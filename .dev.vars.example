@@ -15,8 +15,6 @@ ADMIN_REVIEW_EMAIL=jonathan@jonathanmann.net
 ROOM_DAILY_CLAIM_LIMIT=4
 # Local normal-user publish override for multi-room course/editor testing. Leave blank to use trust-tier caps.
 ROOM_DAILY_PUBLISH_LIMIT=10
-PLAYFUN_ROOM_DAILY_CLAIM_LIMIT=1
-PLAYFUN_ROOM_MAX_PLACED_OBJECTS=16
 PARTYKIT_HOST="127.0.0.1:1999"
 PARTYKIT_PARTY="main"
 PARTYKIT_INTERNAL_TOKEN=
@@ -28,13 +26,6 @@ ROOM_MINT_BLOCK_EXPLORER_URL="https://sepolia.basescan.org"
 # Worker-side signer used for claimer-bound mint authorizations.
 # This must match the contract's on-chain mintAuthority and should not be the owner key.
 ROOM_MINT_AUTH_PRIVATE_KEY=
-
-# Optional Play.fun integration for reward mode (`?pf=1`).
-PLAYFUN_ENABLED=0
-PLAYFUN_API_KEY=
-PLAYFUN_SECRET_KEY=
-PLAYFUN_GAME_ID=
-PLAYFUN_BASE_URL="https://api.play.fun"
 
 # Optional guestbook verification. Leave blank in local dev to bypass Turnstile.
 TURNSTILE_SITE_KEY=

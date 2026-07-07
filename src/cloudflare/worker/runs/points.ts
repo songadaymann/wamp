@@ -5,7 +5,7 @@ import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { RoomRunRecord, UserStatsRecord } from '../../../runs/model';
 import { compareLeaderboardEntries } from '../../../runs/scoring';
 import type { CourseRunRow, Env, PointEventRow, RoomRunRow, UserRow, UserStatsRow } from '../core/types';
-import { isPlayfunLeaderboardExcludedUserId } from '../playfun/leaderboardIsolation';
+import { isGeneratedLeaderboardExcludedUserId } from '../generatedUsers/leaderboardIsolation';
 
 export type PointEventType =
   | 'room_first_publish'
@@ -194,7 +194,7 @@ export async function awardRoomCreatorCompletionPoints(
     return null;
   }
 
-  if (await isPlayfunLeaderboardExcludedUserId(env, input.finisherUserId)) {
+  if (await isGeneratedLeaderboardExcludedUserId(env, input.finisherUserId)) {
     return null;
   }
 
@@ -231,7 +231,7 @@ export async function awardCourseCreatorCompletionPoints(
     return null;
   }
 
-  if (await isPlayfunLeaderboardExcludedUserId(env, input.finisherUserId)) {
+  if (await isGeneratedLeaderboardExcludedUserId(env, input.finisherUserId)) {
     return null;
   }
 
@@ -343,7 +343,7 @@ export async function upsertUserStats(env: Env, userId: string): Promise<void> {
     return;
   }
 
-  if (await isPlayfunLeaderboardExcludedUserId(env, userId)) {
+  if (await isGeneratedLeaderboardExcludedUserId(env, userId)) {
     await env.DB.batch([
       env.DB.prepare(
         `

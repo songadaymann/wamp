@@ -6,7 +6,7 @@ import type {
 } from '../../../profiles/model';
 import type { ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
 import { listPlayerAvatarChoicesForLevel, resolveSelectablePlayerAvatarId } from '../../../player/avatar/unlocks';
-import { isPlayfunLeaderboardExcludedDisplayName } from '../../../playfun/identity';
+import { isGeneratedLeaderboardExcludedDisplayName } from '../../../generatedUsers/identity';
 import type { QualityRatingSummary } from '../../../progression/model';
 import { ROOM_DIFFICULTIES, type RoomDifficulty } from '../../../runs/model';
 import type { Env } from '../core/types';
@@ -124,7 +124,7 @@ function buildProfileStats(
   const stats = mapUserStatsRow(statsRow);
   const rankedEntries = allStatsRows
     .map(mapUserStatsRow)
-    .filter((entry) => !isPlayfunLeaderboardExcludedDisplayName(entry.userDisplayName))
+    .filter((entry) => !isGeneratedLeaderboardExcludedDisplayName(entry.userDisplayName))
     .sort(compareGlobalLeaderboardEntries);
   const publicRank = rankedEntries.findIndex((entry) => entry.userId === stats.userId);
   const publicStats = publicRank >= 0 ? rankedEntries[publicRank] ?? null : null;

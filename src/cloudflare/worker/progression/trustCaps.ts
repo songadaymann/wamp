@@ -124,7 +124,7 @@ export async function loadEffectiveTrustTier(
 export async function loadBuilderCapabilitySummary(
   env: Env,
   progress: UserProgressRow,
-  requestAuthSource: 'session' | 'playfun' | 'api_token' | 'agent_token' | null,
+  requestAuthSource: 'session' | 'api_token' | 'agent_token' | null,
 ): Promise<BuilderCapabilitySummary> {
   return buildCapabilitySummary(
     env,
@@ -149,7 +149,7 @@ function countCollectibleObjects(placedObjects: PlacedObject[]): number {
 export async function resolveRoomCapabilities(
   env: Env,
   userId: string,
-  requestAuthSource: 'session' | 'playfun' | 'api_token' | 'agent_token' | null,
+  requestAuthSource: 'session' | 'api_token' | 'agent_token' | null,
 ): Promise<RoomCapabilitySnapshot> {
   const progress = await loadOrBackfillUserProgress(env, userId);
   const summary = await loadBuilderCapabilitySummary(env, progress, requestAuthSource);
@@ -187,7 +187,7 @@ async function countDailyRoomPublishes(env: Env, userId: string, dayStartIso: st
 export async function assertUserCanPublishContent(
   env: Env,
   userId: string,
-  requestAuthSource: 'session' | 'playfun' | 'api_token' | 'agent_token' | null,
+  requestAuthSource: 'session' | 'api_token' | 'agent_token' | null,
   nowIso: string = new Date().toISOString(),
 ): Promise<void> {
   const capabilities = await resolveRoomCapabilities(env, userId, requestAuthSource);

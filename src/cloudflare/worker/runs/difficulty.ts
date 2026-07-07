@@ -27,9 +27,9 @@ import {
 import { HttpError } from '../core/http';
 import type { ContentTrophyRow, Env, RoomDifficultyVoteRow } from '../core/types';
 import {
-  sqlUserIdDoesNotHavePlayfunDisplayNamePrefix,
-  sqlUserIdIsNotPlayfunOnly,
-} from '../playfun/leaderboardIsolation';
+  sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix,
+  sqlUserIdIsNotLegacyGeneratedOnly,
+} from '../generatedUsers/leaderboardIsolation';
 import {
   loadExpandedRoomTarget,
   loadPublishedExpandedRoomMembershipsForRoomIds,
@@ -897,8 +897,8 @@ export async function loadBuilderDiscoveryResponse(
           MAX(latest_published_at) AS latest_published_at,
           MIN(first_published_at) AS first_published_at
         FROM published_rooms
-        WHERE ${sqlUserIdIsNotPlayfunOnly('published_rooms.builder_user_id')}
-          AND ${sqlUserIdDoesNotHavePlayfunDisplayNamePrefix('published_rooms.builder_user_id')}
+        WHERE ${sqlUserIdIsNotLegacyGeneratedOnly('published_rooms.builder_user_id')}
+          AND ${sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix('published_rooms.builder_user_id')}
         GROUP BY builder_user_id
       )
       SELECT
@@ -964,8 +964,8 @@ async function loadBuilderDiscoveryResponseByPlayableArea(
         ON first_published.room_id = rooms.id
       WHERE rooms.published_json IS NOT NULL
         AND ${builderUserIdExpression} IS NOT NULL
-        AND ${sqlUserIdIsNotPlayfunOnly(builderUserIdExpression)}
-        AND ${sqlUserIdDoesNotHavePlayfunDisplayNamePrefix(builderUserIdExpression)}
+        AND ${sqlUserIdIsNotLegacyGeneratedOnly(builderUserIdExpression)}
+        AND ${sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix(builderUserIdExpression)}
     `
   )
     .all<PublishedRoomDiscoveryRow>();

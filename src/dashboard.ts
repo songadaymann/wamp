@@ -170,8 +170,8 @@ function renderStats(): void {
 
   const cards = [
     { label: 'Users', value: snapshot ? numberFormatter.format(snapshot.users.total) : '--', tone: 'question' },
-    { label: 'Playfun', value: snapshot ? numberFormatter.format(snapshot.users.playfunLinked) : '--', tone: 'pipe' },
-    { label: 'Non Playfun', value: snapshot ? numberFormatter.format(snapshot.users.nonPlayfun) : '--', tone: 'brick' },
+    { label: 'Generated', value: snapshot ? numberFormatter.format(snapshot.users.legacyGeneratedLinked) : '--', tone: 'pipe' },
+    { label: 'Standard', value: snapshot ? numberFormatter.format(snapshot.users.standard) : '--', tone: 'brick' },
     { label: 'Rooms Built', value: snapshot ? numberFormatter.format(snapshot.rooms.totalBuilt) : '--', tone: 'brick' },
     { label: 'Unique Builders', value: snapshot ? numberFormatter.format(snapshot.rooms.uniqueBuilders) : '--', tone: 'question' },
     { label: '2+ Rooms', value: snapshot ? numberFormatter.format(snapshot.rooms.buildersWithMultipleRooms) : '--', tone: 'brick' },
@@ -191,8 +191,8 @@ function renderHistory(): void {
   const history = snapshot?.history ?? null;
   const cards = [
     {
-      label: 'Non-Playfun Signups',
-      points: history?.nonPlayfunSignupsPerDay ?? [],
+      label: 'Standard Signups',
+      points: history?.standardSignupsPerDay ?? [],
       windowDays: history?.windowDays ?? 30,
       tone: 'question',
     },
@@ -220,7 +220,7 @@ function createCardMarkup(label: string, value: string, tone: DashboardTone): st
 
 function createHistoryCardMarkup(
   label: string,
-  points: DashboardStatsResponse['history']['nonPlayfunSignupsPerDay'],
+  points: DashboardStatsResponse['history']['standardSignupsPerDay'],
   windowDays: number,
   tone: DashboardTone
 ): string {
@@ -247,7 +247,7 @@ function createHistoryCardMarkup(
 }
 
 function createHistoryChartMarkup(
-  points: DashboardStatsResponse['history']['nonPlayfunSignupsPerDay'],
+  points: DashboardStatsResponse['history']['standardSignupsPerDay'],
   tone: DashboardTone
 ): string {
   const chartWidth = 320;
@@ -358,13 +358,13 @@ function hideAllHistoryTooltips(): void {
   });
 }
 
-function summarizeSeries(points: DashboardStatsResponse['history']['nonPlayfunSignupsPerDay']): { total: number } {
+function summarizeSeries(points: DashboardStatsResponse['history']['standardSignupsPerDay']): { total: number } {
   return {
     total: points.reduce((sum, point) => sum + point.count, 0),
   };
 }
 
-function labelSeries(points: DashboardStatsResponse['history']['nonPlayfunSignupsPerDay']): string {
+function labelSeries(points: DashboardStatsResponse['history']['standardSignupsPerDay']): string {
   if (points.length === 0) {
     return 'No history available.';
   }

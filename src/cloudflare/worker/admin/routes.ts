@@ -20,7 +20,6 @@ import { revertRoom } from '../rooms/store';
 import { upsertUserStats } from '../runs/points';
 import { loadLaunchStats } from './launchStats';
 import { handleAdminExpandedRoomsMigrationReport } from '../expandedRooms/migrationReport';
-import { handleAdminPlayfunLeaderboardCleanup } from './playfunLeaderboardCleanup';
 import {
   handleAdminSuspiciousInvalidate,
   handleAdminSuspiciousInvalidatePreview,
@@ -64,10 +63,6 @@ export async function handleAdminRequest(
 
   if (url.pathname === '/api/admin/suspicious/users' && request.method === 'GET') {
     return handleAdminSuspiciousUsers(request, url, env);
-  }
-
-  if (url.pathname === '/api/admin/playfun/leaderboard-cleanup' && request.method === 'POST') {
-    return handleAdminPlayfunLeaderboardCleanup(request, env);
   }
 
   if (url.pathname === '/api/admin/run-verification/audit' && request.method === 'GET') {

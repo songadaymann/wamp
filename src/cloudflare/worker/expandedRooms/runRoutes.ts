@@ -50,13 +50,7 @@ import {
 } from '../courses/requestBodies';
 import {
   assertWampLeaderboardWriteAllowed,
-} from '../playfun/leaderboardIsolation';
-import {
-  enqueuePlayfunPointSync,
-  flushPlayfunPointSync,
-  linkPlayfunUserFromRequest,
-  loadPlayfunUserLink,
-} from '../playfun/service';
+} from '../generatedUsers/leaderboardIsolation';
 import {
   awardCourseCreatorCompletionPoints,
   awardRunFinalizePoints,
@@ -635,12 +629,10 @@ export async function handleExpandedRoomRunFinish(
       compareExpandedRoomRunRecords(finalizedRun, previousBest, snapshot.goal) < 0;
   }
 
-  const pointEvent = await awardRunFinalizePoints(env, finalizedRun, {
+  await awardRunFinalizePoints(env, finalizedRun, {
     isFirstCompletion,
     isNewPersonalBest,
   });
-  await maybeMirrorAuthenticatedPointEventToPlayfun(env, request, auth.user.id, pointEvent);
-
   const creatorUserId = await resolvePublishedCourseOwnerUserId(env, context.legacyCourseId);
   const creatorPointEvent =
     finalizedRun.result === 'completed'
@@ -654,7 +646,6 @@ export async function handleExpandedRoomRunFinish(
       : null;
 
   if (creatorPointEvent) {
-    await maybeMirrorPointEventToLinkedPlayfunUser(env, creatorPointEvent.user_id, creatorPointEvent);
     await upsertUserStats(env, creatorPointEvent.user_id);
   }
 
@@ -1190,53 +1181,4 @@ async function mirrorCourseRatingToExpandedRoomRating(
       params.userId,
     ),
   ]);
-}
-
-async function maybeMirrorAuthenticatedPointEventToPlayfun(
-  env: Env,
-  request: Request,
-  userId: string,
-  pointEvent: { id: string; user_id: string; points: number; created_at: string },
-): Promise<void> {
-  if (pointEvent.points <= 0) {
-    return;
-  }
-
-  const playfunSession = await linkPlayfunUserFromRequest(env, request, userId);
-  if (!playfunSession) {
-    return;
-  }
-
-  try {
-    await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
-    await flushPlayfunPointSync(env, userId);
-  } catch (error) {
-    console.warn('Failed to mirror expanded room point event to Play.fun', { userId, pointEventId: pointEvent.id, error });
-  }
-}
-
-async function maybeMirrorPointEventToLinkedPlayfunUser(
-  env: Env,
-  userId: string,
-  pointEvent: { id: string; user_id: string; points: number; created_at: string },
-): Promise<void> {
-  if (pointEvent.points <= 0) {
-    return;
-  }
-
-  const link = await loadPlayfunUserLink(env, userId);
-  if (!link?.ogp_id) {
-    return;
-  }
-
-  try {
-    await enqueuePlayfunPointSync(env, pointEvent, link.ogp_id);
-    await flushPlayfunPointSync(env, userId);
-  } catch (error) {
-    console.warn('Failed to mirror linked expanded room Play.fun point event', {
-      userId,
-      pointEventId: pointEvent.id,
-      error,
-    });
-  }
 }

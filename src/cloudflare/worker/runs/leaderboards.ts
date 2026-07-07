@@ -9,7 +9,7 @@ import type {
 } from '../../../runs/model';
 import { HttpError } from '../core/http';
 import type { Env, UserStatsRow } from '../core/types';
-import { sqlUserIdIsNotPlayfunOnly } from '../playfun/leaderboardIsolation';
+import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
 import { loadRoomAggregateRatingSummaryForVersion } from '../progression/store';
 import type { AggregatedRoomLeaderboardSelection } from './roomLeaderboardAggregation';
 import { sqlIsVerificationAccepted } from './verificationSql';
@@ -66,7 +66,7 @@ function buildRankedRoomLeaderboardCte(goal: RoomGoal, versionCount: number): st
         AND elapsed_ms IS NOT NULL
         AND finished_at IS NOT NULL
         AND ${sqlIsVerificationAccepted('room_runs')}
-        AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
+        AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
     ),
     best_runs AS (
       SELECT
@@ -225,7 +225,7 @@ async function loadRankedGlobalLeaderboardRows(
             ORDER BY ${orderClause}
           ) AS overall_rank
         FROM user_stats
-        WHERE ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
+        WHERE ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
       )
       SELECT
         user_id,
@@ -289,7 +289,7 @@ async function loadViewerRankedGlobalLeaderboardRow(
             ORDER BY ${orderClause}
           ) AS overall_rank
         FROM user_stats
-        WHERE ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
+        WHERE ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
       )
       SELECT
         user_id,

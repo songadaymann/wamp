@@ -1,5 +1,4 @@
 import { getApiBaseUrl } from '../api/baseUrl';
-import { appendPlayfunRequestHeaders } from '../playfun/state';
 import { buildCustomBackgroundValue } from './model';
 
 export type BackgroundImageStatus =
@@ -80,7 +79,6 @@ function buildHeaders(json = false): Headers {
   if (json) {
     headers.set('Content-Type', 'application/json');
   }
-  appendPlayfunRequestHeaders(headers);
   return headers;
 }
 

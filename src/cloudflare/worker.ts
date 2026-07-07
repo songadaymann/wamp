@@ -54,7 +54,6 @@ import {
   handleMusicPhraseGetRequest,
   handleMusicPhraseListRequest,
 } from './worker/music/routes';
-import { handlePlayfunConfig, handlePlayfunFlush } from './worker/playfun/routes';
 import {
   handleMyPlaylistsGet,
   handlePlaylistCreate,
@@ -252,10 +251,6 @@ export default {
         return handleWorldChunksRequest(request, url, env);
       }
 
-      if (url.pathname === '/api/playfun/config' && request.method === 'GET') {
-        return await handlePlayfunConfig(request, env);
-      }
-
       if (url.pathname.startsWith('/api/presence/')) {
         return await handlePresenceRequest(request, url, env);
       }
@@ -289,10 +284,6 @@ export default {
 
       if (url.pathname === '/api/tilesets' && request.method === 'GET') {
         return jsonResponse(request, getAgentTilesetCatalogResponse());
-      }
-
-      if (url.pathname === '/api/playfun/flush' && request.method === 'POST') {
-        return await handlePlayfunFlush(request, env);
       }
 
       if (url.pathname === '/api/playlists/me' && request.method === 'GET') {

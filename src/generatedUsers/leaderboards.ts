@@ -5,20 +5,15 @@ import type {
 import type {
   CourseLeaderboardResponse,
 } from '../courses/runModel';
-import { isPlayfunLeaderboardExcludedDisplayName } from './identity';
-import { isPlayfunMode } from './state';
+import { isGeneratedLeaderboardExcludedDisplayName } from './identity';
 
 export function filterRoomLeaderboardForCurrentSurface(
   response: RoomLeaderboardResponse
 ): RoomLeaderboardResponse {
-  if (isPlayfunMode()) {
-    return response;
-  }
-
   const entries = reRankVisibleEntries(response.entries);
   const viewerRank = adjustViewerRank(response.entries, response.viewerRank);
   const viewerBest =
-    response.viewerBest && !isPlayfunLeaderboardExcludedDisplayName(response.viewerBest.userDisplayName)
+    response.viewerBest && !isGeneratedLeaderboardExcludedDisplayName(response.viewerBest.userDisplayName)
       ? {
           ...response.viewerBest,
           rank: entries.find((entry) => entry.attemptId === response.viewerBest?.attemptId)?.rank
@@ -38,14 +33,10 @@ export function filterRoomLeaderboardForCurrentSurface(
 export function filterCourseLeaderboardForCurrentSurface(
   response: CourseLeaderboardResponse
 ): CourseLeaderboardResponse {
-  if (isPlayfunMode()) {
-    return response;
-  }
-
   const entries = reRankVisibleEntries(response.entries);
   const viewerRank = adjustViewerRank(response.entries, response.viewerRank);
   const viewerBest =
-    response.viewerBest && !isPlayfunLeaderboardExcludedDisplayName(response.viewerBest.userDisplayName)
+    response.viewerBest && !isGeneratedLeaderboardExcludedDisplayName(response.viewerBest.userDisplayName)
       ? {
           ...response.viewerBest,
           rank: entries.find((entry) => entry.attemptId === response.viewerBest?.attemptId)?.rank
@@ -65,14 +56,10 @@ export function filterCourseLeaderboardForCurrentSurface(
 export function filterGlobalLeaderboardForCurrentSurface(
   response: GlobalLeaderboardResponse
 ): GlobalLeaderboardResponse {
-  if (isPlayfunMode()) {
-    return response;
-  }
-
   const entries = reRankVisibleEntries(response.entries);
   const viewerRank = adjustViewerRank(response.entries, response.viewerEntry?.rank ?? null);
   const viewerEntry =
-    response.viewerEntry && !isPlayfunLeaderboardExcludedDisplayName(response.viewerEntry.userDisplayName)
+    response.viewerEntry && !isGeneratedLeaderboardExcludedDisplayName(response.viewerEntry.userDisplayName)
       ? {
           ...response.viewerEntry,
           rank: entries.find((entry) => entry.userId === response.viewerEntry?.userId)?.rank
@@ -89,7 +76,7 @@ export function filterGlobalLeaderboardForCurrentSurface(
 
 function reRankVisibleEntries<T extends { rank: number; userDisplayName: string }>(entries: T[]): T[] {
   return entries
-    .filter((entry) => !isPlayfunLeaderboardExcludedDisplayName(entry.userDisplayName))
+    .filter((entry) => !isGeneratedLeaderboardExcludedDisplayName(entry.userDisplayName))
     .map((entry, index) => ({
       ...entry,
       rank: index + 1,
@@ -107,7 +94,7 @@ function adjustViewerRank<T extends { rank: number; userDisplayName: string }>(
   const hiddenAhead = entries.filter(
     (entry) =>
       entry.rank < rank
-      && isPlayfunLeaderboardExcludedDisplayName(entry.userDisplayName)
+      && isGeneratedLeaderboardExcludedDisplayName(entry.userDisplayName)
   ).length;
 
   return Math.max(1, rank - hiddenAhead);

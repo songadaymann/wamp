@@ -16,7 +16,7 @@ import type {
   UserStatsRow,
   WalletChallengeRow,
 } from '../core/types';
-import { sqlUserIdIsNotPlayfunOnly } from '../playfun/leaderboardIsolation';
+import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
 import { ensureFounderIdentityQualification } from '../progression/store';
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -194,24 +194,6 @@ export async function createUserForWallet(env: Env, walletAddress: string): Prom
   await insertUserRecord(env, user, now);
 
   await ensureFounderIdentityQualification(env, user.id, now);
-
-  return user;
-}
-
-export async function createUserForPlayfun(env: Env, ogpId: string): Promise<AuthUser> {
-  const now = new Date().toISOString();
-  const id = crypto.randomUUID();
-  const displayName = createDisplayNameFromPlayfunOgpId(ogpId);
-  const user: AuthUser = {
-    id,
-    email: null,
-    walletAddress: null,
-    displayName,
-    username: await createUniqueUsername(env, displayName, id),
-    createdAt: now,
-  };
-
-  await insertUserRecord(env, user, now);
 
   return user;
 }
@@ -513,7 +495,7 @@ export async function loadUserStatsRow(env: Env, userId: string) {
         updated_at
       FROM user_stats
       WHERE user_id = ?
-        AND ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
+        AND ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
       LIMIT 1
     `
   )
@@ -544,7 +526,7 @@ export async function loadAllUserStatsRows(env: Env) {
         fastest_clear_ms,
         updated_at
       FROM user_stats
-      WHERE ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
+      WHERE ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
     `
   ).all<UserStatsRow>();
 
@@ -1374,12 +1356,6 @@ export function extractNonceFromWalletMessage(message: string): string | null {
 export function createDisplayNameFromEmail(email: string): string {
   const local = email.split('@')[0] || 'player';
   return local.slice(0, 24);
-}
-
-export function createDisplayNameFromPlayfunOgpId(ogpId: string): string {
-  const normalized = ogpId.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  const suffix = normalized.slice(0, 16) || 'player';
-  return `playfun-${suffix}`.slice(0, 24);
 }
 
 export function normalizeEmail(email: string): string {

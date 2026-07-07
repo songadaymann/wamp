@@ -19,15 +19,9 @@ import type { Env, RoomRunRow } from '../core/types';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { loadRoomRecord } from '../rooms/store';
 import {
-  enqueuePlayfunPointSync,
-  flushPlayfunPointSync,
-  linkPlayfunUserFromRequest,
-  loadPlayfunUserLink,
-} from '../playfun/service';
-import {
   assertWampLeaderboardWriteAllowed,
-  sqlUserIdIsNotPlayfunOnly,
-} from '../playfun/leaderboardIsolation';
+  sqlUserIdIsNotLegacyGeneratedOnly,
+} from '../generatedUsers/leaderboardIsolation';
 import {
   awardRoomCreatorCompletionPoints,
   awardRunFinalizePoints,
@@ -531,11 +525,10 @@ export async function handleRunFinish(
         finalizedRun.attemptId;
   }
 
-  const pointEvent = await awardRunFinalizePoints(env, finalizedRun, {
+  await awardRunFinalizePoints(env, finalizedRun, {
     isFirstCompletion,
     isNewPersonalBest,
   });
-  await maybeMirrorRunPointEventToPlayfun(env, request, auth.user.id, pointEvent);
   const creatorPointEvent =
     finalizedRun.result === 'completed'
       ? await awardRoomCreatorCompletionPoints(env, {
@@ -547,7 +540,6 @@ export async function handleRunFinish(
         })
       : null;
   if (creatorPointEvent) {
-    await maybeMirrorPointEventToLinkedPlayfunUser(env, creatorPointEvent.user_id, creatorPointEvent);
     await upsertUserStats(env, creatorPointEvent.user_id);
   }
   await awardRoomRunProgression(env, {
@@ -723,51 +715,6 @@ function parseBooleanQueryFlag(value: string | null): boolean {
   return normalized === '1' || normalized === 'true' || normalized === 'yes';
 }
 
-async function maybeMirrorRunPointEventToPlayfun(
-  env: Env,
-  request: Request,
-  userId: string,
-  pointEvent: { id: string; user_id: string; points: number; created_at: string }
-): Promise<void> {
-  if (pointEvent.points <= 0) {
-    return;
-  }
-
-  const playfunSession = await linkPlayfunUserFromRequest(env, request, userId);
-  if (!playfunSession) {
-    return;
-  }
-
-  try {
-    await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
-    await flushPlayfunPointSync(env, userId);
-  } catch (error) {
-    console.warn('Failed to mirror run point event to Play.fun', { userId, pointEventId: pointEvent.id, error });
-  }
-}
-
-async function maybeMirrorPointEventToLinkedPlayfunUser(
-  env: Env,
-  userId: string,
-  pointEvent: { id: string; user_id: string; points: number; created_at: string }
-): Promise<void> {
-  if (pointEvent.points <= 0) {
-    return;
-  }
-
-  const link = await loadPlayfunUserLink(env, userId);
-  if (!link?.ogp_id) {
-    return;
-  }
-
-  try {
-    await enqueuePlayfunPointSync(env, pointEvent, link.ogp_id);
-    await flushPlayfunPointSync(env, userId);
-  } catch (error) {
-    console.warn('Failed to mirror linked Play.fun point event', { userId, pointEventId: pointEvent.id, error });
-  }
-}
-
 function resolveRoomVersionPublisherUserId(
   roomRecord: { versions: Array<{ version: number; publishedByUserId: string | null }> },
   roomVersion: number
@@ -879,7 +826,7 @@ export async function loadCompletedRoomRuns(
         AND room_version = ?
         AND result = 'completed'
         AND ${sqlIsVerificationAccepted('room_runs')}
-        AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
+        AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
     `
   )
     .bind(roomId, roomVersion)
@@ -927,7 +874,7 @@ export async function loadCompletedRoomRunsForVersions(
         AND room_version IN (${roomVersions.map(() => '?').join(', ')})
         AND result = 'completed'
         AND ${sqlIsVerificationAccepted('room_runs')}
-        AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
+        AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
     `
   )
     .bind(roomId, ...roomVersions)

@@ -65,7 +65,7 @@ import {
   requireTrustedOriginForMutation,
 } from './request';
 import { NO_CHAT_MODERATION_VIEWER, resolveChatModerationViewer } from '../chat/moderation';
-import { assertPlayfunOnlyDisplayNameChangeAllowed } from '../playfun/leaderboardIsolation';
+import { assertGeneratedOnlyDisplayNameChangeAllowed } from '../generatedUsers/leaderboardIsolation';
 import { getRoomClaimQuota } from '../rooms/store';
 
 export async function handleAuthRequest(request: Request, url: URL, env: Env): Promise<Response> {
@@ -78,10 +78,10 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
       ? resolvePublicPartykitParty(env)
       : null;
     responseBody.chatModeration =
-      auth?.source === 'session' || auth?.source === 'playfun'
+      auth?.source === 'session'
         ? await resolveChatModerationViewer(env, auth.user)
         : NO_CHAT_MODERATION_VIEWER;
-    if (auth?.source === 'session' || auth?.source === 'playfun') {
+    if (auth?.source === 'session') {
       const quota = await getRoomClaimQuota(env, auth.user.id, auth.source);
       responseBody.roomDailyClaimLimit = quota.limit;
       responseBody.roomClaimsUsedToday = quota.claimsUsedToday;
@@ -323,7 +323,7 @@ export async function handleUpdateDisplayName(request: Request, env: Env): Promi
     throw new HttpError(400, 'Display name must be 24 characters or fewer.');
   }
 
-  await assertPlayfunOnlyDisplayNameChangeAllowed(env, auth.user, displayName);
+  await assertGeneratedOnlyDisplayNameChangeAllowed(env, auth.user, displayName);
 
   const existingUser = await findUserByDisplayName(env, displayName);
   if (existingUser && existingUser.id !== auth.user.id) {
@@ -493,9 +493,6 @@ export async function handleWalletVerify(request: Request, env: Env): Promise<Re
 
     user = await attachWalletToUser(env, existingAuth.user, address);
     linkedWallet = true;
-    if (existingAuth.source === 'playfun') {
-      setCookie = createSessionCookie(request, await createSession(env, user.id));
-    }
   } else {
     const existingWalletUser = await findUserByWallet(env, address);
     user = existingWalletUser ?? (await createUserForWallet(env, address));

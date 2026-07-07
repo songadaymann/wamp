@@ -17,12 +17,12 @@ import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type {
   CourseRunRow,
   Env,
-  PlayfunPointSyncRow,
   PointEventRow,
   RoomRunRow,
   SuspiciousInvalidationAuditRow,
 } from '../core/types';
 import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
+import { LEGACY_GENERATED_AUDIT_SYNC_COLUMN } from '../generatedUsers/legacySource';
 import { upsertUserStats } from '../runs/points';
 
 const RECENT_INVALIDATION_LIMIT = 10;
@@ -33,7 +33,6 @@ interface InvalidationSelection {
   selectedPointEvents: PointEventRow[];
   runPointEvents: PointEventRow[];
   creatorPointEvents: PointEventRow[];
-  playfunSync: PlayfunPointSyncRow[];
   affectedUsers: Array<{ userId: string; userDisplayName: string }>;
 }
 
@@ -110,7 +109,6 @@ export async function handleAdminSuspiciousInvalidate(
     selectedPointEvents: preview.selectedPointEvents,
     runPointEvents: preview.runPointEvents,
     creatorPointEvents: preview.creatorPointEvents,
-    playfunSync: preview.playfunSync,
     affectedUsers: preview.affectedUsers,
   };
 
@@ -126,7 +124,7 @@ export async function handleAdminSuspiciousInvalidate(
           room_run_attempt_ids_json,
           course_run_attempt_ids_json,
           affected_point_event_ids_json,
-          affected_playfun_sync_json,
+          ${LEGACY_GENERATED_AUDIT_SYNC_COLUMN},
           affected_creator_user_ids_json,
           remote_follow_up_required,
           snapshot_json,
@@ -147,9 +145,9 @@ export async function handleAdminSuspiciousInvalidate(
         ...preview.runPointEvents.map((event) => event.id),
         ...preview.creatorPointEvents.map((event) => event.id),
       ]),
-      JSON.stringify(preview.playfunSync),
+      JSON.stringify([]),
       JSON.stringify(preview.affectedUsers.map((user) => user.userId)),
-      preview.remoteFollowUpRequired ? 1 : 0,
+      0,
       JSON.stringify(snapshot),
       createdAt
     ),
@@ -201,7 +199,6 @@ export async function loadRecentInvalidations(
             room_run_attempt_ids_json,
             course_run_attempt_ids_json,
             affected_point_event_ids_json,
-            affected_playfun_sync_json,
             affected_creator_user_ids_json,
             remote_follow_up_required,
             snapshot_json,
@@ -225,7 +222,6 @@ export async function loadRecentInvalidations(
             room_run_attempt_ids_json,
             course_run_attempt_ids_json,
             affected_point_event_ids_json,
-            affected_playfun_sync_json,
             affected_creator_user_ids_json,
             remote_follow_up_required,
             snapshot_json,
@@ -269,14 +265,6 @@ async function buildInvalidationPreview(
     runPointEvents: selection.runPointEvents.map(mapPointEventRecord),
     creatorPointEvents: selection.creatorPointEvents.map(mapPointEventRecord),
     affectedUsers: selection.affectedUsers,
-    playfunSync: selection.playfunSync.map((row) => ({
-      pointEventId: row.point_event_id,
-      ogpId: row.ogp_id,
-      points: Math.max(0, Number(row.points ?? 0)),
-      status: row.status,
-      syncedAt: row.synced_at,
-    })),
-    remoteFollowUpRequired: selection.playfunSync.some((row) => row.status === 'sent'),
     summary: {
       roomRunsDeleted: selection.roomRuns.length,
       courseRunsDeleted: selection.courseRuns.length,
@@ -316,13 +304,6 @@ async function loadInvalidationSelection(
   );
   const runPointEvents = dedupePointEventsById(runPointEventsRaw);
   const creatorPointEvents = dedupePointEventsById(creatorPointEventsRaw);
-  const allPointEventIds = [
-    ...selectedPointEvents.map((event) => event.id),
-    ...runPointEvents.map((event) => event.id),
-    ...creatorPointEvents.map((event) => event.id),
-  ];
-  const playfunSync = await loadPlayfunSyncRowsByPointEventIds(env, allPointEventIds);
-
   const affectedUsers = new Map<string, { userId: string; userDisplayName: string }>();
   const targetUserRow = await env.DB.prepare(
     `
@@ -363,7 +344,6 @@ async function loadInvalidationSelection(
     selectedPointEvents,
     runPointEvents,
     creatorPointEvents,
-    playfunSync,
     affectedUsers: [...affectedUsers.values()],
   };
 }
@@ -745,41 +725,6 @@ async function loadCreatorPointEventsByAttemptIds(
   return [...rows.values()];
 }
 
-async function loadPlayfunSyncRowsByPointEventIds(
-  env: Env,
-  pointEventIds: string[]
-): Promise<PlayfunPointSyncRow[]> {
-  if (pointEventIds.length === 0) {
-    return [];
-  }
-
-  const rows: PlayfunPointSyncRow[] = [];
-  for (const chunk of chunkArray([...new Set(pointEventIds)], 50)) {
-    const placeholders = chunk.map(() => '?').join(', ');
-    const result = await env.DB.prepare(
-      `
-        SELECT
-          point_event_id,
-          user_id,
-          ogp_id,
-          points,
-          status,
-          attempt_count,
-          created_at,
-          last_attempted_at,
-          synced_at,
-          last_error
-        FROM playfun_point_sync
-        WHERE point_event_id IN (${placeholders})
-      `
-    )
-      .bind(...chunk)
-      .all<PlayfunPointSyncRow>();
-    rows.push(...result.results);
-  }
-  return rows;
-}
-
 async function deleteExpandedRoomRunsByAttemptIds(env: Env, attemptIds: string[]): Promise<void> {
   const uniqueAttemptIds = [...new Set(attemptIds)];
   if (uniqueAttemptIds.length === 0) {
@@ -816,7 +761,6 @@ function mapAuditSummary(row: SuspiciousInvalidationAuditRow): SuspiciousInvalid
     roomRunCount: decodeJsonArray(row.room_run_attempt_ids_json).length,
     courseRunCount: decodeJsonArray(row.course_run_attempt_ids_json).length,
     pointEventCount: decodeJsonArray(row.affected_point_event_ids_json).length,
-    remoteFollowUpRequired: row.remote_follow_up_required === 1,
     createdAt: row.created_at,
   };
 }

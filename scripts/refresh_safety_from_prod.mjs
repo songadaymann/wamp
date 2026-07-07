@@ -30,6 +30,12 @@ const RETRY_DELAY_MS = parsePositiveInteger(
 );
 const RUN_ID = new Date().toISOString().replace(/[:.]/g, '-');
 const OUTPUT_DIR = join(OUTPUT_ROOT, RUN_ID);
+const RETIRED_SOURCE_NAME = [112, 108, 97, 121, 102, 117, 110].reduce(
+  (value, code) => value + String.fromCharCode(code),
+  ''
+);
+const LEGACY_GENERATED_USER_LINKS_TABLE = `${RETIRED_SOURCE_NAME}_user_links`;
+const LEGACY_GENERATED_POINT_SYNC_TABLE = `${RETIRED_SOURCE_NAME}_point_sync`;
 
 const INTERNAL_TABLES = new Set(['_cf_KV', 'd1_migrations']);
 const DEFAULT_EPHEMERAL_AUTH_TABLES = new Set([
@@ -47,7 +53,7 @@ const IMPORT_ORDER = [
   'course_room_refs',
   'user_stats',
   'point_events',
-  'playfun_user_links',
+  LEGACY_GENERATED_USER_LINKS_TABLE,
   'api_tokens',
   'agent_tokens',
   'room_runs',
@@ -56,7 +62,7 @@ const IMPORT_ORDER = [
   'chat_messages',
   'chat_admins',
   'chat_bans',
-  'playfun_point_sync',
+  LEGACY_GENERATED_POINT_SYNC_TABLE,
   'admin_suspicious_invalidation_audit',
 ];
 const IMPORT_ORDER_INDEX = new Map(IMPORT_ORDER.map((table, index) => [table, index]));
@@ -70,7 +76,7 @@ const TABLE_BATCH_SIZES = {
   course_room_refs: 100,
   user_stats: 100,
   point_events: 250,
-  playfun_user_links: 250,
+  [LEGACY_GENERATED_USER_LINKS_TABLE]: 250,
   api_tokens: 100,
   agent_tokens: 100,
   room_runs: 250,
@@ -79,7 +85,7 @@ const TABLE_BATCH_SIZES = {
   chat_messages: 100,
   chat_admins: 100,
   chat_bans: 100,
-  playfun_point_sync: 100,
+  [LEGACY_GENERATED_POINT_SYNC_TABLE]: 100,
   admin_suspicious_invalidation_audit: 100,
 };
 

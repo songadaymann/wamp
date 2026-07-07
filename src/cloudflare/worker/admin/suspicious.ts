@@ -23,7 +23,7 @@ import {
   compareLeaderboardEntries,
   getLeaderboardRankingMode,
 } from '../../../runs/scoring';
-import { isHeuristicPlayfunCharacterDisplayName } from '../../../playfun/identity';
+import { isHeuristicGeneratedCharacterDisplayName } from '../../../generatedUsers/identity';
 import { requireAdminRequest } from '../auth/request';
 import { HttpError, jsonResponse, parsePositiveIntegerQueryParam } from '../core/http';
 import type {
@@ -35,6 +35,7 @@ import type {
   UserStatsRow,
 } from '../core/types';
 import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
+import { LEGACY_GENERATED_USER_LINKS_TABLE } from '../generatedUsers/legacySource';
 import { mapUserStatsRow } from '../runs/points';
 import { loadRecentInvalidations } from './suspiciousInvalidation';
 
@@ -948,7 +949,7 @@ async function loadRecentCompletedRoomRuns(
       LEFT JOIN room_versions v
         ON v.room_id = r.room_id
        AND v.version = r.room_version
-      LEFT JOIN playfun_user_links l
+      LEFT JOIN ${LEGACY_GENERATED_USER_LINKS_TABLE} l
         ON l.user_id = r.user_id
       LEFT JOIN point_events p
         ON p.user_id = r.user_id
@@ -1008,7 +1009,7 @@ async function loadRecentCompletedCourseRuns(
           LEFT JOIN expanded_room_versions v
             ON v.expanded_room_id = r.expanded_room_id
            AND v.version = r.expanded_room_version
-          LEFT JOIN playfun_user_links l
+          LEFT JOIN ${LEGACY_GENERATED_USER_LINKS_TABLE} l
             ON l.user_id = r.user_id
           LEFT JOIN point_events p
             ON p.user_id = r.user_id
@@ -1052,7 +1053,7 @@ async function loadRecentCompletedCourseRuns(
           LEFT JOIN course_versions v
             ON v.course_id = r.course_id
            AND v.version = r.course_version
-          LEFT JOIN playfun_user_links l
+          LEFT JOIN ${LEGACY_GENERATED_USER_LINKS_TABLE} l
             ON l.user_id = r.user_id
           LEFT JOIN point_events p
             ON p.user_id = r.user_id
@@ -1122,7 +1123,7 @@ async function loadRecentCompletedLegacyCourseRuns(
       LEFT JOIN course_versions v
         ON v.course_id = r.course_id
        AND v.version = r.course_version
-      LEFT JOIN playfun_user_links l
+      LEFT JOIN ${LEGACY_GENERATED_USER_LINKS_TABLE} l
         ON l.user_id = r.user_id
       LEFT JOIN point_events p
         ON p.user_id = r.user_id
@@ -1164,7 +1165,7 @@ async function loadRecentPositivePointEvents(
       FROM point_events e
       INNER JOIN users u
         ON u.id = e.user_id
-      LEFT JOIN playfun_user_links l
+      LEFT JOIN ${LEGACY_GENERATED_USER_LINKS_TABLE} l
         ON l.user_id = e.user_id
       WHERE e.points > 0
         AND e.created_at >= ?
@@ -1251,7 +1252,7 @@ async function loadSuspiciousUserSearchRows(
           )
         ) AS last_activity_at
       FROM users u
-      LEFT JOIN playfun_user_links l
+      LEFT JOIN ${LEGACY_GENERATED_USER_LINKS_TABLE} l
         ON l.user_id = u.id
       LEFT JOIN user_stats s
         ON s.user_id = u.id
@@ -1347,7 +1348,7 @@ async function loadSuspiciousUserSearchRowById(
           )
         ) AS last_activity_at
       FROM users u
-      LEFT JOIN playfun_user_links l
+      LEFT JOIN ${LEGACY_GENERATED_USER_LINKS_TABLE} l
         ON l.user_id = u.id
       LEFT JOIN user_stats s
         ON s.user_id = u.id
@@ -1910,42 +1911,42 @@ function buildUnsuspiciousUserCase(row: SuspiciousUserSearchRow): SuspiciousUser
 }
 
 function classifySuspiciousUserIdentity(accumulator: UserAccumulator): SuspiciousUserIdentity {
-  const hasPlayfunLink = Boolean(accumulator.ogpId || accumulator.playerId);
+  const hasLegacyGeneratedLink = Boolean(accumulator.ogpId || accumulator.playerId);
   const hasIdentityBacking = Boolean(accumulator.email || accumulator.walletAddress);
-  const hasHeuristicName = isHeuristicPlayfunCharacterDisplayName(accumulator.userDisplayName);
+  const hasHeuristicName = isHeuristicGeneratedCharacterDisplayName(accumulator.userDisplayName);
 
-  if (hasPlayfunLink && !hasIdentityBacking) {
+  if (hasLegacyGeneratedLink && !hasIdentityBacking) {
     return {
-      bucket: 'playfun_signals',
-      kind: 'playfun_only',
-      label: 'Known Play.fun-only',
-      summary: 'Linked in Play.fun and still missing both email and wallet identity.',
+      bucket: 'generated_signals',
+      kind: 'generated_only',
+      label: 'Generated-only',
+      summary: 'Linked through a retired generated-account source and still missing both email and wallet identity.',
     };
   }
 
-  if (hasPlayfunLink) {
+  if (hasLegacyGeneratedLink) {
     return {
-      bucket: 'playfun_signals',
-      kind: 'playfun_linked',
-      label: 'Play.fun-linked',
-      summary: 'Linked in Play.fun, but also backed by email or wallet identity.',
+      bucket: 'generated_signals',
+      kind: 'legacy_generated_linked',
+      label: 'Legacy generated-linked',
+      summary: 'Linked through a retired generated-account source, but also backed by email or wallet identity.',
     };
   }
 
   if (hasHeuristicName) {
     return {
-      bucket: 'playfun_signals',
-      kind: 'playfun_name_heuristic',
-      label: 'Play.fun name heuristic',
-      summary: 'Display name matches the current Play.fun burner-name heuristic.',
+      bucket: 'generated_signals',
+      kind: 'generated_name_heuristic',
+      label: 'Generated-name heuristic',
+      summary: 'Display name matches the current generated-account name heuristic.',
     };
   }
 
   return {
     bucket: 'real_players',
-    kind: 'no_playfun_signal',
+    kind: 'no_generated_signal',
     label: 'Real player, as far as we know',
-    summary: 'No Play.fun link or current burner-name heuristic on this account.',
+    summary: 'No generated-account link or current generated-name heuristic on this account.',
   };
 }
 

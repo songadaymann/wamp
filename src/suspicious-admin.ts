@@ -58,7 +58,7 @@ const previewUsers = document.getElementById('preview-users') as HTMLDivElement 
 const previewPointEvents = document.getElementById('preview-point-events') as HTMLTableSectionElement | null;
 
 type SeverityFilter = 'all' | SuspiciousSeverity;
-type QueueTab = 'all' | 'real_players' | 'playfun_signals';
+type QueueTab = 'all' | 'real_players' | 'generated_signals';
 
 interface ViewState {
   adminKey: string;
@@ -185,7 +185,7 @@ queueTabs?.addEventListener('click', (event) => {
     return;
   }
   const nextTab = button.dataset.queueTab;
-  if (nextTab === 'all' || nextTab === 'real_players' || nextTab === 'playfun_signals') {
+  if (nextTab === 'all' || nextTab === 'real_players' || nextTab === 'generated_signals') {
     state.queueTab = nextTab;
     render();
   }
@@ -594,9 +594,6 @@ function renderRecentInvalidations(): void {
     row.innerHTML = `
       <div class="audit-title">
         <strong>${escapeHtml(item.targetUserDisplayName)}</strong>
-        <span class="chip ${item.remoteFollowUpRequired ? 'high' : 'low'}">
-          ${item.remoteFollowUpRequired ? 'Remote follow-up needed' : 'Local only'}
-        </span>
       </div>
       <div class="audit-meta">
         <div>${escapeHtml(item.reason)}</div>
@@ -635,8 +632,8 @@ function renderQueue(): void {
           ? 'No players matched this search.'
           : state.queueTab === 'real_players'
           ? 'No real-player cases in the selected window.'
-          : state.queueTab === 'playfun_signals'
-            ? 'No known or heuristic Play.fun cases in the selected window.'
+          : state.queueTab === 'generated_signals'
+            ? 'No generated-account signal cases in the selected window.'
             : 'No suspicious users in the selected window.'
       )
     );
@@ -671,7 +668,7 @@ function renderQueue(): void {
         <div class="queue-meta">
           <div>${runSummary}</div>
           <div>${escapeHtml(user.userId)}</div>
-          <div>${escapeHtml(user.ogpId ?? 'No Play.fun link')} · ${user.lastActivityAt ? formatTimestamp(user.lastActivityAt) : 'No activity timestamp'}</div>
+          <div>${escapeHtml(user.ogpId ?? 'No generated link')} · ${user.lastActivityAt ? formatTimestamp(user.lastActivityAt) : 'No activity timestamp'}</div>
           <div>${escapeHtml(user.identity.summary)}</div>
           <div class="chips">${signalChips}</div>
         </div>
@@ -817,7 +814,7 @@ function renderPointEvents(
 
 function renderAuditList(
   container: HTMLDivElement | null,
-  items: Array<{ targetUserDisplayName: string; operatorLabel: string; reason: string; createdAt: string; roomRunCount: number; courseRunCount: number; pointEventCount: number; remoteFollowUpRequired: boolean }>,
+  items: Array<{ targetUserDisplayName: string; operatorLabel: string; reason: string; createdAt: string; roomRunCount: number; courseRunCount: number; pointEventCount: number }>,
   emptyMessage: string
 ): void {
   if (!container) {
@@ -835,7 +832,6 @@ function renderAuditList(
     row.innerHTML = `
       <div class="audit-title">
         <strong>${escapeHtml(item.operatorLabel)}</strong>
-        <span class="chip ${item.remoteFollowUpRequired ? 'high' : 'low'}">${item.remoteFollowUpRequired ? 'Remote follow-up' : 'Local only'}</span>
       </div>
       <div class="audit-meta">
         <div>${escapeHtml(item.reason)}</div>
@@ -861,11 +857,9 @@ function renderPreview(): void {
     return;
   }
 
-  const followUpCount = preview.playfunSync.filter((row) => row.status === 'sent').length;
   previewMeta.innerHTML = `
     <div>${preview.summary.roomRunsDeleted} room runs · ${preview.summary.courseRunsDeleted} course runs</div>
     <div>${preview.summary.selectedPointEventsDeleted} selected point events · ${preview.summary.runPointEventsDeleted} run point events · ${preview.summary.creatorPointEventsDeleted} creator point events</div>
-    <div>${preview.remoteFollowUpRequired ? `Remote Play.fun follow-up required for ${followUpCount} synced row${followUpCount === 1 ? '' : 's'}.` : 'No remote Play.fun follow-up required.'}</div>
   `;
 
   previewUsers.innerHTML = preview.affectedUsers
@@ -913,7 +907,7 @@ function renderQueueTabs(): void {
   const tabs: Array<{ id: QueueTab; label: string }> = [
     { id: 'all', label: `All (${counts.all})` },
     { id: 'real_players', label: `Real Players (${counts.real_players})` },
-    { id: 'playfun_signals', label: `Known / Heuristic Play.fun (${counts.playfun_signals})` },
+    { id: 'generated_signals', label: `Generated Signals (${counts.generated_signals})` },
   ];
 
   queueTabs.replaceChildren();
@@ -984,18 +978,18 @@ function getQueueTabCounts(): Record<QueueTab, number> {
   return {
     all: state.users.length,
     real_players: state.users.filter((user) => user.identity.bucket === 'real_players').length,
-    playfun_signals: state.users.filter((user) => user.identity.bucket === 'playfun_signals').length,
+    generated_signals: state.users.filter((user) => user.identity.bucket === 'generated_signals').length,
   };
 }
 
 function identityChipClass(user: SuspiciousUserCase): SuspiciousSeverity {
   switch (user.identity.kind) {
-    case 'playfun_only':
+    case 'generated_only':
       return 'high';
-    case 'playfun_linked':
-    case 'playfun_name_heuristic':
+    case 'legacy_generated_linked':
+    case 'generated_name_heuristic':
       return 'medium';
-    case 'no_playfun_signal':
+    case 'no_generated_signal':
     default:
       return 'low';
   }

@@ -252,14 +252,6 @@ body {
   backdrop-filter: none;
 }
 
-body[data-playfun-mode='true'] .app-feedback {
-  z-index: 10040;
-}
-
-body[data-playfun-mode='true'] .app-busy-overlay {
-  z-index: 10035;
-}
-
 .app-busy-card {
   width: min(460px, calc(100vw - 40px));
   display: flex;
@@ -444,10 +436,6 @@ body[data-app-mode="play-world"] #global-chat {
   justify-content: flex-end;
   gap: 8px;
   pointer-events: none;
-}
-
-body[data-playfun-mode='true'] #auth-panel {
-  z-index: 10020;
 }
 
 #auth-identity,

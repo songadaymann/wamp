@@ -6,7 +6,7 @@ import type {
 } from '../../../courses/runModel';
 import { HttpError } from '../core/http';
 import type { Env } from '../core/types';
-import { sqlUserIdIsNotPlayfunOnly } from '../playfun/leaderboardIsolation';
+import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
 import { loadCourseAggregateRatingSummaryForVersion } from '../progression/store';
 import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 
@@ -52,7 +52,7 @@ function buildRankedCourseLeaderboardCte(goal: CourseGoal): string {
         AND elapsed_ms IS NOT NULL
         AND finished_at IS NOT NULL
         AND ${sqlIsVerificationAccepted('course_runs')}
-        AND ${sqlUserIdIsNotPlayfunOnly('course_runs.user_id')}
+        AND ${sqlUserIdIsNotLegacyGeneratedOnly('course_runs.user_id')}
     ),
     best_runs AS (
       SELECT

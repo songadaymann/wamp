@@ -2,10 +2,9 @@ import type { GameObjectConfig } from '../../config';
 import { cloneRoomGoal, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import {
-  isPlayfunSurfaceAuth,
   isWampLeaderboardEligibleAuth,
   type SurfaceAuthSource,
-} from '../../playfun/leaderboardPolicy';
+} from '../../generatedUsers/leaderboardPolicy';
 import type {
   GlobalLeaderboardResponse,
   RoomLeaderboardResponse,
@@ -913,8 +912,7 @@ export class OverworldGoalRunController {
       runState.roomStatus === 'published' &&
       runState.submissionState === 'local-only' &&
       !runState.leaderboardEligible &&
-      !this.options.getAuthenticated() &&
-      !isPlayfunSurfaceAuth(this.options.getAuthSource())
+      !this.options.getAuthenticated()
     );
   }
 
@@ -1135,10 +1133,6 @@ export class OverworldGoalRunController {
       return 'Practice run. Reach spawn to start ranked attempt.';
     }
 
-    if (isPlayfunSurfaceAuth(this.options.getAuthSource())) {
-      return 'Practice run. Reach spawn to start a local Play.fun attempt.';
-    }
-
     return roomStatus === 'draft'
       ? 'Practice run. Reach spawn to start playtest.'
       : 'Practice run. Reach spawn to start challenge.';
@@ -1150,10 +1144,6 @@ export class OverworldGoalRunController {
   ): string {
     if (leaderboardEligible) {
       return 'Starting ranked run...';
-    }
-
-    if (isPlayfunSurfaceAuth(this.options.getAuthSource())) {
-      return 'Play.fun runs stay local on WAMP.';
     }
 
     return roomStatus !== 'published'

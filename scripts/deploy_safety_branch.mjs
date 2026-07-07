@@ -213,7 +213,7 @@ Defaults:
 Examples:
   npm run deploy:safety:branch
   npm run deploy:safety:branch -- --branch room-music-save-test
-  npm run deploy:safety:branch -- --pages-only --branch playfun-identity-gate
+  npm run deploy:safety:branch -- --pages-only --branch identity-gate-test
   npm run deploy:safety:branch -- --dry-run
 `);
 }

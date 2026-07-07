@@ -5,7 +5,7 @@ import {
 import type { ExpandedRoomLeaderboardEntry, ExpandedRoomLeaderboardResponse } from '../../../expandedRooms/runModel';
 import { HttpError } from '../core/http';
 import type { Env } from '../core/types';
-import { sqlUserIdIsNotPlayfunOnly } from '../playfun/leaderboardIsolation';
+import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
 import { loadCourseAggregateRatingSummaryForVersion } from '../progression/store';
 import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 
@@ -51,7 +51,7 @@ function buildRankedExpandedRoomLeaderboardCte(goal: CourseGoal): string {
         AND elapsed_ms IS NOT NULL
         AND finished_at IS NOT NULL
         AND ${sqlIsVerificationAccepted('expanded_room_runs')}
-        AND ${sqlUserIdIsNotPlayfunOnly('expanded_room_runs.user_id')}
+        AND ${sqlUserIdIsNotLegacyGeneratedOnly('expanded_room_runs.user_id')}
     ),
     best_runs AS (
       SELECT

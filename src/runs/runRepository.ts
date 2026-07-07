@@ -21,13 +21,9 @@ import type {
   RunStartResponse,
 } from './model';
 import {
-  appendPlayfunRequestHeaders,
-  notifyPlayfunEligibleActionSuccess,
-} from '../playfun/client';
-import {
   filterGlobalLeaderboardForCurrentSurface,
   filterRoomLeaderboardForCurrentSurface,
-} from '../playfun/leaderboards';
+} from '../generatedUsers/leaderboards';
 
 export interface RunRepository {
   startRun(body: RunStartRequestBody): Promise<RunStartResponse>;
@@ -83,7 +79,6 @@ class ApiRunRepository implements RunRepository {
       method: 'POST',
       body: JSON.stringify(body),
     });
-    notifyPlayfunEligibleActionSuccess();
   }
 
   async loadRoomLeaderboard(
@@ -209,7 +204,6 @@ class ApiRunRepository implements RunRepository {
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers);
-    appendPlayfunRequestHeaders(headers);
 
     if (init?.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');

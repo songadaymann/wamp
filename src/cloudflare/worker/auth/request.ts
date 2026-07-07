@@ -5,16 +5,8 @@ import type { AuthSession, Env, RequestAuth } from '../core/types';
 import { loadAgentTokenAuth } from '../agents/store';
 import { loadSchoolAuthContextForUser } from '../school/store';
 import {
-  getPlayfunSessionTokenFromRequest,
-  loadPlayfunUserLinkByOgpId,
-  maybeLinkPlayfunUser,
-  validatePlayfunSessionToken,
-} from '../playfun/service';
-import {
   SESSION_MAX_AGE_SECONDS,
-  createUserForPlayfun,
   deleteSessionById,
-  findUserById,
   loadApiTokenAuth,
   loadSessionFromToken,
   parseCookie,
@@ -82,7 +74,6 @@ export async function loadOptionalRequestAuth(
   request: Request
 ): Promise<RequestAuth | null> {
   const isAdmin = isAdminRequest(env, request);
-  const preferHeaderAuth = shouldPreferHeaderAuthForMutation(request);
   const bearerToken = parseBearerToken(request.headers.get('Authorization'));
   if (bearerToken) {
     const tokenAuth = (await loadApiTokenAuth(env, bearerToken)) ?? (await loadAgentTokenAuth(env, bearerToken));
@@ -97,17 +88,9 @@ export async function loadOptionalRequestAuth(
     return requireEnabledSchoolContext(env, auth);
   }
 
-  if (preferHeaderAuth) {
-    const playfunAuth = await loadPlayfunRequestAuth(env, request, isAdmin);
-    if (playfunAuth || isAdmin) {
-      return playfunAuth;
-    }
-  }
-
   const session = await loadCurrentSession(env, request);
   if (session) {
     requireTrustedOriginForMutation(request);
-    await syncPlayfunLinkForUser(env, request, session.user.id);
     const auth = await attachSchoolContext(
       env,
       createUserRequestAuth('session', session.user, isAdmin, session, null),
@@ -119,7 +102,7 @@ export async function loadOptionalRequestAuth(
     await deleteSessionById(env, session.sessionId);
   }
 
-  return loadPlayfunRequestAuth(env, request, isAdmin);
+  return null;
 }
 
 export function requireTrustedOriginForMutation(request: Request): void {
@@ -128,10 +111,6 @@ export function requireTrustedOriginForMutation(request: Request): void {
   }
 
   throw new HttpError(403, 'Request origin is not trusted for cookie-authenticated mutations.');
-}
-
-function shouldPreferHeaderAuthForMutation(request: Request): boolean {
-  return isMutatingRequest(request) && !isTrustedRequestOrigin(request);
 }
 
 function isMutatingRequest(request: Request): boolean {
@@ -219,7 +198,7 @@ export function isAdminRequest(env: Env, request: Request): boolean {
 }
 
 export function hasScope(auth: RequestAuth, scope: ApiTokenScope): boolean {
-  return (auth.source === 'session' || auth.source === 'playfun') || auth.scopes?.includes(scope) === true;
+  return auth.source === 'session' || auth.scopes?.includes(scope) === true;
 }
 
 export function requireScope(auth: RequestAuth, scope: ApiTokenScope, actionLabel: string): void {
@@ -233,57 +212,15 @@ export function requireOptionalScope(
   scope: ApiTokenScope,
   actionLabel: string
 ): void {
-  if (!auth || auth.source === 'session' || auth.source === 'playfun') {
+  if (!auth || auth.source === 'session') {
     return;
   }
 
   requireScope(auth, scope, actionLabel);
 }
 
-async function loadPlayfunRequestAuth(
-  env: Env,
-  request: Request,
-  isAdmin: boolean
-): Promise<RequestAuth | null> {
-  const playfunSession = await validatePlayfunSessionToken(
-    env,
-    getPlayfunSessionTokenFromRequest(request)
-  );
-  if (!playfunSession) {
-    return null;
-  }
-
-  const existingLink = await loadPlayfunUserLinkByOgpId(env, playfunSession.ogpId);
-  const linkedUser = existingLink ? await findUserById(env, existingLink.user_id) : null;
-  const provisionalUser = linkedUser ?? (await createUserForPlayfun(env, playfunSession.ogpId));
-  const resolvedLink = await maybeLinkPlayfunUser(env, provisionalUser.id, playfunSession);
-  const resolvedUser = resolvedLink && resolvedLink.user_id !== provisionalUser.id
-    ? (await findUserById(env, resolvedLink.user_id)) ?? provisionalUser
-    : provisionalUser;
-  return attachSchoolContext(
-    env,
-    createUserRequestAuth('playfun', resolvedUser, isAdmin, null, null),
-  );
-}
-
-async function syncPlayfunLinkForUser(
-  env: Env,
-  request: Request,
-  userId: string
-): Promise<void> {
-  const playfunSession = await validatePlayfunSessionToken(
-    env,
-    getPlayfunSessionTokenFromRequest(request)
-  );
-  if (!playfunSession) {
-    return;
-  }
-
-  await maybeLinkPlayfunUser(env, userId, playfunSession);
-}
-
 function createUserRequestAuth(
-  source: 'session' | 'playfun',
+  source: 'session',
   user: AuthSession['user'],
   isAdmin: boolean,
   session: AuthSession | null,

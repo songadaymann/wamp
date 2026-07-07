@@ -6,10 +6,6 @@ import {
   type CourseSnapshot,
 } from '../courses/model';
 import type { RoomCoordinates } from '../persistence/roomModel';
-import {
-  appendPlayfunRequestHeaders,
-  notifyPlayfunEligibleActionSuccess,
-} from '../playfun/client';
 import { expandedRoomIdFromLegacyCourseId } from './model';
 
 export interface ExpandedRoomEditorCellRequestBody {
@@ -89,7 +85,6 @@ class ApiExpandedRoomEditorRepository implements ExpandedRoomEditorRepository {
         method: 'POST',
       },
     );
-    notifyPlayfunEligibleActionSuccess();
     return record;
   }
 
@@ -129,7 +124,6 @@ class ApiExpandedRoomEditorRepository implements ExpandedRoomEditorRepository {
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers);
-    appendPlayfunRequestHeaders(headers);
     if (init?.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }

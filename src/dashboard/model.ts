@@ -1,7 +1,7 @@
 export interface DashboardUserStats {
   total: number;
-  playfunLinked: number;
-  nonPlayfun: number;
+  legacyGeneratedLinked: number;
+  standard: number;
 }
 
 export interface DashboardRoomStats {
@@ -21,7 +21,7 @@ export interface DashboardDailyCountPoint {
 
 export interface DashboardHistoryStats {
   windowDays: number;
-  nonPlayfunSignupsPerDay: DashboardDailyCountPoint[];
+  standardSignupsPerDay: DashboardDailyCountPoint[];
   roomClaimsPerDay: DashboardDailyCountPoint[];
 }
 

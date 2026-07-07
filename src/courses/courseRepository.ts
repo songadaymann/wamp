@@ -13,11 +13,7 @@ import type {
   CourseRunStartRequestBody,
   CourseRunStartResponse,
 } from './runModel';
-import {
-  appendPlayfunRequestHeaders,
-  notifyPlayfunEligibleActionSuccess,
-} from '../playfun/client';
-import { filterCourseLeaderboardForCurrentSurface } from '../playfun/leaderboards';
+import { filterCourseLeaderboardForCurrentSurface } from '../generatedUsers/leaderboards';
 
 export interface CourseRepository {
   createCourse(snapshot: CourseSnapshot): Promise<CourseRecord>;
@@ -86,7 +82,6 @@ class ApiCourseRepository implements CourseRepository {
     const record = await this.request<CourseRecord>(`/api/courses/${encodeURIComponent(courseId)}/publish`, {
       method: 'POST',
     });
-    notifyPlayfunEligibleActionSuccess();
     return record;
   }
 
@@ -111,7 +106,6 @@ class ApiCourseRepository implements CourseRepository {
       method: 'POST',
       body: JSON.stringify(body),
     });
-    notifyPlayfunEligibleActionSuccess();
   }
 
   async submitCourseRating(
@@ -145,7 +139,6 @@ class ApiCourseRepository implements CourseRepository {
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers);
-    appendPlayfunRequestHeaders(headers);
     if (init?.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }

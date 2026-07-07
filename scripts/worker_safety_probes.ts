@@ -89,7 +89,7 @@ class MockD1Database {
       } as T;
     }
 
-    if (query.includes('users_playfun_filter')) {
+    if (query.includes('users_generated_filter')) {
       return { found: 0 } as T;
     }
 

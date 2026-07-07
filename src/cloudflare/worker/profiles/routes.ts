@@ -17,7 +17,7 @@ import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { findUserByDisplayName, findUserByUsername, updateUserProfile } from '../auth/store';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth } from '../auth/request';
-import { assertPlayfunOnlyDisplayNameChangeAllowed } from '../playfun/leaderboardIsolation';
+import { assertGeneratedOnlyDisplayNameChangeAllowed } from '../generatedUsers/leaderboardIsolation';
 import { assertNotSchoolRestricted } from '../school/restrictions';
 import { loadPublicProgressionSummary } from '../progression/store';
 import { loadCryptopunkAvatarPackRow } from '../avatars/store';
@@ -64,7 +64,7 @@ export async function handleProfileUpdateMe(request: Request, env: Env): Promise
   assertNotSchoolRestricted(auth, 'edit profile text');
   const body = await parseProfileUpdateBody(request);
 
-  await assertPlayfunOnlyDisplayNameChangeAllowed(env, auth.user, body.displayName);
+  await assertGeneratedOnlyDisplayNameChangeAllowed(env, auth.user, body.displayName);
 
   const existingUser = await findUserByDisplayName(env, body.displayName);
   if (existingUser && existingUser.id !== auth.user.id) {

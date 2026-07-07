@@ -21,8 +21,8 @@ import { HttpError, jsonResponse, parsePositiveIntegerQueryParam } from '../core
 import type { Env, RoomRushRunRow, RoomRushRunStartRow } from '../core/types';
 import {
   assertWampLeaderboardWriteAllowed,
-  sqlUserIdIsNotPlayfunOnly,
-} from '../playfun/leaderboardIsolation';
+  sqlUserIdIsNotLegacyGeneratedOnly,
+} from '../generatedUsers/leaderboardIsolation';
 import { loadPublishedExpandedRoomMembershipsInBounds } from '../expandedRooms/store';
 import { loadPublishedRoom, loadPublishedRoomsInBounds } from '../rooms/store';
 import { parseRoomRushRunStartBody, parseRoomRushRunSubmissionBody } from './requestBodies';
@@ -617,7 +617,7 @@ function buildRankedRoomRushCte(): string {
         AND result IN ('completed', 'failed')
         AND unique_rooms > 0
         AND elapsed_ms >= 0
-        AND ${sqlUserIdIsNotPlayfunOnly('room_rush_runs.user_id')}
+        AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_rush_runs.user_id')}
     ),
     best_runs AS (
       SELECT
