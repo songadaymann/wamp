@@ -1,15 +1,16 @@
 import type { DashboardStatsResponse } from '../../../dashboard/model';
 import { jsonResponse } from '../core/http';
 import type { Env } from '../core/types';
-import { sqlUserIdIsNotPlayfunOnly } from '../playfun/leaderboardIsolation';
+import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
+import { LEGACY_GENERATED_USER_LINKS_TABLE } from '../generatedUsers/legacySource';
 
 const MIN_COMPLETED_DASHBOARD_ELAPSED_MS = 500;
 const DASHBOARD_HISTORY_DAYS = 30;
 
 interface DashboardStatsRow {
   total_users: number | string | null;
-  playfun_linked_users: number | string | null;
-  non_playfun_users: number | string | null;
+  legacy_generated_linked_users: number | string | null;
+  standard_users: number | string | null;
   total_rooms: number | string | null;
   unique_room_builders: number | string | null;
   multi_room_builders: number | string | null;
@@ -35,7 +36,7 @@ export async function handleDashboardStatsRequest(
 async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
   const historyStartIso = startOfUtcDayDaysAgo(DASHBOARD_HISTORY_DAYS - 1).toISOString();
 
-  const [row, nonPlayfunRows, roomClaimRows] = await Promise.all([
+  const [row, standardSignupRows, roomClaimRows] = await Promise.all([
     env.DB.prepare(
       `
         SELECT
@@ -45,19 +46,19 @@ async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
             FROM users u
             WHERE EXISTS (
               SELECT 1
-              FROM playfun_user_links l
+              FROM ${LEGACY_GENERATED_USER_LINKS_TABLE} l
               WHERE l.user_id = u.id
             )
-          ) AS playfun_linked_users,
+          ) AS legacy_generated_linked_users,
           (
             SELECT COUNT(*)
             FROM users u
             WHERE NOT EXISTS (
               SELECT 1
-              FROM playfun_user_links l
+              FROM ${LEGACY_GENERATED_USER_LINKS_TABLE} l
               WHERE l.user_id = u.id
             )
-          ) AS non_playfun_users,
+          ) AS standard_users,
           (SELECT COUNT(*) FROM rooms) AS total_rooms,
           (
             SELECT COUNT(DISTINCT claimer_user_id)
@@ -82,7 +83,7 @@ async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
               WHERE result = 'completed'
                 AND elapsed_ms IS NOT NULL
                 AND elapsed_ms >= ?
-                AND ${sqlUserIdIsNotPlayfunOnly('room_runs.user_id')}
+                AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
               GROUP BY user_id, room_id, room_version
             ) AS distinct_completed_room_runs
           ) AS completed_room_challenges
@@ -99,7 +100,7 @@ async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
         WHERE u.created_at >= ?
           AND NOT EXISTS (
             SELECT 1
-            FROM playfun_user_links l
+            FROM ${LEGACY_GENERATED_USER_LINKS_TABLE} l
             WHERE l.user_id = u.id
           )
         GROUP BY substr(u.created_at, 1, 10)
@@ -124,9 +125,9 @@ async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
       .all<DashboardDailyCountRow>(),
   ]);
 
-  const nonPlayfunSignupsPerDay = createDailySeries(
+  const standardSignupsPerDay = createDailySeries(
     DASHBOARD_HISTORY_DAYS,
-    nonPlayfunRows.results
+    standardSignupRows.results
   );
   const roomClaimsPerDay = createDailySeries(
     DASHBOARD_HISTORY_DAYS,
@@ -137,8 +138,8 @@ async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
     generatedAt: new Date().toISOString(),
     users: {
       total: toCount(row?.total_users),
-      playfunLinked: toCount(row?.playfun_linked_users),
-      nonPlayfun: toCount(row?.non_playfun_users),
+      legacyGeneratedLinked: toCount(row?.legacy_generated_linked_users),
+      standard: toCount(row?.standard_users),
     },
     rooms: {
       totalBuilt: toCount(row?.total_rooms),
@@ -150,7 +151,7 @@ async function loadDashboardStats(env: Env): Promise<DashboardStatsResponse> {
     },
     history: {
       windowDays: DASHBOARD_HISTORY_DAYS,
-      nonPlayfunSignupsPerDay,
+      standardSignupsPerDay,
       roomClaimsPerDay,
     },
   };
@@ -163,7 +164,7 @@ function toCount(value: number | string | null | undefined): number {
 function createDailySeries(
   days: number,
   rows: DashboardDailyCountRow[]
-): DashboardStatsResponse['history']['nonPlayfunSignupsPerDay'] {
+): DashboardStatsResponse['history']['standardSignupsPerDay'] {
   const countsByDay = new Map<string, number>();
   for (const row of rows) {
     if (!row.day) {
@@ -173,7 +174,7 @@ function createDailySeries(
     countsByDay.set(row.day, toCount(row.count));
   }
 
-  const series: DashboardStatsResponse['history']['nonPlayfunSignupsPerDay'] = [];
+  const series: DashboardStatsResponse['history']['standardSignupsPerDay'] = [];
   for (let offset = days - 1; offset >= 0; offset -= 1) {
     const day = startOfUtcDayDaysAgo(offset).toISOString().slice(0, 10);
     series.push({

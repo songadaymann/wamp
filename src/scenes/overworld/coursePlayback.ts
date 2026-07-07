@@ -27,9 +27,8 @@ import {
 } from '../../persistence/roomModel';
 import { createRoomRepository } from '../../persistence/roomRepository';
 import {
-  isPlayfunSurfaceAuth,
   isWampLeaderboardEligibleAuth,
-} from '../../playfun/leaderboardPolicy';
+} from '../../generatedUsers/leaderboardPolicy';
 import {
   createActiveCourseRunState,
   type ActiveCourseRunState,
@@ -170,11 +169,9 @@ export class OverworldCoursePlaybackController {
     const localOnlyMessage =
       course.status !== 'published'
         ? 'Draft course run stays local.'
-        : isPlayfunSurfaceAuth(authState.source ?? null)
-          ? 'Play.fun course runs stay local on WAMP.'
-          : authState.authenticated
-            ? 'Ranked course submission unavailable.'
-            : 'Sign in to rank course runs.';
+        : authState.authenticated
+          ? 'Ranked course submission unavailable.'
+          : 'Sign in to rank course runs.';
     return createActiveCourseRunState({
       course: cloneCourseSnapshot(course),
       expandedRoomId:
@@ -416,8 +413,7 @@ export class OverworldCoursePlaybackController {
     return (
       runState.course.status === 'published' &&
       !runState.leaderboardEligible &&
-      !authState.authenticated &&
-      !isPlayfunSurfaceAuth(authState.source ?? null)
+      !authState.authenticated
     );
   }
 

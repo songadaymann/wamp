@@ -42,11 +42,6 @@ import {
   upsertMusicPhrasesForSnapshot,
 } from '../music/store';
 import {
-  enqueuePlayfunPointSync,
-  flushPlayfunPointSync,
-  linkPlayfunUserFromRequest,
-} from '../playfun/service';
-import {
   assertUserCanPublishContent,
   awardRoomPublishProgression,
 } from '../progression/store';
@@ -300,7 +295,7 @@ export async function handleRoomRequest(
       buildRoomMutationActor(auth),
       auth.isAdmin,
     );
-    const pointEvent = await awardRoomPublishPoints(
+    await awardRoomPublishPoints(
       env,
       auth.user.id,
       record.draft.id,
@@ -314,9 +309,6 @@ export async function handleRoomRequest(
         ),
       },
     );
-    if (pointEvent) {
-      await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
-    }
     await awardRoomPublishProgression(env, {
       userId: auth.user.id,
       roomId: record.draft.id,
@@ -356,7 +348,7 @@ export async function handleRoomRequest(
       buildRoomMutationActor(auth),
       auth.isAdmin,
     );
-    const pointEvent = await awardRoomPublishPoints(
+    await awardRoomPublishPoints(
       env,
       auth.user.id,
       record.draft.id,
@@ -370,9 +362,6 @@ export async function handleRoomRequest(
         ),
       },
     );
-    if (pointEvent) {
-      await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
-    }
     await awardRoomPublishProgression(env, {
       userId: auth.user.id,
       roomId: record.draft.id,
@@ -486,27 +475,4 @@ export async function handleRoomRequest(
   }
 
   throw new HttpError(405, 'Method not allowed.');
-}
-
-async function maybeMirrorPointEventToPlayfun(
-  env: Env,
-  request: Request,
-  userId: string,
-  pointEvent: { id: string; user_id: string; points: number; created_at: string },
-): Promise<void> {
-  if (pointEvent.points <= 0) {
-    return;
-  }
-
-  const playfunSession = await linkPlayfunUserFromRequest(env, request, userId);
-  if (!playfunSession) {
-    return;
-  }
-
-  try {
-    await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
-    await flushPlayfunPointSync(env, userId);
-  } catch (error) {
-    console.warn('Failed to mirror room point event to Play.fun', { userId, pointEventId: pointEvent.id, error });
-  }
 }

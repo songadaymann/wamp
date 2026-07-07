@@ -95,10 +95,6 @@ import {
   type CourseComposerState,
 } from '../ui/setup/sceneBridge';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../auth/client';
-import {
-  PLAYFUN_GAME_PAUSE_EVENT,
-  PLAYFUN_GAME_RESUME_EVENT,
-} from '../playfun/client';
 import { createRunRepository } from '../runs/runRepository';
 import type { MultiplayerInstanceClient } from '../multiplayer/instanceClient';
 import type { MultiplayerModeDefinition, MultiplayerModeId } from '../multiplayer/model';
@@ -377,8 +373,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly GUN_RECOIL_VELOCITY = 44;
   private readonly PROJECTILE_SPEED = 360;
   private readonly PROJECTILE_LIFETIME_MS = 720;
-  private playfunPauseDepth = 0;
-  private playfunPauseRequested = false;
   private roomGoalIntroFromOverworldPending = false;
   private forceRoomGoalIntroFromOverworldPending = false;
   private roomGoalIntroPauseRequested = false;
@@ -537,18 +531,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
   private pendingWarpSpawnRoomCoordinates: RoomCoordinates | null = null;
-  private readonly handlePlayfunGamePause = (): void => {
-    this.playfunPauseDepth += 1;
-    this.playfunPauseRequested = true;
-    this.syncScenePauseState();
-  };
-
-  private readonly handlePlayfunGameResume = (): void => {
-    this.playfunPauseDepth = Math.max(0, this.playfunPauseDepth - 1);
-    this.playfunPauseRequested = this.playfunPauseDepth > 0;
-    this.syncScenePauseState();
-  };
-
   private get pvpMatchClient(): MultiplayerInstanceClient | null {
     return this.pvpArenaController.getClient();
   }
@@ -2111,8 +2093,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.loadingText.setScrollFactor(0);
     this.loadingText.setDepth(200);
     this.viewportController.initialize();
-    window.addEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
-    window.addEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
     this.hudBridge = new OverworldHudBridge();
     this.fxController = new SceneFxController({
       scene: this,
@@ -3659,7 +3639,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private syncScenePauseState(): void {
-    const shouldPause = this.playfunPauseRequested || this.roomGoalIntroPauseRequested;
+    const shouldPause = this.roomGoalIntroPauseRequested;
     if (shouldPause === this.scenePauseApplied) {
       return;
     }
@@ -5990,10 +5970,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.clearPresenceSnapshotSyncTimer();
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     window.removeEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
-    window.removeEventListener(PLAYFUN_GAME_PAUSE_EVENT, this.handlePlayfunGamePause);
-    window.removeEventListener(PLAYFUN_GAME_RESUME_EVENT, this.handlePlayfunGameResume);
-    this.playfunPauseDepth = 0;
-    this.playfunPauseRequested = false;
     this.clearRoomGoalIntroState();
     this.scenePauseApplied = false;
     getRoomGoalIntroModalController()?.forceClose();

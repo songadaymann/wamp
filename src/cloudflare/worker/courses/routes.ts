@@ -31,14 +31,8 @@ import {
   requireOptionalScope,
 } from '../auth/request';
 import {
-  enqueuePlayfunPointSync,
-  flushPlayfunPointSync,
-  linkPlayfunUserFromRequest,
-  loadPlayfunUserLink,
-} from '../playfun/service';
-import {
   assertWampLeaderboardWriteAllowed,
-} from '../playfun/leaderboardIsolation';
+} from '../generatedUsers/leaderboardIsolation';
 import {
   awardCoursePublishPoints,
   awardCourseCreatorCompletionPoints,
@@ -206,14 +200,13 @@ export async function handleCoursePublish(
   }
 
   const record = await publishCourse(env, courseId, auth.user, auth.isAdmin, auth.source);
-  const pointEvent = await awardCoursePublishPoints(
+  await awardCoursePublishPoints(
     env,
     auth.user.id,
     record.draft.id,
     record.published?.version ?? record.draft.version,
     !existing.published
   );
-  await maybeMirrorAuthenticatedPointEventToPlayfun(env, request, auth.user.id, pointEvent);
   await awardCoursePublishProgression(env, {
     userId: auth.user.id,
     courseId: record.draft.id,
@@ -678,12 +671,10 @@ export async function handleCourseRunFinish(
         finalizedRun.attemptId;
   }
 
-  const pointEvent = await awardRunFinalizePoints(env, finalizedRun, {
+  await awardRunFinalizePoints(env, finalizedRun, {
     isFirstCompletion,
     isNewPersonalBest,
   });
-  await maybeMirrorAuthenticatedPointEventToPlayfun(env, request, auth.user.id, pointEvent);
-
   const creatorPointEvent =
     finalizedRun.result === 'completed'
       ? await awardCourseCreatorCompletionPoints(env, {
@@ -696,7 +687,6 @@ export async function handleCourseRunFinish(
       : null;
 
   if (creatorPointEvent) {
-    await maybeMirrorPointEventToLinkedPlayfunUser(env, creatorPointEvent.user_id, creatorPointEvent);
     await upsertUserStats(env, creatorPointEvent.user_id);
   }
 
@@ -1000,53 +990,4 @@ async function resolvePublishedCourseOwnerUserId(
     .first<{ owner_user_id: string | null }>();
 
   return row?.owner_user_id ?? null;
-}
-
-async function maybeMirrorAuthenticatedPointEventToPlayfun(
-  env: Env,
-  request: Request,
-  userId: string,
-  pointEvent: { id: string; user_id: string; points: number; created_at: string }
-): Promise<void> {
-  if (pointEvent.points <= 0) {
-    return;
-  }
-
-  const playfunSession = await linkPlayfunUserFromRequest(env, request, userId);
-  if (!playfunSession) {
-    return;
-  }
-
-  try {
-    await enqueuePlayfunPointSync(env, pointEvent, playfunSession.ogpId);
-    await flushPlayfunPointSync(env, userId);
-  } catch (error) {
-    console.warn('Failed to mirror course point event to Play.fun', { userId, pointEventId: pointEvent.id, error });
-  }
-}
-
-async function maybeMirrorPointEventToLinkedPlayfunUser(
-  env: Env,
-  userId: string,
-  pointEvent: { id: string; user_id: string; points: number; created_at: string }
-): Promise<void> {
-  if (pointEvent.points <= 0) {
-    return;
-  }
-
-  const link = await loadPlayfunUserLink(env, userId);
-  if (!link?.ogp_id) {
-    return;
-  }
-
-  try {
-    await enqueuePlayfunPointSync(env, pointEvent, link.ogp_id);
-    await flushPlayfunPointSync(env, userId);
-  } catch (error) {
-    console.warn('Failed to mirror linked course Play.fun point event', {
-      userId,
-      pointEventId: pointEvent.id,
-      error,
-    });
-  }
 }

@@ -14,9 +14,9 @@ import type {
 import type { Env } from '../core/types';
 import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
 import {
-  sqlHasPlayfunDisplayNamePrefix,
-  sqlUserIdIsPlayfunOnly,
-} from '../playfun/leaderboardIsolation';
+  sqlHasLegacyGeneratedDisplayNamePrefix,
+  sqlUserIdIsLegacyGeneratedOnly,
+} from '../generatedUsers/leaderboardIsolation';
 
 const METRICS_ROOM_ID = '__launch-stats__';
 const RECENT_SUMMARY_LIMIT = 80;
@@ -107,21 +107,21 @@ async function loadActivityRange(
   };
 }
 
-function sqlLaunchActivityIsPlayfunIdentity(
+function sqlLaunchActivityIsLegacyGeneratedIdentity(
   userIdExpression: string,
   displayNameExpression: string
 ): string {
   return `(
-    ${sqlUserIdIsPlayfunOnly(userIdExpression)}
-    OR COALESCE(${sqlHasPlayfunDisplayNamePrefix(displayNameExpression)}, 0)
+    ${sqlUserIdIsLegacyGeneratedOnly(userIdExpression)}
+    OR COALESCE(${sqlHasLegacyGeneratedDisplayNamePrefix(displayNameExpression)}, 0)
   )`;
 }
 
-function sqlLaunchActivityIsNotPlayfunIdentity(
+function sqlLaunchActivityIsNotLegacyGeneratedIdentity(
   userIdExpression: string,
   displayNameExpression: string
 ): string {
-  return `NOT ${sqlLaunchActivityIsPlayfunIdentity(userIdExpression, displayNameExpression)}`;
+  return `NOT ${sqlLaunchActivityIsLegacyGeneratedIdentity(userIdExpression, displayNameExpression)}`;
 }
 
 async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> {
@@ -220,7 +220,7 @@ async function loadActivityWindow(
         SELECT COUNT(*) AS count
         FROM users
         WHERE created_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity('users.id', 'users.display_name')}
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity('users.id', 'users.display_name')}
       `,
       [sinceIso]
     ),
@@ -231,7 +231,7 @@ async function loadActivityWindow(
         FROM sessions
         JOIN users ON users.id = sessions.user_id
         WHERE sessions.created_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity('users.id', 'users.display_name')}
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity('users.id', 'users.display_name')}
       `,
       [sinceIso]
     ),
@@ -288,7 +288,7 @@ async function loadActivityWindow(
         FROM magic_link_tokens
         JOIN users ON users.id = magic_link_tokens.user_id
         WHERE magic_link_tokens.created_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity('users.id', 'users.display_name')}
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity('users.id', 'users.display_name')}
       `,
       [sinceIso]
     ),
@@ -298,7 +298,7 @@ async function loadActivityWindow(
         SELECT COUNT(*) AS count
         FROM chat_messages
         WHERE created_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity('chat_messages.user_id', 'chat_messages.user_display_name')}
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity('chat_messages.user_id', 'chat_messages.user_display_name')}
       `,
       [sinceIso]
     ),
@@ -309,7 +309,7 @@ async function loadActivityWindow(
         FROM rooms
         WHERE claimed_at >= ?
           AND claimer_display_name IS NOT NULL
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'rooms.claimer_user_id',
             'rooms.claimer_display_name'
           )}
@@ -323,7 +323,7 @@ async function loadActivityWindow(
         FROM room_versions
         WHERE created_at >= ?
           AND published_by_display_name IS NOT NULL
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'room_versions.published_by_user_id',
             'room_versions.published_by_display_name'
           )}
@@ -337,7 +337,7 @@ async function loadActivityWindow(
         FROM course_versions
         WHERE created_at >= ?
           AND published_by_display_name IS NOT NULL
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'course_versions.published_by_user_id',
             'course_versions.published_by_display_name'
           )}
@@ -354,7 +354,7 @@ async function loadActivityWindow(
         FROM course_versions
         WHERE created_at >= ?
           AND published_by_display_name IS NOT NULL
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'course_versions.published_by_user_id',
             'course_versions.published_by_display_name'
           )}
@@ -368,7 +368,7 @@ async function loadActivityWindow(
         FROM expanded_room_versions
         WHERE created_at >= ?
           AND published_by_display_name IS NOT NULL
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'expanded_room_versions.published_by_user_id',
             'expanded_room_versions.published_by_display_name'
           )}
@@ -381,7 +381,7 @@ async function loadActivityWindow(
         SELECT COUNT(*) AS count
         FROM room_runs
         WHERE started_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'room_runs.user_id',
             'room_runs.user_display_name'
           )}
@@ -395,7 +395,7 @@ async function loadActivityWindow(
         FROM room_runs
         WHERE finished_at IS NOT NULL
           AND finished_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'room_runs.user_id',
             'room_runs.user_display_name'
           )}
@@ -408,7 +408,7 @@ async function loadActivityWindow(
         SELECT COUNT(*) AS count
         FROM course_runs
         WHERE started_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'course_runs.user_id',
             'course_runs.user_display_name'
           )}
@@ -424,7 +424,7 @@ async function loadActivityWindow(
         SELECT COUNT(*) AS count
         FROM course_runs
         WHERE started_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'course_runs.user_id',
             'course_runs.user_display_name'
           )}
@@ -438,7 +438,7 @@ async function loadActivityWindow(
         FROM course_runs
         WHERE finished_at IS NOT NULL
           AND finished_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'course_runs.user_id',
             'course_runs.user_display_name'
           )}
@@ -455,7 +455,7 @@ async function loadActivityWindow(
         FROM course_runs
         WHERE finished_at IS NOT NULL
           AND finished_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'course_runs.user_id',
             'course_runs.user_display_name'
           )}
@@ -468,7 +468,7 @@ async function loadActivityWindow(
         SELECT COUNT(*) AS count
         FROM expanded_room_runs
         WHERE started_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'expanded_room_runs.user_id',
             'expanded_room_runs.user_display_name'
           )}
@@ -482,7 +482,7 @@ async function loadActivityWindow(
         FROM expanded_room_runs
         WHERE finished_at IS NOT NULL
           AND finished_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'expanded_room_runs.user_id',
             'expanded_room_runs.user_display_name'
           )}
@@ -640,7 +640,7 @@ async function loadSignupSummaries(
         users.wallet_address AS wallet_address
       FROM users
       WHERE users.created_at >= ?
-        AND ${sqlLaunchActivityIsNotPlayfunIdentity('users.id', 'users.display_name')}
+        AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity('users.id', 'users.display_name')}
       ORDER BY users.created_at DESC
       LIMIT ?
     `
@@ -766,7 +766,7 @@ async function loadVisitOnlySummaries(
       JOIN users ON users.id = sessions.user_id
       WHERE sessions.created_at >= ?
         AND users.created_at < ?
-        AND ${sqlLaunchActivityIsNotPlayfunIdentity('users.id', 'users.display_name')}
+        AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity('users.id', 'users.display_name')}
       GROUP BY users.id, users.display_name
       HAVING NOT EXISTS (
         SELECT 1
@@ -855,7 +855,7 @@ async function loadRoomPlaySummaries(
           COUNT(DISTINCT room_runs.room_id) AS room_count
         FROM room_runs
         WHERE room_runs.started_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'room_runs.user_id',
             'room_runs.user_display_name'
           )}
@@ -896,7 +896,7 @@ async function loadRoomPlaySummaries(
           FROM room_runs
           LEFT JOIN rooms ON rooms.id = room_runs.room_id
           WHERE room_runs.started_at >= ?
-            AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+            AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
               'room_runs.user_id',
               'room_runs.user_display_name'
             )}
@@ -985,7 +985,7 @@ async function loadRoomBuildSummaries(
         WHERE rooms.claimed_at IS NOT NULL
           AND rooms.claimer_display_name IS NOT NULL
           AND rooms.claimed_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'rooms.claimer_user_id',
             'rooms.claimer_display_name'
           )}
@@ -1006,7 +1006,7 @@ async function loadRoomBuildSummaries(
         JOIN rooms ON rooms.id = room_versions.room_id
         WHERE room_versions.published_by_display_name IS NOT NULL
           AND room_versions.created_at >= ?
-          AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+          AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
             'room_versions.published_by_user_id',
             'room_versions.published_by_display_name'
           )}
@@ -1128,7 +1128,7 @@ async function loadCourseBuildSummaries(
        AND course_room_refs.course_version = course_versions.version
       WHERE course_versions.published_by_display_name IS NOT NULL
         AND course_versions.created_at >= ?
-        AND ${sqlLaunchActivityIsNotPlayfunIdentity(
+        AND ${sqlLaunchActivityIsNotLegacyGeneratedIdentity(
           'course_versions.published_by_user_id',
           'course_versions.published_by_display_name'
         )}

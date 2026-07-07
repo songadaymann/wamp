@@ -26,10 +26,6 @@ import type {
   RoomMetadataRefreshPrepareRequestBody,
   RoomMetadataRefreshPrepareResponse,
 } from '../mint/roomMetadata';
-import {
-  appendPlayfunRequestHeaders,
-  notifyPlayfunEligibleActionSuccess,
-} from '../playfun/client';
 
 export * from './roomModel';
 
@@ -579,7 +575,6 @@ class ApiRoomRepository implements RoomRepository {
           method: 'POST',
           body: JSON.stringify(room),
         });
-        notifyPlayfunEligibleActionSuccess();
         return record;
       },
       () => this.fallback?.publish(room)
@@ -599,7 +594,6 @@ class ApiRoomRepository implements RoomRepository {
           method: 'POST',
           body: JSON.stringify(body),
         });
-        notifyPlayfunEligibleActionSuccess();
         return record;
       },
       () => this.fallback?.revert(roomId, coordinates, targetVersion)
@@ -751,7 +745,6 @@ class ApiRoomRepository implements RoomRepository {
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers);
-    appendPlayfunRequestHeaders(headers);
 
     if (init?.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');

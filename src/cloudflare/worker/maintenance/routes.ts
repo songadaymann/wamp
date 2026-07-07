@@ -1,6 +1,10 @@
 import { clearSessionCookie } from '../auth/request';
 import { HttpError, jsonResponse } from '../core/http';
 import type { Env } from '../core/types';
+import {
+  LEGACY_GENERATED_POINT_SYNC_TABLE,
+  LEGACY_GENERATED_USER_LINKS_TABLE,
+} from '../generatedUsers/legacySource';
 
 export async function handleTestReset(request: Request, env: Env): Promise<Response> {
   if (env.ENABLE_TEST_RESET !== '1') {
@@ -25,8 +29,8 @@ export async function handleTestReset(request: Request, env: Env): Promise<Respo
     expandedRoomRuns: await countRows(env, 'expanded_room_runs'),
     expandedRoomRatings: await countRows(env, 'expanded_room_ratings'),
     userStats: await countRows(env, 'user_stats'),
-    playfunPointSync: await countRows(env, 'playfun_point_sync'),
-    playfunUserLinks: await countRows(env, 'playfun_user_links'),
+    legacyGeneratedPointSync: await countRows(env, LEGACY_GENERATED_POINT_SYNC_TABLE),
+    legacyGeneratedUserLinks: await countRows(env, LEGACY_GENERATED_USER_LINKS_TABLE),
     chatMessages: await countRows(env, 'chat_messages'),
     agents: await countRows(env, 'agents'),
     agentTokens: await countRows(env, 'agent_tokens'),
@@ -42,8 +46,8 @@ export async function handleTestReset(request: Request, env: Env): Promise<Respo
     env.DB.prepare('DELETE FROM magic_link_tokens'),
     env.DB.prepare('DELETE FROM sessions'),
     env.DB.prepare('DELETE FROM wallet_challenges'),
-    env.DB.prepare('DELETE FROM playfun_point_sync'),
-    env.DB.prepare('DELETE FROM playfun_user_links'),
+    env.DB.prepare(`DELETE FROM ${LEGACY_GENERATED_POINT_SYNC_TABLE}`),
+    env.DB.prepare(`DELETE FROM ${LEGACY_GENERATED_USER_LINKS_TABLE}`),
     env.DB.prepare('DELETE FROM user_stats'),
     env.DB.prepare('DELETE FROM expanded_room_ratings'),
     env.DB.prepare('DELETE FROM expanded_room_runs'),

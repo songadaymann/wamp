@@ -7,11 +7,6 @@ import {
 import { initSfx, globalSfxController } from './audio/sfx';
 import { runOverworldLodStress } from './debug/overworldLodStress';
 import { globalRoomMusicController, initRoomMusic } from './music/controller';
-import {
-  bootstrapPlayfunModeFromUrl,
-  getPlayfunDebugState,
-  setupPlayfunClient,
-} from './playfun/client';
 import { BootScene } from './scenes/BootScene';
 import { CourseEditorScene } from './scenes/CourseEditorScene';
 import { CourseComposerScene } from './scenes/CourseComposerScene';
@@ -90,7 +85,6 @@ const config: Phaser.Types.Core.GameConfig = {
   },
 };
 
-bootstrapPlayfunModeFromUrl();
 initializeAppFeedback();
 showBootSplash('Loading assets...', 0);
 logBootPhase('phaser-game:create-start', {
@@ -120,7 +114,6 @@ if (import.meta.env.DEV) {
 setupUI(game);
 logBootPhase('main:ui-ready');
 void setupAuthUi();
-void setupPlayfunClient();
 syncGameKeyboardFocus(game);
 
 const resizeGameToContainer = () => {
@@ -194,7 +187,6 @@ window.render_game_to_text = () =>
     chat: window.get_chat_debug_state?.() ?? null,
     device: getDeviceLayoutState(),
     touch: getTouchInputDebugState(),
-    playfun: getPlayfunDebugState(),
     sfx: window.get_sfx_debug_state?.() ?? globalSfxController.getDebugState(),
     music: globalRoomMusicController.getDebugState(),
     settings: {

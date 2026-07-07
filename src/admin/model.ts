@@ -168,13 +168,13 @@ export interface LaunchStatsResponse {
 
 export type SuspiciousSeverity = 'high' | 'medium' | 'low';
 
-export type SuspiciousUserBucket = 'real_players' | 'playfun_signals';
+export type SuspiciousUserBucket = 'real_players' | 'generated_signals';
 
 export type SuspiciousUserIdentityKind =
-  | 'no_playfun_signal'
-  | 'playfun_linked'
-  | 'playfun_only'
-  | 'playfun_name_heuristic';
+  | 'no_generated_signal'
+  | 'legacy_generated_linked'
+  | 'generated_only'
+  | 'generated_name_heuristic';
 
 export type SuspiciousSignalCode =
   | 'record_gap'
@@ -263,7 +263,6 @@ export interface SuspiciousInvalidationAuditSummary {
   roomRunCount: number;
   courseRunCount: number;
   pointEventCount: number;
-  remoteFollowUpRequired: boolean;
   createdAt: string;
 }
 
@@ -317,14 +316,6 @@ export interface SuspiciousInvalidationUserRecord {
   userDisplayName: string;
 }
 
-export interface SuspiciousPlayfunSyncRecord {
-  pointEventId: string;
-  ogpId: string;
-  points: number;
-  status: string;
-  syncedAt: string | null;
-}
-
 export interface SuspiciousInvalidationPreviewResponse {
   targetUserId: string;
   targetUserDisplayName: string;
@@ -335,8 +326,6 @@ export interface SuspiciousInvalidationPreviewResponse {
   runPointEvents: SuspiciousPointEventRecord[];
   creatorPointEvents: SuspiciousPointEventRecord[];
   affectedUsers: SuspiciousInvalidationUserRecord[];
-  playfunSync: SuspiciousPlayfunSyncRecord[];
-  remoteFollowUpRequired: boolean;
   summary: {
     roomRunsDeleted: number;
     courseRunsDeleted: number;

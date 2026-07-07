@@ -9,11 +9,7 @@ import type {
   ExpandedRoomRunStartRequestBody,
   ExpandedRoomRunStartResponse,
 } from './runModel';
-import {
-  appendPlayfunRequestHeaders,
-  notifyPlayfunEligibleActionSuccess,
-} from '../playfun/client';
-import { filterCourseLeaderboardForCurrentSurface } from '../playfun/leaderboards';
+import { filterCourseLeaderboardForCurrentSurface } from '../generatedUsers/leaderboards';
 
 export interface ExpandedRoomRepository {
   loadExpandedRoom(expandedRoomId: string): Promise<ResolvedExpandedRoomTarget>;
@@ -79,7 +75,6 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
       method: 'POST',
       body: JSON.stringify(body),
     });
-    notifyPlayfunEligibleActionSuccess();
   }
 
   async loadExpandedRoomLeaderboard(
@@ -116,7 +111,6 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers);
-    appendPlayfunRequestHeaders(headers);
 
     if (init?.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');

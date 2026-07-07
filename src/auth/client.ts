@@ -14,7 +14,6 @@ import { createPlayerAvatarPreviewDataUrl } from '../player/avatar/previews';
 import { setStoredPlayerAvatarId } from '../player/avatar/storage';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { apiRequest as requestApi } from '../api/request';
-import { appendPlayfunRequestHeaders } from '../playfun/state';
 import { createProfileRepository } from '../profiles/profileRepository';
 import { isOpenableProfileUserId, PROFILE_INVALIDATED_EVENT, requestProfileOpen } from '../ui/setup/profileEvents';
 import type {
@@ -1008,7 +1007,7 @@ function renderAuthUi(): void {
   const showDisplayNameRow = state.authenticated && !hasSavedDisplayName;
 
   if (authLogoutButton) {
-    authLogoutButton.classList.toggle('hidden', !state.authenticated || state.source === 'playfun');
+    authLogoutButton.classList.toggle('hidden', !state.authenticated);
     authLogoutButton.disabled = state.loading;
   }
 
@@ -1206,7 +1205,6 @@ function isGenericSignedInStatus(status: string): boolean {
   return (
     status.length === 0
     || status.startsWith('Signed in as ')
-    || status.startsWith('Signed in via Play.fun as ')
     || status.startsWith('Signed in with wallet ')
     || status.startsWith('Wallet linked to ')
   );
@@ -1246,7 +1244,7 @@ function getWalletButtonLabel(): string {
 }
 
 function maybeAutoOpenGuestPanel(): void {
-  if (guestPanelAutoOpened || state.authenticated || state.loading || !authPanel || isPlayfunVisitor()) {
+  if (guestPanelAutoOpened || state.authenticated || state.loading || !authPanel) {
     return;
   }
 
@@ -1254,15 +1252,6 @@ function maybeAutoOpenGuestPanel(): void {
   authPanel.classList.add('menu-open');
   authEmailInput?.focus();
   authEmailInput?.select();
-}
-
-function isPlayfunVisitor(): boolean {
-  if (document.body.dataset.playfunMode === 'true') {
-    return true;
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  return params.get('pf') === '1';
 }
 
 function setLoading(loading: boolean, status?: string): void {
@@ -1292,7 +1281,6 @@ function normalizeChatModerationViewer(
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return requestApi<T>(path, {
     ...init,
-    prepareHeaders: appendPlayfunRequestHeaders,
   });
 }
 
