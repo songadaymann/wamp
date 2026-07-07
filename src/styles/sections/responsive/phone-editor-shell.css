@@ -1,5 +1,6 @@
 body[data-device-class='phone'][data-app-mode='editor'] {
   --phone-editor-sheet-height: min(46vh, 344px);
+  --phone-editor-nav-height: 43px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-palette-mode='objects'] {
@@ -8,6 +9,32 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-palette-mode
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-palette-mode='objects'][data-editor-custom-object-filter='true'] {
   --phone-editor-sheet-height: min(66vh, 540px);
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'] {
+  --phone-editor-stage-height: min(
+    52dvh,
+    calc(min(100dvh, var(--app-viewport-height)) - var(--phone-editor-sheet-height) - var(--phone-editor-nav-height))
+  );
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] {
+  --phone-editor-stage-height: calc(
+    min(100dvh, var(--app-viewport-height)) - var(--phone-editor-nav-height) - var(--safe-bottom)
+  );
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'] #app {
+  grid-template-rows: var(--phone-editor-stage-height) minmax(0, 1fr);
+  align-content: start;
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'] #game-container {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  align-self: start;
+  width: 100%;
+  height: var(--phone-editor-stage-height);
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #sidebar {
@@ -46,6 +73,10 @@ body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-only {
 
 body[data-device-class='phone'] .desktop-editor-only {
   display: none !important;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #room-title-section.editor-room-title-overlay {
+  display: none;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .background-card-grid {

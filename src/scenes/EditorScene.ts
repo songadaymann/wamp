@@ -163,7 +163,7 @@ export class EditorScene extends Phaser.Scene {
     event.preventDefault();
   };
   private readonly handleResize = (): void => {
-    this.centerCameraOnRoom();
+    this.interactionController.handleViewportResize();
     this.updateBackgroundPreview();
     this.updateZoomUI();
   };
@@ -1348,10 +1348,6 @@ export class EditorScene extends Phaser.Scene {
 
   private setupCamera(): void {
     this.interactionController.setupCamera();
-  }
-
-  private centerCameraOnRoom(): void {
-    this.interactionController.centerCameraOnRoom();
   }
 
   private updateZoomUI(): void {
