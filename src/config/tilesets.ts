@@ -843,7 +843,7 @@ export const TILESETS: TilesetConfig[] = [
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_MICROMONO, NO_COLLISION_PROFILE),
     },
-    editorPaletteBackgroundColor: '#272624',
+    editorPaletteBackgroundColor: '#878682',
     uiTheme: {
       accentCool: 0x5ca9ff,
       accentWarm: 0xfbd45b,
