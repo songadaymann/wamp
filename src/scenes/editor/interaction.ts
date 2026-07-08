@@ -187,27 +187,18 @@ export class EditorInteractionController {
       ROOM_PX_HEIGHT + previewSpanY * 2 + margin * 2,
     );
     cam.transparent = true;
-    if (this.shouldUsePhonePortraitFit()) {
-      this.fitToScreen({ markManualAdjustment: false });
-    } else {
-      this.centerCameraOnRoom();
-    }
+    this.fitToScreen({ markManualAdjustment: false });
   }
 
   centerCameraOnRoom(): void {
     const cam = this.scene.cameras.main;
     cam.setZoom(editorState.zoom);
-    const viewWidth = cam.width / cam.zoom;
-    const viewHeight = cam.height / cam.zoom;
-    cam.setScroll(
-      ROOM_PX_WIDTH / 2 - viewWidth * cam.originX,
-      ROOM_PX_HEIGHT / 2 - viewHeight * cam.originY,
-    );
+    cam.centerOn(ROOM_PX_WIDTH / 2, ROOM_PX_HEIGHT / 2);
     this.constrainEditorCamera();
   }
 
   handleViewportResize(): void {
-    if (this.shouldUsePhonePortraitFit() && !this.hasUserAdjustedCamera) {
+    if (!this.hasUserAdjustedCamera) {
       this.fitToScreen({ markManualAdjustment: false });
       return;
     }
@@ -621,21 +612,23 @@ export class EditorInteractionController {
   private constrainEditorCamera(): void {
     const cam = this.scene.cameras.main;
     const bounds = cam.getBounds();
-    const viewWidth = cam.width / cam.zoom;
-    const viewHeight = cam.height / cam.zoom;
-    const boundsRight = bounds.x + bounds.width;
-    const boundsBottom = bounds.y + bounds.height;
-    const maxScrollX = boundsRight - viewWidth;
-    const maxScrollY = boundsBottom - viewHeight;
+    const visibleWidth = cam.displayWidth;
+    const visibleHeight = cam.displayHeight;
+    const cameraOriginX = cam.width * cam.originX;
+    const cameraOriginY = cam.height * cam.originY;
+    const minScrollX = bounds.x - cameraOriginX + visibleWidth * 0.5;
+    const maxScrollX = bounds.x + bounds.width - cameraOriginX - visibleWidth * 0.5;
+    const minScrollY = bounds.y - cameraOriginY + visibleHeight * 0.5;
+    const maxScrollY = bounds.y + bounds.height - cameraOriginY - visibleHeight * 0.5;
 
     cam.scrollX =
-      viewWidth >= bounds.width
-        ? bounds.x + bounds.width * 0.5 - viewWidth * cam.originX
-        : Phaser.Math.Clamp(cam.scrollX, bounds.x, maxScrollX);
+      visibleWidth >= bounds.width
+        ? bounds.centerX - cameraOriginX
+        : Phaser.Math.Clamp(cam.scrollX, minScrollX, maxScrollX);
     cam.scrollY =
-      viewHeight >= bounds.height
-        ? bounds.y + bounds.height * 0.5 - viewHeight * cam.originY
-        : Phaser.Math.Clamp(cam.scrollY, bounds.y, maxScrollY);
+      visibleHeight >= bounds.height
+        ? bounds.centerY - cameraOriginY
+        : Phaser.Math.Clamp(cam.scrollY, minScrollY, maxScrollY);
   }
 
   private handleZoom(zoomFactor: number): void {
