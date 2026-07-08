@@ -829,6 +829,27 @@ export const TILESETS: TilesetConfig[] = [
       accentHot: 0xff7865,
       accentAlt: 0x86d54a,
     },
+  },
+  {
+    key: 'micromonobold',
+    name: 'MicroMonoBold',
+    path: 'assets/tilesets/MicroMonoBold.png',
+    imageWidth: 128,
+    imageHeight: 336,
+    columns: 8,
+    rows: 21,
+    tileCount: 168,
+    firstGid: 1417,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_MICROMONO, NO_COLLISION_PROFILE),
+    },
+    editorPaletteBackgroundColor: '#272624',
+    uiTheme: {
+      accentCool: 0x5ca9ff,
+      accentWarm: 0xfbd45b,
+      accentHot: 0xff7865,
+      accentAlt: 0x86d54a,
+    },
   }
 ];
 
