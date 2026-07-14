@@ -23,6 +23,7 @@ export interface AssetsBinding {
 export interface Env {
   ASSETS: AssetsBinding;
   DB: D1Database;
+  JAM_DB: D1Database;
   ADMIN_API_KEY?: string;
   CHAT_OWNER_EMAILS?: string;
   ADMIN_REVIEW_EMAIL?: string;
@@ -64,6 +65,9 @@ export interface Env {
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
   GUESTBOOK_IP_HASH_SALT?: string;
+  JAM_IP_HASH_SALT?: string;
+  JAM_SUBMISSIONS_OPEN_AT?: string;
+  JAM_SUBMISSIONS_CLOSE_AT?: string;
 }
 
 export interface RoomRow {

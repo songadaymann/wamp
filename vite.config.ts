@@ -35,6 +35,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           main: resolve(process.cwd(), 'index.html'),
+          jam: resolve(process.cwd(), 'jam.html'),
           dashboard: resolve(process.cwd(), 'dashboard.html'),
           launchAdmin: resolve(process.cwd(), 'launch-admin.html'),
           backgroundAdmin: resolve(process.cwd(), 'background-admin.html'),

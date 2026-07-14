@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="ai-api-base" content="https://api.wamp.land" />
+    <meta
+      name="description"
+      content="Build one unforgettable WAMP Room. Enter the WAMP Solo Room Jam, July 20-26."
+    />
+    <meta property="og:title" content="WAMP Solo Room Jam" />
+    <meta
+      property="og:description"
+      content="Build one unforgettable Room. $500 in prizes, a special avatar for every participant, and live judging."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://wamp.land/jam" />
+    <title>WAMP Solo Room Jam</title>
+    <link rel="stylesheet" href="/src/jam.css" />
+  </head>
+  <body>
+    <header class="site-bar">
+      <a class="wamp-mark" href="/" aria-label="WAMP home">WAMP</a>
+      <span class="site-bar-date">July 20-26</span>
+    </header>
+
+    <main>
+      <section class="jam-hero" aria-labelledby="jam-title">
+        <div class="hero-scene" aria-hidden="true">
+          <img class="hero-layer hero-layer-sky" src="/assets/backgrounds/meadow/1.png" alt="" />
+          <img class="hero-layer hero-layer-clouds" src="/assets/backgrounds/meadow/2.png" alt="" />
+          <img class="hero-layer hero-layer-hills" src="/assets/backgrounds/meadow/3.png" alt="" />
+          <img class="hero-layer hero-layer-field" src="/assets/backgrounds/meadow/4.png" alt="" />
+        </div>
+
+        <div class="hero-layout">
+          <div class="hero-copy">
+            <p class="eyebrow">One Room. Any idea.</p>
+            <h1 id="jam-title">WAMP Solo<br />Room Jam</h1>
+            <p class="hero-lede">
+              Tell a story. Build a challenge. Make a maze. Create one unforgettable Room,
+              your way.
+            </p>
+            <div class="hero-facts" aria-label="Jam highlights">
+              <span>$500 in prizes</span>
+              <span>19 point score</span>
+              <span>Live judging</span>
+            </div>
+          </div>
+
+          <aside class="entry-panel" aria-labelledby="entry-heading">
+            <div class="entry-panel-heading">
+              <div>
+                <p class="panel-kicker">Your judged Room</p>
+                <h2 id="entry-heading">Submit your entry</h2>
+              </div>
+              <span id="entry-state" class="entry-state">Checking...</span>
+            </div>
+
+            <form id="jam-entry-form" novalidate>
+              <label for="jam-username">
+                WAMP username
+                <input
+                  id="jam-username"
+                  name="username"
+                  type="text"
+                  autocomplete="username"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  maxlength="24"
+                  placeholder="your-username"
+                  required
+                />
+              </label>
+
+              <label for="jam-email">
+                Connected email
+                <input
+                  id="jam-email"
+                  name="email"
+                  type="email"
+                  autocomplete="email"
+                  maxlength="254"
+                  placeholder="you@example.com"
+                  required
+                />
+              </label>
+
+              <label for="jam-room">
+                Room coordinates or URL
+                <input
+                  id="jam-room"
+                  name="roomReference"
+                  type="text"
+                  inputmode="url"
+                  maxlength="300"
+                  placeholder="12, -4 or wamp.land/r/12/-4"
+                  aria-describedby="room-reference-help"
+                  required
+                />
+                <span id="room-reference-help" class="field-help">
+                  The Room must belong to the account above.
+                </span>
+              </label>
+
+              <label class="honeypot" for="jam-website" aria-hidden="true">
+                Website
+                <input id="jam-website" name="website" type="text" tabindex="-1" autocomplete="off" />
+              </label>
+
+              <div id="jam-turnstile" class="turnstile-slot hidden"></div>
+
+              <label class="rules-check" for="jam-rules">
+                <input id="jam-rules" name="rulesAccepted" type="checkbox" required />
+                <span>I made this Room, it was newly claimed July 20-26, and I accept the jam rules.</span>
+              </label>
+
+              <button id="jam-submit" type="submit">Submit Room</button>
+              <div id="jam-status" class="form-status" role="status" aria-live="polite"></div>
+            </form>
+          </aside>
+        </div>
+      </section>
+
+      <section class="prize-band" aria-labelledby="prizes-title">
+        <div class="section-inner prize-layout">
+          <div class="section-heading">
+            <p class="eyebrow">Prizes</p>
+            <h2 id="prizes-title">Make the Room<br />we remember.</h2>
+          </div>
+          <ol class="podium">
+            <li class="podium-place second"><span>2nd</span><strong>$150</strong></li>
+            <li class="podium-place first"><span>1st</span><strong>$300</strong></li>
+            <li class="podium-place third"><span>3rd</span><strong>$50</strong></li>
+          </ol>
+          <div class="prize-extras">
+            <p><strong>Every participant</strong> gets a special playable avatar.</p>
+            <p><strong>Top ten creators</strong> get a profile badge, name badge, and a ribbon on their Room.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="brief-band" aria-labelledby="brief-title">
+        <div class="section-inner brief-grid">
+          <div class="section-heading">
+            <p class="eyebrow">The brief</p>
+            <h2 id="brief-title">Do anything.<br />Use one Room.</h2>
+          </div>
+          <div class="brief-copy">
+            <p>
+              Tell a story with NPCs and Signs. Challenge players with parkour, enemies,
+              and hazards. Construct a maze of portals and locked doors. Express your
+              creativity any way you want, as long as the judged experience fits in a single Room.
+            </p>
+            <p>
+              You can create more Rooms, and we hope you do, but the judges will score only one.
+            </p>
+          </div>
+          <dl class="deadline-grid">
+            <div><dt>Build window</dt><dd>July 20-26</dd></div>
+            <div><dt>Deadline</dt><dd>July 26, 11:59 PM ET</dd></div>
+            <div><dt>Judges</dt><dd>3 scores averaged</dd></div>
+            <div><dt>Maximum</dt><dd>19 points</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="rules-section" aria-labelledby="scoring-title">
+        <div class="section-inner">
+          <div class="rules-heading">
+            <p class="eyebrow">Full rules</p>
+            <h2 id="scoring-title">How scoring works</h2>
+            <p>Each judge scores every Room. All three scores are averaged, with a maximum score of 19 points.</p>
+          </div>
+
+          <div class="score-list">
+            <article class="score-category">
+              <header><h3>Game Design</h3><strong>0-5</strong></header>
+              <p>Use objectives, enemies, collectibles, and puzzle mechanics to make the Room fun.</p>
+              <ol start="0">
+                <li><b>0</b> Totally unplayable. Players cannot move or do anything on entry.</li>
+                <li><b>1</b> Playable, but there is nothing to do.</li>
+                <li><b>2</b> Mechanics or objectives make it more than a space to navigate.</li>
+                <li><b>3</b> The objective makes sense and every required object is present and usable.</li>
+                <li><b>4</b> The objective is fun and challenging.</li>
+                <li><b>5</b> Judges want to keep replaying for faster leaderboard times.</li>
+              </ol>
+            </article>
+
+            <article class="score-category">
+              <header><h3>Level Design</h3><strong>0-3</strong></header>
+              <p>Consider the layout, interesting routes, and whether reachable areas work as expected.</p>
+              <ol start="0">
+                <li><b>0</b> Totally unplayable. Players cannot move or do anything on entry.</li>
+                <li><b>1</b> The Room can be played.</li>
+                <li><b>2</b> Every area that looks accessible can be reached.</li>
+                <li><b>3</b> The Room is interesting to explore and may flow well into neighboring spaces.</li>
+              </ol>
+              <p class="score-note">Neighbors blocking travel from their side will not count against you.</p>
+            </article>
+
+            <article class="score-category">
+              <header><h3>Level Decoration</h3><strong>0-4</strong></header>
+              <p>Use decorative tiles and objects to make the Room feel beautiful and complete.</p>
+              <ol start="0">
+                <li><b>0</b> Bare, with no decorative tiles or objects.</li>
+                <li><b>1</b> Some decoration is present.</li>
+                <li><b>2</b> Decoration supports the Room's theme.</li>
+                <li><b>3</b> Detailed, polished, and complete.</li>
+              </ol>
+              <p class="bonus"><b>+1 bonus</b> Lighting and weather enhance the mood.</p>
+            </article>
+
+            <article class="score-category">
+              <header><h3>Music</h3><strong>0-4</strong></header>
+              <p>Use the music editor to create a mood for your Room.</p>
+              <ol start="0">
+                <li><b>0</b> The music is painful to listen to.</li>
+                <li><b>1</b> There is no music.</li>
+                <li><b>2</b> The music is listenable.</li>
+                <li><b>3</b> The music is catchy enough to hum after playing.</li>
+              </ol>
+              <p class="bonus"><b>+1 bonus</b> Multiple sequencer tracks create a longer song.</p>
+            </article>
+
+            <article class="score-category">
+              <header><h3>Storytelling</h3><strong>0-3</strong></header>
+              <p>Add a narrative told through level design and text.</p>
+              <ol start="0">
+                <li><b>0</b> No story seems to be present.</li>
+                <li><b>1</b> Basic environmental storytelling.</li>
+                <li><b>2</b> Signs and NPCs convey more of the story.</li>
+                <li><b>3</b> The single-Room story hooks the judges and leaves them wanting more.</li>
+              </ol>
+            </article>
+          </div>
+
+          <div class="official-rules" aria-labelledby="official-rules-title">
+            <h2 id="official-rules-title">Entry and conduct rules</h2>
+            <ul>
+              <li>The Room must be a newly claimed space between July 20 and July 26.</li>
+              <li>Submit your username, connected email, and Room coordinates or URL by July 26 at 11:59 PM Eastern Time (NYC).</li>
+              <li>Make sure the coordinates match the Room URL so you do not submit the wrong Room.</li>
+              <li>Keep a valid email connected to your WAMP account so the team can contact you.</li>
+              <li>Custom objects and backgrounds are allowed when your Build Level permits them, but they do not earn bonus points.</li>
+              <li>Prizes may be paid in USD through PayPal or in USDC to an Ethereum wallet address.</li>
+              <li>Judges will play experiences live on stream on Monday the 20th and record scores. Final results will be announced after every submission has been played and scored.</li>
+              <li>Judges' decisions are final. Harassment, score ranting, or other unsportsmanlike conduct can result in removal from events, WAMP, Discord, and related social spaces.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <a class="wamp-mark" href="/">WAMP</a>
+      <p>We All Make A Platformer</p>
+      <a href="#jam-title">Back to top</a>
+    </footer>
+
+    <script type="module" src="/src/jam.ts"></script>
+  </body>
+</html>

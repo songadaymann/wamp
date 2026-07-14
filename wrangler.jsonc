@@ -11,6 +11,8 @@
     "not_found_handling": "single-page-application"
   },
   "vars": {
+    "JAM_SUBMISSIONS_OPEN_AT": "2026-07-20T04:00:00.000Z",
+    "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-27T03:59:59.999Z",
     "PARTYKIT_HOST": "everybodys-platformer-presence.songadaymann.partykit.dev",
     "PARTYKIT_PARTY": "main",
     "ROOM_DAILY_CLAIM_LIMIT": "4"
@@ -21,6 +23,12 @@
       "database_name": "everybodys-platformer-db",
       "database_id": "3cba45fc-4f29-4081-89f7-c57ab3179292",
       "migrations_dir": "./migrations"
+    },
+    {
+      "binding": "JAM_DB",
+      "database_name": "wamp-solo-room-jam-db",
+      "database_id": "c642b3e2-cbb5-471a-bc13-95dc8c40488c",
+      "migrations_dir": "./jam-migrations"
     }
   ],
   "env": {
@@ -29,6 +37,8 @@
       "preview_urls": true,
       "vars": {
         "ENABLE_TEST_RESET": "0",
+        "JAM_SUBMISSIONS_OPEN_AT": "2026-07-01T04:00:00.000Z",
+        "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-27T03:59:59.999Z",
         "PARTYKIT_HOST": "everybodys-platformer-presence-safety.songadaymann.partykit.dev",
         "PARTYKIT_PARTY": "main",
         "ROOM_MINT_DISABLED": "1"
@@ -39,6 +49,12 @@
           "database_name": "everybodys-platformer-safety-db",
           "database_id": "27f64d18-5d6d-45a0-9361-c09ec1a805a6",
           "migrations_dir": "./migrations"
+        },
+        {
+          "binding": "JAM_DB",
+          "database_name": "wamp-solo-room-jam-safety-db",
+          "database_id": "78b05f25-732e-4162-8e7c-b6f71e3b058d",
+          "migrations_dir": "./jam-migrations"
         }
       ]
     }

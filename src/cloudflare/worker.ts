@@ -14,6 +14,7 @@ import { handleChatRequest } from './worker/chat/routes';
 import { handleGuestActivityHeartbeat } from './worker/guestActivity/routes';
 import { handleGuestRoomDraftRequest } from './worker/guestRoomDrafts/routes';
 import { handleGuestbookRequest } from './worker/guestbook/routes';
+import { handleJamRequest } from './worker/jam/routes';
 import {
   handleCourseCreate,
   handleCourseDraftByRoomLookup,
@@ -106,6 +107,15 @@ type WorkerExecutionContext = {
 export default {
   async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === '/jam/' && (request.method === 'GET' || request.method === 'HEAD')) {
+      url.pathname = '/jam';
+      return new Response(null, {
+        status: 308,
+        headers: { Location: url.toString() },
+      });
+    }
+
     const assetAlias = resolvePublicAssetAlias(url.pathname);
 
     if (assetAlias && (request.method === 'GET' || request.method === 'HEAD')) {
@@ -219,6 +229,10 @@ export default {
 
       if (url.pathname.startsWith('/api/guestbook')) {
         return await handleGuestbookRequest(request, url, env);
+      }
+
+      if (url.pathname.startsWith('/api/jam')) {
+        return await handleJamRequest(request, url, env);
       }
 
       if (url.pathname === '/api/settings/me' && request.method === 'GET') {
@@ -643,6 +657,10 @@ export default {
 };
 
 function resolvePublicAssetAlias(pathname: string): string | null {
+  if (pathname === '/jam') {
+    return '/jam.html';
+  }
+
   if (pathname === '/dashboard' || pathname === '/dashboard/') {
     return '/dashboard.html';
   }

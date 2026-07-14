@@ -53,6 +53,8 @@ const PREVIEW_HEIGHT = ROOM_HEIGHT * PREVIEW_TILE_SIZE;
 const GAME_OBJECT_CONFIG_BY_ID = new Map(GAME_OBJECTS.map((config) => [config.id, config]));
 const imageDataCache = new Map();
 const STANDALONE_PAGE_ALIASES = new Map([
+  ['/jam', '/jam.html'],
+  ['/jam.html', '/jam.html'],
   ['/school-admin', '/school-admin.html'],
   ['/school-admin/', '/school-admin.html'],
   ['/school-admin.html', '/school-admin.html'],
@@ -64,6 +66,14 @@ const STANDALONE_PAGE_ALIASES = new Map([
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/jam/' && (request.method === 'GET' || request.method === 'HEAD')) {
+      url.pathname = '/jam';
+      return new Response(null, {
+        status: 308,
+        headers: { Location: url.toString() },
+      });
+    }
+
     const standalonePage = STANDALONE_PAGE_ALIASES.get(url.pathname);
     if (standalonePage) {
       if (request.method !== 'GET' && request.method !== 'HEAD') {
