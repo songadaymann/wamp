@@ -26,9 +26,30 @@ export interface ParsedJamRoomReference {
 export interface JamConfigResponse {
   openAt: string;
   closeAt: string;
+  registrationOpen: boolean;
   submissionsOpen: boolean;
   turnstileSiteKey: string | null;
   turnstileRequired: boolean;
+}
+
+export interface JamRegistrationRequestBody {
+  username: string;
+  email: string;
+  rulesAccepted: boolean;
+  website?: string;
+  turnstileToken?: string | null;
+}
+
+export interface JamRegistrationPublic {
+  id: string;
+  username: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JamRegistrationResponse {
+  registration: JamRegistrationPublic;
+  updated: boolean;
 }
 
 export interface JamSubmissionRequestBody {

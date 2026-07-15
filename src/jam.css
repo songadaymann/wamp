@@ -300,6 +300,40 @@ a:focus-visible {
   font-weight: 400;
 }
 
+.account-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: -7px;
+  font-size: 13px;
+}
+
+#jam-create-account {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  background: var(--cyan);
+  color: var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+  font-family: 'Early Gameboy', monospace;
+  font-size: 7px;
+  line-height: 1.35;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+#jam-create-account:hover:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+#jam-create-account:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .rules-check {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);

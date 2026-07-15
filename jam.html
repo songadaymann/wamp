@@ -39,7 +39,7 @@
             <h1 id="jam-title">WAMP Solo<br />Room Jam</h1>
             <p class="hero-lede">
               Tell a story. Build a challenge. Make a maze. Create one unforgettable Room,
-              your way.
+              your way. Join now and we'll remind you when building begins.
             </p>
             <div class="hero-facts" aria-label="Jam highlights">
               <span>$500 in prizes</span>
@@ -51,10 +51,10 @@
           <aside class="entry-panel" aria-labelledby="entry-heading">
             <div class="entry-panel-heading">
               <div>
-                <p class="panel-kicker">Your judged Room</p>
-                <h2 id="entry-heading">Submit your entry</h2>
+                <p id="panel-kicker" class="panel-kicker">Save your spot</p>
+                <h2 id="entry-heading">Join the jam</h2>
               </div>
-              <span id="entry-state" class="entry-state">Checking...</span>
+              <span id="entry-state" class="entry-state">Signups open</span>
             </div>
 
             <form id="jam-entry-form" novalidate>
@@ -71,10 +71,13 @@
                   placeholder="your-username"
                   required
                 />
+                <span id="jam-username-help" class="field-help">
+                  No account yet? Enter the username you plan to use.
+                </span>
               </label>
 
               <label for="jam-email">
-                Connected email
+                <span id="jam-email-label">Email address</span>
                 <input
                   id="jam-email"
                   name="email"
@@ -86,7 +89,12 @@
                 />
               </label>
 
-              <label for="jam-room">
+              <div id="account-action" class="account-action">
+                <span>New to WAMP?</span>
+                <button id="jam-create-account" type="button">Create account</button>
+              </div>
+
+              <label id="jam-room-field" class="hidden" for="jam-room">
                 Room coordinates or URL
                 <input
                   id="jam-room"
@@ -112,10 +120,10 @@
 
               <label class="rules-check" for="jam-rules">
                 <input id="jam-rules" name="rulesAccepted" type="checkbox" required />
-                <span>I made this Room, it was newly claimed July 20-26, and I accept the jam rules.</span>
+                <span id="jam-rules-copy">I want to join the jam and I accept the jam rules.</span>
               </label>
 
-              <button id="jam-submit" type="submit">Submit Room</button>
+              <button id="jam-submit" type="submit">Join the Jam</button>
               <div id="jam-status" class="form-status" role="status" aria-live="polite"></div>
             </form>
           </aside>

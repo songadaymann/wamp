@@ -53,14 +53,14 @@ const PREVIEW_HEIGHT = ROOM_HEIGHT * PREVIEW_TILE_SIZE;
 const GAME_OBJECT_CONFIG_BY_ID = new Map(GAME_OBJECTS.map((config) => [config.id, config]));
 const imageDataCache = new Map();
 const STANDALONE_PAGE_ALIASES = new Map([
-  ['/jam', '/jam.html'],
-  ['/jam.html', '/jam.html'],
-  ['/school-admin', '/school-admin.html'],
-  ['/school-admin/', '/school-admin.html'],
-  ['/school-admin.html', '/school-admin.html'],
-  ['/school-login', '/school-login.html'],
-  ['/school-login/', '/school-login.html'],
-  ['/school-login.html', '/school-login.html'],
+  ['/jam', '/__standalone/jam.asset'],
+  ['/jam.html', '/__standalone/jam.asset'],
+  ['/school-admin', '/__standalone/school-admin.asset'],
+  ['/school-admin/', '/__standalone/school-admin.asset'],
+  ['/school-admin.html', '/__standalone/school-admin.asset'],
+  ['/school-login', '/__standalone/school-login.asset'],
+  ['/school-login/', '/__standalone/school-login.asset'],
+  ['/school-login.html', '/__standalone/school-login.asset'],
 ]);
 
 export default {
@@ -149,13 +149,9 @@ export default {
 
 async function fetchStandalonePageAsset(request, env, pathname) {
   const url = new URL(request.url);
-  const apiBaseUrl = resolveApiBaseUrl(env, url);
-  const assetUrl = new URL(pathname, `${apiBaseUrl}/`);
-  const response = await fetch(assetUrl.toString(), {
-    method: request.method === 'HEAD' ? 'GET' : request.method,
-    headers: { Accept: 'text/html' },
-    redirect: 'follow',
-  });
+  url.pathname = pathname;
+  const assetRequest = new Request(url.toString(), request);
+  const response = await env.ASSETS.fetch(assetRequest);
   const headers = new Headers(response.headers);
   headers.set('Content-Type', 'text/html; charset=utf-8');
   headers.set('Cache-Control', 'public, max-age=60, s-maxage=300');

@@ -6,6 +6,8 @@ import {
   JAM_SLUG,
   parseJamRoomReference,
   type JamConfigResponse,
+  type JamRegistrationRequestBody,
+  type JamRegistrationResponse,
   type JamSubmissionRequestBody,
   type JamSubmissionResponse,
 } from '../../../jam/model';
@@ -13,7 +15,7 @@ import { normalizeProfileUsername, validateProfileUsername } from '../../../prof
 import { requireTrustedOriginForMutation } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
-import { upsertJamSubmission } from './store';
+import { upsertJamRegistration, upsertJamSubmission } from './store';
 
 const MAX_REQUEST_BODY_BYTES = 8 * 1024;
 const MAX_EMAIL_LENGTH = 254;
@@ -39,6 +41,10 @@ export async function handleJamRequest(request: Request, url: URL, env: Env): Pr
     return handleJamSubmissionCreate(request, env);
   }
 
+  if (url.pathname === '/api/jam/registrations' && request.method === 'POST') {
+    return handleJamRegistrationCreate(request, env);
+  }
+
   throw new HttpError(404, 'Jam route not found.');
 }
 
@@ -49,6 +55,7 @@ function handleJamConfig(request: Request, env: Env): Response {
   const response: JamConfigResponse = {
     openAt,
     closeAt,
+    registrationOpen: now <= Date.parse(closeAt),
     submissionsOpen: now >= Date.parse(openAt) && now <= Date.parse(closeAt),
     turnstileSiteKey: env.TURNSTILE_SITE_KEY?.trim() || null,
     turnstileRequired: Boolean(env.TURNSTILE_SECRET_KEY?.trim()),
@@ -59,6 +66,46 @@ function handleJamConfig(request: Request, env: Env): Response {
   });
 }
 
+async function handleJamRegistrationCreate(request: Request, env: Env): Promise<Response> {
+  requireTrustedOriginForMutation(request);
+  assertRegistrationWindowOpen(env);
+
+  const body = await parseJsonBody<JamRegistrationRequestBody>(request, {
+    maxBytes: MAX_REQUEST_BODY_BYTES,
+  });
+  assertHoneypotEmpty(body.website);
+  const username = normalizeJamUsername(body.username);
+  const email = normalizeEmail(body.email);
+  if (body.rulesAccepted !== true) {
+    throw new HttpError(400, 'Accept the jam rules before joining.');
+  }
+
+  const nowIso = new Date().toISOString();
+  const remoteIp = getRequestIp(request);
+  const turnstileVerifiedAt = await verifyTurnstileToken(
+    env,
+    body.turnstileToken,
+    remoteIp,
+    nowIso,
+  );
+  const matchedAccount = await findMatchingJamAccount(env, username, email);
+  const result = await upsertJamRegistration(env, {
+    jamSlug: JAM_SLUG,
+    username: matchedAccount?.username ?? username,
+    usernameNormalized: username,
+    email: matchedAccount?.email ?? email,
+    emailNormalized: email,
+    matchedUserId: matchedAccount?.id ?? null,
+    ipHash: remoteIp ? await hashJamIp(env, remoteIp) : null,
+    userAgent: normalizeHeaderValue(request.headers.get('User-Agent')),
+    turnstileVerifiedAt,
+    nowIso,
+  });
+
+  const response: JamRegistrationResponse = result;
+  return jsonResponse(request, response, { status: result.updated ? 200 : 201 });
+}
+
 async function handleJamSubmissionCreate(request: Request, env: Env): Promise<Response> {
   requireTrustedOriginForMutation(request);
   assertSubmissionWindowOpen(env);
@@ -66,15 +113,8 @@ async function handleJamSubmissionCreate(request: Request, env: Env): Promise<Re
   const body = await parseJsonBody<JamSubmissionRequestBody>(request, {
     maxBytes: MAX_REQUEST_BODY_BYTES,
   });
-  if (typeof body.website === 'string' && body.website.trim()) {
-    throw new HttpError(400, 'Submission could not be accepted.');
-  }
-
-  const username = normalizeProfileUsername(body.username);
-  const usernameError = validateProfileUsername(username);
-  if (usernameError) {
-    throw new HttpError(400, usernameError);
-  }
+  assertHoneypotEmpty(body.website);
+  const username = normalizeJamUsername(body.username);
   const email = normalizeEmail(body.email);
   const roomReferenceInput = normalizeRoomReferenceInput(body.roomReference);
   const roomReference = parseJamRoomReference(roomReferenceInput);
@@ -121,6 +161,13 @@ async function handleJamSubmissionCreate(request: Request, env: Env): Promise<Re
   return jsonResponse(request, response, { status: result.updated ? 200 : 201 });
 }
 
+function assertRegistrationWindowOpen(env: Env): void {
+  const closeAt = getConfiguredTimestamp(env.JAM_SUBMISSIONS_CLOSE_AT, DEFAULT_JAM_SUBMISSIONS_CLOSE_AT);
+  if (Date.now() > Date.parse(closeAt)) {
+    throw new HttpError(410, 'Jam registration closed July 26 at 11:59 PM Eastern.');
+  }
+}
+
 function assertSubmissionWindowOpen(env: Env): void {
   const openAt = getConfiguredTimestamp(env.JAM_SUBMISSIONS_OPEN_AT, DEFAULT_JAM_SUBMISSIONS_OPEN_AT);
   const closeAt = getConfiguredTimestamp(env.JAM_SUBMISSIONS_CLOSE_AT, DEFAULT_JAM_SUBMISSIONS_CLOSE_AT);
@@ -134,6 +181,19 @@ function assertSubmissionWindowOpen(env: Env): void {
 }
 
 async function loadMatchingJamAccount(env: Env, username: string, email: string): Promise<JamAccountRow> {
+  const account = await findMatchingJamAccount(env, username, email);
+
+  if (!account) {
+    throw new HttpError(400, 'Use the username and email connected to the same WAMP account.');
+  }
+  return account;
+}
+
+async function findMatchingJamAccount(
+  env: Env,
+  username: string,
+  email: string,
+): Promise<JamAccountRow | null> {
   const account = await env.DB.prepare(
     `
       SELECT id, username, email
@@ -146,10 +206,7 @@ async function loadMatchingJamAccount(env: Env, username: string, email: string)
     .bind(username, email)
     .first<JamAccountRow>();
 
-  if (!account?.username || !account.email) {
-    throw new HttpError(400, 'Use the username and email connected to the same WAMP account.');
-  }
-  return account;
+  return account?.username && account.email ? account : null;
 }
 
 async function assertJamRoomOwnedByAccount(
@@ -199,6 +256,21 @@ function normalizeEmail(value: unknown): string {
     throw new HttpError(400, 'Enter a valid email address.');
   }
   return email;
+}
+
+function normalizeJamUsername(value: unknown): string {
+  const username = normalizeProfileUsername(value);
+  const usernameError = validateProfileUsername(username);
+  if (usernameError) {
+    throw new HttpError(400, usernameError);
+  }
+  return username;
+}
+
+function assertHoneypotEmpty(value: unknown): void {
+  if (typeof value === 'string' && value.trim()) {
+    throw new HttpError(400, 'Submission could not be accepted.');
+  }
 }
 
 function normalizeRoomReferenceInput(value: unknown): string {
