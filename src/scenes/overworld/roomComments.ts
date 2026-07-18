@@ -193,6 +193,7 @@ const BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MIN = 20;
 const BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MAX = 38;
 
 export class OverworldRoomCommentsController {
+  private nextVisualSyncAt = 0;
   private readonly browseMarkerScaleConfig: RoomBadgeScaleConfig = {
     hideZoom: BROWSE_COMMENT_HIDE_ZOOM,
     fadeStartZoom: BROWSE_COMMENT_FADE_START_ZOOM,
@@ -261,6 +262,7 @@ export class OverworldRoomCommentsController {
     const nextSignature = room ? this.getRoomSignature(room) : null;
     if (nextSignature !== this.activeRoomSignature) {
       this.activeRoomSignature = nextSignature;
+      this.nextVisualSyncAt = 0;
       this.comments = [];
       this.destroyRenderedComments();
       if (room) {
@@ -271,6 +273,10 @@ export class OverworldRoomCommentsController {
     if (!room) {
       this.closeComposer(false);
     }
+
+    const now = performance.now();
+    if (now < this.nextVisualSyncAt) return;
+    this.nextVisualSyncAt = now + 50;
 
     this.syncRenderedComments(room);
     this.syncBrowseCommentMarkers();

@@ -74,6 +74,8 @@ import { LiveObjectEnemyLifecycleController } from './liveObjects/enemyLifecycle
 import { LiveObjectSwordsmanController } from './liveObjects/swordsmanController';
 import {
   getLiveObjectBehavior,
+  liveObjectBehaviorCanSleepAtDistance,
+  liveObjectBehaviorUpdatesEveryFrame,
   type FlyingEnemyBehavior,
 } from './liveObjects/behaviorRegistry';
 import { carryMovingPlatformRiders } from './liveObjects/movingPlatforms';
@@ -361,11 +363,21 @@ export interface LiveObjectSwitchStateChangedEvent {
   active: boolean;
 }
 
+interface RoomLiveObjectPartition {
+  source: LoadedRoomObject[];
+  sourceLength: number;
+  updating: LoadedRoomObject[];
+  ladders: LoadedRoomObject[];
+  pathTargetsByInstanceId: Map<string, LoadedRoomObject>;
+}
+
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly triggerController: LiveObjectTriggerController<TEdgeWall>;
   private readonly hazardController: LiveObjectHazardController<TEdgeWall>;
   private readonly swordsmanController: LiveObjectSwordsmanController<TEdgeWall>;
   private readonly enemyLifecycleController: LiveObjectEnemyLifecycleController<TEdgeWall>;
+  private readonly liveObjectPartitionsByRoomId = new Map<string, RoomLiveObjectPartition>();
+  private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
   private roomStateEventSuppressionDepth = 0;
 
   constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {
@@ -535,6 +547,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     this.triggerController.applySwitchBlockStates(loadedRoom);
+    this.liveObjectPartitionsByRoomId.delete(loadedRoom.room.id);
     this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
   }
 
@@ -549,6 +562,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     loadedRoom.liveObjects = [];
+    this.liveObjectPartitionsByRoomId.delete(loadedRoom.room.id);
   }
 
   clearRoomInteractions(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
@@ -831,19 +845,35 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     delta: number
   ): void {
     const rooms = Array.from(loadedRooms);
+    const playerBody = this.options.getPlayerBody();
 
     for (const loadedRoom of rooms) {
-      for (const liveObject of loadedRoom.liveObjects) {
+      const partition = this.getRoomLiveObjectPartition(loadedRoom);
+      for (const liveObject of partition.updating) {
         if (!liveObject.sprite.active) {
           continue;
         }
 
         const dynamicBody = this.getDynamicBody(liveObject.sprite);
+        const behavior = getLiveObjectBehavior(liveObject.config.id);
+        const shouldSleep = playerBody !== null
+          && liveObjectBehaviorCanSleepAtDistance(behavior)
+          && this.isLiveObjectOutsideWakeRange(liveObject, playerBody);
+        if (shouldSleep) {
+          if (dynamicBody?.enable) {
+            dynamicBody.enable = false;
+            this.distanceSleepingObjects.add(liveObject);
+          }
+          continue;
+        }
+        if (dynamicBody && this.distanceSleepingObjects.has(liveObject)) {
+          dynamicBody.enable = true;
+          this.distanceSleepingObjects.delete(liveObject);
+        }
         if (dynamicBody) {
           this.updateLiveObjectSpecialTileState(liveObject, dynamicBody);
         }
 
-        const behavior = getLiveObjectBehavior(liveObject.config.id);
         switch (behavior.kind) {
           case 'flyingEnemy': {
             const motion = this.getFlyingEnemyMotion(behavior);
@@ -1169,17 +1199,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       if (liveObject.linkedTargetRoomId && loadedRoom.room.id !== liveObject.linkedTargetRoomId) {
         continue;
       }
-      for (const candidate of loadedRoom.liveObjects) {
-        if (!candidate.sprite.active || !isMovingPlatformEndpointObjectId(candidate.config.id)) {
+      const pathTargets = this.getRoomLiveObjectPartition(loadedRoom).pathTargetsByInstanceId;
+      for (let targetIndex = 0; targetIndex < targetInstanceIds.length; targetIndex += 1) {
+        const candidate = pathTargets.get(targetInstanceIds[targetIndex] ?? '');
+        if (!candidate?.sprite.active) {
           continue;
         }
-
-        const targetIndex = candidate.placedInstanceId
-          ? targetInstanceIds.indexOf(candidate.placedInstanceId)
-          : -1;
-        if (targetIndex >= 0) {
-          points[targetIndex + 1] = { x: candidate.sprite.x, y: candidate.sprite.y };
-        }
+        points[targetIndex + 1] = { x: candidate.sprite.x, y: candidate.sprite.y };
       }
     }
 
@@ -1210,8 +1236,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     let closestDistance = Number.POSITIVE_INFINITY;
 
     for (const loadedRoom of loadedRooms) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        if (liveObject.config.id !== 'ladder' || !liveObject.sprite.active || !liveObject.sprite.body) {
+      for (const liveObject of this.getRoomLiveObjectPartition(loadedRoom).ladders) {
+        if (!liveObject.sprite.active || !liveObject.sprite.body) {
           continue;
         }
 
@@ -1231,6 +1257,45 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     return closestLadder;
+  }
+
+  private getRoomLiveObjectPartition(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+  ): RoomLiveObjectPartition {
+    const existing = this.liveObjectPartitionsByRoomId.get(loadedRoom.room.id);
+    if (existing?.source === loadedRoom.liveObjects && existing.sourceLength === loadedRoom.liveObjects.length) {
+      return existing;
+    }
+    const updating: LoadedRoomObject[] = [];
+    const ladders: LoadedRoomObject[] = [];
+    const pathTargetsByInstanceId = new Map<string, LoadedRoomObject>();
+    for (const liveObject of loadedRoom.liveObjects) {
+      const behavior = getLiveObjectBehavior(liveObject.config.id);
+      if (liveObjectBehaviorUpdatesEveryFrame(behavior) || isDynamicArcadeBody(liveObject.sprite.body as ArcadeObjectBody | null)) {
+        updating.push(liveObject);
+      }
+      if (liveObject.config.id === 'ladder') ladders.push(liveObject);
+      if (liveObject.placedInstanceId && isMovingPlatformEndpointObjectId(liveObject.config.id)) {
+        pathTargetsByInstanceId.set(liveObject.placedInstanceId, liveObject);
+      }
+    }
+    const partition = {
+      source: loadedRoom.liveObjects,
+      sourceLength: loadedRoom.liveObjects.length,
+      updating,
+      ladders,
+      pathTargetsByInstanceId,
+    };
+    this.liveObjectPartitionsByRoomId.set(loadedRoom.room.id, partition);
+    return partition;
+  }
+
+  private isLiveObjectOutsideWakeRange(
+    liveObject: LoadedRoomObject,
+    playerBody: ArcadeObjectBody,
+  ): boolean {
+    return Math.abs(liveObject.sprite.x - playerBody.center.x) > ROOM_PX_WIDTH * 1.5
+      || Math.abs(liveObject.sprite.y - playerBody.center.y) > ROOM_PX_HEIGHT * 1.75;
   }
 
   attackEnemiesInRect(

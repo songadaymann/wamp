@@ -69,6 +69,7 @@ const BUBBLE_TEXT_COLOR = '#f7edd8';
 const ROOM_CHAT_BUBBLE_DEPTH = 260;
 
 export class OverworldRoomChatController {
+  private nextBubblePositionSyncAt = 0;
   private client: WorldRoomChatClient | null = null;
   private identity: WorldPresenceIdentity | null = null;
   private snapshot: WorldRoomChatSnapshot | null = null;
@@ -222,6 +223,9 @@ export class OverworldRoomChatController {
 
   update(): void {
     this.client?.tick();
+    const now = performance.now();
+    if (now < this.nextBubblePositionSyncAt) return;
+    this.nextBubblePositionSyncAt = now + 50;
     this.syncRenderedBubbles();
   }
 
