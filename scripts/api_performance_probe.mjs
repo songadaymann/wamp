@@ -11,6 +11,9 @@ const baseUrl = (args.get('base-url') || process.env.PERF_API_BASE_URL || DEFAUL
 const runs = parsePositiveInteger(args.get('runs') || process.env.PERF_API_RUNS, DEFAULT_RUNS);
 const profileUserId = args.get('profile-user-id') || process.env.PERF_PROFILE_USER_ID || null;
 const timeoutMs = parsePositiveInteger(args.get('timeout-ms') || process.env.PERF_API_TIMEOUT_MS, 15_000);
+const leaderboardRoomId = args.get('leaderboard-room-id') || process.env.PERF_LEADERBOARD_ROOM_ID || '0,0';
+const leaderboardRoomX = Number(args.get('leaderboard-room-x') || process.env.PERF_LEADERBOARD_ROOM_X || 0);
+const leaderboardRoomY = Number(args.get('leaderboard-room-y') || process.env.PERF_LEADERBOARD_ROOM_Y || 0);
 
 const probes = [
   { name: 'health', path: '/api/health' },
@@ -25,6 +28,14 @@ const probes = [
   {
     name: 'recent-builders-48',
     path: '/api/leaderboards/builders/discover?sort=recent&limit=48',
+  },
+  {
+    name: 'global-leaderboard-25',
+    path: '/api/leaderboards/global?limit=25',
+  },
+  {
+    name: 'room-leaderboard-25',
+    path: `/api/leaderboards/rooms/${encodeURIComponent(leaderboardRoomId)}?x=${encodeURIComponent(String(leaderboardRoomX))}&y=${encodeURIComponent(String(leaderboardRoomY))}&limit=25`,
   },
   ...(profileUserId
     ? [

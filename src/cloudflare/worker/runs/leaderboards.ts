@@ -7,6 +7,7 @@ import type {
   RoomLeaderboardEntry,
   RoomLeaderboardResponse,
 } from '../../../runs/model';
+import { buildRoomLeaderboardVersionSelectionState } from '../../../runs/roomLeaderboardVersions';
 import { HttpError } from '../core/http';
 import type { Env, UserStatsRow } from '../core/types';
 import {
@@ -359,34 +360,40 @@ export async function buildRoomLeaderboardResponse(
     throw new HttpError(404, 'This room version does not have a leaderboard goal.');
   }
 
-  const entriesRows = await loadRankedRoomLeaderboardRows(
-    env,
-    snapshot.id,
-    selection.leaderboardFamilyVersions,
-    snapshot.goal,
-    limit
-  );
+  const [entriesRows, ratings] = await Promise.all([
+    loadRankedRoomLeaderboardRows(
+      env,
+      snapshot.id,
+      selection.leaderboardFamilyVersions,
+      snapshot.goal,
+      limit,
+    ),
+    loadRoomAggregateRatingSummaryForVersion(
+      env,
+      record,
+      selection.roomVersion,
+      viewerUserId,
+      selection.currentPublishedVersion,
+    ),
+  ]);
+  const listedViewerRow = viewerUserId === null
+    ? null
+    : entriesRows.find((row) => row.user_id === viewerUserId) ?? null;
   const viewerBestRow =
-    viewerUserId === null
-      ? null
+    viewerUserId === null || listedViewerRow !== null
+      ? listedViewerRow
       : await loadViewerRankedRoomLeaderboardRow(
           env,
           snapshot.id,
           selection.leaderboardFamilyVersions,
           snapshot.goal,
-          viewerUserId
+          viewerUserId,
         );
-  const ratings = await loadRoomAggregateRatingSummaryForVersion(
-    env,
-    record,
-    selection.roomVersion,
-    viewerUserId,
-    selection.currentPublishedVersion,
-  );
   const entries = entriesRows.map((row) => mapRankedRoomLeaderboardEntry(row, snapshot));
   const viewerBest =
     viewerBestRow === null ? null : mapRankedRoomLeaderboardEntry(viewerBestRow, snapshot);
 
+  const versionSelection = buildRoomLeaderboardVersionSelectionState(record);
   return {
     roomId: snapshot.id,
     roomCoordinates: { ...snapshot.coordinates },
@@ -397,6 +404,8 @@ export async function buildRoomLeaderboardResponse(
     leaderboardFamilyVersions: [...selection.leaderboardFamilyVersions],
     leaderboardSourceVersion: selection.leaderboardSourceVersion,
     canonicalRoomVersion: selection.canonicalRoomVersion,
+    currentPublishedVersion: selection.currentPublishedVersion,
+    versionOptions: versionSelection.options,
     goalType: snapshot.goal.type,
     rankingMode: getLeaderboardRankingMode(snapshot.goal),
     difficulty: ratings.difficulty,

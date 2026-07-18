@@ -129,6 +129,15 @@ export interface RoomDifficultySummary {
   viewerNeedsRun: boolean;
 }
 
+export interface RoomLeaderboardVersionOption {
+  value: number;
+  representativeVersion: number;
+  equivalentVersions: number[];
+  containsCanonical: boolean;
+  containsCurrentPublished: boolean;
+  label: string;
+}
+
 export interface RoomLeaderboardResponse {
   roomId: string;
   roomCoordinates: RoomCoordinates;
@@ -139,6 +148,8 @@ export interface RoomLeaderboardResponse {
   leaderboardFamilyVersions: number[];
   leaderboardSourceVersion: number | null;
   canonicalRoomVersion: number | null;
+  currentPublishedVersion?: number | null;
+  versionOptions?: RoomLeaderboardVersionOption[];
   goalType: RoomGoalType;
   rankingMode: LeaderboardRankingMode;
   difficulty: RoomDifficultySummary;

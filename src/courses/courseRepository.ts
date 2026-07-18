@@ -1,5 +1,9 @@
 import { getApiBaseUrl } from '../api/baseUrl';
 import {
+  invalidateStaleWhileRevalidateCache,
+  loadWithStaleWhileRevalidate,
+} from '../api/staleWhileRevalidateCache';
+import {
   cloneCourseRecord,
   normalizeCourseRecord,
   type CourseRecord,
@@ -106,16 +110,19 @@ class ApiCourseRepository implements CourseRepository {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    this.invalidateLeaderboards();
   }
 
   async submitCourseRating(
     courseId: string,
     body: CourseProgressRatingRequestBody
   ): Promise<CourseProgressRatingResponse> {
-    return this.request<CourseProgressRatingResponse>(`/api/courses/${encodeURIComponent(courseId)}/ratings`, {
+    const response = await this.request<CourseProgressRatingResponse>(`/api/courses/${encodeURIComponent(courseId)}/ratings`, {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    this.invalidateLeaderboards();
+    return response;
   }
 
   async loadCourseLeaderboard(
@@ -131,10 +138,16 @@ class ApiCourseRepository implements CourseRepository {
       params.set('version', String(version));
     }
 
-    const response = await this.request<CourseLeaderboardResponse>(
-      `/api/leaderboards/courses/${encodeURIComponent(courseId)}?${params.toString()}`
+    const path = `/api/leaderboards/courses/${encodeURIComponent(courseId)}?${params.toString()}`;
+    const response = await loadWithStaleWhileRevalidate(
+      `leaderboard:${this.baseUrl}${path}`,
+      () => this.request<CourseLeaderboardResponse>(path),
     );
     return filterCourseLeaderboardForCurrentSurface(response);
+  }
+
+  private invalidateLeaderboards(): void {
+    invalidateStaleWhileRevalidateCache(`leaderboard:${this.baseUrl}`);
   }
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {

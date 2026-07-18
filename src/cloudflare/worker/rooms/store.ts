@@ -58,7 +58,7 @@ export async function loadRoomRecord(
   viewerWalletAddress: string | null = null,
   viewerIsAdmin = false
 ): Promise<RoomRecord> {
-  const row = await env.DB.prepare(
+  const roomStatement = env.DB.prepare(
     `
       SELECT
         id,
@@ -91,8 +91,13 @@ export async function loadRoomRecord(
       LIMIT 1
     `
   )
-    .bind(roomId, coordinates.x, coordinates.y)
-    .first<RoomRow>();
+    .bind(roomId, coordinates.x, coordinates.y);
+  const versionsStatement = prepareLoadRoomVersionsStatement(env, roomId);
+  const [roomResult, versionsResult] = await env.DB.batch<{
+    results: Array<RoomRow | RoomVersionRow>;
+  }>([roomStatement, versionsStatement]);
+  const rowCandidate = roomResult?.results[0];
+  const row = rowCandidate && 'draft_json' in rowCandidate ? rowCandidate : null;
 
   if (!row) {
     const emptyRecord = createDefaultRoomRecord(roomId, coordinates);
@@ -111,7 +116,12 @@ export async function loadRoomRecord(
   const published = row.published_json
     ? parseStoredSnapshot(row.published_json, 'published room')
     : null;
-  const versions = await loadRoomVersions(env, row.id);
+  const batchedVersionRows = (versionsResult?.results ?? []).filter(
+    (candidate): candidate is RoomVersionRow => 'snapshot_json' in candidate,
+  );
+  const versions = row.id === roomId
+    ? mapStoredRoomVersions(batchedVersionRows)
+    : await loadRoomVersions(env, row.id);
 
   const record: RoomRecord = {
     draft,
@@ -299,7 +309,12 @@ export async function loadClaimedUnpublishedRoomsInBounds(
 }
 
 export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVersionRecord[]> {
-  const result = await env.DB.prepare(
+  const result = await prepareLoadRoomVersionsStatement(env, roomId).all<RoomVersionRow>();
+  return mapStoredRoomVersions(result.results);
+}
+
+function prepareLoadRoomVersionsStatement(env: Env, roomId: string): D1PreparedStatement {
+  return env.DB.prepare(
     `
       SELECT
         version,
@@ -317,10 +332,11 @@ export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVe
       ORDER BY version ASC
     `
   )
-    .bind(roomId)
-    .all<RoomVersionRow>();
+    .bind(roomId);
+}
 
-  return result.results.map((row) => {
+function mapStoredRoomVersions(rows: RoomVersionRow[]): RoomVersionRecord[] {
+  return rows.map((row) => {
     const snapshot = parseStoredSnapshot(row.snapshot_json, 'room version');
     return createRoomVersionRecord(snapshot, {
       version: row.version,

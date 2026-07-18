@@ -33,6 +33,7 @@ import {
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
+import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, ExpandedRoomRunRow, WorkerExecutionContextLike } from '../core/types';
 import {
   refreshPlayableContentIndexForExpandedRoom,
@@ -672,25 +673,29 @@ export async function handleExpandedRoomLeaderboard(
   env: Env,
   expandedRoomId: string,
 ): Promise<Response> {
-  const auth = await loadOptionalRequestAuth(env, request);
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read expanded room leaderboards');
   const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-  const context = await resolveLegacyExpandedRoomCourseContext(env, expandedRoomId, version ?? undefined);
+  const context = await timing.measure(
+    'expanded_context',
+    () => resolveLegacyExpandedRoomCourseContext(env, expandedRoomId, version ?? undefined),
+  );
   if (!context.snapshot.goal) {
     throw new HttpError(404, 'This expanded room version does not have a leaderboard goal.');
   }
-  const record = await loadCourseRecord(
+  const record = await timing.measure('course_record', () => loadCourseRecord(
     env,
     context.legacyCourseId,
     auth?.user.id ?? null,
     auth?.isAdmin ?? false,
-  );
+  ));
   if (!record) {
     throw new HttpError(404, 'Legacy course not found for expanded room.');
   }
 
-  const leaderboard = await buildExpandedRoomLeaderboardResponse(env, {
+  const leaderboard = await timing.measure('leaderboard', () => buildExpandedRoomLeaderboardResponse(env, {
     expandedRoomId: context.expandedRoomId,
     expandedRoomTitle: context.expandedRoomTitle,
     legacyCourseId: context.legacyCourseId,
@@ -698,8 +703,16 @@ export async function handleExpandedRoomLeaderboard(
     snapshot: context.snapshot,
     limit,
     viewerUserId: auth?.user.id ?? null,
+  }));
+  const authenticated = auth !== null;
+  timing.setDiagnostic('cache', authenticated ? 'private-20' : 'public-20-swr-40');
+  return timedJsonResponse(request, leaderboard, timing, {
+    headers: {
+      'Cache-Control': authenticated
+        ? 'private, max-age=20'
+        : 'public, max-age=20, stale-while-revalidate=40',
+    },
   });
-  return jsonResponse(request, leaderboard);
 }
 
 export async function handleExpandedRoomRatingSubmit(

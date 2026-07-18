@@ -1,4 +1,8 @@
 import { getApiBaseUrl } from '../api/baseUrl';
+import {
+  invalidateStaleWhileRevalidateCache,
+  loadWithStaleWhileRevalidate,
+} from '../api/staleWhileRevalidateCache';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import type { ResolvedExpandedRoomTarget } from './model';
 import type {
@@ -75,6 +79,7 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    this.invalidateLeaderboards();
   }
 
   async loadExpandedRoomLeaderboard(
@@ -90,8 +95,10 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
       params.set('version', String(version));
     }
 
-    const response = await this.request<ExpandedRoomLeaderboardResponse>(
-      `/api/leaderboards/expanded-rooms/${encodeURIComponent(expandedRoomId)}?${params.toString()}`,
+    const path = `/api/leaderboards/expanded-rooms/${encodeURIComponent(expandedRoomId)}?${params.toString()}`;
+    const response = await loadWithStaleWhileRevalidate(
+      `leaderboard:${this.baseUrl}${path}`,
+      () => this.request<ExpandedRoomLeaderboardResponse>(path),
     );
     return filterCourseLeaderboardForCurrentSurface(response) as ExpandedRoomLeaderboardResponse;
   }
@@ -100,13 +107,19 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
     expandedRoomId: string,
     body: ExpandedRoomProgressRatingRequestBody,
   ): Promise<ExpandedRoomProgressRatingResponse> {
-    return this.request<ExpandedRoomProgressRatingResponse>(
+    const response = await this.request<ExpandedRoomProgressRatingResponse>(
       `/api/expanded-rooms/${encodeURIComponent(expandedRoomId)}/ratings`,
       {
         method: 'POST',
         body: JSON.stringify(body),
       },
     );
+    this.invalidateLeaderboards();
+    return response;
+  }
+
+  private invalidateLeaderboards(): void {
+    invalidateStaleWhileRevalidateCache(`leaderboard:${this.baseUrl}`);
   }
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {

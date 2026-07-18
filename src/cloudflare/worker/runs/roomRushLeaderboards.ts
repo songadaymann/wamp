@@ -18,6 +18,7 @@ import type {
 } from '../../../runs/model';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { HttpError, jsonResponse, parsePositiveIntegerQueryParam } from '../core/http';
+import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, RoomRushRunRow, RoomRushRunStartRow } from '../core/types';
 import {
   assertWampLeaderboardWriteAllowed,
@@ -469,12 +470,13 @@ export async function handleRoomRushLeaderboards(
   url: URL,
   env: Env
 ): Promise<Response> {
-  const auth = await loadOptionalRequestAuth(env, request);
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read Room Rush leaderboards');
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 25, 1, 50);
   const requestedMode = parseRoomRushLeaderboardModeQuery(url.searchParams.get('mode'));
   const modeOrder = requestedMode ? [requestedMode] : ROOM_RUSH_MODE_ORDER;
-  const modes = await Promise.all(
+  const modes = await timing.measure('leaderboard', () => Promise.all(
     modeOrder.map((mode) =>
       buildRoomRushLeaderboardResponse(
         env,
@@ -484,9 +486,17 @@ export async function handleRoomRushLeaderboards(
         auth?.user.id ?? null
       )
     )
-  );
+  ));
   const response: RoomRushLeaderboardsResponse = { modes };
-  return jsonResponse(request, response);
+  const authenticated = auth !== null;
+  timing.setDiagnostic('cache', authenticated ? 'private-20' : 'public-20-swr-40');
+  return timedJsonResponse(request, response, timing, {
+    headers: {
+      'Cache-Control': authenticated
+        ? 'private, max-age=20'
+        : 'public, max-age=20, stale-while-revalidate=40',
+    },
+  });
 }
 
 function parseRoomRushLeaderboardModeQuery(value: string | null): {

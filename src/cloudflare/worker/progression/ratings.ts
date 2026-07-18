@@ -229,7 +229,10 @@ async function buildRoomRatingSummary(
   ratingWindow: RatingWindow,
   options: RatingSummaryOptions,
 ): Promise<RatingAggregateSummary> {
-  const rows = await loadRoomRatingsForVersionKey(env, roomId, ratingWindow.versionKey);
+  const [rows, trophy] = await Promise.all([
+    loadRoomRatingsForVersionKey(env, roomId, ratingWindow.versionKey),
+    loadTrophyForContentVersion(env, 'room', roomId, ratingWindow.versionKey),
+  ]);
   const viewerRow =
     options.viewerUserId === null
       ? null
@@ -246,7 +249,7 @@ async function buildRoomRatingSummary(
           updatedAt: viewerRow.updated_at,
         }
       : null,
-    trophy: await loadTrophyForContentVersion(env, 'room', roomId, ratingWindow.versionKey),
+    trophy,
   };
 }
 

@@ -25,6 +25,7 @@ import {
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
+import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { CourseRunRow, Env, WorkerExecutionContextLike } from '../core/types';
 import {
   refreshPlayableContentIndexForExpandedRoom,
@@ -724,27 +725,42 @@ export async function handleCourseLeaderboard(
   env: Env,
   courseId: string
 ): Promise<Response> {
-  const auth = await loadOptionalRequestAuth(env, request);
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read course leaderboards');
   const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-  const snapshot = await resolvePublishedCourseVersion(env, courseId, version ?? undefined);
+  const snapshot = await timing.measure(
+    'published_version',
+    () => resolvePublishedCourseVersion(env, courseId, version ?? undefined),
+  );
   if (!snapshot.goal) {
     throw new HttpError(404, 'This course version does not have a leaderboard goal.');
   }
-  const record = await loadCourseRecord(env, courseId, auth?.user.id ?? null, auth?.isAdmin ?? false);
+  const record = await timing.measure(
+    'course_record',
+    () => loadCourseRecord(env, courseId, auth?.user.id ?? null, auth?.isAdmin ?? false),
+  );
   if (!record) {
     throw new HttpError(404, 'Course not found.');
   }
 
-  const leaderboard = await buildCourseLeaderboardResponse(
+  const leaderboard = await timing.measure('leaderboard', () => buildCourseLeaderboardResponse(
     env,
     record,
     snapshot,
     limit,
     auth?.user.id ?? null
-  );
-  return jsonResponse(request, leaderboard);
+  ));
+  const authenticated = auth !== null;
+  timing.setDiagnostic('cache', authenticated ? 'private-20' : 'public-20-swr-40');
+  return timedJsonResponse(request, leaderboard, timing, {
+    headers: {
+      'Cache-Control': authenticated
+        ? 'private, max-age=20'
+        : 'public, max-age=20, stale-while-revalidate=40',
+    },
+  });
 }
 
 export async function handleCourseRatingSubmit(
