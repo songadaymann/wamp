@@ -247,6 +247,8 @@ import {
 import {
   OverworldRoomRushModeController,
 } from './overworld/roomRushMode';
+import { OverworldRuntimeContext } from './overworld/runtimeContext';
+import { dispatchSignal } from '../events/typedEvent';
 import {
   RankedRunTraceRecorder,
   type RankedRunTraceBinding,
@@ -528,6 +530,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly pvpArenaController: OverworldPvpArenaController;
   private readonly roomChatController: OverworldRoomChatController;
   private readonly roomCommentsController: OverworldRoomCommentsController;
+  private readonly runtimeContext: OverworldRuntimeContext<OverworldMode, CameraMode>;
 
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
@@ -550,6 +553,21 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'OverworldPlayScene' });
+    this.runtimeContext = new OverworldRuntimeContext({
+      getMode: () => this.mode,
+      setMode: (mode) => { this.mode = mode; },
+      getCameraMode: () => this.cameraMode,
+      setCameraMode: (mode) => { this.cameraMode = mode; },
+      getSelectedCoordinates: () => this.selectedCoordinates,
+      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
+      isPvpArenaActive: () => this.pvpArenaController?.isArenaActive() ?? false,
+      isPvpMatchActive: () => this.pvpArenaController?.isMatchActive() ?? false,
+      isRoomRushActive: () => Boolean(this.roomRushModeController?.getCurrentRun()),
+      isBackdropCameraActive: () => Boolean(this.backdropCamera),
+      getBackdropLayerCount: () =>
+        Number(Boolean(this.backdropDisplayLayer)) + Number(Boolean(this.worldDisplayLayer)),
+      isLightingActive: () => this.mode === 'play',
+    });
     const thisScene = this;
     this.goalRunController = new OverworldGoalRunController({
       playerHeight: this.PLAYER_HEIGHT,
@@ -572,7 +590,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     });
     this.roomAudioController = new OverworldRoomAudioController({
       scene: this,
-      getMode: () => this.mode,
+      getMode: this.runtimeContext.mode.get,
       getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
     });
     this.lightingController = new RoomLightingController({
@@ -2072,6 +2090,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   create(data?: OverworldPlaySceneData): void {
+    this.runtimeContext.setLifecycle('initializing');
     this.resetRuntimeState();
     this.initializeMobilePerformanceProfiler();
     this.syncAppMode();
@@ -2145,6 +2164,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       .then((refreshed) => {
         this.maybeAutoPlayDeepLinkedRoomOnBoot(refreshed);
       });
+    this.runtimeContext.setLifecycle('active');
   }
 
   update(_time: number, delta: number): void {
@@ -3593,7 +3613,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private emitCourseComposerStateChanged(): void {
-    window.dispatchEvent(new CustomEvent(COURSE_COMPOSER_STATE_CHANGED_EVENT));
+    dispatchSignal(window, COURSE_COMPOSER_STATE_CHANGED_EVENT);
   }
 
   private syncScenePauseState(): void {
@@ -5784,6 +5804,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private buildMobilePerformanceContext(): MobilePerformanceContext {
     const layout = getDeviceLayoutState();
+    const runtime = this.runtimeContext.getSnapshot();
     const streamingMetrics = this.worldStreamingController.getDebugMetrics();
     const presenceDebug = this.presenceController.getDebugSnapshot();
     const activeLiveObjects = Array.from(this.loadedFullRoomsById.values()).reduce(
@@ -5794,8 +5815,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     const activeProjectiles = this.combatController.getProjectileCount();
 
     return {
-      mode: this.mode,
-      cameraMode: this.cameraMode,
+      mode: runtime.mode,
+      cameraMode: runtime.cameraMode,
+      runtimeLifecycle: runtime.lifecycle,
+      pvpActive: runtime.pvp.arenaActive,
+      roomRushActive: runtime.roomRush.active,
       deviceClass: layout.deviceClass,
       orientationState: layout.orientationState,
       coarsePointer: layout.coarsePointer,
@@ -5913,6 +5937,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleShutdown = (): void => {
+    this.runtimeContext.setLifecycle('shutting-down');
     globalRoomMusicController.stopArrangement({
       transition: 'immediate',
       fadeDurationSec: 0.08,
@@ -5978,6 +6003,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const roomCommentsDebug = this.roomCommentsController.getDebugSnapshot();
     const roomAudioDebug = this.roomAudioController.getDebugSnapshot();
     const lightingDebug = this.lightingController.getDebugState();
+    const runtimeContext = this.runtimeContext.getSnapshot();
     const weatherDebug = this.weatherController.getDebugState();
     const localPresenceIdentity = this.presenceController.getIdentity();
     const currentLoadedRoom = this.loadedFullRoomsById.get(
@@ -6053,6 +6079,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     return {
       scene: 'overworld-play',
+      runtimeContext,
       performanceProfile: getDeviceLayoutState().performanceProfile,
       mode: this.mode,
       cameraMode: this.cameraMode,

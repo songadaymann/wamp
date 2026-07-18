@@ -30,6 +30,7 @@ import {
   type AuthConfigSource,
   type RoomStorageBackend,
 } from './runtimeConfig';
+import { dispatchTypedEvent } from '../events/typedEvent';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
 export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
@@ -1088,11 +1089,7 @@ function renderAuthUi(): void {
     }
   }
 
-  window.dispatchEvent(
-    new CustomEvent(AUTH_STATE_CHANGED_EVENT, {
-      detail: getAuthDebugState(),
-    })
-  );
+  dispatchTypedEvent<AuthDebugState>(window, AUTH_STATE_CHANGED_EVENT, getAuthDebugState());
 }
 
 function renderAuthIdentity(): void {

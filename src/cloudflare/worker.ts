@@ -29,6 +29,7 @@ import {
 } from './worker/courses/routes';
 import { corsHeaders, HttpError, jsonResponse } from './worker/core/http';
 import type { Env } from './worker/core/types';
+import { dispatchWorkerRoute, type WorkerRoute } from './worker/core/router';
 import {
   handleExpandedRoomByCoordinateGet,
   handleExpandedRoomGet,
@@ -111,6 +112,97 @@ type WorkerExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
 };
 
+const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[] = [
+  {
+    methods: ['GET'],
+    pattern: '/api/health',
+    auth: 'public',
+    handler: ({ request, env }) => jsonResponse(request, {
+      ok: true,
+      storage: 'd1',
+      auth: {
+        emailConfigured: Boolean(env.RESEND_API_KEY),
+        debugMagicLinks: env.AUTH_DEBUG_MAGIC_LINKS === '1',
+        testResetEnabled: env.ENABLE_TEST_RESET === '1',
+      },
+    }),
+  },
+  {
+    methods: ['GET'],
+    pattern: '/api/dashboard/stats',
+    auth: 'public',
+    handler: ({ request, env }) => handleDashboardStatsRequest(request, env),
+  },
+  {
+    methods: ['GET', 'POST', 'DELETE'],
+    pattern: { prefix: '/api/auth' },
+    auth: 'optional',
+    handler: ({ request, url, env }) => handleAuthRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    pattern: { prefix: '/api/school' },
+    auth: 'authenticated',
+    handler: ({ request, url, env }) => handleSchoolRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    pattern: { prefix: '/api/agents' },
+    auth: 'authenticated',
+    handler: ({ request, url, env }) => handleAgentRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    pattern: { prefix: '/api/admin/' },
+    auth: 'admin',
+    handler: ({ request, url, env, executionContext }) =>
+      handleAdminRequest(request, url, env, executionContext),
+  },
+  {
+    methods: ['GET', 'POST', 'DELETE'],
+    pattern: { prefix: '/api/background-images' },
+    auth: 'authenticated',
+    handler: ({ request, url, env }) => handleBackgroundImageRequest(request, url, env),
+  },
+  {
+    methods: ['POST'],
+    pattern: '/api/test/reset',
+    auth: 'internal',
+    handler: ({ request, env }) => handleTestReset(request, env),
+  },
+  {
+    methods: ['GET', 'POST', 'DELETE'],
+    pattern: { prefix: '/api/chat/' },
+    auth: 'optional',
+    handler: ({ request, url, env, executionContext }) =>
+      handleChatRequest(request, url, env, executionContext),
+  },
+  {
+    methods: ['POST'],
+    pattern: '/api/guest-activity/heartbeat',
+    auth: 'optional',
+    handler: ({ request, env }) => handleGuestActivityHeartbeat(request, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    pattern: { prefix: '/api/guest-room-drafts' },
+    auth: 'optional',
+    handler: ({ request, url, env }) => handleGuestRoomDraftRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'DELETE'],
+    pattern: { prefix: '/api/guestbook' },
+    auth: 'optional',
+    handler: ({ request, url, env }) => handleGuestbookRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    pattern: { prefix: '/api/jam' },
+    auth: 'optional',
+    handler: ({ request, url, env }) => handleJamRequest(request, url, env),
+  },
+];
+
 export default {
   async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -151,40 +243,13 @@ export default {
     }
 
     try {
-      if (url.pathname === '/api/health' && request.method === 'GET') {
-        return jsonResponse(
-          request,
-          {
-            ok: true,
-            storage: 'd1',
-            auth: {
-              emailConfigured: Boolean(env.RESEND_API_KEY),
-              debugMagicLinks: env.AUTH_DEBUG_MAGIC_LINKS === '1',
-              testResetEnabled: env.ENABLE_TEST_RESET === '1',
-            },
-          }
-        );
-      }
-
-      if (url.pathname === '/api/dashboard/stats' && request.method === 'GET') {
-        return await handleDashboardStatsRequest(request, env);
-      }
-
-      if (url.pathname.startsWith('/api/auth')) {
-        return await handleAuthRequest(request, url, env);
-      }
-
-      if (url.pathname.startsWith('/api/school')) {
-        return await handleSchoolRequest(request, url, env);
-      }
-
-      if (url.pathname.startsWith('/api/agents')) {
-        return await handleAgentRequest(request, url, env);
-      }
-
-      if (url.pathname.startsWith('/api/admin/')) {
-        return await handleAdminRequest(request, url, env, ctx);
-      }
+      const declarativeRoute = await dispatchWorkerRoute(DECLARATIVE_API_ROUTES, {
+        request,
+        url,
+        env,
+        executionContext: ctx,
+      });
+      if (declarativeRoute.matched) return declarativeRoute.response!;
 
       const cryptopunkAvatarStatusMatch = /^\/api\/avatars\/cryptopunks\/([^/]+)\/status$/.exec(url.pathname);
       if (cryptopunkAvatarStatusMatch && request.method === 'GET') {
@@ -212,34 +277,6 @@ export default {
           decodeURIComponent(cryptopunkAvatarAssetMatch[1]),
           decodeURIComponent(cryptopunkAvatarAssetMatch[2])
         );
-      }
-
-      if (url.pathname.startsWith('/api/background-images')) {
-        return await handleBackgroundImageRequest(request, url, env);
-      }
-
-      if (url.pathname === '/api/test/reset' && request.method === 'POST') {
-        return await handleTestReset(request, env);
-      }
-
-      if (url.pathname.startsWith('/api/chat/')) {
-        return await handleChatRequest(request, url, env, ctx);
-      }
-
-      if (url.pathname === '/api/guest-activity/heartbeat' && request.method === 'POST') {
-        return await handleGuestActivityHeartbeat(request, env);
-      }
-
-      if (url.pathname.startsWith('/api/guest-room-drafts')) {
-        return await handleGuestRoomDraftRequest(request, url, env);
-      }
-
-      if (url.pathname.startsWith('/api/guestbook')) {
-        return await handleGuestbookRequest(request, url, env);
-      }
-
-      if (url.pathname.startsWith('/api/jam')) {
-        return await handleJamRequest(request, url, env);
       }
 
       if (url.pathname === '/api/settings/me' && request.method === 'GET') {

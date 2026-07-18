@@ -10,6 +10,17 @@
     "run_worker_first": ["/api/*"],
     "not_found_handling": "single-page-application"
   },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05
+    }
+  },
   "vars": {
     "JAM_SUBMISSIONS_OPEN_AT": "2026-07-20T04:00:00.000Z",
     "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-27T03:59:59.999Z",
@@ -43,6 +54,7 @@
         "PARTYKIT_HOST": "everybodys-platformer-presence-safety.songadaymann.partykit.dev",
         "PARTYKIT_PARTY": "main",
         "ROOM_MINT_DISABLED": "1",
+        "ROOM_DAILY_CLAIM_LIMIT": "4",
         "PLAYABLE_CONTENT_INDEX_READS": "1"
       },
       "d1_databases": [

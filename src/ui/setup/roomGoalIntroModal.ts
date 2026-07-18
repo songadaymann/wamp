@@ -1,4 +1,5 @@
 import type { RoomSnapshot } from '../../persistence/roomRepository';
+import { createModalLifecycle } from './modalLifecycle';
 
 const ROOM_GOAL_INTRO_SEEN_STORAGE_PREFIX = 'everybodys-platformer:room-goal-intro-seen:v1:';
 
@@ -28,22 +29,9 @@ export class RoomGoalIntroModalController {
   private readonly elements: RoomGoalIntroElements;
   private pendingStart: (() => void) | null = null;
   private activeSeenKey: string | null = null;
+  private readonly lifecycle: ReturnType<typeof createModalLifecycle>;
 
   private readonly handleStartClick = () => {
-    this.finish(true, true);
-  };
-
-  private readonly handleBackdropClick = (event: Event) => {
-    if (event.target === this.elements.modal) {
-      this.finish(true, true);
-    }
-  };
-
-  private readonly handleDocumentKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || !this.isOpen()) {
-      return;
-    }
-
     this.finish(true, true);
   };
 
@@ -51,6 +39,7 @@ export class RoomGoalIntroModalController {
     private readonly storage: Storage = window.localStorage,
     private readonly doc: Document = document,
   ) {
+    ensureRoomGoalIntroModalMarkup(this.doc);
     this.elements = {
       modal: this.doc.getElementById('room-goal-intro-modal'),
       title: this.doc.getElementById('room-goal-intro-title'),
@@ -58,13 +47,17 @@ export class RoomGoalIntroModalController {
       body: this.doc.getElementById('room-goal-intro-body'),
       startButton: this.doc.getElementById('btn-room-goal-intro-start') as HTMLButtonElement | null,
     };
+    this.lifecycle = createModalLifecycle({
+      doc: this.doc,
+      modal: this.elements.modal,
+      onClose: () => this.finish(true, true),
+    });
   }
 
   init(): void {
     activeRoomGoalIntroModalController = this;
     this.elements.startButton?.addEventListener('click', this.handleStartClick);
-    this.elements.modal?.addEventListener('click', this.handleBackdropClick);
-    this.doc.addEventListener('keydown', this.handleDocumentKeydown);
+    this.lifecycle.attach();
   }
 
   destroy(): void {
@@ -72,13 +65,12 @@ export class RoomGoalIntroModalController {
       activeRoomGoalIntroModalController = null;
     }
     this.elements.startButton?.removeEventListener('click', this.handleStartClick);
-    this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
-    this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
+    this.lifecycle.detach();
     this.finish(false, false);
   }
 
   isOpen(): boolean {
-    return Boolean(this.elements.modal && !this.elements.modal.classList.contains('hidden'));
+    return this.lifecycle.isOpen();
   }
 
   shouldShowForRoom(room: RoomSnapshot | null): boolean {
@@ -100,8 +92,7 @@ export class RoomGoalIntroModalController {
     this.setText(this.elements.title, options.titleText);
     this.setText(this.elements.meta, options.metaText);
     this.setText(this.elements.body, options.bodyText);
-    this.elements.modal.classList.remove('hidden');
-    this.elements.modal.setAttribute('aria-hidden', 'false');
+    this.lifecycle.show();
   }
 
   forceClose(): void {
@@ -109,10 +100,7 @@ export class RoomGoalIntroModalController {
   }
 
   private finish(markSeen: boolean, triggerStart: boolean): void {
-    if (this.elements.modal) {
-      this.elements.modal.classList.add('hidden');
-      this.elements.modal.setAttribute('aria-hidden', 'true');
-    }
+    this.lifecycle.hide();
 
     const seenKey = this.activeSeenKey;
     const startHandler = this.pendingStart;
@@ -149,4 +137,27 @@ export class RoomGoalIntroModalController {
       element.textContent = value;
     }
   }
+}
+
+function ensureRoomGoalIntroModalMarkup(doc: Document): void {
+  if (doc.getElementById('room-goal-intro-modal')) return;
+  doc.body.insertAdjacentHTML('beforeend', `
+    <div id="room-goal-intro-modal" class="history-modal hidden" aria-hidden="true">
+      <div class="history-modal-panel room-goal-intro-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-goal-intro-title">
+        <div class="history-modal-header room-goal-intro-header">
+          <div class="history-modal-title-group">
+            <div class="history-modal-kicker">Room Goal</div>
+            <h2 id="room-goal-intro-title" class="history-modal-title">Reach Exit</h2>
+            <div id="room-goal-intro-meta" class="history-modal-meta">Collect 3</div>
+          </div>
+        </div>
+        <div class="room-goal-intro-copy">
+          <div id="room-goal-intro-body" class="room-goal-intro-body">Reach the exit as fast as you can!</div>
+        </div>
+        <div class="room-goal-intro-actions">
+          <button id="btn-room-goal-intro-start" class="bar-btn" type="button">Start</button>
+        </div>
+      </div>
+    </div>
+  `);
 }
