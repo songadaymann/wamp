@@ -189,7 +189,10 @@ h1 {
   font-size: 23px;
   font-weight: 700;
   line-height: 1.35;
-  -webkit-text-stroke: 4px #123240;
+  text-shadow: 2px -2px 0px #123240;
+  text-shadow: -2px -2px 0px #123240;
+  text-shadow: -2px 2px 0px #123240;
+  text-shadow: 2px 2px 0px #123240;
 }
 
 .hero-facts {
