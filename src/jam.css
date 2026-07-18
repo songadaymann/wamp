@@ -184,13 +184,15 @@ h1 {
 }
 
 .hero-lede {
-  display: inline-block;
   max-width: 590px;
   margin: 26px 0 0;
   font-size: 23px;
   font-weight: 700;
   line-height: 1.35;
-  background-color: #123240a9;
+  text-shadow: 3px -3px 3px #12324047;
+  text-shadow: -3px -3px 3px #12324047;
+  text-shadow: -3px 3px 3px #12324047;
+  text-shadow: 3px 3px 3px #12324047;
 }
 
 .hero-facts {
