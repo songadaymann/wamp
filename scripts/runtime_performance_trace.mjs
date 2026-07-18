@@ -10,6 +10,7 @@ function parseArgs(argv) {
     durationMs: 60_000,
     cpuThrottle: 4,
     maxP95Ms: 20,
+    roomId: '0,0',
     out: 'output/runtime-performance-trace',
   };
   for (let index = 2; index < argv.length; index += 1) {
@@ -19,6 +20,7 @@ function parseArgs(argv) {
     else if (argument === '--duration-ms' && value) options.durationMs = Number(value);
     else if (argument === '--cpu-throttle' && value) options.cpuThrottle = Number(value);
     else if (argument === '--max-p95-ms' && value) options.maxP95Ms = Number(value);
+    else if (argument === '--room' && value) options.roomId = value;
     else if (argument === '--out' && value) options.out = value;
     else continue;
     index += 1;
@@ -58,9 +60,12 @@ async function waitForOverworld(page) {
   }, null, { timeout: 30_000 });
 }
 
-async function enterPlayableRoom(page) {
+async function enterPlayableRoom(page, roomId) {
   await page.waitForFunction(() => typeof window.run_preview_smoke_action === 'function', null, { timeout: 30_000 });
-  const selection = await page.evaluate(() => window.run_preview_smoke_action?.('selectEditableRoom'));
+  const selection = await page.evaluate(
+    (requestedRoomId) => window.run_preview_smoke_action?.('selectEditableRoom', { roomId: requestedRoomId }),
+    roomId,
+  );
   if (!selection?.ok) throw new Error(`Could not select playable room: ${JSON.stringify(selection)}`);
   const play = await page.evaluate(() => window.run_preview_smoke_action?.('playSelectedRoom'));
   if (!play?.ok) throw new Error(`Could not enter play mode: ${JSON.stringify(play)}`);
@@ -75,6 +80,27 @@ async function enterPlayableRoom(page) {
       return false;
     }
   }, null, { timeout: 15_000 });
+}
+
+function getRoomBenchmarkPosition(roomId) {
+  const [roomX, roomY] = roomId.split(',').map(Number);
+  if (!Number.isInteger(roomX) || !Number.isInteger(roomY)) {
+    throw new Error(`Benchmark room must be an x,y coordinate: ${roomId}`);
+  }
+  return { x: roomX * 640 + 320, y: roomY * 352 + 160 };
+}
+
+async function pinPlayerToBenchmarkRoom(page, position) {
+  const result = await page.evaluate(
+    (target) => window.run_preview_smoke_action?.('setPlayerPosition', {
+      ...target,
+      velocityX: 0,
+      velocityY: 0,
+      bodyEnabled: true,
+    }),
+    position,
+  );
+  if (!result?.ok) throw new Error(`Could not pin benchmark player: ${JSON.stringify(result)}`);
 }
 
 async function run() {
@@ -99,7 +125,9 @@ async function run() {
 
   await page.goto(options.url, { waitUntil: 'domcontentloaded' });
   await waitForOverworld(page);
-  await enterPlayableRoom(page);
+  await enterPlayableRoom(page, options.roomId);
+  const benchmarkPosition = getRoomBenchmarkPosition(options.roomId);
+  await pinPlayerToBenchmarkRoom(page, benchmarkPosition);
   await page.waitForTimeout(2_000);
   await page.evaluate(() => {
     window.wampMobilePerf?.reset();
@@ -115,15 +143,15 @@ async function run() {
 
   const endedAt = Date.now() + options.durationMs;
   let direction = 'ArrowRight';
-  await page.keyboard.down(direction);
   while (Date.now() < endedAt) {
-    await page.waitForTimeout(Math.min(2_500, Math.max(0, endedAt - Date.now())));
-    await page.keyboard.press('Space');
-    await page.keyboard.up(direction);
-    direction = direction === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight';
     await page.keyboard.down(direction);
+    await page.waitForTimeout(Math.min(500, Math.max(0, endedAt - Date.now())));
+    await page.keyboard.up(direction);
+    await page.keyboard.press('Space');
+    direction = direction === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight';
+    await page.waitForTimeout(Math.min(2_000, Math.max(0, endedAt - Date.now())));
+    await pinPlayerToBenchmarkRoom(page, benchmarkPosition);
   }
-  await page.keyboard.up(direction);
 
   const captured = await page.evaluate(() => {
     if (window.__wampFrameRequest) cancelAnimationFrame(window.__wampFrameRequest);
