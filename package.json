@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run build",
+    "check": "npm run lint && npm run test && npm run typecheck && npm run build",
+    "lint": "eslint src partykit scripts/api_performance_probe.mjs scripts/playable_content_index.mjs --max-warnings=0",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "dev": "vite --strictPort --port 3000",
     "dev:frontend:local": "VITE_ROOM_API_BASE_URL='' vite --strictPort --port 3000",
     "dev:frontend:remote": "VITE_ROOM_API_BASE_URL='https://everybodys-platformer.novox-robot.workers.dev' vite --strictPort --port 3000",
@@ -26,6 +29,9 @@
     "smoke:live-construction-play": "npx --yes --quiet tsx scripts/live_construction_play_smoke.ts",
     "smoke:prod": "node scripts/smoke_prod.mjs",
     "stress:presence": "node scripts/presence_load_test.mjs",
+    "perf:api": "node scripts/api_performance_probe.mjs",
+    "index:repair": "node scripts/playable_content_index.mjs repair",
+    "index:parity": "node scripts/playable_content_index.mjs parity",
     "avatar:cryptopunk:build": "python3 gen-avatar/cryptopunk/build-avatar-pack-for-punk-id.py",
     "avatar:cryptopunk:build-preview-atlas": "python3 scripts/build_cryptopunk_head_preview_atlas.py",
     "avatar:cryptopunk:queue": "node scripts/process_cryptopunk_avatar_queue.mjs",
@@ -70,10 +76,14 @@
     "viem": "^2.47.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.7.0",
     "partykit": "^0.0.115",
     "playwright": "^1.59.1",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.64.0",
     "vite": "^6.2.0",
+    "vitest": "^4.1.10",
     "wrangler": "^4.71.0"
   },
   "optionalDependencies": {
