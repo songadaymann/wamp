@@ -5657,7 +5657,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   openGuestDraftRoom(roomSnapshot: RoomSnapshot): void {
-    this.flowController.openEditor({
+    void this.flowController.openEditor({
       roomCoordinates: { ...roomSnapshot.coordinates },
       source: 'world',
       roomSnapshot,

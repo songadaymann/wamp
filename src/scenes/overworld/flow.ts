@@ -27,6 +27,7 @@ import type {
   OverworldMode,
 } from '../sceneData';
 import type { CameraMode } from './camera';
+import { ensureEditorScenesRegistered } from '../editorSceneLoader';
 import type { CoursePlaybackRoomSourceMode } from './coursePlayback';
 import type { ActiveCourseRunState } from './courseRuns';
 import type { ActiveRoomRushRunState } from './roomRushRuns';
@@ -327,7 +328,7 @@ export class OverworldSceneFlowController {
       return;
     }
 
-    this.openEditor({
+    void this.openEditor({
       roomCoordinates: { ...selectedCoordinates },
       source: 'world',
     });
@@ -349,11 +350,11 @@ export class OverworldSceneFlowController {
       ? this.host.getSelectedPublishedCourseId()
       : null;
     if (selectedCourseId) {
-      this.openSelectedExpandedRoomEditor(selectedCourseId, selectedRoomId, selectedCoordinates);
+      void this.openSelectedExpandedRoomEditor(selectedCourseId, selectedRoomId, selectedCoordinates);
       return;
     }
 
-    this.openEditor({
+    void this.openEditor({
       roomCoordinates: { ...selectedCoordinates },
       source: 'world',
       roomSnapshot: this.host.getSelectedRoomSnapshot(selectedCoordinates),
@@ -361,12 +362,18 @@ export class OverworldSceneFlowController {
     });
   }
 
-  private openSelectedExpandedRoomEditor(
+  private async openSelectedExpandedRoomEditor(
     courseId: string,
     selectedRoomId: string,
     selectedCoordinates: RoomCoordinates,
-  ): void {
+  ): Promise<void> {
     showBusyOverlay('Opening expanded room editor...', 'Loading expanded room...');
+    try {
+      await ensureEditorScenesRegistered(this.scene.game);
+    } catch (error) {
+      showBusyError(error instanceof Error ? error.message : 'Failed to load the expanded room editor.');
+      return;
+    }
 
     const sceneData: CourseEditorSceneData = {
       courseId,
@@ -394,8 +401,14 @@ export class OverworldSceneFlowController {
     this.scene.scene.sleep();
   }
 
-  openEditor(editorData: EditorSceneData): void {
+  async openEditor(editorData: EditorSceneData): Promise<void> {
     showBusyOverlay('Opening editor...', 'Loading room...');
+    try {
+      await ensureEditorScenesRegistered(this.scene.game);
+    } catch (error) {
+      showBusyError(error instanceof Error ? error.message : 'Failed to load the room editor.');
+      return;
+    }
 
     if (
       this.scene.scene.isActive('EditorScene')
@@ -531,6 +544,12 @@ export class OverworldSceneFlowController {
   }
 
   async openCourseComposer(): Promise<void> {
+    try {
+      await ensureEditorScenesRegistered(this.scene.game);
+    } catch (error) {
+      showBusyError(error instanceof Error ? error.message : 'Failed to load the expanded room composer.');
+      return;
+    }
     const authState = getAuthDebugState();
     const sessionRecord = getActiveCourseDraftSessionRecord();
     const selectedCoordinates = this.host.getSelectedCoordinates();

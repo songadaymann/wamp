@@ -46,6 +46,12 @@ export default defineConfig(({ mode }) => {
           roomPreviewRender: resolve(process.cwd(), 'room-preview-render.html'),
           rewardStingsPreview: resolve(process.cwd(), 'reward-stings-preview.html'),
         },
+        output: {
+          manualChunks(id) {
+            if (id.includes('/node_modules/phaser/')) return 'phaser-vendor';
+            return undefined;
+          },
+        },
       },
     },
     server: {

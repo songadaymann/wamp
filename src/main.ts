@@ -8,10 +8,8 @@ import { initSfx, globalSfxController } from './audio/sfx';
 import { runOverworldLodStress } from './debug/overworldLodStress';
 import { globalRoomMusicController, initRoomMusic } from './music/controller';
 import { BootScene } from './scenes/BootScene';
-import { CourseEditorScene } from './scenes/CourseEditorScene';
-import { CourseComposerScene } from './scenes/CourseComposerScene';
-import { EditorScene } from './scenes/EditorScene';
 import { OverworldPlayScene } from './scenes/OverworldPlayScene';
+import { ensureEditorScenesRegistered } from './scenes/editorSceneLoader';
 import {
   getAppFeedbackDebugState,
   initializeAppFeedback,
@@ -66,7 +64,7 @@ const config: Phaser.Types.Core.GameConfig = {
   roundPixels: true,
   preserveDrawingBuffer: debug_options.preserveDrawingBuffer,
   backgroundColor: '#050505',
-  scene: [BootScene, EditorScene, OverworldPlayScene, CourseComposerScene, CourseEditorScene],
+  scene: [BootScene, OverworldPlayScene],
   physics: {
     default: 'arcade',
     arcade: {
@@ -205,7 +203,7 @@ window.get_sword_hunter_debug = () => getSwordHunterDebugState(game);
 initializeGuestActivityTracking(getGuestActivitySnapshot);
 
 if (query.get('previewSmoke') === '1') {
-  installPreviewSmokeActions(game, getDebugState);
+  void ensureEditorScenesRegistered(game).then(() => installPreviewSmokeActions(game, getDebugState));
 }
 
 window.capture_debug_info = () => getCaptureDebugInfo(game, debug_options, getDebugState);
