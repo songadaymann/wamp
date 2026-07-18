@@ -9,7 +9,10 @@ import type {
 } from '../../../runs/model';
 import { HttpError } from '../core/http';
 import type { Env, UserStatsRow } from '../core/types';
-import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
+import {
+  sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix,
+  sqlUserIdIsNotLegacyGeneratedOnly,
+} from '../generatedUsers/leaderboardIsolation';
 import { loadRoomAggregateRatingSummaryForVersion } from '../progression/store';
 import type { AggregatedRoomLeaderboardSelection } from './roomLeaderboardAggregation';
 import { sqlIsVerificationAccepted } from './verificationSql';
@@ -27,7 +30,7 @@ interface RankedRoomLeaderboardRow {
   overall_rank: number | string | null;
 }
 
-interface RankedGlobalLeaderboardRow extends UserStatsRow {
+export interface RankedGlobalLeaderboardRow extends UserStatsRow {
   overall_rank: number | string | null;
 }
 
@@ -226,6 +229,7 @@ async function loadRankedGlobalLeaderboardRows(
           ) AS overall_rank
         FROM user_stats
         WHERE ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
+          AND ${sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix('user_stats.user_id')}
       )
       SELECT
         user_id,
@@ -258,7 +262,7 @@ async function loadRankedGlobalLeaderboardRows(
   return result.results;
 }
 
-async function loadViewerRankedGlobalLeaderboardRow(
+export async function loadViewerRankedGlobalLeaderboardRow(
   env: Env,
   viewerUserId: string
 ): Promise<RankedGlobalLeaderboardRow | null> {
@@ -290,6 +294,7 @@ async function loadViewerRankedGlobalLeaderboardRow(
           ) AS overall_rank
         FROM user_stats
         WHERE ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
+          AND ${sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix('user_stats.user_id')}
       )
       SELECT
         user_id,

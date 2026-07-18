@@ -25,6 +25,7 @@ import {
   ROOM_DIFFICULTIES,
 } from '../../../runs/model';
 import { HttpError } from '../core/http';
+import type { ServerTiming } from '../core/serverTiming';
 import type { ContentTrophyRow, Env, RoomDifficultyVoteRow } from '../core/types';
 import {
   sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix,
@@ -276,13 +277,30 @@ export async function loadRoomDiscoveryResponse(
   sort: RoomDiscoverySort,
   includeGoalLessRooms: boolean = false,
   viewerUserId: string | null = null,
+  timing: ServerTiming | null = null,
+  cursorOffset: number = 0,
 ): Promise<RoomDiscoveryResponse> {
   const includeAllPublishedRooms = includeGoalLessRooms && sort === 'newest' && difficultyFilter === null;
   const expandedRoomsEnabled = isExpandedRoomsEnabled(env);
   if (isPersonalRoomDiscoverySort(sort) && !viewerUserId) {
     throw new HttpError(401, 'Sign in to sort by your room history.');
   }
-  const publishedRooms = await env.DB.prepare(
+  const indexedRepresentativeRoomIds = await measureDiscovery(
+    timing,
+    'discovery_index',
+    () => loadIndexedDiscoveryRepresentativeRoomIds(
+      env,
+      difficultyFilter,
+      limit,
+      sort,
+      includeAllPublishedRooms,
+      cursorOffset,
+    ),
+  );
+  const indexedRoomFilter = indexedRepresentativeRoomIds === null
+    ? ''
+    : `AND rooms.id IN (${indexedRepresentativeRoomIds.map(() => '?').join(', ') || "''"})`;
+  const publishedRooms = await measureDiscovery(timing, 'discovery_rows', () => env.DB.prepare(
     `
       SELECT
         rooms.id,
@@ -316,10 +334,14 @@ export async function loadRoomDiscoveryResponse(
         ON first_published.room_id = rooms.id
       WHERE rooms.published_json IS NOT NULL
         AND (? = 1 OR rooms.published_goal_type IS NOT NULL)
+        ${indexedRoomFilter}
     `
   )
-    .bind(includeAllPublishedRooms || expandedRoomsEnabled ? 1 : 0)
-    .all<PublishedRoomDiscoveryRow>();
+    .bind(
+      includeAllPublishedRooms || expandedRoomsEnabled ? 1 : 0,
+      ...(indexedRepresentativeRoomIds ?? []),
+    )
+    .all<PublishedRoomDiscoveryRow>());
 
   const challengeRooms = publishedRooms.results.map((row) => mapPublishedRoomDiscoveryRow(row));
 
@@ -331,11 +353,11 @@ export async function loadRoomDiscoveryResponse(
     };
   }
 
-  const discoveryAreas = await resolveRoomDiscoveryAreaCandidates(
+  const discoveryAreas = await measureDiscovery(timing, 'discovery_areas', () => resolveRoomDiscoveryAreaCandidates(
     env,
     challengeRooms,
     expandedRoomsEnabled,
-  );
+  ));
   const roomIds = Array.from(
     new Set(discoveryAreas.flatMap((area) => area.roomVersionKeys.map((key) => key.roomId))),
   );
@@ -361,16 +383,16 @@ export async function loadRoomDiscoveryResponse(
     viewerStates,
     expandedRoomViewerStates,
   ] = await Promise.all([
-    loadFeaturedRoomRows(env, roomIds),
-    loadRoomDiscoveryRatingAggregateRows(env, roomVersionKeys),
-    loadExpandedRoomDiscoveryRatingAggregateRows(env, expandedRoomVersionKeys),
-    loadRoomDiscoveryTrophyRows(env, roomVersionKeys),
-    loadBuilderProgressionRows(env, builderUserIds),
+    measureDiscovery(timing, 'discovery_featured', () => loadFeaturedRoomRows(env, roomIds)),
+    measureDiscovery(timing, 'discovery_ratings', () => loadRoomDiscoveryRatingAggregateRows(env, roomVersionKeys)),
+    measureDiscovery(timing, 'discovery_expanded_ratings', () => loadExpandedRoomDiscoveryRatingAggregateRows(env, expandedRoomVersionKeys)),
+    measureDiscovery(timing, 'discovery_trophies', () => loadRoomDiscoveryTrophyRows(env, roomVersionKeys)),
+    measureDiscovery(timing, 'discovery_builders', () => loadBuilderProgressionRows(env, builderUserIds)),
     viewerUserId
-      ? loadDiscoveryViewerRoomStates(env, viewerUserId, roomVersionKeys)
+      ? measureDiscovery(timing, 'discovery_viewer', () => loadDiscoveryViewerRoomStates(env, viewerUserId, roomVersionKeys))
       : Promise.resolve(new Map<string, DiscoveryViewerRoomState>()),
     viewerUserId
-      ? loadDiscoveryViewerExpandedRoomStates(env, viewerUserId, expandedRoomVersionKeys)
+      ? measureDiscovery(timing, 'discovery_expanded_viewer', () => loadDiscoveryViewerExpandedRoomStates(env, viewerUserId, expandedRoomVersionKeys))
       : Promise.resolve(new Map<string, DiscoveryViewerRoomState>()),
   ]);
   const featuredByRoomId = new Map(
@@ -405,7 +427,7 @@ export async function loadRoomDiscoveryResponse(
     ] as const),
   );
 
-  const results = discoveryAreas
+  const orderedResults = discoveryAreas
     .map((area): RoomDiscoveryEntry => {
       const room = area.representative;
       const featured = getDiscoveryAreaFeaturedRow(area, featuredByRoomId);
@@ -490,14 +512,86 @@ export async function loadRoomDiscoveryResponse(
           return true;
       }
     })
-    .sort((left, right) => compareRoomDiscoveryEntries(left, right, sort))
-    .slice(0, limit);
+    .sort((left, right) => compareRoomDiscoveryEntries(left, right, sort));
+  const pageOffset = indexedRepresentativeRoomIds === null ? cursorOffset : 0;
+  const results = orderedResults.slice(pageOffset, pageOffset + limit);
+  const hasMore = orderedResults.length > pageOffset + limit;
 
   return {
     difficultyFilter,
     sort,
     results,
+    ...(hasMore ? { nextCursor: encodeRoomDiscoveryCursor(sort, cursorOffset + limit) } : {}),
   };
+}
+
+interface IndexedDiscoveryRepresentativeRow {
+  representative_room_id: string;
+}
+
+async function loadIndexedDiscoveryRepresentativeRoomIds(
+  env: Env,
+  difficultyFilter: RoomDifficulty | null,
+  limit: number,
+  sort: RoomDiscoverySort,
+  includeAllPublishedRooms: boolean,
+  cursorOffset: number,
+): Promise<string[] | null> {
+  if (
+    !playableContentIndexReadsEnabled(env)
+    || includeAllPublishedRooms
+    || (sort !== 'newest' && sort !== 'featured' && sort !== 'quality')
+  ) {
+    return null;
+  }
+
+  const orderClause = sort === 'newest'
+    ? 'first_published_at DESC, published_at DESC, target_key ASC'
+    : sort === 'quality'
+      ? 'quality_adjusted_average DESC, quality_vote_count DESC, published_at DESC, target_key ASC'
+      : '(featured_at IS NOT NULL) DESC, featured_at DESC, quality_adjusted_average DESC, quality_vote_count DESC, published_at DESC, target_key ASC';
+  const candidateLimit = Math.min(400, Math.max((limit + 1) * 2, limit + 25));
+
+  try {
+    const rows = await env.DB.prepare(
+      `
+        SELECT representative_room_id
+        FROM playable_content_index
+        WHERE (? IS NULL OR consensus_difficulty = ?)
+        ORDER BY ${orderClause}
+        LIMIT ? OFFSET ?
+      `,
+    )
+      .bind(difficultyFilter, difficultyFilter, candidateLimit, cursorOffset)
+      .all<IndexedDiscoveryRepresentativeRow>();
+    return Array.from(new Set(rows.results.map((row) => row.representative_room_id)));
+  } catch (error) {
+    if (String(error).toLowerCase().includes('playable_content_index')) {
+      console.warn('Playable-content index is enabled but unavailable; falling back to legacy discovery reads.');
+      return null;
+    }
+    throw error;
+  }
+}
+
+export function encodeRoomDiscoveryCursor(sort: RoomDiscoverySort, offset: number): string {
+  return btoa(JSON.stringify({ version: 1, sort, offset }))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function playableContentIndexReadsEnabled(env: Env): boolean {
+  const raw = env.PLAYABLE_CONTENT_INDEX_READS?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'on';
+}
+
+function measureDiscovery<T>(
+  timing: ServerTiming | null,
+  name: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  return timing ? timing.measure(name, operation) : operation();
 }
 
 async function resolveRoomDiscoveryAreaCandidates(
@@ -1093,7 +1187,7 @@ export function parseBuilderDiscoverySortOrThrow(value: unknown): BuilderDiscove
   return normalized;
 }
 
-function compareRoomDiscoveryEntries(
+export function compareRoomDiscoveryEntries(
   left: RoomDiscoveryEntry,
   right: RoomDiscoveryEntry,
   sort: RoomDiscoverySort,

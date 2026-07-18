@@ -29,7 +29,11 @@ import {
   parseJsonBody,
   parseRoomSnapshot,
 } from '../core/http';
-import type { Env } from '../core/types';
+import type { Env, WorkerExecutionContextLike } from '../core/types';
+import {
+  refreshPlayableContentIndexForRoom,
+  schedulePlayableContentIndexRefresh,
+} from '../playableContentIndex/store';
 import {
   handleRoomMintConfirm,
   handleRoomMintPrepare,
@@ -73,6 +77,7 @@ export async function handleRoomRequest(
   request: Request,
   url: URL,
   env: Env,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const segments = url.pathname.split('/').filter(Boolean);
   const roomId = decodeURIComponent(segments[2] ?? '');
@@ -320,6 +325,7 @@ export async function handleRoomRequest(
       publishedAt: record.published?.publishedAt ?? new Date().toISOString(),
     });
     await upsertUserStats(env, auth.user.id);
+    schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, record.draft.id));
     return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
   }
 
@@ -373,6 +379,7 @@ export async function handleRoomRequest(
       publishedAt: record.published?.publishedAt ?? new Date().toISOString(),
     });
     await upsertUserStats(env, auth.user.id);
+    schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, record.draft.id));
     return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
   }
 
@@ -393,6 +400,7 @@ export async function handleRoomRequest(
       buildRoomMutationActor(auth),
       auth.isAdmin,
     );
+    schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
     return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
   }
 

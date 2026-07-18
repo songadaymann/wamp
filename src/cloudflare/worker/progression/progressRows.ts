@@ -511,6 +511,13 @@ async function createBackfilledUserProgressRow(
   };
 }
 
+export async function loadReadOnlyUserProgress(
+  env: Env,
+  userId: string,
+): Promise<UserProgressRow> {
+  return (await loadUserProgressRow(env, userId)) ?? createBackfilledUserProgressRow(env, userId);
+}
+
 export async function loadOrBackfillUserProgress(
   env: Env,
   userId: string,

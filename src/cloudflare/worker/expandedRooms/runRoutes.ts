@@ -33,7 +33,11 @@ import {
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
-import type { Env, ExpandedRoomRunRow } from '../core/types';
+import type { Env, ExpandedRoomRunRow, WorkerExecutionContextLike } from '../core/types';
+import {
+  refreshPlayableContentIndexForExpandedRoom,
+  schedulePlayableContentIndexRefresh,
+} from '../playableContentIndex/store';
 import {
   loadOptionalRequestAuth,
   requireAuthenticatedRequestAuth,
@@ -702,6 +706,7 @@ export async function handleExpandedRoomRatingSubmit(
   request: Request,
   env: Env,
   expandedRoomId: string,
+  executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -748,6 +753,10 @@ export async function handleExpandedRoomRatingSubmit(
     'expanded_room',
     context.expandedRoomId,
     body.expandedRoomVersion,
+  );
+  schedulePlayableContentIndexRefresh(
+    executionContext,
+    refreshPlayableContentIndexForExpandedRoom(env, context.expandedRoomId),
   );
 
   const responseBody: ExpandedRoomProgressRatingResponse = {

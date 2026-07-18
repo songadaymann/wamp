@@ -2,20 +2,28 @@ import type {
   ProfilePublishedRoomEntry,
   ProfilePublishedRoomExpandedRoomTarget,
   ProfileStatsSummary,
+  UserProfilePlaylistsResponse,
+  UserProfileRoomsResponse,
+  UserProfileSummaryResponse,
   UserProfileResponse,
 } from '../../../profiles/model';
 import type { ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
 import { listPlayerAvatarChoicesForLevel, resolveSelectablePlayerAvatarId } from '../../../player/avatar/unlocks';
-import { isGeneratedLeaderboardExcludedDisplayName } from '../../../generatedUsers/identity';
 import type { QualityRatingSummary } from '../../../progression/model';
 import { ROOM_DIFFICULTIES, type RoomDifficulty } from '../../../runs/model';
 import type { Env } from '../core/types';
-import { findUserById, loadAllUserStatsRows, loadPublicUserProfileCourseCount, loadPublishedRoomsByCreator, loadUserStatsRow } from '../auth/store';
+import type { ServerTiming } from '../core/serverTiming';
+import { HttpError } from '../core/http';
+import { findUserById, loadPublicUserProfileCourseCount, loadPublishedRoomsByCreator, loadUserStatsRow } from '../auth/store';
 import { loadPublicProgressionSummary } from '../progression/store';
 import { parseStoredSnapshot } from '../rooms/store';
-import { compareGlobalLeaderboardEntries, mapUserStatsRow } from '../runs/points';
+import { mapUserStatsRow } from '../runs/points';
+import { loadViewerRankedGlobalLeaderboardRow } from '../runs/leaderboards';
 import { loadPublicPlaylistSummariesForUser } from '../playlists/store';
-import { resolveExpandedRoomAtCoordinates } from '../expandedRooms/store';
+import {
+  loadExpandedRoomTarget,
+  loadPublishedExpandedRoomMembershipsForRoomIds,
+} from '../expandedRooms/store';
 
 const EMPTY_PROFILE_STATS: ProfileStatsSummary = {
   totalPoints: 0,
@@ -69,25 +77,26 @@ interface ProfileRoomRatingAggregateRow {
 export async function loadUserProfile(
   env: Env,
   targetUserId: string,
-  viewerUserId: string | null = null
+  viewerUserId: string | null = null,
+  timing: ServerTiming | null = null,
 ): Promise<UserProfileResponse | null> {
-  const user = await findUserById(env, targetUserId);
+  const user = await measure(timing, 'profile_user', () => findUserById(env, targetUserId));
   if (!user) {
     return null;
   }
 
-  const [statsRow, allStatsRows, publishedRoomRows, publishedCourseCount, playlists] = await Promise.all([
-    loadUserStatsRow(env, targetUserId),
-    loadAllUserStatsRows(env),
-    loadPublishedRoomsByCreator(env, targetUserId),
-    loadPublicUserProfileCourseCount(env, targetUserId),
-    loadPublicPlaylistSummariesForUser(env, targetUserId),
+  const [statsRow, rankedStatsRow, publishedRoomRows, publishedCourseCount, playlists] = await Promise.all([
+    measure(timing, 'profile_stats', () => loadUserStatsRow(env, targetUserId)),
+    measure(timing, 'profile_rank', () => loadViewerRankedGlobalLeaderboardRow(env, targetUserId)),
+    measure(timing, 'profile_room_rows', () => loadPublishedRoomsByCreator(env, targetUserId)),
+    measure(timing, 'profile_course_count', () => loadPublicUserProfileCourseCount(env, targetUserId)),
+    measure(timing, 'profile_playlists', () => loadPublicPlaylistSummariesForUser(env, targetUserId)),
   ]);
 
-  const publishedRooms = await buildPublishedRooms(env, publishedRoomRows);
-  const stats = buildProfileStats(statsRow, allStatsRows, publishedRooms.length);
+  const publishedRooms = await measure(timing, 'profile_rooms', () => buildPublishedRooms(env, publishedRoomRows));
+  const stats = buildProfileStats(statsRow, rankedStatsRow, publishedRooms.length);
   const isSelf = viewerUserId === targetUserId;
-  const progression = await loadPublicProgressionSummary(env, targetUserId);
+  const progression = await measure(timing, 'profile_progression', () => loadPublicProgressionSummary(env, targetUserId));
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
 
   return {
@@ -109,9 +118,223 @@ export async function loadUserProfile(
   };
 }
 
+export async function loadUserProfileSummary(
+  env: Env,
+  targetUserId: string,
+  viewerUserId: string | null = null,
+  timing: ServerTiming | null = null,
+): Promise<UserProfileSummaryResponse | null> {
+  const user = await measure(timing, 'profile_user', () => findUserById(env, targetUserId));
+  if (!user) return null;
+
+  const [statsRow, rankedStatsRow, publishedRoomCount, publishedCourseCount, progression] = await Promise.all([
+    measure(timing, 'profile_stats', () => loadUserStatsRow(env, targetUserId)),
+    measure(timing, 'profile_rank', () => loadViewerRankedGlobalLeaderboardRow(env, targetUserId)),
+    measure(timing, 'profile_room_count', () => loadPublishedPlayableCountForBuilder(env, targetUserId)),
+    measure(timing, 'profile_course_count', () => loadPublicUserProfileCourseCount(env, targetUserId)),
+    measure(timing, 'profile_progression', () => loadPublicProgressionSummary(env, targetUserId)),
+  ]);
+  const isSelf = viewerUserId === targetUserId;
+  const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
+  return {
+    userId: user.id,
+    displayName: user.displayName,
+    username: user.username ?? null,
+    createdAt: user.createdAt ?? new Date(0).toISOString(),
+    avatarUrl: user.avatarUrl ?? null,
+    bio: user.bio ?? null,
+    selectedAvatarId,
+    avatarChoices: listPlayerAvatarChoicesForLevel(progression.player.level, selectedAvatarId),
+    isSelf,
+    canEdit: isSelf,
+    stats: buildProfileStats(statsRow, rankedStatsRow, publishedRoomCount),
+    progression,
+    publishedCourseCount,
+  };
+}
+
+export async function loadUserProfileRoomsPage(
+  env: Env,
+  targetUserId: string,
+  limit: number,
+  cursor: string | null,
+  timing: ServerTiming | null = null,
+): Promise<UserProfileRoomsResponse> {
+  const offset = decodeProfileRoomsCursor(cursor);
+  if (playableContentIndexReadsEnabled(env)) {
+    try {
+      const result = await measure(timing, 'profile_index_rooms', () => env.DB.prepare(
+        `
+          SELECT
+            target_key,
+            target_type,
+            content_id,
+            version_key,
+            representative_room_id,
+            room_x,
+            room_y,
+            title,
+            goal_type,
+            published_at,
+            cell_count,
+            anchor_x,
+            anchor_y,
+            source_type,
+            legacy_course_id,
+            quality_adjusted_average,
+            quality_vote_count,
+            consensus_difficulty
+          FROM playable_content_index
+          WHERE builder_user_id = ?
+          ORDER BY published_at DESC, target_key ASC
+          LIMIT ? OFFSET ?
+        `,
+      ).bind(targetUserId, limit + 1, offset).all<ProfilePlayableContentRow>());
+      const hasMore = result.results.length > limit;
+      return {
+        results: result.results.slice(0, limit).map(mapProfilePlayableContentRow),
+        ...(hasMore ? { nextCursor: encodeProfileRoomsCursor(offset + limit) } : {}),
+      };
+    } catch (error) {
+      if (!String(error).toLowerCase().includes('playable_content_index')) throw error;
+      console.warn('Playable-content index is enabled but unavailable; falling back to legacy profile rooms.');
+    }
+  }
+
+  const rows = await measure(timing, 'profile_room_rows', () => loadPublishedRoomsByCreator(env, targetUserId));
+  const rooms = await measure(timing, 'profile_rooms', () => buildPublishedRooms(env, rows));
+  return {
+    results: rooms.slice(offset, offset + limit),
+    ...(offset + limit < rooms.length ? { nextCursor: encodeProfileRoomsCursor(offset + limit) } : {}),
+  };
+}
+
+export async function loadUserProfilePlaylists(
+  env: Env,
+  targetUserId: string,
+  timing: ServerTiming | null = null,
+): Promise<UserProfilePlaylistsResponse> {
+  return {
+    results: await measure(timing, 'profile_playlists', () => loadPublicPlaylistSummariesForUser(env, targetUserId)),
+  };
+}
+
+interface ProfilePlayableContentRow {
+  target_key: string;
+  target_type: 'room' | 'expanded_room';
+  content_id: string;
+  version_key: number | string;
+  representative_room_id: string;
+  room_x: number;
+  room_y: number;
+  title: string | null;
+  goal_type: string | null;
+  published_at: string;
+  cell_count: number | string;
+  anchor_x: number;
+  anchor_y: number;
+  source_type: 'native_expanded_room' | 'standalone_room' | 'legacy_course';
+  legacy_course_id: string | null;
+  quality_adjusted_average: number | string | null;
+  quality_vote_count: number | string | null;
+  consensus_difficulty: string | null;
+}
+
+function mapProfilePlayableContentRow(row: ProfilePlayableContentRow): ProfilePublishedRoomEntry {
+  const roomVersion = Number(row.version_key);
+  const qualityVoteCount = Number(row.quality_vote_count ?? 0);
+  const adjustedAverage = row.quality_adjusted_average === null
+    ? null
+    : Number(row.quality_adjusted_average);
+  const coordinates = { x: row.room_x, y: row.room_y };
+  const expandedRoom = row.target_type === 'expanded_room'
+    ? {
+        expandedRoomId: row.content_id,
+        expandedRoomVersion: roomVersion,
+        title: row.title,
+        source: row.source_type,
+        legacyCourseId: row.legacy_course_id,
+        cellCount: Number(row.cell_count),
+        anchorCoordinates: { x: row.anchor_x, y: row.anchor_y },
+        focusedCoordinates: { ...coordinates },
+      }
+    : null;
+  return {
+    roomId: row.representative_room_id,
+    roomCoordinates: coordinates,
+    roomTitle: row.title,
+    roomVersion,
+    goalType: normalizeProfileGoalType(row.goal_type),
+    publishedAt: row.published_at,
+    consensusDifficulty: normalizeProfileDifficulty(row.consensus_difficulty),
+    quality: {
+      adjustedAverage,
+      rawAverage: adjustedAverage,
+      voteCount: qualityVoteCount,
+      weightedVoteCount: qualityVoteCount,
+      counts: { oneStar: 0, twoStar: 0, threeStar: 0, fourStar: 0, fiveStar: 0 },
+    },
+    expandedRoom,
+  };
+}
+
+function normalizeProfileGoalType(value: string | null): ProfilePublishedRoomEntry['goalType'] {
+  return value && ['reach_exit', 'collect_target', 'collect_race', 'defeat_all', 'checkpoint_sprint', 'survival'].includes(value)
+    ? value as ProfilePublishedRoomEntry['goalType']
+    : null;
+}
+
+function normalizeProfileDifficulty(value: string | null): RoomDifficulty | null {
+  return value && ROOM_DIFFICULTIES.includes(value as RoomDifficulty) ? value as RoomDifficulty : null;
+}
+
+async function loadPublishedPlayableCountForBuilder(env: Env, userId: string): Promise<number> {
+  if (playableContentIndexReadsEnabled(env)) {
+    try {
+      const row = await env.DB.prepare(
+        'SELECT COUNT(*) AS count FROM playable_content_index WHERE builder_user_id = ?',
+      ).bind(userId).first<{ count: number | string | null }>();
+      return Number(row?.count ?? 0);
+    } catch (error) {
+      if (!String(error).toLowerCase().includes('playable_content_index')) throw error;
+    }
+  }
+  return buildPublishedRooms(env, await loadPublishedRoomsByCreator(env, userId)).then((rooms) => rooms.length);
+}
+
+function playableContentIndexReadsEnabled(env: Env): boolean {
+  const raw = env.PLAYABLE_CONTENT_INDEX_READS?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'on';
+}
+
+function encodeProfileRoomsCursor(offset: number): string {
+  return btoa(JSON.stringify({ v: 1, offset }));
+}
+
+function decodeProfileRoomsCursor(cursor: string | null): number {
+  if (!cursor) return 0;
+  try {
+    const value = JSON.parse(atob(cursor)) as { v?: unknown; offset?: unknown };
+    if (value.v === 1 && Number.isInteger(value.offset) && Number(value.offset) >= 0) {
+      return Number(value.offset);
+    }
+  } catch {
+    // Invalid cursors are rejected below.
+  }
+  throw new HttpError(400, 'Invalid profile rooms cursor.');
+}
+
+function measure<T>(
+  timing: ServerTiming | null,
+  name: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  return timing ? timing.measure(name, operation) : operation();
+}
+
 function buildProfileStats(
   statsRow: Awaited<ReturnType<typeof loadUserStatsRow>>,
-  allStatsRows: Awaited<ReturnType<typeof loadAllUserStatsRows>>,
+  rankedStatsRow: Awaited<ReturnType<typeof loadViewerRankedGlobalLeaderboardRow>>,
   publishedRoomCount: number
 ): ProfileStatsSummary {
   if (!statsRow) {
@@ -122,12 +345,7 @@ function buildProfileStats(
   }
 
   const stats = mapUserStatsRow(statsRow);
-  const rankedEntries = allStatsRows
-    .map(mapUserStatsRow)
-    .filter((entry) => !isGeneratedLeaderboardExcludedDisplayName(entry.userDisplayName))
-    .sort(compareGlobalLeaderboardEntries);
-  const publicRank = rankedEntries.findIndex((entry) => entry.userId === stats.userId);
-  const publicStats = publicRank >= 0 ? rankedEntries[publicRank] ?? null : null;
+  const publicStats = rankedStatsRow ? mapUserStatsRow(rankedStatsRow) : null;
 
   return {
     totalPoints: publicStats?.totalPoints ?? 0,
@@ -145,7 +363,7 @@ function buildProfileStats(
     pvpDraws: stats.pvpDraws,
     bestScore: publicStats?.bestScore ?? 0,
     fastestClearMs: publicStats?.fastestClearMs ?? null,
-    globalRank: publicRank >= 0 ? publicRank + 1 : null,
+    globalRank: rankedStatsRow ? Number(rankedStatsRow.overall_rank) : null,
   };
 }
 
@@ -208,15 +426,51 @@ async function resolveProfilePublishedRoomEntries(
     return entries;
   }
 
-  const entriesByPlayableTarget = new Map<string, ProfilePublishedRoomBaseEntry>();
+  const memberships = await loadPublishedExpandedRoomMembershipsForRoomIds(
+    env,
+    entries.map((entry) => entry.roomId),
+  );
+  const membershipByRoomId = new Map(memberships.map((membership) => [membership.roomId, membership]));
+  const expandedRoomIds = Array.from(
+    new Set(
+      memberships
+        .filter((membership) => membership.cellCount > 1)
+        .map((membership) => membership.expandedRoomId),
+    ),
+  );
+  const expandedTargets = await Promise.all(
+    expandedRoomIds.map(async (expandedRoomId) => [
+      expandedRoomId,
+      await loadExpandedRoomTarget(env, expandedRoomId),
+    ] as const),
+  );
+  const expandedTargetById = new Map(expandedTargets);
+  const resolvedEntries: ProfilePublishedRoomBaseEntry[] = [];
   for (const entry of entries) {
-    const expandedRoomTarget = await loadProfileExpandedRoomTargetForCell(env, entry);
+    const membership = membershipByRoomId.get(entry.roomId);
+    const candidateTarget = membership?.cellCount && membership.cellCount > 1
+      ? expandedTargetById.get(membership.expandedRoomId) ?? null
+      : null;
+    const expandedRoomTarget = candidateTarget && targetContainsPinnedProfileCell(candidateTarget, entry)
+      ? candidateTarget
+      : null;
     const resolvedEntry = expandedRoomTarget
       ? mapProfileEntryToExpandedRoom(entry, expandedRoomTarget)
       : { ...entry, expandedRoom: null };
-    const playableTargetKey = expandedRoomTarget
-      ? getExpandedRoomProfileTargetKey(expandedRoomTarget)
-      : getStandaloneProfileTargetKey(entry);
+    resolvedEntries.push(resolvedEntry);
+  }
+
+  return dedupeResolvedProfilePublishedRoomEntries(resolvedEntries);
+}
+
+export function dedupeResolvedProfilePublishedRoomEntries(
+  entries: ProfilePublishedRoomBaseEntry[],
+): ProfilePublishedRoomBaseEntry[] {
+  const entriesByPlayableTarget = new Map<string, ProfilePublishedRoomBaseEntry>();
+  for (const resolvedEntry of entries) {
+    const playableTargetKey = resolvedEntry.expandedRoom
+      ? `expanded-room:${resolvedEntry.expandedRoom.expandedRoomId}:v${resolvedEntry.expandedRoom.expandedRoomVersion ?? 'published'}`
+      : getStandaloneProfileTargetKey(resolvedEntry);
     const existingEntry = entriesByPlayableTarget.get(playableTargetKey);
     if (!existingEntry || shouldReplaceProfileRepresentative(existingEntry, resolvedEntry)) {
       entriesByPlayableTarget.set(playableTargetKey, resolvedEntry);
@@ -226,19 +480,13 @@ async function resolveProfilePublishedRoomEntries(
   return Array.from(entriesByPlayableTarget.values());
 }
 
-async function loadProfileExpandedRoomTargetForCell(
-  env: Env,
+function targetContainsPinnedProfileCell(
+  target: ResolvedExpandedRoomTarget,
   entry: ProfilePublishedRoomBaseEntry,
-): Promise<ResolvedExpandedRoomTarget | null> {
-  const target = await resolveExpandedRoomAtCoordinates(env, entry.roomCoordinates);
-  if (!target || target.cellCount <= 1) {
-    return null;
-  }
-
-  const containsPinnedCell = target.cells.some(
+): boolean {
+  return target.cellCount > 1 && target.cells.some(
     (cell) => cell.roomId === entry.roomId && normalizeProfileVersion(cell.roomVersion) === entry.roomVersion,
   );
-  return containsPinnedCell ? target : null;
 }
 
 function mapProfileEntryToExpandedRoom(
@@ -297,10 +545,6 @@ function shouldReplaceProfileRepresentative(
     return nextEntry.roomCoordinates.y < existingEntry.roomCoordinates.y;
   }
   return nextEntry.roomCoordinates.x < existingEntry.roomCoordinates.x;
-}
-
-function getExpandedRoomProfileTargetKey(target: ResolvedExpandedRoomTarget): string {
-  return `expanded-room:${target.expandedRoomId}:v${target.version ?? 'published'}`;
 }
 
 function getStandaloneProfileTargetKey(entry: ProfilePublishedRoomBaseEntry): string {

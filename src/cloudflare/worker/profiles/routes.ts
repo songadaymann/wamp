@@ -14,14 +14,20 @@ import {
   isPlayerAvatarUnlockedForLevel,
 } from '../../../player/avatar/unlocks';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
+import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env } from '../core/types';
-import { findUserByDisplayName, findUserByUsername, updateUserProfile } from '../auth/store';
+import { findUserByDisplayName, findUserById, findUserByUsername, updateUserProfile } from '../auth/store';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth } from '../auth/request';
 import { assertGeneratedOnlyDisplayNameChangeAllowed } from '../generatedUsers/leaderboardIsolation';
 import { assertNotSchoolRestricted } from '../school/restrictions';
 import { loadPublicProgressionSummary } from '../progression/store';
 import { loadCryptopunkAvatarPackRow } from '../avatars/store';
-import { loadUserProfile } from './store';
+import {
+  loadUserProfile,
+  loadUserProfilePlaylists,
+  loadUserProfileRoomsPage,
+  loadUserProfileSummary,
+} from './store';
 
 const MAX_PROFILE_BIO_LENGTH = 280;
 const MAX_AVATAR_URL_LENGTH = 500;
@@ -31,13 +37,54 @@ export async function handleProfileGet(
   env: Env,
   userId: string
 ): Promise<Response> {
-  const auth = await loadOptionalRequestAuth(env, request);
-  const profile = await loadUserProfile(env, userId, auth?.user.id ?? null);
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
+  const profile = await loadUserProfile(env, userId, auth?.user.id ?? null, timing);
   if (!profile) {
     throw new HttpError(404, 'Profile not found.');
   }
 
-  return jsonResponse(request, profile);
+  return timedJsonResponse(request, profile, timing, profileCacheInit(auth !== null));
+}
+
+export async function handleProfileSummaryGet(request: Request, env: Env, userId: string): Promise<Response> {
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
+  const profile = await loadUserProfileSummary(env, userId, auth?.user.id ?? null, timing);
+  if (!profile) throw new HttpError(404, 'Profile not found.');
+  timing.setDiagnostic('cache', auth ? 'private' : 'public-20-swr-40');
+  return timedJsonResponse(request, profile, timing, profileCacheInit(auth !== null));
+}
+
+export async function handleProfileRoomsGet(request: Request, url: URL, env: Env, userId: string): Promise<Response> {
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
+  const limit = parseBoundedInteger(url.searchParams.get('limit'), 24, 1, 100);
+  const response = await loadUserProfileRoomsPage(env, userId, limit, url.searchParams.get('cursor'), timing);
+  timing.setDiagnostic('cache', auth ? 'private' : 'public-20-swr-40');
+  return timedJsonResponse(request, response, timing, profileCacheInit(auth !== null));
+}
+
+export async function handleProfilePlaylistsGet(request: Request, env: Env, userId: string): Promise<Response> {
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
+  if (!await findUserById(env, userId)) throw new HttpError(404, 'Profile not found.');
+  const response = await loadUserProfilePlaylists(env, userId, timing);
+  timing.setDiagnostic('cache', auth ? 'private' : 'public-20-swr-40');
+  return timedJsonResponse(request, response, timing, profileCacheInit(auth !== null));
+}
+
+function profileCacheInit(authenticated: boolean): ResponseInit {
+  return { headers: { 'Cache-Control': authenticated ? 'private, max-age=20' : 'public, max-age=20, stale-while-revalidate=40' } };
+}
+
+function parseBoundedInteger(value: string | null, fallback: number, min: number, max: number): number {
+  if (value === null) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new HttpError(400, `limit must be an integer between ${min} and ${max}.`);
+  }
+  return parsed;
 }
 
 export async function handleProfileGetByUsername(

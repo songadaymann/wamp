@@ -16,6 +16,10 @@ export interface D1Database {
   batch<T = unknown>(statements: D1PreparedStatement[]): Promise<T[]>;
 }
 
+export interface WorkerExecutionContextLike {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
 export interface AssetsBinding {
   fetch(request: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
@@ -44,6 +48,7 @@ export interface Env {
   ROOM_DAILY_CLAIM_LIMIT?: string;
   ROOM_DAILY_PUBLISH_LIMIT?: string;
   EXPANDED_ROOMS_ENABLED?: string;
+  PLAYABLE_CONTENT_INDEX_READS?: string;
   ROOM_MINT_CHAIN_ID?: string;
   ROOM_MINT_CHAIN_NAME?: string;
   ROOM_MINT_DISABLED?: string;

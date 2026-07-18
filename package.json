@@ -6,7 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run test && npm run typecheck && npm run build",
-    "lint": "eslint src partykit scripts/api_performance_probe.mjs scripts/playable_content_index.mjs --max-warnings=0",
+    "lint": "eslint src partykit scripts/api_performance_probe.mjs scripts/backfill_badges.mjs scripts/playable_content_index.mjs --max-warnings=0",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "dev": "vite --strictPort --port 3000",
@@ -32,6 +32,7 @@
     "perf:api": "node scripts/api_performance_probe.mjs",
     "index:repair": "node scripts/playable_content_index.mjs repair",
     "index:parity": "node scripts/playable_content_index.mjs parity",
+    "badges:backfill": "node scripts/backfill_badges.mjs",
     "avatar:cryptopunk:build": "python3 gen-avatar/cryptopunk/build-avatar-pack-for-punk-id.py",
     "avatar:cryptopunk:build-preview-atlas": "python3 scripts/build_cryptopunk_head_preview_atlas.py",
     "avatar:cryptopunk:queue": "node scripts/process_cryptopunk_avatar_queue.mjs",

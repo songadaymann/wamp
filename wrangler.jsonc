@@ -15,7 +15,8 @@
     "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-27T03:59:59.999Z",
     "PARTYKIT_HOST": "everybodys-platformer-presence.songadaymann.partykit.dev",
     "PARTYKIT_PARTY": "main",
-    "ROOM_DAILY_CLAIM_LIMIT": "4"
+    "ROOM_DAILY_CLAIM_LIMIT": "4",
+    "PLAYABLE_CONTENT_INDEX_READS": "0"
   },
   "d1_databases": [
     {
@@ -41,7 +42,8 @@
         "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-27T03:59:59.999Z",
         "PARTYKIT_HOST": "everybodys-platformer-presence-safety.songadaymann.partykit.dev",
         "PARTYKIT_PARTY": "main",
-        "ROOM_MINT_DISABLED": "1"
+        "ROOM_MINT_DISABLED": "1",
+        "PLAYABLE_CONTENT_INDEX_READS": "0"
       },
       "d1_databases": [
         {

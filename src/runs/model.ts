@@ -202,6 +202,7 @@ export interface RoomDiscoveryResponse {
   difficultyFilter: RoomDifficulty | null;
   sort: RoomDiscoverySort;
   results: RoomDiscoveryEntry[];
+  nextCursor?: string;
 }
 
 export interface BuilderDiscoveryEntry {

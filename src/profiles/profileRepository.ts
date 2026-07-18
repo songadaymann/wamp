@@ -1,5 +1,9 @@
 import { getApiBaseUrl } from '../api/baseUrl';
 import { appendCryptopunkUnlockOverrideHeaders } from '../avatars/debug';
+import {
+  invalidateStaleWhileRevalidateCache,
+  loadWithStaleWhileRevalidate,
+} from '../api/staleWhileRevalidateCache';
 import type {
   UserProfileResponse,
   UserProfileUpdateRequestBody,
@@ -25,18 +29,22 @@ class ApiProfileRepository implements ProfileRepository {
   constructor(private readonly baseUrl: string) {}
 
   async loadProfile(userId: string): Promise<UserProfileResponse> {
-    return this.request<UserProfileResponse>(`/api/profiles/${encodeURIComponent(userId)}`);
+    const path = `/api/profiles/${encodeURIComponent(userId)}`;
+    return loadWithStaleWhileRevalidate(`profile:${this.baseUrl}${path}`, () => this.request<UserProfileResponse>(path));
   }
 
   async loadProfileByUsername(username: string): Promise<UserProfileResponse> {
-    return this.request<UserProfileResponse>(`/api/profiles/by-username/${encodeURIComponent(username)}`);
+    const path = `/api/profiles/by-username/${encodeURIComponent(username)}`;
+    return loadWithStaleWhileRevalidate(`profile:${this.baseUrl}${path}`, () => this.request<UserProfileResponse>(path));
   }
 
   async updateMyProfile(body: UserProfileUpdateRequestBody): Promise<UserProfileUpdateResponse> {
-    return this.request<UserProfileUpdateResponse>('/api/profiles/me', {
+    const response = await this.request<UserProfileUpdateResponse>('/api/profiles/me', {
       method: 'PATCH',
       body: JSON.stringify(body),
     });
+    invalidateStaleWhileRevalidateCache('profile:');
+    return response;
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {

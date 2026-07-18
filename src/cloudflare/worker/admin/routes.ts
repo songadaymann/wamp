@@ -14,8 +14,13 @@ import {
   normalizePositiveInteger,
   parseJsonBody,
 } from '../core/http';
-import type { Env } from '../core/types';
+import type { Env, WorkerExecutionContextLike } from '../core/types';
+import {
+  refreshPlayableContentIndexForRoom,
+  schedulePlayableContentIndexRefresh,
+} from '../playableContentIndex/store';
 import { loadAdminProgressionUser, searchAdminProgressionUsers, updateAdminBuilderCapOverride } from '../progression/store';
+import { syncUserBadges } from '../progression/badgesTrophies';
 import { revertRoom } from '../rooms/store';
 import { upsertUserStats } from '../runs/points';
 import { loadLaunchStats } from './launchStats';
@@ -35,7 +40,8 @@ import { handleAdminSchoolRequest } from '../school/routes';
 export async function handleAdminRequest(
   request: Request,
   url: URL,
-  env: Env
+  env: Env,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   if (url.pathname.startsWith('/api/admin/background-images')) {
     return handleAdminBackgroundImageRequest(request, url, env);
@@ -71,6 +77,9 @@ export async function handleAdminRequest(
 
   if (url.pathname === '/api/admin/progression/users' && request.method === 'GET') {
     return handleAdminProgressionUserSearch(request, url, env);
+  }
+  if (url.pathname === '/api/admin/progression/badges/backfill' && request.method === 'POST') {
+    return handleAdminBadgeBackfill(request, env);
   }
   if (url.pathname === '/api/admin/snapshot/reset' && request.method === 'POST') {
     return handleAdminSnapshotReset(request, env);
@@ -123,20 +132,54 @@ export async function handleAdminRequest(
 
   const clearMatch = /^\/api\/admin\/rooms\/([^/]+)\/clear$/.exec(url.pathname);
   if (clearMatch && request.method === 'POST') {
-    return handleAdminRoomClear(request, env, decodeURIComponent(clearMatch[1]));
+    return handleAdminRoomClear(request, env, decodeURIComponent(clearMatch[1]), context);
   }
 
   const restoreMatch = /^\/api\/admin\/rooms\/([^/]+)\/restore$/.exec(url.pathname);
   if (restoreMatch && request.method === 'POST') {
-    return handleAdminRoomRestore(request, url, env, decodeURIComponent(restoreMatch[1]));
+    return handleAdminRoomRestore(request, url, env, decodeURIComponent(restoreMatch[1]), context);
   }
 
   const featureMatch = /^\/api\/admin\/rooms\/([^/]+)\/feature$/.exec(url.pathname);
   if (featureMatch && request.method === 'POST') {
-    return handleAdminRoomFeature(request, env, decodeURIComponent(featureMatch[1]));
+    return handleAdminRoomFeature(request, env, decodeURIComponent(featureMatch[1]), context);
   }
 
   throw new HttpError(404, 'Admin route not found.');
+}
+
+interface AdminBadgeBackfillRequestBody {
+  cursor?: string | null;
+  limit?: number;
+}
+
+async function handleAdminBadgeBackfill(request: Request, env: Env): Promise<Response> {
+  requireAdminRequest(env, request, 'backfill progression badges');
+  const body = await parseJsonBody<AdminBadgeBackfillRequestBody>(request);
+  const cursor = typeof body.cursor === 'string' ? body.cursor.trim() : '';
+  const limit = Math.max(
+    1,
+    Math.min(50, body.limit === undefined ? 20 : normalizePositiveInteger(body.limit, 'limit')),
+  );
+  const users = await env.DB.prepare(
+    `
+      SELECT id
+      FROM users
+      WHERE id > ?
+      ORDER BY id ASC
+      LIMIT ?
+    `,
+  ).bind(cursor, limit + 1).all<{ id: string }>();
+  const batch = users.results.slice(0, limit);
+  for (const user of batch) {
+    await syncUserBadges(env, user.id);
+  }
+  const hasMore = users.results.length > limit;
+  return jsonResponse(request, {
+    processed: batch.length,
+    done: !hasMore,
+    ...(hasMore && batch.length > 0 ? { nextCursor: batch[batch.length - 1]?.id } : {}),
+  });
 }
 
 interface AdminRoomFeatureRequestBody {
@@ -148,7 +191,8 @@ async function handleAdminRoomRestore(
   request: Request,
   url: URL,
   env: Env,
-  roomId: string
+  roomId: string,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   requireTrustedOriginForMutation(request);
   const { session } = await requireChatModeratorSession(env, request, `restore room ${roomId}`);
@@ -168,6 +212,7 @@ async function handleAdminRoomRestore(
     },
     true
   );
+  schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
 
   return jsonResponse(request, record);
 }
@@ -175,7 +220,8 @@ async function handleAdminRoomRestore(
 async function handleAdminRoomClear(
   request: Request,
   env: Env,
-  roomId: string
+  roomId: string,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   requireAdminRequest(env, request, `clear room ${roomId}`);
 
@@ -273,6 +319,7 @@ async function handleAdminRoomClear(
   for (const userId of affectedUserIds) {
     await upsertUserStats(env, userId);
   }
+  schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
 
   return jsonResponse(request, {
     ok: true,
@@ -294,6 +341,7 @@ async function handleAdminRoomFeature(
   request: Request,
   env: Env,
   roomId: string,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   requireAdminRequest(env, request, `feature room ${roomId}`);
   const body = await parseJsonBody<AdminRoomFeatureRequestBody>(request);
@@ -364,6 +412,8 @@ async function handleAdminRoomFeature(
       .bind(roomId)
       .all();
   }
+
+  schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
 
   return jsonResponse(request, {
     ok: true,

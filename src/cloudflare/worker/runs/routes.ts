@@ -3,6 +3,7 @@ import { cloneRoomSnapshot, type RoomRecord, type RoomSnapshot } from '../../../
 import { computeRunScore, sortCompletedRunsForLeaderboard } from '../../../runs/scoring';
 import { RANKED_RUN_TRACE_SCHEMA_VERSION } from '../../../runs/verificationTrace';
 import type {
+  RoomDiscoverySort,
   RoomRunRecord,
   RunFinishRequestBody,
   RunStartResponse,
@@ -15,7 +16,12 @@ import {
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
-import type { Env, RoomRunRow } from '../core/types';
+import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
+import type { Env, RoomRunRow, WorkerExecutionContextLike } from '../core/types';
+import {
+  refreshPlayableContentIndexForRoom,
+  schedulePlayableContentIndexRefresh,
+} from '../playableContentIndex/store';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { loadRoomRecord } from '../rooms/store';
 import {
@@ -593,7 +599,8 @@ export async function handleRoomLeaderboard(
 export async function handleRoomDifficultyVote(
   request: Request,
   env: Env,
-  roomId: string
+  roomId: string,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -632,6 +639,7 @@ export async function handleRoomDifficultyVote(
       autoSuggestedDifficulty: body.difficulty,
     },
   });
+  schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
 
   return noContentResponse(request);
 }
@@ -640,6 +648,7 @@ export async function handleRoomRatingSubmit(
   request: Request,
   env: Env,
   roomId: string,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -661,6 +670,7 @@ export async function handleRoomRatingSubmit(
     userId: auth.user.id,
     body,
   });
+  schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
   return jsonResponse(request, responseBody);
 }
 
@@ -669,7 +679,8 @@ export async function handleRoomDiscovery(
   url: URL,
   env: Env
 ): Promise<Response> {
-  const auth = await loadOptionalRequestAuth(env, request);
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'discover room challenges');
   const rawDifficulty = url.searchParams.get('difficulty');
   const difficultyFilter =
@@ -677,19 +688,49 @@ export async function handleRoomDiscovery(
   const rawSort = url.searchParams.get('sort');
   const sort = rawSort && rawSort.trim() ? parseRoomDiscoverySortOrThrow(rawSort) : 'featured';
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
+  const cursorOffset = decodeRoomDiscoveryCursor(url.searchParams.get('cursor'), sort);
   const includeGoalLessRooms =
     difficultyFilter === null
     && sort === 'newest'
     && parseBooleanQueryFlag(url.searchParams.get('includeGoalLessRooms'));
-  const response = await loadRoomDiscoveryResponse(
+  const response = await timing.measure('discovery', () => loadRoomDiscoveryResponse(
     env,
     difficultyFilter,
     limit,
     sort,
     includeGoalLessRooms,
     auth?.user.id ?? null,
-  );
-  return jsonResponse(request, response);
+    timing,
+    cursorOffset,
+  ));
+  const authenticated = auth !== null;
+  timing.setDiagnostic('cache', authenticated ? 'private' : 'public-20-swr-40');
+  return timedJsonResponse(request, response, timing, {
+    headers: {
+      'Cache-Control': authenticated
+        ? 'private, max-age=20'
+        : 'public, max-age=20, stale-while-revalidate=40',
+    },
+  });
+}
+
+function decodeRoomDiscoveryCursor(value: string | null, sort: RoomDiscoverySort): number {
+  if (!value) return 0;
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const decoded = JSON.parse(atob(padded)) as {
+      version?: unknown;
+      sort?: unknown;
+      offset?: unknown;
+    };
+    if (decoded.version !== 1 || decoded.sort !== sort) throw new Error('cursor mismatch');
+    const offset = Number(decoded.offset);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100_000) throw new Error('cursor offset');
+    return offset;
+  } catch {
+    throw new HttpError(400, 'Invalid room discovery cursor.');
+  }
 }
 
 export async function handleBuilderDiscovery(

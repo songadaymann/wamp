@@ -16,6 +16,7 @@ import type {
   CourseRunRecord,
   CourseRunStartResponse,
 } from '../../../courses/runModel';
+import { expandedRoomIdFromLegacyCourseId } from '../../../expandedRooms/model';
 import type { RunResult } from '../../../runs/model';
 import {
   HttpError,
@@ -24,7 +25,11 @@ import {
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
-import type { CourseRunRow, Env } from '../core/types';
+import type { CourseRunRow, Env, WorkerExecutionContextLike } from '../core/types';
+import {
+  refreshPlayableContentIndexForExpandedRoom,
+  schedulePlayableContentIndexRefresh,
+} from '../playableContentIndex/store';
 import {
   loadOptionalRequestAuth,
   requireAuthenticatedRequestAuth,
@@ -85,6 +90,7 @@ import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 
 interface CoursePublishRouteOptions {
   enforceDailyPublishLimit?: boolean;
+  executionContext?: WorkerExecutionContextLike;
 }
 
 export async function handleCourseCreate(
@@ -217,13 +223,18 @@ export async function handleCoursePublish(
     isFirstPublish: !existing.published,
   });
   await upsertUserStats(env, auth.user.id);
+  schedulePlayableContentIndexRefresh(
+    options.executionContext,
+    refreshPlayableContentIndexForExpandedRoom(env, expandedRoomIdFromLegacyCourseId(courseId)),
+  );
   return jsonResponse(request, record);
 }
 
 export async function handleCourseUnpublish(
   request: Request,
   env: Env,
-  courseId: string
+  courseId: string,
+  executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -232,6 +243,10 @@ export async function handleCourseUnpublish(
     'rooms:write'
   );
   const record = await unpublishCourse(env, courseId, auth.user, auth.isAdmin);
+  schedulePlayableContentIndexRefresh(
+    executionContext,
+    refreshPlayableContentIndexForExpandedRoom(env, expandedRoomIdFromLegacyCourseId(courseId)),
+  );
   return jsonResponse(
     request,
     await attachExpandedRoomCellLimitForUser(env, record, auth.user.id, auth.source)
@@ -736,6 +751,7 @@ export async function handleCourseRatingSubmit(
   request: Request,
   env: Env,
   courseId: string,
+  executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -754,6 +770,10 @@ export async function handleCourseRatingSubmit(
     userId: auth.user.id,
     body,
   });
+  schedulePlayableContentIndexRefresh(
+    executionContext,
+    refreshPlayableContentIndexForExpandedRoom(env, expandedRoomIdFromLegacyCourseId(courseId)),
+  );
   return jsonResponse(request, responseBody);
 }
 

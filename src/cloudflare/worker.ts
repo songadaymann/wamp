@@ -65,7 +65,14 @@ import {
   handlePlaylistUpdate,
 } from './worker/playlists/routes';
 import { handlePresenceRequest } from './worker/presence/routes';
-import { handleProfileGet, handleProfileGetByUsername, handleProfileUpdateMe } from './worker/profiles/routes';
+import {
+  handleProfileGet,
+  handleProfileGetByUsername,
+  handleProfilePlaylistsGet,
+  handleProfileRoomsGet,
+  handleProfileSummaryGet,
+  handleProfileUpdateMe,
+} from './worker/profiles/routes';
 import { handlePvpMatchSubmit } from './worker/pvp/routes';
 import {
   handleBuilderDiscovery,
@@ -176,7 +183,7 @@ export default {
       }
 
       if (url.pathname.startsWith('/api/admin/')) {
-        return await handleAdminRequest(request, url, env);
+        return await handleAdminRequest(request, url, env, ctx);
       }
 
       const cryptopunkAvatarStatusMatch = /^\/api\/avatars\/cryptopunks\/([^/]+)\/status$/.exec(url.pathname);
@@ -365,6 +372,21 @@ export default {
         return await handleProfileGetByUsername(request, env, decodeURIComponent(profileByUsernameMatch[1]));
       }
 
+      const profileSummaryMatch = /^\/api\/profiles\/([^/]+)\/summary$/.exec(url.pathname);
+      if (profileSummaryMatch && request.method === 'GET') {
+        return await handleProfileSummaryGet(request, env, decodeURIComponent(profileSummaryMatch[1]));
+      }
+
+      const profileRoomsMatch = /^\/api\/profiles\/([^/]+)\/rooms$/.exec(url.pathname);
+      if (profileRoomsMatch && request.method === 'GET') {
+        return await handleProfileRoomsGet(request, url, env, decodeURIComponent(profileRoomsMatch[1]));
+      }
+
+      const profilePlaylistsMatch = /^\/api\/profiles\/([^/]+)\/playlists$/.exec(url.pathname);
+      if (profilePlaylistsMatch && request.method === 'GET') {
+        return await handleProfilePlaylistsGet(request, env, decodeURIComponent(profilePlaylistsMatch[1]));
+      }
+
       const profileMatch = /^\/api\/profiles\/([^/]+)$/.exec(url.pathname);
       if (profileMatch && request.method === 'GET') {
         return await handleProfileGet(request, env, decodeURIComponent(profileMatch[1]));
@@ -430,7 +452,8 @@ export default {
         return await handleExpandedRoomPublish(
           request,
           env,
-          decodeURIComponent(expandedRoomPublishMatch[1])
+          decodeURIComponent(expandedRoomPublishMatch[1]),
+          ctx,
         );
       }
 
@@ -439,7 +462,8 @@ export default {
         return await handleExpandedRoomUnpublish(
           request,
           env,
-          decodeURIComponent(expandedRoomUnpublishMatch[1])
+          decodeURIComponent(expandedRoomUnpublishMatch[1]),
+          ctx,
         );
       }
 
@@ -496,12 +520,17 @@ export default {
 
       const coursePublishMatch = /^\/api\/courses\/([^/]+)\/publish$/.exec(url.pathname);
       if (coursePublishMatch && request.method === 'POST') {
-        return await handleCoursePublish(request, env, decodeURIComponent(coursePublishMatch[1]));
+        return await handleCoursePublish(
+          request,
+          env,
+          decodeURIComponent(coursePublishMatch[1]),
+          { executionContext: ctx },
+        );
       }
 
       const courseUnpublishMatch = /^\/api\/courses\/([^/]+)\/unpublish$/.exec(url.pathname);
       if (courseUnpublishMatch && request.method === 'POST') {
-        return await handleCourseUnpublish(request, env, decodeURIComponent(courseUnpublishMatch[1]));
+        return await handleCourseUnpublish(request, env, decodeURIComponent(courseUnpublishMatch[1]), ctx);
       }
 
       const courseRunStartMatch = /^\/api\/courses\/([^/]+)\/runs\/start$/.exec(url.pathname);
@@ -553,7 +582,8 @@ export default {
         return await handleRoomDifficultyVote(
           request,
           env,
-          decodeURIComponent(roomDifficultyVoteMatch[1])
+          decodeURIComponent(roomDifficultyVoteMatch[1]),
+          ctx,
         );
       }
 
@@ -563,6 +593,7 @@ export default {
           request,
           env,
           decodeURIComponent(roomRatingMatch[1]),
+          ctx,
         );
       }
 
@@ -592,6 +623,7 @@ export default {
           request,
           env,
           decodeURIComponent(expandedRoomRatingMatch[1]),
+          ctx,
         );
       }
 
@@ -601,6 +633,7 @@ export default {
           request,
           env,
           decodeURIComponent(courseRatingMatch[1]),
+          ctx,
         );
       }
 
@@ -636,7 +669,7 @@ export default {
         throw new HttpError(404, 'Route not found.');
       }
 
-      return await handleRoomRequest(request, url, env);
+      return await handleRoomRequest(request, url, env, ctx);
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;
       const message = error instanceof Error ? error.message : 'Unexpected server error.';

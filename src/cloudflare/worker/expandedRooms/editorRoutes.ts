@@ -18,7 +18,7 @@ import {
 } from '../../../persistence/roomModel';
 import { requireAuthenticatedRequestAuth } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
-import type { Env, RequestAuth } from '../core/types';
+import type { Env, RequestAuth, WorkerExecutionContextLike } from '../core/types';
 import {
   handleCoursePublish,
   handleCourseUnpublish,
@@ -122,22 +122,29 @@ export async function handleExpandedRoomDraftSave(
 export async function handleExpandedRoomPublish(
   request: Request,
   env: Env,
-  expandedRoomId: string
+  expandedRoomId: string,
+  executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
   return handleCoursePublish(
     request,
     env,
     legacyCourseIdForEditableExpandedRoom(expandedRoomId),
-    { enforceDailyPublishLimit: false }
+    { enforceDailyPublishLimit: false, executionContext }
   );
 }
 
 export async function handleExpandedRoomUnpublish(
   request: Request,
   env: Env,
-  expandedRoomId: string
+  expandedRoomId: string,
+  executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
-  return handleCourseUnpublish(request, env, legacyCourseIdForEditableExpandedRoom(expandedRoomId));
+  return handleCourseUnpublish(
+    request,
+    env,
+    legacyCourseIdForEditableExpandedRoom(expandedRoomId),
+    executionContext,
+  );
 }
 
 export async function handleExpandedRoomCellAdd(

@@ -1,5 +1,6 @@
 import type { RoomCoordinates } from '../persistence/roomModel';
 import { getApiBaseUrl } from '../api/baseUrl';
+import { loadWithStaleWhileRevalidate } from '../api/staleWhileRevalidateCache';
 import type {
   BuilderDiscoveryResponse,
   BuilderDiscoverySort,
@@ -46,7 +47,8 @@ export interface RunRepository {
     difficulty: RoomDifficulty | null,
     sort?: RoomDiscoverySort,
     limit?: number,
-    includeGoalLessRooms?: boolean
+    includeGoalLessRooms?: boolean,
+    cursor?: string | null,
   ): Promise<RoomDiscoveryResponse>;
   loadBuilderDiscovery(
     sort?: BuilderDiscoverySort,
@@ -161,7 +163,8 @@ class ApiRunRepository implements RunRepository {
     difficulty: RoomDifficulty | null,
     sort: RoomDiscoverySort = 'featured',
     limit: number = 100,
-    includeGoalLessRooms: boolean = false
+    includeGoalLessRooms: boolean = false,
+    cursor: string | null = null,
   ): Promise<RoomDiscoveryResponse> {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -173,9 +176,14 @@ class ApiRunRepository implements RunRepository {
     if (includeGoalLessRooms) {
       params.set('includeGoalLessRooms', '1');
     }
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
 
-    return this.request<RoomDiscoveryResponse>(
-      `/api/leaderboards/rooms/discover?${params.toString()}`
+    const path = `/api/leaderboards/rooms/discover?${params.toString()}`;
+    return loadWithStaleWhileRevalidate(
+      `discovery:${this.baseUrl}${path}`,
+      () => this.request<RoomDiscoveryResponse>(path),
     );
   }
 
