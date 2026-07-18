@@ -27,7 +27,12 @@ const probes = [
     path: '/api/leaderboards/builders/discover?sort=recent&limit=48',
   },
   ...(profileUserId
-    ? [{ name: 'profile', path: `/api/profiles/${encodeURIComponent(profileUserId)}` }]
+    ? [
+        { name: 'profile-summary', path: `/api/profiles/${encodeURIComponent(profileUserId)}/summary` },
+        { name: 'profile-rooms-48', path: `/api/profiles/${encodeURIComponent(profileUserId)}/rooms?limit=48` },
+        { name: 'profile-playlists', path: `/api/profiles/${encodeURIComponent(profileUserId)}/playlists` },
+        { name: 'profile-compat', path: `/api/profiles/${encodeURIComponent(profileUserId)}` },
+      ]
     : []),
 ];
 
