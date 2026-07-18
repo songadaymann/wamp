@@ -4,6 +4,7 @@ import type {
 } from '../../../persistence/roomModel';
 import { ROOM_GOAL_TYPES, type RoomGoalType } from '../../../goals/roomGoals';
 import type {
+  ExpandedRoomSource,
   ResolvedExpandedRoomTarget,
 } from '../../../expandedRooms/model';
 import type {
@@ -123,6 +124,33 @@ interface RoomDiscoveryAreaCandidate {
   expandedRoom: ResolvedExpandedRoomTarget | null;
   roomVersionKeys: DiscoveryRoomVersionKey[];
   expandedRoomVersionKey: DiscoveryExpandedRoomVersionKey | null;
+}
+
+interface IndexedDiscoveryRow {
+  target_type: 'room' | 'expanded_room';
+  content_id: string;
+  version_key: number | string;
+  representative_room_id: string;
+  representative_room_version: number | string;
+  room_x: number | string;
+  room_y: number | string;
+  builder_user_id: string | null;
+  builder_display_name: string | null;
+  title: string | null;
+  goal_type: string | null;
+  published_at: string;
+  first_published_at: string | null;
+  cell_count: number | string;
+  anchor_x: number | string;
+  anchor_y: number | string;
+  source_type: ExpandedRoomSource;
+  legacy_course_id: string | null;
+  canonical_room_version: number | string | null;
+  featured_at: string | null;
+  quality_adjusted_average: number | string | null;
+  quality_vote_count: number | string | null;
+  consensus_difficulty: string | null;
+  difficulty_vote_count: number | string | null;
 }
 
 type PublishedRoomDiscoveryEntry = ReturnType<typeof mapPublishedRoomDiscoveryRow>;
@@ -285,10 +313,10 @@ export async function loadRoomDiscoveryResponse(
   if (isPersonalRoomDiscoverySort(sort) && !viewerUserId) {
     throw new HttpError(401, 'Sign in to sort by your room history.');
   }
-  const indexedRepresentativeRoomIds = await measureDiscovery(
+  const indexedRows = await measureDiscovery(
     timing,
     'discovery_index',
-    () => loadIndexedDiscoveryRepresentativeRoomIds(
+    () => loadIndexedDiscoveryRows(
       env,
       difficultyFilter,
       limit,
@@ -297,9 +325,9 @@ export async function loadRoomDiscoveryResponse(
       cursorOffset,
     ),
   );
-  const indexedRoomFilter = indexedRepresentativeRoomIds === null
-    ? ''
-    : `AND rooms.id IN (${indexedRepresentativeRoomIds.map(() => '?').join(', ') || "''"})`;
+  if (indexedRows !== null) {
+    return buildIndexedDiscoveryResponse(env, indexedRows, difficultyFilter, sort, limit, cursorOffset, viewerUserId, timing);
+  }
   const publishedRooms = await measureDiscovery(timing, 'discovery_rows', () => env.DB.prepare(
     `
       SELECT
@@ -334,12 +362,10 @@ export async function loadRoomDiscoveryResponse(
         ON first_published.room_id = rooms.id
       WHERE rooms.published_json IS NOT NULL
         AND (? = 1 OR rooms.published_goal_type IS NOT NULL)
-        ${indexedRoomFilter}
     `
   )
     .bind(
       includeAllPublishedRooms || expandedRoomsEnabled ? 1 : 0,
-      ...(indexedRepresentativeRoomIds ?? []),
     )
     .all<PublishedRoomDiscoveryRow>());
 
@@ -513,7 +539,7 @@ export async function loadRoomDiscoveryResponse(
       }
     })
     .sort((left, right) => compareRoomDiscoveryEntries(left, right, sort));
-  const pageOffset = indexedRepresentativeRoomIds === null ? cursorOffset : 0;
+  const pageOffset = cursorOffset;
   const results = orderedResults.slice(pageOffset, pageOffset + limit);
   const hasMore = orderedResults.length > pageOffset + limit;
 
@@ -525,18 +551,14 @@ export async function loadRoomDiscoveryResponse(
   };
 }
 
-interface IndexedDiscoveryRepresentativeRow {
-  representative_room_id: string;
-}
-
-async function loadIndexedDiscoveryRepresentativeRoomIds(
+async function loadIndexedDiscoveryRows(
   env: Env,
   difficultyFilter: RoomDifficulty | null,
   limit: number,
   sort: RoomDiscoverySort,
   includeAllPublishedRooms: boolean,
   cursorOffset: number,
-): Promise<string[] | null> {
+): Promise<IndexedDiscoveryRow[] | null> {
   if (
     !playableContentIndexReadsEnabled(env)
     || includeAllPublishedRooms
@@ -550,21 +572,48 @@ async function loadIndexedDiscoveryRepresentativeRoomIds(
     : sort === 'quality'
       ? 'quality_adjusted_average DESC, quality_vote_count DESC, published_at DESC, target_key ASC'
       : '(featured_at IS NOT NULL) DESC, featured_at DESC, quality_adjusted_average DESC, quality_vote_count DESC, published_at DESC, target_key ASC';
-  const candidateLimit = Math.min(400, Math.max((limit + 1) * 2, limit + 25));
+  const candidateLimit = limit + 1;
 
   try {
     const rows = await env.DB.prepare(
       `
-        SELECT representative_room_id
-        FROM playable_content_index
+        SELECT
+          index_row.target_type,
+          index_row.content_id,
+          index_row.version_key,
+          index_row.representative_room_id,
+          COALESCE(member.room_version, index_row.version_key) AS representative_room_version,
+          index_row.room_x,
+          index_row.room_y,
+          index_row.builder_user_id,
+          index_row.builder_display_name,
+          index_row.title,
+          index_row.goal_type,
+          index_row.published_at,
+          index_row.first_published_at,
+          index_row.cell_count,
+          index_row.anchor_x,
+          index_row.anchor_y,
+          index_row.source_type,
+          index_row.legacy_course_id,
+          index_row.canonical_room_version,
+          index_row.featured_at,
+          index_row.quality_adjusted_average,
+          index_row.quality_vote_count,
+          index_row.consensus_difficulty,
+          index_row.difficulty_vote_count
+        FROM playable_content_index index_row
+        LEFT JOIN playable_content_index_members member
+          ON member.target_key = index_row.target_key
+         AND member.room_id = index_row.representative_room_id
         WHERE (? IS NULL OR consensus_difficulty = ?)
         ORDER BY ${orderClause}
         LIMIT ? OFFSET ?
       `,
     )
       .bind(difficultyFilter, difficultyFilter, candidateLimit, cursorOffset)
-      .all<IndexedDiscoveryRepresentativeRow>();
-    return Array.from(new Set(rows.results.map((row) => row.representative_room_id)));
+      .all<IndexedDiscoveryRow>();
+    return rows.results;
   } catch (error) {
     if (String(error).toLowerCase().includes('playable_content_index')) {
       console.warn('Playable-content index is enabled but unavailable; falling back to legacy discovery reads.');
@@ -572,6 +621,118 @@ async function loadIndexedDiscoveryRepresentativeRoomIds(
     }
     throw error;
   }
+}
+
+async function buildIndexedDiscoveryResponse(
+  env: Env,
+  rows: IndexedDiscoveryRow[],
+  difficultyFilter: RoomDifficulty | null,
+  sort: RoomDiscoverySort,
+  limit: number,
+  cursorOffset: number,
+  viewerUserId: string | null,
+  timing: ServerTiming | null,
+): Promise<RoomDiscoveryResponse> {
+  const pageRows = rows.slice(0, limit);
+  const roomVersionKeys = pageRows.map((row) => ({
+    roomId: row.representative_room_id,
+    roomVersion: parseRowNumber(row.representative_room_version),
+  }));
+  const expandedRoomVersionKeys = pageRows
+    .filter((row) => row.target_type === 'expanded_room')
+    .map((row) => ({
+      expandedRoomId: row.content_id,
+      expandedRoomVersion: parseRowNumber(row.version_key),
+    }));
+  const builderUserIds = Array.from(new Set(
+    pageRows.map((row) => row.builder_user_id?.trim() ?? '').filter(Boolean),
+  ));
+  const [trophyRows, builderRows, viewerStates, expandedViewerStates] = await Promise.all([
+    measureDiscovery(timing, 'discovery_trophies', () => loadRoomDiscoveryTrophyRows(env, roomVersionKeys)),
+    measureDiscovery(timing, 'discovery_builders', () => loadBuilderProgressionRows(env, builderUserIds)),
+    viewerUserId
+      ? measureDiscovery(timing, 'discovery_viewer', () => loadDiscoveryViewerRoomStates(env, viewerUserId, roomVersionKeys))
+      : Promise.resolve(new Map<string, DiscoveryViewerRoomState>()),
+    viewerUserId
+      ? measureDiscovery(timing, 'discovery_expanded_viewer', () => loadDiscoveryViewerExpandedRoomStates(env, viewerUserId, expandedRoomVersionKeys))
+      : Promise.resolve(new Map<string, DiscoveryViewerRoomState>()),
+  ]);
+  const trophies = new Map<string, TrophyAwardSummary>();
+  for (const row of trophyRows.results) {
+    if (!trophies.has(row.content_id)) {
+      trophies.set(row.content_id, {
+        contentType: 'room',
+        contentId: row.content_id,
+        versionKey: parseRowNumber(row.version_key),
+        trophyType: row.trophy_type,
+        awardedAt: row.awarded_at,
+      });
+    }
+  }
+  const builderProgress = new Map(builderRows.results.map((row) => [row.user_id, row] as const));
+  const results = pageRows.map((row): RoomDiscoveryEntry => {
+    const roomVersion = parseRowNumber(row.representative_room_version);
+    const expandedVersion = parseRowNumber(row.version_key);
+    const builder = row.builder_user_id ? builderProgress.get(row.builder_user_id) : null;
+    const viewerState = viewerUserId === null
+      ? null
+      : row.target_type === 'expanded_room'
+        ? expandedViewerStates.get(buildDiscoveryExpandedRoomVersionKey(row.content_id, expandedVersion))
+          ?? createEmptyDiscoveryViewerRoomState()
+        : viewerStates.get(buildDiscoveryRoomVersionKey(row.representative_room_id, roomVersion))
+          ?? createEmptyDiscoveryViewerRoomState();
+    const qualityVoteCount = parseRowNumber(row.quality_vote_count);
+    const adjustedAverage = row.quality_adjusted_average === null
+      ? null
+      : roundQuality(parseRowFloat(row.quality_adjusted_average));
+    return {
+      roomId: row.representative_room_id,
+      roomCoordinates: { x: parseRowNumber(row.room_x), y: parseRowNumber(row.room_y) },
+      roomTitle: row.title,
+      builderUserId: row.builder_user_id,
+      builderDisplayName: row.builder_display_name,
+      builderLevel: builder ? parseRowNumber(builder.builder_level) : null,
+      builderTotalBxp: builder ? parseRowNumber(builder.total_bxp) : null,
+      roomVersion,
+      displayRoomVersion: roomVersion,
+      leaderboardSourceVersion: null,
+      canonicalRoomVersion: row.canonical_room_version === null ? null : parseRowNumber(row.canonical_room_version),
+      goalType: normalizeDiscoveryGoalType(row.goal_type),
+      consensusDifficulty: normalizeRoomDifficulty(row.consensus_difficulty),
+      voteCount: Math.max(qualityVoteCount, parseRowNumber(row.difficulty_vote_count)),
+      quality: {
+        adjustedAverage,
+        rawAverage: adjustedAverage,
+        voteCount: qualityVoteCount,
+        weightedVoteCount: qualityVoteCount,
+        counts: { oneStar: 0, twoStar: 0, threeStar: 0, fourStar: 0, fiveStar: 0 },
+      },
+      trophy: trophies.get(row.representative_room_id) ?? null,
+      publishedAt: row.published_at,
+      firstPublishedAt: row.first_published_at,
+      featured: row.featured_at !== null,
+      featuredAt: row.featured_at,
+      viewerState,
+      expandedRoom: row.target_type === 'expanded_room'
+        ? {
+            expandedRoomId: row.content_id,
+            expandedRoomVersion: expandedVersion,
+            title: row.title,
+            source: row.source_type,
+            legacyCourseId: row.legacy_course_id,
+            cellCount: parseRowNumber(row.cell_count),
+            anchorCoordinates: { x: parseRowNumber(row.anchor_x), y: parseRowNumber(row.anchor_y) },
+            focusedCoordinates: { x: parseRowNumber(row.room_x), y: parseRowNumber(row.room_y) },
+          }
+        : null,
+    };
+  });
+  return {
+    difficultyFilter,
+    sort,
+    results,
+    ...(rows.length > limit ? { nextCursor: encodeRoomDiscoveryCursor(sort, cursorOffset + limit) } : {}),
+  };
 }
 
 export function encodeRoomDiscoveryCursor(sort: RoomDiscoverySort, offset: number): string {
