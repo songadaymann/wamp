@@ -156,7 +156,6 @@ async function refreshStandalonePlayableContentIndexRow(env: Env, roomId: string
         CROSS JOIN ratings
         WHERE rooms.id = ?
           AND rooms.published_json IS NOT NULL
-          AND json_extract(rooms.published_json, '$.goal.type') IS NOT NULL
           AND NOT EXISTS (
             SELECT 1
             FROM playable_content_index_members members

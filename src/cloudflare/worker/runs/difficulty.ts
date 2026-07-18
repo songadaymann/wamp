@@ -561,7 +561,6 @@ async function loadIndexedDiscoveryRows(
 ): Promise<IndexedDiscoveryRow[] | null> {
   if (
     !playableContentIndexReadsEnabled(env)
-    || includeAllPublishedRooms
     || (sort !== 'newest' && sort !== 'featured' && sort !== 'quality')
   ) {
     return null;
@@ -606,12 +605,19 @@ async function loadIndexedDiscoveryRows(
         LEFT JOIN playable_content_index_members member
           ON member.target_key = index_row.target_key
          AND member.room_id = index_row.representative_room_id
-        WHERE (? IS NULL OR consensus_difficulty = ?)
+        WHERE (? = 1 OR index_row.goal_type IS NOT NULL)
+          AND (? IS NULL OR index_row.consensus_difficulty = ?)
         ORDER BY ${orderClause}
         LIMIT ? OFFSET ?
       `,
     )
-      .bind(difficultyFilter, difficultyFilter, candidateLimit, cursorOffset)
+      .bind(
+        includeAllPublishedRooms ? 1 : 0,
+        difficultyFilter,
+        difficultyFilter,
+        candidateLimit,
+        cursorOffset,
+      )
       .all<IndexedDiscoveryRow>();
     return rows.results;
   } catch (error) {

@@ -56,8 +56,7 @@ if (action === 'repair') {
       (SELECT COUNT(*)
        FROM playable_content_index
        WHERE representative_room_id IS NULL
-          OR published_at IS NULL
-          OR goal_type IS NULL) AS incomplete_targets;`,
+          OR published_at IS NULL) AS incomplete_targets;`,
   );
 }
 

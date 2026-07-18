@@ -152,7 +152,6 @@ LEFT JOIN room_rating_aggregates ratings
  AND ratings.version_key = versions.version
 LEFT JOIN featured_rooms featured ON featured.room_id = rooms.id
 WHERE rooms.published_json IS NOT NULL
-  AND json_extract(rooms.published_json, '$.goal.type') IS NOT NULL
   AND NOT EXISTS (
     SELECT 1 FROM published_expanded_members members WHERE members.room_id = rooms.id
   );
