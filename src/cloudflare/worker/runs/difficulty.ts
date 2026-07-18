@@ -568,10 +568,10 @@ async function loadIndexedDiscoveryRows(
   }
 
   const orderClause = sort === 'newest'
-    ? 'first_published_at DESC, published_at DESC, target_key ASC'
+    ? 'index_row.first_published_at DESC, index_row.published_at DESC, index_row.target_key ASC'
     : sort === 'quality'
-      ? 'quality_adjusted_average DESC, quality_vote_count DESC, published_at DESC, target_key ASC'
-      : '(featured_at IS NOT NULL) DESC, featured_at DESC, quality_adjusted_average DESC, quality_vote_count DESC, published_at DESC, target_key ASC';
+      ? 'index_row.quality_adjusted_average DESC, index_row.quality_vote_count DESC, index_row.published_at DESC, index_row.target_key ASC'
+      : '(index_row.featured_at IS NOT NULL) DESC, index_row.featured_at DESC, index_row.quality_adjusted_average DESC, index_row.quality_vote_count DESC, index_row.published_at DESC, index_row.target_key ASC';
   const candidateLimit = limit + 1;
 
   try {
