@@ -48,6 +48,7 @@ const METRICS_STORAGE_PREFIX = 'shard:';
 const PREVIEW_STORAGE_PREFIX = 'preview:';
 const ROOM_PREVIEW_TTL_MS = 120_000;
 const PRESENCE_UPSERT_FLUSH_MS = 80;
+const POPULATION_BROADCAST_FLUSH_MS = 250;
 
 type PresenceMode = 'browse' | 'play' | 'edit';
 type PresenceAnimationState =
@@ -203,6 +204,7 @@ export default class PresenceServer implements Party.Server {
   private readonly persistedPreviewsByRoomId = new Map<string, SharedRoomPreview>();
   private readonly pendingPresenceUpsertsByConnectionId = new Map<string, WorldGhostPresence>();
   private presenceUpsertFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private populationBroadcastFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private pvpMatchState: PvpMatchState | null = null;
   private pvpStartTimer: ReturnType<typeof setTimeout> | null = null;
   private pvpFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -567,6 +569,14 @@ export default class PresenceServer implements Party.Server {
   }
 
   private broadcastPopulations(): void {
+    if (this.populationBroadcastFlushTimer !== null) return;
+    this.populationBroadcastFlushTimer = setTimeout(() => {
+      this.populationBroadcastFlushTimer = null;
+      this.flushPopulationBroadcast();
+    }, POPULATION_BROADCAST_FLUSH_MS);
+  }
+
+  private flushPopulationBroadcast(): void {
     this.sendPresenceMessage({
       type: 'populations',
       roomPopulations: this.computeRoomPopulations(),
@@ -2176,20 +2186,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    for (const connection of presenceConnections) {
-      const viewerUserId = connection.state?.userId ?? null;
-      const visiblePeers = peers.filter((peer) =>
-        peer.connectionId !== connection.id && (!viewerUserId || peer.userId !== viewerUserId)
-      );
-      if (visiblePeers.length === 0) {
-        continue;
-      }
-
-      connection.send(JSON.stringify({
-        type: 'upserts',
-        peers: visiblePeers,
-      }));
-    }
+    this.sendPresenceMessage({ type: 'upserts', peers });
   }
 
   private sendPresenceMessage(
