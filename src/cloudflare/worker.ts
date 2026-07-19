@@ -103,6 +103,7 @@ import {
   handleClaimableFrontierRoomsRequest,
   handleWorldChunksRequest,
   handleWorldRequest,
+  handleWorldChunkSummariesRequest,
 } from './worker/world/routes';
 import { handleRoomShareRequest } from './worker/share/routes';
 import { handleSchoolRequest } from './worker/school/routes';
@@ -309,6 +310,12 @@ export default {
         return handleWorldChunksRequest(request, url, env);
       }
 
+      if (url.pathname === '/api/world/chunks/summary' && request.method === 'GET') {
+        const auth = await loadOptionalRequestAuth(env, request);
+        requireOptionalScope(auth, 'rooms:read', 'read compact world room chunks');
+        return handleWorldChunkSummariesRequest(request, url, env, ctx, auth !== null);
+      }
+
       if (url.pathname.startsWith('/api/presence/')) {
         return await handlePresenceRequest(request, url, env);
       }
@@ -411,17 +418,17 @@ export default {
 
       const profileSummaryMatch = /^\/api\/profiles\/([^/]+)\/summary$/.exec(url.pathname);
       if (profileSummaryMatch && request.method === 'GET') {
-        return await handleProfileSummaryGet(request, env, decodeURIComponent(profileSummaryMatch[1]));
+        return await handleProfileSummaryGet(request, env, decodeURIComponent(profileSummaryMatch[1]), ctx);
       }
 
       const profileRoomsMatch = /^\/api\/profiles\/([^/]+)\/rooms$/.exec(url.pathname);
       if (profileRoomsMatch && request.method === 'GET') {
-        return await handleProfileRoomsGet(request, url, env, decodeURIComponent(profileRoomsMatch[1]));
+        return await handleProfileRoomsGet(request, url, env, decodeURIComponent(profileRoomsMatch[1]), ctx);
       }
 
       const profilePlaylistsMatch = /^\/api\/profiles\/([^/]+)\/playlists$/.exec(url.pathname);
       if (profilePlaylistsMatch && request.method === 'GET') {
-        return await handleProfilePlaylistsGet(request, env, decodeURIComponent(profilePlaylistsMatch[1]));
+        return await handleProfilePlaylistsGet(request, env, decodeURIComponent(profilePlaylistsMatch[1]), ctx);
       }
 
       const profileMatch = /^\/api\/profiles\/([^/]+)$/.exec(url.pathname);
@@ -595,11 +602,11 @@ export default {
       }
 
       if (url.pathname === '/api/leaderboards/rooms/discover' && request.method === 'GET') {
-        return await handleRoomDiscovery(request, url, env);
+        return await handleRoomDiscovery(request, url, env, ctx);
       }
 
       if (url.pathname === '/api/leaderboards/builders/discover' && request.method === 'GET') {
-        return await handleBuilderDiscovery(request, url, env);
+        return await handleBuilderDiscovery(request, url, env, ctx);
       }
 
       const roomLeaderboardMatch = /^\/api\/leaderboards\/rooms\/([^/]+)$/.exec(url.pathname);
@@ -608,7 +615,8 @@ export default {
           request,
           url,
           env,
-          decodeURIComponent(roomLeaderboardMatch[1])
+          decodeURIComponent(roomLeaderboardMatch[1]),
+          ctx,
         );
       }
 
@@ -675,7 +683,7 @@ export default {
       }
 
       if (url.pathname === '/api/leaderboards/global' && request.method === 'GET') {
-        return await handleGlobalLeaderboard(request, url, env);
+        return await handleGlobalLeaderboard(request, url, env, ctx);
       }
 
       if (url.pathname === '/api/leaderboards/room-rush' && request.method === 'GET') {
@@ -695,7 +703,7 @@ export default {
       }
 
       if (url.pathname.startsWith('/api/share/rooms/')) {
-        return await handleRoomShareRequest(request, url, env);
+        return await handleRoomShareRequest(request, url, env, ctx);
       }
 
       if (url.pathname.startsWith('/api/wamp-o-grams')) {

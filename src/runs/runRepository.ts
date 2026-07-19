@@ -214,8 +214,10 @@ class ApiRunRepository implements RunRepository {
       sort,
     });
 
-    return this.request<BuilderDiscoveryResponse>(
-      `/api/leaderboards/builders/discover?${params.toString()}`
+    const path = `/api/leaderboards/builders/discover?${params.toString()}`;
+    return loadWithStaleWhileRevalidate(
+      `builder-discovery:${this.baseUrl}${path}`,
+      () => this.request<BuilderDiscoveryResponse>(path),
     );
   }
 

@@ -1114,6 +1114,13 @@ export async function loadBuilderDiscoveryResponse(
   limit: number,
   sort: BuilderDiscoverySort,
 ): Promise<BuilderDiscoveryResponse> {
+  if (playableContentIndexReadsEnabled(env)) {
+    try {
+      return await loadBuilderDiscoveryResponseFromPlayableIndex(env, limit, sort);
+    } catch (error) {
+      if (!String(error).toLowerCase().includes('playable_content_index')) throw error;
+    }
+  }
   if (isExpandedRoomsEnabled(env)) {
     return loadBuilderDiscoveryResponseByPlayableArea(env, limit, sort);
   }
@@ -1183,6 +1190,42 @@ export async function loadBuilderDiscoveryResponse(
     sort,
     results: rows.results.map(mapBuilderDiscoveryRow),
   };
+}
+
+async function loadBuilderDiscoveryResponseFromPlayableIndex(
+  env: Env,
+  limit: number,
+  sort: BuilderDiscoverySort,
+): Promise<BuilderDiscoveryResponse> {
+  const builderId = 'playable_content_index.builder_user_id';
+  const rows = await env.DB.prepare(
+    `
+      WITH builder_counts AS (
+        SELECT
+          builder_user_id AS user_id,
+          COUNT(*) AS room_count,
+          MAX(published_at) AS latest_published_at,
+          MIN(first_published_at) AS first_published_at
+        FROM playable_content_index
+        WHERE builder_user_id IS NOT NULL
+          AND ${sqlUserIdIsNotLegacyGeneratedOnly(builderId)}
+          AND ${sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix(builderId)}
+        GROUP BY builder_user_id
+      )
+      SELECT
+        builder_counts.user_id,
+        users.display_name,
+        users.username,
+        builder_counts.room_count,
+        builder_counts.latest_published_at,
+        builder_counts.first_published_at
+      FROM builder_counts
+      INNER JOIN users ON users.id = builder_counts.user_id
+      ORDER BY ${getBuilderDiscoverySqlOrderClause(sort)}
+      LIMIT ?
+    `,
+  ).bind(limit).all<BuilderDiscoveryRow>();
+  return { sort, results: rows.results.map(mapBuilderDiscoveryRow) };
 }
 
 async function loadBuilderDiscoveryResponseByPlayableArea(

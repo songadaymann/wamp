@@ -15,7 +15,8 @@ import {
 } from '../../../player/avatar/unlocks';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
-import type { Env } from '../core/types';
+import type { Env, WorkerExecutionContextLike } from '../core/types';
+import { loadAnonymousPublicCache } from '../core/publicCache';
 import { findUserByDisplayName, findUserById, findUserByUsername, updateUserProfile } from '../auth/store';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth } from '../auth/request';
 import { assertGeneratedOnlyDisplayNameChangeAllowed } from '../generatedUsers/leaderboardIsolation';
@@ -47,35 +48,50 @@ export async function handleProfileGet(
   return timedJsonResponse(request, profile, timing, profileCacheInit(auth !== null));
 }
 
-export async function handleProfileSummaryGet(request: Request, env: Env, userId: string): Promise<Response> {
+export async function handleProfileSummaryGet(
+  request: Request, env: Env, userId: string, context?: WorkerExecutionContextLike,
+): Promise<Response> {
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
-  const profile = await loadUserProfileSummary(env, userId, auth?.user.id ?? null, timing);
-  if (!profile) throw new HttpError(404, 'Profile not found.');
-  timing.setDiagnostic('cache', auth ? 'private' : 'public-20-swr-40');
-  return timedJsonResponse(request, profile, timing, profileCacheInit(auth !== null));
+  const loadResponse = async () => {
+    const profile = await loadUserProfileSummary(env, userId, auth?.user.id ?? null, timing);
+    if (!profile) throw new HttpError(404, 'Profile not found.');
+    timing.setDiagnostic('cache', auth ? 'private' : 'public-20');
+    return timedJsonResponse(request, profile, timing, profileCacheInit(auth !== null));
+  };
+  return loadAnonymousPublicCache(request, auth ? undefined : context, loadResponse);
 }
 
-export async function handleProfileRoomsGet(request: Request, url: URL, env: Env, userId: string): Promise<Response> {
+export async function handleProfileRoomsGet(
+  request: Request, url: URL, env: Env, userId: string, context?: WorkerExecutionContextLike,
+): Promise<Response> {
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   const limit = parseBoundedInteger(url.searchParams.get('limit'), 24, 1, 100);
-  const response = await loadUserProfileRoomsPage(env, userId, limit, url.searchParams.get('cursor'), timing);
-  timing.setDiagnostic('cache', auth ? 'private' : 'public-20-swr-40');
-  return timedJsonResponse(request, response, timing, profileCacheInit(auth !== null));
+  const loadResponse = async () => {
+    const response = await loadUserProfileRoomsPage(env, userId, limit, url.searchParams.get('cursor'), timing);
+    timing.setDiagnostic('cache', auth ? 'private' : 'public-20');
+    return timedJsonResponse(request, response, timing, profileCacheInit(auth !== null));
+  };
+  return loadAnonymousPublicCache(request, auth ? undefined : context, loadResponse);
 }
 
-export async function handleProfilePlaylistsGet(request: Request, env: Env, userId: string): Promise<Response> {
+export async function handleProfilePlaylistsGet(
+  request: Request, env: Env, userId: string, context?: WorkerExecutionContextLike,
+): Promise<Response> {
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
-  if (!await findUserById(env, userId)) throw new HttpError(404, 'Profile not found.');
-  const response = await loadUserProfilePlaylists(env, userId, timing);
-  timing.setDiagnostic('cache', auth ? 'private' : 'public-20-swr-40');
-  return timedJsonResponse(request, response, timing, profileCacheInit(auth !== null));
+  const loadResponse = async () => {
+    if (!await findUserById(env, userId)) throw new HttpError(404, 'Profile not found.');
+    const response = await loadUserProfilePlaylists(env, userId, timing);
+    timing.setDiagnostic('cache', auth ? 'private' : 'public-20');
+    return timedJsonResponse(request, response, timing, profileCacheInit(auth !== null));
+  };
+  return loadAnonymousPublicCache(request, auth ? undefined : context, loadResponse);
 }
 
 function profileCacheInit(authenticated: boolean): ResponseInit {
-  return { headers: { 'Cache-Control': authenticated ? 'private, max-age=20' : 'public, max-age=20, stale-while-revalidate=40' } };
+  return { headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' } };
 }
 
 function parseBoundedInteger(value: string | null, fallback: number, min: number, max: number): number {

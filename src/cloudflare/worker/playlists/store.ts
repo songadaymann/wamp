@@ -19,6 +19,7 @@ import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { Env } from '../core/types';
 import { HttpError } from '../core/http';
 import {
+  loadExpandedRoomTarget,
   loadPublishedExpandedRoomMembershipsForRoomIds,
   resolveExpandedRoomAtCoordinates,
 } from '../expandedRooms/store';
@@ -719,15 +720,30 @@ async function hydratePlaylistItemsWithExpandedRooms(
   env: Env,
   items: RoomPlaylistItem[],
 ): Promise<RoomPlaylistItem[]> {
+  if (!isExpandedRoomsEnabled(env) || items.length === 0) return items;
+  const memberships = await loadPublishedExpandedRoomMembershipsForRoomIds(
+    env,
+    items.map((item) => item.roomId),
+  );
+  const membershipByRoomId = new Map(memberships.map((membership) => [membership.roomId, membership]));
+  const expandedIds = [...new Set(memberships
+    .filter((membership) => membership.cellCount > 1)
+    .map((membership) => membership.expandedRoomId))];
+  const targets = await Promise.all(expandedIds.map(async (expandedRoomId) => [
+    expandedRoomId,
+    await loadExpandedRoomTarget(env, expandedRoomId),
+  ] as const));
+  const targetById = new Map(targets);
   const hydrated: RoomPlaylistItem[] = [];
   const seenPlayableTargetKeys = new Set<string>();
   for (const item of items) {
-    const expandedRoomTarget = await loadPlaylistExpandedRoomTargetForCell(
-      env,
-      item.roomId,
-      item.roomCoordinates,
-      item.roomVersion,
-    );
+    const membership = membershipByRoomId.get(item.roomId) ?? null;
+    const candidateTarget = membership?.cellCount && membership.cellCount > 1
+      ? targetById.get(membership.expandedRoomId) ?? null
+      : null;
+    const expandedRoomTarget = candidateTarget && candidateTarget.cells.some(
+      (cell) => cell.roomId === item.roomId && normalizeResolvedRoomVersion(cell.roomVersion) === item.roomVersion,
+    ) ? candidateTarget : null;
     const expandedRoom = expandedRoomTarget
       ? mapExpandedRoomTargetForPlaylistItem(expandedRoomTarget, item.roomCoordinates)
       : null;
@@ -755,19 +771,12 @@ async function loadPlaylistExpandedRoomTargetForCell(
   coordinates: RoomCoordinates,
   roomVersion: number,
 ): Promise<ResolvedExpandedRoomTarget | null> {
-  if (!isExpandedRoomsEnabled(env)) {
-    return null;
-  }
-
+  if (!isExpandedRoomsEnabled(env)) return null;
   const target = await resolveExpandedRoomAtCoordinates(env, coordinates);
-  if (!target || target.cellCount <= 1) {
-    return null;
-  }
-
-  const containsPinnedCell = target.cells.some(
+  if (!target || target.cellCount <= 1) return null;
+  return target.cells.some(
     (cell) => cell.roomId === roomId && normalizeResolvedRoomVersion(cell.roomVersion) === roomVersion,
-  );
-  return containsPinnedCell ? target : null;
+  ) ? target : null;
 }
 
 async function playlistContainsPlayableTarget(
