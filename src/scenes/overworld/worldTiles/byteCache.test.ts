@@ -9,7 +9,10 @@ import {
 } from './byteCache';
 import type { WorldTileManifestReady } from './types';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 interface Deferred<T = void> {
   promise: Promise<T>;
@@ -241,14 +244,19 @@ describe('world tile byte cache deferred persistence', () => {
   });
 
   it('coalesces repeated immutable writes and metadata work into one persistence batch', async () => {
+    vi.useFakeTimers();
     const { blob, ready } = await createReady('coalesced');
     const fetchMock = vi.fn(async () => new Response(blob, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const persistence = new FakeWorldTilePersistence();
     const cache = new WorldTileByteCache(1_024, persistence);
 
-    await cache.getOrFetch(ready, undefined, true);
-    await cache.getOrFetch(ready, undefined, true);
+    const firstRequest = new AbortController();
+    const secondRequest = new AbortController();
+    await Promise.all([
+      cache.getOrFetch(ready, firstRequest.signal, true),
+      cache.getOrFetch(ready, secondRequest.signal, true),
+    ]);
     await cache.flushPersistence();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
