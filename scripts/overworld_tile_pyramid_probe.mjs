@@ -1,11 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import {
+  evaluateOverworldTileProbeAcceptance,
+  evaluateSerializedL0Bootstrap,
+  getManifestLevel,
+  isWorldTileImageUrl,
+  parseSnapshotQuery,
+  parseWorldTileManifestProbe,
+  selectExpectedWorldTileLevel,
+  summarizeTrackedNetwork,
+} from './overworld_tile_pyramid_probe_helpers.mjs';
 
 const DEFAULT_URL = 'http://127.0.0.1:3000/?previewSmoke=1&perf=1&mobilePerfHud=0&worldTiles=force';
 const DEFAULT_ZOOMS = [0.08, 0.10, 0.17, 0.18, 0.20, 0.40, 0.80];
-const LOD_PROMOTION_THRESHOLDS = [0.108, 0.216, 0.432, 0.864];
-const LOD_DEMOTION_THRESHOLDS = [Number.NEGATIVE_INFINITY, 0.092, 0.184, 0.368, 0.736];
+const TARGET_ZOOM_TOLERANCE = 0.006;
 
 function parseArgs(argv) {
   const args = {
@@ -100,17 +109,6 @@ function summarizeState(state) {
       buildSegment: previewBuildSegment,
     },
   };
-}
-
-function selectExpectedWorldTileLevel(zoom, currentLevel) {
-  let nextLevel = currentLevel;
-  while (nextLevel < 4 && zoom >= LOD_PROMOTION_THRESHOLDS[nextLevel]) {
-    nextLevel += 1;
-  }
-  while (nextLevel > 0 && zoom <= LOD_DEMOTION_THRESHOLDS[nextLevel]) {
-    nextLevel -= 1;
-  }
-  return nextLevel;
 }
 
 function isCompleteCoverage(metrics) {
@@ -227,16 +225,19 @@ async function approachZoom(page, targetZoom) {
     const before = summarizeState(await readState(page));
     const zoom = Number(before.zoom);
     samples.push(before);
-    if (Number.isFinite(zoom) && Math.abs(zoom - targetZoom) <= 0.006) break;
+    if (Number.isFinite(zoom) && Math.abs(zoom - targetZoom) <= TARGET_ZOOM_TOLERANCE) break;
     const deltaY = zoom > targetZoom ? 45 : -45;
     await dispatchWheel(page, deltaY);
     await page.waitForTimeout(20);
   }
   await page.waitForTimeout(100);
+  const finalState = summarizeState(await readState(page));
   return {
     samples,
     gestureMs: Math.round((performance.now() - startedAt) * 10) / 10,
-    finalState: summarizeState(await readState(page)),
+    reachedTarget: Number.isFinite(Number(finalState.zoom))
+      && Math.abs(Number(finalState.zoom) - targetZoom) <= TARGET_ZOOM_TOLERANCE + 1e-9,
+    finalState,
   };
 }
 
@@ -266,142 +267,130 @@ function isTrackedNetworkUrl(url) {
     || url.includes('/api/world/chunks');
 }
 
-function isWorldTileImageUrl(url) {
-  return /\/world-tiles\/.*\.png(?:\?|$)/.test(url);
-}
-
-function getManifestLevel(url) {
-  if (!url.includes('/api/world/tiles/manifest')) return null;
-  try {
-    const value = Number(new URL(url).searchParams.get('level'));
-    return Number.isSafeInteger(value) && value >= 0 && value <= 4 ? value : 'invalid';
-  } catch {
-    return 'invalid';
-  }
-}
-
-function parseSnapshotQuery(postData) {
-  if (!postData) return null;
-  try {
-    const body = JSON.parse(postData);
-    const references = Array.isArray(body?.references) ? body.references : [];
-    const referenceKinds = references.map((reference) => (
-      typeof reference?.kind === 'string' ? reference.kind : 'invalid'
-    ));
-    const referenceClasses = references.map((reference) => {
-      const kind = typeof reference?.kind === 'string' ? reference.kind : 'invalid';
-      if (kind !== 'current_preview') return kind;
-      const state = typeof reference?.state === 'string' ? reference.state : 'unspecified';
-      return `${kind}:${state}`;
+async function installClientProbeHooks(page) {
+  await page.addInitScript(() => {
+    const state = { sequence: 0, events: [] };
+    Object.defineProperty(window, '__wampWorldTileProbe', {
+      value: state,
+      configurable: false,
+      enumerable: false,
+      writable: false,
     });
-    return {
-      detail: typeof body?.detail === 'string' ? body.detail : null,
-      referenceCount: references.length,
-      referenceKinds,
-      referenceClasses,
+    const record = (event) => {
+      const entry = {
+        ...event,
+        sequence: ++state.sequence,
+        atMs: performance.now(),
+      };
+      state.events.push(entry);
+      return entry;
     };
-  } catch {
-    return { detail: null, referenceCount: 0, referenceKinds: ['invalid-json'], referenceClasses: [] };
-  }
+    const manifestLevel = (value) => {
+      try {
+        const url = new URL(value, window.location.href);
+        if (!url.pathname.includes('/api/world/tiles/manifest')) return null;
+        const raw = url.searchParams.get('level');
+        if (raw === null || raw.trim() === '') return 'invalid';
+        const level = Number(raw);
+        return Number.isSafeInteger(level) && level >= 0 && level <= 4 ? level : 'invalid';
+      } catch {
+        return 'invalid';
+      }
+    };
+    const requestUrl = (value) => {
+      if (value instanceof Request) return value.url;
+      try {
+        return new URL(String(value), window.location.href).toString();
+      } catch {
+        return String(value);
+      }
+    };
+
+    const originalFetch = window.fetch;
+    window.fetch = function probeFetch(input, init) {
+      const url = requestUrl(input);
+      const level = manifestLevel(url);
+      if (level !== null) record({ type: 'manifest-request', level, url });
+      return Reflect.apply(originalFetch, this, [input, init]);
+    };
+
+    if (typeof Cache !== 'undefined') {
+      const originalCacheMatch = Cache.prototype.match;
+      Cache.prototype.match = async function probeCacheMatch(request, options) {
+        const response = await Reflect.apply(originalCacheMatch, this, [request, options]);
+        const url = requestUrl(request);
+        if (/\/world-tiles\/.*\.png(?:\?|$)/.test(url)) {
+          record({
+            type: response ? 'byte-cache-hit' : 'byte-cache-miss',
+            url,
+          });
+        }
+        return response;
+      };
+    }
+  });
 }
 
-function countValues(values) {
-  const counts = {};
-  for (const value of values) counts[value] = (counts[value] ?? 0) + 1;
-  return counts;
+async function markClientProbeBoundary(page, label) {
+  return await page.evaluate((boundaryLabel) => {
+    const state = window.__wampWorldTileProbe;
+    if (!state || !Array.isArray(state.events)) return null;
+    const entry = {
+      type: 'boundary',
+      label: boundaryLabel,
+      sequence: ++state.sequence,
+      atMs: performance.now(),
+    };
+    state.events.push(entry);
+    return entry;
+  }, label);
 }
 
-function summarizeTrackedNetwork(requests) {
-  const tileRequests = requests.filter((entry) => isWorldTileImageUrl(entry.url));
-  const manifestRequests = requests.filter((entry) => entry.manifestLevel !== null);
-  const snapshotQueries = requests.filter((entry) => entry.snapshotQuery !== null);
-  const snapshotReferenceKinds = snapshotQueries.flatMap(
-    (entry) => entry.snapshotQuery.referenceKinds,
-  );
-  const snapshotReferenceClasses = snapshotQueries.flatMap(
-    (entry) => entry.snapshotQuery.referenceClasses,
-  );
-  return {
-    requestCount: requests.length,
-    tileRequestCount: tileRequests.length,
-    tileResponseCount: tileRequests.filter((entry) => entry.status !== null).length,
-    tileRequestBytes: tileRequests.reduce((sum, entry) => sum + entry.contentLength, 0),
-    manifestRequestCount: manifestRequests.length,
-    manifestLevels: manifestRequests.map((entry) => entry.manifestLevel),
-    manifestLevelCounts: countValues(manifestRequests.map((entry) => String(entry.manifestLevel))),
-    snapshotQueryCount: snapshotQueries.length,
-    snapshotReferenceKindCounts: countValues(snapshotReferenceKinds),
-    snapshotReferenceClassCounts: countValues(snapshotReferenceClasses),
-    snapshotReferenceCount: snapshotQueries.reduce(
-      (sum, entry) => sum + entry.snapshotQuery.referenceCount,
-      0,
-    ),
-    compactWorldSummaryRequestCount: requests.filter((entry) => (
-      entry.url.includes('/api/world/chunks/summary')
-    )).length,
-    legacyWorldChunkRequestCount: requests.filter((entry) => (
-      entry.url.includes('/api/world/chunks') && !entry.url.includes('/api/world/chunks/summary')
-    )).length,
-    announcedBytes: requests.reduce((sum, entry) => sum + entry.contentLength, 0),
-    immutableCacheHits: requests.filter((entry) => entry.cacheStatus === 'HIT').length,
-  };
-}
-
-function assertSerializedL0Bootstrap(requests) {
-  const manifests = requests
-    .filter((entry) => entry.manifestLevel !== null)
-    .sort((left, right) => left.startedAtMs - right.startedAtMs);
-  const l0Manifests = manifests.filter((entry) => entry.manifestLevel === 0);
-  if (manifests[0]?.manifestLevel !== 0 || l0Manifests.length !== 1) {
-    throw new Error(`Tile bootstrap must begin with exactly one L0 manifest: ${manifests.map((entry) => (
-      `${entry.manifestLevel}@${entry.startedAtMs}ms`
-    )).join(', ') || 'none'}`);
-  }
-
-  const firstRefinement = manifests.find((entry) => entry.manifestLevel !== 0) ?? null;
-  if (!firstRefinement) return;
-  const l0Manifest = l0Manifests[0];
-  const l0TileRequests = requests.filter((entry) => (
-    isWorldTileImageUrl(entry.url)
-    && entry.startedAtMs >= l0Manifest.startedAtMs
-    && entry.startedAtMs < firstRefinement.startedAtMs
-  ));
-  const unfinishedL0Network = l0Manifest.responseAtMs === null
-    || l0Manifest.responseAtMs > firstRefinement.startedAtMs
-    || l0TileRequests.some((entry) => (
-      entry.responseAtMs === null || entry.responseAtMs > firstRefinement.startedAtMs
-    ));
-  if (unfinishedL0Network) {
-    throw new Error(`Target-LOD refinement started before L0 network completion: ${JSON.stringify({
-      l0ManifestResponseAtMs: l0Manifest.responseAtMs,
-      l0TileResponsesAtMs: l0TileRequests.map((entry) => entry.responseAtMs),
-      refinementLevel: firstRefinement.manifestLevel,
-      refinementStartedAtMs: firstRefinement.startedAtMs,
-    })}`);
-  }
+async function readClientProbeEvents(page) {
+  return await page.evaluate(() => {
+    const events = window.__wampWorldTileProbe?.events;
+    return Array.isArray(events) ? events.map((entry) => ({ ...entry })) : [];
+  });
 }
 
 function attachNetworkRecorder(page, startedAt) {
   const requests = [];
   const requestEntries = new WeakMap();
-  const elapsedMs = () => Math.round((performance.now() - startedAt) * 10) / 10;
+  const responsesByRequest = new WeakMap();
+  const pendingTasks = new Set();
+  const orphanEvents = [];
+  let eventSequence = 0;
+  const elapsedMs = () => performance.now() - startedAt;
+  const nextSequence = () => {
+    eventSequence += 1;
+    return eventSequence;
+  };
   const recordRequest = (request) => {
     const url = request.url();
     if (!isTrackedNetworkUrl(url)) return null;
-    const postData = url.includes('/api/rooms/snapshots/query') ? request.postData() : null;
+    const isSnapshotQuery = url.includes('/api/rooms/snapshots/query');
+    const postData = isSnapshotQuery ? request.postData() : null;
     const entry = {
       url,
       method: request.method(),
       postData,
-      snapshotQuery: parseSnapshotQuery(postData),
+      snapshotQuery: isSnapshotQuery ? parseSnapshotQuery(postData) : null,
       manifestLevel: getManifestLevel(url),
+      manifestProbe: null,
       resourceType: request.resourceType(),
+      startedSeq: nextSequence(),
       startedAtMs: elapsedMs(),
+      responseSeq: null,
       responseAtMs: null,
+      finishedSeq: null,
+      finishedAtMs: null,
+      failedSeq: null,
       failedAtMs: null,
       failure: null,
       status: null,
       contentLength: 0,
+      responseBodyBytes: null,
+      responseBodyError: null,
       cacheStatus: null,
       wampCache: null,
       serverTiming: null,
@@ -410,23 +399,53 @@ function attachNetworkRecorder(page, startedAt) {
     requests.push(entry);
     return entry;
   };
-  const findPendingRequestEntry = (request) => (
-    requestEntries.get(request)
-    ?? requests.find((entry) => (
-      entry.url === request.url()
-      && entry.method === request.method()
-      && entry.responseAtMs === null
-      && entry.failedAtMs === null
-    ))
-    ?? null
-  );
+  const findExactRequestEntry = (request, type) => {
+    const entry = requestEntries.get(request) ?? null;
+    if (!entry && isTrackedNetworkUrl(request.url())) {
+      orphanEvents.push({
+        type,
+        sequence: nextSequence(),
+        atMs: elapsedMs(),
+        url: request.url(),
+        method: request.method(),
+      });
+    }
+    return entry;
+  };
+  const trackTask = (task) => {
+    pendingTasks.add(task);
+    void task.then(
+      () => pendingTasks.delete(task),
+      () => pendingTasks.delete(task),
+    );
+  };
+  const cloneSnapshotQuery = (snapshotQuery) => snapshotQuery ? {
+    ...snapshotQuery,
+    referenceKinds: [...snapshotQuery.referenceKinds],
+    referenceClasses: [...snapshotQuery.referenceClasses],
+    references: snapshotQuery.references.map((reference) => ({
+      ...reference,
+      coordinates: reference.coordinates ? { ...reference.coordinates } : null,
+    })),
+  } : null;
+  const cloneEntry = (entry) => ({
+    ...entry,
+    snapshotQuery: cloneSnapshotQuery(entry.snapshotQuery),
+    manifestProbe: entry.manifestProbe ? {
+      ...entry.manifestProbe,
+      readyNonEmptyUrls: [...entry.manifestProbe.readyNonEmptyUrls],
+    } : null,
+  });
+
   page.on('request', recordRequest);
   page.on('response', (response) => {
     const request = response.request();
-    const entry = findPendingRequestEntry(request);
+    const entry = findExactRequestEntry(request, 'response');
     if (!entry) return;
+    responsesByRequest.set(request, response);
     const headers = response.headers();
     Object.assign(entry, {
+      responseSeq: nextSequence(),
       responseAtMs: elapsedMs(),
       status: response.status(),
       contentLength: Number(headers['content-length'] ?? 0) || 0,
@@ -435,23 +454,104 @@ function attachNetworkRecorder(page, startedAt) {
       serverTiming: headers['server-timing'] ?? null,
     });
   });
-  page.on('requestfailed', (request) => {
-    const entry = findPendingRequestEntry(request);
+  page.on('requestfinished', (request) => {
+    const entry = findExactRequestEntry(request, 'requestfinished');
     if (!entry) return;
+    entry.finishedSeq = nextSequence();
+    entry.finishedAtMs = elapsedMs();
+    const task = (async () => {
+      let response = responsesByRequest.get(request) ?? null;
+      if (!response) {
+        try {
+          response = await request.response();
+        } catch (error) {
+          entry.responseBodyError = error instanceof Error ? error.message : String(error);
+        }
+      }
+      if (!response) {
+        entry.responseBodyError ??= 'missing-response';
+        if (entry.manifestLevel !== null) {
+          entry.manifestProbe = {
+            parseError: 'missing-manifest-response',
+            level: null,
+            readyNonEmptyUrls: [],
+          };
+        }
+        return;
+      }
+      let body = null;
+      try {
+        body = await response.body();
+        entry.responseBodyBytes = body.byteLength;
+      } catch (error) {
+        entry.responseBodyError = error instanceof Error ? error.message : String(error);
+      }
+      if (entry.manifestLevel === null) return;
+      try {
+        if (!body) throw new Error(entry.responseBodyError ?? 'manifest-body-unavailable');
+        entry.manifestProbe = parseWorldTileManifestProbe(JSON.parse(body.toString('utf8')));
+      } catch (error) {
+        entry.manifestProbe = {
+          parseError: `manifest-json:${error instanceof Error ? error.message : String(error)}`,
+          level: null,
+          readyNonEmptyUrls: [],
+        };
+      }
+    })();
+    trackTask(task);
+  });
+  page.on('requestfailed', (request) => {
+    const entry = findExactRequestEntry(request, 'requestfailed');
+    if (!entry) return;
+    entry.failedSeq = nextSequence();
     entry.failedAtMs = elapsedMs();
     entry.failure = request.failure()?.errorText ?? 'unknown';
   });
   return {
     elapsedMs,
-    snapshot: () => requests.map((entry) => ({
-      ...entry,
-      snapshotQuery: entry.snapshotQuery ? {
-        ...entry.snapshotQuery,
-        referenceKinds: [...entry.snapshotQuery.referenceKinds],
-        referenceClasses: [...entry.snapshotQuery.referenceClasses],
-      } : null,
-    })),
+    mark: (label) => ({
+      label,
+      sequence: nextSequence(),
+      atMs: elapsedMs(),
+    }),
+    settle: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      while (pendingTasks.size > 0) {
+        await Promise.allSettled([...pendingTasks]);
+      }
+    },
+    snapshot: () => requests.map(cloneEntry),
+    snapshotStartedBy: (sequence) => requests
+      .filter((entry) => entry.startedSeq <= sequence)
+      .map(cloneEntry),
+    orphanSnapshot: () => orphanEvents.map((entry) => ({ ...entry })),
   };
+}
+
+async function captureInitialTileState(page, predicate, timeoutMs, networkRecorder, label) {
+  const state = await waitForTileState(page, predicate, timeoutMs);
+  const networkBoundary = networkRecorder.mark(label);
+  const clientBoundary = await markClientProbeBoundary(page, label);
+  return {
+    state,
+    capturedAtMs: networkBoundary.atMs,
+    boundary: {
+      networkSequence: networkBoundary.sequence,
+      clientSequence: clientBoundary?.sequence ?? null,
+    },
+  };
+}
+
+function captureOutcome(promise) {
+  return promise.then(
+    (value) => ({ ok: true, value }),
+    (error) => ({ ok: false, error }),
+  );
+}
+
+function requireCapture(outcome) {
+  if (outcome.ok) return outcome.value;
+  throw outcome.error;
 }
 
 async function runPass(context, args, label) {
@@ -466,28 +566,58 @@ async function runPass(context, args, label) {
   });
   page.on('pageerror', (error) => consoleMessages.push({ type: 'pageerror', text: String(error) }));
 
+  try {
+  await installClientProbeHooks(page);
   await page.goto(args.url, { waitUntil: 'domcontentloaded' });
-  let coarseCoverageError = null;
-  const coarseCoveragePromise = waitForTileState(page, isCompleteCoverage, args.timeoutMs)
-    .then((state) => ({
-      state,
-      capturedAtMs: networkRecorder.elapsedMs(),
-      network: networkRecorder.snapshot(),
-    }))
-    .catch((error) => {
-      coarseCoverageError = error;
-      return null;
-    });
-  await waitForOverworld(page, args.timeoutMs);
+  const coarseCoveragePromise = captureOutcome(captureInitialTileState(
+    page,
+    isCompleteCoverage,
+    args.timeoutMs,
+    networkRecorder,
+    'coarse-coverage',
+  ));
+  const sharpCoveragePromise = captureOutcome(captureInitialTileState(
+    page,
+    isSharpReady,
+    args.timeoutMs,
+    networkRecorder,
+    'sharp-coverage',
+  ));
+  const appReadyPromise = captureOutcome((async () => {
+    await waitForOverworld(page, args.timeoutMs);
+    return networkRecorder.elapsedMs();
+  })());
+  const appReadyOutcome = await appReadyPromise;
+  const appReadyMs = requireCapture(appReadyOutcome);
   await dismissWelcomeModal(page);
-  const appReadyMs = Math.round((performance.now() - navigationStartedAt) * 10) / 10;
-  const coarseCapture = await coarseCoveragePromise;
-  if (!coarseCapture) throw coarseCoverageError;
+  const [coarseOutcome, sharpOutcome] = await Promise.all([
+    coarseCoveragePromise,
+    sharpCoveragePromise,
+  ]);
+  const coarseCapture = requireCapture(coarseOutcome);
+  const sharpCapture = requireCapture(sharpOutcome);
+  await networkRecorder.settle();
+  const bootstrapRequests = networkRecorder.snapshotStartedBy(
+    sharpCapture.boundary.networkSequence,
+  );
+  const coarseNetworkRequests = networkRecorder.snapshotStartedBy(
+    coarseCapture.boundary.networkSequence,
+  );
+  const clientProbeEvents = (await readClientProbeEvents(page)).filter((entry) => (
+    entry.sequence <= sharpCapture.boundary.clientSequence
+  ));
+  const bootstrap = evaluateSerializedL0Bootstrap({
+    requests: bootstrapRequests,
+    clientEvents: clientProbeEvents,
+    initialCoverageBoundary: coarseCapture.boundary,
+    orphanEvents: networkRecorder.orphanSnapshot().filter((entry) => (
+      entry.sequence <= sharpCapture.boundary.networkSequence
+    )),
+  });
   const coarse = coarseCapture.state;
   const coarseReadyMs = coarseCapture.capturedAtMs;
-  assertSerializedL0Bootstrap(coarseCapture.network);
-  const sharp = await waitForTileState(page, isSharpReady, args.timeoutMs);
-  const sharpReadyMs = Math.round((performance.now() - navigationStartedAt) * 10) / 10;
+  const sharp = sharpCapture.state;
+  const sharpReadyMs = sharpCapture.capturedAtMs;
 
   const zooms = [];
   let expectedLevel = Number(sharp.state.committedLevel);
@@ -524,17 +654,30 @@ async function runPass(context, args, label) {
 
   const screenshotPath = path.join(args.out, `${label}.png`);
   await page.screenshot({ path: screenshotPath, fullPage: true });
+  await networkRecorder.settle();
   const network = networkRecorder.snapshot();
+  const finalClientProbeEvents = await readClientProbeEvents(page);
   const result = {
     label,
     appReadyMs,
     coarseReadyMs,
     sharpReadyMs,
+    initialCapture: {
+      coarseBoundary: coarseCapture.boundary,
+      sharpBoundary: sharpCapture.boundary,
+      bootstrap,
+      clientEvents: clientProbeEvents,
+    },
     coarse,
     coarseNetwork: {
       capturedAtMs: coarseCapture.capturedAtMs,
-      requests: coarseCapture.network,
-      summary: summarizeTrackedNetwork(coarseCapture.network),
+      requests: coarseNetworkRequests,
+      summary: summarizeTrackedNetwork(coarseNetworkRequests),
+    },
+    sharpNetwork: {
+      capturedAtMs: sharpCapture.capturedAtMs,
+      requests: bootstrapRequests,
+      summary: summarizeTrackedNetwork(bootstrapRequests),
     },
     sharp,
     zooms,
@@ -549,35 +692,89 @@ async function runPass(context, args, label) {
     },
     network,
     networkSummary: summarizeTrackedNetwork(network),
+    clientProbeEvents: finalClientProbeEvents,
+    orphanNetworkEvents: networkRecorder.orphanSnapshot(),
     consoleMessages,
     screenshotPath,
   };
-  await page.close();
   return result;
+  } catch (error) {
+    await networkRecorder.settle().catch(() => {});
+    const failureScreenshotPath = path.join(args.out, `${label}-failure.png`);
+    await page.screenshot({ path: failureScreenshotPath, fullPage: true }).catch(() => {});
+    const network = networkRecorder.snapshot();
+    const state = await readState(page).then(summarizeState).catch(() => null);
+    const clientProbeEvents = await readClientProbeEvents(page).catch(() => []);
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    normalized.probeArtifact = {
+      label,
+      elapsedMs: networkRecorder.elapsedMs(),
+      error: {
+        message: normalized.message,
+        stack: normalized.stack ?? null,
+        diagnostics: normalized.diagnostics ?? null,
+      },
+      state,
+      network,
+      networkSummary: summarizeTrackedNetwork(network),
+      clientProbeEvents,
+      orphanNetworkEvents: networkRecorder.orphanSnapshot(),
+      consoleMessages,
+      screenshotPath: fs.existsSync(failureScreenshotPath) ? failureScreenshotPath : null,
+    };
+    throw normalized;
+  } finally {
+    await page.close().catch(() => {});
+  }
 }
 
 async function main() {
   const args = parseArgs(process.argv);
   fs.mkdirSync(args.out, { recursive: true });
-  const browser = await chromium.launch({
-    headless: args.headless,
-    args: ['--use-gl=angle', '--use-angle=swiftshader'],
-  });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 820 } });
-  const cold = await runPass(context, args, 'cold');
-  const warm = await runPass(context, args, 'warm');
   const result = {
     generatedAt: new Date().toISOString(),
     url: args.url,
     zoomTargets: args.zooms,
-    cold,
-    warm,
+    cold: null,
+    warm: null,
+    acceptance: null,
   };
   const outputPath = path.join(args.out, 'result.json');
-  fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
-  console.log(`Wrote ${outputPath}`);
-  await context.close();
-  await browser.close();
+  let browser = null;
+  let context = null;
+  try {
+    browser = await chromium.launch({
+      headless: args.headless,
+      args: ['--use-gl=angle', '--use-angle=swiftshader'],
+    });
+    context = await browser.newContext({ viewport: { width: 1280, height: 820 } });
+    result.cold = await runPass(context, args, 'cold');
+    result.warm = await runPass(context, args, 'warm');
+    result.acceptance = evaluateOverworldTileProbeAcceptance(result);
+    if (!result.acceptance.passed) {
+      const error = new Error(
+        `Overworld tile acceptance gates failed: ${result.acceptance.failures.map((failure) => (
+          `${failure.pass}:${failure.code}`
+        )).join(', ')}`,
+      );
+      error.diagnostics = result.acceptance;
+      throw error;
+    }
+  } catch (error) {
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    result.failure = {
+      message: normalized.message,
+      stack: normalized.stack ?? null,
+      diagnostics: normalized.diagnostics ?? null,
+      pass: normalized.probeArtifact ?? null,
+    };
+    throw normalized;
+  } finally {
+    fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
+    console.log(`Wrote ${outputPath}`);
+    if (context) await context.close().catch(() => {});
+    if (browser) await browser.close().catch(() => {});
+  }
 }
 
 main().catch((error) => {

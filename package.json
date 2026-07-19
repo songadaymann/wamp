@@ -6,7 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run test && npm run typecheck && npm run world-tiles:types:check && npm run build",
-    "lint": "eslint src partykit scripts/api_performance_probe.mjs scripts/backfill_badges.mjs scripts/overworld_tile_pyramid_probe.mjs scripts/playable_content_index.mjs scripts/runtime_performance_trace.mjs scripts/world_tile_parity_probe.mjs scripts/world_tiles.mjs --max-warnings=0",
+    "lint": "eslint src partykit scripts/api_performance_probe.mjs scripts/backfill_badges.mjs scripts/overworld_tile_pyramid_probe.mjs scripts/overworld_tile_pyramid_probe_helpers.mjs scripts/playable_content_index.mjs scripts/runtime_performance_trace.mjs scripts/world_tile_parity_probe.mjs scripts/world_tiles.mjs --max-warnings=0",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "dev": "vite --strictPort --port 3000",
