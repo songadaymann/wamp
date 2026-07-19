@@ -4,21 +4,22 @@ declare const __WAMP_WORLD_TILE_BYTE_CACHE_HASH_PARAM__: string;
 
 const EARLY_WORLD_TILE_SCHEMA_VERSION = 1;
 const EARLY_WORLD_TILE_LEVEL = 0;
+const EARLY_WORLD_TILE_MAX_LEVEL = 4;
 const EARLY_WORLD_TILE_IMAGE_WIDTH = 642;
 const EARLY_WORLD_TILE_IMAGE_HEIGHT = 354;
 const EARLY_WORLD_TILE_OVERLAP = 1;
 const EARLY_WORLD_TILE_CONTENT_WIDTH = 640;
 const EARLY_WORLD_TILE_CONTENT_HEIGHT = 352;
 const EARLY_WORLD_TILE_ROOMS_PER_SIDE = 16;
-const EARLY_WORLD_TILE_WORLD_WIDTH = EARLY_WORLD_TILE_CONTENT_WIDTH * EARLY_WORLD_TILE_ROOMS_PER_SIDE;
-const EARLY_WORLD_TILE_WORLD_HEIGHT = EARLY_WORLD_TILE_CONTENT_HEIGHT * EARLY_WORLD_TILE_ROOMS_PER_SIDE;
-const EARLY_WORLD_TILE_WORLD_UNITS_PER_PIXEL = EARLY_WORLD_TILE_ROOMS_PER_SIDE;
 const EARLY_WORLD_TILE_DEFAULT_ZOOM = 0.18;
 const EARLY_WORLD_TILE_MIN_QA_ZOOM = 0.04;
 const EARLY_WORLD_TILE_MAX_QA_ZOOM = 4;
 const EARLY_WORLD_TILE_COHORT_STORAGE_KEY = 'wamp_world_tile_cohort_v1';
 const EARLY_WORLD_TILE_READY_EVENT = 'wamp:early-world-tiles-ready';
+const EARLY_WORLD_TILE_SHARP_READY_EVENT = 'wamp:early-world-tiles-sharp-ready';
 const EARLY_WORLD_TILE_MAX_FETCH_CONCURRENCY = 6;
+
+export type EarlyWorldTileLevel = 0 | 1 | 2 | 3 | 4;
 
 export type EarlyWorldTileBootstrapStatus =
   | 'installed'
@@ -58,7 +59,7 @@ export interface EarlyWorldTileReady {
 export interface EarlyWorldTileEntry {
   address: {
     rendererVersion: string;
-    level: 0;
+    level: EarlyWorldTileLevel;
     x: number;
     y: number;
   };
@@ -107,6 +108,8 @@ export interface EarlyWorldTileBootstrapState {
   decision: EarlyWorldTileRolloutDecision | null;
   apiBaseUrl: string;
   rendererVersion: string | null;
+  displayLevel: EarlyWorldTileLevel;
+  targetLevel: EarlyWorldTileLevel;
   viewport: EarlyWorldTileViewport | null;
   displayRect: EarlyWorldTileContainerRect | null;
   imageTileCount: number;
@@ -115,6 +118,7 @@ export interface EarlyWorldTileBootstrapState {
   cacheHitCount: number;
   networkFetchCount: number;
   error: string | null;
+  refinementError: string | null;
   releaseReason: string | null;
   timings: {
     installedAtMs: number;
@@ -125,6 +129,9 @@ export interface EarlyWorldTileBootstrapState {
     firstTileByteAtMs: number | null;
     tilesValidatedAtMs: number | null;
     visibleAtMs: number | null;
+    refinementStartedAtMs: number | null;
+    refinementManifestReadyAtMs: number | null;
+    sharpVisibleAtMs: number | null;
     releasedAtMs: number | null;
   };
 }
@@ -162,6 +169,7 @@ export interface EarlyWorldTileCoverageHandoffSlot {
 export interface EarlyWorldTileBootstrapHandle {
   readonly schemaVersion: 1;
   readonly ready: Promise<EarlyWorldTileBootstrapState>;
+  readonly sharp: Promise<EarlyWorldTileBootstrapState>;
   getState(): EarlyWorldTileBootstrapState;
   consumeCoverage(request: EarlyWorldTileCoverageRequest): EarlyWorldTileCoverageHandoff | null;
   alignToGameContainer(): void;
@@ -257,6 +265,27 @@ export function calculateEarlyWorldTileViewport(input: {
   roomX?: number;
   roomY?: number;
 }): EarlyWorldTileViewport {
+  return calculateEarlyWorldTileViewportAtLevel(input, EARLY_WORLD_TILE_LEVEL);
+}
+
+export function selectEarlyWorldTileLevel(zoom: number): EarlyWorldTileLevel {
+  if (!Number.isFinite(zoom) || zoom <= 0) {
+    throw new RangeError('Early world tile zoom must be positive and finite.');
+  }
+  if (zoom < 0.10) return 0;
+  if (zoom < 0.20) return 1;
+  if (zoom < 0.40) return 2;
+  if (zoom < 0.80) return 3;
+  return 4;
+}
+
+export function calculateEarlyWorldTileViewportAtLevel(input: {
+  width: number;
+  height: number;
+  zoom: number;
+  roomX?: number;
+  roomY?: number;
+}, level: EarlyWorldTileLevel): EarlyWorldTileViewport {
   if (![input.width, input.height, input.zoom].every(Number.isFinite)) {
     throw new RangeError('Early world tile viewport values must be finite.');
   }
@@ -272,11 +301,14 @@ export function calculateEarlyWorldTileViewport(input: {
   const centerWorldY = roomY * EARLY_WORLD_TILE_CONTENT_HEIGHT + EARLY_WORLD_TILE_CONTENT_HEIGHT / 2;
   const halfWorldWidth = input.width / input.zoom / 2;
   const halfWorldHeight = input.height / input.zoom / 2;
+  const roomsPerSide = getEarlyWorldTileRoomsPerSide(level);
+  const worldWidth = EARLY_WORLD_TILE_CONTENT_WIDTH * roomsPerSide;
+  const worldHeight = EARLY_WORLD_TILE_CONTENT_HEIGHT * roomsPerSide;
   const bounds = {
-    minTileX: Math.floor((centerWorldX - halfWorldWidth) / EARLY_WORLD_TILE_WORLD_WIDTH),
-    maxTileX: Math.ceil((centerWorldX + halfWorldWidth) / EARLY_WORLD_TILE_WORLD_WIDTH) - 1,
-    minTileY: Math.floor((centerWorldY - halfWorldHeight) / EARLY_WORLD_TILE_WORLD_HEIGHT),
-    maxTileY: Math.ceil((centerWorldY + halfWorldHeight) / EARLY_WORLD_TILE_WORLD_HEIGHT) - 1,
+    minTileX: Math.floor((centerWorldX - halfWorldWidth) / worldWidth),
+    maxTileX: Math.ceil((centerWorldX + halfWorldWidth) / worldWidth) - 1,
+    minTileY: Math.floor((centerWorldY - halfWorldHeight) / worldHeight),
+    maxTileY: Math.ceil((centerWorldY + halfWorldHeight) / worldHeight) - 1,
   };
   if (
     bounds.maxTileX - bounds.minTileX + 1 > 16
@@ -299,14 +331,31 @@ export function calculateEarlyWorldTileImagePresentation(
   tileY: number,
   viewport: EarlyWorldTileViewport,
 ): EarlyWorldTileImagePresentation {
+  return calculateEarlyWorldTileImagePresentationAtLevel(
+    tileX,
+    tileY,
+    viewport,
+    EARLY_WORLD_TILE_LEVEL,
+  );
+}
+
+export function calculateEarlyWorldTileImagePresentationAtLevel(
+  tileX: number,
+  tileY: number,
+  viewport: EarlyWorldTileViewport,
+  level: EarlyWorldTileLevel,
+): EarlyWorldTileImagePresentation {
   if (!Number.isSafeInteger(tileX) || !Number.isSafeInteger(tileY)) {
     throw new RangeError('Early world tile coordinates must be safe integers.');
   }
-  const pixelScale = viewport.zoom * EARLY_WORLD_TILE_WORLD_UNITS_PER_PIXEL;
+  const roomsPerSide = getEarlyWorldTileRoomsPerSide(level);
+  const worldWidth = EARLY_WORLD_TILE_CONTENT_WIDTH * roomsPerSide;
+  const worldHeight = EARLY_WORLD_TILE_CONTENT_HEIGHT * roomsPerSide;
+  const pixelScale = viewport.zoom * roomsPerSide;
   return {
-    left: (tileX * EARLY_WORLD_TILE_WORLD_WIDTH - viewport.centerWorldX) * viewport.zoom
+    left: (tileX * worldWidth - viewport.centerWorldX) * viewport.zoom
       + viewport.width / 2 - EARLY_WORLD_TILE_OVERLAP * pixelScale,
-    top: (tileY * EARLY_WORLD_TILE_WORLD_HEIGHT - viewport.centerWorldY) * viewport.zoom
+    top: (tileY * worldHeight - viewport.centerWorldY) * viewport.zoom
       + viewport.height / 2 - EARLY_WORLD_TILE_OVERLAP * pixelScale,
     width: EARLY_WORLD_TILE_IMAGE_WIDTH * pixelScale,
     height: EARLY_WORLD_TILE_IMAGE_HEIGHT * pixelScale,
@@ -339,10 +388,11 @@ export function buildEarlyWorldTileManifestUrl(
   apiBaseUrl: string,
   pageUrl: string,
   bounds: EarlyWorldTileBounds,
+  level: EarlyWorldTileLevel = EARLY_WORLD_TILE_LEVEL,
 ): string {
   const manifestUrl = new URL(`${apiBaseUrl}/api/world/tiles/manifest`, pageUrl);
   manifestUrl.search = new URLSearchParams({
-    level: String(EARLY_WORLD_TILE_LEVEL),
+    level: String(level),
     minTileX: String(bounds.minTileX),
     maxTileX: String(bounds.maxTileX),
     minTileY: String(bounds.minTileY),
@@ -433,8 +483,22 @@ export function parseEarlyWorldTileManifest(
   requestedBounds: EarlyWorldTileBounds,
   expectedRendererVersion: string,
 ): ParsedEarlyManifest {
+  return parseEarlyWorldTileManifestAtLevel(
+    value,
+    requestedBounds,
+    expectedRendererVersion,
+    EARLY_WORLD_TILE_LEVEL,
+  );
+}
+
+export function parseEarlyWorldTileManifestAtLevel(
+  value: unknown,
+  requestedBounds: EarlyWorldTileBounds,
+  expectedRendererVersion: string,
+  expectedLevel: EarlyWorldTileLevel,
+): ParsedEarlyManifest {
   const record = requireRecord(value, 'manifest');
-  if (record.schemaVersion !== EARLY_WORLD_TILE_SCHEMA_VERSION || record.level !== EARLY_WORLD_TILE_LEVEL) {
+  if (record.schemaVersion !== EARLY_WORLD_TILE_SCHEMA_VERSION || record.level !== expectedLevel) {
     throw new Error('Unsupported early world tile manifest.');
   }
   const rendererVersion = requireString(record.rendererVersion, 'rendererVersion');
@@ -448,7 +512,9 @@ export function parseEarlyWorldTileManifest(
 
   const entriesByKey = new Map<string, EarlyWorldTileEntry>();
   for (const rawEntry of requireArray(record.entries, 'entries')) {
-    const entry = parseEntry(rawEntry, rendererVersion);
+    const rawAddress = requireRecord(requireRecord(rawEntry, 'entry').address, 'address');
+    if (rawAddress.level !== expectedLevel) continue;
+    const entry = parseEntry(rawEntry, rendererVersion, expectedLevel);
     const key = `${entry.address.x},${entry.address.y}`;
     if (entriesByKey.has(key)) throw new Error('Duplicate early world tile manifest entry.');
     entriesByKey.set(key, entry);
@@ -494,6 +560,8 @@ export function installEarlyWorldTileBootstrap(
     decision: null,
     apiBaseUrl: resolveEarlyWorldTileApiBaseUrl(options.apiBaseUrl, options.win, options.doc),
     rendererVersion: null,
+    displayLevel: 0,
+    targetLevel: 0,
     viewport: null,
     displayRect: null,
     imageTileCount: 0,
@@ -502,6 +570,7 @@ export function installEarlyWorldTileBootstrap(
     cacheHitCount: 0,
     networkFetchCount: 0,
     error: null,
+    refinementError: null,
     releaseReason: null,
     timings: {
       installedAtMs: now(),
@@ -512,6 +581,9 @@ export function installEarlyWorldTileBootstrap(
       firstTileByteAtMs: null,
       tilesValidatedAtMs: null,
       visibleAtMs: null,
+      refinementStartedAtMs: null,
+      refinementManifestReadyAtMs: null,
+      sharpVisibleAtMs: null,
       releasedAtMs: null,
     },
   };
@@ -543,7 +615,7 @@ export function installEarlyWorldTileBootstrap(
     state.timings.releasedAtMs = now();
   };
 
-  const ready = runEarlyWorldTileBootstrap({
+  const runOptions: RunEarlyWorldTileBootstrapOptions = {
     ...options,
     state,
     signal: abortController.signal,
@@ -562,7 +634,8 @@ export function installEarlyWorldTileBootstrap(
       layer = nextLayer;
     },
     publishCoverage: (manifest) => coverageHandoff.publish(manifest),
-  }).catch((error: unknown) => {
+  };
+  const ready = runEarlyWorldTileBootstrap(runOptions).catch((error: unknown) => {
     if (!released) {
       coverageHandoff.clear();
       state.status = 'failed';
@@ -575,9 +648,27 @@ export function installEarlyWorldTileBootstrap(
     }
     return copyState(state);
   });
+  const sharp = ready.then(async () => {
+    if (
+      released
+      || state.status === 'failed'
+      || state.status === 'disabled'
+      || state.status === 'ready-shadow'
+      || state.status === 'released'
+    ) return copyState(state);
+    try {
+      await refineEarlyWorldTileBootstrap(runOptions);
+    } catch (error) {
+      if (!released && !abortController.signal.aborted) {
+        state.refinementError = error instanceof Error ? error.message : String(error);
+      }
+    }
+    return copyState(state);
+  });
   const handle: EarlyWorldTileBootstrapHandle = {
     schemaVersion: 1,
     ready,
+    sharp,
     getState: () => copyState(state),
     consumeCoverage: (request) => coverageHandoff.consume(request),
     alignToGameContainer,
@@ -633,6 +724,7 @@ async function runEarlyWorldTileBootstrap(
     zoom: parseEarlyWorldTileBootstrapZoom(options.win.location.search),
   });
   state.viewport = viewport;
+  state.targetLevel = selectEarlyWorldTileLevel(viewport.zoom);
   const manifestUrl = buildEarlyWorldTileManifestUrl(
     state.apiBaseUrl,
     options.win.location.href,
@@ -694,6 +786,7 @@ async function runEarlyWorldTileBootstrap(
     displayRect,
     manifest.entries,
     loadedTiles,
+    0,
   );
   if (options.isReleased()) {
     layer.remove();
@@ -722,6 +815,108 @@ async function runEarlyWorldTileBootstrap(
     detail: copyState(state),
   }));
   return copyState(state);
+}
+
+async function refineEarlyWorldTileBootstrap(
+  options: RunEarlyWorldTileBootstrapOptions,
+): Promise<void> {
+  const { state, signal } = options;
+  if (
+    options.isReleased()
+    || signal.aborted
+    || state.status !== 'visible'
+    || !state.rendererVersion
+    || !state.viewport
+  ) return;
+
+  const level = state.targetLevel;
+  if (level === 0) {
+    state.timings.sharpVisibleAtMs = state.timings.visibleAtMs ?? options.now();
+    options.win.dispatchEvent(new CustomEvent(EARLY_WORLD_TILE_SHARP_READY_EVENT, {
+      detail: copyState(state),
+    }));
+    return;
+  }
+
+  state.timings.refinementStartedAtMs = options.now();
+  const viewport = calculateEarlyWorldTileViewportAtLevel({
+    width: state.viewport.width,
+    height: state.viewport.height,
+    zoom: state.viewport.zoom,
+  }, level);
+  const manifestResponse = await options.win.fetch(
+    buildEarlyWorldTileManifestUrl(
+      state.apiBaseUrl,
+      options.win.location.href,
+      viewport.bounds,
+      level,
+    ),
+    getEarlyWorldTilePublicRequestInit(signal),
+  );
+  if (!manifestResponse.ok) {
+    throw new Error(`Early world tile refinement manifest failed with ${manifestResponse.status}.`);
+  }
+  const manifest = parseEarlyWorldTileManifestAtLevel(
+    await manifestResponse.json(),
+    viewport.bounds,
+    state.rendererVersion,
+    level,
+  );
+  state.timings.refinementManifestReadyAtMs = options.now();
+  const cache = await openEarlyWorldTileCache(options.win, options.cacheName);
+  const imageEntries = manifest.entries.filter(
+    (entry): entry is EarlyWorldTileEntry & { ready: EarlyWorldTileReady } => entry.ready !== null,
+  );
+  const loadedTiles = await mapWithConcurrency(
+    imageEntries,
+    EARLY_WORLD_TILE_MAX_FETCH_CONCURRENCY,
+    (entry) => loadEarlyWorldTile({
+      entry,
+      win: options.win,
+      doc: options.doc,
+      cache,
+      cacheHashParam: options.cacheHashParam,
+      signal,
+      registerObjectUrl: options.registerObjectUrl,
+      markFirstByte: () => undefined,
+    }),
+  );
+  if (options.isReleased() || signal.aborted) return;
+  for (const tile of loadedTiles) {
+    if (tile.cacheHit) state.cacheHitCount += 1;
+    if (tile.networkFetch) state.networkFetchCount += 1;
+  }
+
+  const displayRect = getEarlyWorldTileContainerRect(options.doc, options.win);
+  const displayViewport = calculateEarlyWorldTileViewportAtLevel({
+    width: displayRect.width,
+    height: displayRect.height,
+    zoom: viewport.zoom,
+  }, level);
+  const layer = await buildEarlyWorldTileLayer(
+    options.doc,
+    displayViewport,
+    displayRect,
+    manifest.entries,
+    loadedTiles,
+    level,
+  );
+  if (options.isReleased() || signal.aborted) {
+    layer.remove();
+    return;
+  }
+
+  options.doc.body.prepend(layer);
+  options.attachLayer(layer);
+  state.displayRect = displayRect;
+  state.displayLevel = level;
+  state.imageTileCount = imageEntries.length;
+  state.emptyTileCount = manifest.entries.length - imageEntries.length;
+  state.staleMaskCount = layer.querySelectorAll('[data-wamp-early-world-tile-mask]').length;
+  state.timings.sharpVisibleAtMs = options.now();
+  options.win.dispatchEvent(new CustomEvent(EARLY_WORLD_TILE_SHARP_READY_EVENT, {
+    detail: copyState(state),
+  }));
 }
 
 async function loadEarlyWorldTile(input: {
@@ -817,20 +1012,23 @@ async function buildEarlyWorldTileLayer(
   displayRect: EarlyWorldTileContainerRect,
   entries: EarlyWorldTileEntry[],
   loadedTiles: LoadedEarlyWorldTile[],
+  level: EarlyWorldTileLevel,
 ): Promise<HTMLElement> {
   if (!doc.body) await waitForBody(doc);
   const layer = doc.createElement('div');
   layer.id = 'wamp-early-world-tiles';
   layer.dataset.wampEarlyWorldTiles = 'true';
+  layer.dataset.wampEarlyWorldTileLevel = String(level);
   layer.setAttribute('aria-hidden', 'true');
   Object.assign(layer.style, getEarlyWorldTileLayerStyle(displayRect));
 
   const fragment = doc.createDocumentFragment();
   for (const tile of loadedTiles) {
-    const presentation = calculateEarlyWorldTileImagePresentation(
+    const presentation = calculateEarlyWorldTileImagePresentationAtLevel(
       tile.entry.address.x,
       tile.entry.address.y,
       viewport,
+      level,
     );
     const image = tile.image;
     image.dataset.wampEarlyWorldTile = `${tile.entry.address.x},${tile.entry.address.y}`;
@@ -900,17 +1098,25 @@ function alignEarlyWorldTileLayer(
   zoom: number,
   rect: EarlyWorldTileContainerRect,
 ): void {
-  const viewport = calculateEarlyWorldTileViewport({ width: rect.width, height: rect.height, zoom });
+  const parsedLevel = Number(layer.dataset.wampEarlyWorldTileLevel ?? 0);
+  const level = Number.isSafeInteger(parsedLevel) && parsedLevel >= 0 && parsedLevel <= 4
+    ? parsedLevel as EarlyWorldTileLevel
+    : 0;
+  const viewport = calculateEarlyWorldTileViewportAtLevel(
+    { width: rect.width, height: rect.height, zoom },
+    level,
+  );
   Object.assign(layer.style, getEarlyWorldTileLayerStyle(rect));
   for (const image of layer.querySelectorAll<HTMLImageElement>('[data-wamp-early-world-tile]')) {
     const coordinates = parseRoomId(image.dataset.wampEarlyWorldTile ?? '');
     if (!coordinates) continue;
     Object.assign(
       image.style,
-      getEarlyWorldTileImageStyle(calculateEarlyWorldTileImagePresentation(
+      getEarlyWorldTileImageStyle(calculateEarlyWorldTileImagePresentationAtLevel(
         coordinates.x,
         coordinates.y,
         viewport,
+        level,
       )),
     );
   }
@@ -949,12 +1155,16 @@ function parseConfig(value: unknown): EarlyWorldTileConfig {
   };
 }
 
-function parseEntry(value: unknown, rendererVersion: string): EarlyWorldTileEntry {
+function parseEntry(
+  value: unknown,
+  rendererVersion: string,
+  expectedLevel: EarlyWorldTileLevel = EARLY_WORLD_TILE_LEVEL,
+): EarlyWorldTileEntry {
   const record = requireRecord(value, 'entry');
   const address = requireRecord(record.address, 'address');
   if (
     requireString(address.rendererVersion, 'address.rendererVersion') !== rendererVersion
-    || address.level !== EARLY_WORLD_TILE_LEVEL
+    || address.level !== expectedLevel
   ) {
     throw new Error('Invalid early world tile address.');
   }
@@ -971,7 +1181,7 @@ function parseEntry(value: unknown, rendererVersion: string): EarlyWorldTileEntr
   return {
     address: {
       rendererVersion,
-      level: 0,
+      level: expectedLevel,
       x: requireSafeInteger(address.x, 'address.x'),
       y: requireSafeInteger(address.y, 'address.y'),
     },
@@ -1152,6 +1362,13 @@ function parseRoomId(roomId: string): { x: number; y: number } | null {
   const x = Number(match[1]);
   const y = Number(match[2]);
   return Number.isSafeInteger(x) && Number.isSafeInteger(y) ? { x, y } : null;
+}
+
+function getEarlyWorldTileRoomsPerSide(level: EarlyWorldTileLevel): number {
+  if (!Number.isSafeInteger(level) || level < 0 || level > EARLY_WORLD_TILE_MAX_LEVEL) {
+    throw new RangeError('Invalid early world tile level.');
+  }
+  return EARLY_WORLD_TILE_ROOMS_PER_SIDE >> level;
 }
 
 function waitForBody(doc: Document): Promise<void> {

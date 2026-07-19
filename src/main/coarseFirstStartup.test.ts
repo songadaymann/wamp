@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   COARSE_FIRST_MAIN_TIMEOUT_MS,
+  COARSE_FIRST_REFINEMENT_TIMEOUT_MS,
   startMainAfterEarlyWorldTiles,
   waitForEarlyWorldTileCoverage,
 } from './coarseFirstStartup';
@@ -34,6 +35,55 @@ describe('coarse-first application startup', () => {
     await started;
 
     expect(importMain).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('lets target-LOD DOM refinement settle before importing the heavy runtime', async () => {
+    vi.useFakeTimers();
+    let resolveSharp!: () => void;
+    const sharp = new Promise<void>((resolve) => {
+      resolveSharp = resolve;
+    });
+    const importMain = vi.fn(async () => undefined);
+    const started = startMainAfterEarlyWorldTiles({
+      handle: { ready: Promise.resolve(), sharp },
+      importMain,
+    });
+
+    await Promise.resolve();
+    expect(importMain).not.toHaveBeenCalled();
+    resolveSharp();
+    await started;
+
+    expect(importMain).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('caps the extra target-refinement head start without extending a coarse timeout', async () => {
+    vi.useFakeTimers();
+    const importMain = vi.fn(async () => undefined);
+    const started = startMainAfterEarlyWorldTiles({
+      handle: { ready: Promise.resolve(), sharp: new Promise<void>(() => undefined) },
+      importMain,
+    });
+
+    await vi.advanceTimersByTimeAsync(COARSE_FIRST_REFINEMENT_TIMEOUT_MS - 1);
+    expect(importMain).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await started;
+    expect(importMain).toHaveBeenCalledOnce();
+
+    const coarseTimedOutImport = vi.fn(async () => undefined);
+    const coarseTimedOut = startMainAfterEarlyWorldTiles({
+      handle: {
+        ready: new Promise<void>(() => undefined),
+        sharp: new Promise<void>(() => undefined),
+      },
+      importMain: coarseTimedOutImport,
+    });
+    await vi.advanceTimersByTimeAsync(COARSE_FIRST_MAIN_TIMEOUT_MS);
+    await coarseTimedOut;
+    expect(coarseTimedOutImport).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
   });
 

@@ -313,6 +313,20 @@ async function installClientProbeHooks(page) {
         bodyVisible: document.body?.dataset.earlyWorldTilesVisible === 'true',
       });
     }, { once: true });
+    window.addEventListener('wamp:early-world-tiles-sharp-ready', (event) => {
+      let earlyState = null;
+      try {
+        earlyState = JSON.parse(JSON.stringify(event.detail ?? null));
+      } catch {
+        earlyState = null;
+      }
+      record({
+        type: 'early-bootstrap-sharp-ready',
+        state: earlyState,
+        layerPresent: document.querySelector('[data-wamp-early-world-tiles="true"]') !== null,
+        bodyVisible: document.body?.dataset.earlyWorldTilesVisible === 'true',
+      });
+    }, { once: true });
     const manifestLevel = (value) => {
       try {
         const url = new URL(value, window.location.href);
@@ -832,9 +846,19 @@ async function runPass(context, args, label) {
   };
   const coarseReadyMs = bootstrap.coarseReadyMs;
   const sharp = sharpCapture.state;
-  const sharpReadyMs = Number.isFinite(sharpCapture.boundary.clientAtMs)
+  const phaserSharpReadyMs = Number.isFinite(sharpCapture.boundary.clientAtMs)
     ? sharpCapture.boundary.clientAtMs
     : sharpCapture.capturedAtMs;
+  const earlySharpEvent = clientProbeEvents.find((entry) => (
+    entry.type === 'early-bootstrap-sharp-ready'
+    && entry.layerPresent === true
+    && entry.bodyVisible === true
+    && entry.state?.refinementError === null
+    && entry.state?.displayLevel === entry.state?.targetLevel
+    && Number.isFinite(entry.state?.timings?.sharpVisibleAtMs)
+  )) ?? null;
+  const sharpReadyMs = earlySharpEvent?.state?.timings?.sharpVisibleAtMs ?? phaserSharpReadyMs;
+  const sharpSource = earlySharpEvent ? 'pre-phaser-target-lod' : 'phaser-target-lod';
 
   const zooms = [];
   let expectedLevel = Number(sharp.state.committedLevel);
@@ -880,6 +904,7 @@ async function runPass(context, args, label) {
     appReadyMs,
     coarseReadyMs,
     sharpReadyMs,
+    phaserSharpReadyMs,
     readiness: {
       coarse: {
         source: 'pre-phaser-early-l0',
@@ -889,15 +914,17 @@ async function runPass(context, args, label) {
         state: bootstrap.earlyBootstrapState,
       },
       sharp: {
-        source: 'phaser-target-lod',
+        source: sharpSource,
         ready: true,
         readyAtMs: sharpReadyMs,
+        phaserReadyAtMs: phaserSharpReadyMs,
+        earlyState: earlySharpEvent?.state ?? null,
         state: sharp,
       },
     },
     initialCapture: {
       coarseSource: 'pre-phaser-early-l0',
-      sharpSource: 'phaser-target-lod',
+      sharpSource,
       coarseBoundary: coarseCapture.boundary,
       sharpBoundary: sharpCapture.boundary,
       bootstrap,
@@ -915,13 +942,13 @@ async function runPass(context, args, label) {
       startedAfterBoundarySequence: coarseCapture.boundary.networkSequence,
       // Legacy field retained so existing artifact readers continue to find a boundary.
       startedAtBoundarySequence: coarseCapture.boundary.networkSequence,
-      capturedAtMs: sharpReadyMs,
+      capturedAtMs: phaserSharpReadyMs,
       requests: refinementNetworkRequests,
       summary: refinementNetworkSummary,
       apiWorker: summarizeApiWorkerRequests(refinementApiWorkerRequests),
     },
     sharpNetwork: {
-      capturedAtMs: sharpReadyMs,
+      capturedAtMs: phaserSharpReadyMs,
       requests: bootstrapRequests,
       summary: sharpNetworkSummary,
       apiWorker: summarizeApiWorkerRequests(bootstrapApiWorkerRequests),

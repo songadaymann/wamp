@@ -3,7 +3,9 @@ import {
   buildEarlyWorldTileManifestUrl,
   buildEarlyWorldTileCacheUrl,
   calculateEarlyWorldTileImagePresentation,
+  calculateEarlyWorldTileImagePresentationAtLevel,
   calculateEarlyWorldTileViewport,
+  calculateEarlyWorldTileViewportAtLevel,
   createEarlyWorldTileCoverageHandoffSlot,
   decideEarlyWorldTileRollout,
   getEarlyWorldTileCohortBucket,
@@ -13,8 +15,10 @@ import {
   getEarlyWorldTilePublicRequestInit,
   parseEarlyWorldTileBootstrapZoom,
   parseEarlyWorldTileManifest,
+  parseEarlyWorldTileManifestAtLevel,
   persistEarlyWorldTileBlob,
   setEarlyWorldTileVisibilityDataset,
+  selectEarlyWorldTileLevel,
   type EarlyWorldTileBounds,
   type EarlyWorldTileCoverageManifest,
   type EarlyWorldTileEntry,
@@ -61,6 +65,11 @@ describe('classic early world tile bootstrap', () => {
     expect(parseEarlyWorldTileBootstrapZoom('?worldTilesBootstrapZoom=nope')).toBe(0.18);
   });
 
+  it('selects the five initial pyramid levels at their exact zoom boundaries', () => {
+    expect([0.08, 0.10, 0.17, 0.18, 0.20, 0.40, 0.80].map(selectEarlyWorldTileLevel))
+      .toEqual([0, 1, 1, 1, 2, 3, 4]);
+  });
+
   it('uses mathematical floor division across negative L0 coordinates', () => {
     expect(calculateEarlyWorldTileViewport({
       width: 640,
@@ -85,6 +94,25 @@ describe('classic early world tile bootstrap', () => {
     expect(presentation.top + gutter).toBeCloseTo(418.32);
     expect(presentation.width).toBeCloseTo(642 * gutter);
     expect(presentation.height).toBeCloseTo(354 * gutter);
+  });
+
+  it('uses signed target-level geometry for pre-Phaser sharp refinement', () => {
+    const viewport = calculateEarlyWorldTileViewportAtLevel({
+      width: 1280,
+      height: 784,
+      zoom: 0.18,
+    }, 1);
+    expect(viewport.bounds).toEqual({
+      minTileX: -1,
+      maxTileX: 0,
+      minTileY: -1,
+      maxTileY: 0,
+    });
+    const presentation = calculateEarlyWorldTileImagePresentationAtLevel(-1, -1, viewport, 1);
+    expect(presentation.width).toBeCloseTo(642 * 8 * 0.18);
+    expect(presentation.height).toBeCloseTo(354 * 8 * 0.18);
+    expect(presentation.left).toBeLessThan(0);
+    expect(presentation.top).toBeLessThan(0);
   });
 
   it('defines a fixed click-through pixelated DOM cover behind the loading card', () => {
@@ -172,6 +200,31 @@ describe('classic early world tile bootstrap', () => {
     expect(url.pathname).toBe('/api/world/tiles/manifest');
     expect(url.searchParams.get('level')).toBe('0');
     expect(url.searchParams.get('includeRooms')).toBe('0');
+  });
+
+  it('requests and parses only target-level entries while accepting manifest ancestor closure', () => {
+    const bounds = { minTileX: -1, maxTileX: 0, minTileY: 0, maxTileY: 0 };
+    const url = new URL(buildEarlyWorldTileManifestUrl(
+      'https://api.example',
+      'https://game.example/?worldTiles=force',
+      bounds,
+      1,
+    ));
+    expect(url.searchParams.get('level')).toBe('1');
+    const levelOne = (x: number): EarlyWorldTileEntry => ({
+      ...readyEntry(x, 0),
+      address: { rendererVersion, level: 1, x, y: 0 },
+    });
+    const parsed = parseEarlyWorldTileManifestAtLevel({
+      schemaVersion: 1,
+      rendererVersion,
+      level: 1,
+      targetBounds: bounds,
+      entries: [readyEntry(0, 0), levelOne(0), levelOne(-1)],
+      rooms: [],
+    }, bounds, rendererVersion, 1);
+    expect(parsed.entries.map((entry) => [entry.address.level, entry.address.x]))
+      .toEqual([[1, -1], [1, 0]]);
   });
 
   it('sets and clears the narrow loading-veil dataset', () => {

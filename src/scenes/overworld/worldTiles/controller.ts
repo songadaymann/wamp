@@ -131,6 +131,7 @@ export interface WorldTileClientDebugSnapshot extends WorldTileDebugMetrics {
 
 const CAMERA_EPSILON = 0.5;
 const WORLD_TILE_CONFIG_REFRESH_MS = 20_000;
+const WORLD_TILE_REPLACEMENT_READY_EVENT = 'wamp:world-tiles-replacement-ready';
 
 export class WorldTileClientController {
   private readonly layer: WorldTilePhaserLayer;
@@ -199,6 +200,7 @@ export class WorldTileClientController {
   private contextRestorePending = false;
   private nextMutationConvergencePollAtMs = 0;
   private targetReadyCount = 0;
+  private replacementReadySignaled = false;
   private readonly targetLodReadyWaiters = new Set<TargetLodReadyWaiter>();
   private contextCanvas: HTMLCanvasElement | null = null;
   private readonly handleContextRestored = () => {
@@ -597,6 +599,7 @@ export class WorldTileClientController {
     this.lastCoverageComplete = false;
     this.lastFallbackReason = null;
     this.targetReadyCount = 0;
+    this.replacementReadySignaled = false;
     this.committedLevel = 0;
     this.desiredLevel = 0;
     this.lastZoom = null;
@@ -1326,8 +1329,22 @@ export class WorldTileClientController {
       this.lastFallbackReason = fallbackSnapshot.reason;
       this.options.onCoverageChanged?.();
     }
-    if (fallbackSnapshot.active) this.settleAllTargetLodReadyWaiters(false);
-    else this.resolveReadyTargetLodWaiters();
+    if (fallbackSnapshot.active) {
+      this.settleAllTargetLodReadyWaiters(false);
+      this.signalReplacementReady();
+    } else {
+      this.resolveReadyTargetLodWaiters();
+      if (this.isCameraTargetLodReady(this.options.scene.cameras.main)) {
+        this.signalReplacementReady();
+      }
+    }
+  }
+
+  private signalReplacementReady(): void {
+    if (this.replacementReadySignaled) return;
+    this.replacementReadySignaled = true;
+    if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+    window.dispatchEvent(new Event(WORLD_TILE_REPLACEMENT_READY_EVENT));
   }
 
   private updateCameraMotion(viewport: WorldRect, zoom: number, nowMs: number): void {

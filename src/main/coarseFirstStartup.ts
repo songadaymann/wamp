@@ -1,9 +1,11 @@
 export const COARSE_FIRST_MAIN_TIMEOUT_MS = 750;
+export const COARSE_FIRST_REFINEMENT_TIMEOUT_MS = 650;
 
 export type CoarseFirstStartupResult = 'absent' | 'settled' | 'timeout';
 
 export interface EarlyWorldTileReadyHandle {
   readonly ready: PromiseLike<unknown>;
+  readonly sharp?: PromiseLike<unknown>;
 }
 
 /**
@@ -43,6 +45,12 @@ export async function startMainAfterEarlyWorldTiles(options: {
   importMain: () => Promise<unknown>;
   timeoutMs?: number;
 }): Promise<void> {
-  await waitForEarlyWorldTileCoverage(options.handle, options.timeoutMs);
+  const coarseResult = await waitForEarlyWorldTileCoverage(options.handle, options.timeoutMs);
+  if (coarseResult === 'settled' && options.handle?.sharp) {
+    await waitForEarlyWorldTileCoverage(
+      { ready: options.handle.sharp },
+      COARSE_FIRST_REFINEMENT_TIMEOUT_MS,
+    );
+  }
   await options.importMain();
 }
