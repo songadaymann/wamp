@@ -6,6 +6,7 @@ import {
   floorDivide,
   getPixelsPerGameTile,
   getRoomsPerWorldTile,
+  getWorldTileCorePlacement,
   getWorldTileChildren,
   getWorldTileParent,
   roomToWorldTileCoordinate,
@@ -76,6 +77,18 @@ describe('world tile geometry', () => {
       .toEqual([1, 2, 4, 8, 16]);
     expect(WORLD_TILE_OVERLAP).toBe(1);
     expect([WORLD_TILE_IMAGE_WIDTH, WORLD_TILE_IMAGE_HEIGHT]).toEqual([642, 354]);
+  });
+
+  it('places cropped content frames edge-to-edge at every level across zero', () => {
+    for (const level of [0, 1, 2, 3, 4] as const) {
+      const left = getWorldTileCorePlacement({ level, x: -1, y: -1 });
+      const right = getWorldTileCorePlacement({ level, x: 0, y: -1 });
+      const below = getWorldTileCorePlacement({ level, x: -1, y: 0 });
+      expect(left.x + left.width).toBe(right.x);
+      expect(left.y + left.height).toBe(below.y);
+      expect(right.width).toBe(left.width);
+      expect(below.height).toBe(left.height);
+    }
   });
 });
 

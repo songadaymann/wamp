@@ -26,16 +26,33 @@ import {
 import { getApiBaseUrl } from '../api/baseUrl';
 import { ROOM_STORAGE_PREFIX } from './browserStorage';
 import { startBootStallWatch } from '../main/bootDiagnostics';
+import { parseWorldTileConfig, parseWorldTileManifest } from '../scenes/overworld/worldTiles/manifest';
+import type {
+  WorldTileBounds,
+  WorldTileConfig,
+  WorldTileLevel,
+  WorldTileManifest,
+} from '../scenes/overworld/worldTiles/types';
 
 export interface WorldRepository {
   loadWorldWindow(center: RoomCoordinates, radius: number): Promise<WorldWindow>;
   loadWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<WorldChunkWindow>;
   loadCompactWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<CompactWorldChunkWindow | null>;
+  loadWorldTileConfig(signal?: AbortSignal): Promise<WorldTileConfig | null>;
+  loadWorldTileManifest(
+    level: WorldTileLevel,
+    bounds: WorldTileBounds,
+    signal?: AbortSignal,
+  ): Promise<WorldTileManifest | null>;
   queryRoomSnapshots(
     references: RoomSnapshotQueryReference[],
     options?: { priority?: 'high' | 'low' | 'auto'; detail?: RoomSnapshotQueryDetail },
   ): Promise<RoomSnapshotQueryResponse>;
-  loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null>;
+  loadPublishedRoom(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    signal?: AbortSignal,
+  ): Promise<RoomSnapshot | null>;
   loadClaimableFrontierWindow(center: RoomCoordinates, radius: number): Promise<ClaimableFrontierRoomWindow>;
 }
 
@@ -87,6 +104,18 @@ class LocalWorldRepository implements WorldRepository {
     return null;
   }
 
+  async loadWorldTileConfig(_signal?: AbortSignal): Promise<WorldTileConfig | null> {
+    return null;
+  }
+
+  async loadWorldTileManifest(
+    _level: WorldTileLevel,
+    _bounds: WorldTileBounds,
+    _signal?: AbortSignal,
+  ): Promise<WorldTileManifest | null> {
+    return null;
+  }
+
   async queryRoomSnapshots(
     _references: RoomSnapshotQueryReference[],
     _options?: { priority?: 'high' | 'low' | 'auto'; detail?: RoomSnapshotQueryDetail },
@@ -94,7 +123,12 @@ class LocalWorldRepository implements WorldRepository {
     return { snapshots: [], missing: [] };
   }
 
-  async loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null> {
+  async loadPublishedRoom(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    signal?: AbortSignal,
+  ): Promise<RoomSnapshot | null> {
+    signal?.throwIfAborted();
     const parsedCoordinates = parseRoomId(roomId);
     const lookupId = parsedCoordinates
       ? roomId
@@ -215,6 +249,37 @@ class ApiWorldRepository implements WorldRepository {
     }
   }
 
+  async loadWorldTileConfig(signal?: AbortSignal): Promise<WorldTileConfig | null> {
+    const response = await this.fetchWorldApi('/api/world/tiles/config', { signal });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const details = await response.text();
+      throw new WorldApiError(details || `World tile config failed with status ${response.status}.`, response.status);
+    }
+    return parseWorldTileConfig(await response.json());
+  }
+
+  async loadWorldTileManifest(
+    level: WorldTileLevel,
+    bounds: WorldTileBounds,
+    signal?: AbortSignal,
+  ): Promise<WorldTileManifest | null> {
+    const params = new URLSearchParams({
+      level: String(level),
+      minTileX: String(bounds.minTileX),
+      maxTileX: String(bounds.maxTileX),
+      minTileY: String(bounds.minTileY),
+      maxTileY: String(bounds.maxTileY),
+    });
+    const response = await this.fetchWorldApi(`/api/world/tiles/manifest?${params.toString()}`, { signal });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const details = await response.text();
+      throw new WorldApiError(details || `World tile manifest failed with status ${response.status}.`, response.status);
+    }
+    return parseWorldTileManifest(await response.json());
+  }
+
   async queryRoomSnapshots(
     references: RoomSnapshotQueryReference[],
     options: { priority?: 'high' | 'low' | 'auto'; detail?: RoomSnapshotQueryDetail } = {},
@@ -238,15 +303,22 @@ class ApiWorldRepository implements WorldRepository {
     }
   }
 
-  async loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null> {
+  async loadPublishedRoom(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    signal?: AbortSignal,
+  ): Promise<RoomSnapshot | null> {
     const params = new URLSearchParams({
       x: String(coordinates.x),
       y: String(coordinates.y),
     });
 
     return this.withFallback(
-      () => this.requestPublishedRoom(`/api/rooms/${encodeURIComponent(roomId)}/published?${params.toString()}`),
-      () => this.fallback?.loadPublishedRoom(roomId, coordinates)
+      () => this.requestPublishedRoom(
+        `/api/rooms/${encodeURIComponent(roomId)}/published?${params.toString()}`,
+        signal,
+      ),
+      () => this.fallback?.loadPublishedRoom(roomId, coordinates, signal)
     );
   }
 
@@ -303,8 +375,8 @@ class ApiWorldRepository implements WorldRepository {
     return cloneCompactWorldChunkWindow((await response.json()) as CompactWorldChunkWindow);
   }
 
-  private async requestPublishedRoom(path: string): Promise<RoomSnapshot | null> {
-    const response = await this.fetchWorldApi(path);
+  private async requestPublishedRoom(path: string, signal?: AbortSignal): Promise<RoomSnapshot | null> {
+    const response = await this.fetchWorldApi(path, { signal });
 
     if (response.status === 404) {
       return null;

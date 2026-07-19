@@ -8,6 +8,7 @@ import {
   type WorldRect,
   type WorldTileAddress,
   type WorldTileLevel,
+  type WorldTileBounds,
   type WorldVelocity,
 } from './types';
 
@@ -22,6 +23,39 @@ export interface WorldTileViewportCoverage {
   guardTiles: WorldTileAddress[];
   siblingClosure: WorldTileAddress[];
   ancestorClosure: WorldTileAddress[];
+}
+
+export function clampWorldTileManifestBounds(input: {
+  visible: WorldTileBounds;
+  guard: WorldTileBounds;
+  maxAxis?: number;
+}): WorldTileBounds {
+  const maxAxis = input.maxAxis ?? 16;
+  if (!Number.isSafeInteger(maxAxis) || maxAxis <= 0) {
+    throw new RangeError('Manifest maximum axis must be a positive safe integer.');
+  }
+  const x = clampAxis(
+      input.visible.minTileX,
+      input.visible.maxTileX,
+      input.guard.minTileX,
+      input.guard.maxTileX,
+      maxAxis,
+      'X',
+    );
+  const y = clampAxis(
+      input.visible.minTileY,
+      input.visible.maxTileY,
+      input.guard.minTileY,
+      input.guard.maxTileY,
+      maxAxis,
+      'Y',
+    );
+  return {
+    minTileX: x.min,
+    maxTileX: x.max,
+    minTileY: y.min,
+    maxTileY: y.max,
+  };
 }
 
 export function calculateDirectionalGuardRect(input: {
@@ -171,4 +205,39 @@ function assertWorldRect(rect: WorldRect): void {
   if (rect.right <= rect.left || rect.bottom <= rect.top) {
     throw new RangeError('Viewport must have positive width and height.');
   }
+}
+
+function clampAxis(
+  visibleMin: number,
+  visibleMax: number,
+  guardMin: number,
+  guardMax: number,
+  maxAxis: number,
+  axis: 'X' | 'Y',
+): { min: number; max: number } {
+  const visibleSize = visibleMax - visibleMin + 1;
+  if (visibleSize > maxAxis) {
+    throw new RangeError(`Visible world tile ${axis} axis exceeds the manifest limit.`);
+  }
+  const guardSize = guardMax - guardMin + 1;
+  let min = guardMin;
+  let max = guardMax;
+  if (guardSize > maxAxis) {
+    const centeredMin = Math.floor((guardMin + guardMax - maxAxis + 1) / 2);
+    min = Math.min(centeredMin, visibleMin);
+    max = min + maxAxis - 1;
+    if (max < visibleMax) {
+      max = visibleMax;
+      min = max - maxAxis + 1;
+    }
+    if (min < guardMin) {
+      min = guardMin;
+      max = min + maxAxis - 1;
+    }
+    if (max > guardMax) {
+      max = guardMax;
+      min = max - maxAxis + 1;
+    }
+  }
+  return { min, max };
 }

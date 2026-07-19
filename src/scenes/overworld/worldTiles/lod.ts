@@ -9,6 +9,12 @@ export interface WorldTileLodDecision {
   changed: boolean;
 }
 
+export interface WorldTileDisplayLevelDecision {
+  committedLevel: WorldTileLevel;
+  displayLevel: WorldTileLevel;
+  committed: boolean;
+}
+
 export function getInitialWorldTileLevel(zoom: number): WorldTileLevel {
   assertValidZoom(zoom);
   if (zoom < 0.1) return 0;
@@ -53,6 +59,26 @@ export function canCommitWorldTileLevel(input: {
   }
   return input.replacementCoverageComplete &&
     input.nowMs - input.lastGestureAtMs >= idleCommitMs;
+}
+
+export function selectWorldTileDisplayLevel(input: {
+  committedLevel: WorldTileLevel;
+  desiredLevel: WorldTileLevel;
+  nowMs: number;
+  lastGestureAtMs: number;
+  replacementCoverageComplete: boolean;
+}): WorldTileDisplayLevelDecision {
+  const committed = input.desiredLevel !== input.committedLevel && canCommitWorldTileLevel({
+    nowMs: input.nowMs,
+    lastGestureAtMs: input.lastGestureAtMs,
+    replacementCoverageComplete: input.replacementCoverageComplete,
+  });
+  const committedLevel = committed ? input.desiredLevel : input.committedLevel;
+  return {
+    committedLevel,
+    displayLevel: committedLevel,
+    committed,
+  };
 }
 
 export function getWorldTileLodThresholds(): {

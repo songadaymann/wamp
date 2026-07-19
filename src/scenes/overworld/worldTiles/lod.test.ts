@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canCommitWorldTileLevel,
   getInitialWorldTileLevel,
+  selectWorldTileDisplayLevel,
   selectWorldTileLevel,
 } from './lod';
 
@@ -59,5 +60,29 @@ describe('world tile LOD selection', () => {
       lastGestureAtMs: 100,
       replacementCoverageComplete: true,
     })).toBe(true);
+  });
+
+  it('keeps the committed imagery during a gesture and swaps only after idle coverage', () => {
+    expect(selectWorldTileDisplayLevel({
+      committedLevel: 1,
+      desiredLevel: 2,
+      nowMs: 179,
+      lastGestureAtMs: 100,
+      replacementCoverageComplete: true,
+    })).toEqual({ committedLevel: 1, displayLevel: 1, committed: false });
+    expect(selectWorldTileDisplayLevel({
+      committedLevel: 1,
+      desiredLevel: 2,
+      nowMs: 180,
+      lastGestureAtMs: 100,
+      replacementCoverageComplete: false,
+    })).toEqual({ committedLevel: 1, displayLevel: 1, committed: false });
+    expect(selectWorldTileDisplayLevel({
+      committedLevel: 1,
+      desiredLevel: 2,
+      nowMs: 180,
+      lastGestureAtMs: 100,
+      replacementCoverageComplete: true,
+    })).toEqual({ committedLevel: 2, displayLevel: 2, committed: true });
   });
 });

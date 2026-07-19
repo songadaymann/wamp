@@ -36,6 +36,15 @@ export interface RenderableRoom {
   source: PlayableRoomSource;
 }
 
+type RoomLoadOwner = 'render' | 'selection';
+
+interface RoomLoadRequest {
+  abortController: AbortController;
+  lifecycleEpoch: number;
+  owners: Set<RoomLoadOwner>;
+  promise: Promise<RoomSnapshot | null>;
+}
+
 export function isStreamingRoomCandidateRenderable(
   roomCandidate: Pick<StreamingRoomCandidate, 'draft' | 'sharedPreview' | 'summary'>,
 ): boolean {
@@ -50,14 +59,17 @@ export function isStreamingRoomCandidateRenderable(
 export class OverworldPreviewCache {
   private roomSnapshotsById = new Map<string, RoomSnapshot>();
   private overviewSnapshotsById = new Map<string, RoomSnapshot>();
-  private roomLoadPromisesById = new Map<string, Promise<RoomSnapshot | null>>();
+  private roomLoadRequestsById = new Map<string, RoomLoadRequest>();
+  private lifecycleEpoch = 0;
 
   constructor(private readonly worldRepository: WorldRepository) {}
 
   reset(): void {
+    this.lifecycleEpoch += 1;
+    for (const request of this.roomLoadRequestsById.values()) request.abortController.abort();
     this.roomSnapshotsById = new Map();
     this.overviewSnapshotsById = new Map();
-    this.roomLoadPromisesById = new Map();
+    this.roomLoadRequestsById = new Map();
   }
 
   getRoomSnapshotsById(): Map<string, RoomSnapshot> {
@@ -171,7 +183,8 @@ export class OverworldPreviewCache {
   }
 
   invalidateRoom(roomId: string, dropPublishedSnapshot: boolean): void {
-    this.roomLoadPromisesById.delete(roomId);
+    this.roomLoadRequestsById.get(roomId)?.abortController.abort();
+    this.roomLoadRequestsById.delete(roomId);
     if (dropPublishedSnapshot) {
       this.roomSnapshotsById.delete(roomId);
       this.overviewSnapshotsById.delete(roomId);
@@ -274,30 +287,64 @@ export class OverworldPreviewCache {
     return renderableRooms;
   }
 
-  private async ensurePublishedRoomSnapshot(summary: WorldRoomSummary): Promise<RoomSnapshot | null> {
+  async prefetchPublishedRoom(summary: WorldRoomSummary): Promise<RoomSnapshot | null> {
+    return this.ensurePublishedRoomSnapshot(summary, 'selection');
+  }
+
+  cancelSelectionPrefetchesExcept(roomId: string | null): void {
+    for (const [requestRoomId, request] of this.roomLoadRequestsById) {
+      if (requestRoomId === roomId || !request.owners.delete('selection')) continue;
+      if (request.owners.size > 0) continue;
+      request.abortController.abort();
+      this.roomLoadRequestsById.delete(requestRoomId);
+    }
+  }
+
+  private async ensurePublishedRoomSnapshot(
+    summary: WorldRoomSummary,
+    owner: RoomLoadOwner = 'render',
+  ): Promise<RoomSnapshot | null> {
     const cached = this.roomSnapshotsById.get(summary.id);
     if (cached && cached.version === (summary.version ?? cached.version)) {
       return cached;
     }
 
-    const inFlight = this.roomLoadPromisesById.get(summary.id);
+    const inFlight = this.roomLoadRequestsById.get(summary.id);
     if (inFlight) {
-      return inFlight;
+      inFlight.owners.add(owner);
+      return inFlight.promise;
     }
 
-    const request = this.worldRepository
-      .loadPublishedRoom(summary.id, summary.coordinates)
+    const abortController = new AbortController();
+    const lifecycleEpoch = this.lifecycleEpoch;
+    const request: RoomLoadRequest = {
+      abortController,
+      lifecycleEpoch,
+      owners: new Set([owner]),
+      promise: Promise.resolve(null),
+    };
+    request.promise = this.worldRepository
+      .loadPublishedRoom(summary.id, summary.coordinates, abortController.signal)
       .then((room) => {
+        if (
+          abortController.signal.aborted
+          || lifecycleEpoch !== this.lifecycleEpoch
+          || this.roomLoadRequestsById.get(summary.id) !== request
+        ) {
+          return null;
+        }
         if (room) {
           this.roomSnapshotsById.set(room.id, room);
         }
         return room;
       })
       .finally(() => {
-        this.roomLoadPromisesById.delete(summary.id);
+        if (this.roomLoadRequestsById.get(summary.id) === request) {
+          this.roomLoadRequestsById.delete(summary.id);
+        }
       });
 
-    this.roomLoadPromisesById.set(summary.id, request);
-    return request;
+    this.roomLoadRequestsById.set(summary.id, request);
+    return request.promise;
   }
 }

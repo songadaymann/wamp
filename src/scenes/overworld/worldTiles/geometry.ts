@@ -48,6 +48,18 @@ export function getWorldTileSpan(level: WorldTileLevel): { width: number; height
   };
 }
 
+export function getWorldTileCorePlacement(
+  tile: Pick<WorldTileCoordinate, 'level' | 'x' | 'y'>,
+): { x: number; y: number; width: number; height: number } {
+  const span = getWorldTileSpan(tile.level);
+  return {
+    x: tile.x * span.width,
+    y: tile.y * span.height,
+    width: span.width,
+    height: span.height,
+  };
+}
+
 export function roomToWorldTileCoordinate(
   level: WorldTileLevel,
   roomX: number,

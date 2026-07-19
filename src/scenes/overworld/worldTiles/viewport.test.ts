@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateDirectionalGuardRect,
   calculateWorldTileViewportCoverage,
+  clampWorldTileManifestBounds,
   getWorldTileSiblingClosure,
 } from './viewport';
 import type { WorldTileAddress } from './types';
@@ -42,6 +43,13 @@ describe('world tile viewport coverage', () => {
       address(4, -1, -2),
       address(4, -2, -1),
     ]);
+  });
+
+  it('clamps extreme directional guard projection to 16x16 while retaining the visible cover', () => {
+    expect(clampWorldTileManifestBounds({
+      visible: { minTileX: -2, maxTileX: 1, minTileY: -1, maxTileY: 1 },
+      guard: { minTileX: -40, maxTileX: 80, minTileY: -60, maxTileY: 70 },
+    })).toEqual({ minTileX: -2, maxTileX: 13, minTileY: -3, maxTileY: 12 });
   });
 });
 

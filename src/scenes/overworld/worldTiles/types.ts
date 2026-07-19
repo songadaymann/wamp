@@ -24,8 +24,38 @@ export interface WorldTileManifestEntry {
   address: WorldTileAddress;
   desiredGeneration: number;
   desiredEmpty: boolean;
+  readyEmptyGeneration: number | null;
   ready: WorldTileManifestReady | null;
   staleRoomIds: string[];
+}
+
+export interface WorldTileConfig {
+  schemaVersion: 1;
+  available: boolean;
+  rolloutPercentage: number;
+  activeRendererVersion: string | null;
+}
+
+export interface WorldTileRoomSummary {
+  id: string;
+  coordinates: { x: number; y: number };
+  title: string | null;
+  state: 'published';
+  goalType: string | null;
+  version: number;
+  publishedAt: string | null;
+  previewUpdatedAt: string | null;
+  creatorUserId: string | null;
+  creatorDisplayName: string | null;
+}
+
+export interface WorldTileManifest {
+  schemaVersion: 1;
+  rendererVersion: string;
+  level: WorldTileLevel;
+  targetBounds: WorldTileBounds;
+  entries: WorldTileManifestEntry[];
+  rooms: WorldTileRoomSummary[];
 }
 
 export interface WorldTileBounds {

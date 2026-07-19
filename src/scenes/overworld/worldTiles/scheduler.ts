@@ -35,6 +35,60 @@ export interface ManifestRefreshDecision {
   dueAtMs: number;
 }
 
+export interface WorldTileQueuedTask {
+  taskKey: string;
+  retainAcrossCoverage: boolean;
+}
+
+export interface WorldTileQueueReconciliation<T extends WorldTileQueuedTask> {
+  queue: T[];
+  removed: T[];
+  missingTaskKeys: string[];
+}
+
+export function reconcileWorldTileQueuedTasks<T extends WorldTileQueuedTask>(
+  queued: readonly T[],
+  orderedCoverageTaskKeys: readonly string[],
+): WorldTileQueueReconciliation<T> {
+  const orderedCoverage = new Set(orderedCoverageTaskKeys);
+  const retainedKeys = new Set<string>();
+  const sticky: T[] = [];
+  const coverageByKey = new Map<string, T>();
+  const removed: T[] = [];
+
+  for (const task of queued) {
+    if (retainedKeys.has(task.taskKey)) {
+      removed.push(task);
+      continue;
+    }
+    if (task.retainAcrossCoverage) {
+      retainedKeys.add(task.taskKey);
+      if (orderedCoverage.has(task.taskKey)) {
+        coverageByKey.set(task.taskKey, task);
+      } else {
+        sticky.push(task);
+      }
+      continue;
+    }
+    if (orderedCoverage.has(task.taskKey)) {
+      retainedKeys.add(task.taskKey);
+      coverageByKey.set(task.taskKey, task);
+    } else {
+      removed.push(task);
+    }
+  }
+
+  const coverage = orderedCoverageTaskKeys.flatMap((taskKey) => {
+    const task = coverageByKey.get(taskKey);
+    return task ? [task] : [];
+  });
+  return {
+    queue: [...coverage, ...sticky],
+    removed,
+    missingTaskKeys: orderedCoverageTaskKeys.filter((taskKey) => !retainedKeys.has(taskKey)),
+  };
+}
+
 const BYTES_PER_MEBIBYTE = 1_024 * 1_024;
 
 const NORMAL_BUDGETS: WorldTileStreamingBudgets = {
@@ -159,6 +213,12 @@ export class ManifestRefreshSchedule {
 
   hasTrailingRefresh(): boolean {
     return this.pendingGeneration !== null;
+  }
+
+  reset(): void {
+    this.lastIssuedAtMs = Number.NEGATIVE_INFINITY;
+    this.pendingGeneration = null;
+    this.pendingDueAtMs = null;
   }
 }
 

@@ -2175,6 +2175,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     try {
       const worldUpdateStartedAt = profiler?.beginSegment();
       this.windowController.maybeRefreshVisibleChunks();
+      this.worldStreamingController.updateWorldTiles();
       this.updateBackdrop();
       this.gridOverlayController.redraw();
       this.updateLiveObjects(delta);
@@ -2645,6 +2646,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     for (const image of this.previewImages) {
       ignoredObjects.push(image);
     }
+    ignoredObjects.push(...this.worldStreamingController.getWorldTileBackdropIgnoredObjects());
 
     for (const loadedRoom of this.loadedFullRoomsById.values()) {
       if (loadedRoom.backgroundColorRect) {
@@ -6131,6 +6133,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         localPlayPressureScore: streamingMetrics.localPlayPressureScore,
         localPlayPressureRoomCount: streamingMetrics.localPlayPressureRoomCount,
       },
+      worldTiles: streamingMetrics.worldTiles,
       currentRoomBackground: currentLoadedRoom
         ? {
             background: currentLoadedRoom.room.background,

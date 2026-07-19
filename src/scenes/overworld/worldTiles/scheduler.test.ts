@@ -5,6 +5,7 @@ import {
   getWorldTileStreamingBudgets,
   ManifestRefreshSchedule,
   rankWorldTileRequests,
+  reconcileWorldTileQueuedTasks,
   type WorldTileRequestCandidate,
 } from './scheduler';
 import type { WorldTileAddress } from './types';
@@ -49,6 +50,16 @@ describe('world tile scheduling', () => {
     expect(schedule.hasTrailingRefresh()).toBe(false);
   });
 
+  it('drops pending work and permits an immediate issue after reset', () => {
+    const schedule = new ManifestRefreshSchedule();
+    schedule.schedule(100);
+    schedule.schedule(120);
+    expect(schedule.hasTrailingRefresh()).toBe(true);
+    schedule.reset();
+    expect(schedule.hasTrailingRefresh()).toBe(false);
+    expect(schedule.schedule(121)).toMatchObject({ issueNow: true, dueAtMs: 121 });
+  });
+
   it('exposes normal and reduced concurrency and upload budgets', () => {
     expect(getWorldTileStreamingBudgets('normal')).toMatchObject({
       fetchConcurrency: 6,
@@ -75,6 +86,48 @@ describe('world tile scheduling', () => {
   });
 });
 
+describe('world tile pipeline queue reconciliation', () => {
+  it('prunes obsolete viewport work and moves newly visible work ahead of guards', () => {
+    const result = reconcileWorldTileQueuedTasks([
+      task('old-visible'),
+      task('new-guard'),
+      task('new-visible'),
+    ], ['new-visible', 'new-guard', 'missing-visible']);
+
+    expect(result.queue.map((item) => item.taskKey)).toEqual(['new-visible', 'new-guard']);
+    expect(result.removed.map((item) => item.taskKey)).toEqual(['old-visible']);
+    expect(result.missingTaskKeys).toEqual(['missing-visible']);
+  });
+
+  it('keeps visible coverage ahead of retained offscreen work without duplication', () => {
+    const sticky = task('restoration-guard', true);
+    const result = reconcileWorldTileQueuedTasks([
+      task('old-guard'),
+      sticky,
+      task('restoration-guard', true),
+      task('new-visible'),
+    ], ['new-visible']);
+
+    expect(result.queue).toEqual([task('new-visible'), sticky]);
+    expect(result.removed.map((item) => item.taskKey)).toEqual(['old-guard', 'restoration-guard']);
+  });
+
+  it('ranks retained work with current coverage when it becomes visible', () => {
+    const visibleRestoration = task('visible-restoration', true);
+    const result = reconcileWorldTileQueuedTasks([
+      task('offscreen-restoration', true),
+      visibleRestoration,
+      task('new-visible'),
+    ], ['visible-restoration', 'new-visible']);
+
+    expect(result.queue).toEqual([
+      visibleRestoration,
+      task('new-visible'),
+      task('offscreen-restoration', true),
+    ]);
+  });
+});
+
 function candidate(
   x: number,
   properties: Omit<WorldTileRequestCandidate, 'address'>,
@@ -84,4 +137,8 @@ function candidate(
 
 function address(x: number): WorldTileAddress {
   return { rendererVersion: 'renderer-v1', level: 4, x, y: 0 };
+}
+
+function task(taskKey: string, retainAcrossCoverage = false) {
+  return { taskKey, retainAcrossCoverage };
 }
