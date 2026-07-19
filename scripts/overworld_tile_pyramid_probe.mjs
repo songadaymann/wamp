@@ -4,6 +4,8 @@ import { chromium } from 'playwright';
 
 const DEFAULT_URL = 'http://127.0.0.1:3000/?previewSmoke=1&perf=1&mobilePerfHud=0&worldTiles=force';
 const DEFAULT_ZOOMS = [0.08, 0.10, 0.17, 0.18, 0.20, 0.40, 0.80];
+const LOD_PROMOTION_THRESHOLDS = [0.108, 0.216, 0.432, 0.864];
+const LOD_DEMOTION_THRESHOLDS = [Number.NEGATIVE_INFINITY, 0.092, 0.184, 0.368, 0.736];
 
 function parseArgs(argv) {
   const args = {
@@ -55,6 +57,10 @@ function tileMetricsFromState(state) {
 function summarizeState(state) {
   const scene = state?.activeScene ?? {};
   const metrics = tileMetricsFromState(state);
+  const lod = scene.lodMetrics ?? {};
+  const previewBuildSegment = scene.mobilePerformance?.topSegments?.find(
+    (segment) => segment.label === 'stream.buildChunkPreviewTexture',
+  ) ?? null;
   return {
     zoom: scene.zoom ?? null,
     camera: scene.camera?.worldView ?? null,
@@ -87,7 +93,24 @@ function summarizeState(state) {
       attachedTileCount: metrics.attachedTileCount ?? 0,
       contextRestorePending: metrics.contextRestorePending ?? false,
     } : null,
+    legacyPreviews: {
+      loadedRoomCount: lod.loadedPreviewRoomCount ?? 0,
+      loadedChunkCount: lod.loadedPreviewChunkCount ?? 0,
+      pendingTextureBuildCount: lod.pendingPreviewTextureBuildCount ?? 0,
+      buildSegment: previewBuildSegment,
+    },
   };
+}
+
+function selectExpectedWorldTileLevel(zoom, currentLevel) {
+  let nextLevel = currentLevel;
+  while (nextLevel < 4 && zoom >= LOD_PROMOTION_THRESHOLDS[nextLevel]) {
+    nextLevel += 1;
+  }
+  while (nextLevel > 0 && zoom <= LOD_DEMOTION_THRESHOLDS[nextLevel]) {
+    nextLevel -= 1;
+  }
+  return nextLevel;
 }
 
 function isCompleteCoverage(metrics) {
@@ -198,6 +221,7 @@ async function dispatchWheel(page, deltaY) {
 }
 
 async function approachZoom(page, targetZoom) {
+  const startedAt = performance.now();
   const samples = [];
   for (let attempt = 0; attempt < 80; attempt += 1) {
     const before = summarizeState(await readState(page));
@@ -209,7 +233,11 @@ async function approachZoom(page, targetZoom) {
     await page.waitForTimeout(20);
   }
   await page.waitForTimeout(100);
-  return samples;
+  return {
+    samples,
+    gestureMs: Math.round((performance.now() - startedAt) * 10) / 10,
+    finalState: summarizeState(await readState(page)),
+  };
 }
 
 async function panViewport(page) {
@@ -235,10 +263,18 @@ function attachNetworkRecorder(page) {
   const requests = [];
   page.on('response', (response) => {
     const url = response.url();
-    if (!url.includes('/api/world/tiles/') && !/\/world-tiles\/.*\.png(?:\?|$)/.test(url)) return;
+    const tracked = url.includes('/api/world/tiles/')
+      || /\/world-tiles\/.*\.png(?:\?|$)/.test(url)
+      || url.includes('/api/rooms/snapshots/query')
+      || url.includes('/api/world/chunks');
+    if (!tracked) return;
     const headers = response.headers();
     requests.push({
       url,
+      method: response.request().method(),
+      postData: url.includes('/api/rooms/snapshots/query')
+        ? response.request().postData()
+        : null,
       status: response.status(),
       resourceType: response.request().resourceType(),
       contentLength: Number(headers['content-length'] ?? 0),
@@ -272,11 +308,22 @@ async function runPass(context, args, label) {
   const sharpReadyMs = Math.round((performance.now() - navigationStartedAt) * 10) / 10;
 
   const zooms = [];
+  let expectedLevel = Number(sharp.state.committedLevel);
+  if (!Number.isInteger(expectedLevel) || expectedLevel < 0 || expectedLevel > 4) {
+    throw new Error(`Initial sharp state has an invalid committed LOD: ${expectedLevel}`);
+  }
   for (const targetZoom of args.zooms) {
-    const samples = await approachZoom(page, targetZoom);
+    const approach = await approachZoom(page, targetZoom);
+    expectedLevel = selectExpectedWorldTileLevel(Number(approach.finalState.zoom), expectedLevel);
     const coverage = await waitForTileState(page, isCompleteCoverage, args.timeoutMs);
-    const targetReady = await waitForTileState(page, isSharpReady, args.timeoutMs);
-    zooms.push({ targetZoom, samples, coverage, targetReady });
+    const targetReady = await waitForTileState(
+      page,
+      (metrics) => isSharpReady(metrics)
+        && metrics.targetLevel === expectedLevel
+        && metrics.committedLevel === expectedLevel,
+      args.timeoutMs,
+    );
+    zooms.push({ targetZoom, expectedLevel, ...approach, coverage, targetReady });
   }
 
   const beforePan = summarizeState(await readState(page));
@@ -317,6 +364,15 @@ async function runPass(context, args, label) {
       requestCount: network.length,
       tileRequestCount: network.filter((entry) => /\/world-tiles\/.*\.png(?:\?|$)/.test(entry.url)).length,
       manifestRequestCount: network.filter((entry) => entry.url.includes('/api/world/tiles/manifest')).length,
+      snapshotQueryCount: network.filter((entry) => (
+        entry.method === 'POST' && entry.url.includes('/api/rooms/snapshots/query')
+      )).length,
+      compactWorldSummaryRequestCount: network.filter((entry) => (
+        entry.url.includes('/api/world/chunks/summary')
+      )).length,
+      legacyWorldChunkRequestCount: network.filter((entry) => (
+        entry.url.includes('/api/world/chunks') && !entry.url.includes('/api/world/chunks/summary')
+      )).length,
       announcedBytes: network.reduce((sum, entry) => sum + entry.contentLength, 0),
       immutableCacheHits: network.filter((entry) => entry.cacheStatus === 'HIT').length,
     },
