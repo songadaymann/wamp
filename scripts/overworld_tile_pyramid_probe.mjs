@@ -23,6 +23,7 @@ import {
 const DEFAULT_URL = 'http://127.0.0.1:3000/?previewSmoke=1&perf=1&mobilePerfHud=0&worldTiles=force';
 const DEFAULT_ZOOMS = [0.08, 0.10, 0.17, 0.18, 0.20, 0.40, 0.80];
 const TARGET_ZOOM_TOLERANCE = 0.006;
+const PAN_PROBE_ZOOM = 0.18;
 
 function parseArgs(argv) {
   const args = {
@@ -1076,6 +1077,20 @@ async function runPass(context, args, label) {
     zooms.push({ targetZoom, expectedLevel, ...approach, coverage, targetReady });
   }
 
+  const panApproach = await approachZoom(page, PAN_PROBE_ZOOM);
+  if (!panApproach.reachedTarget) {
+    const error = new Error(`Overworld tile probe could not reach pan zoom ${PAN_PROBE_ZOOM}.`);
+    error.diagnostics = { panApproach };
+    throw error;
+  }
+  expectedLevel = selectExpectedWorldTileLevel(Number(panApproach.finalState.zoom), expectedLevel);
+  const panStartReady = await waitForTileState(
+    page,
+    (metrics) => isSharpReady(metrics)
+      && metrics.targetLevel === expectedLevel
+      && metrics.committedLevel === expectedLevel,
+    args.timeoutMs,
+  );
   const beforePan = summarizeState(await readState(page));
   const panStartedAt = performance.now();
   const forwardPan = await moveViewportDeterministically(
@@ -1219,6 +1234,8 @@ async function runPass(context, args, label) {
     sharp,
     zooms,
     pan: {
+      approach: panApproach,
+      startReady: panStartReady,
       before: beforePan,
       after: afterPan,
       forward: forwardPan,
