@@ -393,6 +393,7 @@ export function createOverviewRoomSnapshot(snapshot: RoomSnapshot): RoomSnapshot
   const tileData = createEmptyTileData();
   tileData.background = snapshot.tileData.background;
   tileData.terrain = snapshot.tileData.terrain;
+  tileData.foreground = [];
   return {
     ...snapshot,
     goalIntroText: null,

@@ -1258,7 +1258,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         const batchIds = batches[batchIndex];
         if (!batchIds || this.destroyed || generation !== this.loadGeneration) return;
         try {
-          await this.previewCache.ensureRoomSnapshotsBatch(roomCandidates, batchIds, { detail });
+          await this.previewCache.ensureRoomSnapshotsBatch(roomCandidates, batchIds, {
+            detail,
+            priority: 'high',
+          });
         } catch (error) {
           stopped = true;
           throw error;
