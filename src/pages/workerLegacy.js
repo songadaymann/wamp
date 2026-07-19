@@ -62,6 +62,9 @@ const STANDALONE_PAGE_ALIASES = new Map([
   ['/school-login', '/__standalone/school-login.asset'],
   ['/school-login/', '/__standalone/school-login.asset'],
   ['/school-login.html', '/__standalone/school-login.asset'],
+  ['/world-tile-render', '/__standalone/world-tile-render.asset'],
+  ['/world-tile-render/', '/__standalone/world-tile-render.asset'],
+  ['/world-tile-render.html', '/__standalone/world-tile-render.asset'],
 ]);
 
 export default {
