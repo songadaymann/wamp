@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
 import type { WorldRepository } from '../../persistence/worldRepository';
 import type { WorldRoomSummary } from '../../persistence/worldModel';
-import { OverworldPreviewCache } from './previewCache';
+import { OverworldPreviewCache, type StreamingRoomCandidate } from './previewCache';
 
 describe('overworld exact-room preview cache lifecycle', () => {
   it('cancels an obsolete selection request and ignores a transport that resolves after abort', async () => {
@@ -35,6 +35,52 @@ describe('overworld exact-room preview cache lifecycle', () => {
     loads[1].resolve(snapshot('3,4', 3, 4));
     await Promise.all([replacement, deduplicatedReplacement]);
     expect(cache.getFullRoomSnapshot('3,4')?.id).toBe('3,4');
+  });
+
+  it('shares an exact in-flight snapshot batch across canonical reference orderings', async () => {
+    let resolveBatch!: (response: {
+      snapshots: Array<{ key: string; reference: { kind: 'current_preview'; roomId: string }; snapshot: RoomSnapshot }>;
+      missing: [];
+    }) => void;
+    const queryRoomSnapshots = vi.fn(() => new Promise<{
+      snapshots: Array<{ key: string; reference: { kind: 'current_preview'; roomId: string }; snapshot: RoomSnapshot }>;
+      missing: [];
+    }>((resolve) => { resolveBatch = resolve; }));
+    const cache = new OverworldPreviewCache({ queryRoomSnapshots } as unknown as WorldRepository);
+    const candidates = new Map<string, StreamingRoomCandidate>([
+      ['dedupe-a', candidate('dedupe-a', 10, 11)],
+      ['dedupe-b', candidate('dedupe-b', 12, 13)],
+    ]);
+
+    const first = cache.ensureRoomSnapshotsBatch(candidates, ['dedupe-a', 'dedupe-b'], {
+      detail: 'full',
+      priority: 'high',
+    });
+    const second = cache.ensureRoomSnapshotsBatch(candidates, ['dedupe-b', 'dedupe-a'], {
+      detail: 'full',
+      priority: 'low',
+    });
+
+    expect(queryRoomSnapshots).toHaveBeenCalledOnce();
+    resolveBatch({
+      snapshots: [
+        {
+          key: 'current:dedupe-a',
+          reference: { kind: 'current_preview', roomId: 'dedupe-a' },
+          snapshot: snapshot('dedupe-a', 10, 11),
+        },
+        {
+          key: 'current:dedupe-b',
+          reference: { kind: 'current_preview', roomId: 'dedupe-b' },
+          snapshot: snapshot('dedupe-b', 12, 13),
+        },
+      ],
+      missing: [],
+    });
+    await Promise.all([first, second]);
+
+    expect(cache.getFullRoomSnapshot('dedupe-a')?.id).toBe('dedupe-a');
+    expect(cache.getFullRoomSnapshot('dedupe-b')?.id).toBe('dedupe-b');
   });
 });
 
@@ -73,4 +119,19 @@ function summary(id: string, x: number, y: number): WorldRoomSummary {
 
 function snapshot(id: string, x: number, y: number): RoomSnapshot {
   return createDefaultRoomSnapshot(id, { x, y });
+}
+
+function candidate(id: string, x: number, y: number): StreamingRoomCandidate {
+  return {
+    id,
+    coordinates: { x, y },
+    summary: {
+      ...summary(id, x, y),
+      state: 'claimed_unpublished',
+    },
+    draft: null,
+    sharedPreview: null,
+    allowFullRoomLoad: true,
+    source: 'saved_construction_draft',
+  };
 }

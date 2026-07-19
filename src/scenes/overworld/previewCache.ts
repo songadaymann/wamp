@@ -2,6 +2,8 @@ import {
   cloneRoomSnapshot,
   type RoomSnapshot,
   type RoomSnapshotQueryDetail,
+  type RoomSnapshotQueryReference,
+  type RoomSnapshotQueryResponse,
 } from '../../persistence/roomModel';
 import type { WorldRepository } from '../../persistence/worldRepository';
 import type { WorldChunkWindow, WorldRoomSummary } from '../../persistence/worldModel';
@@ -45,6 +47,32 @@ interface RoomLoadRequest {
   promise: Promise<RoomSnapshot | null>;
 }
 
+interface RoomSnapshotBatchRequest {
+  lifecycleEpoch: number;
+  promise: Promise<RoomSnapshotQueryResponse>;
+}
+
+function serializeRoomSnapshotReference(reference: RoomSnapshotQueryReference): string {
+  return reference.kind === 'version'
+    ? JSON.stringify(['version', reference.roomId, reference.version])
+    : JSON.stringify([
+        'current_preview',
+        reference.roomId,
+        reference.coordinates?.x ?? null,
+        reference.coordinates?.y ?? null,
+        reference.state ?? null,
+        reference.updatedAt ?? null,
+      ]);
+}
+
+function buildRoomSnapshotBatchKey(
+  references: readonly RoomSnapshotQueryReference[],
+  detail: RoomSnapshotQueryDetail,
+): string {
+  const canonicalReferences = references.map(serializeRoomSnapshotReference).sort();
+  return JSON.stringify([detail, canonicalReferences]);
+}
+
 export function isStreamingRoomCandidateRenderable(
   roomCandidate: Pick<StreamingRoomCandidate, 'draft' | 'sharedPreview' | 'summary'>,
 ): boolean {
@@ -60,6 +88,7 @@ export class OverworldPreviewCache {
   private roomSnapshotsById = new Map<string, RoomSnapshot>();
   private overviewSnapshotsById = new Map<string, RoomSnapshot>();
   private roomLoadRequestsById = new Map<string, RoomLoadRequest>();
+  private roomSnapshotBatchRequestsByKey = new Map<string, RoomSnapshotBatchRequest>();
   private lifecycleEpoch = 0;
 
   constructor(private readonly worldRepository: WorldRepository) {}
@@ -70,6 +99,7 @@ export class OverworldPreviewCache {
     this.roomSnapshotsById = new Map();
     this.overviewSnapshotsById = new Map();
     this.roomLoadRequestsById = new Map();
+    this.roomSnapshotBatchRequestsByKey = new Map();
   }
 
   getRoomSnapshotsById(): Map<string, RoomSnapshot> {
@@ -152,11 +182,15 @@ export class OverworldPreviewCache {
         state: summary.state,
         ...(summary.previewUpdatedAt ? { updatedAt: summary.previewUpdatedAt } : {}),
       }];
-    });
+    }).sort((left, right) => (
+      serializeRoomSnapshotReference(left).localeCompare(serializeRoomSnapshotReference(right))
+    ));
 
     for (let index = 0; index < references.length; index += 48) {
       const batch = references.slice(index, index + 48);
-      const response = await this.worldRepository.queryRoomSnapshots(batch, options);
+      const lifecycleEpoch = this.lifecycleEpoch;
+      const response = await this.queryRoomSnapshotBatch(batch, detail, options.priority);
+      if (lifecycleEpoch !== this.lifecycleEpoch) return;
       if (response.missing.length > 0) {
         const missing = response.missing[0];
         throw new Error(`Room preview ${missing.roomId} changed while the world was loading.`);
@@ -180,6 +214,31 @@ export class OverworldPreviewCache {
         ), entry.snapshot);
       }
     }
+  }
+
+  private queryRoomSnapshotBatch(
+    references: RoomSnapshotQueryReference[],
+    detail: RoomSnapshotQueryDetail,
+    priority?: 'high' | 'low' | 'auto',
+  ): Promise<RoomSnapshotQueryResponse> {
+    const key = buildRoomSnapshotBatchKey(references, detail);
+    const existing = this.roomSnapshotBatchRequestsByKey.get(key);
+    if (existing?.lifecycleEpoch === this.lifecycleEpoch) {
+      return existing.promise;
+    }
+
+    const request: RoomSnapshotBatchRequest = {
+      lifecycleEpoch: this.lifecycleEpoch,
+      promise: this.worldRepository.queryRoomSnapshots(references, { detail, priority }),
+    };
+    this.roomSnapshotBatchRequestsByKey.set(key, request);
+    const clearIfCurrent = (): void => {
+      if (this.roomSnapshotBatchRequestsByKey.get(key) === request) {
+        this.roomSnapshotBatchRequestsByKey.delete(key);
+      }
+    };
+    void request.promise.then(clearIfCurrent, clearIfCurrent);
+    return request.promise;
   }
 
   invalidateRoom(roomId: string, dropPublishedSnapshot: boolean): void {
