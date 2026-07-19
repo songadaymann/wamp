@@ -28,6 +28,7 @@ import { WorldTileManifestLoader } from './manifestLoader';
 import { WorldTileDebugMetricsTracker, type WorldTileDebugMetrics } from './metrics';
 import { decodeWorldTileBlob, type DecodedWorldTileSource, WorldTilePhaserLayer } from './phaserLayer';
 import { WorldTileRoomManifestPrefetcher } from './roomPrefetcher';
+import { InitialSelectionPrefetchGate } from './initialSelectionPrefetch';
 import {
   CorruptWorldTileRetryTracker,
   getWorldTileRetryDelayMs,
@@ -135,6 +136,7 @@ export class WorldTileClientController {
   private readonly layer: WorldTilePhaserLayer;
   private readonly manifestLoader: WorldTileManifestLoader;
   private readonly roomManifestPrefetcher: WorldTileRoomManifestPrefetcher;
+  private readonly selectedRoomPrefetchGate: InitialSelectionPrefetchGate;
   private readonly manifestSchedule = new ManifestRefreshSchedule(10);
   private readonly fallback = new WorldTileFallbackController();
   private readonly corruptRetry = new CorruptWorldTileRetryTracker();
@@ -232,6 +234,8 @@ export class WorldTileClientController {
       shouldContinue: () => !this.isRefinementStopped(),
       timeoutMs: WORLD_TILE_COVERAGE_TIMEOUT_MS,
     });
+    const selected = options.getSelectedCoordinates();
+    this.selectedRoomPrefetchGate = new InitialSelectionPrefetchGate(`${selected.x},${selected.y}`);
   }
 
   async prepare(): Promise<boolean> {
@@ -381,7 +385,7 @@ export class WorldTileClientController {
     }
     if (this.manifestSchedule.flush(nowMs)?.issueNow) this.issuePendingManifestRequest();
 
-    this.maybePrefetchSelectedRoom();
+    this.maybePrefetchSelectedRoom(camera);
     this.queueCoverageImages(
       desiredCoverage.visible,
       desiredCoverage.guard,
@@ -452,6 +456,10 @@ export class WorldTileClientController {
     });
   }
 
+  isTargetLodReady(camera: Phaser.Cameras.Scene2D.Camera): boolean {
+    return this.isCameraTargetLodReady(camera);
+  }
+
   getImages(): Phaser.GameObjects.Image[] {
     return this.layer.getImages();
   }
@@ -492,6 +500,8 @@ export class WorldTileClientController {
     coordinates: RoomCoordinates | null,
     owner: 'selection' | 'mutation' = 'selection',
   ): void {
+    const roomId = coordinates ? `${coordinates.x},${coordinates.y}` : null;
+    if (owner === 'selection' && roomId) this.selectedRoomPrefetchGate.markUserIntent(roomId);
     if (
       !coordinates
       || this.isRefinementStopped()
@@ -499,6 +509,7 @@ export class WorldTileClientController {
         owner === 'selection' ? 'selection-prefetch' : 'mutation-prefetch',
       )
     ) return;
+    if (owner === 'selection' && roomId) this.selectedRoomPrefetchGate.markPrefetched(roomId);
     void this.roomManifestPrefetcher.prefetch(coordinates, owner);
   }
 
@@ -587,6 +598,8 @@ export class WorldTileClientController {
     this.optimisticRoomVersions.clear();
     this.immediateMaskedRoomIds.clear();
     this.selectedPrefetchRoomId = null;
+    const selected = this.options.getSelectedCoordinates();
+    this.selectedRoomPrefetchGate.reset(`${selected.x},${selected.y}`);
     this.nextMutationConvergencePollAtMs = 0;
     this.contextRestorePending = false;
   }
@@ -1425,10 +1438,14 @@ export class WorldTileClientController {
     }
   }
 
-  private maybePrefetchSelectedRoom(): void {
+  private maybePrefetchSelectedRoom(camera: Phaser.Cameras.Scene2D.Camera): void {
     const selected = this.options.getSelectedCoordinates();
     const roomId = `${selected.x},${selected.y}`;
     if (roomId === this.selectedPrefetchRoomId) return;
+    if (!this.selectedRoomPrefetchGate.shouldPrefetch(
+      roomId,
+      this.isCameraTargetLodReady(camera),
+    )) return;
     this.selectedPrefetchRoomId = roomId;
     this.roomManifestPrefetcher.cancelOwner('selection', roomId);
     this.prefetchRoom(selected, 'selection');

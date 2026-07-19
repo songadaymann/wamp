@@ -359,6 +359,91 @@ describe('world tile controller bootstrap ownership', () => {
     controller.destroy();
   });
 
+  it('defers the implicit selected-room L4 request until sharp target coverage is committed', async () => {
+    let nowMs = 1_000;
+    vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+    camera.zoom = 0.18;
+
+    await controller.prepare();
+    await controller.ensureInitialCoverage(camera);
+    controller.update(camera);
+    await flushMicrotasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(levelCalls(loadWorldTileManifest, 1)).toHaveLength(1);
+    expect(levelCalls(loadWorldTileManifest, 4)).toHaveLength(0);
+
+    nowMs += 81;
+    controller.update(camera);
+    await flushMicrotasks();
+    expect(controller.isTargetLodReady(camera)).toBe(true);
+    expect(levelCalls(loadWorldTileManifest, 4)).toHaveLength(0);
+
+    controller.update(camera);
+    await flushMicrotasks();
+    controller.update(camera);
+    await flushMicrotasks();
+    expect(levelCalls(loadWorldTileManifest, 4)).toHaveLength(1);
+    controller.destroy();
+  });
+
+  it('keeps changed and explicit same-room selection prefetches immediate', async () => {
+    let selected = { x: 0, y: 0 };
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+      getSelectedCoordinates: () => selected,
+    });
+    const camera = createCamera();
+    camera.zoom = 0.18;
+
+    await controller.prepare();
+    await controller.ensureInitialCoverage(camera);
+    controller.update(camera);
+    selected = { x: 3, y: -2 };
+    controller.update(camera);
+    await flushMicrotasks();
+
+    expect(levelCalls(loadWorldTileManifest, 4)).toHaveLength(1);
+    expect(levelCalls(loadWorldTileManifest, 4)[0]?.[1]).toEqual({
+      minTileX: 3,
+      maxTileX: 3,
+      minTileY: -2,
+      maxTileY: -2,
+    });
+    controller.destroy();
+
+    selected = { x: 0, y: 0 };
+    const explicitLoad = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const explicitController = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest: explicitLoad,
+      getSelectedCoordinates: () => selected,
+    });
+    await explicitController.prepare();
+    await explicitController.ensureInitialCoverage(camera);
+    explicitController.prefetchRoom(selected, 'selection');
+    await flushMicrotasks();
+    expect(levelCalls(explicitLoad, 4)).toHaveLength(1);
+    explicitController.destroy();
+  });
+
   it('settles pending target readiness false on abort, reset, and destroy without leaks', async () => {
     const loadWorldTileManifest = vi.fn(async (
       level: WorldTileLevel,
@@ -449,6 +534,7 @@ describe('world tile controller bootstrap ownership', () => {
 function createController(input: {
   loadWorldTileConfig: WorldRepository['loadWorldTileConfig'];
   loadWorldTileManifest: WorldRepository['loadWorldTileManifest'];
+  getSelectedCoordinates?: () => { x: number; y: number };
 }): WorldTileClientController {
   const repository = {
     loadWorldTileConfig: input.loadWorldTileConfig,
@@ -463,7 +549,7 @@ function createController(input: {
     repository,
     getMode: () => 'browse',
     getPerformanceProfile: () => 'default',
-    getSelectedCoordinates: () => ({ x: 0, y: 0 }),
+    getSelectedCoordinates: input.getSelectedCoordinates ?? (() => ({ x: 0, y: 0 })),
   });
 }
 

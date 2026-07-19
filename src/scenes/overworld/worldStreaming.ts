@@ -90,6 +90,7 @@ import {
 } from './playPressure';
 import { logBootPhase, startBootStallWatch } from '../../main/bootDiagnostics';
 import { WorldTileClientController } from './worldTiles/controller';
+import { InitialSelectionPrefetchGate } from './worldTiles/initialSelectionPrefetch';
 import { shouldRenderLegacyWorldTileOverlay } from './worldTiles/dynamicOverlays';
 import { processProgressivePreviewBatch } from './worldTiles/progressivePreviewBatch';
 import { resolveWorldTileInitialCoverage } from './worldTiles/startup';
@@ -210,10 +211,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private fullRoomReleaseCleanupTimer: Phaser.Time.TimerEvent | null = null;
   private readonly textureNamespace: string;
   private selectedExactPrefetchRoomId: string | null = null;
+  private readonly selectedExactPrefetchGate: InitialSelectionPrefetchGate;
 
   constructor(private readonly options: OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall>) {
     this.textureNamespace = sanitizeTextureNamespace(options.scene.sys.settings.key);
     this.previewCache = new OverworldPreviewCache(options.worldRepository);
+    const selected = options.getSelectedCoordinates();
+    this.selectedExactPrefetchGate = new InitialSelectionPrefetchGate(
+      roomIdFromCoordinates(selected),
+    );
     this.previewRenderer = new OverworldChunkPreviewRenderer({
       scene: options.scene,
       getPreviewTileSize: () => this.getPreviewTileSize(),
@@ -282,6 +288,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.legacyCompactRefreshGeneration = -1;
     this.cancelDynamicOverlayRetry();
     this.selectedExactPrefetchRoomId = null;
+    this.selectedExactPrefetchGate.reset(roomIdFromCoordinates(this.options.getSelectedCoordinates()));
     this.worldTileController.reset();
     this.cancelDeferredFullRoomLoads();
     this.cancelDeferredPreviewRender();
@@ -325,6 +332,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.legacyCompactRefreshGeneration = -1;
     this.cancelDynamicOverlayRetry();
     this.selectedExactPrefetchRoomId = null;
+    this.selectedExactPrefetchGate.reset(roomIdFromCoordinates(this.options.getSelectedCoordinates()));
     this.worldTileController.destroy();
   }
 
@@ -791,16 +799,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.worldTileController.update(this.options.scene.cameras.main);
     if (!this.worldTileController.isBrowseCutoverActive()) {
       this.selectedExactPrefetchRoomId = null;
+      this.selectedExactPrefetchGate.clearPrefetched();
       this.previewCache.cancelSelectionPrefetchesExcept(null);
       return;
     }
     const selected = this.options.getSelectedCoordinates();
     const roomId = roomIdFromCoordinates(selected);
     if (roomId === this.selectedExactPrefetchRoomId) return;
-    this.selectedExactPrefetchRoomId = roomId;
-    this.previewCache.cancelSelectionPrefetchesExcept(roomId);
+    if (!this.selectedExactPrefetchGate.shouldPrefetch(
+      roomId,
+      this.worldTileController.isTargetLodReady(this.options.scene.cameras.main),
+    )) return;
     const summary = this.roomSummariesById.get(roomId);
-    if (summary?.state === 'published') {
+    if (!summary) return;
+    this.selectedExactPrefetchRoomId = roomId;
+    this.selectedExactPrefetchGate.markPrefetched(roomId);
+    this.previewCache.cancelSelectionPrefetchesExcept(roomId);
+    if (summary.state === 'published') {
       void this.previewCache.prefetchPublishedRoom(summary).catch(() => {});
     }
   }
