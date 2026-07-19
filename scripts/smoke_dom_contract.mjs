@@ -189,13 +189,17 @@ for (const [controller, requiredIds] of Object.entries(requiredIdsByController))
 
 const stalePresent = staleIds.filter((id) => ids.has(id));
 const earlyWorldTileMarkerIndex = html.indexOf('<!-- wamp-early-world-tiles-bootstrap -->');
-const mainModuleIndex = html.indexOf('<script type="module" src="/src/main.ts"></script>');
+const mainModuleIndex = html.indexOf('<script type="module" src="/src/main/coarseFirstEntry.ts"></script>');
+const directMainModuleIndex = html.indexOf('<script type="module" src="/src/main.ts"></script>');
 const earlyWorldTileBootstrapContractErrors = [];
 if (earlyWorldTileMarkerIndex < 0) {
   earlyWorldTileBootstrapContractErrors.push('missing early world tile bootstrap marker');
 }
 if (mainModuleIndex < 0) {
-  earlyWorldTileBootstrapContractErrors.push('missing main module script');
+  earlyWorldTileBootstrapContractErrors.push('missing coarse-first main module trampoline');
+}
+if (directMainModuleIndex >= 0) {
+  earlyWorldTileBootstrapContractErrors.push('main.ts must remain behind the coarse-first trampoline');
 }
 if (earlyWorldTileMarkerIndex >= 0 && mainModuleIndex >= 0 && earlyWorldTileMarkerIndex >= mainModuleIndex) {
   earlyWorldTileBootstrapContractErrors.push('early world tile bootstrap must execute before the main module');
