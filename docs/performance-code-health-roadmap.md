@@ -95,3 +95,15 @@ rollback path.
 - One capped browser snapshot/card cache is shared across world streaming, courses, Explore, Profiles, and
   Playlists. Anonymous public bases use 20-second Cache API entries after authentication checks; authenticated
   overlays, errors, mutation responses, and `Set-Cookie` responses bypass shared edge caching.
+
+### Safety evidence
+
+- Worker version `afefcd3c-6314-4d60-82aa-8706a763b37f` and Pages deployment
+  `358ff9d6-b6ee-4039-a748-5b1b49f81b43` passed two consecutive 10-run API probes.
+- Room summary is 1.1 KB at p95 122 ms; current room is 34.5 KB at p95 117 ms; builder discovery
+  p95 is 139 ms; compact 3x3 world p95 is 107 ms.
+- Compact/legacy world summaries and hashes match. Compact summary plus the awaited nearest nine snapshots is
+  419.4 KB, 94.2% below the 7.19 MB legacy chunk response.
+- The eleven-cell expanded-room snapshot batch is 166.2 KB at p95 119 ms with no missing pinned versions.
+- Official browser smoke passed with a ready nine-chunk world and no application errors. The canonical 60-second
+  4x-throttled mobile trace passed at p95 11.7 ms frame work with zero browser errors.
