@@ -105,6 +105,11 @@ import {
   handleWorldRequest,
   handleWorldChunkSummariesRequest,
 } from './worker/world/routes';
+import {
+  handleWorldTileConfigRequest,
+  handleWorldTileManifestRequest,
+  scheduleWorldTileOutboxDispatch,
+} from './worker/worldTiles/routes';
 import { handleRoomShareRequest } from './worker/share/routes';
 import { handleSchoolRequest } from './worker/school/routes';
 import { handleWampOGramRequest } from './worker/wampOGram/routes';
@@ -314,6 +319,14 @@ export default {
         const auth = await loadOptionalRequestAuth(env, request);
         requireOptionalScope(auth, 'rooms:read', 'read compact world room chunks');
         return handleWorldChunkSummariesRequest(request, url, env, ctx, auth !== null);
+      }
+
+      if (url.pathname === '/api/world/tiles/config' && request.method === 'GET') {
+        return await handleWorldTileConfigRequest(request, env, ctx);
+      }
+
+      if (url.pathname === '/api/world/tiles/manifest' && request.method === 'GET') {
+        return await handleWorldTileManifestRequest(request, url, env, ctx);
       }
 
       if (url.pathname.startsWith('/api/presence/')) {
@@ -730,6 +743,10 @@ export default {
         },
         { status }
       );
+    } finally {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        scheduleWorldTileOutboxDispatch(env, ctx);
+      }
     }
   },
 };

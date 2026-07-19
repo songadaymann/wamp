@@ -28,7 +28,25 @@
     "PARTYKIT_PARTY": "main",
     "ROOM_DAILY_CLAIM_LIMIT": "4",
     "PLAYABLE_CONTENT_INDEX_READS": "0",
-    "COMPACT_WORLD_READS": "0"
+    "COMPACT_WORLD_READS": "0",
+    "WORLD_TILE_GENERATION_ENABLED": "0",
+    "TILED_OVERWORLD_READS": "0",
+    "TILED_OVERWORLD_ROLLOUT_PERCENT": "0",
+    "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles.wamp.land"
+  },
+  "r2_buckets": [
+    {
+      "binding": "WORLD_TILE_BUCKET",
+      "bucket_name": "everybodys-platformer-world-tiles"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "WORLD_TILE_QUEUE",
+        "queue": "everybodys-platformer-world-tile-renders"
+      }
+    ]
   },
   "d1_databases": [
     {
@@ -57,7 +75,25 @@
         "ROOM_MINT_DISABLED": "1",
         "ROOM_DAILY_CLAIM_LIMIT": "4",
         "PLAYABLE_CONTENT_INDEX_READS": "1",
-        "COMPACT_WORLD_READS": "1"
+        "COMPACT_WORLD_READS": "1",
+        "WORLD_TILE_GENERATION_ENABLED": "0",
+        "TILED_OVERWORLD_READS": "0",
+        "TILED_OVERWORLD_ROLLOUT_PERCENT": "0",
+        "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles-safety.wamp.land"
+      },
+      "r2_buckets": [
+        {
+          "binding": "WORLD_TILE_BUCKET",
+          "bucket_name": "everybodys-platformer-safety-world-tiles"
+        }
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "WORLD_TILE_QUEUE",
+            "queue": "everybodys-platformer-safety-world-tile-renders"
+          }
+        ]
       },
       "d1_databases": [
         {

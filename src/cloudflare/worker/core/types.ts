@@ -24,6 +24,34 @@ export interface AssetsBinding {
   fetch(request: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
+export interface QueueSendRequest<T> {
+  body: T;
+  contentType?: 'json' | 'text' | 'bytes' | 'v8';
+  delaySeconds?: number;
+}
+
+export interface QueueBinding<T = unknown> {
+  send(body: T, options?: { contentType?: 'json' | 'text' | 'bytes' | 'v8'; delaySeconds?: number }): Promise<void>;
+  sendBatch(messages: QueueSendRequest<T>[]): Promise<void>;
+}
+
+export interface R2ObjectMetadata {
+  key: string;
+  size: number;
+  etag: string;
+  uploaded: Date;
+}
+
+export interface R2BucketBinding {
+  head(key: string): Promise<R2ObjectMetadata | null>;
+  list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{
+    objects: R2ObjectMetadata[];
+    truncated: boolean;
+    cursor?: string;
+  }>;
+  delete(keys: string | string[]): Promise<void>;
+}
+
 export interface Env {
   ASSETS: AssetsBinding;
   DB: D1Database;
@@ -50,6 +78,12 @@ export interface Env {
   EXPANDED_ROOMS_ENABLED?: string;
   PLAYABLE_CONTENT_INDEX_READS?: string;
   COMPACT_WORLD_READS?: string;
+  WORLD_TILE_GENERATION_ENABLED?: string;
+  TILED_OVERWORLD_READS?: string;
+  TILED_OVERWORLD_ROLLOUT_PERCENT?: string;
+  WORLD_TILE_PUBLIC_BASE_URL?: string;
+  WORLD_TILE_QUEUE?: QueueBinding<import('../worldTiles/service').WorldTileGenerationJob>;
+  WORLD_TILE_BUCKET?: R2BucketBinding;
   ROOM_MINT_CHAIN_ID?: string;
   ROOM_MINT_CHAIN_NAME?: string;
   ROOM_MINT_DISABLED?: string;
