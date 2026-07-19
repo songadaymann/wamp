@@ -1,11 +1,14 @@
 export const COARSE_FIRST_MAIN_TIMEOUT_MS = 750;
 export const COARSE_FIRST_REFINEMENT_TIMEOUT_MS = 650;
+export const COARSE_FIRST_MAIN_START_CEILING_MS = 1_400;
 
 export type CoarseFirstStartupResult = 'absent' | 'settled' | 'timeout';
+export type EarlyWorldTileSharpCancellationReason = 'coarse-timeout' | 'refinement-timeout';
 
 export interface EarlyWorldTileReadyHandle {
   readonly ready: PromiseLike<unknown>;
   readonly sharp?: PromiseLike<unknown>;
+  readonly cancelSharp?: (reason: EarlyWorldTileSharpCancellationReason) => void;
 }
 
 /**
@@ -45,12 +48,38 @@ export async function startMainAfterEarlyWorldTiles(options: {
   importMain: () => Promise<unknown>;
   timeoutMs?: number;
 }): Promise<void> {
-  const coarseResult = await waitForEarlyWorldTileCoverage(options.handle, options.timeoutMs);
+  const startedAtMs = performance.now();
+  const coarseTimeoutMs = Math.min(
+    options.timeoutMs ?? COARSE_FIRST_MAIN_TIMEOUT_MS,
+    COARSE_FIRST_MAIN_TIMEOUT_MS,
+  );
+  const coarseResult = await waitForEarlyWorldTileCoverage(options.handle, coarseTimeoutMs);
+  if (coarseResult === 'timeout') {
+    cancelEarlyWorldTileSharp(options.handle, 'coarse-timeout');
+  }
   if (coarseResult === 'settled' && options.handle?.sharp) {
-    await waitForEarlyWorldTileCoverage(
-      { ready: options.handle.sharp },
-      COARSE_FIRST_REFINEMENT_TIMEOUT_MS,
+    const remainingMainStartBudgetMs = Math.max(
+      0,
+      COARSE_FIRST_MAIN_START_CEILING_MS - (performance.now() - startedAtMs),
     );
+    const refinementResult = await waitForEarlyWorldTileCoverage(
+      { ready: options.handle.sharp },
+      Math.min(COARSE_FIRST_REFINEMENT_TIMEOUT_MS, remainingMainStartBudgetMs),
+    );
+    if (refinementResult === 'timeout') {
+      cancelEarlyWorldTileSharp(options.handle, 'refinement-timeout');
+    }
   }
   await options.importMain();
+}
+
+function cancelEarlyWorldTileSharp(
+  handle: EarlyWorldTileReadyHandle | undefined,
+  reason: EarlyWorldTileSharpCancellationReason,
+): void {
+  try {
+    handle?.cancelSharp?.(reason);
+  } catch {
+    // Bootstrap cancellation is best-effort and must never prevent app startup.
+  }
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   COARSE_FIRST_MAIN_TIMEOUT_MS,
+  COARSE_FIRST_MAIN_START_CEILING_MS,
   COARSE_FIRST_REFINEMENT_TIMEOUT_MS,
   startMainAfterEarlyWorldTiles,
   waitForEarlyWorldTileCoverage,
@@ -85,6 +86,93 @@ describe('coarse-first application startup', () => {
     await coarseTimedOut;
     expect(coarseTimedOutImport).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps a late coarse success inside the absolute main-start ceiling', async () => {
+    vi.useFakeTimers();
+    let resolveReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+    const importMain = vi.fn(async () => undefined);
+    const started = startMainAfterEarlyWorldTiles({
+      handle: { ready, sharp: new Promise<void>(() => undefined) },
+      importMain,
+    });
+
+    await vi.advanceTimersByTimeAsync(COARSE_FIRST_MAIN_TIMEOUT_MS - 1);
+    resolveReady();
+    await Promise.resolve();
+    expect(importMain).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(COARSE_FIRST_REFINEMENT_TIMEOUT_MS - 1);
+    expect(importMain).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await started;
+
+    expect(performance.now()).toBeLessThanOrEqual(COARSE_FIRST_MAIN_START_CEILING_MS);
+    expect(importMain).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('cancels sharp work when coarse coverage times out', async () => {
+    vi.useFakeTimers();
+    const cancelSharp = vi.fn();
+    const importMain = vi.fn(async () => undefined);
+    const started = startMainAfterEarlyWorldTiles({
+      handle: {
+        ready: new Promise<void>(() => undefined),
+        sharp: new Promise<void>(() => undefined),
+        cancelSharp,
+      },
+      importMain,
+    });
+
+    await vi.advanceTimersByTimeAsync(COARSE_FIRST_MAIN_TIMEOUT_MS);
+    await started;
+
+    expect(cancelSharp).toHaveBeenCalledOnce();
+    expect(cancelSharp).toHaveBeenCalledWith('coarse-timeout');
+    expect(importMain).toHaveBeenCalledOnce();
+  });
+
+  it('cancels sharp work when its refinement head start times out', async () => {
+    vi.useFakeTimers();
+    const cancelSharp = vi.fn();
+    const importMain = vi.fn(async () => undefined);
+    const started = startMainAfterEarlyWorldTiles({
+      handle: {
+        ready: Promise.resolve(),
+        sharp: new Promise<void>(() => undefined),
+        cancelSharp,
+      },
+      importMain,
+    });
+
+    await vi.advanceTimersByTimeAsync(COARSE_FIRST_REFINEMENT_TIMEOUT_MS);
+    await started;
+
+    expect(cancelSharp).toHaveBeenCalledOnce();
+    expect(cancelSharp).toHaveBeenCalledWith('refinement-timeout');
+    expect(importMain).toHaveBeenCalledOnce();
+  });
+
+  it('contains a throwing sharp cancellation hook and still starts', async () => {
+    vi.useFakeTimers();
+    const importMain = vi.fn(async () => undefined);
+    const started = startMainAfterEarlyWorldTiles({
+      handle: {
+        ready: new Promise<void>(() => undefined),
+        cancelSharp: () => {
+          throw new Error('cancel failed');
+        },
+      },
+      importMain,
+    });
+
+    await vi.advanceTimersByTimeAsync(COARSE_FIRST_MAIN_TIMEOUT_MS);
+    await expect(started).resolves.toBeUndefined();
+    expect(importMain).toHaveBeenCalledOnce();
   });
 
   it('starts after the strict 750 ms ceiling when coverage remains pending', async () => {
