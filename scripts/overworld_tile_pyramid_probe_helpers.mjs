@@ -102,6 +102,28 @@ export function hasWorldTileCoverageIdentityTransition(before, after) {
     && after.coverageEpoch > before.coverageEpoch;
 }
 
+export function isSameZoomDirectionalPanStep(before, after, direction, zoomTolerance = 0.000_001) {
+  if (direction !== 'forward' && direction !== 'reverse') return false;
+  const beforeCamera = before?.camera;
+  const afterCamera = after?.camera;
+  const beforeZoom = before?.zoom;
+  const afterZoom = after?.zoom;
+  if (
+    !isRecord(beforeCamera)
+    || !isRecord(afterCamera)
+    || !Number.isFinite(beforeCamera.x)
+    || !Number.isFinite(afterCamera.x)
+    || !Number.isFinite(beforeZoom)
+    || !Number.isFinite(afterZoom)
+    || !Number.isFinite(zoomTolerance)
+    || zoomTolerance < 0
+    || Math.abs(afterZoom - beforeZoom) > zoomTolerance
+  ) return false;
+  return direction === 'forward'
+    ? afterCamera.x > beforeCamera.x
+    : afterCamera.x < beforeCamera.x;
+}
+
 export function isCameraReversalTowardOrigin(origin, forward, reversal) {
   const originCamera = origin?.camera;
   const forwardCamera = forward?.camera;

@@ -5,6 +5,7 @@ import {
   getManifestLevel,
   hasWorldTileCoverageIdentityTransition,
   isCameraReversalTowardOrigin,
+  isSameZoomDirectionalPanStep,
   isStableWorldTileReadyFrame,
   parseSnapshotQuery,
   parseWorldTileManifestProbe,
@@ -377,6 +378,30 @@ describe('overworld tile pyramid probe helpers', () => {
       camera: { x: 800, y: 160 },
     })).toBe(false);
     expect(isCameraReversalTowardOrigin(origin, origin, origin)).toBe(false);
+  });
+
+  it('accepts only same-zoom horizontal pan steps in the requested direction', () => {
+    const before = { zoom: 0.18, camera: { x: 100, y: 50 } };
+    expect(isSameZoomDirectionalPanStep(before, {
+      zoom: 0.18,
+      camera: { x: 500, y: 50 },
+    }, 'forward')).toBe(true);
+    expect(isSameZoomDirectionalPanStep(before, {
+      zoom: 0.18,
+      camera: { x: -300, y: 50 },
+    }, 'reverse')).toBe(true);
+    expect(isSameZoomDirectionalPanStep(before, {
+      zoom: 0.181,
+      camera: { x: 500, y: 50 },
+    }, 'forward')).toBe(false);
+    expect(isSameZoomDirectionalPanStep(before, {
+      zoom: 0.18,
+      camera: { x: -300, y: 50 },
+    }, 'forward')).toBe(false);
+    expect(isSameZoomDirectionalPanStep(before, {
+      zoom: 0.18,
+      camera: { x: 500, y: 50 },
+    }, 'reverse')).toBe(false);
   });
 
   it('credits pan sharp only after a later ready frame retains the same epoch and key', () => {

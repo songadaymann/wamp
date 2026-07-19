@@ -7,6 +7,7 @@ import {
   getManifestLevel,
   hasWorldTileCoverageIdentityTransition,
   isCameraReversalTowardOrigin,
+  isSameZoomDirectionalPanStep,
   isStableWorldTileReadyFrame,
   isWorldTileImageUrl,
   parseSnapshotQuery,
@@ -258,10 +259,10 @@ async function approachZoom(page, targetZoom) {
   };
 }
 
-async function dragViewportWithSpace(page, direction) {
+async function dragViewportWithMiddleButton(page, direction) {
   const box = await getCanvasBox(page);
-  const startFraction = direction === 'forward' ? 0.82 : 0.18;
-  const endFraction = direction === 'forward' ? 0.18 : 0.82;
+  const startFraction = direction === 'forward' ? 0.88 : 0.12;
+  const endFraction = direction === 'forward' ? 0.12 : 0.88;
   const startX = Math.round(box.x + box.width * startFraction);
   const startY = Math.round(box.y + box.height * 0.5);
   const endX = Math.round(box.x + box.width * endFraction);
@@ -280,63 +281,21 @@ async function dragViewportWithSpace(page, direction) {
     canvas?.focus();
   });
   await page.mouse.move(startX, startY);
-  await page.keyboard.down('Space');
+  let middleButtonDown = false;
   try {
-    await page.mouse.down({ button: 'left' });
+    await page.mouse.down({ button: 'middle' });
+    middleButtonDown = true;
     await page.mouse.move(endX, endY, { steps: 24 });
-    await page.mouse.up({ button: 'left' });
+    await page.mouse.up({ button: 'middle' });
+    middleButtonDown = false;
   } finally {
-    await page.keyboard.up('Space');
-  }
-}
-
-function cameraCenterRoom(state) {
-  const camera = state?.camera;
-  if (!camera || ![camera.x, camera.y, camera.width, camera.height].every(Number.isFinite)) {
-    throw new Error('Overworld tile probe camera bounds are unavailable.');
-  }
-  return {
-    x: Math.floor((camera.x + camera.width / 2) / 640),
-    y: Math.floor((camera.y + camera.height / 2) / 352),
-  };
-}
-
-function getDebugPanTarget(state) {
-  const center = cameraCenterRoom(state);
-  const level = Number.isSafeInteger(state?.targetLevel) ? state.targetLevel : 0;
-  const roomsPerTile = 16 >> Math.max(0, Math.min(4, level));
-  return { x: center.x + roomsPerTile * 2, y: center.y };
-}
-
-async function jumpViewportWithPublicContract(page, coordinates) {
-  const result = await page.evaluate(async (target) => {
-    const jumpInput = document.getElementById('world-jump-input');
-    const jumpButton = document.getElementById('btn-world-jump');
-    if (jumpInput instanceof HTMLInputElement && jumpButton instanceof HTMLButtonElement) {
-      jumpInput.value = `${target.x},${target.y}`;
-      jumpInput.dispatchEvent(new Event('input', { bubbles: true }));
-      jumpButton.click();
-      return { ok: true, source: 'public-warp-ui' };
+    // Keep the probe from leaving a held middle button behind if an intermediate
+    // Playwright mouse move throws. The scene's public panning contract treats a
+    // middle-button drag as a pan without depending on private runtime hooks.
+    if (middleButtonDown) {
+      await page.mouse.up({ button: 'middle' }).catch(() => undefined);
     }
-
-    const game = window.__EVERYBODYS_PLATFORMER_GAME__;
-    if (!game?.scene?.getScene) return { ok: false, reason: 'debug-game-unavailable' };
-    let scene = null;
-    try {
-      scene = game.scene.getScene('OverworldPlayScene');
-    } catch {
-      return { ok: false, reason: 'overworld-scene-unavailable' };
-    }
-    if (!scene || typeof scene.jumpToCoordinates !== 'function') {
-      return { ok: false, reason: 'public-jump-contract-unavailable' };
-    }
-    await scene.jumpToCoordinates(target);
-    return { ok: true, source: 'development-debug-jump' };
-  }, coordinates);
-  if (result?.ok !== true) {
-    throw new Error(`Overworld public pan fallback failed: ${result?.reason ?? 'unknown'}`);
   }
-  return result.source;
 }
 
 async function waitForCoverageIdentityTransition(page, before, timeoutMs) {
@@ -357,20 +316,52 @@ async function waitForCoverageIdentityTransition(page, before, timeoutMs) {
   throw error;
 }
 
-async function moveViewportDeterministically(page, before, direction, fallbackCoordinates) {
-  try {
-    await dragViewportWithSpace(page, direction);
-    const transition = await waitForCoverageIdentityTransition(page, before, 1_500);
-    return { source: 'space-pointer-drag', ...transition };
-  } catch (pointerError) {
-    const source = await jumpViewportWithPublicContract(page, fallbackCoordinates);
-    const transition = await waitForCoverageIdentityTransition(page, before, 5_000);
+async function moveViewportDeterministically(page, before, direction) {
+  const attempts = [];
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const gestureStart = summarizeState(await readState(page));
+    await dragViewportWithMiddleButton(page, direction);
+    const gestureEnd = summarizeState(await readState(page));
+    const attemptRecord = { attempt, before: gestureStart, after: gestureEnd };
+    attempts.push(attemptRecord);
+
+    if (!isSameZoomDirectionalPanStep(gestureStart, gestureEnd, direction)) {
+      const error = new Error(
+        'Overworld tile probe public middle-button pan changed zoom or moved in the wrong direction.',
+      );
+      error.diagnostics = { direction, baseline: before, attempts };
+      throw error;
+    }
+    if (gestureEnd.mode !== 'browse' || gestureEnd.targetLevel !== before.targetLevel) {
+      const error = new Error('Overworld tile probe public pan left the same-zoom browse contract.');
+      error.diagnostics = { direction, baseline: before, attempts };
+      throw error;
+    }
+
+    let transition;
+    try {
+      transition = await waitForCoverageIdentityTransition(page, before, 1_500);
+    } catch (error) {
+      attemptRecord.transitionError = error instanceof Error ? error.message : String(error);
+      continue;
+    }
+    if (!isSameZoomDirectionalPanStep(before, transition.state, direction)) {
+      const error = new Error('Overworld tile coverage transitioned outside the requested same-zoom pan.');
+      error.diagnostics = { direction, baseline: before, attempts, transition };
+      throw error;
+    }
     return {
-      source,
-      pointerError: pointerError instanceof Error ? pointerError.message : String(pointerError),
+      source: 'public-middle-button-drag',
+      attempts,
       ...transition,
     };
   }
+
+  const error = new Error(
+    'Overworld tile probe could not produce a same-zoom coverage transition with public pan input.',
+  );
+  error.diagnostics = { direction, baseline: before, attempts };
+  throw error;
 }
 
 async function waitForStableSharpTileState(page, expectedCoverageKey, timeoutMs) {
@@ -1091,14 +1082,12 @@ async function runPass(context, args, label) {
     page,
     beforePan,
     'forward',
-    getDebugPanTarget(beforePan),
   );
   const reversalStartedAt = performance.now();
   const reversalPan = await moveViewportDeterministically(
     page,
     forwardPan.state,
     'reverse',
-    cameraCenterRoom(beforePan),
   );
   if (!isCameraReversalTowardOrigin(beforePan, forwardPan.state, reversalPan.state)) {
     const error = new Error('Overworld tile probe reversal did not move back toward its origin.');
