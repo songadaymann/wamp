@@ -77,7 +77,7 @@
         "PLAYABLE_CONTENT_INDEX_READS": "1",
         "COMPACT_WORLD_READS": "1",
         "WORLD_TILE_GENERATION_ENABLED": "1",
-        "TILED_OVERWORLD_READS": "0",
+        "TILED_OVERWORLD_READS": "1",
         "TILED_OVERWORLD_ROLLOUT_PERCENT": "0",
         "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles-safety.wamp.land"
       },
