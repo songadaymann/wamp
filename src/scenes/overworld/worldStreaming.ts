@@ -856,7 +856,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.worldWindow;
   }
 
-  async waitForBrowseCommentDiscoveryReady(signal?: AbortSignal): Promise<boolean> {
+  async waitForBrowseSecondaryStartupReady(signal?: AbortSignal): Promise<boolean> {
+    const prepared = await this.worldTileController.prepare();
+    if (signal?.aborted) return false;
+    if (!prepared) return true;
+
     const initial = this.worldTileController.getDebugSnapshot();
     if (!initial.enabled || initial.shadow || initial.fallbackReason) return true;
     const ready = await this.worldTileController.waitForTargetLodReady(
@@ -866,6 +870,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     if (ready) return true;
     const current = this.worldTileController.getDebugSnapshot();
     return !current.enabled || current.shadow || Boolean(current.fallbackReason);
+  }
+
+  async waitForBrowseCommentDiscoveryReady(signal?: AbortSignal): Promise<boolean> {
+    return this.waitForBrowseSecondaryStartupReady(signal);
   }
 
   getChunkWindow(): WorldChunkWindow | null {
