@@ -189,10 +189,18 @@ h1 {
   font-size: 23px;
   font-weight: 700;
   line-height: 1.35;
-  text-shadow: 3px -3px 0px #123240;
-  text-shadow: -3px -3px 0px #123240;
-  text-shadow: -3px 3px 0px #123240;
-  text-shadow: 3px 3px 0px #123240;
+  text-shadow: 3px -3px 3px #123240;
+  text-shadow: -3px -3px 3px #123240;
+  text-shadow: -3px 3px 3px #123240;
+  text-shadow: 3px 3px 3px #123240;
+  text-shadow: 3px -3px 3px #123240;
+  text-shadow: -3px -3px 3px #123240;
+  text-shadow: -3px 3px 3px #123240;
+  text-shadow: 3px 3px 3px #123240;
+  text-shadow: 3px -3px 3px #123240;
+  text-shadow: -3px -3px 3px #123240;
+  text-shadow: -3px 3px 3px #123240;
+  text-shadow: 3px 3px 3px #123240;
 }
 
 .hero-facts {
