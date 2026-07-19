@@ -230,6 +230,7 @@ import {
   OverworldWorldStreamingController,
   type LoadedFullRoom,
 } from './overworld/worldStreaming';
+import { BrowseRealtimeStartupGate } from './overworld/browseRealtimeStartup';
 import {
   recordCourseRunDeath,
   type ActiveCourseRunState,
@@ -528,6 +529,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly pvpInstanceRenderer: MultiplayerRemotePlayerRenderer;
   private readonly pvpArenaController: OverworldPvpArenaController;
   private readonly roomChatController: OverworldRoomChatController;
+  private readonly browseRealtimeStartupGate: BrowseRealtimeStartupGate;
   private readonly roomCommentsController: OverworldRoomCommentsController;
   private readonly runtimeContext: OverworldRuntimeContext<OverworldMode, CameraMode>;
 
@@ -951,6 +953,15 @@ export class OverworldPlayScene extends Phaser.Scene {
       getRenderedGhostsByConnectionId: () => this.presenceController.getRenderedGhostsByConnectionId(),
       showTransientStatus: (message) => this.showTransientStatus(message),
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+    });
+    this.browseRealtimeStartupGate = new BrowseRealtimeStartupGate({
+      getMode: () => this.mode,
+      waitForBrowseReady: (signal) =>
+        this.worldStreamingController.waitForBrowseSecondaryStartupReady(signal),
+      applySubscriptions: () => this.applyPresenceSubscriptions(),
+      onWaitError: (error) => {
+        console.warn('Failed to wait for browse imagery before realtime startup', error);
+      },
     });
     this.roomCommentsController = new OverworldRoomCommentsController({
       scene: this,
@@ -2444,6 +2455,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     // The scene assigns this baseline below. Pass it through now so streaming
     // does not mistake the lifecycle reset for a user selection change.
     this.worldStreamingController.reset(DEFAULT_ROOM_COORDINATES);
+    this.browseRealtimeStartupGate.reset();
     this.liveObjectController.resetSwitchStates();
     this.lightingController.reset();
     this.weatherController.reset();
@@ -2914,6 +2926,10 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private syncPresenceSubscriptions(): void {
+    this.browseRealtimeStartupGate.request();
+  }
+
+  private applyPresenceSubscriptions(): void {
     this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
     this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
   }
@@ -5952,6 +5968,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       mode: 'idle',
       resetTransport: true,
     });
+    this.browseRealtimeStartupGate.destroy();
     this.presenceController.destroy();
     this.roomChatController.destroy();
     this.roomCommentsController.destroy();

@@ -19,12 +19,8 @@ describe('browse comment world readiness', () => {
 
   it('waits for tile preparation before treating an initially disabled snapshot as legacy', async () => {
     let debug = { enabled: false, shadow: false, fallbackReason: null as string | null };
-    let resolvePrepare: ((prepared: boolean) => void) | null = null;
-    const prepare = vi.fn(
-      () => new Promise<boolean>((resolve) => {
-        resolvePrepare = resolve;
-      }),
-    );
+    const preparation = deferred<boolean>();
+    const prepare = vi.fn(() => preparation.promise);
     const waitForTargetLodReady = vi.fn(async () => true);
     const harness = createHarness({
       prepare,
@@ -37,7 +33,7 @@ describe('browse comment world readiness', () => {
     expect(waitForTargetLodReady).not.toHaveBeenCalled();
 
     debug = { enabled: true, shadow: false, fallbackReason: null };
-    resolvePrepare?.(true);
+    preparation.resolve(true);
 
     await expect(readiness).resolves.toBe(true);
     expect(waitForTargetLodReady).toHaveBeenCalledOnce();
@@ -70,22 +66,18 @@ describe('browse comment world readiness', () => {
   });
 
   it('does not start discovery when its caller aborts during tile preparation', async () => {
-    let resolvePrepare: ((prepared: boolean) => void) | null = null;
+    const preparation = deferred<boolean>();
     const controller = new AbortController();
     const waitForTargetLodReady = vi.fn(async () => true);
     const harness = createHarness({
-      prepare: vi.fn(
-        () => new Promise<boolean>((resolve) => {
-          resolvePrepare = resolve;
-        }),
-      ),
+      prepare: vi.fn(() => preparation.promise),
       debug: { enabled: true, shadow: false, fallbackReason: null },
       waitForTargetLodReady,
     });
 
     const readiness = callReadiness(harness, controller.signal);
     controller.abort();
-    resolvePrepare?.(true);
+    preparation.resolve(true);
 
     await expect(readiness).resolves.toBe(false);
     expect(waitForTargetLodReady).not.toHaveBeenCalled();
@@ -120,4 +112,15 @@ function createHarness(input: {
 function callReadiness(harness: Harness, signal?: AbortSignal): Promise<boolean> {
   const method = OverworldWorldStreamingController.prototype.waitForBrowseSecondaryStartupReady;
   return method.call(harness as never, signal);
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+} {
+  let resolvePromise!: (value: T) => void;
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return { promise, resolve: resolvePromise };
 }
