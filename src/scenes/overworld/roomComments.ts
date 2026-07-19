@@ -2,8 +2,17 @@ import Phaser from 'phaser';
 import { getAuthDebugState } from '../../auth/client';
 import { playSfx } from '../../audio/sfx';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
-import { ROOM_COMMENT_MAX_LENGTH, type RoomCommentRecord } from '../../roomComments/model';
-import { fetchRoomComments, submitRoomComment } from '../../roomComments/client';
+import {
+  ROOM_COMMENT_BROWSE_MAX_ROOM_IDS,
+  ROOM_COMMENT_MAX_LENGTH,
+  type BrowseRoomCommentPreview,
+  type RoomCommentRecord,
+} from '../../roomComments/model';
+import {
+  fetchBrowseRoomCommentSummaries,
+  fetchRoomComments,
+  submitRoomComment,
+} from '../../roomComments/client';
 import { type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
 import { type WorldRoomSummary, type WorldWindow } from '../../persistence/worldModel';
 import {
@@ -51,13 +60,16 @@ interface BrowseCommentTarget {
 }
 
 interface BrowseCommentCacheEntry {
-  comments: RoomCommentRecord[];
+  comments: BrowseRoomCommentPreview[];
+  commentCount: number;
+  full: boolean;
 }
 
 interface RenderedBrowseCommentMarker extends OverworldBadgePlacement {
   key: string;
   target: BrowseCommentTarget;
-  comments: RoomCommentRecord[];
+  comments: BrowseRoomCommentPreview[];
+  commentCount: number;
   commentSignature: string;
   accentColor: number;
   dotContainer: Phaser.GameObjects.Container;
@@ -74,7 +86,7 @@ interface RenderedBrowseCommentMarker extends OverworldBadgePlacement {
 interface BrowseDanmakuCandidate {
   key: string;
   target: BrowseCommentTarget;
-  comment: RoomCommentRecord;
+  comment: BrowseRoomCommentPreview;
   accentColor: number;
 }
 
@@ -103,6 +115,13 @@ interface BrowseDanmakuTrack {
   screenY: number;
 }
 
+interface PendingBrowseFullCommentLoad {
+  target: BrowseCommentTarget;
+  pinWhenLoaded: boolean;
+  pinGeneration: number;
+  loadGeneration: number;
+}
+
 interface OverworldRoomCommentsControllerOptions {
   scene: Phaser.Scene;
   getMode: () => OverworldMode;
@@ -117,6 +136,7 @@ interface OverworldRoomCommentsControllerOptions {
   jumpToRoomCoordinates?: (coordinates: RoomCoordinates) => void | Promise<void>;
   showTransientStatus?: (message: string) => void;
   onDisplayObjectsChanged?: () => void;
+  waitForBrowseDiscoveryReady?: (signal: AbortSignal) => Promise<boolean>;
   document?: Document;
 }
 
@@ -191,6 +211,9 @@ const BROWSE_DANMAKU_ROOM_TRACK_VIEWPORT_MAX_FRACTION = 0.46;
 const BROWSE_DANMAKU_ROOM_TRACK_VERTICAL_RATIO = 0.36;
 const BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MIN = 20;
 const BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MAX = 38;
+const BROWSE_COMMENT_VIEWPORT_GUARD_FRACTION = 0.25;
+const BROWSE_COMMENT_READINESS_RETRY_MS = 500;
+const BROWSE_FULL_COMMENT_FETCH_CONCURRENCY = 2;
 
 export class OverworldRoomCommentsController {
   private nextVisualSyncAt = 0;
@@ -216,8 +239,20 @@ export class OverworldRoomCommentsController {
   private readonly renderedCommentsById = new Map<string, RenderedRoomComment>();
   private readonly browseCommentCache = new Map<string, BrowseCommentCacheEntry>();
   private readonly browseCommentMarkersByKey = new Map<string, RenderedBrowseCommentMarker>();
-  private readonly loadingBrowseRoomSignatures = new Set<string>();
+  private readonly loadingBrowseRoomSignatures = new Map<string, PendingBrowseFullCommentLoad>();
+  private readonly pendingBrowseFullCommentLoads = new Map<string, PendingBrowseFullCommentLoad>();
+  private activeBrowseFullCommentLoadCount = 0;
+  private browseFullCommentLoadGeneration = 0;
+  private pinnedBrowseRequestGeneration = 0;
+  private observedMode: OverworldMode;
+  private readonly loadingBrowseSummarySignatures = new Set<string>();
   private readonly failedBrowseRoomSignaturesUntil = new Map<string, number>();
+  private browseSummaryRequestInFlight = false;
+  private browseSummaryGeneration = 0;
+  private browseDiscoveryReady = false;
+  private browseDiscoveryReadinessInFlight = false;
+  private browseDiscoveryReadinessRetryAt = 0;
+  private browseDiscoveryAbortController: AbortController | null = null;
   private hoveredBrowseMarkerKey: string | null = null;
   private pinnedBrowseMarkerKey: string | null = null;
   private readonly activeBrowseDanmaku = new Set<RenderedBrowseDanmakuComment>();
@@ -227,7 +262,9 @@ export class OverworldRoomCommentsController {
   private nextBrowseDanmakuSpawnAtMs = 0;
   private browseDanmakuCandidateCursor = 0;
 
-  constructor(private readonly options: OverworldRoomCommentsControllerOptions) {}
+  constructor(private readonly options: OverworldRoomCommentsControllerOptions) {
+    this.observedMode = options.getMode();
+  }
 
   initialize(): void {
     this.ensureComposerDom();
@@ -240,8 +277,16 @@ export class OverworldRoomCommentsController {
     this.comments = [];
     this.activeRoomSignature = null;
     this.loadingRoomSignature = null;
-    this.loadingBrowseRoomSignatures.clear();
+    this.invalidateBrowseFullCommentLoads();
+    this.loadingBrowseSummarySignatures.clear();
     this.failedBrowseRoomSignaturesUntil.clear();
+    this.browseSummaryRequestInFlight = false;
+    this.browseSummaryGeneration += 1;
+    this.browseDiscoveryReady = false;
+    this.browseDiscoveryReadinessInFlight = false;
+    this.browseDiscoveryReadinessRetryAt = 0;
+    this.browseDiscoveryAbortController?.abort();
+    this.browseDiscoveryAbortController = null;
     this.browseCommentCache.clear();
     this.hoveredBrowseMarkerKey = null;
     this.pinnedBrowseMarkerKey = null;
@@ -258,6 +303,7 @@ export class OverworldRoomCommentsController {
   }
 
   update(): void {
+    this.syncObservedMode();
     const room = this.getRenderableRoom();
     const nextSignature = room ? this.getRoomSignature(room) : null;
     if (nextSignature !== this.activeRoomSignature) {
@@ -309,6 +355,7 @@ export class OverworldRoomCommentsController {
   }
 
   openSelectedBrowseComments(): boolean {
+    this.syncObservedMode();
     if (this.options.getMode() !== 'browse') {
       return this.openComposer();
     }
@@ -321,9 +368,9 @@ export class OverworldRoomCommentsController {
       return false;
     }
 
-    this.pinnedBrowseMarkerKey = target.signature;
+    this.setPinnedBrowseMarkerKey(target.signature);
     const cached = this.browseCommentCache.get(target.signature);
-    if (cached) {
+    if (cached?.full) {
       this.syncBrowseCommentMarkers();
       this.options.showTransientStatus?.(
         cached.comments.length > 0 ? 'Room comments opened.' : 'No comments here yet.',
@@ -331,6 +378,9 @@ export class OverworldRoomCommentsController {
       return cached.comments.length > 0;
     }
 
+    // A viewport summary is deliberately not treated as the full selected
+    // room payload. Preserve the marker while promoting the selected room to
+    // the existing exact/full comments endpoint.
     void this.loadBrowseComments(target, true);
     this.syncBrowseCommentMarkers();
     this.options.showTransientStatus?.('Loading room comments...');
@@ -456,7 +506,8 @@ export class OverworldRoomCommentsController {
       submitting: this.submitting,
       browseMarkerCount: this.browseCommentMarkersByKey.size,
       browseCacheEntryCount: this.browseCommentCache.size,
-      browseLoadingCount: this.loadingBrowseRoomSignatures.size,
+      browseLoadingCount:
+        this.loadingBrowseRoomSignatures.size + this.pendingBrowseFullCommentLoads.size,
       pinnedBrowseMarkerKey: this.pinnedBrowseMarkerKey,
       browseDanmakuActiveCount: this.activeBrowseDanmaku.size,
       browseDanmakuPoolCount: this.idleBrowseDanmaku.length,
@@ -530,52 +581,146 @@ export class OverworldRoomCommentsController {
     }
   }
 
-  private async loadBrowseComments(
-    target: BrowseCommentTarget,
-    pinWhenLoaded = false,
-  ): Promise<void> {
-    if (this.loadingBrowseRoomSignatures.has(target.signature)) {
+  private loadBrowseComments(target: BrowseCommentTarget, pinWhenLoaded = false): void {
+    if (pinWhenLoaded) {
+      // Retain only the newest queued selection. Already active reads may
+      // finish into the cache, but generation checks prevent stale re-pins.
+      this.pendingBrowseFullCommentLoads.clear();
+    }
+    const active = this.loadingBrowseRoomSignatures.get(target.signature);
+    if (active) {
+      if (pinWhenLoaded) {
+        active.pinWhenLoaded = true;
+        active.pinGeneration = this.pinnedBrowseRequestGeneration;
+      }
+      return;
+    }
+    const existing = this.pendingBrowseFullCommentLoads.get(target.signature);
+    if (existing) {
+      if (pinWhenLoaded) {
+        existing.pinWhenLoaded = true;
+        existing.pinGeneration = this.pinnedBrowseRequestGeneration;
+      }
       return;
     }
 
-    this.loadingBrowseRoomSignatures.add(target.signature);
+    this.pendingBrowseFullCommentLoads.set(target.signature, {
+      target,
+      pinWhenLoaded,
+      pinGeneration: this.pinnedBrowseRequestGeneration,
+      loadGeneration: this.browseFullCommentLoadGeneration,
+    });
+    this.drainBrowseFullCommentLoads();
+  }
+
+  private drainBrowseFullCommentLoads(): void {
+    while (
+      this.activeBrowseFullCommentLoadCount < BROWSE_FULL_COMMENT_FETCH_CONCURRENCY
+      && this.pendingBrowseFullCommentLoads.size > 0
+    ) {
+      const nextEntry = this.pendingBrowseFullCommentLoads.entries().next().value as
+        | [string, PendingBrowseFullCommentLoad]
+        | undefined;
+      if (!nextEntry) return;
+      const [signature, load] = nextEntry;
+      this.pendingBrowseFullCommentLoads.delete(signature);
+      if (load.loadGeneration !== this.browseFullCommentLoadGeneration) continue;
+
+      this.activeBrowseFullCommentLoadCount += 1;
+      this.loadingBrowseRoomSignatures.set(signature, load);
+      void this.performBrowseFullCommentLoad(load).finally(() => {
+        this.activeBrowseFullCommentLoadCount = Math.max(
+          0,
+          this.activeBrowseFullCommentLoadCount - 1,
+        );
+        if (this.loadingBrowseRoomSignatures.get(signature) === load) {
+          this.loadingBrowseRoomSignatures.delete(signature);
+        }
+        this.drainBrowseFullCommentLoads();
+      });
+    }
+  }
+
+  private async performBrowseFullCommentLoad(load: PendingBrowseFullCommentLoad): Promise<void> {
+    const { target, loadGeneration } = load;
     try {
       const response = await fetchRoomComments(target.roomId, target.coordinates, target.version);
+      if (
+        loadGeneration !== this.browseFullCommentLoadGeneration
+        || this.options.getMode() !== 'browse'
+      ) return;
       const comments = [...response.comments].sort(compareCommentsNewestFirst);
       this.browseCommentCache.set(target.signature, {
         comments,
+        commentCount: comments.length,
+        full: true,
       });
       this.failedBrowseRoomSignaturesUntil.delete(target.signature);
-      if (pinWhenLoaded) {
-        this.pinnedBrowseMarkerKey = target.signature;
+      if (
+        load.pinWhenLoaded
+        && load.pinGeneration === this.pinnedBrowseRequestGeneration
+        && this.pinnedBrowseMarkerKey === target.signature
+      ) {
         this.options.showTransientStatus?.(
           comments.length > 0 ? 'Room comments opened.' : 'No comments here yet.',
         );
       }
       this.syncBrowseCommentMarkers();
     } catch (error) {
+      if (
+        loadGeneration !== this.browseFullCommentLoadGeneration
+        || this.options.getMode() !== 'browse'
+      ) return;
       console.warn('Failed to load browse room comments', error);
       this.failedBrowseRoomSignaturesUntil.set(target.signature, Date.now() + 15000);
-      if (pinWhenLoaded) {
+      if (
+        load.pinWhenLoaded
+        && load.pinGeneration === this.pinnedBrowseRequestGeneration
+        && this.pinnedBrowseMarkerKey === target.signature
+      ) {
         this.options.showTransientStatus?.('Could not load comments for this room.');
       }
-    } finally {
-      this.loadingBrowseRoomSignatures.delete(target.signature);
     }
   }
 
+  private invalidateBrowseFullCommentLoads(): void {
+    this.browseFullCommentLoadGeneration += 1;
+    this.pinnedBrowseRequestGeneration += 1;
+    this.pendingBrowseFullCommentLoads.clear();
+    this.loadingBrowseRoomSignatures.clear();
+  }
+
+  private syncObservedMode(): void {
+    const mode = this.options.getMode();
+    if (mode === this.observedMode) return;
+    this.observedMode = mode;
+    this.invalidateBrowseFullCommentLoads();
+  }
+
+  private setPinnedBrowseMarkerKey(key: string | null): void {
+    if (this.pinnedBrowseMarkerKey === key) return;
+    this.pinnedBrowseMarkerKey = key;
+    this.pinnedBrowseRequestGeneration += 1;
+    if (key === null) this.pendingBrowseFullCommentLoads.clear();
+  }
+
   private syncBrowseCommentMarkers(): void {
+    this.syncObservedMode();
     if (this.options.getMode() !== 'browse' || !this.commentsVisible) {
       this.hoveredBrowseMarkerKey = null;
-      this.pinnedBrowseMarkerKey = null;
+      this.setPinnedBrowseMarkerKey(null);
       this.destroyBrowseCommentMarkers();
       return;
     }
 
-    const targets = this.getBrowseCommentTargets();
+    if (!this.ensureBrowseDiscoveryReady()) {
+      return;
+    }
+
+    const targets = this.getBrowseCommentTargetsForViewport();
     if (targets.length === 0) {
       this.hoveredBrowseMarkerKey = null;
-      this.pinnedBrowseMarkerKey = null;
+      this.setPinnedBrowseMarkerKey(null);
       this.destroyBrowseCommentMarkers();
       return;
     }
@@ -583,9 +728,9 @@ export class OverworldRoomCommentsController {
     const targetSignatures = new Set<string>();
     const desiredMarkerKeys = new Set<string>();
     let structureChanged = false;
+    this.queueBrowseSummaryLoad(targets);
     for (const target of targets) {
       targetSignatures.add(target.signature);
-      this.queueBrowseCommentLoad(target);
       const cached = this.browseCommentCache.get(target.signature);
       if (!cached || cached.comments.length === 0) {
         continue;
@@ -594,10 +739,15 @@ export class OverworldRoomCommentsController {
       desiredMarkerKeys.add(target.signature);
       const origin = this.options.getRoomOrigin(target.displayCoordinates);
       const markerPosition = this.getBrowseMarkerPosition(origin);
-      const commentSignature = getCommentsSignature(cached.comments);
+      const commentSignature = getCommentsSignature(cached.comments, cached.commentCount);
       const existing = this.browseCommentMarkersByKey.get(target.signature);
       if (!existing) {
-        const marker = this.createBrowseCommentMarker(target, cached.comments, commentSignature);
+        const marker = this.createBrowseCommentMarker(
+          target,
+          cached.comments,
+          cached.commentCount,
+          commentSignature,
+        );
         marker.zoomedInPosition = markerPosition.zoomedIn;
         marker.zoomedOutPosition = markerPosition.zoomedOut;
         this.browseCommentMarkersByKey.set(target.signature, marker);
@@ -610,6 +760,7 @@ export class OverworldRoomCommentsController {
       existing.zoomedOutPosition = markerPosition.zoomedOut;
       if (existing.commentSignature !== commentSignature) {
         existing.comments = cached.comments;
+        existing.commentCount = cached.commentCount;
         existing.commentSignature = commentSignature;
         this.redrawBrowseCommentMarker(existing);
       }
@@ -628,7 +779,7 @@ export class OverworldRoomCommentsController {
       this.pinnedBrowseMarkerKey &&
       !targetSignatures.has(this.pinnedBrowseMarkerKey)
     ) {
-      this.pinnedBrowseMarkerKey = null;
+      this.setPinnedBrowseMarkerKey(null);
     }
     if (
       this.hoveredBrowseMarkerKey &&
@@ -643,20 +794,94 @@ export class OverworldRoomCommentsController {
     }
   }
 
-  private queueBrowseCommentLoad(target: BrowseCommentTarget): void {
+  private ensureBrowseDiscoveryReady(): boolean {
+    if (this.browseDiscoveryReady) return true;
+    if (!this.options.waitForBrowseDiscoveryReady) {
+      this.browseDiscoveryReady = true;
+      return true;
+    }
     if (
-      this.browseCommentCache.has(target.signature) ||
-      this.loadingBrowseRoomSignatures.has(target.signature)
-    ) {
-      return;
-    }
+      this.browseDiscoveryReadinessInFlight
+      || Date.now() < this.browseDiscoveryReadinessRetryAt
+    ) return false;
 
-    const retryAt = this.failedBrowseRoomSignaturesUntil.get(target.signature) ?? 0;
-    if (Date.now() < retryAt) {
-      return;
-    }
+    this.browseDiscoveryReadinessInFlight = true;
+    const abortController = new AbortController();
+    this.browseDiscoveryAbortController?.abort();
+    this.browseDiscoveryAbortController = abortController;
+    void this.options.waitForBrowseDiscoveryReady(abortController.signal)
+      .then((ready) => {
+        if (abortController.signal.aborted || this.browseDiscoveryAbortController !== abortController) {
+          return;
+        }
+        this.browseDiscoveryReady = ready;
+        if (!ready) this.browseDiscoveryReadinessRetryAt = Date.now() + BROWSE_COMMENT_READINESS_RETRY_MS;
+      })
+      .catch((error) => {
+        if (!abortController.signal.aborted) {
+          console.warn('Failed to await browse comment discovery readiness', error);
+          this.browseDiscoveryReadinessRetryAt = Date.now() + BROWSE_COMMENT_READINESS_RETRY_MS;
+        }
+      })
+      .finally(() => {
+        if (this.browseDiscoveryAbortController !== abortController) return;
+        this.browseDiscoveryReadinessInFlight = false;
+        this.browseDiscoveryAbortController = null;
+        if (this.browseDiscoveryReady) this.syncBrowseCommentMarkers();
+      });
+    return false;
+  }
 
-    void this.loadBrowseComments(target);
+  private queueBrowseSummaryLoad(targets: readonly BrowseCommentTarget[]): void {
+    if (this.browseSummaryRequestInFlight) return;
+    const now = Date.now();
+    const pendingTargets = targets
+      .filter((target) => (
+        !this.browseCommentCache.has(target.signature)
+        && !this.loadingBrowseSummarySignatures.has(target.signature)
+        && now >= (this.failedBrowseRoomSignaturesUntil.get(target.signature) ?? 0)
+      ))
+      .slice(0, ROOM_COMMENT_BROWSE_MAX_ROOM_IDS);
+    if (pendingTargets.length === 0) return;
+
+    this.browseSummaryRequestInFlight = true;
+    const generation = this.browseSummaryGeneration;
+    for (const target of pendingTargets) this.loadingBrowseSummarySignatures.add(target.signature);
+    void fetchBrowseRoomCommentSummaries(pendingTargets.map((target) => target.roomId))
+      .then((response) => {
+        if (generation !== this.browseSummaryGeneration) return;
+        const summariesByRoomId = new Map(response.rooms.map((summary) => [summary.roomId, summary]));
+        for (const target of pendingTargets) {
+          const summary = summariesByRoomId.get(target.roomId);
+          if (!summary || summary.roomVersion !== target.version) {
+            this.failedBrowseRoomSignaturesUntil.set(target.signature, Date.now() + 15000);
+            continue;
+          }
+          const existing = this.browseCommentCache.get(target.signature);
+          if (!existing?.full) {
+            this.browseCommentCache.set(target.signature, {
+              comments: [...summary.comments].sort(compareCommentsNewestFirst),
+              commentCount: summary.commentCount,
+              full: false,
+            });
+          }
+          this.failedBrowseRoomSignaturesUntil.delete(target.signature);
+        }
+      })
+      .catch((error) => {
+        if (generation !== this.browseSummaryGeneration) return;
+        console.warn('Failed to load browse comment summaries', error);
+        const retryAt = Date.now() + 15000;
+        for (const target of pendingTargets) {
+          this.failedBrowseRoomSignaturesUntil.set(target.signature, retryAt);
+        }
+      })
+      .finally(() => {
+        if (generation !== this.browseSummaryGeneration) return;
+        for (const target of pendingTargets) this.loadingBrowseSummarySignatures.delete(target.signature);
+        this.browseSummaryRequestInFlight = false;
+        this.syncBrowseCommentMarkers();
+      });
   }
 
   private getBrowseCommentTargets(): BrowseCommentTarget[] {
@@ -694,6 +919,53 @@ export class OverworldRoomCommentsController {
     }
 
     return Array.from(targetsByGroup.values(), (summary) => this.createBrowseTarget(summary));
+  }
+
+  private getBrowseCommentTargetsForViewport(): BrowseCommentTarget[] {
+    const targets = this.getBrowseCommentTargets();
+    const camera = this.options.scene.cameras.main;
+    const view = camera.worldView;
+    const guardX = view.width * BROWSE_COMMENT_VIEWPORT_GUARD_FRACTION;
+    const guardY = view.height * BROWSE_COMMENT_VIEWPORT_GUARD_FRACTION;
+    const minX = view.x - guardX;
+    const maxX = view.right + guardX;
+    const minY = view.y - guardY;
+    const maxY = view.bottom + guardY;
+    const selectedCoordinates = this.options.getSelectedCoordinates?.() ?? null;
+    const centerX = view.centerX;
+    const centerY = view.centerY;
+
+    return targets
+      .filter((target) => {
+        if (selectedCoordinates && coordinatesEqual(target.displayCoordinates, selectedCoordinates)) {
+          return true;
+        }
+        const origin = this.options.getRoomOrigin(target.displayCoordinates);
+        return (
+          origin.x + ROOM_PX_WIDTH >= minX
+          && origin.x <= maxX
+          && origin.y + ROOM_PX_HEIGHT >= minY
+          && origin.y <= maxY
+        );
+      })
+      .sort((left, right) => {
+        const leftSelected = selectedCoordinates && coordinatesEqual(left.displayCoordinates, selectedCoordinates);
+        const rightSelected = selectedCoordinates && coordinatesEqual(right.displayCoordinates, selectedCoordinates);
+        if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
+        if (left.signature === this.pinnedBrowseMarkerKey) return -1;
+        if (right.signature === this.pinnedBrowseMarkerKey) return 1;
+        const leftOrigin = this.options.getRoomOrigin(left.displayCoordinates);
+        const rightOrigin = this.options.getRoomOrigin(right.displayCoordinates);
+        const leftDistance = Math.hypot(
+          leftOrigin.x + ROOM_PX_WIDTH * 0.5 - centerX,
+          leftOrigin.y + ROOM_PX_HEIGHT * 0.5 - centerY,
+        );
+        const rightDistance = Math.hypot(
+          rightOrigin.x + ROOM_PX_WIDTH * 0.5 - centerX,
+          rightOrigin.y + ROOM_PX_HEIGHT * 0.5 - centerY,
+        );
+        return leftDistance - rightDistance || left.signature.localeCompare(right.signature);
+      });
   }
 
   private getBrowseCommentTargetForCoordinates(
@@ -754,12 +1026,13 @@ export class OverworldRoomCommentsController {
 
   private createBrowseCommentMarker(
     target: BrowseCommentTarget,
-    comments: RoomCommentRecord[],
+    comments: BrowseRoomCommentPreview[],
+    commentCount: number,
     commentSignature: string,
   ): RenderedBrowseCommentMarker {
     const accentColor = getBrowseCommentAccentColor(target.signature);
     const dotContainer = this.createBrowseCommentDot(accentColor);
-    const compactContainer = this.createBrowseCommentCompact(accentColor, comments.length);
+    const compactContainer = this.createBrowseCommentCompact(accentColor, commentCount);
     const compactCountText = compactContainer.getByName('count') as Phaser.GameObjects.Text;
     const textMarker = this.createBrowseCommentTextMarker(accentColor);
     const container = this.options.scene.add.container(0, 0, [
@@ -781,6 +1054,7 @@ export class OverworldRoomCommentsController {
       key: target.signature,
       target,
       comments,
+      commentCount,
       commentSignature,
       accentColor,
       container,
@@ -823,8 +1097,11 @@ export class OverworldRoomCommentsController {
       ) => {
         event.stopPropagation();
         this.options.selectRoomCoordinates?.(marker.target.displayCoordinates);
-        this.pinnedBrowseMarkerKey =
-          this.pinnedBrowseMarkerKey === marker.key ? null : marker.key;
+        this.setPinnedBrowseMarkerKey(this.pinnedBrowseMarkerKey === marker.key ? null : marker.key);
+        if (this.pinnedBrowseMarkerKey === marker.key) {
+          const cached = this.browseCommentCache.get(marker.key);
+          if (!cached?.full) void this.loadBrowseComments(marker.target, true);
+        }
         this.syncBrowseCommentMarkerPresentation();
       },
     );
@@ -914,7 +1191,7 @@ export class OverworldRoomCommentsController {
 
   private redrawBrowseCommentMarker(marker: RenderedBrowseCommentMarker): void {
     const latestComment = marker.comments[0];
-    const count = marker.comments.length;
+    const count = marker.commentCount;
     marker.compactCountText.setText(count > 99 ? '99+' : String(count));
     if (!latestComment) {
       marker.textHeaderText.setText('No comments');
@@ -1388,15 +1665,22 @@ export class OverworldRoomCommentsController {
     }
 
     const target = stream.target;
-    this.pinnedBrowseMarkerKey = target.signature;
+    this.setPinnedBrowseMarkerKey(target.signature);
+    const pinGeneration = this.pinnedBrowseRequestGeneration;
     this.hoveredBrowseMarkerKey = null;
+    const cached = this.browseCommentCache.get(target.signature);
+    if (!cached?.full) this.loadBrowseComments(target, true);
     this.syncBrowseCommentMarkerPresentation();
     this.options.showTransientStatus?.('Opening comment room...');
 
     if (this.options.jumpToRoomCoordinates) {
       void Promise.resolve(this.options.jumpToRoomCoordinates(target.displayCoordinates))
         .then(() => {
-          this.pinnedBrowseMarkerKey = target.signature;
+          if (
+            pinGeneration !== this.pinnedBrowseRequestGeneration
+            || this.options.getMode() !== 'browse'
+          ) return;
+          this.setPinnedBrowseMarkerKey(target.signature);
           this.syncBrowseCommentMarkers();
           this.syncBrowseCommentMarkerPresentation();
         })
@@ -1944,7 +2228,10 @@ function truncateCommentBody(value: string, maxLength: number): string {
   return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
-function compareCommentsNewestFirst(left: RoomCommentRecord, right: RoomCommentRecord): number {
+function compareCommentsNewestFirst(
+  left: Pick<RoomCommentRecord, 'createdAt'>,
+  right: Pick<RoomCommentRecord, 'createdAt'>,
+): number {
   return getCommentTimeMs(right.createdAt) - getCommentTimeMs(left.createdAt);
 }
 
@@ -1953,8 +2240,11 @@ function getCommentTimeMs(value: string): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function getCommentsSignature(comments: RoomCommentRecord[]): string {
-  return comments.map((comment) => `${comment.id}:${comment.createdAt}`).join('|');
+function getCommentsSignature(
+  comments: readonly BrowseRoomCommentPreview[],
+  commentCount = comments.length,
+): string {
+  return `${commentCount}|${comments.map((comment) => `${comment.id}:${comment.createdAt}`).join('|')}`;
 }
 
 function coordinatesEqual(left: RoomCoordinates, right: RoomCoordinates): boolean {

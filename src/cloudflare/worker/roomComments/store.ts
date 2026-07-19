@@ -5,6 +5,7 @@ import {
 import type { ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
 import type {
   AdminRoomCommentRecord,
+  BrowseRoomCommentSummary,
   RoomCommentAreaContext,
   RoomCommentRecord,
   RoomCommentStatus,
@@ -31,6 +32,159 @@ export interface RoomCommentTarget {
   builderDisplayName: string | null;
   builderEmail: string | null;
   areaScope: RoomCommentAreaScope | null;
+}
+
+interface BrowseRoomCommentTargetRow {
+  requested_room_id: string;
+  requested_room_version: number;
+}
+
+interface BrowseRoomCommentRow {
+  requested_room_id: string;
+  requested_room_version: number;
+  id: string;
+  body: string;
+  author_display_name: string;
+  created_at: string;
+  comment_count: number;
+  comment_rank: number;
+}
+
+/**
+ * Loads marker/danmaku data for a viewport in two set-based, read-only
+ * statements. playable_content_index_members expands a requested cell to its
+ * current published playable target, so expanded-room comments retain the
+ * same area scope as the full per-room endpoint.
+ */
+export async function listBrowseRoomCommentSummaries(
+  env: Env,
+  roomIds: readonly string[],
+  commentLimit: number,
+): Promise<BrowseRoomCommentSummary[]> {
+  if (roomIds.length === 0) return [];
+  const requestedRoomIdsJson = JSON.stringify(roomIds);
+  const session = env.DB.withSession?.('first-unconstrained') ?? env.DB;
+  const targetsStatement = session.prepare(
+    `
+      WITH requested(room_id) AS (
+        SELECT CAST(value AS TEXT)
+        FROM json_each(?)
+      ),
+      ranked_targets AS (
+        SELECT
+          requested.room_id AS requested_room_id,
+          requested_member.room_version AS requested_room_version,
+          ROW_NUMBER() OVER (
+            PARTITION BY requested.room_id
+            ORDER BY
+              CASE WHEN target.target_type = 'expanded_room' THEN 0 ELSE 1 END ASC,
+              target.updated_at DESC,
+              target.target_key ASC
+          ) AS target_rank
+        FROM requested
+        INNER JOIN playable_content_index_members AS requested_member
+          ON requested_member.room_id = requested.room_id
+        INNER JOIN playable_content_index AS target
+          ON target.target_key = requested_member.target_key
+      )
+      SELECT
+        requested_room_id,
+        requested_room_version
+      FROM ranked_targets
+      WHERE target_rank = 1
+      ORDER BY requested_room_id ASC
+    `,
+  ).bind(requestedRoomIdsJson);
+  const commentsStatement = session.prepare(
+    `
+      WITH requested(room_id) AS (
+        SELECT CAST(value AS TEXT)
+        FROM json_each(?)
+      ),
+      ranked_targets AS (
+        SELECT
+          requested.room_id AS requested_room_id,
+          requested_member.room_version AS requested_room_version,
+          requested_member.target_key,
+          ROW_NUMBER() OVER (
+            PARTITION BY requested.room_id
+            ORDER BY
+              CASE WHEN target.target_type = 'expanded_room' THEN 0 ELSE 1 END ASC,
+              target.updated_at DESC,
+              target.target_key ASC
+          ) AS target_rank
+        FROM requested
+        INNER JOIN playable_content_index_members AS requested_member
+          ON requested_member.room_id = requested.room_id
+        INNER JOIN playable_content_index AS target
+          ON target.target_key = requested_member.target_key
+      ),
+      requested_targets AS (
+        SELECT requested_room_id, requested_room_version, target_key
+        FROM ranked_targets
+        WHERE target_rank = 1
+      ),
+      ranked_comments AS (
+        SELECT
+          requested_targets.requested_room_id,
+          requested_targets.requested_room_version,
+          room_comments.id,
+          SUBSTR(room_comments.body, 1, 82) AS body,
+          room_comments.author_display_name,
+          room_comments.created_at,
+          COUNT(*) OVER (
+            PARTITION BY requested_targets.requested_room_id
+          ) AS comment_count,
+          ROW_NUMBER() OVER (
+            PARTITION BY requested_targets.requested_room_id
+            ORDER BY room_comments.created_at DESC, room_comments.id DESC
+          ) AS comment_rank
+        FROM requested_targets
+        INNER JOIN playable_content_index_members AS target_member
+          ON target_member.target_key = requested_targets.target_key
+        INNER JOIN room_comments
+          ON room_comments.room_id = target_member.room_id
+         AND room_comments.room_version = target_member.room_version
+         AND room_comments.status = 'approved'
+      )
+      SELECT *
+      FROM ranked_comments
+      WHERE comment_rank <= ?
+      ORDER BY requested_room_id ASC, comment_rank ASC
+    `,
+  ).bind(requestedRoomIdsJson, commentLimit);
+  const [targetsResult, commentsResult] = await session.batch([
+    targetsStatement,
+    commentsStatement,
+  ]) as [
+    { results: BrowseRoomCommentTargetRow[] },
+    { results: BrowseRoomCommentRow[] },
+  ];
+
+  const commentsByRequestedRoomId = new Map<string, BrowseRoomCommentRow[]>();
+  for (const row of commentsResult.results) {
+    const rows = commentsByRequestedRoomId.get(row.requested_room_id) ?? [];
+    rows.push(row);
+    commentsByRequestedRoomId.set(row.requested_room_id, rows);
+  }
+
+  return targetsResult.results
+    .slice()
+    .sort((left, right) => left.requested_room_id.localeCompare(right.requested_room_id))
+    .map((target) => {
+      const rows = commentsByRequestedRoomId.get(target.requested_room_id) ?? [];
+      return {
+        roomId: target.requested_room_id,
+        roomVersion: Number(target.requested_room_version),
+        commentCount: Number(rows[0]?.comment_count ?? 0),
+        comments: rows.map((row) => ({
+          id: row.id,
+          body: row.body,
+          authorDisplayName: row.author_display_name,
+          createdAt: row.created_at,
+        })),
+      };
+    });
 }
 
 export async function loadRoomCommentTarget(

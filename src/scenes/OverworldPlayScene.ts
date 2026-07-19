@@ -966,6 +966,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       jumpToRoomCoordinates: (coordinates) => this.jumpToCoordinates(coordinates),
       showTransientStatus: (message) => this.showTransientStatus(message),
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+      waitForBrowseDiscoveryReady: (signal) =>
+        this.worldStreamingController.waitForBrowseCommentDiscoveryReady(signal),
     });
     this.coursePlaybackController = new OverworldCoursePlaybackController({
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),

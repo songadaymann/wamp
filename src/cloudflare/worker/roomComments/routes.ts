@@ -1,10 +1,13 @@
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../../config';
 import {
+  ROOM_COMMENT_BROWSE_COMMENT_LIMIT,
+  ROOM_COMMENT_BROWSE_MAX_ROOM_IDS,
   ROOM_COMMENT_ADMIN_DEFAULT_LIMIT,
   ROOM_COMMENT_DEFAULT_LIMIT,
   ROOM_COMMENT_MAX_LENGTH,
   ROOM_COMMENT_MAX_LIMIT,
   type AdminRoomCommentListResponse,
+  type BrowseRoomCommentSummaryResponse,
   type AdminRoomCommentReviewRequestBody,
   type AdminRoomCommentReviewResponse,
   type RoomCommentCreateRequestBody,
@@ -13,6 +16,7 @@ import {
   type RoomCommentListResponse,
   type RoomCommentStatus,
 } from '../../../roomComments/model';
+import { parseRoomId } from '../../../persistence/roomModel';
 import {
   buildAdminReviewUrl,
   buildPublicAppUrl,
@@ -34,7 +38,9 @@ import {
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
-import type { Env } from '../core/types';
+import type { Env, WorkerExecutionContextLike } from '../core/types';
+import { loadAnonymousPublicCache } from '../core/publicCache';
+import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import { sendRoomCommentApprovedEmail } from './email';
 import {
   countRecentRoomCommentsForUser,
@@ -43,6 +49,7 @@ import {
   getRoomCommentAreaContext,
   listAdminRoomComments,
   listApprovedRoomComments,
+  listBrowseRoomCommentSummaries,
   loadAdminRoomComment,
   loadRoomCommentTarget,
   markRoomCommentNotificationError,
@@ -54,6 +61,54 @@ import {
 const ROOM_COMMENT_USER_MINUTE_LIMIT = 1;
 const ROOM_COMMENT_USER_DAILY_LIMIT = 20;
 const ROOM_COMMENT_USER_ROOM_DAILY_LIMIT = 3;
+
+export function parseBrowseRoomCommentIds(searchParams: URLSearchParams): string[] {
+  const rawRoomIds = searchParams.getAll('roomId');
+  if (rawRoomIds.length === 0) {
+    throw new HttpError(400, 'At least one roomId is required.');
+  }
+  if (rawRoomIds.length > ROOM_COMMENT_BROWSE_MAX_ROOM_IDS) {
+    throw new HttpError(400, `At most ${ROOM_COMMENT_BROWSE_MAX_ROOM_IDS} roomIds may be requested.`);
+  }
+
+  const roomIds = new Set<string>();
+  for (const rawRoomId of rawRoomIds) {
+    const coordinates = parseRoomId(rawRoomId);
+    if (
+      !coordinates
+      || !Number.isSafeInteger(coordinates.x)
+      || !Number.isSafeInteger(coordinates.y)
+      || `${coordinates.x},${coordinates.y}` !== rawRoomId
+    ) {
+      throw new HttpError(400, 'roomId must be a canonical signed coordinate pair.');
+    }
+    roomIds.add(rawRoomId);
+  }
+  return Array.from(roomIds).sort((left, right) => left.localeCompare(right));
+}
+
+export async function handleBrowseRoomCommentSummaries(
+  request: Request,
+  url: URL,
+  env: Env,
+  context?: WorkerExecutionContextLike,
+): Promise<Response> {
+  const roomIds = parseBrowseRoomCommentIds(url.searchParams);
+  const timing = new ServerTiming();
+  const loadResponse = async (): Promise<Response> => {
+    const rooms = await timing.measure('comments_d1', () => listBrowseRoomCommentSummaries(
+      env,
+      roomIds,
+      ROOM_COMMENT_BROWSE_COMMENT_LIMIT,
+    ));
+    timing.setDiagnostic('cache_policy', 'public-20');
+    const response: BrowseRoomCommentSummaryResponse = { rooms };
+    return timedJsonResponse(request, response, timing, {
+      headers: { 'Cache-Control': 'public, max-age=20' },
+    });
+  };
+  return loadAnonymousPublicCache(request, context, loadResponse);
+}
 
 export async function handleRoomCommentList(
   request: Request,

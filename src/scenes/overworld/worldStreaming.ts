@@ -841,6 +841,18 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.worldWindow;
   }
 
+  async waitForBrowseCommentDiscoveryReady(signal?: AbortSignal): Promise<boolean> {
+    const initial = this.worldTileController.getDebugSnapshot();
+    if (!initial.enabled || initial.shadow || initial.fallbackReason) return true;
+    const ready = await this.worldTileController.waitForTargetLodReady(
+      this.options.scene.cameras.main,
+      signal,
+    );
+    if (ready) return true;
+    const current = this.worldTileController.getDebugSnapshot();
+    return !current.enabled || current.shadow || Boolean(current.fallbackReason);
+  }
+
   getChunkWindow(): WorldChunkWindow | null {
     return this.chunkWindow;
   }

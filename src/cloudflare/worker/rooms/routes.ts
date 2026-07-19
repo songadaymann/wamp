@@ -58,6 +58,7 @@ import {
   upsertUserStats,
 } from '../runs/points';
 import {
+  handleBrowseRoomCommentSummaries,
   handleRoomCommentCreate,
   handleRoomCommentList,
 } from '../roomComments/routes';
@@ -91,6 +92,15 @@ export async function handleRoomRequest(
 ): Promise<Response> {
   const segments = url.pathname.split('/').filter(Boolean);
   const roomId = decodeURIComponent(segments[2] ?? '');
+
+  if (
+    segments.length === 4
+    && segments[2] === 'comments'
+    && segments[3] === 'browse'
+    && request.method === 'GET'
+  ) {
+    return handleBrowseRoomCommentSummaries(request, url, env, context);
+  }
 
   if (
     segments.length === 4 &&
