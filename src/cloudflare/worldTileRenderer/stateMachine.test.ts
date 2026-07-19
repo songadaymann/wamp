@@ -234,6 +234,58 @@ describe('world tile renderer state machine', () => {
     expect(browserMock.launch).not.toHaveBeenCalled();
   });
 
+  it('acks a parent that is waiting for children instead of exhausting Queue retries', async () => {
+    insertPublishedRoom(sqlite, 0, 0, 1);
+    insertPublishedRoom(sqlite, 1, 0, 1);
+    const readyLeaf = {
+      rendererVersion: 'renderer-a',
+      level: 4 as const,
+      x: 0,
+      y: 0,
+    };
+    expect(await acquireRenderLease(database, {
+      address: readyLeaf,
+      generation: 1,
+      leaseExpiresAt: '2026-07-19T12:02:00.000Z',
+      leaseOwner: 'ready-child-worker',
+      now: NOW,
+    })).not.toBeNull();
+    expect(await publishReadyObject(database, {
+      address: readyLeaf,
+      generation: 1,
+      leaseOwner: 'ready-child-worker',
+      now: NOW,
+      byteLength: 100,
+      contentHash: 'e'.repeat(64),
+      r2Etag: 'etag-ready-child',
+      r2Key: `world-tiles/renderer-a/objects/${'e'.repeat(64)}.png`,
+    })).toBe(true);
+    const message = createQueueMessage({
+      ...job(0, 0, 1),
+      level: 3,
+    });
+
+    await worldTileRendererWorker.queue(
+      { queue: 'world-tile-renders', messages: [message] },
+      createEnvironment(database),
+    );
+
+    expect(message.ack).toHaveBeenCalledOnce();
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(browserMock.launch).not.toHaveBeenCalled();
+    expect(await loadRenderTile(database, {
+      rendererVersion: 'renderer-a',
+      level: 3,
+      x: 0,
+      y: 0,
+    })).toMatchObject({
+      desired_generation: 1,
+      ready_generation: null,
+      lease_owner: null,
+      last_error: 'Parent l3/0/0 is waiting for 1 current children.',
+    });
+  });
+
   it('retains the previous pointer and releases the lease when R2 upload fails', async () => {
     insertPublishedRoom(sqlite, 10, 11, 1);
     const address = { rendererVersion: 'renderer-a', level: 4 as const, x: 10, y: 11 };

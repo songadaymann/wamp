@@ -103,7 +103,12 @@ export const worldTileRendererWorker = {
         try {
           const result = await processWorldTileMessage(message, env, getBrowser);
           counters[result] += 1;
-          if (result === 'paused' || result === 'ready' || result === 'stale') {
+          if (
+            result === 'paused'
+            || result === 'ready'
+            || result === 'stale'
+            || result === 'waiting'
+          ) {
             message.ack();
           } else {
             message.retry({ delaySeconds: retryDelaySeconds(message.attempts) });
@@ -232,6 +237,9 @@ async function processWorldTileMessage(
       leaseOwner,
       now: new Date().toISOString(),
     });
+    if (error instanceof WaitingForWorldTileChildrenError) {
+      return 'waiting';
+    }
     throw error;
   }
 }
@@ -311,7 +319,7 @@ async function renderParentJob(
   const childRows = await loadChildRenderTiles(env.DB, address);
   const readiness = resolveParentReadiness(address, childRows);
   if (readiness.kind === 'waiting') {
-    throw new RetryableWorldTileError(
+    throw new WaitingForWorldTileChildrenError(
       `Parent l${job.level}/${job.x}/${job.y} is waiting for ${readiness.waiting.length} current children.`
     );
   }
@@ -669,6 +677,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 class RetryableWorldTileError extends Error {}
+class WaitingForWorldTileChildrenError extends Error {}
 
 class HttpStatusError extends Error {
   constructor(readonly status: number, message: string) {
