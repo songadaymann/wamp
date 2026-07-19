@@ -51,7 +51,6 @@ const PLAY_ULTRA_ZOOM_THRESHOLD = 0.11;
 const PLAY_FAR_ZOOM_THRESHOLD = 0.16;
 const PLAY_MID_ZOOM_THRESHOLD = 0.28;
 const OVERVIEW_PREVIEW_ZOOM_THRESHOLD = 0.14;
-const LOW_DETAIL_CHUNK_PREVIEW_ZOOM_THRESHOLD = 0.2;
 const DEFAULT_CHUNK_PREVIEW_TILE_SIZE = 4;
 const OVERVIEW_CHUNK_PREVIEW_TILE_SIZE = 2;
 const VIEWPORT_ROOM_PADDING = 2;
@@ -129,7 +128,7 @@ export function getChunkPreviewTileSize(input: {
   zoom: number;
 }): number {
   const zoom = Math.max(input.zoom, MIN_ZOOM);
-  if (zoom <= LOW_DETAIL_CHUNK_PREVIEW_ZOOM_THRESHOLD) {
+  if (zoom <= OVERVIEW_PREVIEW_ZOOM_THRESHOLD) {
     return OVERVIEW_CHUNK_PREVIEW_TILE_SIZE;
   }
 
