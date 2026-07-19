@@ -1,21 +1,33 @@
-export interface WorldTileBackgroundStartupOptions {
+export interface WorldTileInitialCoverageStartupOptions {
   prepare: () => Promise<boolean>;
   shouldLoadInitialCoverage: () => boolean;
   ensureInitialCoverage: () => Promise<boolean>;
+  shouldAwaitInitialCoverage?: () => boolean;
   onError?: (error: unknown) => void;
 }
 
 /**
- * Starts tiled-world preparation without putting it on the critical path for
- * compact/legacy world rendering.
+ * Starts tiled-world preparation immediately so it can overlap the compact
+ * summary request. The returned promise is the gate before published snapshot
+ * hydration. Shadow mode can leave coverage running in the background while
+ * retaining legacy imagery by returning false from shouldAwaitInitialCoverage.
  */
-export function startWorldTileBootstrapInBackground(
-  options: WorldTileBackgroundStartupOptions,
-): void {
-  void options.prepare()
-    .then((prepared) => {
-      if (!prepared || !options.shouldLoadInitialCoverage()) return;
-      return options.ensureInitialCoverage();
-    })
-    .catch((error) => options.onError?.(error));
+export async function resolveWorldTileInitialCoverage(
+  options: WorldTileInitialCoverageStartupOptions,
+): Promise<boolean> {
+  try {
+    const prepared = await options.prepare();
+    if (!prepared || !options.shouldLoadInitialCoverage()) return false;
+
+    const initialCoveragePromise = options.ensureInitialCoverage();
+    if (options.shouldAwaitInitialCoverage?.() === false) {
+      void initialCoveragePromise.catch((error) => options.onError?.(error));
+      return false;
+    }
+
+    return await initialCoveragePromise;
+  } catch (error) {
+    options.onError?.(error);
+    return false;
+  }
 }

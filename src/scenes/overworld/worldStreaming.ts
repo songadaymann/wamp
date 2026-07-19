@@ -91,7 +91,8 @@ import {
 import { logBootPhase, startBootStallWatch } from '../../main/bootDiagnostics';
 import { WorldTileClientController } from './worldTiles/controller';
 import { shouldRenderLegacyWorldTileOverlay } from './worldTiles/dynamicOverlays';
-import { startWorldTileBootstrapInBackground } from './worldTiles/startup';
+import { processProgressivePreviewBatch } from './worldTiles/progressivePreviewBatch';
+import { resolveWorldTileInitialCoverage } from './worldTiles/startup';
 
 const PLAY_ROOM_PARALLAX_MULTIPLIER = 0.2;
 const FULL_ROOM_RELEASE_GRACE_MS = 300;
@@ -452,7 +453,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     });
 
     try {
-      startWorldTileBootstrapInBackground({
+      const initialWorldTileCoveragePromise = resolveWorldTileInitialCoverage({
         prepare: () => this.worldTileController.prepare(),
         shouldLoadInitialCoverage: () => (
           !this.destroyed
@@ -462,6 +463,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         ensureInitialCoverage: () => (
           this.worldTileController.ensureInitialCoverage(this.options.scene.cameras.main)
         ),
+        shouldAwaitInitialCoverage: () => !this.worldTileController.isShadowMode(),
         onError: (error) => console.warn('Initial tiled world coverage stopped.', error),
       });
       if (this.destroyed || generation !== this.loadGeneration) return 'cancelled';
@@ -496,6 +498,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         }
         logBootPhase('world-stream:chunk-window:done', summarizeChunkWindow(chunkWindow));
         this.applyChunkWindow(chunkWindow, compactWorldActive);
+      }
+
+      if (this.compactWorldActive) {
+        await initialWorldTileCoveragePromise;
+        if (this.destroyed || generation !== this.loadGeneration) return 'cancelled';
       }
 
       let roomCandidates = this.collectVisibleRoomCandidates();
@@ -1387,22 +1394,36 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         const batchIds = batches[batchIndex];
         if (!batchIds || this.destroyed || generation !== this.loadGeneration) return;
         try {
-          await this.previewCache.ensureRoomSnapshotsBatch(roomCandidates, batchIds, {
-            detail,
-            priority: 'high',
+          await processProgressivePreviewBatch({
+            batchIds,
+            selectCurrentRoomIds: (candidateIds) => {
+              if (this.destroyed || generation !== this.loadGeneration) return new Set();
+              return this.getRenderedPreviewRoomIds(roomCandidates, new Set(candidateIds));
+            },
+            loadSnapshots: (currentBatchIds) => this.previewCache.ensureRoomSnapshotsBatch(
+              roomCandidates,
+              currentBatchIds,
+              {
+                detail,
+                priority: 'high',
+              },
+            ),
+            prepareLoaded: (currentBatchIds) => this.previewCache.collectRenderableRooms(
+              roomCandidates,
+              new Set(currentBatchIds),
+              new Set(),
+            ),
+            mergeLoaded: (renderableRooms, currentBatchIds) => {
+              const batchIdSet = new Set(currentBatchIds);
+              this.previewRenderer.mergeChunkPreviews(
+                this.collectPreviewRooms(renderableRooms, batchIdSet),
+              );
+            },
           });
         } catch (error) {
           stopped = true;
           throw error;
         }
-        if (this.destroyed || generation !== this.loadGeneration) return;
-        const batchIdSet = new Set(batchIds);
-        const renderableRooms = await this.previewCache.collectRenderableRooms(
-          roomCandidates,
-          batchIdSet,
-          new Set(),
-        );
-        this.previewRenderer.mergeChunkPreviews(this.collectPreviewRooms(renderableRooms, batchIdSet));
       }
     };
 
