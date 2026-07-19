@@ -1,6 +1,8 @@
 import type { WorldTileManifestReady } from './types';
-
-const WORLD_TILE_BYTE_CACHE_NAME = 'wamp-world-tile-bytes-v1';
+import {
+  buildWorldTileByteCacheRequest,
+  WORLD_TILE_BYTE_CACHE_NAME,
+} from './byteCacheContract';
 const WORLD_TILE_BYTE_METADATA_DB = 'wamp-world-tile-byte-metadata-v1';
 const WORLD_TILE_BYTE_METADATA_STORE = 'entries';
 
@@ -153,7 +155,7 @@ export class WorldTileByteCache {
     if (activeDrain) await activeDrain;
     try {
       const cache = await this.persistence.openCache();
-      if (cache) await cache.delete(buildCacheRequest(ready));
+      if (cache) await cache.delete(buildWorldTileByteCacheRequest(ready));
     } catch {
       // Persistent storage is opportunistic; memory eviction still succeeds.
     }
@@ -196,7 +198,7 @@ export class WorldTileByteCache {
     try {
       cache = await this.persistence.openCache();
       if (!cache) return null;
-      response = await cache.match(buildCacheRequest(ready));
+      response = await cache.match(buildWorldTileByteCacheRequest(ready));
     } catch {
       return null;
     }
@@ -299,7 +301,7 @@ export class WorldTileByteCache {
       const activeCache = cache;
       const persistedWrites = await Promise.all(writes.map(async (write) => {
         try {
-          await activeCache.put(buildCacheRequest(write.ready), new Response(write.blob, {
+          await activeCache.put(buildWorldTileByteCacheRequest(write.ready), new Response(write.blob, {
             headers: {
               'Content-Type': 'image/png',
               'Cache-Control': 'public, max-age=31536000, immutable',
@@ -365,7 +367,7 @@ export class WorldTileByteCache {
     for (const entry of entries.sort((left, right) => left.lastAccess - right.lastAccess)) {
       if (total <= this.byteBudget) break;
       try {
-        await cache.delete(buildCacheRequest(entry));
+        await cache.delete(buildWorldTileByteCacheRequest(entry));
       } catch {
         continue;
       }
@@ -382,7 +384,7 @@ export class WorldTileByteCache {
     ready: Pick<WorldTileManifestReady, 'url' | 'contentHash'>,
   ): Promise<void> {
     await Promise.allSettled([
-      cache.delete(buildCacheRequest(ready)),
+      cache.delete(buildWorldTileByteCacheRequest(ready)),
       this.persistence.deleteMetadata([key]),
     ]);
   }
@@ -403,12 +405,6 @@ async function assertWorldTileContentHash(blob: Blob, expectedHash: string): Pro
   if (actualHash !== expectedHash) {
     throw new Error(`World tile content hash mismatch: expected ${expectedHash}, received ${actualHash}.`);
   }
-}
-
-function buildCacheRequest(ready: Pick<WorldTileManifestReady, 'url' | 'contentHash'>): Request {
-  const url = new URL(ready.url);
-  url.searchParams.set('__wamp_tile_hash', ready.contentHash);
-  return new Request(url.toString(), { method: 'GET' });
 }
 
 async function openCacheStorage(): Promise<WorldTileByteCacheStore | null> {

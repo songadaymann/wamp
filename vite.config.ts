@@ -1,6 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { defineConfig, loadEnv, type PluginOption } from 'vite';
+import { defineConfig, loadEnv, transformWithEsbuild, type PluginOption } from 'vite';
+import {
+  WORLD_TILE_BYTE_CACHE_HASH_PARAM,
+  WORLD_TILE_BYTE_CACHE_NAME,
+} from './src/scenes/overworld/worldTiles/byteCacheContract';
+
+const EARLY_WORLD_TILE_BOOTSTRAP_MARKER = '<!-- wamp-early-world-tiles-bootstrap -->';
 
 export default defineConfig(({ mode }) => {
   const env = loadMergedEnv(mode);
@@ -18,6 +24,7 @@ export default defineConfig(({ mode }) => {
   return {
     base: './',
     plugins: [
+      earlyWorldTileBootstrapPlugin(roomApiBaseUrl),
       cloudflareWebAnalyticsPlugin(cloudflareWebAnalyticsToken),
     ],
     define: {
@@ -68,6 +75,37 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
+
+function earlyWorldTileBootstrapPlugin(apiBaseUrl: string): PluginOption {
+  const entryPath = resolve(process.cwd(), 'src/main/earlyWorldTileBootstrap.classic.ts');
+  let compiledSource: Promise<string> | null = null;
+  return {
+    name: 'early-world-tile-bootstrap',
+    enforce: 'pre',
+    async transformIndexHtml(html, context) {
+      if (context.filename && resolve(context.filename) !== resolve(process.cwd(), 'index.html')) {
+        return html;
+      }
+      if (!html.includes(EARLY_WORLD_TILE_BOOTSTRAP_MARKER)) return html;
+      compiledSource ??= transformWithEsbuild(readFileSync(entryPath, 'utf8'), entryPath, {
+        loader: 'ts',
+        target: 'es2020',
+        format: 'iife',
+        minify: true,
+        define: {
+          __WAMP_EARLY_WORLD_TILE_API_BASE__: JSON.stringify(apiBaseUrl),
+          __WAMP_WORLD_TILE_BYTE_CACHE_NAME__: JSON.stringify(WORLD_TILE_BYTE_CACHE_NAME),
+          __WAMP_WORLD_TILE_BYTE_CACHE_HASH_PARAM__: JSON.stringify(WORLD_TILE_BYTE_CACHE_HASH_PARAM),
+        },
+      }).then(({ code }) => code.replace(/<\/script/gi, '<\\/script'));
+      const source = await compiledSource;
+      return html.replace(
+        EARLY_WORLD_TILE_BOOTSTRAP_MARKER,
+        `<script data-wamp-early-world-tiles-bootstrap="v1">${source}</script>`,
+      );
+    },
+  };
+}
 
 function cloudflareWebAnalyticsPlugin(token: string): PluginOption {
   return {

@@ -188,8 +188,25 @@ for (const [controller, requiredIds] of Object.entries(requiredIdsByController))
 }
 
 const stalePresent = staleIds.filter((id) => ids.has(id));
+const earlyWorldTileMarkerIndex = html.indexOf('<!-- wamp-early-world-tiles-bootstrap -->');
+const mainModuleIndex = html.indexOf('<script type="module" src="/src/main.ts"></script>');
+const earlyWorldTileBootstrapContractErrors = [];
+if (earlyWorldTileMarkerIndex < 0) {
+  earlyWorldTileBootstrapContractErrors.push('missing early world tile bootstrap marker');
+}
+if (mainModuleIndex < 0) {
+  earlyWorldTileBootstrapContractErrors.push('missing main module script');
+}
+if (earlyWorldTileMarkerIndex >= 0 && mainModuleIndex >= 0 && earlyWorldTileMarkerIndex >= mainModuleIndex) {
+  earlyWorldTileBootstrapContractErrors.push('early world tile bootstrap must execute before the main module');
+}
 
-if (duplicateIds.size > 0 || missing.length > 0 || stalePresent.length > 0) {
+if (
+  duplicateIds.size > 0
+  || missing.length > 0
+  || stalePresent.length > 0
+  || earlyWorldTileBootstrapContractErrors.length > 0
+) {
   if (duplicateIds.size > 0) {
     console.error('Duplicate DOM IDs:');
     for (const id of [...duplicateIds].sort()) {
@@ -206,6 +223,12 @@ if (duplicateIds.size > 0 || missing.length > 0 || stalePresent.length > 0) {
     console.error('Stale leaderboard discover IDs should stay owned by ExploreModal instead:');
     for (const id of stalePresent.sort()) {
       console.error(`  #${id}`);
+    }
+  }
+  if (earlyWorldTileBootstrapContractErrors.length > 0) {
+    console.error('Early world tile bootstrap DOM contract errors:');
+    for (const error of earlyWorldTileBootstrapContractErrors) {
+      console.error(`  ${error}`);
     }
   }
   process.exit(1);

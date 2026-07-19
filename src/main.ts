@@ -27,6 +27,7 @@ import {
   logBootPhase,
 } from './main/bootDiagnostics';
 import { getGameDebugState, getSwordHunterDebugState } from './main/debugState';
+import { installEarlyWorldTileBootstrapHandoff } from './main/earlyWorldTileBootstrapHandoff';
 import { installPreviewSmokeActions } from './main/previewSmoke';
 import { normalizeRendererQuery, parseBooleanQuery, resolveRendererType } from './main/query';
 import {
@@ -84,6 +85,7 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 initializeAppFeedback();
+installEarlyWorldTileBootstrapHandoff();
 showBootSplash('Loading assets...', 0);
 logBootPhase('phaser-game:create-start', {
   width: config.width,
