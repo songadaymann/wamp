@@ -21,6 +21,7 @@ import {
 } from './geometry';
 import {
   getWorldTileManifestRendererRole,
+  parseWorldTileManifest,
   WorldTileManifestCompatibilityError,
 } from './manifest';
 import { WorldTileManifestLoader } from './manifestLoader';
@@ -278,10 +279,7 @@ export class WorldTileClientController {
     });
     try {
       const manifest = await Promise.race([
-        this.options.repository.loadWorldTileManifest(0, bounds, {
-          signal: abortController.signal,
-          includeRooms: false,
-        }),
+        this.loadInitialCoverageManifest(bounds, lifecycleEpoch, abortController.signal),
         coverageTimeout,
       ]);
       if (
@@ -313,6 +311,27 @@ export class WorldTileClientController {
     } finally {
       if (timeoutId !== null) clearTimeout(timeoutId);
     }
+  }
+
+  private async loadInitialCoverageManifest(
+    bounds: WorldTileBounds,
+    lifecycleEpoch: number,
+    signal: AbortSignal,
+  ): Promise<WorldTileManifest | null> {
+    const handedOff = hasConsumableEarlyWorldTileCoverage()
+      ? await consumeEarlyWorldTileCoverage({
+          rendererVersion: this.activeRendererVersion,
+          bounds,
+          lifecycleEpoch,
+          signal,
+        })
+      : null;
+    signal.throwIfAborted();
+    if (handedOff) return handedOff;
+    return this.options.repository.loadWorldTileManifest(0, bounds, {
+      signal,
+      includeRooms: false,
+    });
   }
 
   update(camera: Phaser.Cameras.Scene2D.Camera): void {
@@ -1551,6 +1570,128 @@ export class WorldTileClientController {
       }
     }
   }
+}
+
+interface EarlyWorldTileCoverageConsumerInput {
+  rendererVersion: string | null;
+  bounds: WorldTileBounds;
+  lifecycleEpoch: number;
+  signal: AbortSignal;
+}
+
+function hasConsumableEarlyWorldTileCoverage(): boolean {
+  if (typeof window === 'undefined') return false;
+  const handle = window.__wampEarlyWorldTiles;
+  return handle?.schemaVersion === 1
+    && typeof handle.consumeCoverage === 'function'
+    && Boolean(handle.ready);
+}
+
+async function consumeEarlyWorldTileCoverage(
+  input: EarlyWorldTileCoverageConsumerInput,
+): Promise<WorldTileManifest | null> {
+  if (!input.rendererVersion || typeof window === 'undefined') return null;
+  try {
+    const handle = window.__wampEarlyWorldTiles;
+    if (
+      handle?.schemaVersion !== 1
+      || typeof handle.consumeCoverage !== 'function'
+      || !handle.ready
+    ) return null;
+    const state = await waitForEarlyWorldTileBootstrap(handle.ready, input.signal);
+    input.signal.throwIfAborted();
+    if (
+      (state.status !== 'visible' && state.status !== 'ready-shadow')
+      || state.rendererVersion !== input.rendererVersion
+    ) return null;
+    const handoff = handle.consumeCoverage({
+      schemaVersion: 1,
+      consumerGeneration: input.lifecycleEpoch,
+      rendererVersion: input.rendererVersion,
+      level: 0,
+      targetBounds: { ...input.bounds },
+    });
+    if (
+      !handoff
+      || handoff.schemaVersion !== 1
+      || !Number.isSafeInteger(handoff.bootstrapGeneration)
+      || handoff.bootstrapGeneration <= 0
+      || handoff.consumerGeneration !== input.lifecycleEpoch
+    ) return null;
+    const manifest = parseWorldTileManifest(handoff.manifest);
+    if (!isCompatibleEarlyWorldTileCoverage(manifest, input.rendererVersion, input.bounds)) {
+      return null;
+    }
+    return manifest;
+  } catch (error) {
+    if (input.signal.aborted) throw error;
+    return null;
+  }
+}
+
+function waitForEarlyWorldTileBootstrap<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  return new Promise<T>((resolve, reject) => {
+    const handleAbort = () => {
+      cleanup();
+      reject(new DOMException('Early world tile handoff aborted.', 'AbortError'));
+    };
+    const cleanup = () => signal.removeEventListener('abort', handleAbort);
+    signal.addEventListener('abort', handleAbort, { once: true });
+    void promise.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
+function isCompatibleEarlyWorldTileCoverage(
+  manifest: WorldTileManifest,
+  rendererVersion: string,
+  bounds: WorldTileBounds,
+): boolean {
+  if (
+    manifest.level !== 0
+    || manifest.rendererVersion !== rendererVersion
+    || manifest.rooms.length !== 0
+    || !equalWorldTileBounds(manifest.targetBounds, bounds)
+  ) return false;
+  const expectedCount = (bounds.maxTileX - bounds.minTileX + 1)
+    * (bounds.maxTileY - bounds.minTileY + 1);
+  if (manifest.entries.length !== expectedCount) return false;
+  const seen = new Set<string>();
+  for (const entry of manifest.entries) {
+    if (
+      entry.address.level !== 0
+      || entry.address.rendererVersion !== rendererVersion
+      || entry.address.x < bounds.minTileX
+      || entry.address.x > bounds.maxTileX
+      || entry.address.y < bounds.minTileY
+      || entry.address.y > bounds.maxTileY
+      || (!entry.ready && !(
+        entry.desiredEmpty
+        && entry.readyEmptyGeneration !== null
+        && entry.readyEmptyGeneration >= entry.desiredGeneration
+      ))
+    ) return false;
+    const key = `${entry.address.x},${entry.address.y}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+  }
+  return true;
+}
+
+function equalWorldTileBounds(left: WorldTileBounds, right: WorldTileBounds): boolean {
+  return left.minTileX === right.minTileX
+    && left.maxTileX === right.maxTileX
+    && left.minTileY === right.minTileY
+    && left.maxTileY === right.maxTileY;
 }
 
 function sameWorldTileAddresses(

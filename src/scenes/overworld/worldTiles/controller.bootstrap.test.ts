@@ -103,6 +103,155 @@ describe('world tile controller bootstrap ownership', () => {
     controller.destroy();
   });
 
+  it('awaits and consumes the validated early L0 handoff without issuing a second manifest', async () => {
+    let resolveEarlyReady!: (value: unknown) => void;
+    const earlyReady = new Promise<unknown>((resolve) => {
+      resolveEarlyReady = resolve;
+    });
+    const early = installEarlyCoverageHandle(earlyReady);
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+
+    await expect(controller.prepare()).resolves.toBe(true);
+    const coveragePromise = controller.ensureInitialCoverage(camera);
+    await flushMicrotasks();
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+    expect(early.consumeCoverage).not.toHaveBeenCalled();
+
+    resolveEarlyReady(earlyBootstrapState('visible', rendererVersion));
+    await expect(coveragePromise).resolves.toBe(true);
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+    expect(early.consumeCoverage).toHaveBeenCalledOnce();
+    expect(early.consumeCoverage.mock.calls[0]?.[0]).toMatchObject({
+      schemaVersion: 1,
+      consumerGeneration: 0,
+      rendererVersion,
+      level: 0,
+      targetBounds: { minTileX: 0, maxTileX: 0, minTileY: 0, maxTileY: 0 },
+    });
+    expect(early.release).not.toHaveBeenCalled();
+    controller.destroy();
+  });
+
+  it('does not let an aborted lifecycle consume a late early handoff', async () => {
+    let resolveEarlyReady!: (value: unknown) => void;
+    const earlyReady = new Promise<unknown>((resolve) => {
+      resolveEarlyReady = resolve;
+    });
+    const early = installEarlyCoverageHandle(earlyReady);
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+
+    await controller.prepare();
+    const staleCoverage = controller.ensureInitialCoverage(camera);
+    await flushMicrotasks();
+    controller.reset();
+    await expect(staleCoverage).resolves.toBe(false);
+    expect(early.consumeCoverage).not.toHaveBeenCalled();
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+
+    await controller.prepare();
+    const currentCoverage = controller.ensureInitialCoverage(camera);
+    resolveEarlyReady(earlyBootstrapState('visible', rendererVersion));
+    await expect(currentCoverage).resolves.toBe(true);
+    expect(early.consumeCoverage).toHaveBeenCalledOnce();
+    expect(early.consumeCoverage.mock.calls[0]?.[0].consumerGeneration).toBe(1);
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+    controller.destroy();
+  });
+
+  it.each([
+    ['failed bootstrap', earlyBootstrapState('failed', rendererVersion), false],
+    ['renderer mismatch', earlyBootstrapState('visible', 'old-renderer'), false],
+    ['invalid returned bounds', earlyBootstrapState('visible', rendererVersion), true],
+  ])('falls back to the normal L0 request for %s', async (_label, state, returnInvalid) => {
+    const early = installEarlyCoverageHandle(Promise.resolve(state), returnInvalid
+      ? (request) => ({
+          schemaVersion: 1,
+          bootstrapGeneration: 1,
+          consumerGeneration: request.consumerGeneration,
+          manifest: readyEmptyManifest(0, { ...request.targetBounds, maxTileX: request.targetBounds.maxTileX + 1 }),
+        })
+      : undefined);
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+
+    await controller.prepare();
+    await expect(controller.ensureInitialCoverage(createCamera())).resolves.toBe(true);
+    expect(levelCalls(loadWorldTileManifest, 0)).toHaveLength(1);
+    expect(levelCalls(loadWorldTileManifest, 0)[0]?.[2]).toMatchObject({
+      includeRooms: false,
+      signal: expect.any(AbortSignal),
+    });
+    if (returnInvalid) expect(early.consumeCoverage).toHaveBeenCalledOnce();
+    else expect(early.consumeCoverage).not.toHaveBeenCalled();
+    controller.destroy();
+  });
+
+  it('falls back to the normal L0 request when early bootstrap readiness rejects', async () => {
+    const early = installEarlyCoverageHandle(Promise.reject(new Error('early-bootstrap-failed')));
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+
+    await controller.prepare();
+    await expect(controller.ensureInitialCoverage(createCamera())).resolves.toBe(true);
+    expect(levelCalls(loadWorldTileManifest, 0)).toHaveLength(1);
+    expect(early.consumeCoverage).not.toHaveBeenCalled();
+    controller.destroy();
+  });
+
+  it('activates sticky coverage fallback when early bootstrap readiness never settles', async () => {
+    vi.useFakeTimers();
+    const early = installEarlyCoverageHandle(new Promise(() => {}));
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+
+    await controller.prepare();
+    const camera = createCamera();
+    const coveragePromise = controller.ensureInitialCoverage(camera);
+    await flushMicrotasks();
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(WORLD_TILE_COVERAGE_TIMEOUT_MS);
+    await expect(coveragePromise).resolves.toBe(false);
+    expect(early.consumeCoverage).not.toHaveBeenCalled();
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+    controller.update(camera);
+    expect(controller.getDebugSnapshot().fallbackReason).toBe('coverage-timeout');
+    controller.destroy();
+  });
+
   it('holds refinement during shadow bootstrap and resumes only after L0 settles', async () => {
     let resolveInitialManifest!: (manifest: WorldTileManifest) => void;
     installBrowserGlobals('?worldTiles=shadow', async () => ({ quota: 512 * 1_024 * 1_024 }));
@@ -380,6 +529,49 @@ function levelCalls(
   level: WorldTileLevel,
 ): Parameters<WorldRepository['loadWorldTileManifest']>[] {
   return load.mock.calls.filter((call) => call[0] === level);
+}
+
+interface EarlyCoverageRequestForTest {
+  schemaVersion: 1;
+  consumerGeneration: number;
+  rendererVersion: string;
+  level: 0;
+  targetBounds: WorldTileBounds;
+}
+
+function installEarlyCoverageHandle(
+  ready: Promise<unknown>,
+  createHandoff?: (request: EarlyCoverageRequestForTest) => unknown,
+): {
+  consumeCoverage: ReturnType<typeof vi.fn<(request: EarlyCoverageRequestForTest) => unknown>>;
+  release: ReturnType<typeof vi.fn>;
+} {
+  let consumed = false;
+  const consumeCoverage = vi.fn((request: EarlyCoverageRequestForTest) => {
+    if (consumed) return null;
+    const handoff = createHandoff?.(request) ?? {
+      schemaVersion: 1,
+      bootstrapGeneration: 1,
+      consumerGeneration: request.consumerGeneration,
+      manifest: readyEmptyManifest(0, request.targetBounds),
+    };
+    if (handoff) consumed = true;
+    return handoff;
+  });
+  const release = vi.fn();
+  (window as Window).__wampEarlyWorldTiles = {
+    schemaVersion: 1,
+    ready,
+    getState: vi.fn(),
+    consumeCoverage,
+    alignToGameContainer: vi.fn(),
+    release,
+  } as unknown as NonNullable<Window['__wampEarlyWorldTiles']>;
+  return { consumeCoverage, release };
+}
+
+function earlyBootstrapState(status: 'visible' | 'ready-shadow' | 'failed', version: string): unknown {
+  return { status, rendererVersion: version };
 }
 
 function installBrowserGlobals(

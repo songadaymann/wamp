@@ -4,6 +4,7 @@ import {
   buildEarlyWorldTileCacheUrl,
   calculateEarlyWorldTileImagePresentation,
   calculateEarlyWorldTileViewport,
+  createEarlyWorldTileCoverageHandoffSlot,
   decideEarlyWorldTileRollout,
   getEarlyWorldTileCohortBucket,
   getEarlyWorldTileContainerRect,
@@ -15,6 +16,8 @@ import {
   persistEarlyWorldTileBlob,
   setEarlyWorldTileVisibilityDataset,
   type EarlyWorldTileBounds,
+  type EarlyWorldTileCoverageManifest,
+  type EarlyWorldTileEntry,
 } from './earlyWorldTileBootstrap.classic';
 import {
   buildWorldTileByteCacheRequest,
@@ -210,6 +213,80 @@ describe('classic early world tile bootstrap', () => {
       .toEqual([[-1, 0, false], [0, 0, true]]);
   });
 
+  it('hands validated anonymous L0 coverage to exactly one matching lifecycle consumer', () => {
+    const bounds: EarlyWorldTileBounds = {
+      minTileX: -1,
+      maxTileX: 0,
+      minTileY: 0,
+      maxTileY: 0,
+    };
+    const coverage: EarlyWorldTileCoverageManifest = {
+      schemaVersion: 1,
+      rendererVersion,
+      level: 0,
+      targetBounds: bounds,
+      entries: [emptyEntry(-1, 0), readyEntry(0, 0)],
+      rooms: [],
+    };
+    const slot = createEarlyWorldTileCoverageHandoffSlot();
+    slot.publish(coverage);
+
+    expect(slot.consume({
+      schemaVersion: 1,
+      consumerGeneration: -1,
+      rendererVersion,
+      level: 0,
+      targetBounds: bounds,
+    })).toBeNull();
+    expect(slot.consume({
+      schemaVersion: 1,
+      consumerGeneration: 4,
+      rendererVersion: 'different-renderer',
+      level: 0,
+      targetBounds: bounds,
+    })).toBeNull();
+    expect(slot.consume({
+      schemaVersion: 1,
+      consumerGeneration: 4,
+      rendererVersion,
+      level: 0,
+      targetBounds: { ...bounds, maxTileX: 1 },
+    })).toBeNull();
+
+    const handoff = slot.consume({
+      schemaVersion: 1,
+      consumerGeneration: 4,
+      rendererVersion,
+      level: 0,
+      targetBounds: bounds,
+    });
+    expect(handoff).toMatchObject({
+      schemaVersion: 1,
+      bootstrapGeneration: 1,
+      consumerGeneration: 4,
+      manifest: { rendererVersion, level: 0, targetBounds: bounds, rooms: [] },
+    });
+    handoff!.manifest.entries[0].desiredGeneration = 99;
+    expect(coverage.entries[0].desiredGeneration).toBe(2);
+    expect(slot.consume({
+      schemaVersion: 1,
+      consumerGeneration: 4,
+      rendererVersion,
+      level: 0,
+      targetBounds: bounds,
+    })).toBeNull();
+
+    slot.publish(coverage);
+    slot.clear();
+    expect(slot.consume({
+      schemaVersion: 1,
+      consumerGeneration: 5,
+      rendererVersion,
+      level: 0,
+      targetBounds: bounds,
+    })).toBeNull();
+  });
+
   it('rejects missing cells, pending empties, and invalid image contracts before DOM exposure', () => {
     const bounds = { minTileX: 0, maxTileX: 0, minTileY: 0, maxTileY: 0 };
     expect(() => parseEarlyWorldTileManifest(manifest(bounds, []), bounds, rendererVersion))
@@ -226,7 +303,7 @@ describe('classic early world tile bootstrap', () => {
   });
 });
 
-function readyEntry(x: number, y: number) {
+function readyEntry(x: number, y: number): EarlyWorldTileEntry {
   return {
     address: { rendererVersion, level: 0, x, y },
     desiredGeneration: 2,
@@ -245,7 +322,7 @@ function readyEntry(x: number, y: number) {
   };
 }
 
-function emptyEntry(x: number, y: number) {
+function emptyEntry(x: number, y: number): EarlyWorldTileEntry {
   return {
     address: { rendererVersion, level: 0, x, y },
     desiredGeneration: 2,

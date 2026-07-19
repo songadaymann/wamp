@@ -45,7 +45,7 @@ interface EarlyWorldTileConfig {
   activeRendererVersion: string | null;
 }
 
-interface EarlyWorldTileReady {
+export interface EarlyWorldTileReady {
   generation: number;
   contentHash: string;
   url: string;
@@ -55,7 +55,7 @@ interface EarlyWorldTileReady {
   byteLength: number;
 }
 
-interface EarlyWorldTileEntry {
+export interface EarlyWorldTileEntry {
   address: {
     rendererVersion: string;
     level: 0;
@@ -129,10 +129,41 @@ export interface EarlyWorldTileBootstrapState {
   };
 }
 
+export interface EarlyWorldTileCoverageRequest {
+  schemaVersion: 1;
+  consumerGeneration: number;
+  rendererVersion: string;
+  level: 0;
+  targetBounds: EarlyWorldTileBounds;
+}
+
+export interface EarlyWorldTileCoverageManifest {
+  schemaVersion: 1;
+  rendererVersion: string;
+  level: 0;
+  targetBounds: EarlyWorldTileBounds;
+  entries: EarlyWorldTileEntry[];
+  rooms: [];
+}
+
+export interface EarlyWorldTileCoverageHandoff {
+  schemaVersion: 1;
+  bootstrapGeneration: number;
+  consumerGeneration: number;
+  manifest: EarlyWorldTileCoverageManifest;
+}
+
+export interface EarlyWorldTileCoverageHandoffSlot {
+  publish(manifest: EarlyWorldTileCoverageManifest): void;
+  consume(request: EarlyWorldTileCoverageRequest): EarlyWorldTileCoverageHandoff | null;
+  clear(): void;
+}
+
 export interface EarlyWorldTileBootstrapHandle {
   readonly schemaVersion: 1;
   readonly ready: Promise<EarlyWorldTileBootstrapState>;
   getState(): EarlyWorldTileBootstrapState;
+  consumeCoverage(request: EarlyWorldTileCoverageRequest): EarlyWorldTileCoverageHandoff | null;
   alignToGameContainer(): void;
   release(reason?: string): void;
 }
@@ -162,6 +193,50 @@ interface InstallEarlyWorldTileBootstrapOptions {
   apiBaseUrl: string;
   cacheName: string;
   cacheHashParam: string;
+}
+
+/**
+ * Stores only the already-validated, anonymous L0 manifest. A successful take
+ * is one-shot, while mismatched consumers leave the handoff available for the
+ * correct renderer and viewport.
+ */
+export function createEarlyWorldTileCoverageHandoffSlot(): EarlyWorldTileCoverageHandoffSlot {
+  let published: { generation: number; manifest: EarlyWorldTileCoverageManifest } | null = null;
+  let nextGeneration = 0;
+  let consumed = false;
+  return {
+    publish(manifest) {
+      nextGeneration += 1;
+      published = {
+        generation: nextGeneration,
+        manifest: cloneCoverageManifest(manifest),
+      };
+      consumed = false;
+    },
+    consume(request) {
+      if (
+        consumed
+        || !published
+        || request.schemaVersion !== EARLY_WORLD_TILE_SCHEMA_VERSION
+        || request.level !== EARLY_WORLD_TILE_LEVEL
+        || !Number.isSafeInteger(request.consumerGeneration)
+        || request.consumerGeneration < 0
+        || request.rendererVersion !== published.manifest.rendererVersion
+        || !equalBounds(request.targetBounds, published.manifest.targetBounds)
+      ) return null;
+      consumed = true;
+      return {
+        schemaVersion: 1,
+        bootstrapGeneration: published.generation,
+        consumerGeneration: request.consumerGeneration,
+        manifest: cloneCoverageManifest(published.manifest),
+      };
+    },
+    clear() {
+      published = null;
+      consumed = true;
+    },
+  };
 }
 
 export function parseEarlyWorldTileBootstrapZoom(search: string): number {
@@ -442,6 +517,7 @@ export function installEarlyWorldTileBootstrap(
   };
   const abortController = new AbortController();
   const objectUrls = new Set<string>();
+  const coverageHandoff = createEarlyWorldTileCoverageHandoffSlot();
   let layer: HTMLElement | null = null;
   let released = false;
 
@@ -456,6 +532,7 @@ export function installEarlyWorldTileBootstrap(
     if (released) return;
     released = true;
     abortController.abort();
+    coverageHandoff.clear();
     layer?.remove();
     layer = null;
     setEarlyWorldTileVisibilityDataset(options.doc.body, false);
@@ -484,8 +561,10 @@ export function installEarlyWorldTileBootstrap(
       layer?.remove();
       layer = nextLayer;
     },
+    publishCoverage: (manifest) => coverageHandoff.publish(manifest),
   }).catch((error: unknown) => {
     if (!released) {
+      coverageHandoff.clear();
       state.status = 'failed';
       state.error = error instanceof Error ? error.message : String(error);
       layer?.remove();
@@ -500,6 +579,7 @@ export function installEarlyWorldTileBootstrap(
     schemaVersion: 1,
     ready,
     getState: () => copyState(state),
+    consumeCoverage: (request) => coverageHandoff.consume(request),
     alignToGameContainer,
     release,
   };
@@ -514,6 +594,7 @@ interface RunEarlyWorldTileBootstrapOptions extends InstallEarlyWorldTileBootstr
   isReleased: () => boolean;
   registerObjectUrl: (url: string) => void;
   attachLayer: (layer: HTMLElement) => void;
+  publishCoverage: (manifest: EarlyWorldTileCoverageManifest) => void;
 }
 
 async function runEarlyWorldTileBootstrap(
@@ -629,6 +710,14 @@ async function runEarlyWorldTileBootstrap(
     state.status = 'visible';
     state.timings.visibleAtMs = options.now();
   }
+  options.publishCoverage({
+    schemaVersion: 1,
+    rendererVersion: manifest.rendererVersion,
+    level: 0,
+    targetBounds: { ...viewport.bounds },
+    entries: manifest.entries,
+    rooms: [],
+  });
   options.win.dispatchEvent(new CustomEvent(EARLY_WORLD_TILE_READY_EVENT, {
     detail: copyState(state),
   }));
@@ -1074,6 +1163,12 @@ function waitForBody(doc: Document): Promise<void> {
 
 function copyState(state: EarlyWorldTileBootstrapState): EarlyWorldTileBootstrapState {
   return JSON.parse(JSON.stringify(state)) as EarlyWorldTileBootstrapState;
+}
+
+function cloneCoverageManifest(
+  manifest: EarlyWorldTileCoverageManifest,
+): EarlyWorldTileCoverageManifest {
+  return JSON.parse(JSON.stringify(manifest)) as EarlyWorldTileCoverageManifest;
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
