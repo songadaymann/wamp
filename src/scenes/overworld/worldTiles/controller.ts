@@ -3,6 +3,10 @@ import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { WorldRepository } from '../../../persistence/worldRepository';
 import type { PerformanceProfile } from '../../../ui/deviceLayout';
 import type { OverworldMode } from '../../sceneData';
+import {
+  shouldScheduleWorldTileRequest,
+  type WorldTileRequestKind,
+} from './bootstrapPriority';
 import { WorldTileByteCache } from './byteCache';
 import { type WorldTileAvailability } from './coverage';
 import {
@@ -131,6 +135,7 @@ export class WorldTileClientController {
   private prepareAbortController: AbortController | null = null;
   private initialCoveragePromise: Promise<boolean> | null = null;
   private initialCoverageAbortController: AbortController | null = null;
+  private requestSchedulingReady = false;
   private rollout: WorldTileRolloutDecision | null = null;
   private activeRendererVersion: string | null = null;
   private previousRendererVersion: string | null = null;
@@ -183,6 +188,7 @@ export class WorldTileClientController {
     this.contextRestorePending = true;
     this.layer.discardGpuTexturesForContextRestore();
     this.refreshAvailability();
+    if (!this.shouldScheduleRequest('context-restoration')) return;
     const addresses = orderWorldTilesForContextRestoration({
       visible: this.visibleTargets,
       fallbackAncestors: this.fallbackAncestors,
@@ -306,6 +312,11 @@ export class WorldTileClientController {
       this.metrics.recordFrame();
       return;
     }
+    this.maybePollMutationConvergence(nowMs);
+    if (!this.shouldScheduleRequest('viewport-refinement')) {
+      this.metrics.recordFrame();
+      return;
+    }
 
     const viewport = getCameraWorldRect(camera);
     this.updateCameraMotion(viewport, camera.zoom, nowMs);
@@ -344,7 +355,6 @@ export class WorldTileClientController {
     this.processFetchQueue();
     this.processDecodeQueue();
     this.syncCoverage(nowMs);
-    this.maybePollMutationConvergence(nowMs);
     this.maybeRefreshConfig(nowMs);
     this.metrics.recordFrame();
   }
@@ -403,7 +413,13 @@ export class WorldTileClientController {
     coordinates: RoomCoordinates | null,
     owner: 'selection' | 'mutation' = 'selection',
   ): void {
-    if (!coordinates || this.isRefinementStopped()) return;
+    if (
+      !coordinates
+      || this.isRefinementStopped()
+      || !this.shouldScheduleRequest(
+        owner === 'selection' ? 'selection-prefetch' : 'mutation-prefetch',
+      )
+    ) return;
     void this.roomManifestPrefetcher.prefetch(coordinates, owner);
   }
 
@@ -446,6 +462,7 @@ export class WorldTileClientController {
     this.initialCoverageAbortController?.abort();
     this.initialCoverageAbortController = null;
     this.initialCoveragePromise = null;
+    this.requestSchedulingReady = false;
     this.roomManifestPrefetcher.cancelAll();
     this.manifestLoader.cancel();
     this.manifestSchedule.reset();
@@ -500,6 +517,7 @@ export class WorldTileClientController {
     this.prepareAbortController = null;
     this.initialCoverageAbortController?.abort();
     this.initialCoverageAbortController = null;
+    this.requestSchedulingReady = false;
     this.roomManifestPrefetcher.cancelAll();
     this.manifestLoader.cancel();
     this.contextCanvas?.removeEventListener('webglcontextrestored', this.handleContextRestored);
@@ -517,6 +535,7 @@ export class WorldTileClientController {
   }
 
   private async prepareInternal(): Promise<boolean> {
+    this.requestSchedulingReady = false;
     this.installContextRestoreListener();
     const abortController = new AbortController();
     this.prepareAbortController = abortController;
@@ -541,7 +560,7 @@ export class WorldTileClientController {
         search: window.location.search,
       });
       if (!this.rollout.enabled) return false;
-      this.activeRendererVersion = config.activeRendererVersion;
+      const preparedRendererVersion = config.activeRendererVersion;
       const quota = await getStorageQuota();
       if (abortController.signal.aborted || this.destroyed) return false;
       this.byteCache = new WorldTileByteCache(getPersistentWorldTileByteBudget(
@@ -549,7 +568,9 @@ export class WorldTileClientController {
         quota,
       ));
       this.nextConfigRefreshAtMs = performance.now() + WORLD_TILE_CONFIG_REFRESH_MS;
-      return this.activeRendererVersion !== null;
+      this.activeRendererVersion = preparedRendererVersion;
+      this.requestSchedulingReady = preparedRendererVersion !== null;
+      return this.requestSchedulingReady;
     } catch (error) {
       if (abortController.signal.aborted) return false;
       if (error instanceof WorldTileManifestCompatibilityError) {
@@ -575,6 +596,13 @@ export class WorldTileClientController {
     return this.destroyed
       || this.rollout?.enabled !== true
       || this.fallback.snapshot().active;
+  }
+
+  private shouldScheduleRequest(requestKind: WorldTileRequestKind): boolean {
+    return shouldScheduleWorldTileRequest(requestKind, {
+      requestSchedulingReady: this.requestSchedulingReady && this.activeRendererVersion !== null,
+      initialCoverageActive: this.initialCoveragePromise !== null,
+    });
   }
 
   private stopRefinementWork(): void {
@@ -1335,7 +1363,10 @@ export class WorldTileClientController {
   }
 
   private maybeRefreshConfig(nowMs: number): void {
-    if (nowMs < this.nextConfigRefreshAtMs) return;
+    if (
+      nowMs < this.nextConfigRefreshAtMs
+      || !this.shouldScheduleRequest('config-refresh')
+    ) return;
     this.nextConfigRefreshAtMs = nowMs + WORLD_TILE_CONFIG_REFRESH_MS;
     void this.options.repository.loadWorldTileConfig().then((config) => {
       const currentRollout = this.rollout;
