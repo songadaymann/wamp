@@ -501,7 +501,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       }
 
       if (this.compactWorldActive) {
-        await initialWorldTileCoveragePromise;
+        logBootPhase('world-stream:initial-tile-coverage:await-start', {
+          generation,
+          mode: this.options.getMode(),
+        });
+        const initialTileCoverageReady = await initialWorldTileCoveragePromise;
+        logBootPhase('world-stream:initial-tile-coverage:await-done', {
+          generation,
+          ready: initialTileCoverageReady,
+        });
         if (this.destroyed || generation !== this.loadGeneration) return 'cancelled';
       }
 
@@ -516,10 +524,27 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         snapshotDetail = this.getPreviewSnapshotDetail();
         const nearRoomIds = this.getNearestPreviewRoomIds(roomCandidates, renderedPreviewRoomIds, fullRoomIds, 9);
         try {
-          await this.previewCache.ensureRoomSnapshotsBatch(roomCandidates, nearRoomIds, {
-            priority: 'high',
+          let snapshotBatchCompleted = false;
+          logBootPhase('world-stream:nearest-dynamic-snapshots:await-start', {
+            generation,
+            roomCount: nearRoomIds.size,
             detail: snapshotDetail,
+            tiledBrowseCutover: this.worldTileController.isBrowseCutoverActive(),
           });
+          try {
+            await this.previewCache.ensureRoomSnapshotsBatch(roomCandidates, nearRoomIds, {
+              priority: 'high',
+              detail: snapshotDetail,
+            });
+            snapshotBatchCompleted = true;
+          } finally {
+            logBootPhase('world-stream:nearest-dynamic-snapshots:await-done', {
+              generation,
+              roomCount: nearRoomIds.size,
+              detail: snapshotDetail,
+              completed: snapshotBatchCompleted,
+            });
+          }
         } catch (error) {
           console.warn('Compact snapshot loading failed; retrying with legacy world chunks.', error);
           const fallbackBounds = this.loadedChunkBounds ?? this.getDesiredChunkBounds(centerCoordinates);

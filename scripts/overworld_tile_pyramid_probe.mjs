@@ -259,36 +259,205 @@ function cameraMoved(before, after) {
   return beforeView.x !== afterView.x || beforeView.y !== afterView.y;
 }
 
-function attachNetworkRecorder(page) {
+function isTrackedNetworkUrl(url) {
+  return url.includes('/api/world/tiles/')
+    || /\/world-tiles\/.*\.png(?:\?|$)/.test(url)
+    || url.includes('/api/rooms/snapshots/query')
+    || url.includes('/api/world/chunks');
+}
+
+function isWorldTileImageUrl(url) {
+  return /\/world-tiles\/.*\.png(?:\?|$)/.test(url);
+}
+
+function getManifestLevel(url) {
+  if (!url.includes('/api/world/tiles/manifest')) return null;
+  try {
+    const value = Number(new URL(url).searchParams.get('level'));
+    return Number.isSafeInteger(value) && value >= 0 && value <= 4 ? value : 'invalid';
+  } catch {
+    return 'invalid';
+  }
+}
+
+function parseSnapshotQuery(postData) {
+  if (!postData) return null;
+  try {
+    const body = JSON.parse(postData);
+    const references = Array.isArray(body?.references) ? body.references : [];
+    const referenceKinds = references.map((reference) => (
+      typeof reference?.kind === 'string' ? reference.kind : 'invalid'
+    ));
+    const referenceClasses = references.map((reference) => {
+      const kind = typeof reference?.kind === 'string' ? reference.kind : 'invalid';
+      if (kind !== 'current_preview') return kind;
+      const state = typeof reference?.state === 'string' ? reference.state : 'unspecified';
+      return `${kind}:${state}`;
+    });
+    return {
+      detail: typeof body?.detail === 'string' ? body.detail : null,
+      referenceCount: references.length,
+      referenceKinds,
+      referenceClasses,
+    };
+  } catch {
+    return { detail: null, referenceCount: 0, referenceKinds: ['invalid-json'], referenceClasses: [] };
+  }
+}
+
+function countValues(values) {
+  const counts = {};
+  for (const value of values) counts[value] = (counts[value] ?? 0) + 1;
+  return counts;
+}
+
+function summarizeTrackedNetwork(requests) {
+  const tileRequests = requests.filter((entry) => isWorldTileImageUrl(entry.url));
+  const manifestRequests = requests.filter((entry) => entry.manifestLevel !== null);
+  const snapshotQueries = requests.filter((entry) => entry.snapshotQuery !== null);
+  const snapshotReferenceKinds = snapshotQueries.flatMap(
+    (entry) => entry.snapshotQuery.referenceKinds,
+  );
+  const snapshotReferenceClasses = snapshotQueries.flatMap(
+    (entry) => entry.snapshotQuery.referenceClasses,
+  );
+  return {
+    requestCount: requests.length,
+    tileRequestCount: tileRequests.length,
+    tileResponseCount: tileRequests.filter((entry) => entry.status !== null).length,
+    tileRequestBytes: tileRequests.reduce((sum, entry) => sum + entry.contentLength, 0),
+    manifestRequestCount: manifestRequests.length,
+    manifestLevels: manifestRequests.map((entry) => entry.manifestLevel),
+    manifestLevelCounts: countValues(manifestRequests.map((entry) => String(entry.manifestLevel))),
+    snapshotQueryCount: snapshotQueries.length,
+    snapshotReferenceKindCounts: countValues(snapshotReferenceKinds),
+    snapshotReferenceClassCounts: countValues(snapshotReferenceClasses),
+    snapshotReferenceCount: snapshotQueries.reduce(
+      (sum, entry) => sum + entry.snapshotQuery.referenceCount,
+      0,
+    ),
+    compactWorldSummaryRequestCount: requests.filter((entry) => (
+      entry.url.includes('/api/world/chunks/summary')
+    )).length,
+    legacyWorldChunkRequestCount: requests.filter((entry) => (
+      entry.url.includes('/api/world/chunks') && !entry.url.includes('/api/world/chunks/summary')
+    )).length,
+    announcedBytes: requests.reduce((sum, entry) => sum + entry.contentLength, 0),
+    immutableCacheHits: requests.filter((entry) => entry.cacheStatus === 'HIT').length,
+  };
+}
+
+function assertSerializedL0Bootstrap(requests) {
+  const manifests = requests
+    .filter((entry) => entry.manifestLevel !== null)
+    .sort((left, right) => left.startedAtMs - right.startedAtMs);
+  const l0Manifests = manifests.filter((entry) => entry.manifestLevel === 0);
+  if (manifests[0]?.manifestLevel !== 0 || l0Manifests.length !== 1) {
+    throw new Error(`Tile bootstrap must begin with exactly one L0 manifest: ${manifests.map((entry) => (
+      `${entry.manifestLevel}@${entry.startedAtMs}ms`
+    )).join(', ') || 'none'}`);
+  }
+
+  const firstRefinement = manifests.find((entry) => entry.manifestLevel !== 0) ?? null;
+  if (!firstRefinement) return;
+  const l0Manifest = l0Manifests[0];
+  const l0TileRequests = requests.filter((entry) => (
+    isWorldTileImageUrl(entry.url)
+    && entry.startedAtMs >= l0Manifest.startedAtMs
+    && entry.startedAtMs < firstRefinement.startedAtMs
+  ));
+  const unfinishedL0Network = l0Manifest.responseAtMs === null
+    || l0Manifest.responseAtMs > firstRefinement.startedAtMs
+    || l0TileRequests.some((entry) => (
+      entry.responseAtMs === null || entry.responseAtMs > firstRefinement.startedAtMs
+    ));
+  if (unfinishedL0Network) {
+    throw new Error(`Target-LOD refinement started before L0 network completion: ${JSON.stringify({
+      l0ManifestResponseAtMs: l0Manifest.responseAtMs,
+      l0TileResponsesAtMs: l0TileRequests.map((entry) => entry.responseAtMs),
+      refinementLevel: firstRefinement.manifestLevel,
+      refinementStartedAtMs: firstRefinement.startedAtMs,
+    })}`);
+  }
+}
+
+function attachNetworkRecorder(page, startedAt) {
   const requests = [];
-  page.on('response', (response) => {
-    const url = response.url();
-    const tracked = url.includes('/api/world/tiles/')
-      || /\/world-tiles\/.*\.png(?:\?|$)/.test(url)
-      || url.includes('/api/rooms/snapshots/query')
-      || url.includes('/api/world/chunks');
-    if (!tracked) return;
-    const headers = response.headers();
-    requests.push({
+  const requestEntries = new WeakMap();
+  const elapsedMs = () => Math.round((performance.now() - startedAt) * 10) / 10;
+  const recordRequest = (request) => {
+    const url = request.url();
+    if (!isTrackedNetworkUrl(url)) return null;
+    const postData = url.includes('/api/rooms/snapshots/query') ? request.postData() : null;
+    const entry = {
       url,
-      method: response.request().method(),
-      postData: url.includes('/api/rooms/snapshots/query')
-        ? response.request().postData()
-        : null,
+      method: request.method(),
+      postData,
+      snapshotQuery: parseSnapshotQuery(postData),
+      manifestLevel: getManifestLevel(url),
+      resourceType: request.resourceType(),
+      startedAtMs: elapsedMs(),
+      responseAtMs: null,
+      failedAtMs: null,
+      failure: null,
+      status: null,
+      contentLength: 0,
+      cacheStatus: null,
+      wampCache: null,
+      serverTiming: null,
+    };
+    requestEntries.set(request, entry);
+    requests.push(entry);
+    return entry;
+  };
+  const findPendingRequestEntry = (request) => (
+    requestEntries.get(request)
+    ?? requests.find((entry) => (
+      entry.url === request.url()
+      && entry.method === request.method()
+      && entry.responseAtMs === null
+      && entry.failedAtMs === null
+    ))
+    ?? null
+  );
+  page.on('request', recordRequest);
+  page.on('response', (response) => {
+    const request = response.request();
+    const entry = findPendingRequestEntry(request);
+    if (!entry) return;
+    const headers = response.headers();
+    Object.assign(entry, {
+      responseAtMs: elapsedMs(),
       status: response.status(),
-      resourceType: response.request().resourceType(),
-      contentLength: Number(headers['content-length'] ?? 0),
+      contentLength: Number(headers['content-length'] ?? 0) || 0,
       cacheStatus: headers['cf-cache-status'] ?? null,
       wampCache: headers['x-wamp-cache'] ?? null,
       serverTiming: headers['server-timing'] ?? null,
     });
   });
-  return requests;
+  page.on('requestfailed', (request) => {
+    const entry = findPendingRequestEntry(request);
+    if (!entry) return;
+    entry.failedAtMs = elapsedMs();
+    entry.failure = request.failure()?.errorText ?? 'unknown';
+  });
+  return {
+    elapsedMs,
+    snapshot: () => requests.map((entry) => ({
+      ...entry,
+      snapshotQuery: entry.snapshotQuery ? {
+        ...entry.snapshotQuery,
+        referenceKinds: [...entry.snapshotQuery.referenceKinds],
+        referenceClasses: [...entry.snapshotQuery.referenceClasses],
+      } : null,
+    })),
+  };
 }
 
 async function runPass(context, args, label) {
   const page = await context.newPage();
-  const network = attachNetworkRecorder(page);
+  const navigationStartedAt = performance.now();
+  const networkRecorder = attachNetworkRecorder(page, navigationStartedAt);
   const consoleMessages = [];
   page.on('console', (message) => {
     if (message.type() === 'error' || message.type() === 'warning') {
@@ -297,13 +466,26 @@ async function runPass(context, args, label) {
   });
   page.on('pageerror', (error) => consoleMessages.push({ type: 'pageerror', text: String(error) }));
 
-  const navigationStartedAt = performance.now();
   await page.goto(args.url, { waitUntil: 'domcontentloaded' });
+  let coarseCoverageError = null;
+  const coarseCoveragePromise = waitForTileState(page, isCompleteCoverage, args.timeoutMs)
+    .then((state) => ({
+      state,
+      capturedAtMs: networkRecorder.elapsedMs(),
+      network: networkRecorder.snapshot(),
+    }))
+    .catch((error) => {
+      coarseCoverageError = error;
+      return null;
+    });
   await waitForOverworld(page, args.timeoutMs);
   await dismissWelcomeModal(page);
   const appReadyMs = Math.round((performance.now() - navigationStartedAt) * 10) / 10;
-  const coarse = await waitForTileState(page, isCompleteCoverage, args.timeoutMs);
-  const coarseReadyMs = Math.round((performance.now() - navigationStartedAt) * 10) / 10;
+  const coarseCapture = await coarseCoveragePromise;
+  if (!coarseCapture) throw coarseCoverageError;
+  const coarse = coarseCapture.state;
+  const coarseReadyMs = coarseCapture.capturedAtMs;
+  assertSerializedL0Bootstrap(coarseCapture.network);
   const sharp = await waitForTileState(page, isSharpReady, args.timeoutMs);
   const sharpReadyMs = Math.round((performance.now() - navigationStartedAt) * 10) / 10;
 
@@ -342,12 +524,18 @@ async function runPass(context, args, label) {
 
   const screenshotPath = path.join(args.out, `${label}.png`);
   await page.screenshot({ path: screenshotPath, fullPage: true });
+  const network = networkRecorder.snapshot();
   const result = {
     label,
     appReadyMs,
     coarseReadyMs,
     sharpReadyMs,
     coarse,
+    coarseNetwork: {
+      capturedAtMs: coarseCapture.capturedAtMs,
+      requests: coarseCapture.network,
+      summary: summarizeTrackedNetwork(coarseCapture.network),
+    },
     sharp,
     zooms,
     pan: {
@@ -360,22 +548,7 @@ async function runPass(context, args, label) {
       panSharpMs,
     },
     network,
-    networkSummary: {
-      requestCount: network.length,
-      tileRequestCount: network.filter((entry) => /\/world-tiles\/.*\.png(?:\?|$)/.test(entry.url)).length,
-      manifestRequestCount: network.filter((entry) => entry.url.includes('/api/world/tiles/manifest')).length,
-      snapshotQueryCount: network.filter((entry) => (
-        entry.method === 'POST' && entry.url.includes('/api/rooms/snapshots/query')
-      )).length,
-      compactWorldSummaryRequestCount: network.filter((entry) => (
-        entry.url.includes('/api/world/chunks/summary')
-      )).length,
-      legacyWorldChunkRequestCount: network.filter((entry) => (
-        entry.url.includes('/api/world/chunks') && !entry.url.includes('/api/world/chunks/summary')
-      )).length,
-      announcedBytes: network.reduce((sum, entry) => sum + entry.contentLength, 0),
-      immutableCacheHits: network.filter((entry) => entry.cacheStatus === 'HIT').length,
-    },
+    networkSummary: summarizeTrackedNetwork(network),
     consoleMessages,
     screenshotPath,
   };
