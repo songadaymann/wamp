@@ -285,6 +285,20 @@ async function installClientProbeHooks(page) {
       state.events.push(entry);
       return entry;
     };
+    window.addEventListener('wamp:early-world-tiles-ready', (event) => {
+      let earlyState = null;
+      try {
+        earlyState = JSON.parse(JSON.stringify(event.detail ?? null));
+      } catch {
+        earlyState = null;
+      }
+      record({
+        type: 'early-bootstrap-ready',
+        state: earlyState,
+        layerPresent: document.querySelector('[data-wamp-early-world-tiles="true"]') !== null,
+        bodyVisible: document.body?.dataset.earlyWorldTilesVisible === 'true',
+      });
+    }, { once: true });
     const manifestLevel = (value) => {
       try {
         const url = new URL(value, window.location.href);
@@ -356,6 +370,7 @@ async function readClientProbeEvents(page) {
 function attachNetworkRecorder(page, startedAt) {
   const requests = [];
   const requestEntries = new WeakMap();
+  const ignoredRequests = new WeakSet();
   const responsesByRequest = new WeakMap();
   const pendingTasks = new Set();
   const orphanEvents = [];
@@ -368,6 +383,13 @@ function attachNetworkRecorder(page, startedAt) {
   const recordRequest = (request) => {
     const url = request.url();
     if (!isTrackedNetworkUrl(url)) return null;
+    // Actual manifest loads are window.fetch requests and are independently observed by the
+    // init-script hook. Chromium can surface response-body inspection as an aborted `other`
+    // request for the same URL; recording that probe artifact would invent a second client load.
+    if (getManifestLevel(url) !== null && request.resourceType() !== 'fetch') {
+      ignoredRequests.add(request);
+      return null;
+    }
     const isSnapshotQuery = url.includes('/api/rooms/snapshots/query');
     const postData = isSnapshotQuery ? request.postData() : null;
     const entry = {
@@ -401,6 +423,7 @@ function attachNetworkRecorder(page, startedAt) {
   };
   const findExactRequestEntry = (request, type) => {
     const entry = requestEntries.get(request) ?? null;
+    if (!entry && ignoredRequests.has(request)) return null;
     if (!entry && isTrackedNetworkUrl(request.url())) {
       orphanEvents.push({
         type,
@@ -434,6 +457,7 @@ function attachNetworkRecorder(page, startedAt) {
     manifestProbe: entry.manifestProbe ? {
       ...entry.manifestProbe,
       readyNonEmptyUrls: [...entry.manifestProbe.readyNonEmptyUrls],
+      targetAddresses: [...(entry.manifestProbe.targetAddresses ?? [])],
     } : null,
   });
 
@@ -530,14 +554,108 @@ function attachNetworkRecorder(page, startedAt) {
 
 async function captureInitialTileState(page, predicate, timeoutMs, networkRecorder, label) {
   const state = await waitForTileState(page, predicate, timeoutMs);
-  const networkBoundary = networkRecorder.mark(label);
   const clientBoundary = await markClientProbeBoundary(page, label);
+  // The in-page fetch hook runs synchronously, while Playwright reports the matching request on
+  // the next protocol turn. Freeze the semantic client boundary first, then let those request
+  // events reach the recorder before taking its independent sequence boundary.
+  await page.waitForTimeout(10);
+  const networkBoundary = networkRecorder.mark(label);
   return {
     state,
     capturedAtMs: networkBoundary.atMs,
     boundary: {
       networkSequence: networkBoundary.sequence,
       clientSequence: clientBoundary?.sequence ?? null,
+      clientAtMs: clientBoundary?.atMs ?? null,
+    },
+  };
+}
+
+async function readEarlyBootstrapProbeState(page) {
+  return await page.evaluate(() => {
+    const events = window.__wampWorldTileProbe?.events;
+    const readyEvent = Array.isArray(events)
+      ? events.find((entry) => entry.type === 'early-bootstrap-ready') ?? null
+      : null;
+    let currentState = null;
+    try {
+      currentState = window.__wampEarlyWorldTiles?.getState?.() ?? null;
+    } catch {
+      currentState = null;
+    }
+    return {
+      readyEvent: readyEvent ? { ...readyEvent } : null,
+      currentState,
+      layerPresent: document.querySelector('[data-wamp-early-world-tiles="true"]') !== null,
+      bodyVisible: document.body?.dataset.earlyWorldTilesVisible === 'true',
+    };
+  });
+}
+
+async function captureEarlyBootstrapCoverage(page, timeoutMs, networkRecorder) {
+  const startedAt = performance.now();
+  let snapshot = null;
+  while (performance.now() - startedAt < timeoutMs) {
+    snapshot = await readEarlyBootstrapProbeState(page);
+    if (snapshot.readyEvent) {
+      const networkBoundary = networkRecorder.mark('pre-phaser-coarse-coverage');
+      return {
+        ...snapshot,
+        boundary: {
+          networkSequence: networkBoundary.sequence,
+          clientSequence: snapshot.readyEvent.sequence,
+          clientAtMs: snapshot.readyEvent.atMs ?? null,
+        },
+      };
+    }
+    const status = snapshot.currentState?.status;
+    if (status === 'disabled' || status === 'failed' || status === 'released') {
+      const error = new Error(`Pre-Phaser L0 bootstrap ended in ${status} before visible coverage.`);
+      error.diagnostics = { source: 'pre-phaser-early-l0', ...snapshot };
+      throw error;
+    }
+    await page.waitForTimeout(10);
+  }
+  snapshot = await readEarlyBootstrapProbeState(page).catch(() => snapshot);
+  const error = new Error('Timed out waiting for pre-Phaser L0 coverage.');
+  error.diagnostics = { source: 'pre-phaser-early-l0', ...snapshot };
+  throw error;
+}
+
+async function captureReadinessArtifact(page) {
+  const [early, state] = await Promise.all([
+    readEarlyBootstrapProbeState(page).catch(() => null),
+    readState(page).then(summarizeState).catch(() => null),
+  ]);
+  const metrics = state ? {
+    visibleCount: state.visibleCount,
+    readyCount: state.readyCount,
+    targetReadyCount: state.targetReadyCount,
+    coveragePercentage: state.coveragePercentage,
+    targetCoveragePercentage: state.targetCoveragePercentage,
+    staleCount: state.staleCount,
+    targetLevel: state.targetLevel,
+    committedLevel: state.committedLevel,
+    queueDepths: state.queueDepths,
+    fallbackReason: state.fallbackReason,
+  } : null;
+  return {
+    coarse: {
+      source: 'pre-phaser-early-l0',
+      ready: early?.readyEvent?.state?.status === 'visible'
+        && early.readyEvent.layerPresent === true
+        && early.readyEvent.bodyVisible === true,
+      observedReadyAtMs: early?.readyEvent?.atMs ?? null,
+      visibleAtMs: early?.readyEvent?.state?.timings?.visibleAtMs ?? null,
+      event: early?.readyEvent ?? null,
+      current: early?.currentState ?? null,
+      layerPresent: early?.layerPresent ?? null,
+      bodyVisible: early?.bodyVisible ?? null,
+    },
+    sharp: {
+      source: 'phaser-target-lod',
+      ready: isSharpReady(metrics),
+      state,
     },
   };
 }
@@ -569,12 +687,10 @@ async function runPass(context, args, label) {
   try {
   await installClientProbeHooks(page);
   await page.goto(args.url, { waitUntil: 'domcontentloaded' });
-  const coarseCoveragePromise = captureOutcome(captureInitialTileState(
+  const coarseCoveragePromise = captureOutcome(captureEarlyBootstrapCoverage(
     page,
-    isCompleteCoverage,
     args.timeoutMs,
     networkRecorder,
-    'coarse-coverage',
   ));
   const sharpCoveragePromise = captureOutcome(captureInitialTileState(
     page,
@@ -600,9 +716,6 @@ async function runPass(context, args, label) {
   const bootstrapRequests = networkRecorder.snapshotStartedBy(
     sharpCapture.boundary.networkSequence,
   );
-  const coarseNetworkRequests = networkRecorder.snapshotStartedBy(
-    coarseCapture.boundary.networkSequence,
-  );
   const clientProbeEvents = (await readClientProbeEvents(page)).filter((entry) => (
     entry.sequence <= sharpCapture.boundary.clientSequence
   ));
@@ -614,10 +727,25 @@ async function runPass(context, args, label) {
       entry.sequence <= sharpCapture.boundary.networkSequence
     )),
   });
-  const coarse = coarseCapture.state;
-  const coarseReadyMs = coarseCapture.capturedAtMs;
+  const coarseNetworkRequests = bootstrapRequests.filter((entry) => (
+    bootstrap.mainManifestStartedSeq === null
+      ? entry.startedSeq <= coarseCapture.boundary.networkSequence
+      : entry.startedSeq < bootstrap.mainManifestStartedSeq
+  ));
+  const coarse = {
+    source: bootstrap.source,
+    state: bootstrap.earlyBootstrapState,
+    eventAtMs: bootstrap.earlyReadyEventAtMs,
+    eventSequence: bootstrap.earlyReadyEventSequence,
+    layerPresentAtReady: coarseCapture.readyEvent.layerPresent,
+    bodyVisibleAtReady: coarseCapture.readyEvent.bodyVisible,
+    currentState: coarseCapture.currentState,
+  };
+  const coarseReadyMs = bootstrap.coarseReadyMs;
   const sharp = sharpCapture.state;
-  const sharpReadyMs = sharpCapture.capturedAtMs;
+  const sharpReadyMs = Number.isFinite(sharpCapture.boundary.clientAtMs)
+    ? sharpCapture.boundary.clientAtMs
+    : sharpCapture.capturedAtMs;
 
   const zooms = [];
   let expectedLevel = Number(sharp.state.committedLevel);
@@ -662,7 +790,24 @@ async function runPass(context, args, label) {
     appReadyMs,
     coarseReadyMs,
     sharpReadyMs,
+    readiness: {
+      coarse: {
+        source: 'pre-phaser-early-l0',
+        ready: true,
+        visibleAtMs: coarseReadyMs,
+        eventAtMs: bootstrap.earlyReadyEventAtMs,
+        state: bootstrap.earlyBootstrapState,
+      },
+      sharp: {
+        source: 'phaser-target-lod',
+        ready: true,
+        readyAtMs: sharpReadyMs,
+        state: sharp,
+      },
+    },
     initialCapture: {
+      coarseSource: 'pre-phaser-early-l0',
+      sharpSource: 'phaser-target-lod',
       coarseBoundary: coarseCapture.boundary,
       sharpBoundary: sharpCapture.boundary,
       bootstrap,
@@ -670,12 +815,13 @@ async function runPass(context, args, label) {
     },
     coarse,
     coarseNetwork: {
-      capturedAtMs: coarseCapture.capturedAtMs,
+      capturedAtMs: coarseReadyMs,
+      boundarySequence: bootstrap.coarseNetworkBoundarySequence,
       requests: coarseNetworkRequests,
       summary: summarizeTrackedNetwork(coarseNetworkRequests),
     },
     sharpNetwork: {
-      capturedAtMs: sharpCapture.capturedAtMs,
+      capturedAtMs: sharpReadyMs,
       requests: bootstrapRequests,
       summary: summarizeTrackedNetwork(bootstrapRequests),
     },
@@ -705,6 +851,10 @@ async function runPass(context, args, label) {
     const network = networkRecorder.snapshot();
     const state = await readState(page).then(summarizeState).catch(() => null);
     const clientProbeEvents = await readClientProbeEvents(page).catch(() => []);
+    const readiness = await captureReadinessArtifact(page).catch(() => ({
+      coarse: { source: 'pre-phaser-early-l0', ready: false },
+      sharp: { source: 'phaser-target-lod', ready: false },
+    }));
     const normalized = error instanceof Error ? error : new Error(String(error));
     normalized.probeArtifact = {
       label,
@@ -715,6 +865,7 @@ async function runPass(context, args, label) {
         diagnostics: normalized.diagnostics ?? null,
       },
       state,
+      readiness,
       network,
       networkSummary: summarizeTrackedNetwork(network),
       clientProbeEvents,

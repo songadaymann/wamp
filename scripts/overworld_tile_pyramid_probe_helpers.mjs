@@ -156,34 +156,53 @@ export function parseSnapshotQuery(postData) {
 }
 
 export function parseWorldTileManifestProbe(body) {
-  if (!isRecord(body)) {
-    return { parseError: 'manifest-not-object', level: null, readyNonEmptyUrls: [] };
-  }
+  const invalid = (parseError, level = null) => ({
+    parseError,
+    level,
+    readyNonEmptyUrls: [],
+    targetAddresses: [],
+  });
+  if (!isRecord(body)) return invalid('manifest-not-object');
   if (!Number.isSafeInteger(body.level) || body.level < 0 || body.level > 4) {
-    return { parseError: 'invalid-manifest-level', level: null, readyNonEmptyUrls: [] };
+    return invalid('invalid-manifest-level');
   }
-  if (!Array.isArray(body.entries)) {
-    return { parseError: 'manifest-entries-not-array', level: body.level, readyNonEmptyUrls: [] };
-  }
+  if (!Array.isArray(body.entries)) return invalid('manifest-entries-not-array', body.level);
   const readyNonEmptyUrls = [];
+  const targetAddresses = [];
+  const seenAddresses = new Set();
   for (const entry of body.entries) {
-    if (!isRecord(entry) || !isRecord(entry.address) || !Number.isSafeInteger(entry.address.level)) {
-      return { parseError: 'invalid-manifest-entry', level: body.level, readyNonEmptyUrls: [] };
+    if (
+      !isRecord(entry)
+      || !isRecord(entry.address)
+      || !Number.isSafeInteger(entry.address.level)
+      || entry.address.level < 0
+      || entry.address.level > 4
+      || !Number.isSafeInteger(entry.address.x)
+      || !Number.isSafeInteger(entry.address.y)
+    ) {
+      return invalid('invalid-manifest-entry', body.level);
+    }
+    const addressKey = `${entry.address.level}:${entry.address.x},${entry.address.y}`;
+    if (seenAddresses.has(addressKey)) return invalid('duplicate-manifest-entry', body.level);
+    seenAddresses.add(addressKey);
+    if (entry.address.level === body.level) {
+      targetAddresses.push(`${entry.address.x},${entry.address.y}`);
     }
     if (entry.address.level !== 0 || entry.ready === null) continue;
     if (!isRecord(entry.ready) || typeof entry.ready.url !== 'string') {
-      return { parseError: 'invalid-ready-tile', level: body.level, readyNonEmptyUrls: [] };
+      return invalid('invalid-ready-tile', body.level);
     }
     try {
       readyNonEmptyUrls.push(normalizeWorldTileUrl(new URL(entry.ready.url).toString()));
     } catch {
-      return { parseError: 'invalid-ready-url', level: body.level, readyNonEmptyUrls: [] };
+      return invalid('invalid-ready-url', body.level);
     }
   }
   return {
     parseError: null,
     level: body.level,
     readyNonEmptyUrls: [...new Set(readyNonEmptyUrls)].sort(),
+    targetAddresses: targetAddresses.sort(),
   };
 }
 
@@ -600,6 +619,74 @@ function isSuccessfulFinishedRequest(entry, beforeSequence) {
     && entry.status < 300;
 }
 
+function parseManifestRequestBounds(url) {
+  try {
+    const parsed = new URL(url);
+    const names = ['minTileX', 'maxTileX', 'minTileY', 'maxTileY'];
+    const values = Object.fromEntries(names.map((name) => {
+      const raw = parsed.searchParams.get(name);
+      if (raw === null || raw.trim() === '') throw new Error(`missing-${name}`);
+      const value = Number(raw);
+      if (!Number.isSafeInteger(value)) throw new Error(`invalid-${name}`);
+      return [name, value];
+    }));
+    if (values.minTileX > values.maxTileX || values.minTileY > values.maxTileY) {
+      throw new Error('unordered-bounds');
+    }
+    const width = values.maxTileX - values.minTileX + 1;
+    const height = values.maxTileY - values.minTileY + 1;
+    if (width > 16 || height > 16) throw new Error('oversized-bounds');
+    return {
+      parseError: null,
+      minTileX: values.minTileX,
+      maxTileX: values.maxTileX,
+      minTileY: values.minTileY,
+      maxTileY: values.maxTileY,
+      width,
+      height,
+    };
+  } catch (error) {
+    return {
+      parseError: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function normalizeBounds(value) {
+  if (!isRecord(value)) return null;
+  const bounds = {
+    minTileX: value.minTileX,
+    maxTileX: value.maxTileX,
+    minTileY: value.minTileY,
+    maxTileY: value.maxTileY,
+  };
+  if (
+    !Object.values(bounds).every(Number.isSafeInteger)
+    || bounds.minTileX > bounds.maxTileX
+    || bounds.minTileY > bounds.maxTileY
+  ) return null;
+  return bounds;
+}
+
+function sameBounds(left, right) {
+  return left !== null
+    && right !== null
+    && left.minTileX === right.minTileX
+    && left.maxTileX === right.maxTileX
+    && left.minTileY === right.minTileY
+    && left.maxTileY === right.maxTileY;
+}
+
+function addressesForBounds(bounds) {
+  const addresses = [];
+  for (let y = bounds.minTileY; y <= bounds.maxTileY; y += 1) {
+    for (let x = bounds.minTileX; x <= bounds.maxTileX; x += 1) {
+      addresses.push(`${x},${y}`);
+    }
+  }
+  return addresses.sort();
+}
+
 export function evaluateSerializedL0Bootstrap({
   requests,
   clientEvents,
@@ -614,9 +701,8 @@ export function evaluateSerializedL0Bootstrap({
   const manifests = requests
     .filter((entry) => entry.manifestLevel !== null)
     .sort((left, right) => left.startedSeq - right.startedSeq);
-  const l0Manifests = manifests.filter((entry) => entry.manifestLevel === 0);
-  if (manifests[0]?.manifestLevel !== 0 || l0Manifests.length !== 1) {
-    throw probeError('Tile bootstrap must begin with exactly one valid L0 manifest.', {
+  if (manifests[0]?.manifestLevel !== 0) {
+    throw probeError('The earliest tile coverage manifest must be a valid L0 request.', {
       manifests: manifests.map((entry) => ({
         level: entry.manifestLevel,
         startedSeq: entry.startedSeq,
@@ -628,36 +714,88 @@ export function evaluateSerializedL0Bootstrap({
   const clientManifests = clientEvents
     .filter((entry) => entry.type === 'manifest-request')
     .sort((left, right) => left.sequence - right.sequence);
-  const clientL0Manifests = clientManifests.filter((entry) => entry.level === 0);
-  if (clientManifests[0]?.level !== 0 || clientL0Manifests.length !== 1) {
-    throw probeError('Client instrumentation did not observe exactly one initial L0 manifest.', {
+  if (clientManifests[0]?.level !== 0) {
+    throw probeError('Client instrumentation did not observe an initial L0 manifest.', {
       clientManifests,
     });
   }
 
-  const firstRefinement = manifests.find((entry) => entry.manifestLevel !== 0) ?? null;
-  const firstClientRefinement = clientManifests.find((entry) => entry.level !== 0) ?? null;
-  if (Boolean(firstRefinement) !== Boolean(firstClientRefinement)) {
-    throw probeError('Client and network instrumentation disagree about initial refinement.', {
-      firstRefinement,
-      firstClientRefinement,
-    });
-  }
-  const networkBoundarySequence = firstRefinement?.startedSeq
-    ?? initialCoverageBoundary?.networkSequence;
-  const clientBoundarySequence = firstClientRefinement?.sequence
-    ?? initialCoverageBoundary?.clientSequence;
-  if (!Number.isInteger(networkBoundarySequence) || !Number.isInteger(clientBoundarySequence)) {
-    throw probeError('Initial coverage boundaries are unavailable.', {
-      initialCoverageBoundary,
-      firstRefinement,
-      firstClientRefinement,
+  const networkLevels = manifests.map((entry) => entry.manifestLevel);
+  const clientLevels = clientManifests.map((entry) => entry.level);
+  const comparableLevelCount = Math.min(networkLevels.length, clientLevels.length);
+  const commonNetworkLevels = networkLevels.slice(0, comparableLevelCount);
+  const commonClientLevels = clientLevels.slice(0, comparableLevelCount);
+  if (
+    comparableLevelCount === 0
+    || JSON.stringify(commonNetworkLevels) !== JSON.stringify(commonClientLevels)
+  ) {
+    throw probeError('Client and network instrumentation disagree about manifest order.', {
+      networkLevels,
+      clientLevels,
+      comparableLevelCount,
     });
   }
 
-  const l0Manifest = l0Manifests[0];
+  const earlyReadyEvents = clientEvents
+    .filter((entry) => entry.type === 'early-bootstrap-ready')
+    .sort((left, right) => left.sequence - right.sequence);
+  if (earlyReadyEvents.length !== 1) {
+    throw probeError('The pre-Phaser L0 bootstrap did not emit exactly one ready event.', {
+      earlyReadyEvents,
+    });
+  }
+  const earlyReady = earlyReadyEvents[0];
+  const manifestsBeforeEarlyReady = clientManifests.filter(
+    (entry) => entry.sequence < earlyReady.sequence,
+  );
+  if (manifestsBeforeEarlyReady.length !== 1 || manifestsBeforeEarlyReady[0].level !== 0) {
+    throw probeError('A later client manifest began before pre-Phaser L0 coverage was ready.', {
+      earlyReady,
+      manifestsBeforeEarlyReady,
+    });
+  }
+
+  const earlyState = isRecord(earlyReady.state) ? earlyReady.state : null;
+  const visibleAtMs = earlyState?.timings?.visibleAtMs;
+  if (
+    earlyState?.schemaVersion !== 1
+    || earlyState.status !== 'visible'
+    || earlyState.decision?.enabled !== true
+    || earlyState.decision?.shadow === true
+    || earlyReady.layerPresent !== true
+    || earlyReady.bodyVisible !== true
+    || !Number.isFinite(visibleAtMs)
+    || visibleAtMs < 0
+  ) {
+    throw probeError('The pre-Phaser bootstrap ready event did not prove visible L0 coverage.', {
+      earlyReady,
+    });
+  }
+
+  const l0Manifest = manifests[0];
+  const firstMainManifest = manifests[1] ?? null;
+  const firstClientMainManifest = clientManifests.find(
+    (entry) => entry.sequence > earlyReady.sequence,
+  ) ?? null;
+  if (Boolean(firstMainManifest) !== Boolean(firstClientMainManifest)) {
+    throw probeError('Client and network instrumentation disagree about the main tile client.', {
+      firstMainManifest,
+      firstClientMainManifest,
+    });
+  }
+  const networkBoundarySequence = firstMainManifest?.startedSeq
+    ?? initialCoverageBoundary?.networkSequence;
+  const clientBoundarySequence = earlyReady.sequence;
+  if (!Number.isInteger(networkBoundarySequence) || !Number.isInteger(clientBoundarySequence)) {
+    throw probeError('Pre-Phaser coverage boundaries are unavailable.', {
+      initialCoverageBoundary,
+      firstMainManifest,
+      earlyReady,
+    });
+  }
+
   if (!isSuccessfulFinishedRequest(l0Manifest, networkBoundarySequence)) {
-    throw probeError('The L0 manifest did not finish successfully before refinement.', {
+    throw probeError('The pre-Phaser L0 manifest did not finish before the main tile client.', {
       l0Manifest,
       networkBoundarySequence,
     });
@@ -674,6 +812,34 @@ export function evaluateSerializedL0Bootstrap({
     });
   }
 
+  const requestBounds = parseManifestRequestBounds(l0Manifest.url);
+  const earlyBounds = normalizeBounds(earlyState?.viewport?.bounds);
+  const expectedAddresses = requestBounds.parseError === null
+    ? addressesForBounds(requestBounds)
+    : [];
+  if (
+    requestBounds.parseError !== null
+    || !sameBounds(requestBounds, earlyBounds)
+    || JSON.stringify(l0Manifest.manifestProbe.targetAddresses) !== JSON.stringify(expectedAddresses)
+  ) {
+    throw probeError('The pre-Phaser L0 manifest was not a complete cover for its viewport.', {
+      requestBounds,
+      earlyBounds,
+      responseAddresses: l0Manifest.manifestProbe.targetAddresses,
+      expectedAddresses,
+    });
+  }
+
+  const prematureTile = requests.find((entry) => (
+    isWorldTileImageUrl(entry.url) && entry.startedSeq < l0Manifest.startedSeq
+  ));
+  if (prematureTile) {
+    throw probeError('A tile image request began before the owning L0 manifest.', {
+      prematureTile,
+      l0Manifest,
+    });
+  }
+
   const readyUrls = l0Manifest.manifestProbe.readyNonEmptyUrls;
   const completedNetworkUrls = new Set(requests
     .filter((entry) => (
@@ -685,27 +851,37 @@ export function evaluateSerializedL0Bootstrap({
   const byteCacheHitUrls = new Set(clientEvents
     .filter((entry) => (
       entry.type === 'byte-cache-hit'
-      && entry.sequence > clientL0Manifests[0].sequence
-      && entry.sequence < clientBoundarySequence
+      && entry.sequence > clientManifests[0].sequence
+      && entry.sequence < earlyReady.sequence
     ))
     .map((entry) => normalizeWorldTileUrl(entry.url)));
   const missingReadyUrls = readyUrls.filter((url) => (
     !completedNetworkUrls.has(url) && !byteCacheHitUrls.has(url)
   ));
   const diagnostics = {
+    source: 'pre-phaser-early-l0',
+    coarseReadyMs: visibleAtMs,
+    earlyReadyEventAtMs: earlyReady.atMs ?? null,
+    earlyReadyEventSequence: earlyReady.sequence,
+    earlyBootstrapState: earlyState,
     l0ManifestStartedSeq: l0Manifest.startedSeq,
     l0ManifestFinishedSeq: l0Manifest.finishedSeq,
-    refinementLevel: firstRefinement?.manifestLevel ?? null,
-    refinementStartedSeq: firstRefinement?.startedSeq ?? null,
+    coarseNetworkBoundarySequence: networkBoundarySequence,
+    mainManifestLevel: firstMainManifest?.manifestLevel ?? null,
+    mainManifestStartedSeq: firstMainManifest?.startedSeq ?? null,
+    refinementLevel: manifests.find((entry) => entry.manifestLevel !== 0)?.manifestLevel ?? null,
+    refinementStartedSeq: manifests.find((entry) => entry.manifestLevel !== 0)?.startedSeq ?? null,
+    mainManifestLevels: manifests.slice(1).map((entry) => entry.manifestLevel),
     networkBoundarySequence,
     clientBoundarySequence,
+    requestBounds,
     readyUrlCount: readyUrls.length,
     completedNetworkUrls: [...completedNetworkUrls].sort(),
     byteCacheHitUrls: [...byteCacheHitUrls].sort(),
     missingReadyUrls,
   };
   if (missingReadyUrls.length > 0) {
-    throw probeError('Refinement began before every ready L0 tile URL was satisfied.', diagnostics);
+    throw probeError('The main tile client began before every ready L0 tile URL was satisfied.', diagnostics);
   }
   return diagnostics;
 }

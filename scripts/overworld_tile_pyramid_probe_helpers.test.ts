@@ -41,11 +41,31 @@ function request(overrides = {}) {
 
 function l0Manifest(overrides = {}) {
   return request({
-    url: 'https://game.example/api/world/tiles/manifest?level=0',
+    url: 'https://game.example/api/world/tiles/manifest?level=0&minTileX=0&maxTileX=1&minTileY=0&maxTileY=0',
     manifestLevel: 0,
     manifestProbe: manifestProbe(),
     ...overrides,
   });
+}
+
+function earlyReadyEvent(overrides = {}) {
+  return {
+    type: 'early-bootstrap-ready',
+    sequence: 3,
+    atMs: 8,
+    layerPresent: true,
+    bodyVisible: true,
+    state: {
+      schemaVersion: 1,
+      status: 'visible',
+      decision: { enabled: true, shadow: false },
+      viewport: {
+        bounds: { minTileX: 0, maxTileX: 1, minTileY: 0, maxTileY: 0 },
+      },
+      timings: { visibleAtMs: 7.5 },
+    },
+    ...overrides,
+  };
 }
 
 function evaluate(overrides = {}) {
@@ -70,9 +90,10 @@ function evaluate(overrides = {}) {
         sequence: 2,
         url: `${TILE_B}?__wamp_tile_hash=hash`,
       },
-      { type: 'manifest-request', sequence: 3, level: 1 },
+      earlyReadyEvent(),
+      { type: 'manifest-request', sequence: 4, level: 1 },
     ],
-    initialCoverageBoundary: { networkSequence: 20, clientSequence: 4 },
+    initialCoverageBoundary: { networkSequence: 20, clientSequence: 5 },
     ...overrides,
   });
 }
@@ -218,10 +239,92 @@ describe('overworld tile pyramid probe helpers', () => {
 
   it('accepts L0 URLs completed by network or an explicit pre-refinement byte-cache hit', () => {
     expect(evaluate()).toMatchObject({
+      source: 'pre-phaser-early-l0',
+      coarseReadyMs: 7.5,
       readyUrlCount: 2,
+      mainManifestLevel: 1,
       refinementLevel: 1,
       missingReadyUrls: [],
     });
+  });
+
+  it('treats the first L0 as the early owner and later L0 work as main-client refinement', () => {
+    const diagnostics = evaluate({
+      requests: [
+        l0Manifest(),
+        request({ url: TILE_A, startedSeq: 4, responseSeq: 5, finishedSeq: 6 }),
+        l0Manifest({ startedSeq: 10, responseSeq: 11, finishedSeq: 12 }),
+        request({
+          url: 'https://game.example/api/world/tiles/manifest?level=1',
+          manifestLevel: 1,
+          startedSeq: 13,
+          responseSeq: 14,
+          finishedSeq: 15,
+        }),
+      ],
+      clientEvents: [
+        { type: 'manifest-request', sequence: 1, level: 0 },
+        { type: 'byte-cache-hit', sequence: 2, url: TILE_B },
+        earlyReadyEvent(),
+        { type: 'manifest-request', sequence: 4, level: 0 },
+        { type: 'manifest-request', sequence: 5, level: 1 },
+      ],
+    });
+    expect(diagnostics).toMatchObject({
+      mainManifestLevel: 0,
+      mainManifestLevels: [0, 1],
+      refinementLevel: 1,
+      coarseNetworkBoundarySequence: 10,
+    });
+  });
+
+  it('rejects any main-client manifest before the early L0 ready event', () => {
+    expect(() => evaluate({
+      clientEvents: [
+        { type: 'manifest-request', sequence: 1, level: 0 },
+        { type: 'manifest-request', sequence: 2, level: 1 },
+        earlyReadyEvent(),
+      ],
+    })).toThrow(/before pre-Phaser L0 coverage was ready/);
+  });
+
+  it('requires the early ready event to prove an actually visible layer', () => {
+    expect(() => evaluate({
+      clientEvents: [
+        { type: 'manifest-request', sequence: 1, level: 0 },
+        { type: 'byte-cache-hit', sequence: 2, url: TILE_B },
+        earlyReadyEvent({ layerPresent: false }),
+        { type: 'manifest-request', sequence: 4, level: 1 },
+      ],
+    })).toThrow(/did not prove visible L0 coverage/);
+  });
+
+  it('requires the owner response to completely cover the exact requested viewport', () => {
+    expect(() => evaluate({
+      requests: [
+        l0Manifest({
+          url: 'https://game.example/api/world/tiles/manifest?level=0&minTileX=0&maxTileX=2&minTileY=0&maxTileY=0',
+        }),
+        request({ url: TILE_A, startedSeq: 4, responseSeq: 5, finishedSeq: 6 }),
+        request({
+          url: 'https://game.example/api/world/tiles/manifest?level=1',
+          manifestLevel: 1,
+          startedSeq: 10,
+        }),
+      ],
+    })).toThrow(/not a complete cover for its viewport/);
+
+    expect(() => evaluate({
+      requests: [
+        l0Manifest({ manifestProbe: manifestProbe([TILE_A]) }),
+        request({ url: TILE_A, startedSeq: 4, responseSeq: 5, finishedSeq: 6 }),
+        request({
+          url: 'https://game.example/api/world/tiles/manifest?level=1',
+          manifestLevel: 1,
+          startedSeq: 10,
+        }),
+      ],
+    })).toThrow(/not a complete cover for its viewport/);
   });
 
   it('rejects response headers without a successful request-finished event', () => {
@@ -244,7 +347,8 @@ describe('overworld tile pyramid probe helpers', () => {
       clientEvents: [
         { type: 'manifest-request', sequence: 1, level: 0 },
         { type: 'byte-cache-hit', sequence: 2, url: TILE_B },
-        { type: 'manifest-request', sequence: 3, level: 1 },
+        earlyReadyEvent(),
+        { type: 'manifest-request', sequence: 4, level: 1 },
       ],
     })).toThrow(/every ready L0 tile URL/);
   });
@@ -263,7 +367,8 @@ describe('overworld tile pyramid probe helpers', () => {
       clientEvents: [
         { type: 'manifest-request', sequence: 1, level: 0 },
         { type: 'byte-cache-hit', sequence: 2, url: TILE_B },
-        { type: 'manifest-request', sequence: 3, level: 1 },
+        earlyReadyEvent(),
+        { type: 'manifest-request', sequence: 4, level: 1 },
       ],
     })).toThrow(/every ready L0 tile URL/);
   });
@@ -290,7 +395,8 @@ describe('overworld tile pyramid probe helpers', () => {
       clientEvents: [
         { type: 'manifest-request', sequence: 1, level: 0 },
         { type: 'byte-cache-hit', sequence: 2, url: TILE_B },
-        { type: 'manifest-request', sequence: 3, level: 1 },
+        earlyReadyEvent(),
+        { type: 'manifest-request', sequence: 4, level: 1 },
       ],
     })).toThrow(/every ready L0 tile URL/);
   });
@@ -302,8 +408,9 @@ describe('overworld tile pyramid probe helpers', () => {
         { type: 'manifest-request', sequence: 1, level: 0 },
         { type: 'byte-cache-hit', sequence: 2, url: TILE_A },
         { type: 'byte-cache-hit', sequence: 3, url: TILE_B },
+        earlyReadyEvent({ sequence: 4 }),
       ],
-      initialCoverageBoundary: { networkSequence: 20, clientSequence: 4 },
+      initialCoverageBoundary: { networkSequence: 20, clientSequence: 5 },
     });
     expect(diagnostics).toMatchObject({
       refinementLevel: null,
