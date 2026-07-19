@@ -80,6 +80,21 @@ Worker first, and promoted only after its functional and performance gates pass.
 remain behind `PLAYABLE_CONTENT_INDEX_READS` until parity is proven; disabling that flag is the
 rollback path.
 
+## Multiresolution Overworld Extension (2026-07-19)
+
+- Replace browser-composed published browse previews with a sparse, immutable five-level PNG tile
+  pyramid. Exact snapshots remain authoritative for play, editing, verification, construction, and
+  optimistic mutation overlays.
+- Generate lossless tiles asynchronously through a separate Browser Run Worker, R2, Queues, and a
+  transactional D1 outbox. Published mutations invalidate the finest tile and recursively converge
+  ancestors without exposing an R2 URL before the object exists.
+- Stream coarse complete coverage before refinement, retain ancestors until complete sibling groups
+  are GPU-ready, and apply signed-coordinate floor division plus LOD hysteresis to prevent fractional
+  zoom seams and the former 0.17/0.18 oscillation.
+- Keep compact world streaming as a session-sticky circuit breaker throughout staged safety and
+  production rollout. Browser-side published-room composition is eligible for deletion only after a
+  successful 30-day production soak at 100% tiled rollout.
+
 ## Selective Reads and Shared Caching Extension (2026-07-18)
 
 - Compact room APIs separate ownership/summary metadata, current snapshots, paginated version metadata,
