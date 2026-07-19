@@ -41,4 +41,17 @@ describe('world tile debug metrics', () => {
     expect(tracker.recordFrame().replacementGapFrames).toBe(1);
     expect(tracker.recordFrame().replacementGapFrames).toBe(2);
   });
+
+  it('does not treat the pre-bootstrap empty state as complete viewport coverage', () => {
+    const tracker = new WorldTileDebugMetricsTracker();
+    expect(tracker.recordFrame().replacementGapFrames).toBe(0);
+
+    tracker.update({ visibleCount: 4, readyCount: 0 });
+    expect(tracker.recordFrame().replacementGapFrames).toBe(0);
+
+    tracker.update({ visibleCount: 4, readyCount: 4 });
+    expect(tracker.recordFrame().replacementGapFrames).toBe(0);
+    tracker.update({ visibleCount: 4, readyCount: 3 });
+    expect(tracker.recordFrame().replacementGapFrames).toBe(1);
+  });
 });

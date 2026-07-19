@@ -82,7 +82,7 @@ export class WorldTileDebugMetricsTracker {
   }
 
   recordFrame(): WorldTileDebugMetrics {
-    const complete = this.metrics.coveragePercentage === 100;
+    const complete = this.metrics.visibleCount > 0 && this.metrics.coveragePercentage === 100;
     if (this.hasReachedCompleteCoverage && !complete) {
       this.metrics.replacementGapFrames += 1;
     }

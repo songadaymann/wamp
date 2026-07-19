@@ -60,16 +60,33 @@ function summarizeState(state) {
     camera: scene.camera?.worldView ?? null,
     mode: scene.mode ?? null,
     targetLevel: metrics?.targetLevel ?? null,
+    committedLevel: metrics?.committedLevel ?? null,
     visibleCount: metrics?.visibleCount ?? null,
     readyCount: metrics?.readyCount ?? null,
+    targetReadyCount: metrics?.targetReadyCount ?? null,
     staleCount: metrics?.staleCount ?? null,
     coveragePercentage: metrics?.coveragePercentage ?? null,
+    targetCoveragePercentage: metrics?.targetCoveragePercentage ?? null,
     queueDepths: metrics?.queueDepths ?? null,
     replacementGapFrames: metrics?.replacementGapFrames ?? null,
     fallbackReason: metrics?.fallbackReason ?? null,
-    rollout: metrics?.rollout ?? null,
-    byteCache: metrics?.byteCache ?? null,
-    textureCache: metrics?.textureCache ?? null,
+    rollout: metrics ? {
+      enabled: metrics.enabled ?? false,
+      cutoverActive: metrics.cutoverActive ?? false,
+      shadow: metrics.shadow ?? false,
+      forced: metrics.forced ?? false,
+      rendererVersion: metrics.rendererVersion ?? null,
+      cohortBucket: metrics.cohortBucket ?? null,
+    } : null,
+    byteCache: metrics ? {
+      hits: metrics.byteCacheHits ?? 0,
+      misses: metrics.byteCacheMisses ?? 0,
+      evictions: metrics.byteCacheEvictions ?? 0,
+    } : null,
+    textureCache: metrics ? {
+      attachedTileCount: metrics.attachedTileCount ?? 0,
+      contextRestorePending: metrics.contextRestorePending ?? false,
+    } : null,
   };
 }
 
@@ -81,12 +98,15 @@ function isCompleteCoverage(metrics) {
 }
 
 function isSharpReady(metrics) {
-  if (!isCompleteCoverage(metrics) || metrics.readyCount !== metrics.visibleCount || metrics.staleCount !== 0) {
-    return false;
-  }
-  const queues = metrics.queueDepths ?? {};
-  return ['manifest', 'fetch', 'decode', 'gpuUpload', 'replacementGroups']
-    .every((key) => Number(queues[key] ?? 0) === 0);
+  const targetReadyCount = metrics?.targetReadyCount ?? metrics?.readyCount ?? 0;
+  const targetCoveragePercentage = metrics?.targetCoveragePercentage
+    ?? (metrics?.visibleCount > 0 ? targetReadyCount / metrics.visibleCount * 100 : 0);
+  return isCompleteCoverage(metrics)
+    && targetReadyCount === metrics.visibleCount
+    && targetCoveragePercentage === 100
+    && metrics.staleCount === 0
+    && metrics.committedLevel === metrics.targetLevel
+    && Number(metrics.queueDepths?.replacementGroups ?? 0) === 0;
 }
 
 async function waitForOverworld(page, timeoutMs) {
@@ -186,9 +206,16 @@ async function panViewport(page) {
   const endX = Math.round(box.x + box.width * 0.28);
   const endY = Math.round(box.y + box.height * 0.42);
   await page.mouse.move(startX, startY);
-  await page.mouse.down();
+  await page.mouse.down({ button: 'middle' });
   await page.mouse.move(endX, endY, { steps: 24 });
-  await page.mouse.up();
+  await page.mouse.up({ button: 'middle' });
+}
+
+function cameraMoved(before, after) {
+  const beforeView = before?.camera;
+  const afterView = after?.camera;
+  if (!beforeView || !afterView) return false;
+  return beforeView.x !== afterView.x || beforeView.y !== afterView.y;
 }
 
 function attachNetworkRecorder(page) {
@@ -241,11 +268,16 @@ async function runPass(context, args, label) {
   const beforePan = summarizeState(await readState(page));
   const panStartedAt = performance.now();
   await panViewport(page);
+  const panGestureMs = Math.round((performance.now() - panStartedAt) * 10) / 10;
+  const panGestureCompletedAt = performance.now();
   const panCoverage = await waitForTileState(page, isCompleteCoverage, args.timeoutMs);
-  const panCoverageMs = Math.round((performance.now() - panStartedAt) * 10) / 10;
+  const panCoverageMs = Math.round((performance.now() - panGestureCompletedAt) * 10) / 10;
   const panSharp = await waitForTileState(page, isSharpReady, args.timeoutMs);
-  const panSharpMs = Math.round((performance.now() - panStartedAt) * 10) / 10;
+  const panSharpMs = Math.round((performance.now() - panGestureCompletedAt) * 10) / 10;
   const afterPan = summarizeState(await readState(page));
+  if (!cameraMoved(beforePan, afterPan)) {
+    throw new Error('Overworld tile probe pan did not move the camera');
+  }
 
   const screenshotPath = path.join(args.out, `${label}.png`);
   await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -257,7 +289,15 @@ async function runPass(context, args, label) {
     coarse,
     sharp,
     zooms,
-    pan: { before: beforePan, after: afterPan, coverage: panCoverage, sharp: panSharp, panCoverageMs, panSharpMs },
+    pan: {
+      before: beforePan,
+      after: afterPan,
+      coverage: panCoverage,
+      sharp: panSharp,
+      panGestureMs,
+      panCoverageMs,
+      panSharpMs,
+    },
     network,
     networkSummary: {
       requestCount: network.length,
