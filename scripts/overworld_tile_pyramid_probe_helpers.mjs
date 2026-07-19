@@ -304,6 +304,54 @@ export function summarizeTrackedNetwork(requests) {
   };
 }
 
+export function summarizeTileImagePhase(requests) {
+  const summary = summarizeTrackedNetwork(requests);
+  return {
+    requestCount: summary.tileRequestCount,
+    responseCount: summary.tileResponseCount,
+    finishedCount: summary.tileFinishedCount,
+    announcedBytes: summary.tileRequestBytes,
+    responseBytes: summary.tileResponseBytes,
+  };
+}
+
+export function summarizeApiWorkerRequests(requests) {
+  const events = [];
+  const origins = new Set();
+  const requestsByOrigin = {};
+  for (const entry of requests) {
+    if (!Number.isInteger(entry.startedSeq)) continue;
+    events.push({ sequence: entry.startedSeq, delta: 1 });
+    const endedSeq = Number.isInteger(entry.finishedSeq)
+      ? entry.finishedSeq
+      : Number.isInteger(entry.failedSeq)
+        ? entry.failedSeq
+        : null;
+    if (endedSeq !== null) events.push({ sequence: endedSeq, delta: -1 });
+    if (typeof entry.origin === 'string' && entry.origin.length > 0) {
+      origins.add(entry.origin);
+      requestsByOrigin[entry.origin] = (requestsByOrigin[entry.origin] ?? 0) + 1;
+    }
+  }
+  events.sort((left, right) => left.sequence - right.sequence || left.delta - right.delta);
+  let inFlight = 0;
+  let peakInFlight = 0;
+  for (const event of events) {
+    inFlight += event.delta;
+    peakInFlight = Math.max(peakInFlight, inFlight);
+  }
+  return {
+    requestCount: requests.length,
+    peakInFlight,
+    unfinishedCount: requests.filter((entry) => (
+      !Number.isInteger(entry.finishedSeq) && !Number.isInteger(entry.failedSeq)
+    )).length,
+    failedCount: requests.filter((entry) => Number.isInteger(entry.failedSeq)).length,
+    origins: [...origins].sort(),
+    requestsByOrigin: Object.fromEntries(Object.entries(requestsByOrigin).sort()),
+  };
+}
+
 export function summarizeClientTileCacheEvents(events) {
   const hits = events.filter((entry) => entry.type === 'byte-cache-hit').length;
   const misses = events.filter((entry) => entry.type === 'byte-cache-miss').length;
@@ -365,9 +413,9 @@ function checkPassNetworkAcceptance(label, pass, gates, failures) {
     failures,
     'stable-viewport-tile-requests',
     label,
-    sharpSummary?.tileRequestCount,
+    pass?.refinementNetwork?.summary?.tileRequestCount,
     gates.stableViewportTileRequests,
-    'The initial stable viewport requested too many tile images.',
+    'Target refinement requested too many tile images after proven coarse coverage.',
   );
   if (coarseSummary?.missingResponseBodyCount !== 0 || sharpSummary?.missingResponseBodyCount !== 0) {
     addGateFailure(

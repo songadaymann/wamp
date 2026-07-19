@@ -6,6 +6,8 @@ import {
   parseSnapshotQuery,
   parseWorldTileManifestProbe,
   selectExpectedWorldTileLevel,
+  summarizeApiWorkerRequests,
+  summarizeTileImagePhase,
   summarizeTrackedNetwork,
 } from './overworld_tile_pyramid_probe_helpers.mjs';
 
@@ -140,6 +142,12 @@ function acceptancePass(label: 'cold' | 'warm') {
         manifestMaxResponseBytes: 40_000,
         manifestMaxDurationMs: 140,
         manifestMissingDurationCount: 0,
+      },
+    },
+    refinementNetwork: {
+      summary: {
+        tileRequestCount: 12,
+        tileResponseBytes: 800_000,
       },
     },
     network: [],
@@ -437,6 +445,20 @@ describe('overworld tile pyramid probe helpers', () => {
     });
   });
 
+  it('reports API concurrency without silently creating an unplanned acceptance gate', () => {
+    const result = acceptanceResult();
+    result.cold.apiWorkerNetwork = {
+      summary: { requestCount: 400, peakInFlight: 391 },
+    };
+    result.warm.apiWorkerNetwork = {
+      summary: { requestCount: 400, peakInFlight: 391 },
+    };
+    expect(evaluateOverworldTileProbeAcceptance(result)).toMatchObject({
+      passed: true,
+      failures: [],
+    });
+  });
+
   it.each([
     ['coldCoarseReadyMs', 'cold', 'coarseReadyMs', 901, 'cold-coarse-ready'],
     ['warmCoarseReadyMs', 'warm', 'coarseReadyMs', 301, 'warm-coarse-ready'],
@@ -454,13 +476,28 @@ describe('overworld tile pyramid probe helpers', () => {
     const result = acceptanceResult();
     result.cold.coarseNetwork.summary.responseBytes = 500_001;
     result.cold.sharpNetwork.summary.responseBytes = 1_500_001;
-    result.cold.sharpNetwork.summary.tileRequestCount = 17;
+    result.cold.refinementNetwork.summary.tileRequestCount = 17;
     const codes = evaluateOverworldTileProbeAcceptance(result).failures.map(({ code }) => code);
     expect(codes).toEqual(expect.arrayContaining([
       'coarse-response-bytes',
       'sharp-response-bytes',
       'stable-viewport-tile-requests',
     ]));
+  });
+
+  it('applies the 16-request gate only to post-coarse tile refinement', () => {
+    const result = acceptanceResult();
+    result.cold.coarseNetwork.summary.tileRequestCount = 4;
+    result.cold.sharpNetwork.summary.tileRequestCount = 20;
+    result.cold.refinementNetwork.summary.tileRequestCount = 16;
+    expect(evaluateOverworldTileProbeAcceptance(result).failures).not.toContainEqual(
+      expect.objectContaining({ code: 'stable-viewport-tile-requests', pass: 'cold' }),
+    );
+
+    result.cold.refinementNetwork.summary.tileRequestCount = 17;
+    expect(evaluateOverworldTileProbeAcceptance(result).failures).toContainEqual(
+      expect.objectContaining({ code: 'stable-viewport-tile-requests', pass: 'cold' }),
+    );
   });
 
   it('fails any oversized or slow initial stable-view manifest', () => {
@@ -580,6 +617,66 @@ describe('overworld tile pyramid probe helpers', () => {
       worldTileMissingResponseBodyCount: 0,
       responseBytes: 123,
       missingResponseBodyCount: 0,
+    });
+  });
+
+  it('reports coarse and refinement tile-image phases without mixing API bytes into them', () => {
+    const phase = summarizeTileImagePhase([
+      request({ url: TILE_A, contentLength: 10, responseBodyBytes: 123 }),
+      request({ url: TILE_B, contentLength: 20, responseBodyBytes: 456 }),
+      request({
+        url: 'https://game.example/api/world/tiles/manifest?level=1',
+        manifestLevel: 1,
+        contentLength: 30,
+        responseBodyBytes: 789,
+      }),
+    ]);
+    expect(phase).toEqual({
+      requestCount: 2,
+      responseCount: 2,
+      finishedCount: 2,
+      announcedBytes: 30,
+      responseBytes: 579,
+    });
+  });
+
+  it('reports API Worker request volume and true peak in-flight concurrency', () => {
+    const summary = summarizeApiWorkerRequests([
+      {
+        origin: 'https://api.example',
+        startedSeq: 1,
+        finishedSeq: 8,
+        failedSeq: null,
+      },
+      {
+        origin: 'https://api.example',
+        startedSeq: 2,
+        finishedSeq: null,
+        failedSeq: 4,
+      },
+      {
+        origin: 'https://safety-api.example',
+        startedSeq: 3,
+        finishedSeq: 5,
+        failedSeq: null,
+      },
+      {
+        origin: 'https://api.example',
+        startedSeq: 9,
+        finishedSeq: null,
+        failedSeq: null,
+      },
+    ]);
+    expect(summary).toEqual({
+      requestCount: 4,
+      peakInFlight: 3,
+      unfinishedCount: 1,
+      failedCount: 1,
+      origins: ['https://api.example', 'https://safety-api.example'],
+      requestsByOrigin: {
+        'https://api.example': 3,
+        'https://safety-api.example': 1,
+      },
     });
   });
 

@@ -9,6 +9,8 @@ import {
   parseSnapshotQuery,
   parseWorldTileManifestProbe,
   selectExpectedWorldTileLevel,
+  summarizeApiWorkerRequests,
+  summarizeTileImagePhase,
   summarizeTrackedNetwork,
 } from './overworld_tile_pyramid_probe_helpers.mjs';
 
@@ -267,6 +269,17 @@ function isTrackedNetworkUrl(url) {
     || url.includes('/api/world/chunks');
 }
 
+function getApiWorkerOrigin(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname === '/api' || parsed.pathname.startsWith('/api/')
+      ? parsed.origin
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 async function installClientProbeHooks(page) {
   await page.addInitScript(() => {
     const state = { sequence: 0, events: [] };
@@ -369,7 +382,9 @@ async function readClientProbeEvents(page) {
 
 function attachNetworkRecorder(page, startedAt) {
   const requests = [];
+  const apiWorkerRequests = [];
   const requestEntries = new WeakMap();
+  const apiWorkerEntries = new WeakMap();
   const ignoredRequests = new WeakSet();
   const responsesByRequest = new WeakMap();
   const pendingTasks = new Set();
@@ -421,6 +436,31 @@ function attachNetworkRecorder(page, startedAt) {
     requests.push(entry);
     return entry;
   };
+  const recordApiWorkerRequest = (request) => {
+    if (ignoredRequests.has(request)) return null;
+    const url = request.url();
+    const origin = getApiWorkerOrigin(url);
+    if (origin === null) return null;
+    const entry = {
+      url,
+      origin,
+      method: request.method(),
+      resourceType: request.resourceType(),
+      startedSeq: nextSequence(),
+      startedAtMs: elapsedMs(),
+      responseSeq: null,
+      responseAtMs: null,
+      finishedSeq: null,
+      finishedAtMs: null,
+      failedSeq: null,
+      failedAtMs: null,
+      failure: null,
+      status: null,
+    };
+    apiWorkerEntries.set(request, entry);
+    apiWorkerRequests.push(entry);
+    return entry;
+  };
   const findExactRequestEntry = (request, type) => {
     const entry = requestEntries.get(request) ?? null;
     if (!entry && ignoredRequests.has(request)) return null;
@@ -460,26 +500,42 @@ function attachNetworkRecorder(page, startedAt) {
       targetAddresses: [...(entry.manifestProbe.targetAddresses ?? [])],
     } : null,
   });
+  const cloneApiWorkerEntry = (entry) => ({ ...entry });
 
-  page.on('request', recordRequest);
+  page.on('request', (request) => {
+    recordRequest(request);
+    recordApiWorkerRequest(request);
+  });
   page.on('response', (response) => {
     const request = response.request();
     const entry = findExactRequestEntry(request, 'response');
-    if (!entry) return;
-    responsesByRequest.set(request, response);
-    const headers = response.headers();
-    Object.assign(entry, {
-      responseSeq: nextSequence(),
-      responseAtMs: elapsedMs(),
-      status: response.status(),
-      contentLength: Number(headers['content-length'] ?? 0) || 0,
-      cacheStatus: headers['cf-cache-status'] ?? null,
-      wampCache: headers['x-wamp-cache'] ?? null,
-      serverTiming: headers['server-timing'] ?? null,
-    });
+    if (entry) {
+      responsesByRequest.set(request, response);
+      const headers = response.headers();
+      Object.assign(entry, {
+        responseSeq: nextSequence(),
+        responseAtMs: elapsedMs(),
+        status: response.status(),
+        contentLength: Number(headers['content-length'] ?? 0) || 0,
+        cacheStatus: headers['cf-cache-status'] ?? null,
+        wampCache: headers['x-wamp-cache'] ?? null,
+        serverTiming: headers['server-timing'] ?? null,
+      });
+    }
+    const apiEntry = apiWorkerEntries.get(request) ?? null;
+    if (apiEntry) {
+      apiEntry.responseSeq = nextSequence();
+      apiEntry.responseAtMs = elapsedMs();
+      apiEntry.status = response.status();
+    }
   });
   page.on('requestfinished', (request) => {
     const entry = findExactRequestEntry(request, 'requestfinished');
+    const apiEntry = apiWorkerEntries.get(request) ?? null;
+    if (apiEntry) {
+      apiEntry.finishedSeq = nextSequence();
+      apiEntry.finishedAtMs = elapsedMs();
+    }
     if (!entry) return;
     entry.finishedSeq = nextSequence();
     entry.finishedAtMs = elapsedMs();
@@ -526,10 +582,18 @@ function attachNetworkRecorder(page, startedAt) {
   });
   page.on('requestfailed', (request) => {
     const entry = findExactRequestEntry(request, 'requestfailed');
-    if (!entry) return;
-    entry.failedSeq = nextSequence();
-    entry.failedAtMs = elapsedMs();
-    entry.failure = request.failure()?.errorText ?? 'unknown';
+    const failure = request.failure()?.errorText ?? 'unknown';
+    const apiEntry = apiWorkerEntries.get(request) ?? null;
+    if (apiEntry) {
+      apiEntry.failedSeq = nextSequence();
+      apiEntry.failedAtMs = elapsedMs();
+      apiEntry.failure = failure;
+    }
+    if (entry) {
+      entry.failedSeq = nextSequence();
+      entry.failedAtMs = elapsedMs();
+      entry.failure = failure;
+    }
   });
   return {
     elapsedMs,
@@ -548,6 +612,10 @@ function attachNetworkRecorder(page, startedAt) {
     snapshotStartedBy: (sequence) => requests
       .filter((entry) => entry.startedSeq <= sequence)
       .map(cloneEntry),
+    apiWorkerSnapshot: () => apiWorkerRequests.map(cloneApiWorkerEntry),
+    apiWorkerSnapshotStartedBy: (sequence) => apiWorkerRequests
+      .filter((entry) => entry.startedSeq <= sequence)
+      .map(cloneApiWorkerEntry),
     orphanSnapshot: () => orphanEvents.map((entry) => ({ ...entry })),
   };
 }
@@ -716,6 +784,9 @@ async function runPass(context, args, label) {
   const bootstrapRequests = networkRecorder.snapshotStartedBy(
     sharpCapture.boundary.networkSequence,
   );
+  const bootstrapApiWorkerRequests = networkRecorder.apiWorkerSnapshotStartedBy(
+    sharpCapture.boundary.networkSequence,
+  );
   const clientProbeEvents = (await readClientProbeEvents(page)).filter((entry) => (
     entry.sequence <= sharpCapture.boundary.clientSequence
   ));
@@ -732,6 +803,18 @@ async function runPass(context, args, label) {
       ? entry.startedSeq <= coarseCapture.boundary.networkSequence
       : entry.startedSeq < bootstrap.mainManifestStartedSeq
   ));
+  const refinementNetworkRequests = bootstrapRequests.filter(
+    (entry) => entry.startedSeq >= bootstrap.coarseNetworkBoundarySequence,
+  );
+  const coarseApiWorkerRequests = bootstrapApiWorkerRequests.filter(
+    (entry) => entry.startedSeq < bootstrap.coarseNetworkBoundarySequence,
+  );
+  const refinementApiWorkerRequests = bootstrapApiWorkerRequests.filter(
+    (entry) => entry.startedSeq >= bootstrap.coarseNetworkBoundarySequence,
+  );
+  const coarseNetworkSummary = summarizeTrackedNetwork(coarseNetworkRequests);
+  const refinementNetworkSummary = summarizeTrackedNetwork(refinementNetworkRequests);
+  const sharpNetworkSummary = summarizeTrackedNetwork(bootstrapRequests);
   const coarse = {
     source: bootstrap.source,
     state: bootstrap.earlyBootstrapState,
@@ -784,6 +867,7 @@ async function runPass(context, args, label) {
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await networkRecorder.settle();
   const network = networkRecorder.snapshot();
+  const apiWorkerRequests = networkRecorder.apiWorkerSnapshot();
   const finalClientProbeEvents = await readClientProbeEvents(page);
   const result = {
     label,
@@ -818,12 +902,26 @@ async function runPass(context, args, label) {
       capturedAtMs: coarseReadyMs,
       boundarySequence: bootstrap.coarseNetworkBoundarySequence,
       requests: coarseNetworkRequests,
-      summary: summarizeTrackedNetwork(coarseNetworkRequests),
+      summary: coarseNetworkSummary,
+      apiWorker: summarizeApiWorkerRequests(coarseApiWorkerRequests),
+    },
+    refinementNetwork: {
+      startedAtBoundarySequence: bootstrap.coarseNetworkBoundarySequence,
+      capturedAtMs: sharpReadyMs,
+      requests: refinementNetworkRequests,
+      summary: refinementNetworkSummary,
+      apiWorker: summarizeApiWorkerRequests(refinementApiWorkerRequests),
     },
     sharpNetwork: {
       capturedAtMs: sharpReadyMs,
       requests: bootstrapRequests,
-      summary: summarizeTrackedNetwork(bootstrapRequests),
+      summary: sharpNetworkSummary,
+      apiWorker: summarizeApiWorkerRequests(bootstrapApiWorkerRequests),
+    },
+    initialTileImagePhases: {
+      coarse: summarizeTileImagePhase(coarseNetworkRequests),
+      refinement: summarizeTileImagePhase(refinementNetworkRequests),
+      cumulativeThroughSharp: summarizeTileImagePhase(bootstrapRequests),
     },
     sharp,
     zooms,
@@ -838,6 +936,10 @@ async function runPass(context, args, label) {
     },
     network,
     networkSummary: summarizeTrackedNetwork(network),
+    apiWorkerNetwork: {
+      requests: apiWorkerRequests,
+      summary: summarizeApiWorkerRequests(apiWorkerRequests),
+    },
     clientProbeEvents: finalClientProbeEvents,
     orphanNetworkEvents: networkRecorder.orphanSnapshot(),
     consoleMessages,
@@ -849,6 +951,7 @@ async function runPass(context, args, label) {
     const failureScreenshotPath = path.join(args.out, `${label}-failure.png`);
     await page.screenshot({ path: failureScreenshotPath, fullPage: true }).catch(() => {});
     const network = networkRecorder.snapshot();
+    const apiWorkerRequests = networkRecorder.apiWorkerSnapshot();
     const state = await readState(page).then(summarizeState).catch(() => null);
     const clientProbeEvents = await readClientProbeEvents(page).catch(() => []);
     const readiness = await captureReadinessArtifact(page).catch(() => ({
@@ -868,6 +971,10 @@ async function runPass(context, args, label) {
       readiness,
       network,
       networkSummary: summarizeTrackedNetwork(network),
+      apiWorkerNetwork: {
+        requests: apiWorkerRequests,
+        summary: summarizeApiWorkerRequests(apiWorkerRequests),
+      },
       clientProbeEvents,
       orphanNetworkEvents: networkRecorder.orphanSnapshot(),
       consoleMessages,
