@@ -308,8 +308,17 @@ function getDebugPanTarget(state) {
   return { x: center.x + roomsPerTile * 2, y: center.y };
 }
 
-async function jumpViewportWithDebugContract(page, coordinates) {
+async function jumpViewportWithPublicContract(page, coordinates) {
   const result = await page.evaluate(async (target) => {
+    const jumpInput = document.getElementById('world-jump-input');
+    const jumpButton = document.getElementById('btn-world-jump');
+    if (jumpInput instanceof HTMLInputElement && jumpButton instanceof HTMLButtonElement) {
+      jumpInput.value = `${target.x},${target.y}`;
+      jumpInput.dispatchEvent(new Event('input', { bubbles: true }));
+      jumpButton.click();
+      return { ok: true, source: 'public-warp-ui' };
+    }
+
     const game = window.__EVERYBODYS_PLATFORMER_GAME__;
     if (!game?.scene?.getScene) return { ok: false, reason: 'debug-game-unavailable' };
     let scene = null;
@@ -322,11 +331,12 @@ async function jumpViewportWithDebugContract(page, coordinates) {
       return { ok: false, reason: 'public-jump-contract-unavailable' };
     }
     await scene.jumpToCoordinates(target);
-    return { ok: true };
+    return { ok: true, source: 'development-debug-jump' };
   }, coordinates);
   if (result?.ok !== true) {
-    throw new Error(`Overworld debug pan failed: ${result?.reason ?? 'unknown'}`);
+    throw new Error(`Overworld public pan fallback failed: ${result?.reason ?? 'unknown'}`);
   }
+  return result.source;
 }
 
 async function waitForCoverageIdentityTransition(page, before, timeoutMs) {
@@ -353,10 +363,10 @@ async function moveViewportDeterministically(page, before, direction, fallbackCo
     const transition = await waitForCoverageIdentityTransition(page, before, 1_500);
     return { source: 'space-pointer-drag', ...transition };
   } catch (pointerError) {
-    await jumpViewportWithDebugContract(page, fallbackCoordinates);
+    const source = await jumpViewportWithPublicContract(page, fallbackCoordinates);
     const transition = await waitForCoverageIdentityTransition(page, before, 5_000);
     return {
-      source: 'public-debug-jump',
+      source,
       pointerError: pointerError instanceof Error ? pointerError.message : String(pointerError),
       ...transition,
     };
