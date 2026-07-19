@@ -543,7 +543,7 @@ export class WorldTileClientController {
     };
   }
 
-  reset(): void {
+  reset(selectionBaseline: RoomCoordinates = this.options.getSelectedCoordinates()): void {
     this.lifecycleEpoch += 1;
     this.settleAllTargetLodReadyWaiters(false);
     this.destroyed = false;
@@ -598,8 +598,9 @@ export class WorldTileClientController {
     this.optimisticRoomVersions.clear();
     this.immediateMaskedRoomIds.clear();
     this.selectedPrefetchRoomId = null;
-    const selected = this.options.getSelectedCoordinates();
-    this.selectedRoomPrefetchGate.reset(`${selected.x},${selected.y}`);
+    this.selectedRoomPrefetchGate.reset(
+      `${selectionBaseline.x},${selectionBaseline.y}`,
+    );
     this.nextMutationConvergencePollAtMs = 0;
     this.contextRestorePending = false;
   }

@@ -2441,7 +2441,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       mode: 'idle',
       resetTransport: true,
     });
-    this.worldStreamingController.reset();
+    // The scene assigns this baseline below. Pass it through now so streaming
+    // does not mistake the lifecycle reset for a user selection change.
+    this.worldStreamingController.reset(DEFAULT_ROOM_COORDINATES);
     this.liveObjectController.resetSwitchStates();
     this.lightingController.reset();
     this.weatherController.reset();

@@ -254,7 +254,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       : callback();
   }
 
-  reset(): void {
+  reset(selectionBaseline: RoomCoordinates = this.options.getSelectedCoordinates()): void {
     this.loadGeneration += 1;
     this.destroyed = false;
     this.clearDisplayState();
@@ -288,8 +288,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.legacyCompactRefreshGeneration = -1;
     this.cancelDynamicOverlayRetry();
     this.selectedExactPrefetchRoomId = null;
-    this.selectedExactPrefetchGate.reset(roomIdFromCoordinates(this.options.getSelectedCoordinates()));
-    this.worldTileController.reset();
+    this.selectedExactPrefetchGate.reset(roomIdFromCoordinates(selectionBaseline));
+    this.worldTileController.reset(selectionBaseline);
     this.cancelDeferredFullRoomLoads();
     this.cancelDeferredPreviewRender();
     this.cancelFullRoomReleaseCleanup();

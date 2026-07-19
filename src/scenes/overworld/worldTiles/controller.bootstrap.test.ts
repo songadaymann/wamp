@@ -361,6 +361,7 @@ describe('world tile controller bootstrap ownership', () => {
 
   it('defers the implicit selected-room L4 request until sharp target coverage is committed', async () => {
     let nowMs = 1_000;
+    let selected = { x: 9, y: -4 };
     vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
     const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
       level: WorldTileLevel,
@@ -369,10 +370,13 @@ describe('world tile controller bootstrap ownership', () => {
     const controller = createController({
       loadWorldTileConfig: vi.fn(async () => config),
       loadWorldTileManifest,
+      getSelectedCoordinates: () => selected,
     });
     const camera = createCamera();
     camera.zoom = 0.18;
 
+    controller.reset({ x: 0, y: 0 });
+    selected = { x: 0, y: 0 };
     await controller.prepare();
     await controller.ensureInitialCoverage(camera);
     controller.update(camera);
