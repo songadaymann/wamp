@@ -49,6 +49,7 @@ export interface Env {
   ROOM_DAILY_PUBLISH_LIMIT?: string;
   EXPANDED_ROOMS_ENABLED?: string;
   PLAYABLE_CONTENT_INDEX_READS?: string;
+  COMPACT_WORLD_READS?: string;
   ROOM_MINT_CHAIN_ID?: string;
   ROOM_MINT_CHAIN_NAME?: string;
   ROOM_MINT_DISABLED?: string;

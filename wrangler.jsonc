@@ -27,7 +27,8 @@
     "PARTYKIT_HOST": "everybodys-platformer-presence.songadaymann.partykit.dev",
     "PARTYKIT_PARTY": "main",
     "ROOM_DAILY_CLAIM_LIMIT": "4",
-    "PLAYABLE_CONTENT_INDEX_READS": "0"
+    "PLAYABLE_CONTENT_INDEX_READS": "0",
+    "COMPACT_WORLD_READS": "0"
   },
   "d1_databases": [
     {
@@ -55,7 +56,8 @@
         "PARTYKIT_PARTY": "main",
         "ROOM_MINT_DISABLED": "1",
         "ROOM_DAILY_CLAIM_LIMIT": "4",
-        "PLAYABLE_CONTENT_INDEX_READS": "1"
+        "PLAYABLE_CONTENT_INDEX_READS": "1",
+        "COMPACT_WORLD_READS": "1"
       },
       "d1_databases": [
         {

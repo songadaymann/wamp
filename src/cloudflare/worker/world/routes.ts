@@ -5,9 +5,9 @@ import {
   type ExpandedRoomCellMembership,
 } from '../../../expandedRooms/model';
 import type { RoomGoalType } from '../../../goals/roomGoals';
-import { isRoomMinted } from '../../../persistence/roomModel';
 import {
   computeWorldChunkPreviewHash,
+  computeCompactWorldChunkWindow,
   computeWorldChunkWindow,
   computeWorldWindow,
   getRoomBoundsForChunkBounds,
@@ -15,14 +15,18 @@ import {
   type WorldRoomSummary,
 } from '../../../persistence/worldModel';
 import { HttpError, jsonResponse, parseIntegerQueryParam, parseWorldChunkBounds } from '../core/http';
+import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, RequestAuth } from '../core/types';
+import type { WorkerExecutionContextLike } from '../core/types';
+import { loadAnonymousPublicCache } from '../core/publicCache';
 import { loadPublishedCourseMembershipsInBounds } from '../courses/store';
 import { loadPublishedExpandedRoomMembershipsInBounds } from '../expandedRooms/store';
 import {
   getRoomClaimQuota,
   loadClaimedUnpublishedRoomsInBounds,
   loadPublishedRoomsInBounds,
-  loadRoomRecordForMutation,
+  loadUnavailableRoomIdsForClaim,
+  loadWorldRoomSummariesInBounds,
 } from '../rooms/store';
 
 export async function handleWorldRequest(
@@ -99,6 +103,48 @@ export async function handleWorldChunksRequest(
   return jsonResponse(request, chunkWindow);
 }
 
+export async function handleWorldChunkSummariesRequest(
+  request: Request,
+  url: URL,
+  env: Env,
+  context?: WorkerExecutionContextLike,
+  authenticated = false,
+): Promise<Response> {
+  if (!compactWorldReadsEnabled(env)) throw new HttpError(404, 'Compact world reads are disabled.');
+  const timing = new ServerTiming();
+  const loadResponse = async () => {
+  const chunkBounds = parseWorldChunkBounds(url.searchParams);
+  const roomBounds = getRoomBoundsForChunkBounds(chunkBounds);
+  const minX = roomBounds.minX - 1;
+  const maxX = roomBounds.maxX + 1;
+  const minY = roomBounds.minY - 1;
+  const maxY = roomBounds.maxY + 1;
+  const expandedRoomsEnabled = isExpandedRoomsEnabled(env);
+  const [summaries, memberships] = await timing.measure('d1', () => Promise.all([
+    loadWorldRoomSummariesInBounds(env, minX, maxX, minY, maxY),
+    expandedRoomsEnabled
+      ? loadPublishedExpandedRoomMembershipsInBounds(env, minX, maxX, minY, maxY)
+      : loadPublishedCourseMembershipsInBounds(env, minX, maxX, minY, maxY),
+  ]));
+  const compactWindow = timing.measureSync('summaries', () => computeCompactWorldChunkWindow(summaries, chunkBounds));
+  for (const chunk of compactWindow.chunks) {
+    if (expandedRoomsEnabled) applyExpandedRoomMemberships(chunk.rooms, memberships as ExpandedRoomCellMembership[]);
+    else applyLegacyCourseMemberships(chunk.rooms, memberships as LegacyCourseMembership[]);
+    chunk.chunkPreviewHash = computeWorldChunkPreviewHash(chunk);
+  }
+  timing.setDiagnostic('cache', 'public-20');
+  return timedJsonResponse(request, compactWindow, timing, {
+    headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' },
+  });
+  };
+  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
+}
+
+function compactWorldReadsEnabled(env: Env): boolean {
+  const value = env.COMPACT_WORLD_READS?.trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'on';
+}
+
 export async function handleClaimableFrontierRoomsRequest(
   request: Request,
   url: URL,
@@ -143,26 +189,11 @@ export async function handleClaimableFrontierRoomsRequest(
 async function filterClaimableFrontierRooms(
   env: Env,
   rooms: WorldRoomSummary[],
-  auth: RequestAuth
+  _auth: RequestAuth
 ) {
-  const claimableRooms: WorldRoomSummary[] = [];
-  for (const room of rooms) {
-    if (room.state !== 'frontier') continue;
-    const record = await loadRoomRecordForMutation(
-      env,
-      room.id,
-      room.coordinates,
-      auth.user,
-      auth.isAdmin
-    );
-    if (record.published !== null) continue;
-    if (record.claimerUserId !== null) continue;
-    if (isRoomMinted(record)) continue;
-    if (!record.permissions.canPublish) continue;
-    claimableRooms.push(room);
-  }
-
-  return claimableRooms;
+  const frontierRooms = rooms.filter((room) => room.state === 'frontier');
+  const unavailableIds = await loadUnavailableRoomIdsForClaim(env, frontierRooms.map((room) => room.id));
+  return frontierRooms.filter((room) => !unavailableIds.has(room.id));
 }
 
 type LegacyCourseMembership = {

@@ -36,6 +36,7 @@ import {
   createWorldWindowFromRoomBounds,
   isWithinRoomBounds,
   type WorldChunkBounds,
+  type CompactWorldChunkWindow,
   type WorldChunkWindow,
   type WorldRoomBounds,
   type WorldRoomSummary,
@@ -180,6 +181,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private activeChunkRadius = 0;
   private localPlayPressure = createDefaultLocalPlayPressureMetrics();
   private chunkWindowRequestInFlight = false;
+  private compactWorldActive = false;
   private deferredFullRoomLoadQueue: RenderableRoom[] = [];
   private deferredFullRoomLoadTimer: Phaser.Time.TimerEvent | null = null;
   private deferredPreviewRooms: RoomSnapshot[] = [];
@@ -234,6 +236,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.activeChunkRadius = 0;
     this.localPlayPressure = createDefaultLocalPlayPressureMetrics();
     this.chunkWindowRequestInFlight = false;
+    this.compactWorldActive = false;
     this.cancelDeferredFullRoomLoads();
     this.cancelDeferredPreviewRender();
     this.cancelFullRoomReleaseCleanup();
@@ -268,6 +271,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.activeChunkRadius = 0;
     this.localPlayPressure = createDefaultLocalPlayPressureMetrics();
     this.chunkWindowRequestInFlight = false;
+    this.compactWorldActive = false;
   }
 
   setDraftRoom(room: RoomSnapshot): void {
@@ -422,8 +426,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           desiredChunkBounds,
         }));
         let chunkWindow: WorldChunkWindow;
+        let compactWorldActive = false;
         try {
-          chunkWindow = await this.options.worldRepository.loadWorldChunkWindow(desiredChunkBounds);
+          const compactWindow = await this.options.worldRepository.loadCompactWorldChunkWindow(desiredChunkBounds);
+          if (compactWindow) {
+            chunkWindow = compactWorldWindowToLegacyShell(compactWindow);
+            compactWorldActive = true;
+          } else {
+            chunkWindow = await this.options.worldRepository.loadWorldChunkWindow(desiredChunkBounds);
+          }
         } finally {
           cancelChunkStallWatch();
         }
@@ -431,14 +442,32 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           return 'cancelled';
         }
         logBootPhase('world-stream:chunk-window:done', summarizeChunkWindow(chunkWindow));
-        this.applyChunkWindow(chunkWindow);
+        this.applyChunkWindow(chunkWindow, compactWorldActive);
       }
 
-      const roomCandidates = this.collectVisibleRoomCandidates();
+      let roomCandidates = this.collectVisibleRoomCandidates();
       this.visibleRoomIds = new Set(roomCandidates.keys());
-      const previewSelection = this.computePreviewSelection(roomCandidates);
-      const previewRoomIds = previewSelection.previewRoomIds;
-      const fullRoomIds = previewSelection.fullRoomIds;
+      let previewSelection = this.computePreviewSelection(roomCandidates);
+      let previewRoomIds = previewSelection.previewRoomIds;
+      let fullRoomIds = previewSelection.fullRoomIds;
+      if (this.compactWorldActive) {
+        const nearRoomIds = this.getNearestPreviewRoomIds(roomCandidates, previewRoomIds, fullRoomIds, 9);
+        try {
+          await this.previewCache.ensureRoomSnapshotsBatch(roomCandidates, nearRoomIds);
+        } catch (error) {
+          console.warn('Compact snapshot loading failed; retrying with legacy world chunks.', error);
+          const fallbackBounds = this.loadedChunkBounds ?? this.getDesiredChunkBounds(centerCoordinates);
+          const legacyWindow = await this.options.worldRepository.loadWorldChunkWindow(fallbackBounds);
+          if (this.destroyed || generation !== this.loadGeneration) return 'cancelled';
+          this.applyChunkWindow(legacyWindow, false);
+          roomCandidates = this.collectVisibleRoomCandidates();
+          this.visibleRoomIds = new Set(roomCandidates.keys());
+          previewSelection = this.computePreviewSelection(roomCandidates);
+          previewRoomIds = previewSelection.previewRoomIds;
+          fullRoomIds = previewSelection.fullRoomIds;
+        }
+        if (this.destroyed || generation !== this.loadGeneration) return 'cancelled';
+      }
       logBootPhase('world-stream:renderables:start', {
         visibleRoomCount: this.visibleRoomIds.size,
         previewRoomCount: previewRoomIds.size,
@@ -484,6 +513,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           ? this.getRetainedFullRoomIds(fullRoomIds)
           : fullRoomIds
       );
+      if (this.compactWorldActive) {
+        void this.loadDistantPreviewsProgressively(
+          generation,
+          roomCandidates,
+          previewRoomIds,
+          fullRoomIds,
+        ).catch((error) => console.warn('Progressive world preview loading stopped', error));
+      }
       logBootPhase('world-stream:success', {
         visibleRoomCount: this.visibleRoomIds.size,
         loadedPreviewRoomCount: this.previewRenderer.getLoadedPreviewRoomCount(),
@@ -520,7 +557,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.chunkWindowRequestInFlight = true;
 
     try {
-      const nextChunkWindow = await this.options.worldRepository.loadWorldChunkWindow(this.loadedChunkBounds);
+      const compactWindow = this.compactWorldActive
+        ? await this.options.worldRepository.loadCompactWorldChunkWindow(this.loadedChunkBounds)
+        : null;
+      const nextChunkWindow = compactWindow
+        ? compactWorldWindowToLegacyShell(compactWindow)
+        : await this.options.worldRepository.loadWorldChunkWindow(this.loadedChunkBounds);
       if (this.destroyed || generation !== this.loadGeneration) {
         return 'cancelled';
       }
@@ -530,7 +572,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         return 'unchanged';
       }
 
-      this.applyChunkWindow(nextChunkWindow);
+      this.applyChunkWindow(nextChunkWindow, compactWindow !== null);
       this.refreshVisibleRoomsFromCache();
       return 'updated';
     } catch {
@@ -1120,8 +1162,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     });
   }
 
-  private applyChunkWindow(chunkWindow: WorldChunkWindow): void {
+  private applyChunkWindow(chunkWindow: WorldChunkWindow, compactWorldActive = false): void {
     this.chunkWindow = chunkWindow;
+    this.compactWorldActive = compactWorldActive;
     this.loadedChunkBounds = { ...chunkWindow.chunkBounds };
     this.loadedRoomBounds = { ...chunkWindow.roomBounds };
 
@@ -1133,6 +1176,45 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.previewCache.hydrateChunkWindow(chunkWindow);
     this.captureChunkPreviewHashes(chunkWindow);
     this.activeChunkRadius = this.getChunkRadius(chunkWindow.chunkBounds);
+  }
+
+  private getNearestPreviewRoomIds(
+    roomCandidates: Map<string, StreamingRoomCandidate>,
+    previewRoomIds: Set<string>,
+    fullRoomIds: Set<string>,
+    previewCount: number,
+  ): Set<string> {
+    const focus = this.getFocusCoordinates();
+    const sortedPreviewIds = [...previewRoomIds].sort((leftId, rightId) => {
+      const left = roomCandidates.get(leftId)?.coordinates;
+      const right = roomCandidates.get(rightId)?.coordinates;
+      const leftDistance = left ? Math.abs(left.x - focus.x) + Math.abs(left.y - focus.y) : Number.MAX_SAFE_INTEGER;
+      const rightDistance = right ? Math.abs(right.x - focus.x) + Math.abs(right.y - focus.y) : Number.MAX_SAFE_INTEGER;
+      return leftDistance - rightDistance || leftId.localeCompare(rightId);
+    });
+    return new Set([...fullRoomIds, ...sortedPreviewIds.slice(0, previewCount)]);
+  }
+
+  private async loadDistantPreviewsProgressively(
+    generation: number,
+    roomCandidates: Map<string, StreamingRoomCandidate>,
+    previewRoomIds: Set<string>,
+    fullRoomIds: Set<string>,
+  ): Promise<void> {
+    const nearIds = this.getNearestPreviewRoomIds(roomCandidates, previewRoomIds, fullRoomIds, 9);
+    const distantIds = [...previewRoomIds].filter((roomId) => !nearIds.has(roomId));
+    for (let index = 0; index < distantIds.length; index += 48) {
+      if (this.destroyed || generation !== this.loadGeneration) return;
+      const batchIds = distantIds.slice(index, index + 48);
+      await this.previewCache.ensureRoomSnapshotsBatch(roomCandidates, batchIds);
+      if (this.destroyed || generation !== this.loadGeneration) return;
+      const renderableRooms = await this.previewCache.collectRenderableRooms(
+        roomCandidates,
+        new Set(batchIds),
+        new Set(),
+      );
+      this.previewRenderer.renderChunkPreviews(this.collectPreviewRooms(renderableRooms, new Set(batchIds)));
+    }
   }
 
   private captureChunkPreviewHashes(chunkWindow: WorldChunkWindow): void {
@@ -1820,5 +1902,19 @@ function summarizeChunkWindow(chunkWindow: WorldChunkWindow): Record<string, unk
     chunkCount: chunkWindow.chunks.length,
     roomSummaryCount: chunkWindow.chunks.reduce((total, chunk) => total + chunk.rooms.length, 0),
     previewRoomCount: chunkWindow.chunks.reduce((total, chunk) => total + chunk.previewRooms.length, 0),
+  };
+}
+
+function compactWorldWindowToLegacyShell(window: CompactWorldChunkWindow): WorldChunkWindow {
+  return {
+    chunkBounds: { ...window.chunkBounds },
+    roomBounds: { ...window.roomBounds },
+    chunks: window.chunks.map((chunk) => ({
+      ...chunk,
+      coordinates: { ...chunk.coordinates },
+      roomBounds: { ...chunk.roomBounds },
+      rooms: chunk.rooms.map((room) => ({ ...room, coordinates: { ...room.coordinates } })),
+      previewRooms: [],
+    })),
   };
 }

@@ -4,14 +4,18 @@ import {
   parseRoomId,
   type RoomCoordinates,
   type RoomRecord,
+  type RoomSnapshotQueryReference,
+  type RoomSnapshotQueryResponse,
   type RoomSnapshot,
 } from './roomModel';
 import {
   cloneWorldChunkWindow,
+  cloneCompactWorldChunkWindow,
   cloneWorldWindow,
   computeWorldChunkWindow,
   computeWorldWindow,
   type ClaimableFrontierRoomWindow,
+  type CompactWorldChunkWindow,
   type ClaimedUnpublishedWorldRoomSource,
   type WorldRoomSource,
   type WorldChunkBounds,
@@ -25,6 +29,8 @@ import { startBootStallWatch } from '../main/bootDiagnostics';
 export interface WorldRepository {
   loadWorldWindow(center: RoomCoordinates, radius: number): Promise<WorldWindow>;
   loadWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<WorldChunkWindow>;
+  loadCompactWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<CompactWorldChunkWindow | null>;
+  queryRoomSnapshots(references: RoomSnapshotQueryReference[]): Promise<RoomSnapshotQueryResponse>;
   loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null>;
   loadClaimableFrontierWindow(center: RoomCoordinates, radius: number): Promise<ClaimableFrontierRoomWindow>;
 }
@@ -71,6 +77,14 @@ class LocalWorldRepository implements WorldRepository {
 
   async loadWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<WorldChunkWindow> {
     return computeWorldChunkWindow(this.loadAllWorldRooms(), chunkBounds);
+  }
+
+  async loadCompactWorldChunkWindow(_chunkBounds: WorldChunkBounds): Promise<CompactWorldChunkWindow | null> {
+    return null;
+  }
+
+  async queryRoomSnapshots(_references: RoomSnapshotQueryReference[]): Promise<RoomSnapshotQueryResponse> {
+    return { snapshots: [], missing: [] };
   }
 
   async loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null> {
@@ -144,6 +158,7 @@ class LocalWorldRepository implements WorldRepository {
 }
 
 class ApiWorldRepository implements WorldRepository {
+  private compactWorldUnavailable = false;
   constructor(
     private readonly baseUrl: string,
     private readonly fallback: WorldRepository | null
@@ -174,6 +189,41 @@ class ApiWorldRepository implements WorldRepository {
       () => this.requestWorldChunkWindow(`/api/world/chunks?${params.toString()}`),
       () => this.fallback?.loadWorldChunkWindow(chunkBounds)
     );
+  }
+
+  async loadCompactWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<CompactWorldChunkWindow | null> {
+    if (this.compactWorldUnavailable) return null;
+    const params = new URLSearchParams({
+      minChunkX: String(chunkBounds.minChunkX),
+      maxChunkX: String(chunkBounds.maxChunkX),
+      minChunkY: String(chunkBounds.minChunkY),
+      maxChunkY: String(chunkBounds.maxChunkY),
+    });
+    try {
+      return await this.requestCompactWorldChunkWindow(`/api/world/chunks/summary?${params.toString()}`);
+    } catch (error) {
+      this.compactWorldUnavailable = true;
+      console.warn('Compact world reads unavailable for this session; using legacy chunks.', error);
+      return null;
+    }
+  }
+
+  async queryRoomSnapshots(references: RoomSnapshotQueryReference[]): Promise<RoomSnapshotQueryResponse> {
+    try {
+      const response = await this.fetchWorldApi('/api/rooms/snapshots/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ references }),
+      });
+      if (!response.ok) {
+        const details = await response.text();
+        throw new WorldApiError(details || `Snapshot query failed with status ${response.status}.`, response.status);
+      }
+      return (await response.json()) as RoomSnapshotQueryResponse;
+    } catch (error) {
+      this.compactWorldUnavailable = true;
+      throw error;
+    }
   }
 
   async loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null> {
@@ -232,6 +282,15 @@ class ApiWorldRepository implements WorldRepository {
     return cloneWorldChunkWindow((await response.json()) as WorldChunkWindow);
   }
 
+  private async requestCompactWorldChunkWindow(path: string): Promise<CompactWorldChunkWindow> {
+    const response = await this.fetchWorldApi(path);
+    if (!response.ok) {
+      const details = await response.text();
+      throw new WorldApiError(details || `Compact world API request failed with status ${response.status}.`, response.status);
+    }
+    return cloneCompactWorldChunkWindow((await response.json()) as CompactWorldChunkWindow);
+  }
+
   private async requestPublishedRoom(path: string): Promise<RoomSnapshot | null> {
     const response = await this.fetchWorldApi(path);
 
@@ -265,7 +324,7 @@ class ApiWorldRepository implements WorldRepository {
     return (await response.json()) as ClaimableFrontierRoomWindow;
   }
 
-  private async fetchWorldApi(path: string): Promise<Response> {
+  private async fetchWorldApi(path: string, init?: RequestInit): Promise<Response> {
     const cancelStallWatch = startBootStallWatch('world API request', 8000, () => ({
       path,
       baseUrl: this.baseUrl,
@@ -273,6 +332,7 @@ class ApiWorldRepository implements WorldRepository {
 
     try {
       return await fetch(`${this.baseUrl}${path}`, {
+        ...init,
         credentials: 'include',
       });
     } finally {

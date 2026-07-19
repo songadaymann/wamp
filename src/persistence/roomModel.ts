@@ -152,6 +152,149 @@ export interface RoomRecord {
   permissions: RoomPermissions;
 }
 
+export interface RoomSummary {
+  id: string;
+  coordinates: RoomCoordinates;
+  draftTitle: string | null;
+  publishedTitle: string | null;
+  draftVersion: number;
+  publishedVersion: number | null;
+  draftUpdatedAt: string;
+  publishedUpdatedAt: string | null;
+  canonicalVersion: number | null;
+  claimerUserId: string | null;
+  claimerPrincipalKind: RoomAuthorPrincipalKind | null;
+  claimerAgentId: string | null;
+  claimerDisplayName: string | null;
+  claimedAt: string | null;
+  lastPublishedByUserId: string | null;
+  lastPublishedByPrincipalKind: RoomAuthorPrincipalKind | null;
+  lastPublishedByAgentId: string | null;
+  lastPublishedByDisplayName: string | null;
+  mintedChainId: number | null;
+  mintedContractAddress: string | null;
+  mintedTokenId: string | null;
+  mintedOwnerWalletAddress: string | null;
+  mintedOwnerSyncedAt: string | null;
+  mintedMetadataRoomVersion: number | null;
+  mintedMetadataUpdatedAt: string | null;
+  mintedMetadataHash: string | null;
+  permissions: RoomPermissions;
+}
+
+export interface RoomCurrentRecord {
+  summary: RoomSummary;
+  draft: RoomSnapshot;
+  published: RoomSnapshot | null;
+}
+
+export interface RoomVersionSummary {
+  version: number;
+  title: string | null;
+  createdAt: string;
+  publishedByUserId: string | null;
+  publishedByPrincipalKind: RoomAuthorPrincipalKind | null;
+  publishedByAgentId: string | null;
+  publishedByDisplayName: string | null;
+  revertedFromVersion: number | null;
+  leaderboardSourceVersion: number | null;
+}
+
+export interface RoomVersionsPage {
+  versions: RoomVersionSummary[];
+  nextCursor?: string;
+}
+
+export interface ExactRoomSnapshotReference {
+  roomId: string;
+  version: number;
+}
+
+export interface CurrentPreviewSnapshotReference {
+  roomId: string;
+  coordinates?: RoomCoordinates;
+  state?: 'published' | 'claimed_unpublished';
+  updatedAt?: string;
+}
+
+export type RoomSnapshotQueryReference =
+  | ({ kind: 'version' } & ExactRoomSnapshotReference)
+  | ({ kind: 'current_preview' } & CurrentPreviewSnapshotReference);
+
+export interface RoomSnapshotQueryResult {
+  key: string;
+  reference: RoomSnapshotQueryReference;
+  snapshot: RoomSnapshot;
+}
+
+export interface RoomSnapshotQueryResponse {
+  snapshots: RoomSnapshotQueryResult[];
+  missing: RoomSnapshotQueryReference[];
+}
+
+export function createRoomSummaryFromRecord(record: RoomRecord): RoomSummary {
+  return {
+    id: record.draft.id,
+    coordinates: record.draft.coordinates,
+    draftTitle: record.draft.title,
+    publishedTitle: record.published?.title ?? null,
+    draftVersion: record.draft.version,
+    publishedVersion: record.published?.version ?? null,
+    draftUpdatedAt: record.draft.updatedAt,
+    publishedUpdatedAt: record.published?.updatedAt ?? null,
+    canonicalVersion: record.canonicalVersion,
+    claimerUserId: record.claimerUserId,
+    claimerPrincipalKind: record.claimerPrincipalKind,
+    claimerAgentId: record.claimerAgentId,
+    claimerDisplayName: record.claimerDisplayName,
+    claimedAt: record.claimedAt,
+    lastPublishedByUserId: record.lastPublishedByUserId,
+    lastPublishedByPrincipalKind: record.lastPublishedByPrincipalKind,
+    lastPublishedByAgentId: record.lastPublishedByAgentId,
+    lastPublishedByDisplayName: record.lastPublishedByDisplayName,
+    mintedChainId: record.mintedChainId,
+    mintedContractAddress: record.mintedContractAddress,
+    mintedTokenId: record.mintedTokenId,
+    mintedOwnerWalletAddress: record.mintedOwnerWalletAddress,
+    mintedOwnerSyncedAt: record.mintedOwnerSyncedAt,
+    mintedMetadataRoomVersion: record.mintedMetadataRoomVersion,
+    mintedMetadataUpdatedAt: record.mintedMetadataUpdatedAt,
+    mintedMetadataHash: record.mintedMetadataHash,
+    permissions: record.permissions,
+  };
+}
+
+export function createRoomRecordFromCurrent(
+  current: RoomCurrentRecord,
+  versions: RoomVersionRecord[] = [],
+): RoomRecord {
+  const summary = current.summary;
+  return {
+    draft: cloneRoomSnapshot(current.draft),
+    published: current.published ? cloneRoomSnapshot(current.published) : null,
+    versions,
+    canonicalVersion: summary.canonicalVersion,
+    claimerUserId: summary.claimerUserId,
+    claimerPrincipalKind: summary.claimerPrincipalKind,
+    claimerAgentId: summary.claimerAgentId,
+    claimerDisplayName: summary.claimerDisplayName,
+    claimedAt: summary.claimedAt,
+    lastPublishedByUserId: summary.lastPublishedByUserId,
+    lastPublishedByPrincipalKind: summary.lastPublishedByPrincipalKind,
+    lastPublishedByAgentId: summary.lastPublishedByAgentId,
+    lastPublishedByDisplayName: summary.lastPublishedByDisplayName,
+    mintedChainId: summary.mintedChainId,
+    mintedContractAddress: summary.mintedContractAddress,
+    mintedTokenId: summary.mintedTokenId,
+    mintedOwnerWalletAddress: summary.mintedOwnerWalletAddress,
+    mintedOwnerSyncedAt: summary.mintedOwnerSyncedAt,
+    mintedMetadataRoomVersion: summary.mintedMetadataRoomVersion,
+    mintedMetadataUpdatedAt: summary.mintedMetadataUpdatedAt,
+    mintedMetadataHash: summary.mintedMetadataHash,
+    permissions: { ...summary.permissions },
+  };
+}
+
 export interface RoomRevertRequestBody {
   targetVersion: number;
 }

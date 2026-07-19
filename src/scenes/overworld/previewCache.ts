@@ -2,6 +2,12 @@ import { cloneRoomSnapshot, type RoomSnapshot } from '../../persistence/roomMode
 import type { WorldRepository } from '../../persistence/worldRepository';
 import type { WorldChunkWindow, WorldRoomSummary } from '../../persistence/worldModel';
 import type { RoomCoordinates } from '../../persistence/roomModel';
+import {
+  buildSharedRoomSnapshotKey,
+  getSharedRoomSnapshot,
+  invalidateSharedRoomSnapshots,
+  setSharedRoomSnapshot,
+} from '../../persistence/sharedRoomSnapshotCache';
 
 export type PlayableRoomSource =
   | 'published'
@@ -58,6 +64,10 @@ export class OverworldPreviewCache {
 
   setRoomSnapshot(room: RoomSnapshot): void {
     this.roomSnapshotsById.set(room.id, room);
+    setSharedRoomSnapshot(
+      buildSharedRoomSnapshotKey(room.id, room.version, room.status, room.updatedAt),
+      room,
+    );
   }
 
   hydrateChunkWindow(chunkWindow: Pick<WorldChunkWindow, 'chunks'>): void {
@@ -73,6 +83,63 @@ export class OverworldPreviewCache {
         }
 
         this.roomSnapshotsById.set(previewRoom.id, cloneRoomSnapshot(previewRoom));
+        setSharedRoomSnapshot(
+          buildSharedRoomSnapshotKey(previewRoom.id, previewRoom.version, previewRoom.status, previewRoom.updatedAt),
+          previewRoom,
+        );
+      }
+    }
+  }
+
+  async ensureRoomSnapshotsBatch(
+    roomCandidates: Map<string, StreamingRoomCandidate>,
+    roomIds: Iterable<string>,
+  ): Promise<void> {
+    const references = Array.from(new Set(roomIds)).flatMap((roomId) => {
+      const candidate = roomCandidates.get(roomId);
+      const summary = candidate?.summary ?? null;
+      if (!summary || (summary.state !== 'published' && summary.state !== 'claimed_unpublished')) return [];
+      const cached = this.roomSnapshotsById.get(roomId);
+      if (
+        cached &&
+        cached.version === summary.version &&
+        (!summary.previewUpdatedAt || cached.updatedAt === summary.previewUpdatedAt)
+      ) return [];
+      const shared = getSharedRoomSnapshot(buildSharedRoomSnapshotKey(
+        roomId,
+        summary.version,
+        summary.state,
+        summary.previewUpdatedAt,
+      ));
+      if (shared) {
+        this.roomSnapshotsById.set(roomId, shared);
+        return [];
+      }
+      return [{
+        kind: 'current_preview' as const,
+        roomId,
+        coordinates: summary.coordinates,
+        state: summary.state,
+        ...(summary.previewUpdatedAt ? { updatedAt: summary.previewUpdatedAt } : {}),
+      }];
+    });
+
+    for (let index = 0; index < references.length; index += 48) {
+      const batch = references.slice(index, index + 48);
+      const response = await this.worldRepository.queryRoomSnapshots(batch);
+      if (response.missing.length > 0) {
+        const missing = response.missing[0];
+        throw new Error(`Room preview ${missing.roomId} changed while the world was loading.`);
+      }
+      for (const entry of response.snapshots) {
+        this.roomSnapshotsById.set(entry.snapshot.id, cloneRoomSnapshot(entry.snapshot));
+        const summary = roomCandidates.get(entry.snapshot.id)?.summary ?? null;
+        setSharedRoomSnapshot(buildSharedRoomSnapshotKey(
+          entry.snapshot.id,
+          entry.snapshot.version,
+          summary?.state ?? entry.snapshot.status,
+          entry.snapshot.updatedAt,
+        ), entry.snapshot);
       }
     }
   }
@@ -81,6 +148,7 @@ export class OverworldPreviewCache {
     this.roomLoadPromisesById.delete(roomId);
     if (dropPublishedSnapshot) {
       this.roomSnapshotsById.delete(roomId);
+      invalidateSharedRoomSnapshots(roomId);
     }
   }
 
