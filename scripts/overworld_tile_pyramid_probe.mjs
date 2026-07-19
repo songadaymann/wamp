@@ -120,6 +120,19 @@ async function waitForOverworld(page, timeoutMs) {
   }, null, { timeout: timeoutMs });
 }
 
+async function dismissWelcomeModal(page) {
+  const closeButton = page.locator('#btn-welcome-close');
+  if (await closeButton.isVisible().catch(() => false)) {
+    await closeButton.evaluate((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error('Welcome close control is not a button');
+      }
+      button.click();
+    });
+    await page.waitForTimeout(50);
+  }
+}
+
 async function waitForTileState(page, predicate, timeoutMs) {
   const startedAt = performance.now();
   while (performance.now() - startedAt < timeoutMs) {
@@ -251,6 +264,7 @@ async function runPass(context, args, label) {
   const navigationStartedAt = performance.now();
   await page.goto(args.url, { waitUntil: 'domcontentloaded' });
   await waitForOverworld(page, args.timeoutMs);
+  await dismissWelcomeModal(page);
   const appReadyMs = Math.round((performance.now() - navigationStartedAt) * 10) / 10;
   const coarse = await waitForTileState(page, isCompleteCoverage, args.timeoutMs);
   const coarseReadyMs = Math.round((performance.now() - navigationStartedAt) * 10) / 10;
