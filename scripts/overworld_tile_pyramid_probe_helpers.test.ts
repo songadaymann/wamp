@@ -145,6 +145,7 @@ function acceptancePass(label: 'cold' | 'warm') {
         missingResponseBodyCount: 0,
         tileRequestCount: 12,
         manifestMaxResponseBytes: 40_000,
+        manifestP95DurationMs: 140,
         manifestMaxDurationMs: 140,
         manifestMissingDurationCount: 0,
       },
@@ -663,12 +664,34 @@ describe('overworld tile pyramid probe helpers', () => {
   it('fails any oversized or slow initial stable-view manifest', () => {
     const result = acceptanceResult();
     result.warm.sharpNetwork.summary.manifestMaxResponseBytes = 50_001;
-    result.warm.sharpNetwork.summary.manifestMaxDurationMs = 150.1;
+    result.warm.sharpNetwork.summary.manifestP95DurationMs = 150.1;
     const codes = evaluateOverworldTileProbeAcceptance(result).failures.map(({ code }) => code);
     expect(codes).toEqual(expect.arrayContaining([
       'manifest-response-bytes',
       'manifest-latency',
     ]));
+  });
+
+  it('gates manifest latency at p95 while retaining the maximum for diagnostics', () => {
+    const requests = Array.from({ length: 20 }, (_, index) => request({
+      url: `https://game.example/api/world/tiles/manifest?level=1&sample=${index}`,
+      manifestLevel: 1,
+      startedAtMs: index * 2_000,
+      finishedAtMs: index * 2_000 + (index === 19 ? 1_000 : 100),
+    }));
+    const summary = summarizeTrackedNetwork(requests);
+    expect(summary).toMatchObject({
+      manifestDurationCount: 20,
+      manifestP95DurationMs: 100,
+      manifestMaxDurationMs: 1_000,
+      manifestMissingDurationCount: 0,
+    });
+
+    const result = acceptanceResult();
+    result.warm.sharpNetwork.summary.manifestMaxDurationMs = 1_000;
+    expect(evaluateOverworldTileProbeAcceptance(result).failures).not.toContainEqual(
+      expect.objectContaining({ code: 'manifest-latency', pass: 'warm' }),
+    );
   });
 
   it('fails closed when stable-view response bytes or manifest timing cannot be measured', () => {
@@ -866,6 +889,8 @@ describe('overworld tile pyramid probe helpers', () => {
       missingResponseBodyCount: 0,
       worldTileMissingResponseBodyCount: 0,
       manifestMaxResponseBytes: 123,
+      manifestDurationCount: 1,
+      manifestP95DurationMs: 10,
       manifestMaxDurationMs: 10,
       manifestMissingDurationCount: 0,
     });

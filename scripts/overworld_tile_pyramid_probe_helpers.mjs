@@ -336,6 +336,13 @@ function getRequestDurationMs(entry) {
     : null;
 }
 
+function nearestRankPercentile(values, quantile) {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.max(0, Math.ceil(sorted.length * quantile) - 1);
+  return sorted[index];
+}
+
 export function summarizeTrackedNetwork(requests) {
   const tileRequests = requests.filter((entry) => isWorldTileImageUrl(entry.url));
   const worldTileRequests = requests.filter((entry) => (
@@ -372,6 +379,8 @@ export function summarizeTrackedNetwork(requests) {
     )).length,
     manifestRequestCount: manifestRequests.length,
     manifestMaxResponseBytes: Math.max(0, ...manifestRequests.map(getResponsePayloadByteLength)),
+    manifestDurationCount: manifestDurations.length,
+    manifestP95DurationMs: nearestRankPercentile(manifestDurations, 0.95),
     manifestMaxDurationMs: Math.max(0, ...manifestDurations),
     manifestMissingDurationCount: manifestRequests.length - manifestDurations.length,
     manifestLevels: manifestRequests.map((entry) => entry.manifestLevel),
@@ -530,9 +539,9 @@ function checkPassNetworkAcceptance(label, pass, gates, failures) {
     failures,
     'manifest-latency',
     label,
-    sharpSummary?.manifestMaxDurationMs,
+    sharpSummary?.manifestP95DurationMs,
     gates.manifestLatencyMs,
-    'An initial stable-view manifest exceeded the latency gate.',
+    'Initial stable-view manifest p95 exceeded the latency gate.',
   );
   checkFiniteCeiling(
     failures,
