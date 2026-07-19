@@ -2,6 +2,11 @@ import type Phaser from 'phaser';
 import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { WorldRepository } from '../../../persistence/worldRepository';
 import type { PerformanceProfile } from '../../../ui/deviceLayout';
+import {
+  clearWorldReplacementCoverage,
+  publishWorldReplacementCoverageReady,
+  type WorldReplacementCoverageReadyState,
+} from '../../../main/worldReplacementCoverage';
 import type { OverworldMode } from '../../sceneData';
 import {
   shouldScheduleWorldTileRequest,
@@ -134,8 +139,9 @@ export interface WorldTileClientDebugSnapshot extends WorldTileDebugMetrics {
   coverageReadyAtMs: number | null;
 }
 
-export interface WorldTileReplacementReadyEventDetail {
+export interface WorldTileReplacementReadyEventDetail extends WorldReplacementCoverageReadyState {
   schemaVersion: 1;
+  source: 'tiled';
   coverageEpoch: number;
   coverageKey: string;
   rendererVersion: string;
@@ -145,7 +151,6 @@ export interface WorldTileReplacementReadyEventDetail {
 
 const CAMERA_EPSILON = 0.5;
 const WORLD_TILE_CONFIG_REFRESH_MS = 20_000;
-const WORLD_TILE_REPLACEMENT_READY_EVENT = 'wamp:world-tiles-replacement-ready';
 
 export class WorldTileClientController {
   private readonly layer: WorldTilePhaserLayer;
@@ -220,10 +225,12 @@ export class WorldTileClientController {
   private readyCoverageEpoch: number | null = null;
   private coverageStartedAtMs: number | null = null;
   private coverageReadyAtMs: number | null = null;
+  private publishedReplacementCoverageKey: string | null = null;
   private readonly targetLodReadyWaiters = new Set<TargetLodReadyWaiter>();
   private contextCanvas: HTMLCanvasElement | null = null;
   private readonly handleContextRestored = () => {
     if (this.isRefinementStopped()) return;
+    this.markCoverageNotReady();
     this.contextRestorePending = true;
     this.layer.discardGpuTexturesForContextRestore();
     this.refreshAvailability();
@@ -590,6 +597,7 @@ export class WorldTileClientController {
 
   reset(selectionBaseline: RoomCoordinates = this.options.getSelectedCoordinates()): void {
     this.lifecycleEpoch += 1;
+    this.markCoverageNotReady();
     this.settleAllTargetLodReadyWaiters(false);
     this.destroyed = false;
     this.prepareAbortController?.abort();
@@ -658,6 +666,7 @@ export class WorldTileClientController {
 
   destroy(): void {
     this.lifecycleEpoch += 1;
+    this.markCoverageNotReady();
     this.settleAllTargetLodReadyWaiters(false);
     this.destroyed = true;
     this.prepareAbortController?.abort();
@@ -756,6 +765,7 @@ export class WorldTileClientController {
   }
 
   private stopRefinementWork(): void {
+    this.markCoverageNotReady();
     this.settleAllTargetLodReadyWaiters(false);
     this.initialCoverageAbortController?.abort();
     this.initialCoverageAbortController = null;
@@ -1391,6 +1401,7 @@ export class WorldTileClientController {
   ): void {
     const key = buildWorldTileCoverageKey(rendererVersion, level, bounds);
     if (key === this.coverageKey) return;
+    this.markCoverageNotReady();
     this.coverageEpoch += 1;
     this.coverageKey = key;
     this.readyCoverageEpoch = null;
@@ -1399,6 +1410,10 @@ export class WorldTileClientController {
   }
 
   private markCoverageNotReady(): void {
+    if (this.publishedReplacementCoverageKey) {
+      clearWorldReplacementCoverage(this.publishedReplacementCoverageKey);
+      this.publishedReplacementCoverageKey = null;
+    }
     if (this.readyCoverageEpoch !== this.coverageEpoch) return;
     this.readyCoverageEpoch = null;
     this.coverageReadyAtMs = null;
@@ -1416,16 +1431,17 @@ export class WorldTileClientController {
     ) return;
     const detail: WorldTileReplacementReadyEventDetail = {
       schemaVersion: 1,
+      key: `tiled:${this.coverageEpoch}:${this.coverageKey}`,
+      source: 'tiled',
+      generation: this.coverageEpoch,
       coverageEpoch: this.coverageEpoch,
       coverageKey: this.coverageKey,
       rendererVersion: this.activeRendererVersion,
       targetLevel: this.desiredLevel,
       readyAtMs: nowMs,
     };
-    window.dispatchEvent(new CustomEvent<WorldTileReplacementReadyEventDetail>(
-      WORLD_TILE_REPLACEMENT_READY_EVENT,
-      { detail },
-    ));
+    this.publishedReplacementCoverageKey = detail.key;
+    publishWorldReplacementCoverageReady(detail);
   }
 
   private updateCameraMotion(viewport: WorldRect, zoom: number, nowMs: number): void {

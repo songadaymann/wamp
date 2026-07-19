@@ -521,6 +521,7 @@ describe('world tile controller bootstrap ownership', () => {
       minTileY: -1,
       maxTileY: 0,
     });
+    const replacementKey = `tiled:2:${expectedKey}`;
     expect(sharp).toMatchObject({
       coverageEpoch: 2,
       coverageKey: expectedKey,
@@ -532,11 +533,34 @@ describe('world tile controller bootstrap ownership', () => {
       type: 'wamp:world-tiles-replacement-ready',
       detail: {
         schemaVersion: 1,
+        key: replacementKey,
+        source: 'tiled',
+        generation: 2,
         coverageEpoch: 2,
         coverageKey: expectedKey,
         rendererVersion,
         targetLevel: 1,
         readyAtMs: 1_081,
+      },
+    }));
+    expect(window.__wampWorldReplacementCoverage).toMatchObject({
+      key: replacementKey,
+      source: 'tiled',
+      generation: 2,
+    });
+
+    dispatchEvent.mockClear();
+    camera.scrollX += 640 * 32;
+    nowMs += 1;
+    controller.update(camera);
+    expect(window.__wampWorldReplacementCoverage).toBeNull();
+    expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'wamp:world-tiles-replacement-invalidated',
+      detail: {
+        schemaVersion: 1,
+        key: replacementKey,
+        source: 'tiled',
+        generation: 2,
       },
     }));
     controller.destroy();

@@ -89,6 +89,11 @@ import {
   type LocalPlayPressureMetrics,
 } from './playPressure';
 import { logBootPhase, startBootStallWatch } from '../../main/bootDiagnostics';
+import {
+  clearWorldReplacementCoverage,
+  publishWorldReplacementCoverageReady,
+  type WorldReplacementCoverageSource,
+} from '../../main/worldReplacementCoverage';
 import { WorldTileClientController } from './worldTiles/controller';
 import {
   SelectedExactPrefetchLifecycle,
@@ -212,9 +217,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private deferredFullRoomLoadTimer: Phaser.Time.TimerEvent | null = null;
   private deferredPreviewRooms: RoomSnapshot[] = [];
   private deferredPreviewRenderTimer: Phaser.Time.TimerEvent | null = null;
+  private deferredPreviewRenderGeneration = -1;
   private fullRoomReleaseCleanupTimer: Phaser.Time.TimerEvent | null = null;
   private readonly textureNamespace: string;
   private readonly selectedExactPrefetchLifecycle: SelectedExactPrefetchLifecycle;
+  private publishedReplacementCoverageKey: string | null = null;
 
   constructor(private readonly options: OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall>) {
     this.textureNamespace = sanitizeTextureNamespace(options.scene.sys.settings.key);
@@ -257,8 +264,20 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       : callback();
   }
 
-  reset(selectionBaseline: RoomCoordinates = this.options.getSelectedCoordinates()): void {
+  private beginLoadGeneration(): number {
+    this.clearPublishedReplacementCoverage();
     this.loadGeneration += 1;
+    return this.loadGeneration;
+  }
+
+  private clearPublishedReplacementCoverage(): void {
+    if (!this.publishedReplacementCoverageKey) return;
+    clearWorldReplacementCoverage(this.publishedReplacementCoverageKey);
+    this.publishedReplacementCoverageKey = null;
+  }
+
+  reset(selectionBaseline: RoomCoordinates = this.options.getSelectedCoordinates()): void {
+    this.beginLoadGeneration();
     this.destroyed = false;
     this.clearDisplayState();
     this.worldWindow = null;
@@ -298,7 +317,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   destroy(): void {
-    this.loadGeneration += 1;
+    this.beginLoadGeneration();
     this.destroyed = true;
     this.cancelDeferredFullRoomLoads();
     this.cancelDeferredPreviewRender();
@@ -467,7 +486,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return 'cancelled';
     }
 
-    const generation = ++this.loadGeneration;
+    const generation = this.beginLoadGeneration();
     this.legacyCompactRefreshGeneration = -1;
     this.beginDynamicOverlayReadiness(generation);
     this.startupDynamicOverlayGeneration = -1;
@@ -687,8 +706,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       });
 
       this.cancelDeferredPreviewRender();
-      this.previewRenderer.renderChunkPreviews(
-        this.collectPreviewRooms(renderableRooms, renderedPreviewRoomIds)
+      this.renderChunkPreviewsForGeneration(
+        this.collectPreviewRooms(renderableRooms, renderedPreviewRoomIds),
+        generation,
       );
 
       if (this.options.getMode() === 'play') {
@@ -754,8 +774,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return 'cancelled';
     }
 
-    const generation = ++this.loadGeneration;
-    this.beginDynamicOverlayReadiness(generation);
+    const requestGeneration = this.loadGeneration;
     this.legacyCompactRefreshGeneration = -1;
     this.chunkWindowRequestInFlight = true;
 
@@ -766,7 +785,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       const nextChunkWindow = compactWindow
         ? compactWorldWindowToLegacyShell(compactWindow)
         : await this.options.worldRepository.loadWorldChunkWindow(this.loadedChunkBounds);
-      if (this.destroyed || generation !== this.loadGeneration) {
+      if (this.destroyed || requestGeneration !== this.loadGeneration) {
         return 'cancelled';
       }
 
@@ -775,6 +794,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         return 'unchanged';
       }
 
+      const generation = this.beginLoadGeneration();
+      this.beginDynamicOverlayReadiness(generation);
       this.applyChunkWindow(nextChunkWindow, compactWindow !== null);
       this.refreshVisibleRoomsFromCache();
       return 'updated';
@@ -1148,11 +1169,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     const previewRooms = this.collectPreviewRooms(renderableRooms, renderedPreviewRoomIds);
     if (this.options.getMode() === 'play') {
-      this.queueDeferredPreviewRender(previewRooms);
+      this.queueDeferredPreviewRender(previewRooms, this.loadGeneration);
     } else {
       this.cancelDeferredPreviewRender();
       this.measure('stream.renderChunkPreviews', () => {
-        this.previewRenderer.renderChunkPreviews(previewRooms);
+        this.renderChunkPreviewsForGeneration(previewRooms, this.loadGeneration);
       });
     }
 
@@ -1212,6 +1233,34 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     );
   }
 
+  private renderChunkPreviewsForGeneration(
+    previewRooms: RoomSnapshot[],
+    generation: number,
+  ): void {
+    if (!this.isLoadGenerationCurrent(generation)) return;
+    this.previewRenderer.renderChunkPreviews(previewRooms);
+    if (
+      !this.isLoadGenerationCurrent(generation)
+      || this.worldTileController.isBrowseCutoverActive()
+    ) return;
+
+    const source: WorldReplacementCoverageSource = this.compactWorldActive
+      ? 'compact'
+      : 'legacy';
+    const key = `world-stream:${source}:${generation}`;
+    if (this.publishedReplacementCoverageKey && this.publishedReplacementCoverageKey !== key) {
+      this.clearPublishedReplacementCoverage();
+    }
+    this.publishedReplacementCoverageKey = key;
+    publishWorldReplacementCoverageReady({
+      schemaVersion: 1,
+      key,
+      source,
+      generation,
+      readyAtMs: performance.now(),
+    });
+  }
+
   private getRenderedPreviewRoomIds(
     roomCandidates: Map<string, StreamingRoomCandidate>,
     previewRoomIds: Set<string>,
@@ -1245,9 +1294,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return retained;
   }
 
-  private queueDeferredPreviewRender(rooms: RoomSnapshot[]): void {
+  private queueDeferredPreviewRender(rooms: RoomSnapshot[], generation: number): void {
     this.cancelDeferredPreviewRender();
     this.deferredPreviewRooms = rooms;
+    this.deferredPreviewRenderGeneration = generation;
     this.deferredPreviewRenderTimer = this.options.scene.time.delayedCall(
       DEFERRED_PREVIEW_RENDER_DELAY_MS,
       () => {
@@ -1258,9 +1308,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         }
 
         const previewRooms = this.deferredPreviewRooms;
+        const renderGeneration = this.deferredPreviewRenderGeneration;
         this.deferredPreviewRooms = [];
+        this.deferredPreviewRenderGeneration = -1;
         this.measure('stream.renderChunkPreviews', () => {
-          this.previewRenderer.renderChunkPreviews(previewRooms);
+          this.renderChunkPreviewsForGeneration(previewRooms, renderGeneration);
         });
       },
     );
@@ -1270,6 +1322,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.deferredPreviewRenderTimer?.remove(false);
     this.deferredPreviewRenderTimer = null;
     this.deferredPreviewRooms = [];
+    this.deferredPreviewRenderGeneration = -1;
   }
 
   private queueDeferredFullRoomLoads(rooms: RenderableRoom[]): void {
