@@ -221,6 +221,8 @@ export type RoomSnapshotQueryReference =
   | ({ kind: 'version' } & ExactRoomSnapshotReference)
   | ({ kind: 'current_preview' } & CurrentPreviewSnapshotReference);
 
+export type RoomSnapshotQueryDetail = 'full' | 'overview';
+
 export interface RoomSnapshotQueryResult {
   key: string;
   reference: RoomSnapshotQueryReference;

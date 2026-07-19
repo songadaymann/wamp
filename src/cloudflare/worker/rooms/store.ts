@@ -2,6 +2,7 @@ import type { AuthUser } from '../../../auth/model';
 import type { PrincipalKind, RequestAuthSource } from '../../../agents/model';
 import {
   cloneRoomSnapshot,
+  createEmptyTileData,
   DEFAULT_ROOM_COORDINATES,
   createDefaultRoomRecord,
   createRoomVersionRecord,
@@ -385,6 +386,23 @@ export async function loadRoomSnapshotsByReferences(
       return snapshot ? [{ key, reference, snapshot }] : [];
     }),
     missing: uniqueReferences.filter((reference) => !snapshotsByKey.has(snapshotReferenceKey(reference))),
+  };
+}
+
+export function createOverviewRoomSnapshot(snapshot: RoomSnapshot): RoomSnapshot {
+  const tileData = createEmptyTileData();
+  tileData.background = snapshot.tileData.background;
+  tileData.terrain = snapshot.tileData.terrain;
+  return {
+    ...snapshot,
+    goalIntroText: null,
+    music: null,
+    goal: null,
+    spawnPoint: null,
+    tileData,
+    placedObjects: [],
+    customSprites: [],
+    tilesetHint: null,
   };
 }
 

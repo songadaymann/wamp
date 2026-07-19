@@ -205,23 +205,28 @@ export class OverworldChunkPreviewRenderer {
   }
 
   renderChunkPreviews(previewRooms: Iterable<RoomSnapshot>): void {
-    const groupedStates = new Map<string, ChunkPreviewState>();
-    for (const room of previewRooms) {
-      const chunkCoordinates = roomToChunkCoordinates(room.coordinates);
-      const chunkId = `${chunkCoordinates.x},${chunkCoordinates.y}`;
-      const existing = groupedStates.get(chunkId);
-      if (existing) {
-        existing.rooms.push(room);
-      } else {
-        groupedStates.set(chunkId, {
-          chunkId,
-          chunkCoordinates,
-          rooms: [room],
-        });
-      }
-    }
+    this.chunkStatesByChunkId = groupChunkPreviewRooms(previewRooms);
+    this.syncChunkImages();
+  }
 
-    this.chunkStatesByChunkId = groupedStates;
+  mergeChunkPreviews(previewRooms: Iterable<RoomSnapshot>): void {
+    const incomingStates = groupChunkPreviewRooms(previewRooms);
+    for (const [chunkId, incomingState] of incomingStates) {
+      const existingState = this.chunkStatesByChunkId.get(chunkId);
+      if (!existingState) {
+        this.chunkStatesByChunkId.set(chunkId, incomingState);
+        continue;
+      }
+
+      const roomsById = new Map(existingState.rooms.map((room) => [room.id, room]));
+      for (const room of incomingState.rooms) {
+        roomsById.set(room.id, room);
+      }
+      this.chunkStatesByChunkId.set(chunkId, {
+        ...existingState,
+        rooms: Array.from(roomsById.values()).sort(compareRoomSnapshots),
+      });
+    }
     this.syncChunkImages();
   }
 
@@ -654,6 +659,13 @@ export class OverworldChunkPreviewRenderer {
       return;
     }
 
+    this.pendingTextureBuildQueue = this.pendingTextureBuildQueue.filter((pending) => {
+      if (pending.chunkId !== request.chunkId) {
+        return true;
+      }
+      this.pendingTextureBuildsByKey.delete(pending.textureKey);
+      return false;
+    });
     this.pendingTextureBuildsByKey.set(request.textureKey, request);
     this.pendingTextureBuildQueue.push(request);
     this.scheduleNextTextureBuild();
@@ -778,6 +790,28 @@ function compareRoomSnapshots(a: RoomSnapshot, b: RoomSnapshot): number {
   }
 
   return a.coordinates.x - b.coordinates.x;
+}
+
+function groupChunkPreviewRooms(previewRooms: Iterable<RoomSnapshot>): Map<string, ChunkPreviewState> {
+  const groupedStates = new Map<string, ChunkPreviewState>();
+  for (const room of previewRooms) {
+    const chunkCoordinates = roomToChunkCoordinates(room.coordinates);
+    const chunkId = `${chunkCoordinates.x},${chunkCoordinates.y}`;
+    const existing = groupedStates.get(chunkId);
+    if (existing) {
+      existing.rooms.push(room);
+    } else {
+      groupedStates.set(chunkId, {
+        chunkId,
+        chunkCoordinates,
+        rooms: [room],
+      });
+    }
+  }
+  for (const state of groupedStates.values()) {
+    state.rooms.sort(compareRoomSnapshots);
+  }
+  return groupedStates;
 }
 
 function getChunkDistance(

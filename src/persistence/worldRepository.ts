@@ -5,6 +5,7 @@ import {
   type RoomCoordinates,
   type RoomRecord,
   type RoomSnapshotQueryReference,
+  type RoomSnapshotQueryDetail,
   type RoomSnapshotQueryResponse,
   type RoomSnapshot,
 } from './roomModel';
@@ -30,7 +31,10 @@ export interface WorldRepository {
   loadWorldWindow(center: RoomCoordinates, radius: number): Promise<WorldWindow>;
   loadWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<WorldChunkWindow>;
   loadCompactWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<CompactWorldChunkWindow | null>;
-  queryRoomSnapshots(references: RoomSnapshotQueryReference[]): Promise<RoomSnapshotQueryResponse>;
+  queryRoomSnapshots(
+    references: RoomSnapshotQueryReference[],
+    options?: { priority?: 'high' | 'low' | 'auto'; detail?: RoomSnapshotQueryDetail },
+  ): Promise<RoomSnapshotQueryResponse>;
   loadPublishedRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomSnapshot | null>;
   loadClaimableFrontierWindow(center: RoomCoordinates, radius: number): Promise<ClaimableFrontierRoomWindow>;
 }
@@ -83,7 +87,10 @@ class LocalWorldRepository implements WorldRepository {
     return null;
   }
 
-  async queryRoomSnapshots(_references: RoomSnapshotQueryReference[]): Promise<RoomSnapshotQueryResponse> {
+  async queryRoomSnapshots(
+    _references: RoomSnapshotQueryReference[],
+    _options?: { priority?: 'high' | 'low' | 'auto'; detail?: RoomSnapshotQueryDetail },
+  ): Promise<RoomSnapshotQueryResponse> {
     return { snapshots: [], missing: [] };
   }
 
@@ -208,13 +215,18 @@ class ApiWorldRepository implements WorldRepository {
     }
   }
 
-  async queryRoomSnapshots(references: RoomSnapshotQueryReference[]): Promise<RoomSnapshotQueryResponse> {
+  async queryRoomSnapshots(
+    references: RoomSnapshotQueryReference[],
+    options: { priority?: 'high' | 'low' | 'auto'; detail?: RoomSnapshotQueryDetail } = {},
+  ): Promise<RoomSnapshotQueryResponse> {
     try {
-      const response = await this.fetchWorldApi('/api/rooms/snapshots/query', {
+      const requestInit: RequestInit & { priority?: 'high' | 'low' | 'auto' } = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ references }),
-      });
+        body: JSON.stringify({ references, detail: options.detail ?? 'full' }),
+        ...(options.priority ? { priority: options.priority } : {}),
+      };
+      const response = await this.fetchWorldApi('/api/rooms/snapshots/query', requestInit);
       if (!response.ok) {
         const details = await response.text();
         throw new WorldApiError(details || `Snapshot query failed with status ${response.status}.`, response.status);

@@ -73,6 +73,7 @@ import {
   loadRoomRecord,
   loadRoomRecordForMutation,
   loadRoomSnapshotsByReferences,
+  createOverviewRoomSnapshot,
   loadRoomSummary,
   loadRoomVersionPage,
   publishRoom,
@@ -99,11 +100,21 @@ export async function handleRoomRequest(
   ) {
     const auth = await loadOptionalRequestAuth(env, request);
     requireOptionalScope(auth, 'rooms:read', 'read room snapshots');
-    const body = await parseJsonBody<{ references?: unknown }>(request, { maxBytes: 64 * 1024 });
+    const body = await parseJsonBody<{ references?: unknown; detail?: unknown }>(request, { maxBytes: 64 * 1024 });
     const references = parseSnapshotQueryReferences(body.references);
+    const detail = body.detail === 'overview' ? 'overview' : 'full';
     const timing = new ServerTiming();
     const response = await timing.measure('snapshots', () => loadRoomSnapshotsByReferences(env, references));
-    return timedJsonResponse(request, response, timing, {
+    const payload = detail === 'overview'
+      ? {
+          ...response,
+          snapshots: response.snapshots.map((entry) => ({
+            ...entry,
+            snapshot: createOverviewRoomSnapshot(entry.snapshot),
+          })),
+        }
+      : response;
+    return timedJsonResponse(request, payload, timing, {
       headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
     });
   }
