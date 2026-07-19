@@ -65,7 +65,7 @@
       },
       "vars": {
         "WORLD_TILE_ENVIRONMENT": "safety",
-        "WORLD_TILE_GENERATION_ENABLED": "0",
+        "WORLD_TILE_GENERATION_ENABLED": "1",
         "WORLD_TILE_LEASE_SECONDS": "120",
         "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles-safety.wamp.land"
       },
