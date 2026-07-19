@@ -28,7 +28,6 @@ export async function loadAnonymousPublicCache(
 function withCacheDiagnostic(response: Response, status: 'hit' | 'miss' | 'bypass'): Response {
   const headers = new Headers(response.headers);
   headers.set('X-WAMP-Cache', status);
-  const serverTiming = headers.get('Server-Timing');
-  if (status === 'hit') headers.set('Server-Timing', `cache;dur=0;desc="hit"${serverTiming ? `, ${serverTiming}` : ''}`);
+  if (status === 'hit') headers.set('Server-Timing', 'cache;dur=0;desc="hit"');
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
