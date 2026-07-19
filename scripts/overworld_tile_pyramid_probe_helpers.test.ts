@@ -323,6 +323,10 @@ describe('overworld tile pyramid probe helpers', () => {
 
     expect(selectCreditableEarlySharpEvent([event], phaserState)).toBe(event);
     expect(selectCreditableEarlySharpEvent([event], {
+      durationMs: 321,
+      state: phaserState,
+    })).toBe(event);
+    expect(selectCreditableEarlySharpEvent([event], {
       ...phaserState,
       coverageKey: JSON.stringify(['renderer-v1', 1, 0, 0, 0, 0]),
     })).toBeNull();

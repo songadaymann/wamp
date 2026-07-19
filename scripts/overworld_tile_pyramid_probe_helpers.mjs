@@ -36,8 +36,12 @@ export function selectExpectedWorldTileLevel(zoom, currentLevel) {
   return nextLevel;
 }
 
-export function selectCreditableEarlySharpEvent(events, phaserState) {
-  if (!Array.isArray(events) || !isRecord(phaserState)) return null;
+export function selectCreditableEarlySharpEvent(events, phaserStateOrCapture) {
+  if (!Array.isArray(events) || !isRecord(phaserStateOrCapture)) return null;
+  const phaserState = Number.isFinite(phaserStateOrCapture.durationMs)
+    && isRecord(phaserStateOrCapture.state)
+    ? phaserStateOrCapture.state
+    : phaserStateOrCapture;
   const rendererVersion = phaserState.rollout?.rendererVersion;
   const targetLevel = phaserState.targetLevel;
   const coverageKey = phaserState.coverageKey;
