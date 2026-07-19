@@ -18,6 +18,26 @@ const leaderboardRoomY = Number(args.get('leaderboard-room-y') || process.env.PE
 const probes = [
   { name: 'health', path: '/api/health' },
   {
+    name: 'room-summary-0-0',
+    path: '/api/rooms/0%2C0/summary?x=0&y=0',
+  },
+  {
+    name: 'room-current-0-0',
+    path: '/api/rooms/0%2C0/current?x=0&y=0',
+  },
+  {
+    name: 'room-versions-25-0-0',
+    path: '/api/rooms/0%2C0/versions?limit=25',
+  },
+  {
+    name: 'room-compat-0-0',
+    path: '/api/rooms/0%2C0?x=0&y=0',
+  },
+  {
+    name: 'compact-world-3x3',
+    path: '/api/world/chunks/summary?minChunkX=-1&maxChunkX=1&minChunkY=-1&maxChunkY=1',
+  },
+  {
     name: 'newest-rooms-48',
     path: '/api/leaderboards/rooms/discover?sort=newest&limit=48&includeGoalLessRooms=1',
   },

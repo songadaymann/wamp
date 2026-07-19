@@ -79,3 +79,19 @@ Each wave is implemented in independently reviewable commits, exercised against 
 Worker first, and promoted only after its functional and performance gates pass. Additive D1 reads
 remain behind `PLAYABLE_CONTENT_INDEX_READS` until parity is proven; disabling that flag is the
 rollback path.
+
+## Selective Reads and Shared Caching Extension (2026-07-18)
+
+- Compact room APIs separate ownership/summary metadata, current snapshots, paginated version metadata,
+  exact immutable versions, and bounded snapshot batches. The full room route remains the compatibility
+  aggregator and no room GET performs chain synchronization or D1 writes.
+- Set-based reads use `playable_content_index` for builder counts, bounded candidate reads for frontier
+  discovery, and one membership pass plus one resolution per expanded target for playlists.
+- Course, expanded-room verification, playback, and share previews use the shared exact-version loader and
+  fail explicitly when a pinned reference is unavailable.
+- `COMPACT_WORLD_READS` gates projected chunk summaries and near-first progressive preview loading. Safety is
+  enabled; production remains disabled. Endpoint or batch failure is remembered for the browser session and
+  restores the legacy chunk route without a migration rollback.
+- One capped browser snapshot/card cache is shared across world streaming, courses, Explore, Profiles, and
+  Playlists. Anonymous public bases use 20-second Cache API entries after authentication checks; authenticated
+  overlays, errors, mutation responses, and `Set-Cookie` responses bypass shared edge caching.
