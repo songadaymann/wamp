@@ -31,7 +31,10 @@ export class WorldTileManifestLoader {
     }, WORLD_TILE_COVERAGE_TIMEOUT_MS);
     this.pending += 1;
     try {
-      const manifest = await this.repository.loadWorldTileManifest(level, bounds, abortController.signal);
+      const manifest = await this.repository.loadWorldTileManifest(level, bounds, {
+        signal: abortController.signal,
+        includeRooms: false,
+      });
       return {
         generation,
         manifest,

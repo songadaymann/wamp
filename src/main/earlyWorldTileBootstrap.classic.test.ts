@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  buildEarlyWorldTileManifestUrl,
   buildEarlyWorldTileCacheUrl,
   calculateEarlyWorldTileImagePresentation,
   calculateEarlyWorldTileViewport,
@@ -157,6 +158,17 @@ describe('classic early world tile bootstrap', () => {
     )).toBeUndefined();
     expect(put).toHaveBeenCalledOnce();
     resolvePut();
+  });
+
+  it('keeps the early coarse manifest coverage-only', () => {
+    const url = new URL(buildEarlyWorldTileManifestUrl(
+      'https://api.example',
+      'https://game.example/?worldTiles=force',
+      { minTileX: -1, maxTileX: 0, minTileY: -1, maxTileY: 0 },
+    ));
+    expect(url.pathname).toBe('/api/world/tiles/manifest');
+    expect(url.searchParams.get('level')).toBe('0');
+    expect(url.searchParams.get('includeRooms')).toBe('0');
   });
 
   it('sets and clears the narrow loading-veil dataset', () => {

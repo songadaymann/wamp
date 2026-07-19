@@ -53,7 +53,7 @@ describe('world tile controller bootstrap ownership', () => {
       resolveQuota = resolve;
     }));
     installBrowserGlobals('?worldTiles=force', estimate);
-    const loadWorldTileManifest = vi.fn(async (
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
       level: WorldTileLevel,
       bounds: WorldTileBounds,
     ) => readyEmptyManifest(level, bounds));
@@ -81,6 +81,10 @@ describe('world tile controller bootstrap ownership', () => {
 
     await expect(controller.ensureInitialCoverage(camera)).resolves.toBe(true);
     expect(levelCalls(loadWorldTileManifest, 0)).toHaveLength(1);
+    expect(levelCalls(loadWorldTileManifest, 0)[0]?.[2]).toMatchObject({
+      includeRooms: false,
+      signal: expect.any(AbortSignal),
+    });
 
     controller.update(camera);
     await flushMicrotasks();
@@ -132,6 +136,33 @@ describe('world tile controller bootstrap ownership', () => {
     controller.destroy();
   });
 
+  it('retains room summaries for targeted L4 mutation convergence', async () => {
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+
+    await controller.prepare();
+    await controller.ensureInitialCoverage(camera);
+    loadWorldTileManifest.mockClear();
+    controller.prefetchRoom({ x: 3, y: -2 }, 'mutation');
+    await flushMicrotasks();
+
+    expect(loadWorldTileManifest).toHaveBeenCalledOnce();
+    expect(loadWorldTileManifest.mock.calls[0]).toMatchObject([
+      4,
+      { minTileX: 3, maxTileX: 3, minTileY: -2, maxTileY: -2 },
+      { signal: expect.any(AbortSignal) },
+    ]);
+    expect(loadWorldTileManifest.mock.calls[0]?.[2]?.includeRooms).toBeUndefined();
+    controller.destroy();
+  });
+
   it('does not resolve target readiness from coarse L0 when the camera requires sharp L1', async () => {
     let nowMs = 1_000;
     vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
@@ -159,6 +190,10 @@ describe('world tile controller bootstrap ownership', () => {
     controller.update(camera);
     await flushMicrotasks();
     expect(levelCalls(loadWorldTileManifest, 1)).toHaveLength(1);
+    expect(levelCalls(loadWorldTileManifest, 1)[0]?.[2]).toMatchObject({
+      includeRooms: false,
+      signal: expect.any(AbortSignal),
+    });
     expect(sharpReady).toBe(false);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -235,9 +270,9 @@ describe('world tile controller bootstrap ownership', () => {
     const loadWorldTileManifest = vi.fn((
       _level: WorldTileLevel,
       _bounds: WorldTileBounds,
-      signal?: AbortSignal,
+      options?: Parameters<WorldRepository['loadWorldTileManifest']>[2],
     ) => new Promise<WorldTileManifest>((_resolve, reject) => {
-      signal?.addEventListener('abort', () => {
+      options?.signal?.addEventListener('abort', () => {
         reject(new DOMException('aborted', 'AbortError'));
       });
     }));
@@ -343,7 +378,7 @@ function manifestBounds(
 function levelCalls(
   load: ReturnType<typeof vi.fn<WorldRepository['loadWorldTileManifest']>>,
   level: WorldTileLevel,
-): [WorldTileLevel, WorldTileBounds, (AbortSignal | undefined)?][] {
+): Parameters<WorldRepository['loadWorldTileManifest']>[] {
   return load.mock.calls.filter((call) => call[0] === level);
 }
 

@@ -92,6 +92,10 @@ export interface WorldTileManifestReadSet {
   rooms: WorldTileRoomSummary[];
 }
 
+export interface WorldTileManifestReadOptions {
+  includeRooms?: boolean;
+}
+
 export interface WorldRenderTileOutboxRow {
   id: number;
   renderer_version: string;
@@ -195,7 +199,9 @@ export async function loadWorldTileManifestReadSet(
   coordinates: WorldTileCoordinate[],
   coverageRoomBounds: WorldTileRoomBounds,
   targetRoomBounds: WorldTileRoomBounds,
+  options: WorldTileManifestReadOptions = {},
 ): Promise<WorldTileManifestReadSet> {
+  const includeRooms = options.includeRooms !== false;
   try {
     return await loadWorldTileManifestReadSetFromSession(
       createWorldTileManifestReadSession(env.DB),
@@ -203,6 +209,7 @@ export async function loadWorldTileManifestReadSet(
       coverageRoomBounds,
       targetRoomBounds,
       false,
+      includeRooms,
     );
   } catch (error) {
     if (!isMissingPublishedWorldTileRoomSummaryReadModel(error)) throw error;
@@ -212,6 +219,7 @@ export async function loadWorldTileManifestReadSet(
       coverageRoomBounds,
       targetRoomBounds,
       true,
+      includeRooms,
     );
   }
 }
@@ -222,6 +230,7 @@ async function loadWorldTileManifestReadSetFromSession(
   coverageRoomBounds: WorldTileRoomBounds,
   targetRoomBounds: WorldTileRoomBounds,
   useLegacyRoomSummary: boolean,
+  includeRooms: boolean,
 ): Promise<WorldTileManifestReadSet> {
   const tileStatements = chunkArray(coordinates, 30).map((chunk) => database.prepare(
     `
@@ -244,6 +253,13 @@ async function loadWorldTileManifestReadSetFromSession(
       ORDER BY level ASC, tile_y ASC, tile_x ASC
     `,
   ).bind(...chunk.flatMap((coordinate) => [coordinate.level, coordinate.x, coordinate.y])));
+  const roomSummaryStatements = includeRooms
+    ? [preparePublishedWorldTileRoomSummaryStatement(
+      database,
+      targetRoomBounds,
+      useLegacyRoomSummary,
+    )]
+    : [];
   const statements = [
     database.prepare(ACTIVE_WORLD_TILE_RENDERER_VERSION_SQL),
     ...tileStatements,
@@ -268,11 +284,7 @@ async function loadWorldTileManifestReadSetFromSession(
       coverageRoomBounds.minRoomY,
       coverageRoomBounds.maxRoomY,
     ),
-    preparePublishedWorldTileRoomSummaryStatement(
-      database,
-      targetRoomBounds,
-      useLegacyRoomSummary,
-    ),
+    ...roomSummaryStatements,
   ];
   const results = await database.batch(statements) as D1RowsResult[];
   const tileResultEnd = 1 + tileStatements.length;
@@ -280,7 +292,9 @@ async function loadWorldTileManifestReadSetFromSession(
   const tileRows = results.slice(1, tileResultEnd)
     .flatMap((result) => readD1Rows<WorldRenderTileManifestRow>(result));
   const leafChanges = readD1Rows<WorldRenderTileStaleLeafRow>(results[tileResultEnd]);
-  const roomRows = readD1Rows<PublishedWorldTileRoomSummaryRow>(results[tileResultEnd + 1]);
+  const roomRows = includeRooms
+    ? readD1Rows<PublishedWorldTileRoomSummaryRow>(results[tileResultEnd + 1])
+    : [];
   return {
     rendererVersion,
     tileRows,

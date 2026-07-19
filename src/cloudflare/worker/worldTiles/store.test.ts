@@ -169,6 +169,32 @@ describe('world tile read model store', () => {
     });
   });
 
+  it('omits the room-summary statement entirely for coverage-only manifests', async () => {
+    const fake = createFakeDatabase({
+      all(query) {
+        if (/^\s*select\s+version\s+from\s+world_tile_renderer_versions/i.test(query)) {
+          return [{ version: 'renderer-coverage' }];
+        }
+        return [];
+      },
+    });
+
+    const result = await loadWorldTileManifestReadSet(
+      { DB: fake.database } as Pick<Env, 'DB'>,
+      [{ level: 0, x: 0, y: 0 }],
+      { minRoomX: 0, maxRoomX: 15, minRoomY: 0, maxRoomY: 15 },
+      { minRoomX: 0, maxRoomX: 15, minRoomY: 0, maxRoomY: 15 },
+      { includeRooms: false },
+    );
+
+    expect(fake.sessions).toEqual(['first-unconstrained']);
+    expect(fake.batchSizes).toEqual([3]);
+    expect(fake.queries).toHaveLength(3);
+    expect(fake.queries.some((query) => /world_tile_published_room_summaries|from\s+rooms/i.test(query)))
+      .toBe(false);
+    expect(result.rooms).toEqual([]);
+  });
+
   it('keeps every bounded coordinate chunk inside the same manifest batch', async () => {
     const fake = createFakeDatabase({
       all(query) {

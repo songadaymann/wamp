@@ -228,6 +228,28 @@ describe('world tile manifest service', () => {
     expect(result!.etag).toBe(createWorldTileManifestEtag(result!.manifest));
   });
 
+  it('returns the same tile contract without loading room summaries when excluded', async () => {
+    const fake = createManifestDatabase();
+    const result = await loadWorldTileManifest({
+      DB: fake.database,
+      TILED_OVERWORLD_READS: '1',
+      WORLD_TILE_PUBLIC_BASE_URL: 'https://tiles.wamp.land',
+    }, 4, {
+      minTileX: 0,
+      maxTileX: 0,
+      minTileY: 0,
+      maxTileY: 0,
+    }, { includeRooms: false });
+
+    expect(result).not.toBeNull();
+    expect(result!.manifest.rooms).toEqual([]);
+    expect(result!.manifest.entries.length).toBeGreaterThan(0);
+    expect(fake.sessions).toEqual(['first-unconstrained']);
+    expect(fake.batchSizes).toEqual([3]);
+    expect(fake.queries.some((query) => /world_tile_published_room_summaries|from\s+rooms/i.test(query)))
+      .toBe(false);
+  });
+
   it('creates Queue messages containing identity only and no room bytes', () => {
     const job = buildWorldTileGenerationJob(createOutboxRow(), '2026-07-19T10:00:00.000Z');
     expect(job).toEqual({

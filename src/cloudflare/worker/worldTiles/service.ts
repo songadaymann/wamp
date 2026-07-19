@@ -46,6 +46,10 @@ export interface WorldTileManifestLoadResult {
   etag: string;
 }
 
+export interface WorldTileManifestLoadOptions {
+  includeRooms?: boolean;
+}
+
 export interface WorldTileGenerationJob {
   schemaVersion: 1;
   rendererVersion: string;
@@ -78,6 +82,7 @@ export async function loadWorldTileManifest(
   env: WorldTileServiceEnv,
   level: WorldTileLevel,
   targetBounds: WorldTileBounds,
+  options: WorldTileManifestLoadOptions = {},
 ): Promise<WorldTileManifestLoadResult | null> {
   assertWorldTileBounds(targetBounds);
   if (!worldTileReadsEnabled(env)) return null;
@@ -91,6 +96,7 @@ export async function loadWorldTileManifest(
     coordinates,
     coverageRoomBounds,
     targetRoomBounds,
+    { includeRooms: options.includeRooms !== false },
   );
   if (!readSet.rendererVersion) return null;
   const manifest = buildWorldTileManifest({

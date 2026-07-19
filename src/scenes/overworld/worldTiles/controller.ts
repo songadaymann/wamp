@@ -225,7 +225,7 @@ export class WorldTileClientController {
         maxTileX: coordinates.x,
         minTileY: coordinates.y,
         maxTileY: coordinates.y,
-      }, signal),
+      }, { signal }),
       onManifest: (coordinates, manifest) => this.acceptRoomPrefetchManifest(coordinates, manifest),
       onFailure: (error) => this.handleManifestFailure(error, performance.now()),
       shouldContinue: () => !this.isRefinementStopped(),
@@ -278,7 +278,10 @@ export class WorldTileClientController {
     });
     try {
       const manifest = await Promise.race([
-        this.options.repository.loadWorldTileManifest(0, bounds, abortController.signal),
+        this.options.repository.loadWorldTileManifest(0, bounds, {
+          signal: abortController.signal,
+          includeRooms: false,
+        }),
         coverageTimeout,
       ]);
       if (

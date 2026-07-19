@@ -260,6 +260,23 @@ export function getEarlyWorldTilePublicRequestInit(signal?: AbortSignal): Reques
   return { credentials: 'omit', signal };
 }
 
+export function buildEarlyWorldTileManifestUrl(
+  apiBaseUrl: string,
+  pageUrl: string,
+  bounds: EarlyWorldTileBounds,
+): string {
+  const manifestUrl = new URL(`${apiBaseUrl}/api/world/tiles/manifest`, pageUrl);
+  manifestUrl.search = new URLSearchParams({
+    level: String(EARLY_WORLD_TILE_LEVEL),
+    minTileX: String(bounds.minTileX),
+    maxTileX: String(bounds.maxTileX),
+    minTileY: String(bounds.minTileY),
+    maxTileY: String(bounds.maxTileY),
+    includeRooms: '0',
+  }).toString();
+  return manifestUrl.toString();
+}
+
 export function persistEarlyWorldTileBlob(
   cache: Pick<Cache, 'put'>,
   request: Request,
@@ -535,18 +552,15 @@ async function runEarlyWorldTileBootstrap(
     zoom: parseEarlyWorldTileBootstrapZoom(options.win.location.search),
   });
   state.viewport = viewport;
-  const manifestUrl = new URL(`${state.apiBaseUrl}/api/world/tiles/manifest`, options.win.location.href);
-  manifestUrl.search = new URLSearchParams({
-    level: String(EARLY_WORLD_TILE_LEVEL),
-    minTileX: String(viewport.bounds.minTileX),
-    maxTileX: String(viewport.bounds.maxTileX),
-    minTileY: String(viewport.bounds.minTileY),
-    maxTileY: String(viewport.bounds.maxTileY),
-  }).toString();
+  const manifestUrl = buildEarlyWorldTileManifestUrl(
+    state.apiBaseUrl,
+    options.win.location.href,
+    viewport.bounds,
+  );
   state.status = 'loading-manifest';
   state.timings.manifestStartedAtMs = options.now();
   const manifestResponse = await options.win.fetch(
-    manifestUrl.toString(),
+    manifestUrl,
     getEarlyWorldTilePublicRequestInit(signal),
   );
   if (!manifestResponse.ok) throw new Error(`Early world tile manifest failed with ${manifestResponse.status}.`);

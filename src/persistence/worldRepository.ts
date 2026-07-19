@@ -42,7 +42,7 @@ export interface WorldRepository {
   loadWorldTileManifest(
     level: WorldTileLevel,
     bounds: WorldTileBounds,
-    signal?: AbortSignal,
+    options?: WorldTileManifestRequestOptions,
   ): Promise<WorldTileManifest | null>;
   queryRoomSnapshots(
     references: RoomSnapshotQueryReference[],
@@ -54,6 +54,11 @@ export interface WorldRepository {
     signal?: AbortSignal,
   ): Promise<RoomSnapshot | null>;
   loadClaimableFrontierWindow(center: RoomCoordinates, radius: number): Promise<ClaimableFrontierRoomWindow>;
+}
+
+export interface WorldTileManifestRequestOptions {
+  signal?: AbortSignal;
+  includeRooms?: boolean;
 }
 
 class WorldApiError extends Error {
@@ -111,7 +116,7 @@ class LocalWorldRepository implements WorldRepository {
   async loadWorldTileManifest(
     _level: WorldTileLevel,
     _bounds: WorldTileBounds,
-    _signal?: AbortSignal,
+    _options?: WorldTileManifestRequestOptions,
   ): Promise<WorldTileManifest | null> {
     return null;
   }
@@ -262,16 +267,10 @@ class ApiWorldRepository implements WorldRepository {
   async loadWorldTileManifest(
     level: WorldTileLevel,
     bounds: WorldTileBounds,
-    signal?: AbortSignal,
+    options: WorldTileManifestRequestOptions = {},
   ): Promise<WorldTileManifest | null> {
-    const params = new URLSearchParams({
-      level: String(level),
-      minTileX: String(bounds.minTileX),
-      maxTileX: String(bounds.maxTileX),
-      minTileY: String(bounds.minTileY),
-      maxTileY: String(bounds.maxTileY),
-    });
-    const response = await this.fetchWorldApi(`/api/world/tiles/manifest?${params.toString()}`, { signal });
+    const path = buildWorldTileManifestRequestPath(level, bounds, options);
+    const response = await this.fetchWorldApi(path, { signal: options.signal });
     if (response.status === 404) return null;
     if (!response.ok) {
       const details = await response.text();
@@ -452,6 +451,24 @@ class ApiWorldRepository implements WorldRepository {
     if (error instanceof WorldApiError && error.status >= 500) return true;
     return false;
   }
+}
+
+export function buildWorldTileManifestRequestPath(
+  level: WorldTileLevel,
+  bounds: WorldTileBounds,
+  options: Pick<WorldTileManifestRequestOptions, 'includeRooms'> = {},
+): string {
+  const params = new URLSearchParams({
+    level: String(level),
+    minTileX: String(bounds.minTileX),
+    maxTileX: String(bounds.maxTileX),
+    minTileY: String(bounds.minTileY),
+    maxTileY: String(bounds.maxTileY),
+  });
+  if (options.includeRooms !== undefined) {
+    params.set('includeRooms', options.includeRooms ? '1' : '0');
+  }
+  return `/api/world/tiles/manifest?${params.toString()}`;
 }
 
 export function createWorldRepository(): WorldRepository {

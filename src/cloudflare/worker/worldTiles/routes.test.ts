@@ -18,7 +18,24 @@ describe('world tile HTTP routes', () => {
     }))).toEqual({
       level: 2,
       bounds: { minTileX: -8, maxTileX: 7, minTileY: -4, maxTileY: 11 },
+      includeRooms: true,
     });
+    expect(parseWorldTileManifestQuery(new URLSearchParams({
+      level: '2',
+      minTileX: '0',
+      maxTileX: '0',
+      minTileY: '0',
+      maxTileY: '0',
+      includeRooms: '0',
+    })).includeRooms).toBe(false);
+    expect(() => parseWorldTileManifestQuery(new URLSearchParams({
+      level: '2',
+      minTileX: '0',
+      maxTileX: '0',
+      minTileY: '0',
+      maxTileY: '0',
+      includeRooms: 'false',
+    }))).toThrow('includeRooms must be 0 or 1');
     expect(() => parseWorldTileManifestQuery(new URLSearchParams({
       level: '2',
       minTileX: '0',
@@ -74,6 +91,32 @@ describe('world tile HTTP routes', () => {
     const sql = fake.queries.join('\n');
     expect(sql).not.toMatch(/\b(?:insert|update|delete)\b/i);
     expect(fake.queries.every((query) => /^\s*select\b/i.test(query))).toBe(true);
+  });
+
+  it('keeps room summaries on by default and cache-separates coverage-only manifests', async () => {
+    const fake = createReadDatabase();
+    const env = createEnv(fake.database);
+    const baseUrl = 'https://api.wamp.land/api/world/tiles/manifest?level=4&minTileX=0&maxTileX=0&minTileY=0&maxTileY=0';
+    const defaultRequest = new Request(baseUrl);
+    const defaultResponse = await handleWorldTileManifestRequest(
+      defaultRequest,
+      new URL(defaultRequest.url),
+      env,
+    );
+    const coverageRequest = new Request(`${baseUrl}&includeRooms=0`);
+    const coverageResponse = await handleWorldTileManifestRequest(
+      coverageRequest,
+      new URL(coverageRequest.url),
+      env,
+    );
+
+    await expect(defaultResponse.json()).resolves.toMatchObject({
+      rooms: [{ id: '0,0' }],
+    });
+    await expect(coverageResponse.json()).resolves.toMatchObject({ rooms: [] });
+    expect(defaultResponse.headers.get('ETag')).not.toBe(coverageResponse.headers.get('ETag'));
+    expect(fake.queries.filter((query) => /from\s+world_tile_published_room_summaries/i.test(query)))
+      .toHaveLength(1);
   });
 
   it('returns a controlled no-store response while tiled reads are disabled', async () => {
@@ -157,6 +200,20 @@ function createReadDatabase(): { database: D1Database; queries: string[] } {
     async all<T>(): Promise<{ results: T[] }> {
       if (/^\s*select\s+version\s+from\s+world_tile_renderer_versions/i.test(this.query)) {
         return { results: [{ version: 'renderer-a' }] as T[] };
+      }
+      if (/from\s+world_tile_published_room_summaries/i.test(this.query)) {
+        return { results: [{
+          id: '0,0',
+          x: 0,
+          y: 0,
+          published_title: 'Origin',
+          goal_type: 'reach_exit',
+          version: 1,
+          published_at: '2026-07-19T00:00:00.000Z',
+          preview_updated_at: '2026-07-19T00:00:00.000Z',
+          last_published_by_user_id: 'builder-a',
+          last_published_by_display_name: 'Builder A',
+        }] as T[] };
       }
       return { results: [] };
     }

@@ -78,11 +78,11 @@ export async function handleWorldTileManifestRequest(
   context?: WorkerExecutionContextLike,
   authenticated = false,
 ): Promise<Response> {
-  const { level, bounds } = parseWorldTileManifestQuery(url.searchParams);
+  const { level, bounds, includeRooms } = parseWorldTileManifestQuery(url.searchParams);
   const loadResponse = async (): Promise<Response> => {
     const timing = new ServerTiming();
     const result = await timing.measure('manifest_d1', () => (
-      loadWorldTileManifest(env, level, bounds)
+      loadWorldTileManifest(env, level, bounds, { includeRooms })
     ));
     if (!result) {
       timing.setDiagnostic('cache_policy', 'unavailable-no-store');
@@ -143,6 +143,7 @@ export async function handleAdminWorldTileRequest(
 export function parseWorldTileManifestQuery(searchParams: URLSearchParams): {
   level: WorldTileLevel;
   bounds: WorldTileBounds;
+  includeRooms: boolean;
 } {
   const levelValue = parseSafeIntegerQuery(searchParams, 'level');
   const bounds = {
@@ -157,7 +158,11 @@ export function parseWorldTileManifestQuery(searchParams: URLSearchParams): {
   } catch (error) {
     throw new HttpError(400, error instanceof Error ? error.message : 'Invalid world tile query.');
   }
-  return { level: levelValue, bounds };
+  return {
+    level: levelValue,
+    bounds,
+    includeRooms: parseOptionalBinaryQuery(searchParams, 'includeRooms', true),
+  };
 }
 
 interface WorldTileBackfillBody {
@@ -453,6 +458,18 @@ function parseSafeIntegerQuery(searchParams: URLSearchParams, key: string): numb
     throw new HttpError(400, `${key} must be a safe integer.`);
   }
   return value;
+}
+
+function parseOptionalBinaryQuery(
+  searchParams: URLSearchParams,
+  key: string,
+  defaultValue: boolean,
+): boolean {
+  const raw = searchParams.get(key);
+  if (raw === null) return defaultValue;
+  if (raw === '0') return false;
+  if (raw === '1') return true;
+  throw new HttpError(400, `${key} must be 0 or 1.`);
 }
 
 function normalizeIdentifier(value: unknown, label: string): string {
