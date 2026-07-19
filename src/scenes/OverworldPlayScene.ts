@@ -786,6 +786,11 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.portalObjectController.handleFullRoomDestroyed(loadedRoom.room.id);
       },
       onFullRoomReplaced: (loadedRoom) => this.handleFullRoomReplaced(loadedRoom),
+      onSelectedExactRoomSnapshotReady: () => {
+        this.updateSelectedSummary();
+        void this.refreshLeaderboardForSelection();
+        this.renderHud();
+      },
       measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
     });
     this.roomRushResultController = new OverworldRoomRushResultController(this, {

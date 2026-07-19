@@ -90,7 +90,10 @@ import {
 } from './playPressure';
 import { logBootPhase, startBootStallWatch } from '../../main/bootDiagnostics';
 import { WorldTileClientController } from './worldTiles/controller';
-import { InitialSelectionPrefetchGate } from './worldTiles/initialSelectionPrefetch';
+import {
+  SelectedExactPrefetchLifecycle,
+  type SelectedExactPrefetchRequest,
+} from './selectedExactPrefetch';
 import { shouldRenderLegacyWorldTileOverlay } from './worldTiles/dynamicOverlays';
 import { processProgressivePreviewBatch } from './worldTiles/progressivePreviewBatch';
 import { resolveWorldTileInitialCoverage } from './worldTiles/startup';
@@ -154,6 +157,7 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   onFullRoomVisibilityChanged?: () => void;
   onFullRoomDestroyed?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
   onFullRoomReplaced?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
+  onSelectedExactRoomSnapshotReady?: (room: RoomSnapshot) => void;
   measurePerformance?: <T>(label: string, callback: () => T) => T;
 }
 
@@ -210,14 +214,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private deferredPreviewRenderTimer: Phaser.Time.TimerEvent | null = null;
   private fullRoomReleaseCleanupTimer: Phaser.Time.TimerEvent | null = null;
   private readonly textureNamespace: string;
-  private selectedExactPrefetchRoomId: string | null = null;
-  private readonly selectedExactPrefetchGate: InitialSelectionPrefetchGate;
+  private readonly selectedExactPrefetchLifecycle: SelectedExactPrefetchLifecycle;
 
   constructor(private readonly options: OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall>) {
     this.textureNamespace = sanitizeTextureNamespace(options.scene.sys.settings.key);
     this.previewCache = new OverworldPreviewCache(options.worldRepository);
     const selected = options.getSelectedCoordinates();
-    this.selectedExactPrefetchGate = new InitialSelectionPrefetchGate(
+    this.selectedExactPrefetchLifecycle = new SelectedExactPrefetchLifecycle(
       roomIdFromCoordinates(selected),
     );
     this.previewRenderer = new OverworldChunkPreviewRenderer({
@@ -287,8 +290,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.cancelDynamicOverlayReadiness();
     this.legacyCompactRefreshGeneration = -1;
     this.cancelDynamicOverlayRetry();
-    this.selectedExactPrefetchRoomId = null;
-    this.selectedExactPrefetchGate.reset(roomIdFromCoordinates(selectionBaseline));
+    this.selectedExactPrefetchLifecycle.reset(roomIdFromCoordinates(selectionBaseline));
     this.worldTileController.reset(selectionBaseline);
     this.cancelDeferredFullRoomLoads();
     this.cancelDeferredPreviewRender();
@@ -331,8 +333,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.cancelDynamicOverlayReadiness();
     this.legacyCompactRefreshGeneration = -1;
     this.cancelDynamicOverlayRetry();
-    this.selectedExactPrefetchRoomId = null;
-    this.selectedExactPrefetchGate.reset(roomIdFromCoordinates(this.options.getSelectedCoordinates()));
+    this.selectedExactPrefetchLifecycle.reset(
+      roomIdFromCoordinates(this.options.getSelectedCoordinates()),
+    );
     this.worldTileController.destroy();
   }
 
@@ -798,26 +801,36 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   updateWorldTiles(): void {
     this.worldTileController.update(this.options.scene.cameras.main);
     if (!this.worldTileController.isBrowseCutoverActive()) {
-      this.selectedExactPrefetchRoomId = null;
-      this.selectedExactPrefetchGate.clearPrefetched();
+      this.selectedExactPrefetchLifecycle.pause();
       this.previewCache.cancelSelectionPrefetchesExcept(null);
       return;
     }
     const selected = this.options.getSelectedCoordinates();
     const roomId = roomIdFromCoordinates(selected);
-    if (roomId === this.selectedExactPrefetchRoomId) return;
-    if (!this.selectedExactPrefetchGate.shouldPrefetch(
-      roomId,
-      this.worldTileController.isTargetLodReady(this.options.scene.cameras.main),
-    )) return;
+    this.previewCache.cancelSelectionPrefetchesExcept(roomId);
     const summary = this.roomSummariesById.get(roomId);
     if (!summary) return;
-    this.selectedExactPrefetchRoomId = roomId;
-    this.selectedExactPrefetchGate.markPrefetched(roomId);
-    this.previewCache.cancelSelectionPrefetchesExcept(roomId);
-    if (summary.state === 'published') {
-      void this.previewCache.prefetchPublishedRoom(summary).catch(() => {});
+    if (summary.state !== 'published') {
+      this.selectedExactPrefetchLifecycle.markAvailable(roomId);
+      return;
     }
+    const cachedPublishedRoom = this.previewCache.getFullRoomSnapshot(roomId);
+    const missingAtStart = !cachedPublishedRoom
+      || (summary.version !== null && cachedPublishedRoom.version !== summary.version);
+
+    const request = this.selectedExactPrefetchLifecycle.begin({
+      roomId,
+      targetLodReady: this.worldTileController.isTargetLodReady(
+        this.options.scene.cameras.main,
+      ),
+      missingAtStart,
+      nowMs: performance.now(),
+    });
+    if (!request) return;
+    void this.previewCache.prefetchPublishedRoom(summary).then(
+      (room) => this.completeSelectedExactPrefetch(request, room),
+      () => this.completeSelectedExactPrefetch(request, null),
+    );
   }
 
   isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean {
@@ -1995,10 +2008,31 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   private invalidateRoomArtifacts(roomId: string, dropPublishedSnapshot: boolean): void {
     this.fullPreviewUpgradeGeneration = -1;
+    this.selectedExactPrefetchLifecycle.invalidate(roomId);
     this.destroyFullRoom(roomId);
     this.syncLiveObjectWorldColliders();
     this.previewRenderer.invalidateRoomPreview(roomId);
     this.previewCache.invalidateRoom(roomId, dropPublishedSnapshot);
+  }
+
+  private completeSelectedExactPrefetch(
+    request: SelectedExactPrefetchRequest,
+    room: RoomSnapshot | null,
+  ): void {
+    const currentRoomId = roomIdFromCoordinates(this.options.getSelectedCoordinates());
+    const completion = this.selectedExactPrefetchLifecycle.complete({
+      request,
+      snapshotAvailable: room?.id === request.roomId,
+      currentRoomId,
+      nowMs: performance.now(),
+    });
+    if (
+      !completion.accepted
+      || !completion.shouldRefreshSelectedState
+      || !room
+      || currentRoomId !== request.roomId
+    ) return;
+    this.options.onSelectedExactRoomSnapshotReady?.(room);
   }
 
   private ensureFullRoom(room: RoomSnapshot, source: PlayableRoomSource): void {
