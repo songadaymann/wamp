@@ -132,6 +132,104 @@ describe('world tile controller bootstrap ownership', () => {
     controller.destroy();
   });
 
+  it('does not resolve target readiness from coarse L0 when the camera requires sharp L1', async () => {
+    let nowMs = 1_000;
+    vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    const loadWorldTileManifest = vi.fn(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+    camera.zoom = 0.18;
+
+    await expect(controller.prepare()).resolves.toBe(true);
+    await expect(controller.ensureInitialCoverage(camera)).resolves.toBe(true);
+    expect(levelCalls(loadWorldTileManifest, 0)).toHaveLength(1);
+
+    let sharpReady = false;
+    const sharpPromise = controller.waitForTargetLodReady(camera);
+    void sharpPromise.then(() => { sharpReady = true; });
+    await flushMicrotasks();
+    expect(sharpReady).toBe(false);
+
+    controller.update(camera);
+    await flushMicrotasks();
+    expect(levelCalls(loadWorldTileManifest, 1)).toHaveLength(1);
+    expect(sharpReady).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    nowMs += 81;
+    controller.update(camera);
+    await flushMicrotasks();
+    const sharpSnapshot = controller.getDebugSnapshot();
+    expect(sharpSnapshot).toMatchObject({
+      committedLevel: 1,
+      targetCoveragePercentage: 100,
+    });
+    expect(sharpReady).toBe(true);
+    await expect(sharpPromise).resolves.toBe(true);
+    controller.destroy();
+  });
+
+  it('settles pending target readiness false on abort, reset, and destroy without leaks', async () => {
+    const loadWorldTileManifest = vi.fn(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+    camera.zoom = 0.18;
+
+    await controller.prepare();
+    await controller.ensureInitialCoverage(camera);
+    const abortController = new AbortController();
+    const abortedWait = controller.waitForTargetLodReady(camera, abortController.signal);
+    abortController.abort();
+    await expect(abortedWait).resolves.toBe(false);
+    expect(getTargetLodWaiterCount(controller)).toBe(0);
+
+    const resetWait = controller.waitForTargetLodReady(camera);
+    controller.reset();
+    await expect(resetWait).resolves.toBe(false);
+    expect(getTargetLodWaiterCount(controller)).toBe(0);
+
+    const destroyWait = controller.waitForTargetLodReady(camera);
+    controller.destroy();
+    await expect(destroyWait).resolves.toBe(false);
+    expect(getTargetLodWaiterCount(controller)).toBe(0);
+  });
+
+  it('settles pending target readiness false when manifest fallback becomes sticky', async () => {
+    const loadWorldTileManifest = vi.fn(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => level === 0 ? readyEmptyManifest(level, bounds) : null);
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+    camera.zoom = 0.18;
+
+    await controller.prepare();
+    await controller.ensureInitialCoverage(camera);
+    const sharpPromise = controller.waitForTargetLodReady(camera);
+    controller.update(camera);
+    await flushMicrotasks();
+
+    await expect(sharpPromise).resolves.toBe(false);
+    controller.update(camera);
+    expect(controller.getDebugSnapshot().fallbackReason).toBe('manifest-incompatible');
+    controller.destroy();
+  });
+
   it('does not reopen refinement after an initial-coverage timeout activates fallback', async () => {
     vi.useFakeTimers();
     const loadWorldTileManifest = vi.fn((
@@ -197,10 +295,22 @@ function createCamera(): Phaser.Cameras.Scene2D.Camera {
   } as Phaser.Cameras.Scene2D.Camera;
 }
 
+function getTargetLodWaiterCount(controller: WorldTileClientController): number {
+  return (controller as unknown as {
+    targetLodReadyWaiters: ReadonlySet<unknown>;
+  }).targetLodReadyWaiters.size;
+}
+
 function readyEmptyManifest(level: WorldTileLevel, bounds: WorldTileBounds): WorldTileManifest {
   const entries: WorldTileManifest['entries'] = [];
-  for (let y = bounds.minTileY; y <= bounds.maxTileY; y += 1) {
-    for (let x = bounds.minTileX; x <= bounds.maxTileX; x += 1) {
+  const entryBounds = level === 0 ? bounds : {
+    minTileX: Math.floor(bounds.minTileX / 2) * 2,
+    maxTileX: Math.floor(bounds.maxTileX / 2) * 2 + 1,
+    minTileY: Math.floor(bounds.minTileY / 2) * 2,
+    maxTileY: Math.floor(bounds.maxTileY / 2) * 2 + 1,
+  };
+  for (let y = entryBounds.minTileY; y <= entryBounds.maxTileY; y += 1) {
+    for (let x = entryBounds.minTileX; x <= entryBounds.maxTileX; x += 1) {
       entries.push({
         address: { rendererVersion, level, x, y },
         desiredGeneration: 1,

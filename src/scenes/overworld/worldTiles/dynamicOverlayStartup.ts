@@ -2,8 +2,30 @@ export interface StartupDynamicOverlayLoadOptions {
   awaitBeforeReady: boolean;
   loadSnapshots: () => Promise<void>;
   isCurrent: () => boolean;
+  waitForDeferredStart?: () => Promise<boolean>;
+  onDeferredStartStopped?: () => void;
   mergeDeferredSnapshots: () => Promise<void> | void;
   onDeferredError?: (error: unknown) => void;
+}
+
+export function stopStartupDynamicOverlayGeneration(input: {
+  generation: number;
+  startupDynamicOverlayGeneration: number;
+  fullPreviewUpgradeGeneration: number;
+}): {
+  startupDynamicOverlayGeneration: number;
+  fullPreviewUpgradeGeneration: number;
+} {
+  return {
+    startupDynamicOverlayGeneration:
+      input.startupDynamicOverlayGeneration === input.generation
+        ? -1
+        : input.startupDynamicOverlayGeneration,
+    fullPreviewUpgradeGeneration:
+      input.fullPreviewUpgradeGeneration === input.generation
+        ? -1
+        : input.fullPreviewUpgradeGeneration,
+  };
 }
 
 /**
@@ -22,6 +44,12 @@ export async function loadStartupDynamicOverlaySnapshots(
   }
 
   void (async () => {
+    const canStart = await (options.waitForDeferredStart?.() ?? Promise.resolve(true));
+    if (!canStart) {
+      options.onDeferredStartStopped?.();
+      return;
+    }
+    if (!options.isCurrent()) return;
     await options.loadSnapshots();
     if (!options.isCurrent()) return;
     await options.mergeDeferredSnapshots();

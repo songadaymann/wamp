@@ -101,6 +101,14 @@ interface RetryState {
   retryAtMs: number;
 }
 
+interface TargetLodReadyWaiter {
+  camera: Phaser.Cameras.Scene2D.Camera;
+  lifecycleEpoch: number;
+  signal?: AbortSignal;
+  onAbort?: () => void;
+  resolve: (ready: boolean) => void;
+}
+
 export interface WorldTileClientDebugSnapshot extends WorldTileDebugMetrics {
   enabled: boolean;
   cutoverActive: boolean;
@@ -187,6 +195,7 @@ export class WorldTileClientController {
   private contextRestorePending = false;
   private nextMutationConvergencePollAtMs = 0;
   private targetReadyCount = 0;
+  private readonly targetLodReadyWaiters = new Set<TargetLodReadyWaiter>();
   private contextCanvas: HTMLCanvasElement | null = null;
   private readonly handleContextRestored = () => {
     if (this.isRefinementStopped()) return;
@@ -380,6 +389,47 @@ export class WorldTileClientController {
     return this.rollout?.enabled === true && this.rollout.shadow;
   }
 
+  /**
+   * Wait until the camera's current target LOD has replaced every visible
+   * fallback with exact target-level entries and those images are GPU-ready.
+   * Lifecycle changes, an explicit abort, or the sticky compact fallback all
+   * resolve false so startup callers cannot retain a stale waiter.
+   */
+  waitForTargetLodReady(
+    camera: Phaser.Cameras.Scene2D.Camera,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (
+      signal?.aborted
+      || !this.activeRendererVersion
+      || this.isRefinementStopped()
+    ) return Promise.resolve(false);
+    if (this.isCameraTargetLodReady(camera)) return Promise.resolve(true);
+
+    const lifecycleEpoch = this.lifecycleEpoch;
+    return new Promise<boolean>((resolve) => {
+      const waiter: TargetLodReadyWaiter = {
+        camera,
+        lifecycleEpoch,
+        signal,
+        resolve,
+      };
+      if (signal) {
+        waiter.onAbort = () => this.settleTargetLodReadyWaiter(waiter, false);
+        signal.addEventListener('abort', waiter.onAbort, { once: true });
+      }
+      this.targetLodReadyWaiters.add(waiter);
+
+      // Keep the check after registration so a synchronously aborted signal
+      // cannot strand the waiter between the first check and listener setup.
+      if (signal?.aborted) {
+        this.settleTargetLodReadyWaiter(waiter, false);
+      } else if (this.isCameraTargetLodReady(camera)) {
+        this.settleTargetLodReadyWaiter(waiter, true);
+      }
+    });
+  }
+
   getImages(): Phaser.GameObjects.Image[] {
     return this.layer.getImages();
   }
@@ -462,6 +512,7 @@ export class WorldTileClientController {
 
   reset(): void {
     this.lifecycleEpoch += 1;
+    this.settleAllTargetLodReadyWaiters(false);
     this.destroyed = false;
     this.prepareAbortController?.abort();
     this.prepareAbortController = null;
@@ -520,6 +571,7 @@ export class WorldTileClientController {
 
   destroy(): void {
     this.lifecycleEpoch += 1;
+    this.settleAllTargetLodReadyWaiters(false);
     this.destroyed = true;
     this.prepareAbortController?.abort();
     this.prepareAbortController = null;
@@ -615,6 +667,7 @@ export class WorldTileClientController {
   }
 
   private stopRefinementWork(): void {
+    this.settleAllTargetLodReadyWaiters(false);
     this.initialCoverageAbortController?.abort();
     this.initialCoverageAbortController = null;
     this.roomManifestPrefetcher.cancelAll();
@@ -1226,6 +1279,8 @@ export class WorldTileClientController {
       this.lastFallbackReason = fallbackSnapshot.reason;
       this.options.onCoverageChanged?.();
     }
+    if (fallbackSnapshot.active) this.settleAllTargetLodReadyWaiters(false);
+    else this.resolveReadyTargetLodWaiters();
   }
 
   private updateCameraMotion(viewport: WorldRect, zoom: number, nowMs: number): void {
@@ -1406,10 +1461,57 @@ export class WorldTileClientController {
   }
 
   private notifyFallbackChanged(): void {
-    const reason = this.fallback.snapshot().reason;
+    const fallback = this.fallback.snapshot();
+    if (fallback.active) this.settleAllTargetLodReadyWaiters(false);
+    const reason = fallback.reason;
     if (reason === this.lastFallbackReason) return;
     this.lastFallbackReason = reason;
     this.options.onCoverageChanged?.();
+  }
+
+  private isCameraTargetLodReady(camera: Phaser.Cameras.Scene2D.Camera): boolean {
+    if (!this.activeRendererVersion || this.desiredVisibleTargets.length === 0) return false;
+    const requiredLevel = selectWorldTileLevel(camera.zoom, this.desiredLevel).level;
+    if (this.desiredLevel !== requiredLevel || this.committedLevel !== requiredLevel) return false;
+
+    const expectedTargets = enumerateWorldTileBounds(
+      this.activeRendererVersion,
+      requiredLevel,
+      worldRectToTileBounds(requiredLevel, getCameraWorldRect(camera)),
+    );
+    if (!sameWorldTileAddresses(expectedTargets, this.desiredVisibleTargets)) return false;
+    return isWorldTileTargetReplacementComplete(resolveWorldTileDisplayPlan({
+      targets: expectedTargets,
+      availabilityByKey: this.availabilityByKey,
+      previousRendererVersion: this.previousRendererVersion,
+    }));
+  }
+
+  private resolveReadyTargetLodWaiters(): void {
+    for (const waiter of [...this.targetLodReadyWaiters]) {
+      if (waiter.lifecycleEpoch !== this.lifecycleEpoch || waiter.signal?.aborted) {
+        this.settleTargetLodReadyWaiter(waiter, false);
+      } else if (this.isCameraTargetLodReady(waiter.camera)) {
+        this.settleTargetLodReadyWaiter(waiter, true);
+      }
+    }
+  }
+
+  private settleAllTargetLodReadyWaiters(ready: boolean): void {
+    for (const waiter of [...this.targetLodReadyWaiters]) {
+      this.settleTargetLodReadyWaiter(waiter, ready);
+    }
+  }
+
+  private settleTargetLodReadyWaiter(
+    waiter: TargetLodReadyWaiter,
+    ready: boolean,
+  ): void {
+    if (!this.targetLodReadyWaiters.delete(waiter)) return;
+    if (waiter.signal && waiter.onAbort) {
+      waiter.signal.removeEventListener('abort', waiter.onAbort);
+    }
+    waiter.resolve(ready);
   }
 
   private resolveOptimisticRooms(manifest: WorldTileManifest): void {
@@ -1446,6 +1548,15 @@ export class WorldTileClientController {
       }
     }
   }
+}
+
+function sameWorldTileAddresses(
+  left: readonly WorldTileAddress[],
+  right: readonly WorldTileAddress[],
+): boolean {
+  if (left.length !== right.length) return false;
+  const rightKeys = new Set(right.map(worldTileAddressKey));
+  return left.every((address) => rightKeys.has(worldTileAddressKey(address)));
 }
 
 function getCameraWorldRect(camera: Phaser.Cameras.Scene2D.Camera): WorldRect {

@@ -93,7 +93,10 @@ import { WorldTileClientController } from './worldTiles/controller';
 import { shouldRenderLegacyWorldTileOverlay } from './worldTiles/dynamicOverlays';
 import { processProgressivePreviewBatch } from './worldTiles/progressivePreviewBatch';
 import { resolveWorldTileInitialCoverage } from './worldTiles/startup';
-import { loadStartupDynamicOverlaySnapshots } from './worldTiles/dynamicOverlayStartup';
+import {
+  loadStartupDynamicOverlaySnapshots,
+  stopStartupDynamicOverlayGeneration,
+} from './worldTiles/dynamicOverlayStartup';
 
 const PLAY_ROOM_PARALLAX_MULTIPLIER = 0.2;
 const FULL_ROOM_RELEASE_GRACE_MS = 300;
@@ -194,6 +197,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private compactWorldActive = false;
   private fullPreviewUpgradeGeneration = -1;
   private startupDynamicOverlayGeneration = -1;
+  private dynamicOverlayReadinessGeneration = -1;
+  private dynamicOverlayReadinessAbortController: AbortController | null = null;
+  private legacyCompactRefreshGeneration = -1;
+  private legacyCompactRefreshScheduled = false;
   private dynamicOverlayRetryAttempt = 0;
   private dynamicOverlayRetryTimer: Phaser.Time.TimerEvent | null = null;
   private deferredFullRoomLoadQueue: RenderableRoom[] = [];
@@ -271,6 +278,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.compactWorldActive = false;
     this.fullPreviewUpgradeGeneration = -1;
     this.startupDynamicOverlayGeneration = -1;
+    this.cancelDynamicOverlayReadiness();
+    this.legacyCompactRefreshGeneration = -1;
     this.cancelDynamicOverlayRetry();
     this.selectedExactPrefetchRoomId = null;
     this.worldTileController.reset();
@@ -312,6 +321,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.compactWorldActive = false;
     this.fullPreviewUpgradeGeneration = -1;
     this.startupDynamicOverlayGeneration = -1;
+    this.cancelDynamicOverlayReadiness();
+    this.legacyCompactRefreshGeneration = -1;
     this.cancelDynamicOverlayRetry();
     this.selectedExactPrefetchRoomId = null;
     this.worldTileController.destroy();
@@ -446,6 +457,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
 
     const generation = ++this.loadGeneration;
+    this.legacyCompactRefreshGeneration = -1;
+    this.beginDynamicOverlayReadiness(generation);
     this.startupDynamicOverlayGeneration = -1;
     this.cancelDynamicOverlayRetry();
     this.chunkWindowRequestInFlight = true;
@@ -535,9 +548,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       let fullRoomIds = previewSelection.fullRoomIds;
       let renderedPreviewRoomIds = this.getRenderedPreviewRoomIds(roomCandidates, previewRoomIds);
       let snapshotDetail: RoomSnapshotQueryDetail = 'full';
+      let tiledBrowseCutover = false;
       if (this.compactWorldActive) {
         snapshotDetail = this.getPreviewSnapshotDetail();
-        const tiledBrowseCutover = this.worldTileController.isBrowseCutoverActive();
+        tiledBrowseCutover = this.worldTileController.isBrowseCutoverActive();
         if (!tiledBrowseCutover) {
           this.startupDynamicOverlayGeneration = -1;
         }
@@ -566,6 +580,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           }
           await loadStartupDynamicOverlaySnapshots({
             awaitBeforeReady: !tiledBrowseCutover,
+            waitForDeferredStart: tiledBrowseCutover
+              ? () => this.waitForDynamicOverlayTargetLod(generation)
+              : undefined,
+            onDeferredStartStopped: () => this.handleDynamicOverlayReadinessStopped(
+              generation,
+            ),
             loadSnapshots: async () => {
               try {
                 await this.previewCache.ensureRoomSnapshotsBatch(roomCandidates, nearRoomIds, {
@@ -591,6 +611,17 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
                 nearRoomIds,
                 fullRoomIds,
               );
+              if (!this.isLoadGenerationCurrent(generation)) return;
+              if (tiledBrowseCutover) {
+                await this.loadDistantPreviewsProgressively(
+                  generation,
+                  roomCandidates,
+                  renderedPreviewRoomIds,
+                  fullRoomIds,
+                  snapshotDetail,
+                  true,
+                );
+              }
               if (!this.isLoadGenerationCurrent(generation)) return;
               this.startupDynamicOverlayGeneration = -1;
               this.dynamicOverlayRetryAttempt = 0;
@@ -663,13 +694,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           : this.getRetainedBrowseFullRoomIds(fullRoomIds)
       );
       if (this.compactWorldActive) {
-        void this.loadDistantPreviewsProgressively(
-          generation,
-          roomCandidates,
-          renderedPreviewRoomIds,
-          fullRoomIds,
-          snapshotDetail,
-        ).catch((error) => console.warn('Progressive world preview loading stopped', error));
+        if (!tiledBrowseCutover) {
+          void this.loadDistantPreviewsProgressively(
+            generation,
+            roomCandidates,
+            renderedPreviewRoomIds,
+            fullRoomIds,
+            snapshotDetail,
+          ).catch((error) => console.warn('Progressive world preview loading stopped', error));
+        }
         if (
           snapshotDetail === 'full'
           && !this.worldTileController.isBrowseCutoverActive()
@@ -694,6 +727,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     } finally {
       this.chunkWindowRequestInFlight = false;
       cancelRefreshStallWatch();
+      this.maybeStartLegacyCompactRefresh();
     }
   }
 
@@ -710,6 +744,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
 
     const generation = ++this.loadGeneration;
+    this.beginDynamicOverlayReadiness(generation);
+    this.legacyCompactRefreshGeneration = -1;
     this.chunkWindowRequestInFlight = true;
 
     try {
@@ -1437,7 +1473,21 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     previewRoomIds: Set<string>,
     fullRoomIds: Set<string>,
     detail: RoomSnapshotQueryDetail,
+    requireTiledCutover = false,
   ): Promise<void> {
+    const tiledBrowseCutover = this.worldTileController.isBrowseCutoverActive();
+    if (requireTiledCutover && !tiledBrowseCutover) {
+      this.handleDynamicOverlayReadinessStopped(generation);
+      return;
+    }
+    if (tiledBrowseCutover) {
+      const sharpReady = await this.waitForDynamicOverlayTargetLod(generation);
+      if (!sharpReady) {
+        this.handleDynamicOverlayReadinessStopped(generation);
+        return;
+      }
+    }
+    if (!this.isLoadGenerationCurrent(generation)) return;
     const nearIds = this.getNearestPreviewRoomIds(roomCandidates, previewRoomIds, fullRoomIds, 9);
     const focusChunk = roomToChunkCoordinates(this.getFocusCoordinates());
     const distantIds = [...previewRoomIds]
@@ -1521,6 +1571,84 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return !this.destroyed && generation === this.loadGeneration;
   }
 
+  private beginDynamicOverlayReadiness(generation: number): void {
+    this.cancelDynamicOverlayReadiness();
+    this.dynamicOverlayReadinessGeneration = generation;
+    this.dynamicOverlayReadinessAbortController = new AbortController();
+  }
+
+  private cancelDynamicOverlayReadiness(): void {
+    this.dynamicOverlayReadinessAbortController?.abort();
+    this.dynamicOverlayReadinessAbortController = null;
+    this.dynamicOverlayReadinessGeneration = -1;
+  }
+
+  private async waitForDynamicOverlayTargetLod(generation: number): Promise<boolean> {
+    const abortController = this.dynamicOverlayReadinessAbortController;
+    if (
+      !abortController
+      || this.dynamicOverlayReadinessGeneration !== generation
+      || !this.isLoadGenerationCurrent(generation)
+      || !this.worldTileController.isBrowseCutoverActive()
+    ) return false;
+    const ready = await this.worldTileController.waitForTargetLodReady(
+      this.options.scene.cameras.main,
+      abortController.signal,
+    );
+    const current = ready
+      && this.dynamicOverlayReadinessGeneration === generation
+      && this.isLoadGenerationCurrent(generation)
+      && this.worldTileController.isBrowseCutoverActive();
+    if (!current && this.isLoadGenerationCurrent(generation)) {
+      this.clearStartupDynamicOverlayGeneration(generation);
+    }
+    return current;
+  }
+
+  private handleDynamicOverlayReadinessStopped(generation: number): void {
+    if (!this.isLoadGenerationCurrent(generation)) return;
+    this.clearStartupDynamicOverlayGeneration(generation);
+    if (
+      this.compactWorldActive
+      && !this.worldTileController.isBrowseCutoverActive()
+    ) {
+      this.legacyCompactRefreshGeneration = generation;
+      this.maybeStartLegacyCompactRefresh();
+    }
+  }
+
+  private clearStartupDynamicOverlayGeneration(generation: number): void {
+    const stopped = stopStartupDynamicOverlayGeneration({
+      generation,
+      startupDynamicOverlayGeneration: this.startupDynamicOverlayGeneration,
+      fullPreviewUpgradeGeneration: this.fullPreviewUpgradeGeneration,
+    });
+    this.startupDynamicOverlayGeneration = stopped.startupDynamicOverlayGeneration;
+    this.fullPreviewUpgradeGeneration = stopped.fullPreviewUpgradeGeneration;
+  }
+
+  private maybeStartLegacyCompactRefresh(): void {
+    if (
+      this.legacyCompactRefreshScheduled
+      || this.chunkWindowRequestInFlight
+      || this.legacyCompactRefreshGeneration < 0
+    ) return;
+    this.legacyCompactRefreshScheduled = true;
+    queueMicrotask(() => {
+      this.legacyCompactRefreshScheduled = false;
+      const generation = this.legacyCompactRefreshGeneration;
+      if (
+        !this.isLoadGenerationCurrent(generation)
+        || !this.compactWorldActive
+        || this.worldTileController.isBrowseCutoverActive()
+      ) return;
+      this.legacyCompactRefreshGeneration = -1;
+      void this.refreshAround(this.getFocusCoordinates()).catch((error) => {
+        console.warn('Legacy compact fallback refresh stopped.', error);
+      });
+    });
+  }
+
   private async mergeDeferredDynamicOverlays(
     generation: number,
     roomCandidates: Map<string, StreamingRoomCandidate>,
@@ -1600,6 +1728,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     const nearRoomIds = this.getRenderedPreviewRoomIds(roomCandidates, selectedNearRoomIds);
     void loadStartupDynamicOverlaySnapshots({
       awaitBeforeReady: false,
+      waitForDeferredStart: () => this.waitForDynamicOverlayTargetLod(generation),
+      onDeferredStartStopped: () => this.handleDynamicOverlayReadinessStopped(generation),
       loadSnapshots: () => this.previewCache.ensureRoomSnapshotsBatch(roomCandidates, nearRoomIds, {
         priority: 'high',
         detail,
@@ -1611,6 +1741,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           roomCandidates,
           nearRoomIds,
           previewSelection.fullRoomIds,
+        );
+        if (!this.isLoadGenerationCurrent(generation)) return;
+        await this.loadDistantPreviewsProgressively(
+          generation,
+          roomCandidates,
+          renderedPreviewRoomIds,
+          previewSelection.fullRoomIds,
+          detail,
+          true,
         );
         if (!this.isLoadGenerationCurrent(generation)) return;
         this.startupDynamicOverlayGeneration = -1;
@@ -1646,16 +1785,29 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     const generation = this.loadGeneration;
     this.fullPreviewUpgradeGeneration = generation;
+    const tiledBrowseCutover = this.worldTileController.isBrowseCutoverActive();
     const selectedNearRoomIds = this.getNearestPreviewRoomIds(
       roomCandidates,
       previewRoomIds,
       fullRoomIds,
       9,
     );
-    const nearRoomIds = this.worldTileController.isBrowseCutoverActive()
+    const nearRoomIds = tiledBrowseCutover
       ? this.getRenderedPreviewRoomIds(roomCandidates, selectedNearRoomIds)
       : selectedNearRoomIds;
     void (async () => {
+      if (tiledBrowseCutover) {
+        if (!this.worldTileController.isBrowseCutoverActive()) {
+          this.handleDynamicOverlayReadinessStopped(generation);
+          return;
+        }
+        const sharpReady = await this.waitForDynamicOverlayTargetLod(generation);
+        if (!sharpReady) {
+          this.handleDynamicOverlayReadinessStopped(generation);
+          return;
+        }
+      }
+      if (!this.isLoadGenerationCurrent(generation)) return;
       await this.previewCache.ensureRoomSnapshotsBatch(roomCandidates, nearRoomIds, {
         priority: 'high',
         detail: 'full',
@@ -1676,6 +1828,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         previewRoomIds,
         fullRoomIds,
         'full',
+        tiledBrowseCutover,
       );
       if (this.isLoadGenerationCurrent(generation)) {
         this.dynamicOverlayRetryAttempt = 0;
