@@ -19,6 +19,7 @@ describe('world tile bootstrap request priority', () => {
       shouldScheduleWorldTileRequest(requestKind, {
         requestSchedulingReady: false,
         initialCoveragePending: true,
+        visibleEarlyCoverage: false,
       })
     ))).toEqual([]);
   });
@@ -28,8 +29,19 @@ describe('world tile bootstrap request priority', () => {
       shouldScheduleWorldTileRequest(requestKind, {
         requestSchedulingReady: true,
         initialCoveragePending: true,
+        visibleEarlyCoverage: false,
       })
     ))).toEqual(['initial-coverage', 'mutation-prefetch']);
+  });
+
+  it('starts only viewport refinement early when a visible DOM cover owns coarse paint', () => {
+    expect(requestKinds.filter((requestKind) => (
+      shouldScheduleWorldTileRequest(requestKind, {
+        requestSchedulingReady: true,
+        initialCoveragePending: true,
+        visibleEarlyCoverage: true,
+      })
+    ))).toEqual(['initial-coverage', 'viewport-refinement', 'mutation-prefetch']);
   });
 
   it('resumes every request source after initial coverage settles', () => {
@@ -37,6 +49,7 @@ describe('world tile bootstrap request priority', () => {
       shouldScheduleWorldTileRequest(requestKind, {
         requestSchedulingReady: true,
         initialCoveragePending: false,
+        visibleEarlyCoverage: false,
       })
     ))).toEqual(requestKinds);
   });

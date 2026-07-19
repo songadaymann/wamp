@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorldRepository } from '../../../persistence/worldRepository';
 import { WorldTileClientController } from './controller';
+import { decodeWorldTileBlob } from './phaserLayer';
 import { WORLD_TILE_COVERAGE_TIMEOUT_MS } from './retryFallback';
 import type {
   WorldTileBounds,
@@ -13,15 +14,24 @@ import type {
 vi.mock('./phaserLayer', () => ({
   decodeWorldTileBlob: vi.fn(),
   WorldTilePhaserLayer: class MockWorldTilePhaserLayer {
-    installDecoded(): boolean { return true; }
-    hasGpuTexture(): boolean { return false; }
+    private readonly textures = new Map<string, string>();
+    installDecoded(entry: WorldTileManifest['entries'][number]): boolean {
+      if (!entry.ready) return false;
+      const { rendererVersion, level, x, y } = entry.address;
+      this.textures.set(`${rendererVersion}:${level}:${x}:${y}`, entry.ready.contentHash);
+      return true;
+    }
+    hasGpuTexture(addressKey: string, contentHash?: string): boolean {
+      const installedHash = this.textures.get(addressKey);
+      return installedHash !== undefined && (!contentHash || installedHash === contentHash);
+    }
     syncDisplay(): void {}
     getImages(): never[] { return []; }
     getBackdropIgnoredObjects(): never[] { return []; }
     getAttachedAddressKeys(): string[] { return []; }
     clearDisplay(): void {}
-    discardGpuTexturesForContextRestore(): void {}
-    destroy(): void {}
+    discardGpuTexturesForContextRestore(): void { this.textures.clear(); }
+    destroy(): void { this.textures.clear(); }
   },
 }));
 
@@ -137,6 +147,97 @@ describe('world tile controller bootstrap ownership', () => {
       targetBounds: { minTileX: 0, maxTileX: 0, minTileY: 0, maxTileY: 0 },
     });
     expect(early.release).not.toHaveBeenCalled();
+    controller.destroy();
+  });
+
+  it('starts viewport refinement while a visible early cover owns the redundant Phaser L0 hydration', async () => {
+    const early = installEarlyCoverageHandle(
+      Promise.resolve(earlyBootstrapState('visible', rendererVersion)),
+      (request) => ({
+        schemaVersion: 1,
+        bootstrapGeneration: 1,
+        consumerGeneration: request.consumerGeneration,
+        manifest: readyImageManifest(0, request.targetBounds),
+      }),
+    );
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+    camera.zoom = 0.18;
+    const pendingBytes = installDeferredByteCache(controller);
+    vi.mocked(decodeWorldTileBlob).mockResolvedValue({
+      width: 642,
+      height: 354,
+    } as Awaited<ReturnType<typeof decodeWorldTileBlob>>);
+
+    await controller.prepare();
+    // prepare installs the real cache, so replace it only after preparation.
+    pendingBytes.install();
+    const coveragePromise = controller.ensureInitialCoverage(camera);
+    await flushMicrotasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(early.consumeCoverage).toHaveBeenCalledOnce();
+    expect(pendingBytes.getOrFetch).toHaveBeenCalled();
+
+    controller.update(camera);
+    controller.prefetchRoom({ x: 0, y: 0 }, 'selection');
+    await flushMicrotasks();
+    expect(levelCalls(loadWorldTileManifest, 1)).toHaveLength(1);
+    expect(levelCalls(loadWorldTileManifest, 4)).toHaveLength(0);
+
+    pendingBytes.resolve();
+    await expect(coveragePromise).resolves.toBe(true);
+    controller.destroy();
+  });
+
+  it('keeps refinement blocked when the early handoff is shadow-only', async () => {
+    installEarlyCoverageHandle(
+      Promise.resolve(earlyBootstrapState('ready-shadow', rendererVersion)),
+      (request) => ({
+        schemaVersion: 1,
+        bootstrapGeneration: 1,
+        consumerGeneration: request.consumerGeneration,
+        manifest: readyImageManifest(0, request.targetBounds),
+      }),
+    );
+    const loadWorldTileManifest = vi.fn<WorldRepository['loadWorldTileManifest']>(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+    camera.zoom = 0.18;
+    const pendingBytes = installDeferredByteCache(controller);
+    vi.mocked(decodeWorldTileBlob).mockResolvedValue({
+      width: 642,
+      height: 354,
+    } as Awaited<ReturnType<typeof decodeWorldTileBlob>>);
+
+    await controller.prepare();
+    pendingBytes.install();
+    const coveragePromise = controller.ensureInitialCoverage(camera);
+    await flushMicrotasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(pendingBytes.getOrFetch).toHaveBeenCalled();
+
+    controller.update(camera);
+    await flushMicrotasks();
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+
+    pendingBytes.resolve();
+    await expect(coveragePromise).resolves.toBe(true);
+    controller.update(camera);
+    await flushMicrotasks();
+    expect(levelCalls(loadWorldTileManifest, 1)).toHaveLength(1);
     controller.destroy();
   });
 
@@ -602,6 +703,54 @@ function readyEmptyManifest(level: WorldTileLevel, bounds: WorldTileBounds): Wor
     targetBounds: { ...bounds },
     entries,
     rooms: [],
+  };
+}
+
+function readyImageManifest(level: WorldTileLevel, bounds: WorldTileBounds): WorldTileManifest {
+  const manifest = readyEmptyManifest(level, bounds);
+  return {
+    ...manifest,
+    entries: manifest.entries.map((entry) => ({
+      ...entry,
+      desiredEmpty: false,
+      readyEmptyGeneration: null,
+      ready: {
+        generation: 1,
+        contentHash: 'a'.repeat(64),
+        url: 'https://tiles.example.test/early-l0.png',
+        width: 642,
+        height: 354,
+        overlap: 1,
+        byteLength: 1,
+      },
+    })),
+  };
+}
+
+function installDeferredByteCache(controller: WorldTileClientController): {
+  install(): void;
+  resolve(): void;
+  getOrFetch: ReturnType<typeof vi.fn>;
+} {
+  let resolveBytes!: (value: { blob: Blob; cacheHit: boolean }) => void;
+  const bytes = new Promise<{ blob: Blob; cacheHit: boolean }>((resolve) => {
+    resolveBytes = resolve;
+  });
+  const getOrFetch = vi.fn(() => bytes);
+  const byteCache = {
+    getOrFetch,
+    detachPendingRequests: vi.fn(),
+    delete: vi.fn(async () => {}),
+    getDiagnostics: () => ({ hits: 0, misses: 0, evictions: 0, memoryBytes: 0 }),
+  };
+  return {
+    install() {
+      (controller as unknown as { byteCache: typeof byteCache }).byteCache = byteCache;
+    },
+    resolve() {
+      resolveBytes({ blob: new Blob(), cacheHit: true });
+    },
+    getOrFetch,
   };
 }
 

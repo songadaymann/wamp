@@ -151,6 +151,7 @@ export class WorldTileClientController {
   // that handoff because prepare may resolve one microtask before the startup
   // coordinator calls ensureInitialCoverage().
   private initialCoveragePending = true;
+  private visibleEarlyCoverage = false;
   private requestSchedulingReady = false;
   private rollout: WorldTileRolloutDecision | null = null;
   private activeRendererVersion: string | null = null;
@@ -282,16 +283,17 @@ export class WorldTileClientController {
       }, WORLD_TILE_COVERAGE_TIMEOUT_MS);
     });
     try {
-      const manifest = await Promise.race([
+      const initialCoverage = await Promise.race([
         this.loadInitialCoverageManifest(bounds, lifecycleEpoch, abortController.signal),
         coverageTimeout,
       ]);
       if (
-        !manifest
+        !initialCoverage
         || abortController.signal.aborted
         || lifecycleEpoch !== this.lifecycleEpoch
         || this.destroyed
       ) return false;
+      const { manifest } = initialCoverage;
       if (!this.ingestManifest(manifest)) return false;
       const targets = enumerateWorldTileBounds(manifest.rendererVersion, 0, bounds);
       this.visibleTargets = targets;
@@ -300,6 +302,11 @@ export class WorldTileClientController {
       this.desiredGuardTargets = targets;
       this.fallbackAncestors = [];
       this.syncCoverage(startedAtMs);
+      // A validated `visible` handoff means the fixed DOM L0 layer is already
+      // painting every target. Let target-LOD networking overlap the redundant
+      // Phaser decode/upload, while the DOM parent remains attached until the
+      // normal app-ready replacement-paint handoff releases it.
+      this.visibleEarlyCoverage = initialCoverage.visibleEarlyCoverage;
       await this.loadEntriesImmediately(targets, abortController.signal);
       this.syncCoverage(performance.now());
       return this.coarseCoverageComplete;
@@ -321,7 +328,7 @@ export class WorldTileClientController {
     bounds: WorldTileBounds,
     lifecycleEpoch: number,
     signal: AbortSignal,
-  ): Promise<WorldTileManifest | null> {
+  ): Promise<InitialCoverageManifest | null> {
     const handedOff = hasConsumableEarlyWorldTileCoverage()
       ? await consumeEarlyWorldTileCoverage({
           rendererVersion: this.activeRendererVersion,
@@ -332,10 +339,11 @@ export class WorldTileClientController {
       : null;
     signal.throwIfAborted();
     if (handedOff) return handedOff;
-    return this.options.repository.loadWorldTileManifest(0, bounds, {
+    const manifest = await this.options.repository.loadWorldTileManifest(0, bounds, {
       signal,
       includeRooms: false,
     });
+    return manifest ? { manifest, visibleEarlyCoverage: false } : null;
   }
 
   update(camera: Phaser.Cameras.Scene2D.Camera): void {
@@ -554,6 +562,7 @@ export class WorldTileClientController {
     this.initialCoverageAbortController = null;
     this.initialCoveragePromise = null;
     this.initialCoveragePending = true;
+    this.visibleEarlyCoverage = false;
     this.requestSchedulingReady = false;
     this.roomManifestPrefetcher.cancelAll();
     this.manifestLoader.cancel();
@@ -614,6 +623,7 @@ export class WorldTileClientController {
     this.initialCoverageAbortController?.abort();
     this.initialCoverageAbortController = null;
     this.initialCoveragePending = true;
+    this.visibleEarlyCoverage = false;
     this.requestSchedulingReady = false;
     this.roomManifestPrefetcher.cancelAll();
     this.manifestLoader.cancel();
@@ -699,6 +709,7 @@ export class WorldTileClientController {
     return shouldScheduleWorldTileRequest(requestKind, {
       requestSchedulingReady: this.requestSchedulingReady && this.activeRendererVersion !== null,
       initialCoveragePending: this.initialCoveragePending,
+      visibleEarlyCoverage: this.visibleEarlyCoverage,
     });
   }
 
@@ -1597,6 +1608,11 @@ interface EarlyWorldTileCoverageConsumerInput {
   signal: AbortSignal;
 }
 
+interface InitialCoverageManifest {
+  manifest: WorldTileManifest;
+  visibleEarlyCoverage: boolean;
+}
+
 function hasConsumableEarlyWorldTileCoverage(): boolean {
   if (typeof window === 'undefined') return false;
   const handle = window.__wampEarlyWorldTiles;
@@ -1607,7 +1623,7 @@ function hasConsumableEarlyWorldTileCoverage(): boolean {
 
 async function consumeEarlyWorldTileCoverage(
   input: EarlyWorldTileCoverageConsumerInput,
-): Promise<WorldTileManifest | null> {
+): Promise<InitialCoverageManifest | null> {
   if (!input.rendererVersion || typeof window === 'undefined') return null;
   try {
     const handle = window.__wampEarlyWorldTiles;
@@ -1640,7 +1656,10 @@ async function consumeEarlyWorldTileCoverage(
     if (!isCompatibleEarlyWorldTileCoverage(manifest, input.rendererVersion, input.bounds)) {
       return null;
     }
-    return manifest;
+    return {
+      manifest,
+      visibleEarlyCoverage: state.status === 'visible',
+    };
   } catch (error) {
     if (input.signal.aborted) throw error;
     return null;
