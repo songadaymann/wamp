@@ -18,7 +18,7 @@ describe('world tile bootstrap request priority', () => {
     expect(requestKinds.filter((requestKind) => (
       shouldScheduleWorldTileRequest(requestKind, {
         requestSchedulingReady: false,
-        initialCoverageActive: false,
+        initialCoveragePending: true,
       })
     ))).toEqual([]);
   });
@@ -27,7 +27,7 @@ describe('world tile bootstrap request priority', () => {
     expect(requestKinds.filter((requestKind) => (
       shouldScheduleWorldTileRequest(requestKind, {
         requestSchedulingReady: true,
-        initialCoverageActive: true,
+        initialCoveragePending: true,
       })
     ))).toEqual(['initial-coverage', 'mutation-prefetch']);
   });
@@ -36,7 +36,7 @@ describe('world tile bootstrap request priority', () => {
     expect(requestKinds.filter((requestKind) => (
       shouldScheduleWorldTileRequest(requestKind, {
         requestSchedulingReady: true,
-        initialCoverageActive: false,
+        initialCoveragePending: false,
       })
     ))).toEqual(requestKinds);
   });

@@ -8,7 +8,7 @@ export type WorldTileRequestKind =
 
 export interface WorldTileBootstrapRequestState {
   requestSchedulingReady: boolean;
-  initialCoverageActive: boolean;
+  initialCoveragePending: boolean;
 }
 
 /**
@@ -22,7 +22,7 @@ export function shouldScheduleWorldTileRequest(
   state: WorldTileBootstrapRequestState,
 ): boolean {
   if (!state.requestSchedulingReady) return false;
-  return !state.initialCoverageActive
+  return !state.initialCoveragePending
     || requestKind === 'initial-coverage'
     || requestKind === 'mutation-prefetch';
 }

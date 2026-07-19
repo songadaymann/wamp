@@ -135,6 +135,11 @@ export class WorldTileClientController {
   private prepareAbortController: AbortController | null = null;
   private initialCoveragePromise: Promise<boolean> | null = null;
   private initialCoverageAbortController: AbortController | null = null;
+  // The initial L0 request owns cold-start scheduling from construction through
+  // prepare and the prepare/ensure handoff. A promise alone cannot represent
+  // that handoff because prepare may resolve one microtask before the startup
+  // coordinator calls ensureInitialCoverage().
+  private initialCoveragePending = true;
   private requestSchedulingReady = false;
   private rollout: WorldTileRolloutDecision | null = null;
   private activeRendererVersion: string | null = null;
@@ -227,6 +232,7 @@ export class WorldTileClientController {
 
   async ensureInitialCoverage(camera: Phaser.Cameras.Scene2D.Camera): Promise<boolean> {
     if (this.initialCoveragePromise) return this.initialCoveragePromise;
+    const lifecycleEpoch = this.lifecycleEpoch;
     const promise = this.ensureInitialCoverageInternal(camera);
     this.initialCoveragePromise = promise;
     try {
@@ -235,6 +241,7 @@ export class WorldTileClientController {
       if (this.initialCoveragePromise === promise) {
         this.initialCoveragePromise = null;
         this.initialCoverageAbortController = null;
+        if (lifecycleEpoch === this.lifecycleEpoch) this.initialCoveragePending = false;
       }
     }
   }
@@ -462,6 +469,7 @@ export class WorldTileClientController {
     this.initialCoverageAbortController?.abort();
     this.initialCoverageAbortController = null;
     this.initialCoveragePromise = null;
+    this.initialCoveragePending = true;
     this.requestSchedulingReady = false;
     this.roomManifestPrefetcher.cancelAll();
     this.manifestLoader.cancel();
@@ -517,6 +525,7 @@ export class WorldTileClientController {
     this.prepareAbortController = null;
     this.initialCoverageAbortController?.abort();
     this.initialCoverageAbortController = null;
+    this.initialCoveragePending = true;
     this.requestSchedulingReady = false;
     this.roomManifestPrefetcher.cancelAll();
     this.manifestLoader.cancel();
@@ -601,7 +610,7 @@ export class WorldTileClientController {
   private shouldScheduleRequest(requestKind: WorldTileRequestKind): boolean {
     return shouldScheduleWorldTileRequest(requestKind, {
       requestSchedulingReady: this.requestSchedulingReady && this.activeRendererVersion !== null,
-      initialCoverageActive: this.initialCoveragePromise !== null,
+      initialCoveragePending: this.initialCoveragePending,
     });
   }
 

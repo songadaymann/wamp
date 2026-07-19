@@ -1,0 +1,259 @@
+import type Phaser from 'phaser';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WorldRepository } from '../../../persistence/worldRepository';
+import { WorldTileClientController } from './controller';
+import { WORLD_TILE_COVERAGE_TIMEOUT_MS } from './retryFallback';
+import type {
+  WorldTileBounds,
+  WorldTileConfig,
+  WorldTileLevel,
+  WorldTileManifest,
+} from './types';
+
+vi.mock('./phaserLayer', () => ({
+  decodeWorldTileBlob: vi.fn(),
+  WorldTilePhaserLayer: class MockWorldTilePhaserLayer {
+    installDecoded(): boolean { return true; }
+    hasGpuTexture(): boolean { return false; }
+    syncDisplay(): void {}
+    getImages(): never[] { return []; }
+    getBackdropIgnoredObjects(): never[] { return []; }
+    getAttachedAddressKeys(): string[] { return []; }
+    clearDisplay(): void {}
+    discardGpuTexturesForContextRestore(): void {}
+    destroy(): void {}
+  },
+}));
+
+const rendererVersion = 'renderer-bootstrap-v1';
+const config: WorldTileConfig = {
+  schemaVersion: 1,
+  available: true,
+  rolloutPercentage: 100,
+  activeRendererVersion: rendererVersion,
+};
+
+describe('world tile controller bootstrap ownership', () => {
+  beforeEach(() => {
+    installBrowserGlobals('?worldTiles=force', async () => ({ quota: 512 * 1_024 * 1_024 }));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('gives ensureInitialCoverage sole ownership of L0 across the prepare handoff and reset', async () => {
+    let resolveConfig!: (value: WorldTileConfig) => void;
+    let resolveQuota!: (value: StorageEstimate) => void;
+    const loadWorldTileConfig = vi.fn(() => new Promise<WorldTileConfig>((resolve) => {
+      resolveConfig = resolve;
+    }));
+    const estimate = vi.fn(() => new Promise<StorageEstimate>((resolve) => {
+      resolveQuota = resolve;
+    }));
+    installBrowserGlobals('?worldTiles=force', estimate);
+    const loadWorldTileManifest = vi.fn(async (
+      level: WorldTileLevel,
+      bounds: WorldTileBounds,
+    ) => readyEmptyManifest(level, bounds));
+    const controller = createController({ loadWorldTileConfig, loadWorldTileManifest });
+    const camera = createCamera();
+
+    const preparePromise = controller.prepare();
+    controller.update(camera);
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+
+    resolveConfig(config);
+    await flushMicrotasks();
+    expect(estimate).toHaveBeenCalledOnce();
+    controller.update(camera);
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+
+    resolveQuota({ quota: 512 * 1_024 * 1_024 });
+    await expect(preparePromise).resolves.toBe(true);
+
+    // This is the real race window: prepare is resolved, renderer/cache state is
+    // ready, but the startup coordinator has not called ensure yet.
+    controller.update(camera);
+    controller.prefetchRoom({ x: 0, y: 0 }, 'selection');
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+
+    await expect(controller.ensureInitialCoverage(camera)).resolves.toBe(true);
+    expect(levelCalls(loadWorldTileManifest, 0)).toHaveLength(1);
+
+    controller.update(camera);
+    await flushMicrotasks();
+    expect(levelCalls(loadWorldTileManifest, 4).length).toBeGreaterThan(0);
+
+    loadWorldTileManifest.mockClear();
+    loadWorldTileConfig.mockResolvedValue(config);
+    estimate.mockResolvedValue({ quota: 512 * 1_024 * 1_024 });
+    controller.reset();
+    await expect(controller.prepare()).resolves.toBe(true);
+    controller.update(camera);
+    expect(loadWorldTileManifest).not.toHaveBeenCalled();
+
+    await expect(controller.ensureInitialCoverage(camera)).resolves.toBe(true);
+    expect(levelCalls(loadWorldTileManifest, 0)).toHaveLength(1);
+    controller.destroy();
+  });
+
+  it('holds refinement during shadow bootstrap and resumes only after L0 settles', async () => {
+    let resolveInitialManifest!: (manifest: WorldTileManifest) => void;
+    installBrowserGlobals('?worldTiles=shadow', async () => ({ quota: 512 * 1_024 * 1_024 }));
+    const loadWorldTileManifest = vi.fn((level: WorldTileLevel, bounds: WorldTileBounds) => {
+      if (level !== 0) return Promise.resolve(readyEmptyManifest(level, bounds));
+      return new Promise<WorldTileManifest>((resolve) => {
+        resolveInitialManifest = resolve;
+      });
+    });
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+
+    await expect(controller.prepare()).resolves.toBe(true);
+    expect(controller.isShadowMode()).toBe(true);
+    const coveragePromise = controller.ensureInitialCoverage(camera);
+    await flushMicrotasks();
+    expect(levelCalls(loadWorldTileManifest, 0)).toHaveLength(1);
+
+    controller.update(camera);
+    controller.prefetchRoom({ x: 0, y: 0 }, 'selection');
+    expect(loadWorldTileManifest).toHaveBeenCalledOnce();
+
+    resolveInitialManifest(readyEmptyManifest(0, manifestBounds(loadWorldTileManifest, 0)));
+    await expect(coveragePromise).resolves.toBe(true);
+    controller.update(camera);
+    await flushMicrotasks();
+    expect(levelCalls(loadWorldTileManifest, 4).length).toBeGreaterThan(0);
+    controller.destroy();
+  });
+
+  it('does not reopen refinement after an initial-coverage timeout activates fallback', async () => {
+    vi.useFakeTimers();
+    const loadWorldTileManifest = vi.fn((
+      _level: WorldTileLevel,
+      _bounds: WorldTileBounds,
+      signal?: AbortSignal,
+    ) => new Promise<WorldTileManifest>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => {
+        reject(new DOMException('aborted', 'AbortError'));
+      });
+    }));
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest,
+    });
+    const camera = createCamera();
+
+    await expect(controller.prepare()).resolves.toBe(true);
+    const coveragePromise = controller.ensureInitialCoverage(camera);
+    await flushMicrotasks();
+    expect(levelCalls(loadWorldTileManifest, 0)).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(WORLD_TILE_COVERAGE_TIMEOUT_MS);
+    await expect(coveragePromise).resolves.toBe(false);
+
+    controller.update(camera);
+    controller.prefetchRoom({ x: 0, y: 0 }, 'selection');
+    expect(loadWorldTileManifest).toHaveBeenCalledOnce();
+    expect(controller.getDebugSnapshot().fallbackReason).toBe('coverage-timeout');
+    controller.destroy();
+  });
+});
+
+function createController(input: {
+  loadWorldTileConfig: WorldRepository['loadWorldTileConfig'];
+  loadWorldTileManifest: WorldRepository['loadWorldTileManifest'];
+}): WorldTileClientController {
+  const repository = {
+    loadWorldTileConfig: input.loadWorldTileConfig,
+    loadWorldTileManifest: input.loadWorldTileManifest,
+  } as unknown as WorldRepository;
+  const scene = {
+    sys: { game: { canvas: null } },
+    cameras: { main: createCamera() },
+  } as unknown as Phaser.Scene;
+  return new WorldTileClientController({
+    scene,
+    repository,
+    getMode: () => 'browse',
+    getPerformanceProfile: () => 'default',
+    getSelectedCoordinates: () => ({ x: 0, y: 0 }),
+  });
+}
+
+function createCamera(): Phaser.Cameras.Scene2D.Camera {
+  return {
+    zoom: 1,
+    width: 640,
+    height: 352,
+    scrollX: 0,
+    scrollY: 0,
+    originX: 0.5,
+    originY: 0.5,
+  } as Phaser.Cameras.Scene2D.Camera;
+}
+
+function readyEmptyManifest(level: WorldTileLevel, bounds: WorldTileBounds): WorldTileManifest {
+  const entries: WorldTileManifest['entries'] = [];
+  for (let y = bounds.minTileY; y <= bounds.maxTileY; y += 1) {
+    for (let x = bounds.minTileX; x <= bounds.maxTileX; x += 1) {
+      entries.push({
+        address: { rendererVersion, level, x, y },
+        desiredGeneration: 1,
+        desiredEmpty: true,
+        readyEmptyGeneration: 1,
+        ready: null,
+        staleRoomIds: [],
+      });
+    }
+  }
+  return {
+    schemaVersion: 1,
+    rendererVersion,
+    level,
+    targetBounds: { ...bounds },
+    entries,
+    rooms: [],
+  };
+}
+
+function manifestBounds(
+  load: ReturnType<typeof vi.fn<WorldRepository['loadWorldTileManifest']>>,
+  level: WorldTileLevel,
+): WorldTileBounds {
+  const call = levelCalls(load, level)[0];
+  if (!call) throw new Error(`Expected a level ${level} manifest call.`);
+  return call[1];
+}
+
+function levelCalls(
+  load: ReturnType<typeof vi.fn<WorldRepository['loadWorldTileManifest']>>,
+  level: WorldTileLevel,
+): [WorldTileLevel, WorldTileBounds, (AbortSignal | undefined)?][] {
+  return load.mock.calls.filter((call) => call[0] === level);
+}
+
+function installBrowserGlobals(
+  search: string,
+  estimate: () => Promise<StorageEstimate>,
+): void {
+  const storage = {
+    getItem: () => 'controller-bootstrap-cohort',
+    setItem: () => {},
+  };
+  vi.stubGlobal('window', {
+    location: { search },
+    localStorage: storage,
+  });
+  vi.stubGlobal('navigator', { storage: { estimate } });
+  vi.stubGlobal('document', { hidden: false });
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
