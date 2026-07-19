@@ -105,6 +105,21 @@ export interface WorldTileAncestorParityLevel {
   stale: number;
 }
 
+interface PublishedWorldTileRoomSummaryRow {
+  id: string;
+  x: number;
+  y: number;
+  published_title: string | null;
+  goal_type: RoomGoalType | null;
+  version: number;
+  published_at: string | null;
+  preview_updated_at: string | null;
+  last_published_by_user_id: string | null;
+  last_published_by_display_name: string | null;
+}
+
+const WORLD_TILE_PUBLISHED_ROOM_SUMMARY_TABLE = 'world_tile_published_room_summaries';
+
 export async function loadActiveWorldTileRendererVersion(
   env: Pick<Env, 'DB'>,
 ): Promise<WorldTileRendererVersionRow | null> {
@@ -254,6 +269,50 @@ export async function loadPublishedWorldTileRoomSummaries(
   env: Pick<Env, 'DB'>,
   bounds: WorldTileRoomBounds,
 ): Promise<WorldTileRoomSummary[]> {
+  try {
+    return await loadPublishedWorldTileRoomSummariesFromReadModel(env, bounds);
+  } catch (error) {
+    if (!isMissingPublishedWorldTileRoomSummaryReadModel(error)) throw error;
+    return loadPublishedWorldTileRoomSummariesLegacy(env, bounds);
+  }
+}
+
+async function loadPublishedWorldTileRoomSummariesFromReadModel(
+  env: Pick<Env, 'DB'>,
+  bounds: WorldTileRoomBounds,
+): Promise<WorldTileRoomSummary[]> {
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        room_id AS id,
+        room_x AS x,
+        room_y AS y,
+        published_title,
+        goal_type,
+        published_version AS version,
+        published_at,
+        preview_updated_at,
+        creator_user_id AS last_published_by_user_id,
+        creator_display_name AS last_published_by_display_name
+      FROM world_tile_published_room_summaries
+      WHERE room_x BETWEEN ? AND ?
+        AND room_y BETWEEN ? AND ?
+      ORDER BY room_y ASC, room_x ASC, room_id ASC
+    `,
+  ).bind(
+    bounds.minRoomX,
+    bounds.maxRoomX,
+    bounds.minRoomY,
+    bounds.maxRoomY,
+  ).all<PublishedWorldTileRoomSummaryRow>();
+
+  return mapPublishedWorldTileRoomSummaryRows(result.results);
+}
+
+async function loadPublishedWorldTileRoomSummariesLegacy(
+  env: Pick<Env, 'DB'>,
+  bounds: WorldTileRoomBounds,
+): Promise<WorldTileRoomSummary[]> {
   const result = await env.DB.prepare(
     `
       SELECT
@@ -278,20 +337,15 @@ export async function loadPublishedWorldTileRoomSummaries(
     bounds.maxRoomX,
     bounds.minRoomY,
     bounds.maxRoomY,
-  ).all<{
-    id: string;
-    x: number;
-    y: number;
-    published_title: string | null;
-    goal_type: RoomGoalType | null;
-    version: number;
-    published_at: string | null;
-    preview_updated_at: string | null;
-    last_published_by_user_id: string | null;
-    last_published_by_display_name: string | null;
-  }>();
+  ).all<PublishedWorldTileRoomSummaryRow>();
 
-  return result.results.map((row) => ({
+  return mapPublishedWorldTileRoomSummaryRows(result.results);
+}
+
+function mapPublishedWorldTileRoomSummaryRows(
+  rows: PublishedWorldTileRoomSummaryRow[],
+): WorldTileRoomSummary[] {
+  return rows.map((row) => ({
     id: row.id,
     coordinates: { x: Number(row.x), y: Number(row.y) },
     title: row.published_title,
@@ -303,6 +357,12 @@ export async function loadPublishedWorldTileRoomSummaries(
     creatorUserId: row.last_published_by_user_id,
     creatorDisplayName: row.last_published_by_display_name,
   }));
+}
+
+function isMissingPublishedWorldTileRoomSummaryReadModel(error: unknown): boolean {
+  const message = String(error).toLowerCase();
+  return message.includes('no such table')
+    && message.includes(WORLD_TILE_PUBLISHED_ROOM_SUMMARY_TABLE);
 }
 
 export async function createWorldTileRendererVersion(

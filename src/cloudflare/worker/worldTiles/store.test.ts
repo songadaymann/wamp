@@ -7,17 +7,73 @@ import {
 } from './store';
 
 describe('world tile read model store', () => {
-  it('projects published summaries without selecting draft or snapshot bytes', async () => {
+  it('projects published summaries from the normalized read model without JSON or snapshot bytes', async () => {
     const fake = createFakeDatabase();
     await loadPublishedWorldTileRoomSummaries(
       { DB: fake.database } as Pick<Env, 'DB'>,
       { minRoomX: -2, maxRoomX: 2, minRoomY: -3, maxRoomY: 3 },
     );
     const sql = fake.queries.join('\n').toLowerCase();
-    expect(sql).toContain('published_json is not null');
+    expect(sql).toContain('from world_tile_published_room_summaries');
+    expect(sql).not.toContain('json_extract');
+    expect(sql).not.toContain('published_json');
     expect(sql).not.toContain('draft_json');
     expect(sql).not.toContain('snapshot_json');
     expect(sql).not.toMatch(/\b(insert|update|delete)\b/);
+  });
+
+  it('falls back to the legacy projection only when the additive table is missing', async () => {
+    const fake = createFakeDatabase({
+      all(query) {
+        if (/from\s+world_tile_published_room_summaries/i.test(query)) {
+          throw new Error('D1_ERROR: no such table: world_tile_published_room_summaries: SQLITE_ERROR');
+        }
+        return [{
+          id: 'expanded-member',
+          x: -4,
+          y: 9,
+          published_title: 'Member room',
+          goal_type: 'reach_exit',
+          version: 7,
+          published_at: '2026-07-19T10:00:00.000Z',
+          preview_updated_at: '2026-07-19T10:01:00.000Z',
+          last_published_by_user_id: 'builder-a',
+          last_published_by_display_name: 'Builder A',
+        }];
+      },
+    });
+
+    await expect(loadPublishedWorldTileRoomSummaries(
+      { DB: fake.database } as Pick<Env, 'DB'>,
+      { minRoomX: -4, maxRoomX: -4, minRoomY: 9, maxRoomY: 9 },
+    )).resolves.toEqual([{
+      id: 'expanded-member',
+      coordinates: { x: -4, y: 9 },
+      title: 'Member room',
+      state: 'published',
+      goalType: 'reach_exit',
+      version: 7,
+      publishedAt: '2026-07-19T10:00:00.000Z',
+      previewUpdatedAt: '2026-07-19T10:01:00.000Z',
+      creatorUserId: 'builder-a',
+      creatorDisplayName: 'Builder A',
+    }]);
+    expect(fake.queries).toHaveLength(2);
+    expect(fake.queries[1]).toContain('FROM rooms');
+    expect(fake.queries[1]).toContain('published_json IS NOT NULL');
+  });
+
+  it('does not hide non-migration read-model failures behind the legacy query', async () => {
+    const fake = createFakeDatabase({
+      all() {
+        throw new Error('D1_ERROR: database is overloaded');
+      },
+    });
+    await expect(loadPublishedWorldTileRoomSummaries(
+      { DB: fake.database } as Pick<Env, 'DB'>,
+      { minRoomX: 0, maxRoomX: 0, minRoomY: 0, maxRoomY: 0 },
+    )).rejects.toThrow('database is overloaded');
+    expect(fake.queries).toHaveLength(1);
   });
 
   it('keeps manifest tile loading read-only and bounds tuple batches', async () => {
@@ -55,7 +111,9 @@ describe('world tile read model store', () => {
   });
 });
 
-function createFakeDatabase(): {
+function createFakeDatabase(options: {
+  all?: (query: string, bindings: unknown[]) => unknown[];
+} = {}): {
   database: D1Database;
   queries: string[];
   bindings: unknown[][];
@@ -66,11 +124,11 @@ function createFakeDatabase(): {
   const batchSizes: number[] = [];
 
   class FakeStatement implements D1PreparedStatement {
-    constructor(readonly query: string) {}
+    constructor(readonly query: string, readonly values: unknown[] = []) {}
 
     bind(...values: unknown[]): D1PreparedStatement {
       bindings.push(values);
-      return this;
+      return new FakeStatement(this.query, values);
     }
 
     async first<T>(): Promise<T | null> {
@@ -78,7 +136,7 @@ function createFakeDatabase(): {
     }
 
     async all<T>(): Promise<{ results: T[] }> {
-      return { results: [] };
+      return { results: (options.all?.(this.query, this.values) ?? []) as T[] };
     }
   }
 
