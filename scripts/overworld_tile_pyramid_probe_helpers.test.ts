@@ -5,6 +5,7 @@ import {
   getManifestLevel,
   parseSnapshotQuery,
   parseWorldTileManifestProbe,
+  partitionTrackedRequestsByCoverageBoundaries,
   selectExpectedWorldTileLevel,
   summarizeApiWorkerRequests,
   summarizeTileImagePhase,
@@ -245,10 +246,55 @@ describe('overworld tile pyramid probe helpers', () => {
     });
   });
 
+  it('partitions coarse and refinement traffic at semantic coverage boundaries', () => {
+    const requests = [
+      request({ url: 'https://game.example/api/world/tiles/config', startedSeq: 1, responseBodyBytes: 110 }),
+      l0Manifest({ startedSeq: 7, responseBodyBytes: 2_121 }),
+      request({ url: TILE_A, startedSeq: 13, responseBodyBytes: 29_443 }),
+      request({ url: TILE_B, startedSeq: 14, responseBodyBytes: 51_587 }),
+      request({ url: `${TILE_A}?part=3`, startedSeq: 15, responseBodyBytes: 45_513 }),
+      request({ url: `${TILE_B}?part=4`, startedSeq: 16, responseBodyBytes: 54_253 }),
+      request({
+        url: 'https://game.example/api/world/chunks/summary',
+        startedSeq: 37,
+        responseBodyBytes: 319_120,
+      }),
+      request({
+        url: 'https://game.example/api/world/tiles/manifest?level=1',
+        manifestLevel: 1,
+        startedSeq: 51,
+        responseBodyBytes: 9_314,
+      }),
+      request({
+        url: 'https://game.example/api/rooms/snapshots/query',
+        method: 'POST',
+        startedSeq: 126,
+        responseBodyBytes: 50_000,
+      }),
+    ];
+    const phases = partitionTrackedRequestsByCoverageBoundaries(requests, {
+      coarseCoverageSequence: 25,
+      sharpCoverageSequence: 125,
+    });
+
+    expect(summarizeTrackedNetwork(phases.coarse).responseBytes).toBe(183_027);
+    expect(phases.coarse.some((entry) => entry.url.includes('/chunks/summary'))).toBe(false);
+    expect(phases.refinement.map((entry) => entry.startedSeq)).toEqual([37, 51]);
+    expect(phases.throughSharp.some((entry) => entry.startedSeq === 126)).toBe(false);
+  });
+
+  it('rejects invalid semantic coverage boundary ordering', () => {
+    expect(() => partitionTrackedRequestsByCoverageBoundaries([], {
+      coarseCoverageSequence: 10,
+      sharpCoverageSequence: 9,
+    })).toThrow(/cannot occur after sharp coverage/);
+  });
+
   it('accepts L0 URLs completed by network or an explicit pre-refinement byte-cache hit', () => {
     expect(evaluate()).toMatchObject({
       source: 'pre-phaser-early-l0',
       coarseReadyMs: 7.5,
+      coarseCoverageBoundarySequence: 20,
       readyUrlCount: 2,
       mainManifestLevel: 1,
       refinementLevel: 1,

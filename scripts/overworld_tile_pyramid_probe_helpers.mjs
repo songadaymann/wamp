@@ -315,6 +315,27 @@ export function summarizeTileImagePhase(requests) {
   };
 }
 
+export function partitionTrackedRequestsByCoverageBoundaries(requests, {
+  coarseCoverageSequence,
+  sharpCoverageSequence,
+}) {
+  if (!Number.isInteger(coarseCoverageSequence) || !Number.isInteger(sharpCoverageSequence)) {
+    throw new TypeError('Coverage boundaries must be integer recorder sequences.');
+  }
+  if (coarseCoverageSequence > sharpCoverageSequence) {
+    throw new RangeError('Coarse coverage cannot occur after sharp coverage.');
+  }
+
+  const throughSharp = requests.filter((entry) => (
+    Number.isInteger(entry.startedSeq) && entry.startedSeq <= sharpCoverageSequence
+  ));
+  return {
+    coarse: throughSharp.filter((entry) => entry.startedSeq <= coarseCoverageSequence),
+    refinement: throughSharp.filter((entry) => entry.startedSeq > coarseCoverageSequence),
+    throughSharp,
+  };
+}
+
 export function summarizeApiWorkerRequests(requests) {
   const events = [];
   const origins = new Set();
@@ -831,10 +852,15 @@ export function evaluateSerializedL0Bootstrap({
       firstClientMainManifest,
     });
   }
-  const networkBoundarySequence = firstMainManifest?.startedSeq
-    ?? initialCoverageBoundary?.networkSequence;
+  const coarseCoverageBoundarySequence = initialCoverageBoundary?.networkSequence;
+  const mainClientBoundarySequence = firstMainManifest?.startedSeq
+    ?? coarseCoverageBoundarySequence;
   const clientBoundarySequence = earlyReady.sequence;
-  if (!Number.isInteger(networkBoundarySequence) || !Number.isInteger(clientBoundarySequence)) {
+  if (
+    !Number.isInteger(coarseCoverageBoundarySequence)
+    || !Number.isInteger(mainClientBoundarySequence)
+    || !Number.isInteger(clientBoundarySequence)
+  ) {
     throw probeError('Pre-Phaser coverage boundaries are unavailable.', {
       initialCoverageBoundary,
       firstMainManifest,
@@ -842,10 +868,10 @@ export function evaluateSerializedL0Bootstrap({
     });
   }
 
-  if (!isSuccessfulFinishedRequest(l0Manifest, networkBoundarySequence)) {
+  if (!isSuccessfulFinishedRequest(l0Manifest, mainClientBoundarySequence)) {
     throw probeError('The pre-Phaser L0 manifest did not finish before the main tile client.', {
       l0Manifest,
-      networkBoundarySequence,
+      mainClientBoundarySequence,
     });
   }
   if (!l0Manifest.manifestProbe || l0Manifest.manifestProbe.parseError !== null) {
@@ -893,7 +919,7 @@ export function evaluateSerializedL0Bootstrap({
     .filter((entry) => (
       isWorldTileImageUrl(entry.url)
       && entry.startedSeq > l0Manifest.startedSeq
-      && isSuccessfulFinishedRequest(entry, networkBoundarySequence)
+      && isSuccessfulFinishedRequest(entry, mainClientBoundarySequence)
     ))
     .map((entry) => normalizeWorldTileUrl(entry.url)));
   const byteCacheHitUrls = new Set(clientEvents
@@ -914,13 +940,17 @@ export function evaluateSerializedL0Bootstrap({
     earlyBootstrapState: earlyState,
     l0ManifestStartedSeq: l0Manifest.startedSeq,
     l0ManifestFinishedSeq: l0Manifest.finishedSeq,
-    coarseNetworkBoundarySequence: networkBoundarySequence,
+    coarseCoverageBoundarySequence,
+    mainClientBoundarySequence,
+    // Legacy alias retained for older artifact consumers. This was historically
+    // the first main-client manifest sequence, not the semantic coarse-ready boundary.
+    coarseNetworkBoundarySequence: mainClientBoundarySequence,
     mainManifestLevel: firstMainManifest?.manifestLevel ?? null,
     mainManifestStartedSeq: firstMainManifest?.startedSeq ?? null,
     refinementLevel: manifests.find((entry) => entry.manifestLevel !== 0)?.manifestLevel ?? null,
     refinementStartedSeq: manifests.find((entry) => entry.manifestLevel !== 0)?.startedSeq ?? null,
     mainManifestLevels: manifests.slice(1).map((entry) => entry.manifestLevel),
-    networkBoundarySequence,
+    networkBoundarySequence: mainClientBoundarySequence,
     clientBoundarySequence,
     requestBounds,
     readyUrlCount: readyUrls.length,

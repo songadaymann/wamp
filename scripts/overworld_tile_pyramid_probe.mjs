@@ -8,6 +8,7 @@ import {
   isWorldTileImageUrl,
   parseSnapshotQuery,
   parseWorldTileManifestProbe,
+  partitionTrackedRequestsByCoverageBoundaries,
   selectExpectedWorldTileLevel,
   summarizeApiWorkerRequests,
   summarizeTileImagePhase,
@@ -622,17 +623,19 @@ function attachNetworkRecorder(page, startedAt) {
 
 async function captureInitialTileState(page, predicate, timeoutMs, networkRecorder, label) {
   const state = await waitForTileState(page, predicate, timeoutMs);
+  const semanticNetworkBoundary = networkRecorder.mark(label);
   const clientBoundary = await markClientProbeBoundary(page, label);
-  // The in-page fetch hook runs synchronously, while Playwright reports the matching request on
-  // the next protocol turn. Freeze the semantic client boundary first, then let those request
-  // events reach the recorder before taking its independent sequence boundary.
+  // Playwright can report a request on the protocol turn after the matching in-page fetch.
+  // Preserve a later drain boundary for correlation diagnostics, but gate accounting stays at
+  // the semantic boundary observed when the ready state was captured.
   await page.waitForTimeout(10);
-  const networkBoundary = networkRecorder.mark(label);
+  const protocolDrainBoundary = networkRecorder.mark(`${label}-protocol-drain`);
   return {
     state,
-    capturedAtMs: networkBoundary.atMs,
+    capturedAtMs: semanticNetworkBoundary.atMs,
     boundary: {
-      networkSequence: networkBoundary.sequence,
+      networkSequence: semanticNetworkBoundary.sequence,
+      protocolDrainNetworkSequence: protocolDrainBoundary.sequence,
       clientSequence: clientBoundary?.sequence ?? null,
       clientAtMs: clientBoundary?.atMs ?? null,
     },
@@ -781,37 +784,40 @@ async function runPass(context, args, label) {
   const coarseCapture = requireCapture(coarseOutcome);
   const sharpCapture = requireCapture(sharpOutcome);
   await networkRecorder.settle();
-  const bootstrapRequests = networkRecorder.snapshotStartedBy(
-    sharpCapture.boundary.networkSequence,
+  const protocolDrainRequests = networkRecorder.snapshotStartedBy(
+    sharpCapture.boundary.protocolDrainNetworkSequence,
   );
-  const bootstrapApiWorkerRequests = networkRecorder.apiWorkerSnapshotStartedBy(
-    sharpCapture.boundary.networkSequence,
+  const protocolDrainApiWorkerRequests = networkRecorder.apiWorkerSnapshotStartedBy(
+    sharpCapture.boundary.protocolDrainNetworkSequence,
   );
   const clientProbeEvents = (await readClientProbeEvents(page)).filter((entry) => (
     entry.sequence <= sharpCapture.boundary.clientSequence
   ));
+  const networkPhases = partitionTrackedRequestsByCoverageBoundaries(protocolDrainRequests, {
+    coarseCoverageSequence: coarseCapture.boundary.networkSequence,
+    sharpCoverageSequence: sharpCapture.boundary.networkSequence,
+  });
+  const apiWorkerPhases = partitionTrackedRequestsByCoverageBoundaries(
+    protocolDrainApiWorkerRequests,
+    {
+      coarseCoverageSequence: coarseCapture.boundary.networkSequence,
+      sharpCoverageSequence: sharpCapture.boundary.networkSequence,
+    },
+  );
   const bootstrap = evaluateSerializedL0Bootstrap({
-    requests: bootstrapRequests,
+    requests: networkPhases.throughSharp,
     clientEvents: clientProbeEvents,
     initialCoverageBoundary: coarseCapture.boundary,
     orphanEvents: networkRecorder.orphanSnapshot().filter((entry) => (
       entry.sequence <= sharpCapture.boundary.networkSequence
     )),
   });
-  const coarseNetworkRequests = bootstrapRequests.filter((entry) => (
-    bootstrap.mainManifestStartedSeq === null
-      ? entry.startedSeq <= coarseCapture.boundary.networkSequence
-      : entry.startedSeq < bootstrap.mainManifestStartedSeq
-  ));
-  const refinementNetworkRequests = bootstrapRequests.filter(
-    (entry) => entry.startedSeq >= bootstrap.coarseNetworkBoundarySequence,
-  );
-  const coarseApiWorkerRequests = bootstrapApiWorkerRequests.filter(
-    (entry) => entry.startedSeq < bootstrap.coarseNetworkBoundarySequence,
-  );
-  const refinementApiWorkerRequests = bootstrapApiWorkerRequests.filter(
-    (entry) => entry.startedSeq >= bootstrap.coarseNetworkBoundarySequence,
-  );
+  const coarseNetworkRequests = networkPhases.coarse;
+  const refinementNetworkRequests = networkPhases.refinement;
+  const bootstrapRequests = networkPhases.throughSharp;
+  const coarseApiWorkerRequests = apiWorkerPhases.coarse;
+  const refinementApiWorkerRequests = apiWorkerPhases.refinement;
+  const bootstrapApiWorkerRequests = apiWorkerPhases.throughSharp;
   const coarseNetworkSummary = summarizeTrackedNetwork(coarseNetworkRequests);
   const refinementNetworkSummary = summarizeTrackedNetwork(refinementNetworkRequests);
   const sharpNetworkSummary = summarizeTrackedNetwork(bootstrapRequests);
@@ -900,13 +906,15 @@ async function runPass(context, args, label) {
     coarse,
     coarseNetwork: {
       capturedAtMs: coarseReadyMs,
-      boundarySequence: bootstrap.coarseNetworkBoundarySequence,
+      boundarySequence: coarseCapture.boundary.networkSequence,
       requests: coarseNetworkRequests,
       summary: coarseNetworkSummary,
       apiWorker: summarizeApiWorkerRequests(coarseApiWorkerRequests),
     },
     refinementNetwork: {
-      startedAtBoundarySequence: bootstrap.coarseNetworkBoundarySequence,
+      startedAfterBoundarySequence: coarseCapture.boundary.networkSequence,
+      // Legacy field retained so existing artifact readers continue to find a boundary.
+      startedAtBoundarySequence: coarseCapture.boundary.networkSequence,
       capturedAtMs: sharpReadyMs,
       requests: refinementNetworkRequests,
       summary: refinementNetworkSummary,
