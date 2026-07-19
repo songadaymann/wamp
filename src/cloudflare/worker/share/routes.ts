@@ -7,9 +7,10 @@ import {
 } from '../../../persistence/roomModel';
 import { resolvePublicBaseUrl } from '../auth/store';
 import { corsHeaders, HttpError, jsonResponse } from '../core/http';
-import type { Env } from '../core/types';
+import type { Env, WorkerExecutionContextLike } from '../core/types';
+import { loadAnonymousPublicCache } from '../core/publicCache';
 import { resolveExpandedRoomAtCoordinates } from '../expandedRooms/store';
-import { loadPublishedRoom, parseStoredSnapshot } from '../rooms/store';
+import { loadPublishedRoom, loadRoomSnapshotsByReferences } from '../rooms/store';
 import {
   type ExpandedRoomSharePreviewCell,
   ROOM_SHARE_IMAGE_HEIGHT,
@@ -52,6 +53,7 @@ export async function handleRoomShareRequest(
   request: Request,
   url: URL,
   env: Env,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const match = /^\/api\/share\/rooms\/([^/]+)(?:\/(meta|image(?:\.png)?))?\/?$/.exec(url.pathname);
   if (!match) {
@@ -68,21 +70,16 @@ export async function handleRoomShareRequest(
     throw new HttpError(400, 'Room id must use x,y coordinates.');
   }
 
-  const shareTarget = await loadRoomShareTarget(env, roomId, coordinates);
-  if (!shareTarget) {
-    throw new HttpError(404, 'Published room not found.');
-  }
-
-  const target = match[2] ?? 'page';
-  if (target === 'meta') {
-    return jsonResponse(request, buildRoomShareMetadata(request, url, env, shareTarget));
-  }
-
-  if (target === 'image' || target === 'image.png') {
-    return roomShareImageResponse(request, shareTarget);
-  }
-
-  return roomSharePageResponse(request, buildRoomShareMetadata(request, url, env, shareTarget));
+  return loadAnonymousPublicCache(request, context, async () => {
+    const shareTarget = await loadRoomShareTarget(env, roomId, coordinates);
+    if (!shareTarget) throw new HttpError(404, 'Published room not found.');
+    const target = match[2] ?? 'page';
+    if (target === 'meta') return jsonResponse(request, buildRoomShareMetadata(request, url, env, shareTarget), {
+      headers: { 'Cache-Control': 'public, max-age=20' },
+    });
+    if (target === 'image' || target === 'image.png') return roomShareImageResponse(request, shareTarget);
+    return roomSharePageResponse(request, buildRoomShareMetadata(request, url, env, shareTarget));
+  });
 }
 
 async function loadRoomShareTarget(
@@ -138,11 +135,28 @@ async function loadExpandedRoomSharePreviewCells(
   env: Env,
   target: ResolvedExpandedRoomTarget,
 ): Promise<ExpandedRoomSharePreviewCell[]> {
+  const versionedCells = target.cells.flatMap((cell) => {
+    const version = normalizeShareRoomVersion(cell.roomVersion);
+    return version === null ? [] : [{ cell, version }];
+  });
+  const response = await loadRoomSnapshotsByReferences(env, versionedCells.map(({ cell, version }) => ({
+    kind: 'version' as const,
+    roomId: cell.roomId,
+    version,
+  })));
+  if (response.missing.length > 0) {
+    const missing = response.missing[0];
+    throw new HttpError(409, `Expanded room share cell ${missing.roomId} is missing its pinned version.`);
+  }
+  const snapshotByKey = new Map(response.snapshots.map((entry) => [entry.key, entry.snapshot]));
   const cells: ExpandedRoomSharePreviewCell[] = [];
   for (const cell of target.cells) {
-    const snapshot = await loadShareCellSnapshot(env, cell.roomId, cell.coordinates, cell.roomVersion);
+    const version = normalizeShareRoomVersion(cell.roomVersion);
+    const snapshot = version === null
+      ? await loadPublishedRoom(env, cell.roomId, cell.coordinates)
+      : snapshotByKey.get(`version:${cell.roomId}:${version}`) ?? null;
     if (!snapshot) {
-      continue;
+      throw new HttpError(409, `Expanded room share cell ${cell.roomId} is unavailable.`);
     }
     cells.push({
       snapshot,
@@ -160,20 +174,10 @@ async function loadShareCellSnapshot(
 ): Promise<RoomSnapshot | null> {
   const normalizedVersion = normalizeShareRoomVersion(roomVersion);
   if (normalizedVersion !== null) {
-    const row = await env.DB.prepare(
-      `
-        SELECT snapshot_json
-        FROM room_versions
-        WHERE room_id = ?
-          AND version = ?
-        LIMIT 1
-      `,
-    )
-      .bind(roomId, normalizedVersion)
-      .first<{ snapshot_json: string | null }>();
-    if (row?.snapshot_json) {
-      return parseStoredSnapshot(row.snapshot_json, 'expanded room share cell');
-    }
+    const response = await loadRoomSnapshotsByReferences(env, [{
+      kind: 'version', roomId, version: normalizedVersion,
+    }]);
+    return response.snapshots[0]?.snapshot ?? null;
   }
 
   return loadPublishedRoom(env, roomId, coordinates);
@@ -208,7 +212,7 @@ function roomSharePageResponse(request: Request, metadata: RoomShareMetadata): R
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=60, s-maxage=300',
+      'Cache-Control': 'public, max-age=20',
       ...corsHeaders(request),
     },
   });

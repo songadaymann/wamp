@@ -16,7 +16,10 @@ import {
   refreshAuthSession,
   type AuthDebugState,
 } from '../../auth/client';
-import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
+import {
+  getSharedRenderedRoomPreview,
+  loadSharedRenderedRoomPreview,
+} from '../../persistence/sharedRoomPreviewCache';
 import { createWorldRepository, type WorldRepository } from '../../persistence/worldRepository';
 import type { PlayerAvatarChoice } from '../../player/avatar/model';
 import { createPlayerAvatarPreviewDataUrl } from '../../player/avatar/previews';
@@ -101,8 +104,6 @@ type ProfileModalElements = {
 export class ProfileModalController {
   private readonly elements: ProfileModalElements;
   private readonly profileCache = new Map<string, UserProfileResponse>();
-  private readonly roomPreviewCache = new Map<string, string | null>();
-  private readonly roomPreviewLoads = new Map<string, Promise<string | null>>();
   private readonly roomPreviewTargets = new Map<
     Element,
     {
@@ -1536,7 +1537,7 @@ export class ProfileModalController {
     const previewKey = this.buildRoomPreviewKey(room);
     imageEl.dataset.previewKey = previewKey;
 
-    const cached = this.roomPreviewCache.get(previewKey);
+    const cached = getSharedRenderedRoomPreview(previewKey);
     if (cached !== undefined) {
       this.applyRoomPreview(imageEl, fallbackEl, cached, room);
       return;
@@ -1615,7 +1616,7 @@ export class ProfileModalController {
     const previewKey = this.buildRoomPreviewKey(room);
     imageEl.dataset.previewKey = previewKey;
 
-    const cached = this.roomPreviewCache.get(previewKey);
+    const cached = getSharedRenderedRoomPreview(previewKey);
     if (cached !== undefined) {
       this.applyRoomPreview(imageEl, fallbackEl, cached, room);
       return;
@@ -1654,35 +1655,13 @@ export class ProfileModalController {
 
   private loadRoomPreview(room: ProfilePublishedRoomEntry): Promise<string | null> {
     const previewKey = this.buildRoomPreviewKey(room);
-    const inFlight = this.roomPreviewLoads.get(previewKey);
-    if (inFlight) {
-      return inFlight;
-    }
-
-    const request = (async () => {
-      try {
-        const snapshot = await this.worldRepository.loadPublishedRoom(room.roomId, room.roomCoordinates);
-        if (!snapshot) {
-          this.roomPreviewCache.set(previewKey, null);
-          return null;
-        }
-
-        const dataUrl = await renderRoomSnapshotToPngDataUrl(snapshot, {
-          tilePixelSize: 4,
-        });
-        this.roomPreviewCache.set(previewKey, dataUrl);
-        return dataUrl;
-      } catch (error) {
-        console.warn('Failed to load profile room preview.', room.roomId, error);
-        this.roomPreviewCache.set(previewKey, null);
-        return null;
-      } finally {
-        this.roomPreviewLoads.delete(previewKey);
-      }
-    })();
-
-    this.roomPreviewLoads.set(previewKey, request);
-    return request;
+    return loadSharedRenderedRoomPreview(
+      previewKey,
+      () => this.worldRepository.loadPublishedRoom(room.roomId, room.roomCoordinates),
+    ).catch((error) => {
+      console.warn('Failed to load profile room preview.', room.roomId, error);
+      return null;
+    });
   }
 
   private buildRoomPreviewKey(room: ProfilePublishedRoomEntry): string {

@@ -41,7 +41,6 @@ import {
 import {
   cloneRoomSnapshot,
   DEFAULT_ROOM_COORDINATES,
-  isRoomMinted,
   parseRoomId,
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -1722,11 +1721,14 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       getActiveSignState: () => this.signController.getActiveSign(),
       loadRoomOwnershipDetails: async (roomId, coordinates) => {
-        const record = await this.roomRepository.loadRoom(roomId, coordinates);
+        const summary = await this.roomRepository.loadRoomSummary(roomId, coordinates);
         return {
-          claimerUserId: record.claimerUserId,
-          isMinted: isRoomMinted(record),
-          mintedOwnerWalletAddress: record.mintedOwnerWalletAddress,
+          claimerUserId: summary.claimerUserId,
+          isMinted:
+            summary.mintedChainId !== null &&
+            summary.mintedContractAddress !== null &&
+            summary.mintedTokenId !== null,
+          mintedOwnerWalletAddress: summary.mintedOwnerWalletAddress,
         };
       },
       loadPublicProfileSummary: async (userId) => {

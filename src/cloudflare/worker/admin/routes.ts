@@ -4,7 +4,7 @@ import type {
   AdminProgressionUserCapsResponse,
   AdminProgressionUserLookupResponse,
 } from '../../../admin/model';
-import type { RoomRevertRequestBody } from '../../../persistence/roomModel';
+import { createRoomSummaryFromRecord, type RoomRevertRequestBody } from '../../../persistence/roomModel';
 import { requireAdminRequest, requireTrustedOriginForMutation } from '../auth/request';
 import { requireChatModeratorSession } from '../chat/moderation';
 import {
@@ -214,7 +214,9 @@ async function handleAdminRoomRestore(
   );
   schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
 
-  return jsonResponse(request, record);
+  return jsonResponse(request, url.searchParams.get('response') === 'compact'
+    ? { summary: createRoomSummaryFromRecord(record), draft: record.draft, published: record.published }
+    : record);
 }
 
 async function handleAdminRoomClear(

@@ -50,6 +50,10 @@ export class EditorPersistenceController {
     return this.roomSession.getHistoryState();
   }
 
+  loadHistory(): Promise<void> {
+    return this.roomSession.loadHistory();
+  }
+
   getIdleStatusDetails(): EditorStatusDetails {
     return this.roomSession.getIdleStatusDetails();
   }

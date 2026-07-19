@@ -27,6 +27,11 @@ import {
 } from '../../persistence/roomModel';
 import { createRoomRepository } from '../../persistence/roomRepository';
 import {
+  buildSharedRoomSnapshotKey,
+  getSharedRoomSnapshot,
+  setSharedRoomSnapshot,
+} from '../../persistence/sharedRoomSnapshotCache';
+import {
   isWampLeaderboardEligibleAuth,
 } from '../../generatedUsers/leaderboardPolicy';
 import {
@@ -113,16 +118,17 @@ export class OverworldCoursePlaybackController {
       }
     }
 
-    const snapshots = await Promise.all(
-      course.roomRefs.map(async (roomRef) => {
-        const draftOverride = overrideByRoomId.get(roomRef.roomId);
-        const snapshot = draftOverride
-          ? cloneRoomSnapshot(draftOverride)
-          : await this.loadPinnedCourseRoomSnapshot(roomRef);
-        snapshot.status = 'published';
-        return snapshot;
-      }),
+    const pinnedByKey = await this.loadPinnedCourseRoomSnapshots(
+      course.roomRefs.filter((roomRef) => !overrideByRoomId.has(roomRef.roomId)),
     );
+    const snapshots = course.roomRefs.map((roomRef) => {
+      const draftOverride = overrideByRoomId.get(roomRef.roomId);
+      const snapshot = draftOverride
+        ? cloneRoomSnapshot(draftOverride)
+        : cloneRoomSnapshot(pinnedByKey.get(getPinnedCourseRoomSnapshotCacheKey(roomRef))!);
+      snapshot.status = 'published';
+      return snapshot;
+    });
 
     this.host.setTransientRoomOverrides(snapshots);
     for (const snapshot of snapshots) {
@@ -481,26 +487,37 @@ export class OverworldCoursePlaybackController {
     }
   }
 
-  private async loadPinnedCourseRoomSnapshot(roomRef: CourseRoomRef): Promise<RoomSnapshot> {
-    const cachedSnapshot = this.getCachedPinnedCourseRoomSnapshot(roomRef);
-    if (cachedSnapshot) {
-      return cachedSnapshot;
+  private async loadPinnedCourseRoomSnapshots(roomRefs: CourseRoomRef[]): Promise<Map<string, RoomSnapshot>> {
+    const snapshotsByKey = new Map<string, RoomSnapshot>();
+    const missingRefs: CourseRoomRef[] = [];
+    for (const roomRef of roomRefs) {
+      const cached = this.getCachedPinnedCourseRoomSnapshot(roomRef);
+      if (cached) snapshotsByKey.set(getPinnedCourseRoomSnapshotCacheKey(roomRef), cached);
+      else missingRefs.push(roomRef);
     }
 
-    const record = await this.roomRepository.loadRoom(roomRef.roomId, roomRef.coordinates);
-    const historicalVersion =
-      record.versions.find((entry) => entry.version === roomRef.roomVersion)?.snapshot ??
-      (record.published?.version === roomRef.roomVersion ? record.published : null);
-    if (!historicalVersion) {
-      const roomLabel =
-        roomRef.roomTitle?.trim() || `Room ${roomRef.coordinates.x},${roomRef.coordinates.y}`;
-      throw new Error(
-        `${roomLabel} is missing published room version v${roomRef.roomVersion}. Reopen the expanded room builder and publish again.`,
-      );
+    if (missingRefs.length > 0) {
+      const response = await this.roomRepository.queryRoomSnapshots(missingRefs.map((roomRef) => ({
+        kind: 'version' as const,
+        roomId: roomRef.roomId,
+        version: roomRef.roomVersion,
+      })));
+      const loadedByKey = new Map(response.snapshots.map((entry) => [entry.key, entry.snapshot]));
+      for (const roomRef of missingRefs) {
+        const responseKey = `version:${roomRef.roomId}:${roomRef.roomVersion}`;
+        const snapshot = loadedByKey.get(responseKey);
+        if (!snapshot) {
+          const roomLabel = roomRef.roomTitle?.trim() || `Room ${roomRef.coordinates.x},${roomRef.coordinates.y}`;
+          throw new Error(
+            `${roomLabel} is missing published room version v${roomRef.roomVersion}. Reopen the expanded room builder and publish again.`,
+          );
+        }
+        this.setCachedPinnedCourseRoomSnapshot(roomRef, snapshot);
+        snapshotsByKey.set(getPinnedCourseRoomSnapshotCacheKey(roomRef), cloneRoomSnapshot(snapshot));
+      }
     }
 
-    this.setCachedPinnedCourseRoomSnapshot(roomRef, historicalVersion);
-    return cloneRoomSnapshot(historicalVersion);
+    return snapshotsByKey;
   }
 
   private getCachedPinnedCourseRoomSnapshot(roomRef: CourseRoomRef): RoomSnapshot | null {
@@ -508,6 +525,15 @@ export class OverworldCoursePlaybackController {
     const cached = this.pinnedCourseRoomSnapshotCache.get(cacheKey) ?? null;
     if (cached) {
       return cloneRoomSnapshot(cached);
+    }
+    const shared = getSharedRoomSnapshot(buildSharedRoomSnapshotKey(
+      roomRef.roomId,
+      roomRef.roomVersion,
+      'versioned',
+    ));
+    if (shared) {
+      this.pinnedCourseRoomSnapshotCache.set(cacheKey, cloneRoomSnapshot(shared));
+      return shared;
     }
 
     const loadedSnapshot = this.host.getRoomSnapshotForCoordinates(roomRef.coordinates);
@@ -528,10 +554,18 @@ export class OverworldCoursePlaybackController {
     roomRef: CourseRoomRef,
     snapshot: RoomSnapshot,
   ): void {
-    this.pinnedCourseRoomSnapshotCache.set(
-      getPinnedCourseRoomSnapshotCacheKey(roomRef),
-      cloneRoomSnapshot(snapshot),
+    const key = getPinnedCourseRoomSnapshotCacheKey(roomRef);
+    this.pinnedCourseRoomSnapshotCache.delete(key);
+    this.pinnedCourseRoomSnapshotCache.set(key, cloneRoomSnapshot(snapshot));
+    setSharedRoomSnapshot(
+      buildSharedRoomSnapshotKey(roomRef.roomId, roomRef.roomVersion, 'versioned'),
+      snapshot,
     );
+    while (this.pinnedCourseRoomSnapshotCache.size > 256) {
+      const oldest = this.pinnedCourseRoomSnapshotCache.keys().next().value;
+      if (typeof oldest !== 'string') break;
+      this.pinnedCourseRoomSnapshotCache.delete(oldest);
+    }
   }
 
   private countCourseObjectsByCategory(

@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
-import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
+import {
+  getSharedRenderedRoomPreview,
+  loadSharedRenderedRoomPreview,
+} from '../../persistence/sharedRoomPreviewCache';
 import { createWorldRepository, type WorldRepository } from '../../persistence/worldRepository';
 import type { RoomPlaylistItem, RoomPlaylistResponse } from '../../playlists/model';
 import {
@@ -29,8 +32,6 @@ type PlaylistModalElements = {
 
 export class PlaylistModalController {
   private readonly elements: PlaylistModalElements;
-  private readonly roomPreviewCache = new Map<string, string | null>();
-  private readonly roomPreviewLoads = new Map<string, Promise<string | null>>();
   private currentPlaylist: RoomPlaylistResponse | null = null;
   private currentSlug: string | null = null;
   private loading = false;
@@ -271,7 +272,7 @@ export class PlaylistModalController {
   ): void {
     const previewKey = `${item.roomId}:${item.roomVersion}`;
     imageEl.dataset.previewKey = previewKey;
-    const cached = this.roomPreviewCache.get(previewKey);
+    const cached = getSharedRenderedRoomPreview(previewKey);
     if (cached !== undefined) {
       this.applyRoomPreview(imageEl, fallbackEl, cached, item);
       return;
@@ -304,32 +305,13 @@ export class PlaylistModalController {
 
   private loadRoomPreview(item: RoomPlaylistItem): Promise<string | null> {
     const previewKey = `${item.roomId}:${item.roomVersion}`;
-    const inFlight = this.roomPreviewLoads.get(previewKey);
-    if (inFlight) {
-      return inFlight;
-    }
-
-    const request = (async () => {
-      try {
-        const snapshot = await this.worldRepository.loadPublishedRoom(item.roomId, item.roomCoordinates);
-        if (!snapshot) {
-          this.roomPreviewCache.set(previewKey, null);
-          return null;
-        }
-        const dataUrl = await renderRoomSnapshotToPngDataUrl(snapshot, { tilePixelSize: 4 });
-        this.roomPreviewCache.set(previewKey, dataUrl);
-        return dataUrl;
-      } catch (error) {
-        console.warn('Failed to load playlist room preview.', item.roomId, error);
-        this.roomPreviewCache.set(previewKey, null);
-        return null;
-      } finally {
-        this.roomPreviewLoads.delete(previewKey);
-      }
-    })();
-
-    this.roomPreviewLoads.set(previewKey, request);
-    return request;
+    return loadSharedRenderedRoomPreview(
+      previewKey,
+      () => this.worldRepository.loadPublishedRoom(item.roomId, item.roomCoordinates),
+    ).catch((error) => {
+      console.warn('Failed to load playlist room preview.', item.roomId, error);
+      return null;
+    });
   }
 
   private async removePlaylistItem(itemId: string): Promise<void> {

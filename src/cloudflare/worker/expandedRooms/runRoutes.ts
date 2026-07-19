@@ -73,7 +73,7 @@ import {
   verifyCourseRunTrace,
 } from '../runs/verification';
 import { sqlIsVerificationAccepted } from '../runs/verificationSql';
-import { loadRoomRecord } from '../rooms/store';
+import { loadRoomSnapshotsByReferences } from '../rooms/store';
 import {
   awardCourseRunProgression,
   loadEffectiveTrustTier,
@@ -916,21 +916,18 @@ async function resolvePublishedCourseVersion(
 async function loadCourseVerificationRoomsById(
   env: Env,
   course: CourseSnapshot,
-  viewerUserId: string | null,
-  viewerWalletAddress: string | null,
+  _viewerUserId: string | null,
+  _viewerWalletAddress: string | null,
 ): Promise<Map<string, RoomSnapshot>> {
+  const response = await loadRoomSnapshotsByReferences(env, course.roomRefs.map((roomRef) => ({
+    kind: 'version' as const,
+    roomId: roomRef.roomId,
+    version: roomRef.roomVersion,
+  })));
+  const snapshotsByKey = new Map(response.snapshots.map((entry) => [entry.key, entry.snapshot]));
   const roomsById = new Map<string, RoomSnapshot>();
   for (const roomRef of course.roomRefs) {
-    const roomRecord = await loadRoomRecord(
-      env,
-      roomRef.roomId,
-      roomRef.coordinates,
-      viewerUserId,
-      viewerWalletAddress,
-    );
-    const historicalVersion =
-      roomRecord.versions.find((entry) => entry.version === roomRef.roomVersion)?.snapshot ??
-      (roomRecord.published?.version === roomRef.roomVersion ? roomRecord.published : null);
+    const historicalVersion = snapshotsByKey.get(`version:${roomRef.roomId}:${roomRef.roomVersion}`) ?? null;
     if (!historicalVersion) {
       throw new HttpError(
         409,
