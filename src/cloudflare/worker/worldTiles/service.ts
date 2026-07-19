@@ -23,15 +23,13 @@ import type { Env } from '../core/types';
 import {
   loadActiveWorldTileRendererVersion,
   loadPendingWorldTileOutbox,
-  loadPublishedWorldTileRoomSummaries,
-  loadWorldRenderTileLeafChanges,
-  loadWorldRenderTiles,
+  loadWorldTileManifestReadSet,
   markWorldTileOutboxDispatchFailed,
   markWorldTileOutboxDispatching,
   markWorldTileOutboxDispatched,
-  type WorldRenderTileLeafChangeRow,
+  type WorldRenderTileManifestRow,
   type WorldRenderTileOutboxRow,
-  type WorldRenderTileRow,
+  type WorldRenderTileStaleLeafRow,
 } from './store';
 
 export interface WorldTileEnvironmentFlags {
@@ -85,25 +83,24 @@ export async function loadWorldTileManifest(
   if (!worldTileReadsEnabled(env)) return null;
   const publicBaseUrl = normalizeWorldTilePublicBaseUrl(env.WORLD_TILE_PUBLIC_BASE_URL);
   if (!publicBaseUrl) return null;
-  const renderer = await loadActiveWorldTileRendererVersion(env);
-  if (!renderer) return null;
-
   const coordinates = expandWorldTileManifestCoordinates(level, targetBounds);
   const coverageRoomBounds = getCoordinateRoomBounds(coordinates);
   const targetRoomBounds = getTargetRoomBounds(level, targetBounds);
-  const [tileRows, leafChanges, rooms] = await Promise.all([
-    loadWorldRenderTiles(env, renderer.version, coordinates),
-    loadWorldRenderTileLeafChanges(env, renderer.version, coverageRoomBounds),
-    loadPublishedWorldTileRoomSummaries(env, targetRoomBounds),
-  ]);
+  const readSet = await loadWorldTileManifestReadSet(
+    env,
+    coordinates,
+    coverageRoomBounds,
+    targetRoomBounds,
+  );
+  if (!readSet.rendererVersion) return null;
   const manifest = buildWorldTileManifest({
-    rendererVersion: renderer.version,
+    rendererVersion: readSet.rendererVersion,
     level,
     targetBounds,
     coordinates,
-    tileRows,
-    leafChanges,
-    rooms,
+    tileRows: readSet.tileRows,
+    leafChanges: readSet.leafChanges,
+    rooms: readSet.rooms,
     publicBaseUrl,
   });
   return {
@@ -117,8 +114,8 @@ export function buildWorldTileManifest(input: {
   level: WorldTileLevel;
   targetBounds: WorldTileBounds;
   coordinates: WorldTileCoordinate[];
-  tileRows: WorldRenderTileRow[];
-  leafChanges: WorldRenderTileLeafChangeRow[];
+  tileRows: WorldRenderTileManifestRow[];
+  leafChanges: WorldRenderTileStaleLeafRow[];
   rooms: WorldTileRoomSummary[];
   publicBaseUrl: string;
 }): WorldTileManifest {
@@ -152,8 +149,8 @@ export function buildWorldTileManifest(input: {
 export function buildWorldTileManifestEntry(
   rendererVersion: string,
   coordinate: WorldTileCoordinate,
-  row: WorldRenderTileRow | null,
-  leafChanges: WorldRenderTileLeafChangeRow[],
+  row: WorldRenderTileManifestRow | null,
+  leafChanges: WorldRenderTileStaleLeafRow[],
   publicBaseUrl: string,
 ): WorldTileManifestEntry {
   if (!row) {
@@ -267,7 +264,7 @@ export function createWorldTileManifestEtag(manifest: WorldTileManifest): string
 }
 
 function buildReadyWorldTile(
-  row: WorldRenderTileRow,
+  row: WorldRenderTileManifestRow,
   publicBaseUrl: string,
 ): WorldTileManifestReady | null {
   if (
@@ -292,9 +289,9 @@ function buildReadyWorldTile(
 }
 
 function findStaleRoomIds(
-  row: WorldRenderTileRow,
+  row: WorldRenderTileManifestRow,
   coordinate: WorldTileCoordinate,
-  leafChanges: WorldRenderTileLeafChangeRow[],
+  leafChanges: WorldRenderTileStaleLeafRow[],
 ): string[] {
   if (
     row.ready_generation === null

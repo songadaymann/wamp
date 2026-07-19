@@ -155,6 +155,9 @@ function createReadDatabase(): { database: D1Database; queries: string[] } {
       return null;
     }
     async all<T>(): Promise<{ results: T[] }> {
+      if (/^\s*select\s+version\s+from\s+world_tile_renderer_versions/i.test(this.query)) {
+        return { results: [{ version: 'renderer-a' }] as T[] };
+      }
       return { results: [] };
     }
   }

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { WorldTileCoordinate } from '../../../worldTiles/model';
+import type { D1Database, D1PreparedStatement } from '../core/types';
 import {
   buildWorldTileGenerationJob,
   buildWorldTileManifest,
   buildWorldTileManifestEntry,
   createWorldTileManifestEtag,
+  loadWorldTileManifest,
   normalizeWorldTilePublicBaseUrl,
   parseWorldTileRolloutPercentage,
   worldTileGenerationEnabled,
@@ -187,6 +189,45 @@ describe('world tile manifest service', () => {
     expect(createWorldTileManifestEtag(manifest)).toBe(createWorldTileManifestEtag(structuredClone(manifest)));
   });
 
+  it('preserves manifest shape and ordering while loading through one read batch', async () => {
+    const fake = createManifestDatabase();
+    const result = await loadWorldTileManifest({
+      DB: fake.database,
+      TILED_OVERWORLD_READS: '1',
+      WORLD_TILE_PUBLIC_BASE_URL: 'https://tiles.wamp.land',
+    }, 4, {
+      minTileX: 0,
+      maxTileX: 1,
+      minTileY: 0,
+      maxTileY: 0,
+    });
+
+    expect(result).not.toBeNull();
+    expect(fake.sessions).toEqual(['first-unconstrained']);
+    expect(fake.batchSizes).toEqual([4]);
+    expect(fake.queries.every((query) => /^\s*select\b/i.test(query))).toBe(true);
+    expect(result!.manifest.rendererVersion).toBe('renderer-batched');
+    expect(result!.manifest.entries.map((entry) => (
+      `${entry.address.level}:${entry.address.x}:${entry.address.y}`
+    ))).toEqual([...result!.manifest.entries]
+      .sort((left, right) => (
+        left.address.level - right.address.level
+        || left.address.y - right.address.y
+        || left.address.x - right.address.x
+      ))
+      .map((entry) => `${entry.address.level}:${entry.address.x}:${entry.address.y}`));
+    expect(result!.manifest.entries.find((entry) => (
+      entry.address.level === 4 && entry.address.x === 0 && entry.address.y === 0
+    ))?.ready).toMatchObject({
+      generation: 3,
+      contentHash: 'batched-content',
+      url: 'https://tiles.wamp.land/world-tiles/renderer-batched/objects/batched-content.png',
+      byteLength: 456,
+    });
+    expect(result!.manifest.rooms.map((room) => room.id)).toEqual(['0,0', '1,0']);
+    expect(result!.etag).toBe(createWorldTileManifestEtag(result!.manifest));
+  });
+
   it('creates Queue messages containing identity only and no room bytes', () => {
     const job = buildWorldTileGenerationJob(createOutboxRow(), '2026-07-19T10:00:00.000Z');
     expect(job).toEqual({
@@ -291,5 +332,90 @@ function createOutboxRow(): WorldRenderTileOutboxRow {
     created_at: '2026-07-19T09:59:00.000Z',
     updated_at: '2026-07-19T09:59:00.000Z',
     dispatched_at: null,
+  };
+}
+
+function createManifestDatabase(): {
+  database: D1Database;
+  queries: string[];
+  batchSizes: number[];
+  sessions: string[];
+} {
+  const queries: string[] = [];
+  const batchSizes: number[] = [];
+  const sessions: string[] = [];
+
+  class Statement implements D1PreparedStatement {
+    constructor(readonly query: string) {}
+
+    bind(): D1PreparedStatement {
+      return this;
+    }
+
+    async first<T>(): Promise<T | null> {
+      throw new Error('Manifest loading must not issue a separate active-renderer read.');
+    }
+
+    async all<T>(): Promise<{ results: T[] }> {
+      if (/^\s*select\s+version\s+from\s+world_tile_renderer_versions/i.test(this.query)) {
+        return { results: [{ version: 'renderer-batched' }] as T[] };
+      }
+      if (/from\s+world_render_tiles/i.test(this.query) && /\(level, tile_x, tile_y\) in/i.test(this.query)) {
+        return { results: [createTileRow({
+          renderer_version: 'renderer-batched',
+          level: 4,
+          tile_x: 0,
+          tile_y: 0,
+          desired_generation: 3,
+          ready_generation: 3,
+          desired_empty: 0,
+          ready_empty: 0,
+          ready_hash: 'batched-content',
+          r2_key: 'world-tiles/renderer-batched/objects/batched-content.png',
+          byte_length: 456,
+          ready_at: '2026-07-19T10:00:00.000Z',
+        })] as T[] };
+      }
+      if (/from\s+world_tile_published_room_summaries/i.test(this.query)) {
+        return { results: [
+          publishedSummaryRow('1,0', 1, 0),
+          publishedSummaryRow('0,0', 0, 0),
+        ] as T[] };
+      }
+      return { results: [] };
+    }
+  }
+
+  const database: D1Database = {
+    prepare(query) {
+      queries.push(query);
+      return new Statement(query);
+    },
+    async batch<T>(statements: D1PreparedStatement[]): Promise<T[]> {
+      batchSizes.push(statements.length);
+      const results: unknown[] = [];
+      for (const statement of statements) results.push(await statement.all());
+      return results as T[];
+    },
+    withSession(constraint) {
+      sessions.push(constraint ?? 'none');
+      return database;
+    },
+  };
+  return { database, queries, batchSizes, sessions };
+}
+
+function publishedSummaryRow(id: string, x: number, y: number) {
+  return {
+    id,
+    x,
+    y,
+    published_title: `Room ${id}`,
+    goal_type: 'reach_exit',
+    version: 1,
+    published_at: '2026-07-19T09:59:00.000Z',
+    preview_updated_at: '2026-07-19T10:00:00.000Z',
+    last_published_by_user_id: 'builder-a',
+    last_published_by_display_name: 'Builder A',
   };
 }

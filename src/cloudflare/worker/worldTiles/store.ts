@@ -7,7 +7,12 @@ import {
   type WorldTileRoomBounds,
   type WorldTileRoomSummary,
 } from '../../../worldTiles/model';
-import type { D1Database, Env } from '../core/types';
+import type {
+  D1Database,
+  D1DatabaseSession,
+  D1PreparedStatement,
+  Env,
+} from '../core/types';
 
 export type WorldTileRendererStatus = 'building' | 'active' | 'retired' | 'failed';
 
@@ -56,6 +61,35 @@ export interface WorldRenderTileLeafChangeRow {
   ready_empty: 0 | 1 | null;
   desired_at: string;
   ready_at: string | null;
+}
+
+export type WorldRenderTileManifestRow = Pick<WorldRenderTileRow,
+  | 'renderer_version'
+  | 'level'
+  | 'tile_x'
+  | 'tile_y'
+  | 'desired_generation'
+  | 'desired_empty'
+  | 'ready_generation'
+  | 'ready_hash'
+  | 'ready_empty'
+  | 'r2_key'
+  | 'byte_length'
+  | 'ready_at'
+>;
+
+export type WorldRenderTileStaleLeafRow = Pick<WorldRenderTileLeafChangeRow,
+  | 'tile_x'
+  | 'tile_y'
+  | 'desired_empty'
+  | 'desired_at'
+>;
+
+export interface WorldTileManifestReadSet {
+  rendererVersion: string | null;
+  tileRows: WorldRenderTileManifestRow[];
+  leafChanges: WorldRenderTileStaleLeafRow[];
+  rooms: WorldTileRoomSummary[];
 }
 
 export interface WorldRenderTileOutboxRow {
@@ -118,7 +152,21 @@ interface PublishedWorldTileRoomSummaryRow {
   last_published_by_display_name: string | null;
 }
 
+interface ActiveWorldTileRendererVersionProjection {
+  version: string;
+}
+
+interface D1RowsResult {
+  results: unknown[];
+}
+
 const WORLD_TILE_PUBLISHED_ROOM_SUMMARY_TABLE = 'world_tile_published_room_summaries';
+const ACTIVE_WORLD_TILE_RENDERER_VERSION_SQL = `
+  SELECT version
+  FROM world_tile_renderer_versions
+  WHERE status = 'active'
+  LIMIT 1
+`;
 
 export async function loadActiveWorldTileRendererVersion(
   env: Pick<Env, 'DB'>,
@@ -140,6 +188,105 @@ export async function loadActiveWorldTileRendererVersion(
       LIMIT 1
     `,
   ).first<WorldTileRendererVersionRow>();
+}
+
+export async function loadWorldTileManifestReadSet(
+  env: Pick<Env, 'DB'>,
+  coordinates: WorldTileCoordinate[],
+  coverageRoomBounds: WorldTileRoomBounds,
+  targetRoomBounds: WorldTileRoomBounds,
+): Promise<WorldTileManifestReadSet> {
+  try {
+    return await loadWorldTileManifestReadSetFromSession(
+      createWorldTileManifestReadSession(env.DB),
+      coordinates,
+      coverageRoomBounds,
+      targetRoomBounds,
+      false,
+    );
+  } catch (error) {
+    if (!isMissingPublishedWorldTileRoomSummaryReadModel(error)) throw error;
+    return loadWorldTileManifestReadSetFromSession(
+      createWorldTileManifestReadSession(env.DB),
+      coordinates,
+      coverageRoomBounds,
+      targetRoomBounds,
+      true,
+    );
+  }
+}
+
+async function loadWorldTileManifestReadSetFromSession(
+  database: D1DatabaseSession,
+  coordinates: WorldTileCoordinate[],
+  coverageRoomBounds: WorldTileRoomBounds,
+  targetRoomBounds: WorldTileRoomBounds,
+  useLegacyRoomSummary: boolean,
+): Promise<WorldTileManifestReadSet> {
+  const tileStatements = chunkArray(coordinates, 30).map((chunk) => database.prepare(
+    `
+      SELECT
+        renderer_version,
+        level,
+        tile_x,
+        tile_y,
+        desired_generation,
+        desired_empty,
+        ready_generation,
+        ready_hash,
+        ready_empty,
+        r2_key,
+        byte_length,
+        ready_at
+      FROM world_render_tiles
+      WHERE renderer_version = (${ACTIVE_WORLD_TILE_RENDERER_VERSION_SQL})
+        AND (level, tile_x, tile_y) IN (${chunk.map(() => '(?, ?, ?)').join(', ')})
+      ORDER BY level ASC, tile_y ASC, tile_x ASC
+    `,
+  ).bind(...chunk.flatMap((coordinate) => [coordinate.level, coordinate.x, coordinate.y])));
+  const statements = [
+    database.prepare(ACTIVE_WORLD_TILE_RENDERER_VERSION_SQL),
+    ...tileStatements,
+    database.prepare(
+      `
+        SELECT
+          tile_x,
+          tile_y,
+          desired_empty,
+          desired_at
+        FROM world_render_tiles
+        WHERE renderer_version = (${ACTIVE_WORLD_TILE_RENDERER_VERSION_SQL})
+          AND level = 4
+          AND desired_empty = 1
+          AND tile_x BETWEEN ? AND ?
+          AND tile_y BETWEEN ? AND ?
+        ORDER BY tile_y ASC, tile_x ASC
+      `,
+    ).bind(
+      coverageRoomBounds.minRoomX,
+      coverageRoomBounds.maxRoomX,
+      coverageRoomBounds.minRoomY,
+      coverageRoomBounds.maxRoomY,
+    ),
+    preparePublishedWorldTileRoomSummaryStatement(
+      database,
+      targetRoomBounds,
+      useLegacyRoomSummary,
+    ),
+  ];
+  const results = await database.batch(statements) as D1RowsResult[];
+  const tileResultEnd = 1 + tileStatements.length;
+  const rendererVersion = readD1Rows<ActiveWorldTileRendererVersionProjection>(results[0])[0]?.version ?? null;
+  const tileRows = results.slice(1, tileResultEnd)
+    .flatMap((result) => readD1Rows<WorldRenderTileManifestRow>(result));
+  const leafChanges = readD1Rows<WorldRenderTileStaleLeafRow>(results[tileResultEnd]);
+  const roomRows = readD1Rows<PublishedWorldTileRoomSummaryRow>(results[tileResultEnd + 1]);
+  return {
+    rendererVersion,
+    tileRows,
+    leafChanges,
+    rooms: mapPublishedWorldTileRoomSummaryRows(roomRows),
+  };
 }
 
 export async function loadWorldTileRendererVersion(
@@ -281,30 +428,8 @@ async function loadPublishedWorldTileRoomSummariesFromReadModel(
   env: Pick<Env, 'DB'>,
   bounds: WorldTileRoomBounds,
 ): Promise<WorldTileRoomSummary[]> {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        room_id AS id,
-        room_x AS x,
-        room_y AS y,
-        published_title,
-        goal_type,
-        published_version AS version,
-        published_at,
-        preview_updated_at,
-        creator_user_id AS last_published_by_user_id,
-        creator_display_name AS last_published_by_display_name
-      FROM world_tile_published_room_summaries
-      WHERE room_x BETWEEN ? AND ?
-        AND room_y BETWEEN ? AND ?
-      ORDER BY room_y ASC, room_x ASC, room_id ASC
-    `,
-  ).bind(
-    bounds.minRoomX,
-    bounds.maxRoomX,
-    bounds.minRoomY,
-    bounds.maxRoomY,
-  ).all<PublishedWorldTileRoomSummaryRow>();
+  const result = await preparePublishedWorldTileRoomSummaryStatement(env.DB, bounds, false)
+    .all<PublishedWorldTileRoomSummaryRow>();
 
   return mapPublishedWorldTileRoomSummaryRows(result.results);
 }
@@ -313,8 +438,19 @@ async function loadPublishedWorldTileRoomSummariesLegacy(
   env: Pick<Env, 'DB'>,
   bounds: WorldTileRoomBounds,
 ): Promise<WorldTileRoomSummary[]> {
-  const result = await env.DB.prepare(
-    `
+  const result = await preparePublishedWorldTileRoomSummaryStatement(env.DB, bounds, true)
+    .all<PublishedWorldTileRoomSummaryRow>();
+
+  return mapPublishedWorldTileRoomSummaryRows(result.results);
+}
+
+function preparePublishedWorldTileRoomSummaryStatement(
+  database: D1DatabaseSession,
+  bounds: WorldTileRoomBounds,
+  useLegacyRoomSummary: boolean,
+): D1PreparedStatement {
+  const sql = useLegacyRoomSummary
+    ? `
       SELECT
         id,
         x,
@@ -331,15 +467,30 @@ async function loadPublishedWorldTileRoomSummariesLegacy(
         AND x BETWEEN ? AND ?
         AND y BETWEEN ? AND ?
       ORDER BY y ASC, x ASC, id ASC
-    `,
-  ).bind(
+    `
+    : `
+      SELECT
+        room_id AS id,
+        room_x AS x,
+        room_y AS y,
+        published_title,
+        goal_type,
+        published_version AS version,
+        published_at,
+        preview_updated_at,
+        creator_user_id AS last_published_by_user_id,
+        creator_display_name AS last_published_by_display_name
+      FROM world_tile_published_room_summaries
+      WHERE room_x BETWEEN ? AND ?
+        AND room_y BETWEEN ? AND ?
+      ORDER BY room_y ASC, room_x ASC, room_id ASC
+    `;
+  return database.prepare(sql).bind(
     bounds.minRoomX,
     bounds.maxRoomX,
     bounds.minRoomY,
     bounds.maxRoomY,
-  ).all<PublishedWorldTileRoomSummaryRow>();
-
-  return mapPublishedWorldTileRoomSummaryRows(result.results);
+  );
 }
 
 function mapPublishedWorldTileRoomSummaryRows(
@@ -363,6 +514,14 @@ function isMissingPublishedWorldTileRoomSummaryReadModel(error: unknown): boolea
   const message = String(error).toLowerCase();
   return message.includes('no such table')
     && message.includes(WORLD_TILE_PUBLISHED_ROOM_SUMMARY_TABLE);
+}
+
+function createWorldTileManifestReadSession(database: D1Database): D1DatabaseSession {
+  return database.withSession?.('first-unconstrained') ?? database;
+}
+
+function readD1Rows<T>(result: D1RowsResult | undefined): T[] {
+  return (result?.results ?? []) as T[];
 }
 
 export async function createWorldTileRendererVersion(

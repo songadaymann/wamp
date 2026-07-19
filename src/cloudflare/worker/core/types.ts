@@ -11,9 +11,13 @@ export interface D1PreparedStatement {
   all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
 }
 
-export interface D1Database {
+export interface D1DatabaseSession {
   prepare(query: string): D1PreparedStatement;
   batch<T = unknown>(statements: D1PreparedStatement[]): Promise<T[]>;
+}
+
+export interface D1Database extends D1DatabaseSession {
+  withSession?(constraint?: 'first-primary' | 'first-unconstrained'): D1DatabaseSession;
 }
 
 export interface WorkerExecutionContextLike {
