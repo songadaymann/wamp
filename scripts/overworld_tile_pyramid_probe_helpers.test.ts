@@ -3,6 +3,9 @@ import {
   evaluateOverworldTileProbeAcceptance,
   evaluateSerializedL0Bootstrap,
   getManifestLevel,
+  hasWorldTileCoverageIdentityTransition,
+  isCameraReversalTowardOrigin,
+  isStableWorldTileReadyFrame,
   parseSnapshotQuery,
   parseWorldTileManifestProbe,
   partitionTrackedRequestsByCoverageBoundaries,
@@ -331,6 +334,70 @@ describe('overworld tile pyramid probe helpers', () => {
       ...event,
       state: { ...event.state, rendererVersion: 'renderer-v2' },
     }], phaserState)).toBeNull();
+  });
+
+  it('requires both camera movement and a newer coverage identity for pan transitions', () => {
+    const before = {
+      camera: { x: 0, y: 0, width: 1_000, height: 600 },
+      coverageEpoch: 7,
+      coverageKey: 'renderer:1:before',
+    };
+    const after = {
+      camera: { x: 640, y: 0, width: 1_000, height: 600 },
+      coverageEpoch: 8,
+      coverageKey: 'renderer:1:after',
+    };
+    expect(hasWorldTileCoverageIdentityTransition(before, after)).toBe(true);
+    expect(hasWorldTileCoverageIdentityTransition(before, {
+      ...after,
+      camera: before.camera,
+    })).toBe(false);
+    expect(hasWorldTileCoverageIdentityTransition(before, {
+      ...after,
+      coverageKey: before.coverageKey,
+    })).toBe(false);
+    expect(hasWorldTileCoverageIdentityTransition(before, {
+      ...after,
+      coverageEpoch: before.coverageEpoch,
+    })).toBe(false);
+  });
+
+  it('requires a reversal to move the camera closer to its original coordinates', () => {
+    const origin = { camera: { x: 0, y: 0 } };
+    const forward = { camera: { x: 640, y: 160 } };
+    expect(isCameraReversalTowardOrigin(origin, forward, {
+      camera: { x: 100, y: 40 },
+    })).toBe(true);
+    expect(isCameraReversalTowardOrigin(origin, forward, {
+      camera: { x: 800, y: 160 },
+    })).toBe(false);
+    expect(isCameraReversalTowardOrigin(origin, origin, origin)).toBe(false);
+  });
+
+  it('credits pan sharp only after a later ready frame retains the same epoch and key', () => {
+    const ready = {
+      coverageEpoch: 9,
+      coverageKey: 'renderer:1:stable',
+      readyCoverageEpoch: 9,
+      coverageReadyAtMs: 456,
+      targetLevel: 1,
+      committedLevel: 1,
+      fallbackReason: null,
+    };
+    expect(isStableWorldTileReadyFrame(ready, { ...ready })).toBe(true);
+    expect(isStableWorldTileReadyFrame(ready, {
+      ...ready,
+      coverageKey: 'renderer:1:next',
+    })).toBe(false);
+    expect(isStableWorldTileReadyFrame(ready, {
+      ...ready,
+      readyCoverageEpoch: 8,
+    })).toBe(false);
+    expect(isStableWorldTileReadyFrame(ready, {
+      ...ready,
+      coverageEpoch: 10,
+      readyCoverageEpoch: 10,
+    })).toBe(false);
   });
 
   it('accepts L0 URLs completed by network or an explicit pre-refinement byte-cache hit', () => {

@@ -78,6 +78,64 @@ export function selectCreditableEarlySharpEvent(events, phaserState) {
   }) ?? null;
 }
 
+export function hasWorldTileCoverageIdentityTransition(before, after) {
+  const beforeCamera = before?.camera;
+  const afterCamera = after?.camera;
+  return isRecord(beforeCamera)
+    && isRecord(afterCamera)
+    && Number.isFinite(beforeCamera.x)
+    && Number.isFinite(beforeCamera.y)
+    && Number.isFinite(afterCamera.x)
+    && Number.isFinite(afterCamera.y)
+    && (beforeCamera.x !== afterCamera.x || beforeCamera.y !== afterCamera.y)
+    && typeof before?.coverageKey === 'string'
+    && before.coverageKey.length > 0
+    && typeof after?.coverageKey === 'string'
+    && after.coverageKey.length > 0
+    && after.coverageKey !== before.coverageKey
+    && Number.isSafeInteger(before.coverageEpoch)
+    && Number.isSafeInteger(after.coverageEpoch)
+    && after.coverageEpoch > before.coverageEpoch;
+}
+
+export function isCameraReversalTowardOrigin(origin, forward, reversal) {
+  const originCamera = origin?.camera;
+  const forwardCamera = forward?.camera;
+  const reversalCamera = reversal?.camera;
+  if (![originCamera, forwardCamera, reversalCamera].every(isRecord)) return false;
+  const values = [
+    originCamera.x,
+    originCamera.y,
+    forwardCamera.x,
+    forwardCamera.y,
+    reversalCamera.x,
+    reversalCamera.y,
+  ];
+  if (!values.every(Number.isFinite)) return false;
+  const forwardDistance = (forwardCamera.x - originCamera.x) ** 2
+    + (forwardCamera.y - originCamera.y) ** 2;
+  const reversalDistance = (reversalCamera.x - originCamera.x) ** 2
+    + (reversalCamera.y - originCamera.y) ** 2;
+  return forwardDistance > 0 && reversalDistance < forwardDistance;
+}
+
+export function isStableWorldTileReadyFrame(previous, current) {
+  return typeof previous?.coverageKey === 'string'
+    && previous.coverageKey.length > 0
+    && current?.coverageKey === previous.coverageKey
+    && Number.isSafeInteger(previous.coverageEpoch)
+    && current?.coverageEpoch === previous.coverageEpoch
+    && previous.readyCoverageEpoch === previous.coverageEpoch
+    && current.readyCoverageEpoch === current.coverageEpoch
+    && Number.isFinite(previous.coverageReadyAtMs)
+    && Number.isFinite(current.coverageReadyAtMs)
+    && previous.targetLevel === previous.committedLevel
+    && current.targetLevel === current.committedLevel
+    && current.targetLevel === previous.targetLevel
+    && previous.fallbackReason === null
+    && current.fallbackReason === null;
+}
+
 export function isWorldTileImageUrl(url) {
   return /\/world-tiles\/.*\.png(?:\?|$)/.test(url);
 }

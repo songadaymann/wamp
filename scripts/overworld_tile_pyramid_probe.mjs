@@ -5,6 +5,9 @@ import {
   evaluateOverworldTileProbeAcceptance,
   evaluateSerializedL0Bootstrap,
   getManifestLevel,
+  hasWorldTileCoverageIdentityTransition,
+  isCameraReversalTowardOrigin,
+  isStableWorldTileReadyFrame,
   isWorldTileImageUrl,
   parseSnapshotQuery,
   parseWorldTileManifestProbe,
@@ -255,23 +258,135 @@ async function approachZoom(page, targetZoom) {
   };
 }
 
-async function panViewport(page) {
+async function dragViewportWithSpace(page, direction) {
   const box = await getCanvasBox(page);
-  const startX = Math.round(box.x + box.width * 0.68);
-  const startY = Math.round(box.y + box.height * 0.52);
-  const endX = Math.round(box.x + box.width * 0.28);
-  const endY = Math.round(box.y + box.height * 0.42);
+  const startFraction = direction === 'forward' ? 0.82 : 0.18;
+  const endFraction = direction === 'forward' ? 0.18 : 0.82;
+  const startX = Math.round(box.x + box.width * startFraction);
+  const startY = Math.round(box.y + box.height * 0.5);
+  const endX = Math.round(box.x + box.width * endFraction);
+  const endY = startY;
+  await page.evaluate(() => {
+    let canvas = null;
+    let largest = 0;
+    for (const candidate of document.querySelectorAll('canvas')) {
+      const rect = candidate.getBoundingClientRect();
+      const area = rect.width * rect.height;
+      if (area > largest) {
+        largest = area;
+        canvas = candidate;
+      }
+    }
+    canvas?.focus();
+  });
   await page.mouse.move(startX, startY);
-  await page.mouse.down({ button: 'middle' });
-  await page.mouse.move(endX, endY, { steps: 24 });
-  await page.mouse.up({ button: 'middle' });
+  await page.keyboard.down('Space');
+  try {
+    await page.mouse.down({ button: 'left' });
+    await page.mouse.move(endX, endY, { steps: 24 });
+    await page.mouse.up({ button: 'left' });
+  } finally {
+    await page.keyboard.up('Space');
+  }
 }
 
-function cameraMoved(before, after) {
-  const beforeView = before?.camera;
-  const afterView = after?.camera;
-  if (!beforeView || !afterView) return false;
-  return beforeView.x !== afterView.x || beforeView.y !== afterView.y;
+function cameraCenterRoom(state) {
+  const camera = state?.camera;
+  if (!camera || ![camera.x, camera.y, camera.width, camera.height].every(Number.isFinite)) {
+    throw new Error('Overworld tile probe camera bounds are unavailable.');
+  }
+  return {
+    x: Math.floor((camera.x + camera.width / 2) / 640),
+    y: Math.floor((camera.y + camera.height / 2) / 352),
+  };
+}
+
+function getDebugPanTarget(state) {
+  const center = cameraCenterRoom(state);
+  const level = Number.isSafeInteger(state?.targetLevel) ? state.targetLevel : 0;
+  const roomsPerTile = 16 >> Math.max(0, Math.min(4, level));
+  return { x: center.x + roomsPerTile * 2, y: center.y };
+}
+
+async function jumpViewportWithDebugContract(page, coordinates) {
+  const result = await page.evaluate(async (target) => {
+    const game = window.__EVERYBODYS_PLATFORMER_GAME__;
+    if (!game?.scene?.getScene) return { ok: false, reason: 'debug-game-unavailable' };
+    let scene = null;
+    try {
+      scene = game.scene.getScene('OverworldPlayScene');
+    } catch {
+      return { ok: false, reason: 'overworld-scene-unavailable' };
+    }
+    if (!scene || typeof scene.jumpToCoordinates !== 'function') {
+      return { ok: false, reason: 'public-jump-contract-unavailable' };
+    }
+    await scene.jumpToCoordinates(target);
+    return { ok: true };
+  }, coordinates);
+  if (result?.ok !== true) {
+    throw new Error(`Overworld debug pan failed: ${result?.reason ?? 'unknown'}`);
+  }
+}
+
+async function waitForCoverageIdentityTransition(page, before, timeoutMs) {
+  const startedAt = performance.now();
+  while (performance.now() - startedAt < timeoutMs) {
+    const state = summarizeState(await readState(page));
+    if (hasWorldTileCoverageIdentityTransition(before, state)) {
+      return {
+        durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+        state,
+      };
+    }
+    await page.waitForTimeout(16);
+  }
+  const state = summarizeState(await readState(page));
+  const error = new Error('Timed out waiting for camera and tile coverage identity transition.');
+  error.diagnostics = { before, after: state };
+  throw error;
+}
+
+async function moveViewportDeterministically(page, before, direction, fallbackCoordinates) {
+  try {
+    await dragViewportWithSpace(page, direction);
+    const transition = await waitForCoverageIdentityTransition(page, before, 1_500);
+    return { source: 'space-pointer-drag', ...transition };
+  } catch (pointerError) {
+    await jumpViewportWithDebugContract(page, fallbackCoordinates);
+    const transition = await waitForCoverageIdentityTransition(page, before, 5_000);
+    return {
+      source: 'public-debug-jump',
+      pointerError: pointerError instanceof Error ? pointerError.message : String(pointerError),
+      ...transition,
+    };
+  }
+}
+
+async function waitForStableSharpTileState(page, expectedCoverageKey, timeoutMs) {
+  const startedAt = performance.now();
+  let previousReadyState = null;
+  while (performance.now() - startedAt < timeoutMs) {
+    const raw = await readState(page);
+    const metrics = tileMetricsFromState(raw);
+    const state = summarizeState(raw);
+    const ready = isSharpReady(metrics) && state.coverageKey === expectedCoverageKey;
+    if (ready && previousReadyState && isStableWorldTileReadyFrame(previousReadyState, state)) {
+      return {
+        durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+        previousState: previousReadyState,
+        state,
+      };
+    }
+    previousReadyState = ready ? state : null;
+    if (ready) {
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
+    } else {
+      await page.waitForTimeout(16);
+    }
+  }
+  const state = summarizeState(await readState(page));
+  throw new Error(`Timed out waiting for stable sharp tile coverage: ${JSON.stringify(state)}`);
 }
 
 function isTrackedNetworkUrl(url) {
@@ -962,17 +1077,41 @@ async function runPass(context, args, label) {
 
   const beforePan = summarizeState(await readState(page));
   const panStartedAt = performance.now();
-  await panViewport(page);
+  const forwardPan = await moveViewportDeterministically(
+    page,
+    beforePan,
+    'forward',
+    getDebugPanTarget(beforePan),
+  );
+  const reversalStartedAt = performance.now();
+  const reversalPan = await moveViewportDeterministically(
+    page,
+    forwardPan.state,
+    'reverse',
+    cameraCenterRoom(beforePan),
+  );
+  if (!isCameraReversalTowardOrigin(beforePan, forwardPan.state, reversalPan.state)) {
+    const error = new Error('Overworld tile probe reversal did not move back toward its origin.');
+    error.diagnostics = { beforePan, forwardPan, reversalPan };
+    throw error;
+  }
+  const reversalGestureMs = Math.round((performance.now() - reversalStartedAt) * 10) / 10;
   const panGestureMs = Math.round((performance.now() - panStartedAt) * 10) / 10;
   const panGestureCompletedAt = performance.now();
-  const panCoverage = await waitForTileState(page, isCompleteCoverage, args.timeoutMs);
+  const panCoverage = await waitForTileState(
+    page,
+    (metrics) => isCompleteCoverage(metrics)
+      && metrics.coverageKey === reversalPan.state.coverageKey,
+    args.timeoutMs,
+  );
   const panCoverageMs = Math.round((performance.now() - panGestureCompletedAt) * 10) / 10;
-  const panSharp = await waitForTileState(page, isSharpReady, args.timeoutMs);
+  const panSharp = await waitForStableSharpTileState(
+    page,
+    reversalPan.state.coverageKey,
+    args.timeoutMs,
+  );
   const panSharpMs = Math.round((performance.now() - panGestureCompletedAt) * 10) / 10;
-  const afterPan = summarizeState(await readState(page));
-  if (!cameraMoved(beforePan, afterPan)) {
-    throw new Error('Overworld tile probe pan did not move the camera');
-  }
+  const afterPan = panSharp.state;
 
   const screenshotPath = path.join(args.out, `${label}.png`);
   await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -1083,9 +1222,12 @@ async function runPass(context, args, label) {
     pan: {
       before: beforePan,
       after: afterPan,
+      forward: forwardPan,
+      reversal: reversalPan,
       coverage: panCoverage,
       sharp: panSharp,
       panGestureMs,
+      reversalGestureMs,
       panCoverageMs,
       panSharpMs,
     },
