@@ -1,0 +1,106 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "everybodys-platformer-world-tile-renderer",
+  "main": "src/cloudflare/world-tile-renderer-worker.ts",
+  "compatibility_date": "2026-07-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "keep_vars": true,
+  "browser": {
+    "binding": "WORLD_TILE_BROWSER"
+  },
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "vars": {
+    "WORLD_TILE_ENVIRONMENT": "production",
+    "WORLD_TILE_GENERATION_ENABLED": "0",
+    "WORLD_TILE_LEASE_SECONDS": "120",
+    "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles.wamp.land"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "everybodys-platformer-db",
+      "database_id": "3cba45fc-4f29-4081-89f7-c57ab3179292",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "WORLD_TILES",
+      "bucket_name": "everybodys-platformer-world-tiles"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "WORLD_TILE_RENDER_QUEUE",
+        "queue": "everybodys-platformer-world-tile-renders"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "everybodys-platformer-world-tile-renders",
+        "max_batch_size": 4,
+        "max_batch_timeout": 1,
+        "max_retries": 5,
+        "max_concurrency": 2,
+        "dead_letter_queue": "everybodys-platformer-world-tile-renders-dlq"
+      }
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  },
+  "env": {
+    "safety": {
+      "name": "everybodys-platformer-safety-world-tile-renderer",
+      "preview_urls": true,
+      "browser": {
+        "binding": "WORLD_TILE_BROWSER"
+      },
+      "vars": {
+        "WORLD_TILE_ENVIRONMENT": "safety",
+        "WORLD_TILE_GENERATION_ENABLED": "0",
+        "WORLD_TILE_LEASE_SECONDS": "120",
+        "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles-safety.wamp.land"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "everybodys-platformer-safety-db",
+          "database_id": "27f64d18-5d6d-45a0-9361-c09ec1a805a6",
+          "migrations_dir": "./migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "WORLD_TILES",
+          "bucket_name": "everybodys-platformer-safety-world-tiles"
+        }
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "WORLD_TILE_RENDER_QUEUE",
+            "queue": "everybodys-platformer-safety-world-tile-renders"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "everybodys-platformer-safety-world-tile-renders",
+            "max_batch_size": 4,
+            "max_batch_timeout": 1,
+            "max_retries": 5,
+            "max_concurrency": 2,
+            "dead_letter_queue": "everybodys-platformer-safety-world-tile-renders-dlq"
+          }
+        ]
+      }
+    }
+  }
+}

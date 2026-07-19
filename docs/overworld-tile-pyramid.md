@@ -92,6 +92,21 @@ probe suites before activation. Production advances through stable anonymous coh
 and 100%, holding each cohort for at least 24 hours. Compact rendering remains the rollback path for
 30 successful days at 100%; only then may browser-side published-room composition be deleted.
 
+Run the standalone safety parity gate against an activated renderer with:
+
+```bash
+npm run perf:overworld:tiles:parity -- \
+  --api-base https://everybodys-platformer-safety.novox-robot.workers.dev \
+  --renderer-origin https://<deployment-hash>.wampland.pages.dev \
+  --renderer-version <renderer-version> \
+  --out output/overworld-tile-pyramid/safety-parity
+```
+
+It records manifest size/timing/cache headers, advertised-object HEAD parity, missing/empty/stale
+coverage, canonical L4 pixel comparisons, gutter checks, and an independent nearest-neighbor parent
+composition in `world-tile-parity-report.json`. PNG evidence is written beside the report. The
+default visual tolerance is at most 0.1% differing pixels with per-channel delta at most 1.
+
 ## Measured compact baseline
 
 The 2026-07-19 desktop baseline is stored under
