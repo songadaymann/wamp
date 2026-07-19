@@ -6,6 +6,7 @@ import {
   parseSnapshotQuery,
   parseWorldTileManifestProbe,
   partitionTrackedRequestsByCoverageBoundaries,
+  selectCreditableEarlySharpEvent,
   selectExpectedWorldTileLevel,
   summarizeApiWorkerRequests,
   summarizeTileImagePhase,
@@ -288,6 +289,48 @@ describe('overworld tile pyramid probe helpers', () => {
       coarseCoverageSequence: 10,
       sharpCoverageSequence: 9,
     })).toThrow(/cannot occur after sharp coverage/);
+  });
+
+  it('credits early sharp only when renderer, target level, and current Phaser coverage key match', () => {
+    const bounds = { minTileX: -1, maxTileX: 0, minTileY: -1, maxTileY: 0 };
+    const coverageKey = JSON.stringify(['renderer-v1', 1, -1, 0, -1, 0]);
+    const event = {
+      type: 'early-bootstrap-sharp-ready',
+      layerPresent: true,
+      bodyVisible: true,
+      state: {
+        status: 'visible',
+        rendererVersion: 'renderer-v1',
+        displayLevel: 1,
+        targetLevel: 1,
+        targetBounds: bounds,
+        coverageKey,
+        refinementError: null,
+        timings: { sharpVisibleAtMs: 321 },
+      },
+    };
+    const phaserState = {
+      rollout: { rendererVersion: 'renderer-v1' },
+      targetLevel: 1,
+      committedLevel: 1,
+      coverageEpoch: 4,
+      readyCoverageEpoch: 4,
+      coverageKey,
+    };
+
+    expect(selectCreditableEarlySharpEvent([event], phaserState)).toBe(event);
+    expect(selectCreditableEarlySharpEvent([event], {
+      ...phaserState,
+      coverageKey: JSON.stringify(['renderer-v1', 1, 0, 0, 0, 0]),
+    })).toBeNull();
+    expect(selectCreditableEarlySharpEvent([event], {
+      ...phaserState,
+      readyCoverageEpoch: 3,
+    })).toBeNull();
+    expect(selectCreditableEarlySharpEvent([{
+      ...event,
+      state: { ...event.state, rendererVersion: 'renderer-v2' },
+    }], phaserState)).toBeNull();
   });
 
   it('accepts L0 URLs completed by network or an explicit pre-refinement byte-cache hit', () => {

@@ -111,6 +111,9 @@ export interface EarlyWorldTileBootstrapState {
   displayLevel: EarlyWorldTileLevel;
   targetLevel: EarlyWorldTileLevel;
   viewport: EarlyWorldTileViewport | null;
+  targetViewport: EarlyWorldTileViewport | null;
+  targetBounds: EarlyWorldTileBounds | null;
+  coverageKey: string | null;
   displayRect: EarlyWorldTileContainerRect | null;
   imageTileCount: number;
   emptyTileCount: number;
@@ -172,8 +175,34 @@ export interface EarlyWorldTileBootstrapHandle {
   readonly sharp: Promise<EarlyWorldTileBootstrapState>;
   getState(): EarlyWorldTileBootstrapState;
   consumeCoverage(request: EarlyWorldTileCoverageRequest): EarlyWorldTileCoverageHandoff | null;
+  cancelSharp(reason: EarlyWorldTileSharpCancellationReason): void;
   alignToGameContainer(): void;
   release(reason?: string): void;
+}
+
+export type EarlyWorldTileSharpCancellationReason = 'coarse-timeout' | 'refinement-timeout';
+
+export interface EarlyWorldTileRefinementCancellation {
+  readonly signal: AbortSignal;
+  readonly reason: EarlyWorldTileSharpCancellationReason | null;
+  cancel(reason: EarlyWorldTileSharpCancellationReason): void;
+  abort(): void;
+}
+
+export function createEarlyWorldTileRefinementCancellation(): EarlyWorldTileRefinementCancellation {
+  const controller = new AbortController();
+  let reason: EarlyWorldTileSharpCancellationReason | null = null;
+  return {
+    get signal() { return controller.signal; },
+    get reason() { return reason; },
+    cancel(nextReason) {
+      reason ??= nextReason;
+      controller.abort();
+    },
+    abort() {
+      controller.abort();
+    },
+  };
 }
 
 declare global {
@@ -277,6 +306,31 @@ export function selectEarlyWorldTileLevel(zoom: number): EarlyWorldTileLevel {
   if (zoom < 0.40) return 2;
   if (zoom < 0.80) return 3;
   return 4;
+}
+
+export function buildEarlyWorldTileCoverageKey(
+  rendererVersion: string,
+  level: EarlyWorldTileLevel,
+  bounds: EarlyWorldTileBounds,
+): string {
+  return JSON.stringify([
+    rendererVersion,
+    level,
+    bounds.minTileX,
+    bounds.maxTileX,
+    bounds.minTileY,
+    bounds.maxTileY,
+  ]);
+}
+
+export function earlyWorldTileBoundsContain(
+  outer: EarlyWorldTileBounds,
+  inner: EarlyWorldTileBounds,
+): boolean {
+  return outer.minTileX <= inner.minTileX
+    && outer.maxTileX >= inner.maxTileX
+    && outer.minTileY <= inner.minTileY
+    && outer.maxTileY >= inner.maxTileY;
 }
 
 export function calculateEarlyWorldTileViewportAtLevel(input: {
@@ -563,6 +617,9 @@ export function installEarlyWorldTileBootstrap(
     displayLevel: 0,
     targetLevel: 0,
     viewport: null,
+    targetViewport: null,
+    targetBounds: null,
+    coverageKey: null,
     displayRect: null,
     imageTileCount: 0,
     emptyTileCount: 0,
@@ -588,6 +645,7 @@ export function installEarlyWorldTileBootstrap(
     },
   };
   const abortController = new AbortController();
+  const refinementCancellation = createEarlyWorldTileRefinementCancellation();
   const objectUrls = new Set<string>();
   const coverageHandoff = createEarlyWorldTileCoverageHandoffSlot();
   let layer: HTMLElement | null = null;
@@ -604,6 +662,7 @@ export function installEarlyWorldTileBootstrap(
     if (released) return;
     released = true;
     abortController.abort();
+    refinementCancellation.abort();
     coverageHandoff.clear();
     layer?.remove();
     layer = null;
@@ -655,11 +714,19 @@ export function installEarlyWorldTileBootstrap(
       || state.status === 'disabled'
       || state.status === 'ready-shadow'
       || state.status === 'released'
+      || refinementCancellation.signal.aborted
     ) return copyState(state);
     try {
-      await refineEarlyWorldTileBootstrap(runOptions);
+      await refineEarlyWorldTileBootstrap({
+        ...runOptions,
+        signal: refinementCancellation.signal,
+      });
     } catch (error) {
-      if (!released && !abortController.signal.aborted) {
+      if (
+        !released
+        && !abortController.signal.aborted
+        && !refinementCancellation.signal.aborted
+      ) {
         state.refinementError = error instanceof Error ? error.message : String(error);
       }
     }
@@ -671,6 +738,7 @@ export function installEarlyWorldTileBootstrap(
     sharp,
     getState: () => copyState(state),
     consumeCoverage: (request) => coverageHandoff.consume(request),
+    cancelSharp: (reason) => refinementCancellation.cancel(reason),
     alignToGameContainer,
     release,
   };
@@ -725,6 +793,17 @@ async function runEarlyWorldTileBootstrap(
   });
   state.viewport = viewport;
   state.targetLevel = selectEarlyWorldTileLevel(viewport.zoom);
+  state.targetViewport = calculateEarlyWorldTileViewportAtLevel({
+    width: viewport.width,
+    height: viewport.height,
+    zoom: viewport.zoom,
+  }, state.targetLevel);
+  state.targetBounds = { ...state.targetViewport.bounds };
+  state.coverageKey = buildEarlyWorldTileCoverageKey(
+    config.activeRendererVersion,
+    state.targetLevel,
+    state.targetBounds,
+  );
   const manifestUrl = buildEarlyWorldTileManifestUrl(
     state.apiBaseUrl,
     options.win.location.href,
@@ -766,6 +845,7 @@ async function runEarlyWorldTileBootstrap(
         state.timings.firstTileByteAtMs ??= options.now();
       },
     }),
+    signal,
   );
   if (options.isReleased()) return copyState(state);
   for (const tile of loadedTiles) {
@@ -780,6 +860,18 @@ async function runEarlyWorldTileBootstrap(
     height: displayRect.height,
     zoom: viewport.zoom,
   });
+  if (!earlyWorldTileBoundsContain(viewport.bounds, displayViewport.bounds)) {
+    throw new Error('Early world tile request does not contain the live display viewport.');
+  }
+  if (state.targetLevel === 0) {
+    state.targetViewport = displayViewport;
+    state.targetBounds = { ...displayViewport.bounds };
+    state.coverageKey = buildEarlyWorldTileCoverageKey(
+      config.activeRendererVersion,
+      0,
+      displayViewport.bounds,
+    );
+  }
   const layer = await buildEarlyWorldTileLayer(
     options.doc,
     displayViewport,
@@ -831,7 +923,26 @@ async function refineEarlyWorldTileBootstrap(
 
   const level = state.targetLevel;
   if (level === 0) {
-    state.timings.sharpVisibleAtMs = state.timings.visibleAtMs ?? options.now();
+    const displayRect = getEarlyWorldTileContainerRect(options.doc, options.win);
+    const displayViewport = calculateEarlyWorldTileViewport({
+      width: displayRect.width,
+      height: displayRect.height,
+      zoom: state.viewport.zoom,
+    });
+    if (!earlyWorldTileBoundsContain(state.viewport.bounds, displayViewport.bounds)) {
+      throw new Error('Early world tile request no longer contains the live display viewport.');
+    }
+    state.displayRect = displayRect;
+    state.targetViewport = displayViewport;
+    state.targetBounds = { ...displayViewport.bounds };
+    state.coverageKey = buildEarlyWorldTileCoverageKey(
+      state.rendererVersion,
+      0,
+      displayViewport.bounds,
+    );
+    await waitForEarlyWorldTilePaint(options.win);
+    if (options.isReleased() || signal.aborted) return;
+    state.timings.sharpVisibleAtMs = options.now();
     options.win.dispatchEvent(new CustomEvent(EARLY_WORLD_TILE_SHARP_READY_EVENT, {
       detail: copyState(state),
     }));
@@ -880,6 +991,7 @@ async function refineEarlyWorldTileBootstrap(
       registerObjectUrl: options.registerObjectUrl,
       markFirstByte: () => undefined,
     }),
+    signal,
   );
   if (options.isReleased() || signal.aborted) return;
   for (const tile of loadedTiles) {
@@ -893,6 +1005,9 @@ async function refineEarlyWorldTileBootstrap(
     height: displayRect.height,
     zoom: viewport.zoom,
   }, level);
+  if (!earlyWorldTileBoundsContain(viewport.bounds, displayViewport.bounds)) {
+    throw new Error('Early world tile refinement does not contain the live display viewport.');
+  }
   const layer = await buildEarlyWorldTileLayer(
     options.doc,
     displayViewport,
@@ -910,9 +1025,18 @@ async function refineEarlyWorldTileBootstrap(
   options.attachLayer(layer);
   state.displayRect = displayRect;
   state.displayLevel = level;
+  state.targetViewport = displayViewport;
+  state.targetBounds = { ...displayViewport.bounds };
+  state.coverageKey = buildEarlyWorldTileCoverageKey(
+    state.rendererVersion,
+    level,
+    displayViewport.bounds,
+  );
   state.imageTileCount = imageEntries.length;
   state.emptyTileCount = manifest.entries.length - imageEntries.length;
   state.staleMaskCount = layer.querySelectorAll('[data-wamp-early-world-tile-mask]').length;
+  await waitForEarlyWorldTilePaint(options.win);
+  if (options.isReleased() || signal.aborted) return;
   state.timings.sharpVisibleAtMs = options.now();
   options.win.dispatchEvent(new CustomEvent(EARLY_WORLD_TILE_SHARP_READY_EVENT, {
     detail: copyState(state),
@@ -929,6 +1053,7 @@ async function loadEarlyWorldTile(input: {
   registerObjectUrl: (url: string) => void;
   markFirstByte: () => void;
 }): Promise<LoadedEarlyWorldTile> {
+  input.signal.throwIfAborted();
   const ready = input.entry.ready;
   const cacheUrl = buildEarlyWorldTileCacheUrl(ready.url, ready.contentHash, input.cacheHashParam);
   const cacheRequest = new Request(cacheUrl, { method: 'GET' });
@@ -938,10 +1063,17 @@ async function loadEarlyWorldTile(input: {
       try {
         const blob = await cachedResponse.blob();
         input.markFirstByte();
-        const validated = await validateEarlyWorldTileBlob(blob, ready, input.win, input.doc);
+        const validated = await validateEarlyWorldTileBlob(
+          blob,
+          ready,
+          input.win,
+          input.doc,
+          input.signal,
+        );
         input.registerObjectUrl(validated.objectUrl);
         return { entry: input.entry, ...validated, cacheHit: true, networkFetch: false };
-      } catch {
+      } catch (error) {
+        if (input.signal.aborted) throw error;
         await input.cache.delete(cacheRequest).catch(() => false);
       }
     }
@@ -955,8 +1087,15 @@ async function loadEarlyWorldTile(input: {
   });
   if (!response.ok) throw new Error(`Early world tile image failed with ${response.status}.`);
   const blob = await response.blob();
+  input.signal.throwIfAborted();
   input.markFirstByte();
-  const validated = await validateEarlyWorldTileBlob(blob, ready, input.win, input.doc);
+  const validated = await validateEarlyWorldTileBlob(
+    blob,
+    ready,
+    input.win,
+    input.doc,
+    input.signal,
+  );
   input.registerObjectUrl(validated.objectUrl);
   if (input.cache) {
     persistEarlyWorldTileBlob(input.cache, cacheRequest, blob);
@@ -969,7 +1108,9 @@ async function validateEarlyWorldTileBlob(
   ready: EarlyWorldTileReady,
   win: Window,
   doc: Document,
+  signal: AbortSignal,
 ): Promise<{ image: HTMLImageElement; objectUrl: string }> {
+  signal.throwIfAborted();
   if (blob.size !== ready.byteLength || blob.size <= 0) {
     throw new Error(`Early world tile byte length mismatch for ${ready.contentHash}.`);
   }
@@ -980,13 +1121,23 @@ async function validateEarlyWorldTileBlob(
   image.alt = '';
   image.draggable = false;
   image.src = objectUrl;
+  let rejectAbort!: (error: DOMException) => void;
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
+  const handleAbort = () => {
+    image.removeAttribute('src');
+    rejectAbort(new DOMException('Early world tile refinement aborted.', 'AbortError'));
+  };
+  signal.addEventListener('abort', handleAbort, { once: true });
   try {
     const digestPromise = blob.arrayBuffer()
       .then((bytes) => win.crypto.subtle.digest('SHA-256', bytes));
-    const [digest] = await Promise.all([
-      digestPromise,
-      image.decode(),
+    const [digest] = await Promise.race([
+      Promise.all([digestPromise, image.decode()]),
+      abortPromise,
     ]);
+    signal.throwIfAborted();
     const actualHash = [...new Uint8Array(digest)]
       .map((value) => value.toString(16).padStart(2, '0'))
       .join('');
@@ -1003,6 +1154,8 @@ async function validateEarlyWorldTileBlob(
   } catch (error) {
     URL.revokeObjectURL(objectUrl);
     throw error;
+  } finally {
+    signal.removeEventListener('abort', handleAbort);
   }
 }
 
@@ -1339,11 +1492,13 @@ async function mapWithConcurrency<T, R>(
   values: readonly T[],
   concurrency: number,
   operation: (value: T) => Promise<R>,
+  signal?: AbortSignal,
 ): Promise<R[]> {
   const results = new Array<R>(values.length);
   let nextIndex = 0;
   const worker = async (): Promise<void> => {
     while (nextIndex < values.length) {
+      signal?.throwIfAborted();
       const index = nextIndex;
       nextIndex += 1;
       results[index] = await operation(values[index]);
@@ -1375,6 +1530,13 @@ function waitForBody(doc: Document): Promise<void> {
   if (doc.body) return Promise.resolve();
   return new Promise((resolve) => {
     doc.addEventListener('DOMContentLoaded', () => resolve(), { once: true });
+  });
+}
+
+function waitForEarlyWorldTilePaint(win: Window): Promise<void> {
+  if (typeof win.requestAnimationFrame !== 'function') return Promise.resolve();
+  return new Promise((resolve) => {
+    win.requestAnimationFrame(() => resolve());
   });
 }
 

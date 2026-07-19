@@ -127,6 +127,20 @@ export interface WorldTileClientDebugSnapshot extends WorldTileDebugMetrics {
   contextRestorePending: boolean;
   targetReadyCount: number;
   targetCoveragePercentage: number;
+  coverageEpoch: number;
+  coverageKey: string | null;
+  readyCoverageEpoch: number | null;
+  coverageStartedAtMs: number | null;
+  coverageReadyAtMs: number | null;
+}
+
+export interface WorldTileReplacementReadyEventDetail {
+  schemaVersion: 1;
+  coverageEpoch: number;
+  coverageKey: string;
+  rendererVersion: string;
+  targetLevel: WorldTileLevel;
+  readyAtMs: number;
 }
 
 const CAMERA_EPSILON = 0.5;
@@ -174,6 +188,7 @@ export class WorldTileClientController {
   private retriesByKey = new Map<string, RetryState>();
   private committedLevel: WorldTileLevel = 0;
   private desiredLevel: WorldTileLevel = 0;
+  private hasSelectedInitialLevel = false;
   private lastZoom: number | null = null;
   private lastGestureAtMs = 0;
   private lastCameraMovementAtMs = 0;
@@ -200,7 +215,11 @@ export class WorldTileClientController {
   private contextRestorePending = false;
   private nextMutationConvergencePollAtMs = 0;
   private targetReadyCount = 0;
-  private replacementReadySignaled = false;
+  private coverageEpoch = 0;
+  private coverageKey: string | null = null;
+  private readyCoverageEpoch: number | null = null;
+  private coverageStartedAtMs: number | null = null;
+  private coverageReadyAtMs: number | null = null;
   private readonly targetLodReadyWaiters = new Set<TargetLodReadyWaiter>();
   private contextCanvas: HTMLCanvasElement | null = null;
   private readonly handleContextRestored = () => {
@@ -275,6 +294,7 @@ export class WorldTileClientController {
     this.fallback.markCoverageIncomplete(startedAtMs);
     const viewport = getCameraWorldRect(camera);
     const bounds = worldRectToTileBounds(0, viewport);
+    this.setCoverageIdentity(this.activeRendererVersion, 0, bounds, startedAtMs);
     const abortController = new AbortController();
     this.initialCoverageAbortController = abortController;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -372,9 +392,19 @@ export class WorldTileClientController {
 
     const viewport = getCameraWorldRect(camera);
     this.updateCameraMotion(viewport, camera.zoom, nowMs);
-    const lod = selectWorldTileLevel(camera.zoom, this.desiredLevel);
+    const lod = selectWorldTileLevel(
+      camera.zoom,
+      this.hasSelectedInitialLevel ? this.desiredLevel : null,
+    );
+    this.hasSelectedInitialLevel = true;
     this.desiredLevel = lod.level;
     const desiredCoverage = this.calculateCoverage(viewport, this.desiredLevel);
+    this.setCoverageIdentity(
+      this.activeRendererVersion,
+      this.desiredLevel,
+      desiredCoverage.visibleBounds,
+      nowMs,
+    );
     const displayCoverage = this.desiredLevel === this.committedLevel
       ? desiredCoverage
       : this.calculateCoverage(viewport, this.committedLevel);
@@ -550,6 +580,11 @@ export class WorldTileClientController {
       targetCoveragePercentage: base.visibleCount === 0
         ? 100
         : this.targetReadyCount / base.visibleCount * 100,
+      coverageEpoch: this.coverageEpoch,
+      coverageKey: this.coverageKey,
+      readyCoverageEpoch: this.readyCoverageEpoch,
+      coverageStartedAtMs: this.coverageStartedAtMs,
+      coverageReadyAtMs: this.coverageReadyAtMs,
     };
   }
 
@@ -599,9 +634,13 @@ export class WorldTileClientController {
     this.lastCoverageComplete = false;
     this.lastFallbackReason = null;
     this.targetReadyCount = 0;
-    this.replacementReadySignaled = false;
+    this.coverageKey = null;
+    this.readyCoverageEpoch = null;
+    this.coverageStartedAtMs = null;
+    this.coverageReadyAtMs = null;
     this.committedLevel = 0;
     this.desiredLevel = 0;
+    this.hasSelectedInitialLevel = false;
     this.lastZoom = null;
     this.lastGestureAtMs = 0;
     this.lastCameraMovementAtMs = 0;
@@ -757,6 +796,7 @@ export class WorldTileClientController {
   private calculateCoverage(viewport: WorldRect, level: WorldTileLevel): {
     visible: WorldTileAddress[];
     guard: WorldTileAddress[];
+    visibleBounds: WorldTileBounds;
     manifestBounds: WorldTileBounds;
   } {
     const rendererVersion = this.activeRendererVersion!;
@@ -773,6 +813,7 @@ export class WorldTileClientController {
     return {
       visible: enumerateWorldTileBounds(rendererVersion, level, visibleBounds),
       guard: enumerateWorldTileBounds(rendererVersion, level, manifestBounds),
+      visibleBounds,
       manifestBounds,
     };
   }
@@ -1331,20 +1372,60 @@ export class WorldTileClientController {
     }
     if (fallbackSnapshot.active) {
       this.settleAllTargetLodReadyWaiters(false);
-      this.signalReplacementReady();
+      this.markCoverageNotReady();
     } else {
       this.resolveReadyTargetLodWaiters();
       if (this.isCameraTargetLodReady(this.options.scene.cameras.main)) {
-        this.signalReplacementReady();
+        this.markCoverageReady(nowMs);
+      } else {
+        this.markCoverageNotReady();
       }
     }
   }
 
-  private signalReplacementReady(): void {
-    if (this.replacementReadySignaled) return;
-    this.replacementReadySignaled = true;
-    if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
-    window.dispatchEvent(new Event(WORLD_TILE_REPLACEMENT_READY_EVENT));
+  private setCoverageIdentity(
+    rendererVersion: string,
+    level: WorldTileLevel,
+    bounds: WorldTileBounds,
+    nowMs: number,
+  ): void {
+    const key = buildWorldTileCoverageKey(rendererVersion, level, bounds);
+    if (key === this.coverageKey) return;
+    this.coverageEpoch += 1;
+    this.coverageKey = key;
+    this.readyCoverageEpoch = null;
+    this.coverageStartedAtMs = nowMs;
+    this.coverageReadyAtMs = null;
+  }
+
+  private markCoverageNotReady(): void {
+    if (this.readyCoverageEpoch !== this.coverageEpoch) return;
+    this.readyCoverageEpoch = null;
+    this.coverageReadyAtMs = null;
+  }
+
+  private markCoverageReady(nowMs: number): void {
+    if (!this.coverageKey || this.readyCoverageEpoch === this.coverageEpoch) return;
+    this.readyCoverageEpoch = this.coverageEpoch;
+    this.coverageReadyAtMs = nowMs;
+    if (
+      this.rollout?.shadow
+      || typeof window === 'undefined'
+      || typeof window.dispatchEvent !== 'function'
+      || !this.activeRendererVersion
+    ) return;
+    const detail: WorldTileReplacementReadyEventDetail = {
+      schemaVersion: 1,
+      coverageEpoch: this.coverageEpoch,
+      coverageKey: this.coverageKey,
+      rendererVersion: this.activeRendererVersion,
+      targetLevel: this.desiredLevel,
+      readyAtMs: nowMs,
+    };
+    window.dispatchEvent(new CustomEvent<WorldTileReplacementReadyEventDetail>(
+      WORLD_TILE_REPLACEMENT_READY_EVENT,
+      { detail },
+    ));
   }
 
   private updateCameraMotion(viewport: WorldRect, zoom: number, nowMs: number): void {
@@ -1539,7 +1620,10 @@ export class WorldTileClientController {
 
   private isCameraTargetLodReady(camera: Phaser.Cameras.Scene2D.Camera): boolean {
     if (!this.activeRendererVersion || this.desiredVisibleTargets.length === 0) return false;
-    const requiredLevel = selectWorldTileLevel(camera.zoom, this.desiredLevel).level;
+    const requiredLevel = selectWorldTileLevel(
+      camera.zoom,
+      this.hasSelectedInitialLevel ? this.desiredLevel : null,
+    ).level;
     if (this.desiredLevel !== requiredLevel || this.committedLevel !== requiredLevel) return false;
 
     const expectedTargets = enumerateWorldTileBounds(
@@ -1778,6 +1862,21 @@ function buildRequestSignature(level: WorldTileLevel, bounds: WorldTileBounds): 
     bounds.minTileY,
     bounds.maxTileY,
   ].join(':');
+}
+
+export function buildWorldTileCoverageKey(
+  rendererVersion: string,
+  level: WorldTileLevel,
+  bounds: WorldTileBounds,
+): string {
+  return JSON.stringify([
+    rendererVersion,
+    level,
+    bounds.minTileX,
+    bounds.maxTileX,
+    bounds.minTileY,
+    bounds.maxTileY,
+  ]);
 }
 
 function getAddressDistance(address: WorldTileAddress, center: { x: number; y: number }): number {

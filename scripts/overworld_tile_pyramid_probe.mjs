@@ -9,6 +9,7 @@ import {
   parseSnapshotQuery,
   parseWorldTileManifestProbe,
   partitionTrackedRequestsByCoverageBoundaries,
+  selectCreditableEarlySharpEvent,
   selectExpectedWorldTileLevel,
   summarizeApiWorkerRequests,
   summarizeTileImagePhase,
@@ -85,6 +86,11 @@ function summarizeState(state) {
     staleCount: metrics?.staleCount ?? null,
     coveragePercentage: metrics?.coveragePercentage ?? null,
     targetCoveragePercentage: metrics?.targetCoveragePercentage ?? null,
+    coverageEpoch: metrics?.coverageEpoch ?? null,
+    coverageKey: metrics?.coverageKey ?? null,
+    readyCoverageEpoch: metrics?.readyCoverageEpoch ?? null,
+    coverageStartedAtMs: metrics?.coverageStartedAtMs ?? null,
+    coverageReadyAtMs: metrics?.coverageReadyAtMs ?? null,
     queueDepths: metrics?.queueDepths ?? null,
     replacementGapFrames: metrics?.replacementGapFrames ?? null,
     fallbackReason: metrics?.fallbackReason ?? null,
@@ -126,6 +132,11 @@ function isSharpReady(metrics) {
   const targetCoveragePercentage = metrics?.targetCoveragePercentage
     ?? (metrics?.visibleCount > 0 ? targetReadyCount / metrics.visibleCount * 100 : 0);
   return isCompleteCoverage(metrics)
+    && typeof metrics.coverageKey === 'string'
+    && metrics.coverageKey.length > 0
+    && Number.isSafeInteger(metrics.coverageEpoch)
+    && metrics.readyCoverageEpoch === metrics.coverageEpoch
+    && Number.isFinite(metrics.coverageReadyAtMs)
     && targetReadyCount === metrics.visibleCount
     && targetCoveragePercentage === 100
     && metrics.staleCount === 0
@@ -281,7 +292,20 @@ function getApiWorkerOrigin(url) {
   }
 }
 
-async function installClientProbeHooks(page) {
+async function installClientProbeHooks(page, networkRecorder) {
+  const boundaries = new Map();
+  const waiters = new Map();
+  await page.exposeBinding('__wampWorldTileProbeBoundary', (_source, label) => {
+    if (typeof label !== 'string') return null;
+    let boundary = boundaries.get(label) ?? null;
+    if (!boundary) {
+      boundary = networkRecorder.mark(`client-${label}`);
+      boundaries.set(label, boundary);
+      for (const resolve of waiters.get(label) ?? []) resolve(boundary);
+      waiters.delete(label);
+    }
+    return boundary;
+  });
   await page.addInitScript(() => {
     const state = { sequence: 0, events: [] };
     Object.defineProperty(window, '__wampWorldTileProbe', {
@@ -312,6 +336,7 @@ async function installClientProbeHooks(page) {
         layerPresent: document.querySelector('[data-wamp-early-world-tiles="true"]') !== null,
         bodyVisible: document.body?.dataset.earlyWorldTilesVisible === 'true',
       });
+      void window.__wampWorldTileProbeBoundary?.('early-bootstrap-ready');
     }, { once: true });
     window.addEventListener('wamp:early-world-tiles-sharp-ready', (event) => {
       let earlyState = null;
@@ -326,6 +351,7 @@ async function installClientProbeHooks(page) {
         layerPresent: document.querySelector('[data-wamp-early-world-tiles="true"]') !== null,
         bodyVisible: document.body?.dataset.earlyWorldTilesVisible === 'true',
       });
+      void window.__wampWorldTileProbeBoundary?.('early-bootstrap-sharp-ready');
     }, { once: true });
     const manifestLevel = (value) => {
       try {
@@ -371,6 +397,25 @@ async function installClientProbeHooks(page) {
       };
     }
   });
+  return {
+    getBoundary: (label) => boundaries.get(label) ?? null,
+    waitForBoundary: (label, timeoutMs = 250) => {
+      const existing = boundaries.get(label);
+      if (existing) return Promise.resolve(existing);
+      return new Promise((resolve) => {
+        const pending = waiters.get(label) ?? [];
+        pending.push(resolve);
+        waiters.set(label, pending);
+        setTimeout(() => {
+          const current = waiters.get(label) ?? [];
+          const index = current.indexOf(resolve);
+          if (index >= 0) current.splice(index, 1);
+          if (current.length === 0) waiters.delete(label);
+          resolve(boundaries.get(label) ?? null);
+        }, timeoutMs);
+      });
+    },
+  };
 }
 
 async function markClientProbeBoundary(page, label) {
@@ -677,13 +722,14 @@ async function readEarlyBootstrapProbeState(page) {
   });
 }
 
-async function captureEarlyBootstrapCoverage(page, timeoutMs, networkRecorder) {
+async function captureEarlyBootstrapCoverage(page, timeoutMs, networkRecorder, clientProbeHooks) {
   const startedAt = performance.now();
   let snapshot = null;
   while (performance.now() - startedAt < timeoutMs) {
     snapshot = await readEarlyBootstrapProbeState(page);
     if (snapshot.readyEvent) {
-      const networkBoundary = networkRecorder.mark('pre-phaser-coarse-coverage');
+      const networkBoundary = await clientProbeHooks.waitForBoundary('early-bootstrap-ready')
+        ?? networkRecorder.mark('pre-phaser-coarse-coverage-fallback');
       return {
         ...snapshot,
         boundary: {
@@ -721,6 +767,10 @@ async function captureReadinessArtifact(page) {
     staleCount: state.staleCount,
     targetLevel: state.targetLevel,
     committedLevel: state.committedLevel,
+    coverageEpoch: state.coverageEpoch,
+    coverageKey: state.coverageKey,
+    readyCoverageEpoch: state.readyCoverageEpoch,
+    coverageReadyAtMs: state.coverageReadyAtMs,
     queueDepths: state.queueDepths,
     fallbackReason: state.fallbackReason,
   } : null;
@@ -770,12 +820,13 @@ async function runPass(context, args, label) {
   page.on('pageerror', (error) => consoleMessages.push({ type: 'pageerror', text: String(error) }));
 
   try {
-  await installClientProbeHooks(page);
+  const clientProbeHooks = await installClientProbeHooks(page, networkRecorder);
   await page.goto(args.url, { waitUntil: 'domcontentloaded' });
   const coarseCoveragePromise = captureOutcome(captureEarlyBootstrapCoverage(
     page,
     args.timeoutMs,
     networkRecorder,
+    clientProbeHooks,
   ));
   const sharpCoveragePromise = captureOutcome(captureInitialTileState(
     page,
@@ -807,34 +858,72 @@ async function runPass(context, args, label) {
   const clientProbeEvents = (await readClientProbeEvents(page)).filter((entry) => (
     entry.sequence <= sharpCapture.boundary.clientSequence
   ));
-  const networkPhases = partitionTrackedRequestsByCoverageBoundaries(protocolDrainRequests, {
+  const sharp = sharpCapture.state;
+  const matchedEarlySharpEvent = selectCreditableEarlySharpEvent(clientProbeEvents, sharp);
+  const earlySharpBoundary = matchedEarlySharpEvent
+    ? await clientProbeHooks.waitForBoundary('early-bootstrap-sharp-ready')
+    : null;
+  const earlySharpEvent = earlySharpBoundary
+    && earlySharpBoundary.sequence >= coarseCapture.boundary.networkSequence
+    && earlySharpBoundary.sequence <= sharpCapture.boundary.networkSequence
+    ? matchedEarlySharpEvent
+    : null;
+  const phaserNetworkPhases = partitionTrackedRequestsByCoverageBoundaries(protocolDrainRequests, {
     coarseCoverageSequence: coarseCapture.boundary.networkSequence,
     sharpCoverageSequence: sharpCapture.boundary.networkSequence,
   });
-  const apiWorkerPhases = partitionTrackedRequestsByCoverageBoundaries(
+  const phaserApiWorkerPhases = partitionTrackedRequestsByCoverageBoundaries(
     protocolDrainApiWorkerRequests,
     {
       coarseCoverageSequence: coarseCapture.boundary.networkSequence,
       sharpCoverageSequence: sharpCapture.boundary.networkSequence,
     },
   );
+  const earlyNetworkPhases = earlySharpEvent
+    ? partitionTrackedRequestsByCoverageBoundaries(protocolDrainRequests, {
+        coarseCoverageSequence: coarseCapture.boundary.networkSequence,
+        sharpCoverageSequence: earlySharpBoundary.sequence,
+      })
+    : null;
+  const earlyApiWorkerPhases = earlySharpEvent
+    ? partitionTrackedRequestsByCoverageBoundaries(protocolDrainApiWorkerRequests, {
+        coarseCoverageSequence: coarseCapture.boundary.networkSequence,
+        sharpCoverageSequence: earlySharpBoundary.sequence,
+      })
+    : null;
   const bootstrap = evaluateSerializedL0Bootstrap({
-    requests: networkPhases.throughSharp,
+    requests: phaserNetworkPhases.throughSharp,
     clientEvents: clientProbeEvents,
     initialCoverageBoundary: coarseCapture.boundary,
     orphanEvents: networkRecorder.orphanSnapshot().filter((entry) => (
       entry.sequence <= sharpCapture.boundary.networkSequence
     )),
   });
-  const coarseNetworkRequests = networkPhases.coarse;
-  const refinementNetworkRequests = networkPhases.refinement;
-  const bootstrapRequests = networkPhases.throughSharp;
-  const coarseApiWorkerRequests = apiWorkerPhases.coarse;
-  const refinementApiWorkerRequests = apiWorkerPhases.refinement;
-  const bootstrapApiWorkerRequests = apiWorkerPhases.throughSharp;
+  const coarseNetworkRequests = phaserNetworkPhases.coarse;
+  const phaserRefinementNetworkRequests = phaserNetworkPhases.refinement;
+  const phaserSharpNetworkRequests = phaserNetworkPhases.throughSharp;
+  const earlyRefinementNetworkRequests = earlyNetworkPhases?.refinement ?? [];
+  const earlySharpNetworkRequests = earlyNetworkPhases?.throughSharp ?? [];
+  const coarseApiWorkerRequests = phaserApiWorkerPhases.coarse;
+  const phaserRefinementApiWorkerRequests = phaserApiWorkerPhases.refinement;
+  const phaserSharpApiWorkerRequests = phaserApiWorkerPhases.throughSharp;
+  const earlyRefinementApiWorkerRequests = earlyApiWorkerPhases?.refinement ?? [];
+  const earlySharpApiWorkerRequests = earlyApiWorkerPhases?.throughSharp ?? [];
+  const refinementNetworkRequests = earlySharpEvent
+    ? earlyRefinementNetworkRequests
+    : phaserRefinementNetworkRequests;
+  const sharpNetworkRequests = earlySharpEvent
+    ? earlySharpNetworkRequests
+    : phaserSharpNetworkRequests;
+  const refinementApiWorkerRequests = earlySharpEvent
+    ? earlyRefinementApiWorkerRequests
+    : phaserRefinementApiWorkerRequests;
+  const sharpApiWorkerRequests = earlySharpEvent
+    ? earlySharpApiWorkerRequests
+    : phaserSharpApiWorkerRequests;
   const coarseNetworkSummary = summarizeTrackedNetwork(coarseNetworkRequests);
   const refinementNetworkSummary = summarizeTrackedNetwork(refinementNetworkRequests);
-  const sharpNetworkSummary = summarizeTrackedNetwork(bootstrapRequests);
+  const sharpNetworkSummary = summarizeTrackedNetwork(sharpNetworkRequests);
   const coarse = {
     source: bootstrap.source,
     state: bootstrap.earlyBootstrapState,
@@ -845,19 +934,11 @@ async function runPass(context, args, label) {
     currentState: coarseCapture.currentState,
   };
   const coarseReadyMs = bootstrap.coarseReadyMs;
-  const sharp = sharpCapture.state;
   const phaserSharpReadyMs = Number.isFinite(sharpCapture.boundary.clientAtMs)
     ? sharpCapture.boundary.clientAtMs
     : sharpCapture.capturedAtMs;
-  const earlySharpEvent = clientProbeEvents.find((entry) => (
-    entry.type === 'early-bootstrap-sharp-ready'
-    && entry.layerPresent === true
-    && entry.bodyVisible === true
-    && entry.state?.refinementError === null
-    && entry.state?.displayLevel === entry.state?.targetLevel
-    && Number.isFinite(entry.state?.timings?.sharpVisibleAtMs)
-  )) ?? null;
-  const sharpReadyMs = earlySharpEvent?.state?.timings?.sharpVisibleAtMs ?? phaserSharpReadyMs;
+  const earlySharpReadyMs = earlySharpEvent?.state?.timings?.sharpVisibleAtMs ?? null;
+  const sharpReadyMs = earlySharpReadyMs ?? phaserSharpReadyMs;
   const sharpSource = earlySharpEvent ? 'pre-phaser-target-lod' : 'phaser-target-lod';
 
   const zooms = [];
@@ -904,6 +985,7 @@ async function runPass(context, args, label) {
     appReadyMs,
     coarseReadyMs,
     sharpReadyMs,
+    earlySharpReadyMs,
     phaserSharpReadyMs,
     readiness: {
       coarse: {
@@ -917,6 +999,7 @@ async function runPass(context, args, label) {
         source: sharpSource,
         ready: true,
         readyAtMs: sharpReadyMs,
+        earlyReadyAtMs: earlySharpReadyMs,
         phaserReadyAtMs: phaserSharpReadyMs,
         earlyState: earlySharpEvent?.state ?? null,
         state: sharp,
@@ -927,6 +1010,7 @@ async function runPass(context, args, label) {
       sharpSource,
       coarseBoundary: coarseCapture.boundary,
       sharpBoundary: sharpCapture.boundary,
+      earlySharpBoundary,
       bootstrap,
       clientEvents: clientProbeEvents,
     },
@@ -942,21 +1026,57 @@ async function runPass(context, args, label) {
       startedAfterBoundarySequence: coarseCapture.boundary.networkSequence,
       // Legacy field retained so existing artifact readers continue to find a boundary.
       startedAtBoundarySequence: coarseCapture.boundary.networkSequence,
-      capturedAtMs: phaserSharpReadyMs,
+      capturedAtMs: sharpReadyMs,
       requests: refinementNetworkRequests,
       summary: refinementNetworkSummary,
       apiWorker: summarizeApiWorkerRequests(refinementApiWorkerRequests),
     },
     sharpNetwork: {
-      capturedAtMs: phaserSharpReadyMs,
-      requests: bootstrapRequests,
+      capturedAtMs: sharpReadyMs,
+      requests: sharpNetworkRequests,
       summary: sharpNetworkSummary,
-      apiWorker: summarizeApiWorkerRequests(bootstrapApiWorkerRequests),
+      apiWorker: summarizeApiWorkerRequests(sharpApiWorkerRequests),
+    },
+    earlyRefinementNetwork: earlySharpEvent ? {
+      startedAfterBoundarySequence: coarseCapture.boundary.networkSequence,
+      capturedAtMs: earlySharpReadyMs,
+      requests: earlyRefinementNetworkRequests,
+      summary: summarizeTrackedNetwork(earlyRefinementNetworkRequests),
+      apiWorker: summarizeApiWorkerRequests(earlyRefinementApiWorkerRequests),
+    } : null,
+    earlySharpNetwork: earlySharpEvent ? {
+      capturedAtMs: earlySharpReadyMs,
+      boundarySequence: earlySharpBoundary.sequence,
+      requests: earlySharpNetworkRequests,
+      summary: summarizeTrackedNetwork(earlySharpNetworkRequests),
+      apiWorker: summarizeApiWorkerRequests(earlySharpApiWorkerRequests),
+    } : null,
+    phaserRefinementNetwork: {
+      startedAfterBoundarySequence: coarseCapture.boundary.networkSequence,
+      capturedAtMs: phaserSharpReadyMs,
+      requests: phaserRefinementNetworkRequests,
+      summary: summarizeTrackedNetwork(phaserRefinementNetworkRequests),
+      apiWorker: summarizeApiWorkerRequests(phaserRefinementApiWorkerRequests),
+    },
+    phaserSharpNetwork: {
+      capturedAtMs: phaserSharpReadyMs,
+      boundarySequence: sharpCapture.boundary.networkSequence,
+      requests: phaserSharpNetworkRequests,
+      summary: summarizeTrackedNetwork(phaserSharpNetworkRequests),
+      apiWorker: summarizeApiWorkerRequests(phaserSharpApiWorkerRequests),
     },
     initialTileImagePhases: {
       coarse: summarizeTileImagePhase(coarseNetworkRequests),
       refinement: summarizeTileImagePhase(refinementNetworkRequests),
-      cumulativeThroughSharp: summarizeTileImagePhase(bootstrapRequests),
+      cumulativeThroughSharp: summarizeTileImagePhase(sharpNetworkRequests),
+      earlyRefinement: earlySharpEvent
+        ? summarizeTileImagePhase(earlyRefinementNetworkRequests)
+        : null,
+      earlyCumulativeThroughSharp: earlySharpEvent
+        ? summarizeTileImagePhase(earlySharpNetworkRequests)
+        : null,
+      phaserRefinement: summarizeTileImagePhase(phaserRefinementNetworkRequests),
+      phaserCumulativeThroughSharp: summarizeTileImagePhase(phaserSharpNetworkRequests),
     },
     sharp,
     zooms,

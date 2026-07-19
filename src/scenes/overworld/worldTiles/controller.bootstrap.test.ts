@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorldRepository } from '../../../persistence/worldRepository';
-import { WorldTileClientController } from './controller';
+import { buildWorldTileCoverageKey, WorldTileClientController } from './controller';
 import { decodeWorldTileBlob } from './phaserLayer';
 import { WORLD_TILE_COVERAGE_TIMEOUT_MS } from './retryFallback';
 import type {
@@ -460,6 +460,88 @@ describe('world tile controller bootstrap ownership', () => {
     controller.destroy();
   });
 
+  it.each([
+    [0.10, 1],
+    [0.20, 2],
+    [0.40, 3],
+    [0.80, 4],
+  ] as const)('selects exact %f camera zoom as initial L%d', async (zoom, level) => {
+    const camera = createCamera();
+    camera.zoom = zoom;
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest: vi.fn(async (
+        manifestLevel: WorldTileLevel,
+        bounds: WorldTileBounds,
+      ) => readyEmptyManifest(manifestLevel, bounds)),
+      camera,
+    });
+
+    await controller.prepare();
+    await controller.ensureInitialCoverage(camera);
+    controller.update(camera);
+    expect(controller.getDebugSnapshot().targetLevel).toBe(level);
+    controller.destroy();
+  });
+
+  it('binds replacement readiness and debug timing to the current coverage epoch and key', async () => {
+    let nowMs = 1_000;
+    vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    const camera = createCamera();
+    camera.zoom = 0.18;
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest: vi.fn(async (
+        level: WorldTileLevel,
+        bounds: WorldTileBounds,
+      ) => readyEmptyManifest(level, bounds)),
+      camera,
+    });
+    const dispatchEvent = vi.mocked(window.dispatchEvent);
+
+    await controller.prepare();
+    await controller.ensureInitialCoverage(camera);
+    const coarse = controller.getDebugSnapshot();
+    expect(coarse).toMatchObject({
+      coverageEpoch: 1,
+      readyCoverageEpoch: null,
+      coverageStartedAtMs: 1_000,
+      coverageReadyAtMs: null,
+    });
+
+    controller.update(camera);
+    await flushMicrotasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    nowMs += 81;
+    controller.update(camera);
+    const sharp = controller.getDebugSnapshot();
+    const expectedKey = buildWorldTileCoverageKey(rendererVersion, 1, {
+      minTileX: -1,
+      maxTileX: 0,
+      minTileY: -1,
+      maxTileY: 0,
+    });
+    expect(sharp).toMatchObject({
+      coverageEpoch: 2,
+      coverageKey: expectedKey,
+      readyCoverageEpoch: 2,
+      coverageStartedAtMs: 1_000,
+      coverageReadyAtMs: 1_081,
+    });
+    expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'wamp:world-tiles-replacement-ready',
+      detail: {
+        schemaVersion: 1,
+        coverageEpoch: 2,
+        coverageKey: expectedKey,
+        rendererVersion,
+        targetLevel: 1,
+        readyAtMs: 1_081,
+      },
+    }));
+    controller.destroy();
+  });
+
   it('defers the implicit selected-room L4 request until sharp target coverage is committed', async () => {
     let nowMs = 1_000;
     let selected = { x: 9, y: -4 };
@@ -594,6 +676,8 @@ describe('world tile controller bootstrap ownership', () => {
 
     await controller.prepare();
     await controller.ensureInitialCoverage(camera);
+    const dispatchEvent = vi.mocked(window.dispatchEvent);
+    dispatchEvent.mockClear();
     const sharpPromise = controller.waitForTargetLodReady(camera);
     controller.update(camera);
     await flushMicrotasks();
@@ -601,6 +685,7 @@ describe('world tile controller bootstrap ownership', () => {
     await expect(sharpPromise).resolves.toBe(false);
     controller.update(camera);
     expect(controller.getDebugSnapshot().fallbackReason).toBe('manifest-incompatible');
+    expect(dispatchEvent).not.toHaveBeenCalled();
     controller.destroy();
   });
 
@@ -640,6 +725,7 @@ function createController(input: {
   loadWorldTileConfig: WorldRepository['loadWorldTileConfig'];
   loadWorldTileManifest: WorldRepository['loadWorldTileManifest'];
   getSelectedCoordinates?: () => { x: number; y: number };
+  camera?: Phaser.Cameras.Scene2D.Camera;
 }): WorldTileClientController {
   const repository = {
     loadWorldTileConfig: input.loadWorldTileConfig,
@@ -647,7 +733,7 @@ function createController(input: {
   } as unknown as WorldRepository;
   const scene = {
     sys: { game: { canvas: null } },
-    cameras: { main: createCamera() },
+    cameras: { main: input.camera ?? createCamera() },
   } as unknown as Phaser.Scene;
   return new WorldTileClientController({
     scene,
@@ -824,6 +910,7 @@ function installBrowserGlobals(
   vi.stubGlobal('window', {
     location: { search },
     localStorage: storage,
+    dispatchEvent: vi.fn(() => true),
   });
   vi.stubGlobal('navigator', { storage: { estimate } });
   vi.stubGlobal('document', { hidden: false });

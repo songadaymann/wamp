@@ -2,17 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildEarlyWorldTileManifestUrl,
   buildEarlyWorldTileCacheUrl,
+  buildEarlyWorldTileCoverageKey,
   calculateEarlyWorldTileImagePresentation,
   calculateEarlyWorldTileImagePresentationAtLevel,
   calculateEarlyWorldTileViewport,
   calculateEarlyWorldTileViewportAtLevel,
   createEarlyWorldTileCoverageHandoffSlot,
+  createEarlyWorldTileRefinementCancellation,
   decideEarlyWorldTileRollout,
   getEarlyWorldTileCohortBucket,
   getEarlyWorldTileContainerRect,
   getEarlyWorldTileImageStyle,
   getEarlyWorldTileLayerStyle,
   getEarlyWorldTilePublicRequestInit,
+  earlyWorldTileBoundsContain,
   parseEarlyWorldTileBootstrapZoom,
   parseEarlyWorldTileManifest,
   parseEarlyWorldTileManifestAtLevel,
@@ -68,6 +71,30 @@ describe('classic early world tile bootstrap', () => {
   it('selects the five initial pyramid levels at their exact zoom boundaries', () => {
     expect([0.08, 0.10, 0.17, 0.18, 0.20, 0.40, 0.80].map(selectEarlyWorldTileLevel))
       .toEqual([0, 1, 1, 1, 2, 3, 4]);
+  });
+
+  it('uses the same explicit renderer, level, and signed bounds coverage identity as Phaser', () => {
+    const bounds = { minTileX: -2, maxTileX: 1, minTileY: -1, maxTileY: 0 };
+    expect(buildEarlyWorldTileCoverageKey(rendererVersion, 2, bounds)).toBe(
+      JSON.stringify([rendererVersion, 2, -2, 1, -1, 0]),
+    );
+    expect(earlyWorldTileBoundsContain(bounds, {
+      minTileX: -1,
+      maxTileX: 1,
+      minTileY: -1,
+      maxTileY: 0,
+    })).toBe(true);
+    expect(earlyWorldTileBoundsContain(bounds, { ...bounds, maxTileX: 2 })).toBe(false);
+  });
+
+  it('cancels only target refinement and retains the first intentional timeout reason', () => {
+    const cancellation = createEarlyWorldTileRefinementCancellation();
+    expect(cancellation.signal.aborted).toBe(false);
+    expect(cancellation.reason).toBeNull();
+    cancellation.cancel('coarse-timeout');
+    cancellation.cancel('refinement-timeout');
+    expect(cancellation.signal.aborted).toBe(true);
+    expect(cancellation.reason).toBe('coarse-timeout');
   });
 
   it('uses mathematical floor division across negative L0 coordinates', () => {

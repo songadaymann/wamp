@@ -36,6 +36,48 @@ export function selectExpectedWorldTileLevel(zoom, currentLevel) {
   return nextLevel;
 }
 
+export function selectCreditableEarlySharpEvent(events, phaserState) {
+  if (!Array.isArray(events) || !isRecord(phaserState)) return null;
+  const rendererVersion = phaserState.rollout?.rendererVersion;
+  const targetLevel = phaserState.targetLevel;
+  const coverageKey = phaserState.coverageKey;
+  const coverageEpoch = phaserState.coverageEpoch;
+  if (
+    typeof rendererVersion !== 'string'
+    || !Number.isSafeInteger(targetLevel)
+    || typeof coverageKey !== 'string'
+    || coverageKey.length === 0
+    || !Number.isSafeInteger(coverageEpoch)
+    || phaserState.readyCoverageEpoch !== coverageEpoch
+  ) return null;
+
+  return events.find((entry) => {
+    const state = entry?.state;
+    if (
+      entry?.type !== 'early-bootstrap-sharp-ready'
+      || entry.layerPresent !== true
+      || entry.bodyVisible !== true
+      || !isRecord(state)
+      || state.status !== 'visible'
+      || state.refinementError !== null
+      || state.rendererVersion !== rendererVersion
+      || state.targetLevel !== targetLevel
+      || state.displayLevel !== targetLevel
+      || state.coverageKey !== coverageKey
+      || !isRecord(state.targetBounds)
+      || !Number.isFinite(state.timings?.sharpVisibleAtMs)
+    ) return false;
+    return JSON.stringify([
+      rendererVersion,
+      targetLevel,
+      state.targetBounds.minTileX,
+      state.targetBounds.maxTileX,
+      state.targetBounds.minTileY,
+      state.targetBounds.maxTileY,
+    ]) === coverageKey;
+  }) ?? null;
+}
+
 export function isWorldTileImageUrl(url) {
   return /\/world-tiles\/.*\.png(?:\?|$)/.test(url);
 }
