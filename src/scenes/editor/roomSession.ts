@@ -2,6 +2,7 @@ import {
   DEFAULT_ROOM_COORDINATES,
   DEFAULT_ROOM_ID,
   cloneRoomSnapshot,
+  createRoomRecordFromCurrent,
   createLocalRoomRepository,
   isRoomApiError,
   isRoomSnapshotBlank,
@@ -104,6 +105,7 @@ export class EditorRoomSession {
     canMint: false,
   };
   private roomVersionHistory: RoomVersionRecord[] = [];
+  private historyLoaded = false;
   private claimerDisplayName: string | null = null;
   private claimedAt: string | null = null;
   private mintedChainId: number | null = null;
@@ -368,6 +370,36 @@ export class EditorRoomSession {
     };
   }
 
+  async loadHistory(): Promise<void> {
+    if (this.historyLoaded || this.publishedVersion <= 0) return;
+    const metadata = [];
+    let cursor: string | undefined;
+    do {
+      const page = await this.roomRepository.loadRoomVersions(this.roomId, 100, cursor);
+      metadata.push(...page.versions);
+      cursor = page.nextCursor;
+    } while (cursor);
+
+    const snapshotsByKey = new Map<string, RoomSnapshot>();
+    for (let index = 0; index < metadata.length; index += 128) {
+      const batch = metadata.slice(index, index + 128);
+      const response = await this.roomRepository.queryRoomSnapshots(batch.map((version) => ({
+        kind: 'version' as const,
+        roomId: this.roomId,
+        version: version.version,
+      })));
+      if (response.missing.length > 0) throw new Error('One or more room history snapshots are unavailable.');
+      for (const entry of response.snapshots) snapshotsByKey.set(entry.key, entry.snapshot);
+    }
+    this.roomVersionHistory = metadata.map((version) => {
+      const snapshot = snapshotsByKey.get(`version:${this.roomId}:${version.version}`);
+      if (!snapshot) throw new Error(`Room version ${version.version} is unavailable.`);
+      return { ...version, snapshot: cloneRoomSnapshot(snapshot) };
+    }).sort((left, right) => left.version - right.version);
+    this.historyLoaded = true;
+    this.host.refreshUi();
+  }
+
   maybeAutoSave(isPlaying: boolean): void {
     if (
       !this.host.getRoomDirty()
@@ -392,7 +424,9 @@ export class EditorRoomSession {
     this.setStatusText('Loading draft...');
 
     try {
-      const remoteRecord = await this.roomRepository.loadRoom(this.roomId, this.roomCoordinates);
+      const remoteRecord = createRoomRecordFromCurrent(
+        await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
+      );
       const localRecord = await this.getRecoverableLocalDraft(remoteRecord);
       const activeRecord = localRecord ?? remoteRecord;
       this.syncRoomMetadata(activeRecord);
@@ -876,7 +910,9 @@ export class EditorRoomSession {
     } catch (error) {
       console.error('Failed to mint room', error);
       if (isRoomApiError(error) && error.status === 409) {
-        const refreshed = await this.roomRepository.loadRoom(this.roomId, this.roomCoordinates);
+        const refreshed = createRoomRecordFromCurrent(
+          await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
+        );
         this.syncRoomMetadata(refreshed);
       }
 
@@ -982,7 +1018,9 @@ export class EditorRoomSession {
     } catch (error) {
       console.error('Failed to refresh room NFT metadata', error);
       if (isRoomApiError(error) && error.status === 409) {
-        const refreshed = await this.roomRepository.loadRoom(this.roomId, this.roomCoordinates);
+        const refreshed = createRoomRecordFromCurrent(
+          await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
+        );
         this.syncRoomMetadata(refreshed);
       }
 
@@ -1154,6 +1192,7 @@ export class EditorRoomSession {
       ...version,
       snapshot: cloneRoomSnapshot(version.snapshot),
     }));
+    this.historyLoaded = record.versions.length > 0 || record.published === null;
     this.claimerDisplayName = record.claimerDisplayName;
     this.claimedAt = record.claimedAt;
     this.mintedChainId = record.mintedChainId;

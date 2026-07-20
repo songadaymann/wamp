@@ -4,6 +4,8 @@ export const ROOM_COMMENT_MAX_LENGTH = 220;
 export const ROOM_COMMENT_DEFAULT_LIMIT = 80;
 export const ROOM_COMMENT_ADMIN_DEFAULT_LIMIT = 80;
 export const ROOM_COMMENT_MAX_LIMIT = 120;
+export const ROOM_COMMENT_BROWSE_MAX_ROOM_IDS = 128;
+export const ROOM_COMMENT_BROWSE_COMMENT_LIMIT = 12;
 
 export type RoomCommentStatus = 'pending_review' | 'approved' | 'rejected';
 
@@ -36,6 +38,24 @@ export interface RoomCommentAreaContext {
 export interface RoomCommentListResponse {
   comments: RoomCommentRecord[];
   commentArea: RoomCommentAreaContext | null;
+}
+
+export interface BrowseRoomCommentSummary {
+  roomId: string;
+  roomVersion: number;
+  commentCount: number;
+  comments: BrowseRoomCommentPreview[];
+}
+
+export interface BrowseRoomCommentPreview {
+  id: string;
+  body: string;
+  authorDisplayName: string;
+  createdAt: string;
+}
+
+export interface BrowseRoomCommentSummaryResponse {
+  rooms: BrowseRoomCommentSummary[];
 }
 
 export interface RoomCommentCreateRequestBody {

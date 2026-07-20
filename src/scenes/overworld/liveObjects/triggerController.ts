@@ -78,6 +78,42 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
   private readonly blockSwitchActorLatchesBySwitchKey = new Map<string, Set<string>>();
   private readonly pressureTargetStateByKey = new Map<string, PressureTargetState>();
   private readonly pressureTargetKeyBySourceKey = new Map<string, string>();
+  private readonly pressureInitializers: Readonly<Record<string, (liveObject: LoadedRoomObject) => void>> = {
+    blast_door: (liveObject) => {
+      liveObject.runtime.pressureActive = false;
+      this.applyPressureDoorState(liveObject, true);
+    },
+    barricade: (liveObject) => this.initializeLatchedBuildable(liveObject),
+    wooden_bridge: (liveObject) => this.initializeLatchedBuildable(liveObject),
+  };
+  private readonly pressureHandlers: Readonly<Record<string, (
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    active: boolean,
+    latched: boolean,
+  ) => void>> = {
+    door_metal: (room, object, active) => this.applyTriggeredDoorState(room, object, active, false),
+    trapdoor_metal: (room, object, active) => this.applyTriggeredDoorState(room, object, active, false),
+    door_metal_narrow: (room, object, active) => this.applyTriggeredDoorState(room, object, active, false),
+    blast_door: (room, object, active) => this.applyTriggeredDoorState(room, object, active, true),
+    barricade: (room, object, active, latched) => this.applyTriggeredBuildableState(room, object, active, latched),
+    wooden_bridge: (room, object, active, latched) => this.applyTriggeredBuildableState(room, object, active, latched),
+    door_locked: (room, object, active, latched) => {
+      if (active || latched) this.triggerLinkedLockedDoor(room, object);
+    },
+    trapdoor_locked: (room, object, active, latched) => {
+      if (active || latched) this.triggerLinkedLockedDoor(room, object);
+    },
+    door_locked_narrow: (room, object, active, latched) => {
+      if (active || latched) this.triggerLinkedLockedDoor(room, object);
+    },
+    cage: (room, object, active, latched) => {
+      if (active || latched) this.openTriggeredCage(room, object);
+    },
+    treasure_chest: (room, object, active, latched) => {
+      if (active || latched) this.openTriggeredChest(room, object);
+    },
+  };
 
   constructor(private readonly options: LiveObjectTriggerControllerOptions<TEdgeWall>) {}
 
@@ -155,24 +191,7 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
   }
 
   initializePressureControlledObjectState(liveObject: LoadedRoomObject): void {
-    switch (liveObject.config.id) {
-      case 'blast_door':
-        liveObject.runtime.pressureActive = false;
-        this.applyPressureDoorState(liveObject, true);
-        break;
-      case 'barricade':
-        liveObject.runtime.pressureActive = false;
-        liveObject.runtime.triggerLatched = false;
-        this.applyBarricadeUnbuiltState(liveObject);
-        break;
-      case 'wooden_bridge':
-        liveObject.runtime.pressureActive = false;
-        liveObject.runtime.triggerLatched = false;
-        this.applyBarricadeUnbuiltState(liveObject);
-        break;
-      default:
-        break;
-    }
+    this.pressureInitializers[liveObject.config.id]?.(liveObject);
   }
 
   updatePressurePlates(
@@ -273,64 +292,37 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
     active: boolean,
     latched: boolean,
   ): void {
-    switch (liveObject.config.id) {
-      case 'door_metal':
-      case 'trapdoor_metal':
-      case 'door_metal_narrow':
-        // Opens while plate is pressed
-        if (liveObject.runtime.pressureActive !== active) {
-          liveObject.runtime.pressureActive = active;
-          this.applyPressureDoorState(liveObject, active);
-          if (active) {
-            this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
-          }
-        }
-        break;
+    this.pressureHandlers[liveObject.config.id]?.(loadedRoom, liveObject, active, latched);
+  }
 
-      case 'blast_door':
-        // Closes while plate is pressed (opposite of metal door)
-        if (liveObject.runtime.pressureActive !== active) {
-          liveObject.runtime.pressureActive = active;
-          this.applyPressureDoorState(liveObject, !active); // true = open
-          if (active) {
-            this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
-          }
-        }
-        break;
+  private initializeLatchedBuildable(liveObject: LoadedRoomObject): void {
+    liveObject.runtime.pressureActive = false;
+    liveObject.runtime.triggerLatched = false;
+    this.applyBarricadeUnbuiltState(liveObject);
+  }
 
-      case 'barricade':
-      case 'wooden_bridge':
-        // Builds permanently the first time plate is pressed
-        if ((active || latched) && !liveObject.runtime.triggerLatched) {
-          liveObject.runtime.triggerLatched = true;
-          this.applyBarricadeBuiltState(liveObject);
-          this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
-        }
-        break;
+  private applyTriggeredDoorState(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    active: boolean,
+    invert: boolean,
+  ): void {
+    if (liveObject.runtime.pressureActive === active) return;
+    liveObject.runtime.pressureActive = active;
+    this.applyPressureDoorState(liveObject, invert ? !active : active);
+    if (active) this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
+  }
 
-      case 'door_locked':
-      case 'trapdoor_locked':
-      case 'door_locked_narrow':
-        if (active || latched) {
-          this.triggerLinkedLockedDoor(loadedRoom, liveObject);
-        }
-        break;
-
-      case 'cage':
-        if (active || latched) {
-          this.openTriggeredCage(loadedRoom, liveObject);
-        }
-        break;
-
-      case 'treasure_chest':
-        if (active || latched) {
-          this.openTriggeredChest(loadedRoom, liveObject);
-        }
-        break;
-
-      default:
-        break;
-    }
+  private applyTriggeredBuildableState(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    active: boolean,
+    latched: boolean,
+  ): void {
+    if ((!active && !latched) || liveObject.runtime.triggerLatched) return;
+    liveObject.runtime.triggerLatched = true;
+    this.applyBarricadeBuiltState(liveObject);
+    this.options.playRoomSfx('door-open', loadedRoom.room.coordinates);
   }
 
   private getPressureSourceKey(

@@ -3,17 +3,27 @@ import {
   cloneRoomSnapshot,
   createRoomVersionRecord,
   createDefaultRoomRecord,
+  createRoomRecordFromCurrent,
+  createRoomSummaryFromRecord,
+  DEFAULT_ROOM_COORDINATES,
   getRoomPublishValidationError,
   isRoomMinted,
   normalizeRoomRecord,
   type RoomLeaderboardLineageRequestBody,
   type RoomVersionRecord,
   type RoomCoordinates,
+  type RoomCurrentRecord,
   type RoomRecord,
   type RoomRevertRequestBody,
   type RoomSnapshot,
+  type RoomSnapshotQueryReference,
+  type RoomSnapshotQueryResponse,
+  type RoomSummary,
+  type RoomVersionSummary,
+  type RoomVersionsPage,
 } from './roomModel';
 import { ROOM_STORAGE_PREFIX } from './browserStorage';
+import { invalidateSharedRoomPreviewCache } from './sharedRoomPreviewCache';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { buildRoomVersionLineage } from './roomVersionLineage';
 import { getManualRoomLeaderboardSourceValidationError } from './roomLeaderboardLineage';
@@ -33,6 +43,11 @@ export type RoomPersistenceTarget = 'local' | 'remote';
 
 export interface RoomRepository {
   loadRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomRecord>;
+  loadRoomSummary(roomId: string, coordinates: RoomCoordinates): Promise<RoomSummary>;
+  loadRoomCurrent(roomId: string, coordinates: RoomCoordinates): Promise<RoomCurrentRecord>;
+  loadRoomVersions(roomId: string, limit?: number, cursor?: string): Promise<RoomVersionsPage>;
+  loadExactRoomVersion(roomId: string, version: number): Promise<RoomVersionRecord>;
+  queryRoomSnapshots(references: RoomSnapshotQueryReference[]): Promise<RoomSnapshotQueryResponse>;
   saveDraft(room: RoomSnapshot): Promise<RoomRecord>;
   publish(room: RoomSnapshot): Promise<RoomRecord>;
   revert(roomId: string, coordinates: RoomCoordinates, targetVersion: number): Promise<RoomRecord>;
@@ -109,6 +124,60 @@ class LocalRoomRepository implements RoomRepository {
     }
 
     return createDefaultRoomRecord(roomId, coordinates);
+  }
+
+  async loadRoomSummary(roomId: string, coordinates: RoomCoordinates): Promise<RoomSummary> {
+    return createRoomSummaryFromRecord(await this.loadRoom(roomId, coordinates));
+  }
+
+  async loadRoomCurrent(roomId: string, coordinates: RoomCoordinates): Promise<RoomCurrentRecord> {
+    const record = await this.loadRoom(roomId, coordinates);
+    return { summary: createRoomSummaryFromRecord(record), draft: record.draft, published: record.published };
+  }
+
+  async loadRoomVersions(roomId: string, limit = 25): Promise<RoomVersionsPage> {
+    const record = await this.loadRoom(roomId, DEFAULT_ROOM_COORDINATES);
+    const versions: RoomVersionSummary[] = [...record.versions].reverse().slice(0, limit).map((entry) => ({
+      version: entry.version,
+      title: entry.snapshot.title,
+      createdAt: entry.createdAt,
+      publishedByUserId: entry.publishedByUserId,
+      publishedByPrincipalKind: entry.publishedByPrincipalKind,
+      publishedByAgentId: entry.publishedByAgentId,
+      publishedByDisplayName: entry.publishedByDisplayName,
+      revertedFromVersion: entry.revertedFromVersion,
+      leaderboardSourceVersion: entry.leaderboardSourceVersion,
+    }));
+    return { versions };
+  }
+
+  async loadExactRoomVersion(roomId: string, version: number): Promise<RoomVersionRecord> {
+    const record = await this.loadRoom(roomId, DEFAULT_ROOM_COORDINATES);
+    const match = record.versions.find((entry) => entry.version === version);
+    if (!match) throw new Error('Room version not found.');
+    return match;
+  }
+
+  async queryRoomSnapshots(references: RoomSnapshotQueryReference[]): Promise<RoomSnapshotQueryResponse> {
+    const snapshots: RoomSnapshotQueryResponse['snapshots'] = [];
+    const missing: RoomSnapshotQueryReference[] = [];
+    for (const reference of references) {
+      const record = await this.loadRoom(reference.roomId, reference.kind === 'current_preview'
+        ? reference.coordinates ?? DEFAULT_ROOM_COORDINATES
+        : DEFAULT_ROOM_COORDINATES);
+      const snapshot = reference.kind === 'version'
+        ? record.versions.find((entry) => entry.version === reference.version)?.snapshot ?? null
+        : reference.state === 'claimed_unpublished' ? record.draft : record.published;
+      if (snapshot) snapshots.push({
+        key: reference.kind === 'version'
+          ? `version:${reference.roomId}:${reference.version}`
+          : `current:${reference.roomId}:${reference.state ?? 'published'}:${reference.updatedAt ?? ''}`,
+        reference,
+        snapshot,
+      });
+      else missing.push(reference);
+    }
+    return { snapshots, missing };
   }
 
   async saveDraft(room: RoomSnapshot): Promise<RoomRecord> {
@@ -557,13 +626,53 @@ class ApiRoomRepository implements RoomRepository {
     );
   }
 
+  async loadRoomSummary(roomId: string, coordinates: RoomCoordinates): Promise<RoomSummary> {
+    const params = new URLSearchParams({ x: String(coordinates.x), y: String(coordinates.y) });
+    return this.withFallback(
+      () => this.request(`/api/rooms/${encodeURIComponent(roomId)}/summary?${params.toString()}`),
+      () => this.fallback?.loadRoomSummary(roomId, coordinates),
+    );
+  }
+
+  async loadRoomCurrent(roomId: string, coordinates: RoomCoordinates): Promise<RoomCurrentRecord> {
+    const params = new URLSearchParams({ x: String(coordinates.x), y: String(coordinates.y) });
+    return this.withFallback(
+      () => this.request(`/api/rooms/${encodeURIComponent(roomId)}/current?${params.toString()}`),
+      () => this.fallback?.loadRoomCurrent(roomId, coordinates),
+    );
+  }
+
+  async loadRoomVersions(roomId: string, limit = 25, cursor?: string): Promise<RoomVersionsPage> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return this.withFallback(
+      () => this.request(`/api/rooms/${encodeURIComponent(roomId)}/versions?${params.toString()}`),
+      () => this.fallback?.loadRoomVersions(roomId, limit, cursor),
+    );
+  }
+
+  async loadExactRoomVersion(roomId: string, version: number): Promise<RoomVersionRecord> {
+    return this.withFallback(
+      () => this.request(`/api/rooms/${encodeURIComponent(roomId)}/versions/${version}`),
+      () => this.fallback?.loadExactRoomVersion(roomId, version),
+    );
+  }
+
+  async queryRoomSnapshots(references: RoomSnapshotQueryReference[]): Promise<RoomSnapshotQueryResponse> {
+    return this.withFallback(
+      () => this.request('/api/rooms/snapshots/query', { method: 'POST', body: JSON.stringify({ references }) }),
+      () => this.fallback?.queryRoomSnapshots(references),
+    );
+  }
+
   async saveDraft(room: RoomSnapshot): Promise<RoomRecord> {
     return this.withFallback(
-      () =>
-        this.request(`/api/rooms/${encodeURIComponent(room.id)}/draft`, {
+      async () => this.compactMutationRecord(
+        await this.request(`/api/rooms/${encodeURIComponent(room.id)}/draft?response=compact`, {
           method: 'PUT',
           body: JSON.stringify(room),
         }),
+      ),
       () => this.fallback?.saveDraft(room)
     );
   }
@@ -571,11 +680,11 @@ class ApiRoomRepository implements RoomRepository {
   async publish(room: RoomSnapshot): Promise<RoomRecord> {
     return this.withFallback(
       async () => {
-        const record = await this.request<RoomRecord>(`/api/rooms/${encodeURIComponent(room.id)}/publish`, {
+        const current = await this.request<RoomCurrentRecord>(`/api/rooms/${encodeURIComponent(room.id)}/publish?response=compact`, {
           method: 'POST',
           body: JSON.stringify(room),
         });
-        return record;
+        return this.compactMutationRecord(current);
       },
       () => this.fallback?.publish(room)
     );
@@ -585,16 +694,18 @@ class ApiRoomRepository implements RoomRepository {
     const params = new URLSearchParams({
       x: String(coordinates.x),
       y: String(coordinates.y),
+      response: 'compact',
     });
     const body: RoomRevertRequestBody = { targetVersion };
 
     return this.withFallback(
       async () => {
-        const record = await this.request<RoomRecord>(`/api/rooms/${encodeURIComponent(roomId)}/revert?${params.toString()}`, {
+        params.set('response', 'compact');
+        const current = await this.request<RoomCurrentRecord>(`/api/rooms/${encodeURIComponent(roomId)}/revert?${params.toString()}`, {
           method: 'POST',
           body: JSON.stringify(body),
         });
-        return record;
+        return this.compactMutationRecord(current);
       },
       () => this.fallback?.revert(roomId, coordinates, targetVersion)
     );
@@ -608,18 +719,19 @@ class ApiRoomRepository implements RoomRepository {
     const params = new URLSearchParams({
       x: String(coordinates.x),
       y: String(coordinates.y),
+      response: 'compact',
     });
     const body: RoomRevertRequestBody = { targetVersion };
 
     return this.withFallback(
       () =>
-        this.request<RoomRecord>(
+        this.request<RoomCurrentRecord>(
           `/api/admin/rooms/${encodeURIComponent(roomId)}/restore?${params.toString()}`,
           {
             method: 'POST',
             body: JSON.stringify(body),
           }
-        ),
+        ).then((current) => this.compactMutationRecord(current)),
       () => this.fallback?.adminRestore(roomId, coordinates, targetVersion)
     );
   }
@@ -632,17 +744,18 @@ class ApiRoomRepository implements RoomRepository {
     const params = new URLSearchParams({
       x: String(coordinates.x),
       y: String(coordinates.y),
+      response: 'compact',
     });
 
     return this.withFallback(
       () =>
-        this.request<RoomRecord>(
+        this.request<RoomCurrentRecord>(
           `/api/rooms/${encodeURIComponent(roomId)}/canonical?${params.toString()}`,
           {
             method: 'POST',
             body: JSON.stringify({ targetVersion }),
           }
-        ),
+        ).then((current) => this.compactMutationRecord(current)),
       () => this.fallback?.setCanonicalVersion(roomId, coordinates, targetVersion)
     );
   }
@@ -656,18 +769,19 @@ class ApiRoomRepository implements RoomRepository {
     const params = new URLSearchParams({
       x: String(coordinates.x),
       y: String(coordinates.y),
+      response: 'compact',
     });
     const body: RoomLeaderboardLineageRequestBody = { targetVersion, sourceVersion };
 
     return this.withFallback(
       () =>
-        this.request<RoomRecord>(
+        this.request<RoomCurrentRecord>(
           `/api/rooms/${encodeURIComponent(roomId)}/leaderboard-lineage?${params.toString()}`,
           {
             method: 'POST',
             body: JSON.stringify(body),
           }
-        ),
+        ).then((current) => this.compactMutationRecord(current)),
       () => this.fallback?.setLeaderboardSourceVersion(roomId, coordinates, targetVersion, sourceVersion)
     );
   }
@@ -779,16 +893,22 @@ class ApiRoomRepository implements RoomRepository {
 
     const data = (await response.json()) as T;
     if (isRoomRecordResponse(data)) {
+      if (init?.method && init.method !== 'GET') invalidateSharedRoomPreviewCache(data.draft.id);
       return cloneRoomRecord(data) as T;
     }
 
     return data;
   }
 
-  private async withFallback(
-    remoteOperation: () => Promise<RoomRecord>,
-    fallbackOperation: (() => Promise<RoomRecord> | undefined) | undefined
-  ): Promise<RoomRecord> {
+  private compactMutationRecord(current: RoomCurrentRecord): RoomRecord {
+    invalidateSharedRoomPreviewCache(current.draft.id);
+    return createRoomRecordFromCurrent(current);
+  }
+
+  private async withFallback<T>(
+    remoteOperation: () => Promise<T>,
+    fallbackOperation: (() => Promise<T> | undefined) | undefined
+  ): Promise<T> {
     try {
       const remoteResult = await remoteOperation();
       this.lastPersistenceTarget = 'remote';

@@ -30,6 +30,7 @@ import {
   type AuthConfigSource,
   type RoomStorageBackend,
 } from './runtimeConfig';
+import { dispatchTypedEvent } from '../events/typedEvent';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
 export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
@@ -319,26 +320,28 @@ export async function sendPreparedWalletTransaction(
 
   await ensureWalletChain(provider, chain);
 
-  const { BrowserProvider } = await import('ethers');
-  const browserProvider = new BrowserProvider(provider);
-  const signer = await browserProvider.getSigner();
-  const signerAddress = await signer.getAddress();
+  const { createPublicClient, createWalletClient, custom } = await import('viem');
+  const walletClient = createWalletClient({ transport: custom(provider) });
+  const [signerAddress] = await walletClient.getAddresses();
+  if (!signerAddress) throw new Error('The connected wallet did not expose an account.');
   const linkedWallet = state.user?.walletAddress?.toLowerCase();
 
   if (linkedWallet && linkedWallet !== signerAddress.toLowerCase()) {
     throw new Error('Connected wallet does not match the linked account wallet.');
   }
 
-  const response = await signer.sendTransaction({
-    to: transaction.to,
-    data: transaction.data,
+  const hash = await walletClient.sendTransaction({
+    account: signerAddress,
+    chain: null,
+    to: requireHexValue(transaction.to, 'transaction destination'),
+    data: requireHexValue(transaction.data, 'transaction data'),
     value: BigInt(transaction.value),
   });
-
-  await response.wait();
+  const publicClient = createPublicClient({ transport: custom(provider) });
+  await publicClient.waitForTransactionReceipt({ hash });
 
   return {
-    hash: response.hash,
+    hash,
     from: signerAddress,
   };
 }
@@ -779,11 +782,14 @@ async function authenticateWithWallet(): Promise<void> {
 
     const provider = getWalletProvider(walletModal);
 
-    const { BrowserProvider } = await import('ethers');
-    const browserProvider = new BrowserProvider(provider);
-    const signer = await browserProvider.getSigner();
-    const signerAddress = await signer.getAddress();
-    const signature = await signer.signMessage(challenge.message);
+    const { createWalletClient, custom } = await import('viem');
+    const walletClient = createWalletClient({ transport: custom(provider) });
+    const [signerAddress] = await walletClient.getAddresses();
+    if (!signerAddress) throw new Error('The connected wallet did not expose an account.');
+    const signature = await walletClient.signMessage({
+      account: signerAddress,
+      message: challenge.message,
+    });
 
     const response = await apiRequest<WalletVerifyResponse>('/api/auth/wallet/verify', {
       method: 'POST',
@@ -886,11 +892,13 @@ async function ensureWalletModal(): Promise<AppKit> {
   }
 
   walletBootstrapPromise = (async () => {
-    const [{ createAppKit }, { EthersAdapter }, { base, baseSepolia, mainnet }] = await Promise.all([
+    const [{ createAppKit }, { WagmiAdapter }, { base, baseSepolia, mainnet }] = await Promise.all([
       import('@reown/appkit'),
-      import('@reown/appkit-adapter-ethers'),
+      import('@reown/appkit-adapter-wagmi'),
       import('@reown/appkit/networks'),
     ]);
+    const networks: [typeof base, typeof mainnet, typeof baseSepolia] = [base, mainnet, baseSepolia];
+    const wagmiAdapter = new WagmiAdapter({ projectId, networks });
 
     const metadata = {
       name: 'WAMP',
@@ -900,11 +908,11 @@ async function ensureWalletModal(): Promise<AppKit> {
     };
 
     const walletModal = createAppKit({
-      adapters: [new EthersAdapter()],
+      adapters: [wagmiAdapter],
       featuredWalletIds: [...FEATURED_REOWN_WALLET_IDS],
       enableCoinbase: false,
       metadata,
-      networks: [base, mainnet, baseSepolia],
+      networks,
       defaultNetwork: base,
       projectId,
       themeMode: 'dark',
@@ -923,6 +931,13 @@ async function ensureWalletModal(): Promise<AppKit> {
   })();
 
   return walletBootstrapPromise;
+}
+
+function requireHexValue(value: string, label: string): `0x${string}` {
+  if (!/^0x[0-9a-fA-F]*$/.test(value)) {
+    throw new Error(`Invalid ${label}.`);
+  }
+  return value as `0x${string}`;
 }
 
 function syncWalletAccount(account: { isConnected: boolean; address?: string } | undefined): void {
@@ -1074,11 +1089,7 @@ function renderAuthUi(): void {
     }
   }
 
-  window.dispatchEvent(
-    new CustomEvent(AUTH_STATE_CHANGED_EVENT, {
-      detail: getAuthDebugState(),
-    })
-  );
+  dispatchTypedEvent<AuthDebugState>(window, AUTH_STATE_CHANGED_EVENT, getAuthDebugState());
 }
 
 function renderAuthIdentity(): void {

@@ -41,6 +41,8 @@ import {
   PVP_HEART_TEXTURE_PATH,
 } from './overworld/pvpHeartDisplay';
 import { logBootPhase, startBootStallWatch } from '../main/bootDiagnostics';
+import { DEFAULT_PLAYER_AVATAR_ID, getRegisteredPlayerAvatarPack } from '../player/avatar/registry';
+import { getRequestedPlayerAvatarId } from '../player/avatar/storage';
 
 type PendingBootAsset = {
   key: string;
@@ -55,7 +57,8 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     showBootSplash('Loading assets...', 0);
-    const avatarAtlasAssets = listPlayerAvatarAtlasAssets();
+    const bootAvatarIds = getBootAvatarIds();
+    const avatarAtlasAssets = listPlayerAvatarAtlasAssets(bootAvatarIds);
     const assetGroupCount =
       TILESETS.length +
       BACKGROUND_GROUPS.reduce((total, group) => total + group.layers.length, 0) +
@@ -274,7 +277,7 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    for (const animation of listPlayerAvatarAnimations()) {
+    for (const animation of listPlayerAvatarAnimations(getBootAvatarIds())) {
       if (this.anims.exists(animation.key)) {
         continue;
       }
@@ -354,4 +357,12 @@ export class BootScene extends Phaser.Scene {
     logBootPhase('boot-scene:handoff-overworld');
     this.scene.start('OverworldPlayScene');
   }
+}
+
+function getBootAvatarIds(): string[] {
+  const selectedAvatarId = getRequestedPlayerAvatarId();
+  return Array.from(new Set([
+    DEFAULT_PLAYER_AVATAR_ID,
+    ...(selectedAvatarId && getRegisteredPlayerAvatarPack(selectedAvatarId) ? [selectedAvatarId] : []),
+  ]));
 }

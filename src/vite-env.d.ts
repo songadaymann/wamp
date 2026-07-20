@@ -38,6 +38,8 @@ interface Window {
   ) => void;
   run_overworld_lod_stress?: () => Promise<Record<string, unknown>>;
   wampMobilePerf?: import('./debug/mobilePerformanceProfiler').MobilePerformanceProfilerApi;
+  __wampFrameTimes?: number[];
+  __wampFrameRequest?: number;
   wampMobileCameraTuner?: {
     get: () => import('./ui/setup/sceneBridge').MobilePortraitCameraTuningSnapshot;
     log: (reason?: string) => import('./ui/setup/sceneBridge').MobilePortraitCameraTuningSnapshot;

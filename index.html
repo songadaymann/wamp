@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <!-- wamp-early-world-tiles-bootstrap -->
   <base href="/">
   <meta name="theme-color" content="#050505">
   <meta name="mobile-web-app-capable" content="yes">
@@ -1761,24 +1762,6 @@
     </div>
   </div>
 
-  <div id="room-goal-intro-modal" class="history-modal hidden" aria-hidden="true">
-    <div class="history-modal-panel room-goal-intro-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-goal-intro-title">
-      <div class="history-modal-header room-goal-intro-header">
-        <div class="history-modal-title-group">
-          <div class="history-modal-kicker">Room Goal</div>
-          <h2 id="room-goal-intro-title" class="history-modal-title">Reach Exit</h2>
-          <div id="room-goal-intro-meta" class="history-modal-meta">Collect 3</div>
-        </div>
-      </div>
-      <div class="room-goal-intro-copy">
-        <div id="room-goal-intro-body" class="room-goal-intro-body">Reach the exit as fast as you can!</div>
-      </div>
-      <div class="room-goal-intro-actions">
-        <button id="btn-room-goal-intro-start" class="bar-btn" type="button">Start</button>
-      </div>
-    </div>
-  </div>
-
   <div id="room-rush-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel room-rush-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-rush-title">
       <div class="history-modal-header">
@@ -2521,6 +2504,6 @@
   </div>
   </div>
 
-  <script type="module" src="/src/main.ts"></script>
+  <script type="module" src="/src/main/coarseFirstEntry.ts"></script>
 </body>
 </html>

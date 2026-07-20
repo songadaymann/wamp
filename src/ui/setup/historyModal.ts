@@ -145,6 +145,11 @@ export class RoomHistoryModalController {
     this.activeLeaderboardSourceVersion = null;
     this.metadataRefreshInFlight = false;
     this.setError(null);
+    try {
+      await editorScene.loadHistory?.();
+    } catch (error) {
+      this.setError(error instanceof Error ? error.message : 'Failed to load room history.');
+    }
     await this.render();
   }
 

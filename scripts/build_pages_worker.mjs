@@ -6,16 +6,16 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const esbuildBin = process.platform === 'win32' ? 'esbuild.cmd' : 'esbuild';
 const esbuildPath = path.join(repoRoot, 'node_modules', '.bin', esbuildBin);
-const workerSource = path.join(repoRoot, 'public', '_worker.js');
+const workerSource = path.join(repoRoot, 'src', 'pages', 'worker.ts');
 const workerOutput = path.join(repoRoot, 'dist', '_worker.js');
-const standalonePages = ['jam', 'school-admin', 'school-login'];
+const standalonePages = ['jam', 'school-admin', 'school-login', 'world-tile-render'];
 
 if (!fs.existsSync(esbuildPath)) {
   throw new Error('Missing esbuild binary. Run npm install before building.');
 }
 
 if (!fs.existsSync(workerSource)) {
-  throw new Error(`Missing Pages worker source: ${workerSource}`);
+  throw new Error(`Missing typed Pages worker source: ${workerSource}`);
 }
 
 if (!fs.existsSync(path.dirname(workerOutput))) {

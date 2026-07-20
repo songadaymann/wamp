@@ -69,6 +69,7 @@ export type EditorCourseUiState = {
 
 export interface EditorSceneBridge {
   getHistoryState?: () => EditorHistoryState;
+  loadHistory?: () => Promise<void>;
   revertToVersion?: (targetVersion: number) => Promise<RoomRecord | null>;
   adminRestoreToVersion?: (targetVersion: number) => Promise<RoomRecord | null>;
   setCanonicalVersion?: (targetVersion: number) => Promise<RoomRecord | null>;

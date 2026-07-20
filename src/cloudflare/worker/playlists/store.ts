@@ -18,7 +18,11 @@ import {
 import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { Env } from '../core/types';
 import { HttpError } from '../core/http';
-import { resolveExpandedRoomAtCoordinates } from '../expandedRooms/store';
+import {
+  loadExpandedRoomTarget,
+  loadPublishedExpandedRoomMembershipsForRoomIds,
+  resolveExpandedRoomAtCoordinates,
+} from '../expandedRooms/store';
 import { parseStoredSnapshot } from '../rooms/store';
 
 interface PlaylistRow {
@@ -51,8 +55,6 @@ interface PlaylistCountItemRow {
   playlist_id: string;
   room_id: string;
   room_version: number | string | null;
-  room_x: number | string | null;
-  room_y: number | string | null;
 }
 
 interface PublishedRoomVersionRow {
@@ -527,6 +529,15 @@ async function hydratePlaylistSummaryCounts(
   }
 
   const countRows = await loadPlaylistCountItemRows(env, summaries.map((summary) => summary.id));
+  const memberships = await loadPublishedExpandedRoomMembershipsForRoomIds(
+    env,
+    countRows.map((row) => row.room_id),
+  );
+  const membershipByRoomId = new Map(
+    memberships
+      .filter((membership) => membership.cellCount > 1)
+      .map((membership) => [membership.roomId, membership] as const),
+  );
   const playableTargetKeysByPlaylistId = new Map<string, Set<string>>();
   for (const row of countRows) {
     const roomVersion = normalizeResolvedRoomVersion(row.room_version);
@@ -534,17 +545,10 @@ async function hydratePlaylistSummaryCounts(
       continue;
     }
 
-    const expandedRoomTarget = await loadPlaylistExpandedRoomTargetForCell(
-      env,
-      row.room_id,
-      {
-        x: parseRowNumber(row.room_x),
-        y: parseRowNumber(row.room_y),
-      },
-      roomVersion,
-    );
-    const playableTargetKey = expandedRoomTarget
-      ? getExpandedRoomPlaylistTargetKey(expandedRoomTarget)
+    const membership = membershipByRoomId.get(row.room_id);
+    const belongsToCurrentExpandedTarget = membership?.roomVersion === roomVersion;
+    const playableTargetKey = belongsToCurrentExpandedTarget
+      ? `expanded-room:${membership.expandedRoomId}:published`
       : getStandalonePlaylistTargetKey(row.room_id, roomVersion);
     let playlistTargetKeys = playableTargetKeysByPlaylistId.get(row.playlist_id);
     if (!playlistTargetKeys) {
@@ -574,12 +578,8 @@ async function loadPlaylistCountItemRows(
       SELECT
         room_playlist_items.playlist_id,
         room_playlist_items.room_id,
-        room_playlist_items.room_version,
-        rooms.x AS room_x,
-        rooms.y AS room_y
+        room_playlist_items.room_version
       FROM room_playlist_items
-      INNER JOIN rooms
-        ON rooms.id = room_playlist_items.room_id
       INNER JOIN room_versions
         ON room_versions.room_id = room_playlist_items.room_id
        AND room_versions.version = room_playlist_items.room_version
@@ -720,15 +720,30 @@ async function hydratePlaylistItemsWithExpandedRooms(
   env: Env,
   items: RoomPlaylistItem[],
 ): Promise<RoomPlaylistItem[]> {
+  if (!isExpandedRoomsEnabled(env) || items.length === 0) return items;
+  const memberships = await loadPublishedExpandedRoomMembershipsForRoomIds(
+    env,
+    items.map((item) => item.roomId),
+  );
+  const membershipByRoomId = new Map(memberships.map((membership) => [membership.roomId, membership]));
+  const expandedIds = [...new Set(memberships
+    .filter((membership) => membership.cellCount > 1)
+    .map((membership) => membership.expandedRoomId))];
+  const targets = await Promise.all(expandedIds.map(async (expandedRoomId) => [
+    expandedRoomId,
+    await loadExpandedRoomTarget(env, expandedRoomId),
+  ] as const));
+  const targetById = new Map(targets);
   const hydrated: RoomPlaylistItem[] = [];
   const seenPlayableTargetKeys = new Set<string>();
   for (const item of items) {
-    const expandedRoomTarget = await loadPlaylistExpandedRoomTargetForCell(
-      env,
-      item.roomId,
-      item.roomCoordinates,
-      item.roomVersion,
-    );
+    const membership = membershipByRoomId.get(item.roomId) ?? null;
+    const candidateTarget = membership?.cellCount && membership.cellCount > 1
+      ? targetById.get(membership.expandedRoomId) ?? null
+      : null;
+    const expandedRoomTarget = candidateTarget && candidateTarget.cells.some(
+      (cell) => cell.roomId === item.roomId && normalizeResolvedRoomVersion(cell.roomVersion) === item.roomVersion,
+    ) ? candidateTarget : null;
     const expandedRoom = expandedRoomTarget
       ? mapExpandedRoomTargetForPlaylistItem(expandedRoomTarget, item.roomCoordinates)
       : null;
@@ -756,19 +771,12 @@ async function loadPlaylistExpandedRoomTargetForCell(
   coordinates: RoomCoordinates,
   roomVersion: number,
 ): Promise<ResolvedExpandedRoomTarget | null> {
-  if (!isExpandedRoomsEnabled(env)) {
-    return null;
-  }
-
+  if (!isExpandedRoomsEnabled(env)) return null;
   const target = await resolveExpandedRoomAtCoordinates(env, coordinates);
-  if (!target || target.cellCount <= 1) {
-    return null;
-  }
-
-  const containsPinnedCell = target.cells.some(
+  if (!target || target.cellCount <= 1) return null;
+  return target.cells.some(
     (cell) => cell.roomId === roomId && normalizeResolvedRoomVersion(cell.roomVersion) === roomVersion,
-  );
-  return containsPinnedCell ? target : null;
+  ) ? target : null;
 }
 
 async function playlistContainsPlayableTarget(

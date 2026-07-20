@@ -524,7 +524,8 @@ export class OverworldGoalRunController {
           targetRoom.id,
           targetRoom.coordinates,
           targetRoom.version,
-          5
+          25,
+          true,
         ),
         this.options.runRepository.loadGlobalLeaderboard(5),
       ]);
@@ -1074,7 +1075,8 @@ export class OverworldGoalRunController {
         runState.roomId,
         runState.roomCoordinates,
         runState.roomVersion,
-        5,
+        25,
+        true,
       );
       this.currentRoomLeaderboard = leaderboard;
       this.leaderboardState = 'ready';

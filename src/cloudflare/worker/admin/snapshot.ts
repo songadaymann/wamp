@@ -8,6 +8,11 @@ import {
 import { countRows } from '../maintenance/routes';
 
 const SNAPSHOT_TABLES = [
+  // Tile runtime state is environment-specific. Clear it before rooms so room
+  // publication triggers cannot enqueue work against a copied renderer version.
+  'world_render_tile_outbox',
+  'world_render_tiles',
+  'world_tile_renderer_versions',
   'admin_suspicious_invalidation_audit',
   'agent_tokens',
   'agents',

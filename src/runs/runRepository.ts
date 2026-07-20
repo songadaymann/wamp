@@ -1,5 +1,9 @@
 import type { RoomCoordinates } from '../persistence/roomModel';
 import { getApiBaseUrl } from '../api/baseUrl';
+import {
+  invalidateStaleWhileRevalidateCache,
+  loadWithStaleWhileRevalidate,
+} from '../api/staleWhileRevalidateCache';
 import type {
   BuilderDiscoveryResponse,
   BuilderDiscoverySort,
@@ -32,7 +36,8 @@ export interface RunRepository {
     roomId: string,
     coordinates: RoomCoordinates,
     version?: number | null,
-    limit?: number
+    limit?: number,
+    cacheAsCurrent?: boolean,
   ): Promise<RoomLeaderboardResponse>;
   submitRoomDifficultyVote(roomId: string, body: RoomDifficultyVoteRequestBody): Promise<void>;
   submitRoomRating(roomId: string, body: RoomProgressRatingRequestBody): Promise<RoomProgressRatingResponse>;
@@ -46,7 +51,8 @@ export interface RunRepository {
     difficulty: RoomDifficulty | null,
     sort?: RoomDiscoverySort,
     limit?: number,
-    includeGoalLessRooms?: boolean
+    includeGoalLessRooms?: boolean,
+    cursor?: string | null,
   ): Promise<RoomDiscoveryResponse>;
   loadBuilderDiscovery(
     sort?: BuilderDiscoverySort,
@@ -79,13 +85,15 @@ class ApiRunRepository implements RunRepository {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    this.invalidateLeaderboards();
   }
 
   async loadRoomLeaderboard(
     roomId: string,
     coordinates: RoomCoordinates,
     version: number | null = null,
-    limit: number = 10
+    limit: number = 10,
+    cacheAsCurrent: boolean = false,
   ): Promise<RoomLeaderboardResponse> {
     const params = new URLSearchParams({
       x: String(coordinates.x),
@@ -97,8 +105,13 @@ class ApiRunRepository implements RunRepository {
       params.set('version', String(version));
     }
 
-    const response = await this.request<RoomLeaderboardResponse>(
-      `/api/leaderboards/rooms/${encodeURIComponent(roomId)}?${params.toString()}`
+    const path = `/api/leaderboards/rooms/${encodeURIComponent(roomId)}?${params.toString()}`;
+    const cacheKey = cacheAsCurrent || version === null
+      ? this.currentRoomLeaderboardCacheKey(roomId, coordinates, limit)
+      : this.leaderboardCacheKey(path);
+    const response = await loadWithStaleWhileRevalidate(
+      cacheKey,
+      () => this.request<RoomLeaderboardResponse>(path),
     );
     return filterRoomLeaderboardForCurrentSurface(response);
   }
@@ -111,16 +124,19 @@ class ApiRunRepository implements RunRepository {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    this.invalidateLeaderboards();
   }
 
   async submitRoomRating(
     roomId: string,
     body: RoomProgressRatingRequestBody
   ): Promise<RoomProgressRatingResponse> {
-    return this.request<RoomProgressRatingResponse>(`/api/rooms/${encodeURIComponent(roomId)}/ratings`, {
+    const response = await this.request<RoomProgressRatingResponse>(`/api/rooms/${encodeURIComponent(roomId)}/ratings`, {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    this.invalidateLeaderboards();
+    return response;
   }
 
   async startRoomRushRun(
@@ -135,10 +151,12 @@ class ApiRunRepository implements RunRepository {
   async submitRoomRushRun(
     body: RoomRushRunSubmissionRequestBody
   ): Promise<RoomRushRunSubmissionResponse> {
-    return this.request<RoomRushRunSubmissionResponse>('/api/room-rush/runs', {
+    const response = await this.request<RoomRushRunSubmissionResponse>('/api/room-rush/runs', {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    this.invalidateLeaderboards();
+    return response;
   }
 
   async loadRoomRushLeaderboards(
@@ -152,8 +170,10 @@ class ApiRunRepository implements RunRepository {
       params.set('mode', modeKey);
     }
 
-    return this.request<RoomRushLeaderboardsResponse>(
-      `/api/leaderboards/room-rush?${params.toString()}`
+    const path = `/api/leaderboards/room-rush?${params.toString()}`;
+    return loadWithStaleWhileRevalidate(
+      this.leaderboardCacheKey(path),
+      () => this.request<RoomRushLeaderboardsResponse>(path),
     );
   }
 
@@ -161,7 +181,8 @@ class ApiRunRepository implements RunRepository {
     difficulty: RoomDifficulty | null,
     sort: RoomDiscoverySort = 'featured',
     limit: number = 100,
-    includeGoalLessRooms: boolean = false
+    includeGoalLessRooms: boolean = false,
+    cursor: string | null = null,
   ): Promise<RoomDiscoveryResponse> {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -173,9 +194,14 @@ class ApiRunRepository implements RunRepository {
     if (includeGoalLessRooms) {
       params.set('includeGoalLessRooms', '1');
     }
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
 
-    return this.request<RoomDiscoveryResponse>(
-      `/api/leaderboards/rooms/discover?${params.toString()}`
+    const path = `/api/leaderboards/rooms/discover?${params.toString()}`;
+    return loadWithStaleWhileRevalidate(
+      `discovery:${this.baseUrl}${path}`,
+      () => this.request<RoomDiscoveryResponse>(path),
     );
   }
 
@@ -188,8 +214,10 @@ class ApiRunRepository implements RunRepository {
       sort,
     });
 
-    return this.request<BuilderDiscoveryResponse>(
-      `/api/leaderboards/builders/discover?${params.toString()}`
+    const path = `/api/leaderboards/builders/discover?${params.toString()}`;
+    return loadWithStaleWhileRevalidate(
+      `builder-discovery:${this.baseUrl}${path}`,
+      () => this.request<BuilderDiscoveryResponse>(path),
     );
   }
 
@@ -198,8 +226,28 @@ class ApiRunRepository implements RunRepository {
       limit: String(limit),
     });
 
-    const response = await this.request<GlobalLeaderboardResponse>(`/api/leaderboards/global?${params.toString()}`);
+    const path = `/api/leaderboards/global?${params.toString()}`;
+    const response = await loadWithStaleWhileRevalidate(
+      this.leaderboardCacheKey(path),
+      () => this.request<GlobalLeaderboardResponse>(path),
+    );
     return filterGlobalLeaderboardForCurrentSurface(response);
+  }
+
+  private leaderboardCacheKey(path: string): string {
+    return `leaderboard:${this.baseUrl}${path}`;
+  }
+
+  private currentRoomLeaderboardCacheKey(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    limit: number,
+  ): string {
+    return `leaderboard:${this.baseUrl}:room-current:${roomId}:${coordinates.x},${coordinates.y}:${limit}`;
+  }
+
+  private invalidateLeaderboards(): void {
+    invalidateStaleWhileRevalidateCache(`leaderboard:${this.baseUrl}`);
   }
 
   private async request<T = void>(path: string, init?: RequestInit): Promise<T> {

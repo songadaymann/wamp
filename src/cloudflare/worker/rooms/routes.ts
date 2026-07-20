@@ -1,7 +1,10 @@
 import {
+  createRoomSummaryFromRecord,
   type RoomCanonicalVersionRequestBody,
   type RoomLeaderboardLineageRequestBody,
+  type RoomRecord,
   type RoomRevertRequestBody,
+  type RoomSnapshotQueryReference,
 } from '../../../persistence/roomModel';
 import {
   annotateRoomRecordWithTilesetHints,
@@ -29,14 +32,19 @@ import {
   parseJsonBody,
   parseRoomSnapshot,
 } from '../core/http';
-import type { Env } from '../core/types';
+import type { Env, WorkerExecutionContextLike } from '../core/types';
+import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
+import { loadAnonymousPublicCache } from '../core/publicCache';
+import {
+  refreshPlayableContentIndexForRoom,
+  schedulePlayableContentIndexRefresh,
+} from '../playableContentIndex/store';
 import {
   handleRoomMintConfirm,
   handleRoomMintPrepare,
   handleRoomTokenMetadataConfirm,
   handleRoomTokenMetadataPrepare,
 } from '../mint/routes';
-import { syncRoomOwnershipFromChain } from '../mint/service';
 import {
   parseMusicPhraseInstrumentQuery,
   upsertMusicPhrasesForSnapshot,
@@ -50,6 +58,7 @@ import {
   upsertUserStats,
 } from '../runs/points';
 import {
+  handleBrowseRoomCommentSummaries,
   handleRoomCommentCreate,
   handleRoomCommentList,
 } from '../roomComments/routes';
@@ -59,9 +68,15 @@ import {
 } from './commands';
 import {
   loadConstructionRoom,
+  loadExactRoomVersion,
   loadPublishedRoom,
+  loadRoomCurrent,
   loadRoomRecord,
   loadRoomRecordForMutation,
+  loadRoomSnapshotsByReferences,
+  createOverviewRoomSnapshot,
+  loadRoomSummary,
+  loadRoomVersionPage,
   publishRoom,
   revertRoom,
   saveDraft,
@@ -73,9 +88,46 @@ export async function handleRoomRequest(
   request: Request,
   url: URL,
   env: Env,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const segments = url.pathname.split('/').filter(Boolean);
   const roomId = decodeURIComponent(segments[2] ?? '');
+
+  if (
+    segments.length === 4
+    && segments[2] === 'comments'
+    && segments[3] === 'browse'
+    && request.method === 'GET'
+  ) {
+    return handleBrowseRoomCommentSummaries(request, url, env, context);
+  }
+
+  if (
+    segments.length === 4 &&
+    segments[2] === 'snapshots' &&
+    segments[3] === 'query' &&
+    request.method === 'POST'
+  ) {
+    const auth = await loadOptionalRequestAuth(env, request);
+    requireOptionalScope(auth, 'rooms:read', 'read room snapshots');
+    const body = await parseJsonBody<{ references?: unknown; detail?: unknown }>(request, { maxBytes: 64 * 1024 });
+    const references = parseSnapshotQueryReferences(body.references);
+    const detail = body.detail === 'overview' ? 'overview' : 'full';
+    const timing = new ServerTiming();
+    const response = await timing.measure('snapshots', () => loadRoomSnapshotsByReferences(env, references));
+    const payload = detail === 'overview'
+      ? {
+          ...response,
+          snapshots: response.snapshots.map((entry) => ({
+            ...entry,
+            snapshot: createOverviewRoomSnapshot(entry.snapshot),
+          })),
+        }
+      : response;
+    return timedJsonResponse(request, payload, timing, {
+      headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
+    });
+  }
 
   if (!roomId) {
     throw new HttpError(400, 'Room id is required.');
@@ -85,7 +137,7 @@ export async function handleRoomRequest(
     const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
     const auth = await loadOptionalRequestAuth(env, request);
     requireOptionalScope(auth, 'rooms:read', 'read room drafts');
-    let record = await loadRoomRecord(
+    const record = await loadRoomRecord(
       env,
       roomId,
       coordinates,
@@ -93,22 +145,86 @@ export async function handleRoomRequest(
       auth?.user.walletAddress ?? null,
       auth?.isAdmin ?? false,
     );
-    if (auth?.user) {
-      try {
-        await syncRoomOwnershipFromChain(env, record, auth.user);
-        record = await loadRoomRecord(
-          env,
-          roomId,
-          coordinates,
-          auth.user.id,
-          auth.user.walletAddress,
-          auth.isAdmin,
-        );
-      } catch (error) {
-        console.warn('Failed to refresh room ownership from chain during read', error);
-      }
-    }
     return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+  }
+
+  if (segments.length === 4 && segments[3] === 'summary' && request.method === 'GET') {
+    const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+    const auth = await loadOptionalRequestAuth(env, request);
+    requireOptionalScope(auth, 'rooms:read', 'read room summaries');
+    const timing = new ServerTiming();
+    const loadResponse = async () => {
+      const summary = await timing.measure('summary', () => loadRoomSummary(
+        env,
+        roomId,
+        coordinates,
+        auth?.user.id ?? null,
+        auth?.user.walletAddress ?? null,
+        auth?.isAdmin ?? false,
+      ));
+      return timedJsonResponse(request, summary, timing, {
+        headers: { 'Cache-Control': auth ? 'private, no-store' : 'public, max-age=20' },
+      });
+    };
+    return loadAnonymousPublicCache(request, auth ? undefined : context, loadResponse);
+  }
+
+  if (segments.length === 4 && segments[3] === 'current' && request.method === 'GET') {
+    const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+    const auth = await loadOptionalRequestAuth(env, request);
+    requireOptionalScope(auth, 'rooms:read', 'read current room snapshots');
+    const timing = new ServerTiming();
+    const current = await timing.measure('current', () => loadRoomCurrent(
+      env,
+      roomId,
+      coordinates,
+      auth?.user.id ?? null,
+      auth?.user.walletAddress ?? null,
+      auth?.isAdmin ?? false,
+    ));
+    return timedJsonResponse(request, {
+      ...current,
+      draft: annotateRoomSnapshotWithTilesetHint(current.draft),
+      published: current.published ? annotateRoomSnapshotWithTilesetHint(current.published) : null,
+    }, timing, { headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' } });
+  }
+
+  if (segments.length === 4 && segments[3] === 'ownership' && request.method === 'POST') {
+    throw new HttpError(404, 'Route not found.');
+  }
+
+  if (
+    segments.length === 5 &&
+    segments[3] === 'ownership' &&
+    segments[4] === 'refresh' &&
+    request.method === 'POST'
+  ) {
+    const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+    const auth = await requireAuthenticatedRequestAuth(
+      env,
+      request,
+      'refresh room ownership',
+      'rooms:write',
+    );
+    const timing = new ServerTiming();
+    await timing.measure('chain_sync', () => loadRoomRecordForMutation(
+      env,
+      roomId,
+      coordinates,
+      auth.user,
+      auth.isAdmin,
+    ));
+    const summary = await timing.measure('summary', () => loadRoomSummary(
+      env,
+      roomId,
+      coordinates,
+      auth.user.id,
+      auth.user.walletAddress,
+      auth.isAdmin,
+    ));
+    return timedJsonResponse(request, summary, timing, {
+      headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
+    });
   }
 
   if (segments.length === 4 && segments[3] === 'comments' && request.method === 'GET') {
@@ -201,7 +317,7 @@ export async function handleRoomRequest(
       'rooms:write',
     );
     const record = await saveDraft(env, snapshot, buildRoomMutationActor(auth), auth.isAdmin);
-    return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+    return roomMutationResponse(request, url, record);
   }
 
   if (segments.length === 5 && segments[3] === 'music' && segments[4] === 'phrases' && request.method === 'POST') {
@@ -265,7 +381,7 @@ export async function handleRoomRequest(
       buildRoomMutationActor(auth),
       auth.isAdmin,
     );
-    return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+    return roomMutationResponse(request, url, record);
   }
 
   if (segments.length === 4 && segments[3] === 'publish' && request.method === 'POST') {
@@ -320,7 +436,8 @@ export async function handleRoomRequest(
       publishedAt: record.published?.publishedAt ?? new Date().toISOString(),
     });
     await upsertUserStats(env, auth.user.id);
-    return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+    schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, record.draft.id));
+    return roomMutationResponse(request, url, record);
   }
 
   if (segments.length === 4 && segments[3] === 'revert' && request.method === 'POST') {
@@ -373,7 +490,8 @@ export async function handleRoomRequest(
       publishedAt: record.published?.publishedAt ?? new Date().toISOString(),
     });
     await upsertUserStats(env, auth.user.id);
-    return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+    schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, record.draft.id));
+    return roomMutationResponse(request, url, record);
   }
 
   if (segments.length === 4 && segments[3] === 'canonical' && request.method === 'POST') {
@@ -393,7 +511,8 @@ export async function handleRoomRequest(
       buildRoomMutationActor(auth),
       auth.isAdmin,
     );
-    return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+    schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
+    return roomMutationResponse(request, url, record);
   }
 
   if (segments.length === 4 && segments[3] === 'leaderboard-lineage' && request.method === 'POST') {
@@ -414,22 +533,36 @@ export async function handleRoomRequest(
       buildRoomMutationActor(auth),
       auth.isAdmin,
     );
-    return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+    return roomMutationResponse(request, url, record);
   }
 
   if (segments.length === 4 && segments[3] === 'versions' && request.method === 'GET') {
-    const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
     const auth = await loadOptionalRequestAuth(env, request);
     requireOptionalScope(auth, 'rooms:read', 'read room versions');
-    const record = await loadRoomRecord(
+    const limit = parseRoomVersionLimit(url.searchParams.get('limit'));
+    const timing = new ServerTiming();
+    const page = await timing.measure('versions', () => loadRoomVersionPage(
       env,
       roomId,
-      coordinates,
-      auth?.user.id ?? null,
-      auth?.user.walletAddress ?? null,
-      auth?.isAdmin ?? false,
-    );
-    return jsonResponse(request, annotateRoomVersionRecordsWithTilesetHints(record.versions));
+      limit,
+      url.searchParams.get('cursor'),
+    ));
+    return timedJsonResponse(request, page, timing, {
+      headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
+    });
+  }
+
+  if (segments.length === 5 && segments[3] === 'versions' && request.method === 'GET') {
+    const auth = await loadOptionalRequestAuth(env, request);
+    requireOptionalScope(auth, 'rooms:read', 'read an exact room version');
+    const version = Number(segments[4]);
+    if (!Number.isSafeInteger(version) || version < 1) throw new HttpError(400, 'Room version must be a positive integer.');
+    const timing = new ServerTiming();
+    const exact = await timing.measure('version', () => loadExactRoomVersion(env, roomId, version));
+    if (!exact) throw new HttpError(404, 'Room version not found.');
+    return timedJsonResponse(request, annotateRoomVersionRecordsWithTilesetHints([exact])[0], timing, {
+      headers: { 'Cache-Control': 'public, max-age=31536000, immutable', 'X-WAMP-Cache': 'bypass' },
+    });
   }
 
   if (
@@ -475,4 +608,68 @@ export async function handleRoomRequest(
   }
 
   throw new HttpError(405, 'Method not allowed.');
+}
+
+function parseRoomVersionLimit(value: string | null): number {
+  if (value === null || value === '') return 25;
+  const limit = Number(value);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new HttpError(400, 'Room version limit must be between 1 and 100.');
+  }
+  return limit;
+}
+
+function roomMutationResponse(request: Request, url: URL, record: RoomRecord): Response {
+  if (url.searchParams.get('response') !== 'compact') {
+    return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+  }
+  return jsonResponse(request, {
+    summary: createRoomSummaryFromRecord(record),
+    draft: annotateRoomSnapshotWithTilesetHint(record.draft),
+    published: record.published ? annotateRoomSnapshotWithTilesetHint(record.published) : null,
+  }, {
+    headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
+  });
+}
+
+function parseSnapshotQueryReferences(value: unknown): RoomSnapshotQueryReference[] {
+  if (!Array.isArray(value)) throw new HttpError(400, 'references must be an array.');
+  if (value.length > 128) throw new HttpError(400, 'A maximum of 128 room snapshot references is allowed.');
+  return value.map((candidate) => {
+    if (!candidate || typeof candidate !== 'object') throw new HttpError(400, 'Invalid room snapshot reference.');
+    const raw = candidate as Record<string, unknown>;
+    const roomId = typeof raw.roomId === 'string' ? raw.roomId.trim() : '';
+    if (!roomId || roomId.length > 160) throw new HttpError(400, 'Snapshot roomId is required.');
+    if (raw.kind === 'version') {
+      const version = Number(raw.version);
+      if (!Number.isSafeInteger(version) || version < 1) throw new HttpError(400, 'Snapshot version must be positive.');
+      return { kind: 'version', roomId, version };
+    }
+    if (raw.kind === 'current_preview') {
+      const state = raw.state === undefined ? undefined : raw.state;
+      if (state !== undefined && state !== 'published' && state !== 'claimed_unpublished') {
+        throw new HttpError(400, 'Invalid current preview state.');
+      }
+      const coordinates = raw.coordinates && typeof raw.coordinates === 'object'
+        ? raw.coordinates as Record<string, unknown>
+        : null;
+      const x = coordinates ? Number(coordinates.x) : null;
+      const y = coordinates ? Number(coordinates.y) : null;
+      if (coordinates && (!Number.isSafeInteger(x) || !Number.isSafeInteger(y))) {
+        throw new HttpError(400, 'Invalid current preview coordinates.');
+      }
+      const updatedAt = raw.updatedAt === undefined ? undefined : raw.updatedAt;
+      if (updatedAt !== undefined && (typeof updatedAt !== 'string' || updatedAt.length > 64)) {
+        throw new HttpError(400, 'Invalid current preview timestamp.');
+      }
+      return {
+        kind: 'current_preview',
+        roomId,
+        ...(state ? { state } : {}),
+        ...(coordinates ? { coordinates: { x: x as number, y: y as number } } : {}),
+        ...(updatedAt ? { updatedAt } : {}),
+      };
+    }
+    throw new HttpError(400, 'Snapshot kind must be version or current_preview.');
+  });
 }

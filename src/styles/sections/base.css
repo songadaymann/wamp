@@ -127,6 +127,11 @@ body {
   backdrop-filter: none;
 }
 
+body[data-early-world-tiles-visible='true'] .app-boot-splash {
+  background: rgba(24, 22, 28, 0.48);
+  backdrop-filter: none;
+}
+
 .app-boot-splash-kicker,
 .app-busy-title {
   color: #2c5071;

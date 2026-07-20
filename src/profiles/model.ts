@@ -67,6 +67,17 @@ export interface UserProfileResponse {
   publishedCourseCount: number;
 }
 
+export type UserProfileSummaryResponse = Omit<UserProfileResponse, 'publishedRooms' | 'playlists'>;
+
+export interface UserProfileRoomsResponse {
+  results: ProfilePublishedRoomEntry[];
+  nextCursor?: string;
+}
+
+export interface UserProfilePlaylistsResponse {
+  results: RoomPlaylistSummary[];
+}
+
 export interface UserProfileUpdateRequestBody {
   displayName: string;
   username?: string | null;

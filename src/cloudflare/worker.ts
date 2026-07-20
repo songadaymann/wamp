@@ -29,6 +29,7 @@ import {
 } from './worker/courses/routes';
 import { corsHeaders, HttpError, jsonResponse } from './worker/core/http';
 import type { Env } from './worker/core/types';
+import { dispatchWorkerRoute, type WorkerRoute } from './worker/core/router';
 import {
   handleExpandedRoomByCoordinateGet,
   handleExpandedRoomGet,
@@ -65,7 +66,14 @@ import {
   handlePlaylistUpdate,
 } from './worker/playlists/routes';
 import { handlePresenceRequest } from './worker/presence/routes';
-import { handleProfileGet, handleProfileGetByUsername, handleProfileUpdateMe } from './worker/profiles/routes';
+import {
+  handleProfileGet,
+  handleProfileGetByUsername,
+  handleProfilePlaylistsGet,
+  handleProfileRoomsGet,
+  handleProfileSummaryGet,
+  handleProfileUpdateMe,
+} from './worker/profiles/routes';
 import { handlePvpMatchSubmit } from './worker/pvp/routes';
 import {
   handleBuilderDiscovery,
@@ -95,7 +103,13 @@ import {
   handleClaimableFrontierRoomsRequest,
   handleWorldChunksRequest,
   handleWorldRequest,
+  handleWorldChunkSummariesRequest,
 } from './worker/world/routes';
+import {
+  handleWorldTileConfigRequest,
+  handleWorldTileManifestRequest,
+  scheduleWorldTileOutboxDispatch,
+} from './worker/worldTiles/routes';
 import { handleRoomShareRequest } from './worker/share/routes';
 import { handleSchoolRequest } from './worker/school/routes';
 import { handleWampOGramRequest } from './worker/wampOGram/routes';
@@ -103,6 +117,97 @@ import { handleWampOGramRequest } from './worker/wampOGram/routes';
 type WorkerExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
 };
+
+const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[] = [
+  {
+    methods: ['GET'],
+    pattern: '/api/health',
+    auth: 'public',
+    handler: ({ request, env }) => jsonResponse(request, {
+      ok: true,
+      storage: 'd1',
+      auth: {
+        emailConfigured: Boolean(env.RESEND_API_KEY),
+        debugMagicLinks: env.AUTH_DEBUG_MAGIC_LINKS === '1',
+        testResetEnabled: env.ENABLE_TEST_RESET === '1',
+      },
+    }),
+  },
+  {
+    methods: ['GET'],
+    pattern: '/api/dashboard/stats',
+    auth: 'public',
+    handler: ({ request, env }) => handleDashboardStatsRequest(request, env),
+  },
+  {
+    methods: ['GET', 'POST', 'DELETE'],
+    pattern: { prefix: '/api/auth' },
+    auth: 'optional',
+    handler: ({ request, url, env }) => handleAuthRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    pattern: { prefix: '/api/school' },
+    auth: 'authenticated',
+    handler: ({ request, url, env }) => handleSchoolRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    pattern: { prefix: '/api/agents' },
+    auth: 'authenticated',
+    handler: ({ request, url, env }) => handleAgentRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    pattern: { prefix: '/api/admin/' },
+    auth: 'admin',
+    handler: ({ request, url, env, executionContext }) =>
+      handleAdminRequest(request, url, env, executionContext),
+  },
+  {
+    methods: ['GET', 'POST', 'DELETE'],
+    pattern: { prefix: '/api/background-images' },
+    auth: 'authenticated',
+    handler: ({ request, url, env }) => handleBackgroundImageRequest(request, url, env),
+  },
+  {
+    methods: ['POST'],
+    pattern: '/api/test/reset',
+    auth: 'internal',
+    handler: ({ request, env }) => handleTestReset(request, env),
+  },
+  {
+    methods: ['GET', 'POST', 'DELETE'],
+    pattern: { prefix: '/api/chat/' },
+    auth: 'optional',
+    handler: ({ request, url, env, executionContext }) =>
+      handleChatRequest(request, url, env, executionContext),
+  },
+  {
+    methods: ['POST'],
+    pattern: '/api/guest-activity/heartbeat',
+    auth: 'optional',
+    handler: ({ request, env }) => handleGuestActivityHeartbeat(request, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    pattern: { prefix: '/api/guest-room-drafts' },
+    auth: 'optional',
+    handler: ({ request, url, env }) => handleGuestRoomDraftRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'DELETE'],
+    pattern: { prefix: '/api/guestbook' },
+    auth: 'optional',
+    handler: ({ request, url, env }) => handleGuestbookRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    pattern: { prefix: '/api/jam' },
+    auth: 'optional',
+    handler: ({ request, url, env }) => handleJamRequest(request, url, env),
+  },
+];
 
 export default {
   async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {
@@ -144,40 +249,13 @@ export default {
     }
 
     try {
-      if (url.pathname === '/api/health' && request.method === 'GET') {
-        return jsonResponse(
-          request,
-          {
-            ok: true,
-            storage: 'd1',
-            auth: {
-              emailConfigured: Boolean(env.RESEND_API_KEY),
-              debugMagicLinks: env.AUTH_DEBUG_MAGIC_LINKS === '1',
-              testResetEnabled: env.ENABLE_TEST_RESET === '1',
-            },
-          }
-        );
-      }
-
-      if (url.pathname === '/api/dashboard/stats' && request.method === 'GET') {
-        return await handleDashboardStatsRequest(request, env);
-      }
-
-      if (url.pathname.startsWith('/api/auth')) {
-        return await handleAuthRequest(request, url, env);
-      }
-
-      if (url.pathname.startsWith('/api/school')) {
-        return await handleSchoolRequest(request, url, env);
-      }
-
-      if (url.pathname.startsWith('/api/agents')) {
-        return await handleAgentRequest(request, url, env);
-      }
-
-      if (url.pathname.startsWith('/api/admin/')) {
-        return await handleAdminRequest(request, url, env);
-      }
+      const declarativeRoute = await dispatchWorkerRoute(DECLARATIVE_API_ROUTES, {
+        request,
+        url,
+        env,
+        executionContext: ctx,
+      });
+      if (declarativeRoute.matched) return declarativeRoute.response!;
 
       const cryptopunkAvatarStatusMatch = /^\/api\/avatars\/cryptopunks\/([^/]+)\/status$/.exec(url.pathname);
       if (cryptopunkAvatarStatusMatch && request.method === 'GET') {
@@ -205,34 +283,6 @@ export default {
           decodeURIComponent(cryptopunkAvatarAssetMatch[1]),
           decodeURIComponent(cryptopunkAvatarAssetMatch[2])
         );
-      }
-
-      if (url.pathname.startsWith('/api/background-images')) {
-        return await handleBackgroundImageRequest(request, url, env);
-      }
-
-      if (url.pathname === '/api/test/reset' && request.method === 'POST') {
-        return await handleTestReset(request, env);
-      }
-
-      if (url.pathname.startsWith('/api/chat/')) {
-        return await handleChatRequest(request, url, env, ctx);
-      }
-
-      if (url.pathname === '/api/guest-activity/heartbeat' && request.method === 'POST') {
-        return await handleGuestActivityHeartbeat(request, env);
-      }
-
-      if (url.pathname.startsWith('/api/guest-room-drafts')) {
-        return await handleGuestRoomDraftRequest(request, url, env);
-      }
-
-      if (url.pathname.startsWith('/api/guestbook')) {
-        return await handleGuestbookRequest(request, url, env);
-      }
-
-      if (url.pathname.startsWith('/api/jam')) {
-        return await handleJamRequest(request, url, env);
       }
 
       if (url.pathname === '/api/settings/me' && request.method === 'GET') {
@@ -263,6 +313,20 @@ export default {
         const auth = await loadOptionalRequestAuth(env, request);
         requireOptionalScope(auth, 'rooms:read', 'read world room chunks');
         return handleWorldChunksRequest(request, url, env);
+      }
+
+      if (url.pathname === '/api/world/chunks/summary' && request.method === 'GET') {
+        const auth = await loadOptionalRequestAuth(env, request);
+        requireOptionalScope(auth, 'rooms:read', 'read compact world room chunks');
+        return handleWorldChunkSummariesRequest(request, url, env, ctx, auth !== null);
+      }
+
+      if (url.pathname === '/api/world/tiles/config' && request.method === 'GET') {
+        return await handleWorldTileConfigRequest(request, env, ctx);
+      }
+
+      if (url.pathname === '/api/world/tiles/manifest' && request.method === 'GET') {
+        return await handleWorldTileManifestRequest(request, url, env, ctx);
       }
 
       if (url.pathname.startsWith('/api/presence/')) {
@@ -365,6 +429,21 @@ export default {
         return await handleProfileGetByUsername(request, env, decodeURIComponent(profileByUsernameMatch[1]));
       }
 
+      const profileSummaryMatch = /^\/api\/profiles\/([^/]+)\/summary$/.exec(url.pathname);
+      if (profileSummaryMatch && request.method === 'GET') {
+        return await handleProfileSummaryGet(request, env, decodeURIComponent(profileSummaryMatch[1]), ctx);
+      }
+
+      const profileRoomsMatch = /^\/api\/profiles\/([^/]+)\/rooms$/.exec(url.pathname);
+      if (profileRoomsMatch && request.method === 'GET') {
+        return await handleProfileRoomsGet(request, url, env, decodeURIComponent(profileRoomsMatch[1]), ctx);
+      }
+
+      const profilePlaylistsMatch = /^\/api\/profiles\/([^/]+)\/playlists$/.exec(url.pathname);
+      if (profilePlaylistsMatch && request.method === 'GET') {
+        return await handleProfilePlaylistsGet(request, env, decodeURIComponent(profilePlaylistsMatch[1]), ctx);
+      }
+
       const profileMatch = /^\/api\/profiles\/([^/]+)$/.exec(url.pathname);
       if (profileMatch && request.method === 'GET') {
         return await handleProfileGet(request, env, decodeURIComponent(profileMatch[1]));
@@ -430,7 +509,8 @@ export default {
         return await handleExpandedRoomPublish(
           request,
           env,
-          decodeURIComponent(expandedRoomPublishMatch[1])
+          decodeURIComponent(expandedRoomPublishMatch[1]),
+          ctx,
         );
       }
 
@@ -439,7 +519,8 @@ export default {
         return await handleExpandedRoomUnpublish(
           request,
           env,
-          decodeURIComponent(expandedRoomUnpublishMatch[1])
+          decodeURIComponent(expandedRoomUnpublishMatch[1]),
+          ctx,
         );
       }
 
@@ -496,12 +577,17 @@ export default {
 
       const coursePublishMatch = /^\/api\/courses\/([^/]+)\/publish$/.exec(url.pathname);
       if (coursePublishMatch && request.method === 'POST') {
-        return await handleCoursePublish(request, env, decodeURIComponent(coursePublishMatch[1]));
+        return await handleCoursePublish(
+          request,
+          env,
+          decodeURIComponent(coursePublishMatch[1]),
+          { executionContext: ctx },
+        );
       }
 
       const courseUnpublishMatch = /^\/api\/courses\/([^/]+)\/unpublish$/.exec(url.pathname);
       if (courseUnpublishMatch && request.method === 'POST') {
-        return await handleCourseUnpublish(request, env, decodeURIComponent(courseUnpublishMatch[1]));
+        return await handleCourseUnpublish(request, env, decodeURIComponent(courseUnpublishMatch[1]), ctx);
       }
 
       const courseRunStartMatch = /^\/api\/courses\/([^/]+)\/runs\/start$/.exec(url.pathname);
@@ -529,11 +615,11 @@ export default {
       }
 
       if (url.pathname === '/api/leaderboards/rooms/discover' && request.method === 'GET') {
-        return await handleRoomDiscovery(request, url, env);
+        return await handleRoomDiscovery(request, url, env, ctx);
       }
 
       if (url.pathname === '/api/leaderboards/builders/discover' && request.method === 'GET') {
-        return await handleBuilderDiscovery(request, url, env);
+        return await handleBuilderDiscovery(request, url, env, ctx);
       }
 
       const roomLeaderboardMatch = /^\/api\/leaderboards\/rooms\/([^/]+)$/.exec(url.pathname);
@@ -542,7 +628,8 @@ export default {
           request,
           url,
           env,
-          decodeURIComponent(roomLeaderboardMatch[1])
+          decodeURIComponent(roomLeaderboardMatch[1]),
+          ctx,
         );
       }
 
@@ -553,7 +640,8 @@ export default {
         return await handleRoomDifficultyVote(
           request,
           env,
-          decodeURIComponent(roomDifficultyVoteMatch[1])
+          decodeURIComponent(roomDifficultyVoteMatch[1]),
+          ctx,
         );
       }
 
@@ -563,6 +651,7 @@ export default {
           request,
           env,
           decodeURIComponent(roomRatingMatch[1]),
+          ctx,
         );
       }
 
@@ -592,6 +681,7 @@ export default {
           request,
           env,
           decodeURIComponent(expandedRoomRatingMatch[1]),
+          ctx,
         );
       }
 
@@ -601,11 +691,12 @@ export default {
           request,
           env,
           decodeURIComponent(courseRatingMatch[1]),
+          ctx,
         );
       }
 
       if (url.pathname === '/api/leaderboards/global' && request.method === 'GET') {
-        return await handleGlobalLeaderboard(request, url, env);
+        return await handleGlobalLeaderboard(request, url, env, ctx);
       }
 
       if (url.pathname === '/api/leaderboards/room-rush' && request.method === 'GET') {
@@ -625,7 +716,7 @@ export default {
       }
 
       if (url.pathname.startsWith('/api/share/rooms/')) {
-        return await handleRoomShareRequest(request, url, env);
+        return await handleRoomShareRequest(request, url, env, ctx);
       }
 
       if (url.pathname.startsWith('/api/wamp-o-grams')) {
@@ -636,7 +727,7 @@ export default {
         throw new HttpError(404, 'Route not found.');
       }
 
-      return await handleRoomRequest(request, url, env);
+      return await handleRoomRequest(request, url, env, ctx);
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;
       const message = error instanceof Error ? error.message : 'Unexpected server error.';
@@ -652,6 +743,10 @@ export default {
         },
         { status }
       );
+    } finally {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        scheduleWorldTileOutboxDispatch(env, ctx);
+      }
     }
   },
 };

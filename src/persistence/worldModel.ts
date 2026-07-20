@@ -21,6 +21,7 @@ export interface WorldRoomSummary {
   goalType: RoomGoalType | null;
   version: number | null;
   publishedAt: string | null;
+  previewUpdatedAt: string | null;
   creatorUserId: string | null;
   creatorDisplayName: string | null;
   publishedByUserId: string | null;
@@ -95,6 +96,38 @@ export interface WorldChunkWindow {
   chunkBounds: WorldChunkBounds;
   roomBounds: WorldRoomBounds;
   chunks: WorldChunk[];
+}
+
+export interface CompactWorldChunk {
+  id: string;
+  coordinates: WorldChunkCoordinates;
+  roomBounds: WorldRoomBounds;
+  rooms: WorldRoomSummary[];
+  chunkPreviewHash: string;
+}
+
+export interface CompactWorldChunkWindow {
+  chunkBounds: WorldChunkBounds;
+  roomBounds: WorldRoomBounds;
+  chunks: CompactWorldChunk[];
+}
+
+export function cloneCompactWorldChunkWindow(window: CompactWorldChunkWindow): CompactWorldChunkWindow {
+  return {
+    chunkBounds: { ...window.chunkBounds },
+    roomBounds: { ...window.roomBounds },
+    chunks: window.chunks.map((chunk) => ({
+      ...chunk,
+      coordinates: { ...chunk.coordinates },
+      roomBounds: { ...chunk.roomBounds },
+      rooms: chunk.rooms.map((room) => ({
+        ...room,
+        coordinates: { ...room.coordinates },
+        course: room.course ? { ...room.course } : null,
+        expandedRoom: room.expandedRoom ? { ...room.expandedRoom } : null,
+      })),
+    })),
+  };
 }
 
 export interface WorldWindow {
@@ -238,6 +271,7 @@ export function createPublishedRoomSummary(
     goalType: snapshot.goal?.type ?? null,
     version: snapshot.version,
     publishedAt: snapshot.publishedAt,
+    previewUpdatedAt: snapshot.updatedAt,
     creatorUserId: isPublishedWorldRoomSource(room) ? room.creatorUserId : null,
     creatorDisplayName: isPublishedWorldRoomSource(room) ? room.creatorDisplayName : null,
     publishedByUserId: isPublishedWorldRoomSource(room) ? room.creatorUserId : null,
@@ -260,6 +294,7 @@ export function createClaimedUnpublishedRoomSummary(
     goalType: snapshot.goal?.type ?? null,
     version: snapshot.version,
     publishedAt: null,
+    previewUpdatedAt: snapshot.updatedAt,
     creatorUserId: isClaimedUnpublishedWorldRoomSource(room) ? room.claimerUserId : null,
     creatorDisplayName: isClaimedUnpublishedWorldRoomSource(room) ? room.claimerDisplayName : null,
     publishedByUserId: null,
@@ -279,6 +314,7 @@ export function createFrontierRoomSummary(coordinates: RoomCoordinates): WorldRo
     goalType: null,
     version: null,
     publishedAt: null,
+    previewUpdatedAt: null,
     creatorUserId: null,
     creatorDisplayName: null,
     publishedByUserId: null,
@@ -322,6 +358,30 @@ export function computeWorldChunkWindow(
     roomBounds: getRoomBoundsForChunkBounds(chunkBounds),
     chunks,
   };
+}
+
+export function computeCompactWorldChunkWindow(
+  rooms: WorldRoomSummary[],
+  chunkBounds: WorldChunkBounds,
+): CompactWorldChunkWindow {
+  const chunks: CompactWorldChunk[] = [];
+  for (let chunkY = chunkBounds.minChunkY; chunkY <= chunkBounds.maxChunkY; chunkY += 1) {
+    for (let chunkX = chunkBounds.minChunkX; chunkX <= chunkBounds.maxChunkX; chunkX += 1) {
+      const coordinates = { x: chunkX, y: chunkY };
+      const roomBounds = getChunkRoomBounds(coordinates);
+      const summaries = computeWorldSummariesFromOccupancySummariesInBounds(rooms, roomBounds);
+      const chunk: CompactWorldChunk = {
+        id: chunkIdFromCoordinates(coordinates),
+        coordinates,
+        roomBounds,
+        rooms: summaries,
+        chunkPreviewHash: '',
+      };
+      chunk.chunkPreviewHash = computeWorldChunkPreviewHash(chunk);
+      chunks.push(chunk);
+    }
+  }
+  return { chunkBounds: { ...chunkBounds }, roomBounds: getRoomBoundsForChunkBounds(chunkBounds), chunks };
 }
 
 export function computeWorldWindow(
@@ -480,7 +540,7 @@ function computeRoomPreviewSnapshotsInBounds(
 }
 
 export function computeWorldChunkPreviewHash(
-  chunk: Pick<WorldChunk, 'rooms' | 'previewRooms'>
+  chunk: Pick<WorldChunk, 'rooms' | 'previewRooms'> | Pick<CompactWorldChunk, 'rooms'>
 ): string {
   const roomSummarySignature = chunk.rooms
     .slice()
@@ -508,11 +568,18 @@ export function computeWorldChunkPreviewHash(
       ].join(':')
     )
     .join('|');
-  const previewSignature = chunk.previewRooms
-    .slice()
-    .sort(compareRoomSnapshots)
-    .map((room) => `${room.id}:${room.version}:${room.updatedAt}`)
-    .join('|');
+  const previewSignature = 'previewRooms' in chunk
+    ? chunk.previewRooms
+      .slice()
+      .sort(compareRoomSnapshots)
+      .map((room) => `${room.id}:${room.version}:${room.updatedAt}`)
+      .join('|')
+    : chunk.rooms
+      .filter((room) => room.state !== 'frontier')
+      .slice()
+      .sort(compareWorldSummaries)
+      .map((room) => `${room.id}:${room.version}:${room.previewUpdatedAt ?? ''}`)
+      .join('|');
 
   return hashChunkSignature(`${roomSummarySignature}#${previewSignature}`);
 }

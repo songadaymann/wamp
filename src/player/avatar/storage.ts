@@ -1,7 +1,9 @@
 import type { PlayerAvatarId } from './model';
+import { dispatchTypedEvent } from '../../events/typedEvent';
 
 export const PLAYER_AVATAR_STORAGE_KEY = 'ep_player_avatar_id_v1';
 export const PLAYER_AVATAR_CHANGED_EVENT = 'ep-player-avatar-changed';
+export interface PlayerAvatarChangedDetail { avatarId: PlayerAvatarId | null }
 
 function getAvatarIdFromUrl(): PlayerAvatarId | null {
   if (typeof window === 'undefined') {
@@ -42,11 +44,7 @@ export function setStoredPlayerAvatarId(avatarId: PlayerAvatarId | null): void {
     window.localStorage.removeItem(PLAYER_AVATAR_STORAGE_KEY);
   }
 
-  window.dispatchEvent(
-    new CustomEvent(PLAYER_AVATAR_CHANGED_EVENT, {
-      detail: {
-        avatarId: normalizedAvatarId,
-      },
-    }),
-  );
+  dispatchTypedEvent<PlayerAvatarChangedDetail>(window, PLAYER_AVATAR_CHANGED_EVENT, {
+    avatarId: normalizedAvatarId,
+  });
 }

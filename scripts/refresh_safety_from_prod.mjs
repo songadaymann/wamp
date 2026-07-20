@@ -43,6 +43,11 @@ const DEFAULT_EPHEMERAL_AUTH_TABLES = new Set([
   'sessions',
   'wallet_challenges',
 ]);
+const ENVIRONMENT_LOCAL_WORLD_TILE_TABLES = new Set([
+  'world_render_tile_outbox',
+  'world_render_tiles',
+  'world_tile_renderer_versions',
+]);
 const IMPORT_ORDER = [
   'users',
   'agents',
@@ -116,6 +121,10 @@ const summary = {
   },
   tableRefresh: [],
   healthcheck: null,
+  worldTiles: {
+    runtimeTables: [...ENVIRONMENT_LOCAL_WORLD_TILE_TABLES],
+    rebackfillRequired: true,
+  },
   errors: [],
 };
 
@@ -172,6 +181,9 @@ async function main() {
   summary.targetCountsAfter = countTables(TARGET_DB, resetTables);
   verifyCounts(copiedTables, skippedTables);
   summary.healthcheck = await runHealthcheck();
+  console.info(
+    '[safety-refresh] world tile runtime state was cleared; backfill and activate a safety-only renderer version before enabling tiled reads.'
+  );
 }
 
 function guardDirection() {
@@ -198,6 +210,10 @@ function shouldSkipTable(table) {
   }
 
   if (!INCLUDE_EPHEMERAL_AUTH && DEFAULT_EPHEMERAL_AUTH_TABLES.has(table)) {
+    return true;
+  }
+
+  if (ENVIRONMENT_LOCAL_WORLD_TILE_TABLES.has(table)) {
     return true;
   }
 

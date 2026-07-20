@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { dispatchSignal } from '../events/typedEvent';
 import { getAuthDebugState } from '../auth/client';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../config';
 import { createExpandedRoomEditorRepository } from '../expandedRooms/editorRepository';
@@ -864,7 +865,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       checkpointEntries: this.buildCheckpointEntries(),
     });
 
-    window.dispatchEvent(new Event(COURSE_COMPOSER_STATE_CHANGED_EVENT));
+    dispatchSignal(window, COURSE_COMPOSER_STATE_CHANGED_EVENT);
   }
 
   private getSelectedSummary(): WorldRoomSummary | null {

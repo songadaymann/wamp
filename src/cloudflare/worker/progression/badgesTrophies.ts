@@ -15,6 +15,7 @@ import {
 import {
   loadBackfillSeedMetrics,
   loadOrBackfillUserProgress,
+  loadReadOnlyUserProgress,
   upsertUserProgressRow,
 } from './progressRows';
 import { loadBuilderCapabilitySummary } from './trustCaps';
@@ -425,16 +426,15 @@ export async function loadPublicProgressionSummary(
   env: Env,
   userId: string,
 ): Promise<ProgressionSummary> {
-  const progress = await loadOrBackfillUserProgress(env, userId);
-  await syncUserBadges(env, userId);
-  const [badgeRows, roomTrophies, courseTrophies, expandedRoomTrophies, trophyCount] = await Promise.all([
+  const progress = await loadReadOnlyUserProgress(env, userId);
+  const [badgeRows, roomTrophies, courseTrophies, expandedRoomTrophies] = await Promise.all([
     loadBadgeAwardRows(env, userId),
     loadOwnedRoomTrophyRows(env, userId),
     loadOwnedCourseTrophyRows(env, userId),
     loadOwnedExpandedRoomTrophyRows(env, userId),
-    countOwnedTrophies(env, userId),
   ]);
-  const recentTrophies = dedupePlayableTrophies([...roomTrophies, ...courseTrophies, ...expandedRoomTrophies])
+  const ownedTrophies = dedupePlayableTrophies([...roomTrophies, ...courseTrophies, ...expandedRoomTrophies]);
+  const recentTrophies = ownedTrophies
     .sort((left, right) => Date.parse(right.awardedAt) - Date.parse(left.awardedAt))
     .slice(0, 6);
   const builderCaps = await loadBuilderCapabilitySummary(env, progress, 'session');
@@ -462,7 +462,7 @@ export async function loadPublicProgressionSummary(
       .filter((value): value is BadgeAwardSummary => value !== null)
       .slice(0, 6),
     badgeCount: badgeRows.length,
-    trophyCount,
+    trophyCount: ownedTrophies.length,
     recentTrophies,
   };
 }

@@ -19,6 +19,7 @@ import {
 } from '../../persistence/worldModel';
 import { drawRoomSnapshotToContext } from '../../visuals/roomSnapshotTexture';
 import { hashStringToSeed } from '../../visuals/starfield';
+import { calculateChunkPreviewCrop, type ChunkPreviewCrop } from './chunkPreviewCrop';
 
 interface OverworldChunkPreviewRendererOptions {
   scene: Phaser.Scene;
@@ -42,6 +43,7 @@ interface CachedChunkPreviewTexture {
   chunkId: string;
   contentSignature: string;
   previewTileSize: number;
+  crop: ChunkPreviewCrop;
   pixelCount: number;
   lastUsedAt: number;
 }
@@ -53,10 +55,8 @@ interface PendingChunkPreviewBuild {
   chunkCoordinates: WorldChunkCoordinates;
   rooms: RoomSnapshot[];
   previewTileSize: number;
+  crop: ChunkPreviewCrop;
 }
-
-const CHUNK_PREVIEW_WIDTH = WORLD_CHUNK_SIZE * ROOM_PX_WIDTH;
-const CHUNK_PREVIEW_HEIGHT = WORLD_CHUNK_SIZE * ROOM_PX_HEIGHT;
 const CHUNK_PREVIEW_TEXTURE_CACHE_MAX_PIXELS = 32_000_000;
 const CUSTOM_BACKGROUND_PREVIEW_TILE_SIZE = 4;
 const DEFERRED_CHUNK_PREVIEW_BUILD_DELAY_MS = 24;
@@ -187,6 +187,7 @@ export class OverworldChunkPreviewRenderer {
           request.chunkCoordinates,
           request.rooms,
           request.previewTileSize,
+          request.crop,
         );
         if (built) {
           this.recordCachedTexture(
@@ -194,6 +195,7 @@ export class OverworldChunkPreviewRenderer {
             request.chunkId,
             request.contentSignature,
             request.previewTileSize,
+            request.crop,
           );
         }
       }
@@ -205,23 +207,28 @@ export class OverworldChunkPreviewRenderer {
   }
 
   renderChunkPreviews(previewRooms: Iterable<RoomSnapshot>): void {
-    const groupedStates = new Map<string, ChunkPreviewState>();
-    for (const room of previewRooms) {
-      const chunkCoordinates = roomToChunkCoordinates(room.coordinates);
-      const chunkId = `${chunkCoordinates.x},${chunkCoordinates.y}`;
-      const existing = groupedStates.get(chunkId);
-      if (existing) {
-        existing.rooms.push(room);
-      } else {
-        groupedStates.set(chunkId, {
-          chunkId,
-          chunkCoordinates,
-          rooms: [room],
-        });
-      }
-    }
+    this.chunkStatesByChunkId = groupChunkPreviewRooms(previewRooms);
+    this.syncChunkImages();
+  }
 
-    this.chunkStatesByChunkId = groupedStates;
+  mergeChunkPreviews(previewRooms: Iterable<RoomSnapshot>): void {
+    const incomingStates = groupChunkPreviewRooms(previewRooms);
+    for (const [chunkId, incomingState] of incomingStates) {
+      const existingState = this.chunkStatesByChunkId.get(chunkId);
+      if (!existingState) {
+        this.chunkStatesByChunkId.set(chunkId, incomingState);
+        continue;
+      }
+
+      const roomsById = new Map(existingState.rooms.map((room) => [room.id, room]));
+      for (const room of incomingState.rooms) {
+        roomsById.set(room.id, room);
+      }
+      this.chunkStatesByChunkId.set(chunkId, {
+        ...existingState,
+        rooms: Array.from(roomsById.values()).sort(compareRoomSnapshots),
+      });
+    }
     this.syncChunkImages();
   }
 
@@ -315,6 +322,11 @@ export class OverworldChunkPreviewRenderer {
   ): void {
     const chunkId = `${chunkCoordinates.x},${chunkCoordinates.y}`;
     const previewTileSize = this.getPreviewTileSize();
+    const crop = calculateChunkPreviewCrop(
+      chunkCoordinates,
+      rooms.map((room) => room.coordinates),
+    );
+    if (!crop) return;
     const contentSignature = this.buildChunkContentSignature(chunkId, rooms);
     const textureKey = this.buildChunkTextureKey(chunkId, contentSignature, previewTileSize);
 
@@ -335,9 +347,14 @@ export class OverworldChunkPreviewRenderer {
           chunkCoordinates: { ...chunkCoordinates },
           rooms: rooms.slice(),
           previewTileSize,
+          crop,
         });
         if (image) {
-          this.positionChunkImage(image, chunkCoordinates);
+          const displayedTextureKey = this.chunkTextureKeysByChunkId.get(chunkId) ?? null;
+          const displayedCrop = displayedTextureKey
+            ? this.cachedTexturesByKey.get(displayedTextureKey)?.crop ?? null
+            : null;
+          if (displayedCrop) this.positionChunkImage(image, chunkCoordinates, displayedCrop);
         }
         return;
       }
@@ -345,26 +362,33 @@ export class OverworldChunkPreviewRenderer {
       displayTextureKey = textureKey;
       if (!this.options.scene.textures.exists(textureKey)) {
         this.markImmediateTextureBuild();
-        const built = this.buildChunkTexture(textureKey, chunkCoordinates, rooms, previewTileSize);
+        const built = this.buildChunkTexture(
+          textureKey,
+          chunkCoordinates,
+          rooms,
+          previewTileSize,
+          crop,
+        );
         if (!built) {
           return;
         }
       }
-      this.recordCachedTexture(textureKey, chunkId, contentSignature, previewTileSize);
+      this.recordCachedTexture(textureKey, chunkId, contentSignature, previewTileSize, crop);
     } else if (displayTextureKey === textureKey && !this.cachedTexturesByKey.has(textureKey)) {
-      this.recordCachedTexture(textureKey, chunkId, contentSignature, previewTileSize);
+      this.recordCachedTexture(textureKey, chunkId, contentSignature, previewTileSize, crop);
     }
     this.touchCachedTexture(displayTextureKey);
+    const displayCrop = this.cachedTexturesByKey.get(displayTextureKey)?.crop ?? crop;
 
     if (!image) {
       const nextImage = this.options.scene.add.image(0, 0, displayTextureKey);
       nextImage.setOrigin(0, 0);
       nextImage.setDepth(0);
       this.chunkImagesByChunkId.set(chunkId, nextImage);
-      this.positionChunkImage(nextImage, chunkCoordinates);
+      this.positionChunkImage(nextImage, chunkCoordinates, displayCrop);
     } else {
       image.setTexture(displayTextureKey);
-      this.positionChunkImage(image, chunkCoordinates);
+      this.positionChunkImage(image, chunkCoordinates, displayCrop);
     }
     this.chunkTextureKeysByChunkId.set(chunkId, displayTextureKey);
   }
@@ -372,13 +396,17 @@ export class OverworldChunkPreviewRenderer {
   private positionChunkImage(
     image: Phaser.GameObjects.Image,
     chunkCoordinates: WorldChunkCoordinates,
+    crop: ChunkPreviewCrop,
   ): void {
     const origin = this.options.getRoomOrigin({
-      x: chunkCoordinates.x * WORLD_CHUNK_SIZE,
-      y: chunkCoordinates.y * WORLD_CHUNK_SIZE,
+      x: chunkCoordinates.x * WORLD_CHUNK_SIZE + crop.minLocalRoomX,
+      y: chunkCoordinates.y * WORLD_CHUNK_SIZE + crop.minLocalRoomY,
     });
     image.setPosition(origin.x, origin.y);
-    image.setDisplaySize(CHUNK_PREVIEW_WIDTH, CHUNK_PREVIEW_HEIGHT);
+    image.setDisplaySize(
+      crop.roomColumns * ROOM_PX_WIDTH,
+      crop.roomRows * ROOM_PX_HEIGHT,
+    );
     image.setVisible(true);
   }
 
@@ -455,12 +483,13 @@ export class OverworldChunkPreviewRenderer {
     chunkCoordinates: WorldChunkCoordinates,
     rooms: RoomSnapshot[],
     previewTileSize: number,
+    crop: ChunkPreviewCrop,
   ): boolean {
     return this.measure('stream.buildChunkPreviewTexture', () => {
       const canvasTexture = this.options.scene.textures.createCanvas(
         textureKey,
-        WORLD_CHUNK_SIZE * ROOM_WIDTH * previewTileSize,
-        WORLD_CHUNK_SIZE * ROOM_HEIGHT * previewTileSize,
+        crop.roomColumns * ROOM_WIDTH * previewTileSize,
+        crop.roomRows * ROOM_HEIGHT * previewTileSize,
       );
       if (!canvasTexture) {
         return false;
@@ -485,8 +514,8 @@ export class OverworldChunkPreviewRenderer {
           room,
           previewTileSize,
           {
-            offsetX: localRoomX * ROOM_WIDTH * previewTileSize,
-            offsetY: localRoomY * ROOM_HEIGHT * previewTileSize,
+            offsetX: (localRoomX - crop.minLocalRoomX) * ROOM_WIDTH * previewTileSize,
+            offsetY: (localRoomY - crop.minLocalRoomY) * ROOM_HEIGHT * previewTileSize,
             includeObjects: this.shouldDrawDetailedRoomPreviews(previewTileSize),
             includedLayers: this.getPreviewLayers(previewTileSize),
             showConstructionOverlay: room.status !== 'published',
@@ -550,13 +579,15 @@ export class OverworldChunkPreviewRenderer {
     chunkId: string,
     contentSignature: string,
     previewTileSize: number,
+    crop: ChunkPreviewCrop,
   ): void {
     this.cachedTexturesByKey.set(textureKey, {
       textureKey,
       chunkId,
       contentSignature,
       previewTileSize,
-      pixelCount: this.getChunkTexturePixelCount(previewTileSize),
+      crop: { ...crop },
+      pixelCount: this.getChunkTexturePixelCount(previewTileSize, crop),
       lastUsedAt: ++this.cacheClock,
     });
   }
@@ -612,12 +643,15 @@ export class OverworldChunkPreviewRenderer {
     }
   }
 
-  private getChunkTexturePixelCount(previewTileSize: number): number {
+  private getChunkTexturePixelCount(
+    previewTileSize: number,
+    crop: ChunkPreviewCrop,
+  ): number {
     return (
-      WORLD_CHUNK_SIZE *
+      crop.roomColumns *
       ROOM_WIDTH *
       previewTileSize *
-      WORLD_CHUNK_SIZE *
+      crop.roomRows *
       ROOM_HEIGHT *
       previewTileSize
     );
@@ -654,6 +688,13 @@ export class OverworldChunkPreviewRenderer {
       return;
     }
 
+    this.pendingTextureBuildQueue = this.pendingTextureBuildQueue.filter((pending) => {
+      if (pending.chunkId !== request.chunkId) {
+        return true;
+      }
+      this.pendingTextureBuildsByKey.delete(pending.textureKey);
+      return false;
+    });
     this.pendingTextureBuildsByKey.set(request.textureKey, request);
     this.pendingTextureBuildQueue.push(request);
     this.scheduleNextTextureBuild();
@@ -688,6 +729,7 @@ export class OverworldChunkPreviewRenderer {
         request.chunkCoordinates,
         request.rooms,
         request.previewTileSize,
+        request.crop,
       );
       if (built) {
         this.recordCachedTexture(
@@ -695,6 +737,7 @@ export class OverworldChunkPreviewRenderer {
           request.chunkId,
           request.contentSignature,
           request.previewTileSize,
+          request.crop,
         );
       }
     }
@@ -778,6 +821,28 @@ function compareRoomSnapshots(a: RoomSnapshot, b: RoomSnapshot): number {
   }
 
   return a.coordinates.x - b.coordinates.x;
+}
+
+function groupChunkPreviewRooms(previewRooms: Iterable<RoomSnapshot>): Map<string, ChunkPreviewState> {
+  const groupedStates = new Map<string, ChunkPreviewState>();
+  for (const room of previewRooms) {
+    const chunkCoordinates = roomToChunkCoordinates(room.coordinates);
+    const chunkId = `${chunkCoordinates.x},${chunkCoordinates.y}`;
+    const existing = groupedStates.get(chunkId);
+    if (existing) {
+      existing.rooms.push(room);
+    } else {
+      groupedStates.set(chunkId, {
+        chunkId,
+        chunkCoordinates,
+        rooms: [room],
+      });
+    }
+  }
+  for (const state of groupedStates.values()) {
+    state.rooms.sort(compareRoomSnapshots);
+  }
+  return groupedStates;
 }
 
 function getChunkDistance(

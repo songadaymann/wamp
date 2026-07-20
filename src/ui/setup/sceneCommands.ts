@@ -247,7 +247,7 @@ export function setupSceneCommands(
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
-      getActiveOverworldScene(game)?.inviteMultiplayer?.(modeId, entry);
+      void getActiveOverworldScene(game)?.inviteMultiplayer?.(modeId, entry);
     },
     onOpenRoomComment: () => {
       leaderboardModal.close();

@@ -351,9 +351,17 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
 
 function resolveAssetUrl(path: string): string {
   const base = import.meta.env.BASE_URL || '/';
-  const normalizedPath = path.replace(/^\/+/, '');
+  const compressedPath = path.endsWith('.wav')
+    ? path.replace(/\.wav$/, resolveCompressedSfxExtension())
+    : path;
+  const normalizedPath = compressedPath.replace(/^\/+/, '');
   const baseUrl = new URL(base, window.location.href);
   return new URL(normalizedPath, baseUrl).toString();
+}
+
+function resolveCompressedSfxExtension(): '.ogg' | '.m4a' {
+  const audio = document.createElement('audio');
+  return audio.canPlayType('audio/ogg; codecs="vorbis"') ? '.ogg' : '.m4a';
 }
 
 export class SfxController {

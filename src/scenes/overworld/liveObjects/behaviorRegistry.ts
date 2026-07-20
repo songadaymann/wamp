@@ -84,3 +84,14 @@ const BEHAVIORS_BY_OBJECT_ID: Record<string, LiveObjectBehavior> = {
 export function getLiveObjectBehavior(objectId: string): LiveObjectBehavior {
   return BEHAVIORS_BY_OBJECT_ID[objectId] ?? { kind: 'none' };
 }
+
+export function liveObjectBehaviorUpdatesEveryFrame(behavior: LiveObjectBehavior): boolean {
+  return behavior.kind !== 'none';
+}
+
+export function liveObjectBehaviorCanSleepAtDistance(behavior: LiveObjectBehavior): boolean {
+  return behavior.kind !== 'none'
+    && behavior.kind !== 'movingPlatform'
+    && behavior.kind !== 'blockSwitch'
+    && behavior.kind !== 'bouncePad';
+}

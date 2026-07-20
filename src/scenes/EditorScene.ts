@@ -1600,6 +1600,10 @@ export class EditorScene extends Phaser.Scene {
     return this.persistenceController.getHistoryState();
   }
 
+  loadHistory(): Promise<void> {
+    return this.persistenceController.loadHistory();
+  }
+
   async returnToWorld(): Promise<void> {
     if (this.musicPreviewState !== 'stopped') {
       this.stopRoomMusicPreview();

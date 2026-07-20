@@ -2,19 +2,27 @@ import type { AuthUser } from '../../../auth/model';
 import type { PrincipalKind, RequestAuthSource } from '../../../agents/model';
 import {
   cloneRoomSnapshot,
+  createEmptyTileData,
   DEFAULT_ROOM_COORDINATES,
   createDefaultRoomRecord,
   createRoomVersionRecord,
   getRoomPublishValidationError,
   isRoomMinted,
   type RoomCoordinates,
+  type RoomCurrentRecord,
   type RoomRecord,
+  type RoomSnapshotQueryReference,
+  type RoomSnapshotQueryResponse,
   type RoomSnapshot,
+  type RoomSummary,
   type RoomVersionRecord,
+  type RoomVersionSummary,
+  type RoomVersionsPage,
 } from '../../../persistence/roomModel';
 import type {
   ClaimedUnpublishedWorldRoomSource,
   PublishedWorldRoomSource,
+  WorldRoomSummary,
 } from '../../../persistence/worldModel';
 import { buildRoomVersionLineage } from '../../../persistence/roomVersionLineage';
 import { getManualRoomLeaderboardSourceValidationError } from '../../../persistence/roomLeaderboardLineage';
@@ -58,7 +66,7 @@ export async function loadRoomRecord(
   viewerWalletAddress: string | null = null,
   viewerIsAdmin = false
 ): Promise<RoomRecord> {
-  const row = await env.DB.prepare(
+  const roomStatement = env.DB.prepare(
     `
       SELECT
         id,
@@ -91,8 +99,13 @@ export async function loadRoomRecord(
       LIMIT 1
     `
   )
-    .bind(roomId, coordinates.x, coordinates.y)
-    .first<RoomRow>();
+    .bind(roomId, coordinates.x, coordinates.y);
+  const versionsStatement = prepareLoadRoomVersionsStatement(env, roomId);
+  const [roomResult, versionsResult] = await env.DB.batch<{
+    results: Array<RoomRow | RoomVersionRow>;
+  }>([roomStatement, versionsStatement]);
+  const rowCandidate = roomResult?.results[0];
+  const row = rowCandidate && 'draft_json' in rowCandidate ? rowCandidate : null;
 
   if (!row) {
     const emptyRecord = createDefaultRoomRecord(roomId, coordinates);
@@ -111,7 +124,12 @@ export async function loadRoomRecord(
   const published = row.published_json
     ? parseStoredSnapshot(row.published_json, 'published room')
     : null;
-  const versions = await loadRoomVersions(env, row.id);
+  const batchedVersionRows = (versionsResult?.results ?? []).filter(
+    (candidate): candidate is RoomVersionRow => 'snapshot_json' in candidate,
+  );
+  const versions = row.id === roomId
+    ? mapStoredRoomVersions(batchedVersionRows)
+    : await loadRoomVersions(env, row.id);
 
   const record: RoomRecord = {
     draft,
@@ -145,6 +163,399 @@ export async function loadRoomRecord(
 
   return {
     ...record,
+    permissions: buildRoomPermissions(record, viewerUserId, viewerWalletAddress, viewerIsAdmin),
+  };
+}
+
+interface CompactRoomRow extends RoomRow {
+  draft_version: number | null;
+  published_version: number | null;
+  draft_updated_at: string | null;
+  published_updated_at: string | null;
+}
+
+const COMPACT_ROOM_COLUMNS = `
+  id,
+  x,
+  y,
+  draft_title,
+  published_title,
+  claimer_user_id,
+  claimer_principal_type,
+  claimer_agent_id,
+  claimer_display_name,
+  claimed_at,
+  last_published_by_user_id,
+  last_published_by_principal_type,
+  last_published_by_agent_id,
+  last_published_by_display_name,
+  minted_chain_id,
+  minted_contract_address,
+  minted_token_id,
+  minted_owner_wallet_address,
+  minted_owner_synced_at,
+  minted_metadata_room_version,
+  minted_metadata_updated_at,
+  minted_metadata_hash,
+  canonical_version,
+  CAST(json_extract(draft_json, '$.version') AS INTEGER) AS draft_version,
+  CAST(json_extract(published_json, '$.version') AS INTEGER) AS published_version,
+  json_extract(draft_json, '$.updatedAt') AS draft_updated_at,
+  json_extract(published_json, '$.updatedAt') AS published_updated_at
+`;
+
+export async function loadRoomSummary(
+  env: Env,
+  roomId: string,
+  coordinates: RoomCoordinates,
+  viewerUserId: string | null = null,
+  viewerWalletAddress: string | null = null,
+  viewerIsAdmin = false,
+): Promise<RoomSummary> {
+  const row = await env.DB.prepare(
+    `SELECT ${COMPACT_ROOM_COLUMNS} FROM rooms WHERE id = ? OR (x = ? AND y = ?) LIMIT 1`,
+  ).bind(roomId, coordinates.x, coordinates.y).first<CompactRoomRow>();
+
+  if (!row) {
+    return roomSummaryFromRecord(
+      createDefaultRoomRecord(roomId, coordinates),
+      viewerUserId,
+      viewerWalletAddress,
+      viewerIsAdmin,
+    );
+  }
+
+  return roomSummaryFromCompactRow(row, viewerUserId, viewerWalletAddress, viewerIsAdmin);
+}
+
+export async function loadRoomCurrent(
+  env: Env,
+  roomId: string,
+  coordinates: RoomCoordinates,
+  viewerUserId: string | null = null,
+  viewerWalletAddress: string | null = null,
+  viewerIsAdmin = false,
+): Promise<RoomCurrentRecord> {
+  const row = await env.DB.prepare(
+    `SELECT draft_json, published_json, ${COMPACT_ROOM_COLUMNS} FROM rooms WHERE id = ? OR (x = ? AND y = ?) LIMIT 1`,
+  ).bind(roomId, coordinates.x, coordinates.y).first<CompactRoomRow>();
+
+  if (!row) {
+    const record = createDefaultRoomRecord(roomId, coordinates);
+    return {
+      summary: roomSummaryFromRecord(record, viewerUserId, viewerWalletAddress, viewerIsAdmin),
+      draft: record.draft,
+      published: null,
+    };
+  }
+
+  return {
+    summary: roomSummaryFromCompactRow(row, viewerUserId, viewerWalletAddress, viewerIsAdmin),
+    draft: parseStoredSnapshot(row.draft_json, 'draft room'),
+    published: row.published_json ? parseStoredSnapshot(row.published_json, 'published room') : null,
+  };
+}
+
+export async function loadRoomVersionPage(
+  env: Env,
+  roomId: string,
+  limit: number,
+  cursor: string | null,
+): Promise<RoomVersionsPage> {
+  const beforeVersion = cursor ? decodeRoomVersionCursor(cursor) : null;
+  const result = await env.DB.prepare(
+    `
+      SELECT
+        version,
+        title,
+        created_at,
+        published_by_user_id,
+        published_by_principal_type,
+        published_by_agent_id,
+        published_by_display_name,
+        reverted_from_version,
+        leaderboard_source_version
+      FROM room_versions
+      WHERE room_id = ? AND (? IS NULL OR version < ?)
+      ORDER BY version DESC
+      LIMIT ?
+    `,
+  ).bind(roomId, beforeVersion, beforeVersion, limit + 1).all<Omit<RoomVersionRow, 'snapshot_json'>>();
+  const hasMore = result.results.length > limit;
+  const rows = result.results.slice(0, limit);
+  const versions: RoomVersionSummary[] = rows.map((row) => ({
+    version: row.version,
+    title: row.title,
+    createdAt: row.created_at,
+    publishedByUserId: row.published_by_user_id,
+    publishedByPrincipalKind: row.published_by_principal_type,
+    publishedByAgentId: row.published_by_agent_id,
+    publishedByDisplayName: row.published_by_display_name,
+    revertedFromVersion: row.reverted_from_version,
+    leaderboardSourceVersion: row.leaderboard_source_version,
+  }));
+  const last = versions.at(-1);
+  return {
+    versions,
+    ...(hasMore && last ? { nextCursor: encodeRoomVersionCursor(last.version) } : {}),
+  };
+}
+
+export async function loadExactRoomVersion(
+  env: Env,
+  roomId: string,
+  version: number,
+): Promise<RoomVersionRecord | null> {
+  const row = await env.DB.prepare(
+    `
+      SELECT
+        version,
+        snapshot_json,
+        title,
+        created_at,
+        published_by_user_id,
+        published_by_principal_type,
+        published_by_agent_id,
+        published_by_display_name,
+        reverted_from_version,
+        leaderboard_source_version
+      FROM room_versions
+      WHERE room_id = ? AND version = ?
+      LIMIT 1
+    `,
+  ).bind(roomId, version).first<RoomVersionRow>();
+  return row ? mapStoredRoomVersions([row])[0] ?? null : null;
+}
+
+export async function loadRoomSnapshotsByReferences(
+  env: Env,
+  references: RoomSnapshotQueryReference[],
+): Promise<RoomSnapshotQueryResponse> {
+  if (references.length > 128) {
+    throw new HttpError(400, 'A maximum of 128 room snapshot references is allowed.');
+  }
+
+  const uniqueReferences = dedupeSnapshotReferences(references);
+  const versionReferences = uniqueReferences.filter(
+    (reference): reference is Extract<RoomSnapshotQueryReference, { kind: 'version' }> => reference.kind === 'version',
+  );
+  const currentReferences = uniqueReferences.filter(
+    (reference): reference is Extract<RoomSnapshotQueryReference, { kind: 'current_preview' }> => reference.kind === 'current_preview',
+  );
+  const versionStatements = chunkArray(versionReferences, 40).map((chunk) => env.DB.prepare(
+    `SELECT room_id, version, snapshot_json FROM room_versions WHERE (room_id, version) IN (${chunk.map(() => '(?, ?)').join(', ')})`,
+  ).bind(...chunk.flatMap((reference) => [reference.roomId, reference.version])));
+  const currentStatements = chunkArray(currentReferences, 60).map((chunk) => env.DB.prepare(
+    `SELECT id, x, y, draft_json, published_json FROM rooms WHERE id IN (${chunk.map(() => '?').join(', ')})`,
+  ).bind(...chunk.map((reference) => reference.roomId)));
+  const results = versionStatements.length + currentStatements.length > 0
+    ? await env.DB.batch<{ results: Record<string, unknown>[] }>([...versionStatements, ...currentStatements])
+    : [];
+  const snapshotsByKey = new Map<string, RoomSnapshot>();
+
+  for (const result of results.slice(0, versionStatements.length)) {
+    for (const row of result?.results ?? []) {
+      const roomId = String(row.room_id);
+      const version = Number(row.version);
+      snapshotsByKey.set(
+        snapshotReferenceKey({ kind: 'version', roomId, version }),
+        parseStoredSnapshot(String(row.snapshot_json), 'room version'),
+      );
+    }
+  }
+
+  const currentRows = results.slice(versionStatements.length).flatMap((result) => result?.results ?? []);
+  for (const reference of currentReferences) {
+    const row = currentRows.find((candidate) => String(candidate.id) === reference.roomId);
+    if (!row) continue;
+    if (reference.state === 'claimed_unpublished' && typeof row.published_json === 'string') continue;
+    const raw = reference.state === 'claimed_unpublished' ? row.draft_json : row.published_json;
+    if (typeof raw !== 'string') continue;
+    const snapshot = parseStoredSnapshot(raw, 'current preview room');
+    if (reference.coordinates && (
+      snapshot.coordinates.x !== reference.coordinates.x || snapshot.coordinates.y !== reference.coordinates.y
+    )) continue;
+    if (reference.updatedAt && snapshot.updatedAt !== reference.updatedAt) continue;
+    snapshotsByKey.set(snapshotReferenceKey(reference), snapshot);
+  }
+
+  return {
+    snapshots: uniqueReferences.flatMap((reference) => {
+      const key = snapshotReferenceKey(reference);
+      const snapshot = snapshotsByKey.get(key);
+      return snapshot ? [{ key, reference, snapshot }] : [];
+    }),
+    missing: uniqueReferences.filter((reference) => !snapshotsByKey.has(snapshotReferenceKey(reference))),
+  };
+}
+
+export function createOverviewRoomSnapshot(snapshot: RoomSnapshot): RoomSnapshot {
+  const tileData = createEmptyTileData();
+  tileData.background = snapshot.tileData.background;
+  tileData.terrain = snapshot.tileData.terrain;
+  tileData.foreground = [];
+  return {
+    ...snapshot,
+    goalIntroText: null,
+    music: null,
+    goal: null,
+    spawnPoint: null,
+    tileData,
+    placedObjects: [],
+    customSprites: [],
+    tilesetHint: null,
+  };
+}
+
+export async function loadUnavailableRoomIdsForClaim(
+  env: Env,
+  roomIds: string[],
+): Promise<Set<string>> {
+  const uniqueIds = [...new Set(roomIds)];
+  const statements = chunkArray(uniqueIds, 80).map((chunk) => env.DB.prepare(
+    `
+      SELECT id
+      FROM rooms
+      WHERE id IN (${chunk.map(() => '?').join(', ')})
+        AND (
+          published_json IS NOT NULL
+          OR claimer_user_id IS NOT NULL
+          OR claimed_at IS NOT NULL
+          OR minted_chain_id IS NOT NULL
+          OR minted_contract_address IS NOT NULL
+          OR minted_token_id IS NOT NULL
+        )
+    `,
+  ).bind(...chunk));
+  if (statements.length === 0) return new Set();
+  const results = await env.DB.batch<{ results: Array<{ id: string }> }>(statements);
+  return new Set(results.flatMap((result) => result?.results ?? []).map((row) => row.id));
+}
+
+export function encodeRoomVersionCursor(version: number): string {
+  return btoa(`room-version:${version}`);
+}
+
+export function decodeRoomVersionCursor(cursor: string): number {
+  try {
+    const decoded = atob(cursor);
+    const match = /^room-version:(\d+)$/.exec(decoded);
+    const version = match ? Number(match[1]) : Number.NaN;
+    if (!Number.isSafeInteger(version) || version < 1) throw new Error('invalid');
+    return version;
+  } catch {
+    throw new HttpError(400, 'Invalid room version cursor.');
+  }
+}
+
+export function snapshotReferenceKey(reference: RoomSnapshotQueryReference): string {
+  if (reference.kind === 'version') return `version:${reference.roomId}:${reference.version}`;
+  return `current:${reference.roomId}:${reference.state ?? 'published'}:${reference.updatedAt ?? ''}`;
+}
+
+export function dedupeSnapshotReferences(references: RoomSnapshotQueryReference[]): RoomSnapshotQueryReference[] {
+  const byKey = new Map<string, RoomSnapshotQueryReference>();
+  for (const reference of references) byKey.set(snapshotReferenceKey(reference), reference);
+  return [...byKey.values()];
+}
+
+function chunkArray<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) chunks.push(values.slice(index, index + size));
+  return chunks;
+}
+
+function roomSummaryFromCompactRow(
+  row: CompactRoomRow,
+  viewerUserId: string | null,
+  viewerWalletAddress: string | null,
+  viewerIsAdmin: boolean,
+): RoomSummary {
+  const shell = {
+    ...createDefaultRoomRecord(row.id, { x: row.x, y: row.y }),
+    canonicalVersion: row.canonical_version,
+    claimerUserId: row.claimer_user_id,
+    claimerPrincipalKind: row.claimer_principal_type,
+    claimerAgentId: row.claimer_agent_id,
+    claimerDisplayName: row.claimer_display_name,
+    claimedAt: row.claimed_at,
+    lastPublishedByUserId: row.last_published_by_user_id,
+    lastPublishedByPrincipalKind: row.last_published_by_principal_type,
+    lastPublishedByAgentId: row.last_published_by_agent_id,
+    lastPublishedByDisplayName: row.last_published_by_display_name,
+    mintedChainId: row.minted_chain_id,
+    mintedContractAddress: row.minted_contract_address,
+    mintedTokenId: row.minted_token_id,
+    mintedOwnerWalletAddress: row.minted_owner_wallet_address,
+    mintedOwnerSyncedAt: row.minted_owner_synced_at,
+    mintedMetadataRoomVersion: row.minted_metadata_room_version,
+    mintedMetadataUpdatedAt: row.minted_metadata_updated_at,
+    mintedMetadataHash: row.minted_metadata_hash,
+  } satisfies RoomRecord;
+  return {
+    id: row.id,
+    coordinates: { x: row.x, y: row.y },
+    draftTitle: row.draft_title,
+    publishedTitle: row.published_title,
+    draftVersion: row.draft_version ?? 1,
+    publishedVersion: row.published_version,
+    draftUpdatedAt: row.draft_updated_at ?? shell.draft.updatedAt,
+    publishedUpdatedAt: row.published_updated_at,
+    canonicalVersion: row.canonical_version,
+    claimerUserId: row.claimer_user_id,
+    claimerPrincipalKind: row.claimer_principal_type,
+    claimerAgentId: row.claimer_agent_id,
+    claimerDisplayName: row.claimer_display_name,
+    claimedAt: row.claimed_at,
+    lastPublishedByUserId: row.last_published_by_user_id,
+    lastPublishedByPrincipalKind: row.last_published_by_principal_type,
+    lastPublishedByAgentId: row.last_published_by_agent_id,
+    lastPublishedByDisplayName: row.last_published_by_display_name,
+    mintedChainId: row.minted_chain_id,
+    mintedContractAddress: row.minted_contract_address,
+    mintedTokenId: row.minted_token_id,
+    mintedOwnerWalletAddress: row.minted_owner_wallet_address,
+    mintedOwnerSyncedAt: row.minted_owner_synced_at,
+    mintedMetadataRoomVersion: row.minted_metadata_room_version,
+    mintedMetadataUpdatedAt: row.minted_metadata_updated_at,
+    mintedMetadataHash: row.minted_metadata_hash,
+    permissions: buildRoomPermissions(shell, viewerUserId, viewerWalletAddress, viewerIsAdmin),
+  };
+}
+
+function roomSummaryFromRecord(
+  record: RoomRecord,
+  viewerUserId: string | null,
+  viewerWalletAddress: string | null,
+  viewerIsAdmin: boolean,
+): RoomSummary {
+  return {
+    id: record.draft.id,
+    coordinates: record.draft.coordinates,
+    draftTitle: record.draft.title,
+    publishedTitle: record.published?.title ?? null,
+    draftVersion: record.draft.version,
+    publishedVersion: record.published?.version ?? null,
+    draftUpdatedAt: record.draft.updatedAt,
+    publishedUpdatedAt: record.published?.updatedAt ?? null,
+    canonicalVersion: record.canonicalVersion,
+    claimerUserId: record.claimerUserId,
+    claimerPrincipalKind: record.claimerPrincipalKind,
+    claimerAgentId: record.claimerAgentId,
+    claimerDisplayName: record.claimerDisplayName,
+    claimedAt: record.claimedAt,
+    lastPublishedByUserId: record.lastPublishedByUserId,
+    lastPublishedByPrincipalKind: record.lastPublishedByPrincipalKind,
+    lastPublishedByAgentId: record.lastPublishedByAgentId,
+    lastPublishedByDisplayName: record.lastPublishedByDisplayName,
+    mintedChainId: record.mintedChainId,
+    mintedContractAddress: record.mintedContractAddress,
+    mintedTokenId: record.mintedTokenId,
+    mintedOwnerWalletAddress: record.mintedOwnerWalletAddress,
+    mintedOwnerSyncedAt: record.mintedOwnerSyncedAt,
+    mintedMetadataRoomVersion: record.mintedMetadataRoomVersion,
+    mintedMetadataUpdatedAt: record.mintedMetadataUpdatedAt,
+    mintedMetadataHash: record.mintedMetadataHash,
     permissions: buildRoomPermissions(record, viewerUserId, viewerWalletAddress, viewerIsAdmin),
   };
 }
@@ -298,8 +709,85 @@ export async function loadClaimedUnpublishedRoomsInBounds(
   }));
 }
 
-export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVersionRecord[]> {
+export async function loadWorldRoomSummariesInBounds(
+  env: Env,
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number,
+): Promise<WorldRoomSummary[]> {
   const result = await env.DB.prepare(
+    `
+      SELECT
+        id,
+        x,
+        y,
+        CASE WHEN published_json IS NOT NULL THEN 'published' ELSE 'claimed_unpublished' END AS state,
+        CASE WHEN published_json IS NOT NULL THEN published_title ELSE draft_title END AS title,
+        CASE WHEN published_json IS NOT NULL
+          THEN json_extract(published_json, '$.background')
+          ELSE json_extract(draft_json, '$.background') END AS background,
+        CASE WHEN published_json IS NOT NULL
+          THEN json_extract(published_json, '$.goal.type')
+          ELSE json_extract(draft_json, '$.goal.type') END AS goal_type,
+        CAST(CASE WHEN published_json IS NOT NULL
+          THEN json_extract(published_json, '$.version')
+          ELSE json_extract(draft_json, '$.version') END AS INTEGER) AS version,
+        CASE WHEN published_json IS NOT NULL THEN json_extract(published_json, '$.publishedAt') ELSE NULL END AS published_at,
+        CASE WHEN published_json IS NOT NULL
+          THEN json_extract(published_json, '$.updatedAt')
+          ELSE json_extract(draft_json, '$.updatedAt') END AS preview_updated_at,
+        claimer_user_id,
+        claimer_display_name,
+        last_published_by_user_id,
+        last_published_by_display_name
+      FROM rooms
+      WHERE x BETWEEN ? AND ?
+        AND y BETWEEN ? AND ?
+        AND (published_json IS NOT NULL OR (claimer_user_id IS NOT NULL AND claimed_at IS NOT NULL))
+    `,
+  ).bind(minX, maxX, minY, maxY).all<{
+    id: string;
+    x: number;
+    y: number;
+    state: 'published' | 'claimed_unpublished';
+    title: string | null;
+    background: string | null;
+    goal_type: WorldRoomSummary['goalType'];
+    version: number | null;
+    published_at: string | null;
+    preview_updated_at: string | null;
+    claimer_user_id: string | null;
+    claimer_display_name: string | null;
+    last_published_by_user_id: string | null;
+    last_published_by_display_name: string | null;
+  }>();
+  return result.results.map((row) => ({
+    id: row.id,
+    coordinates: { x: Number(row.x), y: Number(row.y) },
+    title: row.title,
+    state: row.state,
+    background: row.background,
+    goalType: row.goal_type,
+    version: row.version === null ? null : Number(row.version),
+    publishedAt: row.published_at,
+    previewUpdatedAt: row.preview_updated_at,
+    creatorUserId: row.claimer_user_id ?? (row.state === 'published' ? row.last_published_by_user_id : null),
+    creatorDisplayName: row.claimer_display_name ?? (row.state === 'published' ? row.last_published_by_display_name : null),
+    publishedByUserId: row.state === 'published' ? row.last_published_by_user_id : null,
+    publishedByDisplayName: row.state === 'published' ? row.last_published_by_display_name : null,
+    course: null,
+    expandedRoom: null,
+  }));
+}
+
+export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVersionRecord[]> {
+  const result = await prepareLoadRoomVersionsStatement(env, roomId).all<RoomVersionRow>();
+  return mapStoredRoomVersions(result.results);
+}
+
+function prepareLoadRoomVersionsStatement(env: Env, roomId: string): D1PreparedStatement {
+  return env.DB.prepare(
     `
       SELECT
         version,
@@ -317,10 +805,11 @@ export async function loadRoomVersions(env: Env, roomId: string): Promise<RoomVe
       ORDER BY version ASC
     `
   )
-    .bind(roomId)
-    .all<RoomVersionRow>();
+    .bind(roomId);
+}
 
-  return result.results.map((row) => {
+function mapStoredRoomVersions(rows: RoomVersionRow[]): RoomVersionRecord[] {
+  return rows.map((row) => {
     const snapshot = parseStoredSnapshot(row.snapshot_json, 'room version');
     return createRoomVersionRecord(snapshot, {
       version: row.version,

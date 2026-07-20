@@ -1,7 +1,19 @@
-import { cloneRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
+import {
+  cloneRoomSnapshot,
+  type RoomSnapshot,
+  type RoomSnapshotQueryDetail,
+  type RoomSnapshotQueryReference,
+  type RoomSnapshotQueryResponse,
+} from '../../persistence/roomModel';
 import type { WorldRepository } from '../../persistence/worldRepository';
 import type { WorldChunkWindow, WorldRoomSummary } from '../../persistence/worldModel';
 import type { RoomCoordinates } from '../../persistence/roomModel';
+import {
+  buildSharedRoomSnapshotKey,
+  getSharedRoomSnapshot,
+  invalidateSharedRoomSnapshots,
+  setSharedRoomSnapshot,
+} from '../../persistence/sharedRoomSnapshotCache';
 
 export type PlayableRoomSource =
   | 'published'
@@ -26,6 +38,41 @@ export interface RenderableRoom {
   source: PlayableRoomSource;
 }
 
+type RoomLoadOwner = 'render' | 'selection';
+
+interface RoomLoadRequest {
+  abortController: AbortController;
+  lifecycleEpoch: number;
+  owners: Set<RoomLoadOwner>;
+  promise: Promise<RoomSnapshot | null>;
+}
+
+interface RoomSnapshotBatchRequest {
+  lifecycleEpoch: number;
+  promise: Promise<RoomSnapshotQueryResponse>;
+}
+
+function serializeRoomSnapshotReference(reference: RoomSnapshotQueryReference): string {
+  return reference.kind === 'version'
+    ? JSON.stringify(['version', reference.roomId, reference.version])
+    : JSON.stringify([
+        'current_preview',
+        reference.roomId,
+        reference.coordinates?.x ?? null,
+        reference.coordinates?.y ?? null,
+        reference.state ?? null,
+        reference.updatedAt ?? null,
+      ]);
+}
+
+function buildRoomSnapshotBatchKey(
+  references: readonly RoomSnapshotQueryReference[],
+  detail: RoomSnapshotQueryDetail,
+): string {
+  const canonicalReferences = references.map(serializeRoomSnapshotReference).sort();
+  return JSON.stringify([detail, canonicalReferences]);
+}
+
 export function isStreamingRoomCandidateRenderable(
   roomCandidate: Pick<StreamingRoomCandidate, 'draft' | 'sharedPreview' | 'summary'>,
 ): boolean {
@@ -39,25 +86,41 @@ export function isStreamingRoomCandidateRenderable(
 
 export class OverworldPreviewCache {
   private roomSnapshotsById = new Map<string, RoomSnapshot>();
-  private roomLoadPromisesById = new Map<string, Promise<RoomSnapshot | null>>();
+  private overviewSnapshotsById = new Map<string, RoomSnapshot>();
+  private roomLoadRequestsById = new Map<string, RoomLoadRequest>();
+  private roomSnapshotBatchRequestsByKey = new Map<string, RoomSnapshotBatchRequest>();
+  private lifecycleEpoch = 0;
 
   constructor(private readonly worldRepository: WorldRepository) {}
 
   reset(): void {
+    this.lifecycleEpoch += 1;
+    for (const request of this.roomLoadRequestsById.values()) request.abortController.abort();
     this.roomSnapshotsById = new Map();
-    this.roomLoadPromisesById = new Map();
+    this.overviewSnapshotsById = new Map();
+    this.roomLoadRequestsById = new Map();
+    this.roomSnapshotBatchRequestsByKey = new Map();
   }
 
   getRoomSnapshotsById(): Map<string, RoomSnapshot> {
-    return this.roomSnapshotsById;
+    return new Map([...this.overviewSnapshotsById, ...this.roomSnapshotsById]);
   }
 
   getRoomSnapshot(roomId: string): RoomSnapshot | null {
+    return this.roomSnapshotsById.get(roomId) ?? this.overviewSnapshotsById.get(roomId) ?? null;
+  }
+
+  getFullRoomSnapshot(roomId: string): RoomSnapshot | null {
     return this.roomSnapshotsById.get(roomId) ?? null;
   }
 
   setRoomSnapshot(room: RoomSnapshot): void {
     this.roomSnapshotsById.set(room.id, room);
+    this.overviewSnapshotsById.delete(room.id);
+    setSharedRoomSnapshot(
+      buildSharedRoomSnapshotKey(room.id, room.version, room.status, room.updatedAt),
+      room,
+    );
   }
 
   hydrateChunkWindow(chunkWindow: Pick<WorldChunkWindow, 'chunks'>): void {
@@ -73,14 +136,118 @@ export class OverworldPreviewCache {
         }
 
         this.roomSnapshotsById.set(previewRoom.id, cloneRoomSnapshot(previewRoom));
+        this.overviewSnapshotsById.delete(previewRoom.id);
+        setSharedRoomSnapshot(
+          buildSharedRoomSnapshotKey(previewRoom.id, previewRoom.version, previewRoom.status, previewRoom.updatedAt),
+          previewRoom,
+        );
       }
     }
   }
 
+  async ensureRoomSnapshotsBatch(
+    roomCandidates: Map<string, StreamingRoomCandidate>,
+    roomIds: Iterable<string>,
+    options: {
+      priority?: 'high' | 'low' | 'auto';
+      detail?: RoomSnapshotQueryDetail;
+    } = {},
+  ): Promise<void> {
+    const detail = options.detail ?? 'full';
+    const references = Array.from(new Set(roomIds)).flatMap((roomId) => {
+      const candidate = roomCandidates.get(roomId);
+      const summary = candidate?.summary ?? null;
+      if (!summary || (summary.state !== 'published' && summary.state !== 'claimed_unpublished')) return [];
+      const cached = this.roomSnapshotsById.get(roomId)
+        ?? (detail === 'overview' ? this.overviewSnapshotsById.get(roomId) : null);
+      if (
+        cached &&
+        cached.version === summary.version &&
+        (!summary.previewUpdatedAt || cached.updatedAt === summary.previewUpdatedAt)
+      ) return [];
+      const shared = getSharedRoomSnapshot(buildSharedRoomSnapshotKey(
+        roomId,
+        summary.version,
+        summary.state,
+        summary.previewUpdatedAt,
+      ));
+      if (shared) {
+        this.roomSnapshotsById.set(roomId, shared);
+        return [];
+      }
+      return [{
+        kind: 'current_preview' as const,
+        roomId,
+        coordinates: summary.coordinates,
+        state: summary.state,
+        ...(summary.previewUpdatedAt ? { updatedAt: summary.previewUpdatedAt } : {}),
+      }];
+    }).sort((left, right) => (
+      serializeRoomSnapshotReference(left).localeCompare(serializeRoomSnapshotReference(right))
+    ));
+
+    for (let index = 0; index < references.length; index += 48) {
+      const batch = references.slice(index, index + 48);
+      const lifecycleEpoch = this.lifecycleEpoch;
+      const response = await this.queryRoomSnapshotBatch(batch, detail, options.priority);
+      if (lifecycleEpoch !== this.lifecycleEpoch) return;
+      if (response.missing.length > 0) {
+        const missing = response.missing[0];
+        throw new Error(`Room preview ${missing.roomId} changed while the world was loading.`);
+      }
+      for (const entry of response.snapshots) {
+        const snapshot = cloneRoomSnapshot(entry.snapshot);
+        if (detail === 'overview') {
+          if (!this.roomSnapshotsById.has(snapshot.id)) {
+            this.overviewSnapshotsById.set(snapshot.id, snapshot);
+          }
+          continue;
+        }
+        this.roomSnapshotsById.set(snapshot.id, snapshot);
+        this.overviewSnapshotsById.delete(snapshot.id);
+        const summary = roomCandidates.get(entry.snapshot.id)?.summary ?? null;
+        setSharedRoomSnapshot(buildSharedRoomSnapshotKey(
+          entry.snapshot.id,
+          entry.snapshot.version,
+          summary?.state ?? entry.snapshot.status,
+          entry.snapshot.updatedAt,
+        ), entry.snapshot);
+      }
+    }
+  }
+
+  private queryRoomSnapshotBatch(
+    references: RoomSnapshotQueryReference[],
+    detail: RoomSnapshotQueryDetail,
+    priority?: 'high' | 'low' | 'auto',
+  ): Promise<RoomSnapshotQueryResponse> {
+    const key = buildRoomSnapshotBatchKey(references, detail);
+    const existing = this.roomSnapshotBatchRequestsByKey.get(key);
+    if (existing?.lifecycleEpoch === this.lifecycleEpoch) {
+      return existing.promise;
+    }
+
+    const request: RoomSnapshotBatchRequest = {
+      lifecycleEpoch: this.lifecycleEpoch,
+      promise: this.worldRepository.queryRoomSnapshots(references, { detail, priority }),
+    };
+    this.roomSnapshotBatchRequestsByKey.set(key, request);
+    const clearIfCurrent = (): void => {
+      if (this.roomSnapshotBatchRequestsByKey.get(key) === request) {
+        this.roomSnapshotBatchRequestsByKey.delete(key);
+      }
+    };
+    void request.promise.then(clearIfCurrent, clearIfCurrent);
+    return request.promise;
+  }
+
   invalidateRoom(roomId: string, dropPublishedSnapshot: boolean): void {
-    this.roomLoadPromisesById.delete(roomId);
+    this.roomLoadRequestsById.get(roomId)?.abortController.abort();
+    this.roomLoadRequestsById.delete(roomId);
     if (dropPublishedSnapshot) {
       this.roomSnapshotsById.delete(roomId);
+      this.overviewSnapshotsById.delete(roomId);
+      invalidateSharedRoomSnapshots(roomId);
     }
   }
 
@@ -88,6 +255,11 @@ export class OverworldPreviewCache {
     for (const roomId of Array.from(this.roomSnapshotsById.keys())) {
       if (!visibleRoomIds.has(roomId) && !loadedFullRoomIds.has(roomId)) {
         this.roomSnapshotsById.delete(roomId);
+      }
+    }
+    for (const roomId of Array.from(this.overviewSnapshotsById.keys())) {
+      if (!visibleRoomIds.has(roomId) && !loadedFullRoomIds.has(roomId)) {
+        this.overviewSnapshotsById.delete(roomId);
       }
     }
   }
@@ -150,7 +322,9 @@ export class OverworldPreviewCache {
           return;
         }
 
-        const cachedRoom = this.roomSnapshotsById.get(candidate.summary.id) ?? null;
+        const cachedRoom = fullRoomIds.has(candidate.summary.id)
+          ? this.getFullRoomSnapshot(candidate.summary.id)
+          : this.getRoomSnapshot(candidate.summary.id);
         const publishedRoom =
           cachedRoom ??
           (candidate.summary.state === 'published' && fullRoomIds.has(candidate.summary.id)
@@ -172,30 +346,64 @@ export class OverworldPreviewCache {
     return renderableRooms;
   }
 
-  private async ensurePublishedRoomSnapshot(summary: WorldRoomSummary): Promise<RoomSnapshot | null> {
+  async prefetchPublishedRoom(summary: WorldRoomSummary): Promise<RoomSnapshot | null> {
+    return this.ensurePublishedRoomSnapshot(summary, 'selection');
+  }
+
+  cancelSelectionPrefetchesExcept(roomId: string | null): void {
+    for (const [requestRoomId, request] of this.roomLoadRequestsById) {
+      if (requestRoomId === roomId || !request.owners.delete('selection')) continue;
+      if (request.owners.size > 0) continue;
+      request.abortController.abort();
+      this.roomLoadRequestsById.delete(requestRoomId);
+    }
+  }
+
+  private async ensurePublishedRoomSnapshot(
+    summary: WorldRoomSummary,
+    owner: RoomLoadOwner = 'render',
+  ): Promise<RoomSnapshot | null> {
     const cached = this.roomSnapshotsById.get(summary.id);
     if (cached && cached.version === (summary.version ?? cached.version)) {
       return cached;
     }
 
-    const inFlight = this.roomLoadPromisesById.get(summary.id);
+    const inFlight = this.roomLoadRequestsById.get(summary.id);
     if (inFlight) {
-      return inFlight;
+      inFlight.owners.add(owner);
+      return inFlight.promise;
     }
 
-    const request = this.worldRepository
-      .loadPublishedRoom(summary.id, summary.coordinates)
+    const abortController = new AbortController();
+    const lifecycleEpoch = this.lifecycleEpoch;
+    const request: RoomLoadRequest = {
+      abortController,
+      lifecycleEpoch,
+      owners: new Set([owner]),
+      promise: Promise.resolve(null),
+    };
+    request.promise = this.worldRepository
+      .loadPublishedRoom(summary.id, summary.coordinates, abortController.signal)
       .then((room) => {
+        if (
+          abortController.signal.aborted
+          || lifecycleEpoch !== this.lifecycleEpoch
+          || this.roomLoadRequestsById.get(summary.id) !== request
+        ) {
+          return null;
+        }
         if (room) {
           this.roomSnapshotsById.set(room.id, room);
         }
         return room;
       })
       .finally(() => {
-        this.roomLoadPromisesById.delete(summary.id);
+        if (this.roomLoadRequestsById.get(summary.id) === request) {
+          this.roomLoadRequestsById.delete(summary.id);
+        }
       });
 
-    this.roomLoadPromisesById.set(summary.id, request);
-    return request;
+    this.roomLoadRequestsById.set(summary.id, request);
+    return request.promise;
   }
 }

@@ -1,16 +1,17 @@
+// Rendering implementation retained separately while the typed Pages entry and route shell evolve.
 import decodeJpegBytes from 'jpeg-js/lib/decoder.js';
 import {
   buildProfileSharePath,
   parseProfileSharePath,
-} from '../src/profiles/username.ts';
+} from '../profiles/username.ts';
 import {
   buildPlaylistSharePath,
   parsePlaylistSharePath,
-} from '../src/playlists/model.ts';
+} from '../playlists/model.ts';
 import {
   buildWampOGramSharePath,
   parseWampOGramSharePath,
-} from '../src/wampOGram/links.ts';
+} from '../wampOGram/links.ts';
 import {
   BACKGROUND_GROUPS,
   GAME_OBJECTS,
@@ -25,7 +26,7 @@ import {
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
   getPlacedObjectLayer,
-} from '../src/config.ts';
+} from '../config.ts';
 
 const ROOM_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/?$/;
 const ROOM_IMAGE_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/image(?:\.png)?\/?$/;
@@ -61,6 +62,9 @@ const STANDALONE_PAGE_ALIASES = new Map([
   ['/school-login', '/__standalone/school-login.asset'],
   ['/school-login/', '/__standalone/school-login.asset'],
   ['/school-login.html', '/__standalone/school-login.asset'],
+  ['/world-tile-render', '/__standalone/world-tile-render.asset'],
+  ['/world-tile-render/', '/__standalone/world-tile-render.asset'],
+  ['/world-tile-render.html', '/__standalone/world-tile-render.asset'],
 ]);
 
 export default {

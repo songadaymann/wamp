@@ -16,6 +16,7 @@ import type {
   CourseRunRecord,
   CourseRunStartResponse,
 } from '../../../courses/runModel';
+import { expandedRoomIdFromLegacyCourseId } from '../../../expandedRooms/model';
 import type { RunResult } from '../../../runs/model';
 import {
   HttpError,
@@ -24,7 +25,12 @@ import {
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
-import type { CourseRunRow, Env } from '../core/types';
+import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
+import type { CourseRunRow, Env, WorkerExecutionContextLike } from '../core/types';
+import {
+  refreshPlayableContentIndexForExpandedRoom,
+  schedulePlayableContentIndexRefresh,
+} from '../playableContentIndex/store';
 import {
   loadOptionalRequestAuth,
   requireAuthenticatedRequestAuth,
@@ -57,7 +63,7 @@ import {
   saveCourseDraft,
   unpublishCourse,
 } from './store';
-import { loadRoomRecord } from '../rooms/store';
+import { loadRoomSnapshotsByReferences } from '../rooms/store';
 import {
   computeCourseSnapshotVerificationHash,
   createCourseVerificationTrigger,
@@ -85,6 +91,7 @@ import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 
 interface CoursePublishRouteOptions {
   enforceDailyPublishLimit?: boolean;
+  executionContext?: WorkerExecutionContextLike;
 }
 
 export async function handleCourseCreate(
@@ -217,13 +224,18 @@ export async function handleCoursePublish(
     isFirstPublish: !existing.published,
   });
   await upsertUserStats(env, auth.user.id);
+  schedulePlayableContentIndexRefresh(
+    options.executionContext,
+    refreshPlayableContentIndexForExpandedRoom(env, expandedRoomIdFromLegacyCourseId(courseId)),
+  );
   return jsonResponse(request, record);
 }
 
 export async function handleCourseUnpublish(
   request: Request,
   env: Env,
-  courseId: string
+  courseId: string,
+  executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -232,6 +244,10 @@ export async function handleCourseUnpublish(
     'rooms:write'
   );
   const record = await unpublishCourse(env, courseId, auth.user, auth.isAdmin);
+  schedulePlayableContentIndexRefresh(
+    executionContext,
+    refreshPlayableContentIndexForExpandedRoom(env, expandedRoomIdFromLegacyCourseId(courseId)),
+  );
   return jsonResponse(
     request,
     await attachExpandedRoomCellLimitForUser(env, record, auth.user.id, auth.source)
@@ -709,33 +725,49 @@ export async function handleCourseLeaderboard(
   env: Env,
   courseId: string
 ): Promise<Response> {
-  const auth = await loadOptionalRequestAuth(env, request);
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read course leaderboards');
   const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-  const snapshot = await resolvePublishedCourseVersion(env, courseId, version ?? undefined);
+  const snapshot = await timing.measure(
+    'published_version',
+    () => resolvePublishedCourseVersion(env, courseId, version ?? undefined),
+  );
   if (!snapshot.goal) {
     throw new HttpError(404, 'This course version does not have a leaderboard goal.');
   }
-  const record = await loadCourseRecord(env, courseId, auth?.user.id ?? null, auth?.isAdmin ?? false);
+  const record = await timing.measure(
+    'course_record',
+    () => loadCourseRecord(env, courseId, auth?.user.id ?? null, auth?.isAdmin ?? false),
+  );
   if (!record) {
     throw new HttpError(404, 'Course not found.');
   }
 
-  const leaderboard = await buildCourseLeaderboardResponse(
+  const leaderboard = await timing.measure('leaderboard', () => buildCourseLeaderboardResponse(
     env,
     record,
     snapshot,
     limit,
     auth?.user.id ?? null
-  );
-  return jsonResponse(request, leaderboard);
+  ));
+  const authenticated = auth !== null;
+  timing.setDiagnostic('cache', authenticated ? 'private-20' : 'public-20-swr-40');
+  return timedJsonResponse(request, leaderboard, timing, {
+    headers: {
+      'Cache-Control': authenticated
+        ? 'private, max-age=20'
+        : 'public, max-age=20, stale-while-revalidate=40',
+    },
+  });
 }
 
 export async function handleCourseRatingSubmit(
   request: Request,
   env: Env,
   courseId: string,
+  executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -754,6 +786,10 @@ export async function handleCourseRatingSubmit(
     userId: auth.user.id,
     body,
   });
+  schedulePlayableContentIndexRefresh(
+    executionContext,
+    refreshPlayableContentIndexForExpandedRoom(env, expandedRoomIdFromLegacyCourseId(courseId)),
+  );
   return jsonResponse(request, responseBody);
 }
 
@@ -813,21 +849,18 @@ async function resolvePublishedCourseVersion(
 async function loadCourseVerificationRoomsById(
   env: Env,
   course: CourseSnapshot,
-  viewerUserId: string | null,
-  viewerWalletAddress: string | null,
+  _viewerUserId: string | null,
+  _viewerWalletAddress: string | null,
 ): Promise<Map<string, RoomSnapshot>> {
+  const response = await loadRoomSnapshotsByReferences(env, course.roomRefs.map((roomRef) => ({
+    kind: 'version' as const,
+    roomId: roomRef.roomId,
+    version: roomRef.roomVersion,
+  })));
+  const snapshotsByKey = new Map(response.snapshots.map((entry) => [entry.key, entry.snapshot]));
   const roomsById = new Map<string, RoomSnapshot>();
   for (const roomRef of course.roomRefs) {
-    const roomRecord = await loadRoomRecord(
-      env,
-      roomRef.roomId,
-      roomRef.coordinates,
-      viewerUserId,
-      viewerWalletAddress,
-    );
-    const historicalVersion =
-      roomRecord.versions.find((entry) => entry.version === roomRef.roomVersion)?.snapshot ??
-      (roomRecord.published?.version === roomRef.roomVersion ? roomRecord.published : null);
+    const historicalVersion = snapshotsByKey.get(`version:${roomRef.roomId}:${roomRef.roomVersion}`) ?? null;
     if (!historicalVersion) {
       throw new HttpError(
         409,

@@ -17,9 +17,9 @@ import {
   type RoomDifficulty,
   type RoomLeaderboardEntry,
   type RoomLeaderboardResponse,
+  type RoomLeaderboardVersionOption,
 } from '../../runs/model';
 import { createRunRepository, type RunRepository } from '../../runs/runRepository';
-import { createRoomRepository, type RoomRepository, type RoomVersionRecord } from '../../persistence/roomRepository';
 import {
   createCourseRepository,
   type CourseRepository,
@@ -31,10 +31,6 @@ import type {
 } from '../../courses/runModel';
 import { getActiveOverworldScene, type OverworldSelectedRoomContext } from './sceneBridge';
 import { createProfileTriggerElement, requestProfileInvalidation } from './profileEvents';
-import {
-  buildRoomLeaderboardVersionSelectionState,
-  type RoomLeaderboardVersionOption,
-} from './leaderboardRoomVersions';
 import {
   POST_RUN_RATING_SUBMITTED_EVENT,
   type PostRunRatingSubmittedDetail,
@@ -86,7 +82,6 @@ type LeaderboardModalElements = {
 export class LeaderboardModalController {
   private readonly elements: LeaderboardModalElements;
   private activeTab: LeaderboardTab = 'room';
-  private roomVersions: RoomVersionRecord[] = [];
   private roomVersionOptions: RoomLeaderboardVersionOption[] = [];
   private currentPublishedVersion: number | null = null;
   private selectedVersion: number | null = null;
@@ -154,7 +149,6 @@ export class LeaderboardModalController {
   constructor(
     private readonly game: Phaser.Game,
     private readonly runRepository: RunRepository = createRunRepository(),
-    private readonly roomRepository: RoomRepository = createRoomRepository(),
     private readonly courseRepository: CourseRepository = createCourseRepository(),
     private readonly profileRepository: ProfileRepository = createProfileRepository(),
     private readonly doc: Document = document,
@@ -290,7 +284,6 @@ export class LeaderboardModalController {
     this.roomRushLoadedModes.clear();
     this.roomRushFailedModes.clear();
     this.globalLeaderboard = null;
-    this.roomVersions = [];
     this.roomVersionOptions = [];
     this.currentPublishedVersion = null;
     this.selectedVersion = null;
@@ -343,7 +336,6 @@ export class LeaderboardModalController {
     try {
       const scene = getActiveOverworldScene(this.game);
       this.roomContext = scene?.getSelectedRoomContext?.() ?? null;
-      this.roomVersions = await this.loadRoomVersions();
       this.activeTab = this.resolveInitialTab();
       this.render();
       await this.ensureTabLoaded(this.activeTab);
@@ -356,28 +348,8 @@ export class LeaderboardModalController {
     }
   }
 
-  private async loadRoomVersions(): Promise<RoomVersionRecord[]> {
-    if (!this.roomContext || this.roomContext.state !== 'published') {
-      this.roomVersionOptions = [];
-      this.currentPublishedVersion = null;
-      this.selectedVersion = null;
-      return [];
-    }
-
-    const record = await this.roomRepository.loadRoom(
-      this.roomContext.roomId,
-      this.roomContext.coordinates
-    );
-    const selectionState = buildRoomLeaderboardVersionSelectionState(record);
-    this.roomVersionOptions = selectionState.options;
-    this.currentPublishedVersion = selectionState.currentPublishedVersion;
-    this.selectedVersion = selectionState.defaultValue;
-
-    return record.versions.filter((version) => version.snapshot.goal !== null);
-  }
-
   private async loadRoomLeaderboard(): Promise<void> {
-    if (!this.roomContext || this.roomContext.state !== 'published' || this.selectedVersion === null) {
+    if (!this.roomContext || this.roomContext.state !== 'published') {
       this.roomLeaderboard = null;
       this.roomLoading = false;
       this.roomLoaded = true;
@@ -389,12 +361,27 @@ export class LeaderboardModalController {
     this.roomLoaded = false;
     this.render();
     try {
-      this.roomLeaderboard = await this.runRepository.loadRoomLeaderboard(
+      const response = await this.runRepository.loadRoomLeaderboard(
         this.roomContext.roomId,
         this.roomContext.coordinates,
         this.selectedVersion,
         25
       );
+      this.roomLeaderboard = response;
+      this.currentPublishedVersion = response.currentPublishedVersion ?? response.roomVersion;
+      this.roomVersionOptions = response.versionOptions?.length
+        ? response.versionOptions
+        : [{
+            value: response.displayRoomVersion,
+            representativeVersion: response.displayRoomVersion,
+            equivalentVersions: [...response.equivalentRoomVersions],
+            containsCanonical: response.canonicalRoomVersion === response.displayRoomVersion,
+            containsCurrentPublished: response.roomVersion === this.currentPublishedVersion,
+            label: this.formatRoomVersionLabel(response),
+          }];
+      this.selectedVersion = this.roomVersionOptions.find((option) =>
+        option.equivalentVersions.includes(response.roomVersion)
+      )?.value ?? response.displayRoomVersion;
       this.setError(null);
     } catch (error) {
       console.error('Failed to load room leaderboard', error);
@@ -589,7 +576,7 @@ export class LeaderboardModalController {
   }
 
   private render(): void {
-    const roomAvailable = this.roomVersions.length > 0 && this.roomContext?.state === 'published';
+    const roomAvailable = this.roomContext?.state === 'published';
     const courseAvailable = Boolean(this.roomContext?.courseId);
     this.elements.roomTabButton?.classList.toggle('active', this.activeTab === 'room');
     this.elements.courseTabButton?.classList.toggle('active', this.activeTab === 'course');
@@ -677,7 +664,7 @@ export class LeaderboardModalController {
     }
 
     this.elements.versionSelect.replaceChildren();
-    if (this.roomVersions.length === 0) {
+    if (this.roomVersionOptions.length === 0) {
       const option = this.doc.createElement('option');
       option.value = '';
       option.textContent = 'No versions';
@@ -774,7 +761,7 @@ export class LeaderboardModalController {
     if (!this.roomLeaderboard || this.roomLeaderboard.entries.length === 0) {
       const empty = this.doc.createElement('div');
       empty.className = 'leaderboard-empty';
-      empty.textContent = this.roomVersions.length === 0
+      empty.textContent = this.roomVersionOptions.length === 0
         ? 'Select a published challenge room to view rankings.'
         : 'No completed ranked runs yet.';
       this.elements.roomList.appendChild(empty);
@@ -1209,7 +1196,7 @@ export class LeaderboardModalController {
   private resolveInitialTab(): LeaderboardTab {
     const requested = this.preferredInitialTab;
     this.preferredInitialTab = null;
-    const roomAvailable = this.roomVersions.length > 0 && this.roomContext?.state === 'published';
+    const roomAvailable = this.roomContext?.state === 'published';
     const courseAvailable = Boolean(this.roomContext?.courseId);
 
     if (requested === 'global') {

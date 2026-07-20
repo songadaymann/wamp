@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAMP World Tile Renderer</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+
+      #world-tile-render-status {
+        position: fixed;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(100%);
+      }
+    </style>
+  </head>
+  <body>
+    <output id="world-tile-render-status" aria-live="off">loading</output>
+    <script type="module" src="/src/world-tile-render.ts"></script>
+  </body>
+</html>

@@ -3,6 +3,7 @@ import { cloneRoomSnapshot, type RoomRecord, type RoomSnapshot } from '../../../
 import { computeRunScore, sortCompletedRunsForLeaderboard } from '../../../runs/scoring';
 import { RANKED_RUN_TRACE_SCHEMA_VERSION } from '../../../runs/verificationTrace';
 import type {
+  RoomDiscoverySort,
   RoomRunRecord,
   RunFinishRequestBody,
   RunStartResponse,
@@ -15,9 +16,15 @@ import {
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
-import type { Env, RoomRunRow } from '../core/types';
+import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
+import type { Env, RoomRunRow, WorkerExecutionContextLike } from '../core/types';
+import { loadAnonymousPublicCache } from '../core/publicCache';
+import {
+  refreshPlayableContentIndexForRoom,
+  schedulePlayableContentIndexRefresh,
+} from '../playableContentIndex/store';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
-import { loadRoomRecord } from '../rooms/store';
+import { loadExactRoomVersion, loadRoomRecord } from '../rooms/store';
 import {
   assertWampLeaderboardWriteAllowed,
   sqlUserIdIsNotLegacyGeneratedOnly,
@@ -79,12 +86,9 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
   );
   await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseRunStartBody(request);
-  const record = await loadRoomRecord(env, body.roomId, body.roomCoordinates, auth.user.id);
-  const snapshot = resolveRoomSnapshotForVersion(record, body.roomVersion);
-
-  if (!record.published || snapshot.status !== 'published') {
-    throw new HttpError(409, 'Only published room versions can accept leaderboard submissions.');
-  }
+  const exactVersion = await loadExactRoomVersion(env, body.roomId, body.roomVersion);
+  if (!exactVersion) throw new HttpError(404, `Room version ${body.roomVersion} was not found.`);
+  const snapshot = cloneRoomSnapshot(exactVersion.snapshot);
 
   if (!snapshot.goal) {
     throw new HttpError(400, 'This room version does not have an active goal.');
@@ -559,41 +563,42 @@ export async function handleRoomLeaderboard(
   request: Request,
   url: URL,
   env: Env,
-  roomId: string
+  roomId: string,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
-  const auth = await loadOptionalRequestAuth(env, request);
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read room leaderboards');
-  const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
-  const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
-  const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-  const record = await loadRoomRecord(
-    env,
-    roomId,
-    coordinates,
-    auth?.user.id ?? null,
-    auth?.user.walletAddress ?? null
-  );
-  const selection = resolveAggregatedRoomLeaderboardSelection(record, version);
-  const snapshot = selection.snapshot;
-
-  if (!snapshot.goal) {
-    throw new HttpError(404, 'This room version does not have a leaderboard goal.');
-  }
-
-  const leaderboard = await buildRoomLeaderboardResponse(
-    env,
-    record,
-    selection,
-    limit,
-    auth?.user.id ?? null
-  );
-  return jsonResponse(request, leaderboard);
+  const authenticated = auth !== null;
+  const loadResponse = async () => {
+    const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+    const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
+    const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
+    const record = await timing.measure('room_record', () => loadRoomRecord(
+      env,
+      roomId,
+      coordinates,
+      auth?.user.id ?? null,
+      auth?.user.walletAddress ?? null,
+    ));
+    const selection = timing.measureSync('lineage', () => resolveAggregatedRoomLeaderboardSelection(record, version));
+    if (!selection.snapshot.goal) throw new HttpError(404, 'This room version does not have a leaderboard goal.');
+    const leaderboard = await timing.measure('leaderboard', () => buildRoomLeaderboardResponse(
+      env, record, selection, limit, auth?.user.id ?? null,
+    ));
+    timing.setDiagnostic('cache', authenticated ? 'private-20' : 'public-20');
+    return timedJsonResponse(request, leaderboard, timing, {
+      headers: { 'Cache-Control': authenticated ? 'private, max-age=20' : 'public, max-age=20' },
+    });
+  };
+  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
 }
 
 export async function handleRoomDifficultyVote(
   request: Request,
   env: Env,
-  roomId: string
+  roomId: string,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -632,6 +637,7 @@ export async function handleRoomDifficultyVote(
       autoSuggestedDifficulty: body.difficulty,
     },
   });
+  schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
 
   return noContentResponse(request);
 }
@@ -640,6 +646,7 @@ export async function handleRoomRatingSubmit(
   request: Request,
   env: Env,
   roomId: string,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -661,15 +668,18 @@ export async function handleRoomRatingSubmit(
     userId: auth.user.id,
     body,
   });
+  schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
   return jsonResponse(request, responseBody);
 }
 
 export async function handleRoomDiscovery(
   request: Request,
   url: URL,
-  env: Env
+  env: Env,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
-  const auth = await loadOptionalRequestAuth(env, request);
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'discover room challenges');
   const rawDifficulty = url.searchParams.get('difficulty');
   const difficultyFilter =
@@ -677,33 +687,73 @@ export async function handleRoomDiscovery(
   const rawSort = url.searchParams.get('sort');
   const sort = rawSort && rawSort.trim() ? parseRoomDiscoverySortOrThrow(rawSort) : 'featured';
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
+  const cursorOffset = decodeRoomDiscoveryCursor(url.searchParams.get('cursor'), sort);
   const includeGoalLessRooms =
     difficultyFilter === null
     && sort === 'newest'
     && parseBooleanQueryFlag(url.searchParams.get('includeGoalLessRooms'));
-  const response = await loadRoomDiscoveryResponse(
-    env,
-    difficultyFilter,
-    limit,
-    sort,
-    includeGoalLessRooms,
-    auth?.user.id ?? null,
-  );
-  return jsonResponse(request, response);
+  const authenticated = auth !== null;
+  const loadResponse = async () => {
+    const response = await timing.measure('discovery', () => loadRoomDiscoveryResponse(
+      env,
+      difficultyFilter,
+      limit,
+      sort,
+      includeGoalLessRooms,
+      auth?.user.id ?? null,
+      timing,
+      cursorOffset,
+    ));
+    timing.setDiagnostic('cache', authenticated ? 'private' : 'public-20');
+    return timedJsonResponse(request, response, timing, {
+      headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' },
+    });
+  };
+  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
+}
+
+function decodeRoomDiscoveryCursor(value: string | null, sort: RoomDiscoverySort): number {
+  if (!value) return 0;
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const decoded = JSON.parse(atob(padded)) as {
+      version?: unknown;
+      sort?: unknown;
+      offset?: unknown;
+    };
+    if (decoded.version !== 1 || decoded.sort !== sort) throw new Error('cursor mismatch');
+    const offset = Number(decoded.offset);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100_000) throw new Error('cursor offset');
+    return offset;
+  } catch {
+    throw new HttpError(400, 'Invalid room discovery cursor.');
+  }
 }
 
 export async function handleBuilderDiscovery(
   request: Request,
   url: URL,
-  env: Env
+  env: Env,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
-  const auth = await loadOptionalRequestAuth(env, request);
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'discover builders');
   const rawSort = url.searchParams.get('sort');
   const sort = rawSort && rawSort.trim() ? parseBuilderDiscoverySortOrThrow(rawSort) : 'alphabet';
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
-  const response = await loadBuilderDiscoveryResponse(env, limit, sort);
-  return jsonResponse(request, response);
+  const authenticated = auth !== null;
+  const loadResponse = async () => {
+    const response = await timing.measure('builders', () => loadBuilderDiscoveryResponse(env, limit, sort));
+    timing.setDiagnostic('cache', authenticated ? 'private' : 'public-20');
+    return timedJsonResponse(request, response, timing, {
+      headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' },
+    });
+  };
+  return authenticated
+    ? loadAnonymousPublicCache(request, undefined, loadResponse)
+    : loadAnonymousPublicCache(request, context, loadResponse);
 }
 
 function parseBooleanQueryFlag(value: string | null): boolean {
@@ -725,13 +775,25 @@ function resolveRoomVersionPublisherUserId(
 export async function handleGlobalLeaderboard(
   request: Request,
   url: URL,
-  env: Env
+  env: Env,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
-  const auth = await loadOptionalRequestAuth(env, request);
+  const timing = new ServerTiming();
+  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read global leaderboards');
-  const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-  const leaderboard = await buildGlobalLeaderboardResponse(env, limit, auth?.user.id ?? null);
-  return jsonResponse(request, leaderboard);
+  const authenticated = auth !== null;
+  const loadResponse = async () => {
+    const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
+    const leaderboard = await timing.measure(
+      'leaderboard',
+      () => buildGlobalLeaderboardResponse(env, limit, auth?.user.id ?? null),
+    );
+    timing.setDiagnostic('cache', authenticated ? 'private-20' : 'public-20');
+    return timedJsonResponse(request, leaderboard, timing, {
+      headers: { 'Cache-Control': authenticated ? 'private, max-age=20' : 'public, max-age=20' },
+    });
+  };
+  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
 }
 
 export function resolveRoomSnapshotForVersion(

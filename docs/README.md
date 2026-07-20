@@ -19,6 +19,8 @@ This folder is organized by the kind of decision a reader is looking for.
 
 ## Development
 
+- [Performance and code-health roadmap](performance-code-health-roadmap.md)
+- [Multiresolution overworld tile pyramid](overworld-tile-pyramid.md)
 - [Architecture notes](development/architecture.md)
 - [Environment setup](development/environment.md)
 - [HTML entry points](development/html-entrypoints.md)

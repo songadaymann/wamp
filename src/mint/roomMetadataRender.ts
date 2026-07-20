@@ -10,6 +10,8 @@ import {
   decodeTileDataValue,
   getObjectById,
   getObjectDefaultFrame,
+  getObjectDisplayOffset,
+  getObjectDisplayScale,
   getObjectFrameSourceRect,
   getPlacedObjectLayer,
   getTilesetByGid,
@@ -25,6 +27,10 @@ import { getCustomRoomTileDefinitionForGid, type CustomRoomTileDefinition } from
 import { drawCustomRoomTileToContext } from '../customTiles/runtime';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { buildRoomSnapshotFromMintedPayload, type WampMintedRoomPayload } from './roomMetadata';
+import {
+  getRoomMetadataBackgroundLayerLayout,
+  getRoomMetadataObjectDrawRect,
+} from './roomMetadataRenderLayout';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from '../visuals/starfield';
 
 export interface MintedRoomRenderOptions {
@@ -32,6 +38,8 @@ export interface MintedRoomRenderOptions {
   includeObjects?: boolean;
   includeBackground?: boolean;
   includedLayers?: LayerName[];
+  /** Fail instead of publishing an approximate image when room content is unresolved. */
+  strictAssets?: boolean;
 }
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
@@ -101,7 +109,7 @@ export async function drawRoomSnapshotToContext(
   const layers = options.includedLayers ?? ['background', 'terrain', 'foreground'];
 
   if (options.includeBackground !== false) {
-    await drawRoomBackground(context, snapshot, width, height);
+    await drawRoomBackground(context, snapshot, width, height, options.strictAssets === true);
   } else {
     context.clearRect(0, 0, width, height);
   }
@@ -111,7 +119,8 @@ export async function drawRoomSnapshotToContext(
     snapshot,
     tilePixelSize,
     layers,
-    options.includeObjects !== false
+    options.includeObjects !== false,
+    options.strictAssets === true
   );
 }
 
@@ -119,7 +128,8 @@ async function drawRoomBackground(
   context: CanvasRenderingContext2D,
   snapshot: Pick<RoomSnapshot, 'id' | 'coordinates' | 'background'>,
   width: number,
-  height: number
+  height: number,
+  strictAssets: boolean
 ): Promise<void> {
   const resolved = resolveRoomBackground(snapshot.background);
   if (resolved.kind === 'none') {
@@ -145,6 +155,9 @@ async function drawRoomBackground(
       const image = await loadAssetImage(getBackgroundImageUrl(resolved.id));
       drawCustomBackgroundImage(context, image, resolved.fit, width, height);
     } catch (error) {
+      if (strictAssets) {
+        throw error;
+      }
       console.warn('Failed to load custom room snapshot background.', resolved.id, error);
     }
     return;
@@ -155,8 +168,12 @@ async function drawRoomBackground(
 
   for (const layer of resolved.group.layers) {
     const image = await loadAssetImage(layer.path);
-    const scale = height / layer.height;
-    const drawWidth = Math.max(1, Math.ceil(layer.width * scale));
+    const layout = getRoomMetadataBackgroundLayerLayout(layer, width, height);
+    if (!layout.repeat) {
+      context.drawImage(image, 0, 0, width, height);
+      continue;
+    }
+    const drawWidth = layout.drawWidth;
     for (let drawX = 0; drawX < width + drawWidth; drawX += drawWidth) {
       context.drawImage(image, drawX, 0, drawWidth, height);
     }
@@ -236,7 +253,8 @@ async function drawRoomTiles(
   snapshot: RoomSnapshot,
   tilePixelSize: number,
   includedLayers: readonly LayerName[],
-  includeObjects: boolean
+  includeObjects: boolean,
+  strictAssets: boolean
 ): Promise<void> {
   for (const layerName of includedLayers) {
     for (let y = 0; y < ROOM_HEIGHT; y += 1) {
@@ -264,6 +282,9 @@ async function drawRoomTiles(
 
         const tileset = getTilesetByGid(gid);
         if (!tileset) {
+          if (strictAssets) {
+            throw new Error(`Room ${snapshot.id} references unknown tile gid ${gid}.`);
+          }
           continue;
         }
 
@@ -287,7 +308,7 @@ async function drawRoomTiles(
     }
 
     if (includeObjects) {
-      await drawObjectsForLayer(context, snapshot, tilePixelSize, layerName);
+      await drawObjectsForLayer(context, snapshot, tilePixelSize, layerName, strictAssets);
     }
   }
 }
@@ -332,10 +353,9 @@ async function drawObjectsForLayer(
   context: CanvasRenderingContext2D,
   snapshot: RoomSnapshot,
   tilePixelSize: number,
-  layerName: LayerName
+  layerName: LayerName,
+  strictAssets: boolean
 ): Promise<void> {
-  const scale = tilePixelSize / TILE_SIZE;
-
   for (const placedObject of snapshot.placedObjects) {
     if (getPlacedObjectLayer(placedObject) !== layerName) {
       continue;
@@ -346,6 +366,8 @@ async function drawObjectsForLayer(
       const customSprite = getCustomSpriteForObject(snapshot, placedObject.id);
       if (customSprite) {
         drawCustomSpriteObject(context, customSprite, placedObject, tilePixelSize);
+      } else if (strictAssets) {
+        throw new Error(`Room ${snapshot.id} references unknown object ${placedObject.id}.`);
       }
       continue;
     }
@@ -357,10 +379,17 @@ async function drawObjectsForLayer(
       frame,
       image.width || objectConfig.frameWidth
     );
-    const destX = Math.round((placedObject.x - objectConfig.frameWidth / 2) * scale);
-    const destY = Math.round((placedObject.y - objectConfig.frameHeight / 2) * scale);
-    const destWidth = Math.max(1, Math.round(sw * scale));
-    const destHeight = Math.max(1, Math.round(sh * scale));
+    const { x: destX, y: destY, width: destWidth, height: destHeight } =
+      getRoomMetadataObjectDrawRect(
+        {
+          frameWidth: objectConfig.frameWidth,
+          frameHeight: objectConfig.frameHeight,
+          displayScale: getObjectDisplayScale(objectConfig),
+          displayOffset: getObjectDisplayOffset(objectConfig),
+        },
+        placedObject,
+        tilePixelSize,
+      );
     const shouldFlipX =
       Boolean(objectConfig.facingDirection) &&
       Boolean(placedObject.facing) &&

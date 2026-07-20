@@ -218,6 +218,14 @@ export class MobilePerformanceProfiler {
     }
   }
 
+  beginSegment(): number {
+    return performance.now();
+  }
+
+  endSegment(label: string, startedAt: number): void {
+    this.recordSegment(label, performance.now() - startedAt);
+  }
+
   getSnapshot(reason: string = 'manual'): MobilePerformanceSnapshot {
     const now = performance.now();
     const frameDeltas = this.recentFrames.map((frame) => frame.deltaMs);
