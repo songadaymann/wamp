@@ -155,6 +155,7 @@ const WORLD_TILE_CONFIG_REFRESH_MS = 20_000;
 
 export class WorldTileClientController {
   private readonly layer: WorldTilePhaserLayer;
+  private readonly rolloutSearch: string;
   private readonly manifestLoader: WorldTileManifestLoader;
   private readonly roomManifestPrefetcher: WorldTileRoomManifestPrefetcher;
   private readonly selectedRoomPrefetchGate: InitialSelectionPrefetchGate;
@@ -245,6 +246,11 @@ export class WorldTileClientController {
   };
 
   constructor(private readonly options: WorldTileClientControllerOptions) {
+    // QA rollout overrides are page-session controls. Route updates and auth
+    // cleanup may rewrite the visible URL after bootstrap, but a forced tile
+    // session must not silently fall back to cohort eligibility on a later
+    // config poll.
+    this.rolloutSearch = typeof window === 'undefined' ? '' : window.location.search;
     const profile = toTileProfile(options.getPerformanceProfile());
     this.layer = new WorldTilePhaserLayer(
       options.scene,
@@ -721,7 +727,7 @@ export class WorldTileClientController {
       this.rollout = decideWorldTileRollout({
         config,
         cohortId,
-        search: window.location.search,
+        search: this.rolloutSearch,
       });
       if (!this.rollout.enabled) return false;
       const preparedRendererVersion = config.activeRendererVersion;
@@ -1609,7 +1615,7 @@ export class WorldTileClientController {
       const nextRollout = decideWorldTileRollout({
         config,
         cohortId: currentRollout.cohortId,
-        search: window.location.search,
+        search: this.rolloutSearch,
       });
       this.rollout = nextRollout;
       if (!nextRollout.enabled) {

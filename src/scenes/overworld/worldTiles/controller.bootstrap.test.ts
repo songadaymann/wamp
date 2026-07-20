@@ -113,6 +113,35 @@ describe('world tile controller bootstrap ownership', () => {
     controller.destroy();
   });
 
+  it('keeps a forced QA rollout enabled after the visible URL is rewritten', async () => {
+    const forcedOnlyConfig: WorldTileConfig = {
+      ...config,
+      rolloutPercentage: 0,
+    };
+    const loadWorldTileConfig = vi.fn(async () => forcedOnlyConfig);
+    const controller = createController({
+      loadWorldTileConfig,
+      loadWorldTileManifest: vi.fn(async (
+        level: WorldTileLevel,
+        bounds: WorldTileBounds,
+      ) => readyEmptyManifest(level, bounds)),
+    });
+
+    const camera = createCamera();
+    await expect(controller.prepare()).resolves.toBe(true);
+    await expect(controller.ensureInitialCoverage(camera)).resolves.toBe(true);
+    expect(controller.getDebugSnapshot()).toMatchObject({ enabled: true, forced: true });
+
+    window.location.search = '';
+    (controller as unknown as { nextConfigRefreshAtMs: number }).nextConfigRefreshAtMs = 0;
+    controller.update(camera);
+    await flushMicrotasks();
+
+    expect(loadWorldTileConfig).toHaveBeenCalledTimes(2);
+    expect(controller.getDebugSnapshot()).toMatchObject({ enabled: true, forced: true });
+    controller.destroy();
+  });
+
   it('awaits and consumes the validated early L0 handoff without issuing a second manifest', async () => {
     let resolveEarlyReady!: (value: unknown) => void;
     const earlyReady = new Promise<unknown>((resolve) => {
