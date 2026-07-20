@@ -15,6 +15,7 @@ import {
   summarizeApiWorkerRequests,
   summarizeTileImagePhase,
   summarizeTrackedNetwork,
+  summarizeWarmRevisitTileCacheEvents,
 } from './overworld_tile_pyramid_probe_helpers.mjs';
 
 const TILE_A = 'https://tiles.example/world-tiles/v/objects/a.png';
@@ -127,6 +128,10 @@ function acceptanceZooms() {
 }
 
 function acceptancePass(label: 'cold' | 'warm') {
+  const cacheUrls = Array.from(
+    { length: 20 },
+    (_, index) => `https://tiles.example.test/world-tiles/cache-${index}.png`,
+  );
   return {
     coarseReadyMs: label === 'cold' ? 800 : 250,
     sharpReadyMs: label === 'cold' ? 1_400 : 450,
@@ -157,7 +162,15 @@ function acceptancePass(label: 'cold' | 'warm') {
         tileResponseBytes: 800_000,
       },
     },
-    network: [],
+    network: label === 'cold'
+      ? cacheUrls.map((url, index) => request({
+          url,
+          startedSeq: index * 3 + 1,
+          responseSeq: index * 3 + 2,
+          finishedSeq: index * 3 + 3,
+          status: 200,
+        }))
+      : [],
     networkSummary: {
       legacyWorldChunkRequestCount: 0,
     },
@@ -176,8 +189,8 @@ function acceptancePass(label: 'cold' | 'warm') {
     },
     clientProbeEvents: label === 'warm'
       ? [
-          ...Array.from({ length: 19 }, () => ({ type: 'byte-cache-hit' })),
-          { type: 'byte-cache-miss' },
+          ...cacheUrls.slice(0, 19).map((url) => ({ type: 'byte-cache-hit', url })),
+          { type: 'byte-cache-miss', url: cacheUrls[19] },
         ]
       : [],
   };
@@ -626,6 +639,9 @@ describe('overworld tile pyramid probe helpers', () => {
         hits: 19,
         misses: 1,
         hitRatio: 0.95,
+        coldCompletedIdentities: 20,
+        warmOnlyIdentities: 0,
+        coldIncompleteWarmIdentities: 0,
       },
       failures: [],
     });
@@ -801,12 +817,103 @@ describe('overworld tile pyramid probe helpers', () => {
 
   it('fails closed when the warm persistent byte-cache hit ratio is below 95%', () => {
     const result = acceptanceResult();
+    const coldUrls = result.cold.network.map((entry) => entry.url);
     result.warm.clientProbeEvents = [
-      ...Array.from({ length: 18 }, () => ({ type: 'byte-cache-hit' })),
-      ...Array.from({ length: 2 }, () => ({ type: 'byte-cache-miss' })),
+      ...coldUrls.slice(0, 18).map((url) => ({ type: 'byte-cache-hit', url })),
+      ...coldUrls.slice(18).map((url) => ({ type: 'byte-cache-miss', url })),
     ];
     expect(evaluateOverworldTileProbeAcceptance(result).failures).toContainEqual(
       expect.objectContaining({ code: 'warm-byte-cache-hit-ratio', pass: 'warm' }),
+    );
+  });
+
+  it('measures warm revisits only for unique identities completed by the cold pass', () => {
+    const completed = 'https://tiles.example.test/world-tiles/completed.png?__wamp_tile_hash=one';
+    const aborted = 'https://tiles.example.test/world-tiles/aborted.png?__wamp_tile_hash=two';
+    const newlyGuarded = 'https://tiles.example.test/world-tiles/new-guard.png?__wamp_tile_hash=three';
+    const summary = summarizeWarmRevisitTileCacheEvents([
+      request({ url: completed, status: 200, finishedSeq: 3 }),
+      request({ url: aborted, status: null, finishedSeq: null, failedSeq: 4 }),
+    ], [
+      { type: 'byte-cache-hit', url: completed },
+      { type: 'byte-cache-hit', url: completed },
+      { type: 'byte-cache-miss', url: aborted },
+      { type: 'byte-cache-miss', url: newlyGuarded },
+    ]);
+
+    expect(summary).toEqual({
+      hits: 1,
+      misses: 0,
+      lookups: 1,
+      hitRatio: 1,
+      coldCompletedIdentities: 1,
+      warmOnlyIdentities: 1,
+      coldIncompleteWarmIdentities: 1,
+    });
+  });
+
+  it('does not count new guards or aborted cold requests against the warm revisit gate', () => {
+    const result = acceptanceResult();
+    const completedUrls = Array.from(
+      { length: 75 },
+      (_, index) => `https://tiles.example.test/world-tiles/completed-${index}.png`,
+    );
+    const abortedUrls = Array.from(
+      { length: 6 },
+      (_, index) => `https://tiles.example.test/world-tiles/aborted-${index}.png`,
+    );
+    const warmOnlyUrls = Array.from(
+      { length: 18 },
+      (_, index) => `https://tiles.example.test/world-tiles/guard-${index}.png`,
+    );
+    result.cold.network = [
+      ...completedUrls.map((url) => request({ url })),
+      ...abortedUrls.map((url) => request({
+        url,
+        responseSeq: null,
+        finishedSeq: null,
+        failedSeq: 4,
+        status: null,
+      })),
+    ];
+    result.warm.clientProbeEvents = [
+      ...completedUrls.map((url) => ({ type: 'byte-cache-hit', url })),
+      ...completedUrls.slice(0, 8).map((url) => ({ type: 'byte-cache-hit', url })),
+      ...abortedUrls.map((url) => ({ type: 'byte-cache-miss', url })),
+      ...warmOnlyUrls.map((url) => ({ type: 'byte-cache-miss', url })),
+    ];
+
+    expect(evaluateOverworldTileProbeAcceptance(result)).toMatchObject({
+      passed: true,
+      warmCache: {
+        hits: 75,
+        misses: 0,
+        lookups: 75,
+        hitRatio: 1,
+        coldCompletedIdentities: 75,
+        warmOnlyIdentities: 18,
+        coldIncompleteWarmIdentities: 6,
+      },
+      failures: [],
+    });
+  });
+
+  it('fails closed when the warm pass revisits no completed cold identity', () => {
+    const result = acceptanceResult();
+    result.cold.network = [request({
+      url: 'https://tiles.example.test/world-tiles/cold-only.png',
+    })];
+    result.warm.clientProbeEvents = [{
+      type: 'byte-cache-miss',
+      url: 'https://tiles.example.test/world-tiles/warm-only.png',
+    }];
+
+    expect(evaluateOverworldTileProbeAcceptance(result).failures).toContainEqual(
+      expect.objectContaining({
+        code: 'warm-byte-cache-hit-ratio',
+        pass: 'warm',
+        actual: expect.objectContaining({ lookups: 0, hitRatio: null }),
+      }),
     );
   });
 

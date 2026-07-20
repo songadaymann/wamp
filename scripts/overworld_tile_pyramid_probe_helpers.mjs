@@ -520,6 +520,62 @@ export function summarizeClientTileCacheEvents(events) {
   };
 }
 
+function isSuccessfulTileResponse(entry) {
+  return isWorldTileImageUrl(entry?.url ?? '')
+    && Number.isInteger(entry?.finishedSeq)
+    && !Number.isInteger(entry?.failedSeq)
+    && Number.isInteger(entry?.status)
+    && entry.status >= 200
+    && entry.status < 300;
+}
+
+/**
+ * Measures the immutable-byte-cache contract against identities the cold pass
+ * actually acquired. Directional guards can legitimately choose additional
+ * tiles on the warm pass, and an aborted cold request never produced bytes to
+ * persist; neither belongs in the revisit denominator.
+ */
+export function summarizeWarmRevisitTileCacheEvents(coldNetwork, warmEvents) {
+  const coldTileRequests = (Array.isArray(coldNetwork) ? coldNetwork : [])
+    .filter((entry) => isWorldTileImageUrl(entry?.url ?? ''));
+  const coldAttemptedIdentities = new Set(coldTileRequests
+    .map((entry) => normalizeWorldTileUrl(entry.url)));
+  const coldCompletedIdentities = new Set(coldTileRequests
+    .filter(isSuccessfulTileResponse)
+    .map((entry) => normalizeWorldTileUrl(entry.url)));
+  const firstWarmLookupByIdentity = new Map();
+  const warmOnlyIdentities = new Set();
+  const coldIncompleteWarmIdentities = new Set();
+
+  for (const entry of Array.isArray(warmEvents) ? warmEvents : []) {
+    if (entry?.type !== 'byte-cache-hit' && entry?.type !== 'byte-cache-miss') continue;
+    if (typeof entry.url !== 'string' || !isWorldTileImageUrl(entry.url)) continue;
+    const identity = normalizeWorldTileUrl(entry.url);
+    if (!coldCompletedIdentities.has(identity)) {
+      if (coldAttemptedIdentities.has(identity)) coldIncompleteWarmIdentities.add(identity);
+      else warmOnlyIdentities.add(identity);
+      continue;
+    }
+    if (!firstWarmLookupByIdentity.has(identity)) {
+      firstWarmLookupByIdentity.set(identity, entry.type);
+    }
+  }
+
+  const lookupTypes = [...firstWarmLookupByIdentity.values()];
+  const hits = lookupTypes.filter((type) => type === 'byte-cache-hit').length;
+  const misses = lookupTypes.filter((type) => type === 'byte-cache-miss').length;
+  const lookups = hits + misses;
+  return {
+    hits,
+    misses,
+    lookups,
+    hitRatio: lookups > 0 ? hits / lookups : null,
+    coldCompletedIdentities: coldCompletedIdentities.size,
+    warmOnlyIdentities: warmOnlyIdentities.size,
+    coldIncompleteWarmIdentities: coldIncompleteWarmIdentities.size,
+  };
+}
+
 function addGateFailure(failures, code, pass, actual, expected, message) {
   failures.push({ code, pass, actual, expected, message });
 }
@@ -794,7 +850,10 @@ export function evaluateOverworldTileProbeAcceptance(result, gateOverrides = {})
     checkReplacementGaps(label, pass, failures);
   }
 
-  const warmCache = summarizeClientTileCacheEvents(result?.warm?.clientProbeEvents ?? []);
+  const warmCache = summarizeWarmRevisitTileCacheEvents(
+    result?.cold?.network ?? [],
+    result?.warm?.clientProbeEvents ?? [],
+  );
   if (warmCache.hitRatio === null || warmCache.hitRatio < gates.warmByteCacheHitRatio) {
     addGateFailure(
       failures,
