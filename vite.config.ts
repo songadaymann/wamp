@@ -7,6 +7,10 @@ import {
 } from './src/scenes/overworld/worldTiles/byteCacheContract';
 
 const EARLY_WORLD_TILE_BOOTSTRAP_MARKER = '<!-- wamp-early-world-tiles-bootstrap -->';
+// One-time namespace bump after an immutable Pages fallback cached HTML at a
+// handful of previously-issued asset URLs. Keep this stable: content hashes
+// handle ordinary releases, while the Pages asset guard prevents recurrence.
+const BUILD_ASSET_NAMESPACE = 'assets/cache-v2';
 
 export default defineConfig(({ mode }) => {
   const env = loadMergedEnv(mode);
@@ -55,6 +59,9 @@ export default defineConfig(({ mode }) => {
           rewardStingsPreview: resolve(process.cwd(), 'reward-stings-preview.html'),
         },
         output: {
+          entryFileNames: `${BUILD_ASSET_NAMESPACE}/[name]-[hash].js`,
+          chunkFileNames: `${BUILD_ASSET_NAMESPACE}/[name]-[hash].js`,
+          assetFileNames: `${BUILD_ASSET_NAMESPACE}/[name]-[hash][extname]`,
           manualChunks(id) {
             if (id.includes('/node_modules/phaser/')) return 'phaser-vendor';
             return undefined;
