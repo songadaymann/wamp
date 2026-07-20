@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { decideWorldTileRollout, getOrCreateWorldTileCohortId, getWorldTileCohortBucket } from './rollout';
+import {
+  captureWorldTileRolloutSearch,
+  decideWorldTileRollout,
+  getOrCreateWorldTileCohortId,
+  getWorldTileCohortBucket,
+} from './rollout';
 import type { WorldTileConfig } from './types';
 
 const config: WorldTileConfig = {
@@ -10,6 +15,13 @@ const config: WorldTileConfig = {
 };
 
 describe('world tile rollout cohort', () => {
+  it('captures only a normalized page-session rollout override', () => {
+    expect(captureWorldTileRolloutSearch('?worldTiles=FORCE&deploy=abc')).toBe('?worldTiles=force');
+    expect(captureWorldTileRolloutSearch('?worldTiles=shadow&x=4')).toBe('?worldTiles=shadow');
+    expect(captureWorldTileRolloutSearch('?worldTiles=off')).toBe('?worldTiles=off');
+    expect(captureWorldTileRolloutSearch('?worldTiles=unknown')).toBe('');
+  });
+
   it('persists one anonymous cohort id', () => {
     const values = new Map<string, string>();
     const storage = {

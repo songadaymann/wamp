@@ -40,7 +40,12 @@ import {
   WORLD_TILE_COVERAGE_TIMEOUT_MS,
   WorldTileFallbackController,
 } from './retryFallback';
-import { decideWorldTileRollout, getOrCreateWorldTileCohortId, type WorldTileRolloutDecision } from './rollout';
+import {
+  captureWorldTileRolloutSearch,
+  decideWorldTileRollout,
+  getOrCreateWorldTileCohortId,
+  type WorldTileRolloutDecision,
+} from './rollout';
 import {
   getGpuWorldTileByteBudget,
   getPersistentWorldTileByteBudget,
@@ -250,7 +255,9 @@ export class WorldTileClientController {
     // cleanup may rewrite the visible URL after bootstrap, but a forced tile
     // session must not silently fall back to cohort eligibility on a later
     // config poll.
-    this.rolloutSearch = typeof window === 'undefined' ? '' : window.location.search;
+    this.rolloutSearch = captureWorldTileRolloutSearch(
+      typeof window === 'undefined' ? '' : window.location.search,
+    );
     const profile = toTileProfile(options.getPerformanceProfile());
     this.layer = new WorldTilePhaserLayer(
       options.scene,

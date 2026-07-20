@@ -2,6 +2,47 @@ import { describe, expect, it, vi } from 'vitest';
 import worker, { type PagesWorkerEnv } from './worker';
 
 describe('Pages standalone renderer routes', () => {
+  it('does not cache an HTML SPA fallback under a hashed asset URL', async () => {
+    const fetchAsset = vi.fn(async () => new Response('<title>WAMP</title>', {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      },
+    }));
+    const env = {
+      ASSETS: { fetch: fetchAsset },
+    } satisfies PagesWorkerEnv;
+
+    const response = await worker.fetch(
+      new Request('https://wamp.land/assets/main-newhash.js'),
+      env,
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+    expect(await response.text()).toBe('Asset Not Found');
+    expect(fetchAsset).toHaveBeenCalledOnce();
+  });
+
+  it('passes through a valid hashed asset response', async () => {
+    const fetchAsset = vi.fn(async () => new Response('export default true;', {
+      headers: { 'Content-Type': 'application/javascript' },
+    }));
+    const env = {
+      ASSETS: { fetch: fetchAsset },
+    } satisfies PagesWorkerEnv;
+
+    const response = await worker.fetch(
+      new Request('https://wamp.land/assets/main-goodhash.js'),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('application/javascript');
+    expect(await response.text()).toBe('export default true;');
+  });
+
   it.each([
     '/world-tile-render',
     '/world-tile-render/',

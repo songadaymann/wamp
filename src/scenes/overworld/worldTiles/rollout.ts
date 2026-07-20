@@ -1,6 +1,7 @@
 import type { WorldTileConfig } from './types';
 
 const WORLD_TILE_COHORT_STORAGE_KEY = 'wamp_world_tile_cohort_v1';
+const WORLD_TILE_ROLLOUT_OVERRIDES = new Set(['force', 'shadow', 'off']);
 
 export type WorldTileRolloutDecision =
   | { enabled: true; forced: boolean; shadow: boolean; cohortId: string; bucket: number }
@@ -28,6 +29,12 @@ export function getWorldTileCohortBucket(cohortId: string): number {
     hash = Math.imul(hash, 0x01000193);
   }
   return (hash >>> 0) / 0x1_0000_0000 * 100;
+}
+
+export function captureWorldTileRolloutSearch(search: string): string {
+  const override = new URLSearchParams(search).get('worldTiles')?.trim().toLowerCase() ?? '';
+  if (!WORLD_TILE_ROLLOUT_OVERRIDES.has(override)) return '';
+  return `?worldTiles=${encodeURIComponent(override)}`;
 }
 
 export function decideWorldTileRollout(input: {

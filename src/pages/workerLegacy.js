@@ -90,6 +90,10 @@ export default {
       return fetchStandalonePageAsset(request, env, standalonePage);
     }
 
+    if (url.pathname.startsWith('/assets/')) {
+      return fetchHashedAsset(request, env);
+    }
+
     const imageCoordinates = parseRoomPath(url.pathname, ROOM_IMAGE_PATH_PATTERN);
     if (imageCoordinates) {
       return renderRoomImageResponse(request, env, url, imageCoordinates);
@@ -150,6 +154,34 @@ export default {
     return renderProfileAppShell(request, env, metadata);
   },
 };
+
+async function fetchHashedAsset(request, env) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response('Method Not Allowed', {
+      status: 405,
+      headers: {
+        Allow: 'GET, HEAD',
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
+
+  const response = await env.ASSETS.fetch(request);
+  const contentType = response.headers.get('Content-Type')?.toLowerCase() ?? '';
+  if (response.ok && !contentType.includes('text/html')) return response;
+
+  // Pages can briefly route a just-deployed hashed asset to the SPA fallback
+  // while the custom-domain deployment pointer propagates. Never let that HTML
+  // response inherit the immutable /assets/* cache policy.
+  return new Response(request.method === 'HEAD' ? null : 'Asset Not Found', {
+    status: 404,
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
 
 async function fetchStandalonePageAsset(request, env, pathname) {
   const url = new URL(request.url);
