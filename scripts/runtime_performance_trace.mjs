@@ -77,6 +77,22 @@ async function enterPlayableRoom(page, roomId) {
       return false;
     }
   }, selection.roomId ?? roomId, { timeout: 15_000 });
+  await page.waitForFunction(() => {
+    try {
+      const entries = JSON.parse(window.render_game_to_text?.() ?? '{}')
+        ?.bootDiagnostics?.entries;
+      if (!Array.isArray(entries)) return false;
+      const lastRefreshStart = entries.findLastIndex((entry) => (
+        entry?.phase === 'overworld-refresh:start'
+      ));
+      const lastRefreshReady = entries.findLastIndex((entry) => (
+        entry?.phase === 'overworld-refresh:ready'
+      ));
+      return lastRefreshStart >= 0 && lastRefreshReady > lastRefreshStart;
+    } catch {
+      return false;
+    }
+  }, null, { timeout: 30_000 });
   const play = await page.evaluate(() => window.run_preview_smoke_action?.('playSelectedRoom'));
   if (!play?.ok) throw new Error(`Could not enter play mode: ${JSON.stringify(play)}`);
   await page.waitForFunction(() => {
