@@ -203,7 +203,7 @@ class LocalWorldRepository implements WorldRepository {
   }
 }
 
-class ApiWorldRepository implements WorldRepository {
+export class ApiWorldRepository implements WorldRepository {
   private compactWorldUnavailable = false;
   constructor(
     private readonly baseUrl: string,
@@ -255,7 +255,11 @@ class ApiWorldRepository implements WorldRepository {
   }
 
   async loadWorldTileConfig(signal?: AbortSignal): Promise<WorldTileConfig | null> {
-    const response = await this.fetchWorldApi('/api/world/tiles/config', { signal });
+    const response = await this.fetchWorldApi('/api/world/tiles/config', {
+      signal,
+      credentials: 'omit',
+      mode: 'cors',
+    });
     if (response.status === 404) return null;
     if (!response.ok) {
       const details = await response.text();
@@ -270,7 +274,11 @@ class ApiWorldRepository implements WorldRepository {
     options: WorldTileManifestRequestOptions = {},
   ): Promise<WorldTileManifest | null> {
     const path = buildWorldTileManifestRequestPath(level, bounds, options);
-    const response = await this.fetchWorldApi(path, { signal: options.signal });
+    const response = await this.fetchWorldApi(path, {
+      signal: options.signal,
+      credentials: 'omit',
+      mode: 'cors',
+    });
     if (response.status === 404) return null;
     if (!response.ok) {
       const details = await response.text();
@@ -416,7 +424,7 @@ class ApiWorldRepository implements WorldRepository {
     try {
       return await fetch(`${this.baseUrl}${path}`, {
         ...init,
-        credentials: 'include',
+        credentials: init?.credentials ?? 'include',
       });
     } finally {
       cancelStallWatch();
