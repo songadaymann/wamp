@@ -67,12 +67,18 @@ async function enterPlayableRoom(page, roomId) {
     roomId,
   );
   if (!selection?.ok) throw new Error(`Could not select playable room: ${JSON.stringify(selection)}`);
+  await page.waitForFunction((requestedRoomId) => {
+    try {
+      const state = JSON.parse(window.render_game_to_text?.() ?? '{}')?.activeScene;
+      const selectedRoomId = `${state?.selected?.x},${state?.selected?.y}`;
+      return selectedRoomId === requestedRoomId
+        && ['published', 'draft', 'claimed_unpublished'].includes(state?.selectedState);
+    } catch {
+      return false;
+    }
+  }, selection.roomId ?? roomId, { timeout: 15_000 });
   const play = await page.evaluate(() => window.run_preview_smoke_action?.('playSelectedRoom'));
   if (!play?.ok) throw new Error(`Could not enter play mode: ${JSON.stringify(play)}`);
-  const goalStartButton = page.locator('#btn-room-goal-intro-start');
-  if (await goalStartButton.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    await goalStartButton.click();
-  }
   await page.waitForFunction(() => {
     try {
       return JSON.parse(window.render_game_to_text?.() ?? '{}')?.activeScene?.mode === 'play';
@@ -80,6 +86,15 @@ async function enterPlayableRoom(page, roomId) {
       return false;
     }
   }, null, { timeout: 15_000 });
+  const goalStartButton = page.locator(
+    '#room-goal-intro-modal:not(.hidden) #btn-room-goal-intro-start',
+  );
+  if (await goalStartButton.waitFor({ state: 'visible', timeout: 5_000 }).then(
+    () => true,
+    () => false,
+  )) {
+    await goalStartButton.click();
+  }
 }
 
 function getRoomBenchmarkPosition(roomId) {
