@@ -18,10 +18,12 @@ the origin.
 | L3 | 2x2 | 8 | `0.40-0.80` |
 | L4 | 1x1 | 16 | `>= 0.80` |
 
-Parents are nearest-neighbor compositions of four children. Published tiles include canonical
-backgrounds, every tile layer, objects, custom tiles and sprites, and deterministic starfields.
-Empty cells remain transparent. Phaser uses nearest filtering and places the gutter outside the
-tile's world-space core.
+Parents use a deterministic 2x premultiplied-alpha box reduction in sRGB. This preserves the
+perceived palette of the covered source area instead of promoting one small highlight into an
+entire low-LOD game tile. Published tiles include canonical backgrounds, every tile layer, objects,
+custom tiles and sprites, and deterministic starfields. Empty cells remain transparent. Phaser
+still uses nearest filtering and places the gutter outside the tile's world-space core, so the
+precomputed representative pixels remain crisp on screen.
 
 Promotion thresholds are `0.108`, `0.216`, `0.432`, and `0.864`; demotion thresholds are `0.092`,
 `0.184`, `0.368`, and `0.736`. A gesture scales attached imagery immediately, then changes level
@@ -103,9 +105,9 @@ npm run perf:overworld:tiles:parity -- \
 ```
 
 It records manifest size/timing/cache headers, advertised-object HEAD parity, missing/empty/stale
-coverage, canonical L4 pixel comparisons, gutter checks, and an independent nearest-neighbor parent
-composition in `world-tile-parity-report.json`. PNG evidence is written beside the report. The
-default visual tolerance is at most 0.1% differing pixels with per-channel delta at most 1.
+coverage, canonical L4 pixel comparisons, gutter checks, and an independent premultiplied-alpha box
+parent composition in `world-tile-parity-report.json`. PNG evidence is written beside the report.
+The default visual tolerance is at most 0.1% differing pixels with per-channel delta at most 1.
 
 ## Measured compact baseline
 

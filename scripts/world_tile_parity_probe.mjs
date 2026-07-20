@@ -565,28 +565,64 @@ async function composeParentIndependently(page, children) {
       return image;
     };
     const images = Object.fromEntries(await Promise.all(Object.entries(sources).map(async ([slot, url]) => [slot, await load(url)])));
-    const core = document.createElement('canvas');
-    core.width = coreWidth;
-    core.height = coreHeight;
-    const context = core.getContext('2d');
-    context.clearRect(0, 0, coreWidth, coreHeight);
-    context.imageSmoothingEnabled = false;
+    const source = document.createElement('canvas');
+    source.width = coreWidth * 2;
+    source.height = coreHeight * 2;
+    const sourceContext = source.getContext('2d', { willReadFrequently: true });
+    sourceContext.clearRect(0, 0, source.width, source.height);
+    sourceContext.imageSmoothingEnabled = false;
     const destinations = {
       northWest: [0, 0],
-      northEast: [coreWidth / 2, 0],
-      southWest: [0, coreHeight / 2],
-      southEast: [coreWidth / 2, coreHeight / 2],
+      northEast: [coreWidth, 0],
+      southWest: [0, coreHeight],
+      southEast: [coreWidth, coreHeight],
     };
     for (const [slot, image] of Object.entries(images)) {
       if (!image) continue;
       const [x, y] = destinations[slot];
-      context.drawImage(image, overlap, overlap, coreWidth, coreHeight, x, y, coreWidth / 2, coreHeight / 2);
+      sourceContext.drawImage(image, overlap, overlap, coreWidth, coreHeight, x, y, coreWidth, coreHeight);
     }
-    const output = document.createElement('canvas');
-    output.width = coreWidth + overlap * 2;
-    output.height = coreHeight + overlap * 2;
-    const out = output.getContext('2d');
-    out.clearRect(0, 0, output.width, output.height);
+    const sourcePixels = sourceContext.getImageData(0, 0, source.width, source.height).data;
+    const core = document.createElement('canvas');
+    core.width = coreWidth;
+    core.height = coreHeight;
+    const context = core.getContext('2d');
+    const output = context.createImageData(coreWidth, coreHeight);
+    for (let outputY = 0; outputY < coreHeight; outputY += 1) {
+      for (let outputX = 0; outputX < coreWidth; outputX += 1) {
+        let alphaSum = 0;
+        let redSum = 0;
+        let greenSum = 0;
+        let blueSum = 0;
+        for (let offsetY = 0; offsetY < 2; offsetY += 1) {
+          for (let offsetX = 0; offsetX < 2; offsetX += 1) {
+            const sourceIndex = (
+              (outputY * 2 + offsetY) * source.width
+              + outputX * 2
+              + offsetX
+            ) * 4;
+            const alpha = sourcePixels[sourceIndex + 3];
+            alphaSum += alpha;
+            redSum += sourcePixels[sourceIndex] * alpha;
+            greenSum += sourcePixels[sourceIndex + 1] * alpha;
+            blueSum += sourcePixels[sourceIndex + 2] * alpha;
+          }
+        }
+        const outputIndex = (outputY * coreWidth + outputX) * 4;
+        if (alphaSum > 0) {
+          output.data[outputIndex] = Math.round(redSum / alphaSum);
+          output.data[outputIndex + 1] = Math.round(greenSum / alphaSum);
+          output.data[outputIndex + 2] = Math.round(blueSum / alphaSum);
+        }
+        output.data[outputIndex + 3] = Math.round(alphaSum / 4);
+      }
+    }
+    context.putImageData(output, 0, 0);
+    const guttered = document.createElement('canvas');
+    guttered.width = coreWidth + overlap * 2;
+    guttered.height = coreHeight + overlap * 2;
+    const out = guttered.getContext('2d');
+    out.clearRect(0, 0, guttered.width, guttered.height);
     out.imageSmoothingEnabled = false;
     out.drawImage(core, overlap, overlap);
     out.drawImage(core, 0, 0, coreWidth, 1, overlap, 0, coreWidth, 1);
@@ -597,7 +633,7 @@ async function composeParentIndependently(page, children) {
     out.drawImage(core, coreWidth - 1, 0, 1, 1, coreWidth + overlap, 0, 1, 1);
     out.drawImage(core, 0, coreHeight - 1, 1, 1, 0, coreHeight + overlap, 1, 1);
     out.drawImage(core, coreWidth - 1, coreHeight - 1, 1, 1, coreWidth + overlap, coreHeight + overlap, 1, 1);
-    return output.toDataURL('image/png');
+    return guttered.toDataURL('image/png');
   }, { sources: children, coreWidth: CORE_WIDTH, coreHeight: CORE_HEIGHT, overlap: OVERLAP });
 }
 
