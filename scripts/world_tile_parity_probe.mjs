@@ -9,7 +9,7 @@ const PNG_HEIGHT = 354;
 const CORE_WIDTH = 640;
 const CORE_HEIGHT = 352;
 const OVERLAP = 1;
-const DEFAULT_CONTRACT = 'wamp-world-tile-render-v1';
+const DEFAULT_CONTRACT = 'wamp-world-tile-render-v2-box-srgb';
 const IMMUTABLE_PAGES_ORIGIN = /^https:\/\/[a-f0-9]{8}\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.pages\.dev$/i;
 
 export function parseWorldTileParityArgs(argv) {

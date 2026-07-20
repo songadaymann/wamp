@@ -1,12 +1,13 @@
 import { renderRoomSnapshotToCanvas } from './mint/roomMetadataRender';
 import type { RoomSnapshot } from './persistence/roomModel';
+import { downsampleWorldTileParentRgba } from './worldTiles/parentResampling';
 
 export const WORLD_TILE_CORE_WIDTH = 640;
 export const WORLD_TILE_CORE_HEIGHT = 352;
 export const WORLD_TILE_OVERLAP = 1;
 export const WORLD_TILE_IMAGE_WIDTH = WORLD_TILE_CORE_WIDTH + WORLD_TILE_OVERLAP * 2;
 export const WORLD_TILE_IMAGE_HEIGHT = WORLD_TILE_CORE_HEIGHT + WORLD_TILE_OVERLAP * 2;
-export const WORLD_TILE_RENDER_CONTRACT = 'wamp-world-tile-render-v1';
+export const WORLD_TILE_RENDER_CONTRACT = 'wamp-world-tile-render-v2-box-srgb';
 
 export interface WorldTileBrowserRenderResult {
   contract: string;
@@ -87,15 +88,20 @@ async function renderParent(input: WorldTileParentRenderInput): Promise<WorldTil
     throw new Error('Canvas 2D context was not available for parent composition.');
   }
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.imageSmoothingEnabled = false;
-
-  const halfWidth = WORLD_TILE_CORE_WIDTH / 2;
-  const halfHeight = WORLD_TILE_CORE_HEIGHT / 2;
-  const destinations = [
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = WORLD_TILE_CORE_WIDTH * 2;
+  sourceCanvas.height = WORLD_TILE_CORE_HEIGHT * 2;
+  const sourceContext = sourceCanvas.getContext('2d', { willReadFrequently: true });
+  if (!sourceContext) {
+    throw new Error('Canvas 2D context was not available for parent source composition.');
+  }
+  sourceContext.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+  sourceContext.imageSmoothingEnabled = false;
+  const sourceDestinations = [
     { x: 0, y: 0 },
-    { x: halfWidth, y: 0 },
-    { x: 0, y: halfHeight },
-    { x: halfWidth, y: halfHeight },
+    { x: WORLD_TILE_CORE_WIDTH, y: 0 },
+    { x: 0, y: WORLD_TILE_CORE_HEIGHT },
+    { x: WORLD_TILE_CORE_WIDTH, y: WORLD_TILE_CORE_HEIGHT },
   ];
 
   for (let index = 0; index < children.length; index += 1) {
@@ -103,8 +109,8 @@ async function renderParent(input: WorldTileParentRenderInput): Promise<WorldTil
     if (!child) {
       continue;
     }
-    const destination = destinations[index];
-    context.drawImage(
+    const destination = sourceDestinations[index];
+    sourceContext.drawImage(
       child,
       WORLD_TILE_OVERLAP,
       WORLD_TILE_OVERLAP,
@@ -112,10 +118,26 @@ async function renderParent(input: WorldTileParentRenderInput): Promise<WorldTil
       WORLD_TILE_CORE_HEIGHT,
       destination.x,
       destination.y,
-      halfWidth,
-      halfHeight
+      WORLD_TILE_CORE_WIDTH,
+      WORLD_TILE_CORE_HEIGHT
     );
   }
+  const sourcePixels = sourceContext.getImageData(
+    0,
+    0,
+    sourceCanvas.width,
+    sourceCanvas.height,
+  );
+  const downsampled = downsampleWorldTileParentRgba(
+    sourcePixels.data,
+    sourceCanvas.width,
+    sourceCanvas.height,
+  );
+  context.putImageData(new ImageData(
+    downsampled,
+    WORLD_TILE_CORE_WIDTH,
+    WORLD_TILE_CORE_HEIGHT,
+  ), 0, 0);
 
   return buildResult(extrudeCanvas(canvas));
 }
