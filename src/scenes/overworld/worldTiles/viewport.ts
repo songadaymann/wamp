@@ -15,6 +15,7 @@ import {
 export const WORLD_TILE_GUARD_RATIO = 0.25;
 export const WORLD_TILE_DIRECTIONAL_GUARD_RATIO = 0.5;
 export const WORLD_TILE_VELOCITY_PROJECTION_MS = 250;
+export const WORLD_TILE_MANIFEST_MAX_AXIS = 16;
 
 export interface WorldTileViewportCoverage {
   visibleRect: WorldRect;
@@ -30,7 +31,7 @@ export function clampWorldTileManifestBounds(input: {
   guard: WorldTileBounds;
   maxAxis?: number;
 }): WorldTileBounds {
-  const maxAxis = input.maxAxis ?? 16;
+  const maxAxis = input.maxAxis ?? WORLD_TILE_MANIFEST_MAX_AXIS;
   if (!Number.isSafeInteger(maxAxis) || maxAxis <= 0) {
     throw new RangeError('Manifest maximum axis must be a positive safe integer.');
   }
@@ -56,6 +57,49 @@ export function clampWorldTileManifestBounds(input: {
     minTileY: y.min,
     maxTileY: y.max,
   };
+}
+
+/**
+ * A rapid zoom-out can make the viewport too large to describe at the still-
+ * committed fine LOD while the coarser target is waiting for its idle/coverage
+ * commit. Step only as far toward that target as needed to keep display work
+ * inside the same bounded 16x16 contract used by manifests. The committed LOD
+ * itself is unchanged, so the normal atomic replacement gate remains in charge.
+ */
+export function selectWorldTileBoundedDisplayLevel(input: {
+  viewport: WorldRect;
+  committedLevel: WorldTileLevel;
+  desiredLevel: WorldTileLevel;
+  maxAxis?: number;
+}): WorldTileLevel {
+  assertWorldRect(input.viewport);
+  const maxAxis = input.maxAxis ?? WORLD_TILE_MANIFEST_MAX_AXIS;
+  if (!Number.isSafeInteger(maxAxis) || maxAxis <= 0) {
+    throw new RangeError('Manifest maximum axis must be a positive safe integer.');
+  }
+
+  let level = input.committedLevel;
+  while (
+    level > input.desiredLevel
+    && !worldTileBoundsFitWithinManifestLimit(
+      worldRectToTileBounds(level, input.viewport),
+      maxAxis,
+    )
+  ) {
+    level = (level - 1) as WorldTileLevel;
+  }
+  return level;
+}
+
+export function worldTileBoundsFitWithinManifestLimit(
+  bounds: WorldTileBounds,
+  maxAxis: number = WORLD_TILE_MANIFEST_MAX_AXIS,
+): boolean {
+  if (!Number.isSafeInteger(maxAxis) || maxAxis <= 0) {
+    throw new RangeError('Manifest maximum axis must be a positive safe integer.');
+  }
+  return bounds.maxTileX - bounds.minTileX + 1 <= maxAxis
+    && bounds.maxTileY - bounds.minTileY + 1 <= maxAxis;
 }
 
 export function calculateDirectionalGuardRect(input: {

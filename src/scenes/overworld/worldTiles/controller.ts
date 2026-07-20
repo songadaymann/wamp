@@ -65,6 +65,7 @@ import {
   clampWorldTileManifestBounds,
   getWorldTileAncestorClosure,
   getWorldTileSiblingClosure,
+  selectWorldTileBoundedDisplayLevel,
 } from './viewport';
 import { orderWorldTilesForContextRestoration } from './restoration';
 
@@ -412,9 +413,14 @@ export class WorldTileClientController {
       desiredCoverage.visibleBounds,
       nowMs,
     );
-    const displayCoverage = this.desiredLevel === this.committedLevel
+    const boundedDisplayLevel = selectWorldTileBoundedDisplayLevel({
+      viewport,
+      committedLevel: this.committedLevel,
+      desiredLevel: this.desiredLevel,
+    });
+    const displayCoverage = this.desiredLevel === boundedDisplayLevel
       ? desiredCoverage
-      : this.calculateCoverage(viewport, this.committedLevel);
+      : this.calculateCoverage(viewport, boundedDisplayLevel);
     this.desiredVisibleTargets = desiredCoverage.visible;
     this.desiredGuardTargets = desiredCoverage.guard;
     this.visibleTargets = displayCoverage.visible;
