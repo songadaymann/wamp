@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildManifestUrl,
   classifyManifestEntry,
   parsePngDimensions,
   parseWorldTileParityArgs,
@@ -66,5 +67,20 @@ describe('world tile parity probe contracts', () => {
     expect(parsePngDimensions(png)).toEqual({ width: 642, height: 354 });
     expect(percentile([10, 40, 20, 30, 50], 0.5)).toBe(30);
     expect(percentile([10, 40, 20, 30, 50], 0.95)).toBe(50);
+  });
+
+  it('measures the coverage-only client manifest separately from room-summary fixtures', () => {
+    const args = {
+      apiBase: 'https://api.wamp.land',
+      bounds: { minTileX: -2, maxTileX: 2, minTileY: -2, maxTileY: 2 },
+    };
+    const coverageUrl = new URL(buildManifestUrl(args));
+    const roomUrl = new URL(buildManifestUrl(args, true));
+
+    expect(coverageUrl.searchParams.get('includeRooms')).toBe('0');
+    expect(roomUrl.searchParams.get('includeRooms')).toBe('1');
+    expect(coverageUrl.searchParams.get('level')).toBe('4');
+    expect(coverageUrl.searchParams.get('minTileX')).toBe('-2');
+    expect(coverageUrl.searchParams.get('maxTileY')).toBe('2');
   });
 });

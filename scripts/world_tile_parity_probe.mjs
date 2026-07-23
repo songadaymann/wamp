@@ -127,7 +127,9 @@ async function runProbe(args, report) {
     report.failures.push('Tile config reports availability=false.');
   }
 
-  const manifestUrl = buildManifestUrl(args);
+  // Measure the same coverage-only payload used by the tiled browser client.
+  // Room summaries are loaded separately below for the leaf parity fixtures.
+  const manifestUrl = buildManifestUrl(args, false);
   const manifestResults = [];
   for (let run = 0; run < args.manifestRuns; run += 1) {
     manifestResults.push(await fetchJsonMeasured(manifestUrl, {
@@ -166,6 +168,26 @@ async function runProbe(args, report) {
     throw new Error('Manifest is missing entries or room summaries.');
   }
 
+  const roomManifestResult = await fetchJsonMeasured(buildManifestUrl(args, true), {
+    signal: AbortSignal.timeout(args.timeoutMs),
+  });
+  report.roomManifest = responseSummary(roomManifestResult);
+  report.roomManifest.roomCount = Array.isArray(roomManifestResult.body?.rooms)
+    ? roomManifestResult.body.rooms.length
+    : null;
+  if (!roomManifestResult.response.ok) {
+    throw new Error(`Room-summary manifest failed with ${roomManifestResult.response.status}.`);
+  }
+  const roomManifest = roomManifestResult.body;
+  if (roomManifest.rendererVersion !== args.rendererVersion) {
+    report.failures.push(
+      `Room-summary manifest renderer ${String(roomManifest.rendererVersion)} does not match requested version.`,
+    );
+  }
+  if (!Array.isArray(roomManifest.rooms)) {
+    throw new Error('Room-summary manifest is missing room summaries.');
+  }
+
   const entriesByAddress = new Map(manifest.entries.map((entry) => [addressKey(entry.address), entry]));
   report.entries = summarizeEntries(manifest.entries);
   if (!args.allowIncomplete) {
@@ -188,7 +210,7 @@ async function runProbe(args, report) {
   const tileBytes = new Map();
   try {
     await loadRendererPage(page, args);
-    const currentPublishedRooms = [...manifest.rooms]
+    const currentPublishedRooms = [...roomManifest.rooms]
       .sort((left, right) => left.coordinates.y - right.coordinates.y || left.coordinates.x - right.coordinates.x)
       .filter((room) => {
         const entry = entriesByAddress.get(addressKey({
@@ -698,13 +720,14 @@ function responseSummary(result) {
   };
 }
 
-function buildManifestUrl(args) {
+export function buildManifestUrl(args, includeRooms = false) {
   const query = new URLSearchParams({
     level: '4',
     minTileX: String(args.bounds.minTileX),
     maxTileX: String(args.bounds.maxTileX),
     minTileY: String(args.bounds.minTileY),
     maxTileY: String(args.bounds.maxTileY),
+    includeRooms: includeRooms ? '1' : '0',
   });
   return `${args.apiBase}/api/world/tiles/manifest?${query}`;
 }
@@ -833,6 +856,7 @@ async function main() {
     },
     config: null,
     manifest: null,
+    roomManifest: null,
     entries: null,
     objects: null,
     snapshotQuery: null,
