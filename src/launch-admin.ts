@@ -853,6 +853,7 @@ function renderTotals(): void {
   const totals = lastSnapshot.totals;
   const cards: Array<[string, number]> = [
     ['Users', totals.users],
+    ['Game Jam Signups', totals.jamRegistrations],
     ['Active Sessions', totals.activeSessions],
     ['Guest Visitors', totals.guestVisitors],
     ['Guest Visits', totals.guestVisits],
