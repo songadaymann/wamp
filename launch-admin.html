@@ -6,83 +6,437 @@
     <meta name="ai-api-base" content="https://api.wamp.land" />
     <meta name="ai-skill" content="https://api.wamp.land/skill.md" />
     <meta name="ai-openapi" content="https://api.wamp.land/openapi.json" />
-    <title>Launch Admin</title>
+    <title>WAMP Control Room</title>
     <style>
+      @font-face {
+        font-family: "Early GameBoy";
+        src: url("/assets/fonts/early-gameboy.ttf") format("truetype");
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "HomeVideo";
+        src: url("/assets/fonts/HomeVideo-Regular.ttf") format("truetype");
+        font-weight: 400;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "HomeVideo";
+        src: url("/assets/fonts/HomeVideo-Bold.ttf") format("truetype");
+        font-weight: 700;
+        font-display: swap;
+      }
+
       :root {
-        color-scheme: dark;
-        --bg: #070b10;
-        --panel: #111823;
-        --panel-border: rgba(170, 196, 255, 0.18);
-        --panel-strong: rgba(170, 196, 255, 0.32);
-        --text: #f5f7fb;
-        --muted: #9eabc4;
-        --good: #59d98e;
-        --warn: #ffcd57;
-        --danger: #ff6d6d;
-        --accent: #7ec9ff;
+        color-scheme: light;
+        --cream: #fff3db;
+        --paper: #fffaf0;
+        --blue: #79ccde;
+        --blue-deep: #2c5071;
+        --green: #277b30;
+        --yellow: #fcea7c;
+        --red: #ed5f4b;
+        --pink: #ee8bc4;
+        --ink: #18161c;
+        --muted: #615b65;
+        --dim: #8d8790;
+        --black: #08090b;
+        --line: #18161c;
+        --shadow: 4px 4px 0 var(--ink);
+        --shadow-small: 2px 2px 0 var(--ink);
+        --body-font: "HomeVideo", "IBM Plex Mono", "Courier New", monospace;
+        --pixel-font: "Early GameBoy", "IBM Plex Mono", monospace;
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html {
+        min-width: 320px;
+        scroll-behavior: smooth;
+      }
+
       body {
+        min-width: 0;
+        min-height: 100vh;
         margin: 0;
-        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        overflow-x: hidden;
         background:
-          radial-gradient(circle at top, rgba(126, 201, 255, 0.16), transparent 32%),
-          linear-gradient(180deg, #0b1018 0%, var(--bg) 100%);
-        color: var(--text);
+          linear-gradient(rgba(121, 204, 222, 0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(121, 204, 222, 0.07) 1px, transparent 1px),
+          var(--black);
+        background-size: 32px 32px;
+        color: var(--ink);
+        font-family: var(--body-font);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        min-width: 0;
+        max-width: 100%;
+        font: inherit;
       }
 
       a {
-        color: var(--accent);
-      }
-
-      .shell {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 24px 20px 48px;
-      }
-
-      .masthead {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 24px;
+        color: var(--blue-deep);
+        font-weight: 700;
+        text-underline-offset: 3px;
       }
 
       h1,
-      h2 {
+      h2,
+      h3,
+      p {
         margin: 0;
-        font-family: "IBM Plex Mono", "Fira Code", monospace;
-        letter-spacing: 0.02em;
       }
 
-      p {
+      h1,
+      h2,
+      h3 {
+        font-family: var(--pixel-font);
+        font-weight: 400;
+        line-height: 1.25;
+      }
+
+      h1 {
+        font-size: clamp(22px, 3vw, 38px);
+      }
+
+      h2 {
+        font-size: clamp(17px, 2vw, 24px);
+      }
+
+      h3 {
+        font-size: 14px;
+        overflow-wrap: anywhere;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      .admin-shell {
+        width: min(100%, 1680px);
+        min-width: 0;
+        margin: 0 auto 0 0;
+        padding: 18px clamp(14px, 2.2vw, 34px) 64px;
+      }
+
+      .admin-masthead {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 20px;
+        align-items: end;
+        min-width: 0;
+        padding: clamp(18px, 3vw, 32px);
+        border: 3px solid var(--ink);
+        background: var(--cream);
+        box-shadow: 7px 7px 0 var(--ink);
+      }
+
+      .admin-masthead::before {
+        position: absolute;
+        inset: 0 0 auto;
+        height: 8px;
+        background: linear-gradient(
+          90deg,
+          var(--blue) 0 25%,
+          var(--green) 25% 50%,
+          var(--yellow) 50% 75%,
+          var(--red) 75%
+        );
+        content: "";
+      }
+
+      .masthead-kicker,
+      .section-kicker,
+      .label {
+        color: var(--blue-deep);
+        font-family: var(--pixel-font);
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .masthead-kicker {
+        display: block;
+        margin-bottom: 10px;
+      }
+
+      .masthead-copy {
+        display: grid;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .masthead-copy p {
+        max-width: 720px;
         color: var(--muted);
+        font-size: 15px;
+      }
+
+      .masthead-status {
+        display: grid;
+        gap: 6px;
+        min-width: 200px;
+        padding: 12px 14px;
+        border: 2px solid var(--ink);
+        background: var(--yellow);
+        box-shadow: var(--shadow-small);
+      }
+
+      .auth-strip {
+        position: relative;
+        z-index: 4;
+        display: grid;
+        grid-template-columns: minmax(220px, 520px) auto minmax(180px, 1fr);
+        gap: 12px;
+        align-items: center;
+        min-width: 0;
+        margin-top: 18px;
+        padding: 14px;
+        border: 3px solid var(--ink);
+        background: var(--blue);
+        box-shadow: var(--shadow);
+      }
+
+      .auth-actions,
+      .controls,
+      .links,
+      .photo-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .auth-status-wrap {
+        min-width: 0;
+        text-align: right;
+      }
+
+      .admin-layout {
+        display: grid;
+        grid-template-columns: minmax(190px, 238px) minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+        min-width: 0;
+        margin-top: 18px;
+      }
+
+      .admin-nav {
+        position: sticky;
+        top: 18px;
+        display: grid;
+        gap: 8px;
+        min-width: 0;
+        padding: 12px;
+        border: 3px solid var(--cream);
+        background: var(--ink);
+        box-shadow: 5px 5px 0 var(--blue);
+      }
+
+      .admin-nav-title {
+        margin: 2px 4px 8px;
+        color: var(--cream);
+        font-family: var(--pixel-font);
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+
+      .admin-nav a {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        min-width: 0;
+        padding: 10px;
+        border: 2px solid transparent;
+        color: var(--cream);
+        text-decoration: none;
+      }
+
+      .admin-nav a:hover,
+      .admin-nav a:focus-visible {
+        border-color: var(--ink);
+        background: var(--yellow);
+        box-shadow: var(--shadow-small);
+        color: var(--ink);
+        outline: 0;
+      }
+
+      .nav-icon,
+      .section-icon {
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        flex: 0 0 auto;
+        border: 2px solid currentColor;
+        font-family: var(--pixel-font);
+        font-size: 13px;
+        line-height: 1;
+      }
+
+      .nav-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .nav-count {
+        min-width: 24px;
+        padding: 3px 5px;
+        border: 2px solid currentColor;
+        background: var(--red);
+        color: var(--cream);
+        font-family: var(--pixel-font);
+        font-size: 9px;
+        text-align: center;
+      }
+
+      .nav-rule {
+        height: 2px;
+        margin: 6px 4px;
+        background: rgba(255, 243, 219, 0.3);
+      }
+
+      .admin-content {
+        display: grid;
+        gap: 22px;
+        min-width: 0;
+      }
+
+      .admin-section {
+        display: grid;
+        gap: 14px;
+        min-width: 0;
+        scroll-margin-top: 18px;
+      }
+
+      .section-heading {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        min-width: 0;
+        padding: 12px 14px;
+        border: 3px solid var(--ink);
+        background: var(--section-color, var(--blue));
+        box-shadow: var(--shadow);
+      }
+
+      .section-heading-copy {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+      }
+
+      .section-heading p {
+        color: rgba(24, 22, 28, 0.72);
+      }
+
+      .admin-section[data-tone="yellow"] {
+        --section-color: var(--yellow);
+      }
+
+      .admin-section[data-tone="pink"] {
+        --section-color: var(--pink);
+      }
+
+      .admin-section[data-tone="green"] {
+        --section-color: #8bd18f;
+      }
+
+      .admin-section[data-tone="red"] {
+        --section-color: #f18979;
       }
 
       .panel {
-        background: rgba(17, 24, 35, 0.9);
-        border: 1px solid var(--panel-border);
-        border-radius: 16px;
+        min-width: 0;
         padding: 16px;
-        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.24);
+        border: 3px solid var(--ink);
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .panel-title-row,
+      .activity-toolbar,
+      .photo-card-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 16px;
+        align-items: center;
+        justify-content: space-between;
+        min-width: 0;
       }
 
       .stack {
         display: grid;
-        gap: 16px;
+        gap: 12px;
+        min-width: 0;
       }
 
-      .controls {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        align-items: center;
+      .overview-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 0.65fr);
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .overview-wide {
+        grid-column: 1 / -1;
+      }
+
+      .grid {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .grid.cards {
+        grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+      }
+
+      .card {
+        min-width: 0;
+        padding: 13px;
+        border: 2px solid var(--ink);
+        background: var(--cream);
+        box-shadow: var(--shadow-small);
+      }
+
+      .card .label {
+        display: block;
+        margin-bottom: 7px;
+      }
+
+      .value {
+        display: block;
+        color: var(--ink);
+        font-family: var(--pixel-font);
+        font-size: clamp(19px, 2.2vw, 30px);
+        line-height: 1.1;
+      }
+
+      .meta,
+      .status {
+        color: var(--muted);
+        font-size: 13px;
+        overflow-wrap: anywhere;
+      }
+
+      .status.error,
+      .meta.error {
+        color: #a52222;
+        font-weight: 700;
       }
 
       input[type="password"],
@@ -90,519 +444,988 @@
       input[type="number"],
       select,
       textarea {
-        min-width: min(420px, 100%);
-        padding: 12px 14px;
-        background: rgba(7, 11, 16, 0.9);
-        border: 1px solid var(--panel-strong);
-        border-radius: 12px;
-        color: var(--text);
+        width: 100%;
+        min-width: 0;
+        min-height: 42px;
+        padding: 10px 11px;
+        border: 2px solid var(--ink);
+        border-radius: 0;
+        background: #fff;
+        color: var(--ink);
+        box-shadow: inset 2px 2px 0 rgba(24, 22, 28, 0.1);
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: var(--green);
+        outline: 3px solid rgba(39, 123, 48, 0.18);
+        outline-offset: 0;
       }
 
       textarea {
-        min-height: 88px;
+        min-height: 84px;
         resize: vertical;
       }
 
-      button {
-        padding: 12px 14px;
-        border-radius: 12px;
-        border: 1px solid var(--panel-strong);
-        background: rgba(126, 201, 255, 0.12);
-        color: var(--text);
+      button,
+      .button-link {
+        display: inline-flex;
+        min-height: 42px;
+        gap: 7px;
+        align-items: center;
+        justify-content: center;
+        padding: 9px 12px;
+        border: 2px solid var(--ink);
+        border-radius: 0;
+        background: var(--blue);
+        box-shadow: var(--shadow-small);
+        color: var(--ink);
         cursor: pointer;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      button:hover,
+      .button-link:hover {
+        filter: brightness(1.04);
+        transform: translate(-1px, -1px);
+        box-shadow: 3px 3px 0 var(--ink);
+      }
+
+      button:active,
+      .button-link:active {
+        transform: translate(2px, 2px);
+        box-shadow: none;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        filter: grayscale(0.7);
+        opacity: 0.48;
+        transform: none;
+        box-shadow: none;
       }
 
       button.secondary {
-        background: rgba(255, 255, 255, 0.06);
+        background: var(--cream);
       }
 
-      .grid {
+      button.success {
+        background: #8bd18f;
+      }
+
+      button.danger {
+        background: var(--red);
+        color: var(--cream);
+      }
+
+      .field {
         display: grid;
-        gap: 12px;
+        gap: 6px;
+        min-width: 0;
       }
 
-      .grid.cards {
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      .admin-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+        gap: 10px;
+        min-width: 0;
       }
 
-      .card {
-        background: rgba(7, 11, 16, 0.65);
-        border: 1px solid rgba(170, 196, 255, 0.12);
-        border-radius: 14px;
-        padding: 14px;
+      .compact-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+        min-width: 0;
       }
 
-      .label {
-        display: block;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--muted);
-        margin-bottom: 8px;
-      }
-
-      .value {
-        font-size: 28px;
-        font-weight: 700;
+      .review-toolbar {
+        display: grid;
+        grid-template-columns: minmax(170px, 0.7fr) minmax(180px, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+        min-width: 0;
       }
 
       .chips {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 6px;
       }
 
       .chip {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        border-radius: 999px;
-        font-size: 13px;
-        font-weight: 600;
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        min-height: 28px;
+        padding: 4px 7px;
+        border: 2px solid var(--ink);
+        background: var(--cream);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
       }
 
       .chip.good {
-        color: var(--good);
-        border-color: rgba(89, 217, 142, 0.24);
+        background: #bfe9c1;
+        color: #124a1a;
       }
 
       .chip.warn {
-        color: var(--warn);
-        border-color: rgba(255, 205, 87, 0.24);
+        background: var(--yellow);
+        color: #6c4d00;
       }
 
       .chip.danger {
-        color: var(--danger);
-        border-color: rgba(255, 109, 109, 0.24);
+        background: #f6a296;
+        color: #721b10;
       }
 
       .warning-list {
         display: grid;
-        gap: 10px;
-      }
-
-      .warning {
-        border-radius: 14px;
-        padding: 12px 14px;
-        border: 1px solid rgba(255, 205, 87, 0.28);
-        background: rgba(255, 205, 87, 0.08);
-        color: var(--warn);
-      }
-
-      .warning.danger {
-        border-color: rgba(255, 109, 109, 0.28);
-        background: rgba(255, 109, 109, 0.08);
-        color: var(--danger);
-      }
-
-      .links {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-      }
-
-      .admin-grid {
-        display: grid;
-        gap: 12px;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      }
-
-      .field {
-        display: grid;
         gap: 8px;
       }
 
-      .field .label {
-        margin-bottom: 0;
+      .warning {
+        padding: 10px 12px;
+        border: 2px solid var(--ink);
+        background: var(--yellow);
+        box-shadow: var(--shadow-small);
+        color: #624700;
+        font-weight: 700;
+      }
+
+      .warning.danger {
+        background: var(--red);
+        color: var(--cream);
+      }
+
+      .photo-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.65fr);
+        gap: 14px;
+        align-items: start;
+        min-width: 0;
+      }
+
+      .photo-review-list {
+        display: grid;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .photo-review-card {
+        display: grid;
+        grid-template-columns: minmax(170px, 0.58fr) minmax(0, 1fr);
+        gap: 14px;
+        padding: 12px;
+        background: var(--paper);
+      }
+
+      .photo-review-card[data-status="approved"] {
+        border-left: 8px solid var(--green);
+      }
+
+      .photo-review-card[data-status="rejected"],
+      .photo-review-card[data-status="blocked"] {
+        border-left: 8px solid var(--red);
+      }
+
+      .photo-review-card[data-status="pending_review"],
+      .photo-review-card[data-status="upload_pending"] {
+        border-left: 8px solid #d4a70e;
+      }
+
+      .photo-preview-wrap {
+        position: relative;
+        display: grid;
+        min-width: 0;
+        min-height: 150px;
+        overflow: hidden;
+        border: 2px solid var(--ink);
+        background:
+          linear-gradient(45deg, #ded7ca 25%, transparent 25%),
+          linear-gradient(-45deg, #ded7ca 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #ded7ca 75%),
+          linear-gradient(-45deg, transparent 75%, #ded7ca 75%),
+          #f2ecdf;
+        background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+        background-size: 16px 16px;
+      }
+
+      .photo-preview {
+        width: 100%;
+        height: 100%;
+        min-height: 150px;
+        object-fit: cover;
+      }
+
+      .photo-preview.blurred {
+        filter: blur(18px);
+        transform: scale(1.12);
+      }
+
+      .photo-reveal-button {
+        position: absolute;
+        inset: auto 8px 8px;
+        width: calc(100% - 16px);
+        min-height: 34px;
+        padding: 6px 8px;
+      }
+
+      .photo-preview-unavailable,
+      .admin-empty-state {
+        display: grid;
+        gap: 8px;
+        place-content: center;
+        min-height: 150px;
+        padding: 20px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .photo-preview-unavailable > span:first-child,
+      .admin-empty-state > span:first-child {
+        font-family: var(--pixel-font);
+        font-size: 28px;
+      }
+
+      .photo-card-copy {
+        align-content: start;
+      }
+
+      .photo-card-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .photo-moderation-note {
+        padding: 9px 10px;
+        border-left: 5px solid var(--yellow);
+        background: #f5efe3;
+        color: var(--muted);
+      }
+
+      .photo-actions {
+        justify-content: flex-end;
+      }
+
+      .photo-actions button {
+        flex: 1 1 120px;
+      }
+
+      .photo-access-panel {
+        position: sticky;
+        top: 18px;
+      }
+
+      .checkbox-row {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        padding: 9px 10px;
+        border: 2px solid var(--ink);
+        background: var(--cream);
+      }
+
+      .checkbox-row input {
+        width: 18px;
+        height: 18px;
+        margin: 1px 0 0;
+        accent-color: var(--green);
       }
 
       .search-results {
         display: grid;
-        gap: 10px;
+        gap: 8px;
+        min-width: 0;
       }
 
       .result-button {
         width: 100%;
+        justify-content: flex-start;
         text-align: left;
-        background: rgba(7, 11, 16, 0.65);
-        cursor: pointer;
       }
 
       .result-button strong {
         display: block;
-        margin-bottom: 4px;
-      }
-
-      .activity-actor-button {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--accent);
-        cursor: pointer;
-        font: inherit;
-        font-weight: 700;
-        text-decoration: underline;
-      }
-
-      .activity-actor {
-        color: var(--text);
-        font-weight: 700;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-
-      th,
-      td {
-        text-align: left;
-        padding: 10px 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      }
-
-      th {
-        color: var(--muted);
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }
-
-      tr.warn td:last-child {
-        color: var(--warn);
-      }
-
-      tr.danger td:last-child {
-        color: var(--danger);
-      }
-
-      .meta {
-        color: var(--muted);
-        font-size: 14px;
+        margin-bottom: 2px;
       }
 
       #progression-selected.selected-flash {
-        outline: 2px solid rgba(126, 201, 255, 0.9);
-        outline-offset: 10px;
-        border-radius: 10px;
+        outline: 4px solid var(--blue);
+        outline-offset: 5px;
         animation: selected-flash 1.2s ease;
       }
 
       @keyframes selected-flash {
         0% {
-          box-shadow: 0 0 0 0 rgba(126, 201, 255, 0.45);
+          box-shadow: 0 0 0 0 rgba(121, 204, 222, 0.75);
         }
 
         100% {
-          box-shadow: 0 0 0 18px rgba(126, 201, 255, 0);
+          box-shadow: 0 0 0 20px rgba(121, 204, 222, 0);
         }
       }
 
+      .comment-review-list,
       .activity-feed {
         display: grid;
         gap: 10px;
       }
 
-      .activity-toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+      .comment-review-card {
+        display: grid;
+        gap: 10px;
+        border-left: 8px solid #d4a70e;
+      }
+
+      .comment-review-card[data-status="approved"] {
+        border-left-color: var(--green);
+      }
+
+      .comment-review-card[data-status="rejected"] {
+        border-left-color: var(--red);
+      }
+
+      .comment-review-body {
+        padding: 10px;
+        border: 2px solid rgba(24, 22, 28, 0.18);
+        background: #fff;
+        color: var(--ink);
+        line-height: 1.55;
+        white-space: pre-wrap;
       }
 
       .activity-toolbar .field {
-        min-width: min(260px, 100%);
+        width: min(280px, 100%);
       }
 
       .activity-filter-list {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 7px;
       }
 
       .activity-filter-button {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 9px 11px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.06);
+        min-height: 36px;
+        padding: 6px 9px;
+        background: var(--cream);
       }
 
-      .activity-filter-button[aria-pressed="true"] {
-        border-color: rgba(126, 201, 255, 0.68);
-        background: rgba(126, 201, 255, 0.18);
+      .activity-filter-button[aria-pressed="true"],
+      .activity-stat-button[aria-pressed="true"] {
+        background: var(--blue);
+        box-shadow: 3px 3px 0 var(--ink);
       }
 
       .activity-filter-count {
-        color: var(--muted);
-        font-size: 12px;
+        padding: 2px 5px;
+        border: 1px solid currentColor;
+        font-size: 10px;
       }
 
       .activity-stat-card {
-        border-left: 4px solid var(--accent);
+        border-top: 7px solid var(--blue);
       }
 
-      .activity-stat-button {
-        width: 100%;
-        text-align: left;
+      #activity-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
       }
 
-      .activity-stat-button[aria-pressed="true"] {
-        border-color: rgba(126, 201, 255, 0.7);
-        box-shadow: 0 0 0 1px rgba(126, 201, 255, 0.3);
+      .activity-stat-card .label,
+      .activity-stat-card .value,
+      .activity-stat-card .meta {
+        max-width: 100%;
+        overflow-wrap: anywhere;
       }
 
-      .activity-row {
-        display: grid;
-        gap: 8px;
-        border-left: 4px solid rgba(126, 201, 255, 0.55);
-        background:
-          linear-gradient(90deg, rgba(126, 201, 255, 0.08), transparent 46%),
-          rgba(7, 11, 16, 0.65);
+      .activity-stat-card .value {
+        font-size: clamp(18px, 1.7vw, 25px);
       }
 
       .activity-tone-people,
       .activity-kind-signup,
       .activity-kind-visit-only {
-        border-left-color: #7ec9ff;
+        border-top-color: var(--blue);
       }
 
       .activity-tone-guest,
       .activity-kind-guest-visit {
-        border-left-color: #ffcd57;
+        border-top-color: var(--yellow);
       }
 
       .activity-tone-play,
       .activity-kind-room-play {
-        border-left-color: #59d98e;
+        border-top-color: #8bd18f;
       }
 
       .activity-tone-build,
       .activity-kind-room-build,
       .activity-kind-course-build {
-        border-left-color: #ff7ab6;
+        border-top-color: var(--pink);
       }
 
       .activity-tone-support {
-        border-left-color: #b391ff;
+        border-top-color: #b9a3e9;
       }
 
-      .activity-summary {
-        line-height: 1.5;
+      .activity-stat-button {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+        min-width: 0;
+        align-content: start;
+        align-items: start;
+        justify-content: stretch;
+        text-align: left;
       }
 
-      .activity-detail {
-        line-height: 1.5;
+      .activity-row {
+        display: grid;
+        gap: 8px;
+        border-left: 8px solid var(--blue);
+        background: var(--paper);
       }
 
       .activity-head {
         display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: baseline;
         flex-wrap: wrap;
+        gap: 8px 14px;
+        align-items: baseline;
+        justify-content: space-between;
       }
 
-      .comment-review-list {
-        display: grid;
-        gap: 12px;
+      .activity-summary,
+      .activity-detail {
+        line-height: 1.55;
       }
 
-      .comment-review-card {
-        display: grid;
-        gap: 10px;
-        border-left: 4px solid var(--warn);
+      .activity-actor-button {
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        box-shadow: none;
+        color: var(--blue-deep);
+        text-decoration: underline;
       }
 
-      .comment-review-card[data-status='approved'] {
-        border-left-color: var(--good);
+      .activity-actor-button:hover,
+      .activity-actor-button:active {
+        transform: none;
+        box-shadow: none;
       }
 
-      .comment-review-card[data-status='rejected'] {
-        border-left-color: var(--danger);
+      .activity-actor {
+        color: var(--ink);
+        font-weight: 700;
       }
 
-      .comment-review-body {
-        white-space: pre-wrap;
-        line-height: 1.5;
-        color: var(--text);
+      .table-wrap {
+        min-width: 0;
+        overflow-x: auto;
+        border: 2px solid var(--ink);
       }
 
-      @media (max-width: 720px) {
-        .shell {
-          padding: 16px 14px 32px;
+      table {
+        width: 100%;
+        min-width: 640px;
+        border-collapse: collapse;
+        background: #fff;
+      }
+
+      th,
+      td {
+        padding: 10px;
+        border-bottom: 2px solid rgba(24, 22, 28, 0.16);
+        text-align: left;
+      }
+
+      th {
+        background: var(--cream);
+        color: var(--blue-deep);
+        font-family: var(--pixel-font);
+        font-size: 9px;
+        text-transform: uppercase;
+      }
+
+      tr.warn td:last-child {
+        background: var(--yellow);
+        color: #624700;
+      }
+
+      tr.danger td:last-child {
+        background: var(--red);
+        color: var(--cream);
+      }
+
+      .links {
+        align-items: stretch;
+      }
+
+      .links .button-link {
+        flex: 1 1 170px;
+      }
+
+      .links .external {
+        background: var(--cream);
+      }
+
+      @media (max-width: 1120px) {
+        .auth-strip {
+          grid-template-columns: minmax(220px, 1fr) auto;
         }
 
-        input[type="password"] {
-          min-width: 100%;
+        .auth-status-wrap {
+          grid-column: 1 / -1;
+          text-align: left;
         }
 
-        .controls {
-          align-items: stretch;
+        .photo-workspace {
+          grid-template-columns: minmax(0, 1fr);
         }
 
-        .controls button {
-          flex: 1;
+        .photo-access-panel {
+          position: static;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .admin-shell {
+          padding: 12px 12px 48px;
+        }
+
+        .admin-masthead {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .masthead-status {
+          min-width: 0;
+        }
+
+        .admin-layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .admin-nav {
+          position: sticky;
+          top: 0;
+          z-index: 6;
+          display: flex;
+          gap: 7px;
+          overflow-x: auto;
+          border-color: var(--ink);
+          box-shadow: 0 4px 0 var(--blue);
+        }
+
+        .admin-nav-title,
+        .nav-rule {
+          display: none;
+        }
+
+        .admin-nav a {
+          flex: 0 0 auto;
+          grid-template-columns: 24px auto auto;
+          padding: 7px 9px;
+        }
+
+        .nav-icon {
+          width: 24px;
+          height: 24px;
+          font-size: 11px;
+        }
+
+        .overview-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .overview-wide {
+          grid-column: auto;
+        }
+      }
+
+      @media (max-width: 680px) {
+        body {
+          font-size: 13px;
+        }
+
+        .admin-masthead,
+        .panel,
+        .section-heading {
+          padding: 12px;
+        }
+
+        .auth-strip {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .auth-actions > * {
+          flex: 1 1 120px;
+        }
+
+        .review-toolbar,
+        .compact-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .photo-review-card {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .photo-preview-wrap,
+        .photo-preview {
+          min-height: 190px;
+        }
+
+        .section-heading p,
+        .masthead-copy p {
+          font-size: 12px;
+        }
+
+        .section-icon {
+          width: 24px;
+          height: 24px;
+          font-size: 11px;
         }
       }
     </style>
   </head>
   <body>
-    <main class="shell stack">
-      <header class="masthead">
-        <div class="stack" style="gap: 6px">
-          <h1>Launch Admin</h1>
-          <p>Hidden operator console for launch-day traffic, auth safety, and ghost shard health.</p>
+    <main class="admin-shell">
+      <header class="admin-masthead">
+        <div class="masthead-copy">
+          <div>
+            <span class="masthead-kicker">WAMP Operator Console</span>
+            <h1>Control Room</h1>
+          </div>
+          <p>Traffic, player support, content review, and world infrastructure in one place.</p>
         </div>
-        <div id="last-updated" class="meta">No snapshot loaded yet.</div>
+        <div class="masthead-status">
+          <span class="label">Last Snapshot</span>
+          <div id="last-updated" class="meta">No snapshot loaded yet.</div>
+        </div>
       </header>
 
-      <section class="panel stack">
-        <div class="controls">
-          <input id="admin-key-input" type="password" autocomplete="off" placeholder="Paste ADMIN_API_KEY" />
-          <button id="save-key-button" type="button">Use Key</button>
-          <button id="refresh-button" type="button" class="secondary">Refresh</button>
-          <button id="clear-key-button" type="button" class="secondary">Clear Key</button>
-        </div>
-        <div id="auth-status" class="meta">Paste the admin key to start polling.</div>
-        <div id="warnings" class="warning-list"></div>
-      </section>
-
-      <section id="progression-admin-panel" class="panel stack">
-        <h2>Builder Cap Overrides</h2>
-        <div class="controls">
-          <input id="progression-query-input" type="text" autocomplete="off" placeholder="Search by user id, email, or display name" />
-          <button id="progression-search-button" type="button">Search</button>
-        </div>
-        <div class="field">
-          <label class="label" for="progression-operator-input">Operator Label</label>
-          <input id="progression-operator-input" type="text" autocomplete="off" placeholder="Jonathan" />
-        </div>
-        <div id="progression-status" class="meta">Search for a user to inspect or raise their builder caps.</div>
-        <div id="progression-results" class="search-results">
-          <div class="meta">No search yet.</div>
-        </div>
-        <div id="progression-selected" class="meta">No user selected.</div>
-        <div class="admin-grid">
-          <label class="field">
-            <span class="label">Claim / day</span>
-            <input id="progression-claim-input" type="number" min="1" step="1" placeholder="blank = trust tier" />
-          </label>
-          <label class="field">
-            <span class="label">Publish / day</span>
-            <input id="progression-publish-input" type="number" min="1" step="1" placeholder="blank = trust tier" />
-          </label>
-          <label class="field">
-            <span class="label">Placed objects</span>
-            <input id="progression-object-input" type="number" min="1" step="1" placeholder="blank = trust tier" />
-          </label>
-          <label class="field">
-            <span class="label">Collectibles</span>
-            <input id="progression-collectible-input" type="number" min="1" step="1" placeholder="blank = trust tier" />
-          </label>
-          <label class="field">
-            <span class="label">Expanded room cells</span>
-            <input id="progression-expanded-room-input" type="number" min="1" step="1" placeholder="blank = trust tier" />
-          </label>
-        </div>
+      <section class="auth-strip" aria-label="Admin authentication">
         <label class="field">
-          <span class="label">Reason</span>
-          <textarea id="progression-reason-input" placeholder="Trusted early builder, custom showcase room, etc."></textarea>
+          <span class="label">Admin API Key</span>
+          <input id="admin-key-input" type="password" autocomplete="off" placeholder="Paste ADMIN_API_KEY" />
         </label>
-        <div class="controls">
-          <button id="progression-save-button" type="button">Save Override</button>
-          <button id="progression-clear-button" type="button" class="secondary">Clear Override</button>
+        <div class="auth-actions">
+          <button id="save-key-button" type="button"><span aria-hidden="true">▶</span> Use Key</button>
+          <button id="refresh-button" type="button" class="secondary"><span aria-hidden="true">↻</span> Refresh All</button>
+          <button id="clear-key-button" type="button" class="secondary"><span aria-hidden="true">×</span> Clear</button>
+        </div>
+        <div class="auth-status-wrap">
+          <span class="label">Console Status</span>
+          <div id="auth-status" class="meta">Paste the admin key to start polling.</div>
         </div>
       </section>
 
-      <section id="room-comments-admin-panel" class="panel stack">
-        <h2>Room Comment Review</h2>
-        <div class="controls">
-          <label class="field">
-            <span class="label">Status</span>
-            <select id="room-comments-status-filter">
-              <option value="pending_review">Pending Review</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="all">All</option>
-            </select>
-          </label>
-          <label class="field">
-            <span class="label">Operator Label</span>
-            <input id="room-comments-operator-input" type="text" autocomplete="off" placeholder="Jonathan" />
-          </label>
-          <button id="room-comments-refresh-button" type="button">Refresh Comments</button>
+      <div class="admin-layout">
+        <nav class="admin-nav" aria-label="Control room sections">
+          <div class="admin-nav-title">Jump To</div>
+          <a href="#overview"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">Overview</span></a>
+          <a href="#photo-review">
+            <span class="nav-icon" aria-hidden="true">▣</span>
+            <span class="nav-label">Photo Review</span>
+            <span id="photo-review-nav-count" class="nav-count" hidden>0</span>
+          </a>
+          <a href="#comment-review"><span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Comments</span></a>
+          <a href="#builders"><span class="nav-icon" aria-hidden="true">▲</span><span class="nav-label">Builders</span></a>
+          <a href="#activity"><span class="nav-icon" aria-hidden="true">↯</span><span class="nav-label">Activity</span></a>
+          <a href="#infrastructure"><span class="nav-icon" aria-hidden="true">⌁</span><span class="nav-label">Infrastructure</span></a>
+          <div class="nav-rule"></div>
+          <a href="/suspicious-admin.html"><span class="nav-icon" aria-hidden="true">!</span><span class="nav-label">Suspicious Runs</span></a>
+          <a href="/school-admin.html"><span class="nav-icon" aria-hidden="true">S</span><span class="nav-label">School Admin</span></a>
+        </nav>
+
+        <div class="admin-content">
+          <section id="overview" class="admin-section">
+            <header class="section-heading">
+              <span class="section-icon" aria-hidden="true">◎</span>
+              <div class="section-heading-copy">
+                <span class="section-kicker">01 / Status</span>
+                <h2>System Overview</h2>
+                <p>The launch pulse at a glance. Problems rise to the top.</p>
+              </div>
+            </header>
+            <div class="overview-grid">
+              <section class="panel stack">
+                <div class="panel-title-row">
+                  <h3>Warnings</h3>
+                  <span class="chip warn">Live checks</span>
+                </div>
+                <div id="warnings" class="warning-list"></div>
+              </section>
+              <section class="panel stack">
+                <h3>Configuration</h3>
+                <div id="config-chips" class="chips"></div>
+              </section>
+              <section class="panel stack overview-wide">
+                <div class="panel-title-row">
+                  <h3>World Totals</h3>
+                  <span class="meta">All-time platform counts</span>
+                </div>
+                <div id="totals-grid" class="grid cards"></div>
+              </section>
+            </div>
+          </section>
+
+          <section id="photo-review" class="admin-section" data-tone="yellow">
+            <header class="section-heading">
+              <span class="section-icon" aria-hidden="true">▣</span>
+              <div class="section-heading-copy">
+                <span class="section-kicker">02 / Content</span>
+                <h2>Photo Approvals</h2>
+                <p>Review room backgrounds and manage who can upload them.</p>
+              </div>
+            </header>
+            <div class="photo-workspace">
+              <section class="panel stack">
+                <div class="review-toolbar">
+                  <label class="field">
+                    <span class="label">Queue</span>
+                    <select id="background-status-filter">
+                      <option value="pending_review">Pending Review</option>
+                      <option value="upload_pending">Upload Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="blocked">Blocked</option>
+                      <option value="all">All Photos</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="label">Operator Label</span>
+                    <input id="background-review-operator-input" type="text" autocomplete="off" placeholder="Jonathan" />
+                  </label>
+                  <button id="background-review-refresh-button" type="button">
+                    <span aria-hidden="true">↻</span> Refresh Photos
+                  </button>
+                </div>
+                <div id="background-queue-status" class="status">Paste the admin key to load photo approvals.</div>
+                <div id="background-queue" class="photo-review-list"></div>
+              </section>
+
+              <aside class="panel stack photo-access-panel">
+                <div>
+                  <span class="section-kicker">Upload Permissions</span>
+                  <h3>Builder Photo Access</h3>
+                </div>
+                <p class="meta">Grant photo upload or automatic approval privileges to a trusted builder.</p>
+                <div class="compact-grid">
+                  <label class="field">
+                    <span class="label">Builder Search</span>
+                    <input id="background-user-query-input" type="text" placeholder="User id, email, or name" />
+                  </label>
+                  <button id="background-user-search-button" type="button">Search</button>
+                </div>
+                <div id="background-user-search-status" class="status">Paste the admin key to manage photo access.</div>
+                <div id="background-user-results" class="search-results"></div>
+                <div id="background-permission-panel" class="stack" hidden>
+                  <div class="card">
+                    <h3 id="background-permission-user-name">Selected Builder</h3>
+                    <div id="background-permission-user-meta" class="meta"></div>
+                  </div>
+                  <label class="checkbox-row">
+                    <input id="background-permission-can-upload" type="checkbox" />
+                    <span><strong>Can upload photos</strong><br /><span class="meta">Allows custom room background uploads.</span></span>
+                  </label>
+                  <label class="checkbox-row">
+                    <input id="background-permission-auto-approve" type="checkbox" />
+                    <span><strong>Auto-approve clean photos</strong><br /><span class="meta">Skips manual review when moderation passes.</span></span>
+                  </label>
+                  <label class="field">
+                    <span class="label">Reason</span>
+                    <textarea id="background-permission-reason" placeholder="Trusted artist, event collaborator, etc."></textarea>
+                  </label>
+                  <label class="field">
+                    <span class="label">Operator Label</span>
+                    <input id="background-permission-operator" type="text" placeholder="Jonathan" />
+                  </label>
+                  <button id="background-permission-save-button" type="button" class="success">Save Photo Access</button>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <section id="comment-review" class="admin-section" data-tone="pink">
+            <header class="section-heading">
+              <span class="section-icon" aria-hidden="true">✎</span>
+              <div class="section-heading-copy">
+                <span class="section-kicker">03 / Content</span>
+                <h2>Room Comment Review</h2>
+                <p>Moderate player comments without leaving the control room.</p>
+              </div>
+            </header>
+            <section id="room-comments-admin-panel" class="panel stack">
+              <div class="review-toolbar">
+                <label class="field">
+                  <span class="label">Status</span>
+                  <select id="room-comments-status-filter">
+                    <option value="pending_review">Pending Review</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="all">All Comments</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="label">Operator Label</span>
+                  <input id="room-comments-operator-input" type="text" autocomplete="off" placeholder="Jonathan" />
+                </label>
+                <button id="room-comments-refresh-button" type="button">Refresh Comments</button>
+              </div>
+              <div id="room-comments-status" class="meta">Paste the admin key to load room comments.</div>
+              <div id="room-comments-list" class="comment-review-list">
+                <div class="admin-empty-state">
+                  <span aria-hidden="true">✎</span>
+                  <strong>Comment review is locked</strong>
+                  <span>Use the admin key above to open the queue.</span>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section id="builders" class="admin-section" data-tone="green">
+            <header class="section-heading">
+              <span class="section-icon" aria-hidden="true">▲</span>
+              <div class="section-heading-copy">
+                <span class="section-kicker">04 / Support</span>
+                <h2>Builder Cap Overrides</h2>
+                <p>Inspect a builder and grant additional room-making capacity.</p>
+              </div>
+            </header>
+            <section id="progression-admin-panel" class="panel stack">
+              <div class="compact-grid">
+                <label class="field">
+                  <span class="label">Builder Search</span>
+                  <input id="progression-query-input" type="text" autocomplete="off" placeholder="User id, email, or display name" />
+                </label>
+                <button id="progression-search-button" type="button">Search</button>
+              </div>
+              <label class="field">
+                <span class="label">Operator Label</span>
+                <input id="progression-operator-input" type="text" autocomplete="off" placeholder="Jonathan" />
+              </label>
+              <div id="progression-status" class="meta">Search for a user to inspect or raise their builder caps.</div>
+              <div id="progression-results" class="search-results">
+                <div class="meta">No search yet.</div>
+              </div>
+              <div id="progression-selected" class="meta">No user selected.</div>
+              <div class="admin-grid">
+                <label class="field">
+                  <span class="label">Claim / day</span>
+                  <input id="progression-claim-input" type="number" min="1" step="1" placeholder="Trust tier default" />
+                </label>
+                <label class="field">
+                  <span class="label">Publish / day</span>
+                  <input id="progression-publish-input" type="number" min="1" step="1" placeholder="Trust tier default" />
+                </label>
+                <label class="field">
+                  <span class="label">Placed objects</span>
+                  <input id="progression-object-input" type="number" min="1" step="1" placeholder="Trust tier default" />
+                </label>
+                <label class="field">
+                  <span class="label">Collectibles</span>
+                  <input id="progression-collectible-input" type="number" min="1" step="1" placeholder="Trust tier default" />
+                </label>
+                <label class="field">
+                  <span class="label">Expanded cells</span>
+                  <input id="progression-expanded-room-input" type="number" min="1" step="1" placeholder="Trust tier default" />
+                </label>
+              </div>
+              <label class="field">
+                <span class="label">Reason</span>
+                <textarea id="progression-reason-input" placeholder="Trusted early builder, custom showcase room, etc."></textarea>
+              </label>
+              <div class="controls">
+                <button id="progression-save-button" type="button" class="success">Save Override</button>
+                <button id="progression-clear-button" type="button" class="secondary">Clear Override</button>
+              </div>
+            </section>
+          </section>
+
+          <section id="activity" class="admin-section" data-tone="red">
+            <header class="section-heading">
+              <span class="section-icon" aria-hidden="true">↯</span>
+              <div class="section-heading-copy">
+                <span class="section-kicker">05 / Pulse</span>
+                <h2>Recent Activity</h2>
+                <p>See who played, built, signed up, claimed, or published.</p>
+              </div>
+            </header>
+            <section class="panel stack">
+              <div class="activity-toolbar">
+                <div class="meta" id="activity-range-summary">Choose a time window to see recent platform activity.</div>
+                <label class="field">
+                  <span class="label">Time Window</span>
+                  <select id="activity-range-select"></select>
+                </label>
+              </div>
+              <div id="activity-filter-list" class="activity-filter-list" role="group" aria-label="Activity type"></div>
+              <div id="activity-grid" class="grid cards"></div>
+              <div id="activity-feed" class="activity-feed"></div>
+            </section>
+          </section>
+
+          <section id="infrastructure" class="admin-section">
+            <header class="section-heading">
+              <span class="section-icon" aria-hidden="true">⌁</span>
+              <div class="section-heading-copy">
+                <span class="section-kicker">06 / Network</span>
+                <h2>Infrastructure</h2>
+                <p>Presence, shards, and the external systems behind WAMP.</p>
+              </div>
+            </header>
+            <section class="panel stack">
+              <div class="panel-title-row">
+                <h3>PartyKit Presence</h3>
+                <span class="chip good">Realtime</span>
+              </div>
+              <div id="partykit-summary" class="grid cards"></div>
+            </section>
+            <section class="panel stack">
+              <div class="panel-title-row">
+                <h3>Shard Heartbeats</h3>
+                <span class="meta">Warn after 30s · critical after 90s</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Shard</th>
+                      <th>Total</th>
+                      <th>Play</th>
+                      <th>Edit</th>
+                      <th>Heartbeat Age</th>
+                    </tr>
+                  </thead>
+                  <tbody id="partykit-shards-body">
+                    <tr>
+                      <td colspan="5" class="meta">No shard data yet.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <section class="panel stack">
+              <h3>Operator Links</h3>
+              <div class="links">
+                <a class="button-link" href="/suspicious-admin.html"><span aria-hidden="true">!</span> Suspicious Runs</a>
+                <a class="button-link" href="/school-admin.html"><span aria-hidden="true">S</span> School Admin</a>
+                <a class="button-link external" href="https://dash.cloudflare.com/" target="_blank" rel="noreferrer">Cloudflare ↗</a>
+                <a class="button-link external" href="https://app.resend.com/" target="_blank" rel="noreferrer">Resend ↗</a>
+                <a class="button-link external" href="https://www.partykit.io/dashboard" target="_blank" rel="noreferrer">PartyKit ↗</a>
+              </div>
+            </section>
+          </section>
         </div>
-        <div id="room-comments-status" class="meta">Paste the admin key to load room comments.</div>
-        <div id="room-comments-list" class="comment-review-list">
-          <div class="meta">No comments loaded yet.</div>
-        </div>
-      </section>
-
-      <section class="panel stack">
-        <h2>Quick Links</h2>
-        <div class="links">
-          <a href="https://dash.cloudflare.com/" target="_blank" rel="noreferrer">Cloudflare Workers</a>
-          <a href="https://dash.cloudflare.com/" target="_blank" rel="noreferrer">Cloudflare D1</a>
-          <a href="/background-admin.html">Background Upload Admin</a>
-          <a href="https://app.resend.com/" target="_blank" rel="noreferrer">Resend</a>
-          <a href="https://www.partykit.io/dashboard" target="_blank" rel="noreferrer">PartyKit</a>
-        </div>
-      </section>
-
-      <section class="panel stack">
-        <h2>Config</h2>
-        <div id="config-chips" class="chips"></div>
-      </section>
-
-      <section class="panel stack">
-        <h2>Totals</h2>
-        <div id="totals-grid" class="grid cards"></div>
-      </section>
-
-      <section class="panel stack">
-        <h2>Recent Activity</h2>
-        <div class="activity-toolbar">
-          <div class="meta" id="activity-range-summary">Choose a time window to see who actually played, built, signed up, or published in that period.</div>
-          <label class="field">
-            <span class="label">Time Window</span>
-            <select id="activity-range-select"></select>
-          </label>
-        </div>
-        <div id="activity-filter-list" class="activity-filter-list" role="group" aria-label="Activity type"></div>
-        <div id="activity-grid" class="grid cards"></div>
-        <div id="activity-feed" class="activity-feed"></div>
-      </section>
-
-      <section class="panel stack">
-        <h2>PartyKit</h2>
-        <div id="partykit-summary" class="grid cards"></div>
-      </section>
-
-      <section class="panel stack">
-        <h2>Shard Heartbeats</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Shard</th>
-              <th>Total</th>
-              <th>Play</th>
-              <th>Edit</th>
-              <th>Heartbeat Age</th>
-            </tr>
-          </thead>
-          <tbody id="partykit-shards-body">
-            <tr>
-              <td colspan="5" class="meta">No shard data yet.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
+      </div>
     </main>
 
     <script type="module" src="/src/launch-admin.ts"></script>

@@ -437,7 +437,7 @@ async function sendBackgroundImageAdminReviewNotification(
       `Labels: ${labels.length > 0 ? labels.join(', ') : 'none'}`,
       `Submitted: ${row.uploaded_at ?? row.created_at}`,
     ],
-    actionUrl: buildAdminReviewUrl(request, env, '/background-admin.html'),
+    actionUrl: buildAdminReviewUrl(request, env, '/launch-admin.html#photo-review'),
     actionLabel: 'Open photo review queue',
   });
   logAdminReviewNotificationFailure(result, `background image ${row.id}`);

@@ -12,6 +12,7 @@ import type {
   PartyKitShardHeartbeat,
 } from './admin/model';
 import { getApiBaseUrl } from './api/baseUrl';
+import { setupBackgroundAdminController } from './background-admin';
 import type {
   AdminRoomCommentListResponse,
   AdminRoomCommentRecord,
@@ -105,6 +106,9 @@ let selectedProgressionUser: AdminProgressionUserCapsResponse | null = null;
 let roomCommentsStatusMessage = 'Paste the admin key to load room comments.';
 let roomCommentsSnapshot: AdminRoomCommentRecord[] = [];
 let roomCommentsLoading = false;
+const backgroundAdminController = setupBackgroundAdminController({
+  getAdminKey: () => adminKey,
+});
 
 if (adminKeyInput) {
   adminKeyInput.value = adminKey;
@@ -118,7 +122,9 @@ saveKeyButton?.addEventListener('click', () => {
     lastError = null;
     syncPolling();
     void refreshSnapshot();
+    backgroundAdminController.handleAdminKeyChange();
   } else {
+    backgroundAdminController.handleAdminKeyChange();
     render();
   }
 });
@@ -126,6 +132,7 @@ saveKeyButton?.addEventListener('click', () => {
 refreshButton?.addEventListener('click', () => {
   void refreshSnapshot(true);
   void refreshRoomComments();
+  void backgroundAdminController.refresh();
 });
 
 clearKeyButton?.addEventListener('click', () => {
@@ -136,6 +143,7 @@ clearKeyButton?.addEventListener('click', () => {
     adminKeyInput.value = '';
   }
   syncPolling();
+  backgroundAdminController.handleAdminKeyChange();
   render();
 });
 
@@ -187,6 +195,7 @@ syncPolling();
 if (adminKey) {
   void refreshSnapshot();
   void refreshRoomComments();
+  void backgroundAdminController.refresh();
 } else {
   render();
 }

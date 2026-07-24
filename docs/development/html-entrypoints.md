@@ -6,8 +6,8 @@ The root HTML files are Vite multi-page entry points and stable URLs used by the
 | --- | --- |
 | `index.html` | Main game/editor shell |
 | `dashboard.html` | Signed-in user dashboard |
-| `launch-admin.html` | Launch and comment review admin surface |
-| `background-admin.html` | User-uploaded background review admin surface |
+| `launch-admin.html` | Unified launch, photo, comment, builder, and infrastructure admin surface |
+| `background-admin.html` | Compatibility redirect to Launch Admin photo review |
 | `suspicious-admin.html` | Suspicious run/admin review surface |
 | `school-admin.html` | Classroom/teacher admin surface |
 | `school-login.html` | Classroom/student login surface |

@@ -100,7 +100,7 @@ export async function sendAdminReviewNotificationEmail(
 export function buildAdminReviewUrl(
   request: Request,
   env: Env,
-  path: '/background-admin.html' | '/launch-admin.html',
+  path: '/launch-admin.html' | '/launch-admin.html#photo-review',
 ): string {
   return buildPublicAppUrl(request, env, path);
 }
