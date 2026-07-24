@@ -27,6 +27,7 @@ export interface LaunchStatsConfig {
 
 export interface LaunchStatsTotals {
   users: number;
+  jamRegistrations: number;
   activeSessions: number;
   guestVisitors: number;
   guestVisits: number;

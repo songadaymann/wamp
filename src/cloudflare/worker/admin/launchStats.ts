@@ -11,6 +11,7 @@ import type {
   LaunchStatsTotals,
   PartyKitLaunchStats,
 } from '../../../admin/model';
+import { JAM_SLUG } from '../../../jam/model';
 import type { Env } from '../core/types';
 import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
 import {
@@ -127,6 +128,7 @@ function sqlLaunchActivityIsNotLegacyGeneratedIdentity(
 async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> {
   const [
     users,
+    jamRegistrations,
     activeSessions,
     guestVisitors,
     guestVisits,
@@ -142,6 +144,7 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
     agentTokens,
   ] = await Promise.all([
     countQuery(env, 'SELECT COUNT(*) AS count FROM users'),
+    countJamRegistrations(env),
     countQuery(env, 'SELECT COUNT(*) AS count FROM sessions WHERE expires_at > ?', [nowIso]),
     countQuery(env, 'SELECT COUNT(DISTINCT guest_user_id) AS count FROM guest_visits'),
     countQuery(env, 'SELECT COUNT(*) AS count FROM guest_visits'),
@@ -173,6 +176,7 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
 
   return {
     users,
+    jamRegistrations,
     activeSessions,
     guestVisitors,
     guestVisits,
@@ -187,6 +191,16 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
     agents,
     agentTokens,
   };
+}
+
+async function countJamRegistrations(env: Env): Promise<number> {
+  const row = await env.JAM_DB.prepare(
+    'SELECT COUNT(*) AS count FROM jam_registrations WHERE jam_slug = ?',
+  )
+    .bind(JAM_SLUG)
+    .first<{ count: number | string | null }>();
+
+  return Number(row?.count ?? 0);
 }
 
 async function loadActivityWindow(
