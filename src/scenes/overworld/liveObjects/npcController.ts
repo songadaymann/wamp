@@ -12,7 +12,6 @@ import { resolveNpcHorizontalVelocity } from './npcEnvironment';
 const NPC_WALK_SPEED = 70;
 const NPC_JUMP_VELOCITY = -210;
 const NPC_FOLLOW_STOP_DISTANCE = 7;
-const NPC_EDGE_PROBE_LEAD_PX = 4;
 const NPC_WANDER_WALK_MIN_MS = 1800;
 const NPC_WANDER_WALK_MAX_MS = 4500;
 const NPC_WANDER_PAUSE_MIN_MS = 1000;
@@ -33,12 +32,6 @@ interface NpcControllerOptions {
     config: LoadedRoomObject['config'],
     directionX: number,
   ): void;
-  hasSupportAhead(
-    room: RoomSnapshot,
-    body: Phaser.Physics.Arcade.Body,
-    directionX: number,
-    leadPx?: number,
-  ): boolean;
   hasSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean;
   playBounceFx(
     x: number,
@@ -296,12 +289,12 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       directionX < 0
         ? body.blocked.left || body.touching.left
         : body.blocked.right || body.touching.right;
-    const canJumpFall = mode === 'follow' || liveObject.runtime.npcCanJumpFall;
+    const canJump = mode === 'follow' || liveObject.runtime.npcCanJumpFall;
 
     if (
       terrainActor &&
       grounded &&
-      canJumpFall &&
+      canJump &&
       blocked &&
       this.hasOneTileJumpSpace(room, body, directionX)
     ) {
@@ -309,12 +302,7 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       return false;
     }
 
-    const missingGround =
-      terrainActor &&
-      grounded &&
-      !canJumpFall &&
-      !this.options.hasSupportAhead(room, body, directionX, NPC_EDGE_PROBE_LEAD_PX);
-    if (!blocked && !missingGround) {
+    if (!blocked) {
       return false;
     }
 
