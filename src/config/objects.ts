@@ -196,7 +196,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: SWORDSMAN_AI_OBJECT_ID, name: 'Sword Hunter', category: 'enemy', path: 'assets/enemies/swordsman_ai/sword_idle.png', frameWidth: 48, frameHeight: 48, frameCount: 10, fps: 8, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 14, bodyOffsetX: 19, bodyOffsetY: 26, displayScale: 1.12, displayOffsetY: 8, previewWidth: 18, previewHeight: 28, previewOffsetX: 15, previewOffsetY: 20, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Smart sword enemy. Patrols, chases nearby players, and attacks with a timed slash.' },
 
   // ── NPCs ──
-  { id: JIMOTHY_OBJECT_ID, name: 'Jimothy', category: 'npc', path: 'assets/enemies/bear_brown.png', frameWidth: 32, frameHeight: 32, frameCount: 8, fps: 4, animationFrames: [0, 1], defaultFrame: 0, facingDirection: 'right', bodyWidth: 24, bodyHeight: 16, bodyOffsetX: 4, bodyOffsetY: 16, behavior: 'static', description: 'A friendly NPC who can idle, wander, patrol, follow players, and deliver dialogue.' },
+  { id: JIMOTHY_OBJECT_ID, name: 'Jimothy', category: 'npc', path: 'assets/npc/jimothy.png', frameWidth: 32, frameHeight: 32, frameCount: 8, fps: 4, animationFrames: [0, 1], defaultFrame: 0, facingDirection: 'right', bodyWidth: 24, bodyHeight: 16, bodyOffsetX: 4, bodyOffsetY: 16, behavior: 'static', description: 'A friendly NPC who can idle, wander, patrol, follow players, and deliver dialogue.' },
 
   // ── Interactive ──
   { id: 'bounce_pad',  name: 'Bounce Pad',  category: 'interactive', path: 'assets/objects/bounce_pad.png',  frameWidth: 16, frameHeight: 32, frameCount: 4,  fps: 0,  bodyWidth: 16, bodyHeight: 8,  behavior: 'bounce',   description: 'Launches player upward on contact.' },
