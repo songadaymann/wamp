@@ -1,5 +1,6 @@
 import { GHOST_OBJECT_ID } from '../../../enemies/ghost';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
+import { JIMOTHY_OBJECT_ID } from '../../../npcs/model';
 
 type FlyingEnemySettingKey = 'bat' | 'bird';
 
@@ -25,6 +26,7 @@ export type LiveObjectBehavior =
   | { kind: 'bouncePad' }
   | { kind: 'movingPlatform' }
   | { kind: 'blockSwitch' }
+  | { kind: 'npc' }
   | { kind: 'none' };
 
 const BEHAVIORS_BY_OBJECT_ID: Record<string, LiveObjectBehavior> = {
@@ -70,6 +72,7 @@ const BEHAVIORS_BY_OBJECT_ID: Record<string, LiveObjectBehavior> = {
   bear_polar: { kind: 'patrolEnemy' },
   chicken: { kind: 'patrolEnemy' },
   [SWORDSMAN_AI_OBJECT_ID]: { kind: 'swordsman' },
+  [JIMOTHY_OBJECT_ID]: { kind: 'npc' },
   frog: { kind: 'frog' },
   cannon: { kind: 'cannon' },
   cannon_bullet: { kind: 'travelingProjectile' },

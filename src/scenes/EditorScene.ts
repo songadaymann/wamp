@@ -824,6 +824,7 @@ export class EditorScene extends Phaser.Scene {
       onSetGoalTimeLimitSeconds: (seconds) => this.toolController.setGoalTimeLimitSeconds(seconds),
       onSetGoalRequiredCount: (requiredCount) => this.toolController.setGoalRequiredCount(requiredCount),
       onSetGoalSurvivalSeconds: (seconds) => this.toolController.setGoalSurvivalSeconds(seconds),
+      onSetNpcQuestType: (questType) => this.toolController.setNpcQuestType(questType),
       onSetGoalIntroText: (text) => this.toolController.setGoalIntroText(text),
       onStartGoalMarkerPlacement: (mode) => this.toolController.startGoalMarkerPlacement(mode),
       onClearGoalMarkers: () => this.toolController.clearGoalMarkers(),
@@ -841,6 +842,22 @@ export class EditorScene extends Phaser.Scene {
         this.inspectorController.setFocusedSwordsmanObjectiveMode(objectiveMode),
       onSetFocusedSwordsmanDefeatMode: (defeatMode) =>
         this.inspectorController.setFocusedSwordsmanDefeatMode(defeatMode),
+      onSetFocusedNpcMode: (mode) =>
+        this.inspectorController.setFocusedNpcMode(mode),
+      onSetFocusedNpcPushable: (pushable) =>
+        this.inspectorController.setFocusedNpcPushable(pushable),
+      onSetFocusedNpcCanJumpFall: (canJumpFall) =>
+        this.inspectorController.setFocusedNpcCanJumpFall(canJumpFall),
+      onSetFocusedNpcPlayerCollision: (playerCollision) =>
+        this.inspectorController.setFocusedNpcPlayerCollision(playerCollision),
+      onSetFocusedNpcFriendlyFire: (friendlyFire) =>
+        this.inspectorController.setFocusedNpcFriendlyFire(friendlyFire),
+      onSetFocusedNpcName: (name) =>
+        this.inspectorController.setFocusedNpcName(name),
+      onSetFocusedNpcDialogue: (text) =>
+        this.inspectorController.setFocusedNpcDialogue(text),
+      onSetFocusedNpcDefeatMode: (defeatMode) =>
+        this.inspectorController.setFocusedNpcDefeatMode(defeatMode),
     });
 
     this.createBackground();

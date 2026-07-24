@@ -7,6 +7,7 @@ export const ROOM_GOAL_TYPES = [
   'defeat_all',
   'checkpoint_sprint',
   'survival',
+  'npc_quest',
 ] as const;
 
 export type RoomGoalType = typeof ROOM_GOAL_TYPES[number];
@@ -50,9 +51,23 @@ export interface SurvivalGoal {
   durationMs: number;
 }
 
+export const NPC_QUEST_TYPES = ['protect', 'escort', 'give'] as const;
+export type NpcQuestType = typeof NPC_QUEST_TYPES[number];
+
+export interface NpcQuestGoal {
+  type: 'npc_quest';
+  questType: NpcQuestType;
+  npcInstanceId: string | null;
+  durationMs: number;
+  requiredCount: number;
+  destination: GoalMarkerPoint | null;
+  timeLimitMs: null;
+}
+
 export interface RoomGoalPublishValidationContext {
   collectiblesPlaced: number;
   collectModeEnemyCount: number;
+  npcInstanceIds?: string[];
 }
 
 export type RoomGoal =
@@ -61,7 +76,8 @@ export type RoomGoal =
   | CollectRaceGoal
   | DefeatAllGoal
   | CheckpointSprintGoal
-  | SurvivalGoal;
+  | SurvivalGoal
+  | NpcQuestGoal;
 
 export const ROOM_GOAL_LABELS: Record<RoomGoalType, string> = {
   reach_exit: 'Reach Exit',
@@ -70,6 +86,7 @@ export const ROOM_GOAL_LABELS: Record<RoomGoalType, string> = {
   defeat_all: 'Defeat All',
   checkpoint_sprint: 'Checkpoint Sprint',
   survival: 'Survival',
+  npc_quest: 'NPC Quest',
 };
 
 export const MAX_ROOM_GOAL_INTRO_TEXT_LENGTH = 140;
@@ -109,6 +126,16 @@ export function createDefaultRoomGoal(type: RoomGoalType): RoomGoal {
       return {
         type,
         durationMs: 30_000,
+      };
+    case 'npc_quest':
+      return {
+        type,
+        questType: 'protect',
+        npcInstanceId: null,
+        durationMs: 30_000,
+        requiredCount: 3,
+        destination: null,
+        timeLimitMs: null,
       };
   }
 }
@@ -159,6 +186,16 @@ export function cloneRoomGoal(goal: RoomGoal | null): RoomGoal | null {
       return {
         type: goal.type,
         durationMs: goal.durationMs,
+      };
+    case 'npc_quest':
+      return {
+        type: goal.type,
+        questType: goal.questType,
+        npcInstanceId: goal.npcInstanceId,
+        durationMs: goal.durationMs,
+        requiredCount: goal.requiredCount,
+        destination: goal.destination ? cloneGoalMarkerPoint(goal.destination) : null,
+        timeLimitMs: null,
       };
   }
 }
@@ -214,6 +251,9 @@ export function normalizeRoomGoal(value: unknown): RoomGoal | null {
     checkpoints?: unknown;
     finish?: unknown;
     exit?: unknown;
+    destination?: unknown;
+    questType?: unknown;
+    npcInstanceId?: unknown;
   };
 
   switch (goal.type) {
@@ -253,13 +293,33 @@ export function normalizeRoomGoal(value: unknown): RoomGoal | null {
         type: 'survival',
         durationMs: normalizePositiveInteger(goal.durationMs) ?? 30_000,
       };
+    case 'npc_quest': {
+      const questType = (NPC_QUEST_TYPES as readonly unknown[]).includes(goal.questType)
+        ? goal.questType as NpcQuestType
+        : 'protect';
+      return {
+        type: 'npc_quest',
+        questType,
+        npcInstanceId:
+          typeof goal.npcInstanceId === 'string' && goal.npcInstanceId.trim()
+            ? goal.npcInstanceId.trim()
+            : null,
+        durationMs: normalizePositiveInteger(goal.durationMs) ?? 30_000,
+        requiredCount: normalizePositiveInteger(goal.requiredCount) ?? 1,
+        destination:
+          isGoalMarkerPointLike(goal.destination)
+            ? cloneGoalMarkerPoint(goal.destination)
+            : null,
+        timeLimitMs: null,
+      };
+    }
     default:
       return null;
   }
 }
 
 export function goalSupportsTimeLimit(goalType: RoomGoalType): boolean {
-  return goalType !== 'survival';
+  return goalType !== 'survival' && goalType !== 'npc_quest';
 }
 
 export function formatRoomGoalShortText(
@@ -286,6 +346,15 @@ export function formatRoomGoalShortText(
       return `Reach ${goal.checkpoints.length || 0} ${goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`;
     case 'survival':
       return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`;
+    case 'npc_quest':
+      switch (goal.questType) {
+        case 'protect':
+          return `Protect NPC for ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`;
+        case 'escort':
+          return 'Escort NPC to the destination';
+        case 'give':
+          return `Collect ${goal.requiredCount} and return to NPC`;
+      }
   }
 }
 
@@ -315,6 +384,15 @@ export function buildAutomaticRoomGoalIntroText(
     }
     case 'survival':
       return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds. Pickups, enemy defeats, and zero-death clears raise your score!`;
+    case 'npc_quest':
+      switch (goal.questType) {
+        case 'protect':
+          return `Keep the NPC alive for ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds!`;
+        case 'escort':
+          return 'Escort the NPC to the marked destination!';
+        case 'give':
+          return `Collect ${goal.requiredCount} item${goal.requiredCount === 1 ? '' : 's'}, then return to the NPC!`;
+      }
   }
 }
 
@@ -356,6 +434,22 @@ export function getRoomGoalPublishValidationError(
 
     if (context.collectModeEnemyCount > 1) {
       return 'Collect Race currently supports exactly one Sword Hunter set to Collect Items.';
+    }
+  }
+
+  if (goal.type === 'npc_quest') {
+    const npcInstanceIds = context.npcInstanceIds ?? [];
+    if (npcInstanceIds.length === 0) {
+      return 'NPC Quest needs at least one NPC in the room.';
+    }
+    if (goal.npcInstanceId && !npcInstanceIds.includes(goal.npcInstanceId)) {
+      return 'The NPC linked to this quest is no longer in the room. Link another NPC.';
+    }
+    if (goal.questType === 'escort' && !goal.destination) {
+      return 'Escort needs a destination marker.';
+    }
+    if (goal.questType === 'give' && context.collectiblesPlaced < goal.requiredCount) {
+      return `Give needs ${goal.requiredCount} collectible${goal.requiredCount === 1 ? '' : 's'}, but only ${context.collectiblesPlaced} are placed.`;
     }
   }
 

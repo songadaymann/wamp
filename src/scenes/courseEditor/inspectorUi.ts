@@ -41,6 +41,19 @@ export function createEmptyCourseInspectorState(): EditorInspectorState {
     swordsmanObjectiveModeDisabled: true,
     swordsmanDefeatModeValue: 'defeatable',
     swordsmanDefeatModeDisabled: true,
+    npcVisible: false,
+    npcStatusText: '',
+    npcModeValue: 'idle',
+    npcModeDisabled: true,
+    npcPushableChecked: false,
+    npcPushableHidden: true,
+    npcJumpFallChecked: false,
+    npcJumpFallHidden: true,
+    npcPlayerCollisionChecked: true,
+    npcFriendlyFireChecked: true,
+    npcNameValue: '',
+    npcDialogueValue: '',
+    npcDefeatModeValue: 'defeatable',
   };
 }
 

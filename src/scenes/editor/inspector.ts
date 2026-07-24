@@ -29,8 +29,22 @@ import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../../sign
 import { canPlacedObjectUseObjectPath } from '../../placedObjects/objectPaths';
 import { type EditorEditRuntime } from './editRuntime';
 import type { EditorInspectorState } from './uiBridge';
+import {
+  DEFAULT_NPC_DEFEAT_MODE,
+  DEFAULT_NPC_MODE,
+  NPC_MODE_LABELS,
+  getPlacedNpcMode,
+  isNpcObjectId,
+  normalizeNpcCanJumpFall,
+  normalizeNpcDefeatMode,
+  normalizeNpcFriendlyFire,
+  normalizeNpcName,
+  normalizeNpcPlayerCollision,
+  normalizeNpcPushable,
+  type NpcMode,
+} from '../../npcs/model';
 
-type PinnedInspector = { kind: 'pressure' | 'container' | 'swordsman'; instanceId: string } | null;
+type PinnedInspector = { kind: 'pressure' | 'container' | 'swordsman' | 'npc'; instanceId: string } | null;
 
 export class EditorInspectorController {
   private focusedPressurePlateInstanceId: string | null = null;
@@ -40,6 +54,8 @@ export class EditorInspectorController {
   private containerStatusText: string | null = null;
   private focusedSwordsmanInstanceId: string | null = null;
   private swordsmanStatusText: string | null = null;
+  private focusedNpcInstanceId: string | null = null;
+  private npcStatusText: string | null = null;
   private pinnedInspector: PinnedInspector = null;
 
   constructor(
@@ -78,6 +94,8 @@ export class EditorInspectorController {
     this.containerStatusText = null;
     this.focusedSwordsmanInstanceId = null;
     this.swordsmanStatusText = null;
+    this.focusedNpcInstanceId = null;
+    this.npcStatusText = null;
     this.pinnedInspector = null;
   }
 
@@ -219,6 +237,18 @@ export class EditorInspectorController {
     ) {
       this.pinnedInspector = null;
     }
+    if (
+      this.focusedNpcInstanceId &&
+      !this.editRuntime.hasPlacedObjectInstanceId(this.focusedNpcInstanceId)
+    ) {
+      this.focusedNpcInstanceId = null;
+    }
+    if (
+      this.pinnedInspector?.kind === 'npc' &&
+      !this.editRuntime.hasPlacedObjectInstanceId(this.pinnedInspector.instanceId)
+    ) {
+      this.pinnedInspector = null;
+    }
 
     const pointer = this.scene.input.activePointer;
     const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
@@ -233,6 +263,7 @@ export class EditorInspectorController {
       }
       this.focusedContainerInstanceId = hoveredContainer.instanceId;
       this.focusedSwordsmanInstanceId = null;
+      this.focusedNpcInstanceId = null;
     } else if (this.pinnedInspector?.kind !== 'container') {
       this.focusedContainerInstanceId = null;
       const hoveredSwordsman = this.editRuntime.findPlacedObjectAt(
@@ -247,6 +278,19 @@ export class EditorInspectorController {
         this.focusedSwordsmanInstanceId = hoveredSwordsman.instanceId;
       } else if (this.pinnedInspector?.kind !== 'swordsman') {
         this.focusedSwordsmanInstanceId = null;
+        const hoveredNpc = this.editRuntime.findPlacedObjectAt(
+          worldPoint.x,
+          worldPoint.y,
+          (placed) => isNpcObjectId(placed.id),
+        );
+        if (hoveredNpc) {
+          if (this.focusedNpcInstanceId !== hoveredNpc.instanceId) {
+            this.npcStatusText = null;
+          }
+          this.focusedNpcInstanceId = hoveredNpc.instanceId;
+        } else if (this.pinnedInspector?.kind !== 'npc') {
+          this.focusedNpcInstanceId = null;
+        }
       }
     }
 
@@ -285,10 +329,26 @@ export class EditorInspectorController {
       return this.handlePressurePlateConnectionClick(worldPoint.x, worldPoint.y);
     }
 
+    const clickedNpc = this.editRuntime.findPlacedObjectAt(
+      worldPoint.x,
+      worldPoint.y,
+      (placed) => isNpcObjectId(placed.id),
+    );
+    if (clickedNpc) {
+      this.focusedNpcInstanceId = clickedNpc.instanceId;
+      this.focusedPressurePlateInstanceId = null;
+      this.focusedContainerInstanceId = null;
+      this.focusedSwordsmanInstanceId = null;
+      this.pinInspector('npc', clickedNpc.instanceId);
+      this.npcStatusText = null;
+      this.renderInspectorUi();
+      return true;
+    }
+
     const clickedSign = this.editRuntime.findPlacedObjectAt(
       worldPoint.x,
       worldPoint.y,
-      (placed) => canPlacedObjectHaveSignText(placed),
+      (placed) => canPlacedObjectHaveSignText(placed) && !isNpcObjectId(placed.id),
     );
     if (clickedSign?.instanceId) {
       this.openSignTextEditor(clickedSign);
@@ -304,6 +364,7 @@ export class EditorInspectorController {
       this.focusedPressurePlateInstanceId = clickedPressurePlate.instanceId;
       this.focusedContainerInstanceId = null;
       this.focusedSwordsmanInstanceId = null;
+      this.focusedNpcInstanceId = null;
       this.pinInspector('pressure', clickedPressurePlate.instanceId);
       this.pressurePlateStatusText = null;
       this.renderPressurePlatePanel();
@@ -323,6 +384,7 @@ export class EditorInspectorController {
       this.focusedSwordsmanInstanceId = clickedSwordsman.instanceId;
       this.focusedPressurePlateInstanceId = null;
       this.focusedContainerInstanceId = null;
+      this.focusedNpcInstanceId = null;
       this.pinInspector('swordsman', clickedSwordsman.instanceId);
       this.swordsmanStatusText = null;
       this.renderInspectorUi();
@@ -352,6 +414,17 @@ export class EditorInspectorController {
   }
 
   handleObjectPlaced(placed: PlacedObject | null): void {
+    if (placed?.instanceId && isNpcObjectId(placed.id)) {
+      this.focusedNpcInstanceId = placed.instanceId;
+      this.focusedPressurePlateInstanceId = null;
+      this.focusedContainerInstanceId = null;
+      this.focusedSwordsmanInstanceId = null;
+      this.pinInspector('npc', placed.instanceId);
+      this.npcStatusText = `${getObjectById(placed.id)?.name ?? 'NPC'} placed. Choose how it should behave.`;
+      this.renderInspectorUi();
+      return;
+    }
+
     if (placed?.instanceId && canPlacedObjectHaveSignText(placed)) {
       this.openSignTextEditor(placed);
       return;
@@ -360,6 +433,7 @@ export class EditorInspectorController {
     if (placed && canPlacedObjectUseObjectLink(placed)) {
       this.focusedContainerInstanceId = null;
       this.focusedSwordsmanInstanceId = null;
+      this.focusedNpcInstanceId = null;
       this.focusedPressurePlateInstanceId = placed.instanceId;
       this.pinInspector('pressure', placed.instanceId);
       this.beginPressurePlateConnection(placed.instanceId, true);
@@ -370,6 +444,7 @@ export class EditorInspectorController {
       this.focusedContainerInstanceId = placed.instanceId;
       this.focusedPressurePlateInstanceId = null;
       this.focusedSwordsmanInstanceId = null;
+      this.focusedNpcInstanceId = null;
       this.pinInspector('container', placed.instanceId);
       this.containerStatusText = `${this.getContainerName(placed.id)} placed. Select a ${this.getContainerAcceptedContentsLabel(placed.id)} and click it to fill the container.`;
       this.renderContainerContentsPanel();
@@ -380,6 +455,7 @@ export class EditorInspectorController {
       this.focusedSwordsmanInstanceId = placed.instanceId;
       this.focusedPressurePlateInstanceId = null;
       this.focusedContainerInstanceId = null;
+      this.focusedNpcInstanceId = null;
       this.pinInspector('swordsman', placed.instanceId);
       this.swordsmanStatusText = 'Sword Hunter placed. Choose what it should try to do.';
       this.renderInspectorUi();
@@ -403,6 +479,9 @@ export class EditorInspectorController {
     if (removed.instanceId === this.focusedSwordsmanInstanceId) {
       this.focusedSwordsmanInstanceId = null;
     }
+    if (removed.instanceId === this.focusedNpcInstanceId) {
+      this.focusedNpcInstanceId = null;
+    }
     if (this.pinnedInspector?.instanceId === removed.instanceId) {
       this.pinnedInspector = null;
     }
@@ -414,6 +493,9 @@ export class EditorInspectorController {
     }
     if (removed.id === SWORDSMAN_AI_OBJECT_ID) {
       this.swordsmanStatusText = 'Sword Hunter removed.';
+    }
+    if (isNpcObjectId(removed.id)) {
+      this.npcStatusText = `${getObjectById(removed.id)?.name ?? 'NPC'} removed.`;
     }
     this.renderPressurePlatePanel();
     this.renderContainerContentsPanel();
@@ -519,6 +601,82 @@ export class EditorInspectorController {
     }
   }
 
+  setFocusedNpcMode(mode: NpcMode): void {
+    const focused = this.getFocusedNpc();
+    if (!focused) {
+      return;
+    }
+    if (this.editRuntime.setNpcMode(focused.instanceId, mode)) {
+      this.focusedNpcInstanceId = focused.instanceId;
+      this.pinInspector('npc', focused.instanceId);
+      this.npcStatusText = `${getObjectById(focused.id)?.name ?? 'NPC'} mode set to ${NPC_MODE_LABELS[mode]}.`;
+      this.renderInspectorUi();
+    }
+  }
+
+  setFocusedNpcPushable(pushable: boolean): void {
+    const focused = this.getFocusedNpc();
+    if (focused && this.editRuntime.setNpcPushable(focused.instanceId, pushable)) {
+      this.focusedNpcInstanceId = focused.instanceId;
+      this.pinInspector('npc', focused.instanceId);
+      this.renderInspectorUi();
+    }
+  }
+
+  setFocusedNpcCanJumpFall(canJumpFall: boolean): void {
+    const focused = this.getFocusedNpc();
+    if (focused && this.editRuntime.setNpcCanJumpFall(focused.instanceId, canJumpFall)) {
+      this.focusedNpcInstanceId = focused.instanceId;
+      this.pinInspector('npc', focused.instanceId);
+      this.renderInspectorUi();
+    }
+  }
+
+  setFocusedNpcPlayerCollision(playerCollision: boolean): void {
+    const focused = this.getFocusedNpc();
+    if (focused && this.editRuntime.setNpcPlayerCollision(focused.instanceId, playerCollision)) {
+      this.focusedNpcInstanceId = focused.instanceId;
+      this.pinInspector('npc', focused.instanceId);
+      this.renderInspectorUi();
+    }
+  }
+
+  setFocusedNpcFriendlyFire(friendlyFire: boolean): void {
+    const focused = this.getFocusedNpc();
+    if (focused && this.editRuntime.setNpcFriendlyFire(focused.instanceId, friendlyFire)) {
+      this.focusedNpcInstanceId = focused.instanceId;
+      this.pinInspector('npc', focused.instanceId);
+      this.renderInspectorUi();
+    }
+  }
+
+  setFocusedNpcName(name: string): void {
+    const focused = this.getFocusedNpc();
+    if (focused && this.editRuntime.setNpcName(focused.instanceId, name)) {
+      this.focusedNpcInstanceId = focused.instanceId;
+      this.pinInspector('npc', focused.instanceId);
+      this.renderInspectorUi();
+    }
+  }
+
+  setFocusedNpcDialogue(text: string): void {
+    const focused = this.getFocusedNpc();
+    if (focused && this.editRuntime.setNpcDialogue(focused.instanceId, text)) {
+      this.focusedNpcInstanceId = focused.instanceId;
+      this.pinInspector('npc', focused.instanceId);
+      this.renderInspectorUi();
+    }
+  }
+
+  setFocusedNpcDefeatMode(defeatMode: SwordsmanDefeatMode): void {
+    const focused = this.getFocusedNpc();
+    if (focused && this.editRuntime.setNpcDefeatMode(focused.instanceId, defeatMode)) {
+      this.focusedNpcInstanceId = focused.instanceId;
+      this.pinInspector('npc', focused.instanceId);
+      this.renderInspectorUi();
+    }
+  }
+
   clearPinnedSelection(): void {
     this.clearPinnedInspector();
   }
@@ -583,6 +741,19 @@ export class EditorInspectorController {
       swordsmanObjectiveModeDisabled: true,
       swordsmanDefeatModeValue: DEFAULT_SWORDSMAN_DEFEAT_MODE,
       swordsmanDefeatModeDisabled: true,
+      npcVisible: false,
+      npcStatusText: '',
+      npcModeValue: DEFAULT_NPC_MODE,
+      npcModeDisabled: true,
+      npcPushableChecked: false,
+      npcPushableHidden: true,
+      npcJumpFallChecked: false,
+      npcJumpFallHidden: true,
+      npcPlayerCollisionChecked: true,
+      npcFriendlyFireChecked: true,
+      npcNameValue: '',
+      npcDialogueValue: '',
+      npcDefeatModeValue: DEFAULT_NPC_DEFEAT_MODE,
     };
   }
 
@@ -672,6 +843,32 @@ export class EditorInspectorController {
         swordsmanObjectiveModeDisabled: false,
         swordsmanDefeatModeValue: defeatMode,
         swordsmanDefeatModeDisabled: false,
+      });
+      return;
+    }
+
+    const focusedNpc = this.getFocusedNpc();
+    if (focusedNpc && editorState.paletteMode === 'objects' && !this.connectingPressurePlateInstanceId) {
+      const mode = getPlacedNpcMode(focusedNpc);
+      const objectName = getObjectById(focusedNpc.id)?.name ?? 'NPC';
+      this.renderInspector({
+        ...hiddenState,
+        visible: true,
+        npcVisible: true,
+        npcStatusText: this.npcStatusText ?? `${objectName} is set to ${NPC_MODE_LABELS[mode]}.`,
+        npcModeValue: mode,
+        npcModeDisabled: false,
+        npcPushableChecked: normalizeNpcPushable(focusedNpc.npcPushable, mode),
+        npcPushableHidden: mode !== 'idle',
+        npcJumpFallChecked: normalizeNpcCanJumpFall(focusedNpc.npcCanJumpFall, mode),
+        npcJumpFallHidden: mode === 'idle' || mode === 'follow',
+        npcPlayerCollisionChecked: normalizeNpcPlayerCollision(
+          focusedNpc.npcPlayerCollision,
+        ),
+        npcFriendlyFireChecked: normalizeNpcFriendlyFire(focusedNpc.npcFriendlyFire),
+        npcNameValue: normalizeNpcName(focusedNpc.npcName, objectName),
+        npcDialogueValue: getPlacedObjectSignText(focusedNpc) ?? '',
+        npcDefeatModeValue: normalizeNpcDefeatMode(focusedNpc.npcDefeatMode),
       });
       return;
     }
@@ -785,7 +982,7 @@ export class EditorInspectorController {
     return true;
   }
 
-  private pinInspector(kind: 'pressure' | 'container' | 'swordsman', instanceId: string): void {
+  private pinInspector(kind: 'pressure' | 'container' | 'swordsman' | 'npc', instanceId: string): void {
     this.pinnedInspector = { kind, instanceId };
   }
 
@@ -794,9 +991,11 @@ export class EditorInspectorController {
     this.focusedPressurePlateInstanceId = null;
     this.focusedContainerInstanceId = null;
     this.focusedSwordsmanInstanceId = null;
+    this.focusedNpcInstanceId = null;
     this.pressurePlateStatusText = null;
     this.containerStatusText = null;
     this.swordsmanStatusText = null;
+    this.npcStatusText = null;
     this.renderInspectorUi();
   }
 
@@ -836,6 +1035,16 @@ export class EditorInspectorController {
     }
 
     return null;
+  }
+
+  private getFocusedNpc(): PlacedObject | null {
+    const pinnedNpcId = this.pinnedInspector?.kind === 'npc'
+      ? this.pinnedInspector.instanceId
+      : null;
+    const focused = this.editRuntime.getPlacedObjectByInstanceId(
+      pinnedNpcId ?? this.focusedNpcInstanceId,
+    );
+    return focused && isNpcObjectId(focused.id) ? focused : null;
   }
 
   private getConnectingPressurePlate(): PlacedObject | null {

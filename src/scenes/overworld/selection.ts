@@ -57,6 +57,7 @@ export class OverworldSelectionController {
       this.host.setCurrentRoomCoordinates(nextCoordinates);
     }
 
+    setFocusedCoordinatesInUrl(nextCoordinates);
     setActiveCourseDraftSessionSelectedRoom(roomIdFromCoordinates(nextCoordinates));
     this.host.updateSelectedSummary();
     void this.host.refreshCourseComposerSelectedRoomState();

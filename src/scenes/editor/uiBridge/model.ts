@@ -2,13 +2,17 @@ import type { ToolName } from '../../../config';
 import type { CourseGoalType } from '../../../courses/model';
 import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../../../enemies/swordsmanObjectives';
 import type { RoomGoalType } from '../../../goals/roomGoals';
+import type { NpcQuestType } from '../../../goals/roomGoals';
 import type { RoomLightingMode } from '../../../lighting/model';
 import type { RoomWeatherMode } from '../../../weather/model';
+import type { NpcMode } from '../../../npcs/model';
 import type { EditorMarkerPlacementMode } from '../../../ui/setup/sceneBridge';
 
 export interface EditorGoalUiViewModel {
   goalTypeValue: string;
   goalTypeDisabled: boolean;
+  npcQuestTypeHidden: boolean;
+  npcQuestTypeValue: NpcQuestType;
   timeLimitHidden: boolean;
   timeLimitDisabled: boolean;
   timeLimitValue: string;
@@ -35,6 +39,10 @@ export interface EditorGoalUiViewModel {
   addCheckpointActive: boolean;
   placeFinishHidden: boolean;
   placeFinishActive: boolean;
+  linkNpcHidden: boolean;
+  linkNpcActive: boolean;
+  placeNpcDestinationHidden: boolean;
+  placeNpcDestinationActive: boolean;
 }
 
 export interface EditorCourseUiViewModel {
@@ -88,6 +96,19 @@ export interface EditorInspectorState {
   swordsmanObjectiveModeDisabled: boolean;
   swordsmanDefeatModeValue: SwordsmanDefeatMode;
   swordsmanDefeatModeDisabled: boolean;
+  npcVisible: boolean;
+  npcStatusText: string;
+  npcModeValue: NpcMode;
+  npcModeDisabled: boolean;
+  npcPushableChecked: boolean;
+  npcPushableHidden: boolean;
+  npcJumpFallChecked: boolean;
+  npcJumpFallHidden: boolean;
+  npcPlayerCollisionChecked: boolean;
+  npcFriendlyFireChecked: boolean;
+  npcNameValue: string;
+  npcDialogueValue: string;
+  npcDefeatModeValue: SwordsmanDefeatMode;
 }
 
 export interface EditorUiViewModel {
@@ -175,6 +196,7 @@ export interface EditorUiBridgeActions {
   onSetGoalTimeLimitSeconds: (seconds: number | null) => void;
   onSetGoalRequiredCount: (requiredCount: number) => void;
   onSetGoalSurvivalSeconds: (seconds: number) => void;
+  onSetNpcQuestType: (questType: NpcQuestType) => void;
   onSetGoalIntroText: (text: string | null) => void;
   onStartGoalMarkerPlacement: (mode: EditorMarkerPlacementMode) => void;
   onClearGoalMarkers: () => void;
@@ -190,4 +212,12 @@ export interface EditorUiBridgeActions {
   onClearContainerContents: () => void;
   onSetFocusedSwordsmanObjectiveMode: (objectiveMode: SwordsmanObjectiveMode) => void;
   onSetFocusedSwordsmanDefeatMode: (defeatMode: SwordsmanDefeatMode) => void;
+  onSetFocusedNpcMode: (mode: NpcMode) => void;
+  onSetFocusedNpcPushable: (pushable: boolean) => void;
+  onSetFocusedNpcCanJumpFall: (canJumpFall: boolean) => void;
+  onSetFocusedNpcPlayerCollision: (playerCollision: boolean) => void;
+  onSetFocusedNpcFriendlyFire: (friendlyFire: boolean) => void;
+  onSetFocusedNpcName: (name: string) => void;
+  onSetFocusedNpcDialogue: (text: string) => void;
+  onSetFocusedNpcDefeatMode: (defeatMode: SwordsmanDefeatMode) => void;
 }

@@ -552,6 +552,7 @@
           <button class="obj-cat-tab" data-category="mine">Mine</button>
           <button class="obj-cat-tab" data-category="collectible">Collect</button>
           <button class="obj-cat-tab" data-category="enemy">Enemy</button>
+          <button class="obj-cat-tab" data-category="npc">NPC</button>
           <button class="obj-cat-tab" data-category="hazard">Hazard</button>
           <button class="obj-cat-tab" data-category="decoration">Deco</button>
           <button class="obj-cat-tab" data-category="interactive">Utility</button>
@@ -716,7 +717,16 @@
                 <option value="defeat_all">Defeat All</option>
                 <option value="checkpoint_sprint">Checkpoint Sprint</option>
                 <option value="survival">Survival</option>
+                <option value="npc_quest">NPC Quest</option>
               </select>
+              <div id="goal-npc-quest-type-row" class="goal-control-row hidden">
+                <label class="goal-control-label" for="goal-npc-quest-type">Quest Type</label>
+                <select id="goal-npc-quest-type" class="goal-input">
+                  <option value="protect">Protect</option>
+                  <option value="escort">Escort</option>
+                  <option value="give">Give</option>
+                </select>
+              </div>
               <div id="goal-time-limit-row" class="goal-control-row hidden">
                 <label class="goal-control-label" for="goal-time-limit-seconds">Time Limit</label>
                 <div class="goal-inline-input">
@@ -732,7 +742,7 @@
                 </div>
               </div>
               <div id="goal-survival-row" class="goal-control-row hidden">
-                <label class="goal-control-label" for="goal-survival-seconds">Survive For</label>
+                <label class="goal-control-label" for="goal-survival-seconds">Duration</label>
                 <div class="goal-inline-input">
                   <input id="goal-survival-seconds" class="goal-input" type="number" min="1" step="1" />
                   <span class="goal-inline-suffix">sec</span>
@@ -755,6 +765,8 @@
                 <button id="btn-goal-place-exit" class="bar-btn bar-btn-small">Set Exit</button>
                 <button id="btn-goal-add-checkpoint" class="bar-btn bar-btn-small">Add Checkpoint</button>
                 <button id="btn-goal-place-finish" class="bar-btn bar-btn-small">Set Finish</button>
+                <button id="btn-goal-link-npc" class="bar-btn bar-btn-small">Link NPC</button>
+                <button id="btn-goal-place-npc-destination" class="bar-btn bar-btn-small">Set Destination</button>
                 <button id="btn-goal-clear-markers" class="bar-btn bar-btn-small">Clear Markers</button>
               </div>
               <div id="goal-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected goal marker.</div>
@@ -987,6 +999,52 @@
           <div class="goal-control-row">
             <label class="goal-control-label" for="swordsman-defeat-mode-select">Defeat</label>
             <select id="swordsman-defeat-mode-select" class="goal-input">
+              <option value="defeatable">Can Die</option>
+              <option value="invincible">Can't Die</option>
+              <option value="respawn">Respawns</option>
+            </select>
+          </div>
+        </div>
+        <div id="npc-objective-panel" class="pressure-plate-panel npc-objective-panel hidden">
+          <div class="section-label">NPC</div>
+          <div id="npc-objective-status" class="goal-context-note">Hover or click an NPC to edit it.</div>
+          <div class="goal-control-row">
+            <label class="goal-control-label" for="npc-mode-select">Mode</label>
+            <select id="npc-mode-select" class="goal-input">
+              <option value="idle">Idle</option>
+              <option value="wander">Wander</option>
+              <option value="patrol">Patrol</option>
+              <option value="follow">Follow</option>
+            </select>
+          </div>
+          <label id="npc-pushable-row" class="goal-control-row npc-checkbox-row">
+            <input id="npc-pushable-checkbox" type="checkbox" />
+            <span>Pushable</span>
+          </label>
+          <label id="npc-jump-fall-row" class="goal-control-row npc-checkbox-row">
+            <input id="npc-jump-fall-checkbox" type="checkbox" />
+            <span>Jump / Fall</span>
+          </label>
+          <label class="goal-control-row npc-checkbox-row">
+            <input id="npc-player-collision-checkbox" type="checkbox" />
+            <span>Player Collision</span>
+          </label>
+          <label class="goal-control-row npc-checkbox-row">
+            <input id="npc-friendly-fire-checkbox" type="checkbox" />
+            <span>Friendly Fire</span>
+          </label>
+          <div class="goal-control-row">
+            <label class="goal-control-label" for="npc-name-input">Name</label>
+            <input id="npc-name-input" class="goal-input" type="text" maxlength="32" placeholder="No name" />
+            <div class="goal-input-help">Delete the name to hide the label over this NPC.</div>
+          </div>
+          <div class="goal-control-row">
+            <label class="goal-control-label" for="npc-dialogue-input">Dialogue</label>
+            <textarea id="npc-dialogue-input" class="goal-input goal-textarea" rows="3" maxlength="140" placeholder="What should this NPC tell nearby players?"></textarea>
+          </div>
+          <div class="goal-control-row">
+            <label class="goal-control-label" for="npc-defeat-mode-select">Defeat</label>
+            <select id="npc-defeat-mode-select" class="goal-input">
               <option value="defeatable">Can Die</option>
               <option value="invincible">Can't Die</option>
               <option value="respawn">Respawns</option>

@@ -544,6 +544,10 @@ export class CourseEditorScene extends Phaser.Scene {
       onSetGoalTimeLimitSeconds: (seconds) => this.setGoalTimeLimitSeconds(seconds),
       onSetGoalRequiredCount: (requiredCount) => this.setGoalRequiredCount(requiredCount),
       onSetGoalSurvivalSeconds: (seconds) => this.setGoalSurvivalSeconds(seconds),
+      onSetNpcQuestType: (questType) => {
+        this.getSelectedSlice()?.runtime.setNpcQuestType(questType);
+        this.renderUi();
+      },
       onSetGoalIntroText: () => {},
       onStartGoalMarkerPlacement: (mode) => this.startGoalMarkerPlacement(mode),
       onClearGoalMarkers: () => this.clearGoalMarkers(),
@@ -559,6 +563,14 @@ export class CourseEditorScene extends Phaser.Scene {
       onClearContainerContents: () => this.objectInspectorController.clearFocusedContainerContents(),
       onSetFocusedSwordsmanObjectiveMode: () => {},
       onSetFocusedSwordsmanDefeatMode: () => {},
+      onSetFocusedNpcMode: () => {},
+      onSetFocusedNpcPushable: () => {},
+      onSetFocusedNpcCanJumpFall: () => {},
+      onSetFocusedNpcPlayerCollision: () => {},
+      onSetFocusedNpcFriendlyFire: () => {},
+      onSetFocusedNpcName: () => {},
+      onSetFocusedNpcDialogue: () => {},
+      onSetFocusedNpcDefeatMode: () => {},
     });
     this.selectionGraphics = this.add.graphics();
     this.selectionGraphics.setDepth(120);

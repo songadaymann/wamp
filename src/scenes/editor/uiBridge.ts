@@ -30,7 +30,8 @@ import {
   type CustomBackgroundFit,
 } from '../../backgrounds/model';
 import type { CourseGoalType } from '../../courses/model';
-import type { RoomGoalType } from '../../goals/roomGoals';
+import type { NpcQuestType, RoomGoalType } from '../../goals/roomGoals';
+import { NPC_MODES, type NpcMode } from '../../npcs/model';
 import {
   normalizeRoomLightingSliderValue,
   type RoomLightingMode,
@@ -615,6 +616,18 @@ export class EditorUiBridge {
         this.elements.goalTypeSelect?.removeEventListener('change', handleGoalTypeChange)
       );
     }
+    const handleNpcQuestTypeChange = () => {
+      const value = this.elements.npcQuestTypeSelect?.value as NpcQuestType | undefined;
+      if (value) {
+        this.actions.onSetNpcQuestType(value);
+      }
+    };
+    this.elements.npcQuestTypeSelect?.addEventListener('change', handleNpcQuestTypeChange);
+    if (this.elements.npcQuestTypeSelect) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.npcQuestTypeSelect?.removeEventListener('change', handleNpcQuestTypeChange)
+      );
+    }
     bindNumericInput(this.cleanupCallbacks, this.elements.timeLimitInput, (input) => {
       const seconds = Number.parseInt(input.value, 10);
       this.actions.onSetGoalTimeLimitSeconds(Number.isFinite(seconds) && seconds > 0 ? seconds : null);
@@ -644,6 +657,14 @@ export class EditorUiBridge {
     });
     bindButton(this.cleanupCallbacks, this.elements.placeFinishBtn, () => {
       this.actions.onStartGoalMarkerPlacement('finish');
+      this.requestPhoneEditorAutoCollapse();
+    });
+    bindButton(this.cleanupCallbacks, this.elements.linkNpcBtn, () => {
+      this.actions.onStartGoalMarkerPlacement('npc');
+      this.requestPhoneEditorAutoCollapse();
+    });
+    bindButton(this.cleanupCallbacks, this.elements.placeNpcDestinationBtn, () => {
+      this.actions.onStartGoalMarkerPlacement('npc_destination');
       this.requestPhoneEditorAutoCollapse();
     });
     bindButton(this.cleanupCallbacks, this.elements.clearGoalMarkersBtn, () => {
@@ -742,6 +763,100 @@ export class EditorUiBridge {
           'change',
           handleSwordsmanDefeatModeChange,
         )
+      );
+    }
+    const handleNpcModeChange = () => {
+      const value = this.elements.npcModeSelect?.value;
+      if ((NPC_MODES as readonly string[]).includes(value ?? '')) {
+        this.actions.onSetFocusedNpcMode(value as NpcMode);
+      }
+    };
+    this.elements.npcModeSelect?.addEventListener('change', handleNpcModeChange);
+    if (this.elements.npcModeSelect) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.npcModeSelect?.removeEventListener('change', handleNpcModeChange)
+      );
+    }
+    const handleNpcPushableChange = () => {
+      this.actions.onSetFocusedNpcPushable(Boolean(this.elements.npcPushableCheckbox?.checked));
+    };
+    this.elements.npcPushableCheckbox?.addEventListener('change', handleNpcPushableChange);
+    if (this.elements.npcPushableCheckbox) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.npcPushableCheckbox?.removeEventListener('change', handleNpcPushableChange)
+      );
+    }
+    const handleNpcJumpFallChange = () => {
+      this.actions.onSetFocusedNpcCanJumpFall(Boolean(this.elements.npcJumpFallCheckbox?.checked));
+    };
+    this.elements.npcJumpFallCheckbox?.addEventListener('change', handleNpcJumpFallChange);
+    if (this.elements.npcJumpFallCheckbox) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.npcJumpFallCheckbox?.removeEventListener('change', handleNpcJumpFallChange)
+      );
+    }
+    const handleNpcPlayerCollisionChange = () => {
+      this.actions.onSetFocusedNpcPlayerCollision(
+        Boolean(this.elements.npcPlayerCollisionCheckbox?.checked),
+      );
+    };
+    this.elements.npcPlayerCollisionCheckbox?.addEventListener(
+      'change',
+      handleNpcPlayerCollisionChange,
+    );
+    if (this.elements.npcPlayerCollisionCheckbox) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.npcPlayerCollisionCheckbox?.removeEventListener(
+          'change',
+          handleNpcPlayerCollisionChange,
+        )
+      );
+    }
+    const handleNpcFriendlyFireChange = () => {
+      this.actions.onSetFocusedNpcFriendlyFire(
+        Boolean(this.elements.npcFriendlyFireCheckbox?.checked),
+      );
+    };
+    this.elements.npcFriendlyFireCheckbox?.addEventListener(
+      'change',
+      handleNpcFriendlyFireChange,
+    );
+    if (this.elements.npcFriendlyFireCheckbox) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.npcFriendlyFireCheckbox?.removeEventListener(
+          'change',
+          handleNpcFriendlyFireChange,
+        )
+      );
+    }
+    const handleNpcNameChange = () => {
+      this.actions.onSetFocusedNpcName(this.elements.npcNameInput?.value ?? '');
+    };
+    this.elements.npcNameInput?.addEventListener('change', handleNpcNameChange);
+    if (this.elements.npcNameInput) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.npcNameInput?.removeEventListener('change', handleNpcNameChange)
+      );
+    }
+    const handleNpcDialogueChange = () => {
+      this.actions.onSetFocusedNpcDialogue(this.elements.npcDialogueInput?.value ?? '');
+    };
+    this.elements.npcDialogueInput?.addEventListener('change', handleNpcDialogueChange);
+    if (this.elements.npcDialogueInput) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.npcDialogueInput?.removeEventListener('change', handleNpcDialogueChange)
+      );
+    }
+    const handleNpcDefeatModeChange = () => {
+      const value = this.elements.npcDefeatModeSelect?.value;
+      if (value === 'defeatable' || value === 'invincible' || value === 'respawn') {
+        this.actions.onSetFocusedNpcDefeatMode(value);
+      }
+    };
+    this.elements.npcDefeatModeSelect?.addEventListener('change', handleNpcDefeatModeChange);
+    if (this.elements.npcDefeatModeSelect) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.npcDefeatModeSelect?.removeEventListener('change', handleNpcDefeatModeChange)
       );
     }
 

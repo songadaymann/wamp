@@ -8,6 +8,16 @@ import {
   type SwordsmanObjectiveMode,
 } from '../../../enemies/swordsmanObjectives';
 import type { SwordsmanTraversalPlannerMode } from '../../../enemies/swordsmanRobustPlanner';
+import {
+  DEFAULT_NPC_MODE,
+  normalizeNpcCanJumpFall,
+  normalizeNpcDefeatMode,
+  normalizeNpcFriendlyFire,
+  normalizeNpcMode,
+  normalizeNpcPlayerCollision,
+  normalizeNpcPushable,
+  type NpcMode,
+} from '../../../npcs/model';
 import type { LoadedRoomObjectRuntimeState } from '../liveObjects';
 
 export function getInitialDirectionX(
@@ -31,6 +41,12 @@ export function createLiveObjectRuntimeState(options: {
   getCurrentTime: () => number;
   objectiveMode: SwordsmanObjectiveMode | null;
   defeatMode: SwordsmanDefeatMode | null;
+  npcMode: NpcMode | null;
+  npcPushable: boolean | null;
+  npcCanJumpFall: boolean | null;
+  npcPlayerCollision: boolean | null;
+  npcFriendlyFire: boolean | null;
+  npcDefeatMode: SwordsmanDefeatMode | null;
   swordsmanTraversalPlannerMode: SwordsmanTraversalPlannerMode;
 }): LoadedRoomObjectRuntimeState {
   const {
@@ -41,9 +57,19 @@ export function createLiveObjectRuntimeState(options: {
     getCurrentTime,
     objectiveMode,
     defeatMode,
+    npcMode,
+    npcPushable,
+    npcCanJumpFall,
+    npcPlayerCollision,
+    npcFriendlyFire,
+    npcDefeatMode,
     swordsmanTraversalPlannerMode,
   } = options;
   const isSwordsman = config.id === SWORDSMAN_AI_OBJECT_ID;
+  const isNpc = config.category === 'npc';
+  const normalizedNpcMode = isNpc
+    ? normalizeNpcMode(npcMode) ?? DEFAULT_NPC_MODE
+    : null;
 
   return {
     baseX: sprite.x,
@@ -53,6 +79,11 @@ export function createLiveObjectRuntimeState(options: {
     gravityDirection: 'down',
     gravityRoomId: null,
     inWater: false,
+    specialTileWindX: 0,
+    specialTileOnIce: false,
+    specialTileOnSticky: false,
+    specialTileOnBounce: false,
+    specialTileOnDamage: false,
     initialDirectionX,
     directionX: initialDirectionX,
     movingPlatformTargetIndex: 1,
@@ -113,6 +144,24 @@ export function createLiveObjectRuntimeState(options: {
     aiCollectRouteScore: null,
     aiCollectRouteValue: 0,
     aiCollectRoutePenalty: 0,
+    npcMode: normalizedNpcMode,
+    npcPushable:
+      isNpc && normalizedNpcMode
+        ? normalizeNpcPushable(npcPushable, normalizedNpcMode)
+        : false,
+    npcCanJumpFall:
+      isNpc && normalizedNpcMode
+        ? normalizeNpcCanJumpFall(npcCanJumpFall, normalizedNpcMode)
+        : false,
+    npcPlayerCollision: isNpc
+      ? normalizeNpcPlayerCollision(npcPlayerCollision)
+      : false,
+    npcFriendlyFire: isNpc ? normalizeNpcFriendlyFire(npcFriendlyFire) : false,
+    npcDefeatMode: isNpc ? normalizeNpcDefeatMode(npcDefeatMode) : null,
+    npcVictorious: false,
+    npcWalking: normalizedNpcMode === 'patrol' || normalizedNpcMode === 'follow',
+    npcBounceCooldownUntil: 0,
+    npcQuicksandUntil: 0,
     pressureActive: false,
     triggerLatched: false,
   };
