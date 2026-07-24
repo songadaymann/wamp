@@ -484,14 +484,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.resetDynamicObjectIfOutOfBounds(room, liveObject, body),
       applyDirectionalFacing: (sprite, config, directionX) =>
         this.applyDirectionalFacing(sprite, config, directionX),
-      hasSupportAhead: (room, body, directionX, leadPx) =>
-        this.hasGroundEnemySupportOrSpecialTileAhead(
-          room,
-          body,
-          directionX,
-          'down',
-          leadPx,
-        ),
       hasSolidTerrainAtWorldPoint: (room, worldX, worldY) =>
         this.hasSolidTerrainAtWorldPoint(room, worldX, worldY),
       playBounceFx: (x, y, roomCoordinates) =>
