@@ -99,6 +99,19 @@ import {
 } from '../../music/model';
 import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../../signs/model';
+import {
+  DEFAULT_NPC_DEFEAT_MODE,
+  DEFAULT_NPC_FRIENDLY_FIRE,
+  DEFAULT_NPC_MODE,
+  DEFAULT_NPC_PLAYER_COLLISION,
+  getPlacedNpcName,
+  isNpcObjectId,
+  normalizeNpcCanJumpFall,
+  normalizeNpcDefeatMode,
+  normalizeNpcMode,
+  normalizeNpcName,
+  type NpcMode,
+} from '../../npcs/model';
 
 interface TileAction {
   layer: LayerName;
@@ -135,7 +148,7 @@ type UndoAction =
   | { kind: 'goal'; action: GoalAction }
   | { kind: 'music'; action: MusicAction };
 
-export type GoalPlacementMode = 'exit' | 'checkpoint' | 'finish' | null;
+export type GoalPlacementMode = 'exit' | 'checkpoint' | 'finish' | 'npc' | 'npc_destination' | null;
 
 interface EditorRoomSnapshotMetadata {
   roomId: string;
@@ -1002,6 +1015,19 @@ export class EditorEditRuntime {
         editorState.selectedObjectId === SWORDSMAN_AI_OBJECT_ID
           ? DEFAULT_SWORDSMAN_DEFEAT_MODE
           : null,
+      npcMode: isNpcObjectId(editorState.selectedObjectId) ? DEFAULT_NPC_MODE : null,
+      npcPushable: isNpcObjectId(editorState.selectedObjectId) ? false : null,
+      npcCanJumpFall: isNpcObjectId(editorState.selectedObjectId) ? false : null,
+      npcPlayerCollision: isNpcObjectId(editorState.selectedObjectId)
+        ? DEFAULT_NPC_PLAYER_COLLISION
+        : null,
+      npcFriendlyFire: isNpcObjectId(editorState.selectedObjectId)
+        ? DEFAULT_NPC_FRIENDLY_FIRE
+        : null,
+      npcName: isNpcObjectId(editorState.selectedObjectId) ? objectConfig.name : null,
+      npcDefeatMode: isNpcObjectId(editorState.selectedObjectId)
+        ? DEFAULT_NPC_DEFEAT_MODE
+        : null,
     };
 
     const previous = this.clonePlacedObjects();
@@ -1408,6 +1434,94 @@ export class EditorEditRuntime {
     return true;
   }
 
+  setNpcMode(instanceId: string, mode: NpcMode): boolean {
+    const normalizedMode = normalizeNpcMode(mode) ?? DEFAULT_NPC_MODE;
+    return this.updateNpc(instanceId, (placed) => ({
+      ...placed,
+      npcMode: normalizedMode,
+      npcPushable: normalizedMode === 'idle'
+        ? ((normalizeNpcMode(placed.npcMode) ?? DEFAULT_NPC_MODE) === 'idle'
+            ? Boolean(placed.npcPushable)
+            : false)
+        : true,
+      npcCanJumpFall: normalizeNpcCanJumpFall(placed.npcCanJumpFall, normalizedMode),
+    }));
+  }
+
+  setNpcPushable(instanceId: string, pushable: boolean): boolean {
+    return this.updateNpc(instanceId, (placed) => ({
+      ...placed,
+      npcPushable: Boolean(pushable),
+    }));
+  }
+
+  setNpcCanJumpFall(instanceId: string, canJumpFall: boolean): boolean {
+    return this.updateNpc(instanceId, (placed) => ({
+      ...placed,
+      npcCanJumpFall: Boolean(canJumpFall),
+    }));
+  }
+
+  setNpcPlayerCollision(instanceId: string, playerCollision: boolean): boolean {
+    return this.updateNpc(instanceId, (placed) => ({
+      ...placed,
+      npcPlayerCollision: Boolean(playerCollision),
+    }));
+  }
+
+  setNpcFriendlyFire(instanceId: string, friendlyFire: boolean): boolean {
+    return this.updateNpc(instanceId, (placed) => ({
+      ...placed,
+      npcFriendlyFire: Boolean(friendlyFire),
+    }));
+  }
+
+  setNpcName(instanceId: string, name: string): boolean {
+    return this.updateNpc(instanceId, (placed) => ({
+      ...placed,
+      npcName: normalizeNpcName(name),
+    }));
+  }
+
+  setNpcDialogue(instanceId: string, text: string): boolean {
+    return this.setSignText(instanceId, text);
+  }
+
+  setNpcDefeatMode(instanceId: string, defeatMode: SwordsmanDefeatMode): boolean {
+    return this.updateNpc(instanceId, (placed) => ({
+      ...placed,
+      npcDefeatMode: normalizeNpcDefeatMode(defeatMode),
+    }));
+  }
+
+  private updateNpc(
+    instanceId: string,
+    update: (placed: PlacedObject) => PlacedObject,
+  ): boolean {
+    const placedObjects = this.host.getPlacedObjects();
+    const npcIndex = placedObjects.findIndex((placed) => placed.instanceId === instanceId);
+    if (npcIndex < 0 || !isNpcObjectId(placedObjects[npcIndex]?.id ?? '')) {
+      return false;
+    }
+
+    const previous = this.clonePlacedObjects();
+    const nextNpc = update(previous[npcIndex]);
+    if (JSON.stringify(previous[npcIndex]) === JSON.stringify(nextNpc)) {
+      return true;
+    }
+
+    const next = previous.map((placed, index) => index === npcIndex ? nextNpc : placed);
+    this.host.setPlacedObjects(next);
+    this.undoStack.push({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
+    });
+    this.redoStack = [];
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
+    return true;
+  }
+
   setPressurePlateTarget(
     triggerInstanceId: string,
     targetInstanceId: string | null,
@@ -1675,12 +1789,24 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
-    if (!this.roomGoal || this.roomGoal.type !== 'collect_target') {
+    if (
+      !this.roomGoal ||
+      (
+        this.roomGoal.type !== 'collect_target' &&
+        !(this.roomGoal.type === 'npc_quest' && this.roomGoal.questType === 'give')
+      )
+    ) {
       return;
     }
 
     const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (!nextGoal || nextGoal.type !== 'collect_target') {
+    if (
+      !nextGoal ||
+      (
+        nextGoal.type !== 'collect_target' &&
+        !(nextGoal.type === 'npc_quest' && nextGoal.questType === 'give')
+      )
+    ) {
       return;
     }
 
@@ -1692,16 +1818,41 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
-    if (!this.roomGoal || this.roomGoal.type !== 'survival') {
+    if (
+      !this.roomGoal ||
+      (
+        this.roomGoal.type !== 'survival' &&
+        !(this.roomGoal.type === 'npc_quest' && this.roomGoal.questType === 'protect')
+      )
+    ) {
       return;
     }
 
     const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (!nextGoal || nextGoal.type !== 'survival') {
+    if (
+      !nextGoal ||
+      (
+        nextGoal.type !== 'survival' &&
+        !(nextGoal.type === 'npc_quest' && nextGoal.questType === 'protect')
+      )
+    ) {
       return;
     }
 
     nextGoal.durationMs = Math.max(1, Math.round(seconds)) * 1000;
+    this.updateRoomGoal(nextGoal);
+  }
+
+  setNpcQuestType(questType: 'protect' | 'escort' | 'give'): void {
+    if (!this.guardEditable() || this.roomGoal?.type !== 'npc_quest') {
+      return;
+    }
+    const nextGoal = cloneRoomGoal(this.roomGoal);
+    if (!nextGoal || nextGoal.type !== 'npc_quest') {
+      return;
+    }
+    nextGoal.questType = questType;
+    this.goalPlacementMode = null;
     this.updateRoomGoal(nextGoal);
   }
 
@@ -1755,6 +1906,9 @@ export class EditorEditRuntime {
     } else if (nextGoal.type === 'checkpoint_sprint') {
       nextGoal.checkpoints = [];
       nextGoal.finish = null;
+    } else if (nextGoal.type === 'npc_quest') {
+      nextGoal.npcInstanceId = null;
+      nextGoal.destination = null;
     }
 
     this.goalPlacementMode = null;
@@ -1796,6 +1950,34 @@ export class EditorEditRuntime {
       return;
     }
 
+    if (nextGoal.type === 'npc_quest') {
+      if (this.goalPlacementMode === 'npc') {
+        const origin = this.getRoomOrigin();
+        const worldX = origin.x + tileX * TILE_SIZE + TILE_SIZE / 2;
+        const worldY = origin.y + tileY * TILE_SIZE + TILE_SIZE / 2;
+        const linkedNpc = [...this.host.getPlacedObjects()]
+          .reverse()
+          .find((placed) => {
+            const config = getEditorObjectConfigById(placed.id);
+            return config?.category === 'npc' && this.getPlacedObjectBounds(placed).contains(worldX, worldY);
+          });
+        if (linkedNpc) {
+          nextGoal.npcInstanceId = linkedNpc.instanceId;
+          this.goalPlacementMode = null;
+          this.updateRoomGoal(nextGoal);
+        } else {
+          this.host.updatePersistenceStatus('Click an NPC to link it to this goal.');
+        }
+        return;
+      }
+      if (this.goalPlacementMode === 'npc_destination') {
+        nextGoal.destination = point;
+        this.goalPlacementMode = null;
+        this.updateRoomGoal(nextGoal);
+      }
+      return;
+    }
+
     if (nextGoal.type !== 'checkpoint_sprint') {
       return;
     }
@@ -1827,6 +2009,21 @@ export class EditorEditRuntime {
         const nextGoal = cloneRoomGoal(this.roomGoal);
         if (nextGoal && nextGoal.type === 'reach_exit') {
           nextGoal.exit = null;
+          this.updateRoomGoal(nextGoal);
+          return true;
+        }
+      }
+    }
+
+    if (this.roomGoal.type === 'npc_quest' && this.roomGoal.destination) {
+      const distance = Math.hypot(
+        this.roomGoal.destination.x - worldX,
+        this.roomGoal.destination.y - worldY,
+      );
+      if (distance < 16) {
+        const nextGoal = cloneRoomGoal(this.roomGoal);
+        if (nextGoal && nextGoal.type === 'npc_quest') {
+          nextGoal.destination = null;
           this.updateRoomGoal(nextGoal);
           return true;
         }
@@ -1874,7 +2071,11 @@ export class EditorEditRuntime {
   }
 
   goalUsesMarkers(goal: RoomGoal | null): boolean {
-    return goal?.type === 'reach_exit' || goal?.type === 'checkpoint_sprint';
+    return (
+      goal?.type === 'reach_exit' ||
+      goal?.type === 'checkpoint_sprint' ||
+      goal?.type === 'npc_quest'
+    );
   }
 
   getGoalSummaryText(): string {
@@ -1904,6 +2105,26 @@ export class EditorEditRuntime {
         return `Hit ${this.roomGoal.checkpoints.length} checkpoint${this.roomGoal.checkpoints.length === 1 ? '' : 's'} then reach the finish marker.`;
       case 'survival':
         return `Stay alive for ${Math.round(this.roomGoal.durationMs / 1000)} seconds.`;
+      case 'npc_quest': {
+        const goal = this.roomGoal;
+        const linkedNpc = goal.npcInstanceId
+          ? this.host.getPlacedObjects().find(
+              (placed) => placed.instanceId === goal.npcInstanceId,
+            )
+          : this.host.getPlacedObjects().find(
+              (placed) => getEditorObjectConfigById(placed.id)?.category === 'npc',
+            );
+        const npcLabel = linkedNpc
+          ? getPlacedNpcName(linkedNpc, getEditorObjectConfigById(linkedNpc.id)?.name ?? 'NPC') || 'unnamed NPC'
+          : 'no NPC';
+        if (goal.questType === 'protect') {
+          return `Protect ${npcLabel} for ${Math.round(goal.durationMs / 1000)} seconds.`;
+        }
+        if (goal.questType === 'escort') {
+          return `Escort ${npcLabel} to ${goal.destination ? 'the destination' : 'a destination you still need to place'}.`;
+        }
+        return `Collect ${goal.requiredCount} item${goal.requiredCount === 1 ? '' : 's'}, then return to ${npcLabel}.`;
+      }
     }
   }
 
@@ -1911,6 +2132,9 @@ export class EditorEditRuntime {
     return getRoomGoalPublishValidationError(this.roomGoal, {
       collectiblesPlaced: this.countPlacedObjectsByCategory('collectible'),
       collectModeEnemyCount: this.countCollectModeSwordsmen(),
+      npcInstanceIds: this.host.getPlacedObjects()
+        .filter((placed) => getEditorObjectConfigById(placed.id)?.category === 'npc')
+        .map((placed) => placed.instanceId),
     });
   }
 
@@ -2262,6 +2486,15 @@ export class EditorEditRuntime {
               }]
             : []),
         ];
+      case 'npc_quest':
+        return goal.destination
+          ? [{
+              point: goal.destination,
+              label: 'NPC',
+              variant: 'finish-pending' as GoalMarkerFlagVariant,
+              textColor: '#ffefef',
+            }]
+          : [];
       default:
         return [];
     }

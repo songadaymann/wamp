@@ -42,6 +42,17 @@ import {
   normalizeSwordsmanDefeatMode,
   normalizeSwordsmanObjectiveMode,
 } from '../enemies/swordsmanObjectives';
+import {
+  DEFAULT_NPC_MODE,
+  getPlacedNpcDefeatMode,
+  isNpcObjectId,
+  normalizeNpcCanJumpFall,
+  normalizeNpcFriendlyFire,
+  normalizeNpcMode,
+  normalizeNpcName,
+  normalizeNpcPlayerCollision,
+  normalizeNpcPushable,
+} from '../npcs/model';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../signs/model';
 import {
   normalizeCustomSpriteDefinitions,
@@ -474,6 +485,33 @@ function normalizePlacedObject(
       placed.id === SWORDSMAN_AI_OBJECT_ID
         ? normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode)
         : null,
+    npcMode: isNpcObjectId(placed.id)
+      ? normalizeNpcMode(placed.npcMode) ?? DEFAULT_NPC_MODE
+      : null,
+    npcPushable: isNpcObjectId(placed.id)
+      ? normalizeNpcPushable(
+          placed.npcPushable,
+          normalizeNpcMode(placed.npcMode) ?? DEFAULT_NPC_MODE,
+        )
+      : null,
+    npcCanJumpFall: isNpcObjectId(placed.id)
+      ? normalizeNpcCanJumpFall(
+          placed.npcCanJumpFall,
+          normalizeNpcMode(placed.npcMode) ?? DEFAULT_NPC_MODE,
+        )
+      : null,
+    npcPlayerCollision: isNpcObjectId(placed.id)
+      ? normalizeNpcPlayerCollision(placed.npcPlayerCollision)
+      : null,
+    npcFriendlyFire: isNpcObjectId(placed.id)
+      ? normalizeNpcFriendlyFire(placed.npcFriendlyFire)
+      : null,
+    npcName: isNpcObjectId(placed.id)
+      ? normalizeNpcName(placed.npcName, getObjectById(placed.id)?.name ?? '')
+      : null,
+    npcDefeatMode: isNpcObjectId(placed.id)
+      ? getPlacedNpcDefeatMode({ id: placed.id, npcDefeatMode: placed.npcDefeatMode })
+      : null,
   };
 
   if (
@@ -548,6 +586,25 @@ function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
         placed.id === SWORDSMAN_AI_OBJECT_ID
           ? normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode)
           : null,
+      npcMode: isNpcObjectId(placed.id)
+        ? normalizeNpcMode(placed.npcMode) ?? DEFAULT_NPC_MODE
+        : null,
+      npcPushable: isNpcObjectId(placed.id)
+        ? normalizeNpcPushable(placed.npcPushable, normalizeNpcMode(placed.npcMode) ?? DEFAULT_NPC_MODE)
+        : null,
+      npcCanJumpFall: isNpcObjectId(placed.id)
+        ? normalizeNpcCanJumpFall(placed.npcCanJumpFall, normalizeNpcMode(placed.npcMode) ?? DEFAULT_NPC_MODE)
+        : null,
+      npcPlayerCollision: isNpcObjectId(placed.id)
+        ? normalizeNpcPlayerCollision(placed.npcPlayerCollision)
+        : null,
+      npcFriendlyFire: isNpcObjectId(placed.id)
+        ? normalizeNpcFriendlyFire(placed.npcFriendlyFire)
+        : null,
+      npcName: isNpcObjectId(placed.id)
+        ? normalizeNpcName(placed.npcName, getObjectById(placed.id)?.name ?? '')
+        : null,
+      npcDefeatMode: isNpcObjectId(placed.id) ? getPlacedNpcDefeatMode(placed) : null,
     };
   });
 }
@@ -823,6 +880,9 @@ export function getRoomPublishValidationError(
         placed.id === SWORDSMAN_AI_OBJECT_ID &&
         normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode) === 'collect',
     ).length,
+    npcInstanceIds: room.placedObjects
+      .filter((placed) => getObjectById(placed.id)?.category === 'npc')
+      .map((placed) => placed.instanceId),
   });
 }
 

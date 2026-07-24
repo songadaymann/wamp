@@ -40,6 +40,7 @@ export interface SpecialTilePlayerEnvironment {
   onIce: boolean;
   onSticky: boolean;
   onBounce: boolean;
+  onDamage: boolean;
 }
 
 const DEFAULT_PLAYER_ENVIRONMENT: SpecialTilePlayerEnvironment = {
@@ -50,6 +51,7 @@ const DEFAULT_PLAYER_ENVIRONMENT: SpecialTilePlayerEnvironment = {
   onIce: false,
   onSticky: false,
   onBounce: false,
+  onDamage: false,
 };
 
 const BOUNCE_TILE_VELOCITY = -392;
@@ -205,6 +207,17 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
 
   getPlayerEnvironment(): SpecialTilePlayerEnvironment {
     return { ...this.playerEnvironment };
+  }
+
+  getEnvironmentForBody(
+    body: Phaser.Physics.Arcade.Body,
+    currentGravityDirection: PlayerGravityDirection = 'down',
+  ): SpecialTilePlayerEnvironment {
+    if (this.host.getMode() !== 'play') {
+      return { ...DEFAULT_PLAYER_ENVIRONMENT };
+    }
+
+    return this.scanBodyEnvironment(body, currentGravityDirection);
   }
 
   getConveyorDirectionForBody(
@@ -385,44 +398,58 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
       this.latchedGravityDirection = 'down';
     }
 
+    const environment = this.scanBodyEnvironment(
+      playerBody,
+      this.latchedGravityDirection,
+    );
+    this.latchedGravityDirection = environment.gravityDirection;
+    this.latchedGravityRoomId = currentGravityRoomId;
+    return environment;
+  }
+
+  private scanBodyEnvironment(
+    body: Phaser.Physics.Arcade.Body,
+    currentGravityDirection: PlayerGravityDirection,
+  ): SpecialTilePlayerEnvironment {
     const environment: SpecialTilePlayerEnvironment = {
       ...DEFAULT_PLAYER_ENVIRONMENT,
-      gravityDirection: this.latchedGravityDirection,
+      gravityDirection: currentGravityDirection,
     };
-
-    const overlaps = this.findSpecialTilesOverlappingBody(playerBody);
-    this.applyGravityMatches(overlaps, currentGravityRoomId, environment);
+    const overlaps = this.findSpecialTilesOverlappingBody(body);
+    environment.gravityDirection =
+      this.getGravityDirectionFromMatches(overlaps) ?? environment.gravityDirection;
     for (const match of overlaps) {
-      if (GRAVITY_DIRECTION_BY_TILE_KIND[match.kind]) {
-        continue;
-      }
-
       switch (match.kind) {
         case 'water':
           environment.inWater = true;
           break;
-        default:
-          break;
-      }
-    }
-
-    const windMatches = this.findSpecialTilesNearBody(playerBody, WIND_ZONE_SCAN_PADDING_PX);
-    for (const match of windMatches) {
-      switch (match.kind) {
-        case 'windLeft':
-          environment.windX = -1;
-          break;
-        case 'windRight':
-          environment.windX = 1;
+        case 'damage':
+          environment.onDamage = true;
           break;
         default:
           break;
       }
     }
 
-    let surfaceMatches = this.findSpecialTilesAtGravityContact(playerBody, environment.gravityDirection);
-    if (this.applyGravityMatches(surfaceMatches, currentGravityRoomId, environment)) {
-      surfaceMatches = this.findSpecialTilesAtGravityContact(playerBody, environment.gravityDirection);
+    for (const match of this.findSpecialTilesNearBody(body, WIND_ZONE_SCAN_PADDING_PX)) {
+      if (match.kind === 'windLeft') {
+        environment.windX = -1;
+      } else if (match.kind === 'windRight') {
+        environment.windX = 1;
+      }
+    }
+
+    let surfaceMatches = this.findSpecialTilesAtGravityContact(
+      body,
+      environment.gravityDirection,
+    );
+    const contactGravityDirection = this.getGravityDirectionFromMatches(surfaceMatches);
+    if (contactGravityDirection && contactGravityDirection !== environment.gravityDirection) {
+      environment.gravityDirection = contactGravityDirection;
+      surfaceMatches = this.findSpecialTilesAtGravityContact(
+        body,
+        environment.gravityDirection,
+      );
     }
     for (const match of surfaceMatches) {
       switch (match.kind) {
@@ -441,29 +468,15 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
         case 'bounce':
           environment.onBounce = true;
           break;
+        case 'damage':
+          environment.onDamage = true;
+          break;
         default:
           break;
       }
     }
 
     return environment;
-  }
-
-  private applyGravityMatches(
-    matches: Array<SpecialTileMatch<TLiveObject, TEdgeWall>>,
-    currentGravityRoomId: string,
-    environment: SpecialTilePlayerEnvironment,
-  ): boolean {
-    const gravityDirection = this.getGravityDirectionFromMatches(matches);
-    if (!gravityDirection) {
-      return false;
-    }
-
-    const changed = environment.gravityDirection !== gravityDirection;
-    this.latchedGravityDirection = gravityDirection;
-    this.latchedGravityRoomId = currentGravityRoomId;
-    environment.gravityDirection = gravityDirection;
-    return changed;
   }
 
   private getGravityDirectionFromMatches(
@@ -493,9 +506,8 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
       return;
     }
 
-    const overlaps = this.findSpecialTilesOverlappingBody(playerBody);
     if (
-      overlaps.some((match) => match.kind === 'damage') &&
+      this.playerEnvironment.onDamage &&
       this.host.getCurrentTime() >= this.damageCooldownUntil
     ) {
       this.damageCooldownUntil = this.host.getCurrentTime() + DAMAGE_TILE_COOLDOWN_MS;

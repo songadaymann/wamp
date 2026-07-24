@@ -31,6 +31,17 @@ interface OverworldObjectiveControllerHost {
   toWorldGoalPoint(roomCoordinates: RoomCoordinates, point: GoalMarkerPoint): GoalMarkerPoint;
   toWorldCoursePoint(point: CourseMarkerPoint): GoalMarkerPoint;
   resetChallengeStateForCurrentRun(): void;
+  getRoomNpcState(
+    roomId: string,
+    requestedInstanceId: string | null,
+  ): {
+    instanceId: string | null;
+    name: string;
+    alive: boolean;
+    x: number;
+    y: number;
+  } | null;
+  setRoomNpcsVictorious(roomId: string, victorious: boolean): void;
   showTransientStatus(message: string): void;
   redrawGoalMarkers(): void;
   playGoalFx(
@@ -60,13 +71,26 @@ export class OverworldObjectiveController {
     room: RoomSnapshot | null,
     entryContext: 'transition' | 'spawn' | 'respawn' = 'transition',
   ): void {
-    this.applyGoalRunMutation(this.host.goalRunController.syncRunForRoom(room, entryContext));
+    const result = this.host.goalRunController.syncRunForRoom(room, entryContext);
+    this.applyGoalRunMutation(result);
+    if (room?.id && !result.changed) {
+      const currentRun = this.host.goalRunController.getCurrentRun();
+      this.host.setRoomNpcsVictorious(
+        room.id,
+        currentRun?.roomId === room.id && currentRun.result === 'completed',
+      );
+    } else if (room?.id && !this.host.goalRunController.getCurrentRun()) {
+      this.host.setRoomNpcsVictorious(room.id, false);
+    }
   }
 
   restartGoalRunForRoom(
     room: RoomSnapshot | null,
     entryContext: 'transition' | 'spawn' | 'respawn' = 'spawn',
   ): void {
+    if (room?.id) {
+      this.host.setRoomNpcsVictorious(room.id, false);
+    }
     this.applyGoalRunMutation(this.host.goalRunController.restartRunForRoom(room, entryContext));
   }
 
@@ -128,6 +152,9 @@ export class OverworldObjectiveController {
       case 'checkpoint_sprint':
         this.updateCheckpointSprintRun(runState);
         break;
+      case 'npc_quest':
+        this.updateNpcQuestRun(runState);
+        break;
       default:
         break;
     }
@@ -173,6 +200,76 @@ export class OverworldObjectiveController {
 
   handleEnemyCollectibleCollected(roomId: string): void {
     this.applyGoalRunMutation(this.host.goalRunController.recordEnemyCollectibleCollected(roomId));
+  }
+
+  handleNpcDefeated(
+    roomId: string,
+    instanceId: string | null,
+    npcName: string,
+  ): boolean {
+    const result = this.host.goalRunController.recordNpcDefeated(
+      roomId,
+      instanceId,
+      npcName,
+    );
+    this.applyGoalRunMutation(result);
+    return result.changed;
+  }
+
+  private updateNpcQuestRun(runState: GoalRunState): void {
+    if (runState.goal.type !== 'npc_quest') {
+      return;
+    }
+    const npcState = this.host.getRoomNpcState(
+      runState.roomId,
+      runState.goal.npcInstanceId ?? runState.npcTargetInstanceId,
+    );
+    if (!npcState) {
+      return;
+    }
+    this.host.goalRunController.resolveNpcTarget(npcState.instanceId);
+
+    if (runState.goal.questType === 'protect') {
+      return;
+    }
+    if (runState.goal.questType === 'escort' && runState.goal.destination) {
+      const destination = this.host.toWorldGoalPoint(
+        runState.roomCoordinates,
+        runState.goal.destination,
+      );
+      if (
+        Phaser.Math.Distance.Between(
+          npcState.x,
+          npcState.y,
+          destination.x,
+          destination.y,
+        ) <= this.options.goalTouchRadius
+      ) {
+        this.applyGoalRunMutation(
+          this.host.goalRunController.recordNpcReachedDestination(runState.roomId),
+        );
+      }
+      return;
+    }
+    if (
+      runState.goal.questType === 'give' &&
+      runState.collectiblesCollected >= runState.goal.requiredCount
+    ) {
+      const playerBody = this.host.getPlayerBody();
+      if (
+        playerBody &&
+        Phaser.Math.Distance.Between(
+          playerBody.center.x,
+          playerBody.center.y,
+          npcState.x,
+          npcState.y,
+        ) <= 52
+      ) {
+        this.applyGoalRunMutation(
+          this.host.goalRunController.recordGiveReturned(runState.roomId),
+        );
+      }
+    }
   }
 
   private updateCheckpointSprintRun(runState: GoalRunState): void {
@@ -323,6 +420,14 @@ export class OverworldObjectiveController {
           y: origin.y,
           checkpointIndex: null,
         });
+      }
+      if (runState) {
+        this.host.setRoomNpcsVictorious(runState.roomId, true);
+      }
+    } else if (result.event === 'start' || result.event === 'fail') {
+      const runState = this.host.goalRunController.getCurrentRun();
+      if (runState) {
+        this.host.setRoomNpcsVictorious(runState.roomId, false);
       }
     }
 

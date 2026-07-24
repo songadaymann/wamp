@@ -65,6 +65,10 @@ interface LiveObjectHazardControllerOptions<TEdgeWall> {
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     switchObject: LoadedRoomObject,
   ) => void;
+  handleNpcHazardContact: (
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    npc: LoadedRoomObject,
+  ) => void;
 }
 
 export class LiveObjectHazardController<TEdgeWall = unknown> {
@@ -141,6 +145,18 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
         );
         this.options.showTransientStatus('Bounce pad launched you.');
       })
+    );
+  }
+
+  addNpcTornadoInteraction(
+    tornadoRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    npc: LoadedRoomObject,
+    tornado: LoadedRoomObject,
+  ): void {
+    npc.interactions.push(
+      this.options.scene.physics.add.overlap(npc.sprite, tornado.sprite, () => {
+        this.triggerNpcTornadoLaunch(tornadoRoom, npc, tornado);
+      }),
     );
   }
 
@@ -270,24 +286,9 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
       return;
     }
 
-    const relativeDirection =
-      Math.abs(playerBody.center.x - liveObject.sprite.x) < 4
-        ? liveObject.runtime.directionX || 1
-        : playerBody.center.x >= liveObject.sprite.x
-          ? 1
-          : -1;
-
     liveObject.runtime.cooldownUntil =
       this.options.getCurrentTime() + this.options.settings.tornadoCooldownMs;
-    playerBody.setVelocityX(
-      playerBody.velocity.x * 0.22 + relativeDirection * this.options.settings.tornadoSideVelocity
-    );
-    playerBody.setVelocityY(
-      Math.min(
-        this.options.settings.tornadoLiftVelocity,
-        playerBody.velocity.y + this.options.settings.tornadoLiftVelocity * 0.32
-      )
-    );
+    this.applyTornadoVelocity(playerBody, liveObject);
     this.options.grantExternalLaunchGrace(TORNADO_LAUNCH_GRACE_MS);
     this.options.playBounceFx(
       liveObject.sprite.x,
@@ -295,6 +296,52 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
       loadedRoom.room.coordinates
     );
     this.options.showTransientStatus('Tornado tossed you.');
+  }
+
+  private triggerNpcTornadoLaunch(
+    tornadoRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    npc: LoadedRoomObject,
+    tornado: LoadedRoomObject,
+  ): void {
+    const npcBody = this.getDynamicBody(npc.sprite);
+    if (
+      !npcBody ||
+      !npc.sprite.active ||
+      this.options.getCurrentTime() < npc.runtime.npcBounceCooldownUntil
+    ) {
+      return;
+    }
+
+    npc.runtime.npcBounceCooldownUntil =
+      this.options.getCurrentTime() +
+      Math.max(this.options.settings.tornadoCooldownMs, TORNADO_LAUNCH_GRACE_MS);
+    this.applyTornadoVelocity(npcBody, tornado);
+    this.options.playBounceFx(
+      tornado.sprite.x,
+      tornado.sprite.y - 4,
+      tornadoRoom.room.coordinates,
+    );
+  }
+
+  private applyTornadoVelocity(
+    body: Phaser.Physics.Arcade.Body,
+    tornado: LoadedRoomObject,
+  ): void {
+    const relativeDirection =
+      Math.abs(body.center.x - tornado.sprite.x) < 4
+        ? tornado.runtime.directionX || 1
+        : body.center.x >= tornado.sprite.x
+          ? 1
+          : -1;
+    body.setVelocityX(
+      body.velocity.x * 0.22 + relativeDirection * this.options.settings.tornadoSideVelocity
+    );
+    body.setVelocityY(
+      Math.min(
+        this.options.settings.tornadoLiftVelocity,
+        body.velocity.y + this.options.settings.tornadoLiftVelocity * 0.32
+      )
+    );
   }
 
   private triggerBombExplosion(
@@ -350,6 +397,8 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
       linkedTargetWorldY: null,
       containedObjectId: null,
       signText: null,
+      npcName: null,
+      npcNameLabel: null,
       layer: 'terrain',
       countsTowardGoals: false,
       config: CANNON_BULLET_CONFIG,
@@ -365,6 +414,11 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
         gravityDirection: 'down',
         gravityRoomId: loadedRoom.room.id,
         inWater: false,
+        specialTileWindX: 0,
+        specialTileOnIce: false,
+        specialTileOnSticky: false,
+        specialTileOnBounce: false,
+        specialTileOnDamage: false,
         initialDirectionX: directionX,
         directionX,
         movingPlatformTargetIndex: 1,
@@ -416,6 +470,16 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
         aiCollectRouteScore: null,
         aiCollectRouteValue: 0,
         aiCollectRoutePenalty: 0,
+        npcMode: null,
+        npcPushable: false,
+        npcCanJumpFall: false,
+        npcPlayerCollision: false,
+        npcFriendlyFire: false,
+        npcDefeatMode: null,
+        npcVictorious: false,
+        npcWalking: false,
+        npcBounceCooldownUntil: 0,
+        npcQuicksandUntil: 0,
         pressureActive: false,
         triggerLatched: false,
       },
@@ -459,6 +523,26 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
             this.options.triggerBlockSwitch(loadedRoom, platform);
           }
           this.options.removeLiveObject(loadedRoom, bullet);
+        }),
+      );
+    }
+    for (const npc of loadedRoom.liveObjects) {
+      if (
+        npc.config.category !== 'npc' ||
+        !npc.sprite.active ||
+        !npc.sprite.body
+      ) {
+        continue;
+      }
+      bullet.interactions.push(
+        this.options.scene.physics.add.overlap(sprite, npc.sprite, () => {
+          if (!bullet.sprite.active || !npc.sprite.active) {
+            return;
+          }
+          this.options.handleNpcHazardContact(loadedRoom, npc);
+          if (bullet.sprite.active) {
+            this.options.removeLiveObject(loadedRoom, bullet);
+          }
         }),
       );
     }

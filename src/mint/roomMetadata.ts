@@ -1,5 +1,6 @@
 import {
   getPlacedObjectInstanceId,
+  getObjectById,
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_WIDTH,
@@ -23,6 +24,18 @@ import {
   type RoomSnapshot,
   type RoomTileData,
 } from '../persistence/roomModel';
+import {
+  getPlacedNpcDefeatMode,
+  getPlacedNpcMode,
+  getPlacedNpcName,
+  isNpcObjectId,
+  normalizeNpcCanJumpFall,
+  normalizeNpcFriendlyFire,
+  normalizeNpcPlayerCollision,
+  normalizeNpcPushable,
+  type NpcMode,
+} from '../npcs/model';
+import type { SwordsmanDefeatMode } from '../enemies/swordsmanObjectives';
 
 const WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 = 1 as const;
 const WAMP_MINTED_ROOM_SCHEMA_VERSION_V2 = 2 as const;
@@ -37,7 +50,7 @@ type WampMintedRoomPayloadVersion =
   | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V3
   | typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V4;
 type WampV2LayerKey = 'b' | 't' | 'f';
-type WampGoalCode = 'e' | 'c' | 'r' | 'd' | 'k' | 's';
+type WampGoalCode = 'e' | 'c' | 'r' | 'd' | 'k' | 's' | 'n';
 
 export interface WampMintedRoomObject {
   id: string;
@@ -45,8 +58,38 @@ export interface WampMintedRoomObject {
   y: number;
   facing: 'left' | 'right' | null;
   layer: LayerName;
+  instanceId?: string | null;
   containedObjectId?: string | null;
+  signText?: string | null;
+  npcMode?: NpcMode | null;
+  npcPushable?: boolean | null;
+  npcCanJumpFall?: boolean | null;
+  npcPlayerCollision?: boolean | null;
+  npcFriendlyFire?: boolean | null;
+  npcName?: string | null;
+  npcDefeatMode?: SwordsmanDefeatMode | null;
 }
+
+interface WampMintedNpcObjectV4 {
+  i?: string;
+  m?: 'i' | 'w' | 'p' | 'f';
+  p?: 0 | 1;
+  j?: 0 | 1;
+  c?: 0 | 1;
+  f?: 0 | 1;
+  n?: string;
+  t?: string;
+  d?: 'd' | 'i' | 'r';
+}
+
+type WampMintedRoomObjectV4 = [
+  number,
+  number,
+  number,
+  number,
+  (number | null)?,
+  WampMintedNpcObjectV4?,
+];
 
 export interface WampMintedRoomPayload {
   v: WampMintedRoomPayloadVersion;
@@ -98,13 +141,23 @@ interface WampMintedSurvivalGoalV2 {
   d: number;
 }
 
+interface WampMintedNpcQuestGoalV2 {
+  t: 'n';
+  q: 'p' | 'e' | 'g';
+  i?: string;
+  d?: number;
+  r?: number;
+  e?: [number, number];
+}
+
 type WampMintedRoomGoalV2 =
   | WampMintedReachExitGoalV2
   | WampMintedCollectTargetGoalV2
   | WampMintedCollectRaceGoalV2
   | WampMintedDefeatAllGoalV2
   | WampMintedCheckpointSprintGoalV2
-  | WampMintedSurvivalGoalV2;
+  | WampMintedSurvivalGoalV2
+  | WampMintedNpcQuestGoalV2;
 
 export interface WampMintedRoomPayloadV2 {
   v: typeof WAMP_MINTED_ROOM_SCHEMA_VERSION_V2;
@@ -115,7 +168,7 @@ export interface WampMintedRoomPayloadV2 {
   s?: [number, number];
   t?: Partial<Record<WampV2LayerKey, string>>;
   k?: string[];
-  o?: Array<[number, number, number, number, number?]>;
+  o?: WampMintedRoomObjectV4[];
   pv: number;
   pt?: string;
 }
@@ -130,7 +183,7 @@ export interface WampMintedRoomPayloadV3 {
   s?: [number, number];
   t?: Partial<Record<WampV2LayerKey, string>>;
   k?: string[];
-  o?: Array<[number, number, number, number, number?]>;
+  o?: WampMintedRoomObjectV4[];
   pv: number;
   pt?: string;
 }
@@ -146,7 +199,7 @@ export interface WampMintedRoomPayloadV4 {
   s?: [number, number];
   t?: Partial<Record<WampV2LayerKey, string>>;
   k?: string[];
-  o?: Array<[number, number, number, number, number?]>;
+  o?: WampMintedRoomObjectV4[];
   pv: number;
   pt?: string;
 }
@@ -248,7 +301,26 @@ export function buildWampMintedRoomPayload(snapshot: RoomSnapshot): WampMintedRo
       y: placed.y,
       facing: placed.facing === 'left' || placed.facing === 'right' ? placed.facing : null,
       layer: getPlacedObjectLayer(placed),
+      instanceId: placed.instanceId ?? null,
       containedObjectId: placed.containedObjectId ?? null,
+      signText: placed.signText ?? null,
+      npcMode: isNpcObjectId(placed.id) ? getPlacedNpcMode(placed) : null,
+      npcPushable: isNpcObjectId(placed.id)
+        ? normalizeNpcPushable(placed.npcPushable, getPlacedNpcMode(placed))
+        : null,
+      npcCanJumpFall: isNpcObjectId(placed.id)
+        ? normalizeNpcCanJumpFall(placed.npcCanJumpFall, getPlacedNpcMode(placed))
+        : null,
+      npcPlayerCollision: isNpcObjectId(placed.id)
+        ? normalizeNpcPlayerCollision(placed.npcPlayerCollision)
+        : null,
+      npcFriendlyFire: isNpcObjectId(placed.id)
+        ? normalizeNpcFriendlyFire(placed.npcFriendlyFire)
+        : null,
+      npcName: isNpcObjectId(placed.id)
+        ? getPlacedNpcName(placed, getObjectById(placed.id)?.name ?? placed.id)
+        : null,
+      npcDefeatMode: isNpcObjectId(placed.id) ? getPlacedNpcDefeatMode(placed) : null,
     })),
     version: snapshot.version,
     publishedAt: snapshot.publishedAt,
@@ -280,22 +352,32 @@ export function buildRoomSnapshotFromMintedPayload(
     id: placed.id,
     x: placed.x,
     y: placed.y,
-    instanceId: getPlacedObjectInstanceId(
-      {
-        id: placed.id,
-        x: placed.x,
-        y: placed.y,
-        facing: placed.facing ?? undefined,
-        layer: placed.layer,
-        instanceId: '',
-      },
-      index,
-    ),
+    instanceId:
+      placed.instanceId ??
+      getPlacedObjectInstanceId(
+        {
+          id: placed.id,
+          x: placed.x,
+          y: placed.y,
+          facing: placed.facing ?? undefined,
+          layer: placed.layer,
+          instanceId: '',
+        },
+        index,
+      ),
     facing: placed.facing ?? undefined,
     layer: placed.layer,
     triggerTargetInstanceId: null,
     linkedTargetInstanceIds: null,
     containedObjectId: placed.containedObjectId ?? null,
+    signText: placed.signText ?? null,
+    npcMode: placed.npcMode ?? null,
+    npcPushable: placed.npcPushable ?? null,
+    npcCanJumpFall: placed.npcCanJumpFall ?? null,
+    npcPlayerCollision: placed.npcPlayerCollision ?? null,
+    npcFriendlyFire: placed.npcFriendlyFire ?? null,
+    npcName: placed.npcName ?? null,
+    npcDefeatMode: placed.npcDefeatMode ?? null,
   }));
   snapshot.version = payload.version;
   snapshot.status = 'published';
@@ -372,7 +454,7 @@ export async function sha256Hex(value: string): Promise<string> {
 function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampMintedRoomPayload {
   const dictionary: string[] = [];
   const objectIdToIndex = new Map<string, number>();
-  const serializedObjects: Array<[number, number, number, number, number?]> = [];
+  const serializedObjects: WampMintedRoomObjectV4[] = [];
 
   for (const placed of payload.placedObjects) {
     let dictionaryIndex = objectIdToIndex.get(placed.id);
@@ -392,13 +474,18 @@ function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampM
       }
     }
 
-    serializedObjects.push([
+    const serializedObject: WampMintedRoomObjectV4 = [
       dictionaryIndex,
       Math.round(placed.x),
       Math.round(placed.y),
       packObjectFlags(placed),
-      containedDictionaryIndex,
-    ]);
+      containedDictionaryIndex ?? null,
+    ];
+    const npcExtension = serializeMintedNpcObjectV4(placed);
+    if (npcExtension) {
+      serializedObject.push(npcExtension);
+    }
+    serializedObjects.push(serializedObject);
   }
 
   const tiles = serializeMintedRoomTilesV2(payload.tiles);
@@ -420,6 +507,68 @@ function serializeMintedRoomPayload(payload: WampMintedRoomPayload): StoredWampM
     ...(serializedObjects.length > 0 ? { o: serializedObjects } : {}),
     pv: payload.version,
     ...(payload.publishedAt ? { pt: payload.publishedAt } : {}),
+  };
+}
+
+function serializeMintedNpcObjectV4(
+  placed: WampMintedRoomObject,
+): WampMintedNpcObjectV4 | undefined {
+  if (!isNpcObjectId(placed.id)) {
+    return undefined;
+  }
+
+  const mode = placed.npcMode ?? 'idle';
+  const defeatMode = placed.npcDefeatMode ?? 'defeatable';
+  return {
+    ...(placed.instanceId ? { i: placed.instanceId } : {}),
+    m: mode === 'wander' ? 'w' : mode === 'patrol' ? 'p' : mode === 'follow' ? 'f' : 'i',
+    p: placed.npcPushable ? 1 : 0,
+    j: placed.npcCanJumpFall ? 1 : 0,
+    c: normalizeNpcPlayerCollision(placed.npcPlayerCollision) ? 1 : 0,
+    f: normalizeNpcFriendlyFire(placed.npcFriendlyFire) ? 1 : 0,
+    n: placed.npcName ?? '',
+    ...(placed.signText ? { t: placed.signText } : {}),
+    d: defeatMode === 'invincible' ? 'i' : defeatMode === 'respawn' ? 'r' : 'd',
+  };
+}
+
+function normalizeMintedNpcObjectV4(
+  value: unknown,
+): Partial<WampMintedRoomObject> {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const extension = value as Partial<WampMintedNpcObjectV4>;
+  const mode: NpcMode =
+    extension.m === 'w'
+      ? 'wander'
+      : extension.m === 'p'
+        ? 'patrol'
+        : extension.m === 'f'
+          ? 'follow'
+          : 'idle';
+  const defeatMode: SwordsmanDefeatMode =
+    extension.d === 'i'
+      ? 'invincible'
+      : extension.d === 'r'
+        ? 'respawn'
+        : 'defeatable';
+  return {
+    instanceId:
+      typeof extension.i === 'string' && extension.i.trim() ? extension.i : null,
+    signText: typeof extension.t === 'string' ? extension.t : null,
+    npcMode: mode,
+    npcPushable: extension.p === 1,
+    npcCanJumpFall: extension.j === 1,
+    npcPlayerCollision: normalizeNpcPlayerCollision(
+      extension.c === undefined ? undefined : extension.c === 1,
+    ),
+    npcFriendlyFire: normalizeNpcFriendlyFire(
+      extension.f === undefined ? undefined : extension.f === 1,
+    ),
+    npcName: typeof extension.n === 'string' ? extension.n : null,
+    npcDefeatMode: defeatMode,
   };
 }
 
@@ -502,6 +651,15 @@ function serializeRoomGoalV2(goal: RoomGoal): WampMintedRoomGoalV2 {
         t: 's',
         d: goal.durationMs,
       };
+    case 'npc_quest':
+      return {
+        t: 'n',
+        q: goal.questType === 'protect' ? 'p' : goal.questType === 'escort' ? 'e' : 'g',
+        ...(goal.npcInstanceId ? { i: goal.npcInstanceId } : {}),
+        ...(goal.questType === 'protect' ? { d: goal.durationMs } : {}),
+        ...(goal.questType === 'give' ? { r: goal.requiredCount } : {}),
+        ...(goal.destination ? { e: [goal.destination.x, goal.destination.y] } : {}),
+      };
   }
 }
 
@@ -583,10 +741,22 @@ function normalizeMintedRoomPayloadV1(value: Partial<WampMintedRoomPayload>): Wa
             y: placed.y,
             facing: placed.facing ?? null,
             layer: placed.layer,
+            instanceId:
+              typeof placed.instanceId === 'string' && placed.instanceId.trim()
+                ? placed.instanceId
+                : null,
             containedObjectId:
               typeof placed.containedObjectId === 'string' && placed.containedObjectId.trim()
                 ? placed.containedObjectId
                 : null,
+            signText: typeof placed.signText === 'string' ? placed.signText : null,
+            npcMode: placed.npcMode ?? null,
+            npcPushable: placed.npcPushable ?? null,
+            npcCanJumpFall: placed.npcCanJumpFall ?? null,
+            npcPlayerCollision: placed.npcPlayerCollision ?? null,
+            npcFriendlyFire: placed.npcFriendlyFire ?? null,
+            npcName: typeof placed.npcName === 'string' ? placed.npcName : null,
+            npcDefeatMode: placed.npcDefeatMode ?? null,
           }))
       : [],
     version: value.version,
@@ -823,6 +993,17 @@ function normalizeRoomGoalV2(value: unknown): RoomGoal | null {
         durationMs: normalizeNullablePositiveInteger(survivalGoal.d) ?? 30_000,
       });
     }
+    case 'n': {
+      const npcGoal = value as Partial<WampMintedNpcQuestGoalV2>;
+      return normalizeRoomGoal({
+        type: 'npc_quest',
+        questType: npcGoal.q === 'e' ? 'escort' : npcGoal.q === 'g' ? 'give' : 'protect',
+        npcInstanceId: typeof npcGoal.i === 'string' ? npcGoal.i : null,
+        durationMs: normalizeNullablePositiveInteger(npcGoal.d) ?? 30_000,
+        requiredCount: normalizeNullablePositiveInteger(npcGoal.r) ?? 1,
+        destination: normalizePointTuple(npcGoal.e),
+      });
+    }
     default:
       return null;
   }
@@ -854,17 +1035,28 @@ function normalizeMintedRoomObjectV2(
   value: unknown,
   dictionary: string[]
 ): WampMintedRoomObject | null {
-  if (!Array.isArray(value) || (value.length !== 4 && value.length !== 5)) {
+  if (!Array.isArray(value) || value.length < 4 || value.length > 6) {
     return null;
   }
 
-  const [dictionaryIndex, x, y, packedFlags, containedDictionaryIndex] = value;
+  const [
+    dictionaryIndex,
+    x,
+    y,
+    packedFlags,
+    containedDictionaryIndex,
+    npcExtension,
+  ] = value;
   if (
     typeof dictionaryIndex !== 'number' ||
     typeof x !== 'number' ||
     typeof y !== 'number' ||
     typeof packedFlags !== 'number' ||
-    (containedDictionaryIndex !== undefined && typeof containedDictionaryIndex !== 'number')
+    (
+      containedDictionaryIndex !== undefined &&
+      containedDictionaryIndex !== null &&
+      typeof containedDictionaryIndex !== 'number'
+    )
   ) {
     return null;
   }
@@ -883,6 +1075,7 @@ function normalizeMintedRoomObjectV2(
     layer,
     containedObjectId:
       typeof containedDictionaryIndex === 'number' ? dictionary[containedDictionaryIndex] ?? null : null,
+    ...normalizeMintedNpcObjectV4(npcExtension),
   };
 }
 

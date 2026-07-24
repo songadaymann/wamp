@@ -54,6 +54,7 @@ import {
   setBodyVelocityAlongVector,
   type DirectionVector,
   type PlayerGravityDirection,
+  type SpecialTilePlayerEnvironment,
 } from './specialTiles';
 import {
   getArcadeBodyBounds,
@@ -81,6 +82,24 @@ import {
 import { carryMovingPlatformRiders } from './liveObjects/movingPlatforms';
 import { getPlacedObjectPathTargetIds } from '../../placedObjects/objectPaths';
 import { getContainedLiveObjectKey } from './liveObjects/indexing';
+import {
+  JIMOTHY_ANIMATION_KEYS,
+  getPlacedNpcDefeatMode,
+  getPlacedNpcMode,
+  getPlacedNpcName,
+  normalizeNpcCanJumpFall,
+  normalizeNpcFriendlyFire,
+  normalizeNpcPlayerCollision,
+  normalizeNpcPushable,
+  type NpcMode,
+} from '../../npcs/model';
+import {
+  LiveObjectNpcController,
+  type NpcRuntimeStateSnapshot,
+} from './liveObjects/npcController';
+import {
+  getNpcEnvironmentalObjectInteraction,
+} from './liveObjects/npcEnvironment';
 
 export { isDynamicArcadeBody } from './liveObjects/bodies';
 export type { ArcadeObjectBody } from './liveObjects/bodies';
@@ -100,6 +119,11 @@ export interface LoadedRoomObjectRuntimeState {
   gravityDirection: PlayerGravityDirection;
   gravityRoomId: string | null;
   inWater: boolean;
+  specialTileWindX: -1 | 0 | 1;
+  specialTileOnIce: boolean;
+  specialTileOnSticky: boolean;
+  specialTileOnBounce: boolean;
+  specialTileOnDamage: boolean;
   initialDirectionX: number;
   directionX: number;
   movingPlatformTargetIndex: number;
@@ -151,6 +175,16 @@ export interface LoadedRoomObjectRuntimeState {
   aiCollectRouteScore: number | null;
   aiCollectRouteValue: number;
   aiCollectRoutePenalty: number;
+  npcMode: NpcMode | null;
+  npcPushable: boolean;
+  npcCanJumpFall: boolean;
+  npcPlayerCollision: boolean;
+  npcFriendlyFire: boolean;
+  npcDefeatMode: SwordsmanDefeatMode | null;
+  npcVictorious: boolean;
+  npcWalking: boolean;
+  npcBounceCooldownUntil: number;
+  npcQuicksandUntil: number;
   pressureActive: boolean;
   triggerLatched: boolean;
 }
@@ -165,6 +199,8 @@ export interface LoadedRoomObject {
   linkedTargetWorldY: number | null;
   containedObjectId: string | null;
   signText: string | null;
+  npcName: string | null;
+  npcNameLabel: Phaser.GameObjects.Text | null;
   layer: LayerName;
   countsTowardGoals: boolean;
   config: GameObjectConfig;
@@ -221,12 +257,11 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body,
     gravityDirection: PlayerGravityDirection,
   ) => -1 | 0 | 1;
-  getGravityPlateDirectionForBody: (
+  getBodyRoomId: (body: Phaser.Physics.Arcade.Body) => string;
+  getSpecialTileEnvironmentForBody: (
     body: Phaser.Physics.Arcade.Body,
     currentGravityDirection: PlayerGravityDirection,
-  ) => PlayerGravityDirection | null;
-  getBodyRoomId: (body: Phaser.Physics.Arcade.Body) => string;
-  isBodyInWater: (body: Phaser.Physics.Arcade.Body) => boolean;
+  ) => SpecialTilePlayerEnvironment;
   swordsmanTraversalPlannerMode: SwordsmanTraversalPlannerMode;
   isPlayerClimbingLadder: () => boolean;
   isLadderDropRequested: () => boolean;
@@ -248,6 +283,14 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
     x: number;
     y: number;
   }) => boolean;
+  onNpcDefeated: (event: {
+    roomId: string;
+    roomCoordinates: RoomCoordinates;
+    npcName: string;
+    instanceId: string | null;
+    x: number;
+    y: number;
+  }) => void;
   onCollectibleCollected: (event: {
     roomId: string;
     roomCoordinates: RoomCoordinates;
@@ -288,6 +331,8 @@ const LIVE_OBJECT_MAX_GRAVITY_SPEED = 500;
 const LIVE_OBJECT_WATER_GRAVITY_FACTOR = 0.35;
 const LIVE_OBJECT_WATER_MAX_GRAVITY_SPEED = 118;
 const LIVE_OBJECT_WATER_DAMPING_FACTOR = 0.965;
+const LIVE_OBJECT_WIND_ACCELERATION = 980;
+const LIVE_OBJECT_WIND_MAX_SPEED = 280;
 const BUTT_STOMP_BREAK_BOUNCE_VELOCITY = -150;
 const BUTT_STOMP_BREAK_TOP_TOLERANCE_PX = 12;
 const BUTT_STOMP_BREAK_MIN_HORIZONTAL_OVERLAP_PX = 3;
@@ -323,6 +368,13 @@ export interface CreateLiveObjectEntryOptions {
   signText: string | null;
   objectiveMode?: SwordsmanObjectiveMode | null;
   defeatMode?: SwordsmanDefeatMode | null;
+  npcMode?: NpcMode | null;
+  npcPushable?: boolean | null;
+  npcCanJumpFall?: boolean | null;
+  npcPlayerCollision?: boolean | null;
+  npcFriendlyFire?: boolean | null;
+  npcName?: string | null;
+  npcDefeatMode?: SwordsmanDefeatMode | null;
   countsTowardGoals: boolean;
 }
 
@@ -335,6 +387,7 @@ export interface WeaponHitResult {
 
 export type LiveObjectRemovedReason =
   | 'enemy-defeated'
+  | 'npc-defeated'
   | 'collectible-collected'
   | 'enemy-collected'
   | 'object-removed'
@@ -375,6 +428,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly triggerController: LiveObjectTriggerController<TEdgeWall>;
   private readonly hazardController: LiveObjectHazardController<TEdgeWall>;
   private readonly swordsmanController: LiveObjectSwordsmanController<TEdgeWall>;
+  private readonly npcController: LiveObjectNpcController<TEdgeWall>;
   private readonly enemyLifecycleController: LiveObjectEnemyLifecycleController<TEdgeWall>;
   private readonly liveObjectPartitionsByRoomId = new Map<string, RoomLiveObjectPartition>();
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
@@ -418,6 +472,32 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.removeLiveObject(loadedRoom, liveObject),
       triggerBlockSwitch: (loadedRoom, switchObject) =>
         this.triggerController.triggerBlockSwitch(loadedRoom, switchObject),
+      handleNpcHazardContact: (loadedRoom, npc) => {
+        this.enemyLifecycleController.defeatNpc(loadedRoom, npc);
+      },
+    });
+    this.npcController = new LiveObjectNpcController({
+      scene: this.options.scene,
+      getCurrentTime: this.options.getCurrentTime,
+      getPlayerBody: this.options.getPlayerBody,
+      resetDynamicObjectIfOutOfBounds: (room, liveObject, body) =>
+        this.resetDynamicObjectIfOutOfBounds(room, liveObject, body),
+      applyDirectionalFacing: (sprite, config, directionX) =>
+        this.applyDirectionalFacing(sprite, config, directionX),
+      hasSupportAhead: (room, body, directionX, leadPx) =>
+        this.hasGroundEnemySupportOrSpecialTileAhead(
+          room,
+          body,
+          directionX,
+          'down',
+          leadPx,
+        ),
+      hasSolidTerrainAtWorldPoint: (room, worldX, worldY) =>
+        this.hasSolidTerrainAtWorldPoint(room, worldX, worldY),
+      playBounceFx: (x, y, roomCoordinates) =>
+        this.options.playBounceFx(x, y, roomCoordinates),
+      bouncePadVelocity: this.options.settings.bouncePadVelocity,
+      bouncePadCooldownMs: this.options.settings.bouncePadCooldownMs,
     });
     this.swordsmanController = new LiveObjectSwordsmanController({
       scene: this.options.scene,
@@ -447,6 +527,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       showTransientStatus: this.options.showTransientStatus,
       handlePlayerDeath: this.options.handlePlayerDeath,
       onEnemyDefeated: this.options.onEnemyDefeated,
+      onNpcDefeated: this.options.onNpcDefeated,
       onLiveObjectRemoved: (event) => this.emitLiveObjectRemoved(event),
       getSwordsmanObjectiveMode: (liveObject) => this.swordsmanController.getObjectiveMode(liveObject),
       getSwordsmanDefeatMode: (liveObject) => this.swordsmanController.getDefeatMode(liveObject),
@@ -539,6 +620,21 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         signText: placedObject.signText ?? null,
         objectiveMode: placedObject.swordsmanObjectiveMode ?? null,
         defeatMode: placedObject.swordsmanDefeatMode ?? null,
+        npcMode: getPlacedNpcMode(placedObject),
+        npcPushable: normalizeNpcPushable(
+          placedObject.npcPushable,
+          getPlacedNpcMode(placedObject),
+        ),
+        npcCanJumpFall: normalizeNpcCanJumpFall(
+          placedObject.npcCanJumpFall,
+          getPlacedNpcMode(placedObject),
+        ),
+        npcPlayerCollision: normalizeNpcPlayerCollision(
+          placedObject.npcPlayerCollision,
+        ),
+        npcFriendlyFire: normalizeNpcFriendlyFire(placedObject.npcFriendlyFire),
+        npcName: getPlacedNpcName(placedObject, config.name),
+        npcDefeatMode: getPlacedNpcDefeatMode(placedObject),
         countsTowardGoals: true,
       });
       if (liveObject) {
@@ -577,6 +673,25 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.syncWorldObjectColliders(loadedRooms);
   }
 
+  setRoomNpcsVictorious(roomId: string, victorious: boolean): void {
+    this.npcController.setRoomVictory(
+      this.options.getLoadedFullRooms(),
+      roomId,
+      victorious,
+    );
+  }
+
+  getRoomNpcState(
+    roomId: string,
+    requestedInstanceId: string | null = null,
+  ): NpcRuntimeStateSnapshot | null {
+    return this.npcController.getRoomNpcState(
+      this.options.getLoadedFullRooms(),
+      roomId,
+      requestedInstanceId,
+    );
+  }
+
   private createLiveObjectEntry(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     options: CreateLiveObjectEntryOptions,
@@ -600,6 +715,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       signText,
       objectiveMode = null,
       defeatMode = null,
+      npcMode = null,
+      npcPushable = null,
+      npcCanJumpFall = null,
+      npcPlayerCollision = null,
+      npcFriendlyFire = null,
+      npcName = null,
+      npcDefeatMode = null,
       countsTowardGoals,
     } = options;
     ensureCustomSpriteTexture(this.options.scene, config);
@@ -639,7 +761,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (
       config.bodyWidth > 0 &&
       config.bodyHeight > 0 &&
-      placedObjectLayerAllowsRuntimeCollision(config, { layer: normalizedLayer })
+      (
+        placedObjectLayerAllowsRuntimeCollision(config, { layer: normalizedLayer }) ||
+        config.category === 'npc'
+      )
     ) {
       if (this.usesDynamicObjectBody(config)) {
         this.options.scene.physics.add.existing(sprite);
@@ -647,7 +772,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         body.setSize(config.bodyWidth, config.bodyHeight, true);
         body.setOffset(...this.getObjectBodyOffset(config));
         body.setCollideWorldBounds(false);
-        body.setAllowGravity(this.objectUsesGravity(config));
+        body.setAllowGravity(config.category === 'npc' ? false : this.objectUsesGravity(config));
         if (isMovingPlatformObjectId(config.id)) {
           body.setAllowGravity(false);
           body.setImmovable(true);
@@ -689,6 +814,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       linkedTargetWorldY,
       containedObjectId,
       signText,
+      npcName: config.category === 'npc' ? npcName ?? config.name : null,
+      npcNameLabel: null,
       layer: normalizedLayer,
       countsTowardGoals,
       config,
@@ -704,9 +831,50 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         getCurrentTime: this.options.getCurrentTime,
         objectiveMode,
         defeatMode,
+        npcMode,
+        npcPushable,
+        npcCanJumpFall,
+        npcPlayerCollision,
+        npcFriendlyFire,
+        npcDefeatMode,
         swordsmanTraversalPlannerMode: this.options.swordsmanTraversalPlannerMode,
       }),
     };
+    if (config.category === 'npc') {
+      const npcBody = this.getDynamicBody(sprite);
+      const npcIsMovable =
+        liveObject.runtime.npcMode !== 'idle' || liveObject.runtime.npcPushable;
+      if (npcBody) {
+        npcBody.setAllowGravity(normalizedLayer === 'terrain' && npcIsMovable);
+        npcBody.setImmovable(!npcIsMovable);
+        npcBody.pushable = npcIsMovable;
+        npcBody.setBounce(0, 0);
+        npcBody.setDragX(npcIsMovable ? 550 : 0);
+        npcBody.setMaxVelocity(140, 500);
+      }
+      if (liveObject.npcName) {
+        const label = this.options.scene.add.text(
+          sprite.x,
+          sprite.y - 19,
+          liveObject.npcName,
+          {
+            fontFamily: '"Press Start 2P", monospace',
+            fontSize: '6px',
+            color: '#ffffff',
+            stroke: '#101522',
+            strokeThickness: 2,
+            align: 'center',
+          },
+        );
+        label.setOrigin(0.5, 1);
+        label.setDepth(sprite.depth + 0.05);
+        liveObject.npcNameLabel = label;
+        liveObject.helpers.push(label);
+      }
+      if (this.options.scene.anims.exists(JIMOTHY_ANIMATION_KEYS.idle)) {
+        sprite.play(JIMOTHY_ANIMATION_KEYS.idle);
+      }
+    }
 
     this.triggerController.initializePressureControlledObjectState(liveObject);
 
@@ -714,11 +882,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   syncLiveObjectInteractions(loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {
+    const rooms = Array.from(loadedRooms);
     const player = this.options.getPlayer();
     const playerPickupSensor = this.options.getPlayerPickupSensor();
     const playerBody = this.options.getPlayerBody();
 
-    for (const loadedRoom of loadedRooms) {
+    for (const loadedRoom of rooms) {
       for (const liveObject of loadedRoom.liveObjects) {
         this.destroyLiveObjectInteractions(liveObject);
 
@@ -746,6 +915,64 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
                 this.enemyLifecycleController.handleEnemyContact(loadedRoom, liveObject);
               })
             );
+            break;
+          case 'npc':
+            if (placedObjectLayerAllowsRuntimeCollision(liveObject.config, liveObject)) {
+              if (liveObject.runtime.npcPlayerCollision) {
+                liveObject.interactions.push(
+                  this.options.scene.physics.add.collider(
+                    player,
+                    liveObject.sprite,
+                    () => {
+                      this.enemyLifecycleController.handleNpcContact(loadedRoom, liveObject);
+                    },
+                    () => this.shouldCollideWithLiveObject(liveObject),
+                  ),
+                );
+              }
+              for (const dangerRoom of rooms) {
+                for (const danger of dangerRoom.liveObjects) {
+                  if (
+                    danger === liveObject ||
+                    !danger.sprite.active ||
+                    !danger.sprite.body
+                  ) {
+                    continue;
+                  }
+                  const interactionKind =
+                    getNpcEnvironmentalObjectInteraction(danger.config);
+                  if (interactionKind === 'none') {
+                    continue;
+                  }
+                  if (interactionKind === 'tornado') {
+                    if (
+                      liveObject.runtime.npcMode !== 'idle' ||
+                      liveObject.runtime.npcPushable
+                    ) {
+                      this.hazardController.addNpcTornadoInteraction(
+                        dangerRoom,
+                        liveObject,
+                        danger,
+                      );
+                    }
+                    continue;
+                  }
+                  liveObject.interactions.push(
+                    this.options.scene.physics.add.overlap(
+                      liveObject.sprite,
+                      danger.sprite,
+                      () => {
+                        if (interactionKind === 'quicksand') {
+                          this.npcController.touchQuicksand(liveObject);
+                        } else {
+                          this.enemyLifecycleController.defeatNpc(loadedRoom, liveObject);
+                        }
+                      },
+                    ),
+                  );
+                }
+              }
+            }
             break;
           case 'platform':
             if (liveObject.config.id === 'brick_box') {
@@ -872,6 +1099,15 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         }
         if (dynamicBody) {
           this.updateLiveObjectSpecialTileState(liveObject, dynamicBody);
+          if (
+            liveObject.config.category === 'npc' &&
+            liveObject.runtime.specialTileOnDamage
+          ) {
+            this.enemyLifecycleController.defeatNpc(loadedRoom, liveObject);
+            if (!liveObject.sprite.active) {
+              continue;
+            }
+          }
         }
 
         switch (behavior.kind) {
@@ -917,13 +1153,21 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           case 'blockSwitch':
             this.triggerController.updateBlockSwitchObject(loadedRoom, liveObject);
             break;
+          case 'npc':
+            this.npcController.updateNpc(rooms, loadedRoom, liveObject, delta);
+            break;
           default:
             break;
         }
 
         this.applyConveyorToLiveObject(liveObject);
         if (dynamicBody) {
-          this.applyLiveObjectSpecialTileForces(liveObject, dynamicBody, delta);
+          this.applyLiveObjectSpecialTileForces(
+            loadedRoom,
+            liveObject,
+            dynamicBody,
+            delta,
+          );
         }
         if (liveObject.sprite.active) {
           this.syncLiveObjectGravityPresentation(liveObject);
@@ -996,7 +1240,15 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       liveObject.runtime.gravityDirection = 'down';
       liveObject.runtime.gravityRoomId = null;
       liveObject.runtime.inWater = false;
-      body.setAllowGravity(this.objectUsesGravity(liveObject.config));
+      liveObject.runtime.specialTileWindX = 0;
+      liveObject.runtime.specialTileOnIce = false;
+      liveObject.runtime.specialTileOnSticky = false;
+      liveObject.runtime.specialTileOnBounce = false;
+      liveObject.runtime.specialTileOnDamage =
+        liveObject.config.category === 'npc' && liveObject.layer === 'terrain'
+          ? this.options.getSpecialTileEnvironmentForBody(body, 'down').onDamage
+          : false;
+      body.setAllowGravity(this.liveObjectUsesGravity(liveObject));
       return;
     }
 
@@ -1006,18 +1258,20 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       liveObject.runtime.gravityDirection = 'down';
     }
 
-    const nextGravityDirection = this.options.getGravityPlateDirectionForBody(
+    const environment = this.options.getSpecialTileEnvironmentForBody(
       body,
       liveObject.runtime.gravityDirection,
     );
-    if (nextGravityDirection) {
-      liveObject.runtime.gravityDirection = nextGravityDirection;
-      liveObject.runtime.gravityRoomId = currentRoomId;
-    }
-
-    liveObject.runtime.inWater = this.options.isBodyInWater(body);
+    liveObject.runtime.gravityDirection = environment.gravityDirection;
+    liveObject.runtime.gravityRoomId = currentRoomId;
+    liveObject.runtime.inWater = environment.inWater;
+    liveObject.runtime.specialTileWindX = environment.windX;
+    liveObject.runtime.specialTileOnIce = environment.onIce;
+    liveObject.runtime.specialTileOnSticky = environment.onSticky;
+    liveObject.runtime.specialTileOnBounce = environment.onBounce;
+    liveObject.runtime.specialTileOnDamage = environment.onDamage;
     body.setAllowGravity(
-      this.objectUsesGravity(liveObject.config) &&
+      this.liveObjectUsesGravity(liveObject) &&
       liveObject.runtime.gravityDirection === 'down' &&
       !liveObject.runtime.inWater,
     );
@@ -1031,6 +1285,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   private applyLiveObjectSpecialTileForces(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body,
     delta: number,
@@ -1043,7 +1298,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const gravityVector = getGravityVector(gravityDirection);
     const deltaSeconds = Math.max(delta / 1000, 1 / 60);
     const usesManualGravity = gravityDirection !== 'down' || liveObject.runtime.inWater;
-    body.setAllowGravity(this.objectUsesGravity(liveObject.config) && !usesManualGravity);
+    body.setAllowGravity(this.liveObjectUsesGravity(liveObject) && !usesManualGravity);
 
     if (usesManualGravity) {
       const gravityScale = liveObject.runtime.inWater ? LIVE_OBJECT_WATER_GRAVITY_FACTOR : 1;
@@ -1075,6 +1330,44 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       );
       body.setVelocity(nextVelocityX, nextVelocityY);
     }
+
+    if (
+      liveObject.config.category === 'npc' &&
+      liveObject.runtime.specialTileWindX !== 0
+    ) {
+      const windDelta =
+        liveObject.runtime.specialTileWindX * LIVE_OBJECT_WIND_ACCELERATION * deltaSeconds;
+      body.setVelocityX(
+        Phaser.Math.Clamp(
+          body.velocity.x + windDelta,
+          -LIVE_OBJECT_WIND_MAX_SPEED,
+          LIVE_OBJECT_WIND_MAX_SPEED,
+        ),
+      );
+    }
+
+    if (
+      liveObject.config.category === 'npc' &&
+      liveObject.runtime.specialTileOnBounce &&
+      this.options.getCurrentTime() >= liveObject.runtime.npcBounceCooldownUntil
+    ) {
+      const gravityVelocity = getBodyVelocityAlongVector(body, gravityVector);
+      if (gravityVelocity >= -24) {
+        liveObject.runtime.npcBounceCooldownUntil =
+          this.options.getCurrentTime() + this.options.settings.bouncePadCooldownMs;
+        setBodyVelocityAlongVector(
+          body,
+          gravityVector,
+          this.options.settings.bouncePadVelocity,
+        );
+        this.options.playBounceFx(
+          body.center.x,
+          body.center.y,
+          loadedRoom.room.coordinates,
+          'bounce',
+        );
+      }
+    }
   }
 
   private shouldLiveObjectUseSpecialTilePhysics(liveObject: LoadedRoomObject): boolean {
@@ -1094,7 +1387,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     return (
       isPushableObjectConfig(config) ||
-      config.category === 'enemy'
+      config.category === 'enemy' ||
+      (
+        config.category === 'npc' &&
+        liveObject.layer === 'terrain' &&
+        (liveObject.runtime.npcMode !== 'idle' || liveObject.runtime.npcPushable)
+      )
     );
   }
 
@@ -1107,7 +1405,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     return (
       isPushableObjectConfig(config) ||
       config.id === 'cage' ||
-      (config.category === 'enemy' && config.behavior !== 'fly')
+      (config.category === 'enemy' && config.behavior !== 'fly') ||
+      (
+        config.category === 'npc' &&
+        liveObject.layer === 'terrain' &&
+        (liveObject.runtime.npcMode !== 'idle' || liveObject.runtime.npcPushable)
+      )
     );
   }
 
@@ -1880,11 +2183,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     liveObject.runtime.gravityDirection = 'down';
     liveObject.runtime.gravityRoomId = room.id;
     liveObject.runtime.inWater = false;
+    liveObject.runtime.specialTileWindX = 0;
+    liveObject.runtime.specialTileOnIce = false;
+    liveObject.runtime.specialTileOnSticky = false;
+    liveObject.runtime.specialTileOnBounce = false;
+    liveObject.runtime.specialTileOnDamage = false;
+    liveObject.runtime.npcBounceCooldownUntil = 0;
+    liveObject.runtime.npcQuicksandUntil = 0;
     liveObject.runtime.elapsedMs = 0;
     liveObject.runtime.nextActionAt = this.options.getCurrentTime() + 250;
     body.reset(liveObject.runtime.baseX, liveObject.runtime.baseY);
     liveObject.sprite.setPosition(liveObject.runtime.baseX, liveObject.runtime.baseY);
-    body.setAllowGravity(this.objectUsesGravity(liveObject.config));
+    body.setAllowGravity(this.liveObjectUsesGravity(liveObject));
     if (liveObject.config.id === SWORDSMAN_AI_OBJECT_ID) {
       this.swordsmanController.resetFacingMemory(liveObject, liveObject.runtime.initialDirectionX);
       this.swordsmanController.applyFacing(liveObject, body, liveObject.runtime.initialDirectionX, {
@@ -2132,6 +2442,16 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       config.id !== 'cage' &&
       !isMovingPlatformObjectId(config.id)
     );
+  }
+
+  private liveObjectUsesGravity(liveObject: LoadedRoomObject): boolean {
+    if (liveObject.config.category === 'npc') {
+      return (
+        liveObject.layer === 'terrain' &&
+        (liveObject.runtime.npcMode !== 'idle' || liveObject.runtime.npcPushable)
+      );
+    }
+    return this.objectUsesGravity(liveObject.config);
   }
 
   private createLadderTopSupport(sprite: Phaser.GameObjects.Sprite): Phaser.GameObjects.Zone | null {

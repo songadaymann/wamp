@@ -1064,6 +1064,17 @@ function normalizeFinalizedRunBody(
         throw new HttpError(409, 'Completed survival runs must last the full published duration.');
       }
       break;
+    case 'npc_quest':
+      if (goal.questType === 'protect' && body.elapsedMs < goal.durationMs) {
+        throw new HttpError(409, 'Completed protect runs must last the full published duration.');
+      }
+      if (
+        goal.questType === 'give' &&
+        body.collectiblesCollected < goal.requiredCount
+      ) {
+        throw new HttpError(409, 'Completed give runs must collect the published target.');
+      }
+      break;
     case 'reach_exit':
       break;
   }

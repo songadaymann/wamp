@@ -9,6 +9,7 @@ import type {
   SwordsmanDefeatMode,
   SwordsmanObjectiveMode,
 } from '../../../enemies/swordsmanObjectives';
+import { JIMOTHY_ANIMATION_KEYS } from '../../../npcs/model';
 import type {
   CreateLiveObjectEntryOptions,
   LoadedRoomObject,
@@ -51,13 +52,21 @@ interface EnemyLifecycleOptions<TEdgeWall> {
     x: number;
     y: number;
   }) => boolean;
+  onNpcDefeated: (event: {
+    roomId: string;
+    roomCoordinates: RoomCoordinates;
+    npcName: string;
+    instanceId: string | null;
+    x: number;
+    y: number;
+  }) => void;
   onLiveObjectRemoved: (event: {
     roomId: string;
     roomCoordinates: RoomCoordinates;
     objectKey: string;
     objectId: string;
     instanceId: string | null;
-    reason: 'enemy-defeated';
+    reason: 'enemy-defeated' | 'npc-defeated';
     x: number;
     y: number;
   }) => void;
@@ -96,7 +105,8 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     for (const loadedRoom of loadedRooms) {
       for (const liveObject of [...loadedRoom.liveObjects]) {
         if (
-          liveObject.config.category !== 'enemy' ||
+          (liveObject.config.category !== 'enemy' && liveObject.config.category !== 'npc') ||
+          (liveObject.config.category === 'npc' && !liveObject.runtime.npcFriendlyFire) ||
           !liveObject.sprite.active ||
           !liveObject.sprite.body
         ) {
@@ -171,6 +181,42 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     this.defeatEnemy(loadedRoom, liveObject);
   }
 
+  handleNpcContact(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): void {
+    const playerBody = this.options.getPlayerBody();
+    if (!playerBody || !liveObject.sprite.body) {
+      return;
+    }
+
+    const npcBody = liveObject.sprite.body as ArcadeObjectBody;
+    const stomped = playerBody.velocity.y > 40 && playerBody.bottom <= npcBody.top + 10;
+    if (!stomped || !liveObject.runtime.npcFriendlyFire) {
+      return;
+    }
+
+    playerBody.setVelocityY(this.options.settings.enemyStompBounceVelocity);
+    const defeated = this.defeatEnemy(loadedRoom, liveObject);
+    if (!defeated && liveObject.runtime.npcDefeatMode === 'invincible') {
+      this.options.playBounceFx(
+        liveObject.sprite.x,
+        liveObject.sprite.y,
+        loadedRoom.room.coordinates,
+      );
+    }
+  }
+
+  defeatNpc(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): WeaponHitResult | null {
+    if (liveObject.config.category !== 'npc') {
+      return null;
+    }
+    return this.defeatEnemy(loadedRoom, liveObject);
+  }
+
   private defeatEnemy(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject
@@ -178,25 +224,38 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     if (!liveObject.sprite.active) {
       return null;
     }
-    if (
-      liveObject.config.id === SWORDSMAN_AI_OBJECT_ID &&
-      this.options.getSwordsmanDefeatMode(liveObject) === 'invincible'
-    ) {
-      this.options.showTransientStatus(`${liveObject.config.name} can't be defeated.`);
+    const isNpc = liveObject.config.category === 'npc';
+    const defeatMode = isNpc
+      ? liveObject.runtime.npcDefeatMode
+      : liveObject.config.id === SWORDSMAN_AI_OBJECT_ID
+        ? this.options.getSwordsmanDefeatMode(liveObject)
+        : 'defeatable';
+    if (defeatMode === 'invincible') {
+      if (this.options.scene.time.now >= liveObject.runtime.cooldownUntil) {
+        liveObject.runtime.cooldownUntil = this.options.scene.time.now + 700;
+        this.options.showTransientStatus(`${liveObject.config.name} can't be defeated.`);
+      }
       return null;
     }
 
     const x = liveObject.sprite.x;
     const y = liveObject.sprite.y;
-    const enemyName = liveObject.config.name;
+    const enemyName = isNpc ? liveObject.npcName ?? liveObject.config.name : liveObject.config.name;
     const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
     const respawnOptions =
-      liveObject.config.id === SWORDSMAN_AI_OBJECT_ID &&
-      this.options.getSwordsmanDefeatMode(liveObject) === 'respawn'
+      (
+        (isNpc && defeatMode === 'respawn') ||
+        (
+          liveObject.config.id === SWORDSMAN_AI_OBJECT_ID &&
+          this.options.getSwordsmanDefeatMode(liveObject) === 'respawn'
+        )
+      )
         ? this.createLiveObjectRespawnOptions(loadedRoom, liveObject)
         : null;
 
-    this.options.addScore(10);
+    if (!isNpc) {
+      this.options.addScore(10);
+    }
     this.options.playEnemyKillFx(x, y, loadedRoom.room.coordinates);
     this.options.onLiveObjectRemoved({
       roomId: loadedRoom.room.id,
@@ -204,17 +263,20 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       objectKey: liveObject.key,
       objectId: liveObject.config.id,
       instanceId: liveObject.placedInstanceId,
-      reason: 'enemy-defeated',
+      reason: isNpc ? 'npc-defeated' : 'enemy-defeated',
       x: x - roomOrigin.x,
       y: y - roomOrigin.y,
     });
     this.options.destroyLiveObjectInteractions(liveObject);
     this.options.destroyLiveObjectWorldColliders(liveObject);
     this.options.destroyLiveObjectHelpers(liveObject);
-    liveObject.sprite.destroy();
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (body) {
+      body.enable = false;
+    }
     loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
 
-    const handledStatus = liveObject.countsTowardGoals
+    const handledStatus = !isNpc && liveObject.countsTowardGoals
       ? this.options.onEnemyDefeated({
           roomId: loadedRoom.room.id,
           roomCoordinates: loadedRoom.room.coordinates,
@@ -224,6 +286,16 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
           y: y - roomOrigin.y,
         })
       : false;
+    if (isNpc) {
+      this.options.onNpcDefeated({
+        roomId: loadedRoom.room.id,
+        roomCoordinates: loadedRoom.room.coordinates,
+        npcName: enemyName,
+        instanceId: liveObject.placedInstanceId,
+        x: x - roomOrigin.x,
+        y: y - roomOrigin.y,
+      });
+    }
     if (!handledStatus) {
       this.options.showTransientStatus(
         respawnOptions ? `${enemyName} will respawn.` : `${enemyName} defeated.`
@@ -232,6 +304,13 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
 
     if (respawnOptions) {
       this.scheduleLiveObjectRespawn(loadedRoom, respawnOptions);
+    }
+
+    if (isNpc && this.options.scene.anims.exists(JIMOTHY_ANIMATION_KEYS.death)) {
+      liveObject.sprite.play(JIMOTHY_ANIMATION_KEYS.death);
+      this.options.scene.time.delayedCall(350, () => liveObject.sprite.destroy());
+    } else {
+      liveObject.sprite.destroy();
     }
 
     return {
@@ -266,6 +345,13 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       signText: liveObject.signText,
       objectiveMode: liveObject.runtime.aiObjectiveMode,
       defeatMode: liveObject.runtime.aiDefeatMode,
+      npcMode: liveObject.runtime.npcMode,
+      npcPushable: liveObject.runtime.npcPushable,
+      npcCanJumpFall: liveObject.runtime.npcCanJumpFall,
+      npcPlayerCollision: liveObject.runtime.npcPlayerCollision,
+      npcFriendlyFire: liveObject.runtime.npcFriendlyFire,
+      npcName: liveObject.npcName,
+      npcDefeatMode: liveObject.runtime.npcDefeatMode,
       countsTowardGoals: liveObject.countsTowardGoals,
     };
   }

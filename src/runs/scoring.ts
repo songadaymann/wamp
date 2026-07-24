@@ -14,6 +14,7 @@ const SURVIVAL_CLEAR_BONUS = 100;
 const SURVIVAL_COLLECTIBLE_SCORE = 15;
 const SURVIVAL_ENEMY_SCORE = 30;
 const SURVIVAL_ZERO_DEATH_CLEAR_BONUS = 50;
+const NPC_PROTECT_SCORE_PER_SECOND = 10;
 const DEATH_PENALTY = 20;
 
 export function computeRunScore(goal: RoomGoal, finish: RunFinishRequestBody): number {
@@ -73,6 +74,21 @@ export function computeRunScore(goal: RoomGoal, finish: RunFinishRequestBody): n
           deathPenalty
       );
     }
+    case 'npc_quest':
+      if (goal.questType === 'protect') {
+        return Math.max(
+          0,
+          Math.floor(Math.min(elapsedMs, goal.durationMs) / 1000) *
+            NPC_PROTECT_SCORE_PER_SECOND -
+            deathPenalty,
+        );
+      }
+      return Math.max(
+        0,
+        100 +
+          collectiblesCollected * (goal.questType === 'give' ? 10 : 0) -
+          deathPenalty,
+      );
   }
 }
 
@@ -81,6 +97,8 @@ export function getLeaderboardRankingMode(goal: RoomGoal): LeaderboardRankingMod
     case 'survival':
     case 'collect_race':
       return 'score';
+    case 'npc_quest':
+      return goal.questType === 'protect' ? 'score' : 'time';
     case 'reach_exit':
     case 'collect_target':
     case 'defeat_all':
@@ -101,12 +119,17 @@ export function sortRoomLeaderboardEntries<T extends Pick<RoomLeaderboardEntry, 
 }
 
 export function sortCompletedRunsForLeaderboard(runs: RoomRunRecord[], goal: RoomGoal): RoomRunRecord[] {
-  const completedRuns = runs.filter(
+  const rankedRuns = runs.filter(
     (run): run is RoomRunRecord & { elapsedMs: number; finishedAt: string } =>
-      run.result === 'completed' && run.elapsedMs !== null && run.finishedAt !== null
+      (
+        run.result === 'completed' ||
+        (goal.type === 'npc_quest' && goal.questType === 'protect' && run.result === 'failed')
+      ) &&
+      run.elapsedMs !== null &&
+      run.finishedAt !== null
   );
 
-  return sortRoomLeaderboardEntries(completedRuns, goal);
+  return sortRoomLeaderboardEntries(rankedRuns, goal);
 }
 
 export function compareLeaderboardEntries<
@@ -116,6 +139,14 @@ export function compareLeaderboardEntries<
   right: T,
   goal: RoomGoal
 ): number {
+  if (goal.type === 'npc_quest' && goal.questType === 'protect') {
+    return (
+      right.elapsedMs - left.elapsedMs ||
+      left.deaths - right.deaths ||
+      left.finishedAt.localeCompare(right.finishedAt)
+    );
+  }
+
   const rankingMode = getLeaderboardRankingMode(goal);
   if (rankingMode === 'time') {
     return (

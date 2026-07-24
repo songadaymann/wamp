@@ -121,7 +121,10 @@ export class OverworldHudStateController {
       return {
         courseId: expandedRoom.legacyCourseId,
         courseTitle: expandedRoom.title,
-        goalType: expandedRoom.goalType === 'collect_race' ? null : expandedRoom.goalType,
+        goalType:
+          expandedRoom.goalType === 'collect_race' || expandedRoom.goalType === 'npc_quest'
+            ? null
+            : expandedRoom.goalType,
         roomCount: expandedRoom.cellCount,
       };
     }
@@ -370,6 +373,12 @@ export class OverworldHudStateController {
         return `Reach ${goal.checkpoints.length || 0} ${goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`;
       case 'survival':
         return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`;
+      case 'npc_quest':
+        return goal.questType === 'protect'
+          ? `Protect NPC ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`
+          : goal.questType === 'escort'
+            ? 'Escort NPC'
+            : `Give NPC ${goal.requiredCount}`;
     }
   }
 
@@ -393,6 +402,12 @@ export class OverworldHudStateController {
         return `Reach ${room.goal.checkpoints.length} ${room.goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`;
       case 'survival':
         return `Survive ${Math.max(1, Math.round(room.goal.durationMs / 1000))} seconds`;
+      case 'npc_quest':
+        return room.goal.questType === 'protect'
+          ? `Protect NPC for ${Math.max(1, Math.round(room.goal.durationMs / 1000))} seconds`
+          : room.goal.questType === 'escort'
+            ? 'Escort NPC to the destination'
+            : `Collect ${room.goal.requiredCount} and return to NPC`;
     }
   }
 
@@ -407,6 +422,10 @@ export class OverworldHudStateController {
 
     if (runState.goal.type === 'survival') {
       return `${this.formatOverlayTimer(Math.max(0, runState.goal.durationMs - runState.elapsedMs))} LEFT`;
+    }
+
+    if (runState.goal.type === 'npc_quest' && runState.goal.questType === 'protect') {
+      return `${this.formatOverlayTimer(Math.min(runState.elapsedMs, runState.goal.durationMs))} PROTECTED`;
     }
 
     if (runState.goal.timeLimitMs !== null) {
@@ -438,6 +457,16 @@ export class OverworldHudStateController {
         return `${runState.checkpointsReached}/${runState.checkpointTarget ?? 0} checkpoints`;
       case 'survival':
         return runState.result === 'completed' ? 'Survived' : 'Stay alive';
+      case 'npc_quest':
+        if (runState.goal.questType === 'protect') {
+          return runState.result === 'completed' ? 'NPC protected' : 'Keep NPC alive';
+        }
+        if (runState.goal.questType === 'escort') {
+          return runState.result === 'completed' ? 'Escort complete' : 'Move NPC to destination';
+        }
+        return runState.collectiblesCollected >= runState.goal.requiredCount
+          ? 'Return to NPC'
+          : `${runState.collectiblesCollected}/${runState.goal.requiredCount} collected`;
     }
   }
 

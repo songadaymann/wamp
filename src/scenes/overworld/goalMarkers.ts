@@ -177,6 +177,25 @@ export class OverworldGoalMarkerController {
               }]
             : []),
         ];
+      case 'npc_quest':
+        return runState.goal.questType === 'escort' && runState.goal.destination
+          ? [
+              ...markers,
+              {
+                point: this.toWorldGoalPoint(
+                  runState.roomCoordinates,
+                  runState.goal.destination,
+                ),
+                label: 'NPC',
+                variant: (
+                  runState.result === 'completed'
+                    ? 'finish-cleared'
+                    : 'finish-pending'
+                ) as GoalMarkerFlagVariant,
+                textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
+              },
+            ]
+          : markers;
       default:
         return markers;
     }

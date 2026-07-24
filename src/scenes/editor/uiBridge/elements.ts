@@ -79,6 +79,8 @@ export interface EditorUiElements {
   weatherIntensityValue: HTMLElement | null;
   backgroundButtons: HTMLButtonElement[];
   goalTypeSelect: HTMLSelectElement | null;
+  npcQuestTypeRow: HTMLElement | null;
+  npcQuestTypeSelect: HTMLSelectElement | null;
   goalContextNote: HTMLElement | null;
   timeLimitRow: HTMLElement | null;
   timeLimitInput: HTMLInputElement | null;
@@ -95,6 +97,8 @@ export interface EditorUiElements {
   placeExitBtn: HTMLButtonElement | null;
   addCheckpointBtn: HTMLButtonElement | null;
   placeFinishBtn: HTMLButtonElement | null;
+  linkNpcBtn: HTMLButtonElement | null;
+  placeNpcDestinationBtn: HTMLButtonElement | null;
   clearGoalMarkersBtn: HTMLButtonElement | null;
   courseRoot: HTMLElement | null;
   courseStatus: HTMLElement | null;
@@ -127,6 +131,18 @@ export interface EditorUiElements {
   swordsmanStatus: HTMLElement | null;
   swordsmanObjectiveModeSelect: HTMLSelectElement | null;
   swordsmanDefeatModeSelect: HTMLSelectElement | null;
+  npcPanel: HTMLElement | null;
+  npcStatus: HTMLElement | null;
+  npcModeSelect: HTMLSelectElement | null;
+  npcPushableRow: HTMLElement | null;
+  npcPushableCheckbox: HTMLInputElement | null;
+  npcJumpFallRow: HTMLElement | null;
+  npcJumpFallCheckbox: HTMLInputElement | null;
+  npcPlayerCollisionCheckbox: HTMLInputElement | null;
+  npcFriendlyFireCheckbox: HTMLInputElement | null;
+  npcNameInput: HTMLInputElement | null;
+  npcDialogueInput: HTMLTextAreaElement | null;
+  npcDefeatModeSelect: HTMLSelectElement | null;
 }
 
 function byId<T extends HTMLElement>(doc: Document, id: string): T | null {
@@ -239,6 +255,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     weatherIntensityValue: byId<HTMLElement>(doc, 'weather-intensity-value'),
     backgroundButtons: all<HTMLButtonElement>(doc, '[data-background-id]'),
     goalTypeSelect: byId<HTMLSelectElement>(doc, 'goal-type-select'),
+    npcQuestTypeRow: byId<HTMLElement>(doc, 'goal-npc-quest-type-row'),
+    npcQuestTypeSelect: byId<HTMLSelectElement>(doc, 'goal-npc-quest-type'),
     goalContextNote: byId<HTMLElement>(doc, 'goal-context-note'),
     timeLimitRow: byId<HTMLElement>(doc, 'goal-time-limit-row'),
     timeLimitInput: byId<HTMLInputElement>(doc, 'goal-time-limit-seconds'),
@@ -255,6 +273,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     placeExitBtn: byId<HTMLButtonElement>(doc, 'btn-goal-place-exit'),
     addCheckpointBtn: byId<HTMLButtonElement>(doc, 'btn-goal-add-checkpoint'),
     placeFinishBtn: byId<HTMLButtonElement>(doc, 'btn-goal-place-finish'),
+    linkNpcBtn: byId<HTMLButtonElement>(doc, 'btn-goal-link-npc'),
+    placeNpcDestinationBtn: byId<HTMLButtonElement>(doc, 'btn-goal-place-npc-destination'),
     clearGoalMarkersBtn: byId<HTMLButtonElement>(doc, 'btn-goal-clear-markers'),
     courseRoot: byId<HTMLElement>(doc, 'course-goal-section'),
     courseStatus: byId<HTMLElement>(doc, 'course-editor-status'),
@@ -290,5 +310,17 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
       'swordsman-objective-mode-select',
     ),
     swordsmanDefeatModeSelect: byId<HTMLSelectElement>(doc, 'swordsman-defeat-mode-select'),
+    npcPanel: byId<HTMLElement>(doc, 'npc-objective-panel'),
+    npcStatus: byId<HTMLElement>(doc, 'npc-objective-status'),
+    npcModeSelect: byId<HTMLSelectElement>(doc, 'npc-mode-select'),
+    npcPushableRow: byId<HTMLElement>(doc, 'npc-pushable-row'),
+    npcPushableCheckbox: byId<HTMLInputElement>(doc, 'npc-pushable-checkbox'),
+    npcJumpFallRow: byId<HTMLElement>(doc, 'npc-jump-fall-row'),
+    npcJumpFallCheckbox: byId<HTMLInputElement>(doc, 'npc-jump-fall-checkbox'),
+    npcPlayerCollisionCheckbox: byId<HTMLInputElement>(doc, 'npc-player-collision-checkbox'),
+    npcFriendlyFireCheckbox: byId<HTMLInputElement>(doc, 'npc-friendly-fire-checkbox'),
+    npcNameInput: byId<HTMLInputElement>(doc, 'npc-name-input'),
+    npcDialogueInput: byId<HTMLTextAreaElement>(doc, 'npc-dialogue-input'),
+    npcDefeatModeSelect: byId<HTMLSelectElement>(doc, 'npc-defeat-mode-select'),
   };
 }

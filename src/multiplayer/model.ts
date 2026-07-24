@@ -299,6 +299,7 @@ export interface MultiplayerInstanceCombatEventMessage {
 
 export type MultiplayerRoomStateEventReason =
   | 'enemy-defeated'
+  | 'npc-defeated'
   | 'collectible-collected'
   | 'enemy-collected'
   | 'object-removed'

@@ -43,6 +43,10 @@ import {
 import { logBootPhase, startBootStallWatch } from '../main/bootDiagnostics';
 import { DEFAULT_PLAYER_AVATAR_ID, getRegisteredPlayerAvatarPack } from '../player/avatar/registry';
 import { getRequestedPlayerAvatarId } from '../player/avatar/storage';
+import {
+  JIMOTHY_ANIMATION_KEYS,
+  JIMOTHY_OBJECT_ID,
+} from '../npcs/model';
 
 type PendingBootAsset = {
   key: string;
@@ -219,6 +223,27 @@ export class BootScene extends Phaser.Scene {
           repeat: -1,
         });
       }
+    }
+
+    const jimothyAnimations = [
+      { key: JIMOTHY_ANIMATION_KEYS.idle, frames: [0, 1], frameRate: 4, repeat: -1 },
+      { key: JIMOTHY_ANIMATION_KEYS.walk, frames: [4, 5, 6, 7], frameRate: 7, repeat: -1 },
+      { key: JIMOTHY_ANIMATION_KEYS.death, frames: [2], frameRate: 1, repeat: 0 },
+      { key: JIMOTHY_ANIMATION_KEYS.victory, frames: [3], frameRate: 1, repeat: 0 },
+    ] as const;
+    for (const animation of jimothyAnimations) {
+      if (this.anims.exists(animation.key)) {
+        continue;
+      }
+      this.anims.create({
+        key: animation.key,
+        frames: animation.frames.map((frame) => ({
+          key: JIMOTHY_OBJECT_ID,
+          frame,
+        })),
+        frameRate: animation.frameRate,
+        repeat: animation.repeat,
+      });
     }
 
     if (!this.anims.exists('brick_box_break_anim')) {

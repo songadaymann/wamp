@@ -119,7 +119,8 @@ export function isExpandedRoomGoalType(value: unknown): value is ExpandedRoomGoa
     value === 'collect_race' ||
     value === 'defeat_all' ||
     value === 'checkpoint_sprint' ||
-    value === 'survival'
+    value === 'survival' ||
+    value === 'npc_quest'
   );
 }
 

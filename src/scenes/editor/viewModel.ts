@@ -112,6 +112,8 @@ export function buildEditorUiViewModel(
     goal: {
       goalTypeValue: roomGoal?.type ?? '',
       goalTypeDisabled: false,
+      npcQuestTypeHidden: roomGoal?.type !== 'npc_quest',
+      npcQuestTypeValue: roomGoal?.type === 'npc_quest' ? roomGoal.questType : 'protect',
       timeLimitHidden: !roomGoal || !goalSupportsTimeLimit(roomGoal.type),
       timeLimitDisabled: false,
       timeLimitValue:
@@ -121,14 +123,22 @@ export function buildEditorUiViewModel(
         roomGoal.timeLimitMs
           ? String(Math.round(roomGoal.timeLimitMs / 1000))
           : '',
-      requiredCountHidden: roomGoal?.type !== 'collect_target',
+      requiredCountHidden:
+        roomGoal?.type !== 'collect_target' &&
+        !(roomGoal?.type === 'npc_quest' && roomGoal.questType === 'give'),
       requiredCountDisabled: false,
       requiredCountValue:
-        roomGoal?.type === 'collect_target' ? String(roomGoal.requiredCount) : '1',
-      survivalHidden: roomGoal?.type !== 'survival',
+        roomGoal?.type === 'collect_target' ||
+        (roomGoal?.type === 'npc_quest' && roomGoal.questType === 'give')
+          ? String(roomGoal.requiredCount)
+          : '1',
+      survivalHidden:
+        roomGoal?.type !== 'survival' &&
+        !(roomGoal?.type === 'npc_quest' && roomGoal.questType === 'protect'),
       survivalDisabled: false,
       survivalValue:
-        roomGoal?.type === 'survival'
+        roomGoal?.type === 'survival' ||
+        (roomGoal?.type === 'npc_quest' && roomGoal.questType === 'protect')
           ? String(Math.round(roomGoal.durationMs / 1000))
           : '30',
       introTextHidden: !roomGoal,
@@ -143,6 +153,10 @@ export function buildEditorUiViewModel(
             ? 'Click the canvas to add a checkpoint marker.'
             : roomPlacementMode === 'finish'
               ? 'Click the canvas to place the finish marker.'
+              : roomPlacementMode === 'npc'
+                ? 'Click an NPC in the room to link it.'
+                : roomPlacementMode === 'npc_destination'
+                  ? 'Click the canvas to set the escort destination.'
               : '',
       summaryText: goalSummaryText,
       contextHidden: true,
@@ -155,6 +169,11 @@ export function buildEditorUiViewModel(
       addCheckpointActive: roomPlacementMode === 'checkpoint',
       placeFinishHidden: roomGoal?.type !== 'checkpoint_sprint',
       placeFinishActive: roomPlacementMode === 'finish',
+      linkNpcHidden: roomGoal?.type !== 'npc_quest',
+      linkNpcActive: roomPlacementMode === 'npc',
+      placeNpcDestinationHidden:
+        roomGoal?.type !== 'npc_quest' || roomGoal.questType !== 'escort',
+      placeNpcDestinationActive: roomPlacementMode === 'npc_destination',
     },
     course: {
       visible: courseEditorState.visible,

@@ -76,11 +76,38 @@ export function renderInspectorPanel(
   setDisabled(elements.swordsmanObjectiveModeSelect, state.swordsmanObjectiveModeDisabled);
   setValue(elements.swordsmanDefeatModeSelect, state.swordsmanDefeatModeValue);
   setDisabled(elements.swordsmanDefeatModeSelect, state.swordsmanDefeatModeDisabled);
+  setHidden(elements.npcPanel, !state.npcVisible);
+  setText(elements.npcStatus, state.npcStatusText);
+  setValue(elements.npcModeSelect, state.npcModeValue);
+  setDisabled(elements.npcModeSelect, !state.npcVisible);
+  setHidden(elements.npcPushableRow, state.npcPushableHidden);
+  if (elements.npcPushableCheckbox) {
+    elements.npcPushableCheckbox.checked = state.npcPushableChecked;
+    elements.npcPushableCheckbox.disabled = !state.npcVisible;
+  }
+  setHidden(elements.npcJumpFallRow, state.npcJumpFallHidden);
+  if (elements.npcJumpFallCheckbox) {
+    elements.npcJumpFallCheckbox.checked = state.npcJumpFallChecked;
+    elements.npcJumpFallCheckbox.disabled = !state.npcVisible;
+  }
+  if (elements.npcPlayerCollisionCheckbox) {
+    elements.npcPlayerCollisionCheckbox.checked = state.npcPlayerCollisionChecked;
+    elements.npcPlayerCollisionCheckbox.disabled = !state.npcVisible;
+  }
+  if (elements.npcFriendlyFireCheckbox) {
+    elements.npcFriendlyFireCheckbox.checked = state.npcFriendlyFireChecked;
+    elements.npcFriendlyFireCheckbox.disabled = !state.npcVisible;
+  }
+  setValue(elements.npcNameInput, state.npcNameValue);
+  setValue(elements.npcDialogueInput, state.npcDialogueValue);
+  setValue(elements.npcDefeatModeSelect, state.npcDefeatModeValue);
 }
 
 function renderGoalPanel(elements: EditorUiElements, viewModel: EditorUiViewModel): void {
   setValue(elements.goalTypeSelect, viewModel.goal.goalTypeValue);
   setDisabled(elements.goalTypeSelect, viewModel.goal.goalTypeDisabled);
+  setHidden(elements.npcQuestTypeRow, viewModel.goal.npcQuestTypeHidden);
+  setValue(elements.npcQuestTypeSelect, viewModel.goal.npcQuestTypeValue);
   setHidden(elements.goalContextNote, viewModel.goal.contextHidden);
   setText(elements.goalContextNote, viewModel.goal.contextText);
   setHidden(elements.timeLimitRow, viewModel.goal.timeLimitHidden);
@@ -107,6 +134,10 @@ function renderGoalPanel(elements: EditorUiElements, viewModel: EditorUiViewMode
   setActive(elements.addCheckpointBtn, viewModel.goal.addCheckpointActive);
   setHidden(elements.placeFinishBtn, viewModel.goal.placeFinishHidden);
   setActive(elements.placeFinishBtn, viewModel.goal.placeFinishActive);
+  setHidden(elements.linkNpcBtn, viewModel.goal.linkNpcHidden);
+  setActive(elements.linkNpcBtn, viewModel.goal.linkNpcActive);
+  setHidden(elements.placeNpcDestinationBtn, viewModel.goal.placeNpcDestinationHidden);
+  setActive(elements.placeNpcDestinationBtn, viewModel.goal.placeNpcDestinationActive);
 }
 
 function renderCourseGoalPanel(elements: EditorUiElements, viewModel: EditorUiViewModel): void {

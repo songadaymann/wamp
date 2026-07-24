@@ -7,7 +7,7 @@ import {
   type ToolName,
 } from '../../config';
 import type { RoomGoal } from '../../goals/roomGoals';
-import type { RoomGoalType } from '../../goals/roomGoals';
+import type { NpcQuestType, RoomGoalType } from '../../goals/roomGoals';
 import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import type { EditorClipboardState, EditorEditRuntime, GoalPlacementMode } from './editRuntime';
 import type { EditorPersistenceController } from './persistence';
@@ -66,6 +66,10 @@ export class EditorToolController {
 
   setGoalSurvivalSeconds(seconds: number): void {
     this.editRuntime.setGoalSurvivalSeconds(seconds);
+  }
+
+  setNpcQuestType(questType: NpcQuestType): void {
+    this.editRuntime.setNpcQuestType(questType);
   }
 
   setGoalIntroText(text: string | null): void {

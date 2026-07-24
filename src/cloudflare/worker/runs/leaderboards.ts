@@ -36,6 +36,9 @@ export interface RankedGlobalLeaderboardRow extends UserStatsRow {
 }
 
 function getRoomLeaderboardSqlOrderClause(goal: RoomGoal): string {
+  if (goal.type === 'npc_quest' && goal.questType === 'protect') {
+    return 'elapsed_ms DESC, deaths ASC, finished_at ASC, attempt_id ASC';
+  }
   return getLeaderboardRankingMode(goal) === 'time'
     ? 'elapsed_ms ASC, deaths ASC, score DESC, finished_at ASC, attempt_id ASC'
     : 'score DESC, deaths ASC, elapsed_ms ASC, finished_at ASC, attempt_id ASC';
@@ -48,6 +51,10 @@ function getGlobalLeaderboardSqlOrderClause(): string {
 function buildRankedRoomLeaderboardCte(goal: RoomGoal, versionCount: number): string {
   const versionPlaceholders = Array.from({ length: versionCount }, () => '?').join(', ');
   const orderClause = getRoomLeaderboardSqlOrderClause(goal);
+  const resultPredicate =
+    goal.type === 'npc_quest' && goal.questType === 'protect'
+      ? "result IN ('completed', 'failed')"
+      : "result = 'completed'";
   return `
     WITH candidate_runs AS (
       SELECT
@@ -66,7 +73,7 @@ function buildRankedRoomLeaderboardCte(goal: RoomGoal, versionCount: number): st
       FROM room_runs
       WHERE room_id = ?
         AND room_version IN (${versionPlaceholders})
-        AND result = 'completed'
+        AND ${resultPredicate}
         AND elapsed_ms IS NOT NULL
         AND finished_at IS NOT NULL
         AND ${sqlIsVerificationAccepted('room_runs')}

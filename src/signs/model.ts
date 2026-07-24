@@ -1,5 +1,6 @@
 import type { PlacedObject } from '../config';
 import type { CustomSpriteKind } from '../customSprites/model';
+import { isNpcObjectId } from '../npcs/model';
 
 export const SIGN_TEXT_MAX_LENGTH = 140;
 
@@ -14,7 +15,11 @@ export function isSignObjectId(id: string): id is SignObjectId {
 export function canPlacedObjectHaveSignText<T extends { id: string; customSpriteKind?: CustomSpriteKind | null }>(
   placed: T | null | undefined,
 ): placed is T {
-  return isSignObjectId(placed?.id ?? '') || placed?.customSpriteKind === 'sign';
+  return (
+    isSignObjectId(placed?.id ?? '')
+    || isNpcObjectId(placed?.id ?? '')
+    || placed?.customSpriteKind === 'sign'
+  );
 }
 
 export function normalizeSignText(value: unknown): string | null {

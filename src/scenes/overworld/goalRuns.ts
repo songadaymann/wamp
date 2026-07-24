@@ -1,4 +1,4 @@
-import type { GameObjectConfig } from '../../config';
+import { getObjectById, type GameObjectConfig } from '../../config';
 import { cloneRoomGoal, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import {
@@ -53,6 +53,8 @@ export interface GoalRunState {
   enemyTarget: number | null;
   checkpointsReached: number;
   checkpointTarget: number | null;
+  npcTargetInstanceId: string | null;
+  npcAlive: boolean | null;
   nextCheckpointIndex: number;
   result: 'active' | 'completed' | 'failed';
   completionMessage: string | null;
@@ -211,7 +213,9 @@ export class OverworldGoalRunController {
           ? room.goal.requiredCount
           : room.goal.type === 'collect_race'
             ? this.options.countRoomObjectsByCategory(room, 'collectible')
-            : null,
+            : room.goal.type === 'npc_quest' && room.goal.questType === 'give'
+              ? room.goal.requiredCount
+              : null,
       enemiesDefeated: 0,
       enemyTarget:
         room.goal.type === 'defeat_all'
@@ -220,6 +224,14 @@ export class OverworldGoalRunController {
       checkpointsReached: 0,
       checkpointTarget:
         room.goal.type === 'checkpoint_sprint' ? room.goal.checkpoints.length : null,
+      npcTargetInstanceId:
+        room.goal.type === 'npc_quest'
+          ? room.goal.npcInstanceId ??
+            room.placedObjects.find((placed) => getObjectById(placed.id)?.category === 'npc')
+              ?.instanceId ??
+            null
+          : null,
+      npcAlive: room.goal.type === 'npc_quest' ? true : null,
       nextCheckpointIndex: 0,
       result: 'active',
       completionMessage: null,
@@ -283,6 +295,14 @@ export class OverworldGoalRunController {
       this.currentGoalRun.elapsedMs >= this.currentGoalRun.goal.durationMs
     ) {
       return this.markCompleted('Survival clear.');
+    }
+
+    if (
+      this.currentGoalRun.goal.type === 'npc_quest' &&
+      this.currentGoalRun.goal.questType === 'protect' &&
+      this.currentGoalRun.elapsedMs >= this.currentGoalRun.goal.durationMs
+    ) {
+      return this.markCompleted('NPC protected.');
     }
 
     return NOOP_MUTATION_RESULT;
@@ -360,7 +380,8 @@ export class OverworldGoalRunController {
       this.currentGoalRun.qualificationState !== 'qualified' ||
       (this.currentGoalRun.goal.type !== 'collect_target' &&
         this.currentGoalRun.goal.type !== 'collect_race' &&
-        this.currentGoalRun.goal.type !== 'survival') ||
+        this.currentGoalRun.goal.type !== 'survival' &&
+        !(this.currentGoalRun.goal.type === 'npc_quest' && this.currentGoalRun.goal.questType === 'give')) ||
       this.currentGoalRun.roomId !== roomId
     ) {
       return NOOP_MUTATION_RESULT;
@@ -372,6 +393,22 @@ export class OverworldGoalRunController {
       this.currentGoalRun.collectiblesCollected >= this.currentGoalRun.goal.requiredCount
     ) {
       return this.markCompleted('Collection target reached.');
+    }
+
+    if (
+      this.currentGoalRun.goal.type === 'npc_quest' &&
+      this.currentGoalRun.goal.questType === 'give'
+    ) {
+      return {
+        changed: true,
+        goalMarkersChanged: false,
+        resetChallengeState: false,
+        transientStatus:
+          this.currentGoalRun.collectiblesCollected >= this.currentGoalRun.goal.requiredCount
+            ? 'Return to the NPC.'
+            : null,
+        event: null,
+      };
     }
 
     if (this.currentGoalRun.goal.type === 'collect_race' && this.collectRaceGoalExhausted(this.currentGoalRun)) {
@@ -410,6 +447,68 @@ export class OverworldGoalRunController {
       transientStatus: null,
       event: null,
     };
+  }
+
+  resolveNpcTarget(instanceId: string | null): void {
+    if (
+      this.currentGoalRun?.result === 'active' &&
+      this.currentGoalRun.goal.type === 'npc_quest' &&
+      this.currentGoalRun.npcTargetInstanceId === null
+    ) {
+      this.currentGoalRun.npcTargetInstanceId = instanceId;
+    }
+  }
+
+  recordNpcDefeated(
+    roomId: string,
+    instanceId: string | null,
+    npcName: string,
+  ): GoalRunMutationResult {
+    if (
+      !this.currentGoalRun ||
+      this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'qualified' ||
+      this.currentGoalRun.goal.type !== 'npc_quest' ||
+      this.currentGoalRun.roomId !== roomId ||
+      (
+        this.currentGoalRun.npcTargetInstanceId !== null &&
+        instanceId !== this.currentGoalRun.npcTargetInstanceId
+      )
+    ) {
+      return NOOP_MUTATION_RESULT;
+    }
+
+    this.currentGoalRun.npcAlive = false;
+    return this.markFailed(`${npcName} was defeated.`);
+  }
+
+  recordNpcReachedDestination(roomId: string): GoalRunMutationResult {
+    if (
+      !this.currentGoalRun ||
+      this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'qualified' ||
+      this.currentGoalRun.goal.type !== 'npc_quest' ||
+      this.currentGoalRun.goal.questType !== 'escort' ||
+      this.currentGoalRun.roomId !== roomId
+    ) {
+      return NOOP_MUTATION_RESULT;
+    }
+    return this.markCompleted('Escort complete.');
+  }
+
+  recordGiveReturned(roomId: string): GoalRunMutationResult {
+    if (
+      !this.currentGoalRun ||
+      this.currentGoalRun.result !== 'active' ||
+      this.currentGoalRun.qualificationState !== 'qualified' ||
+      this.currentGoalRun.goal.type !== 'npc_quest' ||
+      this.currentGoalRun.goal.questType !== 'give' ||
+      this.currentGoalRun.collectiblesCollected < this.currentGoalRun.goal.requiredCount ||
+      this.currentGoalRun.roomId !== roomId
+    ) {
+      return NOOP_MUTATION_RESULT;
+    }
+    return this.markCompleted('Delivery complete.');
   }
 
   recordCheckpointReached(): GoalRunMutationResult {
@@ -591,11 +690,20 @@ export class OverworldGoalRunController {
         }
         return `${parts.join(' · ')}${submissionSuffix}`;
       }
+      case 'npc_quest':
+        if (runState.goal.questType === 'protect') {
+          const protectedMs = Math.min(runState.elapsedMs, runState.goal.durationMs);
+          return `goal protect ${(protectedMs / 1000).toFixed(1)}/${(runState.goal.durationMs / 1000).toFixed(1)}s${submissionSuffix}`;
+        }
+        if (runState.goal.questType === 'escort') {
+          return `goal escort NPC · ${elapsedSeconds}s${submissionSuffix}`;
+        }
+        return `goal give ${Math.min(runState.collectiblesCollected, runState.goal.requiredCount)}/${runState.goal.requiredCount} · ${runState.collectiblesCollected >= runState.goal.requiredCount ? 'return to NPC' : `${elapsedSeconds}s`}${submissionSuffix}`;
     }
   }
 
   private getGoalCountdownText(runState: GoalRunState): string | null {
-    if (runState.goal.type === 'survival') {
+    if (runState.goal.type === 'survival' || runState.goal.type === 'npc_quest') {
       return null;
     }
 
@@ -629,7 +737,10 @@ export class OverworldGoalRunController {
       const metric =
         rankingMode === 'time'
           ? `${(roomTop.elapsedMs / 1000).toFixed(2)}s`
-          : `${roomTop.score} pts`;
+          : this.currentGoalRun?.goal.type === 'npc_quest' &&
+              this.currentGoalRun.goal.questType === 'protect'
+            ? `${(roomTop.elapsedMs / 1000).toFixed(1)}s`
+            : `${roomTop.score} pts`;
       parts.push(`Room top ${roomTop.userDisplayName} ${metric}`);
     }
 
@@ -687,6 +798,8 @@ export class OverworldGoalRunController {
             enemyTarget: this.currentGoalRun.enemyTarget,
             checkpointsReached: this.currentGoalRun.checkpointsReached,
             checkpointTarget: this.currentGoalRun.checkpointTarget,
+            npcTargetInstanceId: this.currentGoalRun.npcTargetInstanceId,
+            npcAlive: this.currentGoalRun.npcAlive,
             nextCheckpointIndex: this.currentGoalRun.nextCheckpointIndex,
             result: this.currentGoalRun.result,
             completionMessage: this.currentGoalRun.completionMessage,
@@ -780,7 +893,7 @@ export class OverworldGoalRunController {
   }
 
   private goalTimeLimitReached(runState: GoalRunState): boolean {
-    if (runState.goal.type === 'survival') {
+    if (runState.goal.type === 'survival' || runState.goal.type === 'npc_quest') {
       return false;
     }
 

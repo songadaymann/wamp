@@ -119,7 +119,15 @@ function carryObjectsOnMovingPlatform(
 }
 
 function shouldCarryObjectOnMovingPlatform(liveObject: LoadedRoomObject): boolean {
-  return liveObject.config.category === 'collectible' || liveObject.config.category === 'enemy';
+  return (
+    liveObject.config.category === 'collectible' ||
+    liveObject.config.category === 'enemy' ||
+    (
+      liveObject.config.category === 'npc' &&
+      liveObject.layer === 'terrain' &&
+      (liveObject.runtime.npcMode !== 'idle' || liveObject.runtime.npcPushable)
+    )
+  );
 }
 
 function bodyIsOnMovingPlatformTop(

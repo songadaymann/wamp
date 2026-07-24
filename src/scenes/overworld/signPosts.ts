@@ -46,7 +46,8 @@ export class OverworldSignController<TEdgeWall = unknown> {
           !liveObject.sprite.active ||
           !liveObject.placedInstanceId ||
           !canPlacedObjectHaveSignText(liveObject.config) ||
-          !liveObject.signText
+          !liveObject.signText ||
+          (liveObject.config.category === 'npc' && liveObject.runtime.npcVictorious)
         ) {
           continue;
         }
@@ -65,7 +66,7 @@ export class OverworldSignController<TEdgeWall = unknown> {
         nextActiveSign = {
           instanceId: liveObject.placedInstanceId,
           objectId: liveObject.config.id,
-          objectLabel: liveObject.config.name,
+          objectLabel: liveObject.npcName ?? liveObject.config.name,
           roomCoordinates: { ...loadedRoom.room.coordinates },
           text: liveObject.signText,
         };

@@ -899,7 +899,7 @@ function getExpandedRoomGoalTypeFromJson(raw: string | null): ExpandedRoomGoalTy
 
 function getLegacyCourseGoalTypeFromJson(raw: string | null): CourseGoalType | null {
   const goalType = getExpandedRoomGoalTypeFromJson(raw);
-  return goalType === 'collect_race' ? null : goalType;
+  return goalType === 'collect_race' || goalType === 'npc_quest' ? null : goalType;
 }
 
 function getLegacyCourseIdFromExpandedRoomId(expandedRoomId: string): string | null {

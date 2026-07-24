@@ -644,10 +644,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPlayerBody: () => this.playerBody,
       getConveyorDirectionForBody: (body, gravityDirection) =>
         this.specialTilesController.getConveyorDirectionForBody(body, gravityDirection),
-      getGravityPlateDirectionForBody: (body, currentGravityDirection) =>
-        this.specialTilesController.getGravityPlateDirectionForBody(body, currentGravityDirection),
       getBodyRoomId: (body) => this.specialTilesController.getBodyRoomId(body),
-      isBodyInWater: (body) => this.specialTilesController.isBodyInWater(body),
+      getSpecialTileEnvironmentForBody: (body, currentGravityDirection) =>
+        this.specialTilesController.getEnvironmentForBody(body, currentGravityDirection),
       swordsmanTraversalPlannerMode: this.getSwordsmanTraversalPlannerMode(),
       isPlayerClimbingLadder: () => this.isClimbingLadder,
       isLadderDropRequested: () => this.isLadderDropRequested(),
@@ -682,6 +681,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       showTransientStatus: (message) => this.showTransientStatus(message),
       handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
       onEnemyDefeated: (event) => this.handleEnemyDefeated(event),
+      onNpcDefeated: (event) => this.handleNpcDefeated(event),
       onCollectibleCollected: (event) => this.handleCollectibleCollected(event),
       onEnemyCollectibleCollected: (event) => this.handleEnemyCollectibleCollected(event),
       onLiveObjectRemoved: (event) => this.handleLiveObjectRemovedForMultiplayer(event),
@@ -1152,6 +1152,10 @@ export class OverworldPlayScene extends Phaser.Scene {
         toWorldCoursePoint: (point) => this.toWorldCoursePoint(point),
         resetChallengeStateForCurrentRun: () =>
           this.sessionResetController.resetChallengeStateForCurrentRun(),
+        getRoomNpcState: (roomId, requestedInstanceId) =>
+          this.liveObjectController.getRoomNpcState(roomId, requestedInstanceId),
+        setRoomNpcsVictorious: (roomId, victorious) =>
+          this.liveObjectController.setRoomNpcsVictorious(roomId, victorious),
         showTransientStatus: (message) => this.showTransientStatus(message),
         redrawGoalMarkers: () => this.redrawGoalMarkers(),
         playGoalFx: (effect, x, y, cue) => this.fxController?.playGoalFx(effect, x, y, cue),
@@ -4403,6 +4407,21 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.objectiveController.handleEnemyDefeated(event.roomId, event.enemyName);
   }
 
+  private handleNpcDefeated(event: {
+    roomId: string;
+    npcName: string;
+    instanceId: string | null;
+  }): void {
+    const handled = this.objectiveController.handleNpcDefeated(
+      event.roomId,
+      event.instanceId,
+      event.npcName,
+    );
+    if (!handled) {
+      this.showTransientStatus(`${event.npcName} was defeated.`);
+    }
+  }
+
   private handleCollectibleCollected(event: {
     roomId: string;
     roomCoordinates: RoomCoordinates;
@@ -6100,6 +6119,33 @@ export class OverworldPlayScene extends Phaser.Scene {
               : Math.round(liveObject.runtime.aiCollectRouteScore),
             aiCollectRouteValue: Math.round(liveObject.runtime.aiCollectRouteValue),
             aiCollectRoutePenalty: Math.round(liveObject.runtime.aiCollectRoutePenalty),
+            npcName: liveObject.npcName,
+            npcMode: liveObject.runtime.npcMode,
+            npcPushable: liveObject.runtime.npcPushable,
+            npcCanJumpFall: liveObject.runtime.npcCanJumpFall,
+            npcPlayerCollision: liveObject.runtime.npcPlayerCollision,
+            npcFriendlyFire: liveObject.runtime.npcFriendlyFire,
+            npcDefeatMode: liveObject.runtime.npcDefeatMode,
+            npcVictorious: liveObject.runtime.npcVictorious,
+            npcWalking: liveObject.runtime.npcWalking,
+            npcQuicksandMs: Math.max(
+              0,
+              Math.round(liveObject.runtime.npcQuicksandUntil - this.time.now),
+            ),
+            npcBounceCooldownMs: Math.max(
+              0,
+              Math.round(liveObject.runtime.npcBounceCooldownUntil - this.time.now),
+            ),
+            specialTiles: {
+              windX: liveObject.runtime.specialTileWindX,
+              onIce: liveObject.runtime.specialTileOnIce,
+              onSticky: liveObject.runtime.specialTileOnSticky,
+              onBounce: liveObject.runtime.specialTileOnBounce,
+              onDamage: liveObject.runtime.specialTileOnDamage,
+              inWater: liveObject.runtime.inWater,
+              gravityDirection: liveObject.runtime.gravityDirection,
+            },
+            animationKey: liveObject.sprite.anims.currentAnim?.key ?? null,
             allowGravity: dynamicBody ? dynamicBody.allowGravity : null,
             velocityX: dynamicBody ? Math.round(dynamicBody.velocity.x) : 0,
             velocityY: dynamicBody ? Math.round(dynamicBody.velocity.y) : 0,

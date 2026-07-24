@@ -7,6 +7,11 @@ import {
 import { GHOST_OBJECT_ID } from '../enemies/ghost';
 import { SWORDSMAN_AI_OBJECT_ID } from '../enemies/swordsmanAi';
 import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../enemies/swordsmanObjectives';
+import {
+  JIMOTHY_OBJECT_ID,
+  isNpcObjectId,
+  type NpcMode,
+} from '../npcs/model';
 import { TILE_SIZE, type LayerName } from './room';
 import {
   FIRE_BIG_LIGHT_EMISSION,
@@ -18,7 +23,7 @@ import {
 // GAME OBJECTS (enemies, collectibles, hazards, decorations)
 // ══════════════════════════════════════
 
-export type ObjectCategory = 'collectible' | 'hazard' | 'enemy' | 'platform' | 'decoration' | 'interactive';
+export type ObjectCategory = 'collectible' | 'hazard' | 'enemy' | 'npc' | 'platform' | 'decoration' | 'interactive';
 export type ObjectInteraction = 'pushable';
 
 export interface GameObjectConfig {
@@ -190,6 +195,9 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'shark',       name: 'Shark',       category: 'enemy',       path: 'assets/enemies/shark.png',       frameWidth: 64, frameHeight: 32, frameCount: 4,  fps: 8,  animationFrames: [0, 1, 2, 3, 2, 1], defaultFrame: 1, facingDirection: 'left', bodyWidth: 48, bodyHeight: 18, behavior: 'fly',      description: 'Cruises left and right in a wave pattern. Kills on contact.' },
   { id: SWORDSMAN_AI_OBJECT_ID, name: 'Sword Hunter', category: 'enemy', path: 'assets/enemies/swordsman_ai/sword_idle.png', frameWidth: 48, frameHeight: 48, frameCount: 10, fps: 8, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 14, bodyOffsetX: 19, bodyOffsetY: 26, displayScale: 1.12, displayOffsetY: 8, previewWidth: 18, previewHeight: 28, previewOffsetX: 15, previewOffsetY: 20, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Smart sword enemy. Patrols, chases nearby players, and attacks with a timed slash.' },
 
+  // ── NPCs ──
+  { id: JIMOTHY_OBJECT_ID, name: 'Jimothy', category: 'npc', path: 'assets/enemies/bear_brown.png', frameWidth: 32, frameHeight: 32, frameCount: 8, fps: 4, animationFrames: [0, 1], defaultFrame: 0, facingDirection: 'right', bodyWidth: 24, bodyHeight: 16, bodyOffsetX: 4, bodyOffsetY: 16, behavior: 'static', description: 'A friendly NPC who can idle, wander, patrol, follow players, and deliver dialogue.' },
+
   // ── Interactive ──
   { id: 'bounce_pad',  name: 'Bounce Pad',  category: 'interactive', path: 'assets/objects/bounce_pad.png',  frameWidth: 16, frameHeight: 32, frameCount: 4,  fps: 0,  bodyWidth: 16, bodyHeight: 8,  behavior: 'bounce',   description: 'Launches player upward on contact.' },
   { id: 'spawn_point', name: 'Spawn Point', category: 'interactive', path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Player spawn marker. Only one is stored per room.' },
@@ -265,6 +273,7 @@ export function isDynamicRuntimeObjectConfig(
     || config.id === 'chicken'
     || config.id === 'cage'
     || config.id === SWORDSMAN_AI_OBJECT_ID
+    || isNpcObjectId(config.id)
     || config.id === MOVING_PLATFORM_OBJECT_ID
   );
 }
@@ -278,6 +287,7 @@ export function isSolidRuntimeObjectConfig(
 
   return (
     config.category === 'platform'
+    || config.category === 'npc'
     || config.id === 'door_locked'
     || config.id === 'door_locked_narrow'
     || config.id === 'trapdoor_locked'
@@ -312,7 +322,10 @@ export function placedObjectLayerAllowsRuntimeCollision(
   config: Pick<GameObjectConfig, 'id' | 'category' | 'interaction' | 'customSpriteKind'> | null | undefined,
   placed: Pick<PlacedObject, 'layer'> | null | undefined,
 ): boolean {
-  return !isSolidCustomSpriteObjectConfig(config) || getPlacedObjectLayer(placed) === 'terrain';
+  return (
+    (!isSolidCustomSpriteObjectConfig(config) && !isNpcObjectId(config?.id ?? ''))
+    || getPlacedObjectLayer(placed) === 'terrain'
+  );
 }
 
 export function getObjectAnimationFrames(config: GameObjectConfig): number[] {
@@ -513,6 +526,13 @@ export interface PlacedObject {
   signText?: string | null;
   swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;
   swordsmanDefeatMode?: SwordsmanDefeatMode | null;
+  npcMode?: NpcMode | null;
+  npcPushable?: boolean | null;
+  npcCanJumpFall?: boolean | null;
+  npcPlayerCollision?: boolean | null;
+  npcFriendlyFire?: boolean | null;
+  npcName?: string | null;
+  npcDefeatMode?: SwordsmanDefeatMode | null;
 }
 
 export function getPlacedObjectLayer(

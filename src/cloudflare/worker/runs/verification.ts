@@ -6,7 +6,7 @@ import type { RoomGoal, GoalMarkerPoint } from '../../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../../persistence/roomModel';
 import type { TrustTier } from '../../../progression/model';
 import type { LeaderboardRankingMode } from '../../../runs/model';
-import { compareLeaderboardEntries } from '../../../runs/scoring';
+import { compareLeaderboardEntries, getLeaderboardRankingMode } from '../../../runs/scoring';
 import {
   RANKED_RUN_TRACE_SCHEMA_VERSION,
   type RankedRunTraceBreadcrumb,
@@ -134,6 +134,12 @@ export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot
       layer: placed.layer ?? null,
       swordsmanObjectiveMode: placed.swordsmanObjectiveMode ?? null,
       swordsmanDefeatMode: placed.swordsmanDefeatMode ?? null,
+      npcMode: placed.npcMode ?? null,
+      npcPushable: placed.npcPushable ?? null,
+      npcCanJumpFall: placed.npcCanJumpFall ?? null,
+      npcPlayerCollision: placed.npcPlayerCollision ?? null,
+      npcFriendlyFire: placed.npcFriendlyFire ?? null,
+      npcDefeatMode: placed.npcDefeatMode ?? null,
       containedObjectId: placed.containedObjectId ?? null,
       triggerTargetInstanceId: placed.triggerTargetInstanceId ?? null,
       linkedTargetInstanceIds: placed.linkedTargetInstanceIds ?? null,
@@ -183,7 +189,7 @@ export function createRoomVerificationTrigger(
 ): RunVerificationTriggerResult {
   return createGenericVerificationTrigger({
     ...input,
-    rankingMode: goal.type === 'survival' || goal.type === 'collect_race' ? 'score' : 'time',
+    rankingMode: getLeaderboardRankingMode(goal),
     compare: (left, right) => compareLeaderboardEntries(left, right, goal),
   });
 }
@@ -914,6 +920,23 @@ function deriveMetricsForGoal(input: {
       }
       break;
     case 'survival':
+      break;
+    case 'npc_quest':
+      if (goal.questType === 'give' && collectibleIds.size < goal.requiredCount) {
+        return createFailedVerification('failed', 'trace_goal', {
+          issue: 'npc_give_shortfall',
+          requiredCount: goal.requiredCount,
+          collectedCount: collectibleIds.size,
+        });
+      }
+      if (
+        (goal.questType === 'escort' || goal.questType === 'give') &&
+        !reachedFinish
+      ) {
+        return createFailedVerification('failed', 'trace_goal', {
+          issue: 'npc_quest_missing_completion',
+        });
+      }
       break;
   }
 

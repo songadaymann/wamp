@@ -13,6 +13,15 @@ import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import { getPlacedObjectSignText } from '../signs/model';
 import { normalizeCustomSpriteDefinitions } from '../customSprites/model';
 import { getPlacedObjectPathTargetIds } from '../placedObjects/objectPaths';
+import {
+  getPlacedNpcDefeatMode,
+  getPlacedNpcMode,
+  getPlacedNpcName,
+  normalizeNpcCanJumpFall,
+  normalizeNpcFriendlyFire,
+  normalizeNpcPlayerCollision,
+  normalizeNpcPushable,
+} from '../npcs/model';
 import type { RoomSnapshot, RoomVersionRecord } from './roomModel';
 
 type CanonicalGoalPayload =
@@ -43,6 +52,14 @@ type CanonicalGoalPayload =
   | {
       type: 'survival';
       durationMs: number;
+    }
+  | {
+      type: 'npc_quest';
+      questType: string;
+      npcInstanceId: string | null;
+      durationMs: number;
+      requiredCount: number;
+      destination: [number, number] | null;
     };
 
 type CanonicalPlacedObjectPayload = {
@@ -56,6 +73,13 @@ type CanonicalPlacedObjectPayload = {
   swordsmanObjectiveMode: string | null;
   swordsmanDefeatMode: string | null;
   signText: string | null;
+  npcMode: string | null;
+  npcPushable: boolean | null;
+  npcCanJumpFall: boolean | null;
+  npcPlayerCollision: boolean | null;
+  npcFriendlyFire: boolean | null;
+  npcName: string | null;
+  npcDefeatMode: string | null;
   triggerTarget: string | null;
   linkedTargets: string[];
 };
@@ -268,6 +292,17 @@ function normalizeGoalForFingerprint(goal: RoomGoal | null): CanonicalGoalPayloa
         type: normalized.type,
         durationMs: normalized.durationMs,
       };
+    case 'npc_quest':
+      return {
+        type: normalized.type,
+        questType: normalized.questType,
+        npcInstanceId: normalized.npcInstanceId,
+        durationMs: normalized.durationMs,
+        requiredCount: normalized.requiredCount,
+        destination: normalized.destination
+          ? [Math.round(normalized.destination.x), Math.round(normalized.destination.y)]
+          : null,
+      };
   }
 }
 
@@ -287,6 +322,25 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       instanceId: getPlacedObjectInstanceId(placed, index),
       layer: getPlacedObjectLayer(placed),
       signText: getPlacedObjectSignText(placed),
+      npcMode: placed.id === 'jimothy' ? getPlacedNpcMode(placed) : null,
+      npcPushable:
+        placed.id === 'jimothy'
+          ? normalizeNpcPushable(placed.npcPushable, getPlacedNpcMode(placed))
+          : null,
+      npcCanJumpFall:
+        placed.id === 'jimothy'
+          ? normalizeNpcCanJumpFall(placed.npcCanJumpFall, getPlacedNpcMode(placed))
+          : null,
+      npcPlayerCollision:
+        placed.id === 'jimothy'
+          ? normalizeNpcPlayerCollision(placed.npcPlayerCollision)
+          : null,
+      npcFriendlyFire:
+        placed.id === 'jimothy'
+          ? normalizeNpcFriendlyFire(placed.npcFriendlyFire)
+          : null,
+      npcName: placed.id === 'jimothy' ? getPlacedNpcName(placed, 'Jimothy') : null,
+      npcDefeatMode: placed.id === 'jimothy' ? getPlacedNpcDefeatMode(placed) : null,
       swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
       swordsmanDefeatMode: normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode),
       signature,
@@ -321,6 +375,13 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       swordsmanObjectiveMode: placed.swordsmanObjectiveMode,
       swordsmanDefeatMode: placed.swordsmanDefeatMode,
       signText: placed.signText,
+      npcMode: placed.npcMode,
+      npcPushable: placed.npcPushable,
+      npcCanJumpFall: placed.npcCanJumpFall,
+      npcPlayerCollision: placed.npcPlayerCollision,
+      npcFriendlyFire: placed.npcFriendlyFire,
+      npcName: placed.npcName,
+      npcDefeatMode: placed.npcDefeatMode,
       triggerTarget: placed.triggerTargetInstanceId
         ? canonicalIdentityByInstanceId.get(placed.triggerTargetInstanceId) ?? null
         : null,
@@ -348,6 +409,25 @@ function buildPlacedObjectSignature(placed: PlacedObject): string {
     swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
     swordsmanDefeatMode: normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode),
     signText: getPlacedObjectSignText(placed),
+    npcMode: placed.id === 'jimothy' ? getPlacedNpcMode(placed) : null,
+    npcPushable:
+      placed.id === 'jimothy'
+        ? normalizeNpcPushable(placed.npcPushable, getPlacedNpcMode(placed))
+        : null,
+    npcCanJumpFall:
+      placed.id === 'jimothy'
+        ? normalizeNpcCanJumpFall(placed.npcCanJumpFall, getPlacedNpcMode(placed))
+        : null,
+    npcPlayerCollision:
+      placed.id === 'jimothy'
+        ? normalizeNpcPlayerCollision(placed.npcPlayerCollision)
+        : null,
+    npcFriendlyFire:
+      placed.id === 'jimothy'
+        ? normalizeNpcFriendlyFire(placed.npcFriendlyFire)
+        : null,
+    npcName: placed.id === 'jimothy' ? getPlacedNpcName(placed, 'Jimothy') : null,
+    npcDefeatMode: placed.id === 'jimothy' ? getPlacedNpcDefeatMode(placed) : null,
   });
 }
 
@@ -366,6 +446,8 @@ function compareCanonicalPlacedObjects(
     (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
     (left.swordsmanDefeatMode ?? '').localeCompare(right.swordsmanDefeatMode ?? '') ||
     (left.signText ?? '').localeCompare(right.signText ?? '') ||
+    Number(left.npcPlayerCollision ?? false) - Number(right.npcPlayerCollision ?? false) ||
+    Number(left.npcFriendlyFire ?? false) - Number(right.npcFriendlyFire ?? false) ||
     (left.triggerTarget ?? '').localeCompare(right.triggerTarget ?? '') ||
     left.linkedTargets.join('|').localeCompare(right.linkedTargets.join('|'))
   );

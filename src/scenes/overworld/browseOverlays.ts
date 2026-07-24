@@ -42,6 +42,7 @@ const ROOM_BADGE_SEMANTIC_COLORS: Record<RoomGoalType, number> = {
   collect_race: 0x58d39b,
   defeat_all: 0xff7a7a,
   survival: 0xc297ff,
+  npc_quest: 0xff9fe6,
 };
 const ROOM_BADGE_SEMANTIC_CODES: Record<RoomGoalType, string> = {
   reach_exit: 'EX',
@@ -50,6 +51,7 @@ const ROOM_BADGE_SEMANTIC_CODES: Record<RoomGoalType, string> = {
   collect_race: 'RC',
   defeat_all: 'KO',
   survival: 'SV',
+  npc_quest: 'NQ',
 };
 const SELECTED_ROOM_PLAY_BUTTON_RADIUS = 10;
 const SELECTED_ROOM_PLAY_BUTTON_HIT_RADIUS = SELECTED_ROOM_PLAY_BUTTON_RADIUS + 4;
