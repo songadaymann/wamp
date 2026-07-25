@@ -26,6 +26,30 @@ export interface NpcHorizontalMovementInput {
   windX: -1 | 0 | 1;
 }
 
+export interface NpcRoomBoundaryBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+export interface NpcRoomBoundaryCorrection {
+  deltaX: number;
+  deltaY: number;
+  hitLeft: boolean;
+  hitRight: boolean;
+  hitTop: boolean;
+  hitBottom: boolean;
+}
+
+export interface NpcRoomBoundaryInput {
+  roomBounds: NpcRoomBoundaryBounds;
+  bodyBounds: NpcRoomBoundaryBounds;
+  velocityX: number;
+  velocityY: number;
+  inset?: number;
+}
+
 export function getNpcEnvironmentalObjectInteraction(
   config: Pick<GameObjectConfig, 'id' | 'category'>,
 ): NpcEnvironmentalObjectInteraction {
@@ -78,4 +102,47 @@ export function resolveNpcHorizontalVelocity(
       (targetVelocityX - input.currentVelocityX) * NPC_WIND_RECOVERY_FACTOR;
   }
   return targetVelocityX;
+}
+
+export function resolveNpcRoomBoundaryCorrection(
+  input: NpcRoomBoundaryInput,
+): NpcRoomBoundaryCorrection | null {
+  const inset = Math.max(0, input.inset ?? 1);
+  const minLeft = input.roomBounds.left + inset;
+  const maxRight = input.roomBounds.right - inset;
+  const minTop = input.roomBounds.top + inset;
+  const maxBottom = input.roomBounds.bottom - inset;
+  const hitLeft =
+    input.bodyBounds.left < minLeft ||
+    (input.bodyBounds.left <= minLeft && input.velocityX < 0);
+  const hitRight =
+    input.bodyBounds.right > maxRight ||
+    (input.bodyBounds.right >= maxRight && input.velocityX > 0);
+  const hitTop =
+    input.bodyBounds.top < minTop ||
+    (input.bodyBounds.top <= minTop && input.velocityY < 0);
+  const hitBottom =
+    input.bodyBounds.bottom > maxBottom ||
+    (input.bodyBounds.bottom >= maxBottom && input.velocityY > 0);
+
+  if (!hitLeft && !hitRight && !hitTop && !hitBottom) {
+    return null;
+  }
+
+  return {
+    deltaX: hitLeft
+      ? Math.max(0, minLeft - input.bodyBounds.left)
+      : hitRight
+        ? Math.min(0, maxRight - input.bodyBounds.right)
+        : 0,
+    deltaY: hitTop
+      ? Math.max(0, minTop - input.bodyBounds.top)
+      : hitBottom
+        ? Math.min(0, maxBottom - input.bodyBounds.bottom)
+        : 0,
+    hitLeft,
+    hitRight,
+    hitTop,
+    hitBottom,
+  };
 }

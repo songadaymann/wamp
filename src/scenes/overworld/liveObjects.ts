@@ -482,6 +482,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       getPlayerBody: this.options.getPlayerBody,
       resetDynamicObjectIfOutOfBounds: (room, liveObject, body) =>
         this.resetDynamicObjectIfOutOfBounds(room, liveObject, body),
+      getRoomWorldBounds: (room) => this.getRoomWorldBounds(room),
       applyDirectionalFacing: (sprite, config, directionX) =>
         this.applyDirectionalFacing(sprite, config, directionX),
       hasSolidTerrainAtWorldPoint: (room, worldX, worldY) =>
@@ -1290,9 +1291,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const gravityVector = getGravityVector(gravityDirection);
     const deltaSeconds = Math.max(delta / 1000, 1 / 60);
     const usesManualGravity = gravityDirection !== 'down' || liveObject.runtime.inWater;
-    body.setAllowGravity(this.liveObjectUsesGravity(liveObject) && !usesManualGravity);
+    const suppressNpcRoomBottomGravity =
+      gravityDirection === 'down' &&
+      liveObject.config.category === 'npc' &&
+      this.npcController.isRestingOnRoomBottom(liveObject);
+    body.setAllowGravity(
+      this.liveObjectUsesGravity(liveObject) &&
+      !usesManualGravity &&
+      !suppressNpcRoomBottomGravity,
+    );
 
-    if (usesManualGravity) {
+    if (usesManualGravity && !suppressNpcRoomBottomGravity) {
       const gravityScale = liveObject.runtime.inWater ? LIVE_OBJECT_WATER_GRAVITY_FACTOR : 1;
       const maxGravitySpeed = liveObject.runtime.inWater
         ? LIVE_OBJECT_WATER_MAX_GRAVITY_SPEED

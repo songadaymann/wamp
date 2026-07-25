@@ -7,7 +7,11 @@ import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { LoadedRoomObject } from '../liveObjects';
 import type { LoadedFullRoom } from '../worldStreaming';
 import { getArcadeBodyBounds } from './bodies';
-import { resolveNpcHorizontalVelocity } from './npcEnvironment';
+import {
+  resolveNpcHorizontalVelocity,
+  resolveNpcRoomBoundaryCorrection,
+  type NpcRoomBoundaryBounds,
+} from './npcEnvironment';
 
 const NPC_WALK_SPEED = 70;
 const NPC_JUMP_VELOCITY = -210;
@@ -27,6 +31,7 @@ interface NpcControllerOptions {
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body,
   ): boolean;
+  getRoomWorldBounds(room: RoomSnapshot): NpcRoomBoundaryBounds;
   applyDirectionalFacing(
     sprite: Phaser.GameObjects.Sprite,
     config: LoadedRoomObject['config'],
@@ -52,7 +57,13 @@ export interface NpcRuntimeStateSnapshot {
 }
 
 export class LiveObjectNpcController<TEdgeWall = unknown> {
+  private readonly roomBottomedNpcY = new WeakMap<LoadedRoomObject, number>();
+
   constructor(private readonly options: NpcControllerOptions) {}
+
+  isRestingOnRoomBottom(liveObject: LoadedRoomObject): boolean {
+    return this.roomBottomedNpcY.has(liveObject);
+  }
 
   updateNpc(
     rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
@@ -69,6 +80,14 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
     const mode = liveObject.runtime.npcMode ?? 'idle';
     const terrainActor = liveObject.layer === 'terrain';
     const movable = mode !== 'idle' || liveObject.runtime.npcPushable;
+    const roomBottomedY = this.roomBottomedNpcY.get(liveObject);
+    if (
+      roomBottomedY !== undefined &&
+      (body.velocity.y < -1 || liveObject.sprite.y < roomBottomedY - 20)
+    ) {
+      this.roomBottomedNpcY.delete(liveObject);
+    }
+    const restingOnRoomBottom = this.roomBottomedNpcY.has(liveObject);
     const externallyLaunched =
       this.options.getCurrentTime() < liveObject.runtime.npcBounceCooldownUntil &&
       !body.blocked.down &&
@@ -76,7 +95,7 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
     const inQuicksand =
       this.options.getCurrentTime() < liveObject.runtime.npcQuicksandUntil;
 
-    body.setAllowGravity(terrainActor && movable);
+    body.setAllowGravity(terrainActor && movable && !restingOnRoomBottom);
     body.setImmovable(!movable);
     body.pushable = movable;
     body.setDragX(
@@ -120,6 +139,9 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
         break;
     }
 
+    if (movable) {
+      this.containNpcInRoom(loadedRoom.room, liveObject, body, mode);
+    }
     this.syncNameLabel(liveObject);
   }
 
@@ -378,6 +400,51 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
         this.options.getCurrentTime() < liveObject.runtime.npcQuicksandUntil,
       windX: liveObject.runtime.specialTileWindX,
     }));
+  }
+
+  private containNpcInRoom(
+    room: RoomSnapshot,
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+    mode: NpcMode,
+  ): boolean {
+    const correction = resolveNpcRoomBoundaryCorrection({
+      roomBounds: this.options.getRoomWorldBounds(room),
+      bodyBounds: {
+        left: body.left,
+        right: body.right,
+        top: body.top,
+        bottom: body.bottom,
+      },
+      velocityX: body.velocity.x,
+      velocityY: body.velocity.y,
+    });
+    if (!correction) {
+      return false;
+    }
+
+    const nextX = liveObject.sprite.x + correction.deltaX;
+    const nextY = liveObject.sprite.y + correction.deltaY;
+    const nextVelocityX =
+      correction.hitLeft || correction.hitRight ? 0 : body.velocity.x;
+    const nextVelocityY =
+      correction.hitTop || correction.hitBottom ? 0 : body.velocity.y;
+    body.reset(nextX, nextY);
+    liveObject.sprite.setPosition(nextX, nextY);
+    if (correction.hitBottom) {
+      this.roomBottomedNpcY.set(liveObject, nextY);
+      body.setAllowGravity(false);
+    }
+    body.setVelocity(nextVelocityX, nextVelocityY);
+
+    if (mode === 'wander' || mode === 'patrol') {
+      if (correction.hitLeft) {
+        liveObject.runtime.directionX = 1;
+      } else if (correction.hitRight) {
+        liveObject.runtime.directionX = -1;
+      }
+    }
+    return true;
   }
 
   private maybeLaunchFromBouncePad(
