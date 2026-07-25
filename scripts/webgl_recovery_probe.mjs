@@ -30,7 +30,7 @@ async function createReadyPage() {
     const state = JSON.parse(window.render_game_to_text());
     return state.activeScene?.worldTiles?.coveragePercentage === 100
       && state.activeScene?.worldTiles?.attachedTileCount > 0;
-  }, { timeout: 20_000 });
+  }, null, { timeout: 20_000 });
   const closeButton = page.locator('#welcome-modal button', { hasText: 'CLOSE' });
   if (await closeButton.count()) await closeButton.first().click();
   return { context, page, messages };
@@ -58,7 +58,7 @@ await restoredRun.page.waitForFunction(() => {
     && state.activeScene?.worldTiles?.targetCoveragePercentage === 100
     && state.activeScene?.worldTiles?.contextRestorePending === false
     && state.activeScene?.worldTiles?.attachedTileCount > 0;
-}, { timeout: 15_000 });
+}, null, { timeout: 15_000 });
 await restoredRun.page.screenshot({ path: `${outputPrefix}-native-restored.png` });
 const restoredState = await restoredRun.page.evaluate(() => {
   const state = JSON.parse(window.render_game_to_text());
@@ -76,7 +76,7 @@ await reloadRun.page.waitForFunction(() => {
     && state.activeScene?.worldTiles?.targetCoveragePercentage === 100
     && state.activeScene?.worldTiles?.contextRestorePending === false
     && state.activeScene?.worldTiles?.attachedTileCount > 0;
-}, { timeout: 20_000 });
+}, null, { timeout: 20_000 });
 await reloadRun.page.screenshot({ path: `${outputPrefix}-auto-reloaded.png` });
 const reloadState = await reloadRun.page.evaluate(() => {
   const state = JSON.parse(window.render_game_to_text());
