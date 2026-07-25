@@ -12,8 +12,10 @@ import { OverworldPlayScene } from './scenes/OverworldPlayScene';
 import { ensureEditorScenesRegistered } from './scenes/editorSceneLoader';
 import {
   getAppFeedbackDebugState,
+  hideBusyOverlay,
   initializeAppFeedback,
   isAppReady,
+  showBusyError,
   showBootSplash,
 } from './ui/appFeedback';
 import { getDeviceLayoutState } from './ui/deviceLayout';
@@ -34,6 +36,7 @@ import {
   getRuntimeResourceDebugState,
   installRuntimeResourceDebugLogger,
 } from './main/resourceDebug';
+import { installWebglRecoveryMonitor } from './main/webglRecovery';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
 import {
   getGameSettingsSyncDebugState,
@@ -178,6 +181,36 @@ window.requestAnimationFrame(() => {
 });
 
 const getDebugState = () => getGameDebugState(game);
+let webglRecoveryStorage: Storage | null = null;
+try {
+  webglRecoveryStorage = window.sessionStorage;
+} catch {
+  // Storage access is optional; graphics recovery still works without it.
+}
+const webglRecoveryMonitor = installWebglRecoveryMonitor({
+  renderer: game.renderer,
+  storage: webglRecoveryStorage,
+  getMode: () => getDebugState().mode === 'browse' ? 'browse' : 'protected',
+  reloadPage: () => window.location.reload(),
+  showManualRecovery: () => showBusyError(
+    'The browser paused the game graphics. Your current room is still here; reload to restore the picture.',
+    {
+      title: 'Graphics paused',
+      closeLabel: 'Keep waiting',
+      retryHandler: () => window.location.reload(),
+    },
+  ),
+  hideManualRecovery: () => hideBusyOverlay(),
+  log: (phase, details) => logBootPhase(
+    `webgl-context:${phase}`,
+    details,
+    {
+      level: phase === 'restored' ? 'info' : 'warn',
+      force: true,
+    },
+  ),
+});
+window.get_wamp_graphics_debug = () => webglRecoveryMonitor.getDebugState();
 
 window.render_game_to_text = () =>
   JSON.stringify({
@@ -197,6 +230,7 @@ window.render_game_to_text = () =>
       ready: isAppReady(),
       ...getAppFeedbackDebugState(),
     },
+    graphics: webglRecoveryMonitor.getDebugState(),
     bootDiagnostics: getBootDiagnostics(),
   });
 
