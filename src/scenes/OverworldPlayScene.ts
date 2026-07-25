@@ -2644,11 +2644,15 @@ export class OverworldPlayScene extends Phaser.Scene {
     const mainCamera = this.cameras.main;
     mainCamera.transparent = true;
 
-    if (this.backdropDisplayLayer) mainCamera.ignore(this.backdropDisplayLayer);
+    if (this.backdropDisplayLayer) {
+      this.backdropDisplayLayer.setActive(true).setVisible(true).setAlpha(1);
+      mainCamera.ignore(this.backdropDisplayLayer);
+    }
 
     if (!this.backdropCamera || !this.worldDisplayLayer) {
       return;
     }
+    this.worldDisplayLayer.setActive(true).setVisible(true).setAlpha(1);
 
     const ignoredObjects: Phaser.GameObjects.GameObject[] = [];
 
@@ -6206,6 +6210,28 @@ export class OverworldPlayScene extends Phaser.Scene {
         localPlayPressureRoomCount: streamingMetrics.localPlayPressureRoomCount,
       },
       worldTiles: streamingMetrics.worldTiles,
+      displayHealth: {
+        scene: {
+          active: this.sys.isActive(),
+          visible: this.sys.isVisible(),
+          sleeping: this.sys.isSleeping(),
+          paused: this.sys.isPaused(),
+        },
+        mainCamera: {
+          id: camera.id,
+          visible: camera.visible,
+          alpha: camera.alpha,
+        },
+        backdropCamera: this.backdropCamera
+          ? {
+              id: this.backdropCamera.id,
+              visible: this.backdropCamera.visible,
+              alpha: this.backdropCamera.alpha,
+            }
+          : null,
+        worldLayer: describeDisplayLayer(this.worldDisplayLayer, camera),
+        backdropLayer: describeDisplayLayer(this.backdropDisplayLayer, this.backdropCamera),
+      },
       currentRoomBackground: currentLoadedRoom
         ? {
             background: currentLoadedRoom.room.background,
@@ -6358,4 +6384,21 @@ export class OverworldPlayScene extends Phaser.Scene {
       liveObjects,
     };
   }
+}
+
+function describeDisplayLayer(
+  layer: Phaser.GameObjects.Layer | null,
+  camera: Phaser.Cameras.Scene2D.Camera | null,
+): Record<string, unknown> | null {
+  if (!layer) return null;
+  return {
+    active: layer.active,
+    visible: layer.visible,
+    alpha: layer.alpha,
+    renderFlags: layer.renderFlags,
+    cameraFilter: layer.cameraFilter,
+    attachedToDisplayList: Boolean(layer.displayList),
+    childCount: layer.list.length,
+    visibleToCamera: camera ? layer.willRender(camera) : null,
+  };
 }

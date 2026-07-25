@@ -36,7 +36,10 @@ import {
   getRuntimeResourceDebugState,
   installRuntimeResourceDebugLogger,
 } from './main/resourceDebug';
-import { installWebglRecoveryMonitor } from './main/webglRecovery';
+import {
+  type GraphicsDebugState,
+  installWebglRecoveryMonitor,
+} from './main/webglRecovery';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
 import {
   getGameSettingsSyncDebugState,
@@ -96,6 +99,18 @@ logBootPhase('phaser-game:create-start', {
 });
 const game = new Phaser.Game(config);
 logBootPhase('phaser-game:created');
+let gamePostStepCount = 0;
+let rendererPostRenderCount = 0;
+let lastGamePostStepAtMs: number | null = null;
+let lastRendererPostRenderAtMs: number | null = null;
+game.events.on(Phaser.Core.Events.POST_STEP, () => {
+  gamePostStepCount += 1;
+  lastGamePostStepAtMs = performance.now();
+});
+game.renderer.on(Phaser.Renderer.Events.POST_RENDER, () => {
+  rendererPostRenderCount += 1;
+  lastRendererPostRenderAtMs = performance.now();
+});
 initSfx();
 initRoomMusic();
 const applyRuntimeSettings = (settings: GameSettings) => {
@@ -210,7 +225,54 @@ const webglRecoveryMonitor = installWebglRecoveryMonitor({
     },
   ),
 });
-window.get_wamp_graphics_debug = () => webglRecoveryMonitor.getDebugState();
+const getGraphicsDebugState = (): GraphicsDebugState => {
+  const nowMs = performance.now();
+  const renderer = game.renderer as typeof game.renderer & {
+    contextLost?: boolean;
+    gl?: WebGLRenderingContext | WebGL2RenderingContext;
+  };
+  const canvasRect = game.canvas.getBoundingClientRect();
+  let browserReportsContextLost: boolean | null = null;
+  try {
+    browserReportsContextLost = renderer.gl?.isContextLost() ?? null;
+  } catch {
+    browserReportsContextLost = null;
+  }
+  return {
+    ...webglRecoveryMonitor.getDebugState(),
+    heartbeat: {
+      gameFrame: game.loop.frame,
+      gamePostStepCount,
+      rendererPostRenderCount,
+      lastGamePostStepAtMs,
+      lastRendererPostRenderAtMs,
+      gamePostStepAgeMs: lastGamePostStepAtMs === null
+        ? null
+        : Math.max(0, Math.round(nowMs - lastGamePostStepAtMs)),
+      rendererPostRenderAgeMs: lastRendererPostRenderAtMs === null
+        ? null
+        : Math.max(0, Math.round(nowMs - lastRendererPostRenderAtMs)),
+      loopRunning: game.loop.running,
+      loopStarted: game.loop.started,
+      loopInFocus: game.loop.inFocus,
+      gamePaused: game.isPaused,
+      documentHidden: document.hidden,
+      documentVisibilityState: document.visibilityState,
+      documentHasFocus: document.hasFocus(),
+    },
+    renderer: {
+      type: game.renderer.type,
+      contextLost: renderer.contextLost ?? null,
+      browserReportsContextLost,
+      canvasConnected: game.canvas.isConnected,
+      canvasWidth: game.canvas.width,
+      canvasHeight: game.canvas.height,
+      cssWidth: Math.round(canvasRect.width),
+      cssHeight: Math.round(canvasRect.height),
+    },
+  };
+};
+window.get_wamp_graphics_debug = getGraphicsDebugState;
 
 window.render_game_to_text = () =>
   JSON.stringify({
@@ -230,7 +292,7 @@ window.render_game_to_text = () =>
       ready: isAppReady(),
       ...getAppFeedbackDebugState(),
     },
-    graphics: webglRecoveryMonitor.getDebugState(),
+    graphics: getGraphicsDebugState(),
     bootDiagnostics: getBootDiagnostics(),
   });
 
