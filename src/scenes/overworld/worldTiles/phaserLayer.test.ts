@@ -44,6 +44,87 @@ describe('world tile Phaser layer transitions', () => {
     expect(firstImage.destroyed).toBe(false);
     expect(scene.killTweensOf).toHaveBeenCalledWith(firstImage);
   });
+
+  it('repairs a desired image left transparent after an interrupted blend', () => {
+    const scene = createScene();
+    const layer = new WorldTilePhaserLayer(scene.value, 32_000_000);
+    const first = entry(0);
+    layer.installDecoded(first, source());
+    layer.syncDisplay(new Map([[key(first), first]]), [key(first)], {
+      blend: true,
+      staleRoomIds: [],
+    });
+
+    const image = scene.images[0];
+    image.alpha = 0;
+    layer.syncDisplay(new Map([[key(first), first]]), [key(first)], {
+      blend: true,
+      staleRoomIds: [],
+    });
+
+    expect(image.alpha).toBe(1);
+    expect(layer.getHealthSnapshot()).toMatchObject({
+      desiredImageCount: 1,
+      healthyDesiredImageCount: 1,
+      unhealthyDesiredImageCount: 0,
+      repairCount: 1,
+      lastRepairReasons: ['restored-alpha'],
+    });
+  });
+
+  it('recreates a desired image destroyed without changing the coverage signature', () => {
+    const scene = createScene();
+    const layer = new WorldTilePhaserLayer(scene.value, 32_000_000);
+    const first = entry(0);
+    layer.installDecoded(first, source());
+    layer.syncDisplay(new Map([[key(first), first]]), [key(first)], {
+      blend: false,
+      staleRoomIds: [],
+    });
+
+    const destroyedImage = scene.images[0];
+    destroyedImage.destroy();
+    expect(layer.getHealthSnapshot()).toMatchObject({
+      destroyedDesiredImageCount: 1,
+      unhealthyDesiredImageCount: 1,
+    });
+
+    layer.syncDisplay(new Map([[key(first), first]]), [key(first)], {
+      blend: false,
+      staleRoomIds: [],
+    });
+    const replacement = scene.images[1];
+    expect(replacement).toBeDefined();
+    expect(replacement.destroyed).toBe(false);
+    expect(layer.getHealthSnapshot()).toMatchObject({
+      healthyDesiredImageCount: 1,
+      unhealthyDesiredImageCount: 0,
+      repairCount: 1,
+      lastRepairReasons: ['recreated-destroyed-image'],
+    });
+  });
+
+  it('does not interrupt a healthy blend that is still tweening', () => {
+    const scene = createScene();
+    const layer = new WorldTilePhaserLayer(scene.value, 32_000_000);
+    const first = entry(0);
+    const second = entry(1);
+    layer.installDecoded(first, source());
+    layer.installDecoded(second, source());
+    const entries = new Map([
+      [key(first), first],
+      [key(second), second],
+    ]);
+    layer.syncDisplay(entries, [key(first)], { blend: true, staleRoomIds: [] });
+    layer.syncDisplay(entries, [key(second)], { blend: true, staleRoomIds: [] });
+    const enteringImage = scene.images[1];
+    expect(enteringImage.alpha).toBe(0);
+
+    layer.syncDisplay(entries, [key(second)], { blend: true, staleRoomIds: [] });
+
+    expect(enteringImage.alpha).toBe(0);
+    expect(layer.getHealthSnapshot().repairCount).toBe(0);
+  });
 });
 
 function createScene() {
@@ -54,8 +135,11 @@ function createScene() {
     setFilter: () => void;
   }>();
   const images: FakeImage[] = [];
-  const tweens: Array<{ onComplete?: () => void }> = [];
-  const killTweensOf = vi.fn();
+  const tweens: Array<{ onComplete?: () => void; targets?: FakeImage[] }> = [];
+  const activeTweenTargets = new Set<FakeImage>();
+  const killTweensOf = vi.fn((target: FakeImage) => {
+    activeTweenTargets.delete(target);
+  });
   const value = {
     textures: {
       exists: (textureKey: string) => textureRecords.has(textureKey),
@@ -75,18 +159,20 @@ function createScene() {
     },
     add: {
       image: (_x: number, _y: number, textureKey: string) => {
-        const image = new FakeImage(textureKey);
+        const image = new FakeImage(value as never, textureKey);
         images.push(image);
         return image;
       },
-      rectangle: () => new FakeImage('mask'),
+      rectangle: () => new FakeImage(value as never, 'mask'),
     },
     tweens: {
-      add: (config: { onComplete?: () => void }) => {
+      add: (config: { onComplete?: () => void; targets?: FakeImage[] }) => {
         tweens.push(config);
+        for (const target of config.targets ?? []) activeTweenTargets.add(target);
         return config;
       },
       killTweensOf,
+      isTweening: (target: FakeImage) => activeTweenTargets.has(target),
     },
   };
   return { value: value as never, images, tweens, killTweensOf };
@@ -94,10 +180,17 @@ function createScene() {
 
 class FakeImage {
   alpha = 1;
+  active = true;
+  visible = true;
+  cameraFilter = 0;
+  displayList: object | null = {};
+  parentContainer: object | null = null;
+  scene: object | undefined;
   destroyed = false;
   texture: { key: string };
 
-  constructor(textureKey: string) {
+  constructor(scene: object, textureKey: string) {
+    this.scene = scene;
     this.texture = { key: textureKey };
   }
 
@@ -106,7 +199,15 @@ class FakeImage {
   setDisplaySize() { return this; }
   setTexture(textureKey: string) { this.texture.key = textureKey; return this; }
   setAlpha(alpha: number) { this.alpha = alpha; return this; }
-  destroy() { this.destroyed = true; }
+  setVisible(visible: boolean) { this.visible = visible; return this; }
+  setActive(active: boolean) { this.active = active; return this; }
+  destroy() {
+    this.destroyed = true;
+    this.active = false;
+    this.visible = false;
+    this.displayList = null;
+    this.scene = undefined;
+  }
 }
 
 function entry(x: number): WorldTileManifestEntry {

@@ -31,7 +31,12 @@ import {
 } from './manifest';
 import { WorldTileManifestLoader } from './manifestLoader';
 import { WorldTileDebugMetricsTracker, type WorldTileDebugMetrics } from './metrics';
-import { decodeWorldTileBlob, type DecodedWorldTileSource, WorldTilePhaserLayer } from './phaserLayer';
+import {
+  decodeWorldTileBlob,
+  type DecodedWorldTileSource,
+  type WorldTileLayerHealthSnapshot,
+  WorldTilePhaserLayer,
+} from './phaserLayer';
 import { WorldTileRoomManifestPrefetcher } from './roomPrefetcher';
 import { InitialSelectionPrefetchGate } from './initialSelectionPrefetch';
 import {
@@ -132,6 +137,7 @@ export interface WorldTileClientDebugSnapshot extends WorldTileDebugMetrics {
   committedLevel: WorldTileLevel;
   cohortBucket: number | null;
   attachedTileCount: number;
+  layerHealth: WorldTileLayerHealthSnapshot;
   byteCacheHits: number;
   byteCacheMisses: number;
   byteCacheEvictions: number;
@@ -598,6 +604,7 @@ export class WorldTileClientController {
       committedLevel: this.committedLevel,
       cohortBucket: this.rollout?.bucket ?? null,
       attachedTileCount: this.layer.getAttachedAddressKeys().length,
+      layerHealth: this.layer.getHealthSnapshot(),
       byteCacheHits: byteCache.hits,
       byteCacheMisses: byteCache.misses,
       byteCacheEvictions: byteCache.evictions,

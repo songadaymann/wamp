@@ -52,6 +52,35 @@ export interface WebglRecoveryDebugState {
   manualRecoveryPrompts: number;
 }
 
+export interface GraphicsDebugState extends WebglRecoveryDebugState {
+  heartbeat: {
+    gameFrame: number;
+    gamePostStepCount: number;
+    rendererPostRenderCount: number;
+    lastGamePostStepAtMs: number | null;
+    lastRendererPostRenderAtMs: number | null;
+    gamePostStepAgeMs: number | null;
+    rendererPostRenderAgeMs: number | null;
+    loopRunning: boolean;
+    loopStarted: boolean;
+    loopInFocus: boolean;
+    gamePaused: boolean;
+    documentHidden: boolean;
+    documentVisibilityState: DocumentVisibilityState;
+    documentHasFocus: boolean;
+  };
+  renderer: {
+    type: number;
+    contextLost: boolean | null;
+    browserReportsContextLost: boolean | null;
+    canvasConnected: boolean;
+    canvasWidth: number;
+    canvasHeight: number;
+    cssWidth: number;
+    cssHeight: number;
+  };
+}
+
 export interface WebglRecoveryMonitor {
   getDebugState(): WebglRecoveryDebugState;
   destroy(): void;

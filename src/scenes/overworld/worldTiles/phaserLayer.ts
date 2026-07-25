@@ -24,9 +24,29 @@ export interface WorldTileLayerSyncOptions {
   staleRoomIds: Iterable<string>;
 }
 
+export interface WorldTileLayerHealthSnapshot {
+  desiredImageCount: number;
+  attachedImageCount: number;
+  healthyDesiredImageCount: number;
+  unhealthyDesiredImageCount: number;
+  missingDesiredImageCount: number;
+  destroyedDesiredImageCount: number;
+  detachedDesiredImageCount: number;
+  invisibleDesiredImageCount: number;
+  inactiveDesiredImageCount: number;
+  fadedDesiredImageCount: number;
+  missingTextureDesiredImageCount: number;
+  mismatchedTextureDesiredImageCount: number;
+  cameraFilteredDesiredImageCount: number;
+  repairCount: number;
+  lastRepairAtMs: number | null;
+  lastRepairReasons: string[];
+}
+
 const WORLD_TILE_IMAGE_DEPTH = -0.5;
 const WORLD_TILE_STALE_MASK_DEPTH = -0.25;
 const WORLD_TILE_BLEND_MS = 75;
+const WORLD_TILE_TRANSITION_STALL_MS = 1_000;
 const WORLD_TILE_STALE_MASK_COLOR = 0x080d18;
 const WORLD_TILE_CONTENT_FRAME = 'content';
 
@@ -40,6 +60,10 @@ export class WorldTilePhaserLayer {
   private currentDesiredKeys = new Set<string>();
   private displaySignature = '';
   private nextTransitionToken = 0;
+  private readonly transitionStartedAtMsByImage = new WeakMap<Phaser.GameObjects.Image, number>();
+  private repairCount = 0;
+  private lastRepairAtMs: number | null = null;
+  private lastRepairReasons: string[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -121,7 +145,12 @@ export class WorldTilePhaserLayer {
     this.syncPinnedTextures(displayableKeys);
     const masksChanged = this.syncStaleMasks(options.staleRoomIds);
     if (masksChanged) this.onObjectsChanged?.();
-    if (signature === this.displaySignature) return;
+    if (signature === this.displaySignature) {
+      if (this.repairStableDisplay(entriesByKey, displayableKeys)) {
+        this.onObjectsChanged?.();
+      }
+      return;
+    }
     this.displaySignature = signature;
 
     const desired = new Set(displayableKeys);
@@ -202,6 +231,47 @@ export class WorldTilePhaserLayer {
     return [...this.imagesByAddressKey.keys()].sort();
   }
 
+  getHealthSnapshot(): WorldTileLayerHealthSnapshot {
+    const snapshot: WorldTileLayerHealthSnapshot = {
+      desiredImageCount: this.currentDesiredKeys.size,
+      attachedImageCount: this.imagesByAddressKey.size,
+      healthyDesiredImageCount: 0,
+      unhealthyDesiredImageCount: 0,
+      missingDesiredImageCount: 0,
+      destroyedDesiredImageCount: 0,
+      detachedDesiredImageCount: 0,
+      invisibleDesiredImageCount: 0,
+      inactiveDesiredImageCount: 0,
+      fadedDesiredImageCount: 0,
+      missingTextureDesiredImageCount: 0,
+      mismatchedTextureDesiredImageCount: 0,
+      cameraFilteredDesiredImageCount: 0,
+      repairCount: this.repairCount,
+      lastRepairAtMs: this.lastRepairAtMs,
+      lastRepairReasons: [...this.lastRepairReasons],
+    };
+    for (const addressKey of this.currentDesiredKeys) {
+      const image = this.imagesByAddressKey.get(addressKey);
+      const installed = this.textureByAddressKey.get(addressKey);
+      const reasons = this.getDesiredImageHealthReasons(image, installed);
+      if (reasons.length === 0) {
+        snapshot.healthyDesiredImageCount += 1;
+        continue;
+      }
+      snapshot.unhealthyDesiredImageCount += 1;
+      if (reasons.includes('missing-image')) snapshot.missingDesiredImageCount += 1;
+      if (reasons.includes('destroyed-image')) snapshot.destroyedDesiredImageCount += 1;
+      if (reasons.includes('detached-image')) snapshot.detachedDesiredImageCount += 1;
+      if (reasons.includes('invisible-image')) snapshot.invisibleDesiredImageCount += 1;
+      if (reasons.includes('inactive-image')) snapshot.inactiveDesiredImageCount += 1;
+      if (reasons.includes('faded-image')) snapshot.fadedDesiredImageCount += 1;
+      if (reasons.includes('missing-texture')) snapshot.missingTextureDesiredImageCount += 1;
+      if (reasons.includes('mismatched-texture')) snapshot.mismatchedTextureDesiredImageCount += 1;
+      if (reasons.includes('camera-filtered-image')) snapshot.cameraFilteredDesiredImageCount += 1;
+    }
+    return snapshot;
+  }
+
   clearDisplay(): void {
     this.displaySignature = '';
     this.currentDesiredKeys.clear();
@@ -247,6 +317,7 @@ export class WorldTilePhaserLayer {
     this.scene.tweens.killTweensOf(image);
     const token = ++this.nextTransitionToken;
     this.transitionTokenByImage.set(image, token);
+    this.transitionStartedAtMsByImage.set(image, performance.now());
     return token;
   }
 
@@ -268,6 +339,86 @@ export class WorldTilePhaserLayer {
     }
     for (const textureKey of nextPinned) this.textureCache.pin(textureKey);
     this.pinnedTextureKeys = nextPinned;
+  }
+
+  private repairStableDisplay(
+    entriesByKey: ReadonlyMap<string, WorldTileManifestEntry>,
+    displayableKeys: readonly string[],
+  ): boolean {
+    let repairReasons: Set<string> | null = null;
+    const nowMs = performance.now();
+    for (const addressKey of displayableKeys) {
+      const installed = this.textureByAddressKey.get(addressKey);
+      const entry = entriesByKey.get(addressKey);
+      if (!installed || !entry || !this.scene.textures.exists(installed.textureKey)) continue;
+      let image = this.imagesByAddressKey.get(addressKey);
+      if (!image || image.scene !== this.scene) {
+        if (image?.scene) image.destroy();
+        image = this.createImage(entry, installed.textureKey);
+        this.imagesByAddressKey.set(addressKey, image);
+        (repairReasons ??= new Set()).add('recreated-destroyed-image');
+        continue;
+      }
+      if (!image.displayList && !image.parentContainer) {
+        image.destroy();
+        image = this.createImage(entry, installed.textureKey);
+        this.imagesByAddressKey.set(addressKey, image);
+        (repairReasons ??= new Set()).add('reattached-image');
+      }
+      if (image.texture.key !== installed.textureKey) {
+        image.setTexture(installed.textureKey, WORLD_TILE_CONTENT_FRAME);
+        (repairReasons ??= new Set()).add('restored-texture');
+      }
+      if (!image.visible) {
+        image.setVisible(true);
+        (repairReasons ??= new Set()).add('restored-visibility');
+      }
+      if (!image.active) {
+        image.setActive(true);
+        (repairReasons ??= new Set()).add('restored-activity');
+      }
+      if (image.cameraFilter !== 0) {
+        image.cameraFilter = 0;
+        (repairReasons ??= new Set()).add('cleared-camera-filter');
+      }
+      const transitionStartedAtMs = this.transitionStartedAtMsByImage.get(image) ?? nowMs;
+      const transitionStalled = nowMs - transitionStartedAtMs > WORLD_TILE_TRANSITION_STALL_MS;
+      if (
+        image.alpha < 0.999
+        && (!this.scene.tweens.isTweening(image) || transitionStalled)
+      ) {
+        this.cancelImageTransition(image);
+        image.setAlpha(1);
+        (repairReasons ??= new Set()).add(
+          transitionStalled ? 'completed-stalled-transition' : 'restored-alpha',
+        );
+      }
+    }
+    if (!repairReasons) return false;
+    this.repairCount += 1;
+    this.lastRepairAtMs = Date.now();
+    this.lastRepairReasons = [...repairReasons].sort();
+    return true;
+  }
+
+  private getDesiredImageHealthReasons(
+    image: Phaser.GameObjects.Image | undefined,
+    installed: InstalledWorldTileTexture | undefined,
+  ): string[] {
+    if (!image) return ['missing-image'];
+    const reasons: string[] = [];
+    if (image.scene !== this.scene) reasons.push('destroyed-image');
+    if (!image.displayList && !image.parentContainer) reasons.push('detached-image');
+    if (!image.visible) reasons.push('invisible-image');
+    if (!image.active) reasons.push('inactive-image');
+    if (image.alpha < 0.999) reasons.push('faded-image');
+    if (!installed || !this.scene.textures.exists(installed.textureKey)) {
+      reasons.push('missing-texture');
+    } else if (image.texture.key !== installed.textureKey) {
+      reasons.push('mismatched-texture');
+    }
+    if (image.cameraFilter !== 0) reasons.push('camera-filtered-image');
+    return reasons;
   }
 
   private syncStaleMasks(staleRoomIds: Iterable<string>): boolean {

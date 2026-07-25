@@ -23,7 +23,7 @@ interface Window {
   get_room_music_debug_state?: () => Record<string, unknown>;
   get_wamp_resource_debug?: () => Record<string, unknown>;
   get_wamp_resource_log?: () => Record<string, unknown>[];
-  get_wamp_graphics_debug?: () => import('./main/webglRecovery').WebglRecoveryDebugState;
+  get_wamp_graphics_debug?: () => import('./main/webglRecovery').GraphicsDebugState;
   get_sword_hunter_debug?: () => Record<string, unknown>;
   get_sfx_debug_state?: () => Record<string, unknown>;
   get_wamp_boot_debug_state?: () => Record<string, unknown>;
