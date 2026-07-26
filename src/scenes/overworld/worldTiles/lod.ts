@@ -61,6 +61,22 @@ export function canCommitWorldTileLevel(input: {
     input.nowMs - input.lastGestureAtMs >= idleCommitMs;
 }
 
+export function shouldDeferWorldTileTargetRefinement(input: {
+  nowMs: number;
+  lastGestureAtMs: number;
+  committedLevel: WorldTileLevel;
+  desiredLevel: WorldTileLevel;
+  idleCommitMs?: number;
+}): boolean {
+  const idleCommitMs = input.idleCommitMs ?? WORLD_TILE_LOD_IDLE_COMMIT_MS;
+  if (![input.nowMs, input.lastGestureAtMs, idleCommitMs].every(Number.isFinite)) {
+    throw new RangeError('LOD refinement timing values must be finite.');
+  }
+  return input.desiredLevel !== input.committedLevel
+    && input.nowMs >= input.lastGestureAtMs
+    && input.nowMs - input.lastGestureAtMs < idleCommitMs;
+}
+
 export function selectWorldTileDisplayLevel(input: {
   committedLevel: WorldTileLevel;
   desiredLevel: WorldTileLevel;

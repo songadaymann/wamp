@@ -4,6 +4,7 @@ import {
   getInitialWorldTileLevel,
   selectWorldTileDisplayLevel,
   selectWorldTileLevel,
+  shouldDeferWorldTileTargetRefinement,
 } from './lod';
 
 describe('world tile LOD selection', () => {
@@ -60,6 +61,27 @@ describe('world tile LOD selection', () => {
       lastGestureAtMs: 100,
       replacementCoverageComplete: true,
     })).toBe(true);
+  });
+
+  it('defers target-level refinement only while a cross-LOD gesture is active', () => {
+    expect(shouldDeferWorldTileTargetRefinement({
+      committedLevel: 4,
+      desiredLevel: 3,
+      nowMs: 1_079,
+      lastGestureAtMs: 1_000,
+    })).toBe(true);
+    expect(shouldDeferWorldTileTargetRefinement({
+      committedLevel: 4,
+      desiredLevel: 3,
+      nowMs: 1_080,
+      lastGestureAtMs: 1_000,
+    })).toBe(false);
+    expect(shouldDeferWorldTileTargetRefinement({
+      committedLevel: 3,
+      desiredLevel: 3,
+      nowMs: 1_010,
+      lastGestureAtMs: 1_000,
+    })).toBe(false);
   });
 
   it('keeps the committed imagery during a gesture and swaps only after idle coverage', () => {

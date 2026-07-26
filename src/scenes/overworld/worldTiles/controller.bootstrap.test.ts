@@ -29,6 +29,26 @@ vi.mock('./phaserLayer', () => ({
     getImages(): never[] { return []; }
     getBackdropIgnoredObjects(): never[] { return []; }
     getAttachedAddressKeys(): string[] { return []; }
+    getHealthSnapshot(): Record<string, unknown> {
+      return {
+        desiredImageCount: 0,
+        attachedImageCount: 0,
+        healthyDesiredImageCount: 0,
+        unhealthyDesiredImageCount: 0,
+        missingDesiredImageCount: 0,
+        destroyedDesiredImageCount: 0,
+        detachedDesiredImageCount: 0,
+        invisibleDesiredImageCount: 0,
+        inactiveDesiredImageCount: 0,
+        fadedDesiredImageCount: 0,
+        missingTextureDesiredImageCount: 0,
+        mismatchedTextureDesiredImageCount: 0,
+        cameraFilteredDesiredImageCount: 0,
+        repairCount: 0,
+        lastRepairAtMs: null,
+        lastRepairReasons: [],
+      };
+    }
     clearDisplay(): void {}
     discardGpuTexturesForContextRestore(): void { this.textures.clear(); }
     destroy(): void { this.textures.clear(); }

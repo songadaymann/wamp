@@ -64,11 +64,15 @@ export interface GraphicsDebugState extends WebglRecoveryDebugState {
     loopRunning: boolean;
     loopStarted: boolean;
     loopInFocus: boolean;
+    rafRunning: boolean;
+    rafUsesSetTimeout: boolean;
+    rafRequestId: number | null;
     gamePaused: boolean;
     documentHidden: boolean;
     documentVisibilityState: DocumentVisibilityState;
     documentHasFocus: boolean;
   };
+  renderLoopRecovery: import('./renderLoopRecovery').RenderLoopRecoveryDebugState;
   renderer: {
     type: number;
     contextLost: boolean | null;

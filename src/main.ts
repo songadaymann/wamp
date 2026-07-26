@@ -40,6 +40,7 @@ import {
   type GraphicsDebugState,
   installWebglRecoveryMonitor,
 } from './main/webglRecovery';
+import { installRenderLoopRecoveryMonitor } from './main/renderLoopRecovery';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
 import {
   getGameSettingsSyncDebugState,
@@ -103,6 +104,39 @@ let gamePostStepCount = 0;
 let rendererPostRenderCount = 0;
 let lastGamePostStepAtMs: number | null = null;
 let lastRendererPostRenderAtMs: number | null = null;
+const restartPhaserRenderLoop = () => {
+  const loop = game.loop as unknown as {
+    running: boolean;
+    focus(): void;
+    wake(seamless?: boolean): void;
+    raf: {
+      isRunning: boolean;
+      isSetTimeOut: boolean;
+      timeOutID: number | null;
+      stop(): void;
+    };
+  };
+  loop.focus();
+  loop.raf.stop();
+  loop.running = false;
+  loop.wake(true);
+};
+const renderLoopRecoveryMonitor = installRenderLoopRecoveryMonitor({
+  restartLoop: restartPhaserRenderLoop,
+  isEligible: () => (
+    !document.hidden
+    && !game.isPaused
+    && getGameDebugState(game).mode === 'browse'
+  ),
+  log: (phase, details) => logBootPhase(
+    `render-loop:${phase}`,
+    details,
+    {
+      level: phase === 'restarted' ? 'info' : 'warn',
+      force: true,
+    },
+  ),
+});
 game.events.on(Phaser.Core.Events.POST_STEP, () => {
   gamePostStepCount += 1;
   lastGamePostStepAtMs = performance.now();
@@ -110,6 +144,24 @@ game.events.on(Phaser.Core.Events.POST_STEP, () => {
 game.renderer.on(Phaser.Renderer.Events.POST_RENDER, () => {
   rendererPostRenderCount += 1;
   lastRendererPostRenderAtMs = performance.now();
+  renderLoopRecoveryMonitor.recordRender(lastRendererPostRenderAtMs);
+});
+const notifyRenderLoopUserActivity = () => renderLoopRecoveryMonitor.notifyUserActivity();
+window.addEventListener('wheel', notifyRenderLoopUserActivity, { capture: true, passive: true });
+window.addEventListener('pointerdown', notifyRenderLoopUserActivity, { capture: true, passive: true });
+window.addEventListener('touchstart', notifyRenderLoopUserActivity, { capture: true, passive: true });
+window.addEventListener('keydown', notifyRenderLoopUserActivity, { capture: true });
+window.addEventListener('focus', () => renderLoopRecoveryMonitor.notifyVisibilityResume());
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) renderLoopRecoveryMonitor.notifyVisibilityResume();
+});
+window.addEventListener('error', (event) => {
+  renderLoopRecoveryMonitor.notifyRuntimeError({
+    message: event.message,
+    source: event.filename || null,
+    line: event.lineno || null,
+    column: event.colno || null,
+  });
 });
 initSfx();
 initRoomMusic();
@@ -231,6 +283,13 @@ const getGraphicsDebugState = (): GraphicsDebugState => {
     contextLost?: boolean;
     gl?: WebGLRenderingContext | WebGL2RenderingContext;
   };
+  const loop = game.loop as typeof game.loop & {
+    raf?: {
+      isRunning?: boolean;
+      isSetTimeOut?: boolean;
+      timeOutID?: number | null;
+    };
+  };
   const canvasRect = game.canvas.getBoundingClientRect();
   let browserReportsContextLost: boolean | null = null;
   try {
@@ -255,11 +314,15 @@ const getGraphicsDebugState = (): GraphicsDebugState => {
       loopRunning: game.loop.running,
       loopStarted: game.loop.started,
       loopInFocus: game.loop.inFocus,
+      rafRunning: loop.raf?.isRunning === true,
+      rafUsesSetTimeout: loop.raf?.isSetTimeOut === true,
+      rafRequestId: typeof loop.raf?.timeOutID === 'number' ? loop.raf.timeOutID : null,
       gamePaused: game.isPaused,
       documentHidden: document.hidden,
       documentVisibilityState: document.visibilityState,
       documentHasFocus: document.hasFocus(),
     },
+    renderLoopRecovery: renderLoopRecoveryMonitor.getDebugState(),
     renderer: {
       type: game.renderer.type,
       contextLost: renderer.contextLost ?? null,

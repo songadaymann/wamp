@@ -7,6 +7,7 @@ export interface WorldTileStreamingBudgets {
   decodeConcurrency: number;
   gpuUploadsPerFrame: number;
   gpuUploadBudgetMs: number;
+  maxGpuUploadBacklog: number;
   persistentByteBudgetMb: number;
   gpuTextureBudgetMb: number;
 }
@@ -96,6 +97,7 @@ const NORMAL_BUDGETS: WorldTileStreamingBudgets = {
   decodeConcurrency: 2,
   gpuUploadsPerFrame: 2,
   gpuUploadBudgetMs: 4,
+  maxGpuUploadBacklog: 8,
   persistentByteBudgetMb: 128,
   gpuTextureBudgetMb: 96,
 };
@@ -105,6 +107,7 @@ const REDUCED_BUDGETS: WorldTileStreamingBudgets = {
   decodeConcurrency: 1,
   gpuUploadsPerFrame: 1,
   gpuUploadBudgetMs: 2,
+  maxGpuUploadBacklog: 4,
   persistentByteBudgetMb: 48,
   gpuTextureBudgetMb: 40,
 };

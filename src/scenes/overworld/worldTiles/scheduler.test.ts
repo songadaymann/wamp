@@ -66,6 +66,7 @@ describe('world tile scheduling', () => {
       decodeConcurrency: 2,
       gpuUploadsPerFrame: 2,
       gpuUploadBudgetMs: 4,
+      maxGpuUploadBacklog: 8,
       persistentByteBudgetMb: 128,
       gpuTextureBudgetMb: 96,
     });
@@ -74,6 +75,7 @@ describe('world tile scheduling', () => {
       decodeConcurrency: 1,
       gpuUploadsPerFrame: 1,
       gpuUploadBudgetMs: 2,
+      maxGpuUploadBacklog: 4,
       persistentByteBudgetMb: 48,
       gpuTextureBudgetMb: 40,
     });

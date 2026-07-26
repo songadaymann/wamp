@@ -148,7 +148,7 @@ export function installBootDiagnosticsGlobal(): void {
         line: event.lineno || null,
         column: event.colno || null,
       },
-      { level: 'error' }
+      { level: 'error', force: true }
     );
   });
 
@@ -160,7 +160,7 @@ export function installBootDiagnosticsGlobal(): void {
         message: reason instanceof Error ? reason.message : String(reason),
         name: reason instanceof Error ? reason.name : null,
       },
-      { level: 'error' }
+      { level: 'error', force: true }
     );
   });
 
