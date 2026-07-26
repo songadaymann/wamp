@@ -132,6 +132,7 @@ let authIdentityCuratorLevel: HTMLElement | null = null;
 let authIdentityCuratorProgress: HTMLElement | null = null;
 let authIdentityBuilderLevel: HTMLElement | null = null;
 let authIdentityBuilderProgress: HTMLElement | null = null;
+let authEmailRow: HTMLElement | null = null;
 let authEmailInput: HTMLInputElement | null = null;
 let authEmailButton: HTMLButtonElement | null = null;
 let authWalletButton: HTMLButtonElement | null = null;
@@ -183,6 +184,7 @@ export async function setupAuthUi(): Promise<void> {
   authIdentityCuratorProgress = document.getElementById('auth-identity-curator-progress');
   authIdentityBuilderLevel = document.getElementById('auth-identity-builder-level');
   authIdentityBuilderProgress = document.getElementById('auth-identity-builder-progress');
+  authEmailRow = document.getElementById('auth-email-row');
   authEmailInput = document.getElementById('auth-email-input') as HTMLInputElement | null;
   authEmailButton = document.getElementById('btn-auth-email') as HTMLButtonElement | null;
   authWalletButton = document.getElementById('btn-auth-wallet') as HTMLButtonElement | null;
@@ -545,14 +547,17 @@ function bindSessionRefreshListeners(): void {
 
 async function requestMagicLink(): Promise<void> {
   const email = authEmailInput?.value.trim() ?? '';
+  const linkingEmail = state.authenticated && !state.user?.email;
 
   if (!email) {
-    state.status = 'Enter an email address.';
+    state.status = linkingEmail
+      ? 'Enter the email address you want to add.'
+      : 'Enter an email address.';
     renderAuthUi();
     return;
   }
 
-  setLoading(true, 'Sending sign-in link...');
+  setLoading(true, linkingEmail ? 'Sending verification link...' : 'Sending sign-in link...');
 
   try {
     const response = await apiRequest<MagicLinkRequestResponse>('/api/auth/request-link', {
@@ -563,8 +568,12 @@ async function requestMagicLink(): Promise<void> {
     state.debugMagicLink = normalizeDebugMagicLink(response.debugMagicLink);
     state.status =
       response.delivery === 'email'
-        ? 'Check your email for the sign-in link.'
-        : 'Debug sign-in link generated below.';
+        ? response.purpose === 'link_email'
+          ? 'Check your email to finish adding it to this account.'
+          : 'Check your email for the sign-in link.'
+        : response.purpose === 'link_email'
+          ? 'Debug email verification link generated below.'
+          : 'Debug sign-in link generated below.';
   } catch (error) {
     console.error('Failed to request magic link', error);
     state.status = getErrorMessage(error, 'Failed to send sign-in link.');
@@ -1005,11 +1014,18 @@ function renderAuthUi(): void {
   }
 
   if (authEmailButton) {
+    authEmailButton.textContent =
+      state.authenticated && !state.user?.email ? 'Add Email' : 'Sign In With Email';
     authEmailButton.disabled = state.loading;
   }
 
+  const showEmailRow = !state.authenticated || !state.user?.email;
+  authEmailRow?.classList.toggle('hidden', !showEmailRow);
+
   if (authEmailInput) {
-    authEmailInput.disabled = state.loading;
+    authEmailInput.placeholder =
+      state.authenticated && !state.user?.email ? 'Add your email address' : 'you@example.com';
+    authEmailInput.disabled = state.loading || !showEmailRow;
   }
 
   if (authWalletButton) {
@@ -1206,7 +1222,9 @@ function getAuthStatusText(): string {
   }
 
   if (!state.status || isGenericSignedInStatus(state.status)) {
-    return '';
+    return state.user?.walletAddress && !state.user.email
+      ? 'Add an email for another way to sign in and recover your account.'
+      : '';
   }
 
   return state.status;
@@ -1323,6 +1341,8 @@ function initializeStatusFromQuery(): void {
 
   if (authResult === 'email') {
     state.status = 'Email sign-in complete.';
+  } else if (authResult === 'email-linked') {
+    state.status = 'Email added to your account.';
   } else if (authResult === 'school') {
     state.status = 'Classroom sign-in complete.';
   } else if (authResult === 'invalid') {

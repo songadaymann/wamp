@@ -49,6 +49,7 @@ export interface MagicLinkRequestBody {
 export interface MagicLinkRequestResponse {
   ok: true;
   delivery: 'email' | 'debug';
+  purpose: 'sign_in' | 'link_email';
   debugMagicLink?: string;
 }
 

@@ -307,6 +307,55 @@ export async function attachWalletToUser(
   };
 }
 
+export async function attachEmailToUser(
+  env: Env,
+  user: AuthUser,
+  email: string
+): Promise<AuthUser> {
+  const normalizedEmail = normalizeEmail(email);
+  const existingEmailUser = await findUserByEmail(env, normalizedEmail);
+
+  if (existingEmailUser && existingEmailUser.id !== user.id) {
+    throw new HttpError(409, 'That email is already linked to another account.');
+  }
+
+  if (user.email === normalizedEmail) {
+    return user;
+  }
+
+  if (user.email && user.email !== normalizedEmail) {
+    throw new HttpError(409, 'This account is already linked to a different email.');
+  }
+
+  const updatedAt = new Date().toISOString();
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        `
+          UPDATE users
+          SET email = ?, updated_at = ?
+          WHERE id = ? AND email IS NULL
+        `
+      ).bind(normalizedEmail, updatedAt, user.id),
+    ]);
+  } catch (error) {
+    const conflictingUser = await findUserByEmail(env, normalizedEmail);
+    if (conflictingUser && conflictingUser.id !== user.id) {
+      throw new HttpError(409, 'That email is already linked to another account.');
+    }
+    throw error;
+  }
+
+  const updatedUser = await findUserById(env, user.id);
+  if (!updatedUser || normalizeEmail(updatedUser.email ?? '') !== normalizedEmail) {
+    throw new HttpError(409, 'This account is already linked to a different email.');
+  }
+
+  await ensureFounderIdentityQualification(env, user.id, updatedAt);
+
+  return updatedUser;
+}
+
 export async function updateUserDisplayName(
   env: Env,
   user: AuthUser,
@@ -573,6 +622,7 @@ export async function loadMagicLinkByTokenHash(
         m.expires_at,
         m.consumed_at,
         m.created_at,
+        u.email AS user_email,
         u.wallet_address,
         u.display_name,
         NULL AS username,

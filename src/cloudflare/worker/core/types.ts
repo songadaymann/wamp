@@ -758,6 +758,7 @@ export interface MagicLinkJoinRow {
   expires_at: string;
   consumed_at: string | null;
   created_at: string;
+  user_email: string | null;
   wallet_address: string | null;
   display_name: string;
   username?: string | null;
