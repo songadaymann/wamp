@@ -60,7 +60,11 @@ import {
   reconcileWorldTileQueuedTasks,
   type WorldTileRequestCandidate,
 } from './scheduler';
-import { selectWorldTileDisplayLevel, selectWorldTileLevel } from './lod';
+import {
+  selectWorldTileDisplayLevel,
+  selectWorldTileLevel,
+  shouldDeferWorldTileTargetRefinement,
+} from './lod';
 import type {
   WorldRect,
   WorldTileAddress,
@@ -458,11 +462,17 @@ export class WorldTileClientController {
     if (this.manifestSchedule.flush(nowMs)?.issueNow) this.issuePendingManifestRequest();
 
     this.maybePrefetchSelectedRoom(camera);
+    const deferTargetRefinement = shouldDeferWorldTileTargetRefinement({
+      nowMs,
+      lastGestureAtMs: this.lastGestureAtMs,
+      committedLevel: this.committedLevel,
+      desiredLevel: this.desiredLevel,
+    });
     this.queueCoverageImages(
-      desiredCoverage.visible,
-      desiredCoverage.guard,
+      deferTargetRefinement ? [] : desiredCoverage.visible,
+      deferTargetRefinement ? [] : desiredCoverage.guard,
       displayCoverage.visible,
-      displayCoverage.guard,
+      deferTargetRefinement ? [] : displayCoverage.guard,
     );
     this.processGpuUploads(nowMs);
     this.queueDueRetries(nowMs);
@@ -1199,7 +1209,11 @@ export class WorldTileClientController {
   private processDecodeQueue(): void {
     if (this.isRefinementStopped()) return;
     const budgets = getWorldTileStreamingBudgets(toTileProfile(this.options.getPerformanceProfile()));
-    while (this.decodeInFlight < budgets.decodeConcurrency && this.decodeQueue.length > 0) {
+    while (
+      this.decodeInFlight < budgets.decodeConcurrency
+      && this.decodeQueue.length > 0
+      && this.uploadQueue.length + this.decodeInFlight < budgets.maxGpuUploadBacklog
+    ) {
       const task = this.decodeQueue.shift()!;
       const taskKey = task.taskKey;
       this.queuedDecodeKeys.delete(taskKey);
@@ -1295,15 +1309,24 @@ export class WorldTileClientController {
     ) {
       const task = this.uploadQueue.shift()!;
       if (
-        task.lifecycleEpoch === this.lifecycleEpoch
-        && this.isTaskWanted(task.taskKey)
-        && this.isEntryCurrent(task.entry)
+        task.lifecycleEpoch !== this.lifecycleEpoch
+        || !this.isTaskWanted(task.taskKey)
+        || !this.isEntryCurrent(task.entry)
       ) {
-        this.layer.installDecoded(task.entry, task.source);
+        closeDecodedSource(task.source);
+        this.releaseActiveTask(task.taskKey, true, task.lifecycleEpoch);
+        uploaded += 1;
+        continue;
+      }
+      try {
+        if (!this.layer.installDecoded(task.entry, task.source)) {
+          throw new Error('Phaser rejected a decoded world tile texture.');
+        }
         this.corruptRetry.markSuccessful(task.taskKey);
         this.retriesByKey.delete(task.taskKey);
-      } else {
+      } catch (error) {
         closeDecodedSource(task.source);
+        this.recordTileFailure(task.entry, error, performance.now());
       }
       this.releaseActiveTask(task.taskKey, true, task.lifecycleEpoch);
       uploaded += 1;
@@ -1377,12 +1400,18 @@ export class WorldTileClientController {
       for (const roomId of this.entriesByKey.get(key)?.staleRoomIds ?? []) staleRoomIds.add(roomId);
     }
     if (!this.rollout?.shadow) {
-      this.layer.syncDisplay(this.entriesByKey, displayKeys, {
-        blend: this.options.getMode() === 'browse'
-          && this.options.getPerformanceProfile() !== 'reduced'
-          && nowMs - this.lastCameraMovementAtMs >= 80,
-        staleRoomIds,
-      });
+      try {
+        this.layer.syncDisplay(this.entriesByKey, displayKeys, {
+          blend: this.options.getMode() === 'browse'
+            && this.options.getPerformanceProfile() !== 'reduced'
+            && nowMs - this.lastCameraMovementAtMs >= 80,
+          staleRoomIds,
+        });
+      } catch (error) {
+        this.fallback.recordCriticalFailure(nowMs);
+        this.notifyFallbackChanged();
+        console.error('World tile display sync failed; retaining the previous imagery.', error);
+      }
     }
     this.metrics.update({
       targetLevel: this.desiredLevel,
