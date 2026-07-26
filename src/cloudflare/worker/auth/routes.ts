@@ -18,6 +18,7 @@ import type {
 import { HttpError, jsonResponse, noContentResponse, parseJsonBody, redirectResponse } from '../core/http';
 import type { Env } from '../core/types';
 import {
+  attachEmailToUser,
   attachWalletToUser,
   API_TOKEN_PREFIX,
   MAGIC_LINK_TTL_MS,
@@ -162,7 +163,27 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
     throw new HttpError(400, 'Please enter a valid email address.');
   }
 
-  const user = (await findUserByEmail(env, email)) ?? (await createUserForEmail(env, email));
+  const existingAuth = await loadOptionalRequestAuth(env, request);
+  let purpose: MagicLinkRequestResponse['purpose'] = 'sign_in';
+  let user: AuthUser;
+
+  if (existingAuth?.source === 'session') {
+    requireTrustedOriginForMutation(request);
+    const existingEmailUser = await findUserByEmail(env, email);
+
+    if (existingAuth.user.email && normalizeEmail(existingAuth.user.email) !== email) {
+      throw new HttpError(409, 'This account is already linked to a different email.');
+    }
+
+    if (existingEmailUser && existingEmailUser.id !== existingAuth.user.id) {
+      throw new HttpError(409, 'That email is already linked to another account.');
+    }
+
+    user = existingAuth.user;
+    purpose = user.email ? 'sign_in' : 'link_email';
+  } else {
+    user = (await findUserByEmail(env, email)) ?? (await createUserForEmail(env, email));
+  }
   const token = generateOpaqueToken(32);
   const tokenHash = await hashToken(token);
   const now = new Date();
@@ -178,6 +199,7 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
   const magicLink = magicLinkUrl.toString();
   const responseBody: MagicLinkRequestResponse = {
     ok: true,
+    purpose,
     delivery: env.AUTH_DEBUG_MAGIC_LINKS === '1'
       ? 'debug'
       : env.RESEND_API_KEY
@@ -204,7 +226,6 @@ export async function handleVerifyMagicLink(
   url: URL,
   env: Env
 ): Promise<Response> {
-  const redirectUrl = buildMagicLinkRedirectUrl(request, env, url.searchParams.get('returnTo'), 'email');
   const invalidRedirectUrl = buildMagicLinkRedirectUrl(request, env, url.searchParams.get('returnTo'), 'invalid');
   const token = url.searchParams.get('token');
   if (!token) {
@@ -218,9 +239,9 @@ export async function handleVerifyMagicLink(
     return redirectResponse(invalidRedirectUrl);
   }
 
-  const user: AuthUser = {
+  let user: AuthUser = {
     id: row.user_id,
-    email: row.email,
+    email: row.user_email,
     walletAddress: row.wallet_address,
     displayName: row.display_name,
     username: row.username ?? null,
@@ -230,9 +251,23 @@ export async function handleVerifyMagicLink(
     selectedAvatarId: row.selected_avatar_id,
   };
 
+  let authResult: 'email' | 'email-linked' = 'email';
+  if (!user.email) {
+    user = await attachEmailToUser(env, user, row.email);
+    authResult = 'email-linked';
+  } else if (normalizeEmail(user.email) !== normalizeEmail(row.email)) {
+    return redirectResponse(invalidRedirectUrl);
+  }
+
   const sessionToken = await createSession(env, user.id);
   const now = new Date().toISOString();
   await consumeMagicLinkToken(env, row.id, now);
+  const redirectUrl = buildMagicLinkRedirectUrl(
+    request,
+    env,
+    url.searchParams.get('returnTo'),
+    authResult,
+  );
 
   return redirectResponse(redirectUrl, {
     'Set-Cookie': createSessionCookie(request, sessionToken),
@@ -285,7 +320,7 @@ function buildMagicLinkRedirectUrl(
   request: Request,
   env: Env,
   candidate: string | null,
-  authResult: 'email' | 'invalid',
+  authResult: 'email' | 'email-linked' | 'invalid',
 ): string {
   const redirectUrl = new URL(resolveMagicLinkReturnUrl(request, env, candidate ?? undefined));
   redirectUrl.searchParams.set('auth', authResult);
