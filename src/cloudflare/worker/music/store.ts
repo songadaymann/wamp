@@ -608,7 +608,7 @@ export async function prepareMusicPhrasePublishStatements(
   const createdAt = published.publishedAt ?? published.updatedAt ?? new Date().toISOString();
   const creatorDisplayName = actor.displayName.trim() || 'Guest';
   const statements: D1PreparedStatement[] = [];
-  let batchId: string | null = null;
+  let batchId = await loadExistingMusicPhraseBatchId(env, published.id, published.version);
 
   for (const instrumentId of ROOM_PATTERN_INSTRUMENT_IDS) {
     const payload = extractMusicPhrasePayloadFromPattern(pattern, instrumentId);
