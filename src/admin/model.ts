@@ -167,6 +167,52 @@ export interface LaunchStatsResponse {
   partykit: LaunchStatsPartykitStatus;
 }
 
+export interface AdminGameJamRegistration {
+  id: string;
+  username: string;
+  email: string;
+  registeredAt: string;
+  updatedAt: string;
+}
+
+export interface AdminGameJamAccount {
+  id: string;
+  displayName: string;
+  username: string | null;
+  email: string | null;
+  walletAddress: string | null;
+}
+
+export interface AdminGameJamSubmission {
+  id: string;
+  username: string;
+  email: string;
+  roomX: number;
+  roomY: number;
+  roomUrl: string;
+  submittedAt: string;
+  updatedAt: string;
+}
+
+export interface AdminGameJamParticipant {
+  registration: AdminGameJamRegistration | null;
+  account: AdminGameJamAccount | null;
+  submission: AdminGameJamSubmission | null;
+}
+
+export interface AdminGameJamSummary {
+  slug: string;
+  registrationCount: number;
+  submissionCount: number;
+  awaitingSubmissionCount: number;
+  participants: AdminGameJamParticipant[];
+}
+
+export interface AdminGameJamsResponse {
+  generatedAt: string;
+  jams: AdminGameJamSummary[];
+}
+
 export type SuspiciousSeverity = 'high' | 'medium' | 'low';
 
 export type SuspiciousUserBucket = 'real_players' | 'generated_signals';
