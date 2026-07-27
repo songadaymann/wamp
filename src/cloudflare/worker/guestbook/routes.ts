@@ -142,7 +142,7 @@ function getGuestbookConfig(env: Env): GuestbookConfigResponse {
   const turnstileSiteKey = env.TURNSTILE_SITE_KEY?.trim() || null;
   return {
     turnstileSiteKey,
-    turnstileRequired: Boolean(env.TURNSTILE_SECRET_KEY?.trim()),
+    turnstileRequired: Boolean(turnstileSiteKey || env.TURNSTILE_SECRET?.trim()),
   };
 }
 
@@ -248,33 +248,47 @@ async function verifyTurnstileToken(
   remoteIp: string | null,
   verifiedAt: string,
 ): Promise<string | null> {
-  const secret = env.TURNSTILE_SECRET_KEY?.trim();
+  const secret = env.TURNSTILE_SECRET?.trim();
   if (!secret) {
+    if (env.TURNSTILE_SITE_KEY?.trim()) {
+      throw new HttpError(503, 'Turnstile verification is unavailable.');
+    }
     return null;
   }
 
   if (typeof token !== 'string' || !token.trim()) {
-    throw new HttpError(400, 'Turnstile verification is required.');
+    throw new HttpError(403, 'Turnstile verification is required.');
   }
 
-  const form = new FormData();
-  form.set('secret', secret);
-  form.set('response', token.trim());
-  if (remoteIp) {
-    form.set('remoteip', remoteIp);
-  }
-
-  const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-    method: 'POST',
-    body: form,
+  const body = new URLSearchParams({
+    secret,
+    response: token.trim(),
   });
-  if (!response.ok) {
-    throw new HttpError(502, 'Turnstile verification failed.');
+  if (remoteIp) {
+    body.set('remoteip', remoteIp);
   }
 
-  const result = await response.json() as { success?: boolean };
-  if (!result.success) {
-    throw new HttpError(400, 'Turnstile verification failed. Try again.');
+  let result: { success?: boolean };
+  try {
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    if (!response.ok) {
+      throw new Error(`siteverify returned ${response.status}`);
+    }
+    result = await response.json() as { success?: boolean };
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: 'Turnstile siteverify request failed',
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    throw new HttpError(403, 'Turnstile verification failed. Try again.');
+  }
+
+  if (result.success !== true) {
+    throw new HttpError(403, 'Turnstile verification failed. Try again.');
   }
 
   return verifiedAt;

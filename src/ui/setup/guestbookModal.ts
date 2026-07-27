@@ -28,6 +28,7 @@ type GuestbookModalElements = {
 type TurnstileApi = {
   render(container: HTMLElement, options: {
     sitekey: string;
+    action?: string;
     callback?: (token: string) => void;
     'expired-callback'?: () => void;
     'error-callback'?: () => void;
@@ -330,6 +331,7 @@ export class GuestbookModalController {
 
     this.turnstileWidgetId = window.turnstile.render(this.elements.turnstile, {
       sitekey: this.config.turnstileSiteKey,
+      action: 'turnstile-spin-v2',
       theme: 'dark',
       callback: (token) => {
         this.turnstileToken = token;

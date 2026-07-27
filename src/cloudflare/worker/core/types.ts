@@ -107,6 +107,7 @@ export interface Env {
   OPENROUTER_API_KEY?: string;
   OPENROUTER_IMAGE_MODERATION_MODEL?: string;
   TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
   GUESTBOOK_IP_HASH_SALT?: string;
   JAM_IP_HASH_SALT?: string;
