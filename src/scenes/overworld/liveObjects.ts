@@ -79,6 +79,7 @@ import {
   liveObjectBehaviorUpdatesEveryFrame,
   type FlyingEnemyBehavior,
 } from './liveObjects/behaviorRegistry';
+import { liveObjectBlocksPlayerMovement } from './playerCollisionObjects';
 import { carryMovingPlatformRiders } from './liveObjects/movingPlatforms';
 import { getPlacedObjectPathTargetIds } from '../../placedObjects/objectPaths';
 import { getContainedLiveObjectKey } from './liveObjects/indexing';
@@ -911,7 +912,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             break;
           case 'npc':
             if (placedObjectLayerAllowsRuntimeCollision(liveObject.config, liveObject)) {
-              if (liveObject.runtime.npcPlayerCollision) {
+              if (liveObjectBlocksPlayerMovement(liveObject)) {
                 liveObject.interactions.push(
                   this.options.scene.physics.add.collider(
                     player,

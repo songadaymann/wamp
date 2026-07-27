@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { playSfx, stopSfx } from '../../audio/sfx';
 import {
   isPushableObjectConfig,
-  isSolidRuntimeObjectConfig,
   ROOM_HEIGHT,
   ROOM_WIDTH,
   TILE_SIZE,
@@ -20,6 +19,7 @@ import {
   type ArcadeObjectBody,
   type LoadedRoomObject,
 } from './liveObjects';
+import { liveObjectBlocksPlayerMovement } from './playerCollisionObjects';
 import {
   bodyIsBlockedInGravityDirection,
   getBodyVelocityAlongVector,
@@ -1368,7 +1368,7 @@ export class OverworldMovementController {
 
   private getEnabledSolidRuntimeObjectBody(liveObject: LoadedRoomObject): ArcadeObjectBody | null {
     if (
-      !isSolidRuntimeObjectConfig(liveObject.config) ||
+      !liveObjectBlocksPlayerMovement(liveObject) ||
       !liveObject.sprite.active ||
       !liveObject.sprite.body
     ) {
