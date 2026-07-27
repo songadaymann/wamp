@@ -1,4 +1,6 @@
 import type {
+  AdminGameJamParticipant,
+  AdminGameJamsResponse,
   AdminProgressionCapsUpdateRequest,
   AdminProgressionUserCapsResponse,
   AdminProgressionUserLookupEntry,
@@ -23,6 +25,7 @@ import type {
 const ADMIN_KEY_STORAGE_KEY = 'ep_launch_admin_api_key';
 const ACTIVITY_RANGE_STORAGE_KEY = 'ep_launch_admin_activity_range';
 const ACTIVITY_FILTER_STORAGE_KEY = 'ep_launch_admin_activity_filter';
+const GAME_JAM_STORAGE_KEY = 'ep_launch_admin_game_jam';
 const POLL_INTERVAL_MS = 10_000;
 const WARN_AGE_MS = 30_000;
 const CRITICAL_AGE_MS = 90_000;
@@ -60,6 +63,11 @@ const lastUpdated = document.getElementById('last-updated') as HTMLDivElement | 
 const warnings = document.getElementById('warnings') as HTMLDivElement | null;
 const configChips = document.getElementById('config-chips') as HTMLDivElement | null;
 const totalsGrid = document.getElementById('totals-grid') as HTMLDivElement | null;
+const gameJamSelect = document.getElementById('game-jam-select') as HTMLSelectElement | null;
+const gameJamRefreshButton = document.getElementById('game-jam-refresh-button') as HTMLButtonElement | null;
+const gameJamStatus = document.getElementById('game-jam-status') as HTMLDivElement | null;
+const gameJamSummary = document.getElementById('game-jam-summary') as HTMLDivElement | null;
+const gameJamParticipantsBody = document.getElementById('game-jam-participants-body') as HTMLTableSectionElement | null;
 const activityRangeSelect = document.getElementById('activity-range-select') as HTMLSelectElement | null;
 const activityRangeSummary = document.getElementById('activity-range-summary') as HTMLDivElement | null;
 const activityFilterList = document.getElementById('activity-filter-list') as HTMLDivElement | null;
@@ -90,6 +98,10 @@ const roomCommentsList = document.getElementById('room-comments-list') as HTMLDi
 
 let adminKey = window.sessionStorage.getItem(ADMIN_KEY_STORAGE_KEY) ?? '';
 let lastSnapshot: LaunchStatsResponse | null = null;
+let gameJamsSnapshot: AdminGameJamsResponse | null = null;
+let gameJamsError: string | null = null;
+let gameJamsLoading = false;
+let selectedGameJamSlug = window.localStorage.getItem(GAME_JAM_STORAGE_KEY);
 let lastError: string | null = null;
 let lastGoodSnapshotAt: string | null = null;
 let pollingTimer: number | null = null;
@@ -122,6 +134,7 @@ saveKeyButton?.addEventListener('click', () => {
     lastError = null;
     syncPolling();
     void refreshSnapshot();
+    void refreshGameJams();
     backgroundAdminController.handleAdminKeyChange();
   } else {
     backgroundAdminController.handleAdminKeyChange();
@@ -131,6 +144,7 @@ saveKeyButton?.addEventListener('click', () => {
 
 refreshButton?.addEventListener('click', () => {
   void refreshSnapshot(true);
+  void refreshGameJams();
   void refreshRoomComments();
   void backgroundAdminController.refresh();
 });
@@ -138,6 +152,8 @@ refreshButton?.addEventListener('click', () => {
 clearKeyButton?.addEventListener('click', () => {
   adminKey = '';
   lastError = null;
+  gameJamsSnapshot = null;
+  gameJamsError = null;
   window.sessionStorage.removeItem(ADMIN_KEY_STORAGE_KEY);
   if (adminKeyInput) {
     adminKeyInput.value = '';
@@ -155,6 +171,16 @@ activityRangeSelect?.addEventListener('change', () => {
 
 activityFilterList?.addEventListener('click', handleActivityFilterClick);
 activityGrid?.addEventListener('click', handleActivityFilterClick);
+
+gameJamSelect?.addEventListener('change', () => {
+  selectedGameJamSlug = gameJamSelect.value;
+  window.localStorage.setItem(GAME_JAM_STORAGE_KEY, selectedGameJamSlug);
+  renderGameJams();
+});
+
+gameJamRefreshButton?.addEventListener('click', () => {
+  void refreshGameJams();
+});
 
 progressionSearchButton?.addEventListener('click', () => {
   void searchProgressionUsers();
@@ -194,6 +220,7 @@ document.addEventListener('visibilitychange', () => {
 syncPolling();
 if (adminKey) {
   void refreshSnapshot();
+  void refreshGameJams();
   void refreshRoomComments();
   void backgroundAdminController.refresh();
 } else {
@@ -259,6 +286,47 @@ async function refreshSnapshot(force = false): Promise<void> {
   }
 }
 
+async function refreshGameJams(): Promise<void> {
+  if (!adminKey) {
+    gameJamsError = 'Paste the admin key to load Game Jam entrants.';
+    renderGameJams();
+    return;
+  }
+  if (gameJamsLoading) {
+    return;
+  }
+
+  gameJamsLoading = true;
+  gameJamsError = null;
+  renderGameJams();
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/admin/game-jams`, {
+      headers: {
+        'x-admin-key': adminKey,
+      },
+    });
+    if (!response.ok) {
+      const text = (await response.text()).trim();
+      throw new Error(text || `Game Jam request failed with status ${response.status}.`);
+    }
+    gameJamsSnapshot = (await response.json()) as AdminGameJamsResponse;
+    if (
+      !selectedGameJamSlug
+      || !gameJamsSnapshot.jams.some((jam) => jam.slug === selectedGameJamSlug)
+    ) {
+      selectedGameJamSlug = gameJamsSnapshot.jams[0]?.slug ?? null;
+    }
+    if (selectedGameJamSlug) {
+      window.localStorage.setItem(GAME_JAM_STORAGE_KEY, selectedGameJamSlug);
+    }
+  } catch (error) {
+    gameJamsError = error instanceof Error ? error.message : 'Unknown Game Jam failure.';
+  } finally {
+    gameJamsLoading = false;
+    renderGameJams();
+  }
+}
+
 function render(): void {
   renderMeta();
   renderWarnings();
@@ -266,9 +334,149 @@ function render(): void {
   renderRoomCommentsAdmin();
   renderConfig();
   renderTotals();
+  renderGameJams();
   renderActivity();
   renderPartykitSummary();
   renderShards();
+}
+
+function renderGameJams(): void {
+  if (!gameJamSelect || !gameJamStatus || !gameJamSummary || !gameJamParticipantsBody) {
+    return;
+  }
+
+  gameJamRefreshButton?.toggleAttribute('disabled', gameJamsLoading);
+  const jams = gameJamsSnapshot?.jams ?? [];
+  gameJamSelect.innerHTML = jams
+    .map((jam) => `
+      <option value="${escapeHtml(jam.slug)}"${jam.slug === selectedGameJamSlug ? ' selected' : ''}>
+        ${escapeHtml(formatGameJamName(jam.slug))}
+      </option>
+    `)
+    .join('');
+
+  if (gameJamsLoading && !gameJamsSnapshot) {
+    gameJamStatus.textContent = 'Loading entrants and submissions...';
+    gameJamSummary.innerHTML = '';
+    gameJamParticipantsBody.innerHTML =
+      '<tr><td colspan="6" class="meta">Loading Game Jam data...</td></tr>';
+    return;
+  }
+
+  if (gameJamsError) {
+    gameJamStatus.textContent = gameJamsError;
+    gameJamStatus.classList.add('error');
+  } else {
+    gameJamStatus.classList.remove('error');
+  }
+
+  const jam = jams.find((candidate) => candidate.slug === selectedGameJamSlug) ?? jams[0];
+  if (!jam) {
+    gameJamStatus.textContent = adminKey
+      ? 'No Game Jams are configured yet.'
+      : 'Paste the admin key to load entrants and submissions.';
+    gameJamSummary.innerHTML = '';
+    gameJamParticipantsBody.innerHTML =
+      '<tr><td colspan="6" class="meta">No Game Jam people to show yet.</td></tr>';
+    return;
+  }
+
+  if (!gameJamsError) {
+    const refreshed = gameJamsSnapshot
+      ? `Updated ${formatTimestamp(gameJamsSnapshot.generatedAt)}.`
+      : '';
+    gameJamStatus.textContent =
+      `${formatNumber(jam.participants.length)} people in the combined entrant/submission view. ${refreshed}`;
+  }
+  gameJamSummary.innerHTML = [
+    ['Entered', jam.registrationCount, 'Registration received'],
+    ['Submitted', jam.submissionCount, 'Level received'],
+    ['Awaiting Level', jam.awaitingSubmissionCount, 'Entered, no submission'],
+  ]
+    .map(([label, value, detail]) => `
+      <article class="card">
+        <span class="label">${escapeHtml(String(label))}</span>
+        <span class="value">${formatNumber(Number(value))}</span>
+        <span class="meta">${escapeHtml(String(detail))}</span>
+      </article>
+    `)
+    .join('');
+
+  gameJamParticipantsBody.innerHTML = jam.participants.length > 0
+    ? jam.participants.map(renderGameJamParticipant).join('')
+    : '<tr><td colspan="6" class="meta">Nobody has entered or submitted yet.</td></tr>';
+}
+
+function renderGameJamParticipant(participant: AdminGameJamParticipant): string {
+  const account = participant.account;
+  const registration = participant.registration;
+  const submission = participant.submission;
+  const displayName =
+    account?.displayName
+    ?? registration?.username
+    ?? submission?.username
+    ?? 'Unknown entrant';
+  const username = account?.username
+    ?? registration?.username
+    ?? submission?.username
+    ?? null;
+  const contactEmail = registration?.email ?? submission?.email ?? account?.email ?? null;
+  const accountEmail =
+    account?.email && normalizeComparableEmail(account.email) !== normalizeComparableEmail(contactEmail)
+      ? account.email
+      : null;
+  const identityMeta = [
+    username && username !== displayName ? `@${username}` : null,
+    account ? `Account ${account.id}` : 'No linked account',
+  ].filter(Boolean).join(' · ');
+  const enteredMarkup = registration
+    ? `<span class="chip good">Entered</span><div class="meta">${escapeHtml(formatTimestamp(registration.registeredAt))}</div>`
+    : '<span class="chip warn">No registration</span>';
+  const submittedMarkup = submission
+    ? `<span class="chip good">Submitted</span><div class="meta">${escapeHtml(formatTimestamp(submission.submittedAt))}</div>`
+    : '<span class="chip warn">Awaiting level</span>';
+  const roomMarkup = submission
+    ? `<a href="${escapeHtml(submission.roomUrl)}" target="_blank" rel="noreferrer">Room ${formatNumber(submission.roomX)},${formatNumber(submission.roomY)} ↗</a>`
+    : '<span class="meta">—</span>';
+
+  return `
+    <tr>
+      <td>
+        <strong>${escapeHtml(displayName)}</strong>
+        <div class="meta">${escapeHtml(identityMeta)}</div>
+      </td>
+      <td>
+        <span class="game-jam-contact">${escapeHtml(contactEmail ?? 'No email')}</span>
+        ${accountEmail ? `<div class="meta">Account: ${escapeHtml(accountEmail)}</div>` : ''}
+      </td>
+      <td>
+        ${account?.walletAddress
+          ? `<code class="game-jam-wallet" title="${escapeHtml(account.walletAddress)}">${escapeHtml(shortenWallet(account.walletAddress))}</code>`
+          : '<span class="meta">No wallet linked</span>'}
+      </td>
+      <td>${enteredMarkup}</td>
+      <td>${submittedMarkup}</td>
+      <td>${roomMarkup}</td>
+    </tr>
+  `;
+}
+
+function formatGameJamName(slug: string): string {
+  return slug
+    .split('-')
+    .filter(Boolean)
+    .map((part) => (/^\d+$/.test(part) ? part : `${part.charAt(0).toUpperCase()}${part.slice(1)}`))
+    .join(' ');
+}
+
+function normalizeComparableEmail(value: string | null): string {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function shortenWallet(walletAddress: string): string {
+  return walletAddress.length > 16
+    ? `${walletAddress.slice(0, 8)}…${walletAddress.slice(-6)}`
+    : walletAddress;
 }
 
 async function searchProgressionUsers(): Promise<void> {

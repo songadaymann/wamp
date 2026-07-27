@@ -609,6 +609,35 @@
         min-width: 0;
       }
 
+      .game-jam-toolbar {
+        display: grid;
+        grid-template-columns: minmax(220px, 420px) auto minmax(220px, 1fr);
+        gap: 10px;
+        align-items: end;
+      }
+
+      .game-jam-toolbar .status {
+        align-self: center;
+        text-align: right;
+      }
+
+      .game-jam-wallet,
+      .game-jam-contact {
+        overflow-wrap: anywhere;
+      }
+
+      .game-jam-wallet {
+        font-size: 12px;
+      }
+
+      .game-jam-table {
+        min-width: 940px;
+      }
+
+      .game-jam-table td {
+        vertical-align: top;
+      }
+
       .photo-review-list {
         display: grid;
         gap: 12px;
@@ -990,6 +1019,15 @@
           grid-template-columns: minmax(0, 1fr);
         }
 
+        .game-jam-toolbar {
+          grid-template-columns: minmax(220px, 1fr) auto;
+        }
+
+        .game-jam-toolbar .status {
+          grid-column: 1 / -1;
+          text-align: left;
+        }
+
         .photo-access-panel {
           position: static;
         }
@@ -1069,8 +1107,13 @@
         }
 
         .review-toolbar,
-        .compact-grid {
+        .compact-grid,
+        .game-jam-toolbar {
           grid-template-columns: minmax(0, 1fr);
+        }
+
+        .game-jam-toolbar .status {
+          grid-column: auto;
         }
 
         .photo-review-card {
@@ -1131,6 +1174,7 @@
         <nav class="admin-nav" aria-label="Control room sections">
           <div class="admin-nav-title">Jump To</div>
           <a href="#overview"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">Overview</span></a>
+          <a href="#game-jams"><span class="nav-icon" aria-hidden="true">★</span><span class="nav-label">Game Jams</span></a>
           <a href="#photo-review">
             <span class="nav-icon" aria-hidden="true">▣</span>
             <span class="nav-label">Photo Review</span>
@@ -1177,11 +1221,54 @@
             </div>
           </section>
 
+          <section id="game-jams" class="admin-section" data-tone="green">
+            <header class="section-heading">
+              <span class="section-icon" aria-hidden="true">★</span>
+              <div class="section-heading-copy">
+                <span class="section-kicker">02 / Events</span>
+                <h2>Game Jams</h2>
+                <p>See who entered, how to identify them, and which level they submitted.</p>
+              </div>
+            </header>
+            <section class="panel stack">
+              <div class="game-jam-toolbar">
+                <label class="field">
+                  <span class="label">Game Jam</span>
+                  <select id="game-jam-select" aria-label="Choose a Game Jam"></select>
+                </label>
+                <button id="game-jam-refresh-button" type="button">
+                  <span aria-hidden="true">↻</span> Refresh Jams
+                </button>
+                <div id="game-jam-status" class="status">Paste the admin key to load entrants and submissions.</div>
+              </div>
+              <div id="game-jam-summary" class="grid cards"></div>
+              <div class="table-wrap">
+                <table class="game-jam-table">
+                  <thead>
+                    <tr>
+                      <th>Person / Account</th>
+                      <th>Contact Email</th>
+                      <th>Wallet</th>
+                      <th>Entry</th>
+                      <th>Submission</th>
+                      <th>Level</th>
+                    </tr>
+                  </thead>
+                  <tbody id="game-jam-participants-body">
+                    <tr>
+                      <td colspan="6" class="meta">Game Jam data is locked.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+
           <section id="photo-review" class="admin-section" data-tone="yellow">
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">▣</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">02 / Content</span>
+                <span class="section-kicker">03 / Content</span>
                 <h2>Photo Approvals</h2>
                 <p>Review room backgrounds and manage who can upload them.</p>
               </div>
@@ -1258,7 +1345,7 @@
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">✎</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">03 / Content</span>
+                <span class="section-kicker">04 / Content</span>
                 <h2>Room Comment Review</h2>
                 <p>Moderate player comments without leaving the control room.</p>
               </div>
@@ -1295,7 +1382,7 @@
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">▲</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">04 / Support</span>
+                <span class="section-kicker">05 / Support</span>
                 <h2>Builder Cap Overrides</h2>
                 <p>Inspect a builder and grant additional room-making capacity.</p>
               </div>
@@ -1354,7 +1441,7 @@
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">↯</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">05 / Pulse</span>
+                <span class="section-kicker">06 / Pulse</span>
                 <h2>Recent Activity</h2>
                 <p>See who played, built, signed up, claimed, or published.</p>
               </div>
@@ -1377,7 +1464,7 @@
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">⌁</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">06 / Network</span>
+                <span class="section-kicker">07 / Network</span>
                 <h2>Infrastructure</h2>
                 <p>Presence, shards, and the external systems behind WAMP.</p>
               </div>

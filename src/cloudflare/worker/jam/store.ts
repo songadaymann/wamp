@@ -136,9 +136,9 @@ export async function upsertJamSubmission(
   },
 ): Promise<{ submission: JamSubmissionPublic; updated: boolean }> {
   const existing = await env.JAM_DB.prepare(
-    'SELECT id, created_at FROM jam_submissions WHERE user_id = ? LIMIT 1',
+    'SELECT id, created_at FROM jam_submissions WHERE jam_slug = ? AND user_id = ? LIMIT 1',
   )
-    .bind(input.userId)
+    .bind(input.jamSlug, input.userId)
     .first<{ id: string; created_at: string }>();
   const id = existing?.id ?? crypto.randomUUID();
   const createdAt = existing?.created_at ?? input.nowIso;
@@ -164,8 +164,7 @@ export async function upsertJamSubmission(
         updated_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET
-        jam_slug = excluded.jam_slug,
+      ON CONFLICT(jam_slug, user_id) DO UPDATE SET
         username = excluded.username,
         email = excluded.email,
         room_x = excluded.room_x,

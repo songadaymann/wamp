@@ -24,6 +24,7 @@ import { syncUserBadges } from '../progression/badgesTrophies';
 import { revertRoom } from '../rooms/store';
 import { upsertUserStats } from '../runs/points';
 import { loadLaunchStats } from './launchStats';
+import { loadAdminGameJams } from './gameJams';
 import { handleAdminExpandedRoomsMigrationReport } from '../expandedRooms/migrationReport';
 import {
   handleAdminSuspiciousInvalidate,
@@ -62,6 +63,10 @@ export async function handleAdminRequest(
 
   if (url.pathname === '/api/admin/launch-stats' && request.method === 'GET') {
     return handleAdminLaunchStats(request, env);
+  }
+
+  if (url.pathname === '/api/admin/game-jams' && request.method === 'GET') {
+    return handleAdminGameJams(request, env);
   }
 
   if (url.pathname === '/api/admin/expanded-rooms/migration-report' && request.method === 'GET') {
@@ -498,6 +503,11 @@ function safeJsonParse(value: string): unknown {
 async function handleAdminLaunchStats(request: Request, env: Env): Promise<Response> {
   requireAdminRequest(env, request, 'read launch stats');
   return jsonResponse(request, await loadLaunchStats(env));
+}
+
+async function handleAdminGameJams(request: Request, env: Env): Promise<Response> {
+  requireAdminRequest(env, request, 'read game jam entrants');
+  return jsonResponse(request, await loadAdminGameJams(env));
 }
 
 async function handleAdminProgressionUserSearch(
