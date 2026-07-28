@@ -23,7 +23,7 @@
   },
   "vars": {
     "JAM_SUBMISSIONS_OPEN_AT": "2026-07-20T04:00:00.000Z",
-    "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-27T03:59:59.999Z",
+    "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-28T12:00:00.000Z",
     "PARTYKIT_HOST": "everybodys-platformer-presence.songadaymann.partykit.dev",
     "PARTYKIT_PARTY": "main",
     "ROOM_DAILY_CLAIM_LIMIT": "4",
@@ -69,7 +69,7 @@
       "vars": {
         "ENABLE_TEST_RESET": "0",
         "JAM_SUBMISSIONS_OPEN_AT": "2026-07-20T04:00:00.000Z",
-        "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-27T03:59:59.999Z",
+        "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-28T12:00:00.000Z",
         "PARTYKIT_HOST": "everybodys-platformer-presence-safety.songadaymann.partykit.dev",
         "PARTYKIT_PARTY": "main",
         "ROOM_MINT_DISABLED": "1",
