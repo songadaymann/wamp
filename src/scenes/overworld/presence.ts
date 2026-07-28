@@ -7,6 +7,7 @@ import {
   isSceneAvatarPackLoaded,
   isDynamicPlayerAvatarId,
 } from '../../player/avatar/dynamic';
+import { getRegisteredPlayerAvatarPack } from '../../player/avatar/registry';
 import { resolvePlayerAvatarPack } from '../../player/avatar/runtime';
 import { roomIdFromCoordinates, type RoomCoordinates } from '../../persistence/roomModel';
 import type {
@@ -1171,7 +1172,7 @@ export class OverworldPresenceController {
   }
 
   private ensureGhostAvatarPackLoaded(avatarId: string): void {
-    if (!isDynamicPlayerAvatarId(avatarId) || this.pendingGhostAvatarLoads.has(avatarId)) {
+    if (this.isGhostAvatarRenderReady(avatarId) || this.pendingGhostAvatarLoads.has(avatarId)) {
       return;
     }
 
@@ -1193,7 +1194,11 @@ export class OverworldPresenceController {
   }
 
   private isGhostAvatarRenderReady(avatarId: string): boolean {
-    return !isDynamicPlayerAvatarId(avatarId) || isSceneAvatarPackLoaded(this.options.scene, avatarId);
+    if (!getRegisteredPlayerAvatarPack(avatarId) && !isDynamicPlayerAvatarId(avatarId)) {
+      return true;
+    }
+
+    return isSceneAvatarPackLoaded(this.options.scene, avatarId);
   }
 
   private isPresenceFresh(timestamp: number): boolean {

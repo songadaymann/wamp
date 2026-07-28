@@ -30,7 +30,11 @@ export function isSceneAvatarPackLoaded(
   scene: Phaser.Scene,
   avatarId: PlayerAvatarId
 ): boolean {
-  return sceneLoadedAvatarIds.get(scene)?.has(avatarId) ?? false;
+  const pack = getRegisteredPlayerAvatarPack(avatarId);
+  return Boolean(
+    pack
+    && pack.atlasAssets.every((atlas) => scene.textures.exists(atlas.key))
+  );
 }
 
 export function getDynamicAvatarDebugState(scene?: Phaser.Scene | null): Record<string, unknown> {
