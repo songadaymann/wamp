@@ -164,7 +164,7 @@ async function handleJamSubmissionCreate(request: Request, env: Env): Promise<Re
 function assertRegistrationWindowOpen(env: Env): void {
   const closeAt = getConfiguredTimestamp(env.JAM_SUBMISSIONS_CLOSE_AT, DEFAULT_JAM_SUBMISSIONS_CLOSE_AT);
   if (Date.now() > Date.parse(closeAt)) {
-    throw new HttpError(410, 'Jam registration closed July 26 at 11:59 PM Eastern.');
+    throw new HttpError(410, 'Jam registration closed July 28 at 8:00 AM Eastern.');
   }
 }
 
@@ -176,7 +176,7 @@ function assertSubmissionWindowOpen(env: Env): void {
     throw new HttpError(403, 'Jam submissions open July 20 at 12:00 AM Eastern.');
   }
   if (now > Date.parse(closeAt)) {
-    throw new HttpError(410, 'Jam submissions closed July 26 at 11:59 PM Eastern.');
+    throw new HttpError(410, 'Jam submissions closed July 28 at 8:00 AM Eastern.');
   }
 }
 

@@ -215,7 +215,7 @@ function renderSubmissionState(nextConfig: JamConfigResponse): void {
 
   setEntryState('Entries closed', false);
   setFormCopy('closed');
-  setStatus('Jam registration closed July 26 at 11:59 PM Eastern.', false);
+  setStatus('Jam registration closed July 28 at 8:00 AM Eastern.', false);
   setSubmissionEnabled(false);
 }
 
