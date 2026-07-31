@@ -46,6 +46,8 @@ export interface RenderedGhost {
   actionProjectile: Phaser.GameObjects.Rectangle;
   targetX: number;
   targetY: number;
+  cachedLabelText: string;
+  pvpPresentationActive: boolean | null;
 }
 
 export interface BrowsePresenceDotPresence {
@@ -72,20 +74,35 @@ export interface OnlineRosterEntry {
   isSelf: boolean;
 }
 
-interface LocalPresenceInput {
+export interface LocalPresenceInput {
+  readonly mode: OverworldMode;
+  readonly roomCoordinates: Readonly<RoomCoordinates>;
+  readonly x: number;
+  readonly y: number;
+  readonly velocityX: number;
+  readonly velocityY: number;
+  readonly facing: number;
+  readonly animationState: DefaultPlayerAnimationState;
+  readonly pvp?: {
+    readonly matchId: string;
+    readonly action: WorldPresencePvpAction | null;
+    readonly actionUntil: number;
+  } | null;
+}
+
+interface LocalPresenceDeadlineSnapshot {
   mode: OverworldMode;
-  roomCoordinates: RoomCoordinates;
+  roomX: number;
+  roomY: number;
   x: number;
   y: number;
   velocityX: number;
   velocityY: number;
   facing: number;
   animationState: DefaultPlayerAnimationState;
-  pvp?: {
-    matchId: string;
-    action: WorldPresencePvpAction | null;
-    actionUntil: number;
-  } | null;
+  pvpMatchId: string;
+  pvpAction: WorldPresencePvpAction | null;
+  pvpActionUntilBucket: number;
 }
 
 interface PresenceSummaryInput {
@@ -124,10 +141,14 @@ export class OverworldPresenceController {
   private ghostRenderBudget = 0;
   private visibleGhostCount = 0;
   private localRosterPresence: Pick<LocalPresenceInput, 'mode' | 'roomCoordinates'> | null = null;
+  private localPresenceDeadlineSnapshot: LocalPresenceDeadlineSnapshot | null = null;
+  private lastLocalPresenceForwardedAt = 0;
+  private hasForwardedLocalPresence = false;
   private pendingGhostAvatarLoads = new Set<string>();
   private pvpMatchSnapshot: PvpMatchSnapshot | null = null;
   private pvpLocalUserId: string | null = null;
   private pvpInstanceOpponentUserId: string | null = null;
+  private readonly predictedGhostTargetScratch = { x: 0, y: 0 };
 
   constructor(private readonly options: OverworldPresenceControllerOptions) {}
 
@@ -237,6 +258,9 @@ export class OverworldPresenceController {
     this.ghostRenderBudget = 0;
     this.visibleGhostCount = 0;
     this.localRosterPresence = null;
+    this.localPresenceDeadlineSnapshot = null;
+    this.lastLocalPresenceForwardedAt = 0;
+    this.hasForwardedLocalPresence = false;
     this.pvpMatchSnapshot = null;
     this.pvpLocalUserId = null;
     this.pvpInstanceOpponentUserId = null;
@@ -256,6 +280,9 @@ export class OverworldPresenceController {
     this.ghostRenderBudget = 0;
     this.visibleGhostCount = 0;
     this.localRosterPresence = null;
+    this.localPresenceDeadlineSnapshot = null;
+    this.lastLocalPresenceForwardedAt = 0;
+    this.hasForwardedLocalPresence = false;
     this.pvpMatchSnapshot = null;
     this.pvpLocalUserId = null;
     this.pvpInstanceOpponentUserId = null;
@@ -356,7 +383,69 @@ export class OverworldPresenceController {
     this.subscribedBoundsRetainUntil = now + 1_200;
   }
 
-  updateLocalPresence(input: LocalPresenceInput | null): void {
+  isLocalPresenceDue(
+    input: LocalPresenceInput | null,
+    force = false,
+    now = Date.now(),
+  ): boolean {
+    if (!this.client) {
+      return false;
+    }
+    if (force || !this.hasForwardedLocalPresence) {
+      return true;
+    }
+    const previous = this.localPresenceDeadlineSnapshot;
+    if (!input) {
+      return previous !== null;
+    }
+    if (!previous) {
+      return true;
+    }
+
+    const pvpMatchId = input.pvp?.matchId ?? '';
+    const pvpAction = input.pvp?.action ?? null;
+    const pvpActionUntilBucket = Math.round((input.pvp?.actionUntil ?? 0) / 50);
+    if (
+      input.mode !== previous.mode
+      || input.roomCoordinates.x !== previous.roomX
+      || input.roomCoordinates.y !== previous.roomY
+      || pvpMatchId !== previous.pvpMatchId
+      || pvpAction !== previous.pvpAction
+      || pvpActionUntilBucket !== previous.pvpActionUntilBucket
+    ) {
+      return true;
+    }
+
+    const changed =
+      Math.round(input.x) !== previous.x
+      || Math.round(input.y) !== previous.y
+      || Math.round(input.velocityX) !== previous.velocityX
+      || Math.round(input.velocityY) !== previous.velocityY
+      || input.facing !== previous.facing
+      || input.animationState !== previous.animationState;
+    const interval = changed ? (pvpMatchId ? 25 : 200) : 5_000;
+    return now - this.lastLocalPresenceForwardedAt >= interval;
+  }
+
+  updateLocalPresence(input: LocalPresenceInput | null, now = Date.now()): void {
+    this.hasForwardedLocalPresence = true;
+    this.lastLocalPresenceForwardedAt = now;
+    this.localPresenceDeadlineSnapshot = input
+      ? {
+          mode: input.mode,
+          roomX: input.roomCoordinates.x,
+          roomY: input.roomCoordinates.y,
+          x: Math.round(input.x),
+          y: Math.round(input.y),
+          velocityX: Math.round(input.velocityX),
+          velocityY: Math.round(input.velocityY),
+          facing: input.facing,
+          animationState: input.animationState,
+          pvpMatchId: input.pvp?.matchId ?? '',
+          pvpAction: input.pvp?.action ?? null,
+          pvpActionUntilBucket: Math.round((input.pvp?.actionUntil ?? 0) / 50),
+        }
+      : null;
     this.localRosterPresence = input
       ? {
           mode: input.mode,
@@ -379,7 +468,7 @@ export class OverworldPresenceController {
       animationState: input.animationState,
       mode: input.mode,
       pvp: input.pvp ?? null,
-      timestamp: Date.now(),
+      timestamp: now,
     });
   }
 
@@ -388,21 +477,28 @@ export class OverworldPresenceController {
     const pvpStep = Math.min(1, delta / 30);
     for (const renderedGhost of this.renderedGhostsByConnectionId.values()) {
       const pvpRealtime = this.isGhostInActivePvp(renderedGhost.presence);
-      const predictedTarget = pvpRealtime
-        ? this.getPredictedGhostTarget(renderedGhost.presence)
-        : { x: renderedGhost.targetX, y: renderedGhost.targetY };
+      let targetX = renderedGhost.targetX;
+      let targetY = renderedGhost.targetY;
+      if (pvpRealtime) {
+        this.writePredictedGhostTarget(
+          renderedGhost.presence,
+          this.predictedGhostTargetScratch,
+        );
+        targetX = this.predictedGhostTargetScratch.x;
+        targetY = this.predictedGhostTargetScratch.y;
+      }
       const distance = Phaser.Math.Distance.Between(
         renderedGhost.sprite.x,
         renderedGhost.sprite.y,
-        predictedTarget.x,
-        predictedTarget.y,
+        targetX,
+        targetY,
       );
       const step = pvpRealtime ? pvpStep : defaultStep;
       if (pvpRealtime && distance > 72) {
-        renderedGhost.sprite.setPosition(predictedTarget.x, predictedTarget.y);
+        renderedGhost.sprite.setPosition(targetX, targetY);
       } else {
-        renderedGhost.sprite.x = Phaser.Math.Linear(renderedGhost.sprite.x, predictedTarget.x, step);
-        renderedGhost.sprite.y = Phaser.Math.Linear(renderedGhost.sprite.y, predictedTarget.y, step);
+        renderedGhost.sprite.x = Phaser.Math.Linear(renderedGhost.sprite.x, targetX, step);
+        renderedGhost.sprite.y = Phaser.Math.Linear(renderedGhost.sprite.y, targetY, step);
       }
       renderedGhost.halo.x = renderedGhost.sprite.x;
       renderedGhost.halo.y = renderedGhost.sprite.y - 2;
@@ -838,7 +934,7 @@ export class OverworldPresenceController {
       existing.targetX = ghost.x;
       existing.targetY = ghost.y;
       existing.sprite.setFlipX(ghost.facing < 0);
-      existing.label.setText(this.getGhostLabelText(ghost));
+      this.syncRenderedGhostLabel(existing);
       this.syncRenderedGhostPvpPresentation(existing);
       this.ensureGhostAvatarPackLoaded(ghost.avatarId);
       if (!this.isGhostAvatarRenderReady(ghost.avatarId)) {
@@ -868,25 +964,42 @@ export class OverworldPresenceController {
 
   private syncRenderedGhostLabels(): void {
     for (const renderedGhost of this.renderedGhostsByConnectionId.values()) {
-      renderedGhost.label.setText(this.getGhostLabelText(renderedGhost.presence));
+      this.syncRenderedGhostLabel(renderedGhost);
       this.syncRenderedGhostPvpPresentation(renderedGhost);
     }
   }
 
   private syncRenderedGhostPvpPresentation(renderedGhost?: RenderedGhost): void {
-    const renderedGhosts = renderedGhost
-      ? [renderedGhost]
-      : Array.from(this.renderedGhostsByConnectionId.values());
-
-    for (const ghost of renderedGhosts) {
-      const pvpParticipant = this.isGhostInActivePvp(ghost.presence);
-      ghost.sprite.setAlpha(pvpParticipant ? 1 : 0.74);
-      ghost.halo.setAlpha(pvpParticipant ? 0 : 1);
-      ghost.label.setAlpha(pvpParticipant ? 1 : 0.94);
-      ghost.label.setColor(pvpParticipant ? '#ff3f5f' : '#f3eee2');
-      ghost.label.setStroke('#050505', pvpParticipant ? 4 : 3);
-      ghost.label.setBackgroundColor(pvpParticipant ? 'rgba(0,0,0,0)' : '#050505');
+    if (renderedGhost) {
+      this.applyRenderedGhostPvpPresentation(renderedGhost);
+      return;
     }
+    for (const ghost of this.renderedGhostsByConnectionId.values()) {
+      this.applyRenderedGhostPvpPresentation(ghost);
+    }
+  }
+
+  private applyRenderedGhostPvpPresentation(ghost: RenderedGhost): void {
+    const pvpParticipant = this.isGhostInActivePvp(ghost.presence);
+    if (ghost.pvpPresentationActive === pvpParticipant) {
+      return;
+    }
+    ghost.pvpPresentationActive = pvpParticipant;
+    ghost.sprite.setAlpha(pvpParticipant ? 1 : 0.74);
+    ghost.halo.setAlpha(pvpParticipant ? 0 : 1);
+    ghost.label.setAlpha(pvpParticipant ? 1 : 0.94);
+    ghost.label.setColor(pvpParticipant ? '#ff3f5f' : '#f3eee2');
+    ghost.label.setStroke('#050505', pvpParticipant ? 4 : 3);
+    ghost.label.setBackgroundColor(pvpParticipant ? 'rgba(0,0,0,0)' : '#050505');
+  }
+
+  private syncRenderedGhostLabel(renderedGhost: RenderedGhost): void {
+    const nextText = this.getGhostLabelText(renderedGhost.presence);
+    if (renderedGhost.cachedLabelText === nextText) {
+      return;
+    }
+    renderedGhost.cachedLabelText = nextText;
+    renderedGhost.label.setText(nextText);
   }
 
   private getPrioritizedGhostsToRender(): WorldGhostPresence[] {
@@ -995,13 +1108,14 @@ export class OverworldPresenceController {
     return this.pvpMatchSnapshot?.participants.find((participant) => participant.userId === userId) ?? null;
   }
 
-  private getPredictedGhostTarget(ghost: WorldGhostPresence): { x: number; y: number } {
+  private writePredictedGhostTarget(
+    ghost: WorldGhostPresence,
+    target: { x: number; y: number },
+  ): void {
     const ageMs = Phaser.Math.Clamp(Date.now() - ghost.timestamp, 0, 100);
     const ageSeconds = ageMs / 1000;
-    return {
-      x: ghost.x + ghost.velocityX * ageSeconds,
-      y: ghost.y + ghost.velocityY * ageSeconds,
-    };
+    target.x = ghost.x + ghost.velocityX * ageSeconds;
+    target.y = ghost.y + ghost.velocityY * ageSeconds;
   }
 
   private isGhostActionVisible(ghost: WorldGhostPresence): boolean {
@@ -1135,7 +1249,7 @@ export class OverworldPresenceController {
     actionProjectile.setDepth(28);
     actionProjectile.setVisible(false);
 
-    const renderedGhost = {
+    const renderedGhost: RenderedGhost = {
       presence: ghost,
       halo,
       sprite,
@@ -1145,6 +1259,8 @@ export class OverworldPresenceController {
       actionProjectile,
       targetX: ghost.x,
       targetY: ghost.y,
+      cachedLabelText: this.getGhostLabelText(ghost),
+      pvpPresentationActive: null,
     };
     this.syncRenderedGhostPvpPresentation(renderedGhost);
     return renderedGhost;

@@ -109,6 +109,8 @@ import {
 
 const PLAY_ROOM_PARALLAX_MULTIPLIER = 0.2;
 const FULL_ROOM_RELEASE_GRACE_MS = 300;
+const TRANSITION_PREPARED_FULL_ROOM_RETAIN_MS = 1_500;
+const PLAYABLE_ROOM_PREFETCH_RETRY_DELAY_MS = 1_000;
 const DEFERRED_FULL_ROOM_LOAD_DELAY_MS = 24;
 const DEFERRED_PREVIEW_RENDER_DELAY_MS = 32;
 const DYNAMIC_OVERLAY_RETRY_DELAYS_MS = [500, 1_000, 2_000, 5_000, 10_000] as const;
@@ -204,6 +206,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private activeChunkRadius = 0;
   private localPlayPressure = createDefaultLocalPlayPressureMetrics();
   private chunkWindowRequestInFlight = false;
+  private playableRoomSnapshotRequestsById = new Map<string, Promise<void>>();
+  private playableRoomSnapshotRetryAtById = new Map<string, number>();
   private compactWorldActive = false;
   private fullPreviewUpgradeGeneration = -1;
   private startupDynamicOverlayGeneration = -1;
@@ -303,6 +307,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.activeChunkRadius = 0;
     this.localPlayPressure = createDefaultLocalPlayPressureMetrics();
     this.chunkWindowRequestInFlight = false;
+    this.playableRoomSnapshotRequestsById = new Map();
+    this.playableRoomSnapshotRetryAtById = new Map();
     this.compactWorldActive = false;
     this.fullPreviewUpgradeGeneration = -1;
     this.startupDynamicOverlayGeneration = -1;
@@ -346,6 +352,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.activeChunkRadius = 0;
     this.localPlayPressure = createDefaultLocalPlayPressureMetrics();
     this.chunkWindowRequestInFlight = false;
+    this.playableRoomSnapshotRequestsById = new Map();
+    this.playableRoomSnapshotRetryAtById = new Map();
     this.compactWorldActive = false;
     this.fullPreviewUpgradeGeneration = -1;
     this.startupDynamicOverlayGeneration = -1;
@@ -886,6 +894,131 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.previewCache.getRoomSnapshot(roomId);
   }
 
+  getPlayableRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null {
+    const roomId = roomIdFromCoordinates(coordinates);
+    const transientRoom = this.transientRoomOverridesById.get(roomId);
+    if (transientRoom) {
+      return cloneRoomSnapshot(transientRoom);
+    }
+
+    const draftRoom = this.draftRoomsById.get(roomId);
+    if (draftRoom) {
+      return cloneRoomSnapshot(draftRoom);
+    }
+
+    const optimisticPublishedRoom = this.optimisticPublishedRoomsById.get(roomId);
+    if (optimisticPublishedRoom) {
+      return cloneRoomSnapshot(optimisticPublishedRoom);
+    }
+
+    const roomSummary = this.roomSummariesById.get(roomId) ?? null;
+    const presencePreviewRoom = this.presencePreviewRoomsById.get(roomId);
+    if (presencePreviewRoom && roomSummary?.state !== 'published') {
+      return cloneRoomSnapshot(presencePreviewRoom);
+    }
+
+    const loadedFullRoom = this.loadedFullRoomsById.get(roomId);
+    if (loadedFullRoom) {
+      return cloneRoomSnapshot(loadedFullRoom.room);
+    }
+
+    const cachedRoom = this.getCurrentCachedFullRoomSnapshot(roomSummary);
+    return cachedRoom ? cloneRoomSnapshot(cachedRoom) : null;
+  }
+
+  isPlayableRoomCollisionReady(coordinates: RoomCoordinates): boolean {
+    const loadedRoom = this.loadedFullRoomsById.get(roomIdFromCoordinates(coordinates));
+    if (!loadedRoom) {
+      return false;
+    }
+
+    const player = this.options.getPlayer();
+    if (!player) {
+      return true;
+    }
+
+    return Boolean(
+      loadedRoom.terrainCollider?.active
+      && (
+        !loadedRoom.terrainInsetBodies
+        || loadedRoom.terrainInsetCollider?.active
+      )
+    );
+  }
+
+  prefetchPlayableRoomForTransition(coordinates: RoomCoordinates): void {
+    const roomId = roomIdFromCoordinates(coordinates);
+    const now = this.options.scene.time.now;
+    if (
+      this.isPlayableRoomCollisionReady(coordinates)
+      || this.resolveTransitionRenderableRoom(coordinates)
+      || this.playableRoomSnapshotRequestsById.has(roomId)
+      || (this.playableRoomSnapshotRetryAtById.get(roomId) ?? 0) > now
+    ) {
+      return;
+    }
+
+    const summary = this.roomSummariesById.get(roomId) ?? null;
+    if (
+      !summary
+      || (summary.state !== 'published' && summary.state !== 'claimed_unpublished')
+    ) {
+      return;
+    }
+
+    const candidate: StreamingRoomCandidate = {
+      id: roomId,
+      coordinates: { ...coordinates },
+      summary,
+      draft: null,
+      sharedPreview: null,
+      allowFullRoomLoad: true,
+      source: summary.state === 'published' ? 'published' : 'saved_construction_draft',
+    };
+    const candidates = new Map([[roomId, candidate]]);
+    let request: Promise<void>;
+    request = this.previewCache.ensureRoomSnapshotsBatch(candidates, [roomId], {
+      detail: 'full',
+      priority: 'high',
+    }).then(() => {
+      if (this.playableRoomSnapshotRequestsById.get(roomId) === request) {
+        this.playableRoomSnapshotRetryAtById.delete(roomId);
+      }
+    }).catch((error) => {
+      if (this.playableRoomSnapshotRequestsById.get(roomId) === request) {
+        this.playableRoomSnapshotRetryAtById.set(
+          roomId,
+          this.options.scene.time.now + PLAYABLE_ROOM_PREFETCH_RETRY_DELAY_MS,
+        );
+        console.warn(`Playable room ${roomId} could not be prepared before transition.`, error);
+      }
+    }).finally(() => {
+      if (this.playableRoomSnapshotRequestsById.get(roomId) === request) {
+        this.playableRoomSnapshotRequestsById.delete(roomId);
+      }
+    });
+    this.playableRoomSnapshotRequestsById.set(roomId, request);
+  }
+
+  preparePlayableRoomForTransition(coordinates: RoomCoordinates): boolean {
+    if (this.isPlayableRoomCollisionReady(coordinates)) {
+      return true;
+    }
+
+    const renderableRoom = this.resolveTransitionRenderableRoom(coordinates);
+    if (!renderableRoom) {
+      this.prefetchPlayableRoomForTransition(coordinates);
+      return false;
+    }
+
+    this.ensureFullRoom(renderableRoom.room, renderableRoom.source);
+    const ready = this.isPlayableRoomCollisionReady(coordinates);
+    if (ready) {
+      this.retainPreparedTransitionRoom(renderableRoom.id);
+    }
+    return ready;
+  }
+
   getWorldWindow(): WorldWindow | null {
     return this.worldWindow;
   }
@@ -1125,7 +1258,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       }
 
       if (candidate.summary?.state === 'published' && candidate.sharedPreview) {
-        const cachedPublishedRoom = this.previewCache.getRoomSnapshot(candidate.summary.id);
+        const cachedPublishedRoom = fullRoomIds.has(candidate.summary.id)
+          ? this.previewCache.getFullRoomSnapshot(candidate.summary.id)
+          : this.previewCache.getRoomSnapshot(candidate.summary.id);
         if (cachedPublishedRoom) {
           renderableRooms.set(candidate.id, {
             id: candidate.id,
@@ -1154,7 +1289,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         continue;
       }
 
-      const cachedRoom = this.previewCache.getRoomSnapshot(candidate.summary.id);
+      const cachedRoom = fullRoomIds.has(candidate.summary.id)
+        ? this.previewCache.getFullRoomSnapshot(candidate.summary.id)
+        : this.previewCache.getRoomSnapshot(candidate.summary.id);
       if (!cachedRoom) {
         continue;
       }
@@ -1362,6 +1499,106 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.deferredFullRoomLoadTimer?.remove(false);
     this.deferredFullRoomLoadTimer = null;
     this.deferredFullRoomLoadQueue = [];
+  }
+
+  private resolveTransitionRenderableRoom(
+    coordinates: RoomCoordinates,
+  ): RenderableRoom | null {
+    const roomId = roomIdFromCoordinates(coordinates);
+    const transientRoom = this.transientRoomOverridesById.get(roomId);
+    if (transientRoom) {
+      return {
+        id: roomId,
+        coordinates: { ...coordinates },
+        room: transientRoom,
+        source: 'local_draft',
+      };
+    }
+
+    const draftRoom = this.draftRoomsById.get(roomId);
+    if (draftRoom) {
+      return {
+        id: roomId,
+        coordinates: { ...coordinates },
+        room: draftRoom,
+        source: 'local_draft',
+      };
+    }
+
+    const optimisticRoom = this.optimisticPublishedRoomsById.get(roomId);
+    if (optimisticRoom) {
+      return {
+        id: roomId,
+        coordinates: { ...coordinates },
+        room: optimisticRoom,
+        source: 'published',
+      };
+    }
+
+    const summary = this.roomSummariesById.get(roomId) ?? null;
+    const presencePreviewRoom = this.presencePreviewRoomsById.get(roomId);
+    if (presencePreviewRoom && summary?.state !== 'published') {
+      return {
+        id: roomId,
+        coordinates: { ...coordinates },
+        room: presencePreviewRoom,
+        source: 'live_construction_preview',
+      };
+    }
+
+    const cachedRoom = this.getCurrentCachedFullRoomSnapshot(summary);
+    if (!cachedRoom) {
+      return null;
+    }
+
+    return {
+      id: roomId,
+      coordinates: { ...coordinates },
+      room: cachedRoom,
+      source: summary?.state === 'published' ? 'published' : 'saved_construction_draft',
+    };
+  }
+
+  private getCurrentCachedFullRoomSnapshot(
+    summary: WorldRoomSummary | null,
+  ): RoomSnapshot | null {
+    if (
+      !summary
+      || (summary.state !== 'published' && summary.state !== 'claimed_unpublished')
+    ) {
+      return null;
+    }
+
+    const cachedRoom = this.previewCache.getFullRoomSnapshot(summary.id);
+    if (!cachedRoom) {
+      return null;
+    }
+    if (summary.version !== null && cachedRoom.version !== summary.version) {
+      return null;
+    }
+    if (summary.previewUpdatedAt && cachedRoom.updatedAt !== summary.previewUpdatedAt) {
+      return null;
+    }
+    return cachedRoom;
+  }
+
+  private retainPreparedTransitionRoom(roomId: string): void {
+    if (roomId === roomIdFromCoordinates(this.options.getCurrentRoomCoordinates())) {
+      return;
+    }
+
+    const now = this.options.scene.time.now;
+    this.fullRoomReleaseAtById.set(
+      roomId,
+      now + TRANSITION_PREPARED_FULL_ROOM_RETAIN_MS,
+    );
+    let nextReleaseAt: number | null = null;
+    for (const releaseAt of this.fullRoomReleaseAtById.values()) {
+      nextReleaseAt = nextReleaseAt === null
+        ? releaseAt
+        : Math.min(nextReleaseAt, releaseAt);
+    }
+    this.scheduleFullRoomReleaseCleanup(nextReleaseAt, now);
   }
 
   private collectVisibleRoomCandidates(): Map<string, StreamingRoomCandidate> {
@@ -2093,6 +2330,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     registerCustomSpritesFromSnapshot(room);
     const existing = this.loadedFullRoomsById.get(room.id);
     if (existing && this.isLoadedFullRoomCurrent(existing, room, source)) {
+      this.ensurePlayerTerrainColliders(existing);
       existing.image.setVisible(true);
       existing.foregroundImage?.setVisible(true);
       for (const liveObject of existing.liveObjects) {
@@ -2272,6 +2510,31 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       this.options.onFullRoomReplaced?.(loadedRoom);
     }
     });
+  }
+
+  private ensurePlayerTerrainColliders(
+    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
+  ): void {
+    const player = this.options.getPlayer();
+    if (!player) {
+      return;
+    }
+
+    if (!loadedRoom.terrainCollider?.active) {
+      loadedRoom.terrainCollider = this.options.scene.physics.add.collider(
+        player,
+        loadedRoom.terrainLayer,
+        undefined,
+        (_player, tile) =>
+          this.options.shouldCollidePlayerWithTerrainTile?.(tile as Phaser.Tilemaps.Tile) ?? true,
+      );
+    }
+    if (loadedRoom.terrainInsetBodies && !loadedRoom.terrainInsetCollider?.active) {
+      loadedRoom.terrainInsetCollider = this.options.scene.physics.add.collider(
+        player,
+        loadedRoom.terrainInsetBodies,
+      );
+    }
   }
 
   private isLoadedFullRoomCurrent(
@@ -2595,6 +2858,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     camera: Phaser.Cameras.Scene2D.Camera
   ): void {
     const origin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
+    const worldView = camera.worldView;
+    if (
+      origin.x + ROOM_PX_WIDTH < worldView.left
+      || origin.x > worldView.right
+      || origin.y + ROOM_PX_HEIGHT < worldView.top
+      || origin.y > worldView.bottom
+    ) {
+      return;
+    }
 
     if (loadedRoom.backgroundColorRect) {
       loadedRoom.backgroundColorRect.setPosition(origin.x, origin.y);

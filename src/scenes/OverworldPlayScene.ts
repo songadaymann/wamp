@@ -146,6 +146,7 @@ import {
 import { buildAmbientRoomLightingBounds } from './overworld/lighting';
 import {
   OverworldPresenceController,
+  type LocalPresenceInput,
   type OnlineRosterEntry,
   type RenderedGhost,
 } from './overworld/presence';
@@ -459,6 +460,23 @@ export class OverworldPlayScene extends Phaser.Scene {
   private pvpLocalInvulnerabilityFx: Phaser.GameObjects.Graphics | null = null;
   private localPvpAction: WorldPresencePvpAction | null = null;
   private localPvpActionUntilEpoch = 0;
+  private readonly localPresenceRoomScratch: RoomCoordinates = { x: 0, y: 0 };
+  private readonly localPvpPresenceScratch = {
+    matchId: '',
+    action: null as WorldPresencePvpAction | null,
+    actionUntil: 0,
+  };
+  private readonly localPresenceScratch = {
+    mode: 'browse' as OverworldMode,
+    roomCoordinates: this.localPresenceRoomScratch,
+    x: 0,
+    y: 0,
+    velocityX: 0,
+    velocityY: 0,
+    facing: 1,
+    animationState: 'idle' as DefaultPlayerAnimationState,
+    pvp: null as LocalPresenceInput['pvp'],
+  };
   private lastPvpInstanceStateSentAt = 0;
   private pvpInstanceStateSequence = 0;
   private activeMultiplayerGoalPolicy: MultiplayerModeDefinition['goals'] | null = null;
@@ -728,6 +746,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPlayerBody: () => this.playerBody,
       getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
       getLoadedFullRoomById: (roomId) => this.loadedFullRoomsById.get(roomId) ?? null,
+      authorizeRoomTransition: (coordinates) =>
+        this.roomTransitionController.authorizeTeleportTransition(coordinates),
       teleportPlayerTo: (x, y, velocity) =>
         this.teleportPlayerToPortalObject(x, y, velocity),
       playPortalFx: () => {
@@ -780,7 +800,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       getProtectedFullRoomIds: (targetFullRoomIds) =>
         this.getProtectedMovingPlatformSourceRoomIds(targetFullRoomIds),
       onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
-      onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
+      onFullRoomVisibilityChanged: () => {
+        this.syncGhostVisibility();
+        this.runtimeController?.syncEdgeWalls();
+      },
       onFullRoomDestroyed: (loadedRoom) => {
         this.specialTilesController.handleFullRoomDestroyed(loadedRoom.room.id);
         this.portalObjectController.handleFullRoomDestroyed(loadedRoom.room.id);
@@ -1283,7 +1306,10 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.mode = mode;
         },
         getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-        getCurrentRoomSnapshot: () => this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates),
+        getCurrentRoomSnapshot: () =>
+          this.worldStreamingController.getPlayableRoomSnapshotForCoordinates(
+            this.currentRoomCoordinates,
+          ),
         getActiveCourseSnapshot: () => this.activeCourseSnapshot,
         getActiveCourseRun: () => this.activeCourseRun,
         getActiveRoomRushRun: () => this.activeRoomRushRun,
@@ -1329,6 +1355,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
         getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
         getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
+        isPlayableRoomCollisionReady: (coordinates) =>
+          this.worldStreamingController.isPlayableRoomCollisionReady(coordinates),
         syncBackdropCameraIgnores: () => this.syncBackdropCameraIgnores(),
       },
       {
@@ -1845,6 +1873,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
       isNeighborReachable: (roomCoordinates, neighborCoordinates) =>
         this.runtimeController.isNeighborReachable(roomCoordinates, neighborCoordinates),
+      prefetchPlayableRoomForTransition: (coordinates) =>
+        this.worldStreamingController.prefetchPlayableRoomForTransition(coordinates),
+      preparePlayableRoomForTransition: (coordinates) =>
+        this.worldStreamingController.preparePlayableRoomForTransition(coordinates),
       isRoomTransitionLocked: () => this.isPvpArenaActive(),
       resetChallengeStateForRoomExit: (nextRoomCoordinates) => {
         this.sessionResetController.resetChallengeStateForRoomExit(nextRoomCoordinates);
@@ -2759,7 +2791,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       }
     }
     if (identityChanged || roomChatIdentityChanged) {
-      this.syncLocalPresence();
+      this.syncLocalPresence(true);
     }
     this.renderHud();
   };
@@ -2802,7 +2834,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (!isDynamicPlayerAvatarId(avatarId) || loadedAvatarId === avatarId) {
       this.playerSprite?.setVisible(true);
     }
-    this.syncLocalPresence();
+    this.syncLocalPresence(true);
     this.renderHud();
   }
 
@@ -2947,56 +2979,64 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
   }
 
-  private syncLocalPresence(): void {
+  private syncLocalPresence(force = false): void {
     const now = Date.now();
-    const activePvpPresence =
+    const activePvpMatch =
       this.activePvpMatch && this.activePvpMatch.status !== 'complete'
-        ? {
-            matchId: this.activePvpMatch.matchId,
-            action:
-              this.localPvpAction && now < this.localPvpActionUntilEpoch
-                ? this.localPvpAction
-                : null,
-            actionUntil:
-              this.localPvpAction && now < this.localPvpActionUntilEpoch
-                ? this.localPvpActionUntilEpoch
-                : 0,
-          }
+        ? this.activePvpMatch
         : null;
-    if (!activePvpPresence?.action) {
+    const activePvpAction =
+      this.localPvpAction && now < this.localPvpActionUntilEpoch
+        ? this.localPvpAction
+        : null;
+    if (!activePvpAction) {
       this.localPvpAction = null;
       this.localPvpActionUntilEpoch = 0;
     }
 
-    const localPresence =
-      this.mode === 'play' && this.player && this.playerBody
-        ? {
-            mode: this.mode,
-            roomCoordinates: { ...this.currentRoomCoordinates },
-            x: this.player.x,
-            y: this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
-            velocityX: this.playerBody.velocity.x,
-            velocityY: this.playerBody.velocity.y,
-            facing: this.playerFacing,
-            animationState: this.playerAnimationState,
-            pvp: activePvpPresence,
-          }
-        : this.mode === 'browse'
-          ? {
-              mode: this.mode,
-              roomCoordinates: { ...this.selectedCoordinates },
-              x: this.selectedCoordinates.x * ROOM_PX_WIDTH + ROOM_PX_WIDTH * 0.5,
-              y: this.selectedCoordinates.y * ROOM_PX_HEIGHT + ROOM_PX_HEIGHT * 0.5,
-              velocityX: 0,
-              velocityY: 0,
-              facing: 1,
-              animationState: 'idle' as const,
-              pvp: null,
-            }
-          : null;
+    let localPresence: LocalPresenceInput | null = null;
+    if (this.mode === 'play' && this.player && this.playerBody) {
+      this.localPresenceRoomScratch.x = this.currentRoomCoordinates.x;
+      this.localPresenceRoomScratch.y = this.currentRoomCoordinates.y;
+      this.localPresenceScratch.mode = 'play';
+      this.localPresenceScratch.x = this.player.x;
+      this.localPresenceScratch.y =
+        this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET;
+      this.localPresenceScratch.velocityX = this.playerBody.velocity.x;
+      this.localPresenceScratch.velocityY = this.playerBody.velocity.y;
+      this.localPresenceScratch.facing = this.playerFacing;
+      this.localPresenceScratch.animationState = this.playerAnimationState;
+      if (activePvpMatch) {
+        this.localPvpPresenceScratch.matchId = activePvpMatch.matchId;
+        this.localPvpPresenceScratch.action = activePvpAction;
+        this.localPvpPresenceScratch.actionUntil =
+          activePvpAction ? this.localPvpActionUntilEpoch : 0;
+        this.localPresenceScratch.pvp = this.localPvpPresenceScratch;
+      } else {
+        this.localPresenceScratch.pvp = null;
+      }
+      localPresence = this.localPresenceScratch;
+    } else if (this.mode === 'browse') {
+      this.localPresenceRoomScratch.x = this.selectedCoordinates.x;
+      this.localPresenceRoomScratch.y = this.selectedCoordinates.y;
+      this.localPresenceScratch.mode = 'browse';
+      this.localPresenceScratch.x =
+        this.selectedCoordinates.x * ROOM_PX_WIDTH + ROOM_PX_WIDTH * 0.5;
+      this.localPresenceScratch.y =
+        this.selectedCoordinates.y * ROOM_PX_HEIGHT + ROOM_PX_HEIGHT * 0.5;
+      this.localPresenceScratch.velocityX = 0;
+      this.localPresenceScratch.velocityY = 0;
+      this.localPresenceScratch.facing = 1;
+      this.localPresenceScratch.animationState = 'idle';
+      this.localPresenceScratch.pvp = null;
+      localPresence = this.localPresenceScratch;
+    }
 
-    this.presenceController.updateLocalPresence(localPresence);
-    this.roomChatController.updateLocalPresence(localPresence);
+    if (!this.presenceController.isLocalPresenceDue(localPresence, force, now)) {
+      return;
+    }
+    this.presenceController.updateLocalPresence(localPresence, now);
+    this.roomChatController.updateLocalPresence(localPresence, now);
   }
 
   private syncPvpInstanceState(force = false): void {
@@ -3727,6 +3767,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private redrawWorld(): void {
+    this.gridOverlayController.invalidateContent();
     this.roomCellController.redraw();
 
     if (!this.worldWindow) {
@@ -5349,7 +5390,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerPresentationController.syncPlayerPickupSensor();
     this.playerPresentationController.syncPlayerVisual();
     this.pvpSpawnAppliedMatchId = snapshot.matchId;
-    this.syncLocalPresence();
+    this.syncLocalPresence(true);
     this.syncPvpInstanceState(true);
     this.applyPvpArenaCameraLock();
   }
@@ -5471,7 +5512,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         : null,
     });
     this.syncPvpInstanceState(true);
-    this.syncLocalPresence();
+    this.syncLocalPresence(true);
   }
 
   private syncPvpLocalHeartLabel(): void {
@@ -6242,6 +6283,9 @@ export class OverworldPlayScene extends Phaser.Scene {
               : null,
           }
         : null,
+      currentFullRoomLoaded: Boolean(currentLoadedRoom),
+      currentTerrainColliderActive: Boolean(currentLoadedRoom?.terrainCollider?.active),
+      loadedFullRoomIds: Array.from(this.loadedFullRoomsById.keys()).sort(),
       loadedPreviewRooms: this.previewImages.length,
       loadedFullRooms: this.loadedFullRoomsById.size,
       score: this.score,
