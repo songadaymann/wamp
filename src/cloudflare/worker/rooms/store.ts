@@ -575,7 +575,9 @@ export async function loadRoomRecordForMutation(
     actor?.walletAddress ?? null,
     actorIsAdmin
   );
-  await syncRoomOwnershipFromChain(env, record, actor);
+  await syncRoomOwnershipFromChain(env, record, actor, {
+    allowStaleUnmintedRoomOnReadFailure: true,
+  });
   return loadRoomRecord(
     env,
     roomId,

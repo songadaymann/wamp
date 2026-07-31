@@ -9,7 +9,7 @@ import {
   ROOM_OWNERSHIP_TOKEN_ABI,
 } from '../../../mint/roomOwnership';
 import { sha256Hex } from '../../../mint/roomMetadata';
-import { type RoomCoordinates, type RoomRecord } from '../../../persistence/roomModel';
+import { isRoomMinted, type RoomCoordinates, type RoomRecord } from '../../../persistence/roomModel';
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
 import type { Env, RoomMintChainState, RoomMintConfig } from '../core/types';
@@ -80,6 +80,10 @@ export function createRoomMintPublicClient(config: RoomMintConfig) {
   });
 }
 
+export interface SyncRoomOwnershipOptions {
+  allowStaleUnmintedRoomOnReadFailure?: boolean;
+}
+
 export async function loadRoomMintPriceWei(config: RoomMintConfig): Promise<string> {
   const client = createRoomMintPublicClient(config);
   const priceWei = await client.readContract({
@@ -132,7 +136,8 @@ export async function signRoomMintAuthorization(
 export async function syncRoomOwnershipFromChain(
   env: Env,
   record: RoomRecord,
-  actor: AuthUser | null
+  actor: AuthUser | null,
+  options: SyncRoomOwnershipOptions = {}
 ): Promise<RoomRecord> {
   const config = getOptionalRoomMintConfig(env);
   if (!config) {
@@ -144,6 +149,27 @@ export async function syncRoomOwnershipFromChain(
     chainState = await readRoomMintStateFromChain(config, record.draft.coordinates);
   } catch (error) {
     if (!shouldSkipLocalRoomMintSync(config, error)) {
+      if (options.allowStaleUnmintedRoomOnReadFailure && !isRoomMinted(record)) {
+        console.warn('Skipping room ownership sync for an unminted room because the mint RPC read failed.', {
+          roomId: record.draft.id,
+          coordinates: record.draft.coordinates,
+          error: summarizeRoomMintSyncError(error),
+        });
+        return record;
+      }
+
+      if (options.allowStaleUnmintedRoomOnReadFailure && isRoomMinted(record)) {
+        console.error('Room ownership sync failed for a minted room mutation.', {
+          roomId: record.draft.id,
+          coordinates: record.draft.coordinates,
+          error: summarizeRoomMintSyncError(error),
+        });
+        throw new HttpError(
+          503,
+          'Room ownership check is temporarily unavailable. Try again shortly.'
+        );
+      }
+
       throw error;
     }
 
@@ -237,6 +263,54 @@ export function shouldSkipLocalRoomMintSync(config: RoomMintConfig, _error: unkn
   } catch {
     return false;
   }
+}
+
+function summarizeRoomMintSyncError(error: unknown): {
+  name: string | null;
+  message: string;
+  status: number | null;
+  details: string | null;
+} {
+  const errorLike =
+    error && typeof error === 'object'
+      ? (error as {
+          name?: unknown;
+          message?: unknown;
+          shortMessage?: unknown;
+          details?: unknown;
+        })
+      : null;
+  const shortMessage =
+    typeof errorLike?.shortMessage === 'string'
+      ? errorLike.shortMessage
+      : error instanceof Error
+        ? error.message.split('\n')[0] ?? error.message
+        : String(error);
+  const details = typeof errorLike?.details === 'string' ? errorLike.details : null;
+
+  return {
+    name: typeof errorLike?.name === 'string' ? errorLike.name : null,
+    message: shortMessage,
+    status: findNestedErrorStatus(error) ?? null,
+    details,
+  };
+}
+
+function findNestedErrorStatus(error: unknown): number | undefined {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5; depth += 1) {
+    if (!current || typeof current !== 'object') {
+      return undefined;
+    }
+
+    const errorLike = current as { status?: unknown; cause?: unknown };
+    if (typeof errorLike.status === 'number') {
+      return errorLike.status;
+    }
+    current = errorLike.cause;
+  }
+
+  return undefined;
 }
 
 export async function verifyMintTransactionForRoom(
