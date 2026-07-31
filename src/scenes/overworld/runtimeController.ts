@@ -83,6 +83,14 @@ interface OverworldRuntimeControllerOptions {
   edgeWallThickness: number;
 }
 
+function isPlayableCellState(state: SelectedCellState): boolean {
+  return (
+    state === 'published'
+    || state === 'draft'
+    || state === 'claimed_unpublished'
+  );
+}
+
 export class OverworldRuntimeController<TLiveObject = unknown> {
   constructor(
     private readonly host: OverworldRuntimeControllerHost<TLiveObject>,
@@ -110,6 +118,12 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
 
     const currentRoom = this.host.getCurrentRoomSnapshot();
     if (!currentRoom) {
+      if (isPlayableCellState(this.host.getCellStateAt(this.host.getSelectedCoordinates()))) {
+        // A room transition updates the active coordinates before an adjacent
+        // snapshot necessarily finishes hydrating. Keep the existing Play
+        // runtime alive until the completed refresh calls this method again.
+        return;
+      }
       this.host.setMode('browse');
       this.host.setCameraMode('inspect');
       this.host.syncAppMode();
@@ -235,8 +249,7 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
       const activeCourseRun = this.host.getActiveCourseRun();
       if (activeCourseRun?.expandedRoomId && (currentInCourse || neighborInCourse)) {
         const outsideCoordinates = currentInCourse ? neighborCoordinates : roomCoordinates;
-        const outsideState = this.host.getCellStateAt(outsideCoordinates);
-        return outsideState === 'published' || outsideState === 'draft';
+        return isPlayableCellState(this.host.getCellStateAt(outsideCoordinates));
       }
 
       return false;
@@ -247,7 +260,7 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
       return neighborState === 'published';
     }
 
-    return neighborState === 'published' || neighborState === 'draft';
+    return isPlayableCellState(neighborState);
   }
 
   private createEdgeWall(
