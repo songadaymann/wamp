@@ -190,13 +190,6 @@ export class OverworldViewportController {
     this.updateDebugOverlay();
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    const ignored: Phaser.GameObjects.GameObject[] = [];
-    if (this.zoomDebugGraphics) ignored.push(this.zoomDebugGraphics);
-    if (this.zoomDebugText) ignored.push(this.zoomDebugText);
-    return ignored;
-  }
-
   zoomIn(): void {
     this.adjustButtonZoom(this.options.buttonZoomFactor);
   }

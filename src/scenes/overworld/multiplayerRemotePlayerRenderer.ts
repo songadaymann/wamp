@@ -24,7 +24,6 @@ interface MultiplayerRemotePlayerRendererOptions {
   playerWidth: number;
   playerHeight: number;
   presentCombatEvent: (event: MultiplayerInstanceCombatEvent, receivedAt: number) => void;
-  onDisplayObjectsChanged?: () => void;
 }
 
 interface RemoteOpponent {
@@ -52,6 +51,11 @@ interface RemoteOpponent {
 export class MultiplayerRemotePlayerRenderer {
   private opponent: RemoteOpponent | null = null;
   private lastCombatEventIds = new Set<string>();
+  private readonly predictedTargetScratch = { x: 0, y: 0 };
+  private readonly opponentBodyRectScratch = new Phaser.Geom.Rectangle();
+  private readonly opponentHitRectScratch = new Phaser.Geom.Rectangle();
+  private readonly remoteActionRectScratch = new Phaser.Geom.Rectangle();
+  private readonly pointRectScratch = new Phaser.Geom.Rectangle();
 
   constructor(private readonly options: MultiplayerRemotePlayerRendererOptions) {}
 
@@ -140,19 +144,30 @@ export class MultiplayerRemotePlayerRenderer {
         this.opponent.actionDownward = false;
         this.playOpponentAnimation(this.opponent.animationState);
       }
-      const predicted = this.getPredictedTarget(this.opponent);
+      this.writePredictedTarget(this.opponent, this.predictedTargetScratch);
       const distance = Phaser.Math.Distance.Between(
         this.opponent.sprite.x,
         this.opponent.sprite.y,
-        predicted.x,
-        predicted.y,
+        this.predictedTargetScratch.x,
+        this.predictedTargetScratch.y,
       );
       const step = 0.68;
       if (distance > 56) {
-        this.opponent.sprite.setPosition(predicted.x, predicted.y);
+        this.opponent.sprite.setPosition(
+          this.predictedTargetScratch.x,
+          this.predictedTargetScratch.y,
+        );
       } else {
-        this.opponent.sprite.x = Phaser.Math.Linear(this.opponent.sprite.x, predicted.x, step);
-        this.opponent.sprite.y = Phaser.Math.Linear(this.opponent.sprite.y, predicted.y, step);
+        this.opponent.sprite.x = Phaser.Math.Linear(
+          this.opponent.sprite.x,
+          this.predictedTargetScratch.x,
+          step,
+        );
+        this.opponent.sprite.y = Phaser.Math.Linear(
+          this.opponent.sprite.y,
+          this.predictedTargetScratch.y,
+          step,
+        );
       }
       this.opponent.heartsDisplay.setPosition(
         this.opponent.sprite.x,
@@ -169,26 +184,19 @@ export class MultiplayerRemotePlayerRenderer {
   }
 
   getOpponentBodyRect(): Phaser.Geom.Rectangle | null {
-    if (!this.opponent || !this.opponent.sprite.visible) {
+    if (!this.writeOpponentBodyRect(this.opponentBodyRectScratch)) {
       return null;
     }
-
-    return new Phaser.Geom.Rectangle(
-      this.opponent.sprite.x - this.options.playerWidth * 0.5,
-      this.opponent.sprite.y - this.options.playerHeight,
-      this.options.playerWidth,
-      this.options.playerHeight,
-    );
+    return this.opponentBodyRectScratch;
   }
 
   getOpponentHitRect(): Phaser.Geom.Rectangle | null {
-    const rect = this.getOpponentBodyRect();
-    if (!rect) {
+    if (!this.writeOpponentBodyRect(this.opponentHitRectScratch)) {
       return null;
     }
 
-    Phaser.Geom.Rectangle.Inflate(rect, 12, 8);
-    return rect;
+    Phaser.Geom.Rectangle.Inflate(this.opponentHitRectScratch, 12, 8);
+    return this.opponentHitRectScratch;
   }
 
   getRemoteActionDamageRect(): Phaser.Geom.Rectangle | null {
@@ -203,7 +211,7 @@ export class MultiplayerRemotePlayerRenderer {
 
     if (this.opponent.action === 'gun') {
       const width = 88;
-      const rect = new Phaser.Geom.Rectangle(
+      const rect = this.remoteActionRectScratch.setTo(
         this.opponent.facing > 0 ? bodyRect.centerX : bodyRect.centerX - width,
         bodyRect.centerY - 12,
         width,
@@ -214,7 +222,7 @@ export class MultiplayerRemotePlayerRenderer {
     }
 
     if (this.opponent.actionDownward) {
-      const rect = new Phaser.Geom.Rectangle(
+      const rect = this.remoteActionRectScratch.setTo(
         bodyRect.centerX - 12,
         bodyRect.bottom - 2,
         24,
@@ -224,7 +232,7 @@ export class MultiplayerRemotePlayerRenderer {
       return rect;
     }
 
-    const rect = new Phaser.Geom.Rectangle(
+    const rect = this.remoteActionRectScratch.setTo(
       bodyRect.centerX + this.opponent.facing * 8 - 14,
       bodyRect.top + 2,
       28,
@@ -260,29 +268,19 @@ export class MultiplayerRemotePlayerRenderer {
   }
 
   getHitResultAtPoint(worldX: number, worldY: number): WeaponHitResult | null {
-    const pointRect = new Phaser.Geom.Rectangle(worldX - 4, worldY - 3, 8, 6);
-    return this.getHitResultInRect(pointRect);
+    this.pointRectScratch.setTo(worldX - 4, worldY - 3, 8, 6);
+    return this.getHitResultInRect(this.pointRectScratch);
   }
 
-  getOpponentCenter(): { x: number; y: number } | null {
-    return this.opponent
-      ? {
-          x: this.opponent.sprite.x,
-          y: this.opponent.sprite.y - this.options.playerHeight * 0.5,
-        }
-      : null;
+  hasOpponent(): boolean {
+    return this.opponent !== null;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    const objects: Phaser.GameObjects.GameObject[] = [];
-    if (this.opponent) {
-      objects.push(
-        this.opponent.sprite,
-        this.opponent.heartsDisplay.getGameObject(),
-        this.opponent.invulnerabilityFx,
-      );
-    }
-    return objects;
+  writeOpponentCenter(target: { x: number; y: number }): boolean {
+    if (!this.opponent) return false;
+    target.x = this.opponent.sprite.x;
+    target.y = this.opponent.sprite.y - this.options.playerHeight * 0.5;
+    return true;
   }
 
   getDebugState(): Record<string, unknown> | null {
@@ -319,7 +317,6 @@ export class MultiplayerRemotePlayerRenderer {
       this.opponent = null;
     }
     this.lastCombatEventIds.clear();
-    this.options.onDisplayObjectsChanged?.();
   }
 
   destroy(): void {
@@ -371,7 +368,6 @@ export class MultiplayerRemotePlayerRenderer {
       avatarLoadPending: false,
     };
     this.ensureOpponentAvatarLoaded(this.opponent);
-    this.options.onDisplayObjectsChanged?.();
   }
 
   private getOpponentHeartY(opponent: RemoteOpponent): number {
@@ -477,13 +473,27 @@ export class MultiplayerRemotePlayerRenderer {
     }
   }
 
-  private getPredictedTarget(opponent: RemoteOpponent): { x: number; y: number } {
+  private writePredictedTarget(
+    opponent: RemoteOpponent,
+    target: { x: number; y: number },
+  ): void {
     const ageMs = Phaser.Math.Clamp(Date.now() - opponent.receivedAt, 0, 80);
     const ageSeconds = ageMs / 1000;
-    return {
-      x: opponent.targetX + opponent.velocityX * ageSeconds,
-      y: opponent.targetY + opponent.velocityY * ageSeconds,
-    };
+    target.x = opponent.targetX + opponent.velocityX * ageSeconds;
+    target.y = opponent.targetY + opponent.velocityY * ageSeconds;
+  }
+
+  private writeOpponentBodyRect(target: Phaser.Geom.Rectangle): boolean {
+    if (!this.opponent || !this.opponent.sprite.visible) {
+      return false;
+    }
+    target.setTo(
+      this.opponent.sprite.x - this.options.playerWidth * 0.5,
+      this.opponent.sprite.y - this.options.playerHeight,
+      this.options.playerWidth,
+      this.options.playerHeight,
+    );
+    return true;
   }
 
   private getOpponentHitResult(): WeaponHitResult | null {

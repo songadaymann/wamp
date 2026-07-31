@@ -46,7 +46,6 @@ function createReachabilityHarness(
     { edgeWallThickness: 4 },
   );
 }
-
 describe('overworld runtime room hydration', () => {
   it.each<SelectedCellState>([
     'published',

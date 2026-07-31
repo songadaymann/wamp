@@ -101,10 +101,6 @@ export class OverworldGoalMarkerController {
     }
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return [...this.goalMarkerSprites, ...this.goalMarkerLabels];
-  }
-
   toWorldGoalPoint(
     roomCoordinates: RoomCoordinates,
     point: GoalMarkerPoint,

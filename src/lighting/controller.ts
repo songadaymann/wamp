@@ -33,8 +33,22 @@ export interface RoomLightingFrameInput {
   roomId: string | null;
   bounds: RoomLightingBounds | null;
   lighting: RoomLightingSettings | null | undefined;
-  emitters: RoomLightingEmitter[];
-  ambientBounds?: RoomLightingBounds[];
+  emitters: readonly RoomLightingEmitter[];
+  ambientBounds?: readonly RoomLightingBounds[];
+  debugCounts?: Partial<RoomLightingFrameDebugCounts>;
+}
+
+export interface RoomLightingEmitterSlot {
+  key: string;
+  emitter: RoomLightingEmitter;
+}
+
+export interface RoomLightingStructureInput {
+  roomId: string | null;
+  bounds: RoomLightingBounds | null;
+  lighting: RoomLightingSettings | null | undefined;
+  emitters: readonly RoomLightingEmitterSlot[];
+  ambientBounds?: readonly RoomLightingBounds[];
   debugCounts?: Partial<RoomLightingFrameDebugCounts>;
 }
 
@@ -68,6 +82,11 @@ export class RoomLightingController {
   private overlay: Phaser.GameObjects.RenderTexture | null = null;
   private glowOverlay: Phaser.GameObjects.RenderTexture | null = null;
   private ambientOverlays: Phaser.GameObjects.Rectangle[] = [];
+  private activeBounds: RoomLightingBounds | null = null;
+  private activeLighting = cloneRoomLightingSettings(null);
+  private activeEmitters: RoomLightingEmitter[] = [];
+  private readonly emittersByKey = new Map<string, RoomLightingEmitter>();
+  private frameRenderingEnabled = false;
   private debugState: RoomLightingDebugState = {
     mode: 'off',
     darkness: DEFAULT_ROOM_LIGHTING_DARKNESS,
@@ -87,6 +106,11 @@ export class RoomLightingController {
 
   reset(): boolean {
     const structureChanged = this.destroyOverlays();
+    this.activeBounds = null;
+    this.activeLighting = cloneRoomLightingSettings(null);
+    this.activeEmitters.length = 0;
+    this.emittersByKey.clear();
+    this.frameRenderingEnabled = false;
     this.debugState = {
       mode: 'off',
       darkness: DEFAULT_ROOM_LIGHTING_DARKNESS,
@@ -109,12 +133,28 @@ export class RoomLightingController {
   }
 
   sync(input: RoomLightingFrameInput): boolean {
+    const structureChanged = this.reconcileStructure({
+      ...input,
+      emitters: input.emitters.map((emitter, index) => ({
+        key: `legacy:${index}`,
+        emitter,
+      })),
+    });
+    this.renderFrame();
+    return structureChanged;
+  }
+
+  reconcileStructure(input: RoomLightingStructureInput): boolean {
     const lighting = cloneRoomLightingSettings(input.lighting ?? null);
     const activeRoomId = input.roomId ?? null;
     const ambientBounds = input.ambientBounds ?? [];
-    const emitterCount = input.emitters.length;
-    const debugCounts = resolveDebugCounts(input.emitters, input.debugCounts);
+    this.reconcileEmitterSlots(input.emitters);
+    const emitterCount = this.activeEmitters.length;
+    const debugCounts = resolveDebugCounts(this.activeEmitters, input.debugCounts);
     let structureChanged = false;
+    this.activeBounds = input.bounds ? { ...input.bounds } : null;
+    this.activeLighting = lighting;
+    this.frameRenderingEnabled = false;
 
     if (!activeRoomId || !input.bounds) {
       structureChanged = this.destroyOverlays();
@@ -192,6 +232,49 @@ export class RoomLightingController {
       return structureChanged;
     }
 
+    const ambientAlpha = resolvePlayerAuraDarkAmbientAlpha(lighting.darkness);
+    structureChanged = this.syncAmbientOverlays(ambientBounds, ambientAlpha) || structureChanged;
+    this.frameRenderingEnabled = true;
+    this.debugState = {
+      mode: lighting.mode,
+      darkness: lighting.darkness,
+      radius: lighting.radius,
+      rendererPath: 'webgl',
+      activeRoomId,
+      emitterCount,
+      playerGhostEmitterCount: debugCounts.playerGhostEmitterCount,
+      staticObjectEmitterCount: debugCounts.staticObjectEmitterCount,
+      staticTileEmitterCount: debugCounts.staticTileEmitterCount,
+      glowEmitterCount: 0,
+      ambientOverlayCount: ambientBounds.length,
+      fallbackReason: null,
+    };
+    return structureChanged;
+  }
+
+  updateEmitterPosition(key: string, x: number, y: number): boolean {
+    const emitter = this.emittersByKey.get(key);
+    if (!emitter) return false;
+    emitter.x = x;
+    emitter.y = y;
+    return true;
+  }
+
+  hasEmitter(key: string): boolean {
+    return this.emittersByKey.has(key);
+  }
+
+  getEmitterIdentity(key: string): RoomLightingEmitter | null {
+    return this.emittersByKey.get(key) ?? null;
+  }
+
+  renderFrame(): void {
+    const bounds = this.activeBounds;
+    const lighting = this.activeLighting;
+    if (!this.frameRenderingEnabled || !bounds || !this.overlay || !this.glowOverlay) {
+      return;
+    }
+
     const defaultRevealRadiusPx = resolvePlayerAuraDarkAuraDiameter(lighting.radius) * 0.5;
     const ambientAlpha = resolvePlayerAuraDarkAmbientAlpha(lighting.darkness);
     this.overlay.clear();
@@ -200,13 +283,13 @@ export class RoomLightingController {
       ambientAlpha,
       0,
       0,
-      input.bounds.width,
-      input.bounds.height,
+      bounds.width,
+      bounds.height,
     );
     this.glowOverlay.clear();
 
     let glowEmitterCount = 0;
-    for (const emitter of input.emitters) {
+    for (const emitter of this.activeEmitters) {
       const resolved = resolveEmitterState(
         emitter,
         defaultRevealRadiusPx,
@@ -224,8 +307,8 @@ export class RoomLightingController {
           [1, 'rgba(255, 255, 255, 0)'],
         ],
       );
-      const localRevealX = emitter.x - input.bounds.x - revealDiameter * 0.5;
-      const localRevealY = emitter.y - input.bounds.y - revealDiameter * 0.5;
+      const localRevealX = emitter.x - bounds.x - revealDiameter * 0.5;
+      const localRevealY = emitter.y - bounds.y - revealDiameter * 0.5;
       this.overlay.erase(auraTextureKey, localRevealX, localRevealY);
 
       if (
@@ -245,8 +328,8 @@ export class RoomLightingController {
             [1, 'rgba(255, 255, 255, 0)'],
           ],
         );
-        const localGlowX = emitter.x - input.bounds.x - glowDiameter * 0.5;
-        const localGlowY = emitter.y - input.bounds.y - glowDiameter * 0.5;
+        const localGlowX = emitter.x - bounds.x - glowDiameter * 0.5;
+        const localGlowY = emitter.y - bounds.y - glowDiameter * 0.5;
         this.glowOverlay.drawFrame(
           glowTextureKey,
           undefined,
@@ -259,23 +342,7 @@ export class RoomLightingController {
       }
     }
 
-    structureChanged = this.syncAmbientOverlays(ambientBounds, ambientAlpha) || structureChanged;
-
-    this.debugState = {
-      mode: lighting.mode,
-      darkness: lighting.darkness,
-      radius: lighting.radius,
-      rendererPath: 'webgl',
-      activeRoomId,
-      emitterCount,
-      playerGhostEmitterCount: debugCounts.playerGhostEmitterCount,
-      staticObjectEmitterCount: debugCounts.staticObjectEmitterCount,
-      staticTileEmitterCount: debugCounts.staticTileEmitterCount,
-      glowEmitterCount,
-      ambientOverlayCount: ambientBounds.length,
-      fallbackReason: null,
-    };
-    return structureChanged;
+    this.debugState.glowEmitterCount = glowEmitterCount;
   }
 
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
@@ -298,6 +365,27 @@ export class RoomLightingController {
 
   private supportsDynamicLighting(): boolean {
     return this.options.scene.game.renderer.type === Phaser.WEBGL;
+  }
+
+  private reconcileEmitterSlots(slots: readonly RoomLightingEmitterSlot[]): void {
+    const retainedKeys = new Set<string>();
+    this.activeEmitters.length = 0;
+    for (const slot of slots) {
+      retainedKeys.add(slot.key);
+      let emitter = this.emittersByKey.get(slot.key);
+      if (!emitter) {
+        emitter = { ...slot.emitter };
+        this.emittersByKey.set(slot.key, emitter);
+      } else {
+        copyEmitterState(emitter, slot.emitter);
+      }
+      this.activeEmitters.push(emitter);
+    }
+    for (const key of this.emittersByKey.keys()) {
+      if (!retainedKeys.has(key)) {
+        this.emittersByKey.delete(key);
+      }
+    }
   }
 
   private ensureOverlays(bounds: RoomLightingBounds): boolean {
@@ -342,7 +430,10 @@ export class RoomLightingController {
     return structureChanged;
   }
 
-  private syncAmbientOverlays(boundsList: RoomLightingBounds[], ambientAlpha: number): boolean {
+  private syncAmbientOverlays(
+    boundsList: readonly RoomLightingBounds[],
+    ambientAlpha: number,
+  ): boolean {
     let structureChanged = false;
 
     while (this.ambientOverlays.length > boundsList.length) {
@@ -413,7 +504,7 @@ export class RoomLightingController {
 }
 
 function resolveDebugCounts(
-  emitters: RoomLightingEmitter[],
+  emitters: readonly RoomLightingEmitter[],
   input?: Partial<RoomLightingFrameDebugCounts>,
 ): RoomLightingFrameDebugCounts {
   return {
@@ -427,6 +518,20 @@ function resolveDebugCounts(
       input?.staticTileEmitterCount
       ?? emitters.filter((emitter) => emitter.sourceType === 'tile').length,
   };
+}
+
+function copyEmitterState(
+  target: RoomLightingEmitter,
+  source: RoomLightingEmitter,
+): void {
+  target.x = source.x;
+  target.y = source.y;
+  target.sourceType = source.sourceType;
+  target.revealRadiusPx = source.revealRadiusPx;
+  target.glowRadiusPx = source.glowRadiusPx;
+  target.glowColor = source.glowColor;
+  target.glowAlpha = source.glowAlpha;
+  target.flicker = source.flicker;
 }
 
 function resolveEmitterState(

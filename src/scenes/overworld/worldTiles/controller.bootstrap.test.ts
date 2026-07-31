@@ -27,7 +27,6 @@ vi.mock('./phaserLayer', () => ({
     }
     syncDisplay(): void {}
     getImages(): never[] { return []; }
-    getBackdropIgnoredObjects(): never[] { return []; }
     getAttachedAddressKeys(): string[] { return []; }
     getHealthSnapshot(): Record<string, unknown> {
       return {

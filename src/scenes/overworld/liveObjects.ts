@@ -99,6 +99,10 @@ import {
   type NpcRuntimeStateSnapshot,
 } from './liveObjects/npcController';
 import {
+  LiveObjectPhysicsRegistry,
+  type LiveObjectPhysicsGroupCategory,
+} from './liveObjects/physicsRegistry';
+import {
   getNpcEnvironmentalObjectInteraction,
 } from './liveObjects/npcEnvironment';
 
@@ -262,7 +266,7 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   getSpecialTileEnvironmentForBody: (
     body: Phaser.Physics.Arcade.Body,
     currentGravityDirection: PlayerGravityDirection,
-  ) => SpecialTilePlayerEnvironment;
+  ) => Readonly<SpecialTilePlayerEnvironment>;
   swordsmanTraversalPlannerMode: SwordsmanTraversalPlannerMode;
   isPlayerClimbingLadder: () => boolean;
   isLadderDropRequested: () => boolean;
@@ -420,8 +424,10 @@ export interface LiveObjectSwitchStateChangedEvent {
 interface RoomLiveObjectPartition {
   source: LoadedRoomObject[];
   sourceLength: number;
+  activeCount: number;
   updating: LoadedRoomObject[];
   ladders: LoadedRoomObject[];
+  pushables: LoadedRoomObject[];
   pathTargetsByInstanceId: Map<string, LoadedRoomObject>;
 }
 
@@ -431,8 +437,22 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly swordsmanController: LiveObjectSwordsmanController<TEdgeWall>;
   private readonly npcController: LiveObjectNpcController<TEdgeWall>;
   private readonly enemyLifecycleController: LiveObjectEnemyLifecycleController<TEdgeWall>;
+  private readonly physicsRegistry: LiveObjectPhysicsRegistry<
+    LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    LoadedRoomObject
+  >;
   private readonly liveObjectPartitionsByRoomId = new Map<string, RoomLiveObjectPartition>();
+  private readonly cachedLoadedRoomsById = new Map<
+    string,
+    LoadedFullRoom<LoadedRoomObject, TEdgeWall>
+  >();
+  private cachedLoadedRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[] = [];
+  private activeLiveObjectCount = 0;
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
+  private readonly movingPlatformPathPoints = new WeakMap<
+    LoadedRoomObject,
+    Array<{ x: number; y: number }>
+  >();
   private roomStateEventSuppressionDepth = 0;
 
   constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {
@@ -538,6 +558,58 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       syncWorldObjectColliders: (loadedRooms) => this.syncWorldObjectColliders(loadedRooms),
       syncLiveObjectInteractions: (loadedRooms) => this.syncLiveObjectInteractions(loadedRooms),
     });
+    this.physicsRegistry = new LiveObjectPhysicsRegistry(this.options.scene, {
+      onPlayerCollectible: ({ room, liveObject }) => this.collectLiveObject(room, liveObject),
+      onPlayerHazard: ({ room, liveObject }) =>
+        this.hazardController.handlePlayerHazardContact(room, liveObject),
+      onPlayerEnemy: ({ room, liveObject }) =>
+        this.enemyLifecycleController.handleEnemyContact(room, liveObject),
+      onPlayerNpc: ({ room, liveObject }) =>
+        this.enemyLifecycleController.handleNpcContact(room, liveObject),
+      onPlayerSolid: ({ room, liveObject }) =>
+        this.handlePlayerSolidContact(room, liveObject),
+      onPlayerBouncePad: ({ room, liveObject }) =>
+        this.hazardController.handlePlayerBouncePadContact(room, liveObject),
+      onPlayerProjectile: ({ room, liveObject }) =>
+        this.hazardController.handlePlayerProjectileContact(room, liveObject),
+      onNpcEnvironment: (npc, environment) =>
+        this.handleNpcEnvironmentContact(npc.room, npc.liveObject, environment.room, environment.liveObject),
+      onDynamicSolid: (actor, obstacle) =>
+        this.handleDynamicSolidContact(actor.liveObject, obstacle.room, obstacle.liveObject),
+      onProjectileSolid: (projectile, obstacle) =>
+        this.hazardController.handleProjectileSolidContact(
+          projectile.room,
+          projectile.liveObject,
+          obstacle.room,
+          obstacle.liveObject,
+        ),
+      onProjectileNpc: (projectile, npc) =>
+        this.hazardController.handleProjectileNpcContact(
+          projectile.room,
+          projectile.liveObject,
+          npc.room,
+          npc.liveObject,
+        ),
+      onProjectileTerrain: ({ room, liveObject }) =>
+        this.hazardController.handleProjectileTerrainContact(room, liveObject),
+      shouldPlayerNpc: ({ liveObject }) =>
+        liveObjectBlocksPlayerMovement(liveObject)
+        && this.shouldCollideWithLiveObject(liveObject),
+      shouldPlayerSolid: ({ liveObject }) => this.shouldCollideWithLiveObject(liveObject),
+      shouldPlayerLadder: ({ liveObject }, support) => {
+        const playerBody = this.options.getPlayerBody();
+        return Boolean(
+          playerBody
+          && this.shouldCollideWithLiveObject(liveObject)
+          && this.shouldCollideWithLadderTopSupport(
+            playerBody,
+            support.body as ArcadeObjectBody,
+          )
+        );
+      },
+      shouldDynamicSolid: (actor, obstacle) =>
+        this.shouldCollideLiveObjectPair(actor.liveObject, obstacle.liveObject),
+    });
   }
 
   resetSwitchStates(): void {
@@ -583,6 +655,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   createLiveObjects(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
+    this.registerLoadedRoom(loadedRoom);
     for (let index = 0; index < loadedRoom.room.placedObjects.length; index += 1) {
       const placedObject = loadedRoom.room.placedObjects[index];
       const config = getEditorObjectConfigById(placedObject.id);
@@ -651,8 +724,25 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       liveObject.sprite.destroy();
     }
 
+    const partition = this.liveObjectPartitionsByRoomId.get(loadedRoom.room.id);
+    if (partition) {
+      this.activeLiveObjectCount = Math.max(0, this.activeLiveObjectCount - partition.activeCount);
+    }
     loadedRoom.liveObjects = [];
     this.liveObjectPartitionsByRoomId.delete(loadedRoom.room.id);
+    this.unregisterLoadedRoom(loadedRoom);
+  }
+
+  getLoadedRooms(): readonly LoadedFullRoom<LoadedRoomObject, TEdgeWall>[] {
+    return this.cachedLoadedRooms;
+  }
+
+  getActiveLiveObjectCount(): number {
+    return this.activeLiveObjectCount;
+  }
+
+  destroy(): void {
+    this.physicsRegistry.destroy();
   }
 
   clearRoomInteractions(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
@@ -871,201 +961,33 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     this.triggerController.initializePressureControlledObjectState(liveObject);
+    const physicsMetadata = { room: loadedRoom, liveObject };
+    this.physicsRegistry.register(
+      physicsMetadata,
+      liveObject.sprite,
+      this.getPhysicsCategories(liveObject),
+    );
+    if (liveObject.config.id === 'ladder') {
+      const support = liveObject.helpers[0];
+      if (support?.body) {
+        this.physicsRegistry.registerHelper(physicsMetadata, support, 'ladderSupports');
+      }
+    }
 
     return liveObject;
   }
 
-  syncLiveObjectInteractions(loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {
-    const rooms = Array.from(loadedRooms);
-    const player = this.options.getPlayer();
-    const playerPickupSensor = this.options.getPlayerPickupSensor();
-    const playerBody = this.options.getPlayerBody();
-
-    for (const loadedRoom of rooms) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        this.destroyLiveObjectInteractions(liveObject);
-
-        if (!player || !playerBody || !liveObject.sprite.active || !liveObject.sprite.body) {
-          continue;
-        }
-
-        switch (liveObject.config.category) {
-          case 'collectible':
-            if (!playerPickupSensor) {
-              break;
-            }
-            liveObject.interactions.push(
-              this.options.scene.physics.add.overlap(playerPickupSensor, liveObject.sprite, () => {
-                this.collectLiveObject(loadedRoom, liveObject);
-              })
-            );
-            break;
-          case 'hazard':
-            this.hazardController.addHazardInteraction(loadedRoom, liveObject, player);
-            break;
-          case 'enemy':
-            liveObject.interactions.push(
-              this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-                this.enemyLifecycleController.handleEnemyContact(loadedRoom, liveObject);
-              })
-            );
-            break;
-          case 'npc':
-            if (placedObjectLayerAllowsRuntimeCollision(liveObject.config, liveObject)) {
-              if (liveObjectBlocksPlayerMovement(liveObject)) {
-                liveObject.interactions.push(
-                  this.options.scene.physics.add.collider(
-                    player,
-                    liveObject.sprite,
-                    () => {
-                      this.enemyLifecycleController.handleNpcContact(loadedRoom, liveObject);
-                    },
-                    () => this.shouldCollideWithLiveObject(liveObject),
-                  ),
-                );
-              }
-              for (const dangerRoom of rooms) {
-                for (const danger of dangerRoom.liveObjects) {
-                  if (
-                    danger === liveObject ||
-                    !danger.sprite.active ||
-                    !danger.sprite.body
-                  ) {
-                    continue;
-                  }
-                  const interactionKind =
-                    getNpcEnvironmentalObjectInteraction(danger.config);
-                  if (interactionKind === 'none') {
-                    continue;
-                  }
-                  if (interactionKind === 'tornado') {
-                    if (
-                      liveObject.runtime.npcMode !== 'idle' ||
-                      liveObject.runtime.npcPushable
-                    ) {
-                      this.hazardController.addNpcTornadoInteraction(
-                        dangerRoom,
-                        liveObject,
-                        danger,
-                      );
-                    }
-                    continue;
-                  }
-                  liveObject.interactions.push(
-                    this.options.scene.physics.add.overlap(
-                      liveObject.sprite,
-                      danger.sprite,
-                      () => {
-                        if (interactionKind === 'quicksand') {
-                          this.npcController.touchQuicksand(liveObject);
-                        } else {
-                          this.enemyLifecycleController.defeatNpc(loadedRoom, liveObject);
-                        }
-                      },
-                    ),
-                  );
-                }
-              }
-            }
-            break;
-          case 'platform':
-            if (liveObject.config.id === 'brick_box') {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
-                  this.maybeBreakBrickBox(loadedRoom, liveObject);
-                }, () => this.shouldCollideWithLiveObject(liveObject))
-              );
-            } else if (liveObject.config.id === 'crate') {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
-                  this.maybeBreakButtStompableObject(loadedRoom, liveObject);
-                }, () => this.shouldCollideWithLiveObject(liveObject))
-              );
-            } else if (isBlockSwitchObjectId(liveObject.config.id)) {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
-                  this.triggerController.maybeTriggerBlockSwitch(loadedRoom, liveObject);
-                }, () => this.shouldCollideWithLiveObject(liveObject))
-              );
-            } else {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(
-                  player,
-                  liveObject.sprite,
-                  undefined,
-                  () => this.shouldCollideWithLiveObject(liveObject),
-                )
-              );
-            }
-            break;
-          case 'interactive':
-            if (liveObject.config.id === 'ladder') {
-              const supportZone = liveObject.helpers[0];
-              if (supportZone && supportZone.body) {
-                liveObject.interactions.push(
-                  this.options.scene.physics.add.collider(
-                    player,
-                    supportZone,
-                    undefined,
-                    () => this.shouldCollideWithLadderTopSupport(playerBody, supportZone.body as ArcadeObjectBody),
-                  )
-                );
-              }
-            } else if (liveObject.config.id === 'bounce_pad') {
-              this.hazardController.addBouncePadInteraction(loadedRoom, liveObject, player);
-            } else if (liveObject.config.id === 'tornado' || liveObject.config.id === 'tornado_sand') {
-              this.hazardController.addHazardInteraction(loadedRoom, liveObject, player);
-            } else if (
-              liveObject.config.id === 'door_locked' ||
-              liveObject.config.id === 'door_locked_narrow'
-            ) {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
-                  this.triggerController.handleLockedDoorContact(loadedRoom, liveObject);
-                }, () => this.shouldCollideWithLiveObject(liveObject))
-              );
-            } else if (liveObject.config.id === 'trapdoor_locked') {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(
-                  player,
-                  liveObject.sprite,
-                  undefined,
-                  () => this.shouldCollideWithLiveObject(liveObject),
-                )
-              );
-            } else if (liveObject.config.id === 'barricade') {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(
-                  player,
-                  liveObject.sprite,
-                  undefined,
-                  () => this.shouldCollideWithLiveObject(liveObject),
-                )
-              );
-            } else if (liveObject.config.id === 'wooden_bridge') {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(
-                  player,
-                  liveObject.sprite,
-                  undefined,
-                  () => this.shouldCollideWithLiveObject(liveObject),
-                )
-              );
-            }
-            break;
-          default:
-            break;
-        }
-
-      }
-    }
+  syncLiveObjectInteractions(
+    _loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
+  ): void {
+    this.physicsRegistry.syncPlayer(
+      this.options.getPlayer(),
+      this.options.getPlayerPickupSensor(),
+    );
   }
 
-  updateLiveObjects(
-    loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
-    delta: number
-  ): void {
-    const rooms = Array.from(loadedRooms);
+  updateLiveObjects(delta: number): void {
+    const rooms = this.cachedLoadedRooms;
     const playerBody = this.options.getPlayerBody();
 
     for (const loadedRoom of rooms) {
@@ -1084,12 +1006,14 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           if (dynamicBody?.enable) {
             dynamicBody.enable = false;
             this.distanceSleepingObjects.add(liveObject);
+            this.physicsRegistry.setSleeping(liveObject, liveObject.sprite, true);
           }
           continue;
         }
         if (dynamicBody && this.distanceSleepingObjects.has(liveObject)) {
           dynamicBody.enable = true;
           this.distanceSleepingObjects.delete(liveObject);
+          this.physicsRegistry.setSleeping(liveObject, liveObject.sprite, false);
         }
         if (dynamicBody) {
           this.updateLiveObjectSpecialTileState(liveObject, dynamicBody);
@@ -1104,7 +1028,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           }
         }
 
-        switch (behavior.kind) {
+        switch (behavior.update) {
           case 'flyingEnemy': {
             const motion = this.getFlyingEnemyMotion(behavior);
             this.updateFlyingEnemyObject(
@@ -1441,27 +1365,21 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
     targetIndex = Phaser.Math.Clamp(targetIndex, 0, pathPoints.length - 1);
 
-    const destinationPoint = pathPoints[targetIndex];
-    const destination = new Phaser.Math.Vector2(destinationPoint.x, destinationPoint.y);
-    const current = new Phaser.Math.Vector2(liveObject.sprite.x, liveObject.sprite.y);
-    const remaining = Phaser.Math.Distance.Between(
-      current.x,
-      current.y,
-      destination.x,
-      destination.y,
-    );
-    const deltaSeconds = Math.max(delta / 1000, 1 / 60);
-    const step = Math.max(1, 44 * deltaSeconds);
-    const next =
-      remaining <= step
-        ? destination
-        : current.add(destination.clone().subtract(current).normalize().scale(step));
+    const destination = pathPoints[targetIndex];
     const previousX = liveObject.sprite.x;
     const previousY = liveObject.sprite.y;
+    const deltaX = destination.x - previousX;
+    const deltaY = destination.y - previousY;
+    const remaining = Math.hypot(deltaX, deltaY);
+    const deltaSeconds = Math.max(delta / 1000, 1 / 60);
+    const step = Math.max(1, 44 * deltaSeconds);
+    const stepScale = remaining > step ? step / remaining : 1;
+    const nextX = previousX + deltaX * stepScale;
+    const nextY = previousY + deltaY * stepScale;
 
-    body.reset(next.x, next.y);
-    body.setVelocity((next.x - previousX) / deltaSeconds, (next.y - previousY) / deltaSeconds);
-    liveObject.sprite.setPosition(next.x, next.y);
+    body.reset(nextX, nextY);
+    body.setVelocity((nextX - previousX) / deltaSeconds, (nextY - previousY) / deltaSeconds);
+    liveObject.sprite.setPosition(nextX, nextY);
     liveObject.runtime.previousX = previousX;
     liveObject.runtime.previousY = previousY;
     if (remaining <= step) {
@@ -1480,7 +1398,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     } else {
       liveObject.runtime.movingPlatformPathDirection = pathDirection;
       liveObject.runtime.movingPlatformTargetIndex = targetIndex;
-      liveObject.runtime.directionX = next.x >= previousX ? 1 : -1;
+      liveObject.runtime.directionX = nextX >= previousX ? 1 : -1;
     }
   }
 
@@ -1488,49 +1406,92 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     rooms: Array<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
     liveObject: LoadedRoomObject,
   ): Array<{ x: number; y: number }> {
-    const targetInstanceIds = liveObject.linkedTargetInstanceIds.length > 0
-      ? liveObject.linkedTargetInstanceIds
+    let points = this.movingPlatformPathPoints.get(liveObject);
+    if (!points) {
+      points = [];
+      this.movingPlatformPathPoints.set(liveObject, points);
+    }
+    const targetInstanceCount = liveObject.linkedTargetInstanceIds.length > 0
+      ? liveObject.linkedTargetInstanceIds.length
       : liveObject.linkedTargetInstanceId
-        ? [liveObject.linkedTargetInstanceId]
-        : [];
-    if (targetInstanceIds.length === 0) {
-      return [];
+        ? 1
+        : 0;
+    if (targetInstanceCount === 0) {
+      points.length = 0;
+      return points;
     }
 
-    const points: Array<{ x: number; y: number }> = [
-      { x: liveObject.runtime.baseX, y: liveObject.runtime.baseY },
-    ];
-    for (const loadedRoom of rooms) {
-      if (liveObject.linkedTargetRoomId && loadedRoom.room.id !== liveObject.linkedTargetRoomId) {
+    this.writeMovingPlatformPathPoint(
+      points,
+      0,
+      liveObject.runtime.baseX,
+      liveObject.runtime.baseY,
+    );
+    let pointCount = 1;
+    for (let targetIndex = 0; targetIndex < targetInstanceCount; targetIndex += 1) {
+      const targetInstanceId = liveObject.linkedTargetInstanceIds.length > 0
+        ? liveObject.linkedTargetInstanceIds[targetIndex]
+        : liveObject.linkedTargetInstanceId;
+      if (!targetInstanceId) {
         continue;
       }
-      const pathTargets = this.getRoomLiveObjectPartition(loadedRoom).pathTargetsByInstanceId;
-      for (let targetIndex = 0; targetIndex < targetInstanceIds.length; targetIndex += 1) {
-        const candidate = pathTargets.get(targetInstanceIds[targetIndex] ?? '');
+      for (const loadedRoom of rooms) {
+        if (
+          liveObject.linkedTargetRoomId
+          && loadedRoom.room.id !== liveObject.linkedTargetRoomId
+        ) {
+          continue;
+        }
+        const candidate = this.getRoomLiveObjectPartition(loadedRoom)
+          .pathTargetsByInstanceId.get(targetInstanceId);
         if (!candidate?.sprite.active) {
           continue;
         }
-        points[targetIndex + 1] = { x: candidate.sprite.x, y: candidate.sprite.y };
+        this.writeMovingPlatformPathPoint(
+          points,
+          pointCount,
+          candidate.sprite.x,
+          candidate.sprite.y,
+        );
+        pointCount += 1;
+        break;
       }
     }
 
     if (
       liveObject.linkedTargetWorldX !== null &&
       liveObject.linkedTargetWorldY !== null &&
-      points.length === 1
+      pointCount === 1
     ) {
-      points.push({
-        x: liveObject.linkedTargetWorldX,
-        y: liveObject.linkedTargetWorldY,
-      });
+      this.writeMovingPlatformPathPoint(
+        points,
+        pointCount,
+        liveObject.linkedTargetWorldX,
+        liveObject.linkedTargetWorldY,
+      );
+      pointCount += 1;
     }
 
-    return points.filter((point): point is { x: number; y: number } => Boolean(point));
+    points.length = pointCount;
+    return points;
   }
 
-  findOverlappingLadder(
-    loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>
-  ): LoadedRoomObject | null {
+  private writeMovingPlatformPathPoint(
+    points: Array<{ x: number; y: number }>,
+    index: number,
+    x: number,
+    y: number,
+  ): void {
+    const point = points[index];
+    if (point) {
+      point.x = x;
+      point.y = y;
+    } else {
+      points[index] = { x, y };
+    }
+  }
+
+  findOverlappingLadder(): LoadedRoomObject | null {
     const playerBody = this.options.getPlayerBody();
     if (!playerBody) {
       return null;
@@ -1540,7 +1501,16 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     let closestLadder: LoadedRoomObject | null = null;
     let closestDistance = Number.POSITIVE_INFINITY;
 
-    for (const loadedRoom of loadedRooms) {
+    for (const loadedRoom of this.cachedLoadedRooms) {
+      const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
+      if (
+        playerBounds.right < roomOrigin.x
+        || playerBounds.left > roomOrigin.x + ROOM_PX_WIDTH
+        || playerBounds.bottom < roomOrigin.y
+        || playerBounds.top > roomOrigin.y + ROOM_PX_HEIGHT
+      ) {
+        continue;
+      }
       for (const liveObject of this.getRoomLiveObjectPartition(loadedRoom).ladders) {
         if (!liveObject.sprite.active || !liveObject.sprite.body) {
           continue;
@@ -1573,13 +1543,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
     const updating: LoadedRoomObject[] = [];
     const ladders: LoadedRoomObject[] = [];
+    const pushables: LoadedRoomObject[] = [];
+    let activeCount = 0;
     const pathTargetsByInstanceId = new Map<string, LoadedRoomObject>();
     for (const liveObject of loadedRoom.liveObjects) {
+      if (liveObject.sprite.active) activeCount += 1;
       const behavior = getLiveObjectBehavior(liveObject.config.id);
       if (liveObjectBehaviorUpdatesEveryFrame(behavior) || isDynamicArcadeBody(liveObject.sprite.body as ArcadeObjectBody | null)) {
         updating.push(liveObject);
       }
       if (liveObject.config.id === 'ladder') ladders.push(liveObject);
+      if (isPushableObjectConfig(liveObject.config)) pushables.push(liveObject);
       if (liveObject.placedInstanceId && isMovingPlatformEndpointObjectId(liveObject.config.id)) {
         pathTargetsByInstanceId.set(liveObject.placedInstanceId, liveObject);
       }
@@ -1587,10 +1561,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const partition = {
       source: loadedRoom.liveObjects,
       sourceLength: loadedRoom.liveObjects.length,
+      activeCount,
       updating,
       ladders,
+      pushables,
       pathTargetsByInstanceId,
     };
+    this.activeLiveObjectCount += activeCount - (existing?.activeCount ?? 0);
     this.liveObjectPartitionsByRoomId.set(loadedRoom.room.id, partition);
     return partition;
   }
@@ -1629,7 +1606,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }> = [];
 
     for (const loadedRoom of loadedRooms) {
-      for (const liveObject of loadedRoom.liveObjects) {
+      for (const liveObject of this.getRoomLiveObjectPartition(loadedRoom).pushables) {
         const body = liveObject.sprite.body as ArcadeObjectBody | null;
         if (
           liveObject.sprite.active &&
@@ -1701,7 +1678,106 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     liveObject.interactions = [];
   }
 
+  private getPhysicsCategories(
+    liveObject: LoadedRoomObject,
+  ): LiveObjectPhysicsGroupCategory[] {
+    if (!liveObject.sprite.body) {
+      return [];
+    }
+    const categories: LiveObjectPhysicsGroupCategory[] = [];
+    const behavior = getLiveObjectBehavior(liveObject.config.id);
+    const projectile = behavior.physicsCategory === 'projectile';
+    if (liveObject.config.category === 'collectible') categories.push('collectibles');
+    if (
+      !projectile
+      && (
+        liveObject.config.category === 'hazard'
+        || liveObject.config.id === 'tornado'
+        || liveObject.config.id === 'tornado_sand'
+      )
+    ) {
+      categories.push('hazards');
+    }
+    if (liveObject.config.category === 'enemy') categories.push('enemies');
+    if (liveObject.config.category === 'npc') categories.push('npcs');
+    if (liveObject.config.id === 'bounce_pad') categories.push('bouncePads');
+    if (projectile) categories.push('projectiles');
+    if (
+      liveObject.config.category !== 'npc'
+      && liveObjectBlocksPlayerMovement(liveObject)
+    ) {
+      categories.push('solidPlatforms');
+    }
+    if (
+      placedObjectLayerAllowsRuntimeCollision(liveObject.config, liveObject)
+      && objectCollidesWithWorld(liveObject.config)
+      && isSolidRuntimeObjectConfig(liveObject.config)
+    ) {
+      categories.push('solidObstacles');
+    }
+    return categories;
+  }
+
+  private handlePlayerSolidContact(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): void {
+    if (liveObject.config.id === 'brick_box') {
+      this.maybeBreakBrickBox(loadedRoom, liveObject);
+    } else if (liveObject.config.id === 'crate') {
+      this.maybeBreakButtStompableObject(loadedRoom, liveObject);
+    } else if (isBlockSwitchObjectId(liveObject.config.id)) {
+      this.triggerController.maybeTriggerBlockSwitch(loadedRoom, liveObject);
+    } else if (
+      liveObject.config.id === 'door_locked'
+      || liveObject.config.id === 'door_locked_narrow'
+    ) {
+      this.triggerController.handleLockedDoorContact(loadedRoom, liveObject);
+    }
+  }
+
+  private handleNpcEnvironmentContact(
+    npcRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    npc: LoadedRoomObject,
+    environmentRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    environment: LoadedRoomObject,
+  ): void {
+    const interactionKind = getNpcEnvironmentalObjectInteraction(environment.config);
+    if (interactionKind === 'tornado') {
+      if (npc.runtime.npcMode !== 'idle' || npc.runtime.npcPushable) {
+        this.hazardController.handleNpcTornadoContact(
+          environmentRoom,
+          npc,
+          environment,
+        );
+      }
+    } else if (interactionKind === 'quicksand') {
+      this.npcController.touchQuicksand(npc);
+    } else if (interactionKind === 'lethal') {
+      this.enemyLifecycleController.defeatNpc(npcRoom, npc);
+    }
+  }
+
+  private handleDynamicSolidContact(
+    actor: LoadedRoomObject,
+    obstacleRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    obstacle: LoadedRoomObject,
+  ): void {
+    if (
+      isBlockSwitchObjectId(obstacle.config.id)
+      && canActorTriggerBlockSwitchByContact(actor)
+    ) {
+      this.triggerController.handleBlockSwitchActorHit(obstacleRoom, obstacle, actor);
+    } else if (
+      isPushableObjectConfig(obstacle.config)
+      && this.canActorPushPushableByContact(actor)
+    ) {
+      this.handleActorPushableContact(actor, obstacle);
+    }
+  }
+
   private destroyLiveObjectHelpers(liveObject: LoadedRoomObject): void {
+    this.physicsRegistry.unregister(liveObject, liveObject.sprite, liveObject.helpers);
     for (const helper of liveObject.helpers) {
       helper.destroy();
     }
@@ -2077,8 +2153,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     const directionX = actor.runtime.directionX >= 0 ? 1 : -1;
     const actorBounds = getArcadeBodyBounds(actorBody);
-    for (const loadedRoom of this.options.getLoadedFullRooms()) {
-      for (const candidate of loadedRoom.liveObjects) {
+    for (const loadedRoom of this.cachedLoadedRooms) {
+      for (const candidate of this.getRoomLiveObjectPartition(loadedRoom).pushables) {
         if (
           candidate === actor ||
           !candidate.sprite.active ||
@@ -2801,6 +2877,31 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     return liveObject;
   }
 
+  private registerLoadedRoom(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+  ): void {
+    if (this.cachedLoadedRoomsById.get(loadedRoom.room.id) === loadedRoom) {
+      return;
+    }
+    this.cachedLoadedRoomsById.set(loadedRoom.room.id, loadedRoom);
+    this.cachedLoadedRooms = Array.from(this.cachedLoadedRoomsById.values());
+    this.physicsRegistry.registerTerrain(loadedRoom, {
+      terrainLayer: loadedRoom.terrainLayer,
+      terrainInsetBodies: loadedRoom.terrainInsetBodies,
+    });
+  }
+
+  private unregisterLoadedRoom(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+  ): void {
+    if (this.cachedLoadedRoomsById.get(loadedRoom.room.id) !== loadedRoom) {
+      return;
+    }
+    this.physicsRegistry.unregisterTerrain(loadedRoom);
+    this.cachedLoadedRoomsById.delete(loadedRoom.room.id);
+    this.cachedLoadedRooms = Array.from(this.cachedLoadedRoomsById.values());
+  }
+
   private getContainedObjectRevealYOffset(container: LoadedRoomObject): number {
     switch (container.config.id) {
       case 'brick_box':
@@ -2820,6 +2921,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       collector?: 'player' | 'enemy';
     } = {},
   ): void {
+    const previousLength = loadedRoom.liveObjects.length;
     collectLiveObjectWithFx(loadedRoom, liveObject, {
       scene: this.options.scene,
       isCollectedObjectKey: this.options.isCollectedObjectKey,
@@ -2835,6 +2937,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       onLiveObjectRemoved: (event) => this.emitLiveObjectRemoved(event),
       destroyLiveObjectInteractions: (target) => this.destroyLiveObjectInteractions(target),
     }, options);
+    if (loadedRoom.liveObjects.length < previousLength) {
+      this.physicsRegistry.unregister(liveObject, liveObject.sprite, liveObject.helpers);
+    }
   }
 
   private emitLiveObjectRemovedForObject(

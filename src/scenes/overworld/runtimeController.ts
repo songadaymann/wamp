@@ -76,7 +76,6 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   getCellStateAt(coordinates: RoomCoordinates): SelectedCellState;
   getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null;
-  syncBackdropCameraIgnores(): void;
 }
 
 interface OverworldRuntimeControllerOptions {
@@ -310,7 +309,6 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
     rect.setDepth(15);
     this.host.scene.physics.add.existing(rect, true);
     const collider = this.host.scene.physics.add.collider(player, rect);
-    this.host.syncBackdropCameraIgnores();
     return { rect, collider };
   }
 }

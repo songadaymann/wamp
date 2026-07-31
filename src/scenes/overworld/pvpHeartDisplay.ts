@@ -9,6 +9,7 @@ const HEART_SPACING_PX = 12;
 export class PvpHeartDisplay {
   private readonly container: Phaser.GameObjects.Container;
   private readonly icons: Phaser.GameObjects.Image[] = [];
+  private heartCount = -1;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -21,6 +22,10 @@ export class PvpHeartDisplay {
 
   setHearts(hearts: number): void {
     const nextCount = Math.max(0, Math.floor(hearts));
+    if (nextCount === this.heartCount) {
+      return;
+    }
+    this.heartCount = nextCount;
     while (this.icons.length < nextCount) {
       const icon = this.scene.add.image(0, 0, PVP_HEART_TEXTURE_KEY);
       icon.setOrigin(0.5);

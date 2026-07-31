@@ -13,7 +13,13 @@ interface OverworldGridOverlayControllerHost {
 
 export class OverworldGridOverlayController {
   private roomGridGraphics: Phaser.GameObjects.Graphics | null = null;
-  private lastRedrawSignature = '';
+  private lastFirstCol = Number.NaN;
+  private lastLastCol = Number.NaN;
+  private lastFirstRow = Number.NaN;
+  private lastLastRow = Number.NaN;
+  private lastLineWidth = Number.NaN;
+  private contentRevision = 0;
+  private renderedContentRevision = -1;
 
   constructor(private readonly host: OverworldGridOverlayControllerHost) {}
 
@@ -29,13 +35,17 @@ export class OverworldGridOverlayController {
   destroy(): void {
     this.roomGridGraphics?.destroy();
     this.roomGridGraphics = null;
-    this.lastRedrawSignature = '';
+    this.resetRenderedState();
+  }
+
+  invalidateContent(): void {
+    this.contentRevision += 1;
   }
 
   redraw(): void {
     const worldWindow = this.host.getWorldWindow();
     if (!worldWindow || !this.roomGridGraphics) {
-      this.lastRedrawSignature = '';
+      this.resetRenderedState();
       this.roomGridGraphics?.clear();
       return;
     }
@@ -46,19 +56,23 @@ export class OverworldGridOverlayController {
     const firstRow = Math.floor(worldView.top / ROOM_PX_HEIGHT) - 1;
     const lastRow = Math.ceil(worldView.bottom / ROOM_PX_HEIGHT) + 1;
     const lineWidth = 1 / this.host.getZoom();
-    const redrawSignature = [
-      firstCol,
-      lastCol,
-      firstRow,
-      lastRow,
-      lineWidth.toFixed(4),
-      this.getExpandedRoomRedrawSignature(firstCol, lastCol, firstRow, lastRow),
-    ].join(':');
-    if (redrawSignature === this.lastRedrawSignature) {
+    if (
+      firstCol === this.lastFirstCol
+      && lastCol === this.lastLastCol
+      && firstRow === this.lastFirstRow
+      && lastRow === this.lastLastRow
+      && lineWidth === this.lastLineWidth
+      && this.contentRevision === this.renderedContentRevision
+    ) {
       return;
     }
 
-    this.lastRedrawSignature = redrawSignature;
+    this.lastFirstCol = firstCol;
+    this.lastLastCol = lastCol;
+    this.lastFirstRow = firstRow;
+    this.lastLastRow = lastRow;
+    this.lastLineWidth = lineWidth;
+    this.renderedContentRevision = this.contentRevision;
     this.roomGridGraphics.clear();
 
     this.roomGridGraphics.fillStyle(RETRO_COLORS.grid, 0.14);
@@ -112,29 +126,13 @@ export class OverworldGridOverlayController {
     return upExpandedRoomId === (this.host.getExpandedRoomIdAt?.({ x: col, y: row }) ?? null);
   }
 
-  private getExpandedRoomRedrawSignature(
-    firstCol: number,
-    lastCol: number,
-    firstRow: number,
-    lastRow: number,
-  ): string {
-    if (!this.host.getExpandedRoomIdAt) {
-      return '';
-    }
-
-    const parts: string[] = [];
-    for (let row = firstRow; row <= lastRow; row += 1) {
-      for (let col = firstCol; col <= lastCol; col += 1) {
-        const expandedRoomId = this.host.getExpandedRoomIdAt({ x: col, y: row });
-        if (expandedRoomId) {
-          parts.push(`${col},${row}=${expandedRoomId}`);
-        }
-      }
-    }
-    return parts.join('|');
+  private resetRenderedState(): void {
+    this.lastFirstCol = Number.NaN;
+    this.lastLastCol = Number.NaN;
+    this.lastFirstRow = Number.NaN;
+    this.lastLastRow = Number.NaN;
+    this.lastLineWidth = Number.NaN;
+    this.renderedContentRevision = -1;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return this.roomGridGraphics ? [this.roomGridGraphics] : [];
-  }
 }

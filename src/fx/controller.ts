@@ -6,7 +6,6 @@ type GoalFxKind = 'start' | 'checkpoint' | 'success' | 'fail' | 'abandon';
 
 interface SceneFxControllerOptions {
   scene: Phaser.Scene;
-  onDisplayObjectsChanged?: () => void;
 }
 
 export class SceneFxController {
@@ -19,10 +18,6 @@ export class SceneFxController {
       object.destroy();
     }
     this.displayObjects.clear();
-  }
-
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return Array.from(this.displayObjects);
   }
 
   playCollectFx(
@@ -299,10 +294,8 @@ export class SceneFxController {
 
   private track<T extends Phaser.GameObjects.GameObject>(object: T): T {
     this.displayObjects.add(object);
-    this.options.onDisplayObjectsChanged?.();
     object.once(Phaser.GameObjects.Events.DESTROY, () => {
       this.displayObjects.delete(object);
-      this.options.onDisplayObjectsChanged?.();
     });
     return object;
   }

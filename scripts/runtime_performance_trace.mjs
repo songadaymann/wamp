@@ -11,16 +11,23 @@ function parseArgs(argv) {
     cpuThrottle: 4,
     maxP95Ms: 20,
     roomId: '0,0',
+    scenario: 'traversal',
+    traceGc: false,
     out: 'output/runtime-performance-trace',
   };
   for (let index = 2; index < argv.length; index += 1) {
     const argument = argv[index];
     const value = argv[index + 1];
+    if (argument === '--trace-gc') {
+      options.traceGc = true;
+      continue;
+    }
     if (argument === '--url' && value) options.url = value;
     else if (argument === '--duration-ms' && value) options.durationMs = Number(value);
     else if (argument === '--cpu-throttle' && value) options.cpuThrottle = Number(value);
     else if (argument === '--max-p95-ms' && value) options.maxP95Ms = Number(value);
     else if (argument === '--room' && value) options.roomId = value;
+    else if (argument === '--scenario' && value) options.scenario = value;
     else if (argument === '--out' && value) options.out = value;
     else continue;
     index += 1;
@@ -93,15 +100,17 @@ async function enterPlayableRoom(page, roomId) {
       return false;
     }
   }, null, { timeout: 30_000 });
-  const play = await page.evaluate(() => window.run_preview_smoke_action?.('playSelectedRoom'));
-  if (!play?.ok) throw new Error(`Could not enter play mode: ${JSON.stringify(play)}`);
-  await page.waitForFunction(() => {
+  await page.waitForFunction((requestedRoomId) => {
     try {
-      return JSON.parse(window.render_game_to_text?.() ?? '{}')?.activeScene?.mode === 'play';
+      const state = JSON.parse(window.render_game_to_text?.() ?? '{}')?.activeScene;
+      if (state?.selectedState !== 'published') return true;
+      return state?.leaderboards?.room?.roomId === requestedRoomId;
     } catch {
       return false;
     }
-  }, null, { timeout: 15_000 });
+  }, selection.roomId ?? roomId, { timeout: 120_000 });
+  const play = await page.evaluate(() => window.run_preview_smoke_action?.('playSelectedRoom'));
+  if (!play?.ok) throw new Error(`Could not enter play mode: ${JSON.stringify(play)}`);
   const goalStartButton = page.locator(
     '#room-goal-intro-modal:not(.hidden) #btn-room-goal-intro-start',
   );
@@ -111,6 +120,13 @@ async function enterPlayableRoom(page, roomId) {
   )) {
     await goalStartButton.click();
   }
+  await page.waitForFunction(() => {
+    try {
+      return JSON.parse(window.render_game_to_text?.() ?? '{}')?.activeScene?.mode === 'play';
+    } catch {
+      return false;
+    }
+  }, null, { timeout: 15_000 });
 }
 
 function getRoomBenchmarkPosition(roomId) {
@@ -119,6 +135,20 @@ function getRoomBenchmarkPosition(roomId) {
     throw new Error(`Benchmark room must be an x,y coordinate: ${roomId}`);
   }
   return { x: roomX * 640 + 320, y: roomY * 352 + 160 };
+}
+
+function getRightNeighborTransition(roomId) {
+  const [roomX, roomY] = roomId.split(',').map(Number);
+  if (!Number.isInteger(roomX) || !Number.isInteger(roomY)) {
+    throw new Error(`Transition room must be an x,y coordinate: ${roomId}`);
+  }
+  return {
+    expectedRoomId: `${roomX + 1},${roomY}`,
+    position: {
+      x: (roomX + 1) * 640 + 8,
+      y: roomY * 352 + 160,
+    },
+  };
 }
 
 async function pinPlayerToBenchmarkRoom(page, position) {
@@ -134,8 +164,55 @@ async function pinPlayerToBenchmarkRoom(page, position) {
   if (!result?.ok) throw new Error(`Could not pin benchmark player: ${JSON.stringify(result)}`);
 }
 
+async function startGcTrace(cdp) {
+  await cdp.send('Tracing.start', {
+    categories: [
+      'devtools.timeline',
+      'v8.execute',
+      'disabled-by-default-v8.gc',
+    ].join(','),
+    transferMode: 'ReturnAsStream',
+  });
+}
+
+async function stopGcTrace(cdp, tracePath) {
+  const completed = new Promise((resolve) => cdp.once('Tracing.tracingComplete', resolve));
+  await cdp.send('Tracing.end');
+  const event = await completed;
+  if (!event?.stream) {
+    throw new Error('Chrome tracing completed without a readable stream.');
+  }
+
+  let traceJson = '';
+  while (true) {
+    const chunk = await cdp.send('IO.read', { handle: event.stream });
+    traceJson += chunk.data ?? '';
+    if (chunk.eof) break;
+  }
+  await cdp.send('IO.close', { handle: event.stream });
+  fs.writeFileSync(tracePath, traceJson);
+
+  const trace = JSON.parse(traceJson);
+  const gcEvents = (trace.traceEvents ?? []).filter((entry) => (
+    typeof entry?.name === 'string'
+    && /(?:^|\.)gc|garbage/i.test(entry.name)
+    && typeof entry.dur === 'number'
+  ));
+  const durationsMs = gcEvents.map((entry) => entry.dur / 1000);
+  return {
+    eventCount: gcEvents.length,
+    totalMs: durationsMs.reduce((total, value) => total + value, 0),
+    maxMs: Math.max(0, ...durationsMs),
+  };
+}
+
 async function run() {
   const options = parseArgs(process.argv);
+  if (!['idle', 'traversal', 'room-transition'].includes(options.scenario)) {
+    throw new Error(
+      `Unsupported scenario "${options.scenario}". Use idle, traversal, or room-transition.`,
+    );
+  }
   fs.mkdirSync(options.out, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -160,6 +237,9 @@ async function run() {
   const benchmarkPosition = getRoomBenchmarkPosition(options.roomId);
   await pinPlayerToBenchmarkRoom(page, benchmarkPosition);
   await page.waitForTimeout(2_000);
+  if (options.traceGc) {
+    await startGcTrace(cdp);
+  }
   await page.evaluate(() => {
     window.wampMobilePerf?.reset();
     window.__wampFrameTimes = [];
@@ -173,28 +253,54 @@ async function run() {
   });
 
   const endedAt = Date.now() + options.durationMs;
-  let direction = 'ArrowRight';
-  while (Date.now() < endedAt) {
-    await page.keyboard.down(direction);
-    await page.waitForTimeout(Math.min(500, Math.max(0, endedAt - Date.now())));
-    await page.keyboard.up(direction);
-    await page.keyboard.press('Space');
-    direction = direction === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight';
-    await page.waitForTimeout(Math.min(2_000, Math.max(0, endedAt - Date.now())));
-    await pinPlayerToBenchmarkRoom(page, benchmarkPosition);
+  if (options.scenario === 'idle') {
+    await page.waitForTimeout(options.durationMs);
+  } else if (options.scenario === 'room-transition') {
+    const transition = getRightNeighborTransition(options.roomId);
+    await pinPlayerToBenchmarkRoom(page, transition.position);
+    await page.waitForTimeout(options.durationMs);
+  } else {
+    let direction = 'ArrowRight';
+    while (Date.now() < endedAt) {
+      await page.keyboard.down(direction);
+      await page.waitForTimeout(Math.min(500, Math.max(0, endedAt - Date.now())));
+      await page.keyboard.up(direction);
+      await page.keyboard.press('Space');
+      direction = direction === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight';
+      await page.waitForTimeout(Math.min(2_000, Math.max(0, endedAt - Date.now())));
+      await pinPlayerToBenchmarkRoom(page, benchmarkPosition);
+    }
   }
 
   const captured = await page.evaluate(() => {
     if (window.__wampFrameRequest) cancelAnimationFrame(window.__wampFrameRequest);
     return {
       frameTimes: window.__wampFrameTimes ?? [],
-      profiler: window.wampMobilePerf?.get('60-second-mobile-trace') ?? null,
+      profiler: window.wampMobilePerf?.get('runtime-mobile-trace') ?? null,
       state: JSON.parse(window.render_game_to_text?.() ?? '{}'),
     };
   });
+  const tracePath = options.traceGc ? path.join(options.out, 'chrome-gc-trace.json') : null;
+  const gc = tracePath ? await stopGcTrace(cdp, tracePath) : null;
   const warmFrameTimes = captured.frameTimes.slice(5);
   const frameTime = summarize(warmFrameTimes);
   const frameWorkP95Ms = captured.profiler?.updateMs?.p95 ?? Number.POSITIVE_INFINITY;
+  const transition = options.scenario === 'room-transition'
+    ? getRightNeighborTransition(options.roomId)
+    : null;
+  const transitionAssertion = transition
+    ? {
+        expectedRoomId: transition.expectedRoomId,
+        actualRoomId: captured.state?.activeScene?.currentRoom
+          ? `${captured.state.activeScene.currentRoom.x},${captured.state.activeScene.currentRoom.y}`
+          : null,
+        mode: captured.state?.activeScene?.mode ?? null,
+        passed:
+          captured.state?.activeScene?.mode === 'play'
+          && `${captured.state?.activeScene?.currentRoom?.x},${captured.state?.activeScene?.currentRoom?.y}`
+            === transition.expectedRoomId,
+      }
+    : null;
   const screenshotPath = path.join(options.out, 'final.png');
   await page.screenshot({ path: screenshotPath, fullPage: true });
   const result = {
@@ -203,16 +309,31 @@ async function run() {
     frameTime,
     frameWorkP95Ms,
     frameWorkGate: 'Phaser update work measured on a 4x CPU-throttled mobile viewport; compositor pacing is reported separately.',
+    transitionAssertion,
     profiler: captured.profiler,
+    gc,
+    tracePath,
     state: captured.state,
     errors,
-    passed: frameWorkP95Ms < options.maxP95Ms && errors.length === 0,
+    passed:
+      frameWorkP95Ms < options.maxP95Ms
+      && errors.length === 0
+      && (transitionAssertion?.passed ?? true),
     screenshotPath,
   };
   const resultPath = path.join(options.out, 'result.json');
   fs.writeFileSync(resultPath, JSON.stringify(result, null, 2));
   await browser.close();
-  console.log(JSON.stringify({ resultPath, frameTime, frameWorkP95Ms, errors: errors.length, passed: result.passed }, null, 2));
+  console.log(JSON.stringify({
+    resultPath,
+    scenario: options.scenario,
+    frameTime,
+    frameWorkP95Ms,
+    gc,
+    errors: errors.length,
+    transitionAssertion,
+    passed: result.passed,
+  }, null, 2));
   if (!result.passed) process.exitCode = 1;
 }
 

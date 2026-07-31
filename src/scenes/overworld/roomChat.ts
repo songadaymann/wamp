@@ -20,10 +20,9 @@ import {
   resolveWorldPresenceConfig,
   resolveWorldPresenceIdentity,
   type WorldPresenceIdentity,
-  type WorldPresencePayload,
 } from '../../presence/worldPresence';
 import type { OverworldMode } from '../sceneData';
-import type { RenderedGhost } from './presence';
+import type { LocalPresenceInput, RenderedGhost } from './presence';
 
 interface ComposerElements {
   root: HTMLDivElement;
@@ -40,17 +39,6 @@ interface RenderedRoomChatBubble {
   text: Phaser.GameObjects.Text;
 }
 
-interface LocalPresenceInput {
-  mode: OverworldMode;
-  roomCoordinates: RoomCoordinates;
-  x: number;
-  y: number;
-  velocityX: number;
-  velocityY: number;
-  facing: number;
-  animationState: WorldPresencePayload['animationState'];
-}
-
 interface OverworldRoomChatControllerOptions {
   scene: Phaser.Scene;
   getMode: () => OverworldMode;
@@ -58,7 +46,6 @@ interface OverworldRoomChatControllerOptions {
   getPlayerAnchor: () => { x: number; y: number } | null;
   getRenderedGhostsByConnectionId: () => Map<string, RenderedGhost>;
   showTransientStatus?: (message: string) => void;
-  onDisplayObjectsChanged?: () => void;
   document?: Document;
 }
 
@@ -79,6 +66,9 @@ export class OverworldRoomChatController {
   private subscribedChunkBounds: WorldChunkBounds | null = null;
   private subscribedBoundsRetainUntil = 0;
   private lastLatestMessageId: string | null = null;
+  private reconciledBubbleMode: OverworldMode | null = null;
+  private reconciledBubbleRoomId: string | null = null;
+  private readonly bubbleAnchorScratch = { x: 0, y: 0 };
 
   constructor(private readonly options: OverworldRoomChatControllerOptions) {}
 
@@ -108,7 +98,7 @@ export class OverworldRoomChatController {
         ) {
           playSfx('chat-receive');
         }
-        this.syncRenderedBubbles();
+        this.reconcileRenderedBubbles();
         this.renderComposer();
       },
     });
@@ -201,7 +191,7 @@ export class OverworldRoomChatController {
     this.subscribedBoundsRetainUntil = now + SUBSCRIPTION_RETAIN_MS;
   }
 
-  updateLocalPresence(input: LocalPresenceInput | null): void {
+  updateLocalPresence(input: LocalPresenceInput | null, now = Date.now()): void {
     if (!this.client || !input || input.mode !== 'play') {
       this.client?.updateLocalPresence(null);
       this.closeComposer(false);
@@ -217,16 +207,24 @@ export class OverworldRoomChatController {
       facing: input.facing,
       animationState: input.animationState,
       mode: 'play',
-      timestamp: Date.now(),
+      timestamp: now,
     });
   }
 
   update(): void {
     this.client?.tick();
+    const mode = this.options.getMode();
+    const roomId = roomIdFromCoordinates(this.options.getCurrentRoomCoordinates());
+    if (
+      mode !== this.reconciledBubbleMode
+      || roomId !== this.reconciledBubbleRoomId
+    ) {
+      this.reconcileRenderedBubbles();
+    }
     const now = performance.now();
     if (now < this.nextBubblePositionSyncAt) return;
     this.nextBubblePositionSyncAt = now + 50;
-    this.syncRenderedBubbles();
+    this.updateRenderedBubblePositions();
   }
 
   openComposer(): boolean {
@@ -282,10 +280,6 @@ export class OverworldRoomChatController {
 
     this.closeComposer();
     return true;
-  }
-
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return Array.from(this.renderedBubblesByUserId.values(), (bubble) => bubble.container);
   }
 
   getDebugSnapshot(): {
@@ -434,11 +428,16 @@ export class OverworldRoomChatController {
     this.client?.destroy();
     this.client = null;
     this.destroyRenderedBubbles();
+    this.reconciledBubbleMode = null;
+    this.reconciledBubbleRoomId = null;
   }
 
-  private syncRenderedBubbles(): void {
+  private reconcileRenderedBubbles(): void {
     const currentRoomId = roomIdFromCoordinates(this.options.getCurrentRoomCoordinates());
-    const shouldRender = this.options.getMode() === 'play';
+    const mode = this.options.getMode();
+    this.reconciledBubbleMode = mode;
+    this.reconciledBubbleRoomId = currentRoomId;
+    const shouldRender = mode === 'play';
     const nextMessages = shouldRender
       ? (this.snapshot?.messages ?? []).filter((message) => message.roomId === currentRoomId)
       : [];
@@ -446,8 +445,7 @@ export class OverworldRoomChatController {
     let structureChanged = false;
 
     for (const message of nextMessages) {
-      const anchor = this.resolveBubbleAnchor(message);
-      if (!anchor) {
+      if (!this.writeBubbleAnchor(message, this.bubbleAnchorScratch)) {
         continue;
       }
 
@@ -455,7 +453,7 @@ export class OverworldRoomChatController {
       const existing = this.renderedBubblesByUserId.get(message.userId);
       if (!existing) {
         const bubble = this.createRenderedBubble(message);
-        bubble.container.setPosition(anchor.x, anchor.y);
+        bubble.container.setPosition(this.bubbleAnchorScratch.x, this.bubbleAnchorScratch.y);
         this.renderedBubblesByUserId.set(message.userId, bubble);
         structureChanged = true;
         continue;
@@ -467,7 +465,7 @@ export class OverworldRoomChatController {
       } else {
         existing.message = message;
       }
-      existing.container.setPosition(anchor.x, anchor.y);
+      existing.container.setPosition(this.bubbleAnchorScratch.x, this.bubbleAnchorScratch.y);
       existing.container.setVisible(true);
     }
 
@@ -482,24 +480,41 @@ export class OverworldRoomChatController {
     }
 
     if (structureChanged) {
-      this.options.onDisplayObjectsChanged?.();
     }
   }
 
-  private resolveBubbleAnchor(message: RoomChatMessageRecord): { x: number; y: number } | null {
+  private updateRenderedBubblePositions(): void {
+    if (this.renderedBubblesByUserId.size === 0) {
+      return;
+    }
+    for (const bubble of this.renderedBubblesByUserId.values()) {
+      const visible = this.writeBubbleAnchor(bubble.message, this.bubbleAnchorScratch);
+      bubble.container.setVisible(visible);
+      if (visible) {
+        bubble.container.setPosition(
+          this.bubbleAnchorScratch.x,
+          this.bubbleAnchorScratch.y,
+        );
+      }
+    }
+  }
+
+  private writeBubbleAnchor(
+    message: RoomChatMessageRecord,
+    target: { x: number; y: number },
+  ): boolean {
     if (
       this.identity &&
       message.userId === this.identity.userId
     ) {
       const playerAnchor = this.options.getPlayerAnchor();
       if (!playerAnchor) {
-        return null;
+        return false;
       }
 
-      return {
-        x: playerAnchor.x,
-        y: playerAnchor.y - 40,
-      };
+      target.x = playerAnchor.x;
+      target.y = playerAnchor.y - 40;
+      return true;
     }
 
     for (const ghost of this.options.getRenderedGhostsByConnectionId().values()) {
@@ -511,13 +526,12 @@ export class OverworldRoomChatController {
         continue;
       }
 
-      return {
-        x: ghost.sprite.x,
-        y: ghost.sprite.y - 40,
-      };
+      target.x = ghost.sprite.x;
+      target.y = ghost.sprite.y - 40;
+      return true;
     }
 
-    return null;
+    return false;
   }
 
   private createRenderedBubble(message: RoomChatMessageRecord): RenderedRoomChatBubble {
@@ -585,7 +599,6 @@ export class OverworldRoomChatController {
       this.destroyRenderedBubble(bubble);
     }
     this.renderedBubblesByUserId.clear();
-    this.options.onDisplayObjectsChanged?.();
   }
 
   private destroyRenderedBubble(bubble: RenderedRoomChatBubble): void {

@@ -88,13 +88,6 @@ export class OverworldPresenceOverlayController {
     }
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return [
-      ...Array.from(this.browsePresenceDotsByConnectionId.values()).map((presenceDot) => presenceDot.dot),
-      ...this.playRoomPresenceMarkers.map((marker) => marker.container),
-    ];
-  }
-
   getBrowseDotCount(): number {
     return this.browsePresenceDotsByConnectionId.size;
   }

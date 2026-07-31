@@ -158,7 +158,6 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
     loadedRooms: Iterable<LoadedFullRoom<TLiveObject, TEdgeWall>>,
   ) => void;
   getProtectedFullRoomIds?: (targetFullRoomIds: ReadonlySet<string>) => Iterable<string>;
-  onBackdropObjectsChanged?: () => void;
   onFullRoomVisibilityChanged?: () => void;
   onFullRoomDestroyed?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
   onFullRoomReplaced?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
@@ -236,7 +235,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       getFocusCoordinates: () => this.getFocusCoordinates(),
       getRoomOrigin: options.getRoomOrigin,
       isFullRoomLoaded: (roomId) => this.loadedFullRoomsById.has(roomId),
-      onBackdropObjectsChanged: options.onBackdropObjectsChanged,
       onFullRoomVisibilityChanged: options.onFullRoomVisibilityChanged,
       measurePerformance: options.measurePerformance,
     });
@@ -246,7 +244,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       getMode: options.getMode,
       getPerformanceProfile: options.getPerformanceProfile,
       getSelectedCoordinates: options.getSelectedCoordinates,
-      onObjectsChanged: options.onBackdropObjectsChanged,
       onCoverageChanged: () => {
         if (!this.destroyed && this.loadedRoomBounds) this.refreshVisibleRoomsFromCache();
       },
@@ -939,10 +936,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       ...this.previewRenderer.getPreviewImages(),
       ...this.worldTileController.getImages(),
     ];
-  }
-
-  getWorldTileBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return this.worldTileController.getBackdropIgnoredObjects();
   }
 
   hasPreviewForRoom(roomId: string): boolean {
@@ -2266,7 +2259,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.loadedFullRoomsById.set(room.id, loadedRoom);
     this.syncLiveObjectWorldColliders();
     this.previewRenderer.syncPreviewVisibility();
-    this.options.onBackdropObjectsChanged?.();
     this.options.onFullRoomVisibilityChanged?.();
     if (replacingExistingRoom) {
       this.options.onFullRoomReplaced?.(loadedRoom);
@@ -2421,7 +2413,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.options.onFullRoomDestroyed?.(loadedRoom);
     this.loadedFullRoomsById.delete(roomId);
     this.fullRoomReleaseAtById.delete(roomId);
-    this.options.onBackdropObjectsChanged?.();
     this.options.onFullRoomVisibilityChanged?.();
   }
 
@@ -2553,7 +2544,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
             useVerticalParallax: false,
             customLayer: layer,
           });
-          this.options.onBackdropObjectsChanged?.();
         })
         .catch(() => {});
       return { colorRect, sprites };
@@ -2595,6 +2585,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     camera: Phaser.Cameras.Scene2D.Camera
   ): void {
     const origin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
+    const worldView = camera.worldView;
+    if (
+      origin.x + ROOM_PX_WIDTH < worldView.left
+      || origin.x > worldView.right
+      || origin.y + ROOM_PX_HEIGHT < worldView.top
+      || origin.y > worldView.bottom
+    ) {
+      return;
+    }
 
     if (loadedRoom.backgroundColorRect) {
       loadedRoom.backgroundColorRect.setPosition(origin.x, origin.y);

@@ -51,17 +51,6 @@ export class OverworldRoomCellController {
     this.lastZoomRenderKey = null;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    const ignoredObjects: Array<Phaser.GameObjects.GameObject | null> = [
-      this.roomFillGraphics,
-      this.roomFrameGraphics,
-      ...this.frontierLabelTexts.values(),
-    ];
-    return ignoredObjects.filter(
-      (gameObject): gameObject is Phaser.GameObjects.GameObject => gameObject !== null,
-    );
-  }
-
   redrawForZoom(): void {
     const nextZoomRenderKey = this.getZoomRenderKey();
     if (this.lastZoomRenderKey === nextZoomRenderKey) {

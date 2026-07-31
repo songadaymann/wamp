@@ -101,10 +101,6 @@ export class OverworldCombatController {
     return this.playerProjectiles.length;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return this.playerProjectiles.map((projectile) => projectile.presentation.rect);
-  }
-
   handleCombatInput(input: {
     swordPressed: boolean;
     gunPressed: boolean;

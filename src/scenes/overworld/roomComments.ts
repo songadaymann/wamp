@@ -135,7 +135,6 @@ interface OverworldRoomCommentsControllerOptions {
   selectRoomCoordinates?: (coordinates: RoomCoordinates) => void;
   jumpToRoomCoordinates?: (coordinates: RoomCoordinates) => void | Promise<void>;
   showTransientStatus?: (message: string) => void;
-  onDisplayObjectsChanged?: () => void;
   waitForBrowseDiscoveryReady?: (signal: AbortSignal) => Promise<boolean>;
   document?: Document;
 }
@@ -261,6 +260,10 @@ export class OverworldRoomCommentsController {
   private lastBrowseDanmakuUpdateMs = 0;
   private nextBrowseDanmakuSpawnAtMs = 0;
   private browseDanmakuCandidateCursor = 0;
+  private lastBrowseMarkerFirstCol = Number.NaN;
+  private lastBrowseMarkerLastCol = Number.NaN;
+  private lastBrowseMarkerFirstRow = Number.NaN;
+  private lastBrowseMarkerLastRow = Number.NaN;
 
   constructor(private readonly options: OverworldRoomCommentsControllerOptions) {
     this.observedMode = options.getMode();
@@ -277,6 +280,7 @@ export class OverworldRoomCommentsController {
     this.comments = [];
     this.activeRoomSignature = null;
     this.loadingRoomSignature = null;
+    this.resetBrowseMarkerViewport();
     this.invalidateBrowseFullCommentLoads();
     this.loadingBrowseSummarySignatures.clear();
     this.failedBrowseRoomSignaturesUntil.clear();
@@ -324,10 +328,11 @@ export class OverworldRoomCommentsController {
     if (now < this.nextVisualSyncAt) return;
     this.nextVisualSyncAt = now + 50;
 
-    this.syncRenderedComments(room);
-    this.syncBrowseCommentMarkers();
+    if (this.didBrowseMarkerViewportChange()) {
+      this.syncBrowseCommentMarkers();
+    }
+    this.syncBrowseCommentMarkerPresentation();
     this.syncBrowseDanmakuStreams();
-    this.renderComposer();
   }
 
   openComposer(): boolean {
@@ -443,14 +448,6 @@ export class OverworldRoomCommentsController {
 
   refreshAuthState(): void {
     this.renderComposer();
-  }
-
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return [
-      ...Array.from(this.renderedCommentsById.values(), (rendered) => rendered.container),
-      ...Array.from(this.browseCommentMarkersByKey.values(), (rendered) => rendered.container),
-      ...Array.from(this.activeBrowseDanmaku.values(), (rendered) => rendered.container),
-    ];
   }
 
   getDebugSnapshot(): {
@@ -694,7 +691,45 @@ export class OverworldRoomCommentsController {
     const mode = this.options.getMode();
     if (mode === this.observedMode) return;
     this.observedMode = mode;
+    this.resetBrowseMarkerViewport();
     this.invalidateBrowseFullCommentLoads();
+  }
+
+  private didBrowseMarkerViewportChange(): boolean {
+    if (this.options.getMode() !== 'browse') {
+      const changed = Number.isFinite(this.lastBrowseMarkerFirstCol);
+      this.resetBrowseMarkerViewport();
+      return changed;
+    }
+
+    const worldView = this.options.scene.cameras.main.worldView;
+    const guardX = worldView.width * BROWSE_COMMENT_VIEWPORT_GUARD_FRACTION;
+    const guardY = worldView.height * BROWSE_COMMENT_VIEWPORT_GUARD_FRACTION;
+    const firstCol = Math.floor((worldView.left - guardX) / ROOM_PX_WIDTH);
+    const lastCol = Math.floor((worldView.right + guardX) / ROOM_PX_WIDTH);
+    const firstRow = Math.floor((worldView.top - guardY) / ROOM_PX_HEIGHT);
+    const lastRow = Math.floor((worldView.bottom + guardY) / ROOM_PX_HEIGHT);
+    if (
+      firstCol === this.lastBrowseMarkerFirstCol
+      && lastCol === this.lastBrowseMarkerLastCol
+      && firstRow === this.lastBrowseMarkerFirstRow
+      && lastRow === this.lastBrowseMarkerLastRow
+    ) {
+      return false;
+    }
+
+    this.lastBrowseMarkerFirstCol = firstCol;
+    this.lastBrowseMarkerLastCol = lastCol;
+    this.lastBrowseMarkerFirstRow = firstRow;
+    this.lastBrowseMarkerLastRow = lastRow;
+    return true;
+  }
+
+  private resetBrowseMarkerViewport(): void {
+    this.lastBrowseMarkerFirstCol = Number.NaN;
+    this.lastBrowseMarkerLastCol = Number.NaN;
+    this.lastBrowseMarkerFirstRow = Number.NaN;
+    this.lastBrowseMarkerLastRow = Number.NaN;
   }
 
   private setPinnedBrowseMarkerKey(key: string | null): void {
@@ -790,7 +825,6 @@ export class OverworldRoomCommentsController {
 
     this.syncBrowseCommentMarkerPresentation();
     if (structureChanged) {
-      this.options.onDisplayObjectsChanged?.();
     }
   }
 
@@ -1210,16 +1244,19 @@ export class OverworldRoomCommentsController {
   }
 
   private syncBrowseCommentMarkerPresentation(): void {
-    const markers = Array.from(this.browseCommentMarkersByKey.values());
-    if (markers.length === 0) {
+    if (this.browseCommentMarkersByKey.size === 0) {
       return;
     }
 
     const zoom = this.options.getZoom?.() ?? this.options.scene.cameras.main.zoom;
-    syncBadgePlacements(markers, zoom, this.browseMarkerScaleConfig);
+    syncBadgePlacements(
+      this.browseCommentMarkersByKey.values(),
+      zoom,
+      this.browseMarkerScaleConfig,
+    );
     const reduceMotion = prefersReducedMotion();
     const now = this.options.scene.time.now;
-    for (const marker of markers) {
+    for (const marker of this.browseCommentMarkersByKey.values()) {
       const popoverVisible =
         marker.key === this.hoveredBrowseMarkerKey ||
         marker.key === this.pinnedBrowseMarkerKey;
@@ -1472,7 +1509,6 @@ export class OverworldRoomCommentsController {
     this.activeBrowseDanmaku.add(stream);
     this.placeBrowseDanmakuStream(stream, camera, zoom, track);
     stream.container.setAlpha(this.getBrowseDanmakuStreamAlpha(stream, track));
-    this.options.onDisplayObjectsChanged?.();
     return true;
   }
 
@@ -1867,7 +1903,6 @@ export class OverworldRoomCommentsController {
     stream.container.setVisible(false);
     stream.container.setAlpha(0);
     this.idleBrowseDanmaku.push(stream);
-    this.options.onDisplayObjectsChanged?.();
   }
 
   private destroyBrowseDanmakuStreams(): void {
@@ -1969,7 +2004,6 @@ export class OverworldRoomCommentsController {
     }
 
     if (structureChanged) {
-      this.options.onDisplayObjectsChanged?.();
     }
   }
 

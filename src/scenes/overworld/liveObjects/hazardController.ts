@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import {
   getObjectDefaultFrame,
   isBlockSwitchObjectId,
-  isSolidRuntimeObjectConfig,
   ROOM_PX_WIDTH,
   TILE_SIZE,
   type GameObjectConfig,
@@ -79,30 +78,25 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
     liveObject: LoadedRoomObject,
     player: Phaser.GameObjects.GameObject,
   ): void {
+    liveObject.interactions.push(
+      this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
+        this.handlePlayerHazardContact(loadedRoom, liveObject);
+      }),
+    );
+  }
+
+  handlePlayerHazardContact(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): void {
     if (liveObject.config.id === 'quicksand') {
-      liveObject.interactions.push(
-        this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-          this.options.touchQuicksand();
-        })
-      );
+      this.options.touchQuicksand();
     } else if (liveObject.config.id === 'bomb') {
-      liveObject.interactions.push(
-        this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-          this.triggerBombExplosion(loadedRoom, liveObject);
-        })
-      );
+      this.triggerBombExplosion(loadedRoom, liveObject);
     } else if (liveObject.config.id === 'tornado' || liveObject.config.id === 'tornado_sand') {
-      liveObject.interactions.push(
-        this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-          this.triggerTornadoLaunch(loadedRoom, liveObject);
-        })
-      );
+      this.triggerTornadoLaunch(loadedRoom, liveObject);
     } else {
-      liveObject.interactions.push(
-        this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-          this.options.handlePlayerDeath(`${liveObject.config.name} hit you.`);
-        })
-      );
+      this.options.handlePlayerDeath(`${liveObject.config.name} hit you.`);
     }
   }
 
@@ -113,39 +107,46 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
   ): void {
     liveObject.interactions.push(
       this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-        const padBody = liveObject.sprite.body as ArcadeObjectBody | null;
-        const activePlayerBody = this.options.getPlayerBody();
-        if (!activePlayerBody || !padBody) {
-          return;
-        }
-
-        if (
-          this.options.getCurrentTime() < liveObject.runtime.cooldownUntil ||
-          activePlayerBody.velocity.y < -24
-        ) {
-          return;
-        }
-
-        const playerBottom = activePlayerBody.bottom;
-        const padTop = padBody.top;
-        if (playerBottom > padTop + 12) {
-          return;
-        }
-
-        liveObject.runtime.cooldownUntil =
-          this.options.getCurrentTime() + this.options.settings.bouncePadCooldownMs;
-        liveObject.runtime.activatedUntil =
-          this.options.getCurrentTime() + this.options.settings.bouncePadActiveMs;
-        activePlayerBody.setVelocityY(this.options.settings.bouncePadVelocity);
-        this.options.grantExternalLaunchGrace(BOUNCE_PAD_LAUNCH_GRACE_MS);
-        this.options.playBounceFx(
-          liveObject.sprite.x,
-          liveObject.sprite.y - 2,
-          loadedRoom.room.coordinates
-        );
-        this.options.showTransientStatus('Bounce pad launched you.');
+        this.handlePlayerBouncePadContact(loadedRoom, liveObject);
       })
     );
+  }
+
+  handlePlayerBouncePadContact(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): void {
+    const padBody = liveObject.sprite.body as ArcadeObjectBody | null;
+    const activePlayerBody = this.options.getPlayerBody();
+    if (!activePlayerBody || !padBody) {
+      return;
+    }
+
+    if (
+      this.options.getCurrentTime() < liveObject.runtime.cooldownUntil ||
+      activePlayerBody.velocity.y < -24
+    ) {
+      return;
+    }
+
+    const playerBottom = activePlayerBody.bottom;
+    const padTop = padBody.top;
+    if (playerBottom > padTop + 12) {
+      return;
+    }
+
+    liveObject.runtime.cooldownUntil =
+      this.options.getCurrentTime() + this.options.settings.bouncePadCooldownMs;
+    liveObject.runtime.activatedUntil =
+      this.options.getCurrentTime() + this.options.settings.bouncePadActiveMs;
+    activePlayerBody.setVelocityY(this.options.settings.bouncePadVelocity);
+    this.options.grantExternalLaunchGrace(BOUNCE_PAD_LAUNCH_GRACE_MS);
+    this.options.playBounceFx(
+      liveObject.sprite.x,
+      liveObject.sprite.y - 2,
+      loadedRoom.room.coordinates
+    );
+    this.options.showTransientStatus('Bounce pad launched you.');
   }
 
   addNpcTornadoInteraction(
@@ -158,6 +159,54 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
         this.triggerNpcTornadoLaunch(tornadoRoom, npc, tornado);
       }),
     );
+  }
+
+  handleNpcTornadoContact(
+    tornadoRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    npc: LoadedRoomObject,
+    tornado: LoadedRoomObject,
+  ): void {
+    this.triggerNpcTornadoLaunch(tornadoRoom, npc, tornado);
+  }
+
+  handlePlayerProjectileContact(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    projectile: LoadedRoomObject,
+  ): void {
+    this.handleCannonBulletContact(loadedRoom, projectile);
+  }
+
+  handleProjectileTerrainContact(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    projectile: LoadedRoomObject,
+  ): void {
+    if (projectile.sprite.active) this.options.removeLiveObject(loadedRoom, projectile);
+  }
+
+  handleProjectileSolidContact(
+    projectileRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    projectile: LoadedRoomObject,
+    obstacleRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    obstacle: LoadedRoomObject,
+  ): void {
+    if (!projectile.sprite.active || !obstacle.sprite.active) return;
+    if (isBlockSwitchObjectId(obstacle.config.id)) {
+      this.options.triggerBlockSwitch(obstacleRoom, obstacle);
+    }
+    this.options.removeLiveObject(projectileRoom, projectile);
+  }
+
+  handleProjectileNpcContact(
+    projectileRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    projectile: LoadedRoomObject,
+    npcRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    npc: LoadedRoomObject,
+  ): void {
+    if (!projectile.sprite.active || !npc.sprite.active) return;
+    this.options.handleNpcHazardContact(npcRoom, npc);
+    if (projectile.sprite.active) {
+      this.options.removeLiveObject(projectileRoom, projectile);
+    }
   }
 
   updateCannonObject(
@@ -484,68 +533,6 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
         triggerLatched: false,
       },
     };
-
-    const player = this.options.getPlayer();
-    if (player) {
-      bullet.interactions.push(
-        this.options.scene.physics.add.collider(player, sprite, () => {
-          this.handleCannonBulletContact(loadedRoom, bullet);
-        }),
-      );
-    }
-
-    bullet.worldColliders.push(
-      this.options.scene.physics.add.collider(sprite, loadedRoom.terrainLayer, () => {
-        this.options.removeLiveObject(loadedRoom, bullet);
-      }),
-    );
-    if (loadedRoom.terrainInsetBodies) {
-      bullet.worldColliders.push(
-        this.options.scene.physics.add.collider(sprite, loadedRoom.terrainInsetBodies, () => {
-          this.options.removeLiveObject(loadedRoom, bullet);
-        }),
-      );
-    }
-    for (const platform of loadedRoom.liveObjects) {
-      if (
-        platform === bullet ||
-        !isSolidRuntimeObjectConfig(platform.config) ||
-        !platform.sprite.active ||
-        !platform.sprite.body
-      ) {
-        continue;
-      }
-
-      const hitsBlockSwitch = isBlockSwitchObjectId(platform.config.id);
-      bullet.worldColliders.push(
-        this.options.scene.physics.add.collider(sprite, platform.sprite, () => {
-          if (hitsBlockSwitch) {
-            this.options.triggerBlockSwitch(loadedRoom, platform);
-          }
-          this.options.removeLiveObject(loadedRoom, bullet);
-        }),
-      );
-    }
-    for (const npc of loadedRoom.liveObjects) {
-      if (
-        npc.config.category !== 'npc' ||
-        !npc.sprite.active ||
-        !npc.sprite.body
-      ) {
-        continue;
-      }
-      bullet.interactions.push(
-        this.options.scene.physics.add.overlap(sprite, npc.sprite, () => {
-          if (!bullet.sprite.active || !npc.sprite.active) {
-            return;
-          }
-          this.options.handleNpcHazardContact(loadedRoom, npc);
-          if (bullet.sprite.active) {
-            this.options.removeLiveObject(loadedRoom, bullet);
-          }
-        }),
-      );
-    }
 
     loadedRoom.liveObjects.push(bullet);
   }

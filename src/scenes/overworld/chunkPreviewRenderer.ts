@@ -27,7 +27,6 @@ interface OverworldChunkPreviewRendererOptions {
   getFocusCoordinates?: () => RoomCoordinates;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   isFullRoomLoaded: (roomId: string) => boolean;
-  onBackdropObjectsChanged?: () => void;
   onFullRoomVisibilityChanged?: () => void;
   measurePerformance?: <T>(label: string, callback: () => T) => T;
 }
@@ -313,7 +312,6 @@ export class OverworldChunkPreviewRenderer {
     this.visiblePreviewRoomIds = nextVisiblePreviewRoomIds;
     this.hasCompletedInitialTexturePass = true;
     this.pruneTextureCache();
-    this.options.onBackdropObjectsChanged?.();
   }
 
   private ensureChunkPreview(
