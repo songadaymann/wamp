@@ -72,6 +72,7 @@ export interface Env {
   AUTH_DEBUG_MAGIC_LINKS?: string;
   AUTH_TRUSTED_REDIRECT_HOSTS?: string;
   APP_BASE_URL?: string;
+  DEV_STACK_NAME?: string;
   REOWN_PROJECT_ID?: string;
   VITE_REOWN_PROJECT_ID?: string;
   WALLET_CONNECT_PROJECT_ID?: string;

@@ -131,6 +131,7 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
         debugMagicLinks: env.AUTH_DEBUG_MAGIC_LINKS === '1',
         testResetEnabled: env.ENABLE_TEST_RESET === '1',
       },
+      ...(env.DEV_STACK_NAME ? { devStack: env.DEV_STACK_NAME } : {}),
     }),
   },
   {
