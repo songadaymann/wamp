@@ -135,7 +135,7 @@ function getTierAlphaMap(
 }
 
 export function syncBadgePlacements(
-  badges: OverworldBadgePlacement[],
+  badges: Iterable<OverworldBadgePlacement>,
   zoom: number,
   config: RoomBadgeScaleConfig,
 ): void {

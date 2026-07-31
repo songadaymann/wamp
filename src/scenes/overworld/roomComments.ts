@@ -1210,16 +1210,19 @@ export class OverworldRoomCommentsController {
   }
 
   private syncBrowseCommentMarkerPresentation(): void {
-    const markers = Array.from(this.browseCommentMarkersByKey.values());
-    if (markers.length === 0) {
+    if (this.browseCommentMarkersByKey.size === 0) {
       return;
     }
 
     const zoom = this.options.getZoom?.() ?? this.options.scene.cameras.main.zoom;
-    syncBadgePlacements(markers, zoom, this.browseMarkerScaleConfig);
+    syncBadgePlacements(
+      this.browseCommentMarkersByKey.values(),
+      zoom,
+      this.browseMarkerScaleConfig,
+    );
     const reduceMotion = prefersReducedMotion();
     const now = this.options.scene.time.now;
-    for (const marker of markers) {
+    for (const marker of this.browseCommentMarkersByKey.values()) {
       const popoverVisible =
         marker.key === this.hoveredBrowseMarkerKey ||
         marker.key === this.pinnedBrowseMarkerKey;

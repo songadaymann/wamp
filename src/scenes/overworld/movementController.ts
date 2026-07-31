@@ -101,7 +101,7 @@ interface OverworldMovementControllerHost {
   getCurrentTime(): number;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
-  getSpecialTileEnvironment(): SpecialTilePlayerEnvironment;
+  getSpecialTileEnvironment(): Readonly<SpecialTilePlayerEnvironment>;
   getPlayerFacing(): -1 | 1;
   getCurrentRoomCoordinates(): RoomCoordinates;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };

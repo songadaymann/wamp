@@ -20,10 +20,9 @@ import {
   resolveWorldPresenceConfig,
   resolveWorldPresenceIdentity,
   type WorldPresenceIdentity,
-  type WorldPresencePayload,
 } from '../../presence/worldPresence';
 import type { OverworldMode } from '../sceneData';
-import type { RenderedGhost } from './presence';
+import type { LocalPresenceInput, RenderedGhost } from './presence';
 
 interface ComposerElements {
   root: HTMLDivElement;
@@ -38,17 +37,6 @@ interface RenderedRoomChatBubble {
   container: Phaser.GameObjects.Container;
   background: Phaser.GameObjects.Graphics;
   text: Phaser.GameObjects.Text;
-}
-
-interface LocalPresenceInput {
-  mode: OverworldMode;
-  roomCoordinates: RoomCoordinates;
-  x: number;
-  y: number;
-  velocityX: number;
-  velocityY: number;
-  facing: number;
-  animationState: WorldPresencePayload['animationState'];
 }
 
 interface OverworldRoomChatControllerOptions {
@@ -201,7 +189,7 @@ export class OverworldRoomChatController {
     this.subscribedBoundsRetainUntil = now + SUBSCRIPTION_RETAIN_MS;
   }
 
-  updateLocalPresence(input: LocalPresenceInput | null): void {
+  updateLocalPresence(input: LocalPresenceInput | null, now = Date.now()): void {
     if (!this.client || !input || input.mode !== 'play') {
       this.client?.updateLocalPresence(null);
       this.closeComposer(false);
@@ -217,7 +205,7 @@ export class OverworldRoomChatController {
       facing: input.facing,
       animationState: input.animationState,
       mode: 'play',
-      timestamp: Date.now(),
+      timestamp: now,
     });
   }
 

@@ -2595,6 +2595,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     camera: Phaser.Cameras.Scene2D.Camera
   ): void {
     const origin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
+    const worldView = camera.worldView;
+    if (
+      origin.x + ROOM_PX_WIDTH < worldView.left
+      || origin.x > worldView.right
+      || origin.y + ROOM_PX_HEIGHT < worldView.top
+      || origin.y > worldView.bottom
+    ) {
+      return;
+    }
 
     if (loadedRoom.backgroundColorRect) {
       loadedRoom.backgroundColorRect.setPosition(origin.x, origin.y);

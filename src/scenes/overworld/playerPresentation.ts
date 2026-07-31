@@ -28,7 +28,7 @@ interface OverworldPlayerPresentationControllerHost {
   getPlayerSprite(): Phaser.GameObjects.Sprite | null;
   getPlayerPickupSensor(): Phaser.GameObjects.Rectangle | null;
   getPlayerPickupSensorBody(): Phaser.Physics.Arcade.Body | null;
-  getSpecialTileEnvironment(): SpecialTilePlayerEnvironment;
+  getSpecialTileEnvironment(): Readonly<SpecialTilePlayerEnvironment>;
   getLastMovementInput(): { horizontalInput: number; verticalInput: number };
   getQuicksandVisualSink(): number;
   getWeaponKnockbackUntil(): number;

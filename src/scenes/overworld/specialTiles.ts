@@ -43,7 +43,7 @@ export interface SpecialTilePlayerEnvironment {
   onDamage: boolean;
 }
 
-const DEFAULT_PLAYER_ENVIRONMENT: SpecialTilePlayerEnvironment = {
+const DEFAULT_PLAYER_ENVIRONMENT: Readonly<SpecialTilePlayerEnvironment> = Object.freeze({
   gravityDirection: 'down',
   inWater: false,
   windX: 0,
@@ -52,7 +52,7 @@ const DEFAULT_PLAYER_ENVIRONMENT: SpecialTilePlayerEnvironment = {
   onSticky: false,
   onBounce: false,
   onDamage: false,
-};
+});
 
 const BOUNCE_TILE_VELOCITY = -392;
 const BOUNCE_TILE_COOLDOWN_MS = 180;
@@ -178,12 +178,33 @@ export function bodyIsBlockedInGravityDirection(
   }
 }
 
+function resetEnvironment(
+  environment: SpecialTilePlayerEnvironment,
+  gravityDirection: PlayerGravityDirection,
+): SpecialTilePlayerEnvironment {
+  environment.gravityDirection = gravityDirection;
+  environment.inWater = false;
+  environment.windX = 0;
+  environment.conveyorX = 0;
+  environment.onIce = false;
+  environment.onSticky = false;
+  environment.onBounce = false;
+  environment.onDamage = false;
+  return environment;
+}
+
 export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = unknown> {
   private runtimeRoomTextureRevision = 0;
   private bounceCooldownUntil = 0;
   private damageCooldownUntil = 0;
   private oneWayDropThroughUntil = 0;
-  private playerEnvironment: SpecialTilePlayerEnvironment = { ...DEFAULT_PLAYER_ENVIRONMENT };
+  private readonly playerEnvironment: SpecialTilePlayerEnvironment = {
+    ...DEFAULT_PLAYER_ENVIRONMENT,
+  };
+  private readonly bodyEnvironments = new WeakMap<
+    Phaser.Physics.Arcade.Body,
+    SpecialTilePlayerEnvironment
+  >();
   private latchedGravityDirection: PlayerGravityDirection = 'down';
   private latchedGravityRoomId: string | null = null;
   private readonly brokenSpecialBrickTileKeysByRoomId = new Map<string, Set<string>>();
@@ -195,29 +216,34 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
 
   update(): void {
     if (this.host.getMode() !== 'play') {
-      this.playerEnvironment = { ...DEFAULT_PLAYER_ENVIRONMENT };
+      resetEnvironment(this.playerEnvironment, 'down');
       this.resetGravityLatch();
       return;
     }
 
-    this.playerEnvironment = this.scanPlayerEnvironment();
+    this.scanPlayerEnvironment(this.playerEnvironment);
     this.applyImmediatePlayerEffects();
     this.maybeBreakSpecialBrickTile();
   }
 
-  getPlayerEnvironment(): SpecialTilePlayerEnvironment {
-    return { ...this.playerEnvironment };
+  getPlayerEnvironment(): Readonly<SpecialTilePlayerEnvironment> {
+    return this.playerEnvironment;
   }
 
   getEnvironmentForBody(
     body: Phaser.Physics.Arcade.Body,
     currentGravityDirection: PlayerGravityDirection = 'down',
-  ): SpecialTilePlayerEnvironment {
+  ): Readonly<SpecialTilePlayerEnvironment> {
     if (this.host.getMode() !== 'play') {
-      return { ...DEFAULT_PLAYER_ENVIRONMENT };
+      return DEFAULT_PLAYER_ENVIRONMENT;
     }
 
-    return this.scanBodyEnvironment(body, currentGravityDirection);
+    let environment = this.bodyEnvironments.get(body);
+    if (!environment) {
+      environment = { ...DEFAULT_PLAYER_ENVIRONMENT };
+      this.bodyEnvironments.set(body, environment);
+    }
+    return this.scanBodyEnvironment(body, currentGravityDirection, environment);
   }
 
   getConveyorDirectionForBody(
@@ -339,7 +365,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
       this.resetForRoom(loadedRoom);
     }
     this.brokenSpecialBrickTileKeysByRoomId.clear();
-    this.playerEnvironment = { ...DEFAULT_PLAYER_ENVIRONMENT };
+    resetEnvironment(this.playerEnvironment, 'down');
     this.resetGravityLatch();
     this.bounceCooldownUntil = 0;
     this.damageCooldownUntil = 0;
@@ -385,11 +411,13 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     this.refreshLoadedRoomTerrainTexture(loadedRoom);
   }
 
-  private scanPlayerEnvironment(): SpecialTilePlayerEnvironment {
+  private scanPlayerEnvironment(
+    environment: SpecialTilePlayerEnvironment,
+  ): SpecialTilePlayerEnvironment {
     const playerBody = this.host.getPlayerBody();
     if (!playerBody) {
       this.resetGravityLatch();
-      return { ...DEFAULT_PLAYER_ENVIRONMENT };
+      return resetEnvironment(environment, 'down');
     }
 
     const currentGravityRoomId = this.getPlayerGravityRoomId(playerBody);
@@ -398,9 +426,10 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
       this.latchedGravityDirection = 'down';
     }
 
-    const environment = this.scanBodyEnvironment(
+    this.scanBodyEnvironment(
       playerBody,
       this.latchedGravityDirection,
+      environment,
     );
     this.latchedGravityDirection = environment.gravityDirection;
     this.latchedGravityRoomId = currentGravityRoomId;
@@ -410,11 +439,9 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   private scanBodyEnvironment(
     body: Phaser.Physics.Arcade.Body,
     currentGravityDirection: PlayerGravityDirection,
+    environment: SpecialTilePlayerEnvironment,
   ): SpecialTilePlayerEnvironment {
-    const environment: SpecialTilePlayerEnvironment = {
-      ...DEFAULT_PLAYER_ENVIRONMENT,
-      gravityDirection: currentGravityDirection,
-    };
+    resetEnvironment(environment, currentGravityDirection);
     const overlaps = this.findSpecialTilesOverlappingBody(body);
     environment.gravityDirection =
       this.getGravityDirectionFromMatches(overlaps) ?? environment.gravityDirection;

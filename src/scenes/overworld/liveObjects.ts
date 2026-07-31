@@ -262,7 +262,7 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   getSpecialTileEnvironmentForBody: (
     body: Phaser.Physics.Arcade.Body,
     currentGravityDirection: PlayerGravityDirection,
-  ) => SpecialTilePlayerEnvironment;
+  ) => Readonly<SpecialTilePlayerEnvironment>;
   swordsmanTraversalPlannerMode: SwordsmanTraversalPlannerMode;
   isPlayerClimbingLadder: () => boolean;
   isLadderDropRequested: () => boolean;

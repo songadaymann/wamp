@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import PartySocket from 'partysocket';
+import WebSocket from 'ws';
 
 const ROOM_PX_WIDTH = 640;
 const ROOM_PX_HEIGHT = 352;
@@ -287,6 +288,7 @@ class PresenceBot {
       party,
       room: nextShardId,
       id: this.userId,
+      WebSocket,
       query: {
         identityToken,
       },
