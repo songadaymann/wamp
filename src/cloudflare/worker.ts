@@ -631,7 +631,7 @@ export default {
         throw new HttpError(404, 'Route not found.');
       }
 
-      return await handleRoomRequest(request, url, env);
+      return await handleRoomRequest(request, url, env, ctx);
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;
       const message = error instanceof Error ? error.message : 'Unexpected server error.';

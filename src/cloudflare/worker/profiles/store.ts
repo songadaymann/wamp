@@ -4,18 +4,26 @@ import type {
   ProfileStatsSummary,
   UserProfileResponse,
 } from '../../../profiles/model';
-import type { ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
+import type { ExpandedRoomCellMembership, ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
 import { listPlayerAvatarChoicesForLevel, resolveSelectablePlayerAvatarId } from '../../../player/avatar/unlocks';
-import { isPlayfunLeaderboardExcludedDisplayName } from '../../../playfun/identity';
 import type { QualityRatingSummary } from '../../../progression/model';
 import { ROOM_DIFFICULTIES, type RoomDifficulty } from '../../../runs/model';
 import type { Env } from '../core/types';
-import { findUserById, loadAllUserStatsRows, loadPublicUserProfileCourseCount, loadPublishedRoomsByCreator, loadUserStatsRow } from '../auth/store';
+import {
+  findUserById,
+  loadPublicUserProfileCourseCount,
+  loadPublicUserStatsRank,
+  loadPublishedRoomsByCreator,
+  loadUserStatsRow,
+} from '../auth/store';
 import { loadPublicProgressionSummary } from '../progression/store';
 import { parseStoredSnapshot } from '../rooms/store';
-import { compareGlobalLeaderboardEntries, mapUserStatsRow } from '../runs/points';
+import { mapUserStatsRow } from '../runs/points';
 import { loadPublicPlaylistSummariesForUser } from '../playlists/store';
-import { resolveExpandedRoomAtCoordinates } from '../expandedRooms/store';
+import {
+  loadExpandedRoomTarget,
+  loadPublishedExpandedRoomMembershipsForRoomIds,
+} from '../expandedRooms/store';
 
 const EMPTY_PROFILE_STATS: ProfileStatsSummary = {
   totalPoints: 0,
@@ -76,18 +84,18 @@ export async function loadUserProfile(
     return null;
   }
 
-  const [statsRow, allStatsRows, publishedRoomRows, publishedCourseCount, playlists] = await Promise.all([
+  const [statsRow, publicRank, publishedRoomRows, publishedCourseCount, playlists, progression] = await Promise.all([
     loadUserStatsRow(env, targetUserId),
-    loadAllUserStatsRows(env),
+    loadPublicUserStatsRank(env, targetUserId),
     loadPublishedRoomsByCreator(env, targetUserId),
     loadPublicUserProfileCourseCount(env, targetUserId),
     loadPublicPlaylistSummariesForUser(env, targetUserId),
+    loadPublicProgressionSummary(env, targetUserId),
   ]);
 
   const publishedRooms = await buildPublishedRooms(env, publishedRoomRows);
-  const stats = buildProfileStats(statsRow, allStatsRows, publishedRooms.length);
+  const stats = buildProfileStats(statsRow, publicRank, publishedRooms.length);
   const isSelf = viewerUserId === targetUserId;
-  const progression = await loadPublicProgressionSummary(env, targetUserId);
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
 
   return {
@@ -111,7 +119,7 @@ export async function loadUserProfile(
 
 function buildProfileStats(
   statsRow: Awaited<ReturnType<typeof loadUserStatsRow>>,
-  allStatsRows: Awaited<ReturnType<typeof loadAllUserStatsRows>>,
+  publicRank: number | null,
   publishedRoomCount: number
 ): ProfileStatsSummary {
   if (!statsRow) {
@@ -122,30 +130,25 @@ function buildProfileStats(
   }
 
   const stats = mapUserStatsRow(statsRow);
-  const rankedEntries = allStatsRows
-    .map(mapUserStatsRow)
-    .filter((entry) => !isPlayfunLeaderboardExcludedDisplayName(entry.userDisplayName))
-    .sort(compareGlobalLeaderboardEntries);
-  const publicRank = rankedEntries.findIndex((entry) => entry.userId === stats.userId);
-  const publicStats = publicRank >= 0 ? rankedEntries[publicRank] ?? null : null;
+  const isPublicStatsEligible = publicRank !== null;
 
   return {
-    totalPoints: publicStats?.totalPoints ?? 0,
-    totalScore: publicStats?.totalScore ?? 0,
+    totalPoints: isPublicStatsEligible ? stats.totalPoints : 0,
+    totalScore: isPublicStatsEligible ? stats.totalScore : 0,
     totalDeaths: stats.totalDeaths,
     totalCollectibles: stats.totalCollectibles,
     totalEnemiesDefeated: stats.totalEnemiesDefeated,
     totalCheckpoints: stats.totalCheckpoints,
     totalRoomsPublished: publishedRoomCount,
-    completedRuns: publicStats?.completedRuns ?? 0,
-    failedRuns: publicStats?.failedRuns ?? 0,
-    abandonedRuns: publicStats?.abandonedRuns ?? 0,
+    completedRuns: isPublicStatsEligible ? stats.completedRuns : 0,
+    failedRuns: isPublicStatsEligible ? stats.failedRuns : 0,
+    abandonedRuns: isPublicStatsEligible ? stats.abandonedRuns : 0,
     pvpWins: stats.pvpWins,
     pvpLosses: stats.pvpLosses,
     pvpDraws: stats.pvpDraws,
-    bestScore: publicStats?.bestScore ?? 0,
-    fastestClearMs: publicStats?.fastestClearMs ?? null,
-    globalRank: publicRank >= 0 ? publicRank + 1 : null,
+    bestScore: isPublicStatsEligible ? stats.bestScore : 0,
+    fastestClearMs: isPublicStatsEligible ? stats.fastestClearMs : null,
+    globalRank: publicRank,
   };
 }
 
@@ -208,9 +211,27 @@ async function resolveProfilePublishedRoomEntries(
     return entries;
   }
 
+  const membershipsByRoomId = await loadProfileExpandedRoomMemberships(env, entries);
+  const expandedRoomTargetLoads = new Map<string, Promise<ResolvedExpandedRoomTarget | null>>();
+  const loadExpandedRoomTargetOnce = (expandedRoomId: string): Promise<ResolvedExpandedRoomTarget | null> => {
+    const existing = expandedRoomTargetLoads.get(expandedRoomId);
+    if (existing) {
+      return existing;
+    }
+
+    const request = loadExpandedRoomTarget(env, expandedRoomId);
+    expandedRoomTargetLoads.set(expandedRoomId, request);
+    return request;
+  };
+
   const entriesByPlayableTarget = new Map<string, ProfilePublishedRoomBaseEntry>();
   for (const entry of entries) {
-    const expandedRoomTarget = await loadProfileExpandedRoomTargetForCell(env, entry);
+    const membership = membershipsByRoomId.get(entry.roomId) ?? null;
+    const expandedRoomTarget = await loadProfileExpandedRoomTargetForCell(
+      entry,
+      membership,
+      loadExpandedRoomTargetOnce,
+    );
     const resolvedEntry = expandedRoomTarget
       ? mapProfileEntryToExpandedRoom(entry, expandedRoomTarget)
       : { ...entry, expandedRoom: null };
@@ -226,11 +247,34 @@ async function resolveProfilePublishedRoomEntries(
   return Array.from(entriesByPlayableTarget.values());
 }
 
-async function loadProfileExpandedRoomTargetForCell(
+async function loadProfileExpandedRoomMemberships(
   env: Env,
+  entries: ProfilePublishedRoomBaseEntry[],
+): Promise<Map<string, ExpandedRoomCellMembership>> {
+  const memberships = await loadPublishedExpandedRoomMembershipsForRoomIds(
+    env,
+    entries.map((entry) => entry.roomId),
+  );
+  return new Map(memberships.map((membership) => [membership.roomId, membership]));
+}
+
+async function loadProfileExpandedRoomTargetForCell(
   entry: ProfilePublishedRoomBaseEntry,
+  membership: ExpandedRoomCellMembership | null,
+  loadExpandedRoomTargetOnce: (expandedRoomId: string) => Promise<ResolvedExpandedRoomTarget | null>,
 ): Promise<ResolvedExpandedRoomTarget | null> {
-  const target = await resolveExpandedRoomAtCoordinates(env, entry.roomCoordinates);
+  if (!membership || membership.cellCount <= 1) {
+    return null;
+  }
+
+  if (
+    membership.source !== 'legacy_course'
+    && normalizeProfileVersion(membership.roomVersion) !== entry.roomVersion
+  ) {
+    return null;
+  }
+
+  const target = await loadExpandedRoomTargetOnce(membership.expandedRoomId);
   if (!target || target.cellCount <= 1) {
     return null;
   }

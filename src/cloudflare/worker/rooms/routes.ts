@@ -2,6 +2,7 @@ import {
   type RoomCanonicalVersionRequestBody,
   type RoomLeaderboardLineageRequestBody,
   type RoomRevertRequestBody,
+  type RoomSnapshot,
 } from '../../../persistence/roomModel';
 import {
   annotateRoomRecordWithTilesetHints,
@@ -67,10 +68,15 @@ import {
   setRoomVersionLeaderboardSource,
 } from './store';
 
+type WorkerExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void;
+};
+
 export async function handleRoomRequest(
   request: Request,
   url: URL,
   env: Env,
+  ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const segments = url.pathname.split('/').filter(Boolean);
   const roomId = decodeURIComponent(segments[2] ?? '');
@@ -233,34 +239,31 @@ export async function handleRoomRequest(
       buildRoomMutationActor(auth),
       auth.isAdmin,
     );
-    const pointEvent = await awardRoomPublishPoints(
-      env,
-      auth.user.id,
-      record.draft.id,
-      record.published?.version ?? record.draft.version,
-      {
-        hasGoal: record.published?.goal !== null,
-        hasPriorGoalPublish: record.versions.some(
+    const publishedSnapshot = record.published ?? record.draft;
+    const publishedVersion = publishedSnapshot.version;
+    const hasGoal = publishedSnapshot.goal !== null;
+    await deferOrRunPostPublishAccounting(
+      ctx,
+      runPostPublishAccounting(env, request, {
+        userId: auth.user.id,
+        roomId: record.draft.id,
+        roomVersion: publishedVersion,
+        publishedSnapshot,
+        previousPublishedSnapshot: previousRecord.published,
+        hasGoal,
+        hasPriorGoalPublish: previousRecord.versions.some((version) => version.snapshot.goal !== null),
+        hasPriorGoalPublishForPoints: record.versions.some(
           (version) =>
-            version.version !== (record.published?.version ?? record.draft.version) &&
-            version.snapshot.goal !== null,
+            version.version !== publishedVersion
+            && version.snapshot.goal !== null,
         ),
+        publishedAt: publishedSnapshot.publishedAt ?? new Date().toISOString(),
+      }),
+      {
+        userId: auth.user.id,
+        roomId: record.draft.id,
       },
     );
-    if (pointEvent) {
-      await maybeMirrorPointEventToPlayfun(env, request, auth.user.id, pointEvent);
-    }
-    await awardRoomPublishProgression(env, {
-      userId: auth.user.id,
-      roomId: record.draft.id,
-      roomVersion: record.published?.version ?? record.draft.version,
-      publishedSnapshot: record.published ?? record.draft,
-      previousPublishedSnapshot: previousRecord.published,
-      hasGoal: record.published?.goal !== null,
-      hasPriorGoalPublish: previousRecord.versions.some((version) => version.snapshot.goal !== null),
-      publishedAt: record.published?.publishedAt ?? new Date().toISOString(),
-    });
-    await upsertUserStats(env, auth.user.id);
     return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
   }
 
@@ -419,6 +422,80 @@ export async function handleRoomRequest(
   }
 
   throw new HttpError(405, 'Method not allowed.');
+}
+
+interface RoomPostPublishAccountingInput {
+  userId: string;
+  roomId: string;
+  roomVersion: number;
+  publishedSnapshot: RoomSnapshot;
+  previousPublishedSnapshot: RoomSnapshot | null;
+  hasGoal: boolean;
+  hasPriorGoalPublish: boolean;
+  hasPriorGoalPublishForPoints: boolean;
+  publishedAt: string;
+}
+
+async function deferOrRunPostPublishAccounting(
+  ctx: WorkerExecutionContext | undefined,
+  promise: Promise<void>,
+  context: { userId: string; roomId: string },
+): Promise<void> {
+  const guardedPromise = promise.catch((error) => {
+    console.warn('Post-publish room accounting failed.', { ...context, error });
+  });
+
+  if (ctx) {
+    ctx.waitUntil(guardedPromise);
+    return;
+  }
+
+  await guardedPromise;
+}
+
+async function runPostPublishAccounting(
+  env: Env,
+  request: Request,
+  input: RoomPostPublishAccountingInput,
+): Promise<void> {
+  try {
+    const pointEvent = await awardRoomPublishPoints(
+      env,
+      input.userId,
+      input.roomId,
+      input.roomVersion,
+      {
+        hasGoal: input.hasGoal,
+        hasPriorGoalPublish: input.hasPriorGoalPublishForPoints,
+      },
+    );
+    if (pointEvent) {
+      await maybeMirrorPointEventToPlayfun(env, request, input.userId, pointEvent);
+    }
+  } catch (error) {
+    console.warn('Failed to award room publish points.', { userId: input.userId, roomId: input.roomId, error });
+  }
+
+  try {
+    await awardRoomPublishProgression(env, {
+      userId: input.userId,
+      roomId: input.roomId,
+      roomVersion: input.roomVersion,
+      publishedSnapshot: input.publishedSnapshot,
+      previousPublishedSnapshot: input.previousPublishedSnapshot,
+      hasGoal: input.hasGoal,
+      hasPriorGoalPublish: input.hasPriorGoalPublish,
+      publishedAt: input.publishedAt,
+    });
+  } catch (error) {
+    console.warn('Failed to award room publish progression.', { userId: input.userId, roomId: input.roomId, error });
+  }
+
+  try {
+    await upsertUserStats(env, input.userId);
+  } catch (error) {
+    console.warn('Failed to update user stats after room publish.', { userId: input.userId, roomId: input.roomId, error });
+  }
 }
 
 async function maybeMirrorPointEventToPlayfun(

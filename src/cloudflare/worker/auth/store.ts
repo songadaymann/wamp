@@ -16,7 +16,10 @@ import type {
   UserStatsRow,
   WalletChallengeRow,
 } from '../core/types';
-import { sqlUserIdIsNotPlayfunOnly } from '../playfun/leaderboardIsolation';
+import {
+  sqlDoesNotHavePlayfunDisplayNamePrefix,
+  sqlUserIdIsNotPlayfunOnly,
+} from '../playfun/leaderboardIsolation';
 import { ensureFounderIdentityQualification } from '../progression/store';
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -519,6 +522,65 @@ export async function loadUserStatsRow(env: Env, userId: string) {
   )
     .bind(userId)
     .first<UserStatsRow>();
+}
+
+export async function loadPublicUserStatsRank(env: Env, userId: string): Promise<number | null> {
+  const row = await env.DB.prepare(
+    `
+      WITH target_stats AS (
+        SELECT
+          user_id,
+          user_display_name,
+          total_points,
+          completed_runs,
+          total_rooms_published
+        FROM user_stats
+        WHERE user_id = ?
+          AND ${sqlUserIdIsNotPlayfunOnly('user_stats.user_id')}
+          AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('user_stats.user_display_name')}
+        LIMIT 1
+      )
+      SELECT
+        CASE
+          WHEN EXISTS (SELECT 1 FROM target_stats) THEN (
+            SELECT COUNT(*) + 1
+            FROM user_stats candidate, target_stats target
+            WHERE ${sqlUserIdIsNotPlayfunOnly('candidate.user_id')}
+              AND ${sqlDoesNotHavePlayfunDisplayNamePrefix('candidate.user_display_name')}
+              AND (
+                candidate.total_points > target.total_points
+                OR (
+                  candidate.total_points = target.total_points
+                  AND candidate.completed_runs > target.completed_runs
+                )
+                OR (
+                  candidate.total_points = target.total_points
+                  AND candidate.completed_runs = target.completed_runs
+                  AND candidate.total_rooms_published > target.total_rooms_published
+                )
+                OR (
+                  candidate.total_points = target.total_points
+                  AND candidate.completed_runs = target.completed_runs
+                  AND candidate.total_rooms_published = target.total_rooms_published
+                  AND (
+                    candidate.user_display_name < target.user_display_name
+                    OR (
+                      candidate.user_display_name = target.user_display_name
+                      AND candidate.user_id < target.user_id
+                    )
+                  )
+                )
+              )
+          )
+          ELSE NULL
+        END AS rank
+    `
+  )
+    .bind(userId)
+    .first<{ rank: number | string | null }>();
+
+  const rank = Number(row?.rank ?? 0);
+  return Number.isInteger(rank) && rank > 0 ? rank : null;
 }
 
 export async function loadAllUserStatsRows(env: Env) {
