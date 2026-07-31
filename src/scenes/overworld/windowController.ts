@@ -43,6 +43,7 @@ interface WindowStreamingController {
   needsRefreshAround(centerCoordinates: RoomCoordinates): boolean;
   isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean;
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
+  getPlayableRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   refreshVisibleSelectionFromCache(): void;
   refreshLoadedChunksIfChanged(
     centerCoordinates: RoomCoordinates
@@ -367,7 +368,7 @@ export class OverworldWindowController {
       this.refreshFromCurrentCache(centerCoordinates, options);
       const needsPlayableSnapshot =
         this.host.getMode() === 'play'
-        && !this.host.worldStreamingController.getRoomSnapshotForCoordinates(centerCoordinates);
+        && !this.host.worldStreamingController.getPlayableRoomSnapshotForCoordinates(centerCoordinates);
       if (needsPlayableSnapshot) {
         this.requestPlayableSnapshotRefresh(centerCoordinates);
       } else if (needsRefresh) {
@@ -378,7 +379,7 @@ export class OverworldWindowController {
 
     const needsPlayableSnapshot =
       this.host.getMode() === 'play'
-      && !this.host.worldStreamingController.getRoomSnapshotForCoordinates(centerCoordinates);
+      && !this.host.worldStreamingController.getPlayableRoomSnapshotForCoordinates(centerCoordinates);
     if (
       options.forceChunkReload
       || needsRefresh
@@ -497,7 +498,7 @@ export class OverworldWindowController {
 
     if (
       this.host.getMode() !== 'play'
-      || this.host.worldStreamingController.getRoomSnapshotForCoordinates(
+      || this.host.worldStreamingController.getPlayableRoomSnapshotForCoordinates(
         request.centerCoordinates,
       )
     ) {
@@ -522,7 +523,7 @@ export class OverworldWindowController {
         if (
           result === 'success'
           || this.host.getMode() !== 'play'
-          || this.host.worldStreamingController.getRoomSnapshotForCoordinates(
+          || this.host.worldStreamingController.getPlayableRoomSnapshotForCoordinates(
             request.centerCoordinates,
           )
         ) {

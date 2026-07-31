@@ -21,13 +21,20 @@ import { OverworldWindowController } from './windowController';
 function createHarness(options: {
   mode?: 'browse' | 'play';
   snapshotAvailable?: boolean;
+  overviewAvailable?: boolean;
 } = {}) {
   const coordinates = { x: 0, y: 0 };
   let snapshotAvailable = options.snapshotAvailable ?? false;
+  const overviewAvailable = options.overviewAvailable ?? snapshotAvailable;
   const worldStreamingController = {
     needsRefreshAround: vi.fn(() => false),
     isWithinLoadedRoomBounds: vi.fn(() => true),
     getRoomSnapshotForCoordinates: vi.fn(() => (
+      snapshotAvailable || overviewAvailable
+        ? { id: '0,0', coordinates }
+        : null
+    )),
+    getPlayableRoomSnapshotForCoordinates: vi.fn(() => (
       snapshotAvailable
         ? { id: '0,0', coordinates }
         : null
@@ -74,6 +81,24 @@ function createHarness(options: {
 describe('overworld cached-window play hydration', () => {
   it('starts a full refresh when Play has no current room snapshot', async () => {
     const { controller, worldStreamingController } = createHarness();
+
+    controller.refreshAroundIfNeededOrFromCache(
+      { x: 0, y: 0 },
+      { preferCachedWindow: true },
+    );
+
+    await vi.waitFor(() => {
+      expect(worldStreamingController.refreshAround).toHaveBeenCalledWith(
+        { x: 0, y: 0 },
+        {},
+      );
+    });
+  });
+
+  it('does not treat an overview-only preview as a playable snapshot', async () => {
+    const { controller, worldStreamingController } = createHarness({
+      overviewAvailable: true,
+    });
 
     controller.refreshAroundIfNeededOrFromCache(
       { x: 0, y: 0 },

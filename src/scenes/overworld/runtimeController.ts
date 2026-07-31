@@ -76,6 +76,7 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   getCellStateAt(coordinates: RoomCoordinates): SelectedCellState;
   getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null;
+  isPlayableRoomCollisionReady(coordinates: RoomCoordinates): boolean;
   syncBackdropCameraIgnores(): void;
 }
 
@@ -198,7 +199,7 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
       }
 
       for (const neighbor of getOrthogonalNeighbors(loadedRoom.room.coordinates)) {
-        if (this.isNeighborReachable(loadedRoom.room.coordinates, neighbor)) {
+        if (this.isNeighborTraversalReady(loadedRoom.room.coordinates, neighbor)) {
           continue;
         }
 
@@ -261,6 +262,14 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
     }
 
     return isPlayableCellState(neighborState);
+  }
+
+  isNeighborTraversalReady(
+    roomCoordinates: RoomCoordinates,
+    neighborCoordinates: RoomCoordinates,
+  ): boolean {
+    return this.isNeighborReachable(roomCoordinates, neighborCoordinates)
+      && this.host.isPlayableRoomCollisionReady(neighborCoordinates);
   }
 
   private createEdgeWall(

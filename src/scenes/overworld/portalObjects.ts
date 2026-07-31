@@ -28,6 +28,7 @@ interface OverworldPortalObjectControllerHost<TEdgeWall> {
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
   getLoadedFullRooms: () => Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>;
   getLoadedFullRoomById: (roomId: string) => LoadedFullRoom<LoadedRoomObject, TEdgeWall> | null;
+  authorizeRoomTransition: (coordinates: RoomCoordinates) => void;
   teleportPlayerTo: (
     x: number,
     y: number,
@@ -110,6 +111,7 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
       return;
     }
 
+    this.host.authorizeRoomTransition(destination.roomCoordinates);
     this.host.teleportPlayerTo(destination.x, destination.y, {
       x: playerBody.velocity.x,
       y: playerBody.velocity.y,

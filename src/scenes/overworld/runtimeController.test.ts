@@ -33,6 +33,7 @@ function createHydrationHarness(selectedState: SelectedCellState) {
 function createReachabilityHarness(
   neighborState: SelectedCellState,
   roomRushActive = false,
+  collisionReady = true,
 ) {
   const host = {
     isRoomTransitionLocked: vi.fn(() => false),
@@ -40,6 +41,7 @@ function createReachabilityHarness(
     getActiveCourseSnapshot: vi.fn(() => null),
     getCellStateAt: vi.fn(() => neighborState),
     getActiveRoomRushRun: vi.fn(() => roomRushActive ? {} : null),
+    isPlayableRoomCollisionReady: vi.fn(() => collisionReady),
   };
   return new OverworldRuntimeController(
     host as never,
@@ -102,5 +104,18 @@ describe('overworld room seam reachability', () => {
     const controller = createReachabilityHarness('claimed_unpublished', true);
 
     expect(controller.isNeighborReachable({ x: 0, y: 0 }, { x: 1, y: 0 })).toBe(false);
+  });
+
+  it('keeps the seam closed until a reachable neighbor collider is active', () => {
+    const controller = createReachabilityHarness('published', false, false);
+
+    expect(controller.isNeighborReachable({ x: 0, y: 0 }, { x: 1, y: 0 })).toBe(true);
+    expect(controller.isNeighborTraversalReady({ x: 0, y: 0 }, { x: 1, y: 0 })).toBe(false);
+  });
+
+  it('opens the seam once the reachable neighbor collider is active', () => {
+    const controller = createReachabilityHarness('published', false, true);
+
+    expect(controller.isNeighborTraversalReady({ x: 0, y: 0 }, { x: 1, y: 0 })).toBe(true);
   });
 });

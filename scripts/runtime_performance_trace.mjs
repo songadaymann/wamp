@@ -180,6 +180,9 @@ async function readTransitionRuntime(page) {
         ? `${scene.selected.x},${scene.selected.y}`
         : null,
       collectedKeysHeld: scene?.keysHeld ?? null,
+      currentFullRoomLoaded: scene?.currentFullRoomLoaded ?? null,
+      currentTerrainColliderActive: scene?.currentTerrainColliderActive ?? null,
+      loadedFullRoomIds: scene?.loadedFullRoomIds ?? null,
       player: player
         ? {
             avatarId: player.avatarId ?? null,
@@ -410,9 +413,14 @@ async function run() {
         roomCoordinateChanged:
           transitionRun?.beforeSeam?.currentRoomId === transition.sourceRoomId
           && transitionRun?.atSeam?.currentRoomId === transition.expectedRoomId,
+        destinationColliderReadyAtSeam:
+          transitionRun?.atSeam?.currentFullRoomLoaded === true
+          && transitionRun?.atSeam?.currentTerrainColliderActive === true,
+        destinationColliderReadyAfterSeam:
+          transitionRun?.afterSeam?.currentFullRoomLoaded === true
+          && transitionRun?.afterSeam?.currentTerrainColliderActive === true,
         remainedInDestinationColumn:
-          transitionRun?.afterSeam?.currentRoomId?.split(',')[0]
-          === transition.expectedRoomId.split(',')[0],
+          transitionRun?.afterSeam?.currentRoomId === transition.expectedRoomId,
         finalPlayRuntimePresent:
           captured.state?.activeScene?.mode === 'play'
           && Boolean(captured.state?.activeScene?.player),
@@ -424,9 +432,12 @@ async function run() {
           && transitionRun?.beforeSeam?.currentRoomId === transition.sourceRoomId
           && transitionRun?.atSeam?.mode === 'play'
           && transitionRun?.atSeam?.currentRoomId === transition.expectedRoomId
+          && transitionRun?.atSeam?.currentFullRoomLoaded === true
+          && transitionRun?.atSeam?.currentTerrainColliderActive === true
           && transitionRun?.afterSeam?.mode === 'play'
-          && transitionRun?.afterSeam?.currentRoomId?.split(',')[0]
-            === transition.expectedRoomId.split(',')[0]
+          && transitionRun?.afterSeam?.currentFullRoomLoaded === true
+          && transitionRun?.afterSeam?.currentTerrainColliderActive === true
+          && transitionRun?.afterSeam?.currentRoomId === transition.expectedRoomId
           && Boolean(transitionRun?.beforeSeam?.player)
           && Boolean(transitionRun?.atSeam?.player)
           && Boolean(transitionRun?.afterSeam?.player)

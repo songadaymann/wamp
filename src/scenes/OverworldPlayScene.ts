@@ -746,6 +746,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPlayerBody: () => this.playerBody,
       getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
       getLoadedFullRoomById: (roomId) => this.loadedFullRoomsById.get(roomId) ?? null,
+      authorizeRoomTransition: (coordinates) =>
+        this.roomTransitionController.authorizeTeleportTransition(coordinates),
       teleportPlayerTo: (x, y, velocity) =>
         this.teleportPlayerToPortalObject(x, y, velocity),
       playPortalFx: () => {
@@ -798,7 +800,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       getProtectedFullRoomIds: (targetFullRoomIds) =>
         this.getProtectedMovingPlatformSourceRoomIds(targetFullRoomIds),
       onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
-      onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
+      onFullRoomVisibilityChanged: () => {
+        this.syncGhostVisibility();
+        this.runtimeController?.syncEdgeWalls();
+      },
       onFullRoomDestroyed: (loadedRoom) => {
         this.specialTilesController.handleFullRoomDestroyed(loadedRoom.room.id);
         this.portalObjectController.handleFullRoomDestroyed(loadedRoom.room.id);
@@ -1301,7 +1306,10 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.mode = mode;
         },
         getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-        getCurrentRoomSnapshot: () => this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates),
+        getCurrentRoomSnapshot: () =>
+          this.worldStreamingController.getPlayableRoomSnapshotForCoordinates(
+            this.currentRoomCoordinates,
+          ),
         getActiveCourseSnapshot: () => this.activeCourseSnapshot,
         getActiveCourseRun: () => this.activeCourseRun,
         getActiveRoomRushRun: () => this.activeRoomRushRun,
@@ -1347,6 +1355,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
         getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
         getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
+        isPlayableRoomCollisionReady: (coordinates) =>
+          this.worldStreamingController.isPlayableRoomCollisionReady(coordinates),
         syncBackdropCameraIgnores: () => this.syncBackdropCameraIgnores(),
       },
       {
@@ -1863,6 +1873,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
       isNeighborReachable: (roomCoordinates, neighborCoordinates) =>
         this.runtimeController.isNeighborReachable(roomCoordinates, neighborCoordinates),
+      prefetchPlayableRoomForTransition: (coordinates) =>
+        this.worldStreamingController.prefetchPlayableRoomForTransition(coordinates),
+      preparePlayableRoomForTransition: (coordinates) =>
+        this.worldStreamingController.preparePlayableRoomForTransition(coordinates),
       isRoomTransitionLocked: () => this.isPvpArenaActive(),
       resetChallengeStateForRoomExit: (nextRoomCoordinates) => {
         this.sessionResetController.resetChallengeStateForRoomExit(nextRoomCoordinates);
@@ -6269,6 +6283,9 @@ export class OverworldPlayScene extends Phaser.Scene {
               : null,
           }
         : null,
+      currentFullRoomLoaded: Boolean(currentLoadedRoom),
+      currentTerrainColliderActive: Boolean(currentLoadedRoom?.terrainCollider?.active),
+      loadedFullRoomIds: Array.from(this.loadedFullRoomsById.keys()).sort(),
       loadedPreviewRooms: this.previewImages.length,
       loadedFullRooms: this.loadedFullRoomsById.size,
       score: this.score,
