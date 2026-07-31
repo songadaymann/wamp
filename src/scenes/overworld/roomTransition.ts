@@ -32,7 +32,11 @@ interface OverworldRoomTransitionHost {
   refreshAround(coordinates: RoomCoordinates): Promise<unknown>;
   refreshAroundIfNeededOrFromCache(
     coordinates: RoomCoordinates,
-    options?: { forceChunkReload?: boolean; refreshLeaderboards?: boolean }
+    options?: {
+      forceChunkReload?: boolean;
+      refreshLeaderboards?: boolean;
+      preferCachedWindow?: boolean;
+    }
   ): void;
   redrawWorld(): void;
   renderHud(): void;
@@ -91,6 +95,7 @@ export class OverworldRoomTransitionController {
     ) {
       this.host.refreshAroundIfNeededOrFromCache(nextRoomCoordinates, {
         refreshLeaderboards: false,
+        preferCachedWindow: true,
       });
       return;
     }
