@@ -1,0 +1,122 @@
+.world-contextual-hint {
+  position: fixed;
+  z-index: 360;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 9px 10px;
+  border: 2px solid #18161c;
+  border-radius: 4px;
+  color: #fff8dc;
+  background: rgba(24, 22, 28, 0.94);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.42);
+  font-family: var(--hud-ui-font);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 14px));
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+
+.world-contextual-hint[data-visible='true'] {
+  opacity: 1;
+  transform: translate(-50%, calc(-100% - 18px));
+}
+
+.world-contextual-hint::after {
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid #18161c;
+  border-bottom: 2px solid #18161c;
+  background: rgba(24, 22, 28, 0.94);
+  content: '';
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.world-contextual-hint-body {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.world-contextual-hint-title {
+  color: #7ee2ff;
+  font-size: 11px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.world-contextual-hint-control-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.world-contextual-hint-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 5px;
+  border: 2px solid #18161c;
+  color: #18161c;
+  background: #fff8dc;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.42);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.world-contextual-hint-plus {
+  color: #ffcf5a;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.world-contextual-hint-description {
+  color: rgba(255, 248, 220, 0.86);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.world-contextual-hint-dismiss {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  padding: 5px 7px;
+  border: 2px solid #18161c;
+  border-radius: 3px;
+  color: #18161c;
+  background: #ffcf5a;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.42);
+  cursor: pointer;
+  font-family: var(--hud-ui-font);
+  font-size: 10px;
+  pointer-events: auto;
+}
+
+.world-contextual-hint-dismiss:hover {
+  filter: brightness(1.06);
+}
+
+.world-contextual-hint-dismiss:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.42);
+}
+
+@media (max-width: 700px) {
+  .world-contextual-hint {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .world-contextual-hint-key {
+    min-width: 24px;
+    height: 22px;
+  }
+}

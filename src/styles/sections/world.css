@@ -1,6 +1,7 @@
 @import './world/hud-goals.css';
 @import './world/chat-and-jump.css';
 @import './world/room-comments.css';
+@import './world/contextual-hints.css';
 @import './world/mobile-controls.css';
 @import './world/bars-buttons.css';
 @import './world/online-popover.css';

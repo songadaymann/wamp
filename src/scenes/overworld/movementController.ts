@@ -62,6 +62,13 @@ export interface OverworldCrateInteraction {
   gravityDirection: PlayerGravityDirection;
 }
 
+export interface OverworldCratePullHintTarget {
+  worldX: number;
+  worldY: number;
+  backDirection: -1 | 1;
+  facing: -1 | 1;
+}
+
 interface DirectionalGravityControls {
   tangentInput: number;
   crouchHeld: boolean;
@@ -831,6 +838,39 @@ export class OverworldMovementController {
       verticalInput !== 0 &&
       Math.abs(playerBody?.velocity.y ?? 0) > 6;
     this.setLadderClimbSfxPlaying(shouldPlay);
+  }
+
+  findCratePullHintTarget(): OverworldCratePullHintTarget | null {
+    const playerBody = this.host.getPlayerBody();
+    if (!playerBody) {
+      return null;
+    }
+
+    const specialEnvironment = this.host.getSpecialTileEnvironment();
+    if (specialEnvironment.gravityDirection !== 'down') {
+      return null;
+    }
+
+    const grounded =
+      bodyIsBlockedInGravityDirection(playerBody, specialEnvironment.gravityDirection) ||
+      this.isSupportedBySolidRuntimeObject(playerBody) ||
+      specialEnvironment.inWater;
+    if (!grounded) {
+      return null;
+    }
+
+    const facing = this.host.getPlayerFacing();
+    const pushInteraction = this.findCrateInteraction(facing, false, specialEnvironment.gravityDirection);
+    if (!pushInteraction || pushInteraction.mode !== 'push') {
+      return null;
+    }
+
+    return {
+      worldX: playerBody.center.x,
+      worldY: playerBody.top - 4,
+      backDirection: facing > 0 ? -1 : 1,
+      facing,
+    };
   }
 
   private resetWallMovementState(): void {

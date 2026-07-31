@@ -189,6 +189,9 @@ import {
   OverworldCombatController,
 } from './overworld/combatController';
 import {
+  OverworldContextualHintsController,
+} from './overworld/contextualHints';
+import {
   OverworldMovementController,
   type OverworldMovementControllerState,
 } from './overworld/movementController';
@@ -531,6 +534,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly roomChatController: OverworldRoomChatController;
   private readonly browseRealtimeStartupGate: BrowseRealtimeStartupGate;
   private readonly roomCommentsController: OverworldRoomCommentsController;
+  private readonly contextualHintsController: OverworldContextualHintsController;
   private readonly runtimeContext: OverworldRuntimeContext<OverworldMode, CameraMode>;
 
   private shouldCenterCamera = false;
@@ -985,6 +989,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       waitForBrowseDiscoveryReady: (signal) =>
         this.worldStreamingController.waitForBrowseCommentDiscoveryReady(signal),
     });
+    this.contextualHintsController = new OverworldContextualHintsController(this);
     this.coursePlaybackController = new OverworldCoursePlaybackController({
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getActiveCourseRun: () => this.activeCourseRun,
@@ -2241,6 +2246,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         };
         const noPlayerStartedAt = profiler?.beginSegment();
         this.movementController.handleNoPlayerRuntime();
+        this.contextualHintsController.update([]);
         this.syncLocalPresence();
         this.syncPvpInstanceState();
         this.syncPvpLocalHeartLabel();
@@ -2286,6 +2292,25 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.maybeStompPvpPeer();
       this.resolvePvpPeerCollision();
       this.movementController.syncLadderClimbSfx(movement.verticalInput);
+      if (this.activeCrateInteractionMode === 'pull') {
+        this.contextualHintsController.completeHint('pull-crate');
+      }
+      const pullCrateHintTarget =
+        this.mode === 'play' && !pvpCountdownLocked
+          ? this.movementController.findCratePullHintTarget()
+          : null;
+      this.contextualHintsController.update(
+        pullCrateHintTarget
+          ? [{
+              id: 'pull-crate',
+              anchor: {
+                worldX: pullCrateHintTarget.worldX,
+                worldY: pullCrateHintTarget.worldY,
+              },
+              backDirection: pullCrateHintTarget.backDirection,
+            }]
+          : [],
+      );
       this.maybeRespawnFromVoid();
       this.roomTransitionController.maybeAdvancePlayerRoom();
       this.recordRankedRunTraceFrame(delta, movement);
@@ -2504,6 +2529,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.clearRankedRunTrace();
     this.goalRunController.reset();
     this.roomRushModeController.reset();
+    this.contextualHintsController.resetTransientState();
     this.playerPresentationController.reset();
     this.browseOverlayController.destroy();
     this.shouldCenterCamera = false;
@@ -6000,6 +6026,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.presenceController.destroy();
     this.roomChatController.destroy();
     this.roomCommentsController.destroy();
+    this.contextualHintsController.destroy();
     this.roomAudioController.destroy();
     this.lightingController.destroy();
     this.weatherController.destroy();
@@ -6289,6 +6316,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         rangedCooldownMs: this.combatController.getRangedCooldownRemainingMs(this.time.now),
         projectileCount: this.combatController.getProjectileCount(),
       },
+      contextualHints: this.contextualHintsController.getDebugState(),
       specialTiles: this.specialTilesController.getPlayerEnvironment(),
       presence: {
         status: presenceDebug.snapshot?.status ?? 'disabled',
