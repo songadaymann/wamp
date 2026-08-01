@@ -5,6 +5,7 @@ import {
   getCustomBackgroundTextureKey,
 } from '../../backgrounds/runtime';
 import {
+  LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -17,11 +18,35 @@ import {
   type WorldChunkCoordinates,
   WORLD_CHUNK_SIZE,
 } from '../../persistence/worldModel';
-import { drawRoomSnapshotToContext } from '../../visuals/roomSnapshotTexture';
+import {
+  drawConstructionOverlay,
+  drawRoomBackground,
+  drawRoomObjectRangeForLayerToContext,
+  drawRoomSnapshotToContext,
+  drawRoomTileLayerRowsToContext,
+} from '../../visuals/roomSnapshotTexture';
 import { hashStringToSeed } from '../../visuals/starfield';
 import { calculateChunkPreviewCrop, type ChunkPreviewCrop } from './chunkPreviewCrop';
+import type {
+  FrameWorkGeneration,
+  FrameWorkJobHandle,
+  FrameWorkJobSpec,
+} from './frameWorkCoordinator';
 
-interface OverworldChunkPreviewRendererOptions {
+/**
+ * Minimal scene-owned scheduling surface used by chunk preview work. A
+ * FrameWorkCoordinator satisfies this interface directly, while callers that
+ * need Browse-mode immediate rendering can omit the hook for the legacy timer
+ * path.
+ */
+export interface ChunkPreviewWorkScheduler {
+  beginGeneration(scope: string): FrameWorkGeneration;
+  enqueue(spec: FrameWorkJobSpec): FrameWorkJobHandle;
+  cancelGeneration(generation: FrameWorkGeneration, reason?: string): number;
+  releaseGeneration(generation: FrameWorkGeneration): boolean;
+}
+
+export interface OverworldChunkPreviewRendererOptions {
   scene: Phaser.Scene;
   getPreviewTileSize: () => number;
   getFocusCoordinates?: () => RoomCoordinates;
@@ -30,6 +55,17 @@ interface OverworldChunkPreviewRendererOptions {
   onBackdropObjectsChanged?: () => void;
   onFullRoomVisibilityChanged?: () => void;
   measurePerformance?: <T>(label: string, callback: () => T) => T;
+  /**
+   * When supplied, every chunk texture build stage is deferred through this
+   * scheduler at preview-cosmetic priority while shouldScheduleWork permits
+   * it. Omit it to preserve the immediate first Browse preview and
+   * timer-driven fallback behavior.
+   */
+  workScheduler?: ChunkPreviewWorkScheduler;
+  /** Dynamically keeps Browse rendering on the immediate/timer fallback. */
+  shouldScheduleWork?: () => boolean;
+  /** Test seam for creating a detached, unregistered preview canvas. */
+  createCanvas?: () => HTMLCanvasElement;
 }
 
 interface ChunkPreviewState {
@@ -56,12 +92,44 @@ interface PendingChunkPreviewBuild {
   rooms: RoomSnapshot[];
   previewTileSize: number;
   crop: ChunkPreviewCrop;
+  generation?: FrameWorkGeneration;
+  canvas?: HTMLCanvasElement;
+  context?: CanvasRenderingContext2D;
+  uploaded?: boolean;
+  ownsUploadedTexture?: boolean;
+  scheduledCursor?: ScheduledChunkPreviewCursor;
+}
+
+type ScheduledChunkPreviewStage =
+  | 'prepare-canvas'
+  | 'room-background'
+  | 'layer-tiles'
+  | 'layer-objects'
+  | 'room-overlay'
+  | 'upload-texture'
+  | 'commit-image';
+
+interface ScheduledChunkPreviewCursor {
+  stage: ScheduledChunkPreviewStage;
+  roomIndex: number;
+  layerIndex: number;
+  nextRow: number;
+  nextObjectIndex: number;
 }
 const CHUNK_PREVIEW_TEXTURE_CACHE_MAX_PIXELS = 32_000_000;
 const CUSTOM_BACKGROUND_PREVIEW_TILE_SIZE = 4;
 const DEFERRED_CHUNK_PREVIEW_BUILD_DELAY_MS = 24;
 const INITIAL_IMMEDIATE_CHUNK_TEXTURE_BUILDS = 1;
 const LIGHTWEIGHT_PREVIEW_LAYERS: LayerName[] = ['background', 'terrain'];
+const PREVIEW_CANVAS_PREPARE_ESTIMATE_MS = 0.25;
+const PREVIEW_BACKGROUND_DRAW_ESTIMATE_MS = 0.5;
+const PREVIEW_TILE_BATCH_ESTIMATE_MS = 0.5;
+const PREVIEW_OBJECT_BATCH_ESTIMATE_MS = 0.5;
+const PREVIEW_OVERLAY_DRAW_ESTIMATE_MS = 0.25;
+const PREVIEW_TEXTURE_UPLOAD_ESTIMATE_MS = 0.5;
+const PREVIEW_IMAGE_COMMIT_ESTIMATE_MS = 0.25;
+const PREVIEW_TILE_ROWS_PER_JOB = 1;
+const PREVIEW_OBJECTS_PER_JOB = 8;
 
 export class OverworldChunkPreviewRenderer {
   private chunkStatesByChunkId = new Map<string, ChunkPreviewState>();
@@ -160,10 +228,33 @@ export class OverworldChunkPreviewRenderer {
   }
 
   getPendingTextureBuildCount(): number {
-    return this.pendingTextureBuildQueue.length;
+    return this.pendingTextureBuildsByKey.size;
   }
 
   flushPendingTextureBuilds(): number {
+    // A scheduled renderer must never bypass the scene-owned frame budget,
+    // even when a diagnostic caller asks to flush. The coordinator will drain
+    // these jobs once critical simulation leaves headroom.
+    if (this.shouldSchedulePreviewWork()) {
+      return 0;
+    }
+
+    // If the mode changed from Play to Browse before scheduled work drained,
+    // reclaim those requests for the synchronous diagnostic flush rather than
+    // leaving coordinator-owned jobs stranded.
+    for (const request of Array.from(this.pendingTextureBuildsByKey.values())) {
+      if (!request.generation) continue;
+      const stillCurrent = this.isTextureBuildRequestCurrent(request);
+      this.cancelPendingTextureBuild(request, 'preview-scheduler-disabled');
+      if (!stillCurrent) continue;
+      request.generation = undefined;
+      request.uploaded = undefined;
+      request.ownsUploadedTexture = undefined;
+      request.scheduledCursor = undefined;
+      this.pendingTextureBuildsByKey.set(request.textureKey, request);
+      this.pendingTextureBuildQueue.push(request);
+    }
+
     if (this.textureBuildTimer !== null) {
       window.clearTimeout(this.textureBuildTimer);
       this.textureBuildTimer = null;
@@ -329,8 +420,9 @@ export class OverworldChunkPreviewRenderer {
     if (!crop) return;
     const contentSignature = this.buildChunkContentSignature(chunkId, rooms);
     const textureKey = this.buildChunkTextureKey(chunkId, contentSignature, previewTileSize);
+    const schedulePreviewWork = this.shouldSchedulePreviewWork();
 
-    if (this.shouldDrawCustomBackgroundImages(previewTileSize)) {
+    if (this.shouldDrawCustomBackgroundImages(previewTileSize) && !schedulePreviewWork) {
       this.ensureCustomBackgroundsForChunk(rooms);
     }
 
@@ -338,8 +430,12 @@ export class OverworldChunkPreviewRenderer {
       this.findReusableTextureKey(chunkId, contentSignature, previewTileSize) ?? textureKey;
     const image = this.chunkImagesByChunkId.get(chunkId) ?? null;
 
-    if (!this.options.scene.textures.exists(displayTextureKey)) {
-      if (this.shouldDeferTextureBuild()) {
+    if (!this.isTextureReadyForDisplay(displayTextureKey)) {
+      if (
+        schedulePreviewWork
+        || this.shouldDeferTextureBuild()
+        || this.pendingTextureBuildsByKey.has(textureKey)
+      ) {
         this.queueTextureBuild({
           textureKey,
           chunkId,
@@ -465,6 +561,12 @@ export class OverworldChunkPreviewRenderer {
   }
 
   private destroyChunkPreview(chunkId: string): void {
+    for (const request of Array.from(this.pendingTextureBuildsByKey.values())) {
+      if (request.chunkId === chunkId) {
+        this.cancelPendingTextureBuild(request, 'preview-chunk-no-longer-visible');
+      }
+    }
+
     const image = this.chunkImagesByChunkId.get(chunkId);
     if (image) {
       image.destroy();
@@ -506,28 +608,44 @@ export class OverworldChunkPreviewRenderer {
       context.imageSmoothingEnabled = false;
 
       for (const room of rooms) {
-        const localRoomX = room.coordinates.x - chunkCoordinates.x * WORLD_CHUNK_SIZE;
-        const localRoomY = room.coordinates.y - chunkCoordinates.y * WORLD_CHUNK_SIZE;
-        drawRoomSnapshotToContext(
-          this.options.scene,
+        this.drawChunkPreviewRoom(
           context,
+          chunkCoordinates,
           room,
           previewTileSize,
-          {
-            offsetX: (localRoomX - crop.minLocalRoomX) * ROOM_WIDTH * previewTileSize,
-            offsetY: (localRoomY - crop.minLocalRoomY) * ROOM_HEIGHT * previewTileSize,
-            includeObjects: this.shouldDrawDetailedRoomPreviews(previewTileSize),
-            includedLayers: this.getPreviewLayers(previewTileSize),
-            showConstructionOverlay: room.status !== 'published',
-            constructionLabel: 'BUILDING',
-            skipCustomBackgroundImages: !this.shouldDrawCustomBackgroundImages(previewTileSize),
-          }
+          crop,
         );
       }
 
       canvasTexture.refresh();
       return true;
     });
+  }
+
+  private drawChunkPreviewRoom(
+    context: CanvasRenderingContext2D,
+    chunkCoordinates: WorldChunkCoordinates,
+    room: RoomSnapshot,
+    previewTileSize: number,
+    crop: ChunkPreviewCrop,
+  ): void {
+    const localRoomX = room.coordinates.x - chunkCoordinates.x * WORLD_CHUNK_SIZE;
+    const localRoomY = room.coordinates.y - chunkCoordinates.y * WORLD_CHUNK_SIZE;
+    drawRoomSnapshotToContext(
+      this.options.scene,
+      context,
+      room,
+      previewTileSize,
+      {
+        offsetX: (localRoomX - crop.minLocalRoomX) * ROOM_WIDTH * previewTileSize,
+        offsetY: (localRoomY - crop.minLocalRoomY) * ROOM_HEIGHT * previewTileSize,
+        includeObjects: this.shouldDrawDetailedRoomPreviews(previewTileSize),
+        includedLayers: this.getPreviewLayers(previewTileSize),
+        showConstructionOverlay: room.status !== 'published',
+        constructionLabel: 'BUILDING',
+        skipCustomBackgroundImages: !this.shouldDrawCustomBackgroundImages(previewTileSize),
+      },
+    );
   }
 
   private buildChunkTextureKey(
@@ -540,7 +658,27 @@ export class OverworldChunkPreviewRenderer {
 
   private buildChunkContentSignature(chunkId: string, rooms: RoomSnapshot[]): string {
     const signature = rooms
-      .map((room) => `${room.id}:${room.version}:${room.updatedAt}:${room.status}`)
+      .map((room) => {
+        const customBackgroundId = getCustomBackgroundId(room);
+        const customBackgroundResident = customBackgroundId
+          ? Number(this.options.scene.textures.exists(
+              getCustomBackgroundTextureKey(customBackgroundId),
+            ))
+          : 0;
+        const customSpriteResidency = (room.customSprites ?? [])
+          .map((sprite) => (
+            `${sprite.id}:${Number(this.options.scene.textures.exists(`custom_sprite:${sprite.id}`))}`
+          ))
+          .join(',');
+        return [
+          room.id,
+          room.version,
+          room.updatedAt,
+          room.status,
+          `background-resident:${customBackgroundResident}`,
+          `sprites-resident:${customSpriteResidency}`,
+        ].join(':');
+      })
       .join('|');
     return hashStringToSeed(`${chunkId}|${signature}`).toString(36);
   }
@@ -572,6 +710,12 @@ export class OverworldChunkPreviewRenderer {
     }
 
     return best?.textureKey ?? null;
+  }
+
+  private isTextureReadyForDisplay(textureKey: string): boolean {
+    if (!this.options.scene.textures.exists(textureKey)) return false;
+    const pending = this.pendingTextureBuildsByKey.get(textureKey);
+    return !pending || this.cachedTexturesByKey.has(textureKey);
   }
 
   private recordCachedTexture(
@@ -681,23 +825,476 @@ export class OverworldChunkPreviewRenderer {
   }
 
   private queueTextureBuild(request: PendingChunkPreviewBuild): void {
-    if (
-      this.options.scene.textures.exists(request.textureKey) ||
-      this.pendingTextureBuildsByKey.has(request.textureKey)
-    ) {
+    const sameTexturePending = this.pendingTextureBuildsByKey.get(request.textureKey);
+    if (sameTexturePending) {
+      if (sameTexturePending.generation && !this.shouldSchedulePreviewWork()) {
+        this.cancelPendingTextureBuild(sameTexturePending, 'preview-scheduler-disabled');
+      } else {
+        return;
+      }
+    }
+    if (this.options.scene.textures.exists(request.textureKey)) {
       return;
     }
 
-    this.pendingTextureBuildQueue = this.pendingTextureBuildQueue.filter((pending) => {
-      if (pending.chunkId !== request.chunkId) {
-        return true;
+    for (const pending of Array.from(this.pendingTextureBuildsByKey.values())) {
+      if (pending.chunkId === request.chunkId) {
+        this.cancelPendingTextureBuild(pending, 'superseded-preview-texture');
       }
-      this.pendingTextureBuildsByKey.delete(pending.textureKey);
-      return false;
-    });
+    }
     this.pendingTextureBuildsByKey.set(request.textureKey, request);
+
+    if (this.shouldSchedulePreviewWork()) {
+      this.scheduleTextureBuild(request);
+      return;
+    }
+
     this.pendingTextureBuildQueue.push(request);
     this.scheduleNextTextureBuild();
+  }
+
+  private scheduleTextureBuild(request: PendingChunkPreviewBuild): void {
+    const scheduler = this.options.workScheduler;
+    if (!scheduler) return;
+
+    request.generation = scheduler.beginGeneration(
+      `chunk-preview:${this.textureNamespace}:${request.chunkId}`,
+    );
+    request.scheduledCursor = {
+      stage: 'prepare-canvas',
+      roomIndex: 0,
+      layerIndex: 0,
+      nextRow: 0,
+      nextObjectIndex: 0,
+    };
+    this.enqueueNextScheduledTextureStage(request);
+  }
+
+  private enqueueNextScheduledTextureStage(request: PendingChunkPreviewBuild): void {
+    const cursor = request.scheduledCursor;
+    if (!cursor) return;
+
+    const room = request.rooms[cursor.roomIndex] ?? null;
+    const layers = this.getPreviewLayers(request.previewTileSize) ?? LAYER_NAMES;
+    const layer = layers[cursor.layerIndex] ?? null;
+    switch (cursor.stage) {
+      case 'prepare-canvas':
+        this.enqueueScheduledTextureStage(
+          request,
+          'prepare-canvas',
+          'cpu',
+          PREVIEW_CANVAS_PREPARE_ESTIMATE_MS,
+          () => this.prepareScheduledChunkCanvas(request),
+        );
+        return;
+      case 'room-background':
+        if (!room) {
+          this.moveScheduledCursorToUpload(request);
+          this.enqueueNextScheduledTextureStage(request);
+          return;
+        }
+        this.enqueueScheduledTextureStage(
+          request,
+          `draw-background-${cursor.roomIndex + 1}-of-${request.rooms.length}`,
+          'cpu',
+          PREVIEW_BACKGROUND_DRAW_ESTIMATE_MS,
+          () => this.drawScheduledRoomBackground(request, room),
+        );
+        return;
+      case 'layer-tiles': {
+        if (!room || !layer) {
+          this.advanceScheduledRoom(request);
+          this.enqueueNextScheduledTextureStage(request);
+          return;
+        }
+        const endRow = Math.min(ROOM_HEIGHT, cursor.nextRow + PREVIEW_TILE_ROWS_PER_JOB);
+        this.enqueueScheduledTextureStage(
+          request,
+          `draw-${layer}-rows-${cursor.nextRow}-${endRow}-room-${cursor.roomIndex + 1}`,
+          'cpu',
+          PREVIEW_TILE_BATCH_ESTIMATE_MS,
+          () => this.drawScheduledRoomTileRows(request, room, layer, endRow),
+        );
+        return;
+      }
+      case 'layer-objects': {
+        if (!room || !layer) {
+          this.advanceScheduledRoom(request);
+          this.enqueueNextScheduledTextureStage(request);
+          return;
+        }
+        const endObjectIndex = Math.min(
+          room.placedObjects.length,
+          cursor.nextObjectIndex + PREVIEW_OBJECTS_PER_JOB,
+        );
+        this.enqueueScheduledTextureStage(
+          request,
+          `draw-${layer}-objects-${cursor.nextObjectIndex}-${endObjectIndex}-room-${cursor.roomIndex + 1}`,
+          'cpu',
+          PREVIEW_OBJECT_BATCH_ESTIMATE_MS,
+          () => this.drawScheduledRoomObjects(request, room, layer, endObjectIndex),
+        );
+        return;
+      }
+      case 'room-overlay':
+        if (!room) {
+          this.moveScheduledCursorToUpload(request);
+          this.enqueueNextScheduledTextureStage(request);
+          return;
+        }
+        this.enqueueScheduledTextureStage(
+          request,
+          `draw-overlay-room-${cursor.roomIndex + 1}`,
+          'cpu',
+          PREVIEW_OVERLAY_DRAW_ESTIMATE_MS,
+          () => this.drawScheduledRoomOverlay(request, room),
+        );
+        return;
+      case 'upload-texture':
+        this.enqueueScheduledTextureStage(
+          request,
+          'upload-texture',
+          'gpu-upload',
+          PREVIEW_TEXTURE_UPLOAD_ESTIMATE_MS,
+          () => this.uploadScheduledChunkTexture(request),
+        );
+        return;
+      case 'commit-image':
+        this.enqueueScheduledTextureStage(
+          request,
+          'commit-image',
+          'cpu',
+          PREVIEW_IMAGE_COMMIT_ESTIMATE_MS,
+          () => this.commitScheduledChunkTexture(request),
+        );
+    }
+  }
+
+  private enqueueScheduledTextureStage(
+    request: PendingChunkPreviewBuild,
+    stage: string,
+    costKind: 'cpu' | 'gpu-upload',
+    estimatedCostMs: number,
+    execute: () => void,
+  ): void {
+    const scheduler = this.options.workScheduler;
+    const generation = request.generation;
+    if (!scheduler || !generation) return;
+
+    scheduler.enqueue({
+      label: `preview.${stage}:${request.chunkId}`,
+      priority: 'preview-cosmetic',
+      costKind,
+      estimatedCostMs,
+      generation,
+      execute: () => {
+        if (!this.isScheduledTextureBuildCurrent(request)) {
+          this.cancelPendingTextureBuild(request, 'stale-preview-texture');
+          return;
+        }
+        try {
+          execute();
+          if (this.isScheduledTextureBuildCurrent(request)) {
+            this.enqueueNextScheduledTextureStage(request);
+          }
+        } catch (error) {
+          this.cancelPendingTextureBuild(request, 'preview-texture-stage-failed');
+          throw error;
+        }
+      },
+    });
+  }
+
+  private prepareScheduledChunkCanvas(request: PendingChunkPreviewBuild): void {
+    if (this.options.scene.textures.exists(request.textureKey)) {
+      request.uploaded = true;
+      request.ownsUploadedTexture = false;
+      request.scheduledCursor = {
+        ...request.scheduledCursor!,
+        stage: 'commit-image',
+      };
+      return;
+    }
+
+    const canvas = this.options.createCanvas?.() ?? document.createElement('canvas');
+    canvas.width = request.crop.roomColumns * ROOM_WIDTH * request.previewTileSize;
+    canvas.height = request.crop.roomRows * ROOM_HEIGHT * request.previewTileSize;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      canvas.width = 0;
+      canvas.height = 0;
+      this.cancelPendingTextureBuild(request, 'preview-canvas-context-missing');
+      return;
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.imageSmoothingEnabled = false;
+    request.canvas = canvas;
+    request.context = context;
+    request.scheduledCursor = {
+      ...request.scheduledCursor!,
+      stage: request.rooms.length > 0 ? 'room-background' : 'upload-texture',
+    };
+  }
+
+  private drawScheduledRoomBackground(
+    request: PendingChunkPreviewBuild,
+    room: RoomSnapshot,
+  ): void {
+    const context = this.requireScheduledPreviewContext(request);
+    if (!context) return;
+    const draw = this.getScheduledRoomDrawRect(request, room);
+    this.measure('stream.drawChunkPreviewBackground', () => {
+      this.withScheduledRoomClip(context, draw, () => {
+        drawRoomBackground(
+          this.options.scene,
+          context,
+          room,
+          draw.width,
+          draw.height,
+          draw.offsetX,
+          draw.offsetY,
+          false,
+        );
+      });
+    });
+    request.scheduledCursor = {
+      ...request.scheduledCursor!,
+      stage: 'layer-tiles',
+      layerIndex: 0,
+      nextRow: 0,
+      nextObjectIndex: 0,
+    };
+  }
+
+  private drawScheduledRoomTileRows(
+    request: PendingChunkPreviewBuild,
+    room: RoomSnapshot,
+    layer: LayerName,
+    endRow: number,
+  ): void {
+    const context = this.requireScheduledPreviewContext(request);
+    if (!context) return;
+    const cursor = request.scheduledCursor!;
+    const draw = this.getScheduledRoomDrawRect(request, room);
+    this.measure('stream.drawChunkPreviewTileRows', () => {
+      this.withScheduledRoomClip(context, draw, () => {
+        drawRoomTileLayerRowsToContext(
+          this.options.scene,
+          context,
+          room,
+          request.previewTileSize,
+          layer,
+          cursor.nextRow,
+          endRow,
+          draw.offsetX,
+          draw.offsetY,
+        );
+      });
+    });
+    cursor.nextRow = endRow;
+    if (endRow < ROOM_HEIGHT) return;
+    if (
+      this.shouldDrawDetailedRoomPreviews(request.previewTileSize)
+      && room.placedObjects.length > 0
+    ) {
+      cursor.stage = 'layer-objects';
+      cursor.nextObjectIndex = 0;
+      return;
+    }
+    this.advanceScheduledLayer(request, room);
+  }
+
+  private drawScheduledRoomObjects(
+    request: PendingChunkPreviewBuild,
+    room: RoomSnapshot,
+    layer: LayerName,
+    endObjectIndex: number,
+  ): void {
+    const context = this.requireScheduledPreviewContext(request);
+    if (!context) return;
+    const cursor = request.scheduledCursor!;
+    const draw = this.getScheduledRoomDrawRect(request, room);
+    this.measure('stream.drawChunkPreviewObjects', () => {
+      this.withScheduledRoomClip(context, draw, () => {
+        drawRoomObjectRangeForLayerToContext(
+          this.options.scene,
+          context,
+          room,
+          request.previewTileSize,
+          layer,
+          cursor.nextObjectIndex,
+          endObjectIndex,
+          draw.offsetX,
+          draw.offsetY,
+          { ensureCustomSpriteTextures: false },
+        );
+      });
+    });
+    cursor.nextObjectIndex = endObjectIndex;
+    if (endObjectIndex < room.placedObjects.length) return;
+    this.advanceScheduledLayer(request, room);
+  }
+
+  private drawScheduledRoomOverlay(
+    request: PendingChunkPreviewBuild,
+    room: RoomSnapshot,
+  ): void {
+    const context = this.requireScheduledPreviewContext(request);
+    if (!context) return;
+    const draw = this.getScheduledRoomDrawRect(request, room);
+    this.measure('stream.drawChunkPreviewOverlay', () => {
+      this.withScheduledRoomClip(context, draw, () => {
+        drawConstructionOverlay(
+          context,
+          draw.width,
+          draw.height,
+          draw.offsetX,
+          draw.offsetY,
+          'BUILDING',
+        );
+      });
+    });
+    this.advanceScheduledRoom(request);
+  }
+
+  private advanceScheduledLayer(
+    request: PendingChunkPreviewBuild,
+    room: RoomSnapshot,
+  ): void {
+    const cursor = request.scheduledCursor!;
+    const layers = this.getPreviewLayers(request.previewTileSize) ?? LAYER_NAMES;
+    cursor.layerIndex += 1;
+    cursor.nextRow = 0;
+    cursor.nextObjectIndex = 0;
+    if (cursor.layerIndex < layers.length) {
+      cursor.stage = 'layer-tiles';
+      return;
+    }
+    if (room.status !== 'published') {
+      cursor.stage = 'room-overlay';
+      return;
+    }
+    this.advanceScheduledRoom(request);
+  }
+
+  private advanceScheduledRoom(request: PendingChunkPreviewBuild): void {
+    const cursor = request.scheduledCursor!;
+    cursor.roomIndex += 1;
+    cursor.layerIndex = 0;
+    cursor.nextRow = 0;
+    cursor.nextObjectIndex = 0;
+    cursor.stage = cursor.roomIndex < request.rooms.length
+      ? 'room-background'
+      : 'upload-texture';
+  }
+
+  private moveScheduledCursorToUpload(request: PendingChunkPreviewBuild): void {
+    request.scheduledCursor = {
+      ...request.scheduledCursor!,
+      stage: 'upload-texture',
+    };
+  }
+
+  private requireScheduledPreviewContext(
+    request: PendingChunkPreviewBuild,
+  ): CanvasRenderingContext2D | null {
+    if (request.uploaded) return null;
+    if (!request.context) {
+      this.cancelPendingTextureBuild(request, 'preview-canvas-not-ready');
+      return null;
+    }
+    return request.context;
+  }
+
+  private getScheduledRoomDrawRect(
+    request: PendingChunkPreviewBuild,
+    room: RoomSnapshot,
+  ): { offsetX: number; offsetY: number; width: number; height: number } {
+    const localRoomX = room.coordinates.x - request.chunkCoordinates.x * WORLD_CHUNK_SIZE;
+    const localRoomY = room.coordinates.y - request.chunkCoordinates.y * WORLD_CHUNK_SIZE;
+    return {
+      offsetX:
+        (localRoomX - request.crop.minLocalRoomX) * ROOM_WIDTH * request.previewTileSize,
+      offsetY:
+        (localRoomY - request.crop.minLocalRoomY) * ROOM_HEIGHT * request.previewTileSize,
+      width: ROOM_WIDTH * request.previewTileSize,
+      height: ROOM_HEIGHT * request.previewTileSize,
+    };
+  }
+
+  private withScheduledRoomClip(
+    context: CanvasRenderingContext2D,
+    draw: { offsetX: number; offsetY: number; width: number; height: number },
+    callback: () => void,
+  ): void {
+    context.save();
+    context.beginPath();
+    context.rect(draw.offsetX, draw.offsetY, draw.width, draw.height);
+    context.clip();
+    try {
+      callback();
+    } finally {
+      context.restore();
+    }
+  }
+
+  private uploadScheduledChunkTexture(request: PendingChunkPreviewBuild): void {
+    if (!request.uploaded) {
+      if (!request.canvas) {
+        this.cancelPendingTextureBuild(request, 'preview-canvas-not-ready');
+        return;
+      }
+      if (this.options.scene.textures.exists(request.textureKey)) {
+        request.uploaded = true;
+        request.ownsUploadedTexture = false;
+        request.canvas.width = 0;
+        request.canvas.height = 0;
+        request.canvas = undefined;
+        request.context = undefined;
+      } else {
+        const canvas = request.canvas;
+        this.measure('stream.uploadChunkPreviewTexture', () => {
+          this.options.scene.textures.addCanvas(request.textureKey, canvas);
+        });
+        if (!this.options.scene.textures.exists(request.textureKey)) {
+          this.cancelPendingTextureBuild(request, 'preview-texture-upload-failed');
+          return;
+        }
+        request.uploaded = true;
+        request.ownsUploadedTexture = true;
+      }
+    }
+    request.scheduledCursor = {
+      ...request.scheduledCursor!,
+      stage: 'commit-image',
+    };
+  }
+
+  private commitScheduledChunkTexture(request: PendingChunkPreviewBuild): void {
+    if (!request.uploaded || !this.options.scene.textures.exists(request.textureKey)) {
+      this.cancelPendingTextureBuild(request, 'preview-texture-not-uploaded');
+      return;
+    }
+    this.recordCachedTexture(
+      request.textureKey,
+      request.chunkId,
+      request.contentSignature,
+      request.previewTileSize,
+      request.crop,
+    );
+    if (this.pendingTextureBuildsByKey.get(request.textureKey) === request) {
+      this.pendingTextureBuildsByKey.delete(request.textureKey);
+    }
+    request.canvas = undefined;
+    request.context = undefined;
+    request.scheduledCursor = undefined;
+    this.syncChunkImages();
+    const generation = request.generation;
+    request.generation = undefined;
+    if (generation) {
+      this.options.workScheduler?.releaseGeneration(generation);
+    }
   }
 
   private scheduleNextTextureBuild(): void {
@@ -760,10 +1357,65 @@ export class OverworldChunkPreviewRenderer {
     return this.buildChunkContentSignature(request.chunkId, visibleRooms) === request.contentSignature;
   }
 
+  private isScheduledTextureBuildCurrent(request: PendingChunkPreviewBuild): boolean {
+    if (this.pendingTextureBuildsByKey.get(request.textureKey) !== request) return false;
+    const chunkState = this.chunkStatesByChunkId.get(request.chunkId);
+    return Boolean(
+      chunkState
+      && chunkState.rooms.some((room) => !this.options.isFullRoomLoaded(room.id)),
+    );
+  }
+
+  private cancelPendingTextureBuild(
+    request: PendingChunkPreviewBuild,
+    reason: string,
+  ): void {
+    if (request.generation) {
+      this.options.workScheduler?.cancelGeneration(request.generation, reason);
+      request.generation = undefined;
+    }
+    if (this.pendingTextureBuildsByKey.get(request.textureKey) === request) {
+      this.pendingTextureBuildsByKey.delete(request.textureKey);
+    }
+    this.pendingTextureBuildQueue = this.pendingTextureBuildQueue.filter(
+      (pending) => pending !== request,
+    );
+    const displayedTextureKey = this.chunkTextureKeysByChunkId.get(request.chunkId) ?? null;
+    const displayedImage = this.chunkImagesByChunkId.get(request.chunkId) as unknown as {
+      texture?: { key?: string };
+      textureKey?: string;
+    } | undefined;
+    const requestTextureIsDisplayed = displayedTextureKey === request.textureKey
+      || displayedImage?.texture?.key === request.textureKey
+      || displayedImage?.textureKey === request.textureKey;
+    if (!requestTextureIsDisplayed) {
+      this.cachedTexturesByKey.delete(request.textureKey);
+    }
+    if (
+      request.ownsUploadedTexture
+      && !requestTextureIsDisplayed
+      && this.options.scene.textures.exists(request.textureKey)
+    ) {
+      this.options.scene.textures.remove(request.textureKey);
+    }
+    if (request.canvas && !requestTextureIsDisplayed) {
+      request.canvas.width = 0;
+      request.canvas.height = 0;
+    }
+    request.canvas = undefined;
+    request.context = undefined;
+    request.uploaded = undefined;
+    request.ownsUploadedTexture = undefined;
+    request.scheduledCursor = undefined;
+  }
+
   private cancelQueuedTextureBuilds(): void {
     if (this.textureBuildTimer !== null) {
       window.clearTimeout(this.textureBuildTimer);
       this.textureBuildTimer = null;
+    }
+    for (const request of Array.from(this.pendingTextureBuildsByKey.values())) {
+      this.cancelPendingTextureBuild(request, 'preview-renderer-cleared');
     }
     this.pendingTextureBuildsByKey = new Map();
     this.pendingTextureBuildQueue = [];
@@ -785,6 +1437,13 @@ export class OverworldChunkPreviewRenderer {
     return this.shouldDrawDetailedRoomPreviews(previewTileSize)
       ? undefined
       : LIGHTWEIGHT_PREVIEW_LAYERS;
+  }
+
+  private shouldSchedulePreviewWork(): boolean {
+    return Boolean(
+      this.options.workScheduler
+      && (this.options.shouldScheduleWork?.() ?? true),
+    );
   }
 
   private getPrioritizedChunkStates(): Array<[string, ChunkPreviewState]> {

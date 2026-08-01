@@ -12,6 +12,7 @@ interface OverworldRoomTransitionHost {
   getMode(): 'browse' | 'play';
   getPlayer(): Phaser.GameObjects.Rectangle | null;
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
+  getPlayerFacing(): -1 | 1;
   getCurrentRoomCoordinates(): RoomCoordinates;
   setCurrentRoomCoordinates(coordinates: RoomCoordinates): void;
   setSelectedCoordinates(coordinates: RoomCoordinates): void;
@@ -19,7 +20,8 @@ interface OverworldRoomTransitionHost {
   getRoomCoordinatesForPoint(x: number, y: number): RoomCoordinates;
   isNeighborReachable(roomCoordinates: RoomCoordinates, neighborCoordinates: RoomCoordinates): boolean;
   prefetchPlayableRoomForTransition(coordinates: RoomCoordinates): void;
-  preparePlayableRoomForTransition(coordinates: RoomCoordinates): boolean;
+  clearPredictedPlayableRoomForTransition(): void;
+  preparePlayableRoomForTransition(coordinates: RoomCoordinates, portalDestination?: boolean): boolean;
   isRoomTransitionLocked(): boolean;
   resetChallengeStateForRoomExit(nextRoomCoordinates: RoomCoordinates): void;
   updateSelectedSummary(): void;
@@ -38,6 +40,7 @@ interface OverworldRoomTransitionHost {
       forceChunkReload?: boolean;
       refreshLeaderboards?: boolean;
       preferCachedWindow?: boolean;
+      focusChangeFrom?: RoomCoordinates;
     }
   ): void;
   redrawWorld(): void;
@@ -55,7 +58,10 @@ interface SafePlayerTransform {
   y: number;
 }
 
-const TRANSITION_PREFETCH_DISTANCE_PX = 192;
+// Start exact-snapshot preparation as soon as movement predicts a cardinal
+// destination anywhere in the current room. The coordinator still limits the
+// actual work, while the full-room lead time keeps normal runs off the seam.
+const TRANSITION_PREFETCH_DISTANCE_PX = Math.max(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
 const TRANSITION_PREPARE_DISTANCE_PX = 72;
 const MOVEMENT_EPSILON = 1;
 
@@ -71,6 +77,7 @@ export class OverworldRoomTransitionController {
   private pendingVerticalPreparation: RoomCoordinates | null = null;
   private authorizedTeleportDestination: RoomCoordinates | null = null;
   private transitionRoomPreparedThisUpdate = false;
+  private predictedRoomRequestedThisUpdate = false;
 
   constructor(private readonly host: OverworldRoomTransitionHost) {}
 
@@ -82,6 +89,7 @@ export class OverworldRoomTransitionController {
     if (this.host.getMode() !== 'play') {
       this.lastSafePlayerTransform.valid = false;
       this.clearPendingPreparation();
+      this.host.clearPredictedPlayableRoomForTransition();
       this.authorizedTeleportDestination = null;
       return;
     }
@@ -90,10 +98,12 @@ export class OverworldRoomTransitionController {
     if (!player) {
       this.lastSafePlayerTransform.valid = false;
       this.clearPendingPreparation();
+      this.host.clearPredictedPlayableRoomForTransition();
       this.authorizedTeleportDestination = null;
       return;
     }
     this.transitionRoomPreparedThisUpdate = false;
+    this.predictedRoomRequestedThisUpdate = false;
 
     const currentRoomCoordinates = this.host.getCurrentRoomCoordinates();
     const nextRoomCoordinates = this.host.getRoomCoordinatesForPoint(player.x, player.y);
@@ -106,8 +116,16 @@ export class OverworldRoomTransitionController {
       this.lastSafePlayerTransform.roomY = currentRoomCoordinates.y;
       this.lastSafePlayerTransform.x = player.x;
       this.lastSafePlayerTransform.y = player.y;
+      this.discardPendingPreparationsContraryToIntent(
+        currentRoomCoordinates,
+        player,
+        this.host.getPlayerBody(),
+      );
       this.pollPendingPreparations(currentRoomCoordinates, player);
       this.prepareApproachingNeighbors(currentRoomCoordinates, player, this.host.getPlayerBody());
+      if (!this.predictedRoomRequestedThisUpdate) {
+        this.host.clearPredictedPlayableRoomForTransition();
+      }
       this.authorizedTeleportDestination = null;
       return;
     }
@@ -120,6 +138,7 @@ export class OverworldRoomTransitionController {
         authorizedTeleport,
       )
     ) {
+      this.host.clearPredictedPlayableRoomForTransition();
       if (!this.isCardinalNeighbor(currentRoomCoordinates, nextRoomCoordinates)) {
         this.restoreLastSafePlayerTransform(currentRoomCoordinates);
       } else {
@@ -128,7 +147,10 @@ export class OverworldRoomTransitionController {
       return;
     }
 
-    if (!this.host.preparePlayableRoomForTransition(nextRoomCoordinates)) {
+    const destinationPrepared = authorizedTeleport
+      ? this.host.preparePlayableRoomForTransition(nextRoomCoordinates, true)
+      : this.host.preparePlayableRoomForTransition(nextRoomCoordinates);
+    if (!destinationPrepared) {
       if (this.isCardinalNeighbor(currentRoomCoordinates, nextRoomCoordinates)) {
         this.blockRoomTransition(currentRoomCoordinates, nextRoomCoordinates);
       } else {
@@ -142,6 +164,7 @@ export class OverworldRoomTransitionController {
     this.host.setSelectedCoordinates(nextRoomCoordinates);
     this.lastSafePlayerTransform.valid = false;
     this.clearPendingPreparation();
+    this.host.clearPredictedPlayableRoomForTransition();
     this.host.updateSelectedSummary();
 
     if (this.host.getActiveRoomRushRun()) {
@@ -167,6 +190,7 @@ export class OverworldRoomTransitionController {
       this.host.refreshAroundIfNeededOrFromCache(nextRoomCoordinates, {
         refreshLeaderboards: false,
         preferCachedWindow: true,
+        focusChangeFrom: currentRoomCoordinates,
       });
       return;
     }
@@ -230,6 +254,15 @@ export class OverworldRoomTransitionController {
         { x: currentRoomCoordinates.x - 1, y: currentRoomCoordinates.y },
         player.x - origin.x,
       );
+    } else if (Math.abs(playerBody.velocity.y) <= MOVEMENT_EPSILON) {
+      const facing = this.host.getPlayerFacing();
+      this.prepareApproachingNeighbor(
+        currentRoomCoordinates,
+        { x: currentRoomCoordinates.x + facing, y: currentRoomCoordinates.y },
+        facing > 0
+          ? origin.x + ROOM_PX_WIDTH - player.x
+          : player.x - origin.x,
+      );
     }
 
     if (playerBody.velocity.y > MOVEMENT_EPSILON) {
@@ -259,6 +292,7 @@ export class OverworldRoomTransitionController {
       return;
     }
 
+    this.predictedRoomRequestedThisUpdate = true;
     this.host.prefetchPlayableRoomForTransition(neighborCoordinates);
     if (distanceToSeam <= TRANSITION_PREPARE_DISTANCE_PX) {
       this.setPendingPreparation(currentRoomCoordinates, neighborCoordinates);
@@ -288,6 +322,65 @@ export class OverworldRoomTransitionController {
     );
   }
 
+  private discardPendingPreparationsContraryToIntent(
+    currentRoomCoordinates: RoomCoordinates,
+    player: Phaser.GameObjects.Rectangle,
+    playerBody: Phaser.Physics.Arcade.Body | null,
+  ): void {
+    if (!playerBody) {
+      this.clearPendingPreparation();
+      return;
+    }
+
+    const intendedHorizontalDirection = playerBody.velocity.x > MOVEMENT_EPSILON
+      ? 1
+      : playerBody.velocity.x < -MOVEMENT_EPSILON
+        ? -1
+        : this.host.getPlayerFacing();
+    if (
+      this.pendingHorizontalPreparation
+      && (
+        Math.sign(this.pendingHorizontalPreparation.x - currentRoomCoordinates.x)
+          !== intendedHorizontalDirection
+        || (
+          Math.abs(playerBody.velocity.x) <= MOVEMENT_EPSILON
+          && this.getDistanceToNeighborSeam(
+            currentRoomCoordinates,
+            this.pendingHorizontalPreparation,
+            player,
+          ) > TRANSITION_PREPARE_DISTANCE_PX
+        )
+      )
+    ) {
+      this.pendingHorizontalPreparation = null;
+    }
+
+    const intendedVerticalDirection = playerBody.velocity.y > MOVEMENT_EPSILON
+      ? 1
+      : playerBody.velocity.y < -MOVEMENT_EPSILON
+        ? -1
+        : 0;
+    if (
+      intendedVerticalDirection !== 0
+      && this.pendingVerticalPreparation
+      && Math.sign(this.pendingVerticalPreparation.y - currentRoomCoordinates.y)
+        !== intendedVerticalDirection
+    ) {
+      this.pendingVerticalPreparation = null;
+    }
+    if (
+      intendedVerticalDirection === 0
+      && this.pendingVerticalPreparation
+      && this.getDistanceToNeighborSeam(
+        currentRoomCoordinates,
+        this.pendingVerticalPreparation,
+        player,
+      ) > TRANSITION_PREPARE_DISTANCE_PX
+    ) {
+      this.pendingVerticalPreparation = null;
+    }
+  }
+
   private pollPendingPreparation(
     currentRoomCoordinates: RoomCoordinates,
     player: Phaser.GameObjects.Rectangle,
@@ -310,6 +403,7 @@ export class OverworldRoomTransitionController {
       return null;
     }
 
+    this.predictedRoomRequestedThisUpdate = true;
     this.host.prefetchPlayableRoomForTransition(neighborCoordinates);
     if (distanceToSeam <= TRANSITION_PREPARE_DISTANCE_PX) {
       if (

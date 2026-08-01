@@ -9,7 +9,12 @@ import {
 } from '../../courses/draftSession';
 import { cloneCourseSnapshot, type CourseSnapshot } from '../../courses/model';
 import { getFocusedCoordinatesFromUrl } from '../../navigation/worldNavigation';
-import { cloneRoomSnapshot, type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
+import {
+  cloneRoomSnapshot,
+  type RoomCoordinates,
+  type RoomSnapshot,
+  type RoomSnapshotView,
+} from '../../persistence/roomModel';
 import {
   hideBusyOverlay,
   isAppReady,
@@ -28,6 +33,21 @@ import type { OverworldMode, OverworldPlaySceneData } from '../sceneData';
 type WorldRefreshResult = 'success' | 'cancelled' | 'error';
 type ChunkWindowRefreshResult = 'updated' | 'unchanged' | 'cancelled' | 'error';
 
+const REQUIRED_WINDOW_REFRESH_RETRY_MS = 50;
+
+interface RequiredWindowRefreshRequirements {
+  playableSnapshot: boolean;
+  windowCoverage: boolean;
+  successfulAttempt: boolean;
+}
+
+interface PendingRequiredWindowRefresh {
+  token: number;
+  centerCoordinates: RoomCoordinates;
+  options: { forceChunkReload?: boolean };
+  requirements: RequiredWindowRefreshRequirements;
+}
+
 interface WindowStreamingController {
   reset(): void;
   applyOptimisticMutation(mutation: {
@@ -43,7 +63,7 @@ interface WindowStreamingController {
   needsRefreshAround(centerCoordinates: RoomCoordinates): boolean;
   isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean;
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
-  getPlayableRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
+  getPlayableRoomSnapshotViewForCoordinates(coordinates: RoomCoordinates): RoomSnapshotView | null;
   refreshVisibleSelectionFromCache(): void;
   refreshLoadedChunksIfChanged(
     centerCoordinates: RoomCoordinates
@@ -87,6 +107,11 @@ interface OverworldWindowControllerHost {
   refreshLeaderboardForSelection(): Promise<void>;
   updateCameraBounds(): void;
   syncModeRuntime(): void;
+  syncFocusedRoomRuntime(
+    previousCoordinates: RoomCoordinates,
+    currentCoordinates: RoomCoordinates,
+  ): void;
+  syncFocusedRoomVisuals(): void;
   syncPreviewVisibility(): void;
   syncPresenceSubscriptions(): void;
   syncGhostVisibility(): void;
@@ -102,14 +127,11 @@ interface OverworldWindowControllerHost {
 export class OverworldWindowController {
   private visibleChunkRefreshInFlight = false;
   private nextVisibleChunkRefreshAt = 0;
-  private pendingPlayableSnapshotRefresh: {
-    token: number;
-    centerCoordinates: RoomCoordinates;
-    options: { forceChunkReload?: boolean };
-  } | null = null;
-  private playableSnapshotRefreshInFlightToken: number | null = null;
-  private nextPlayableSnapshotRefreshAt = 0;
-  private playableSnapshotRefreshToken = 0;
+  private pendingRequiredWindowRefresh: PendingRequiredWindowRefresh | null = null;
+  private requiredWindowRefreshInFlightToken: number | null = null;
+  private nextRequiredWindowRefreshAt = 0;
+  private requiredWindowRefreshToken = 0;
+  private requiredWindowRefreshResetGeneration = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -119,10 +141,11 @@ export class OverworldWindowController {
   reset(): void {
     this.visibleChunkRefreshInFlight = false;
     this.nextVisibleChunkRefreshAt = 0;
-    this.pendingPlayableSnapshotRefresh = null;
-    this.playableSnapshotRefreshInFlightToken = null;
-    this.nextPlayableSnapshotRefreshAt = 0;
-    this.playableSnapshotRefreshToken += 1;
+    this.pendingRequiredWindowRefresh = null;
+    this.requiredWindowRefreshInFlightToken = null;
+    this.nextRequiredWindowRefreshAt = 0;
+    this.requiredWindowRefreshToken += 1;
+    this.requiredWindowRefreshResetGeneration += 1;
   }
 
   async handleWakeAsync(data?: OverworldPlaySceneData): Promise<void> {
@@ -231,7 +254,20 @@ export class OverworldWindowController {
     centerCoordinates: RoomCoordinates,
     options: { forceChunkReload?: boolean } = {}
   ): Promise<boolean> {
-    return (await this.performRefreshAround(centerCoordinates, options)) === 'success';
+    const resetGeneration = this.requiredWindowRefreshResetGeneration;
+    const result = await this.performRefreshAround(centerCoordinates, options);
+    if (
+      result === 'cancelled'
+      && resetGeneration === this.requiredWindowRefreshResetGeneration
+    ) {
+      this.requestRequiredWindowRefresh(
+        centerCoordinates,
+        options,
+        { successfulAttempt: true },
+        this.host.getTimeNow() + REQUIRED_WINDOW_REFRESH_RETRY_MS,
+      );
+    }
+    return result === 'success';
   }
 
   private async performRefreshAround(
@@ -357,7 +393,12 @@ export class OverworldWindowController {
 
   refreshAroundIfNeededOrFromCache(
     centerCoordinates: RoomCoordinates,
-    options: { forceChunkReload?: boolean; refreshLeaderboards?: boolean; preferCachedWindow?: boolean } = {},
+    options: {
+      forceChunkReload?: boolean;
+      refreshLeaderboards?: boolean;
+      preferCachedWindow?: boolean;
+      focusChangeFrom?: RoomCoordinates;
+    } = {},
   ): void {
     const needsRefresh = this.host.worldStreamingController.needsRefreshAround(centerCoordinates);
     if (
@@ -368,29 +409,30 @@ export class OverworldWindowController {
       this.refreshFromCurrentCache(centerCoordinates, options);
       const needsPlayableSnapshot =
         this.host.getMode() === 'play'
-        && !this.host.worldStreamingController.getPlayableRoomSnapshotForCoordinates(centerCoordinates);
-      if (needsPlayableSnapshot) {
-        this.requestPlayableSnapshotRefresh(centerCoordinates);
-      } else if (needsRefresh) {
-        void this.refreshAround(centerCoordinates);
+        && !this.host.worldStreamingController.getPlayableRoomSnapshotViewForCoordinates(centerCoordinates);
+      if (needsPlayableSnapshot || needsRefresh) {
+        this.requestRequiredWindowRefresh(centerCoordinates, {}, {
+          playableSnapshot: needsPlayableSnapshot,
+          windowCoverage: needsRefresh,
+        });
       }
       return;
     }
 
     const needsPlayableSnapshot =
       this.host.getMode() === 'play'
-      && !this.host.worldStreamingController.getPlayableRoomSnapshotForCoordinates(centerCoordinates);
+      && !this.host.worldStreamingController.getPlayableRoomSnapshotViewForCoordinates(centerCoordinates);
     if (
       options.forceChunkReload
       || needsRefresh
       || needsPlayableSnapshot
     ) {
       const refreshOptions = { forceChunkReload: options.forceChunkReload };
-      if (needsPlayableSnapshot) {
-        this.requestPlayableSnapshotRefresh(centerCoordinates, refreshOptions);
-      } else {
-        void this.refreshAround(centerCoordinates, refreshOptions);
-      }
+      this.requestRequiredWindowRefresh(centerCoordinates, refreshOptions, {
+        playableSnapshot: needsPlayableSnapshot,
+        windowCoverage: needsRefresh,
+        successfulAttempt: Boolean(options.forceChunkReload),
+      });
       return;
     }
 
@@ -399,7 +441,10 @@ export class OverworldWindowController {
 
   private refreshFromCurrentCache(
     centerCoordinates: RoomCoordinates,
-    options: { refreshLeaderboards?: boolean } = {},
+    options: {
+      refreshLeaderboards?: boolean;
+      focusChangeFrom?: RoomCoordinates;
+    } = {},
   ): void {
     this.host.setWindowCenterCoordinates({ ...centerCoordinates });
     this.host.worldStreamingController.refreshVisibleSelectionFromCache();
@@ -408,12 +453,27 @@ export class OverworldWindowController {
       void this.host.refreshLeaderboardForSelection();
     }
     this.host.updateCameraBounds();
-    this.host.syncModeRuntime();
+    const isTargetedFocusChange = Boolean(
+      options.focusChangeFrom &&
+      (
+        options.focusChangeFrom.x !== centerCoordinates.x ||
+        options.focusChangeFrom.y !== centerCoordinates.y
+      )
+    );
+    if (isTargetedFocusChange && options.focusChangeFrom) {
+      this.host.syncFocusedRoomRuntime(options.focusChangeFrom, centerCoordinates);
+    } else {
+      this.host.syncModeRuntime();
+    }
     this.host.syncPreviewVisibility();
     this.host.syncPresenceSubscriptions();
     this.host.syncGhostVisibility();
     this.host.syncRoomComments();
-    this.host.redrawWorld();
+    if (isTargetedFocusChange) {
+      this.host.syncFocusedRoomVisuals();
+    } else {
+      this.host.redrawWorld();
+    }
     this.host.renderHud();
     this.host.hideLoadingText();
     this.nextVisibleChunkRefreshAt =
@@ -426,7 +486,7 @@ export class OverworldWindowController {
 
   refreshChunkWindowIfNeeded(centerCoordinates: RoomCoordinates): void {
     if (this.host.worldStreamingController.needsRefreshAround(centerCoordinates)) {
-      void this.refreshAround(centerCoordinates);
+      this.requestRequiredWindowRefresh(centerCoordinates, {}, { windowCoverage: true });
       return;
     }
 
@@ -435,7 +495,7 @@ export class OverworldWindowController {
   }
 
   maybeRefreshVisibleChunks(): void {
-    if (this.maybeRunPlayableSnapshotRefresh()) {
+    if (this.maybeRunRequiredWindowRefresh()) {
       return;
     }
     if (this.visibleChunkRefreshInFlight) {
@@ -449,6 +509,7 @@ export class OverworldWindowController {
 
     const centerCoordinates = this.host.getRefreshCenterCoordinates();
     if (this.host.worldStreamingController.needsRefreshAround(centerCoordinates)) {
+      this.requestRequiredWindowRefresh(centerCoordinates, {}, { windowCoverage: true });
       return;
     }
 
@@ -476,71 +537,167 @@ export class OverworldWindowController {
       });
   }
 
-  private requestPlayableSnapshotRefresh(
+  private requestRequiredWindowRefresh(
     centerCoordinates: RoomCoordinates,
     options: { forceChunkReload?: boolean } = {},
+    requirements: Partial<RequiredWindowRefreshRequirements> = {},
+    notBefore = 0,
   ): void {
-    this.playableSnapshotRefreshToken += 1;
-    this.pendingPlayableSnapshotRefresh = {
-      token: this.playableSnapshotRefreshToken,
+    const normalizedRequirements: RequiredWindowRefreshRequirements = {
+      playableSnapshot: requirements.playableSnapshot === true,
+      windowCoverage: requirements.windowCoverage === true,
+      successfulAttempt:
+        requirements.successfulAttempt === true || options.forceChunkReload === true,
+    };
+    const pending = this.pendingRequiredWindowRefresh;
+    const sameCenter = Boolean(
+      pending
+      && pending.centerCoordinates.x === centerCoordinates.x
+      && pending.centerCoordinates.y === centerCoordinates.y
+    );
+
+    if (pending && sameCenter) {
+      const forceStrengthened =
+        options.forceChunkReload === true && pending.options.forceChunkReload !== true;
+      const requirementsStrengthened =
+        (normalizedRequirements.playableSnapshot && !pending.requirements.playableSnapshot)
+        || (normalizedRequirements.windowCoverage && !pending.requirements.windowCoverage)
+        || (normalizedRequirements.successfulAttempt && !pending.requirements.successfulAttempt);
+
+      if (
+        forceStrengthened
+        && this.requiredWindowRefreshInFlightToken === pending.token
+      ) {
+        this.requiredWindowRefreshToken += 1;
+        this.pendingRequiredWindowRefresh = {
+          token: this.requiredWindowRefreshToken,
+          centerCoordinates: { ...centerCoordinates },
+          options: { forceChunkReload: true },
+          requirements: {
+            playableSnapshot:
+              pending.requirements.playableSnapshot || normalizedRequirements.playableSnapshot,
+            windowCoverage:
+              pending.requirements.windowCoverage || normalizedRequirements.windowCoverage,
+            successfulAttempt: true,
+          },
+        };
+        this.nextRequiredWindowRefreshAt = notBefore;
+      } else {
+        pending.options.forceChunkReload =
+          pending.options.forceChunkReload === true || options.forceChunkReload === true;
+        pending.requirements.playableSnapshot =
+          pending.requirements.playableSnapshot || normalizedRequirements.playableSnapshot;
+        pending.requirements.windowCoverage =
+          pending.requirements.windowCoverage || normalizedRequirements.windowCoverage;
+        pending.requirements.successfulAttempt =
+          pending.requirements.successfulAttempt || normalizedRequirements.successfulAttempt;
+        if (requirementsStrengthened && this.requiredWindowRefreshInFlightToken === null) {
+          this.nextRequiredWindowRefreshAt = notBefore;
+        } else if (notBefore > 0) {
+          this.nextRequiredWindowRefreshAt = Math.max(
+            this.nextRequiredWindowRefreshAt,
+            notBefore,
+          );
+        }
+      }
+      this.maybeRunRequiredWindowRefresh();
+      return;
+    }
+
+    this.requiredWindowRefreshToken += 1;
+    this.pendingRequiredWindowRefresh = {
+      token: this.requiredWindowRefreshToken,
       centerCoordinates: { ...centerCoordinates },
       options: { ...options },
+      requirements: normalizedRequirements,
     };
-    this.nextPlayableSnapshotRefreshAt = 0;
-    this.maybeRunPlayableSnapshotRefresh();
+    this.nextRequiredWindowRefreshAt = notBefore;
+    this.maybeRunRequiredWindowRefresh();
   }
 
-  private maybeRunPlayableSnapshotRefresh(): boolean {
-    const request = this.pendingPlayableSnapshotRefresh;
+  private maybeRunRequiredWindowRefresh(): boolean {
+    const request = this.pendingRequiredWindowRefresh;
     if (!request) {
       return false;
     }
 
-    if (
-      this.host.getMode() !== 'play'
-      || this.host.worldStreamingController.getPlayableRoomSnapshotForCoordinates(
-        request.centerCoordinates,
-      )
-    ) {
-      this.pendingPlayableSnapshotRefresh = null;
+    if (this.isRequiredWindowRefreshSatisfied(request)) {
+      this.pendingRequiredWindowRefresh = null;
       return false;
     }
 
     if (
-      this.playableSnapshotRefreshInFlightToken !== null
+      this.requiredWindowRefreshInFlightToken !== null
       || this.visibleChunkRefreshInFlight
-      || this.host.getTimeNow() < this.nextPlayableSnapshotRefreshAt
+      || this.host.getTimeNow() < this.nextRequiredWindowRefreshAt
     ) {
       return true;
     }
 
-    this.playableSnapshotRefreshInFlightToken = request.token;
+    const resetGeneration = this.requiredWindowRefreshResetGeneration;
+    this.requiredWindowRefreshInFlightToken = request.token;
     void this.performRefreshAround(request.centerCoordinates, request.options)
       .then((result) => {
-        if (this.pendingPlayableSnapshotRefresh?.token !== request.token) {
+        if (
+          resetGeneration !== this.requiredWindowRefreshResetGeneration
+          || this.pendingRequiredWindowRefresh?.token !== request.token
+        ) {
           return;
         }
-        if (
-          result === 'success'
-          || this.host.getMode() !== 'play'
-          || this.host.worldStreamingController.getPlayableRoomSnapshotForCoordinates(
-            request.centerCoordinates,
-          )
-        ) {
-          this.pendingPlayableSnapshotRefresh = null;
+        if (result === 'success') {
+          request.requirements.successfulAttempt = false;
+          request.options.forceChunkReload = undefined;
+          if (this.isRequiredWindowRefreshSatisfied(request)) {
+            this.pendingRequiredWindowRefresh = null;
+          } else {
+            this.nextRequiredWindowRefreshAt =
+              this.host.getTimeNow() + REQUIRED_WINDOW_REFRESH_RETRY_MS;
+          }
+          return;
+        }
+        if (this.isRequiredWindowRefreshSatisfied(request)) {
+          this.pendingRequiredWindowRefresh = null;
           return;
         }
         if (result === 'cancelled') {
-          this.nextPlayableSnapshotRefreshAt = this.host.getTimeNow() + 50;
+          this.nextRequiredWindowRefreshAt =
+            this.host.getTimeNow() + REQUIRED_WINDOW_REFRESH_RETRY_MS;
           return;
         }
-        this.pendingPlayableSnapshotRefresh = null;
+        this.pendingRequiredWindowRefresh = null;
       })
       .finally(() => {
-        if (this.playableSnapshotRefreshInFlightToken === request.token) {
-          this.playableSnapshotRefreshInFlightToken = null;
+        if (
+          resetGeneration === this.requiredWindowRefreshResetGeneration
+          && this.requiredWindowRefreshInFlightToken === request.token
+        ) {
+          this.requiredWindowRefreshInFlightToken = null;
         }
       });
+    return true;
+  }
+
+  private isRequiredWindowRefreshSatisfied(
+    request: PendingRequiredWindowRefresh,
+  ): boolean {
+    if (request.requirements.successfulAttempt) {
+      return false;
+    }
+    if (
+      request.requirements.playableSnapshot
+      && this.host.getMode() === 'play'
+      && !this.host.worldStreamingController.getPlayableRoomSnapshotViewForCoordinates(
+        request.centerCoordinates,
+      )
+    ) {
+      return false;
+    }
+    if (
+      request.requirements.windowCoverage
+      && this.host.worldStreamingController.needsRefreshAround(request.centerCoordinates)
+    ) {
+      return false;
+    }
     return true;
   }
 

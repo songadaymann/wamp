@@ -34,6 +34,7 @@ function createHarness() {
     getMode: vi.fn(() => 'play' as const),
     getPlayer: vi.fn(() => player),
     getPlayerBody: vi.fn(() => body),
+    getPlayerFacing: vi.fn(() => 1 as const),
     getCurrentRoomCoordinates: vi.fn(() => ({ x: 0, y: 0 })),
     setCurrentRoomCoordinates: vi.fn(),
     setSelectedCoordinates: vi.fn(),
@@ -42,8 +43,12 @@ function createHarness() {
       x: Math.floor(x / 640),
       y: Math.floor(y / 352),
     })),
-    isNeighborReachable: vi.fn(() => true),
+    isNeighborReachable: vi.fn((
+      _roomCoordinates: { x: number; y: number },
+      _neighborCoordinates: { x: number; y: number },
+    ) => true),
     prefetchPlayableRoomForTransition: vi.fn(),
+    clearPredictedPlayableRoomForTransition: vi.fn(),
     preparePlayableRoomForTransition: vi.fn(() => true),
     isRoomTransitionLocked: vi.fn(() => false),
     resetChallengeStateForRoomExit: vi.fn(),
@@ -82,6 +87,68 @@ describe('overworld room transition hydration', () => {
     expect(host.preparePlayableRoomForTransition).toHaveBeenCalledWith({ x: 1, y: 0 });
   });
 
+  it('starts predicted destination preparation from the middle of the room', () => {
+    const { controller, host, player } = createHarness();
+    player.x = 320;
+
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.prefetchPlayableRoomForTransition).toHaveBeenCalledWith({ x: 1, y: 0 });
+    expect(host.preparePlayableRoomForTransition).not.toHaveBeenCalled();
+  });
+
+  it('uses facing to warm one destination while the player is idle', () => {
+    const { body, controller, host, player } = createHarness();
+    player.x = 320;
+    body.velocity.x = 0;
+
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.prefetchPlayableRoomForTransition).toHaveBeenCalledWith({ x: 1, y: 0 });
+    expect(host.preparePlayableRoomForTransition).not.toHaveBeenCalled();
+  });
+
+  it('expires predicted intent as soon as no reachable neighbor remains', () => {
+    const { body, controller, host } = createHarness();
+    controller.maybeAdvancePlayerRoom();
+    host.isNeighborReachable.mockReturnValue(false);
+    body.velocity.x = 0;
+
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.clearPredictedPlayableRoomForTransition).toHaveBeenCalledOnce();
+  });
+
+  it('replaces predicted intent immediately when movement reverses', () => {
+    const { body, controller, host, player } = createHarness();
+    player.x = 320;
+    controller.maybeAdvancePlayerRoom();
+    body.velocity.x = -150;
+
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.prefetchPlayableRoomForTransition).toHaveBeenNthCalledWith(1, { x: 1, y: 0 });
+    expect(host.prefetchPlayableRoomForTransition).toHaveBeenNthCalledWith(2, { x: -1, y: 0 });
+    expect(host.clearPredictedPlayableRoomForTransition).not.toHaveBeenCalled();
+  });
+
+  it('drops an unresolved old prediction when reversal points at an unreachable room', () => {
+    const { body, controller, host, player } = createHarness();
+    player.x = 600;
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    host.isNeighborReachable.mockImplementation(
+      (_current, neighbor) => neighbor.x >= 0,
+    );
+    controller.maybeAdvancePlayerRoom();
+    body.velocity.x = -150;
+
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.prefetchPlayableRoomForTransition).toHaveBeenCalledOnce();
+    expect(host.prefetchPlayableRoomForTransition).toHaveBeenCalledWith({ x: 1, y: 0 });
+    expect(host.clearPredictedPlayableRoomForTransition).toHaveBeenCalledOnce();
+  });
+
   it('holds the player inside the source room until destination collision is ready', () => {
     const { controller, host, player, body } = createHarness();
     controller.maybeAdvancePlayerRoom();
@@ -116,6 +183,14 @@ describe('overworld room transition hydration', () => {
 
     expect(host.preparePlayableRoomForTransition).toHaveBeenLastCalledWith({ x: 1, y: 0 });
     expect(host.setCurrentRoomCoordinates).toHaveBeenCalledWith({ x: 1, y: 0 });
+    expect(host.refreshAroundIfNeededOrFromCache).toHaveBeenCalledWith(
+      { x: 1, y: 0 },
+      {
+        refreshLeaderboards: false,
+        preferCachedWindow: true,
+        focusChangeFrom: { x: 0, y: 0 },
+      },
+    );
   });
 
   it('restores the last safe transform after a multi-room physics skip', () => {
@@ -139,6 +214,7 @@ describe('overworld room transition hydration', () => {
 
     controller.maybeAdvancePlayerRoom();
 
+    expect(host.preparePlayableRoomForTransition).toHaveBeenLastCalledWith({ x: 2, y: 0 }, true);
     expect(host.setCurrentRoomCoordinates).toHaveBeenCalledWith({ x: 2, y: 0 });
   });
 
@@ -169,6 +245,26 @@ describe('overworld room transition hydration', () => {
 
     expect(host.preparePlayableRoomForTransition).toHaveBeenCalledTimes(2);
     expect(host.preparePlayableRoomForTransition).toHaveBeenNthCalledWith(2, { x: 0, y: 1 });
+  });
+
+  it('expires a stopped vertical prediction after the player moves away from its seam', () => {
+    const { body, controller, host, player } = createHarness();
+    player.x = 320;
+    player.y = 340;
+    body.velocity.x = 0;
+    body.velocity.y = 150;
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    host.isNeighborReachable.mockImplementation(
+      (_current, neighbor) => neighbor.x === 0,
+    );
+
+    controller.maybeAdvancePlayerRoom();
+    body.velocity.y = 0;
+    player.y = 176;
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.prefetchPlayableRoomForTransition).toHaveBeenCalledOnce();
+    expect(host.clearPredictedPlayableRoomForTransition).toHaveBeenCalledOnce();
   });
 
   it('prefetches both corner neighbors but promotes at most one heavy room per update', () => {

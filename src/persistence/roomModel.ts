@@ -126,6 +126,30 @@ export interface RoomSnapshot {
   tilesetHint?: RoomTilesetHint | null;
 }
 
+export type DeepReadonly<T> =
+  T extends (...args: never[]) => unknown
+    ? T
+    : T extends readonly (infer Item)[]
+      ? readonly DeepReadonly<Item>[]
+      : T extends object
+        ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+        : T;
+
+/**
+ * Allocation-free runtime view of a normalized room snapshot.
+ *
+ * Runtime readers must treat snapshots as immutable. Call `cloneRoomSnapshot`
+ * before editing, persisting, exporting, or otherwise mutating one.
+ */
+export type RoomSnapshotView = DeepReadonly<RoomSnapshot>;
+
+let roomSnapshotCloneCount = 0;
+
+/** Monotonic process-local count of every deep room snapshot clone. */
+export function getRoomSnapshotCloneCount(): number {
+  return roomSnapshotCloneCount;
+}
+
 export interface RoomVersionRecord {
   version: number;
   snapshot: RoomSnapshot;
@@ -406,7 +430,7 @@ export function createDefaultRoomPermissions(): RoomPermissions {
   };
 }
 
-function cloneTileData(tileData: RoomTileData): RoomTileData {
+function cloneTileData(tileData: RoomTileData | RoomSnapshotView['tileData']): RoomTileData {
   const next = {} as RoomTileData;
 
   for (const layerName of LAYER_NAMES) {
@@ -417,7 +441,7 @@ function cloneTileData(tileData: RoomTileData): RoomTileData {
 }
 
 function normalizePlacedObject(
-  placed: Partial<PlacedObject> | null | undefined,
+  placed: Partial<PlacedObject> | RoomSnapshotView['placedObjects'][number] | null | undefined,
   index: number,
 ): PlacedObject | null {
   if (
@@ -526,7 +550,9 @@ function normalizePlacedObject(
   return normalized;
 }
 
-function clonePlacedObjects(placedObjects: PlacedObject[]): PlacedObject[] {
+function clonePlacedObjects(
+  placedObjects: PlacedObject[] | RoomSnapshotView['placedObjects'],
+): PlacedObject[] {
   const normalized = placedObjects
     .map((placed, index) => normalizePlacedObject(placed, index))
     .filter((placed): placed is PlacedObject => placed !== null);
@@ -673,7 +699,8 @@ function migrateLegacyBrickBoxesToSpecialTerrain(
   return nextPlacedObjects;
 }
 
-export function cloneRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
+export function cloneRoomSnapshot(room: RoomSnapshot | RoomSnapshotView): RoomSnapshot {
+  roomSnapshotCloneCount += 1;
   const tileData = cloneTileData(room.tileData);
   const placedObjects = migrateLegacyBrickBoxesToSpecialTerrain(
     tileData,

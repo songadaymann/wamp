@@ -39,12 +39,12 @@ import {
   setFocusedCoordinatesInUrl,
 } from '../navigation/worldNavigation';
 import {
-  cloneRoomSnapshot,
   DEFAULT_ROOM_COORDINATES,
   parseRoomId,
   roomIdFromCoordinates,
   type RoomCoordinates,
   type RoomSnapshot,
+  type RoomSnapshotView,
 } from '../persistence/roomModel';
 import { getPlacedObjectPathTargetIds } from '../placedObjects/objectPaths';
 import { createRoomRepository } from '../persistence/roomRepository';
@@ -65,7 +65,7 @@ import { RoomLightingController } from '../lighting/controller';
 import { type RoomLightingEmitter } from '../lighting/model';
 import { resolvePlayerAuraDarkAuraDiameter } from '../lighting/presets';
 import { RoomWeatherController } from '../weather/controller';
-import { buildRoomWeatherSurfaceSegments } from '../weather/surfaces';
+import { getCachedRoomWeatherSurfaceSegments } from '../weather/surfaces';
 import {
   DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
   type DefaultPlayerAnimationState,
@@ -223,7 +223,10 @@ import {
 } from './overworld/selection';
 import { OverworldSignController } from './overworld/signPosts';
 import { OverworldSpecialTilesController } from './overworld/specialTiles';
-import { OverworldPortalObjectController } from './overworld/portalObjects';
+import {
+  createPortalTargetRoomPreparationAdapter,
+  OverworldPortalObjectController,
+} from './overworld/portalObjects';
 import {
   OverworldRoomCellController,
 } from './overworld/roomCells';
@@ -313,7 +316,30 @@ type SceneLoadedFullRoom = LoadedFullRoom<LoadedRoomObject, RoomEdgeWall>;
 interface RoomMusicPlaybackTarget {
   identity: string;
   sourceRoomId: string;
-  music: RoomMusic | null;
+  music: RoomSnapshotView['music'];
+}
+
+export interface OverworldRuntimeTransitionProbe {
+  readonly scene: 'overworld-play';
+  readonly mode: OverworldMode;
+  readonly currentRoomId: string;
+  readonly selectedRoomId: string;
+  readonly destinationRoomId: string | null;
+  readonly destinationLoaded: boolean | null;
+  readonly destinationPreparationIdentity: string | null;
+  readonly destinationPreparationPhase: string | null;
+  readonly destinationDormantReady: boolean | null;
+  readonly currentFullRoomLoaded: boolean;
+  readonly currentCollisionReady: boolean;
+  readonly currentTerrainColliderActive: boolean;
+  readonly player: {
+    readonly x: number;
+    readonly y: number;
+    readonly velocityX: number;
+    readonly velocityY: number;
+    readonly bodyWidth: number;
+    readonly bodyHeight: number;
+  } | null;
 }
 
 export class OverworldPlayScene extends Phaser.Scene {
@@ -421,6 +447,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private hudBridge: OverworldHudBridge | null = null;
   private fxController: SceneFxController | null = null;
   private mobilePerformanceProfiler: MobilePerformanceProfiler | null = null;
+  private criticalFrameStartedAtMs: number | null = null;
 
   private mode: OverworldMode = 'browse';
   private cameraMode: CameraMode = 'inspect';
@@ -554,6 +581,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
   private pendingWarpSpawnRoomCoordinates: RoomCoordinates | null = null;
+  private unknownNeighborWindowRefresh: Promise<boolean> | null = null;
+  private nextUnknownNeighborWindowRefreshAt = 0;
   private get pvpMatchClient(): MultiplayerInstanceClient | null {
     return this.pvpArenaController.getClient();
   }
@@ -648,7 +677,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         respawnFallDistance: RESPAWN_FALL_DISTANCE,
         enemyStompBounceVelocity: this.JUMP_VELOCITY * 0.58,
       },
-      getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
+      getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
       getPlacedObjectRuntimeKey: (roomId, placedObject, placedIndex) =>
         this.getPlacedObjectRuntimeKey(roomId, placedObject, placedIndex),
@@ -738,14 +767,25 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.signController = new OverworldSignController({
       getMode: () => this.mode,
       getPlayerBody: () => this.playerBody,
-      getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
+      getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
+    });
+    const portalTargetRoomPreparation = createPortalTargetRoomPreparationAdapter({
+      resolveRoomCoordinates: parseRoomId,
+      preparePortalTargetRoomForTransition: (coordinates) =>
+        this.worldStreamingController.preparePortalTargetRoomForTransition(coordinates),
+      clearPortalTargetRoomPreparation: (roomId) =>
+        this.worldStreamingController.clearPortalTargetRoomPreparation(roomId),
     });
     this.portalObjectController = new OverworldPortalObjectController({
       getMode: () => this.mode,
       getCurrentTime: () => this.time.now,
       getPlayerBody: () => this.playerBody,
-      getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
-      getLoadedFullRoomById: (roomId) => this.loadedFullRoomsById.get(roomId) ?? null,
+      getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
+      getLoadedFullRoomById: (roomId) => this.getCollisionReadyLoadedFullRoomById(roomId),
+      requestPortalTargetRoomPreparation: (roomId) =>
+        portalTargetRoomPreparation.request(roomId),
+      clearPortalTargetRoomPreparation: (roomId) =>
+        portalTargetRoomPreparation.clear(roomId),
       authorizeRoomTransition: (coordinates) =>
         this.roomTransitionController.authorizeTeleportTransition(coordinates),
       teleportPlayerTo: (x, y, velocity) =>
@@ -758,8 +798,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       getMode: () => this.mode,
       getCurrentTime: () => this.time.now,
       getPlayerBody: () => this.playerBody,
-      getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
-      getLoadedFullRoomById: (roomId) => this.loadedFullRoomsById.get(roomId) ?? null,
+      getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
+      getLoadedFullRoomById: (roomId) => this.getCollisionReadyLoadedFullRoomById(roomId),
       getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
       grantExternalLaunchGrace: (durationMs) => {
@@ -788,21 +828,61 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPerformanceProfile: () => getDeviceLayoutState().performanceProfile,
       getSelectedCoordinates: () => this.selectedCoordinates,
       getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
+      refreshRoomSummariesForTransition: (centerCoordinates) =>
+        this.refreshAround(centerCoordinates, { forceChunkReload: true }),
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
       getPlayer: () => this.player,
       shouldCollidePlayerWithTerrainTile: (tile) =>
         this.specialTilesController.shouldCollidePlayerWithTerrainTile(tile),
       createLiveObjects: (loadedRoom) => this.createLiveObjects(loadedRoom),
-      destroyLiveObjects: (loadedRoom) => this.destroyLiveObjects(loadedRoom),
+      createLiveObjectsBatch: (loadedRoom, startIndex, endIndex, dormant) =>
+        this.liveObjectController.createLiveObjectsBatch(
+          loadedRoom,
+          startIndex,
+          endIndex,
+          dormant,
+        ),
+      finalizeLiveObjectCreation: (loadedRoom, dormant) =>
+        this.liveObjectController.finalizeLiveObjectCreation(loadedRoom, dormant),
+      onPreparedLiveObjectsReady: (loadedRoom) =>
+        this.syncActiveCourseObjectLinks([loadedRoom]),
+      setLiveObjectsDormant: (loadedRoom, dormant) =>
+        this.liveObjectController.setLoadedRoomLiveObjectsDormant(loadedRoom, dormant),
+      destroyLiveObjects: (loadedRoom, options) => this.destroyLiveObjects(loadedRoom, options),
+      destroyLiveObjectsBatch: (loadedRoom, maxObjectCount, options) =>
+        this.liveObjectController.destroyLiveObjectsBatch(
+          loadedRoom,
+          maxObjectCount,
+          options,
+        ),
       destroyEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
       syncLiveObjectWorldColliders: (loadedRooms) =>
         this.liveObjectController.syncLoadedWorldColliders(loadedRooms),
+      setLiveObjectWorldCollisionTargetDormant: (loadedRoom, dormant) =>
+        this.liveObjectController.setLoadedRoomWorldCollisionTargetDormant(
+          loadedRoom,
+          dormant,
+        ),
+      getLiveObjectPhysicsReconciliationGeneration: () =>
+        this.liveObjectController.getPhysicsReconciliationGeneration(),
+      syncLiveObjectInteractions: (loadedRooms) =>
+        this.liveObjectController.syncLiveObjectInteractions(loadedRooms),
       getProtectedFullRoomIds: (targetFullRoomIds) =>
         this.getProtectedMovingPlatformSourceRoomIds(targetFullRoomIds),
       onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
-      onFullRoomVisibilityChanged: () => {
+      onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
+      onFullRoomSetChanged: (coordinates) => {
         this.syncGhostVisibility();
-        this.runtimeController?.syncEdgeWalls();
+        this.runtimeController?.syncEdgeWallsForCoordinates(coordinates);
+      },
+      onFullRoomCollisionReady: (loadedRoom) => {
+        if (
+          this.mode === 'play'
+          && loadedRoom.room.id === roomIdFromCoordinates(this.currentRoomCoordinates)
+          && (!this.player || this.shouldRespawnPlayer)
+        ) {
+          this.runtimeController?.syncModeRuntime();
+        }
       },
       onFullRoomDestroyed: (loadedRoom) => {
         this.specialTilesController.handleFullRoomDestroyed(loadedRoom.room.id);
@@ -994,7 +1074,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.roomCommentsController = new OverworldRoomCommentsController({
       scene: this,
       getMode: () => this.mode,
-      getCurrentRoomSnapshot: () => this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates),
+      getCurrentRoomSnapshot: () =>
+        this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates) as RoomSnapshot | null,
       isCurrentRoomPublished: () => this.getCellStateAt(this.currentRoomCoordinates) === 'published',
       getWorldWindow: () => this.worldWindow,
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
@@ -1149,6 +1230,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
       updateCameraBounds: () => this.updateCameraBounds(),
       syncModeRuntime: () => this.syncModeRuntime(),
+      syncFocusedRoomRuntime: (previousCoordinates, currentCoordinates) =>
+        this.runtimeController.syncFocusedRoomRuntime(previousCoordinates, currentCoordinates),
+      syncFocusedRoomVisuals: () => this.syncFocusedRoomVisuals(),
       syncPreviewVisibility: () => this.syncPreviewVisibility(),
       syncPresenceSubscriptions: () => this.syncPresenceSubscriptions(),
       syncGhostVisibility: () => this.syncGhostVisibility(),
@@ -1300,16 +1384,17 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.runtimeController = new OverworldRuntimeController(
       {
         scene: this,
-        getLoadedFullRooms: () => this.loadedFullRoomsById.values(),
+        getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
         getMode: () => this.mode,
         setMode: (mode) => {
           this.mode = mode;
         },
         getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
+        getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
         getCurrentRoomSnapshot: () =>
-          this.worldStreamingController.getPlayableRoomSnapshotForCoordinates(
+          this.worldStreamingController.getPlayableRoomSnapshotViewForCoordinates(
             this.currentRoomCoordinates,
-          ),
+          ) as RoomSnapshot | null,
         getActiveCourseSnapshot: () => this.activeCourseSnapshot,
         getActiveCourseRun: () => this.activeCourseRun,
         getActiveRoomRushRun: () => this.activeRoomRushRun,
@@ -1354,6 +1439,10 @@ export class OverworldPlayScene extends Phaser.Scene {
         destroyRoomEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
         getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
         getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
+        isWithinLoadedRoomBounds: (coordinates) =>
+          this.worldStreamingController.isWithinLoadedRoomBounds(coordinates),
+        requestWindowRefreshForUnknownNeighbor: (roomCoordinates, neighborCoordinates) =>
+          this.requestWindowRefreshForUnknownNeighbor(roomCoordinates, neighborCoordinates),
         getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
         isPlayableRoomCollisionReady: (coordinates) =>
           this.worldStreamingController.isPlayableRoomCollisionReady(coordinates),
@@ -1586,16 +1675,20 @@ export class OverworldPlayScene extends Phaser.Scene {
         getPlayerFacing: () => this.playerFacing as -1 | 1,
         getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
         getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-        getRoomSnapshotForCoordinates: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
+        getRoomSnapshotForCoordinates: (coordinates) =>
+          this.getRoomSnapshotViewForCoordinates(coordinates) as RoomSnapshot | null,
         isSolidTerrainAtWorldPoint: (room, worldX, worldY) =>
           this.isSolidTerrainAtWorldPoint(room, worldX, worldY),
         getExternalLaunchGraceUntil: () => this.externalLaunchGraceUntil,
         shouldForceFullBodyHitbox: () => this.isPvpArenaActive(),
-        getLoadedLiveObjects: function* () {
-          for (const loadedRoom of thisScene.loadedFullRoomsById.values()) {
-            yield* loadedRoom.liveObjects;
-          }
-        },
+        getPushableLiveObjectsInBounds: (bounds, paddingX, paddingY) =>
+          this.liveObjectController.getPushableLiveObjectsInBounds(bounds, paddingX, paddingY),
+        getRuntimeSolidLiveObjectsInBounds: (bounds, paddingX, paddingY) =>
+          this.liveObjectController.getRuntimeSolidLiveObjectsInBounds(
+            bounds,
+            paddingX,
+            paddingY,
+          ),
         getArcadeBodyBounds: (body) => this.getArcadeBodyBounds(body),
         getCursors: () => this.cursors,
         getWasd: () => this.wasd,
@@ -1745,7 +1838,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveCourseRun: () => this.activeCourseRun,
       getActiveRoomRushRun: () => this.activeRoomRushRun,
       getCurrentGoalRun: () => this.currentGoalRun,
-      getRoomSnapshotForCoordinates: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
+      getRoomSnapshotForCoordinates: (coordinates) =>
+        this.getRoomSnapshotViewForCoordinates(coordinates),
       getCurrentRoomLeaderboard: () => this.currentRoomLeaderboard,
       getGoalPersistentStatusText: () =>
         this.getPvpPersistentStatusText() ?? this.goalRunController.getPersistentStatusText() ?? null,
@@ -1862,6 +1956,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getMode: () => this.mode,
       getPlayer: () => this.player,
       getPlayerBody: () => this.playerBody,
+      getPlayerFacing: () => this.playerFacing < 0 ? -1 : 1,
       getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
       setCurrentRoomCoordinates: (coordinates) => {
         this.currentRoomCoordinates = { ...coordinates };
@@ -1875,8 +1970,13 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.runtimeController.isNeighborReachable(roomCoordinates, neighborCoordinates),
       prefetchPlayableRoomForTransition: (coordinates) =>
         this.worldStreamingController.prefetchPlayableRoomForTransition(coordinates),
-      preparePlayableRoomForTransition: (coordinates) =>
-        this.worldStreamingController.preparePlayableRoomForTransition(coordinates),
+      clearPredictedPlayableRoomForTransition: () =>
+        this.worldStreamingController.clearPredictedPlayableRoomForTransition(),
+      preparePlayableRoomForTransition: (coordinates, portalDestination) =>
+        this.worldStreamingController.preparePlayableRoomForTransition(
+          coordinates,
+          portalDestination,
+        ),
       isRoomTransitionLocked: () => this.isPvpArenaActive(),
       resetChallengeStateForRoomExit: (nextRoomCoordinates) => {
         this.sessionResetController.resetChallengeStateForRoomExit(nextRoomCoordinates);
@@ -1888,7 +1988,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       syncGoalRunForRoom: (room, entryContext) => {
         this.syncGoalRunForRoomWithIntro(room, entryContext);
       },
-      getRoomSnapshotForCoordinates: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
+      getRoomSnapshotForCoordinates: (coordinates) =>
+        this.getRoomSnapshotViewForCoordinates(coordinates) as RoomSnapshot | null,
       refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
       refreshCourseComposerSelectedRoomState: () => this.refreshCourseComposerSelectedRoomState(),
       setFocusedCoordinates: (coordinates) => {
@@ -2133,6 +2234,21 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.worldStreamingController.getLoadedFullRoomsById();
   }
 
+  private *getCollisionReadyLoadedFullRooms(): IterableIterator<SceneLoadedFullRoom> {
+    for (const loadedRoom of this.loadedFullRoomsById.values()) {
+      if (loadedRoom.collisionReady === true && loadedRoom.runtimeSuspended !== true) {
+        yield loadedRoom;
+      }
+    }
+  }
+
+  private getCollisionReadyLoadedFullRoomById(roomId: string): SceneLoadedFullRoom | null {
+    const loadedRoom = this.loadedFullRoomsById.get(roomId) ?? null;
+    return loadedRoom?.collisionReady === true && loadedRoom.runtimeSuspended !== true
+      ? loadedRoom
+      : null;
+  }
+
   private get nearLodRoomIds(): Set<string> {
     return this.worldStreamingController.getNearLodRoomIds();
   }
@@ -2186,6 +2302,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncBackdropCameraIgnores();
 
     this.scale.on('resize', this.handleResize, this);
+    this.events.on(
+      Phaser.Scenes.Events.PRE_UPDATE,
+      this.captureCriticalFrameStart,
+      this,
+    );
     this.events.on(Phaser.Scenes.Events.WAKE, this.handleWake, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
@@ -2224,12 +2345,21 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Arcade Physics runs on the Scene UPDATE event before Scene.update.
+    // PRE_UPDATE captures that work so discretionary streaming sees the real
+    // simulation headroom instead of only timing this method's body.
+    const criticalFrameStartedAt = this.criticalFrameStartedAtMs ?? performance.now();
+    this.criticalFrameStartedAtMs = null;
     const profiler = this.mobilePerformanceProfiler;
     profiler?.beginFrame(delta, this.buildMobilePerformanceContext());
     try {
       const worldUpdateStartedAt = profiler?.beginSegment();
       this.windowController.maybeRefreshVisibleChunks();
-      this.worldStreamingController.updateWorldTiles();
+      const worldTileWorkStartedAt = performance.now();
+      const worldTileWorkRan = this.worldStreamingController.updateWorldTiles();
+      const worldTileSharedBudgetConsumedMs = worldTileWorkRan
+        ? performance.now() - worldTileWorkStartedAt
+        : 0;
       this.updateBackdrop();
       this.gridOverlayController.redraw();
       this.updateLiveObjects(delta);
@@ -2280,6 +2410,10 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.updateRoomWeather();
         if (noPlayerStartedAt !== undefined) profiler?.endSegment('update.noPlayer', noPlayerStartedAt);
         this.renderFrameHud();
+        this.worldStreamingController.runDiscretionaryFrameWork(
+          performance.now() - criticalFrameStartedAt,
+          worldTileSharedBudgetConsumedMs,
+        );
         return;
       }
 
@@ -2336,6 +2470,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.tickRoomRushRun(delta);
       if (playerUpdateStartedAt !== undefined) profiler?.endSegment('update.player', playerUpdateStartedAt);
       this.renderFrameHud();
+      this.worldStreamingController.runDiscretionaryFrameWork(
+        performance.now() - criticalFrameStartedAt,
+        worldTileSharedBudgetConsumedMs,
+      );
     } finally {
       profiler?.endFrame(this.buildMobilePerformanceContext());
     }
@@ -2356,7 +2494,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
+    const currentRoom = this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates);
     if (!currentRoom) {
       const structureChanged = this.lightingController.sync({
         roomId: null,
@@ -2412,7 +2550,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         width: ROOM_PX_WIDTH,
         height: ROOM_PX_HEIGHT,
       },
-      lighting: currentRoom.lighting,
+      lighting: currentRoom.lighting as RoomSnapshot['lighting'],
       emitters,
       ambientBounds: buildAmbientRoomLightingBounds({
         roomCoordinates: currentRoom.coordinates,
@@ -2446,7 +2584,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
+    const currentRoom = this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates);
     if (!currentRoom) {
       const structureChanged = this.weatherController.sync({
         roomId: null,
@@ -2468,9 +2606,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         width: ROOM_PX_WIDTH,
         height: ROOM_PX_HEIGHT,
       },
-      weather: currentRoom.weather,
+      weather: currentRoom.weather as RoomSnapshot['weather'],
       surfaces: currentRoom.weather.mode === 'rain'
-        ? buildRoomWeatherSurfaceSegments(currentRoom, roomOrigin)
+        ? getCachedRoomWeatherSurfaceSegments(currentRoom, roomOrigin)
         : [],
     });
 
@@ -2541,6 +2679,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.shouldCenterCamera = false;
     this.shouldRespawnPlayer = false;
     this.pendingWarpSpawnRoomCoordinates = null;
+    this.unknownNeighborWindowRefresh = null;
+    this.nextUnknownNeighborWindowRefreshAt = 0;
     this.presenceController.reset();
     this.roomChatController.reset();
     this.roomCommentsController.reset();
@@ -2959,6 +3099,35 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.windowController.refreshAround(centerCoordinates, options);
   }
 
+  private requestWindowRefreshForUnknownNeighbor(
+    roomCoordinates: RoomCoordinates,
+    neighborCoordinates: RoomCoordinates,
+  ): void {
+    if (
+      this.mode !== 'play'
+      || this.worldStreamingController.isWithinLoadedRoomBounds(neighborCoordinates)
+      || this.unknownNeighborWindowRefresh
+      || this.time.now < this.nextUnknownNeighborWindowRefreshAt
+    ) {
+      return;
+    }
+
+    const request = this.refreshAround(roomCoordinates, { forceChunkReload: true });
+    this.unknownNeighborWindowRefresh = request;
+    void request
+      .then((refreshed) => {
+        if (this.unknownNeighborWindowRefresh !== request) {
+          return;
+        }
+        this.nextUnknownNeighborWindowRefreshAt = this.time.now + (refreshed ? 250 : 50);
+      })
+      .finally(() => {
+        if (this.unknownNeighborWindowRefresh === request) {
+          this.unknownNeighborWindowRefresh = null;
+        }
+      });
+  }
+
   private refreshAroundIfNeededOrFromCache(
     centerCoordinates: RoomCoordinates,
     options: { forceChunkReload?: boolean; refreshLeaderboards?: boolean; preferCachedWindow?: boolean } = {},
@@ -3151,11 +3320,24 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private destroyEdgeWalls(loadedRoom: SceneLoadedFullRoom): void {
+    let firstError: unknown;
+    let hasError = false;
+    const attempt = (operation: () => void) => {
+      try {
+        operation();
+      } catch (error) {
+        if (!hasError) {
+          firstError = error;
+          hasError = true;
+        }
+      }
+    };
     for (const wall of loadedRoom.edgeWalls) {
-      wall.collider.destroy();
-      wall.rect.destroy();
+      attempt(() => wall.collider.destroy());
+      attempt(() => wall.rect.destroy());
     }
     loadedRoom.edgeWalls = [];
+    if (hasError) throw firstError;
   }
 
   private createLiveObjects(loadedRoom: SceneLoadedFullRoom): void {
@@ -3163,8 +3345,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncActiveCourseObjectLinks([loadedRoom]);
   }
 
-  private destroyLiveObjects(loadedRoom: SceneLoadedFullRoom): void {
-    this.liveObjectController.destroyLiveObjects(loadedRoom);
+  private destroyLiveObjects(
+    loadedRoom: SceneLoadedFullRoom,
+    options?: { preserveTriggerState?: boolean },
+  ): void {
+    this.liveObjectController.destroyLiveObjects(loadedRoom, options);
   }
 
   private updateLiveObjects(delta: number): void {
@@ -3172,7 +3357,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    this.liveObjectController.updateLiveObjects(this.loadedFullRoomsById.values(), delta);
+    this.liveObjectController.updateLiveObjects(this.getCollisionReadyLoadedFullRooms(), delta);
   }
 
   private setActiveCourseRun(runState: ActiveCourseRunState | null): void {
@@ -3211,15 +3396,20 @@ export class OverworldPlayScene extends Phaser.Scene {
     const activeCourse = this.activeCourseSnapshot;
 
     for (const loadedRoom of loadedRooms) {
+      const placedObjectsByInstanceId = new Map(
+        loadedRoom.room.placedObjects.flatMap((placedObject) =>
+          placedObject.instanceId
+            ? [[placedObject.instanceId, placedObject] as const]
+            : [],
+        ),
+      );
       for (const liveObject of loadedRoom.liveObjects) {
         const sourceInstanceId = liveObject.placedInstanceId;
         if (!sourceInstanceId) {
           continue;
         }
 
-        const placedTrigger =
-          loadedRoom.room.placedObjects.find((placed) => placed.instanceId === sourceInstanceId) ??
-          null;
+        const placedTrigger = placedObjectsByInstanceId.get(sourceInstanceId) ?? null;
         if (!canPlacedObjectUseObjectLink(placedTrigger)) {
           continue;
         }
@@ -3238,7 +3428,9 @@ export class OverworldPlayScene extends Phaser.Scene {
             ? this.resolveObjectLinkTargetWorldPoint(
                 activeCourse,
                 targetRoomId,
-                targetInstanceId
+                targetInstanceId,
+                loadedRoom.room,
+                placedObjectsByInstanceId,
               )
             : null;
 
@@ -3353,18 +3545,31 @@ export class OverworldPlayScene extends Phaser.Scene {
     activeCourse: CourseSnapshot | null,
     targetRoomId: string,
     targetInstanceId: string,
+    preferredRoom: RoomSnapshot | null = null,
+    preferredPlacedObjectsByInstanceId: ReadonlyMap<
+      string,
+      RoomSnapshot['placedObjects'][number]
+    > | null = null,
   ): { x: number; y: number } | null {
     const loadedRoom = this.loadedFullRoomsById.get(targetRoomId) ?? null;
     const roomRef =
       activeCourse?.roomRefs.find((candidate) => candidate.roomId === targetRoomId) ?? null;
-    const room = loadedRoom?.room ?? (roomRef ? this.getRoomSnapshotForCoordinates(roomRef.coordinates) : null);
-    const roomCoordinates = loadedRoom?.room.coordinates ?? roomRef?.coordinates ?? room?.coordinates ?? null;
+    const preferredTargetRoom = preferredRoom?.id === targetRoomId ? preferredRoom : null;
+    const room = preferredTargetRoom
+      ?? loadedRoom?.room
+      ?? (roomRef ? this.getRoomSnapshotForCoordinates(roomRef.coordinates) : null);
+    const roomCoordinates = preferredTargetRoom?.coordinates
+      ?? loadedRoom?.room.coordinates
+      ?? roomRef?.coordinates
+      ?? room?.coordinates
+      ?? null;
     if (!room || !roomCoordinates) {
       return null;
     }
 
-    const placedTarget =
-      room.placedObjects.find((placed) => placed.instanceId === targetInstanceId) ?? null;
+    const placedTarget = preferredTargetRoom && preferredPlacedObjectsByInstanceId
+      ? preferredPlacedObjectsByInstanceId.get(targetInstanceId) ?? null
+      : room.placedObjects.find((placed) => placed.instanceId === targetInstanceId) ?? null;
     if (!placedTarget) {
       return null;
     }
@@ -3403,13 +3608,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
+    const currentRoom = this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates);
     if (!currentRoom) {
       return;
     }
 
     const playbackTarget = this.resolveRoomMusicPlaybackTarget(currentRoom);
-    const roomMusicKey = getRoomMusicKey(playbackTarget.music) ?? 'none';
+    const roomMusicKey = getRoomMusicKey(playbackTarget.music as RoomMusic | null) ?? 'none';
     const signature =
       `mode:play|${playbackTarget.identity}|source:${playbackTarget.sourceRoomId}|music:${roomMusicKey}`;
     if (this.lastRoomMusicSyncSignature === signature) {
@@ -3417,7 +3622,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     this.lastRoomMusicSyncSignature = signature;
-    if (isRoomMusicEmpty(playbackTarget.music)) {
+    if (isRoomMusicEmpty(playbackTarget.music as RoomMusic | null)) {
       globalRoomMusicController.stopArrangement({
         transition: 'bar',
         fadeDurationSec: 0.18,
@@ -3426,13 +3631,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    void globalRoomMusicController.playArrangement(playbackTarget.music, {
+    void globalRoomMusicController.playArrangement(playbackTarget.music as RoomMusic, {
       mode: 'world-play',
       transition: 'bar',
     });
   }
 
-  private resolveRoomMusicPlaybackTarget(currentRoom: RoomSnapshot): RoomMusicPlaybackTarget {
+  private resolveRoomMusicPlaybackTarget(currentRoom: RoomSnapshotView): RoomMusicPlaybackTarget {
     const activeCourseRun = this.activeCourseRun;
     const activeCourse = activeCourseRun?.course ?? null;
     if (activeCourse?.roomRefs.some((roomRef) => roomRef.roomId === currentRoom.id)) {
@@ -3472,9 +3677,9 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private resolveCourseAreaMusicSource(
     course: CourseSnapshot,
-    currentRoom: RoomSnapshot,
+    currentRoom: RoomSnapshotView,
     lockedStartRoomId: string | null = null,
-  ): RoomSnapshot {
+  ): RoomSnapshotView {
     const startRoomRef = this.coursePlaybackController.getCourseStartRoomRef(
       course,
       lockedStartRoomId,
@@ -3483,14 +3688,14 @@ export class OverworldPlayScene extends Phaser.Scene {
       ...(startRoomRef ? [startRoomRef] : []),
       ...course.roomRefs.filter((roomRef) => roomRef.roomId !== startRoomRef?.roomId),
     ];
-    let firstAvailableRoom: RoomSnapshot | null = null;
+    let firstAvailableRoom: RoomSnapshotView | null = null;
     for (const roomRef of orderedRoomRefs) {
-      const room = this.getRoomSnapshotForCoordinates(roomRef.coordinates);
+      const room = this.getRoomSnapshotViewForCoordinates(roomRef.coordinates);
       if (!room) {
         continue;
       }
       firstAvailableRoom ??= room;
-      if (!isRoomMusicEmpty(room.music)) {
+      if (!isRoomMusicEmpty(room.music as RoomMusic | null)) {
         return room;
       }
     }
@@ -3500,20 +3705,20 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private resolveLoadedExpandedRoomMusicSource(
     expandedRoomId: string,
-    currentRoom: RoomSnapshot,
-  ): RoomSnapshot {
+    currentRoom: RoomSnapshotView,
+  ): RoomSnapshotView {
     const candidateCoordinates = Array.from(this.roomSummariesById.values())
       .filter((summary) => summary.expandedRoom?.expandedRoomId === expandedRoomId)
       .map((summary) => summary.coordinates)
       .sort((a, b) => a.y - b.y || a.x - b.x);
-    let firstAvailableRoom: RoomSnapshot | null = null;
+    let firstAvailableRoom: RoomSnapshotView | null = null;
     for (const coordinates of candidateCoordinates) {
-      const room = this.getRoomSnapshotForCoordinates(coordinates);
+      const room = this.getRoomSnapshotViewForCoordinates(coordinates);
       if (!room) {
         continue;
       }
       firstAvailableRoom ??= room;
-      if (!isRoomMusicEmpty(room.music)) {
+      if (!isRoomMusicEmpty(room.music as RoomMusic | null)) {
         return room;
       }
     }
@@ -3778,6 +3983,14 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.browseOverlayController.redrawBrowseOverlays();
     this.presenceOverlayController.syncOverlays();
+    this.syncBackdropCameraIgnores();
+  }
+
+  private syncFocusedRoomVisuals(): void {
+    this.roomCellController.redrawFocusHighlights();
+    this.browseOverlayController.redrawBrowseOverlays();
+    this.presenceOverlayController.syncOverlays();
+    this.updateBackdrop();
     this.syncBackdropCameraIgnores();
   }
 
@@ -4214,15 +4427,19 @@ export class OverworldPlayScene extends Phaser.Scene {
     return false;
   }
 
-  private getRoomSnapshotAtWorldPoint(worldX: number, worldY: number): RoomSnapshot | null {
+  private getRoomSnapshotAtWorldPoint(worldX: number, worldY: number): RoomSnapshotView | null {
     const coordinates = {
       x: Math.floor(worldX / ROOM_PX_WIDTH),
       y: Math.floor(worldY / ROOM_PX_HEIGHT),
     };
-    return this.getRoomSnapshotForCoordinates(coordinates);
+    return this.getRoomSnapshotViewForCoordinates(coordinates);
   }
 
-  private isSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean {
+  private isSolidTerrainAtWorldPoint(
+    room: RoomSnapshot | RoomSnapshotView,
+    worldX: number,
+    worldY: number,
+  ): boolean {
     const roomOrigin = this.getRoomOrigin(room.coordinates);
     const localX = Math.floor((worldX - roomOrigin.x) / TILE_SIZE);
     const localY = Math.floor((worldY - roomOrigin.y) / TILE_SIZE);
@@ -4232,7 +4449,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     const localPixelY = worldY - roomOrigin.y - localY * TILE_SIZE;
-    return terrainTileCollidesAtLocalPixel(room, localX, localY, localPixelY);
+    return terrainTileCollidesAtLocalPixel(room as RoomSnapshot, localX, localY, localPixelY);
   }
 
   private getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle {
@@ -4240,7 +4457,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private maybeRespawnFromVoid(): void {
-    const currentRoom = this.getRoomSnapshotForCoordinates(this.currentRoomCoordinates);
+    const currentRoom = this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates);
     if (!currentRoom || !this.player || !this.playerBody) return;
 
     const roomOrigin = this.getRoomOrigin(currentRoom.coordinates);
@@ -4655,6 +4872,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.portalObjectController.resetForRoom(loadedRoom);
     this.destroyLiveObjects(loadedRoom);
     this.createLiveObjects(loadedRoom);
+    this.liveObjectController.syncLoadedWorldColliders(this.loadedFullRoomsById.values());
     this.syncLiveObjectInteractions();
   }
 
@@ -4730,6 +4948,12 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.selectionController.getRoomSnapshotForCoordinates(coordinates);
   }
 
+  private getRoomSnapshotViewForCoordinates(
+    coordinates: RoomCoordinates,
+  ): RoomSnapshotView | null {
+    return this.worldStreamingController.getRoomSnapshotViewForCoordinates(coordinates);
+  }
+
   private updateSelectedSummary(): void {
     this.hudStateController.refreshSelectedSummary();
   }
@@ -4745,8 +4969,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   getPostRunShareRoomSnapshot(): RoomSnapshot | null {
     const runState = this.goalRunController.getCurrentRun();
     const coordinates = runState?.roomCoordinates ?? this.currentRoomCoordinates;
-    const snapshot = this.getRoomSnapshotForCoordinates(coordinates);
-    return snapshot ? cloneRoomSnapshot(snapshot) : null;
+    return this.worldStreamingController.cloneRoomSnapshotForCoordinates(coordinates);
   }
 
   fitLoadedWorld(): void {
@@ -5697,6 +5920,43 @@ export class OverworldPlayScene extends Phaser.Scene {
     };
   }
 
+  debugPrepareTransitionDestination(roomId: string): Record<string, unknown> {
+    const coordinates = parseRoomId(roomId);
+    if (!coordinates) {
+      return { ok: false, reason: 'invalid-room-id' };
+    }
+    if (this.mode !== 'play') {
+      return { ok: false, reason: 'play-mode-required' };
+    }
+    const currentCoordinates = this.currentRoomCoordinates;
+    if (
+      !currentCoordinates
+      || Math.abs(coordinates.x - currentCoordinates.x)
+        + Math.abs(coordinates.y - currentCoordinates.y) !== 1
+    ) {
+      return { ok: false, reason: 'destination-not-cardinal-neighbor' };
+    }
+
+    const collisionReady =
+      this.worldStreamingController.preparePortalTargetRoomForTransition(coordinates);
+    return {
+      ok: true,
+      roomId: roomIdFromCoordinates(coordinates),
+      coordinates,
+      collisionReady,
+    };
+  }
+
+  debugClearTransitionDestinationPreparation(roomId: string): Record<string, unknown> {
+    const coordinates = parseRoomId(roomId);
+    if (!coordinates) {
+      return { ok: false, reason: 'invalid-room-id' };
+    }
+    const normalizedRoomId = roomIdFromCoordinates(coordinates);
+    this.worldStreamingController.clearPortalTargetRoomPreparation(normalizedRoomId);
+    return { ok: true, roomId: normalizedRoomId };
+  }
+
   async restartCurrentRun(): Promise<void> {
     if (this.activeRoomRushRun) {
       await this.restartRoomRushRun();
@@ -6051,6 +6311,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.scenePauseApplied = false;
     getRoomGoalIntroModalController()?.forceClose();
     this.scale.off('resize', this.handleResize, this);
+    this.events.off(
+      Phaser.Scenes.Events.PRE_UPDATE,
+      this.captureCriticalFrameStart,
+      this,
+    );
     this.events.off(Phaser.Scenes.Events.WAKE, this.handleWake, this);
     this.inspectInputController.destroy();
     this.input.removeAllListeners();
@@ -6065,6 +6330,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.mobilePerformanceProfiler = null;
     this.removeMobilePortraitCameraTunerApi();
 
+    this.portalObjectController.destroy();
     this.destroyPlayer();
     this.worldStreamingController.destroy();
     for (const sprite of this.starfieldSprites) {
@@ -6079,12 +6345,59 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.cameras.remove(this.backdropCamera, true);
     }
     this.backdropCamera = null;
+    this.criticalFrameStartedAtMs = null;
     this.goalMarkerController.destroy();
     this.gridOverlayController.destroy();
     this.browseOverlayController.destroy();
     this.roomCellController.destroy();
     this.presenceOverlayController.destroy();
   };
+
+  private captureCriticalFrameStart = (): void => {
+    this.criticalFrameStartedAtMs = performance.now();
+  };
+
+  getRuntimeTransitionProbe(
+    destinationRoomId: string | null = null,
+  ): OverworldRuntimeTransitionProbe {
+    const currentRoomId = roomIdFromCoordinates(this.currentRoomCoordinates);
+    const loadedFullRoomsById = this.loadedFullRoomsById;
+    const currentLoadedRoom = loadedFullRoomsById.get(currentRoomId) ?? null;
+    const destinationPreparation = destinationRoomId === null
+      ? null
+      : this.worldStreamingController.getFullRoomPreparationProbe(destinationRoomId);
+    return {
+      scene: 'overworld-play',
+      mode: this.mode,
+      currentRoomId,
+      selectedRoomId: roomIdFromCoordinates(this.selectedCoordinates),
+      destinationRoomId,
+      destinationLoaded: destinationRoomId === null
+        ? null
+        : loadedFullRoomsById.has(destinationRoomId),
+      destinationPreparationIdentity: destinationPreparation?.identity ?? null,
+      destinationPreparationPhase: destinationPreparation?.phase ?? null,
+      destinationDormantReady: destinationRoomId === null
+        ? null
+        : destinationPreparation?.dormantReady === true,
+      currentFullRoomLoaded: currentLoadedRoom !== null,
+      currentCollisionReady:
+        this.worldStreamingController.isPlayableRoomCollisionReady(
+          this.currentRoomCoordinates,
+        ),
+      currentTerrainColliderActive: currentLoadedRoom?.terrainCollider?.active === true,
+      player: this.playerBody && this.player
+        ? {
+            x: Math.round(this.player.x),
+            y: Math.round(this.player.y),
+            velocityX: Math.round(this.playerBody.velocity.x),
+            velocityY: Math.round(this.playerBody.velocity.y),
+            bodyWidth: Math.round(this.playerBody.width),
+            bodyHeight: Math.round(this.playerBody.height),
+          }
+        : null,
+    };
+  }
 
   describeState(): Record<string, unknown> {
     const camera = this.cameras.main;
@@ -6246,6 +6559,10 @@ export class OverworldPlayScene extends Phaser.Scene {
         pendingPreviewTextureBuildCount: streamingMetrics.pendingPreviewTextureBuildCount,
         approximatePreviewTexturePixels: streamingMetrics.approximatePreviewTexturePixels,
         loadedFullRoomCount: streamingMetrics.loadedFullRoomCount,
+        roomSnapshotCloneCount: streamingMetrics.roomSnapshotCloneCount,
+        pendingFullRoomPreparationCount: streamingMetrics.pendingFullRoomPreparationCount,
+        frameWork: streamingMetrics.frameWork,
+        roomArtifactCache: streamingMetrics.roomArtifactCache,
         localPlayPressureProfile: streamingMetrics.localPlayPressureProfile,
         localPlayPressureScore: streamingMetrics.localPlayPressureScore,
         localPlayPressureRoomCount: streamingMetrics.localPlayPressureRoomCount,
@@ -6284,6 +6601,10 @@ export class OverworldPlayScene extends Phaser.Scene {
           }
         : null,
       currentFullRoomLoaded: Boolean(currentLoadedRoom),
+      currentCollisionReady:
+        this.worldStreamingController.isPlayableRoomCollisionReady(
+          this.currentRoomCoordinates,
+        ),
       currentTerrainColliderActive: Boolean(currentLoadedRoom?.terrainCollider?.active),
       loadedFullRoomIds: Array.from(this.loadedFullRoomsById.keys()).sort(),
       loadedPreviewRooms: this.previewImages.length,

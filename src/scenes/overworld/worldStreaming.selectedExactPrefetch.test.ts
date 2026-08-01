@@ -33,6 +33,9 @@ describe('world streaming selected exact prefetch', () => {
           isBrowseCutoverActive: () => true,
           isTargetLodReady: () => true,
         },
+        frameWorkCoordinator: {
+          hasQueuedWorkAtPriority: () => false,
+        },
         previewCache: {
           cancelSelectionPrefetchesExcept: vi.fn(),
           getFullRoomSnapshot: () => cachedRoom,

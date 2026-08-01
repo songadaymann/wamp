@@ -27,6 +27,9 @@ interface Window {
   get_sword_hunter_debug?: () => Record<string, unknown>;
   get_sfx_debug_state?: () => Record<string, unknown>;
   get_wamp_boot_debug_state?: () => Record<string, unknown>;
+  get_wamp_runtime_transition_probe?: (
+    destinationRoomId?: string | null,
+  ) => import('./scenes/OverworldPlayScene').OverworldRuntimeTransitionProbe | null;
   download_wamp_resource_log?: () => void;
   clear_wamp_resource_log?: () => void;
   wampResourceDebug?: import('./main/resourceDebug').ResourceDebugLoggerApi;
@@ -61,7 +64,9 @@ interface Window {
       | 'returnToWorld'
       | 'editSelectedRoom'
       | 'openSyntheticEditor'
-      | 'setPlayerPosition',
+      | 'setPlayerPosition'
+      | 'prepareTransitionDestination'
+      | 'clearTransitionDestinationPreparation',
     payload?: {
       roomId?: string | null;
       x?: number;
