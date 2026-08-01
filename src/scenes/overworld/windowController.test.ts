@@ -41,10 +41,12 @@ function createHarness(options: {
     )),
     refreshVisibleSelectionFromCache: vi.fn(),
     refreshAround: vi.fn(async (): Promise<'success' | 'cancelled' | 'error'> => 'cancelled'),
+    refreshLoadedChunksIfChanged: vi.fn(async (): Promise<'updated' | 'unchanged' | 'cancelled' | 'error'> => 'unchanged'),
   };
   const host = {
     worldStreamingController,
     getMode: vi.fn(() => options.mode ?? 'play'),
+    getRefreshCenterCoordinates: vi.fn(() => ({ ...coordinates })),
     setWindowCenterCoordinates: vi.fn(),
     updateSelectedSummary: vi.fn(),
     refreshLeaderboardForSelection: vi.fn(async () => undefined),
@@ -135,6 +137,79 @@ describe('overworld cached-window play hydration', () => {
     );
 
     expect(worldStreamingController.refreshAround).not.toHaveBeenCalled();
+  });
+
+  it('retries a cancelled window recenter until it succeeds', async () => {
+    const { controller, host, worldStreamingController } = createHarness({
+      snapshotAvailable: true,
+    });
+    worldStreamingController.needsRefreshAround.mockReturnValue(true);
+    worldStreamingController.refreshAround
+      .mockResolvedValueOnce('cancelled')
+      .mockImplementationOnce(async () => {
+        worldStreamingController.needsRefreshAround.mockReturnValue(false);
+        return 'success';
+      });
+
+    controller.refreshAroundIfNeededOrFromCache(
+      { x: -2, y: 0 },
+      { preferCachedWindow: true },
+    );
+
+    await vi.waitFor(() => {
+      expect(worldStreamingController.refreshAround).toHaveBeenCalledTimes(1);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    host.getTimeNow.mockReturnValue(1_000);
+    await vi.waitFor(() => {
+      controller.maybeRefreshVisibleChunks();
+      expect(worldStreamingController.refreshAround).toHaveBeenCalledTimes(2);
+    });
+
+    // Once satisfied, the pending recenter is dropped and no more refreshes run.
+    host.getTimeNow.mockReturnValue(10_000);
+    controller.maybeRefreshVisibleChunks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worldStreamingController.refreshAround).toHaveBeenCalledTimes(2);
+  });
+
+  it('repairs a stale window from the update loop when no recenter is pending', async () => {
+    const { controller, worldStreamingController } = createHarness({
+      snapshotAvailable: true,
+    });
+    worldStreamingController.needsRefreshAround.mockReturnValue(true);
+    worldStreamingController.refreshAround.mockImplementationOnce(async () => {
+      worldStreamingController.needsRefreshAround.mockReturnValue(false);
+      return 'success';
+    });
+
+    controller.maybeRefreshVisibleChunks();
+
+    await vi.waitFor(() => {
+      expect(worldStreamingController.refreshAround).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('drops a pending recenter when another refresh already covered it', async () => {
+    const { controller, worldStreamingController } = createHarness({
+      snapshotAvailable: true,
+    });
+    worldStreamingController.needsRefreshAround.mockReturnValue(true);
+    worldStreamingController.refreshAround.mockResolvedValueOnce('cancelled');
+
+    controller.refreshAroundIfNeededOrFromCache(
+      { x: -2, y: 0 },
+      { preferCachedWindow: true },
+    );
+    await vi.waitFor(() => {
+      expect(worldStreamingController.refreshAround).toHaveBeenCalledTimes(1);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    worldStreamingController.needsRefreshAround.mockReturnValue(false);
+    controller.maybeRefreshVisibleChunks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worldStreamingController.refreshAround).toHaveBeenCalledTimes(1);
   });
 
   it('retries missing Play hydration after an in-flight refresh cancels it', async () => {

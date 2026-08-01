@@ -99,6 +99,9 @@ interface OverworldWindowControllerHost {
   getPlayRefreshIntervalMs(): number;
 }
 
+const RECENTER_REFRESH_CANCELLED_RETRY_DELAY_MS = 250;
+const RECENTER_REFRESH_ERROR_RETRY_DELAY_MS = 5_000;
+
 export class OverworldWindowController {
   private visibleChunkRefreshInFlight = false;
   private nextVisibleChunkRefreshAt = 0;
@@ -110,6 +113,12 @@ export class OverworldWindowController {
   private playableSnapshotRefreshInFlightToken: number | null = null;
   private nextPlayableSnapshotRefreshAt = 0;
   private playableSnapshotRefreshToken = 0;
+  private pendingRecenterRefresh: {
+    centerCoordinates: RoomCoordinates;
+    options: { forceChunkReload?: boolean };
+  } | null = null;
+  private recenterRefreshInFlight = false;
+  private nextRecenterRefreshAt = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -123,6 +132,9 @@ export class OverworldWindowController {
     this.playableSnapshotRefreshInFlightToken = null;
     this.nextPlayableSnapshotRefreshAt = 0;
     this.playableSnapshotRefreshToken += 1;
+    this.pendingRecenterRefresh = null;
+    this.recenterRefreshInFlight = false;
+    this.nextRecenterRefreshAt = 0;
   }
 
   async handleWakeAsync(data?: OverworldPlaySceneData): Promise<void> {
@@ -372,7 +384,7 @@ export class OverworldWindowController {
       if (needsPlayableSnapshot) {
         this.requestPlayableSnapshotRefresh(centerCoordinates);
       } else if (needsRefresh) {
-        void this.refreshAround(centerCoordinates);
+        this.requestRecenterRefresh(centerCoordinates);
       }
       return;
     }
@@ -389,7 +401,7 @@ export class OverworldWindowController {
       if (needsPlayableSnapshot) {
         this.requestPlayableSnapshotRefresh(centerCoordinates, refreshOptions);
       } else {
-        void this.refreshAround(centerCoordinates, refreshOptions);
+        this.requestRecenterRefresh(centerCoordinates, refreshOptions);
       }
       return;
     }
@@ -426,7 +438,7 @@ export class OverworldWindowController {
 
   refreshChunkWindowIfNeeded(centerCoordinates: RoomCoordinates): void {
     if (this.host.worldStreamingController.needsRefreshAround(centerCoordinates)) {
-      void this.refreshAround(centerCoordinates);
+      this.requestRecenterRefresh(centerCoordinates);
       return;
     }
 
@@ -435,6 +447,9 @@ export class OverworldWindowController {
   }
 
   maybeRefreshVisibleChunks(): void {
+    if (this.maybeRunRecenterRefresh()) {
+      return;
+    }
     if (this.maybeRunPlayableSnapshotRefresh()) {
       return;
     }
@@ -449,6 +464,10 @@ export class OverworldWindowController {
 
     const centerCoordinates = this.host.getRefreshCenterCoordinates();
     if (this.host.worldStreamingController.needsRefreshAround(centerCoordinates)) {
+      // The loaded window no longer covers the active center (e.g. a
+      // transition-time recenter lost a race with an in-flight refresh).
+      // Repair it instead of waiting for a page reload.
+      this.requestRecenterRefresh(centerCoordinates);
       return;
     }
 
@@ -474,6 +493,64 @@ export class OverworldWindowController {
         this.nextVisibleChunkRefreshAt =
           this.host.getTimeNow() + this.getVisibleChunkRefreshIntervalMs();
       });
+  }
+
+  private requestRecenterRefresh(
+    centerCoordinates: RoomCoordinates,
+    options: { forceChunkReload?: boolean } = {},
+  ): void {
+    this.pendingRecenterRefresh = {
+      centerCoordinates: { ...centerCoordinates },
+      options: { ...options },
+    };
+    this.nextRecenterRefreshAt = 0;
+    this.maybeRunRecenterRefresh();
+  }
+
+  private maybeRunRecenterRefresh(): boolean {
+    const request = this.pendingRecenterRefresh;
+    if (!request) {
+      return false;
+    }
+
+    if (
+      !request.options.forceChunkReload
+      && !this.host.worldStreamingController.needsRefreshAround(request.centerCoordinates)
+    ) {
+      // Another refresh already covered this center while we were waiting.
+      this.pendingRecenterRefresh = null;
+      return false;
+    }
+
+    if (
+      this.recenterRefreshInFlight
+      || this.host.getTimeNow() < this.nextRecenterRefreshAt
+    ) {
+      return true;
+    }
+
+    this.recenterRefreshInFlight = true;
+    void this.performRefreshAround(request.centerCoordinates, request.options)
+      .then((result) => {
+        if (this.pendingRecenterRefresh !== request) {
+          return;
+        }
+        if (result === 'success') {
+          this.pendingRecenterRefresh = null;
+          return;
+        }
+        // 'cancelled' means another chunk request was in flight; retry soon
+        // instead of dropping the recenter and leaving the window stale.
+        // Errors retry with a longer backoff so a flaky connection recovers.
+        this.nextRecenterRefreshAt = this.host.getTimeNow()
+          + (result === 'cancelled'
+            ? RECENTER_REFRESH_CANCELLED_RETRY_DELAY_MS
+            : RECENTER_REFRESH_ERROR_RETRY_DELAY_MS);
+      })
+      .finally(() => {
+        this.recenterRefreshInFlight = false;
+      });
+    return true;
   }
 
   private requestPlayableSnapshotRefresh(
