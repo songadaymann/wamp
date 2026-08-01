@@ -45,7 +45,10 @@ interface OverworldRoomTransitionHost {
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   clearLadderState(): void;
   syncPlayerPickupSensor(): void;
+  getTransitionDebugContext?(coordinates: RoomCoordinates): Record<string, unknown>;
 }
+
+type BlockedTransitionReason = 'locked' | 'unreachable' | 'non-cardinal' | 'unprepared';
 
 interface SafePlayerTransform {
   valid: boolean;
@@ -58,6 +61,7 @@ interface SafePlayerTransform {
 const TRANSITION_PREFETCH_DISTANCE_PX = 192;
 const TRANSITION_PREPARE_DISTANCE_PX = 72;
 const MOVEMENT_EPSILON = 1;
+const BLOCKED_TRANSITION_LOG_INTERVAL_MS = 1_000;
 
 export class OverworldRoomTransitionController {
   private readonly lastSafePlayerTransform: SafePlayerTransform = {
@@ -71,6 +75,8 @@ export class OverworldRoomTransitionController {
   private pendingVerticalPreparation: RoomCoordinates | null = null;
   private authorizedTeleportDestination: RoomCoordinates | null = null;
   private transitionRoomPreparedThisUpdate = false;
+  private lastBlockedLogKey = '';
+  private lastBlockedLogAt = 0;
 
   constructor(private readonly host: OverworldRoomTransitionHost) {}
 
@@ -120,6 +126,12 @@ export class OverworldRoomTransitionController {
         authorizedTeleport,
       )
     ) {
+      const reason: BlockedTransitionReason = this.host.isRoomTransitionLocked()
+        ? 'locked'
+        : this.isCardinalNeighbor(currentRoomCoordinates, nextRoomCoordinates)
+          ? 'unreachable'
+          : 'non-cardinal';
+      this.logBlockedTransition(reason, currentRoomCoordinates, nextRoomCoordinates);
       if (!this.isCardinalNeighbor(currentRoomCoordinates, nextRoomCoordinates)) {
         this.restoreLastSafePlayerTransform(currentRoomCoordinates);
       } else {
@@ -129,6 +141,7 @@ export class OverworldRoomTransitionController {
     }
 
     if (!this.host.preparePlayableRoomForTransition(nextRoomCoordinates)) {
+      this.logBlockedTransition('unprepared', currentRoomCoordinates, nextRoomCoordinates);
       if (this.isCardinalNeighbor(currentRoomCoordinates, nextRoomCoordinates)) {
         this.blockRoomTransition(currentRoomCoordinates, nextRoomCoordinates);
       } else {
@@ -376,6 +389,25 @@ export class OverworldRoomTransitionController {
       && destination.x === nextRoomCoordinates.x
       && destination.y === nextRoomCoordinates.y
     );
+  }
+
+  private logBlockedTransition(
+    reason: BlockedTransitionReason,
+    currentRoomCoordinates: RoomCoordinates,
+    nextRoomCoordinates: RoomCoordinates,
+  ): void {
+    const key = `${reason}:${nextRoomCoordinates.x},${nextRoomCoordinates.y}`;
+    const now = Date.now();
+    if (key === this.lastBlockedLogKey && now < this.lastBlockedLogAt + BLOCKED_TRANSITION_LOG_INTERVAL_MS) {
+      return;
+    }
+    this.lastBlockedLogKey = key;
+    this.lastBlockedLogAt = now;
+    console.warn(`[room-transition] blocked (${reason})`, {
+      from: { ...currentRoomCoordinates },
+      to: { ...nextRoomCoordinates },
+      ...(this.host.getTransitionDebugContext?.(nextRoomCoordinates) ?? {}),
+    });
   }
 
   private restoreLastSafePlayerTransform(currentRoomCoordinates: RoomCoordinates): void {

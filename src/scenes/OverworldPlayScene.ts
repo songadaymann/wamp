@@ -1904,6 +1904,18 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.movementController.clearLadderState();
       },
       syncPlayerPickupSensor: () => this.playerPresentationController.syncPlayerPickupSensor(),
+      getTransitionDebugContext: (coordinates) => ({
+        cellState: this.getCellStateAt(coordinates),
+        summaryLoaded: this.worldStreamingController
+          .getRoomSummariesById()
+          .has(roomIdFromCoordinates(coordinates)),
+        withinLoadedBounds: this.worldStreamingController.isWithinLoadedRoomBounds(coordinates),
+        collisionReady: this.worldStreamingController.isPlayableRoomCollisionReady(coordinates),
+        windowCenter: { ...this.windowCenterCoordinates },
+        needsWindowRefresh: this.worldStreamingController.needsRefreshAround(
+          this.currentRoomCoordinates,
+        ),
+      }),
     });
     this.presenceOverlayController = new OverworldPresenceOverlayController({
       scene: this,
