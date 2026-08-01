@@ -302,7 +302,7 @@ async function waitForTransitionDestinationPrepared(page, destinationRoomId) {
   try {
     await page.waitForFunction((expectedRoomId) => {
       const probe = window.get_wamp_runtime_transition_probe?.(expectedRoomId) ?? null;
-      return probe?.destinationLoaded === true || probe?.destinationDormantReady === true;
+      return probe?.destinationCollisionReady === true;
     }, destinationRoomId, { timeout: 15_000 });
   } catch (error) {
     const diagnostic = await page.evaluate((expectedRoomId) => {
@@ -531,10 +531,10 @@ function isDestinationLoaded(sample, transition) {
 }
 
 function isDestinationPrepared(sample, transition) {
-  return isDestinationLoaded(sample, transition)
-    || (
-      sample?.destinationRoomId === transition.expectedRoomId
-      && sample.destinationDormantReady === true
+  return sample?.destinationRoomId === transition.expectedRoomId
+    && (
+      sample.destinationCollisionReady === true
+      || sample.destinationDormantReady === true
     );
 }
 
@@ -557,7 +557,7 @@ export function analyzeTransitionSamples(
     sample?.currentRoomId === transition.expectedRoomId
   )) ?? null;
   const destinationReadySample = timeline.find((sample) => (
-    isDestinationLoaded(sample, transition)
+    isDestinationPrepared(sample, transition)
   )) ?? null;
   let firstNearSeamContact = null;
   let firstNearSeamStop = null;
@@ -616,7 +616,7 @@ export function analyzeTransitionSamples(
   const seamHoldWithinLimit = preparationState === 'warm'
     ? !seamHoldDetected && seamHoldMs === 0
     : seamHoldMs <= allowedSeamHoldMs;
-  const destinationReadyMs = destinationLoadedBeforeKey
+  const destinationReadyMs = destinationPreparedAtInput
     ? 0
     : destinationReadySample?.elapsedSinceKeyDownMs ?? null;
   const sampleIntervalsMs = timeline.slice(1).map((sample, index) => (
@@ -776,6 +776,7 @@ async function readTransitionRuntime(page, destinationRoomId) {
       selectedRoomId: probe.selectedRoomId,
       destinationRoomId: probe.destinationRoomId,
       destinationLoaded: probe.destinationLoaded,
+      destinationCollisionReady: probe.destinationCollisionReady,
       destinationPreparationIdentity: probe.destinationPreparationIdentity,
       destinationPreparationPhase: probe.destinationPreparationPhase,
       destinationDormantReady: probe.destinationDormantReady,
@@ -787,8 +788,12 @@ async function readTransitionRuntime(page, destinationRoomId) {
   }, destinationRoomId);
 }
 
-async function startPostCrossingInvariantMonitor(page, expectedRoomId) {
-  await page.evaluate((destinationRoomId) => {
+async function startPostCrossingInvariantMonitor(
+  page,
+  expectedRoomId,
+  keyDownPlayerTarget = null,
+) {
+  await page.evaluate(({ destinationRoomId, playerTarget }) => {
     const previousMonitor = window.__wampTransitionInvariantMonitor;
     if (previousMonitor?.requestId) cancelAnimationFrame(previousMonitor.requestId);
     if (previousMonitor?.keyDownHandler) {
@@ -807,11 +812,17 @@ async function startPostCrossingInvariantMonitor(page, expectedRoomId) {
       requestId: 0,
     };
     monitor.keyDownHandler = () => {
+      if (playerTarget) {
+        void window.run_preview_smoke_action?.('setPlayerPosition', {
+          ...playerTarget,
+          bodyEnabled: true,
+        });
+      }
       const probe = window.get_wamp_runtime_transition_probe?.(destinationRoomId) ?? null;
       monitor.timeline = [];
       monitor.keyDownAtMs = performance.now();
       monitor.destinationPreparedAtKeyDown = Boolean(
-        probe?.destinationLoaded === true || probe?.destinationDormantReady === true,
+        probe?.destinationCollisionReady === true || probe?.destinationDormantReady === true,
       );
     };
     window.addEventListener('keydown', monitor.keyDownHandler, { once: true });
@@ -828,6 +839,7 @@ async function startPostCrossingInvariantMonitor(page, expectedRoomId) {
             currentRoomId,
             destinationRoomId: probe.destinationRoomId,
             destinationLoaded: probe.destinationLoaded === true,
+            destinationCollisionReady: probe.destinationCollisionReady === true,
             destinationPreparationIdentity: probe.destinationPreparationIdentity,
             destinationPreparationPhase: probe.destinationPreparationPhase,
             destinationDormantReady: probe.destinationDormantReady === true,
@@ -857,7 +869,10 @@ async function startPostCrossingInvariantMonitor(page, expectedRoomId) {
     };
     monitor.requestId = requestAnimationFrame(sample);
     window.__wampTransitionInvariantMonitor = monitor;
-  }, expectedRoomId);
+  }, {
+    destinationRoomId: expectedRoomId,
+    playerTarget: keyDownPlayerTarget,
+  });
 }
 
 async function captureTransitionWindow(page) {
@@ -920,7 +935,11 @@ async function runKeyboardRoomTransition(
   let keyHeld = false;
   let monitorCaptured = false;
 
-  await startPostCrossingInvariantMonitor(page, transition.expectedRoomId);
+  await startPostCrossingInvariantMonitor(page, transition.expectedRoomId, {
+    ...transition.approachPosition,
+    velocityX: transition.approachVelocity.x,
+    velocityY: transition.approachVelocity.y,
+  });
   try {
     await page.keyboard.down(transition.heldKey);
     keyHeld = true;
@@ -1088,9 +1107,18 @@ async function run() {
   const cdp = await context.newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: options.cpuThrottle });
   const errors = [];
+  const transitionWarnings = [];
+  let captureWarmTransitionWarnings = false;
   page.on('pageerror', (error) => errors.push(String(error)));
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
+    if (
+      captureWarmTransitionWarnings
+      && message.type() === 'warning'
+      && message.text().startsWith('[room-transition]')
+    ) {
+      transitionWarnings.push(message.text());
+    }
   });
 
   await page.goto(options.url, { waitUntil: 'domcontentloaded' });
@@ -1135,13 +1163,16 @@ async function run() {
     try {
       await prepareTransitionDestination(page, transition.expectedRoomId);
       await waitForTransitionDestinationPrepared(page, transition.expectedRoomId);
+      captureWarmTransitionWarnings = true;
       warmTransitionRun = await runKeyboardRoomTransition(
         page,
         transition,
         options.durationMs,
         options.maxSeamHoldMs,
+        { approachSettleMs: 0 },
       );
     } finally {
+      captureWarmTransitionWarnings = false;
       await clearTransitionDestinationPreparation(page, transition.expectedRoomId);
     }
     transitionRuns.push(warmTransitionRun);
@@ -1151,10 +1182,19 @@ async function run() {
       const coldContext = await createBenchmarkBrowserContext(browser);
       try {
         const coldPage = await coldContext.newPage();
+        let captureColdTransitionWarnings = false;
+        const coldTransitionWarnings = [];
         coldPage.on('pageerror', (error) => errors.push(`cold-${iteration}: ${String(error)}`));
         coldPage.on('console', (message) => {
           if (message.type() === 'error') {
             errors.push(`cold-${iteration}: ${message.text()}`);
+          }
+          if (
+            captureColdTransitionWarnings
+            && message.type() === 'warning'
+            && message.text().startsWith('[room-transition]')
+          ) {
+            coldTransitionWarnings.push(`cold-${iteration}: ${message.text()}`);
           }
         });
         const coldCdp = await coldContext.newCDPSession(coldPage);
@@ -1168,13 +1208,20 @@ async function run() {
         await coldPage.evaluate(() => {
           window.wampMobilePerf?.reset();
         });
-        const coldRun = await runKeyboardRoomTransition(
-          coldPage,
-          transition,
-          options.durationMs,
-          options.maxSeamHoldMs,
-          { approachSettleMs: 0 },
-        );
+        captureColdTransitionWarnings = true;
+        let coldRun;
+        try {
+          coldRun = await runKeyboardRoomTransition(
+            coldPage,
+            transition,
+            options.durationMs,
+            options.maxSeamHoldMs,
+            { approachSettleMs: 0 },
+          );
+        } finally {
+          captureColdTransitionWarnings = false;
+          transitionWarnings.push(...coldTransitionWarnings);
+        }
         const coldFinalState = await coldPage.evaluate(() => (
           JSON.parse(window.render_game_to_text?.() ?? '{}')
         ));
@@ -1416,6 +1463,7 @@ async function run() {
     tracePath,
     state: captured.state,
     errors,
+    transitionWarnings,
     passed:
       profilerGate.passed
       && runtimeCounterGate.passed
@@ -1438,6 +1486,7 @@ async function run() {
     transitionRuntimeCounterAggregate,
     gc,
     errors: errors.length,
+    transitionWarnings,
     transitionAssertion,
     transitionAggregate,
     passed: result.passed,

@@ -87,7 +87,12 @@ describe('runtime room-transition seam timing', () => {
     const result = analyzeTransitionSamples([
       sample({ elapsed: 0 }),
       sample({ elapsed: 250, x: 634, velocityX: 0 }),
-      sample({ elapsed: 360, x: 634, velocityX: 0, loaded: ['0,0', '1,0'] }),
+      {
+        ...sample({ elapsed: 360, x: 634, velocityX: 0, loaded: ['0,0', '1,0'] }),
+        destinationRoomId: '1,0',
+        destinationLoaded: true,
+        destinationCollisionReady: true,
+      },
       sample({ elapsed: 430, room: '1,0', x: 643, loaded: ['0,0', '1,0'] }),
     ], transition('right'), { maxSeamHoldMs: 100 });
 
@@ -152,6 +157,31 @@ describe('runtime room-transition seam timing', () => {
     expect(result.preparationState).toBe('warm');
     expect(result.destinationPreparedBeforeKey).toBe(true);
     expect(result.seamHoldGatePassed).toBe(false);
+  });
+
+  it('does not treat a loaded destination without active collision as warm', () => {
+    const first = {
+      ...sample({ elapsed: 0 }),
+      destinationRoomId: '1,0',
+      destinationLoaded: true,
+      destinationCollisionReady: false,
+    };
+    const result = analyzeTransitionSamples([
+      first,
+      {
+        ...sample({ elapsed: 60, room: '1,0', x: 643, loaded: ['0,0', '1,0'] }),
+        destinationRoomId: '1,0',
+        destinationLoaded: true,
+        destinationCollisionReady: true,
+      },
+    ], transition('right'), {
+      destinationPreparedBeforeKey: false,
+      maxSeamHoldMs: 100,
+    });
+
+    expect(result.preparationState).toBe('cold');
+    expect(result.destinationPreparedBeforeKey).toBe(false);
+    expect(result.destinationReadyMsAfterKeyDown).toBe(60);
   });
 
   it.each([

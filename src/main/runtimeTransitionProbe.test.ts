@@ -11,6 +11,7 @@ describe('getRuntimeTransitionProbe', () => {
       selectedRoomId: '5,7',
       destinationRoomId: '6,7',
       destinationLoaded: true,
+      destinationCollisionReady: true,
       destinationPreparationIdentity: null,
       destinationPreparationPhase: null,
       destinationDormantReady: false,

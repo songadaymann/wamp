@@ -326,6 +326,7 @@ export interface OverworldRuntimeTransitionProbe {
   readonly selectedRoomId: string;
   readonly destinationRoomId: string | null;
   readonly destinationLoaded: boolean | null;
+  readonly destinationCollisionReady: boolean | null;
   readonly destinationPreparationIdentity: string | null;
   readonly destinationPreparationPhase: string | null;
   readonly destinationDormantReady: boolean | null;
@@ -6378,6 +6379,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     const destinationPreparation = destinationRoomId === null
       ? null
       : this.worldStreamingController.getFullRoomPreparationProbe(destinationRoomId);
+    const destinationLoadedRoom = destinationRoomId === null
+      ? null
+      : loadedFullRoomsById.get(destinationRoomId) ?? null;
     return {
       scene: 'overworld-play',
       mode: this.mode,
@@ -6386,7 +6390,15 @@ export class OverworldPlayScene extends Phaser.Scene {
       destinationRoomId,
       destinationLoaded: destinationRoomId === null
         ? null
-        : loadedFullRoomsById.has(destinationRoomId),
+        : destinationLoadedRoom !== null,
+      destinationCollisionReady: destinationRoomId === null
+        ? null
+        : Boolean(
+            destinationLoadedRoom
+            && this.worldStreamingController.isPlayableRoomCollisionReady(
+              destinationLoadedRoom.room.coordinates,
+            )
+          ),
       destinationPreparationIdentity: destinationPreparation?.identity ?? null,
       destinationPreparationPhase: destinationPreparation?.phase ?? null,
       destinationDormantReady: destinationRoomId === null
