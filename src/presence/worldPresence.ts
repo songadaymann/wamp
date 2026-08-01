@@ -719,7 +719,9 @@ export class WorldPresenceClient {
       roomPreviews[roomId] = {
         ...preview,
         roomCoordinates: { ...preview.roomCoordinates },
-        snapshot: cloneRoomSnapshot(preview.snapshot),
+        // replaceRoomPreviews owns and normalizes this snapshot at wire ingress.
+        // Snapshot emissions are readonly views and must retain that stable identity.
+        snapshot: preview.snapshot,
       };
     }
 

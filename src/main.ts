@@ -29,6 +29,7 @@ import {
   logBootPhase,
 } from './main/bootDiagnostics';
 import { getGameDebugState, getSwordHunterDebugState } from './main/debugState';
+import { getRuntimeTransitionProbe } from './main/runtimeTransitionProbe';
 import { installEarlyWorldTileBootstrapHandoff } from './main/earlyWorldTileBootstrapHandoff';
 import { installPreviewSmokeActions } from './main/previewSmoke';
 import { normalizeRendererQuery, parseBooleanQuery, resolveRendererType } from './main/query';
@@ -248,6 +249,8 @@ window.requestAnimationFrame(() => {
 });
 
 const getDebugState = () => getGameDebugState(game);
+window.get_wamp_runtime_transition_probe = (destinationRoomId = null) =>
+  getRuntimeTransitionProbe(game, destinationRoomId);
 let webglRecoveryStorage: Storage | null = null;
 try {
   webglRecoveryStorage = window.sessionStorage;

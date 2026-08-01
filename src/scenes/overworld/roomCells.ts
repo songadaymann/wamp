@@ -25,6 +25,7 @@ interface OverworldRoomCellControllerHost {
 export class OverworldRoomCellController {
   private roomFillGraphics: Phaser.GameObjects.Graphics | null = null;
   private roomFrameGraphics: Phaser.GameObjects.Graphics | null = null;
+  private roomFocusGraphics: Phaser.GameObjects.Graphics | null = null;
   private frontierLabelTexts = new Map<string, Phaser.GameObjects.Text>();
   private lastZoomRenderKey: string | null = null;
 
@@ -40,6 +41,11 @@ export class OverworldRoomCellController {
       this.roomFrameGraphics = this.host.scene.add.graphics();
       this.roomFrameGraphics.setDepth(20);
     }
+
+    if (!this.roomFocusGraphics) {
+      this.roomFocusGraphics = this.host.scene.add.graphics();
+      this.roomFocusGraphics.setDepth(21);
+    }
   }
 
   destroy(): void {
@@ -48,6 +54,8 @@ export class OverworldRoomCellController {
     this.roomFillGraphics = null;
     this.roomFrameGraphics?.destroy();
     this.roomFrameGraphics = null;
+    this.roomFocusGraphics?.destroy();
+    this.roomFocusGraphics = null;
     this.lastZoomRenderKey = null;
   }
 
@@ -55,6 +63,7 @@ export class OverworldRoomCellController {
     const ignoredObjects: Array<Phaser.GameObjects.GameObject | null> = [
       this.roomFillGraphics,
       this.roomFrameGraphics,
+      this.roomFocusGraphics,
       ...this.frontierLabelTexts.values(),
     ];
     return ignoredObjects.filter(
@@ -73,6 +82,7 @@ export class OverworldRoomCellController {
   redraw(): void {
     this.roomFillGraphics?.clear();
     this.roomFrameGraphics?.clear();
+    this.roomFocusGraphics?.clear();
 
     if (!this.roomFillGraphics || !this.roomFrameGraphics) {
       return;
@@ -106,7 +116,68 @@ export class OverworldRoomCellController {
     }
 
     this.pruneFrontierLabels(visibleFrontierLabelKeys);
+    this.redrawFocusHighlights();
     this.lastZoomRenderKey = this.getZoomRenderKey();
+  }
+
+  redrawFocusHighlights(): void {
+    this.roomFocusGraphics?.clear();
+    if (!this.roomFocusGraphics) {
+      return;
+    }
+
+    const worldWindow = this.host.getWorldWindow();
+    if (!worldWindow) {
+      return;
+    }
+
+    const currentCoordinates = this.host.getCurrentRoomCoordinates();
+    if (
+      this.host.getMode() === 'play' &&
+      this.isWithinWorldWindow(currentCoordinates, worldWindow) &&
+      !this.host.getExpandedRoomIdAt(currentCoordinates) &&
+      !this.host.isRoomInActiveCourse(currentCoordinates)
+    ) {
+      const currentOrigin = this.host.getRoomOrigin(currentCoordinates);
+      this.drawInsetFrame(
+        this.roomFocusGraphics,
+        currentOrigin.x,
+        currentOrigin.y,
+        4,
+        3,
+        RETRO_COLORS.draft,
+        0.98,
+      );
+    }
+
+    const selectedCoordinates = this.host.getSelectedCoordinates();
+    if (!this.isWithinWorldWindow(selectedCoordinates, worldWindow)) {
+      return;
+    }
+
+    const selectedExpandedRoomId = this.host.getExpandedRoomIdAt(selectedCoordinates);
+    if (selectedExpandedRoomId) {
+      this.drawSelectedExpandedRoomBoundary(
+        selectedCoordinates,
+        selectedExpandedRoomId,
+        worldWindow,
+      );
+      return;
+    }
+    if (this.host.isRoomInActiveCourse(selectedCoordinates)) {
+      return;
+    }
+
+    const selectedOrigin = this.host.getRoomOrigin(selectedCoordinates);
+    this.drawInsetFrame(
+      this.roomFocusGraphics,
+      selectedOrigin.x,
+      selectedOrigin.y,
+      8,
+      2,
+      RETRO_COLORS.selected,
+      0.95,
+    );
   }
 
   private drawCellFrame(
@@ -121,7 +192,6 @@ export class OverworldRoomCellController {
 
     const expandedRoomId = this.host.getExpandedRoomIdAt(coordinates);
     if (expandedRoomId) {
-      this.drawExpandedRoomBoundary(coordinates, x, y, expandedRoomId);
       return;
     }
 
@@ -132,40 +202,24 @@ export class OverworldRoomCellController {
 
     const editorCount = this.host.getRoomEditorCount(coordinates);
     if (cellState === 'draft') {
-      this.drawInsetFrame(x, y, 4, 2, RETRO_COLORS.draft, 0.95);
+      this.drawInsetFrame(this.roomFrameGraphics, x, y, 4, 2, RETRO_COLORS.draft, 0.95);
     } else if (cellState === 'claimed_unpublished') {
-      this.drawInsetFrame(x, y, 4, 2, RETRO_COLORS.claimedUnpublished, 0.92);
+      this.drawInsetFrame(this.roomFrameGraphics, x, y, 4, 2, RETRO_COLORS.claimedUnpublished, 0.92);
     } else if (cellState === 'frontier') {
-      this.drawInsetFrame(x, y, 4, 2, FRONTIER_BUILD_HERE_RED, 0.95);
+      this.drawInsetFrame(this.roomFrameGraphics, x, y, 4, 2, FRONTIER_BUILD_HERE_RED, 0.95);
     } else if (cellState === 'published') {
-      this.drawInsetFrame(x, y, 2, 1, RETRO_COLORS.published, 0.45);
-    }
-
-    const currentRoomCoordinates = this.host.getCurrentRoomCoordinates();
-    if (
-      coordinates.x === currentRoomCoordinates.x &&
-      coordinates.y === currentRoomCoordinates.y &&
-      this.host.getMode() === 'play'
-    ) {
-      this.drawInsetFrame(x, y, 4, 3, RETRO_COLORS.draft, 0.98);
-    }
-
-    const selectedCoordinates = this.host.getSelectedCoordinates();
-    if (
-      coordinates.x === selectedCoordinates.x &&
-      coordinates.y === selectedCoordinates.y
-    ) {
-      this.drawInsetFrame(x, y, 8, 2, RETRO_COLORS.selected, 0.95);
+      this.drawInsetFrame(this.roomFrameGraphics, x, y, 2, 1, RETRO_COLORS.published, 0.45);
     }
 
     if (editorCount > 0 && cellState !== 'draft') {
       const editorHighlightColor =
         cellState === 'frontier' ? FRONTIER_BUILD_HERE_RED : RETRO_COLORS.frontier;
-      this.drawInsetFrame(x, y, 14, 2, editorHighlightColor, 0.88);
+      this.drawInsetFrame(this.roomFrameGraphics, x, y, 14, 2, editorHighlightColor, 0.88);
     }
   }
 
   private drawInsetFrame(
+    graphics: Phaser.GameObjects.Graphics,
     x: number,
     y: number,
     inset: number,
@@ -173,10 +227,6 @@ export class OverworldRoomCellController {
     color: number,
     alpha: number,
   ): void {
-    if (!this.roomFrameGraphics) {
-      return;
-    }
-
     const frameX = x + inset;
     const frameY = y + inset;
     const frameWidth = ROOM_PX_WIDTH - inset * 2;
@@ -189,11 +239,11 @@ export class OverworldRoomCellController {
     const rightX = frameX + frameWidth - thickness;
     const bottomY = frameY + frameHeight - thickness;
 
-    this.roomFrameGraphics.fillStyle(color, alpha);
-    this.roomFrameGraphics.fillRect(frameX, frameY, frameWidth, thickness);
-    this.roomFrameGraphics.fillRect(frameX, bottomY, frameWidth, thickness);
-    this.roomFrameGraphics.fillRect(frameX, frameY, thickness, frameHeight);
-    this.roomFrameGraphics.fillRect(rightX, frameY, thickness, frameHeight);
+    graphics.fillStyle(color, alpha);
+    graphics.fillRect(frameX, frameY, frameWidth, thickness);
+    graphics.fillRect(frameX, bottomY, frameWidth, thickness);
+    graphics.fillRect(frameX, frameY, thickness, frameHeight);
+    graphics.fillRect(rightX, frameY, thickness, frameHeight);
   }
 
   private getWorldLineThickness(
@@ -261,7 +311,11 @@ export class OverworldRoomCellController {
     x: number,
     y: number,
   ): void {
+    if (!this.roomFrameGraphics) {
+      return;
+    }
     this.drawConnectedCellBoundary(
+      this.roomFrameGraphics,
       coordinates,
       x,
       y,
@@ -272,31 +326,8 @@ export class OverworldRoomCellController {
     );
   }
 
-  private drawExpandedRoomBoundary(
-    coordinates: RoomCoordinates,
-    x: number,
-    y: number,
-    expandedRoomId: string,
-  ): void {
-    const selectedCoordinates = this.host.getSelectedCoordinates();
-    const selectedExpandedRoomId = this.host.getExpandedRoomIdAt(selectedCoordinates);
-    const selected = selectedExpandedRoomId === expandedRoomId;
-    if (!selected) {
-      return;
-    }
-
-    this.drawConnectedCellBoundary(
-      coordinates,
-      x,
-      y,
-      (candidate) => this.host.getExpandedRoomIdAt(candidate) === expandedRoomId,
-      RETRO_COLORS.selected,
-      0.96,
-      4,
-    );
-  }
-
   private drawConnectedCellBoundary(
+    graphics: Phaser.GameObjects.Graphics,
     coordinates: RoomCoordinates,
     x: number,
     y: number,
@@ -305,10 +336,6 @@ export class OverworldRoomCellController {
     alpha: number,
     screenThicknessPx: number,
   ): void {
-    if (!this.roomFrameGraphics) {
-      return;
-    }
-
     const lineInset = 4;
     const left = x + lineInset;
     const right = x + ROOM_PX_WIDTH - lineInset;
@@ -324,19 +351,74 @@ export class OverworldRoomCellController {
       down: isConnectedNeighbor({ x: coordinates.x, y: coordinates.y + 1 }),
     };
 
-    this.roomFrameGraphics.fillStyle(color, alpha);
+    graphics.fillStyle(color, alpha);
     if (!neighbors.left) {
-      this.roomFrameGraphics.fillRect(left, top, thickness, boundaryHeight);
+      graphics.fillRect(left, top, thickness, boundaryHeight);
     }
     if (!neighbors.right) {
-      this.roomFrameGraphics.fillRect(right - thickness, top, thickness, boundaryHeight);
+      graphics.fillRect(right - thickness, top, thickness, boundaryHeight);
     }
     if (!neighbors.up) {
-      this.roomFrameGraphics.fillRect(left, top, boundaryWidth, thickness);
+      graphics.fillRect(left, top, boundaryWidth, thickness);
     }
     if (!neighbors.down) {
-      this.roomFrameGraphics.fillRect(left, bottom - thickness, boundaryWidth, thickness);
+      graphics.fillRect(left, bottom - thickness, boundaryWidth, thickness);
     }
+  }
+
+  private drawSelectedExpandedRoomBoundary(
+    selectedCoordinates: RoomCoordinates,
+    expandedRoomId: string,
+    worldWindow: WorldWindow,
+  ): void {
+    if (!this.roomFocusGraphics) {
+      return;
+    }
+
+    const pending: RoomCoordinates[] = [{ ...selectedCoordinates }];
+    const visited = new Set<string>();
+    for (let index = 0; index < pending.length; index += 1) {
+      const coordinates = pending[index];
+      if (!coordinates) {
+        continue;
+      }
+      const key = `${coordinates.x},${coordinates.y}`;
+      if (visited.has(key)) {
+        continue;
+      }
+      visited.add(key);
+      if (
+        !this.isWithinWorldWindow(coordinates, worldWindow) ||
+        this.host.getExpandedRoomIdAt(coordinates) !== expandedRoomId
+      ) {
+        continue;
+      }
+
+      const origin = this.host.getRoomOrigin(coordinates);
+      this.drawConnectedCellBoundary(
+        this.roomFocusGraphics,
+        coordinates,
+        origin.x,
+        origin.y,
+        (candidate) => this.host.getExpandedRoomIdAt(candidate) === expandedRoomId,
+        RETRO_COLORS.selected,
+        0.96,
+        4,
+      );
+      pending.push(
+        { x: coordinates.x - 1, y: coordinates.y },
+        { x: coordinates.x + 1, y: coordinates.y },
+        { x: coordinates.x, y: coordinates.y - 1 },
+        { x: coordinates.x, y: coordinates.y + 1 },
+      );
+    }
+  }
+
+  private isWithinWorldWindow(coordinates: RoomCoordinates, worldWindow: WorldWindow): boolean {
+    return (
+      Math.abs(coordinates.x - worldWindow.center.x) <= worldWindow.radius &&
+      Math.abs(coordinates.y - worldWindow.center.y) <= worldWindow.radius
+    );
   }
 
   private getCellFillStyle(cellState: SelectedCellState): { color: number; alpha: number } {

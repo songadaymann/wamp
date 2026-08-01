@@ -23,6 +23,7 @@ export function carryMovingPlatformRiders(
   options: {
     getDynamicBody(sprite: Phaser.GameObjects.Sprite): Phaser.Physics.Arcade.Body | null;
     getPlayerBody(): Phaser.Physics.Arcade.Body | null;
+    onLiveObjectMoved?(liveObject: LoadedRoomObject): void;
   },
 ): void {
   for (const loadedRoom of rooms) {
@@ -39,7 +40,7 @@ export function carryMovingPlatformRiders(
       const deltaX = liveObject.sprite.x - liveObject.runtime.previousX;
       const deltaY = liveObject.sprite.y - liveObject.runtime.previousY;
       carryPlayerOnMovingPlatform(options.getPlayerBody(), body, deltaX, deltaY);
-      carryObjectsOnMovingPlatform(rooms, liveObject, body, deltaX, deltaY);
+      carryObjectsOnMovingPlatform(rooms, liveObject, body, deltaX, deltaY, options);
     }
   }
 }
@@ -81,6 +82,9 @@ function carryObjectsOnMovingPlatform(
   platformBody: Phaser.Physics.Arcade.Body,
   deltaX: number,
   deltaY: number,
+  options: {
+    onLiveObjectMoved?(liveObject: LoadedRoomObject): void;
+  },
 ): void {
   if (deltaX === 0 && deltaY === 0) {
     return;
@@ -114,6 +118,7 @@ function carryObjectsOnMovingPlatform(
       }
 
       moveCarriedLiveObjectToPlatformTop(liveObject, body, platformBody, deltaX);
+      options.onLiveObjectMoved?.(liveObject);
     }
   }
 }

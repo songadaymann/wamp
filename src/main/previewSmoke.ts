@@ -25,6 +25,8 @@ type PreviewSmokeScene = {
     velocityY?: number;
     bodyEnabled?: boolean;
   }) => Record<string, unknown>;
+  debugPrepareTransitionDestination?: (roomId: string) => Record<string, unknown>;
+  debugClearTransitionDestinationPreparation?: (roomId: string) => Record<string, unknown>;
   roomSummariesById?: Map<string, { id?: string; coordinates?: { x: number; y: number }; state?: string }>;
   draftRoomsById?: Map<string, { id: string; coordinates: { x: number; y: number } }>;
 };
@@ -36,7 +38,9 @@ type PreviewSmokeAction =
   | 'editSelectedRoom'
   | 'openSyntheticEditor'
   | 'openSyntheticCourseEditor'
-  | 'setPlayerPosition';
+  | 'setPlayerPosition'
+  | 'prepareTransitionDestination'
+  | 'clearTransitionDestinationPreparation';
 
 interface PreviewSmokePayload {
   roomId?: string | null;
@@ -98,6 +102,32 @@ export function installPreviewSmokeActions(
             });
           },
           50,
+        );
+      case 'prepareTransitionDestination':
+        return runOverworldPreviewSmokeAction(
+          game,
+          getDebugState,
+          (scene) => {
+            if (typeof payload?.roomId !== 'string') {
+              return { ok: false, reason: 'room-id-required' };
+            }
+            return scene.debugPrepareTransitionDestination?.(payload.roomId)
+              ?? { ok: false, reason: 'transition-preparation-unavailable' };
+          },
+          50,
+        );
+      case 'clearTransitionDestinationPreparation':
+        return runOverworldPreviewSmokeAction(
+          game,
+          getDebugState,
+          (scene) => {
+            if (typeof payload?.roomId !== 'string') {
+              return { ok: false, reason: 'room-id-required' };
+            }
+            return scene.debugClearTransitionDestinationPreparation?.(payload.roomId)
+              ?? { ok: false, reason: 'transition-preparation-unavailable' };
+          },
+          0,
         );
       default:
         return { ok: false, reason: `unsupported-action:${action}` };

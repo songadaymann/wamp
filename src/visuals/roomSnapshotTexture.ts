@@ -16,6 +16,7 @@ import {
   type LayerName,
 } from '../config';
 import { getEditorObjectConfigById } from '../customSprites/objectConfig';
+import { parseCustomSpriteObjectId } from '../customSprites/model';
 import {
   ensureCustomSpriteTexture,
   registerCustomSpritesFromSnapshot,
@@ -403,48 +404,17 @@ function drawRoomTiles(
   offsetY = 0,
 ): void {
   for (const layerName of includedLayers) {
-    for (let y = 0; y < ROOM_HEIGHT; y++) {
-      for (let x = 0; x < ROOM_WIDTH; x++) {
-        const tileValue = room.tileData[layerName][y][x];
-        const { gid, flipX, flipY } = decodeTileDataValue(tileValue);
-        if (gid <= 0) continue;
-
-        const customTile = getCustomRoomTileDefinitionForGid(room, gid);
-        if (customTile) {
-          drawCustomTileFrame(
-            context,
-            customTile,
-            offsetX + x * tilePixelSize,
-            offsetY + y * tilePixelSize,
-            tilePixelSize,
-            flipX,
-            flipY,
-          );
-          continue;
-        }
-
-        const resolvedTileset = resolveTilesetForGid(gid);
-        if (!resolvedTileset) continue;
-
-        const sourceImage = getTextureSource(scene, resolvedTileset.key);
-        if (!sourceImage) continue;
-
-        const sourceCol = resolvedTileset.localIndex % resolvedTileset.columns;
-        const sourceRow = Math.floor(resolvedTileset.localIndex / resolvedTileset.columns);
-        drawTileFrame(
-          context,
-          sourceImage,
-          sourceCol * TILE_SIZE,
-          sourceRow * TILE_SIZE,
-          offsetX + x * tilePixelSize,
-          offsetY + y * tilePixelSize,
-          tilePixelSize,
-          tilePixelSize,
-          flipX,
-          flipY,
-        );
-      }
-    }
+    drawRoomTileLayerRowsToContext(
+      scene,
+      context,
+      room,
+      tilePixelSize,
+      layerName,
+      0,
+      ROOM_HEIGHT,
+      offsetX,
+      offsetY,
+    );
 
     if (includeObjects) {
       drawRoomObjectsForLayer(scene, context, room, tilePixelSize, layerName, offsetX, offsetY);
@@ -452,6 +422,64 @@ function drawRoomTiles(
   }
 
   context.globalAlpha = 1;
+}
+
+/** Draws a half-open row range for one room layer into an existing canvas. */
+export function drawRoomTileLayerRowsToContext(
+  scene: Phaser.Scene,
+  context: CanvasRenderingContext2D,
+  room: RoomSnapshot,
+  tilePixelSize: number,
+  layerName: LayerName,
+  startRow: number,
+  endRow: number,
+  offsetX = 0,
+  offsetY = 0,
+): void {
+  const firstRow = Phaser.Math.Clamp(Math.floor(startRow), 0, ROOM_HEIGHT);
+  const lastRow = Phaser.Math.Clamp(Math.ceil(endRow), firstRow, ROOM_HEIGHT);
+  for (let y = firstRow; y < lastRow; y += 1) {
+    for (let x = 0; x < ROOM_WIDTH; x += 1) {
+      const tileValue = room.tileData[layerName][y][x];
+      const { gid, flipX, flipY } = decodeTileDataValue(tileValue);
+      if (gid <= 0) continue;
+
+      const customTile = getCustomRoomTileDefinitionForGid(room, gid);
+      if (customTile) {
+        drawCustomTileFrame(
+          context,
+          customTile,
+          offsetX + x * tilePixelSize,
+          offsetY + y * tilePixelSize,
+          tilePixelSize,
+          flipX,
+          flipY,
+        );
+        continue;
+      }
+
+      const resolvedTileset = resolveTilesetForGid(gid);
+      if (!resolvedTileset) continue;
+
+      const sourceImage = getTextureSource(scene, resolvedTileset.key);
+      if (!sourceImage) continue;
+
+      const sourceCol = resolvedTileset.localIndex % resolvedTileset.columns;
+      const sourceRow = Math.floor(resolvedTileset.localIndex / resolvedTileset.columns);
+      drawTileFrame(
+        context,
+        sourceImage,
+        sourceCol * TILE_SIZE,
+        sourceRow * TILE_SIZE,
+        offsetX + x * tilePixelSize,
+        offsetY + y * tilePixelSize,
+        tilePixelSize,
+        tilePixelSize,
+        flipX,
+        flipY,
+      );
+    }
+  }
 }
 
 function drawCustomTileFrame(
@@ -470,7 +498,8 @@ function drawCustomTileFrame(
   context.restore();
 }
 
-function drawConstructionOverlay(
+/** Draws the construction treatment after every tile/object batch is complete. */
+export function drawConstructionOverlay(
   context: CanvasRenderingContext2D,
   width: number,
   height: number,
@@ -552,17 +581,74 @@ function drawRoomObjectsForLayer(
   offsetX = 0,
   offsetY = 0,
 ): void {
-  const scale = tilePixelSize / TILE_SIZE;
+  drawRoomObjectRangeForLayerToContext(
+    scene,
+    context,
+    room,
+    tilePixelSize,
+    layerName,
+    0,
+    room.placedObjects.length,
+    offsetX,
+    offsetY,
+  );
+}
 
-  for (const placedObject of room.placedObjects) {
+export interface RoomObjectRangeDrawOptions {
+  /**
+   * Browse/editor rendering may create a missing custom-sprite CanvasTexture.
+   * Scheduled Play previews pass false so a nominal CPU draw stage only reads
+   * already-resident assets.
+   */
+  ensureCustomSpriteTextures?: boolean;
+}
+
+/** Draws a bounded half-open range of placed objects for one room layer. */
+export function drawRoomObjectRangeForLayerToContext(
+  scene: Phaser.Scene,
+  context: CanvasRenderingContext2D,
+  room: RoomSnapshot,
+  tilePixelSize: number,
+  layerName: LayerName,
+  startObjectIndex: number,
+  endObjectIndex: number,
+  offsetX = 0,
+  offsetY = 0,
+  options: RoomObjectRangeDrawOptions = {},
+): void {
+  const scale = tilePixelSize / TILE_SIZE;
+  const firstObjectIndex = Phaser.Math.Clamp(
+    Math.floor(startObjectIndex),
+    0,
+    room.placedObjects.length,
+  );
+  const lastObjectIndex = Phaser.Math.Clamp(
+    Math.ceil(endObjectIndex),
+    firstObjectIndex,
+    room.placedObjects.length,
+  );
+
+  for (let objectIndex = firstObjectIndex; objectIndex < lastObjectIndex; objectIndex += 1) {
+    const placedObject = room.placedObjects[objectIndex];
     if (getPlacedObjectLayer(placedObject) !== layerName) {
+      continue;
+    }
+
+    const customSpriteId = parseCustomSpriteObjectId(placedObject.id);
+    if (
+      customSpriteId
+      && options.ensureCustomSpriteTextures === false
+      && !scene.textures.exists(`custom_sprite:${customSpriteId}`)
+    ) {
       continue;
     }
 
     const objectConfig = getEditorObjectConfigById(placedObject.id);
     if (!objectConfig) continue;
 
-    ensureCustomSpriteTexture(scene, objectConfig);
+    if (options.ensureCustomSpriteTextures !== false) {
+      ensureCustomSpriteTexture(scene, objectConfig);
+    }
     const sourceImage = getTextureSource(scene, objectConfig.id);
     if (!sourceImage) continue;
 

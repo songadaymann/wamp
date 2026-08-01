@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
+import {
+  createDefaultRoomSnapshot,
+  type RoomSnapshot,
+  type RoomSnapshotQueryReference,
+} from '../../persistence/roomModel';
 import type { WorldRepository } from '../../persistence/worldRepository';
 import type { WorldRoomSummary } from '../../persistence/worldModel';
-import { OverworldPreviewCache, type StreamingRoomCandidate } from './previewCache';
+import {
+  OverworldPreviewCache,
+  RoomSnapshotReferenceChangedError,
+  type StreamingRoomCandidate,
+} from './previewCache';
 
 describe('overworld exact-room preview cache lifecycle', () => {
   it('cancels an obsolete selection request and ignores a transport that resolves after abort', async () => {
@@ -81,6 +89,173 @@ describe('overworld exact-room preview cache lifecycle', () => {
 
     expect(cache.getFullRoomSnapshot('dedupe-a')?.id).toBe('dedupe-a');
     expect(cache.getFullRoomSnapshot('dedupe-b')?.id).toBe('dedupe-b');
+  });
+
+  it('identifies a missing exact reference as stale summary data', async () => {
+    const roomId = 'stale-summary';
+    const roomCandidate = candidate(roomId, -2, 0);
+    const queryRoomSnapshots = vi.fn(async (references: RoomSnapshotQueryReference[]) => ({
+      snapshots: [],
+      missing: references,
+    }));
+    const cache = new OverworldPreviewCache({ queryRoomSnapshots } as unknown as WorldRepository);
+
+    const request = cache.ensureRoomSnapshotsBatch(
+      new Map([[roomId, roomCandidate]]),
+      [roomId],
+      { detail: 'full', priority: 'high' },
+    );
+
+    await expect(request).rejects.toMatchObject({
+      name: 'RoomSnapshotReferenceChangedError',
+      roomIds: [roomId],
+    });
+    await expect(request).rejects.toBeInstanceOf(RoomSnapshotReferenceChangedError);
+    expect(cache.getFullRoomSnapshot(roomId)).toBeNull();
+  });
+
+  it('rejects a newer returned snapshot when a legacy summary has no updated timestamp', async () => {
+    const roomId = 'legacy-summary';
+    const roomCandidate = candidate(roomId, -1, 0);
+    const newer = snapshot(roomId, -1, 0);
+    newer.version = 2;
+    newer.updatedAt = `${newer.updatedAt}:v2`;
+    const queryRoomSnapshots = vi.fn(async (references: RoomSnapshotQueryReference[]) => ({
+      snapshots: [{
+        key: `current:${roomId}`,
+        reference: references[0],
+        snapshot: newer,
+      }],
+      missing: [],
+    }));
+    const cache = new OverworldPreviewCache({ queryRoomSnapshots } as unknown as WorldRepository);
+
+    await expect(cache.ensureRoomSnapshotsBatch(
+      new Map([[roomId, roomCandidate]]),
+      [roomId],
+      { detail: 'full', priority: 'high' },
+    )).rejects.toBeInstanceOf(RoomSnapshotReferenceChangedError);
+
+    expect(cache.getFullRoomSnapshot(roomId)).toBeNull();
+  });
+
+  it('loads an exact published portal target without a world-window summary', async () => {
+    const target = snapshot('40,-12', 40, -12);
+    const queryRoomSnapshots = vi.fn(async () => ({
+      snapshots: [{
+        key: 'current:40,-12:published',
+        reference: {
+          kind: 'current_preview' as const,
+          roomId: target.id,
+          coordinates: target.coordinates,
+          state: 'published' as const,
+        },
+        snapshot: target,
+      }],
+      missing: [],
+    }));
+    const cache = new OverworldPreviewCache({ queryRoomSnapshots } as unknown as WorldRepository);
+
+    const loaded = await cache.ensureCurrentPublishedRoomSnapshot(
+      target.id,
+      target.coordinates,
+      { detail: 'full', priority: 'high' },
+    );
+
+    expect(queryRoomSnapshots).toHaveBeenCalledWith([
+      {
+        kind: 'current_preview',
+        roomId: target.id,
+        coordinates: target.coordinates,
+        state: 'published',
+      },
+    ], { detail: 'full', priority: 'high' });
+    expect(loaded).not.toBe(target);
+    expect(cache.getFullRoomSnapshot(target.id)).toBe(loaded);
+  });
+
+  it('rejects an unavailable out-of-window portal target so callers can back off', async () => {
+    const queryRoomSnapshots = vi.fn(async () => ({
+      snapshots: [],
+      missing: [{
+        kind: 'current_preview' as const,
+        roomId: '40,-12',
+        coordinates: { x: 40, y: -12 },
+        state: 'published' as const,
+      }],
+    }));
+    const cache = new OverworldPreviewCache({ queryRoomSnapshots } as unknown as WorldRepository);
+
+    await expect(cache.ensureCurrentPublishedRoomSnapshot(
+      '40,-12',
+      { x: 40, y: -12 },
+      { detail: 'full', priority: 'high' },
+    )).rejects.toThrow('Published portal destination 40,-12 is unavailable.');
+  });
+
+  it('ignores a delayed batch snapshot after that room is invalidated and replaced', async () => {
+    let resolveBatch!: (response: {
+      snapshots: Array<{ key: string; reference: { kind: 'current_preview'; roomId: string }; snapshot: RoomSnapshot }>;
+      missing: [];
+    }) => void;
+    const queryRoomSnapshots = vi.fn(() => new Promise<{
+      snapshots: Array<{ key: string; reference: { kind: 'current_preview'; roomId: string }; snapshot: RoomSnapshot }>;
+      missing: [];
+    }>((resolve) => { resolveBatch = resolve; }));
+    const cache = new OverworldPreviewCache({ queryRoomSnapshots } as unknown as WorldRepository);
+    const roomId = '5,7';
+    const request = cache.ensureRoomSnapshotsBatch(
+      new Map([[roomId, candidate(roomId, 5, 7)]]),
+      [roomId],
+      { detail: 'full', priority: 'high' },
+    );
+    const replacement = snapshot(roomId, 5, 7);
+    replacement.version = 2;
+    replacement.updatedAt = `${replacement.updatedAt}:v2`;
+
+    cache.invalidateRoom(roomId, false);
+    cache.setRoomSnapshot(replacement);
+    resolveBatch({
+      snapshots: [{
+        key: `current:${roomId}`,
+        reference: { kind: 'current_preview', roomId },
+        snapshot: snapshot(roomId, 5, 7),
+      }],
+      missing: [],
+    });
+    await request;
+
+    expect(cache.getFullRoomSnapshot(roomId)).toBe(replacement);
+  });
+
+  it('ignores an invalidated delayed direct-portal response', async () => {
+    let resolveBatch!: (response: {
+      snapshots: Array<{ key: string; reference: { kind: 'current_preview'; roomId: string }; snapshot: RoomSnapshot }>;
+      missing: [];
+    }) => void;
+    const queryRoomSnapshots = vi.fn(() => new Promise<{
+      snapshots: Array<{ key: string; reference: { kind: 'current_preview'; roomId: string }; snapshot: RoomSnapshot }>;
+      missing: [];
+    }>((resolve) => { resolveBatch = resolve; }));
+    const cache = new OverworldPreviewCache({ queryRoomSnapshots } as unknown as WorldRepository);
+    const roomId = '40,-12';
+    const request = cache.ensureCurrentPublishedRoomSnapshot(roomId, { x: 40, y: -12 });
+    const replacement = snapshot(roomId, 40, -12);
+    replacement.version = 2;
+
+    cache.invalidateRoom(roomId, false);
+    cache.setRoomSnapshot(replacement);
+    resolveBatch({
+      snapshots: [{
+        key: `current:${roomId}`,
+        reference: { kind: 'current_preview', roomId },
+        snapshot: snapshot(roomId, 40, -12),
+      }],
+      missing: [],
+    });
+
+    await expect(request).resolves.toBeNull();
+    expect(cache.getFullRoomSnapshot(roomId)).toBe(replacement);
   });
 });
 

@@ -28,6 +28,8 @@ interface OverworldPortalObjectControllerHost<TEdgeWall> {
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
   getLoadedFullRooms: () => Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>;
   getLoadedFullRoomById: (roomId: string) => LoadedFullRoom<LoadedRoomObject, TEdgeWall> | null;
+  requestPortalTargetRoomPreparation: (roomId: string) => boolean;
+  clearPortalTargetRoomPreparation: (roomId: string) => void;
   authorizeRoomTransition: (coordinates: RoomCoordinates) => void;
   teleportPlayerTo: (
     x: number,
@@ -41,9 +43,41 @@ interface OverworldPortalObjectControllerHost<TEdgeWall> {
   ) => void;
 }
 
+interface PortalTargetRoomPreparationAdapterOptions {
+  resolveRoomCoordinates: (roomId: string) => RoomCoordinates | null;
+  preparePortalTargetRoomForTransition: (coordinates: RoomCoordinates) => boolean;
+  clearPortalTargetRoomPreparation: (roomId: string) => void;
+}
+
+export interface PortalTargetRoomPreparationAdapter {
+  request: (roomId: string) => boolean;
+  clear: (roomId: string) => void;
+}
+
+export function createPortalTargetRoomPreparationAdapter(
+  options: PortalTargetRoomPreparationAdapterOptions,
+): PortalTargetRoomPreparationAdapter {
+  return {
+    request: (roomId) => {
+      const coordinates = options.resolveRoomCoordinates(roomId);
+      if (!coordinates) {
+        return false;
+      }
+
+      // `false` means the valid destination is still being prepared, not that
+      // the request was rejected. The controller keeps ownership and polls it.
+      options.preparePortalTargetRoomForTransition(coordinates);
+      return true;
+    },
+    clear: (roomId) => options.clearPortalTargetRoomPreparation(roomId),
+  };
+}
+
 export class OverworldPortalObjectController<TEdgeWall = unknown> {
   private portalCooldownUntil = 0;
   private suppressedPortalObjectKey: string | null = null;
+  private preparedPortalSourceKey: string | null = null;
+  private preparedPortalTargetRoomId: string | null = null;
 
   constructor(
     private readonly host: OverworldPortalObjectControllerHost<TEdgeWall>,
@@ -52,6 +86,7 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
   update(): void {
     if (this.host.getMode() !== 'play') {
       this.suppressedPortalObjectKey = null;
+      this.clearPreparedPortalTarget();
       return;
     }
 
@@ -62,16 +97,30 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
     if (this.suppressedPortalObjectKey?.startsWith(`${roomId}:`)) {
       this.suppressedPortalObjectKey = null;
     }
+    if (this.preparedPortalSourceKey?.startsWith(`${roomId}:`)) {
+      this.clearPreparedPortalTarget();
+    }
   }
 
   resetAll(): void {
     this.portalCooldownUntil = 0;
     this.suppressedPortalObjectKey = null;
+    this.clearPreparedPortalTarget();
+  }
+
+  destroy(): void {
+    this.resetAll();
   }
 
   resetForRoom(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
     if (this.suppressedPortalObjectKey?.startsWith(`${loadedRoom.room.id}:`)) {
       this.suppressedPortalObjectKey = null;
+    }
+    if (
+      this.preparedPortalTargetRoomId === loadedRoom.room.id ||
+      this.preparedPortalSourceKey?.startsWith(`${loadedRoom.room.id}:`)
+    ) {
+      this.clearPreparedPortalTarget();
     }
     this.portalCooldownUntil = 0;
   }
@@ -80,13 +129,22 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
     const playerBody = this.host.getPlayerBody();
     if (!playerBody) {
       this.suppressedPortalObjectKey = null;
+      this.clearPreparedPortalTarget();
       return;
     }
 
     const portalMatches = this.findPortalObjectsOverlappingBody(playerBody);
     if (portalMatches.length === 0) {
       this.suppressedPortalObjectKey = null;
+      this.clearPreparedPortalTarget();
       return;
+    }
+
+    if (
+      this.preparedPortalSourceKey &&
+      !portalMatches.some((match) => this.getPortalObjectKey(match) === this.preparedPortalSourceKey)
+    ) {
+      this.clearPreparedPortalTarget();
     }
 
     if (
@@ -128,6 +186,9 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
     const matches: Array<PortalObjectMatch<TEdgeWall>> = [];
 
     for (const loadedRoom of this.host.getLoadedFullRooms()) {
+      if (loadedRoom.runtimeSuspended === true) {
+        continue;
+      }
       for (const liveObject of loadedRoom.liveObjects) {
         const objectId = isPortalObjectId(liveObject.config.id) ? liveObject.config.id : null;
         if (!objectId || !liveObject.sprite.active) {
@@ -177,6 +238,7 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
       return null;
     }
 
+    this.clearPreparedPortalTarget();
     const reverseTarget = this.findPortalLinkedTo(source);
     return reverseTarget ? this.getPortalDestination(reverseTarget) : null;
   }
@@ -185,11 +247,13 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
     source: PortalObjectMatch<TEdgeWall>,
   ): PortalObjectMatch<TEdgeWall> | null {
     if (!source.liveObject.linkedTargetInstanceId || !source.liveObject.linkedTargetRoomId) {
+      this.clearPreparedPortalTarget();
       return null;
     }
 
     const targetRoom = this.host.getLoadedFullRoomById(source.liveObject.linkedTargetRoomId);
-    if (!targetRoom) {
+    if (!targetRoom || targetRoom.collisionReady !== true) {
+      this.retainPreparedPortalTarget(source, source.liveObject.linkedTargetRoomId);
       return null;
     }
 
@@ -200,6 +264,7 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
         liveObject.config.id === oppositeObjectId,
     );
     if (!target || !isPortalObjectId(target.config.id)) {
+      this.clearPreparedPortalTarget();
       return null;
     }
 
@@ -216,6 +281,9 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
 
     const oppositeObjectId = getOppositePortalObjectId(target.objectId);
     for (const loadedRoom of this.host.getLoadedFullRooms()) {
+      if (loadedRoom.runtimeSuspended === true) {
+        continue;
+      }
       for (const liveObject of loadedRoom.liveObjects) {
         if (
           liveObject.config.id === oppositeObjectId &&
@@ -248,5 +316,36 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
       match.liveObject.placedInstanceId ?? match.liveObject.key,
       match.objectId,
     ].join(':');
+  }
+
+  private retainPreparedPortalTarget(
+    source: PortalObjectMatch<TEdgeWall>,
+    targetRoomId: string,
+  ): void {
+    const sourceKey = this.getPortalObjectKey(source);
+    if (
+      this.preparedPortalTargetRoomId !== targetRoomId ||
+      this.preparedPortalSourceKey !== sourceKey
+    ) {
+      this.clearPreparedPortalTarget();
+    }
+
+    if (!this.host.requestPortalTargetRoomPreparation(targetRoomId)) {
+      this.preparedPortalSourceKey = null;
+      this.preparedPortalTargetRoomId = null;
+      return;
+    }
+
+    this.preparedPortalSourceKey = sourceKey;
+    this.preparedPortalTargetRoomId = targetRoomId;
+  }
+
+  private clearPreparedPortalTarget(): void {
+    const targetRoomId = this.preparedPortalTargetRoomId;
+    this.preparedPortalSourceKey = null;
+    this.preparedPortalTargetRoomId = null;
+    if (targetRoomId) {
+      this.host.clearPortalTargetRoomPreparation(targetRoomId);
+    }
   }
 }

@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { playSfx, stopSfx } from '../../audio/sfx';
 import {
-  isPushableObjectConfig,
   ROOM_HEIGHT,
   ROOM_WIDTH,
   TILE_SIZE,
@@ -109,7 +108,16 @@ interface OverworldMovementControllerHost {
   isSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean;
   getExternalLaunchGraceUntil(): number;
   shouldForceFullBodyHitbox(): boolean;
-  getLoadedLiveObjects(): Iterable<LoadedRoomObject>;
+  getPushableLiveObjectsInBounds(
+    bounds: Phaser.Geom.Rectangle,
+    paddingX?: number,
+    paddingY?: number,
+  ): Iterable<LoadedRoomObject>;
+  getRuntimeSolidLiveObjectsInBounds(
+    bounds: Phaser.Geom.Rectangle,
+    paddingX?: number,
+    paddingY?: number,
+  ): Iterable<LoadedRoomObject>;
   getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle;
   getCursors(): Phaser.Types.Input.Keyboard.CursorKeys;
   getWasd(): {
@@ -1319,6 +1327,20 @@ export class OverworldMovementController {
     this.host.state.activeCrateInteractionFacing = crateInteraction.facing;
   }
 
+  private bodyBoundsCouldOverlap(
+    body: ArcadeObjectBody,
+    bounds: Phaser.Geom.Rectangle,
+    paddingX = 0,
+    paddingY = paddingX,
+  ): boolean {
+    return (
+      body.right >= bounds.left - paddingX &&
+      body.left <= bounds.right + paddingX &&
+      body.bottom >= bounds.top - paddingY &&
+      body.top <= bounds.bottom + paddingY
+    );
+  }
+
   private canPlayerFitHitbox(height: number, playerBody = this.host.getPlayerBody()): boolean {
     if (!playerBody) {
       return true;
@@ -1347,9 +1369,13 @@ export class OverworldMovementController {
       }
     }
 
-    for (const liveObject of this.host.getLoadedLiveObjects()) {
+    if (addedHeadroomBounds.width <= 0 || addedHeadroomBounds.height <= 0) {
+      return true;
+    }
+
+    for (const liveObject of this.host.getRuntimeSolidLiveObjectsInBounds(addedHeadroomBounds)) {
       const objectBody = this.getEnabledSolidRuntimeObjectBody(liveObject);
-      if (!objectBody) {
+      if (!objectBody || !this.bodyBoundsCouldOverlap(objectBody, addedHeadroomBounds)) {
         continue;
       }
 
@@ -1388,9 +1414,25 @@ export class OverworldMovementController {
     const playerLeft = playerBounds.left + RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX;
     const playerRight = playerBounds.right - RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX;
 
-    for (const liveObject of this.host.getLoadedLiveObjects()) {
+    for (const liveObject of this.host.getRuntimeSolidLiveObjectsInBounds(
+      playerBounds,
+      RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX,
+      Math.max(
+        RUNTIME_OBJECT_SUPPORT_HOVER_TOLERANCE_PX,
+        RUNTIME_OBJECT_SUPPORT_PENETRATION_TOLERANCE_PX,
+      ),
+    )) {
       const objectBody = this.getEnabledSolidRuntimeObjectBody(liveObject);
       if (!objectBody) {
+        continue;
+      }
+
+      if (
+        objectBody.right <= playerLeft + RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX ||
+        objectBody.left >= playerRight - RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX ||
+        objectBody.top < playerBounds.bottom - RUNTIME_OBJECT_SUPPORT_PENETRATION_TOLERANCE_PX ||
+        objectBody.top > playerBounds.bottom + RUNTIME_OBJECT_SUPPORT_HOVER_TOLERANCE_PX
+      ) {
         continue;
       }
 
@@ -1446,14 +1488,28 @@ export class OverworldMovementController {
     const playerGravity = this.projectBodyBounds(playerBounds, gravityVector);
     let bestInteraction: OverworldCrateInteraction | null = null;
     let bestGap = Number.POSITIVE_INFINITY;
+    const pullGapLimit =
+      this.host.state.activeCrateInteractionMode === 'pull'
+        ? this.options.crateInteractionMaxGap + Math.max(6, playerTangent.size * 0.5)
+        : this.options.crateInteractionMaxGap;
+    const broadphasePadding = pullGapLimit + 6;
 
-    for (const liveObject of this.host.getLoadedLiveObjects()) {
+    for (const liveObject of this.host.getPushableLiveObjectsInBounds(
+      playerBounds,
+      broadphasePadding,
+      broadphasePadding,
+    )) {
       const candidateBody = liveObject.sprite.body as ArcadeObjectBody | null;
       if (
-        !isPushableObjectConfig(liveObject.config) ||
         !liveObject.sprite.active ||
         !isDynamicArcadeBody(candidateBody) ||
-        !candidateBody.enable
+        !candidateBody.enable ||
+        !this.bodyBoundsCouldOverlap(
+          candidateBody,
+          playerBounds,
+          broadphasePadding,
+          broadphasePadding,
+        )
       ) {
         continue;
       }
@@ -1472,10 +1528,6 @@ export class OverworldMovementController {
       let mode: 'push' | 'pull' | null = null;
       let gap = Number.POSITIVE_INFINITY;
       let facing: -1 | 1 = this.resolveSpriteFacingForGravity(gravityDirection, moveDirectionX);
-      const pullGapLimit =
-        this.host.state.activeCrateInteractionMode === 'pull'
-          ? this.options.crateInteractionMaxGap + Math.max(6, playerTangent.size * 0.5)
-          : this.options.crateInteractionMaxGap;
 
       if (moveDirectionX > 0) {
         const pushGap = crateTangent.min - playerTangent.max;

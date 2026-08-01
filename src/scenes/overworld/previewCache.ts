@@ -38,6 +38,28 @@ export interface RenderableRoom {
   source: PlayableRoomSource;
 }
 
+/**
+ * The world summary and the room snapshot endpoint no longer agree about the
+ * exact current preview. Callers must refresh the summary before retrying the
+ * same reference; retrying it unchanged can never make progress.
+ */
+export class RoomSnapshotReferenceChangedError extends Error {
+  readonly roomIds: readonly string[];
+
+  constructor(readonly references: readonly RoomSnapshotQueryReference[]) {
+    const roomIds = Array.from(new Set(references.map((reference) => reference.roomId)));
+    super(`Room preview ${roomIds[0] ?? 'unknown'} changed while the world was loading.`);
+    this.name = 'RoomSnapshotReferenceChangedError';
+    this.roomIds = roomIds;
+  }
+}
+
+export function isRoomSnapshotReferenceChangedError(
+  error: unknown,
+): error is RoomSnapshotReferenceChangedError {
+  return error instanceof RoomSnapshotReferenceChangedError;
+}
+
 type RoomLoadOwner = 'render' | 'selection';
 
 interface RoomLoadRequest {
@@ -49,6 +71,7 @@ interface RoomLoadRequest {
 
 interface RoomSnapshotBatchRequest {
   lifecycleEpoch: number;
+  roomInvalidationEpochs: Map<string, number>;
   promise: Promise<RoomSnapshotQueryResponse>;
 }
 
@@ -89,6 +112,7 @@ export class OverworldPreviewCache {
   private overviewSnapshotsById = new Map<string, RoomSnapshot>();
   private roomLoadRequestsById = new Map<string, RoomLoadRequest>();
   private roomSnapshotBatchRequestsByKey = new Map<string, RoomSnapshotBatchRequest>();
+  private roomInvalidationEpochsById = new Map<string, number>();
   private lifecycleEpoch = 0;
 
   constructor(private readonly worldRepository: WorldRepository) {}
@@ -100,6 +124,7 @@ export class OverworldPreviewCache {
     this.overviewSnapshotsById = new Map();
     this.roomLoadRequestsById = new Map();
     this.roomSnapshotBatchRequestsByKey = new Map();
+    this.roomInvalidationEpochsById = new Map();
   }
 
   getRoomSnapshotsById(): Map<string, RoomSnapshot> {
@@ -189,13 +214,38 @@ export class OverworldPreviewCache {
     for (let index = 0; index < references.length; index += 48) {
       const batch = references.slice(index, index + 48);
       const lifecycleEpoch = this.lifecycleEpoch;
+      const roomInvalidationEpochs = this.captureRoomInvalidationEpochs(batch);
       const response = await this.queryRoomSnapshotBatch(batch, detail, options.priority);
       if (lifecycleEpoch !== this.lifecycleEpoch) return;
-      if (response.missing.length > 0) {
-        const missing = response.missing[0];
-        throw new Error(`Room preview ${missing.roomId} changed while the world was loading.`);
+      const currentMissing = response.missing.filter((missing) =>
+        this.isRoomInvalidationEpochCurrent(missing.roomId, roomInvalidationEpochs),
+      );
+      if (currentMissing.length > 0) {
+        throw new RoomSnapshotReferenceChangedError(currentMissing);
+      }
+      const changedReferences = response.snapshots.flatMap((entry) => {
+        if (!this.isRoomInvalidationEpochCurrent(entry.snapshot.id, roomInvalidationEpochs)) {
+          return [];
+        }
+        const summary = roomCandidates.get(entry.snapshot.id)?.summary ?? null;
+        if (
+          !summary
+          || (
+            (summary.version === null || entry.snapshot.version === summary.version)
+            && (!summary.previewUpdatedAt || entry.snapshot.updatedAt === summary.previewUpdatedAt)
+          )
+        ) {
+          return [];
+        }
+        return [entry.reference];
+      });
+      if (changedReferences.length > 0) {
+        throw new RoomSnapshotReferenceChangedError(changedReferences);
       }
       for (const entry of response.snapshots) {
+        if (!this.isRoomInvalidationEpochCurrent(entry.snapshot.id, roomInvalidationEpochs)) {
+          continue;
+        }
         const snapshot = cloneRoomSnapshot(entry.snapshot);
         if (detail === 'overview') {
           if (!this.roomSnapshotsById.has(snapshot.id)) {
@@ -216,6 +266,63 @@ export class OverworldPreviewCache {
     }
   }
 
+  /**
+   * Loads a published room that is not represented by the current world-window
+   * summaries. Portal links can legitimately point outside that window, so
+   * their exact destination must not depend on overview discovery first.
+   */
+  async ensureCurrentPublishedRoomSnapshot(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    options: {
+      priority?: 'high' | 'low' | 'auto';
+      detail?: RoomSnapshotQueryDetail;
+    } = {},
+  ): Promise<RoomSnapshot | null> {
+    const detail = options.detail ?? 'full';
+    const reference: RoomSnapshotQueryReference = {
+      kind: 'current_preview',
+      roomId,
+      coordinates,
+      state: 'published',
+    };
+    const lifecycleEpoch = this.lifecycleEpoch;
+    const roomInvalidationEpochs = this.captureRoomInvalidationEpochs([reference]);
+    const response = await this.queryRoomSnapshotBatch(
+      [reference],
+      detail,
+      options.priority,
+    );
+    if (lifecycleEpoch !== this.lifecycleEpoch) return null;
+    if (!this.isRoomInvalidationEpochCurrent(roomId, roomInvalidationEpochs)) return null;
+
+    const entry = response.snapshots.find((candidate) => candidate.snapshot.id === roomId) ?? null;
+    if (!entry || response.missing.length > 0) {
+      throw new Error(`Published portal destination ${roomId} is unavailable.`);
+    }
+
+    const snapshot = cloneRoomSnapshot(entry.snapshot);
+    if (detail === 'overview') {
+      if (!this.roomSnapshotsById.has(roomId)) {
+        this.overviewSnapshotsById.set(roomId, snapshot);
+      }
+      return snapshot;
+    }
+
+    this.roomSnapshotsById.set(roomId, snapshot);
+    this.overviewSnapshotsById.delete(roomId);
+    setSharedRoomSnapshot(
+      buildSharedRoomSnapshotKey(
+        roomId,
+        snapshot.version,
+        'published',
+        snapshot.updatedAt,
+      ),
+      snapshot,
+    );
+    return snapshot;
+  }
+
   private queryRoomSnapshotBatch(
     references: RoomSnapshotQueryReference[],
     detail: RoomSnapshotQueryDetail,
@@ -223,12 +330,17 @@ export class OverworldPreviewCache {
   ): Promise<RoomSnapshotQueryResponse> {
     const key = buildRoomSnapshotBatchKey(references, detail);
     const existing = this.roomSnapshotBatchRequestsByKey.get(key);
-    if (existing?.lifecycleEpoch === this.lifecycleEpoch) {
+    const roomInvalidationEpochs = this.captureRoomInvalidationEpochs(references);
+    if (
+      existing?.lifecycleEpoch === this.lifecycleEpoch
+      && this.areRoomInvalidationEpochsCurrent(existing.roomInvalidationEpochs)
+    ) {
       return existing.promise;
     }
 
     const request: RoomSnapshotBatchRequest = {
       lifecycleEpoch: this.lifecycleEpoch,
+      roomInvalidationEpochs,
       promise: this.worldRepository.queryRoomSnapshots(references, { detail, priority }),
     };
     this.roomSnapshotBatchRequestsByKey.set(key, request);
@@ -242,6 +354,10 @@ export class OverworldPreviewCache {
   }
 
   invalidateRoom(roomId: string, dropPublishedSnapshot: boolean): void {
+    this.roomInvalidationEpochsById.set(
+      roomId,
+      (this.roomInvalidationEpochsById.get(roomId) ?? 0) + 1,
+    );
     this.roomLoadRequestsById.get(roomId)?.abortController.abort();
     this.roomLoadRequestsById.delete(roomId);
     if (dropPublishedSnapshot) {
@@ -249,6 +365,32 @@ export class OverworldPreviewCache {
       this.overviewSnapshotsById.delete(roomId);
       invalidateSharedRoomSnapshots(roomId);
     }
+  }
+
+  private captureRoomInvalidationEpochs(
+    references: Iterable<Pick<RoomSnapshotQueryReference, 'roomId'>>,
+  ): Map<string, number> {
+    return new Map(Array.from(references, (reference) => [
+      reference.roomId,
+      this.roomInvalidationEpochsById.get(reference.roomId) ?? 0,
+    ]));
+  }
+
+  private isRoomInvalidationEpochCurrent(
+    roomId: string,
+    capturedEpochs: ReadonlyMap<string, number>,
+  ): boolean {
+    return (capturedEpochs.get(roomId) ?? 0)
+      === (this.roomInvalidationEpochsById.get(roomId) ?? 0);
+  }
+
+  private areRoomInvalidationEpochsCurrent(
+    capturedEpochs: ReadonlyMap<string, number>,
+  ): boolean {
+    for (const [roomId, epoch] of capturedEpochs) {
+      if ((this.roomInvalidationEpochsById.get(roomId) ?? 0) !== epoch) return false;
+    }
+    return true;
   }
 
   pruneSnapshots(visibleRoomIds: Set<string>, loadedFullRoomIds: Set<string>): void {

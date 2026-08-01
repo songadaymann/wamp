@@ -12,7 +12,7 @@ import {
   TILE_SIZE,
 } from '../config';
 import { getCustomRoomTileCollisionProfile } from '../customTiles/model';
-import type { RoomSnapshot } from '../persistence/roomModel';
+import type { RoomSnapshot, RoomSnapshotView } from '../persistence/roomModel';
 
 export interface RoomWeatherSurfaceSegment {
   x1: number;
@@ -25,8 +25,20 @@ export interface RoomWeatherSurfaceOrigin {
   y: number;
 }
 
+type RoomWeatherSurfaceSource = RoomSnapshot | RoomSnapshotView;
+
+interface CachedRoomWeatherSurfaces {
+  version: number;
+  updatedAt: string;
+  originX: number;
+  originY: number;
+  segments: RoomWeatherSurfaceSegment[];
+}
+
+const roomWeatherSurfaceCache = new WeakMap<object, CachedRoomWeatherSurfaces>();
+
 export function buildRoomWeatherSurfaceSegments(
-  room: RoomSnapshot,
+  room: RoomWeatherSurfaceSource,
   origin: RoomWeatherSurfaceOrigin = { x: 0, y: 0 },
 ): RoomWeatherSurfaceSegment[] {
   const surfaces: RoomWeatherSurfaceSegment[] = [];
@@ -82,11 +94,46 @@ export function buildRoomWeatherSurfaceSegments(
   return surfaces;
 }
 
-function hasRoomTerrainCollision(room: RoomSnapshot, tileX: number, tileY: number): boolean {
+/**
+ * Reuses rain collision surfaces for an immutable runtime room snapshot.
+ * Replacing the snapshot, changing its version/update timestamp, or changing
+ * the world origin invalidates the cached result.
+ */
+export function getCachedRoomWeatherSurfaceSegments(
+  room: RoomSnapshotView,
+  origin: RoomWeatherSurfaceOrigin = { x: 0, y: 0 },
+): RoomWeatherSurfaceSegment[] {
+  const cached = roomWeatherSurfaceCache.get(room);
+  if (
+    cached
+    && cached.version === room.version
+    && cached.updatedAt === room.updatedAt
+    && cached.originX === origin.x
+    && cached.originY === origin.y
+  ) {
+    return cached.segments;
+  }
+
+  const segments = buildRoomWeatherSurfaceSegments(room, origin);
+  roomWeatherSurfaceCache.set(room, {
+    version: room.version,
+    updatedAt: room.updatedAt,
+    originX: origin.x,
+    originY: origin.y,
+    segments,
+  });
+  return segments;
+}
+
+function hasRoomTerrainCollision(
+  room: RoomWeatherSurfaceSource,
+  tileX: number,
+  tileY: number,
+): boolean {
   return getRoomTerrainProfile(room, tileX, tileY).hasCollision;
 }
 
-function getRoomTerrainProfile(room: RoomSnapshot, tileX: number, tileY: number) {
+function getRoomTerrainProfile(room: RoomWeatherSurfaceSource, tileX: number, tileY: number) {
   if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
     return { hasCollision: false, topInset: 0 };
   }
@@ -97,7 +144,7 @@ function getRoomTerrainProfile(room: RoomSnapshot, tileX: number, tileY: number)
   }
 
   const profile =
-    getCustomRoomTileCollisionProfile(room, decoded.gid) ??
+    getCustomRoomTileCollisionProfile(room as RoomSnapshot, decoded.gid) ??
     getTerrainCollisionProfileForGid(decoded.gid);
   if (!profile.hasCollision) {
     return { hasCollision: false, topInset: 0 };

@@ -41,6 +41,7 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   getMode(): OverworldMode;
   setMode(mode: OverworldMode): void;
   getSelectedCoordinates(): RoomCoordinates;
+  getCurrentRoomCoordinates?: () => RoomCoordinates;
   getCurrentRoomSnapshot(): RoomSnapshot | null;
   getActiveCourseSnapshot(): CourseSnapshot | null;
   getActiveCourseRun(): ActiveCourseRunState | null;
@@ -75,6 +76,11 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   destroyRoomEdgeWalls(loadedRoom: LoadedFullRoom<TLiveObject, OverworldRoomEdgeWall>): void;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   getCellStateAt(coordinates: RoomCoordinates): SelectedCellState;
+  isWithinLoadedRoomBounds?: (coordinates: RoomCoordinates) => boolean;
+  requestWindowRefreshForUnknownNeighbor?: (
+    roomCoordinates: RoomCoordinates,
+    neighborCoordinates: RoomCoordinates,
+  ) => void;
   getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null;
   isPlayableRoomCollisionReady(coordinates: RoomCoordinates): boolean;
   syncBackdropCameraIgnores(): void;
@@ -135,7 +141,22 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
       return;
     }
 
-    if (!this.host.getPlayer() || this.host.getShouldRespawnPlayer()) {
+    const needsPlayerSpawn = !this.host.getPlayer() || this.host.getShouldRespawnPlayer();
+    if (
+      needsPlayerSpawn
+      && !this.host.isPlayableRoomCollisionReady(currentRoom.coordinates)
+    ) {
+      // A cached exact snapshot can outlive a full runtime while its teardown
+      // finishes. Keep Play in its existing no-player loading state until the
+      // replacement collider is atomically ready; creating a gravity-enabled
+      // body here would let it fall through the room.
+      if (this.host.getPlayer()) {
+        this.host.destroyPlayer();
+      }
+      return;
+    }
+
+    if (needsPlayerSpawn) {
       this.host.destroyPlayer();
       this.host.createPlayer(currentRoom);
       this.host.setShouldRespawnPlayer(false);
@@ -155,6 +176,29 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
     this.host.applyCameraMode(this.host.getShouldCenterCamera());
     this.host.setShouldCenterCamera(false);
     this.host.syncGhostVisibility();
+  }
+
+  syncFocusedRoomRuntime(
+    previousCoordinates: RoomCoordinates,
+    currentCoordinates: RoomCoordinates,
+  ): void {
+    const currentRoom = this.host.getCurrentRoomSnapshot();
+    if (
+      this.host.getMode() !== 'play' ||
+      !currentRoom ||
+      !this.host.getPlayer() ||
+      !this.host.getPlayerBody() ||
+      this.host.getShouldRespawnPlayer() ||
+      currentRoom.coordinates.x !== currentCoordinates.x ||
+      currentRoom.coordinates.y !== currentCoordinates.y ||
+      !this.host.isPlayableRoomCollisionReady(currentCoordinates)
+    ) {
+      this.syncModeRuntime();
+      return;
+    }
+
+    this.syncEdgeWallsForCoordinates([previousCoordinates, currentCoordinates]);
+    this.host.applyCameraMode(false);
   }
 
   syncFullRoomColliders(): void {
@@ -191,8 +235,32 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
   }
 
   syncEdgeWalls(): void {
+    this.syncEdgeWallsForRoomIds(null);
+  }
+
+  syncEdgeWallsForCoordinates(coordinates: Iterable<RoomCoordinates>): void {
+    const affectedRoomIds = new Set<string>();
+    for (const coordinate of coordinates) {
+      affectedRoomIds.add(roomIdFromCoordinates(coordinate));
+      for (const neighbor of getOrthogonalNeighbors(coordinate)) {
+        affectedRoomIds.add(roomIdFromCoordinates(neighbor));
+      }
+    }
+    if (affectedRoomIds.size === 0) {
+      return;
+    }
+    this.syncEdgeWallsForRoomIds(affectedRoomIds);
+  }
+
+  private syncEdgeWallsForRoomIds(roomIds: ReadonlySet<string> | null): void {
+    let changed = false;
     for (const loadedRoom of this.host.getLoadedFullRooms()) {
+      if (roomIds && !roomIds.has(loadedRoom.room.id)) {
+        continue;
+      }
+
       this.host.destroyRoomEdgeWalls(loadedRoom);
+      changed = true;
 
       if (!this.host.getPlayerBody() || this.host.getMode() !== 'play') {
         continue;
@@ -208,6 +276,10 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
           loadedRoom.edgeWalls.push(edgeWall);
         }
       }
+    }
+
+    if (changed) {
+      this.host.syncBackdropCameraIgnores();
     }
   }
 
@@ -253,6 +325,20 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
         return isPlayableCellState(this.host.getCellStateAt(outsideCoordinates));
       }
 
+      return false;
+    }
+
+    if (this.host.isWithinLoadedRoomBounds?.(neighborCoordinates) === false) {
+      const currentCoordinates = this.host.getCurrentRoomCoordinates?.() ?? roomCoordinates;
+      if (
+        currentCoordinates.x === roomCoordinates.x
+        && currentCoordinates.y === roomCoordinates.y
+      ) {
+        this.host.requestWindowRefreshForUnknownNeighbor?.(
+          roomCoordinates,
+          neighborCoordinates,
+        );
+      }
       return false;
     }
 
@@ -319,7 +405,6 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
     rect.setDepth(15);
     this.host.scene.physics.add.existing(rect, true);
     const collider = this.host.scene.physics.add.collider(player, rect);
-    this.host.syncBackdropCameraIgnores();
     return { rect, collider };
   }
 }

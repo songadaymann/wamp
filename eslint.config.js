@@ -18,7 +18,9 @@ export default tseslint.config(
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ['scripts/runtime_performance_trace.test.ts'],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },

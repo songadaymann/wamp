@@ -25,6 +25,18 @@ export interface CustomBackgroundDrawRect {
 export type CustomBackgroundObject = Phaser.GameObjects.TileSprite | Phaser.GameObjects.Image;
 export type BuiltInBackgroundObject = Phaser.GameObjects.TileSprite | Phaser.GameObjects.Image;
 
+export interface CustomBackgroundTexturePreparationSnapshot {
+  key: string;
+  prepared: boolean;
+  committed: boolean;
+  cancelled: boolean;
+  width: number;
+  height: number;
+}
+
+type CustomBackgroundDecodedImage = ImageBitmap | HTMLImageElement;
+type CustomBackgroundImageDecoder = (blob: Blob) => Promise<CustomBackgroundDecodedImage>;
+
 interface BuiltInBackgroundLayer {
   key: string;
   width: number;
@@ -233,6 +245,150 @@ export function ensureCustomBackgroundTexture(
 
   customBackgroundLoadPromises.set(key, promise);
   return promise;
+}
+
+/**
+ * Fetches and decodes a custom background without publishing it to Phaser.
+ * The caller chooses when to perform the final canvas draw / texture upload,
+ * which lets gameplay route that atomic work through its frame coordinator.
+ */
+export class CustomBackgroundTexturePreparation {
+  readonly key: string;
+  private readonly abortController = new AbortController();
+  private bitmap: CustomBackgroundDecodedImage | null = null;
+  private preparePromise: Promise<void> | null = null;
+  private committed = false;
+  private cancelled = false;
+
+  constructor(
+    private readonly id: string,
+    private readonly fetchImage: typeof fetch = fetch,
+    private readonly decodeImage: CustomBackgroundImageDecoder = decodeCustomBackgroundBlob,
+    private readonly createCanvas: () => HTMLCanvasElement = () => document.createElement('canvas'),
+  ) {
+    this.key = getCustomBackgroundTextureKey(id);
+  }
+
+  prepare(): Promise<void> {
+    if (this.cancelled) {
+      return Promise.reject(new DOMException('Custom background preparation was cancelled.', 'AbortError'));
+    }
+    if (this.bitmap || this.committed) return Promise.resolve();
+    if (this.preparePromise) return this.preparePromise;
+    this.preparePromise = this.fetchAndDecode();
+    return this.preparePromise;
+  }
+
+  commit(scene: Phaser.Scene): string {
+    if (this.cancelled) {
+      throw new Error('Cancelled custom background preparation cannot be committed.');
+    }
+    if (scene.textures.exists(this.key)) {
+      this.releaseBitmap();
+      this.committed = true;
+      return this.key;
+    }
+    const bitmap = this.bitmap;
+    if (!bitmap) {
+      throw new Error('Custom background texture cannot be committed before decode completes.');
+    }
+    const canvas = this.createCanvas();
+    canvas.width = Math.max(1, getDecodedImageWidth(bitmap));
+    canvas.height = Math.max(1, getDecodedImageHeight(bitmap));
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Could not create a custom background staging canvas.');
+    }
+    context.imageSmoothingEnabled = true;
+    context.drawImage(bitmap, 0, 0);
+    const texture = scene.textures.addCanvas(this.key, canvas);
+    if (!texture || !scene.textures.exists(this.key)) {
+      throw new Error(`Custom background texture ${this.key} was not registered.`);
+    }
+    this.releaseBitmap();
+    this.committed = true;
+    return this.key;
+  }
+
+  cancel(): void {
+    if (this.committed || this.cancelled) return;
+    this.cancelled = true;
+    this.abortController.abort();
+    this.releaseBitmap();
+  }
+
+  isPrepared(): boolean {
+    return Boolean(this.bitmap) || this.committed;
+  }
+
+  getSnapshot(): CustomBackgroundTexturePreparationSnapshot {
+    return {
+      key: this.key,
+      prepared: this.isPrepared(),
+      committed: this.committed,
+      cancelled: this.cancelled,
+      width: this.bitmap ? getDecodedImageWidth(this.bitmap) : 0,
+      height: this.bitmap ? getDecodedImageHeight(this.bitmap) : 0,
+    };
+  }
+
+  private async fetchAndDecode(): Promise<void> {
+    const response = await this.fetchImage(getBackgroundImageUrl(this.id), {
+      credentials: 'include',
+      signal: this.abortController.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Custom background image failed to load (${response.status}).`);
+    }
+    const blob = await response.blob();
+    if (this.cancelled) return;
+    const bitmap = await this.decodeImage(blob);
+    if (this.cancelled) {
+      releaseDecodedImage(bitmap);
+      return;
+    }
+    this.bitmap = bitmap;
+  }
+
+  private releaseBitmap(): void {
+    if (this.bitmap) releaseDecodedImage(this.bitmap);
+    this.bitmap = null;
+  }
+}
+
+async function decodeCustomBackgroundBlob(blob: Blob): Promise<CustomBackgroundDecodedImage> {
+  if (typeof globalThis.createImageBitmap === 'function') {
+    return globalThis.createImageBitmap(blob);
+  }
+  const objectUrl = URL.createObjectURL(blob);
+  const image = new Image();
+  try {
+    image.src = objectUrl;
+    await image.decode();
+    return image;
+  } catch (error) {
+    image.src = '';
+    throw error;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function getDecodedImageWidth(image: CustomBackgroundDecodedImage): number {
+  return 'naturalWidth' in image ? image.naturalWidth : image.width;
+}
+
+function getDecodedImageHeight(image: CustomBackgroundDecodedImage): number {
+  return 'naturalHeight' in image ? image.naturalHeight : image.height;
+}
+
+function releaseDecodedImage(image: CustomBackgroundDecodedImage): void {
+  const closable = image as { close?: () => void };
+  if (typeof closable.close === 'function') {
+    closable.close();
+    return;
+  }
+  (image as HTMLImageElement).src = '';
 }
 
 function isTileSprite(object: CustomBackgroundObject): object is Phaser.GameObjects.TileSprite {

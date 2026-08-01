@@ -12,7 +12,12 @@ import {
   type ActiveCourseRunState,
 } from './courseRuns';
 import type { RoomGoal } from '../../goals/roomGoals';
-import { roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
+import {
+  roomIdFromCoordinates,
+  type RoomCoordinates,
+  type RoomSnapshot,
+  type RoomSnapshotView,
+} from '../../persistence/roomModel';
 import { type WorldRoomSummary } from '../../persistence/worldModel';
 import type { RoomLeaderboardResponse } from '../../runs/model';
 import type { OverworldMode } from '../sceneData';
@@ -58,7 +63,7 @@ interface OverworldHudStateControllerHost {
   getActiveCourseRun(): ActiveCourseRunState | null;
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   getCurrentGoalRun(): GoalRunState | null;
-  getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
+  getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshotView | null;
   getCurrentRoomLeaderboard(): RoomLeaderboardResponse | null;
   getGoalPersistentStatusText(): string | null;
   getTotalPlayerCount(): number | null;
@@ -207,7 +212,7 @@ export class OverworldHudStateController {
           : null,
         selectedOwnership: this.selectedOwnershipByRoomId.get(selectedRoomId) ?? null,
         selectedDraft,
-        selectedPublishedRoom,
+        selectedPublishedRoom: selectedPublishedRoom as RoomSnapshot | null,
         selectedPublishedCourse,
         selectedPopulation: this.host.getRoomPopulation(selectedCoordinates),
         selectedEditorCount: this.host.getRoomEditorCount(selectedCoordinates),
@@ -229,7 +234,7 @@ export class OverworldHudStateController {
         activeCourseRun,
         activeRoomRushRun,
         activeRoomGoalRun,
-        activeGoalRoom,
+        activeGoalRoom: activeGoalRoom as RoomSnapshot | null,
         totalPlayerCount: this.host.getTotalPlayerCount(),
         onlineRosterEntries: this.host.getOnlineRosterEntries(),
         currentUserId,
