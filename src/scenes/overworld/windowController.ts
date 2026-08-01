@@ -34,6 +34,7 @@ type WorldRefreshResult = 'success' | 'cancelled' | 'error';
 type ChunkWindowRefreshResult = 'updated' | 'unchanged' | 'cancelled' | 'error';
 
 const REQUIRED_WINDOW_REFRESH_RETRY_MS = 50;
+const REQUIRED_WINDOW_REFRESH_ERROR_RETRY_MS = 5_000;
 
 interface RequiredWindowRefreshRequirements {
   playableSnapshot: boolean;
@@ -664,7 +665,8 @@ export class OverworldWindowController {
             this.host.getTimeNow() + REQUIRED_WINDOW_REFRESH_RETRY_MS;
           return;
         }
-        this.pendingRequiredWindowRefresh = null;
+        this.nextRequiredWindowRefreshAt =
+          this.host.getTimeNow() + REQUIRED_WINDOW_REFRESH_ERROR_RETRY_MS;
       })
       .finally(() => {
         if (
