@@ -18,6 +18,7 @@ import { LeaderboardModalController } from './leaderboardModal';
 import { PaletteController } from './paletteController';
 import { PlaylistModalController } from './playlistModal';
 import { PlaylistIntroModalController } from './playlistIntroModal';
+import { PerformanceSuggestionModalController } from './performanceSuggestionModal';
 import { RoomSequenceController } from './roomSequenceController';
 import { setupRoomMusicControls } from './musicControls';
 import { ProfileModalController } from './profileModal';
@@ -59,6 +60,7 @@ interface UiControllers {
   profileModal: ProfileModalController;
   playlistModal: PlaylistModalController;
   playlistIntroModal: PlaylistIntroModalController;
+  performanceSuggestionModal: PerformanceSuggestionModalController;
   rewardStings: RewardStingController;
   xpReceipts: XpReceiptController;
   rewardStingCatchup: RewardStingCatchupController;
@@ -113,6 +115,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     profileModal: new ProfileModalController(game),
     playlistModal: new PlaylistModalController(game),
     playlistIntroModal,
+    performanceSuggestionModal: new PerformanceSuggestionModalController(game),
     rewardStings: new RewardStingController(),
     xpReceipts: new XpReceiptController(),
     rewardStingCatchup: new RewardStingCatchupController(),
@@ -146,6 +149,7 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.roomGoalIntroModal.init();
   controllers.playlistModal.init();
   controllers.playlistIntroModal.init();
+  controllers.performanceSuggestionModal.init();
   controllers.rewardStings.init();
   controllers.xpReceipts.init();
   controllers.rewardStingCatchup.init();
@@ -176,6 +180,7 @@ function configureEditorBridge(controllers: UiControllers): void {
       controllers.chatModerationModal.close();
       controllers.playlistModal.close();
       controllers.playlistIntroModal.close();
+      controllers.performanceSuggestionModal.deferForAppModeTransition();
       controllers.roomSequence.stop({ returnToWorld: false });
       controllers.wampOGramModal.close();
     },

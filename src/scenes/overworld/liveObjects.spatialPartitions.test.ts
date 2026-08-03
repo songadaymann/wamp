@@ -60,6 +60,15 @@ function createBody(left: number, top: number, width: number, height: number) {
   };
 }
 
+function createStaticBody() {
+  return {
+    enable: true,
+    updateFromGameObject: vi.fn(),
+    setSize: vi.fn(),
+    setOffset: vi.fn(),
+  };
+}
+
 function createLiveObject(
   objectId: string,
   body: ReturnType<typeof createBody>,
@@ -96,9 +105,10 @@ function createLoadedRoom(
 function createController(
   playerBody: ReturnType<typeof createBody>,
   loadedRooms: ReturnType<typeof createLoadedRoom>[] = [],
+  scene: object = {},
 ) {
   return new OverworldLiveObjectController({
-    scene: {},
+    scene,
     settings: {
       bouncePadVelocity: -320,
       bouncePadCooldownMs: 180,
@@ -114,10 +124,77 @@ function createController(
       x: coordinates.x * ROOM_PX_WIDTH,
       y: coordinates.y * ROOM_PX_HEIGHT,
     }),
+    getCurrentTime: () => 0,
   } as never);
 }
 
 describe('OverworldLiveObjectController spatial partitions', () => {
+  it('keeps a cold coin destination buildable when boot registered an empty animation', () => {
+    const data = new Map<string, unknown>();
+    const play = vi.fn(() => {
+      throw new Error('An empty Phaser animation must never be played.');
+    });
+    const sprite = {
+      active: true,
+      visible: true,
+      body: null as ReturnType<typeof createStaticBody> | null,
+      depth: 0,
+      x: 184,
+      y: 184,
+      texture: { setFilter: vi.fn() },
+      play,
+      setOrigin: vi.fn(),
+      setScale: vi.fn(),
+      setDepth: vi.fn(),
+      setActive: vi.fn((active: boolean) => { sprite.active = active; }),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; }),
+      getData: vi.fn((key: string) => data.get(key)),
+      setData: vi.fn((key: string, value: unknown) => {
+        if (value === undefined) data.delete(key);
+        else data.set(key, value);
+      }),
+    };
+    const emptyAnimation = {
+      key: 'coin_gold_anim',
+      frames: [],
+      manager: null as object | null,
+      getTotalFrames: () => 0,
+    };
+    const animationManager = {
+      exists: vi.fn(() => true),
+      get: vi.fn(() => emptyAnimation),
+    };
+    emptyAnimation.manager = animationManager;
+    const scene = {
+      add: { sprite: vi.fn(() => sprite) },
+      anims: animationManager,
+      physics: {
+        add: {
+          existing: vi.fn(() => {
+            sprite.body = createStaticBody();
+          }),
+        },
+      },
+    };
+    const room = createLoadedRoom(
+      '1,-7',
+      { x: 1, y: -7 },
+      [],
+      [{
+        id: 'coin_gold',
+        x: 184,
+        y: 184,
+        instanceId: 'obj_7d850028-6a28-4889-8d99-0cd72f12b154',
+      }],
+    );
+    const controller = createController(createBody(0, 0, 16, 24), [room], scene);
+
+    expect(controller.createLiveObjectsBatch(room as never, 0, 1, true)).toBe(1);
+    expect(room.liveObjects).toHaveLength(1);
+    expect(play).not.toHaveBeenCalled();
+    expect(sprite).toMatchObject({ active: false, visible: false });
+  });
+
   it('rejects a distant ladder room before reading any ladder body bounds', () => {
     const playerBody = createBody(8, 8, 16, 24);
     const inaccessibleFarBody = { enable: true } as ReturnType<typeof createBody>;

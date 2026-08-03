@@ -47,6 +47,53 @@ describe('world streaming loaded-room lifecycle', () => {
     expect(frame.cpuOvershootMs).toBe(0);
   });
 
+  it('marks exact-snapshot competition only when world-tile work actually executes', () => {
+    const onPerformanceAdvisorExactSnapshotEvent = vi.fn();
+    const update = vi.fn()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const harness = Object.assign(
+      Object.create(OverworldWorldStreamingController.prototype),
+      {
+        frameWorkCoordinator: {
+          hasQueuedWorkAtPriority: vi.fn(() => false),
+        },
+        worldTileController: {
+          update,
+          isBrowseCutoverActive: vi.fn(() => false),
+        },
+        selectedExactPrefetchLifecycle: { pause: vi.fn() },
+        previewCache: { cancelSelectionPrefetchesExcept: vi.fn() },
+        performanceAdvisorExactSnapshotRequestsByRoomId: new Map([[
+          '1,0',
+          {
+            roomId: '1,0',
+            generation: 7,
+            optionalCompetitionObserved: false,
+            settled: false,
+          },
+        ]]),
+        options: {
+          scene: { cameras: { main: {} } },
+          onPerformanceAdvisorExactSnapshotEvent,
+        },
+      },
+    );
+
+    expect(harness.updateWorldTiles()).toBe(true);
+    expect(onPerformanceAdvisorExactSnapshotEvent).not.toHaveBeenCalled();
+
+    expect(harness.updateWorldTiles()).toBe(true);
+    expect(onPerformanceAdvisorExactSnapshotEvent).toHaveBeenCalledOnce();
+    expect(onPerformanceAdvisorExactSnapshotEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'optional-competition',
+        roomId: '1,0',
+        generation: 7,
+      }),
+    );
+  });
+
   it('does not rebuild artifact-cache protection on steady frames', () => {
     const profile = { value: 'normal' as 'normal' | 'reduced' };
     const syncRoomArtifactCachePolicy = vi.fn(function (this: { roomArtifactCacheProfile: string }) {

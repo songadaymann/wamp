@@ -84,6 +84,17 @@ import {
 } from '../goals/roomGoals';
 import { setAppMode } from '../ui/appMode';
 import { getDeviceLayoutState } from '../ui/deviceLayout';
+import {
+  getDevicePerformanceMode,
+  subscribeDevicePerformanceMode,
+} from '../performance/devicePerformanceMode';
+import {
+  type PerformanceAdvisorFrameSample,
+  type PerformanceAdvisorResetReason,
+  type PerformanceAdvisorSuggestion,
+  type PerformanceAdvisorTransitionBlockReason,
+} from '../performance/performanceAdvisor';
+import { performanceAdvisorRuntime } from '../performance/performanceAdvisorRuntime';
 import { createProfileRepository } from '../profiles/profileRepository';
 import {
   COURSE_COMPOSER_STATE_CHANGED_EVENT,
@@ -281,11 +292,13 @@ import {
   getTouchInputState,
 } from '../ui/mobile/touchControls';
 import { getRoomGoalIntroModalController } from '../ui/setup/roomGoalIntroModal';
+import { getPerformanceSuggestionModalController } from '../ui/setup/performanceSuggestionModal';
 import {
   createMobilePerformanceProfiler,
   type MobilePerformanceContext,
   type MobilePerformanceProfiler,
 } from '../debug/mobilePerformanceProfiler';
+import type { RunFrameWorkResult } from './overworld/frameWorkCoordinator';
 
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.5;
@@ -294,6 +307,8 @@ const BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 15000;
 const PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 8000;
 const FRAME_HUD_RENDER_INTERVAL_MS = 100;
 const PRESENCE_SNAPSHOT_SYNC_INTERVAL_MS = 200;
+const PERFORMANCE_ADVISOR_PRESENTATION_STABLE_MS = 1_000;
+const PERFORMANCE_ADVISOR_DEFAULT_FRAME_TARGET_MS = 1_000 / 60;
 const BUTTON_ZOOM_FACTOR = 1.12;
 const WHEEL_ZOOM_SENSITIVITY = 0.003;
 const PLAY_ROOM_FIT_PADDING = 16;
@@ -449,6 +464,26 @@ export class OverworldPlayScene extends Phaser.Scene {
   private fxController: SceneFxController | null = null;
   private mobilePerformanceProfiler: MobilePerformanceProfiler | null = null;
   private criticalFrameStartedAtMs: number | null = null;
+  private previousCriticalFrameStartedAtMs: number | null = null;
+  private currentWallFrameDeltaMs = 0;
+  private performanceAdvisorLongTaskObserver: PerformanceObserver | null = null;
+  private performanceAdvisorPendingLongTaskCount = 0;
+  private performanceAdvisorLongTaskCutoffMs = 0;
+  private performanceAdvisorEligible = false;
+  private performanceAdvisorSceneActive = false;
+  private performanceAdvisorWebglContextLost = false;
+  private performanceAdvisorRoomStableSinceMs = 0;
+  private performanceAdvisorLastTransitionGateAtMs = 0;
+  private performanceAdvisorObservedRoomId: string | null = null;
+  private performanceSuggestionPauseRequested = false;
+  private readonly performanceAdvisorFrameSample = {
+    atMs: 0,
+    frameDeltaMs: 0,
+    criticalUpdateMs: 0,
+    schedulerHeadroomMs: 0,
+    longTaskCount: 0,
+  } satisfies PerformanceAdvisorFrameSample;
+  private unsubscribeDevicePerformanceMode: (() => void) | null = null;
 
   private mode: OverworldMode = 'browse';
   private cameraMode: CameraMode = 'inspect';
@@ -827,6 +862,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       worldRepository: createWorldRepository(),
       getMode: () => this.mode,
       getPerformanceProfile: () => getDeviceLayoutState().performanceProfile,
+      getDevicePerformanceMode: () => getDevicePerformanceMode(),
       getSelectedCoordinates: () => this.selectedCoordinates,
       getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
       refreshRoomSummariesForTransition: (centerCoordinates) =>
@@ -894,6 +930,22 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.updateSelectedSummary();
         void this.refreshLeaderboardForSelection();
         this.renderHud();
+      },
+      onPerformanceAdvisorExactSnapshotEvent: (event) => {
+        performanceAdvisorRuntime.advisor.recordExactSnapshot(event);
+      },
+      onPerformanceAdvisorDestinationProgress: (
+        roomId,
+        generation,
+        progressRevision,
+        atMs,
+      ) => {
+        performanceAdvisorRuntime.advisor.recordDestinationProgress(
+          roomId,
+          generation,
+          progressRevision,
+          atMs,
+        );
       },
       measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
     });
@@ -1047,6 +1099,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       returnToWorld: () => this.returnToWorld(),
       renderHud: () => this.renderHud(),
       showTransientStatus: (message) => this.showTransientStatus(message),
+      onSetupStateChanged: (inProgress) => {
+        getPerformanceSuggestionModalController()?.handlePvpSetupStateChanged(inProgress);
+      },
     });
     this.roomChatController = new OverworldRoomChatController({
       scene: this,
@@ -1978,6 +2033,14 @@ export class OverworldPlayScene extends Phaser.Scene {
           coordinates,
           portalDestination,
         ),
+      setTransitionPreparationSeamUrgent: (urgent) =>
+        this.worldStreamingController.setTransitionPreparationSeamUrgent(urgent),
+      recordPerformanceTransitionGate: (reason, currentCoordinates, nextCoordinates) =>
+        this.recordPerformanceTransitionGate(reason, currentCoordinates, nextCoordinates),
+      clearPerformanceTransitionGate: () => {
+        performanceAdvisorRuntime.advisor.clearTransitionGate(performance.now());
+      },
+      onRoomTransitionCompleted: () => this.handlePerformanceRoomTransitionCompleted(),
       isRoomTransitionLocked: () => this.isPvpArenaActive(),
       resetChallengeStateForRoomExit: (nextRoomCoordinates) => {
         this.sessionResetController.resetChallengeStateForRoomExit(nextRoomCoordinates);
@@ -2141,6 +2204,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.goalRunController.getCurrentRun();
   }
 
+  private isTimedGoalRunActive(): boolean {
+    const run = this.currentGoalRun;
+    if (!run || run.result !== 'active') return false;
+    if (run.goal.type === 'survival') return true;
+    if (run.goal.type === 'npc_quest') return run.goal.questType === 'protect';
+    return run.goal.timeLimitMs !== null;
+  }
+
   private get activeCourseSnapshot(): CourseSnapshot | null {
     return this.activeCourseRun?.course ?? null;
   }
@@ -2277,6 +2348,12 @@ export class OverworldPlayScene extends Phaser.Scene {
   create(data?: OverworldPlaySceneData): void {
     this.runtimeContext.setLifecycle('initializing');
     this.resetRuntimeState();
+    this.resetPerformanceAdvisorSceneState();
+    this.unsubscribeDevicePerformanceMode?.();
+    this.unsubscribeDevicePerformanceMode = subscribeDevicePerformanceMode(() => {
+      this.worldStreamingController.handlePerformancePolicyChanged();
+      this.renderHud();
+    });
     this.initializeMobilePerformanceProfiler();
     this.syncAppMode();
     this.initializeMobilePortraitCameraTuning();
@@ -2321,7 +2398,15 @@ export class OverworldPlayScene extends Phaser.Scene {
       this,
     );
     this.events.on(Phaser.Scenes.Events.WAKE, this.handleWake, this);
+    this.events.on(
+      Phaser.Scenes.Events.SLEEP,
+      this.handlePerformanceAdvisorSceneSleep,
+      this,
+    );
+    this.events.on(Phaser.Scenes.Events.PAUSE, this.handlePerformanceAdvisorScenePause, this);
+    this.events.on(Phaser.Scenes.Events.RESUME, this.handlePerformanceAdvisorSceneResume, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
+    this.initializePerformanceAdvisorMonitoring();
 
     const deepLinkedInitialFocus =
       !data?.centerCoordinates && !data?.roomCoordinates && hasFocusedCoordinatesInUrl();
@@ -2355,6 +2440,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.maybeAutoPlayDeepLinkedRoomOnBoot(refreshed);
       });
     this.runtimeContext.setLifecycle('active');
+    this.performanceAdvisorSceneActive = true;
+    this.syncPerformanceAdvisorEligibility(performance.now());
   }
 
   update(_time: number, delta: number): void {
@@ -2363,6 +2450,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     // simulation headroom instead of only timing this method's body.
     const criticalFrameStartedAt = this.criticalFrameStartedAtMs ?? performance.now();
     this.criticalFrameStartedAtMs = null;
+    let criticalUpdateMs: number | null = null;
+    let frameWorkResult: RunFrameWorkResult | null = null;
+    let worldTileSharedBudgetConsumedMs = 0;
     const profiler = this.mobilePerformanceProfiler;
     profiler?.beginFrame(delta, this.buildMobilePerformanceContext());
     try {
@@ -2370,7 +2460,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.windowController.maybeRefreshVisibleChunks();
       const worldTileWorkStartedAt = performance.now();
       const worldTileWorkRan = this.worldStreamingController.updateWorldTiles();
-      const worldTileSharedBudgetConsumedMs = worldTileWorkRan
+      worldTileSharedBudgetConsumedMs = worldTileWorkRan
         ? performance.now() - worldTileWorkStartedAt
         : 0;
       this.updateBackdrop();
@@ -2423,7 +2513,11 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.updateRoomWeather();
         if (noPlayerStartedAt !== undefined) profiler?.endSegment('update.noPlayer', noPlayerStartedAt);
         this.renderFrameHud();
-        this.worldStreamingController.runDiscretionaryFrameWork(
+        criticalUpdateMs = Math.max(
+          0,
+          performance.now() - criticalFrameStartedAt - worldTileSharedBudgetConsumedMs,
+        );
+        frameWorkResult = this.worldStreamingController.runDiscretionaryFrameWork(
           performance.now() - criticalFrameStartedAt,
           worldTileSharedBudgetConsumedMs,
         );
@@ -2483,11 +2577,22 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.tickRoomRushRun(delta);
       if (playerUpdateStartedAt !== undefined) profiler?.endSegment('update.player', playerUpdateStartedAt);
       this.renderFrameHud();
-      this.worldStreamingController.runDiscretionaryFrameWork(
+      criticalUpdateMs = Math.max(
+        0,
+        performance.now() - criticalFrameStartedAt - worldTileSharedBudgetConsumedMs,
+      );
+      frameWorkResult = this.worldStreamingController.runDiscretionaryFrameWork(
         performance.now() - criticalFrameStartedAt,
         worldTileSharedBudgetConsumedMs,
       );
     } finally {
+      this.recordPerformanceAdvisorFrame(
+        criticalUpdateMs ?? Math.max(
+          0,
+          performance.now() - criticalFrameStartedAt - worldTileSharedBudgetConsumedMs,
+        ),
+        frameWorkResult,
+      );
       profiler?.endFrame(this.buildMobilePerformanceContext());
     }
   }
@@ -2907,6 +3012,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleResize(): void {
+    this.resetPerformanceAdvisorEvidence('resize', performance.now());
     this.loadingText.setPosition(this.scale.width / 2, this.scale.height / 2);
     this.resizeBackdrop();
     this.updateBackdrop();
@@ -2928,9 +3034,227 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.renderHud();
   }
 
-  private handleWake = (_sys: Phaser.Scenes.Systems, data?: OverworldPlaySceneData): void => {
+  private handleWake(_sys: Phaser.Scenes.Systems, data?: OverworldPlaySceneData): void {
+    const now = performance.now();
+    this.performanceAdvisorSceneActive = true;
+    this.resetPerformanceAdvisorEvidence('scene-wake', now);
+    this.syncPerformanceAdvisorEligibility(now);
     void this.windowController.handleWakeAsync(data);
+  }
+
+  private handlePerformanceAdvisorSceneSleep(): void {
+    const now = performance.now();
+    this.performanceAdvisorSceneActive = false;
+    this.resetPerformanceAdvisorEvidence('pause', now);
+    this.syncPerformanceAdvisorEligibility(now);
+  }
+
+  private resetPerformanceAdvisorSceneState(): void {
+    const now = performance.now();
+    this.performanceAdvisorSceneActive = false;
+    this.performanceAdvisorWebglContextLost = false;
+    this.performanceAdvisorEligible = false;
+    this.performanceAdvisorPendingLongTaskCount = 0;
+    this.performanceAdvisorLongTaskCutoffMs = now;
+    this.performanceAdvisorRoomStableSinceMs = now;
+    this.performanceAdvisorLastTransitionGateAtMs = 0;
+    this.performanceAdvisorObservedRoomId = roomIdFromCoordinates(
+      this.currentRoomCoordinates,
+    );
+    this.performanceSuggestionPauseRequested = false;
+    this.previousCriticalFrameStartedAtMs = null;
+    this.currentWallFrameDeltaMs = 0;
+    performanceAdvisorRuntime.advisor.setEligibility(false, now);
+    performanceAdvisorRuntime.advisor.resetEvidence('manual', now);
+  }
+
+  private initializePerformanceAdvisorMonitoring(): void {
+    window.addEventListener('focus', this.handlePerformanceAdvisorWindowFocus);
+    window.addEventListener('blur', this.handlePerformanceAdvisorWindowBlur);
+    window.addEventListener('orientationchange', this.handlePerformanceAdvisorOrientationChange);
+    document.addEventListener(
+      'visibilitychange',
+      this.handlePerformanceAdvisorVisibilityChange,
+    );
+    this.game.renderer.on('losewebgl', this.handlePerformanceAdvisorWebglContextLost);
+    this.game.renderer.on('restorewebgl', this.handlePerformanceAdvisorWebglContextRestored);
+
+    if (
+      typeof PerformanceObserver === 'undefined'
+      || !PerformanceObserver.supportedEntryTypes?.includes('longtask')
+    ) {
+      return;
+    }
+
+    try {
+      this.performanceAdvisorLongTaskObserver = new PerformanceObserver((list) => {
+        if (!this.performanceAdvisorEligible) return;
+        for (const entry of list.getEntries()) {
+          if (entry.startTime >= this.performanceAdvisorLongTaskCutoffMs) {
+            this.performanceAdvisorPendingLongTaskCount += 1;
+          }
+        }
+      });
+      this.performanceAdvisorLongTaskObserver.observe({ entryTypes: ['longtask'] });
+    } catch {
+      this.performanceAdvisorLongTaskObserver?.disconnect();
+      this.performanceAdvisorLongTaskObserver = null;
+    }
+  }
+
+  private destroyPerformanceAdvisorMonitoring(): void {
+    window.removeEventListener('focus', this.handlePerformanceAdvisorWindowFocus);
+    window.removeEventListener('blur', this.handlePerformanceAdvisorWindowBlur);
+    window.removeEventListener(
+      'orientationchange',
+      this.handlePerformanceAdvisorOrientationChange,
+    );
+    document.removeEventListener(
+      'visibilitychange',
+      this.handlePerformanceAdvisorVisibilityChange,
+    );
+    this.game.renderer.off('losewebgl', this.handlePerformanceAdvisorWebglContextLost);
+    this.game.renderer.off('restorewebgl', this.handlePerformanceAdvisorWebglContextRestored);
+    this.performanceAdvisorLongTaskObserver?.disconnect();
+    this.performanceAdvisorLongTaskObserver = null;
+    this.performanceAdvisorPendingLongTaskCount = 0;
+  }
+
+  private readonly handlePerformanceAdvisorWindowFocus = (): void => {
+    this.syncPerformanceAdvisorEligibility(performance.now());
   };
+
+  private readonly handlePerformanceAdvisorWindowBlur = (): void => {
+    this.syncPerformanceAdvisorEligibility(performance.now());
+  };
+
+  private readonly handlePerformanceAdvisorVisibilityChange = (): void => {
+    const now = performance.now();
+    this.syncPerformanceAdvisorEligibility(now);
+    if (document.visibilityState === 'visible') {
+      this.resetPerformanceAdvisorEvidence('visibility-restored', now);
+    }
+  };
+
+  private readonly handlePerformanceAdvisorOrientationChange = (): void => {
+    this.resetPerformanceAdvisorEvidence('orientation', performance.now());
+  };
+
+  private readonly handlePerformanceAdvisorWebglContextLost = (): void => {
+    this.performanceAdvisorWebglContextLost = true;
+    this.syncPerformanceAdvisorEligibility(performance.now());
+  };
+
+  private readonly handlePerformanceAdvisorWebglContextRestored = (): void => {
+    const now = performance.now();
+    this.performanceAdvisorWebglContextLost = false;
+    this.syncPerformanceAdvisorEligibility(now);
+    this.resetPerformanceAdvisorEvidence('webgl-context-restored', now);
+  };
+
+  private readonly handlePerformanceAdvisorScenePause = (): void => {
+    this.syncPerformanceAdvisorEligibility(performance.now());
+  };
+
+  private readonly handlePerformanceAdvisorSceneResume = (): void => {
+    this.syncPerformanceAdvisorEligibility(performance.now());
+  };
+
+  private syncPerformanceAdvisorEligibility(atMs: number): void {
+    const eligible = Boolean(
+      this.performanceAdvisorSceneActive
+      && !this.performanceAdvisorWebglContextLost
+      && this.mode === 'play'
+      && !this.scenePauseApplied
+      && this.sys.isActive()
+      && this.sys.isVisible()
+      && !this.sys.isSleeping()
+      && !this.sys.isPaused()
+      && document.visibilityState === 'visible'
+      && document.hasFocus()
+    );
+    if (eligible === this.performanceAdvisorEligible) return;
+
+    this.performanceAdvisorEligible = eligible;
+    this.performanceAdvisorPendingLongTaskCount = 0;
+    this.performanceAdvisorLongTaskCutoffMs = atMs;
+    this.previousCriticalFrameStartedAtMs = null;
+    this.currentWallFrameDeltaMs = 0;
+    performanceAdvisorRuntime.advisor.setEligibility(eligible, atMs);
+  }
+
+  private resetPerformanceAdvisorEvidence(
+    reason: PerformanceAdvisorResetReason,
+    atMs: number,
+  ): void {
+    this.performanceAdvisorPendingLongTaskCount = 0;
+    this.performanceAdvisorLongTaskCutoffMs = atMs;
+    this.previousCriticalFrameStartedAtMs = null;
+    this.currentWallFrameDeltaMs = 0;
+    performanceAdvisorRuntime.advisor.resetEvidence(reason, atMs);
+  }
+
+  private recordPerformanceAdvisorFrame(
+    criticalUpdateMs: number,
+    frameWorkResult: RunFrameWorkResult | null,
+  ): void {
+    const atMs = performance.now();
+    this.syncPerformanceAdvisorEligibility(atMs);
+    const longTaskCount = this.performanceAdvisorPendingLongTaskCount;
+    this.performanceAdvisorPendingLongTaskCount = 0;
+
+    if (!this.performanceAdvisorEligible || this.currentWallFrameDeltaMs <= 0) {
+      performanceAdvisorRuntime.advisor.tick(atMs);
+      return;
+    }
+
+    const schedulerHeadroomMs = frameWorkResult
+      ? Math.max(
+          0,
+          frameWorkResult.criticalHeadroomMs - frameWorkResult.actualSharedWorkMs,
+        )
+      : Math.max(0, PERFORMANCE_ADVISOR_DEFAULT_FRAME_TARGET_MS - criticalUpdateMs);
+    const sample = this.performanceAdvisorFrameSample;
+    sample.atMs = atMs;
+    sample.frameDeltaMs = this.currentWallFrameDeltaMs;
+    sample.criticalUpdateMs = Math.max(0, criticalUpdateMs);
+    sample.schedulerHeadroomMs = schedulerHeadroomMs;
+    sample.longTaskCount = longTaskCount;
+    performanceAdvisorRuntime.advisor.recordFrame(sample);
+  }
+
+  private recordPerformanceTransitionGate(
+    reason: PerformanceAdvisorTransitionBlockReason,
+    currentCoordinates: RoomCoordinates,
+    nextCoordinates: RoomCoordinates,
+  ): void {
+    const atMs = performance.now();
+    const destinationRoomId = roomIdFromCoordinates(nextCoordinates);
+    const advisorState = this.worldStreamingController.getTransitionAdvisorState(
+      destinationRoomId,
+    );
+    this.performanceAdvisorLastTransitionGateAtMs = atMs;
+    performanceAdvisorRuntime.advisor.recordTransitionGate({
+      atMs,
+      fromRoomId: roomIdFromCoordinates(currentCoordinates),
+      toRoomId: destinationRoomId,
+      reason,
+      generation: advisorState.generation,
+      progressRevision: advisorState.progressRevision,
+      urgentWorkQueued: advisorState.urgentWorkQueued,
+      schedulerStarved: advisorState.schedulerStarved,
+    });
+  }
+
+  private handlePerformanceRoomTransitionCompleted(): void {
+    const atMs = performance.now();
+    this.performanceAdvisorRoomStableSinceMs = atMs;
+    this.performanceAdvisorLastTransitionGateAtMs = 0;
+    this.performanceAdvisorObservedRoomId = roomIdFromCoordinates(
+      this.currentRoomCoordinates,
+    );
+    this.resetPerformanceAdvisorEvidence('room-transition', atMs);
+  }
   private readonly handleAuthStateChanged = (): void => {
     const identityChanged = this.presenceController.refreshIdentity();
     const roomChatIdentityChanged = this.roomChatController.refreshIdentity();
@@ -3912,7 +4236,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private syncScenePauseState(): void {
-    const shouldPause = this.roomGoalIntroPauseRequested;
+    const shouldPause =
+      this.roomGoalIntroPauseRequested || this.performanceSuggestionPauseRequested;
     if (shouldPause === this.scenePauseApplied) {
       return;
     }
@@ -6304,6 +6629,10 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private handleShutdown = (): void => {
     this.runtimeContext.setLifecycle('shutting-down');
+    this.performanceAdvisorSceneActive = false;
+    this.performanceSuggestionPauseRequested = false;
+    this.syncPerformanceAdvisorEligibility(performance.now());
+    this.destroyPerformanceAdvisorMonitoring();
     globalRoomMusicController.stopArrangement({
       transition: 'immediate',
       fadeDurationSec: 0.08,
@@ -6330,6 +6659,21 @@ export class OverworldPlayScene extends Phaser.Scene {
       this,
     );
     this.events.off(Phaser.Scenes.Events.WAKE, this.handleWake, this);
+    this.events.off(
+      Phaser.Scenes.Events.SLEEP,
+      this.handlePerformanceAdvisorSceneSleep,
+      this,
+    );
+    this.events.off(
+      Phaser.Scenes.Events.PAUSE,
+      this.handlePerformanceAdvisorScenePause,
+      this,
+    );
+    this.events.off(
+      Phaser.Scenes.Events.RESUME,
+      this.handlePerformanceAdvisorSceneResume,
+      this,
+    );
     this.inspectInputController.destroy();
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();
@@ -6346,6 +6690,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.portalObjectController.destroy();
     this.destroyPlayer();
     this.worldStreamingController.destroy();
+    this.unsubscribeDevicePerformanceMode?.();
+    this.unsubscribeDevicePerformanceMode = null;
     for (const sprite of this.starfieldSprites) {
       sprite.destroy();
     }
@@ -6359,6 +6705,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
     this.backdropCamera = null;
     this.criticalFrameStartedAtMs = null;
+    this.previousCriticalFrameStartedAtMs = null;
+    this.currentWallFrameDeltaMs = 0;
     this.goalMarkerController.destroy();
     this.gridOverlayController.destroy();
     this.browseOverlayController.destroy();
@@ -6367,8 +6715,104 @@ export class OverworldPlayScene extends Phaser.Scene {
   };
 
   private captureCriticalFrameStart = (): void => {
-    this.criticalFrameStartedAtMs = performance.now();
+    const atMs = performance.now();
+    this.currentWallFrameDeltaMs = this.previousCriticalFrameStartedAtMs === null
+      ? 0
+      : Math.max(0, atMs - this.previousCriticalFrameStartedAtMs);
+    this.previousCriticalFrameStartedAtMs = atMs;
+    this.criticalFrameStartedAtMs = atMs;
+
+    const currentRoomId = roomIdFromCoordinates(this.currentRoomCoordinates);
+    if (this.performanceAdvisorObservedRoomId !== currentRoomId) {
+      this.performanceAdvisorObservedRoomId = currentRoomId;
+      this.performanceAdvisorRoomStableSinceMs = atMs;
+      this.performanceAdvisorLastTransitionGateAtMs = 0;
+      this.resetPerformanceAdvisorEvidence('room-transition', atMs);
+    }
+    this.syncPerformanceAdvisorEligibility(atMs);
   };
+
+  getPerformanceAdvisorSuggestion(): PerformanceAdvisorSuggestion | null {
+    return performanceAdvisorRuntime.getSuggestion();
+  }
+
+  canPresentPerformanceAdvisorSuggestion(): boolean {
+    const atMs = performance.now();
+    const suggestion = performanceAdvisorRuntime.getSuggestion();
+    if (
+      !suggestion
+      || suggestion.expiresAtMs <= atMs
+      || getDevicePerformanceMode() !== 'auto'
+      || !this.performanceAdvisorSceneActive
+      || !this.performanceAdvisorEligible
+      || this.mode !== 'play'
+      || this.scenePauseApplied
+      || this.roomGoalIntroPauseRequested
+      || this.performanceSuggestionPauseRequested
+      || !this.player
+      || !this.playerBody
+      || this.isTimedGoalRunActive()
+      || this.activeCourseRun
+      || this.activeRoomRushRun
+      || this.isPvpArenaActive()
+      || this.isPvpMatchActive()
+      || this.pvpArenaController.isSetupInProgress()
+      || atMs - this.performanceAdvisorRoomStableSinceMs
+        < PERFORMANCE_ADVISOR_PRESENTATION_STABLE_MS
+      || (
+        this.performanceAdvisorLastTransitionGateAtMs > 0
+        && atMs - this.performanceAdvisorLastTransitionGateAtMs
+          < PERFORMANCE_ADVISOR_PRESENTATION_STABLE_MS
+      )
+      || !this.worldStreamingController.isPlayableRoomCollisionReady(
+        this.currentRoomCoordinates,
+      )
+      || this.isPerformanceAdvisorInputHeld()
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  dismissPerformanceAdvisorSuggestion(suggestionId: number): boolean {
+    return performanceAdvisorRuntime.dismissSuggestion(suggestionId);
+  }
+
+  setPerformanceSuggestionPauseRequested(requested: boolean): void {
+    if (requested === this.performanceSuggestionPauseRequested) return;
+    this.performanceSuggestionPauseRequested = requested;
+    this.syncScenePauseState();
+    this.syncPerformanceAdvisorEligibility(performance.now());
+  }
+
+  private isPerformanceAdvisorInputHeld(): boolean {
+    const keyboardHeld = Boolean(
+      this.cursors?.left?.isDown
+      || this.cursors?.right?.isDown
+      || this.cursors?.up?.isDown
+      || this.cursors?.down?.isDown
+      || this.cursors?.space?.isDown
+      || this.wasd?.W?.isDown
+      || this.wasd?.A?.isDown
+      || this.wasd?.S?.isDown
+      || this.wasd?.D?.isDown
+      || this.attackKeys?.Q?.isDown
+      || this.attackKeys?.E?.isDown
+      || this.cameraToggleKey?.isDown
+    );
+    if (keyboardHeld) return true;
+
+    const touchInput = getTouchInputState();
+    return Boolean(
+      Math.abs(this.lastMovementInput.horizontalInput) > 0.001
+      || Math.abs(this.lastMovementInput.verticalInput) > 0.001
+      || Math.abs(touchInput.moveX) > 0.001
+      || Math.abs(touchInput.moveY) > 0.001
+      || touchInput.jumpHeld
+      || touchInput.slashHeld
+      || touchInput.shootHeld
+    );
+  }
 
   getRuntimeTransitionProbe(
     destinationRoomId: string | null = null,
@@ -6539,6 +6983,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       scene: 'overworld-play',
       runtimeContext,
       performanceProfile: getDeviceLayoutState().performanceProfile,
+      performancePolicy: streamingMetrics.resolvedPerformancePolicy,
+      performanceAdvisor: performanceAdvisorRuntime.advisor.getDebugState(performance.now()),
       mode: this.mode,
       cameraMode: this.cameraMode,
       selected: { ...this.selectedCoordinates },
@@ -6573,6 +7019,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         activeChunkCount: this.chunkWindow?.chunks.length ?? 0,
         activeChunkRadius: streamingMetrics.activeChunkRadius,
         effectivePerformanceProfile: streamingMetrics.effectivePerformanceProfile,
+        resolvedPerformancePolicy: streamingMetrics.resolvedPerformancePolicy,
         visibleRoomCount: streamingMetrics.visibleRoomCount,
         previewRoomBudget: streamingMetrics.previewRoomBudget,
         fullRoomBudget: streamingMetrics.fullRoomBudget,

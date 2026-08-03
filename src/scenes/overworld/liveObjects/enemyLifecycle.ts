@@ -16,6 +16,7 @@ import type {
   WeaponHitResult,
 } from '../liveObjects';
 import type { LoadedFullRoom } from '../worldStreaming';
+import { isAnimationSafelyPlayable } from './animationReadiness';
 import {
   getArcadeBodyBounds,
 } from './bodies';
@@ -306,7 +307,10 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       this.scheduleLiveObjectRespawn(loadedRoom, respawnOptions);
     }
 
-    if (isNpc && this.options.scene.anims.exists(JIMOTHY_ANIMATION_KEYS.death)) {
+    if (
+      isNpc
+      && isAnimationSafelyPlayable(this.options.scene.anims, JIMOTHY_ANIMATION_KEYS.death)
+    ) {
       liveObject.sprite.play(JIMOTHY_ANIMATION_KEYS.death);
       this.options.scene.time.delayedCall(350, () => liveObject.sprite.destroy());
     } else {

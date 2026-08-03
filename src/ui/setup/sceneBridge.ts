@@ -17,6 +17,7 @@ import type {
 import type { MultiplayerModeId } from '../../multiplayer/model';
 import type { OverworldOnlineRosterViewEntry } from '../../scenes/overworld/hud';
 import type { RoomCoordinates, RoomRecord, RoomSnapshot, RoomVersionRecord } from '../../persistence/roomModel';
+import type { PerformanceAdvisorSuggestion } from '../../performance/performanceAdvisor';
 
 export type EditorHistoryState = {
   roomId: string;
@@ -261,6 +262,10 @@ export type CourseComposerState = {
 };
 
 export interface OverworldSceneBridge {
+  getPerformanceAdvisorSuggestion?: () => PerformanceAdvisorSuggestion | null;
+  canPresentPerformanceAdvisorSuggestion?: () => boolean;
+  dismissPerformanceAdvisorSuggestion?: (suggestionId: number) => boolean;
+  setPerformanceSuggestionPauseRequested?: (requested: boolean) => void;
   playSelectedRoom?: (options?: { forceGoalIntro?: boolean }) => void;
   restartCurrentRun?: () => Promise<void> | void;
   startRoomRushRun?: (options: {

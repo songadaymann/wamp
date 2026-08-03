@@ -47,6 +47,7 @@ import {
   JIMOTHY_ANIMATION_KEYS,
   JIMOTHY_OBJECT_ID,
 } from '../npcs/model';
+import { hasExactTextureFrame } from './boot/animationFrameReadiness';
 
 type PendingBootAsset = {
   key: string;
@@ -213,12 +214,28 @@ export class BootScene extends Phaser.Scene {
     // Create animations for game objects with multiple frames
     for (const obj of GAME_OBJECTS) {
       if (obj.frameCount > 1 && obj.fps > 0) {
+        const frames = getObjectAnimationFrames(obj).map((frame) => ({
+          key: obj.id,
+          frame,
+        }));
+        const missingFrames = frames.filter(
+          ({ key, frame }) => !hasExactTextureFrame(this.textures, key, frame),
+        );
+        if (missingFrames.length > 0) {
+          logBootPhase(
+            'boot-scene:animation-skipped',
+            {
+              animationKey: `${obj.id}_anim`,
+              missingFrameCount: missingFrames.length,
+              requestedFrameCount: frames.length,
+            },
+            { level: 'warn' },
+          );
+          continue;
+        }
         this.anims.create({
           key: `${obj.id}_anim`,
-          frames: getObjectAnimationFrames(obj).map((frame) => ({
-            key: obj.id,
-            frame,
-          })),
+          frames,
           frameRate: obj.fps,
           repeat: -1,
         });

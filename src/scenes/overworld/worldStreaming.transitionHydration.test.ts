@@ -5,6 +5,7 @@ import {
   type RoomSnapshotView,
 } from '../../persistence/roomModel';
 import type { WorldRoomSummary } from '../../persistence/worldModel';
+import type { PerformanceAdvisorExactSnapshotEvent } from '../../performance/performanceAdvisor';
 import { OverworldWorldStreamingController } from './worldStreaming';
 import { RoomSnapshotReferenceChangedError } from './previewCache';
 
@@ -15,6 +16,9 @@ interface TransitionPrefetchHarness {
     scene: { time: { now: number } };
     getCurrentRoomCoordinates: () => { x: number; y: number };
     refreshRoomSummariesForTransition?: ReturnType<typeof vi.fn>;
+    onPerformanceAdvisorExactSnapshotEvent?: (
+      event: PerformanceAdvisorExactSnapshotEvent,
+    ) => void;
   };
   roomSummariesById: Map<string, WorldRoomSummary>;
   playableRoomSnapshotRequestsById: Map<string, Promise<void>>;
@@ -25,7 +29,10 @@ interface TransitionPrefetchHarness {
   previewCache: { ensureRoomSnapshotsBatch: ReturnType<typeof vi.fn> };
   isPlayableRoomCollisionReady: () => boolean;
   resolveTransitionRenderableRoom: ReturnType<typeof vi.fn>;
-  adoptPredictedPreparation: () => boolean;
+  adoptPredictedPreparation: (
+    roomId: string,
+    coordinates: { x: number; y: number },
+  ) => boolean;
   predictedPreparationRoomId: string | null;
   predictedPreparationIntentGeneration: number;
 }
@@ -192,6 +199,83 @@ describe('world streaming transition hydration', () => {
       expect(beginFullRoomPreparation).not.toHaveBeenCalled();
     },
   );
+
+  it('starts a fresh advisor generation when a reversal re-adopts a shared transport', async () => {
+    let resolveTransport!: () => void;
+    const sharedTransport = new Promise<void>((resolve) => {
+      resolveTransport = resolve;
+    });
+    const events: PerformanceAdvisorExactSnapshotEvent[] = [];
+    const harness = createPrefetchHarness(() => sharedTransport);
+    const mutableHarness = harness as TransitionPrefetchHarness & {
+      portalPreparationRoomId: string | null;
+      predictedPreparationCoordinates: { x: number; y: number } | null;
+      predictedPreparationExpiresAt: number;
+      pendingFullRoomPreparationsById: Map<string, unknown>;
+      performanceAdvisorExactSnapshotRequestsByRoomId: Map<string, unknown>;
+      nextPerformanceAdvisorExactSnapshotGeneration: number;
+      cancelPredictedPreparationExpiryTimer: ReturnType<typeof vi.fn>;
+      cancelFullRoomPreparation: ReturnType<typeof vi.fn>;
+      queueUnretainedPredictedRoomTeardown: ReturnType<typeof vi.fn>;
+      syncRoomArtifactCachePolicy: ReturnType<typeof vi.fn>;
+    };
+    Object.assign(mutableHarness, {
+      portalPreparationRoomId: null,
+      predictedPreparationCoordinates: { x: 1, y: 0 },
+      predictedPreparationExpiresAt: 1_000,
+      pendingFullRoomPreparationsById: new Map(),
+      performanceAdvisorExactSnapshotRequestsByRoomId: new Map(),
+      nextPerformanceAdvisorExactSnapshotGeneration: 0,
+      cancelPredictedPreparationExpiryTimer: vi.fn(),
+      cancelFullRoomPreparation: vi.fn(),
+      queueUnretainedPredictedRoomTeardown: vi.fn(),
+      syncRoomArtifactCachePolicy: vi.fn(),
+    });
+    mutableHarness.options.onPerformanceAdvisorExactSnapshotEvent = (event) => {
+      events.push(event);
+    };
+    mutableHarness.adoptPredictedPreparation = function (roomId, coordinates) {
+      if (this.predictedPreparationRoomId !== roomId) {
+        this.predictedPreparationIntentGeneration += 1;
+      }
+      this.predictedPreparationRoomId = roomId;
+      this.predictedPreparationCoordinates = { ...coordinates };
+      return true;
+    };
+
+    callPrefetch(mutableHarness);
+    const firstLogicalRequest = mutableHarness.playableRoomSnapshotRequestsById.get('1,0');
+    expect(firstLogicalRequest).toBeDefined();
+
+    OverworldWorldStreamingController.prototype.clearPredictedPlayableRoomForTransition.call(
+      mutableHarness as never,
+      'test-reversal',
+    );
+    expect(mutableHarness.playableRoomSnapshotRequestsById.has('1,0')).toBe(false);
+
+    callPrefetch(mutableHarness);
+    const readoptedLogicalRequest = mutableHarness.playableRoomSnapshotRequestsById.get('1,0');
+    expect(readoptedLogicalRequest).toBeDefined();
+    expect(readoptedLogicalRequest).not.toBe(firstLogicalRequest);
+    expect(mutableHarness.previewCache.ensureRoomSnapshotsBatch).toHaveBeenCalledTimes(2);
+    expect(events.map((event) => [event.phase, event.generation, 'outcome' in event
+      ? event.outcome
+      : null])).toEqual([
+      ['started', 1, null],
+      ['settled', 1, 'cancelled'],
+      ['started', 2, null],
+    ]);
+
+    resolveTransport();
+    await Promise.all([firstLogicalRequest, readoptedLogicalRequest]);
+
+    expect(events.at(-1)).toMatchObject({
+      phase: 'settled',
+      roomId: '1,0',
+      generation: 2,
+      outcome: 'success',
+    });
+  });
 
   it('keeps a portal-owned preparation when movement prediction clears in the same frame', () => {
     const coordinates = { x: 2, y: 0 };

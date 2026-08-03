@@ -5,6 +5,12 @@ import {
   type GameSettings,
   type OverworldPanningStyle,
 } from '../../settings/userSettings';
+import {
+  getDevicePerformanceMode,
+  setDevicePerformanceMode,
+  subscribeDevicePerformanceMode,
+  type DevicePerformanceMode,
+} from '../../performance/devicePerformanceMode';
 
 type SettingsModalElements = {
   modal: HTMLElement | null;
@@ -15,11 +21,13 @@ type SettingsModalElements = {
   sfxVolumeInput: HTMLInputElement | null;
   sfxVolumeValue: HTMLElement | null;
   panningStyleInputs: HTMLInputElement[];
+  performanceModeInputs: HTMLInputElement[];
 };
 
 export class SettingsModalController {
   private readonly elements: SettingsModalElements;
   private unsubscribeSettings: (() => void) | null = null;
+  private unsubscribePerformanceMode: (() => void) | null = null;
 
   private readonly handleCloseClick = () => {
     this.close();
@@ -72,6 +80,15 @@ export class SettingsModalController {
     });
   };
 
+  private readonly handlePerformanceModeChange = (event: Event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || !target.checked) {
+      return;
+    }
+
+    setDevicePerformanceMode(target.value);
+  };
+
   constructor(
     private readonly doc: Document = document,
   ) {
@@ -86,6 +103,9 @@ export class SettingsModalController {
       panningStyleInputs: Array.from(
         this.doc.querySelectorAll<HTMLInputElement>('input[name="settings-panning-style"]'),
       ),
+      performanceModeInputs: Array.from(
+        this.doc.querySelectorAll<HTMLInputElement>('input[name="settings-performance-mode"]'),
+      ),
     };
   }
 
@@ -98,9 +118,16 @@ export class SettingsModalController {
     for (const input of this.elements.panningStyleInputs) {
       input.addEventListener('change', this.handlePanningStyleChange);
     }
+    for (const input of this.elements.performanceModeInputs) {
+      input.addEventListener('change', this.handlePerformanceModeChange);
+    }
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.unsubscribeSettings = subscribeGameSettings((settings) => this.render(settings));
+    this.unsubscribePerformanceMode = subscribeDevicePerformanceMode(({ mode }) => {
+      this.renderPerformanceMode(mode);
+    });
     this.render(getGameSettings());
+    this.renderPerformanceMode(getDevicePerformanceMode());
   }
 
   destroy(): void {
@@ -112,9 +139,14 @@ export class SettingsModalController {
     for (const input of this.elements.panningStyleInputs) {
       input.removeEventListener('change', this.handlePanningStyleChange);
     }
+    for (const input of this.elements.performanceModeInputs) {
+      input.removeEventListener('change', this.handlePerformanceModeChange);
+    }
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     this.unsubscribeSettings?.();
     this.unsubscribeSettings = null;
+    this.unsubscribePerformanceMode?.();
+    this.unsubscribePerformanceMode = null;
     this.close();
   }
 
@@ -124,6 +156,7 @@ export class SettingsModalController {
     }
 
     this.render(getGameSettings());
+    this.renderPerformanceMode(getDevicePerformanceMode());
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
   }
@@ -155,6 +188,12 @@ export class SettingsModalController {
 
     for (const input of this.elements.panningStyleInputs) {
       input.checked = normalizePanningStyle(input.value) === settings.panningStyle;
+    }
+  }
+
+  private renderPerformanceMode(mode: DevicePerformanceMode): void {
+    for (const input of this.elements.performanceModeInputs) {
+      input.checked = input.value === mode;
     }
   }
 }

@@ -2355,6 +2355,21 @@
     </div>
   </div>
 
+  <div id="performance-suggestion-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel performance-suggestion-modal-panel" role="dialog" aria-modal="true" aria-labelledby="performance-suggestion-title" aria-describedby="performance-suggestion-body">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <h2 id="performance-suggestion-title" class="history-modal-title">Gameplay running slowly?</h2>
+        </div>
+      </div>
+      <p id="performance-suggestion-body" class="performance-suggestion-body">WAMP noticed sustained performance pressure. Battery Saver reduces background and visual work while keeping gameplay and room collision intact.</p>
+      <div class="performance-suggestion-actions">
+        <button id="btn-performance-suggestion-accept" class="bar-btn" type="button">Turn on Battery Saver</button>
+        <button id="btn-performance-suggestion-dismiss" class="bar-btn bar-btn-secondary" type="button">Not now</button>
+      </div>
+    </div>
+  </div>
+
   <div id="settings-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel settings-modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
       <div class="history-modal-header">
@@ -2364,6 +2379,32 @@
         <button id="btn-settings-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div class="settings-modal-body">
+        <section class="settings-section">
+          <div class="settings-section-title">Performance</div>
+          <div class="settings-choice-group settings-performance-choice-group">
+            <label class="settings-choice settings-performance-choice">
+              <input type="radio" name="settings-performance-mode" value="auto" />
+              <span class="settings-choice-copy">
+                <span class="settings-choice-title">Auto</span>
+                <span class="settings-choice-description">Balances smooth play and detail for this device and room. WAMP may suggest Battery Saver, but never switches automatically.</span>
+              </span>
+            </label>
+            <label class="settings-choice settings-performance-choice">
+              <input type="radio" name="settings-performance-mode" value="battery-saver" />
+              <span class="settings-choice-copy">
+                <span class="settings-choice-title">Battery Saver</span>
+                <span class="settings-choice-description">Reduces background and visual work while keeping gameplay and room collision intact.</span>
+              </span>
+            </label>
+            <label class="settings-choice settings-performance-choice">
+              <input type="radio" name="settings-performance-mode" value="full-quality" />
+              <span class="settings-choice-copy">
+                <span class="settings-choice-title">Full Quality</span>
+                <span class="settings-choice-description">Keeps rich visuals when safe. Collision, frame, and memory safeguards still apply.</span>
+              </span>
+            </label>
+          </div>
+        </section>
         <section class="settings-section">
           <div class="settings-section-title">Comments</div>
           <label class="settings-toggle-row" for="settings-comments-visible">

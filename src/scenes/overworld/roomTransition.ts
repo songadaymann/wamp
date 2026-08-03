@@ -49,6 +49,14 @@ interface OverworldRoomTransitionHost {
   clearLadderState(): void;
   syncPlayerPickupSensor(): void;
   getTransitionDebugContext?(coordinates: RoomCoordinates): Record<string, unknown>;
+  setTransitionPreparationSeamUrgent?(urgent: boolean): void;
+  recordPerformanceTransitionGate?(
+    reason: BlockedTransitionReason,
+    currentRoomCoordinates: RoomCoordinates,
+    nextRoomCoordinates: RoomCoordinates,
+  ): void;
+  clearPerformanceTransitionGate?(): void;
+  onRoomTransitionCompleted?(): void;
 }
 
 type BlockedTransitionReason = 'locked' | 'unreachable' | 'non-cardinal' | 'unprepared';
@@ -59,6 +67,11 @@ interface SafePlayerTransform {
   roomY: number;
   x: number;
   y: number;
+}
+
+interface ActiveUnpreparedTransition {
+  readonly from: RoomCoordinates;
+  readonly to: RoomCoordinates;
 }
 
 // Start exact-snapshot preparation as soon as movement predicts a cardinal
@@ -84,6 +97,7 @@ export class OverworldRoomTransitionController {
   private predictedRoomRequestedThisUpdate = false;
   private lastBlockedLogKey = '';
   private lastBlockedLogAt = 0;
+  private activeUnpreparedTransition: ActiveUnpreparedTransition | null = null;
 
   constructor(private readonly host: OverworldRoomTransitionHost) {}
 
@@ -92,10 +106,12 @@ export class OverworldRoomTransitionController {
   }
 
   maybeAdvancePlayerRoom(): void {
+    this.host.setTransitionPreparationSeamUrgent?.(false);
     if (this.host.getMode() !== 'play') {
       this.lastSafePlayerTransform.valid = false;
       this.clearPendingPreparation();
       this.host.clearPredictedPlayableRoomForTransition();
+      this.clearActiveUnpreparedTransition();
       this.authorizedTeleportDestination = null;
       return;
     }
@@ -105,6 +121,7 @@ export class OverworldRoomTransitionController {
       this.lastSafePlayerTransform.valid = false;
       this.clearPendingPreparation();
       this.host.clearPredictedPlayableRoomForTransition();
+      this.clearActiveUnpreparedTransition();
       this.authorizedTeleportDestination = null;
       return;
     }
@@ -132,9 +149,12 @@ export class OverworldRoomTransitionController {
       if (!this.predictedRoomRequestedThisUpdate) {
         this.host.clearPredictedPlayableRoomForTransition();
       }
+      this.clearAbandonedUnpreparedTransition(currentRoomCoordinates);
       this.authorizedTeleportDestination = null;
       return;
     }
+
+    this.host.setTransitionPreparationSeamUrgent?.(true);
 
     const authorizedTeleport = this.consumeAuthorizedTeleport(nextRoomCoordinates);
     if (
@@ -150,6 +170,15 @@ export class OverworldRoomTransitionController {
         : this.isCardinalNeighbor(currentRoomCoordinates, nextRoomCoordinates)
           ? 'unreachable'
           : 'non-cardinal';
+      // The advisor owns clearing a prior unprepared stall when it receives a
+      // different gate reason. Keep only the controller's intent bookkeeping
+      // in sync here so we do not double-clear the same episode.
+      this.activeUnpreparedTransition = null;
+      this.host.recordPerformanceTransitionGate?.(
+        reason,
+        currentRoomCoordinates,
+        nextRoomCoordinates,
+      );
       this.logBlockedTransition(reason, currentRoomCoordinates, nextRoomCoordinates);
       if (!this.isCardinalNeighbor(currentRoomCoordinates, nextRoomCoordinates)) {
         this.restoreLastSafePlayerTransform(currentRoomCoordinates);
@@ -163,8 +192,15 @@ export class OverworldRoomTransitionController {
       ? this.host.preparePlayableRoomForTransition(nextRoomCoordinates, true)
       : this.host.preparePlayableRoomForTransition(nextRoomCoordinates);
     if (!destinationPrepared) {
+      this.retainUnpreparedTransition(currentRoomCoordinates, nextRoomCoordinates);
+      this.host.recordPerformanceTransitionGate?.(
+        'unprepared',
+        currentRoomCoordinates,
+        nextRoomCoordinates,
+      );
       this.logBlockedTransition('unprepared', currentRoomCoordinates, nextRoomCoordinates);
       if (this.isCardinalNeighbor(currentRoomCoordinates, nextRoomCoordinates)) {
+        this.setPendingPreparation(currentRoomCoordinates, nextRoomCoordinates);
         this.blockRoomTransition(currentRoomCoordinates, nextRoomCoordinates);
       } else {
         this.restoreLastSafePlayerTransform(currentRoomCoordinates);
@@ -178,7 +214,9 @@ export class OverworldRoomTransitionController {
     this.lastSafePlayerTransform.valid = false;
     this.clearPendingPreparation();
     this.host.clearPredictedPlayableRoomForTransition();
+    this.clearActiveUnpreparedTransition();
     this.host.updateSelectedSummary();
+    this.host.onRoomTransitionCompleted?.();
 
     if (this.host.getActiveRoomRushRun()) {
       this.host.recordRoomRushVisit(
@@ -308,6 +346,7 @@ export class OverworldRoomTransitionController {
     this.predictedRoomRequestedThisUpdate = true;
     this.host.prefetchPlayableRoomForTransition(neighborCoordinates);
     if (distanceToSeam <= TRANSITION_PREPARE_DISTANCE_PX) {
+      this.host.setTransitionPreparationSeamUrgent?.(true);
       this.setPendingPreparation(currentRoomCoordinates, neighborCoordinates);
       if (
         !this.transitionRoomPreparedThisUpdate
@@ -315,6 +354,7 @@ export class OverworldRoomTransitionController {
       ) {
         this.transitionRoomPreparedThisUpdate = true;
         this.clearPendingPreparationFor(neighborCoordinates);
+        this.clearPreparedUnpreparedTransition(neighborCoordinates);
       }
     }
   }
@@ -419,11 +459,13 @@ export class OverworldRoomTransitionController {
     this.predictedRoomRequestedThisUpdate = true;
     this.host.prefetchPlayableRoomForTransition(neighborCoordinates);
     if (distanceToSeam <= TRANSITION_PREPARE_DISTANCE_PX) {
+      this.host.setTransitionPreparationSeamUrgent?.(true);
       if (
         !this.transitionRoomPreparedThisUpdate
         && this.host.preparePlayableRoomForTransition(neighborCoordinates)
       ) {
         this.transitionRoomPreparedThisUpdate = true;
+        this.clearPreparedUnpreparedTransition(neighborCoordinates);
         return null;
       }
     }
@@ -473,6 +515,99 @@ export class OverworldRoomTransitionController {
   private clearPendingPreparation(): void {
     this.pendingHorizontalPreparation = null;
     this.pendingVerticalPreparation = null;
+  }
+
+  private retainUnpreparedTransition(
+    currentRoomCoordinates: RoomCoordinates,
+    nextRoomCoordinates: RoomCoordinates,
+  ): void {
+    const active = this.activeUnpreparedTransition;
+    const sameEpisode = Boolean(
+      active
+      && active.from.x === currentRoomCoordinates.x
+      && active.from.y === currentRoomCoordinates.y
+      && active.to.x === nextRoomCoordinates.x
+      && active.to.y === nextRoomCoordinates.y
+    );
+    if (sameEpisode) {
+      return;
+    }
+    if (active) {
+      this.clearActiveUnpreparedTransition();
+    }
+    this.activeUnpreparedTransition = {
+      from: { ...currentRoomCoordinates },
+      to: { ...nextRoomCoordinates },
+    };
+  }
+
+  private clearPreparedUnpreparedTransition(coordinates: RoomCoordinates): void {
+    const active = this.activeUnpreparedTransition;
+    if (
+      active
+      && active.to.x === coordinates.x
+      && active.to.y === coordinates.y
+    ) {
+      this.clearActiveUnpreparedTransition();
+    }
+  }
+
+  private clearAbandonedUnpreparedTransition(
+    currentRoomCoordinates: RoomCoordinates,
+  ): void {
+    const active = this.activeUnpreparedTransition;
+    if (!active) {
+      return;
+    }
+    const stillInSourceRoom =
+      active.from.x === currentRoomCoordinates.x
+      && active.from.y === currentRoomCoordinates.y;
+    if (!stillInSourceRoom) {
+      this.clearActiveUnpreparedTransition();
+      return;
+    }
+    const replacementReason: BlockedTransitionReason | null =
+      this.host.isRoomTransitionLocked()
+        ? 'locked'
+        : !this.isCardinalNeighbor(currentRoomCoordinates, active.to)
+          ? 'non-cardinal'
+          : !this.isNeighborReachableInCurrentPlayMode(currentRoomCoordinates, active.to)
+            ? 'unreachable'
+            : null;
+    if (replacementReason) {
+      this.activeUnpreparedTransition = null;
+      this.host.recordPerformanceTransitionGate?.(
+        replacementReason,
+        currentRoomCoordinates,
+        active.to,
+      );
+      return;
+    }
+    const stillPreparingDestination = this.hasPendingPreparationFor(active.to);
+    if (!stillPreparingDestination) {
+      this.clearActiveUnpreparedTransition();
+    }
+  }
+
+  private hasPendingPreparationFor(coordinates: RoomCoordinates): boolean {
+    return Boolean(
+      (
+        this.pendingHorizontalPreparation?.x === coordinates.x
+        && this.pendingHorizontalPreparation.y === coordinates.y
+      )
+      || (
+        this.pendingVerticalPreparation?.x === coordinates.x
+        && this.pendingVerticalPreparation.y === coordinates.y
+      )
+    );
+  }
+
+  private clearActiveUnpreparedTransition(): void {
+    if (!this.activeUnpreparedTransition) {
+      return;
+    }
+    this.activeUnpreparedTransition = null;
+    this.host.clearPerformanceTransitionGate?.();
   }
 
   private consumeAuthorizedTeleport(nextRoomCoordinates: RoomCoordinates): boolean {

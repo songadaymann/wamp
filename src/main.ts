@@ -44,6 +44,11 @@ import {
 import { installRenderLoopRecoveryMonitor } from './main/renderLoopRecovery';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
 import {
+  getDevicePerformanceMode,
+  subscribeDevicePerformanceMode,
+} from './performance/devicePerformanceMode';
+import { getResolvedPerformancePolicy } from './performance/performancePolicy';
+import {
   getGameSettingsSyncDebugState,
   initializeGameSettingsSync,
 } from './settings/userSettingsSync';
@@ -172,6 +177,11 @@ const applyRuntimeSettings = (settings: GameSettings) => {
 };
 applyRuntimeSettings(getGameSettings());
 subscribeGameSettings(applyRuntimeSettings);
+const applyDevicePerformanceMode = () => {
+  document.body.dataset.devicePerformanceMode = getDevicePerformanceMode();
+};
+applyDevicePerformanceMode();
+subscribeDevicePerformanceMode(applyDevicePerformanceMode);
 initializeGameSettingsSync();
 window.get_wamp_resource_debug = () => getRuntimeResourceDebugState(game);
 installRuntimeResourceDebugLogger(game, query);
@@ -353,6 +363,11 @@ window.render_game_to_text = () =>
     settings: {
       values: getGameSettings(),
       sync: getGameSettingsSyncDebugState(),
+      performance: {
+        selectedMode: getDevicePerformanceMode(),
+        resolvedPolicy: getDebugState().performancePolicy
+          ?? getResolvedPerformancePolicy(getDeviceLayoutState().performanceProfile),
+      },
     },
     appFeedback: {
       ready: isAppReady(),

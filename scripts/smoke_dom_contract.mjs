@@ -159,6 +159,11 @@ const requiredIdsByController = {
     'mobile-goal-footer-progress',
     'mobile-goal-footer-timer',
   ],
+  'PerformanceSuggestionModalController': [
+    'performance-suggestion-modal',
+    'btn-performance-suggestion-accept',
+    'btn-performance-suggestion-dismiss',
+  ],
   'sceneCommands': [
     'auth-panel',
     'btn-about-open',
