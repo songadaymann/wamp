@@ -26,6 +26,7 @@ export interface MultiplayerInstanceClientOptions {
   onPeerCombatEvent?: (event: MultiplayerInstanceCombatEvent) => void;
   onPeerRoomStateEvent?: (event: MultiplayerRoomStateEvent) => void;
   onStatus?: (message: string) => void;
+  onConnectionFailure?: () => void;
 }
 
 export class MultiplayerInstanceClient {
@@ -41,6 +42,7 @@ export class MultiplayerInstanceClient {
     const config = resolveWorldPresenceConfig();
     if (!config) {
       this.options.onStatus?.('PVP is unavailable right now.');
+      this.options.onConnectionFailure?.();
       return false;
     }
 
@@ -64,6 +66,7 @@ export class MultiplayerInstanceClient {
     } catch (error) {
       if (this.connectAttemptId === attemptId) {
         this.options.onStatus?.('PVP identity token unavailable.');
+        this.options.onConnectionFailure?.();
       }
       console.warn('Failed to issue PartyKit PVP identity token.', error);
       return;
@@ -124,6 +127,7 @@ export class MultiplayerInstanceClient {
       }
       if (!wasClosing) {
         this.options.onStatus?.('PVP match disconnected.');
+        this.options.onConnectionFailure?.();
       }
     });
   }

@@ -22,6 +22,7 @@ import {
   type GameSettings,
 } from '../../settings/userSettings';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
+import { getResolvedPerformancePolicy } from '../../performance/performancePolicy';
 import type { OverworldMode } from '../sceneData';
 import {
   syncBadgePlacements,
@@ -1648,7 +1649,7 @@ export class OverworldRoomCommentsController {
       return BROWSE_DANMAKU_PHONE_MIN_SPAWN_GAP_MS;
     }
 
-    return layout.performanceProfile === 'reduced'
+    return getResolvedPerformancePolicy(layout.performanceProfile).visualDataProfile === 'reduced'
       ? BROWSE_DANMAKU_REDUCED_MIN_SPAWN_GAP_MS
       : BROWSE_DANMAKU_DESKTOP_MIN_SPAWN_GAP_MS;
   }
@@ -1734,7 +1735,9 @@ export class OverworldRoomCommentsController {
       return BROWSE_DANMAKU_MIN_LANES;
     }
 
-    return layout.performanceProfile === 'reduced' ? 4 : 5;
+    return getResolvedPerformancePolicy(layout.performanceProfile).visualDataProfile === 'reduced'
+      ? 4
+      : 5;
   }
 
   private getBrowseDanmakuFallbackLaneScreenY(
@@ -1844,7 +1847,7 @@ export class OverworldRoomCommentsController {
       return BROWSE_DANMAKU_PHONE_MAX_ACTIVE;
     }
 
-    return layout.performanceProfile === 'reduced'
+    return getResolvedPerformancePolicy(layout.performanceProfile).visualDataProfile === 'reduced'
       ? BROWSE_DANMAKU_REDUCED_MAX_ACTIVE
       : BROWSE_DANMAKU_DESKTOP_MAX_ACTIVE;
   }

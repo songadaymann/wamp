@@ -88,6 +88,8 @@ interface WorldTileClientControllerOptions {
   repository: WorldRepository;
   getMode: () => OverworldMode;
   getPerformanceProfile: () => PerformanceProfile;
+  getRuntimePerformanceProfile?: () => PerformanceProfile;
+  getMemoryPerformanceProfile?: () => PerformanceProfile;
   getSelectedCoordinates: () => RoomCoordinates;
   onObjectsChanged?: () => void;
   onCoverageChanged?: () => void;
@@ -221,6 +223,7 @@ export class WorldTileClientController {
   private nextManifestRetryAtMs = Number.POSITIVE_INFINITY;
   private manifestFailureCount = 0;
   private nextConfigRefreshAtMs = 0;
+  private configRefreshInFlight = 0;
   private destroyed = false;
   private lifecycleEpoch = 0;
   private coarseCoverageComplete = false;
@@ -268,7 +271,9 @@ export class WorldTileClientController {
     this.rolloutSearch = captureWorldTileRolloutSearch(
       typeof window === 'undefined' ? '' : window.location.search,
     );
-    const profile = toTileProfile(options.getPerformanceProfile());
+    const profile = toTileProfile(
+      options.getMemoryPerformanceProfile?.() ?? options.getPerformanceProfile(),
+    );
     this.layer = new WorldTilePhaserLayer(
       options.scene,
       getGpuWorldTileByteBudget(profile),
@@ -399,26 +404,35 @@ export class WorldTileClientController {
     return manifest ? { manifest, visibleEarlyCoverage: false } : null;
   }
 
-  update(camera: Phaser.Cameras.Scene2D.Camera): void {
+  /**
+   * Returns whether optional tile transport, decode, upload, or maintenance
+   * work was active. Routine steady-state coverage checks do not count.
+   */
+  update(camera: Phaser.Cameras.Scene2D.Camera): boolean {
     const nowMs = performance.now();
     if (this.isRefinementStopped()) {
       this.stopRefinementWork();
       this.recordStoppedMetrics();
       this.metrics.recordFrame();
-      return;
+      return false;
     }
     if (!this.activeRendererVersion) {
       this.metrics.recordFrame();
-      return;
+      return false;
     }
     if (typeof document !== 'undefined' && document.hidden) {
       this.metrics.recordFrame();
-      return;
+      return false;
     }
-    this.maybePollMutationConvergence(nowMs);
+    let optionalWorkExecuted = this.manifestLoader.pendingCount > 0
+      || this.roomManifestPrefetcher.pendingCount > 0
+      || this.fetchInFlight > 0
+      || this.decodeInFlight > 0
+      || this.configRefreshInFlight > 0;
+    if (this.maybePollMutationConvergence(nowMs)) optionalWorkExecuted = true;
     if (!this.shouldScheduleRequest('viewport-refinement')) {
       this.metrics.recordFrame();
-      return;
+      return optionalWorkExecuted;
     }
 
     const viewport = getCameraWorldRect(camera);
@@ -457,30 +471,38 @@ export class WorldTileClientController {
       if (retryDue) this.nextManifestRetryAtMs = Number.POSITIVE_INFINITY;
       this.pendingManifestRequest = request;
       const decision = this.manifestSchedule.schedule(nowMs);
-      if (decision.issueNow) this.issuePendingManifestRequest();
+      if (decision.issueNow && this.issuePendingManifestRequest()) {
+        optionalWorkExecuted = true;
+      }
     }
-    if (this.manifestSchedule.flush(nowMs)?.issueNow) this.issuePendingManifestRequest();
+    if (
+      this.manifestSchedule.flush(nowMs)?.issueNow
+      && this.issuePendingManifestRequest()
+    ) {
+      optionalWorkExecuted = true;
+    }
 
-    this.maybePrefetchSelectedRoom(camera);
+    if (this.maybePrefetchSelectedRoom(camera)) optionalWorkExecuted = true;
     const deferTargetRefinement = shouldDeferWorldTileTargetRefinement({
       nowMs,
       lastGestureAtMs: this.lastGestureAtMs,
       committedLevel: this.committedLevel,
       desiredLevel: this.desiredLevel,
     });
-    this.queueCoverageImages(
+    if (this.queueCoverageImages(
       deferTargetRefinement ? [] : desiredCoverage.visible,
       deferTargetRefinement ? [] : desiredCoverage.guard,
       displayCoverage.visible,
       deferTargetRefinement ? [] : displayCoverage.guard,
-    );
-    this.processGpuUploads(nowMs);
-    this.queueDueRetries(nowMs);
-    this.processFetchQueue();
-    this.processDecodeQueue();
+    )) optionalWorkExecuted = true;
+    if (this.processGpuUploads(nowMs)) optionalWorkExecuted = true;
+    if (this.queueDueRetries(nowMs)) optionalWorkExecuted = true;
+    if (this.processFetchQueue()) optionalWorkExecuted = true;
+    if (this.processDecodeQueue()) optionalWorkExecuted = true;
     this.syncCoverage(nowMs);
-    this.maybeRefreshConfig(nowMs);
+    if (this.maybeRefreshConfig(nowMs)) optionalWorkExecuted = true;
     this.metrics.recordFrame();
+    return optionalWorkExecuted;
   }
 
   isBrowseCutoverActive(): boolean {
@@ -758,7 +780,9 @@ export class WorldTileClientController {
       const quota = await getStorageQuota();
       if (abortController.signal.aborted || this.destroyed) return false;
       this.byteCache = new WorldTileByteCache(getPersistentWorldTileByteBudget(
-        toTileProfile(this.options.getPerformanceProfile()),
+        toTileProfile(
+          this.options.getMemoryPerformanceProfile?.() ?? this.options.getPerformanceProfile(),
+        ),
         quota,
       ));
       this.nextConfigRefreshAtMs = performance.now() + WORLD_TILE_CONFIG_REFRESH_MS;
@@ -864,10 +888,10 @@ export class WorldTileClientController {
     };
   }
 
-  private issuePendingManifestRequest(): void {
-    if (this.isRefinementStopped()) return;
+  private issuePendingManifestRequest(): boolean {
+    if (this.isRefinementStopped()) return false;
     const request = this.pendingManifestRequest;
-    if (!request) return;
+    if (!request) return false;
     this.pendingManifestRequest = null;
     void this.manifestLoader.load(request.level, request.bounds).then((result) => {
       if (result.obsolete || this.isRefinementStopped()) return;
@@ -880,6 +904,7 @@ export class WorldTileClientController {
       this.nextManifestRetryAtMs = Number.POSITIVE_INFINITY;
       this.manifestFailureCount = 0;
     }).catch((error) => this.handleManifestFailure(error, performance.now()));
+    return true;
   }
 
   private ingestManifest(manifest: WorldTileManifest): boolean {
@@ -937,7 +962,11 @@ export class WorldTileClientController {
     desiredGuards: WorldTileAddress[],
     displayVisible: WorldTileAddress[],
     displayGuards: WorldTileAddress[],
-  ): void {
+  ): boolean {
+    const previousFetchQueueLength = this.fetchQueue.length;
+    const previousDecodeQueueLength = this.decodeQueue.length;
+    const previousUploadQueueLength = this.uploadQueue.length;
+    const previousActiveTaskCount = this.activeTaskKeys.size;
     const visibleKeys = new Set([
       ...desiredVisible.map(worldTileAddressKey),
       ...displayVisible.map(worldTileAddressKey),
@@ -990,6 +1019,10 @@ export class WorldTileClientController {
       return entry?.ready ? [entry] : [];
     });
     this.reconcileCoverageTasks(rankedEntries);
+    return previousFetchQueueLength !== this.fetchQueue.length
+      || previousDecodeQueueLength !== this.decodeQueue.length
+      || previousUploadQueueLength !== this.uploadQueue.length
+      || previousActiveTaskCount !== this.activeTaskKeys.size;
   }
 
   private queueAddresses(addresses: readonly WorldTileAddress[], restoration = false): void {
@@ -1110,7 +1143,9 @@ export class WorldTileClientController {
       return [entry];
     });
     const concurrency = getWorldTileStreamingBudgets(
-      toTileProfile(this.options.getPerformanceProfile()),
+      toTileProfile(
+        this.options.getRuntimePerformanceProfile?.() ?? this.options.getPerformanceProfile(),
+      ),
     ).fetchConcurrency;
     let index = 0;
     const worker = async (): Promise<void> => {
@@ -1143,9 +1178,12 @@ export class WorldTileClientController {
     if (lifecycleEpoch === this.lifecycleEpoch) this.refreshAvailability();
   }
 
-  private processFetchQueue(): void {
-    if (this.isRefinementStopped()) return;
-    const budgets = getWorldTileStreamingBudgets(toTileProfile(this.options.getPerformanceProfile()));
+  private processFetchQueue(): boolean {
+    if (this.isRefinementStopped()) return false;
+    let workExecuted = false;
+    const budgets = getWorldTileStreamingBudgets(toTileProfile(
+      this.options.getRuntimePerformanceProfile?.() ?? this.options.getPerformanceProfile(),
+    ));
     while (this.fetchInFlight < budgets.fetchConcurrency && this.fetchQueue.length > 0) {
       const task = this.fetchQueue.shift()!;
       const taskKey = task.taskKey;
@@ -1160,6 +1198,7 @@ export class WorldTileClientController {
         this.releaseActiveTask(taskKey, false, task.lifecycleEpoch);
         continue;
       }
+      workExecuted = true;
       this.fetchInFlight += 1;
       const abortController = new AbortController();
       this.fetchAbortControllersByTaskKey.set(taskKey, abortController);
@@ -1204,11 +1243,15 @@ export class WorldTileClientController {
           }
         });
     }
+    return workExecuted;
   }
 
-  private processDecodeQueue(): void {
-    if (this.isRefinementStopped()) return;
-    const budgets = getWorldTileStreamingBudgets(toTileProfile(this.options.getPerformanceProfile()));
+  private processDecodeQueue(): boolean {
+    if (this.isRefinementStopped()) return false;
+    let workExecuted = false;
+    const budgets = getWorldTileStreamingBudgets(toTileProfile(
+      this.options.getRuntimePerformanceProfile?.() ?? this.options.getPerformanceProfile(),
+    ));
     while (
       this.decodeInFlight < budgets.decodeConcurrency
       && this.decodeQueue.length > 0
@@ -1227,6 +1270,7 @@ export class WorldTileClientController {
         this.releaseActiveTask(taskKey, false, task.lifecycleEpoch);
         continue;
       }
+      workExecuted = true;
       this.decodeInFlight += 1;
       this.decodeInFlightTaskKeys.set(taskKey, task.lifecycleEpoch);
       void decodeWorldTileBlob(task.blob)
@@ -1297,10 +1341,13 @@ export class WorldTileClientController {
           }
         });
     }
+    return workExecuted;
   }
 
-  private processGpuUploads(startedAtMs: number): void {
-    const budgets = getWorldTileStreamingBudgets(toTileProfile(this.options.getPerformanceProfile()));
+  private processGpuUploads(startedAtMs: number): boolean {
+    const budgets = getWorldTileStreamingBudgets(toTileProfile(
+      this.options.getRuntimePerformanceProfile?.() ?? this.options.getPerformanceProfile(),
+    ));
     let uploaded = 0;
     while (
       uploaded < budgets.gpuUploadsPerFrame
@@ -1339,6 +1386,7 @@ export class WorldTileClientController {
         this.contextRestorePending = false;
       }
     }
+    return uploaded > 0;
   }
 
   private syncCoverage(nowMs: number): void {
@@ -1522,7 +1570,8 @@ export class WorldTileClientController {
     this.lastCameraSample = { ...center, atMs: nowMs };
   }
 
-  private queueDueRetries(nowMs: number): void {
+  private queueDueRetries(nowMs: number): boolean {
+    let queued = false;
     for (const [taskKey, retry] of this.retriesByKey) {
       if (!this.isTaskWanted(taskKey)) {
         this.retriesByKey.delete(taskKey);
@@ -1540,7 +1589,9 @@ export class WorldTileClientController {
         retainAcrossCoverage: this.stickyTaskKeys.has(taskKey),
         lifecycleEpoch: this.lifecycleEpoch,
       });
+      queued = true;
     }
+    return queued;
   }
 
   private recordTileFailure(entry: WorldTileManifestEntry, error: unknown, nowMs: number): void {
@@ -1619,24 +1670,25 @@ export class WorldTileClientController {
     }
   }
 
-  private maybePrefetchSelectedRoom(camera: Phaser.Cameras.Scene2D.Camera): void {
+  private maybePrefetchSelectedRoom(camera: Phaser.Cameras.Scene2D.Camera): boolean {
     const selected = this.options.getSelectedCoordinates();
     const roomId = `${selected.x},${selected.y}`;
-    if (roomId === this.selectedPrefetchRoomId) return;
+    if (roomId === this.selectedPrefetchRoomId) return false;
     if (!this.selectedRoomPrefetchGate.shouldPrefetch(
       roomId,
       this.isCameraTargetLodReady(camera),
-    )) return;
+    )) return false;
     this.selectedPrefetchRoomId = roomId;
     this.roomManifestPrefetcher.cancelOwner('selection', roomId);
     this.prefetchRoom(selected, 'selection');
+    return true;
   }
 
-  private maybePollMutationConvergence(nowMs: number): void {
+  private maybePollMutationConvergence(nowMs: number): boolean {
     if (
       nowMs < this.nextMutationConvergencePollAtMs
       || (this.optimisticRoomVersions.size === 0 && this.immediateMaskedRoomIds.size === 0)
-    ) return;
+    ) return false;
     this.nextMutationConvergencePollAtMs = nowMs + 1_000;
     for (const roomId of new Set([
       ...this.optimisticRoomVersions.keys(),
@@ -1644,14 +1696,16 @@ export class WorldTileClientController {
     ])) {
       this.prefetchRoom(parseRoomCoordinates(roomId), 'mutation');
     }
+    return true;
   }
 
-  private maybeRefreshConfig(nowMs: number): void {
+  private maybeRefreshConfig(nowMs: number): boolean {
     if (
       nowMs < this.nextConfigRefreshAtMs
       || !this.shouldScheduleRequest('config-refresh')
-    ) return;
+    ) return false;
     this.nextConfigRefreshAtMs = nowMs + WORLD_TILE_CONFIG_REFRESH_MS;
+    this.configRefreshInFlight = (this.configRefreshInFlight ?? 0) + 1;
     void this.options.repository.loadWorldTileConfig().then((config) => {
       const currentRollout = this.rollout;
       if (!config || !currentRollout || this.destroyed) return;
@@ -1677,7 +1731,10 @@ export class WorldTileClientController {
         this.activeRendererVersion = config.activeRendererVersion;
         this.lastCameraSignature = '';
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => {
+      this.configRefreshInFlight = Math.max(0, this.configRefreshInFlight - 1);
+    });
+    return true;
   }
 
   private notifyFallbackChanged(): void {

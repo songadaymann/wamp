@@ -122,9 +122,19 @@ import {
   type FrameWorkGeneration,
   type FrameWorkJobHandle,
   type FrameWorkPriority,
+  type RunFrameWorkResult,
 } from './frameWorkCoordinator';
 import { RoomArtifactCache } from './roomArtifactCache';
 import { RoomTexturePreparation } from './roomTexturePreparation';
+import {
+  getDevicePerformanceMode,
+  type DevicePerformanceMode,
+} from '../../performance/devicePerformanceMode';
+import {
+  resolvePerformancePolicy,
+  type ResolvedPerformancePolicy,
+} from '../../performance/performancePolicy';
+import type { PerformanceAdvisorExactSnapshotEvent } from '../../performance/performanceAdvisor';
 
 const PLAY_ROOM_PARALLAX_MULTIPLIER = 0.2;
 const FULL_ROOM_RELEASE_GRACE_MS = 300;
@@ -197,6 +207,7 @@ interface PendingFullRoomPreparation<TLiveObject, TEdgeWall> {
   generation: FrameWorkGeneration;
   priority: FrameWorkPriority;
   queuedJob: FrameWorkJobHandle | null;
+  progressRevision: number;
   activationRequested: boolean;
   standardActivationRequested: boolean;
   portalActivationRequested: boolean;
@@ -239,6 +250,20 @@ interface PlayableRoomSnapshotPreparationRequest {
   independentOfPredictedIntent: boolean;
 }
 
+interface ActivePerformanceAdvisorExactSnapshotRequest {
+  roomId: string;
+  generation: number;
+  optionalCompetitionObserved: boolean;
+  settled: boolean;
+}
+
+export interface TransitionAdvisorState {
+  generation: number | null;
+  progressRevision: number | null;
+  urgentWorkQueued: boolean;
+  schedulerStarved: boolean;
+}
+
 interface PlayableRoomSummaryRecovery {
   summaryIdentity: string;
   refreshPromise: Promise<void> | null;
@@ -259,6 +284,7 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   worldRepository: WorldRepository;
   getMode: () => OverworldMode;
   getPerformanceProfile: () => PerformanceProfile;
+  getDevicePerformanceMode?: () => DevicePerformanceMode;
   getSelectedCoordinates: () => RoomCoordinates;
   getCurrentRoomCoordinates: () => RoomCoordinates;
   refreshRoomSummariesForTransition?: (centerCoordinates: RoomCoordinates) => Promise<boolean>;
@@ -315,6 +341,15 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   onFullRoomDestroyed?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
   onFullRoomReplaced?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
   onSelectedExactRoomSnapshotReady?: (room: RoomSnapshot) => void;
+  onPerformanceAdvisorExactSnapshotEvent?: (
+    event: PerformanceAdvisorExactSnapshotEvent,
+  ) => void;
+  onPerformanceAdvisorDestinationProgress?: (
+    roomId: string,
+    generation: number | null,
+    progressRevision: number | null,
+    atMs: number,
+  ) => void;
   measurePerformance?: <T>(label: string, callback: () => T) => T;
 }
 
@@ -363,6 +398,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     string,
     PlayableRoomSnapshotPreparationRequest
   >();
+  private performanceAdvisorExactSnapshotRequestsByRoomId = new Map<
+    string,
+    ActivePerformanceAdvisorExactSnapshotRequest
+  >();
+  private nextPerformanceAdvisorExactSnapshotGeneration = 0;
   private playableRoomSnapshotRetryAtById = new Map<string, number>();
   private playableRoomSummaryRecoveriesById = new Map<string, PlayableRoomSummaryRecovery>();
   private compactWorldActive = false;
@@ -383,6 +423,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private publishedReplacementCoverageKey: string | null = null;
   private roomSnapshotCloneCountBaseline = getGlobalRoomSnapshotCloneCount();
   private readonly frameWorkCoordinator: FrameWorkCoordinator;
+  private lastDiscretionaryFrameWorkResult: RunFrameWorkResult | null = null;
   private readonly roomArtifactCache: RoomArtifactCache;
   private roomArtifactCacheProfile: 'normal' | 'reduced' | null = null;
   private artifactFocusRoomId: string | null = null;
@@ -406,6 +447,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private fullRoomTeardownReconciliationRequired = false;
   private fullRoomTeardownReconciliationGeneration: number | null = null;
   private retainedFullRoomIds = new Set<string>();
+  private transitionPreparationSeamUrgent = false;
 
   constructor(private readonly options: OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall>) {
     this.textureNamespace = sanitizeTextureNamespace(options.scene.sys.settings.key);
@@ -445,7 +487,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       getMode: options.getMode,
       // Local heavy-room pressure participates in the same reduced streaming
       // policy as dormant-room preparation, not only the device-wide profile.
-      getPerformanceProfile: () => this.getEffectivePerformanceProfile(),
+      getPerformanceProfile: () => this.getResolvedPerformancePolicy().visualDataProfile,
+      getRuntimePerformanceProfile: () => this.getResolvedPerformancePolicy().activeRuntimeProfile,
+      getMemoryPerformanceProfile: () => this.getResolvedPerformancePolicy().memoryProfile,
       getSelectedCoordinates: options.getSelectedCoordinates,
       onObjectsChanged: options.onBackdropObjectsChanged,
       onCoverageChanged: () => {
@@ -480,6 +524,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   reset(selectionBaseline: RoomCoordinates = this.options.getSelectedCoordinates()): void {
     this.beginLoadGeneration();
     this.destroyed = false;
+    this.cancelAllPerformanceAdvisorExactSnapshotRequests();
     this.cancelAllFullRoomPreparations('stream-reset');
     this.cancelPredictedPreparationExpiryTimer();
     this.cancelAllPendingFullRoomTeardowns('stream-reset', false);
@@ -524,6 +569,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.predictedPreparationIntentGeneration += 1;
     this.portalPreparationRoomId = null;
     this.retainedFullRoomIds = new Set();
+    this.transitionPreparationSeamUrgent = false;
+    this.lastDiscretionaryFrameWorkResult = null;
     this.pendingFullRoomTeardownReconciliationJob = null;
     this.fullRoomTeardownReconciliationRequired = false;
     this.fullRoomTeardownReconciliationGeneration = null;
@@ -543,6 +590,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   destroy(): void {
     this.beginLoadGeneration();
     this.destroyed = true;
+    this.cancelAllPerformanceAdvisorExactSnapshotRequests();
     this.cancelAllFullRoomPreparations('stream-destroyed');
     this.cancelPredictedPreparationExpiryTimer();
     this.cancelAllPendingFullRoomTeardowns('stream-destroyed', false);
@@ -589,6 +637,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.predictedPreparationIntentGeneration += 1;
     this.portalPreparationRoomId = null;
     this.retainedFullRoomIds = new Set();
+    this.transitionPreparationSeamUrgent = false;
+    this.lastDiscretionaryFrameWorkResult = null;
     this.pendingFullRoomTeardownReconciliationJob = null;
     this.fullRoomTeardownReconciliationRequired = false;
     this.fullRoomTeardownReconciliationGeneration = null;
@@ -1073,8 +1123,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.refreshVisibleRoomsFromCache();
   }
 
+  handlePerformancePolicyChanged(): void {
+    if (this.destroyed) {
+      return;
+    }
+    this.syncRoomArtifactCachePolicy();
+    if (this.loadedRoomBounds) {
+      this.refreshVisibleRoomsFromCache();
+    }
+    this.updateFullRoomBackgrounds(this.options.scene.cameras.main);
+  }
+
   syncPreviewVisibility(): void {
     this.previewRenderer.syncPreviewVisibility();
+  }
+
+  setTransitionPreparationSeamUrgent(urgent: boolean): void {
+    this.transitionPreparationSeamUrgent = urgent;
   }
 
   updateWorldTiles(): boolean {
@@ -1083,10 +1148,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     // every 1 ms destination stage permanently inadmissible.
     if (
       this.frameWorkCoordinator.hasQueuedWorkAtPriority('portal-current-destination')
+      || this.frameWorkCoordinator.hasQueuedWorkAtPriority('predicted-destination-collision')
     ) {
       return false;
     }
-    this.worldTileController.update(this.options.scene.cameras.main);
+    const optionalWorldTileWorkExecuted =
+      this.worldTileController.update(this.options.scene.cameras.main);
+    if (optionalWorldTileWorkExecuted) {
+      this.markPerformanceAdvisorExactSnapshotOptionalCompetition();
+    }
     if (!this.worldTileController.isBrowseCutoverActive()) {
       this.selectedExactPrefetchLifecycle.pause();
       this.previewCache.cancelSelectionPrefetchesExcept(null);
@@ -1114,6 +1184,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       nowMs: performance.now(),
     });
     if (!request) return true;
+    this.markPerformanceAdvisorExactSnapshotOptionalCompetition();
     void this.previewCache.prefetchPublishedRoom(summary).then(
       (room) => this.completeSelectedExactPrefetch(request, room),
       () => this.completeSelectedExactPrefetch(request, null),
@@ -1124,25 +1195,39 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   runDiscretionaryFrameWork(
     criticalFrameElapsedMs: number,
     sharedBudgetConsumedMs = 0,
-  ): void {
+  ): RunFrameWorkResult | null {
     if (this.destroyed || this.options.getMode() !== 'play') {
-      return;
+      this.lastDiscretionaryFrameWorkResult = null;
+      return null;
     }
-    const effectiveProfile = this.getEffectivePerformanceProfile() === 'reduced'
-      ? 'reduced'
-      : 'normal';
-    if (effectiveProfile !== this.roomArtifactCacheProfile) {
+    const policy = this.getResolvedPerformancePolicy();
+    const frameWorkProfile = policy.transitionUrgency === 'seam-critical'
+      ? 'normal'
+      : policy.activeRuntimeProfile === 'reduced'
+        ? 'reduced'
+        : 'normal';
+    const memoryProfile = policy.memoryProfile === 'reduced' ? 'reduced' : 'normal';
+    if (memoryProfile !== this.roomArtifactCacheProfile) {
       this.syncRoomArtifactCachePolicy();
     }
     const criticalHeadroomMs = Math.max(0, FRAME_TARGET_MS - criticalFrameElapsedMs);
-    this.measure('stream.frameWorkCoordinator', () => {
+    const result = this.measure('stream.frameWorkCoordinator', () =>
       this.frameWorkCoordinator.runFrame({
-        profile: effectiveProfile,
+        profile: frameWorkProfile,
         criticalHeadroomMs,
         sharedBudgetConsumedMs,
         cpuBudgetConsumedMs: sharedBudgetConsumedMs,
-      });
-    });
+      }),
+    );
+    if (!result) {
+      this.lastDiscretionaryFrameWorkResult = null;
+      return null;
+    }
+    if (result.executed.some((execution) => execution.priority === 'preview-cosmetic')) {
+      this.markPerformanceAdvisorExactSnapshotOptionalCompetition();
+    }
+    this.lastDiscretionaryFrameWorkResult = result;
+    return result;
   }
 
   isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean {
@@ -1353,35 +1438,43 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return;
     }
 
+    const performanceAdvisorRequest =
+      this.beginPerformanceAdvisorExactSnapshotRequest(roomId);
+    let performanceAdvisorOutcome: 'success' | 'failure' | 'cancelled' = 'success';
     let request: Promise<void>;
     request = snapshotRequest.then(() => {
       const pendingRequest = this.playableRoomSnapshotPreparationRequestsById.get(roomId);
-      if (
+      const requestIsCurrent = Boolean(
         this.playableRoomSnapshotRequestsById.get(roomId) === request
         && pendingRequest
         && this.isPlayableRoomSnapshotPreparationRequestCurrent(roomId, pendingRequest)
-      ) {
-        this.playableRoomSnapshotRetryAtById.delete(roomId);
-        const renderableRoom = this.resolveTransitionRenderableRoom(coordinates);
-        if (renderableRoom) {
-          const preparation = this.beginFullRoomPreparation(
-            renderableRoom,
-            pendingRequest.priority,
-            !pendingRequest.independentOfPredictedIntent,
-            false,
-          );
-          if (pendingRequest.activationRequested && preparation) {
-            this.applySnapshotPreparationActivationOwners(preparation, pendingRequest);
-          }
+      );
+      if (!requestIsCurrent || !pendingRequest) {
+        performanceAdvisorOutcome = 'cancelled';
+        return;
+      }
+      this.playableRoomSnapshotRetryAtById.delete(roomId);
+      const renderableRoom = this.resolveTransitionRenderableRoom(coordinates);
+      if (renderableRoom) {
+        const preparation = this.beginFullRoomPreparation(
+          renderableRoom,
+          pendingRequest.priority,
+          !pendingRequest.independentOfPredictedIntent,
+          false,
+        );
+        if (pendingRequest.activationRequested && preparation) {
+          this.applySnapshotPreparationActivationOwners(preparation, pendingRequest);
         }
       }
     }).catch((error) => {
       const pendingRequest = this.playableRoomSnapshotPreparationRequestsById.get(roomId);
-      if (
+      const requestIsCurrent = Boolean(
         this.playableRoomSnapshotRequestsById.get(roomId) === request
         && pendingRequest
         && this.isPlayableRoomSnapshotPreparationRequestCurrent(roomId, pendingRequest)
-      ) {
+      );
+      performanceAdvisorOutcome = requestIsCurrent ? 'failure' : 'cancelled';
+      if (requestIsCurrent) {
         if (isRoomSnapshotReferenceChangedError(error) && error.roomIds.includes(roomId)) {
           const staleSummary = this.roomSummariesById.get(roomId) ?? null;
           if (staleSummary) {
@@ -1405,12 +1498,100 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         this.playableRoomSnapshotRequestIntentGenerationById.delete(roomId);
         this.playableRoomSnapshotPreparationRequestsById.delete(roomId);
       }
+      this.settlePerformanceAdvisorExactSnapshotRequest(
+        performanceAdvisorRequest,
+        performanceAdvisorOutcome,
+      );
     });
     this.playableRoomSnapshotRequestsById.set(roomId, request);
     this.playableRoomSnapshotRequestIntentGenerationById.set(roomId, intentGeneration);
     this.playableRoomSnapshotPreparationRequestsById.set(roomId, {
       ...requestedPreparation,
     });
+  }
+
+  private beginPerformanceAdvisorExactSnapshotRequest(
+    roomId: string,
+  ): ActivePerformanceAdvisorExactSnapshotRequest {
+    this.performanceAdvisorExactSnapshotRequestsByRoomId ??= new Map();
+    this.cancelPerformanceAdvisorExactSnapshotRequest(roomId);
+    this.nextPerformanceAdvisorExactSnapshotGeneration =
+      (this.nextPerformanceAdvisorExactSnapshotGeneration ?? 0) + 1;
+    const request: ActivePerformanceAdvisorExactSnapshotRequest = {
+      roomId,
+      generation: this.nextPerformanceAdvisorExactSnapshotGeneration,
+      optionalCompetitionObserved: false,
+      settled: false,
+    };
+    this.performanceAdvisorExactSnapshotRequestsByRoomId.set(roomId, request);
+    this.emitPerformanceAdvisorExactSnapshotEvent({
+      phase: 'started',
+      atMs: performance.now(),
+      roomId,
+      generation: request.generation,
+      optionalCompetitionObserved: false,
+    });
+    return request;
+  }
+
+  private markPerformanceAdvisorExactSnapshotOptionalCompetition(): void {
+    if (!this.performanceAdvisorExactSnapshotRequestsByRoomId) return;
+    for (const request of this.performanceAdvisorExactSnapshotRequestsByRoomId.values()) {
+      if (request.settled || request.optionalCompetitionObserved) continue;
+      request.optionalCompetitionObserved = true;
+      this.emitPerformanceAdvisorExactSnapshotEvent({
+        phase: 'optional-competition',
+        atMs: performance.now(),
+        roomId: request.roomId,
+        generation: request.generation,
+      });
+    }
+  }
+
+  private settlePerformanceAdvisorExactSnapshotRequest(
+    request: ActivePerformanceAdvisorExactSnapshotRequest,
+    outcome: 'success' | 'failure' | 'cancelled',
+  ): void {
+    if (request.settled) return;
+    request.settled = true;
+    if (
+      this.performanceAdvisorExactSnapshotRequestsByRoomId?.get(request.roomId) === request
+    ) {
+      this.performanceAdvisorExactSnapshotRequestsByRoomId.delete(request.roomId);
+    }
+    this.emitPerformanceAdvisorExactSnapshotEvent({
+      phase: 'settled',
+      atMs: performance.now(),
+      roomId: request.roomId,
+      generation: request.generation,
+      outcome,
+      optionalCompetitionObserved: request.optionalCompetitionObserved,
+    });
+  }
+
+  private cancelPerformanceAdvisorExactSnapshotRequest(roomId: string): void {
+    const request = this.performanceAdvisorExactSnapshotRequestsByRoomId?.get(roomId);
+    if (!request) return;
+    this.settlePerformanceAdvisorExactSnapshotRequest(request, 'cancelled');
+  }
+
+  private cancelAllPerformanceAdvisorExactSnapshotRequests(): void {
+    if (!this.performanceAdvisorExactSnapshotRequestsByRoomId) return;
+    for (const request of Array.from(
+      this.performanceAdvisorExactSnapshotRequestsByRoomId.values(),
+    )) {
+      this.settlePerformanceAdvisorExactSnapshotRequest(request, 'cancelled');
+    }
+  }
+
+  private emitPerformanceAdvisorExactSnapshotEvent(
+    event: PerformanceAdvisorExactSnapshotEvent,
+  ): void {
+    try {
+      this.options.onPerformanceAdvisorExactSnapshotEvent?.(event);
+    } catch (error) {
+      console.warn('Performance advisor exact-snapshot observer failed.', error);
+    }
   }
 
   private beginPlayableRoomSummaryRecovery(
@@ -1570,6 +1751,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       }
       this.playableRoomSnapshotRequestIntentGenerationById.delete(previousRoomId);
     } else {
+      this.detachPlayableRoomSnapshotRequestInterest(previousRoomId);
       this.cancelFullRoomPreparation(previousRoomId, reason);
       this.queueUnretainedPredictedRoomTeardown(previousRoomId);
     }
@@ -1668,6 +1850,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     } else {
       // The underlying transport cannot be aborted here, but removing its
       // ownership record makes completion cache-only after the player leaves.
+      this.cancelPerformanceAdvisorExactSnapshotRequest(roomId);
       this.playableRoomSnapshotRequestsById.delete(roomId);
       this.playableRoomSnapshotRequestIntentGenerationById.delete(roomId);
       this.playableRoomSnapshotPreparationRequestsById.delete(roomId);
@@ -1791,9 +1974,39 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     };
   }
 
+  getTransitionAdvisorState(roomId: string): TransitionAdvisorState {
+    const preparation = this.pendingFullRoomPreparationsById?.get(roomId) ?? null;
+    const exactSnapshotRequest =
+      this.performanceAdvisorExactSnapshotRequestsByRoomId?.get(roomId) ?? null;
+    const queuedJob = preparation?.queuedJob ?? null;
+    const urgentWorkQueued = Boolean(
+      queuedJob?.state === 'queued'
+      && (
+        queuedJob.priority === 'portal-current-destination'
+        || queuedJob.priority === 'predicted-destination-collision'
+      ),
+    );
+    const lastFrame = this.lastDiscretionaryFrameWorkResult;
+    const schedulerStarved = Boolean(
+      urgentWorkQueued
+      && lastFrame
+      && lastFrame.executed.length === 0
+      && lastFrame.stopReason === 'critical-headroom-exhausted',
+    );
+    return {
+      generation: preparation?.generation.id ?? exactSnapshotRequest?.generation ?? null,
+      progressRevision: Number.isFinite(preparation?.progressRevision)
+        ? preparation!.progressRevision
+        : null,
+      urgentWorkQueued,
+      schedulerStarved,
+    };
+  }
+
   getDebugMetrics(): {
     activeChunkRadius: number;
     effectivePerformanceProfile: PerformanceProfile;
+    resolvedPerformancePolicy: ResolvedPerformancePolicy;
     visibleRoomCount: number;
     previewRoomBudget: number;
     fullRoomBudget: number;
@@ -1816,6 +2029,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return {
       activeChunkRadius: this.activeChunkRadius,
       effectivePerformanceProfile: this.getEffectivePerformanceProfile(),
+      resolvedPerformancePolicy: this.getResolvedPerformancePolicy(),
       visibleRoomCount: this.visibleRoomIds.size,
       previewRoomBudget: this.previewRoomBudget,
       fullRoomBudget: this.fullRoomBudget,
@@ -2547,7 +2761,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     if (
       this.options.getMode() === 'play'
-      && this.getEffectivePerformanceProfile() === 'reduced'
+      && this.getResolvedPerformancePolicy().activeRuntimeProfile === 'reduced'
     ) {
       this.prefetchExactCardinalRoomSnapshots();
     }
@@ -3104,9 +3318,27 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private getEffectivePerformanceProfile(): PerformanceProfile {
-    return this.options.getMode() === 'play' && this.localPlayPressure.profile === 'reduced'
-      ? 'reduced'
-      : this.options.getPerformanceProfile();
+    return this.getResolvedPerformancePolicy().visualDataProfile;
+  }
+
+  private getResolvedPerformancePolicy(): ResolvedPerformancePolicy {
+    const configuredDeviceProfile = this.options.getPerformanceProfile?.();
+    const legacyHarnessProfile = Object.prototype.hasOwnProperty.call(
+      this,
+      'getEffectivePerformanceProfile',
+    )
+      ? (this.getEffectivePerformanceProfile as () => PerformanceProfile)()
+      : 'normal';
+    return resolvePerformancePolicy({
+      selectedMode: this.options.getDevicePerformanceMode?.() ?? getDevicePerformanceMode(),
+      deviceProfile: configuredDeviceProfile ?? legacyHarnessProfile,
+      localPlayPressure: (this.options.getMode?.() ?? 'play') === 'play'
+        ? this.localPlayPressure?.profile ?? 'normal'
+        : 'normal',
+      seamPreparationUrgent:
+        (this.frameWorkCoordinator.hasQueuedWorkAtPriority?.('portal-current-destination') ?? false)
+        || this.transitionPreparationSeamUrgent,
+    });
   }
 
   private computeLocalPlayPressure(
@@ -3185,6 +3417,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     );
     this.fullPreviewUpgradeGeneration = -1;
     this.selectedExactPrefetchLifecycle.invalidate(roomId);
+    this.cancelPerformanceAdvisorExactSnapshotRequest(roomId);
     this.cancelFullRoomPreparation(roomId, 'room-invalidated');
     if (!replacementAvailable) {
       this.destroyFullRoom(roomId);
@@ -3613,6 +3846,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     const previousRoomId = this.predictedPreparationRoomId;
     if (previousRoomId && previousRoomId !== roomId) {
       if (previousRoomId !== this.portalPreparationRoomId) {
+        this.detachPlayableRoomSnapshotRequestInterest(previousRoomId);
         this.cancelFullRoomPreparation(previousRoomId, 'predicted-destination-changed');
         this.queueUnretainedPredictedRoomTeardown(previousRoomId);
       }
@@ -3634,6 +3868,17 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       true,
     );
     return true;
+  }
+
+  private detachPlayableRoomSnapshotRequestInterest(roomId: string): void {
+    // Snapshot transports are cache-owned and may continue after movement
+    // intent changes. Detach this logical owner so a later reversal installs
+    // a fresh wrapper and advisor generation around the still-running shared
+    // transport instead of inheriting cancelled request state.
+    this.cancelPerformanceAdvisorExactSnapshotRequest(roomId);
+    this.playableRoomSnapshotRequestsById?.delete(roomId);
+    this.playableRoomSnapshotRequestIntentGenerationById?.delete(roomId);
+    this.playableRoomSnapshotPreparationRequestsById?.delete(roomId);
   }
 
   private schedulePredictedPreparationExpiry(): void {
@@ -3799,6 +4044,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       generation: this.frameWorkCoordinator.beginGeneration(`full-room:${renderableRoom.id}`),
       priority,
       queuedJob: null,
+      progressRevision: 0,
       activationRequested: standardActivationRequested || portalActivationRequested,
       standardActivationRequested,
       portalActivationRequested,
@@ -3867,6 +4113,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         if (!this.isFullRoomPreparationCurrent(preparation)) return;
         try {
           execute();
+          if (preparation.phase !== 'cancelled' && preparation.phase !== 'failed') {
+            this.recordFullRoomPreparationProgress(preparation);
+          }
         } catch (error) {
           this.failFullRoomPreparation(preparation, error);
           throw error;
@@ -3874,6 +4123,24 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       },
     });
     preparation.queuedJob = queuedJob;
+  }
+
+  private recordFullRoomPreparationProgress(
+    preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
+  ): void {
+    preparation.progressRevision = Number.isFinite(preparation.progressRevision)
+      ? preparation.progressRevision + 1
+      : 1;
+    try {
+      this.options.onPerformanceAdvisorDestinationProgress?.(
+        preparation.room.id,
+        preparation.generation.id,
+        preparation.progressRevision,
+        performance.now(),
+      );
+    } catch (error) {
+      console.warn('Performance advisor destination-progress observer failed.', error);
+    }
   }
 
   private promoteFullRoomPreparation(
@@ -4789,7 +5056,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
     if (this.previousRoomArtifactKey) protectedKeys.add(this.previousRoomArtifactKey);
     this.roomArtifactCache.setProtectedKeys(protectedKeys);
-    const effectiveProfile = this.getEffectivePerformanceProfile() === 'reduced'
+    const effectiveProfile = this.getResolvedPerformancePolicy().memoryProfile === 'reduced'
       ? 'reduced'
       : 'normal';
     this.roomArtifactCache.setBudgetBytes(
@@ -5516,7 +5783,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     const retainedRoomIds = new Set<string>(effectiveTargetRoomIds);
     const now = this.options.scene.time.now;
-    const retainReleaseGrace = this.getEffectivePerformanceProfile() !== 'reduced';
+    const policy = this.getResolvedPerformancePolicy();
+    const retainReleaseGrace = policy.activeRuntimeProfile !== 'reduced'
+      || policy.selectedMode === 'battery-saver';
     let nextReleaseAt: number | null = null;
 
     for (const roomId of effectiveTargetRoomIds) {

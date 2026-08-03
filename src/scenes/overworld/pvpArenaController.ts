@@ -67,6 +67,7 @@ interface OverworldPvpArenaControllerHost {
   returnToWorld: () => void;
   renderHud: () => void;
   showTransientStatus: (message: string) => void;
+  onSetupStateChanged?: (inProgress: boolean) => void;
 }
 
 export class OverworldPvpArenaController {
@@ -78,6 +79,8 @@ export class OverworldPvpArenaController {
   private activePvpReturnCoordinates: RoomCoordinates | null = null;
   private readonly pendingPvpInvitesByMatchId = new Map<string, PendingPvpInvite>();
   private lastSubmittedPvpMatchId: string | null = null;
+  private nextPvpSetupGeneration = 0;
+  private activePvpSetupGeneration: number | null = null;
 
   constructor(private readonly host: OverworldPvpArenaControllerHost) {}
 
@@ -99,6 +102,10 @@ export class OverworldPvpArenaController {
 
   isMatchActive(): boolean {
     return Boolean(this.activePvpMatch && this.activePvpMatch.status !== 'complete');
+  }
+
+  isSetupInProgress(): boolean {
+    return this.activePvpSetupGeneration !== null;
   }
 
   isArenaActive(): boolean {
@@ -274,7 +281,7 @@ export class OverworldPvpArenaController {
     });
   }
 
-  clearActiveMatch(disconnect = true): void {
+  clearActiveMatch(disconnect = true, preserveSetup = false): void {
     if (disconnect) {
       this.pvpMatchClient?.disconnect();
     }
@@ -286,6 +293,9 @@ export class OverworldPvpArenaController {
     this.host.clearSceneRuntime();
     this.host.syncPresenceMatchSnapshot(null, null, null);
     hidePvpCountdownOverlay();
+    if (!preserveSetup) {
+      this.finishActivePvpSetup();
+    }
   }
 
   private async startArenaDuel(options: {
@@ -295,50 +305,112 @@ export class OverworldPvpArenaController {
     roomCoordinates: RoomCoordinates;
     opponent: PvpParticipantIdentity;
   }): Promise<boolean> {
-    const identity = this.host.getIdentity();
-    if (!identity) {
-      this.host.showTransientStatus('PVP identity unavailable.');
-      return false;
-    }
-
-    if (!this.host.isWithinLoadedRoomBounds(options.roomCoordinates)) {
-      const refreshed = await this.host.refreshAround(options.roomCoordinates);
-      if (!refreshed) {
-        this.host.showTransientStatus('Could not load duel room.');
+    const setupGeneration = this.beginPvpSetup();
+    try {
+      const identity = this.host.getIdentity();
+      if (!identity) {
+        this.host.showTransientStatus('PVP identity unavailable.');
+        this.finishPvpSetup(setupGeneration);
         return false;
       }
+
+      if (!this.host.isWithinLoadedRoomBounds(options.roomCoordinates)) {
+        const refreshed = await this.host.refreshAround(options.roomCoordinates);
+        if (!this.isPvpSetupCurrent(setupGeneration)) {
+          return false;
+        }
+        if (!refreshed) {
+          this.host.showTransientStatus('Could not load duel room.');
+          this.finishPvpSetup(setupGeneration);
+          return false;
+        }
+      }
+
+      const room = this.host.getRoomSnapshotForCoordinates(options.roomCoordinates);
+      if (!room || room.status !== 'published') {
+        this.host.showTransientStatus('Duel room is no longer available.');
+        this.finishPvpSetup(setupGeneration);
+        return false;
+      }
+
+      const returnCoordinates = { ...this.host.getSelectedCoordinates() };
+      const mode = getMultiplayerModeDefinition(options.modeId);
+      this.clearActiveMatch(true, true);
+      this.host.prepareArenaDuel(options.roomCoordinates, options.opponent.userId, mode);
+      this.activePvpOpponentUserId = options.opponent.userId;
+      this.activePvpReturnCoordinates = returnCoordinates;
+      this.lastSubmittedPvpMatchId = null;
+
+      let client: MultiplayerInstanceClient;
+      client = new MultiplayerInstanceClient({
+        matchId: options.matchId,
+        mode: mode.id,
+        roomId: options.roomId,
+        roomCoordinates: { ...options.roomCoordinates },
+        localIdentity: identity,
+        opponentIdentity: options.opponent,
+        onSnapshot: (snapshot) => {
+          if (this.pvpMatchClient !== client) {
+            return;
+          }
+          try {
+            this.handleSnapshot(snapshot);
+          } finally {
+            this.finishPvpSetup(setupGeneration);
+          }
+        },
+        onPeerState: (state) => this.handlePeerState(state),
+        onPeerCombatEvent: (event) => this.handlePeerCombatEvent(event),
+        onPeerRoomStateEvent: (event) => this.handlePeerRoomStateEvent(event),
+        onStatus: (message) => this.host.showTransientStatus(message),
+        onConnectionFailure: () => {
+          if (this.activePvpSetupGeneration === setupGeneration) {
+            this.clearActiveMatch(false);
+          }
+        },
+      });
+      this.pvpMatchClient = client;
+      if (!client.connect()) {
+        if (this.pvpMatchClient === client) {
+          this.clearActiveMatch(false);
+        }
+        return false;
+      }
+      this.host.showTransientStatus(`${mode.displayName} with ${options.opponent.displayName}.`);
+      return true;
+    } catch (error) {
+      this.finishPvpSetup(setupGeneration);
+      throw error;
     }
+  }
 
-    const room = this.host.getRoomSnapshotForCoordinates(options.roomCoordinates);
-    if (!room || room.status !== 'published') {
-      this.host.showTransientStatus('Duel room is no longer available.');
-      return false;
+  private beginPvpSetup(): number {
+    const generation = ++this.nextPvpSetupGeneration;
+    const wasInProgress = this.activePvpSetupGeneration !== null;
+    this.activePvpSetupGeneration = generation;
+    if (!wasInProgress) {
+      this.host.onSetupStateChanged?.(true);
     }
+    return generation;
+  }
 
-    const returnCoordinates = { ...this.host.getSelectedCoordinates() };
-    const mode = getMultiplayerModeDefinition(options.modeId);
-    this.clearActiveMatch();
-    this.host.prepareArenaDuel(options.roomCoordinates, options.opponent.userId, mode);
-    this.activePvpOpponentUserId = options.opponent.userId;
-    this.activePvpReturnCoordinates = returnCoordinates;
-    this.lastSubmittedPvpMatchId = null;
+  private isPvpSetupCurrent(generation: number): boolean {
+    return this.activePvpSetupGeneration === generation;
+  }
 
-    this.pvpMatchClient = new MultiplayerInstanceClient({
-      matchId: options.matchId,
-      mode: mode.id,
-      roomId: options.roomId,
-      roomCoordinates: { ...options.roomCoordinates },
-      localIdentity: identity,
-      opponentIdentity: options.opponent,
-      onSnapshot: (snapshot) => this.handleSnapshot(snapshot),
-      onPeerState: (state) => this.handlePeerState(state),
-      onPeerCombatEvent: (event) => this.handlePeerCombatEvent(event),
-      onPeerRoomStateEvent: (event) => this.handlePeerRoomStateEvent(event),
-      onStatus: (message) => this.host.showTransientStatus(message),
-    });
-    this.pvpMatchClient.connect();
-    this.host.showTransientStatus(`${mode.displayName} with ${options.opponent.displayName}.`);
-    return true;
+  private finishPvpSetup(generation: number): void {
+    if (!this.isPvpSetupCurrent(generation)) {
+      return;
+    }
+    this.activePvpSetupGeneration = null;
+    this.host.onSetupStateChanged?.(false);
+  }
+
+  private finishActivePvpSetup(): void {
+    const generation = this.activePvpSetupGeneration;
+    if (generation !== null) {
+      this.finishPvpSetup(generation);
+    }
   }
 
   private handleSnapshot(snapshot: PvpMatchSnapshot): void {

@@ -5,6 +5,10 @@ vi.mock('phaser', () => ({
 }));
 
 import { OverworldRoomTransitionController } from './roomTransition';
+import {
+  PERFORMANCE_ADVISOR_THRESHOLDS,
+  RuntimePerformanceAdvisor,
+} from '../../performance/performanceAdvisor';
 
 function createHarness() {
   const player = {
@@ -68,6 +72,9 @@ function createHarness() {
     getRoomOrigin: vi.fn(() => ({ x: 0, y: 0 })),
     clearLadderState: vi.fn(),
     syncPlayerPickupSensor: vi.fn(),
+    recordPerformanceTransitionGate: vi.fn(),
+    clearPerformanceTransitionGate: vi.fn(),
+    onRoomTransitionCompleted: vi.fn(),
   };
   return {
     body,
@@ -160,6 +167,132 @@ describe('overworld room transition hydration', () => {
     expect(host.setCurrentRoomCoordinates).not.toHaveBeenCalled();
     expect(body.reset).toHaveBeenLastCalledWith(631, 176);
     expect(player.x).toBe(631);
+  });
+
+  it('keeps one unprepared advisor episode alive across seam clamps and retry frames', () => {
+    const { body, controller, host, player } = createHarness();
+    const readyAtMs = PERFORMANCE_ADVISOR_THRESHOLDS.startupIgnoreMs;
+    const advisor = new RuntimePerformanceAdvisor({ startedAtMs: 0 });
+    let now = readyAtMs;
+    advisor.tick(now);
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    host.recordPerformanceTransitionGate.mockImplementation((reason, from, to) => {
+      advisor.recordTransitionGate({
+        atMs: now,
+        fromRoomId: `${from.x},${from.y}`,
+        toRoomId: `${to.x},${to.y}`,
+        reason,
+        generation: 1,
+        progressRevision: 0,
+        urgentWorkQueued: true,
+        schedulerStarved: true,
+      });
+    });
+    host.clearPerformanceTransitionGate.mockImplementation(() => {
+      advisor.clearTransitionGate(now);
+    });
+
+    controller.maybeAdvancePlayerRoom();
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+
+    now += 250;
+    body.velocity.x = 0;
+    controller.maybeAdvancePlayerRoom();
+    now += 250;
+    body.velocity.x = 150;
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+    now = readyAtMs + PERFORMANCE_ADVISOR_THRESHOLDS.transitionStallMs - 1;
+    body.velocity.x = 0;
+    controller.maybeAdvancePlayerRoom();
+    advisor.tick(now);
+
+    expect(advisor.getSuggestion()).toBeNull();
+    expect(host.clearPerformanceTransitionGate).not.toHaveBeenCalled();
+
+    now += 1;
+    body.velocity.x = 150;
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+
+    expect(advisor.getSuggestion()?.reason).toBe('transition-starvation');
+    expect(host.recordPerformanceTransitionGate).toHaveBeenCalledTimes(3);
+    expect(host.clearPerformanceTransitionGate).not.toHaveBeenCalled();
+  });
+
+  it('clears an unprepared episode only after the player abandons that seam', () => {
+    const { body, controller, host, player } = createHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+
+    controller.maybeAdvancePlayerRoom();
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+    expect(host.clearPerformanceTransitionGate).not.toHaveBeenCalled();
+
+    player.x = 500;
+    body.velocity.x = -150;
+    controller.maybeAdvancePlayerRoom();
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.clearPerformanceTransitionGate).toHaveBeenCalledOnce();
+  });
+
+  it('clears an unprepared episode when a source-room retry becomes ready', () => {
+    const { body, controller, host, player } = createHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+
+    controller.maybeAdvancePlayerRoom();
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+    expect(host.clearPerformanceTransitionGate).not.toHaveBeenCalled();
+
+    host.preparePlayableRoomForTransition.mockReturnValue(true);
+    body.velocity.x = 0;
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.clearPerformanceTransitionGate).toHaveBeenCalledOnce();
+  });
+
+  it('lets a non-unprepared gate reason clear the advisor episode itself', () => {
+    const { body, controller, host, player } = createHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+
+    controller.maybeAdvancePlayerRoom();
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+
+    host.isRoomTransitionLocked.mockReturnValue(true);
+    body.velocity.x = 150;
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.recordPerformanceTransitionGate).toHaveBeenLastCalledWith(
+      'locked',
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    );
+    expect(host.clearPerformanceTransitionGate).not.toHaveBeenCalled();
+  });
+
+  it('replaces a retry episode with an unreachable gate through the advisor', () => {
+    const { body, controller, host, player } = createHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+
+    controller.maybeAdvancePlayerRoom();
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+
+    host.isNeighborReachable.mockReturnValue(false);
+    body.velocity.x = 0;
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.recordPerformanceTransitionGate).toHaveBeenLastCalledWith(
+      'unreachable',
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    );
+    expect(host.clearPerformanceTransitionGate).not.toHaveBeenCalled();
   });
 
   it('preserves tangential jump velocity while holding a side seam closed', () => {
