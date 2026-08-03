@@ -12,6 +12,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { createDefaultRoomSnapshot } from '../../persistence/roomModel';
+import { getCustomBackgroundTextureKey } from '../../backgrounds/runtime';
 import { FrameWorkCoordinator } from './frameWorkCoordinator';
 import { OverworldWorldStreamingController } from './worldStreaming';
 
@@ -90,6 +91,194 @@ describe('world streaming dormant destination lifecycle', () => {
     expect(customImage).toMatchObject({ active: false, visible: false });
     expect(preparation.backgroundPrepared).toBe(true);
     expect(queuePreparedTerrainBatch).toHaveBeenCalledWith(preparation);
+  });
+
+  it('prepares and atomically activates a cold custom-background destination', async () => {
+    const room = createDefaultRoomSnapshot('-2,9', { x: -2, y: 9 });
+    room.background = 'custom:abcdefgh?fit=stretch';
+    const renderableRoom = {
+      id: room.id,
+      coordinates: room.coordinates,
+      room,
+      source: 'published',
+    };
+    const terrainTextureKey = 'terrain-texture';
+    const foregroundTextureKey = 'foreground-texture';
+    const customBackgroundTextureKey = getCustomBackgroundTextureKey('abcdefgh');
+    const registeredTextures = new Set([terrainTextureKey, foregroundTextureKey]);
+    const canvasContext = {
+      imageSmoothingEnabled: false,
+      drawImage: vi.fn(),
+    };
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => canvasContext),
+    };
+    const bitmap = {
+      width: 320,
+      height: 176,
+      close: vi.fn(),
+    } as unknown as ImageBitmap;
+    const createImageBitmapSpy = vi.fn(async () => bitmap);
+    const fetchReceivers: unknown[] = [];
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(function (
+      this: unknown,
+      _url: RequestInfo | URL,
+      _init?: RequestInit,
+    ): Promise<Response> {
+      fetchReceivers.push(this);
+      if (this !== globalThis) {
+        return Promise.reject(new TypeError('Illegal invocation'));
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        blob: async () => new Blob(['cold-background']),
+      } as Response);
+    });
+    vi.stubGlobal('createImageBitmap', createImageBitmapSpy);
+    vi.stubGlobal('document', {
+      createElement: vi.fn((tagName: string) => {
+        expect(tagName).toBe('canvas');
+        return canvas;
+      }),
+    });
+
+    const image = createDormantDisplayObject();
+    const foregroundImage = createDormantDisplayObject();
+    const terrainLayer = createDormantTerrainLayer();
+    const loadedRoom = {
+      room,
+      source: 'published',
+      backgroundColorRect: null,
+      backgroundSprites: [],
+      image,
+      textureKey: terrainTextureKey,
+      foregroundImage,
+      foregroundTextureKey,
+      terrainLayer,
+      terrainInsetBodies: null,
+      liveObjects: [],
+      collisionReady: false,
+    };
+    const loadedFullRoomsById = new Map<string, unknown>();
+    const pendingFullRoomPreparationsById = new Map<string, unknown>();
+    const frameWorkCoordinator = new FrameWorkCoordinator();
+    const observerStates: Array<{ published: boolean; collisionReady: boolean }> = [];
+    const onFullRoomCollisionReady = vi.fn();
+    const onFullRoomSetChanged = vi.fn(() => {
+      observerStates.push({
+        published: loadedFullRoomsById.get(room.id) === loadedRoom,
+        collisionReady: loadedRoom.collisionReady,
+      });
+    });
+    const scene = {
+      textures: {
+        exists: vi.fn((key: string) => registeredTextures.has(key)),
+        addCanvas: vi.fn((key: string) => {
+          registeredTextures.add(key);
+          return {};
+        }),
+      },
+      cameras: { main: {} },
+    };
+    const harness = Object.assign(
+      Object.create(OverworldWorldStreamingController.prototype),
+      {
+        destroyed: false,
+        loadedFullRoomsById,
+        pendingFullRoomPreparationsById,
+        pendingFullRoomTeardownsById: new Map(),
+        predictedPreparationRoomId: null,
+        frameWorkCoordinator,
+        roomArtifactCache: { has: vi.fn(() => false) },
+        options: {
+          getMode: () => 'play',
+          scene,
+          getRoomOrigin: () => ({ x: 0, y: 0 }),
+          syncLiveObjectInteractions: vi.fn(),
+          onBackdropObjectsChanged: vi.fn(),
+          onFullRoomSetChanged,
+          onFullRoomCollisionReady,
+        },
+        detachPredictedPreparationIntent: vi.fn(),
+        buildFullRoomPreparationIdentity: vi.fn(() => 'cold-custom-background'),
+        buildFullRoomArtifactKey: vi.fn(() => 'cold-custom-background-artifact'),
+        buildScopedRoomTextureKey: vi
+          .fn()
+          .mockReturnValueOnce(terrainTextureKey)
+          .mockReturnValueOnce(foregroundTextureKey),
+        getCustomRoomTileTextureKey: vi.fn(() => null),
+        recordPreparedRoomArtifacts: vi.fn(),
+        syncRoomArtifactCachePolicy: vi.fn(),
+        releaseRoomArtifactResources: vi.fn(),
+        isFullRoomPreparationSnapshotCurrent: vi.fn(() => true),
+        requirePreparedLoadedRoom: vi.fn(() => loadedRoom),
+        setPreparedInsetBodiesActive: vi.fn(),
+        isLoadedRoomCollisionInfrastructureReady: vi.fn(() => true),
+        ensurePlayerTerrainColliders: vi.fn(),
+        syncLiveObjectWorldColliders: vi.fn(),
+        updateFullRoomBackground: vi.fn(),
+        retainPreparedTransitionRoom: vi.fn(),
+        previewRenderer: { syncPreviewVisibility: vi.fn() },
+        queuePreparedRuntimeShell: vi.fn((preparation: { loadedRoom: unknown }) => {
+          preparation.loadedRoom = loadedRoom;
+          Object.assign(preparation, { backgroundPrepared: true });
+          callMarkPreparedRoomReady(harness, preparation);
+        }),
+      },
+    );
+
+    try {
+      const preparation = callBeginPreparedRoom(
+        harness,
+        renderableRoom,
+        'predicted-visuals-objects',
+        false,
+      ) as { phase: string; activationRequested: boolean };
+
+      expect(preparation).not.toBeNull();
+      expect(preparation.phase).toBe('custom-background');
+      expect(preparation.activationRequested).toBe(true);
+      expect(loadedFullRoomsById.has(room.id)).toBe(false);
+      expect(loadedRoom.collisionReady).toBe(false);
+
+      await vi.waitFor(() => {
+        expect(frameWorkCoordinator.getDiagnostics().queueDepth).toBe(1);
+      });
+      for (let frame = 0; frame < 10 && !loadedFullRoomsById.has(room.id); frame += 1) {
+        frameWorkCoordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 4 });
+      }
+
+      expect(fetchReceivers).toEqual([globalThis]);
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('/api/background-images/abcdefgh/image'),
+        expect.objectContaining({
+          credentials: 'include',
+          signal: expect.any(AbortSignal),
+        }),
+      );
+      expect(createImageBitmapSpy).toHaveBeenCalledOnce();
+      expect(registeredTextures.has(customBackgroundTextureKey)).toBe(true);
+      expect(canvasContext.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
+      expect(bitmap.close).toHaveBeenCalledOnce();
+      expect(loadedFullRoomsById.get(room.id)).toBe(loadedRoom);
+      expect(loadedRoom.collisionReady).toBe(true);
+      expect(pendingFullRoomPreparationsById.has(room.id)).toBe(false);
+      expect(onFullRoomCollisionReady).toHaveBeenCalledWith(loadedRoom);
+      expect(onFullRoomSetChanged).toHaveBeenCalledWith([room.coordinates]);
+      expect(observerStates).toEqual([{ published: true, collisionReady: true }]);
+      expect(frameWorkCoordinator.getDiagnostics()).toMatchObject({
+        queueDepth: 0,
+        failedJobs: 0,
+        currentGenerations: {},
+      });
+    } finally {
+      fetchSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('finalizes prepared object links and switch state in a discretionary job while dormant', () => {

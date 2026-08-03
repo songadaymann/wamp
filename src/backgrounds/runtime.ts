@@ -262,7 +262,7 @@ export class CustomBackgroundTexturePreparation {
 
   constructor(
     private readonly id: string,
-    private readonly fetchImage: typeof fetch = fetch,
+    private readonly fetchImage: typeof fetch = globalThis.fetch.bind(globalThis),
     private readonly decodeImage: CustomBackgroundImageDecoder = decodeCustomBackgroundBlob,
     private readonly createCanvas: () => HTMLCanvasElement = () => document.createElement('canvas'),
   ) {

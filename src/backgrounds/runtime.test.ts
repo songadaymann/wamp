@@ -35,6 +35,131 @@ function createCanvasHarness() {
 }
 
 describe('CustomBackgroundTexturePreparation', () => {
+  it('binds the default fetch receiver, decodes, and defers upload until commit', async () => {
+    const receivers: unknown[] = [];
+    const bitmap = createBitmap();
+    const blob = new Blob(['cold-background']);
+    const decodeImage = vi.fn(async () => bitmap);
+    const { canvas, context } = createCanvasHarness();
+    let registered = false;
+    const scene = {
+      textures: {
+        exists: vi.fn(() => registered),
+        addCanvas: vi.fn(() => {
+          registered = true;
+          return {};
+        }),
+      },
+    } as unknown as Phaser.Scene;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(function (
+      this: unknown,
+      _url: RequestInfo | URL,
+      init?: RequestInit,
+    ): Promise<Response> {
+      receivers.push(this);
+      if (this !== globalThis) {
+        return Promise.reject(new TypeError('Illegal invocation'));
+      }
+      expect(init).toMatchObject({ credentials: 'include' });
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        blob: async () => blob,
+      } as Response);
+    });
+
+    try {
+      const preparation = new CustomBackgroundTexturePreparation(
+        'receiver-safe',
+        undefined,
+        decodeImage as typeof createImageBitmap,
+        () => canvas,
+      );
+
+      await preparation.prepare();
+
+      expect(receivers).toEqual([globalThis]);
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('/api/background-images/receiver-safe/image'),
+        expect.objectContaining({
+          credentials: 'include',
+          signal: expect.any(AbortSignal),
+        }),
+      );
+      expect(decodeImage).toHaveBeenCalledWith(blob);
+      expect(scene.textures.addCanvas).not.toHaveBeenCalled();
+      expect(preparation.getSnapshot()).toMatchObject({
+        prepared: true,
+        committed: false,
+        cancelled: false,
+      });
+
+      expect(preparation.commit(scene)).toBe(getCustomBackgroundTextureKey('receiver-safe'));
+      expect(context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
+      expect(scene.textures.addCanvas).toHaveBeenCalledOnce();
+      expect(bitmap.close).toHaveBeenCalledOnce();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('binds the default fetch receiver and still aborts an in-flight request', async () => {
+    const receivers: unknown[] = [];
+    let capturedSignal: AbortSignal | null = null;
+    const decodeImage = vi.fn();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(function (
+      this: unknown,
+      _url: RequestInfo | URL,
+      init?: RequestInit,
+    ): Promise<Response> {
+      receivers.push(this);
+      if (this !== globalThis) {
+        return Promise.reject(new TypeError('Illegal invocation'));
+      }
+      const signal = init?.signal;
+      if (!(signal instanceof AbortSignal)) {
+        return Promise.reject(new Error('Missing custom-background abort signal.'));
+      }
+      capturedSignal = signal;
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('cancelled', 'AbortError'));
+        }, { once: true });
+      });
+    });
+
+    try {
+      const preparation = new CustomBackgroundTexturePreparation(
+        'receiver-safe-cancel',
+        undefined,
+        decodeImage as typeof createImageBitmap,
+      );
+      const preparing = preparation.prepare();
+
+      preparation.cancel();
+
+      await expect(preparing).rejects.toMatchObject({ name: 'AbortError' });
+      expect(receivers).toEqual([globalThis]);
+      expect(capturedSignal).toMatchObject({ aborted: true });
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('/api/background-images/receiver-safe-cancel/image'),
+        expect.objectContaining({
+          credentials: 'include',
+          signal: capturedSignal,
+        }),
+      );
+      expect(decodeImage).not.toHaveBeenCalled();
+      expect(preparation.getSnapshot()).toMatchObject({
+        prepared: false,
+        committed: false,
+        cancelled: true,
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('decodes off-cache and defers the Phaser texture upload until commit', async () => {
     const bitmap = createBitmap();
     const blob = new Blob(['background']);
