@@ -6,6 +6,7 @@ import {
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { LoadedRoomObject } from '../liveObjects';
 import type { LoadedFullRoom } from '../worldStreaming';
+import { isAnimationSafelyPlayable } from './animationReadiness';
 import { getArcadeBodyBounds } from './bodies';
 import {
   resolveNpcHorizontalVelocity,
@@ -490,7 +491,7 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
 
   private playAnimation(liveObject: LoadedRoomObject, key: string): void {
     if (
-      this.options.scene.anims.exists(key) &&
+      isAnimationSafelyPlayable(this.options.scene.anims, key) &&
       liveObject.sprite.anims.currentAnim?.key !== key
     ) {
       liveObject.sprite.play(key);

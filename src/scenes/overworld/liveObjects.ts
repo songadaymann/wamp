@@ -66,6 +66,7 @@ import {
   createLiveObjectRuntimeState,
   getInitialDirectionX,
 } from './liveObjects/objectFactory';
+import { isAnimationSafelyPlayable } from './liveObjects/animationReadiness';
 import { collectLiveObject as collectLiveObjectWithFx } from './liveObjects/collection';
 import {
   canActorTriggerBlockSwitchByContact,
@@ -930,7 +931,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     if (config.frameCount > 1 && config.fps > 0) {
       const animationKey = `${config.id}_anim`;
-      if (this.options.scene.anims.exists(animationKey)) {
+      if (isAnimationSafelyPlayable(this.options.scene.anims, animationKey)) {
         sprite.play(animationKey);
       }
     }
@@ -1058,7 +1059,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         liveObject.npcNameLabel = label;
         liveObject.helpers.push(label);
       }
-      if (this.options.scene.anims.exists(JIMOTHY_ANIMATION_KEYS.idle)) {
+      if (isAnimationSafelyPlayable(this.options.scene.anims, JIMOTHY_ANIMATION_KEYS.idle)) {
         sprite.play(JIMOTHY_ANIMATION_KEYS.idle);
       }
     }
@@ -3362,7 +3363,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const body = sprite.body as ArcadeObjectBody | null;
     const removalReason: LiveObjectExplicitRemovalReason =
       liveObject.config.id === 'crate' ? 'crate-broken' : 'brick-broken';
-    const canPlayBreakAnimation = this.options.scene.anims.exists(animationKey);
+    const canPlayBreakAnimation = isAnimationSafelyPlayable(
+      this.options.scene.anims,
+      animationKey,
+    );
 
     if (canPlayBreakAnimation) {
       sprite.play(animationKey);

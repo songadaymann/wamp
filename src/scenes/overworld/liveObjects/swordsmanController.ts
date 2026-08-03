@@ -60,6 +60,7 @@ import {
 import type { LoadedRoomObject } from '../liveObjects';
 import type { LoadedFullRoom } from '../worldStreaming';
 import { terrainTileCollidesAtLocalPixel } from '../terrainCollision';
+import { isAnimationSafelyPlayable } from './animationReadiness';
 import {
   getArcadeBodyBounds,
   isDynamicArcadeBody,
@@ -2772,7 +2773,14 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     liveObject.runtime.activatedUntil = now + SWORDSMAN_AI_ATTACK_HIT_END_MS;
     liveObject.runtime.cooldownUntil = now + SWORDSMAN_AI_ATTACK_MS + SWORDSMAN_AI_COOLDOWN_MS;
     this.applySwordsmanFacing(liveObject, null, liveObject.runtime.directionX, { force: true });
-    liveObject.sprite.play(SWORDSMAN_AI_ANIMATION_KEYS['sword-slash'], false);
+    if (
+      isAnimationSafelyPlayable(
+        this.options.scene.anims,
+        SWORDSMAN_AI_ANIMATION_KEYS['sword-slash'],
+      )
+    ) {
+      liveObject.sprite.play(SWORDSMAN_AI_ANIMATION_KEYS['sword-slash'], false);
+    }
     this.applySwordsmanSwordDamage(loadedRoom, liveObject);
   }
 
@@ -2789,7 +2797,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   private playSwordsmanAnimation(liveObject: LoadedRoomObject, animationKey: string): void {
-    if (!this.options.scene.anims.exists(animationKey)) {
+    if (!isAnimationSafelyPlayable(this.options.scene.anims, animationKey)) {
       return;
     }
 
