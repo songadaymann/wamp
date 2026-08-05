@@ -127,6 +127,9 @@ function compareAvatarChoices(left: PlayerAvatarChoice, right: PlayerAvatarChoic
 }
 
 function getChoiceRank(choice: PlayerAvatarChoice): number {
+  if (choice.avatarId === GAMEJEW_RED_PLAYER_AVATAR_ID) {
+    return -1;
+  }
   if (choice.avatarId === DEFAULT_PLAYER_AVATAR_ID) {
     return 0;
   }

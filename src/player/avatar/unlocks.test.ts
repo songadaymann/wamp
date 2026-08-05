@@ -24,5 +24,6 @@ describe('player avatar entitlement choices', () => {
       unlocked: true,
       selected: true,
     });
+    expect(choices[0]?.avatarId).toBe(GAMEJEW_RED_PLAYER_AVATAR_ID);
   });
 });
