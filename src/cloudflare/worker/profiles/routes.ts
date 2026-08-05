@@ -11,6 +11,7 @@ import {
 import { getRegisteredPlayerAvatarPack } from '../../../player/avatar/registry';
 import {
   getPlayerAvatarUnlockLevel,
+  isPlayerAvatarEntitlementGated,
   isPlayerAvatarUnlockedForLevel,
 } from '../../../player/avatar/unlocks';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
@@ -23,6 +24,7 @@ import { assertGeneratedOnlyDisplayNameChangeAllowed } from '../generatedUsers/l
 import { assertNotSchoolRestricted } from '../school/restrictions';
 import { loadPublicProgressionSummary } from '../progression/store';
 import { loadCryptopunkAvatarPackRow } from '../avatars/store';
+import { hasUserAvatarEntitlement } from '../avatars/entitlements';
 import {
   loadUserProfile,
   loadUserProfilePlaylists,
@@ -307,6 +309,13 @@ async function validateSelectedAvatarUpdate(
   const pack = getRegisteredPlayerAvatarPack(selectedAvatarId);
   if (!pack) {
     throw new HttpError(400, 'Selected avatar is not registered.');
+  }
+
+  if (isPlayerAvatarEntitlementGated(selectedAvatarId)) {
+    if (await hasUserAvatarEntitlement(env, userId, selectedAvatarId)) {
+      return selectedAvatarId;
+    }
+    throw new HttpError(403, 'That prize avatar is not unlocked for this account.');
   }
 
   const progression = await loadPublicProgressionSummary(env, userId);

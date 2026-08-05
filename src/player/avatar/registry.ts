@@ -20,6 +20,7 @@ import {
 
 export const DEFAULT_PLAYER_AVATAR_ID = 'default-player';
 export const PUNK_465_PLAYER_AVATAR_ID = 'punk-465';
+export const GAMEJEW_RED_PLAYER_AVATAR_ID = 'gamejew-red';
 
 export const PLAYER_COLOR_AVATAR_HEXES = [
   '091321',
@@ -184,6 +185,15 @@ const PUNK_465_PLAYER_PACK = createDefaultCompatibleAvatarPack({
   source: 'feat/punk-avatar-stage1-2026-03-30',
 });
 
+const GAMEJEW_RED_PLAYER_PACK = createDefaultCompatibleAvatarPack({
+  id: GAMEJEW_RED_PLAYER_AVATAR_ID,
+  label: 'GameJew Red',
+  kind: 'custom',
+  assetRoot: 'assets/player/gamejew-red',
+  atlasKeyRoot: 'player-gamejew-red',
+  source: 'Solo Room Game Jam 2026 prize',
+});
+
 const COLOR_PLAYER_PACKS = PLAYER_COLOR_AVATAR_HEXES.map((hex) =>
   createDefaultCompatibleAvatarPack({
     id: `color-${hex}`,
@@ -200,6 +210,7 @@ const PLAYER_AVATAR_PACKS = new Map<string, PlayerAvatarPackDefinition>(
   [
     DEFAULT_PLAYER_PACK,
     PUNK_465_PLAYER_PACK,
+    GAMEJEW_RED_PLAYER_PACK,
     ...COLOR_PLAYER_PACKS,
   ].map((pack) => [pack.id, pack]),
 );

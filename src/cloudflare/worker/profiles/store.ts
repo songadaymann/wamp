@@ -16,6 +16,7 @@ import type { ServerTiming } from '../core/serverTiming';
 import { HttpError } from '../core/http';
 import { findUserById, loadPublicUserProfileCourseCount, loadPublishedRoomsByCreator, loadUserStatsRow } from '../auth/store';
 import { loadPublicProgressionSummary } from '../progression/store';
+import { loadUserAvatarEntitlementIds } from '../avatars/entitlements';
 import { parseStoredSnapshot } from '../rooms/store';
 import { mapUserStatsRow } from '../runs/points';
 import { loadViewerRankedGlobalLeaderboardRow } from '../runs/leaderboards';
@@ -96,7 +97,12 @@ export async function loadUserProfile(
   const publishedRooms = await measure(timing, 'profile_rooms', () => buildPublishedRooms(env, publishedRoomRows));
   const stats = buildProfileStats(statsRow, rankedStatsRow, publishedRooms.length);
   const isSelf = viewerUserId === targetUserId;
-  const progression = await measure(timing, 'profile_progression', () => loadPublicProgressionSummary(env, targetUserId));
+  const [progression, entitledAvatarIds] = await Promise.all([
+    measure(timing, 'profile_progression', () => loadPublicProgressionSummary(env, targetUserId)),
+    isSelf
+      ? measure(timing, 'profile_avatar_entitlements', () => loadUserAvatarEntitlementIds(env, targetUserId))
+      : Promise.resolve(new Set<string>()),
+  ]);
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
 
   return {
@@ -107,7 +113,11 @@ export async function loadUserProfile(
     avatarUrl: user.avatarUrl ?? null,
     bio: user.bio ?? null,
     selectedAvatarId,
-    avatarChoices: listPlayerAvatarChoicesForLevel(progression.player.level, selectedAvatarId),
+    avatarChoices: listPlayerAvatarChoicesForLevel(
+      progression.player.level,
+      selectedAvatarId,
+      entitledAvatarIds,
+    ),
     isSelf,
     canEdit: isSelf,
     stats,
@@ -127,12 +137,15 @@ export async function loadUserProfileSummary(
   const user = await measure(timing, 'profile_user', () => findUserById(env, targetUserId));
   if (!user) return null;
 
-  const [statsRow, rankedStatsRow, publishedRoomCount, publishedCourseCount, progression] = await Promise.all([
+  const [statsRow, rankedStatsRow, publishedRoomCount, publishedCourseCount, progression, entitledAvatarIds] = await Promise.all([
     measure(timing, 'profile_stats', () => loadUserStatsRow(env, targetUserId)),
     measure(timing, 'profile_rank', () => loadViewerRankedGlobalLeaderboardRow(env, targetUserId)),
     measure(timing, 'profile_room_count', () => loadPublishedPlayableCountForBuilder(env, targetUserId)),
     measure(timing, 'profile_course_count', () => loadPublicUserProfileCourseCount(env, targetUserId)),
     measure(timing, 'profile_progression', () => loadPublicProgressionSummary(env, targetUserId)),
+    viewerUserId === targetUserId
+      ? measure(timing, 'profile_avatar_entitlements', () => loadUserAvatarEntitlementIds(env, targetUserId))
+      : Promise.resolve(new Set<string>()),
   ]);
   const isSelf = viewerUserId === targetUserId;
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
@@ -144,7 +157,11 @@ export async function loadUserProfileSummary(
     avatarUrl: user.avatarUrl ?? null,
     bio: user.bio ?? null,
     selectedAvatarId,
-    avatarChoices: listPlayerAvatarChoicesForLevel(progression.player.level, selectedAvatarId),
+    avatarChoices: listPlayerAvatarChoicesForLevel(
+      progression.player.level,
+      selectedAvatarId,
+      entitledAvatarIds,
+    ),
     isSelf,
     canEdit: isSelf,
     stats: buildProfileStats(statsRow, rankedStatsRow, publishedRoomCount),

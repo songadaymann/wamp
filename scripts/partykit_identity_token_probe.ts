@@ -92,6 +92,24 @@ async function main(): Promise<void> {
   const issuedClaims = await verifyPartykitIdentityToken(issuedBody.token, secret);
   assert(issuedClaims?.userId === identity.userId, 'Worker-issued token should verify');
 
+  const prizeSpoof = await handlePresenceRequest(
+    new Request('https://api.example.test/api/presence/identity-token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ identity: { ...identity, avatarId: 'gamejew-red' } }),
+    }),
+    new URL('https://api.example.test/api/presence/identity-token'),
+    { PARTYKIT_IDENTITY_TOKEN_SECRET: secret } as Env
+  );
+  assert(prizeSpoof.ok, `Guest prize-avatar token request should fall back, got ${prizeSpoof.status}`);
+  const prizeSpoofBody = (await prizeSpoof.json()) as { token?: string };
+  assert(typeof prizeSpoofBody.token === 'string', 'Guest fallback response should return a token');
+  const prizeSpoofClaims = await verifyPartykitIdentityToken(prizeSpoofBody.token, secret);
+  assert(
+    prizeSpoofClaims?.avatarId === 'default-player',
+    'Guests should not receive signed presence for the prize avatar'
+  );
+
   console.log('PartyKit identity token probe passed.');
 }
 

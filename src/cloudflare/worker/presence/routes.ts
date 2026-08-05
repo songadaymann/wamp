@@ -8,9 +8,15 @@ import {
   type PartyKitIdentityTokenIssueResponse,
   type PartyKitIdentityTokenSource,
 } from '../../../presence/identityToken';
+import { DEFAULT_PLAYER_AVATAR_ID } from '../../../player/avatar/registry';
+import {
+  isPlayerAvatarEntitlementGated,
+  resolveSelectablePlayerAvatarId,
+} from '../../../player/avatar/unlocks';
 import { loadOptionalRequestAuth } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
+import { hasUserAvatarEntitlement } from '../avatars/entitlements';
 
 const MAX_IDENTITY_TOKEN_REQUEST_BYTES = 4096;
 
@@ -39,7 +45,7 @@ async function handlePresenceIdentityTokenIssue(
     maxBytes: MAX_IDENTITY_TOKEN_REQUEST_BYTES,
   });
   const auth = await loadOptionalRequestAuth(env, request);
-  const { identity, source } = resolveIssueIdentity(body, auth?.user ?? null);
+  const { identity, source } = await resolveIssueIdentity(body, auth?.user ?? null, env);
   const { token, claims } = await createPartykitIdentityToken(identity, source, signingSecret.secret);
   const response: PartyKitIdentityTokenIssueResponse = {
     token,
@@ -51,18 +57,24 @@ async function handlePresenceIdentityTokenIssue(
   return jsonResponse(request, response);
 }
 
-function resolveIssueIdentity(
+async function resolveIssueIdentity(
   body: PartyKitIdentityTokenIssueRequestBody,
-  authUser: { id: string; displayName: string } | null
-): { identity: PartyKitIdentity; source: PartyKitIdentityTokenSource } {
+  authUser: { id: string; displayName: string; selectedAvatarId?: string | null } | null,
+  env: Env,
+): Promise<{ identity: PartyKitIdentity; source: PartyKitIdentityTokenSource }> {
   const bodyIdentity = body.identity ?? {};
   const requestedAvatarId = bodyIdentity.avatarId ?? body.avatarId ?? 'default-player';
 
   if (authUser) {
+    const selectedAvatarId = resolveSelectablePlayerAvatarId(authUser.selectedAvatarId);
+    const avatarId = isPlayerAvatarEntitlementGated(selectedAvatarId)
+      && !await hasUserAvatarEntitlement(env, authUser.id, selectedAvatarId)
+      ? DEFAULT_PLAYER_AVATAR_ID
+      : selectedAvatarId;
     const identity = normalizePartykitAuthIdentity({
       userId: authUser.id,
       displayName: authUser.displayName,
-      avatarId: requestedAvatarId,
+      avatarId,
     });
     if (!identity) {
       throw new HttpError(400, 'Authenticated presence identity is invalid.');
@@ -77,7 +89,10 @@ function resolveIssueIdentity(
   const identity = normalizePartykitGuestIdentity({
     userId: bodyIdentity.userId ?? body.userId,
     displayName: bodyIdentity.displayName ?? body.displayName,
-    avatarId: requestedAvatarId,
+    avatarId: typeof requestedAvatarId === 'string'
+      && isPlayerAvatarEntitlementGated(requestedAvatarId.trim())
+      ? DEFAULT_PLAYER_AVATAR_ID
+      : requestedAvatarId,
   });
   if (!identity) {
     throw new HttpError(400, 'Guest presence identity is invalid.');
