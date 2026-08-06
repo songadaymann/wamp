@@ -1320,6 +1320,7 @@ export class CourseEditorScene extends Phaser.Scene {
     } finally {
       this.loading = false;
       this.renderUi();
+      hideBusyOverlay();
     }
   }
 
