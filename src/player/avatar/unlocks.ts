@@ -5,6 +5,7 @@ import {
 } from '../../avatars/model';
 import {
   DEFAULT_PLAYER_AVATAR_ID,
+  GAMEJEW_RED_PLAYER_AVATAR_ID,
   PUNK_465_PLAYER_AVATAR_ID,
   getRegisteredPlayerAvatarPack,
   listRegisteredPlayerAvatarPacks,
@@ -32,6 +33,14 @@ export const PLAYER_LEVEL_AVATAR_UNLOCKS: readonly PlayerAvatarUnlockRule[] = [
 const AVATAR_UNLOCK_LEVEL_BY_ID = new Map<PlayerAvatarId, number>(
   PLAYER_LEVEL_AVATAR_UNLOCKS.map((rule) => [rule.avatarId, rule.unlockLevel]),
 );
+
+const ENTITLEMENT_GATED_AVATAR_IDS = new Set<PlayerAvatarId>([
+  GAMEJEW_RED_PLAYER_AVATAR_ID,
+]);
+
+export function isPlayerAvatarEntitlementGated(avatarId: PlayerAvatarId): boolean {
+  return ENTITLEMENT_GATED_AVATAR_IDS.has(avatarId);
+}
 
 export function resolveSelectablePlayerAvatarId(
   avatarId: PlayerAvatarId | null | undefined,
@@ -75,14 +84,19 @@ export function isPlayerAvatarUnlockedForLevel(
 export function listPlayerAvatarChoicesForLevel(
   playerLevel: number,
   selectedAvatarId: PlayerAvatarId | null | undefined,
+  entitledAvatarIds: Iterable<PlayerAvatarId> = [],
 ): PlayerAvatarChoice[] {
   const normalizedLevel = normalizePlayerLevel(playerLevel);
   const selectedId = resolveSelectablePlayerAvatarId(selectedAvatarId);
+  const entitlements = new Set(entitledAvatarIds);
 
   return listRegisteredPlayerAvatarPacks()
+    .filter((pack) => !isPlayerAvatarEntitlementGated(pack.id) || entitlements.has(pack.id))
     .map((pack) => {
       const unlockLevel = getPlayerAvatarUnlockLevel(pack.id);
-      const unlocked = isPlayerAvatarUnlockedForLevel(pack.id, normalizedLevel);
+      const unlocked = isPlayerAvatarEntitlementGated(pack.id)
+        ? entitlements.has(pack.id)
+        : isPlayerAvatarUnlockedForLevel(pack.id, normalizedLevel);
       return {
         avatarId: pack.id,
         label: pack.label,
@@ -113,6 +127,9 @@ function compareAvatarChoices(left: PlayerAvatarChoice, right: PlayerAvatarChoic
 }
 
 function getChoiceRank(choice: PlayerAvatarChoice): number {
+  if (choice.avatarId === GAMEJEW_RED_PLAYER_AVATAR_ID) {
+    return -1;
+  }
   if (choice.avatarId === DEFAULT_PLAYER_AVATAR_ID) {
     return 0;
   }

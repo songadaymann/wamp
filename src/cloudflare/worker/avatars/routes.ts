@@ -20,8 +20,10 @@ import {
 import { loadOrBackfillUserProgress } from '../progression/store';
 import {
   getPlayerAvatarUnlockLevel,
+  isPlayerAvatarEntitlementGated,
   isPlayerAvatarUnlockedForLevel,
 } from '../../../player/avatar/unlocks';
+import { hasUserAvatarEntitlement } from './entitlements';
 import {
   loadCryptopunkAvatarPackRow,
   mapCryptopunkAvatarPackRow,
@@ -194,6 +196,13 @@ async function assertAvatarCanBeSelected(
   const registeredPack = getRegisteredPlayerAvatarPack(selectedAvatarId);
   if (!registeredPack) {
     throw new HttpError(400, 'Unknown avatar id.');
+  }
+
+  if (isPlayerAvatarEntitlementGated(selectedAvatarId)) {
+    if (await hasUserAvatarEntitlement(env, auth.user.id, selectedAvatarId)) {
+      return;
+    }
+    throw new HttpError(403, 'That prize avatar is not unlocked for this account.');
   }
 
   const playerLevel = registeredPack.kind === 'cryptopunk'
