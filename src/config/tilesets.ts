@@ -517,10 +517,10 @@ const TEXTGLOW_EMISSION = Object.freeze({
 const CYBERCITY_LIGHT_EMISSION = Object.freeze({
   offsetY: 0,
   offsetX: 0,
-  revealRadiusPx: 16,
-  glowRadiusPx: 16,
+  revealRadiusPx: 18,
+  glowRadiusPx: 12,
   glowColor: 0xffffff,
-  glowAlpha: 0.25,
+  glowAlpha: 0.1,
 } satisfies TileLightEmissionConfig);
 
 const CAVE_LANTERN_LIGHT_INDICES = [62, 64];
@@ -534,7 +534,7 @@ const TEXTGLOW_INDICES = [
   32, 33, 34, 35, 36, 37, 38, 39,
   40, 41, 42, 43,
 ];
-const CYBERCITY_LIGHT_INDICES = [2,3,7,32,49,50,51];
+const CYBERCITY_LIGHT_INDICES = [2,3,7,49,50,51];
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
