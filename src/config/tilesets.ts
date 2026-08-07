@@ -101,7 +101,7 @@ const TOP_DECOR_INDICES_FOREST = [
   25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
   36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
   48, 49, 50, 51, 52, 53, 54, 55,
-  60, 63, 64, 65, 66, 67, 58, 69, 70, 71,
+  60, 63, 64, 65, 66, 67, 68, 69, 70, 71,
 ];
 const TOP_DECOR_INDICES_SNOW = [
   13, 14, 15, 18,
@@ -234,6 +234,21 @@ const DECO_ONLY_INDICES_MICROMONO = [
   128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
   144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
   160, 161, 162, 163, 164, 165, 166, 167,
+];
+const TOP_DECOR_INDICES_CYBERCITY = [
+  9, 11,
+  12, 14, 15, 16, 17, 19, 20, 21, 23,
+  25, 26, 27, 28, 29, 30, 31, 33, 34, 35,
+  36, 37, 38, 39, 40, 41, 42, 43,
+  48, 49, 50, 51, 52, 53, 54, 55,
+  60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
+];
+const DECO_ONLY_INDICES_CYBERCITY = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 10,
+  13, 18, 22,
+  24, 32,
+  44, 45, 46, 47,
+  56, 57, 58, 59,
 ];
 
 const DEFAULT_TILESET_UI_THEME: TilesetUiThemeConfig = {
@@ -490,9 +505,36 @@ const GOTHIC_GARGOYLE_TILE_LIGHT_EMISSION = Object.freeze({
   flicker: GARGOYLE_LIGHT_FLICKER,
 } satisfies TileLightEmissionConfig);
 
+const TEXTGLOW_EMISSION = Object.freeze({
+  offsetY: 0,
+  offsetX: 0,
+  revealRadiusPx: 16,
+  glowRadiusPx: 16,
+  glowColor: 0x6df7c1,
+  glowAlpha: 0.25,
+} satisfies TileLightEmissionConfig);
+
+const CYBERCITY_LIGHT_EMISSION = Object.freeze({
+  offsetY: 0,
+  offsetX: 0,
+  revealRadiusPx: 16,
+  glowRadiusPx: 16,
+  glowColor: 0xffffff,
+  glowAlpha: 0.25,
+} satisfies TileLightEmissionConfig);
+
 const CAVE_LANTERN_LIGHT_INDICES = [62, 64];
 const GOTHIC_CANDLE_LIGHT_INDICES = [59];
 const GOTHIC_GARGOYLE_LIGHT_INDICES = [65];
+const TEXTGLOW_INDICES = [
+  0, 1, 2, 3, 4, 5, 6, 7,
+  8, 9, 10, 11, 12, 13, 14, 15,
+  16, 17, 18, 19, 20, 21, 22, 23,
+  24, 25, 26, 27, 28, 29, 30, 31,
+  32, 33, 34, 35, 36, 37, 38, 39,
+  40, 41, 42, 43,
+];
+const CYBERCITY_LIGHT_INDICES = [2,3,7,32];
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
@@ -849,6 +891,55 @@ export const TILESETS: TilesetConfig[] = [
       accentWarm: 0xfbd45b,
       accentHot: 0xff7865,
       accentAlt: 0x86d54a,
+    },
+  },
+  {
+    key: 'cybertext',
+    name: 'Cyber Text',
+    path: 'assets/tilesets/CyberText.png',
+    imageWidth: 128,
+    imageHeight: 96,
+    columns: 8,
+    rows: 6,
+    tileCount: 48,
+    firstGid: 1585,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_TEXT, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_TEXT, NO_COLLISION_PROFILE),
+    },
+    editorPaletteBackgroundColor: '#f3eee2',
+    lightEmissionProfiles: {
+      ...createTilesetLightEmissionProfiles(TEXTGLOW_INDICES, TEXTGLOW_EMISSION),
+    },
+    uiTheme: {
+      accentCool: 0x5ca9ff,
+      accentWarm: 0xfbd45b,
+      accentHot: 0xff7865,
+      accentAlt: 0x86d54a,
+    },
+  },
+  {
+    key: 'cybercity yellow',
+    name: 'Cybercity Yellow',
+    path: 'assets/tilesets/cybercity_yellow.png',
+    imageWidth: 192,
+    imageHeight: 96,
+    columns: 12,
+    rows: 6,
+    tileCount: 72,
+    firstGid: 1633,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_CYBERCITY, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_CYBERCITY, NO_COLLISION_PROFILE),
+    },
+    lightEmissionProfiles: {
+      ...createTilesetLightEmissionProfiles(CYBERCITY_LIGHT_INDICES, CYBERCITY_LIGHT_EMISSION),
+    },
+    uiTheme: {
+      accentCool: 0x84b95d,
+      accentWarm: 0xcd9158,
+      accentHot: 0xe76f50,
+      accentAlt: 0xd8b373,
     },
   }
 ];
