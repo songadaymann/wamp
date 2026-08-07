@@ -534,7 +534,7 @@ const TEXTGLOW_INDICES = [
   32, 33, 34, 35, 36, 37, 38, 39,
   40, 41, 42, 43,
 ];
-const CYBERCITY_LIGHT_INDICES = [2,3,7,32];
+const CYBERCITY_LIGHT_INDICES = [2,3,7,32,49,50,51];
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
