@@ -236,15 +236,16 @@ const DECO_ONLY_INDICES_MICROMONO = [
   160, 161, 162, 163, 164, 165, 166, 167,
 ];
 const TOP_DECOR_INDICES_CYBERCITY = [
-  9, 11,
+  11,
   12, 14, 15, 16, 17, 19, 20, 21, 23,
   25, 26, 27, 28, 29, 30, 31, 33, 34, 35,
   36, 37, 38, 39, 40, 41, 42, 43,
   48, 49, 50, 51, 52, 53, 54, 55,
   60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
+  72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
 ];
 const DECO_ONLY_INDICES_CYBERCITY = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 10,
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
   13, 18, 22,
   24, 32,
   44, 45, 46, 47,
@@ -534,7 +535,7 @@ const TEXTGLOW_INDICES = [
   32, 33, 34, 35, 36, 37, 38, 39,
   40, 41, 42, 43,
 ];
-const CYBERCITY_LIGHT_INDICES = [2,3,7,49,50,51];
+const CYBERCITY_LIGHT_INDICES = [2,3,49,50,51,73, 74, 75, 76];
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
@@ -923,10 +924,10 @@ export const TILESETS: TilesetConfig[] = [
     name: 'Cybercity Yellow',
     path: 'assets/tilesets/cybercity_yellow.png',
     imageWidth: 192,
-    imageHeight: 96,
+    imageHeight: 112,
     columns: 12,
-    rows: 6,
-    tileCount: 72,
+    rows: 7,
+    tileCount: 84,
     firstGid: 1633,
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_CYBERCITY, DECORATED_TOP_PROFILE),
