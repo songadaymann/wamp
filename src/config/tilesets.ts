@@ -897,7 +897,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'cybertext',
     name: 'Cyber Text',
-    path: 'assets/tilesets/CyberText.png',
+    path: 'assets/tilesets/CyberText.png?v=2026-08-08-cybertext-refresh',
     imageWidth: 128,
     imageHeight: 96,
     columns: 8,
@@ -922,7 +922,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'cybercity yellow',
     name: 'Cybercity Yellow',
-    path: 'assets/tilesets/cybercity_yellow.png',
+    path: 'assets/tilesets/cybercity_yellow.png?v=2026-08-08-expanded-cybercity',
     imageWidth: 192,
     imageHeight: 112,
     columns: 12,
