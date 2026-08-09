@@ -103,6 +103,28 @@ describe('drawRoomTileLayerRowsToContext', () => {
     expect(drawImage).toHaveBeenCalledTimes(1);
   });
 
+  it('treats omitted overview rows as empty tiles', () => {
+    const room = {
+      tileData: {
+        background: createTileLayer(),
+        terrain: createTileLayer(),
+        foreground: [],
+      },
+      customTiles: [],
+    } as unknown as RoomSnapshot;
+
+    expect(() => drawRoomTileLayerRowsToContext(
+      scene as never,
+      context,
+      room,
+      16,
+      'foreground',
+      0,
+      1,
+    )).not.toThrow();
+    expect(drawImage).not.toHaveBeenCalled();
+  });
+
   it('skips a missing custom sprite before config or texture creation in resident-only mode', () => {
     const missingScene = {
       textures: {
