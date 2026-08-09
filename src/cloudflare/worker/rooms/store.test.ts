@@ -53,7 +53,7 @@ describe('compact room reads', () => {
     expect(overview.background).toBe('grassland');
     expect(overview.tileData.background[0][0]).toBe(1);
     expect(overview.tileData.terrain[1][1]).toBe(2);
-    expect(overview.tileData.foreground.flat().every((tile) => tile === -1)).toBe(true);
+    expect(overview.tileData.foreground).toEqual([]);
     expect(overview.goalIntroText).toBeNull();
     expect(overview.placedObjects).toEqual([]);
     expect(overview.customSprites).toEqual([]);

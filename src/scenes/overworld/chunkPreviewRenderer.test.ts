@@ -327,6 +327,75 @@ describe('sparse overworld chunk preview textures', () => {
     }
   });
 
+  it('keeps sparse overview snapshots on lightweight scheduled preview layers', () => {
+    const scene = createScene();
+    const coordinator = new FrameWorkCoordinator();
+    const renderer = new OverworldChunkPreviewRenderer({
+      scene: scene.value,
+      getPreviewTileSize: () => 4,
+      getRoomOrigin: (coordinates) => ({
+        x: coordinates.x * ROOM_PX_WIDTH,
+        y: coordinates.y * ROOM_PX_HEIGHT,
+      }),
+      isFullRoomLoaded: () => false,
+      workScheduler: coordinator,
+      shouldScheduleWork: () => true,
+      createCanvas: scene.createDetachedCanvas,
+    });
+    const overviewRoom = room(5, 3);
+    overviewRoom.tileData.foreground = [];
+
+    renderer.renderChunkPreviews([overviewRoom]);
+    drainCoordinator(coordinator);
+
+    expect(mocks.drawRoomTileLayerRowsToContext).toHaveBeenCalled();
+    expect(new Set(
+      mocks.drawRoomTileLayerRowsToContext.mock.calls.map((call) => call[4]),
+    )).toEqual(new Set(['background', 'terrain']));
+    expect(mocks.drawRoomObjectRangeForLayerToContext).not.toHaveBeenCalled();
+    expect(scene.registeredCanvasUploads).toHaveLength(1);
+    expect(renderer.getPendingTextureBuildCount()).toBe(0);
+  });
+
+  it('supersedes a prepared overview build when matching full preview data arrives', () => {
+    const scene = createScene();
+    const coordinator = new FrameWorkCoordinator();
+    const renderer = new OverworldChunkPreviewRenderer({
+      scene: scene.value,
+      getPreviewTileSize: () => 4,
+      getRoomOrigin: (coordinates) => ({
+        x: coordinates.x * ROOM_PX_WIDTH,
+        y: coordinates.y * ROOM_PX_HEIGHT,
+      }),
+      isFullRoomLoaded: () => false,
+      workScheduler: coordinator,
+      shouldScheduleWork: () => true,
+      createCanvas: scene.createDetachedCanvas,
+    });
+    const stableRoom = room(2, 3);
+    const overviewRoom = room(5, 3);
+    overviewRoom.tileData.foreground = [];
+    const fullRoom = room(5, 3);
+
+    renderer.renderChunkPreviews([stableRoom, overviewRoom]);
+    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 0.25 });
+    const overviewCanvas = scene.detachedCanvasBuilds[0].canvas;
+
+    renderer.mergeChunkPreviews([fullRoom]);
+
+    expect(coordinator.getDiagnostics().cancelledJobs).toBeGreaterThan(0);
+    expect(overviewCanvas).toMatchObject({ width: 0, height: 0 });
+    drainCoordinator(coordinator);
+
+    const foregroundCalls = mocks.drawRoomTileLayerRowsToContext.mock.calls.filter(
+      (call) => call[4] === 'foreground',
+    );
+    expect(foregroundCalls.some((call) => call[2] === fullRoom)).toBe(true);
+    expect(foregroundCalls.some((call) => call[2] === overviewRoom)).toBe(false);
+    expect(scene.registeredCanvasUploads).toHaveLength(1);
+    expect(renderer.getPendingTextureBuildCount()).toBe(0);
+  });
+
   it('preserves custom-background loading for immediate Browse previews', () => {
     const scene = createScene();
     const renderer = new OverworldChunkPreviewRenderer({

@@ -439,8 +439,10 @@ export function drawRoomTileLayerRowsToContext(
   const firstRow = Phaser.Math.Clamp(Math.floor(startRow), 0, ROOM_HEIGHT);
   const lastRow = Phaser.Math.Clamp(Math.ceil(endRow), firstRow, ROOM_HEIGHT);
   for (let y = firstRow; y < lastRow; y += 1) {
+    const row = room.tileData[layerName]?.[y];
+    if (!row) continue;
     for (let x = 0; x < ROOM_WIDTH; x += 1) {
-      const tileValue = room.tileData[layerName][y][x];
+      const tileValue = row[x] ?? -1;
       const { gid, flipX, flipY } = decodeTileDataValue(tileValue);
       if (gid <= 0) continue;
 

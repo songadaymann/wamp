@@ -639,8 +639,8 @@ export class OverworldChunkPreviewRenderer {
       {
         offsetX: (localRoomX - crop.minLocalRoomX) * ROOM_WIDTH * previewTileSize,
         offsetY: (localRoomY - crop.minLocalRoomY) * ROOM_HEIGHT * previewTileSize,
-        includeObjects: this.shouldDrawDetailedRoomPreviews(previewTileSize),
-        includedLayers: this.getPreviewLayers(previewTileSize),
+        includeObjects: this.shouldDrawDetailedRoomPreview(room, previewTileSize),
+        includedLayers: this.getPreviewLayers(room, previewTileSize),
         showConstructionOverlay: room.status !== 'published',
         constructionLabel: 'BUILDING',
         skipCustomBackgroundImages: !this.shouldDrawCustomBackgroundImages(previewTileSize),
@@ -675,6 +675,7 @@ export class OverworldChunkPreviewRenderer {
           room.version,
           room.updatedAt,
           room.status,
+          `preview-data:${hasDetailedPreviewTileData(room) ? 'detailed' : 'lightweight'}`,
           `background-resident:${customBackgroundResident}`,
           `sprites-resident:${customSpriteResidency}`,
         ].join(':');
@@ -875,7 +876,9 @@ export class OverworldChunkPreviewRenderer {
     if (!cursor) return;
 
     const room = request.rooms[cursor.roomIndex] ?? null;
-    const layers = this.getPreviewLayers(request.previewTileSize) ?? LAYER_NAMES;
+    const layers = room
+      ? this.getPreviewLayers(room, request.previewTileSize) ?? LAYER_NAMES
+      : LIGHTWEIGHT_PREVIEW_LAYERS;
     const layer = layers[cursor.layerIndex] ?? null;
     switch (cursor.stage) {
       case 'prepare-canvas':
@@ -1095,7 +1098,7 @@ export class OverworldChunkPreviewRenderer {
     cursor.nextRow = endRow;
     if (endRow < ROOM_HEIGHT) return;
     if (
-      this.shouldDrawDetailedRoomPreviews(request.previewTileSize)
+      this.shouldDrawDetailedRoomPreview(room, request.previewTileSize)
       && room.placedObjects.length > 0
     ) {
       cursor.stage = 'layer-objects';
@@ -1163,7 +1166,7 @@ export class OverworldChunkPreviewRenderer {
     room: RoomSnapshot,
   ): void {
     const cursor = request.scheduledCursor!;
-    const layers = this.getPreviewLayers(request.previewTileSize) ?? LAYER_NAMES;
+    const layers = this.getPreviewLayers(room, request.previewTileSize) ?? LAYER_NAMES;
     cursor.layerIndex += 1;
     cursor.nextRow = 0;
     cursor.nextObjectIndex = 0;
@@ -1433,8 +1436,19 @@ export class OverworldChunkPreviewRenderer {
     return previewTileSize >= CUSTOM_BACKGROUND_PREVIEW_TILE_SIZE;
   }
 
-  private getPreviewLayers(previewTileSize: number): LayerName[] | undefined {
+  private shouldDrawDetailedRoomPreview(
+    room: RoomSnapshot,
+    previewTileSize: number,
+  ): boolean {
     return this.shouldDrawDetailedRoomPreviews(previewTileSize)
+      && hasDetailedPreviewTileData(room);
+  }
+
+  private getPreviewLayers(
+    room: RoomSnapshot,
+    previewTileSize: number,
+  ): LayerName[] | undefined {
+    return this.shouldDrawDetailedRoomPreview(room, previewTileSize)
       ? undefined
       : LIGHTWEIGHT_PREVIEW_LAYERS;
   }
@@ -1472,6 +1486,12 @@ function sanitizeChunkKey(value: string): string {
 function getCustomBackgroundId(room: RoomSnapshot): string | null {
   const resolved = resolveRoomBackground(room.background);
   return resolved.kind === 'custom' ? resolved.id : null;
+}
+
+function hasDetailedPreviewTileData(room: RoomSnapshot): boolean {
+  return LAYER_NAMES.every(
+    (layerName) => room.tileData[layerName]?.length >= ROOM_HEIGHT,
+  );
 }
 
 function compareRoomSnapshots(a: RoomSnapshot, b: RoomSnapshot): number {
