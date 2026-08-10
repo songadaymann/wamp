@@ -16,6 +16,16 @@ export interface TilesetConfig {
   editorTileMetadata?: Partial<Record<number, EditorTileMetadata>>;
   editorPaletteBackgroundColor?: string;
   uiTheme?: TilesetUiThemeConfig;
+  /** Optional curated structural recipes for agent-authored terrain. */
+  authoringBuildStyles?: TilesetAuthoringBuildStyleDefinition[];
+}
+
+export interface TilesetAuthoringBuildStyleDefinition {
+  id: string;
+  label: string;
+  description: string;
+  surfaceLocalIndices: number[];
+  fillLocalIndices: number[];
 }
 
 export interface EditorTileMetadata {
@@ -554,6 +564,15 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
     },
+    authoringBuildStyles: [
+      {
+        id: 'forest_flat',
+        label: 'Forest Flat',
+        description: 'Grass-topped dirt platforms that match the common forest ground language.',
+        surfaceLocalIndices: [14, 15, 16, 17],
+        fillLocalIndices: [27, 28, 39, 40],
+      },
+    ],
     uiTheme: DEFAULT_TILESET_UI_THEME,
   },
   {
@@ -570,6 +589,15 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_FOREST, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_FOREST, NO_COLLISION_PROFILE),
     },
+    authoringBuildStyles: [
+      {
+        id: 'desert_flat',
+        label: 'Desert Flat',
+        description: 'Sandstone platforms with the standard desert top edge and fill blocks.',
+        surfaceLocalIndices: [14, 15, 16, 17],
+        fillLocalIndices: [27, 28, 39, 40],
+      },
+    ],
     uiTheme: {
       accentCool: 0x62c8ad,
       accentWarm: 0xf0c06b,
@@ -597,6 +625,15 @@ export const TILESETS: TilesetConfig[] = [
         CAVE_LANTERN_TILE_LIGHT_EMISSION,
       ),
     },
+    authoringBuildStyles: [
+      {
+        id: 'cave_flat',
+        label: 'Cave Flat',
+        description: 'Rocky cave platforms that use the shared standard top edge and fill blocks.',
+        surfaceLocalIndices: [14, 15, 16, 17],
+        fillLocalIndices: [27, 28, 39, 40],
+      },
+    ],
     uiTheme: {
       accentCool: 0x84b95d,
       accentWarm: 0xcd9158,
@@ -618,6 +655,15 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_LAVA, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_LAVA, NO_COLLISION_PROFILE),
     },
+    authoringBuildStyles: [
+      {
+        id: 'lava_shelf',
+        label: 'Lava Shelf',
+        description: 'Jagged lava shelf pieces for readable floating ledges and thicker lava rock platforms.',
+        surfaceLocalIndices: [31, 32, 33, 34, 35],
+        fillLocalIndices: [46, 47, 48, 49, 50],
+      },
+    ],
     uiTheme: {
       accentCool: 0xce6bff,
       accentWarm: 0xffb15a,
@@ -639,6 +685,15 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_SNOW, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_SNOW, NO_COLLISION_PROFILE),
     },
+    authoringBuildStyles: [
+      {
+        id: 'snow_flat',
+        label: 'Snow Flat',
+        description: 'Snowy top edge with cold stone fill blocks for standard snowy ground.',
+        surfaceLocalIndices: [13, 14, 15, 18],
+        fillLocalIndices: [24, 25, 36, 37],
+      },
+    ],
     uiTheme: {
       accentCool: 0x7fd4ff,
       accentWarm: 0xdfeaff,
@@ -660,6 +715,15 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_STANDARD, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_WATER, NO_COLLISION_PROFILE),
     },
+    authoringBuildStyles: [
+      {
+        id: 'water_flat',
+        label: 'Water Flat',
+        description: 'Water-theme rock platforms with the shared grassy top edge and fill blocks.',
+        surfaceLocalIndices: [14, 15, 16, 17],
+        fillLocalIndices: [27, 28, 39, 40],
+      },
+    ],
     uiTheme: {
       accentCool: 0x60d7ff,
       accentWarm: 0x91f0d0,
@@ -677,6 +741,15 @@ export const TILESETS: TilesetConfig[] = [
     rows: 4,
     tileCount: 32,
     firstGid: 460,
+    authoringBuildStyles: [
+      {
+        id: 'smb_ground',
+        label: 'SMB Ground',
+        description: 'Classic side-scroller ground tiles for simple flat SMB-style platforms.',
+        surfaceLocalIndices: [24, 25, 26, 27],
+        fillLocalIndices: [16, 17, 18, 19],
+      },
+    ],
     uiTheme: {
       accentCool: 0x5ca9ff,
       accentWarm: 0xfbd45b,

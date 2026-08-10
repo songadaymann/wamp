@@ -96,8 +96,12 @@ import {
 } from './worker/userSettings/routes';
 import {
   getAgentTilesetCatalogResponse,
-  renderAgentTilesetMarkdown,
 } from '../agentBuilder/tilesetCatalog';
+import {
+  AUTHORING_CATALOG_CACHE_CONTROL,
+  getAuthoringCatalog,
+  renderAuthoringDocuments,
+} from '../agentBuilder/authoringCatalog';
 import { handleRoomRequest } from './worker/rooms/routes';
 import {
   handleClaimableFrontierRoomsRequest,
@@ -131,6 +135,14 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
         debugMagicLinks: env.AUTH_DEBUG_MAGIC_LINKS === '1',
         testResetEnabled: env.ENABLE_TEST_RESET === '1',
       },
+    }),
+  },
+  {
+    methods: ['GET'],
+    pattern: '/api/authoring/catalog',
+    auth: 'public',
+    handler: ({ request }) => jsonResponse(request, getAuthoringCatalog(), {
+      headers: { 'Cache-Control': AUTHORING_CATALOG_CACHE_CONTROL },
     }),
   },
   {
@@ -227,11 +239,17 @@ export default {
       return env.ASSETS.fetch(new Request(new URL(assetAlias, request.url), request));
     }
 
-    if (url.pathname === '/agent-tilesets.md' && request.method === 'GET') {
-      return new Response(renderAgentTilesetMarkdown(), {
+    if (
+      (url.pathname === '/agent-tilesets.md' || url.pathname === '/agent-room-authoring.md')
+      && request.method === 'GET'
+    ) {
+      const documents = renderAuthoringDocuments();
+      const filename = url.pathname.slice(1) as keyof typeof documents;
+      return new Response(documents[filename], {
         status: 200,
         headers: {
           'Content-Type': 'text/markdown; charset=utf-8',
+          'Cache-Control': AUTHORING_CATALOG_CACHE_CONTROL,
           ...corsHeaders(request),
         },
       });
@@ -361,7 +379,9 @@ export default {
       }
 
       if (url.pathname === '/api/tilesets' && request.method === 'GET') {
-        return jsonResponse(request, getAgentTilesetCatalogResponse());
+        return jsonResponse(request, getAgentTilesetCatalogResponse(), {
+          headers: { 'Cache-Control': AUTHORING_CATALOG_CACHE_CONTROL },
+        });
       }
 
       if (url.pathname === '/api/playlists/me' && request.method === 'GET') {
