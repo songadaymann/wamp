@@ -32,6 +32,10 @@ import {
   syncExpandedRoomVersionFromLegacyCourse,
 } from '../expandedRooms/writeStore';
 import { resolveRoomCapabilities } from '../progression/trustCaps';
+import {
+  resolveCourseRoomRefsForActor,
+  type CourseRoomVersionPolicy,
+} from './roomRefs';
 
 export async function loadCourseRecord(
   env: Env,
@@ -223,6 +227,7 @@ export async function createCourseDraft(
     allowSingleRoomDraft: true,
     requirePublishedGoal: false,
     expandedRoomCellLimit,
+    roomVersionPolicy: 'pinned',
   });
   const createdAt = normalized.createdAt || now;
   const nextRecord: CourseRecord = {
@@ -303,6 +308,7 @@ export async function saveCourseDraft(
       allowSingleRoomDraft: true,
       requirePublishedGoal: false,
       expandedRoomCellLimit,
+      roomVersionPolicy: 'pinned',
     }
   );
 
@@ -373,6 +379,7 @@ export async function publishCourse(
       allowSingleRoomDraft: false,
       requirePublishedGoal: true,
       expandedRoomCellLimit,
+      roomVersionPolicy: 'latest_published',
     }
   );
 
@@ -525,6 +532,7 @@ async function resolveValidatedCourseDraft(
     allowSingleRoomDraft: boolean;
     requirePublishedGoal: boolean;
     expandedRoomCellLimit: number;
+    roomVersionPolicy: CourseRoomVersionPolicy;
   }
 ): Promise<CourseSnapshot> {
   const roomRefs = draft.roomRefs;
@@ -551,23 +559,19 @@ async function resolveValidatedCourseDraft(
     throw new HttpError(400, 'Expanded room cells must stay in one connected cluster.');
   }
 
-  const resolvedRefs = sortCourseRoomRefsForStorage(await Promise.all(
-    roomRefs.map(async (roomRef) => {
-      const roomVersion = await loadPublishedRoomVersionForCourse(env, roomRef.roomId, roomRef.roomVersion);
-      if (!roomVersion.published_by_user_id) {
-        throw new HttpError(409, 'Only published rooms can be used in an expanded room.');
-      }
-      if (roomVersion.published_by_user_id !== actor.id) {
-        throw new HttpError(403, 'All expanded room cells must be published by the same creator.');
-      }
+  const resolvedRefs = await resolveCourseRoomRefsForActor(
+    roomRefs,
+    actor.id,
+    options.roomVersionPolicy,
+    async (roomId, requestedVersion) => {
+      const roomVersion = await loadPublishedRoomVersionForCourse(env, roomId, requestedVersion);
       return {
-        roomId: roomRef.roomId,
-        coordinates: { ...roomRef.coordinates },
-        roomVersion: roomVersion.version,
-        roomTitle: roomVersion.title ?? roomRef.roomTitle ?? null,
-      } satisfies CourseRoomRef;
-    })
-  ));
+        version: roomVersion.version,
+        title: roomVersion.title,
+        publishedByUserId: roomVersion.published_by_user_id,
+      };
+    },
+  );
 
   const nextGoal = normalizeCourseGoal(draft.goal);
   validateCourseMarkerBelongsToCourse(draft.startPoint, resolvedRefs, 'Start point');
@@ -594,10 +598,33 @@ async function resolveValidatedCourseDraft(
 async function loadPublishedRoomVersionForCourse(
   env: Env,
   roomId: string,
-  requestedVersion: number
+  requestedVersion: number | null
 ): Promise<RoomVersionRow> {
-  const row = await env.DB.prepare(
-    `
+  const row = requestedVersion === null
+    ? await env.DB.prepare(
+      `
+        SELECT
+          versions.version,
+          versions.snapshot_json,
+          versions.title,
+          versions.created_at,
+          versions.published_by_user_id,
+          versions.published_by_display_name,
+          versions.reverted_from_version,
+          versions.leaderboard_source_version
+        FROM room_versions versions
+        INNER JOIN rooms current_room
+          ON current_room.id = versions.room_id
+         AND versions.version = CAST(json_extract(current_room.published_json, '$.version') AS INTEGER)
+        WHERE versions.room_id = ?
+          AND current_room.published_json IS NOT NULL
+        LIMIT 1
+      `
+    )
+      .bind(roomId)
+      .first<RoomVersionRow & { reverted_from_version: number | null }>()
+    : await env.DB.prepare(
+      `
       SELECT
         version,
         snapshot_json,
@@ -612,12 +639,17 @@ async function loadPublishedRoomVersionForCourse(
         AND version = ?
       LIMIT 1
     `
-  )
-    .bind(roomId, requestedVersion)
-    .first<RoomVersionRow & { reverted_from_version: number | null }>();
+    )
+      .bind(roomId, requestedVersion)
+      .first<RoomVersionRow & { reverted_from_version: number | null }>();
 
   if (!row) {
-    throw new HttpError(404, `Room version ${roomId} v${requestedVersion} was not found.`);
+    throw new HttpError(
+      404,
+      requestedVersion === null
+        ? `Current published room ${roomId} was not found.`
+        : `Room version ${roomId} v${requestedVersion} was not found.`,
+    );
   }
 
   return row;
