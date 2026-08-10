@@ -1,0 +1,131 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import {
+  BACKGROUND_GROUPS,
+  GAME_OBJECTS,
+  TILESETS,
+} from '../config';
+import { ROOM_GOAL_TYPES } from '../goals/roomGoals';
+import type { Env } from '../cloudflare/worker/core/types';
+import worker from '../cloudflare/worker';
+import {
+  AUTHORING_CATALOG_CACHE_CONTROL,
+  getAuthoringCatalog,
+  renderAuthoringDocuments,
+} from './authoringCatalog';
+import { getAgentTilesetCatalogResponse } from './tilesetCatalog';
+import { ROOM_DRAFT_COMMAND_TYPES } from '../cloudflare/worker/rooms/commandCore';
+import { writeAuthoringDocuments } from './authoringDocumentsWriter';
+
+describe('authoring catalog', () => {
+  it('has one entry for every canonical built-in registry item', () => {
+    const catalog = getAuthoringCatalog();
+    expect(catalog.schemaVersion).toBe(1);
+    expect(catalog.tilesets.map((entry) => entry.key)).toEqual(TILESETS.map((entry) => entry.key));
+    expect(catalog.objects.map((entry) => entry.id)).toEqual(GAME_OBJECTS.map((entry) => entry.id));
+    expect(catalog.backgrounds.groups.map((entry) => entry.id)).toEqual(BACKGROUND_GROUPS.map((entry) => entry.id));
+    expect(catalog.goals.map((entry) => entry.type)).toEqual(ROOM_GOAL_TYPES);
+  });
+
+  it('exposes every tileset independently of optional build styles', () => {
+    const catalog = getAuthoringCatalog();
+    for (const entry of catalog.tilesets) {
+      expect(entry.assetPath).toBeTruthy();
+      expect(entry.tileCount).toBeGreaterThan(0);
+      expect(
+        entry.collisionLocalIndices.full.length
+        + entry.collisionLocalIndices.decoratedTop.length
+        + entry.collisionLocalIndices.none.length,
+      ).toBe(entry.tileCount);
+      expect(entry.disabledEditorLocalIndices.length).toBeLessThan(entry.tileCount);
+    }
+    expect(catalog.tilesets.find((entry) => entry.key === 'cybertext')?.assetPath).toContain('CyberText.png');
+    expect(catalog.tilesets.find((entry) => entry.key === 'cybercity yellow')?.rows).toBe(7);
+    expect(catalog.tilesets.find((entry) => entry.key === 'essentials')?.buildStyles).toEqual([]);
+  });
+
+  it('derives current object capabilities and marks spawn_point non-placeable', () => {
+    const objects = new Map(getAuthoringCatalog().objects.map((entry) => [entry.id, entry]));
+    expect(objects.get('spawn_point')?.capabilities.placeable).toBe(false);
+    expect(objects.get('jimothy')?.capabilities.npc?.modes).toEqual(['idle', 'wander', 'patrol', 'follow']);
+    expect(objects.get('jimothy')?.capabilities.signText.supported).toBe(true);
+    expect(objects.get('portal_a')?.capabilities.links.targetObjectIds).toEqual(['portal_b']);
+    expect(objects.get('moving_platform')?.capabilities.links).toMatchObject({ ordered: true, maximumTargets: 12 });
+    expect(objects.get('floor_trigger')?.capabilities.links.targetObjectIds).toContain('door_locked_narrow');
+    expect(objects.get('crate')?.capabilities.container.allowedObjectIds).toContain('kitkat');
+    expect(objects.get('block_switch')).toBeDefined();
+    expect(objects.get('switch_block_on')).toBeDefined();
+    expect(objects.get('swordsman_ai')?.capabilities.swordsman?.objectiveModes).toEqual(['duel', 'collect']);
+  });
+
+  it('keeps the legacy tileset route projection stable', () => {
+    const legacy = getAgentTilesetCatalogResponse();
+    const unified = getAuthoringCatalog();
+    expect(legacy.tilesets).toEqual(unified.tilesets.map((entry) => ({
+      key: entry.key,
+      name: entry.name,
+      gidStart: entry.gidStart,
+      gidEnd: entry.gidEnd,
+      decoratedTopLocalIndices: entry.decoratedTopLocalIndices,
+      decoratedTopGids: entry.decoratedTopGids,
+      nonCollidingLocalIndices: entry.nonCollidingLocalIndices,
+      nonCollidingGids: entry.nonCollidingGids,
+      buildStyles: entry.buildStyles,
+    })));
+  });
+
+  it('renders complete registry-derived Markdown and keeps OpenAPI command enums in parity', () => {
+    const documents = renderAuthoringDocuments();
+    for (const object of GAME_OBJECTS) expect(documents['agent-room-authoring.md']).toContain(`\`${object.id}\``);
+    for (const tileset of TILESETS) expect(documents['agent-tilesets.md']).toContain(`\`${tileset.key}\``);
+    for (const goalType of ROOM_GOAL_TYPES) expect(documents['agent-room-authoring.md']).toContain(`\`${goalType}\``);
+
+    const openapi = JSON.parse(readFileSync(resolve(process.cwd(), 'public/openapi.json'), 'utf8')) as {
+      info: { version: string };
+      components: { schemas: { RoomDraftCommand: { oneOf: Array<{ properties: { type: { const: string } } }> } } };
+    };
+    expect(openapi.info.version).toBe('0.9.0');
+    expect(openapi.components.schemas.RoomDraftCommand.oneOf.map((schema) => schema.properties.type.const))
+      .toEqual(ROOM_DRAFT_COMMAND_TYPES);
+  });
+
+  it('writes byte-identical Pages Markdown from the Worker renderers', () => {
+    const outputDirectory = mkdtempSync(join(tmpdir(), 'wamp-authoring-docs-'));
+    try {
+      const documents = renderAuthoringDocuments();
+      writeAuthoringDocuments(outputDirectory);
+      for (const [filename, contents] of Object.entries(documents)) {
+        expect(readFileSync(resolve(outputDirectory, filename), 'utf8')).toBe(contents);
+      }
+    } finally {
+      rmSync(outputDirectory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('authoring catalog routes', () => {
+  const env = {} as Env;
+
+  it('serves the unified catalog with CORS and a short public cache lifetime', async () => {
+    const response = await worker.fetch(new Request('https://api.wamp.land/api/authoring/catalog'), env);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(response.headers.get('cache-control')).toBe(AUTHORING_CATALOG_CACHE_CONTROL);
+    expect(await response.json()).toEqual(getAuthoringCatalog());
+  });
+
+  it('serves legacy tilesets and generated Markdown from the same contracts', async () => {
+    const tilesetsResponse = await worker.fetch(new Request('https://api.wamp.land/api/tilesets'), env);
+    expect(tilesetsResponse.headers.get('cache-control')).toBe(AUTHORING_CATALOG_CACHE_CONTROL);
+    expect(await tilesetsResponse.json()).toEqual(getAgentTilesetCatalogResponse());
+
+    const documents = renderAuthoringDocuments();
+    for (const filename of Object.keys(documents) as Array<keyof typeof documents>) {
+      const response = await worker.fetch(new Request(`https://api.wamp.land/${filename}`), env);
+      expect(response.headers.get('content-type')).toContain('text/markdown');
+      expect(await response.text()).toBe(documents[filename]);
+    }
+  });
+});

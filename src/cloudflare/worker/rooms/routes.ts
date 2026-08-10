@@ -373,7 +373,7 @@ export async function handleRoomRequest(
       'save room drafts from commands',
       'rooms:write',
     );
-    const record = await saveDraftFromCommandRequest(
+    const { record, commandRefs } = await saveDraftFromCommandRequest(
       env,
       roomId,
       coordinates,
@@ -381,7 +381,7 @@ export async function handleRoomRequest(
       buildRoomMutationActor(auth),
       auth.isAdmin,
     );
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, record, { commandRefs });
   }
 
   if (segments.length === 4 && segments[3] === 'publish' && request.method === 'POST') {
@@ -619,14 +619,23 @@ function parseRoomVersionLimit(value: string | null): number {
   return limit;
 }
 
-function roomMutationResponse(request: Request, url: URL, record: RoomRecord): Response {
+function roomMutationResponse(
+  request: Request,
+  url: URL,
+  record: RoomRecord,
+  additions: Record<string, unknown> = {},
+): Response {
   if (url.searchParams.get('response') !== 'compact') {
-    return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+    return jsonResponse(request, {
+      ...annotateRoomRecordWithTilesetHints(record),
+      ...additions,
+    });
   }
   return jsonResponse(request, {
     summary: createRoomSummaryFromRecord(record),
     draft: annotateRoomSnapshotWithTilesetHint(record.draft),
     published: record.published ? annotateRoomSnapshotWithTilesetHint(record.published) : null,
+    ...additions,
   }, {
     headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
   });

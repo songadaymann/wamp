@@ -1,8 +1,10 @@
 import type Phaser from 'phaser';
 import type { SwordsmanBodySnapshot } from './swordsmanTraversal';
 
-export type SwordsmanObjectiveMode = 'duel' | 'collect';
-export type SwordsmanDefeatMode = 'defeatable' | 'invincible' | 'respawn';
+export const SWORDSMAN_OBJECTIVE_MODES = ['duel', 'collect'] as const;
+export type SwordsmanObjectiveMode = (typeof SWORDSMAN_OBJECTIVE_MODES)[number];
+export const SWORDSMAN_DEFEAT_MODES = ['defeatable', 'invincible', 'respawn'] as const;
+export type SwordsmanDefeatMode = (typeof SWORDSMAN_DEFEAT_MODES)[number];
 export type SwordsmanObjectiveBody = Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody;
 
 export const DEFAULT_SWORDSMAN_OBJECTIVE_MODE: SwordsmanObjectiveMode = 'duel';

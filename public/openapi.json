@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Everybody's Platformer Agent API",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "description": "Agent-facing and builder-facing API contract for room authoring, frontier discovery, scored runs, leaderboards, agent accounts, and room ownership minting. UI-only routes, chat moderation, and internal admin/operator endpoints are intentionally out of scope."
   },
   "servers": [
@@ -505,29 +505,283 @@
           }
         }
       },
-      "RoomDraftCommand": {
-        "type": "object",
-        "required": ["type"],
-        "additionalProperties": true,
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "set_title",
-              "set_background",
-              "set_spawn",
-              "set_goal",
-              "clear_goal",
-              "platform",
-              "fill_rect",
-              "erase_rect",
-              "clear_layer",
-              "place_object",
-              "remove_objects_in_rect",
-              "clear_objects"
-            ]
+      "RoomDraftObjectSelector": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["ref"],
+            "additionalProperties": false,
+            "properties": { "ref": { "type": "string", "minLength": 1, "maxLength": 64 } }
+          },
+          {
+            "type": "object",
+            "required": ["instanceId"],
+            "additionalProperties": false,
+            "properties": { "instanceId": { "type": "string", "minLength": 1, "maxLength": 160 } }
           }
+        ]
+      },
+      "RoomDraftTilePoint": {
+        "type": "object",
+        "required": ["tileX", "tileY"],
+        "additionalProperties": false,
+        "properties": {
+          "tileX": { "type": "integer", "minimum": 0, "maximum": 39 },
+          "tileY": { "type": "integer", "minimum": 0, "maximum": 21 }
         }
+      },
+      "RoomDraftGoalCommandValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type", "exit"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "reach_exit" },
+              "exit": { "$ref": "#/components/schemas/RoomDraftTilePoint" },
+              "timeLimitMs": { "type": ["integer", "null"], "minimum": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "requiredCount"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "collect_target" },
+              "requiredCount": { "type": "integer", "minimum": 1 },
+              "timeLimitMs": { "type": ["integer", "null"], "minimum": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "collect_race" },
+              "timeLimitMs": { "type": ["integer", "null"], "minimum": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "defeat_all" },
+              "timeLimitMs": { "type": ["integer", "null"], "minimum": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "checkpoints", "finish"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "checkpoint_sprint" },
+              "checkpoints": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "$ref": "#/components/schemas/RoomDraftTilePoint" }
+              },
+              "finish": { "$ref": "#/components/schemas/RoomDraftTilePoint" },
+              "timeLimitMs": { "type": ["integer", "null"], "minimum": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "durationMs"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "survival" },
+              "durationMs": { "type": "integer", "minimum": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "questType"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "npc_quest" },
+              "questType": { "type": "string", "enum": ["protect", "escort", "give"] },
+              "npc": { "$ref": "#/components/schemas/RoomDraftObjectSelector" },
+              "npcInstanceId": { "type": "string", "minLength": 1, "maxLength": 160 },
+              "durationMs": { "type": "integer", "minimum": 1 },
+              "requiredCount": { "type": "integer", "minimum": 1 },
+              "destination": { "$ref": "#/components/schemas/RoomDraftTilePoint" }
+            },
+            "description": "Supply exactly one of npc or npcInstanceId. protect accepts durationMs, escort requires destination, and give requires requiredCount."
+          }
+        ]
+      },
+      "RoomDraftSetTileValue": {
+        "type": "object",
+        "required": ["tileX", "tileY", "localIndex"],
+        "additionalProperties": false,
+        "properties": {
+          "tileX": { "type": "integer", "minimum": 0, "maximum": 39 },
+          "tileY": { "type": "integer", "minimum": 0, "maximum": 21 },
+          "localIndex": { "type": "integer", "minimum": 0 },
+          "flipX": { "type": "boolean", "default": false },
+          "flipY": { "type": "boolean", "default": false }
+        }
+      },
+      "RoomDraftCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type", "title"],
+            "additionalProperties": false,
+            "properties": { "type": { "const": "set_title" }, "title": { "type": ["string", "null"] } }
+          },
+          {
+            "type": "object",
+            "required": ["type", "background"],
+            "additionalProperties": false,
+            "properties": { "type": { "const": "set_background" }, "background": { "type": "string" } }
+          },
+          {
+            "type": "object",
+            "required": ["type", "tileX", "tileY"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "set_spawn" },
+              "tileX": { "type": "integer", "minimum": 0, "maximum": 39 },
+              "tileY": { "type": "integer", "minimum": 0, "maximum": 21 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "goal"],
+            "additionalProperties": false,
+            "properties": { "type": { "const": "set_goal" }, "goal": { "$ref": "#/components/schemas/RoomDraftGoalCommandValue" } }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "additionalProperties": false,
+            "properties": { "type": { "const": "clear_goal" } }
+          },
+          {
+            "type": "object",
+            "required": ["type", "tilesetKey", "styleId", "row", "colStart", "colEnd", "depth"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "platform" },
+              "tilesetKey": { "type": "string" },
+              "styleId": { "type": "string" },
+              "row": { "type": "integer", "minimum": 0, "maximum": 21 },
+              "colStart": { "type": "integer", "minimum": 0, "maximum": 39 },
+              "colEnd": { "type": "integer", "minimum": 0, "maximum": 39 },
+              "depth": { "type": "integer", "minimum": 1, "maximum": 22 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "tilesetKey", "styleId", "role", "tileX", "tileY", "width", "height"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "fill_rect" },
+              "tilesetKey": { "type": "string" },
+              "styleId": { "type": "string" },
+              "role": { "type": "string", "enum": ["surface", "fill"] },
+              "tileX": { "type": "integer", "minimum": 0, "maximum": 39 },
+              "tileY": { "type": "integer", "minimum": 0, "maximum": 21 },
+              "width": { "type": "integer", "minimum": 1, "maximum": 40 },
+              "height": { "type": "integer", "minimum": 1, "maximum": 22 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "tilesetKey", "layer", "tiles"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "set_tiles" },
+              "tilesetKey": { "type": "string" },
+              "layer": { "type": "string", "enum": ["background", "terrain", "foreground"] },
+              "tiles": { "type": "array", "minItems": 1, "maxItems": 880, "items": { "$ref": "#/components/schemas/RoomDraftSetTileValue" } }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "tileX", "tileY", "width", "height"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "erase_rect" },
+              "layer": { "type": "string", "enum": ["background", "terrain", "foreground"], "default": "terrain" },
+              "tileX": { "type": "integer", "minimum": 0, "maximum": 39 },
+              "tileY": { "type": "integer", "minimum": 0, "maximum": 21 },
+              "width": { "type": "integer", "minimum": 1, "maximum": 40 },
+              "height": { "type": "integer", "minimum": 1, "maximum": 22 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "layer"],
+            "additionalProperties": false,
+            "properties": { "type": { "const": "clear_layer" }, "layer": { "type": "string", "enum": ["background", "terrain", "foreground"] } }
+          },
+          {
+            "type": "object",
+            "required": ["type", "objectId", "tileX", "tileY"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "place_object" },
+              "ref": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "objectId": { "type": "string" },
+              "tileX": { "type": "integer", "minimum": 0, "maximum": 39 },
+              "tileY": { "type": "integer", "minimum": 0, "maximum": 21 },
+              "facing": { "type": "string", "enum": ["left", "right"] },
+              "layer": { "type": "string", "enum": ["background", "terrain", "foreground"] },
+              "swordsmanObjectiveMode": { "type": "string", "enum": ["duel", "collect"] },
+              "swordsmanDefeatMode": { "type": "string", "enum": ["defeatable", "invincible", "respawn"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "target"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "configure_object" },
+              "target": { "$ref": "#/components/schemas/RoomDraftObjectSelector" },
+              "layer": { "type": ["string", "null"], "enum": ["background", "terrain", "foreground", null] },
+              "facing": { "type": ["string", "null"], "enum": ["left", "right", null] },
+              "linkedTargets": { "type": ["array", "null"], "maxItems": 12, "items": { "$ref": "#/components/schemas/RoomDraftObjectSelector" } },
+              "containedObjectId": { "type": ["string", "null"] },
+              "signText": { "type": ["string", "null"], "maxLength": 140 },
+              "swordsmanObjectiveMode": { "type": ["string", "null"], "enum": ["duel", "collect", null] },
+              "swordsmanDefeatMode": { "type": ["string", "null"], "enum": ["defeatable", "invincible", "respawn", null] },
+              "npcMode": { "type": ["string", "null"], "enum": ["idle", "wander", "patrol", "follow", null] },
+              "npcPushable": { "type": ["boolean", "null"] },
+              "npcCanJumpFall": { "type": ["boolean", "null"] },
+              "npcPlayerCollision": { "type": ["boolean", "null"] },
+              "npcFriendlyFire": { "type": ["boolean", "null"] },
+              "npcName": { "type": ["string", "null"], "maxLength": 32 },
+              "npcDefeatMode": { "type": ["string", "null"], "enum": ["defeatable", "invincible", "respawn", null] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "target"],
+            "additionalProperties": false,
+            "properties": { "type": { "const": "remove_object" }, "target": { "$ref": "#/components/schemas/RoomDraftObjectSelector" } }
+          },
+          {
+            "type": "object",
+            "required": ["type", "tileX", "tileY", "width", "height"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "remove_objects_in_rect" },
+              "tileX": { "type": "integer", "minimum": 0, "maximum": 39 },
+              "tileY": { "type": "integer", "minimum": 0, "maximum": 21 },
+              "width": { "type": "integer", "minimum": 1, "maximum": 40 },
+              "height": { "type": "integer", "minimum": 1, "maximum": 22 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "additionalProperties": false,
+            "properties": { "type": { "const": "clear_objects" } }
+          }
+        ]
       },
       "RoomDraftCommandsRequestBody": {
         "type": "object",
@@ -539,9 +793,47 @@
           },
           "commands": {
             "type": "array",
+            "minItems": 1,
+            "maxItems": 512,
             "items": { "$ref": "#/components/schemas/RoomDraftCommand" }
           }
         }
+      },
+      "AuthoringCatalog": {
+        "type": "object",
+        "required": ["schemaVersion", "room", "tilesets", "objects", "backgrounds", "goals"],
+        "properties": {
+          "schemaVersion": { "const": 1 },
+          "room": {
+            "type": "object",
+            "required": ["width", "height", "tileSize", "layers"],
+            "properties": {
+              "width": { "const": 40 },
+              "height": { "const": 22 },
+              "tileSize": { "const": 16 },
+              "layers": { "type": "array", "items": { "type": "string", "enum": ["background", "terrain", "foreground"] } }
+            }
+          },
+          "tilesets": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "objects": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "backgrounds": { "type": "object", "additionalProperties": true },
+          "goals": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+        }
+      },
+      "RoomDraftCommandsResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/RoomRecord" },
+          {
+            "type": "object",
+            "required": ["commandRefs"],
+            "properties": {
+              "commandRefs": {
+                "type": "object",
+                "additionalProperties": { "type": "string" }
+              }
+            }
+          }
+        ]
       },
       "PlacedObject": {
         "type": "object",
@@ -2231,6 +2523,27 @@
         }
       }
     },
+    "/api/authoring/catalog": {
+      "get": {
+        "summary": "Read the complete built-in authoring catalog",
+        "description": "Public, versioned registry for room dimensions, all built-in tilesets and editor-enabled local indices, objects and configuration capabilities, backgrounds, and all goal types.",
+        "responses": {
+          "200": {
+            "description": "Unified authoring catalog",
+            "headers": {
+              "Cache-Control": {
+                "schema": { "type": "string", "example": "public, max-age=300" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthoringCatalog" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/rooms/{roomId}": {
       "get": {
         "summary": "Read a room record",
@@ -2351,7 +2664,7 @@
     "/api/rooms/{roomId}/draft/commands": {
       "post": {
         "summary": "Build a room draft from validated commands",
-        "description": "Requires auth. Bearer tokens must include rooms:write. Validates the entire command list, applies it atomically against the selected base snapshot, then persists through the normal draft-save path.",
+        "description": "Requires auth. Bearer tokens must include rooms:write. Bodies are limited to 2 MB, lists to 512 commands, and cumulative tile writes to 2,640. The entire list is validated, applied in order against the selected base snapshot, and persisted atomically. place_object refs are available only to later commands and are returned in commandRefs.",
         "security": [
           { "cookieSession": [] },
           { "bearerAuth": [] }
@@ -2401,7 +2714,7 @@
             "description": "Updated room record",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/RoomRecord" }
+                "schema": { "$ref": "#/components/schemas/RoomDraftCommandsResponse" }
               }
             }
           },

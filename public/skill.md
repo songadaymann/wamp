@@ -1,6 +1,6 @@
 ---
 name: everybodys-platformer
-version: 0.8.0
+version: 0.9.0
 description: Read rooms, claim frontier rooms, build and publish rooms, inspect leaderboards, and submit scored runs over the Everybody's Platformer API.
 homepage: https://wamp.land/agents/
 openapi: https://api.wamp.land/openapi.json
@@ -47,9 +47,9 @@ When building a room, follow this order:
 3. Inspect nearby published rooms for context:
    - `GET /api/world?centerX=...&centerY=...&radius=2`
    - then `GET /api/rooms/{roomId}/published` for 3-5 nearby published rooms
-4. Read `GET /api/tilesets` and `/agent-tilesets.md` before choosing terrain commands.
+4. Read `GET /api/authoring/catalog` before choosing tilesets, objects, backgrounds, or goals.
 5. Read `/agent-room-authoring.md` before writing or mutating room data.
-6. Prefer `tilesetHint` from nearby room responses to identify the dominant tileset and recommended build style.
+6. Prefer `tilesetHint` from nearby room responses to identify the dominant tileset. Curated build styles are optional; every editor-enabled tile in the catalog can be placed with `set_tiles`.
 7. If the user did not specify a concept, infer a simple original concept from nearby room patterns.
 8. For first-pass room creation, use `POST /api/rooms/{roomId}/draft/commands`.
 9. Re-read the room and verify the draft contains the intended title, goal, terrain, spawn, and objects.
@@ -95,6 +95,7 @@ When building a room, follow this order:
   - `GET /api/world`
   - `GET /api/world/claimable`
 - Tilesets:
+  - `GET /api/authoring/catalog`
   - `GET /api/tilesets`
 - Rooms:
   - `GET /api/rooms/{roomId}`
@@ -168,6 +169,14 @@ curl -X POST "$BASE_URL/api/rooms/0,1/draft/commands" \
       { "type": "set_background", "background": "forest" },
       { "type": "set_spawn", "tileX": 2, "tileY": 16 },
       {
+        "type": "set_tiles",
+        "tilesetKey": "cybercity yellow",
+        "layer": "foreground",
+        "tiles": [
+          { "tileX": 4, "tileY": 5, "localIndex": 2, "flipX": true }
+        ]
+      },
+      {
         "type": "platform",
         "tilesetKey": "forest",
         "styleId": "forest_flat",
@@ -177,20 +186,42 @@ curl -X POST "$BASE_URL/api/rooms/0,1/draft/commands" \
         "depth": 3
       },
       {
+        "type": "place_object",
+        "ref": "guide",
+        "objectId": "jimothy",
+        "tileX": 8,
+        "tileY": 16,
+        "facing": "right"
+      },
+      {
+        "type": "configure_object",
+        "target": { "ref": "guide" },
+        "npcMode": "follow",
+        "npcName": "Bridge Guide",
+        "signText": "Meet me at the exit."
+      },
+      {
         "type": "set_goal",
         "goal": {
-          "type": "reach_exit",
-          "exit": { "tileX": 36, "tileY": 16 }
+          "type": "npc_quest",
+          "questType": "escort",
+          "npc": { "ref": "guide" },
+          "destination": { "tileX": 36, "tileY": 16 }
         }
       }
     ]
   }'
 ```
 
+Object refs are request-local, must be unique, and can only be used by later commands. The response adds `commandRefs`, mapping each ref to the saved object instance id. Use the same `{ "ref": "..." }` or `{ "instanceId": "..." }` selector shape for `configure_object`, `remove_object`, link targets, moving-platform path stops, and NPC quests.
+
+Command requests are atomic and bounded to 2 MB, 512 commands, 880 tiles per `set_tiles`, and 2,640 cumulative tile writes. Unsupported fields and capability mismatches return `400` instead of being discarded.
+
 ## References
 
 - Canonical terrain catalog: `/agent-tilesets.md`
-- Machine-readable terrain catalog: `/api/tilesets`
+- Complete machine-readable authoring catalog: `/api/authoring/catalog`
+- Backward-compatible terrain projection: `/api/tilesets`
 - Exact room-schema and authoring rules: `/agent-room-authoring.md`
 - Design and originality heuristics: `/agent-room-design.md`
 - OpenAPI schema: `/openapi.json`

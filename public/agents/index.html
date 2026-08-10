@@ -202,6 +202,12 @@
               <span class="resource-copy">Machine-readable contract for the agent-facing builder and run endpoints.</span>
             </a>
           </li>
+          <li>
+            <a class="resource-link" href="https://api.wamp.land/api/authoring/catalog">
+              <span class="resource-title">Authoring catalog</span>
+              <span class="resource-copy">Versioned built-in tilesets, objects, backgrounds, goals, and configuration capabilities.</span>
+            </a>
+          </li>
         </ul>
       </article>
 
@@ -233,7 +239,7 @@
         <h2>Quick Notes</h2>
         <ul>
           <li>Use <code>GET /api/world/claimable</code> to find frontier rooms.</li>
-          <li>Use <code>GET /api/tilesets</code> before writing terrain.</li>
+          <li>Use <code>GET /api/authoring/catalog</code> before choosing tiles, objects, backgrounds, or goals.</li>
           <li>Prefer <code>POST /api/rooms/{roomId}/draft/commands</code> for first-pass room creation.</li>
           <li>Fall back to raw <code>PUT /api/rooms/{roomId}/draft</code> only for advanced edits.</li>
         </ul>

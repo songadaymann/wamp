@@ -5,6 +5,7 @@ import {
   WORLD_TILE_BYTE_CACHE_HASH_PARAM,
   WORLD_TILE_BYTE_CACHE_NAME,
 } from './src/scenes/overworld/worldTiles/byteCacheContract';
+import { writeAuthoringDocuments } from './src/agentBuilder/authoringDocumentsWriter';
 
 const EARLY_WORLD_TILE_BOOTSTRAP_MARKER = '<!-- wamp-early-world-tiles-bootstrap -->';
 // One-time namespace bump after an immutable Pages fallback cached HTML at a
@@ -30,6 +31,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       earlyWorldTileBootstrapPlugin(roomApiBaseUrl),
       cloudflareWebAnalyticsPlugin(cloudflareWebAnalyticsToken),
+      authoringDocumentsPlugin(),
     ],
     define: {
       'import.meta.env.VITE_ROOM_API_BASE_URL': JSON.stringify(roomApiBaseUrl),
@@ -133,6 +135,15 @@ function cloudflareWebAnalyticsPlugin(token: string): PluginOption {
           injectTo: 'body',
         },
       ];
+    },
+  };
+}
+
+function authoringDocumentsPlugin(): PluginOption {
+  return {
+    name: 'authoring-documents',
+    closeBundle() {
+      writeAuthoringDocuments(resolve(process.cwd(), 'dist'));
     },
   };
 }

@@ -35,80 +35,6 @@ export interface AgentTilesetCatalogEntry {
   buildStyles: AgentTilesetBuildStyle[];
 }
 
-interface AgentTilesetBuildStyleDefinition {
-  id: string;
-  label: string;
-  description: string;
-  surfaceLocalIndices: number[];
-  fillLocalIndices: number[];
-}
-
-const AGENT_TILESET_BUILD_STYLE_DEFINITIONS: Record<string, AgentTilesetBuildStyleDefinition[]> = {
-  forest: [
-    {
-      id: 'forest_flat',
-      label: 'Forest Flat',
-      description: 'Grass-topped dirt platforms that match the common forest ground language.',
-      surfaceLocalIndices: [14, 15, 16, 17],
-      fillLocalIndices: [27, 28, 39, 40],
-    },
-  ],
-  desert: [
-    {
-      id: 'desert_flat',
-      label: 'Desert Flat',
-      description: 'Sandstone platforms with the standard desert top edge and fill blocks.',
-      surfaceLocalIndices: [14, 15, 16, 17],
-      fillLocalIndices: [27, 28, 39, 40],
-    },
-  ],
-  cave: [
-    {
-      id: 'cave_flat',
-      label: 'Cave Flat',
-      description: 'Rocky cave platforms that use the shared standard top edge and fill blocks.',
-      surfaceLocalIndices: [14, 15, 16, 17],
-      fillLocalIndices: [27, 28, 39, 40],
-    },
-  ],
-  lava: [
-    {
-      id: 'lava_shelf',
-      label: 'Lava Shelf',
-      description: 'Jagged lava shelf pieces for readable floating ledges and thicker lava rock platforms.',
-      surfaceLocalIndices: [31, 32, 33, 34, 35],
-      fillLocalIndices: [46, 47, 48, 49, 50],
-    },
-  ],
-  snow: [
-    {
-      id: 'snow_flat',
-      label: 'Snow Flat',
-      description: 'Snowy top edge with cold stone fill blocks for standard snowy ground.',
-      surfaceLocalIndices: [13, 14, 15, 18],
-      fillLocalIndices: [24, 25, 36, 37],
-    },
-  ],
-  water: [
-    {
-      id: 'water_flat',
-      label: 'Water Flat',
-      description: 'Water-theme rock platforms with the shared grassy top edge and fill blocks.',
-      surfaceLocalIndices: [14, 15, 16, 17],
-      fillLocalIndices: [27, 28, 39, 40],
-    },
-  ],
-  smb_lvl1_3_5: [
-    {
-      id: 'smb_ground',
-      label: 'SMB Ground',
-      description: 'Classic side-scroller ground tiles for simple flat SMB-style platforms.',
-      surfaceLocalIndices: [24, 25, 26, 27],
-      fillLocalIndices: [16, 17, 18, 19],
-    },
-  ],
-};
-
 const LEGACY_AGENT_TILESET_KEY_ALIASES: Record<string, string> = {
   dirt: 'cave',
 };
@@ -141,7 +67,7 @@ function getCollisionIndicesByProfile(
 function buildCatalogEntry(tileset: TilesetConfig): AgentTilesetCatalogEntry {
   const decoratedTopLocalIndices = getCollisionIndicesByProfile(tileset, 'decoratedTop');
   const nonCollidingLocalIndices = getCollisionIndicesByProfile(tileset, 'none');
-  const buildStyles = (AGENT_TILESET_BUILD_STYLE_DEFINITIONS[tileset.key] ?? []).map((definition) => ({
+  const buildStyles = (tileset.authoringBuildStyles ?? []).map((definition) => ({
     ...definition,
     surfaceGids: localIndicesToGids(tileset, definition.surfaceLocalIndices),
     fillGids: localIndicesToGids(tileset, definition.fillLocalIndices),
@@ -383,7 +309,7 @@ export function renderAgentTilesetMarkdown(): string {
   const sections = AGENT_TILESET_CATALOG.map((entry) => {
     const buildStyles = entry.buildStyles.length > 0
       ? entry.buildStyles.map(renderBuildStyle).join('')
-      : '_No curated build styles yet. Use nearby room hints or the raw snapshot path for this tileset._\n\n';
+      : '_No curated build styles yet. Use `set_tiles` with editor-enabled local indices from the unified catalog._\n\n';
 
     return [
       `## ${entry.name} \`${entry.key}\``,
@@ -409,13 +335,14 @@ export function renderAgentTilesetMarkdown(): string {
     '- Positive terrain gids collide by default.',
     '- Transparency does not mean a tile is non-solid.',
     '- Only gids explicitly listed as non-colliding are safe decoration-only terrain.',
-    '- The safest build path is: pick one tileset, use one named build style, then compose.',
+    '- Every editor-enabled tile can be placed with `set_tiles`; named build styles are optional structural helpers.',
     '',
     '## Use this with room hints',
     '',
-    '- `GET /api/tilesets` returns the same catalog in JSON.',
+    '- `GET /api/authoring/catalog` returns the complete versioned authoring catalog.',
+    '- `GET /api/tilesets` returns the backward-compatible terrain projection.',
     '- Room reads can include `tilesetHint` with the dominant tileset and observed surface/fill gids.',
-    '- `POST /api/rooms/{roomId}/draft/commands` uses `tilesetKey` + `styleId`, not raw gids, for terrain commands.',
+    '- `set_tiles` uses `tilesetKey` + `localIndex`; `platform` and `fill_rect` use optional named styles.',
     '',
     ...sections,
   ].join('\n');
