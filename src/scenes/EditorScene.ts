@@ -510,6 +510,7 @@ export class EditorScene extends Phaser.Scene {
         getRoomPermissions: () => this.roomPermissions,
         getMintedTokenId: () => this.mintedTokenId,
         getRoomVersionHistory: () => this.roomVersionHistory,
+        getPublishedVersion: () => this.publishedVersion,
         getEntrySource: () => this.entrySource,
         getCourseEditorState: () => this.courseController.getCourseEditorState(),
         getSaveInFlight: () => this.saveInFlight,

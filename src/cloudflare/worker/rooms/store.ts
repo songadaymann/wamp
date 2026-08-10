@@ -471,8 +471,23 @@ function roomSummaryFromCompactRow(
   viewerWalletAddress: string | null,
   viewerIsAdmin: boolean,
 ): RoomSummary {
+  const base = createDefaultRoomRecord(row.id, { x: row.x, y: row.y });
+  // Compact rows expose published_version but not the full published snapshot.
+  // buildRoomPermissions only checks published presence, so a sentinel is enough.
+  const publishedPresence: RoomSnapshot | null =
+    row.published_version !== null
+      ? {
+          ...base.draft,
+          version: row.published_version,
+          title: row.published_title,
+          status: 'published',
+          updatedAt: row.published_updated_at ?? base.draft.updatedAt,
+          publishedAt: row.published_updated_at,
+        }
+      : null;
   const shell = {
-    ...createDefaultRoomRecord(row.id, { x: row.x, y: row.y }),
+    ...base,
+    published: publishedPresence,
     canonicalVersion: row.canonical_version,
     claimerUserId: row.claimer_user_id,
     claimerPrincipalKind: row.claimer_principal_type,
@@ -499,7 +514,7 @@ function roomSummaryFromCompactRow(
     publishedTitle: row.published_title,
     draftVersion: row.draft_version ?? 1,
     publishedVersion: row.published_version,
-    draftUpdatedAt: row.draft_updated_at ?? shell.draft.updatedAt,
+    draftUpdatedAt: row.draft_updated_at ?? base.draft.updatedAt,
     publishedUpdatedAt: row.published_updated_at,
     canonicalVersion: row.canonical_version,
     claimerUserId: row.claimer_user_id,

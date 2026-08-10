@@ -2626,6 +2626,7 @@ export class CourseEditorScene extends Phaser.Scene {
         saveInFlight: this.loading,
         mintedMetadataCurrent: true,
         roomVersionHistory: selectedSlice?.roomVersionHistory ?? [],
+        publishedVersion: selectedSlice?.publishedVersion ?? 0,
         entrySource: 'world',
         zoomText: `Zoom: ${camera.zoom.toFixed(2)}x`,
         saveStatus,

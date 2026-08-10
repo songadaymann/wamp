@@ -1177,10 +1177,10 @@ export class EditorRoomSession {
   }
 
   private syncRoomMetadata(record: RoomRecord): void {
+    const nextPublishedVersion = record.published?.version ?? 0;
     this.roomId = record.draft.id;
     this.roomCoordinates = { ...record.draft.coordinates };
     this.roomVersion = record.draft.version;
-    this.publishedVersion = record.published?.version ?? 0;
     this.canonicalVersion = record.canonicalVersion;
     this.roomTitle = record.draft.title;
     this.roomCreatedAt = record.draft.createdAt;
@@ -1188,11 +1188,22 @@ export class EditorRoomSession {
     this.roomPublishedAt = record.published?.publishedAt ?? null;
     this.publishedRoomSnapshot = record.published ? cloneRoomSnapshot(record.published) : null;
     this.roomPermissions = { ...record.permissions };
-    this.roomVersionHistory = record.versions.map((version) => ({
-      ...version,
-      snapshot: cloneRoomSnapshot(version.snapshot),
-    }));
-    this.historyLoaded = record.versions.length > 0 || record.published === null;
+    // Compact /current and mutation responses omit versions. Keep any already-loaded
+    // history unless publish advanced (or the room is unpublished).
+    if (record.versions.length > 0) {
+      this.roomVersionHistory = record.versions.map((version) => ({
+        ...version,
+        snapshot: cloneRoomSnapshot(version.snapshot),
+      }));
+      this.historyLoaded = true;
+    } else if (record.published === null) {
+      this.roomVersionHistory = [];
+      this.historyLoaded = true;
+    } else if (nextPublishedVersion !== this.publishedVersion) {
+      this.roomVersionHistory = [];
+      this.historyLoaded = false;
+    }
+    this.publishedVersion = nextPublishedVersion;
     this.claimerDisplayName = record.claimerDisplayName;
     this.claimedAt = record.claimedAt;
     this.mintedChainId = record.mintedChainId;

@@ -20,6 +20,7 @@ export interface BuildEditorUiViewModelOptions {
   saveInFlight: boolean;
   mintedMetadataCurrent: boolean;
   roomVersionHistory: RoomVersionRecord[];
+  publishedVersion: number;
   entrySource: 'world' | 'direct';
   zoomText: string;
   saveStatus: EditorStatusDetails;
@@ -62,6 +63,7 @@ export function buildEditorUiViewModel(
     saveInFlight,
     mintedMetadataCurrent,
     roomVersionHistory,
+    publishedVersion,
     entrySource,
     zoomText,
     saveStatus,
@@ -107,7 +109,8 @@ export function buildEditorUiViewModel(
       ? 'Refresh NFT Metadata'
       : 'Refresh NFT Metadata',
     historyHidden: false,
-    historyDisabled: roomVersionHistory.length === 0,
+    // Versions are lazy-loaded; enable History whenever a published version exists.
+    historyDisabled: publishedVersion <= 0 && roomVersionHistory.length === 0,
     fitHidden: false,
     goal: {
       goalTypeValue: roomGoal?.type ?? '',

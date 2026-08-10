@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultRoomSnapshot } from '../../../persistence/roomModel';
+import { createDefaultRoomRecord, createDefaultRoomSnapshot } from '../../../persistence/roomModel';
 import {
+  buildRoomPermissions,
   createOverviewRoomSnapshot,
   decodeRoomVersionCursor,
   dedupeSnapshotReferences,
@@ -57,5 +58,51 @@ describe('compact room reads', () => {
     expect(overview.goalIntroText).toBeNull();
     expect(overview.placedObjects).toEqual([]);
     expect(overview.customSprites).toEqual([]);
+  });
+});
+
+describe('buildRoomPermissions', () => {
+  it('allows anyone to edit another user\'s published unminted room', () => {
+    const record = createDefaultRoomRecord('1,2', { x: 1, y: 2 });
+    record.claimerUserId = 'claimer-user';
+    record.published = {
+      ...record.draft,
+      status: 'published',
+      version: 3,
+      publishedAt: '2026-08-01T00:00:00.000Z',
+    };
+
+    const permissions = buildRoomPermissions(record, 'other-user', null, false);
+
+    expect(permissions.canSaveDraft).toBe(true);
+    expect(permissions.canPublish).toBe(true);
+    expect(permissions.canMint).toBe(false);
+  });
+
+  it('locks unpublished claimed drafts to the claimer only', () => {
+    const record = createDefaultRoomRecord('1,2', { x: 1, y: 2 });
+    record.claimerUserId = 'claimer-user';
+    record.published = null;
+
+    expect(buildRoomPermissions(record, 'other-user', null, false).canSaveDraft).toBe(false);
+    expect(buildRoomPermissions(record, 'claimer-user', null, false).canSaveDraft).toBe(true);
+  });
+
+  it('locks minted rooms to the token owner wallet', () => {
+    const record = createDefaultRoomRecord('1,2', { x: 1, y: 2 });
+    record.claimerUserId = 'claimer-user';
+    record.published = {
+      ...record.draft,
+      status: 'published',
+      version: 3,
+      publishedAt: '2026-08-01T00:00:00.000Z',
+    };
+    record.mintedChainId = 8453;
+    record.mintedContractAddress = '0xabc';
+    record.mintedTokenId = '7';
+    record.mintedOwnerWalletAddress = '0xOwner';
+
+    expect(buildRoomPermissions(record, 'claimer-user', '0xOther', false).canSaveDraft).toBe(false);
+    expect(buildRoomPermissions(record, 'claimer-user', '0xOwner', false).canSaveDraft).toBe(true);
   });
 });
