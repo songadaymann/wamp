@@ -26,6 +26,7 @@ interface EditorChromeControllerHost {
   getRoomGoal(): RoomGoal | null;
   getRoomPermissions(): RoomPermissions;
   getMintedTokenId(): string | null;
+  getPublishedVersion(): number;
   getRoomVersionHistory(): RoomVersionRecord[];
   getEntrySource(): 'world' | 'direct';
   getCourseEditorState(): EditorCourseUiState;
@@ -68,6 +69,7 @@ export class EditorChromeController {
         canRefreshMintMetadata: historyState.canRefreshMintMetadata,
         saveInFlight: this.host.getSaveInFlight(),
         mintedMetadataCurrent: historyState.mintedMetadataCurrent,
+        publishedVersion: this.host.getPublishedVersion(),
         roomVersionHistory: this.host.getRoomVersionHistory(),
         entrySource: this.host.getEntrySource(),
         zoomText: `Zoom: ${editorState.zoom}x`,

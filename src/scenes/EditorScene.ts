@@ -509,6 +509,7 @@ export class EditorScene extends Phaser.Scene {
         getRoomGoal: () => this.roomGoal,
         getRoomPermissions: () => this.roomPermissions,
         getMintedTokenId: () => this.mintedTokenId,
+        getPublishedVersion: () => this.publishedVersion,
         getRoomVersionHistory: () => this.roomVersionHistory,
         getEntrySource: () => this.entrySource,
         getCourseEditorState: () => this.courseController.getCourseEditorState(),
@@ -1427,7 +1428,7 @@ export class EditorScene extends Phaser.Scene {
 
   useCustomSpriteAsTile(sprite: CustomSpriteDefinition): boolean {
     if (!this.roomPermissions.canSaveDraft) {
-      this.updatePersistenceStatus('Minted room is read-only for non-owners.');
+      this.updatePersistenceStatus('This room is read-only for this account.');
       return false;
     }
 

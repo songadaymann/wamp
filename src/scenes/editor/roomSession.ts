@@ -460,7 +460,11 @@ export class EditorRoomSession {
       return null;
     }
     if (!this.roomPermissions.canSaveDraft) {
-      this.setStatusText('Only the room token owner can save this room.');
+      this.setStatusText(
+        this.mintedTokenId
+          ? 'Only the room token owner can save this room.'
+          : 'You do not have permission to save this room.',
+      );
       return null;
     }
 
@@ -542,7 +546,11 @@ export class EditorRoomSession {
       return null;
     }
     if (!this.roomPermissions.canPublish) {
-      this.setStatusText('Only the room token owner can publish this room.');
+      this.setStatusText(
+        this.mintedTokenId
+          ? 'Only the room token owner can publish this room.'
+          : 'You do not have permission to publish this room.',
+      );
       return null;
     }
     await refreshAuthSession();

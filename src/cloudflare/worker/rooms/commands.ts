@@ -1,6 +1,7 @@
 import {
   cloneRoomSnapshot,
   createDefaultRoomSnapshot,
+  isRoomMinted,
   type RoomCoordinates,
   type RoomRecord,
   type RoomSnapshot,
@@ -52,7 +53,14 @@ export async function saveDraftFromCommandRequest(
   actorIsAdmin = false,
 ): Promise<SaveDraftFromCommandRequestResult> {
   const existing = await loadRoomRecordForMutation(env, roomId, coordinates, actor.ownerUser, actorIsAdmin);
-  if (!existing.permissions.canSaveDraft) throw new HttpError(403, 'Only the room token owner can save drafts for this minted room.');
+  if (!existing.permissions.canSaveDraft) {
+    throw new HttpError(
+      403,
+      isRoomMinted(existing)
+        ? 'Only the room token owner can save drafts for this minted room.'
+        : 'You do not have permission to save drafts for this room.',
+    );
+  }
   const base = selectBaseSnapshot(roomId, coordinates, existing, requestBody.base);
   base.id = roomId;
   base.coordinates = { ...coordinates };

@@ -330,7 +330,7 @@ export class RoomHistoryModalController {
       metaParts.push('Unclaimed room');
     }
 
-    if (!state.canPublish) {
+    if (state.mintedTokenId && !state.canPublish) {
       metaParts.push('Minted lock active');
     }
 
