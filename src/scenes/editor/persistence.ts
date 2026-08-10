@@ -171,6 +171,6 @@ export class EditorPersistenceController {
   private getDirtyPersistenceStatusText(): string {
     return this.host.getRoomPermissions().canSaveDraft
       ? 'Draft changes...'
-      : 'Read-only minted room. Changes are local only.';
+      : 'This room is read-only. Changes are local only.';
   }
 }

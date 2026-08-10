@@ -519,7 +519,17 @@ function roomSummaryFromCompactRow(
     mintedMetadataRoomVersion: row.minted_metadata_room_version,
     mintedMetadataUpdatedAt: row.minted_metadata_updated_at,
     mintedMetadataHash: row.minted_metadata_hash,
-    permissions: buildRoomPermissions(shell, viewerUserId, viewerWalletAddress, viewerIsAdmin),
+    permissions: buildRoomPermissionsFromState(
+      {
+        minted: isRoomMinted(shell),
+        hasPublishedRoom: row.published_version !== null,
+        claimerUserId: row.claimer_user_id,
+        mintedOwnerWalletAddress: row.minted_owner_wallet_address,
+      },
+      viewerUserId,
+      viewerWalletAddress,
+      viewerIsAdmin,
+    ),
   };
 }
 
@@ -1642,48 +1652,73 @@ export function buildRoomPermissions(
   viewerWalletAddress: string | null,
   viewerIsAdmin = false
 ): RoomRecord['permissions'] {
+  return buildRoomPermissionsFromState(
+    {
+      minted: isRoomMinted(record),
+      hasPublishedRoom: record.published !== null,
+      claimerUserId: record.claimerUserId,
+      mintedOwnerWalletAddress: record.mintedOwnerWalletAddress,
+    },
+    viewerUserId,
+    viewerWalletAddress,
+    viewerIsAdmin,
+  );
+}
+
+interface RoomPermissionState {
+  minted: boolean;
+  hasPublishedRoom: boolean;
+  claimerUserId: string | null;
+  mintedOwnerWalletAddress: string | null;
+}
+
+function buildRoomPermissionsFromState(
+  state: RoomPermissionState,
+  viewerUserId: string | null,
+  viewerWalletAddress: string | null,
+  viewerIsAdmin = false,
+): RoomRecord['permissions'] {
   if (viewerIsAdmin) {
     return {
       canSaveDraft: true,
       canPublish: true,
       canRevert: true,
       canMint:
-        !isRoomMinted(record) &&
-        record.published !== null &&
+        !state.minted &&
+        state.hasPublishedRoom &&
         viewerUserId !== null &&
         viewerWalletAddress !== null,
     };
   }
 
-  const minted = isRoomMinted(record);
   const ownsMintedRoom =
-    minted &&
+    state.minted &&
     viewerWalletAddress !== null &&
-    record.mintedOwnerWalletAddress !== null &&
-    normalizeAddress(viewerWalletAddress) === normalizeAddress(record.mintedOwnerWalletAddress);
+    state.mintedOwnerWalletAddress !== null &&
+    normalizeAddress(viewerWalletAddress) === normalizeAddress(state.mintedOwnerWalletAddress);
 
   return {
     canSaveDraft:
-      minted
+      state.minted
         ? ownsMintedRoom
-        : record.published === null && record.claimerUserId !== null
-          ? viewerUserId !== null && viewerUserId === record.claimerUserId
+        : !state.hasPublishedRoom && state.claimerUserId !== null
+          ? viewerUserId !== null && viewerUserId === state.claimerUserId
           : true,
     canPublish:
-      minted
+      state.minted
         ? ownsMintedRoom
-        : record.published === null && record.claimerUserId !== null
-          ? viewerUserId !== null && viewerUserId === record.claimerUserId
+        : !state.hasPublishedRoom && state.claimerUserId !== null
+          ? viewerUserId !== null && viewerUserId === state.claimerUserId
           : true,
-    canRevert: minted
+    canRevert: state.minted
       ? ownsMintedRoom
-      : viewerUserId !== null && viewerUserId === record.claimerUserId,
+      : viewerUserId !== null && viewerUserId === state.claimerUserId,
     canMint:
-      !minted &&
-      record.published !== null &&
+      !state.minted &&
+      state.hasPublishedRoom &&
       viewerUserId !== null &&
       viewerWalletAddress !== null &&
-      (record.claimerUserId === null || viewerUserId === record.claimerUserId),
+      (state.claimerUserId === null || viewerUserId === state.claimerUserId),
   };
 }
 

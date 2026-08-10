@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultRoomSnapshot } from '../../../persistence/roomModel';
+import type { D1Database, D1PreparedStatement, Env } from '../core/types';
 import {
   createOverviewRoomSnapshot,
   decodeRoomVersionCursor,
   dedupeSnapshotReferences,
   encodeRoomVersionCursor,
+  loadRoomSummary,
   loadRoomSnapshotsByReferences,
   snapshotReferenceKey,
 } from './store';
@@ -58,4 +60,84 @@ describe('compact room reads', () => {
     expect(overview.placedObjects).toEqual([]);
     expect(overview.customSprites).toEqual([]);
   });
+
+  it('keeps published unminted rooms editable when building a compact summary', async () => {
+    const summary = await loadRoomSummary(
+      createCompactSummaryEnv({ publishedVersion: 12 }),
+      '2,1',
+      { x: 2, y: 1 },
+      'another-user',
+      null,
+    );
+
+    expect(summary.permissions).toMatchObject({
+      canSaveDraft: true,
+      canPublish: true,
+      canRevert: false,
+    });
+  });
+
+  it('keeps claimed unpublished rooms private to their claimer in compact summaries', async () => {
+    const summary = await loadRoomSummary(
+      createCompactSummaryEnv({ publishedVersion: null }),
+      '2,1',
+      { x: 2, y: 1 },
+      'another-user',
+      null,
+    );
+
+    expect(summary.permissions).toMatchObject({
+      canSaveDraft: false,
+      canPublish: false,
+      canRevert: false,
+    });
+  });
 });
+
+function createCompactSummaryEnv(options: { publishedVersion: number | null }): Env {
+  const row = {
+    id: '2,1',
+    x: 2,
+    y: 1,
+    draft_title: 'Draft',
+    published_title: options.publishedVersion === null ? null : 'Published',
+    claimer_user_id: 'room-claimer',
+    claimer_principal_type: 'user',
+    claimer_agent_id: null,
+    claimer_display_name: 'Room Claimer',
+    claimed_at: '2026-03-14T20:00:40.750Z',
+    last_published_by_user_id: 'room-claimer',
+    last_published_by_principal_type: 'user',
+    last_published_by_agent_id: null,
+    last_published_by_display_name: 'Room Claimer',
+    minted_chain_id: null,
+    minted_contract_address: null,
+    minted_token_id: null,
+    minted_owner_wallet_address: null,
+    minted_owner_synced_at: null,
+    minted_metadata_room_version: null,
+    minted_metadata_updated_at: null,
+    minted_metadata_hash: null,
+    canonical_version: options.publishedVersion,
+    draft_version: options.publishedVersion ?? 1,
+    published_version: options.publishedVersion,
+    draft_updated_at: '2026-08-10T00:00:00.000Z',
+    published_updated_at:
+      options.publishedVersion === null ? null : '2026-08-10T00:00:00.000Z',
+  };
+  const statement: D1PreparedStatement = {
+    bind: () => statement,
+    first: async <T>() => row as T,
+    all: async <T>() => ({ results: [] as T[] }),
+  };
+  const database: D1Database = {
+    prepare: () => statement,
+    batch: async <T>() => [] as T[],
+  };
+
+  return {
+    DB: database,
+    JAM_DB: database,
+    ASSETS: { fetch: async () => new Response() },
+  };
+}

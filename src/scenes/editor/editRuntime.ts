@@ -332,7 +332,7 @@ export class EditorEditRuntime {
       return true;
     }
 
-    this.host.updatePersistenceStatus('Minted room is read-only for non-owners.');
+    this.host.updatePersistenceStatus('This room is read-only for this account.');
     return false;
   }
 
@@ -2367,7 +2367,7 @@ export class EditorEditRuntime {
     this.host.updatePersistenceStatus(
       this.host.canSaveDraft()
         ? 'Draft changes...'
-        : 'Read-only minted room. Changes are local only.',
+        : 'This room is read-only. Changes are local only.',
     );
   }
 

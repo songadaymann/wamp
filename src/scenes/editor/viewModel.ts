@@ -19,6 +19,7 @@ export interface BuildEditorUiViewModelOptions {
   canRefreshMintMetadata: boolean;
   saveInFlight: boolean;
   mintedMetadataCurrent: boolean;
+  publishedVersion: number;
   roomVersionHistory: RoomVersionRecord[];
   entrySource: 'world' | 'direct';
   zoomText: string;
@@ -44,6 +45,13 @@ export function shouldShowPublishNudge(
   );
 }
 
+export function isRoomHistoryAvailable(
+  publishedVersion: number,
+  roomVersionHistory: RoomVersionRecord[],
+): boolean {
+  return publishedVersion > 0 || roomVersionHistory.length > 0;
+}
+
 export function buildEditorUiViewModel(
   options: BuildEditorUiViewModelOptions,
 ): EditorUiViewModel {
@@ -61,6 +69,7 @@ export function buildEditorUiViewModel(
     canRefreshMintMetadata,
     saveInFlight,
     mintedMetadataCurrent,
+    publishedVersion,
     roomVersionHistory,
     entrySource,
     zoomText,
@@ -107,7 +116,7 @@ export function buildEditorUiViewModel(
       ? 'Refresh NFT Metadata'
       : 'Refresh NFT Metadata',
     historyHidden: false,
-    historyDisabled: roomVersionHistory.length === 0,
+    historyDisabled: !isRoomHistoryAvailable(publishedVersion, roomVersionHistory),
     fitHidden: false,
     goal: {
       goalTypeValue: roomGoal?.type ?? '',
