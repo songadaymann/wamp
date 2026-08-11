@@ -42,6 +42,14 @@ export function parseWorldTileConfig(value: unknown): WorldTileConfig {
     activeRendererVersion: record.activeRendererVersion === null
       ? null
       : requireString(record.activeRendererVersion, 'activeRendererVersion'),
+    activeRendererAssetContractHash: optionalNullableString(
+      record.activeRendererAssetContractHash,
+      'activeRendererAssetContractHash',
+    ),
+    expectedRendererAssetContractHash: optionalStringValue(
+      record.expectedRendererAssetContractHash,
+      'expectedRendererAssetContractHash',
+    ),
   };
 }
 
@@ -172,6 +180,16 @@ function requireString(value: unknown, label: string): string {
 
 function optionalString(value: unknown, label: string): string | null {
   return value === null ? null : requireString(value, label);
+}
+
+function optionalNullableString(value: unknown, label: string): string | null | undefined {
+  if (value === undefined || value === null) return value;
+  return requireString(value, label);
+}
+
+function optionalStringValue(value: unknown, label: string): string | undefined {
+  if (value === undefined) return undefined;
+  return requireString(value, label);
 }
 
 function requireBoolean(value: unknown, label: string): boolean {

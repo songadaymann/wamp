@@ -103,6 +103,8 @@ export interface WorldTileConfig {
   available: boolean;
   rolloutPercentage: number;
   activeRendererVersion: string | null;
+  activeRendererAssetContractHash?: string | null;
+  expectedRendererAssetContractHash?: string;
 }
 
 export function isWorldTileLevel(value: number): value is WorldTileLevel {

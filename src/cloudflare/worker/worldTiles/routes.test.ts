@@ -6,6 +6,7 @@ import {
   parseWorldTileManifestQuery,
   scheduleWorldTileOutboxDispatch,
 } from './routes';
+import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../../../worldTiles/assetContract';
 
 describe('world tile HTTP routes', () => {
   it('accepts signed safe coordinates and enforces the 16 by 16 target limit', () => {
@@ -58,6 +59,11 @@ describe('world tile HTTP routes', () => {
     const request = new Request('https://api.wamp.land/api/world/tiles/config');
     const publicResponse = await handleWorldTileConfigRequest(request, env);
     expect(publicResponse.status).toBe(200);
+    await expect(publicResponse.clone().json()).resolves.toMatchObject({
+      available: true,
+      activeRendererAssetContractHash: WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH,
+      expectedRendererAssetContractHash: WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH,
+    });
     expect(publicResponse.headers.get('Cache-Control')).toBe(
       'public, max-age=20, stale-while-revalidate=40'
     );
@@ -73,6 +79,20 @@ describe('world tile HTTP routes', () => {
     const privateResponse = await handleWorldTileConfigRequest(request, env, undefined, true);
     expect(privateResponse.headers.get('Cache-Control')).toBe('private, no-store');
     expect(privateResponse.headers.get('X-WAMP-Cache')).toBe('bypass');
+  });
+
+  it('disables tiled reads when the active renderer predates the authoring registry', async () => {
+    const fake = createReadDatabase('authoring-catalog-v1:stale');
+    const response = await handleWorldTileConfigRequest(
+      new Request('https://api.wamp.land/api/world/tiles/config'),
+      createEnv(fake.database),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      available: false,
+      activeRendererAssetContractHash: 'authoring-catalog-v1:stale',
+      expectedRendererAssetContractHash: WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH,
+    });
   });
 
   it('assembles a stable manifest using only read statements', async () => {
@@ -175,7 +195,9 @@ function createEnv(database: D1Database): Env {
   };
 }
 
-function createReadDatabase(): { database: D1Database; queries: string[] } {
+function createReadDatabase(
+  assetContractHash = WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH,
+): { database: D1Database; queries: string[] } {
   const queries: string[] = [];
   class Statement implements D1PreparedStatement {
     constructor(readonly query: string) {}
@@ -189,7 +211,7 @@ function createReadDatabase(): { database: D1Database; queries: string[] } {
           status: 'active',
           render_origin: 'https://abc123.wampland.pages.dev',
           renderer_contract_hash: 'contract-a',
-          asset_contract_hash: 'assets-a',
+          asset_contract_hash: assetContractHash,
           created_at: '2026-07-19T00:00:00.000Z',
           activated_at: '2026-07-19T00:01:00.000Z',
           retired_at: null,
@@ -198,8 +220,11 @@ function createReadDatabase(): { database: D1Database; queries: string[] } {
       return null;
     }
     async all<T>(): Promise<{ results: T[] }> {
-      if (/^\s*select\s+version\s+from\s+world_tile_renderer_versions/i.test(this.query)) {
-        return { results: [{ version: 'renderer-a' }] as T[] };
+      if (/^\s*select\s+version,\s+asset_contract_hash\s+from\s+world_tile_renderer_versions/i.test(this.query)) {
+        return { results: [{
+          version: 'renderer-a',
+          asset_contract_hash: WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH,
+        }] as T[] };
       }
       if (/from\s+world_tile_published_room_summaries/i.test(this.query)) {
         return { results: [{

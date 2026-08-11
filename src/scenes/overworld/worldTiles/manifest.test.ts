@@ -77,7 +77,14 @@ describe('world tile wire contracts', () => {
       available: true,
       rolloutPercentage: 25,
       activeRendererVersion: 'renderer-v1',
-    })).toMatchObject({ available: true, rolloutPercentage: 25 });
+      activeRendererAssetContractHash: 'authoring-catalog-v1:1234567890abcdef',
+      expectedRendererAssetContractHash: 'authoring-catalog-v1:1234567890abcdef',
+    })).toMatchObject({
+      available: true,
+      rolloutPercentage: 25,
+      activeRendererAssetContractHash: 'authoring-catalog-v1:1234567890abcdef',
+      expectedRendererAssetContractHash: 'authoring-catalog-v1:1234567890abcdef',
+    });
     expect(() => parseWorldTileConfig({ schemaVersion: 2 }))
       .toThrow(WorldTileManifestCompatibilityError);
   });

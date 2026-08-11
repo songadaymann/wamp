@@ -20,6 +20,7 @@ import {
   type WorldTileRoomSummary,
 } from '../../../worldTiles/model';
 import type { Env } from '../core/types';
+import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../../../worldTiles/assetContract';
 import {
   loadActiveWorldTileRendererVersion,
   loadPendingWorldTileOutbox,
@@ -70,11 +71,18 @@ export async function loadWorldTileConfig(
 ): Promise<WorldTileConfig> {
   const activeRenderer = await loadActiveWorldTileRendererVersion(env);
   const publicBaseUrl = normalizeWorldTilePublicBaseUrl(env.WORLD_TILE_PUBLIC_BASE_URL);
+  const assetContractMatches = activeRenderer?.asset_contract_hash
+    === WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH;
   return {
     schemaVersion: WORLD_TILE_SCHEMA_VERSION,
-    available: worldTileReadsEnabled(env) && activeRenderer !== null && publicBaseUrl !== null,
+    available: worldTileReadsEnabled(env)
+      && activeRenderer !== null
+      && publicBaseUrl !== null
+      && assetContractMatches,
     rolloutPercentage: parseWorldTileRolloutPercentage(env.TILED_OVERWORLD_ROLLOUT_PERCENT),
     activeRendererVersion: activeRenderer?.version ?? null,
+    activeRendererAssetContractHash: activeRenderer?.asset_contract_hash ?? null,
+    expectedRendererAssetContractHash: WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH,
   };
 }
 
@@ -98,7 +106,10 @@ export async function loadWorldTileManifest(
     targetRoomBounds,
     { includeRooms: options.includeRooms !== false },
   );
-  if (!readSet.rendererVersion) return null;
+  if (
+    !readSet.rendererVersion
+    || readSet.rendererAssetContractHash !== WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH
+  ) return null;
   const manifest = buildWorldTileManifest({
     rendererVersion: readSet.rendererVersion,
     level,

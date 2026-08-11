@@ -18,11 +18,13 @@ import {
 import { getAgentTilesetCatalogResponse } from './tilesetCatalog';
 import { ROOM_DRAFT_COMMAND_TYPES } from '../cloudflare/worker/rooms/commandCore';
 import { writeAuthoringDocuments } from './authoringDocumentsWriter';
+import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../worldTiles/assetContract';
 
 describe('authoring catalog', () => {
   it('has one entry for every canonical built-in registry item', () => {
     const catalog = getAuthoringCatalog();
     expect(catalog.schemaVersion).toBe(1);
+    expect(catalog.rendererAssetContractHash).toBe(WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH);
     expect(catalog.tilesets.map((entry) => entry.key)).toEqual(TILESETS.map((entry) => entry.key));
     expect(catalog.objects.map((entry) => entry.id)).toEqual(GAME_OBJECTS.map((entry) => entry.id));
     expect(catalog.backgrounds.groups.map((entry) => entry.id)).toEqual(BACKGROUND_GROUPS.map((entry) => entry.id));

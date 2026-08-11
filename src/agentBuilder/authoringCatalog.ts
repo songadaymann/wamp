@@ -47,6 +47,7 @@ import {
   renderAgentTilesetMarkdown,
   type AgentTilesetCatalogEntry,
 } from './tilesetCatalog';
+import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../worldTiles/assetContract';
 
 export const AUTHORING_CATALOG_SCHEMA_VERSION = 1 as const;
 export const AUTHORING_CATALOG_CACHE_CONTROL = 'public, max-age=300';
@@ -284,6 +285,7 @@ function buildObjectCatalogEntry(config: GameObjectConfig): AuthoringObjectCatal
 export function getAuthoringCatalog() {
   return {
     schemaVersion: AUTHORING_CATALOG_SCHEMA_VERSION,
+    rendererAssetContractHash: WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH,
     room: {
       width: ROOM_WIDTH,
       height: ROOM_HEIGHT,

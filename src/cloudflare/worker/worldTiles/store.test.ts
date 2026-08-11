@@ -93,8 +93,8 @@ describe('world tile read model store', () => {
   it('loads one active-version-consistent manifest read set in one replica-eligible batch', async () => {
     const fake = createFakeDatabase({
       all(query) {
-        if (/^\s*select\s+version\s+from\s+world_tile_renderer_versions/i.test(query)) {
-          return [{ version: 'renderer-consistent' }];
+        if (/^\s*select\s+version,\s+asset_contract_hash\s+from\s+world_tile_renderer_versions/i.test(query)) {
+          return [{ version: 'renderer-consistent', asset_contract_hash: 'assets-consistent' }];
         }
         if (/from\s+world_render_tiles/i.test(query) && /\(level, tile_x, tile_y\) in/i.test(query)) {
           return [{
@@ -158,6 +158,7 @@ describe('world tile read model store', () => {
     expect(leafSql).not.toMatch(/ready_generation|ready_empty|ready_at/);
     expect(result).toMatchObject({
       rendererVersion: 'renderer-consistent',
+      rendererAssetContractHash: 'assets-consistent',
       tileRows: [{ renderer_version: 'renderer-consistent', tile_x: -1, tile_y: 2 }],
       leafChanges: [{ tile_x: -1, tile_y: 2, desired_empty: 1 }],
       rooms: [{
@@ -172,8 +173,8 @@ describe('world tile read model store', () => {
   it('omits the room-summary statement entirely for coverage-only manifests', async () => {
     const fake = createFakeDatabase({
       all(query) {
-        if (/^\s*select\s+version\s+from\s+world_tile_renderer_versions/i.test(query)) {
-          return [{ version: 'renderer-coverage' }];
+        if (/^\s*select\s+version,\s+asset_contract_hash\s+from\s+world_tile_renderer_versions/i.test(query)) {
+          return [{ version: 'renderer-coverage', asset_contract_hash: 'assets-coverage' }];
         }
         return [];
       },
@@ -198,8 +199,8 @@ describe('world tile read model store', () => {
   it('keeps every bounded coordinate chunk inside the same manifest batch', async () => {
     const fake = createFakeDatabase({
       all(query) {
-        if (/^\s*select\s+version\s+from\s+world_tile_renderer_versions/i.test(query)) {
-          return [{ version: 'renderer-a' }];
+        if (/^\s*select\s+version,\s+asset_contract_hash\s+from\s+world_tile_renderer_versions/i.test(query)) {
+          return [{ version: 'renderer-a', asset_contract_hash: 'assets-a' }];
         }
         return [];
       },
@@ -227,8 +228,8 @@ describe('world tile read model store', () => {
   it('retries the complete manifest read batch with the legacy summary only when the table is missing', async () => {
     const fake = createFakeDatabase({
       all(query) {
-        if (/^\s*select\s+version\s+from\s+world_tile_renderer_versions/i.test(query)) {
-          return [{ version: 'renderer-a' }];
+        if (/^\s*select\s+version,\s+asset_contract_hash\s+from\s+world_tile_renderer_versions/i.test(query)) {
+          return [{ version: 'renderer-a', asset_contract_hash: 'assets-a' }];
         }
         if (/from\s+world_tile_published_room_summaries/i.test(query)) {
           throw new Error('D1_ERROR: no such table: world_tile_published_room_summaries: SQLITE_ERROR');

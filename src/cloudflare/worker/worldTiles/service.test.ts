@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WorldTileCoordinate } from '../../../worldTiles/model';
 import type { D1Database, D1PreparedStatement } from '../core/types';
+import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../../../worldTiles/assetContract';
 import {
   buildWorldTileGenerationJob,
   buildWorldTileManifest,
@@ -250,6 +251,22 @@ describe('world tile manifest service', () => {
       .toBe(false);
   });
 
+  it('refuses immutable manifests rendered against a stale authoring registry', async () => {
+    const fake = createManifestDatabase('authoring-catalog-v1:stale');
+    const result = await loadWorldTileManifest({
+      DB: fake.database,
+      TILED_OVERWORLD_READS: '1',
+      WORLD_TILE_PUBLIC_BASE_URL: 'https://tiles.wamp.land',
+    }, 4, {
+      minTileX: 0,
+      maxTileX: 0,
+      minTileY: 0,
+      maxTileY: 0,
+    });
+
+    expect(result).toBeNull();
+  });
+
   it('creates Queue messages containing identity only and no room bytes', () => {
     const job = buildWorldTileGenerationJob(createOutboxRow(), '2026-07-19T10:00:00.000Z');
     expect(job).toEqual({
@@ -357,7 +374,9 @@ function createOutboxRow(): WorldRenderTileOutboxRow {
   };
 }
 
-function createManifestDatabase(): {
+function createManifestDatabase(
+  assetContractHash = WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH,
+): {
   database: D1Database;
   queries: string[];
   batchSizes: number[];
@@ -379,8 +398,11 @@ function createManifestDatabase(): {
     }
 
     async all<T>(): Promise<{ results: T[] }> {
-      if (/^\s*select\s+version\s+from\s+world_tile_renderer_versions/i.test(this.query)) {
-        return { results: [{ version: 'renderer-batched' }] as T[] };
+      if (/^\s*select\s+version,\s+asset_contract_hash\s+from\s+world_tile_renderer_versions/i.test(this.query)) {
+        return { results: [{
+          version: 'renderer-batched',
+          asset_contract_hash: assetContractHash,
+        }] as T[] };
       }
       if (/from\s+world_render_tiles/i.test(this.query) && /\(level, tile_x, tile_y\) in/i.test(this.query)) {
         return { results: [createTileRow({
