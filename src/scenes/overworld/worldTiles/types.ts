@@ -34,6 +34,8 @@ export interface WorldTileConfig {
   available: boolean;
   rolloutPercentage: number;
   activeRendererVersion: string | null;
+  activeRendererAssetContractHash?: string | null;
+  expectedRendererAssetContractHash?: string;
 }
 
 export interface WorldTileRoomSummary {

@@ -87,6 +87,7 @@ export type WorldRenderTileStaleLeafRow = Pick<WorldRenderTileLeafChangeRow,
 
 export interface WorldTileManifestReadSet {
   rendererVersion: string | null;
+  rendererAssetContractHash: string | null;
   tileRows: WorldRenderTileManifestRow[];
   leafChanges: WorldRenderTileStaleLeafRow[];
   rooms: WorldTileRoomSummary[];
@@ -158,6 +159,7 @@ interface PublishedWorldTileRoomSummaryRow {
 
 interface ActiveWorldTileRendererVersionProjection {
   version: string;
+  asset_contract_hash: string;
 }
 
 interface D1RowsResult {
@@ -167,6 +169,13 @@ interface D1RowsResult {
 const WORLD_TILE_PUBLISHED_ROOM_SUMMARY_TABLE = 'world_tile_published_room_summaries';
 const ACTIVE_WORLD_TILE_RENDERER_VERSION_SQL = `
   SELECT version
+  FROM world_tile_renderer_versions
+  WHERE status = 'active'
+  LIMIT 1
+`;
+
+const ACTIVE_WORLD_TILE_RENDERER_CONTRACT_SQL = `
+  SELECT version, asset_contract_hash
   FROM world_tile_renderer_versions
   WHERE status = 'active'
   LIMIT 1
@@ -261,7 +270,7 @@ async function loadWorldTileManifestReadSetFromSession(
     )]
     : [];
   const statements = [
-    database.prepare(ACTIVE_WORLD_TILE_RENDERER_VERSION_SQL),
+    database.prepare(ACTIVE_WORLD_TILE_RENDERER_CONTRACT_SQL),
     ...tileStatements,
     database.prepare(
       `
@@ -288,7 +297,7 @@ async function loadWorldTileManifestReadSetFromSession(
   ];
   const results = await database.batch(statements) as D1RowsResult[];
   const tileResultEnd = 1 + tileStatements.length;
-  const rendererVersion = readD1Rows<ActiveWorldTileRendererVersionProjection>(results[0])[0]?.version ?? null;
+  const renderer = readD1Rows<ActiveWorldTileRendererVersionProjection>(results[0])[0] ?? null;
   const tileRows = results.slice(1, tileResultEnd)
     .flatMap((result) => readD1Rows<WorldRenderTileManifestRow>(result));
   const leafChanges = readD1Rows<WorldRenderTileStaleLeafRow>(results[tileResultEnd]);
@@ -296,7 +305,8 @@ async function loadWorldTileManifestReadSetFromSession(
     ? readD1Rows<PublishedWorldTileRoomSummaryRow>(results[tileResultEnd + 1])
     : [];
   return {
-    rendererVersion,
+    rendererVersion: renderer?.version ?? null,
+    rendererAssetContractHash: renderer?.asset_contract_hash ?? null,
     tileRows,
     leafChanges,
     rooms: mapPublishedWorldTileRoomSummaryRows(roomRows),

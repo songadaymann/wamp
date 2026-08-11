@@ -61,6 +61,13 @@ current; an empty parent is a ready marker without an R2 object. One-minute repa
 undispatched outbox rows and expired leases. Object garbage collection is an explicit guarded
 operation for unreferenced objects older than 30 days.
 
+Every build derives a versioned `rendererAssetContractHash` from the canonical built-in tileset,
+object, and background registries and publishes it through `GET /api/authoring/catalog`. A renderer
+version must store that exact value as its `asset_contract_hash`. If the active immutable renderer
+does not match the current registry, config reports tiled reads unavailable and manifests return
+404, activating the current browser-composed fallback instead of serving stale parent imagery.
+Backfill and activate a matching immutable renderer to restore tiled reads after registry changes.
+
 ## Client coverage contract
 
 Cold entry paints the smallest complete L0 cover first and then refines. Attached parents, stale
@@ -93,6 +100,10 @@ Safety must pass full parity, object-existence checks, zero-DLQ status, and two 
 probe suites before activation. Production advances through stable anonymous cohorts at 5%, 25%,
 and 100%, holding each cohort for at least 24 hours. Compact rendering remains the rollback path for
 30 successful days at 100%; only then may browser-side published-room composition be deleted.
+
+Use the current catalog's `rendererAssetContractHash` for the backfill command's
+`--asset-contract-hash`. The public world-tile config exposes both the active and expected hashes
+for diagnosis. Never activate a renderer whose asset contract differs from the catalog.
 
 Run the standalone safety parity gate against an activated renderer with:
 
