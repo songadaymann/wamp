@@ -534,6 +534,15 @@ const CYBERCITY_LIGHT_EMISSION = Object.freeze({
   glowAlpha: 0.1,
 } satisfies TileLightEmissionConfig);
 
+const CYBERCITY_FENCE_EMISSION = Object.freeze({
+  offsetY: 0,
+  offsetX: 0,
+  revealRadiusPx: 18,
+  glowRadiusPx: 12,
+  glowColor: 0xe64312,
+  glowAlpha: 0.1,
+} satisfies TileLightEmissionConfig);
+
 const CAVE_LANTERN_LIGHT_INDICES = [62, 64];
 const GOTHIC_CANDLE_LIGHT_INDICES = [59];
 const GOTHIC_GARGOYLE_LIGHT_INDICES = [65];
@@ -546,6 +555,7 @@ const TEXTGLOW_INDICES = [
   40, 41, 42, 43,
 ];
 const CYBERCITY_LIGHT_INDICES = [2,3,49,50,51,73, 74, 75, 76];
+const CYBERCITY_FENCE_INDICES = [44,45,46,56,57,58];
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
 // Keep existing ranges stable because persisted room tile data stores absolute gids.
@@ -995,7 +1005,32 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'cybercity yellow',
     name: 'Cybercity Yellow',
-    path: 'assets/tilesets/cybercity_yellow.png?v=2026-08-08-expanded-cybercity',
+    path: 'assets/tilesets/cybercity_yellow.png',
+    imageWidth: 192,
+    imageHeight: 112,
+    columns: 12,
+    rows: 7,
+    tileCount: 84,
+    firstGid: 1633,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_CYBERCITY, DECORATED_TOP_PROFILE),
+      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_CYBERCITY, NO_COLLISION_PROFILE),
+    },
+    lightEmissionProfiles: {
+      ...createTilesetLightEmissionProfiles(CYBERCITY_LIGHT_INDICES, CYBERCITY_LIGHT_EMISSION),
+      ...createTilesetLightEmissionProfiles(CYBERCITY_FENCE_INDICES, CYBERCITY_FENCE_EMISSION),
+    },
+    uiTheme: {
+      accentCool: 0x84b95d,
+      accentWarm: 0xcd9158,
+      accentHot: 0xe76f50,
+      accentAlt: 0xd8b373,
+    },
+  },
+  {
+    key: 'cybercity pink',
+    name: 'Cybercity Pink',
+    path: 'assets/tilesets/cybercity_pink.png?v=2026-08-08-expanded-cybercity',
     imageWidth: 192,
     imageHeight: 112,
     columns: 12,
