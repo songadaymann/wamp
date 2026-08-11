@@ -537,10 +537,10 @@ const CYBERCITY_LIGHT_EMISSION = Object.freeze({
 const CYBERCITY_FENCE_EMISSION = Object.freeze({
   offsetY: 0,
   offsetX: 0,
-  revealRadiusPx: 18,
-  glowRadiusPx: 12,
+  revealRadiusPx: 10,
+  glowRadiusPx: 18,
   glowColor: 0xe64312,
-  glowAlpha: 0.1,
+  glowAlpha: 0.25,
 } satisfies TileLightEmissionConfig);
 
 const CAVE_LANTERN_LIGHT_INDICES = [62, 64];
