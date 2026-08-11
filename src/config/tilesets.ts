@@ -1005,7 +1005,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'cybercity yellow',
     name: 'Cybercity Yellow',
-    path: 'assets/tilesets/cybercity_yellow.png',
+    path: 'assets/tilesets/cybercity_yellow.png?v=2026-08-08-expanded-cybercity',
     imageWidth: 192,
     imageHeight: 112,
     columns: 12,
@@ -1018,7 +1018,6 @@ export const TILESETS: TilesetConfig[] = [
     },
     lightEmissionProfiles: {
       ...createTilesetLightEmissionProfiles(CYBERCITY_LIGHT_INDICES, CYBERCITY_LIGHT_EMISSION),
-      ...createTilesetLightEmissionProfiles(CYBERCITY_FENCE_INDICES, CYBERCITY_FENCE_EMISSION),
     },
     uiTheme: {
       accentCool: 0x84b95d,
@@ -1030,19 +1029,20 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'cybercity pink',
     name: 'Cybercity Pink',
-    path: 'assets/tilesets/cybercity_pink.png?v=2026-08-08-expanded-cybercity',
+    path: 'assets/tilesets/cybercity_pink.png',
     imageWidth: 192,
     imageHeight: 112,
     columns: 12,
     rows: 7,
     tileCount: 84,
-    firstGid: 1633,
+    firstGid: 1717,
     terrainCollisionProfiles: {
       ...createTilesetCollisionProfiles(TOP_DECOR_INDICES_CYBERCITY, DECORATED_TOP_PROFILE),
       ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_CYBERCITY, NO_COLLISION_PROFILE),
     },
     lightEmissionProfiles: {
       ...createTilesetLightEmissionProfiles(CYBERCITY_LIGHT_INDICES, CYBERCITY_LIGHT_EMISSION),
+      ...createTilesetLightEmissionProfiles(CYBERCITY_FENCE_INDICES, CYBERCITY_FENCE_EMISSION),
     },
     uiTheme: {
       accentCool: 0x84b95d,
