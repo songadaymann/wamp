@@ -149,6 +149,7 @@ export class WorldTilePhaserLayer {
       if (this.repairStableDisplay(entriesByKey, displayableKeys)) {
         this.onObjectsChanged?.();
       }
+      this.syncPinnedTextures(displayableKeys);
       return;
     }
     this.displaySignature = signature;
@@ -206,6 +207,7 @@ export class WorldTilePhaserLayer {
             image.destroy();
             this.imagesByAddressKey.delete(key);
           }
+          this.syncPinnedTextures([...this.currentDesiredKeys]);
           this.onObjectsChanged?.();
         },
       });
@@ -216,6 +218,7 @@ export class WorldTilePhaserLayer {
         this.imagesByAddressKey.delete(key);
       }
     }
+    this.syncPinnedTextures(displayableKeys);
     this.onObjectsChanged?.();
   }
 
@@ -326,18 +329,21 @@ export class WorldTilePhaserLayer {
   }
 
   private syncPinnedTextures(displayableKeys: readonly string[]): void {
-    const nextPinned = new Set(
-      displayableKeys.flatMap((key) => {
+    // Phaser Images keep their Frame references through the outgoing fade. A
+    // texture cannot become evictable until every attached Image releases it.
+    const nextPinned = new Set([
+      ...displayableKeys.flatMap((key) => {
         const textureKey = this.textureByAddressKey.get(key)?.textureKey;
         return textureKey ? [textureKey] : [];
       }),
-    );
+      ...[...this.imagesByAddressKey.values()].map((image) => image.texture.key),
+    ]);
+    for (const textureKey of nextPinned) this.textureCache.pin(textureKey);
     for (const textureKey of this.pinnedTextureKeys) {
       if (!nextPinned.has(textureKey)) {
         for (const eviction of this.textureCache.unpin(textureKey)) this.destroyInstalledTexture(eviction.value);
       }
     }
-    for (const textureKey of nextPinned) this.textureCache.pin(textureKey);
     this.pinnedTextureKeys = nextPinned;
   }
 
