@@ -223,13 +223,16 @@ export async function hasViewerRatedRoomVersion(
       SELECT 1 AS found
       FROM room_runs
       WHERE room_id = ?
-        AND room_version IN (${roomVersions.map(() => '?').join(', ')})
+        AND room_version IN (
+          SELECT CAST(value AS INTEGER)
+          FROM json_each(?)
+        )
         AND user_id = ?
         AND result != 'active'
       LIMIT 1
     `
   )
-    .bind(roomId, ...roomVersions, userId)
+    .bind(roomId, JSON.stringify(roomVersions), userId)
     .first<{ found: number | string | null }>();
 
   return Number(row?.found ?? 0) === 1;
@@ -2062,10 +2065,13 @@ async function loadLatestDifficultyVotesByUser(
         carried_from_version
       FROM room_difficulty_votes
       WHERE room_id = ?
-        AND room_version IN (${roomVersions.map(() => '?').join(', ')})
+        AND room_version IN (
+          SELECT CAST(value AS INTEGER)
+          FROM json_each(?)
+        )
     `
   )
-    .bind(roomId, ...roomVersions)
+    .bind(roomId, JSON.stringify(roomVersions))
     .all<RoomDifficultyVoteRow>();
 
   return dedupeLatestDifficultyVotesByUser(result.results);

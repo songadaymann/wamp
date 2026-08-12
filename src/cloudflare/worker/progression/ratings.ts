@@ -362,13 +362,16 @@ async function hasCompletedRoomRatingWindow(
       SELECT 1 AS found
       FROM room_runs
       WHERE room_id = ?
-        AND room_version IN (${versionFamily.map(() => '?').join(', ')})
+        AND room_version IN (
+          SELECT CAST(value AS INTEGER)
+          FROM json_each(?)
+        )
         AND user_id = ?
         AND result = 'completed'
       LIMIT 1
     `
   )
-    .bind(roomId, ...versionFamily, userId)
+    .bind(roomId, JSON.stringify(versionFamily), userId)
     .first<{ found: number | string | null }>();
 
   return parseRowNumber(row?.found) === 1;
@@ -389,13 +392,16 @@ async function hasCompletedCourseRatingWindow(
       SELECT 1 AS found
       FROM course_runs
       WHERE course_id = ?
-        AND course_version IN (${versionFamily.map(() => '?').join(', ')})
+        AND course_version IN (
+          SELECT CAST(value AS INTEGER)
+          FROM json_each(?)
+        )
         AND user_id = ?
         AND result = 'completed'
       LIMIT 1
     `
   )
-    .bind(courseId, ...versionFamily, userId)
+    .bind(courseId, JSON.stringify(versionFamily), userId)
     .first<{ found: number | string | null }>();
 
   return parseRowNumber(row?.found) === 1;

@@ -933,13 +933,16 @@ export async function loadCompletedRoomRunsForVersions(
         verification_snapshot_hash
       FROM room_runs
       WHERE room_id = ?
-        AND room_version IN (${roomVersions.map(() => '?').join(', ')})
+        AND room_version IN (
+          SELECT CAST(value AS INTEGER)
+          FROM json_each(?)
+        )
         AND result = 'completed'
         AND ${sqlIsVerificationAccepted('room_runs')}
         AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
     `
   )
-    .bind(roomId, ...roomVersions)
+    .bind(roomId, JSON.stringify(roomVersions))
     .all<RoomRunRow>();
 
   return result.results.map(mapRoomRunRow);

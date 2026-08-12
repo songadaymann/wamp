@@ -48,8 +48,7 @@ function getGlobalLeaderboardSqlOrderClause(): string {
   return 'total_points DESC, completed_runs DESC, total_rooms_published DESC, user_display_name ASC, user_id ASC';
 }
 
-function buildRankedRoomLeaderboardCte(goal: RoomGoal, versionCount: number): string {
-  const versionPlaceholders = Array.from({ length: versionCount }, () => '?').join(', ');
+function buildRankedRoomLeaderboardCte(goal: RoomGoal): string {
   const orderClause = getRoomLeaderboardSqlOrderClause(goal);
   const resultPredicate =
     goal.type === 'npc_quest' && goal.questType === 'protect'
@@ -72,7 +71,12 @@ function buildRankedRoomLeaderboardCte(goal: RoomGoal, versionCount: number): st
         ) AS user_row_num
       FROM room_runs
       WHERE room_id = ?
-        AND room_version IN (${versionPlaceholders})
+        -- Leaderboard families are unbounded; keep them in one D1 bind instead
+        -- of generating a placeholder per historical room version.
+        AND room_version IN (
+          SELECT CAST(value AS INTEGER)
+          FROM json_each(?)
+        )
         AND ${resultPredicate}
         AND elapsed_ms IS NOT NULL
         AND finished_at IS NOT NULL
@@ -121,7 +125,7 @@ export async function loadRankedRoomLeaderboardRows(
     return [];
   }
 
-  const cte = buildRankedRoomLeaderboardCte(goal, roomVersions.length);
+  const cte = buildRankedRoomLeaderboardCte(goal);
   const result = await env.DB.prepare(
     `
       ${cte}
@@ -140,7 +144,7 @@ export async function loadRankedRoomLeaderboardRows(
       LIMIT ?
     `
   )
-    .bind(roomId, ...roomVersions, limit)
+    .bind(roomId, JSON.stringify(roomVersions), limit)
     .all<RankedRoomLeaderboardRow>();
 
   return result.results;
@@ -157,7 +161,7 @@ export async function loadViewerRankedRoomLeaderboardRow(
     return null;
   }
 
-  const cte = buildRankedRoomLeaderboardCte(goal, roomVersions.length);
+  const cte = buildRankedRoomLeaderboardCte(goal);
   const row = await env.DB.prepare(
     `
       ${cte}
@@ -176,7 +180,7 @@ export async function loadViewerRankedRoomLeaderboardRow(
       LIMIT 1
     `
   )
-    .bind(roomId, ...roomVersions, viewerUserId)
+    .bind(roomId, JSON.stringify(roomVersions), viewerUserId)
     .first<RankedRoomLeaderboardRow>();
 
   return row ?? null;

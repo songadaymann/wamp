@@ -125,6 +125,38 @@ describe('world tile Phaser layer transitions', () => {
     expect(enteringImage.alpha).toBe(0);
     expect(layer.getHealthSnapshot().repairCount).toBe(0);
   });
+
+  it('keeps an outgoing image texture alive until its fade completes', () => {
+    const tileBytes = 642 * 354 * 4;
+    const scene = createScene();
+    const layer = new WorldTilePhaserLayer(scene.value, tileBytes * 2);
+    const first = entry(0);
+    const second = entry(1);
+    const third = entry(2);
+    const entries = new Map([
+      [key(first), first],
+      [key(second), second],
+      [key(third), third],
+    ]);
+    layer.installDecoded(first, source());
+    layer.installDecoded(second, source());
+    layer.syncDisplay(entries, [key(first)], { blend: true, staleRoomIds: [] });
+    const firstImage = scene.images[0];
+    const firstTextureKey = firstImage.texture.key;
+
+    layer.syncDisplay(entries, [key(second)], { blend: true, staleRoomIds: [] });
+    const fadeOut = scene.tweens.find((tween) => tween.onComplete);
+    expect(fadeOut).toBeDefined();
+
+    expect(layer.installDecoded(third, source())).toBe(false);
+    expect(scene.removedTextureKeys).not.toContain(firstTextureKey);
+    expect(firstImage.destroyed).toBe(false);
+
+    fadeOut?.onComplete?.();
+    expect(firstImage.destroyed).toBe(true);
+    expect(layer.installDecoded(third, source())).toBe(true);
+    expect(scene.removedTextureKeys).toContain(firstTextureKey);
+  });
 });
 
 function createScene() {
@@ -135,6 +167,7 @@ function createScene() {
     setFilter: () => void;
   }>();
   const images: FakeImage[] = [];
+  const removedTextureKeys: string[] = [];
   const tweens: Array<{ onComplete?: () => void; targets?: FakeImage[] }> = [];
   const activeTweenTargets = new Set<FakeImage>();
   const killTweensOf = vi.fn((target: FakeImage) => {
@@ -155,7 +188,10 @@ function createScene() {
         return texture;
       },
       get: (textureKey: string) => textureRecords.get(textureKey)!,
-      remove: (textureKey: string) => { textureRecords.delete(textureKey); },
+      remove: (textureKey: string) => {
+        removedTextureKeys.push(textureKey);
+        textureRecords.delete(textureKey);
+      },
     },
     add: {
       image: (_x: number, _y: number, textureKey: string) => {
@@ -175,7 +211,7 @@ function createScene() {
       isTweening: (target: FakeImage) => activeTweenTargets.has(target),
     },
   };
-  return { value: value as never, images, tweens, killTweensOf };
+  return { value: value as never, images, tweens, killTweensOf, removedTextureKeys };
 }
 
 class FakeImage {
