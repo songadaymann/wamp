@@ -1,0 +1,66 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "everybodys-platformer-map-screenshots",
+  "main": "src/mapScreenshot/worker.ts",
+  "compatibility_date": "2026-07-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "keep_vars": true,
+  "browser": {
+    "binding": "MAP_SCREENSHOT_BROWSER"
+  },
+  "triggers": {
+    // AUTO_CAPTURE_CRON default: 0 10 * * * (10:00 UTC ≈ 6am Eastern during EDT)
+    "crons": ["0 10 * * *"]
+  },
+  "vars": {
+    "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles.wamp.land"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "everybodys-platformer-db",
+      "database_id": "3cba45fc-4f29-4081-89f7-c57ab3179292",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "SCREENSHOTS",
+      // Create once: npx wrangler r2 bucket create everybodys-platformer-map-screenshots
+      "bucket_name": "everybodys-platformer-map-screenshots"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  },
+  "env": {
+    "safety": {
+      "name": "everybodys-platformer-safety-map-screenshots",
+      "preview_urls": true,
+      "browser": {
+        "binding": "MAP_SCREENSHOT_BROWSER"
+      },
+      "vars": {
+        "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles-safety.wamp.land"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "everybodys-platformer-safety-db",
+          "database_id": "27f64d18-5d6d-45a0-9361-c09ec1a805a6",
+          "migrations_dir": "./migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "SCREENSHOTS",
+          "bucket_name": "everybodys-platformer-safety-map-screenshots"
+        }
+      ]
+    }
+  }
+}
