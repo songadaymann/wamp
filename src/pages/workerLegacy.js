@@ -1,11 +1,8 @@
 // Rendering implementation retained separately while the typed Pages entry and route shell evolve.
-import decodeJpegBytes from 'jpeg-js/lib/decoder.js';
 import {
   BACKGROUND_GROUPS,
   GAME_OBJECTS,
   ROOM_HEIGHT,
-  ROOM_PX_HEIGHT,
-  ROOM_PX_WIDTH,
   ROOM_WIDTH,
   TILESETS,
   TILE_FLIP_X_FLAG,
@@ -19,7 +16,6 @@ import {
   ROOM_SHARE_IMAGE_HEIGHT,
   ROOM_SHARE_IMAGE_WIDTH,
   loadPublishedRoomSnapshot,
-  resolveApiBaseUrl,
 } from './shareMetadata.ts';
 import {
   handleSharePageRequest,
@@ -28,10 +24,8 @@ import {
 import {
   blendRect,
   blitImageNearest,
-  blitImageSmooth,
   createCanvas,
   darken,
-  decodePng,
   drawBorder,
   drawDiamond,
   drawHorizonSteps,
@@ -40,27 +34,24 @@ import {
   fillEllipse,
   fillRect,
   hexToNumber,
-  isJpeg,
-  isPng,
   lighten,
 } from './roomImagePrimitives.ts';
+import {
+  drawCustomBackgroundImage,
+  loadAssetImageData,
+  loadCustomBackgroundImageData,
+  parseCustomBackground,
+} from './roomImageAssets.ts';
 
 const ROOM_IMAGE_TIMEOUT_MS = 3500;
-const CUSTOM_BACKGROUND_PREFIX = 'custom:';
 const CUSTOM_SPRITE_OBJECT_PREFIX = 'custom_sprite:';
 const SOLID_BACKGROUND_PREFIX = 'solid:';
-const DEFAULT_CUSTOM_BACKGROUND_FIT = 'tile';
-const MAX_TILED_PHOTO_WIDTH = 128;
-const MAX_TILED_PHOTO_HEIGHT = 96;
-const MAX_CUSTOM_BACKGROUND_DECODE_MP = 8;
-const MAX_CUSTOM_BACKGROUND_DECODE_MEMORY_MB = 96;
 const PREVIEW_TILE_SIZE = 27;
 const PREVIEW_LEFT = 60;
 const PREVIEW_TOP = 18;
 const PREVIEW_WIDTH = ROOM_WIDTH * PREVIEW_TILE_SIZE;
 const PREVIEW_HEIGHT = ROOM_HEIGHT * PREVIEW_TILE_SIZE;
 const GAME_OBJECT_CONFIG_BY_ID = new Map(GAME_OBJECTS.map((config) => [config.id, config]));
-const imageDataCache = new Map();
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -230,30 +221,6 @@ function parseSolidBackgroundColor(value) {
 
   const color = trimmed.slice(SOLID_BACKGROUND_PREFIX.length).replace(/^#/, '').trim();
   return /^[0-9a-f]{6}$/i.test(color) ? Number.parseInt(color, 16) : null;
-}
-
-function parseCustomBackground(value) {
-  const trimmed = String(value || '').trim();
-  if (!trimmed.toLowerCase().startsWith(CUSTOM_BACKGROUND_PREFIX)) {
-    return null;
-  }
-
-  const customValue = trimmed.slice(CUSTOM_BACKGROUND_PREFIX.length).trim();
-  const queryStart = customValue.indexOf('?');
-  const id = (queryStart >= 0 ? customValue.slice(0, queryStart) : customValue).trim();
-  if (!/^[a-zA-Z0-9_-]{8,128}$/.test(id)) {
-    return null;
-  }
-
-  const fit = queryStart >= 0
-    ? new URLSearchParams(customValue.slice(queryStart + 1)).get('fit')
-    : DEFAULT_CUSTOM_BACKGROUND_FIT;
-  return {
-    id,
-    fit: fit === 'stretch' || fit === 'center' || fit === 'tile'
-      ? fit
-      : DEFAULT_CUSTOM_BACKGROUND_FIT,
-  };
 }
 
 async function primeRoomAssetCache(request, env, url, snapshot) {
@@ -658,139 +625,4 @@ function getTileColor(gid, tileX, tileY) {
   const base = palettes[Math.abs(gid + tileX * 3 + tileY * 5) % palettes.length];
   const variation = ((gid + tileX + tileY) % 5) - 2;
   return variation >= 0 ? lighten(base, variation * 0.04) : darken(base, Math.abs(variation) * 0.05);
-}
-
-async function loadAssetImageData(request, env, url, assetPath) {
-  const normalizedPath = normalizeAssetPath(assetPath);
-  let pending = imageDataCache.get(normalizedPath);
-  if (pending) {
-    return pending;
-  }
-
-  pending = (async () => {
-    const assetUrl = new URL(normalizedPath, url.origin);
-    const response = await env.ASSETS.fetch(new Request(assetUrl, request));
-    if (!response.ok) {
-      throw new Error(`Failed to load asset ${normalizedPath}`);
-    }
-
-    return decodePng(new Uint8Array(await response.arrayBuffer()));
-  })();
-  imageDataCache.set(normalizedPath, pending);
-  return pending;
-}
-
-async function loadCustomBackgroundImageData(request, env, url, id) {
-  const apiBaseUrl = resolveApiBaseUrl(env, url);
-  const imageUrl = new URL(`/api/background-images/${encodeURIComponent(id)}/image`, apiBaseUrl);
-  const cacheKey = `custom-background:${imageUrl.toString()}`;
-  let pending = imageDataCache.get(cacheKey);
-  if (pending) {
-    return pending;
-  }
-
-  pending = (async () => {
-    const response = await fetch(imageUrl.toString(), {
-      headers: {
-        Accept: 'image/png',
-        'User-Agent': request.headers.get('User-Agent') || 'WAMP room share renderer',
-      },
-      cf: {
-        image: {
-          format: 'png',
-        },
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to load custom background ${id}`);
-    }
-
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (isPng(bytes)) {
-      return decodePng(bytes);
-    }
-    if (isJpeg(bytes)) {
-      return decodeJpegImageData(bytes);
-    }
-    throw new Error(`Custom background ${id} was not returned as a supported image format.`);
-  })();
-  imageDataCache.set(cacheKey, pending);
-  return pending;
-}
-
-function decodeJpegImageData(bytes) {
-  const image = decodeJpegBytes(bytes, {
-    useTArray: true,
-    formatAsRGBA: true,
-    maxResolutionInMP: MAX_CUSTOM_BACKGROUND_DECODE_MP,
-    maxMemoryUsageInMB: MAX_CUSTOM_BACKGROUND_DECODE_MEMORY_MB,
-  });
-  return {
-    width: image.width,
-    height: image.height,
-    pixels: image.data,
-  };
-}
-
-function normalizeAssetPath(assetPath) {
-  const trimmed = String(assetPath || '').trim();
-  return `/${trimmed.replace(/^\/+/, '')}`;
-}
-
-function drawCustomBackgroundImage(canvas, image, fit, x, y, width, height) {
-  if (fit === 'stretch') {
-    blitImageSmooth(canvas, image, 0, 0, image.width, image.height, x, y, width, height);
-    return;
-  }
-
-  if (fit === 'center') {
-    const rect = getCustomBackgroundCenterRect(
-      { width: image.width, height: image.height },
-      { width: ROOM_PX_WIDTH, height: ROOM_PX_HEIGHT },
-    );
-    const scaleX = width / ROOM_PX_WIDTH;
-    const scaleY = height / ROOM_PX_HEIGHT;
-    blitImageSmooth(
-      canvas,
-      image,
-      0,
-      0,
-      image.width,
-      image.height,
-      x + rect.x * scaleX,
-      y + rect.y * scaleY,
-      Math.max(1, Math.round(rect.width * scaleX)),
-      Math.max(1, Math.round(rect.height * scaleY)),
-    );
-    return;
-  }
-
-  const tileScale = getCustomBackgroundTileScale(image) * (width / ROOM_PX_WIDTH);
-  const drawWidth = Math.max(1, Math.ceil(image.width * tileScale));
-  const drawHeight = Math.max(1, Math.ceil(image.height * tileScale));
-  for (let drawY = 0; drawY < height + drawHeight; drawY += drawHeight) {
-    for (let drawX = 0; drawX < width + drawWidth; drawX += drawWidth) {
-      blitImageSmooth(canvas, image, 0, 0, image.width, image.height, x + drawX, y + drawY, drawWidth, drawHeight);
-    }
-  }
-}
-
-function getCustomBackgroundTileScale(size) {
-  const width = Math.max(1, size.width);
-  const height = Math.max(1, size.height);
-  return Math.min(1, MAX_TILED_PHOTO_WIDTH / width, MAX_TILED_PHOTO_HEIGHT / height);
-}
-
-function getCustomBackgroundCenterRect(source, target) {
-  const sourceWidth = Math.max(1, Math.round(source.width));
-  const sourceHeight = Math.max(1, Math.round(source.height));
-  const scale = Math.min(1, target.width / sourceWidth, target.height / sourceHeight);
-  const width = Math.max(1, Math.round(sourceWidth * scale));
-  const height = Math.max(1, Math.round(sourceHeight * scale));
-  return {
-    x: Math.floor((target.width - width) / 2),
-    y: Math.floor((target.height - height) / 2),
-    width,
-    height,
-  };
 }
