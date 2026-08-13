@@ -1,5 +1,5 @@
 import type * as Party from 'partykit/server';
-import type { PartyKitLaunchStats, PartyKitShardHeartbeat } from '../src/admin/model';
+import type { PartyKitShardHeartbeat } from '../src/admin/model';
 import {
   ROOM_CHAT_MESSAGE_LIFETIME_MS,
   ROOM_CHAT_MESSAGE_MAX_LENGTH,
@@ -46,6 +46,15 @@ import {
   toWorldGhostPresence,
 } from '../src/partykit/presencePopulation';
 import {
+  buildLaunchStats,
+  computeShardHeartbeat,
+  heartbeatStorageKey,
+  METRICS_ROOM_ID,
+  METRICS_STORAGE_PREFIX,
+  normalizeHeartbeatPayload,
+  partitionActiveHeartbeats,
+} from '../src/partykit/shardMetricsRuntime';
+import {
   getMultiplayerModeDefinition,
   type PvpHitSource,
   type PvpInviteAcceptMessage,
@@ -68,10 +77,7 @@ import {
 } from '../src/pvp/model';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
-const STALE_HEARTBEAT_MS = 120_000;
 const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
-const METRICS_ROOM_ID = '__launch-stats__';
-const METRICS_STORAGE_PREFIX = 'shard:';
 const PRESENCE_UPSERT_FLUSH_MS = 80;
 const POPULATION_BROADCAST_FLUSH_MS = 250;
 
@@ -676,36 +682,11 @@ export default class PresenceServer implements Party.Server {
   }
 
   private computeShardHeartbeat(): PartyKitShardHeartbeat | null {
-    let totalConnections = 0;
-    let playConnections = 0;
-    let editConnections = 0;
-
-    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
-      if (connection.state?.channel !== 'presence') {
-        continue;
-      }
-
-      totalConnections += 1;
-
-      const mode = connection.state?.presence?.mode ?? null;
-      if (mode === 'play') {
-        playConnections += 1;
-      } else if (mode === 'edit') {
-        editConnections += 1;
-      }
-    }
-
-    if (totalConnections === 0) {
-      return null;
-    }
-
-    return {
-      shardId: this.room.id,
-      totalConnections,
-      playConnections,
-      editConnections,
-      updatedAt: new Date().toISOString(),
-    };
+    return computeShardHeartbeat(
+      this.room.id,
+      Array.from(this.room.getConnections<ConnectionPresenceState>(), ({ state }) => state),
+      Date.now(),
+    );
   }
 
   private syncHeartbeatTimer(): void {
@@ -744,13 +725,13 @@ export default class PresenceServer implements Party.Server {
   }
 
   private async handleHeartbeat(req: Party.Request): Promise<Response> {
-    const heartbeat = this.normalizeHeartbeatPayload(await req.json().catch(() => null));
+    const heartbeat = normalizeHeartbeatPayload(await req.json().catch(() => null));
     if (!heartbeat) {
       return new Response('Invalid heartbeat payload.', { status: 400 });
     }
 
     await this.pruneStaleHeartbeats();
-    await this.room.storage.put(this.getHeartbeatStorageKey(heartbeat.shardId), heartbeat);
+    await this.room.storage.put(heartbeatStorageKey(heartbeat.shardId), heartbeat);
 
     return this.json({
       ok: true,
@@ -759,17 +740,7 @@ export default class PresenceServer implements Party.Server {
 
   private async handleStats(): Promise<Response> {
     const { heartbeats, staleShardCount } = await this.loadActiveHeartbeats();
-    const responseBody: PartyKitLaunchStats = {
-      fetchedAt: new Date().toISOString(),
-      shardCount: heartbeats.length,
-      staleShardCount,
-      totalConnections: heartbeats.reduce((sum, shard) => sum + shard.totalConnections, 0),
-      totalPlayConnections: heartbeats.reduce((sum, shard) => sum + shard.playConnections, 0),
-      totalEditConnections: heartbeats.reduce((sum, shard) => sum + shard.editConnections, 0),
-      shards: heartbeats,
-    };
-
-    return this.json(responseBody);
+    return this.json(buildLaunchStats(heartbeats, staleShardCount, Date.now()));
   }
 
   private async loadActiveHeartbeats(): Promise<{
@@ -779,34 +750,11 @@ export default class PresenceServer implements Party.Server {
     const entries = await this.room.storage.list<PartyKitShardHeartbeat>({
       prefix: METRICS_STORAGE_PREFIX,
     });
-    const heartbeats: PartyKitShardHeartbeat[] = [];
-    const staleKeys: string[] = [];
-    const now = Date.now();
-
-    for (const [key, value] of entries) {
-      const heartbeat = this.normalizeHeartbeatPayload(value);
-      if (!heartbeat) {
-        staleKeys.push(key);
-        continue;
-      }
-
-      const updatedAtMs = Date.parse(heartbeat.updatedAt);
-      if (!Number.isFinite(updatedAtMs) || now - updatedAtMs > STALE_HEARTBEAT_MS) {
-        staleKeys.push(key);
-        continue;
-      }
-
-      heartbeats.push(heartbeat);
-    }
+    const { heartbeats, staleKeys } = partitionActiveHeartbeats(entries, Date.now());
 
     if (staleKeys.length > 0) {
       await Promise.all(staleKeys.map((key) => this.room.storage.delete(key)));
     }
-
-    heartbeats.sort(
-      (left, right) =>
-        right.totalConnections - left.totalConnections || left.shardId.localeCompare(right.shardId)
-    );
 
     return {
       heartbeats,
@@ -816,10 +764,6 @@ export default class PresenceServer implements Party.Server {
 
   private async pruneStaleHeartbeats(): Promise<void> {
     await this.loadActiveHeartbeats();
-  }
-
-  private getHeartbeatStorageKey(shardId: string): string {
-    return `${METRICS_STORAGE_PREFIX}${shardId}`;
   }
 
   private hasValidInternalToken(req: Party.Request): boolean {
@@ -1959,43 +1903,6 @@ export default class PresenceServer implements Party.Server {
     }
   }
 
-  private normalizeHeartbeatPayload(value: unknown): PartyKitShardHeartbeat | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const payload = value as Partial<PartyKitShardHeartbeat>;
-    const updatedAtMs = Date.parse(String(payload.updatedAt ?? ''));
-    const totalConnections = payload.totalConnections;
-    const playConnections = payload.playConnections;
-    const editConnections = payload.editConnections;
-    if (
-      typeof payload.shardId !== 'string' ||
-      !payload.shardId.trim() ||
-      payload.shardId === METRICS_ROOM_ID ||
-      typeof totalConnections !== 'number' ||
-      typeof playConnections !== 'number' ||
-      typeof editConnections !== 'number' ||
-      !Number.isInteger(totalConnections) ||
-      !Number.isInteger(playConnections) ||
-      !Number.isInteger(editConnections) ||
-      totalConnections < 0 ||
-      playConnections < 0 ||
-      editConnections < 0 ||
-      playConnections + editConnections > totalConnections ||
-      !Number.isFinite(updatedAtMs)
-    ) {
-      return null;
-    }
-
-    return {
-      shardId: payload.shardId,
-      totalConnections,
-      playConnections,
-      editConnections,
-      updatedAt: new Date(updatedAtMs).toISOString(),
-    };
-  }
 }
 
 PresenceServer satisfies Party.Worker;
