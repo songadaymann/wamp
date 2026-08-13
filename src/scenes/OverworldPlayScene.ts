@@ -3,11 +3,6 @@ import { playSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
 import { createExpandedRoomEditorRepository } from '../expandedRooms/editorRepository';
 import { globalRoomMusicController } from '../music/controller';
-import {
-  getRoomMusicKey,
-  isRoomMusicEmpty,
-  type RoomMusic,
-} from '../music/model';
 import { getCourseObjectLink } from '../courses/objectLinks';
 import {
   getActiveCourseDraftSessionCourseId,
@@ -176,6 +171,7 @@ import {
   OverworldRoomCommentsController,
 } from './overworld/roomComments';
 import { OverworldRoomAudioController } from './overworld/roomAudio';
+import { OverworldRoomMusicPlaybackController } from './overworld/roomMusicPlaybackController';
 import {
   OverworldCoursePlaybackController,
 } from './overworld/coursePlayback';
@@ -328,12 +324,6 @@ const MOBILE_PORTRAIT_CAMERA_TUNING_STORAGE_KEY = 'wamp_mobile_portrait_camera_t
 type RoomEdgeWall = OverworldRoomEdgeWall;
 
 type SceneLoadedFullRoom = LoadedFullRoom<LoadedRoomObject, RoomEdgeWall>;
-
-interface RoomMusicPlaybackTarget {
-  identity: string;
-  sourceRoomId: string;
-  music: RoomSnapshotView['music'];
-}
 
 export interface OverworldRuntimeTransitionProbe {
   readonly scene: 'overworld-play';
@@ -496,7 +486,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private mobilePortraitCameraTargetY = MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y;
   private mobilePortraitCameraTunerApi: Window['wampMobileCameraTuner'] | null = null;
   private shouldAutoPlayDeepLinkedRoomOnBoot = false;
-  private lastRoomMusicSyncSignature = '';
   private nextFrameHudRenderAt = 0;
   private presenceSnapshotSyncPending = false;
   private presenceSnapshotSyncTimer: number | null = null;
@@ -567,6 +556,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly rankedRunTraceRecorder = new RankedRunTraceRecorder();
   private readonly goalRunController: OverworldGoalRunController;
   private readonly roomAudioController: OverworldRoomAudioController;
+  private readonly roomMusicPlaybackController: OverworldRoomMusicPlaybackController;
   private readonly lightingController: RoomLightingController;
   private readonly weatherController: RoomWeatherController;
   private readonly flowController: OverworldSceneFlowController;
@@ -1179,6 +1169,18 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.clearRankedRunTrace();
       },
     });
+    this.roomMusicPlaybackController = new OverworldRoomMusicPlaybackController(
+      {
+        getRoomSnapshotViewForCoordinates: (coordinates) =>
+          this.getRoomSnapshotViewForCoordinates(coordinates),
+        getRoomSummaryById: (roomId) => this.roomSummariesById.get(roomId) ?? null,
+        getRoomSummaries: () => this.roomSummariesById.values(),
+        getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
+        getCourseStartRoomRef: (course, lockedStartRoomId) =>
+          this.coursePlaybackController.getCourseStartRoomRef(course, lockedStartRoomId),
+      },
+      globalRoomMusicController,
+    );
     this.courseComposerController = new OverworldCourseComposerController({
       roomRepository: this.roomRepository,
       expandedRoomEditorRepository: this.expandedRoomEditorRepository,
@@ -2475,7 +2477,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.roomChatController.update();
       this.roomCommentsController.update();
       this.presenceOverlayController.updateBrowseDots(delta);
-      this.maybeSyncRoomMusicPlayback();
+      this.roomMusicPlaybackController.sync({
+        mode: this.mode,
+        currentRoomCoordinates: this.currentRoomCoordinates,
+        activeCourseRun: this.activeCourseRun,
+      });
       if (worldUpdateStartedAt !== undefined) profiler?.endSegment('update.world', worldUpdateStartedAt);
 
       if (
@@ -2742,14 +2748,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.cameras.remove(this.backdropCamera, true);
     }
 
-    this.lastRoomMusicSyncSignature = '';
     this.nextFrameHudRenderAt = 0;
-    globalRoomMusicController.stopArrangement({
-      transition: 'immediate',
-      fadeDurationSec: 0.08,
-      mode: 'idle',
-      resetTransport: true,
-    });
+    this.roomMusicPlaybackController.reset();
     // The scene assigns this baseline below. Pass it through now so streaming
     // does not mistake the lifecycle reset for a user selection change.
     this.worldStreamingController.reset(DEFAULT_ROOM_COORDINATES);
@@ -3901,141 +3901,6 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private syncModeRuntime(): void {
     this.runtimeController.syncModeRuntime();
-  }
-
-  private maybeSyncRoomMusicPlayback(): void {
-    if (this.mode !== 'play') {
-      const signature = `mode:${this.mode}`;
-      if (this.lastRoomMusicSyncSignature === signature) {
-        return;
-      }
-
-      this.lastRoomMusicSyncSignature = signature;
-      globalRoomMusicController.stopArrangement({
-        transition: 'immediate',
-        fadeDurationSec: 0.08,
-        mode: 'idle',
-        resetTransport: true,
-      });
-      return;
-    }
-
-    const currentRoom = this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates);
-    if (!currentRoom) {
-      return;
-    }
-
-    const playbackTarget = this.resolveRoomMusicPlaybackTarget(currentRoom);
-    const roomMusicKey = getRoomMusicKey(playbackTarget.music as RoomMusic | null) ?? 'none';
-    const signature =
-      `mode:play|${playbackTarget.identity}|source:${playbackTarget.sourceRoomId}|music:${roomMusicKey}`;
-    if (this.lastRoomMusicSyncSignature === signature) {
-      return;
-    }
-
-    this.lastRoomMusicSyncSignature = signature;
-    if (isRoomMusicEmpty(playbackTarget.music as RoomMusic | null)) {
-      globalRoomMusicController.stopArrangement({
-        transition: 'bar',
-        fadeDurationSec: 0.18,
-        mode: 'world-play',
-      });
-      return;
-    }
-
-    void globalRoomMusicController.playArrangement(playbackTarget.music as RoomMusic, {
-      mode: 'world-play',
-      transition: 'bar',
-    });
-  }
-
-  private resolveRoomMusicPlaybackTarget(currentRoom: RoomSnapshotView): RoomMusicPlaybackTarget {
-    const activeCourseRun = this.activeCourseRun;
-    const activeCourse = activeCourseRun?.course ?? null;
-    if (activeCourse?.roomRefs.some((roomRef) => roomRef.roomId === currentRoom.id)) {
-      const sourceRoom = this.resolveCourseAreaMusicSource(
-        activeCourse,
-        currentRoom,
-        activeCourseRun?.startRoomId ?? null,
-      );
-      const expandedRoomId =
-        activeCourseRun?.expandedRoomId ?? this.getExpandedRoomIdAt(currentRoom.coordinates) ?? `course:${activeCourse.id}`;
-      return {
-        identity: `expanded-room:${expandedRoomId}|v:${activeCourseRun?.expandedRoomVersion ?? activeCourse.version}`,
-        sourceRoomId: sourceRoom.id,
-        music: sourceRoom.music,
-      };
-    }
-
-    const expandedRoom = this.roomSummariesById.get(currentRoom.id)?.expandedRoom ?? null;
-    if (expandedRoom && expandedRoom.cellCount > 1) {
-      const sourceRoom = this.resolveLoadedExpandedRoomMusicSource(
-        expandedRoom.expandedRoomId,
-        currentRoom,
-      );
-      return {
-        identity: `expanded-room:${expandedRoom.expandedRoomId}`,
-        sourceRoomId: sourceRoom.id,
-        music: sourceRoom.music,
-      };
-    }
-
-    return {
-      identity: `room:${currentRoom.id}`,
-      sourceRoomId: currentRoom.id,
-      music: currentRoom.music,
-    };
-  }
-
-  private resolveCourseAreaMusicSource(
-    course: CourseSnapshot,
-    currentRoom: RoomSnapshotView,
-    lockedStartRoomId: string | null = null,
-  ): RoomSnapshotView {
-    const startRoomRef = this.coursePlaybackController.getCourseStartRoomRef(
-      course,
-      lockedStartRoomId,
-    );
-    const orderedRoomRefs = [
-      ...(startRoomRef ? [startRoomRef] : []),
-      ...course.roomRefs.filter((roomRef) => roomRef.roomId !== startRoomRef?.roomId),
-    ];
-    let firstAvailableRoom: RoomSnapshotView | null = null;
-    for (const roomRef of orderedRoomRefs) {
-      const room = this.getRoomSnapshotViewForCoordinates(roomRef.coordinates);
-      if (!room) {
-        continue;
-      }
-      firstAvailableRoom ??= room;
-      if (!isRoomMusicEmpty(room.music as RoomMusic | null)) {
-        return room;
-      }
-    }
-
-    return firstAvailableRoom ?? currentRoom;
-  }
-
-  private resolveLoadedExpandedRoomMusicSource(
-    expandedRoomId: string,
-    currentRoom: RoomSnapshotView,
-  ): RoomSnapshotView {
-    const candidateCoordinates = Array.from(this.roomSummariesById.values())
-      .filter((summary) => summary.expandedRoom?.expandedRoomId === expandedRoomId)
-      .map((summary) => summary.coordinates)
-      .sort((a, b) => a.y - b.y || a.x - b.x);
-    let firstAvailableRoom: RoomSnapshotView | null = null;
-    for (const coordinates of candidateCoordinates) {
-      const room = this.getRoomSnapshotViewForCoordinates(coordinates);
-      if (!room) {
-        continue;
-      }
-      firstAvailableRoom ??= room;
-      if (!isRoomMusicEmpty(room.music as RoomMusic | null)) {
-        return room;
-      }
-    }
-
-    return firstAvailableRoom ?? currentRoom;
   }
 
   private countRoomObjectsByCategory(room: RoomSnapshot, category: GameObjectConfig['category']): number {
@@ -6608,12 +6473,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.performanceSuggestionPauseRequested = false;
     this.syncPerformanceAdvisorEligibility(performance.now());
     this.destroyPerformanceAdvisorMonitoring();
-    globalRoomMusicController.stopArrangement({
-      transition: 'immediate',
-      fadeDurationSec: 0.08,
-      mode: 'idle',
-      resetTransport: true,
-    });
+    this.roomMusicPlaybackController.stopImmediately();
     this.browseRealtimeStartupGate.destroy();
     this.presenceController.destroy();
     this.roomChatController.destroy();

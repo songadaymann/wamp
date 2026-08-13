@@ -101,3 +101,43 @@ performance claim by itself.
 `codex/refactor-foundation-2026-08-13` starts Track 1 with the quicksand controller extraction.
 The extraction owns only contact buffering, status cooldown, and visual-sink state; movement factors,
 hazard collision, player presentation, and void death routing keep their existing owners.
+
+## Continuous manual-QA execution
+
+The remaining work advances linearly on this branch. Every tranche ends at a recorded commit,
+passes its automated gates, and is copied to an immutable build directory named
+`/private/tmp/everybodys-platformer-refactor-qa/TNN-<short-sha>/`. The frozen build is served on
+port `46NN` while the source worktree advances.
+
+Manual `PASS` accepts the tranche. `PASS WITH NOTES` accepts only cosmetic or otherwise
+non-behavioral notes. `STOP` freezes that dependency lane; the repair receives a new commit and
+frozen build while work may continue only on an independent lane. Commits already under test are
+never rewritten. No production deployment or production-data mutation is part of this program.
+
+| Tranche | Deliverable | Status |
+| --- | --- | --- |
+| T00 | Quicksand state controller | Accepted: manual `PASS` at `000741f`; frozen on port 4600 |
+| T01 | Room-music playback selection and synchronization controller | Automated gates passed; preparing frozen manual-QA build |
+| T02 | Executable-entry guard and dormant course-composer cleanup | Pending |
+| T03 | Live-object model types and spatial index | Pending |
+| T04 | Live-object lifecycle and interaction coordinators | Pending |
+| T05 | Movement-state ownership | Pending |
+| T06 | Movement and swordsman state-machine decomposition | Pending |
+| T07 | Backdrop and camera ownership | Pending |
+| T08 | Room-comments data, composer, and presentation owners | Pending |
+| T09 | Editor document, history, and presentation core | Pending |
+| T10 | World-streaming model, selection policy, and readiness | Pending |
+| T11 | World-streaming preparation and teardown lifecycles | Pending |
+| T12 | PvP combat geometry, ledger, presentation, and coordinator | Pending |
+| T13 | Typed Pages Worker migration | Pending |
+| T14 | Cloudflare Worker analysis/admin module split | Pending |
+| T15 | Thin admin UI entries and application modules | Pending |
+| T16 | PartyKit protocol and server decomposition | Pending |
+| T17 | Measured performance and dead-code closeout | Pending |
+
+Every client tranche receives an exact route, fixture expectations, account/write requirements,
+and a short manual checklist. The common sweep covers direct-link refresh, Browse pan/zoom/Fit,
+Play movement and a room seam, editor entry/return without saving, and visible/runtime errors.
+Worker tranches add the safety probe; PartyKit adds identity and load probes; performance work uses
+comparable before/after artifacts. Final reconciliation with current `origin/main` happens only
+after all tranches are accepted and does not rewrite their reviewed commits.
