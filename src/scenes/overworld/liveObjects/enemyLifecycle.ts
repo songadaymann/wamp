@@ -349,6 +349,8 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       signText: liveObject.signText,
       objectiveMode: liveObject.runtime.aiObjectiveMode,
       defeatMode: liveObject.runtime.aiDefeatMode,
+      policeBehaviorMode: liveObject.runtime.policeBehaviorMode,
+      policePatrolShoots: liveObject.runtime.policePatrolShoots,
       npcMode: liveObject.runtime.npcMode,
       npcPushable: liveObject.runtime.npcPushable,
       npcCanJumpFall: liveObject.runtime.npcCanJumpFall,

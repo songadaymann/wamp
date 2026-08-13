@@ -9,6 +9,10 @@ import {
   normalizeSwordsmanDefeatMode,
   normalizeSwordsmanObjectiveMode,
 } from '../enemies/swordsmanObjectives';
+import {
+  getPlacedPoliceBehaviorMode,
+  getPlacedPolicePatrolShoots,
+} from '../enemies/policeEnemy';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
 import { getPlacedObjectSignText } from '../signs/model';
 import { normalizeCustomSpriteDefinitions } from '../customSprites/model';
@@ -72,6 +76,8 @@ type CanonicalPlacedObjectPayload = {
   containedObjectId: string | null;
   swordsmanObjectiveMode: string | null;
   swordsmanDefeatMode: string | null;
+  policeBehaviorMode: string | null;
+  policePatrolShoots: boolean | null;
   signText: string | null;
   npcMode: string | null;
   npcPushable: boolean | null;
@@ -343,6 +349,10 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       npcDefeatMode: placed.id === 'jimothy' ? getPlacedNpcDefeatMode(placed) : null,
       swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
       swordsmanDefeatMode: normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode),
+      policeBehaviorMode: getPlacedPoliceBehaviorMode(placed),
+      policePatrolShoots: getPlacedPoliceBehaviorMode(placed) === null
+        ? null
+        : getPlacedPolicePatrolShoots(placed),
       signature,
       triggerTargetInstanceId:
         typeof placed.triggerTargetInstanceId === 'string' && placed.triggerTargetInstanceId.trim().length > 0
@@ -374,6 +384,8 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       containedObjectId: placed.containedObjectId,
       swordsmanObjectiveMode: placed.swordsmanObjectiveMode,
       swordsmanDefeatMode: placed.swordsmanDefeatMode,
+      policeBehaviorMode: placed.policeBehaviorMode,
+      policePatrolShoots: placed.policePatrolShoots,
       signText: placed.signText,
       npcMode: placed.npcMode,
       npcPushable: placed.npcPushable,
@@ -408,6 +420,10 @@ function buildPlacedObjectSignature(placed: PlacedObject): string {
         : null,
     swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
     swordsmanDefeatMode: normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode),
+    policeBehaviorMode: getPlacedPoliceBehaviorMode(placed),
+    policePatrolShoots: getPlacedPoliceBehaviorMode(placed) === null
+      ? null
+      : getPlacedPolicePatrolShoots(placed),
     signText: getPlacedObjectSignText(placed),
     npcMode: placed.id === 'jimothy' ? getPlacedNpcMode(placed) : null,
     npcPushable:
@@ -445,6 +461,8 @@ function compareCanonicalPlacedObjects(
     (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
     (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
     (left.swordsmanDefeatMode ?? '').localeCompare(right.swordsmanDefeatMode ?? '') ||
+    (left.policeBehaviorMode ?? '').localeCompare(right.policeBehaviorMode ?? '') ||
+    Number(left.policePatrolShoots ?? false) - Number(right.policePatrolShoots ?? false) ||
     (left.signText ?? '').localeCompare(right.signText ?? '') ||
     Number(left.npcPlayerCollision ?? false) - Number(right.npcPlayerCollision ?? false) ||
     Number(left.npcFriendlyFire ?? false) - Number(right.npcFriendlyFire ?? false) ||
@@ -463,6 +481,8 @@ function compareNormalizedPlacedObjects(
     containedObjectId: string | null;
     swordsmanObjectiveMode: string | null;
     swordsmanDefeatMode: string | null;
+    policeBehaviorMode: string | null;
+    policePatrolShoots: boolean | null;
     signText: string | null;
     signature: string;
   },
@@ -475,6 +495,8 @@ function compareNormalizedPlacedObjects(
     containedObjectId: string | null;
     swordsmanObjectiveMode: string | null;
     swordsmanDefeatMode: string | null;
+    policeBehaviorMode: string | null;
+    policePatrolShoots: boolean | null;
     signText: string | null;
     signature: string;
   }
@@ -489,6 +511,8 @@ function compareNormalizedPlacedObjects(
     (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
     (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
     (left.swordsmanDefeatMode ?? '').localeCompare(right.swordsmanDefeatMode ?? '') ||
+    (left.policeBehaviorMode ?? '').localeCompare(right.policeBehaviorMode ?? '') ||
+    Number(left.policePatrolShoots ?? false) - Number(right.policePatrolShoots ?? false) ||
     (left.signText ?? '').localeCompare(right.signText ?? '')
   );
 }

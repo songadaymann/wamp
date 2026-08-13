@@ -731,7 +731,9 @@
               "facing": { "type": "string", "enum": ["left", "right"] },
               "layer": { "type": "string", "enum": ["background", "terrain", "foreground"] },
               "swordsmanObjectiveMode": { "type": "string", "enum": ["duel", "collect"] },
-              "swordsmanDefeatMode": { "type": "string", "enum": ["defeatable", "invincible", "respawn"] }
+              "swordsmanDefeatMode": { "type": "string", "enum": ["defeatable", "invincible", "respawn"] },
+              "policeBehaviorMode": { "type": "string", "enum": ["hunter", "patrol"] },
+              "policePatrolShoots": { "type": "boolean" }
             }
           },
           {
@@ -748,6 +750,8 @@
               "signText": { "type": ["string", "null"], "maxLength": 140 },
               "swordsmanObjectiveMode": { "type": ["string", "null"], "enum": ["duel", "collect", null] },
               "swordsmanDefeatMode": { "type": ["string", "null"], "enum": ["defeatable", "invincible", "respawn", null] },
+              "policeBehaviorMode": { "type": ["string", "null"], "enum": ["hunter", "patrol", null] },
+              "policePatrolShoots": { "type": ["boolean", "null"] },
               "npcMode": { "type": ["string", "null"], "enum": ["idle", "wander", "patrol", "follow", null] },
               "npcPushable": { "type": ["boolean", "null"] },
               "npcCanJumpFall": { "type": ["boolean", "null"] },
@@ -803,7 +807,7 @@
         "type": "object",
         "required": ["schemaVersion", "room", "tilesets", "objects", "backgrounds", "goals"],
         "properties": {
-          "schemaVersion": { "const": 1 },
+          "schemaVersion": { "const": 2 },
           "room": {
             "type": "object",
             "required": ["width", "height", "tileSize", "layers"],

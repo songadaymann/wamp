@@ -261,6 +261,26 @@ const DECO_ONLY_INDICES_CYBERCITY = [
   44, 45, 46, 47,
   56, 57, 58, 59,
 ];
+const BOYGAME_BLANK_INDICES = [
+  17, 18, 19, 22, 23,
+  24, 25, 26, 27, 29, 30, 31,
+  37, 38, 39,
+  45, 46, 47,
+  51, 52, 53, 54, 55,
+];
+
+function createBoygameEditorMetadata(): Partial<Record<number, EditorTileMetadata>> {
+  return Object.fromEntries(
+    BOYGAME_BLANK_INDICES.map((localIndex) => [
+      localIndex,
+      {
+        label: 'Unused Boygame atlas cell',
+        description: 'Intentionally blank spacing between multi-cell source graphics.',
+        enabled: false,
+      },
+    ]),
+  );
+}
 
 const DEFAULT_TILESET_UI_THEME: TilesetUiThemeConfig = {
   accentCool: 0x5dc16b,
@@ -270,6 +290,8 @@ const DEFAULT_TILESET_UI_THEME: TilesetUiThemeConfig = {
 };
 export const DEFAULT_TILESET_EDITOR_PALETTE_BACKGROUND_COLOR = '#0b0b0b';
 
+export const BOYGAME_TILESET_KEY = 'boygame';
+export const BOYGAME_TILESET_FIRST_GID = 1801;
 export const SPECIAL_TILESET_KEY = 'special';
 export const SPECIAL_TILESET_FIRST_GID = 669;
 export type SpecialTileKind =
@@ -1049,6 +1071,34 @@ export const TILESETS: TilesetConfig[] = [
       accentWarm: 0xcd9158,
       accentHot: 0xe76f50,
       accentAlt: 0xd8b373,
+    },
+  },
+  {
+    key: BOYGAME_TILESET_KEY,
+    name: 'Boygame',
+    path: 'assets/tilesets/boygame.png?v=2026-08-13-object-split',
+    imageWidth: 128,
+    imageHeight: 112,
+    columns: 8,
+    rows: 7,
+    tileCount: 56,
+    firstGid: BOYGAME_TILESET_FIRST_GID,
+    editorTileMetadata: createBoygameEditorMetadata(),
+    editorPaletteBackgroundColor: '#d7e894',
+    authoringBuildStyles: [
+      {
+        id: 'boygame_ruins',
+        label: 'Boygame Ruins',
+        description: 'Grass-edged platforms with chunky four-shade Game Boy stone fill.',
+        surfaceLocalIndices: [10],
+        fillLocalIndices: [5, 6, 7, 14, 15, 16],
+      },
+    ],
+    uiTheme: {
+      accentCool: 0x306230,
+      accentWarm: 0x8bac0f,
+      accentHot: 0x0f380f,
+      accentAlt: 0x9bbc0f,
     },
   }
 ];

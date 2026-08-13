@@ -15,6 +15,15 @@ import {
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
 import {
+  DEFAULT_POLICE_BEHAVIOR_MODE,
+  POLICE_BEHAVIOR_MODE_LABELS,
+  getPlacedPoliceBehaviorMode,
+  getPlacedPolicePatrolShoots,
+  isPoliceEnemyObjectId,
+  normalizePoliceBehaviorMode,
+  type PoliceBehaviorMode,
+} from '../../enemies/policeEnemy';
+import {
   DEFAULT_SWORDSMAN_DEFEAT_MODE,
   DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
   SWORDSMAN_DEFEAT_MODE_LABELS,
@@ -44,7 +53,7 @@ import {
   type NpcMode,
 } from '../../npcs/model';
 
-type PinnedInspector = { kind: 'pressure' | 'container' | 'swordsman' | 'npc'; instanceId: string } | null;
+type PinnedInspector = { kind: 'pressure' | 'container' | 'swordsman' | 'police' | 'npc'; instanceId: string } | null;
 
 export class EditorInspectorController {
   private focusedPressurePlateInstanceId: string | null = null;
@@ -54,6 +63,8 @@ export class EditorInspectorController {
   private containerStatusText: string | null = null;
   private focusedSwordsmanInstanceId: string | null = null;
   private swordsmanStatusText: string | null = null;
+  private focusedPoliceInstanceId: string | null = null;
+  private policeStatusText: string | null = null;
   private focusedNpcInstanceId: string | null = null;
   private npcStatusText: string | null = null;
   private pinnedInspector: PinnedInspector = null;
@@ -94,6 +105,8 @@ export class EditorInspectorController {
     this.containerStatusText = null;
     this.focusedSwordsmanInstanceId = null;
     this.swordsmanStatusText = null;
+    this.focusedPoliceInstanceId = null;
+    this.policeStatusText = null;
     this.focusedNpcInstanceId = null;
     this.npcStatusText = null;
     this.pinnedInspector = null;
@@ -238,6 +251,18 @@ export class EditorInspectorController {
       this.pinnedInspector = null;
     }
     if (
+      this.focusedPoliceInstanceId &&
+      !this.editRuntime.hasPlacedObjectInstanceId(this.focusedPoliceInstanceId)
+    ) {
+      this.focusedPoliceInstanceId = null;
+    }
+    if (
+      this.pinnedInspector?.kind === 'police' &&
+      !this.editRuntime.hasPlacedObjectInstanceId(this.pinnedInspector.instanceId)
+    ) {
+      this.pinnedInspector = null;
+    }
+    if (
       this.focusedNpcInstanceId &&
       !this.editRuntime.hasPlacedObjectInstanceId(this.focusedNpcInstanceId)
     ) {
@@ -263,6 +288,7 @@ export class EditorInspectorController {
       }
       this.focusedContainerInstanceId = hoveredContainer.instanceId;
       this.focusedSwordsmanInstanceId = null;
+      this.focusedPoliceInstanceId = null;
       this.focusedNpcInstanceId = null;
     } else if (this.pinnedInspector?.kind !== 'container') {
       this.focusedContainerInstanceId = null;
@@ -278,18 +304,31 @@ export class EditorInspectorController {
         this.focusedSwordsmanInstanceId = hoveredSwordsman.instanceId;
       } else if (this.pinnedInspector?.kind !== 'swordsman') {
         this.focusedSwordsmanInstanceId = null;
-        const hoveredNpc = this.editRuntime.findPlacedObjectAt(
+        const hoveredPolice = this.editRuntime.findPlacedObjectAt(
           worldPoint.x,
           worldPoint.y,
-          (placed) => isNpcObjectId(placed.id),
+          (placed) => isPoliceEnemyObjectId(placed.id),
         );
-        if (hoveredNpc) {
-          if (this.focusedNpcInstanceId !== hoveredNpc.instanceId) {
-            this.npcStatusText = null;
+        if (hoveredPolice) {
+          if (this.focusedPoliceInstanceId !== hoveredPolice.instanceId) {
+            this.policeStatusText = null;
           }
-          this.focusedNpcInstanceId = hoveredNpc.instanceId;
-        } else if (this.pinnedInspector?.kind !== 'npc') {
-          this.focusedNpcInstanceId = null;
+          this.focusedPoliceInstanceId = hoveredPolice.instanceId;
+        } else if (this.pinnedInspector?.kind !== 'police') {
+          this.focusedPoliceInstanceId = null;
+          const hoveredNpc = this.editRuntime.findPlacedObjectAt(
+            worldPoint.x,
+            worldPoint.y,
+            (placed) => isNpcObjectId(placed.id),
+          );
+          if (hoveredNpc) {
+            if (this.focusedNpcInstanceId !== hoveredNpc.instanceId) {
+              this.npcStatusText = null;
+            }
+            this.focusedNpcInstanceId = hoveredNpc.instanceId;
+          } else if (this.pinnedInspector?.kind !== 'npc') {
+            this.focusedNpcInstanceId = null;
+          }
         }
       }
     }
@@ -329,6 +368,23 @@ export class EditorInspectorController {
       return this.handlePressurePlateConnectionClick(worldPoint.x, worldPoint.y);
     }
 
+    const clickedPolice = this.editRuntime.findPlacedObjectAt(
+      worldPoint.x,
+      worldPoint.y,
+      (placed) => isPoliceEnemyObjectId(placed.id),
+    );
+    if (clickedPolice) {
+      this.focusedPoliceInstanceId = clickedPolice.instanceId;
+      this.focusedPressurePlateInstanceId = null;
+      this.focusedContainerInstanceId = null;
+      this.focusedSwordsmanInstanceId = null;
+      this.focusedNpcInstanceId = null;
+      this.pinInspector('police', clickedPolice.instanceId);
+      this.policeStatusText = null;
+      this.renderInspectorUi();
+      return true;
+    }
+
     const clickedNpc = this.editRuntime.findPlacedObjectAt(
       worldPoint.x,
       worldPoint.y,
@@ -339,6 +395,7 @@ export class EditorInspectorController {
       this.focusedPressurePlateInstanceId = null;
       this.focusedContainerInstanceId = null;
       this.focusedSwordsmanInstanceId = null;
+      this.focusedPoliceInstanceId = null;
       this.pinInspector('npc', clickedNpc.instanceId);
       this.npcStatusText = null;
       this.renderInspectorUi();
@@ -364,6 +421,7 @@ export class EditorInspectorController {
       this.focusedPressurePlateInstanceId = clickedPressurePlate.instanceId;
       this.focusedContainerInstanceId = null;
       this.focusedSwordsmanInstanceId = null;
+      this.focusedPoliceInstanceId = null;
       this.focusedNpcInstanceId = null;
       this.pinInspector('pressure', clickedPressurePlate.instanceId);
       this.pressurePlateStatusText = null;
@@ -384,6 +442,7 @@ export class EditorInspectorController {
       this.focusedSwordsmanInstanceId = clickedSwordsman.instanceId;
       this.focusedPressurePlateInstanceId = null;
       this.focusedContainerInstanceId = null;
+      this.focusedPoliceInstanceId = null;
       this.focusedNpcInstanceId = null;
       this.pinInspector('swordsman', clickedSwordsman.instanceId);
       this.swordsmanStatusText = null;
@@ -414,11 +473,24 @@ export class EditorInspectorController {
   }
 
   handleObjectPlaced(placed: PlacedObject | null): void {
+    if (placed?.instanceId && isPoliceEnemyObjectId(placed.id)) {
+      this.focusedPoliceInstanceId = placed.instanceId;
+      this.focusedPressurePlateInstanceId = null;
+      this.focusedContainerInstanceId = null;
+      this.focusedSwordsmanInstanceId = null;
+      this.focusedNpcInstanceId = null;
+      this.pinInspector('police', placed.instanceId);
+      this.policeStatusText = `${getObjectById(placed.id)?.name ?? 'Police enemy'} placed. Choose how it should behave.`;
+      this.renderInspectorUi();
+      return;
+    }
+
     if (placed?.instanceId && isNpcObjectId(placed.id)) {
       this.focusedNpcInstanceId = placed.instanceId;
       this.focusedPressurePlateInstanceId = null;
       this.focusedContainerInstanceId = null;
       this.focusedSwordsmanInstanceId = null;
+      this.focusedPoliceInstanceId = null;
       this.pinInspector('npc', placed.instanceId);
       this.npcStatusText = `${getObjectById(placed.id)?.name ?? 'NPC'} placed. Choose how it should behave.`;
       this.renderInspectorUi();
@@ -433,6 +505,7 @@ export class EditorInspectorController {
     if (placed && canPlacedObjectUseObjectLink(placed)) {
       this.focusedContainerInstanceId = null;
       this.focusedSwordsmanInstanceId = null;
+      this.focusedPoliceInstanceId = null;
       this.focusedNpcInstanceId = null;
       this.focusedPressurePlateInstanceId = placed.instanceId;
       this.pinInspector('pressure', placed.instanceId);
@@ -444,6 +517,7 @@ export class EditorInspectorController {
       this.focusedContainerInstanceId = placed.instanceId;
       this.focusedPressurePlateInstanceId = null;
       this.focusedSwordsmanInstanceId = null;
+      this.focusedPoliceInstanceId = null;
       this.focusedNpcInstanceId = null;
       this.pinInspector('container', placed.instanceId);
       this.containerStatusText = `${this.getContainerName(placed.id)} placed. Select a ${this.getContainerAcceptedContentsLabel(placed.id)} and click it to fill the container.`;
@@ -455,6 +529,7 @@ export class EditorInspectorController {
       this.focusedSwordsmanInstanceId = placed.instanceId;
       this.focusedPressurePlateInstanceId = null;
       this.focusedContainerInstanceId = null;
+      this.focusedPoliceInstanceId = null;
       this.focusedNpcInstanceId = null;
       this.pinInspector('swordsman', placed.instanceId);
       this.swordsmanStatusText = 'Sword Hunter placed. Choose what it should try to do.';
@@ -479,6 +554,9 @@ export class EditorInspectorController {
     if (removed.instanceId === this.focusedSwordsmanInstanceId) {
       this.focusedSwordsmanInstanceId = null;
     }
+    if (removed.instanceId === this.focusedPoliceInstanceId) {
+      this.focusedPoliceInstanceId = null;
+    }
     if (removed.instanceId === this.focusedNpcInstanceId) {
       this.focusedNpcInstanceId = null;
     }
@@ -493,6 +571,9 @@ export class EditorInspectorController {
     }
     if (removed.id === SWORDSMAN_AI_OBJECT_ID) {
       this.swordsmanStatusText = 'Sword Hunter removed.';
+    }
+    if (isPoliceEnemyObjectId(removed.id)) {
+      this.policeStatusText = `${getObjectById(removed.id)?.name ?? 'Police enemy'} removed.`;
     }
     if (isNpcObjectId(removed.id)) {
       this.npcStatusText = `${getObjectById(removed.id)?.name ?? 'NPC'} removed.`;
@@ -597,6 +678,43 @@ export class EditorInspectorController {
       this.focusedSwordsmanInstanceId = focused.instanceId;
       this.pinInspector('swordsman', focused.instanceId);
       this.swordsmanStatusText = `Sword Hunter defeat behavior set to ${SWORDSMAN_DEFEAT_MODE_LABELS[normalizedMode]}.`;
+      this.renderInspectorUi();
+    }
+  }
+
+  setFocusedPoliceBehaviorMode(mode: PoliceBehaviorMode): void {
+    const focused = this.getFocusedPolice();
+    if (!focused) {
+      this.policeStatusText = 'Select a police enemy first.';
+      this.renderInspectorUi();
+      return;
+    }
+
+    const normalizedMode = normalizePoliceBehaviorMode(mode) ?? DEFAULT_POLICE_BEHAVIOR_MODE;
+    if (this.editRuntime.setPoliceBehaviorMode(focused.instanceId, normalizedMode)) {
+      this.focusedPoliceInstanceId = focused.instanceId;
+      this.pinInspector('police', focused.instanceId);
+      const objectName = getObjectById(focused.id)?.name ?? 'Police enemy';
+      this.policeStatusText = `${objectName} set to ${POLICE_BEHAVIOR_MODE_LABELS[normalizedMode]}.`;
+      this.renderInspectorUi();
+    }
+  }
+
+  setFocusedPolicePatrolShoots(patrolShoots: boolean): void {
+    const focused = this.getFocusedPolice();
+    if (!focused) {
+      this.policeStatusText = 'Select a police enemy first.';
+      this.renderInspectorUi();
+      return;
+    }
+
+    if (this.editRuntime.setPolicePatrolShoots(focused.instanceId, patrolShoots)) {
+      this.focusedPoliceInstanceId = focused.instanceId;
+      this.pinInspector('police', focused.instanceId);
+      const objectName = getObjectById(focused.id)?.name ?? 'Police enemy';
+      this.policeStatusText = patrolShoots
+        ? `${objectName} will shoot when the player enters its patrol sightline.`
+        : `${objectName} will patrol without shooting.`;
       this.renderInspectorUi();
     }
   }
@@ -741,6 +859,12 @@ export class EditorInspectorController {
       swordsmanObjectiveModeDisabled: true,
       swordsmanDefeatModeValue: DEFAULT_SWORDSMAN_DEFEAT_MODE,
       swordsmanDefeatModeDisabled: true,
+      policeVisible: false,
+      policeStatusText: '',
+      policeBehaviorModeValue: DEFAULT_POLICE_BEHAVIOR_MODE,
+      policeBehaviorModeDisabled: true,
+      policePatrolShootsChecked: false,
+      policePatrolShootsHidden: true,
       npcVisible: false,
       npcStatusText: '',
       npcModeValue: DEFAULT_NPC_MODE,
@@ -843,6 +967,28 @@ export class EditorInspectorController {
         swordsmanObjectiveModeDisabled: false,
         swordsmanDefeatModeValue: defeatMode,
         swordsmanDefeatModeDisabled: false,
+      });
+      return;
+    }
+
+    const focusedPolice = this.getFocusedPolice();
+    if (focusedPolice && editorState.paletteMode === 'objects' && !this.connectingPressurePlateInstanceId) {
+      const mode = getPlacedPoliceBehaviorMode(focusedPolice) ?? DEFAULT_POLICE_BEHAVIOR_MODE;
+      const patrolShoots = getPlacedPolicePatrolShoots(focusedPolice);
+      const objectName = getObjectById(focusedPolice.id)?.name ?? 'Police enemy';
+      this.renderInspector({
+        ...hiddenState,
+        visible: true,
+        policeVisible: true,
+        policeStatusText:
+          this.policeStatusText
+          ?? (mode === 'hunter'
+            ? `${objectName} will chase and shoot the player.`
+            : `${objectName} will patrol ${patrolShoots ? 'and shoot on sight' : 'without shooting'}.`),
+        policeBehaviorModeValue: mode,
+        policeBehaviorModeDisabled: false,
+        policePatrolShootsChecked: patrolShoots,
+        policePatrolShootsHidden: mode !== 'patrol',
       });
       return;
     }
@@ -982,7 +1128,7 @@ export class EditorInspectorController {
     return true;
   }
 
-  private pinInspector(kind: 'pressure' | 'container' | 'swordsman' | 'npc', instanceId: string): void {
+  private pinInspector(kind: 'pressure' | 'container' | 'swordsman' | 'police' | 'npc', instanceId: string): void {
     this.pinnedInspector = { kind, instanceId };
   }
 
@@ -991,10 +1137,12 @@ export class EditorInspectorController {
     this.focusedPressurePlateInstanceId = null;
     this.focusedContainerInstanceId = null;
     this.focusedSwordsmanInstanceId = null;
+    this.focusedPoliceInstanceId = null;
     this.focusedNpcInstanceId = null;
     this.pressurePlateStatusText = null;
     this.containerStatusText = null;
     this.swordsmanStatusText = null;
+    this.policeStatusText = null;
     this.npcStatusText = null;
     this.renderInspectorUi();
   }
@@ -1045,6 +1193,16 @@ export class EditorInspectorController {
       pinnedNpcId ?? this.focusedNpcInstanceId,
     );
     return focused && isNpcObjectId(focused.id) ? focused : null;
+  }
+
+  private getFocusedPolice(): PlacedObject | null {
+    const pinnedPoliceId = this.pinnedInspector?.kind === 'police'
+      ? this.pinnedInspector.instanceId
+      : null;
+    const focused = this.editRuntime.getPlacedObjectByInstanceId(
+      pinnedPoliceId ?? this.focusedPoliceInstanceId,
+    );
+    return focused && isPoliceEnemyObjectId(focused.id) ? focused : null;
   }
 
   private getConnectingPressurePlate(): PlacedObject | null {

@@ -1005,6 +1005,21 @@
             </select>
           </div>
         </div>
+        <div id="police-behavior-panel" class="pressure-plate-panel hidden">
+          <div class="section-label">Police Enemy</div>
+          <div id="police-behavior-status" class="goal-context-note">Hover or click a police enemy to change its behavior.</div>
+          <div class="goal-control-row">
+            <label class="goal-control-label" for="police-behavior-mode-select">Mode</label>
+            <select id="police-behavior-mode-select" class="goal-input">
+              <option value="hunter">Hunt Player</option>
+              <option value="patrol">Patrol</option>
+            </select>
+          </div>
+          <label id="police-patrol-shoots-row" class="goal-control-row npc-checkbox-row hidden">
+            <input id="police-patrol-shoots-checkbox" type="checkbox" />
+            <span>Shoot While Patrolling</span>
+          </label>
+        </div>
         <div id="npc-objective-panel" class="pressure-plate-panel npc-objective-panel hidden">
           <div class="section-label">NPC</div>
           <div id="npc-objective-status" class="goal-context-note">Hover or click an NPC to edit it.</div>

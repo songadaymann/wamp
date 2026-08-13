@@ -39,6 +39,11 @@ import {
 } from '../music/model';
 import { SWORDSMAN_AI_OBJECT_ID } from '../enemies/swordsmanAi';
 import {
+  getPlacedPoliceBehaviorMode,
+  getPlacedPolicePatrolShoots,
+  isPoliceEnemyObjectId,
+} from '../enemies/policeEnemy';
+import {
   normalizeSwordsmanDefeatMode,
   normalizeSwordsmanObjectiveMode,
 } from '../enemies/swordsmanObjectives';
@@ -509,6 +514,12 @@ function normalizePlacedObject(
       placed.id === SWORDSMAN_AI_OBJECT_ID
         ? normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode)
         : null,
+    policeBehaviorMode: isPoliceEnemyObjectId(placed.id)
+      ? getPlacedPoliceBehaviorMode(placed)
+      : null,
+    policePatrolShoots: isPoliceEnemyObjectId(placed.id)
+      ? getPlacedPolicePatrolShoots(placed)
+      : null,
     npcMode: isNpcObjectId(placed.id)
       ? normalizeNpcMode(placed.npcMode) ?? DEFAULT_NPC_MODE
       : null,
@@ -612,6 +623,12 @@ function clonePlacedObjects(
         placed.id === SWORDSMAN_AI_OBJECT_ID
           ? normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode)
           : null,
+      policeBehaviorMode: isPoliceEnemyObjectId(placed.id)
+        ? getPlacedPoliceBehaviorMode(placed)
+        : null,
+      policePatrolShoots: isPoliceEnemyObjectId(placed.id)
+        ? getPlacedPolicePatrolShoots(placed)
+        : null,
       npcMode: isNpcObjectId(placed.id)
         ? normalizeNpcMode(placed.npcMode) ?? DEFAULT_NPC_MODE
         : null,

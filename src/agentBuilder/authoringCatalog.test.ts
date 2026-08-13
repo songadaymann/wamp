@@ -12,6 +12,7 @@ import type { Env } from '../cloudflare/worker/core/types';
 import worker from '../cloudflare/worker';
 import {
   AUTHORING_CATALOG_CACHE_CONTROL,
+  AUTHORING_CATALOG_SCHEMA_VERSION,
   getAuthoringCatalog,
   renderAuthoringDocuments,
 } from './authoringCatalog';
@@ -23,7 +24,7 @@ import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../worldTiles/assetCon
 describe('authoring catalog', () => {
   it('has one entry for every canonical built-in registry item', () => {
     const catalog = getAuthoringCatalog();
-    expect(catalog.schemaVersion).toBe(1);
+    expect(catalog.schemaVersion).toBe(2);
     expect(catalog.rendererAssetContractHash).toBe(WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH);
     expect(catalog.tilesets.map((entry) => entry.key)).toEqual(TILESETS.map((entry) => entry.key));
     expect(catalog.objects.map((entry) => entry.id)).toEqual(GAME_OBJECTS.map((entry) => entry.id));
@@ -46,6 +47,26 @@ describe('authoring catalog', () => {
     expect(catalog.tilesets.find((entry) => entry.key === 'cybertext')?.assetPath).toContain('CyberText.png');
     expect(catalog.tilesets.find((entry) => entry.key === 'cybercity yellow')?.rows).toBe(7);
     expect(catalog.tilesets.find((entry) => entry.key === 'essentials')?.buildStyles).toEqual([]);
+
+    const boygame = catalog.tilesets.find((entry) => entry.key === 'boygame');
+    expect(boygame).toMatchObject({
+      name: 'Boygame',
+      assetPath: expect.stringContaining('boygame.png'),
+      imageWidth: 128,
+      imageHeight: 112,
+      columns: 8,
+      rows: 7,
+      tileCount: 56,
+      gidStart: 1801,
+      gidEnd: 1856,
+    });
+    expect(boygame?.disabledEditorLocalIndices).toContain(17);
+    expect(boygame?.disabledEditorLocalIndices).not.toContain(10);
+    expect(boygame?.collisionLocalIndices.full).toContain(10);
+    expect(boygame?.buildStyles).toContainEqual(expect.objectContaining({
+      id: 'boygame_ruins',
+      surfaceLocalIndices: [10],
+    }));
   });
 
   it('derives current object capabilities and marks spawn_point non-placeable', () => {
@@ -60,6 +81,21 @@ describe('authoring catalog', () => {
     expect(objects.get('block_switch')).toBeDefined();
     expect(objects.get('switch_block_on')).toBeDefined();
     expect(objects.get('swordsman_ai')?.capabilities.swordsman?.objectiveModes).toEqual(['duel', 'collect']);
+    expect(objects.get('police_patrolman')?.capabilities.police).toMatchObject({
+      behaviorModes: ['hunter', 'patrol'],
+      defaults: { behaviorMode: 'hunter', patrolShoots: false },
+    });
+    expect(objects.get('policewoman')?.capabilities.police).toBeTruthy();
+    expect(objects.get('boygame_coin')).toMatchObject({ category: 'collectible', frameCount: 4, behavior: 'animated' });
+    expect(objects.get('boygame_heart')).toMatchObject({ category: 'collectible', frameCount: 9, behavior: 'animated' });
+    expect(objects.get('boygame_wall_torch')).toMatchObject({ category: 'decoration', frameCount: 4, behavior: 'animated' });
+
+    expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_coin')?.animationFrames).toEqual([0, 1, 3, 1]);
+    expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_heart')?.animationFrames).toEqual([0, 1, 4, 5, 6, 7, 6, 5, 4, 1]);
+    expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_wall_torch')?.lightEmission).toMatchObject({
+      glowColor: 0x9bbc0f,
+      flicker: expect.any(Object),
+    });
   });
 
   it('keeps the legacy tileset route projection stable', () => {
@@ -86,9 +122,16 @@ describe('authoring catalog', () => {
 
     const openapi = JSON.parse(readFileSync(resolve(process.cwd(), 'public/openapi.json'), 'utf8')) as {
       info: { version: string };
-      components: { schemas: { RoomDraftCommand: { oneOf: Array<{ properties: { type: { const: string } } }> } } };
+      components: {
+        schemas: {
+          AuthoringCatalog: { properties: { schemaVersion: { const: number } } };
+          RoomDraftCommand: { oneOf: Array<{ properties: { type: { const: string } } }> };
+        };
+      };
     };
     expect(openapi.info.version).toBe('0.9.0');
+    expect(openapi.components.schemas.AuthoringCatalog.properties.schemaVersion.const)
+      .toBe(AUTHORING_CATALOG_SCHEMA_VERSION);
     expect(openapi.components.schemas.RoomDraftCommand.oneOf.map((schema) => schema.properties.type.const))
       .toEqual(ROOM_DRAFT_COMMAND_TYPES);
   });

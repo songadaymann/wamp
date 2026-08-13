@@ -22,6 +22,10 @@ import {
   SWORDSMAN_AI_EXTRA_SPRITESHEETS,
 } from '../enemies/swordsmanAi';
 import {
+  POLICE_ENEMY_ANIMATIONS,
+  POLICE_ENEMY_EXTRA_SPRITESHEETS,
+} from '../enemies/policeEnemy';
+import {
   GHOST_ANIMATIONS,
   GHOST_EXTRA_SPRITESHEETS,
 } from '../enemies/ghost';
@@ -70,6 +74,7 @@ export class BootScene extends Phaser.Scene {
       GAME_OBJECTS.length +
       BLOCK_SWITCH_ACTIVE_TEXTURES.length +
       SWORDSMAN_AI_EXTRA_SPRITESHEETS.length +
+      POLICE_ENEMY_EXTRA_SPRITESHEETS.length +
       GHOST_EXTRA_SPRITESHEETS.length +
       avatarAtlasAssets.length +
       ROCKY_ROADS_FX_SPRITESHEETS.length +
@@ -166,6 +171,14 @@ export class BootScene extends Phaser.Scene {
     this.load.image(PVP_HEART_TEXTURE_KEY, PVP_HEART_TEXTURE_PATH);
 
     for (const sheet of SWORDSMAN_AI_EXTRA_SPRITESHEETS) {
+      trackAsset('spritesheet', sheet.key, sheet.path);
+      this.load.spritesheet(sheet.key, sheet.path, {
+        frameWidth: sheet.frameWidth,
+        frameHeight: sheet.frameHeight,
+      });
+    }
+
+    for (const sheet of POLICE_ENEMY_EXTRA_SPRITESHEETS) {
       trackAsset('spritesheet', sheet.key, sheet.path);
       this.load.spritesheet(sheet.key, sheet.path, {
         frameWidth: sheet.frameWidth,
@@ -298,6 +311,38 @@ export class BootScene extends Phaser.Scene {
           key: animation.spritesheetKey,
           frame,
         })),
+        frameRate: animation.frameRate,
+        repeat: animation.repeat,
+      });
+    }
+
+    for (const animation of POLICE_ENEMY_ANIMATIONS) {
+      if (this.anims.exists(animation.key)) {
+        continue;
+      }
+
+      const frames = animation.frames.map((frame) => ({
+        key: animation.spritesheetKey,
+        frame,
+      }));
+      const missingFrames = frames.filter(
+        ({ key, frame }) => !hasExactTextureFrame(this.textures, key, frame),
+      );
+      if (missingFrames.length > 0) {
+        logBootPhase(
+          'boot-scene:animation-skipped',
+          {
+            animationKey: animation.key,
+            missingFrameCount: missingFrames.length,
+            requestedFrameCount: frames.length,
+          },
+          { level: 'warn' },
+        );
+        continue;
+      }
+      this.anims.create({
+        key: animation.key,
+        frames,
         frameRate: animation.frameRate,
         repeat: animation.repeat,
       });

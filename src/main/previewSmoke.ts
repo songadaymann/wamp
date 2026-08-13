@@ -10,6 +10,12 @@ import {
   type RoomRecord,
   type RoomSnapshot,
 } from '../persistence/roomModel';
+import { POLICE_PATROLMAN_OBJECT_ID, POLICEWOMAN_OBJECT_ID } from '../enemies/policeEnemy';
+import {
+  BOYGAME_TILESET_FIRST_GID,
+  getObjectById,
+  getObjectPlacementPointForTile,
+} from '../config';
 import { markAppReady } from '../ui/appFeedback';
 
 type PreviewSmokeScene = {
@@ -37,6 +43,8 @@ type PreviewSmokeAction =
   | 'returnToWorld'
   | 'editSelectedRoom'
   | 'openSyntheticEditor'
+  | 'openSyntheticPoliceEditor'
+  | 'openSyntheticBoygameEditor'
   | 'openSyntheticCourseEditor'
   | 'setPlayerPosition'
   | 'prepareTransitionDestination'
@@ -86,6 +94,10 @@ export function installPreviewSmokeActions(
         );
       case 'openSyntheticEditor':
         return openSyntheticEditorForPreviewSmoke(game, getDebugState);
+      case 'openSyntheticPoliceEditor':
+        return openSyntheticEditorForPreviewSmoke(game, getDebugState, createPoliceEnemyPreviewRoom());
+      case 'openSyntheticBoygameEditor':
+        return openSyntheticEditorForPreviewSmoke(game, getDebugState, createBoygamePreviewRoom());
       case 'openSyntheticCourseEditor':
         return openSyntheticCourseEditorForPreviewSmoke(game, getDebugState);
       case 'setPlayerPosition':
@@ -314,6 +326,7 @@ function getOverworldSceneForPreviewSmoke(game: Phaser.Game): PreviewSmokeScene 
 async function openSyntheticEditorForPreviewSmoke(
   game: Phaser.Game,
   getDebugState: () => Record<string, unknown>,
+  fixtureRoom?: RoomSnapshot,
 ): Promise<Record<string, unknown>> {
   const editorScene = game.scene.keys.EditorScene as unknown as {
     roomSession?: {
@@ -326,14 +339,16 @@ async function openSyntheticEditorForPreviewSmoke(
 
   editorScene.roomSession.loadPersistedRoom = async () => true;
 
-  const roomSnapshot = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
-  roomSnapshot.background = 'cave';
-  roomSnapshot.spawnPoint = { x: 320, y: 176 };
-  roomSnapshot.lighting = {
-    mode: 'playerAuraDark',
-    darkness: 88,
-    radius: 24,
-  };
+  const roomSnapshot = fixtureRoom ?? createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
+  if (!fixtureRoom) {
+    roomSnapshot.background = 'cave';
+    roomSnapshot.spawnPoint = { x: 320, y: 176 };
+    roomSnapshot.lighting = {
+      mode: 'playerAuraDark',
+      darkness: 88,
+      radius: 24,
+    };
+  }
 
   if (
     game.scene.isActive('EditorScene')
@@ -357,6 +372,125 @@ async function openSyntheticEditorForPreviewSmoke(
     ok: true,
     activeScene: getDebugState(),
   };
+}
+
+function createPoliceEnemyPreviewRoom(): RoomSnapshot {
+  const roomSnapshot = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
+  const floorY = 16;
+
+  roomSnapshot.title = 'Police Enemy Preview';
+  roomSnapshot.background = 'cave';
+  roomSnapshot.spawnPoint = { x: 320, y: floorY * 16 - 16 };
+  roomSnapshot.tileData.terrain[floorY] = roomSnapshot.tileData.terrain[floorY].map(() => 492);
+  roomSnapshot.placedObjects = [
+    {
+      id: POLICE_PATROLMAN_OBJECT_ID,
+      x: 128,
+      y: floorY * 16 - 32,
+      instanceId: 'preview-police-patrolman',
+      facing: 'right',
+      layer: 'terrain',
+      policeBehaviorMode: 'hunter',
+      policePatrolShoots: false,
+    },
+    {
+      id: POLICEWOMAN_OBJECT_ID,
+      x: 512,
+      y: floorY * 16 - 32,
+      instanceId: 'preview-policewoman',
+      facing: 'left',
+      layer: 'terrain',
+      policeBehaviorMode: 'patrol',
+      policePatrolShoots: true,
+    },
+  ];
+
+  return roomSnapshot;
+}
+
+function createBoygamePreviewRoom(): RoomSnapshot {
+  const roomSnapshot = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
+  const floorY = 16;
+  const gid = (localIndex: number) => BOYGAME_TILESET_FIRST_GID + localIndex;
+  const placeObject = (
+    id: string,
+    tileX: number,
+    tileY: number,
+    layer: 'background' | 'terrain' | 'foreground' = 'terrain',
+  ) => {
+    const config = getObjectById(id);
+    if (!config) {
+      throw new Error(`Missing Boygame preview object config: ${id}`);
+    }
+    const point = getObjectPlacementPointForTile(config, tileX, tileY);
+    return {
+      id,
+      x: point.x,
+      y: point.y,
+      instanceId: `preview-${id}`,
+      layer,
+    };
+  };
+  const stamp = (
+    layer: 'background' | 'terrain' | 'foreground',
+    tileX: number,
+    tileY: number,
+    localIndices: number[][],
+  ) => {
+    for (let dy = 0; dy < localIndices.length; dy += 1) {
+      for (let dx = 0; dx < (localIndices[dy]?.length ?? 0); dx += 1) {
+        roomSnapshot.tileData[layer][tileY + dy][tileX + dx] = gid(localIndices[dy][dx]);
+      }
+    }
+  };
+
+  roomSnapshot.title = 'Boygame Preview';
+  roomSnapshot.background = 'solid:#d7e894';
+  roomSnapshot.spawnPoint = { x: 320, y: floorY * 16 - 16 };
+  roomSnapshot.lighting = {
+    mode: 'playerAuraDark',
+    darkness: 84,
+    radius: 38,
+  };
+
+  for (let tileX = 0; tileX < roomSnapshot.tileData.terrain[floorY].length; tileX += 1) {
+    roomSnapshot.tileData.terrain[floorY][tileX] = gid(10);
+    for (let tileY = floorY + 1; tileY < roomSnapshot.tileData.terrain.length; tileY += 1) {
+      roomSnapshot.tileData.terrain[tileY][tileX] = gid([5, 6, 7, 14, 15, 16][tileX % 6]);
+    }
+  }
+
+  stamp('background', 2, 13, [
+    [32, 33, 34],
+    [40, 41, 42],
+    [48, 49, 50],
+  ]);
+  stamp('background', 6, 14, [
+    [35, 36],
+    [43, 44],
+  ]);
+  stamp('terrain', 10, 13, [[12], [20], [28]]);
+  stamp('terrain', 28, 14, [[13], [21]]);
+  roomSnapshot.placedObjects = [
+    placeObject('boygame_sign_left', 14, 15),
+    placeObject('boygame_chest', 16, 15),
+    placeObject('boygame_chest_open', 17, 15),
+    placeObject('boygame_tree', 19, 15, 'background'),
+    placeObject('boygame_boot', 21, 15),
+    placeObject('boygame_flower', 22, 15),
+    placeObject('boygame_grass', 23, 15),
+    placeObject('boygame_pebbles', 24, 15),
+    placeObject('boygame_rune_stone', 25, 15),
+    placeObject('boygame_rock_shard', 26, 15),
+    placeObject('boygame_wall_torch', 27, 13, 'foreground'),
+    placeObject('boygame_coin', 28, 14),
+    placeObject('boygame_coin_small', 29, 14),
+    placeObject('boygame_heart', 30, 13),
+    placeObject('boygame_rocks', 32, 15, 'background'),
+    placeObject('boygame_sign_right', 35, 15),
+  ];
+
+  return roomSnapshot;
 }
 
 function findEditableRoomCandidate(

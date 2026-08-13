@@ -176,7 +176,7 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
 
     liveObject.runtime.nextActionAt =
       this.options.getCurrentTime() + this.options.settings.cannonFireDelayMs;
-    this.spawnCannonBullet(loadedRoom, liveObject);
+    this.spawnEnemyBullet(loadedRoom, liveObject);
   }
 
   updateTravelingProjectile(
@@ -362,13 +362,18 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
     this.options.handlePlayerDeath('Bomb exploded.');
   }
 
-  private spawnCannonBullet(
+  spawnEnemyBullet(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-    cannon: LoadedRoomObject
+    source: LoadedRoomObject,
+    options: {
+      offsetX?: number;
+      offsetY?: number;
+      hitReason?: string;
+    } = {},
   ): void {
-    const directionX = cannon.runtime.directionX || 1;
-    const spawnX = cannon.sprite.x + directionX * 18;
-    const spawnY = cannon.sprite.y + 2;
+    const directionX = source.runtime.directionX || 1;
+    const spawnX = source.sprite.x + directionX * (options.offsetX ?? 18);
+    const spawnY = source.sprite.y + (options.offsetY ?? 2);
     const sprite = this.options.scene.add.sprite(
       spawnX,
       spawnY,
@@ -388,7 +393,7 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
     body.setVelocityX(directionX * this.options.settings.cannonBulletSpeed);
 
     const bullet: LoadedRoomObject = {
-      key: `${cannon.key}:bullet:${this.options.getCurrentTime()}`,
+      key: `${source.key}:bullet:${this.options.getCurrentTime()}`,
       placedInstanceId: null,
       linkedTargetRoomId: null,
       linkedTargetInstanceId: null,
@@ -470,6 +475,8 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
         aiCollectRouteScore: null,
         aiCollectRouteValue: 0,
         aiCollectRoutePenalty: 0,
+        policeBehaviorMode: null,
+        policePatrolShoots: false,
         npcMode: null,
         npcPushable: false,
         npcCanJumpFall: false,
@@ -489,7 +496,7 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
     if (player) {
       bullet.interactions.push(
         this.options.scene.physics.add.collider(player, sprite, () => {
-          this.handleCannonBulletContact(loadedRoom, bullet);
+          this.handleEnemyBulletContact(loadedRoom, bullet, options.hitReason);
         }),
       );
     }
@@ -550,9 +557,10 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
     loadedRoom.liveObjects.push(bullet);
   }
 
-  private handleCannonBulletContact(
+  private handleEnemyBulletContact(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-    bullet: LoadedRoomObject
+    bullet: LoadedRoomObject,
+    hitReason = 'Cannonball hit you.',
   ): void {
     const playerBody = this.options.getPlayerBody();
     const bulletBody = this.getDynamicBody(bullet.sprite);
@@ -568,7 +576,7 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
       return;
     }
 
-    this.options.handlePlayerDeath('Cannonball hit you.');
+    this.options.handlePlayerDeath(hitReason);
   }
 
   private getDynamicBody(sprite: Phaser.GameObjects.Sprite): Phaser.Physics.Arcade.Body | null {

@@ -765,6 +765,38 @@ export class EditorUiBridge {
         )
       );
     }
+    const handlePoliceBehaviorModeChange = () => {
+      const value = this.elements.policeBehaviorModeSelect?.value;
+      if (value === 'hunter' || value === 'patrol') {
+        this.actions.onSetFocusedPoliceBehaviorMode(value);
+      }
+    };
+    this.elements.policeBehaviorModeSelect?.addEventListener('change', handlePoliceBehaviorModeChange);
+    if (this.elements.policeBehaviorModeSelect) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.policeBehaviorModeSelect?.removeEventListener(
+          'change',
+          handlePoliceBehaviorModeChange,
+        )
+      );
+    }
+    const handlePolicePatrolShootsChange = () => {
+      this.actions.onSetFocusedPolicePatrolShoots(
+        Boolean(this.elements.policePatrolShootsCheckbox?.checked),
+      );
+    };
+    this.elements.policePatrolShootsCheckbox?.addEventListener(
+      'change',
+      handlePolicePatrolShootsChange,
+    );
+    if (this.elements.policePatrolShootsCheckbox) {
+      this.cleanupCallbacks.push(() =>
+        this.elements.policePatrolShootsCheckbox?.removeEventListener(
+          'change',
+          handlePolicePatrolShootsChange,
+        )
+      );
+    }
     const handleNpcModeChange = () => {
       const value = this.elements.npcModeSelect?.value;
       if ((NPC_MODES as readonly string[]).includes(value ?? '')) {
