@@ -120,6 +120,12 @@ import {
   type NpcMode,
 } from '../../npcs/model';
 import { EditorHistory } from './history';
+import {
+  buildEditorClipboardState,
+  cloneEditorClipboardState,
+  planEditorClipboardPaste,
+  type EditorClipboardState,
+} from './clipboard';
 
 interface TileAction {
   layer: LayerName;
@@ -168,13 +174,7 @@ interface EditorRoomSnapshotMetadata {
   publishedAt: string | null;
 }
 
-export interface EditorClipboardState {
-  sourceLayer: LayerName;
-  width: number;
-  height: number;
-  tiles: number[][];
-  occupiedMask: boolean[][];
-}
+export type { EditorClipboardState } from './clipboard';
 
 interface EditorEditRuntimeHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
@@ -283,27 +283,11 @@ export class EditorEditRuntime {
   }
 
   get currentClipboardState(): EditorClipboardState | null {
-    return this.clipboardState
-      ? {
-          sourceLayer: this.clipboardState.sourceLayer,
-          width: this.clipboardState.width,
-          height: this.clipboardState.height,
-          tiles: this.clipboardState.tiles.map((row) => [...row]),
-          occupiedMask: this.clipboardState.occupiedMask.map((row) => [...row]),
-        }
-      : null;
+    return cloneEditorClipboardState(this.clipboardState);
   }
 
   setClipboardState(state: EditorClipboardState | null): void {
-    this.clipboardState = state
-      ? {
-          sourceLayer: state.sourceLayer,
-          width: state.width,
-          height: state.height,
-          tiles: state.tiles.map((row) => [...row]),
-          occupiedMask: state.occupiedMask.map((row) => [...row]),
-        }
-      : null;
+    this.clipboardState = cloneEditorClipboardState(state);
   }
 
   initializeGraphics(): void {
@@ -439,49 +423,20 @@ export class EditorEditRuntime {
       return false;
     }
 
-    const minX = Math.max(0, Math.min(x1, x2));
-    const minY = Math.max(0, Math.min(y1, y2));
-    const maxX = Math.min(ROOM_WIDTH - 1, Math.max(x1, x2));
-    const maxY = Math.min(ROOM_HEIGHT - 1, Math.max(y1, y2));
-    const width = maxX - minX + 1;
-    const height = maxY - minY + 1;
-    if (width <= 0 || height <= 0) {
-      return false;
-    }
-
-    const tiles: number[][] = [];
-    const occupiedMask: boolean[][] = [];
-    let hasOccupiedTiles = false;
-
-    for (let dy = 0; dy < height; dy += 1) {
-      const tileRow: number[] = [];
-      const occupiedRow: boolean[] = [];
-      for (let dx = 0; dx < width; dx += 1) {
-        const existingTile = layer.getTileAt(minX + dx, minY + dy);
-        const encodedTileValue = existingTile
+    this.clipboardState = buildEditorClipboardState(
+      editorState.activeLayer,
+      x1,
+      y1,
+      x2,
+      y2,
+      (x, y) => {
+        const existingTile = layer.getTileAt(x, y);
+        return existingTile
           ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
           : -1;
-        const occupied = encodedTileValue >= 0;
-        tileRow.push(encodedTileValue);
-        occupiedRow.push(occupied);
-        hasOccupiedTiles ||= occupied;
-      }
-      tiles.push(tileRow);
-      occupiedMask.push(occupiedRow);
-    }
-
-    if (!hasOccupiedTiles) {
-      return false;
-    }
-
-    this.clipboardState = {
-      sourceLayer: editorState.activeLayer,
-      width,
-      height,
-      tiles,
-      occupiedMask,
-    };
-    return true;
+      },
+    );
+    return this.clipboardState !== null;
   }
 
   pasteClipboardAt(baseTileX: number, baseTileY: number): boolean {
@@ -496,23 +451,11 @@ export class EditorEditRuntime {
     }
 
     let changed = false;
-    for (let dy = 0; dy < clipboard.height; dy += 1) {
-      for (let dx = 0; dx < clipboard.width; dx += 1) {
-        if (!clipboard.occupiedMask[dy]?.[dx]) {
-          continue;
-        }
-
-        const tileX = baseTileX + dx;
-        const tileY = baseTileY + dy;
-        if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
-          continue;
-        }
-
-        const newGid = clipboard.tiles[dy]?.[dx] ?? -1;
-        if (newGid < 0) {
-          continue;
-        }
-
+    for (const { x: tileX, y: tileY, encodedTileValue: newGid } of planEditorClipboardPaste(
+      clipboard,
+      baseTileX,
+      baseTileY,
+    )) {
         const existingTile = layer.getTileAt(tileX, tileY);
         const oldGid = existingTile
           ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
@@ -536,7 +479,6 @@ export class EditorEditRuntime {
           newGid,
         });
         changed = true;
-      }
     }
 
     return changed;
