@@ -29,6 +29,14 @@ import {
   type WorldGhostPresence,
 } from '../src/partykit/presenceProtocol';
 import {
+  computePresenceRoomCounts,
+  listWorldGhostPeers,
+  roomIdFromPresenceCoordinates,
+  roomIdFromUnknownCoordinates,
+  shouldBroadcastPresencePopulations,
+  toWorldGhostPresence,
+} from '../src/partykit/presencePopulation';
+import {
   getMultiplayerModeDefinition,
   type PvpHitSource,
   type PvpInviteAcceptMessage,
@@ -394,64 +402,24 @@ export default class PresenceServer implements Party.Server {
   private listPeers(
     viewer: Party.Connection<ConnectionPresenceState> | null,
   ): WorldGhostPresence[] {
-    const peers: WorldGhostPresence[] = [];
-    const excludeConnectionId = viewer?.id ?? null;
-    const excludeUserId = viewer?.state?.userId ?? null;
-
-    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
-      if (excludeConnectionId && connection.id === excludeConnectionId) {
-        continue;
-      }
-      if (excludeUserId && connection.state?.userId === excludeUserId) {
-        continue;
-      }
-
-      const peer = this.toGhostPresence(connection);
-      if (peer) {
-        peers.push(peer);
-      }
-    }
-
-    return peers.sort((left, right) => left.displayName.localeCompare(right.displayName));
+    return listWorldGhostPeers(
+      this.room.getConnections<ConnectionPresenceState>(),
+      viewer,
+      this.room.id,
+    );
   }
 
   private computeRoomPopulations(): Record<string, number> {
-    const counts = new Map<string, number>();
-
-    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
-      const presence = connection.state?.presence;
-      if (
-        connection.state?.channel !== 'presence' ||
-        !presence ||
-        presence.mode !== 'play'
-      ) {
-        continue;
-      }
-
-      const roomId = this.getRoomId(presence.roomCoordinates);
-      counts.set(roomId, (counts.get(roomId) ?? 0) + 1);
-    }
-
-    return Object.fromEntries(
-      Array.from(counts.entries()).sort(([left], [right]) => left.localeCompare(right))
+    return computePresenceRoomCounts(
+      this.room.getConnections<ConnectionPresenceState>(),
+      'play',
     );
   }
 
   private computeRoomEditors(): Record<string, number> {
-    const counts = new Map<string, number>();
-
-    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
-      const presence = connection.state?.presence;
-      if (connection.state?.channel !== 'presence' || !presence || presence.mode !== 'edit') {
-        continue;
-      }
-
-      const roomId = `${presence.roomCoordinates.x},${presence.roomCoordinates.y}`;
-      counts.set(roomId, (counts.get(roomId) ?? 0) + 1);
-    }
-
-    return Object.fromEntries(
-      Array.from(counts.entries()).sort(([left], [right]) => left.localeCompare(right))
+    return computePresenceRoomCounts(
+      this.room.getConnections<ConnectionPresenceState>(),
+      'edit',
     );
   }
 
@@ -496,20 +464,7 @@ export default class PresenceServer implements Party.Server {
   private toGhostPresence(
     connection: Party.Connection<ConnectionPresenceState>
   ): WorldGhostPresence | null {
-    const state = connection.state;
-    if (state?.channel !== 'presence' || !isVisiblePresence(state.presence)) {
-      return null;
-    }
-
-    return {
-      ...state.presence,
-      connectionId: connection.id,
-      userId: state.userId,
-      displayName: state.displayName,
-      avatarId: state.avatarId,
-      shardId: this.room.id,
-      roomId: `${state.presence.roomCoordinates.x},${state.presence.roomCoordinates.y}`,
-    };
+    return toWorldGhostPresence(connection, this.room.id);
   }
 
   private toRoomPreview(
@@ -636,37 +591,15 @@ export default class PresenceServer implements Party.Server {
     previousPresence: PresencePayload | null,
     nextPresence: PresencePayload | null
   ): boolean {
-    const previousCountsMode = this.getPopulationMode(previousPresence);
-    const nextCountsMode = this.getPopulationMode(nextPresence);
-    const previousRoomId = previousPresence ? this.getRoomId(previousPresence.roomCoordinates) : null;
-    const nextRoomId = nextPresence ? this.getRoomId(nextPresence.roomCoordinates) : null;
-
-    return previousCountsMode !== nextCountsMode || previousRoomId !== nextRoomId;
-  }
-
-  private getPopulationMode(presence: PresencePayload | null): 'play' | 'edit' | null {
-    if (!presence || (presence.mode !== 'play' && presence.mode !== 'edit')) {
-      return null;
-    }
-
-    return presence.mode;
+    return shouldBroadcastPresencePopulations(previousPresence, nextPresence);
   }
 
   private getRoomId(roomCoordinates: RoomCoordinates): string {
-    return `${roomCoordinates.x},${roomCoordinates.y}`;
+    return roomIdFromPresenceCoordinates(roomCoordinates);
   }
 
   private getRoomIdFromMaybeCoordinates(roomCoordinates: unknown): string | null {
-    if (
-      !roomCoordinates ||
-      typeof roomCoordinates !== 'object' ||
-      !Number.isInteger((roomCoordinates as Partial<RoomCoordinates>).x) ||
-      !Number.isInteger((roomCoordinates as Partial<RoomCoordinates>).y)
-    ) {
-      return null;
-    }
-
-    return this.getRoomId(roomCoordinates as RoomCoordinates);
+    return roomIdFromUnknownCoordinates(roomCoordinates);
   }
 
   private getPreviewStorageKey(roomId: string): string {
