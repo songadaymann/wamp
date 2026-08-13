@@ -20,6 +20,7 @@ import {
   type RoomBadgeScaleConfig,
 } from './badgeOverlays';
 import { RoomCommentsComposerController } from './roomCommentsComposerController';
+import { RoomCommentsBrowsePresentationController } from './roomCommentsBrowsePresentationController';
 import {
   RoomCommentsDataController,
   type BrowseCommentTarget,
@@ -175,18 +176,66 @@ export class OverworldRoomCommentsController {
   private readonly composerController: RoomCommentsComposerController;
   private readonly dataController: RoomCommentsDataController;
   private readonly playPresentationController: RoomCommentsPlayPresentationController;
+  private readonly browsePresentationController: RoomCommentsBrowsePresentationController<
+    RenderedBrowseCommentMarker,
+    RenderedBrowseDanmakuComment
+  >;
   private commentsVisible = getGameSettings().roomCommentsVisible;
   private unsubscribeSettings: (() => void) | null = null;
-  private readonly browseCommentMarkersByKey = new Map<string, RenderedBrowseCommentMarker>();
-  private hoveredBrowseMarkerKey: string | null = null;
-  private readonly activeBrowseDanmaku = new Set<RenderedBrowseDanmakuComment>();
-  private readonly idleBrowseDanmaku: RenderedBrowseDanmakuComment[] = [];
-  private readonly browseDanmakuLaneCooldowns: number[] = [];
-  private lastBrowseDanmakuUpdateMs = 0;
-  private nextBrowseDanmakuSpawnAtMs = 0;
-  private browseDanmakuCandidateCursor = 0;
+
+  private get browseCommentMarkersByKey(): Map<string, RenderedBrowseCommentMarker> {
+    return this.browsePresentationController.markersByKey;
+  }
+
+  private get hoveredBrowseMarkerKey(): string | null {
+    return this.browsePresentationController.hoveredMarkerKey;
+  }
+
+  private set hoveredBrowseMarkerKey(value: string | null) {
+    this.browsePresentationController.hoveredMarkerKey = value;
+  }
+
+  private get activeBrowseDanmaku(): Set<RenderedBrowseDanmakuComment> {
+    return this.browsePresentationController.activeDanmaku;
+  }
+
+  private get idleBrowseDanmaku(): RenderedBrowseDanmakuComment[] {
+    return this.browsePresentationController.idleDanmaku;
+  }
+
+  private get browseDanmakuLaneCooldowns(): number[] {
+    return this.browsePresentationController.danmakuLaneCooldowns;
+  }
+
+  private get lastBrowseDanmakuUpdateMs(): number {
+    return this.browsePresentationController.lastDanmakuUpdateMs;
+  }
+
+  private set lastBrowseDanmakuUpdateMs(value: number) {
+    this.browsePresentationController.lastDanmakuUpdateMs = value;
+  }
+
+  private get nextBrowseDanmakuSpawnAtMs(): number {
+    return this.browsePresentationController.nextDanmakuSpawnAtMs;
+  }
+
+  private set nextBrowseDanmakuSpawnAtMs(value: number) {
+    this.browsePresentationController.nextDanmakuSpawnAtMs = value;
+  }
+
+  private get browseDanmakuCandidateCursor(): number {
+    return this.browsePresentationController.danmakuCandidateCursor;
+  }
+
+  private set browseDanmakuCandidateCursor(value: number) {
+    this.browsePresentationController.danmakuCandidateCursor = value;
+  }
 
   constructor(private readonly options: OverworldRoomCommentsControllerOptions) {
+    this.browsePresentationController = new RoomCommentsBrowsePresentationController({
+      syncMarkers: () => this.syncBrowseCommentMarkers(),
+      syncDanmaku: () => this.syncBrowseDanmakuStreams(),
+    });
     this.playPresentationController = new RoomCommentsPlayPresentationController({
       scene: options.scene,
       getRoomOrigin: options.getRoomOrigin,
@@ -220,8 +269,7 @@ export class OverworldRoomCommentsController {
     this.dataController.reset();
     this.hoveredBrowseMarkerKey = null;
     this.playPresentationController.reset();
-    this.destroyBrowseCommentMarkers();
-    this.destroyBrowseDanmakuStreams();
+    this.browsePresentationController.destroy();
   }
 
   destroy(): void {
@@ -246,8 +294,7 @@ export class OverworldRoomCommentsController {
     this.nextVisualSyncAt = now + 50;
 
     this.syncRenderedComments(room);
-    this.syncBrowseCommentMarkers();
-    this.syncBrowseDanmakuStreams();
+    this.browsePresentationController.sync();
     this.composerController.refresh();
   }
 
@@ -272,7 +319,7 @@ export class OverworldRoomCommentsController {
     this.dataController.setPinnedBrowseMarkerKey(target.signature);
     const cached = this.dataController.getBrowseCacheEntry(target.signature);
     if (cached?.full) {
-      this.syncBrowseCommentMarkers();
+      this.browsePresentationController.syncMarkers();
       this.options.showTransientStatus?.(
         cached.comments.length > 0 ? 'Room comments opened.' : 'No comments here yet.',
       );
@@ -283,7 +330,7 @@ export class OverworldRoomCommentsController {
     // room payload. Preserve the marker while promoting the selected room to
     // the existing exact/full comments endpoint.
     this.dataController.loadBrowseComments(target, true);
-    this.syncBrowseCommentMarkers();
+    this.browsePresentationController.syncMarkers();
     this.options.showTransientStatus?.('Loading room comments...');
     return true;
   }
@@ -308,8 +355,7 @@ export class OverworldRoomCommentsController {
     this.commentsVisible = visible;
     updateGameSettings({ roomCommentsVisible: visible });
     this.syncRenderedComments(this.getRenderableRoom());
-    this.syncBrowseCommentMarkers();
-    this.syncBrowseDanmakuStreams();
+    this.browsePresentationController.sync();
     this.composerController.refresh();
   }
 
@@ -329,8 +375,7 @@ export class OverworldRoomCommentsController {
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
     return [
       ...this.playPresentationController.getIgnoredObjects(),
-      ...Array.from(this.browseCommentMarkersByKey.values(), (rendered) => rendered.container),
-      ...Array.from(this.activeBrowseDanmaku.values(), (rendered) => rendered.container),
+      ...this.browsePresentationController.getIgnoredObjects(),
     ];
   }
 
@@ -370,6 +415,9 @@ export class OverworldRoomCommentsController {
     const currentRoom = this.options.getCurrentRoomSnapshot();
     const composerDebug = this.composerController.getDebugSnapshot();
     const dataDebug = this.dataController.getDebugSnapshot();
+    const browsePresentationDebug = this.browsePresentationController.getDebugSnapshot(
+      (stream) => this.getBrowseDanmakuDebugScreenY(stream),
+    );
     return {
       activeRoomSignature: dataDebug.activeRoomSignature,
       loadingRoomSignature: dataDebug.loadingRoomSignature,
@@ -387,23 +435,13 @@ export class OverworldRoomCommentsController {
         : null,
       composerOpen: composerDebug.composerOpen,
       submitting: composerDebug.submitting,
-      browseMarkerCount: this.browseCommentMarkersByKey.size,
+      browseMarkerCount: browsePresentationDebug.markerCount,
       browseCacheEntryCount: dataDebug.browseCacheEntryCount,
       browseLoadingCount: dataDebug.browseLoadingCount,
       pinnedBrowseMarkerKey: dataDebug.pinnedBrowseMarkerKey,
-      browseDanmakuActiveCount: this.activeBrowseDanmaku.size,
-      browseDanmakuPoolCount: this.idleBrowseDanmaku.length,
-      browseDanmakuStreams: Array.from(this.activeBrowseDanmaku, (stream) => ({
-        key: stream.key,
-        commentId: stream.commentId,
-        targetCoordinates: stream.target ? { ...stream.target.displayCoordinates } : null,
-        laneIndex: stream.laneIndex,
-        screenX: Math.round(stream.screenX),
-        screenY: Math.round(this.getBrowseDanmakuDebugScreenY(stream)),
-        widthPx: stream.widthPx,
-        alpha: Number(stream.container.alpha.toFixed(2)),
-        ageMs: Math.round(stream.ageMs),
-      })),
+      browseDanmakuActiveCount: browsePresentationDebug.activeCount,
+      browseDanmakuPoolCount: browsePresentationDebug.poolCount,
+      browseDanmakuStreams: browsePresentationDebug.streams,
     };
   }
 
@@ -414,8 +452,7 @@ export class OverworldRoomCommentsController {
 
     this.commentsVisible = settings.roomCommentsVisible;
     this.syncRenderedComments(this.getRenderableRoom());
-    this.syncBrowseCommentMarkers();
-    this.syncBrowseDanmakuStreams();
+    this.browsePresentationController.sync();
     this.composerController.refresh();
   };
 
@@ -1311,7 +1348,7 @@ export class OverworldRoomCommentsController {
             || this.options.getMode() !== 'browse'
           ) return;
           this.dataController.setPinnedBrowseMarkerKey(target.signature);
-          this.syncBrowseCommentMarkers();
+          this.browsePresentationController.syncMarkers();
           this.syncBrowseCommentMarkerPresentation();
         })
         .catch((error) => {
@@ -1500,20 +1537,6 @@ export class OverworldRoomCommentsController {
     stream.container.setAlpha(0);
     this.idleBrowseDanmaku.push(stream);
     this.options.onDisplayObjectsChanged?.();
-  }
-
-  private destroyBrowseDanmakuStreams(): void {
-    for (const stream of this.activeBrowseDanmaku) {
-      stream.container.destroy(true);
-    }
-    for (const stream of this.idleBrowseDanmaku) {
-      stream.container.destroy(true);
-    }
-    this.activeBrowseDanmaku.clear();
-    this.idleBrowseDanmaku.length = 0;
-    this.browseDanmakuLaneCooldowns.length = 0;
-    this.lastBrowseDanmakuUpdateMs = 0;
-    this.nextBrowseDanmakuSpawnAtMs = 0;
   }
 
   private hasBlockingModalOpen(): boolean {
