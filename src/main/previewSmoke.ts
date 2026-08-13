@@ -11,6 +11,7 @@ import {
   type RoomSnapshot,
 } from '../persistence/roomModel';
 import { POLICE_PATROLMAN_OBJECT_ID, POLICEWOMAN_OBJECT_ID } from '../enemies/policeEnemy';
+import { BOYGAME_TILESET_FIRST_GID } from '../config';
 import { markAppReady } from '../ui/appFeedback';
 
 type PreviewSmokeScene = {
@@ -39,6 +40,7 @@ type PreviewSmokeAction =
   | 'editSelectedRoom'
   | 'openSyntheticEditor'
   | 'openSyntheticPoliceEditor'
+  | 'openSyntheticBoygameEditor'
   | 'openSyntheticCourseEditor'
   | 'setPlayerPosition'
   | 'prepareTransitionDestination'
@@ -90,6 +92,8 @@ export function installPreviewSmokeActions(
         return openSyntheticEditorForPreviewSmoke(game, getDebugState);
       case 'openSyntheticPoliceEditor':
         return openSyntheticEditorForPreviewSmoke(game, getDebugState, createPoliceEnemyPreviewRoom());
+      case 'openSyntheticBoygameEditor':
+        return openSyntheticEditorForPreviewSmoke(game, getDebugState, createBoygamePreviewRoom());
       case 'openSyntheticCourseEditor':
         return openSyntheticCourseEditorForPreviewSmoke(game, getDebugState);
       case 'setPlayerPosition':
@@ -396,6 +400,58 @@ function createPoliceEnemyPreviewRoom(): RoomSnapshot {
       policePatrolShoots: true,
     },
   ];
+
+  return roomSnapshot;
+}
+
+function createBoygamePreviewRoom(): RoomSnapshot {
+  const roomSnapshot = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
+  const floorY = 16;
+  const gid = (localIndex: number) => BOYGAME_TILESET_FIRST_GID + localIndex;
+  const stamp = (
+    layer: 'background' | 'terrain' | 'foreground',
+    tileX: number,
+    tileY: number,
+    localIndices: number[][],
+  ) => {
+    for (let dy = 0; dy < localIndices.length; dy += 1) {
+      for (let dx = 0; dx < (localIndices[dy]?.length ?? 0); dx += 1) {
+        roomSnapshot.tileData[layer][tileY + dy][tileX + dx] = gid(localIndices[dy][dx]);
+      }
+    }
+  };
+
+  roomSnapshot.title = 'Boygame Preview';
+  roomSnapshot.background = 'solid:#d7e894';
+  roomSnapshot.spawnPoint = { x: 320, y: floorY * 16 - 16 };
+
+  for (let tileX = 0; tileX < roomSnapshot.tileData.terrain[floorY].length; tileX += 1) {
+    roomSnapshot.tileData.terrain[floorY][tileX] = gid(10);
+    for (let tileY = floorY + 1; tileY < roomSnapshot.tileData.terrain.length; tileY += 1) {
+      roomSnapshot.tileData.terrain[tileY][tileX] = gid([5, 6, 7, 14, 15, 16][tileX % 6]);
+    }
+  }
+
+  stamp('background', 2, 13, [
+    [32, 33, 34],
+    [40, 41, 42],
+    [48, 49, 50],
+  ]);
+  stamp('background', 6, 14, [
+    [35, 36],
+    [43, 44],
+  ]);
+  stamp('terrain', 10, 13, [[12], [20], [28]]);
+  stamp('terrain', 28, 14, [[13], [21]]);
+  stamp('foreground', 31, 14, [[68, 69], [76, 77]]);
+  stamp('foreground', 18, 11, [[80, 81], [88, 89]]);
+  stamp('foreground', 23, 10, [
+    [84, 85, 86],
+    [92, 93, 94],
+    [100, 101, 102],
+  ]);
+  stamp('foreground', 16, 15, [[56, 57, 58, 59]]);
+  stamp('foreground', 34, 15, [[60, 61, 62, 63]]);
 
   return roomSnapshot;
 }

@@ -6,7 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run test && npm run typecheck && npm run world-tiles:types:check && npm run build",
-    "lint": "eslint src partykit scripts/api_performance_probe.mjs scripts/backfill_badges.mjs scripts/overworld_tile_pyramid_probe.mjs scripts/overworld_tile_pyramid_probe_helpers.mjs scripts/playable_content_index.mjs scripts/runtime_performance_trace.mjs scripts/runtime_performance_trace.test.ts scripts/smoke_police_enemies.mjs scripts/webgl_recovery_probe.mjs scripts/world_tile_parity_probe.mjs scripts/world_tiles.mjs --max-warnings=0",
+    "lint": "eslint src partykit scripts/api_performance_probe.mjs scripts/backfill_badges.mjs scripts/overworld_tile_pyramid_probe.mjs scripts/overworld_tile_pyramid_probe_helpers.mjs scripts/playable_content_index.mjs scripts/runtime_performance_trace.mjs scripts/runtime_performance_trace.test.ts scripts/smoke_boygame_tileset.mjs scripts/smoke_police_enemies.mjs scripts/webgl_recovery_probe.mjs scripts/world_tile_parity_probe.mjs scripts/world_tiles.mjs --max-warnings=0",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "dev": "vite --strictPort --port 3000",
@@ -21,6 +21,7 @@
     "smoke:guest-claim": "npx --yes --quiet -p playwright node scripts/smoke_guest_claim_modal.mjs",
     "smoke:guest-builder-claim": "npx --yes --quiet -p playwright node scripts/smoke_guest_builder_claim_modal.mjs",
     "smoke:preview:readonly": "npx --yes --quiet -p playwright node scripts/preview_smoke_readonly.mjs",
+    "smoke:boygame-tileset": "node scripts/smoke_boygame_tileset.mjs",
     "smoke:police-enemies": "node scripts/smoke_police_enemies.mjs",
     "smoke:progression-rating": "npx --yes --quiet -p playwright node scripts/smoke_progression_rating_modal.mjs",
     "smoke:progression-api:local": "node scripts/smoke_progression_api_flow.mjs",

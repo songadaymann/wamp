@@ -12,6 +12,7 @@ import type { Env } from '../cloudflare/worker/core/types';
 import worker from '../cloudflare/worker';
 import {
   AUTHORING_CATALOG_CACHE_CONTROL,
+  AUTHORING_CATALOG_SCHEMA_VERSION,
   getAuthoringCatalog,
   renderAuthoringDocuments,
 } from './authoringCatalog';
@@ -46,6 +47,27 @@ describe('authoring catalog', () => {
     expect(catalog.tilesets.find((entry) => entry.key === 'cybertext')?.assetPath).toContain('CyberText.png');
     expect(catalog.tilesets.find((entry) => entry.key === 'cybercity yellow')?.rows).toBe(7);
     expect(catalog.tilesets.find((entry) => entry.key === 'essentials')?.buildStyles).toEqual([]);
+
+    const boygame = catalog.tilesets.find((entry) => entry.key === 'boygame');
+    expect(boygame).toMatchObject({
+      name: 'Boygame',
+      assetPath: expect.stringContaining('boygame.png'),
+      imageWidth: 128,
+      imageHeight: 208,
+      columns: 8,
+      rows: 13,
+      tileCount: 104,
+      gidStart: 1801,
+      gidEnd: 1904,
+    });
+    expect(boygame?.disabledEditorLocalIndices).toContain(17);
+    expect(boygame?.disabledEditorLocalIndices).not.toContain(10);
+    expect(boygame?.collisionLocalIndices.none).toContain(56);
+    expect(boygame?.collisionLocalIndices.full).toContain(10);
+    expect(boygame?.buildStyles).toContainEqual(expect.objectContaining({
+      id: 'boygame_ruins',
+      surfaceLocalIndices: [10],
+    }));
   });
 
   it('derives current object capabilities and marks spawn_point non-placeable', () => {
@@ -91,9 +113,16 @@ describe('authoring catalog', () => {
 
     const openapi = JSON.parse(readFileSync(resolve(process.cwd(), 'public/openapi.json'), 'utf8')) as {
       info: { version: string };
-      components: { schemas: { RoomDraftCommand: { oneOf: Array<{ properties: { type: { const: string } } }> } } };
+      components: {
+        schemas: {
+          AuthoringCatalog: { properties: { schemaVersion: { const: number } } };
+          RoomDraftCommand: { oneOf: Array<{ properties: { type: { const: string } } }> };
+        };
+      };
     };
     expect(openapi.info.version).toBe('0.9.0');
+    expect(openapi.components.schemas.AuthoringCatalog.properties.schemaVersion.const)
+      .toBe(AUTHORING_CATALOG_SCHEMA_VERSION);
     expect(openapi.components.schemas.RoomDraftCommand.oneOf.map((schema) => schema.properties.type.const))
       .toEqual(ROOM_DRAFT_COMMAND_TYPES);
   });

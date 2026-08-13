@@ -1,0 +1,7 @@
+Boygame tileset asset provenance
+
+Source: user-supplied local `Gameboy assets` pack.
+
+Imported on 2026-08-13 as an 8 x 13 atlas on the native 16 x 16 game grid.
+The Player_notmove.png, Player_jump.png, and Player_dead.png sheets were intentionally excluded.
+No license or attribution document was present in the supplied source folder.

@@ -807,7 +807,7 @@
         "type": "object",
         "required": ["schemaVersion", "room", "tilesets", "objects", "backgrounds", "goals"],
         "properties": {
-          "schemaVersion": { "const": 1 },
+          "schemaVersion": { "const": 2 },
           "room": {
             "type": "object",
             "required": ["width", "height", "tileSize", "layers"],
