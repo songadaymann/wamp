@@ -8,7 +8,16 @@ import {
   type RoomChatSayMessage,
   type RoomChatTransportChannel,
 } from '../src/chat/roomChatModel';
-import type { RoomCoordinates, RoomSnapshot } from '../src/persistence/roomModel';
+import type { RoomCoordinates } from '../src/persistence/roomModel';
+import {
+  collectLatestRoomPreviews,
+  isRoomPreviewExpired,
+  normalizeRoomPreviewPayload,
+  normalizeStoredSharedPreview,
+  ROOM_PREVIEW_STORAGE_PREFIX,
+  roomPreviewStorageKey,
+  toSharedRoomPreview,
+} from '../src/partykit/constructionPreviewRuntime';
 import {
   resolvePartykitIdentitySigningSecret,
   verifyPartykitIdentityToken,
@@ -63,8 +72,6 @@ const STALE_HEARTBEAT_MS = 120_000;
 const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
 const METRICS_ROOM_ID = '__launch-stats__';
 const METRICS_STORAGE_PREFIX = 'shard:';
-const PREVIEW_STORAGE_PREFIX = 'preview:';
-const ROOM_PREVIEW_TTL_MS = 120_000;
 const PRESENCE_UPSERT_FLUSH_MS = 80;
 const POPULATION_BROADCAST_FLUSH_MS = 250;
 
@@ -140,11 +147,11 @@ export default class PresenceServer implements Party.Server {
     }
 
     const entries = await this.room.storage.list<SharedRoomPreview>({
-      prefix: PREVIEW_STORAGE_PREFIX,
+      prefix: ROOM_PREVIEW_STORAGE_PREFIX,
     });
     for (const [storageKey, storedPreview] of entries.entries()) {
-      const preview = this.normalizeStoredSharedPreview(storedPreview);
-      if (!preview || this.isRoomPreviewExpired(preview)) {
+      const preview = normalizeStoredSharedPreview(storedPreview);
+      if (!preview || isRoomPreviewExpired(preview, Date.now())) {
         void this.room.storage.delete(storageKey);
         continue;
       }
@@ -425,22 +432,15 @@ export default class PresenceServer implements Party.Server {
 
   private computeRoomPreviews(): Record<string, SharedRoomPreview> {
     this.pruneExpiredPersistedPreviews();
-    const previewsByRoomId = new Map<string, SharedRoomPreview>(this.persistedPreviewsByRoomId);
-
+    const activePreviews: SharedRoomPreview[] = [];
     for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
       const preview = this.toRoomPreview(connection);
-      if (!preview || this.isRoomPreviewExpired(preview)) {
-        continue;
-      }
-
-      const existing = previewsByRoomId.get(preview.roomId) ?? null;
-      if (!existing || preview.timestamp >= existing.timestamp) {
-        previewsByRoomId.set(preview.roomId, preview);
-      }
+      if (preview) activePreviews.push(preview);
     }
-
-    return Object.fromEntries(
-      Array.from(previewsByRoomId.entries()).sort(([left], [right]) => left.localeCompare(right))
+    return collectLatestRoomPreviews(
+      this.persistedPreviewsByRoomId.values(),
+      activePreviews,
+      Date.now(),
     );
   }
 
@@ -476,16 +476,7 @@ export default class PresenceServer implements Party.Server {
       return null;
     }
 
-    const { constructionPreviewToken: _token, ...sharedPreview } = preview;
-
-    return {
-      ...sharedPreview,
-      roomId: this.getRoomId(preview.roomCoordinates),
-      userId: state.userId,
-      displayName: state.displayName,
-      shardId: this.room.id,
-      timestamp: Date.now(),
-    };
+    return toSharedRoomPreview(preview, state, this.room.id, Date.now());
   }
 
   private async updatePreview(
@@ -497,7 +488,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const preview = this.normalizeRoomPreviewPayload(value);
+    const preview = normalizeRoomPreviewPayload(value);
     if (!preview) {
       return;
     }
@@ -603,7 +594,7 @@ export default class PresenceServer implements Party.Server {
   }
 
   private getPreviewStorageKey(roomId: string): string {
-    return `${PREVIEW_STORAGE_PREFIX}${roomId}`;
+    return roomPreviewStorageKey(roomId);
   }
 
   private toStoredSharedPreview(
@@ -614,95 +605,7 @@ export default class PresenceServer implements Party.Server {
     if (!state) {
       return null;
     }
-    const { constructionPreviewToken: _token, ...storedPreview } = preview;
-
-    return {
-      ...storedPreview,
-      roomId: this.getRoomId(preview.roomCoordinates),
-      userId: state.userId,
-      displayName: state.displayName,
-      shardId: this.room.id,
-    };
-  }
-
-  private normalizeStoredSharedPreview(value: unknown): SharedRoomPreview | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const preview = value as Partial<SharedRoomPreview>;
-    if (
-      typeof preview.roomId !== 'string' ||
-      typeof preview.userId !== 'string' ||
-      typeof preview.displayName !== 'string' ||
-      typeof preview.shardId !== 'string'
-    ) {
-      return null;
-    }
-
-    const normalizedPayload = this.normalizeRoomPreviewPayload(preview);
-    if (!normalizedPayload) {
-      return null;
-    }
-
-    return {
-      ...normalizedPayload,
-      roomId: preview.roomId,
-      userId: preview.userId,
-      displayName: preview.displayName,
-      shardId: preview.shardId,
-    };
-  }
-
-  private normalizeRoomPreviewPayload(value: unknown): RoomPreviewPayload | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const payload = value as Partial<RoomPreviewPayload>;
-    if (
-      !payload.roomCoordinates ||
-      !Number.isInteger(payload.roomCoordinates.x) ||
-      !Number.isInteger(payload.roomCoordinates.y) ||
-      typeof payload.timestamp !== 'number' ||
-      !Number.isFinite(payload.timestamp) ||
-      !payload.snapshot ||
-      typeof payload.snapshot !== 'object'
-    ) {
-      return null;
-    }
-
-    const snapshot = payload.snapshot as Partial<RoomSnapshot>;
-    if (
-      typeof snapshot.id !== 'string' ||
-      !snapshot.coordinates ||
-      snapshot.coordinates.x !== payload.roomCoordinates.x ||
-      snapshot.coordinates.y !== payload.roomCoordinates.y
-    ) {
-      return null;
-    }
-
-    try {
-      if (JSON.stringify(payload.snapshot).length > 120_000) {
-        return null;
-      }
-    } catch {
-      return null;
-    }
-
-    return {
-      roomCoordinates: {
-        x: payload.roomCoordinates.x,
-        y: payload.roomCoordinates.y,
-      },
-      snapshot: payload.snapshot as RoomSnapshot,
-      timestamp: payload.timestamp,
-      ...(typeof payload.constructionPreviewToken === 'string' &&
-      payload.constructionPreviewToken.trim().length > 0 &&
-      payload.constructionPreviewToken.length <= 2048
-        ? { constructionPreviewToken: payload.constructionPreviewToken.trim() }
-        : {}),
-    };
+    return toSharedRoomPreview(preview, state, this.room.id);
   }
 
   private clearStoredPreviewForPayload(preview: RoomPreviewPayload | null): boolean {
@@ -724,7 +627,7 @@ export default class PresenceServer implements Party.Server {
   private pruneExpiredPersistedPreviews(): boolean {
     let pruned = false;
     for (const [roomId, preview] of this.persistedPreviewsByRoomId.entries()) {
-      if (!this.isRoomPreviewExpired(preview)) {
+      if (!isRoomPreviewExpired(preview, Date.now())) {
         continue;
       }
 
@@ -734,10 +637,6 @@ export default class PresenceServer implements Party.Server {
     }
 
     return pruned;
-  }
-
-  private isRoomPreviewExpired(preview: Pick<RoomPreviewPayload, 'timestamp'>): boolean {
-    return Date.now() - preview.timestamp > ROOM_PREVIEW_TTL_MS;
   }
 
   private async maybeSendShardHeartbeat(force = false): Promise<void> {
