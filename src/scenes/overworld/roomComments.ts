@@ -1,17 +1,13 @@
 import Phaser from 'phaser';
-import { getAuthDebugState } from '../../auth/client';
-import { playSfx } from '../../audio/sfx';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import {
   ROOM_COMMENT_BROWSE_MAX_ROOM_IDS,
-  ROOM_COMMENT_MAX_LENGTH,
   type BrowseRoomCommentPreview,
   type RoomCommentRecord,
 } from '../../roomComments/model';
 import {
   fetchBrowseRoomCommentSummaries,
   fetchRoomComments,
-  submitRoomComment,
 } from '../../roomComments/client';
 import { type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
 import { type WorldRoomSummary, type WorldWindow } from '../../persistence/worldModel';
@@ -29,15 +25,7 @@ import {
   type OverworldBadgePlacement,
   type RoomBadgeScaleConfig,
 } from './badgeOverlays';
-
-interface ComposerElements {
-  root: HTMLDivElement;
-  form: HTMLFormElement;
-  input: HTMLTextAreaElement;
-  counter: HTMLDivElement;
-  cancelButton: HTMLButtonElement;
-  submitButton: HTMLButtonElement;
-}
+import { RoomCommentsComposerController } from './roomCommentsComposerController';
 
 interface RenderedRoomComment {
   comment: RoomCommentRecord;
@@ -229,9 +217,7 @@ export class OverworldRoomCommentsController {
     compactTierMaxZoom: BROWSE_COMMENT_COMPACT_TIER_MAX_ZOOM,
     tierFadeSpan: BROWSE_COMMENT_TIER_FADE_SPAN,
   };
-  private composerElements: ComposerElements | null = null;
-  private composerOpen = false;
-  private submitting = false;
+  private readonly composerController: RoomCommentsComposerController;
   private comments: RoomCommentRecord[] = [];
   private activeRoomSignature: string | null = null;
   private loadingRoomSignature: string | null = null;
@@ -265,16 +251,24 @@ export class OverworldRoomCommentsController {
 
   constructor(private readonly options: OverworldRoomCommentsControllerOptions) {
     this.observedMode = options.getMode();
+    this.composerController = new RoomCommentsComposerController({
+      document: options.document,
+      getHost: () => options.scene.game.canvas.parentElement ?? (options.document ?? document).body,
+      focusCanvas: () => options.scene.game.canvas.focus(),
+      getRenderableRoom: () => this.getRenderableRoom(),
+      getPlayerCommentPosition: options.getPlayerCommentPosition,
+      showTransientStatus: options.showTransientStatus,
+    });
   }
 
   initialize(): void {
-    this.ensureComposerDom();
+    this.composerController.initialize();
     this.unsubscribeSettings = subscribeGameSettings(this.handleSettingsChanged);
-    this.renderComposer();
+    this.composerController.refresh();
   }
 
   reset(): void {
-    this.closeComposer(false);
+    this.composerController.close(false);
     this.comments = [];
     this.activeRoomSignature = null;
     this.loadingRoomSignature = null;
@@ -300,7 +294,7 @@ export class OverworldRoomCommentsController {
     this.unsubscribeSettings?.();
     this.unsubscribeSettings = null;
     this.reset();
-    this.destroyComposerDom();
+    this.composerController.destroy();
   }
 
   update(): void {
@@ -317,9 +311,7 @@ export class OverworldRoomCommentsController {
       }
     }
 
-    if (!room) {
-      this.closeComposer(false);
-    }
+    this.composerController.update();
 
     const now = performance.now();
     if (now < this.nextVisualSyncAt) return;
@@ -328,31 +320,11 @@ export class OverworldRoomCommentsController {
     this.syncRenderedComments(room);
     this.syncBrowseCommentMarkers();
     this.syncBrowseDanmakuStreams();
-    this.renderComposer();
+    this.composerController.refresh();
   }
 
   openComposer(): boolean {
-    const room = this.getRenderableRoom();
-    if (!room) {
-      this.options.showTransientStatus?.('Play a published room to leave a comment.');
-      return false;
-    }
-
-    const authState = getAuthDebugState();
-    if (!authState.authenticated || !authState.user) {
-      this.options.showTransientStatus?.('Sign in to comment on rooms.');
-      return false;
-    }
-    if (authState.schoolManaged) {
-      this.options.showTransientStatus?.('Classroom accounts cannot comment on rooms.');
-      return false;
-    }
-
-    this.ensureComposerDom();
-    this.composerOpen = true;
-    this.renderComposer();
-    this.composerElements?.input.focus();
-    return true;
+    return this.composerController.open();
   }
 
   openSelectedBrowseComments(): boolean {
@@ -389,26 +361,11 @@ export class OverworldRoomCommentsController {
   }
 
   closeComposer(focusCanvas = true): void {
-    if (!this.composerOpen) {
-      this.renderComposer();
-      return;
-    }
-
-    this.composerOpen = false;
-    this.submitting = false;
-    if (this.composerElements) {
-      this.composerElements.form.reset();
-      this.composerElements.input.blur();
-    }
-    this.renderComposer();
-
-    if (focusCanvas) {
-      this.options.scene.game.canvas.focus();
-    }
+    this.composerController.close(focusCanvas);
   }
 
   isComposerOpen(): boolean {
-    return this.composerOpen;
+    return this.composerController.isOpen();
   }
 
   areCommentsVisible(): boolean {
@@ -425,7 +382,7 @@ export class OverworldRoomCommentsController {
     this.syncRenderedComments(this.getRenderableRoom());
     this.syncBrowseCommentMarkers();
     this.syncBrowseDanmakuStreams();
-    this.renderComposer();
+    this.composerController.refresh();
   }
 
   toggleCommentsVisible(): boolean {
@@ -434,16 +391,11 @@ export class OverworldRoomCommentsController {
   }
 
   handleEscapeKey(): boolean {
-    if (!this.composerOpen) {
-      return false;
-    }
-
-    this.closeComposer();
-    return true;
+    return this.composerController.handleEscapeKey();
   }
 
   refreshAuthState(): void {
-    this.renderComposer();
+    this.composerController.refresh();
   }
 
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
@@ -488,6 +440,7 @@ export class OverworldRoomCommentsController {
     }>;
   } {
     const currentRoom = this.options.getCurrentRoomSnapshot();
+    const composerDebug = this.composerController.getDebugSnapshot();
     return {
       activeRoomSignature: this.activeRoomSignature,
       loadingRoomSignature: this.loadingRoomSignature,
@@ -503,8 +456,8 @@ export class OverworldRoomCommentsController {
             coordinates: { ...currentRoom.coordinates },
           }
         : null,
-      composerOpen: this.composerOpen,
-      submitting: this.submitting,
+      composerOpen: composerDebug.composerOpen,
+      submitting: composerDebug.submitting,
       browseMarkerCount: this.browseCommentMarkersByKey.size,
       browseCacheEntryCount: this.browseCommentCache.size,
       browseLoadingCount:
@@ -526,28 +479,6 @@ export class OverworldRoomCommentsController {
     };
   }
 
-  private readonly handleComposerSubmit = (event: SubmitEvent) => {
-    event.preventDefault();
-    void this.submitComposer();
-  };
-
-  private readonly handleComposerInput = () => {
-    this.renderCounter();
-  };
-
-  private readonly handleComposerKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape') {
-      return;
-    }
-
-    event.preventDefault();
-    this.closeComposer();
-  };
-
-  private readonly handleComposerCancel = () => {
-    this.closeComposer();
-  };
-
   private readonly handleSettingsChanged = (settings: GameSettings): void => {
     if (this.commentsVisible === settings.roomCommentsVisible) {
       return;
@@ -557,7 +488,7 @@ export class OverworldRoomCommentsController {
     this.syncRenderedComments(this.getRenderableRoom());
     this.syncBrowseCommentMarkers();
     this.syncBrowseDanmakuStreams();
-    this.renderComposer();
+    this.composerController.refresh();
   };
 
   private async loadComments(room: RoomSnapshot, signature: string): Promise<void> {
@@ -1898,51 +1829,6 @@ export class OverworldRoomCommentsController {
     );
   }
 
-  private async submitComposer(): Promise<void> {
-    if (this.submitting || !this.composerElements) {
-      return;
-    }
-
-    const room = this.getRenderableRoom();
-    if (!room) {
-      this.options.showTransientStatus?.('Play a published room to leave a comment.');
-      return;
-    }
-
-    const body = this.composerElements.input.value.replace(/\s+/g, ' ').trim();
-    if (!body) {
-      this.options.showTransientStatus?.('Type a comment first.');
-      return;
-    }
-    if (body.length > ROOM_COMMENT_MAX_LENGTH) {
-      this.options.showTransientStatus?.(`Keep comments under ${ROOM_COMMENT_MAX_LENGTH} characters.`);
-      return;
-    }
-
-    const position = this.options.getPlayerCommentPosition() ?? {
-      x: Math.round(ROOM_PX_WIDTH / 2),
-      y: Math.round(ROOM_PX_HEIGHT / 2),
-    };
-
-    this.submitting = true;
-    this.renderComposer();
-    try {
-      await submitRoomComment(room.id, room.coordinates, {
-        roomVersion: room.version,
-        position,
-        body,
-      });
-      playSfx('chat-send');
-      this.closeComposer(false);
-      this.options.showTransientStatus?.('Comment submitted for review.');
-    } catch (error) {
-      this.options.showTransientStatus?.(getErrorMessage(error, 'Comment failed to submit.'));
-    } finally {
-      this.submitting = false;
-      this.renderComposer();
-    }
-  }
-
   private syncRenderedComments(room: RoomSnapshot | null): void {
     const visibleComments = room && this.commentsVisible ? this.comments : [];
     const nextIds = new Set<string>();
@@ -2093,109 +1979,6 @@ export class OverworldRoomCommentsController {
     rendered.container.destroy(true);
   }
 
-  private ensureComposerDom(): void {
-    if (this.composerElements) {
-      return;
-    }
-
-    const doc = this.options.document ?? document;
-    const host = this.options.scene.game.canvas.parentElement ?? doc.body;
-    const root = doc.createElement('div');
-    root.id = 'room-comment-composer';
-    root.className = 'room-comment-composer hidden';
-
-    const form = doc.createElement('form');
-    form.className = 'room-comment-composer-form';
-
-    const input = doc.createElement('textarea');
-    input.id = 'room-comment-input';
-    input.className = 'room-comment-input';
-    input.maxLength = ROOM_COMMENT_MAX_LENGTH;
-    input.placeholder = 'Leave a comment for this room';
-    input.rows = 3;
-    input.spellcheck = true;
-
-    const footer = doc.createElement('div');
-    footer.className = 'room-comment-composer-footer';
-
-    const counter = doc.createElement('div');
-    counter.className = 'room-comment-counter';
-    counter.textContent = `0/${ROOM_COMMENT_MAX_LENGTH}`;
-
-    const cancelButton = doc.createElement('button');
-    cancelButton.type = 'button';
-    cancelButton.className = 'bar-btn bar-btn-small room-comment-cancel';
-    cancelButton.textContent = 'Cancel';
-
-    const submitButton = doc.createElement('button');
-    submitButton.type = 'submit';
-    submitButton.className = 'bar-btn bar-btn-small room-comment-submit';
-    submitButton.textContent = 'Submit';
-
-    footer.append(counter, cancelButton, submitButton);
-    form.append(input, footer);
-    root.append(form);
-    host.append(root);
-
-    form.addEventListener('submit', this.handleComposerSubmit);
-    input.addEventListener('input', this.handleComposerInput);
-    input.addEventListener('keydown', this.handleComposerKeydown);
-    cancelButton.addEventListener('click', this.handleComposerCancel);
-
-    this.composerElements = {
-      root,
-      form,
-      input,
-      counter,
-      cancelButton,
-      submitButton,
-    };
-  }
-
-  private destroyComposerDom(): void {
-    if (!this.composerElements) {
-      return;
-    }
-
-    this.composerElements.form.removeEventListener('submit', this.handleComposerSubmit);
-    this.composerElements.input.removeEventListener('input', this.handleComposerInput);
-    this.composerElements.input.removeEventListener('keydown', this.handleComposerKeydown);
-    this.composerElements.cancelButton.removeEventListener('click', this.handleComposerCancel);
-    this.composerElements.root.remove();
-    this.composerElements = null;
-  }
-
-  private renderComposer(): void {
-    const elements = this.composerElements;
-    if (!elements) {
-      return;
-    }
-
-    const authState = getAuthDebugState();
-    const room = this.getRenderableRoom();
-    const open = this.composerOpen && Boolean(room);
-    elements.root.classList.toggle('hidden', !open);
-    elements.input.disabled = !authState.authenticated || authState.schoolManaged || this.submitting;
-    elements.submitButton.disabled = !authState.authenticated || authState.schoolManaged || this.submitting;
-    elements.cancelButton.disabled = this.submitting;
-    elements.submitButton.textContent = this.submitting ? 'Submitting...' : 'Submit';
-    elements.input.placeholder = authState.schoolManaged
-      ? 'Classroom comments are disabled'
-      : authState.authenticated
-      ? 'Leave a comment for this room'
-      : 'Sign in to comment on rooms';
-    this.renderCounter();
-  }
-
-  private renderCounter(): void {
-    if (!this.composerElements) {
-      return;
-    }
-
-    const count = this.composerElements.input.value.length;
-    this.composerElements.counter.textContent = `${count}/${ROOM_COMMENT_MAX_LENGTH}`;
-  }
-
   private getRenderableRoom(): RoomSnapshot | null {
     if (this.options.getMode() !== 'play' || !this.options.isCurrentRoomPublished()) {
       return null;
@@ -2329,8 +2112,4 @@ function prefersReducedMotion(): boolean {
   }
 
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
 }
