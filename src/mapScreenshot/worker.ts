@@ -1,6 +1,11 @@
 import { AUTO_CAPTURE_CRON } from './config';
 import { captureMapScreenshot, type MapScreenshotEnv } from './capture';
 import { buildGalleryHtml } from './galleryHtml';
+import {
+  formatEasternMonth,
+  monthKeyFromFileName,
+  shiftMonthKey,
+} from './naming';
 import { listScreenshots, loadScreenshotPng } from './storage';
 import { buildZipArchive } from './zip';
 
@@ -20,10 +25,17 @@ const worker = {
 
     try {
       if (request.method === 'GET' && (path === '/' || path === '/index.html')) {
-        const screenshots = await listScreenshots(env.SCREENSHOTS);
+        const all = await listScreenshots(env.SCREENSHOTS);
+        const monthKey = resolveMonthKey(url.searchParams.get('month'), all);
+        const monthShots = all.filter((shot) => monthKeyFromFileName(shot.fileName) === monthKey);
+        const currentEasternMonth = formatEasternMonth();
+        const nextMonth = shiftMonthKey(monthKey, 1);
         return htmlResponse(buildGalleryHtml({
-          screenshots,
+          screenshots: monthShots,
           publicBasePath: '',
+          monthKey,
+          hasPrevMonth: true,
+          hasNextMonth: nextMonth <= currentEasternMonth,
         }));
       }
 
@@ -76,9 +88,19 @@ const worker = {
       }
 
       if (request.method === 'GET' && path === '/archive.zip') {
-        const screenshots = await listScreenshots(env.SCREENSHOTS);
+        const all = await listScreenshots(env.SCREENSHOTS);
+        const monthParam = url.searchParams.get('month');
+        let selected = all;
+        let zipName = 'wamp-map-screenshots.zip';
+        if (monthParam) {
+          if (!isSafeMonthKey(monthParam)) {
+            return jsonResponse({ ok: false, error: 'Invalid month.' }, 400);
+          }
+          selected = all.filter((shot) => monthKeyFromFileName(shot.fileName) === monthParam);
+          zipName = `wamp-map-screenshots-${monthParam}.zip`;
+        }
         const files = [];
-        for (const shot of screenshots) {
+        for (const shot of selected) {
           const bytes = await loadScreenshotPng(env.SCREENSHOTS, shot.fileName);
           if (!bytes) continue;
           files.push({ name: shot.fileName, bytes: new Uint8Array(bytes) });
@@ -89,7 +111,7 @@ const worker = {
         return new Response(zipBytes.buffer, {
           headers: {
             'content-type': 'application/zip',
-            'content-disposition': 'attachment; filename="wamp-map-screenshots.zip"',
+            'content-disposition': `attachment; filename="${zipName}"`,
           },
         });
       }
@@ -117,8 +139,35 @@ const worker = {
 
 export default worker;
 
+/** Daily `_0` plus manuals `_1`…`_9`. */
 function isSafeScreenshotFileName(fileName: string): boolean {
-  return /^[0-9]{4}_[0-9]{2}_[0-9]{2}(?:_[1-9])?\.png$/.test(fileName);
+  return /^[0-9]{4}_[0-9]{2}_[0-9]{2}_[0-9]\.png$/.test(fileName);
+}
+
+function isSafeMonthKey(value: string): boolean {
+  return /^[0-9]{4}_[0-9]{2}$/.test(value);
+}
+
+function collectMonthKeys(screenshots: Array<{ fileName: string }>): string[] {
+  const months = new Set<string>();
+  for (const shot of screenshots) {
+    const month = monthKeyFromFileName(shot.fileName);
+    if (month) months.add(month);
+  }
+  return Array.from(months).sort();
+}
+
+function resolveMonthKey(
+  requested: string | null,
+  screenshots: Array<{ fileName: string }>,
+): string {
+  if (requested && isSafeMonthKey(requested)) {
+    return requested;
+  }
+  const current = formatEasternMonth();
+  const months = collectMonthKeys(screenshots);
+  if (months.includes(current)) return current;
+  return months.length > 0 ? months[months.length - 1]! : current;
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

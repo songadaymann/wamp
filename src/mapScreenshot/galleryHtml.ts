@@ -7,11 +7,18 @@ import {
   SCREENSHOT_HEIGHT,
   SCREENSHOT_WIDTH,
 } from './config';
+import { displayMonthLabel, shiftMonthKey } from './naming';
 
 export function buildGalleryHtml(input: {
   screenshots: StoredScreenshot[];
   publicBasePath: string;
+  monthKey: string;
+  hasPrevMonth: boolean;
+  hasNextMonth: boolean;
 }): string {
+  const prevMonth = shiftMonthKey(input.monthKey, -1);
+  const nextMonth = shiftMonthKey(input.monthKey, 1);
+  const monthLabel = displayMonthLabel(input.monthKey);
   const rows = input.screenshots.map((shot) => {
     const href = `${input.publicBasePath}/files/${encodeURIComponent(shot.fileName)}`;
     const uploaded = shot.uploaded ? shot.uploaded.toISOString() : '';
@@ -22,6 +29,11 @@ export function buildGalleryHtml(input: {
   <td><a href="${href}" download="${escapeHtml(shot.fileName)}">Download</a></td>
 </tr>`;
   }).join('\n');
+
+  const prevHref = `${input.publicBasePath}/?month=${encodeURIComponent(prevMonth)}`;
+  const nextHref = `${input.publicBasePath}/?month=${encodeURIComponent(nextMonth)}`;
+  const monthZipHref = `${input.publicBasePath}/archive.zip?month=${encodeURIComponent(input.monthKey)}`;
+  const allZipHref = `${input.publicBasePath}/archive.zip`;
 
   return `<!doctype html>
 <html lang="en">
@@ -76,6 +88,25 @@ export function buildGalleryHtml(input: {
     }
     button:hover, .button:hover { background: rgba(232,197,106,0.12); }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .button.is-disabled {
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .month-nav {
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .month-nav h2 {
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
     #status { margin-top: 12px; min-height: 1.5em; color: var(--muted); }
     table { width: 100%; border-collapse: collapse; margin-top: 16px; }
     th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 0.95rem; }
@@ -88,35 +119,40 @@ export function buildGalleryHtml(input: {
 <body>
   <main>
     <h1>WAMP map screenshots</h1>
-    <p>Daily automatic captures plus manual test shots. Files are stored online in R2 and can be downloaded individually or as a ZIP.</p>
+    <p>Daily automatic captures (<code>yyyy_mm_dd_0.png</code>) plus manual test shots (<code>_1</code>…<code>_${MAX_MANUAL_SHOTS_PER_DAY}</code>). Files are stored in R2 and can be downloaded individually or as a ZIP.</p>
 
     <section class="panel">
       <h2 style="margin:0 0 12px; font-size:1.15rem;">Manual capture</h2>
-      <p style="margin-top:0;">Takes a screenshot now as <code>yyyy_mm_dd_x.png</code> (x = 1…${MAX_MANUAL_SHOTS_PER_DAY}). If _${MAX_MANUAL_SHOTS_PER_DAY} already exists for today, the button does nothing.</p>
+      <p style="margin-top:0;">Takes a screenshot now as <code>yyyy_mm_dd_x.png</code> (x = 1…${MAX_MANUAL_SHOTS_PER_DAY}). Each capture (daily or manual) advances zoom by at most <code>${MAX_ZOOM_DELTA_PER_DAY}</code> toward the ideal fit, so several manuals can catch up after a growth spurt. If _${MAX_MANUAL_SHOTS_PER_DAY} already exists for today, the button does nothing.</p>
       <button id="capture" type="button">Take screenshot</button>
       <div id="status"></div>
     </section>
 
     <section class="panel">
-      <h2 style="margin:0 0 12px; font-size:1.15rem;">Archive</h2>
-      <p style="margin-top:0;">
-        <a class="button" href="${input.publicBasePath}/archive.zip">Download all as ZIP</a>
-      </p>
+      <div class="row month-nav">
+        <a class="button${input.hasPrevMonth ? '' : ' is-disabled'}" href="${prevHref}"${input.hasPrevMonth ? '' : ' aria-disabled="true"'}>← Prev</a>
+        <h2>${escapeHtml(monthLabel)}</h2>
+        <a class="button${input.hasNextMonth ? '' : ' is-disabled'}" href="${nextHref}"${input.hasNextMonth ? '' : ' aria-disabled="true"'}>Next →</a>
+      </div>
+      <div class="row" style="margin-bottom:8px;">
+        <a class="button" href="${monthZipHref}">Download this month (ZIP)</a>
+        <a class="button" href="${allZipHref}">Download all (ZIP)</a>
+      </div>
       <table>
         <thead>
           <tr><th>File</th><th>Bytes</th><th>Uploaded</th><th></th></tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="4">No screenshots yet.</td></tr>'}
+          ${rows || '<tr><td colspan="4">No screenshots for this month.</td></tr>'}
         </tbody>
       </table>
     </section>
 
     <p class="meta">
       Tunables: padding=${PADDING_ROOMS} rooms,
-      max zoom delta/day=${MAX_ZOOM_DELTA_PER_DAY},
+      max zoom delta/capture=${MAX_ZOOM_DELTA_PER_DAY},
       size=${SCREENSHOT_WIDTH}×${SCREENSHOT_HEIGHT},
-      cron=<code>${AUTO_CAPTURE_CRON}</code> (10:00 UTC ≈ 6am Eastern EDT).
+      cron=<code>${AUTO_CAPTURE_CRON}</code> (04:00 UTC ≈ midnight Eastern EDT).
     </p>
   </main>
   <script>

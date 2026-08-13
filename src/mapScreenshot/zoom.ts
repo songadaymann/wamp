@@ -19,7 +19,8 @@ export function computeIdealFitZoom(world: WorldPixelRect): number {
 }
 
 /**
- * Move toward idealZoom by at most MAX_ZOOM_DELTA_PER_DAY.
+ * Move toward idealZoom by at most MAX_ZOOM_DELTA_PER_DAY per capture
+ * (daily or manual — not limited to one step per calendar day).
  * First capture (no previous) uses idealZoom directly.
  */
 export function applyGradualZoom(

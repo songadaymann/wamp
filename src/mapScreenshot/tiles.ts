@@ -83,6 +83,35 @@ export async function loadPublishedRoomBounds(db: MapScreenshotDb): Promise<Publ
   };
 }
 
+export interface PublishedRoomCoordinate {
+  x: number;
+  y: number;
+}
+
+/** Published room cells inside an inclusive room-coordinate window (for grid seams). */
+export async function loadPublishedRoomCoordinates(
+  db: MapScreenshotDb,
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number,
+): Promise<PublishedRoomCoordinate[]> {
+  const rows = await db.prepare(
+    `
+      SELECT x, y
+      FROM rooms
+      WHERE published_json IS NOT NULL
+        AND x BETWEEN ? AND ?
+        AND y BETWEEN ? AND ?
+    `,
+  ).bind(minX, maxX, minY, maxY).all<{ x: number; y: number }>();
+
+  return rows.results.map((row) => ({
+    x: Number(row.x),
+    y: Number(row.y),
+  }));
+}
+
 export async function loadActiveRendererVersion(db: MapScreenshotDb): Promise<string | null> {
   const row = await db.prepare(
     `

@@ -4,13 +4,14 @@
   "main": "src/mapScreenshot/worker.ts",
   "compatibility_date": "2026-07-19",
   "compatibility_flags": ["nodejs_compat"],
+  "account_id": "a79a1faef6e8f94566f3320429d54006",
   "keep_vars": true,
   "browser": {
     "binding": "MAP_SCREENSHOT_BROWSER"
   },
   "triggers": {
-    // AUTO_CAPTURE_CRON default: 0 10 * * * (10:00 UTC ≈ 6am Eastern during EDT)
-    "crons": ["0 10 * * *"]
+    // AUTO_CAPTURE_CRON default: 0 4 * * * (04:00 UTC = midnight Eastern during EDT)
+    "crons": ["0 4 * * *"]
   },
   "vars": {
     "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles.wamp.land"

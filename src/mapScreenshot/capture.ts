@@ -6,15 +6,24 @@ import {
   roomToTileCoordinate,
   type WorldTileLevel,
 } from './bounds';
-import { MAX_STITCH_TILES, PADDING_ROOMS } from './config';
-import { formatEasternDate } from './naming';
+import {
+  FONT_PUBLIC_BASE_URL,
+  INFO_OVERLAY_INSET_PX,
+  MAX_STITCH_TILES,
+  PADDING_ROOMS,
+} from './config';
+import { fillInfoOverlayTemplate } from './infoOverlay';
+import { formatEasternDate, formatEasternLongDate } from './naming';
+import { loadMapScreenshotStats } from './stats';
 import { buildStitchRequest } from './stitch';
 import { stitchMapScreenshotPng } from './stitchBrowser';
 import {
   dailyFileNameForToday,
+  loadStarfieldDataUrl,
   loadZoomState,
   nextManualFileName,
   saveScreenshotPng,
+  saveStarfieldPng,
   saveZoomState,
   screenshotExists,
   type ScreenshotR2Bucket,
@@ -22,6 +31,7 @@ import {
 import {
   loadActiveRendererVersion,
   loadPublishedRoomBounds,
+  loadPublishedRoomCoordinates,
   loadStitchTiles,
   type MapScreenshotDb,
 } from './tiles';
@@ -42,6 +52,7 @@ export interface CaptureResult {
   ok: boolean;
   skipped?: boolean;
   reason?: string;
+  error?: string;
   fileName?: string;
   key?: string;
   zoom?: number;
@@ -58,6 +69,15 @@ async function fetchTileAsDataUrl(url: string): Promise<string> {
   }
   const bytes = Buffer.from(await response.arrayBuffer());
   return `data:image/png;base64,${bytes.toString('base64')}`;
+}
+
+async function fetchFontAsDataUrl(url: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch font ${url}: HTTP ${response.status}`);
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  return `data:font/ttf;base64,${bytes.toString('base64')}`;
 }
 
 export async function captureMapScreenshot(
@@ -115,17 +135,25 @@ export async function captureMapScreenshot(
     return { ok: false, reason: 'WORLD_TILE_PUBLIC_BASE_URL is not configured.' };
   }
 
-  // Expand fetch window slightly so gradual-zoom framing still has edge tiles.
-  const tiles = await loadStitchTiles({
-    db: env.DB,
-    rendererVersion,
-    level,
-    roomMinX: fetchMinX,
-    roomMaxX: fetchMaxX,
-    roomMinY: fetchMinY,
-    roomMaxY: fetchMaxY,
-    publicBaseUrl,
-  });
+  const fontBase = FONT_PUBLIC_BASE_URL.replace(/\/$/, '');
+  const [publishedRooms, stats, earlyGameboyDataUrl, homeVideoDataUrl, tiles, starfieldDataUrl] =
+    await Promise.all([
+      loadPublishedRoomCoordinates(env.DB, padded.minX, padded.maxX, padded.minY, padded.maxY),
+      loadMapScreenshotStats(env.DB),
+      fetchFontAsDataUrl(`${fontBase}/assets/fonts/early-gameboy.ttf`),
+      fetchFontAsDataUrl(`${fontBase}/assets/fonts/HomeVideo-Regular.ttf`),
+      loadStitchTiles({
+        db: env.DB,
+        rendererVersion,
+        level,
+        roomMinX: fetchMinX,
+        roomMaxX: fetchMaxX,
+        roomMinY: fetchMinY,
+        roomMaxY: fetchMaxY,
+        publicBaseUrl,
+      }),
+      loadStarfieldDataUrl(env.SCREENSHOTS),
+    ]);
 
   if (tiles.length === 0) {
     return { ok: false, reason: `No ready tiles at L${level} for the published bounds.` };
@@ -138,13 +166,60 @@ export async function captureMapScreenshot(
     url: await fetchTileAsDataUrl(tile.url),
   })));
 
+  const infoOverlay = {
+    date: formatEasternLongDate(),
+    players: new Intl.NumberFormat('en-US').format(stats.players),
+    builders: new Intl.NumberFormat('en-US').format(stats.builders),
+    rooms: new Intl.NumberFormat('en-US').format(stats.rooms),
+  };
+  const infoHtml = fillInfoOverlayTemplate({
+    date: infoOverlay.date,
+    players: stats.players,
+    builders: stats.builders,
+    rooms: stats.rooms,
+  });
+
   const stitchRequest = buildStitchRequest({
     zoom,
     centerWorldX: world.centerX,
     centerWorldY: world.centerY,
     tiles: tilesWithDataUrls,
+    publishedRooms,
+    gridRoomBounds: {
+      minX: padded.minX,
+      maxX: padded.maxX,
+      minY: padded.minY,
+      maxY: padded.maxY,
+    },
+    infoHtml,
+    infoOverlay,
+    earlyGameboyDataUrl,
+    homeVideoDataUrl,
+    infoInset: INFO_OVERLAY_INSET_PX,
+    starfieldDataUrl,
+    generateStarfield: !starfieldDataUrl,
   });
-  const pngBytes = await stitchMapScreenshotPng(env.MAP_SCREENSHOT_BROWSER, stitchRequest);
+
+  let pngBytes: ArrayBuffer;
+  let starfieldPngBytes: ArrayBuffer | null = null;
+  try {
+    const stitchResult = await stitchMapScreenshotPng(env.MAP_SCREENSHOT_BROWSER, stitchRequest);
+    pngBytes = stitchResult.pngBytes;
+    starfieldPngBytes = stitchResult.starfieldPngBytes;
+  } catch (error) {
+    const stitchDebug = (error as Error & { stitchDebug?: Record<string, unknown> }).stitchDebug;
+    const stage = typeof stitchDebug?.stage === 'string' ? ` (stage: ${stitchDebug.stage})` : '';
+    return {
+      ok: false,
+      reason: (error instanceof Error ? error.message : String(error)) + stage,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  if (starfieldPngBytes) {
+    await saveStarfieldPng(env.SCREENSHOTS, starfieldPngBytes);
+  }
+
   const key = await saveScreenshotPng(env.SCREENSHOTS, fileName, pngBytes);
   await saveZoomState(env.SCREENSHOTS, {
     zoom,

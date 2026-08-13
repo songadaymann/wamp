@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { applyGradualZoom, computeIdealFitZoom } from './zoom';
 import {
+  dailyScreenshotFileName,
+  displayMonthLabel,
   formatEasternDate,
+  formatEasternMonth,
   manualScreenshotFileName,
+  monthKeyFromFileName,
   parseManualIndex,
   screenshotObjectKey,
+  shiftMonthKey,
 } from './naming';
+import { fillInfoOverlayTemplate } from './infoOverlay';
 import { padPublishedBounds, roomBoundsToWorldPixels, chooseTileLevelForZoom } from './bounds';
 import { buildZipArchive } from './zip';
 import { pngDataUrlToArrayBuffer } from './stitch';
@@ -17,7 +23,7 @@ describe('map screenshot zoom', () => {
     expect(zoom).toBeCloseTo(Math.min(3840 / (2 * 640), 2160 / 352), 6);
   });
 
-  it('clamps daily zoom changes to 0.005', () => {
+  it('clamps zoom changes per capture to 0.005', () => {
     expect(applyGradualZoom(0.5, null)).toBe(0.5);
     expect(applyGradualZoom(0.4, 0.5)).toBeCloseTo(0.495, 6);
     expect(applyGradualZoom(0.497, 0.5)).toBeCloseTo(0.497, 6);
@@ -26,16 +32,47 @@ describe('map screenshot zoom', () => {
 });
 
 describe('map screenshot naming', () => {
-  it('builds daily and manual keys', () => {
-    expect(screenshotObjectKey('2026_08_12.png')).toBe('screenshots/2026_08_12.png');
+  it('builds daily _0 and manual keys', () => {
+    expect(dailyScreenshotFileName('2026_08_12')).toBe('2026_08_12_0.png');
+    expect(screenshotObjectKey('2026_08_12_0.png')).toBe('screenshots/2026_08_12_0.png');
     expect(manualScreenshotFileName('2026_08_12', 3)).toBe('2026_08_12_3.png');
     expect(parseManualIndex('2026_08_12_3.png', '2026_08_12')).toBe(3);
-    expect(parseManualIndex('2026_08_12.png', '2026_08_12')).toBeNull();
+    expect(parseManualIndex('2026_08_12_0.png', '2026_08_12')).toBeNull();
   });
 
   it('formats an Eastern date as yyyy_mm_dd', () => {
     // 2026-08-12T10:00:00Z is still Aug 12 in Eastern (EDT).
     expect(formatEasternDate(new Date('2026-08-12T10:00:00.000Z'))).toBe('2026_08_12');
+    expect(formatEasternMonth(new Date('2026-08-12T10:00:00.000Z'))).toBe('2026_08');
+  });
+
+  it('parses and shifts month keys', () => {
+    expect(monthKeyFromFileName('2026_08_12_0.png')).toBe('2026_08');
+    expect(monthKeyFromFileName('2026_08_12_3.png')).toBe('2026_08');
+    expect(monthKeyFromFileName('bad.png')).toBeNull();
+    expect(shiftMonthKey('2026_08', -1)).toBe('2026_07');
+    expect(shiftMonthKey('2026_01', -1)).toBe('2025_12');
+    expect(shiftMonthKey('2026_12', 1)).toBe('2027_01');
+    expect(displayMonthLabel('2026_08')).toBe('August 2026');
+  });
+});
+
+describe('map screenshot info overlay', () => {
+  it('fills placeholders', () => {
+    const html = fillInfoOverlayTemplate({
+      date: 'August 12, 2026',
+      players: 1200,
+      builders: 40,
+      rooms: 300,
+    });
+    expect(html).toContain('We All Make A<br>Platformer');
+    expect(html).toContain('map-shot-info__date');
+    expect(html).toContain('#79ccde');
+    expect(html).toContain('August 12, 2026');
+    expect(html).toContain('<span class="value">1,200</span>');
+    expect(html).toContain('<span class="value">40</span>');
+    expect(html).toContain('<span class="value">300</span>');
+    expect(html).toContain('#f65699');
   });
 });
 

@@ -1,6 +1,7 @@
 import {
   MAX_MANUAL_SHOTS_PER_DAY,
   SCREENSHOT_KEY_PREFIX,
+  STARFIELD_OBJECT_KEY,
   STATE_OBJECT_KEY,
 } from './config';
 import {
@@ -88,6 +89,27 @@ export async function saveScreenshotPng(
     httpMetadata: { contentType: 'image/png' },
   });
   return key;
+}
+
+/** Load the cached composite starfield as a PNG data URL, or null if missing. */
+export async function loadStarfieldDataUrl(
+  bucket: ScreenshotR2Bucket,
+): Promise<string | null> {
+  const object = await bucket.get(STARFIELD_OBJECT_KEY);
+  if (!object) return null;
+  const bytes = Buffer.from(await object.arrayBuffer());
+  return `data:image/png;base64,${bytes.toString('base64')}`;
+}
+
+/** Persist the composite starfield PNG for reuse on later captures. */
+export async function saveStarfieldPng(
+  bucket: ScreenshotR2Bucket,
+  pngBytes: ArrayBuffer,
+): Promise<string> {
+  await bucket.put(STARFIELD_OBJECT_KEY, pngBytes, {
+    httpMetadata: { contentType: 'image/png' },
+  });
+  return STARFIELD_OBJECT_KEY;
 }
 
 export async function loadScreenshotPng(
