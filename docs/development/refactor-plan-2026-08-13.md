@@ -1,0 +1,103 @@
+# Refactor Plan Audit — 2026-08-13
+
+This is the current implementation plan for the cleanup proposal reviewed against
+`origin/main` at `667f766`. The original proposal had the right overall goal—small,
+independently verified extractions—but several findings were stale or based on a dirty
+checkout rather than the tracked repository.
+
+## Verdict
+
+Proceed incrementally. Keep behavior-preserving extraction work separate from measured
+performance changes, add characterization tests before moving unowned behavior, and do
+not use line count alone as an exit criterion.
+
+## Corrections to the original proposal
+
+| Original claim | Current finding | Decision |
+| --- | --- | --- |
+| `README.md`, `node-app/`, `about-wamp-copy.txt`, and `.claude/` need Phase 0 cleanup | These are local artifacts in a stale root checkout; current `origin/main` already has the correct README and does not track the other paths | Leave the user-owned root checkout untouched |
+| `earlyWorldTileBootstrap.classic.ts` is dead | `vite.config.ts` reads, compiles, and injects it into `index.html` before Phaser starts | Keep the module and its tests; treat it as critical startup code |
+| Ghost playback and Room Rush still need controllers | Their scene methods are already thin delegations to `OverworldPresenceController` and `OverworldRoomRushModeController` | Do not create duplicate controllers |
+| Grid overlay redraws unconditionally | `OverworldGridOverlayController` already caches viewport, zoom, and content revision, with focused tests | No change without profile evidence |
+| Presence constructs and sends every frame | The scene reuses presence scratch objects; the controller coalesces updates at 25 ms for PvP, 200 ms while changing, and 5 seconds while unchanged | Profile realistic client fanout before changing cadence |
+| `swordsmanTraversal.ts` has one consumer and should move under `liveObjects/` | Several modules under `src/enemies/` consume its types and behavior | Keep domain traversal code together until a dependency-boundary audit proves a better home |
+| `worldStreaming.ts` is about 2,950 lines | It is now about 6,300 lines and is covered by ten focused test files | Split only along already-tested lifecycle/hydration/replacement seams |
+| `OverworldPlayScene.ts` is about 6,460 lines | It is now about 7,240 lines | Reduce responsibilities in reviewable slices; do not force an arbitrary 1,200-line target |
+| All three editor-family scenes should share one editing core | `EditorScene` and `CourseEditorScene` already share runtime, music workflow, and UI primitives; `CourseComposerScene` is a world-footprint composer with different responsibilities | Converge the two tile/object editors incrementally; do not force the composer into the same abstraction |
+| Rename all of `src/ui/setup/` to `src/ui/modals/` | The directory also contains non-modal scene bridges, HUD setup, and orchestration | Split real modal boundaries first; avoid a misleading whole-directory rename |
+| Make Knip an immediate CI gate | Knip is configured but is not a package dependency or repository script, and build-time inputs such as the Vite-read bootstrap are not ordinary imports | Model build and dynamic entry points first; then introduce the tool as an explicit, reviewed gate |
+
+## Implementation tracks
+
+### 1. Overworld composition root
+
+Extract cohesive state owners one at a time, preserving call order and public behavior.
+
+1. Quicksand contact, cooldown, and visual-sink state, with direct characterization tests.
+2. Room-music target selection and signature-based playback synchronization, after tests cover
+   normal rooms, expanded rooms, courses, empty music, mode exit, and deduplication.
+3. Backdrop lifecycle and camera-ignore ownership, after tests cover camera ordering, parallax,
+   resize, ignored-object completeness, and teardown.
+4. PvP collision/action glue, only after outbound retry/throttling, inbound deduplication,
+   stomp geometry, cooldown, and collision resolution are characterized.
+
+Keep void respawn with death/session handling unless a broader player-hazard owner emerges.
+
+### 2. Large client modules
+
+- Move shared live-object/runtime types out of `liveObjects.ts` first; nine child modules currently
+  import types back from their parent. Then split behavior only along seams with focused tests.
+- Split `worldStreaming.ts` along its existing test boundaries: lifecycle, hydration,
+  replacement coverage, dormant activation, and teardown races.
+- Split comment data/sync from Phaser presentation without moving both at once.
+- Keep enemy traversal domain code under `src/enemies/`; split the scene controller's state
+  machine separately.
+- Treat broad directory renames as low-priority import churn, not architectural progress.
+
+### 3. Editor convergence
+
+Before sharing selection, placement, undo, or persistence code, add scene-level characterization
+for place/delete, selection, undo/redo, dirty state, and save/reload. Extract one primitive at a
+time and retain scene-specific policy at each scene boundary. Keep `CourseComposerScene` outside the
+tile/object editing core. Separately characterize and remove the apparently dormant legacy
+`overworld/courseComposer.ts` controller only after proving the current scene/panel flow covers its
+DOM and preview behavior.
+
+### 4. Worker, admin, and PartyKit surfaces
+
+- Convert `workerLegacy.js` route-by-route behind parity tests rather than in one rewrite.
+- Separate Worker routes, queries, and pure scoring logic with route-contract coverage.
+- Move admin application bodies behind thin entry modules without changing URL entry points.
+- Split PartyKit message validation/handlers only after connect, disconnect, shard movement,
+  population/editor accounting, rate limiting, and malformed-message behavior are tested.
+
+### 5. Performance work
+
+Performance changes remain a separate measured track. The current residual candidates are finer
+profiler segments and verified allocation churn such as `lastMovementInput`. Controller gating is
+not assumed safe because an inactive-looking update may perform cleanup or synchronization.
+
+Run the existing runtime probes before and after each performance patch and report the exact path
+affected. Preserve browser-composed published-room fallback while the production renderer remains
+inside its documented soak period.
+
+## Required gates
+
+Every structural slice must pass:
+
+```bash
+npm run check
+npm run smoke:dom-contract
+git diff --check
+```
+
+Also run the focused unit tests and an official web-game browser smoke for the affected gameplay
+surface. Worker or PartyKit changes additionally require their safety/identity probes. Performance
+changes require comparable before/after runtime artifacts; a structural extraction makes no
+performance claim by itself.
+
+## Current branch status
+
+`codex/refactor-foundation-2026-08-13` starts Track 1 with the quicksand controller extraction.
+The extraction owns only contact buffering, status cooldown, and visual-sink state; movement factors,
+hazard collision, player presentation, and void death routing keep their existing owners.

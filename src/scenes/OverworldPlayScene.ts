@@ -204,6 +204,7 @@ import {
   OverworldMovementController,
   type OverworldMovementControllerState,
 } from './overworld/movementController';
+import { OverworldQuicksandController } from './overworld/quicksandController';
 import {
   OverworldPlayerPresentationController,
   type OverworldPlayerPresentationControllerState,
@@ -384,10 +385,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly BOUNCE_PAD_VELOCITY = -392;
   private readonly BOUNCE_PAD_COOLDOWN_MS = 220;
   private readonly BOUNCE_PAD_ACTIVE_MS = 140;
-  private readonly QUICKSAND_ACTIVE_BUFFER_MS = 90;
   private readonly QUICKSAND_MOVE_FACTOR = 0.56;
   private readonly QUICKSAND_JUMP_FACTOR = 0.92;
-  private readonly QUICKSAND_VISUAL_SINK_MAX = 5;
   private readonly BAT_SPEED = 72;
   private readonly BAT_WAVE_AMPLITUDE = 6;
   private readonly BAT_WAVE_SPEED = 0.012;
@@ -504,9 +503,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private lastPresenceSnapshotSyncAt = 0;
   private transientStatusMessage: string | null = null;
   private transientStatusExpiresAt = 0;
-  private quicksandTouchedUntil = 0;
-  private quicksandVisualSink = 0;
-  private quicksandStatusCooldownUntil = 0;
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
   private readonly expandedRoomEditorRepository = createExpandedRoomEditorRepository();
@@ -586,6 +582,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly playerPresentationController: OverworldPlayerPresentationController;
   private readonly objectiveController: OverworldObjectiveController;
   private readonly movementController: OverworldMovementController;
+  private readonly quicksandController: OverworldQuicksandController;
   private readonly combatPresentationController: OverworldCombatPresentationController;
   private readonly combatController: OverworldCombatController;
   private readonly sessionResetController: OverworldSessionResetController;
@@ -651,6 +648,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       getBackdropLayerCount: () =>
         Number(Boolean(this.backdropDisplayLayer)) + Number(Boolean(this.worldDisplayLayer)),
       isLightingActive: () => this.mode === 'play',
+    });
+    this.quicksandController = new OverworldQuicksandController({
+      getCurrentTime: () => this.time.now,
+      showTransientStatus: (message) => this.showTransientStatus(message),
     });
     const thisScene = this;
     this.goalRunController = new OverworldGoalRunController({
@@ -753,7 +754,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         return true;
       },
       touchQuicksand: () => {
-        this.touchQuicksand();
+        this.quicksandController.touch();
       },
       grantExternalLaunchGrace: (durationMs) => {
         this.externalLaunchGraceUntil = Math.max(
@@ -1562,7 +1563,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         getPlayerPickupSensorBody: () => this.playerPickupSensorBody,
         getSpecialTileEnvironment: () => this.specialTilesController.getPlayerEnvironment(),
         getLastMovementInput: () => this.lastMovementInput,
-        getQuicksandVisualSink: () => this.quicksandVisualSink,
+        getQuicksandVisualSink: () => this.quicksandController.getVisualSink(),
         getWeaponKnockbackUntil: () => this.weaponKnockbackUntil,
         getIsClimbingLadder: () => this.isClimbingLadder,
         getIsWallSliding: () => this.isWallSliding,
@@ -2529,7 +2530,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       const gunInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
       const swordPressed = !pvpCountdownLocked && swordInputPressed;
       const gunPressed = !pvpCountdownLocked && gunInputPressed;
-      const inQuicksand = this.isPlayerInQuicksand();
+      const inQuicksand = this.quicksandController.isActive();
       const playerUpdateStartedAt = profiler?.beginSegment();
       this.updateSpecialTiles();
       this.updatePortalObjects();
@@ -2553,7 +2554,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         downHeld: movement.downHeld,
         grounded: movement.grounded,
       });
-      this.updateQuicksandVisualSink();
+      this.quicksandController.updateVisualSink();
       this.combatController.updateProjectiles(delta);
       this.maybeApplyRemotePvpActionHit();
       this.maybeStompPvpPeer();
@@ -2777,9 +2778,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.mobilePortraitCameraTargetY = MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y;
     this.transientStatusMessage = null;
     this.transientStatusExpiresAt = 0;
-    this.quicksandTouchedUntil = 0;
-    this.quicksandVisualSink = 0;
-    this.quicksandStatusCooldownUntil = 0;
+    this.quicksandController.reset();
     this.lastMovementInput = {
       horizontalInput: 0,
       verticalInput: 0,
@@ -3323,30 +3322,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private showTransientStatus(message: string): void {
     this.transientStatusMessage = message;
     this.transientStatusExpiresAt = this.time.now + 4200;
-  }
-
-  private touchQuicksand(): void {
-    this.quicksandTouchedUntil = Math.max(
-      this.quicksandTouchedUntil,
-      this.time.now + this.QUICKSAND_ACTIVE_BUFFER_MS
-    );
-    if (this.time.now >= this.quicksandStatusCooldownUntil) {
-      this.quicksandStatusCooldownUntil = this.time.now + 2400;
-      this.showTransientStatus('Quicksand drags you down.');
-    }
-  }
-
-  private isPlayerInQuicksand(): boolean {
-    return this.time.now < this.quicksandTouchedUntil;
-  }
-
-  private updateQuicksandVisualSink(): void {
-    const target = this.isPlayerInQuicksand() ? this.QUICKSAND_VISUAL_SINK_MAX : 0;
-    const lerp = this.isPlayerInQuicksand() ? 0.24 : 0.18;
-    this.quicksandVisualSink = Phaser.Math.Linear(this.quicksandVisualSink, target, lerp);
-    if (Math.abs(this.quicksandVisualSink - target) < 0.08) {
-      this.quicksandVisualSink = target;
-    }
   }
 
   private getTransientStatusMessage(): string | null {
