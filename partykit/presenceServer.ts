@@ -2,7 +2,6 @@ import type * as Party from 'partykit/server';
 import type { PartyKitShardHeartbeat } from '../src/admin/model';
 import {
   ROOM_CHAT_MESSAGE_LIFETIME_MS,
-  ROOM_CHAT_MESSAGE_MAX_LENGTH,
   ROOM_CHAT_SEND_RATE_LIMIT_MS,
   type RoomChatBroadcastMessage,
   type RoomChatSayMessage,
@@ -55,6 +54,16 @@ import {
   partitionActiveHeartbeats,
 } from '../src/partykit/shardMetricsRuntime';
 import {
+  buildPvpInviteAccepted,
+  buildPvpInviteDeclined,
+  buildPvpInviteOffer,
+  buildRoomChatBroadcast,
+  identityFromPresenceState,
+  normalizePvpInviteSend,
+  normalizeRoomChatText,
+  PVP_INVITE_SEND_RATE_LIMIT_MS,
+} from '../src/partykit/relayProtocol';
+import {
   getMultiplayerModeDefinition,
   type PvpHitSource,
   type PvpInviteAcceptMessage,
@@ -71,7 +80,6 @@ import {
   type PvpMode,
   type PvpParticipantIdentity,
   type PvpParticipantSnapshot,
-  type PvpPresenceServerMessage,
   type PvpRoomStateEvent,
   type PvpRoomStateEventMessage,
 } from '../src/pvp/model';
@@ -848,7 +856,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const text = this.normalizeRoomChatText(message.text);
+    const text = normalizeRoomChatText(message.text);
     if (!text) {
       return;
     }
@@ -864,24 +872,9 @@ export default class PresenceServer implements Party.Server {
     });
 
     const roomId = this.getRoomId(presence.roomCoordinates);
-    const payload = {
-      type: 'room-chat:message',
-      message: {
-        id: crypto.randomUUID(),
-        shardId: this.room.id,
-        userId: state.userId,
-        displayName: state.displayName,
-        avatarId: state.avatarId,
-        roomCoordinates: {
-          x: presence.roomCoordinates.x,
-          y: presence.roomCoordinates.y,
-        },
-        roomId,
-        text,
-        createdAt: now,
-        expiresAt: now + ROOM_CHAT_MESSAGE_LIFETIME_MS,
-      },
-    } satisfies RoomChatBroadcastMessage;
+    const payload = buildRoomChatBroadcast(
+      state, this.room.id, text, now, crypto.randomUUID(), ROOM_CHAT_MESSAGE_LIFETIME_MS,
+    );
 
     this.sendRoomChatMessage(payload, (connection) => {
       const peerPresence = connection.state?.presence;
@@ -891,19 +884,6 @@ export default class PresenceServer implements Party.Server {
         this.getRoomId(peerPresence.roomCoordinates) === roomId
       );
     });
-  }
-
-  private normalizeRoomChatText(rawText: unknown): string | null {
-    if (typeof rawText !== 'string') {
-      return null;
-    }
-
-    const text = rawText.trim();
-    if (text.length === 0 || text.length > ROOM_CHAT_MESSAGE_MAX_LENGTH) {
-      return null;
-    }
-
-    return text;
   }
 
   private handlePvpInvite(
@@ -916,11 +896,11 @@ export default class PresenceServer implements Party.Server {
     }
 
     const now = Date.now();
-    if (now - state.lastPvpInviteSentAt < 3_000) {
+    if (now - state.lastPvpInviteSentAt < PVP_INVITE_SEND_RATE_LIMIT_MS) {
       return;
     }
 
-    const invite = this.normalizePvpInviteSend(message);
+    const invite = normalizePvpInviteSend(message, now);
     if (!invite) {
       return;
     }
@@ -935,22 +915,9 @@ export default class PresenceServer implements Party.Server {
       lastPvpInviteSentAt: now,
     });
 
-    const payload: PvpPresenceServerMessage = {
-      type: 'pvp:invite:offer',
-      invite: {
-        inviteId: invite.inviteId,
-        matchId: invite.matchId,
-        mode: invite.mode,
-        roomId: invite.roomId,
-        roomCoordinates: { ...invite.roomCoordinates },
-        shardId: this.room.id,
-        inviterConnectionId: sender.id,
-        inviter: this.identityFromState(state),
-        target: this.identityFromState(target.state),
-        createdAt: now,
-        expiresAt: invite.expiresAt,
-      },
-    };
+    const payload = buildPvpInviteOffer(
+      invite, sender.id, this.identityFromState(state), this.identityFromState(target.state), this.room.id, now,
+    );
     target.send(JSON.stringify(payload));
   }
 
@@ -968,12 +935,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const payload: PvpPresenceServerMessage = {
-      type: 'pvp:invite:accepted',
-      inviteId: String(message.inviteId ?? '').slice(0, 80),
-      matchId: String(message.matchId ?? '').slice(0, 96),
-      acceptedBy: this.identityFromState(state),
-    };
+    const payload = buildPvpInviteAccepted(message, this.identityFromState(state));
     target.send(JSON.stringify(payload));
   }
 
@@ -991,12 +953,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const payload: PvpPresenceServerMessage = {
-      type: 'pvp:invite:declined',
-      inviteId: String(message.inviteId ?? '').slice(0, 80),
-      matchId: String(message.matchId ?? '').slice(0, 96),
-      declinedBy: this.identityFromState(state),
-    };
+    const payload = buildPvpInviteDeclined(message, this.identityFromState(state));
     target.send(JSON.stringify(payload));
   }
 
@@ -1503,38 +1460,6 @@ export default class PresenceServer implements Party.Server {
     };
   }
 
-  private normalizePvpInviteSend(message: PvpInviteSendMessage): PvpInviteSendMessage['invite'] | null {
-    const invite = message.invite;
-    if (!invite || invite.mode !== 'arena') {
-      return null;
-    }
-
-    const roomCoordinates = this.normalizeRoomCoordinates(invite.roomCoordinates);
-    const inviteId = this.normalizeShortId(invite.inviteId, 80);
-    const matchId = this.normalizeShortId(invite.matchId, 96);
-    const roomId = this.normalizeShortId(invite.roomId, 80);
-    const targetConnectionId = this.normalizeShortId(invite.targetConnectionId, 96);
-    if (!roomCoordinates || !inviteId || !matchId || !roomId || !targetConnectionId) {
-      return null;
-    }
-
-    return {
-      ...invite,
-      inviteId,
-      matchId,
-      mode: 'arena',
-      roomId,
-      roomCoordinates,
-      targetConnectionId,
-      target: this.normalizePvpParticipant(invite.target) ?? {
-        userId: '',
-        displayName: 'Player',
-        avatarId: 'default-player',
-      },
-      expiresAt: Math.max(Date.now() + 5_000, Number(invite.expiresAt ?? 0)),
-    };
-  }
-
   private normalizePvpParticipants(value: unknown): PvpParticipantIdentity[] {
     if (!Array.isArray(value)) {
       return [];
@@ -1808,11 +1733,7 @@ export default class PresenceServer implements Party.Server {
   }
 
   private identityFromState(state: ConnectionPresenceState): PvpParticipantIdentity {
-    return {
-      userId: state.userId,
-      displayName: state.displayName,
-      avatarId: state.avatarId,
-    };
+    return identityFromPresenceState(state);
   }
 
   private findConnectionById(
