@@ -100,13 +100,13 @@ export class OverworldPvpLocalPresentationController {
   }
 
   destroy(): void {
-    const hadDisplayObjects = Boolean(this.heartDisplay || this.invulnerabilityFx);
-    this.heartDisplay?.destroy();
+    if (!this.heartDisplay) {
+      return;
+    }
+    this.heartDisplay.destroy();
     this.heartDisplay = null;
     this.destroyInvulnerabilityFx();
-    if (hadDisplayObjects) {
-      this.host.onDisplayObjectsChanged?.();
-    }
+    this.host.onDisplayObjectsChanged?.();
   }
 
   private syncInvulnerability(
@@ -137,13 +137,13 @@ export class OverworldPvpLocalPresentationController {
   }
 
   private destroyInvulnerabilityFx(): void {
-    if (!this.invulnerabilityFx) {
-      return;
-    }
     const playerSprite = this.host.getPlayerSprite();
     if (playerSprite) {
       playerSprite.setAlpha(1);
       playerSprite.clearTint();
+    }
+    if (!this.invulnerabilityFx) {
+      return;
     }
     this.invulnerabilityFx.destroy();
     this.invulnerabilityFx = null;
