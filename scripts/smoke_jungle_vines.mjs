@@ -106,8 +106,8 @@ try {
     decorationGroupCounts[group] = await page.locator('#object-grid .object-item').count();
   }
   assert.deepEqual(decorationGroupCounts, {
-    vines: 46,
-    trees: 5,
+    vines: 9,
+    trees: 226,
     plants: 3,
     rocks: 5,
     props: 9,
@@ -115,32 +115,71 @@ try {
   });
 
   await page.click('[data-decoration-group="trees"]');
+  const treeSubcategoryCounts = {};
+  for (const subgroup of ['woodland', 'tropical', 'blossom', 'bonsai', 'winter', 'classic']) {
+    await page.click(`[data-tree-category="${subgroup}"]`);
+    treeSubcategoryCounts[subgroup] = await page.locator('#object-grid .object-item').count();
+  }
+  assert.deepEqual(treeSubcategoryCounts, {
+    woodland: 80,
+    tropical: 60,
+    blossom: 20,
+    bonsai: 41,
+    winter: 20,
+    classic: 5,
+  });
+
+  await page.click('[data-tree-category="woodland"]');
+  const woodlandFamilyCounts = {};
+  for (const family of ['basic', 'birch', 'oak', 'weeping-willow']) {
+    await page.click(`[data-tree-family="${family}"]`);
+    woodlandFamilyCounts[family] = await page.locator('#object-grid .object-item').count();
+  }
+  assert.deepEqual(woodlandFamilyCounts, {
+    basic: 20,
+    birch: 20,
+    oak: 20,
+    'weeping-willow': 20,
+  });
+
+  await page.click('[data-tree-category="tropical"]');
+  const tropicalFamilyCounts = {};
+  for (const family of ['bamboo', 'coconut', 'palm']) {
+    await page.click(`[data-tree-family="${family}"]`);
+    tropicalFamilyCounts[family] = await page.locator('#object-grid .object-item').count();
+  }
+  assert.deepEqual(tropicalFamilyCounts, { bamboo: 20, coconut: 20, palm: 20 });
+
+  await page.click('[data-tree-category="bonsai"]');
+  const bonsaiFamilyCounts = {};
+  for (const family of ['bonsai', 'bonsai-sakura']) {
+    await page.click(`[data-tree-family="${family}"]`);
+    bonsaiFamilyCounts[family] = await page.locator('#object-grid .object-item').count();
+  }
+  assert.deepEqual(bonsaiFamilyCounts, { bonsai: 21, 'bonsai-sakura': 20 });
+
+  summary.trees = {
+    total: decorationGroupCounts.trees,
+    subgroups: treeSubcategoryCounts,
+    families: {
+      woodland: woodlandFamilyCounts,
+      tropical: tropicalFamilyCounts,
+      bonsai: bonsaiFamilyCounts,
+    },
+  };
+  await page.click('[data-tree-category="woodland"]');
+  await page.click('[data-tree-family="oak"]');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.object-item[data-object-id^="tree_pack_oak_"]').length === 20,
+  );
   await setCanvasVisibility(page, false);
   await page.locator('#object-palette-section').screenshot({
     path: path.join(outputDir, 'tree-object-palette-panel.png'),
   });
   await setCanvasVisibility(page, true);
 
-  await page.click('[data-decoration-group="vines"]');
-  await page.click('[data-vine-category="modular"]');
-  await page.waitForFunction(
-    () => document.querySelectorAll('.object-item[data-object-id^="jungle_vine_piece_"]').length === 37,
-  );
-  summary.objects = await page.locator('.object-item[data-object-id^="jungle_vine_piece_"]').evaluateAll(
-    (items) => items.map((item) => item.getAttribute('data-object-id')),
-  );
-  assert.equal(summary.objects.length, 37);
-  assert.ok(summary.objects.includes('jungle_vine_piece_00'));
-  assert.ok(summary.objects.includes('jungle_vine_piece_63'));
-  summary.decorationGroupCounts = decorationGroupCounts;
-  await setCanvasVisibility(page, false);
-  await page.locator('#object-palette-section').screenshot({
-    path: path.join(outputDir, 'jungle-object-palette-panel.png'),
-  });
-  await setCanvasVisibility(page, true);
-
   await page.click('.layer-btn[data-layer="background"]');
-  await page.click('.object-item[data-object-id="jungle_vine_piece_00"]');
+  await page.click('.object-item[data-object-id="tree_pack_oak_01"]');
   const gameCanvas = await page.evaluate(() => Array.from(document.querySelectorAll('#game-container canvas'))
     .map((canvas) => {
       const rect = canvas.getBoundingClientRect();
@@ -148,27 +187,46 @@ try {
     })
     .filter((rect) => rect.width > 0 && rect.height > 0)
     .sort((left, right) => right.width * right.height - left.width * left.height)[0] ?? null);
-  assert.ok(gameCanvas, 'Game canvas was not visible for decoration placement.');
+  assert.ok(gameCanvas, 'Game canvas was not visible for tree placement.');
   await page.mouse.click(
     gameCanvas.x + gameCanvas.width * 0.54,
-    gameCanvas.y + gameCanvas.height * 0.34,
+    gameCanvas.y + gameCanvas.height * 0.645,
   );
-  await waitForState(page, (state) => state?.activeScene?.roomDirty === true, 'vine decoration placement');
+  await waitForState(page, (state) => state?.activeScene?.placedObjects === 16, 'tree decoration placement');
   await setEarlyWorldTilesVisibility(page, false);
-  await page.screenshot({ path: path.join(outputDir, 'jungle-modular-deco-placed.png') });
+  await page.screenshot({ path: path.join(outputDir, 'tree-pack-deco-placed.png') });
+
+  await page.click('[data-decoration-group="vines"]');
+  await page.click('[data-vine-category="sprigs"]');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.object-item[data-object-id^="jungle_vine_sprig_"]').length === 7,
+  );
+  summary.objects = await page.locator('.object-item[data-object-id^="jungle_vine_sprig_"]').evaluateAll(
+    (items) => items.map((item) => item.getAttribute('data-object-id')),
+  );
+  assert.equal(summary.objects.length, 7);
+  assert.ok(summary.objects.includes('jungle_vine_sprig_1'));
+  assert.ok(summary.objects.includes('jungle_vine_sprig_7'));
+  summary.decorationGroupCounts = decorationGroupCounts;
+  await setCanvasVisibility(page, false);
+  await page.locator('#object-palette-section').screenshot({
+    path: path.join(outputDir, 'jungle-object-palette-panel.png'),
+  });
+  await setCanvasVisibility(page, true);
 
   await page.click('#btn-test-play');
   const runtimeState = await waitForState(
     page,
     (state) => state?.activeScene?.scene === 'overworld-play'
       && state?.activeScene?.mode === 'play'
-      && jungleObjects(state).length === 16
+      && jungleObjects(state).length === 15
+      && treePackObjects(state).length === 1
       && state?.activeScene?.currentRoomBackground?.background === 'jungle_vines'
       && state?.activeScene?.currentRoomBackground?.layerCount === 6,
     'Jungle test play',
   );
   const runtimeObjects = jungleObjects(runtimeState);
-  assert.ok(runtimeObjects.some((object) => object.id === 'jungle_vine_piece_00'));
+  assert.equal(treePackObjects(runtimeState)[0]?.id, 'tree_pack_oak_01');
   const climbingVine = runtimeObjects.find((object) => object.id === 'jungle_climbing_vine_1');
   assert.ok(climbingVine, 'Climbing vine was missing from test play.');
   await setEarlyWorldTilesVisibility(page, false);
@@ -193,6 +251,7 @@ try {
     scene: runtimeState.activeScene.scene,
     mode: runtimeState.activeScene.mode,
     objectCount: runtimeObjects.length,
+    treePackObjectCount: treePackObjects(runtimeState).length,
     background: runtimeState.activeScene.currentRoomBackground,
     climbingVineKey: climbingState.activeScene.player.ladderKey,
   };
@@ -213,6 +272,12 @@ console.log(JSON.stringify(summary, null, 2));
 function jungleObjects(state) {
   return (state?.activeScene?.liveObjects ?? []).filter(
     (object) => typeof object.id === 'string' && object.id.startsWith('jungle_'),
+  );
+}
+
+function treePackObjects(state) {
+  return (state?.activeScene?.liveObjects ?? []).filter(
+    (object) => typeof object.id === 'string' && object.id.startsWith('tree_pack_'),
   );
 }
 

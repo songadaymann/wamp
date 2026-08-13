@@ -45,9 +45,27 @@ const BOYGAME_TORCH_LIGHT_EMISSION = Object.freeze({
 export type ObjectCategory = 'collectible' | 'hazard' | 'enemy' | 'npc' | 'platform' | 'decoration' | 'interactive';
 export type ObjectInteraction = 'pushable';
 export const DECORATION_PALETTE_GROUPS = ['vines', 'trees', 'plants', 'rocks', 'props', 'sky'] as const;
-export const VINE_PALETTE_SUBGROUPS = ['modular', 'large', 'sprigs'] as const;
+export const VINE_PALETTE_SUBGROUPS = ['large', 'sprigs'] as const;
+export const TREE_PALETTE_SUBGROUPS = ['woodland', 'tropical', 'blossom', 'bonsai', 'winter', 'classic'] as const;
+export const TREE_PALETTE_FAMILIES = [
+  'basic',
+  'birch',
+  'oak',
+  'weeping-willow',
+  'bamboo',
+  'coconut',
+  'palm',
+  'sakura',
+  'bonsai',
+  'bonsai-sakura',
+  'winter',
+  'classic',
+] as const;
 export type DecorationPaletteGroup = (typeof DECORATION_PALETTE_GROUPS)[number];
 export type VinePaletteSubgroup = (typeof VINE_PALETTE_SUBGROUPS)[number];
+export type TreePaletteSubgroup = (typeof TREE_PALETTE_SUBGROUPS)[number];
+export type TreePaletteFamily = (typeof TREE_PALETTE_FAMILIES)[number];
+export type DecorationPaletteSubgroup = VinePaletteSubgroup | TreePaletteSubgroup;
 
 export interface GameObjectConfig {
   id: string;
@@ -101,7 +119,9 @@ export interface GameObjectConfig {
   /** first-level editor grouping used inside the built-in Deco palette */
   decorationPaletteGroup?: DecorationPaletteGroup;
   /** optional second-level grouping for large decoration families */
-  decorationPaletteSubgroup?: VinePaletteSubgroup;
+  decorationPaletteSubgroup?: DecorationPaletteSubgroup;
+  /** exact tree family used by the third-level Trees palette filter */
+  treePaletteFamily?: TreePaletteFamily;
   /** kind marker for object configs generated from custom sprite definitions */
   customSpriteKind?: CustomSpriteKind | null;
   /** false for actors that keep overlap bodies but pass through terrain and solid objects */
@@ -158,32 +178,7 @@ const JUNGLE_CLIMBING_VINE_OBJECTS: GameObjectConfig[] = [
   { id: 'jungle_climbing_vine_6', name: 'Climbing Vine F', category: 'interactive', path: 'assets/objects/jungle/pixelina/climbing-vine-6.png', frameWidth: 17, frameHeight: 94, frameCount: 1, fps: 0, bodyWidth: 17, bodyHeight: 90, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', climbable: true, description: 'A long broad-leaf climbable vine using Pixelina top, middle, and bottom segments.' },
 ];
 
-const JUNGLE_VINE_MODULAR_LOCAL_INDICES = [
-  ...Array.from({ length: 32 }, (_, index) => index),
-  35, 36, 45, 54, 63,
-];
-
-const JUNGLE_VINE_MODULAR_OBJECTS: GameObjectConfig[] = JUNGLE_VINE_MODULAR_LOCAL_INDICES.map(
-  (localIndex, sequenceIndex) => ({
-    id: `jungle_vine_piece_${String(localIndex).padStart(2, '0')}`,
-    name: `Hanging Vine Piece ${String(sequenceIndex + 1).padStart(2, '0')}`,
-    category: 'decoration',
-    path: `assets/objects/jungle/lunardrift/modular/vine-piece-${String(localIndex).padStart(2, '0')}.png`,
-    frameWidth: 16,
-    frameHeight: 16,
-    frameCount: 1,
-    fps: 0,
-    bodyWidth: 0,
-    bodyHeight: 0,
-    behavior: 'static',
-    decorationPaletteGroup: 'vines',
-    decorationPaletteSubgroup: 'modular',
-    description: `Non-colliding modular hanging-vine decoration from Jungle Vines tile ${localIndex}.`,
-  }),
-);
-
 const JUNGLE_VINE_DECORATION_OBJECTS: GameObjectConfig[] = [
-  ...JUNGLE_VINE_MODULAR_OBJECTS,
   { id: 'jungle_hanging_creepers', name: 'Hanging Jungle Creepers', category: 'decoration', path: 'assets/objects/jungle/pixelina/hanging-creepers.png', frameWidth: 77, frameHeight: 55, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'large', description: 'A wide curtain of hanging moss and creepers.' },
   { id: 'jungle_loop_vine', name: 'Looping Jungle Vine', category: 'decoration', path: 'assets/objects/jungle/pixelina/loop-vine.png', frameWidth: 146, frameHeight: 50, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'large', description: 'A long looping vine for ceilings and broad foreground spans.' },
   { id: 'jungle_vine_sprig_1', name: 'Jungle Vine Sprig A', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_1.png', frameWidth: 16, frameHeight: 17, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'sprigs', description: 'Small modular LunarDrift vine sprig.' },
@@ -194,6 +189,58 @@ const JUNGLE_VINE_DECORATION_OBJECTS: GameObjectConfig[] = [
   { id: 'jungle_vine_sprig_6', name: 'Jungle Vine Sprig F', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_6.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'sprigs', description: 'Small modular LunarDrift vine sprig.' },
   { id: 'jungle_vine_sprig_7', name: 'Jungle Vine Sprig G', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_7.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'sprigs', description: 'Small modular LunarDrift vine sprig.' },
 ];
+
+type DevkiddTreeFamilyConfig = {
+  id: Exclude<TreePaletteFamily, 'classic'>;
+  name: string;
+  subgroup: Exclude<TreePaletteSubgroup, 'classic'>;
+  count: number;
+  frameWidth: number;
+  frameHeight: number;
+  groundOffsetY: number;
+};
+
+const DEVKIDD_TREE_FAMILIES: readonly DevkiddTreeFamilyConfig[] = [
+  { id: 'basic', name: 'Basic Tree', subgroup: 'woodland', count: 20, frameWidth: 176, frameHeight: 208, groundOffsetY: 12 },
+  { id: 'birch', name: 'Birch', subgroup: 'woodland', count: 20, frameWidth: 192, frameHeight: 240, groundOffsetY: 13 },
+  { id: 'oak', name: 'Oak', subgroup: 'woodland', count: 20, frameWidth: 192, frameHeight: 240, groundOffsetY: 13 },
+  { id: 'weeping-willow', name: 'Weeping Willow', subgroup: 'woodland', count: 20, frameWidth: 192, frameHeight: 240, groundOffsetY: 11 },
+  { id: 'bamboo', name: 'Bamboo', subgroup: 'tropical', count: 20, frameWidth: 192, frameHeight: 240, groundOffsetY: 13 },
+  { id: 'coconut', name: 'Coconut Tree', subgroup: 'tropical', count: 20, frameWidth: 176, frameHeight: 208, groundOffsetY: 12 },
+  { id: 'palm', name: 'Palm Tree', subgroup: 'tropical', count: 20, frameWidth: 176, frameHeight: 208, groundOffsetY: 12 },
+  { id: 'sakura', name: 'Sakura', subgroup: 'blossom', count: 20, frameWidth: 208, frameHeight: 240, groundOffsetY: 9 },
+  { id: 'bonsai', name: 'Bonsai', subgroup: 'bonsai', count: 21, frameWidth: 192, frameHeight: 255, groundOffsetY: 12 },
+  { id: 'bonsai-sakura', name: 'Sakura Bonsai', subgroup: 'bonsai', count: 20, frameWidth: 192, frameHeight: 240, groundOffsetY: 11 },
+  { id: 'winter', name: 'Winter Tree', subgroup: 'winter', count: 20, frameWidth: 192, frameHeight: 240, groundOffsetY: 13 },
+];
+
+const DEVKIDD_TREE_DECORATION_OBJECTS: GameObjectConfig[] = DEVKIDD_TREE_FAMILIES.flatMap(
+  (family) => Array.from({ length: family.count }, (_, index) => {
+    const variant = index + 1;
+    const variantLabel = String(variant).padStart(2, '0');
+    const displayScale = 0.5;
+    return {
+      id: `tree_pack_${family.id.replace(/-/g, '_')}_${variantLabel}`,
+      name: `${family.name} ${variantLabel}`,
+      category: 'decoration',
+      path: `assets/objects/trees/devkidd/${family.id}/tree-${variantLabel}.png`,
+      frameWidth: family.frameWidth,
+      frameHeight: family.frameHeight,
+      frameCount: 1,
+      fps: 0,
+      bodyWidth: 0,
+      bodyHeight: 0,
+      displayScale,
+      displayOffsetX: -family.frameWidth * (1 - displayScale) * 0.5,
+      displayOffsetY: family.frameHeight * (1 - displayScale) * 0.5 + family.groundOffsetY,
+      behavior: 'static',
+      decorationPaletteGroup: 'trees',
+      decorationPaletteSubgroup: family.subgroup,
+      treePaletteFamily: family.id,
+      description: `Non-colliding ${family.name.toLowerCase()} decoration from the Devkidd tree pack.`,
+    } satisfies GameObjectConfig;
+  }),
+);
 export const SWITCH_BLOCK_OBJECT_IDS = [
   SWITCH_BLOCK_ON_OBJECT_ID,
   SWITCH_BLOCK_OFF_OBJECT_ID,
@@ -316,7 +363,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'boygame_sign_left', name: 'Boygame Left Sign', category: 'decoration', path: 'assets/objects/boygame/sign_arrow_left.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'props', description: 'Boygame arrow sign pointing left.' },
   { id: 'boygame_sign_right', name: 'Boygame Right Sign', category: 'decoration', path: 'assets/objects/boygame/sign_arrow_right.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'props', description: 'Boygame arrow sign pointing right.' },
   { id: 'boygame_boot', name: 'Boygame Boot', category: 'decoration', path: 'assets/objects/boygame/boot.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'props', description: 'Small Boygame boot decoration.' },
-  { id: 'boygame_tree', name: 'Boygame Tree', category: 'decoration', path: 'assets/objects/boygame/tree.png', frameWidth: 32, frameHeight: 32, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'trees', description: 'Large Boygame tree decoration.' },
+  { id: 'boygame_tree', name: 'Boygame Tree', category: 'decoration', path: 'assets/objects/boygame/tree.png', frameWidth: 32, frameHeight: 32, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'trees', decorationPaletteSubgroup: 'classic', treePaletteFamily: 'classic', description: 'Large Boygame tree decoration.' },
   { id: 'boygame_rocks', name: 'Boygame Rocks', category: 'decoration', path: 'assets/objects/boygame/rocks.png', frameWidth: 32, frameHeight: 32, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'rocks', description: 'Large Boygame rock pile decoration.' },
   { id: 'boygame_rock_shard', name: 'Boygame Rock Shard', category: 'decoration', path: 'assets/objects/boygame/rock_shard.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'rocks', description: 'Small Boygame rock shard decoration.' },
   { id: 'boygame_flower', name: 'Boygame Flower', category: 'decoration', path: 'assets/objects/boygame/flower.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'plants', description: 'Small Boygame flower decoration.' },
@@ -325,12 +372,13 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'boygame_rune_stone', name: 'Boygame Rune Stone', category: 'decoration', path: 'assets/objects/boygame/rune_stone.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'rocks', description: 'Carved Boygame rune stone decoration.' },
   { id: 'boygame_wall_torch', name: 'Boygame Wall Torch', category: 'decoration', path: 'assets/objects/boygame/wall_torch.png', frameWidth: 16, frameHeight: 16, frameCount: 4, fps: 9, bodyWidth: 0, bodyHeight: 0, behavior: 'animated', lightEmission: BOYGAME_TORCH_LIGHT_EMISSION, decorationPaletteGroup: 'props', description: 'Animated Boygame wall torch with a flickering light in dark rooms.' },
   ...JUNGLE_VINE_DECORATION_OBJECTS,
+  ...DEVKIDD_TREE_DECORATION_OBJECTS,
   { id: 'bush',        name: 'Bush',        category: 'decoration',  path: 'assets/deco/bush.png',           frameWidth: 32, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'plants', description: 'Decorative bush. No collision.' },
   { id: 'rock',        name: 'Rock',        category: 'decoration',  path: 'assets/deco/rock.png',           frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'rocks', description: 'Decorative rock. No collision.' },
-  { id: 'tree',        name: 'Tree',        category: 'decoration',  path: 'assets/deco/tree.png',           frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', description: 'Decorative tree. No collision.' },
-  { id: 'tree_b',      name: 'Tree B',      category: 'decoration',  path: 'assets/deco/tree_b.png',         frameWidth: 48, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', description: 'Large decorative tree. No collision.' },
-  { id: 'tree_c',      name: 'Tree C',      category: 'decoration',  path: 'assets/deco/tree_c.png',         frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', description: 'Extra palm-like tree decoration.' },
-  { id: 'tree_trunk',  name: 'Tree Trunk',  category: 'decoration',  path: 'assets/deco/tree_trunk.png',     frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', description: 'Cut stump or trunk decoration.' },
+  { id: 'tree',        name: 'Tree',        category: 'decoration',  path: 'assets/deco/tree.png',           frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', decorationPaletteSubgroup: 'classic', treePaletteFamily: 'classic', description: 'Decorative tree. No collision.' },
+  { id: 'tree_b',      name: 'Tree B',      category: 'decoration',  path: 'assets/deco/tree_b.png',         frameWidth: 48, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', decorationPaletteSubgroup: 'classic', treePaletteFamily: 'classic', description: 'Large decorative tree. No collision.' },
+  { id: 'tree_c',      name: 'Tree C',      category: 'decoration',  path: 'assets/deco/tree_c.png',         frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', decorationPaletteSubgroup: 'classic', treePaletteFamily: 'classic', description: 'Extra palm-like tree decoration.' },
+  { id: 'tree_trunk',  name: 'Tree Trunk',  category: 'decoration',  path: 'assets/deco/tree_trunk.png',     frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', decorationPaletteSubgroup: 'classic', treePaletteFamily: 'classic', description: 'Cut stump or trunk decoration.' },
   { id: 'sun',         name: 'Sun',         category: 'decoration',  path: 'assets/deco/sun.png',            frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 4,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'animated', decorationPaletteGroup: 'sky', description: 'Animated sun. Purely decorative.' },
   { id: 'clouds_deco', name: 'Clouds',      category: 'decoration',  path: 'assets/deco/clouds.png',         frameWidth: 48, frameHeight: 14, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'sky', description: 'Cloud decoration. No collision.' },
 ];

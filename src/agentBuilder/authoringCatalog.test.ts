@@ -115,7 +115,7 @@ describe('authoring catalog', () => {
     });
 
     const jungleObjects = GAME_OBJECTS.filter((entry) => entry.id.startsWith('jungle_'));
-    expect(jungleObjects).toHaveLength(52);
+    expect(jungleObjects).toHaveLength(15);
     expect(jungleObjects.filter(isClimbableObjectConfig).map((entry) => entry.id)).toEqual([
       'jungle_climbing_vine_1',
       'jungle_climbing_vine_2',
@@ -124,15 +124,31 @@ describe('authoring catalog', () => {
       'jungle_climbing_vine_5',
       'jungle_climbing_vine_6',
     ]);
-    expect(jungleObjects.filter((entry) => entry.category === 'decoration')).toHaveLength(46);
-    expect(jungleObjects.filter((entry) => entry.decorationPaletteSubgroup === 'modular')).toHaveLength(37);
+    expect(jungleObjects.filter((entry) => entry.category === 'decoration')).toHaveLength(9);
     expect(
       GAME_OBJECTS
         .filter((entry) => entry.category === 'decoration')
         .every((entry) => Boolean(entry.decorationPaletteGroup)),
     ).toBe(true);
-    expect(GAME_OBJECTS.filter((entry) => entry.decorationPaletteGroup === 'trees')).toHaveLength(5);
-    expect(GAME_OBJECTS.filter((entry) => entry.decorationPaletteGroup === 'vines')).toHaveLength(46);
+    const treePackObjects = GAME_OBJECTS.filter((entry) => entry.id.startsWith('tree_pack_'));
+    expect(treePackObjects).toHaveLength(221);
+    expect(treePackObjects.every((entry) => (
+      entry.category === 'decoration'
+      && entry.decorationPaletteGroup === 'trees'
+      && entry.displayScale === 0.5
+      && entry.bodyWidth === 0
+      && entry.bodyHeight === 0
+    ))).toBe(true);
+    expect(treePackObjects.filter((entry) => entry.treePaletteFamily === 'bonsai')).toHaveLength(21);
+    expect(treePackObjects.filter((entry) => entry.treePaletteFamily === 'basic')).toHaveLength(20);
+    expect(treePackObjects.filter((entry) => entry.decorationPaletteSubgroup === 'woodland')).toHaveLength(80);
+    expect(treePackObjects.filter((entry) => entry.decorationPaletteSubgroup === 'tropical')).toHaveLength(60);
+    expect(treePackObjects.filter((entry) => entry.decorationPaletteSubgroup === 'blossom')).toHaveLength(20);
+    expect(treePackObjects.filter((entry) => entry.decorationPaletteSubgroup === 'bonsai')).toHaveLength(41);
+    expect(treePackObjects.filter((entry) => entry.decorationPaletteSubgroup === 'winter')).toHaveLength(20);
+    expect(GAME_OBJECTS.filter((entry) => entry.decorationPaletteGroup === 'trees')).toHaveLength(226);
+    expect(GAME_OBJECTS.filter((entry) => entry.treePaletteFamily === 'classic')).toHaveLength(5);
+    expect(GAME_OBJECTS.filter((entry) => entry.decorationPaletteGroup === 'vines')).toHaveLength(9);
     expect(isClimbableObjectConfig(GAME_OBJECTS.find((entry) => entry.id === 'ladder'))).toBe(true);
     expect(isClimbableObjectConfig(GAME_OBJECTS.find((entry) => entry.id === 'jungle_loop_vine'))).toBe(false);
 
