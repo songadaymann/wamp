@@ -1,40 +1,42 @@
 import type {
   LaunchStatsActivityRange,
-  LaunchStatsActivityRangeKey,
   LaunchStatsActivityWindow,
   LaunchStatsRecentCourseReference,
   LaunchStatsRecentRoomReference,
   LaunchStatsRecentSummary,
   LaunchStatsPartykitStatus,
   LaunchStatsResponse,
-  LaunchStatsSignupSource,
   LaunchStatsTotals,
   PartyKitLaunchStats,
 } from '../../../admin/model';
-import { JAM_SLUG } from '../../../jam/model';
 import type { Env } from '../core/types';
-import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
 import {
   sqlHasLegacyGeneratedDisplayNamePrefix,
   sqlUserIdIsLegacyGeneratedOnly,
 } from '../generatedUsers/leaderboardIsolation';
+import {
+  ACTIVITY_RANGES,
+  buildLaunchStatsActorKey,
+  compareIsoDesc,
+  DEFAULT_ACTIVITY_RANGE_KEY,
+  hoursAgoIso,
+  inferSignupSource,
+  maxIso,
+  minutesAgoIso,
+  parseOptionalInteger,
+  stripRoomReferenceAccumulator,
+  type LaunchStatsRoomReferenceAccumulator,
+} from './launchStatsModel';
+import {
+  countExpandedRoomAwareQuery,
+  countExpandedRoomQuery,
+  countJamRegistrations,
+  countLaunchStatsQuery,
+} from './launchStatsStore';
 
 const METRICS_ROOM_ID = '__launch-stats__';
 const RECENT_SUMMARY_LIMIT = 80;
 const TOP_REFERENCE_LIMIT = 3;
-const DEFAULT_ACTIVITY_RANGE_KEY: LaunchStatsActivityRangeKey = 'last24h';
-const ACTIVITY_RANGES: Array<{
-  key: LaunchStatsActivityRangeKey;
-  label: string;
-  description: string;
-  hours: number;
-}> = [
-  { key: 'last12h', label: 'Last 12h', description: 'the last 12 hours', hours: 12 },
-  { key: 'last24h', label: 'Last 24h', description: 'the last 24 hours', hours: 24 },
-  { key: 'last3d', label: 'Last 3d', description: 'the last 3 days', hours: 72 },
-  { key: 'last7d', label: 'Last 7d', description: 'the last 7 days', hours: 168 },
-  { key: 'last30d', label: 'Last 30d', description: 'the last 30 days', hours: 720 },
-];
 
 export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
   const now = new Date();
@@ -77,14 +79,6 @@ export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
 
 function isPartykitConfigured(env: Env): boolean {
   return Boolean(env.PARTYKIT_HOST?.trim() && env.PARTYKIT_INTERNAL_TOKEN?.trim());
-}
-
-function minutesAgoIso(base: Date, minutes: number): string {
-  return new Date(base.getTime() - minutes * 60 * 1000).toISOString();
-}
-
-function hoursAgoIso(base: Date, hours: number): string {
-  return new Date(base.getTime() - hours * 60 * 60 * 1000).toISOString();
 }
 
 async function loadActivityRange(
@@ -143,15 +137,15 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
     agents,
     agentTokens,
   ] = await Promise.all([
-    countQuery(env, 'SELECT COUNT(*) AS count FROM users'),
+    countLaunchStatsQuery(env, 'SELECT COUNT(*) AS count FROM users'),
     countJamRegistrations(env),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM sessions WHERE expires_at > ?', [nowIso]),
-    countQuery(env, 'SELECT COUNT(DISTINCT guest_user_id) AS count FROM guest_visits'),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM guest_visits'),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM rooms'),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM rooms WHERE published_json IS NOT NULL'),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM room_runs'),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM courses'),
+    countLaunchStatsQuery(env, 'SELECT COUNT(*) AS count FROM sessions WHERE expires_at > ?', [nowIso]),
+    countLaunchStatsQuery(env, 'SELECT COUNT(DISTINCT guest_user_id) AS count FROM guest_visits'),
+    countLaunchStatsQuery(env, 'SELECT COUNT(*) AS count FROM guest_visits'),
+    countLaunchStatsQuery(env, 'SELECT COUNT(*) AS count FROM rooms'),
+    countLaunchStatsQuery(env, 'SELECT COUNT(*) AS count FROM rooms WHERE published_json IS NOT NULL'),
+    countLaunchStatsQuery(env, 'SELECT COUNT(*) AS count FROM room_runs'),
+    countLaunchStatsQuery(env, 'SELECT COUNT(*) AS count FROM courses'),
     countExpandedRoomAwareQuery(
       env,
       `
@@ -169,9 +163,9 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
     ),
     countExpandedRoomQuery(env, 'SELECT COUNT(*) AS count FROM expanded_rooms WHERE archived_at IS NULL'),
     countExpandedRoomQuery(env, 'SELECT COUNT(*) AS count FROM expanded_room_runs'),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM chat_messages'),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM agents'),
-    countQuery(env, 'SELECT COUNT(*) AS count FROM agent_tokens'),
+    countLaunchStatsQuery(env, 'SELECT COUNT(*) AS count FROM chat_messages'),
+    countLaunchStatsQuery(env, 'SELECT COUNT(*) AS count FROM agents'),
+    countLaunchStatsQuery(env, 'SELECT COUNT(*) AS count FROM agent_tokens'),
   ]);
 
   return {
@@ -191,16 +185,6 @@ async function loadTotals(env: Env, nowIso: string): Promise<LaunchStatsTotals> 
     agents,
     agentTokens,
   };
-}
-
-async function countJamRegistrations(env: Env): Promise<number> {
-  const row = await env.JAM_DB.prepare(
-    'SELECT COUNT(*) AS count FROM jam_registrations WHERE jam_slug = ?',
-  )
-    .bind(JAM_SLUG)
-    .first<{ count: number | string | null }>();
-
-  return Number(row?.count ?? 0);
 }
 
 async function loadActivityWindow(
@@ -228,7 +212,7 @@ async function loadActivityWindow(
     expandedRoomRunStarts,
     expandedRoomRunFinishes,
   ] = await Promise.all([
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -238,7 +222,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -249,7 +233,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COUNT(DISTINCT guest_user_id) AS count
@@ -258,7 +242,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COALESCE(SUM(heartbeat_count), 0) AS count
@@ -267,7 +251,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COUNT(DISTINCT guest_user_id) AS count
@@ -277,7 +261,7 @@ async function loadActivityWindow(
       `,
       [sinceIso, sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COALESCE(SUM(play_seconds), 0) AS count
@@ -286,7 +270,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COALESCE(SUM(edit_seconds), 0) AS count
@@ -295,7 +279,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -306,7 +290,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -316,7 +300,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -330,7 +314,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -389,7 +373,7 @@ async function loadActivityWindow(
       `,
       [sinceIso],
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -402,7 +386,7 @@ async function loadActivityWindow(
       `,
       [sinceIso]
     ),
-    countQuery(
+    countLaunchStatsQuery(
       env,
       `
         SELECT COUNT(*) AS count
@@ -604,10 +588,6 @@ interface RoomPlayTopRoomRow {
   room_rank: number;
 }
 
-interface RoomReferenceAccumulator extends LaunchStatsRecentRoomReference {
-  lastAt: string;
-}
-
 interface CourseCoordinateAccumulator {
   x: number;
   y: number;
@@ -683,18 +663,6 @@ async function loadSignupSummaries(
       topRooms: [],
       topCourses: [],
     }));
-}
-
-function inferSignupSource(row: SignupSummaryRow): LaunchStatsSignupSource {
-  if (row.wallet_address?.trim()) {
-    return 'wallet';
-  }
-
-  if (row.email?.trim()) {
-    return 'email';
-  }
-
-  return 'unknown';
 }
 
 async function loadGuestVisitSummaries(
@@ -1039,7 +1007,7 @@ async function loadRoomBuildSummaries(
       actorDisplayName: string;
       claimCount: number;
       roomPublishCount: number;
-      topRooms: Map<string, RoomReferenceAccumulator>;
+      topRooms: Map<string, LaunchStatsRoomReferenceAccumulator>;
     }
   >();
 
@@ -1048,7 +1016,7 @@ async function loadRoomBuildSummaries(
       continue;
     }
 
-    const actorKey = buildActorKey(row.actor_user_id, row.actor_display_name);
+    const actorKey = buildLaunchStatsActorKey(row.actor_user_id, row.actor_display_name);
     const summary =
       summaries.get(actorKey) ??
       {
@@ -1057,7 +1025,7 @@ async function loadRoomBuildSummaries(
         actorDisplayName: row.actor_display_name,
         claimCount: 0,
         roomPublishCount: 0,
-        topRooms: new Map<string, RoomReferenceAccumulator>(),
+        topRooms: new Map<string, LaunchStatsRoomReferenceAccumulator>(),
       };
 
     summary.at = maxIso(summary.at, row.at);
@@ -1167,7 +1135,7 @@ async function loadCourseBuildSummaries(
       continue;
     }
 
-    const actorKey = buildActorKey(row.actor_user_id, row.actor_display_name);
+    const actorKey = buildLaunchStatsActorKey(row.actor_user_id, row.actor_display_name);
     const summary =
       summaries.get(actorKey) ??
       {
@@ -1276,41 +1244,6 @@ async function loadCourseBuildSummaries(
     .slice(0, RECENT_SUMMARY_LIMIT);
 }
 
-function buildActorKey(actorUserId: string | null, actorDisplayName: string): string {
-  return actorUserId?.trim() ? `user:${actorUserId}` : `name:${actorDisplayName.trim().toLowerCase()}`;
-}
-
-function stripRoomReferenceAccumulator(
-  value: RoomReferenceAccumulator
-): LaunchStatsRecentRoomReference {
-  return {
-    roomId: value.roomId,
-    roomTitle: value.roomTitle,
-    roomX: value.roomX,
-    roomY: value.roomY,
-    attemptCount: value.attemptCount,
-    claimCount: value.claimCount,
-    publishCount: value.publishCount,
-  };
-}
-
-function compareIsoDesc(left: string, right: string): number {
-  return right.localeCompare(left);
-}
-
-function maxIso(current: string, candidate: string): string {
-  return candidate > current ? candidate : current;
-}
-
-function parseOptionalInteger(value: number | string | null | undefined): number | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.round(parsed) : null;
-}
-
 async function loadPartykitStatus(env: Env): Promise<LaunchStatsPartykitStatus> {
   if (!isPartykitConfigured(env)) {
     return {
@@ -1379,46 +1312,4 @@ function buildPartykitStatsUrl(env: Env): string | null {
   return `${protocol}://${host}/parties/${encodeURIComponent(party)}/${encodeURIComponent(
     METRICS_ROOM_ID
   )}/stats`;
-}
-
-async function countQuery(env: Env, query: string, bindings: unknown[] = []): Promise<number> {
-  const prepared = env.DB.prepare(query);
-  const row =
-    bindings.length > 0
-      ? await prepared.bind(...bindings).first<{ count: number | string | null }>()
-      : await prepared.first<{ count: number | string | null }>();
-
-  return Number(row?.count ?? 0);
-}
-
-async function countExpandedRoomQuery(
-  env: Env,
-  query: string,
-  bindings: unknown[] = [],
-): Promise<number> {
-  try {
-    return await countQuery(env, query, bindings);
-  } catch (error) {
-    if (isExpandedRoomSchemaMissingError(error)) {
-      return 0;
-    }
-    throw error;
-  }
-}
-
-async function countExpandedRoomAwareQuery(
-  env: Env,
-  query: string,
-  bindings: unknown[],
-  fallbackQuery: string,
-  fallbackBindings: unknown[] = bindings,
-): Promise<number> {
-  try {
-    return await countQuery(env, query, bindings);
-  } catch (error) {
-    if (isExpandedRoomSchemaMissingError(error)) {
-      return countQuery(env, fallbackQuery, fallbackBindings);
-    }
-    throw error;
-  }
 }
