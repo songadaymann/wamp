@@ -90,7 +90,8 @@ describe('authoring catalog', () => {
     expect(objects.get('boygame_heart')).toMatchObject({ category: 'collectible', frameCount: 9, behavior: 'animated' });
     expect(objects.get('boygame_wall_torch')).toMatchObject({ category: 'decoration', frameCount: 4, behavior: 'animated' });
 
-    expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_heart')?.animationFrames).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_coin')?.animationFrames).toEqual([0, 1, 3, 1]);
+    expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_heart')?.animationFrames).toEqual([0, 1, 4, 5, 6, 7, 6, 5, 4, 1]);
     expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_wall_torch')?.lightEmission).toMatchObject({
       glowColor: 0x9bbc0f,
       flicker: expect.any(Object),

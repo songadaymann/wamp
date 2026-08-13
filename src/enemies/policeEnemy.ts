@@ -107,6 +107,37 @@ export function getPoliceAnimationKey(
   return `${objectId}-${action}`;
 }
 
+/**
+ * Source-frame registration compensation for actions whose supplied art is not
+ * centered on the same standing axis as the idle sheet. Values are source
+ * pixels and are mirrored by the runtime when the sprite faces left.
+ */
+export function getPoliceAnimationVisualShiftX(
+  objectId: string,
+  animationKey: string,
+): number {
+  if (objectId === POLICE_PATROLMAN_OBJECT_ID) {
+    if (animationKey === getPoliceAnimationKey(objectId, 'shoot')) {
+      return 24;
+    }
+    if (animationKey === getPoliceAnimationKey(objectId, 'reload')) {
+      return 6;
+    }
+  }
+
+  if (
+    objectId === POLICEWOMAN_OBJECT_ID
+    && (
+      animationKey === getPoliceAnimationKey(objectId, 'shoot')
+      || animationKey === getPoliceAnimationKey(objectId, 'reload')
+    )
+  ) {
+    return 2;
+  }
+
+  return 0;
+}
+
 export const POLICE_ENEMY_EXTRA_SPRITESHEETS: PoliceEnemySpritesheet[] = [
   { key: POLICE_SPRITESHEETS.police_patrolman.run, path: 'assets/enemies/police_patrolman/run.png', frameWidth: 64, frameHeight: 64 },
   { key: POLICE_SPRITESHEETS.police_patrolman['jump-rise'], path: 'assets/enemies/police_patrolman/jump.png', frameWidth: 64, frameHeight: 64 },

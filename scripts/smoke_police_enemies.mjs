@@ -113,8 +113,13 @@ try {
   assert.ok(initialPolice.some((enemy) => enemy.id === 'policewoman' && enemy.policeBehaviorMode === 'patrol' && enemy.policePatrolShoots === true));
 
   let observedHunterState = null;
+  let observedHunterReloadState = null;
+  let observedHunterPostReloadState = null;
+  let observedHunterSecondAttackState = null;
   let observedPatrolShooterState = null;
   let lastObservedState = playState;
+  let lastHunterAiState = null;
+  let hunterAttackCycleCount = 0;
   const runtimeSamples = [];
   const startedAt = Date.now();
   while (Date.now() - startedAt < 4000) {
@@ -125,6 +130,13 @@ try {
     const patrolShooter = police.find(
       (enemy) => enemy.id === 'policewoman' && enemy.policeBehaviorMode === 'patrol' && enemy.policePatrolShoots === true,
     );
+    if (hunter?.aiState === 'attack' && lastHunterAiState !== 'attack') {
+      hunterAttackCycleCount += 1;
+      if (hunterAttackCycleCount >= 2 && !observedHunterSecondAttackState) {
+        observedHunterSecondAttackState = state;
+      }
+    }
+    lastHunterAiState = hunter?.aiState ?? null;
     const sample = {
       player: state?.activeScene?.player
         ? { x: state.activeScene.player.x, y: state.activeScene.player.y }
@@ -137,18 +149,48 @@ try {
     if (JSON.stringify(sample) !== JSON.stringify(runtimeSamples.at(-1))) {
       runtimeSamples.push(sample);
     }
-    if (hunter?.aiState === 'attack') {
+    if (hunter?.aiState === 'attack' && !observedHunterState) {
       observedHunterState = state;
+      await page.screenshot({ path: path.join(outputDir, 'police-hunter-shoot-registration.png') });
+    }
+    if (
+      hunter?.aiState === 'cooldown'
+      && hunter?.animationKey === 'police_patrolman-reload'
+      && !observedHunterReloadState
+    ) {
+      observedHunterReloadState = state;
+      await page.screenshot({ path: path.join(outputDir, 'police-hunter-reload-registration.png') });
+    }
+    if (
+      observedHunterReloadState
+      && hunter?.aiState !== 'attack'
+      && hunter?.aiState !== 'cooldown'
+      && hunter?.originX === 0.5
+      && !observedHunterPostReloadState
+    ) {
+      observedHunterPostReloadState = state;
     }
     if (patrolShooter?.aiState === 'attack') {
       observedPatrolShooterState = state;
     }
-    if (observedHunterState && observedPatrolShooterState) {
+    if (
+      observedHunterState
+      && observedHunterReloadState
+      && observedHunterPostReloadState
+      && observedHunterSecondAttackState
+      && observedPatrolShooterState
+    ) {
       break;
     }
     await page.waitForTimeout(50);
   }
-  if (!observedHunterState || !observedPatrolShooterState) {
+  if (
+    !observedHunterState
+    || !observedHunterReloadState
+    || !observedHunterPostReloadState
+    || !observedHunterSecondAttackState
+    || !observedPatrolShooterState
+  ) {
     summary.runtime = {
       police: policeObjects(lastObservedState),
       samples: runtimeSamples,
@@ -156,7 +198,40 @@ try {
     await page.screenshot({ path: path.join(outputDir, 'police-test-play-failed.png') });
   }
   assert.ok(observedHunterState, 'Hunter police enemy never reached its ranged attack state.');
+  assert.ok(observedHunterReloadState, 'Hunter police enemy never reached its reload state.');
+  assert.ok(observedHunterPostReloadState, 'Hunter police enemy never restored its standing registration after reload.');
+  assert.ok(observedHunterSecondAttackState, 'Hunter police enemy never completed a second firing cycle.');
   assert.ok(observedPatrolShooterState, 'Patrol+Shoot police enemy never reached its ranged attack state.');
+
+  const hunterAttack = policeObjects(observedHunterState).find(
+    (enemy) => enemy.id === 'police_patrolman' && enemy.policeBehaviorMode === 'hunter',
+  );
+  const hunterReload = policeObjects(observedHunterReloadState).find(
+    (enemy) => enemy.id === 'police_patrolman' && enemy.policeBehaviorMode === 'hunter',
+  );
+  const hunterPostReload = policeObjects(observedHunterPostReloadState).find(
+    (enemy) => enemy.id === 'police_patrolman' && enemy.policeBehaviorMode === 'hunter',
+  );
+  const hunterSecondAttack = policeObjects(observedHunterSecondAttackState).find(
+    (enemy) => enemy.id === 'police_patrolman' && enemy.policeBehaviorMode === 'hunter',
+  );
+  assert.ok(hunterAttack);
+  assert.ok(hunterReload);
+  assert.ok(hunterPostReload);
+  assert.ok(hunterSecondAttack);
+  assert.equal(hunterAttack.originX, hunterAttack.flipX ? 0.875 : 0.125);
+  assert.equal(hunterReload.originX, hunterReload.flipX ? 0.5938 : 0.4063);
+  assert.equal(hunterPostReload.originX, 0.5);
+  assert.equal(hunterSecondAttack.originX, hunterSecondAttack.flipX ? 0.875 : 0.125);
+  assert.equal(hunterAttack.bodyCenterX, hunterReload.bodyCenterX);
+  assert.equal(
+    Number((hunterAttack.bodyCenterX - hunterAttack.x).toFixed(2)),
+    Number((hunterPostReload.bodyCenterX - hunterPostReload.x).toFixed(2)),
+  );
+  assert.equal(
+    Number((hunterAttack.bodyCenterX - hunterAttack.x).toFixed(2)),
+    Number((hunterSecondAttack.bodyCenterX - hunterSecondAttack.x).toFixed(2)),
+  );
 
   summary.runtime = {
     police: policeObjects(lastObservedState).map((enemy) => ({
@@ -173,6 +248,9 @@ try {
       patrolShooter: policeObjects(observedPatrolShooterState).find(
         (enemy) => enemy.id === 'policewoman' && enemy.policeBehaviorMode === 'patrol',
       ),
+      hunterReload,
+      hunterPostReload,
+      hunterSecondAttack,
     },
   };
   await setEarlyWorldTilesVisibility(page, false);

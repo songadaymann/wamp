@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import {
+  getObjectRuntimeBodyOffset,
   isSolidRuntimeObjectConfig,
   objectCollidesWithWorld,
   ROOM_HEIGHT,
@@ -16,6 +17,7 @@ import {
 } from '../../../enemies/swordsmanAi';
 import {
   getPoliceAnimationKey,
+  getPoliceAnimationVisualShiftX,
   isPoliceEnemyObjectId,
 } from '../../../enemies/policeEnemy';
 import {
@@ -2870,7 +2872,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         attackAnimationKey,
       )
     ) {
-      liveObject.sprite.play(attackAnimationKey, false);
+      this.playSwordsmanAnimation(liveObject, attackAnimationKey, false);
     }
     if (isPolice) {
       this.options.spawnEnemyBullet(loadedRoom, liveObject);
@@ -2891,12 +2893,44 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     liveObject.runtime.actionStartedAt = this.options.getCurrentTime();
   }
 
-  private playSwordsmanAnimation(liveObject: LoadedRoomObject, animationKey: string): void {
+  private playSwordsmanAnimation(
+    liveObject: LoadedRoomObject,
+    animationKey: string,
+    ignoreIfPlaying = true,
+  ): void {
     if (!isAnimationSafelyPlayable(this.options.scene.anims, animationKey)) {
       return;
     }
 
-    liveObject.sprite.play(animationKey, true);
+    liveObject.sprite.play(animationKey, ignoreIfPlaying);
+    this.applyPoliceAnimationRegistration(liveObject, animationKey);
+  }
+
+  private applyPoliceAnimationRegistration(
+    liveObject: LoadedRoomObject,
+    animationKey: string,
+  ): void {
+    if (!isPoliceEnemyObjectId(liveObject.config.id)) {
+      return;
+    }
+
+    const body = this.getDynamicBody(liveObject.sprite);
+    if (!body) {
+      return;
+    }
+
+    const frameWidth = liveObject.config.frameWidth;
+    const visualShiftX = getPoliceAnimationVisualShiftX(
+      liveObject.config.id,
+      animationKey,
+    );
+    const mirroredShiftX = liveObject.sprite.flipX ? visualShiftX : -visualShiftX;
+    const displayOriginX = frameWidth * 0.5 + mirroredShiftX;
+    const [baseBodyOffsetX, baseBodyOffsetY] = getObjectRuntimeBodyOffset(liveObject.config);
+
+    liveObject.sprite.setOrigin(displayOriginX / frameWidth, liveObject.sprite.originY);
+    body.setOffset(baseBodyOffsetX + mirroredShiftX, baseBodyOffsetY);
+    body.updateFromGameObject();
   }
 
   private getEnemyAnimationKey(

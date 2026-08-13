@@ -14,6 +14,7 @@ import {
   getPlacedPoliceBehaviorMode,
   getPlacedPolicePatrolShoots,
   getPoliceAnimationKey,
+  getPoliceAnimationVisualShiftX,
   isPoliceEnemyObjectId,
   normalizePoliceBehaviorMode,
 } from './policeEnemy';
@@ -47,6 +48,25 @@ describe('police enemy model', () => {
       );
     }
     expect(POLICE_ENEMY_EXTRA_SPRITESHEETS).toHaveLength(12);
+  });
+
+  it('compensates the supplied shoot and reload frame registration', () => {
+    expect(getPoliceAnimationVisualShiftX(
+      'police_patrolman',
+      getPoliceAnimationKey('police_patrolman', 'shoot')!,
+    )).toBe(24);
+    expect(getPoliceAnimationVisualShiftX(
+      'police_patrolman',
+      getPoliceAnimationKey('police_patrolman', 'reload')!,
+    )).toBe(6);
+    expect(getPoliceAnimationVisualShiftX(
+      'policewoman',
+      getPoliceAnimationKey('policewoman', 'shoot')!,
+    )).toBe(2);
+    expect(getPoliceAnimationVisualShiftX(
+      'policewoman',
+      getPoliceAnimationKey('policewoman', 'idle')!,
+    )).toBe(0);
   });
 
   it('bottom-aligns preview art and collision bodies to the placement tile', () => {

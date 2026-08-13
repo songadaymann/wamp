@@ -158,6 +158,28 @@ try {
   assert.equal(runtimeState.activeScene.lighting?.rendererPath, 'webgl');
   assert.ok(runtimeState.activeScene.lighting?.staticObjectEmitterCount >= 1);
   assert.ok(runtimeState.activeScene.lighting?.glowEmitterCount >= 1);
+  const observedAnimationFrames = {
+    boygame_coin: new Set(),
+    boygame_coin_small: new Set(),
+    boygame_heart: new Set(),
+  };
+  const animationSampleStartedAt = Date.now();
+  while (Date.now() - animationSampleStartedAt < 1400) {
+    const sampleState = await readState(page);
+    for (const object of boygameObjects(sampleState)) {
+      const frames = observedAnimationFrames[object.id];
+      if (frames && object.animationFrame !== null) {
+        frames.add(Number(object.animationFrame));
+      }
+    }
+    await page.waitForTimeout(40);
+  }
+  assert.ok(observedAnimationFrames.boygame_coin.size >= 3);
+  assert.ok(observedAnimationFrames.boygame_coin_small.size >= 3);
+  assert.ok(observedAnimationFrames.boygame_heart.size >= 6);
+  assert.deepEqual([...observedAnimationFrames.boygame_coin].sort(), [0, 1, 3]);
+  assert.deepEqual([...observedAnimationFrames.boygame_coin_small].sort(), [0, 1, 3]);
+  assert.deepEqual([...observedAnimationFrames.boygame_heart].sort(), [0, 1, 4, 5, 6, 7]);
   summary.runtime = {
     scene: runtimeState.activeScene.scene,
     mode: runtimeState.activeScene.mode,
@@ -167,6 +189,9 @@ try {
       .filter((object) => object.animationKey)
       .map((object) => object.id),
     lighting: runtimeState.activeScene.lighting,
+    animationFramesObserved: Object.fromEntries(
+      Object.entries(observedAnimationFrames).map(([id, frames]) => [id, [...frames].sort()]),
+    ),
   };
   await setEarlyWorldTilesVisibility(page, false);
   await page.screenshot({ path: path.join(outputDir, 'boygame-test-play.png') });
