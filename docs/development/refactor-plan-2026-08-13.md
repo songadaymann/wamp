@@ -127,7 +127,7 @@ never rewritten. No production deployment or production-data mutation is part of
 | T06 | Movement and swordsman state-machine decomposition | Candidate: frozen at `d730e31`; manual QA pending on port 4606 |
 | T07 | Backdrop and camera ownership | Candidate: frozen at `a811551`; manual QA pending on port 4607 |
 | T08 | Room-comments data, composer, and presentation owners | Candidate source at `10c88d5`; full 168-file / 1,193-test gate, DOM contract, focused 16-test suite, and safety Canvas comment-pin smoke passed; manual QA pending on port 4608 |
-| T09 | Editor document, history, and presentation core | Pending |
+| T09 | Editor document, history, and presentation core | Candidate source at `54c7f4a`; pure history, clipboard planning, placed-object mutations, room-goal documents, document presentation, and shared ordinary/Expanded inspector view models are extracted behind stable runtime/scene façades. Direct runtime characterization also found and fixed tile Redo applying the erased value. Focused 22-test coverage and the complete 175-file / 1,213-test suite pass; lint, TypeScript, generated bindings, production build, DOM contract, and diff checks are green. Manual QA pending on port 4609 |
 | T10 | World-streaming model, selection policy, and readiness | Pending |
 | T11 | World-streaming preparation and teardown lifecycles | Pending |
 | T12 | PvP combat geometry, ledger, presentation, and coordinator | Pending |
