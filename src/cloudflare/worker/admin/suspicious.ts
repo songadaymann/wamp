@@ -399,7 +399,7 @@ async function loadSuspiciousAnalysis(
   applyRunBurstSignals(accumulators, combinedRunsByUser, 60 * 60 * 1_000, RUN_BURST_60M_THRESHOLD, RUN_BURST_60M_HIGH_THRESHOLD, 'run_burst_60m');
   applyRepeatSignals(accumulators, combinedRunsByUser);
   applyPointBurstSignals(accumulators, pointEvents);
-  applyNewAccountSpikeSignals(accumulators);
+  applyNewAccountSpikeSignals(accumulators, Date.now());
 
   const items: SuspiciousUserCase[] = [];
   const byUserId = new Map<string, SuspiciousUserCase>();

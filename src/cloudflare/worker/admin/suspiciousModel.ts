@@ -306,12 +306,12 @@ export function applyPointBurstSignals(
 }
 
 export function applyNewAccountSpikeSignals(
-  accumulators: Map<string, UserAccumulator>
+  accumulators: Map<string, UserAccumulator>,
+  nowMs: number
 ): void {
-  const now = Date.now();
   for (const accumulator of accumulators.values()) {
     const createdAtMs = Date.parse(accumulator.userCreatedAt);
-    if (!Number.isFinite(createdAtMs) || now - createdAtMs > NEW_ACCOUNT_MAX_AGE_MS) {
+    if (!Number.isFinite(createdAtMs) || nowMs - createdAtMs > NEW_ACCOUNT_MAX_AGE_MS) {
       continue;
     }
 

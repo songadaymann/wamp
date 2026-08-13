@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { SuspiciousRunCase, SuspiciousSignal, SuspiciousUserCase } from '../../../admin/model';
 import {
   applyNewAccountSpikeSignals,
@@ -18,10 +18,6 @@ import {
   type CombinedRunBase,
   type UserAccumulator,
 } from './suspiciousModel';
-
-afterEach(() => {
-  vi.useRealTimers();
-});
 
 describe('suspicious analysis thresholds', () => {
   it('treats exactly one second as valid and flags only faster runs as high severity', () => {
@@ -154,15 +150,14 @@ describe('suspicious analysis thresholds', () => {
   });
 
   it('uses inclusive new-account point/run thresholds and a strict age cutoff', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-13T16:00:00.000Z'));
+    const nowMs = Date.parse('2026-08-13T16:00:00.000Z');
     const accumulators = new Map<string, UserAccumulator>();
     createAccumulator(accumulators, 'points', '2026-08-12T16:00:00.000Z', 1_000, 0);
     createAccumulator(accumulators, 'runs', '2026-08-13T15:00:00.000Z', 0, 20);
     createAccumulator(accumulators, 'old', '2026-08-12T15:59:59.999Z', 10_000, 100);
     createAccumulator(accumulators, 'below', '2026-08-13T15:00:00.000Z', 999, 19);
 
-    applyNewAccountSpikeSignals(accumulators);
+    applyNewAccountSpikeSignals(accumulators, nowMs);
 
     expect(accumulators.get('points')!.signals.has('new_account_spike')).toBe(true);
     expect(accumulators.get('runs')!.signals.has('new_account_spike')).toBe(true);
@@ -218,6 +213,56 @@ describe('suspicious analysis thresholds', () => {
 });
 
 describe('suspicious severity and ordering', () => {
+  it('reuses an accumulator while applying the original identity and stats precedence', () => {
+    const accumulators = new Map<string, UserAccumulator>();
+    const original = createAccumulator(accumulators, 'user-merge');
+    original.recentPoints = 25;
+
+    const merged = getOrCreateAccumulator(accumulators, 'user-merge', {
+      userDisplayName: '',
+      userCreatedAt: '',
+      email: null,
+      walletAddress: '0xabc',
+      ogpId: 'ogp-1',
+      playerId: null,
+      stats: {
+        userId: 'user-merge',
+        userDisplayName: 'Ignored Stats Name',
+        totalPoints: 200,
+        totalScore: 0,
+        totalDeaths: 0,
+        totalCollectibles: 0,
+        totalEnemiesDefeated: 0,
+        totalCheckpoints: 0,
+        totalRoomsPublished: 0,
+        completedRuns: 9,
+        failedRuns: 0,
+        abandonedRuns: 0,
+        pvpWins: 0,
+        pvpLosses: 0,
+        pvpDraws: 0,
+        bestScore: 0,
+        fastestClearMs: null,
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      },
+    });
+
+    expect(merged).toBe(original);
+    expect(merged).toEqual(
+      expect.objectContaining({
+        userDisplayName: 'user-merge',
+        userCreatedAt: '2026-08-01T00:00:00.000Z',
+        email: 'user-merge@example.test',
+        walletAddress: '0xabc',
+        ogpId: 'ogp-1',
+        totalPoints: 200,
+        completedRuns: 9,
+        recentPoints: 25,
+      })
+    );
+    expect(accumulators).toHaveLength(1);
+  });
+
   it('sorts signals, run cases, and users by the exact severity and tie-break rules', () => {
     const signals: SuspiciousSignal[] = [
       signal('point_burst_5m', 'medium', 'Zulu'),
