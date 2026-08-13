@@ -4,7 +4,8 @@ Jungle Vines asset credits
 LunarDrift Studios
 Source: https://lunadrift-studios.itch.io/jungle-vines-background-2d-pixel-pack
 Used for: the six-layer Jungle Vines parallax background, the Jungle Vines
-decorative tileset, and the seven small vine-sprig objects.
+decorative tileset, 37 individually placeable modular decorations cropped from
+the occupied atlas cells, and the seven small vine-sprig objects.
 License note from the source page: personal and commercial use and modification
 are allowed; credit and a link back to the source page are required.
 

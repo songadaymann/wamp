@@ -95,34 +95,80 @@ try {
   });
 
   await page.click('.palette-tab[data-mode="objects"]');
-  await page.fill('#object-search-input', 'Jungle');
+  await page.click('.obj-cat-tab[data-category="decoration"]');
+  const decorationGroupCounts = {};
+  for (const group of ['vines', 'trees', 'plants', 'rocks', 'props', 'sky']) {
+    await page.click(`[data-decoration-group="${group}"]`);
+    await page.waitForFunction(
+      (activeGroup) => document.querySelector(`[data-decoration-group="${activeGroup}"]`)?.classList.contains('active'),
+      group,
+    );
+    decorationGroupCounts[group] = await page.locator('#object-grid .object-item').count();
+  }
+  assert.deepEqual(decorationGroupCounts, {
+    vines: 46,
+    trees: 5,
+    plants: 3,
+    rocks: 5,
+    props: 9,
+    sky: 2,
+  });
+
+  await page.click('[data-decoration-group="trees"]');
+  await setCanvasVisibility(page, false);
+  await page.locator('#object-palette-section').screenshot({
+    path: path.join(outputDir, 'tree-object-palette-panel.png'),
+  });
+  await setCanvasVisibility(page, true);
+
+  await page.click('[data-decoration-group="vines"]');
+  await page.click('[data-vine-category="modular"]');
   await page.waitForFunction(
-    () => document.querySelectorAll('.object-item[data-object-id^="jungle_"]').length === 15,
+    () => document.querySelectorAll('.object-item[data-object-id^="jungle_vine_piece_"]').length === 37,
   );
-  summary.objects = await page.locator('.object-item[data-object-id^="jungle_"]').evaluateAll(
+  summary.objects = await page.locator('.object-item[data-object-id^="jungle_vine_piece_"]').evaluateAll(
     (items) => items.map((item) => item.getAttribute('data-object-id')),
   );
-  assert.equal(summary.objects.filter((id) => id.startsWith('jungle_climbing_vine_')).length, 6);
-  assert.equal(summary.objects.filter((id) => id.startsWith('jungle_vine_sprig_')).length, 7);
-  assert.ok(summary.objects.includes('jungle_hanging_creepers'));
-  assert.ok(summary.objects.includes('jungle_loop_vine'));
+  assert.equal(summary.objects.length, 37);
+  assert.ok(summary.objects.includes('jungle_vine_piece_00'));
+  assert.ok(summary.objects.includes('jungle_vine_piece_63'));
+  summary.decorationGroupCounts = decorationGroupCounts;
   await setCanvasVisibility(page, false);
   await page.locator('#object-palette-section').screenshot({
     path: path.join(outputDir, 'jungle-object-palette-panel.png'),
   });
   await setCanvasVisibility(page, true);
 
+  await page.click('.layer-btn[data-layer="background"]');
+  await page.click('.object-item[data-object-id="jungle_vine_piece_00"]');
+  const gameCanvas = await page.evaluate(() => Array.from(document.querySelectorAll('#game-container canvas'))
+    .map((canvas) => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    })
+    .filter((rect) => rect.width > 0 && rect.height > 0)
+    .sort((left, right) => right.width * right.height - left.width * left.height)[0] ?? null);
+  assert.ok(gameCanvas, 'Game canvas was not visible for decoration placement.');
+  await page.mouse.click(
+    gameCanvas.x + gameCanvas.width * 0.54,
+    gameCanvas.y + gameCanvas.height * 0.34,
+  );
+  await waitForState(page, (state) => state?.activeScene?.roomDirty === true, 'vine decoration placement');
+  await setEarlyWorldTilesVisibility(page, false);
+  await page.screenshot({ path: path.join(outputDir, 'jungle-modular-deco-placed.png') });
+
   await page.click('#btn-test-play');
   const runtimeState = await waitForState(
     page,
     (state) => state?.activeScene?.scene === 'overworld-play'
       && state?.activeScene?.mode === 'play'
-      && jungleObjects(state).length === 15
+      && jungleObjects(state).length === 16
       && state?.activeScene?.currentRoomBackground?.background === 'jungle_vines'
       && state?.activeScene?.currentRoomBackground?.layerCount === 6,
     'Jungle test play',
   );
   const runtimeObjects = jungleObjects(runtimeState);
+  assert.ok(runtimeObjects.some((object) => object.id === 'jungle_vine_piece_00'));
   const climbingVine = runtimeObjects.find((object) => object.id === 'jungle_climbing_vine_1');
   assert.ok(climbingVine, 'Climbing vine was missing from test play.');
   await setEarlyWorldTilesVisibility(page, false);

@@ -44,6 +44,10 @@ const BOYGAME_TORCH_LIGHT_EMISSION = Object.freeze({
 
 export type ObjectCategory = 'collectible' | 'hazard' | 'enemy' | 'npc' | 'platform' | 'decoration' | 'interactive';
 export type ObjectInteraction = 'pushable';
+export const DECORATION_PALETTE_GROUPS = ['vines', 'trees', 'plants', 'rocks', 'props', 'sky'] as const;
+export const VINE_PALETTE_SUBGROUPS = ['modular', 'large', 'sprigs'] as const;
+export type DecorationPaletteGroup = (typeof DECORATION_PALETTE_GROUPS)[number];
+export type VinePaletteSubgroup = (typeof VINE_PALETTE_SUBGROUPS)[number];
 
 export interface GameObjectConfig {
   id: string;
@@ -94,6 +98,10 @@ export interface GameObjectConfig {
   interaction?: ObjectInteraction;
   /** allows the player to climb this object like a ladder */
   climbable?: boolean;
+  /** first-level editor grouping used inside the built-in Deco palette */
+  decorationPaletteGroup?: DecorationPaletteGroup;
+  /** optional second-level grouping for large decoration families */
+  decorationPaletteSubgroup?: VinePaletteSubgroup;
   /** kind marker for object configs generated from custom sprite definitions */
   customSpriteKind?: CustomSpriteKind | null;
   /** false for actors that keep overlap bodies but pass through terrain and solid objects */
@@ -150,16 +158,41 @@ const JUNGLE_CLIMBING_VINE_OBJECTS: GameObjectConfig[] = [
   { id: 'jungle_climbing_vine_6', name: 'Climbing Vine F', category: 'interactive', path: 'assets/objects/jungle/pixelina/climbing-vine-6.png', frameWidth: 17, frameHeight: 94, frameCount: 1, fps: 0, bodyWidth: 17, bodyHeight: 90, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', climbable: true, description: 'A long broad-leaf climbable vine using Pixelina top, middle, and bottom segments.' },
 ];
 
+const JUNGLE_VINE_MODULAR_LOCAL_INDICES = [
+  ...Array.from({ length: 32 }, (_, index) => index),
+  35, 36, 45, 54, 63,
+];
+
+const JUNGLE_VINE_MODULAR_OBJECTS: GameObjectConfig[] = JUNGLE_VINE_MODULAR_LOCAL_INDICES.map(
+  (localIndex, sequenceIndex) => ({
+    id: `jungle_vine_piece_${String(localIndex).padStart(2, '0')}`,
+    name: `Hanging Vine Piece ${String(sequenceIndex + 1).padStart(2, '0')}`,
+    category: 'decoration',
+    path: `assets/objects/jungle/lunardrift/modular/vine-piece-${String(localIndex).padStart(2, '0')}.png`,
+    frameWidth: 16,
+    frameHeight: 16,
+    frameCount: 1,
+    fps: 0,
+    bodyWidth: 0,
+    bodyHeight: 0,
+    behavior: 'static',
+    decorationPaletteGroup: 'vines',
+    decorationPaletteSubgroup: 'modular',
+    description: `Non-colliding modular hanging-vine decoration from Jungle Vines tile ${localIndex}.`,
+  }),
+);
+
 const JUNGLE_VINE_DECORATION_OBJECTS: GameObjectConfig[] = [
-  { id: 'jungle_hanging_creepers', name: 'Hanging Jungle Creepers', category: 'decoration', path: 'assets/objects/jungle/pixelina/hanging-creepers.png', frameWidth: 77, frameHeight: 55, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'A wide curtain of hanging moss and creepers.' },
-  { id: 'jungle_loop_vine', name: 'Looping Jungle Vine', category: 'decoration', path: 'assets/objects/jungle/pixelina/loop-vine.png', frameWidth: 146, frameHeight: 50, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'A long looping vine for ceilings and broad foreground spans.' },
-  { id: 'jungle_vine_sprig_1', name: 'Jungle Vine Sprig A', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_1.png', frameWidth: 16, frameHeight: 17, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
-  { id: 'jungle_vine_sprig_2', name: 'Jungle Vine Sprig B', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_2.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
-  { id: 'jungle_vine_sprig_3', name: 'Jungle Vine Sprig C', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_3.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
-  { id: 'jungle_vine_sprig_4', name: 'Jungle Vine Sprig D', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_4.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
-  { id: 'jungle_vine_sprig_5', name: 'Jungle Vine Sprig E', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_5.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
-  { id: 'jungle_vine_sprig_6', name: 'Jungle Vine Sprig F', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_6.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
-  { id: 'jungle_vine_sprig_7', name: 'Jungle Vine Sprig G', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_7.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
+  ...JUNGLE_VINE_MODULAR_OBJECTS,
+  { id: 'jungle_hanging_creepers', name: 'Hanging Jungle Creepers', category: 'decoration', path: 'assets/objects/jungle/pixelina/hanging-creepers.png', frameWidth: 77, frameHeight: 55, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'large', description: 'A wide curtain of hanging moss and creepers.' },
+  { id: 'jungle_loop_vine', name: 'Looping Jungle Vine', category: 'decoration', path: 'assets/objects/jungle/pixelina/loop-vine.png', frameWidth: 146, frameHeight: 50, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'large', description: 'A long looping vine for ceilings and broad foreground spans.' },
+  { id: 'jungle_vine_sprig_1', name: 'Jungle Vine Sprig A', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_1.png', frameWidth: 16, frameHeight: 17, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'sprigs', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_2', name: 'Jungle Vine Sprig B', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_2.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'sprigs', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_3', name: 'Jungle Vine Sprig C', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_3.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'sprigs', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_4', name: 'Jungle Vine Sprig D', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_4.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'sprigs', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_5', name: 'Jungle Vine Sprig E', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_5.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'sprigs', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_6', name: 'Jungle Vine Sprig F', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_6.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'sprigs', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_7', name: 'Jungle Vine Sprig G', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_7.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'vines', decorationPaletteSubgroup: 'sprigs', description: 'Small modular LunarDrift vine sprig.' },
 ];
 export const SWITCH_BLOCK_OBJECT_IDS = [
   SWITCH_BLOCK_ON_OBJECT_ID,
@@ -270,36 +303,36 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'treasure_chest', name: 'Treasure Chest', category: 'platform', path: 'assets/objects/treasure_chest.png', frameWidth: 32, frameHeight: 32, frameCount: 4, fps: 0, defaultFrame: 0, bodyWidth: 28, bodyHeight: 18, bodyOffsetX: 2, bodyOffsetY: 14, behavior: 'static', description: 'Solid chest prop. Good for treasure rooms.' },
   { id: 'log_wall',    name: 'Log Wall',    category: 'platform',    path: 'assets/deco/log_wall.png',       frameWidth: 32, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 28, bodyHeight: 44, bodyOffsetX: 2, bodyOffsetY: 4, behavior: 'static',   description: 'Tall wooden wall segment. Solid collision.' },
   { id: 'cage',        name: 'Cage',        category: 'platform',    path: 'assets/objects/cage.png',        frameWidth: 18, frameHeight: 32, frameCount: 5,  fps: 0,  defaultFrame: 0, facingDirection: 'right', bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 1, bodyOffsetY: 16, behavior: 'static', description: 'Tall cage prop. Solid collision.' },
-  { id: 'sign',        name: 'Sign',        category: 'decoration',  path: 'assets/objects/sign.png',        frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative signpost. No collision.' },
-  { id: 'sign_arrow',  name: 'Arrow Sign',  category: 'decoration',  path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative arrow sign. No collision.' },
+  { id: 'sign',        name: 'Sign',        category: 'decoration',  path: 'assets/objects/sign.png',        frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'props', description: 'Decorative signpost. No collision.' },
+  { id: 'sign_arrow',  name: 'Arrow Sign',  category: 'decoration',  path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'props', description: 'Decorative arrow sign. No collision.' },
   { id: 'ladder',      name: 'Ladder',      category: 'interactive', path: 'assets/objects/ladder.png',      frameWidth: 16, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 51, bodyOffsetX: 0, bodyOffsetY: 13, previewWidth: 16, previewHeight: 51, previewOffsetX: 0, previewOffsetY: 13, behavior: 'static', climbable: true, description: 'Climbable surface. Press up to climb.' },
   ...JUNGLE_CLIMBING_VINE_OBJECTS,
   { id: 'floor_trigger', name: 'Pressure Plate', category: 'interactive', path: 'assets/objects/floor_trigger.png', frameWidth: 16, frameHeight: 16, frameCount: 2, fps: 0, defaultFrame: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Link this plate to a door, cage, or chest, then press it with a player, monster, or crate.' },
-  { id: 'button',      name: 'Button',      category: 'decoration',  path: 'assets/objects/button.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 0,  defaultFrame: 0, bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Floor button prop. No collision.' },
+  { id: 'button',      name: 'Button',      category: 'decoration',  path: 'assets/objects/button.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 0,  defaultFrame: 0, bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'props', description: 'Floor button prop. No collision.' },
 
   // ── Decorations ──
-  { id: 'boygame_chest', name: 'Boygame Chest', category: 'decoration', path: 'assets/objects/boygame/chest.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Closed Boygame treasure chest decoration.' },
-  { id: 'boygame_chest_open', name: 'Boygame Open Chest', category: 'decoration', path: 'assets/objects/boygame/chest_open.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Open Boygame treasure chest decoration.' },
-  { id: 'boygame_sign_left', name: 'Boygame Left Sign', category: 'decoration', path: 'assets/objects/boygame/sign_arrow_left.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Boygame arrow sign pointing left.' },
-  { id: 'boygame_sign_right', name: 'Boygame Right Sign', category: 'decoration', path: 'assets/objects/boygame/sign_arrow_right.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Boygame arrow sign pointing right.' },
-  { id: 'boygame_boot', name: 'Boygame Boot', category: 'decoration', path: 'assets/objects/boygame/boot.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small Boygame boot decoration.' },
-  { id: 'boygame_tree', name: 'Boygame Tree', category: 'decoration', path: 'assets/objects/boygame/tree.png', frameWidth: 32, frameHeight: 32, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Large Boygame tree decoration.' },
-  { id: 'boygame_rocks', name: 'Boygame Rocks', category: 'decoration', path: 'assets/objects/boygame/rocks.png', frameWidth: 32, frameHeight: 32, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Large Boygame rock pile decoration.' },
-  { id: 'boygame_rock_shard', name: 'Boygame Rock Shard', category: 'decoration', path: 'assets/objects/boygame/rock_shard.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small Boygame rock shard decoration.' },
-  { id: 'boygame_flower', name: 'Boygame Flower', category: 'decoration', path: 'assets/objects/boygame/flower.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small Boygame flower decoration.' },
-  { id: 'boygame_grass', name: 'Boygame Grass', category: 'decoration', path: 'assets/objects/boygame/grass.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Boygame grass clump decoration.' },
-  { id: 'boygame_pebbles', name: 'Boygame Pebbles', category: 'decoration', path: 'assets/objects/boygame/pebbles.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Boygame ground pebbles decoration.' },
-  { id: 'boygame_rune_stone', name: 'Boygame Rune Stone', category: 'decoration', path: 'assets/objects/boygame/rune_stone.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Carved Boygame rune stone decoration.' },
-  { id: 'boygame_wall_torch', name: 'Boygame Wall Torch', category: 'decoration', path: 'assets/objects/boygame/wall_torch.png', frameWidth: 16, frameHeight: 16, frameCount: 4, fps: 9, bodyWidth: 0, bodyHeight: 0, behavior: 'animated', lightEmission: BOYGAME_TORCH_LIGHT_EMISSION, description: 'Animated Boygame wall torch with a flickering light in dark rooms.' },
+  { id: 'boygame_chest', name: 'Boygame Chest', category: 'decoration', path: 'assets/objects/boygame/chest.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'props', description: 'Closed Boygame treasure chest decoration.' },
+  { id: 'boygame_chest_open', name: 'Boygame Open Chest', category: 'decoration', path: 'assets/objects/boygame/chest_open.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'props', description: 'Open Boygame treasure chest decoration.' },
+  { id: 'boygame_sign_left', name: 'Boygame Left Sign', category: 'decoration', path: 'assets/objects/boygame/sign_arrow_left.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'props', description: 'Boygame arrow sign pointing left.' },
+  { id: 'boygame_sign_right', name: 'Boygame Right Sign', category: 'decoration', path: 'assets/objects/boygame/sign_arrow_right.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'props', description: 'Boygame arrow sign pointing right.' },
+  { id: 'boygame_boot', name: 'Boygame Boot', category: 'decoration', path: 'assets/objects/boygame/boot.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'props', description: 'Small Boygame boot decoration.' },
+  { id: 'boygame_tree', name: 'Boygame Tree', category: 'decoration', path: 'assets/objects/boygame/tree.png', frameWidth: 32, frameHeight: 32, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'trees', description: 'Large Boygame tree decoration.' },
+  { id: 'boygame_rocks', name: 'Boygame Rocks', category: 'decoration', path: 'assets/objects/boygame/rocks.png', frameWidth: 32, frameHeight: 32, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'rocks', description: 'Large Boygame rock pile decoration.' },
+  { id: 'boygame_rock_shard', name: 'Boygame Rock Shard', category: 'decoration', path: 'assets/objects/boygame/rock_shard.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'rocks', description: 'Small Boygame rock shard decoration.' },
+  { id: 'boygame_flower', name: 'Boygame Flower', category: 'decoration', path: 'assets/objects/boygame/flower.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'plants', description: 'Small Boygame flower decoration.' },
+  { id: 'boygame_grass', name: 'Boygame Grass', category: 'decoration', path: 'assets/objects/boygame/grass.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'plants', description: 'Boygame grass clump decoration.' },
+  { id: 'boygame_pebbles', name: 'Boygame Pebbles', category: 'decoration', path: 'assets/objects/boygame/pebbles.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'rocks', description: 'Boygame ground pebbles decoration.' },
+  { id: 'boygame_rune_stone', name: 'Boygame Rune Stone', category: 'decoration', path: 'assets/objects/boygame/rune_stone.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', decorationPaletteGroup: 'rocks', description: 'Carved Boygame rune stone decoration.' },
+  { id: 'boygame_wall_torch', name: 'Boygame Wall Torch', category: 'decoration', path: 'assets/objects/boygame/wall_torch.png', frameWidth: 16, frameHeight: 16, frameCount: 4, fps: 9, bodyWidth: 0, bodyHeight: 0, behavior: 'animated', lightEmission: BOYGAME_TORCH_LIGHT_EMISSION, decorationPaletteGroup: 'props', description: 'Animated Boygame wall torch with a flickering light in dark rooms.' },
   ...JUNGLE_VINE_DECORATION_OBJECTS,
-  { id: 'bush',        name: 'Bush',        category: 'decoration',  path: 'assets/deco/bush.png',           frameWidth: 32, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative bush. No collision.' },
-  { id: 'rock',        name: 'Rock',        category: 'decoration',  path: 'assets/deco/rock.png',           frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative rock. No collision.' },
-  { id: 'tree',        name: 'Tree',        category: 'decoration',  path: 'assets/deco/tree.png',           frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative tree. No collision.' },
-  { id: 'tree_b',      name: 'Tree B',      category: 'decoration',  path: 'assets/deco/tree_b.png',         frameWidth: 48, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Large decorative tree. No collision.' },
-  { id: 'tree_c',      name: 'Tree C',      category: 'decoration',  path: 'assets/deco/tree_c.png',         frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Extra palm-like tree decoration.' },
-  { id: 'tree_trunk',  name: 'Tree Trunk',  category: 'decoration',  path: 'assets/deco/tree_trunk.png',     frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Cut stump or trunk decoration.' },
-  { id: 'sun',         name: 'Sun',         category: 'decoration',  path: 'assets/deco/sun.png',            frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 4,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'animated', description: 'Animated sun. Purely decorative.' },
-  { id: 'clouds_deco', name: 'Clouds',      category: 'decoration',  path: 'assets/deco/clouds.png',         frameWidth: 48, frameHeight: 14, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Cloud decoration. No collision.' },
+  { id: 'bush',        name: 'Bush',        category: 'decoration',  path: 'assets/deco/bush.png',           frameWidth: 32, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'plants', description: 'Decorative bush. No collision.' },
+  { id: 'rock',        name: 'Rock',        category: 'decoration',  path: 'assets/deco/rock.png',           frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'rocks', description: 'Decorative rock. No collision.' },
+  { id: 'tree',        name: 'Tree',        category: 'decoration',  path: 'assets/deco/tree.png',           frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', description: 'Decorative tree. No collision.' },
+  { id: 'tree_b',      name: 'Tree B',      category: 'decoration',  path: 'assets/deco/tree_b.png',         frameWidth: 48, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', description: 'Large decorative tree. No collision.' },
+  { id: 'tree_c',      name: 'Tree C',      category: 'decoration',  path: 'assets/deco/tree_c.png',         frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', description: 'Extra palm-like tree decoration.' },
+  { id: 'tree_trunk',  name: 'Tree Trunk',  category: 'decoration',  path: 'assets/deco/tree_trunk.png',     frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'trees', description: 'Cut stump or trunk decoration.' },
+  { id: 'sun',         name: 'Sun',         category: 'decoration',  path: 'assets/deco/sun.png',            frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 4,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'animated', decorationPaletteGroup: 'sky', description: 'Animated sun. Purely decorative.' },
+  { id: 'clouds_deco', name: 'Clouds',      category: 'decoration',  path: 'assets/deco/clouds.png',         frameWidth: 48, frameHeight: 14, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   decorationPaletteGroup: 'sky', description: 'Cloud decoration. No collision.' },
 ];
 
 export function getObjectById(id: string): GameObjectConfig | undefined {
