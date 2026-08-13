@@ -75,11 +75,18 @@ import { OverworldChunkPreviewRenderer } from './chunkPreviewRenderer';
 import {
   OverworldPreviewCache,
   isRoomSnapshotReferenceChangedError,
+} from './previewCache';
+import {
   isStreamingRoomCandidateRenderable,
   type PlayableRoomSource,
   type RenderableRoom,
   type StreamingRoomCandidate,
-} from './previewCache';
+} from './worldStreamingModel';
+import {
+  collectVisibleRoomCandidates,
+  planFullRoomRetention,
+  selectNearestPreviewRoomIds,
+} from './worldStreamingPolicy';
 import {
   computeOverworldPreviewSelection,
   getChunkPreviewTileSize,
@@ -126,6 +133,7 @@ import {
 } from './frameWorkCoordinator';
 import { RoomArtifactCache } from './roomArtifactCache';
 import { RoomTexturePreparation } from './roomTexturePreparation';
+import { DynamicOverlayReadinessCoordinator } from './dynamicOverlayReadinessCoordinator';
 import {
   getDevicePerformanceMode,
   type DevicePerformanceMode,
@@ -142,7 +150,6 @@ const TRANSITION_PREPARED_FULL_ROOM_RETAIN_MS = 1_500;
 const PREDICTED_DESTINATION_INTENT_TTL_MS = 1_500;
 const PLAYABLE_ROOM_PREFETCH_RETRY_DELAY_MS = 1_000;
 const DEFERRED_PREVIEW_RENDER_DELAY_MS = 32;
-const DYNAMIC_OVERLAY_RETRY_DELAYS_MS = [500, 1_000, 2_000, 5_000, 10_000] as const;
 const NORMAL_ROOM_ARTIFACT_CACHE_BYTES = 24 * 1024 * 1024;
 const REDUCED_ROOM_ARTIFACT_CACHE_BYTES = 8 * 1024 * 1024;
 const FRAME_TARGET_MS = 1_000 / 60;
@@ -408,12 +415,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private compactWorldActive = false;
   private fullPreviewUpgradeGeneration = -1;
   private startupDynamicOverlayGeneration = -1;
-  private dynamicOverlayReadinessGeneration = -1;
-  private dynamicOverlayReadinessAbortController: AbortController | null = null;
+  private readonly dynamicOverlayReadiness = new DynamicOverlayReadinessCoordinator();
   private legacyCompactRefreshGeneration = -1;
   private legacyCompactRefreshScheduled = false;
-  private dynamicOverlayRetryAttempt = 0;
-  private dynamicOverlayRetryTimer: Phaser.Time.TimerEvent | null = null;
   private deferredPreviewRooms: RoomSnapshot[] = [];
   private deferredPreviewRenderTimer: Phaser.Time.TimerEvent | null = null;
   private deferredPreviewRenderGeneration = -1;
@@ -959,7 +963,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
               }
               if (!this.isLoadGenerationCurrent(generation)) return;
               this.startupDynamicOverlayGeneration = -1;
-              this.dynamicOverlayRetryAttempt = 0;
               this.cancelDynamicOverlayRetry();
             },
             onDeferredError: (error) => this.scheduleDynamicOverlayRetry(
@@ -2636,97 +2639,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private collectVisibleRoomCandidates(): Map<string, StreamingRoomCandidate> {
-    const candidates = new Map<string, StreamingRoomCandidate>();
-    const roomBounds = this.loadedRoomBounds;
-    if (!roomBounds) {
-      return candidates;
-    }
-
-    for (const summary of this.roomSummariesById.values()) {
-      candidates.set(summary.id, {
-        id: summary.id,
-        coordinates: { ...summary.coordinates },
-        summary,
-        draft: null,
-        sharedPreview: null,
-        allowFullRoomLoad: summary.state === 'published' || summary.state === 'claimed_unpublished',
-        source: summary.state === 'published' ? 'published' : 'saved_construction_draft',
-      });
-    }
-
-    for (const draftRoom of this.draftRoomsById.values()) {
-      if (!isWithinRoomBounds(draftRoom.coordinates, roomBounds)) {
-        continue;
-      }
-
-      const existing = candidates.get(draftRoom.id);
-      candidates.set(draftRoom.id, {
-        id: draftRoom.id,
-        coordinates: { ...draftRoom.coordinates },
-        summary: existing?.summary ?? null,
-        draft: draftRoom,
-        sharedPreview: null,
-        allowFullRoomLoad: true,
-        source: 'local_draft',
-      });
-    }
-
-    for (const overrideRoom of this.transientRoomOverridesById.values()) {
-      if (!isWithinRoomBounds(overrideRoom.coordinates, roomBounds)) {
-        continue;
-      }
-
-      const existing = candidates.get(overrideRoom.id);
-      candidates.set(overrideRoom.id, {
-        id: overrideRoom.id,
-        coordinates: { ...overrideRoom.coordinates },
-        summary: existing?.summary ?? null,
-        draft: overrideRoom,
-        sharedPreview: null,
-        allowFullRoomLoad: true,
-        source: 'local_draft',
-      });
-    }
-
-    for (const previewRoom of this.presencePreviewRoomsById.values()) {
-      if (!isWithinRoomBounds(previewRoom.coordinates, roomBounds)) {
-        continue;
-      }
-
-      const existing = candidates.get(previewRoom.id);
-      if (existing?.draft) {
-        continue;
-      }
-
-      candidates.set(previewRoom.id, {
-        id: previewRoom.id,
-        coordinates: { ...previewRoom.coordinates },
-        summary: existing?.summary ?? null,
-        draft: null,
-        sharedPreview: previewRoom,
-        allowFullRoomLoad:
-          existing?.summary?.state === 'claimed_unpublished' ||
-          (!existing?.summary && previewRoom.status === 'draft'),
-        source: 'live_construction_preview',
-      });
-    }
-
-    for (const optimisticRoom of this.optimisticPublishedRoomsById.values()) {
-      if (!isWithinRoomBounds(optimisticRoom.coordinates, roomBounds)) continue;
-      const existing = candidates.get(optimisticRoom.id);
-      if (existing?.draft || existing?.sharedPreview) continue;
-      candidates.set(optimisticRoom.id, {
-        id: optimisticRoom.id,
-        coordinates: { ...optimisticRoom.coordinates },
-        summary: existing?.summary ?? createPublishedRoomSummary(optimisticRoom),
-        draft: optimisticRoom,
-        sharedPreview: null,
-        allowFullRoomLoad: true,
-        source: 'published',
-      });
-    }
-
-    return candidates;
+    return collectVisibleRoomCandidates({
+      roomBounds: this.loadedRoomBounds,
+      summaries: this.roomSummariesById.values(),
+      draftRooms: this.draftRoomsById.values(),
+      transientRoomOverrides: this.transientRoomOverridesById.values(),
+      presencePreviewRooms: this.presencePreviewRoomsById.values(),
+      optimisticPublishedRooms: this.optimisticPublishedRoomsById.values(),
+    });
   }
 
   private computePreviewSelection(
@@ -2880,15 +2800,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     fullRoomIds: Set<string>,
     previewCount: number,
   ): Set<string> {
-    const focus = this.getFocusCoordinates();
-    const sortedPreviewIds = [...previewRoomIds].sort((leftId, rightId) => {
-      const left = roomCandidates.get(leftId)?.coordinates;
-      const right = roomCandidates.get(rightId)?.coordinates;
-      const leftDistance = left ? Math.abs(left.x - focus.x) + Math.abs(left.y - focus.y) : Number.MAX_SAFE_INTEGER;
-      const rightDistance = right ? Math.abs(right.x - focus.x) + Math.abs(right.y - focus.y) : Number.MAX_SAFE_INTEGER;
-      return leftDistance - rightDistance || leftId.localeCompare(rightId);
+    return selectNearestPreviewRoomIds({
+      roomCandidates,
+      previewRoomIds,
+      fullRoomIds,
+      focusCoordinates: this.getFocusCoordinates(),
+      previewCount,
     });
-    return new Set([...fullRoomIds, ...sortedPreviewIds.slice(0, previewCount)]);
   }
 
   private async loadDistantPreviewsProgressively(
@@ -2996,37 +2914,24 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private beginDynamicOverlayReadiness(generation: number): void {
-    this.cancelDynamicOverlayReadiness();
-    this.dynamicOverlayReadinessGeneration = generation;
-    this.dynamicOverlayReadinessAbortController = new AbortController();
+    this.dynamicOverlayReadiness.beginReadiness(generation);
   }
 
   private cancelDynamicOverlayReadiness(): void {
-    this.dynamicOverlayReadinessAbortController?.abort();
-    this.dynamicOverlayReadinessAbortController = null;
-    this.dynamicOverlayReadinessGeneration = -1;
+    this.dynamicOverlayReadiness.cancelReadiness();
   }
 
   private async waitForDynamicOverlayTargetLod(generation: number): Promise<boolean> {
-    const abortController = this.dynamicOverlayReadinessAbortController;
-    if (
-      !abortController
-      || this.dynamicOverlayReadinessGeneration !== generation
-      || !this.isLoadGenerationCurrent(generation)
-      || !this.worldTileController.isBrowseCutoverActive()
-    ) return false;
-    const ready = await this.worldTileController.waitForTargetLodReady(
-      this.options.scene.cameras.main,
-      abortController.signal,
-    );
-    const current = ready
-      && this.dynamicOverlayReadinessGeneration === generation
-      && this.isLoadGenerationCurrent(generation)
-      && this.worldTileController.isBrowseCutoverActive();
-    if (!current && this.isLoadGenerationCurrent(generation)) {
-      this.clearStartupDynamicOverlayGeneration(generation);
-    }
-    return current;
+    return this.dynamicOverlayReadiness.waitForTargetLod({
+      generation,
+      isGenerationCurrent: () => this.isLoadGenerationCurrent(generation),
+      isBrowseCutoverActive: () => this.worldTileController.isBrowseCutoverActive(),
+      waitForTargetLodReady: (signal) => this.worldTileController.waitForTargetLodReady(
+        this.options.scene.cameras.main,
+        signal,
+      ),
+      onCurrentReadinessStopped: () => this.clearStartupDynamicOverlayGeneration(generation),
+    });
   }
 
   private handleDynamicOverlayReadinessStopped(generation: number): void {
@@ -3105,30 +3010,22 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   ): void {
     if (!this.isLoadGenerationCurrent(generation)) return;
     console.warn('Deferred construction preview loading stopped; retaining world tiles and retrying.', error);
-    if (this.dynamicOverlayRetryTimer) return;
+    if (this.dynamicOverlayReadiness.hasRetryScheduled()) return;
 
     this.startupDynamicOverlayGeneration = generation;
     if (detail === 'full') {
       this.fullPreviewUpgradeGeneration = generation;
     }
-    const retryIndex = Math.min(
-      this.dynamicOverlayRetryAttempt,
-      DYNAMIC_OVERLAY_RETRY_DELAYS_MS.length - 1,
-    );
-    const retryDelay = DYNAMIC_OVERLAY_RETRY_DELAYS_MS[retryIndex];
-    this.dynamicOverlayRetryAttempt += 1;
-    this.dynamicOverlayRetryTimer = this.options.scene.time.delayedCall(retryDelay, () => {
-      this.dynamicOverlayRetryTimer = null;
-      if (
-        !this.isLoadGenerationCurrent(generation)
-        || !this.worldTileController.isBrowseCutoverActive()
-      ) {
-        if (generation === this.loadGeneration) {
-          this.startupDynamicOverlayGeneration = -1;
-        }
-        return;
-      }
-      this.retryCurrentDynamicOverlays(generation, detail);
+    this.dynamicOverlayReadiness.scheduleRetry({
+      generation,
+      schedule: (delayMs, callback) => this.options.scene.time.delayedCall(delayMs, callback),
+      isGenerationCurrent: () => this.isLoadGenerationCurrent(generation),
+      isGenerationIdentityCurrent: () => generation === this.loadGeneration,
+      isBrowseCutoverActive: () => this.worldTileController.isBrowseCutoverActive(),
+      onCurrentRetryStopped: () => {
+        this.startupDynamicOverlayGeneration = -1;
+      },
+      retry: () => this.retryCurrentDynamicOverlays(generation, detail),
     });
   }
 
@@ -3188,9 +3085,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private cancelDynamicOverlayRetry(): void {
-    this.dynamicOverlayRetryTimer?.remove(false);
-    this.dynamicOverlayRetryTimer = null;
-    this.dynamicOverlayRetryAttempt = 0;
+    this.dynamicOverlayReadiness.cancelRetry();
   }
 
   private requestFullPreviewUpgradeIfNeeded(
@@ -3255,7 +3150,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         tiledBrowseCutover,
       );
       if (this.isLoadGenerationCurrent(generation)) {
-        this.dynamicOverlayRetryAttempt = 0;
         this.cancelDynamicOverlayRetry();
       }
     })().catch((error) => {
@@ -5776,53 +5670,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   private getRetainedFullRoomIds(targetFullRoomIds: Set<string>): Set<string> {
     const protectedRoomIds = this.getProtectedLoadedFullRoomIds(targetFullRoomIds);
-    const effectiveTargetRoomIds = new Set<string>(targetFullRoomIds);
-    for (const roomId of protectedRoomIds) {
-      effectiveTargetRoomIds.add(roomId);
-    }
-
-    const retainedRoomIds = new Set<string>(effectiveTargetRoomIds);
     const now = this.options.scene.time.now;
     const policy = this.getResolvedPerformancePolicy();
     const retainReleaseGrace = policy.activeRuntimeProfile !== 'reduced'
       || policy.selectedMode === 'battery-saver';
-    let nextReleaseAt: number | null = null;
-
-    for (const roomId of effectiveTargetRoomIds) {
-      this.fullRoomReleaseAtById.delete(roomId);
-    }
-
-    for (const roomId of Array.from(this.fullRoomReleaseAtById.keys())) {
-      if (!this.loadedFullRoomsById.has(roomId)) {
-        this.fullRoomReleaseAtById.delete(roomId);
-      }
-    }
-
-    for (const roomId of this.loadedFullRoomsById.keys()) {
-      if (effectiveTargetRoomIds.has(roomId)) {
-        continue;
-      }
-      if (this.pendingFullRoomTeardownsById.has(roomId)) {
-        continue;
-      }
-
-      if (!retainReleaseGrace) {
-        this.fullRoomReleaseAtById.delete(roomId);
-        continue;
-      }
-
-      const releaseAt = this.fullRoomReleaseAtById.get(roomId) ?? (now + FULL_ROOM_RELEASE_GRACE_MS);
-      this.fullRoomReleaseAtById.set(roomId, releaseAt);
-      if (releaseAt > now) {
-        retainedRoomIds.add(roomId);
-        nextReleaseAt = nextReleaseAt === null ? releaseAt : Math.min(nextReleaseAt, releaseAt);
-      } else {
-        this.fullRoomReleaseAtById.delete(roomId);
-      }
-    }
-
-    this.scheduleFullRoomReleaseCleanup(nextReleaseAt, now);
-    return retainedRoomIds;
+    const retention = planFullRoomRetention({
+      targetRoomIds: targetFullRoomIds,
+      protectedRoomIds,
+      loadedRoomIds: this.loadedFullRoomsById.keys(),
+      pendingTeardownRoomIds: new Set(this.pendingFullRoomTeardownsById.keys()),
+      releaseAtByRoomId: this.fullRoomReleaseAtById,
+      now,
+      retainReleaseGrace,
+      releaseGraceMs: FULL_ROOM_RELEASE_GRACE_MS,
+    });
+    this.fullRoomReleaseAtById = retention.releaseAtByRoomId;
+    this.scheduleFullRoomReleaseCleanup(retention.nextReleaseAt, now);
+    return retention.retainedRoomIds;
   }
 
   private getProtectedLoadedFullRoomIds(targetFullRoomIds: ReadonlySet<string>): Set<string> {
