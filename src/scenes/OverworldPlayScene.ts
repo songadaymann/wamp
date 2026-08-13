@@ -196,7 +196,6 @@ import {
 } from './overworld/combatController';
 import {
   OverworldMovementController,
-  type OverworldMovementControllerState,
 } from './overworld/movementController';
 import { OverworldQuicksandController } from './overworld/quicksandController';
 import {
@@ -428,16 +427,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     E: Phaser.Input.Keyboard.Key;
   };
   private cameraToggleKey!: Phaser.Input.Keyboard.Key;
-  private isCrouching = false;
-  private isButtStomping = false;
-  private buttStompFlipUntil = 0;
-  private buttStompImpactGraceUntil = 0;
-  private activeCrateInteractionMode: 'push' | 'pull' | null = null;
-  private activeCrateInteractionFacing: -1 | 1 | null = null;
-  private weaponKnockbackVelocityX = 0;
-  private weaponKnockbackUntil = 0;
   private externalLaunchGraceUntil = 0;
-  private ladderClimbSfxPlaying = false;
 
   private loadingText!: Phaser.GameObjects.Text;
   private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
@@ -525,19 +515,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private courseEditorReturnTarget: OverworldPlaySceneData['courseEditorReturnTarget'] = null;
   private editorPlaytestReturnTarget: OverworldPlaySceneData['editorPlaytestReturnTarget'] = null;
 
-  private coyoteTime = 0;
-  private jumpBuffered = false;
-  private jumpBufferTime = 0;
-  private wallContactSide: -1 | 1 | 0 = 0;
-  private wallContactGraceSide: -1 | 1 | 0 = 0;
-  private wallContactGraceUntil = 0;
-  private isWallSliding = false;
-  private wallJumpLockUntil = 0;
-  private wallJumpActive = false;
-  private wallJumpDirection: -1 | 1 | 0 = 0;
-  private wallJumpChainActive = false;
-  private isClimbingLadder = false;
-  private activeLadderKey: string | null = null;
   private lastMovementInput = {
     horizontalInput: 0,
     verticalInput: 0,
@@ -715,10 +692,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       getSpecialTileEnvironmentForBody: (body, currentGravityDirection) =>
         this.specialTilesController.getEnvironmentForBody(body, currentGravityDirection),
       swordsmanTraversalPlannerMode: this.getSwordsmanTraversalPlannerMode(),
-      isPlayerClimbingLadder: () => this.isClimbingLadder,
+      isPlayerClimbingLadder: () => this.movementController.isClimbingLadder(),
       isLadderDropRequested: () => this.isLadderDropRequested(),
-      isPlayerButtStomping: () =>
-        this.isButtStomping || this.time.now <= this.buttStompImpactGraceUntil,
+      isPlayerButtStomping: () => this.movementController.isButtStompImpactActive(),
       handlePlayerButtStompImpact: (bounceVelocity) =>
         this.movementController.handleButtStompImpact(bounceVelocity),
       getCurrentTime: () => this.time.now,
@@ -828,8 +804,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.time.now + durationMs
         );
       },
-      isPlayerButtStomping: () =>
-        this.isButtStomping || this.time.now <= this.buttStompImpactGraceUntil,
+      isPlayerButtStomping: () => this.movementController.isButtStompImpactActive(),
       handlePlayerButtStompImpact: (bounceVelocity) =>
         this.movementController.handleButtStompImpact(bounceVelocity),
       handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
@@ -1505,16 +1480,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         getSpecialTileEnvironment: () => this.specialTilesController.getPlayerEnvironment(),
         getLastMovementInput: () => this.lastMovementInput,
         getQuicksandVisualSink: () => this.quicksandController.getVisualSink(),
-        getWeaponKnockbackUntil: () => this.weaponKnockbackUntil,
-        getIsClimbingLadder: () => this.isClimbingLadder,
-        getIsWallSliding: () => this.isWallSliding,
-        getWallContactSide: () => this.wallContactSide,
-        getWallJumpActive: () => this.wallJumpActive,
-        getIsCrouching: () => this.isCrouching,
-        getIsButtStomping: () => this.isButtStomping,
-        getButtStompFlipUntil: () => this.buttStompFlipUntil,
-        getActiveCrateInteractionMode: () => this.activeCrateInteractionMode,
-        getActiveCrateInteractionFacing: () => this.activeCrateInteractionFacing,
+        getMovementPresentationState: () =>
+          this.movementController.getPresentationState(),
         getGroundedOverride: () => this.playerPresentationGroundedOverride,
         getCurrentAttackAnimation: (now) => this.combatController.getCurrentAttackAnimation(now),
         playLandingDustFx: (x, y, facing) => this.fxController?.playLandingDustFx(x, y, facing),
@@ -1529,143 +1496,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         runVelocityThreshold: 12,
       },
     );
-    const movementState: OverworldMovementControllerState = {
-      get isCrouching() {
-        return thisScene.isCrouching;
-      },
-      set isCrouching(value: boolean) {
-        thisScene.isCrouching = value;
-      },
-      get isButtStomping() {
-        return thisScene.isButtStomping;
-      },
-      set isButtStomping(value: boolean) {
-        thisScene.isButtStomping = value;
-      },
-      get buttStompFlipUntil() {
-        return thisScene.buttStompFlipUntil;
-      },
-      set buttStompFlipUntil(value: number) {
-        thisScene.buttStompFlipUntil = value;
-      },
-      get buttStompImpactGraceUntil() {
-        return thisScene.buttStompImpactGraceUntil;
-      },
-      set buttStompImpactGraceUntil(value: number) {
-        thisScene.buttStompImpactGraceUntil = value;
-      },
-      get activeCrateInteractionMode() {
-        return thisScene.activeCrateInteractionMode;
-      },
-      set activeCrateInteractionMode(value: 'push' | 'pull' | null) {
-        thisScene.activeCrateInteractionMode = value;
-      },
-      get activeCrateInteractionFacing() {
-        return thisScene.activeCrateInteractionFacing;
-      },
-      set activeCrateInteractionFacing(value: -1 | 1 | null) {
-        thisScene.activeCrateInteractionFacing = value;
-      },
-      get weaponKnockbackVelocityX() {
-        return thisScene.weaponKnockbackVelocityX;
-      },
-      set weaponKnockbackVelocityX(value: number) {
-        thisScene.weaponKnockbackVelocityX = value;
-      },
-      get weaponKnockbackUntil() {
-        return thisScene.weaponKnockbackUntil;
-      },
-      set weaponKnockbackUntil(value: number) {
-        thisScene.weaponKnockbackUntil = value;
-      },
-      get ladderClimbSfxPlaying() {
-        return thisScene.ladderClimbSfxPlaying;
-      },
-      set ladderClimbSfxPlaying(value: boolean) {
-        thisScene.ladderClimbSfxPlaying = value;
-      },
-      get coyoteTime() {
-        return thisScene.coyoteTime;
-      },
-      set coyoteTime(value: number) {
-        thisScene.coyoteTime = value;
-      },
-      get jumpBuffered() {
-        return thisScene.jumpBuffered;
-      },
-      set jumpBuffered(value: boolean) {
-        thisScene.jumpBuffered = value;
-      },
-      get jumpBufferTime() {
-        return thisScene.jumpBufferTime;
-      },
-      set jumpBufferTime(value: number) {
-        thisScene.jumpBufferTime = value;
-      },
-      get wallContactSide() {
-        return thisScene.wallContactSide;
-      },
-      set wallContactSide(value: -1 | 1 | 0) {
-        thisScene.wallContactSide = value;
-      },
-      get wallContactGraceSide() {
-        return thisScene.wallContactGraceSide;
-      },
-      set wallContactGraceSide(value: -1 | 1 | 0) {
-        thisScene.wallContactGraceSide = value;
-      },
-      get wallContactGraceUntil() {
-        return thisScene.wallContactGraceUntil;
-      },
-      set wallContactGraceUntil(value: number) {
-        thisScene.wallContactGraceUntil = value;
-      },
-      get isWallSliding() {
-        return thisScene.isWallSliding;
-      },
-      set isWallSliding(value: boolean) {
-        thisScene.isWallSliding = value;
-      },
-      get wallJumpLockUntil() {
-        return thisScene.wallJumpLockUntil;
-      },
-      set wallJumpLockUntil(value: number) {
-        thisScene.wallJumpLockUntil = value;
-      },
-      get wallJumpActive() {
-        return thisScene.wallJumpActive;
-      },
-      set wallJumpActive(value: boolean) {
-        thisScene.wallJumpActive = value;
-      },
-      get wallJumpDirection() {
-        return thisScene.wallJumpDirection;
-      },
-      set wallJumpDirection(value: -1 | 1 | 0) {
-        thisScene.wallJumpDirection = value;
-      },
-      get wallJumpChainActive() {
-        return thisScene.wallJumpChainActive;
-      },
-      set wallJumpChainActive(value: boolean) {
-        thisScene.wallJumpChainActive = value;
-      },
-      get isClimbingLadder() {
-        return thisScene.isClimbingLadder;
-      },
-      set isClimbingLadder(value: boolean) {
-        thisScene.isClimbingLadder = value;
-      },
-      get activeLadderKey() {
-        return thisScene.activeLadderKey;
-      },
-      set activeLadderKey(value: string | null) {
-        thisScene.activeLadderKey = value;
-      },
-    };
     this.movementController = new OverworldMovementController(
       {
-        state: movementState,
         getCurrentTime: () => this.time.now,
         getPlayer: () => this.player,
         getPlayerBody: () => this.playerBody,
@@ -1726,7 +1558,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         getPlayer: () => this.player,
         getPlayerBody: () => this.playerBody,
         getPlayerFacing: () => this.playerFacing as -1 | 1,
-        isPlayerCrouching: () => this.isCrouching,
+        isPlayerCrouching: () => this.movementController.isCrouching(),
         attackEnemiesInRect: (attackRect, damage) =>
           this.liveObjectController.attackEnemiesInRect(
             this.loadedFullRoomsById.values(),
@@ -6599,6 +6431,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const lightingDebug = this.lightingController.getDebugState();
     const runtimeContext = this.runtimeContext.getSnapshot();
     const weatherDebug = this.weatherController.getDebugState();
+    const movementDebug = this.movementController.getDebugSnapshot();
     const localPresenceIdentity = this.presenceController.getIdentity();
     const currentLoadedRoom = this.loadedFullRoomsById.get(
       roomIdFromCoordinates(this.currentRoomCoordinates)
@@ -6836,16 +6669,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       hazards: this.countLiveObjectsByCategory('hazard'),
       enemies: this.countLiveObjectsByCategory('enemy'),
       combat: {
-        crouching: this.isCrouching,
-        buttStomping: this.isButtStomping,
-        buttStompFlipMs: Math.max(0, Math.round(this.buttStompFlipUntil - this.time.now)),
-        buttStompImpactGraceMs: Math.max(
-          0,
-          Math.round(this.buttStompImpactGraceUntil - this.time.now),
-        ),
+        crouching: movementDebug.crouching,
+        buttStomping: movementDebug.buttStomping,
+        buttStompFlipMs: movementDebug.buttStompFlipMs,
+        buttStompImpactGraceMs: movementDebug.buttStompImpactGraceMs,
         activeAttackAnimation: this.combatController.getActiveAttackAnimation(),
-        crateInteractionMode: this.activeCrateInteractionMode,
-        crateInteractionFacing: this.activeCrateInteractionFacing,
+        crateInteractionMode: movementDebug.crateInteractionMode,
+        crateInteractionFacing: movementDebug.crateInteractionFacing,
         meleeCooldownMs: this.combatController.getMeleeCooldownRemainingMs(this.time.now),
         rangedCooldownMs: this.combatController.getRangedCooldownRemainingMs(this.time.now),
         projectileCount: this.combatController.getProjectileCount(),
@@ -6916,25 +6746,22 @@ export class OverworldPlayScene extends Phaser.Scene {
             bodyHeight: Math.round(this.playerBody.height),
             bodyTop: Math.round(this.playerBody.top),
             bodyBottom: Math.round(this.playerBody.bottom),
-            crouching: this.isCrouching,
-            buttStomping: this.isButtStomping,
-            buttStompFlipMs: Math.max(0, Math.round(this.buttStompFlipUntil - this.time.now)),
-            buttStompImpactGraceMs: Math.max(
-              0,
-              Math.round(this.buttStompImpactGraceUntil - this.time.now),
-            ),
-            climbing: this.isClimbingLadder,
-            jumpBuffered: this.jumpBuffered,
-            jumpBufferMs: Math.max(0, Math.round(this.jumpBufferTime)),
-            coyoteMs: Math.max(0, Math.round(this.coyoteTime)),
-            wallSliding: this.isWallSliding,
-            wallContactSide: this.wallContactSide,
-            wallContactGraceSide: this.wallContactGraceSide,
-            wallContactGraceMs: Math.max(0, Math.round(this.wallContactGraceUntil - this.time.now)),
-            wallJumpActive: this.wallJumpActive,
-            wallJumpChainActive: this.wallJumpChainActive,
-            wallJumpLockMs: Math.max(0, this.wallJumpLockUntil - this.time.now),
-            ladderKey: this.activeLadderKey,
+            crouching: movementDebug.crouching,
+            buttStomping: movementDebug.buttStomping,
+            buttStompFlipMs: movementDebug.buttStompFlipMs,
+            buttStompImpactGraceMs: movementDebug.buttStompImpactGraceMs,
+            climbing: movementDebug.climbing,
+            jumpBuffered: movementDebug.jumpBuffered,
+            jumpBufferMs: movementDebug.jumpBufferMs,
+            coyoteMs: movementDebug.coyoteMs,
+            wallSliding: movementDebug.wallSliding,
+            wallContactSide: movementDebug.wallContactSide,
+            wallContactGraceSide: movementDebug.wallContactGraceSide,
+            wallContactGraceMs: movementDebug.wallContactGraceMs,
+            wallJumpActive: movementDebug.wallJumpActive,
+            wallJumpChainActive: movementDebug.wallJumpChainActive,
+            wallJumpLockMs: movementDebug.wallJumpLockMs,
+            ladderKey: movementDebug.ladderKey,
             animation: this.playerAnimationState,
             facing: this.playerFacing,
           }

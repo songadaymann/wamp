@@ -3,6 +3,7 @@ import {
   type DefaultPlayerAnimationState,
 } from '../../player/defaultPlayer';
 import { resolveActivePlayerAvatarPack } from '../../player/avatar/runtime';
+import type { OverworldMovementPresentationState } from './movementController';
 import {
   bodyIsBlockedInGravityDirection,
   getBodyVelocityAlongVector,
@@ -31,16 +32,7 @@ interface OverworldPlayerPresentationControllerHost {
   getSpecialTileEnvironment(): Readonly<SpecialTilePlayerEnvironment>;
   getLastMovementInput(): { horizontalInput: number; verticalInput: number };
   getQuicksandVisualSink(): number;
-  getWeaponKnockbackUntil(): number;
-  getIsClimbingLadder(): boolean;
-  getIsWallSliding(): boolean;
-  getWallContactSide(): -1 | 1 | 0;
-  getWallJumpActive(): boolean;
-  getIsCrouching(): boolean;
-  getIsButtStomping(): boolean;
-  getButtStompFlipUntil(): number;
-  getActiveCrateInteractionMode(): 'push' | 'pull' | null;
-  getActiveCrateInteractionFacing(): -1 | 1 | null;
+  getMovementPresentationState(): Readonly<OverworldMovementPresentationState>;
   getGroundedOverride(): boolean | null;
   getCurrentAttackAnimation(now: number): DefaultPlayerAnimationState | null;
   playLandingDustFx(x: number, y: number, facing: -1 | 1): void;
@@ -122,13 +114,14 @@ export class OverworldPlayerPresentationController {
     }
 
     const now = this.host.getCurrentTime();
-    const facingLockedByWeaponKnockback = now < this.host.getWeaponKnockbackUntil();
-    const wallContactSide = this.host.getWallContactSide();
+    const movement = this.host.getMovementPresentationState();
+    const facingLockedByWeaponKnockback = now < movement.weaponKnockbackUntil;
+    const wallContactSide = movement.wallContactSide;
     const tangentVelocity = getBodyVelocityAlongVector(playerBody, getGravityRightVector(gravityDirection));
-    if (this.host.getIsWallSliding() && wallContactSide !== 0) {
+    if (movement.isWallSliding && wallContactSide !== 0) {
       this.host.state.facing = wallContactSide;
-    } else if (this.host.getActiveCrateInteractionFacing() !== null) {
-      this.host.state.facing = this.host.getActiveCrateInteractionFacing()!;
+    } else if (movement.activeCrateInteractionFacing !== null) {
+      this.host.state.facing = movement.activeCrateInteractionFacing;
     } else if (
       !facingLockedByWeaponKnockback &&
       Math.abs(tangentVelocity) > this.options.facingVelocityThreshold
@@ -140,7 +133,7 @@ export class OverworldPlayerPresentationController {
     const grounded =
       this.host.getGroundedOverride() ??
       bodyIsBlockedInGravityDirection(playerBody, gravityDirection);
-    if (!this.host.getIsClimbingLadder() && grounded && !this.host.state.wasGrounded) {
+    if (!movement.isClimbingLadder && grounded && !this.host.state.wasGrounded) {
       this.host.state.landAnimationUntil = now + this.options.landingAnimationMs;
       this.host.playLandingDustFx(player.x, playerBody.bottom, this.host.state.facing);
     }
@@ -150,6 +143,7 @@ export class OverworldPlayerPresentationController {
       grounded,
       playerBody,
       specialEnvironment,
+      movement,
     });
     const playerAvatarPack = resolveActivePlayerAvatarPack();
     const nextAnimationKey = playerAvatarPack.animationKeys[nextAnimation];
@@ -187,26 +181,27 @@ export class OverworldPlayerPresentationController {
     grounded: boolean;
     playerBody: Phaser.Physics.Arcade.Body;
     specialEnvironment: SpecialTilePlayerEnvironment;
+    movement: Readonly<OverworldMovementPresentationState>;
   }): DefaultPlayerAnimationState {
     const activeAttackAnimation = this.host.getCurrentAttackAnimation(input.now);
     if (activeAttackAnimation) {
       return activeAttackAnimation;
     }
 
-    if (this.host.getIsClimbingLadder()) {
+    if (input.movement.isClimbingLadder) {
       return 'ladder-climb';
     }
 
-    if (this.host.getIsWallSliding()) {
+    if (input.movement.isWallSliding) {
       return 'wall-slide';
     }
 
-    if (this.host.getWallJumpActive()) {
+    if (input.movement.wallJumpActive) {
       return 'wall-jump';
     }
 
-    if (this.host.getIsButtStomping()) {
-      return input.now < this.host.getButtStompFlipUntil()
+    if (input.movement.isButtStomping) {
+      return input.now < input.movement.buttStompFlipUntil
         ? 'butt-stomp-flip'
         : 'crouch';
     }
@@ -221,15 +216,15 @@ export class OverworldPlayerPresentationController {
         : 'jump-fall';
     }
 
-    if (this.host.getActiveCrateInteractionMode() === 'push') {
+    if (input.movement.activeCrateInteractionMode === 'push') {
       return 'push';
     }
 
-    if (this.host.getActiveCrateInteractionMode() === 'pull') {
+    if (input.movement.activeCrateInteractionMode === 'pull') {
       return 'pull';
     }
 
-    if (this.host.getIsCrouching()) {
+    if (input.movement.isCrouching) {
       const tangentVelocity = getBodyVelocityAlongVector(
         input.playerBody,
         getGravityRightVector(input.specialEnvironment.gravityDirection),

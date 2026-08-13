@@ -70,7 +70,7 @@ interface DirectionalGravityControls {
   verticalInput: number;
 }
 
-export interface OverworldMovementControllerState {
+interface OverworldMovementControllerState {
   isCrouching: boolean;
   isButtStomping: boolean;
   buttStompFlipUntil: number;
@@ -96,7 +96,6 @@ export interface OverworldMovementControllerState {
 }
 
 interface OverworldMovementControllerHost {
-  state: OverworldMovementControllerState;
   getCurrentTime(): number;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
@@ -165,21 +164,157 @@ export interface OverworldMovementStepResult {
   jumpPressed: boolean;
 }
 
+export interface OverworldMovementPresentationState {
+  readonly isCrouching: boolean;
+  readonly isButtStomping: boolean;
+  readonly buttStompFlipUntil: number;
+  readonly activeCrateInteractionMode: 'push' | 'pull' | null;
+  readonly activeCrateInteractionFacing: -1 | 1 | null;
+  readonly weaponKnockbackUntil: number;
+  readonly isClimbingLadder: boolean;
+  readonly isWallSliding: boolean;
+  readonly wallContactSide: -1 | 1 | 0;
+  readonly wallJumpActive: boolean;
+}
+
+export interface OverworldMovementDebugSnapshot {
+  crouching: boolean;
+  buttStomping: boolean;
+  buttStompFlipMs: number;
+  buttStompImpactGraceMs: number;
+  crateInteractionMode: 'push' | 'pull' | null;
+  crateInteractionFacing: -1 | 1 | null;
+  weaponKnockbackVelocityX: number;
+  weaponKnockbackMs: number;
+  climbing: boolean;
+  jumpBuffered: boolean;
+  jumpBufferMs: number;
+  coyoteMs: number;
+  wallSliding: boolean;
+  wallContactSide: -1 | 1 | 0;
+  wallContactGraceSide: -1 | 1 | 0;
+  wallContactGraceMs: number;
+  wallJumpActive: boolean;
+  wallJumpDirection: -1 | 1 | 0;
+  wallJumpChainActive: boolean;
+  wallJumpLockMs: number;
+  ladderKey: string | null;
+  ladderClimbSfxPlaying: boolean;
+}
+
+function createMovementControllerState(): OverworldMovementControllerState {
+  return {
+    isCrouching: false,
+    isButtStomping: false,
+    buttStompFlipUntil: 0,
+    buttStompImpactGraceUntil: 0,
+    activeCrateInteractionMode: null,
+    activeCrateInteractionFacing: null,
+    weaponKnockbackVelocityX: 0,
+    weaponKnockbackUntil: 0,
+    ladderClimbSfxPlaying: false,
+    coyoteTime: 0,
+    jumpBuffered: false,
+    jumpBufferTime: 0,
+    wallContactSide: 0,
+    wallContactGraceSide: 0,
+    wallContactGraceUntil: 0,
+    isWallSliding: false,
+    wallJumpLockUntil: 0,
+    wallJumpActive: false,
+    wallJumpDirection: 0,
+    wallJumpChainActive: false,
+    isClimbingLadder: false,
+    activeLadderKey: null,
+  };
+}
+
 export class OverworldMovementController {
+  private readonly state = createMovementControllerState();
+  private readonly presentationState: Readonly<OverworldMovementPresentationState>;
+
   constructor(
     private readonly host: OverworldMovementControllerHost,
     private readonly options: OverworldMovementControllerOptions,
-  ) {}
+  ) {
+    const state = this.state;
+    this.presentationState = Object.freeze({
+      get isCrouching() { return state.isCrouching; },
+      get isButtStomping() { return state.isButtStomping; },
+      get buttStompFlipUntil() { return state.buttStompFlipUntil; },
+      get activeCrateInteractionMode() { return state.activeCrateInteractionMode; },
+      get activeCrateInteractionFacing() { return state.activeCrateInteractionFacing; },
+      get weaponKnockbackUntil() { return state.weaponKnockbackUntil; },
+      get isClimbingLadder() { return state.isClimbingLadder; },
+      get isWallSliding() { return state.isWallSliding; },
+      get wallContactSide() { return state.wallContactSide; },
+      get wallJumpActive() { return state.wallJumpActive; },
+    });
+  }
+
+  getPresentationState(): Readonly<OverworldMovementPresentationState> {
+    return this.presentationState;
+  }
+
+  isCrouching(): boolean {
+    return this.state.isCrouching;
+  }
+
+  isClimbingLadder(): boolean {
+    return this.state.isClimbingLadder;
+  }
+
+  isButtStomping(): boolean {
+    return this.state.isButtStomping;
+  }
+
+  isButtStompImpactActive(): boolean {
+    return (
+      this.state.isButtStomping ||
+      this.host.getCurrentTime() <= this.state.buttStompImpactGraceUntil
+    );
+  }
+
+  getDebugSnapshot(): OverworldMovementDebugSnapshot {
+    const now = this.host.getCurrentTime();
+    return {
+      crouching: this.state.isCrouching,
+      buttStomping: this.state.isButtStomping,
+      buttStompFlipMs: Math.max(0, Math.round(this.state.buttStompFlipUntil - now)),
+      buttStompImpactGraceMs: Math.max(
+        0,
+        Math.round(this.state.buttStompImpactGraceUntil - now),
+      ),
+      crateInteractionMode: this.state.activeCrateInteractionMode,
+      crateInteractionFacing: this.state.activeCrateInteractionFacing,
+      weaponKnockbackVelocityX: this.state.weaponKnockbackVelocityX,
+      weaponKnockbackMs: Math.max(0, Math.round(this.state.weaponKnockbackUntil - now)),
+      climbing: this.state.isClimbingLadder,
+      jumpBuffered: this.state.jumpBuffered,
+      jumpBufferMs: Math.max(0, Math.round(this.state.jumpBufferTime)),
+      coyoteMs: Math.max(0, Math.round(this.state.coyoteTime)),
+      wallSliding: this.state.isWallSliding,
+      wallContactSide: this.state.wallContactSide,
+      wallContactGraceSide: this.state.wallContactGraceSide,
+      wallContactGraceMs: Math.max(0, Math.round(this.state.wallContactGraceUntil - now)),
+      wallJumpActive: this.state.wallJumpActive,
+      wallJumpDirection: this.state.wallJumpDirection,
+      wallJumpChainActive: this.state.wallJumpChainActive,
+      wallJumpLockMs: Math.max(0, Math.round(this.state.wallJumpLockUntil - now)),
+      ladderKey: this.state.activeLadderKey,
+      ladderClimbSfxPlaying: this.state.ladderClimbSfxPlaying,
+    };
+  }
 
   reset(): void {
-    this.host.state.coyoteTime = 0;
-    this.host.state.jumpBuffered = false;
-    this.host.state.jumpBufferTime = 0;
-    this.host.state.isCrouching = false;
+    this.state.coyoteTime = 0;
+    this.state.jumpBuffered = false;
+    this.state.jumpBufferTime = 0;
+    this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
-    this.host.state.weaponKnockbackVelocityX = 0;
-    this.host.state.weaponKnockbackUntil = 0;
+    this.state.weaponKnockbackVelocityX = 0;
+    this.state.weaponKnockbackUntil = 0;
     this.setPlayerLadderState(null);
     this.resetWallMovementState();
     this.setLadderClimbSfxPlaying(false);
@@ -192,11 +327,11 @@ export class OverworldMovementController {
   }
 
   handlePlayerCreated(): void {
-    this.host.state.isCrouching = false;
+    this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
-    this.host.state.weaponKnockbackVelocityX = 0;
-    this.host.state.weaponKnockbackUntil = 0;
+    this.state.weaponKnockbackVelocityX = 0;
+    this.state.weaponKnockbackUntil = 0;
     this.setPlayerLadderState(null);
     this.resetWallMovementState();
     this.syncPlayerHitbox();
@@ -204,22 +339,22 @@ export class OverworldMovementController {
   }
 
   handlePlayerDestroyed(): void {
-    this.host.state.isCrouching = false;
+    this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
-    this.host.state.weaponKnockbackVelocityX = 0;
-    this.host.state.weaponKnockbackUntil = 0;
+    this.state.weaponKnockbackVelocityX = 0;
+    this.state.weaponKnockbackUntil = 0;
     this.setPlayerLadderState(null);
     this.resetWallMovementState();
     this.setLadderClimbSfxPlaying(false);
   }
 
   handleRespawnReset(): void {
-    this.host.state.isCrouching = false;
+    this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
-    this.host.state.weaponKnockbackVelocityX = 0;
-    this.host.state.weaponKnockbackUntil = 0;
+    this.state.weaponKnockbackVelocityX = 0;
+    this.state.weaponKnockbackUntil = 0;
     this.setPlayerLadderState(null);
     this.resetWallMovementState();
     this.syncPlayerHitbox();
@@ -227,7 +362,7 @@ export class OverworldMovementController {
   }
 
   resetTransientPlayState(): void {
-    this.host.state.isCrouching = false;
+    this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
     this.resetWallMovementState();
@@ -248,15 +383,15 @@ export class OverworldMovementController {
       return;
     }
 
-    this.host.state.weaponKnockbackVelocityX = velocityX;
-    this.host.state.weaponKnockbackUntil = this.host.getCurrentTime() + this.options.weaponKnockbackMs;
+    this.state.weaponKnockbackVelocityX = velocityX;
+    this.state.weaponKnockbackUntil = this.host.getCurrentTime() + this.options.weaponKnockbackMs;
     playerBody.setVelocityX(velocityX);
   }
 
   handleButtStompImpact(bounceVelocity: number): void {
     const playerBody = this.host.getPlayerBody();
     this.clearButtStompState();
-    this.host.state.isCrouching = false;
+    this.state.isCrouching = false;
     if (!playerBody) {
       return;
     }
@@ -313,8 +448,8 @@ export class OverworldMovementController {
     const stayOnLadder =
       overlappingLadder !== null &&
       !spacePressed &&
-      (verticalInput !== 0 || (this.host.state.isClimbingLadder && !left && !right));
-    const jumpedOffLadder = this.host.state.isClimbingLadder && spacePressed;
+      (verticalInput !== 0 || (this.state.isClimbingLadder && !left && !right));
+    const jumpedOffLadder = this.state.isClimbingLadder && spacePressed;
     const specialEnvironment = this.host.getSpecialTileEnvironment();
     const playerGravityDirection = specialEnvironment.gravityDirection;
     playerBody.setAllowGravity(playerGravityDirection === 'down');
@@ -354,10 +489,10 @@ export class OverworldMovementController {
       const ladderDeltaX = overlappingLadder.sprite.x - (player.x ?? playerBody.center.x);
       playerBody.setVelocityX(Phaser.Math.Clamp(ladderDeltaX * 12, -45, 45));
       playerBody.setVelocityY(verticalInput * this.options.ladderClimbSpeed);
-      this.host.state.coyoteTime = 0;
-      this.host.state.jumpBuffered = false;
-      this.host.state.jumpBufferTime = 0;
-      this.host.state.isCrouching = false;
+      this.state.coyoteTime = 0;
+      this.state.jumpBuffered = false;
+      this.state.jumpBufferTime = 0;
+      this.state.isCrouching = false;
       this.clearButtStompState();
       this.clearCrateInteractionState();
       this.resetWallMovementState();
@@ -371,7 +506,7 @@ export class OverworldMovementController {
       };
     }
 
-    if (this.host.state.isClimbingLadder) {
+    if (this.state.isClimbingLadder) {
       this.setPlayerLadderState(null);
     }
 
@@ -390,8 +525,8 @@ export class OverworldMovementController {
     } else if (specialEnvironment.inWater || inQuicksand) {
       this.clearButtStompState();
     } else if (
-      !this.host.state.isButtStomping &&
-      !this.host.state.isClimbingLadder &&
+      !this.state.isButtStomping &&
+      !this.state.isClimbingLadder &&
       (downPressed || touchDown)
     ) {
       this.startButtStomp(playerBody);
@@ -407,21 +542,21 @@ export class OverworldMovementController {
       playerBody.height >= this.options.playerStandingHeight ||
       this.canPlayerFitHitbox(this.options.playerStandingHeight);
     const wantsCrouch = grounded && downHeld && !crateInteraction;
-    this.host.state.isCrouching =
+    this.state.isCrouching =
       wantsCrouch ||
       (grounded && !standingHitboxFits) ||
-      (this.host.state.isCrouching && !standingHitboxFits);
+      (this.state.isCrouching && !standingHitboxFits);
     this.syncPlayerHitbox(grounded && playerBody.velocity.y >= 0);
     const canWallAttach =
       !grounded &&
       crateInteraction === null &&
-      !this.host.state.isCrouching &&
-      !this.host.state.isButtStomping;
+      !this.state.isCrouching &&
+      !this.state.isButtStomping;
     this.updateWallMovementState(horizontalInput, grounded, canWallAttach);
     if (grounded) {
-      this.host.state.coyoteTime = this.options.coyoteMs;
+      this.state.coyoteTime = this.options.coyoteMs;
     } else {
-      this.host.state.coyoteTime = Math.max(0, this.host.state.coyoteTime - delta);
+      this.state.coyoteTime = Math.max(0, this.state.coyoteTime - delta);
     }
 
     const buttStompInFlipPause = this.isButtStompInFlipPause();
@@ -432,16 +567,16 @@ export class OverworldMovementController {
     } else {
       if (buttStompInFlipPause) {
         playerBody.setVelocityX(0);
-      } else if (this.host.getCurrentTime() < this.host.state.weaponKnockbackUntil) {
-        playerBody.setVelocityX(this.host.state.weaponKnockbackVelocityX);
+      } else if (this.host.getCurrentTime() < this.state.weaponKnockbackUntil) {
+        playerBody.setVelocityX(this.state.weaponKnockbackVelocityX);
       } else if (
-        this.host.getCurrentTime() < this.host.state.wallJumpLockUntil &&
-        this.host.state.wallJumpDirection !== 0
+        this.host.getCurrentTime() < this.state.wallJumpLockUntil &&
+        this.state.wallJumpDirection !== 0
       ) {
-        playerBody.setVelocityX(this.host.state.wallJumpDirection * this.options.wallJumpVelocityX);
+        playerBody.setVelocityX(this.state.wallJumpDirection * this.options.wallJumpVelocityX);
       } else {
-        this.host.state.weaponKnockbackVelocityX = 0;
-        const moveSpeedBase = this.host.state.isCrouching ? this.options.crawlSpeed : this.options.playerSpeed;
+        this.state.weaponKnockbackVelocityX = 0;
+        const moveSpeedBase = this.state.isCrouching ? this.options.crawlSpeed : this.options.playerSpeed;
         const moveSpeed =
           inQuicksand
             ? moveSpeedBase * this.options.quicksandMoveFactor
@@ -473,8 +608,8 @@ export class OverworldMovementController {
     }
 
     const jumpPressed =
-      !this.host.state.isCrouching &&
-      !this.host.state.isButtStomping &&
+      !this.state.isCrouching &&
+      !this.state.isButtStomping &&
       (spacePressed || (upPressed && overlappingLadder === null));
     const specialJumpVelocity =
       specialEnvironment.inWater
@@ -488,46 +623,46 @@ export class OverworldMovementController {
     if (jumpedOffLadder) {
       playerBody.setVelocityY(specialJumpVelocity);
       this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
-      this.host.state.jumpBuffered = false;
-      this.host.state.jumpBufferTime = 0;
-      this.host.state.coyoteTime = 0;
+      this.state.jumpBuffered = false;
+      this.state.jumpBufferTime = 0;
+      this.state.coyoteTime = 0;
       this.resetWallMovementState();
     } else {
       if (jumpPressed) {
         if (specialEnvironment.inWater) {
           playerBody.setVelocityY(WATER_SWIM_KICK_VELOCITY);
           this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
-          this.host.state.jumpBuffered = false;
-          this.host.state.jumpBufferTime = 0;
-          this.host.state.coyoteTime = 0;
+          this.state.jumpBuffered = false;
+          this.state.jumpBufferTime = 0;
+          this.state.coyoteTime = 0;
         } else if (!this.tryPerformWallJump(player, playerBody)) {
-          this.host.state.jumpBuffered = true;
-          this.host.state.jumpBufferTime =
-            !grounded && this.host.state.coyoteTime <= 0
+          this.state.jumpBuffered = true;
+          this.state.jumpBufferTime =
+            !grounded && this.state.coyoteTime <= 0
               ? this.options.wallJumpBufferMs
               : this.options.jumpBufferMs;
         }
       }
 
-      if (this.host.state.jumpBuffered && this.tryPerformWallJump(player, playerBody)) {
+      if (this.state.jumpBuffered && this.tryPerformWallJump(player, playerBody)) {
         // Wall-jump buffering lets the player press jump just before reaching the next wall.
-      } else if (this.host.state.jumpBuffered && this.host.state.coyoteTime > 0) {
+      } else if (this.state.jumpBuffered && this.state.coyoteTime > 0) {
         playerBody.setVelocityY(specialJumpVelocity);
         this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
-        this.host.state.jumpBuffered = false;
-        this.host.state.jumpBufferTime = 0;
-        this.host.state.coyoteTime = 0;
-        this.host.state.wallJumpActive = false;
-        this.host.state.wallJumpDirection = 0;
-        this.host.state.wallJumpLockUntil = 0;
+        this.state.jumpBuffered = false;
+        this.state.jumpBufferTime = 0;
+        this.state.coyoteTime = 0;
+        this.state.wallJumpActive = false;
+        this.state.wallJumpDirection = 0;
+        this.state.wallJumpLockUntil = 0;
         this.clearWallContactState();
-        this.host.state.wallJumpChainActive = false;
+        this.state.wallJumpChainActive = false;
       }
 
-      if (this.host.state.jumpBufferTime > 0) {
-        this.host.state.jumpBufferTime -= delta;
-        if (this.host.state.jumpBufferTime <= 0) {
-          this.host.state.jumpBuffered = false;
+      if (this.state.jumpBufferTime > 0) {
+        this.state.jumpBufferTime -= delta;
+        if (this.state.jumpBufferTime <= 0) {
+          this.state.jumpBuffered = false;
         }
       }
 
@@ -542,12 +677,12 @@ export class OverworldMovementController {
     }
 
     if (
-      this.host.state.isWallSliding &&
+      this.state.isWallSliding &&
       playerBody.velocity.y > this.options.wallSlideMaxFallSpeed
     ) {
       playerBody.setVelocityY(this.options.wallSlideMaxFallSpeed);
     }
-    if (this.host.state.isButtStomping) {
+    if (this.state.isButtStomping) {
       this.updateButtStompVelocity(playerBody);
     }
 
@@ -600,7 +735,7 @@ export class OverworldMovementController {
     const deltaSeconds = Math.max(delta / 1000, 1 / 60);
 
     this.setPlayerLadderState(null);
-    this.host.state.isCrouching = false;
+    this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
     this.syncPlayerHitbox();
@@ -620,9 +755,9 @@ export class OverworldMovementController {
 
     const grounded = bodyIsBlockedInGravityDirection(playerBody, gravityDirection);
     if (grounded) {
-      this.host.state.coyoteTime = this.options.coyoteMs;
+      this.state.coyoteTime = this.options.coyoteMs;
     } else {
-      this.host.state.coyoteTime = Math.max(0, this.host.state.coyoteTime - delta);
+      this.state.coyoteTime = Math.max(0, this.state.coyoteTime - delta);
     }
 
     const crateInteraction =
@@ -630,16 +765,16 @@ export class OverworldMovementController {
         ? this.findCrateInteraction(controls.tangentInput, controls.crouchHeld, gravityDirection)
         : null;
     this.syncCrateInteractionState(crateInteraction);
-    this.host.state.isCrouching = grounded && controls.crouchHeld && !crateInteraction;
+    this.state.isCrouching = grounded && controls.crouchHeld && !crateInteraction;
     this.syncPlayerHitbox();
     const canWallAttach =
       !grounded &&
       crateInteraction === null &&
-      !this.host.state.isCrouching &&
+      !this.state.isCrouching &&
       !specialEnvironment.inWater;
     this.updateWallMovementState(controls.tangentInput, grounded, canWallAttach, gravityDirection);
 
-    const moveSpeedBase = this.host.state.isCrouching
+    const moveSpeedBase = this.state.isCrouching
       ? this.options.crawlSpeed
       : specialEnvironment.inWater
       ? this.options.playerSpeed * WATER_MOVE_FACTOR
@@ -652,13 +787,13 @@ export class OverworldMovementController {
       this.applyCrateInteraction(playerBody, crateInteraction, moveSpeed, delta);
     } else {
       if (
-        this.host.getCurrentTime() < this.host.state.wallJumpLockUntil &&
-        this.host.state.wallJumpDirection !== 0
+        this.host.getCurrentTime() < this.state.wallJumpLockUntil &&
+        this.state.wallJumpDirection !== 0
       ) {
         setBodyVelocityAlongVector(
           playerBody,
           rightVector,
-          this.host.state.wallJumpDirection * this.options.wallJumpVelocityX,
+          this.state.wallJumpDirection * this.options.wallJumpVelocityX,
         );
       } else {
         const targetTangentVelocity = controls.tangentInput * moveSpeedBase;
@@ -679,7 +814,7 @@ export class OverworldMovementController {
       }
     }
 
-    const jumpPressed = !this.host.state.isCrouching && controls.jumpPressed;
+    const jumpPressed = !this.state.isCrouching && controls.jumpPressed;
     const performGravityJump = () => {
       const launchVelocity =
         specialEnvironment.inWater
@@ -689,42 +824,42 @@ export class OverworldMovementController {
             : this.options.jumpVelocity;
       setBodyVelocityAlongVector(playerBody, gravityVector, launchVelocity);
       this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
-      this.host.state.jumpBuffered = false;
-      this.host.state.jumpBufferTime = 0;
-      this.host.state.coyoteTime = 0;
-      this.host.state.wallJumpActive = false;
-      this.host.state.wallJumpDirection = 0;
-      this.host.state.wallJumpLockUntil = 0;
+      this.state.jumpBuffered = false;
+      this.state.jumpBufferTime = 0;
+      this.state.coyoteTime = 0;
+      this.state.wallJumpActive = false;
+      this.state.wallJumpDirection = 0;
+      this.state.wallJumpLockUntil = 0;
       this.clearWallContactState();
-      this.host.state.wallJumpChainActive = false;
+      this.state.wallJumpChainActive = false;
     };
 
     if (jumpPressed) {
       if (specialEnvironment.inWater) {
         performGravityJump();
       } else if (!this.tryPerformWallJump(player, playerBody, gravityDirection)) {
-        this.host.state.jumpBuffered = true;
-        this.host.state.jumpBufferTime =
-          !grounded && this.host.state.coyoteTime <= 0
+        this.state.jumpBuffered = true;
+        this.state.jumpBufferTime =
+          !grounded && this.state.coyoteTime <= 0
             ? this.options.wallJumpBufferMs
             : this.options.jumpBufferMs;
       }
     }
 
     if (
-      this.host.state.jumpBuffered &&
+      this.state.jumpBuffered &&
       !specialEnvironment.inWater &&
       this.tryPerformWallJump(player, playerBody, gravityDirection)
     ) {
       // Wall-jump buffering lets the player press jump just before reaching the next wall.
-    } else if (this.host.state.jumpBuffered && this.host.state.coyoteTime > 0) {
+    } else if (this.state.jumpBuffered && this.state.coyoteTime > 0) {
       performGravityJump();
     }
 
-    if (this.host.state.jumpBufferTime > 0) {
-      this.host.state.jumpBufferTime -= delta;
-      if (this.host.state.jumpBufferTime <= 0) {
-        this.host.state.jumpBuffered = false;
+    if (this.state.jumpBufferTime > 0) {
+      this.state.jumpBufferTime -= delta;
+      if (this.state.jumpBufferTime <= 0) {
+        this.state.jumpBuffered = false;
       }
     }
 
@@ -737,7 +872,7 @@ export class OverworldMovementController {
       setBodyVelocityAlongVector(playerBody, gravityVector, currentNormalVelocity * 0.86);
     }
 
-    if (this.host.state.isWallSliding) {
+    if (this.state.isWallSliding) {
       const wallSlideGravityVelocity = getBodyVelocityAlongVector(playerBody, gravityVector);
       if (wallSlideGravityVelocity > this.options.wallSlideMaxFallSpeed) {
         setBodyVelocityAlongVector(
@@ -835,7 +970,7 @@ export class OverworldMovementController {
     const playerBody = this.host.getPlayerBody();
     const shouldPlay =
       Boolean(playerBody) &&
-      this.host.state.isClimbingLadder &&
+      this.state.isClimbingLadder &&
       verticalInput !== 0 &&
       Math.abs(playerBody?.velocity.y ?? 0) > 6;
     this.setLadderClimbSfxPlaying(shouldPlay);
@@ -843,39 +978,39 @@ export class OverworldMovementController {
 
   private resetWallMovementState(): void {
     this.clearWallContactState();
-    this.host.state.wallJumpLockUntil = 0;
-    this.host.state.wallJumpActive = false;
-    this.host.state.wallJumpDirection = 0;
-    this.host.state.wallJumpChainActive = false;
+    this.state.wallJumpLockUntil = 0;
+    this.state.wallJumpActive = false;
+    this.state.wallJumpDirection = 0;
+    this.state.wallJumpChainActive = false;
   }
 
   private clearButtStompState(options: { keepImpactGrace?: boolean } = {}): void {
-    const wasButtStomping = this.host.state.isButtStomping;
-    this.host.state.isButtStomping = false;
-    this.host.state.buttStompFlipUntil = 0;
+    const wasButtStomping = this.state.isButtStomping;
+    this.state.isButtStomping = false;
+    this.state.buttStompFlipUntil = 0;
     if (options.keepImpactGrace && wasButtStomping) {
-      this.host.state.buttStompImpactGraceUntil =
+      this.state.buttStompImpactGraceUntil =
         this.host.getCurrentTime() + BUTT_STOMP_IMPACT_GRACE_MS;
     } else if (!options.keepImpactGrace) {
-      this.host.state.buttStompImpactGraceUntil = 0;
+      this.state.buttStompImpactGraceUntil = 0;
     }
   }
 
   private startButtStomp(playerBody: Phaser.Physics.Arcade.Body): void {
-    this.host.state.isButtStomping = true;
-    this.host.state.buttStompFlipUntil = this.host.getCurrentTime() + BUTT_STOMP_FLIP_MS;
-    this.host.state.buttStompImpactGraceUntil = 0;
-    this.host.state.jumpBuffered = false;
-    this.host.state.jumpBufferTime = 0;
-    this.host.state.coyoteTime = 0;
-    this.host.state.isCrouching = false;
+    this.state.isButtStomping = true;
+    this.state.buttStompFlipUntil = this.host.getCurrentTime() + BUTT_STOMP_FLIP_MS;
+    this.state.buttStompImpactGraceUntil = 0;
+    this.state.jumpBuffered = false;
+    this.state.jumpBufferTime = 0;
+    this.state.coyoteTime = 0;
+    this.state.isCrouching = false;
     this.clearCrateInteractionState();
     this.resetWallMovementState();
     this.updateButtStompVelocity(playerBody);
   }
 
   private isButtStompInFlipPause(now = this.host.getCurrentTime()): boolean {
-    return this.host.state.isButtStomping && now < this.host.state.buttStompFlipUntil;
+    return this.state.isButtStomping && now < this.state.buttStompFlipUntil;
   }
 
   private updateButtStompVelocity(playerBody: Phaser.Physics.Arcade.Body): void {
@@ -896,10 +1031,10 @@ export class OverworldMovementController {
   }
 
   private clearWallContactState(): void {
-    this.host.state.wallContactSide = 0;
-    this.host.state.wallContactGraceSide = 0;
-    this.host.state.wallContactGraceUntil = 0;
-    this.host.state.isWallSliding = false;
+    this.state.wallContactSide = 0;
+    this.state.wallContactGraceSide = 0;
+    this.state.wallContactGraceUntil = 0;
+    this.state.isWallSliding = false;
   }
 
   private tryPerformWallJump(
@@ -907,7 +1042,7 @@ export class OverworldMovementController {
     playerBody: Phaser.Physics.Arcade.Body,
     gravityDirection: PlayerGravityDirection = 'down',
   ): boolean {
-    const wallJumpSourceSide = this.host.state.wallContactSide;
+    const wallJumpSourceSide = this.state.wallContactSide;
     if (wallJumpSourceSide === 0) {
       return false;
     }
@@ -928,15 +1063,15 @@ export class OverworldMovementController {
       playerBody.bottom,
       this.host.getPlayerFacing(),
     );
-    this.host.state.jumpBuffered = false;
-    this.host.state.jumpBufferTime = 0;
-    this.host.state.coyoteTime = 0;
+    this.state.jumpBuffered = false;
+    this.state.jumpBufferTime = 0;
+    this.state.coyoteTime = 0;
     this.clearWallContactState();
-    this.host.state.wallJumpLockUntil =
+    this.state.wallJumpLockUntil =
       this.host.getCurrentTime() + this.options.wallJumpInputLockMs;
-    this.host.state.wallJumpActive = true;
-    this.host.state.wallJumpDirection = wallJumpDirection;
-    this.host.state.wallJumpChainActive = true;
+    this.state.wallJumpActive = true;
+    this.state.wallJumpDirection = wallJumpDirection;
+    this.state.wallJumpChainActive = true;
     return true;
   }
 
@@ -984,7 +1119,7 @@ export class OverworldMovementController {
     if (horizontalInput === 0) {
       return touchingWallSide;
     }
-    if (this.host.state.wallJumpChainActive) {
+    if (this.state.wallJumpChainActive) {
       return touchingWallSide;
     }
 
@@ -998,7 +1133,7 @@ export class OverworldMovementController {
     gravityDirection: PlayerGravityDirection = 'down',
   ): void {
     const playerBody = this.host.getPlayerBody();
-    if (!playerBody || grounded || this.host.state.isClimbingLadder) {
+    if (!playerBody || grounded || this.state.isClimbingLadder) {
       this.resetWallMovementState();
       return;
     }
@@ -1007,9 +1142,9 @@ export class OverworldMovementController {
       playerBody,
       getGravityVector(gravityDirection),
     );
-    if (this.host.state.wallJumpActive && gravityVelocity >= 0) {
-      this.host.state.wallJumpActive = false;
-      this.host.state.wallJumpDirection = 0;
+    if (this.state.wallJumpActive && gravityVelocity >= 0) {
+      this.state.wallJumpActive = false;
+      this.state.wallJumpDirection = 0;
     }
 
     const rawWallContactSide = canWallAttach
@@ -1017,34 +1152,34 @@ export class OverworldMovementController {
       : 0;
     const now = this.host.getCurrentTime();
     if (rawWallContactSide !== 0) {
-      this.host.state.wallContactGraceSide = rawWallContactSide;
-      this.host.state.wallContactGraceUntil = now + this.options.wallContactGraceMs;
+      this.state.wallContactGraceSide = rawWallContactSide;
+      this.state.wallContactGraceUntil = now + this.options.wallContactGraceMs;
     }
 
     const hasWallContactGrace =
-      this.host.state.wallContactGraceSide !== 0 &&
-      now <= this.host.state.wallContactGraceUntil;
+      this.state.wallContactGraceSide !== 0 &&
+      now <= this.state.wallContactGraceUntil;
     const wallContactSide = rawWallContactSide !== 0
       ? rawWallContactSide
       : hasWallContactGrace
-        ? this.host.state.wallContactGraceSide
+        ? this.state.wallContactGraceSide
         : 0;
-    this.host.state.wallContactSide = wallContactSide;
-    this.host.state.isWallSliding = rawWallContactSide !== 0 && gravityVelocity >= 0;
+    this.state.wallContactSide = wallContactSide;
+    this.state.isWallSliding = rawWallContactSide !== 0 && gravityVelocity >= 0;
 
-    if (this.host.state.isWallSliding) {
-      this.host.state.wallJumpActive = false;
-      this.host.state.wallJumpDirection = 0;
-    } else if (!this.host.state.wallJumpActive && this.host.getCurrentTime() >= this.host.state.wallJumpLockUntil) {
-      this.host.state.wallJumpDirection = 0;
+    if (this.state.isWallSliding) {
+      this.state.wallJumpActive = false;
+      this.state.wallJumpDirection = 0;
+    } else if (!this.state.wallJumpActive && this.host.getCurrentTime() >= this.state.wallJumpLockUntil) {
+      this.state.wallJumpDirection = 0;
     }
   }
 
   private setPlayerLadderState(ladder: LoadedRoomObject | null): void {
     const playerBody = this.host.getPlayerBody();
     if (!playerBody) {
-      this.host.state.isClimbingLadder = false;
-      this.host.state.activeLadderKey = null;
+      this.state.isClimbingLadder = false;
+      this.state.activeLadderKey = null;
       this.resetWallMovementState();
       this.setLadderClimbSfxPlaying(false);
       return;
@@ -1052,15 +1187,15 @@ export class OverworldMovementController {
 
     const nextKey = ladder?.key ?? null;
     if (
-      this.host.state.activeLadderKey === nextKey &&
-      this.host.state.isClimbingLadder === Boolean(ladder)
+      this.state.activeLadderKey === nextKey &&
+      this.state.isClimbingLadder === Boolean(ladder)
     ) {
       return;
     }
 
-    const enteringLadder = ladder !== null && !this.host.state.isClimbingLadder;
-    this.host.state.isClimbingLadder = ladder !== null;
-    this.host.state.activeLadderKey = nextKey;
+    const enteringLadder = ladder !== null && !this.state.isClimbingLadder;
+    this.state.isClimbingLadder = ladder !== null;
+    this.state.activeLadderKey = nextKey;
     playerBody.setAllowGravity(!ladder);
     if (!ladder) {
       this.setLadderClimbSfxPlaying(false);
@@ -1100,7 +1235,7 @@ export class OverworldMovementController {
 
   private isPushHitboxProfile(height: number, groundedProfile: boolean): boolean {
     return groundedProfile &&
-      this.host.state.activeCrateInteractionMode === 'push' &&
+      this.state.activeCrateInteractionMode === 'push' &&
       height === this.options.playerPushHeight;
   }
 
@@ -1110,7 +1245,7 @@ export class OverworldMovementController {
   }
 
   private getPlayerHitboxHeight(playerBody: Phaser.Physics.Arcade.Body, groundedProfile: boolean): number {
-    if (this.host.state.isCrouching) {
+    if (this.state.isCrouching) {
       return this.options.playerCrouchHeight;
     }
 
@@ -1118,7 +1253,7 @@ export class OverworldMovementController {
       return this.options.playerStandingHeight;
     }
 
-    if (groundedProfile && this.host.state.activeCrateInteractionMode === 'push') {
+    if (groundedProfile && this.state.activeCrateInteractionMode === 'push') {
       return this.options.playerPushHeight;
     }
 
@@ -1133,16 +1268,16 @@ export class OverworldMovementController {
   }
 
   private clearCrateInteractionState(): void {
-    this.host.state.activeCrateInteractionMode = null;
-    this.host.state.activeCrateInteractionFacing = null;
+    this.state.activeCrateInteractionMode = null;
+    this.state.activeCrateInteractionFacing = null;
   }
 
   private setLadderClimbSfxPlaying(playing: boolean): void {
-    if (this.host.state.ladderClimbSfxPlaying === playing) {
+    if (this.state.ladderClimbSfxPlaying === playing) {
       return;
     }
 
-    this.host.state.ladderClimbSfxPlaying = playing;
+    this.state.ladderClimbSfxPlaying = playing;
     if (playing) {
       playSfx('ladder-climb');
       return;
@@ -1163,14 +1298,14 @@ export class OverworldMovementController {
       !downHeld &&
       !spacePressed &&
       !inQuicksand &&
-      !this.host.state.isClimbingLadder &&
-      (grounded || this.host.state.coyoteTime > 0)
+      !this.state.isClimbingLadder &&
+      (grounded || this.state.coyoteTime > 0)
     );
   }
 
   private tryApplySingleTileGapAssist(horizontalInput: number, grounded: boolean): boolean {
     const playerBody = this.host.getPlayerBody();
-    if (!playerBody || (!grounded && this.host.state.coyoteTime <= 0)) {
+    if (!playerBody || (!grounded && this.state.coyoteTime <= 0)) {
       return false;
     }
 
@@ -1323,8 +1458,8 @@ export class OverworldMovementController {
       return;
     }
 
-    this.host.state.activeCrateInteractionMode = crateInteraction.mode;
-    this.host.state.activeCrateInteractionFacing = crateInteraction.facing;
+    this.state.activeCrateInteractionMode = crateInteraction.mode;
+    this.state.activeCrateInteractionFacing = crateInteraction.facing;
   }
 
   private bodyBoundsCouldOverlap(
@@ -1489,7 +1624,7 @@ export class OverworldMovementController {
     let bestInteraction: OverworldCrateInteraction | null = null;
     let bestGap = Number.POSITIVE_INFINITY;
     const pullGapLimit =
-      this.host.state.activeCrateInteractionMode === 'pull'
+      this.state.activeCrateInteractionMode === 'pull'
         ? this.options.crateInteractionMaxGap + Math.max(6, playerTangent.size * 0.5)
         : this.options.crateInteractionMaxGap;
     const broadphasePadding = pullGapLimit + 6;
