@@ -11,7 +11,11 @@ import {
   type RoomSnapshot,
 } from '../persistence/roomModel';
 import { POLICE_PATROLMAN_OBJECT_ID, POLICEWOMAN_OBJECT_ID } from '../enemies/policeEnemy';
-import { BOYGAME_TILESET_FIRST_GID } from '../config';
+import {
+  BOYGAME_TILESET_FIRST_GID,
+  getObjectById,
+  getObjectPlacementPointForTile,
+} from '../config';
 import { markAppReady } from '../ui/appFeedback';
 
 type PreviewSmokeScene = {
@@ -408,6 +412,25 @@ function createBoygamePreviewRoom(): RoomSnapshot {
   const roomSnapshot = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
   const floorY = 16;
   const gid = (localIndex: number) => BOYGAME_TILESET_FIRST_GID + localIndex;
+  const placeObject = (
+    id: string,
+    tileX: number,
+    tileY: number,
+    layer: 'background' | 'terrain' | 'foreground' = 'terrain',
+  ) => {
+    const config = getObjectById(id);
+    if (!config) {
+      throw new Error(`Missing Boygame preview object config: ${id}`);
+    }
+    const point = getObjectPlacementPointForTile(config, tileX, tileY);
+    return {
+      id,
+      x: point.x,
+      y: point.y,
+      instanceId: `preview-${id}`,
+      layer,
+    };
+  };
   const stamp = (
     layer: 'background' | 'terrain' | 'foreground',
     tileX: number,
@@ -424,6 +447,11 @@ function createBoygamePreviewRoom(): RoomSnapshot {
   roomSnapshot.title = 'Boygame Preview';
   roomSnapshot.background = 'solid:#d7e894';
   roomSnapshot.spawnPoint = { x: 320, y: floorY * 16 - 16 };
+  roomSnapshot.lighting = {
+    mode: 'playerAuraDark',
+    darkness: 84,
+    radius: 38,
+  };
 
   for (let tileX = 0; tileX < roomSnapshot.tileData.terrain[floorY].length; tileX += 1) {
     roomSnapshot.tileData.terrain[floorY][tileX] = gid(10);
@@ -443,15 +471,24 @@ function createBoygamePreviewRoom(): RoomSnapshot {
   ]);
   stamp('terrain', 10, 13, [[12], [20], [28]]);
   stamp('terrain', 28, 14, [[13], [21]]);
-  stamp('foreground', 31, 14, [[68, 69], [76, 77]]);
-  stamp('foreground', 18, 11, [[80, 81], [88, 89]]);
-  stamp('foreground', 23, 10, [
-    [84, 85, 86],
-    [92, 93, 94],
-    [100, 101, 102],
-  ]);
-  stamp('foreground', 16, 15, [[56, 57, 58, 59]]);
-  stamp('foreground', 34, 15, [[60, 61, 62, 63]]);
+  roomSnapshot.placedObjects = [
+    placeObject('boygame_sign_left', 14, 15),
+    placeObject('boygame_chest', 16, 15),
+    placeObject('boygame_chest_open', 17, 15),
+    placeObject('boygame_tree', 19, 15, 'background'),
+    placeObject('boygame_boot', 21, 15),
+    placeObject('boygame_flower', 22, 15),
+    placeObject('boygame_grass', 23, 15),
+    placeObject('boygame_pebbles', 24, 15),
+    placeObject('boygame_rune_stone', 25, 15),
+    placeObject('boygame_rock_shard', 26, 15),
+    placeObject('boygame_wall_torch', 27, 13, 'foreground'),
+    placeObject('boygame_coin', 28, 14),
+    placeObject('boygame_coin_small', 29, 14),
+    placeObject('boygame_heart', 30, 13),
+    placeObject('boygame_rocks', 32, 15, 'background'),
+    placeObject('boygame_sign_right', 35, 15),
+  ];
 
   return roomSnapshot;
 }

@@ -25,6 +25,19 @@ import {
   LAVA_OBJECT_LIGHT_EMISSION,
 } from './tilesets';
 
+const BOYGAME_TORCH_LIGHT_EMISSION = Object.freeze({
+  offsetY: -2,
+  revealRadiusPx: 25,
+  glowRadiusPx: 37,
+  glowColor: 0x9bbc0f,
+  glowAlpha: 0.52,
+  flicker: {
+    radiusAmplitude: 2.5,
+    alphaAmplitude: 0.07,
+    speedHz: 7.5,
+  },
+} satisfies LightEmissionConfig);
+
 // ══════════════════════════════════════
 // GAME OBJECTS (enemies, collectibles, hazards, decorations)
 // ══════════════════════════════════════
@@ -161,6 +174,9 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'cake',        name: 'Cake',        category: 'collectible', path: 'assets/objects/cake.png',        frameWidth: 32, frameHeight: 32, frameCount: 6,   fps: 10,   bodyWidth: 32, bodyHeight: 32, behavior: 'animated',     description: 'Collectible cake.' },
   { id: 'coin_small_gold',   name: 'Small Gold Coin',   category: 'collectible', path: 'assets/objects/coin_small_gold.png',   frameWidth: 16, frameHeight: 16, frameCount: 6,  fps: 10, bodyWidth: 10, bodyHeight: 10, behavior: 'animated', description: 'Smaller gold coin. Quick pickup for points.' },
   { id: 'coin_small_silver', name: 'Small Silver Coin', category: 'collectible', path: 'assets/objects/coin_small_silver.png', frameWidth: 16, frameHeight: 16, frameCount: 6,  fps: 10, bodyWidth: 10, bodyHeight: 10, behavior: 'animated', description: 'Smaller silver coin. Quick pickup for points.' },
+  { id: 'boygame_coin', name: 'Boygame Coin', category: 'collectible', path: 'assets/objects/boygame/coin.png', frameWidth: 16, frameHeight: 16, frameCount: 4, fps: 9, bodyWidth: 12, bodyHeight: 12, behavior: 'animated', description: 'Four-frame spinning Boygame coin. Collect for points.' },
+  { id: 'boygame_coin_small', name: 'Boygame Small Coin', category: 'collectible', path: 'assets/objects/boygame/coin_small.png', frameWidth: 16, frameHeight: 16, frameCount: 4, fps: 9, bodyWidth: 10, bodyHeight: 10, behavior: 'animated', description: 'Small four-frame spinning Boygame coin. Collect for points.' },
+  { id: 'boygame_heart', name: 'Boygame Heart', category: 'collectible', path: 'assets/objects/boygame/heart.png', frameWidth: 16, frameHeight: 16, frameCount: 9, fps: 9, animationFrames: [0, 1, 2, 3, 4, 5, 6, 7], defaultFrame: 0, bodyWidth: 12, bodyHeight: 12, behavior: 'animated', description: 'Eight-frame spinning Boygame heart collectible.' },
 
   // ── Hazards ──
   { id: 'spikes',      name: 'Spikes',      category: 'hazard',      path: 'assets/enemies/spikes.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 8,  bodyWidth: 14, bodyHeight: 10, behavior: 'animated', description: 'Animated spike trap. Kills on contact.' },
@@ -200,8 +216,8 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'chicken',     name: 'Chicken',     category: 'enemy',       path: 'assets/enemies/chicken.png',     frameWidth: 32, frameHeight: 32, frameCount: 14, fps: 8,  animationFrames: [7, 8, 9, 10, 11, 12, 13], defaultFrame: 7, facingDirection: 'left', bodyWidth: 18, bodyHeight: 16, behavior: 'patrol',   description: 'Quick patrol enemy. Kills on contact.' },
   { id: 'shark',       name: 'Shark',       category: 'enemy',       path: 'assets/enemies/shark.png',       frameWidth: 64, frameHeight: 32, frameCount: 4,  fps: 8,  animationFrames: [0, 1, 2, 3, 2, 1], defaultFrame: 1, facingDirection: 'left', bodyWidth: 48, bodyHeight: 18, behavior: 'fly',      description: 'Cruises left and right in a wave pattern. Kills on contact.' },
   { id: SWORDSMAN_AI_OBJECT_ID, name: 'Sword Hunter', category: 'enemy', path: 'assets/enemies/swordsman_ai/sword_idle.png', frameWidth: 48, frameHeight: 48, frameCount: 10, fps: 8, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 14, bodyOffsetX: 19, bodyOffsetY: 26, displayScale: 1.12, displayOffsetY: 8, previewWidth: 18, previewHeight: 28, previewOffsetX: 15, previewOffsetY: 20, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Smart sword enemy. Patrols, chases nearby players, and attacks with a timed slash.' },
-  { id: POLICE_PATROLMAN_OBJECT_ID, name: 'Police Patrolman', category: 'enemy', path: 'assets/enemies/police_patrolman/idle.png', frameWidth: 64, frameHeight: 64, frameCount: 6, fps: 6, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 27, bodyOffsetX: 29, bodyOffsetY: 37, previewWidth: 22, previewHeight: 34, previewOffsetX: 22, previewOffsetY: 30, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Ranged police enemy. Can hunt players across platforms or patrol with optional shooting.' },
-  { id: POLICEWOMAN_OBJECT_ID, name: 'Policewoman', category: 'enemy', path: 'assets/enemies/policewoman/idle.png', frameWidth: 64, frameHeight: 64, frameCount: 6, fps: 6, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 27, bodyOffsetX: 25, bodyOffsetY: 37, previewWidth: 20, previewHeight: 34, previewOffsetX: 20, previewOffsetY: 30, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Ranged police enemy. Can hunt players across platforms or patrol with optional shooting.' },
+  { id: POLICE_PATROLMAN_OBJECT_ID, name: 'Police Patrolman', category: 'enemy', path: 'assets/enemies/police_patrolman/idle.png', frameWidth: 64, frameHeight: 64, frameCount: 6, fps: 6, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 27, bodyOffsetX: 29, bodyOffsetY: 37, displayScale: 1.25, displayOffsetY: -8, previewWidth: 22, previewHeight: 34, previewOffsetX: 22, previewOffsetY: 30, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Ranged police enemy. Can hunt players across platforms or patrol with optional shooting.' },
+  { id: POLICEWOMAN_OBJECT_ID, name: 'Policewoman', category: 'enemy', path: 'assets/enemies/policewoman/idle.png', frameWidth: 64, frameHeight: 64, frameCount: 6, fps: 6, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 27, bodyOffsetX: 25, bodyOffsetY: 37, displayScale: 1.25, displayOffsetY: -8, previewWidth: 20, previewHeight: 34, previewOffsetX: 20, previewOffsetY: 30, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Ranged police enemy. Can hunt players across platforms or patrol with optional shooting.' },
 
   // ── NPCs ──
   { id: JIMOTHY_OBJECT_ID, name: 'Jimothy', category: 'npc', path: 'assets/npc/jimothy.png', frameWidth: 32, frameHeight: 32, frameCount: 8, fps: 4, animationFrames: [0, 1], defaultFrame: 0, facingDirection: 'right', bodyWidth: 24, bodyHeight: 16, bodyOffsetX: 4, bodyOffsetY: 16, behavior: 'static', description: 'A friendly NPC who can idle, wander, patrol, follow players, and deliver dialogue.' },
@@ -238,6 +254,19 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'button',      name: 'Button',      category: 'decoration',  path: 'assets/objects/button.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 0,  defaultFrame: 0, bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Floor button prop. No collision.' },
 
   // ── Decorations ──
+  { id: 'boygame_chest', name: 'Boygame Chest', category: 'decoration', path: 'assets/objects/boygame/chest.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Closed Boygame treasure chest decoration.' },
+  { id: 'boygame_chest_open', name: 'Boygame Open Chest', category: 'decoration', path: 'assets/objects/boygame/chest_open.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Open Boygame treasure chest decoration.' },
+  { id: 'boygame_sign_left', name: 'Boygame Left Sign', category: 'decoration', path: 'assets/objects/boygame/sign_arrow_left.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Boygame arrow sign pointing left.' },
+  { id: 'boygame_sign_right', name: 'Boygame Right Sign', category: 'decoration', path: 'assets/objects/boygame/sign_arrow_right.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Boygame arrow sign pointing right.' },
+  { id: 'boygame_boot', name: 'Boygame Boot', category: 'decoration', path: 'assets/objects/boygame/boot.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small Boygame boot decoration.' },
+  { id: 'boygame_tree', name: 'Boygame Tree', category: 'decoration', path: 'assets/objects/boygame/tree.png', frameWidth: 32, frameHeight: 32, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Large Boygame tree decoration.' },
+  { id: 'boygame_rocks', name: 'Boygame Rocks', category: 'decoration', path: 'assets/objects/boygame/rocks.png', frameWidth: 32, frameHeight: 32, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Large Boygame rock pile decoration.' },
+  { id: 'boygame_rock_shard', name: 'Boygame Rock Shard', category: 'decoration', path: 'assets/objects/boygame/rock_shard.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small Boygame rock shard decoration.' },
+  { id: 'boygame_flower', name: 'Boygame Flower', category: 'decoration', path: 'assets/objects/boygame/flower.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small Boygame flower decoration.' },
+  { id: 'boygame_grass', name: 'Boygame Grass', category: 'decoration', path: 'assets/objects/boygame/grass.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Boygame grass clump decoration.' },
+  { id: 'boygame_pebbles', name: 'Boygame Pebbles', category: 'decoration', path: 'assets/objects/boygame/pebbles.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Boygame ground pebbles decoration.' },
+  { id: 'boygame_rune_stone', name: 'Boygame Rune Stone', category: 'decoration', path: 'assets/objects/boygame/rune_stone.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Carved Boygame rune stone decoration.' },
+  { id: 'boygame_wall_torch', name: 'Boygame Wall Torch', category: 'decoration', path: 'assets/objects/boygame/wall_torch.png', frameWidth: 16, frameHeight: 16, frameCount: 4, fps: 9, bodyWidth: 0, bodyHeight: 0, behavior: 'animated', lightEmission: BOYGAME_TORCH_LIGHT_EMISSION, description: 'Animated Boygame wall torch with a flickering light in dark rooms.' },
   { id: 'bush',        name: 'Bush',        category: 'decoration',  path: 'assets/deco/bush.png',           frameWidth: 32, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative bush. No collision.' },
   { id: 'rock',        name: 'Rock',        category: 'decoration',  path: 'assets/deco/rock.png',           frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative rock. No collision.' },
   { id: 'tree',        name: 'Tree',        category: 'decoration',  path: 'assets/deco/tree.png',           frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative tree. No collision.' },

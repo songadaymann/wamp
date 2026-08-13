@@ -559,7 +559,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       spawnEnemyBullet: (loadedRoom, liveObject) => {
         const body = this.getDynamicBody(liveObject.sprite);
         this.hazardController.spawnEnemyBullet(loadedRoom, liveObject, {
-          offsetX: 14,
+          offsetX: 14 * getObjectDisplayScale(liveObject.config),
           offsetY: body ? body.center.y - liveObject.sprite.y - 4 : 8,
           hitReason: `${liveObject.config.name} shot you.`,
         });

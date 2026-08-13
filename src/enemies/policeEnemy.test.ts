@@ -57,6 +57,7 @@ describe('police enemy model', () => {
     for (const objectId of POLICE_ENEMY_OBJECT_IDS) {
       const config = getObjectById(objectId);
       expect(config).toBeDefined();
+      expect(config?.displayScale).toBe(1.25);
       const placementPoint = getObjectPlacementPointForTile(config!, tileX, tileY);
       const previewRect = getObjectPreviewRectForTile(config!, tileX, tileY);
       const bodyRect = getObjectRuntimeBodyRect(config!, placementPoint);

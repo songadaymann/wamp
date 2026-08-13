@@ -7,7 +7,7 @@ const baseUrl = process.argv[2] || 'http://127.0.0.1:4517/';
 const outputDir = process.env.BOYGAME_SMOKE_OUTPUT_DIR || 'output/web-game/boygame-tileset';
 const url = new URL(baseUrl);
 url.searchParams.set('previewSmoke', '1');
-url.searchParams.set('renderer', 'canvas');
+url.searchParams.set('renderer', 'webgl');
 
 mkdirSync(outputDir, { recursive: true });
 
@@ -17,6 +17,7 @@ const summary = {
   consoleErrors: [],
   pageErrors: [],
   palette: null,
+  objects: null,
   runtime: null,
 };
 
@@ -68,7 +69,7 @@ try {
     const source = game?.textures.get('boygame')?.getSourceImage();
     return source ? { width: source.width, height: source.height } : null;
   });
-  assert.deepEqual(texture, { width: 128, height: 208 });
+  assert.deepEqual(texture, { width: 128, height: 112 });
 
   const paletteCanvas = page.locator('#palette-canvas');
   const paletteBox = await paletteCanvas.boundingBox();
@@ -92,10 +93,30 @@ try {
     path: path.join(outputDir, 'boygame-palette-panel.png'),
   });
 
+  await page.click('.palette-tab[data-mode="objects"]');
+  await page.fill('#object-search-input', 'Boygame');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.object-item[data-object-id^="boygame_"]').length === 16,
+  );
+  summary.objects = await page.locator('.object-item[data-object-id^="boygame_"]').evaluateAll(
+    (items) => items.map((item) => item.getAttribute('data-object-id')),
+  );
+  assert.ok(summary.objects.includes('boygame_coin'));
+  assert.ok(summary.objects.includes('boygame_heart'));
+  assert.ok(summary.objects.includes('boygame_wall_torch'));
+  await setCanvasVisibility(page, false);
+  await page.locator('#object-palette-section').screenshot({
+    path: path.join(outputDir, 'boygame-object-palette-panel.png'),
+  });
+  await setCanvasVisibility(page, true);
+
+  await page.click('.palette-tab[data-mode="tiles"]');
+  await page.selectOption('#tileset-select', 'boygame');
+
   // Choose local tile 10 (column 2, row 1) and stamp it into the synthetic room.
   await page.mouse.click(
     paletteBox.x + paletteBox.width * (2.5 / 8),
-    paletteBox.y + paletteBox.height * (1.5 / 13),
+    paletteBox.y + paletteBox.height * (1.5 / 7),
   );
   const gameCanvas = await page.evaluate(() => Array.from(document.querySelectorAll('canvas'))
     .filter((canvas) => canvas.id !== 'palette-canvas' && canvas.id !== 'tile-preview-canvas')
@@ -112,20 +133,60 @@ try {
   );
   await waitForState(page, (state) => state?.activeScene?.roomDirty === true, 'Boygame tile placement');
 
+  await page.click('.editor-feature-btn[data-editor-feature="lighting"]');
+  await page.selectOption('#lighting-mode-select', 'playerAuraDark');
+  await waitForState(
+    page,
+    (state) => state?.activeScene?.lighting?.rendererPath === 'webgl',
+    'Boygame dark-room lighting preview',
+  );
+
   await page.click('#btn-test-play');
   const runtimeState = await waitForState(
     page,
-    (state) => state?.activeScene?.scene === 'overworld-play' && state?.activeScene?.mode === 'play',
+    (state) => state?.activeScene?.scene === 'overworld-play'
+      && state?.activeScene?.mode === 'play'
+      && boygameObjects(state).length === 16
+      && state?.activeScene?.lighting?.rendererPath === 'webgl',
     'Boygame test play',
   );
+  const runtimeObjects = boygameObjects(runtimeState);
+  assert.equal(runtimeObjects.find((object) => object.id === 'boygame_coin')?.animationKey, 'boygame_coin_anim');
+  assert.equal(runtimeObjects.find((object) => object.id === 'boygame_coin_small')?.animationKey, 'boygame_coin_small_anim');
+  assert.equal(runtimeObjects.find((object) => object.id === 'boygame_heart')?.animationKey, 'boygame_heart_anim');
+  assert.equal(runtimeObjects.find((object) => object.id === 'boygame_wall_torch')?.animationKey, 'boygame_wall_torch_anim');
+  assert.equal(runtimeState.activeScene.lighting?.rendererPath, 'webgl');
+  assert.ok(runtimeState.activeScene.lighting?.staticObjectEmitterCount >= 1);
+  assert.ok(runtimeState.activeScene.lighting?.glowEmitterCount >= 1);
   summary.runtime = {
     scene: runtimeState.activeScene.scene,
     mode: runtimeState.activeScene.mode,
     roomId: runtimeState.activeScene.roomId,
+    objectCount: runtimeObjects.length,
+    animatedObjectIds: runtimeObjects
+      .filter((object) => object.animationKey)
+      .map((object) => object.id),
+    lighting: runtimeState.activeScene.lighting,
   };
   await setEarlyWorldTilesVisibility(page, false);
   await page.screenshot({ path: path.join(outputDir, 'boygame-test-play.png') });
   await setEarlyWorldTilesVisibility(page, true);
+
+  const heart = runtimeObjects.find((object) => object.id === 'boygame_heart');
+  assert.ok(heart, 'Boygame heart was not present before collection.');
+  const scoreBeforeHeart = runtimeState.activeScene.score;
+  const moveResult = await page.evaluate(
+    ({ x, y }) => window.run_preview_smoke_action?.('setPlayerPosition', { x, y }) ?? null,
+    { x: heart.x, y: heart.y },
+  );
+  assert.equal(moveResult?.ok, true);
+  const collectedState = await waitForState(
+    page,
+    (state) => !boygameObjects(state).some((object) => object.id === 'boygame_heart'),
+    'Boygame heart collection',
+  );
+  assert.equal(collectedState.activeScene.score, scoreBeforeHeart + 1);
+  summary.runtime.heartCollected = true;
 
   assert.deepEqual(summary.consoleErrors, []);
   assert.deepEqual(summary.pageErrors, []);
@@ -155,6 +216,20 @@ async function setEarlyWorldTilesVisibility(page, visible) {
       layer.style.visibility = nextVisible ? '' : 'hidden';
     }
   }, visible);
+}
+
+async function setCanvasVisibility(page, visible) {
+  await page.evaluate((nextVisible) => {
+    for (const surface of document.querySelectorAll('canvas, #wamp-early-world-tiles')) {
+      surface.style.visibility = nextVisible ? '' : 'hidden';
+    }
+  }, visible);
+}
+
+function boygameObjects(state) {
+  return (state?.activeScene?.liveObjects ?? []).filter(
+    (object) => typeof object.id === 'string' && object.id.startsWith('boygame_'),
+  );
 }
 
 async function waitForState(page, predicate, label, timeoutMs = 30_000) {

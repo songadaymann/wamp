@@ -53,16 +53,15 @@ describe('authoring catalog', () => {
       name: 'Boygame',
       assetPath: expect.stringContaining('boygame.png'),
       imageWidth: 128,
-      imageHeight: 208,
+      imageHeight: 112,
       columns: 8,
-      rows: 13,
-      tileCount: 104,
+      rows: 7,
+      tileCount: 56,
       gidStart: 1801,
-      gidEnd: 1904,
+      gidEnd: 1856,
     });
     expect(boygame?.disabledEditorLocalIndices).toContain(17);
     expect(boygame?.disabledEditorLocalIndices).not.toContain(10);
-    expect(boygame?.collisionLocalIndices.none).toContain(56);
     expect(boygame?.collisionLocalIndices.full).toContain(10);
     expect(boygame?.buildStyles).toContainEqual(expect.objectContaining({
       id: 'boygame_ruins',
@@ -87,6 +86,15 @@ describe('authoring catalog', () => {
       defaults: { behaviorMode: 'hunter', patrolShoots: false },
     });
     expect(objects.get('policewoman')?.capabilities.police).toBeTruthy();
+    expect(objects.get('boygame_coin')).toMatchObject({ category: 'collectible', frameCount: 4, behavior: 'animated' });
+    expect(objects.get('boygame_heart')).toMatchObject({ category: 'collectible', frameCount: 9, behavior: 'animated' });
+    expect(objects.get('boygame_wall_torch')).toMatchObject({ category: 'decoration', frameCount: 4, behavior: 'animated' });
+
+    expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_heart')?.animationFrames).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_wall_torch')?.lightEmission).toMatchObject({
+      glowColor: 0x9bbc0f,
+      flicker: expect.any(Object),
+    });
   });
 
   it('keeps the legacy tileset route projection stable', () => {

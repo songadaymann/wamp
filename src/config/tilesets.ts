@@ -261,19 +261,12 @@ const DECO_ONLY_INDICES_CYBERCITY = [
   44, 45, 46, 47,
   56, 57, 58, 59,
 ];
-const DECO_ONLY_INDICES_BOYGAME = Array.from(
-  { length: 48 },
-  (_, index) => index + 56,
-);
 const BOYGAME_BLANK_INDICES = [
   17, 18, 19, 22, 23,
   24, 25, 26, 27, 29, 30, 31,
   37, 38, 39,
   45, 46, 47,
   51, 52, 53, 54, 55,
-  72, 73,
-  87, 95,
-  96, 97, 98, 99, 103,
 ];
 
 function createBoygameEditorMetadata(): Partial<Record<number, EditorTileMetadata>> {
@@ -1083,16 +1076,13 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: BOYGAME_TILESET_KEY,
     name: 'Boygame',
-    path: 'assets/tilesets/boygame.png?v=2026-08-13-boygame-import',
+    path: 'assets/tilesets/boygame.png?v=2026-08-13-object-split',
     imageWidth: 128,
-    imageHeight: 208,
+    imageHeight: 112,
     columns: 8,
-    rows: 13,
-    tileCount: 104,
+    rows: 7,
+    tileCount: 56,
     firstGid: BOYGAME_TILESET_FIRST_GID,
-    terrainCollisionProfiles: {
-      ...createTilesetCollisionProfiles(DECO_ONLY_INDICES_BOYGAME, NO_COLLISION_PROFILE),
-    },
     editorTileMetadata: createBoygameEditorMetadata(),
     editorPaletteBackgroundColor: '#d7e894',
     authoringBuildStyles: [
