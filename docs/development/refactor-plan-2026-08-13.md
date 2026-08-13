@@ -121,17 +121,17 @@ never rewritten. No production deployment or production-data mutation is part of
 | T00 | Quicksand state controller | Accepted: manual `PASS` at `000741f`; frozen on port 4600 |
 | T01 | Room-music playback selection and synchronization controller | Accepted: manual `PASS` at `8909001`; frozen on port 4601 |
 | T02 | Executable-entry guard and dormant course-composer cleanup | Accepted: manual `PASS` at repair commit `7a5336c`; frozen on port 4602 |
-| T03 | Live-object model types and spatial index | Candidate: frozen at `3d93c4e`; full gate and police browser smoke passed; manual QA pending on port 4603 |
-| T04 | Live-object lifecycle and interaction coordinators | Candidate: frozen at `1244099`; manual QA pending on port 4604 |
-| T05 | Movement-state ownership | Candidate: frozen at `9f8f752`; manual QA pending on port 4605 |
-| T06 | Movement and swordsman state-machine decomposition | Candidate: frozen at `d730e31`; manual QA pending on port 4606 |
-| T07 | Backdrop and camera ownership | Candidate: frozen at `a811551`; manual QA pending on port 4607 |
-| T08 | Room-comments data, composer, and presentation owners | Candidate source at `10c88d5`; full 168-file / 1,193-test gate, DOM contract, focused 16-test suite, and safety Canvas comment-pin smoke passed; manual QA pending on port 4608 |
-| T09 | Editor document, history, and presentation core | Candidate source at `54c7f4a`; pure history, clipboard planning, placed-object mutations, room-goal documents, document presentation, and shared ordinary/Expanded inspector view models are extracted behind stable runtime/scene façades. Direct runtime characterization also found and fixed tile Redo applying the erased value. Focused 22-test coverage and the complete 175-file / 1,213-test suite pass; lint, TypeScript, generated bindings, production build, DOM contract, and diff checks are green. Manual QA pending on port 4609 |
+| T03 | Live-object model types and spatial index | Accepted: manual `PASS` at `3d93c4e`; frozen on port 4603 |
+| T04 | Live-object lifecycle and interaction coordinators | Accepted: manual `PASS` at `1244099`; frozen on port 4604 |
+| T05 | Movement-state ownership | Accepted: manual `PASS` at `9f8f752`; frozen on port 4605 |
+| T06 | Movement and swordsman state-machine decomposition | Accepted: manual `PASS` at `d730e31`; frozen on port 4606 |
+| T07 | Backdrop and camera ownership | Accepted: manual `PASS` at `a811551`; frozen on port 4607 |
+| T08 | Room-comments data, composer, and presentation owners | Accepted: manual `PASS` at `aaef66f`; frozen on port 4608 |
+| T09 | Editor document, history, and presentation core | Accepted: manual `PASS` at `fd1c070`; frozen on port 4609 |
 | T10 | World-streaming model, selection policy, and readiness | Candidate source at `f77599a`; shared streaming DTOs now live in a model module with cache compatibility re-exports. Pure candidate precedence, nearest-preview selection, and full-room retention planning sit behind the stable streaming façade, while a focused coordinator owns dynamic-overlay generation aborts and the exact capped 500/1000/2000/5000/10000 ms retry policy. All 35 streaming/preview suites pass 260 tests; the complete 177-file / 1,222-test gate, lint, TypeScript, generated bindings, production build, DOM contract, and diff checks are green. Manual QA pending on port 4610 |
 | T11 | World-streaming preparation and teardown lifecycles | Candidate source at `516215d`; focused coordinators now own full-room preparation state, standard/portal activation ownership, cancellation/failure, deferred commits, phased teardown, forced destruction, retention, and reconciliation while the stable façade retains Phaser operations and their exact destruction order. All 36 streaming suites pass 264 tests; the complete 178-file / 1,226-test gate, lint, TypeScript, generated bindings, production build, DOM contract, and diff checks are green. Manual QA pending on port 4611 |
 | T12 | PvP combat geometry, ledger, presentation, and coordinator | Pending |
-| T13 | Typed Pages Worker migration | Candidate: frozen at `68b362b`; full gate passed at 155 files / 1,141 tests; manual QA pending on port 4613 |
+| T13 | Typed Pages Worker migration | Accepted: manual `PASS` at `68b362b`; frozen on port 4613 |
 | T14 | Cloudflare Worker analysis/admin module split | Pending |
 | T15 | Thin admin UI entries and application modules | Pending |
 | T16 | PartyKit protocol and server decomposition | Pending |
