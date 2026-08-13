@@ -8,11 +8,8 @@ import {
   getObjectDisplayOffset,
   getObjectDisplayScale,
   getObjectRuntimeBodyOffset,
-  objectCollidesWithWorld,
   placedObjectLayerAllowsRuntimeCollision,
   isDynamicRuntimeObjectConfig,
-  isBlockSwitchObjectId,
-  isSwitchBlockObjectId,
   isMovingPlatformEndpointObjectId,
   isMovingPlatformObjectId,
   isPushableObjectConfig,
@@ -28,14 +25,11 @@ import {
   type SpecialTileKind,
 } from '../../config';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
-import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { ensureCustomSpriteTexture } from '../../customSprites/registry';
 import {
   SWORDSMAN_AI_OBJECT_ID,
 } from '../../enemies/swordsmanAi';
 import {
-  getPlacedPoliceBehaviorMode,
-  getPlacedPolicePatrolShoots,
   isPoliceEnemyObjectId,
 } from '../../enemies/policeEnemy';
 import type { SwordsmanTraversalPlannerMode } from '../../enemies/swordsmanRobustPlanner';
@@ -63,9 +57,6 @@ import {
 } from './liveObjects/objectFactory';
 import { isAnimationSafelyPlayable } from './liveObjects/animationReadiness';
 import { collectLiveObject as collectLiveObjectWithFx } from './liveObjects/collection';
-import {
-  canActorTriggerBlockSwitchByContact,
-} from './liveObjects/triggers';
 import { LiveObjectTriggerController } from './liveObjects/triggerController';
 import { LiveObjectHazardController } from './liveObjects/hazardController';
 import { LiveObjectEnemyLifecycleController } from './liveObjects/enemyLifecycle';
@@ -75,27 +66,15 @@ import {
   liveObjectBehaviorCanSleepAtDistance,
   type FlyingEnemyBehavior,
 } from './liveObjects/behaviorRegistry';
-import { liveObjectBlocksPlayerMovement } from './playerCollisionObjects';
 import { carryMovingPlatformRiders } from './liveObjects/movingPlatforms';
-import { getPlacedObjectPathTargetIds } from '../../placedObjects/objectPaths';
 import { getContainedLiveObjectKey } from './liveObjects/indexing';
 import {
   JIMOTHY_ANIMATION_KEYS,
-  getPlacedNpcDefeatMode,
-  getPlacedNpcMode,
-  getPlacedNpcName,
-  normalizeNpcCanJumpFall,
-  normalizeNpcFriendlyFire,
-  normalizeNpcPlayerCollision,
-  normalizeNpcPushable,
 } from '../../npcs/model';
 import {
   LiveObjectNpcController,
   type NpcRuntimeStateSnapshot,
 } from './liveObjects/npcController';
-import {
-  getNpcEnvironmentalObjectInteraction,
-} from './liveObjects/npcEnvironment';
 import type {
   CreateLiveObjectEntryOptions,
   LiveObjectExplicitRemovalReason,
@@ -104,6 +83,8 @@ import type {
   LoadedRoomObject,
   WeaponHitResult,
 } from './liveObjects/model';
+import { LiveObjectLifecycleController } from './liveObjects/lifecycleController';
+import { LiveObjectInteractionCoordinator } from './liveObjects/interactionCoordinator';
 import { LiveObjectPartitionIndex } from './liveObjects/partitionIndex';
 
 export { isDynamicArcadeBody } from './liveObjects/bodies';
@@ -264,12 +245,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly swordsmanController: LiveObjectSwordsmanController<TEdgeWall>;
   private readonly npcController: LiveObjectNpcController<TEdgeWall>;
   private readonly enemyLifecycleController: LiveObjectEnemyLifecycleController<TEdgeWall>;
+  private readonly lifecycleController: LiveObjectLifecycleController<TEdgeWall>;
+  private readonly interactionCoordinator: LiveObjectInteractionCoordinator<TEdgeWall>;
   private readonly partitionIndex: LiveObjectPartitionIndex<TEdgeWall>;
-  private readonly colliderDormancyStates = new WeakMap<
-    Phaser.Physics.Arcade.Collider,
-    boolean
-  >();
-  private physicsReconciliationGeneration = 0;
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
   private roomStateEventSuppressionDepth = 0;
 
@@ -294,6 +272,20 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       onRoomSwitchStateChanged: (event) => this.emitRoomSwitchStateChanged(event),
       syncWorldObjectColliders: (loadedRooms) => this.syncWorldObjectColliders(loadedRooms),
       syncLiveObjectInteractions: (loadedRooms) => this.syncLiveObjectInteractions(loadedRooms),
+    });
+    this.lifecycleController = new LiveObjectLifecycleController({
+      getLoadedFullRooms: this.options.getLoadedFullRooms,
+      getPlacedObjectRuntimeKey: this.options.getPlacedObjectRuntimeKey,
+      isCollectedObjectKey: this.options.isCollectedObjectKey,
+      createLiveObjectEntry: (loadedRoom, entryOptions) =>
+        this.createLiveObjectEntry(loadedRoom, entryOptions),
+      applySwitchBlockStates: (loadedRoom) =>
+        this.triggerController.applySwitchBlockStates(loadedRoom),
+      clearBlockSwitchActorLatchesForRoom: (loadedRoom) =>
+        this.triggerController.clearBlockSwitchActorLatchesForRoom(loadedRoom),
+      clearPressureTriggerStatesForRoom: (loadedRoom) =>
+        this.triggerController.clearPressureTriggerStatesForRoom(loadedRoom),
+      invalidateRoomPartition: (roomId) => this.partitionIndex.invalidateRoom(roomId),
     });
     this.hazardController = new LiveObjectHazardController({
       scene: this.options.scene,
@@ -380,13 +372,59 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       createLiveObjectEntry: (loadedRoom, entryOptions) =>
         this.createLiveObjectEntry(loadedRoom, entryOptions),
       destroyLiveObjectInteractions: (liveObject) =>
-        this.destroyLiveObjectInteractions(liveObject),
+        this.lifecycleController.destroyInteractions(liveObject),
       destroyLiveObjectWorldColliders: (liveObject) =>
-        this.destroyLiveObjectWorldColliders(liveObject),
+        this.lifecycleController.destroyWorldColliders(liveObject),
       destroyLiveObjectHelpers: (liveObject) =>
-        this.destroyLiveObjectHelpers(liveObject),
+        this.lifecycleController.destroyHelpers(liveObject),
       syncWorldObjectColliders: (loadedRooms) => this.syncWorldObjectColliders(loadedRooms),
       syncLiveObjectInteractions: (loadedRooms) => this.syncLiveObjectInteractions(loadedRooms),
+    });
+    this.interactionCoordinator = new LiveObjectInteractionCoordinator({
+      scene: this.options.scene,
+      getPlayer: this.options.getPlayer,
+      getPlayerPickupSensor: this.options.getPlayerPickupSensor,
+      getPlayerBody: this.options.getPlayerBody,
+      destroyInteractions: (liveObject) =>
+        this.lifecycleController.destroyInteractions(liveObject),
+      destroyWorldColliders: (liveObject) =>
+        this.lifecycleController.destroyWorldColliders(liveObject),
+      collectLiveObject: (loadedRoom, liveObject) =>
+        this.collectLiveObject(loadedRoom, liveObject),
+      addHazardInteraction: (loadedRoom, liveObject, player) =>
+        this.hazardController.addHazardInteraction(loadedRoom, liveObject, player),
+      handleEnemyContact: (loadedRoom, liveObject) =>
+        this.enemyLifecycleController.handleEnemyContact(loadedRoom, liveObject),
+      handleNpcContact: (loadedRoom, liveObject) =>
+        this.enemyLifecycleController.handleNpcContact(loadedRoom, liveObject),
+      addNpcTornadoInteraction: (loadedRoom, npc, tornado) =>
+        this.hazardController.addNpcTornadoInteraction(loadedRoom, npc, tornado),
+      touchNpcQuicksand: (liveObject) => this.npcController.touchQuicksand(liveObject),
+      defeatNpc: (loadedRoom, liveObject) =>
+        this.enemyLifecycleController.defeatNpc(loadedRoom, liveObject),
+      maybeBreakBrickBox: (loadedRoom, liveObject) =>
+        this.maybeBreakBrickBox(loadedRoom, liveObject),
+      maybeBreakButtStompableObject: (loadedRoom, liveObject) =>
+        this.maybeBreakButtStompableObject(loadedRoom, liveObject),
+      maybeTriggerBlockSwitch: (loadedRoom, liveObject) =>
+        this.triggerController.maybeTriggerBlockSwitch(loadedRoom, liveObject),
+      addBouncePadInteraction: (loadedRoom, liveObject, player) =>
+        this.hazardController.addBouncePadInteraction(loadedRoom, liveObject, player),
+      handleLockedDoorContact: (loadedRoom, liveObject) =>
+        this.triggerController.handleLockedDoorContact(loadedRoom, liveObject),
+      shouldCollideWithLiveObject: (liveObject) =>
+        this.shouldCollideWithLiveObject(liveObject),
+      shouldCollideWithLadderTopSupport: (playerBody, supportBody) =>
+        this.shouldCollideWithLadderTopSupport(playerBody, supportBody),
+      getRuntimeSolidObjects: (loadedRoom) =>
+        this.partitionIndex.getRuntimeSolidObjects(loadedRoom),
+      usesDynamicObjectBody: (config) => this.usesDynamicObjectBody(config),
+      handleBlockSwitchActorHit: (loadedRoom, switchObject, actor) =>
+        this.triggerController.handleBlockSwitchActorHit(loadedRoom, switchObject, actor),
+      canActorPushPushableByContact: (liveObject) =>
+        this.canActorPushPushableByContact(liveObject),
+      handleActorPushableContact: (actor, pushable) =>
+        this.handleActorPushableContact(actor, pushable),
     });
   }
 
@@ -448,135 +486,26 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     endIndex: number,
     dormant: boolean,
   ): number {
-    const firstIndex = Phaser.Math.Clamp(
-      Math.floor(startIndex),
-      0,
-      loadedRoom.room.placedObjects.length,
-    );
-    const lastIndex = Phaser.Math.Clamp(
-      Math.ceil(endIndex),
-      firstIndex,
-      loadedRoom.room.placedObjects.length,
-    );
-    for (let index = firstIndex; index < lastIndex; index += 1) {
-      const placedObject = loadedRoom.room.placedObjects[index];
-      const config = getEditorObjectConfigById(placedObject.id);
-      if (!config) {
-        continue;
-      }
-
-      const objectKey = this.options.getPlacedObjectRuntimeKey(loadedRoom.room.id, placedObject, index);
-      if (this.options.isCollectedObjectKey(objectKey)) {
-        continue;
-      }
-
-      const linkedTargetInstanceIds = getPlacedObjectPathTargetIds(placedObject);
-      const liveObject = this.createLiveObjectEntry(loadedRoom, {
-        key: objectKey,
-        config,
-        x: placedObject.x,
-        y: placedObject.y,
-        facing: placedObject.facing,
-        layer: placedObject.layer,
-        baseTimeSeed: placedObject.x + placedObject.y,
-        placedInstanceId: placedObject.instanceId,
-        linkedTargetRoomId: linkedTargetInstanceIds.length > 0 ? loadedRoom.room.id : null,
-        linkedTargetInstanceId: linkedTargetInstanceIds[0] ?? null,
-        linkedTargetInstanceIds,
-        linkedTargetWorldX: null,
-        linkedTargetWorldY: null,
-        containedObjectId: placedObject.containedObjectId ?? null,
-        signText: placedObject.signText ?? null,
-        objectiveMode: placedObject.swordsmanObjectiveMode ?? null,
-        defeatMode: placedObject.swordsmanDefeatMode ?? null,
-        policeBehaviorMode: getPlacedPoliceBehaviorMode(placedObject),
-        policePatrolShoots: getPlacedPolicePatrolShoots(placedObject),
-        npcMode: getPlacedNpcMode(placedObject),
-        npcPushable: normalizeNpcPushable(
-          placedObject.npcPushable,
-          getPlacedNpcMode(placedObject),
-        ),
-        npcCanJumpFall: normalizeNpcCanJumpFall(
-          placedObject.npcCanJumpFall,
-          getPlacedNpcMode(placedObject),
-        ),
-        npcPlayerCollision: normalizeNpcPlayerCollision(
-          placedObject.npcPlayerCollision,
-        ),
-        npcFriendlyFire: normalizeNpcFriendlyFire(placedObject.npcFriendlyFire),
-        npcName: getPlacedNpcName(placedObject, config.name),
-        npcDefeatMode: getPlacedNpcDefeatMode(placedObject),
-        countsTowardGoals: true,
-      });
-      if (liveObject) {
-        loadedRoom.liveObjects.push(liveObject);
-        if (dormant) {
-          this.setLiveObjectDormant(liveObject, true);
-        }
-      }
-    }
-
-    return lastIndex;
+    return this.lifecycleController.createBatch(loadedRoom, startIndex, endIndex, dormant);
   }
-
   finalizeLiveObjectCreation(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     dormant: boolean,
   ): void {
-    this.triggerController.applySwitchBlockStates(loadedRoom);
-    if (dormant) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        if (!isSwitchBlockObjectId(liveObject.config.id)) continue;
-        this.captureFinalizedDormantBodyState(liveObject.sprite);
-      }
-    }
-    this.partitionIndex.invalidateRoom(loadedRoom.room.id);
+    this.lifecycleController.finalizeCreation(loadedRoom, dormant);
   }
-
   setLoadedRoomLiveObjectsDormant(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     dormant: boolean,
   ): void {
-    for (const liveObject of loadedRoom.liveObjects) {
-      this.setLiveObjectDormant(liveObject, dormant);
-      for (const interaction of liveObject.interactions) {
-        this.setColliderDormant(interaction, dormant);
-      }
-      for (const collider of liveObject.worldColliders) {
-        this.setColliderDormant(collider, dormant);
-      }
-    }
-    this.partitionIndex.invalidateRoom(loadedRoom.room.id);
+    this.lifecycleController.setRoomDormant(loadedRoom, dormant);
   }
-
   setLoadedRoomWorldCollisionTargetDormant(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     dormant: boolean,
   ): void {
-    const collisionTargets = new Set<unknown>([
-      loadedRoom.terrainLayer,
-      loadedRoom.terrainInsetBodies,
-    ].filter(Boolean));
-    if (collisionTargets.size === 0) return;
-
-    for (const activeRoom of this.options.getLoadedFullRooms()) {
-      for (const liveObject of activeRoom.liveObjects) {
-        for (const collider of liveObject.worldColliders) {
-          const targets = collider as Phaser.Physics.Arcade.Collider & {
-            object1?: unknown;
-            object2?: unknown;
-          };
-          if (
-            collisionTargets.has(targets.object1)
-            || collisionTargets.has(targets.object2)
-          ) {
-            this.setColliderDormant(collider, dormant);
-          }
-        }
-      }
-    }
+    this.lifecycleController.setRoomWorldCollisionTargetDormant(loadedRoom, dormant);
   }
-
   destroyLiveObjects(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     options: { preserveTriggerState?: boolean } = {},
@@ -595,45 +524,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       clearRoomTriggerState?: boolean;
     } = {},
   ): boolean {
-    let firstError: unknown;
-    let hasError = false;
-    const attempt = (operation: () => void) => {
-      try {
-        operation();
-      } catch (error) {
-        if (!hasError) {
-          firstError = error;
-          hasError = true;
-        }
-      }
-    };
-    if (options.clearRoomTriggerState && !options.preserveTriggerState) {
-      attempt(() => this.triggerController.clearBlockSwitchActorLatchesForRoom(loadedRoom));
-      attempt(() => this.triggerController.clearPressureTriggerStatesForRoom(loadedRoom));
-    }
-    const destroyCount = Math.min(
-      loadedRoom.liveObjects.length,
-      Math.max(1, Math.floor(maxObjectCount)),
-    );
-    for (let index = 0; index < destroyCount; index += 1) {
-      const liveObject = loadedRoom.liveObjects.at(-1);
-      if (!liveObject) break;
-      attempt(() => this.destroyLiveObjectInteractions(liveObject));
-      attempt(() => this.destroyLiveObjectWorldColliders(liveObject));
-      attempt(() => this.destroyLiveObjectHelpers(liveObject));
-      attempt(() => liveObject.sprite.destroy());
-      loadedRoom.liveObjects.pop();
-    }
-
-    this.partitionIndex.invalidateRoom(loadedRoom.room.id);
-    if (hasError) throw firstError;
-    return loadedRoom.liveObjects.length === 0;
+    return this.lifecycleController.destroyBatch(loadedRoom, maxObjectCount, options);
   }
-
   clearRoomInteractions(loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>): void {
-    for (const liveObject of loadedRoom.liveObjects) {
-      this.destroyLiveObjectInteractions(liveObject);
-    }
+    this.lifecycleController.clearRoomInteractions(loadedRoom);
   }
 
   syncLoadedWorldColliders(
@@ -643,7 +537,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   getPhysicsReconciliationGeneration(): number {
-    return this.physicsReconciliationGeneration;
+    return this.interactionCoordinator.getReconciliationGeneration();
   }
 
   setRoomNpcsVictorious(roomId: string, victorious: boolean): void {
@@ -887,192 +781,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   syncLiveObjectInteractions(loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {
-    this.physicsReconciliationGeneration += 1;
-    const rooms = Array.from(loadedRooms).filter(
-      (loadedRoom) => loadedRoom.runtimeSuspended !== true,
-    );
-    const player = this.options.getPlayer();
-    const playerPickupSensor = this.options.getPlayerPickupSensor();
-    const playerBody = this.options.getPlayerBody();
-
-    for (const loadedRoom of rooms) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        this.destroyLiveObjectInteractions(liveObject);
-
-        if (!player || !playerBody || !liveObject.sprite.active || !liveObject.sprite.body) {
-          continue;
-        }
-
-        switch (liveObject.config.category) {
-          case 'collectible':
-            if (!playerPickupSensor) {
-              break;
-            }
-            liveObject.interactions.push(
-              this.options.scene.physics.add.overlap(playerPickupSensor, liveObject.sprite, () => {
-                this.collectLiveObject(loadedRoom, liveObject);
-              })
-            );
-            break;
-          case 'hazard':
-            this.hazardController.addHazardInteraction(loadedRoom, liveObject, player);
-            break;
-          case 'enemy':
-            liveObject.interactions.push(
-              this.options.scene.physics.add.overlap(player, liveObject.sprite, () => {
-                this.enemyLifecycleController.handleEnemyContact(loadedRoom, liveObject);
-              })
-            );
-            break;
-          case 'npc':
-            if (placedObjectLayerAllowsRuntimeCollision(liveObject.config, liveObject)) {
-              if (liveObjectBlocksPlayerMovement(liveObject)) {
-                liveObject.interactions.push(
-                  this.options.scene.physics.add.collider(
-                    player,
-                    liveObject.sprite,
-                    () => {
-                      this.enemyLifecycleController.handleNpcContact(loadedRoom, liveObject);
-                    },
-                    () => this.shouldCollideWithLiveObject(liveObject),
-                  ),
-                );
-              }
-              for (const dangerRoom of rooms) {
-                for (const danger of dangerRoom.liveObjects) {
-                  if (
-                    danger === liveObject ||
-                    !danger.sprite.active ||
-                    !danger.sprite.body
-                  ) {
-                    continue;
-                  }
-                  const interactionKind =
-                    getNpcEnvironmentalObjectInteraction(danger.config);
-                  if (interactionKind === 'none') {
-                    continue;
-                  }
-                  if (interactionKind === 'tornado') {
-                    if (
-                      liveObject.runtime.npcMode !== 'idle' ||
-                      liveObject.runtime.npcPushable
-                    ) {
-                      this.hazardController.addNpcTornadoInteraction(
-                        dangerRoom,
-                        liveObject,
-                        danger,
-                      );
-                    }
-                    continue;
-                  }
-                  liveObject.interactions.push(
-                    this.options.scene.physics.add.overlap(
-                      liveObject.sprite,
-                      danger.sprite,
-                      () => {
-                        if (interactionKind === 'quicksand') {
-                          this.npcController.touchQuicksand(liveObject);
-                        } else {
-                          this.enemyLifecycleController.defeatNpc(loadedRoom, liveObject);
-                        }
-                      },
-                    ),
-                  );
-                }
-              }
-            }
-            break;
-          case 'platform':
-            if (liveObject.config.id === 'brick_box') {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
-                  this.maybeBreakBrickBox(loadedRoom, liveObject);
-                }, () => this.shouldCollideWithLiveObject(liveObject))
-              );
-            } else if (liveObject.config.id === 'crate') {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
-                  this.maybeBreakButtStompableObject(loadedRoom, liveObject);
-                }, () => this.shouldCollideWithLiveObject(liveObject))
-              );
-            } else if (isBlockSwitchObjectId(liveObject.config.id)) {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
-                  this.triggerController.maybeTriggerBlockSwitch(loadedRoom, liveObject);
-                }, () => this.shouldCollideWithLiveObject(liveObject))
-              );
-            } else {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(
-                  player,
-                  liveObject.sprite,
-                  undefined,
-                  () => this.shouldCollideWithLiveObject(liveObject),
-                )
-              );
-            }
-            break;
-          case 'interactive':
-            if (liveObject.config.id === 'ladder') {
-              const supportZone = liveObject.helpers[0];
-              if (supportZone && supportZone.body) {
-                liveObject.interactions.push(
-                  this.options.scene.physics.add.collider(
-                    player,
-                    supportZone,
-                    undefined,
-                    () => this.shouldCollideWithLadderTopSupport(playerBody, supportZone.body as ArcadeObjectBody),
-                  )
-                );
-              }
-            } else if (liveObject.config.id === 'bounce_pad') {
-              this.hazardController.addBouncePadInteraction(loadedRoom, liveObject, player);
-            } else if (liveObject.config.id === 'tornado' || liveObject.config.id === 'tornado_sand') {
-              this.hazardController.addHazardInteraction(loadedRoom, liveObject, player);
-            } else if (
-              liveObject.config.id === 'door_locked' ||
-              liveObject.config.id === 'door_locked_narrow'
-            ) {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(player, liveObject.sprite, () => {
-                  this.triggerController.handleLockedDoorContact(loadedRoom, liveObject);
-                }, () => this.shouldCollideWithLiveObject(liveObject))
-              );
-            } else if (liveObject.config.id === 'trapdoor_locked') {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(
-                  player,
-                  liveObject.sprite,
-                  undefined,
-                  () => this.shouldCollideWithLiveObject(liveObject),
-                )
-              );
-            } else if (liveObject.config.id === 'barricade') {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(
-                  player,
-                  liveObject.sprite,
-                  undefined,
-                  () => this.shouldCollideWithLiveObject(liveObject),
-                )
-              );
-            } else if (liveObject.config.id === 'wooden_bridge') {
-              liveObject.interactions.push(
-                this.options.scene.physics.add.collider(
-                  player,
-                  liveObject.sprite,
-                  undefined,
-                  () => this.shouldCollideWithLiveObject(liveObject),
-                )
-              );
-            }
-            break;
-          default:
-            break;
-        }
-
-      }
-    }
+    this.interactionCoordinator.syncPlayerInteractions(loadedRooms);
   }
 
   updateLiveObjects(
@@ -1686,262 +1395,15 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
   }
 
-  private destroyLiveObjectInteractions(liveObject: LoadedRoomObject): void {
-    let firstError: unknown;
-    let hasError = false;
-    for (const interaction of liveObject.interactions) {
-      this.colliderDormancyStates.delete(interaction);
-      try {
-        interaction.destroy();
-      } catch (error) {
-        if (!hasError) {
-          firstError = error;
-          hasError = true;
-        }
-      }
-    }
-    liveObject.interactions = [];
-    if (hasError) throw firstError;
-  }
-
-  private destroyLiveObjectHelpers(liveObject: LoadedRoomObject): void {
-    let firstError: unknown;
-    let hasError = false;
-    for (const helper of liveObject.helpers) {
-      try {
-        helper.destroy();
-      } catch (error) {
-        if (!hasError) {
-          firstError = error;
-          hasError = true;
-        }
-      }
-    }
-    liveObject.helpers = [];
-    if (hasError) throw firstError;
-  }
-
-  private setLiveObjectDormant(liveObject: LoadedRoomObject, dormant: boolean): void {
-    this.setGameObjectDormant(liveObject.sprite, dormant);
-    for (const helper of liveObject.helpers) {
-      this.setGameObjectDormant(helper, dormant);
-    }
-  }
-
-  private captureFinalizedDormantBodyState(gameObject: Phaser.GameObjects.GameObject): void {
-    const body = (gameObject as Phaser.GameObjects.GameObject & {
-      body?: ArcadeObjectBody | null;
-    }).body;
-    if (gameObject.getData('wampPreparedDormant') !== true || !body) return;
-
-    // Switch-state finalization runs after the object was made dormant. Keep
-    // its newly resolved logical collision state for activation without
-    // allowing the detached body's collision to become live before commit.
-    gameObject.setData('wampPreparedBodyEnabled', body.enable);
-    body.enable = false;
-  }
-
-  private setGameObjectDormant(gameObject: Phaser.GameObjects.GameObject, dormant: boolean): void {
-    const displayObject = gameObject as Phaser.GameObjects.GameObject & {
-      visible?: boolean;
-      setVisible?: (visible: boolean) => unknown;
-      body?: ArcadeObjectBody | null;
-    };
-    if (dormant) {
-      if (gameObject.getData('wampPreparedDormant') === true) {
-        return;
-      }
-      gameObject.setData('wampPreparedDormant', true);
-      gameObject.setData('wampPreparedActive', gameObject.active);
-      gameObject.setData('wampPreparedVisible', displayObject.visible ?? true);
-      gameObject.setData('wampPreparedBodyEnabled', displayObject.body?.enable ?? null);
-      gameObject.setActive(false);
-      displayObject.setVisible?.(false);
-      if (displayObject.body) {
-        displayObject.body.enable = false;
-      }
-      return;
-    }
-
-    if (gameObject.getData('wampPreparedDormant') !== true) {
-      return;
-    }
-    gameObject.setActive(gameObject.getData('wampPreparedActive') !== false);
-    displayObject.setVisible?.(gameObject.getData('wampPreparedVisible') !== false);
-    const bodyEnabled = gameObject.getData('wampPreparedBodyEnabled');
-    if (displayObject.body && typeof bodyEnabled === 'boolean') {
-      displayObject.body.enable = bodyEnabled;
-    }
-    gameObject.setData('wampPreparedDormant', undefined);
-    gameObject.setData('wampPreparedActive', undefined);
-    gameObject.setData('wampPreparedVisible', undefined);
-    gameObject.setData('wampPreparedBodyEnabled', undefined);
-  }
-
-  private destroyLiveObjectWorldColliders(liveObject: LoadedRoomObject): void {
-    let firstError: unknown;
-    let hasError = false;
-    for (const collider of liveObject.worldColliders) {
-      this.colliderDormancyStates.delete(collider);
-      try {
-        collider.destroy();
-      } catch (error) {
-        if (!hasError) {
-          firstError = error;
-          hasError = true;
-        }
-      }
-    }
-    liveObject.worldColliders = [];
-    if (hasError) throw firstError;
-  }
-
   private shouldCollideWithLiveObject(liveObject: LoadedRoomObject): boolean {
     const body = liveObject.sprite.body as ArcadeObjectBody | null;
     return Boolean(liveObject.sprite.active && body?.enable);
   }
 
-  private shouldCollideLiveObjectWithWorld(liveObject: LoadedRoomObject): boolean {
-    const body = liveObject.sprite.body as ArcadeObjectBody | null;
-    return Boolean(liveObject.sprite.active && body?.enable);
-  }
-
-  private shouldCollideLiveObjectPair(
-    liveObject: LoadedRoomObject,
-    obstacle: LoadedRoomObject,
-  ): boolean {
-    return (
-      this.shouldCollideLiveObjectWithWorld(liveObject)
-      && this.shouldCollideWithLiveObject(obstacle)
-    );
-  }
-
   private syncWorldObjectColliders(
     loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
   ): void {
-    this.physicsReconciliationGeneration += 1;
-    const rooms = Array.from(loadedRooms).filter(
-      (loadedRoom) => loadedRoom.runtimeSuspended !== true,
-    );
-    const solidObstacles = rooms.flatMap((loadedRoom) =>
-      this.partitionIndex.getRuntimeSolidObjects(loadedRoom).filter(
-        (candidate) =>
-          this.shouldCollideWithLiveObject(candidate) &&
-          objectCollidesWithWorld(candidate.config)
-      ).map((liveObject) => ({ loadedRoom, liveObject }))
-    );
-    const dynamicSolidObstacleIndexByKey = new Map(
-      solidObstacles
-        .filter(({ liveObject }) => this.usesDynamicObjectBody(liveObject.config))
-        .map(({ liveObject }, index) => [liveObject.key, index] as const)
-    );
-
-    for (const loadedRoom of rooms) {
-      for (const liveObject of loadedRoom.liveObjects) {
-        this.destroyLiveObjectWorldColliders(liveObject);
-
-        if (
-          !this.shouldCollideLiveObjectWithWorld(liveObject)
-          || !this.usesDynamicObjectBody(liveObject.config)
-        ) {
-          continue;
-        }
-        if (!placedObjectLayerAllowsRuntimeCollision(liveObject.config, liveObject)) {
-          continue;
-        }
-        if (!objectCollidesWithWorld(liveObject.config)) {
-          continue;
-        }
-
-        for (const collisionRoom of rooms) {
-          liveObject.worldColliders.push(
-            this.options.scene.physics.add.collider(
-              liveObject.sprite,
-              collisionRoom.terrainLayer,
-              undefined,
-              () => this.shouldCollideLiveObjectWithWorld(liveObject),
-            )
-          );
-          if (collisionRoom.terrainInsetBodies) {
-            liveObject.worldColliders.push(
-              this.options.scene.physics.add.collider(
-                liveObject.sprite,
-                collisionRoom.terrainInsetBodies,
-                undefined,
-                () => this.shouldCollideLiveObjectWithWorld(liveObject),
-              )
-            );
-          }
-        }
-
-        const liveObjectDynamicSolidIndex = dynamicSolidObstacleIndexByKey.get(liveObject.key);
-        for (const { loadedRoom: obstacleLoadedRoom, liveObject: obstacle } of solidObstacles) {
-          if (!obstacle.sprite.active || !obstacle.sprite.body || obstacle === liveObject) {
-            continue;
-          }
-
-          const obstacleDynamicSolidIndex = dynamicSolidObstacleIndexByKey.get(obstacle.key);
-          if (
-            liveObjectDynamicSolidIndex !== undefined &&
-            obstacleDynamicSolidIndex !== undefined &&
-            obstacleDynamicSolidIndex <= liveObjectDynamicSolidIndex
-          ) {
-            continue;
-          }
-
-          if (
-            isBlockSwitchObjectId(obstacle.config.id) &&
-            canActorTriggerBlockSwitchByContact(liveObject)
-          ) {
-            liveObject.worldColliders.push(
-              this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite, () => {
-                this.triggerController.handleBlockSwitchActorHit(obstacleLoadedRoom, obstacle, liveObject);
-              }, () => this.shouldCollideLiveObjectPair(liveObject, obstacle))
-            );
-            continue;
-          }
-
-          if (
-            isPushableObjectConfig(obstacle.config) &&
-            this.canActorPushPushableByContact(liveObject)
-          ) {
-            liveObject.worldColliders.push(
-              this.options.scene.physics.add.collider(liveObject.sprite, obstacle.sprite, () => {
-                this.handleActorPushableContact(liveObject, obstacle);
-              }, () => this.shouldCollideLiveObjectPair(liveObject, obstacle))
-            );
-            continue;
-          }
-
-          liveObject.worldColliders.push(
-            this.options.scene.physics.add.collider(
-              liveObject.sprite,
-              obstacle.sprite,
-              undefined,
-              () => this.shouldCollideLiveObjectPair(liveObject, obstacle),
-            )
-          );
-        }
-      }
-    }
-  }
-
-  private setColliderDormant(
-    collider: Phaser.Physics.Arcade.Collider,
-    dormant: boolean,
-  ): void {
-    if (dormant) {
-      if (!this.colliderDormancyStates.has(collider)) {
-        this.colliderDormancyStates.set(collider, collider.active);
-      }
-      collider.active = false;
-      return;
-    }
-
-    const previousActive = this.colliderDormancyStates.get(collider);
-    if (previousActive === undefined) return;
-    collider.active = previousActive;
-    this.colliderDormancyStates.delete(collider);
+    this.interactionCoordinator.syncWorldColliders(loadedRooms);
   }
 
   private updateFlyingEnemyObject(
@@ -2820,9 +2282,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
     const revealedObject = this.revealContainedObjectFromBrokenContainer(loadedRoom, liveObject);
     this.emitLiveObjectRemovedForObject(loadedRoom, liveObject, removalReason);
-    this.destroyLiveObjectInteractions(liveObject);
-    this.destroyLiveObjectWorldColliders(liveObject);
-    this.destroyLiveObjectHelpers(liveObject);
+    this.lifecycleController.destroyInteractions(liveObject);
+    this.lifecycleController.destroyWorldColliders(liveObject);
+    this.lifecycleController.destroyHelpers(liveObject);
     if (body) {
       body.enable = false;
     }
@@ -2844,9 +2306,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   ): void {
     const revealedObject = this.revealContainedObjectFromBrokenContainer(loadedRoom, liveObject);
     this.emitLiveObjectRemovedForObject(loadedRoom, liveObject, reason);
-    this.destroyLiveObjectInteractions(liveObject);
-    this.destroyLiveObjectWorldColliders(liveObject);
-    this.destroyLiveObjectHelpers(liveObject);
+    this.lifecycleController.destroyInteractions(liveObject);
+    this.lifecycleController.destroyWorldColliders(liveObject);
+    this.lifecycleController.destroyHelpers(liveObject);
     liveObject.sprite.destroy();
     loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
     this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
@@ -2938,7 +2400,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       onCollectibleCollected: this.options.onCollectibleCollected,
       onEnemyCollectibleCollected: this.options.onEnemyCollectibleCollected,
       onLiveObjectRemoved: (event) => this.emitLiveObjectRemoved(event),
-      destroyLiveObjectInteractions: (target) => this.destroyLiveObjectInteractions(target),
+      destroyLiveObjectInteractions: (target) =>
+        this.lifecycleController.destroyInteractions(target),
     }, options);
   }
 
