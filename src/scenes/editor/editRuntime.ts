@@ -126,6 +126,10 @@ import {
   planEditorClipboardPaste,
   type EditorClipboardState,
 } from './clipboard';
+import {
+  clonePlacedObjectDocument,
+  removePlacedObjectFromDocument,
+} from './placedObjectDocument';
 
 interface TileAction {
   layer: LayerName;
@@ -621,7 +625,7 @@ export class EditorEditRuntime {
   }
 
   private clonePlacedObjects(placedObjects: PlacedObject[] = this.host.getPlacedObjects()): PlacedObject[] {
-    return placedObjects.map((placed) => ({ ...placed }));
+    return clonePlacedObjectDocument(placedObjects);
   }
 
   placeTileAt(worldX: number, worldY: number): void {
@@ -1048,12 +1052,9 @@ export class EditorEditRuntime {
     }
 
     const previous = this.clonePlacedObjects();
-    const removed = previous[bestIndex];
-    const next = previous
-      .filter((_, index) => index !== bestIndex)
-      .map((placed) =>
-        this.removeLinkedTargetFromPlacedObject(placed, removed.instanceId)
-      );
+    const removal = removePlacedObjectFromDocument(previous, previous[bestIndex].instanceId);
+    const removed = removal.removed!;
+    const next = removal.placedObjects;
     this.host.setPlacedObjects(next);
     this.history.record({
       kind: 'objects',
