@@ -65,7 +65,9 @@ DOM and preview behavior.
 
 ### 4. Worker, admin, and PartyKit surfaces
 
-- Convert `workerLegacy.js` route-by-route behind parity tests rather than in one rewrite.
+- Convert the Pages Worker route-by-route behind parity tests. T13 completed that migration and
+  removed `workerLegacy.js` only after typed static, share, image, and fallback routing covered the
+  full contract.
 - Separate Worker routes, queries, and pure scoring logic with route-contract coverage.
 - Move admin application bodies behind thin entry modules without changing URL entry points.
 - Split PartyKit message validation/handlers only after connect, disconnect, shard movement,
@@ -129,7 +131,7 @@ never rewritten. No production deployment or production-data mutation is part of
 | T10 | World-streaming model, selection policy, and readiness | Pending |
 | T11 | World-streaming preparation and teardown lifecycles | Pending |
 | T12 | PvP combat geometry, ledger, presentation, and coordinator | Pending |
-| T13 | Typed Pages Worker migration | Pending |
+| T13 | Typed Pages Worker migration | Candidate: implementation complete through `162dc62`; full gate passed at 155 files / 1,141 tests; manual QA pending on port 4613 |
 | T14 | Cloudflare Worker analysis/admin module split | Pending |
 | T15 | Thin admin UI entries and application modules | Pending |
 | T16 | PartyKit protocol and server decomposition | Pending |
@@ -139,5 +141,5 @@ Every client tranche receives an exact route, fixture expectations, account/writ
 and a short manual checklist. The common sweep covers direct-link refresh, Browse pan/zoom/Fit,
 Play movement and a room seam, editor entry/return without saving, and visible/runtime errors.
 Worker tranches add the safety probe; PartyKit adds identity and load probes; performance work uses
-comparable before/after artifacts. Final reconciliation with current `origin/main` happens only
-after all tranches are accepted and does not rewrite their reviewed commits.
+comparable before/after artifacts. Current `origin/main` is merged at clean lane boundaries without
+rewriting reviewed commits, then reconciled once more before final acceptance.
