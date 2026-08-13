@@ -20,6 +20,12 @@ import {
 } from './liveObjects';
 import { liveObjectBlocksPlayerMovement } from './playerCollisionObjects';
 import {
+  OverworldButtStompMovementStateController,
+  OverworldCrateMovementStateController,
+  OverworldLadderMovementStateController,
+  OverworldWallMovementStateController,
+} from './movementStateControllers';
+import {
   bodyIsBlockedInGravityDirection,
   getBodyVelocityAlongVector,
   getGravityRightVector,
@@ -72,27 +78,11 @@ interface DirectionalGravityControls {
 
 interface OverworldMovementControllerState {
   isCrouching: boolean;
-  isButtStomping: boolean;
-  buttStompFlipUntil: number;
-  buttStompImpactGraceUntil: number;
-  activeCrateInteractionMode: 'push' | 'pull' | null;
-  activeCrateInteractionFacing: -1 | 1 | null;
   weaponKnockbackVelocityX: number;
   weaponKnockbackUntil: number;
-  ladderClimbSfxPlaying: boolean;
   coyoteTime: number;
   jumpBuffered: boolean;
   jumpBufferTime: number;
-  wallContactSide: -1 | 1 | 0;
-  wallContactGraceSide: -1 | 1 | 0;
-  wallContactGraceUntil: number;
-  isWallSliding: boolean;
-  wallJumpLockUntil: number;
-  wallJumpActive: boolean;
-  wallJumpDirection: -1 | 1 | 0;
-  wallJumpChainActive: boolean;
-  isClimbingLadder: boolean;
-  activeLadderKey: string | null;
 }
 
 interface OverworldMovementControllerHost {
@@ -205,32 +195,20 @@ export interface OverworldMovementDebugSnapshot {
 function createMovementControllerState(): OverworldMovementControllerState {
   return {
     isCrouching: false,
-    isButtStomping: false,
-    buttStompFlipUntil: 0,
-    buttStompImpactGraceUntil: 0,
-    activeCrateInteractionMode: null,
-    activeCrateInteractionFacing: null,
     weaponKnockbackVelocityX: 0,
     weaponKnockbackUntil: 0,
-    ladderClimbSfxPlaying: false,
     coyoteTime: 0,
     jumpBuffered: false,
     jumpBufferTime: 0,
-    wallContactSide: 0,
-    wallContactGraceSide: 0,
-    wallContactGraceUntil: 0,
-    isWallSliding: false,
-    wallJumpLockUntil: 0,
-    wallJumpActive: false,
-    wallJumpDirection: 0,
-    wallJumpChainActive: false,
-    isClimbingLadder: false,
-    activeLadderKey: null,
   };
 }
 
 export class OverworldMovementController {
   private readonly state = createMovementControllerState();
+  private readonly ladderState = new OverworldLadderMovementStateController();
+  private readonly buttStompState = new OverworldButtStompMovementStateController();
+  private readonly crateState = new OverworldCrateMovementStateController();
+  private readonly wallState = new OverworldWallMovementStateController();
   private readonly presentationState: Readonly<OverworldMovementPresentationState>;
 
   constructor(
@@ -238,17 +216,21 @@ export class OverworldMovementController {
     private readonly options: OverworldMovementControllerOptions,
   ) {
     const state = this.state;
+    const ladderState = this.ladderState;
+    const buttStompState = this.buttStompState;
+    const crateState = this.crateState;
+    const wallState = this.wallState;
     this.presentationState = Object.freeze({
       get isCrouching() { return state.isCrouching; },
-      get isButtStomping() { return state.isButtStomping; },
-      get buttStompFlipUntil() { return state.buttStompFlipUntil; },
-      get activeCrateInteractionMode() { return state.activeCrateInteractionMode; },
-      get activeCrateInteractionFacing() { return state.activeCrateInteractionFacing; },
+      get isButtStomping() { return buttStompState.isActive(); },
+      get buttStompFlipUntil() { return buttStompState.getFlipUntil(); },
+      get activeCrateInteractionMode() { return crateState.getMode(); },
+      get activeCrateInteractionFacing() { return crateState.getFacing(); },
       get weaponKnockbackUntil() { return state.weaponKnockbackUntil; },
-      get isClimbingLadder() { return state.isClimbingLadder; },
-      get isWallSliding() { return state.isWallSliding; },
-      get wallContactSide() { return state.wallContactSide; },
-      get wallJumpActive() { return state.wallJumpActive; },
+      get isClimbingLadder() { return ladderState.isClimbing(); },
+      get isWallSliding() { return wallState.isSliding(); },
+      get wallContactSide() { return wallState.getContactSide(); },
+      get wallJumpActive() { return wallState.isJumpActive(); },
     });
   }
 
@@ -261,48 +243,45 @@ export class OverworldMovementController {
   }
 
   isClimbingLadder(): boolean {
-    return this.state.isClimbingLadder;
+    return this.ladderState.isClimbing();
   }
 
   isButtStomping(): boolean {
-    return this.state.isButtStomping;
+    return this.buttStompState.isActive();
   }
 
   isButtStompImpactActive(): boolean {
-    return (
-      this.state.isButtStomping ||
-      this.host.getCurrentTime() <= this.state.buttStompImpactGraceUntil
-    );
+    return this.buttStompState.isImpactActive(this.host.getCurrentTime());
   }
 
   getDebugSnapshot(): OverworldMovementDebugSnapshot {
     const now = this.host.getCurrentTime();
     return {
       crouching: this.state.isCrouching,
-      buttStomping: this.state.isButtStomping,
-      buttStompFlipMs: Math.max(0, Math.round(this.state.buttStompFlipUntil - now)),
+      buttStomping: this.buttStompState.isActive(),
+      buttStompFlipMs: Math.max(0, Math.round(this.buttStompState.getFlipUntil() - now)),
       buttStompImpactGraceMs: Math.max(
         0,
-        Math.round(this.state.buttStompImpactGraceUntil - now),
+        Math.round(this.buttStompState.getImpactGraceUntil() - now),
       ),
-      crateInteractionMode: this.state.activeCrateInteractionMode,
-      crateInteractionFacing: this.state.activeCrateInteractionFacing,
+      crateInteractionMode: this.crateState.getMode(),
+      crateInteractionFacing: this.crateState.getFacing(),
       weaponKnockbackVelocityX: this.state.weaponKnockbackVelocityX,
       weaponKnockbackMs: Math.max(0, Math.round(this.state.weaponKnockbackUntil - now)),
-      climbing: this.state.isClimbingLadder,
+      climbing: this.ladderState.isClimbing(),
       jumpBuffered: this.state.jumpBuffered,
       jumpBufferMs: Math.max(0, Math.round(this.state.jumpBufferTime)),
       coyoteMs: Math.max(0, Math.round(this.state.coyoteTime)),
-      wallSliding: this.state.isWallSliding,
-      wallContactSide: this.state.wallContactSide,
-      wallContactGraceSide: this.state.wallContactGraceSide,
-      wallContactGraceMs: Math.max(0, Math.round(this.state.wallContactGraceUntil - now)),
-      wallJumpActive: this.state.wallJumpActive,
-      wallJumpDirection: this.state.wallJumpDirection,
-      wallJumpChainActive: this.state.wallJumpChainActive,
-      wallJumpLockMs: Math.max(0, Math.round(this.state.wallJumpLockUntil - now)),
-      ladderKey: this.state.activeLadderKey,
-      ladderClimbSfxPlaying: this.state.ladderClimbSfxPlaying,
+      wallSliding: this.wallState.isSliding(),
+      wallContactSide: this.wallState.getContactSide(),
+      wallContactGraceSide: this.wallState.getContactGraceSide(),
+      wallContactGraceMs: Math.max(0, Math.round(this.wallState.getContactGraceUntil() - now)),
+      wallJumpActive: this.wallState.isJumpActive(),
+      wallJumpDirection: this.wallState.getJumpDirection(),
+      wallJumpChainActive: this.wallState.isJumpChainActive(),
+      wallJumpLockMs: Math.max(0, Math.round(this.wallState.getJumpLockUntil() - now)),
+      ladderKey: this.ladderState.getActiveLadderKey(),
+      ladderClimbSfxPlaying: this.ladderState.isClimbSfxPlaying(),
     };
   }
 
@@ -448,8 +427,8 @@ export class OverworldMovementController {
     const stayOnLadder =
       overlappingLadder !== null &&
       !spacePressed &&
-      (verticalInput !== 0 || (this.state.isClimbingLadder && !left && !right));
-    const jumpedOffLadder = this.state.isClimbingLadder && spacePressed;
+      (verticalInput !== 0 || (this.ladderState.isClimbing() && !left && !right));
+    const jumpedOffLadder = this.ladderState.isClimbing() && spacePressed;
     const specialEnvironment = this.host.getSpecialTileEnvironment();
     const playerGravityDirection = specialEnvironment.gravityDirection;
     playerBody.setAllowGravity(playerGravityDirection === 'down');
@@ -506,7 +485,7 @@ export class OverworldMovementController {
       };
     }
 
-    if (this.state.isClimbingLadder) {
+    if (this.ladderState.isClimbing()) {
       this.setPlayerLadderState(null);
     }
 
@@ -525,8 +504,8 @@ export class OverworldMovementController {
     } else if (specialEnvironment.inWater || inQuicksand) {
       this.clearButtStompState();
     } else if (
-      !this.state.isButtStomping &&
-      !this.state.isClimbingLadder &&
+      !this.buttStompState.isActive() &&
+      !this.ladderState.isClimbing() &&
       (downPressed || touchDown)
     ) {
       this.startButtStomp(playerBody);
@@ -551,7 +530,7 @@ export class OverworldMovementController {
       !grounded &&
       crateInteraction === null &&
       !this.state.isCrouching &&
-      !this.state.isButtStomping;
+      !this.buttStompState.isActive();
     this.updateWallMovementState(horizontalInput, grounded, canWallAttach);
     if (grounded) {
       this.state.coyoteTime = this.options.coyoteMs;
@@ -570,10 +549,12 @@ export class OverworldMovementController {
       } else if (this.host.getCurrentTime() < this.state.weaponKnockbackUntil) {
         playerBody.setVelocityX(this.state.weaponKnockbackVelocityX);
       } else if (
-        this.host.getCurrentTime() < this.state.wallJumpLockUntil &&
-        this.state.wallJumpDirection !== 0
+        this.host.getCurrentTime() < this.wallState.getJumpLockUntil() &&
+        this.wallState.getJumpDirection() !== 0
       ) {
-        playerBody.setVelocityX(this.state.wallJumpDirection * this.options.wallJumpVelocityX);
+        playerBody.setVelocityX(
+          this.wallState.getJumpDirection() * this.options.wallJumpVelocityX,
+        );
       } else {
         this.state.weaponKnockbackVelocityX = 0;
         const moveSpeedBase = this.state.isCrouching ? this.options.crawlSpeed : this.options.playerSpeed;
@@ -609,7 +590,7 @@ export class OverworldMovementController {
 
     const jumpPressed =
       !this.state.isCrouching &&
-      !this.state.isButtStomping &&
+      !this.buttStompState.isActive() &&
       (spacePressed || (upPressed && overlappingLadder === null));
     const specialJumpVelocity =
       specialEnvironment.inWater
@@ -652,11 +633,7 @@ export class OverworldMovementController {
         this.state.jumpBuffered = false;
         this.state.jumpBufferTime = 0;
         this.state.coyoteTime = 0;
-        this.state.wallJumpActive = false;
-        this.state.wallJumpDirection = 0;
-        this.state.wallJumpLockUntil = 0;
-        this.clearWallContactState();
-        this.state.wallJumpChainActive = false;
+        this.wallState.finishGroundJump();
       }
 
       if (this.state.jumpBufferTime > 0) {
@@ -677,12 +654,12 @@ export class OverworldMovementController {
     }
 
     if (
-      this.state.isWallSliding &&
+      this.wallState.isSliding() &&
       playerBody.velocity.y > this.options.wallSlideMaxFallSpeed
     ) {
       playerBody.setVelocityY(this.options.wallSlideMaxFallSpeed);
     }
-    if (this.state.isButtStomping) {
+    if (this.buttStompState.isActive()) {
       this.updateButtStompVelocity(playerBody);
     }
 
@@ -787,13 +764,13 @@ export class OverworldMovementController {
       this.applyCrateInteraction(playerBody, crateInteraction, moveSpeed, delta);
     } else {
       if (
-        this.host.getCurrentTime() < this.state.wallJumpLockUntil &&
-        this.state.wallJumpDirection !== 0
+        this.host.getCurrentTime() < this.wallState.getJumpLockUntil() &&
+        this.wallState.getJumpDirection() !== 0
       ) {
         setBodyVelocityAlongVector(
           playerBody,
           rightVector,
-          this.state.wallJumpDirection * this.options.wallJumpVelocityX,
+          this.wallState.getJumpDirection() * this.options.wallJumpVelocityX,
         );
       } else {
         const targetTangentVelocity = controls.tangentInput * moveSpeedBase;
@@ -827,11 +804,7 @@ export class OverworldMovementController {
       this.state.jumpBuffered = false;
       this.state.jumpBufferTime = 0;
       this.state.coyoteTime = 0;
-      this.state.wallJumpActive = false;
-      this.state.wallJumpDirection = 0;
-      this.state.wallJumpLockUntil = 0;
-      this.clearWallContactState();
-      this.state.wallJumpChainActive = false;
+      this.wallState.finishGroundJump();
     };
 
     if (jumpPressed) {
@@ -872,7 +845,7 @@ export class OverworldMovementController {
       setBodyVelocityAlongVector(playerBody, gravityVector, currentNormalVelocity * 0.86);
     }
 
-    if (this.state.isWallSliding) {
+    if (this.wallState.isSliding()) {
       const wallSlideGravityVelocity = getBodyVelocityAlongVector(playerBody, gravityVector);
       if (wallSlideGravityVelocity > this.options.wallSlideMaxFallSpeed) {
         setBodyVelocityAlongVector(
@@ -970,36 +943,25 @@ export class OverworldMovementController {
     const playerBody = this.host.getPlayerBody();
     const shouldPlay =
       Boolean(playerBody) &&
-      this.state.isClimbingLadder &&
+      this.ladderState.isClimbing() &&
       verticalInput !== 0 &&
       Math.abs(playerBody?.velocity.y ?? 0) > 6;
     this.setLadderClimbSfxPlaying(shouldPlay);
   }
 
   private resetWallMovementState(): void {
-    this.clearWallContactState();
-    this.state.wallJumpLockUntil = 0;
-    this.state.wallJumpActive = false;
-    this.state.wallJumpDirection = 0;
-    this.state.wallJumpChainActive = false;
+    this.wallState.reset();
   }
 
   private clearButtStompState(options: { keepImpactGrace?: boolean } = {}): void {
-    const wasButtStomping = this.state.isButtStomping;
-    this.state.isButtStomping = false;
-    this.state.buttStompFlipUntil = 0;
-    if (options.keepImpactGrace && wasButtStomping) {
-      this.state.buttStompImpactGraceUntil =
-        this.host.getCurrentTime() + BUTT_STOMP_IMPACT_GRACE_MS;
-    } else if (!options.keepImpactGrace) {
-      this.state.buttStompImpactGraceUntil = 0;
-    }
+    this.buttStompState.clear(this.host.getCurrentTime(), {
+      keepImpactGrace: options.keepImpactGrace,
+      impactGraceMs: BUTT_STOMP_IMPACT_GRACE_MS,
+    });
   }
 
   private startButtStomp(playerBody: Phaser.Physics.Arcade.Body): void {
-    this.state.isButtStomping = true;
-    this.state.buttStompFlipUntil = this.host.getCurrentTime() + BUTT_STOMP_FLIP_MS;
-    this.state.buttStompImpactGraceUntil = 0;
+    this.buttStompState.start(this.host.getCurrentTime(), BUTT_STOMP_FLIP_MS);
     this.state.jumpBuffered = false;
     this.state.jumpBufferTime = 0;
     this.state.coyoteTime = 0;
@@ -1010,7 +972,7 @@ export class OverworldMovementController {
   }
 
   private isButtStompInFlipPause(now = this.host.getCurrentTime()): boolean {
-    return this.state.isButtStomping && now < this.state.buttStompFlipUntil;
+    return this.buttStompState.isInFlipPause(now);
   }
 
   private updateButtStompVelocity(playerBody: Phaser.Physics.Arcade.Body): void {
@@ -1030,24 +992,16 @@ export class OverworldMovementController {
     }
   }
 
-  private clearWallContactState(): void {
-    this.state.wallContactSide = 0;
-    this.state.wallContactGraceSide = 0;
-    this.state.wallContactGraceUntil = 0;
-    this.state.isWallSliding = false;
-  }
-
   private tryPerformWallJump(
     player: Phaser.GameObjects.Rectangle,
     playerBody: Phaser.Physics.Arcade.Body,
     gravityDirection: PlayerGravityDirection = 'down',
   ): boolean {
-    const wallJumpSourceSide = this.state.wallContactSide;
-    if (wallJumpSourceSide === 0) {
+    const wallJumpDirection = this.wallState.getJumpDirectionFromContact();
+    if (wallJumpDirection === 0) {
       return false;
     }
 
-    const wallJumpDirection = (wallJumpSourceSide === -1 ? 1 : -1) as -1 | 1;
     setBodyVelocityAlongVector(
       playerBody,
       getGravityRightVector(gravityDirection),
@@ -1066,12 +1020,11 @@ export class OverworldMovementController {
     this.state.jumpBuffered = false;
     this.state.jumpBufferTime = 0;
     this.state.coyoteTime = 0;
-    this.clearWallContactState();
-    this.state.wallJumpLockUntil =
-      this.host.getCurrentTime() + this.options.wallJumpInputLockMs;
-    this.state.wallJumpActive = true;
-    this.state.wallJumpDirection = wallJumpDirection;
-    this.state.wallJumpChainActive = true;
+    this.wallState.commitJump(
+      wallJumpDirection,
+      this.host.getCurrentTime(),
+      this.options.wallJumpInputLockMs,
+    );
     return true;
   }
 
@@ -1119,7 +1072,7 @@ export class OverworldMovementController {
     if (horizontalInput === 0) {
       return touchingWallSide;
     }
-    if (this.state.wallJumpChainActive) {
+    if (this.wallState.isJumpChainActive()) {
       return touchingWallSide;
     }
 
@@ -1133,7 +1086,7 @@ export class OverworldMovementController {
     gravityDirection: PlayerGravityDirection = 'down',
   ): void {
     const playerBody = this.host.getPlayerBody();
-    if (!playerBody || grounded || this.state.isClimbingLadder) {
+    if (!playerBody || grounded || this.ladderState.isClimbing()) {
       this.resetWallMovementState();
       return;
     }
@@ -1142,60 +1095,33 @@ export class OverworldMovementController {
       playerBody,
       getGravityVector(gravityDirection),
     );
-    if (this.state.wallJumpActive && gravityVelocity >= 0) {
-      this.state.wallJumpActive = false;
-      this.state.wallJumpDirection = 0;
-    }
-
     const rawWallContactSide = canWallAttach
       ? this.getWallContactSide(horizontalInput, gravityDirection)
       : 0;
     const now = this.host.getCurrentTime();
-    if (rawWallContactSide !== 0) {
-      this.state.wallContactGraceSide = rawWallContactSide;
-      this.state.wallContactGraceUntil = now + this.options.wallContactGraceMs;
-    }
-
-    const hasWallContactGrace =
-      this.state.wallContactGraceSide !== 0 &&
-      now <= this.state.wallContactGraceUntil;
-    const wallContactSide = rawWallContactSide !== 0
-      ? rawWallContactSide
-      : hasWallContactGrace
-        ? this.state.wallContactGraceSide
-        : 0;
-    this.state.wallContactSide = wallContactSide;
-    this.state.isWallSliding = rawWallContactSide !== 0 && gravityVelocity >= 0;
-
-    if (this.state.isWallSliding) {
-      this.state.wallJumpActive = false;
-      this.state.wallJumpDirection = 0;
-    } else if (!this.state.wallJumpActive && this.host.getCurrentTime() >= this.state.wallJumpLockUntil) {
-      this.state.wallJumpDirection = 0;
-    }
+    this.wallState.update({
+      rawContactSide: rawWallContactSide,
+      gravityVelocity,
+      now,
+      contactGraceMs: this.options.wallContactGraceMs,
+    });
   }
 
   private setPlayerLadderState(ladder: LoadedRoomObject | null): void {
     const playerBody = this.host.getPlayerBody();
     if (!playerBody) {
-      this.state.isClimbingLadder = false;
-      this.state.activeLadderKey = null;
+      this.ladderState.setActiveLadder(null);
       this.resetWallMovementState();
       this.setLadderClimbSfxPlaying(false);
       return;
     }
 
     const nextKey = ladder?.key ?? null;
-    if (
-      this.state.activeLadderKey === nextKey &&
-      this.state.isClimbingLadder === Boolean(ladder)
-    ) {
+    const transition = this.ladderState.setActiveLadder(nextKey);
+    if (!transition.changed) {
       return;
     }
 
-    const enteringLadder = ladder !== null && !this.state.isClimbingLadder;
-    this.state.isClimbingLadder = ladder !== null;
-    this.state.activeLadderKey = nextKey;
     playerBody.setAllowGravity(!ladder);
     if (!ladder) {
       this.setLadderClimbSfxPlaying(false);
@@ -1203,7 +1129,7 @@ export class OverworldMovementController {
       this.resetWallMovementState();
     }
 
-    if (enteringLadder) {
+    if (transition.entering) {
       this.clearButtStompState();
       playerBody.setVelocityY(0);
     }
@@ -1235,7 +1161,7 @@ export class OverworldMovementController {
 
   private isPushHitboxProfile(height: number, groundedProfile: boolean): boolean {
     return groundedProfile &&
-      this.state.activeCrateInteractionMode === 'push' &&
+      this.crateState.getMode() === 'push' &&
       height === this.options.playerPushHeight;
   }
 
@@ -1253,7 +1179,7 @@ export class OverworldMovementController {
       return this.options.playerStandingHeight;
     }
 
-    if (groundedProfile && this.state.activeCrateInteractionMode === 'push') {
+    if (groundedProfile && this.crateState.getMode() === 'push') {
       return this.options.playerPushHeight;
     }
 
@@ -1268,16 +1194,13 @@ export class OverworldMovementController {
   }
 
   private clearCrateInteractionState(): void {
-    this.state.activeCrateInteractionMode = null;
-    this.state.activeCrateInteractionFacing = null;
+    this.crateState.clear();
   }
 
   private setLadderClimbSfxPlaying(playing: boolean): void {
-    if (this.state.ladderClimbSfxPlaying === playing) {
+    if (!this.ladderState.setClimbSfxPlaying(playing)) {
       return;
     }
-
-    this.state.ladderClimbSfxPlaying = playing;
     if (playing) {
       playSfx('ladder-climb');
       return;
@@ -1298,7 +1221,7 @@ export class OverworldMovementController {
       !downHeld &&
       !spacePressed &&
       !inQuicksand &&
-      !this.state.isClimbingLadder &&
+      !this.ladderState.isClimbing() &&
       (grounded || this.state.coyoteTime > 0)
     );
   }
@@ -1453,13 +1376,7 @@ export class OverworldMovementController {
   }
 
   private syncCrateInteractionState(crateInteraction: OverworldCrateInteraction | null): void {
-    if (!crateInteraction) {
-      this.clearCrateInteractionState();
-      return;
-    }
-
-    this.state.activeCrateInteractionMode = crateInteraction.mode;
-    this.state.activeCrateInteractionFacing = crateInteraction.facing;
+    this.crateState.sync(crateInteraction);
   }
 
   private bodyBoundsCouldOverlap(
@@ -1624,7 +1541,7 @@ export class OverworldMovementController {
     let bestInteraction: OverworldCrateInteraction | null = null;
     let bestGap = Number.POSITIVE_INFINITY;
     const pullGapLimit =
-      this.state.activeCrateInteractionMode === 'pull'
+      this.crateState.getMode() === 'pull'
         ? this.options.crateInteractionMaxGap + Math.max(6, playerTangent.size * 0.5)
         : this.options.crateInteractionMaxGap;
     const broadphasePadding = pullGapLimit + 6;
