@@ -119,6 +119,7 @@ import {
   normalizeNpcName,
   type NpcMode,
 } from '../../npcs/model';
+import { EditorHistory } from './history';
 
 interface TileAction {
   layer: LayerName;
@@ -211,8 +212,7 @@ export class EditorEditRuntime {
   private roomDirty = false;
   private lastDirtyAt = 0;
   private goalPlacementMode: GoalPlacementMode = null;
-  private undoStack: UndoAction[] = [];
-  private redoStack: UndoAction[] = [];
+  private readonly history = new EditorHistory<UndoAction>();
   private currentBatch: TileAction[] = [];
   private clipboardState: EditorClipboardState | null = null;
   private customRoomTiles: CustomRoomTileDefinition[] = [];
@@ -369,8 +369,7 @@ export class EditorEditRuntime {
     this.roomDirty = false;
     this.lastDirtyAt = 0;
     this.goalPlacementMode = null;
-    this.undoStack = [];
-    this.redoStack = [];
+    this.history.reset();
     this.currentBatch = [];
     this.clipboardState = null;
     this.customRoomTiles = [];
@@ -424,8 +423,7 @@ export class EditorEditRuntime {
     this.rebuildObjectSprites();
     this.host.updateGoalUi();
 
-    this.undoStack = [];
-    this.redoStack = [];
+    this.history.reset();
     this.currentBatch = [];
     this.roomDirty = false;
     this.lastDirtyAt = 0;
@@ -640,8 +638,7 @@ export class EditorEditRuntime {
     }
 
     const placedTileCount = this.currentBatch.filter((action) => action.newGid >= 0).length;
-    this.undoStack.push({ kind: 'tiles', actions: [...this.currentBatch] });
-    this.redoStack = [];
+    this.history.record({ kind: 'tiles', actions: [...this.currentBatch] });
     this.currentBatch = [];
     this.markRoomDirty();
     this.host.recordBuildPlacement(placedTileCount);
@@ -666,14 +663,13 @@ export class EditorEditRuntime {
     }
 
     this.roomMusic = cloneRoomMusic(normalizedNext);
-    this.undoStack.push({
+    this.history.record({
       kind: 'music',
       action: {
         previous,
         next: cloneRoomMusic(normalizedNext),
       },
     });
-    this.redoStack = [];
     this.markRoomDirty();
     return cloneRoomMusic(this.roomMusic);
   }
@@ -811,8 +807,7 @@ export class EditorEditRuntime {
       return;
     }
 
-    this.undoStack.push({ kind: 'tiles', actions });
-    this.redoStack = [];
+    this.history.record({ kind: 'tiles', actions });
     this.markRoomDirty();
   }
 
@@ -851,8 +846,7 @@ export class EditorEditRuntime {
       return;
     }
 
-    this.undoStack.push({ kind: 'tiles', actions });
-    this.redoStack = [];
+    this.history.record({ kind: 'tiles', actions });
     this.markRoomDirty();
   }
 
@@ -867,11 +861,10 @@ export class EditorEditRuntime {
     }
 
     this.host.setPlacedObjects([]);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: [] },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
   }
@@ -1063,11 +1056,10 @@ export class EditorEditRuntime {
           .concat(placed)
       : [...previous, placed];
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     this.host.recordBuildPlacement(1);
@@ -1121,11 +1113,10 @@ export class EditorEditRuntime {
         this.removeLinkedTargetFromPlacedObject(placed, removed.instanceId)
       );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return removed;
@@ -1311,11 +1302,10 @@ export class EditorEditRuntime {
         : placed
     );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
@@ -1352,11 +1342,10 @@ export class EditorEditRuntime {
         : placed
     );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.markRoomDirty();
     return true;
   }
@@ -1395,11 +1384,10 @@ export class EditorEditRuntime {
         : placed
     );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.markRoomDirty();
     return true;
   }
@@ -1438,11 +1426,10 @@ export class EditorEditRuntime {
         : placed
     );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.markRoomDirty();
     return true;
   }
@@ -1480,11 +1467,10 @@ export class EditorEditRuntime {
 
     const next = previous.map((placed, index) => index === policeIndex ? nextPolice : placed);
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
@@ -1568,11 +1554,10 @@ export class EditorEditRuntime {
 
     const next = previous.map((placed, index) => index === npcIndex ? nextNpc : placed);
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
@@ -1636,11 +1621,10 @@ export class EditorEditRuntime {
     }
 
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
@@ -1688,11 +1672,10 @@ export class EditorEditRuntime {
         : placed
     );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
@@ -2204,18 +2187,18 @@ export class EditorEditRuntime {
   }
 
   hasUndoHistory(): boolean {
-    return this.undoStack.length > 0;
+    return this.history.canUndo();
   }
 
   hasRedoHistory(): boolean {
-    return this.redoStack.length > 0;
+    return this.history.canRedo();
   }
 
   undo(): void {
     if (!this.guardEditable()) {
       return;
     }
-    const action = this.undoStack.pop();
+    const action = this.history.takeUndo();
     if (!action) {
       return;
     }
@@ -2245,14 +2228,14 @@ export class EditorEditRuntime {
           newGid: a.oldGid,
         });
       }
-      this.redoStack.push({ kind: 'tiles', actions: reverseActions });
+      this.history.pushRedo({ kind: 'tiles', actions: reverseActions });
       this.markRoomDirty();
       return;
     }
 
     if (action.kind === 'objects') {
       this.host.setPlacedObjects(this.clonePlacedObjects(action.action.previous));
-      this.redoStack.push({
+      this.history.pushRedo({
         kind: 'objects',
         action: {
           previous: this.clonePlacedObjects(action.action.next),
@@ -2266,7 +2249,7 @@ export class EditorEditRuntime {
 
     if (action.kind === 'spawn') {
       this.roomSpawnPoint = action.action.previous ? { ...action.action.previous } : null;
-      this.redoStack.push({
+      this.history.pushRedo({
         kind: 'spawn',
         action: {
           previous: action.action.next ? { ...action.action.next } : null,
@@ -2280,7 +2263,7 @@ export class EditorEditRuntime {
 
     if (action.kind === 'music') {
       this.roomMusic = cloneRoomMusic(action.action.previous);
-      this.redoStack.push({
+      this.history.pushRedo({
         kind: 'music',
         action: {
           previous: cloneRoomMusic(action.action.next),
@@ -2293,7 +2276,7 @@ export class EditorEditRuntime {
 
     this.roomGoal = cloneRoomGoal(action.action.previous);
     this.goalPlacementMode = null;
-    this.redoStack.push({
+    this.history.pushRedo({
       kind: 'goal',
       action: {
         previous: cloneRoomGoal(action.action.next),
@@ -2308,7 +2291,7 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
-    const action = this.redoStack.pop();
+    const action = this.history.takeRedo();
     if (!action) {
       return;
     }
@@ -2338,14 +2321,14 @@ export class EditorEditRuntime {
           newGid: a.oldGid,
         });
       }
-      this.undoStack.push({ kind: 'tiles', actions: reverseActions });
+      this.history.pushUndo({ kind: 'tiles', actions: reverseActions });
       this.markRoomDirty();
       return;
     }
 
     if (action.kind === 'objects') {
       this.host.setPlacedObjects(this.clonePlacedObjects(action.action.previous));
-      this.undoStack.push({
+      this.history.pushUndo({
         kind: 'objects',
         action: {
           previous: this.clonePlacedObjects(action.action.next),
@@ -2359,7 +2342,7 @@ export class EditorEditRuntime {
 
     if (action.kind === 'spawn') {
       this.roomSpawnPoint = action.action.previous ? { ...action.action.previous } : null;
-      this.undoStack.push({
+      this.history.pushUndo({
         kind: 'spawn',
         action: {
           previous: action.action.next ? { ...action.action.next } : null,
@@ -2373,7 +2356,7 @@ export class EditorEditRuntime {
 
     if (action.kind === 'music') {
       this.roomMusic = cloneRoomMusic(action.action.previous);
-      this.undoStack.push({
+      this.history.pushUndo({
         kind: 'music',
         action: {
           previous: cloneRoomMusic(action.action.next),
@@ -2386,7 +2369,7 @@ export class EditorEditRuntime {
 
     this.roomGoal = cloneRoomGoal(action.action.previous);
     this.goalPlacementMode = null;
-    this.undoStack.push({
+    this.history.pushUndo({
       kind: 'goal',
       action: {
         previous: cloneRoomGoal(action.action.next),
@@ -2453,11 +2436,10 @@ export class EditorEditRuntime {
     }
 
     this.roomSpawnPoint = next;
-    this.undoStack.push({
+    this.history.record({
       kind: 'spawn',
       action: { previous, next },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
   }
@@ -2574,11 +2556,10 @@ export class EditorEditRuntime {
     }
 
     if (trackUndo) {
-      this.undoStack.push({
+      this.history.record({
         kind: 'goal',
         action: { previous, next: normalizedNext },
       });
-      this.redoStack = [];
     }
 
     this.rebuildObjectSprites();
