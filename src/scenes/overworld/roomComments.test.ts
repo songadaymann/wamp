@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoomCommentRecord } from '../../roomComments/model';
 import { OverworldRoomCommentsController } from './roomComments';
+import type { RoomCommentsDataController } from './roomCommentsDataController';
 
 const { fetchBrowseRoomCommentSummaries, fetchRoomComments } = vi.hoisted(() => ({
   fetchBrowseRoomCommentSummaries: vi.fn(),
@@ -60,9 +61,9 @@ describe('overworld browse comment loading', () => {
     fetchRoomComments.mockResolvedValue({ comments: [], commentArea: null });
     const controller = createController({ roomCount: 1, selectedX: 0 });
     const harness = controller as unknown as {
-      browseCommentCache: Map<string, { comments: RoomCommentRecord[]; commentCount: number; full: boolean }>;
+      dataController: RoomCommentsDataController;
     };
-    harness.browseCommentCache.set('0,0:v1', {
+    harness.dataController.getBrowseCommentCacheForCompatibility().set('0,0:v1', {
       comments: [],
       commentCount: 4,
       full: false,
@@ -72,7 +73,7 @@ describe('overworld browse comment loading', () => {
     expect(fetchRoomComments).toHaveBeenCalledTimes(1);
     expect(fetchRoomComments).toHaveBeenCalledWith('0,0', { x: 0, y: 0 }, 1);
     await flushMicrotasks();
-    expect(harness.browseCommentCache.get('0,0:v1')).toMatchObject({
+    expect(harness.dataController.getBrowseCacheEntry('0,0:v1')).toMatchObject({
       comments: [],
       commentCount: 0,
       full: true,
@@ -90,15 +91,13 @@ describe('overworld browse comment loading', () => {
     const controller = createController({ roomCount: 4, selectedX: 0 });
     const harness = controller as unknown as {
       getBrowseCommentTargets(): TestBrowseTarget[];
-      loadBrowseComments(target: TestBrowseTarget, pinWhenLoaded: boolean): void;
-      setPinnedBrowseMarkerKey(key: string): void;
-      pinnedBrowseMarkerKey: string | null;
+      dataController: RoomCommentsDataController;
     };
     const targets = harness.getBrowseCommentTargets();
 
     for (const target of targets) {
-      harness.setPinnedBrowseMarkerKey(target.signature);
-      harness.loadBrowseComments(target, true);
+      harness.dataController.setPinnedBrowseMarkerKey(target.signature);
+      harness.dataController.loadBrowseComments(target as never, true);
     }
     expect(fetchRoomComments).toHaveBeenCalledTimes(2);
 
@@ -107,7 +106,7 @@ describe('overworld browse comment loading', () => {
     expect(fetchRoomComments).toHaveBeenCalledTimes(3);
     expect(fetchRoomComments.mock.calls[2][0]).toBe('3,0');
     expect(fetchRoomComments.mock.calls.some((call) => call[0] === '2,0')).toBe(false);
-    expect(harness.pinnedBrowseMarkerKey).toBe('3,0:v1');
+    expect(harness.dataController.getPinnedBrowseMarkerKey()).toBe('3,0:v1');
 
     responses[1].resolve({ comments: [], commentArea: null });
     responses[2].resolve({ comments: [], commentArea: null });
@@ -119,13 +118,13 @@ describe('overworld browse comment loading', () => {
     fetchRoomComments.mockReturnValueOnce(resetResponse.promise);
     const resetController = createController({ roomCount: 1, selectedX: 0 });
     const resetHarness = resetController as unknown as {
-      browseCommentCache: Map<string, unknown>;
+      dataController: RoomCommentsDataController;
     };
     resetController.openSelectedBrowseComments();
     resetController.reset();
     resetResponse.resolve({ comments: [fullComment('reset-comment')], commentArea: null });
     await flushMicrotasks();
-    expect(resetHarness.browseCommentCache.size).toBe(0);
+    expect(resetHarness.dataController.getDebugSnapshot().browseCacheEntryCount).toBe(0);
 
     let mode: 'browse' | 'play' = 'browse';
     const modeResponse = deferred<{ comments: RoomCommentRecord[]; commentArea: null }>();
@@ -136,14 +135,14 @@ describe('overworld browse comment loading', () => {
       getMode: () => mode,
     });
     const modeHarness = modeController as unknown as {
-      browseCommentCache: Map<string, unknown>;
+      dataController: RoomCommentsDataController;
     };
     modeController.openSelectedBrowseComments();
     mode = 'play';
     modeController.update();
     modeResponse.resolve({ comments: [fullComment('mode-comment')], commentArea: null });
     await flushMicrotasks();
-    expect(modeHarness.browseCommentCache.size).toBe(0);
+    expect(modeHarness.dataController.getDebugSnapshot().browseCacheEntryCount).toBe(0);
   });
 });
 

@@ -1,14 +1,9 @@
 import Phaser from 'phaser';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import {
-  ROOM_COMMENT_BROWSE_MAX_ROOM_IDS,
   type BrowseRoomCommentPreview,
   type RoomCommentRecord,
 } from '../../roomComments/model';
-import {
-  fetchBrowseRoomCommentSummaries,
-  fetchRoomComments,
-} from '../../roomComments/client';
 import { type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
 import { type WorldRoomSummary, type WorldWindow } from '../../persistence/worldModel';
 import {
@@ -26,6 +21,10 @@ import {
   type RoomBadgeScaleConfig,
 } from './badgeOverlays';
 import { RoomCommentsComposerController } from './roomCommentsComposerController';
+import {
+  RoomCommentsDataController,
+  type BrowseCommentTarget,
+} from './roomCommentsDataController';
 
 interface RenderedRoomComment {
   comment: RoomCommentRecord;
@@ -36,22 +35,6 @@ interface RenderedRoomComment {
   bodyText: Phaser.GameObjects.Text;
   timeText: Phaser.GameObjects.Text;
   pinned: boolean;
-}
-
-interface BrowseCommentTarget {
-  signature: string;
-  groupKey: string;
-  roomId: string;
-  version: number;
-  coordinates: RoomCoordinates;
-  displayCoordinates: RoomCoordinates;
-  title: string | null;
-}
-
-interface BrowseCommentCacheEntry {
-  comments: BrowseRoomCommentPreview[];
-  commentCount: number;
-  full: boolean;
 }
 
 interface RenderedBrowseCommentMarker extends OverworldBadgePlacement {
@@ -102,13 +85,6 @@ interface BrowseDanmakuTrack {
   startX: number;
   exitX: number;
   screenY: number;
-}
-
-interface PendingBrowseFullCommentLoad {
-  target: BrowseCommentTarget;
-  pinWhenLoaded: boolean;
-  pinGeneration: number;
-  loadGeneration: number;
 }
 
 interface OverworldRoomCommentsControllerOptions {
@@ -201,8 +177,6 @@ const BROWSE_DANMAKU_ROOM_TRACK_VERTICAL_RATIO = 0.36;
 const BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MIN = 20;
 const BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MAX = 38;
 const BROWSE_COMMENT_VIEWPORT_GUARD_FRACTION = 0.25;
-const BROWSE_COMMENT_READINESS_RETRY_MS = 500;
-const BROWSE_FULL_COMMENT_FETCH_CONCURRENCY = 2;
 
 export class OverworldRoomCommentsController {
   private nextVisualSyncAt = 0;
@@ -218,30 +192,12 @@ export class OverworldRoomCommentsController {
     tierFadeSpan: BROWSE_COMMENT_TIER_FADE_SPAN,
   };
   private readonly composerController: RoomCommentsComposerController;
-  private comments: RoomCommentRecord[] = [];
-  private activeRoomSignature: string | null = null;
-  private loadingRoomSignature: string | null = null;
+  private readonly dataController: RoomCommentsDataController;
   private commentsVisible = getGameSettings().roomCommentsVisible;
   private unsubscribeSettings: (() => void) | null = null;
   private readonly renderedCommentsById = new Map<string, RenderedRoomComment>();
-  private readonly browseCommentCache = new Map<string, BrowseCommentCacheEntry>();
   private readonly browseCommentMarkersByKey = new Map<string, RenderedBrowseCommentMarker>();
-  private readonly loadingBrowseRoomSignatures = new Map<string, PendingBrowseFullCommentLoad>();
-  private readonly pendingBrowseFullCommentLoads = new Map<string, PendingBrowseFullCommentLoad>();
-  private activeBrowseFullCommentLoadCount = 0;
-  private browseFullCommentLoadGeneration = 0;
-  private pinnedBrowseRequestGeneration = 0;
-  private observedMode: OverworldMode;
-  private readonly loadingBrowseSummarySignatures = new Set<string>();
-  private readonly failedBrowseRoomSignaturesUntil = new Map<string, number>();
-  private browseSummaryRequestInFlight = false;
-  private browseSummaryGeneration = 0;
-  private browseDiscoveryReady = false;
-  private browseDiscoveryReadinessInFlight = false;
-  private browseDiscoveryReadinessRetryAt = 0;
-  private browseDiscoveryAbortController: AbortController | null = null;
   private hoveredBrowseMarkerKey: string | null = null;
-  private pinnedBrowseMarkerKey: string | null = null;
   private readonly activeBrowseDanmaku = new Set<RenderedBrowseDanmakuComment>();
   private readonly idleBrowseDanmaku: RenderedBrowseDanmakuComment[] = [];
   private readonly browseDanmakuLaneCooldowns: number[] = [];
@@ -250,7 +206,13 @@ export class OverworldRoomCommentsController {
   private browseDanmakuCandidateCursor = 0;
 
   constructor(private readonly options: OverworldRoomCommentsControllerOptions) {
-    this.observedMode = options.getMode();
+    this.dataController = new RoomCommentsDataController({
+      getMode: options.getMode,
+      waitForBrowseDiscoveryReady: options.waitForBrowseDiscoveryReady,
+      showTransientStatus: options.showTransientStatus,
+      onCurrentCommentsChanged: () => this.syncRenderedComments(this.getRenderableRoom()),
+      onBrowseDataChanged: () => this.syncBrowseCommentMarkers(),
+    });
     this.composerController = new RoomCommentsComposerController({
       document: options.document,
       getHost: () => options.scene.game.canvas.parentElement ?? (options.document ?? document).body,
@@ -269,22 +231,8 @@ export class OverworldRoomCommentsController {
 
   reset(): void {
     this.composerController.close(false);
-    this.comments = [];
-    this.activeRoomSignature = null;
-    this.loadingRoomSignature = null;
-    this.invalidateBrowseFullCommentLoads();
-    this.loadingBrowseSummarySignatures.clear();
-    this.failedBrowseRoomSignaturesUntil.clear();
-    this.browseSummaryRequestInFlight = false;
-    this.browseSummaryGeneration += 1;
-    this.browseDiscoveryReady = false;
-    this.browseDiscoveryReadinessInFlight = false;
-    this.browseDiscoveryReadinessRetryAt = 0;
-    this.browseDiscoveryAbortController?.abort();
-    this.browseDiscoveryAbortController = null;
-    this.browseCommentCache.clear();
+    this.dataController.reset();
     this.hoveredBrowseMarkerKey = null;
-    this.pinnedBrowseMarkerKey = null;
     this.destroyRenderedComments();
     this.destroyBrowseCommentMarkers();
     this.destroyBrowseDanmakuStreams();
@@ -298,17 +246,11 @@ export class OverworldRoomCommentsController {
   }
 
   update(): void {
-    this.syncObservedMode();
+    this.dataController.syncObservedMode();
     const room = this.getRenderableRoom();
-    const nextSignature = room ? this.getRoomSignature(room) : null;
-    if (nextSignature !== this.activeRoomSignature) {
-      this.activeRoomSignature = nextSignature;
+    if (this.dataController.observeCurrentRoom(room)) {
       this.nextVisualSyncAt = 0;
-      this.comments = [];
       this.destroyRenderedComments();
-      if (room) {
-        void this.loadComments(room, this.getRoomSignature(room));
-      }
     }
 
     this.composerController.update();
@@ -328,7 +270,7 @@ export class OverworldRoomCommentsController {
   }
 
   openSelectedBrowseComments(): boolean {
-    this.syncObservedMode();
+    this.dataController.syncObservedMode();
     if (this.options.getMode() !== 'browse') {
       return this.openComposer();
     }
@@ -341,8 +283,8 @@ export class OverworldRoomCommentsController {
       return false;
     }
 
-    this.setPinnedBrowseMarkerKey(target.signature);
-    const cached = this.browseCommentCache.get(target.signature);
+    this.dataController.setPinnedBrowseMarkerKey(target.signature);
+    const cached = this.dataController.getBrowseCacheEntry(target.signature);
     if (cached?.full) {
       this.syncBrowseCommentMarkers();
       this.options.showTransientStatus?.(
@@ -354,7 +296,7 @@ export class OverworldRoomCommentsController {
     // A viewport summary is deliberately not treated as the full selected
     // room payload. Preserve the marker while promoting the selected room to
     // the existing exact/full comments endpoint.
-    void this.loadBrowseComments(target, true);
+    this.dataController.loadBrowseComments(target, true);
     this.syncBrowseCommentMarkers();
     this.options.showTransientStatus?.('Loading room comments...');
     return true;
@@ -441,10 +383,11 @@ export class OverworldRoomCommentsController {
   } {
     const currentRoom = this.options.getCurrentRoomSnapshot();
     const composerDebug = this.composerController.getDebugSnapshot();
+    const dataDebug = this.dataController.getDebugSnapshot();
     return {
-      activeRoomSignature: this.activeRoomSignature,
-      loadingRoomSignature: this.loadingRoomSignature,
-      commentCount: this.comments.length,
+      activeRoomSignature: dataDebug.activeRoomSignature,
+      loadingRoomSignature: dataDebug.loadingRoomSignature,
+      commentCount: dataDebug.commentCount,
       renderedCommentCount: this.renderedCommentsById.size,
       commentsVisible: this.commentsVisible,
       currentRoomPublished: this.options.isCurrentRoomPublished(),
@@ -459,10 +402,9 @@ export class OverworldRoomCommentsController {
       composerOpen: composerDebug.composerOpen,
       submitting: composerDebug.submitting,
       browseMarkerCount: this.browseCommentMarkersByKey.size,
-      browseCacheEntryCount: this.browseCommentCache.size,
-      browseLoadingCount:
-        this.loadingBrowseRoomSignatures.size + this.pendingBrowseFullCommentLoads.size,
-      pinnedBrowseMarkerKey: this.pinnedBrowseMarkerKey,
+      browseCacheEntryCount: dataDebug.browseCacheEntryCount,
+      browseLoadingCount: dataDebug.browseLoadingCount,
+      pinnedBrowseMarkerKey: dataDebug.pinnedBrowseMarkerKey,
       browseDanmakuActiveCount: this.activeBrowseDanmaku.size,
       browseDanmakuPoolCount: this.idleBrowseDanmaku.length,
       browseDanmakuStreams: Array.from(this.activeBrowseDanmaku, (stream) => ({
@@ -491,168 +433,23 @@ export class OverworldRoomCommentsController {
     this.composerController.refresh();
   };
 
-  private async loadComments(room: RoomSnapshot, signature: string): Promise<void> {
-    if (this.loadingRoomSignature === signature) {
-      return;
-    }
-
-    this.loadingRoomSignature = signature;
-    try {
-      const response = await fetchRoomComments(room.id, room.coordinates, room.version);
-      if (this.activeRoomSignature !== signature) {
-        return;
-      }
-      this.comments = response.comments;
-      this.syncRenderedComments(room);
-    } catch (error) {
-      console.warn('Failed to load room comments', error);
-    } finally {
-      if (this.loadingRoomSignature === signature) {
-        this.loadingRoomSignature = null;
-      }
-    }
-  }
-
-  private loadBrowseComments(target: BrowseCommentTarget, pinWhenLoaded = false): void {
-    if (pinWhenLoaded) {
-      // Retain only the newest queued selection. Already active reads may
-      // finish into the cache, but generation checks prevent stale re-pins.
-      this.pendingBrowseFullCommentLoads.clear();
-    }
-    const active = this.loadingBrowseRoomSignatures.get(target.signature);
-    if (active) {
-      if (pinWhenLoaded) {
-        active.pinWhenLoaded = true;
-        active.pinGeneration = this.pinnedBrowseRequestGeneration;
-      }
-      return;
-    }
-    const existing = this.pendingBrowseFullCommentLoads.get(target.signature);
-    if (existing) {
-      if (pinWhenLoaded) {
-        existing.pinWhenLoaded = true;
-        existing.pinGeneration = this.pinnedBrowseRequestGeneration;
-      }
-      return;
-    }
-
-    this.pendingBrowseFullCommentLoads.set(target.signature, {
-      target,
-      pinWhenLoaded,
-      pinGeneration: this.pinnedBrowseRequestGeneration,
-      loadGeneration: this.browseFullCommentLoadGeneration,
-    });
-    this.drainBrowseFullCommentLoads();
-  }
-
-  private drainBrowseFullCommentLoads(): void {
-    while (
-      this.activeBrowseFullCommentLoadCount < BROWSE_FULL_COMMENT_FETCH_CONCURRENCY
-      && this.pendingBrowseFullCommentLoads.size > 0
-    ) {
-      const nextEntry = this.pendingBrowseFullCommentLoads.entries().next().value as
-        | [string, PendingBrowseFullCommentLoad]
-        | undefined;
-      if (!nextEntry) return;
-      const [signature, load] = nextEntry;
-      this.pendingBrowseFullCommentLoads.delete(signature);
-      if (load.loadGeneration !== this.browseFullCommentLoadGeneration) continue;
-
-      this.activeBrowseFullCommentLoadCount += 1;
-      this.loadingBrowseRoomSignatures.set(signature, load);
-      void this.performBrowseFullCommentLoad(load).finally(() => {
-        this.activeBrowseFullCommentLoadCount = Math.max(
-          0,
-          this.activeBrowseFullCommentLoadCount - 1,
-        );
-        if (this.loadingBrowseRoomSignatures.get(signature) === load) {
-          this.loadingBrowseRoomSignatures.delete(signature);
-        }
-        this.drainBrowseFullCommentLoads();
-      });
-    }
-  }
-
-  private async performBrowseFullCommentLoad(load: PendingBrowseFullCommentLoad): Promise<void> {
-    const { target, loadGeneration } = load;
-    try {
-      const response = await fetchRoomComments(target.roomId, target.coordinates, target.version);
-      if (
-        loadGeneration !== this.browseFullCommentLoadGeneration
-        || this.options.getMode() !== 'browse'
-      ) return;
-      const comments = [...response.comments].sort(compareCommentsNewestFirst);
-      this.browseCommentCache.set(target.signature, {
-        comments,
-        commentCount: comments.length,
-        full: true,
-      });
-      this.failedBrowseRoomSignaturesUntil.delete(target.signature);
-      if (
-        load.pinWhenLoaded
-        && load.pinGeneration === this.pinnedBrowseRequestGeneration
-        && this.pinnedBrowseMarkerKey === target.signature
-      ) {
-        this.options.showTransientStatus?.(
-          comments.length > 0 ? 'Room comments opened.' : 'No comments here yet.',
-        );
-      }
-      this.syncBrowseCommentMarkers();
-    } catch (error) {
-      if (
-        loadGeneration !== this.browseFullCommentLoadGeneration
-        || this.options.getMode() !== 'browse'
-      ) return;
-      console.warn('Failed to load browse room comments', error);
-      this.failedBrowseRoomSignaturesUntil.set(target.signature, Date.now() + 15000);
-      if (
-        load.pinWhenLoaded
-        && load.pinGeneration === this.pinnedBrowseRequestGeneration
-        && this.pinnedBrowseMarkerKey === target.signature
-      ) {
-        this.options.showTransientStatus?.('Could not load comments for this room.');
-      }
-    }
-  }
-
-  private invalidateBrowseFullCommentLoads(): void {
-    this.browseFullCommentLoadGeneration += 1;
-    this.pinnedBrowseRequestGeneration += 1;
-    this.pendingBrowseFullCommentLoads.clear();
-    this.loadingBrowseRoomSignatures.clear();
-  }
-
-  private syncObservedMode(): void {
-    const mode = this.options.getMode();
-    if (mode === this.observedMode) return;
-    this.observedMode = mode;
-    this.invalidateBrowseFullCommentLoads();
-  }
-
-  private setPinnedBrowseMarkerKey(key: string | null): void {
-    if (this.pinnedBrowseMarkerKey === key) return;
-    this.pinnedBrowseMarkerKey = key;
-    this.pinnedBrowseRequestGeneration += 1;
-    if (key === null) this.pendingBrowseFullCommentLoads.clear();
-  }
-
   private syncBrowseCommentMarkers(): void {
-    this.syncObservedMode();
+    this.dataController.syncObservedMode();
     if (this.options.getMode() !== 'browse' || !this.commentsVisible) {
       this.hoveredBrowseMarkerKey = null;
-      this.setPinnedBrowseMarkerKey(null);
+      this.dataController.setPinnedBrowseMarkerKey(null);
       this.destroyBrowseCommentMarkers();
       return;
     }
 
-    if (!this.ensureBrowseDiscoveryReady()) {
+    if (!this.dataController.ensureBrowseDiscoveryReady()) {
       return;
     }
 
     const targets = this.getBrowseCommentTargetsForViewport();
     if (targets.length === 0) {
       this.hoveredBrowseMarkerKey = null;
-      this.setPinnedBrowseMarkerKey(null);
+      this.dataController.setPinnedBrowseMarkerKey(null);
       this.destroyBrowseCommentMarkers();
       return;
     }
@@ -660,10 +457,10 @@ export class OverworldRoomCommentsController {
     const targetSignatures = new Set<string>();
     const desiredMarkerKeys = new Set<string>();
     let structureChanged = false;
-    this.queueBrowseSummaryLoad(targets);
+    this.dataController.queueBrowseSummaryLoad(targets);
     for (const target of targets) {
       targetSignatures.add(target.signature);
-      const cached = this.browseCommentCache.get(target.signature);
+      const cached = this.dataController.getBrowseCacheEntry(target.signature);
       if (!cached || cached.comments.length === 0) {
         continue;
       }
@@ -708,10 +505,10 @@ export class OverworldRoomCommentsController {
     }
 
     if (
-      this.pinnedBrowseMarkerKey &&
-      !targetSignatures.has(this.pinnedBrowseMarkerKey)
+      this.dataController.getPinnedBrowseMarkerKey() &&
+      !targetSignatures.has(this.dataController.getPinnedBrowseMarkerKey()!)
     ) {
-      this.setPinnedBrowseMarkerKey(null);
+      this.dataController.setPinnedBrowseMarkerKey(null);
     }
     if (
       this.hoveredBrowseMarkerKey &&
@@ -724,96 +521,6 @@ export class OverworldRoomCommentsController {
     if (structureChanged) {
       this.options.onDisplayObjectsChanged?.();
     }
-  }
-
-  private ensureBrowseDiscoveryReady(): boolean {
-    if (this.browseDiscoveryReady) return true;
-    if (!this.options.waitForBrowseDiscoveryReady) {
-      this.browseDiscoveryReady = true;
-      return true;
-    }
-    if (
-      this.browseDiscoveryReadinessInFlight
-      || Date.now() < this.browseDiscoveryReadinessRetryAt
-    ) return false;
-
-    this.browseDiscoveryReadinessInFlight = true;
-    const abortController = new AbortController();
-    this.browseDiscoveryAbortController?.abort();
-    this.browseDiscoveryAbortController = abortController;
-    void this.options.waitForBrowseDiscoveryReady(abortController.signal)
-      .then((ready) => {
-        if (abortController.signal.aborted || this.browseDiscoveryAbortController !== abortController) {
-          return;
-        }
-        this.browseDiscoveryReady = ready;
-        if (!ready) this.browseDiscoveryReadinessRetryAt = Date.now() + BROWSE_COMMENT_READINESS_RETRY_MS;
-      })
-      .catch((error) => {
-        if (!abortController.signal.aborted) {
-          console.warn('Failed to await browse comment discovery readiness', error);
-          this.browseDiscoveryReadinessRetryAt = Date.now() + BROWSE_COMMENT_READINESS_RETRY_MS;
-        }
-      })
-      .finally(() => {
-        if (this.browseDiscoveryAbortController !== abortController) return;
-        this.browseDiscoveryReadinessInFlight = false;
-        this.browseDiscoveryAbortController = null;
-        if (this.browseDiscoveryReady) this.syncBrowseCommentMarkers();
-      });
-    return false;
-  }
-
-  private queueBrowseSummaryLoad(targets: readonly BrowseCommentTarget[]): void {
-    if (this.browseSummaryRequestInFlight) return;
-    const now = Date.now();
-    const pendingTargets = targets
-      .filter((target) => (
-        !this.browseCommentCache.has(target.signature)
-        && !this.loadingBrowseSummarySignatures.has(target.signature)
-        && now >= (this.failedBrowseRoomSignaturesUntil.get(target.signature) ?? 0)
-      ))
-      .slice(0, ROOM_COMMENT_BROWSE_MAX_ROOM_IDS);
-    if (pendingTargets.length === 0) return;
-
-    this.browseSummaryRequestInFlight = true;
-    const generation = this.browseSummaryGeneration;
-    for (const target of pendingTargets) this.loadingBrowseSummarySignatures.add(target.signature);
-    void fetchBrowseRoomCommentSummaries(pendingTargets.map((target) => target.roomId))
-      .then((response) => {
-        if (generation !== this.browseSummaryGeneration) return;
-        const summariesByRoomId = new Map(response.rooms.map((summary) => [summary.roomId, summary]));
-        for (const target of pendingTargets) {
-          const summary = summariesByRoomId.get(target.roomId);
-          if (!summary || summary.roomVersion !== target.version) {
-            this.failedBrowseRoomSignaturesUntil.set(target.signature, Date.now() + 15000);
-            continue;
-          }
-          const existing = this.browseCommentCache.get(target.signature);
-          if (!existing?.full) {
-            this.browseCommentCache.set(target.signature, {
-              comments: [...summary.comments].sort(compareCommentsNewestFirst),
-              commentCount: summary.commentCount,
-              full: false,
-            });
-          }
-          this.failedBrowseRoomSignaturesUntil.delete(target.signature);
-        }
-      })
-      .catch((error) => {
-        if (generation !== this.browseSummaryGeneration) return;
-        console.warn('Failed to load browse comment summaries', error);
-        const retryAt = Date.now() + 15000;
-        for (const target of pendingTargets) {
-          this.failedBrowseRoomSignaturesUntil.set(target.signature, retryAt);
-        }
-      })
-      .finally(() => {
-        if (generation !== this.browseSummaryGeneration) return;
-        for (const target of pendingTargets) this.loadingBrowseSummarySignatures.delete(target.signature);
-        this.browseSummaryRequestInFlight = false;
-        this.syncBrowseCommentMarkers();
-      });
   }
 
   private getBrowseCommentTargets(): BrowseCommentTarget[] {
@@ -884,8 +591,9 @@ export class OverworldRoomCommentsController {
         const leftSelected = selectedCoordinates && coordinatesEqual(left.displayCoordinates, selectedCoordinates);
         const rightSelected = selectedCoordinates && coordinatesEqual(right.displayCoordinates, selectedCoordinates);
         if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
-        if (left.signature === this.pinnedBrowseMarkerKey) return -1;
-        if (right.signature === this.pinnedBrowseMarkerKey) return 1;
+        const pinnedKey = this.dataController.getPinnedBrowseMarkerKey();
+        if (left.signature === pinnedKey) return -1;
+        if (right.signature === pinnedKey) return 1;
         const leftOrigin = this.options.getRoomOrigin(left.displayCoordinates);
         const rightOrigin = this.options.getRoomOrigin(right.displayCoordinates);
         const leftDistance = Math.hypot(
@@ -1029,10 +737,11 @@ export class OverworldRoomCommentsController {
       ) => {
         event.stopPropagation();
         this.options.selectRoomCoordinates?.(marker.target.displayCoordinates);
-        this.setPinnedBrowseMarkerKey(this.pinnedBrowseMarkerKey === marker.key ? null : marker.key);
-        if (this.pinnedBrowseMarkerKey === marker.key) {
-          const cached = this.browseCommentCache.get(marker.key);
-          if (!cached?.full) void this.loadBrowseComments(marker.target, true);
+        const pinnedKey = this.dataController.getPinnedBrowseMarkerKey();
+        this.dataController.setPinnedBrowseMarkerKey(pinnedKey === marker.key ? null : marker.key);
+        if (this.dataController.getPinnedBrowseMarkerKey() === marker.key) {
+          const cached = this.dataController.getBrowseCacheEntry(marker.key);
+          if (!cached?.full) this.dataController.loadBrowseComments(marker.target, true);
         }
         this.syncBrowseCommentMarkerPresentation();
       },
@@ -1157,7 +866,7 @@ export class OverworldRoomCommentsController {
     for (const marker of this.browseCommentMarkersByKey.values()) {
       const popoverVisible =
         marker.key === this.hoveredBrowseMarkerKey ||
-        marker.key === this.pinnedBrowseMarkerKey;
+        marker.key === this.dataController.getPinnedBrowseMarkerKey();
       if (popoverVisible) {
         marker.container.setVisible(true);
         marker.container.setAlpha(1);
@@ -1600,11 +1309,11 @@ export class OverworldRoomCommentsController {
     }
 
     const target = stream.target;
-    this.setPinnedBrowseMarkerKey(target.signature);
-    const pinGeneration = this.pinnedBrowseRequestGeneration;
+    this.dataController.setPinnedBrowseMarkerKey(target.signature);
+    const pinGeneration = this.dataController.getPinnedBrowseRequestGeneration();
     this.hoveredBrowseMarkerKey = null;
-    const cached = this.browseCommentCache.get(target.signature);
-    if (!cached?.full) this.loadBrowseComments(target, true);
+    const cached = this.dataController.getBrowseCacheEntry(target.signature);
+    if (!cached?.full) this.dataController.loadBrowseComments(target, true);
     this.syncBrowseCommentMarkerPresentation();
     this.options.showTransientStatus?.('Opening comment room...');
 
@@ -1612,10 +1321,10 @@ export class OverworldRoomCommentsController {
       void Promise.resolve(this.options.jumpToRoomCoordinates(target.displayCoordinates))
         .then(() => {
           if (
-            pinGeneration !== this.pinnedBrowseRequestGeneration
+            pinGeneration !== this.dataController.getPinnedBrowseRequestGeneration()
             || this.options.getMode() !== 'browse'
           ) return;
-          this.setPinnedBrowseMarkerKey(target.signature);
+          this.dataController.setPinnedBrowseMarkerKey(target.signature);
           this.syncBrowseCommentMarkers();
           this.syncBrowseCommentMarkerPresentation();
         })
@@ -1830,7 +1539,9 @@ export class OverworldRoomCommentsController {
   }
 
   private syncRenderedComments(room: RoomSnapshot | null): void {
-    const visibleComments = room && this.commentsVisible ? this.comments : [];
+    const visibleComments = room && this.commentsVisible
+      ? this.dataController.getCurrentComments()
+      : [];
     const nextIds = new Set<string>();
     let structureChanged = false;
 
@@ -1986,10 +1697,6 @@ export class OverworldRoomCommentsController {
 
     return this.options.getCurrentRoomSnapshot();
   }
-
-  private getRoomSignature(room: RoomSnapshot): string {
-    return `${room.id}:v${room.version}`;
-  }
 }
 
 function formatCommentTime(value: string): string {
@@ -2015,18 +1722,6 @@ function truncateCommentBody(value: string, maxLength: number): string {
   }
 
   return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
-}
-
-function compareCommentsNewestFirst(
-  left: Pick<RoomCommentRecord, 'createdAt'>,
-  right: Pick<RoomCommentRecord, 'createdAt'>,
-): number {
-  return getCommentTimeMs(right.createdAt) - getCommentTimeMs(left.createdAt);
-}
-
-function getCommentTimeMs(value: string): number {
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function getCommentsSignature(
