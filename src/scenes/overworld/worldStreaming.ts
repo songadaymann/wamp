@@ -135,6 +135,12 @@ import { RoomArtifactCache } from './roomArtifactCache';
 import { RoomTexturePreparation } from './roomTexturePreparation';
 import { DynamicOverlayReadinessCoordinator } from './dynamicOverlayReadinessCoordinator';
 import {
+  FullRoomPreparationLifecycleCoordinator,
+  FullRoomTeardownLifecycleCoordinator,
+  type FullRoomPreparationPhase,
+  type FullRoomTeardownPhase,
+} from './fullRoomLifecycles';
+import {
   getDevicePerformanceMode,
   type DevicePerformanceMode,
 } from '../../performance/devicePerformanceMode';
@@ -164,6 +170,8 @@ const PREDICTED_SEAM_LOCK_DISTANCE_PX = 72;
 const PREDICTED_VELOCITY_EPSILON = 1;
 const PREDICTED_FALLBACK_SPEED_PX_PER_SEC = 150;
 const PREDICTED_DESTINATION_SWITCH_HYSTERESIS_MS = 8;
+const fullRoomPreparationLifecycle = new FullRoomPreparationLifecycleCoordinator();
+const fullRoomTeardownLifecycle = new FullRoomTeardownLifecycleCoordinator();
 
 export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
   room: RoomSnapshot;
@@ -187,24 +195,6 @@ export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
   collisionReady?: boolean;
   runtimeSuspended?: boolean;
 }
-
-type FullRoomPreparationPhase =
-  | 'textures'
-  | 'uploads'
-  | 'custom-tiles'
-  | 'custom-background'
-  | 'runtime-shell'
-  | 'terrain'
-  | 'terrain-collision'
-  | 'terrain-insets'
-  | 'lighting'
-  | 'objects'
-  | 'ready'
-  | 'commit'
-  | 'waiting-for-teardown'
-  | 'committed'
-  | 'cancelled'
-  | 'failed';
 
 interface PendingFullRoomPreparation<TLiveObject, TEdgeWall> {
   identity: string;
@@ -241,7 +231,7 @@ interface PendingFullRoomTeardown<TLiveObject, TEdgeWall> {
   restoreCollisionReady: boolean;
   restoreRuntime: (() => void) | null;
   liveObjectReconciliationGeneration: number | null;
-  phase: 'queued' | 'objects' | 'collision' | 'insets' | 'terrain' | 'backgrounds' | 'display' | 'finalize';
+  phase: FullRoomTeardownPhase;
   destructionStarted: boolean;
   liveObjectRoomStateCleared: boolean;
   retainedAfterDestruction: boolean;
@@ -1745,8 +1735,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       }
       const preparation = this.pendingFullRoomPreparationsById.get(previousRoomId);
       if (preparation) {
-        preparation.standardActivationRequested = false;
-        preparation.activationRequested = preparation.portalActivationRequested;
+        fullRoomPreparationLifecycle.releaseActivation(preparation, 'standard');
         this.clearPreparedRoomActivationIfUnowned(
           preparation,
           'movement-activation-cleared',
@@ -1837,8 +1826,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         pendingRequest.activationRequested = pendingRequest.standardActivationRequested;
       }
       if (preparation) {
-        preparation.portalActivationRequested = false;
-        preparation.activationRequested = preparation.standardActivationRequested;
+        fullRoomPreparationLifecycle.releaseActivation(preparation, 'portal');
         this.clearPreparedRoomActivationIfUnowned(
           preparation,
           'portal-activation-cleared',
@@ -3832,7 +3820,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     )) {
       const pendingTeardown = this.pendingFullRoomTeardownsById.get(renderableRoom.id);
       if (pendingTeardown?.destructionStarted) {
-        pendingTeardown.retainedAfterDestruction = true;
+        fullRoomTeardownLifecycle.retainAfterDestruction(pendingTeardown);
         if (!pendingTeardown.job) {
           this.enqueuePendingFullRoomTeardownJob(
             renderableRoom.id,
@@ -4051,16 +4039,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     portalDestination = false,
   ): void {
     if (!this.isFullRoomPreparationCurrent(preparation)) return;
-    if (portalDestination) {
-      preparation.portalActivationRequested = true;
-    } else {
-      preparation.standardActivationRequested = true;
-    }
-    preparation.activationRequested = Boolean(
-      preparation.standardActivationRequested || preparation.portalActivationRequested,
+    const readyForCommit = fullRoomPreparationLifecycle.requestActivation(
+      preparation,
+      portalDestination ? 'portal' : 'standard',
     );
     this.promoteFullRoomPreparation(preparation, 'portal-current-destination');
-    if (preparation.phase === 'ready') {
+    if (readyForCommit) {
       this.queuePreparedRoomCommit(preparation);
     }
   }
@@ -4075,16 +4059,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       && preparation.queuedJob?.cancel(reason)
     ) {
       preparation.queuedJob = null;
-      preparation.phase = 'ready';
+      fullRoomPreparationLifecycle.returnToReady(preparation);
       this.settleDisposedReplacementAfterPreparationStops(preparation);
       return;
     }
     if (preparation.phase !== 'waiting-for-teardown') return;
     const pendingTeardown = this.pendingFullRoomTeardownsById.get(preparation.room.id);
     if (pendingTeardown?.commitAfterTeardown === preparation) {
-      pendingTeardown.commitAfterTeardown = null;
+      fullRoomTeardownLifecycle.clearDeferredCommit(pendingTeardown);
     }
-    preparation.phase = 'ready';
+    fullRoomPreparationLifecycle.returnToReady(preparation);
     this.settleDisposedReplacementAfterPreparationStops(preparation);
   }
 
@@ -4539,8 +4523,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private markPreparedFullRoomReady(
     preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
   ): void {
-    preparation.phase = 'ready';
-    if (preparation.activationRequested) {
+    if (fullRoomPreparationLifecycle.markReady(preparation)) {
       this.queuePreparedRoomCommit(preparation);
     }
   }
@@ -4548,8 +4531,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private queuePreparedRoomCommit(
     preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
   ): void {
-    if (preparation.phase === 'commit' || preparation.phase === 'committed') return;
-    preparation.phase = 'commit';
+    if (!fullRoomPreparationLifecycle.beginCommit(preparation)) return;
     this.enqueueFullRoomPreparationJob(
       preparation,
       'commit-prepared-room',
@@ -4581,8 +4563,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
     if (pendingTeardown?.loadedRoom === existing) {
       if (pendingTeardown.destructionStarted) {
-        pendingTeardown.commitAfterTeardown = preparation;
-        preparation.phase = 'waiting-for-teardown';
+        fullRoomTeardownLifecycle.attachDeferredCommit(pendingTeardown, preparation);
+        fullRoomPreparationLifecycle.waitForTeardown(preparation);
         return;
       }
       this.cancelPendingFullRoomTeardown(
@@ -4639,7 +4621,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       // Settle this preparation before callbacks that may synchronously clear
       // course overrides and invalidate this same room. Re-entrant invalidation
       // must not cancel and destroy the runtime that was just published.
-      preparation.phase = 'committed';
+      fullRoomPreparationLifecycle.markCommitted(preparation);
       if (this.pendingFullRoomPreparationsById.get(preparation.room.id) === preparation) {
         this.pendingFullRoomPreparationsById.delete(preparation.room.id);
       }
@@ -4659,7 +4641,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         existing,
         previousReleaseAt,
       );
-      preparation.phase = 'failed';
+      fullRoomPreparationLifecycle.markFailed(preparation);
       if (this.pendingFullRoomPreparationsById.get(preparation.room.id) !== preparation) {
         this.settleDisposedReplacementAfterPreparationStops(preparation);
       }
@@ -4779,8 +4761,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
   ): boolean {
     return !this.destroyed
-      && preparation.phase !== 'cancelled'
-      && preparation.phase !== 'failed'
+      && fullRoomPreparationLifecycle.isProgressable(preparation)
       && this.pendingFullRoomPreparationsById.get(preparation.room.id) === preparation;
   }
 
@@ -4836,7 +4817,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.pendingFullRoomPreparationsById.delete(roomId);
     this.frameWorkCoordinator.cancelGeneration(preparation.generation, reason);
     preparation.queuedJob = null;
-    preparation.phase = 'cancelled';
+    fullRoomPreparationLifecycle.markCancelled(preparation);
     preparation.texturePreparation?.cancel();
     preparation.customTilePreparation?.cancel();
     preparation.customBackgroundPreparation?.cancel();
@@ -4896,7 +4877,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       || preparation.phase === 'cancelled'
       || preparation.phase === 'committed'
     ) return;
-    preparation.phase = 'failed';
+    fullRoomPreparationLifecycle.markFailed(preparation);
     console.error(`Room ${preparation.room.id} preparation failed.`, error);
     this.cancelFullRoomPreparation(preparation.room.id, 'preparation-failed');
   }
@@ -5099,7 +5080,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       pending.restoreRuntime = this.suspendLoadedRoomRuntime(loadedRoom);
     } catch (error) {
       console.error(`Could not suspend room ${roomId} for deferred teardown.`, error);
-      pending.destructionStarted = true;
+      fullRoomTeardownLifecycle.beginDestruction(pending);
       this.forceCompletePendingFullRoomTeardown(roomId, pending, true);
       if (notifyVisibility) {
         this.previewRenderer.syncPreviewVisibility();
@@ -5131,7 +5112,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return;
     }
     if (this.shouldRetainFullRoom(roomId)) {
-      pending.retainedAfterDestruction = true;
+      fullRoomTeardownLifecycle.retainAfterDestruction(pending);
     }
 
     if (!this.options.destroyLiveObjectsBatch) {
@@ -5143,11 +5124,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return;
     }
 
-    pending.destructionStarted = true;
+    fullRoomTeardownLifecycle.beginDestruction(pending);
     pending.restoreRuntime = null;
 
     if (pending.phase === 'queued' || pending.phase === 'objects') {
-      pending.phase = 'objects';
+      fullRoomTeardownLifecycle.advance(pending, 'objects');
       const complete = this.options.destroyLiveObjectsBatch(
         pending.loadedRoom,
         TEARDOWN_LIVE_OBJECTS_PER_JOB,
@@ -5160,21 +5141,21 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'objects');
         return;
       }
-      pending.phase = 'collision';
+      fullRoomTeardownLifecycle.advance(pending, 'collision');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'collision');
       return;
     }
 
     if (pending.phase === 'collision') {
       this.destroyLoadedRoomCollisionResources(pending.loadedRoom);
-      pending.phase = 'insets';
+      fullRoomTeardownLifecycle.advance(pending, 'insets');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'insets');
       return;
     }
 
     if (pending.phase === 'insets') {
       if (this.destroyLoadedRoomInsetBodyBatch(pending.loadedRoom)) {
-        pending.phase = 'terrain';
+        fullRoomTeardownLifecycle.advance(pending, 'terrain');
       }
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, pending.phase);
       return;
@@ -5183,7 +5164,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     if (pending.phase === 'terrain') {
       pending.loadedRoom.terrainLayer.destroy();
       pending.loadedRoom.map.destroy();
-      pending.phase = 'backgrounds';
+      fullRoomTeardownLifecycle.advance(pending, 'backgrounds');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'backgrounds');
       return;
     }
@@ -5200,7 +5181,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         pending.loadedRoom.backgroundSprites.pop();
       }
       if (pending.loadedRoom.backgroundSprites.length === 0) {
-        pending.phase = 'display';
+        fullRoomTeardownLifecycle.advance(pending, 'display');
       }
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, pending.phase);
       return;
@@ -5212,7 +5193,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       pending.loadedRoom.image.destroy();
       pending.loadedRoom.foregroundImage?.destroy();
       pending.loadedRoom.foregroundImage = null;
-      pending.phase = 'finalize';
+      fullRoomTeardownLifecycle.advance(pending, 'finalize');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'finalize');
       return;
     }
@@ -5253,12 +5234,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.pendingFullRoomTeardownsById.delete(roomId);
     if (this.loadedFullRoomsById.get(roomId) !== pending.loadedRoom) return;
     const loadedRoom = pending.loadedRoom;
-    const deferredCommit = pending.commitAfterTeardown;
-    const canCommitDeferredPreparation = Boolean(
-      deferredCommit
-      && deferredCommit.activationRequested
-      && this.isFullRoomPreparationSnapshotCurrent(deferredCommit),
+    const deferredCommitResolution = fullRoomTeardownLifecycle.resolveDeferredCommit(
+      pending,
+      (preparation) => preparation.activationRequested
+        && this.isFullRoomPreparationSnapshotCurrent(preparation),
     );
+    const deferredCommit = deferredCommitResolution.preparation;
+    const canCommitDeferredPreparation = deferredCommitResolution.action === 'commit';
     const artifactRemainsCached = Boolean(
       loadedRoom.artifactKey && this.roomArtifactCache.has(loadedRoom.artifactKey),
     );
@@ -5273,10 +5255,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     if (canCommitDeferredPreparation && deferredCommit) {
       deferredCommit.disposedReplacementRoom = loadedRoom;
     } else if (
-      deferredCommit
+      deferredCommitResolution.action === 'cancel'
+      && deferredCommit
       && this.pendingFullRoomPreparationsById.get(roomId) === deferredCommit
     ) {
-      pending.commitAfterTeardown = null;
       this.cancelFullRoomPreparation(
         roomId,
         'deferred-preparation-stale-after-teardown',
@@ -5327,7 +5309,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         });
       });
       pending.liveObjectRoomStateCleared = true;
-      pending.phase = 'collision';
+      fullRoomTeardownLifecycle.advance(pending, 'collision');
     }
     if (pending.phase === 'collision') {
       this.runFullRoomTeardownCleanupStep('destroy edge walls', () => {
@@ -5341,11 +5323,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         pending.loadedRoom.terrainInsetCollider?.destroy();
       });
       pending.loadedRoom.terrainInsetCollider = null;
-      pending.phase = 'insets';
+      fullRoomTeardownLifecycle.advance(pending, 'insets');
     }
     if (pending.phase === 'insets') {
       this.forceDestroyLoadedRoomInsetBodies(pending.loadedRoom);
-      pending.phase = 'terrain';
+      fullRoomTeardownLifecycle.advance(pending, 'terrain');
     }
     if (pending.phase === 'terrain') {
       this.runFullRoomTeardownCleanupStep('destroy the terrain layer', () => {
@@ -5354,7 +5336,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       this.runFullRoomTeardownCleanupStep('destroy the tilemap', () => {
         pending.loadedRoom.map.destroy();
       });
-      pending.phase = 'backgrounds';
+      fullRoomTeardownLifecycle.advance(pending, 'backgrounds');
     }
     if (pending.phase === 'backgrounds') {
       for (const background of pending.loadedRoom.backgroundSprites) {
@@ -5363,7 +5345,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         });
       }
       pending.loadedRoom.backgroundSprites = [];
-      pending.phase = 'display';
+      fullRoomTeardownLifecycle.advance(pending, 'display');
     }
     if (pending.phase === 'display') {
       this.runFullRoomTeardownCleanupStep('destroy the background color', () => {
@@ -5377,7 +5359,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         pending.loadedRoom.foregroundImage?.destroy();
       });
       pending.loadedRoom.foregroundImage = null;
-      pending.phase = 'finalize';
+      fullRoomTeardownLifecycle.advance(pending, 'finalize');
     }
     this.finalizePendingFullRoomTeardown(roomId, pending, queueReconciliation);
   }
@@ -5446,9 +5428,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private queueFullRoomTeardownReconciliation(): void {
-    this.fullRoomTeardownReconciliationRequired = true;
-    this.fullRoomTeardownReconciliationGeneration =
-      this.options.getLiveObjectPhysicsReconciliationGeneration?.() ?? null;
+    const reconciliation = fullRoomTeardownLifecycle.requestReconciliation(
+      this.options.getLiveObjectPhysicsReconciliationGeneration?.() ?? null,
+    );
+    this.fullRoomTeardownReconciliationRequired = reconciliation.required;
+    this.fullRoomTeardownReconciliationGeneration = reconciliation.generation;
     if (this.pendingFullRoomTeardownReconciliationJob) return;
 
     let job: FrameWorkJobHandle | null = null;
@@ -5461,18 +5445,18 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         if (this.pendingFullRoomTeardownReconciliationJob === job) {
           this.pendingFullRoomTeardownReconciliationJob = null;
         }
-        if (this.pendingFullRoomTeardownsById.size > 0) {
-          return;
-        }
-        if (!this.fullRoomTeardownReconciliationRequired) return;
-        this.fullRoomTeardownReconciliationRequired = false;
-        const queuedAtGeneration = this.fullRoomTeardownReconciliationGeneration;
-        this.fullRoomTeardownReconciliationGeneration = null;
-        const currentGeneration =
-          this.options.getLiveObjectPhysicsReconciliationGeneration?.() ?? null;
-        if (queuedAtGeneration !== null && currentGeneration !== queuedAtGeneration) {
-          return;
-        }
+        const resolution = fullRoomTeardownLifecycle.consumeReconciliation({
+          state: {
+            required: this.fullRoomTeardownReconciliationRequired,
+            generation: this.fullRoomTeardownReconciliationGeneration,
+          },
+          pendingTeardownCount: this.pendingFullRoomTeardownsById.size,
+          currentGeneration:
+            this.options.getLiveObjectPhysicsReconciliationGeneration?.() ?? null,
+        });
+        this.fullRoomTeardownReconciliationRequired = resolution.state.required;
+        this.fullRoomTeardownReconciliationGeneration = resolution.state.generation;
+        if (resolution.action !== 'reconcile') return;
         this.syncLiveObjectWorldColliders();
         this.options.syncLiveObjectInteractions?.(this.loadedFullRoomsById.values());
       },
@@ -5490,7 +5474,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     const pending = this.pendingFullRoomTeardownsById.get(roomId);
     if (!pending) return null;
     if (restoreCollisionReady && pending.destructionStarted) {
-      pending.retainedAfterDestruction = true;
+      fullRoomTeardownLifecycle.retainAfterDestruction(pending);
       if (!pending.job) {
         this.enqueuePendingFullRoomTeardownJob(roomId, pending, pending.phase);
       }
@@ -5517,8 +5501,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       } catch (error) {
         console.error(`Could not restore suspended runtime for retained room ${roomId}.`, error);
         pending.restoreRuntime = null;
-        pending.destructionStarted = true;
-        pending.retainedAfterDestruction = true;
+        fullRoomTeardownLifecycle.beginDestruction(pending);
+        fullRoomTeardownLifecycle.retainAfterDestruction(pending);
         this.forceCompletePendingFullRoomTeardown(roomId, pending, true);
         if (notifySeams) {
           this.options.onFullRoomSetChanged?.([loadedRoom.room.coordinates]);
@@ -5547,8 +5531,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       }
       if (!pending.restoreCollisionReady || !collisionInfrastructureReady) {
         loadedRoom.collisionReady = false;
-        pending.destructionStarted = true;
-        pending.retainedAfterDestruction = true;
+        fullRoomTeardownLifecycle.beginDestruction(pending);
+        fullRoomTeardownLifecycle.retainAfterDestruction(pending);
         this.pendingFullRoomTeardownsById.set(roomId, pending);
         this.forceCompletePendingFullRoomTeardown(roomId, pending, true);
         if (notifySeams) {
@@ -5563,8 +5547,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         } catch (error) {
           console.error(`Could not reconcile retained room ${roomId}.`, error);
           loadedRoom.collisionReady = false;
-          pending.destructionStarted = true;
-          pending.retainedAfterDestruction = true;
+          fullRoomTeardownLifecycle.beginDestruction(pending);
+          fullRoomTeardownLifecycle.retainAfterDestruction(pending);
           this.pendingFullRoomTeardownsById.set(roomId, pending);
           this.forceCompletePendingFullRoomTeardown(roomId, pending, true);
           if (notifySeams) {
@@ -5576,8 +5560,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           'teardown-reconciliation-covered-by-room-restore',
         );
         this.pendingFullRoomTeardownReconciliationJob = null;
-        this.fullRoomTeardownReconciliationRequired = false;
-        this.fullRoomTeardownReconciliationGeneration = null;
+        const clearedReconciliation = fullRoomTeardownLifecycle.clearReconciliation();
+        this.fullRoomTeardownReconciliationRequired = clearedReconciliation.required;
+        this.fullRoomTeardownReconciliationGeneration = clearedReconciliation.generation;
       }
       loadedRoom.collisionReady = true;
       if (notifyVisibility) {
