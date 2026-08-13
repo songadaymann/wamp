@@ -1992,10 +1992,10 @@ export class EditorEditRuntime {
           continue;
         }
 
-        if (a.newGid === -1) {
+        if (a.oldGid === -1) {
           layer.removeTileAt(a.x, a.y);
         } else {
-          const decoded = decodeTileDataValue(a.newGid);
+          const decoded = decodeTileDataValue(a.oldGid);
           const restoredTile = layer.putTileAt(decoded.gid, a.x, a.y);
           if (restoredTile) {
             restoredTile.flipX = decoded.flipX;
