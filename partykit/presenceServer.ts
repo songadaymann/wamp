@@ -620,8 +620,10 @@ export default class PresenceServer implements Party.Server {
       return null;
     }
 
+    const { constructionPreviewToken: _token, ...sharedPreview } = preview;
+
     return {
-      ...preview,
+      ...sharedPreview,
       roomId: this.getRoomId(preview.roomCoordinates),
       userId: state.userId,
       displayName: state.displayName,

@@ -6,6 +6,12 @@ import {
   type PartyKitIdentity,
   type PartyKitIdentityTokenSource,
 } from '../presence/identityToken';
+import { createConstructionPreviewToken } from '../presence/constructionPreviewToken';
+import {
+  createDefaultRoomSnapshot,
+  type RoomCoordinates,
+  type RoomSnapshot,
+} from '../persistence/roomModel';
 
 const DEFAULT_NOW_MS = Date.UTC(2026, 7, 13, 16, 0, 0);
 const DEFAULT_IDENTITY_SECRET = 'presence-server-test-secret';
@@ -19,22 +25,107 @@ export interface FakeConnectionClose {
   reason: string | undefined;
 }
 
+export type FakePresenceStorageOperation =
+  | {
+      type: 'list';
+      prefix: string;
+      settled: true;
+    }
+  | {
+      type: 'put';
+      key: string;
+      value: unknown;
+      settled: boolean;
+    }
+  | {
+      type: 'delete';
+      key: string;
+      settled: boolean;
+    };
+
 export class FakePresenceStorage {
   private readonly values = new Map<string, unknown>();
+  private readonly pendingMutationReleases: Array<() => void> = [];
+  private deferMutations = false;
+  readonly operations: FakePresenceStorageOperation[] = [];
 
   async delete(key: string): Promise<boolean> {
-    return this.values.delete(key);
+    const operation: FakePresenceStorageOperation = {
+      type: 'delete',
+      key,
+      settled: false,
+    };
+    this.operations.push(operation);
+    await this.waitForMutationRelease();
+    const deleted = this.values.delete(key);
+    operation.settled = true;
+    return deleted;
   }
 
   async list<T>(options: { prefix?: string } = {}): Promise<Map<string, T>> {
     const prefix = options.prefix ?? '';
+    this.operations.push({ type: 'list', prefix, settled: true });
     return new Map(
       Array.from(this.values.entries()).filter(([key]) => key.startsWith(prefix))
     ) as Map<string, T>;
   }
 
   async put<T>(key: string, value: T): Promise<void> {
+    const operation: FakePresenceStorageOperation = {
+      type: 'put',
+      key,
+      value,
+      settled: false,
+    };
+    this.operations.push(operation);
+    await this.waitForMutationRelease();
     this.values.set(key, value);
+    operation.settled = true;
+  }
+
+  clearOperationLog(): void {
+    this.operations.length = 0;
+  }
+
+  deferMutationCompletion(): void {
+    this.deferMutations = true;
+  }
+
+  releaseNextMutation(): boolean {
+    const release = this.pendingMutationReleases.shift();
+    if (!release) {
+      return false;
+    }
+    release();
+    return true;
+  }
+
+  releaseAllMutations(): void {
+    while (this.releaseNextMutation()) {
+      // Drain every mutation in the same order it was issued.
+    }
+  }
+
+  resumeImmediateMutationCompletion(): void {
+    this.deferMutations = false;
+    this.releaseAllMutations();
+  }
+
+  seed<T>(key: string, value: T): void {
+    this.values.set(key, value);
+  }
+
+  peek<T>(key: string): T | undefined {
+    return this.values.get(key) as T | undefined;
+  }
+
+  private waitForMutationRelease(): Promise<void> {
+    if (!this.deferMutations) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.pendingMutationReleases.push(resolve);
+    });
   }
 }
 
@@ -172,7 +263,7 @@ export interface ConnectOptions {
 
 export class PresenceServerHarness {
   readonly room: FakePresenceRoom;
-  readonly server: PresenceServer;
+  server: PresenceServer;
 
   constructor(options: { roomId?: string; env?: Record<string, unknown>; nowMs?: number } = {}) {
     vi.useFakeTimers();
@@ -202,6 +293,22 @@ export class PresenceServerHarness {
 
   async advance(ms: number): Promise<void> {
     await vi.advanceTimersByTimeAsync(ms);
+  }
+
+  async settleAsyncWork(): Promise<void> {
+    for (let index = 0; index < 4; index += 1) {
+      await vi.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+    }
+  }
+
+  setTime(nowMs: number): void {
+    vi.setSystemTime(nowMs);
+  }
+
+  async reactivate(): Promise<void> {
+    this.server = new PresenceServer(this.room.asPartyRoom());
+    await this.server.onStart();
   }
 
   close(connection: FakePresenceConnection): void {
@@ -240,6 +347,48 @@ export async function createTestIdentityToken(
   return token;
 }
 
+export async function createTestConstructionPreviewToken(
+  identity: PartyKitIdentity,
+  roomCoordinates: RoomCoordinates,
+  options: { nowMs?: number; ttlMs?: number; secret?: string } = {}
+): Promise<string> {
+  const roomId = `${roomCoordinates.x},${roomCoordinates.y}`;
+  const { token } = await createConstructionPreviewToken(
+    {
+      roomId,
+      roomCoordinates,
+      userId: identity.userId,
+    },
+    options.secret ?? DEFAULT_IDENTITY_SECRET,
+    {
+      nowMs: options.nowMs ?? Date.now(),
+      ttlMs: options.ttlMs,
+      nonce: `preview-${identity.userId}-${roomId}`,
+    }
+  );
+  return token;
+}
+
+export function roomPreviewPayload(input: {
+  roomX?: number;
+  roomY?: number;
+  timestamp?: number;
+  token?: string;
+  snapshot?: RoomSnapshot;
+} = {}): Record<string, unknown> {
+  const roomCoordinates = {
+    x: input.roomX ?? 1,
+    y: input.roomY ?? 2,
+  };
+  return {
+    roomCoordinates,
+    snapshot:
+      input.snapshot ?? createDefaultRoomSnapshot(`${roomCoordinates.x},${roomCoordinates.y}`, roomCoordinates),
+    timestamp: input.timestamp ?? Date.now(),
+    ...(input.token !== undefined ? { constructionPreviewToken: input.token } : {}),
+  };
+}
+
 export function presencePayload(input: {
   roomX?: number;
   roomY?: number;
@@ -275,6 +424,38 @@ export function sendPresence(
     JSON.stringify({
       type: 'presence:update',
       presence,
+    }),
+    connection.asPartyConnection()
+  );
+}
+
+export function sendRoomPreview(
+  harness: PresenceServerHarness,
+  connection: FakePresenceConnection,
+  preview: Record<string, unknown>
+): void {
+  harness.server.onMessage(
+    JSON.stringify({
+      type: 'presence:preview:update',
+      preview,
+    }),
+    connection.asPartyConnection()
+  );
+}
+
+export function clearRoomPreview(
+  harness: PresenceServerHarness,
+  connection: FakePresenceConnection,
+  input: { roomX?: number; roomY?: number; timestamp?: number } = {}
+): void {
+  harness.server.onMessage(
+    JSON.stringify({
+      type: 'presence:preview:clear',
+      roomCoordinates: {
+        x: input.roomX ?? 1,
+        y: input.roomY ?? 2,
+      },
+      ...(input.timestamp !== undefined ? { timestamp: input.timestamp } : {}),
     }),
     connection.asPartyConnection()
   );
