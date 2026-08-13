@@ -8,7 +8,7 @@ import {
   type RoomChatSayMessage,
   type RoomChatTransportChannel,
 } from '../src/chat/roomChatModel';
-import type { RoomSnapshot } from '../src/persistence/roomModel';
+import type { RoomCoordinates, RoomSnapshot } from '../src/persistence/roomModel';
 import {
   resolvePartykitIdentitySigningSecret,
   verifyPartykitIdentityToken,
@@ -18,6 +18,16 @@ import {
   resolveConstructionPreviewTokenSigningSecret,
   verifyConstructionPreviewToken,
 } from '../src/presence/constructionPreviewToken';
+import {
+  isVisiblePresence,
+  normalizePresencePayload,
+  parseIncomingMessage,
+  type ConnectionPresenceState,
+  type PresencePayload,
+  type RoomPreviewPayload,
+  type SharedRoomPreview,
+  type WorldGhostPresence,
+} from '../src/partykit/presenceProtocol';
 import {
   getMultiplayerModeDefinition,
   type PvpHitSource,
@@ -49,101 +59,6 @@ const PREVIEW_STORAGE_PREFIX = 'preview:';
 const ROOM_PREVIEW_TTL_MS = 120_000;
 const PRESENCE_UPSERT_FLUSH_MS = 80;
 const POPULATION_BROADCAST_FLUSH_MS = 250;
-
-type PresenceMode = 'browse' | 'play' | 'edit';
-type PresenceAnimationState =
-  | 'idle'
-  | 'run'
-  | 'jump-rise'
-  | 'jump-fall'
-  | 'wall-slide'
-  | 'wall-jump'
-  | 'land'
-  | 'ladder-climb'
-  | 'crouch'
-  | 'crawl'
-  | 'push'
-  | 'pull'
-  | 'sword-slash'
-  | 'air-slash-down'
-  | 'gun-fire';
-
-interface RoomCoordinates {
-  x: number;
-  y: number;
-}
-
-interface PresencePayload {
-  roomCoordinates: RoomCoordinates;
-  x: number;
-  y: number;
-  velocityX: number;
-  velocityY: number;
-  facing: number;
-  animationState: PresenceAnimationState;
-  mode: PresenceMode;
-  pvp?: {
-    matchId: string;
-    action: 'sword' | 'gun' | null;
-    actionUntil: number;
-  } | null;
-  timestamp: number;
-}
-
-interface RoomPreviewPayload {
-  roomCoordinates: RoomCoordinates;
-  snapshot: RoomSnapshot;
-  timestamp: number;
-  constructionPreviewToken?: string;
-}
-
-interface ConnectionPresenceState {
-  channel: RoomChatTransportChannel;
-  userId: string;
-  displayName: string;
-  avatarId: string;
-  presence: PresencePayload | null;
-  lastRoomChatSentAt: number;
-  lastPvpInviteSentAt: number;
-}
-
-interface WorldGhostPresence extends PresencePayload {
-  connectionId: string;
-  userId: string;
-  displayName: string;
-  avatarId: string;
-  shardId: string;
-  roomId: string;
-}
-
-interface SharedRoomPreview extends Omit<RoomPreviewPayload, 'constructionPreviewToken'> {
-  roomId: string;
-  userId: string;
-  displayName: string;
-  shardId: string;
-}
-
-type IncomingMessage =
-  | {
-      type: 'presence:update';
-      presence: PresencePayload;
-    }
-  | {
-      type: 'presence:preview:update';
-      preview: RoomPreviewPayload;
-    }
-  | {
-      type: 'presence:preview:clear';
-      roomCoordinates?: RoomCoordinates;
-      timestamp?: number;
-    }
-  | {
-      type: 'presence:leave';
-    }
-  | PvpInviteSendMessage
-  | PvpInviteAcceptMessage
-  | PvpInviteDeclineMessage
-  | RoomChatSayMessage;
 
 interface PvpMatchState {
   matchId: string;
@@ -294,15 +209,8 @@ export default class PresenceServer implements Party.Server {
   }
 
   onMessage(message: string, sender: Party.Connection<ConnectionPresenceState>): void {
-    let parsed: IncomingMessage | null = null;
-
-    try {
-      parsed = JSON.parse(message) as IncomingMessage;
-    } catch {
-      return;
-    }
-
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') {
+    const parsed = parseIncomingMessage(message);
+    if (!parsed) {
       return;
     }
 
@@ -359,7 +267,7 @@ export default class PresenceServer implements Party.Server {
 
     const previousPresence = current.presence ?? null;
     const previousPreview = this.previewsByConnectionId.get(sender.id) ?? null;
-    const presence = this.normalizePresencePayload(parsed.presence);
+    const presence = normalizePresencePayload(parsed.presence);
     if (!presence) {
       return;
     }
@@ -384,7 +292,7 @@ export default class PresenceServer implements Party.Server {
     });
 
     if (current.channel === 'presence') {
-      if (this.isVisiblePresence(previousPresence) && !this.isVisiblePresence(presence)) {
+      if (isVisiblePresence(previousPresence) && !isVisiblePresence(presence)) {
         this.sendPresenceMessage(
           {
             type: 'remove',
@@ -418,7 +326,7 @@ export default class PresenceServer implements Party.Server {
     this.pendingPresenceUpsertsByConnectionId.delete(connection.id);
     this.previewsByConnectionId.delete(connection.id);
     this.clearStoredPreviewForPayload(preview);
-    if (connection.state?.channel === 'presence' && this.isVisiblePresence(presence)) {
+    if (connection.state?.channel === 'presence' && isVisiblePresence(presence)) {
       this.sendPresenceMessage({
         type: 'remove',
         connectionId: connection.id,
@@ -464,7 +372,7 @@ export default class PresenceServer implements Party.Server {
       presence: null,
     });
 
-    if (current?.channel === 'presence' && this.isVisiblePresence(previousPresence)) {
+    if (current?.channel === 'presence' && isVisiblePresence(previousPresence)) {
       this.sendPresenceMessage(
         {
           type: 'remove',
@@ -589,7 +497,7 @@ export default class PresenceServer implements Party.Server {
     connection: Party.Connection<ConnectionPresenceState>
   ): WorldGhostPresence | null {
     const state = connection.state;
-    if (state?.channel !== 'presence' || !this.isVisiblePresence(state.presence)) {
+    if (state?.channel !== 'presence' || !isVisiblePresence(state.presence)) {
       return null;
     }
 
@@ -602,13 +510,6 @@ export default class PresenceServer implements Party.Server {
       shardId: this.room.id,
       roomId: `${state.presence.roomCoordinates.x},${state.presence.roomCoordinates.y}`,
     };
-  }
-
-  private isVisiblePresence(presence: PresencePayload | null | undefined): presence is PresencePayload {
-    return Boolean(
-      presence &&
-      (presence.mode === 'browse' || presence.mode === 'play' || presence.mode === 'edit')
-    );
   }
 
   private toRoomPreview(
@@ -2224,87 +2125,6 @@ export default class PresenceServer implements Party.Server {
 
       connection.send(serialized);
     }
-  }
-
-  private normalizePresencePayload(value: unknown): PresencePayload | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const payload = value as Partial<PresencePayload>;
-    if (
-      !payload.roomCoordinates ||
-      !Number.isInteger(payload.roomCoordinates.x) ||
-      !Number.isInteger(payload.roomCoordinates.y) ||
-      typeof payload.x !== 'number' ||
-      typeof payload.y !== 'number' ||
-      typeof payload.velocityX !== 'number' ||
-      typeof payload.velocityY !== 'number' ||
-      typeof payload.facing !== 'number' ||
-      typeof payload.timestamp !== 'number'
-    ) {
-      return null;
-    }
-
-    const animationState = payload.animationState;
-    if (
-      animationState !== 'idle' &&
-      animationState !== 'run' &&
-      animationState !== 'jump-rise' &&
-      animationState !== 'jump-fall' &&
-      animationState !== 'wall-slide' &&
-      animationState !== 'wall-jump' &&
-      animationState !== 'land' &&
-      animationState !== 'ladder-climb' &&
-      animationState !== 'crouch' &&
-      animationState !== 'crawl' &&
-      animationState !== 'push' &&
-      animationState !== 'pull' &&
-      animationState !== 'sword-slash' &&
-      animationState !== 'air-slash-down' &&
-      animationState !== 'gun-fire'
-    ) {
-      return null;
-    }
-
-    if (payload.mode !== 'browse' && payload.mode !== 'play' && payload.mode !== 'edit') {
-      return null;
-    }
-
-    return {
-      roomCoordinates: {
-        x: payload.roomCoordinates.x,
-        y: payload.roomCoordinates.y,
-      },
-      x: payload.x,
-      y: payload.y,
-      velocityX: payload.velocityX,
-      velocityY: payload.velocityY,
-      facing: payload.facing < 0 ? -1 : 1,
-      animationState,
-      mode: payload.mode,
-      pvp: this.normalizePresencePvpState(payload.pvp),
-      timestamp: payload.timestamp,
-    };
-  }
-
-  private normalizePresencePvpState(value: unknown): PresencePayload['pvp'] {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const raw = value as Partial<NonNullable<PresencePayload['pvp']>>;
-    const matchId = this.normalizeShortId(raw.matchId, 96);
-    if (!matchId) {
-      return null;
-    }
-    const action = raw.action === 'sword' || raw.action === 'gun' ? raw.action : null;
-    const actionUntil = Number(raw.actionUntil ?? 0);
-    return {
-      matchId,
-      action,
-      actionUntil: Number.isFinite(actionUntil) ? actionUntil : 0,
-    };
   }
 
   private normalizeHeartbeatPayload(value: unknown): PartyKitShardHeartbeat | null {
