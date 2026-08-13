@@ -16,7 +16,6 @@ import {
   isMovingPlatformEndpointObjectId,
   isMovingPlatformObjectId,
   isPushableObjectConfig,
-  isSolidRuntimeObjectConfig,
   getPlacedObjectLayer,
   getSpecialTileKindForGid,
   LAYER_NAMES,
@@ -26,7 +25,6 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   type GameObjectConfig,
-  type LayerName,
   type SpecialTileKind,
 } from '../../config';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
@@ -34,21 +32,12 @@ import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { ensureCustomSpriteTexture } from '../../customSprites/registry';
 import {
   SWORDSMAN_AI_OBJECT_ID,
-  type SwordsmanAiState,
 } from '../../enemies/swordsmanAi';
 import {
   getPlacedPoliceBehaviorMode,
   getPlacedPolicePatrolShoots,
   isPoliceEnemyObjectId,
-  type PoliceBehaviorMode,
 } from '../../enemies/policeEnemy';
-import type {
-  SwordsmanDefeatMode,
-  SwordsmanObjectiveMode,
-} from '../../enemies/swordsmanObjectives';
-import {
-  type SwordsmanTraversalIntent,
-} from '../../enemies/swordsmanTraversal';
 import type { SwordsmanTraversalPlannerMode } from '../../enemies/swordsmanRobustPlanner';
 import type { LoadedFullRoom } from './worldStreaming';
 import { terrainTileCollidesAtLocalPixel } from './terrainCollision';
@@ -84,7 +73,6 @@ import { LiveObjectSwordsmanController } from './liveObjects/swordsmanController
 import {
   getLiveObjectBehavior,
   liveObjectBehaviorCanSleepAtDistance,
-  liveObjectBehaviorUpdatesEveryFrame,
   type FlyingEnemyBehavior,
 } from './liveObjects/behaviorRegistry';
 import { liveObjectBlocksPlayerMovement } from './playerCollisionObjects';
@@ -100,7 +88,6 @@ import {
   normalizeNpcFriendlyFire,
   normalizeNpcPlayerCollision,
   normalizeNpcPushable,
-  type NpcMode,
 } from '../../npcs/model';
 import {
   LiveObjectNpcController,
@@ -109,118 +96,28 @@ import {
 import {
   getNpcEnvironmentalObjectInteraction,
 } from './liveObjects/npcEnvironment';
+import type {
+  CreateLiveObjectEntryOptions,
+  LiveObjectExplicitRemovalReason,
+  LiveObjectRemovedEvent,
+  LiveObjectSwitchStateChangedEvent,
+  LoadedRoomObject,
+  WeaponHitResult,
+} from './liveObjects/model';
+import { LiveObjectPartitionIndex } from './liveObjects/partitionIndex';
 
 export { isDynamicArcadeBody } from './liveObjects/bodies';
 export type { ArcadeObjectBody } from './liveObjects/bodies';
-
-interface SwordsmanTraversalBlockState {
-  edgeId: string;
-  until: number;
-}
-
-type SwordsmanCollectState = 'sweep' | 'route' | 'jump';
-
-export interface LoadedRoomObjectRuntimeState {
-  baseX: number;
-  baseY: number;
-  previousX: number;
-  previousY: number;
-  gravityDirection: PlayerGravityDirection;
-  gravityRoomId: string | null;
-  inWater: boolean;
-  specialTileWindX: -1 | 0 | 1;
-  specialTileOnIce: boolean;
-  specialTileOnSticky: boolean;
-  specialTileOnBounce: boolean;
-  specialTileOnDamage: boolean;
-  initialDirectionX: number;
-  directionX: number;
-  movingPlatformTargetIndex: number;
-  movingPlatformPathDirection: -1 | 1;
-  aiFacingDirectionX: number;
-  aiFacingLastFlipAt: number;
-  aiFacingLastFlipX: number;
-  elapsedMs: number;
-  nextActionAt: number;
-  actionStartedAt: number;
-  aiTraversalCooldownUntil: number;
-  cooldownUntil: number;
-  activatedUntil: number;
-  aiState: SwordsmanAiState | null;
-  aiObjectiveMode: SwordsmanObjectiveMode | null;
-  aiDefeatMode: SwordsmanDefeatMode | null;
-  aiIntent: SwordsmanTraversalIntent | null;
-  aiTargetX: number | null;
-  aiCurrentSegmentId: string | null;
-  aiTargetSegmentId: string | null;
-  aiTraversalEdgeId: string | null;
-  aiTraversalBlockedEdges: SwordsmanTraversalBlockState[];
-  aiTraversalLastBlockReason: string | null;
-  aiActiveTraversalEdgeId: string | null;
-  aiActiveTraversalNextNodeId: string | null;
-  aiActiveTraversalStartedAt: number;
-  aiActiveTraversalStartBottom: number;
-  aiLadderTraversalEdgeId: string | null;
-  aiFallbackTraversalEdgeId: string | null;
-  aiFallbackTraversalSegmentId: string | null;
-  aiFallbackTraversalLastProgressAt: number;
-  aiFallbackTraversalBestMetric: number;
-  aiRouteLoopSignature: string | null;
-  aiRouteLoopCount: number;
-  aiRouteLoopLastProgressAt: number;
-  aiRouteLoopBestMetric: number;
-  aiPlannerMode: SwordsmanTraversalPlannerMode | null;
-  aiPlannerFallback: boolean;
-  aiPlannerPlanMs: number;
-  aiPlannerExpandedStates: number;
-  aiPlannerSimulatedEdges: number;
-  aiPlannedTraversalEdgeIds: string[];
-  aiPlannedTraversalTargetNodeId: string | null;
-  aiPlannedTraversalExpiresAt: number;
-  aiPlannedTraversalReason: string | null;
-  aiCollectState: SwordsmanCollectState | null;
-  aiCollectRouteTargetNodeId: string | null;
-  aiCollectRouteExpiresAt: number;
-  aiCollectRouteScore: number | null;
-  aiCollectRouteValue: number;
-  aiCollectRoutePenalty: number;
-  policeBehaviorMode: PoliceBehaviorMode | null;
-  policePatrolShoots: boolean;
-  npcMode: NpcMode | null;
-  npcPushable: boolean;
-  npcCanJumpFall: boolean;
-  npcPlayerCollision: boolean;
-  npcFriendlyFire: boolean;
-  npcDefeatMode: SwordsmanDefeatMode | null;
-  npcVictorious: boolean;
-  npcWalking: boolean;
-  npcBounceCooldownUntil: number;
-  npcQuicksandUntil: number;
-  pressureActive: boolean;
-  triggerLatched: boolean;
-}
-
-export interface LoadedRoomObject {
-  key: string;
-  placedInstanceId: string | null;
-  linkedTargetRoomId: string | null;
-  linkedTargetInstanceId: string | null;
-  linkedTargetInstanceIds: string[];
-  linkedTargetWorldX: number | null;
-  linkedTargetWorldY: number | null;
-  containedObjectId: string | null;
-  signText: string | null;
-  npcName: string | null;
-  npcNameLabel: Phaser.GameObjects.Text | null;
-  layer: LayerName;
-  countsTowardGoals: boolean;
-  config: GameObjectConfig;
-  sprite: Phaser.GameObjects.Sprite;
-  helpers: Phaser.GameObjects.GameObject[];
-  interactions: Phaser.Physics.Arcade.Collider[];
-  worldColliders: Phaser.Physics.Arcade.Collider[];
-  runtime: LoadedRoomObjectRuntimeState;
-}
+export type {
+  CreateLiveObjectEntryOptions,
+  LiveObjectExplicitRemovalReason,
+  LiveObjectRemovedEvent,
+  LiveObjectRemovedReason,
+  LiveObjectSwitchStateChangedEvent,
+  LoadedRoomObject,
+  LoadedRoomObjectRuntimeState,
+  WeaponHitResult,
+} from './liveObjects/model';
 
 interface OverworldLiveObjectSettings {
   bouncePadVelocity: number;
@@ -361,121 +258,13 @@ const GROUND_ENEMY_EDGE_SAFE_SPECIAL_TILE_KINDS = new Set<SpecialTileKind>([
   'water',
 ]);
 
-export interface CreateLiveObjectEntryOptions {
-  key: string;
-  config: GameObjectConfig;
-  x: number;
-  y: number;
-  facing?: 'left' | 'right';
-  layer?: LayerName;
-  baseTimeSeed?: number;
-  placedInstanceId: string | null;
-  linkedTargetRoomId: string | null;
-  linkedTargetInstanceId: string | null;
-  linkedTargetInstanceIds?: string[];
-  linkedTargetWorldX?: number | null;
-  linkedTargetWorldY?: number | null;
-  containedObjectId: string | null;
-  signText: string | null;
-  objectiveMode?: SwordsmanObjectiveMode | null;
-  defeatMode?: SwordsmanDefeatMode | null;
-  policeBehaviorMode?: PoliceBehaviorMode | null;
-  policePatrolShoots?: boolean | null;
-  npcMode?: NpcMode | null;
-  npcPushable?: boolean | null;
-  npcCanJumpFall?: boolean | null;
-  npcPlayerCollision?: boolean | null;
-  npcFriendlyFire?: boolean | null;
-  npcName?: string | null;
-  npcDefeatMode?: SwordsmanDefeatMode | null;
-  countsTowardGoals: boolean;
-}
-
-export interface WeaponHitResult {
-  roomId: string;
-  enemyName: string;
-  x: number;
-  y: number;
-}
-
-export type LiveObjectRemovedReason =
-  | 'enemy-defeated'
-  | 'npc-defeated'
-  | 'collectible-collected'
-  | 'enemy-collected'
-  | 'object-removed'
-  | 'brick-broken'
-  | 'crate-broken';
-
-export type LiveObjectExplicitRemovalReason = Extract<
-  LiveObjectRemovedReason,
-  'object-removed' | 'brick-broken' | 'crate-broken'
->;
-
-export interface LiveObjectRemovedEvent {
-  roomId: string;
-  roomCoordinates: RoomCoordinates;
-  objectKey: string;
-  objectId: string;
-  instanceId: string | null;
-  reason: LiveObjectRemovedReason;
-  x: number;
-  y: number;
-}
-
-export interface LiveObjectSwitchStateChangedEvent {
-  roomId: string;
-  roomCoordinates: RoomCoordinates;
-  active: boolean;
-}
-
-interface RoomLiveObjectPartition {
-  source: LoadedRoomObject[];
-  sourceLength: number;
-  updating: LoadedRoomObject[];
-  ladders: LoadedRoomObject[];
-  ladderRoomBoundsPadding: number;
-  ladderSpatialIndex: LiveObjectSpatialIndex | null;
-  pushables: LoadedRoomObject[];
-  pushableRoomBoundsPadding: number;
-  pushableSpatialIndex: LiveObjectSpatialIndex | null;
-  runtimeSolids: LoadedRoomObject[];
-  runtimeSolidRoomBoundsPadding: number;
-  runtimeSolidSpatialIndex: LiveObjectSpatialIndex | null;
-  pathTargetsByInstanceId: Map<string, LoadedRoomObject>;
-}
-
-interface LiveObjectSpatialBinRange {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-}
-
-interface LiveObjectSpatialIndex {
-  readonly binsByX: Map<number, Map<number, Set<LoadedRoomObject>>>;
-  readonly binRangeByObject: Map<LoadedRoomObject, LiveObjectSpatialBinRange>;
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-}
-
-const LIVE_OBJECT_SPATIAL_BIN_SIZE_PX = TILE_SIZE * 4;
-
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly triggerController: LiveObjectTriggerController<TEdgeWall>;
   private readonly hazardController: LiveObjectHazardController<TEdgeWall>;
   private readonly swordsmanController: LiveObjectSwordsmanController<TEdgeWall>;
   private readonly npcController: LiveObjectNpcController<TEdgeWall>;
   private readonly enemyLifecycleController: LiveObjectEnemyLifecycleController<TEdgeWall>;
-  private readonly liveObjectPartitionsByRoomId = new Map<string, RoomLiveObjectPartition>();
-  private readonly liveObjectPartitionByObject = new WeakMap<
-    LoadedRoomObject,
-    RoomLiveObjectPartition
-  >();
-  private readonly spatialQueryMarks = new WeakMap<LoadedRoomObject, number>();
-  private spatialQueryGeneration = 0;
+  private readonly partitionIndex: LiveObjectPartitionIndex<TEdgeWall>;
   private readonly colliderDormancyStates = new WeakMap<
     Phaser.Physics.Arcade.Collider,
     boolean
@@ -485,6 +274,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private roomStateEventSuppressionDepth = 0;
 
   constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {
+    this.partitionIndex = new LiveObjectPartitionIndex({
+      getLoadedFullRooms: this.options.getLoadedFullRooms,
+      getRoomOrigin: this.options.getRoomOrigin,
+    });
     this.triggerController = new LiveObjectTriggerController({
       getLoadedFullRooms: this.options.getLoadedFullRooms,
       getPlayerBody: this.options.getPlayerBody,
@@ -737,7 +530,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.captureFinalizedDormantBodyState(liveObject.sprite);
       }
     }
-    this.liveObjectPartitionsByRoomId.delete(loadedRoom.room.id);
+    this.partitionIndex.invalidateRoom(loadedRoom.room.id);
   }
 
   setLoadedRoomLiveObjectsDormant(
@@ -753,7 +546,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.setColliderDormant(collider, dormant);
       }
     }
-    this.liveObjectPartitionsByRoomId.delete(loadedRoom.room.id);
+    this.partitionIndex.invalidateRoom(loadedRoom.room.id);
   }
 
   setLoadedRoomWorldCollisionTargetDormant(
@@ -832,7 +625,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       loadedRoom.liveObjects.pop();
     }
 
-    this.liveObjectPartitionsByRoomId.delete(loadedRoom.room.id);
+    this.partitionIndex.invalidateRoom(loadedRoom.room.id);
     if (hasError) throw firstError;
     return loadedRoom.liveObjects.length === 0;
   }
@@ -874,13 +667,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   *getLoadedPushableLiveObjects(): IterableIterator<LoadedRoomObject> {
     for (const loadedRoom of this.options.getLoadedFullRooms()) {
-      yield* this.getRoomLiveObjectPartition(loadedRoom).pushables;
+      yield* this.partitionIndex.getPushableObjects(loadedRoom);
     }
   }
 
   *getLoadedRuntimeSolidLiveObjects(): IterableIterator<LoadedRoomObject> {
     for (const loadedRoom of this.options.getLoadedFullRooms()) {
-      yield* this.getRoomLiveObjectPartition(loadedRoom).runtimeSolids;
+      yield* this.partitionIndex.getRuntimeSolidObjects(loadedRoom);
     }
   }
 
@@ -889,7 +682,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     paddingX = 0,
     paddingY = paddingX,
   ): IterableIterator<LoadedRoomObject> {
-    yield* this.getLiveObjectsInBounds('pushable', bounds, paddingX, paddingY);
+    yield* this.partitionIndex.queryPushablesInBounds(bounds, paddingX, paddingY);
   }
 
   *getRuntimeSolidLiveObjectsInBounds(
@@ -897,7 +690,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     paddingX = 0,
     paddingY = paddingX,
   ): IterableIterator<LoadedRoomObject> {
-    yield* this.getLiveObjectsInBounds('runtimeSolid', bounds, paddingX, paddingY);
+    yield* this.partitionIndex.queryRuntimeSolidsInBounds(bounds, paddingX, paddingY);
   }
 
   private createLiveObjectEntry(
@@ -1292,9 +1085,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const playerBody = this.options.getPlayerBody();
 
     for (const loadedRoom of rooms) {
-      const partition = this.getRoomLiveObjectPartition(loadedRoom);
-      this.ensureDynamicSpatialIndexes(partition);
-      for (const liveObject of partition.updating) {
+      this.partitionIndex.prepareDynamicSpatialIndexes(loadedRoom);
+      for (const liveObject of this.partitionIndex.getUpdatingObjects(loadedRoom)) {
         try {
           if (!liveObject.sprite.active) {
             continue;
@@ -1392,7 +1184,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             this.syncLiveObjectGravityPresentation(liveObject);
           }
         } finally {
-          this.refreshPartitionSpatialMembership(partition, liveObject);
+          this.partitionIndex.refreshDynamicObject(liveObject);
         }
       }
     }
@@ -1400,7 +1192,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     carryMovingPlatformRiders(rooms, {
       getDynamicBody: (sprite) => this.getDynamicBody(sprite),
       getPlayerBody: this.options.getPlayerBody,
-      onLiveObjectMoved: (liveObject) => this.refreshLiveObjectSpatialMembership(liveObject),
+      onLiveObjectMoved: (liveObject) => this.partitionIndex.refreshDynamicObject(liveObject),
     });
     this.stabilizePushableStacks(rooms);
     this.triggerController.updatePressurePlates(rooms);
@@ -1736,9 +1528,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       if (liveObject.linkedTargetRoomId && loadedRoom.room.id !== liveObject.linkedTargetRoomId) {
         continue;
       }
-      const pathTargets = this.getRoomLiveObjectPartition(loadedRoom).pathTargetsByInstanceId;
       for (let targetIndex = 0; targetIndex < targetInstanceIds.length; targetIndex += 1) {
-        const candidate = pathTargets.get(targetInstanceIds[targetIndex] ?? '');
+        const candidate = this.partitionIndex.getPathTarget(
+          loadedRoom,
+          targetInstanceIds[targetIndex] ?? '',
+        );
         if (!candidate?.sprite.active) {
           continue;
         }
@@ -1771,403 +1565,26 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const playerBounds = getArcadeBodyBounds(playerBody);
     let closestLadder: LoadedRoomObject | null = null;
     let closestDistance = Number.POSITIVE_INFINITY;
-    const queryMark = this.nextSpatialQueryMark();
-
-    for (const loadedRoom of loadedRooms) {
-      const partition = this.getRoomLiveObjectPartition(loadedRoom);
-      if (
-        !partition.ladderSpatialIndex &&
-        !this.boundsCouldOverlapRoom(
-          playerBounds,
-          loadedRoom.room.coordinates,
-          partition.ladderRoomBoundsPadding,
-        )
-      ) {
+    for (const liveObject of this.partitionIndex.queryLaddersInBounds(loadedRooms, playerBounds)) {
+      if (!liveObject.sprite.active || !liveObject.sprite.body) {
         continue;
       }
 
-      const spatialIndex = this.getOrCreateSpatialIndex(partition, 'ladder');
-      for (const liveObject of this.querySpatialIndex(
-        spatialIndex,
-        playerBounds,
-        0,
-        0,
-        queryMark,
-      )) {
-        if (!liveObject.sprite.active || !liveObject.sprite.body) {
-          continue;
-        }
+      const ladderBounds = getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
+      if (!Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, ladderBounds)) {
+        continue;
+      }
 
-        const ladderBounds = getArcadeBodyBounds(liveObject.sprite.body as ArcadeObjectBody);
-        if (!Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, ladderBounds)) {
-          continue;
-        }
-
-        const distance =
-          Math.abs(liveObject.sprite.x - playerBody.center.x) +
-          Math.abs(liveObject.sprite.y - playerBody.center.y);
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closestLadder = liveObject;
-        }
+      const distance =
+        Math.abs(liveObject.sprite.x - playerBody.center.x) +
+        Math.abs(liveObject.sprite.y - playerBody.center.y);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestLadder = liveObject;
       }
     }
 
     return closestLadder;
-  }
-
-  private boundsCouldOverlapRoom(
-    bounds: Phaser.Geom.Rectangle,
-    coordinates: RoomCoordinates,
-    padding: number,
-  ): boolean {
-    const origin = this.options.getRoomOrigin(coordinates);
-    return (
-      bounds.right >= origin.x - padding &&
-      bounds.left <= origin.x + ROOM_PX_WIDTH + padding &&
-      bounds.bottom >= origin.y - padding &&
-      bounds.top <= origin.y + ROOM_PX_HEIGHT + padding
-    );
-  }
-
-  private getRoomLiveObjectPartition(
-    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-  ): RoomLiveObjectPartition {
-    const existing = this.liveObjectPartitionsByRoomId.get(loadedRoom.room.id);
-    if (existing?.source === loadedRoom.liveObjects && existing.sourceLength === loadedRoom.liveObjects.length) {
-      return existing;
-    }
-    const updating: LoadedRoomObject[] = [];
-    const ladders: LoadedRoomObject[] = [];
-    const pushables: LoadedRoomObject[] = [];
-    const runtimeSolids: LoadedRoomObject[] = [];
-    let ladderRoomBoundsPadding = 0;
-    let pushableRoomBoundsPadding = 0;
-    let runtimeSolidRoomBoundsPadding = 0;
-    const pathTargetsByInstanceId = new Map<string, LoadedRoomObject>();
-    for (const liveObject of loadedRoom.liveObjects) {
-      const behavior = getLiveObjectBehavior(liveObject.config.id);
-      if (liveObjectBehaviorUpdatesEveryFrame(behavior) || isDynamicArcadeBody(liveObject.sprite.body as ArcadeObjectBody | null)) {
-        updating.push(liveObject);
-      }
-      if (liveObject.config.id === 'ladder') {
-        ladders.push(liveObject);
-        ladderRoomBoundsPadding = Math.max(
-          ladderRoomBoundsPadding,
-          this.getLiveObjectRoomBoundsPadding(liveObject),
-        );
-      }
-      if (isPushableObjectConfig(liveObject.config)) {
-        pushables.push(liveObject);
-        pushableRoomBoundsPadding = Math.max(
-          pushableRoomBoundsPadding,
-          this.getLiveObjectRoomBoundsPadding(liveObject),
-        );
-      }
-      if (
-        isSolidRuntimeObjectConfig(liveObject.config) &&
-        placedObjectLayerAllowsRuntimeCollision(liveObject.config, liveObject)
-      ) {
-        runtimeSolids.push(liveObject);
-        runtimeSolidRoomBoundsPadding = Math.max(
-          runtimeSolidRoomBoundsPadding,
-          this.getLiveObjectRoomBoundsPadding(liveObject),
-        );
-      }
-      if (liveObject.placedInstanceId && isMovingPlatformEndpointObjectId(liveObject.config.id)) {
-        pathTargetsByInstanceId.set(liveObject.placedInstanceId, liveObject);
-      }
-    }
-    const partition = {
-      source: loadedRoom.liveObjects,
-      sourceLength: loadedRoom.liveObjects.length,
-      updating,
-      ladders,
-      ladderRoomBoundsPadding,
-      ladderSpatialIndex: null,
-      pushables,
-      pushableRoomBoundsPadding,
-      pushableSpatialIndex: null,
-      runtimeSolids,
-      runtimeSolidRoomBoundsPadding,
-      runtimeSolidSpatialIndex: null,
-      pathTargetsByInstanceId,
-    };
-    for (const liveObject of loadedRoom.liveObjects) {
-      this.liveObjectPartitionByObject.set(liveObject, partition);
-    }
-    this.liveObjectPartitionsByRoomId.set(loadedRoom.room.id, partition);
-    return partition;
-  }
-
-  private *getLiveObjectsInBounds(
-    category: 'pushable' | 'runtimeSolid',
-    bounds: Phaser.Geom.Rectangle,
-    paddingX: number,
-    paddingY: number,
-  ): IterableIterator<LoadedRoomObject> {
-    const safePaddingX = Math.max(0, paddingX);
-    const safePaddingY = Math.max(0, paddingY);
-    const queryMark = this.nextSpatialQueryMark();
-    for (const loadedRoom of this.options.getLoadedFullRooms()) {
-      const partition = this.getRoomLiveObjectPartition(loadedRoom);
-      const existingIndex = category === 'pushable'
-        ? partition.pushableSpatialIndex
-        : partition.runtimeSolidSpatialIndex;
-      const roomBoundsPadding = category === 'pushable'
-        ? partition.pushableRoomBoundsPadding
-        : partition.runtimeSolidRoomBoundsPadding;
-      if (
-        !existingIndex &&
-        !this.boundsCouldOverlapRoom(
-          bounds,
-          loadedRoom.room.coordinates,
-          roomBoundsPadding + Math.max(safePaddingX, safePaddingY),
-        )
-      ) {
-        continue;
-      }
-
-      const spatialIndex = existingIndex ?? this.getOrCreateSpatialIndex(partition, category);
-      yield* this.querySpatialIndex(
-        spatialIndex,
-        bounds,
-        safePaddingX,
-        safePaddingY,
-        queryMark,
-      );
-    }
-  }
-
-  private getOrCreateSpatialIndex(
-    partition: RoomLiveObjectPartition,
-    category: 'ladder' | 'pushable' | 'runtimeSolid',
-  ): LiveObjectSpatialIndex {
-    switch (category) {
-      case 'ladder':
-        partition.ladderSpatialIndex ??= this.createSpatialIndex(partition.ladders);
-        return partition.ladderSpatialIndex;
-      case 'pushable':
-        partition.pushableSpatialIndex ??= this.createSpatialIndex(partition.pushables);
-        return partition.pushableSpatialIndex;
-      case 'runtimeSolid':
-        partition.runtimeSolidSpatialIndex ??= this.createSpatialIndex(partition.runtimeSolids);
-        return partition.runtimeSolidSpatialIndex;
-    }
-  }
-
-  private createSpatialIndex(liveObjects: LoadedRoomObject[]): LiveObjectSpatialIndex {
-    const spatialIndex: LiveObjectSpatialIndex = {
-      binsByX: new Map(),
-      binRangeByObject: new Map(),
-      minX: Number.POSITIVE_INFINITY,
-      maxX: Number.NEGATIVE_INFINITY,
-      minY: Number.POSITIVE_INFINITY,
-      maxY: Number.NEGATIVE_INFINITY,
-    };
-    for (const liveObject of liveObjects) {
-      this.refreshSpatialIndexMembership(spatialIndex, liveObject);
-    }
-    return spatialIndex;
-  }
-
-  private ensureDynamicSpatialIndexes(partition: RoomLiveObjectPartition): void {
-    if (partition.pushables.length > 0) {
-      this.getOrCreateSpatialIndex(partition, 'pushable');
-    }
-    if (partition.runtimeSolids.length > 0) {
-      this.getOrCreateSpatialIndex(partition, 'runtimeSolid');
-    }
-  }
-
-  private refreshPartitionSpatialMembership(
-    partition: RoomLiveObjectPartition,
-    liveObject: LoadedRoomObject,
-  ): void {
-    if (partition.pushableSpatialIndex && isPushableObjectConfig(liveObject.config)) {
-      this.refreshSpatialIndexMembership(partition.pushableSpatialIndex, liveObject);
-    }
-    if (
-      partition.runtimeSolidSpatialIndex &&
-      isSolidRuntimeObjectConfig(liveObject.config) &&
-      placedObjectLayerAllowsRuntimeCollision(liveObject.config, liveObject)
-    ) {
-      this.refreshSpatialIndexMembership(partition.runtimeSolidSpatialIndex, liveObject);
-    }
-  }
-
-  private refreshLiveObjectSpatialMembership(liveObject: LoadedRoomObject): void {
-    const partition = this.liveObjectPartitionByObject.get(liveObject);
-    if (partition) {
-      this.refreshPartitionSpatialMembership(partition, liveObject);
-    }
-  }
-
-  private refreshSpatialIndexMembership(
-    spatialIndex: LiveObjectSpatialIndex,
-    liveObject: LoadedRoomObject,
-  ): void {
-    const previousRange = spatialIndex.binRangeByObject.get(liveObject) ?? null;
-    const body = liveObject.sprite.body as ArcadeObjectBody | null;
-    if (!body) {
-      if (previousRange) {
-        this.removeSpatialIndexMembership(spatialIndex, liveObject, previousRange);
-      }
-      return;
-    }
-    const nextMinX = Math.floor(body.left / LIVE_OBJECT_SPATIAL_BIN_SIZE_PX);
-    const nextMaxX = Math.floor(
-      Math.max(body.left, body.left + Math.max(0, body.width) - 0.001) /
-        LIVE_OBJECT_SPATIAL_BIN_SIZE_PX,
-    );
-    const nextMinY = Math.floor(body.top / LIVE_OBJECT_SPATIAL_BIN_SIZE_PX);
-    const nextMaxY = Math.floor(
-      Math.max(body.top, body.top + Math.max(0, body.height) - 0.001) /
-        LIVE_OBJECT_SPATIAL_BIN_SIZE_PX,
-    );
-    if (
-      previousRange &&
-      previousRange.minX === nextMinX &&
-      previousRange.maxX === nextMaxX &&
-      previousRange.minY === nextMinY &&
-      previousRange.maxY === nextMaxY
-    ) {
-      return;
-    }
-    if (previousRange) {
-      this.removeSpatialIndexMembership(spatialIndex, liveObject, previousRange);
-    }
-    const nextRange = {
-      minX: nextMinX,
-      maxX: nextMaxX,
-      minY: nextMinY,
-      maxY: nextMaxY,
-    };
-
-    spatialIndex.binRangeByObject.set(liveObject, nextRange);
-    spatialIndex.minX = Math.min(spatialIndex.minX, nextRange.minX);
-    spatialIndex.maxX = Math.max(spatialIndex.maxX, nextRange.maxX);
-    spatialIndex.minY = Math.min(spatialIndex.minY, nextRange.minY);
-    spatialIndex.maxY = Math.max(spatialIndex.maxY, nextRange.maxY);
-    for (let binX = nextRange.minX; binX <= nextRange.maxX; binX += 1) {
-      let binsByY = spatialIndex.binsByX.get(binX);
-      if (!binsByY) {
-        binsByY = new Map();
-        spatialIndex.binsByX.set(binX, binsByY);
-      }
-      for (let binY = nextRange.minY; binY <= nextRange.maxY; binY += 1) {
-        let bin = binsByY.get(binY);
-        if (!bin) {
-          bin = new Set();
-          binsByY.set(binY, bin);
-        }
-        bin.add(liveObject);
-      }
-    }
-  }
-
-  private removeSpatialIndexMembership(
-    spatialIndex: LiveObjectSpatialIndex,
-    liveObject: LoadedRoomObject,
-    range: LiveObjectSpatialBinRange,
-  ): void {
-    spatialIndex.binRangeByObject.delete(liveObject);
-    for (let binX = range.minX; binX <= range.maxX; binX += 1) {
-      const binsByY = spatialIndex.binsByX.get(binX);
-      if (!binsByY) {
-        continue;
-      }
-      for (let binY = range.minY; binY <= range.maxY; binY += 1) {
-        const bin = binsByY.get(binY);
-        bin?.delete(liveObject);
-        if (bin?.size === 0) {
-          binsByY.delete(binY);
-        }
-      }
-      if (binsByY.size === 0) {
-        spatialIndex.binsByX.delete(binX);
-      }
-    }
-    if (spatialIndex.binRangeByObject.size === 0) {
-      spatialIndex.minX = Number.POSITIVE_INFINITY;
-      spatialIndex.maxX = Number.NEGATIVE_INFINITY;
-      spatialIndex.minY = Number.POSITIVE_INFINITY;
-      spatialIndex.maxY = Number.NEGATIVE_INFINITY;
-    }
-  }
-
-  private *querySpatialIndex(
-    spatialIndex: LiveObjectSpatialIndex,
-    bounds: Phaser.Geom.Rectangle,
-    paddingX: number,
-    paddingY: number,
-    queryMark: number,
-  ): IterableIterator<LoadedRoomObject> {
-    const queryRange = this.getSpatialBinRange(
-      bounds.left - paddingX,
-      bounds.top - paddingY,
-      bounds.width + paddingX * 2,
-      bounds.height + paddingY * 2,
-    );
-    if (
-      queryRange.maxX < spatialIndex.minX ||
-      queryRange.minX > spatialIndex.maxX ||
-      queryRange.maxY < spatialIndex.minY ||
-      queryRange.minY > spatialIndex.maxY
-    ) {
-      return;
-    }
-
-    for (let binX = queryRange.minX; binX <= queryRange.maxX; binX += 1) {
-      const binsByY = spatialIndex.binsByX.get(binX);
-      if (!binsByY) {
-        continue;
-      }
-      for (let binY = queryRange.minY; binY <= queryRange.maxY; binY += 1) {
-        const bin = binsByY.get(binY);
-        if (!bin) {
-          continue;
-        }
-        for (const liveObject of bin) {
-          if (this.spatialQueryMarks.get(liveObject) === queryMark) {
-            continue;
-          }
-          this.spatialQueryMarks.set(liveObject, queryMark);
-          yield liveObject;
-        }
-      }
-    }
-  }
-
-  private getSpatialBinRange(
-    left: number,
-    top: number,
-    width: number,
-    height: number,
-  ): LiveObjectSpatialBinRange {
-    const right = left + Math.max(0, width);
-    const bottom = top + Math.max(0, height);
-    return {
-      minX: Math.floor(left / LIVE_OBJECT_SPATIAL_BIN_SIZE_PX),
-      maxX: Math.floor(Math.max(left, right - 0.001) / LIVE_OBJECT_SPATIAL_BIN_SIZE_PX),
-      minY: Math.floor(top / LIVE_OBJECT_SPATIAL_BIN_SIZE_PX),
-      maxY: Math.floor(Math.max(top, bottom - 0.001) / LIVE_OBJECT_SPATIAL_BIN_SIZE_PX),
-    };
-  }
-
-  private nextSpatialQueryMark(): number {
-    this.spatialQueryGeneration += 1;
-    return this.spatialQueryGeneration;
-  }
-
-  private getLiveObjectRoomBoundsPadding(liveObject: LoadedRoomObject): number {
-    const displayScale = Math.max(1, Math.abs(getObjectDisplayScale(liveObject.config)));
-    return Math.max(
-      liveObject.config.frameWidth * displayScale,
-      liveObject.config.frameHeight * displayScale,
-      liveObject.config.bodyWidth * displayScale,
-      liveObject.config.bodyHeight * displayScale,
-    );
   }
 
   private isLiveObjectOutsideWakeRange(
@@ -2204,7 +1621,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }> = [];
 
     for (const loadedRoom of loadedRooms) {
-      for (const liveObject of this.getRoomLiveObjectPartition(loadedRoom).pushables) {
+      for (const liveObject of this.partitionIndex.getPushableObjects(loadedRoom)) {
         const body = liveObject.sprite.body as ArcadeObjectBody | null;
         if (
           liveObject.sprite.active &&
@@ -2264,7 +1681,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         upper.body.prev.x = upper.body.x;
         upper.body.prev.y = upper.body.y;
         upper.body.setVelocity(velocityX, 0);
-        this.refreshLiveObjectSpatialMembership(upper.liveObject);
+        this.partitionIndex.refreshDynamicObject(upper.liveObject);
       }
     }
   }
@@ -2407,7 +1824,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       (loadedRoom) => loadedRoom.runtimeSuspended !== true,
     );
     const solidObstacles = rooms.flatMap((loadedRoom) =>
-      this.getRoomLiveObjectPartition(loadedRoom).runtimeSolids.filter(
+      this.partitionIndex.getRuntimeSolidObjects(loadedRoom).filter(
         (candidate) =>
           this.shouldCollideWithLiveObject(candidate) &&
           objectCollidesWithWorld(candidate.config)

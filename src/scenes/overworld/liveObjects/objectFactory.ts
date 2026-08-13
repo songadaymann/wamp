@@ -25,7 +25,7 @@ import {
   normalizeNpcPushable,
   type NpcMode,
 } from '../../../npcs/model';
-import type { LoadedRoomObjectRuntimeState } from '../liveObjects';
+import type { LoadedRoomObjectRuntimeState } from './model';
 
 export function getInitialDirectionX(
   facing: 'left' | 'right' | undefined,

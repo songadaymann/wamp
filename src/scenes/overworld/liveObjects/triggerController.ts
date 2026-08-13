@@ -13,7 +13,7 @@ import type {
   CreateLiveObjectEntryOptions,
   LiveObjectExplicitRemovalReason,
   LoadedRoomObject,
-} from '../liveObjects';
+} from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
 import {
   arcadeBodiesTouchOrOverlap,

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { isPushableObjectConfig } from '../../../config';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
 import type { LoadedFullRoom } from '../worldStreaming';
-import type { LoadedRoomObject } from '../liveObjects';
+import type { LoadedRoomObject } from './model';
 
 export interface PressurePlateScanIndex<TEdgeWall = unknown> {
   triggers: Array<{

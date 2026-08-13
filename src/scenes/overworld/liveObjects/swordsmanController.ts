@@ -63,7 +63,7 @@ import {
   SWORDSMAN_AI_ROBUST_ROUTE_COMMIT_MS,
   type SwordsmanTraversalPlannerMode,
 } from '../../../enemies/swordsmanRobustPlanner';
-import type { LoadedRoomObject } from '../liveObjects';
+import type { LoadedRoomObject } from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
 import { terrainTileCollidesAtLocalPixel } from '../terrainCollision';
 import { isAnimationSafelyPlayable } from './animationReadiness';

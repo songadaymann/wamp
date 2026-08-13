@@ -12,9 +12,10 @@ import type {
 import { JIMOTHY_ANIMATION_KEYS } from '../../../npcs/model';
 import type {
   CreateLiveObjectEntryOptions,
+  LiveObjectRemovedEvent,
   LoadedRoomObject,
   WeaponHitResult,
-} from '../liveObjects';
+} from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
 import { isAnimationSafelyPlayable } from './animationReadiness';
 import {
@@ -61,16 +62,7 @@ interface EnemyLifecycleOptions<TEdgeWall> {
     x: number;
     y: number;
   }) => void;
-  onLiveObjectRemoved: (event: {
-    roomId: string;
-    roomCoordinates: RoomCoordinates;
-    objectKey: string;
-    objectId: string;
-    instanceId: string | null;
-    reason: 'enemy-defeated' | 'npc-defeated';
-    x: number;
-    y: number;
-  }) => void;
+  onLiveObjectRemoved: (event: LiveObjectRemovedEvent) => void;
   getSwordsmanObjectiveMode: (liveObject: LoadedRoomObject) => SwordsmanObjectiveMode;
   getSwordsmanDefeatMode: (liveObject: LoadedRoomObject) => SwordsmanDefeatMode;
   swordsmanSwordCanDamagePlayer: (

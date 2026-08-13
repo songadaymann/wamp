@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import type { SfxCue } from '../../../audio/sfx';
 import type { RoomCoordinates } from '../../../persistence/roomModel';
-import type { LoadedRoomObject } from '../liveObjects';
+import type { LiveObjectRemovedEvent, LoadedRoomObject } from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
 import {
   getCollectibleCue,
@@ -16,12 +16,6 @@ interface LiveObjectCollectionEvent {
   instanceId: string | null;
   x: number;
   y: number;
-}
-
-interface LiveObjectRemovedEvent extends LiveObjectCollectionEvent {
-  objectKey: string;
-  objectId: string;
-  reason: 'collectible-collected' | 'enemy-collected';
 }
 
 interface LiveObjectCollectionHost {

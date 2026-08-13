@@ -9,7 +9,7 @@ import {
 } from '../../../config';
 import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { SfxCue } from '../../../audio/sfx';
-import type { LoadedRoomObject } from '../liveObjects';
+import type { LoadedRoomObject } from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
 import { isDynamicArcadeBody } from './bodies';
 import type { ArcadeObjectBody } from './bodies';
