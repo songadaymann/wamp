@@ -134,6 +134,8 @@ export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot
       layer: placed.layer ?? null,
       swordsmanObjectiveMode: placed.swordsmanObjectiveMode ?? null,
       swordsmanDefeatMode: placed.swordsmanDefeatMode ?? null,
+      policeBehaviorMode: placed.policeBehaviorMode ?? null,
+      policePatrolShoots: placed.policePatrolShoots ?? null,
       npcMode: placed.npcMode ?? null,
       npcPushable: placed.npcPushable ?? null,
       npcCanJumpFall: placed.npcCanJumpFall ?? null,

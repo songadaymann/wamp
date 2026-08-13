@@ -2,6 +2,13 @@ import type Phaser from 'phaser';
 import { ROOM_PX_WIDTH, type GameObjectConfig } from '../../../config';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
 import {
+  DEFAULT_POLICE_BEHAVIOR_MODE,
+  isPoliceEnemyObjectId,
+  normalizePoliceBehaviorMode,
+  normalizePolicePatrolShoots,
+  type PoliceBehaviorMode,
+} from '../../../enemies/policeEnemy';
+import {
   DEFAULT_SWORDSMAN_DEFEAT_MODE,
   DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
   type SwordsmanDefeatMode,
@@ -41,6 +48,8 @@ export function createLiveObjectRuntimeState(options: {
   getCurrentTime: () => number;
   objectiveMode: SwordsmanObjectiveMode | null;
   defeatMode: SwordsmanDefeatMode | null;
+  policeBehaviorMode: PoliceBehaviorMode | null;
+  policePatrolShoots: boolean | null;
   npcMode: NpcMode | null;
   npcPushable: boolean | null;
   npcCanJumpFall: boolean | null;
@@ -57,6 +66,8 @@ export function createLiveObjectRuntimeState(options: {
     getCurrentTime,
     objectiveMode,
     defeatMode,
+    policeBehaviorMode,
+    policePatrolShoots,
     npcMode,
     npcPushable,
     npcCanJumpFall,
@@ -66,6 +77,8 @@ export function createLiveObjectRuntimeState(options: {
     swordsmanTraversalPlannerMode,
   } = options;
   const isSwordsman = config.id === SWORDSMAN_AI_OBJECT_ID;
+  const isPolice = isPoliceEnemyObjectId(config.id);
+  const isSmartTraversalEnemy = isSwordsman || isPolice;
   const isNpc = config.category === 'npc';
   const normalizedNpcMode = isNpc
     ? normalizeNpcMode(npcMode) ?? DEFAULT_NPC_MODE
@@ -104,7 +117,7 @@ export function createLiveObjectRuntimeState(options: {
     aiTraversalCooldownUntil: 0,
     cooldownUntil: 0,
     activatedUntil: 0,
-    aiState: isSwordsman ? 'patrol' : null,
+    aiState: isSmartTraversalEnemy ? 'patrol' : null,
     aiObjectiveMode: isSwordsman
       ? objectiveMode ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE
       : null,
@@ -129,7 +142,7 @@ export function createLiveObjectRuntimeState(options: {
     aiRouteLoopCount: 0,
     aiRouteLoopLastProgressAt: 0,
     aiRouteLoopBestMetric: Number.POSITIVE_INFINITY,
-    aiPlannerMode: isSwordsman ? swordsmanTraversalPlannerMode : null,
+    aiPlannerMode: isSmartTraversalEnemy ? swordsmanTraversalPlannerMode : null,
     aiPlannerFallback: false,
     aiPlannerPlanMs: 0,
     aiPlannerExpandedStates: 0,
@@ -144,6 +157,12 @@ export function createLiveObjectRuntimeState(options: {
     aiCollectRouteScore: null,
     aiCollectRouteValue: 0,
     aiCollectRoutePenalty: 0,
+    policeBehaviorMode: isPolice
+      ? normalizePoliceBehaviorMode(policeBehaviorMode) ?? DEFAULT_POLICE_BEHAVIOR_MODE
+      : null,
+    policePatrolShoots: isPolice
+      ? normalizePolicePatrolShoots(policePatrolShoots)
+      : false,
     npcMode: normalizedNpcMode,
     npcPushable:
       isNpc && normalizedNpcMode

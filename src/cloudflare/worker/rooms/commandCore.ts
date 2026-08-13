@@ -25,6 +25,13 @@ import {
 } from '../../../backgrounds/model';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
 import {
+  DEFAULT_POLICE_BEHAVIOR_MODE,
+  DEFAULT_POLICE_PATROL_SHOOTS,
+  isPoliceEnemyObjectId,
+  normalizePoliceBehaviorMode,
+  type PoliceBehaviorMode,
+} from '../../../enemies/policeEnemy';
+import {
   DEFAULT_SWORDSMAN_DEFEAT_MODE,
   DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
   normalizeSwordsmanDefeatMode,
@@ -204,6 +211,8 @@ interface PlaceObjectCommand {
   layer?: LayerName;
   swordsmanObjectiveMode?: SwordsmanObjectiveMode;
   swordsmanDefeatMode?: SwordsmanDefeatMode;
+  policeBehaviorMode?: PoliceBehaviorMode;
+  policePatrolShoots?: boolean;
 }
 
 interface ObjectConfiguration {
@@ -214,6 +223,8 @@ interface ObjectConfiguration {
   signText?: string | null;
   swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;
   swordsmanDefeatMode?: SwordsmanDefeatMode | null;
+  policeBehaviorMode?: PoliceBehaviorMode | null;
+  policePatrolShoots?: boolean | null;
   npcMode?: NpcMode | null;
   npcPushable?: boolean | null;
   npcCanJumpFall?: boolean | null;
@@ -555,6 +566,18 @@ function normalizeConfiguration(command: Record<string, unknown>, index: number,
     }
     configuration.swordsmanDefeatMode = command.swordsmanDefeatMode as SwordsmanDefeatMode | null;
   }
+  if (hasOwn(command, 'policeBehaviorMode')) {
+    if (command.policeBehaviorMode !== null && !normalizePoliceBehaviorMode(command.policeBehaviorMode)) {
+      throw new HttpError(400, `commands[${index}].policeBehaviorMode must be hunter, patrol, or null.`);
+    }
+    configuration.policeBehaviorMode = command.policeBehaviorMode as PoliceBehaviorMode | null;
+  }
+  if (hasOwn(command, 'policePatrolShoots')) {
+    configuration.policePatrolShoots = normalizeNullableBoolean(
+      command.policePatrolShoots,
+      `commands[${index}].policePatrolShoots`,
+    );
+  }
   if (hasOwn(command, 'npcMode')) {
     if (command.npcMode !== null && !normalizeNpcMode(command.npcMode)) throw new HttpError(400, `commands[${index}].npcMode is invalid.`);
     configuration.npcMode = command.npcMode as NpcMode | null;
@@ -665,7 +688,7 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
       addTileWrites(state, MAX_SET_TILES_PER_COMMAND);
       return { type: 'clear_layer', layer: normalizeLayer(command.layer, `commands[${index}].layer`) };
     case 'place_object': {
-      assertAllowedKeys(command, ['type', 'ref', 'objectId', 'tileX', 'tileY', 'facing', 'layer', 'swordsmanObjectiveMode', 'swordsmanDefeatMode'], `commands[${index}]`);
+      assertAllowedKeys(command, ['type', 'ref', 'objectId', 'tileX', 'tileY', 'facing', 'layer', 'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'policeBehaviorMode', 'policePatrolShoots'], `commands[${index}]`);
       if (typeof command.objectId !== 'string') throw new HttpError(400, `commands[${index}].objectId must be a string.`);
       const objectConfig = getObjectById(command.objectId);
       if (!objectConfig) throw new HttpError(400, `Unknown objectId "${command.objectId}".`);
@@ -674,6 +697,8 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
       if (command.facing !== undefined && !objectConfig.facingDirection) throw new HttpError(400, `commands[${index}].facing is not supported by ${command.objectId}.`);
       if (command.swordsmanObjectiveMode !== undefined && command.objectId !== SWORDSMAN_AI_OBJECT_ID) throw new HttpError(400, `commands[${index}].swordsmanObjectiveMode only applies to swordsman_ai.`);
       if (command.swordsmanDefeatMode !== undefined && command.objectId !== SWORDSMAN_AI_OBJECT_ID) throw new HttpError(400, `commands[${index}].swordsmanDefeatMode only applies to swordsman_ai.`);
+      if (command.policeBehaviorMode !== undefined && !isPoliceEnemyObjectId(command.objectId)) throw new HttpError(400, `commands[${index}].policeBehaviorMode only applies to police enemies.`);
+      if (command.policePatrolShoots !== undefined && !isPoliceEnemyObjectId(command.objectId)) throw new HttpError(400, `commands[${index}].policePatrolShoots only applies to police enemies.`);
       const objectiveMode = command.objectId === SWORDSMAN_AI_OBJECT_ID
         ? normalizeSwordsmanObjectiveMode(command.swordsmanObjectiveMode) ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE
         : undefined;
@@ -682,6 +707,16 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
         : undefined;
       if (command.objectId === SWORDSMAN_AI_OBJECT_ID && command.swordsmanObjectiveMode !== undefined && !normalizeSwordsmanObjectiveMode(command.swordsmanObjectiveMode)) throw new HttpError(400, `commands[${index}].swordsmanObjectiveMode must be duel or collect.`);
       if (command.objectId === SWORDSMAN_AI_OBJECT_ID && command.swordsmanDefeatMode !== undefined && !normalizeSwordsmanDefeatMode(command.swordsmanDefeatMode)) throw new HttpError(400, `commands[${index}].swordsmanDefeatMode is invalid.`);
+      const policeBehaviorMode = isPoliceEnemyObjectId(command.objectId)
+        ? normalizePoliceBehaviorMode(command.policeBehaviorMode) ?? DEFAULT_POLICE_BEHAVIOR_MODE
+        : undefined;
+      const policePatrolShoots = isPoliceEnemyObjectId(command.objectId)
+        ? typeof command.policePatrolShoots === 'boolean'
+          ? command.policePatrolShoots
+          : DEFAULT_POLICE_PATROL_SHOOTS
+        : undefined;
+      if (isPoliceEnemyObjectId(command.objectId) && command.policeBehaviorMode !== undefined && !normalizePoliceBehaviorMode(command.policeBehaviorMode)) throw new HttpError(400, `commands[${index}].policeBehaviorMode must be hunter or patrol.`);
+      if (isPoliceEnemyObjectId(command.objectId) && command.policePatrolShoots !== undefined && typeof command.policePatrolShoots !== 'boolean') throw new HttpError(400, `commands[${index}].policePatrolShoots must be a boolean.`);
       const ref = command.ref === undefined ? undefined : normalizeRef(command.ref, `commands[${index}].ref`);
       if (ref && state.refs.has(ref)) throw new HttpError(400, `commands[${index}].ref "${ref}" is already used.`);
       if (ref) state.refs.add(ref);
@@ -695,12 +730,15 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
         layer: normalizeOptionalLayer(command.layer, `commands[${index}].layer`),
         swordsmanObjectiveMode: objectiveMode,
         swordsmanDefeatMode: defeatMode,
+        policeBehaviorMode,
+        policePatrolShoots,
       };
     }
     case 'configure_object': {
       const configurationKeys = [
         'layer', 'facing', 'linkedTargets', 'containedObjectId', 'signText',
         'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'npcMode', 'npcPushable',
+        'policeBehaviorMode', 'policePatrolShoots',
         'npcCanJumpFall', 'npcPlayerCollision', 'npcFriendlyFire', 'npcName', 'npcDefeatMode',
       ] as const;
       assertAllowedKeys(command, ['type', 'target', ...configurationKeys], `commands[${index}]`);
@@ -787,6 +825,12 @@ function placeObjectAtTile(command: PlaceObjectCommand): PlacedObject {
     swordsmanDefeatMode: command.objectId === SWORDSMAN_AI_OBJECT_ID
       ? command.swordsmanDefeatMode ?? DEFAULT_SWORDSMAN_DEFEAT_MODE
       : null,
+    policeBehaviorMode: isPoliceEnemyObjectId(command.objectId)
+      ? command.policeBehaviorMode ?? DEFAULT_POLICE_BEHAVIOR_MODE
+      : null,
+    policePatrolShoots: isPoliceEnemyObjectId(command.objectId)
+      ? command.policePatrolShoots ?? DEFAULT_POLICE_PATROL_SHOOTS
+      : null,
     npcMode: npc ? DEFAULT_NPC_MODE : null,
     npcPushable: npc ? normalizeNpcPushable(null, DEFAULT_NPC_MODE) : null,
     npcCanJumpFall: npc ? normalizeNpcCanJumpFall(null, DEFAULT_NPC_MODE) : null,
@@ -839,6 +883,10 @@ function applyObjectConfiguration(room: RoomSnapshot, placed: PlacedObject, comm
   if (hasSwordsmanConfiguration && placed.id !== SWORDSMAN_AI_OBJECT_ID) throw new HttpError(400, 'Sword Hunter settings only apply to swordsman_ai.');
   if (command.swordsmanObjectiveMode !== undefined) placed.swordsmanObjectiveMode = command.swordsmanObjectiveMode ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE;
   if (command.swordsmanDefeatMode !== undefined) placed.swordsmanDefeatMode = command.swordsmanDefeatMode ?? DEFAULT_SWORDSMAN_DEFEAT_MODE;
+  const hasPoliceConfiguration = command.policeBehaviorMode !== undefined || command.policePatrolShoots !== undefined;
+  if (hasPoliceConfiguration && !isPoliceEnemyObjectId(placed.id)) throw new HttpError(400, 'Police settings only apply to police enemies.');
+  if (command.policeBehaviorMode !== undefined) placed.policeBehaviorMode = command.policeBehaviorMode ?? DEFAULT_POLICE_BEHAVIOR_MODE;
+  if (command.policePatrolShoots !== undefined) placed.policePatrolShoots = command.policePatrolShoots ?? DEFAULT_POLICE_PATROL_SHOOTS;
   const hasNpcConfiguration = [
     command.npcMode,
     command.npcPushable,

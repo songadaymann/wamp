@@ -563,6 +563,8 @@ export class CourseEditorScene extends Phaser.Scene {
       onClearContainerContents: () => this.objectInspectorController.clearFocusedContainerContents(),
       onSetFocusedSwordsmanObjectiveMode: () => {},
       onSetFocusedSwordsmanDefeatMode: () => {},
+      onSetFocusedPoliceBehaviorMode: () => {},
+      onSetFocusedPolicePatrolShoots: () => {},
       onSetFocusedNpcMode: () => {},
       onSetFocusedNpcPushable: () => {},
       onSetFocusedNpcCanJumpFall: () => {},

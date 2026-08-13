@@ -1,4 +1,5 @@
 import { GHOST_OBJECT_ID } from '../../../enemies/ghost';
+import { POLICE_ENEMY_OBJECT_IDS } from '../../../enemies/policeEnemy';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
 import { JIMOTHY_OBJECT_ID } from '../../../npcs/model';
 
@@ -72,6 +73,7 @@ const BEHAVIORS_BY_OBJECT_ID: Record<string, LiveObjectBehavior> = {
   bear_polar: { kind: 'patrolEnemy' },
   chicken: { kind: 'patrolEnemy' },
   [SWORDSMAN_AI_OBJECT_ID]: { kind: 'swordsman' },
+  ...Object.fromEntries(POLICE_ENEMY_OBJECT_IDS.map((objectId) => [objectId, { kind: 'swordsman' as const }])),
   [JIMOTHY_OBJECT_ID]: { kind: 'npc' },
   frog: { kind: 'frog' },
   cannon: { kind: 'cannon' },

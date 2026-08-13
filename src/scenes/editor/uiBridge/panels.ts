@@ -76,6 +76,15 @@ export function renderInspectorPanel(
   setDisabled(elements.swordsmanObjectiveModeSelect, state.swordsmanObjectiveModeDisabled);
   setValue(elements.swordsmanDefeatModeSelect, state.swordsmanDefeatModeValue);
   setDisabled(elements.swordsmanDefeatModeSelect, state.swordsmanDefeatModeDisabled);
+  setHidden(elements.policePanel, !state.policeVisible);
+  setText(elements.policeStatus, state.policeStatusText);
+  setValue(elements.policeBehaviorModeSelect, state.policeBehaviorModeValue);
+  setDisabled(elements.policeBehaviorModeSelect, state.policeBehaviorModeDisabled);
+  setHidden(elements.policePatrolShootsRow, state.policePatrolShootsHidden);
+  if (elements.policePatrolShootsCheckbox) {
+    elements.policePatrolShootsCheckbox.checked = state.policePatrolShootsChecked;
+    elements.policePatrolShootsCheckbox.disabled = !state.policeVisible;
+  }
   setHidden(elements.npcPanel, !state.npcVisible);
   setText(elements.npcStatus, state.npcStatusText);
   setValue(elements.npcModeSelect, state.npcModeValue);

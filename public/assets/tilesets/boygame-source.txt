@@ -1,0 +1,10 @@
+Boygame tileset asset provenance
+
+Source: user-supplied local `Gameboy assets` pack.
+
+Imported on 2026-08-13 on the native 16 x 16 game grid.
+Terrain is stored as an 8 x 7 atlas. Chests, signs, decorations, coins, and the
+heart were split into standalone Boygame objects; the supplied multi-frame coin,
+heart, and wall-torch artwork remains animated.
+The Player_notmove.png, Player_jump.png, and Player_dead.png sheets were intentionally excluded.
+No license or attribution document was present in the supplied source folder.

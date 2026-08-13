@@ -133,6 +133,8 @@ describe('room draft command objects and goals', () => {
       { type: 'configure_object', target: { ref: 'jim' }, npcMode: 'follow', npcPushable: false, npcCanJumpFall: true, npcPlayerCollision: false, npcFriendlyFire: false, npcName: 'Guide Jim', npcDefeatMode: 'respawn', signText: 'Follow me.' },
       { type: 'place_object', ref: 'hunter', objectId: 'swordsman_ai', tileX: 30, tileY: 10 },
       { type: 'configure_object', target: { ref: 'hunter' }, swordsmanObjectiveMode: 'collect', swordsmanDefeatMode: 'invincible' },
+      { type: 'place_object', ref: 'patrolman', objectId: 'police_patrolman', tileX: 32, tileY: 10, policeBehaviorMode: 'patrol', policePatrolShoots: true },
+      { type: 'place_object', ref: 'policewoman', objectId: 'policewoman', tileX: 34, tileY: 10 },
       { type: 'set_goal', goal: { type: 'npc_quest', questType: 'escort', npc: { ref: 'jim' }, destination: { tileX: 38, tileY: 10 } } },
     ]);
     const result = applyRoomDraftCommands(blankRoom(), body.commands);
@@ -144,6 +146,8 @@ describe('room draft command objects and goals', () => {
     expect(byRef('sign').signText).toBe('Catalog parity!');
     expect(byRef('jim')).toMatchObject({ npcMode: 'follow', npcPushable: false, npcCanJumpFall: true, npcPlayerCollision: false, npcFriendlyFire: false, npcName: 'Guide Jim', npcDefeatMode: 'respawn', signText: 'Follow me.' });
     expect(byRef('hunter')).toMatchObject({ swordsmanObjectiveMode: 'collect', swordsmanDefeatMode: 'invincible' });
+    expect(byRef('patrolman')).toMatchObject({ policeBehaviorMode: 'patrol', policePatrolShoots: true });
+    expect(byRef('policewoman')).toMatchObject({ policeBehaviorMode: 'hunter', policePatrolShoots: false });
     expect(result.snapshot.goal).toMatchObject({ type: 'npc_quest', questType: 'escort', npcInstanceId: result.commandRefs.jim });
   });
 
@@ -182,6 +186,8 @@ describe('room draft command objects and goals', () => {
     expect(() => normalize([{ type: 'place_object', ref: 'same', objectId: 'sign', tileX: 1, tileY: 1 }, { type: 'place_object', ref: 'same', objectId: 'sign', tileX: 2, tileY: 1 }])).toThrow(/already used/);
     expect(() => normalize([{ type: 'place_object', objectId: 'coin_gold', tileX: 1, tileY: 1, facing: 'left' }])).toThrow(/not supported/);
     expect(() => normalize([{ type: 'clear_goal', surprise: true }])).toThrow(/unsupported field/);
+    expect(() => normalize([{ type: 'place_object', objectId: 'coin_gold', tileX: 1, tileY: 1, policeBehaviorMode: 'patrol' }])).toThrow(/only applies to police enemies/);
+    expect(() => normalize([{ type: 'place_object', objectId: 'policewoman', tileX: 1, tileY: 1, policeBehaviorMode: 'wander' }])).toThrow(/must be hunter or patrol/);
 
     const invalidLink = normalize([
       { type: 'place_object', ref: 'portal', objectId: 'portal_a', tileX: 1, tileY: 1 },

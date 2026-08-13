@@ -12,12 +12,14 @@ export function getCollectibleScoreValue(objectId: string): number {
       return 5;
     case 'coin_gold':
     case 'ring':
+    case 'boygame_coin':
       return 3;
     case 'coin_silver':
       return 2;
     case 'kitkat':
       return 2;
     case 'coin_small_gold':
+    case 'boygame_coin_small':
       return 2;
     case 'coin_small_silver':
       return 1;
@@ -43,6 +45,7 @@ export function getCollectibleCue(objectId: string): SfxCue {
     case 'banana':
     case 'kitkat':
     case 'heart':
+    case 'boygame_heart':
     case 'health_potion':
     case 'mana_potion':
     case 'mushroom':
