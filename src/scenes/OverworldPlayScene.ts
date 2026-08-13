@@ -49,11 +49,7 @@ import {
   type WorldRoomSummary,
   type WorldWindow,
 } from '../persistence/worldModel';
-import {
-  RETRO_COLORS,
-  createStarfieldTileSprite,
-  getStarfieldLayerConfig,
-} from '../visuals/starfield';
+import { RETRO_COLORS } from '../visuals/starfield';
 import type { RoomRushOverworldCapture } from '../social/roomRushShare';
 import { RoomLightingController } from '../lighting/controller';
 import { type RoomLightingEmitter } from '../lighting/model';
@@ -254,6 +250,7 @@ import {
   OverworldRoomRushModeController,
 } from './overworld/roomRushMode';
 import { OverworldRuntimeContext } from './overworld/runtimeContext';
+import { OverworldBackdropController } from './overworld/backdropController';
 import { dispatchSignal } from '../events/typedEvent';
 import {
   RankedRunTraceRecorder,
@@ -430,10 +427,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private externalLaunchGraceUntil = 0;
 
   private loadingText!: Phaser.GameObjects.Text;
-  private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
-  private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
-  private backdropDisplayLayer: Phaser.GameObjects.Layer | null = null;
-  private worldDisplayLayer: Phaser.GameObjects.Layer | null = null;
   private hudBridge: OverworldHudBridge | null = null;
   private fxController: SceneFxController | null = null;
   private mobilePerformanceProfiler: MobilePerformanceProfiler | null = null;
@@ -570,6 +563,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly browseRealtimeStartupGate: BrowseRealtimeStartupGate;
   private readonly roomCommentsController: OverworldRoomCommentsController;
   private readonly runtimeContext: OverworldRuntimeContext<OverworldMode, CameraMode>;
+  private readonly backdropController: OverworldBackdropController;
 
   private shouldCenterCamera = false;
   private shouldRespawnPlayer = false;
@@ -594,6 +588,12 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'OverworldPlayScene' });
+    this.backdropController = new OverworldBackdropController({
+      scene: this,
+      collectWorldObjects: () => this.collectBackdropIgnoredObjects(),
+      updateWorldBackgrounds: (camera) =>
+        this.worldStreamingController.updateFullRoomBackgrounds(camera),
+    });
     this.runtimeContext = new OverworldRuntimeContext({
       getMode: () => this.mode,
       setMode: (mode) => { this.mode = mode; },
@@ -604,9 +604,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       isPvpArenaActive: () => this.pvpArenaController?.isArenaActive() ?? false,
       isPvpMatchActive: () => this.pvpArenaController?.isMatchActive() ?? false,
       isRoomRushActive: () => Boolean(this.roomRushModeController?.getCurrentRun()),
-      isBackdropCameraActive: () => Boolean(this.backdropCamera),
-      getBackdropLayerCount: () =>
-        Number(Boolean(this.backdropDisplayLayer)) + Number(Boolean(this.worldDisplayLayer)),
+      isBackdropCameraActive: () => this.backdropController.isCameraActive(),
+      getBackdropLayerCount: () => this.backdropController.getLayerCount(),
       isLightingActive: () => this.mode === 'play',
     });
     this.quicksandController = new OverworldQuicksandController({
@@ -2509,9 +2508,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private resetRuntimeState(): void {
     this.removeMobilePortraitCameraTunerApi();
-    if (this.backdropCamera && this.cameras.cameras.includes(this.backdropCamera)) {
-      this.cameras.remove(this.backdropCamera, true);
-    }
+    this.backdropController.beginReset();
 
     this.nextFrameHudRenderAt = 0;
     this.roomMusicPlaybackController.reset();
@@ -2524,12 +2521,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.weatherController.reset();
     this.pvpInstanceRenderer.clear();
     this.combatPresentationController.destroyProjectiles();
-    this.starfieldSprites = [];
-    this.backdropDisplayLayer?.destroy();
-    this.worldDisplayLayer?.destroy();
-    this.backdropDisplayLayer = null;
-    this.worldDisplayLayer = null;
-    this.backdropCamera = null;
+    this.backdropController.finishReset();
     this.mode = 'browse';
     this.cameraMode = 'inspect';
     this.selectedCoordinates = { ...DEFAULT_ROOM_COORDINATES };
@@ -2622,91 +2614,22 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private createBackdrop(): void {
-    this.backdropDisplayLayer = this.add.layer().setDepth(-1000);
-    this.worldDisplayLayer = this.add.layer().setDepth(0);
-    this.starfieldSprites = [0, 1].map((index) => {
-      const config = getStarfieldLayerConfig(index);
-      return createStarfieldTileSprite(this, {
-        x: 0,
-        y: 0,
-        width: this.scale.width,
-        height: this.scale.height,
-        depth: -80 + index,
-        alpha: config.alpha,
-      });
-    });
-    this.backdropDisplayLayer.add(this.starfieldSprites);
-    this.ensureBackdropCamera();
-    this.syncBackdropCameraIgnores();
-    this.resizeBackdrop();
-    this.updateBackdrop();
+    this.backdropController.create();
   }
 
   private updateBackdrop(): void {
-    this.worldStreamingController.updateFullRoomBackgrounds(this.cameras.main);
-
-    if (this.starfieldSprites.length === 0) {
-      return;
-    }
-
-    const motionCamera = this.cameras.main;
-    const backdropCamera = this.backdropCamera;
-
-    for (let index = 0; index < this.starfieldSprites.length; index++) {
-      const sprite = this.starfieldSprites[index];
-      const config = getStarfieldLayerConfig(index);
-      sprite.tilePositionX = (motionCamera.scrollX * config.parallax) / config.tileScale;
-      sprite.tilePositionY = (motionCamera.scrollY * config.parallax) / config.tileScale;
-    }
-
-    if (backdropCamera) {
-      backdropCamera.setScroll(0, 0);
-    }
+    this.backdropController.update();
   }
 
   private resizeBackdrop(): void {
-    for (let index = 0; index < this.starfieldSprites.length; index += 1) {
-      const sprite = this.starfieldSprites[index];
-      const config = getStarfieldLayerConfig(index);
-      sprite.setPosition(0, 0);
-      sprite.setSize(this.scale.width, this.scale.height);
-      sprite.setTileScale(config.tileScale, config.tileScale);
-    }
-    this.backdropCamera?.setSize(this.scale.width, this.scale.height);
-  }
-
-  private ensureBackdropCamera(): void {
-    if (!this.backdropCamera) {
-      this.backdropCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
-      this.backdropCamera.setScroll(0, 0);
-      this.backdropCamera.setRoundPixels(true);
-
-      const cameras = this.cameras.cameras;
-      const backdropIndex = cameras.indexOf(this.backdropCamera);
-      if (backdropIndex > 0) {
-        cameras.splice(backdropIndex, 1);
-        cameras.unshift(this.backdropCamera);
-      }
-      return;
-    }
-
-    this.backdropCamera.setSize(this.scale.width, this.scale.height);
+    this.backdropController.resize();
   }
 
   private syncBackdropCameraIgnores(): void {
-    const mainCamera = this.cameras.main;
-    mainCamera.transparent = true;
+    this.backdropController.syncIgnores();
+  }
 
-    if (this.backdropDisplayLayer) {
-      this.backdropDisplayLayer.setActive(true).setVisible(true).setAlpha(1);
-      mainCamera.ignore(this.backdropDisplayLayer);
-    }
-
-    if (!this.backdropCamera || !this.worldDisplayLayer) {
-      return;
-    }
-    this.worldDisplayLayer.setActive(true).setVisible(true).setAlpha(1);
-
+  private collectBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
     const ignoredObjects: Phaser.GameObjects.GameObject[] = [];
 
     ignoredObjects.push(...this.gridOverlayController.getBackdropIgnoredObjects());
@@ -2755,9 +2678,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     ignoredObjects.push(...this.roomCommentsController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.presenceOverlayController.getBackdropIgnoredObjects());
     ignoredObjects.push(...(this.fxController?.getBackdropIgnoredObjects() ?? []));
-
-    this.worldDisplayLayer.add(ignoredObjects);
-    this.backdropCamera.ignore(this.worldDisplayLayer);
+    return ignoredObjects;
   }
 
   private selectRoomCoordinates(coordinates: RoomCoordinates): void {
@@ -6243,18 +6164,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.worldStreamingController.destroy();
     this.unsubscribeDevicePerformanceMode?.();
     this.unsubscribeDevicePerformanceMode = null;
-    for (const sprite of this.starfieldSprites) {
-      sprite.destroy();
-    }
-    this.starfieldSprites = [];
-    this.backdropDisplayLayer?.destroy();
-    this.worldDisplayLayer?.destroy();
-    this.backdropDisplayLayer = null;
-    this.worldDisplayLayer = null;
-    if (this.backdropCamera && this.cameras.cameras.includes(this.backdropCamera)) {
-      this.cameras.remove(this.backdropCamera, true);
-    }
-    this.backdropCamera = null;
+    this.backdropController.destroy();
     this.criticalFrameStartedAtMs = null;
     this.previousCriticalFrameStartedAtMs = null;
     this.currentWallFrameDeltaMs = 0;
@@ -6440,6 +6350,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       currentLoadedRoom?.backgroundSprites.find(
         (backgroundSprite) => Math.abs(backgroundSprite.parallax) > 0.0001
       ) ?? null;
+    const backdropDisplayHealth = this.backdropController.getDisplayHealth();
     const liveObjects = Array.from(this.loadedFullRoomsById.values()).flatMap((loadedRoom) =>
       loadedRoom.liveObjects
         .filter((liveObject) => liveObject.sprite.active)
@@ -6604,20 +6515,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           sleeping: this.sys.isSleeping(),
           paused: this.sys.isPaused(),
         },
-        mainCamera: {
-          id: camera.id,
-          visible: camera.visible,
-          alpha: camera.alpha,
-        },
-        backdropCamera: this.backdropCamera
-          ? {
-              id: this.backdropCamera.id,
-              visible: this.backdropCamera.visible,
-              alpha: this.backdropCamera.alpha,
-            }
-          : null,
-        worldLayer: describeDisplayLayer(this.worldDisplayLayer, camera),
-        backdropLayer: describeDisplayLayer(this.backdropDisplayLayer, this.backdropCamera),
+        ...backdropDisplayHealth,
       },
       currentRoomBackground: currentLoadedRoom
         ? {
@@ -6772,21 +6670,4 @@ export class OverworldPlayScene extends Phaser.Scene {
       liveObjects,
     };
   }
-}
-
-function describeDisplayLayer(
-  layer: Phaser.GameObjects.Layer | null,
-  camera: Phaser.Cameras.Scene2D.Camera | null,
-): Record<string, unknown> | null {
-  if (!layer) return null;
-  return {
-    active: layer.active,
-    visible: layer.visible,
-    alpha: layer.alpha,
-    renderFlags: layer.renderFlags,
-    cameraFilter: layer.cameraFilter,
-    attachedToDisplayList: Boolean(layer.displayList),
-    childCount: layer.list.length,
-    visibleToCamera: camera ? layer.willRender(camera) : null,
-  };
 }
