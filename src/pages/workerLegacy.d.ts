@@ -1,11 +1,5 @@
-interface PagesWorkerEnv {
-  ASSETS: {
-    fetch(request: Request): Promise<Response>;
-  };
-}
+import type { PagesWorkerHandler } from './model';
 
-declare const worker: {
-  fetch(request: Request, env: PagesWorkerEnv): Promise<Response>;
-};
+declare const worker: PagesWorkerHandler;
 
 export default worker;

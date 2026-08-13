@@ -1,13 +1,13 @@
-import worker from './workerLegacy.js';
+import type { PagesWorkerHandler } from './model';
+import { createPagesWorker } from './routes';
+import legacyWorker from './workerLegacy.js';
 
-export interface PagesWorkerEnv {
-  ASSETS: {
-    fetch(request: Request): Promise<Response>;
-  };
-}
+export type {
+  PagesWorkerEnv,
+  PagesWorkerExecutionContext,
+  PagesWorkerHandler,
+} from './model';
 
-export interface PagesWorkerHandler {
-  fetch(request: Request, env: PagesWorkerEnv): Promise<Response>;
-}
+const worker = createPagesWorker(legacyWorker);
 
 export default worker satisfies PagesWorkerHandler;

@@ -53,46 +53,9 @@ const PREVIEW_WIDTH = ROOM_WIDTH * PREVIEW_TILE_SIZE;
 const PREVIEW_HEIGHT = ROOM_HEIGHT * PREVIEW_TILE_SIZE;
 const GAME_OBJECT_CONFIG_BY_ID = new Map(GAME_OBJECTS.map((config) => [config.id, config]));
 const imageDataCache = new Map();
-const STANDALONE_PAGE_ALIASES = new Map([
-  ['/jam', '/__standalone/jam.asset'],
-  ['/jam.html', '/__standalone/jam.asset'],
-  ['/school-admin', '/__standalone/school-admin.asset'],
-  ['/school-admin/', '/__standalone/school-admin.asset'],
-  ['/school-admin.html', '/__standalone/school-admin.asset'],
-  ['/school-login', '/__standalone/school-login.asset'],
-  ['/school-login/', '/__standalone/school-login.asset'],
-  ['/school-login.html', '/__standalone/school-login.asset'],
-  ['/world-tile-render', '/__standalone/world-tile-render.asset'],
-  ['/world-tile-render/', '/__standalone/world-tile-render.asset'],
-  ['/world-tile-render.html', '/__standalone/world-tile-render.asset'],
-]);
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === '/jam/' && (request.method === 'GET' || request.method === 'HEAD')) {
-      url.pathname = '/jam';
-      return new Response(null, {
-        status: 308,
-        headers: { Location: url.toString() },
-      });
-    }
-
-    const standalonePage = STANDALONE_PAGE_ALIASES.get(url.pathname);
-    if (standalonePage) {
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
-        return new Response('Method Not Allowed', {
-          status: 405,
-          headers: { Allow: 'GET, HEAD' },
-        });
-      }
-
-      return fetchStandalonePageAsset(request, env, standalonePage);
-    }
-
-    if (url.pathname.startsWith('/assets/')) {
-      return fetchHashedAsset(request, env);
-    }
 
     const imageCoordinates = parseRoomPath(url.pathname, ROOM_IMAGE_PATH_PATTERN);
     if (imageCoordinates) {
@@ -154,50 +117,6 @@ export default {
     return renderProfileAppShell(request, env, metadata);
   },
 };
-
-async function fetchHashedAsset(request, env) {
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    return new Response('Method Not Allowed', {
-      status: 405,
-      headers: {
-        Allow: 'GET, HEAD',
-        'Cache-Control': 'no-store',
-      },
-    });
-  }
-
-  const response = await env.ASSETS.fetch(request);
-  const contentType = response.headers.get('Content-Type')?.toLowerCase() ?? '';
-  if (response.ok && !contentType.includes('text/html')) return response;
-
-  // Pages can briefly route a just-deployed hashed asset to the SPA fallback
-  // while the custom-domain deployment pointer propagates. Never let that HTML
-  // response inherit the immutable /assets/* cache policy.
-  return new Response(request.method === 'HEAD' ? null : 'Asset Not Found', {
-    status: 404,
-    headers: {
-      'Cache-Control': 'no-store',
-      'Content-Type': 'text/plain; charset=utf-8',
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
-}
-
-async function fetchStandalonePageAsset(request, env, pathname) {
-  const url = new URL(request.url);
-  url.pathname = pathname;
-  const assetRequest = new Request(url.toString(), request);
-  const response = await env.ASSETS.fetch(assetRequest);
-  const headers = new Headers(response.headers);
-  headers.set('Content-Type', 'text/html; charset=utf-8');
-  headers.set('Cache-Control', 'public, max-age=60, s-maxage=300');
-  headers.delete('Content-Length');
-
-  return new Response(request.method === 'HEAD' ? null : response.body, {
-    status: response.status,
-    headers,
-  });
-}
 
 function parseRoomPath(pathname, pattern = ROOM_PATH_PATTERN) {
   const match = pattern.exec(pathname);
