@@ -106,9 +106,6 @@ import {
 } from '../pvp/model';
 import type { WorldPresencePvpAction } from '../presence/worldPresence';
 import {
-  showPvpDamageFlashOverlay,
-} from '../ui/setup/pvpModal';
-import {
   OverworldGoalRunController,
   type GoalRunState,
 } from './overworld/goalRuns';
@@ -151,13 +148,22 @@ import {
   type RenderedGhost,
 } from './overworld/presence';
 import { OverworldPvpArenaController } from './overworld/pvpArenaController';
-import { MultiplayerRemotePlayerRenderer } from './overworld/multiplayerRemotePlayerRenderer';
-import { PVP_HEART_HEAD_CLEARANCE_PX, PvpHeartDisplay } from './overworld/pvpHeartDisplay';
+import { OverworldPvpCombatCoordinator } from './overworld/pvpCombatCoordinator';
+import { OverworldPvpLocalPresentationController } from './overworld/pvpLocalPresentationController';
 import {
-  PVP_INVULNERABILITY_FX_DEPTH,
-  syncPvpInvulnerabilityFx,
-  syncPvpInvulnerabilitySpriteStyle,
-} from './overworld/pvpInvulnerabilityFx';
+  createPvpGhostBodyRect,
+  createPvpGhostHitRect,
+  createPvpPlayerBodyRect,
+  createPvpPointHitRect,
+  createPvpRemoteActionDamageRect,
+  inflatePvpCombatRect,
+  isPvpStompContact,
+  isPvpStompVerticalContact,
+  pvpCombatRectsIntersect,
+  resolvePvpPeerCollision as resolvePvpPeerCollisionGeometry,
+  type PvpCombatRect,
+} from './overworld/pvpCombatGeometry';
+import { MultiplayerRemotePlayerRenderer } from './overworld/multiplayerRemotePlayerRenderer';
 import {
   OverworldRoomChatController,
 } from './overworld/roomChat';
@@ -476,15 +482,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly publishedCourseSnapshotsById = new Map<string, CourseSnapshot>();
   private readonly publishedCourseSnapshotLoadsById = new Map<string, Promise<CourseSnapshot | null>>();
   private activeCourseRun: ActiveCourseRunState | null = null;
-  private lastPvpSelfDeathHitId: string | null = null;
-  private lastPvpStompAt = 0;
   private pvpSpawnAppliedMatchId: string | null = null;
-  private readonly pvpLastHitSentAtByKey = new Map<string, number>();
-  private readonly pvpLastReceivedActionHitIds = new Set<string>();
-  private pvpLocalHeartDisplay: PvpHeartDisplay | null = null;
-  private pvpLocalInvulnerabilityFx: Phaser.GameObjects.Graphics | null = null;
-  private localPvpAction: WorldPresencePvpAction | null = null;
-  private localPvpActionUntilEpoch = 0;
   private readonly localPresenceRoomScratch: RoomCoordinates = { x: 0, y: 0 };
   private readonly localPvpPresenceScratch = {
     matchId: '',
@@ -502,8 +500,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     animationState: 'idle' as DefaultPlayerAnimationState,
     pvp: null as LocalPresenceInput['pvp'],
   };
-  private lastPvpInstanceStateSentAt = 0;
-  private pvpInstanceStateSequence = 0;
   private activeMultiplayerGoalPolicy: MultiplayerModeDefinition['goals'] | null = null;
   private courseEditorReturnTarget: OverworldPlaySceneData['courseEditorReturnTarget'] = null;
   private editorPlaytestReturnTarget: OverworldPlaySceneData['editorPlaytestReturnTarget'] = null;
@@ -559,6 +555,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly presenceController: OverworldPresenceController;
   private readonly pvpInstanceRenderer: MultiplayerRemotePlayerRenderer;
   private readonly pvpArenaController: OverworldPvpArenaController;
+  private readonly pvpCombatCoordinator = new OverworldPvpCombatCoordinator();
+  private readonly pvpLocalPresentationController: OverworldPvpLocalPresentationController;
   private readonly roomChatController: OverworldRoomChatController;
   private readonly browseRealtimeStartupGate: BrowseRealtimeStartupGate;
   private readonly roomCommentsController: OverworldRoomCommentsController;
@@ -1017,6 +1015,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       playerWidth: this.PLAYER_WIDTH,
       playerHeight: this.PLAYER_HEIGHT,
       presentCombatEvent: (event, receivedAt) => this.presentRemotePvpCombatEvent(event, receivedAt),
+      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+    });
+    this.pvpLocalPresentationController = new OverworldPvpLocalPresentationController({
+      scene: this,
+      playerWidth: this.PLAYER_WIDTH,
+      playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
+      getPlayerSprite: () => this.playerSprite,
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
     this.pvpArenaController = new OverworldPvpArenaController({
@@ -2640,8 +2645,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     ignoredObjects.push(...this.browseOverlayController.getBackdropIgnoredObjects());
     if (this.player) ignoredObjects.push(this.player);
     if (this.playerSprite) ignoredObjects.push(this.playerSprite);
-    if (this.pvpLocalHeartDisplay) ignoredObjects.push(this.pvpLocalHeartDisplay.getGameObject());
-    if (this.pvpLocalInvulnerabilityFx) ignoredObjects.push(this.pvpLocalInvulnerabilityFx);
+    ignoredObjects.push(...this.pvpLocalPresentationController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.combatPresentationController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.combatController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.pvpInstanceRenderer.getBackdropIgnoredObjects());
@@ -3151,14 +3155,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.activePvpMatch && this.activePvpMatch.status !== 'complete'
         ? this.activePvpMatch
         : null;
-    const activePvpAction =
-      this.localPvpAction && now < this.localPvpActionUntilEpoch
-        ? this.localPvpAction
-        : null;
-    if (!activePvpAction) {
-      this.localPvpAction = null;
-      this.localPvpActionUntilEpoch = 0;
-    }
+    const activePvpAction = this.pvpCombatCoordinator.getActiveLocalAction(now);
 
     let localPresence: LocalPresenceInput | null = null;
     if (this.mode === 'play' && this.player && this.playerBody) {
@@ -3176,7 +3173,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.localPvpPresenceScratch.matchId = activePvpMatch.matchId;
         this.localPvpPresenceScratch.action = activePvpAction;
         this.localPvpPresenceScratch.actionUntil =
-          activePvpAction ? this.localPvpActionUntilEpoch : 0;
+          activePvpAction ? this.pvpCombatCoordinator.getLocalActionUntilEpoch() : 0;
         this.localPresenceScratch.pvp = this.localPvpPresenceScratch;
       } else {
         this.localPresenceScratch.pvp = null;
@@ -3212,17 +3209,13 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     const now = this.time.now;
-    if (!force && now - this.lastPvpInstanceStateSentAt < 25) {
+    const sequence = this.pvpCombatCoordinator.beginInstanceStateSend(now, force);
+    if (sequence === null) {
       return;
     }
 
     const epochNow = Date.now();
-    const activeAction =
-      this.localPvpAction && epochNow < this.localPvpActionUntilEpoch
-        ? this.localPvpAction
-        : null;
-    this.lastPvpInstanceStateSentAt = now;
-    this.pvpInstanceStateSequence += 1;
+    const activeAction = this.pvpCombatCoordinator.getActiveLocalAction(epochNow);
     this.pvpMatchClient?.sendPlayerState({
       matchId: match.matchId,
       x: this.player.x,
@@ -3232,8 +3225,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       facing: this.playerFacing < 0 ? -1 : 1,
       animationState: this.playerAnimationState,
       action: activeAction,
-      actionUntil: activeAction ? this.localPvpActionUntilEpoch : 0,
-      sequence: this.pvpInstanceStateSequence,
+      actionUntil: activeAction ? this.pvpCombatCoordinator.getLocalActionUntilEpoch() : 0,
+      sequence,
       sentAt: epochNow,
     });
   }
@@ -5020,21 +5013,18 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private recordPvpSelfDeath(reason: string): boolean {
-    if (!this.isPvpDamageActive()) {
-      return false;
-    }
-
     const identity = this.presenceController.getIdentity();
-    if (!identity) {
+    const recorded = this.pvpCombatCoordinator.reportSelfDeath({
+      damageActive: this.isPvpDamageActive(),
+      matchId: this.activePvpMatch?.matchId ?? null,
+      localUserId: identity?.userId ?? null,
+      epochNow: Date.now(),
+      report: (_source, hitId) =>
+        this.pvpMatchClient?.reportSelfDeath(this.resolvePvpEnvironmentSource(reason), hitId) ?? false,
+    });
+    if (!recorded) {
       return false;
     }
-
-    const hitId = `self:${this.activePvpMatch?.matchId}:${identity.userId}:${Date.now()}`;
-    if (hitId === this.lastPvpSelfDeathHitId) {
-      return false;
-    }
-    this.lastPvpSelfDeathHitId = hitId;
-    this.pvpMatchClient?.reportSelfDeath(this.resolvePvpEnvironmentSource(reason), hitId);
     return this.activePvpMatch?.status === 'complete';
   }
 
@@ -5075,7 +5065,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return instanceHit;
     }
 
-    const pointRect = new Phaser.Geom.Rectangle(worldX - 4, worldY - 3, 8, 6);
+    const pointRect = createPvpPointHitRect(worldX, worldY);
     const target = this.findPvpTargetInRect(pointRect);
     if (!target) {
       return null;
@@ -5091,25 +5081,22 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private maybeStompPvpPeer(): void {
-    if (!this.playerBody || !this.isPvpDamageActive() || this.time.now - this.lastPvpStompAt < 450) {
+    if (!this.playerBody || !this.isPvpDamageActive() || !this.pvpCombatCoordinator.isStompReady(this.time.now)) {
       return;
     }
 
-    const playerRect = new Phaser.Geom.Rectangle(
-      this.playerBody.left,
-      this.playerBody.top,
-      this.playerBody.width,
-      this.playerBody.height,
-    );
+    const playerRect = createPvpPlayerBodyRect(this.playerBody);
     const target = this.findPvpTargetInRect(playerRect);
     const instanceTargetUserId = this.pvpInstanceRenderer.getOpponentUserId();
     const instanceTargetRect = this.pvpInstanceRenderer.getOpponentBodyRect();
     const instanceStomped =
       instanceTargetUserId &&
       instanceTargetRect &&
-      Phaser.Geom.Intersects.RectangleToRectangle(playerRect, instanceTargetRect) &&
-      this.playerBody.velocity.y > 40 &&
-      this.playerBody.bottom <= instanceTargetRect.top + 10;
+      isPvpStompContact({
+        playerRect,
+        targetRect: instanceTargetRect,
+        playerVelocityY: this.playerBody.velocity.y,
+      });
 
     if (!target && !instanceStomped) {
       return;
@@ -5117,13 +5104,17 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     const targetRect = target ? this.getPvpGhostRect(target) : null;
     const stomped = targetRect
-      ? this.playerBody.velocity.y > 40 && this.playerBody.bottom <= targetRect.top + 10
+      ? isPvpStompVerticalContact({
+          playerRect,
+          targetRect,
+          playerVelocityY: this.playerBody.velocity.y,
+        })
       : false;
     if (!stomped && !instanceStomped) {
       return;
     }
 
-    this.lastPvpStompAt = this.time.now;
+    this.pvpCombatCoordinator.recordStomp(this.time.now);
     this.playerBody.setVelocityY(this.JUMP_VELOCITY * 0.58);
     const instanceCenter = this.pvpInstanceRenderer.getOpponentCenter();
     const hitX = instanceStomped && instanceCenter ? instanceCenter.x : target?.sprite.x ?? this.playerBody.center.x;
@@ -5140,32 +5131,17 @@ export class OverworldPlayScene extends Phaser.Scene {
     targetUserId: string,
     source: Exclude<PvpHitSource, 'environment'>,
   ): boolean {
-    const match = this.activePvpMatch;
-    if (!match || !targetUserId || !this.isPvpDamageActive()) {
-      return false;
-    }
-
-    const now = this.time.now;
-    const key = `${match.matchId}:${targetUserId}:${source}`;
-    const previousAt = this.pvpLastHitSentAtByKey.get(key) ?? -Infinity;
-    if (now - previousAt < 180) {
-      return false;
-    }
-
-    this.pvpLastHitSentAtByKey.set(key, now);
-    const hitId = [
-      source,
-      match.matchId,
+    return this.pvpCombatCoordinator.reportPeerHit({
+      damageActive: this.isPvpDamageActive(),
+      matchId: this.activePvpMatch?.matchId ?? null,
       targetUserId,
-      Date.now(),
-      Math.floor(now),
-      Math.random().toString(36).slice(2, 8),
-    ].join(':');
-    const reported = this.pvpMatchClient?.reportHit(targetUserId, source, hitId) ?? false;
-    if (!reported) {
-      this.pvpLastHitSentAtByKey.delete(key);
-    }
-    return reported;
+      source,
+      monotonicNow: this.time.now,
+      epochNow: Date.now(),
+      randomSuffix: Math.random().toString(36).slice(2, 8),
+      report: (reportedTargetUserId, reportedSource, hitId) =>
+        this.pvpMatchClient?.reportHit(reportedTargetUserId, reportedSource, hitId) ?? false,
+    });
   }
 
   private maybeApplyRemotePvpActionHit(): void {
@@ -5175,45 +5151,25 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    const playerRect = new Phaser.Geom.Rectangle(
-      this.playerBody.left,
-      this.playerBody.top,
-      this.playerBody.width,
-      this.playerBody.height,
-    );
-    Phaser.Geom.Rectangle.Inflate(playerRect, 4, 4);
+    const playerRect = inflatePvpCombatRect(createPvpPlayerBodyRect(this.playerBody), 4, 4);
 
     const instanceAction = this.pvpInstanceRenderer.getRemoteActionState();
     const instanceDamageRect = this.pvpInstanceRenderer.getRemoteActionDamageRect();
     if (
       instanceAction &&
       instanceDamageRect &&
-      Phaser.Geom.Intersects.RectangleToRectangle(playerRect, instanceDamageRect)
+      pvpCombatRectsIntersect(playerRect, instanceDamageRect)
     ) {
-      const hitId = [
-        'received-instance',
-        instanceAction.action,
-        match.matchId,
-        instanceAction.attackerUserId,
-        identity.userId,
-        Math.round(instanceAction.actionUntil / 50),
-      ].join(':');
-      if (this.pvpLastReceivedActionHitIds.has(hitId)) {
-        return;
-      }
-
-      if (this.pvpLastReceivedActionHitIds.size > 80) {
-        this.pvpLastReceivedActionHitIds.clear();
-      }
-      this.pvpLastReceivedActionHitIds.add(hitId);
-      const reported = this.pvpMatchClient?.reportReceivedHit(
-        instanceAction.attackerUserId,
-        instanceAction.action,
-        hitId,
-      ) ?? false;
-      if (!reported) {
-        this.pvpLastReceivedActionHitIds.delete(hitId);
-      }
+      this.pvpCombatCoordinator.reportReceivedActionHit({
+        channel: 'instance',
+        action: instanceAction.action,
+        matchId: match.matchId,
+        attackerUserId: instanceAction.attackerUserId,
+        localUserId: identity.userId,
+        actionUntil: instanceAction.actionUntil,
+        report: (attackerUserId, source, hitId) =>
+          this.pvpMatchClient?.reportReceivedHit(attackerUserId, source, hitId) ?? false,
+      });
       return;
     }
 
@@ -5230,58 +5186,29 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     const damageRect = this.getPvpRemoteActionDamageRect(target, action);
-    if (!Phaser.Geom.Intersects.RectangleToRectangle(playerRect, damageRect)) {
+    if (!pvpCombatRectsIntersect(playerRect, damageRect)) {
       return;
     }
 
-    const hitId = [
-      'received',
+    this.pvpCombatCoordinator.reportReceivedActionHit({
+      channel: 'presence',
       action,
-      match.matchId,
-      target.presence.userId,
-      identity.userId,
-      Math.round(actionUntil / 50),
-    ].join(':');
-    if (this.pvpLastReceivedActionHitIds.has(hitId)) {
-      return;
-    }
-
-    if (this.pvpLastReceivedActionHitIds.size > 80) {
-      this.pvpLastReceivedActionHitIds.clear();
-    }
-    this.pvpLastReceivedActionHitIds.add(hitId);
-    const reported = this.pvpMatchClient?.reportReceivedHit(target.presence.userId, action, hitId) ?? false;
-    if (!reported) {
-      this.pvpLastReceivedActionHitIds.delete(hitId);
-    }
+      matchId: match.matchId,
+      attackerUserId: target.presence.userId,
+      localUserId: identity.userId,
+      actionUntil,
+      report: (attackerUserId, source, hitId) =>
+        this.pvpMatchClient?.reportReceivedHit(attackerUserId, source, hitId) ?? false,
+    });
   }
 
   private getPvpRemoteActionDamageRect(
     renderedGhost: RenderedGhost,
     action: Exclude<PvpHitSource, 'environment' | 'stomp'>,
-  ): Phaser.Geom.Rectangle {
+  ): PvpCombatRect {
     const ghostRect = this.getPvpGhostRect(renderedGhost);
     const facing = renderedGhost.presence.facing < 0 ? -1 : 1;
-    if (action === 'gun') {
-      const width = 88;
-      const rect = new Phaser.Geom.Rectangle(
-        facing > 0 ? ghostRect.centerX : ghostRect.centerX - width,
-        ghostRect.centerY - 12,
-        width,
-        24,
-      );
-      Phaser.Geom.Rectangle.Inflate(rect, 8, 4);
-      return rect;
-    }
-
-    const rect = new Phaser.Geom.Rectangle(
-      ghostRect.centerX + facing * 8 - 14,
-      ghostRect.top + 2,
-      28,
-      ghostRect.height + 10,
-    );
-    Phaser.Geom.Rectangle.Inflate(rect, 14, 8);
-    return rect;
+    return createPvpRemoteActionDamageRect({ bodyRect: ghostRect, facing, action });
   }
 
   private resolvePvpPeerCollision(): void {
@@ -5289,59 +5216,30 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    const playerRect = new Phaser.Geom.Rectangle(
-      this.playerBody.left,
-      this.playerBody.top,
-      this.playerBody.width,
-      this.playerBody.height,
-    );
+    const playerRect = createPvpPlayerBodyRect(this.playerBody);
     const target = this.findPvpOpponentGhost();
     const targetRect = this.pvpInstanceRenderer.getOpponentBodyRect() ?? (target ? this.getPvpGhostRect(target) : null);
     if (!targetRect) {
       return;
     }
-    if (!Phaser.Geom.Intersects.RectangleToRectangle(playerRect, targetRect)) {
+    const resolution = resolvePvpPeerCollisionGeometry({
+      playerRect,
+      targetRect,
+      velocity: { x: this.playerBody.velocity.x, y: this.playerBody.velocity.y },
+    });
+    if (!resolution) {
       return;
     }
 
-    const leftOverlap = playerRect.right - targetRect.left;
-    const rightOverlap = targetRect.right - playerRect.left;
-    const topOverlap = playerRect.bottom - targetRect.top;
-    const bottomOverlap = targetRect.bottom - playerRect.top;
-    const overlapX = Math.min(leftOverlap, rightOverlap);
-    const overlapY = Math.min(topOverlap, bottomOverlap);
-    if (overlapX <= 0 || overlapY <= 0) {
-      return;
-    }
-
-    const fallingOntoOpponent =
-      this.playerBody.velocity.y >= 0 &&
-      playerRect.centerY < targetRect.centerY &&
-      topOverlap <= 12 &&
-      topOverlap <= overlapX + 2;
-
-    let offsetX = 0;
-    let offsetY = 0;
-    let nextVelocityX = this.playerBody.velocity.x;
-    let nextVelocityY = this.playerBody.velocity.y;
-    if (fallingOntoOpponent) {
-      offsetY = -topOverlap - 0.5;
-      nextVelocityY = Math.min(0, nextVelocityY);
-    } else {
-      offsetX = playerRect.centerX < targetRect.centerX
-        ? -overlapX - 0.5
-        : overlapX + 0.5;
-      if ((offsetX < 0 && nextVelocityX > 0) || (offsetX > 0 && nextVelocityX < 0)) {
-        nextVelocityX = 0;
-      }
-    }
-
-    this.playerBody.reset(this.playerBody.center.x + offsetX, this.playerBody.center.y + offsetY);
-    this.playerBody.setVelocity(nextVelocityX, nextVelocityY);
+    this.playerBody.reset(
+      this.playerBody.center.x + resolution.offsetX,
+      this.playerBody.center.y + resolution.offsetY,
+    );
+    this.playerBody.setVelocity(resolution.velocityX, resolution.velocityY);
     this.playerPresentationController.syncPlayerPickupSensor();
   }
 
-  private findPvpTargetInRect(attackRect: Phaser.Geom.Rectangle): RenderedGhost | null {
+  private findPvpTargetInRect(attackRect: PvpCombatRect): RenderedGhost | null {
     if (!this.isPvpDamageActive()) {
       return null;
     }
@@ -5352,7 +5250,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     const targetRect = this.getPvpGhostHitRect(renderedGhost);
-    return Phaser.Geom.Intersects.RectangleToRectangle(attackRect, targetRect)
+    return pvpCombatRectsIntersect(attackRect, targetRect)
       ? renderedGhost
       : null;
   }
@@ -5377,21 +5275,19 @@ export class OverworldPlayScene extends Phaser.Scene {
 
   private getPvpGhostRect(renderedGhost: {
     sprite: Phaser.GameObjects.Sprite;
-  }): Phaser.Geom.Rectangle {
-    return new Phaser.Geom.Rectangle(
-      renderedGhost.sprite.x - this.PLAYER_WIDTH * 0.5,
-      renderedGhost.sprite.y - this.PLAYER_HEIGHT,
-      this.PLAYER_WIDTH,
-      this.PLAYER_HEIGHT,
-    );
+  }): PvpCombatRect {
+    return createPvpGhostBodyRect({
+      x: renderedGhost.sprite.x,
+      feetY: renderedGhost.sprite.y,
+      playerWidth: this.PLAYER_WIDTH,
+      playerHeight: this.PLAYER_HEIGHT,
+    });
   }
 
   private getPvpGhostHitRect(renderedGhost: {
     sprite: Phaser.GameObjects.Sprite;
-  }): Phaser.Geom.Rectangle {
-    const rect = this.getPvpGhostRect(renderedGhost);
-    Phaser.Geom.Rectangle.Inflate(rect, 12, 8);
-    return rect;
+  }): PvpCombatRect {
+    return createPvpGhostHitRect(this.getPvpGhostRect(renderedGhost));
   }
 
   private serializePvpOpponentGhost(renderedGhost = this.findPvpOpponentGhost()): Record<string, unknown> | null {
@@ -5565,38 +5461,21 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private publishPvpCombatAction(event: CombatPresentationEvent): void {
-    if (!this.isPvpDamageActive()) {
-      return;
-    }
-
     const match = this.activePvpMatch;
     if (!match || !this.player || !this.playerBody) {
       return;
     }
 
-    this.localPvpAction = event.source;
-    this.localPvpActionUntilEpoch = event.startedAt + Math.max(180, event.durationMs);
-    this.pvpMatchClient?.sendCombatEvent({
-      id: event.id,
+    const published = this.pvpCombatCoordinator.publishLocalAction({
+      damageActive: this.isPvpDamageActive(),
       matchId: match.matchId,
-      source: event.source,
-      x: event.x,
-      y: event.y + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
-      facing: event.facing,
-      startedAt: event.startedAt,
-      durationMs: event.durationMs,
-      effectX: event.effectX,
-      effectY: event.effectY,
-      downward: event.downward,
-      projectile: event.projectile
-        ? {
-            x: event.projectile.x,
-            y: event.projectile.y,
-            velocityX: event.projectile.velocityX,
-            lifetimeMs: event.projectile.lifetimeMs,
-          }
-        : null,
+      event,
+      visualFeetOffset: DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+      send: (combatEvent) => this.pvpMatchClient?.sendCombatEvent(combatEvent) ?? false,
     });
+    if (!published) {
+      return;
+    }
     this.syncPvpInstanceState(true);
     this.syncLocalPresence(true);
   }
@@ -5607,105 +5486,20 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.maybeApplyPvpStartingPosition(snapshot);
     }
     const identity = this.presenceController.getIdentity();
-    if (
-      !snapshot ||
-      snapshot.status === 'complete' ||
-      !identity ||
-      !this.player ||
-      !this.playerBody
-    ) {
-      this.destroyPvpLocalHeartLabel();
-      return;
-    }
-
-    const local = snapshot.participants.find((participant) => participant.userId === identity.userId);
-    if (!local) {
-      this.destroyPvpLocalHeartLabel();
-      return;
-    }
-
-    if (!this.pvpLocalHeartDisplay) {
-      this.pvpLocalHeartDisplay = new PvpHeartDisplay(this, 30);
-      this.syncBackdropCameraIgnores();
-    }
-
-    this.pvpLocalHeartDisplay.setHearts(local.hearts);
-    this.pvpLocalHeartDisplay.setPosition(
-      this.playerBody.center.x,
-      this.getLocalPvpHeartY(),
-    );
-    this.pvpLocalHeartDisplay.setVisible(true);
-    this.syncPvpLocalInvulnerability(local.invulnerableUntil);
+    this.pvpLocalPresentationController.sync({
+      snapshot,
+      localUserId: identity?.userId ?? null,
+      playerPresent: Boolean(this.player),
+      playerBody: this.playerBody,
+    });
   }
 
   private destroyPvpLocalHeartLabel(): void {
-    if (!this.pvpLocalHeartDisplay) {
-      return;
-    }
-
-    this.pvpLocalHeartDisplay.destroy();
-    this.pvpLocalHeartDisplay = null;
-    this.destroyPvpLocalInvulnerabilityFx();
-    this.syncBackdropCameraIgnores();
+    this.pvpLocalPresentationController.destroy();
   }
 
   private playPvpLocalDamageFeedback(previousHearts: number, nextHearts: number): void {
-    const lostHearts = Math.max(1, previousHearts - nextHearts);
-    playSfx('player-hurt', { ignoreCooldown: true });
-    showPvpDamageFlashOverlay();
-    this.cameras.main.flash(150, 255, 32, 42, false);
-    this.cameras.main.shake(110, 0.0045 + lostHearts * 0.0015);
-    if (this.playerSprite) {
-      this.playerSprite.setTintFill(0xff4f5f);
-      this.time.delayedCall(90, () => {
-        this.playerSprite?.clearTint();
-      });
-    }
-  }
-
-  private getLocalPvpHeartY(): number {
-    const visualTop = this.playerSprite
-      ? this.playerSprite.y - this.playerSprite.displayHeight
-      : this.playerBody?.top ?? 0;
-    const bodyTop = this.playerBody?.top ?? visualTop;
-    return Math.min(visualTop, bodyTop) - PVP_HEART_HEAD_CLEARANCE_PX;
-  }
-
-  private syncPvpLocalInvulnerability(invulnerableUntil: number): void {
-    if (!this.playerBody || !this.playerSprite) {
-      this.destroyPvpLocalInvulnerabilityFx();
-      return;
-    }
-
-    if (!this.pvpLocalInvulnerabilityFx) {
-      this.pvpLocalInvulnerabilityFx = this.add.graphics();
-      this.pvpLocalInvulnerabilityFx.setDepth(PVP_INVULNERABILITY_FX_DEPTH);
-      this.pvpLocalInvulnerabilityFx.setVisible(false);
-      this.syncBackdropCameraIgnores();
-    }
-
-    syncPvpInvulnerabilityFx({
-      graphics: this.pvpLocalInvulnerabilityFx,
-      centerX: this.playerBody.center.x,
-      bottomY: this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
-      width: Math.max(18, this.PLAYER_WIDTH + 8),
-      height: Math.max(30, this.PLAYER_STANDING_HEIGHT + 8),
-      invulnerableUntil,
-    });
-    syncPvpInvulnerabilitySpriteStyle(this.playerSprite, invulnerableUntil);
-  }
-
-  private destroyPvpLocalInvulnerabilityFx(): void {
-    if (this.playerSprite) {
-      this.playerSprite.setAlpha(1);
-      this.playerSprite.clearTint();
-    }
-    if (!this.pvpLocalInvulnerabilityFx) {
-      return;
-    }
-
-    this.pvpLocalInvulnerabilityFx.destroy();
-    this.pvpLocalInvulnerabilityFx = null;
+    this.pvpLocalPresentationController.playDamageFeedback(previousHearts, nextHearts);
   }
 
   private resolvePvpEnvironmentSource(reason: string): PvpHitSource {
@@ -5723,15 +5517,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private clearPvpSceneRuntime(): void {
-    this.lastPvpSelfDeathHitId = null;
-    this.lastPvpStompAt = 0;
+    this.pvpCombatCoordinator.reset();
     this.pvpSpawnAppliedMatchId = null;
-    this.pvpLastHitSentAtByKey.clear();
-    this.pvpLastReceivedActionHitIds.clear();
-    this.localPvpAction = null;
-    this.localPvpActionUntilEpoch = 0;
-    this.lastPvpInstanceStateSentAt = 0;
-    this.pvpInstanceStateSequence = 0;
     this.activeMultiplayerGoalPolicy = null;
     this.multiplayerRemovedObjectKeys.clear();
     this.multiplayerRoomStateEventIds.clear();
