@@ -17,9 +17,7 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   editorState,
-  getPlacedObjectLayer,
   getObjectById,
-  getObjectDefaultFrame,
   getObjectDisplayOffset,
   getObjectDisplayScale,
   getObjectPlacementPointForTile,
@@ -46,7 +44,6 @@ import {
   type SwordsmanObjectiveMode,
 } from '../../enemies/swordsmanObjectives';
 import {
-  ensureCustomSpriteTexture,
   getCustomSpriteDefinitionByObjectId,
   getCustomSpriteDefinitionsForPlacedObjects,
 } from '../../customSprites/registry';
@@ -84,7 +81,6 @@ import {
   type RoomGoal,
   type RoomGoalType,
 } from '../../goals/roomGoals';
-import { createGoalMarkerFlagSprite } from '../../goals/markerFlags';
 import {
   cloneRoomLightingSettings,
   type RoomLightingSettings,
@@ -126,7 +122,6 @@ import {
   removePlacedObjectFromDocument,
 } from './placedObjectDocument';
 import {
-  buildRoomGoalMarkerDescriptors,
   clearRoomGoalMarkers,
   getRoomGoalSummaryText,
   placeRoomGoalMarker,
@@ -138,6 +133,7 @@ import {
   withRoomGoalTimeLimitSeconds,
   type GoalPlacementMode,
 } from './goalDocument';
+import { EditorDocumentPresentationController } from './documentPresentationController';
 
 interface TileAction {
   layer: LayerName;
@@ -212,10 +208,7 @@ interface EditorEditRuntimeHost {
 }
 
 export class EditorEditRuntime {
-  private objectSprites: Phaser.GameObjects.Sprite[] = [];
-  private spawnMarkerSprite: Phaser.GameObjects.Sprite | null = null;
-  private goalMarkerSprites: Phaser.GameObjects.Sprite[] = [];
-  private goalMarkerLabels: Phaser.GameObjects.Text[] = [];
+  private readonly documentPresentation: EditorDocumentPresentationController;
   private roomGoal: RoomGoal | null = null;
   private roomGoalIntroText: string | null = null;
   private roomSpawnPoint: RoomSpawnPoint | null = null;
@@ -231,22 +224,27 @@ export class EditorEditRuntime {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly host: EditorEditRuntimeHost,
-  ) {}
+  ) {
+    this.documentPresentation = new EditorDocumentPresentationController(
+      scene,
+      () => this.host.syncBackgroundCameraIgnores(),
+    );
+  }
 
   get placedObjectSprites(): Phaser.GameObjects.Sprite[] {
-    return this.objectSprites;
+    return this.documentPresentation.placedObjectSprites;
   }
 
   get currentSpawnMarkerSprite(): Phaser.GameObjects.Sprite | null {
-    return this.spawnMarkerSprite;
+    return this.documentPresentation.currentSpawnMarkerSprite;
   }
 
   get currentGoalMarkerSprites(): Phaser.GameObjects.Sprite[] {
-    return this.goalMarkerSprites;
+    return this.documentPresentation.currentGoalMarkerSprites;
   }
 
   get currentGoalMarkerLabels(): Phaser.GameObjects.Text[] {
-    return this.goalMarkerLabels;
+    return this.documentPresentation.currentGoalMarkerLabels;
   }
 
   get currentRoomGoal(): RoomGoal | null {
@@ -339,23 +337,7 @@ export class EditorEditRuntime {
   }
 
   reset(): void {
-    for (const sprite of this.objectSprites) {
-      sprite.destroy();
-    }
-    this.objectSprites = [];
-
-    for (const sprite of this.goalMarkerSprites) {
-      sprite.destroy();
-    }
-    this.goalMarkerSprites = [];
-
-    for (const label of this.goalMarkerLabels) {
-      label.destroy();
-    }
-    this.goalMarkerLabels = [];
-
-    this.spawnMarkerSprite?.destroy();
-    this.spawnMarkerSprite = null;
+    this.documentPresentation.reset();
 
     this.roomGoal = null;
     this.roomGoalIntroText = null;
@@ -1085,66 +1067,12 @@ export class EditorEditRuntime {
   }
 
   rebuildObjectSprites(): void {
-    for (const sprite of this.objectSprites) {
-      sprite.destroy();
-    }
-    this.objectSprites = [];
-
-    for (const placed of this.host.getPlacedObjects()) {
-      const objectConfig = getEditorObjectConfigById(placed.id);
-      if (!objectConfig) {
-        continue;
-      }
-
-      const worldPoint = this.toWorldPoint(placed.x, placed.y);
-      ensureCustomSpriteTexture(this.scene, objectConfig);
-      const displayOffset = getObjectDisplayOffset(objectConfig);
-      const sprite = this.scene.add.sprite(
-        worldPoint.x + displayOffset.x,
-        worldPoint.y + displayOffset.y,
-        objectConfig.id,
-        0,
-      );
-      sprite.setDepth(this.getPlacedObjectEditorDepth(placed));
-      sprite.setOrigin(0.5, 0.5);
-      sprite.setScale(getObjectDisplayScale(objectConfig));
-      if (objectConfig.frameCount > 1 && objectConfig.fps > 0) {
-        const animKey = `${objectConfig.id}_anim`;
-        if (this.scene.anims.exists(animKey)) {
-          sprite.play(animKey);
-        }
-      } else {
-        sprite.setFrame(getObjectDefaultFrame(objectConfig));
-      }
-      if (placed.id === 'door_metal') {
-        sprite.setTint(0xb8c4d8);
-      }
-      if (placed.id === 'trapdoor_metal') {
-        sprite.setTint(0xb8c4d8);
-      }
-      if (placed.id === 'blast_door') {
-        sprite.setTint(0xb8c4d8);
-      }
-      this.applyPlacedObjectFacing(sprite, objectConfig, placed);
-      this.objectSprites.push(sprite);
-    }
-
-    this.spawnMarkerSprite?.destroy();
-    this.spawnMarkerSprite = null;
-    if (this.roomSpawnPoint) {
-      const worldPoint = this.toWorldPoint(this.roomSpawnPoint.x, this.roomSpawnPoint.y);
-      this.spawnMarkerSprite = this.scene.add.sprite(
-        worldPoint.x,
-        worldPoint.y,
-        'spawn_point',
-        0,
-      );
-      this.spawnMarkerSprite.setOrigin(0.5, 1);
-      this.spawnMarkerSprite.setDepth(26);
-      this.spawnMarkerSprite.setAlpha(0.92);
-    }
-
-    this.redrawGoalMarkers();
+    this.documentPresentation.rebuild({
+      origin: this.getRoomOrigin(),
+      placedObjects: this.host.getPlacedObjects(),
+      spawnPoint: this.roomSpawnPoint,
+      goal: this.roomGoal,
+    });
     this.host.updateGoalUi();
     this.host.syncBackgroundCameraIgnores();
   }
@@ -1724,31 +1652,6 @@ export class EditorEditRuntime {
     return getObjectById(placed.containedObjectId)?.name ?? null;
   }
 
-  private applyPlacedObjectFacing(
-    sprite: Phaser.GameObjects.Sprite,
-    objectConfig: ReturnType<typeof getObjectById>,
-    placed: PlacedObject
-  ): void {
-    if (!objectConfig?.facingDirection || !placed.facing) {
-      sprite.setFlipX(false);
-      return;
-    }
-
-    sprite.setFlipX(objectConfig.facingDirection !== placed.facing);
-  }
-
-  private getPlacedObjectEditorDepth(placed: PlacedObject): number {
-    switch (getPlacedObjectLayer(placed)) {
-      case 'background':
-        return 5;
-      case 'foreground':
-        return 60;
-      case 'terrain':
-      default:
-        return 25;
-    }
-  }
-
   setGoalType(nextType: RoomGoalType | null): void {
     if (!this.guardEditable()) {
       return;
@@ -2227,53 +2130,6 @@ export class EditorEditRuntime {
     });
     this.rebuildObjectSprites();
     this.markRoomDirty();
-  }
-
-  private redrawGoalMarkers(): void {
-    for (const sprite of this.goalMarkerSprites) {
-      sprite.destroy();
-    }
-    this.goalMarkerSprites = [];
-    for (const label of this.goalMarkerLabels) {
-      label.destroy();
-    }
-    this.goalMarkerLabels = [];
-
-    if (!this.roomGoal) {
-      this.host.syncBackgroundCameraIgnores();
-      return;
-    }
-
-    const markers = buildRoomGoalMarkerDescriptors(this.roomGoal);
-    for (const marker of markers) {
-      const sprite = createGoalMarkerFlagSprite(
-        this.scene,
-        marker.variant,
-        this.getRoomOrigin().x + marker.point.x,
-        this.getRoomOrigin().y + marker.point.y + 2,
-        97,
-      );
-      this.goalMarkerSprites.push(sprite);
-
-      if (marker.label) {
-        const label = this.scene.add.text(
-          this.getRoomOrigin().x + marker.point.x,
-          this.getRoomOrigin().y + marker.point.y - 28,
-          marker.label,
-          {
-          fontFamily: 'Courier New',
-          fontSize: '12px',
-          color: marker.textColor,
-          stroke: '#050505',
-          strokeThickness: 4,
-        });
-        label.setOrigin(0.5, 1);
-        label.setDepth(98);
-        this.goalMarkerLabels.push(label);
-      }
-    }
-
-    this.host.syncBackgroundCameraIgnores();
   }
 
   private updateRoomGoal(nextGoal: RoomGoal | null, trackUndo: boolean = true): void {
