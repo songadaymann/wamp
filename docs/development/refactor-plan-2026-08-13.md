@@ -121,12 +121,12 @@ never rewritten. No production deployment or production-data mutation is part of
 | T00 | Quicksand state controller | Accepted: manual `PASS` at `000741f`; frozen on port 4600 |
 | T01 | Room-music playback selection and synchronization controller | Accepted: manual `PASS` at `8909001`; frozen on port 4601 |
 | T02 | Executable-entry guard and dormant course-composer cleanup | Accepted: manual `PASS` at repair commit `7a5336c`; frozen on port 4602 |
-| T03 | Live-object model types and spatial index | Candidate: implementation at `443cbcd`; full gate and police browser smoke passed; manual QA pending on port 4603 |
-| T04 | Live-object lifecycle and interaction coordinators | Pending |
-| T05 | Movement-state ownership | Pending |
-| T06 | Movement and swordsman state-machine decomposition | Pending |
-| T07 | Backdrop and camera ownership | Pending |
-| T08 | Room-comments data, composer, and presentation owners | Pending |
+| T03 | Live-object model types and spatial index | Candidate: frozen at `3d93c4e`; full gate and police browser smoke passed; manual QA pending on port 4603 |
+| T04 | Live-object lifecycle and interaction coordinators | Candidate: frozen at `1244099`; manual QA pending on port 4604 |
+| T05 | Movement-state ownership | Candidate: frozen at `9f8f752`; manual QA pending on port 4605 |
+| T06 | Movement and swordsman state-machine decomposition | Candidate: frozen at `d730e31`; manual QA pending on port 4606 |
+| T07 | Backdrop and camera ownership | Candidate: frozen at `a811551`; manual QA pending on port 4607 |
+| T08 | Room-comments data, composer, and presentation owners | Candidate source at `10c88d5`; full 168-file / 1,193-test gate, DOM contract, focused 16-test suite, and safety Canvas comment-pin smoke passed; manual QA pending on port 4608 |
 | T09 | Editor document, history, and presentation core | Pending |
 | T10 | World-streaming model, selection policy, and readiness | Pending |
 | T11 | World-streaming preparation and teardown lifecycles | Pending |
