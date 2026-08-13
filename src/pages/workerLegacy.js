@@ -1,8 +1,5 @@
 // Rendering implementation retained separately while the typed Pages entry and route shell evolve.
 import decodeJpegBytes from 'jpeg-js/lib/decoder.js';
-import { parseProfileSharePath } from '../profiles/username.ts';
-import { parsePlaylistSharePath } from '../playlists/model.ts';
-import { parseWampOGramSharePath } from '../wampOGram/links.ts';
 import {
   BACKGROUND_GROUPS,
   GAME_OBJECTS,
@@ -21,22 +18,14 @@ import {
 import {
   ROOM_SHARE_IMAGE_HEIGHT,
   ROOM_SHARE_IMAGE_WIDTH,
-  loadPlaylistMetadata,
-  loadProfileMetadata,
   loadPublishedRoomSnapshot,
-  loadRoomMetadata,
-  loadWampOGramMetadata,
   resolveApiBaseUrl,
 } from './shareMetadata.ts';
 import {
-  renderPlaylistAppShell,
-  renderProfileAppShell,
-  renderRoomAppShell,
-  renderWampOGramAppShell,
-} from './shareAppShell.ts';
+  handleSharePageRequest,
+  parseRoomImageCoordinates,
+} from './shareRoutes.ts';
 
-const ROOM_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/?$/;
-const ROOM_IMAGE_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/image(?:\.png)?\/?$/;
 const ROOM_IMAGE_TIMEOUT_MS = 3500;
 const CUSTOM_BACKGROUND_PREFIX = 'custom:';
 const CUSTOM_SPRITE_OBJECT_PREFIX = 'custom_sprite:';
@@ -57,101 +46,15 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    const imageCoordinates = parseRoomPath(url.pathname, ROOM_IMAGE_PATH_PATTERN);
+    const imageCoordinates = parseRoomImageCoordinates(url.pathname);
     if (imageCoordinates) {
       return renderRoomImageResponse(request, env, url, imageCoordinates);
     }
 
-    const coordinates = parseRoomPath(url.pathname) || parseRoomQuery(url);
-    if (coordinates) {
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
-        return new Response('Method Not Allowed', {
-          status: 405,
-          headers: { Allow: 'GET, HEAD' },
-        });
-      }
-
-      const metadata = await loadRoomMetadata(request, env, url, coordinates);
-      return renderRoomAppShell(request, env, metadata);
-    }
-
-    const playlistSlug = parsePlaylistSharePath(url.pathname);
-    if (playlistSlug) {
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
-        return new Response('Method Not Allowed', {
-          status: 405,
-          headers: { Allow: 'GET, HEAD' },
-        });
-      }
-
-      const metadata = await loadPlaylistMetadata(request, env, url, playlistSlug);
-      return renderPlaylistAppShell(request, env, metadata);
-    }
-
-    const wampOGramSlug = parseWampOGramSharePath(url.pathname);
-    if (wampOGramSlug) {
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
-        return new Response('Method Not Allowed', {
-          status: 405,
-          headers: { Allow: 'GET, HEAD' },
-        });
-      }
-
-      const metadata = await loadWampOGramMetadata(request, env, url, wampOGramSlug);
-      return renderWampOGramAppShell(request, env, metadata);
-    }
-
-    const profileUsername = parseProfileSharePath(url.pathname);
-    if (!profileUsername) {
-      return env.ASSETS.fetch(request);
-    }
-
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return new Response('Method Not Allowed', {
-        status: 405,
-        headers: { Allow: 'GET, HEAD' },
-      });
-    }
-
-    const metadata = await loadProfileMetadata(request, env, url, profileUsername);
-    return renderProfileAppShell(request, env, metadata);
+    const sharePageResponse = await handleSharePageRequest(request, env, url);
+    return sharePageResponse ?? env.ASSETS.fetch(request);
   },
 };
-
-function parseRoomPath(pathname, pattern = ROOM_PATH_PATTERN) {
-  const match = pattern.exec(pathname);
-  if (!match) {
-    return null;
-  }
-
-  return {
-    x: Number.parseInt(match[1], 10),
-    y: Number.parseInt(match[2], 10),
-  };
-}
-
-function parseRoomQuery(url) {
-  if (url.pathname !== '/' && url.pathname !== '/index.html') {
-    return null;
-  }
-
-  const x = parseStrictInteger(url.searchParams.get('x'));
-  const y = parseStrictInteger(url.searchParams.get('y'));
-  if (x === null || y === null) {
-    return null;
-  }
-
-  return { x, y };
-}
-
-function parseStrictInteger(value) {
-  if (typeof value !== 'string' || !/^-?\d+$/.test(value)) {
-    return null;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
 
 async function renderRoomImageResponse(request, env, url, coordinates) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
