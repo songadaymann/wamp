@@ -81,15 +81,10 @@ import {
   getRoomGoalPublishValidationError,
   goalSupportsTimeLimit,
   normalizeRoomGoalIntroText,
-  type CheckpointSprintGoal,
-  type GoalMarkerPoint,
   type RoomGoal,
   type RoomGoalType,
 } from '../../goals/roomGoals';
-import {
-  createGoalMarkerFlagSprite,
-  type GoalMarkerFlagVariant,
-} from '../../goals/markerFlags';
+import { createGoalMarkerFlagSprite } from '../../goals/markerFlags';
 import {
   cloneRoomLightingSettings,
   type RoomLightingSettings,
@@ -130,6 +125,19 @@ import {
   clonePlacedObjectDocument,
   removePlacedObjectFromDocument,
 } from './placedObjectDocument';
+import {
+  buildRoomGoalMarkerDescriptors,
+  clearRoomGoalMarkers,
+  getRoomGoalSummaryText,
+  placeRoomGoalMarker,
+  removeRoomGoalMarkerAt,
+  roomGoalUsesMarkers,
+  withNpcQuestType,
+  withRoomGoalRequiredCount,
+  withRoomGoalSurvivalSeconds,
+  withRoomGoalTimeLimitSeconds,
+  type GoalPlacementMode,
+} from './goalDocument';
 
 interface TileAction {
   layer: LayerName;
@@ -166,8 +174,6 @@ type UndoAction =
   | { kind: 'goal'; action: GoalAction }
   | { kind: 'music'; action: MusicAction };
 
-export type GoalPlacementMode = 'exit' | 'checkpoint' | 'finish' | 'npc' | 'npc_destination' | null;
-
 interface EditorRoomSnapshotMetadata {
   roomId: string;
   coordinates: RoomCoordinates;
@@ -179,6 +185,7 @@ interface EditorRoomSnapshotMetadata {
 }
 
 export type { EditorClipboardState } from './clipboard';
+export type { GoalPlacementMode } from './goalDocument';
 
 interface EditorEditRuntimeHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
@@ -1758,13 +1765,7 @@ export class EditorEditRuntime {
       return;
     }
 
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (!nextGoal || !goalSupportsTimeLimit(nextGoal.type) || nextGoal.type === 'survival') {
-      return;
-    }
-
-    nextGoal.timeLimitMs = seconds && seconds > 0 ? Math.round(seconds * 1000) : null;
-    this.updateRoomGoal(nextGoal);
+    this.updateRoomGoal(withRoomGoalTimeLimitSeconds(this.roomGoal, seconds));
   }
 
   setGoalRequiredCount(requiredCount: number): void {
@@ -1781,19 +1782,7 @@ export class EditorEditRuntime {
       return;
     }
 
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (
-      !nextGoal ||
-      (
-        nextGoal.type !== 'collect_target' &&
-        !(nextGoal.type === 'npc_quest' && nextGoal.questType === 'give')
-      )
-    ) {
-      return;
-    }
-
-    nextGoal.requiredCount = Math.max(1, Math.round(requiredCount));
-    this.updateRoomGoal(nextGoal);
+    this.updateRoomGoal(withRoomGoalRequiredCount(this.roomGoal, requiredCount));
   }
 
   setGoalSurvivalSeconds(seconds: number): void {
@@ -1810,32 +1799,15 @@ export class EditorEditRuntime {
       return;
     }
 
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (
-      !nextGoal ||
-      (
-        nextGoal.type !== 'survival' &&
-        !(nextGoal.type === 'npc_quest' && nextGoal.questType === 'protect')
-      )
-    ) {
-      return;
-    }
-
-    nextGoal.durationMs = Math.max(1, Math.round(seconds)) * 1000;
-    this.updateRoomGoal(nextGoal);
+    this.updateRoomGoal(withRoomGoalSurvivalSeconds(this.roomGoal, seconds));
   }
 
   setNpcQuestType(questType: 'protect' | 'escort' | 'give'): void {
     if (!this.guardEditable() || this.roomGoal?.type !== 'npc_quest') {
       return;
     }
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (!nextGoal || nextGoal.type !== 'npc_quest') {
-      return;
-    }
-    nextGoal.questType = questType;
     this.goalPlacementMode = null;
-    this.updateRoomGoal(nextGoal);
+    this.updateRoomGoal(withNpcQuestType(this.roomGoal, questType));
   }
 
   setGoalIntroText(nextText: string | null): void {
@@ -1860,7 +1832,7 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
-    if (!this.goalUsesMarkers(this.roomGoal)) {
+    if (!roomGoalUsesMarkers(this.roomGoal)) {
       this.goalPlacementMode = null;
       this.host.updateGoalUi();
       return;
@@ -1874,27 +1846,12 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
-    if (!this.goalUsesMarkers(this.roomGoal)) {
+    if (!roomGoalUsesMarkers(this.roomGoal)) {
       return;
-    }
-
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (!nextGoal) {
-      return;
-    }
-
-    if (nextGoal.type === 'reach_exit') {
-      nextGoal.exit = null;
-    } else if (nextGoal.type === 'checkpoint_sprint') {
-      nextGoal.checkpoints = [];
-      nextGoal.finish = null;
-    } else if (nextGoal.type === 'npc_quest') {
-      nextGoal.npcInstanceId = null;
-      nextGoal.destination = null;
     }
 
     this.goalPlacementMode = null;
-    this.updateRoomGoal(nextGoal);
+    this.updateRoomGoal(clearRoomGoalMarkers(this.roomGoal!));
   }
 
   getGoalEditorState(): {
@@ -1920,19 +1877,7 @@ export class EditorEditRuntime {
     }
 
     const point = createGoalMarkerPointFromTile(tileX, tileY);
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (!nextGoal) {
-      return;
-    }
-
-    if (nextGoal.type === 'reach_exit' && this.goalPlacementMode === 'exit') {
-      nextGoal.exit = point;
-      this.goalPlacementMode = null;
-      this.updateRoomGoal(nextGoal);
-      return;
-    }
-
-    if (nextGoal.type === 'npc_quest') {
+    if (this.roomGoal.type === 'npc_quest') {
       if (this.goalPlacementMode === 'npc') {
         const origin = this.getRoomOrigin();
         const worldX = origin.x + tileX * TILE_SIZE + TILE_SIZE / 2;
@@ -1944,170 +1889,67 @@ export class EditorEditRuntime {
             return config?.category === 'npc' && this.getPlacedObjectBounds(placed).contains(worldX, worldY);
           });
         if (linkedNpc) {
-          nextGoal.npcInstanceId = linkedNpc.instanceId;
-          this.goalPlacementMode = null;
-          this.updateRoomGoal(nextGoal);
+          const mutation = placeRoomGoalMarker(
+            this.roomGoal,
+            this.goalPlacementMode,
+            point,
+            linkedNpc.instanceId,
+          );
+          if (mutation) {
+            this.goalPlacementMode = mutation.placementComplete ? null : this.goalPlacementMode;
+            this.updateRoomGoal(mutation.goal);
+          }
         } else {
           this.host.updatePersistenceStatus('Click an NPC to link it to this goal.');
         }
         return;
       }
-      if (this.goalPlacementMode === 'npc_destination') {
-        nextGoal.destination = point;
-        this.goalPlacementMode = null;
-        this.updateRoomGoal(nextGoal);
-      }
-      return;
     }
 
-    if (nextGoal.type !== 'checkpoint_sprint') {
+    const mutation = placeRoomGoalMarker(this.roomGoal, this.goalPlacementMode, point);
+    if (!mutation) {
       return;
     }
-
-    if (this.goalPlacementMode === 'checkpoint') {
-      nextGoal.checkpoints = [...nextGoal.checkpoints, point];
-      this.updateRoomGoal(nextGoal);
-      return;
-    }
-
-    if (this.goalPlacementMode === 'finish') {
-      nextGoal.finish = point;
-      this.goalPlacementMode = null;
-      this.updateRoomGoal(nextGoal);
-    }
+    this.goalPlacementMode = mutation.placementComplete ? null : this.goalPlacementMode;
+    this.updateRoomGoal(mutation.goal);
   }
 
   removeGoalMarkerAt(worldX: number, worldY: number): boolean {
     if (!this.guardEditable()) {
       return false;
     }
-    if (!this.roomGoal) {
-      return false;
-    }
-
-    if (this.roomGoal.type === 'reach_exit' && this.roomGoal.exit) {
-      const distance = Math.hypot(this.roomGoal.exit.x - worldX, this.roomGoal.exit.y - worldY);
-      if (distance < 16) {
-        const nextGoal = cloneRoomGoal(this.roomGoal);
-        if (nextGoal && nextGoal.type === 'reach_exit') {
-          nextGoal.exit = null;
-          this.updateRoomGoal(nextGoal);
-          return true;
-        }
-      }
-    }
-
-    if (this.roomGoal.type === 'npc_quest' && this.roomGoal.destination) {
-      const distance = Math.hypot(
-        this.roomGoal.destination.x - worldX,
-        this.roomGoal.destination.y - worldY,
-      );
-      if (distance < 16) {
-        const nextGoal = cloneRoomGoal(this.roomGoal);
-        if (nextGoal && nextGoal.type === 'npc_quest') {
-          nextGoal.destination = null;
-          this.updateRoomGoal(nextGoal);
-          return true;
-        }
-      }
-    }
-
-    if (this.roomGoal.type !== 'checkpoint_sprint') {
-      return false;
-    }
-
-    const goal = this.roomGoal as CheckpointSprintGoal;
-    if (goal.finish) {
-      const finishDistance = Math.hypot(goal.finish.x - worldX, goal.finish.y - worldY);
-      if (finishDistance < 16) {
-        const nextGoal = cloneRoomGoal(goal);
-        if (nextGoal && nextGoal.type === 'checkpoint_sprint') {
-          nextGoal.finish = null;
-          this.updateRoomGoal(nextGoal);
-          return true;
-        }
-      }
-    }
-
-    let bestIndex = -1;
-    let bestDistance = 16;
-    for (let index = 0; index < goal.checkpoints.length; index += 1) {
-      const checkpoint = goal.checkpoints[index];
-      const distance = Math.hypot(checkpoint.x - worldX, checkpoint.y - worldY);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestIndex = index;
-      }
-    }
-
-    if (bestIndex >= 0) {
-      const nextGoal = cloneRoomGoal(goal);
-      if (nextGoal && nextGoal.type === 'checkpoint_sprint') {
-        nextGoal.checkpoints.splice(bestIndex, 1);
-        this.updateRoomGoal(nextGoal);
-        return true;
-      }
+    const nextGoal = this.roomGoal
+      ? removeRoomGoalMarkerAt(this.roomGoal, worldX, worldY)
+      : null;
+    if (nextGoal) {
+      this.updateRoomGoal(nextGoal);
+      return true;
     }
 
     return false;
   }
 
   goalUsesMarkers(goal: RoomGoal | null): boolean {
-    return (
-      goal?.type === 'reach_exit' ||
-      goal?.type === 'checkpoint_sprint' ||
-      goal?.type === 'npc_quest'
-    );
+    return roomGoalUsesMarkers(goal);
   }
 
   getGoalSummaryText(): string {
-    if (!this.roomGoal) {
-      return 'No room goal selected.';
-    }
-
-    switch (this.roomGoal.type) {
-      case 'reach_exit':
-        return this.roomGoal.exit
-          ? 'Reach the exit marker to clear the room.'
-          : 'Set an exit marker to finish the room.';
-      case 'collect_target': {
-        const available = this.countPlacedObjectsByCategory('collectible');
-        return `Collect ${this.roomGoal.requiredCount} item${this.roomGoal.requiredCount === 1 ? '' : 's'} (${available} placed).`;
-      }
-      case 'collect_race': {
-        const availableCollectibles = this.countPlacedObjectsByCategory('collectible');
-        const collectingHunters = this.countCollectModeSwordsmen();
-        return `Collect more items than the Sword Hunter (${availableCollectibles} collectibles, ${collectingHunters} collector${collectingHunters === 1 ? '' : 's'}).`;
-      }
-      case 'defeat_all': {
-        const available = this.countPlacedObjectsByCategory('enemy');
-        return `Defeat every enemy in the room (${available} placed).`;
-      }
-      case 'checkpoint_sprint':
-        return `Hit ${this.roomGoal.checkpoints.length} checkpoint${this.roomGoal.checkpoints.length === 1 ? '' : 's'} then reach the finish marker.`;
-      case 'survival':
-        return `Stay alive for ${Math.round(this.roomGoal.durationMs / 1000)} seconds.`;
-      case 'npc_quest': {
-        const goal = this.roomGoal;
-        const linkedNpc = goal.npcInstanceId
-          ? this.host.getPlacedObjects().find(
-              (placed) => placed.instanceId === goal.npcInstanceId,
-            )
-          : this.host.getPlacedObjects().find(
-              (placed) => getEditorObjectConfigById(placed.id)?.category === 'npc',
-            );
-        const npcLabel = linkedNpc
-          ? getPlacedNpcName(linkedNpc, getEditorObjectConfigById(linkedNpc.id)?.name ?? 'NPC') || 'unnamed NPC'
-          : 'no NPC';
-        if (goal.questType === 'protect') {
-          return `Protect ${npcLabel} for ${Math.round(goal.durationMs / 1000)} seconds.`;
-        }
-        if (goal.questType === 'escort') {
-          return `Escort ${npcLabel} to ${goal.destination ? 'the destination' : 'a destination you still need to place'}.`;
-        }
-        return `Collect ${goal.requiredCount} item${goal.requiredCount === 1 ? '' : 's'}, then return to ${npcLabel}.`;
-      }
-    }
+    const linkedNpcInstanceId = this.roomGoal?.type === 'npc_quest'
+      ? this.roomGoal.npcInstanceId
+      : null;
+    const linkedNpc = linkedNpcInstanceId
+      ? this.host.getPlacedObjects().find((placed) => placed.instanceId === linkedNpcInstanceId)
+      : this.host.getPlacedObjects().find(
+          (placed) => getEditorObjectConfigById(placed.id)?.category === 'npc',
+        );
+    return getRoomGoalSummaryText(this.roomGoal, {
+      collectiblesPlaced: this.countPlacedObjectsByCategory('collectible'),
+      enemiesPlaced: this.countPlacedObjectsByCategory('enemy'),
+      collectModeEnemyCount: this.countCollectModeSwordsmen(),
+      linkedNpcLabel: linkedNpc
+        ? getPlacedNpcName(linkedNpc, getEditorObjectConfigById(linkedNpc.id)?.name ?? 'NPC') || 'unnamed NPC'
+        : 'no NPC',
+    });
   }
 
   getPublishValidationError(): string | null {
@@ -2402,7 +2244,7 @@ export class EditorEditRuntime {
       return;
     }
 
-    const markers = this.getGoalMarkerDescriptors(this.roomGoal);
+    const markers = buildRoomGoalMarkerDescriptors(this.roomGoal);
     for (const marker of markers) {
       const sprite = createGoalMarkerFlagSprite(
         this.scene,
@@ -2434,53 +2276,6 @@ export class EditorEditRuntime {
     this.host.syncBackgroundCameraIgnores();
   }
 
-  private getGoalMarkerDescriptors(goal: RoomGoal): Array<{
-    point: GoalMarkerPoint;
-    label: string | null;
-    variant: GoalMarkerFlagVariant;
-    textColor: string;
-  }> {
-    switch (goal.type) {
-      case 'reach_exit':
-        return goal.exit
-          ? [{
-              point: goal.exit,
-              label: null,
-              variant: 'finish-pending' as GoalMarkerFlagVariant,
-              textColor: '#ffefef',
-            }]
-          : [];
-      case 'checkpoint_sprint':
-        return [
-          ...goal.checkpoints.map((checkpoint, index) => ({
-            point: checkpoint,
-            label: `${index + 1}`,
-            variant: 'checkpoint-pending' as GoalMarkerFlagVariant,
-            textColor: '#ffefef',
-          })),
-          ...(goal.finish
-            ? [{
-                point: goal.finish,
-                label: null,
-                variant: 'finish-pending' as GoalMarkerFlagVariant,
-                textColor: '#ffefef',
-              }]
-            : []),
-        ];
-      case 'npc_quest':
-        return goal.destination
-          ? [{
-              point: goal.destination,
-              label: 'NPC',
-              variant: 'finish-pending' as GoalMarkerFlagVariant,
-              textColor: '#ffefef',
-            }]
-          : [];
-      default:
-        return [];
-    }
-  }
-
   private updateRoomGoal(nextGoal: RoomGoal | null, trackUndo: boolean = true): void {
     const previous = cloneRoomGoal(this.roomGoal);
     const normalizedNext = cloneRoomGoal(nextGoal);
@@ -2494,7 +2289,7 @@ export class EditorEditRuntime {
     if (!this.roomGoal) {
       this.roomGoalIntroText = null;
     }
-    if (!this.goalUsesMarkers(this.roomGoal)) {
+    if (!roomGoalUsesMarkers(this.roomGoal)) {
       this.goalPlacementMode = null;
     }
 
