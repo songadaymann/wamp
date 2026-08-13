@@ -61,7 +61,6 @@ function createHarness() {
     syncGoalRunForRoom: vi.fn(),
     getRoomSnapshotForCoordinates: vi.fn(() => null),
     refreshLeaderboardForSelection: vi.fn(async () => undefined),
-    refreshCourseComposerSelectedRoomState: vi.fn(async () => undefined),
     setFocusedCoordinates: vi.fn(),
     getActiveRoomRushRun: vi.fn(() => null),
     recordRoomRushVisit: vi.fn(),

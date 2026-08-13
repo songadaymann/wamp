@@ -117,8 +117,8 @@ never rewritten. No production deployment or production-data mutation is part of
 | Tranche | Deliverable | Status |
 | --- | --- | --- |
 | T00 | Quicksand state controller | Accepted: manual `PASS` at `000741f`; frozen on port 4600 |
-| T01 | Room-music playback selection and synchronization controller | Automated gates passed; preparing frozen manual-QA build |
-| T02 | Executable-entry guard and dormant course-composer cleanup | Pending |
+| T01 | Room-music playback selection and synchronization controller | Accepted: manual `PASS` at `8909001`; frozen on port 4601 |
+| T02 | Executable-entry guard and dormant course-composer cleanup | Automated gates passed; preparing frozen manual-QA build |
 | T03 | Live-object model types and spatial index | Pending |
 | T04 | Live-object lifecycle and interaction coordinators | Pending |
 | T05 | Movement-state ownership | Pending |

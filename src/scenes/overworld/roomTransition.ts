@@ -29,7 +29,6 @@ interface OverworldRoomTransitionHost {
   syncGoalRunForRoom(room: RoomSnapshot | null, entryContext?: 'transition' | 'spawn' | 'respawn'): void;
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   refreshLeaderboardForSelection(): Promise<void>;
-  refreshCourseComposerSelectedRoomState(): Promise<void>;
   setFocusedCoordinates(coordinates: RoomCoordinates): void;
   getActiveRoomRushRun(): unknown | null;
   recordRoomRushVisit(room: RoomSnapshot | null): void;
@@ -230,7 +229,6 @@ export class OverworldRoomTransitionController {
       void this.host.refreshLeaderboardForSelection();
     }
 
-    void this.host.refreshCourseComposerSelectedRoomState();
     this.host.setFocusedCoordinates(nextRoomCoordinates);
 
     const windowCenterCoordinates = this.host.getWindowCenterCoordinates();

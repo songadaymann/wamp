@@ -98,8 +98,6 @@ interface OverworldWindowControllerHost {
   setEditorPlaytestReturnTarget(
     target: OverworldPlaySceneData['editorPlaytestReturnTarget'] | null
   ): void;
-  syncCourseComposerRecordFromSession(): void;
-  handleCourseEditorReturned(): void;
   activateDraftCoursePreview(
     snapshot: CourseSnapshot,
     draftRoom: RoomSnapshot | null
@@ -215,11 +213,6 @@ export class OverworldWindowController {
     }
     if (data?.editorPlaytestReturnTarget !== undefined) {
       this.host.setEditorPlaytestReturnTarget(data.editorPlaytestReturnTarget ?? null);
-    }
-
-    this.host.syncCourseComposerRecordFromSession();
-    if (data?.courseEditorReturned) {
-      this.host.handleCourseEditorReturned();
     }
 
     if (data?.mode) {

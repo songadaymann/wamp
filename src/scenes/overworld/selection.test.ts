@@ -57,7 +57,6 @@ function createHost(mode: 'browse' | 'play') {
     setSelectedCoordinates: vi.fn(),
     setCurrentRoomCoordinates: vi.fn(),
     updateSelectedSummary: vi.fn(),
-    refreshCourseComposerSelectedRoomState: vi.fn(async () => {}),
     refreshLeaderboardForSelection: vi.fn(async () => {}),
     redrawWorld: vi.fn(),
     renderHud: vi.fn(),

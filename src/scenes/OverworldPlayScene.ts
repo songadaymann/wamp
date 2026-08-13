@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
-import { createExpandedRoomEditorRepository } from '../expandedRooms/editorRepository';
 import { globalRoomMusicController } from '../music/controller';
 import { getCourseObjectLink } from '../courses/objectLinks';
 import {
@@ -96,7 +95,6 @@ import {
   type MobilePortraitCameraTuningAdjustment,
   type MobilePortraitCameraTuningInput,
   type MobilePortraitCameraTuningSnapshot,
-  type CourseComposerState,
 } from '../ui/setup/sceneBridge';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../auth/client';
 import { createRunRepository } from '../runs/runRepository';
@@ -214,9 +212,6 @@ import {
 import {
   OverworldRoomTransitionController,
 } from './overworld/roomTransition';
-import {
-  OverworldCourseComposerController,
-} from './overworld/courseComposer';
 import {
   OverworldWindowController,
 } from './overworld/windowController';
@@ -494,7 +489,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private transientStatusExpiresAt = 0;
   private readonly roomRepository = createRoomRepository();
   private readonly courseRepository = createCourseRepository();
-  private readonly expandedRoomEditorRepository = createExpandedRoomEditorRepository();
   private readonly profileRepository = createProfileRepository();
   private readonly publishedCourseSnapshotsById = new Map<string, CourseSnapshot>();
   private readonly publishedCourseSnapshotLoadsById = new Map<string, Promise<CourseSnapshot | null>>();
@@ -577,7 +571,6 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly combatController: OverworldCombatController;
   private readonly sessionResetController: OverworldSessionResetController;
   private readonly roomTransitionController: OverworldRoomTransitionController;
-  private readonly courseComposerController: OverworldCourseComposerController;
   private readonly windowController: OverworldWindowController;
   private readonly viewportController: OverworldViewportController;
   private readonly presenceOverlayController: OverworldPresenceOverlayController;
@@ -1181,53 +1174,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       globalRoomMusicController,
     );
-    this.courseComposerController = new OverworldCourseComposerController({
-      roomRepository: this.roomRepository,
-      expandedRoomEditorRepository: this.expandedRoomEditorRepository,
-      getMode: () => this.mode,
-      setMode: (mode) => {
-        this.mode = mode;
-      },
-      setCameraMode: (mode) => {
-        this.cameraMode = mode;
-      },
-      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-      setSelectedCoordinates: (coordinates) => {
-        this.selectedCoordinates = { ...coordinates };
-      },
-      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
-      setCurrentRoomCoordinates: (coordinates) => {
-        this.currentRoomCoordinates = { ...coordinates };
-      },
-      setShouldCenterCamera: (value) => {
-        this.shouldCenterCamera = value;
-      },
-      setShouldRespawnPlayer: (value) => {
-        this.shouldRespawnPlayer = value;
-      },
-      getBrowseInspectZoom: () => this.browseInspectZoom,
-      setInspectZoom: (zoom) => {
-        this.inspectZoom = zoom;
-      },
-      syncAppMode: () => this.syncAppMode(),
-      getRoomSnapshotForCoordinates: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
-      getSelectedSummaryCourseId: () =>
-        this.hudStateController.getSelectedSummary()?.course?.courseId ?? null,
-      getActiveCourseRun: () => this.activeCourseRun,
-      resetPlaySession: () => {
-        this.sessionResetController.resetPlaySession();
-      },
-      clearTouchGestureState: () => this.clearTouchGestureState(),
-      showTransientStatus: (message) => this.showTransientStatus(message),
-      updateSelectedSummary: () => this.updateSelectedSummary(),
-      redrawWorld: () => this.redrawWorld(),
-      renderHud: () => this.renderHud(),
-      emitStateChanged: () => this.emitCourseComposerStateChanged(),
-      refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
-      openEditor: (editorData) => this.flowController.openEditor(editorData),
-      startDraftCoursePlayback: (snapshot) =>
-        this.flowController.startCoursePlayback(snapshot, 'draftPreview'),
-    });
     this.windowController = new OverworldWindowController(this, {
       worldStreamingController: this.worldStreamingController,
       getMode: () => this.mode,
@@ -1276,12 +1222,6 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.editorPlaytestReturnTarget = target
           ? { roomCoordinates: { ...target.roomCoordinates } }
           : null;
-      },
-      syncCourseComposerRecordFromSession: () => {
-        this.courseComposerController.syncRecordFromSession();
-      },
-      handleCourseEditorReturned: () => {
-        this.courseComposerController.handleCourseEditorReturned();
       },
       activateDraftCoursePreview: (snapshot, draftRoom) =>
         this.coursePlaybackController.activateDraftCoursePreview(snapshot, draftRoom),
@@ -1380,7 +1320,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getActiveCourseSnapshot: () => this.activeCourseSnapshot,
-      getCourseComposerRecord: () => this.courseComposerController.getRecord(),
     });
     this.cameraController = new OverworldCameraController(
       {
@@ -1951,7 +1890,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       countRoomEnemies: (room) => this.countRoomObjectsByCategory(room, 'enemy'),
       getScore: () => this.score,
-      isCourseComposerLoading: () => this.courseComposerController.isLoading(),
       areRoomCommentsVisible: () => this.roomCommentsController.areCommentsVisible(),
       getZoom: () => this.cameras.main.zoom,
       getTransientStatusMessage: () => this.getTransientStatusMessage(),
@@ -1992,7 +1930,6 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.shouldRespawnPlayer = value;
       },
       updateSelectedSummary: () => this.updateSelectedSummary(),
-      refreshCourseComposerSelectedRoomState: () => this.refreshCourseComposerSelectedRoomState(),
       refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
       redrawWorld: () => this.redrawWorld(),
       renderHud: () => this.renderHud(),
@@ -2058,7 +1995,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       getRoomSnapshotForCoordinates: (coordinates) =>
         this.getRoomSnapshotViewForCoordinates(coordinates) as RoomSnapshot | null,
       refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
-      refreshCourseComposerSelectedRoomState: () => this.refreshCourseComposerSelectedRoomState(),
       setFocusedCoordinates: (coordinates) => {
         setFocusedCoordinatesInUrl(coordinates);
       },
@@ -2176,9 +2112,6 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       startRemoteCourseRun: (runState) => {
         void this.coursePlaybackController.startRemoteCourseRun(runState);
-      },
-      setCourseComposerStatusText: (text) => {
-        this.courseComposerController.setStatusText(text);
       },
       emitCourseComposerStateChanged: () => this.emitCourseComposerStateChanged(),
       renderHud: () => this.renderHud(),
@@ -2801,7 +2734,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.presenceController.reset();
     this.roomChatController.reset();
     this.roomCommentsController.reset();
-    this.courseComposerController.reset();
     this.windowController.reset();
     this.coursePlaybackController.clearActiveCourseRoomOverrides();
     this.setActiveCourseRun(null);
@@ -6194,10 +6126,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     await this.flowController.openCourseComposer();
   }
 
-  closeCourseComposer(): void {
-    this.courseComposerController.close();
-  }
-
   openRoomChatComposer(): boolean {
     return this.roomChatController.openComposer();
   }
@@ -6231,50 +6159,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.showTransientStatus(visible ? 'Room comments shown.' : 'Room comments hidden.');
     this.syncBackdropCameraIgnores();
     this.renderHud();
-  }
-
-  getCourseComposerState(): CourseComposerState | null {
-    return this.courseComposerController.getState();
-  }
-
-  setCourseTitle(title: string | null): void {
-    this.courseComposerController.setCourseTitle(title);
-  }
-
-  addSelectedRoomToCourseDraft(): void {
-    this.courseComposerController.addSelectedRoomToCourseDraft();
-  }
-
-  removeSelectedRoomFromCourseDraft(): void {
-    this.courseComposerController.removeSelectedRoomFromCourseDraft();
-  }
-
-  selectCourseRoomInComposer(roomId: string): void {
-    this.courseComposerController.selectCourseRoomInComposer(roomId);
-  }
-
-  editSelectedCourseRoom(): boolean {
-    return this.courseComposerController.editSelectedCourseRoom();
-  }
-
-  async testDraftCourse(): Promise<void> {
-    await this.courseComposerController.testDraftCourse();
-  }
-
-  async saveCourseDraft(): Promise<void> {
-    await this.courseComposerController.saveCourseDraft();
-  }
-
-  async publishCourseDraft(): Promise<void> {
-    await this.courseComposerController.publishCourseDraft();
-  }
-
-  async unpublishCourse(): Promise<void> {
-    await this.courseComposerController.unpublishCourse();
-  }
-
-  private async refreshCourseComposerSelectedRoomState(): Promise<void> {
-    await this.courseComposerController.refreshSelectedRoomState();
   }
 
   private getPlayerEffectOrigin(): { x: number; y: number } | null {

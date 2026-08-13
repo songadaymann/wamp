@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import {
   type CourseMarkerPoint,
-  type CourseRecord,
   type CourseSnapshot,
 } from '../../courses/model';
 import {
@@ -31,7 +30,6 @@ interface OverworldGoalMarkerControllerHost {
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   getSelectedCoordinates(): RoomCoordinates;
   getActiveCourseSnapshot(): CourseSnapshot | null;
-  getCourseComposerRecord(): CourseRecord | null;
 }
 
 export class OverworldGoalMarkerController {
@@ -119,7 +117,6 @@ export class OverworldGoalMarkerController {
   toWorldCoursePoint(point: CourseMarkerPoint): GoalMarkerPoint {
     const roomRef =
       this.host.getActiveCourseSnapshot()?.roomRefs.find((candidate) => candidate.roomId === point.roomId) ??
-      this.host.getCourseComposerRecord()?.draft.roomRefs.find((candidate) => candidate.roomId === point.roomId) ??
       null;
 
     const origin = this.host.getRoomOrigin(roomRef?.coordinates ?? this.host.getSelectedCoordinates());

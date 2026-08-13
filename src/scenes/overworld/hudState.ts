@@ -77,7 +77,6 @@ interface OverworldHudStateControllerHost {
   loadPublishedCourseSnapshot(courseId: string): Promise<CourseSnapshot | null>;
   countRoomEnemies(room: RoomSnapshot): number;
   getScore(): number;
-  isCourseComposerLoading(): boolean;
   areRoomCommentsVisible(): boolean;
   getZoom(): number;
   getTransientStatusMessage(): string | null;
@@ -240,7 +239,7 @@ export class OverworldHudStateController {
         currentUserId,
         currentWalletAddress,
         score: this.host.getScore(),
-        courseBuilderButtonDisabled: this.host.isCourseComposerLoading(),
+        courseBuilderButtonDisabled: false,
         roomCommentsVisible: this.host.areRoomCommentsVisible(),
         zoom: this.host.getZoom(),
         getRoomDisplayTitle: (title, coordinates) => this.getRoomDisplayTitle(title, coordinates),
