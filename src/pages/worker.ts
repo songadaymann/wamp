@@ -1,6 +1,5 @@
 import type { PagesWorkerHandler } from './model';
 import { createPagesWorker } from './routes';
-import legacyWorker from './workerLegacy.js';
 
 export type {
   PagesWorkerEnv,
@@ -8,6 +7,6 @@ export type {
   PagesWorkerHandler,
 } from './model';
 
-const worker = createPagesWorker(legacyWorker);
+const worker = createPagesWorker();
 
 export default worker satisfies PagesWorkerHandler;
