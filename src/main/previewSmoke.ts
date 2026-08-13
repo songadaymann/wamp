@@ -13,6 +13,7 @@ import {
 import { POLICE_PATROLMAN_OBJECT_ID, POLICEWOMAN_OBJECT_ID } from '../enemies/policeEnemy';
 import {
   BOYGAME_TILESET_FIRST_GID,
+  JUNGLE_VINES_TILESET_FIRST_GID,
   getObjectById,
   getObjectPlacementPointForTile,
 } from '../config';
@@ -45,6 +46,7 @@ type PreviewSmokeAction =
   | 'openSyntheticEditor'
   | 'openSyntheticPoliceEditor'
   | 'openSyntheticBoygameEditor'
+  | 'openSyntheticJungleEditor'
   | 'openSyntheticCourseEditor'
   | 'setPlayerPosition'
   | 'prepareTransitionDestination'
@@ -98,6 +100,8 @@ export function installPreviewSmokeActions(
         return openSyntheticEditorForPreviewSmoke(game, getDebugState, createPoliceEnemyPreviewRoom());
       case 'openSyntheticBoygameEditor':
         return openSyntheticEditorForPreviewSmoke(game, getDebugState, createBoygamePreviewRoom());
+      case 'openSyntheticJungleEditor':
+        return openSyntheticEditorForPreviewSmoke(game, getDebugState, createJunglePreviewRoom());
       case 'openSyntheticCourseEditor':
         return openSyntheticCourseEditorForPreviewSmoke(game, getDebugState);
       case 'setPlayerPosition':
@@ -488,6 +492,64 @@ function createBoygamePreviewRoom(): RoomSnapshot {
     placeObject('boygame_heart', 30, 13),
     placeObject('boygame_rocks', 32, 15, 'background'),
     placeObject('boygame_sign_right', 35, 15),
+  ];
+
+  return roomSnapshot;
+}
+
+function createJunglePreviewRoom(): RoomSnapshot {
+  const roomSnapshot = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
+  const floorY = 18;
+  const gid = (localIndex: number) => JUNGLE_VINES_TILESET_FIRST_GID + localIndex;
+  const placeObject = (
+    id: string,
+    tileX: number,
+    tileY: number,
+    layer: 'background' | 'terrain' | 'foreground' = 'terrain',
+  ) => {
+    const config = getObjectById(id);
+    if (!config) {
+      throw new Error(`Missing Jungle preview object config: ${id}`);
+    }
+    const point = getObjectPlacementPointForTile(config, tileX, tileY);
+    return {
+      id,
+      x: point.x,
+      y: point.y,
+      instanceId: `preview-${id}`,
+      layer,
+    };
+  };
+  const stampVineSheet = (
+    layer: 'background' | 'foreground',
+    startTileX: number,
+  ) => {
+    for (let localIndex = 0; localIndex < 72; localIndex += 1) {
+      const tileX = startTileX + localIndex % 9;
+      const tileY = Math.floor(localIndex / 9);
+      roomSnapshot.tileData[layer][tileY][tileX] = gid(localIndex);
+    }
+  };
+
+  roomSnapshot.title = 'Jungle Vines Preview';
+  roomSnapshot.background = 'jungle_vines';
+  roomSnapshot.spawnPoint = { x: 320, y: floorY * 16 - 16 };
+
+  for (let tileX = 0; tileX < roomSnapshot.tileData.terrain[floorY].length; tileX += 1) {
+    roomSnapshot.tileData.terrain[floorY][tileX] = 492;
+  }
+  stampVineSheet('background', 0);
+  stampVineSheet('foreground', 31);
+
+  roomSnapshot.placedObjects = [
+    placeObject('jungle_loop_vine', 5, 5, 'background'),
+    placeObject('jungle_hanging_creepers', 25, 5, 'foreground'),
+    ...Array.from({ length: 7 }, (_, index) =>
+      placeObject(`jungle_vine_sprig_${index + 1}`, 2 + index * 5, 9, 'background')
+    ),
+    ...Array.from({ length: 6 }, (_, index) =>
+      placeObject(`jungle_climbing_vine_${index + 1}`, 7 + index * 5, floorY - 1)
+    ),
   ];
 
   return roomSnapshot;

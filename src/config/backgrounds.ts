@@ -48,6 +48,19 @@ export const BACKGROUND_GROUPS: BackgroundGroup[] = [
     ],
   },
   {
+    id: 'jungle_vines',
+    name: 'Jungle Vines',
+    bgColor: '#d2f7bb',
+    layers: [
+      { key: 'jungle_vines_0', path: 'assets/backgrounds/jungle_vines/layer_0.png', width: 384, height: 176, scrollFactor: 0.0 },
+      { key: 'jungle_vines_1', path: 'assets/backgrounds/jungle_vines/layer_1.png', width: 384, height: 176, scrollFactor: 0.08 },
+      { key: 'jungle_vines_2', path: 'assets/backgrounds/jungle_vines/layer_2.png', width: 384, height: 176, scrollFactor: 0.16 },
+      { key: 'jungle_vines_3', path: 'assets/backgrounds/jungle_vines/layer_3.png', width: 384, height: 176, scrollFactor: 0.28 },
+      { key: 'jungle_vines_4', path: 'assets/backgrounds/jungle_vines/layer_4.png', width: 384, height: 176, scrollFactor: 0.42 },
+      { key: 'jungle_vines_5', path: 'assets/backgrounds/jungle_vines/layer_5.png', width: 384, height: 176, scrollFactor: 0.6 },
+    ],
+  },
+  {
     id: 'spooky_moon',
     name: 'Spooky Moon',
     layers: [

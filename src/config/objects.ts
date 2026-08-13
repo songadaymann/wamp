@@ -92,6 +92,8 @@ export interface GameObjectConfig {
   behavior: 'static' | 'patrol' | 'fly' | 'bounce' | 'animated' | 'shooter';
   /** optional runtime interaction capability shared across object categories */
   interaction?: ObjectInteraction;
+  /** allows the player to climb this object like a ladder */
+  climbable?: boolean;
   /** kind marker for object configs generated from custom sprite definitions */
   customSpriteKind?: CustomSpriteKind | null;
   /** false for actors that keep overlap bodies but pass through terrain and solid objects */
@@ -138,6 +140,27 @@ export const BLOCK_SWITCH_ACTIVE_TEXTURES = [
     path: 'assets/objects/switch-block-red-active.png',
   },
 ] as const;
+
+const JUNGLE_CLIMBING_VINE_OBJECTS: GameObjectConfig[] = [
+  { id: 'jungle_climbing_vine_1', name: 'Climbing Vine A', category: 'interactive', path: 'assets/objects/jungle/pixelina/climbing-vine-1.png', frameWidth: 16, frameHeight: 64, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 60, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', climbable: true, description: 'A thin climbable jungle vine assembled from repeating Pixelina segments.' },
+  { id: 'jungle_climbing_vine_2', name: 'Climbing Vine B', category: 'interactive', path: 'assets/objects/jungle/pixelina/climbing-vine-2.png', frameWidth: 16, frameHeight: 64, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 60, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', climbable: true, description: 'A winding climbable jungle vine assembled from repeating Pixelina segments.' },
+  { id: 'jungle_climbing_vine_3', name: 'Climbing Vine C', category: 'interactive', path: 'assets/objects/jungle/pixelina/climbing-vine-3.png', frameWidth: 16, frameHeight: 64, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 60, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', climbable: true, description: 'A leafy climbable jungle vine assembled from repeating Pixelina segments.' },
+  { id: 'jungle_climbing_vine_4', name: 'Climbing Vine D', category: 'interactive', path: 'assets/objects/jungle/pixelina/climbing-vine-4.png', frameWidth: 16, frameHeight: 64, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 60, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', climbable: true, description: 'A flowering climbable jungle vine assembled from repeating Pixelina segments.' },
+  { id: 'jungle_climbing_vine_5', name: 'Climbing Vine E', category: 'interactive', path: 'assets/objects/jungle/pixelina/climbing-vine-5.png', frameWidth: 16, frameHeight: 64, frameCount: 1, fps: 0, bodyWidth: 16, bodyHeight: 60, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', climbable: true, description: 'A dense climbable jungle vine assembled from repeating Pixelina segments.' },
+  { id: 'jungle_climbing_vine_6', name: 'Climbing Vine F', category: 'interactive', path: 'assets/objects/jungle/pixelina/climbing-vine-6.png', frameWidth: 17, frameHeight: 94, frameCount: 1, fps: 0, bodyWidth: 17, bodyHeight: 90, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', climbable: true, description: 'A long broad-leaf climbable vine using Pixelina top, middle, and bottom segments.' },
+];
+
+const JUNGLE_VINE_DECORATION_OBJECTS: GameObjectConfig[] = [
+  { id: 'jungle_hanging_creepers', name: 'Hanging Jungle Creepers', category: 'decoration', path: 'assets/objects/jungle/pixelina/hanging-creepers.png', frameWidth: 77, frameHeight: 55, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'A wide curtain of hanging moss and creepers.' },
+  { id: 'jungle_loop_vine', name: 'Looping Jungle Vine', category: 'decoration', path: 'assets/objects/jungle/pixelina/loop-vine.png', frameWidth: 146, frameHeight: 50, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'A long looping vine for ceilings and broad foreground spans.' },
+  { id: 'jungle_vine_sprig_1', name: 'Jungle Vine Sprig A', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_1.png', frameWidth: 16, frameHeight: 17, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_2', name: 'Jungle Vine Sprig B', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_2.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_3', name: 'Jungle Vine Sprig C', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_3.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_4', name: 'Jungle Vine Sprig D', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_4.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_5', name: 'Jungle Vine Sprig E', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_5.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_6', name: 'Jungle Vine Sprig F', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_6.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
+  { id: 'jungle_vine_sprig_7', name: 'Jungle Vine Sprig G', category: 'decoration', path: 'assets/objects/jungle/lunardrift/vines_swing_7.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Small modular LunarDrift vine sprig.' },
+];
 export const SWITCH_BLOCK_OBJECT_IDS = [
   SWITCH_BLOCK_ON_OBJECT_ID,
   SWITCH_BLOCK_OFF_OBJECT_ID,
@@ -249,7 +272,8 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'cage',        name: 'Cage',        category: 'platform',    path: 'assets/objects/cage.png',        frameWidth: 18, frameHeight: 32, frameCount: 5,  fps: 0,  defaultFrame: 0, facingDirection: 'right', bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 1, bodyOffsetY: 16, behavior: 'static', description: 'Tall cage prop. Solid collision.' },
   { id: 'sign',        name: 'Sign',        category: 'decoration',  path: 'assets/objects/sign.png',        frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative signpost. No collision.' },
   { id: 'sign_arrow',  name: 'Arrow Sign',  category: 'decoration',  path: 'assets/objects/sign_arrow.png',  frameWidth: 16, frameHeight: 32, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative arrow sign. No collision.' },
-  { id: 'ladder',      name: 'Ladder',      category: 'interactive', path: 'assets/objects/ladder.png',      frameWidth: 16, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 51, bodyOffsetX: 0, bodyOffsetY: 13, previewWidth: 16, previewHeight: 51, previewOffsetX: 0, previewOffsetY: 13, behavior: 'static',   description: 'Climbable surface. Press up to climb.' },
+  { id: 'ladder',      name: 'Ladder',      category: 'interactive', path: 'assets/objects/ladder.png',      frameWidth: 16, frameHeight: 64, frameCount: 1,  fps: 0,  bodyWidth: 16, bodyHeight: 51, bodyOffsetX: 0, bodyOffsetY: 13, previewWidth: 16, previewHeight: 51, previewOffsetX: 0, previewOffsetY: 13, behavior: 'static', climbable: true, description: 'Climbable surface. Press up to climb.' },
+  ...JUNGLE_CLIMBING_VINE_OBJECTS,
   { id: 'floor_trigger', name: 'Pressure Plate', category: 'interactive', path: 'assets/objects/floor_trigger.png', frameWidth: 16, frameHeight: 16, frameCount: 2, fps: 0, defaultFrame: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Link this plate to a door, cage, or chest, then press it with a player, monster, or crate.' },
   { id: 'button',      name: 'Button',      category: 'decoration',  path: 'assets/objects/button.png',      frameWidth: 16, frameHeight: 16, frameCount: 4,  fps: 0,  defaultFrame: 0, bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Floor button prop. No collision.' },
 
@@ -267,6 +291,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'boygame_pebbles', name: 'Boygame Pebbles', category: 'decoration', path: 'assets/objects/boygame/pebbles.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Boygame ground pebbles decoration.' },
   { id: 'boygame_rune_stone', name: 'Boygame Rune Stone', category: 'decoration', path: 'assets/objects/boygame/rune_stone.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Carved Boygame rune stone decoration.' },
   { id: 'boygame_wall_torch', name: 'Boygame Wall Torch', category: 'decoration', path: 'assets/objects/boygame/wall_torch.png', frameWidth: 16, frameHeight: 16, frameCount: 4, fps: 9, bodyWidth: 0, bodyHeight: 0, behavior: 'animated', lightEmission: BOYGAME_TORCH_LIGHT_EMISSION, description: 'Animated Boygame wall torch with a flickering light in dark rooms.' },
+  ...JUNGLE_VINE_DECORATION_OBJECTS,
   { id: 'bush',        name: 'Bush',        category: 'decoration',  path: 'assets/deco/bush.png',           frameWidth: 32, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative bush. No collision.' },
   { id: 'rock',        name: 'Rock',        category: 'decoration',  path: 'assets/deco/rock.png',           frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative rock. No collision.' },
   { id: 'tree',        name: 'Tree',        category: 'decoration',  path: 'assets/deco/tree.png',           frameWidth: 48, frameHeight: 48, frameCount: 1,  fps: 0,  bodyWidth: 0,  bodyHeight: 0,  behavior: 'static',   description: 'Decorative tree. No collision.' },
@@ -285,6 +310,12 @@ export function isPushableObjectConfig(
   config: Pick<GameObjectConfig, 'interaction'> | null | undefined,
 ): boolean {
   return config?.interaction === 'pushable';
+}
+
+export function isClimbableObjectConfig(
+  config: Pick<GameObjectConfig, 'climbable'> | null | undefined,
+): boolean {
+  return config?.climbable === true;
 }
 
 export function isDynamicRuntimeObjectConfig(

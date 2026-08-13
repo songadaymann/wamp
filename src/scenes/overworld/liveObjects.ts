@@ -12,6 +12,7 @@ import {
   placedObjectLayerAllowsRuntimeCollision,
   isDynamicRuntimeObjectConfig,
   isBlockSwitchObjectId,
+  isClimbableObjectConfig,
   isSwitchBlockObjectId,
   isMovingPlatformEndpointObjectId,
   isMovingPlatformObjectId,
@@ -1007,7 +1008,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const initialDirectionX = getInitialDirectionX(facing, x);
     this.applyDirectionalFacing(sprite, config, initialDirectionX);
     const helpers: Phaser.GameObjects.GameObject[] = [];
-    if (config.id === 'ladder') {
+    if (isClimbableObjectConfig(config)) {
       const supportZone = this.createLadderTopSupport(sprite);
       if (supportZone) {
         helpers.push(supportZone);
@@ -1220,7 +1221,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
             }
             break;
           case 'interactive':
-            if (liveObject.config.id === 'ladder') {
+            if (isClimbableObjectConfig(liveObject.config)) {
               const supportZone = liveObject.helpers[0];
               if (supportZone && supportZone.body) {
                 liveObject.interactions.push(
@@ -1850,7 +1851,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       if (liveObjectBehaviorUpdatesEveryFrame(behavior) || isDynamicArcadeBody(liveObject.sprite.body as ArcadeObjectBody | null)) {
         updating.push(liveObject);
       }
-      if (liveObject.config.id === 'ladder') {
+      if (isClimbableObjectConfig(liveObject.config)) {
         ladders.push(liveObject);
         ladderRoomBoundsPadding = Math.max(
           ladderRoomBoundsPadding,

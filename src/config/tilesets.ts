@@ -268,6 +268,14 @@ const BOYGAME_BLANK_INDICES = [
   45, 46, 47,
   51, 52, 53, 54, 55,
 ];
+const JUNGLE_VINES_TILE_COUNT = 72;
+const JUNGLE_VINES_BLANK_INDICES = [
+  32, 33, 34,
+  37, 38, 39, 40, 41, 42, 43, 44,
+  46, 47, 48, 49, 50, 51, 52, 53,
+  55, 56, 57, 58, 59, 60, 61, 62,
+  64, 65, 66, 67, 68, 69, 70, 71,
+];
 
 function createBoygameEditorMetadata(): Partial<Record<number, EditorTileMetadata>> {
   return Object.fromEntries(
@@ -276,6 +284,19 @@ function createBoygameEditorMetadata(): Partial<Record<number, EditorTileMetadat
       {
         label: 'Unused Boygame atlas cell',
         description: 'Intentionally blank spacing between multi-cell source graphics.',
+        enabled: false,
+      },
+    ]),
+  );
+}
+
+function createJungleVinesEditorMetadata(): Partial<Record<number, EditorTileMetadata>> {
+  return Object.fromEntries(
+    JUNGLE_VINES_BLANK_INDICES.map((localIndex) => [
+      localIndex,
+      {
+        label: 'Unused Jungle Vines atlas cell',
+        description: 'Transparent spacing around the modular vine pieces.',
         enabled: false,
       },
     ]),
@@ -292,6 +313,8 @@ export const DEFAULT_TILESET_EDITOR_PALETTE_BACKGROUND_COLOR = '#0b0b0b';
 
 export const BOYGAME_TILESET_KEY = 'boygame';
 export const BOYGAME_TILESET_FIRST_GID = 1801;
+export const JUNGLE_VINES_TILESET_KEY = 'jungle-vines';
+export const JUNGLE_VINES_TILESET_FIRST_GID = 2001;
 export const SPECIAL_TILESET_KEY = 'special';
 export const SPECIAL_TILESET_FIRST_GID = 669;
 export type SpecialTileKind =
@@ -1099,6 +1122,29 @@ export const TILESETS: TilesetConfig[] = [
       accentWarm: 0x8bac0f,
       accentHot: 0x0f380f,
       accentAlt: 0x9bbc0f,
+    },
+  },
+  {
+    key: JUNGLE_VINES_TILESET_KEY,
+    name: 'Jungle Vines',
+    path: 'assets/tilesets/jungle-vines.png',
+    imageWidth: 144,
+    imageHeight: 128,
+    columns: 9,
+    rows: 8,
+    tileCount: JUNGLE_VINES_TILE_COUNT,
+    firstGid: JUNGLE_VINES_TILESET_FIRST_GID,
+    terrainCollisionProfiles: createTilesetCollisionProfiles(
+      Array.from({ length: JUNGLE_VINES_TILE_COUNT }, (_, index) => index),
+      NO_COLLISION_PROFILE,
+    ),
+    editorTileMetadata: createJungleVinesEditorMetadata(),
+    editorPaletteBackgroundColor: '#111a13',
+    uiTheme: {
+      accentCool: 0x3e8847,
+      accentWarm: 0x8dbf67,
+      accentHot: 0xb5dd78,
+      accentAlt: 0x1f5b34,
     },
   }
 ];
