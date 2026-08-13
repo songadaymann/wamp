@@ -121,7 +121,7 @@ never rewritten. No production deployment or production-data mutation is part of
 | T00 | Quicksand state controller | Accepted: manual `PASS` at `000741f`; frozen on port 4600 |
 | T01 | Room-music playback selection and synchronization controller | Accepted: manual `PASS` at `8909001`; frozen on port 4601 |
 | T02 | Executable-entry guard and dormant course-composer cleanup | Accepted: manual `PASS` at repair commit `7a5336c`; frozen on port 4602 |
-| T03 | Live-object model types and spatial index | Pending |
+| T03 | Live-object model types and spatial index | Candidate: implementation at `443cbcd`; full gate and police browser smoke passed; manual QA pending on port 4603 |
 | T04 | Live-object lifecycle and interaction coordinators | Pending |
 | T05 | Movement-state ownership | Pending |
 | T06 | Movement and swordsman state-machine decomposition | Pending |
@@ -131,7 +131,7 @@ never rewritten. No production deployment or production-data mutation is part of
 | T10 | World-streaming model, selection policy, and readiness | Pending |
 | T11 | World-streaming preparation and teardown lifecycles | Pending |
 | T12 | PvP combat geometry, ledger, presentation, and coordinator | Pending |
-| T13 | Typed Pages Worker migration | Candidate: implementation complete through `162dc62`; full gate passed at 155 files / 1,141 tests; manual QA pending on port 4613 |
+| T13 | Typed Pages Worker migration | Candidate: frozen at `68b362b`; full gate passed at 155 files / 1,141 tests; manual QA pending on port 4613 |
 | T14 | Cloudflare Worker analysis/admin module split | Pending |
 | T15 | Thin admin UI entries and application modules | Pending |
 | T16 | PartyKit protocol and server decomposition | Pending |
