@@ -72,6 +72,7 @@ import {
   isDynamicArcadeBody,
   type ArcadeObjectBody,
 } from './bodies';
+import { SwordsmanRuntimeStateController } from './swordsmanRuntimeStateController';
 
 const SWORDSMAN_AI_CHASE_RANGE_X = 240;
 const SWORDSMAN_AI_CHASE_RANGE_Y = 176;
@@ -168,6 +169,7 @@ interface LiveObjectSwordsmanControllerOptions<TEdgeWall> {
 
 export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   private readonly swordsmanTraversalGraphs = new Map<string, SwordsmanTraversalGraph>();
+  private readonly runtimeState = new SwordsmanRuntimeStateController();
 
   constructor(private readonly options: LiveObjectSwordsmanControllerOptions<TEdgeWall>) {}
 
@@ -255,7 +257,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     const target = liveObject.runtime.policePatrolShoots
       ? this.getSwordsmanDuelObjectiveTarget(loadedRoom, liveObject, body)
       : null;
-    const currentState = liveObject.runtime.aiState ?? 'patrol';
+    const currentState = this.runtimeState.getAiState(liveObject.runtime);
 
     if (currentState === 'attack') {
       body.setVelocityX(0);
@@ -313,7 +315,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     now: number,
   ): void {
     const target = this.getSwordsmanDuelObjectiveTarget(loadedRoom, liveObject, body);
-    const currentState = liveObject.runtime.aiState ?? 'patrol';
+    const currentState = this.runtimeState.getAiState(liveObject.runtime);
 
     if (currentState === 'attack') {
       body.setVelocityX(0);
@@ -379,7 +381,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     now: number,
   ): void {
     const target = this.getSwordsmanCollectObjectiveTarget(loadedRoom, liveObject, body);
-    const currentState = liveObject.runtime.aiState ?? 'patrol';
+    const currentState = this.runtimeState.getAiState(liveObject.runtime);
 
     if (currentState === 'attack' || currentState === 'windup' || currentState === 'cooldown') {
       this.clearSwordsmanObjectiveTraversalState(liveObject, 'collect-mode-reset', body);
@@ -1198,14 +1200,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   private clearSwordsmanCollectRoute(liveObject: LoadedRoomObject): void {
-    liveObject.runtime.aiCollectRouteTargetNodeId = null;
-    liveObject.runtime.aiCollectRouteExpiresAt = 0;
-    liveObject.runtime.aiCollectRouteScore = null;
-    liveObject.runtime.aiCollectRouteValue = 0;
-    liveObject.runtime.aiCollectRoutePenalty = 0;
-    if (liveObject.runtime.aiCollectState === 'route') {
-      liveObject.runtime.aiCollectState = null;
-    }
+    this.runtimeState.clearCollectRoute(liveObject.runtime);
   }
 
   private clearSwordsmanObjectiveTraversalState(
@@ -1214,15 +1209,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body | null = null,
   ): void {
     this.stopSwordsmanLadderTraversal(liveObject, body);
-    liveObject.runtime.aiIntent = null;
-    liveObject.runtime.aiTargetX = null;
-    liveObject.runtime.aiCurrentSegmentId = null;
-    liveObject.runtime.aiTargetSegmentId = null;
-    liveObject.runtime.aiTraversalEdgeId = null;
-    this.clearSwordsmanFallbackTraversal(liveObject);
-    this.clearSwordsmanRouteLoopMemory(liveObject);
-    this.clearSwordsmanPlannedRoute(liveObject, reason);
-    this.clearSwordsmanCollectRoute(liveObject);
+    this.runtimeState.clearObjectiveTraversal(liveObject.runtime, reason);
   }
 
   private runSwordsmanTraversalObjective(
@@ -1281,13 +1268,15 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       this.updateSwordsmanRouteLoopMemory(room, liveObject, body, traversalDecision, now);
     }
     this.trackSwordsmanFallbackRoute(room, liveObject, body, traversalDecision, now);
-    const chaseDirectionX = traversalDecision?.directionX ?? target.directionX;
-    liveObject.runtime.directionX = chaseDirectionX;
-    liveObject.runtime.aiIntent = traversalDecision?.intent ?? (onFloor ? 'same-platform' : 'air-chase');
-    liveObject.runtime.aiTargetX = traversalDecision?.targetX ?? target.body.center.x;
-    liveObject.runtime.aiCurrentSegmentId = traversalDecision?.currentSegmentId ?? null;
-    liveObject.runtime.aiTargetSegmentId = traversalDecision?.targetSegmentId ?? null;
-    liveObject.runtime.aiTraversalEdgeId = traversalDecision?.traversalEdgeId ?? null;
+    const chaseDirectionX = this.runtimeState.applyTraversalDecision(
+      liveObject.runtime,
+      traversalDecision,
+      {
+        fallbackDirectionX: target.directionX,
+        fallbackTargetX: target.body.center.x,
+        onFloor,
+      },
+    );
     if (target.withinActionRange) {
       options.onActionRangeReached?.();
       if (!liveObject.runtime.aiActiveTraversalEdgeId && (body.blocked.down || body.touching.down)) {
@@ -1969,10 +1958,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     if (body) {
       body.setAllowGravity(true);
     }
-    liveObject.runtime.aiLadderTraversalEdgeId = null;
-    if (ladderEdgeId && liveObject.runtime.aiActiveTraversalEdgeId === ladderEdgeId) {
-      this.clearSwordsmanTraversalAttempt(liveObject);
-    }
+    this.runtimeState.stopLadderTraversal(liveObject.runtime);
   }
 
   private tryApplySwordsmanLadderTraversal(
@@ -2002,7 +1988,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
     if (liveObject.runtime.aiLadderTraversalEdgeId !== edge.id) {
       this.startSwordsmanTraversalAttempt(liveObject, decision, body);
-      liveObject.runtime.aiLadderTraversalEdgeId = edge.id;
+      this.runtimeState.setLadderTraversalEdge(liveObject.runtime, edge.id);
       liveObject.runtime.aiTraversalCooldownUntil = now + SWORDSMAN_AI_TRAVERSAL_COOLDOWN_MS;
     }
 
@@ -2147,28 +2133,18 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     this.clearSwordsmanFallbackTraversal(liveObject);
     this.clearSwordsmanRouteLoopMemory(liveObject);
     this.clearSwordsmanPlannedRoute(liveObject, 'collect-overhead-jump');
-    liveObject.runtime.directionX = jump.directionX;
-    liveObject.runtime.aiIntent = 'jump-up';
-    liveObject.runtime.aiTargetX = Math.round(jump.targetX - roomOrigin.x);
-    liveObject.runtime.aiTraversalEdgeId = null;
-    liveObject.runtime.aiTraversalCooldownUntil = now + SWORDSMAN_AI_TRAVERSAL_COOLDOWN_MS;
+    this.runtimeState.applyCollectJump(liveObject.runtime, {
+      directionX: jump.directionX,
+      targetX: Math.round(jump.targetX - roomOrigin.x),
+      cooldownUntil: now + SWORDSMAN_AI_TRAVERSAL_COOLDOWN_MS,
+    });
     this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
     this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'jump-rise'));
     return true;
   }
 
   private resetSwordsmanTraversalMemory(liveObject: LoadedRoomObject): void {
-    liveObject.runtime.aiTraversalBlockedEdges = [];
-    this.clearSwordsmanTraversalAttempt(liveObject);
-    this.clearSwordsmanFallbackTraversal(liveObject);
-    this.clearSwordsmanRouteLoopMemory(liveObject);
-    this.clearSwordsmanPlannedRoute(liveObject, null);
-    this.clearSwordsmanCollectRoute(liveObject);
-    liveObject.runtime.aiPlannerFallback = false;
-    liveObject.runtime.aiPlannerPlanMs = 0;
-    liveObject.runtime.aiPlannerExpandedStates = 0;
-    liveObject.runtime.aiPlannerSimulatedEdges = 0;
-    liveObject.runtime.aiTraversalLastBlockReason = null;
+    this.runtimeState.resetTraversalMemory(liveObject.runtime);
   }
 
   private resetSwordsmanFacingMemory(
@@ -2216,35 +2192,22 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   private clearSwordsmanTraversalAttempt(liveObject: LoadedRoomObject): void {
-    liveObject.runtime.aiLadderTraversalEdgeId = null;
-    liveObject.runtime.aiActiveTraversalEdgeId = null;
-    liveObject.runtime.aiActiveTraversalNextNodeId = null;
-    liveObject.runtime.aiActiveTraversalStartedAt = 0;
-    liveObject.runtime.aiActiveTraversalStartBottom = 0;
+    this.runtimeState.clearTraversalAttempt(liveObject.runtime);
   }
 
   private clearSwordsmanFallbackTraversal(liveObject: LoadedRoomObject): void {
-    liveObject.runtime.aiFallbackTraversalEdgeId = null;
-    liveObject.runtime.aiFallbackTraversalSegmentId = null;
-    liveObject.runtime.aiFallbackTraversalLastProgressAt = 0;
-    liveObject.runtime.aiFallbackTraversalBestMetric = Number.POSITIVE_INFINITY;
+    this.runtimeState.clearFallbackTraversal(liveObject.runtime);
   }
 
   private clearSwordsmanRouteLoopMemory(liveObject: LoadedRoomObject): void {
-    liveObject.runtime.aiRouteLoopSignature = null;
-    liveObject.runtime.aiRouteLoopCount = 0;
-    liveObject.runtime.aiRouteLoopLastProgressAt = 0;
-    liveObject.runtime.aiRouteLoopBestMetric = Number.POSITIVE_INFINITY;
+    this.runtimeState.clearRouteLoopMemory(liveObject.runtime);
   }
 
   private clearSwordsmanPlannedRoute(
     liveObject: LoadedRoomObject,
     reason: string | null,
   ): void {
-    liveObject.runtime.aiPlannedTraversalEdgeIds = [];
-    liveObject.runtime.aiPlannedTraversalTargetNodeId = null;
-    liveObject.runtime.aiPlannedTraversalExpiresAt = 0;
-    liveObject.runtime.aiPlannedTraversalReason = reason;
+    this.runtimeState.clearPlannedRoute(liveObject.runtime, reason);
   }
 
   private advanceSwordsmanPlannedRoute(
@@ -2252,22 +2215,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     graph: SwordsmanTraversalGraph,
     currentNodeId: string | null,
   ): void {
-    while (liveObject.runtime.aiPlannedTraversalEdgeIds.length > 0 && currentNodeId) {
-      const nextEdge = this.getSwordsmanPlannedRouteActiveEdge(liveObject, graph);
-      if (!nextEdge) {
-        this.clearSwordsmanPlannedRoute(liveObject, 'missing-edge');
-        return;
-      }
-      if (nextEdge.toId !== currentNodeId) {
-        break;
-      }
-      liveObject.runtime.aiPlannedTraversalEdgeIds.shift();
-      liveObject.runtime.aiPlannedTraversalReason = 'advance-route';
-    }
-
-    if (liveObject.runtime.aiPlannedTraversalEdgeIds.length === 0 && currentNodeId) {
-      this.clearSwordsmanPlannedRoute(liveObject, 'route-complete');
-    }
+    this.runtimeState.advancePlannedRoute(liveObject.runtime, graph, currentNodeId);
   }
 
   private getSwordsmanPlannedRouteActiveEdge(
@@ -2286,15 +2234,12 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     decision: SwordsmanTraversalDecision,
     body: Phaser.Physics.Arcade.Body,
   ): void {
-    if (!decision.traversalEdgeId) {
-      this.clearSwordsmanTraversalAttempt(liveObject);
-      return;
-    }
-
-    liveObject.runtime.aiActiveTraversalEdgeId = decision.traversalEdgeId;
-    liveObject.runtime.aiActiveTraversalNextNodeId = decision.traversalNextNodeId;
-    liveObject.runtime.aiActiveTraversalStartedAt = this.options.getCurrentTime();
-    liveObject.runtime.aiActiveTraversalStartBottom = body.bottom;
+    this.runtimeState.startTraversalAttempt(
+      liveObject.runtime,
+      decision,
+      this.options.getCurrentTime(),
+      body.bottom,
+    );
   }
 
   private updateSwordsmanTraversalMemory(
@@ -2303,9 +2248,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body,
     now: number,
   ): void {
-    liveObject.runtime.aiTraversalBlockedEdges = liveObject.runtime.aiTraversalBlockedEdges.filter(
-      (entry) => entry.until > now,
-    );
+    this.runtimeState.pruneBlockedEdges(liveObject.runtime, now);
 
     const activeEdgeId = liveObject.runtime.aiActiveTraversalEdgeId;
     if (!activeEdgeId) {
@@ -2842,12 +2785,11 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
   private startSwordsmanWindup(liveObject: LoadedRoomObject): void {
     const now = this.options.getCurrentTime();
-    this.setSwordsmanAiState(liveObject, 'windup');
-    liveObject.runtime.nextActionAt = now + (
+    this.runtimeState.beginWindup(liveObject.runtime, now, (
       isPoliceEnemyObjectId(liveObject.config.id)
         ? POLICE_AI_WINDUP_MS
         : SWORDSMAN_AI_WINDUP_MS
-    );
+    ));
     this.applySwordsmanFacing(liveObject, null, liveObject.runtime.directionX, { force: true });
     this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
   }
@@ -2860,10 +2802,11 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     const isPolice = isPoliceEnemyObjectId(liveObject.config.id);
     const attackMs = isPolice ? POLICE_AI_ATTACK_MS : SWORDSMAN_AI_ATTACK_MS;
     const cooldownMs = isPolice ? POLICE_AI_COOLDOWN_MS : SWORDSMAN_AI_COOLDOWN_MS;
-    this.setSwordsmanAiState(liveObject, 'attack');
-    liveObject.runtime.nextActionAt = now + attackMs;
-    liveObject.runtime.activatedUntil = now + SWORDSMAN_AI_ATTACK_HIT_END_MS;
-    liveObject.runtime.cooldownUntil = now + attackMs + cooldownMs;
+    this.runtimeState.beginAttack(liveObject.runtime, now, {
+      attackMs,
+      cooldownMs,
+      hitWindowEndMs: SWORDSMAN_AI_ATTACK_HIT_END_MS,
+    });
     this.applySwordsmanFacing(liveObject, null, liveObject.runtime.directionX, { force: true });
     const attackAnimationKey = this.getEnemyAnimationKey(liveObject, 'sword-slash');
     if (
@@ -2885,12 +2828,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     liveObject: LoadedRoomObject,
     state: SwordsmanAiState
   ): void {
-    if (liveObject.runtime.aiState === state) {
-      return;
-    }
-
-    liveObject.runtime.aiState = state;
-    liveObject.runtime.actionStartedAt = this.options.getCurrentTime();
+    this.runtimeState.transition(liveObject.runtime, state, this.options.getCurrentTime());
   }
 
   private playSwordsmanAnimation(
@@ -2971,11 +2909,11 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     playerBody: Phaser.Physics.Arcade.Body,
   ): boolean {
     const now = this.options.getCurrentTime();
-    if (
-      liveObject.runtime.aiState !== 'attack' ||
-      now - liveObject.runtime.actionStartedAt < SWORDSMAN_AI_ATTACK_HIT_START_MS ||
-      now > liveObject.runtime.activatedUntil
-    ) {
+    if (!this.runtimeState.isAttackHitActive(
+      liveObject.runtime,
+      now,
+      SWORDSMAN_AI_ATTACK_HIT_START_MS,
+    )) {
       return false;
     }
 
