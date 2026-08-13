@@ -300,7 +300,7 @@
   background: rgba(92, 64, 27, 0.2);
 }
 
-#editor-inspector #swordsman-objective-panel {
+#editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) {
   display: grid;
   gap: 10px;
   overflow: hidden;
@@ -313,7 +313,7 @@
   font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
 }
 
-#editor-inspector #swordsman-objective-panel .section-label {
+#editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .section-label {
   margin: 0 -10px;
   padding: 8px 10px 7px;
   border-bottom: 3px solid var(--editor-retro-shadow, #18161c);
@@ -326,7 +326,7 @@
   line-height: 1.2;
 }
 
-#editor-inspector #swordsman-objective-panel .section-label::before {
+#editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .section-label::before {
   content: '';
   display: inline-block;
   width: 9px;
@@ -337,7 +337,7 @@
   box-shadow: 13px 0 0 var(--editor-retro-blue, #79ccde);
 }
 
-#editor-inspector #swordsman-objective-panel .goal-context-note {
+#editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-context-note {
   margin: 0;
   padding: 8px 9px;
   border: 2px solid var(--editor-retro-blue-deep, #2c5071);
@@ -350,18 +350,18 @@
   line-height: 1.35;
 }
 
-#editor-inspector #swordsman-objective-panel .goal-control-row {
+#editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-control-row {
   gap: 5px;
   margin-top: 0;
   padding-left: 8px;
   border-left: 6px solid var(--editor-retro-green, #277b30);
 }
 
-#editor-inspector #swordsman-objective-panel .goal-control-row:last-child {
+#editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-control-row:last-child {
   border-left-color: var(--editor-retro-yellow, #fcea7c);
 }
 
-#editor-inspector #swordsman-objective-panel .goal-control-label {
+#editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-control-label {
   color: var(--editor-retro-blue-deep, #2c5071);
   font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
   font-size: 10px;
@@ -369,7 +369,7 @@
   letter-spacing: 0.06em;
 }
 
-#editor-inspector #swordsman-objective-panel .goal-input {
+#editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-input {
   height: 34px;
   padding: 7px 9px 6px;
   border: 2px solid var(--editor-retro-blue-deep, #2c5071);
@@ -382,13 +382,13 @@
   line-height: 1.2;
 }
 
-#editor-inspector #swordsman-objective-panel .goal-input:focus {
+#editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-input:focus {
   outline: none;
   border-color: var(--editor-retro-green, #277b30);
   box-shadow: 2px 2px 0 var(--editor-retro-shadow, #18161c), 0 0 0 2px rgba(121, 204, 222, 0.28);
 }
 
-#editor-inspector #swordsman-objective-panel .goal-input option {
+#editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-input option {
   background: #18161c;
   color: var(--editor-retro-cream, #fff3db);
 }
@@ -411,7 +411,7 @@
   backdrop-filter: blur(8px);
 }
 
-.editor-inspector > #swordsman-objective-panel {
+.editor-inspector > :is(#swordsman-objective-panel, #police-behavior-panel) {
   backdrop-filter: none;
 }
 

@@ -27,6 +27,12 @@ import {
 } from '../enemies/swordsmanObjectives';
 import { SWORDSMAN_AI_OBJECT_ID } from '../enemies/swordsmanAi';
 import {
+  DEFAULT_POLICE_BEHAVIOR_MODE,
+  DEFAULT_POLICE_PATROL_SHOOTS,
+  POLICE_BEHAVIOR_MODES,
+  isPoliceEnemyObjectId,
+} from '../enemies/policeEnemy';
+import {
   NPC_DIALOGUE_MAX_LENGTH,
   NPC_MODES,
   NPC_NAME_MAX_LENGTH,
@@ -49,7 +55,7 @@ import {
 } from './tilesetCatalog';
 import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../worldTiles/assetContract';
 
-export const AUTHORING_CATALOG_SCHEMA_VERSION = 1 as const;
+export const AUTHORING_CATALOG_SCHEMA_VERSION = 2 as const;
 export const AUTHORING_CATALOG_CACHE_CONTROL = 'public, max-age=300';
 
 export interface AuthoringTilesetCatalogEntry extends AgentTilesetCatalogEntry {
@@ -90,6 +96,13 @@ export interface AuthoringObjectCapabilities {
     defaults: {
       objectiveMode: string;
       defeatMode: string;
+    };
+  } | null;
+  police: {
+    behaviorModes: readonly string[];
+    defaults: {
+      behaviorMode: string;
+      patrolShoots: boolean;
     };
   } | null;
   npc: {
@@ -270,6 +283,15 @@ function buildObjectCatalogEntry(config: GameObjectConfig): AuthoringObjectCatal
             },
           }
         : null,
+      police: isPoliceEnemyObjectId(config.id)
+        ? {
+            behaviorModes: POLICE_BEHAVIOR_MODES,
+            defaults: {
+              behaviorMode: DEFAULT_POLICE_BEHAVIOR_MODE,
+              patrolShoots: DEFAULT_POLICE_PATROL_SHOOTS,
+            },
+          }
+        : null,
       npc: isNpcObjectId(config.id)
         ? {
             modes: NPC_MODES,
@@ -325,6 +347,7 @@ function renderObjectCatalog(): string {
           entry.capabilities.container.supported ? 'container' : null,
           entry.capabilities.signText.supported ? 'text' : null,
           entry.capabilities.swordsman ? 'Sword Hunter settings' : null,
+          entry.capabilities.police ? 'police behavior settings' : null,
           entry.capabilities.npc ? 'NPC settings' : null,
         ].filter(Boolean);
         return `- \`${entry.id}\` — ${entry.name}${entry.capabilities.placeable ? '' : ' (not placeable; use set_spawn)'}${capabilities.length > 0 ? `; ${capabilities.join(', ')}` : ''}`;
@@ -390,6 +413,7 @@ export function renderAgentRoomAuthoringMarkdown(): string {
     '- Containers: `containedObjectId` (use `null` to clear). Contents must be allowed by the catalog.',
     '- Text: `signText` (use `null` to clear). Signs and NPCs support text.',
     '- Sword Hunter: `swordsmanObjectiveMode`, `swordsmanDefeatMode`.',
+    '- Police enemies: `policeBehaviorMode` (`hunter` or `patrol`), `policePatrolShoots`.',
     '- NPC: `npcMode`, `npcPushable`, `npcCanJumpFall`, `npcPlayerCollision`, `npcFriendlyFire`, `npcName`, `npcDefeatMode`.',
     '- Unsupported fields are rejected; they are never silently discarded.',
     '',

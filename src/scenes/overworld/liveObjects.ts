@@ -36,6 +36,12 @@ import {
   SWORDSMAN_AI_OBJECT_ID,
   type SwordsmanAiState,
 } from '../../enemies/swordsmanAi';
+import {
+  getPlacedPoliceBehaviorMode,
+  getPlacedPolicePatrolShoots,
+  isPoliceEnemyObjectId,
+  type PoliceBehaviorMode,
+} from '../../enemies/policeEnemy';
 import type {
   SwordsmanDefeatMode,
   SwordsmanObjectiveMode,
@@ -178,6 +184,8 @@ export interface LoadedRoomObjectRuntimeState {
   aiCollectRouteScore: number | null;
   aiCollectRouteValue: number;
   aiCollectRoutePenalty: number;
+  policeBehaviorMode: PoliceBehaviorMode | null;
+  policePatrolShoots: boolean;
   npcMode: NpcMode | null;
   npcPushable: boolean;
   npcCanJumpFall: boolean;
@@ -371,6 +379,8 @@ export interface CreateLiveObjectEntryOptions {
   signText: string | null;
   objectiveMode?: SwordsmanObjectiveMode | null;
   defeatMode?: SwordsmanDefeatMode | null;
+  policeBehaviorMode?: PoliceBehaviorMode | null;
+  policePatrolShoots?: boolean | null;
   npcMode?: NpcMode | null;
   npcPushable?: boolean | null;
   npcCanJumpFall?: boolean | null;
@@ -546,6 +556,14 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.collectLiveObject(loadedRoom, liveObject, options),
       maybeReverseGroundEnemy: (room, liveObject, body) =>
         this.maybeReverseGroundEnemy(room, liveObject, body),
+      spawnEnemyBullet: (loadedRoom, liveObject) => {
+        const body = this.getDynamicBody(liveObject.sprite);
+        this.hazardController.spawnEnemyBullet(loadedRoom, liveObject, {
+          offsetX: 14,
+          offsetY: body ? body.center.y - liveObject.sprite.y - 4 : 8,
+          hitReason: `${liveObject.config.name} shot you.`,
+        });
+      },
     });
     this.enemyLifecycleController = new LiveObjectEnemyLifecycleController({
       scene: this.options.scene,
@@ -678,6 +696,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         signText: placedObject.signText ?? null,
         objectiveMode: placedObject.swordsmanObjectiveMode ?? null,
         defeatMode: placedObject.swordsmanDefeatMode ?? null,
+        policeBehaviorMode: getPlacedPoliceBehaviorMode(placedObject),
+        policePatrolShoots: getPlacedPolicePatrolShoots(placedObject),
         npcMode: getPlacedNpcMode(placedObject),
         npcPushable: normalizeNpcPushable(
           placedObject.npcPushable,
@@ -903,6 +923,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       signText,
       objectiveMode = null,
       defeatMode = null,
+      policeBehaviorMode = null,
+      policePatrolShoots = null,
       npcMode = null,
       npcPushable = null,
       npcCanJumpFall = null,
@@ -1019,6 +1041,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         getCurrentTime: this.options.getCurrentTime,
         objectiveMode,
         defeatMode,
+        policeBehaviorMode,
+        policePatrolShoots,
         npcMode,
         npcPushable,
         npcCanJumpFall,
@@ -1588,7 +1612,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     ) {
       return false;
     }
-    if (config.id === SWORDSMAN_AI_OBJECT_ID && liveObject.runtime.aiLadderTraversalEdgeId) {
+    if (
+      (config.id === SWORDSMAN_AI_OBJECT_ID || isPoliceEnemyObjectId(config.id))
+      && liveObject.runtime.aiLadderTraversalEdgeId
+    ) {
       return false;
     }
 
@@ -3450,6 +3477,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       signText: null,
       objectiveMode: null,
       defeatMode: null,
+      policeBehaviorMode: null,
+      policePatrolShoots: null,
       countsTowardGoals: true,
     });
     if (!liveObject) {

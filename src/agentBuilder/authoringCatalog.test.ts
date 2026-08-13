@@ -23,7 +23,7 @@ import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../worldTiles/assetCon
 describe('authoring catalog', () => {
   it('has one entry for every canonical built-in registry item', () => {
     const catalog = getAuthoringCatalog();
-    expect(catalog.schemaVersion).toBe(1);
+    expect(catalog.schemaVersion).toBe(2);
     expect(catalog.rendererAssetContractHash).toBe(WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH);
     expect(catalog.tilesets.map((entry) => entry.key)).toEqual(TILESETS.map((entry) => entry.key));
     expect(catalog.objects.map((entry) => entry.id)).toEqual(GAME_OBJECTS.map((entry) => entry.id));
@@ -60,6 +60,11 @@ describe('authoring catalog', () => {
     expect(objects.get('block_switch')).toBeDefined();
     expect(objects.get('switch_block_on')).toBeDefined();
     expect(objects.get('swordsman_ai')?.capabilities.swordsman?.objectiveModes).toEqual(['duel', 'collect']);
+    expect(objects.get('police_patrolman')?.capabilities.police).toMatchObject({
+      behaviorModes: ['hunter', 'patrol'],
+      defaults: { behaviorMode: 'hunter', patrolShoots: false },
+    });
+    expect(objects.get('policewoman')?.capabilities.police).toBeTruthy();
   });
 
   it('keeps the legacy tileset route projection stable', () => {

@@ -10,6 +10,7 @@ import {
   type RoomRecord,
   type RoomSnapshot,
 } from '../persistence/roomModel';
+import { POLICE_PATROLMAN_OBJECT_ID, POLICEWOMAN_OBJECT_ID } from '../enemies/policeEnemy';
 import { markAppReady } from '../ui/appFeedback';
 
 type PreviewSmokeScene = {
@@ -37,6 +38,7 @@ type PreviewSmokeAction =
   | 'returnToWorld'
   | 'editSelectedRoom'
   | 'openSyntheticEditor'
+  | 'openSyntheticPoliceEditor'
   | 'openSyntheticCourseEditor'
   | 'setPlayerPosition'
   | 'prepareTransitionDestination'
@@ -86,6 +88,8 @@ export function installPreviewSmokeActions(
         );
       case 'openSyntheticEditor':
         return openSyntheticEditorForPreviewSmoke(game, getDebugState);
+      case 'openSyntheticPoliceEditor':
+        return openSyntheticEditorForPreviewSmoke(game, getDebugState, createPoliceEnemyPreviewRoom());
       case 'openSyntheticCourseEditor':
         return openSyntheticCourseEditorForPreviewSmoke(game, getDebugState);
       case 'setPlayerPosition':
@@ -314,6 +318,7 @@ function getOverworldSceneForPreviewSmoke(game: Phaser.Game): PreviewSmokeScene 
 async function openSyntheticEditorForPreviewSmoke(
   game: Phaser.Game,
   getDebugState: () => Record<string, unknown>,
+  fixtureRoom?: RoomSnapshot,
 ): Promise<Record<string, unknown>> {
   const editorScene = game.scene.keys.EditorScene as unknown as {
     roomSession?: {
@@ -326,14 +331,16 @@ async function openSyntheticEditorForPreviewSmoke(
 
   editorScene.roomSession.loadPersistedRoom = async () => true;
 
-  const roomSnapshot = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
-  roomSnapshot.background = 'cave';
-  roomSnapshot.spawnPoint = { x: 320, y: 176 };
-  roomSnapshot.lighting = {
-    mode: 'playerAuraDark',
-    darkness: 88,
-    radius: 24,
-  };
+  const roomSnapshot = fixtureRoom ?? createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
+  if (!fixtureRoom) {
+    roomSnapshot.background = 'cave';
+    roomSnapshot.spawnPoint = { x: 320, y: 176 };
+    roomSnapshot.lighting = {
+      mode: 'playerAuraDark',
+      darkness: 88,
+      radius: 24,
+    };
+  }
 
   if (
     game.scene.isActive('EditorScene')
@@ -357,6 +364,40 @@ async function openSyntheticEditorForPreviewSmoke(
     ok: true,
     activeScene: getDebugState(),
   };
+}
+
+function createPoliceEnemyPreviewRoom(): RoomSnapshot {
+  const roomSnapshot = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
+  const floorY = 16;
+
+  roomSnapshot.title = 'Police Enemy Preview';
+  roomSnapshot.background = 'cave';
+  roomSnapshot.spawnPoint = { x: 320, y: floorY * 16 - 16 };
+  roomSnapshot.tileData.terrain[floorY] = roomSnapshot.tileData.terrain[floorY].map(() => 492);
+  roomSnapshot.placedObjects = [
+    {
+      id: POLICE_PATROLMAN_OBJECT_ID,
+      x: 128,
+      y: floorY * 16 - 32,
+      instanceId: 'preview-police-patrolman',
+      facing: 'right',
+      layer: 'terrain',
+      policeBehaviorMode: 'hunter',
+      policePatrolShoots: false,
+    },
+    {
+      id: POLICEWOMAN_OBJECT_ID,
+      x: 512,
+      y: floorY * 16 - 32,
+      instanceId: 'preview-policewoman',
+      facing: 'left',
+      layer: 'terrain',
+      policeBehaviorMode: 'patrol',
+      policePatrolShoots: true,
+    },
+  ];
+
+  return roomSnapshot;
 }
 
 function findEditableRoomCandidate(

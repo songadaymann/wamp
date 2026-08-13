@@ -843,6 +843,10 @@ export class EditorScene extends Phaser.Scene {
         this.inspectorController.setFocusedSwordsmanObjectiveMode(objectiveMode),
       onSetFocusedSwordsmanDefeatMode: (defeatMode) =>
         this.inspectorController.setFocusedSwordsmanDefeatMode(defeatMode),
+      onSetFocusedPoliceBehaviorMode: (mode) =>
+        this.inspectorController.setFocusedPoliceBehaviorMode(mode),
+      onSetFocusedPolicePatrolShoots: (patrolShoots) =>
+        this.inspectorController.setFocusedPolicePatrolShoots(patrolShoots),
       onSetFocusedNpcMode: (mode) =>
         this.inspectorController.setFocusedNpcMode(mode),
       onSetFocusedNpcPushable: (pushable) =>

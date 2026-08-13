@@ -6945,6 +6945,8 @@ export class OverworldPlayScene extends Phaser.Scene {
               : Math.round(liveObject.runtime.aiCollectRouteScore),
             aiCollectRouteValue: Math.round(liveObject.runtime.aiCollectRouteValue),
             aiCollectRoutePenalty: Math.round(liveObject.runtime.aiCollectRoutePenalty),
+            policeBehaviorMode: liveObject.runtime.policeBehaviorMode,
+            policePatrolShoots: liveObject.runtime.policePatrolShoots,
             npcName: liveObject.npcName,
             npcMode: liveObject.runtime.npcMode,
             npcPushable: liveObject.runtime.npcPushable,

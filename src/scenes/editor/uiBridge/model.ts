@@ -1,6 +1,7 @@
 import type { ToolName } from '../../../config';
 import type { CourseGoalType } from '../../../courses/model';
 import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../../../enemies/swordsmanObjectives';
+import type { PoliceBehaviorMode } from '../../../enemies/policeEnemy';
 import type { RoomGoalType } from '../../../goals/roomGoals';
 import type { NpcQuestType } from '../../../goals/roomGoals';
 import type { RoomLightingMode } from '../../../lighting/model';
@@ -96,6 +97,12 @@ export interface EditorInspectorState {
   swordsmanObjectiveModeDisabled: boolean;
   swordsmanDefeatModeValue: SwordsmanDefeatMode;
   swordsmanDefeatModeDisabled: boolean;
+  policeVisible: boolean;
+  policeStatusText: string;
+  policeBehaviorModeValue: PoliceBehaviorMode;
+  policeBehaviorModeDisabled: boolean;
+  policePatrolShootsChecked: boolean;
+  policePatrolShootsHidden: boolean;
   npcVisible: boolean;
   npcStatusText: string;
   npcModeValue: NpcMode;
@@ -212,6 +219,8 @@ export interface EditorUiBridgeActions {
   onClearContainerContents: () => void;
   onSetFocusedSwordsmanObjectiveMode: (objectiveMode: SwordsmanObjectiveMode) => void;
   onSetFocusedSwordsmanDefeatMode: (defeatMode: SwordsmanDefeatMode) => void;
+  onSetFocusedPoliceBehaviorMode: (mode: PoliceBehaviorMode) => void;
+  onSetFocusedPolicePatrolShoots: (patrolShoots: boolean) => void;
   onSetFocusedNpcMode: (mode: NpcMode) => void;
   onSetFocusedNpcPushable: (pushable: boolean) => void;
   onSetFocusedNpcCanJumpFall: (canJumpFall: boolean) => void;

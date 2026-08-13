@@ -15,6 +15,10 @@ import {
   type SwordsmanAiState,
 } from '../../../enemies/swordsmanAi';
 import {
+  getPoliceAnimationKey,
+  isPoliceEnemyObjectId,
+} from '../../../enemies/policeEnemy';
+import {
   buildSwordsmanDuelObjectiveTarget,
   DEFAULT_SWORDSMAN_DEFEAT_MODE,
   DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
@@ -92,6 +96,11 @@ const SWORDSMAN_AI_ATTACK_MS = 240;
 const SWORDSMAN_AI_ATTACK_HIT_START_MS = 55;
 const SWORDSMAN_AI_ATTACK_HIT_END_MS = 155;
 const SWORDSMAN_AI_COOLDOWN_MS = 300;
+const POLICE_AI_SHOOT_RANGE_X = 220;
+const POLICE_AI_SHOOT_RANGE_Y = 20;
+const POLICE_AI_WINDUP_MS = 220;
+const POLICE_AI_ATTACK_MS = 650;
+const POLICE_AI_COOLDOWN_MS = 680;
 const SWORDSMAN_AI_SWORD_LOS_STEP_PX = 4;
 const SWORDSMAN_AI_EDGE_GUARD_PROBE_LEAD_PX = 4;
 const SWORDSMAN_AI_FACING_FLIP_MIN_INTERVAL_MS = 90;
@@ -148,6 +157,10 @@ interface LiveObjectSwordsmanControllerOptions<TEdgeWall> {
     room: RoomSnapshot,
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body,
+  ) => void;
+  spawnEnemyBullet: (
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
   ) => void;
 }
 
@@ -212,6 +225,14 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
     this.syncSwordsmanLadderGravity(liveObject, body);
     this.updateSwordsmanTraversalMemory(room, liveObject, body, now);
+    if (isPoliceEnemyObjectId(liveObject.config.id)) {
+      if (liveObject.runtime.policeBehaviorMode === 'patrol') {
+        this.updatePolicePatrolObjective(loadedRoom, liveObject, body, now);
+      } else {
+        this.updateSwordsmanDuelObjective(loadedRoom, liveObject, body, now);
+      }
+      return;
+    }
     switch (this.getSwordsmanObjectiveMode(liveObject)) {
       case 'collect':
         this.updateSwordsmanCollectObjective(loadedRoom, liveObject, body, now);
@@ -221,6 +242,58 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         this.updateSwordsmanDuelObjective(loadedRoom, liveObject, body, now);
         return;
     }
+  }
+
+  private updatePolicePatrolObjective(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+    now: number,
+  ): void {
+    const target = liveObject.runtime.policePatrolShoots
+      ? this.getSwordsmanDuelObjectiveTarget(loadedRoom, liveObject, body)
+      : null;
+    const currentState = liveObject.runtime.aiState ?? 'patrol';
+
+    if (currentState === 'attack') {
+      body.setVelocityX(0);
+      this.holdGroundedSwordsmanAttackBody(body);
+      this.clearSwordsmanObjectiveTraversalState(liveObject, 'police-patrol-attack', body);
+      this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
+      this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'sword-slash'));
+      if (now >= liveObject.runtime.nextActionAt) {
+        this.setSwordsmanAiState(liveObject, 'patrol');
+      }
+      return;
+    }
+
+    if (currentState === 'windup') {
+      body.setVelocityX(0);
+      this.holdGroundedSwordsmanAttackBody(body);
+      this.clearSwordsmanObjectiveTraversalState(liveObject, 'police-patrol-windup', body);
+      if (target) {
+        liveObject.runtime.directionX = target.directionX;
+      }
+      this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
+      this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
+      if (now >= liveObject.runtime.nextActionAt) {
+        if (target?.withinActionRange) {
+          this.startSwordsmanAttack(loadedRoom, liveObject);
+        } else {
+          this.setSwordsmanAiState(liveObject, 'patrol');
+        }
+      }
+      return;
+    }
+
+    if (target?.withinActionRange && now >= liveObject.runtime.cooldownUntil) {
+      liveObject.runtime.directionX = target.directionX;
+      this.startSwordsmanWindup(liveObject);
+      body.setVelocityX(0);
+      return;
+    }
+
+    this.runSwordsmanPatrolFallback(loadedRoom, liveObject, body, 'police-patrol');
   }
 
   private getSwordsmanObjectiveMode(liveObject: LoadedRoomObject): SwordsmanObjectiveMode {
@@ -245,11 +318,13 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       this.holdGroundedSwordsmanAttackBody(body);
       this.clearSwordsmanObjectiveTraversalState(liveObject, 'attack', body);
       this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
-      this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS['sword-slash']);
-      this.applySwordsmanSwordDamage(loadedRoom, liveObject);
+      this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'sword-slash'));
+      if (!isPoliceEnemyObjectId(liveObject.config.id)) {
+        this.applySwordsmanSwordDamage(loadedRoom, liveObject);
+      }
       if (now >= liveObject.runtime.nextActionAt) {
         this.setSwordsmanAiState(liveObject, 'cooldown');
-        this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
+        this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
       }
       return;
     }
@@ -262,7 +337,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         liveObject.runtime.directionX = target.directionX;
       }
       this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
-      this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
+      this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
       if (now >= liveObject.runtime.nextActionAt) {
         if (target?.withinActionRange) {
           this.startSwordsmanAttack(loadedRoom, liveObject);
@@ -277,7 +352,10 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       body.setVelocityX(0);
       this.holdGroundedSwordsmanAttackBody(body);
       this.clearSwordsmanObjectiveTraversalState(liveObject, 'cooldown', body);
-      this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
+      this.playSwordsmanAnimation(
+        liveObject,
+        this.getEnemyAnimationKey(liveObject, isPoliceEnemyObjectId(liveObject.config.id) ? 'reload' : 'idle'),
+      );
       if (now >= liveObject.runtime.cooldownUntil) {
         this.setSwordsmanAiState(liveObject, target ? 'chase' : 'patrol');
       }
@@ -313,7 +391,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         }
         if (!liveObject.runtime.aiActiveTraversalEdgeId && (body.blocked.down || body.touching.down)) {
           body.setVelocityX(0);
-          this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
+          this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
         }
         liveObject.runtime.aiPlannedTraversalReason = 'collect';
         this.collectLiveObject(loadedRoom, target.collectible, {
@@ -330,6 +408,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body
   ): SwordsmanObjectiveTarget | null {
     const room = loadedRoom.room;
+    const isPolice = isPoliceEnemyObjectId(liveObject.config.id);
     const target = buildSwordsmanDuelObjectiveTarget({
       enemyBody: body,
       playerBody: this.options.getPlayerBody(),
@@ -338,15 +417,19 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       roomHeightPx: ROOM_PX_HEIGHT,
       chaseRangeX: SWORDSMAN_AI_CHASE_RANGE_X,
       chaseRangeY: SWORDSMAN_AI_CHASE_RANGE_Y,
-      attackRangeX: SWORDSMAN_AI_ATTACK_RANGE_X,
-      attackRangeY: SWORDSMAN_AI_ATTACK_RANGE_Y,
+      attackRangeX: isPolice ? POLICE_AI_SHOOT_RANGE_X : SWORDSMAN_AI_ATTACK_RANGE_X,
+      attackRangeY: isPolice ? POLICE_AI_SHOOT_RANGE_Y : SWORDSMAN_AI_ATTACK_RANGE_Y,
     });
 
     if (!target?.withinActionRange) {
       return target;
     }
 
-    if (this.canSwordsmanSwordReachTarget(loadedRoom, liveObject, target.body)) {
+    if (
+      isPolice
+        ? this.canPoliceShootTarget(loadedRoom, liveObject, target.body)
+        : this.canSwordsmanSwordReachTarget(loadedRoom, liveObject, target.body)
+    ) {
       return target;
     }
 
@@ -1253,10 +1336,10 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     this.playSwordsmanAnimation(
       liveObject,
       body.velocity.y < 0
-        ? SWORDSMAN_AI_ANIMATION_KEYS['jump-rise']
+        ? this.getEnemyAnimationKey(liveObject, 'jump-rise')
         : body.velocity.y > 0
-          ? SWORDSMAN_AI_ANIMATION_KEYS['jump-fall']
-          : SWORDSMAN_AI_ANIMATION_KEYS.idle,
+          ? this.getEnemyAnimationKey(liveObject, 'jump-fall')
+          : this.getEnemyAnimationKey(liveObject, 'idle'),
     );
   }
 
@@ -1314,12 +1397,12 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
     if (movingTowardWall || missingGroundAhead) {
       body.setVelocityX(0);
-      this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
+      this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
       return;
     }
 
     body.setVelocityX(liveObject.runtime.directionX * speed);
-    this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.run);
+    this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'run'));
   }
 
   private getSwordsmanTraversalDecision(
@@ -1943,7 +2026,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
           SWORDSMAN_AI_LADDER_ALIGN_SPEED,
         ),
       );
-      this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
+      this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
       return true;
     }
 
@@ -1962,7 +2045,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         : decision.directionX;
     liveObject.runtime.directionX = facingDirectionX;
     this.applySwordsmanFacing(liveObject, body, facingDirectionX);
-    this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS['ladder-climb']);
+    this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'ladder-climb'));
     return true;
   }
 
@@ -1984,7 +2067,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       liveObject.runtime.aiTraversalCooldownUntil =
         this.options.getCurrentTime() + SWORDSMAN_AI_TRAVERSAL_COOLDOWN_MS;
       this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
-      this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS['jump-rise']);
+      this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'jump-rise'));
       return true;
     }
 
@@ -2002,7 +2085,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       liveObject.runtime.aiTraversalCooldownUntil =
         this.options.getCurrentTime() + SWORDSMAN_AI_TRAVERSAL_COOLDOWN_MS;
       this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
-      this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS['jump-rise']);
+      this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'jump-rise'));
       return true;
     }
 
@@ -2068,7 +2151,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     liveObject.runtime.aiTraversalEdgeId = null;
     liveObject.runtime.aiTraversalCooldownUntil = now + SWORDSMAN_AI_TRAVERSAL_COOLDOWN_MS;
     this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
-    this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS['jump-rise']);
+    this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'jump-rise'));
     return true;
   }
 
@@ -2701,8 +2784,8 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     this.playSwordsmanAnimation(
       liveObject,
       body.velocity.y < 0
-        ? SWORDSMAN_AI_ANIMATION_KEYS['jump-rise']
-        : SWORDSMAN_AI_ANIMATION_KEYS['jump-fall'],
+        ? this.getEnemyAnimationKey(liveObject, 'jump-rise')
+        : this.getEnemyAnimationKey(liveObject, 'jump-fall'),
     );
   }
 
@@ -2730,8 +2813,8 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     this.playSwordsmanAnimation(
       liveObject,
       body.velocity.y < 0
-        ? SWORDSMAN_AI_ANIMATION_KEYS['jump-rise']
-        : SWORDSMAN_AI_ANIMATION_KEYS['jump-fall'],
+        ? this.getEnemyAnimationKey(liveObject, 'jump-rise')
+        : this.getEnemyAnimationKey(liveObject, 'jump-fall'),
     );
   }
 
@@ -2758,9 +2841,13 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   private startSwordsmanWindup(liveObject: LoadedRoomObject): void {
     const now = this.options.getCurrentTime();
     this.setSwordsmanAiState(liveObject, 'windup');
-    liveObject.runtime.nextActionAt = now + SWORDSMAN_AI_WINDUP_MS;
+    liveObject.runtime.nextActionAt = now + (
+      isPoliceEnemyObjectId(liveObject.config.id)
+        ? POLICE_AI_WINDUP_MS
+        : SWORDSMAN_AI_WINDUP_MS
+    );
     this.applySwordsmanFacing(liveObject, null, liveObject.runtime.directionX, { force: true });
-    this.playSwordsmanAnimation(liveObject, SWORDSMAN_AI_ANIMATION_KEYS.idle);
+    this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
   }
 
   private startSwordsmanAttack(
@@ -2768,20 +2855,28 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     liveObject: LoadedRoomObject,
   ): void {
     const now = this.options.getCurrentTime();
+    const isPolice = isPoliceEnemyObjectId(liveObject.config.id);
+    const attackMs = isPolice ? POLICE_AI_ATTACK_MS : SWORDSMAN_AI_ATTACK_MS;
+    const cooldownMs = isPolice ? POLICE_AI_COOLDOWN_MS : SWORDSMAN_AI_COOLDOWN_MS;
     this.setSwordsmanAiState(liveObject, 'attack');
-    liveObject.runtime.nextActionAt = now + SWORDSMAN_AI_ATTACK_MS;
+    liveObject.runtime.nextActionAt = now + attackMs;
     liveObject.runtime.activatedUntil = now + SWORDSMAN_AI_ATTACK_HIT_END_MS;
-    liveObject.runtime.cooldownUntil = now + SWORDSMAN_AI_ATTACK_MS + SWORDSMAN_AI_COOLDOWN_MS;
+    liveObject.runtime.cooldownUntil = now + attackMs + cooldownMs;
     this.applySwordsmanFacing(liveObject, null, liveObject.runtime.directionX, { force: true });
+    const attackAnimationKey = this.getEnemyAnimationKey(liveObject, 'sword-slash');
     if (
       isAnimationSafelyPlayable(
         this.options.scene.anims,
-        SWORDSMAN_AI_ANIMATION_KEYS['sword-slash'],
+        attackAnimationKey,
       )
     ) {
-      liveObject.sprite.play(SWORDSMAN_AI_ANIMATION_KEYS['sword-slash'], false);
+      liveObject.sprite.play(attackAnimationKey, false);
     }
-    this.applySwordsmanSwordDamage(loadedRoom, liveObject);
+    if (isPolice) {
+      this.options.spawnEnemyBullet(loadedRoom, liveObject);
+    } else {
+      this.applySwordsmanSwordDamage(loadedRoom, liveObject);
+    }
   }
 
   private setSwordsmanAiState(
@@ -2802,6 +2897,26 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     }
 
     liveObject.sprite.play(animationKey, true);
+  }
+
+  private getEnemyAnimationKey(
+    liveObject: LoadedRoomObject,
+    action: keyof typeof SWORDSMAN_AI_ANIMATION_KEYS | 'reload',
+  ): string {
+    if (!isPoliceEnemyObjectId(liveObject.config.id)) {
+      return action === 'reload'
+        ? SWORDSMAN_AI_ANIMATION_KEYS.idle
+        : SWORDSMAN_AI_ANIMATION_KEYS[action];
+    }
+
+    const policeAction = action === 'sword-slash'
+      ? 'shoot'
+      : action === 'ladder-climb'
+        ? 'run'
+        : action === 'land'
+          ? 'idle'
+          : action;
+    return getPoliceAnimationKey(liveObject.config.id, policeAction) ?? liveObject.config.id;
   }
 
   private applySwordsmanSwordDamage(
@@ -2847,6 +2962,50 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     }
 
     return !this.isSwordsmanSwordPathBlocked(loadedRoom, liveObject, targetBounds);
+  }
+
+  private canPoliceShootTarget(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+    targetBody: ArcadeObjectBody,
+  ): boolean {
+    const body = liveObject.sprite.body as ArcadeObjectBody | null;
+    if (!body) {
+      return false;
+    }
+
+    const bodyBounds = getArcadeBodyBounds(body);
+    const targetBounds = getArcadeBodyBounds(targetBody);
+    const shotY = body.center.y - 4;
+    if (shotY < targetBounds.top - 5 || shotY > targetBounds.bottom + 5) {
+      return false;
+    }
+
+    const directionX = targetBody.center.x >= body.center.x ? 1 : -1;
+    const pathStartX = directionX > 0 ? bodyBounds.right : targetBounds.right;
+    const pathEndX = directionX > 0 ? targetBounds.left : bodyBounds.left;
+    const left = Math.min(pathStartX, pathEndX);
+    const right = Math.max(pathStartX, pathEndX);
+    if (right - left <= 1) {
+      return true;
+    }
+
+    const lane = new Phaser.Geom.Rectangle(left, shotY - 2, right - left, 4);
+    if (this.swordsmanSwordLaneHitsSolidTerrain(loadedRoom.room, lane)) {
+      return false;
+    }
+
+    for (const candidate of loadedRoom.liveObjects) {
+      const solidBody = this.getSolidRuntimeObjectBody(candidate, liveObject);
+      if (
+        solidBody
+        && Phaser.Geom.Intersects.RectangleToRectangle(lane, getArcadeBodyBounds(solidBody))
+      ) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private isSwordsmanSwordPathBlocked(

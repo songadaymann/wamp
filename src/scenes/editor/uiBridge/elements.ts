@@ -131,6 +131,11 @@ export interface EditorUiElements {
   swordsmanStatus: HTMLElement | null;
   swordsmanObjectiveModeSelect: HTMLSelectElement | null;
   swordsmanDefeatModeSelect: HTMLSelectElement | null;
+  policePanel: HTMLElement | null;
+  policeStatus: HTMLElement | null;
+  policeBehaviorModeSelect: HTMLSelectElement | null;
+  policePatrolShootsRow: HTMLElement | null;
+  policePatrolShootsCheckbox: HTMLInputElement | null;
   npcPanel: HTMLElement | null;
   npcStatus: HTMLElement | null;
   npcModeSelect: HTMLSelectElement | null;
@@ -310,6 +315,11 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
       'swordsman-objective-mode-select',
     ),
     swordsmanDefeatModeSelect: byId<HTMLSelectElement>(doc, 'swordsman-defeat-mode-select'),
+    policePanel: byId<HTMLElement>(doc, 'police-behavior-panel'),
+    policeStatus: byId<HTMLElement>(doc, 'police-behavior-status'),
+    policeBehaviorModeSelect: byId<HTMLSelectElement>(doc, 'police-behavior-mode-select'),
+    policePatrolShootsRow: byId<HTMLElement>(doc, 'police-patrol-shoots-row'),
+    policePatrolShootsCheckbox: byId<HTMLInputElement>(doc, 'police-patrol-shoots-checkbox'),
     npcPanel: byId<HTMLElement>(doc, 'npc-objective-panel'),
     npcStatus: byId<HTMLElement>(doc, 'npc-objective-status'),
     npcModeSelect: byId<HTMLSelectElement>(doc, 'npc-mode-select'),

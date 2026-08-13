@@ -5,6 +5,12 @@ import {
   type CustomSpriteKind,
 } from '../customSprites/model';
 import { GHOST_OBJECT_ID } from '../enemies/ghost';
+import {
+  POLICE_PATROLMAN_OBJECT_ID,
+  POLICEWOMAN_OBJECT_ID,
+  isPoliceEnemyObjectId,
+  type PoliceBehaviorMode,
+} from '../enemies/policeEnemy';
 import { SWORDSMAN_AI_OBJECT_ID } from '../enemies/swordsmanAi';
 import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../enemies/swordsmanObjectives';
 import {
@@ -194,6 +200,8 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'chicken',     name: 'Chicken',     category: 'enemy',       path: 'assets/enemies/chicken.png',     frameWidth: 32, frameHeight: 32, frameCount: 14, fps: 8,  animationFrames: [7, 8, 9, 10, 11, 12, 13], defaultFrame: 7, facingDirection: 'left', bodyWidth: 18, bodyHeight: 16, behavior: 'patrol',   description: 'Quick patrol enemy. Kills on contact.' },
   { id: 'shark',       name: 'Shark',       category: 'enemy',       path: 'assets/enemies/shark.png',       frameWidth: 64, frameHeight: 32, frameCount: 4,  fps: 8,  animationFrames: [0, 1, 2, 3, 2, 1], defaultFrame: 1, facingDirection: 'left', bodyWidth: 48, bodyHeight: 18, behavior: 'fly',      description: 'Cruises left and right in a wave pattern. Kills on contact.' },
   { id: SWORDSMAN_AI_OBJECT_ID, name: 'Sword Hunter', category: 'enemy', path: 'assets/enemies/swordsman_ai/sword_idle.png', frameWidth: 48, frameHeight: 48, frameCount: 10, fps: 8, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 14, bodyOffsetX: 19, bodyOffsetY: 26, displayScale: 1.12, displayOffsetY: 8, previewWidth: 18, previewHeight: 28, previewOffsetX: 15, previewOffsetY: 20, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Smart sword enemy. Patrols, chases nearby players, and attacks with a timed slash.' },
+  { id: POLICE_PATROLMAN_OBJECT_ID, name: 'Police Patrolman', category: 'enemy', path: 'assets/enemies/police_patrolman/idle.png', frameWidth: 64, frameHeight: 64, frameCount: 6, fps: 6, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 27, bodyOffsetX: 29, bodyOffsetY: 37, previewWidth: 22, previewHeight: 34, previewOffsetX: 22, previewOffsetY: 30, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Ranged police enemy. Can hunt players across platforms or patrol with optional shooting.' },
+  { id: POLICEWOMAN_OBJECT_ID, name: 'Policewoman', category: 'enemy', path: 'assets/enemies/policewoman/idle.png', frameWidth: 64, frameHeight: 64, frameCount: 6, fps: 6, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 27, bodyOffsetX: 25, bodyOffsetY: 37, previewWidth: 20, previewHeight: 34, previewOffsetX: 20, previewOffsetY: 30, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Ranged police enemy. Can hunt players across platforms or patrol with optional shooting.' },
 
   // ── NPCs ──
   { id: JIMOTHY_OBJECT_ID, name: 'Jimothy', category: 'npc', path: 'assets/npc/jimothy.png', frameWidth: 32, frameHeight: 32, frameCount: 8, fps: 4, animationFrames: [0, 1], defaultFrame: 0, facingDirection: 'right', bodyWidth: 24, bodyHeight: 16, bodyOffsetX: 4, bodyOffsetY: 16, behavior: 'static', description: 'A friendly NPC who can idle, wander, patrol, follow players, and deliver dialogue.' },
@@ -273,6 +281,7 @@ export function isDynamicRuntimeObjectConfig(
     || config.id === 'chicken'
     || config.id === 'cage'
     || config.id === SWORDSMAN_AI_OBJECT_ID
+    || isPoliceEnemyObjectId(config.id)
     || isNpcObjectId(config.id)
     || config.id === MOVING_PLATFORM_OBJECT_ID
   );
@@ -408,6 +417,8 @@ export function getObjectRuntimeBodyOffset(config: GameObjectConfig): [number, n
     case 'bear_polar':
     case 'chicken':
     case SWORDSMAN_AI_OBJECT_ID:
+    case POLICE_PATROLMAN_OBJECT_ID:
+    case POLICEWOMAN_OBJECT_ID:
       offsetY = Math.max(0, config.frameHeight - config.bodyHeight);
       break;
     default:
@@ -526,6 +537,8 @@ export interface PlacedObject {
   signText?: string | null;
   swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;
   swordsmanDefeatMode?: SwordsmanDefeatMode | null;
+  policeBehaviorMode?: PoliceBehaviorMode | null;
+  policePatrolShoots?: boolean | null;
   npcMode?: NpcMode | null;
   npcPushable?: boolean | null;
   npcCanJumpFall?: boolean | null;

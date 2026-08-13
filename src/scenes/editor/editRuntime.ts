@@ -31,6 +31,13 @@ import {
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
 import {
+  DEFAULT_POLICE_BEHAVIOR_MODE,
+  DEFAULT_POLICE_PATROL_SHOOTS,
+  isPoliceEnemyObjectId,
+  normalizePoliceBehaviorMode,
+  type PoliceBehaviorMode,
+} from '../../enemies/policeEnemy';
+import {
   DEFAULT_SWORDSMAN_DEFEAT_MODE,
   DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
   normalizeSwordsmanDefeatMode,
@@ -1015,6 +1022,12 @@ export class EditorEditRuntime {
         editorState.selectedObjectId === SWORDSMAN_AI_OBJECT_ID
           ? DEFAULT_SWORDSMAN_DEFEAT_MODE
           : null,
+      policeBehaviorMode: isPoliceEnemyObjectId(editorState.selectedObjectId)
+        ? DEFAULT_POLICE_BEHAVIOR_MODE
+        : null,
+      policePatrolShoots: isPoliceEnemyObjectId(editorState.selectedObjectId)
+        ? DEFAULT_POLICE_PATROL_SHOOTS
+        : null,
       npcMode: isNpcObjectId(editorState.selectedObjectId) ? DEFAULT_NPC_MODE : null,
       npcPushable: isNpcObjectId(editorState.selectedObjectId) ? false : null,
       npcCanJumpFall: isNpcObjectId(editorState.selectedObjectId) ? false : null,
@@ -1430,6 +1443,49 @@ export class EditorEditRuntime {
       action: { previous, next: this.clonePlacedObjects(next) },
     });
     this.redoStack = [];
+    this.markRoomDirty();
+    return true;
+  }
+
+  setPoliceBehaviorMode(instanceId: string, mode: PoliceBehaviorMode): boolean {
+    const normalizedMode = normalizePoliceBehaviorMode(mode) ?? DEFAULT_POLICE_BEHAVIOR_MODE;
+    return this.updatePoliceEnemy(instanceId, (placed) => ({
+      ...placed,
+      policeBehaviorMode: normalizedMode,
+    }));
+  }
+
+  setPolicePatrolShoots(instanceId: string, patrolShoots: boolean): boolean {
+    return this.updatePoliceEnemy(instanceId, (placed) => ({
+      ...placed,
+      policePatrolShoots: Boolean(patrolShoots),
+    }));
+  }
+
+  private updatePoliceEnemy(
+    instanceId: string,
+    update: (placed: PlacedObject) => PlacedObject,
+  ): boolean {
+    const placedObjects = this.host.getPlacedObjects();
+    const policeIndex = placedObjects.findIndex((placed) => placed.instanceId === instanceId);
+    if (policeIndex < 0 || !isPoliceEnemyObjectId(placedObjects[policeIndex]?.id ?? '')) {
+      return false;
+    }
+
+    const previous = this.clonePlacedObjects();
+    const nextPolice = update(previous[policeIndex]);
+    if (JSON.stringify(previous[policeIndex]) === JSON.stringify(nextPolice)) {
+      return true;
+    }
+
+    const next = previous.map((placed, index) => index === policeIndex ? nextPolice : placed);
+    this.host.setPlacedObjects(next);
+    this.undoStack.push({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
+    });
+    this.redoStack = [];
+    this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
   }
