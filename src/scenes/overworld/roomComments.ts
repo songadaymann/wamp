@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import {
   type BrowseRoomCommentPreview,
-  type RoomCommentRecord,
 } from '../../roomComments/model';
 import { type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
 import { type WorldRoomSummary, type WorldWindow } from '../../persistence/worldModel';
@@ -25,17 +24,7 @@ import {
   RoomCommentsDataController,
   type BrowseCommentTarget,
 } from './roomCommentsDataController';
-
-interface RenderedRoomComment {
-  comment: RoomCommentRecord;
-  container: Phaser.GameObjects.Container;
-  pin: Phaser.GameObjects.Image;
-  panel: Phaser.GameObjects.Graphics;
-  authorText: Phaser.GameObjects.Text;
-  bodyText: Phaser.GameObjects.Text;
-  timeText: Phaser.GameObjects.Text;
-  pinned: boolean;
-}
+import { RoomCommentsPlayPresentationController } from './roomCommentsPlayPresentationController';
 
 interface RenderedBrowseCommentMarker extends OverworldBadgePlacement {
   key: string;
@@ -105,14 +94,6 @@ interface OverworldRoomCommentsControllerOptions {
   document?: Document;
 }
 
-const COMMENT_PIN_DEPTH = 262;
-const COMMENT_PIN_TEXTURE_KEY = 'room_comment_icon';
-const COMMENT_PANEL_FILL = 0x050505;
-const COMMENT_PANEL_STROKE = 0xffd65a;
-const COMMENT_TEXT_COLOR = '#fff3dc';
-const COMMENT_MUTED_COLOR = '#d0b98c';
-const COMMENT_PANEL_WIDTH = 236;
-const COMMENT_PANEL_PADDING = 9;
 const BROWSE_COMMENT_DEPTH = 58;
 const BROWSE_COMMENT_HIDE_ZOOM = 0.11;
 const BROWSE_COMMENT_FADE_START_ZOOM = 0.145;
@@ -193,9 +174,9 @@ export class OverworldRoomCommentsController {
   };
   private readonly composerController: RoomCommentsComposerController;
   private readonly dataController: RoomCommentsDataController;
+  private readonly playPresentationController: RoomCommentsPlayPresentationController;
   private commentsVisible = getGameSettings().roomCommentsVisible;
   private unsubscribeSettings: (() => void) | null = null;
-  private readonly renderedCommentsById = new Map<string, RenderedRoomComment>();
   private readonly browseCommentMarkersByKey = new Map<string, RenderedBrowseCommentMarker>();
   private hoveredBrowseMarkerKey: string | null = null;
   private readonly activeBrowseDanmaku = new Set<RenderedBrowseDanmakuComment>();
@@ -206,6 +187,11 @@ export class OverworldRoomCommentsController {
   private browseDanmakuCandidateCursor = 0;
 
   constructor(private readonly options: OverworldRoomCommentsControllerOptions) {
+    this.playPresentationController = new RoomCommentsPlayPresentationController({
+      scene: options.scene,
+      getRoomOrigin: options.getRoomOrigin,
+      onDisplayObjectsChanged: options.onDisplayObjectsChanged,
+    });
     this.dataController = new RoomCommentsDataController({
       getMode: options.getMode,
       waitForBrowseDiscoveryReady: options.waitForBrowseDiscoveryReady,
@@ -233,7 +219,7 @@ export class OverworldRoomCommentsController {
     this.composerController.close(false);
     this.dataController.reset();
     this.hoveredBrowseMarkerKey = null;
-    this.destroyRenderedComments();
+    this.playPresentationController.reset();
     this.destroyBrowseCommentMarkers();
     this.destroyBrowseDanmakuStreams();
   }
@@ -250,7 +236,7 @@ export class OverworldRoomCommentsController {
     const room = this.getRenderableRoom();
     if (this.dataController.observeCurrentRoom(room)) {
       this.nextVisualSyncAt = 0;
-      this.destroyRenderedComments();
+      this.playPresentationController.reset();
     }
 
     this.composerController.update();
@@ -342,7 +328,7 @@ export class OverworldRoomCommentsController {
 
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
     return [
-      ...Array.from(this.renderedCommentsById.values(), (rendered) => rendered.container),
+      ...this.playPresentationController.getIgnoredObjects(),
       ...Array.from(this.browseCommentMarkersByKey.values(), (rendered) => rendered.container),
       ...Array.from(this.activeBrowseDanmaku.values(), (rendered) => rendered.container),
     ];
@@ -388,7 +374,7 @@ export class OverworldRoomCommentsController {
       activeRoomSignature: dataDebug.activeRoomSignature,
       loadingRoomSignature: dataDebug.loadingRoomSignature,
       commentCount: dataDebug.commentCount,
-      renderedCommentCount: this.renderedCommentsById.size,
+      renderedCommentCount: this.playPresentationController.getRenderedCount(),
       commentsVisible: this.commentsVisible,
       currentRoomPublished: this.options.isCurrentRoomPublished(),
       currentRoomSnapshot: currentRoom
@@ -1542,152 +1528,7 @@ export class OverworldRoomCommentsController {
     const visibleComments = room && this.commentsVisible
       ? this.dataController.getCurrentComments()
       : [];
-    const nextIds = new Set<string>();
-    let structureChanged = false;
-
-    for (const comment of visibleComments) {
-      nextIds.add(comment.id);
-      const position = this.getCommentWorldPosition(comment);
-      const existing = this.renderedCommentsById.get(comment.id);
-      if (!existing) {
-        const rendered = this.createRenderedComment(comment);
-        rendered.container.setPosition(position.x, position.y);
-        this.renderedCommentsById.set(comment.id, rendered);
-        structureChanged = true;
-        continue;
-      }
-
-      existing.comment = comment;
-      existing.container.setPosition(position.x, position.y);
-    }
-
-    for (const [commentId, rendered] of this.renderedCommentsById.entries()) {
-      if (nextIds.has(commentId)) {
-        continue;
-      }
-
-      this.destroyRenderedComment(rendered);
-      this.renderedCommentsById.delete(commentId);
-      structureChanged = true;
-    }
-
-    if (structureChanged) {
-      this.options.onDisplayObjectsChanged?.();
-    }
-  }
-
-  private getCommentWorldPosition(comment: RoomCommentRecord): { x: number; y: number } {
-    const origin = this.options.getRoomOrigin(comment.roomCoordinates);
-    return {
-      x: origin.x + comment.position.x,
-      y: origin.y + comment.position.y - 22,
-    };
-  }
-
-  private createRenderedComment(comment: RoomCommentRecord): RenderedRoomComment {
-    const pin = this.options.scene.add.image(0, 0, COMMENT_PIN_TEXTURE_KEY);
-    pin.setOrigin(0.5, 0.5);
-    pin.setDisplaySize(20, 20);
-    const panel = this.options.scene.add.graphics();
-    const authorText = this.options.scene.add.text(0, 0, comment.authorDisplayName, {
-      fontFamily: 'IBM Plex Mono, Courier New, monospace',
-      fontSize: '11px',
-      color: COMMENT_MUTED_COLOR,
-    });
-    const bodyText = this.options.scene.add.text(0, 0, comment.body, {
-      fontFamily: 'IBM Plex Mono, Courier New, monospace',
-      fontSize: '12px',
-      color: COMMENT_TEXT_COLOR,
-      wordWrap: { width: COMMENT_PANEL_WIDTH - COMMENT_PANEL_PADDING * 2 },
-      lineSpacing: 3,
-    });
-    const timeText = this.options.scene.add.text(0, 0, formatCommentTime(comment.createdAt), {
-      fontFamily: 'IBM Plex Mono, Courier New, monospace',
-      fontSize: '10px',
-      color: COMMENT_MUTED_COLOR,
-    });
-    const container = this.options.scene.add.container(0, 0, [
-      pin,
-      panel,
-      authorText,
-      bodyText,
-      timeText,
-    ]);
-    container.setDepth(COMMENT_PIN_DEPTH);
-    container.setSize(30, 30);
-    container.setInteractive(
-      new Phaser.Geom.Rectangle(-15, -15, 30, 30),
-      Phaser.Geom.Rectangle.Contains,
-    );
-
-    const rendered: RenderedRoomComment = {
-      comment,
-      container,
-      pin,
-      panel,
-      authorText,
-      bodyText,
-      timeText,
-      pinned: false,
-    };
-
-    this.redrawRenderedComment(rendered);
-    this.setPopoverVisible(rendered, false);
-
-    container.on('pointerover', () => this.setPopoverVisible(rendered, true));
-    container.on('pointerout', () => {
-      if (!rendered.pinned) {
-        this.setPopoverVisible(rendered, false);
-      }
-    });
-    container.on('pointerdown', () => {
-      rendered.pinned = !rendered.pinned;
-      this.setPopoverVisible(rendered, rendered.pinned);
-    });
-
-    return rendered;
-  }
-
-  private redrawRenderedComment(rendered: RenderedRoomComment): void {
-    rendered.authorText.setText(rendered.comment.authorDisplayName);
-    rendered.bodyText.setText(rendered.comment.body);
-    rendered.timeText.setText(formatCommentTime(rendered.comment.createdAt));
-    const panelX = 16;
-    const panelY = -12;
-    const authorY = panelY + COMMENT_PANEL_PADDING;
-    const bodyY = authorY + rendered.authorText.height + 4;
-    const timeY = bodyY + rendered.bodyText.height + 7;
-    const panelHeight = COMMENT_PANEL_PADDING + rendered.authorText.height + 4 + rendered.bodyText.height + 7 + rendered.timeText.height + COMMENT_PANEL_PADDING;
-
-    rendered.panel.clear();
-    rendered.panel.fillStyle(COMMENT_PANEL_FILL, 0.94);
-    rendered.panel.lineStyle(2, COMMENT_PANEL_STROKE, 1);
-    rendered.panel.fillRoundedRect(panelX, panelY, COMMENT_PANEL_WIDTH, panelHeight, 6);
-    rendered.panel.strokeRoundedRect(panelX, panelY, COMMENT_PANEL_WIDTH, panelHeight, 6);
-    rendered.panel.fillStyle(COMMENT_PANEL_FILL, 0.94);
-    rendered.panel.fillTriangle(10, 2, panelX + 2, panelY + 14, panelX + 2, panelY + 26);
-
-    rendered.authorText.setPosition(panelX + COMMENT_PANEL_PADDING, authorY);
-    rendered.bodyText.setPosition(panelX + COMMENT_PANEL_PADDING, bodyY);
-    rendered.timeText.setPosition(panelX + COMMENT_PANEL_PADDING, timeY);
-  }
-
-  private setPopoverVisible(rendered: RenderedRoomComment, visible: boolean): void {
-    rendered.panel.setVisible(visible);
-    rendered.authorText.setVisible(visible);
-    rendered.bodyText.setVisible(visible);
-    rendered.timeText.setVisible(visible);
-  }
-
-  private destroyRenderedComments(): void {
-    for (const rendered of this.renderedCommentsById.values()) {
-      this.destroyRenderedComment(rendered);
-    }
-    this.renderedCommentsById.clear();
-  }
-
-  private destroyRenderedComment(rendered: RenderedRoomComment): void {
-    rendered.container.destroy(true);
+    this.playPresentationController.sync(visibleComments);
   }
 
   private getRenderableRoom(): RoomSnapshot | null {
@@ -1701,10 +1542,7 @@ export class OverworldRoomCommentsController {
 
 function formatCommentTime(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
+  if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
