@@ -64,23 +64,33 @@ import {
   PVP_INVITE_SEND_RATE_LIMIT_MS,
 } from '../src/partykit/relayProtocol';
 import {
+  activatePvpMatchIfReady,
+  applyPvpLifeLoss as applyPvpLifeLossToState,
+  createPvpMatchState,
+  finalizePvpMatch as finalizePvpMatchState,
+  getPvpSnapshot as buildPvpSnapshot,
+  isValidPvpMatchConfiguration,
+  markPvpForfeit,
+  normalizePvpCombatEvent,
+  normalizePvpPlayerState,
+  normalizePvpRoomStateEvent,
+  startPvpMatch as startPvpMatchState,
+  upsertPvpParticipant as upsertPvpParticipantState,
+  type PvpMatchState,
+} from '../src/partykit/pvpMatchRuntime';
+import {
   getMultiplayerModeDefinition,
   type PvpHitSource,
   type PvpInviteAcceptMessage,
   type PvpInviteDeclineMessage,
   type PvpInviteSendMessage,
-  type PvpMatchCombatEvent,
   type PvpMatchCombatEventMessage,
   type PvpMatchClientMessage,
   type PvpMatchConfigureMessage,
-  type PvpMatchPlayerState,
   type PvpMatchPlayerStateMessage,
   type PvpMatchSnapshot,
-  type PvpMatchStatus,
-  type PvpMode,
   type PvpParticipantIdentity,
   type PvpParticipantSnapshot,
-  type PvpRoomStateEvent,
   type PvpRoomStateEventMessage,
 } from '../src/pvp/model';
 
@@ -88,24 +98,6 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
 const PRESENCE_UPSERT_FLUSH_MS = 80;
 const POPULATION_BROADCAST_FLUSH_MS = 250;
-
-interface PvpMatchState {
-  matchId: string;
-  mode: PvpMode;
-  roomId: string;
-  roomCoordinates: RoomCoordinates;
-  status: PvpMatchStatus;
-  participants: PvpParticipantSnapshot[];
-  startedAt: number | null;
-  countdownEndsAt: number | null;
-  finishedAt: number | null;
-  winnerUserId: string | null;
-  loserUserId: string | null;
-  draw: boolean;
-  lastEvent: string | null;
-  appliedHitIds: Set<string>;
-  playerStatesByUserId: Map<string, PvpMatchPlayerState>;
-}
 
 interface HeartbeatMutationResponse {
   ok: true;
@@ -1070,48 +1062,12 @@ export default class PresenceServer implements Party.Server {
     message: PvpMatchConfigureMessage,
   ): void {
     const state = sender.state;
-    if (!state || message.mode !== 'arena') {
+    if (!state || !isValidPvpMatchConfiguration(message)) {
       return;
     }
-    const mode = getMultiplayerModeDefinition(message.mode);
-
-    const roomCoordinates = this.normalizeRoomCoordinates(message.roomCoordinates);
-    const matchId = this.normalizeShortId(message.matchId, 96);
-    const roomId = this.normalizeShortId(message.roomId, 80);
-    if (!roomCoordinates || !matchId || !roomId) {
-      return;
-    }
-
     if (!this.pvpMatchState) {
-      const participants = this.normalizePvpParticipants(message.participants);
-      if (!participants.some((participant) => participant.userId === state.userId)) {
-        participants.push(this.identityFromState(state));
-      }
-
-      this.pvpMatchState = {
-        matchId,
-        mode: mode.id,
-        roomId,
-        roomCoordinates,
-        status: 'waiting',
-        participants: participants.slice(0, mode.maxPlayers).map((participant) => ({
-          ...participant,
-          hearts: mode.startingLives,
-          connected: false,
-          invulnerableUntil: 0,
-          losses: 0,
-          hits: 0,
-        })),
-        startedAt: null,
-        countdownEndsAt: null,
-        finishedAt: null,
-        winnerUserId: null,
-        loserUserId: null,
-        draw: false,
-        lastEvent: mode.copy.createdEvent,
-        appliedHitIds: new Set(),
-        playerStatesByUserId: new Map(),
-      };
+      this.pvpMatchState = createPvpMatchState(message, this.identityFromState(state));
+      if (!this.pvpMatchState) return;
     }
 
     this.upsertPvpParticipant(sender);
@@ -1126,47 +1082,12 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const existing = match.participants.find((candidate) => candidate.userId === state.userId);
-    if (existing) {
-      existing.displayName = state.displayName;
-      existing.avatarId = state.avatarId;
-      existing.connected = true;
-      return;
-    }
-
-    const mode = getMultiplayerModeDefinition(match.mode);
-    if (match.participants.length >= mode.maxPlayers) {
-      return;
-    }
-
-    match.participants.push({
-      ...this.identityFromState(state),
-      hearts: mode.startingLives,
-      connected: true,
-      invulnerableUntil: 0,
-      losses: 0,
-      hits: 0,
-    });
+    upsertPvpParticipantState(match, this.identityFromState(state));
   }
 
   private maybeActivatePvpMatch(): void {
     const match = this.pvpMatchState;
-    if (!match || match.status !== 'waiting') {
-      return;
-    }
-
-    const mode = getMultiplayerModeDefinition(match.mode);
-    if (
-      match.participants.length < mode.minPlayers ||
-      match.participants.some((participant) => !participant.connected)
-    ) {
-      return;
-    }
-
-    match.status = 'countdown';
-    match.countdownEndsAt = Date.now() + mode.countdownMs;
-    match.lastEvent = mode.copy.startRuleEvent;
-    this.schedulePvpStart();
+    if (match && activatePvpMatchIfReady(match, Date.now())) this.schedulePvpStart();
   }
 
   private schedulePvpStart(): void {
@@ -1186,15 +1107,7 @@ export default class PresenceServer implements Party.Server {
 
   private startPvpMatch(): void {
     const match = this.pvpMatchState;
-    if (!match || match.status !== 'countdown') {
-      return;
-    }
-
-    match.status = 'active';
-    match.startedAt = Date.now();
-    match.countdownEndsAt = null;
-    match.lastEvent = getMultiplayerModeDefinition(match.mode).copy.goEvent;
-    this.broadcastPvpSnapshot();
+    if (match && startPvpMatchState(match, Date.now())) this.broadcastPvpSnapshot();
   }
 
   private applyPvpLifeLoss(input: {
@@ -1204,55 +1117,10 @@ export default class PresenceServer implements Party.Server {
     source: PvpHitSource;
   }): void {
     const match = this.pvpMatchState;
-    if (!match || (match.status !== 'active' && match.status !== 'finalizing')) {
-      return;
-    }
-
-    const hitId = this.normalizeShortId(input.hitId, 120);
-    if (!hitId || match.appliedHitIds.has(hitId)) {
-      return;
-    }
-
-    const target = match.participants.find((participant) => participant.userId === input.targetUserId);
-    if (!target || target.hearts <= 0) {
-      return;
-    }
-
-    if (
-      input.attackerUserId &&
-      !match.participants.some((participant) => participant.userId === input.attackerUserId)
-    ) {
-      return;
-    }
-
-    const now = Date.now();
-    if (match.status === 'active' && now < target.invulnerableUntil) {
-      return;
-    }
-
-    match.appliedHitIds.add(hitId);
-    target.hearts = Math.max(0, target.hearts - 1);
-    target.losses += 1;
-    target.invulnerableUntil = now + getMultiplayerModeDefinition(match.mode).respawnInvulnerableMs;
-
-    const attacker = input.attackerUserId
-      ? match.participants.find((participant) => participant.userId === input.attackerUserId) ?? null
-      : null;
-    if (attacker && attacker.userId !== target.userId) {
-      attacker.hits += 1;
-    }
-
-    match.lastEvent =
-      input.source === 'environment'
-        ? `${target.displayName} lost a heart.`
-        : `${target.displayName} lost a heart to ${attacker?.displayName ?? 'opponent'}.`;
-
-    if (target.hearts <= 0) {
-      match.status = 'finalizing';
-      match.lastEvent = `${target.displayName} is out.`;
-      this.schedulePvpFinalize();
-    }
-
+    if (!match) return;
+    const result = applyPvpLifeLossToState(match, input, Date.now());
+    if (!result.changed) return;
+    if (result.requiresFinalizeSchedule) this.schedulePvpFinalize();
     this.broadcastPvpSnapshot();
   }
 
@@ -1271,7 +1139,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const normalized = this.normalizePvpPlayerState(message.state, state.userId);
+    const normalized = normalizePvpPlayerState(message.state, state.userId, Date.now());
     if (!normalized || normalized.matchId !== match.matchId) {
       return;
     }
@@ -1301,7 +1169,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const normalized = this.normalizePvpCombatEvent(message.event, state.userId);
+    const normalized = normalizePvpCombatEvent(message.event, state.userId, Date.now());
     if (!normalized || normalized.matchId !== match.matchId) {
       return;
     }
@@ -1330,7 +1198,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const normalized = this.normalizePvpRoomStateEvent(message.event, state.userId);
+    const normalized = normalizePvpRoomStateEvent(message.event, state.userId, Date.now());
     if (!normalized || normalized.matchId !== match.matchId) {
       return;
     }
@@ -1381,16 +1249,7 @@ export default class PresenceServer implements Party.Server {
 
     this.clearPvpStartTimer();
     this.clearPvpFinalizeTimer();
-    match.startedAt ??= Date.now();
-    match.countdownEndsAt = null;
-    participant.hearts = 0;
-    participant.losses = Math.max(
-      participant.losses,
-      getMultiplayerModeDefinition(match.mode).startingLives,
-    );
-    participant.invulnerableUntil = 0;
-    match.status = 'finalizing';
-    match.lastEvent = `${participant.displayName} forfeited.`;
+    markPvpForfeit(match, participant, Date.now());
     this.finalizePvpMatch();
   }
 
@@ -1402,23 +1261,7 @@ export default class PresenceServer implements Party.Server {
 
     this.clearPvpStartTimer();
     this.clearPvpFinalizeTimer();
-    const eliminated = match.participants.filter((participant) => participant.hearts <= 0);
-    const alive = match.participants.filter((participant) => participant.hearts > 0);
-    match.status = 'complete';
-    match.finishedAt = Date.now();
-
-    if (eliminated.length !== 1 || alive.length !== 1) {
-      match.draw = true;
-      match.winnerUserId = null;
-      match.loserUserId = null;
-      match.lastEvent = 'Draw.';
-    } else {
-      match.draw = false;
-      match.winnerUserId = alive[0]?.userId ?? null;
-      match.loserUserId = eliminated[0]?.userId ?? null;
-      match.lastEvent = `${alive[0]?.displayName ?? 'Player'} wins.`;
-    }
-
+    finalizePvpMatchState(match, Date.now());
     this.broadcastPvpSnapshot();
   }
 
@@ -1443,293 +1286,7 @@ export default class PresenceServer implements Party.Server {
       return null;
     }
 
-    return {
-      matchId: match.matchId,
-      mode: match.mode,
-      roomId: match.roomId,
-      roomCoordinates: { ...match.roomCoordinates },
-      status: match.status,
-      participants: match.participants.map((participant) => ({ ...participant })),
-      startedAt: match.startedAt,
-      countdownEndsAt: match.countdownEndsAt,
-      finishedAt: match.finishedAt,
-      winnerUserId: match.winnerUserId,
-      loserUserId: match.loserUserId,
-      draw: match.draw,
-      lastEvent: match.lastEvent,
-    };
-  }
-
-  private normalizePvpParticipants(value: unknown): PvpParticipantIdentity[] {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-
-    const participants: PvpParticipantIdentity[] = [];
-    const seenUserIds = new Set<string>();
-    for (const item of value) {
-      const participant = this.normalizePvpParticipant(item);
-      if (!participant || seenUserIds.has(participant.userId)) {
-        continue;
-      }
-
-      seenUserIds.add(participant.userId);
-      participants.push(participant);
-      if (participants.length >= 2) {
-        break;
-      }
-    }
-
-    return participants;
-  }
-
-  private normalizePvpParticipant(value: unknown): PvpParticipantIdentity | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const raw = value as Partial<PvpParticipantIdentity>;
-    const userId = this.normalizeShortId(raw.userId, 96);
-    if (!userId) {
-      return null;
-    }
-
-    return {
-      userId,
-      displayName: (typeof raw.displayName === 'string' && raw.displayName.trim()
-        ? raw.displayName.trim()
-        : 'Player').slice(0, 32),
-      avatarId: (typeof raw.avatarId === 'string' && raw.avatarId.trim()
-        ? raw.avatarId.trim()
-        : 'default-player').slice(0, 32),
-    };
-  }
-
-  private normalizeRoomCoordinates(value: unknown): RoomCoordinates | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const raw = value as Partial<RoomCoordinates>;
-    const x = raw.x;
-    const y = raw.y;
-    if (
-      typeof x !== 'number' ||
-      typeof y !== 'number' ||
-      !Number.isInteger(x) ||
-      !Number.isInteger(y)
-    ) {
-      return null;
-    }
-
-    return { x, y };
-  }
-
-  private normalizePvpPlayerState(value: unknown, userId: string): PvpMatchPlayerState | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const raw = value as Partial<PvpMatchPlayerState>;
-    const matchId = this.normalizeShortId(raw.matchId, 96);
-    if (!matchId || !this.isPvpPlayerAnimationState(raw.animationState)) {
-      return null;
-    }
-
-    const x = this.normalizeFiniteNumber(raw.x, -1_000_000, 1_000_000);
-    const y = this.normalizeFiniteNumber(raw.y, -1_000_000, 1_000_000);
-    const velocityX = this.normalizeFiniteNumber(raw.velocityX, -2_000, 2_000);
-    const velocityY = this.normalizeFiniteNumber(raw.velocityY, -2_000, 2_000);
-    const actionUntil = this.normalizeFiniteNumber(raw.actionUntil, 0, Date.now() + 10_000);
-    const sequence = this.normalizeFiniteNumber(raw.sequence, 0, Number.MAX_SAFE_INTEGER);
-    const sentAt = this.normalizeFiniteNumber(raw.sentAt, 0, Date.now() + 10_000);
-    if (
-      x === null ||
-      y === null ||
-      velocityX === null ||
-      velocityY === null ||
-      actionUntil === null ||
-      sequence === null ||
-      sentAt === null
-    ) {
-      return null;
-    }
-
-    return {
-      matchId,
-      userId,
-      x,
-      y,
-      velocityX,
-      velocityY,
-      facing: raw.facing === -1 ? -1 : 1,
-      animationState: raw.animationState,
-      action: raw.action === 'sword' || raw.action === 'gun' ? raw.action : null,
-      actionUntil,
-      sequence: Math.floor(sequence),
-      sentAt,
-    };
-  }
-
-  private normalizePvpCombatEvent(value: unknown, userId: string): PvpMatchCombatEvent | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const raw = value as Partial<PvpMatchCombatEvent>;
-    const id = this.normalizeShortId(raw.id, 120);
-    const matchId = this.normalizeShortId(raw.matchId, 96);
-    if (!id || !matchId || (raw.source !== 'sword' && raw.source !== 'gun')) {
-      return null;
-    }
-
-    const x = this.normalizeFiniteNumber(raw.x, -1_000_000, 1_000_000);
-    const y = this.normalizeFiniteNumber(raw.y, -1_000_000, 1_000_000);
-    const startedAt = this.normalizeFiniteNumber(raw.startedAt, 0, Date.now() + 10_000);
-    const durationMs = this.normalizeFiniteNumber(raw.durationMs, 16, 2_000);
-    if (x === null || y === null || startedAt === null || durationMs === null) {
-      return null;
-    }
-
-    const rawEffectX = this.normalizeFiniteNumber(raw.effectX, -1_000_000, 1_000_000);
-    const rawEffectY = this.normalizeFiniteNumber(raw.effectY, -1_000_000, 1_000_000);
-    const effectX = rawEffectX ?? x;
-    const effectY = rawEffectY ?? y;
-    const projectile = this.normalizePvpProjectile(raw.projectile);
-    return {
-      id,
-      matchId,
-      userId,
-      source: raw.source,
-      x,
-      y,
-      facing: raw.facing === -1 ? -1 : 1,
-      startedAt,
-      durationMs,
-      effectX,
-      effectY,
-      downward: raw.downward === true,
-      projectile,
-    };
-  }
-
-  private normalizePvpProjectile(value: unknown): PvpMatchCombatEvent['projectile'] {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const raw = value as NonNullable<PvpMatchCombatEvent['projectile']>;
-    const x = this.normalizeFiniteNumber(raw.x, -1_000_000, 1_000_000);
-    const y = this.normalizeFiniteNumber(raw.y, -1_000_000, 1_000_000);
-    const velocityX = this.normalizeFiniteNumber(raw.velocityX, -2_000, 2_000);
-    const lifetimeMs = this.normalizeFiniteNumber(raw.lifetimeMs, 16, 3_000);
-    if (x === null || y === null || velocityX === null || lifetimeMs === null) {
-      return null;
-    }
-
-    return { x, y, velocityX, lifetimeMs };
-  }
-
-  private normalizePvpRoomStateEvent(value: unknown, userId: string): PvpRoomStateEvent | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const raw = value as Partial<PvpRoomStateEvent>;
-    const id = this.normalizeShortId(raw.id, 120);
-    const matchId = this.normalizeShortId(raw.matchId, 96);
-    const roomId = this.normalizeShortId(raw.roomId, 80);
-    const roomCoordinates = this.normalizeRoomCoordinates(raw.roomCoordinates);
-    const sentAt = this.normalizeFiniteNumber(raw.sentAt, 0, Date.now() + 10_000);
-    if (!id || !matchId || !roomId || !roomCoordinates || sentAt === null) {
-      return null;
-    }
-
-    if (raw.kind === 'live-object-removed') {
-      const objectKey = this.normalizeShortId(raw.objectKey, 160);
-      const objectId = this.normalizeShortId(raw.objectId, 96);
-      const instanceId = raw.instanceId === null ? null : this.normalizeShortId(raw.instanceId, 96);
-      const x = this.normalizeFiniteNumber(raw.x, -1_000_000, 1_000_000);
-      const y = this.normalizeFiniteNumber(raw.y, -1_000_000, 1_000_000);
-      const reason =
-        raw.reason === 'enemy-defeated' ||
-        raw.reason === 'collectible-collected' ||
-        raw.reason === 'enemy-collected' ||
-        raw.reason === 'object-removed' ||
-        raw.reason === 'brick-broken'
-          ? raw.reason
-          : null;
-      if (!objectKey || !objectId || instanceId === undefined || x === null || y === null || !reason) {
-        return null;
-      }
-      return {
-        id,
-        matchId,
-        roomId,
-        roomCoordinates,
-        kind: 'live-object-removed',
-        objectKey,
-        objectId,
-        instanceId,
-        reason,
-        x,
-        y,
-        sentAt,
-        userId,
-      };
-    }
-
-    if (raw.kind === 'room-switch-state') {
-      return {
-        id,
-        matchId,
-        roomId,
-        roomCoordinates,
-        kind: 'room-switch-state',
-        active: raw.active === true,
-        sentAt,
-        userId,
-      };
-    }
-
-    return null;
-  }
-
-  private normalizeFiniteNumber(value: unknown, min: number, max: number): number | null {
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-      return null;
-    }
-
-    return Math.max(min, Math.min(max, value));
-  }
-
-  private isPvpPlayerAnimationState(value: unknown): value is PvpMatchPlayerState['animationState'] {
-    return (
-      value === 'idle' ||
-      value === 'run' ||
-      value === 'jump-rise' ||
-      value === 'jump-fall' ||
-      value === 'wall-slide' ||
-      value === 'wall-jump' ||
-      value === 'land' ||
-      value === 'ladder-climb' ||
-      value === 'crouch' ||
-      value === 'crawl' ||
-      value === 'push' ||
-      value === 'pull' ||
-      value === 'sword-slash' ||
-      value === 'air-slash-down' ||
-      value === 'gun-fire'
-    );
-  }
-
-  private normalizeShortId(value: unknown, maxLength: number): string | null {
-    if (typeof value !== 'string') {
-      return null;
-    }
-
-    const normalized = value.trim().slice(0, maxLength);
-    return normalized.length > 0 ? normalized : null;
+    return buildPvpSnapshot(match);
   }
 
   private identityFromState(state: ConnectionPresenceState): PvpParticipantIdentity {
