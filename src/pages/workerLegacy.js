@@ -1,17 +1,8 @@
 // Rendering implementation retained separately while the typed Pages entry and route shell evolve.
 import decodeJpegBytes from 'jpeg-js/lib/decoder.js';
-import {
-  buildProfileSharePath,
-  parseProfileSharePath,
-} from '../profiles/username.ts';
-import {
-  buildPlaylistSharePath,
-  parsePlaylistSharePath,
-} from '../playlists/model.ts';
-import {
-  buildWampOGramSharePath,
-  parseWampOGramSharePath,
-} from '../wampOGram/links.ts';
+import { parseProfileSharePath } from '../profiles/username.ts';
+import { parsePlaylistSharePath } from '../playlists/model.ts';
+import { parseWampOGramSharePath } from '../wampOGram/links.ts';
 import {
   BACKGROUND_GROUPS,
   GAME_OBJECTS,
@@ -27,17 +18,20 @@ import {
   getObjectFrameSourceRect,
   getPlacedObjectLayer,
 } from '../config.ts';
+import {
+  ROOM_SHARE_IMAGE_HEIGHT,
+  ROOM_SHARE_IMAGE_WIDTH,
+  loadPlaylistMetadata,
+  loadProfileMetadata,
+  loadPublishedRoomSnapshot,
+  loadRoomMetadata,
+  loadWampOGramMetadata,
+  resolveApiBaseUrl,
+} from './shareMetadata.ts';
 
 const ROOM_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/?$/;
 const ROOM_IMAGE_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/image(?:\.png)?\/?$/;
-const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
-const ROOM_META_TIMEOUT_MS = 1200;
-const PROFILE_META_TIMEOUT_MS = 1200;
-const WAMP_O_GRAM_META_TIMEOUT_MS = 1200;
 const ROOM_IMAGE_TIMEOUT_MS = 3500;
-const ROOM_IMAGE_RENDERER_VERSION = 'assets-v5';
-const ROOM_SHARE_IMAGE_WIDTH = 1200;
-const ROOM_SHARE_IMAGE_HEIGHT = 630;
 const CUSTOM_BACKGROUND_PREFIX = 'custom:';
 const CUSTOM_SPRITE_OBJECT_PREFIX = 'custom_sprite:';
 const SOLID_BACKGROUND_PREFIX = 'solid:';
@@ -153,287 +147,6 @@ function parseStrictInteger(value) {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
-async function loadRoomMetadata(request, env, url, coordinates) {
-  const apiBaseUrl = resolveApiBaseUrl(env, url);
-  const roomId = `${coordinates.x},${coordinates.y}`;
-  const publicUrl = `${url.origin}/r/${coordinates.x}/${coordinates.y}`;
-  const fallback = buildFallbackMetadata(apiBaseUrl, roomId, coordinates, publicUrl);
-  const publishedRoom = await loadPublishedRoomSnapshot(request, env, url, coordinates, ROOM_META_TIMEOUT_MS);
-  if (publishedRoom) {
-    return buildPublishedRoomMetadata(publishedRoom, fallback, coordinates);
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ROOM_META_TIMEOUT_MS);
-
-  try {
-    const metaUrl = new URL(`/api/share/rooms/${encodeURIComponent(roomId)}/meta`, apiBaseUrl);
-    metaUrl.searchParams.set('x', String(coordinates.x));
-    metaUrl.searchParams.set('y', String(coordinates.y));
-    metaUrl.searchParams.set('url', publicUrl);
-    const response = await fetch(metaUrl.toString(), {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': request.headers.get('User-Agent') || 'WAMP room share renderer',
-      },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      return fallback;
-    }
-
-    return {
-      ...normalizeMetadata(await response.json(), fallback),
-      imageUrl: fallback.imageUrl,
-    };
-  } catch {
-    return fallback;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function loadProfileMetadata(request, env, url, username) {
-  const apiBaseUrl = resolveApiBaseUrl(env, url);
-  const publicUrl = `${url.origin}${buildProfileSharePath(username)}`;
-  const fallback = buildFallbackProfileMetadata(username, publicUrl, url.origin);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROFILE_META_TIMEOUT_MS);
-
-  try {
-    const profileUrl = new URL(`/api/profiles/by-username/${encodeURIComponent(username)}`, apiBaseUrl);
-    const response = await fetch(profileUrl.toString(), {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': request.headers.get('User-Agent') || 'WAMP profile share renderer',
-      },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      return fallback;
-    }
-
-    return buildPublishedProfileMetadata(await response.json(), fallback);
-  } catch {
-    return fallback;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function loadPlaylistMetadata(request, env, url, slug) {
-  const apiBaseUrl = resolveApiBaseUrl(env, url);
-  const publicUrl = `${url.origin}${buildPlaylistSharePath(slug)}`;
-  const fallback = buildFallbackPlaylistMetadata(slug, publicUrl, url.origin);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROFILE_META_TIMEOUT_MS);
-
-  try {
-    const playlistUrl = new URL(`/api/playlists/by-slug/${encodeURIComponent(slug)}`, apiBaseUrl);
-    const response = await fetch(playlistUrl.toString(), {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': request.headers.get('User-Agent') || 'WAMP playlist share renderer',
-      },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      return fallback;
-    }
-
-    return buildPublishedPlaylistMetadata(await response.json(), fallback);
-  } catch {
-    return fallback;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function resolveApiBaseUrl(env, url) {
-  const configured = typeof env.ROOM_SHARE_API_BASE_URL === 'string'
-    ? env.ROOM_SHARE_API_BASE_URL.trim()
-    : '';
-  if (configured) {
-    return configured.replace(/\/+$/, '');
-  }
-
-  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-    return `${url.protocol}//${url.hostname}:8787`;
-  }
-
-  return DEFAULT_API_BASE_URL;
-}
-
-function buildFallbackMetadata(apiBaseUrl, roomId, coordinates, publicUrl) {
-  const imageUrl = new URL(`/r/${coordinates.x}/${coordinates.y}/image.png`, publicUrl);
-
-  return {
-    title: `WAMP room ${coordinates.x},${coordinates.y}`,
-    description: `Play this WAMP room at ${coordinates.x},${coordinates.y}.`,
-    url: publicUrl,
-    imageUrl: imageUrl.toString(),
-    imageWidth: 1200,
-    imageHeight: 630,
-  };
-}
-
-function buildFallbackProfileMetadata(username, publicUrl, origin) {
-  return {
-    title: `@${username} on WAMP`,
-    description: `View @${username}'s WAMP profile, levels, progress, and stats.`,
-    url: publicUrl,
-    imageUrl: new URL('/favicon.svg', origin).toString(),
-  };
-}
-
-function buildFallbackPlaylistMetadata(slug, publicUrl, origin) {
-  return {
-    title: `${slug} - WAMP playlist`,
-    description: `Play this WAMP room playlist.`,
-    url: publicUrl,
-    imageUrl: new URL('/favicon.svg', origin).toString(),
-  };
-}
-
-function buildFallbackWampOGramMetadata(slug, publicUrl, apiBaseUrl) {
-  return {
-    title: 'Wamp-O-Gram',
-    description: 'Open this playable WAMP level postcard.',
-    url: publicUrl,
-    imageUrl: new URL(`/api/wamp-o-grams/${encodeURIComponent(slug)}/preview.png`, apiBaseUrl).toString(),
-    imageWidth: ROOM_SHARE_IMAGE_WIDTH,
-    imageHeight: ROOM_SHARE_IMAGE_HEIGHT,
-  };
-}
-
-function buildPublishedRoomMetadata(snapshot, fallback, coordinates) {
-  const roomTitle = cleanText(snapshot?.title);
-  const title = roomTitle
-    ? `${roomTitle} - WAMP room ${coordinates.x},${coordinates.y}`
-    : fallback.title;
-
-  return {
-    ...fallback,
-    title,
-    description: roomTitle
-      ? `Play "${roomTitle}" in WAMP. Can you do better?`
-      : fallback.description,
-    imageUrl: withRoomVersionQuery(fallback.imageUrl, snapshot?.version),
-  };
-}
-
-function buildPublishedProfileMetadata(profile, fallback) {
-  const displayName = cleanText(profile?.displayName) || fallback.title.replace(/ on WAMP$/, '');
-  const username = cleanText(profile?.username);
-  const bio = cleanText(profile?.bio);
-  const totalRooms = Number(profile?.stats?.totalRoomsPublished ?? 0) || 0;
-  const roomText = totalRooms === 1 ? '1 published level' : `${totalRooms} published levels`;
-  const title = username ? `${displayName} (@${username}) on WAMP` : `${displayName} on WAMP`;
-  const description = bio || `${displayName}'s WAMP profile with ${roomText}, progress, and stats.`;
-  const avatarUrl = cleanUrl(profile?.avatarUrl);
-
-  return {
-    ...fallback,
-    title,
-    description,
-    imageUrl: avatarUrl || fallback.imageUrl,
-  };
-}
-
-function buildPublishedPlaylistMetadata(playlist, fallback) {
-  const title = cleanText(playlist?.title) || fallback.title;
-  const owner = cleanText(playlist?.ownerDisplayName);
-  const description = cleanText(playlist?.description);
-  const roomCount = Number(playlist?.roomCount ?? playlist?.items?.length ?? 0) || 0;
-  const roomText = roomCount === 1 ? '1 room' : `${roomCount} rooms`;
-
-  return {
-    ...fallback,
-    title: `${title} - WAMP playlist`,
-    description: description || `${owner ? `${owner}'s ` : ''}WAMP playlist with ${roomText}.`,
-  };
-}
-
-function buildPublishedWampOGramMetadata(record, fallback) {
-  const title = cleanText(record?.title);
-  const recipient = cleanText(record?.recipientName);
-  const sender = cleanText(record?.senderName) || cleanText(record?.creatorDisplayName);
-  const message = cleanText(record?.message);
-
-  return {
-    ...fallback,
-    title: title || (recipient ? `A Wamp-O-Gram for ${recipient}` : 'Wamp-O-Gram'),
-    description: message || (sender
-      ? `${sender} made a playable WAMP level postcard.`
-      : fallback.description),
-  };
-}
-
-async function loadWampOGramMetadata(request, env, url, slug) {
-  const apiBaseUrl = resolveApiBaseUrl(env, url);
-  const publicUrl = `${url.origin}${buildWampOGramSharePath(slug)}`;
-  const fallback = buildFallbackWampOGramMetadata(slug, publicUrl, apiBaseUrl);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), WAMP_O_GRAM_META_TIMEOUT_MS);
-
-  try {
-    const gramUrl = new URL(`/api/wamp-o-grams/${encodeURIComponent(slug)}`, apiBaseUrl);
-    const response = await fetch(gramUrl.toString(), {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': request.headers.get('User-Agent') || 'WAMP Wamp-O-Gram share renderer',
-      },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      return fallback;
-    }
-
-    return buildPublishedWampOGramMetadata(await response.json(), fallback);
-  } catch {
-    return fallback;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function withRoomVersionQuery(imageUrl, version) {
-  const url = new URL(imageUrl);
-  if (Number.isFinite(version)) {
-    url.searchParams.set('v', String(version));
-  }
-  url.searchParams.set('renderer', ROOM_IMAGE_RENDERER_VERSION);
-  return url.toString();
-}
-
-async function loadPublishedRoomSnapshot(request, env, url, coordinates, timeoutMs) {
-  const apiBaseUrl = resolveApiBaseUrl(env, url);
-  const roomId = `${coordinates.x},${coordinates.y}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const roomUrl = new URL(`/api/rooms/${encodeURIComponent(roomId)}/published`, apiBaseUrl);
-    roomUrl.searchParams.set('x', String(coordinates.x));
-    roomUrl.searchParams.set('y', String(coordinates.y));
-    const response = await fetch(roomUrl.toString(), {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': request.headers.get('User-Agent') || 'WAMP room share renderer',
-      },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      return null;
-    }
-    return await response.json();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 async function renderRoomImageResponse(request, env, url, coordinates) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method Not Allowed', {
@@ -458,21 +171,6 @@ async function renderRoomImageResponse(request, env, url, coordinates) {
     status: 200,
     headers,
   });
-}
-
-function normalizeMetadata(value, fallback) {
-  if (!value || typeof value !== 'object') {
-    return fallback;
-  }
-
-  return {
-    title: cleanText(value.title) || fallback.title,
-    description: cleanText(value.description) || fallback.description,
-    url: cleanUrl(value.url) || fallback.url,
-    imageUrl: cleanUrl(value.imageUrl) || fallback.imageUrl,
-    imageWidth: Number.isFinite(value.imageWidth) ? value.imageWidth : fallback.imageWidth,
-    imageHeight: Number.isFinite(value.imageHeight) ? value.imageHeight : fallback.imageHeight,
-  };
 }
 
 async function renderRoomAppShell(request, env, metadata) {
@@ -810,23 +508,6 @@ function buildPlaylistMetaTags(metadata) {
     `    <meta name="twitter:description" content="${description}">`,
     `    <meta name="twitter:image" content="${imageUrl}">`,
   ].join('\n');
-}
-
-function cleanText(value) {
-  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
-}
-
-function cleanUrl(value) {
-  if (typeof value !== 'string') {
-    return '';
-  }
-
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : '';
-  } catch {
-    return '';
-  }
 }
 
 function escapeHtml(value) {
