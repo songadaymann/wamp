@@ -11,6 +11,8 @@ import type { WorldRepository } from '../../persistence/worldRepository';
 import { createWorldRepository } from '../../persistence/worldRepository';
 import { APP_READY_EVENT, isAppReady, isBusyOverlayVisible } from '../appFeedback';
 import { getActiveOverworldScene } from './sceneBridge';
+import { hasFocusedCoordinatesInUrl } from '../../navigation/worldNavigation';
+import { shouldSuppressLegacyWelcome } from '../../tutorial/eligibility';
 
 const WELCOME_MODAL_SEEN_STORAGE_KEY = 'wamp_welcome_modal_seen_v1';
 const WELCOME_MODAL_AUTO_OPEN_DELAY_MS = 540;
@@ -347,7 +349,15 @@ export class WelcomeModalController {
   }
 
   private readDismissedState(): boolean {
-    return this.shouldForceOpen() ? false : this.storage.getItem(WELCOME_MODAL_SEEN_STORAGE_KEY) === '1';
+    if (this.shouldForceOpen()) return false;
+    if (shouldSuppressLegacyWelcome({
+      storage: this.storage,
+      location: this.windowObj.location,
+      hasFocusedCoordinates: hasFocusedCoordinatesInUrl(this.windowObj.location),
+    })) {
+      return true;
+    }
+    return this.storage.getItem(WELCOME_MODAL_SEEN_STORAGE_KEY) === '1';
   }
 
   private writeDismissedState(): void {

@@ -581,7 +581,7 @@ export function createLocalRoomRepository(): RoomRepository {
   return new LocalRoomRepository();
 }
 
-class RoomApiError extends Error {
+export class RoomApiError extends Error {
   constructor(
     message: string,
     readonly status: number

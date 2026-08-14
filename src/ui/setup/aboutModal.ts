@@ -5,6 +5,7 @@ type AboutModalElements = {
   closeButton: HTMLElement | null;
   skillLink: HTMLAnchorElement | null;
   copySkillUrlButton: HTMLButtonElement | null;
+  replayTutorialButton: HTMLButtonElement | null;
   copyStatus: HTMLElement | null;
 };
 
@@ -21,14 +22,21 @@ export class AboutModalController {
     void this.copySkillUrl();
   };
 
+  private readonly handleReplayTutorialClick = () => {
+    this.close();
+    void this.onReplayTutorial?.();
+  };
+
   constructor(
     private readonly doc: Document = document,
+    private readonly onReplayTutorial?: () => Promise<void> | void,
   ) {
     this.elements = {
       modal: this.doc.getElementById('about-modal'),
       closeButton: this.doc.getElementById('btn-about-close'),
       skillLink: this.doc.getElementById('about-skill-link') as HTMLAnchorElement | null,
       copySkillUrlButton: this.doc.getElementById('btn-about-copy-skill-url') as HTMLButtonElement | null,
+      replayTutorialButton: this.doc.getElementById('btn-about-replay-tutorial') as HTMLButtonElement | null,
       copyStatus: this.doc.getElementById('about-copy-status'),
     };
     this.lifecycle = createModalLifecycle({
@@ -42,12 +50,14 @@ export class AboutModalController {
     this.syncSkillLinkHref();
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.copySkillUrlButton?.addEventListener('click', this.handleCopySkillUrlClick);
+    this.elements.replayTutorialButton?.addEventListener('click', this.handleReplayTutorialClick);
     this.lifecycle.attach();
   }
 
   destroy(): void {
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.copySkillUrlButton?.removeEventListener('click', this.handleCopySkillUrlClick);
+    this.elements.replayTutorialButton?.removeEventListener('click', this.handleReplayTutorialClick);
     this.lifecycle.detach();
     this.clearCopyStatusResetTimer();
     this.close();

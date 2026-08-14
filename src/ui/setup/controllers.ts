@@ -40,6 +40,7 @@ import { XpReceiptController } from './xpReceipts';
 import { WelcomeModalController } from './welcomeModal';
 import { configureEditorUiBridgeRuntime } from '../../scenes/editor/uiBridge';
 import { CUSTOM_SPRITES_CHANGED_EVENT } from '../../customSprites/registry';
+import { TutorialCoordinator } from '../../tutorial/TutorialCoordinator';
 
 interface UiControllers {
   paletteController: PaletteController;
@@ -71,6 +72,7 @@ interface UiControllers {
   welcomeModal: WelcomeModalController;
   chatPanel: ChatPanelController;
   mobileUi: MobileUiController;
+  tutorialCoordinator: TutorialCoordinator;
 }
 
 export function setupUiControllers(game: Phaser.Game): void {
@@ -94,6 +96,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
   const controlsModal = new ControlsModalController();
   const playlistIntroModal = new PlaylistIntroModalController();
   const welcomeModal = new WelcomeModalController(game);
+  const tutorialCoordinator = new TutorialCoordinator(game);
 
   return {
     paletteController: new PaletteController(),
@@ -106,7 +109,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     guestbookModal: new GuestbookModalController(),
     settingsModal: new SettingsModalController(),
     controlsModal,
-    aboutModal: new AboutModalController(),
+    aboutModal: new AboutModalController(document, () => tutorialCoordinator.replay()),
     chatModerationModal: new ChatModerationModalController(),
     courseComposerPanel: new CourseComposerPanelController(game),
     profileModal: new ProfileModalController(game),
@@ -125,10 +128,12 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     welcomeModal,
     chatPanel: new ChatPanelController(),
     mobileUi: new MobileUiController(game),
+    tutorialCoordinator,
   };
 }
 
 function initUiControllers(controllers: UiControllers): void {
+  controllers.tutorialCoordinator.init();
   controllers.historyModal.init();
   controllers.leaderboardModal.init();
   controllers.exploreModal.init();

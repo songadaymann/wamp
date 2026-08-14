@@ -373,6 +373,7 @@ window.render_game_to_text = () =>
       ready: isAppReady(),
       ...getAppFeedbackDebugState(),
     },
+    tutorial: window.get_wamp_tutorial_debug_state?.() ?? null,
     graphics: getGraphicsDebugState(),
     bootDiagnostics: getBootDiagnostics(),
   });
