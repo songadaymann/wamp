@@ -51,6 +51,7 @@ import {
 } from '../ui/appFeedback';
 import { isNativeTextEditingFocused, isTextInputFocused } from '../ui/keyboardFocus';
 import type { CustomSpriteDefinition } from '../customSprites/model';
+import { roomSnapshotUsesCustomSprite } from '../customSprites/usage';
 import type {
   CourseEditorSceneData,
   CourseEditedRoomData,
@@ -1449,6 +1450,10 @@ export class EditorScene extends Phaser.Scene {
     this.presenceController.markConstructionPreviewDirty();
     this.updatePersistenceStatus('Saved as tile. Click in the room to paint it.');
     return true;
+  }
+
+  usesCustomSprite(spriteId: string): boolean {
+    return roomSnapshotUsesCustomSprite(this.editRuntime.exportRoomSnapshot(), spriteId);
   }
 
   beginFocusedPressurePlateConnection(): void {

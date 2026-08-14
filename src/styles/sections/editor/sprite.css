@@ -337,17 +337,48 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
 
 .editor-sprite-library-item {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
   align-items: center;
   width: 100%;
-  padding: 5px;
+  padding: 3px;
   border: 2px solid #fff3db;
   border-radius: 3px;
   background: #111;
   color: #fff3db;
   text-align: left;
   box-shadow: none;
+}
+
+.editor-sprite-library-select {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.editor-sprite-library-delete {
+  align-self: stretch;
+  padding: 4px 5px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font-family: var(--editor-pixel-font);
+  font-size: 7px;
+  line-height: 1;
+}
+
+.editor-sprite-library-delete:hover:not(:disabled),
+.editor-sprite-library-delete:focus-visible {
+  background: #f84f4f;
+  color: #18161c;
 }
 
 .editor-sprite-library-item.active {
