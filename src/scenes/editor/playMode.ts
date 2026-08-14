@@ -6,6 +6,7 @@ import {
 } from '../../courses/model';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomRepository';
 import type { CourseEditedRoomData, OverworldPlaySceneData } from '../sceneData';
+import { cloneTutorialSceneContext, type TutorialSceneContext } from '../../tutorial/model';
 
 export function getSelectedCoursePreviewForPlay(
   draft: CourseSnapshot | null,
@@ -43,6 +44,7 @@ export interface BuildEditorPlayModeDataOptions {
   usePublishedCourseRoomVersion: boolean;
   coursePreview: CourseSnapshot | null;
   courseEditedRoom: CourseEditedRoomData | null;
+  tutorialContext?: TutorialSceneContext | null;
 }
 
 export function buildEditorPlayModeData(
@@ -54,23 +56,26 @@ export function buildEditorPlayModeData(
     usePublishedCourseRoomVersion,
     coursePreview,
     courseEditedRoom,
+    tutorialContext = null,
   } = options;
   const startRoomRef = getCoursePreviewStartRoomRef(coursePreview, roomSnapshot);
   const playCoordinates = startRoomRef?.coordinates ?? roomCoordinates;
   return {
     centerCoordinates: { ...playCoordinates },
     roomCoordinates: { ...playCoordinates },
-    draftRoom: usePublishedCourseRoomVersion ? null : roomSnapshot,
-    publishedRoom: usePublishedCourseRoomVersion ? roomSnapshot : null,
+    draftRoom: tutorialContext || !usePublishedCourseRoomVersion ? roomSnapshot : null,
+    publishedRoom: tutorialContext ? null : usePublishedCourseRoomVersion ? roomSnapshot : null,
     invalidateRoomId: roomSnapshot.id,
     forceRefreshAround: usePublishedCourseRoomVersion,
     courseDraftPreviewId: coursePreview?.id ?? null,
     courseEditedRoom,
     editorPlaytestReturnTarget: {
       roomCoordinates: { ...roomCoordinates },
+      tutorialContext: cloneTutorialSceneContext(tutorialContext),
     },
     statusMessage: coursePreview ? 'Testing draft course.' : null,
     mode: 'play',
+    tutorialContext: cloneTutorialSceneContext(tutorialContext),
   };
 }
 

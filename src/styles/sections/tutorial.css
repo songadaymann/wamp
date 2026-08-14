@@ -1,0 +1,290 @@
+.tutorial-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: calc(18px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
+}
+
+.tutorial-layer.hidden {
+  display: none;
+}
+
+.tutorial-layer--dream {
+  pointer-events: auto;
+  align-items: center;
+  background: #050505;
+}
+
+.tutorial-panel {
+  position: relative;
+  width: min(420px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow: auto;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border: 3px solid #18161c;
+  border-radius: 0;
+  background: #fff3db;
+  color: #18161c;
+  box-shadow: 6px 6px 0 #18161c;
+}
+
+.tutorial-layer--dream .tutorial-panel {
+  width: min(620px, calc(100vw - 36px));
+  min-height: min(420px, calc(100vh - 36px));
+  justify-content: center;
+  border-color: #79ccde;
+  background: #080b12;
+  color: #fff3db;
+  box-shadow: 8px 8px 0 #79ccde;
+}
+
+.tutorial-layer--success .tutorial-panel {
+  border-color: #277b30;
+  box-shadow: 6px 6px 0 #277b30;
+}
+
+.tutorial-layer--claim .tutorial-panel {
+  border-color: #1b84c2;
+  box-shadow: 6px 6px 0 #1b84c2;
+}
+
+.tutorial-title {
+  margin: 0;
+  padding-right: 92px;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 14px;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+}
+
+.tutorial-layer--dream .tutorial-title {
+  padding-right: 0;
+  color: #79ccde;
+  font-size: clamp(16px, 4vw, 24px);
+  text-align: center;
+}
+
+.tutorial-body,
+.tutorial-dream-line {
+  margin: 0;
+  font-family: 'Super Mario Bros. NES', 'Early GameBoy', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.tutorial-dream-script {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+
+.tutorial-dream-line {
+  animation: tutorial-dream-line-in 700ms ease both;
+  animation-delay: calc(var(--tutorial-line-index) * 620ms);
+}
+
+@keyframes tutorial-dream-line-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tutorial-skip {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 6px 8px;
+  border: 2px solid currentColor;
+  border-radius: 0;
+  background: #fff3db;
+  color: #18161c;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 8px;
+  cursor: pointer;
+}
+
+.tutorial-layer--dream .tutorial-skip {
+  background: #080b12;
+  color: #fff3db;
+}
+
+.tutorial-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tutorial-action,
+.tutorial-checklist-skip {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #f3eee2;
+  color: #18161c;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 9px;
+  line-height: 1.35;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+.tutorial-action--primary {
+  background: #79ccde;
+}
+
+.tutorial-layer--dream .tutorial-action {
+  border-color: #79ccde;
+  background: #080b12;
+  color: #fff3db;
+  box-shadow: 3px 3px 0 #79ccde;
+}
+
+.tutorial-layer--dream .tutorial-action--primary {
+  background: #79ccde;
+  color: #050505;
+}
+
+.tutorial-layer--dream .tutorial-actions {
+  justify-content: center;
+}
+
+.tutorial-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tutorial-checklist-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 2px solid #18161c;
+  background: #f3eee2;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.tutorial-checklist-item[data-state='done'] {
+  background: #b6ffbe;
+}
+
+.tutorial-checklist-item[data-state='skipped'] {
+  background: #d8d2c5;
+}
+
+.tutorial-checklist-skip {
+  min-height: 28px;
+  padding: 4px 6px;
+  font-size: 7px;
+}
+
+.tutorial-status {
+  padding: 8px;
+  border: 2px solid #1b84c2;
+  background: #d9f4ff;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.tutorial-status--error {
+  border-color: #a51140;
+  background: #ffd7dc;
+}
+
+body[data-tutorial-editor='true'] #btn-save-draft,
+body[data-tutorial-editor='true'] #btn-publish-room,
+body[data-tutorial-editor='true'] #room-title-section,
+body[data-tutorial-editor='true'] #btn-wamp-o-gram,
+body[data-tutorial-editor='true'] #btn-editor-back,
+body[data-tutorial-editor='true'] #btn-editor-publish-nudge,
+body[data-tutorial-editor='true'] #btn-mint-room,
+body[data-tutorial-editor='true'] #btn-room-history,
+body[data-tutorial-editor='true'] #btn-editor-music-save,
+body[data-tutorial-editor='true'] #btn-editor-music-publish,
+body[data-tutorial-editor='true'] #btn-tool-more,
+body[data-tutorial-editor='true'] #editor-advanced,
+body[data-tutorial-editor='true'] #more-tools-panel,
+body[data-tutorial-editor='true'] #layers-section,
+body[data-tutorial-editor='true'] #tileset-section,
+body[data-tutorial-editor='true'] #btn-editor-top-tool-more,
+body[data-tutorial-editor='true'] [data-tool='copy'],
+body[data-tutorial-editor='true'] .editor-feature-btn[data-editor-feature='music'],
+body[data-tutorial-editor='true'] .editor-feature-btn[data-editor-feature='lighting'],
+body[data-tutorial-editor='true'] .editor-feature-btn[data-editor-feature='sprite'],
+body[data-tutorial-editor='true'] .obj-cat-tab[data-category='all'],
+body[data-tutorial-editor='true'] .obj-cat-tab[data-category='custom'],
+body[data-tutorial-editor='true'] .obj-cat-tab[data-category='mine'],
+body[data-tutorial-editor='true'] .obj-cat-tab[data-category='npc'],
+body[data-tutorial-editor='true'] .obj-cat-tab[data-category='hazard'],
+body[data-tutorial-editor='true'] .obj-cat-tab[data-category='interactive'] {
+  display: none !important;
+}
+
+body[data-tutorial-private='true'] #global-chat,
+body[data-tutorial-private='true'] #room-sequence-hud,
+body[data-tutorial-private='true'] #btn-world-comment,
+body[data-tutorial-private='true'] #btn-world-room-comment,
+body[data-tutorial-private='true'] #btn-world-rate-room,
+body[data-tutorial-private='true'] #btn-world-leaderboard,
+body[data-tutorial-private='true'] #btn-world-explore,
+body[data-tutorial-private='true'] #btn-world-course-builder,
+body[data-tutorial-private='true'] #btn-world-edit,
+body[data-tutorial-private='true'] #btn-world-build {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  .tutorial-layer:not(.tutorial-layer--dream) {
+    padding-top: calc(10px + env(safe-area-inset-top));
+    align-items: flex-start;
+  }
+
+  .tutorial-panel {
+    width: min(390px, calc(100vw - 20px));
+    max-height: min(48vh, 420px);
+    padding: 14px;
+    gap: 9px;
+    box-shadow: 4px 4px 0 #18161c;
+  }
+
+  .tutorial-title {
+    padding-right: 82px;
+    font-size: 11px;
+  }
+
+  .tutorial-body {
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .tutorial-actions {
+    flex-direction: column;
+  }
+
+  .tutorial-action {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-dream-line {
+    animation: none;
+  }
+}

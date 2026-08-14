@@ -440,6 +440,7 @@ export class PaletteController {
     this.objectGrid.innerHTML = '';
 
     const filteredObjects = listEditorObjectConfigs().filter((objectConfig) => (
+      this.matchesTutorialObjectSurface(objectConfig) &&
       this.matchesObjectCategoryFilter(objectConfig) &&
       this.matchesObjectSearchFilter(objectConfig)
     ));
@@ -1133,6 +1134,12 @@ export class PaletteController {
     }
 
     return objectConfig.category === this.currentObjectCategory;
+  }
+
+  private matchesTutorialObjectSurface(objectConfig: GameObjectConfig): boolean {
+    if (this.doc.body.dataset.tutorialEditor !== 'true') return true;
+    if (parseCustomSpriteObjectId(objectConfig.id)) return false;
+    return ['decoration', 'collectible', 'enemy'].includes(objectConfig.category);
   }
 
   private matchesObjectSearchFilter(objectConfig: GameObjectConfig): boolean {

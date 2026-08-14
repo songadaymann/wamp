@@ -97,6 +97,25 @@ export function resetEditorPaletteSelection(): void {
   editorState.selection = createDefaultEditorTileSelection();
 }
 
+export function selectEditorPaletteTile(
+  tilesetKey: string,
+  startCol: number,
+  startRow: number,
+): void {
+  const tileset = getTilesetByKey(tilesetKey);
+  if (!tileset) return;
+  editorState.selectedTilesetKey = tilesetKey;
+  editorState.selectedTileGid = tileset.firstGid + startRow * tileset.columns + startCol;
+  editorState.selection = {
+    tilesetKey,
+    startCol,
+    startRow,
+    width: 1,
+    height: 1,
+    occupiedMask: [[true]],
+  };
+}
+
 export function selectionCellIsOccupied(dx: number, dy: number): boolean {
   const row = editorState.selection.occupiedMask[dy];
   if (!row) return true;

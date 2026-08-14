@@ -22,6 +22,7 @@ import type {
 import { buildEditorPlayModeData } from './playMode';
 import { type EditorRoomSession } from './roomSession';
 import { shouldShowPublishNudge as shouldShowPublishNudgeHelper } from './viewModel';
+import type { TutorialSceneContext } from '../../tutorial/model';
 
 interface EditorSceneFlowHost {
   cancelClipboardPastePreview(): void;
@@ -51,6 +52,7 @@ interface EditorSceneFlowHost {
   getMintedTokenId(): string | null;
   getRoomEditCount(): number;
   publishRoom(): Promise<RoomRecord | null>;
+  getTutorialContext(): TutorialSceneContext | null;
 }
 
 export class EditorSceneFlowController {
@@ -69,11 +71,12 @@ export class EditorSceneFlowController {
   async startPlayMode(): Promise<void> {
     this.host.cancelClipboardPastePreview();
     const coursePreview = this.host.getSelectedCoursePreviewForPlay();
-    if (this.host.getRoomPermissions().canSaveDraft) {
+    const tutorialContext = this.host.getTutorialContext();
+    if (!tutorialContext?.private && this.host.getRoomPermissions().canSaveDraft) {
       void this.host.saveDraft(true);
     }
     const currentRoomSnapshot = this.host.exportRoomSnapshot();
-    const usePublishedCourseRoomVersion =
+    const usePublishedCourseRoomVersion = !tutorialContext &&
       !this.host.getRoomDirty() &&
       this.host.getPublishedVersion() > 0 &&
       !this.roomSession.hasDraftPreviewInWorld();
@@ -86,6 +89,7 @@ export class EditorSceneFlowController {
       usePublishedCourseRoomVersion,
       coursePreview,
       courseEditedRoom: this.host.buildCourseEditedRoomData(),
+      tutorialContext,
     });
 
     this.host.hideObjectInspectorUi();

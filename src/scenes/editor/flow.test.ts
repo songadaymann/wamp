@@ -22,6 +22,9 @@ vi.mock('../../ui/appFeedback', () => ({
 }));
 
 import { EditorSceneFlowController } from './flow';
+import { createDefaultRoomSnapshot } from '../../persistence/roomModel';
+import { TUTORIAL_TEMPLATE_VERSIONS } from '../../tutorial/config';
+import { createEmptyCreativeChecklist } from '../../tutorial/model';
 
 describe('editor return flow', () => {
   beforeEach(() => {
@@ -90,6 +93,53 @@ describe('editor return flow', () => {
     expect(hideBusyOverlay.mock.invocationCallOrder[0]).toBeLessThan(
       host.wakeOverworld.mock.invocationCallOrder[0],
     );
+  });
+
+  it('starts a private tutorial playtest without ordinary save or publish persistence', async () => {
+    const snapshot = createDefaultRoomSnapshot('-10,-6', { x: -10, y: -6 });
+    const context = {
+      sessionId: 'tutorial-session',
+      stage: 'bridge_playtest' as const,
+      mode: 'private_playtest' as const,
+      private: true,
+      inputLocked: false,
+      templateVersions: { ...TUTORIAL_TEMPLATE_VERSIONS },
+      checklist: createEmptyCreativeChecklist(),
+    };
+    const roomSession = { hasDraftPreviewInWorld: vi.fn(() => false) };
+    const host = {
+      cancelClipboardPastePreview: vi.fn(),
+      getSelectedCoursePreviewForPlay: vi.fn(() => null),
+      getRoomPermissions: vi.fn(() => ({ canSaveDraft: true })),
+      saveDraft: vi.fn(),
+      exportRoomSnapshot: vi.fn(() => snapshot),
+      getRoomDirty: vi.fn(() => false),
+      getPublishedVersion: vi.fn(() => 8),
+      getRoomCoordinates: vi.fn(() => ({ x: -10, y: -6 })),
+      buildCourseEditedRoomData: vi.fn(() => null),
+      syncActiveCourseRoomSessionSnapshot: vi.fn(),
+      hideObjectInspectorUi: vi.fn(),
+      clearEditorPresence: vi.fn(),
+      sleepEditorScene: vi.fn(),
+      wakeOverworld: vi.fn(),
+      updateBottomBar: vi.fn(),
+      getTutorialContext: vi.fn(() => context),
+    };
+    const controller = new EditorSceneFlowController(roomSession as never, host as never);
+
+    await controller.startPlayMode();
+
+    expect(host.saveDraft).not.toHaveBeenCalled();
+    expect(host.syncActiveCourseRoomSessionSnapshot).toHaveBeenCalledWith(snapshot, {
+      published: false,
+    });
+    expect(host.clearEditorPresence).toHaveBeenCalledOnce();
+    expect(host.wakeOverworld).toHaveBeenCalledWith(expect.objectContaining({
+      draftRoom: snapshot,
+      publishedRoom: null,
+      tutorialContext: context,
+      mode: 'play',
+    }));
   });
 });
 

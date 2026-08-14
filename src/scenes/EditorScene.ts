@@ -9,6 +9,8 @@ import {
   LAYER_NAMES,
   TILESETS,
   editorState,
+  resetEditorPaletteSelection,
+  selectEditorPaletteTile,
 } from '../config';
 import { globalRoomMusicController } from '../music/controller';
 import {
@@ -98,6 +100,16 @@ import {
 } from '../weather/model';
 import { buildRoomWeatherSurfaceSegments } from '../weather/surfaces';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
+import { dispatchTypedEvent } from '../events/typedEvent';
+import {
+  TUTORIAL_EDITOR_MUTATION_EVENT,
+  TUTORIAL_PLAYTEST_REQUESTED_EVENT,
+} from '../tutorial/events';
+import { evaluateBridgeSnapshot } from '../tutorial/evaluators';
+import {
+  cloneTutorialSceneContext,
+  type TutorialSceneContext,
+} from '../tutorial/model';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
 type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
@@ -138,12 +150,20 @@ export class EditorScene extends Phaser.Scene {
   private lightingPreviewCacheKey = '';
   private entrySource: 'world' | 'direct' = 'direct';
   private initialRoomSnapshot: RoomSnapshot | null = null;
+  private tutorialTemplateSnapshot: RoomSnapshot | null = null;
   private forceInitialRoomSnapshot = false;
-  private readonly handleWake = (): void => {
+  private entryStatusMessage: string | null = null;
+  private tutorialContext: TutorialSceneContext | null = null;
+  private lastTutorialMutationEditCount = 0;
+  private readonly handleWake = (_sys?: unknown, data?: EditorSceneData): void => {
+    if (data?.tutorialContext !== undefined) {
+      this.setTutorialContext(data.tutorialContext ?? null);
+    }
+    if (data?.statusMessage) this.updatePersistenceStatus(data.statusMessage);
     setAppMode('editor');
     delete document.body.dataset.editorCourseMode;
     editorState.isPlaying = false;
-    this.presenceController.sync();
+    if (!this.isPrivateTutorialEditor()) this.presenceController.sync();
     this.updateBottomBar();
     this.updateGoalUi();
   };
@@ -222,6 +242,12 @@ export class EditorScene extends Phaser.Scene {
 
       if (this.inspectorController.hasPinnedInspector()) {
         this.inspectorController.clearPinnedSelection();
+        return;
+      }
+
+      if (this.isPrivateTutorialEditor()) {
+        this.emitTutorialMutation('leave_editor');
+        this.updatePersistenceStatus('Use Skip Tutorial if you want to return to Browse.');
         return;
       }
 
@@ -326,6 +352,9 @@ export class EditorScene extends Phaser.Scene {
     this.uiBridge = null;
     this.musicPatternController.destroy();
     this.presenceController.destroy();
+    if (document.body.dataset.tutorialEditor === 'true') {
+      delete document.body.dataset.tutorialEditor;
+    }
     this.resetRuntimeState();
   };
 
@@ -396,7 +425,11 @@ export class EditorScene extends Phaser.Scene {
       syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
       updatePersistenceStatus: (text) => this.updatePersistenceStatus(text),
       canSaveDraft: () => this.roomPermissions.canSaveDraft,
-      recordBuildPlacement: (count) => this.guestBuilderActivityTracker.recordPlacedBuildContent(count),
+      recordBuildPlacement: (count) => {
+        if (!this.isPrivateTutorialEditor()) {
+          this.guestBuilderActivityTracker.recordPlacedBuildContent(count);
+        }
+      },
     });
     this.roomSession = new EditorRoomSession(createRoomRepository(), {
       applyRoomSnapshot: (room) => {
@@ -489,6 +522,7 @@ export class EditorScene extends Phaser.Scene {
       getMintedTokenId: () => this.mintedTokenId,
       getRoomEditCount: () => this.roomEditCount,
       publishRoom: () => this.publishRoom(),
+      getTutorialContext: () => cloneTutorialSceneContext(this.tutorialContext),
     });
     this.inspectorController = new EditorInspectorController(
       this,
@@ -769,7 +803,19 @@ export class EditorScene extends Phaser.Scene {
     this.resetRuntimeState();
 
     this.initialRoomSnapshot = data?.roomSnapshot ? cloneRoomSnapshot(data.roomSnapshot) : null;
+    this.tutorialTemplateSnapshot = data?.tutorialTemplateSnapshot
+      ? cloneRoomSnapshot(data.tutorialTemplateSnapshot)
+      : null;
     this.forceInitialRoomSnapshot = data?.forceRoomSnapshot === true;
+    this.entryStatusMessage = data?.statusMessage ?? null;
+    this.setTutorialContext(data?.tutorialContext ?? null);
+    this.lastTutorialMutationEditCount = 0;
+    if (this.isPrivateTutorialEditor()) {
+      resetEditorPaletteSelection();
+      if (this.tutorialContext?.stage === 'bridge_edit') {
+        selectEditorPaletteTile('essentials', 2, 3);
+      }
+    }
     this.courseController.initialize(data?.courseEdit ?? null);
 
     if (this.initialRoomSnapshot) {
@@ -789,7 +835,7 @@ export class EditorScene extends Phaser.Scene {
       onRequestRender: () => this.renderEditorUi(),
       onDocumentKeyDown: this.handleDocumentKeyDown,
       onAuthStateChanged: () => {
-        this.presenceController.refreshIdentity();
+        if (!this.isPrivateTutorialEditor()) this.presenceController.refreshIdentity();
         this.renderEditorUi();
       },
       onBack: () => this.handleEditorBackAction(),
@@ -891,15 +937,25 @@ export class EditorScene extends Phaser.Scene {
       this.updatePersistenceStatus('Loading room...');
     }
 
-    void this.loadPersistedRoom();
-    this.presenceController.initialize();
+    if (this.isPrivateTutorialEditor()) {
+      hideBusyOverlay();
+      this.updatePersistenceStatus(this.entryStatusMessage ?? 'Private tutorial draft. Saved in this browser only.');
+      this.emitTutorialMutation('mutation');
+    } else {
+      void this.loadPersistedRoom();
+      this.presenceController.initialize();
+    }
     this.updateBottomBar();
     this.updateGoalUi();
   }
 
   update(time: number): void {
-    this.maybeAutoSave(time);
-    this.presenceController.sync();
+    if (this.isPrivateTutorialEditor()) {
+      this.maybeEmitTutorialMutation();
+    } else {
+      this.maybeAutoSave(time);
+      this.presenceController.sync();
+    }
     this.updateBackgroundPreview();
     this.updateLightingPreview();
     this.updateWeatherPreview();
@@ -1211,6 +1267,7 @@ export class EditorScene extends Phaser.Scene {
     }
 
     this.presenceController.sync();
+    if (this.entryStatusMessage) this.updatePersistenceStatus(this.entryStatusMessage);
     this.updateGoalUi();
   }
 
@@ -1253,6 +1310,11 @@ export class EditorScene extends Phaser.Scene {
     force: boolean = false,
     options?: { promptForSignInOnUnauthorized?: boolean }
   ): Promise<RoomRecord | null> {
+    if (this.isPrivateTutorialEditor()) {
+      this.emitTutorialMutation('mutation');
+      this.updatePersistenceStatus('Private tutorial draft saved in this browser.');
+      return null;
+    }
     return this.persistenceController.saveDraft(force, options);
   }
 
@@ -1293,6 +1355,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
+    if (this.isPrivateTutorialEditor()) {
+      this.emitTutorialMutation('mutation');
+      this.updatePersistenceStatus('Choose a place in the world before publishing.');
+      return null;
+    }
     const record = await this.persistenceController.publishRoom(successText);
     if (record?.published) {
       await this.musicWorkflow.handleRoomPublished();
@@ -1569,6 +1636,32 @@ export class EditorScene extends Phaser.Scene {
     if (this.musicPreviewState !== 'stopped') {
       this.stopRoomMusicPreview();
     }
+    if (this.tutorialContext?.stage === 'bridge_edit' && this.tutorialTemplateSnapshot) {
+      const snapshot = this.exportRoomSnapshot();
+      const bridge = evaluateBridgeSnapshot(this.tutorialTemplateSnapshot, snapshot);
+      if (!bridge.readyToPlaytest) {
+        this.updatePersistenceStatus('Add at least three Essentials terrain tiles across the water first.');
+        this.emitTutorialMutation('mutation');
+        return;
+      }
+      dispatchTypedEvent(window, TUTORIAL_PLAYTEST_REQUESTED_EVENT, {
+        context: cloneTutorialSceneContext(this.tutorialContext)!,
+        snapshot: cloneRoomSnapshot(snapshot),
+      });
+      this.tutorialContext = {
+        ...this.tutorialContext,
+        stage: 'bridge_playtest',
+        mode: 'private_playtest',
+        inputLocked: false,
+      };
+    } else if (this.tutorialContext?.private) {
+      this.emitTutorialMutation('playtest');
+      this.tutorialContext = {
+        ...this.tutorialContext,
+        mode: 'private_playtest',
+        inputLocked: false,
+      };
+    }
     await this.flowController.startPlayMode();
   }
 
@@ -1630,6 +1723,11 @@ export class EditorScene extends Phaser.Scene {
     if (this.musicPreviewState !== 'stopped') {
       this.stopRoomMusicPreview();
     }
+    if (this.isPrivateTutorialEditor()) {
+      this.emitTutorialMutation('leave_editor');
+      this.updatePersistenceStatus('Use Skip Tutorial if you want to return to Browse.');
+      return;
+    }
     await this.flowController.returnToWorld();
   }
 
@@ -1638,6 +1736,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private async handleEditorBackAction(): Promise<void> {
+    if (this.isPrivateTutorialEditor()) {
+      this.emitTutorialMutation('leave_editor');
+      this.updatePersistenceStatus('Use Skip Tutorial if you want to return to Browse.');
+      return;
+    }
     await this.flowController.handleEditorBackAction();
   }
 
@@ -1850,6 +1953,39 @@ export class EditorScene extends Phaser.Scene {
       canUndo: this.editRuntime.hasUndoHistory(),
       canRedo: this.editRuntime.hasRedoHistory(),
       isPlaying: editorState.isPlaying,
+      tutorial: cloneTutorialSceneContext(this.tutorialContext),
     };
+  }
+
+  private isPrivateTutorialEditor(): boolean {
+    return Boolean(this.tutorialContext?.private);
+  }
+
+  private setTutorialContext(context: TutorialSceneContext | null): void {
+    this.tutorialContext = cloneTutorialSceneContext(context);
+    if (this.tutorialContext?.private) {
+      document.body.dataset.tutorialEditor = 'true';
+    } else {
+      delete document.body.dataset.tutorialEditor;
+    }
+  }
+
+  private maybeEmitTutorialMutation(): void {
+    if (!this.tutorialContext?.private || this.roomEditCount === this.lastTutorialMutationEditCount) {
+      return;
+    }
+    this.lastTutorialMutationEditCount = this.roomEditCount;
+    this.emitTutorialMutation('mutation');
+  }
+
+  private emitTutorialMutation(
+    reason: 'mutation' | 'playtest' | 'leave_editor',
+  ): void {
+    if (!this.tutorialContext?.private || !this.map) return;
+    dispatchTypedEvent(window, TUTORIAL_EDITOR_MUTATION_EVENT, {
+      context: cloneTutorialSceneContext(this.tutorialContext)!,
+      snapshot: cloneRoomSnapshot(this.exportRoomSnapshot()),
+      reason,
+    });
   }
 }
