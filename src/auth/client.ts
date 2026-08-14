@@ -4,7 +4,6 @@ import type {
   DisplayNameAvailabilityResponse,
   DisplayNameUpdateResponse,
   AuthUser,
-  MagicLinkRequestResponse,
   WalletChallengeResponse,
   WalletVerifyResponse,
 } from './model';
@@ -31,6 +30,7 @@ import {
   type RoomStorageBackend,
 } from './runtimeConfig';
 import { dispatchTypedEvent } from '../events/typedEvent';
+import { requestEmailMagicLink } from './emailMagicLink';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
 export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
@@ -560,9 +560,8 @@ async function requestMagicLink(): Promise<void> {
   setLoading(true, linkingEmail ? 'Sending verification link...' : 'Sending sign-in link...');
 
   try {
-    const response = await apiRequest<MagicLinkRequestResponse>('/api/auth/request-link', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
+    const response = await requestEmailMagicLink(email, {
+      returnTo: window.location.href,
     });
 
     state.debugMagicLink = normalizeDebugMagicLink(response.debugMagicLink);

@@ -12,6 +12,7 @@ export interface TutorialViewAction {
 
 export interface TutorialViewHandlers {
   onAction(action: TutorialViewAction): void;
+  onEmailSubmit(email: string): void;
   onSkip(): void;
 }
 
@@ -33,7 +34,10 @@ export class TutorialView {
     this.root.replaceChildren(this.buildPanel(model));
     this.status = this.root.querySelector('.tutorial-status');
 
-    if (model.tone === 'dream') {
+    if (model.accountCreation && ['idle', 'error'].includes(model.accountCreation.state)) {
+      const input = this.root.querySelector<HTMLInputElement>('.tutorial-email-input');
+      this.doc.defaultView?.setTimeout(() => input?.focus(), 0);
+    } else if (model.tone === 'dream') {
       const primary = this.root.querySelector<HTMLButtonElement>('[data-tutorial-primary="true"]');
       this.doc.defaultView?.setTimeout(() => primary?.focus(), 0);
     }
@@ -139,6 +143,10 @@ export class TutorialView {
       panel.append(list);
     }
 
+    if (model.accountCreation) {
+      panel.append(this.buildAccountCreationForm(model.accountCreation));
+    }
+
     const status = this.doc.createElement('div');
     status.className = 'tutorial-status hidden';
     status.setAttribute('aria-live', 'polite');
@@ -165,5 +173,62 @@ export class TutorialView {
       checklistItem: action.checklistItem,
     }));
     return button;
+  }
+
+  private buildAccountCreationForm(
+    account: NonNullable<TutorialCoachmarkViewModel['accountCreation']>,
+  ): HTMLFormElement {
+    const form = this.doc.createElement('form');
+    form.className = 'tutorial-email-form';
+    form.noValidate = false;
+
+    const label = this.doc.createElement('label');
+    label.className = 'tutorial-email-label';
+    label.htmlFor = 'tutorial-email-input';
+    label.textContent = 'Email address';
+
+    const controls = this.doc.createElement('div');
+    controls.className = 'tutorial-email-controls';
+
+    const input = this.doc.createElement('input');
+    input.id = 'tutorial-email-input';
+    input.className = 'tutorial-email-input';
+    input.type = 'email';
+    input.name = 'email';
+    input.autocomplete = 'email';
+    input.inputMode = 'email';
+    input.placeholder = 'you@example.com';
+    input.required = true;
+    input.value = account.email;
+    input.disabled = account.state === 'sending';
+
+    const submit = this.doc.createElement('button');
+    submit.className = 'tutorial-email-submit';
+    submit.type = 'submit';
+    submit.disabled = account.state === 'sending';
+    submit.textContent = account.state === 'sending'
+      ? 'Sending…'
+      : account.state === 'sent'
+        ? 'Send Again'
+        : 'Email Me a Link';
+
+    controls.append(input, submit);
+    form.append(label, controls);
+
+    if (account.debugMagicLink) {
+      const debugLink = this.doc.createElement('a');
+      debugLink.className = 'tutorial-email-debug-link';
+      debugLink.href = account.debugMagicLink;
+      debugLink.textContent = 'Open debug account link';
+      form.append(debugLink);
+    }
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      this.handlers.onEmailSubmit(input.value);
+    });
+
+    return form;
   }
 }

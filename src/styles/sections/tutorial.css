@@ -194,6 +194,72 @@
   font-size: 7px;
 }
 
+.tutorial-email-form {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 2px;
+}
+
+.tutorial-email-label {
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.tutorial-email-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.tutorial-email-input,
+.tutorial-email-submit {
+  min-height: 42px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  font-family: 'Early GameBoy', monospace;
+}
+
+.tutorial-email-input {
+  min-width: 0;
+  padding: 9px 10px 7px;
+  background: #fffaf0;
+  color: #18161c;
+  font-size: 10px;
+}
+
+.tutorial-email-input:focus {
+  outline: 3px solid #1b84c2;
+  outline-offset: 1px;
+}
+
+.tutorial-email-submit {
+  padding: 8px 10px;
+  background: #79ccde;
+  color: #18161c;
+  font-size: 8px;
+  line-height: 1.35;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 #18161c;
+}
+
+.tutorial-email-submit:disabled {
+  background: #c7c1b4;
+  color: #5d5851;
+  box-shadow: none;
+  cursor: wait;
+}
+
+.tutorial-email-debug-link {
+  width: fit-content;
+  color: #075f98;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  text-decoration: underline;
+}
+
 .tutorial-status {
   padding: 8px;
   border: 2px solid #1b84c2;
@@ -250,6 +316,10 @@ body[data-tutorial-private='true'] #btn-world-build {
   display: none !important;
 }
 
+body[data-tutorial-account-creation='true'] #auth-panel {
+  display: none !important;
+}
+
 @media (max-width: 900px) {
   .tutorial-layer:not(.tutorial-layer--dream) {
     padding-top: calc(10px + env(safe-area-inset-top));
@@ -276,6 +346,14 @@ body[data-tutorial-private='true'] #btn-world-build {
 
   .tutorial-actions {
     flex-direction: column;
+  }
+
+  .tutorial-email-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .tutorial-email-submit {
+    width: 100%;
   }
 
   .tutorial-action {

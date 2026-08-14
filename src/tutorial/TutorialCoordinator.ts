@@ -2,9 +2,12 @@ import type Phaser from 'phaser';
 import {
   AUTH_STATE_CHANGED_EVENT,
   getAuthDebugState,
-  promptForSignIn,
   type AuthDebugState,
 } from '../auth/client';
+import {
+  buildTutorialAccountReturnUrl,
+  requestEmailMagicLink as requestEmailMagicLinkRequest,
+} from '../auth/emailMagicLink';
 import { listenForTypedEvent } from '../events/typedEvent';
 import {
   cloneRoomSnapshot,
@@ -15,7 +18,10 @@ import { createRoomRepository, type RoomRepository } from '../persistence/roomRe
 import { createWorldRepository, type WorldRepository } from '../persistence/worldRepository';
 import { hasFocusedCoordinatesInUrl } from '../navigation/worldNavigation';
 import { APP_READY_EVENT, isAppReady } from '../ui/appFeedback';
-import { buildTutorialCoachmark } from './coachmarks';
+import {
+  buildTutorialCoachmark,
+  type TutorialAccountCreationState,
+} from './coachmarks';
 import { TutorialClaimService } from './claimService';
 import {
   TUTORIAL_BRIDGE_ROOM,
@@ -73,6 +79,15 @@ export interface TutorialDebugState {
   hasBridgeBackup: boolean;
   selectedClaimCoordinates: TutorialProgressV1['selectedClaimCoordinates'];
   claimInFlight: boolean;
+  accountCreationState: TutorialAccountCreationState | null;
+}
+
+interface TutorialAccountPromptState {
+  email: string;
+  state: TutorialAccountCreationState;
+  message: string | null;
+  isError: boolean;
+  debugMagicLink: string | null;
 }
 
 interface TutorialCoordinatorOptions {
@@ -86,7 +101,7 @@ interface TutorialCoordinatorOptions {
   eventTarget?: Window;
   doc?: Document;
   getAuthState?: () => AuthDebugState;
-  promptForSignIn?: (status: string) => void;
+  requestEmailMagicLink?: typeof requestEmailMagicLinkRequest;
   hasFocusedCoordinates?: () => boolean;
 }
 
@@ -103,13 +118,14 @@ export class TutorialCoordinator {
   private readonly view: TutorialView;
   private readonly claimService: TutorialClaimService;
   private readonly getAuthState: () => AuthDebugState;
-  private readonly showSignIn: (status: string) => void;
+  private readonly requestEmailLink: typeof requestEmailMagicLinkRequest;
   private readonly hasFocusedCoordinates: () => boolean;
   private progress: TutorialProgressV1 | null = null;
   private templates: TutorialTemplates | null = null;
   private initialized = false;
   private startTimer: number | null = null;
   private claimInFlight = false;
+  private accountPrompt: TutorialAccountPromptState | null = null;
   private readonly removeListeners: Array<() => void> = [];
 
   constructor(game: Phaser.Game, options: TutorialCoordinatorOptions = {}) {
@@ -123,11 +139,12 @@ export class TutorialCoordinator {
       ?? new PinnedTutorialTemplateLoader(this.roomRepository);
     this.runtime = options.runtime ?? new PhaserTutorialRuntimeGateway(game);
     this.getAuthState = options.getAuthState ?? getAuthDebugState;
-    this.showSignIn = options.promptForSignIn ?? promptForSignIn;
+    this.requestEmailLink = options.requestEmailMagicLink ?? requestEmailMagicLinkRequest;
     this.hasFocusedCoordinates = options.hasFocusedCoordinates
       ?? (() => hasFocusedCoordinatesInUrl(this.eventTarget.location));
     this.view = options.view ?? new TutorialView(this.doc, {
       onAction: (action) => { void this.handleViewAction(action); },
+      onEmailSubmit: (email) => { void this.handleAccountEmailSubmit(email); },
       onSkip: () => { void this.dismiss(); },
     });
     this.claimService = new TutorialClaimService({
@@ -153,6 +170,7 @@ export class TutorialCoordinator {
     this.startTimer = null;
     for (const remove of this.removeListeners.splice(0)) remove();
     delete this.eventTarget.get_wamp_tutorial_debug_state;
+    delete this.doc.body.dataset.tutorialAccountCreation;
     this.view.destroy();
   }
 
@@ -160,6 +178,7 @@ export class TutorialCoordinator {
     await this.runtime.returnToBrowse(null, this.getTemplateRoomIds()).catch(() => {});
     this.progress = this.store.create();
     this.templates = null;
+    this.accountPrompt = null;
     arbitrateLegacyWelcome(this.storage);
     this.persistAndRender();
   }
@@ -174,6 +193,7 @@ export class TutorialCoordinator {
     this.progress.workingSnapshot = null;
     this.progress.bridgeBackupSnapshot = null;
     this.progress.selectedClaimCoordinates = null;
+    this.accountPrompt = null;
     this.progress = this.store.save(this.progress);
     this.syncDocumentState();
     this.view.hide();
@@ -196,6 +216,7 @@ export class TutorialCoordinator {
         ? { ...this.progress.selectedClaimCoordinates }
         : null,
       claimInFlight: this.claimInFlight,
+      accountCreationState: this.accountPrompt?.state ?? null,
     };
   }
 
@@ -497,8 +518,7 @@ export class TutorialCoordinator {
     this.progress.selectedClaimCoordinates = { ...detail.coordinates };
     this.progress = this.store.save(this.progress);
     if (!this.getAuthState().authenticated) {
-      this.showSignIn('Sign in to give this private draft a place in the world.');
-      this.view.setStatus('Sign in, then this same room will be checked again.');
+      this.showAccountPrompt();
       return;
     }
     await this.claimSelectedRoom();
@@ -513,6 +533,8 @@ export class TutorialCoordinator {
     ) {
       return;
     }
+    this.accountPrompt = null;
+    this.doc.getElementById('auth-panel')?.classList.remove('menu-open');
     await this.claimSelectedRoom();
   }
 
@@ -533,7 +555,7 @@ export class TutorialCoordinator {
         this.progress.selectedClaimCoordinates,
       );
       if (!result.ok) {
-        if (result.code === 'auth_required') this.showSignIn(result.message);
+        if (result.code === 'auth_required') this.showAccountPrompt();
         if (result.code === 'stale_frontier' || result.code === 'concurrent_claim') {
           this.progress.selectedClaimCoordinates = null;
           this.progress = this.store.save(this.progress);
@@ -599,9 +621,106 @@ export class TutorialCoordinator {
       this.view.hide();
       return;
     }
-    const model = buildTutorialCoachmark(this.progress);
-    if (model) this.view.render(model);
-    else this.view.hide();
+    const shouldShowAccountPrompt = (
+      this.progress.stage === 'awaiting_claim'
+      && Boolean(this.progress.selectedClaimCoordinates)
+      && !this.getAuthState().authenticated
+    );
+    if (shouldShowAccountPrompt && !this.accountPrompt) {
+      this.accountPrompt = this.createAccountPrompt();
+    } else if (!shouldShowAccountPrompt) {
+      this.accountPrompt = null;
+    }
+    if (shouldShowAccountPrompt) {
+      this.doc.body.dataset.tutorialAccountCreation = 'true';
+      this.doc.getElementById('auth-panel')?.classList.remove('menu-open');
+    } else {
+      delete this.doc.body.dataset.tutorialAccountCreation;
+    }
+    const model = buildTutorialCoachmark(this.progress, {
+      accountCreation: this.accountPrompt
+        ? {
+            email: this.accountPrompt.email,
+            state: this.accountPrompt.state,
+            debugMagicLink: this.accountPrompt.debugMagicLink,
+          }
+        : null,
+    });
+    if (model) {
+      this.view.render(model);
+      if (this.accountPrompt?.message) {
+        this.view.setStatus(this.accountPrompt.message, this.accountPrompt.isError);
+      }
+    } else {
+      this.view.hide();
+    }
+  }
+
+  private showAccountPrompt(): void {
+    this.accountPrompt ??= this.createAccountPrompt();
+    this.render();
+  }
+
+  private createAccountPrompt(): TutorialAccountPromptState {
+    return {
+      email: '',
+      state: 'idle',
+      message: null,
+      isError: false,
+      debugMagicLink: null,
+    };
+  }
+
+  private async handleAccountEmailSubmit(email: string): Promise<void> {
+    if (
+      !this.progress
+      || this.progress.stage !== 'awaiting_claim'
+      || !this.progress.selectedClaimCoordinates
+      || this.getAuthState().authenticated
+      || this.accountPrompt?.state === 'sending'
+    ) {
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    this.accountPrompt = {
+      email: normalizedEmail,
+      state: 'sending',
+      message: 'Sending your account link…',
+      isError: false,
+      debugMagicLink: null,
+    };
+    this.render();
+
+    try {
+      const response = await this.requestEmailLink(normalizedEmail, {
+        returnTo: this.getAccountReturnUrl(),
+      });
+      this.accountPrompt = {
+        email: normalizedEmail,
+        state: 'sent',
+        message: response.delivery === 'email'
+          ? 'Link sent. Check your email on this device.'
+          : 'Your debug account link is ready.',
+        isError: false,
+        debugMagicLink: response.debugMagicLink ?? null,
+      };
+    } catch (error) {
+      this.accountPrompt = {
+        email: normalizedEmail,
+        state: 'error',
+        message: error instanceof Error
+          ? error.message
+          : 'We could not send the account link. Try again.',
+        isError: true,
+        debugMagicLink: null,
+      };
+    }
+    this.render();
+  }
+
+  private getAccountReturnUrl(): string {
+    return buildTutorialAccountReturnUrl(this.eventTarget.location.href);
   }
 
   private context(
@@ -635,6 +754,7 @@ export class TutorialCoordinator {
       delete this.doc.body.dataset.tutorialInputLocked;
       delete this.doc.body.dataset.tutorialEditor;
       delete this.doc.body.dataset.tutorialPrivate;
+      delete this.doc.body.dataset.tutorialAccountCreation;
       return;
     }
     const resolvedContext = cloneTutorialSceneContext(context);

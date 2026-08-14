@@ -30,12 +30,25 @@ export interface TutorialChecklistViewItem {
   state: CreativeChecklistItemState;
 }
 
+export type TutorialAccountCreationState = 'idle' | 'sending' | 'sent' | 'error';
+
+export interface TutorialAccountCreationViewModel {
+  email: string;
+  state: TutorialAccountCreationState;
+  debugMagicLink?: string | null;
+}
+
+export interface TutorialCoachmarkOptions {
+  accountCreation?: TutorialAccountCreationViewModel | null;
+}
+
 export interface TutorialCoachmarkViewModel {
   tone: 'dream' | 'guide' | 'success' | 'claim';
   title: string;
   body: string;
   dreamLines?: readonly string[];
   checklist?: TutorialChecklistViewItem[];
+  accountCreation?: TutorialAccountCreationViewModel;
   actions: TutorialCoachmarkAction[];
   persistentSkip: boolean;
 }
@@ -51,6 +64,7 @@ const CHECKLIST_LABELS: Record<CreativeChecklistItem, string> = {
 
 export function buildTutorialCoachmark(
   progress: TutorialProgressV1,
+  options: TutorialCoachmarkOptions = {},
 ): TutorialCoachmarkViewModel | null {
   switch (progress.stage) {
     case 'dream':
@@ -130,6 +144,19 @@ export function buildTutorialCoachmark(
         persistentSkip: true,
       };
     case 'awaiting_claim':
+      if (options.accountCreation) {
+        const sent = options.accountCreation.state === 'sent';
+        return {
+          tone: 'claim',
+          title: sent ? 'Check your email' : 'Create your WAMP account',
+          body: sent
+            ? `We sent a one-time link to ${options.accountCreation.email}. Open it on this device. The link will bring you back, and your room will still be waiting.`
+            : 'Enter your email and we’ll send you a one-time link. Open it on this device; the link will bring you back to place your room in the world.',
+          accountCreation: options.accountCreation,
+          actions: [],
+          persistentSkip: true,
+        };
+      }
       return {
         tone: 'claim',
         title: 'Choose where this dream will wake',
