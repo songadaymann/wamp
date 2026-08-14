@@ -6,6 +6,7 @@ import {
   BACKGROUND_GROUPS,
   GAME_OBJECTS,
   TILESETS,
+  isClimbableObjectConfig,
 } from '../config';
 import { ROOM_GOAL_TYPES } from '../goals/roomGoals';
 import type { Env } from '../cloudflare/worker/core/types';
@@ -67,6 +68,22 @@ describe('authoring catalog', () => {
       id: 'boygame_ruins',
       surfaceLocalIndices: [10],
     }));
+
+    const jungleVines = catalog.tilesets.find((entry) => entry.key === 'jungle-vines');
+    expect(jungleVines).toMatchObject({
+      name: 'Jungle Vines',
+      assetPath: expect.stringContaining('jungle-vines.png'),
+      imageWidth: 144,
+      imageHeight: 128,
+      columns: 9,
+      rows: 8,
+      tileCount: 72,
+      gidStart: 2001,
+      gidEnd: 2072,
+    });
+    expect(jungleVines?.collisionLocalIndices.none).toHaveLength(72);
+    expect(jungleVines?.disabledEditorLocalIndices).toContain(32);
+    expect(jungleVines?.disabledEditorLocalIndices).not.toContain(35);
   });
 
   it('derives current object capabilities and marks spawn_point non-placeable', () => {
@@ -96,6 +113,54 @@ describe('authoring catalog', () => {
       glowColor: 0x9bbc0f,
       flicker: expect.any(Object),
     });
+
+    const jungleObjects = GAME_OBJECTS.filter((entry) => entry.id.startsWith('jungle_'));
+    expect(jungleObjects).toHaveLength(15);
+    expect(jungleObjects.filter(isClimbableObjectConfig).map((entry) => entry.id)).toEqual([
+      'jungle_climbing_vine_1',
+      'jungle_climbing_vine_2',
+      'jungle_climbing_vine_3',
+      'jungle_climbing_vine_4',
+      'jungle_climbing_vine_5',
+      'jungle_climbing_vine_6',
+    ]);
+    expect(jungleObjects.filter((entry) => entry.category === 'decoration')).toHaveLength(9);
+    expect(
+      GAME_OBJECTS
+        .filter((entry) => entry.category === 'decoration')
+        .every((entry) => Boolean(entry.decorationPaletteGroup)),
+    ).toBe(true);
+    const treePackObjects = GAME_OBJECTS.filter((entry) => entry.id.startsWith('tree_pack_'));
+    expect(treePackObjects).toHaveLength(221);
+    expect(treePackObjects.every((entry) => (
+      entry.category === 'decoration'
+      && entry.decorationPaletteGroup === 'trees'
+      && entry.displayScale === 0.5
+      && entry.bodyWidth === 0
+      && entry.bodyHeight === 0
+    ))).toBe(true);
+    expect(treePackObjects.filter((entry) => entry.treePaletteFamily === 'bonsai')).toHaveLength(21);
+    expect(treePackObjects.filter((entry) => entry.treePaletteFamily === 'basic')).toHaveLength(20);
+    expect(treePackObjects.filter((entry) => entry.decorationPaletteSubgroup === 'woodland')).toHaveLength(80);
+    expect(treePackObjects.filter((entry) => entry.decorationPaletteSubgroup === 'tropical')).toHaveLength(60);
+    expect(treePackObjects.filter((entry) => entry.decorationPaletteSubgroup === 'blossom')).toHaveLength(20);
+    expect(treePackObjects.filter((entry) => entry.decorationPaletteSubgroup === 'bonsai')).toHaveLength(41);
+    expect(treePackObjects.filter((entry) => entry.decorationPaletteSubgroup === 'winter')).toHaveLength(20);
+    expect(GAME_OBJECTS.filter((entry) => entry.decorationPaletteGroup === 'trees')).toHaveLength(226);
+    expect(GAME_OBJECTS.filter((entry) => entry.treePaletteFamily === 'classic')).toHaveLength(5);
+    expect(GAME_OBJECTS.filter((entry) => entry.decorationPaletteGroup === 'vines')).toHaveLength(9);
+    expect(isClimbableObjectConfig(GAME_OBJECTS.find((entry) => entry.id === 'ladder'))).toBe(true);
+    expect(isClimbableObjectConfig(GAME_OBJECTS.find((entry) => entry.id === 'jungle_loop_vine'))).toBe(false);
+
+    expect(BACKGROUND_GROUPS.find((entry) => entry.id === 'jungle_vines')).toMatchObject({
+      name: 'Jungle Vines',
+      bgColor: '#d2f7bb',
+      layers: expect.arrayContaining([
+        expect.objectContaining({ key: 'jungle_vines_0', width: 384, height: 176, scrollFactor: 0 }),
+        expect.objectContaining({ key: 'jungle_vines_5', width: 384, height: 176, scrollFactor: 0.6 }),
+      ]),
+    });
+    expect(BACKGROUND_GROUPS.find((entry) => entry.id === 'jungle_vines')?.layers).toHaveLength(6);
   });
 
   it('keeps the legacy tileset route projection stable', () => {

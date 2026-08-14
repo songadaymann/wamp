@@ -10,6 +10,7 @@ import {
   FONT_PUBLIC_BASE_URL,
   INFO_OVERLAY_INSET_PX,
   MAX_STITCH_TILES,
+  MAX_ZOOM_DELTA_PER_DAY,
   PADDING_ROOMS,
 } from './config';
 import { fillInfoOverlayTemplate } from './infoOverlay';
@@ -19,8 +20,8 @@ import { buildStitchRequest } from './stitch';
 import { stitchMapScreenshotPng } from './stitchBrowser';
 import {
   dailyFileNameForToday,
+  loadPreviousZoom,
   loadStarfieldDataUrl,
-  loadZoomState,
   nextManualFileName,
   saveScreenshotPng,
   saveStarfieldPng,
@@ -56,7 +57,10 @@ export interface CaptureResult {
   fileName?: string;
   key?: string;
   zoom?: number;
+  previousZoom?: number | null;
   idealZoom?: number;
+  zoomDelta?: number;
+  clamped?: boolean;
   level?: WorldTileLevel;
   roomCount?: number;
   twitter?: { posted: boolean; reason: string };
@@ -116,8 +120,11 @@ export async function captureMapScreenshot(
   const padded = padPublishedBounds(published, PADDING_ROOMS);
   const world = roomBoundsToWorldPixels(padded);
   const idealZoom = computeIdealFitZoom(world);
-  const previous = await loadZoomState(env.SCREENSHOTS);
-  const zoom = applyGradualZoom(idealZoom, previous?.zoom ?? null);
+  const previousZoom = await loadPreviousZoom(env.SCREENSHOTS);
+  const zoom = applyGradualZoom(idealZoom, previousZoom);
+  const zoomDelta = previousZoom === null ? idealZoom : zoom - previousZoom;
+  const clamped =
+    previousZoom !== null && Math.abs(idealZoom - previousZoom) > MAX_ZOOM_DELTA_PER_DAY;
   const fetchPadding = PADDING_ROOMS + 2;
   const fetchMinX = published.minX - fetchPadding;
   const fetchMaxX = published.maxX + fetchPadding;
@@ -220,7 +227,7 @@ export async function captureMapScreenshot(
     await saveStarfieldPng(env.SCREENSHOTS, starfieldPngBytes);
   }
 
-  const key = await saveScreenshotPng(env.SCREENSHOTS, fileName, pngBytes);
+  const key = await saveScreenshotPng(env.SCREENSHOTS, fileName, pngBytes, zoom);
   await saveZoomState(env.SCREENSHOTS, {
     zoom,
     updatedAt: new Date().toISOString(),
@@ -240,7 +247,10 @@ export async function captureMapScreenshot(
     fileName,
     key,
     zoom,
+    previousZoom,
     idealZoom,
+    zoomDelta,
+    clamped,
     level,
     roomCount: published.roomCount,
     twitter,

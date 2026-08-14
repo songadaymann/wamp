@@ -42,6 +42,10 @@
     "safety": {
       "name": "everybodys-platformer-safety-map-screenshots",
       "preview_urls": true,
+      // Do not inherit production daily cron — manual captures only on safety.
+      "triggers": {
+        "crons": []
+      },
       "browser": {
         "binding": "MAP_SCREENSHOT_BROWSER"
       },

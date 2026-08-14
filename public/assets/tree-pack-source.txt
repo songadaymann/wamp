@@ -1,0 +1,14 @@
+Devkidd tree pack asset credits
+
+Source folder: 240 Tress Pack
+Creator: Devkidd
+Creator page: https://devkidd.itch.io/
+
+Used for: 221 finished, non-colliding tree decorations across Bamboo, Basic,
+Birch, Bonsai, Bonsai Sakura, Coconut, Oak, Palm, Sakura, Weeping Willow, and
+Winter families. The separated trunk and leaf layer PNGs are source-editing
+components and are not registered as duplicate game objects.
+
+License supplied with the pack: free to use in personal or commercial projects.
+Attribution is appreciated but not required. The assets may not be resold as-is,
+even when modified.

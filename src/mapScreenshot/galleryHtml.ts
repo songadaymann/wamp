@@ -169,8 +169,23 @@ export function buildGalleryHtml(input: {
         } else if (body.skipped) {
           status.textContent = body.reason || 'Skipped.';
         } else {
-          status.textContent = 'Saved ' + body.fileName + ' (zoom ' + Number(body.zoom).toFixed(4) + '). Reloading…';
-          setTimeout(() => location.reload(), 800);
+          status.textContent = (() => {
+            const zoom = Number(body.zoom);
+            const previous = body.previousZoom == null ? null : Number(body.previousZoom);
+            const ideal = Number(body.idealZoom);
+            const delta = Number(body.zoomDelta);
+            const capped = body.clamped ? ' capped' : '';
+            if (previous == null || !Number.isFinite(previous)) {
+              return 'Saved ' + body.fileName + '. zoom ' + zoom.toFixed(4)
+                + ' (first capture → ideal ' + ideal.toFixed(4) + '). Reloading…';
+            }
+            return 'Saved ' + body.fileName + '. zoom ' + zoom.toFixed(4)
+              + ' (was ' + previous.toFixed(4)
+              + ' → ideal ' + ideal.toFixed(4)
+              + ', Δ ' + (delta >= 0 ? '+' : '') + delta.toFixed(4)
+              + capped + '). Reloading…';
+          })();
+          setTimeout(() => location.reload(), 1200);
           return;
         }
       } catch (error) {

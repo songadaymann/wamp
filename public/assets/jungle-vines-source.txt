@@ -1,0 +1,20 @@
+Jungle Vines asset credits
+==========================
+
+LunarDrift Studios
+Source: https://lunadrift-studios.itch.io/jungle-vines-background-2d-pixel-pack
+Used for: the six-layer Jungle Vines parallax background, the Jungle Vines
+decorative tileset, and the seven small vine-sprig objects.
+License note from the source page: personal and commercial use and modification
+are allowed; credit and a link back to the source page are required.
+
+Pixelina
+Source: https://pixelina-art.itch.io/vines-asset-pack-by-pixelina
+Used for: the six climbable vine objects, Hanging Jungle Creepers, and Looping
+Jungle Vine. The climbable objects are lossless vertical compositions of the
+pack's individual top, middle, and (where supplied) bottom segments.
+License note from the source page: CC0; credit is appreciated but not required.
+
+The Pixelina header banner and combined reference sheet are not runtime assets,
+because they duplicate the individual source sprites. Every unique gameplay
+sprite supplied in the pack is represented by the objects above.

@@ -23,11 +23,18 @@ describe('map screenshot zoom', () => {
     expect(zoom).toBeCloseTo(Math.min(3840 / (2 * 640), 2160 / 352), 6);
   });
 
-  it('clamps zoom changes per capture to 0.005', () => {
+  it('clamps zoom changes per capture to 0.001', () => {
     expect(applyGradualZoom(0.5, null)).toBe(0.5);
-    expect(applyGradualZoom(0.4, 0.5)).toBeCloseTo(0.495, 6);
-    expect(applyGradualZoom(0.497, 0.5)).toBeCloseTo(0.497, 6);
-    expect(applyGradualZoom(0.6, 0.5)).toBeCloseTo(0.505, 6);
+    expect(applyGradualZoom(0.4, 0.5)).toBeCloseTo(0.499, 6);
+    expect(applyGradualZoom(0.4995, 0.5)).toBeCloseTo(0.4995, 6);
+    expect(applyGradualZoom(0.6, 0.5)).toBeCloseTo(0.501, 6);
+  });
+
+  it('still clamps when previous zoom is recovered outside state.json', () => {
+    // Simulates loadPreviousZoom falling back to PNG metadata.
+    const recoveredPrevious = 0.12;
+    const ideal = 0.108;
+    expect(applyGradualZoom(ideal, recoveredPrevious)).toBeCloseTo(0.119, 6);
   });
 });
 

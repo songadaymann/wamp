@@ -82,4 +82,57 @@ describe('Pages standalone renderer routes', () => {
     expect(response.headers.get('Allow')).toBe('GET, HEAD');
     expect(fetchAsset).not.toHaveBeenCalled();
   });
+
+  it('proxies /capture to the map-screenshot Worker with a public base path', async () => {
+    const upstreamFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      expect(request.url).toBe(
+        'https://everybodys-platformer-map-screenshots.novox-robot.workers.dev/api/health',
+      );
+      expect(request.headers.get('X-WAMP-Public-Base-Path')).toBe('/capture');
+      expect(request.headers.get('Cookie')).toBeNull();
+      expect(request.headers.get('Authorization')).toBeNull();
+      expect(request.headers.get('X-Unrelated-Header')).toBeNull();
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', upstreamFetch);
+
+    try {
+      const response = await worker.fetch(
+        new Request('https://wamp.land/capture/api/health', {
+          headers: {
+            Authorization: 'Bearer must-not-forward',
+            Cookie: 'session=must-not-forward',
+            'X-Unrelated-Header': 'must-not-forward',
+          },
+        }),
+        { ASSETS: { fetch: vi.fn() } } satisfies PagesWorkerEnv,
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true });
+      expect(upstreamFetch).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('rejects unsupported /capture proxy methods without an upstream request', async () => {
+    const upstreamFetch = vi.fn();
+    vi.stubGlobal('fetch', upstreamFetch);
+
+    try {
+      const response = await worker.fetch(
+        new Request('https://wamp.land/capture/api/health', { method: 'PUT' }),
+        { ASSETS: { fetch: vi.fn() } } satisfies PagesWorkerEnv,
+      );
+
+      expect(response.status).toBe(405);
+      expect(response.headers.get('Allow')).toBe('GET, HEAD, POST');
+      expect(upstreamFetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

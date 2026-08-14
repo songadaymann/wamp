@@ -8,6 +8,7 @@ import {
   getObjectDisplayOffset,
   getObjectDisplayScale,
   getObjectRuntimeBodyOffset,
+  isClimbableObjectConfig,
   placedObjectLayerAllowsRuntimeCollision,
   isDynamicRuntimeObjectConfig,
   isMovingPlatformEndpointObjectId,
@@ -694,7 +695,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const initialDirectionX = getInitialDirectionX(facing, x);
     this.applyDirectionalFacing(sprite, config, initialDirectionX);
     const helpers: Phaser.GameObjects.GameObject[] = [];
-    if (config.id === 'ladder') {
+    if (isClimbableObjectConfig(config)) {
       const supportZone = this.createLadderTopSupport(sprite);
       if (supportZone) {
         helpers.push(supportZone);

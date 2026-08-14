@@ -4,6 +4,7 @@ import {
 } from './triggers';
 import {
   isBlockSwitchObjectId,
+  isClimbableObjectConfig,
   isPushableObjectConfig,
   objectCollidesWithWorld,
   placedObjectLayerAllowsRuntimeCollision,
@@ -222,7 +223,7 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
             }
             break;
           case 'interactive': {
-            if (liveObject.config.id === 'ladder') {
+            if (isClimbableObjectConfig(liveObject.config)) {
               const supportZone = liveObject.helpers[0];
               if (supportZone?.body) {
                 liveObject.interactions.push(

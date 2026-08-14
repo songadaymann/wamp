@@ -1,4 +1,5 @@
 import {
+  DECORATION_PALETTE_GROUPS,
   TILESETS,
   TILE_SIZE,
   colorNumberToCssHex,
@@ -13,9 +14,16 @@ import {
   MOVING_PLATFORM_OBJECT_ID,
   SPECIAL_TILE_LOCAL_INDICES,
   SPECIAL_TILESET_KEY,
+  TREE_PALETTE_FAMILIES,
+  TREE_PALETTE_SUBGROUPS,
+  VINE_PALETTE_SUBGROUPS,
+  type DecorationPaletteGroup,
   type GameObjectConfig,
   type TileSelection,
   type TilesetConfig,
+  type TreePaletteFamily,
+  type TreePaletteSubgroup,
+  type VinePaletteSubgroup,
 } from '../../config';
 import {
   getEditorObjectConfigById,
@@ -31,6 +39,10 @@ const CUSTOM_OBJECT_SUBCATEGORIES = ['all', 'decoration', 'collectible', 'sign',
 
 type CustomObjectSubcategory = (typeof CUSTOM_OBJECT_SUBCATEGORIES)[number];
 type CustomObjectKindSubcategory = Exclude<CustomObjectSubcategory, 'all'>;
+type DecorationPaletteFilter = 'all' | DecorationPaletteGroup;
+type VinePaletteFilter = 'all' | VinePaletteSubgroup;
+type TreePaletteFilter = 'all' | TreePaletteSubgroup;
+type TreeFamilyFilter = 'all' | TreePaletteFamily;
 
 type PaletteTooltipContent = {
   title: string;
@@ -48,6 +60,14 @@ export class PaletteController {
   private readonly objectSearchInput: HTMLInputElement | null;
   private readonly customObjectSubcategoryTabs: HTMLButtonElement[];
   private readonly customObjectSubcategoryControls: HTMLElement | null;
+  private readonly decorationObjectGroupTabs: HTMLButtonElement[];
+  private readonly decorationObjectGroupControls: HTMLElement | null;
+  private readonly vineObjectSubcategoryTabs: HTMLButtonElement[];
+  private readonly vineObjectSubcategoryControls: HTMLElement | null;
+  private readonly treeObjectSubcategoryTabs: HTMLButtonElement[];
+  private readonly treeObjectSubcategoryControls: HTMLElement | null;
+  private readonly treeObjectFamilyTabs: HTMLButtonElement[];
+  private readonly treeObjectFamilyControls: HTMLElement | null;
   private readonly objectFacingControls: HTMLElement | null;
   private readonly objectFacingLeftBtn: HTMLButtonElement | null;
   private readonly objectFacingRightBtn: HTMLButtonElement | null;
@@ -60,6 +80,10 @@ export class PaletteController {
   private readonly paletteTileVisibility = new Map<string, boolean[]>();
   private currentObjectCategory = 'all';
   private currentCustomObjectSubcategory: CustomObjectSubcategory = 'all';
+  private currentDecorationGroup: DecorationPaletteFilter = 'all';
+  private currentVineSubcategory: VinePaletteFilter = 'all';
+  private currentTreeSubcategory: TreePaletteFilter = 'all';
+  private currentTreeFamily: TreeFamilyFilter = 'all';
   private currentObjectSearch = '';
   private paletteDragStart: { col: number; row: number } | null = null;
   private paletteTooltipEl: HTMLDivElement | null = null;
@@ -75,7 +99,23 @@ export class PaletteController {
     this.objectSearchInput = this.doc.getElementById('object-search-input') as HTMLInputElement | null;
     this.customObjectSubcategoryControls = this.doc.getElementById('custom-object-subcategory-tabs');
     this.customObjectSubcategoryTabs = Array.from(
-      this.doc.querySelectorAll<HTMLButtonElement>('.object-subcategory-tab'),
+      this.customObjectSubcategoryControls?.querySelectorAll<HTMLButtonElement>('.object-subcategory-tab') ?? [],
+    );
+    this.decorationObjectGroupControls = this.doc.getElementById('decoration-object-group-tabs');
+    this.decorationObjectGroupTabs = Array.from(
+      this.decorationObjectGroupControls?.querySelectorAll<HTMLButtonElement>('.object-subcategory-tab') ?? [],
+    );
+    this.vineObjectSubcategoryControls = this.doc.getElementById('vine-object-subcategory-tabs');
+    this.vineObjectSubcategoryTabs = Array.from(
+      this.vineObjectSubcategoryControls?.querySelectorAll<HTMLButtonElement>('.object-subcategory-tab') ?? [],
+    );
+    this.treeObjectSubcategoryControls = this.doc.getElementById('tree-object-subcategory-tabs');
+    this.treeObjectSubcategoryTabs = Array.from(
+      this.treeObjectSubcategoryControls?.querySelectorAll<HTMLButtonElement>('.object-subcategory-tab') ?? [],
+    );
+    this.treeObjectFamilyControls = this.doc.getElementById('tree-object-family-tabs');
+    this.treeObjectFamilyTabs = Array.from(
+      this.treeObjectFamilyControls?.querySelectorAll<HTMLButtonElement>('.object-subcategory-tab') ?? [],
     );
     this.objectFacingControls = this.doc.getElementById('object-facing-controls');
     this.objectFacingLeftBtn = this.doc.getElementById('btn-object-facing-left') as HTMLButtonElement | null;
@@ -89,6 +129,10 @@ export class PaletteController {
     this.loadPaletteImages();
     this.bindObjectSearchInput();
     this.bindCustomObjectSubcategoryTabs();
+    this.bindDecorationObjectGroupTabs();
+    this.bindVineObjectSubcategoryTabs();
+    this.bindTreeObjectSubcategoryTabs();
+    this.bindTreeObjectFamilyTabs();
     this.bindObjectFacingControls();
     this.renderObjectGrid();
     this.renderObjectFacingControls();
@@ -114,6 +158,14 @@ export class PaletteController {
     for (const tab of this.customObjectSubcategoryTabs) {
       tab.onclick = null;
     }
+    for (const tab of [
+      ...this.decorationObjectGroupTabs,
+      ...this.vineObjectSubcategoryTabs,
+      ...this.treeObjectSubcategoryTabs,
+      ...this.treeObjectFamilyTabs,
+    ]) {
+      tab.onclick = null;
+    }
   }
 
   setObjectCategory(category: string): void {
@@ -121,8 +173,14 @@ export class PaletteController {
     if (!this.isCustomObjectCategoryFilter(this.currentObjectCategory)) {
       this.currentCustomObjectSubcategory = 'all';
     }
+    if (this.currentObjectCategory !== 'decoration') {
+      this.currentDecorationGroup = 'all';
+      this.currentVineSubcategory = 'all';
+      this.currentTreeSubcategory = 'all';
+      this.currentTreeFamily = 'all';
+    }
     this.resetObjectGridScroll();
-    this.renderCustomObjectSubcategoryTabs();
+    this.renderObjectSubcategoryTabs();
     this.renderObjectGrid();
   }
 
@@ -436,7 +494,7 @@ export class PaletteController {
       return;
     }
 
-    this.renderCustomObjectSubcategoryTabs();
+    this.renderObjectSubcategoryTabs();
     this.objectGrid.innerHTML = '';
 
     const filteredObjects = listEditorObjectConfigs().filter((objectConfig) => (
@@ -584,21 +642,121 @@ export class PaletteController {
           tab.dataset.customObjectCategory,
         );
         this.resetObjectGridScroll();
-        this.renderCustomObjectSubcategoryTabs();
+        this.renderObjectSubcategoryTabs();
         this.renderObjectGrid();
       };
     }
   }
 
-  private renderCustomObjectSubcategoryTabs(): void {
-    const visible = this.isCustomObjectCategoryFilter(this.currentObjectCategory);
-    this.objectPaletteSection?.classList.toggle('has-custom-subcategories', visible);
+  private bindDecorationObjectGroupTabs(): void {
+    for (const tab of this.decorationObjectGroupTabs) {
+      tab.onclick = () => {
+        this.currentDecorationGroup = this.normalizeDecorationPaletteGroup(
+          tab.dataset.decorationGroup,
+        );
+        this.currentVineSubcategory = 'all';
+        this.currentTreeSubcategory = 'all';
+        this.currentTreeFamily = 'all';
+        this.resetObjectGridScroll();
+        this.renderObjectSubcategoryTabs();
+        this.renderObjectGrid();
+      };
+    }
+  }
+
+  private bindVineObjectSubcategoryTabs(): void {
+    for (const tab of this.vineObjectSubcategoryTabs) {
+      tab.onclick = () => {
+        this.currentVineSubcategory = this.normalizeVinePaletteSubgroup(
+          tab.dataset.vineCategory,
+        );
+        this.resetObjectGridScroll();
+        this.renderObjectSubcategoryTabs();
+        this.renderObjectGrid();
+      };
+    }
+  }
+
+  private bindTreeObjectSubcategoryTabs(): void {
+    for (const tab of this.treeObjectSubcategoryTabs) {
+      tab.onclick = () => {
+        this.currentTreeSubcategory = this.normalizeTreePaletteSubgroup(
+          tab.dataset.treeCategory,
+        );
+        this.currentTreeFamily = 'all';
+        this.resetObjectGridScroll();
+        this.renderObjectSubcategoryTabs();
+        this.renderObjectGrid();
+      };
+    }
+  }
+
+  private bindTreeObjectFamilyTabs(): void {
+    for (const tab of this.treeObjectFamilyTabs) {
+      tab.onclick = () => {
+        this.currentTreeFamily = this.normalizeTreePaletteFamily(
+          tab.dataset.treeFamily,
+        );
+        this.resetObjectGridScroll();
+        this.renderObjectSubcategoryTabs();
+        this.renderObjectGrid();
+      };
+    }
+  }
+
+  private renderObjectSubcategoryTabs(): void {
+    const customVisible = this.isCustomObjectCategoryFilter(this.currentObjectCategory);
+    const decorationVisible = this.currentObjectCategory === 'decoration';
+    const vineVisible = decorationVisible && this.currentDecorationGroup === 'vines';
+    const treeVisible = decorationVisible && this.currentDecorationGroup === 'trees';
+    const visibleTreeFamilies = this.treeObjectFamilyTabs.filter((tab) => (
+      tab.dataset.treeFamily === 'all'
+      || tab.dataset.treeSubgroup === this.currentTreeSubcategory
+    ));
+    const treeFamilyVisible = treeVisible
+      && this.currentTreeSubcategory !== 'all'
+      && visibleTreeFamilies.length > 2;
+    this.objectPaletteSection?.classList.toggle(
+      'has-custom-subcategories',
+      customVisible || decorationVisible,
+    );
     this.objectPaletteSection?.setAttribute('data-object-category', this.currentObjectCategory);
-    this.customObjectSubcategoryControls?.classList.toggle('hidden', !visible);
+    this.customObjectSubcategoryControls?.classList.toggle('hidden', !customVisible);
+    this.decorationObjectGroupControls?.classList.toggle('hidden', !decorationVisible);
+    this.vineObjectSubcategoryControls?.classList.toggle('hidden', !vineVisible);
+    this.treeObjectSubcategoryControls?.classList.toggle('hidden', !treeVisible);
+    this.treeObjectFamilyControls?.classList.toggle('hidden', !treeFamilyVisible);
 
     for (const tab of this.customObjectSubcategoryTabs) {
       const tabCategory = this.normalizeCustomObjectSubcategory(tab.dataset.customObjectCategory);
-      const active = visible && tabCategory === this.currentCustomObjectSubcategory;
+      const active = customVisible && tabCategory === this.currentCustomObjectSubcategory;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    for (const tab of this.decorationObjectGroupTabs) {
+      const tabCategory = this.normalizeDecorationPaletteGroup(tab.dataset.decorationGroup);
+      const active = decorationVisible && tabCategory === this.currentDecorationGroup;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    for (const tab of this.vineObjectSubcategoryTabs) {
+      const tabCategory = this.normalizeVinePaletteSubgroup(tab.dataset.vineCategory);
+      const active = vineVisible && tabCategory === this.currentVineSubcategory;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    for (const tab of this.treeObjectSubcategoryTabs) {
+      const tabCategory = this.normalizeTreePaletteSubgroup(tab.dataset.treeCategory);
+      const active = treeVisible && tabCategory === this.currentTreeSubcategory;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    for (const tab of this.treeObjectFamilyTabs) {
+      const belongsToSubgroup = tab.dataset.treeFamily === 'all'
+        || tab.dataset.treeSubgroup === this.currentTreeSubcategory;
+      tab.classList.toggle('hidden', !belongsToSubgroup);
+      const tabFamily = this.normalizeTreePaletteFamily(tab.dataset.treeFamily);
+      const active = treeFamilyVisible && belongsToSubgroup && tabFamily === this.currentTreeFamily;
       tab.classList.toggle('active', active);
       tab.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
@@ -1128,6 +1286,10 @@ export class PaletteController {
       return this.matchesCustomObjectSubcategory(objectConfig);
     }
 
+    if (this.currentObjectCategory === 'decoration') {
+      return this.matchesDecorationPaletteFilter(objectConfig);
+    }
+
     if (this.currentObjectCategory === 'interactive') {
       return objectConfig.category === 'interactive' || objectConfig.category === 'platform';
     }
@@ -1145,6 +1307,9 @@ export class PaletteController {
       objectConfig.id,
       objectConfig.description,
       objectConfig.category,
+      objectConfig.decorationPaletteGroup ?? '',
+      objectConfig.decorationPaletteSubgroup ?? '',
+      objectConfig.treePaletteFamily ?? '',
       this.getCustomObjectSubcategory(objectConfig) ?? '',
     ]
       .join(' ')
@@ -1161,6 +1326,57 @@ export class PaletteController {
     return CUSTOM_OBJECT_SUBCATEGORIES.includes(value as CustomObjectSubcategory)
       ? value as CustomObjectSubcategory
       : 'all';
+  }
+
+  private normalizeDecorationPaletteGroup(value: string | undefined): DecorationPaletteFilter {
+    return value === 'all' || DECORATION_PALETTE_GROUPS.includes(value as DecorationPaletteGroup)
+      ? value as DecorationPaletteFilter
+      : 'all';
+  }
+
+  private normalizeVinePaletteSubgroup(value: string | undefined): VinePaletteFilter {
+    return value === 'all' || VINE_PALETTE_SUBGROUPS.includes(value as VinePaletteSubgroup)
+      ? value as VinePaletteFilter
+      : 'all';
+  }
+
+  private normalizeTreePaletteSubgroup(value: string | undefined): TreePaletteFilter {
+    return value === 'all' || TREE_PALETTE_SUBGROUPS.includes(value as TreePaletteSubgroup)
+      ? value as TreePaletteFilter
+      : 'all';
+  }
+
+  private normalizeTreePaletteFamily(value: string | undefined): TreeFamilyFilter {
+    return value === 'all' || TREE_PALETTE_FAMILIES.includes(value as TreePaletteFamily)
+      ? value as TreeFamilyFilter
+      : 'all';
+  }
+
+  private matchesDecorationPaletteFilter(objectConfig: GameObjectConfig): boolean {
+    if (objectConfig.category !== 'decoration') {
+      return false;
+    }
+    if (this.currentDecorationGroup === 'all') {
+      return true;
+    }
+    if (objectConfig.decorationPaletteGroup !== this.currentDecorationGroup) {
+      return false;
+    }
+    if (this.currentDecorationGroup === 'vines') {
+      return this.currentVineSubcategory === 'all'
+        || objectConfig.decorationPaletteSubgroup === this.currentVineSubcategory;
+    }
+    if (this.currentDecorationGroup === 'trees') {
+      if (
+        this.currentTreeSubcategory !== 'all'
+        && objectConfig.decorationPaletteSubgroup !== this.currentTreeSubcategory
+      ) {
+        return false;
+      }
+      return this.currentTreeFamily === 'all'
+        || objectConfig.treePaletteFamily === this.currentTreeFamily;
+    }
+    return true;
   }
 
   private matchesCustomObjectSubcategory(objectConfig: GameObjectConfig): boolean {

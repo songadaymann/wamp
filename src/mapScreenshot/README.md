@@ -5,8 +5,9 @@ Daily 4K PNGs of the published WAMP map, stitched from the existing world-tile p
 ## What this is
 
 - Separate Cloudflare Worker (`wrangler.map-screenshot.jsonc`) — does not change overworld gameplay or tile generation.
-- Stores files in R2 under `screenshots/yyyy_mm_dd.png` (manual tests: `yyyy_mm_dd_1.png` … `_9.png`).
+- Stores files in R2 under `screenshots/yyyy_mm_dd_0.png` (manual tests: `yyyy_mm_dd_1.png` … `_9.png`).
 - Gallery + manual button + ZIP download are served by the Worker itself.
+- Pretty URL: `https://wamp.land/capture` (Pages proxies to this Worker).
 - Tunables live in `src/mapScreenshot/config.ts`.
 
 ## One-time setup
@@ -17,6 +18,8 @@ npm run map-screenshot:deploy:safety
 # after QA:
 npm run map-screenshot:deploy:production
 ```
+
+Public gallery: [https://wamp.land/capture](https://wamp.land/capture) (also the Worker URL below after deploy).
 
 Optional custom domain (e.g. `screenshots.wamp.land`) can be attached in the Cloudflare dashboard to the Worker.
 

@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import {
   getObjectDisplayScale,
+  isClimbableObjectConfig,
   isMovingPlatformEndpointObjectId,
   isPushableObjectConfig,
   isSolidRuntimeObjectConfig,
@@ -197,7 +198,7 @@ export class LiveObjectPartitionIndex<TEdgeWall = unknown> {
       ) {
         updating.push(liveObject);
       }
-      if (liveObject.config.id === 'ladder') {
+      if (isClimbableObjectConfig(liveObject.config)) {
         ladders.push(liveObject);
         ladderRoomBoundsPadding = Math.max(
           ladderRoomBoundsPadding,
