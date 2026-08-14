@@ -27,6 +27,7 @@ describe('world streaming loaded-room lifecycle', () => {
       {
         frameWorkCoordinator,
         worldTileController,
+        options: { getMode: () => 'play' },
       },
     );
 
@@ -45,6 +46,44 @@ describe('world streaming loaded-room lifecycle', () => {
       'prepare-room-runtime-shell:-2,0',
     ]);
     expect(frame.cpuOvershootMs).toBe(0);
+  });
+
+  it('resumes world-tile LOD updates in Browse while Play preparation remains queued', () => {
+    let mode: 'play' | 'browse' = 'play';
+    const frameWorkCoordinator = new FrameWorkCoordinator();
+    frameWorkCoordinator.enqueue({
+      label: 'prepare-room-runtime-shell:-2,0',
+      priority: 'portal-current-destination',
+      costKind: 'cpu',
+      estimatedCostMs: 1,
+      execute: vi.fn(),
+    });
+    const camera = { zoom: 0.08 };
+    const update = vi.fn(() => false);
+    const harness = Object.assign(
+      Object.create(OverworldWorldStreamingController.prototype),
+      {
+        frameWorkCoordinator,
+        worldTileController: {
+          update,
+          isBrowseCutoverActive: vi.fn(() => false),
+        },
+        selectedExactPrefetchLifecycle: { pause: vi.fn() },
+        previewCache: { cancelSelectionPrefetchesExcept: vi.fn() },
+        options: {
+          getMode: () => mode,
+          scene: { cameras: { main: camera } },
+        },
+      },
+    );
+
+    expect(harness.updateWorldTiles()).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+
+    mode = 'browse';
+    expect(harness.updateWorldTiles()).toBe(true);
+    expect(update).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledWith(camera);
   });
 
   it('marks exact-snapshot competition only when world-tile work actually executes', () => {
@@ -74,6 +113,7 @@ describe('world streaming loaded-room lifecycle', () => {
           },
         ]]),
         options: {
+          getMode: () => 'browse',
           scene: { cameras: { main: {} } },
           onPerformanceAdvisorExactSnapshotEvent,
         },

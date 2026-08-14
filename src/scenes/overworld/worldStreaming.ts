@@ -117,6 +117,7 @@ import {
   type SelectedExactPrefetchRequest,
 } from './selectedExactPrefetch';
 import { shouldRenderLegacyWorldTileOverlay } from './worldTiles/dynamicOverlays';
+import { selectWorldTileLevel } from './worldTiles/lod';
 import { processProgressivePreviewBatch } from './worldTiles/progressivePreviewBatch';
 import { resolveWorldTileInitialCoverage } from './worldTiles/startup';
 import {
@@ -1137,11 +1138,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   updateWorldTiles(): boolean {
     // Portal/current-destination preparation owns the first claim on the
-    // reduced CPU budget. Letting world-tile preview work run first can leave
-    // every 1 ms destination stage permanently inadmissible.
+    // reduced Play CPU budget. Letting world-tile preview work run first can
+    // leave every 1 ms destination stage permanently inadmissible. Browse does
+    // not run the Play-only frame-work queue, so stale destination work must
+    // never prevent its camera from selecting the correct overview LOD.
     if (
-      this.frameWorkCoordinator.hasQueuedWorkAtPriority('portal-current-destination')
-      || this.frameWorkCoordinator.hasQueuedWorkAtPriority('predicted-destination-collision')
+      this.options.getMode() === 'play'
+      && this.hasUrgentDestinationFrameWork()
     ) {
       return false;
     }
@@ -1183,6 +1186,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       () => this.completeSelectedExactPrefetch(request, null),
     );
     return true;
+  }
+
+  private hasUrgentDestinationFrameWork(): boolean {
+    return this.frameWorkCoordinator.hasQueuedWorkAtPriority('portal-current-destination')
+      || this.frameWorkCoordinator.hasQueuedWorkAtPriority('predicted-destination-collision');
   }
 
   runDiscretionaryFrameWork(
@@ -2015,8 +2023,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     localPlayPressureProfile: LocalPlayPressureMetrics['profile'];
     localPlayPressureScore: number;
     localPlayPressureRoomCount: number;
-    worldTiles: ReturnType<WorldTileClientController['getDebugSnapshot']>;
+    worldTiles: ReturnType<WorldTileClientController['getDebugSnapshot']> & {
+      cameraZoom: number;
+      expectedTargetLevel: ReturnType<typeof selectWorldTileLevel>['level'];
+      targetLevelMatchesCamera: boolean;
+      updateBlockedByUrgentPlayPreparation: boolean;
+    };
   } {
+    const worldTiles = this.worldTileController.getDebugSnapshot();
+    const cameraZoom = this.options.scene.cameras.main.zoom;
+    const expectedTargetLevel = selectWorldTileLevel(cameraZoom, worldTiles.targetLevel).level;
     return {
       activeChunkRadius: this.activeChunkRadius,
       effectivePerformanceProfile: this.getEffectivePerformanceProfile(),
@@ -2038,7 +2054,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       localPlayPressureProfile: this.localPlayPressure.profile,
       localPlayPressureScore: this.localPlayPressure.score,
       localPlayPressureRoomCount: this.localPlayPressure.roomBreakdowns.length,
-      worldTiles: this.worldTileController.getDebugSnapshot(),
+      worldTiles: {
+        ...worldTiles,
+        cameraZoom,
+        expectedTargetLevel,
+        targetLevelMatchesCamera: expectedTargetLevel === worldTiles.targetLevel,
+        updateBlockedByUrgentPlayPreparation:
+          this.options.getMode() === 'play' && this.hasUrgentDestinationFrameWork(),
+      },
     };
   }
 
