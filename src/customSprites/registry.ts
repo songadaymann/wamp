@@ -3,21 +3,63 @@ import {
   getCustomSpriteCategory,
   getCustomSpritePixelBounds,
   getCustomSpriteKindLabel,
+  normalizeCustomSpriteDefinition,
   normalizeCustomSpriteDefinitions,
   parseCustomSpriteObjectId,
   type CustomSpriteDefinition,
 } from './model';
 import type { GameObjectConfig, PlacedObject } from '../config';
 import type { RoomSnapshot } from '../persistence/roomModel';
+import {
+  CUSTOM_SPRITE_ACCOUNT_LIMIT,
+  type CustomSpriteCatalogEntry,
+  type CustomSpriteCatalogRemixSource,
+} from './catalog';
 
 export const CUSTOM_SPRITES_CHANGED_EVENT = 'custom-sprites-changed';
 
-const STORAGE_KEY = 'wamp.customSprites.v1';
+const LEGACY_STORAGE_KEY = 'wamp.customSprites.v1';
+const STORAGE_KEY = 'wamp.customSprites.v2';
+const DATA_URL_CACHE_LIMIT = 256;
 const spriteById = new Map<string, CustomSpriteDefinition>();
 const dataUrlById = new Map<string, string>();
 const localSpriteIds = new Set<string>();
+const localMetadataById = new Map<string, LocalCustomSpriteMetadata>();
+const catalogMetadataById = new Map<string, CatalogCustomSpriteMetadata>();
+let currentOwnerUserId: string | null = null;
+
+export type CustomSpriteSyncStatus = 'local' | 'pending' | 'synced' | 'error';
+
+export interface LocalCustomSpriteMetadata {
+  ownerUserId: string | null;
+  revision: number | null;
+  remixedFromSpriteId: string | null;
+  syncStatus: CustomSpriteSyncStatus;
+  syncError: string | null;
+  retryable: boolean;
+}
+
+export interface CatalogCustomSpriteMetadata {
+  creatorUserId: string | null;
+  creatorDisplayName: string;
+  creatorUsername: string | null;
+  legacy: boolean;
+  revision: number;
+  remixedFrom: CustomSpriteCatalogRemixSource | null;
+}
+
+interface StoredLocalCustomSpriteRecord {
+  definition: CustomSpriteDefinition;
+  metadata: LocalCustomSpriteMetadata;
+}
 
 interface RegisterCustomSpriteOptions {
+  persist?: boolean;
+  notify?: boolean;
+  remixedFromSpriteId?: string | null;
+}
+
+interface RegistryMutationOptions {
   persist?: boolean;
   notify?: boolean;
 }
@@ -39,10 +81,25 @@ function persistLocalLibrary(): void {
     return;
   }
 
-  const sprites = Array.from(spriteById.values())
-    .filter((sprite) => sprite.status !== 'blocked' && localSpriteIds.has(sprite.id))
-    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sprites));
+  const records = Array.from(localSpriteIds)
+    .map((id): StoredLocalCustomSpriteRecord | null => {
+      const definition = spriteById.get(id);
+      const metadata = localMetadataById.get(id);
+      return definition && metadata ? { definition, metadata } : null;
+    })
+    .filter((record): record is StoredLocalCustomSpriteRecord => Boolean(record))
+    .filter((record) => record.definition.status !== 'blocked')
+    .sort((left, right) => Date.parse(right.definition.updatedAt) - Date.parse(left.definition.updatedAt))
+    .slice(0, CUSTOM_SPRITE_ACCOUNT_LIMIT);
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    window.localStorage.setItem(
+      LEGACY_STORAGE_KEY,
+      JSON.stringify(records.map((record) => record.definition)),
+    );
+  } catch {
+    // Keep the in-memory library usable when browser storage is unavailable or full.
+  }
 }
 
 export function loadCustomSpritesFromStorage(): void {
@@ -51,16 +108,37 @@ export function loadCustomSpritesFromStorage(): void {
   }
 
   const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
+  const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (!raw && !legacyRaw) {
     return;
   }
 
   try {
-    const sprites = normalizeCustomSpriteDefinitions(JSON.parse(raw));
+    const records = raw ? normalizeStoredRecords(JSON.parse(raw)) : [];
+    if (records.length > 0) {
+      for (const record of records) {
+        spriteById.set(record.definition.id, record.definition);
+        localSpriteIds.add(record.definition.id);
+        localMetadataById.set(record.definition.id, record.metadata);
+      }
+      return;
+    }
+
+    const legacyValues = JSON.parse(legacyRaw ?? '[]');
+    const sprites = Array.isArray(legacyValues)
+      ? legacyValues
+          .map(normalizeCustomSpriteDefinition)
+          .filter((sprite): sprite is CustomSpriteDefinition => Boolean(sprite))
+      : [];
+    const seen = new Set<string>();
     for (const sprite of sprites) {
+      if (seen.has(sprite.id) || seen.size >= CUSTOM_SPRITE_ACCOUNT_LIMIT) continue;
+      seen.add(sprite.id);
       spriteById.set(sprite.id, sprite);
       localSpriteIds.add(sprite.id);
+      localMetadataById.set(sprite.id, createLocalMetadata());
     }
+    persistLocalLibrary();
   } catch {
     // Bad local art cache should not block the editor boot.
   }
@@ -71,6 +149,18 @@ export function registerCustomSprite(sprite: CustomSpriteDefinition, options: Re
   dataUrlById.delete(sprite.id);
   if (options.persist !== false) {
     localSpriteIds.add(sprite.id);
+    const existingMetadata = localMetadataById.get(sprite.id);
+    localMetadataById.set(sprite.id, {
+      ...existingMetadata ?? createLocalMetadata(),
+      ownerUserId: existingMetadata?.ownerUserId ?? currentOwnerUserId,
+      remixedFromSpriteId:
+        options.remixedFromSpriteId
+        ?? existingMetadata?.remixedFromSpriteId
+        ?? null,
+      syncStatus: currentOwnerUserId ? 'pending' : 'local',
+      syncError: null,
+      retryable: true,
+    });
     persistLocalLibrary();
   }
   if (options.notify !== false) {
@@ -94,6 +184,14 @@ export function registerCustomSprites(
     spriteById.set(sprite.id, sprite);
     if (options.persist !== false) {
       localSpriteIds.add(sprite.id);
+      const existingMetadata = localMetadataById.get(sprite.id);
+      localMetadataById.set(sprite.id, {
+        ...existingMetadata ?? createLocalMetadata(),
+        ownerUserId: existingMetadata?.ownerUserId ?? currentOwnerUserId,
+        syncStatus: currentOwnerUserId ? 'pending' : 'local',
+        syncError: null,
+        retryable: true,
+      });
     }
     dataUrlById.delete(sprite.id);
     changed = true;
@@ -134,7 +232,17 @@ export function listCustomSpriteDefinitions(): CustomSpriteDefinition[] {
 }
 
 export function listLocalCustomSpriteDefinitions(): CustomSpriteDefinition[] {
-  return listCustomSpriteDefinitions().filter((sprite) => localSpriteIds.has(sprite.id));
+  return listCustomSpriteDefinitions().filter((sprite) => isLocalCustomSpriteId(sprite.id));
+}
+
+export function listLocalCustomSpriteRecords(): Array<{
+  sprite: CustomSpriteDefinition;
+  metadata: LocalCustomSpriteMetadata;
+}> {
+  return listLocalCustomSpriteDefinitions().map((sprite) => ({
+    sprite,
+    metadata: getLocalCustomSpriteMetadata(sprite.id) ?? createLocalMetadata(),
+  }));
 }
 
 export function getCustomSpriteRegistryDebugState(): Record<string, unknown> {
@@ -146,22 +254,31 @@ export function getCustomSpriteRegistryDebugState(): Record<string, unknown> {
   return {
     definitionCount: spriteById.size,
     localDefinitionCount: localSpriteIds.size,
+    currentOwnerUserId,
+    catalogMetadataCount: catalogMetadataById.size,
     dataUrlCacheCount: dataUrlById.size,
     approximateDataUrlBytes,
   };
 }
 
 export function isLocalCustomSpriteId(id: string | null | undefined): boolean {
-  return Boolean(id && localSpriteIds.has(id));
+  if (!id || !localSpriteIds.has(id)) return false;
+  const metadata = localMetadataById.get(id);
+  return Boolean(metadata && (
+    metadata.ownerUserId === null
+    || metadata.ownerUserId === currentOwnerUserId
+  ));
 }
 
 export function removeLocalCustomSprite(id: string | null | undefined): boolean {
-  if (!id || !localSpriteIds.delete(id)) {
+  if (!id || !isLocalCustomSpriteId(id) || !localSpriteIds.delete(id)) {
     return false;
   }
 
   spriteById.delete(id);
   dataUrlById.delete(id);
+  localMetadataById.delete(id);
+  catalogMetadataById.delete(id);
   persistLocalLibrary();
   dispatchChanged();
   return true;
@@ -176,7 +293,155 @@ export function getCustomSpriteDataUrl(sprite: CustomSpriteDefinition): string {
   const canvas = createCustomSpriteCanvas(sprite);
   const dataUrl = canvas.toDataURL('image/png');
   dataUrlById.set(sprite.id, dataUrl);
+  while (dataUrlById.size > DATA_URL_CACHE_LIMIT) {
+    const oldestId = dataUrlById.keys().next().value as string | undefined;
+    if (!oldestId) break;
+    dataUrlById.delete(oldestId);
+  }
   return dataUrl;
+}
+
+export function configureCustomSpriteOwner(userId: string | null | undefined): void {
+  const normalized = typeof userId === 'string' && userId.trim() ? userId.trim() : null;
+  if (currentOwnerUserId === normalized) return;
+  currentOwnerUserId = normalized;
+  dispatchChanged();
+}
+
+export function getCurrentCustomSpriteOwnerUserId(): string | null {
+  return currentOwnerUserId;
+}
+
+export function getLocalCustomSpriteMetadata(id: string): LocalCustomSpriteMetadata | null {
+  const metadata = localMetadataById.get(id);
+  return metadata ? { ...metadata } : null;
+}
+
+export function updateLocalCustomSpriteMetadata(
+  id: string,
+  updates: Partial<LocalCustomSpriteMetadata>,
+  options: RegistryMutationOptions = {},
+): void {
+  const existing = localMetadataById.get(id);
+  if (!existing) return;
+  localMetadataById.set(id, { ...existing, ...updates });
+  if (options.persist !== false) persistLocalLibrary();
+  if (options.notify !== false) dispatchChanged();
+}
+
+export function registerOwnedCatalogSprite(
+  entry: CustomSpriteCatalogEntry,
+  options: RegistryMutationOptions = {},
+): void {
+  spriteById.set(entry.sprite.id, entry.sprite);
+  localSpriteIds.add(entry.sprite.id);
+  dataUrlById.delete(entry.sprite.id);
+  localMetadataById.set(entry.sprite.id, {
+    ownerUserId: entry.creator.userId,
+    revision: entry.revision,
+    remixedFromSpriteId: entry.remixedFrom?.spriteId ?? null,
+    syncStatus: 'synced',
+    syncError: null,
+    retryable: false,
+  });
+  setCatalogMetadata(entry);
+  if (options.persist !== false) persistLocalLibrary();
+  if (options.notify !== false) dispatchChanged();
+}
+
+export function commitCustomSpriteLibraryChanges(): void {
+  persistLocalLibrary();
+  dispatchChanged();
+}
+
+export function registerCommunityCatalogSprite(entry: CustomSpriteCatalogEntry): void {
+  spriteById.set(entry.sprite.id, entry.sprite);
+  dataUrlById.delete(entry.sprite.id);
+  setCatalogMetadata(entry);
+  dispatchChanged();
+}
+
+export function registerCommunityCatalogSprites(entries: readonly CustomSpriteCatalogEntry[]): void {
+  if (entries.length === 0) return;
+  for (const entry of entries) {
+    spriteById.set(entry.sprite.id, entry.sprite);
+    dataUrlById.delete(entry.sprite.id);
+    setCatalogMetadata(entry);
+  }
+  dispatchChanged();
+}
+
+export function getCustomSpriteCatalogMetadata(id: string | null | undefined): CatalogCustomSpriteMetadata | null {
+  if (!id) return null;
+  const metadata = catalogMetadataById.get(id);
+  return metadata ? {
+    ...metadata,
+    remixedFrom: metadata.remixedFrom ? { ...metadata.remixedFrom } : null,
+  } : null;
+}
+
+function setCatalogMetadata(entry: CustomSpriteCatalogEntry): void {
+  catalogMetadataById.set(entry.sprite.id, {
+    creatorUserId: entry.creator.userId,
+    creatorDisplayName: entry.creator.displayName,
+    creatorUsername: entry.creator.username,
+    legacy: entry.creator.legacy,
+    revision: entry.revision,
+    remixedFrom: entry.remixedFrom ? { ...entry.remixedFrom } : null,
+  });
+}
+
+function createLocalMetadata(): LocalCustomSpriteMetadata {
+  return {
+    ownerUserId: null,
+    revision: null,
+    remixedFromSpriteId: null,
+    syncStatus: 'local',
+    syncError: null,
+    retryable: true,
+  };
+}
+
+function normalizeStoredRecords(value: unknown): StoredLocalCustomSpriteRecord[] {
+  if (!Array.isArray(value)) return [];
+  const records: StoredLocalCustomSpriteRecord[] = [];
+  const seen = new Set<string>();
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    const input = candidate as {
+      definition?: unknown;
+      metadata?: Partial<LocalCustomSpriteMetadata>;
+    };
+    const definition = normalizeCustomSpriteDefinitions([input.definition])[0];
+    if (!definition || seen.has(definition.id)) continue;
+    seen.add(definition.id);
+    const metadata = input.metadata;
+    records.push({
+      definition,
+      metadata: {
+        ownerUserId: typeof metadata?.ownerUserId === 'string' && metadata.ownerUserId.trim()
+          ? metadata.ownerUserId.trim()
+          : null,
+        revision: Number.isSafeInteger(metadata?.revision) && Number(metadata?.revision) > 0
+          ? Number(metadata?.revision)
+          : null,
+        remixedFromSpriteId:
+          typeof metadata?.remixedFromSpriteId === 'string' && metadata.remixedFromSpriteId.trim()
+            ? metadata.remixedFromSpriteId.trim()
+            : null,
+        syncStatus:
+          metadata?.syncStatus === 'pending'
+          || metadata?.syncStatus === 'synced'
+          || metadata?.syncStatus === 'error'
+            ? metadata.syncStatus
+            : 'local',
+        syncError: typeof metadata?.syncError === 'string' ? metadata.syncError : null,
+        retryable: metadata?.retryable !== false,
+      },
+    });
+    if (records.length >= CUSTOM_SPRITE_ACCOUNT_LIMIT) break;
+  }
+  return records;
 }
 
 export function createCustomSpriteCanvas(sprite: CustomSpriteDefinition): HTMLCanvasElement {

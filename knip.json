@@ -61,6 +61,7 @@
     "scripts/safety_ranked_run_spoof_probe.js",
     "scripts/sanitize_placed_object_stacks.ts",
     "scripts/smoke_boygame_tileset.mjs",
+    "scripts/smoke_community_sprites.mjs",
     "scripts/smoke_jungle_vines.mjs",
     "scripts/smoke_dom_contract.mjs",
     "scripts/smoke_guest_builder_claim_modal.mjs",

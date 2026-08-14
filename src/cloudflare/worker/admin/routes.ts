@@ -38,6 +38,7 @@ import { handleAdminBackgroundImageRequest } from '../backgroundImages/routes';
 import { handleAdminRoomCommentRequest } from '../roomComments/routes';
 import { handleAdminSchoolRequest } from '../school/routes';
 import { handleAdminWorldTileRequest } from '../worldTiles/routes';
+import { handleAdminCustomSpriteRequest } from '../customSprites/adminRoutes';
 
 export async function handleAdminRequest(
   request: Request,
@@ -47,6 +48,10 @@ export async function handleAdminRequest(
 ): Promise<Response> {
   if (url.pathname.startsWith('/api/admin/world-tiles')) {
     return handleAdminWorldTileRequest(request, url, env, context);
+  }
+
+  if (url.pathname.startsWith('/api/admin/custom-sprites')) {
+    return handleAdminCustomSpriteRequest(request, url, env);
   }
 
   if (url.pathname.startsWith('/api/admin/background-images')) {

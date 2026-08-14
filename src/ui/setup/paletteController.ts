@@ -30,7 +30,20 @@ import {
   listEditorObjectConfigs,
 } from '../../customSprites/objectConfig';
 import { parseCustomSpriteObjectId } from '../../customSprites/model';
-import { getCustomSpriteDefinitionByObjectId, isLocalCustomSpriteId } from '../../customSprites/registry';
+import { getCustomSpriteKindLabel } from '../../customSprites/model';
+import {
+  CUSTOM_SPRITE_REMIX_REQUESTED_EVENT,
+  CUSTOM_SPRITE_USE_REQUESTED_EVENT,
+  type CustomSpriteCatalogEntry,
+} from '../../customSprites/catalog';
+import { listCommunityCustomSprites } from '../../customSprites/catalogClient';
+import { refreshOwnedCustomSprites } from '../../customSprites/sync';
+import {
+  getCustomSpriteDataUrl,
+  getCustomSpriteDefinitionByObjectId,
+  isLocalCustomSpriteId,
+  registerCommunityCatalogSprites,
+} from '../../customSprites/registry';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
 
@@ -74,6 +87,9 @@ export class PaletteController {
   private readonly objectSelectionDetails: HTMLElement | null;
   private readonly objectSelectionName: HTMLElement | null;
   private readonly objectSelectionDescription: HTMLElement | null;
+  private readonly communityPagination: HTMLElement | null;
+  private readonly communityLoadMoreButton: HTMLButtonElement | null;
+  private readonly communityPageStatus: HTMLElement | null;
 
   private readonly paletteImages = new Map<string, HTMLImageElement>();
   private readonly paletteTileOccupancy = new Map<string, boolean[]>();
@@ -87,6 +103,11 @@ export class PaletteController {
   private currentObjectSearch = '';
   private paletteDragStart: { col: number; row: number } | null = null;
   private paletteTooltipEl: HTMLDivElement | null = null;
+  private communityEntries: CustomSpriteCatalogEntry[] = [];
+  private communityNextCursor: string | null = null;
+  private communityStatus: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
+  private communityLoadToken = 0;
+  private communitySearchTimer: number | null = null;
 
   constructor(doc: Document = document) {
     this.doc = doc;
@@ -123,6 +144,9 @@ export class PaletteController {
     this.objectSelectionDetails = this.doc.getElementById('object-selection-details');
     this.objectSelectionName = this.doc.getElementById('object-selection-name');
     this.objectSelectionDescription = this.doc.getElementById('object-selection-description');
+    this.communityPagination = this.doc.getElementById('community-sprite-pagination');
+    this.communityLoadMoreButton = this.doc.getElementById('community-sprite-load-more') as HTMLButtonElement | null;
+    this.communityPageStatus = this.doc.getElementById('community-sprite-page-status');
   }
 
   init(): void {
@@ -134,6 +158,9 @@ export class PaletteController {
     this.bindTreeObjectSubcategoryTabs();
     this.bindTreeObjectFamilyTabs();
     this.bindObjectFacingControls();
+    if (this.communityLoadMoreButton) {
+      this.communityLoadMoreButton.onclick = () => void this.loadCommunityPage(false);
+    }
     this.renderObjectGrid();
     this.renderObjectFacingControls();
     this.renderObjectSelectionDetails();
@@ -166,6 +193,8 @@ export class PaletteController {
     ]) {
       tab.onclick = null;
     }
+    if (this.communitySearchTimer !== null) window.clearTimeout(this.communitySearchTimer);
+    if (this.communityLoadMoreButton) this.communityLoadMoreButton.onclick = null;
   }
 
   setObjectCategory(category: string): void {
@@ -182,6 +211,11 @@ export class PaletteController {
     this.resetObjectGridScroll();
     this.renderObjectSubcategoryTabs();
     this.renderObjectGrid();
+    if (this.currentObjectCategory === 'custom') {
+      void this.loadCommunityPage(true);
+    } else if (this.currentObjectCategory === 'mine') {
+      void refreshOwnedCustomSprites().catch(() => undefined);
+    }
   }
 
   updateSelection(
@@ -497,6 +531,12 @@ export class PaletteController {
     this.renderObjectSubcategoryTabs();
     this.objectGrid.innerHTML = '';
 
+    if (this.currentObjectCategory === 'custom') {
+      this.renderCommunityGrid();
+      return;
+    }
+    this.communityPagination?.classList.add('hidden');
+
     const filteredObjects = listEditorObjectConfigs().filter((objectConfig) => (
       this.matchesObjectCategoryFilter(objectConfig) &&
       this.matchesObjectSearchFilter(objectConfig)
@@ -587,9 +627,19 @@ export class PaletteController {
     }
 
     const applySearch = () => {
-      this.currentObjectSearch = this.objectSearchInput?.value.trim().toLowerCase() ?? '';
+      const nextSearch = this.objectSearchInput?.value.trim().toLowerCase() ?? '';
+      if (nextSearch === this.currentObjectSearch) return;
+      this.currentObjectSearch = nextSearch;
       this.resetObjectGridScroll();
-      this.renderObjectGrid();
+      if (this.currentObjectCategory === 'custom') {
+        if (this.communitySearchTimer !== null) window.clearTimeout(this.communitySearchTimer);
+        this.communitySearchTimer = window.setTimeout(() => {
+          this.communitySearchTimer = null;
+          void this.loadCommunityPage(true);
+        }, 250);
+      } else {
+        this.renderObjectGrid();
+      }
     };
 
     this.currentObjectSearch = this.objectSearchInput.value.trim().toLowerCase();
@@ -644,6 +694,9 @@ export class PaletteController {
         this.resetObjectGridScroll();
         this.renderObjectSubcategoryTabs();
         this.renderObjectGrid();
+        if (this.currentObjectCategory === 'custom') {
+          void this.loadCommunityPage(true);
+        }
       };
     }
   }
@@ -1320,6 +1373,116 @@ export class PaletteController {
 
   private isCustomObjectCategoryFilter(category: string): boolean {
     return category === 'custom' || category === 'mine';
+  }
+
+  private async loadCommunityPage(reset: boolean): Promise<void> {
+    if (this.currentObjectCategory !== 'custom') return;
+    const token = reset ? ++this.communityLoadToken : this.communityLoadToken;
+    if (reset) {
+      this.communityEntries = [];
+      this.communityNextCursor = null;
+    }
+    this.communityStatus = 'loading';
+    this.renderObjectGrid();
+    try {
+      const page = await listCommunityCustomSprites({
+        query: this.currentObjectSearch,
+        kind: this.currentCustomObjectSubcategory === 'all' ? null : this.currentCustomObjectSubcategory,
+        cursor: reset ? null : this.communityNextCursor,
+        limit: 32,
+      });
+      if (token !== this.communityLoadToken || this.currentObjectCategory !== 'custom') return;
+      this.communityEntries = reset
+        ? page.sprites
+        : [...this.communityEntries, ...page.sprites];
+      this.communityNextCursor = page.nextCursor;
+      this.communityStatus = 'ready';
+      registerCommunityCatalogSprites(page.sprites);
+      this.renderObjectGrid();
+    } catch {
+      if (token !== this.communityLoadToken) return;
+      this.communityStatus = 'error';
+      this.renderObjectGrid();
+    }
+  }
+
+  private renderCommunityGrid(): void {
+    if (!this.objectGrid) return;
+    this.communityPagination?.classList.remove('hidden');
+    if (this.communityLoadMoreButton) {
+      this.communityLoadMoreButton.disabled = this.communityStatus === 'loading';
+      this.communityLoadMoreButton.classList.toggle('hidden', !this.communityNextCursor);
+    }
+    if (this.communityPageStatus) {
+      this.communityPageStatus.textContent = this.communityStatus === 'loading'
+        ? 'Loading…'
+        : `${this.communityEntries.length} shown`;
+    }
+
+    if (this.communityEntries.length === 0) {
+      const emptyState = this.doc.createElement('div');
+      emptyState.className = 'object-grid-empty';
+      if (this.communityStatus === 'loading') {
+        emptyState.textContent = 'Loading community sprites…';
+      } else if (this.communityStatus === 'error') {
+        emptyState.textContent = 'Community sprites could not load. Click to retry.';
+        emptyState.setAttribute('role', 'button');
+        emptyState.tabIndex = 0;
+        emptyState.onclick = () => void this.loadCommunityPage(true);
+      } else {
+        emptyState.textContent = 'No community sprites match this filter.';
+      }
+      this.objectGrid.appendChild(emptyState);
+      this.renderObjectSelectionDetails();
+      this.renderObjectFacingControls();
+      return;
+    }
+
+    for (const entry of this.communityEntries) {
+      const card = this.doc.createElement('article');
+      card.className = 'community-sprite-card';
+      const image = this.doc.createElement('img');
+      image.src = getCustomSpriteDataUrl(entry.sprite);
+      image.alt = '';
+      const copy = this.doc.createElement('div');
+      copy.className = 'community-sprite-card-copy';
+      const name = this.doc.createElement('div');
+      name.className = 'community-sprite-card-name';
+      name.textContent = entry.sprite.name;
+      const credit = this.doc.createElement('div');
+      credit.className = 'community-sprite-card-credit';
+      credit.textContent = `by ${entry.creator.displayName}`;
+      const kind = this.doc.createElement('div');
+      kind.className = 'community-sprite-card-kind';
+      kind.textContent = `${entry.sprite.size}×${entry.sprite.size} · ${getCustomSpriteKindLabel(entry.sprite.kind)}`;
+      copy.append(name, credit, kind);
+
+      const actions = this.doc.createElement('div');
+      actions.className = 'community-sprite-card-actions';
+      const useButton = this.doc.createElement('button');
+      useButton.type = 'button';
+      useButton.className = 'bar-btn bar-btn-small';
+      useButton.textContent = 'Use';
+      useButton.onclick = () => this.requestCommunitySpriteUse(entry);
+      const remixButton = this.doc.createElement('button');
+      remixButton.type = 'button';
+      remixButton.className = 'bar-btn bar-btn-small';
+      remixButton.textContent = 'Remix';
+      remixButton.onclick = () => this.doc.defaultView?.dispatchEvent(
+        new CustomEvent(CUSTOM_SPRITE_REMIX_REQUESTED_EVENT, { detail: entry }),
+      );
+      actions.append(useButton, remixButton);
+      card.append(image, copy, actions);
+      this.objectGrid.appendChild(card);
+    }
+    this.renderObjectSelectionDetails();
+    this.renderObjectFacingControls();
+  }
+
+  private requestCommunitySpriteUse(entry: CustomSpriteCatalogEntry): void {
+    this.doc.defaultView?.dispatchEvent(
+      new CustomEvent(CUSTOM_SPRITE_USE_REQUESTED_EVENT, { detail: entry }),
+    );
   }
 
   private normalizeCustomObjectSubcategory(value: string | undefined): CustomObjectSubcategory {
