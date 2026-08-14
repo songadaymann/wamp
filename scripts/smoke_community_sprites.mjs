@@ -39,7 +39,7 @@ try {
   if (liveMode) {
     assert(await page.locator('.community-sprite-card').count() > 0, 'The live Community should render sprites.');
     assert(
-      await page.locator('.community-sprite-card .community-sprite-creator').first().isVisible(),
+      await page.locator('.community-sprite-card .community-sprite-card-credit').first().isVisible(),
       'Creator credit should be visible.',
     );
     await page.screenshot({ path: `${outputDir}/community-live.png`, fullPage: true });
