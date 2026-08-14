@@ -44,6 +44,13 @@ describe('overworld update performance contract', () => {
     expect(sceneSource).toContain("endSegment('update.player'");
   });
 
+  it('samples controller segments round-robin instead of timing every controller every frame', () => {
+    expect(sceneSource).toContain('mobilePerformanceControllerProfileSlot = 0');
+    expect(sceneSource).toContain('(controllerProfileSlot + 1) % 20');
+    expect(sceneSource.match(/controllerProfileSlot === \d+ \? profiler\?\.beginSegment\(\) : undefined/g))
+      .toHaveLength(23);
+  });
+
   it('keeps canvas-only render entries outside the Phaser runtime graph', () => {
     expect(metadataRenderSource).toContain("from '../customTiles/draw'");
     expect(metadataRenderSource).toContain("from '../visuals/starfieldCanvas'");

@@ -436,6 +436,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private hudBridge: OverworldHudBridge | null = null;
   private fxController: SceneFxController | null = null;
   private mobilePerformanceProfiler: MobilePerformanceProfiler | null = null;
+  private mobilePerformanceControllerProfileSlot = 0;
   private criticalFrameStartedAtMs: number | null = null;
   private previousCriticalFrameStartedAtMs: number | null = null;
   private currentWallFrameDeltaMs = 0;
@@ -2226,10 +2227,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     let frameWorkResult: RunFrameWorkResult | null = null;
     let worldTileSharedBudgetConsumedMs = 0;
     const profiler = this.mobilePerformanceProfiler;
+    const controllerProfileSlot = profiler ? this.mobilePerformanceControllerProfileSlot : -1;
+    if (profiler) {
+      this.mobilePerformanceControllerProfileSlot = (controllerProfileSlot + 1) % 20;
+    }
     profiler?.beginFrame(delta, this.buildMobilePerformanceContext());
     try {
       const worldUpdateStartedAt = profiler?.beginSegment();
-      const streamingStartedAt = profiler?.beginSegment();
+      const streamingStartedAt = controllerProfileSlot === 0 ? profiler?.beginSegment() : undefined;
       this.windowController.maybeRefreshVisibleChunks();
       const worldTileWorkStartedAt = performance.now();
       const worldTileWorkRan = this.worldStreamingController.updateWorldTiles();
@@ -2239,46 +2244,46 @@ export class OverworldPlayScene extends Phaser.Scene {
       if (streamingStartedAt !== undefined) {
         profiler?.endSegment('controller.worldStreaming', streamingStartedAt);
       }
-      const backdropStartedAt = profiler?.beginSegment();
+      const backdropStartedAt = controllerProfileSlot === 1 ? profiler?.beginSegment() : undefined;
       this.updateBackdrop();
       if (backdropStartedAt !== undefined) profiler?.endSegment('controller.backdrop', backdropStartedAt);
-      const gridOverlayStartedAt = profiler?.beginSegment();
+      const gridOverlayStartedAt = controllerProfileSlot === 2 ? profiler?.beginSegment() : undefined;
       this.gridOverlayController.redraw();
       if (gridOverlayStartedAt !== undefined) {
         profiler?.endSegment('controller.gridOverlay', gridOverlayStartedAt);
       }
-      const liveObjectsStartedAt = profiler?.beginSegment();
+      const liveObjectsStartedAt = controllerProfileSlot === 3 ? profiler?.beginSegment() : undefined;
       this.updateLiveObjects(delta);
       if (liveObjectsStartedAt !== undefined) {
         profiler?.endSegment('controller.liveObjects', liveObjectsStartedAt);
       }
-      const signStartedAt = profiler?.beginSegment();
+      const signStartedAt = controllerProfileSlot === 4 ? profiler?.beginSegment() : undefined;
       this.signController.update();
       if (signStartedAt !== undefined) profiler?.endSegment('controller.signs', signStartedAt);
-      const ghostsStartedAt = profiler?.beginSegment();
+      const ghostsStartedAt = controllerProfileSlot === 5 ? profiler?.beginSegment() : undefined;
       this.updateGhosts(delta);
       if (ghostsStartedAt !== undefined) profiler?.endSegment('controller.ghosts', ghostsStartedAt);
-      const pvpPresentationStartedAt = profiler?.beginSegment();
+      const pvpPresentationStartedAt = controllerProfileSlot === 6 ? profiler?.beginSegment() : undefined;
       this.pvpInstanceRenderer.update(delta);
       this.combatPresentationController.update();
       this.applyPvpArenaCameraLock();
       if (pvpPresentationStartedAt !== undefined) {
         profiler?.endSegment('controller.pvpPresentation', pvpPresentationStartedAt);
       }
-      const roomChatStartedAt = profiler?.beginSegment();
+      const roomChatStartedAt = controllerProfileSlot === 7 ? profiler?.beginSegment() : undefined;
       this.roomChatController.update();
       if (roomChatStartedAt !== undefined) profiler?.endSegment('controller.roomChat', roomChatStartedAt);
-      const roomCommentsStartedAt = profiler?.beginSegment();
+      const roomCommentsStartedAt = controllerProfileSlot === 8 ? profiler?.beginSegment() : undefined;
       this.roomCommentsController.update();
       if (roomCommentsStartedAt !== undefined) {
         profiler?.endSegment('controller.roomComments', roomCommentsStartedAt);
       }
-      const browsePresenceStartedAt = profiler?.beginSegment();
+      const browsePresenceStartedAt = controllerProfileSlot === 9 ? profiler?.beginSegment() : undefined;
       this.presenceOverlayController.updateBrowseDots(delta);
       if (browsePresenceStartedAt !== undefined) {
         profiler?.endSegment('controller.presenceOverlay', browsePresenceStartedAt);
       }
-      const roomMusicStartedAt = profiler?.beginSegment();
+      const roomMusicStartedAt = controllerProfileSlot === 10 ? profiler?.beginSegment() : undefined;
       this.roomMusicPlaybackController.sync({
         mode: this.mode,
         currentRoomCoordinates: this.currentRoomCoordinates,
@@ -2314,19 +2319,19 @@ export class OverworldPlayScene extends Phaser.Scene {
       if (!this.playerBody) {
         this.setLastMovementInput(0, 0);
         const noPlayerStartedAt = profiler?.beginSegment();
-        const noPlayerMovementStartedAt = profiler?.beginSegment();
+        const noPlayerMovementStartedAt = controllerProfileSlot === 11 ? profiler?.beginSegment() : undefined;
         this.movementController.handleNoPlayerRuntime();
         if (noPlayerMovementStartedAt !== undefined) {
           profiler?.endSegment('controller.movement', noPlayerMovementStartedAt);
         }
-        const noPlayerPresenceStartedAt = profiler?.beginSegment();
+        const noPlayerPresenceStartedAt = controllerProfileSlot === 12 ? profiler?.beginSegment() : undefined;
         this.syncLocalPresence();
         this.syncPvpInstanceState();
         this.syncPvpLocalHeartLabel();
         if (noPlayerPresenceStartedAt !== undefined) {
           profiler?.endSegment('controller.presencePvp', noPlayerPresenceStartedAt);
         }
-        const noPlayerEnvironmentStartedAt = profiler?.beginSegment();
+        const noPlayerEnvironmentStartedAt = controllerProfileSlot === 13 ? profiler?.beginSegment() : undefined;
         this.updateRoomLighting();
         this.updateRoomWeather();
         if (noPlayerEnvironmentStartedAt !== undefined) {
@@ -2352,15 +2357,15 @@ export class OverworldPlayScene extends Phaser.Scene {
       const gunPressed = !pvpCountdownLocked && gunInputPressed;
       const inQuicksand = this.quicksandController.isActive();
       const playerUpdateStartedAt = profiler?.beginSegment();
-      const specialTilesStartedAt = profiler?.beginSegment();
+      const specialTilesStartedAt = controllerProfileSlot === 14 ? profiler?.beginSegment() : undefined;
       this.updateSpecialTiles();
       if (specialTilesStartedAt !== undefined) {
         profiler?.endSegment('controller.specialTiles', specialTilesStartedAt);
       }
-      const portalsStartedAt = profiler?.beginSegment();
+      const portalsStartedAt = controllerProfileSlot === 15 ? profiler?.beginSegment() : undefined;
       this.updatePortalObjects();
       if (portalsStartedAt !== undefined) profiler?.endSegment('controller.portals', portalsStartedAt);
-      const movementStartedAt = profiler?.beginSegment();
+      const movementStartedAt = controllerProfileSlot === 11 ? profiler?.beginSegment() : undefined;
       const movement = this.movementController.updateMovement(delta, inQuicksand);
       this.setLastMovementInput(movement.horizontalInput, movement.verticalInput);
       if (movement.downHeld && movement.jumpPressed) {
@@ -2373,7 +2378,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         }
       }
       if (movementStartedAt !== undefined) profiler?.endSegment('controller.movement', movementStartedAt);
-      const combatStartedAt = profiler?.beginSegment();
+      const combatStartedAt = controllerProfileSlot === 16 ? profiler?.beginSegment() : undefined;
       this.combatController.handleCombatInput({
         swordPressed,
         gunPressed,
@@ -2388,13 +2393,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.movementController.syncLadderClimbSfx(movement.verticalInput);
       this.maybeRespawnFromVoid();
       if (combatStartedAt !== undefined) profiler?.endSegment('controller.combat', combatStartedAt);
-      const roomTransitionStartedAt = profiler?.beginSegment();
+      const roomTransitionStartedAt = controllerProfileSlot === 17 ? profiler?.beginSegment() : undefined;
       this.roomTransitionController.maybeAdvancePlayerRoom();
       this.recordRankedRunTraceFrame(delta, movement);
       if (roomTransitionStartedAt !== undefined) {
         profiler?.endSegment('controller.roomTransition', roomTransitionStartedAt);
       }
-      const playerPresentationStartedAt = profiler?.beginSegment();
+      const playerPresentationStartedAt = controllerProfileSlot === 18 ? profiler?.beginSegment() : undefined;
       try {
         this.playerPresentationGroundedOverride = movement.grounded;
         this.playerPresentationController.syncPlayerVisual();
@@ -2404,18 +2409,18 @@ export class OverworldPlayScene extends Phaser.Scene {
       if (playerPresentationStartedAt !== undefined) {
         profiler?.endSegment('controller.playerPresentation', playerPresentationStartedAt);
       }
-      const presenceStartedAt = profiler?.beginSegment();
+      const presenceStartedAt = controllerProfileSlot === 12 ? profiler?.beginSegment() : undefined;
       this.syncLocalPresence();
       this.syncPvpInstanceState();
       this.syncPvpLocalHeartLabel();
       if (presenceStartedAt !== undefined) profiler?.endSegment('controller.presencePvp', presenceStartedAt);
-      const environmentStartedAt = profiler?.beginSegment();
+      const environmentStartedAt = controllerProfileSlot === 13 ? profiler?.beginSegment() : undefined;
       this.updateRoomLighting();
       this.updateRoomWeather();
       if (environmentStartedAt !== undefined) {
         profiler?.endSegment('controller.environment', environmentStartedAt);
       }
-      const objectiveStartedAt = profiler?.beginSegment();
+      const objectiveStartedAt = controllerProfileSlot === 19 ? profiler?.beginSegment() : undefined;
       this.objectiveController.update(delta);
       this.tickRoomRushRun(delta);
       if (objectiveStartedAt !== undefined) {
