@@ -59,6 +59,7 @@ interface OverworldObjectiveControllerHost {
     y: number;
     checkpointIndex?: number | null;
   }): void;
+  onGoalRunCompleted?(runState: GoalRunState): void;
 }
 
 export class OverworldObjectiveController {
@@ -423,6 +424,7 @@ export class OverworldObjectiveController {
       }
       if (runState) {
         this.host.setRoomNpcsVictorious(runState.roomId, true);
+        this.host.onGoalRunCompleted?.(runState);
       }
     } else if (result.event === 'start' || result.event === 'fail') {
       const runState = this.host.goalRunController.getCurrentRun();

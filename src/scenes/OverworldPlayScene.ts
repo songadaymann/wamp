@@ -34,6 +34,7 @@ import {
 } from '../navigation/worldNavigation';
 import {
   DEFAULT_ROOM_COORDINATES,
+  cloneRoomSnapshot,
   parseRoomId,
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -257,7 +258,7 @@ import {
 } from './overworld/roomRushMode';
 import { OverworldRuntimeContext } from './overworld/runtimeContext';
 import { OverworldBackdropController } from './overworld/backdropController';
-import { dispatchSignal } from '../events/typedEvent';
+import { dispatchSignal, dispatchTypedEvent } from '../events/typedEvent';
 import {
   RankedRunTraceRecorder,
   type RankedRunTraceBinding,
@@ -293,6 +294,18 @@ import {
   type MobilePerformanceProfiler,
 } from '../debug/mobilePerformanceProfiler';
 import type { RunFrameWorkResult } from './overworld/frameWorkCoordinator';
+import {
+  TUTORIAL_ACTIVE_SIGN_CHANGED_EVENT,
+  TUTORIAL_CLAIM_REQUESTED_EVENT,
+  TUTORIAL_PLAYTEST_CANCELLED_EVENT,
+  TUTORIAL_ROOM_GOAL_COMPLETED_EVENT,
+} from '../tutorial/events';
+import {
+  cloneTutorialSceneContext,
+  type TutorialSceneContext,
+} from '../tutorial/model';
+import type { TutorialTemplates } from '../tutorial/templateLoader';
+import { shouldSuppressLegacyWelcome } from '../tutorial/eligibility';
 
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.5;
@@ -505,6 +518,11 @@ export class OverworldPlayScene extends Phaser.Scene {
   private activeMultiplayerGoalPolicy: MultiplayerModeDefinition['goals'] | null = null;
   private courseEditorReturnTarget: OverworldPlaySceneData['courseEditorReturnTarget'] = null;
   private editorPlaytestReturnTarget: OverworldPlaySceneData['editorPlaytestReturnTarget'] = null;
+  private tutorialContext: TutorialSceneContext | null = null;
+  private tutorialSleepSprite: Phaser.GameObjects.Sprite | null = null;
+  private tutorialSleepLabel: Phaser.GameObjects.Text | null = null;
+  private lastTutorialActiveSignKey: string | null = null;
+  private tutorialRealtimeDeferred = false;
 
   private readonly lastMovementInput = {
     horizontalInput: 0,
@@ -871,6 +889,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.runtimeController?.syncEdgeWallsForCoordinates(coordinates);
       },
       onFullRoomCollisionReady: (loadedRoom) => {
+        this.runtimeController?.syncEdgeWallsForCoordinates([
+          loadedRoom.room.coordinates,
+        ]);
         if (
           this.mode === 'play'
           && loadedRoom.room.id === roomIdFromCoordinates(this.currentRoomCoordinates)
@@ -1201,9 +1222,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       setEditorPlaytestReturnTarget: (target) => {
         this.editorPlaytestReturnTarget = target
-          ? { roomCoordinates: { ...target.roomCoordinates } }
+          ? {
+              roomCoordinates: { ...target.roomCoordinates },
+              tutorialContext: cloneTutorialSceneContext(target.tutorialContext),
+            }
           : null;
       },
+      setTutorialContext: (context) => this.setTutorialContext(context),
       activateDraftCoursePreview: (snapshot, draftRoom) =>
         this.coursePlaybackController.activateDraftCoursePreview(snapshot, draftRoom),
       updateSelectedSummary: () => this.updateSelectedSummary(),
@@ -1250,8 +1275,9 @@ export class OverworldPlayScene extends Phaser.Scene {
           void this.coursePlaybackController.finalizeActiveCourseRun(result);
         },
         recordRankedGoalEvent: (event) => {
-          this.recordRankedGoalEvent(event);
+          if (!this.tutorialContext?.private) this.recordRankedGoalEvent(event);
         },
+        onGoalRunCompleted: (runState) => this.handleTutorialGoalCompleted(runState),
       },
       {
         goalTouchRadius: 18,
@@ -1731,6 +1757,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       areRoomCommentsVisible: () => this.roomCommentsController.areCommentsVisible(),
       getZoom: () => this.cameras.main.zoom,
       getTransientStatusMessage: () => this.getTransientStatusMessage(),
+      allowFrontierClaimAttemptAtLimit: () => this.tutorialContext?.stage === 'awaiting_claim',
       renderHudViewModel: (viewModel) => {
         this.hudBridge?.render(viewModel);
       },
@@ -1894,11 +1921,19 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       getEditorPlaytestReturnTarget: () =>
         this.editorPlaytestReturnTarget
-          ? { roomCoordinates: { ...this.editorPlaytestReturnTarget.roomCoordinates } }
+          ? {
+              roomCoordinates: { ...this.editorPlaytestReturnTarget.roomCoordinates },
+              tutorialContext: cloneTutorialSceneContext(
+                this.editorPlaytestReturnTarget.tutorialContext,
+              ),
+            }
           : null,
       setEditorPlaytestReturnTarget: (target) => {
         this.editorPlaytestReturnTarget = target
-          ? { roomCoordinates: { ...target.roomCoordinates } }
+          ? {
+              roomCoordinates: { ...target.roomCoordinates },
+              tutorialContext: cloneTutorialSceneContext(target.tutorialContext),
+            }
           : null;
       },
       getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
@@ -2122,6 +2157,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   create(data?: OverworldPlaySceneData): void {
     this.runtimeContext.setLifecycle('initializing');
     this.resetRuntimeState();
+    this.setTutorialContext(data?.tutorialContext ?? null);
     this.resetPerformanceAdvisorSceneState();
     this.unsubscribeDevicePerformanceMode?.();
     this.unsubscribeDevicePerformanceMode = subscribeDevicePerformanceMode(() => {
@@ -2158,9 +2194,20 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.setupGameplayKeys();
     this.inspectInputController.initialize();
     this.setupCamera();
-    this.initializePresenceClient();
-    this.initializeRoomChatClient();
-    this.initializeRoomComments();
+    const realtimeDeferredForTutorial = this.tutorialContext?.private === true || (
+      !this.tutorialContext
+      && shouldSuppressLegacyWelcome({
+        storage: window.localStorage,
+        location: window.location,
+        hasFocusedCoordinates: hasFocusedCoordinatesInUrl(),
+      })
+    );
+    this.tutorialRealtimeDeferred = realtimeDeferredForTutorial;
+    if (!realtimeDeferredForTutorial) {
+      this.initializePresenceClient();
+      this.initializeRoomChatClient();
+      this.initializeRoomComments();
+    }
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     window.addEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
     this.syncBackdropCameraIgnores();
@@ -2199,6 +2246,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       forceRefreshAround: data?.forceRefreshAround ?? false,
       statusMessage: data?.statusMessage ?? null,
       editorPlaytestReturnTarget: data?.editorPlaytestReturnTarget ?? null,
+      tutorialContext: data?.tutorialContext ?? null,
+      tutorialRoomSnapshots: data?.tutorialRoomSnapshots ?? [],
     });
     if (deepLinkedInitialFocus && (data?.mode ?? 'browse') === 'browse') {
       const fitZoom = this.getFitZoomForRoom();
@@ -2262,6 +2311,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       }
       const signStartedAt = controllerProfileSlot === 4 ? profiler?.beginSegment() : undefined;
       this.signController.update();
+      this.syncTutorialActiveSign();
       if (signStartedAt !== undefined) profiler?.endSegment('controller.signs', signStartedAt);
       const ghostsStartedAt = controllerProfileSlot === 5 ? profiler?.beginSegment() : undefined;
       this.updateGhosts(delta);
@@ -2354,10 +2404,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       }
 
       const pvpCountdownLocked = this.isPvpCountdownActive();
+      const tutorialInputLocked = this.tutorialContext?.inputLocked === true;
       const swordInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
       const gunInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
-      const swordPressed = !pvpCountdownLocked && swordInputPressed;
-      const gunPressed = !pvpCountdownLocked && gunInputPressed;
+      const swordPressed = !tutorialInputLocked && !pvpCountdownLocked && swordInputPressed;
+      const gunPressed = !tutorialInputLocked && !pvpCountdownLocked && gunInputPressed;
       const inQuicksand = this.quicksandController.isActive();
       const playerUpdateStartedAt = profiler?.beginSegment();
       const specialTilesStartedAt = controllerProfileSlot === 14 ? profiler?.beginSegment() : undefined;
@@ -2370,11 +2421,14 @@ export class OverworldPlayScene extends Phaser.Scene {
       if (portalsStartedAt !== undefined) profiler?.endSegment('controller.portals', portalsStartedAt);
       const movementStartedAt = controllerProfileSlot === 11 ? profiler?.beginSegment() : undefined;
       const movement = this.movementController.updateMovement(delta, inQuicksand);
-      this.setLastMovementInput(movement.horizontalInput, movement.verticalInput);
+      this.setLastMovementInput(
+        tutorialInputLocked ? 0 : movement.horizontalInput,
+        tutorialInputLocked ? 0 : movement.verticalInput,
+      );
       if (movement.downHeld && movement.jumpPressed) {
         this.specialTilesController.beginOneWayDropThrough();
       }
-      if (pvpCountdownLocked) {
+      if (pvpCountdownLocked || tutorialInputLocked) {
         this.playerBody.setVelocityX(0);
         if (this.playerBody.blocked.down || this.playerBody.touching.down) {
           this.playerBody.setVelocityY(0);
@@ -2397,8 +2451,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.maybeRespawnFromVoid();
       if (combatStartedAt !== undefined) profiler?.endSegment('controller.combat', combatStartedAt);
       const roomTransitionStartedAt = controllerProfileSlot === 17 ? profiler?.beginSegment() : undefined;
-      this.roomTransitionController.maybeAdvancePlayerRoom();
-      this.recordRankedRunTraceFrame(delta, movement);
+      if (!tutorialInputLocked) {
+        this.roomTransitionController.maybeAdvancePlayerRoom();
+        this.recordRankedRunTraceFrame(delta, movement);
+      }
       if (roomTransitionStartedAt !== undefined) {
         profiler?.endSegment('controller.roomTransition', roomTransitionStartedAt);
       }
@@ -2424,8 +2480,10 @@ export class OverworldPlayScene extends Phaser.Scene {
         profiler?.endSegment('controller.environment', environmentStartedAt);
       }
       const objectiveStartedAt = controllerProfileSlot === 19 ? profiler?.beginSegment() : undefined;
-      this.objectiveController.update(delta);
-      this.tickRoomRushRun(delta);
+      if (!tutorialInputLocked) {
+        this.objectiveController.update(delta);
+        this.tickRoomRushRun(delta);
+      }
       if (objectiveStartedAt !== undefined) {
         profiler?.endSegment('controller.objectiveRoomRush', objectiveStartedAt);
       }
@@ -2590,6 +2648,13 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private resetRuntimeState(): void {
+    this.tutorialSleepSprite?.destroy();
+    this.tutorialSleepLabel?.destroy();
+    this.tutorialSleepSprite = null;
+    this.tutorialSleepLabel = null;
+    this.tutorialContext = null;
+    this.lastTutorialActiveSignKey = null;
+    this.tutorialRealtimeDeferred = false;
     this.removeMobilePortraitCameraTunerApi();
     this.backdropController.beginReset();
 
@@ -3216,15 +3281,18 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private syncPresenceSubscriptions(): void {
+    if (this.tutorialContext?.private) return;
     this.browseRealtimeStartupGate.request();
   }
 
   private applyPresenceSubscriptions(): void {
+    if (this.tutorialContext?.private) return;
     this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
     this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
   }
 
   private syncLocalPresence(force = false): void {
+    if (this.tutorialContext?.private) return;
     const now = Date.now();
     const activePvpMatch =
       this.activePvpMatch && this.activePvpMatch.status !== 'complete'
@@ -3705,7 +3773,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private async refreshLeaderboardForSelection(): Promise<void> {
-    if (this.activeCourseRun || this.activeRoomRushRun) {
+    if (this.tutorialContext?.private || this.activeCourseRun || this.activeRoomRushRun) {
       return;
     }
 
@@ -3720,6 +3788,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     room: RoomSnapshot | null,
     entryContext: 'transition' | 'spawn' | 'respawn' = 'transition',
   ): void {
+    if (this.tutorialContext?.private) {
+      this.objectiveController.syncGoalRunForRoom(room, entryContext);
+      return;
+    }
     if (!this.areMultiplayerRoomGoalsActive()) {
       this.goalRunController.clearCurrentRun();
       this.redrawGoalMarkers();
@@ -5693,6 +5765,23 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   returnToWorld(): void {
+    if (this.tutorialContext?.mode === 'private_playtest') {
+      const returnContext: TutorialSceneContext = {
+        ...this.tutorialContext,
+        stage: this.tutorialContext.stage === 'bridge_playtest'
+          ? 'bridge_edit'
+          : this.tutorialContext.stage,
+        mode: 'private_editor',
+        inputLocked: false,
+      };
+      if (this.editorPlaytestReturnTarget) {
+        this.editorPlaytestReturnTarget.tutorialContext = cloneTutorialSceneContext(returnContext);
+      }
+      dispatchTypedEvent(window, TUTORIAL_PLAYTEST_CANCELLED_EVENT, {
+        context: cloneTutorialSceneContext(this.tutorialContext)!,
+      });
+      this.setTutorialContext(returnContext);
+    }
     const pvpReturnCoordinates = this.activePvpReturnCoordinates
       ? { ...this.activePvpReturnCoordinates }
       : null;
@@ -5706,7 +5795,272 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   buildSelectedRoom(): void {
+    if (this.tutorialContext?.stage === 'awaiting_claim') {
+      if (this.getCellStateAt(this.selectedCoordinates) !== 'frontier') {
+        this.showTransientStatus('Choose a highlighted frontier room.');
+        return;
+      }
+      dispatchTypedEvent(window, TUTORIAL_CLAIM_REQUESTED_EVENT, {
+        context: cloneTutorialSceneContext(this.tutorialContext)!,
+        coordinates: { ...this.selectedCoordinates },
+      });
+      return;
+    }
     this.flowController.buildSelectedRoom();
+  }
+
+  async startTutorialTraversal(options: {
+    templates: TutorialTemplates;
+    focus: 'wake' | 'bridge';
+    context: TutorialSceneContext;
+  }): Promise<void> {
+    const { templates, focus, context } = options;
+    const focusRoom = focus === 'wake' ? templates.wakeRoom : templates.bridgeRoom;
+    this.worldStreamingController.setTransientRoomOverrides([
+      cloneRoomSnapshot(templates.wakeRoom),
+      cloneRoomSnapshot(templates.bridgeRoom),
+    ]);
+    await this.windowController.handleWakeAsync({
+      centerCoordinates: { ...focusRoom.coordinates },
+      roomCoordinates: { ...focusRoom.coordinates },
+      mode: 'play',
+      tutorialContext: cloneTutorialSceneContext(context),
+      tutorialRoomSnapshots: [
+        cloneRoomSnapshot(templates.wakeRoom),
+        cloneRoomSnapshot(templates.bridgeRoom),
+      ],
+      forceRefreshAround: false,
+    });
+    this.worldStreamingController.preparePlayableRoomForTransition(
+      templates.wakeRoom.coordinates,
+    );
+    this.worldStreamingController.preparePlayableRoomForTransition(
+      templates.bridgeRoom.coordinates,
+    );
+    await this.waitForTutorialRoomsReady(templates);
+    this.runtimeController.syncEdgeWallsForCoordinates([
+      templates.wakeRoom.coordinates,
+      templates.bridgeRoom.coordinates,
+    ]);
+  }
+
+  async playTutorialWakeSequence(context: TutorialSceneContext): Promise<void> {
+    this.setTutorialContext({ ...context, inputLocked: true });
+    const ready = await this.waitForTutorialPlayer();
+    if (!ready || !this.playerSprite || !this.player) {
+      throw new Error('The sleeping Wamp could not enter the room.');
+    }
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const source = this.playerSprite;
+    source.setVisible(false);
+    this.tutorialSleepSprite?.destroy();
+    this.tutorialSleepLabel?.destroy();
+    this.tutorialSleepSprite = this.add.sprite(
+      source.x,
+      source.y + 4,
+      source.texture.key,
+      source.frame.name,
+    );
+    this.tutorialSleepSprite
+      .setOrigin(source.originX, source.originY)
+      .setScale(source.scaleX, source.scaleY)
+      .setFlipX(source.flipX)
+      .setRotation(Math.PI * 0.42)
+      .setDepth(source.depth + 1);
+    this.tutorialSleepLabel = this.add.text(source.x + 18, source.y - 28, 'Z  Z  Z', {
+      fontFamily: 'Courier New',
+      fontSize: '12px',
+      color: '#fff3db',
+      stroke: '#050505',
+      strokeThickness: 4,
+    }).setDepth(source.depth + 2);
+
+    if (!reducedMotion) {
+      this.tweens.add({
+        targets: [this.tutorialSleepSprite, this.tutorialSleepLabel],
+        y: '-=3',
+        duration: 560,
+        yoyo: true,
+        repeat: 1,
+      });
+    }
+    await this.waitTutorialMs(reducedMotion ? 180 : 1_350);
+
+    const flash = this.add.rectangle(
+      this.player.x,
+      this.player.y,
+      64,
+      64,
+      0xfff3db,
+      reducedMotion ? 0.45 : 0.9,
+    ).setDepth(source.depth + 4);
+    if (!reducedMotion) {
+      this.tweens.add({ targets: flash, alpha: 0, scale: 1.8, duration: 220 });
+    }
+    this.tutorialSleepSprite?.destroy();
+    this.tutorialSleepLabel?.destroy();
+    this.tutorialSleepSprite = null;
+    this.tutorialSleepLabel = null;
+    source.setVisible(true);
+    await this.waitTutorialMs(reducedMotion ? 80 : 240);
+    flash.destroy();
+  }
+
+  async openTutorialEditor(
+    roomSnapshot: RoomSnapshot,
+    context: TutorialSceneContext,
+    templateSnapshot: RoomSnapshot,
+  ): Promise<void> {
+    this.setTutorialContext(context);
+    this.worldStreamingController.clearTransientRoomOverride(roomSnapshot.id);
+    await this.flowController.openEditor({
+      roomCoordinates: { ...roomSnapshot.coordinates },
+      source: 'world',
+      roomSnapshot: cloneRoomSnapshot(roomSnapshot),
+      forceRoomSnapshot: true,
+      tutorialContext: cloneTutorialSceneContext(context),
+      tutorialTemplateSnapshot: cloneRoomSnapshot(templateSnapshot),
+      statusMessage: 'Private tutorial draft. Saved in this browser only.',
+    });
+  }
+
+  setTutorialContext(context: TutorialSceneContext | null): void {
+    const wasPrivate = this.tutorialContext?.private === true;
+    this.tutorialContext = cloneTutorialSceneContext(context);
+    const isPrivate = this.tutorialContext?.private === true;
+    if (isPrivate && !wasPrivate) {
+      this.tutorialRealtimeDeferred = true;
+      this.presenceController.reset();
+      this.roomChatController.reset();
+      this.roomCommentsController.reset();
+    } else if (
+      !isPrivate
+      && (wasPrivate || this.tutorialRealtimeDeferred)
+      && this.scene.isActive(this.scene.key)
+    ) {
+      this.tutorialRealtimeDeferred = false;
+      this.initializePresenceClient();
+      this.initializeRoomChatClient();
+      this.initializeRoomComments();
+      this.syncPresenceSubscriptions();
+    }
+    if (this.tutorialContext?.inputLocked && this.playerBody) {
+      this.playerBody.setVelocity(0, 0);
+    }
+  }
+
+  async returnTutorialPlaytestToEditor(context: TutorialSceneContext): Promise<void> {
+    this.setTutorialContext(context);
+    if (this.editorPlaytestReturnTarget) {
+      this.editorPlaytestReturnTarget.tutorialContext = cloneTutorialSceneContext(context);
+    }
+    this.flowController.returnToWorld();
+  }
+
+  async returnTutorialToBrowse(
+    context: TutorialSceneContext | null,
+    clearDraftRoomIds: string[],
+    forceRefreshAround = false,
+  ): Promise<void> {
+    this.worldStreamingController.clearTransientRoomOverrides(clearDraftRoomIds);
+    for (const roomId of clearDraftRoomIds) {
+      this.worldStreamingController.applyOptimisticMutation({ clearDraftRoomId: roomId });
+    }
+    const data: OverworldPlaySceneData = {
+      centerCoordinates: { ...this.windowCenterCoordinates },
+      roomCoordinates: { ...this.selectedCoordinates },
+      forceRefreshAround,
+      mode: 'browse',
+      tutorialContext: cloneTutorialSceneContext(context),
+      editorPlaytestReturnTarget: null,
+      statusMessage: context?.stage === 'awaiting_claim'
+        ? 'Choose where this dream will wake.'
+        : null,
+    };
+    if (this.scene.isSleeping(this.scene.key)) {
+      this.scene.stop('EditorScene');
+      this.scene.stop('CourseEditorScene');
+      this.scene.stop('CourseComposerScene');
+      this.scene.wake(this.scene.key, data);
+      return;
+    }
+    await this.windowController.handleWakeAsync(data);
+  }
+
+  async openTutorialClaimedEditor(
+    roomSnapshot: RoomSnapshot,
+    statusMessage: string,
+  ): Promise<void> {
+    this.setTutorialContext(null);
+    await this.flowController.openEditor({
+      roomCoordinates: { ...roomSnapshot.coordinates },
+      source: 'world',
+      roomSnapshot: cloneRoomSnapshot(roomSnapshot),
+      forceRoomSnapshot: true,
+      tutorialContext: null,
+      statusMessage,
+    });
+  }
+
+  private syncTutorialActiveSign(): void {
+    if (!this.tutorialContext?.private || this.tutorialContext.mode !== 'traversal') {
+      this.lastTutorialActiveSignKey = null;
+      return;
+    }
+    const sign = this.signController.getActiveSign();
+    const key = sign
+      ? `${sign.roomCoordinates.x},${sign.roomCoordinates.y}:${sign.instanceId}:${sign.text}`
+      : null;
+    if (key === this.lastTutorialActiveSignKey) return;
+    this.lastTutorialActiveSignKey = key;
+    dispatchTypedEvent(window, TUTORIAL_ACTIVE_SIGN_CHANGED_EVENT, {
+      context: cloneTutorialSceneContext(this.tutorialContext)!,
+      sign,
+    });
+  }
+
+  private handleTutorialGoalCompleted(runState: GoalRunState): void {
+    if (!this.tutorialContext?.private) return;
+    dispatchTypedEvent(window, TUTORIAL_ROOM_GOAL_COMPLETED_EVENT, {
+      context: cloneTutorialSceneContext(this.tutorialContext)!,
+      roomId: runState.roomId,
+      roomCoordinates: { ...runState.roomCoordinates },
+      goalType: runState.goal.type,
+    });
+  }
+
+  private async waitForTutorialPlayer(): Promise<boolean> {
+    const deadline = performance.now() + 5_000;
+    while (performance.now() < deadline) {
+      if (this.player && this.playerBody && this.playerSprite) return true;
+      await this.waitTutorialMs(50);
+    }
+    return false;
+  }
+
+  private async waitForTutorialRoomsReady(templates: TutorialTemplates): Promise<void> {
+    const deadline = performance.now() + 20_000;
+    while (performance.now() < deadline) {
+      if (
+        this.worldStreamingController.isPlayableRoomCollisionReady(
+          templates.wakeRoom.coordinates,
+        )
+        && this.worldStreamingController.isPlayableRoomCollisionReady(
+          templates.bridgeRoom.coordinates,
+        )
+      ) {
+        return;
+      }
+      await this.waitTutorialMs(50);
+    }
+    throw new Error('The pinned tutorial rooms did not become playable in time.');
+  }
+
+  private waitTutorialMs(durationMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, durationMs);
+    });
   }
 
   openGuestDraftRoom(roomSnapshot: RoomSnapshot): void {
@@ -5941,6 +6295,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private isFrontierBuildBlockedByClaimLimit(): boolean {
+    if (this.tutorialContext?.stage === 'awaiting_claim') return false;
     const authState = getAuthDebugState();
     return (
       authState.authenticated &&
@@ -6322,6 +6677,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       performancePolicy: streamingMetrics.resolvedPerformancePolicy,
       performanceAdvisor: performanceAdvisorRuntime.advisor.getDebugState(performance.now()),
       mode: this.mode,
+      tutorial: cloneTutorialSceneContext(this.tutorialContext),
       cameraMode: this.cameraMode,
       selected: { ...this.selectedCoordinates },
       currentRoom: { ...this.currentRoomCoordinates },

@@ -82,6 +82,7 @@ interface OverworldHudStateControllerHost {
   getTransientStatusMessage(): string | null;
   renderHudViewModel(viewModel: OverworldHudViewModel): void;
   syncOverlayScale(): void;
+  allowFrontierClaimAttemptAtLimit(): boolean;
 }
 
 export class OverworldHudStateController {
@@ -352,6 +353,7 @@ export class OverworldHudStateController {
   }
 
   private isFrontierBuildBlockedByClaimLimit(authState: ReturnType<typeof getAuthDebugState>): boolean {
+    if (this.host.allowFrontierClaimAttemptAtLimit()) return false;
     return (
       authState.authenticated &&
       authState.roomClaimsRemainingToday !== null &&

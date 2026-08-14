@@ -18,6 +18,8 @@ import type { MultiplayerModeId } from '../../multiplayer/model';
 import type { OverworldOnlineRosterViewEntry } from '../../scenes/overworld/hud';
 import type { RoomCoordinates, RoomRecord, RoomSnapshot, RoomVersionRecord } from '../../persistence/roomModel';
 import type { PerformanceAdvisorSuggestion } from '../../performance/performanceAdvisor';
+import type { TutorialSceneContext } from '../../tutorial/model';
+import type { TutorialTemplates } from '../../tutorial/templateLoader';
 
 export type EditorHistoryState = {
   roomId: string;
@@ -246,6 +248,28 @@ export interface OverworldSceneBridge {
   editSelectedRoom?: () => void;
   buildSelectedRoom?: () => void;
   openGuestDraftRoom?: (roomSnapshot: RoomSnapshot) => void;
+  startTutorialTraversal?: (options: {
+    templates: TutorialTemplates;
+    focus: 'wake' | 'bridge';
+    context: TutorialSceneContext;
+  }) => Promise<void> | void;
+  playTutorialWakeSequence?: (context: TutorialSceneContext) => Promise<void> | void;
+  openTutorialEditor?: (
+    roomSnapshot: RoomSnapshot,
+    context: TutorialSceneContext,
+    templateSnapshot: RoomSnapshot,
+  ) => Promise<void> | void;
+  setTutorialContext?: (context: TutorialSceneContext | null) => void;
+  returnTutorialPlaytestToEditor?: (context: TutorialSceneContext) => Promise<void> | void;
+  returnTutorialToBrowse?: (
+    context: TutorialSceneContext | null,
+    clearDraftRoomIds: string[],
+    forceRefreshAround?: boolean,
+  ) => Promise<void> | void;
+  openTutorialClaimedEditor?: (
+    roomSnapshot: RoomSnapshot,
+    statusMessage: string,
+  ) => Promise<void> | void;
   zoomIn?: () => void;
   zoomOut?: () => void;
   jumpToCoordinates?: (coordinates: RoomCoordinates) => Promise<void> | void;

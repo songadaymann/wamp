@@ -29,6 +29,7 @@ import {
 import { logBootPhase, startBootStallWatch } from '../../main/bootDiagnostics';
 import type { CameraMode } from './camera';
 import type { OverworldMode, OverworldPlaySceneData } from '../sceneData';
+import type { TutorialSceneContext } from '../../tutorial/model';
 
 type WorldRefreshResult = 'success' | 'cancelled' | 'error';
 type ChunkWindowRefreshResult = 'updated' | 'unchanged' | 'cancelled' | 'error';
@@ -98,6 +99,7 @@ interface OverworldWindowControllerHost {
   setEditorPlaytestReturnTarget(
     target: OverworldPlaySceneData['editorPlaytestReturnTarget'] | null
   ): void;
+  setTutorialContext(context: TutorialSceneContext | null): void;
   activateDraftCoursePreview(
     snapshot: CourseSnapshot,
     draftRoom: RoomSnapshot | null
@@ -181,6 +183,16 @@ export class OverworldWindowController {
     const fallback =
       data?.centerCoordinates ?? data?.roomCoordinates ?? getFocusedCoordinatesFromUrl();
     const wasPlaying = this.host.getMode() === 'play';
+
+    if (data?.tutorialContext !== undefined) {
+      this.host.setTutorialContext(data.tutorialContext ?? null);
+    }
+
+    for (const tutorialRoom of data?.tutorialRoomSnapshots ?? []) {
+      this.host.worldStreamingController.applyOptimisticMutation({
+        draftRoom: cloneRoomSnapshot(tutorialRoom),
+      });
+    }
 
     if (
       data?.clearDraftRoomId ||

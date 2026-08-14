@@ -301,6 +301,10 @@ export class OverworldSceneFlowController {
       const sceneData: EditorSceneData = {
         roomCoordinates: { ...editorPlaytestReturnTarget.roomCoordinates },
         source: 'world',
+        tutorialContext: editorPlaytestReturnTarget.tutorialContext ?? null,
+        statusMessage: editorPlaytestReturnTarget.tutorialContext?.stage === 'bridge_complete'
+          ? 'The room remembered your answer.'
+          : null,
       };
       if (
         this.scene.scene.isSleeping('EditorScene')

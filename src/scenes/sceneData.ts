@@ -1,4 +1,5 @@
 import type { RoomCoordinates, RoomSnapshot } from '../persistence/roomModel';
+import type { TutorialSceneContext } from '../tutorial/model';
 
 export interface EditorCourseEditData {
   courseId: string;
@@ -18,6 +19,7 @@ export interface CourseComposerReturnTarget {
 
 export interface EditorPlaytestReturnTarget {
   roomCoordinates: RoomCoordinates;
+  tutorialContext?: TutorialSceneContext | null;
 }
 
 export interface EditorSceneData {
@@ -26,6 +28,9 @@ export interface EditorSceneData {
   roomSnapshot?: RoomSnapshot | null;
   forceRoomSnapshot?: boolean;
   courseEdit?: EditorCourseEditData | null;
+  tutorialContext?: TutorialSceneContext | null;
+  tutorialTemplateSnapshot?: RoomSnapshot | null;
+  statusMessage?: string | null;
 }
 
 export interface CourseComposerSceneData {
@@ -70,4 +75,6 @@ export interface OverworldPlaySceneData {
   courseEditedRoom?: CourseEditedRoomData | null;
   courseEditorReturnTarget?: CourseComposerReturnTarget | null;
   editorPlaytestReturnTarget?: EditorPlaytestReturnTarget | null;
+  tutorialContext?: TutorialSceneContext | null;
+  tutorialRoomSnapshots?: RoomSnapshot[];
 }

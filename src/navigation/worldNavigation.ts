@@ -13,12 +13,14 @@ function parseCoordinate(value: string | null): number | null {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
-export function hasFocusedCoordinatesInUrl(): boolean {
-  if (parseRoomSharePath(window.location.pathname)) {
+export function hasFocusedCoordinatesInUrl(
+  location: Pick<Location, 'pathname' | 'search'> = window.location,
+): boolean {
+  if (parseRoomSharePath(location.pathname)) {
     return true;
   }
 
-  const params = new URLSearchParams(window.location.search);
+  const params = new URLSearchParams(location.search);
   return parseCoordinate(params.get('x')) !== null && parseCoordinate(params.get('y')) !== null;
 }
 
