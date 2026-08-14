@@ -119,10 +119,6 @@ function createHarness(playerBody: FakeBody, liveObjects: LoadedRoomObject[]) {
     );
   }));
   const host = {
-    state: {
-      activeCrateInteractionMode: null,
-      activeCrateInteractionFacing: null,
-    },
     getPlayerBody: () => playerBody,
     getPushableLiveObjectsInBounds: queryLiveObjects,
     getRuntimeSolidLiveObjectsInBounds: queryLiveObjects,
@@ -143,6 +139,13 @@ function createHarness(playerBody: FakeBody, liveObjects: LoadedRoomObject[]) {
     ): { crateBody: FakeBody; mode: 'push' | 'pull' } | null;
     isSupportedBySolidRuntimeObject(body: FakeBody): boolean;
     canPlayerFitHitbox(height: number, body: FakeBody): boolean;
+    syncCrateInteractionState(interaction: {
+      crateBody: FakeBody;
+      mode: 'push' | 'pull';
+      moveDirectionX: -1 | 1;
+      facing: -1 | 1;
+      gravityDirection: 'up' | 'down' | 'left' | 'right';
+    }): void;
   };
 
   return { controller: spatialController, host, getArcadeBodyBounds, queryLiveObjects };
@@ -186,9 +189,14 @@ describe('OverworldMovementController spatial queries', () => {
   it('preserves the extended same-tick pull coupling distance', () => {
     const playerBody = createBody(100, 100, 16, 24);
     const crateBody = createBody(74, 104, 16, 16);
-    const { controller, host } = createHarness(playerBody, [createLiveObject('crate', crateBody)]);
-    (host.state as { activeCrateInteractionMode: 'push' | 'pull' | null })
-      .activeCrateInteractionMode = 'pull';
+    const { controller } = createHarness(playerBody, [createLiveObject('crate', crateBody)]);
+    controller.syncCrateInteractionState({
+      crateBody,
+      mode: 'pull',
+      moveDirectionX: 1,
+      facing: 1,
+      gravityDirection: 'down',
+    });
 
     expect(controller.findCrateInteraction(1, true, 'down')).toMatchObject({
       crateBody,

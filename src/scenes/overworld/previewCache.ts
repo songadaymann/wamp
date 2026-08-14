@@ -14,29 +14,18 @@ import {
   invalidateSharedRoomSnapshots,
   setSharedRoomSnapshot,
 } from '../../persistence/sharedRoomSnapshotCache';
+import {
+  type RenderableRoom,
+  type StreamingRoomCandidate,
+} from './worldStreamingModel';
 
-export type PlayableRoomSource =
-  | 'published'
-  | 'local_draft'
-  | 'live_construction_preview'
-  | 'saved_construction_draft';
-
-export interface StreamingRoomCandidate {
-  id: string;
-  coordinates: RoomCoordinates;
-  summary: WorldRoomSummary | null;
-  draft: RoomSnapshot | null;
-  sharedPreview: RoomSnapshot | null;
-  allowFullRoomLoad: boolean;
-  source: PlayableRoomSource;
-}
-
-export interface RenderableRoom {
-  id: string;
-  coordinates: RoomCoordinates;
-  room: RoomSnapshot;
-  source: PlayableRoomSource;
-}
+// Compatibility re-exports while callers migrate to the streaming model.
+export {
+  isStreamingRoomCandidateRenderable,
+  type PlayableRoomSource,
+  type RenderableRoom,
+  type StreamingRoomCandidate,
+} from './worldStreamingModel';
 
 /**
  * The world summary and the room snapshot endpoint no longer agree about the
@@ -94,17 +83,6 @@ function buildRoomSnapshotBatchKey(
 ): string {
   const canonicalReferences = references.map(serializeRoomSnapshotReference).sort();
   return JSON.stringify([detail, canonicalReferences]);
-}
-
-export function isStreamingRoomCandidateRenderable(
-  roomCandidate: Pick<StreamingRoomCandidate, 'draft' | 'sharedPreview' | 'summary'>,
-): boolean {
-  return (
-    roomCandidate.draft !== null ||
-    roomCandidate.sharedPreview !== null ||
-    roomCandidate.summary?.state === 'published' ||
-    roomCandidate.summary?.state === 'claimed_unpublished'
-  );
 }
 
 export class OverworldPreviewCache {

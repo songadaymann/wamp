@@ -5,7 +5,7 @@ import {
   isDynamicArcadeBody,
   type ArcadeObjectBody,
 } from './bodies';
-import type { LoadedRoomObject } from '../liveObjects';
+import type { LoadedRoomObject } from './model';
 
 const MOVING_PLATFORM_CARRY_MAX_UPWARD_PLAYER_SPEED = -60;
 const MOVING_PLATFORM_CARRY_EDGE_INSET_PX = 1;

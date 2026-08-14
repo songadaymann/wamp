@@ -235,6 +235,16 @@ describe('OverworldLiveObjectController spatial partitions', () => {
     expect(controller.findOverlappingLadder([room] as never)).toBe(nearLadder);
   });
 
+  it('keeps the first ladder when overlapping candidates are equally close', () => {
+    const playerBody = createBody(24, 8, 16, 24);
+    const firstLadder = createLiveObject('ladder', createBody(16, 0, 16, 51), 24, 26);
+    const secondLadder = createLiveObject('ladder', createBody(32, 0, 16, 51), 40, 26);
+    const room = createLoadedRoom('room', { x: 0, y: 0 }, [firstLadder, secondLadder]);
+    const controller = createController(playerBody);
+
+    expect(controller.findOverlappingLadder([room] as never)).toBe(firstLadder);
+  });
+
   it('rejects distant rooms and same-room bins for pushable and runtime-solid queries', () => {
     const playerBody = createBody(628, 100, 16, 24);
     const seamCrate = createLiveObject('crate', createBody(645, 104, 16, 16));
@@ -272,7 +282,9 @@ describe('OverworldLiveObjectController spatial partitions', () => {
     const room = createLoadedRoom('room', { x: 0, y: 0 }, [crate]);
     const controller = createController(playerBody, [room]);
     const harness = controller as unknown as {
-      refreshLiveObjectSpatialMembership(liveObject: LoadedRoomObject): void;
+      partitionIndex: {
+        refreshDynamicObject(liveObject: LoadedRoomObject): void;
+      };
     };
 
     expect(Array.from(controller.getPushableLiveObjectsInBounds(
@@ -282,7 +294,7 @@ describe('OverworldLiveObjectController spatial partitions', () => {
     crateBody.left = 660;
     crateBody.right = 676;
     crateBody.center.x = 668;
-    harness.refreshLiveObjectSpatialMembership(crate);
+    harness.partitionIndex.refreshDynamicObject(crate);
 
     expect(Array.from(controller.getPushableLiveObjectsInBounds(
       new MockRectangle(32, 32, 32, 32) as never,
@@ -299,17 +311,23 @@ describe('OverworldLiveObjectController spatial partitions', () => {
     const room = createLoadedRoom('room', { x: 0, y: 0 }, [crate, brick]);
     const controller = createController(playerBody, [room]);
     const partitionController = controller as unknown as {
-      getRoomLiveObjectPartition(loadedRoom: typeof room): object;
+      partitionIndex: {
+        getPushableObjects(loadedRoom: typeof room): readonly LoadedRoomObject[];
+        getRuntimeSolidObjects(loadedRoom: typeof room): readonly LoadedRoomObject[];
+      };
     };
 
     const firstPushables = Array.from(controller.getLoadedPushableLiveObjects());
     const firstSolids = Array.from(controller.getLoadedRuntimeSolidLiveObjects());
-    const firstPartition = partitionController.getRoomLiveObjectPartition(room);
+    const firstPushablePartition = partitionController.partitionIndex.getPushableObjects(room);
+    const firstSolidPartition = partitionController.partitionIndex.getRuntimeSolidObjects(room);
     const secondPushables = Array.from(controller.getLoadedPushableLiveObjects());
     const secondSolids = Array.from(controller.getLoadedRuntimeSolidLiveObjects());
-    const secondPartition = partitionController.getRoomLiveObjectPartition(room);
+    const secondPushablePartition = partitionController.partitionIndex.getPushableObjects(room);
+    const secondSolidPartition = partitionController.partitionIndex.getRuntimeSolidObjects(room);
 
-    expect(secondPartition).toBe(firstPartition);
+    expect(secondPushablePartition).toBe(firstPushablePartition);
+    expect(secondSolidPartition).toBe(firstSolidPartition);
     expect(firstPushables).toEqual([crate]);
     expect(firstSolids).toEqual([crate, brick]);
     expect(secondPushables).toEqual(firstPushables);
@@ -341,10 +359,10 @@ describe('OverworldLiveObjectController spatial partitions', () => {
         options: { key: string },
       ): LoadedRoomObject | null;
       triggerController: { applySwitchBlockStates(loadedRoom: typeof room): void };
-      liveObjectPartitionsByRoomId: Map<string, unknown>;
-      getRoomLiveObjectPartition(loadedRoom: typeof room): {
-        pushables: LoadedRoomObject[];
-        runtimeSolids: LoadedRoomObject[];
+      partitionIndex: {
+        partitionsByRoomId: Map<string, unknown>;
+        getPushableObjects(loadedRoom: typeof room): readonly LoadedRoomObject[];
+        getRuntimeSolidObjects(loadedRoom: typeof room): readonly LoadedRoomObject[];
       };
     };
     harness.createLiveObjectEntry = vi.fn((_loadedRoom, options) => (
@@ -367,10 +385,11 @@ describe('OverworldLiveObjectController spatial partitions', () => {
       expect(gameObject.body.enable).toBe(false);
     }
 
-    const beforeFinalize = harness.getRoomLiveObjectPartition(room);
-    expect(beforeFinalize.pushables).toEqual([crate]);
-    expect(beforeFinalize.runtimeSolids).toEqual([crate, brick]);
-    expect(harness.liveObjectPartitionsByRoomId.has(room.room.id)).toBe(true);
+    const beforeFinalizePushables = harness.partitionIndex.getPushableObjects(room);
+    const beforeFinalizeSolids = harness.partitionIndex.getRuntimeSolidObjects(room);
+    expect(beforeFinalizePushables).toEqual([crate]);
+    expect(beforeFinalizeSolids).toEqual([crate, brick]);
+    expect(harness.partitionIndex.partitionsByRoomId.has(room.room.id)).toBe(true);
 
     controller.finalizeLiveObjectCreation(room as never, true);
 
@@ -381,7 +400,7 @@ describe('OverworldLiveObjectController spatial partitions', () => {
     }
     expect(applySwitchBlockStates).toHaveBeenCalledOnce();
     expect(applySwitchBlockStates).toHaveBeenCalledWith(room);
-    expect(harness.liveObjectPartitionsByRoomId.has(room.room.id)).toBe(false);
+    expect(harness.partitionIndex.partitionsByRoomId.has(room.room.id)).toBe(false);
 
     controller.setLoadedRoomLiveObjectsDormant(room as never, false);
 
@@ -413,10 +432,12 @@ describe('OverworldLiveObjectController spatial partitions', () => {
     expect(inactiveHelper.body.enable).toBe(false);
     expect(applySwitchBlockStates).toHaveBeenCalledTimes(2);
 
-    const afterFinalize = harness.getRoomLiveObjectPartition(room);
-    expect(afterFinalize).not.toBe(beforeFinalize);
-    expect(afterFinalize.pushables).toEqual([crate]);
-    expect(afterFinalize.runtimeSolids).toEqual([crate, brick]);
+    const afterFinalizePushables = harness.partitionIndex.getPushableObjects(room);
+    const afterFinalizeSolids = harness.partitionIndex.getRuntimeSolidObjects(room);
+    expect(afterFinalizePushables).not.toBe(beforeFinalizePushables);
+    expect(afterFinalizeSolids).not.toBe(beforeFinalizeSolids);
+    expect(afterFinalizePushables).toEqual([crate]);
+    expect(afterFinalizeSolids).toEqual([crate, brick]);
   });
 
   it.each([

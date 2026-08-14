@@ -39,8 +39,6 @@ import { canPlacedObjectUseObjectPath } from '../../placedObjects/objectPaths';
 import { type EditorEditRuntime } from './editRuntime';
 import type { EditorInspectorState } from './uiBridge';
 import {
-  DEFAULT_NPC_DEFEAT_MODE,
-  DEFAULT_NPC_MODE,
   NPC_MODE_LABELS,
   getPlacedNpcMode,
   isNpcObjectId,
@@ -52,6 +50,13 @@ import {
   normalizeNpcPushable,
   type NpcMode,
 } from '../../npcs/model';
+import {
+  buildContainerInspectorState,
+  buildPressurePlateInspectorState,
+  createEmptyEditorInspectorState,
+  getContainerAcceptedContentsLabel,
+  getContainerName,
+} from './inspectorViewModel';
 
 type PinnedInspector = { kind: 'pressure' | 'container' | 'swordsman' | 'police' | 'npc'; instanceId: string } | null;
 
@@ -94,7 +99,7 @@ export class EditorInspectorController {
 
   hideTransientUi(): void {
     this.clearTransientObjectInspectorState();
-    this.renderInspector(this.createEmptyInspectorState());
+    this.renderInspector(createEmptyEditorInspectorState());
   }
 
   private clearTransientObjectInspectorState(): void {
@@ -520,7 +525,7 @@ export class EditorInspectorController {
       this.focusedPoliceInstanceId = null;
       this.focusedNpcInstanceId = null;
       this.pinInspector('container', placed.instanceId);
-      this.containerStatusText = `${this.getContainerName(placed.id)} placed. Select a ${this.getContainerAcceptedContentsLabel(placed.id)} and click it to fill the container.`;
+      this.containerStatusText = `${getContainerName(placed.id)} placed. Select a ${getContainerAcceptedContentsLabel(placed.id)} and click it to fill the container.`;
       this.renderContainerContentsPanel();
       return;
     }
@@ -567,7 +572,7 @@ export class EditorInspectorController {
       this.pressurePlateStatusText = `${this.getObjectLinkTargetLabel(removed.id)} removed. Linked objects were cleared.`;
     }
     if (canPlacedObjectBeContainer(removed)) {
-      this.containerStatusText = `${this.getContainerName(removed.id)} removed.`;
+      this.containerStatusText = `${getContainerName(removed.id)} removed.`;
     }
     if (removed.id === SWORDSMAN_AI_OBJECT_ID) {
       this.swordsmanStatusText = 'Sword Hunter removed.';
@@ -641,7 +646,7 @@ export class EditorInspectorController {
     if (this.editRuntime.setContainerContents(focused.instanceId, null)) {
       this.focusedContainerInstanceId = focused.instanceId;
       this.pinInspector('container', focused.instanceId);
-      this.containerStatusText = `${this.getContainerName(focused.id)} is now empty.`;
+      this.containerStatusText = `${getContainerName(focused.id)} is now empty.`;
       this.renderContainerContentsPanel();
     }
   }
@@ -838,51 +843,8 @@ export class EditorInspectorController {
     this.renderInspectorUi();
   }
 
-  private createEmptyInspectorState(): EditorInspectorState {
-    return {
-      visible: false,
-      pressureVisible: false,
-      pressureStatusText: '',
-      pressureConnectHidden: true,
-      pressureConnectDisabled: true,
-      pressureConnectTitle: '',
-      pressureClearHidden: true,
-      pressureClearDisabled: true,
-      pressureDoneLaterHidden: true,
-      containerVisible: false,
-      containerStatusText: '',
-      containerClearDisabled: true,
-      containerClearTitle: '',
-      swordsmanVisible: false,
-      swordsmanStatusText: '',
-      swordsmanObjectiveModeValue: DEFAULT_SWORDSMAN_OBJECTIVE_MODE,
-      swordsmanObjectiveModeDisabled: true,
-      swordsmanDefeatModeValue: DEFAULT_SWORDSMAN_DEFEAT_MODE,
-      swordsmanDefeatModeDisabled: true,
-      policeVisible: false,
-      policeStatusText: '',
-      policeBehaviorModeValue: DEFAULT_POLICE_BEHAVIOR_MODE,
-      policeBehaviorModeDisabled: true,
-      policePatrolShootsChecked: false,
-      policePatrolShootsHidden: true,
-      npcVisible: false,
-      npcStatusText: '',
-      npcModeValue: DEFAULT_NPC_MODE,
-      npcModeDisabled: true,
-      npcPushableChecked: false,
-      npcPushableHidden: true,
-      npcJumpFallChecked: false,
-      npcJumpFallHidden: true,
-      npcPlayerCollisionChecked: true,
-      npcFriendlyFireChecked: true,
-      npcNameValue: '',
-      npcDialogueValue: '',
-      npcDefeatModeValue: DEFAULT_NPC_DEFEAT_MODE,
-    };
-  }
-
   private renderInspectorUi(): void {
-    const hiddenState = this.createEmptyInspectorState();
+    const hiddenState = createEmptyEditorInspectorState();
     if (editorState.isPlaying) {
       this.renderInspector(hiddenState);
       return;
@@ -896,24 +858,21 @@ export class EditorInspectorController {
     if (source && (editorState.paletteMode === 'objects' || connectMode)) {
       const targets = this.getObjectLinkTargets(source);
       const eligibleTargetCount = this.editRuntime.getObjectLinkEligibleTargets(source.instanceId).length;
-      this.renderInspector({
-        ...hiddenState,
-        visible: true,
-        pressureVisible: true,
-        pressureStatusText:
+      const pressureStatusText =
           this.pressurePlateStatusText ??
           (connectMode
             ? this.getObjectLinkConnectStatus(source, eligibleTargetCount)
             : targets.length > 0
               ? this.getObjectLinkLinkedStatus(source, targets)
-              : `${this.getObjectLinkSourceLabel(source)} is not linked yet.`),
-        pressureConnectHidden: connectMode,
-        pressureConnectDisabled: connectMode || eligibleTargetCount === 0,
-        pressureConnectTitle: eligibleTargetCount === 0 ? this.getObjectLinkNoTargetsTitle(source) : '',
-        pressureClearHidden: connectMode,
-        pressureClearDisabled: targets.length === 0,
-        pressureDoneLaterHidden: !connectMode,
-      });
+              : `${this.getObjectLinkSourceLabel(source)} is not linked yet.`);
+      this.renderInspector(buildPressurePlateInspectorState({
+        statusText: pressureStatusText,
+        connectMode,
+        targetSummary: targets.length > 0 ? pressureStatusText : null,
+        eligibleTargetCount,
+        connectTitle: this.getObjectLinkNoTargetsTitle(source),
+        allowReconnectWithTarget: true,
+      }));
       return;
     }
 
@@ -923,28 +882,21 @@ export class EditorInspectorController {
         : this.getFocusedContainer();
     if (focusedContainer && editorState.paletteMode === 'objects' && !this.connectingPressurePlateInstanceId) {
       const selectedObject = editorState.selectedObjectId
-        ? getEditorObjectConfigById(editorState.selectedObjectId)
+        ? getEditorObjectConfigById(editorState.selectedObjectId) ?? null
         : null;
       const selectedLooksLikeContents =
         selectedObject?.category === 'enemy' || selectedObject?.category === 'collectible';
       const canStoreSelected = canObjectBeStoredInContainer(focusedContainer.id, selectedObject);
       const currentContentsLabel = this.editRuntime.getContainerContentsLabel(focusedContainer);
-      this.renderInspector({
-        ...hiddenState,
-        visible: true,
-        containerVisible: true,
-        containerStatusText:
-          this.containerStatusText ??
-          (canStoreSelected && selectedObject
-            ? `Click this ${this.getContainerLabel(focusedContainer.id)} to stash ${selectedObject.name} inside.`
-            : selectedLooksLikeContents && selectedObject
-              ? `${this.getContainerName(focusedContainer.id)} can only hold ${this.getContainerAcceptedContentsLabel(focusedContainer.id)}.`
-              : currentContentsLabel
-                ? `${this.getContainerName(focusedContainer.id)} currently holds ${currentContentsLabel}. Select a ${this.getContainerAcceptedContentsLabel(focusedContainer.id)} and click it to change the contents.`
-                : `${this.getContainerName(focusedContainer.id)} is empty. Select a ${this.getContainerAcceptedContentsLabel(focusedContainer.id)} from the object list, then click it to fill the container.`),
-        containerClearDisabled: !focusedContainer.containedObjectId,
-        containerClearTitle: focusedContainer.containedObjectId ? '' : 'This container is empty.',
-      });
+      this.renderInspector(buildContainerInspectorState({
+        containerObjectId: focusedContainer.id,
+        statusText: this.containerStatusText,
+        selectedObject,
+        selectedLooksLikeContents,
+        canStoreSelected,
+        currentContentsLabel,
+        hasContents: Boolean(focusedContainer.containedObjectId),
+      }));
       return;
     }
 
@@ -1114,13 +1066,13 @@ export class EditorInspectorController {
     }
 
     if (!canObjectBeStoredInContainer(focused.id, selectedObject)) {
-      this.containerStatusText = `${this.getContainerName(focused.id)} can only hold ${this.getContainerAcceptedContentsLabel(focused.id)}.`;
+      this.containerStatusText = `${getContainerName(focused.id)} can only hold ${getContainerAcceptedContentsLabel(focused.id)}.`;
       this.renderContainerContentsPanel();
       return true;
     }
 
     if (this.editRuntime.setContainerContents(focused.instanceId, selectedObject.id)) {
-      this.containerStatusText = `${this.getContainerName(focused.id)} now holds ${selectedObject.name}.`;
+      this.containerStatusText = `${getContainerName(focused.id)} now holds ${selectedObject.name}.`;
       this.renderContainerContentsPanel();
       return true;
     }
@@ -1352,36 +1304,6 @@ export class EditorInspectorController {
       default:
         return getObjectById(objectId)?.name ?? 'object';
     }
-  }
-
-  private getContainerLabel(objectId: string): string {
-    switch (objectId) {
-      case 'cage':
-        return 'cage';
-      case 'brick_box':
-        return 'brick box';
-      case 'crate':
-        return 'crate';
-      default:
-        return 'treasure chest';
-    }
-  }
-
-  private getContainerName(objectId: string): string {
-    switch (objectId) {
-      case 'cage':
-        return 'This cage';
-      case 'brick_box':
-        return 'This brick box';
-      case 'crate':
-        return 'This crate';
-      default:
-        return 'This treasure chest';
-    }
-  }
-
-  private getContainerAcceptedContentsLabel(objectId: string): string {
-    return objectId === 'cage' ? 'enemies or crates' : 'collectibles';
   }
 
   private openSignTextEditor(placed: PlacedObject): void {

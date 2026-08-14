@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DynamicOverlayReadinessCoordinator } from './dynamicOverlayReadinessCoordinator';
 import { OverworldWorldStreamingController } from './worldStreaming';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -66,8 +67,7 @@ interface ChangedCompactChunkHarness {
     maxChunkY: number;
   };
   chunkWindow: object;
-  dynamicOverlayReadinessGeneration: number;
-  dynamicOverlayReadinessAbortController: AbortController | null;
+  dynamicOverlayReadiness: DynamicOverlayReadinessCoordinator;
   legacyCompactRefreshGeneration: number;
   options: {
     worldRepository: {
@@ -313,6 +313,8 @@ describe('world streaming dynamic-overlay fallback', () => {
       }],
     };
     const refreshVisibleRoomsFromCache = vi.fn();
+    const dynamicOverlayReadiness = new DynamicOverlayReadinessCoordinator();
+    dynamicOverlayReadiness.beginReadiness(7);
     const controller = Object.create(
       OverworldWorldStreamingController.prototype,
     ) as ChangedCompactChunkHarness;
@@ -323,8 +325,7 @@ describe('world streaming dynamic-overlay fallback', () => {
       chunkWindowRequestInFlight: false,
       loadedChunkBounds: chunkBounds,
       chunkWindow: {},
-      dynamicOverlayReadinessGeneration: 7,
-      dynamicOverlayReadinessAbortController: new AbortController(),
+      dynamicOverlayReadiness,
       legacyCompactRefreshGeneration: -1,
       options: {
         worldRepository: {
@@ -341,9 +342,9 @@ describe('world streaming dynamic-overlay fallback', () => {
       .resolves.toBe('updated');
 
     expect(controller.loadGeneration).toBe(8);
-    expect(controller.dynamicOverlayReadinessGeneration).toBe(8);
-    expect(controller.dynamicOverlayReadinessAbortController).not.toBeNull();
-    expect(controller.dynamicOverlayReadinessAbortController?.signal.aborted).toBe(false);
+    expect(controller.dynamicOverlayReadiness.getReadinessGeneration()).toBe(8);
+    expect(controller.dynamicOverlayReadiness.getReadinessSignal()).not.toBeNull();
+    expect(controller.dynamicOverlayReadiness.getReadinessSignal()?.aborted).toBe(false);
     expect(refreshVisibleRoomsFromCache).toHaveBeenCalledOnce();
   });
 });

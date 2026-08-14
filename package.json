@@ -6,6 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run test && npm run typecheck && npm run world-tiles:types:check && npm run build",
+    "dead-code:report": "knip --no-exit-code",
     "lint": "eslint src partykit scripts/api_performance_probe.mjs scripts/backfill_badges.mjs scripts/overworld_tile_pyramid_probe.mjs scripts/overworld_tile_pyramid_probe_helpers.mjs scripts/playable_content_index.mjs scripts/runtime_performance_trace.mjs scripts/runtime_performance_trace.test.ts scripts/smoke_boygame_tileset.mjs scripts/smoke_jungle_vines.mjs scripts/smoke_police_enemies.mjs scripts/webgl_recovery_probe.mjs scripts/world_tile_parity_probe.mjs scripts/world_tiles.mjs --max-warnings=0",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -105,6 +106,7 @@
     "@cloudflare/workers-types": "^4.20260702.1",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.7.0",
+    "knip": "6.32.2",
     "partykit": "^0.0.115",
     "playwright": "^1.59.1",
     "typescript": "^5.7.0",

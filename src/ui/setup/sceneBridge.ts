@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { CourseGoalType, CourseRoomRef } from '../../courses/model';
+import type { CourseGoalType } from '../../courses/model';
 import type { CourseEditorUiState } from '../../courses/editor/state';
 import type { CustomSpriteDefinition } from '../../customSprites/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
@@ -223,44 +223,6 @@ export interface CourseComposerSceneBridge {
 
 export type CourseMarkerPlacementMode = 'start' | 'checkpoint' | 'finish';
 
-export type CourseComposerState = {
-  courseId: string | null;
-  title: string;
-  roomRefs: CourseRoomRef[];
-  goalType: CourseGoalType | null;
-  timeLimitSeconds: number | null;
-  requiredCount: number | null;
-  survivalSeconds: number | null;
-  startPointRoomId: string | null;
-  checkpointCount: number;
-  finishRoomId: string | null;
-  selectedRoomInDraft: boolean;
-  selectedRoomEligible: boolean;
-  selectedRoomId: string | null;
-  canEdit: boolean;
-  published: boolean;
-  publishedVersion: number | null;
-  publishedRoomCount: number;
-  publishedStateText: string;
-  publishedDraftWarningText: string | null;
-  cellCount: number;
-  cellLimit: number;
-  cellUsageText: string;
-  cellLimitReached: boolean;
-  dirty: boolean;
-  statusText: string | null;
-  canEditSelectedRoom: boolean;
-  canTestDraft: boolean;
-  testDraftDisabledReason: string | null;
-  canSaveDraft: boolean;
-  saveDraftDisabledReason: string | null;
-  canPublishCourse: boolean;
-  publishCourseDisabledReason: string | null;
-  showUnpublishCourse: boolean;
-  canUnpublishCourse: boolean;
-  unpublishCourseDisabledReason: string | null;
-};
-
 export interface OverworldSceneBridge {
   getPerformanceAdvisorSuggestion?: () => PerformanceAdvisorSuggestion | null;
   canPresentPerformanceAdvisorSuggestion?: () => boolean;
@@ -299,17 +261,6 @@ export interface OverworldSceneBridge {
   toggleRoomComments?: () => void;
   openCourseComposer?: () => Promise<void> | void;
   openCourseEditor?: () => Promise<void> | void;
-  closeCourseComposer?: () => void;
-  getCourseComposerState?: () => CourseComposerState | null;
-  selectCourseRoomInComposer?: (roomId: string) => void;
-  setCourseTitle?: (title: string | null) => void;
-  addSelectedRoomToCourseDraft?: () => void;
-  removeSelectedRoomFromCourseDraft?: () => void;
-  editSelectedCourseRoom?: () => boolean;
-  testDraftCourse?: () => Promise<void> | void;
-  saveCourseDraft?: () => Promise<void>;
-  publishCourseDraft?: () => Promise<void>;
-  unpublishCourse?: () => Promise<void>;
   getMobilePortraitCameraTuning?: () => MobilePortraitCameraTuningSnapshot;
   setMobilePortraitCameraTuning?: (
     input: MobilePortraitCameraTuningInput,

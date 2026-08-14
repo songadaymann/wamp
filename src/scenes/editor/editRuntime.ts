@@ -17,9 +17,7 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   editorState,
-  getPlacedObjectLayer,
   getObjectById,
-  getObjectDefaultFrame,
   getObjectDisplayOffset,
   getObjectDisplayScale,
   getObjectPlacementPointForTile,
@@ -46,7 +44,6 @@ import {
   type SwordsmanObjectiveMode,
 } from '../../enemies/swordsmanObjectives';
 import {
-  ensureCustomSpriteTexture,
   getCustomSpriteDefinitionByObjectId,
   getCustomSpriteDefinitionsForPlacedObjects,
 } from '../../customSprites/registry';
@@ -81,15 +78,9 @@ import {
   getRoomGoalPublishValidationError,
   goalSupportsTimeLimit,
   normalizeRoomGoalIntroText,
-  type CheckpointSprintGoal,
-  type GoalMarkerPoint,
   type RoomGoal,
   type RoomGoalType,
 } from '../../goals/roomGoals';
-import {
-  createGoalMarkerFlagSprite,
-  type GoalMarkerFlagVariant,
-} from '../../goals/markerFlags';
 import {
   cloneRoomLightingSettings,
   type RoomLightingSettings,
@@ -119,6 +110,30 @@ import {
   normalizeNpcName,
   type NpcMode,
 } from '../../npcs/model';
+import { EditorHistory } from './history';
+import {
+  buildEditorClipboardState,
+  cloneEditorClipboardState,
+  planEditorClipboardPaste,
+  type EditorClipboardState,
+} from './clipboard';
+import {
+  clonePlacedObjectDocument,
+  removePlacedObjectFromDocument,
+} from './placedObjectDocument';
+import {
+  clearRoomGoalMarkers,
+  getRoomGoalSummaryText,
+  placeRoomGoalMarker,
+  removeRoomGoalMarkerAt,
+  roomGoalUsesMarkers,
+  withNpcQuestType,
+  withRoomGoalRequiredCount,
+  withRoomGoalSurvivalSeconds,
+  withRoomGoalTimeLimitSeconds,
+  type GoalPlacementMode,
+} from './goalDocument';
+import { EditorDocumentPresentationController } from './documentPresentationController';
 
 interface TileAction {
   layer: LayerName;
@@ -155,8 +170,6 @@ type UndoAction =
   | { kind: 'goal'; action: GoalAction }
   | { kind: 'music'; action: MusicAction };
 
-export type GoalPlacementMode = 'exit' | 'checkpoint' | 'finish' | 'npc' | 'npc_destination' | null;
-
 interface EditorRoomSnapshotMetadata {
   roomId: string;
   coordinates: RoomCoordinates;
@@ -167,13 +180,8 @@ interface EditorRoomSnapshotMetadata {
   publishedAt: string | null;
 }
 
-export interface EditorClipboardState {
-  sourceLayer: LayerName;
-  width: number;
-  height: number;
-  tiles: number[][];
-  occupiedMask: boolean[][];
-}
+export type { EditorClipboardState } from './clipboard';
+export type { GoalPlacementMode } from './goalDocument';
 
 interface EditorEditRuntimeHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
@@ -200,10 +208,7 @@ interface EditorEditRuntimeHost {
 }
 
 export class EditorEditRuntime {
-  private objectSprites: Phaser.GameObjects.Sprite[] = [];
-  private spawnMarkerSprite: Phaser.GameObjects.Sprite | null = null;
-  private goalMarkerSprites: Phaser.GameObjects.Sprite[] = [];
-  private goalMarkerLabels: Phaser.GameObjects.Text[] = [];
+  private readonly documentPresentation: EditorDocumentPresentationController;
   private roomGoal: RoomGoal | null = null;
   private roomGoalIntroText: string | null = null;
   private roomSpawnPoint: RoomSpawnPoint | null = null;
@@ -211,8 +216,7 @@ export class EditorEditRuntime {
   private roomDirty = false;
   private lastDirtyAt = 0;
   private goalPlacementMode: GoalPlacementMode = null;
-  private undoStack: UndoAction[] = [];
-  private redoStack: UndoAction[] = [];
+  private readonly history = new EditorHistory<UndoAction>();
   private currentBatch: TileAction[] = [];
   private clipboardState: EditorClipboardState | null = null;
   private customRoomTiles: CustomRoomTileDefinition[] = [];
@@ -220,22 +224,27 @@ export class EditorEditRuntime {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly host: EditorEditRuntimeHost,
-  ) {}
+  ) {
+    this.documentPresentation = new EditorDocumentPresentationController(
+      scene,
+      () => this.host.syncBackgroundCameraIgnores(),
+    );
+  }
 
   get placedObjectSprites(): Phaser.GameObjects.Sprite[] {
-    return this.objectSprites;
+    return this.documentPresentation.placedObjectSprites;
   }
 
   get currentSpawnMarkerSprite(): Phaser.GameObjects.Sprite | null {
-    return this.spawnMarkerSprite;
+    return this.documentPresentation.currentSpawnMarkerSprite;
   }
 
   get currentGoalMarkerSprites(): Phaser.GameObjects.Sprite[] {
-    return this.goalMarkerSprites;
+    return this.documentPresentation.currentGoalMarkerSprites;
   }
 
   get currentGoalMarkerLabels(): Phaser.GameObjects.Text[] {
-    return this.goalMarkerLabels;
+    return this.documentPresentation.currentGoalMarkerLabels;
   }
 
   get currentRoomGoal(): RoomGoal | null {
@@ -283,27 +292,11 @@ export class EditorEditRuntime {
   }
 
   get currentClipboardState(): EditorClipboardState | null {
-    return this.clipboardState
-      ? {
-          sourceLayer: this.clipboardState.sourceLayer,
-          width: this.clipboardState.width,
-          height: this.clipboardState.height,
-          tiles: this.clipboardState.tiles.map((row) => [...row]),
-          occupiedMask: this.clipboardState.occupiedMask.map((row) => [...row]),
-        }
-      : null;
+    return cloneEditorClipboardState(this.clipboardState);
   }
 
   setClipboardState(state: EditorClipboardState | null): void {
-    this.clipboardState = state
-      ? {
-          sourceLayer: state.sourceLayer,
-          width: state.width,
-          height: state.height,
-          tiles: state.tiles.map((row) => [...row]),
-          occupiedMask: state.occupiedMask.map((row) => [...row]),
-        }
-      : null;
+    this.clipboardState = cloneEditorClipboardState(state);
   }
 
   initializeGraphics(): void {
@@ -344,23 +337,7 @@ export class EditorEditRuntime {
   }
 
   reset(): void {
-    for (const sprite of this.objectSprites) {
-      sprite.destroy();
-    }
-    this.objectSprites = [];
-
-    for (const sprite of this.goalMarkerSprites) {
-      sprite.destroy();
-    }
-    this.goalMarkerSprites = [];
-
-    for (const label of this.goalMarkerLabels) {
-      label.destroy();
-    }
-    this.goalMarkerLabels = [];
-
-    this.spawnMarkerSprite?.destroy();
-    this.spawnMarkerSprite = null;
+    this.documentPresentation.reset();
 
     this.roomGoal = null;
     this.roomGoalIntroText = null;
@@ -369,8 +346,7 @@ export class EditorEditRuntime {
     this.roomDirty = false;
     this.lastDirtyAt = 0;
     this.goalPlacementMode = null;
-    this.undoStack = [];
-    this.redoStack = [];
+    this.history.reset();
     this.currentBatch = [];
     this.clipboardState = null;
     this.customRoomTiles = [];
@@ -424,8 +400,7 @@ export class EditorEditRuntime {
     this.rebuildObjectSprites();
     this.host.updateGoalUi();
 
-    this.undoStack = [];
-    this.redoStack = [];
+    this.history.reset();
     this.currentBatch = [];
     this.roomDirty = false;
     this.lastDirtyAt = 0;
@@ -441,49 +416,20 @@ export class EditorEditRuntime {
       return false;
     }
 
-    const minX = Math.max(0, Math.min(x1, x2));
-    const minY = Math.max(0, Math.min(y1, y2));
-    const maxX = Math.min(ROOM_WIDTH - 1, Math.max(x1, x2));
-    const maxY = Math.min(ROOM_HEIGHT - 1, Math.max(y1, y2));
-    const width = maxX - minX + 1;
-    const height = maxY - minY + 1;
-    if (width <= 0 || height <= 0) {
-      return false;
-    }
-
-    const tiles: number[][] = [];
-    const occupiedMask: boolean[][] = [];
-    let hasOccupiedTiles = false;
-
-    for (let dy = 0; dy < height; dy += 1) {
-      const tileRow: number[] = [];
-      const occupiedRow: boolean[] = [];
-      for (let dx = 0; dx < width; dx += 1) {
-        const existingTile = layer.getTileAt(minX + dx, minY + dy);
-        const encodedTileValue = existingTile
+    this.clipboardState = buildEditorClipboardState(
+      editorState.activeLayer,
+      x1,
+      y1,
+      x2,
+      y2,
+      (x, y) => {
+        const existingTile = layer.getTileAt(x, y);
+        return existingTile
           ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
           : -1;
-        const occupied = encodedTileValue >= 0;
-        tileRow.push(encodedTileValue);
-        occupiedRow.push(occupied);
-        hasOccupiedTiles ||= occupied;
-      }
-      tiles.push(tileRow);
-      occupiedMask.push(occupiedRow);
-    }
-
-    if (!hasOccupiedTiles) {
-      return false;
-    }
-
-    this.clipboardState = {
-      sourceLayer: editorState.activeLayer,
-      width,
-      height,
-      tiles,
-      occupiedMask,
-    };
-    return true;
+      },
+    );
+    return this.clipboardState !== null;
   }
 
   pasteClipboardAt(baseTileX: number, baseTileY: number): boolean {
@@ -498,23 +444,11 @@ export class EditorEditRuntime {
     }
 
     let changed = false;
-    for (let dy = 0; dy < clipboard.height; dy += 1) {
-      for (let dx = 0; dx < clipboard.width; dx += 1) {
-        if (!clipboard.occupiedMask[dy]?.[dx]) {
-          continue;
-        }
-
-        const tileX = baseTileX + dx;
-        const tileY = baseTileY + dy;
-        if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
-          continue;
-        }
-
-        const newGid = clipboard.tiles[dy]?.[dx] ?? -1;
-        if (newGid < 0) {
-          continue;
-        }
-
+    for (const { x: tileX, y: tileY, encodedTileValue: newGid } of planEditorClipboardPaste(
+      clipboard,
+      baseTileX,
+      baseTileY,
+    )) {
         const existingTile = layer.getTileAt(tileX, tileY);
         const oldGid = existingTile
           ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
@@ -538,7 +472,6 @@ export class EditorEditRuntime {
           newGid,
         });
         changed = true;
-      }
     }
 
     return changed;
@@ -640,8 +573,7 @@ export class EditorEditRuntime {
     }
 
     const placedTileCount = this.currentBatch.filter((action) => action.newGid >= 0).length;
-    this.undoStack.push({ kind: 'tiles', actions: [...this.currentBatch] });
-    this.redoStack = [];
+    this.history.record({ kind: 'tiles', actions: [...this.currentBatch] });
     this.currentBatch = [];
     this.markRoomDirty();
     this.host.recordBuildPlacement(placedTileCount);
@@ -666,14 +598,13 @@ export class EditorEditRuntime {
     }
 
     this.roomMusic = cloneRoomMusic(normalizedNext);
-    this.undoStack.push({
+    this.history.record({
       kind: 'music',
       action: {
         previous,
         next: cloneRoomMusic(normalizedNext),
       },
     });
-    this.redoStack = [];
     this.markRoomDirty();
     return cloneRoomMusic(this.roomMusic);
   }
@@ -683,7 +614,7 @@ export class EditorEditRuntime {
   }
 
   private clonePlacedObjects(placedObjects: PlacedObject[] = this.host.getPlacedObjects()): PlacedObject[] {
-    return placedObjects.map((placed) => ({ ...placed }));
+    return clonePlacedObjectDocument(placedObjects);
   }
 
   placeTileAt(worldX: number, worldY: number): void {
@@ -811,8 +742,7 @@ export class EditorEditRuntime {
       return;
     }
 
-    this.undoStack.push({ kind: 'tiles', actions });
-    this.redoStack = [];
+    this.history.record({ kind: 'tiles', actions });
     this.markRoomDirty();
   }
 
@@ -851,8 +781,7 @@ export class EditorEditRuntime {
       return;
     }
 
-    this.undoStack.push({ kind: 'tiles', actions });
-    this.redoStack = [];
+    this.history.record({ kind: 'tiles', actions });
     this.markRoomDirty();
   }
 
@@ -867,11 +796,10 @@ export class EditorEditRuntime {
     }
 
     this.host.setPlacedObjects([]);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: [] },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
   }
@@ -1063,11 +991,10 @@ export class EditorEditRuntime {
           .concat(placed)
       : [...previous, placed];
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     this.host.recordBuildPlacement(1);
@@ -1114,18 +1041,14 @@ export class EditorEditRuntime {
     }
 
     const previous = this.clonePlacedObjects();
-    const removed = previous[bestIndex];
-    const next = previous
-      .filter((_, index) => index !== bestIndex)
-      .map((placed) =>
-        this.removeLinkedTargetFromPlacedObject(placed, removed.instanceId)
-      );
+    const removal = removePlacedObjectFromDocument(previous, previous[bestIndex].instanceId);
+    const removed = removal.removed!;
+    const next = removal.placedObjects;
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return removed;
@@ -1144,66 +1067,12 @@ export class EditorEditRuntime {
   }
 
   rebuildObjectSprites(): void {
-    for (const sprite of this.objectSprites) {
-      sprite.destroy();
-    }
-    this.objectSprites = [];
-
-    for (const placed of this.host.getPlacedObjects()) {
-      const objectConfig = getEditorObjectConfigById(placed.id);
-      if (!objectConfig) {
-        continue;
-      }
-
-      const worldPoint = this.toWorldPoint(placed.x, placed.y);
-      ensureCustomSpriteTexture(this.scene, objectConfig);
-      const displayOffset = getObjectDisplayOffset(objectConfig);
-      const sprite = this.scene.add.sprite(
-        worldPoint.x + displayOffset.x,
-        worldPoint.y + displayOffset.y,
-        objectConfig.id,
-        0,
-      );
-      sprite.setDepth(this.getPlacedObjectEditorDepth(placed));
-      sprite.setOrigin(0.5, 0.5);
-      sprite.setScale(getObjectDisplayScale(objectConfig));
-      if (objectConfig.frameCount > 1 && objectConfig.fps > 0) {
-        const animKey = `${objectConfig.id}_anim`;
-        if (this.scene.anims.exists(animKey)) {
-          sprite.play(animKey);
-        }
-      } else {
-        sprite.setFrame(getObjectDefaultFrame(objectConfig));
-      }
-      if (placed.id === 'door_metal') {
-        sprite.setTint(0xb8c4d8);
-      }
-      if (placed.id === 'trapdoor_metal') {
-        sprite.setTint(0xb8c4d8);
-      }
-      if (placed.id === 'blast_door') {
-        sprite.setTint(0xb8c4d8);
-      }
-      this.applyPlacedObjectFacing(sprite, objectConfig, placed);
-      this.objectSprites.push(sprite);
-    }
-
-    this.spawnMarkerSprite?.destroy();
-    this.spawnMarkerSprite = null;
-    if (this.roomSpawnPoint) {
-      const worldPoint = this.toWorldPoint(this.roomSpawnPoint.x, this.roomSpawnPoint.y);
-      this.spawnMarkerSprite = this.scene.add.sprite(
-        worldPoint.x,
-        worldPoint.y,
-        'spawn_point',
-        0,
-      );
-      this.spawnMarkerSprite.setOrigin(0.5, 1);
-      this.spawnMarkerSprite.setDepth(26);
-      this.spawnMarkerSprite.setAlpha(0.92);
-    }
-
-    this.redrawGoalMarkers();
+    this.documentPresentation.rebuild({
+      origin: this.getRoomOrigin(),
+      placedObjects: this.host.getPlacedObjects(),
+      spawnPoint: this.roomSpawnPoint,
+      goal: this.roomGoal,
+    });
     this.host.updateGoalUi();
     this.host.syncBackgroundCameraIgnores();
   }
@@ -1311,11 +1180,10 @@ export class EditorEditRuntime {
         : placed
     );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
@@ -1352,11 +1220,10 @@ export class EditorEditRuntime {
         : placed
     );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.markRoomDirty();
     return true;
   }
@@ -1395,11 +1262,10 @@ export class EditorEditRuntime {
         : placed
     );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.markRoomDirty();
     return true;
   }
@@ -1438,11 +1304,10 @@ export class EditorEditRuntime {
         : placed
     );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.markRoomDirty();
     return true;
   }
@@ -1480,11 +1345,10 @@ export class EditorEditRuntime {
 
     const next = previous.map((placed, index) => index === policeIndex ? nextPolice : placed);
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
@@ -1568,11 +1432,10 @@ export class EditorEditRuntime {
 
     const next = previous.map((placed, index) => index === npcIndex ? nextNpc : placed);
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
@@ -1636,11 +1499,10 @@ export class EditorEditRuntime {
     }
 
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
@@ -1688,11 +1550,10 @@ export class EditorEditRuntime {
         : placed
     );
     this.host.setPlacedObjects(next);
-    this.undoStack.push({
+    this.history.record({
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
     return true;
@@ -1791,31 +1652,6 @@ export class EditorEditRuntime {
     return getObjectById(placed.containedObjectId)?.name ?? null;
   }
 
-  private applyPlacedObjectFacing(
-    sprite: Phaser.GameObjects.Sprite,
-    objectConfig: ReturnType<typeof getObjectById>,
-    placed: PlacedObject
-  ): void {
-    if (!objectConfig?.facingDirection || !placed.facing) {
-      sprite.setFlipX(false);
-      return;
-    }
-
-    sprite.setFlipX(objectConfig.facingDirection !== placed.facing);
-  }
-
-  private getPlacedObjectEditorDepth(placed: PlacedObject): number {
-    switch (getPlacedObjectLayer(placed)) {
-      case 'background':
-        return 5;
-      case 'foreground':
-        return 60;
-      case 'terrain':
-      default:
-        return 25;
-    }
-  }
-
   setGoalType(nextType: RoomGoalType | null): void {
     if (!this.guardEditable()) {
       return;
@@ -1832,13 +1668,7 @@ export class EditorEditRuntime {
       return;
     }
 
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (!nextGoal || !goalSupportsTimeLimit(nextGoal.type) || nextGoal.type === 'survival') {
-      return;
-    }
-
-    nextGoal.timeLimitMs = seconds && seconds > 0 ? Math.round(seconds * 1000) : null;
-    this.updateRoomGoal(nextGoal);
+    this.updateRoomGoal(withRoomGoalTimeLimitSeconds(this.roomGoal, seconds));
   }
 
   setGoalRequiredCount(requiredCount: number): void {
@@ -1855,19 +1685,7 @@ export class EditorEditRuntime {
       return;
     }
 
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (
-      !nextGoal ||
-      (
-        nextGoal.type !== 'collect_target' &&
-        !(nextGoal.type === 'npc_quest' && nextGoal.questType === 'give')
-      )
-    ) {
-      return;
-    }
-
-    nextGoal.requiredCount = Math.max(1, Math.round(requiredCount));
-    this.updateRoomGoal(nextGoal);
+    this.updateRoomGoal(withRoomGoalRequiredCount(this.roomGoal, requiredCount));
   }
 
   setGoalSurvivalSeconds(seconds: number): void {
@@ -1884,32 +1702,15 @@ export class EditorEditRuntime {
       return;
     }
 
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (
-      !nextGoal ||
-      (
-        nextGoal.type !== 'survival' &&
-        !(nextGoal.type === 'npc_quest' && nextGoal.questType === 'protect')
-      )
-    ) {
-      return;
-    }
-
-    nextGoal.durationMs = Math.max(1, Math.round(seconds)) * 1000;
-    this.updateRoomGoal(nextGoal);
+    this.updateRoomGoal(withRoomGoalSurvivalSeconds(this.roomGoal, seconds));
   }
 
   setNpcQuestType(questType: 'protect' | 'escort' | 'give'): void {
     if (!this.guardEditable() || this.roomGoal?.type !== 'npc_quest') {
       return;
     }
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (!nextGoal || nextGoal.type !== 'npc_quest') {
-      return;
-    }
-    nextGoal.questType = questType;
     this.goalPlacementMode = null;
-    this.updateRoomGoal(nextGoal);
+    this.updateRoomGoal(withNpcQuestType(this.roomGoal, questType));
   }
 
   setGoalIntroText(nextText: string | null): void {
@@ -1934,7 +1735,7 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
-    if (!this.goalUsesMarkers(this.roomGoal)) {
+    if (!roomGoalUsesMarkers(this.roomGoal)) {
       this.goalPlacementMode = null;
       this.host.updateGoalUi();
       return;
@@ -1948,27 +1749,12 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
-    if (!this.goalUsesMarkers(this.roomGoal)) {
+    if (!roomGoalUsesMarkers(this.roomGoal)) {
       return;
-    }
-
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (!nextGoal) {
-      return;
-    }
-
-    if (nextGoal.type === 'reach_exit') {
-      nextGoal.exit = null;
-    } else if (nextGoal.type === 'checkpoint_sprint') {
-      nextGoal.checkpoints = [];
-      nextGoal.finish = null;
-    } else if (nextGoal.type === 'npc_quest') {
-      nextGoal.npcInstanceId = null;
-      nextGoal.destination = null;
     }
 
     this.goalPlacementMode = null;
-    this.updateRoomGoal(nextGoal);
+    this.updateRoomGoal(clearRoomGoalMarkers(this.roomGoal!));
   }
 
   getGoalEditorState(): {
@@ -1994,19 +1780,7 @@ export class EditorEditRuntime {
     }
 
     const point = createGoalMarkerPointFromTile(tileX, tileY);
-    const nextGoal = cloneRoomGoal(this.roomGoal);
-    if (!nextGoal) {
-      return;
-    }
-
-    if (nextGoal.type === 'reach_exit' && this.goalPlacementMode === 'exit') {
-      nextGoal.exit = point;
-      this.goalPlacementMode = null;
-      this.updateRoomGoal(nextGoal);
-      return;
-    }
-
-    if (nextGoal.type === 'npc_quest') {
+    if (this.roomGoal.type === 'npc_quest') {
       if (this.goalPlacementMode === 'npc') {
         const origin = this.getRoomOrigin();
         const worldX = origin.x + tileX * TILE_SIZE + TILE_SIZE / 2;
@@ -2018,170 +1792,67 @@ export class EditorEditRuntime {
             return config?.category === 'npc' && this.getPlacedObjectBounds(placed).contains(worldX, worldY);
           });
         if (linkedNpc) {
-          nextGoal.npcInstanceId = linkedNpc.instanceId;
-          this.goalPlacementMode = null;
-          this.updateRoomGoal(nextGoal);
+          const mutation = placeRoomGoalMarker(
+            this.roomGoal,
+            this.goalPlacementMode,
+            point,
+            linkedNpc.instanceId,
+          );
+          if (mutation) {
+            this.goalPlacementMode = mutation.placementComplete ? null : this.goalPlacementMode;
+            this.updateRoomGoal(mutation.goal);
+          }
         } else {
           this.host.updatePersistenceStatus('Click an NPC to link it to this goal.');
         }
         return;
       }
-      if (this.goalPlacementMode === 'npc_destination') {
-        nextGoal.destination = point;
-        this.goalPlacementMode = null;
-        this.updateRoomGoal(nextGoal);
-      }
-      return;
     }
 
-    if (nextGoal.type !== 'checkpoint_sprint') {
+    const mutation = placeRoomGoalMarker(this.roomGoal, this.goalPlacementMode, point);
+    if (!mutation) {
       return;
     }
-
-    if (this.goalPlacementMode === 'checkpoint') {
-      nextGoal.checkpoints = [...nextGoal.checkpoints, point];
-      this.updateRoomGoal(nextGoal);
-      return;
-    }
-
-    if (this.goalPlacementMode === 'finish') {
-      nextGoal.finish = point;
-      this.goalPlacementMode = null;
-      this.updateRoomGoal(nextGoal);
-    }
+    this.goalPlacementMode = mutation.placementComplete ? null : this.goalPlacementMode;
+    this.updateRoomGoal(mutation.goal);
   }
 
   removeGoalMarkerAt(worldX: number, worldY: number): boolean {
     if (!this.guardEditable()) {
       return false;
     }
-    if (!this.roomGoal) {
-      return false;
-    }
-
-    if (this.roomGoal.type === 'reach_exit' && this.roomGoal.exit) {
-      const distance = Math.hypot(this.roomGoal.exit.x - worldX, this.roomGoal.exit.y - worldY);
-      if (distance < 16) {
-        const nextGoal = cloneRoomGoal(this.roomGoal);
-        if (nextGoal && nextGoal.type === 'reach_exit') {
-          nextGoal.exit = null;
-          this.updateRoomGoal(nextGoal);
-          return true;
-        }
-      }
-    }
-
-    if (this.roomGoal.type === 'npc_quest' && this.roomGoal.destination) {
-      const distance = Math.hypot(
-        this.roomGoal.destination.x - worldX,
-        this.roomGoal.destination.y - worldY,
-      );
-      if (distance < 16) {
-        const nextGoal = cloneRoomGoal(this.roomGoal);
-        if (nextGoal && nextGoal.type === 'npc_quest') {
-          nextGoal.destination = null;
-          this.updateRoomGoal(nextGoal);
-          return true;
-        }
-      }
-    }
-
-    if (this.roomGoal.type !== 'checkpoint_sprint') {
-      return false;
-    }
-
-    const goal = this.roomGoal as CheckpointSprintGoal;
-    if (goal.finish) {
-      const finishDistance = Math.hypot(goal.finish.x - worldX, goal.finish.y - worldY);
-      if (finishDistance < 16) {
-        const nextGoal = cloneRoomGoal(goal);
-        if (nextGoal && nextGoal.type === 'checkpoint_sprint') {
-          nextGoal.finish = null;
-          this.updateRoomGoal(nextGoal);
-          return true;
-        }
-      }
-    }
-
-    let bestIndex = -1;
-    let bestDistance = 16;
-    for (let index = 0; index < goal.checkpoints.length; index += 1) {
-      const checkpoint = goal.checkpoints[index];
-      const distance = Math.hypot(checkpoint.x - worldX, checkpoint.y - worldY);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestIndex = index;
-      }
-    }
-
-    if (bestIndex >= 0) {
-      const nextGoal = cloneRoomGoal(goal);
-      if (nextGoal && nextGoal.type === 'checkpoint_sprint') {
-        nextGoal.checkpoints.splice(bestIndex, 1);
-        this.updateRoomGoal(nextGoal);
-        return true;
-      }
+    const nextGoal = this.roomGoal
+      ? removeRoomGoalMarkerAt(this.roomGoal, worldX, worldY)
+      : null;
+    if (nextGoal) {
+      this.updateRoomGoal(nextGoal);
+      return true;
     }
 
     return false;
   }
 
   goalUsesMarkers(goal: RoomGoal | null): boolean {
-    return (
-      goal?.type === 'reach_exit' ||
-      goal?.type === 'checkpoint_sprint' ||
-      goal?.type === 'npc_quest'
-    );
+    return roomGoalUsesMarkers(goal);
   }
 
   getGoalSummaryText(): string {
-    if (!this.roomGoal) {
-      return 'No room goal selected.';
-    }
-
-    switch (this.roomGoal.type) {
-      case 'reach_exit':
-        return this.roomGoal.exit
-          ? 'Reach the exit marker to clear the room.'
-          : 'Set an exit marker to finish the room.';
-      case 'collect_target': {
-        const available = this.countPlacedObjectsByCategory('collectible');
-        return `Collect ${this.roomGoal.requiredCount} item${this.roomGoal.requiredCount === 1 ? '' : 's'} (${available} placed).`;
-      }
-      case 'collect_race': {
-        const availableCollectibles = this.countPlacedObjectsByCategory('collectible');
-        const collectingHunters = this.countCollectModeSwordsmen();
-        return `Collect more items than the Sword Hunter (${availableCollectibles} collectibles, ${collectingHunters} collector${collectingHunters === 1 ? '' : 's'}).`;
-      }
-      case 'defeat_all': {
-        const available = this.countPlacedObjectsByCategory('enemy');
-        return `Defeat every enemy in the room (${available} placed).`;
-      }
-      case 'checkpoint_sprint':
-        return `Hit ${this.roomGoal.checkpoints.length} checkpoint${this.roomGoal.checkpoints.length === 1 ? '' : 's'} then reach the finish marker.`;
-      case 'survival':
-        return `Stay alive for ${Math.round(this.roomGoal.durationMs / 1000)} seconds.`;
-      case 'npc_quest': {
-        const goal = this.roomGoal;
-        const linkedNpc = goal.npcInstanceId
-          ? this.host.getPlacedObjects().find(
-              (placed) => placed.instanceId === goal.npcInstanceId,
-            )
-          : this.host.getPlacedObjects().find(
-              (placed) => getEditorObjectConfigById(placed.id)?.category === 'npc',
-            );
-        const npcLabel = linkedNpc
-          ? getPlacedNpcName(linkedNpc, getEditorObjectConfigById(linkedNpc.id)?.name ?? 'NPC') || 'unnamed NPC'
-          : 'no NPC';
-        if (goal.questType === 'protect') {
-          return `Protect ${npcLabel} for ${Math.round(goal.durationMs / 1000)} seconds.`;
-        }
-        if (goal.questType === 'escort') {
-          return `Escort ${npcLabel} to ${goal.destination ? 'the destination' : 'a destination you still need to place'}.`;
-        }
-        return `Collect ${goal.requiredCount} item${goal.requiredCount === 1 ? '' : 's'}, then return to ${npcLabel}.`;
-      }
-    }
+    const linkedNpcInstanceId = this.roomGoal?.type === 'npc_quest'
+      ? this.roomGoal.npcInstanceId
+      : null;
+    const linkedNpc = linkedNpcInstanceId
+      ? this.host.getPlacedObjects().find((placed) => placed.instanceId === linkedNpcInstanceId)
+      : this.host.getPlacedObjects().find(
+          (placed) => getEditorObjectConfigById(placed.id)?.category === 'npc',
+        );
+    return getRoomGoalSummaryText(this.roomGoal, {
+      collectiblesPlaced: this.countPlacedObjectsByCategory('collectible'),
+      enemiesPlaced: this.countPlacedObjectsByCategory('enemy'),
+      collectModeEnemyCount: this.countCollectModeSwordsmen(),
+      linkedNpcLabel: linkedNpc
+        ? getPlacedNpcName(linkedNpc, getEditorObjectConfigById(linkedNpc.id)?.name ?? 'NPC') || 'unnamed NPC'
+        : 'no NPC',
+    });
   }
 
   getPublishValidationError(): string | null {
@@ -2204,18 +1875,18 @@ export class EditorEditRuntime {
   }
 
   hasUndoHistory(): boolean {
-    return this.undoStack.length > 0;
+    return this.history.canUndo();
   }
 
   hasRedoHistory(): boolean {
-    return this.redoStack.length > 0;
+    return this.history.canRedo();
   }
 
   undo(): void {
     if (!this.guardEditable()) {
       return;
     }
-    const action = this.undoStack.pop();
+    const action = this.history.takeUndo();
     if (!action) {
       return;
     }
@@ -2245,14 +1916,14 @@ export class EditorEditRuntime {
           newGid: a.oldGid,
         });
       }
-      this.redoStack.push({ kind: 'tiles', actions: reverseActions });
+      this.history.pushRedo({ kind: 'tiles', actions: reverseActions });
       this.markRoomDirty();
       return;
     }
 
     if (action.kind === 'objects') {
       this.host.setPlacedObjects(this.clonePlacedObjects(action.action.previous));
-      this.redoStack.push({
+      this.history.pushRedo({
         kind: 'objects',
         action: {
           previous: this.clonePlacedObjects(action.action.next),
@@ -2266,7 +1937,7 @@ export class EditorEditRuntime {
 
     if (action.kind === 'spawn') {
       this.roomSpawnPoint = action.action.previous ? { ...action.action.previous } : null;
-      this.redoStack.push({
+      this.history.pushRedo({
         kind: 'spawn',
         action: {
           previous: action.action.next ? { ...action.action.next } : null,
@@ -2280,7 +1951,7 @@ export class EditorEditRuntime {
 
     if (action.kind === 'music') {
       this.roomMusic = cloneRoomMusic(action.action.previous);
-      this.redoStack.push({
+      this.history.pushRedo({
         kind: 'music',
         action: {
           previous: cloneRoomMusic(action.action.next),
@@ -2293,7 +1964,7 @@ export class EditorEditRuntime {
 
     this.roomGoal = cloneRoomGoal(action.action.previous);
     this.goalPlacementMode = null;
-    this.redoStack.push({
+    this.history.pushRedo({
       kind: 'goal',
       action: {
         previous: cloneRoomGoal(action.action.next),
@@ -2308,7 +1979,7 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
-    const action = this.redoStack.pop();
+    const action = this.history.takeRedo();
     if (!action) {
       return;
     }
@@ -2321,10 +1992,10 @@ export class EditorEditRuntime {
           continue;
         }
 
-        if (a.newGid === -1) {
+        if (a.oldGid === -1) {
           layer.removeTileAt(a.x, a.y);
         } else {
-          const decoded = decodeTileDataValue(a.newGid);
+          const decoded = decodeTileDataValue(a.oldGid);
           const restoredTile = layer.putTileAt(decoded.gid, a.x, a.y);
           if (restoredTile) {
             restoredTile.flipX = decoded.flipX;
@@ -2338,14 +2009,14 @@ export class EditorEditRuntime {
           newGid: a.oldGid,
         });
       }
-      this.undoStack.push({ kind: 'tiles', actions: reverseActions });
+      this.history.pushUndo({ kind: 'tiles', actions: reverseActions });
       this.markRoomDirty();
       return;
     }
 
     if (action.kind === 'objects') {
       this.host.setPlacedObjects(this.clonePlacedObjects(action.action.previous));
-      this.undoStack.push({
+      this.history.pushUndo({
         kind: 'objects',
         action: {
           previous: this.clonePlacedObjects(action.action.next),
@@ -2359,7 +2030,7 @@ export class EditorEditRuntime {
 
     if (action.kind === 'spawn') {
       this.roomSpawnPoint = action.action.previous ? { ...action.action.previous } : null;
-      this.undoStack.push({
+      this.history.pushUndo({
         kind: 'spawn',
         action: {
           previous: action.action.next ? { ...action.action.next } : null,
@@ -2373,7 +2044,7 @@ export class EditorEditRuntime {
 
     if (action.kind === 'music') {
       this.roomMusic = cloneRoomMusic(action.action.previous);
-      this.undoStack.push({
+      this.history.pushUndo({
         kind: 'music',
         action: {
           previous: cloneRoomMusic(action.action.next),
@@ -2386,7 +2057,7 @@ export class EditorEditRuntime {
 
     this.roomGoal = cloneRoomGoal(action.action.previous);
     this.goalPlacementMode = null;
-    this.undoStack.push({
+    this.history.pushUndo({
       kind: 'goal',
       action: {
         previous: cloneRoomGoal(action.action.next),
@@ -2453,107 +2124,12 @@ export class EditorEditRuntime {
     }
 
     this.roomSpawnPoint = next;
-    this.undoStack.push({
+    this.history.record({
       kind: 'spawn',
       action: { previous, next },
     });
-    this.redoStack = [];
     this.rebuildObjectSprites();
     this.markRoomDirty();
-  }
-
-  private redrawGoalMarkers(): void {
-    for (const sprite of this.goalMarkerSprites) {
-      sprite.destroy();
-    }
-    this.goalMarkerSprites = [];
-    for (const label of this.goalMarkerLabels) {
-      label.destroy();
-    }
-    this.goalMarkerLabels = [];
-
-    if (!this.roomGoal) {
-      this.host.syncBackgroundCameraIgnores();
-      return;
-    }
-
-    const markers = this.getGoalMarkerDescriptors(this.roomGoal);
-    for (const marker of markers) {
-      const sprite = createGoalMarkerFlagSprite(
-        this.scene,
-        marker.variant,
-        this.getRoomOrigin().x + marker.point.x,
-        this.getRoomOrigin().y + marker.point.y + 2,
-        97,
-      );
-      this.goalMarkerSprites.push(sprite);
-
-      if (marker.label) {
-        const label = this.scene.add.text(
-          this.getRoomOrigin().x + marker.point.x,
-          this.getRoomOrigin().y + marker.point.y - 28,
-          marker.label,
-          {
-          fontFamily: 'Courier New',
-          fontSize: '12px',
-          color: marker.textColor,
-          stroke: '#050505',
-          strokeThickness: 4,
-        });
-        label.setOrigin(0.5, 1);
-        label.setDepth(98);
-        this.goalMarkerLabels.push(label);
-      }
-    }
-
-    this.host.syncBackgroundCameraIgnores();
-  }
-
-  private getGoalMarkerDescriptors(goal: RoomGoal): Array<{
-    point: GoalMarkerPoint;
-    label: string | null;
-    variant: GoalMarkerFlagVariant;
-    textColor: string;
-  }> {
-    switch (goal.type) {
-      case 'reach_exit':
-        return goal.exit
-          ? [{
-              point: goal.exit,
-              label: null,
-              variant: 'finish-pending' as GoalMarkerFlagVariant,
-              textColor: '#ffefef',
-            }]
-          : [];
-      case 'checkpoint_sprint':
-        return [
-          ...goal.checkpoints.map((checkpoint, index) => ({
-            point: checkpoint,
-            label: `${index + 1}`,
-            variant: 'checkpoint-pending' as GoalMarkerFlagVariant,
-            textColor: '#ffefef',
-          })),
-          ...(goal.finish
-            ? [{
-                point: goal.finish,
-                label: null,
-                variant: 'finish-pending' as GoalMarkerFlagVariant,
-                textColor: '#ffefef',
-              }]
-            : []),
-        ];
-      case 'npc_quest':
-        return goal.destination
-          ? [{
-              point: goal.destination,
-              label: 'NPC',
-              variant: 'finish-pending' as GoalMarkerFlagVariant,
-              textColor: '#ffefef',
-            }]
-          : [];
-      default:
-        return [];
-    }
   }
 
   private updateRoomGoal(nextGoal: RoomGoal | null, trackUndo: boolean = true): void {
@@ -2569,16 +2145,15 @@ export class EditorEditRuntime {
     if (!this.roomGoal) {
       this.roomGoalIntroText = null;
     }
-    if (!this.goalUsesMarkers(this.roomGoal)) {
+    if (!roomGoalUsesMarkers(this.roomGoal)) {
       this.goalPlacementMode = null;
     }
 
     if (trackUndo) {
-      this.undoStack.push({
+      this.history.record({
         kind: 'goal',
         action: { previous, next: normalizedNext },
       });
-      this.redoStack = [];
     }
 
     this.rebuildObjectSprites();

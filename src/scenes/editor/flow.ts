@@ -167,6 +167,7 @@ export class EditorSceneFlowController {
     wakeData.courseEditedRoom = this.host.buildCourseEditedRoomData();
 
     this.host.stopEditorScene();
+    hideBusyOverlay();
     if (this.host.shouldReturnToCourseEditor()) {
       this.host.wakeCourseComposer(this.host.buildCourseEditorWakeData(wakeData));
       return;

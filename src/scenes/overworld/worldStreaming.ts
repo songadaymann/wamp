@@ -75,11 +75,18 @@ import { OverworldChunkPreviewRenderer } from './chunkPreviewRenderer';
 import {
   OverworldPreviewCache,
   isRoomSnapshotReferenceChangedError,
+} from './previewCache';
+import {
   isStreamingRoomCandidateRenderable,
   type PlayableRoomSource,
   type RenderableRoom,
   type StreamingRoomCandidate,
-} from './previewCache';
+} from './worldStreamingModel';
+import {
+  collectVisibleRoomCandidates,
+  planFullRoomRetention,
+  selectNearestPreviewRoomIds,
+} from './worldStreamingPolicy';
 import {
   computeOverworldPreviewSelection,
   getChunkPreviewTileSize,
@@ -126,6 +133,13 @@ import {
 } from './frameWorkCoordinator';
 import { RoomArtifactCache } from './roomArtifactCache';
 import { RoomTexturePreparation } from './roomTexturePreparation';
+import { DynamicOverlayReadinessCoordinator } from './dynamicOverlayReadinessCoordinator';
+import {
+  FullRoomPreparationLifecycleCoordinator,
+  FullRoomTeardownLifecycleCoordinator,
+  type FullRoomPreparationPhase,
+  type FullRoomTeardownPhase,
+} from './fullRoomLifecycles';
 import {
   getDevicePerformanceMode,
   type DevicePerformanceMode,
@@ -142,7 +156,6 @@ const TRANSITION_PREPARED_FULL_ROOM_RETAIN_MS = 1_500;
 const PREDICTED_DESTINATION_INTENT_TTL_MS = 1_500;
 const PLAYABLE_ROOM_PREFETCH_RETRY_DELAY_MS = 1_000;
 const DEFERRED_PREVIEW_RENDER_DELAY_MS = 32;
-const DYNAMIC_OVERLAY_RETRY_DELAYS_MS = [500, 1_000, 2_000, 5_000, 10_000] as const;
 const NORMAL_ROOM_ARTIFACT_CACHE_BYTES = 24 * 1024 * 1024;
 const REDUCED_ROOM_ARTIFACT_CACHE_BYTES = 8 * 1024 * 1024;
 const FRAME_TARGET_MS = 1_000 / 60;
@@ -157,6 +170,8 @@ const PREDICTED_SEAM_LOCK_DISTANCE_PX = 72;
 const PREDICTED_VELOCITY_EPSILON = 1;
 const PREDICTED_FALLBACK_SPEED_PX_PER_SEC = 150;
 const PREDICTED_DESTINATION_SWITCH_HYSTERESIS_MS = 8;
+const fullRoomPreparationLifecycle = new FullRoomPreparationLifecycleCoordinator();
+const fullRoomTeardownLifecycle = new FullRoomTeardownLifecycleCoordinator();
 
 export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
   room: RoomSnapshot;
@@ -180,24 +195,6 @@ export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
   collisionReady?: boolean;
   runtimeSuspended?: boolean;
 }
-
-type FullRoomPreparationPhase =
-  | 'textures'
-  | 'uploads'
-  | 'custom-tiles'
-  | 'custom-background'
-  | 'runtime-shell'
-  | 'terrain'
-  | 'terrain-collision'
-  | 'terrain-insets'
-  | 'lighting'
-  | 'objects'
-  | 'ready'
-  | 'commit'
-  | 'waiting-for-teardown'
-  | 'committed'
-  | 'cancelled'
-  | 'failed';
 
 interface PendingFullRoomPreparation<TLiveObject, TEdgeWall> {
   identity: string;
@@ -234,7 +231,7 @@ interface PendingFullRoomTeardown<TLiveObject, TEdgeWall> {
   restoreCollisionReady: boolean;
   restoreRuntime: (() => void) | null;
   liveObjectReconciliationGeneration: number | null;
-  phase: 'queued' | 'objects' | 'collision' | 'insets' | 'terrain' | 'backgrounds' | 'display' | 'finalize';
+  phase: FullRoomTeardownPhase;
   destructionStarted: boolean;
   liveObjectRoomStateCleared: boolean;
   retainedAfterDestruction: boolean;
@@ -408,12 +405,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private compactWorldActive = false;
   private fullPreviewUpgradeGeneration = -1;
   private startupDynamicOverlayGeneration = -1;
-  private dynamicOverlayReadinessGeneration = -1;
-  private dynamicOverlayReadinessAbortController: AbortController | null = null;
+  private readonly dynamicOverlayReadiness = new DynamicOverlayReadinessCoordinator();
   private legacyCompactRefreshGeneration = -1;
   private legacyCompactRefreshScheduled = false;
-  private dynamicOverlayRetryAttempt = 0;
-  private dynamicOverlayRetryTimer: Phaser.Time.TimerEvent | null = null;
   private deferredPreviewRooms: RoomSnapshot[] = [];
   private deferredPreviewRenderTimer: Phaser.Time.TimerEvent | null = null;
   private deferredPreviewRenderGeneration = -1;
@@ -959,7 +953,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
               }
               if (!this.isLoadGenerationCurrent(generation)) return;
               this.startupDynamicOverlayGeneration = -1;
-              this.dynamicOverlayRetryAttempt = 0;
               this.cancelDynamicOverlayRetry();
             },
             onDeferredError: (error) => this.scheduleDynamicOverlayRetry(
@@ -1742,8 +1735,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       }
       const preparation = this.pendingFullRoomPreparationsById.get(previousRoomId);
       if (preparation) {
-        preparation.standardActivationRequested = false;
-        preparation.activationRequested = preparation.portalActivationRequested;
+        fullRoomPreparationLifecycle.releaseActivation(preparation, 'standard');
         this.clearPreparedRoomActivationIfUnowned(
           preparation,
           'movement-activation-cleared',
@@ -1834,8 +1826,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         pendingRequest.activationRequested = pendingRequest.standardActivationRequested;
       }
       if (preparation) {
-        preparation.portalActivationRequested = false;
-        preparation.activationRequested = preparation.standardActivationRequested;
+        fullRoomPreparationLifecycle.releaseActivation(preparation, 'portal');
         this.clearPreparedRoomActivationIfUnowned(
           preparation,
           'portal-activation-cleared',
@@ -2636,97 +2627,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private collectVisibleRoomCandidates(): Map<string, StreamingRoomCandidate> {
-    const candidates = new Map<string, StreamingRoomCandidate>();
-    const roomBounds = this.loadedRoomBounds;
-    if (!roomBounds) {
-      return candidates;
-    }
-
-    for (const summary of this.roomSummariesById.values()) {
-      candidates.set(summary.id, {
-        id: summary.id,
-        coordinates: { ...summary.coordinates },
-        summary,
-        draft: null,
-        sharedPreview: null,
-        allowFullRoomLoad: summary.state === 'published' || summary.state === 'claimed_unpublished',
-        source: summary.state === 'published' ? 'published' : 'saved_construction_draft',
-      });
-    }
-
-    for (const draftRoom of this.draftRoomsById.values()) {
-      if (!isWithinRoomBounds(draftRoom.coordinates, roomBounds)) {
-        continue;
-      }
-
-      const existing = candidates.get(draftRoom.id);
-      candidates.set(draftRoom.id, {
-        id: draftRoom.id,
-        coordinates: { ...draftRoom.coordinates },
-        summary: existing?.summary ?? null,
-        draft: draftRoom,
-        sharedPreview: null,
-        allowFullRoomLoad: true,
-        source: 'local_draft',
-      });
-    }
-
-    for (const overrideRoom of this.transientRoomOverridesById.values()) {
-      if (!isWithinRoomBounds(overrideRoom.coordinates, roomBounds)) {
-        continue;
-      }
-
-      const existing = candidates.get(overrideRoom.id);
-      candidates.set(overrideRoom.id, {
-        id: overrideRoom.id,
-        coordinates: { ...overrideRoom.coordinates },
-        summary: existing?.summary ?? null,
-        draft: overrideRoom,
-        sharedPreview: null,
-        allowFullRoomLoad: true,
-        source: 'local_draft',
-      });
-    }
-
-    for (const previewRoom of this.presencePreviewRoomsById.values()) {
-      if (!isWithinRoomBounds(previewRoom.coordinates, roomBounds)) {
-        continue;
-      }
-
-      const existing = candidates.get(previewRoom.id);
-      if (existing?.draft) {
-        continue;
-      }
-
-      candidates.set(previewRoom.id, {
-        id: previewRoom.id,
-        coordinates: { ...previewRoom.coordinates },
-        summary: existing?.summary ?? null,
-        draft: null,
-        sharedPreview: previewRoom,
-        allowFullRoomLoad:
-          existing?.summary?.state === 'claimed_unpublished' ||
-          (!existing?.summary && previewRoom.status === 'draft'),
-        source: 'live_construction_preview',
-      });
-    }
-
-    for (const optimisticRoom of this.optimisticPublishedRoomsById.values()) {
-      if (!isWithinRoomBounds(optimisticRoom.coordinates, roomBounds)) continue;
-      const existing = candidates.get(optimisticRoom.id);
-      if (existing?.draft || existing?.sharedPreview) continue;
-      candidates.set(optimisticRoom.id, {
-        id: optimisticRoom.id,
-        coordinates: { ...optimisticRoom.coordinates },
-        summary: existing?.summary ?? createPublishedRoomSummary(optimisticRoom),
-        draft: optimisticRoom,
-        sharedPreview: null,
-        allowFullRoomLoad: true,
-        source: 'published',
-      });
-    }
-
-    return candidates;
+    return collectVisibleRoomCandidates({
+      roomBounds: this.loadedRoomBounds,
+      summaries: this.roomSummariesById.values(),
+      draftRooms: this.draftRoomsById.values(),
+      transientRoomOverrides: this.transientRoomOverridesById.values(),
+      presencePreviewRooms: this.presencePreviewRoomsById.values(),
+      optimisticPublishedRooms: this.optimisticPublishedRoomsById.values(),
+    });
   }
 
   private computePreviewSelection(
@@ -2880,15 +2788,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     fullRoomIds: Set<string>,
     previewCount: number,
   ): Set<string> {
-    const focus = this.getFocusCoordinates();
-    const sortedPreviewIds = [...previewRoomIds].sort((leftId, rightId) => {
-      const left = roomCandidates.get(leftId)?.coordinates;
-      const right = roomCandidates.get(rightId)?.coordinates;
-      const leftDistance = left ? Math.abs(left.x - focus.x) + Math.abs(left.y - focus.y) : Number.MAX_SAFE_INTEGER;
-      const rightDistance = right ? Math.abs(right.x - focus.x) + Math.abs(right.y - focus.y) : Number.MAX_SAFE_INTEGER;
-      return leftDistance - rightDistance || leftId.localeCompare(rightId);
+    return selectNearestPreviewRoomIds({
+      roomCandidates,
+      previewRoomIds,
+      fullRoomIds,
+      focusCoordinates: this.getFocusCoordinates(),
+      previewCount,
     });
-    return new Set([...fullRoomIds, ...sortedPreviewIds.slice(0, previewCount)]);
   }
 
   private async loadDistantPreviewsProgressively(
@@ -2996,37 +2902,24 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private beginDynamicOverlayReadiness(generation: number): void {
-    this.cancelDynamicOverlayReadiness();
-    this.dynamicOverlayReadinessGeneration = generation;
-    this.dynamicOverlayReadinessAbortController = new AbortController();
+    this.dynamicOverlayReadiness.beginReadiness(generation);
   }
 
   private cancelDynamicOverlayReadiness(): void {
-    this.dynamicOverlayReadinessAbortController?.abort();
-    this.dynamicOverlayReadinessAbortController = null;
-    this.dynamicOverlayReadinessGeneration = -1;
+    this.dynamicOverlayReadiness.cancelReadiness();
   }
 
   private async waitForDynamicOverlayTargetLod(generation: number): Promise<boolean> {
-    const abortController = this.dynamicOverlayReadinessAbortController;
-    if (
-      !abortController
-      || this.dynamicOverlayReadinessGeneration !== generation
-      || !this.isLoadGenerationCurrent(generation)
-      || !this.worldTileController.isBrowseCutoverActive()
-    ) return false;
-    const ready = await this.worldTileController.waitForTargetLodReady(
-      this.options.scene.cameras.main,
-      abortController.signal,
-    );
-    const current = ready
-      && this.dynamicOverlayReadinessGeneration === generation
-      && this.isLoadGenerationCurrent(generation)
-      && this.worldTileController.isBrowseCutoverActive();
-    if (!current && this.isLoadGenerationCurrent(generation)) {
-      this.clearStartupDynamicOverlayGeneration(generation);
-    }
-    return current;
+    return this.dynamicOverlayReadiness.waitForTargetLod({
+      generation,
+      isGenerationCurrent: () => this.isLoadGenerationCurrent(generation),
+      isBrowseCutoverActive: () => this.worldTileController.isBrowseCutoverActive(),
+      waitForTargetLodReady: (signal) => this.worldTileController.waitForTargetLodReady(
+        this.options.scene.cameras.main,
+        signal,
+      ),
+      onCurrentReadinessStopped: () => this.clearStartupDynamicOverlayGeneration(generation),
+    });
   }
 
   private handleDynamicOverlayReadinessStopped(generation: number): void {
@@ -3105,30 +2998,22 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   ): void {
     if (!this.isLoadGenerationCurrent(generation)) return;
     console.warn('Deferred construction preview loading stopped; retaining world tiles and retrying.', error);
-    if (this.dynamicOverlayRetryTimer) return;
+    if (this.dynamicOverlayReadiness.hasRetryScheduled()) return;
 
     this.startupDynamicOverlayGeneration = generation;
     if (detail === 'full') {
       this.fullPreviewUpgradeGeneration = generation;
     }
-    const retryIndex = Math.min(
-      this.dynamicOverlayRetryAttempt,
-      DYNAMIC_OVERLAY_RETRY_DELAYS_MS.length - 1,
-    );
-    const retryDelay = DYNAMIC_OVERLAY_RETRY_DELAYS_MS[retryIndex];
-    this.dynamicOverlayRetryAttempt += 1;
-    this.dynamicOverlayRetryTimer = this.options.scene.time.delayedCall(retryDelay, () => {
-      this.dynamicOverlayRetryTimer = null;
-      if (
-        !this.isLoadGenerationCurrent(generation)
-        || !this.worldTileController.isBrowseCutoverActive()
-      ) {
-        if (generation === this.loadGeneration) {
-          this.startupDynamicOverlayGeneration = -1;
-        }
-        return;
-      }
-      this.retryCurrentDynamicOverlays(generation, detail);
+    this.dynamicOverlayReadiness.scheduleRetry({
+      generation,
+      schedule: (delayMs, callback) => this.options.scene.time.delayedCall(delayMs, callback),
+      isGenerationCurrent: () => this.isLoadGenerationCurrent(generation),
+      isGenerationIdentityCurrent: () => generation === this.loadGeneration,
+      isBrowseCutoverActive: () => this.worldTileController.isBrowseCutoverActive(),
+      onCurrentRetryStopped: () => {
+        this.startupDynamicOverlayGeneration = -1;
+      },
+      retry: () => this.retryCurrentDynamicOverlays(generation, detail),
     });
   }
 
@@ -3188,9 +3073,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private cancelDynamicOverlayRetry(): void {
-    this.dynamicOverlayRetryTimer?.remove(false);
-    this.dynamicOverlayRetryTimer = null;
-    this.dynamicOverlayRetryAttempt = 0;
+    this.dynamicOverlayReadiness.cancelRetry();
   }
 
   private requestFullPreviewUpgradeIfNeeded(
@@ -3255,7 +3138,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         tiledBrowseCutover,
       );
       if (this.isLoadGenerationCurrent(generation)) {
-        this.dynamicOverlayRetryAttempt = 0;
         this.cancelDynamicOverlayRetry();
       }
     })().catch((error) => {
@@ -3938,7 +3820,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     )) {
       const pendingTeardown = this.pendingFullRoomTeardownsById.get(renderableRoom.id);
       if (pendingTeardown?.destructionStarted) {
-        pendingTeardown.retainedAfterDestruction = true;
+        fullRoomTeardownLifecycle.retainAfterDestruction(pendingTeardown);
         if (!pendingTeardown.job) {
           this.enqueuePendingFullRoomTeardownJob(
             renderableRoom.id,
@@ -4157,16 +4039,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     portalDestination = false,
   ): void {
     if (!this.isFullRoomPreparationCurrent(preparation)) return;
-    if (portalDestination) {
-      preparation.portalActivationRequested = true;
-    } else {
-      preparation.standardActivationRequested = true;
-    }
-    preparation.activationRequested = Boolean(
-      preparation.standardActivationRequested || preparation.portalActivationRequested,
+    const readyForCommit = fullRoomPreparationLifecycle.requestActivation(
+      preparation,
+      portalDestination ? 'portal' : 'standard',
     );
     this.promoteFullRoomPreparation(preparation, 'portal-current-destination');
-    if (preparation.phase === 'ready') {
+    if (readyForCommit) {
       this.queuePreparedRoomCommit(preparation);
     }
   }
@@ -4181,16 +4059,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       && preparation.queuedJob?.cancel(reason)
     ) {
       preparation.queuedJob = null;
-      preparation.phase = 'ready';
+      fullRoomPreparationLifecycle.returnToReady(preparation);
       this.settleDisposedReplacementAfterPreparationStops(preparation);
       return;
     }
     if (preparation.phase !== 'waiting-for-teardown') return;
     const pendingTeardown = this.pendingFullRoomTeardownsById.get(preparation.room.id);
     if (pendingTeardown?.commitAfterTeardown === preparation) {
-      pendingTeardown.commitAfterTeardown = null;
+      fullRoomTeardownLifecycle.clearDeferredCommit(pendingTeardown);
     }
-    preparation.phase = 'ready';
+    fullRoomPreparationLifecycle.returnToReady(preparation);
     this.settleDisposedReplacementAfterPreparationStops(preparation);
   }
 
@@ -4645,8 +4523,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private markPreparedFullRoomReady(
     preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
   ): void {
-    preparation.phase = 'ready';
-    if (preparation.activationRequested) {
+    if (fullRoomPreparationLifecycle.markReady(preparation)) {
       this.queuePreparedRoomCommit(preparation);
     }
   }
@@ -4654,8 +4531,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private queuePreparedRoomCommit(
     preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
   ): void {
-    if (preparation.phase === 'commit' || preparation.phase === 'committed') return;
-    preparation.phase = 'commit';
+    if (!fullRoomPreparationLifecycle.beginCommit(preparation)) return;
     this.enqueueFullRoomPreparationJob(
       preparation,
       'commit-prepared-room',
@@ -4687,8 +4563,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
     if (pendingTeardown?.loadedRoom === existing) {
       if (pendingTeardown.destructionStarted) {
-        pendingTeardown.commitAfterTeardown = preparation;
-        preparation.phase = 'waiting-for-teardown';
+        fullRoomTeardownLifecycle.attachDeferredCommit(pendingTeardown, preparation);
+        fullRoomPreparationLifecycle.waitForTeardown(preparation);
         return;
       }
       this.cancelPendingFullRoomTeardown(
@@ -4745,7 +4621,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       // Settle this preparation before callbacks that may synchronously clear
       // course overrides and invalidate this same room. Re-entrant invalidation
       // must not cancel and destroy the runtime that was just published.
-      preparation.phase = 'committed';
+      fullRoomPreparationLifecycle.markCommitted(preparation);
       if (this.pendingFullRoomPreparationsById.get(preparation.room.id) === preparation) {
         this.pendingFullRoomPreparationsById.delete(preparation.room.id);
       }
@@ -4765,7 +4641,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         existing,
         previousReleaseAt,
       );
-      preparation.phase = 'failed';
+      fullRoomPreparationLifecycle.markFailed(preparation);
       if (this.pendingFullRoomPreparationsById.get(preparation.room.id) !== preparation) {
         this.settleDisposedReplacementAfterPreparationStops(preparation);
       }
@@ -4885,8 +4761,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
   ): boolean {
     return !this.destroyed
-      && preparation.phase !== 'cancelled'
-      && preparation.phase !== 'failed'
+      && fullRoomPreparationLifecycle.isProgressable(preparation)
       && this.pendingFullRoomPreparationsById.get(preparation.room.id) === preparation;
   }
 
@@ -4942,7 +4817,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.pendingFullRoomPreparationsById.delete(roomId);
     this.frameWorkCoordinator.cancelGeneration(preparation.generation, reason);
     preparation.queuedJob = null;
-    preparation.phase = 'cancelled';
+    fullRoomPreparationLifecycle.markCancelled(preparation);
     preparation.texturePreparation?.cancel();
     preparation.customTilePreparation?.cancel();
     preparation.customBackgroundPreparation?.cancel();
@@ -5002,7 +4877,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       || preparation.phase === 'cancelled'
       || preparation.phase === 'committed'
     ) return;
-    preparation.phase = 'failed';
+    fullRoomPreparationLifecycle.markFailed(preparation);
     console.error(`Room ${preparation.room.id} preparation failed.`, error);
     this.cancelFullRoomPreparation(preparation.room.id, 'preparation-failed');
   }
@@ -5205,7 +5080,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       pending.restoreRuntime = this.suspendLoadedRoomRuntime(loadedRoom);
     } catch (error) {
       console.error(`Could not suspend room ${roomId} for deferred teardown.`, error);
-      pending.destructionStarted = true;
+      fullRoomTeardownLifecycle.beginDestruction(pending);
       this.forceCompletePendingFullRoomTeardown(roomId, pending, true);
       if (notifyVisibility) {
         this.previewRenderer.syncPreviewVisibility();
@@ -5237,7 +5112,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return;
     }
     if (this.shouldRetainFullRoom(roomId)) {
-      pending.retainedAfterDestruction = true;
+      fullRoomTeardownLifecycle.retainAfterDestruction(pending);
     }
 
     if (!this.options.destroyLiveObjectsBatch) {
@@ -5249,11 +5124,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return;
     }
 
-    pending.destructionStarted = true;
+    fullRoomTeardownLifecycle.beginDestruction(pending);
     pending.restoreRuntime = null;
 
     if (pending.phase === 'queued' || pending.phase === 'objects') {
-      pending.phase = 'objects';
+      fullRoomTeardownLifecycle.advance(pending, 'objects');
       const complete = this.options.destroyLiveObjectsBatch(
         pending.loadedRoom,
         TEARDOWN_LIVE_OBJECTS_PER_JOB,
@@ -5266,21 +5141,21 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'objects');
         return;
       }
-      pending.phase = 'collision';
+      fullRoomTeardownLifecycle.advance(pending, 'collision');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'collision');
       return;
     }
 
     if (pending.phase === 'collision') {
       this.destroyLoadedRoomCollisionResources(pending.loadedRoom);
-      pending.phase = 'insets';
+      fullRoomTeardownLifecycle.advance(pending, 'insets');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'insets');
       return;
     }
 
     if (pending.phase === 'insets') {
       if (this.destroyLoadedRoomInsetBodyBatch(pending.loadedRoom)) {
-        pending.phase = 'terrain';
+        fullRoomTeardownLifecycle.advance(pending, 'terrain');
       }
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, pending.phase);
       return;
@@ -5289,7 +5164,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     if (pending.phase === 'terrain') {
       pending.loadedRoom.terrainLayer.destroy();
       pending.loadedRoom.map.destroy();
-      pending.phase = 'backgrounds';
+      fullRoomTeardownLifecycle.advance(pending, 'backgrounds');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'backgrounds');
       return;
     }
@@ -5306,7 +5181,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         pending.loadedRoom.backgroundSprites.pop();
       }
       if (pending.loadedRoom.backgroundSprites.length === 0) {
-        pending.phase = 'display';
+        fullRoomTeardownLifecycle.advance(pending, 'display');
       }
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, pending.phase);
       return;
@@ -5318,7 +5193,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       pending.loadedRoom.image.destroy();
       pending.loadedRoom.foregroundImage?.destroy();
       pending.loadedRoom.foregroundImage = null;
-      pending.phase = 'finalize';
+      fullRoomTeardownLifecycle.advance(pending, 'finalize');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'finalize');
       return;
     }
@@ -5359,12 +5234,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.pendingFullRoomTeardownsById.delete(roomId);
     if (this.loadedFullRoomsById.get(roomId) !== pending.loadedRoom) return;
     const loadedRoom = pending.loadedRoom;
-    const deferredCommit = pending.commitAfterTeardown;
-    const canCommitDeferredPreparation = Boolean(
-      deferredCommit
-      && deferredCommit.activationRequested
-      && this.isFullRoomPreparationSnapshotCurrent(deferredCommit),
+    const deferredCommitResolution = fullRoomTeardownLifecycle.resolveDeferredCommit(
+      pending,
+      (preparation) => preparation.activationRequested
+        && this.isFullRoomPreparationSnapshotCurrent(preparation),
     );
+    const deferredCommit = deferredCommitResolution.preparation;
+    const canCommitDeferredPreparation = deferredCommitResolution.action === 'commit';
     const artifactRemainsCached = Boolean(
       loadedRoom.artifactKey && this.roomArtifactCache.has(loadedRoom.artifactKey),
     );
@@ -5379,10 +5255,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     if (canCommitDeferredPreparation && deferredCommit) {
       deferredCommit.disposedReplacementRoom = loadedRoom;
     } else if (
-      deferredCommit
+      deferredCommitResolution.action === 'cancel'
+      && deferredCommit
       && this.pendingFullRoomPreparationsById.get(roomId) === deferredCommit
     ) {
-      pending.commitAfterTeardown = null;
       this.cancelFullRoomPreparation(
         roomId,
         'deferred-preparation-stale-after-teardown',
@@ -5433,7 +5309,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         });
       });
       pending.liveObjectRoomStateCleared = true;
-      pending.phase = 'collision';
+      fullRoomTeardownLifecycle.advance(pending, 'collision');
     }
     if (pending.phase === 'collision') {
       this.runFullRoomTeardownCleanupStep('destroy edge walls', () => {
@@ -5447,11 +5323,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         pending.loadedRoom.terrainInsetCollider?.destroy();
       });
       pending.loadedRoom.terrainInsetCollider = null;
-      pending.phase = 'insets';
+      fullRoomTeardownLifecycle.advance(pending, 'insets');
     }
     if (pending.phase === 'insets') {
       this.forceDestroyLoadedRoomInsetBodies(pending.loadedRoom);
-      pending.phase = 'terrain';
+      fullRoomTeardownLifecycle.advance(pending, 'terrain');
     }
     if (pending.phase === 'terrain') {
       this.runFullRoomTeardownCleanupStep('destroy the terrain layer', () => {
@@ -5460,7 +5336,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       this.runFullRoomTeardownCleanupStep('destroy the tilemap', () => {
         pending.loadedRoom.map.destroy();
       });
-      pending.phase = 'backgrounds';
+      fullRoomTeardownLifecycle.advance(pending, 'backgrounds');
     }
     if (pending.phase === 'backgrounds') {
       for (const background of pending.loadedRoom.backgroundSprites) {
@@ -5469,7 +5345,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         });
       }
       pending.loadedRoom.backgroundSprites = [];
-      pending.phase = 'display';
+      fullRoomTeardownLifecycle.advance(pending, 'display');
     }
     if (pending.phase === 'display') {
       this.runFullRoomTeardownCleanupStep('destroy the background color', () => {
@@ -5483,7 +5359,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         pending.loadedRoom.foregroundImage?.destroy();
       });
       pending.loadedRoom.foregroundImage = null;
-      pending.phase = 'finalize';
+      fullRoomTeardownLifecycle.advance(pending, 'finalize');
     }
     this.finalizePendingFullRoomTeardown(roomId, pending, queueReconciliation);
   }
@@ -5552,9 +5428,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private queueFullRoomTeardownReconciliation(): void {
-    this.fullRoomTeardownReconciliationRequired = true;
-    this.fullRoomTeardownReconciliationGeneration =
-      this.options.getLiveObjectPhysicsReconciliationGeneration?.() ?? null;
+    const reconciliation = fullRoomTeardownLifecycle.requestReconciliation(
+      this.options.getLiveObjectPhysicsReconciliationGeneration?.() ?? null,
+    );
+    this.fullRoomTeardownReconciliationRequired = reconciliation.required;
+    this.fullRoomTeardownReconciliationGeneration = reconciliation.generation;
     if (this.pendingFullRoomTeardownReconciliationJob) return;
 
     let job: FrameWorkJobHandle | null = null;
@@ -5567,18 +5445,18 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         if (this.pendingFullRoomTeardownReconciliationJob === job) {
           this.pendingFullRoomTeardownReconciliationJob = null;
         }
-        if (this.pendingFullRoomTeardownsById.size > 0) {
-          return;
-        }
-        if (!this.fullRoomTeardownReconciliationRequired) return;
-        this.fullRoomTeardownReconciliationRequired = false;
-        const queuedAtGeneration = this.fullRoomTeardownReconciliationGeneration;
-        this.fullRoomTeardownReconciliationGeneration = null;
-        const currentGeneration =
-          this.options.getLiveObjectPhysicsReconciliationGeneration?.() ?? null;
-        if (queuedAtGeneration !== null && currentGeneration !== queuedAtGeneration) {
-          return;
-        }
+        const resolution = fullRoomTeardownLifecycle.consumeReconciliation({
+          state: {
+            required: this.fullRoomTeardownReconciliationRequired,
+            generation: this.fullRoomTeardownReconciliationGeneration,
+          },
+          pendingTeardownCount: this.pendingFullRoomTeardownsById.size,
+          currentGeneration:
+            this.options.getLiveObjectPhysicsReconciliationGeneration?.() ?? null,
+        });
+        this.fullRoomTeardownReconciliationRequired = resolution.state.required;
+        this.fullRoomTeardownReconciliationGeneration = resolution.state.generation;
+        if (resolution.action !== 'reconcile') return;
         this.syncLiveObjectWorldColliders();
         this.options.syncLiveObjectInteractions?.(this.loadedFullRoomsById.values());
       },
@@ -5596,7 +5474,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     const pending = this.pendingFullRoomTeardownsById.get(roomId);
     if (!pending) return null;
     if (restoreCollisionReady && pending.destructionStarted) {
-      pending.retainedAfterDestruction = true;
+      fullRoomTeardownLifecycle.retainAfterDestruction(pending);
       if (!pending.job) {
         this.enqueuePendingFullRoomTeardownJob(roomId, pending, pending.phase);
       }
@@ -5623,8 +5501,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       } catch (error) {
         console.error(`Could not restore suspended runtime for retained room ${roomId}.`, error);
         pending.restoreRuntime = null;
-        pending.destructionStarted = true;
-        pending.retainedAfterDestruction = true;
+        fullRoomTeardownLifecycle.beginDestruction(pending);
+        fullRoomTeardownLifecycle.retainAfterDestruction(pending);
         this.forceCompletePendingFullRoomTeardown(roomId, pending, true);
         if (notifySeams) {
           this.options.onFullRoomSetChanged?.([loadedRoom.room.coordinates]);
@@ -5653,8 +5531,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       }
       if (!pending.restoreCollisionReady || !collisionInfrastructureReady) {
         loadedRoom.collisionReady = false;
-        pending.destructionStarted = true;
-        pending.retainedAfterDestruction = true;
+        fullRoomTeardownLifecycle.beginDestruction(pending);
+        fullRoomTeardownLifecycle.retainAfterDestruction(pending);
         this.pendingFullRoomTeardownsById.set(roomId, pending);
         this.forceCompletePendingFullRoomTeardown(roomId, pending, true);
         if (notifySeams) {
@@ -5669,8 +5547,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         } catch (error) {
           console.error(`Could not reconcile retained room ${roomId}.`, error);
           loadedRoom.collisionReady = false;
-          pending.destructionStarted = true;
-          pending.retainedAfterDestruction = true;
+          fullRoomTeardownLifecycle.beginDestruction(pending);
+          fullRoomTeardownLifecycle.retainAfterDestruction(pending);
           this.pendingFullRoomTeardownsById.set(roomId, pending);
           this.forceCompletePendingFullRoomTeardown(roomId, pending, true);
           if (notifySeams) {
@@ -5682,8 +5560,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           'teardown-reconciliation-covered-by-room-restore',
         );
         this.pendingFullRoomTeardownReconciliationJob = null;
-        this.fullRoomTeardownReconciliationRequired = false;
-        this.fullRoomTeardownReconciliationGeneration = null;
+        const clearedReconciliation = fullRoomTeardownLifecycle.clearReconciliation();
+        this.fullRoomTeardownReconciliationRequired = clearedReconciliation.required;
+        this.fullRoomTeardownReconciliationGeneration = clearedReconciliation.generation;
       }
       loadedRoom.collisionReady = true;
       if (notifyVisibility) {
@@ -5776,53 +5655,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   private getRetainedFullRoomIds(targetFullRoomIds: Set<string>): Set<string> {
     const protectedRoomIds = this.getProtectedLoadedFullRoomIds(targetFullRoomIds);
-    const effectiveTargetRoomIds = new Set<string>(targetFullRoomIds);
-    for (const roomId of protectedRoomIds) {
-      effectiveTargetRoomIds.add(roomId);
-    }
-
-    const retainedRoomIds = new Set<string>(effectiveTargetRoomIds);
     const now = this.options.scene.time.now;
     const policy = this.getResolvedPerformancePolicy();
     const retainReleaseGrace = policy.activeRuntimeProfile !== 'reduced'
       || policy.selectedMode === 'battery-saver';
-    let nextReleaseAt: number | null = null;
-
-    for (const roomId of effectiveTargetRoomIds) {
-      this.fullRoomReleaseAtById.delete(roomId);
-    }
-
-    for (const roomId of Array.from(this.fullRoomReleaseAtById.keys())) {
-      if (!this.loadedFullRoomsById.has(roomId)) {
-        this.fullRoomReleaseAtById.delete(roomId);
-      }
-    }
-
-    for (const roomId of this.loadedFullRoomsById.keys()) {
-      if (effectiveTargetRoomIds.has(roomId)) {
-        continue;
-      }
-      if (this.pendingFullRoomTeardownsById.has(roomId)) {
-        continue;
-      }
-
-      if (!retainReleaseGrace) {
-        this.fullRoomReleaseAtById.delete(roomId);
-        continue;
-      }
-
-      const releaseAt = this.fullRoomReleaseAtById.get(roomId) ?? (now + FULL_ROOM_RELEASE_GRACE_MS);
-      this.fullRoomReleaseAtById.set(roomId, releaseAt);
-      if (releaseAt > now) {
-        retainedRoomIds.add(roomId);
-        nextReleaseAt = nextReleaseAt === null ? releaseAt : Math.min(nextReleaseAt, releaseAt);
-      } else {
-        this.fullRoomReleaseAtById.delete(roomId);
-      }
-    }
-
-    this.scheduleFullRoomReleaseCleanup(nextReleaseAt, now);
-    return retainedRoomIds;
+    const retention = planFullRoomRetention({
+      targetRoomIds: targetFullRoomIds,
+      protectedRoomIds,
+      loadedRoomIds: this.loadedFullRoomsById.keys(),
+      pendingTeardownRoomIds: new Set(this.pendingFullRoomTeardownsById.keys()),
+      releaseAtByRoomId: this.fullRoomReleaseAtById,
+      now,
+      retainReleaseGrace,
+      releaseGraceMs: FULL_ROOM_RELEASE_GRACE_MS,
+    });
+    this.fullRoomReleaseAtById = retention.releaseAtByRoomId;
+    this.scheduleFullRoomReleaseCleanup(retention.nextReleaseAt, now);
+    return retention.retainedRoomIds;
   }
 
   private getProtectedLoadedFullRoomIds(targetFullRoomIds: ReadonlySet<string>): Set<string> {

@@ -89,7 +89,6 @@ interface OverworldSceneFlowHost {
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
   startRemoteCourseRun(runState: ActiveCourseRunState): void;
-  setCourseComposerStatusText(text: string | null): void;
   emitCourseComposerStateChanged(): void;
   renderHud(): void;
 }
@@ -493,7 +492,6 @@ export class OverworldSceneFlowController {
     this.host.setSelectedCoordinates({ ...startRoom.coordinates });
     this.host.setShouldCenterCamera(true);
     this.host.setShouldRespawnPlayer(true);
-    this.host.setCourseComposerStatusText(null);
     this.host.emitCourseComposerStateChanged();
     setFocusedCoordinatesInUrl(startRoom.coordinates);
     this.host.refreshAroundIfNeededOrFromCache(startRoom.coordinates, {
@@ -568,7 +566,6 @@ export class OverworldSceneFlowController {
       statusMessage: authState.authenticated ? null : 'Sign in to author and publish courses.',
     };
 
-    this.host.setCourseComposerStatusText(null);
     this.host.emitCourseComposerStateChanged();
     this.host.renderHud();
 

@@ -4,7 +4,7 @@ import {
   type NpcMode,
 } from '../../../npcs/model';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
-import type { LoadedRoomObject } from '../liveObjects';
+import type { LoadedRoomObject } from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
 import { isAnimationSafelyPlayable } from './animationReadiness';
 import { getArcadeBodyBounds } from './bodies';

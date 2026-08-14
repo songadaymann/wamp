@@ -1,18 +1,8 @@
 import Phaser from 'phaser';
-import { getAuthDebugState } from '../../auth/client';
-import { playSfx } from '../../audio/sfx';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import {
-  ROOM_COMMENT_BROWSE_MAX_ROOM_IDS,
-  ROOM_COMMENT_MAX_LENGTH,
   type BrowseRoomCommentPreview,
-  type RoomCommentRecord,
 } from '../../roomComments/model';
-import {
-  fetchBrowseRoomCommentSummaries,
-  fetchRoomComments,
-  submitRoomComment,
-} from '../../roomComments/client';
 import { type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
 import { type WorldRoomSummary, type WorldWindow } from '../../persistence/worldModel';
 import {
@@ -29,42 +19,13 @@ import {
   type OverworldBadgePlacement,
   type RoomBadgeScaleConfig,
 } from './badgeOverlays';
-
-interface ComposerElements {
-  root: HTMLDivElement;
-  form: HTMLFormElement;
-  input: HTMLTextAreaElement;
-  counter: HTMLDivElement;
-  cancelButton: HTMLButtonElement;
-  submitButton: HTMLButtonElement;
-}
-
-interface RenderedRoomComment {
-  comment: RoomCommentRecord;
-  container: Phaser.GameObjects.Container;
-  pin: Phaser.GameObjects.Image;
-  panel: Phaser.GameObjects.Graphics;
-  authorText: Phaser.GameObjects.Text;
-  bodyText: Phaser.GameObjects.Text;
-  timeText: Phaser.GameObjects.Text;
-  pinned: boolean;
-}
-
-interface BrowseCommentTarget {
-  signature: string;
-  groupKey: string;
-  roomId: string;
-  version: number;
-  coordinates: RoomCoordinates;
-  displayCoordinates: RoomCoordinates;
-  title: string | null;
-}
-
-interface BrowseCommentCacheEntry {
-  comments: BrowseRoomCommentPreview[];
-  commentCount: number;
-  full: boolean;
-}
+import { RoomCommentsComposerController } from './roomCommentsComposerController';
+import { RoomCommentsBrowsePresentationController } from './roomCommentsBrowsePresentationController';
+import {
+  RoomCommentsDataController,
+  type BrowseCommentTarget,
+} from './roomCommentsDataController';
+import { RoomCommentsPlayPresentationController } from './roomCommentsPlayPresentationController';
 
 interface RenderedBrowseCommentMarker extends OverworldBadgePlacement {
   key: string;
@@ -116,13 +77,6 @@ interface BrowseDanmakuTrack {
   screenY: number;
 }
 
-interface PendingBrowseFullCommentLoad {
-  target: BrowseCommentTarget;
-  pinWhenLoaded: boolean;
-  pinGeneration: number;
-  loadGeneration: number;
-}
-
 interface OverworldRoomCommentsControllerOptions {
   scene: Phaser.Scene;
   getMode: () => OverworldMode;
@@ -141,14 +95,6 @@ interface OverworldRoomCommentsControllerOptions {
   document?: Document;
 }
 
-const COMMENT_PIN_DEPTH = 262;
-const COMMENT_PIN_TEXTURE_KEY = 'room_comment_icon';
-const COMMENT_PANEL_FILL = 0x050505;
-const COMMENT_PANEL_STROKE = 0xffd65a;
-const COMMENT_TEXT_COLOR = '#fff3dc';
-const COMMENT_MUTED_COLOR = '#d0b98c';
-const COMMENT_PANEL_WIDTH = 236;
-const COMMENT_PANEL_PADDING = 9;
 const BROWSE_COMMENT_DEPTH = 58;
 const BROWSE_COMMENT_HIDE_ZOOM = 0.11;
 const BROWSE_COMMENT_FADE_START_ZOOM = 0.145;
@@ -213,8 +159,6 @@ const BROWSE_DANMAKU_ROOM_TRACK_VERTICAL_RATIO = 0.36;
 const BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MIN = 20;
 const BROWSE_DANMAKU_ROOM_TRACK_LANE_SPACING_MAX = 38;
 const BROWSE_COMMENT_VIEWPORT_GUARD_FRACTION = 0.25;
-const BROWSE_COMMENT_READINESS_RETRY_MS = 500;
-const BROWSE_FULL_COMMENT_FETCH_CONCURRENCY = 2;
 
 export class OverworldRoomCommentsController {
   private nextVisualSyncAt = 0;
@@ -229,134 +173,137 @@ export class OverworldRoomCommentsController {
     compactTierMaxZoom: BROWSE_COMMENT_COMPACT_TIER_MAX_ZOOM,
     tierFadeSpan: BROWSE_COMMENT_TIER_FADE_SPAN,
   };
-  private composerElements: ComposerElements | null = null;
-  private composerOpen = false;
-  private submitting = false;
-  private comments: RoomCommentRecord[] = [];
-  private activeRoomSignature: string | null = null;
-  private loadingRoomSignature: string | null = null;
+  private readonly composerController: RoomCommentsComposerController;
+  private readonly dataController: RoomCommentsDataController;
+  private readonly playPresentationController: RoomCommentsPlayPresentationController;
+  private readonly browsePresentationController: RoomCommentsBrowsePresentationController<
+    RenderedBrowseCommentMarker,
+    RenderedBrowseDanmakuComment
+  >;
   private commentsVisible = getGameSettings().roomCommentsVisible;
   private unsubscribeSettings: (() => void) | null = null;
-  private readonly renderedCommentsById = new Map<string, RenderedRoomComment>();
-  private readonly browseCommentCache = new Map<string, BrowseCommentCacheEntry>();
-  private readonly browseCommentMarkersByKey = new Map<string, RenderedBrowseCommentMarker>();
-  private readonly loadingBrowseRoomSignatures = new Map<string, PendingBrowseFullCommentLoad>();
-  private readonly pendingBrowseFullCommentLoads = new Map<string, PendingBrowseFullCommentLoad>();
-  private activeBrowseFullCommentLoadCount = 0;
-  private browseFullCommentLoadGeneration = 0;
-  private pinnedBrowseRequestGeneration = 0;
-  private observedMode: OverworldMode;
-  private readonly loadingBrowseSummarySignatures = new Set<string>();
-  private readonly failedBrowseRoomSignaturesUntil = new Map<string, number>();
-  private browseSummaryRequestInFlight = false;
-  private browseSummaryGeneration = 0;
-  private browseDiscoveryReady = false;
-  private browseDiscoveryReadinessInFlight = false;
-  private browseDiscoveryReadinessRetryAt = 0;
-  private browseDiscoveryAbortController: AbortController | null = null;
-  private hoveredBrowseMarkerKey: string | null = null;
-  private pinnedBrowseMarkerKey: string | null = null;
-  private readonly activeBrowseDanmaku = new Set<RenderedBrowseDanmakuComment>();
-  private readonly idleBrowseDanmaku: RenderedBrowseDanmakuComment[] = [];
-  private readonly browseDanmakuLaneCooldowns: number[] = [];
-  private lastBrowseDanmakuUpdateMs = 0;
-  private nextBrowseDanmakuSpawnAtMs = 0;
-  private browseDanmakuCandidateCursor = 0;
+
+  private get browseCommentMarkersByKey(): Map<string, RenderedBrowseCommentMarker> {
+    return this.browsePresentationController.markersByKey;
+  }
+
+  private get hoveredBrowseMarkerKey(): string | null {
+    return this.browsePresentationController.hoveredMarkerKey;
+  }
+
+  private set hoveredBrowseMarkerKey(value: string | null) {
+    this.browsePresentationController.hoveredMarkerKey = value;
+  }
+
+  private get activeBrowseDanmaku(): Set<RenderedBrowseDanmakuComment> {
+    return this.browsePresentationController.activeDanmaku;
+  }
+
+  private get idleBrowseDanmaku(): RenderedBrowseDanmakuComment[] {
+    return this.browsePresentationController.idleDanmaku;
+  }
+
+  private get browseDanmakuLaneCooldowns(): number[] {
+    return this.browsePresentationController.danmakuLaneCooldowns;
+  }
+
+  private get lastBrowseDanmakuUpdateMs(): number {
+    return this.browsePresentationController.lastDanmakuUpdateMs;
+  }
+
+  private set lastBrowseDanmakuUpdateMs(value: number) {
+    this.browsePresentationController.lastDanmakuUpdateMs = value;
+  }
+
+  private get nextBrowseDanmakuSpawnAtMs(): number {
+    return this.browsePresentationController.nextDanmakuSpawnAtMs;
+  }
+
+  private set nextBrowseDanmakuSpawnAtMs(value: number) {
+    this.browsePresentationController.nextDanmakuSpawnAtMs = value;
+  }
+
+  private get browseDanmakuCandidateCursor(): number {
+    return this.browsePresentationController.danmakuCandidateCursor;
+  }
+
+  private set browseDanmakuCandidateCursor(value: number) {
+    this.browsePresentationController.danmakuCandidateCursor = value;
+  }
 
   constructor(private readonly options: OverworldRoomCommentsControllerOptions) {
-    this.observedMode = options.getMode();
+    this.browsePresentationController = new RoomCommentsBrowsePresentationController({
+      syncMarkers: () => this.syncBrowseCommentMarkers(),
+      syncDanmaku: () => this.syncBrowseDanmakuStreams(),
+    });
+    this.playPresentationController = new RoomCommentsPlayPresentationController({
+      scene: options.scene,
+      getRoomOrigin: options.getRoomOrigin,
+      onDisplayObjectsChanged: options.onDisplayObjectsChanged,
+    });
+    this.dataController = new RoomCommentsDataController({
+      getMode: options.getMode,
+      waitForBrowseDiscoveryReady: options.waitForBrowseDiscoveryReady,
+      showTransientStatus: options.showTransientStatus,
+      onCurrentCommentsChanged: () => this.syncRenderedComments(this.getRenderableRoom()),
+      onBrowseDataChanged: () => this.syncBrowseCommentMarkers(),
+    });
+    this.composerController = new RoomCommentsComposerController({
+      document: options.document,
+      getHost: () => options.scene.game.canvas.parentElement ?? (options.document ?? document).body,
+      focusCanvas: () => options.scene.game.canvas.focus(),
+      getRenderableRoom: () => this.getRenderableRoom(),
+      getPlayerCommentPosition: options.getPlayerCommentPosition,
+      showTransientStatus: options.showTransientStatus,
+    });
   }
 
   initialize(): void {
-    this.ensureComposerDom();
+    this.composerController.initialize();
     this.unsubscribeSettings = subscribeGameSettings(this.handleSettingsChanged);
-    this.renderComposer();
+    this.composerController.refresh();
   }
 
   reset(): void {
-    this.closeComposer(false);
-    this.comments = [];
-    this.activeRoomSignature = null;
-    this.loadingRoomSignature = null;
-    this.invalidateBrowseFullCommentLoads();
-    this.loadingBrowseSummarySignatures.clear();
-    this.failedBrowseRoomSignaturesUntil.clear();
-    this.browseSummaryRequestInFlight = false;
-    this.browseSummaryGeneration += 1;
-    this.browseDiscoveryReady = false;
-    this.browseDiscoveryReadinessInFlight = false;
-    this.browseDiscoveryReadinessRetryAt = 0;
-    this.browseDiscoveryAbortController?.abort();
-    this.browseDiscoveryAbortController = null;
-    this.browseCommentCache.clear();
+    this.composerController.close(false);
+    this.dataController.reset();
     this.hoveredBrowseMarkerKey = null;
-    this.pinnedBrowseMarkerKey = null;
-    this.destroyRenderedComments();
-    this.destroyBrowseCommentMarkers();
-    this.destroyBrowseDanmakuStreams();
+    this.playPresentationController.reset();
+    this.browsePresentationController.destroy();
   }
 
   destroy(): void {
     this.unsubscribeSettings?.();
     this.unsubscribeSettings = null;
     this.reset();
-    this.destroyComposerDom();
+    this.composerController.destroy();
   }
 
   update(): void {
-    this.syncObservedMode();
+    this.dataController.syncObservedMode();
     const room = this.getRenderableRoom();
-    const nextSignature = room ? this.getRoomSignature(room) : null;
-    if (nextSignature !== this.activeRoomSignature) {
-      this.activeRoomSignature = nextSignature;
+    if (this.dataController.observeCurrentRoom(room)) {
       this.nextVisualSyncAt = 0;
-      this.comments = [];
-      this.destroyRenderedComments();
-      if (room) {
-        void this.loadComments(room, this.getRoomSignature(room));
-      }
+      this.playPresentationController.reset();
     }
 
-    if (!room) {
-      this.closeComposer(false);
-    }
+    this.composerController.update();
 
     const now = performance.now();
     if (now < this.nextVisualSyncAt) return;
     this.nextVisualSyncAt = now + 50;
 
     this.syncRenderedComments(room);
-    this.syncBrowseCommentMarkers();
-    this.syncBrowseDanmakuStreams();
-    this.renderComposer();
+    this.browsePresentationController.sync();
+    this.composerController.refresh();
   }
 
   openComposer(): boolean {
-    const room = this.getRenderableRoom();
-    if (!room) {
-      this.options.showTransientStatus?.('Play a published room to leave a comment.');
-      return false;
-    }
-
-    const authState = getAuthDebugState();
-    if (!authState.authenticated || !authState.user) {
-      this.options.showTransientStatus?.('Sign in to comment on rooms.');
-      return false;
-    }
-    if (authState.schoolManaged) {
-      this.options.showTransientStatus?.('Classroom accounts cannot comment on rooms.');
-      return false;
-    }
-
-    this.ensureComposerDom();
-    this.composerOpen = true;
-    this.renderComposer();
-    this.composerElements?.input.focus();
-    return true;
+    return this.composerController.open();
   }
 
   openSelectedBrowseComments(): boolean {
-    this.syncObservedMode();
+    this.dataController.syncObservedMode();
     if (this.options.getMode() !== 'browse') {
       return this.openComposer();
     }
@@ -369,10 +316,10 @@ export class OverworldRoomCommentsController {
       return false;
     }
 
-    this.setPinnedBrowseMarkerKey(target.signature);
-    const cached = this.browseCommentCache.get(target.signature);
+    this.dataController.setPinnedBrowseMarkerKey(target.signature);
+    const cached = this.dataController.getBrowseCacheEntry(target.signature);
     if (cached?.full) {
-      this.syncBrowseCommentMarkers();
+      this.browsePresentationController.syncMarkers();
       this.options.showTransientStatus?.(
         cached.comments.length > 0 ? 'Room comments opened.' : 'No comments here yet.',
       );
@@ -382,33 +329,18 @@ export class OverworldRoomCommentsController {
     // A viewport summary is deliberately not treated as the full selected
     // room payload. Preserve the marker while promoting the selected room to
     // the existing exact/full comments endpoint.
-    void this.loadBrowseComments(target, true);
-    this.syncBrowseCommentMarkers();
+    this.dataController.loadBrowseComments(target, true);
+    this.browsePresentationController.syncMarkers();
     this.options.showTransientStatus?.('Loading room comments...');
     return true;
   }
 
   closeComposer(focusCanvas = true): void {
-    if (!this.composerOpen) {
-      this.renderComposer();
-      return;
-    }
-
-    this.composerOpen = false;
-    this.submitting = false;
-    if (this.composerElements) {
-      this.composerElements.form.reset();
-      this.composerElements.input.blur();
-    }
-    this.renderComposer();
-
-    if (focusCanvas) {
-      this.options.scene.game.canvas.focus();
-    }
+    this.composerController.close(focusCanvas);
   }
 
   isComposerOpen(): boolean {
-    return this.composerOpen;
+    return this.composerController.isOpen();
   }
 
   areCommentsVisible(): boolean {
@@ -423,9 +355,8 @@ export class OverworldRoomCommentsController {
     this.commentsVisible = visible;
     updateGameSettings({ roomCommentsVisible: visible });
     this.syncRenderedComments(this.getRenderableRoom());
-    this.syncBrowseCommentMarkers();
-    this.syncBrowseDanmakuStreams();
-    this.renderComposer();
+    this.browsePresentationController.sync();
+    this.composerController.refresh();
   }
 
   toggleCommentsVisible(): boolean {
@@ -434,23 +365,17 @@ export class OverworldRoomCommentsController {
   }
 
   handleEscapeKey(): boolean {
-    if (!this.composerOpen) {
-      return false;
-    }
-
-    this.closeComposer();
-    return true;
+    return this.composerController.handleEscapeKey();
   }
 
   refreshAuthState(): void {
-    this.renderComposer();
+    this.composerController.refresh();
   }
 
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
     return [
-      ...Array.from(this.renderedCommentsById.values(), (rendered) => rendered.container),
-      ...Array.from(this.browseCommentMarkersByKey.values(), (rendered) => rendered.container),
-      ...Array.from(this.activeBrowseDanmaku.values(), (rendered) => rendered.container),
+      ...this.playPresentationController.getIgnoredObjects(),
+      ...this.browsePresentationController.getIgnoredObjects(),
     ];
   }
 
@@ -488,11 +413,16 @@ export class OverworldRoomCommentsController {
     }>;
   } {
     const currentRoom = this.options.getCurrentRoomSnapshot();
+    const composerDebug = this.composerController.getDebugSnapshot();
+    const dataDebug = this.dataController.getDebugSnapshot();
+    const browsePresentationDebug = this.browsePresentationController.getDebugSnapshot(
+      (stream) => this.getBrowseDanmakuDebugScreenY(stream),
+    );
     return {
-      activeRoomSignature: this.activeRoomSignature,
-      loadingRoomSignature: this.loadingRoomSignature,
-      commentCount: this.comments.length,
-      renderedCommentCount: this.renderedCommentsById.size,
+      activeRoomSignature: dataDebug.activeRoomSignature,
+      loadingRoomSignature: dataDebug.loadingRoomSignature,
+      commentCount: dataDebug.commentCount,
+      renderedCommentCount: this.playPresentationController.getRenderedCount(),
       commentsVisible: this.commentsVisible,
       currentRoomPublished: this.options.isCurrentRoomPublished(),
       currentRoomSnapshot: currentRoom
@@ -503,50 +433,17 @@ export class OverworldRoomCommentsController {
             coordinates: { ...currentRoom.coordinates },
           }
         : null,
-      composerOpen: this.composerOpen,
-      submitting: this.submitting,
-      browseMarkerCount: this.browseCommentMarkersByKey.size,
-      browseCacheEntryCount: this.browseCommentCache.size,
-      browseLoadingCount:
-        this.loadingBrowseRoomSignatures.size + this.pendingBrowseFullCommentLoads.size,
-      pinnedBrowseMarkerKey: this.pinnedBrowseMarkerKey,
-      browseDanmakuActiveCount: this.activeBrowseDanmaku.size,
-      browseDanmakuPoolCount: this.idleBrowseDanmaku.length,
-      browseDanmakuStreams: Array.from(this.activeBrowseDanmaku, (stream) => ({
-        key: stream.key,
-        commentId: stream.commentId,
-        targetCoordinates: stream.target ? { ...stream.target.displayCoordinates } : null,
-        laneIndex: stream.laneIndex,
-        screenX: Math.round(stream.screenX),
-        screenY: Math.round(this.getBrowseDanmakuDebugScreenY(stream)),
-        widthPx: stream.widthPx,
-        alpha: Number(stream.container.alpha.toFixed(2)),
-        ageMs: Math.round(stream.ageMs),
-      })),
+      composerOpen: composerDebug.composerOpen,
+      submitting: composerDebug.submitting,
+      browseMarkerCount: browsePresentationDebug.markerCount,
+      browseCacheEntryCount: dataDebug.browseCacheEntryCount,
+      browseLoadingCount: dataDebug.browseLoadingCount,
+      pinnedBrowseMarkerKey: dataDebug.pinnedBrowseMarkerKey,
+      browseDanmakuActiveCount: browsePresentationDebug.activeCount,
+      browseDanmakuPoolCount: browsePresentationDebug.poolCount,
+      browseDanmakuStreams: browsePresentationDebug.streams,
     };
   }
-
-  private readonly handleComposerSubmit = (event: SubmitEvent) => {
-    event.preventDefault();
-    void this.submitComposer();
-  };
-
-  private readonly handleComposerInput = () => {
-    this.renderCounter();
-  };
-
-  private readonly handleComposerKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape') {
-      return;
-    }
-
-    event.preventDefault();
-    this.closeComposer();
-  };
-
-  private readonly handleComposerCancel = () => {
-    this.closeComposer();
-  };
 
   private readonly handleSettingsChanged = (settings: GameSettings): void => {
     if (this.commentsVisible === settings.roomCommentsVisible) {
@@ -555,173 +452,27 @@ export class OverworldRoomCommentsController {
 
     this.commentsVisible = settings.roomCommentsVisible;
     this.syncRenderedComments(this.getRenderableRoom());
-    this.syncBrowseCommentMarkers();
-    this.syncBrowseDanmakuStreams();
-    this.renderComposer();
+    this.browsePresentationController.sync();
+    this.composerController.refresh();
   };
 
-  private async loadComments(room: RoomSnapshot, signature: string): Promise<void> {
-    if (this.loadingRoomSignature === signature) {
-      return;
-    }
-
-    this.loadingRoomSignature = signature;
-    try {
-      const response = await fetchRoomComments(room.id, room.coordinates, room.version);
-      if (this.activeRoomSignature !== signature) {
-        return;
-      }
-      this.comments = response.comments;
-      this.syncRenderedComments(room);
-    } catch (error) {
-      console.warn('Failed to load room comments', error);
-    } finally {
-      if (this.loadingRoomSignature === signature) {
-        this.loadingRoomSignature = null;
-      }
-    }
-  }
-
-  private loadBrowseComments(target: BrowseCommentTarget, pinWhenLoaded = false): void {
-    if (pinWhenLoaded) {
-      // Retain only the newest queued selection. Already active reads may
-      // finish into the cache, but generation checks prevent stale re-pins.
-      this.pendingBrowseFullCommentLoads.clear();
-    }
-    const active = this.loadingBrowseRoomSignatures.get(target.signature);
-    if (active) {
-      if (pinWhenLoaded) {
-        active.pinWhenLoaded = true;
-        active.pinGeneration = this.pinnedBrowseRequestGeneration;
-      }
-      return;
-    }
-    const existing = this.pendingBrowseFullCommentLoads.get(target.signature);
-    if (existing) {
-      if (pinWhenLoaded) {
-        existing.pinWhenLoaded = true;
-        existing.pinGeneration = this.pinnedBrowseRequestGeneration;
-      }
-      return;
-    }
-
-    this.pendingBrowseFullCommentLoads.set(target.signature, {
-      target,
-      pinWhenLoaded,
-      pinGeneration: this.pinnedBrowseRequestGeneration,
-      loadGeneration: this.browseFullCommentLoadGeneration,
-    });
-    this.drainBrowseFullCommentLoads();
-  }
-
-  private drainBrowseFullCommentLoads(): void {
-    while (
-      this.activeBrowseFullCommentLoadCount < BROWSE_FULL_COMMENT_FETCH_CONCURRENCY
-      && this.pendingBrowseFullCommentLoads.size > 0
-    ) {
-      const nextEntry = this.pendingBrowseFullCommentLoads.entries().next().value as
-        | [string, PendingBrowseFullCommentLoad]
-        | undefined;
-      if (!nextEntry) return;
-      const [signature, load] = nextEntry;
-      this.pendingBrowseFullCommentLoads.delete(signature);
-      if (load.loadGeneration !== this.browseFullCommentLoadGeneration) continue;
-
-      this.activeBrowseFullCommentLoadCount += 1;
-      this.loadingBrowseRoomSignatures.set(signature, load);
-      void this.performBrowseFullCommentLoad(load).finally(() => {
-        this.activeBrowseFullCommentLoadCount = Math.max(
-          0,
-          this.activeBrowseFullCommentLoadCount - 1,
-        );
-        if (this.loadingBrowseRoomSignatures.get(signature) === load) {
-          this.loadingBrowseRoomSignatures.delete(signature);
-        }
-        this.drainBrowseFullCommentLoads();
-      });
-    }
-  }
-
-  private async performBrowseFullCommentLoad(load: PendingBrowseFullCommentLoad): Promise<void> {
-    const { target, loadGeneration } = load;
-    try {
-      const response = await fetchRoomComments(target.roomId, target.coordinates, target.version);
-      if (
-        loadGeneration !== this.browseFullCommentLoadGeneration
-        || this.options.getMode() !== 'browse'
-      ) return;
-      const comments = [...response.comments].sort(compareCommentsNewestFirst);
-      this.browseCommentCache.set(target.signature, {
-        comments,
-        commentCount: comments.length,
-        full: true,
-      });
-      this.failedBrowseRoomSignaturesUntil.delete(target.signature);
-      if (
-        load.pinWhenLoaded
-        && load.pinGeneration === this.pinnedBrowseRequestGeneration
-        && this.pinnedBrowseMarkerKey === target.signature
-      ) {
-        this.options.showTransientStatus?.(
-          comments.length > 0 ? 'Room comments opened.' : 'No comments here yet.',
-        );
-      }
-      this.syncBrowseCommentMarkers();
-    } catch (error) {
-      if (
-        loadGeneration !== this.browseFullCommentLoadGeneration
-        || this.options.getMode() !== 'browse'
-      ) return;
-      console.warn('Failed to load browse room comments', error);
-      this.failedBrowseRoomSignaturesUntil.set(target.signature, Date.now() + 15000);
-      if (
-        load.pinWhenLoaded
-        && load.pinGeneration === this.pinnedBrowseRequestGeneration
-        && this.pinnedBrowseMarkerKey === target.signature
-      ) {
-        this.options.showTransientStatus?.('Could not load comments for this room.');
-      }
-    }
-  }
-
-  private invalidateBrowseFullCommentLoads(): void {
-    this.browseFullCommentLoadGeneration += 1;
-    this.pinnedBrowseRequestGeneration += 1;
-    this.pendingBrowseFullCommentLoads.clear();
-    this.loadingBrowseRoomSignatures.clear();
-  }
-
-  private syncObservedMode(): void {
-    const mode = this.options.getMode();
-    if (mode === this.observedMode) return;
-    this.observedMode = mode;
-    this.invalidateBrowseFullCommentLoads();
-  }
-
-  private setPinnedBrowseMarkerKey(key: string | null): void {
-    if (this.pinnedBrowseMarkerKey === key) return;
-    this.pinnedBrowseMarkerKey = key;
-    this.pinnedBrowseRequestGeneration += 1;
-    if (key === null) this.pendingBrowseFullCommentLoads.clear();
-  }
-
   private syncBrowseCommentMarkers(): void {
-    this.syncObservedMode();
+    this.dataController.syncObservedMode();
     if (this.options.getMode() !== 'browse' || !this.commentsVisible) {
       this.hoveredBrowseMarkerKey = null;
-      this.setPinnedBrowseMarkerKey(null);
+      this.dataController.setPinnedBrowseMarkerKey(null);
       this.destroyBrowseCommentMarkers();
       return;
     }
 
-    if (!this.ensureBrowseDiscoveryReady()) {
+    if (!this.dataController.ensureBrowseDiscoveryReady()) {
       return;
     }
 
     const targets = this.getBrowseCommentTargetsForViewport();
     if (targets.length === 0) {
       this.hoveredBrowseMarkerKey = null;
-      this.setPinnedBrowseMarkerKey(null);
+      this.dataController.setPinnedBrowseMarkerKey(null);
       this.destroyBrowseCommentMarkers();
       return;
     }
@@ -729,10 +480,10 @@ export class OverworldRoomCommentsController {
     const targetSignatures = new Set<string>();
     const desiredMarkerKeys = new Set<string>();
     let structureChanged = false;
-    this.queueBrowseSummaryLoad(targets);
+    this.dataController.queueBrowseSummaryLoad(targets);
     for (const target of targets) {
       targetSignatures.add(target.signature);
-      const cached = this.browseCommentCache.get(target.signature);
+      const cached = this.dataController.getBrowseCacheEntry(target.signature);
       if (!cached || cached.comments.length === 0) {
         continue;
       }
@@ -777,10 +528,10 @@ export class OverworldRoomCommentsController {
     }
 
     if (
-      this.pinnedBrowseMarkerKey &&
-      !targetSignatures.has(this.pinnedBrowseMarkerKey)
+      this.dataController.getPinnedBrowseMarkerKey() &&
+      !targetSignatures.has(this.dataController.getPinnedBrowseMarkerKey()!)
     ) {
-      this.setPinnedBrowseMarkerKey(null);
+      this.dataController.setPinnedBrowseMarkerKey(null);
     }
     if (
       this.hoveredBrowseMarkerKey &&
@@ -793,96 +544,6 @@ export class OverworldRoomCommentsController {
     if (structureChanged) {
       this.options.onDisplayObjectsChanged?.();
     }
-  }
-
-  private ensureBrowseDiscoveryReady(): boolean {
-    if (this.browseDiscoveryReady) return true;
-    if (!this.options.waitForBrowseDiscoveryReady) {
-      this.browseDiscoveryReady = true;
-      return true;
-    }
-    if (
-      this.browseDiscoveryReadinessInFlight
-      || Date.now() < this.browseDiscoveryReadinessRetryAt
-    ) return false;
-
-    this.browseDiscoveryReadinessInFlight = true;
-    const abortController = new AbortController();
-    this.browseDiscoveryAbortController?.abort();
-    this.browseDiscoveryAbortController = abortController;
-    void this.options.waitForBrowseDiscoveryReady(abortController.signal)
-      .then((ready) => {
-        if (abortController.signal.aborted || this.browseDiscoveryAbortController !== abortController) {
-          return;
-        }
-        this.browseDiscoveryReady = ready;
-        if (!ready) this.browseDiscoveryReadinessRetryAt = Date.now() + BROWSE_COMMENT_READINESS_RETRY_MS;
-      })
-      .catch((error) => {
-        if (!abortController.signal.aborted) {
-          console.warn('Failed to await browse comment discovery readiness', error);
-          this.browseDiscoveryReadinessRetryAt = Date.now() + BROWSE_COMMENT_READINESS_RETRY_MS;
-        }
-      })
-      .finally(() => {
-        if (this.browseDiscoveryAbortController !== abortController) return;
-        this.browseDiscoveryReadinessInFlight = false;
-        this.browseDiscoveryAbortController = null;
-        if (this.browseDiscoveryReady) this.syncBrowseCommentMarkers();
-      });
-    return false;
-  }
-
-  private queueBrowseSummaryLoad(targets: readonly BrowseCommentTarget[]): void {
-    if (this.browseSummaryRequestInFlight) return;
-    const now = Date.now();
-    const pendingTargets = targets
-      .filter((target) => (
-        !this.browseCommentCache.has(target.signature)
-        && !this.loadingBrowseSummarySignatures.has(target.signature)
-        && now >= (this.failedBrowseRoomSignaturesUntil.get(target.signature) ?? 0)
-      ))
-      .slice(0, ROOM_COMMENT_BROWSE_MAX_ROOM_IDS);
-    if (pendingTargets.length === 0) return;
-
-    this.browseSummaryRequestInFlight = true;
-    const generation = this.browseSummaryGeneration;
-    for (const target of pendingTargets) this.loadingBrowseSummarySignatures.add(target.signature);
-    void fetchBrowseRoomCommentSummaries(pendingTargets.map((target) => target.roomId))
-      .then((response) => {
-        if (generation !== this.browseSummaryGeneration) return;
-        const summariesByRoomId = new Map(response.rooms.map((summary) => [summary.roomId, summary]));
-        for (const target of pendingTargets) {
-          const summary = summariesByRoomId.get(target.roomId);
-          if (!summary || summary.roomVersion !== target.version) {
-            this.failedBrowseRoomSignaturesUntil.set(target.signature, Date.now() + 15000);
-            continue;
-          }
-          const existing = this.browseCommentCache.get(target.signature);
-          if (!existing?.full) {
-            this.browseCommentCache.set(target.signature, {
-              comments: [...summary.comments].sort(compareCommentsNewestFirst),
-              commentCount: summary.commentCount,
-              full: false,
-            });
-          }
-          this.failedBrowseRoomSignaturesUntil.delete(target.signature);
-        }
-      })
-      .catch((error) => {
-        if (generation !== this.browseSummaryGeneration) return;
-        console.warn('Failed to load browse comment summaries', error);
-        const retryAt = Date.now() + 15000;
-        for (const target of pendingTargets) {
-          this.failedBrowseRoomSignaturesUntil.set(target.signature, retryAt);
-        }
-      })
-      .finally(() => {
-        if (generation !== this.browseSummaryGeneration) return;
-        for (const target of pendingTargets) this.loadingBrowseSummarySignatures.delete(target.signature);
-        this.browseSummaryRequestInFlight = false;
-        this.syncBrowseCommentMarkers();
-      });
   }
 
   private getBrowseCommentTargets(): BrowseCommentTarget[] {
@@ -953,8 +614,9 @@ export class OverworldRoomCommentsController {
         const leftSelected = selectedCoordinates && coordinatesEqual(left.displayCoordinates, selectedCoordinates);
         const rightSelected = selectedCoordinates && coordinatesEqual(right.displayCoordinates, selectedCoordinates);
         if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
-        if (left.signature === this.pinnedBrowseMarkerKey) return -1;
-        if (right.signature === this.pinnedBrowseMarkerKey) return 1;
+        const pinnedKey = this.dataController.getPinnedBrowseMarkerKey();
+        if (left.signature === pinnedKey) return -1;
+        if (right.signature === pinnedKey) return 1;
         const leftOrigin = this.options.getRoomOrigin(left.displayCoordinates);
         const rightOrigin = this.options.getRoomOrigin(right.displayCoordinates);
         const leftDistance = Math.hypot(
@@ -1098,10 +760,11 @@ export class OverworldRoomCommentsController {
       ) => {
         event.stopPropagation();
         this.options.selectRoomCoordinates?.(marker.target.displayCoordinates);
-        this.setPinnedBrowseMarkerKey(this.pinnedBrowseMarkerKey === marker.key ? null : marker.key);
-        if (this.pinnedBrowseMarkerKey === marker.key) {
-          const cached = this.browseCommentCache.get(marker.key);
-          if (!cached?.full) void this.loadBrowseComments(marker.target, true);
+        const pinnedKey = this.dataController.getPinnedBrowseMarkerKey();
+        this.dataController.setPinnedBrowseMarkerKey(pinnedKey === marker.key ? null : marker.key);
+        if (this.dataController.getPinnedBrowseMarkerKey() === marker.key) {
+          const cached = this.dataController.getBrowseCacheEntry(marker.key);
+          if (!cached?.full) this.dataController.loadBrowseComments(marker.target, true);
         }
         this.syncBrowseCommentMarkerPresentation();
       },
@@ -1226,7 +889,7 @@ export class OverworldRoomCommentsController {
     for (const marker of this.browseCommentMarkersByKey.values()) {
       const popoverVisible =
         marker.key === this.hoveredBrowseMarkerKey ||
-        marker.key === this.pinnedBrowseMarkerKey;
+        marker.key === this.dataController.getPinnedBrowseMarkerKey();
       if (popoverVisible) {
         marker.container.setVisible(true);
         marker.container.setAlpha(1);
@@ -1669,11 +1332,11 @@ export class OverworldRoomCommentsController {
     }
 
     const target = stream.target;
-    this.setPinnedBrowseMarkerKey(target.signature);
-    const pinGeneration = this.pinnedBrowseRequestGeneration;
+    this.dataController.setPinnedBrowseMarkerKey(target.signature);
+    const pinGeneration = this.dataController.getPinnedBrowseRequestGeneration();
     this.hoveredBrowseMarkerKey = null;
-    const cached = this.browseCommentCache.get(target.signature);
-    if (!cached?.full) this.loadBrowseComments(target, true);
+    const cached = this.dataController.getBrowseCacheEntry(target.signature);
+    if (!cached?.full) this.dataController.loadBrowseComments(target, true);
     this.syncBrowseCommentMarkerPresentation();
     this.options.showTransientStatus?.('Opening comment room...');
 
@@ -1681,11 +1344,11 @@ export class OverworldRoomCommentsController {
       void Promise.resolve(this.options.jumpToRoomCoordinates(target.displayCoordinates))
         .then(() => {
           if (
-            pinGeneration !== this.pinnedBrowseRequestGeneration
+            pinGeneration !== this.dataController.getPinnedBrowseRequestGeneration()
             || this.options.getMode() !== 'browse'
           ) return;
-          this.setPinnedBrowseMarkerKey(target.signature);
-          this.syncBrowseCommentMarkers();
+          this.dataController.setPinnedBrowseMarkerKey(target.signature);
+          this.browsePresentationController.syncMarkers();
           this.syncBrowseCommentMarkerPresentation();
         })
         .catch((error) => {
@@ -1876,20 +1539,6 @@ export class OverworldRoomCommentsController {
     this.options.onDisplayObjectsChanged?.();
   }
 
-  private destroyBrowseDanmakuStreams(): void {
-    for (const stream of this.activeBrowseDanmaku) {
-      stream.container.destroy(true);
-    }
-    for (const stream of this.idleBrowseDanmaku) {
-      stream.container.destroy(true);
-    }
-    this.activeBrowseDanmaku.clear();
-    this.idleBrowseDanmaku.length = 0;
-    this.browseDanmakuLaneCooldowns.length = 0;
-    this.lastBrowseDanmakuUpdateMs = 0;
-    this.nextBrowseDanmakuSpawnAtMs = 0;
-  }
-
   private hasBlockingModalOpen(): boolean {
     const doc = this.options.document ?? document;
     return Array.from(doc.querySelectorAll<HTMLElement>('.history-modal')).some((element) =>
@@ -1898,302 +1547,11 @@ export class OverworldRoomCommentsController {
     );
   }
 
-  private async submitComposer(): Promise<void> {
-    if (this.submitting || !this.composerElements) {
-      return;
-    }
-
-    const room = this.getRenderableRoom();
-    if (!room) {
-      this.options.showTransientStatus?.('Play a published room to leave a comment.');
-      return;
-    }
-
-    const body = this.composerElements.input.value.replace(/\s+/g, ' ').trim();
-    if (!body) {
-      this.options.showTransientStatus?.('Type a comment first.');
-      return;
-    }
-    if (body.length > ROOM_COMMENT_MAX_LENGTH) {
-      this.options.showTransientStatus?.(`Keep comments under ${ROOM_COMMENT_MAX_LENGTH} characters.`);
-      return;
-    }
-
-    const position = this.options.getPlayerCommentPosition() ?? {
-      x: Math.round(ROOM_PX_WIDTH / 2),
-      y: Math.round(ROOM_PX_HEIGHT / 2),
-    };
-
-    this.submitting = true;
-    this.renderComposer();
-    try {
-      await submitRoomComment(room.id, room.coordinates, {
-        roomVersion: room.version,
-        position,
-        body,
-      });
-      playSfx('chat-send');
-      this.closeComposer(false);
-      this.options.showTransientStatus?.('Comment submitted for review.');
-    } catch (error) {
-      this.options.showTransientStatus?.(getErrorMessage(error, 'Comment failed to submit.'));
-    } finally {
-      this.submitting = false;
-      this.renderComposer();
-    }
-  }
-
   private syncRenderedComments(room: RoomSnapshot | null): void {
-    const visibleComments = room && this.commentsVisible ? this.comments : [];
-    const nextIds = new Set<string>();
-    let structureChanged = false;
-
-    for (const comment of visibleComments) {
-      nextIds.add(comment.id);
-      const position = this.getCommentWorldPosition(comment);
-      const existing = this.renderedCommentsById.get(comment.id);
-      if (!existing) {
-        const rendered = this.createRenderedComment(comment);
-        rendered.container.setPosition(position.x, position.y);
-        this.renderedCommentsById.set(comment.id, rendered);
-        structureChanged = true;
-        continue;
-      }
-
-      existing.comment = comment;
-      existing.container.setPosition(position.x, position.y);
-    }
-
-    for (const [commentId, rendered] of this.renderedCommentsById.entries()) {
-      if (nextIds.has(commentId)) {
-        continue;
-      }
-
-      this.destroyRenderedComment(rendered);
-      this.renderedCommentsById.delete(commentId);
-      structureChanged = true;
-    }
-
-    if (structureChanged) {
-      this.options.onDisplayObjectsChanged?.();
-    }
-  }
-
-  private getCommentWorldPosition(comment: RoomCommentRecord): { x: number; y: number } {
-    const origin = this.options.getRoomOrigin(comment.roomCoordinates);
-    return {
-      x: origin.x + comment.position.x,
-      y: origin.y + comment.position.y - 22,
-    };
-  }
-
-  private createRenderedComment(comment: RoomCommentRecord): RenderedRoomComment {
-    const pin = this.options.scene.add.image(0, 0, COMMENT_PIN_TEXTURE_KEY);
-    pin.setOrigin(0.5, 0.5);
-    pin.setDisplaySize(20, 20);
-    const panel = this.options.scene.add.graphics();
-    const authorText = this.options.scene.add.text(0, 0, comment.authorDisplayName, {
-      fontFamily: 'IBM Plex Mono, Courier New, monospace',
-      fontSize: '11px',
-      color: COMMENT_MUTED_COLOR,
-    });
-    const bodyText = this.options.scene.add.text(0, 0, comment.body, {
-      fontFamily: 'IBM Plex Mono, Courier New, monospace',
-      fontSize: '12px',
-      color: COMMENT_TEXT_COLOR,
-      wordWrap: { width: COMMENT_PANEL_WIDTH - COMMENT_PANEL_PADDING * 2 },
-      lineSpacing: 3,
-    });
-    const timeText = this.options.scene.add.text(0, 0, formatCommentTime(comment.createdAt), {
-      fontFamily: 'IBM Plex Mono, Courier New, monospace',
-      fontSize: '10px',
-      color: COMMENT_MUTED_COLOR,
-    });
-    const container = this.options.scene.add.container(0, 0, [
-      pin,
-      panel,
-      authorText,
-      bodyText,
-      timeText,
-    ]);
-    container.setDepth(COMMENT_PIN_DEPTH);
-    container.setSize(30, 30);
-    container.setInteractive(
-      new Phaser.Geom.Rectangle(-15, -15, 30, 30),
-      Phaser.Geom.Rectangle.Contains,
-    );
-
-    const rendered: RenderedRoomComment = {
-      comment,
-      container,
-      pin,
-      panel,
-      authorText,
-      bodyText,
-      timeText,
-      pinned: false,
-    };
-
-    this.redrawRenderedComment(rendered);
-    this.setPopoverVisible(rendered, false);
-
-    container.on('pointerover', () => this.setPopoverVisible(rendered, true));
-    container.on('pointerout', () => {
-      if (!rendered.pinned) {
-        this.setPopoverVisible(rendered, false);
-      }
-    });
-    container.on('pointerdown', () => {
-      rendered.pinned = !rendered.pinned;
-      this.setPopoverVisible(rendered, rendered.pinned);
-    });
-
-    return rendered;
-  }
-
-  private redrawRenderedComment(rendered: RenderedRoomComment): void {
-    rendered.authorText.setText(rendered.comment.authorDisplayName);
-    rendered.bodyText.setText(rendered.comment.body);
-    rendered.timeText.setText(formatCommentTime(rendered.comment.createdAt));
-    const panelX = 16;
-    const panelY = -12;
-    const authorY = panelY + COMMENT_PANEL_PADDING;
-    const bodyY = authorY + rendered.authorText.height + 4;
-    const timeY = bodyY + rendered.bodyText.height + 7;
-    const panelHeight = COMMENT_PANEL_PADDING + rendered.authorText.height + 4 + rendered.bodyText.height + 7 + rendered.timeText.height + COMMENT_PANEL_PADDING;
-
-    rendered.panel.clear();
-    rendered.panel.fillStyle(COMMENT_PANEL_FILL, 0.94);
-    rendered.panel.lineStyle(2, COMMENT_PANEL_STROKE, 1);
-    rendered.panel.fillRoundedRect(panelX, panelY, COMMENT_PANEL_WIDTH, panelHeight, 6);
-    rendered.panel.strokeRoundedRect(panelX, panelY, COMMENT_PANEL_WIDTH, panelHeight, 6);
-    rendered.panel.fillStyle(COMMENT_PANEL_FILL, 0.94);
-    rendered.panel.fillTriangle(10, 2, panelX + 2, panelY + 14, panelX + 2, panelY + 26);
-
-    rendered.authorText.setPosition(panelX + COMMENT_PANEL_PADDING, authorY);
-    rendered.bodyText.setPosition(panelX + COMMENT_PANEL_PADDING, bodyY);
-    rendered.timeText.setPosition(panelX + COMMENT_PANEL_PADDING, timeY);
-  }
-
-  private setPopoverVisible(rendered: RenderedRoomComment, visible: boolean): void {
-    rendered.panel.setVisible(visible);
-    rendered.authorText.setVisible(visible);
-    rendered.bodyText.setVisible(visible);
-    rendered.timeText.setVisible(visible);
-  }
-
-  private destroyRenderedComments(): void {
-    for (const rendered of this.renderedCommentsById.values()) {
-      this.destroyRenderedComment(rendered);
-    }
-    this.renderedCommentsById.clear();
-  }
-
-  private destroyRenderedComment(rendered: RenderedRoomComment): void {
-    rendered.container.destroy(true);
-  }
-
-  private ensureComposerDom(): void {
-    if (this.composerElements) {
-      return;
-    }
-
-    const doc = this.options.document ?? document;
-    const host = this.options.scene.game.canvas.parentElement ?? doc.body;
-    const root = doc.createElement('div');
-    root.id = 'room-comment-composer';
-    root.className = 'room-comment-composer hidden';
-
-    const form = doc.createElement('form');
-    form.className = 'room-comment-composer-form';
-
-    const input = doc.createElement('textarea');
-    input.id = 'room-comment-input';
-    input.className = 'room-comment-input';
-    input.maxLength = ROOM_COMMENT_MAX_LENGTH;
-    input.placeholder = 'Leave a comment for this room';
-    input.rows = 3;
-    input.spellcheck = true;
-
-    const footer = doc.createElement('div');
-    footer.className = 'room-comment-composer-footer';
-
-    const counter = doc.createElement('div');
-    counter.className = 'room-comment-counter';
-    counter.textContent = `0/${ROOM_COMMENT_MAX_LENGTH}`;
-
-    const cancelButton = doc.createElement('button');
-    cancelButton.type = 'button';
-    cancelButton.className = 'bar-btn bar-btn-small room-comment-cancel';
-    cancelButton.textContent = 'Cancel';
-
-    const submitButton = doc.createElement('button');
-    submitButton.type = 'submit';
-    submitButton.className = 'bar-btn bar-btn-small room-comment-submit';
-    submitButton.textContent = 'Submit';
-
-    footer.append(counter, cancelButton, submitButton);
-    form.append(input, footer);
-    root.append(form);
-    host.append(root);
-
-    form.addEventListener('submit', this.handleComposerSubmit);
-    input.addEventListener('input', this.handleComposerInput);
-    input.addEventListener('keydown', this.handleComposerKeydown);
-    cancelButton.addEventListener('click', this.handleComposerCancel);
-
-    this.composerElements = {
-      root,
-      form,
-      input,
-      counter,
-      cancelButton,
-      submitButton,
-    };
-  }
-
-  private destroyComposerDom(): void {
-    if (!this.composerElements) {
-      return;
-    }
-
-    this.composerElements.form.removeEventListener('submit', this.handleComposerSubmit);
-    this.composerElements.input.removeEventListener('input', this.handleComposerInput);
-    this.composerElements.input.removeEventListener('keydown', this.handleComposerKeydown);
-    this.composerElements.cancelButton.removeEventListener('click', this.handleComposerCancel);
-    this.composerElements.root.remove();
-    this.composerElements = null;
-  }
-
-  private renderComposer(): void {
-    const elements = this.composerElements;
-    if (!elements) {
-      return;
-    }
-
-    const authState = getAuthDebugState();
-    const room = this.getRenderableRoom();
-    const open = this.composerOpen && Boolean(room);
-    elements.root.classList.toggle('hidden', !open);
-    elements.input.disabled = !authState.authenticated || authState.schoolManaged || this.submitting;
-    elements.submitButton.disabled = !authState.authenticated || authState.schoolManaged || this.submitting;
-    elements.cancelButton.disabled = this.submitting;
-    elements.submitButton.textContent = this.submitting ? 'Submitting...' : 'Submit';
-    elements.input.placeholder = authState.schoolManaged
-      ? 'Classroom comments are disabled'
-      : authState.authenticated
-      ? 'Leave a comment for this room'
-      : 'Sign in to comment on rooms';
-    this.renderCounter();
-  }
-
-  private renderCounter(): void {
-    if (!this.composerElements) {
-      return;
-    }
-
-    const count = this.composerElements.input.value.length;
-    this.composerElements.counter.textContent = `${count}/${ROOM_COMMENT_MAX_LENGTH}`;
+    const visibleComments = room && this.commentsVisible
+      ? this.dataController.getCurrentComments()
+      : [];
+    this.playPresentationController.sync(visibleComments);
   }
 
   private getRenderableRoom(): RoomSnapshot | null {
@@ -2203,18 +1561,11 @@ export class OverworldRoomCommentsController {
 
     return this.options.getCurrentRoomSnapshot();
   }
-
-  private getRoomSignature(room: RoomSnapshot): string {
-    return `${room.id}:v${room.version}`;
-  }
 }
 
 function formatCommentTime(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
+  if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
@@ -2232,18 +1583,6 @@ function truncateCommentBody(value: string, maxLength: number): string {
   }
 
   return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
-}
-
-function compareCommentsNewestFirst(
-  left: Pick<RoomCommentRecord, 'createdAt'>,
-  right: Pick<RoomCommentRecord, 'createdAt'>,
-): number {
-  return getCommentTimeMs(right.createdAt) - getCommentTimeMs(left.createdAt);
-}
-
-function getCommentTimeMs(value: string): number {
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function getCommentsSignature(
@@ -2329,8 +1668,4 @@ function prefersReducedMotion(): boolean {
   }
 
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
 }

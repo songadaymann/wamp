@@ -4,7 +4,9 @@ Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 sto
 
 ## Client
 
-- `src/main.ts` boots the Vite/Phaser client and wires the game container.
+- `index.html` starts at `src/main/coarseFirstEntry.ts`, which waits for the
+  Vite-injected `src/main/earlyWorldTileBootstrap.classic.ts` pass before dynamically
+  loading `src/main.ts` and wiring the Phaser game container.
 - `src/scenes/BootScene.ts` preloads assets and transitions into the playable world/editor flow.
 - `src/scenes/OverworldPlayScene.ts` owns browse/play mode, chunk streaming, room traversal, goals, runs, comments, presence, and HUD integration.
 - `src/scenes/EditorScene.ts` owns room editing, tools, inspector state, test play, save/publish flow, and editor overlays.
@@ -13,10 +15,14 @@ Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 sto
 
 ## Backend
 
-- `src/cloudflare/worker.ts` is the Worker entry point.
+- `src/cloudflare/worker.ts` is the API Worker entry point. Separate Wrangler
+  entries handle the CryptoPunk avatar queue, world-tile rendering, and map
+  screenshots.
 - `src/cloudflare/worker/` contains route groups for room storage, auth, chat, runs, leaderboards, admin review, school flows, background uploads, profiles, and share metadata.
 - D1 migrations live under `migrations/`.
-- `public/_worker.js` handles Pages-side route aliases and metadata injection for selected public routes.
+- `src/pages/worker.ts` is bundled by `scripts/build_pages_worker.mjs` to
+  `dist/_worker.js` for Pages-side route aliases and metadata injection. It keeps
+  the existing legacy handler behind the typed Pages entry while routes migrate.
 
 ## Realtime
 
@@ -35,3 +41,14 @@ Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 sto
 - Root HTML files are multi-page app/admin entry points. See [html-entrypoints.md](html-entrypoints.md).
 - Public agent-facing docs and schemas live under `public/` because the app serves them directly.
 - Environment examples live in [environment.md](environment.md), not tracked root-level env files.
+
+## Executable Entry Inventory
+
+- `knip.json` explicitly models Vite HTML/module roots, build and test configs,
+  the Vite-read early bootstrap, Pages and Wrangler Workers, PartyKit, the
+  container runner, and command/manual scripts.
+- `src/config/executableEntryContract.test.ts` derives those roots from the Vite,
+  Wrangler, PartyKit, Docker, package-script, and filesystem contracts and keeps
+  the inventory deterministic.
+- `npm run dead-code:report` uses Knip as a report-only audit. It is not part of
+  `npm run check` or CI.

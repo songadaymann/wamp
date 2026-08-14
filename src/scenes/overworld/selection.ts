@@ -28,7 +28,6 @@ interface OverworldSelectionHost {
   setShouldCenterCamera(value: boolean): void;
   setShouldRespawnPlayer(value: boolean): void;
   updateSelectedSummary(): void;
-  refreshCourseComposerSelectedRoomState(): Promise<void>;
   refreshLeaderboardForSelection(): Promise<void>;
   redrawWorld(): void;
   renderHud(): void;
@@ -60,7 +59,6 @@ export class OverworldSelectionController {
     setFocusedCoordinatesInUrl(nextCoordinates);
     setActiveCourseDraftSessionSelectedRoom(roomIdFromCoordinates(nextCoordinates));
     this.host.updateSelectedSummary();
-    void this.host.refreshCourseComposerSelectedRoomState();
     void this.host.refreshLeaderboardForSelection();
     this.host.redrawWorld();
     this.host.renderHud();

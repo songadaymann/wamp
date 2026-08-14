@@ -5,7 +5,6 @@ import { AboutModalController } from './aboutModal';
 import { setupButtonFeedback } from './buttonFeedback';
 import { ChatModerationModalController } from './chatModerationModal';
 import { ControlsModalController } from './controlsModal';
-import { CourseModalController } from './courseModal';
 import { CourseComposerPanelController } from './courseComposerPanel';
 import { setupCustomSpriteEditor } from './customSpriteEditor';
 import { ExploreModalController } from './exploreModal';
@@ -55,7 +54,6 @@ interface UiControllers {
   controlsModal: ControlsModalController;
   aboutModal: AboutModalController;
   chatModerationModal: ChatModerationModalController;
-  courseModal: CourseModalController;
   courseComposerPanel: CourseComposerPanelController;
   profileModal: ProfileModalController;
   playlistModal: PlaylistModalController;
@@ -110,7 +108,6 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     controlsModal,
     aboutModal: new AboutModalController(),
     chatModerationModal: new ChatModerationModalController(),
-    courseModal: new CourseModalController(game),
     courseComposerPanel: new CourseComposerPanelController(game),
     profileModal: new ProfileModalController(game),
     playlistModal: new PlaylistModalController(game),
@@ -143,7 +140,6 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.controlsModal.init();
   controllers.aboutModal.init();
   controllers.chatModerationModal.init();
-  controllers.courseModal.init();
   controllers.courseComposerPanel.init();
   controllers.profileModal.init();
   controllers.roomGoalIntroModal.init();
@@ -176,7 +172,6 @@ function configureEditorBridge(controllers: UiControllers): void {
       controllers.settingsModal.close();
       controllers.controlsModal.close();
       controllers.aboutModal.close();
-      controllers.courseModal.close();
       controllers.chatModerationModal.close();
       controllers.playlistModal.close();
       controllers.playlistIntroModal.close();
@@ -199,7 +194,6 @@ function setupUiControllerCommands(game: Phaser.Game, controllers: UiControllers
     controllers.controlsModal,
     controllers.aboutModal,
     controllers.chatModerationModal,
-    controllers.courseModal,
     controllers.roomRushModal,
     controllers.roomRushResultModal
   );

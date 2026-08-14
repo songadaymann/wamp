@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { AboutModalController } from './aboutModal';
 import { ChatModerationModalController } from './chatModerationModal';
 import { ControlsModalController } from './controlsModal';
-import { CourseModalController } from './courseModal';
 import { ExploreModalController } from './exploreModal';
 import { GuestbookModalController } from './guestbookModal';
 import { RoomHistoryModalController } from './historyModal';
@@ -27,7 +26,6 @@ export function setupSceneCommands(
   controlsModal: ControlsModalController,
   aboutModal: AboutModalController,
   chatModerationModal: ChatModerationModalController,
-  courseModal: CourseModalController,
   roomRushModal: RoomRushModalController,
   roomRushResultModal: RoomRushResultModalController,
   doc: Document = document,
@@ -49,7 +47,6 @@ export function setupSceneCommands(
     settingsModal.close();
     controlsModal.close();
     aboutModal.close();
-    courseModal.close();
     roomRushModal.close();
     roomRushResultModal.close();
     chatModerationModal.close();
@@ -185,7 +182,6 @@ export function setupSceneCommands(
       settingsModal.close();
       controlsModal.close();
       aboutModal.close();
-      courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
@@ -197,7 +193,6 @@ export function setupSceneCommands(
       settingsModal.close();
       controlsModal.close();
       aboutModal.close();
-      courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
@@ -211,7 +206,6 @@ export function setupSceneCommands(
       settingsModal.close();
       controlsModal.close();
       aboutModal.close();
-      courseModal.close();
       chatModerationModal.close();
       roomRushResultModal.close();
       const scene = getActiveOverworldScene(game);
@@ -229,7 +223,6 @@ export function setupSceneCommands(
       settingsModal.close();
       controlsModal.close();
       aboutModal.close();
-      courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
@@ -243,7 +236,6 @@ export function setupSceneCommands(
       settingsModal.close();
       controlsModal.close();
       aboutModal.close();
-      courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
@@ -257,7 +249,6 @@ export function setupSceneCommands(
       settingsModal.close();
       controlsModal.close();
       aboutModal.close();
-      courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
@@ -271,7 +262,6 @@ export function setupSceneCommands(
       settingsModal.close();
       controlsModal.close();
       aboutModal.close();
-      courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
@@ -284,7 +274,6 @@ export function setupSceneCommands(
       historyModal.close();
       controlsModal.close();
       aboutModal.close();
-      courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
@@ -298,7 +287,6 @@ export function setupSceneCommands(
       historyModal.close();
       settingsModal.close();
       aboutModal.close();
-      courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
@@ -313,7 +301,6 @@ export function setupSceneCommands(
       settingsModal.close();
       guestbookModal.close();
       aboutModal.close();
-      courseModal.close();
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
@@ -328,7 +315,6 @@ export function setupSceneCommands(
     exploreModal.close();
     guestbookModal.close();
     controlsModal.close();
-    courseModal.close();
     roomRushModal.close();
     roomRushResultModal.close();
     chatModerationModal.close();
@@ -343,7 +329,6 @@ export function setupSceneCommands(
     guestbookModal.close();
     controlsModal.close();
     aboutModal.close();
-    courseModal.close();
     roomRushModal.close();
     roomRushResultModal.close();
     void chatModerationModal.open();
@@ -358,7 +343,6 @@ export function setupSceneCommands(
   courseSaveBtn?.addEventListener('click', async () => {
     controlsModal.close();
     aboutModal.close();
-    courseModal.close();
     chatModerationModal.close();
     exploreModal.close();
     roomRushResultModal.close();
@@ -371,7 +355,6 @@ export function setupSceneCommands(
   coursePublishBtn?.addEventListener('click', async () => {
     controlsModal.close();
     aboutModal.close();
-    courseModal.close();
     chatModerationModal.close();
     roomRushResultModal.close();
     const editorScene = getActiveEditorScene(game);
