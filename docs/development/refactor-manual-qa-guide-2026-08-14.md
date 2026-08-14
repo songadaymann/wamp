@@ -23,14 +23,14 @@ otherwise, use a logged-out or incognito window against the safety backend.
 | T07 | Backdrop and camera ownership | PASS | `a811551` | [Backdrop fixture](http://127.0.0.1:4607/r/1/-2?renderer=canvas) |
 | T08 | Room-comments architecture | PASS | `aaef66f` | [Commented room](http://127.0.0.1:4608/r/11/-12?renderer=canvas) |
 | T09 | Editor document/history/presentation | PASS | `fd1c070` | [Ordinary editor fixture](http://127.0.0.1:4609/r/11/-13?renderer=canvas) |
-| T10 | Streaming model/selection/readiness | PENDING | `229b3ab` | [Streaming fixture](http://127.0.0.1:4610/r/0/0?renderer=canvas) |
-| T11 | Streaming preparation/teardown | PENDING | `848eda8` | [Transition fixture](http://127.0.0.1:4611/r/0/0?renderer=canvas) |
-| T12 | PvP combat ownership | PENDING | `212d54a` | [Two-client PvP fixture](http://127.0.0.1:4612/r/0/0?renderer=canvas) |
+| T10 | Streaming model/selection/readiness | PASS | `229b3ab` | [Streaming fixture](http://127.0.0.1:4610/r/0/0?renderer=canvas) |
+| T11 | Streaming preparation/teardown | PASS | `848eda8` | [Transition fixture](http://127.0.0.1:4611/r/0/0?renderer=canvas) |
+| T12 | PvP combat ownership | PASS | `212d54a` | [Two-client PvP fixture](http://127.0.0.1:4612/r/0/0?renderer=canvas) |
 | T13 | Typed Pages Worker | PASS | `68b362b` | [Typed Pages root](http://127.0.0.1:4613/) |
-| T14 | Worker analysis/admin modules | PENDING | `4d024d3` | [Read-only client](http://127.0.0.1:4614/?renderer=canvas) |
-| T15 | Admin UI entries | PENDING | `802ce11` | [Launch Admin](http://127.0.0.1:4615/launch-admin.html) |
-| T16 | PartyKit server decomposition | PENDING | `d3ba27a` | [Two-client presence fixture](http://127.0.0.1:4616/r/0/0?renderer=canvas) |
-| T17 | Performance/dead-code closeout | PENDING | `2fe3548` | [T17 dense room](http://127.0.0.1:4617/r/5/7?renderer=canvas) |
+| T14 | Worker analysis/admin modules | PASS | `4d024d3` | [Read-only client](http://127.0.0.1:4614/?renderer=canvas) |
+| T15 | Admin UI entries | PASS | `802ce11` | [Launch Admin](http://127.0.0.1:4615/launch-admin.html) |
+| T16 | PartyKit server decomposition | PASS | `d3ba27a` | [Two-client presence fixture](http://127.0.0.1:4616/r/0/0?renderer=canvas) |
+| T17 | Performance/dead-code closeout | PASS | `2fe3548` | [T17 dense room](http://127.0.0.1:4617/r/5/7?renderer=canvas) |
 
 The localhost servers are temporary. A connection-refused response means the exact frozen server
 needs restarting; it is not a test failure. Do not substitute a different tranche's port. The
@@ -237,7 +237,7 @@ Expanded Room:
 
 ## T10 — World-streaming model, selection, and readiness
 
-- Status: **PENDING** at `229b3ab`
+- Status: **PASS** at `229b3ab`
 - Open: [Streaming fixture 0,0](http://127.0.0.1:4610/r/0/0?renderer=canvas)
 - Account/writes: none; stay logged out.
 
@@ -252,7 +252,7 @@ Optional: repeat with Settings → Performance → Battery Saver, then restore t
 
 ## T11 — World-streaming preparation and teardown
 
-- Status: **PENDING** at `848eda8`
+- Status: **PASS** at `848eda8`
 - Open: [Repeated-transition fixture 0,0](http://127.0.0.1:4611/r/0/0?renderer=canvas) and
 [custom-background fixture -2,8](http://127.0.0.1:4611/r/-2/8?renderer=canvas)
 - Account/writes: none; use published content logged out.
@@ -271,7 +271,7 @@ Optional: repeat in Canvas and WebGL.
 
 ## T12 — PvP combat ownership
 
-- Status: **PENDING** at `212d54a`
+- Status: **PASS** at `212d54a`
 - Open in both windows: [PvP fixture 0,0](http://127.0.0.1:4612/r/0/0?renderer=canvas)
 - Account/writes: two different safety accounts in separate browser profiles/windows. Completing a
 match may create safety-only PvP result rows.
@@ -309,7 +309,7 @@ content, or route-specific 404/500 responses.
 
 ## T14 — Cloudflare Worker analysis/admin modules
 
-- Status: **PENDING** at `4d024d3`
+- Status: **PASS** at `4d024d3`
 - Open: [Safety-backed client](http://127.0.0.1:4614/?renderer=canvas)
 - Account/writes: public Explore/leaderboards need no account; a safety account helps with Profile
 views. Read-only only—do not rate, comment, approve, invalidate, edit, or publish.
@@ -324,7 +324,7 @@ views. Read-only only—do not rate, comment, approve, invalidate, edit, or publ
 
 ## T15 — Admin UI entries
 
-- Status: **PENDING** at `802ce11`
+- Status: **PASS** at `802ce11`
 - Open: [Launch Admin](http://127.0.0.1:4615/launch-admin.html) and
 [Suspicious Admin](http://127.0.0.1:4615/suspicious-admin.html)
 - Account/writes: safety admin key required. Read-only only—do not approve, reject, invalidate, hide,
@@ -342,7 +342,7 @@ Optional: repeat at phone width and confirm no functional controls disappear.
 
 ## T16 — PartyKit server decomposition
 
-- Status: **PENDING** at `d3ba27a`
+- Status: **PASS** at `d3ba27a`
 - Open in both windows: [Presence fixture 0,0](http://127.0.0.1:4616/r/0/0?renderer=canvas)
 - Account/writes: two safety accounts; a guest third window is optional. One uniquely labeled safety
 chat message and ordinary safety PvP rows are allowed.
@@ -365,7 +365,7 @@ Optional: repeat with a guest third window and across a chunk boundary.
 
 ## T17 — Measured performance and dead-code closeout
 
-- Status: **PENDING** at `2fe3548`
+- Status: **PASS** at `2fe3548`
 - Open: [T00 baseline](http://127.0.0.1:4600/r/5/7?renderer=canvas) and
 [T17 candidate](http://127.0.0.1:4617/r/5/7?renderer=canvas)
 - Account/writes: none; stay logged out and do not finish a ranked goal.
@@ -383,13 +383,18 @@ Automated reference: traversal p95 was 7.4 ms; repeated-transition median p95 wa
 5/5 correct crossings, zero seam hold, and no errors. Initial JS fell 75.3% for minted-room,
 89.8% for room-preview, and 89.7% for the world-tile renderer. Knip remains report-only.
 
-## Final acceptance after the pending tranches pass
+## Final acceptance
 
-After T10-T12 and T14-T17 are accepted:
+Jonathan manually accepted every frozen T00-T17 candidate on 2026-08-14. The final current-main
+reconciliation, automated release gate, production deployment, and live verification are tracked
+separately from these immutable manual QA results.
+
+Final release gate authorized on 2026-08-14:
 
 1. Merge current `origin/main` without rewriting any accepted tranche SHA.
 2. Rerun the complete test/build gate, DOM and Worker safety smokes, PartyKit identity/load probes,
    Canvas/WebGL gameplay smokes, streaming performance probes, and `git diff --check`.
-3. Run one final manual sweep across Play/Browse, editor, Expanded Room, comments, PvP, admin, and
-   reconnect behavior.
-4. Leave the branch clean, local, and undeployed until a separate push/deploy request.
+3. Treat the accepted T00-T17 sweeps as the final manual behavior gate; repeat affected surfaces if
+   current-main reconciliation introduces a conflict or automated/browser regression.
+4. Push the feature branch, merge and push `main`, deploy Worker/Pages and PartyKit, and verify the
+   live custom domain. No D1 migration or production-data mutation is included.
