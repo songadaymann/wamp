@@ -106,6 +106,9 @@ hazard collision, player presentation, and void death routing keep their existin
 
 ## Continuous manual-QA execution
 
+The consolidated launch links, safety/write boundaries, and exact T00-T17 test steps are in
+[`refactor-manual-qa-guide-2026-08-14.md`](./refactor-manual-qa-guide-2026-08-14.md).
+
 The remaining work advances linearly on this branch. Every tranche ends at a recorded commit,
 passes its automated gates, and is copied to an immutable build directory named
 `/private/tmp/everybodys-platformer-refactor-qa/TNN-<short-sha>/`. The frozen build is served on
