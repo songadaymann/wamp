@@ -24,14 +24,14 @@ import {
   type CustomSpriteDefinition,
 } from '../customSprites/model';
 import { getCustomRoomTileDefinitionForGid, type CustomRoomTileDefinition } from '../customTiles/model';
-import { drawCustomRoomTileToContext } from '../customTiles/runtime';
+import { drawCustomRoomTileToContext } from '../customTiles/draw';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { buildRoomSnapshotFromMintedPayload, type WampMintedRoomPayload } from './roomMetadata';
 import {
   getRoomMetadataBackgroundLayerLayout,
   getRoomMetadataObjectDrawRect,
 } from './roomMetadataRenderLayout';
-import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from '../visuals/starfield';
+import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from '../visuals/starfieldCanvas';
 
 export interface MintedRoomRenderOptions {
   tilePixelSize?: number;

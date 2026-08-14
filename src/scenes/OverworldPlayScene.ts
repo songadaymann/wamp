@@ -504,7 +504,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private courseEditorReturnTarget: OverworldPlaySceneData['courseEditorReturnTarget'] = null;
   private editorPlaytestReturnTarget: OverworldPlaySceneData['editorPlaytestReturnTarget'] = null;
 
-  private lastMovementInput = {
+  private readonly lastMovementInput = {
     horizontalInput: 0,
     verticalInput: 0,
   };
@@ -2229,28 +2229,64 @@ export class OverworldPlayScene extends Phaser.Scene {
     profiler?.beginFrame(delta, this.buildMobilePerformanceContext());
     try {
       const worldUpdateStartedAt = profiler?.beginSegment();
+      const streamingStartedAt = profiler?.beginSegment();
       this.windowController.maybeRefreshVisibleChunks();
       const worldTileWorkStartedAt = performance.now();
       const worldTileWorkRan = this.worldStreamingController.updateWorldTiles();
       worldTileSharedBudgetConsumedMs = worldTileWorkRan
         ? performance.now() - worldTileWorkStartedAt
         : 0;
+      if (streamingStartedAt !== undefined) {
+        profiler?.endSegment('controller.worldStreaming', streamingStartedAt);
+      }
+      const backdropStartedAt = profiler?.beginSegment();
       this.updateBackdrop();
+      if (backdropStartedAt !== undefined) profiler?.endSegment('controller.backdrop', backdropStartedAt);
+      const gridOverlayStartedAt = profiler?.beginSegment();
       this.gridOverlayController.redraw();
+      if (gridOverlayStartedAt !== undefined) {
+        profiler?.endSegment('controller.gridOverlay', gridOverlayStartedAt);
+      }
+      const liveObjectsStartedAt = profiler?.beginSegment();
       this.updateLiveObjects(delta);
+      if (liveObjectsStartedAt !== undefined) {
+        profiler?.endSegment('controller.liveObjects', liveObjectsStartedAt);
+      }
+      const signStartedAt = profiler?.beginSegment();
       this.signController.update();
+      if (signStartedAt !== undefined) profiler?.endSegment('controller.signs', signStartedAt);
+      const ghostsStartedAt = profiler?.beginSegment();
       this.updateGhosts(delta);
+      if (ghostsStartedAt !== undefined) profiler?.endSegment('controller.ghosts', ghostsStartedAt);
+      const pvpPresentationStartedAt = profiler?.beginSegment();
       this.pvpInstanceRenderer.update(delta);
       this.combatPresentationController.update();
       this.applyPvpArenaCameraLock();
+      if (pvpPresentationStartedAt !== undefined) {
+        profiler?.endSegment('controller.pvpPresentation', pvpPresentationStartedAt);
+      }
+      const roomChatStartedAt = profiler?.beginSegment();
       this.roomChatController.update();
+      if (roomChatStartedAt !== undefined) profiler?.endSegment('controller.roomChat', roomChatStartedAt);
+      const roomCommentsStartedAt = profiler?.beginSegment();
       this.roomCommentsController.update();
+      if (roomCommentsStartedAt !== undefined) {
+        profiler?.endSegment('controller.roomComments', roomCommentsStartedAt);
+      }
+      const browsePresenceStartedAt = profiler?.beginSegment();
       this.presenceOverlayController.updateBrowseDots(delta);
+      if (browsePresenceStartedAt !== undefined) {
+        profiler?.endSegment('controller.presenceOverlay', browsePresenceStartedAt);
+      }
+      const roomMusicStartedAt = profiler?.beginSegment();
       this.roomMusicPlaybackController.sync({
         mode: this.mode,
         currentRoomCoordinates: this.currentRoomCoordinates,
         activeCourseRun: this.activeCourseRun,
       });
+      if (roomMusicStartedAt !== undefined) {
+        profiler?.endSegment('controller.roomMusic', roomMusicStartedAt);
+      }
       if (worldUpdateStartedAt !== undefined) profiler?.endSegment('update.world', worldUpdateStartedAt);
 
       if (
@@ -2276,17 +2312,26 @@ export class OverworldPlayScene extends Phaser.Scene {
       }
 
       if (!this.playerBody) {
-        this.lastMovementInput = {
-          horizontalInput: 0,
-          verticalInput: 0,
-        };
+        this.setLastMovementInput(0, 0);
         const noPlayerStartedAt = profiler?.beginSegment();
+        const noPlayerMovementStartedAt = profiler?.beginSegment();
         this.movementController.handleNoPlayerRuntime();
+        if (noPlayerMovementStartedAt !== undefined) {
+          profiler?.endSegment('controller.movement', noPlayerMovementStartedAt);
+        }
+        const noPlayerPresenceStartedAt = profiler?.beginSegment();
         this.syncLocalPresence();
         this.syncPvpInstanceState();
         this.syncPvpLocalHeartLabel();
+        if (noPlayerPresenceStartedAt !== undefined) {
+          profiler?.endSegment('controller.presencePvp', noPlayerPresenceStartedAt);
+        }
+        const noPlayerEnvironmentStartedAt = profiler?.beginSegment();
         this.updateRoomLighting();
         this.updateRoomWeather();
+        if (noPlayerEnvironmentStartedAt !== undefined) {
+          profiler?.endSegment('controller.environment', noPlayerEnvironmentStartedAt);
+        }
         if (noPlayerStartedAt !== undefined) profiler?.endSegment('update.noPlayer', noPlayerStartedAt);
         this.renderFrameHud();
         criticalUpdateMs = Math.max(
@@ -2307,13 +2352,17 @@ export class OverworldPlayScene extends Phaser.Scene {
       const gunPressed = !pvpCountdownLocked && gunInputPressed;
       const inQuicksand = this.quicksandController.isActive();
       const playerUpdateStartedAt = profiler?.beginSegment();
+      const specialTilesStartedAt = profiler?.beginSegment();
       this.updateSpecialTiles();
+      if (specialTilesStartedAt !== undefined) {
+        profiler?.endSegment('controller.specialTiles', specialTilesStartedAt);
+      }
+      const portalsStartedAt = profiler?.beginSegment();
       this.updatePortalObjects();
+      if (portalsStartedAt !== undefined) profiler?.endSegment('controller.portals', portalsStartedAt);
+      const movementStartedAt = profiler?.beginSegment();
       const movement = this.movementController.updateMovement(delta, inQuicksand);
-      this.lastMovementInput = {
-        horizontalInput: movement.horizontalInput,
-        verticalInput: movement.verticalInput,
-      };
+      this.setLastMovementInput(movement.horizontalInput, movement.verticalInput);
       if (movement.downHeld && movement.jumpPressed) {
         this.specialTilesController.beginOneWayDropThrough();
       }
@@ -2323,6 +2372,8 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.playerBody.setVelocityY(0);
         }
       }
+      if (movementStartedAt !== undefined) profiler?.endSegment('controller.movement', movementStartedAt);
+      const combatStartedAt = profiler?.beginSegment();
       this.combatController.handleCombatInput({
         swordPressed,
         gunPressed,
@@ -2336,21 +2387,40 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.resolvePvpPeerCollision();
       this.movementController.syncLadderClimbSfx(movement.verticalInput);
       this.maybeRespawnFromVoid();
+      if (combatStartedAt !== undefined) profiler?.endSegment('controller.combat', combatStartedAt);
+      const roomTransitionStartedAt = profiler?.beginSegment();
       this.roomTransitionController.maybeAdvancePlayerRoom();
       this.recordRankedRunTraceFrame(delta, movement);
+      if (roomTransitionStartedAt !== undefined) {
+        profiler?.endSegment('controller.roomTransition', roomTransitionStartedAt);
+      }
+      const playerPresentationStartedAt = profiler?.beginSegment();
       try {
         this.playerPresentationGroundedOverride = movement.grounded;
         this.playerPresentationController.syncPlayerVisual();
       } finally {
         this.playerPresentationGroundedOverride = null;
       }
+      if (playerPresentationStartedAt !== undefined) {
+        profiler?.endSegment('controller.playerPresentation', playerPresentationStartedAt);
+      }
+      const presenceStartedAt = profiler?.beginSegment();
       this.syncLocalPresence();
       this.syncPvpInstanceState();
       this.syncPvpLocalHeartLabel();
+      if (presenceStartedAt !== undefined) profiler?.endSegment('controller.presencePvp', presenceStartedAt);
+      const environmentStartedAt = profiler?.beginSegment();
       this.updateRoomLighting();
       this.updateRoomWeather();
+      if (environmentStartedAt !== undefined) {
+        profiler?.endSegment('controller.environment', environmentStartedAt);
+      }
+      const objectiveStartedAt = profiler?.beginSegment();
       this.objectiveController.update(delta);
       this.tickRoomRushRun(delta);
+      if (objectiveStartedAt !== undefined) {
+        profiler?.endSegment('controller.objectiveRoomRush', objectiveStartedAt);
+      }
       if (playerUpdateStartedAt !== undefined) profiler?.endSegment('update.player', playerUpdateStartedAt);
       this.renderFrameHud();
       criticalUpdateMs = Math.max(
@@ -2541,10 +2611,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.transientStatusMessage = null;
     this.transientStatusExpiresAt = 0;
     this.quicksandController.reset();
-    this.lastMovementInput = {
-      horizontalInput: 0,
-      verticalInput: 0,
-    };
+    this.setLastMovementInput(0, 0);
     this.inspectInputController.reset();
     this.movementController.reset();
     this.combatController.reset();
@@ -3812,10 +3879,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.combatController.clearAttackAnimation();
     this.playerPresentationController.handlePlayerDestroyed();
     this.externalLaunchGraceUntil = 0;
-    this.lastMovementInput = {
-      horizontalInput: 0,
-      verticalInput: 0,
-    };
+    this.setLastMovementInput(0, 0);
     this.playerBody = null;
     this.playerPickupSensorBody = null;
     this.playerPickupSensor = null;
@@ -5755,6 +5819,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.mobilePerformanceProfiler
       ? this.mobilePerformanceProfiler.measure(label, callback)
       : callback();
+  }
+
+  private setLastMovementInput(horizontalInput: number, verticalInput: number): void {
+    this.lastMovementInput.horizontalInput = horizontalInput;
+    this.lastMovementInput.verticalInput = verticalInput;
   }
 
   private buildMobilePerformanceContext(): MobilePerformanceContext {
