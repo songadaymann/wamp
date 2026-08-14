@@ -12,9 +12,9 @@ export const PADDING_ROOMS = 2;
  * Max absolute zoom change per capture (daily or manual).
  * Limits sudden jumps in a time-lapse. Manual clicks each advance by up to this
  * amount, so several manuals can catch up faster after a growth spurt.
- * Default: 0.005
+ * Default: 0.001
  */
-export const MAX_ZOOM_DELTA_PER_DAY = 0.005;
+export const MAX_ZOOM_DELTA_PER_DAY = 0.001;
 
 /** Output width in pixels. Default: 3840 (4K) */
 export const SCREENSHOT_WIDTH = 3840;

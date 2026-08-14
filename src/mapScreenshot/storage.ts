@@ -17,6 +17,7 @@ export interface ScreenshotR2Object {
   key: string;
   size: number;
   uploaded?: Date;
+  customMetadata?: Record<string, string>;
   text(): Promise<string>;
   arrayBuffer(): Promise<ArrayBuffer>;
 }
@@ -26,14 +27,22 @@ export interface ScreenshotR2Bucket {
   put(
     key: string,
     value: ArrayBuffer | ArrayBufferView | string,
-    options?: { httpMetadata?: { contentType?: string } },
+    options?: {
+      httpMetadata?: { contentType?: string };
+      customMetadata?: Record<string, string>;
+    },
   ): Promise<unknown>;
   list(options?: {
     prefix?: string;
     cursor?: string;
     limit?: number;
   }): Promise<{
-    objects: Array<{ key: string; size: number; uploaded?: Date }>;
+    objects: Array<{
+      key: string;
+      size: number;
+      uploaded?: Date;
+      customMetadata?: Record<string, string>;
+    }>;
     truncated: boolean;
     cursor?: string;
   }>;
@@ -83,12 +92,42 @@ export async function saveScreenshotPng(
   bucket: ScreenshotR2Bucket,
   fileName: string,
   pngBytes: ArrayBuffer,
+  zoom?: number,
 ): Promise<string> {
   const key = screenshotObjectKey(fileName);
   await bucket.put(key, pngBytes, {
     httpMetadata: { contentType: 'image/png' },
+    customMetadata:
+      typeof zoom === 'number' && Number.isFinite(zoom)
+        ? { zoom: String(zoom) }
+        : undefined,
   });
   return key;
+}
+
+/**
+ * Prefer state.json; if missing, recover zoom from the latest screenshot's
+ * customMetadata so a wiped state file cannot snap straight to ideal fit.
+ */
+export async function loadPreviousZoom(
+  bucket: ScreenshotR2Bucket,
+): Promise<number | null> {
+  const state = await loadZoomState(bucket);
+  if (state) return state.zoom;
+
+  const listed = await listScreenshots(bucket);
+  if (listed.length === 0) return null;
+
+  // listScreenshots sorts newest fileName first.
+  for (const item of listed) {
+    const object = await bucket.get(item.key);
+    if (!object) continue;
+    const raw = object.customMetadata?.zoom;
+    if (typeof raw !== 'string') continue;
+    const zoom = Number(raw);
+    if (Number.isFinite(zoom)) return zoom;
+  }
+  return null;
 }
 
 /** Load the cached composite starfield as a PNG data URL, or null if missing. */
