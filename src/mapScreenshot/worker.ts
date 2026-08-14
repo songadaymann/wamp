@@ -21,7 +21,8 @@ export interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: MapScreenshotEnv): Promise<Response> {
     const url = new URL(request.url);
-    const path = url.pathname.replace(/\/+$/, '') || '/';
+    const publicBasePath = resolvePublicBasePath(request);
+    const path = normalizeWorkerPath(url.pathname, publicBasePath);
 
     try {
       if (request.method === 'GET' && (path === '/' || path === '/index.html')) {
@@ -32,7 +33,7 @@ const worker = {
         const nextMonth = shiftMonthKey(monthKey, 1);
         return htmlResponse(buildGalleryHtml({
           screenshots: monthShots,
-          publicBasePath: '',
+          publicBasePath,
           monthKey,
           hasPrevMonth: true,
           hasNextMonth: nextMonth <= currentEasternMonth,
@@ -54,7 +55,7 @@ const worker = {
             fileName: shot.fileName,
             size: shot.size,
             uploaded: shot.uploaded?.toISOString() ?? null,
-            url: `/files/${encodeURIComponent(shot.fileName)}`,
+            url: `${publicBasePath}/files/${encodeURIComponent(shot.fileName)}`,
           })),
         });
       }
@@ -138,6 +139,22 @@ const worker = {
 };
 
 export default worker;
+
+const PUBLIC_BASE_PATH_HEADER = 'x-wamp-public-base-path';
+
+function resolvePublicBasePath(request: Request): string {
+  const raw = request.headers.get(PUBLIC_BASE_PATH_HEADER)?.trim() ?? '';
+  if (!raw || raw === '/') return '';
+  return raw.replace(/\/+$/, '');
+}
+
+function normalizeWorkerPath(pathname: string, publicBasePath: string): string {
+  let path = pathname;
+  if (publicBasePath && (path === publicBasePath || path.startsWith(`${publicBasePath}/`))) {
+    path = path.slice(publicBasePath.length) || '/';
+  }
+  return path.replace(/\/+$/, '') || '/';
+}
 
 /** Daily `_0` plus manuals `_1`…`_9`. */
 function isSafeScreenshotFileName(fileName: string): boolean {

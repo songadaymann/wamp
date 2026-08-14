@@ -82,4 +82,30 @@ describe('Pages standalone renderer routes', () => {
     expect(response.headers.get('Allow')).toBe('GET, HEAD');
     expect(fetchAsset).not.toHaveBeenCalled();
   });
+
+  it('proxies /capture to the map-screenshot Worker with a public base path', async () => {
+    const upstreamFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      expect(request.url).toBe(
+        'https://everybodys-platformer-map-screenshots.novox-robot.workers.dev/api/health',
+      );
+      expect(request.headers.get('X-WAMP-Public-Base-Path')).toBe('/capture');
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', upstreamFetch);
+
+    try {
+      const response = await worker.fetch(
+        new Request('https://wamp.land/capture/api/health'),
+        { ASSETS: { fetch: vi.fn() } } satisfies PagesWorkerEnv,
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true });
+      expect(upstreamFetch).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

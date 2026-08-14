@@ -31,6 +31,8 @@ import {
 const ROOM_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/?$/;
 const ROOM_IMAGE_PATH_PATTERN = /^\/r\/(-?\d+)\/(-?\d+)\/image(?:\.png)?\/?$/;
 const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
+const MAP_SCREENSHOT_ORIGIN = 'https://everybodys-platformer-map-screenshots.novox-robot.workers.dev';
+const CAPTURE_PATH_PREFIX = '/capture';
 const ROOM_META_TIMEOUT_MS = 1200;
 const PROFILE_META_TIMEOUT_MS = 1200;
 const WAMP_O_GRAM_META_TIMEOUT_MS = 1200;
@@ -76,6 +78,10 @@ export default {
         status: 308,
         headers: { Location: url.toString() },
       });
+    }
+
+    if (isCapturePath(url.pathname)) {
+      return proxyMapScreenshotGallery(request, url);
     }
 
     const standalonePage = STANDALONE_PAGE_ALIASES.get(url.pathname);
@@ -197,6 +203,32 @@ async function fetchStandalonePageAsset(request, env, pathname) {
     status: response.status,
     headers,
   });
+}
+
+function isCapturePath(pathname) {
+  return pathname === CAPTURE_PATH_PREFIX
+    || pathname === `${CAPTURE_PATH_PREFIX}/`
+    || pathname.startsWith(`${CAPTURE_PATH_PREFIX}/`);
+}
+
+async function proxyMapScreenshotGallery(request, url) {
+  let upstreamPath = url.pathname.slice(CAPTURE_PATH_PREFIX.length);
+  if (!upstreamPath) {
+    upstreamPath = '/';
+  }
+  const upstreamUrl = new URL(upstreamPath + url.search, MAP_SCREENSHOT_ORIGIN);
+  const headers = new Headers(request.headers);
+  headers.set('X-WAMP-Public-Base-Path', CAPTURE_PATH_PREFIX);
+  headers.delete('host');
+
+  const upstreamRequest = new Request(upstreamUrl, {
+    method: request.method,
+    headers,
+    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+    redirect: 'manual',
+  });
+
+  return fetch(upstreamRequest);
 }
 
 function parseRoomPath(pathname, pattern = ROOM_PATH_PATTERN) {
