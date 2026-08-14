@@ -117,6 +117,7 @@ import {
 import { handleRoomShareRequest } from './worker/share/routes';
 import { handleSchoolRequest } from './worker/school/routes';
 import { handleWampOGramRequest } from './worker/wampOGram/routes';
+import { handleCustomSpriteRequest } from './worker/customSprites/routes';
 
 type WorkerExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
@@ -181,6 +182,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     pattern: { prefix: '/api/background-images' },
     auth: 'authenticated',
     handler: ({ request, url, env }) => handleBackgroundImageRequest(request, url, env),
+  },
+  {
+    methods: ['GET'],
+    pattern: { prefix: '/api/custom-sprites/' },
+    auth: 'public',
+    handler: ({ request, url, env }) => handleCustomSpriteRequest(request, url, env),
   },
   {
     methods: ['POST'],

@@ -8,11 +8,15 @@ import {
   type CustomSpriteSize,
 } from '../../customSprites/model';
 import { canCustomSpriteBecomeRoomTile } from '../../customTiles/model';
+import { deleteCustomSpriteIfUnused } from '../../customSprites/deletion';
+import { isCustomSpriteUsedInLocalRoomStorage } from '../../customSprites/localUsage';
+import { loadCustomSpriteUsage } from '../../customSprites/usageClient';
 import {
   CUSTOM_SPRITES_CHANGED_EVENT,
   getCustomSpriteDataUrl,
   getCustomSpriteDefinition,
   listLocalCustomSpriteDefinitions,
+  removeLocalCustomSprite,
   refreshCustomSpriteTexture,
   registerCustomSprite,
 } from '../../customSprites/registry';
@@ -805,12 +809,15 @@ export function setupCustomSpriteEditor(
     }
 
     for (const sprite of sprites) {
-      const button = doc.createElement('button');
-      button.type = 'button';
-      button.className = 'editor-sprite-library-item';
+      const item = doc.createElement('div');
+      item.className = 'editor-sprite-library-item';
       const active = sprite.id === editingSpriteId;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      item.classList.toggle('active', active);
+
+      const selectButton = doc.createElement('button');
+      selectButton.type = 'button';
+      selectButton.className = 'editor-sprite-library-select';
+      selectButton.setAttribute('aria-pressed', active ? 'true' : 'false');
 
       const preview = doc.createElement('span');
       preview.className = 'editor-sprite-library-preview';
@@ -825,11 +832,23 @@ export function setupCustomSpriteEditor(
       meta.className = 'editor-sprite-library-meta';
       meta.textContent = `${sprite.size}x${sprite.size} · ${getCustomSpriteKindLabel(sprite.kind)}`;
       copy.append(name, meta);
-      button.append(preview, copy);
-      button.addEventListener('click', () => {
+      selectButton.append(preview, copy);
+      selectButton.addEventListener('click', () => {
         loadSpriteForEditing(sprite);
       });
-      libraryList.appendChild(button);
+
+      const deleteButton = doc.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'editor-sprite-library-delete';
+      deleteButton.textContent = 'Delete';
+      deleteButton.title = `Delete ${sprite.name}`;
+      deleteButton.setAttribute('aria-label', `Delete ${sprite.name}`);
+      deleteButton.addEventListener('click', () => {
+        void deleteSprite(sprite, deleteButton);
+      });
+
+      item.append(selectButton, deleteButton);
+      libraryList.appendChild(item);
     }
   };
 
@@ -873,6 +892,57 @@ export function setupCustomSpriteEditor(
     renderCanvas();
     renderLibrary();
     setStatus(`Editing ${sprite.name}. Save updates this object everywhere it is reused.`);
+  };
+
+  const deleteSprite = async (
+    sprite: CustomSpriteDefinition,
+    deleteButton: HTMLButtonElement,
+  ): Promise<void> => {
+    if (!window.confirm(`Delete "${sprite.name}" from My Objects? This cannot be undone.`)) {
+      return;
+    }
+
+    deleteButton.disabled = true;
+    setStatus(`Checking whether ${sprite.name} is used in a room...`);
+    const result = await deleteCustomSpriteIfUnused(sprite.id, {
+      isUsedLocally: (spriteId) => {
+        if (isCustomSpriteUsedInLocalRoomStorage(spriteId)) {
+          return true;
+        }
+
+        let usedInActiveEditor = false;
+        withActiveEditorScene(game, (scene) => {
+          usedInActiveEditor = scene.usesCustomSprite?.(spriteId) ?? false;
+        });
+        return usedInActiveEditor;
+      },
+      loadRemoteUsage: loadCustomSpriteUsage,
+      removeLocalSprite: removeLocalCustomSprite,
+    });
+
+    if (result === 'deleted') {
+      if (editorState.selectedObjectId === buildCustomSpriteObjectId(sprite.id)) {
+        editorState.selectedObjectId = null;
+      }
+      if (editingSpriteId === sprite.id) {
+        resetSpriteDraft();
+      } else {
+        renderLibrary();
+      }
+      setStatus(`Deleted ${sprite.name}.`);
+      return;
+    }
+    if (result === 'in-use') {
+      setStatus(
+        `Can't delete ${sprite.name} while it is used in a room. Remove it everywhere and save or publish those rooms first.`,
+        'error',
+      );
+    } else if (result === 'verification-failed') {
+      setStatus(`Couldn't verify whether ${sprite.name} is used. Nothing was deleted.`, 'error');
+    } else {
+      setStatus(`${sprite.name} is no longer in My Objects.`, 'error');
+    }
+    deleteButton.disabled = false;
   };
 
   const setSpriteModeActive = (active: boolean): void => {

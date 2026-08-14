@@ -114,6 +114,9 @@ import {
   createEmptyCourseInspectorState,
 } from './courseEditor/inspectorUi';
 import { CourseEditorObjectInspectorController } from './courseEditor/objectInspector';
+import { selectCustomSpriteTileForCourseRoom } from './courseEditor/customSpriteTiles';
+import type { CustomSpriteDefinition } from '../customSprites/model';
+import { roomSnapshotUsesCustomSprite } from '../customSprites/usage';
 
 const DAILY_ROOM_CLAIM_LIMIT_ERROR_PREFIX = 'Daily room claim limit reached.';
 const DAILY_ROOM_CLAIM_LIMIT_TITLE = "You've Reached Today's Room Claim Limit";
@@ -842,6 +845,35 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     this.renderUi();
+  }
+
+  useCustomSpriteAsTile(sprite: CustomSpriteDefinition): boolean {
+    const slice = this.getSelectedSlice();
+    const result = selectCustomSpriteTileForCourseRoom(
+      sprite,
+      slice
+        ? {
+            canSaveDraft: slice.permissions.canSaveDraft,
+            label: this.getSliceLabel(slice),
+            useCustomSpriteAsTile: (candidate) => Boolean(slice.runtime.useCustomSpriteAsTile(candidate)),
+          }
+        : null,
+    );
+
+    if (result.statusText) {
+      this.statusText = result.statusText;
+    }
+    if (result.selected) {
+      this.objectInspectorController.clearTransientState();
+    }
+    this.renderUi();
+    return result.selected;
+  }
+
+  usesCustomSprite(spriteId: string): boolean {
+    return Array.from(this.roomSlices.values()).some((slice) => (
+      roomSnapshotUsesCustomSprite(slice.runtime.exportRoomSnapshot(), spriteId)
+    ));
   }
 
   async saveDraft(

@@ -155,6 +155,18 @@ export function isLocalCustomSpriteId(id: string | null | undefined): boolean {
   return Boolean(id && localSpriteIds.has(id));
 }
 
+export function removeLocalCustomSprite(id: string | null | undefined): boolean {
+  if (!id || !localSpriteIds.delete(id)) {
+    return false;
+  }
+
+  spriteById.delete(id);
+  dataUrlById.delete(id);
+  persistLocalLibrary();
+  dispatchChanged();
+  return true;
+}
+
 export function getCustomSpriteDataUrl(sprite: CustomSpriteDefinition): string {
   const cached = dataUrlById.get(sprite.id);
   if (cached) {
