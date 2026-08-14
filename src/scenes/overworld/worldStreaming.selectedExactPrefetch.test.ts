@@ -24,6 +24,7 @@ describe('world streaming selected exact prefetch', () => {
       Object.create(OverworldWorldStreamingController.prototype) as Record<string, unknown>,
       {
         options: {
+          getMode: () => 'browse',
           scene: { cameras: { main: {} } },
           getSelectedCoordinates: () => selected,
           onSelectedExactRoomSnapshotReady,
