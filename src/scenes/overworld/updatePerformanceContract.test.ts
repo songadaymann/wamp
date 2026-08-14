@@ -45,6 +45,8 @@ describe('overworld update performance contract', () => {
   });
 
   it('samples controller segments round-robin instead of timing every controller every frame', () => {
+    expect(sceneSource).toContain("get('mobilePerfControllers') === '1'");
+    expect(sceneSource).toContain('profiler && this.mobilePerformanceControllerProfilingEnabled');
     expect(sceneSource).toContain('mobilePerformanceControllerProfileSlot = 0');
     expect(sceneSource).toContain('(controllerProfileSlot + 1) % 20');
     expect(sceneSource.match(/controllerProfileSlot === \d+ \? profiler\?\.beginSegment\(\) : undefined/g))

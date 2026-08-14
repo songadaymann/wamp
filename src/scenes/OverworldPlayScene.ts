@@ -436,6 +436,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private hudBridge: OverworldHudBridge | null = null;
   private fxController: SceneFxController | null = null;
   private mobilePerformanceProfiler: MobilePerformanceProfiler | null = null;
+  private mobilePerformanceControllerProfilingEnabled = false;
   private mobilePerformanceControllerProfileSlot = 0;
   private criticalFrameStartedAtMs: number | null = null;
   private previousCriticalFrameStartedAtMs: number | null = null;
@@ -2227,8 +2228,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     let frameWorkResult: RunFrameWorkResult | null = null;
     let worldTileSharedBudgetConsumedMs = 0;
     const profiler = this.mobilePerformanceProfiler;
-    const controllerProfileSlot = profiler ? this.mobilePerformanceControllerProfileSlot : -1;
-    if (profiler) {
+    const controllerProfileSlot = profiler && this.mobilePerformanceControllerProfilingEnabled
+      ? this.mobilePerformanceControllerProfileSlot
+      : -1;
+    if (controllerProfileSlot >= 0) {
       this.mobilePerformanceControllerProfileSlot = (controllerProfileSlot + 1) % 20;
     }
     profiler?.beginFrame(delta, this.buildMobilePerformanceContext());
@@ -5818,6 +5821,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.mobilePerformanceProfiler = createMobilePerformanceProfiler({
       getContext: () => this.buildMobilePerformanceContext(),
     });
+    this.mobilePerformanceControllerProfilingEnabled =
+      new URLSearchParams(window.location.search).get('mobilePerfControllers') === '1';
+    this.mobilePerformanceControllerProfileSlot = 0;
   }
 
   private measureMobilePerformance<T>(label: string, callback: () => T): T {
