@@ -807,6 +807,47 @@
         gap: 10px;
       }
 
+      .sprite-review-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+        gap: 12px;
+      }
+
+      .sprite-review-card {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        gap: 12px;
+        align-items: start;
+        border-left: 8px solid var(--green);
+      }
+
+      .sprite-review-card[data-status="blocked"] {
+        border-left-color: var(--red);
+      }
+
+      .sprite-review-preview {
+        width: 72px;
+        height: 72px;
+        border: 2px solid var(--ink);
+        background: repeating-conic-gradient(#ddd 0 25%, #fff 0 50%) 50% / 16px 16px;
+        image-rendering: pixelated;
+        object-fit: contain;
+      }
+
+      .sprite-review-copy {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .sprite-review-copy .meta {
+        overflow-wrap: anywhere;
+      }
+
+      .sprite-review-actions {
+        grid-column: 1 / -1;
+      }
+
       .comment-review-card {
         display: grid;
         gap: 10px;
@@ -1180,6 +1221,7 @@
             <span class="nav-label">Photo Review</span>
             <span id="photo-review-nav-count" class="nav-count" hidden>0</span>
           </a>
+          <a href="#sprite-review"><span class="nav-icon" aria-hidden="true">◆</span><span class="nav-label">Sprites</span></a>
           <a href="#comment-review"><span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Comments</span></a>
           <a href="#builders"><span class="nav-icon" aria-hidden="true">▲</span><span class="nav-label">Builders</span></a>
           <a href="#activity"><span class="nav-icon" aria-hidden="true">↯</span><span class="nav-label">Activity</span></a>
@@ -1339,6 +1381,38 @@
                 </div>
               </aside>
             </div>
+          </section>
+
+          <section id="sprite-review" class="admin-section" data-tone="green">
+            <header class="section-heading">
+              <span class="section-icon" aria-hidden="true">◆</span>
+              <div class="section-heading-copy">
+                <span class="section-kicker">04 / Content</span>
+                <h2>Community Sprites</h2>
+                <p>Hide a sprite from discovery and future reuse. Existing rooms keep rendering their saved copy.</p>
+              </div>
+            </header>
+            <section class="panel stack">
+              <div class="review-toolbar">
+                <label class="field">
+                  <span class="label">Status</span>
+                  <select id="custom-sprite-admin-status-filter">
+                    <option value="active">Discoverable</option>
+                    <option value="blocked">Hidden</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="label">Search</span>
+                  <input id="custom-sprite-admin-query" type="search" placeholder="Name or creator" />
+                </label>
+                <button id="custom-sprite-admin-refresh" type="button">Refresh Sprites</button>
+              </div>
+              <div id="custom-sprite-admin-status" class="status">Paste the admin key to load community sprites.</div>
+              <div id="custom-sprite-admin-list" class="sprite-review-list"></div>
+              <div class="controls">
+                <button id="custom-sprite-admin-load-more" type="button" class="secondary" hidden>Load More</button>
+              </div>
+            </section>
           </section>
 
           <section id="comment-review" class="admin-section" data-tone="pink">

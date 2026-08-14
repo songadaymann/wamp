@@ -8,6 +8,16 @@ import {
   type CustomSpriteSize,
 } from '../../customSprites/model';
 import { canCustomSpriteBecomeRoomTile } from '../../customTiles/model';
+import {
+  CUSTOM_SPRITE_ACCOUNT_LIMIT,
+  CUSTOM_SPRITE_REMIX_REQUESTED_EVENT,
+  CUSTOM_SPRITE_USE_REQUESTED_EVENT,
+  type CustomSpriteCatalogEntry,
+} from '../../customSprites/catalog';
+import {
+  CustomSpriteCatalogApiError,
+  deleteCommunityCustomSprite,
+} from '../../customSprites/catalogClient';
 import { deleteCustomSpriteIfUnused } from '../../customSprites/deletion';
 import { isCustomSpriteUsedInLocalRoomStorage } from '../../customSprites/localUsage';
 import { loadCustomSpriteUsage } from '../../customSprites/usageClient';
@@ -15,11 +25,14 @@ import {
   CUSTOM_SPRITES_CHANGED_EVENT,
   getCustomSpriteDataUrl,
   getCustomSpriteDefinition,
+  getCurrentCustomSpriteOwnerUserId,
+  getLocalCustomSpriteMetadata,
   listLocalCustomSpriteDefinitions,
   removeLocalCustomSprite,
   refreshCustomSpriteTexture,
   registerCustomSprite,
 } from '../../customSprites/registry';
+import { queueCustomSpriteSync, refreshOwnedCustomSprites } from '../../customSprites/sync';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
 import { syncGameKeyboardFocus } from '../keyboardFocus';
 import { withActiveEditorScene } from './sceneBridge';
@@ -183,6 +196,7 @@ export function setupCustomSpriteEditor(
   let dragMode: SpritePaintDragMode | null = null;
   let isPointerDown = false;
   let editingSpriteId: string | null = null;
+  let remixedFromSpriteId: string | null = null;
   let saveAfterUseAsChoice = false;
   let spriteClipboard: SpriteClipboard | null = null;
   let clipboardPlacementActive = false;
@@ -830,7 +844,16 @@ export function setupCustomSpriteEditor(
       name.textContent = sprite.name;
       const meta = doc.createElement('span');
       meta.className = 'editor-sprite-library-meta';
-      meta.textContent = `${sprite.size}x${sprite.size} · ${getCustomSpriteKindLabel(sprite.kind)}`;
+      const sync = getLocalCustomSpriteMetadata(sprite.id);
+      const syncLabel = sync?.syncStatus === 'synced'
+        ? 'Shared'
+        : sync?.syncStatus === 'pending'
+          ? 'Sharing…'
+          : sync?.syncStatus === 'error'
+            ? 'Share failed'
+            : 'Saved locally';
+      meta.textContent = `${sprite.size}x${sprite.size} · ${getCustomSpriteKindLabel(sprite.kind)} · ${syncLabel}`;
+      if (sync?.syncError) meta.title = sync.syncError;
       copy.append(name, meta);
       selectButton.append(preview, copy);
       selectButton.addEventListener('click', () => {
@@ -854,6 +877,7 @@ export function setupCustomSpriteEditor(
 
   const resetSpriteDraft = (): void => {
     editingSpriteId = null;
+    remixedFromSpriteId = null;
     size = 16;
     pixels = createEmptyPixels();
     clipboardPlacementActive = false;
@@ -875,6 +899,7 @@ export function setupCustomSpriteEditor(
 
   const loadSpriteForEditing = (sprite: CustomSpriteDefinition): void => {
     editingSpriteId = sprite.id;
+    remixedFromSpriteId = getLocalCustomSpriteMetadata(sprite.id)?.remixedFromSpriteId ?? null;
     size = sprite.size;
     pixels = Array.from({ length: size * size }, (_, index) => sprite.pixels[index] ?? null);
     clipboardPlacementActive = false;
@@ -891,7 +916,26 @@ export function setupCustomSpriteEditor(
     syncSizeButtons();
     renderCanvas();
     renderLibrary();
-    setStatus(`Editing ${sprite.name}. Save updates this object everywhere it is reused.`);
+    setStatus(`Editing ${sprite.name}. Rooms already containing it keep their saved copy.`);
+  };
+
+  const loadSpriteForRemixing = (entry: CustomSpriteCatalogEntry): void => {
+    editingSpriteId = null;
+    remixedFromSpriteId = entry.sprite.id;
+    size = entry.sprite.size;
+    pixels = [...entry.sprite.pixels];
+    clipboardPlacementActive = false;
+    clipboardHoverCell = null;
+    resetUndoHistory();
+    if (nameInput) nameInput.value = clampSpriteName(`${entry.sprite.name} Remix`);
+    if (kindSelect) kindSelect.value = entry.sprite.kind;
+    saveAfterUseAsChoice = false;
+    setUseAsPromptVisible(false);
+    syncSizeButtons();
+    renderCanvas();
+    renderLibrary();
+    setStatus(`Remixing ${entry.sprite.name} by ${entry.creator.displayName}. Saving creates your own copy.`);
+    setSpriteModeActive(true);
   };
 
   const deleteSprite = async (
@@ -904,21 +948,39 @@ export function setupCustomSpriteEditor(
 
     deleteButton.disabled = true;
     setStatus(`Checking whether ${sprite.name} is used in a room...`);
-    const result = await deleteCustomSpriteIfUnused(sprite.id, {
-      isUsedLocally: (spriteId) => {
-        if (isCustomSpriteUsedInLocalRoomStorage(spriteId)) {
-          return true;
-        }
-
-        let usedInActiveEditor = false;
-        withActiveEditorScene(game, (scene) => {
-          usedInActiveEditor = scene.usesCustomSprite?.(spriteId) ?? false;
-        });
-        return usedInActiveEditor;
-      },
-      loadRemoteUsage: loadCustomSpriteUsage,
-      removeLocalSprite: removeLocalCustomSprite,
-    });
+    const isUsedLocally = (spriteId: string): boolean => {
+      if (isCustomSpriteUsedInLocalRoomStorage(spriteId)) return true;
+      let usedInActiveEditor = false;
+      withActiveEditorScene(game, (scene) => {
+        usedInActiveEditor = scene.usesCustomSprite?.(spriteId) ?? false;
+      });
+      return usedInActiveEditor;
+    };
+    let result: Awaited<ReturnType<typeof deleteCustomSpriteIfUnused>> = 'verification-failed';
+    const metadata = getLocalCustomSpriteMetadata(sprite.id);
+    const isOwnedCatalogSprite = Boolean(
+      metadata?.revision
+      && metadata.ownerUserId
+      && metadata.ownerUserId === getCurrentCustomSpriteOwnerUserId()
+    );
+    if (isUsedLocally(sprite.id)) {
+      result = 'in-use';
+    } else if (isOwnedCatalogSprite) {
+      try {
+        await deleteCommunityCustomSprite(sprite.id);
+        result = removeLocalCustomSprite(sprite.id) ? 'deleted' : 'not-local';
+      } catch (error) {
+        result = error instanceof CustomSpriteCatalogApiError && error.status === 409
+          ? 'in-use'
+          : 'verification-failed';
+      }
+    } else {
+      result = await deleteCustomSpriteIfUnused(sprite.id, {
+        isUsedLocally,
+        loadRemoteUsage: loadCustomSpriteUsage,
+        removeLocalSprite: removeLocalCustomSprite,
+      });
+    }
 
     if (result === 'deleted') {
       if (editorState.selectedObjectId === buildCustomSpriteObjectId(sprite.id)) {
@@ -963,6 +1025,7 @@ export function setupCustomSpriteEditor(
     }
 
     if (active) {
+      void refreshOwnedCustomSprites().catch(() => undefined);
       withActiveEditorScene(game, (scene) => scene.setMusicModeActive?.(false));
       editorState.paletteMode = 'objects';
       renderLibrary();
@@ -1003,10 +1066,13 @@ export function setupCustomSpriteEditor(
     editorState.selectedObjectId = buildCustomSpriteObjectId(sprite.id);
     editorState.objectFacing = 'right';
     editorState.activeTool = 'pencil';
-    registerCustomSprite(sprite);
+    registerCustomSprite(sprite, { remixedFromSpriteId });
+    queueCustomSpriteSync();
     refreshSpriteInActiveScenes(sprite);
     renderLibrary();
-    setStatus('Saved. Click in the room to place it.');
+    setStatus(getCurrentCustomSpriteOwnerUserId()
+      ? 'Saved. Sharing to Community; click in the room to place it.'
+      : 'Saved locally. Sign in to share it with Community.');
     setSpriteModeActive(false);
   };
 
@@ -1020,11 +1086,14 @@ export function setupCustomSpriteEditor(
       return;
     }
 
-    registerCustomSprite(sprite);
+    registerCustomSprite(sprite, { remixedFromSpriteId });
+    queueCustomSpriteSync();
     refreshSpriteInActiveScenes(sprite);
     editingSpriteId = sprite.id;
     renderLibrary();
-    setStatus('Saved as tile. Click in the room to paint it.');
+    setStatus(getCurrentCustomSpriteOwnerUserId()
+      ? 'Saved as tile and sharing to Community. Click in the room to paint it.'
+      : 'Saved locally as a tile. Sign in to share it with Community.');
     setSpriteModeActive(false);
   };
 
@@ -1042,6 +1111,11 @@ export function setupCustomSpriteEditor(
 
     saveAfterUseAsChoice = false;
     setUseAsPromptVisible(false);
+
+    if (!editingSpriteId && listLocalCustomSpriteDefinitions().length >= CUSTOM_SPRITE_ACCOUNT_LIMIT) {
+      setStatus(`My Objects can hold up to ${CUSTOM_SPRITE_ACCOUNT_LIMIT} sprites. Delete an unused one before saving another.`, 'error');
+      return;
+    }
 
     const sprite = buildSpriteDraft(kind);
     if (!sprite) {
@@ -1250,6 +1324,39 @@ export function setupCustomSpriteEditor(
   }
 
   window.addEventListener(CUSTOM_SPRITES_CHANGED_EVENT, renderLibrary);
+  window.addEventListener(CUSTOM_SPRITE_REMIX_REQUESTED_EVENT, (event) => {
+    const entry = event instanceof CustomEvent
+      ? event.detail as CustomSpriteCatalogEntry | undefined
+      : undefined;
+    if (entry?.sprite) loadSpriteForRemixing(entry);
+  });
+  window.addEventListener(CUSTOM_SPRITE_USE_REQUESTED_EVENT, (event) => {
+    const entry = event instanceof CustomEvent
+      ? event.detail as CustomSpriteCatalogEntry | undefined
+      : undefined;
+    if (!entry?.sprite) return;
+    const sprite = entry.sprite;
+    refreshSpriteInActiveScenes(sprite);
+    if (canCustomSpriteBecomeRoomTile(sprite)) {
+      let selected = false;
+      withActiveEditorScene(game, (scene) => {
+        selected = scene.useCustomSpriteAsTile?.(sprite) ?? false;
+      });
+      if (!selected) {
+        setStatus('Open an editable room before using this tile.', 'error');
+        return;
+      }
+      setStatus(`Using ${sprite.name} by ${entry.creator.displayName} as a tile.`);
+    } else {
+      editorState.paletteMode = 'objects';
+      editorState.selectedObjectId = buildCustomSpriteObjectId(sprite.id);
+      editorState.objectFacing = 'right';
+      editorState.activeTool = 'pencil';
+      window.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
+      setStatus(`Using ${sprite.name} by ${entry.creator.displayName}.`);
+    }
+    setSpriteModeActive(false);
+  });
   setActiveTool('pencil');
   resetSpriteDraft();
   syncCommandButtons();

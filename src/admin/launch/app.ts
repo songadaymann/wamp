@@ -14,6 +14,7 @@ import type {
   PartyKitShardHeartbeat,
 } from '../model';
 import { setupBackgroundAdminController } from '../../background-admin';
+import { setupCustomSpriteAdminController } from '../../custom-sprite-admin';
 import { createAdminResponseClient } from '../adminApiClient';
 import { createPollingController } from '../pollingController';
 import {
@@ -116,6 +117,9 @@ let roomCommentsLoading = false;
 const backgroundAdminController = setupBackgroundAdminController({
   getAdminKey: () => adminKey,
 });
+const customSpriteAdminController = setupCustomSpriteAdminController({
+  getAdminKey: () => adminKey,
+});
 const adminResponseClient = createAdminResponseClient(() => adminKey);
 const pollingController = createPollingController(POLL_INTERVAL_MS, () => {
   void refreshSnapshot();
@@ -135,8 +139,10 @@ saveKeyButton?.addEventListener('click', () => {
     void refreshSnapshot();
     void refreshGameJams();
     backgroundAdminController.handleAdminKeyChange();
+    customSpriteAdminController.handleAdminKeyChange();
   } else {
     backgroundAdminController.handleAdminKeyChange();
+    customSpriteAdminController.handleAdminKeyChange();
     render();
   }
 });
@@ -146,6 +152,7 @@ refreshButton?.addEventListener('click', () => {
   void refreshGameJams();
   void refreshRoomComments();
   void backgroundAdminController.refresh();
+  void customSpriteAdminController.refresh();
 });
 
 clearKeyButton?.addEventListener('click', () => {
@@ -159,6 +166,7 @@ clearKeyButton?.addEventListener('click', () => {
   }
   syncPolling();
   backgroundAdminController.handleAdminKeyChange();
+  customSpriteAdminController.handleAdminKeyChange();
   render();
 });
 
@@ -222,6 +230,7 @@ if (adminKey) {
   void refreshGameJams();
   void refreshRoomComments();
   void backgroundAdminController.refresh();
+  void customSpriteAdminController.refresh();
 } else {
   render();
 }

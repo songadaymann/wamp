@@ -184,8 +184,8 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     handler: ({ request, url, env }) => handleBackgroundImageRequest(request, url, env),
   },
   {
-    methods: ['GET'],
-    pattern: { prefix: '/api/custom-sprites/' },
+    methods: ['GET', 'PUT', 'DELETE'],
+    pattern: { prefix: '/api/custom-sprites' },
     auth: 'public',
     handler: ({ request, url, env }) => handleCustomSpriteRequest(request, url, env),
   },
