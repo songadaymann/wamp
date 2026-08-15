@@ -2865,9 +2865,24 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     const mirroredShiftX = liveObject.sprite.flipX ? visualShiftX : -visualShiftX;
     const displayOriginX = frameWidth * 0.5 + mirroredShiftX;
     const [baseBodyOffsetX, baseBodyOffsetY] = getObjectRuntimeBodyOffset(liveObject.config);
+    const nextOriginX = displayOriginX / frameWidth;
+    const nextBodyOffsetX = baseBodyOffsetX + mirroredShiftX;
 
-    liveObject.sprite.setOrigin(displayOriginX / frameWidth, liveObject.sprite.originY);
-    body.setOffset(baseBodyOffsetX + mirroredShiftX, baseBodyOffsetY);
+    // updateFromGameObject repositions an Arcade body from its sprite. Calling
+    // it every AI tick cancels the movement that physics integrated during the
+    // previous tick, leaving police running in place despite non-zero velocity.
+    // Registration only needs to be resynced when an animation or facing change
+    // actually changes the supplied art's alignment.
+    if (
+      liveObject.sprite.originX === nextOriginX
+      && body.offset.x === nextBodyOffsetX
+      && body.offset.y === baseBodyOffsetY
+    ) {
+      return;
+    }
+
+    liveObject.sprite.setOrigin(nextOriginX, liveObject.sprite.originY);
+    body.setOffset(nextBodyOffsetX, baseBodyOffsetY);
     body.updateFromGameObject();
   }
 

@@ -97,6 +97,11 @@ try {
   };
   assert.equal(summary.editor.placedObjects, 3);
 
+  // Leave the newly placed officer in plain patrol mode so this smoke test can
+  // prove that a running police animation also produces physical movement.
+  await page.uncheck('#police-patrol-shoots-checkbox');
+  assert.equal(await page.isChecked('#police-patrol-shoots-checkbox'), false);
+
   await page.click('#btn-test-play');
   await waitForState(
     page,
@@ -117,9 +122,17 @@ try {
   let observedHunterPostReloadState = null;
   let observedHunterSecondAttackState = null;
   let observedPatrolShooterState = null;
+  let observedPatrolMovementState = null;
   let lastObservedState = playState;
   let lastHunterAiState = null;
   let hunterAttackCycleCount = 0;
+  const initialPatrolWalker = initialPolice.find(
+    (enemy) => enemy.id === 'police_patrolman'
+      && enemy.policeBehaviorMode === 'patrol'
+      && enemy.policePatrolShoots === false,
+  );
+  assert.ok(initialPatrolWalker, 'Plain patrol police enemy was not created.');
+  let maxPatrolDisplacement = 0;
   const runtimeSamples = [];
   const startedAt = Date.now();
   while (Date.now() - startedAt < 4000) {
@@ -130,6 +143,18 @@ try {
     const patrolShooter = police.find(
       (enemy) => enemy.id === 'policewoman' && enemy.policeBehaviorMode === 'patrol' && enemy.policePatrolShoots === true,
     );
+    const patrolWalker = police.find(
+      (enemy) => enemy.id === 'police_patrolman'
+        && enemy.policeBehaviorMode === 'patrol'
+        && enemy.policePatrolShoots === false,
+    );
+    if (patrolWalker) {
+      const displacement = Math.abs(patrolWalker.x - initialPatrolWalker.x);
+      maxPatrolDisplacement = Math.max(maxPatrolDisplacement, displacement);
+      if (displacement >= 8 && !observedPatrolMovementState) {
+        observedPatrolMovementState = state;
+      }
+    }
     if (hunter?.aiState === 'attack' && lastHunterAiState !== 'attack') {
       hunterAttackCycleCount += 1;
       if (hunterAttackCycleCount >= 2 && !observedHunterSecondAttackState) {
@@ -142,7 +167,16 @@ try {
         ? { x: state.activeScene.player.x, y: state.activeScene.player.y }
         : null,
       hunter: hunter
-        ? { x: hunter.x, y: hunter.y, aiState: hunter.aiState, textureKey: hunter.textureKey }
+        ? { x: hunter.x, y: hunter.y, velocityX: hunter.velocityX, aiState: hunter.aiState, textureKey: hunter.textureKey }
+        : null,
+      patrolWalker: patrolWalker
+        ? {
+            x: patrolWalker.x,
+            y: patrolWalker.y,
+            velocityX: patrolWalker.velocityX,
+            aiState: patrolWalker.aiState,
+            textureKey: patrolWalker.textureKey,
+          }
         : null,
       projectileCount: state?.activeScene?.combat?.projectileCount ?? 0,
     };
@@ -179,6 +213,7 @@ try {
       && observedHunterPostReloadState
       && observedHunterSecondAttackState
       && observedPatrolShooterState
+      && observedPatrolMovementState
     ) {
       break;
     }
@@ -190,6 +225,7 @@ try {
     || !observedHunterPostReloadState
     || !observedHunterSecondAttackState
     || !observedPatrolShooterState
+    || !observedPatrolMovementState
   ) {
     summary.runtime = {
       police: policeObjects(lastObservedState),
@@ -202,6 +238,10 @@ try {
   assert.ok(observedHunterPostReloadState, 'Hunter police enemy never restored its standing registration after reload.');
   assert.ok(observedHunterSecondAttackState, 'Hunter police enemy never completed a second firing cycle.');
   assert.ok(observedPatrolShooterState, 'Patrol+Shoot police enemy never reached its ranged attack state.');
+  assert.ok(
+    observedPatrolMovementState,
+    `Plain patrol police enemy played its run state but moved only ${maxPatrolDisplacement.toFixed(2)}px.`,
+  );
 
   const hunterAttack = policeObjects(observedHunterState).find(
     (enemy) => enemy.id === 'police_patrolman' && enemy.policeBehaviorMode === 'hunter',
@@ -251,6 +291,12 @@ try {
       hunterReload,
       hunterPostReload,
       hunterSecondAttack,
+      patrolMovement: policeObjects(observedPatrolMovementState).find(
+        (enemy) => enemy.id === 'police_patrolman'
+          && enemy.policeBehaviorMode === 'patrol'
+          && enemy.policePatrolShoots === false,
+      ),
+      maxPatrolDisplacement,
     },
   };
   await setEarlyWorldTilesVisibility(page, false);
