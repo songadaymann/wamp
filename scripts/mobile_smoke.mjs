@@ -204,12 +204,14 @@ async function runScenario(browserInstance, scenario) {
     if (message.type() !== 'error') {
       return;
     }
+    const location = message.location();
     const record = {
       scenario: scenario.name,
       type: message.type(),
       text: message.text(),
+      url: location.url || null,
     };
-    if (!isIgnoredConsoleError(record.text)) {
+    if (!isIgnoredConsoleError(record.text, record.url)) {
       summary.consoleErrors.push(record);
     }
   });
@@ -1467,10 +1469,10 @@ async function readPortraitFocusedWorldHudLayout(page) {
   });
 }
 
-function isIgnoredConsoleError(text) {
+function isIgnoredConsoleError(text, url = null) {
   return (
     text.includes('cloudflareinsights.com/cdn-cgi/rum')
-    || text.includes('Failed to load resource: net::ERR_FAILED') && text.includes('cloudflareinsights.com')
+    || url?.includes('cloudflareinsights.com/cdn-cgi/rum')
   );
 }
 
