@@ -1373,7 +1373,6 @@
             <div class="world-hud-title">We All Make A Platformer</div>
             <div class="world-hud-beta">BETA</div>
           </div>
-          <button id="btn-mobile-world-hud-minimize" class="bar-btn bar-btn-small world-hud-mobile-toggle hidden" type="button">Hide</button>
         </div>
         <div class="world-room-title-row">
           <div id="world-selected-title" class="world-room-title">Room 0,0</div>
@@ -1391,6 +1390,20 @@
               />
             </button>
             <div id="world-selected-state-info-tooltip" class="world-title-lock-tooltip"></div>
+          </div>
+          <div class="world-hud-mobile-actions">
+            <button
+              id="btn-mobile-world-hud-details"
+              class="bar-btn bar-btn-small world-hud-mobile-toggle hidden"
+              type="button"
+              aria-expanded="false"
+            >More +</button>
+            <button
+              id="btn-mobile-world-hud-minimize"
+              class="bar-btn bar-btn-small world-hud-mobile-toggle hidden"
+              type="button"
+              aria-label="Collapse room controls"
+            >Room −</button>
           </div>
         </div>
         <div id="world-selected-subtitle" class="world-room-subtitle"></div>
@@ -1510,7 +1523,12 @@
         <div id="world-sign-panel-label" class="world-sign-panel-label">SIGN</div>
         <div id="world-sign-panel-text" class="world-sign-panel-text"></div>
       </div>
-      <button id="btn-world-hud-toggle" class="bar-btn bar-btn-small world-hud-toggle hidden" type="button">Room +</button>
+      <button
+        id="btn-world-hud-toggle"
+        class="bar-btn bar-btn-small world-hud-toggle hidden"
+        type="button"
+        aria-label="Expand room controls"
+      >Room +</button>
       <button
         id="btn-mobile-world-stop"
         class="bar-btn bar-btn-small world-btn-play active mobile-world-stop hidden"
@@ -1624,12 +1642,17 @@
       </div>
     </div>
     <div id="mobile-editor-nav" class="mobile-editor-nav hidden" aria-label="Editor panels">
+      <button
+        class="bar-btn bar-btn-small mobile-editor-tab mobile-editor-world-tab"
+        type="button"
+        data-mobile-editor-sheet="actions"
+        aria-label="World and editor actions"
+      >&#8592; World</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="tools">Tools</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="background">Background</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="palette">Palette</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="objects">Objects</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="goal">Goal</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="actions">Actions</button>
       <button id="btn-mobile-editor-undo" class="bar-btn bar-btn-small mobile-editor-utility" type="button">Undo</button>
       <button id="btn-mobile-editor-toggle" class="bar-btn bar-btn-small mobile-editor-utility" type="button">Hide</button>
     </div>

@@ -204,12 +204,14 @@ async function runScenario(browserInstance, scenario) {
     if (message.type() !== 'error') {
       return;
     }
+    const location = message.location();
     const record = {
       scenario: scenario.name,
       type: message.type(),
       text: message.text(),
+      url: location.url || null,
     };
-    if (!isIgnoredConsoleError(record.text)) {
+    if (!isIgnoredConsoleError(record.text, record.url)) {
       summary.consoleErrors.push(record);
     }
   });
@@ -282,9 +284,12 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
       candidate?.touch?.active === true
       && candidate?.device?.deviceClass === 'phone'
       && candidate.device.orientationState === 'portrait'
-      && candidate?.activeScene?.mode === 'play',
+      && candidate?.activeScene?.mode === 'play'
+      && candidate.activeScene.player !== null
+      && candidate.activeScene.mobilePortraitCamera?.playerScreen !== null,
     'phone portrait deep-linked play mode',
   );
+  await closeBlockingOverlaysUntilClear(page);
   await assertAbsent(page, '#rotate-gate', 'rotate gate during phone portrait play');
   await assertVisible(page, '#mobile-play-controls', 'portrait mobile play controls');
   await assertVisible(page, '#mobile-move-zone', 'portrait mobile move zone');
@@ -334,6 +339,16 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
     layout.playerScreen.x > layout.viewport.width * 0.34
       && layout.playerScreen.x < layout.viewport.width * 0.66,
     `portrait camera should keep player roughly centered horizontally: ${JSON.stringify(layout.playerScreen)}`,
+  );
+  assertCondition(
+    state.activeScene.mobilePortraitCamera?.zoomMultiplier === 2
+      && state.activeScene.mobilePortraitCamera?.targetY === 0.34,
+    `portrait camera should use the wider, centered mobile defaults: ${JSON.stringify(state.activeScene.mobilePortraitCamera)}`,
+  );
+  assertCondition(
+    layout.playerScreen.y > layout.controls.top * 0.45
+      && layout.playerScreen.y < layout.controls.top * 0.6,
+    `portrait player should stay near the center of the unobstructed game view: ${JSON.stringify(layout)}`,
   );
   assertCondition(
     layout.playerScreen.y < layout.controls.top - 16,
@@ -499,16 +514,22 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
 
   await assertAbsent(page, '#rotate-gate', 'rotate gate during phone portrait focused room browse');
   await assertHidden(page, '#mobile-play-controls', 'mobile play controls after stopping portrait play');
-  await assertHidden(page, '#bottom-bar', 'bottom bar during portrait focused room HUD');
-  await assertVisible(page, '#world-hud', 'portrait focused room bottom HUD');
+  await assertVisible(page, '#bottom-bar', 'compact phone footer during portrait focused room HUD');
+  await assertVisible(page, '#world-hud', 'portrait focused room compact HUD');
   await assertVisible(page, '#btn-world-play', 'portrait focused room Play button');
   await assertVisible(page, '#btn-world-edit', 'portrait focused room Edit button');
   await assertVisible(page, '#btn-world-build', 'portrait focused room Build button');
-  await assertVisible(page, '#btn-world-course-builder', 'portrait focused room Course Builder button');
-  await assertVisible(page, '#btn-world-explore', 'portrait focused room Explore button');
-  await assertVisible(page, '#btn-world-leaderboard', 'portrait focused room Leaderboard button');
-  await assertVisible(page, '#btn-world-chat', 'portrait focused room Chat button');
-  await assertVisible(page, '#btn-world-jump-sheet', 'portrait focused room Warp shortcut');
+  await assertVisible(page, '#btn-mobile-world-hud-details', 'portrait focused room More disclosure');
+  await assertVisible(page, '#btn-mobile-world-hud-minimize', 'portrait focused room collapse button');
+  await assertHidden(page, '#btn-world-course-builder', 'portrait focused room Course Builder by default');
+  await assertHidden(page, '#btn-world-explore', 'portrait focused room Explore by default');
+  await assertHidden(page, '#btn-world-leaderboard', 'portrait focused room Leaderboard by default');
+  await assertHidden(page, '#btn-world-chat', 'portrait focused room Chat by default');
+  await assertHidden(page, '#btn-world-jump-sheet', 'portrait focused room Warp by default');
+  await assertHidden(page, '#btn-world-zoom-out-footer', 'phone footer zoom out');
+  await assertHidden(page, '#btn-world-zoom-in-footer', 'phone footer zoom in');
+  await assertHidden(page, '#btn-fit-screen', 'phone footer Fit button');
+  await assertHidden(page, '#zoom-level', 'phone footer zoom readout');
   await assertSelectorsWithinViewport(
     page,
     [
@@ -516,50 +537,66 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
       '#btn-world-play',
       '#btn-world-edit',
       '#btn-world-build',
-      '#btn-world-course-builder',
-      '#btn-world-explore',
-      '#btn-world-leaderboard',
-      '#btn-world-chat',
-      '#btn-world-jump-sheet',
+      '#btn-mobile-world-hud-details',
+      '#btn-mobile-world-hud-minimize',
+      '#bottom-bar',
     ],
     'phone portrait focused room HUD bounds',
   );
 
   const layout = await readPortraitFocusedWorldHudLayout(page);
   const hudTop = Math.max(layout.hud.top, layout.hudDocument.top);
-  const hudBottom = Math.max(layout.hud.bottom, layout.hudDocument.bottom);
   assertCondition(
     layout.mobilePortraitFocusedRoom === 'true' && layout.mobilePortraitPlay === 'false',
     `body should mark focused room portrait HUD without play controls: ${JSON.stringify(layout)}`,
   );
   assertCondition(
-    hudTop >= Math.round(layout.viewport.height * 0.55),
-    `portrait focused room HUD should live at the bottom: ${JSON.stringify(layout.hud)}`,
+    hudTop <= 80,
+    `portrait focused room HUD should stay compact at the top: ${JSON.stringify(layout.hud)}`,
   );
   assertCondition(
-    hudBottom >= layout.viewport.height - 16,
-    `portrait focused room HUD should reach the bottom safe area: ${JSON.stringify(layout.hud)}`,
+    layout.hud.height <= 150,
+    `portrait focused room HUD should use less than 150px by default: ${JSON.stringify(layout.hud)}`,
   );
   assertCondition(
-    layout.buttons.every((button) => button.visible && button.withinHud),
-    `portrait focused room HUD buttons should be compact and inside the HUD: ${JSON.stringify(layout.buttons)}`,
+    layout.buttons.filter((button) => button.visible).every((button) => button.withinHud),
+    `visible portrait focused room HUD buttons should stay inside the HUD: ${JSON.stringify(layout.buttons)}`,
   );
   assertCondition(
-    layout.primaryButtons.length === 4
-      && layout.primaryButtons.every((button) => button.visible && button.rowTop === layout.primaryButtons[0].rowTop),
-    `portrait focused room primary actions should share one row: ${JSON.stringify(layout.primaryButtons)}`,
+    layout.primaryButtons.filter((button) => button.visible).length === 3
+      && layout.primaryButtons
+        .filter((button) => button.visible)
+        .every((button) => button.rowTop === layout.primaryButtons.find((button) => button.visible)?.rowTop),
+    `portrait focused room should show exactly three primary actions in one row: ${JSON.stringify(layout.primaryButtons)}`,
   );
   assertCondition(
-    !layout.leaderboard.visible || layout.leaderboard.withinHud,
-    `portrait focused room best-run strip should stay inside the HUD: ${JSON.stringify(layout.leaderboard)}`,
+    !layout.leaderboard.visible,
+    `portrait focused room best-run strip should be removed from the mobile HUD: ${JSON.stringify(layout.leaderboard)}`,
   );
 
+  await clickElement(page, '#btn-mobile-world-hud-details');
+  await assertVisible(page, '#btn-world-course-builder', 'portrait focused room Course Builder after More');
+  await assertVisible(page, '#btn-world-explore', 'portrait focused room Explore after More');
+  await assertVisible(page, '#btn-world-leaderboard', 'portrait focused room Leaderboard after More');
+  await assertVisible(page, '#btn-world-chat', 'portrait focused room Chat after More');
+  await assertVisible(page, '#btn-world-jump-sheet', 'portrait focused room Warp after More');
+  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'portrait-more-actions');
+  await clickElement(page, '#btn-mobile-world-hud-details');
+  await assertHidden(page, '#btn-world-explore', 'portrait focused room Explore after closing More');
+
+  await clickElement(page, '#btn-mobile-world-hud-minimize');
+  await assertHidden(page, '#world-hud', 'portrait focused room collapsed HUD');
+  await assertVisible(page, '#btn-world-hud-toggle', 'portrait focused room expand control');
+  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'portrait-collapsed-hud');
+  await clickElement(page, '#btn-world-hud-toggle');
+  await assertVisible(page, '#world-hud', 'portrait focused room re-expanded HUD');
+
   scenarioSummary.assertions.push({
-    label: 'deep-linked phone portrait stop returns to a compact bottom HUD instead of rotate gate',
+    label: 'deep-linked phone portrait stop returns to a compact, disclosed, collapsible HUD',
     layout,
     activeScene: summarizeActiveScene(state.activeScene),
   });
-  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'portrait-bottom-hud');
+  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'portrait-compact-hud');
 }
 
 async function runPhonePortraitCameraTuner(page, scenarioSummary, scenarioDir) {
@@ -585,6 +622,10 @@ async function runPhonePortraitCameraTuner(page, scenarioSummary, scenarioDir) {
   );
 
   const before = await readCameraTunerSnapshot(page);
+  assertCondition(
+    before.zoomMultiplier === 2 && before.targetY === 0.34,
+    `camera tuner should begin from the wider, centered portrait defaults: ${JSON.stringify(before)}`,
+  );
   await clickElement(page, '[data-mobile-camera-tuner-action="zoom-in"]');
   const afterZoom = await waitForCameraTunerSnapshot(
     page,
@@ -627,13 +668,19 @@ async function runPhoneLandscapeBrowse(page, scenarioSummary, scenarioDir) {
   await assertAbsent(page, '#install-help-modal', 'install help modal in phone landscape');
   await assertAbsent(page, '.mobile-dpad-btn', 'legacy mobile D-pad buttons in phone landscape browse');
   await assertVisible(page, '#world-hud', 'world HUD');
-  await assertVisible(page, '#btn-world-chat', 'mobile global chat shortcut');
-  await assertVisible(page, '#btn-world-jump-sheet', 'mobile jump shortcut');
+  await assertVisible(page, '#btn-mobile-world-hud-details', 'mobile More disclosure');
+  await assertVisible(page, '#btn-mobile-world-hud-minimize', 'mobile room collapse button');
+  await assertHidden(page, '#btn-world-chat', 'mobile global chat shortcut by default');
+  await assertHidden(page, '#btn-world-jump-sheet', 'mobile jump shortcut by default');
   await assertSelectorsWithinViewport(
     page,
-    ['#world-hud', '#btn-world-chat', '#btn-world-jump-sheet', '#bottom-bar'],
+    ['#world-hud', '#btn-mobile-world-hud-details', '#btn-mobile-world-hud-minimize', '#bottom-bar'],
     'phone landscape browse bounds',
   );
+  await clickElement(page, '#btn-mobile-world-hud-details');
+  await assertVisible(page, '#btn-world-chat', 'mobile global chat shortcut after More');
+  await assertVisible(page, '#btn-world-jump-sheet', 'mobile jump shortcut after More');
+  await clickElement(page, '#btn-mobile-world-hud-details');
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'browse');
 }
 
@@ -719,7 +766,34 @@ async function runPhoneLandscapeEditorSheets(page, scenarioSummary, scenarioDir)
   await assertVisible(page, '#mobile-editor-nav', 'mobile editor nav');
   await assertVisible(page, '#sidebar', 'mobile editor sheet');
 
-  for (const sheet of ['tools', 'background', 'palette', 'objects', 'goal', 'actions']) {
+  const editorNav = await page.evaluate(() => {
+    const tabs = Array.from(document.querySelectorAll('#mobile-editor-nav [data-mobile-editor-sheet]'));
+    return tabs.map((tab) => ({
+      sheet: tab.getAttribute('data-mobile-editor-sheet'),
+      text: tab.textContent?.trim() ?? '',
+      ariaLabel: tab.getAttribute('aria-label'),
+    }));
+  });
+  assertCondition(
+    editorNav[0]?.sheet === 'actions'
+      && editorNav[0]?.text === '← World'
+      && editorNav[0]?.ariaLabel === 'World and editor actions',
+    `mobile editor should lead with an explicit World action tab: ${JSON.stringify(editorNav)}`,
+  );
+
+  await clickElement(page, '[data-mobile-editor-sheet="actions"]');
+  await page.waitForFunction(() => document.body.dataset.mobileEditorSheet === 'actions');
+  await assertVisible(page, '#editor-actions', 'editor actions sheet');
+  const worldActionLabel = await page.$eval('#btn-editor-back .tool-label', (element) => element.textContent?.trim() ?? '');
+  assertCondition(worldActionLabel === 'World', `expected World action label, received ${worldActionLabel}`);
+  await assertSelectorsWithinViewport(
+    page,
+    ['#mobile-editor-nav', '#sidebar'],
+    'mobile editor World actions bounds',
+  );
+  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'editor-world-actions');
+
+  for (const sheet of ['tools', 'background', 'palette', 'objects', 'goal']) {
     await clickElement(page, `[data-mobile-editor-sheet="${sheet}"]`);
     await page.waitForFunction((expectedSheet) => document.body.dataset.mobileEditorSheet === expectedSheet, sheet);
     await assertVisible(page, '#sidebar', `mobile editor ${sheet} sheet`);
@@ -727,10 +801,16 @@ async function runPhoneLandscapeEditorSheets(page, scenarioSummary, scenarioDir)
     scenarioSummary.assertions.push({ label: `mobile editor sheet selectable: ${sheet}` });
   }
 
+  await clickElement(page, '[data-mobile-editor-sheet="actions"]');
+  await page.waitForFunction(() => document.body.dataset.mobileEditorSheet === 'actions');
   await clickElement(page, '#btn-mobile-editor-toggle');
   await page.waitForFunction(() => document.body.dataset.mobileEditorCollapsed === 'true');
   scenarioSummary.assertions.push({ label: 'mobile editor sheet collapses' });
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'editor-collapsed');
+  scenarioSummary.assertions.push({
+    label: 'leftmost World tab reveals the actions sheet and remains visible when collapsed',
+    editorNav,
+  });
 }
 
 async function runTabletLandscapeBrowse(page, scenarioSummary, scenarioDir) {
@@ -901,6 +981,7 @@ async function assertVisible(page, selector, label) {
 }
 
 async function assertHidden(page, selector, label) {
+  await page.waitForSelector(selector, { state: 'hidden', timeout: 2000 }).catch(() => {});
   const visible = await page.locator(selector).first().isVisible().catch(() => false);
   assertCondition(!visible, `${label} should be hidden (${selector})`);
 }
@@ -1435,10 +1516,10 @@ async function readPortraitFocusedWorldHudLayout(page) {
   });
 }
 
-function isIgnoredConsoleError(text) {
+function isIgnoredConsoleError(text, url = null) {
   return (
     text.includes('cloudflareinsights.com/cdn-cgi/rum')
-    || text.includes('Failed to load resource: net::ERR_FAILED') && text.includes('cloudflareinsights.com')
+    || url?.includes('cloudflareinsights.com/cdn-cgi/rum')
   );
 }
 

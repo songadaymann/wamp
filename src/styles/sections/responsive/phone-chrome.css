@@ -9,8 +9,35 @@ body[data-device-class='phone'] #bottom-bar {
   padding: 8px calc(10px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(10px + var(--safe-left));
   gap: 10px;
   flex-wrap: wrap;
-  background: rgba(5, 5, 5, 0.66);
-  backdrop-filter: blur(8px);
+  background: #050505;
+}
+
+body[data-device-class='phone'][data-app-mode='world'] #bottom-bar {
+  min-height: 46px;
+  padding: 5px calc(8px + var(--safe-right)) calc(5px + var(--safe-bottom)) calc(8px + var(--safe-left));
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-left,
+body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-right {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-center {
+  width: 100%;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 5px;
+}
+
+body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-btn,
+body[data-device-class='phone'][data-app-mode='world'] #bottom-bar #world-online-count {
+  min-height: 30px;
+  padding: 4px 6px;
+  border-radius: 0;
+  font-size: 7px;
+  white-space: nowrap;
 }
 
 body[data-device-class='phone'] .bar-left,
@@ -29,7 +56,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] #bottom-bar {
   gap: 6px;
   align-items: flex-end;
   justify-content: center;
-  background: linear-gradient(180deg, rgba(5, 5, 5, 0), rgba(5, 5, 5, 0.4));
+  background: #050505;
   border-top: none;
 }
 
@@ -47,10 +74,10 @@ body[data-device-class='phone'][data-app-mode='play-world'] .bar-right {
   justify-content: flex-start;
 }
 
-body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-zoom-out-footer,
-body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-zoom-in-footer,
-body[data-device-class='phone'][data-app-mode='play-world'] #btn-fit-screen,
-body[data-device-class='phone'][data-app-mode='play-world'] #zoom-level {
+body[data-device-class='phone'] #btn-world-zoom-out-footer,
+body[data-device-class='phone'] #btn-world-zoom-in-footer,
+body[data-device-class='phone'] #btn-fit-screen,
+body[data-device-class='phone'] #zoom-level {
   display: none;
 }
 

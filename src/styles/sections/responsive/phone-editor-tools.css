@@ -5,11 +5,11 @@ body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav {
   width: min(calc(100vw - 12px - var(--safe-left) - var(--safe-right)), 820px);
   transform: translateX(-50%);
   padding: 0;
-  background: rgba(14, 14, 14, 0.98);
+  background: #0e0e0e;
   border: 1px solid var(--border-strong);
   border-bottom: none;
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.26);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] #mobile-editor-nav {
@@ -20,8 +20,8 @@ body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .bar-
   min-width: 0;
   padding: 10px 12px;
   border: none;
-  border-right: 1px solid rgba(243, 238, 226, 0.08);
-  background: transparent;
+  border-right: 1px solid #343434;
+  background: #0e0e0e;
   box-shadow: none;
   color: var(--text-muted);
 }
@@ -31,8 +31,17 @@ body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .bar-
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab.active {
-  background: rgba(11, 11, 11, 0.98);
+  background: #0b0b0b;
   color: #f7ecd1;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-world-tab {
+  color: var(--accent-alt);
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-world-tab.active {
+  background: var(--accent-alt);
+  color: #0b0b0b;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-utility {
@@ -41,7 +50,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobi
 
 body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-utility:active,
 body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab:active {
-  background: rgba(243, 238, 226, 0.08);
+  background: #2b2b2b;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #tools,
@@ -100,4 +109,3 @@ body[data-device-class='phone'][data-app-mode='editor'] .object-item {
 body[data-device-class='phone'][data-app-mode='editor'] .palette-hint {
   padding-top: 2px;
 }
-
