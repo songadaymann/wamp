@@ -5,11 +5,11 @@
 }
 
 .mobile-editor-nav .mobile-editor-tab:first-of-type {
-  border-top-left-radius: 14px;
+  border-top-left-radius: 0;
 }
 
 .mobile-editor-nav .mobile-editor-utility:last-of-type {
-  border-top-right-radius: 14px;
+  border-top-right-radius: 0;
 }
 
 .mobile-editor-utility {

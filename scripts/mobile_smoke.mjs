@@ -766,7 +766,34 @@ async function runPhoneLandscapeEditorSheets(page, scenarioSummary, scenarioDir)
   await assertVisible(page, '#mobile-editor-nav', 'mobile editor nav');
   await assertVisible(page, '#sidebar', 'mobile editor sheet');
 
-  for (const sheet of ['tools', 'background', 'palette', 'objects', 'goal', 'actions']) {
+  const editorNav = await page.evaluate(() => {
+    const tabs = Array.from(document.querySelectorAll('#mobile-editor-nav [data-mobile-editor-sheet]'));
+    return tabs.map((tab) => ({
+      sheet: tab.getAttribute('data-mobile-editor-sheet'),
+      text: tab.textContent?.trim() ?? '',
+      ariaLabel: tab.getAttribute('aria-label'),
+    }));
+  });
+  assertCondition(
+    editorNav[0]?.sheet === 'actions'
+      && editorNav[0]?.text === '← World'
+      && editorNav[0]?.ariaLabel === 'World and editor actions',
+    `mobile editor should lead with an explicit World action tab: ${JSON.stringify(editorNav)}`,
+  );
+
+  await clickElement(page, '[data-mobile-editor-sheet="actions"]');
+  await page.waitForFunction(() => document.body.dataset.mobileEditorSheet === 'actions');
+  await assertVisible(page, '#editor-actions', 'editor actions sheet');
+  const worldActionLabel = await page.$eval('#btn-editor-back .tool-label', (element) => element.textContent?.trim() ?? '');
+  assertCondition(worldActionLabel === 'World', `expected World action label, received ${worldActionLabel}`);
+  await assertSelectorsWithinViewport(
+    page,
+    ['#mobile-editor-nav', '#sidebar'],
+    'mobile editor World actions bounds',
+  );
+  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'editor-world-actions');
+
+  for (const sheet of ['tools', 'background', 'palette', 'objects', 'goal']) {
     await clickElement(page, `[data-mobile-editor-sheet="${sheet}"]`);
     await page.waitForFunction((expectedSheet) => document.body.dataset.mobileEditorSheet === expectedSheet, sheet);
     await assertVisible(page, '#sidebar', `mobile editor ${sheet} sheet`);
@@ -774,10 +801,16 @@ async function runPhoneLandscapeEditorSheets(page, scenarioSummary, scenarioDir)
     scenarioSummary.assertions.push({ label: `mobile editor sheet selectable: ${sheet}` });
   }
 
+  await clickElement(page, '[data-mobile-editor-sheet="actions"]');
+  await page.waitForFunction(() => document.body.dataset.mobileEditorSheet === 'actions');
   await clickElement(page, '#btn-mobile-editor-toggle');
   await page.waitForFunction(() => document.body.dataset.mobileEditorCollapsed === 'true');
   scenarioSummary.assertions.push({ label: 'mobile editor sheet collapses' });
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'editor-collapsed');
+  scenarioSummary.assertions.push({
+    label: 'leftmost World tab reveals the actions sheet and remains visible when collapsed',
+    editorNav,
+  });
 }
 
 async function runTabletLandscapeBrowse(page, scenarioSummary, scenarioDir) {
