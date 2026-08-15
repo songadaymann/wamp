@@ -341,6 +341,16 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
     `portrait camera should keep player roughly centered horizontally: ${JSON.stringify(layout.playerScreen)}`,
   );
   assertCondition(
+    state.activeScene.mobilePortraitCamera?.zoomMultiplier === 2
+      && state.activeScene.mobilePortraitCamera?.targetY === 0.34,
+    `portrait camera should use the wider, centered mobile defaults: ${JSON.stringify(state.activeScene.mobilePortraitCamera)}`,
+  );
+  assertCondition(
+    layout.playerScreen.y > layout.controls.top * 0.45
+      && layout.playerScreen.y < layout.controls.top * 0.6,
+    `portrait player should stay near the center of the unobstructed game view: ${JSON.stringify(layout)}`,
+  );
+  assertCondition(
     layout.playerScreen.y < layout.controls.top - 16,
     `portrait camera should keep player above the control deck: ${JSON.stringify(layout)}`,
   );
@@ -612,6 +622,10 @@ async function runPhonePortraitCameraTuner(page, scenarioSummary, scenarioDir) {
   );
 
   const before = await readCameraTunerSnapshot(page);
+  assertCondition(
+    before.zoomMultiplier === 2 && before.targetY === 0.34,
+    `camera tuner should begin from the wider, centered portrait defaults: ${JSON.stringify(before)}`,
+  );
   await clickElement(page, '[data-mobile-camera-tuner-action="zoom-in"]');
   const afterZoom = await waitForCameraTunerSnapshot(
     page,
