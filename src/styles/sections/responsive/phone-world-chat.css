@@ -20,12 +20,142 @@ body[data-device-class='phone'] #world-hud {
   top: calc(8px + var(--safe-top));
   left: calc(8px + var(--safe-left));
   right: auto;
-  width: min(296px, calc(100vw - 96px - var(--safe-left) - var(--safe-right)));
-  max-width: calc(100vw - 96px - var(--safe-left) - var(--safe-right));
-  padding: 12px;
-  gap: 10px;
+  bottom: auto;
+  width: min(320px, calc(100vw - 76px - var(--safe-left) - var(--safe-right)));
+  max-width: calc(100vw - 76px - var(--safe-left) - var(--safe-right));
+  height: auto;
+  padding: 8px;
+  gap: 6px;
   background: #0b0b0b;
-  transition: transform 0.16s ease, opacity 0.16s ease;
+  border: 2px solid #fff3db;
+  box-shadow: 3px 3px 0 #18161c;
+  transition: none;
+}
+
+body[data-device-class='phone'] #world-hud::after,
+body[data-device-class='phone'] #world-hud .world-hud-topline,
+body[data-device-class='phone'] #world-hud .world-room-subtitle,
+body[data-device-class='phone'] #world-hud #world-selected-meta,
+body[data-device-class='phone'] #world-hud #world-jump-row,
+body[data-device-class='phone'] #world-hud #world-zoom-label,
+body[data-device-class='phone'] #world-hud #world-status,
+body[data-device-class='phone'] #world-hud #world-selected-goal,
+body[data-device-class='phone'] #world-hud #world-leaderboard,
+body[data-device-class='phone'] #world-hud .world-hud-row-secondary-actions,
+body[data-device-class='phone'] #world-hud .world-hud-row-tertiary-actions,
+body[data-device-class='phone'] #world-hud #btn-world-course-builder,
+body[data-device-class='phone'] #world-hud #btn-world-room-rush {
+  display: none;
+}
+
+body[data-device-class='phone'] #world-hud .world-room-title-row {
+  align-items: center;
+  gap: 6px;
+}
+
+body[data-device-class='phone'] #world-hud .world-hud-mobile-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+body[data-device-class='phone'] #world-hud .world-hud-mobile-actions .bar-btn {
+  min-height: 28px;
+  padding: 4px 6px;
+  font-size: 7px;
+  line-height: 1;
+  border-radius: 0;
+}
+
+body[data-device-class='phone'] #world-hud .world-hud-row-selected-owner {
+  min-height: 14px;
+  align-items: center;
+  gap: 6px;
+}
+
+body[data-device-class='phone'] #world-hud #world-selected-coords {
+  display: none;
+}
+
+body[data-device-class='phone'] #world-hud .world-state-wrap {
+  margin-left: auto;
+}
+
+body[data-device-class='phone'] #world-hud .world-state-pill {
+  padding: 2px 4px 1px;
+  border-width: 1px;
+  box-shadow: none;
+  font-size: 6px;
+  letter-spacing: 0.04em;
+}
+
+body[data-device-class='phone'] #world-hud .world-creator-card {
+  min-height: 14px;
+  padding: 0;
+  border: 0;
+  background: #0b0b0b;
+  box-shadow: none;
+}
+
+body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-avatar-frame,
+body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-stats,
+body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-progress {
+  display: none;
+}
+
+body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-body {
+  gap: 0;
+}
+
+body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-byline,
+body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-name {
+  font-size: 8px;
+  line-height: 1;
+}
+
+body[data-device-class='phone'] #world-hud .world-hud-row-primary-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 5px;
+}
+
+body[data-device-class='phone'] #world-hud .world-hud-row-primary-actions .bar-btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 4px 3px;
+  font-size: 8px;
+  line-height: 1.05;
+  letter-spacing: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  border-radius: 0;
+}
+
+body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud #btn-world-course-builder,
+body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud #btn-world-room-rush {
+  display: inline-flex;
+}
+
+body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud .world-hud-row-tertiary-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 5px;
+}
+
+body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud .world-hud-row-tertiary-actions .bar-btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 3px;
+  font-size: 7px;
+  line-height: 1.05;
+  letter-spacing: 0;
+  white-space: normal;
+  border-radius: 0;
 }
 
 body[data-device-class='phone'] .world-goal-panel {
@@ -90,7 +220,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-ti
 
 body[data-coarse-pointer='true']:not([data-device-class='desktop'])[data-mobile-world-hud-collapsed='true'] #world-hud {
   transform: translateY(calc(-100% - 14px));
-  opacity: 0;
+  visibility: hidden;
   pointer-events: none;
 }
 
@@ -128,15 +258,16 @@ body[data-device-class='phone'] .auth-session-summary-value {
 }
 
 body[data-device-class='phone'] .world-room-title {
-  font-size: 16px;
+  font-size: 11px;
+  line-height: 1.05;
 }
 
 body[data-device-class='phone'] .world-room-title[data-title-size='compact'] {
-  font-size: 14px;
+  font-size: 10px;
 }
 
 body[data-device-class='phone'] .world-room-title[data-title-size='tiny'] {
-  font-size: 12px;
+  font-size: 9px;
 }
 
 body[data-device-class='phone'] .world-room-subtitle {

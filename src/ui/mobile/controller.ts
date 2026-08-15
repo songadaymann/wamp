@@ -17,6 +17,7 @@ type Elements = {
   mobileCameraTunerButtons: HTMLButtonElement[];
   worldHudToggleButton: HTMLButtonElement | null;
   worldHudMinimizeButton: HTMLButtonElement | null;
+  worldHudDetailsButton: HTMLButtonElement | null;
   worldChatButton: HTMLButtonElement | null;
   worldRoomChatButton: HTMLButtonElement | null;
   worldJumpSheetButton: HTMLButtonElement | null;
@@ -36,6 +37,7 @@ export class MobileUiController {
   private activeEditorSheet: EditorSheetId = 'tools';
   private editorSheetCollapsed = false;
   private worldHudCollapsed = false;
+  private worldHudDetailsExpanded = false;
   private previousAppMode: string | null = null;
   private lastTouchEndAt = 0;
 
@@ -55,6 +57,7 @@ export class MobileUiController {
       mobileCameraTunerButtons: Array.from(doc.querySelectorAll<HTMLButtonElement>('[data-mobile-camera-tuner-action]')),
       worldHudToggleButton: doc.getElementById('btn-world-hud-toggle') as HTMLButtonElement | null,
       worldHudMinimizeButton: doc.getElementById('btn-mobile-world-hud-minimize') as HTMLButtonElement | null,
+      worldHudDetailsButton: doc.getElementById('btn-mobile-world-hud-details') as HTMLButtonElement | null,
       worldChatButton: doc.getElementById('btn-world-chat') as HTMLButtonElement | null,
       worldRoomChatButton: doc.getElementById('btn-world-room-chat') as HTMLButtonElement | null,
       worldJumpSheetButton: doc.getElementById('btn-world-jump-sheet') as HTMLButtonElement | null,
@@ -210,7 +213,15 @@ export class MobileUiController {
 
     this.elements.worldHudMinimizeButton?.addEventListener('click', () => {
       this.worldHudCollapsed = true;
+      this.worldHudDetailsExpanded = false;
       this.doc.body.dataset.mobileWorldHudCollapsed = 'true';
+      this.doc.body.dataset.mobileWorldHudDetails = 'false';
+      this.render();
+    });
+
+    this.elements.worldHudDetailsButton?.addEventListener('click', () => {
+      this.worldHudDetailsExpanded = !this.worldHudDetailsExpanded;
+      this.doc.body.dataset.mobileWorldHudDetails = this.worldHudDetailsExpanded ? 'true' : 'false';
       this.render();
     });
   }
@@ -433,8 +444,10 @@ export class MobileUiController {
         } else if (appMode === 'world') {
           this.worldHudCollapsed = false;
         }
+        this.worldHudDetailsExpanded = false;
       } else {
         this.worldHudCollapsed = false;
+        this.worldHudDetailsExpanded = false;
       }
       this.previousAppMode = appMode;
     }
@@ -485,6 +498,8 @@ export class MobileUiController {
 
     this.doc.body.dataset.mobileWorldHudCollapsed =
       isCollapsibleWorldHud && this.worldHudCollapsed ? 'true' : 'false';
+    this.doc.body.dataset.mobileWorldHudDetails =
+      isCollapsibleWorldHud && this.worldHudDetailsExpanded ? 'true' : 'false';
     this.elements.worldHudToggleButton?.classList.toggle(
       'hidden',
       !(isCollapsibleWorldHud && this.worldHudCollapsed),
@@ -493,6 +508,17 @@ export class MobileUiController {
       'hidden',
       !(isCollapsibleWorldHud && !this.worldHudCollapsed),
     );
+    this.elements.worldHudDetailsButton?.classList.toggle(
+      'hidden',
+      !(isCollapsibleWorldHud && appMode === 'world' && !this.worldHudCollapsed),
+    );
+    if (this.elements.worldHudDetailsButton) {
+      this.elements.worldHudDetailsButton.textContent = this.worldHudDetailsExpanded ? 'More −' : 'More +';
+      this.elements.worldHudDetailsButton.setAttribute(
+        'aria-expanded',
+        this.worldHudDetailsExpanded ? 'true' : 'false',
+      );
+    }
 
     this.elements.worldChatButton?.classList.toggle(
       'hidden',
