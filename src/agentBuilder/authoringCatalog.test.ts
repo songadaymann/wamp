@@ -111,7 +111,11 @@ describe('authoring catalog', () => {
     expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_heart')?.animationFrames).toEqual([0, 1, 4, 5, 6, 7, 6, 5, 4, 1]);
     expect(GAME_OBJECTS.find((entry) => entry.id === 'boygame_wall_torch')?.lightEmission).toMatchObject({
       glowColor: 0x9bbc0f,
-      flicker: expect.any(Object),
+      flicker: {
+        radiusAmplitude: 0.06,
+        alphaAmplitude: 0.08,
+        speedHz: 1.25,
+      },
     });
 
     const jungleObjects = GAME_OBJECTS.filter((entry) => entry.id.startsWith('jungle_'));
