@@ -32,9 +32,9 @@ const BOYGAME_TORCH_LIGHT_EMISSION = Object.freeze({
   glowColor: 0x9bbc0f,
   glowAlpha: 0.52,
   flicker: {
-    radiusAmplitude: 2.5,
-    alphaAmplitude: 0.07,
-    speedHz: 7.5,
+    radiusAmplitude: 0.06,
+    alphaAmplitude: 0.08,
+    speedHz: 1.25,
   },
 } satisfies LightEmissionConfig);
 
