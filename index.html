@@ -2230,13 +2230,19 @@
     <div class="history-modal-panel leaderboard-modal-panel run-rating-modal-panel" role="dialog" aria-modal="true" aria-labelledby="run-rating-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
-          <div id="run-rating-kicker" class="history-modal-kicker">Run Complete</div>
           <h2 id="run-rating-title" class="history-modal-title">Post-Run Rating</h2>
           <div id="run-rating-meta" class="history-modal-meta">Rate the run you just finished.</div>
         </div>
         <button id="btn-run-rating-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div id="run-rating-error" class="history-modal-error hidden"></div>
+      <section id="run-rating-batch" class="run-rating-batch hidden" aria-live="polite">
+        <div class="run-rating-batch-heading">
+          <strong id="run-rating-batch-title">Rate the rooms you just completed</strong>
+          <span id="run-rating-batch-progress">Room 1 of 2</span>
+        </div>
+        <ol id="run-rating-batch-list" class="run-rating-batch-list"></ol>
+      </section>
       <div class="leaderboard-panel run-rating-panel">
         <div id="run-rating-result" class="run-rating-result"></div>
         <div id="run-rating-leaderboard" class="history-modal-meta run-rating-summary-card run-rating-summary-card-leaderboard">Loading latest leaderboard summary...</div>
