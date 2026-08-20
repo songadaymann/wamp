@@ -25,6 +25,7 @@ await page.waitForTimeout(1500);
 
 await page.evaluate(() => {
   document.body.dataset.appReady = 'true';
+  document.body.dataset.appMode = 'play-world';
   document.getElementById('boot-splash')?.classList.add('hidden');
   document.getElementById('busy-overlay')?.classList.add('hidden');
   document.getElementById('welcome-modal')?.classList.add('hidden');
@@ -47,6 +48,22 @@ await page.evaluate(() => {
       },
     }),
   );
+});
+
+const deferredState = await page.evaluate(() => ({
+  appMode: document.body.dataset.appMode,
+  modalHidden: document.getElementById('run-rating-modal')?.classList.contains('hidden') ?? false,
+  recordsRaw: window.localStorage.getItem('wamp_guest_run_progress_v1'),
+}));
+if (deferredState.appMode !== 'play-world' || !deferredState.modalHidden) {
+  throw new Error(`Expected guest claim prompt to remain hidden during Play: ${JSON.stringify(deferredState)}`);
+}
+if (!deferredState.recordsRaw) {
+  throw new Error('Expected guest clear progress to be recorded before the deferred prompt opens.');
+}
+
+await page.evaluate(() => {
+  document.body.dataset.appMode = 'world';
 });
 
 await page.waitForSelector('#run-guest-claim:not(.hidden)');
@@ -129,6 +146,7 @@ await page.screenshot({
 });
 
 fs.writeFileSync(path.join(outputDir, 'modal-state.json'), JSON.stringify(modalState, null, 2));
+fs.writeFileSync(path.join(outputDir, 'deferred-state.json'), JSON.stringify(deferredState, null, 2));
 fs.writeFileSync(path.join(outputDir, 'signin-state.json'), JSON.stringify(signInState, null, 2));
 fs.writeFileSync(path.join(outputDir, 'errors.json'), JSON.stringify(errors, null, 2));
 

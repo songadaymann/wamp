@@ -54,15 +54,24 @@ import {
   openTwitterShareIntent,
   type RunShareImage,
 } from '../../social/runShare';
+import {
+  getPostRunPromptKey,
+  PostRunRatingQueue,
+  type PostRunPromptQueueEntry,
+  type PostRunPromptMode,
+} from './postRunRatingQueue';
 
 type RunRatingElements = {
   modal: HTMLElement | null;
   closeButton: HTMLButtonElement | null;
   skipButton: HTMLButtonElement | null;
   submitButton: HTMLButtonElement | null;
-  kicker: HTMLElement | null;
   title: HTMLElement | null;
   meta: HTMLElement | null;
+  batch: HTMLElement | null;
+  batchTitle: HTMLElement | null;
+  batchProgress: HTMLElement | null;
+  batchList: HTMLElement | null;
   result: HTMLElement | null;
   leaderboard: HTMLElement | null;
   suggestion: HTMLElement | null;
@@ -93,12 +102,7 @@ type PostRunShareScene = {
   getPostRunShareRoomSnapshot?: () => RoomSnapshot | null;
 };
 
-type RunRatingModalMode = 'rating' | 'guest-claim';
-
-interface PendingOpenRequest {
-  mode: RunRatingModalMode;
-  detail: PostRunRatingRequestDetail;
-}
+type RunRatingModalMode = PostRunPromptMode;
 
 export class RunRatingModalController {
   private readonly elements: RunRatingElements;
@@ -114,7 +118,9 @@ export class RunRatingModalController {
   private savedDeltaText: string | null = null;
   private baselineProgression: ProgressionSummary | null = null;
   private baselineProgressionLoad: Promise<void> | null = null;
-  private pendingOpenRequest: PendingOpenRequest | null = null;
+  private readonly promptQueue = new PostRunRatingQueue();
+  private readonly guestProgressByPromptKey = new Map<string, GuestRunProgressSummary>();
+  private appModeObserver: MutationObserver | null = null;
   private mode: RunRatingModalMode = 'rating';
   private guestProgressSummary: GuestRunProgressSummary | null = null;
   private shareImage: RunShareImage | null = null;
@@ -124,6 +130,10 @@ export class RunRatingModalController {
 
   private readonly handleCloseClick = () => {
     this.close();
+  };
+
+  private readonly handleSkipClick = () => {
+    this.advancePrompt(this.savedProgression ? 'rated' : 'skipped');
   };
 
   private readonly handleShareSignInClick = () => {
@@ -137,7 +147,7 @@ export class RunRatingModalController {
   };
 
   private readonly handleGuestClaimContinueClick = () => {
-    this.close();
+    this.advancePrompt('skipped');
   };
 
   private readonly handleShareTwitterClick = () => {
@@ -177,17 +187,7 @@ export class RunRatingModalController {
     }
 
     const mode: RunRatingModalMode = getAuthDebugState().authenticated ? 'rating' : 'guest-claim';
-    if (this.isRewardStingVisible()) {
-      this.pendingOpenRequest = { mode, detail };
-      return;
-    }
-
-    if (mode === 'guest-claim') {
-      this.openGuestClaim(detail);
-      return;
-    }
-
-    void this.open(detail);
+    this.enqueuePrompt({ mode, detail });
   };
 
   private readonly handleGuestClaimRequest = (event: Event) => {
@@ -199,26 +199,15 @@ export class RunRatingModalController {
       return;
     }
 
-    if (this.isRewardStingVisible()) {
-      this.pendingOpenRequest = { mode: 'guest-claim', detail };
-      return;
-    }
-
-    this.openGuestClaim(detail);
+    this.enqueuePrompt({ mode: 'guest-claim', detail });
   };
 
   private readonly handleRewardStingsIdle = () => {
-    if (!this.pendingOpenRequest || this.isRewardStingVisible()) {
-      return;
-    }
+    this.presentQueuedBatch();
+  };
 
-    const request = this.pendingOpenRequest;
-    this.pendingOpenRequest = null;
-    if (request.mode === 'guest-claim') {
-      this.openGuestClaim(request.detail);
-      return;
-    }
-    void this.open(request.detail);
+  private readonly handleAppModeChange = () => {
+    this.presentQueuedBatch();
   };
 
   constructor(
@@ -235,9 +224,12 @@ export class RunRatingModalController {
       closeButton: this.doc.getElementById('btn-run-rating-close') as HTMLButtonElement | null,
       skipButton: this.doc.getElementById('btn-run-rating-skip') as HTMLButtonElement | null,
       submitButton: this.doc.getElementById('btn-run-rating-submit') as HTMLButtonElement | null,
-      kicker: this.doc.getElementById('run-rating-kicker'),
       title: this.doc.getElementById('run-rating-title'),
       meta: this.doc.getElementById('run-rating-meta'),
+      batch: this.doc.getElementById('run-rating-batch'),
+      batchTitle: this.doc.getElementById('run-rating-batch-title'),
+      batchProgress: this.doc.getElementById('run-rating-batch-progress'),
+      batchList: this.doc.getElementById('run-rating-batch-list'),
       result: this.doc.getElementById('run-rating-result'),
       leaderboard: this.doc.getElementById('run-rating-leaderboard'),
       suggestion: this.doc.getElementById('run-rating-suggestion'),
@@ -271,7 +263,7 @@ export class RunRatingModalController {
 
   init(): void {
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
-    this.elements.skipButton?.addEventListener('click', this.handleCloseClick);
+    this.elements.skipButton?.addEventListener('click', this.handleSkipClick);
     this.elements.submitButton?.addEventListener('click', () => {
       void this.submit();
     });
@@ -291,6 +283,16 @@ export class RunRatingModalController {
       this.handleGuestClaimRequest as EventListener
     );
     this.windowObj.addEventListener(REWARD_STINGS_IDLE_EVENT, this.handleRewardStingsIdle);
+    const MutationObserverCtor = (
+      this.windowObj as Window & { MutationObserver?: typeof MutationObserver }
+    ).MutationObserver;
+    if (typeof MutationObserverCtor === 'function') {
+      this.appModeObserver = new MutationObserverCtor(this.handleAppModeChange);
+      this.appModeObserver.observe(this.doc.body, {
+        attributes: true,
+        attributeFilter: ['data-app-mode'],
+      });
+    }
     for (const button of this.elements.qualityButtons) {
       button.addEventListener('click', () => {
         const value = Number.parseInt(button.dataset.qualityStars ?? '', 10);
@@ -313,7 +315,7 @@ export class RunRatingModalController {
 
   destroy(): void {
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
-    this.elements.skipButton?.removeEventListener('click', this.handleCloseClick);
+    this.elements.skipButton?.removeEventListener('click', this.handleSkipClick);
     this.elements.shareSignInButton?.removeEventListener('click', this.handleShareSignInClick);
     this.elements.shareTwitterButton?.removeEventListener('click', this.handleShareTwitterClick);
     this.elements.shareDownloadButton?.removeEventListener('click', this.handleShareDownloadClick);
@@ -330,6 +332,69 @@ export class RunRatingModalController {
       this.handleGuestClaimRequest as EventListener
     );
     this.windowObj.removeEventListener(REWARD_STINGS_IDLE_EVENT, this.handleRewardStingsIdle);
+    this.appModeObserver?.disconnect();
+    this.appModeObserver = null;
+    this.close();
+  }
+
+  private enqueuePrompt(prompt: { mode: RunRatingModalMode; detail: PostRunRatingRequestDetail }): void {
+    if (!this.promptQueue.enqueue(prompt)) {
+      return;
+    }
+
+    if (prompt.mode === 'guest-claim') {
+      this.guestProgressByPromptKey.set(
+        getPostRunPromptKey(prompt.detail),
+        recordGuestRunClear(prompt.detail),
+      );
+    }
+    if (this.activeRequest) {
+      this.render();
+    }
+    this.presentQueuedBatch();
+  }
+
+  private presentQueuedBatch(): void {
+    if (
+      this.doc.body.dataset.appMode !== 'world'
+      || this.isRewardStingVisible()
+      || this.activeRequest
+      || (this.elements.modal && !this.elements.modal.classList.contains('hidden'))
+    ) {
+      return;
+    }
+
+    const prompt = this.promptQueue.beginBatch();
+    if (prompt) {
+      this.presentPrompt(prompt);
+    }
+  }
+
+  private presentPrompt(prompt: PostRunPromptQueueEntry): void {
+    if (prompt.mode === 'guest-claim') {
+      this.openGuestClaim(
+        prompt.detail,
+        this.guestProgressByPromptKey.get(prompt.key) ?? null,
+      );
+      return;
+    }
+    void this.open(prompt.detail);
+  }
+
+  private advancePrompt(disposition: 'rated' | 'skipped'): void {
+    if (this.submitting || !this.activeRequest) {
+      return;
+    }
+
+    const next = this.promptQueue.advanceCurrent(disposition);
+    if (next) {
+      this.presentPrompt(next);
+      return;
+    }
+
+    this.promptQueue.finishBatch();
+    this.guestProgressByPromptKey.clear();
+    this.hideAndReset();
   }
 
   private async open(detail: PostRunRatingRequestDetail): Promise<void> {
@@ -406,14 +471,17 @@ export class RunRatingModalController {
     }
   }
 
-  private openGuestClaim(detail: PostRunRatingRequestDetail): void {
+  private openGuestClaim(
+    detail: PostRunRatingRequestDetail,
+    guestProgressSummary: GuestRunProgressSummary | null,
+  ): void {
     if (!this.elements.modal) {
       return;
     }
 
     this.mode = 'guest-claim';
     this.activeRequest = detail;
-    this.guestProgressSummary = recordGuestRunClear(detail);
+    this.guestProgressSummary = guestProgressSummary;
     this.roomSummary = null;
     this.courseSummary = null;
     this.currentQualityStars = null;
@@ -436,6 +504,12 @@ export class RunRatingModalController {
   }
 
   close(): void {
+    this.promptQueue.dismissAll();
+    this.guestProgressByPromptKey.clear();
+    this.hideAndReset();
+  }
+
+  private hideAndReset(): void {
     if (!this.elements.modal) {
       return;
     }
@@ -451,11 +525,11 @@ export class RunRatingModalController {
     this.currentDifficultyChoice = null;
     this.submitting = false;
     this.loadingSummary = false;
+    this.loadToken += 1;
     this.savedProgression = null;
     this.savedDeltaText = null;
     this.baselineProgression = null;
     this.baselineProgressionLoad = null;
-    this.pendingOpenRequest = null;
     this.shareImage = null;
     this.shareImageLoading = false;
     this.shareStatusText = null;
@@ -683,6 +757,7 @@ export class RunRatingModalController {
               ? request.expandedRoomId ?? null
               : null,
       });
+      this.promptQueue.markCurrentRated();
     } catch (error) {
       this.setError(error instanceof Error ? error.message : 'Failed to save your rating.');
     } finally {
@@ -734,7 +809,6 @@ export class RunRatingModalController {
           ?? request?.contentTitle
           ?? (request?.contentType === 'expanded_room' ? 'Expanded Room Run' : 'Course Run');
 
-    this.elements.kicker?.classList.toggle('hidden', guestClaimMode);
     if (this.elements.title) {
       this.elements.title.textContent = summaryTitle;
     }
@@ -791,6 +865,7 @@ export class RunRatingModalController {
     if (guestClaimMode) {
       this.renderGuestClaim();
     }
+    this.renderBatchQueue();
     this.renderShare(request);
 
     for (const button of this.elements.qualityButtons) {
@@ -814,8 +889,12 @@ export class RunRatingModalController {
       this.elements.submitButton.textContent = this.savedProgression ? 'Update Rating' : 'Submit Rating';
     }
     if (this.elements.skipButton) {
+      const queue = this.promptQueue.getSnapshot();
+      const hasNext = queue.currentIndex >= 0 && queue.currentIndex < queue.total - 1;
       this.elements.skipButton.disabled = this.submitting;
-      this.elements.skipButton.textContent = this.savedProgression ? 'Done' : 'Skip';
+      this.elements.skipButton.textContent = this.savedProgression
+        ? hasNext ? 'Next Room' : 'Done'
+        : hasNext ? 'Skip Room' : 'Skip';
     }
   }
 
@@ -828,6 +907,54 @@ export class RunRatingModalController {
       this.elements.guestClaimCopy.textContent =
         'Sign in to save your XP and leaderboard progress.';
     }
+    if (this.elements.guestClaimContinueButton) {
+      const queue = this.promptQueue.getSnapshot();
+      const hasNext = queue.currentIndex >= 0 && queue.currentIndex < queue.total - 1;
+      this.elements.guestClaimContinueButton.textContent = hasNext ? 'Next Room' : 'Keep Playing';
+    }
+  }
+
+  private renderBatchQueue(): void {
+    const snapshot = this.promptQueue.getSnapshot();
+    const isBatch = snapshot.total > 1;
+    this.elements.batch?.classList.toggle('hidden', !isBatch);
+    if (!isBatch) {
+      this.elements.batchList?.replaceChildren();
+      return;
+    }
+
+    const roomOnly = snapshot.entries.every((entry) => entry.detail.contentType === 'room');
+    if (this.elements.batchTitle) {
+      this.elements.batchTitle.textContent = roomOnly
+        ? 'Rate the rooms you just completed'
+        : 'Rate the levels you just completed';
+    }
+    if (this.elements.batchProgress) {
+      const currentNumber = Math.max(1, snapshot.currentIndex + 1);
+      this.elements.batchProgress.textContent = `${roomOnly ? 'Room' : 'Level'} ${currentNumber} of ${snapshot.total}`;
+    }
+    if (!this.elements.batchList) {
+      return;
+    }
+
+    const items = snapshot.entries.map((entry, index) => {
+      const item = this.doc.createElement('li');
+      item.className = `run-rating-batch-item run-rating-batch-item--${entry.status}`;
+      if (index === snapshot.currentIndex) {
+        item.setAttribute('aria-current', 'step');
+      }
+
+      const title = this.doc.createElement('span');
+      title.className = 'run-rating-batch-item-title';
+      title.textContent = `${index + 1}. ${formatPromptTitle(entry.detail)}`;
+
+      const status = this.doc.createElement('span');
+      status.className = 'run-rating-batch-item-status';
+      status.textContent = formatPromptQueueStatus(entry.status, index === snapshot.currentIndex);
+      item.append(title, status);
+      return item;
+    });
+    this.elements.batchList.replaceChildren(...items);
   }
 
   private renderShare(request: PostRunRatingRequestDetail | null): void {
@@ -998,6 +1125,30 @@ function formatRunResultSummary(detail: PostRunRatingRequestDetail): string {
     parts.push(`${detail.score} pts`);
   }
   return parts.join(' · ');
+}
+
+function formatPromptTitle(detail: PostRunRatingRequestDetail): string {
+  const title = detail.contentTitle?.trim();
+  if (title) {
+    return title;
+  }
+  if (detail.contentType === 'expanded_room') {
+    return 'Expanded Room';
+  }
+  return detail.contentType === 'course' ? 'Course' : 'Untitled Room';
+}
+
+function formatPromptQueueStatus(
+  status: PostRunPromptQueueEntry['status'],
+  isCurrent: boolean,
+): string {
+  if (status === 'rated') {
+    return 'Rated';
+  }
+  if (status === 'skipped') {
+    return 'Skipped';
+  }
+  return isCurrent ? 'Now' : 'Waiting';
 }
 
 function formatElapsedMs(elapsedMs: number): string {
