@@ -365,7 +365,8 @@ export class EditorEditRuntime {
 
       for (let y = 0; y < ROOM_HEIGHT; y += 1) {
         for (let x = 0; x < ROOM_WIDTH; x += 1) {
-          const encodedTileValue = tileData[layerName][y][x];
+          // Compact overview snapshots may omit rows until the persisted room finishes loading.
+          const encodedTileValue = tileData[layerName]?.[y]?.[x] ?? -1;
           const { gid, flipX, flipY } = decodeTileDataValue(encodedTileValue);
           if (gid > 0) {
             const tile = layer.putTileAt(gid, x, y);

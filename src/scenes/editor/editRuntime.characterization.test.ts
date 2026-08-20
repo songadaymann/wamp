@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LAYER_NAMES,
+  ROOM_HEIGHT,
+  ROOM_WIDTH,
   editorState,
   type LayerName,
   type PlacedObject,
@@ -75,6 +77,19 @@ describe('editor edit runtime document contracts', () => {
     expect(exported.tileData.terrain[2][3]).toBe(1);
     expect(runtime.isRoomDirty).toBe(false);
     expect(runtime.hasUndoHistory()).toBe(false);
+  });
+
+  it('treats omitted overview tile rows as empty while the full room loads', () => {
+    const room = createRoom();
+    room.tileData.foreground = [];
+
+    const { runtime } = createHarness(room);
+    const exported = runtime.exportRoomSnapshot();
+
+    expect(exported.tileData.foreground).toHaveLength(ROOM_HEIGHT);
+    expect(exported.tileData.foreground).toEqual(
+      Array.from({ length: ROOM_HEIGHT }, () => Array(ROOM_WIDTH).fill(-1)),
+    );
   });
 
   it('applies Undo and Redo for tiles, objects, spawn, goals, and music', () => {
