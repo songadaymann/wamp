@@ -15,6 +15,7 @@ import {
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { RETRO_COLORS } from '../../visuals/starfield';
+import { getEditorToolHudLabel } from './editorToolSelection';
 
 interface EditorOverlayHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
@@ -132,18 +133,10 @@ export class EditorOverlayController {
           ? '#2f6b7f'
           : '#ff6f3c';
     const modeLabel = editorState.paletteMode === 'objects' ? 'Objects' : 'Tiles';
-    const toolLabel =
-      editorState.activeTool === 'eraser'
-        ? `Erase ${editorState.eraserBrushSize}x${editorState.eraserBrushSize}`
-        : editorState.activeTool === 'rect'
-          ? 'Rect'
-          : editorState.activeTool === 'fill'
-            ? 'Fill'
-            : editorState.activeTool === 'copy'
-              ? this.host.isClipboardPastePreviewActive()
-                ? 'Paste'
-                : 'Copy'
-              : 'Draw';
+    const toolLabel = getEditorToolHudLabel(
+      editorState.activeTool,
+      this.host.isClipboardPastePreviewActive(),
+    );
     const flipLabels: string[] = [];
     if (editorState.paletteMode === 'tiles' && editorState.tileFlipX) {
       flipLabels.push('Flip H');
