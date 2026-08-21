@@ -111,6 +111,7 @@ import {
   type NpcMode,
 } from '../../npcs/model';
 import { EditorHistory } from './history';
+import { iterateShapeTiles } from './shapeTiles';
 import {
   buildEditorClipboardState,
   cloneEditorClipboardState,
@@ -806,51 +807,78 @@ export class EditorEditRuntime {
   }
 
   fillRect(x1: number, y1: number, x2: number, y2: number): void {
+    this.stampShape('rect', x1, y1, x2, y2, {
+      outline: editorState.rectOutline,
+      erase: false,
+    });
+  }
+
+  stampShape(
+    kind: 'rect' | 'ellipse',
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    options?: { outline?: boolean; erase?: boolean },
+  ): void {
     if (!this.guardEditable()) {
       return;
     }
-    const minX = Math.max(0, Math.min(x1, x2));
-    const minY = Math.max(0, Math.min(y1, y2));
-    const maxX = Math.min(ROOM_WIDTH - 1, Math.max(x1, x2));
-    const maxY = Math.min(ROOM_HEIGHT - 1, Math.max(y1, y2));
+    const erase = Boolean(options?.erase);
+    const outline = Boolean(options?.outline);
     const layer = this.host.getLayers().get(editorState.activeLayer);
-    if (!layer || editorState.selectedTileGid < 0) {
+    if (!layer || (!erase && editorState.selectedTileGid < 0)) {
       return;
     }
 
-    for (let x = minX; x <= maxX; x += 1) {
-      for (let y = minY; y <= maxY; y += 1) {
-        const existingTile = layer.getTileAt(x, y);
-        const oldGid = existingTile
-          ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
-          : -1;
-        const newGid = getSelectionTileValue(0, 0);
+    const newGid = erase ? -1 : getSelectionTileValue(0, 0);
+    for (const tile of iterateShapeTiles(kind, x1, y1, x2, y2, outline)) {
+      if (tile.x < 0 || tile.x >= ROOM_WIDTH || tile.y < 0 || tile.y >= ROOM_HEIGHT) {
+        continue;
+      }
 
-        if (oldGid !== newGid) {
-          const decoded = decodeTileDataValue(newGid);
-          const placedTile = layer.putTileAt(decoded.gid, x, y);
-          if (placedTile) {
-            placedTile.flipX = decoded.flipX;
-            placedTile.flipY = decoded.flipY;
-          }
-          this.currentBatch.push({
-            layer: editorState.activeLayer,
-            x,
-            y,
-            oldGid,
-            newGid,
-          });
+      const existingTile = layer.getTileAt(tile.x, tile.y);
+      const oldGid = existingTile
+        ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
+        : -1;
+      if (oldGid === newGid) {
+        continue;
+      }
+
+      if (erase) {
+        layer.removeTileAt(tile.x, tile.y);
+      } else {
+        const decoded = decodeTileDataValue(newGid);
+        const placedTile = layer.putTileAt(decoded.gid, tile.x, tile.y);
+        if (placedTile) {
+          placedTile.flipX = decoded.flipX;
+          placedTile.flipY = decoded.flipY;
         }
       }
+      this.currentBatch.push({
+        layer: editorState.activeLayer,
+        x: tile.x,
+        y: tile.y,
+        oldGid,
+        newGid,
+      });
     }
   }
 
   floodFill(startX: number, startY: number): void {
+    this.floodReplace(startX, startY, getSelectionTileValue(0, 0));
+  }
+
+  floodErase(startX: number, startY: number): void {
+    this.floodReplace(startX, startY, -1);
+  }
+
+  private floodReplace(startX: number, startY: number, replacementGid: number): void {
     if (!this.guardEditable()) {
       return;
     }
     const layer = this.host.getLayers().get(editorState.activeLayer);
-    if (!layer || editorState.selectedTileGid < 0) {
+    if (!layer || (replacementGid >= 0 && editorState.selectedTileGid < 0)) {
       return;
     }
 
@@ -858,8 +886,7 @@ export class EditorEditRuntime {
     const targetGid = targetTile
       ? encodeTileDataValue(targetTile.index, targetTile.flipX, targetTile.flipY)
       : -1;
-    const fillGid = getSelectionTileValue(0, 0);
-    if (targetGid === fillGid) {
+    if (targetGid === replacementGid) {
       return;
     }
 
@@ -885,18 +912,22 @@ export class EditorEditRuntime {
       }
 
       visited.add(key);
-      const decoded = decodeTileDataValue(fillGid);
-      const placedTile = layer.putTileAt(decoded.gid, x, y);
-      if (placedTile) {
-        placedTile.flipX = decoded.flipX;
-        placedTile.flipY = decoded.flipY;
+      if (replacementGid < 0) {
+        layer.removeTileAt(x, y);
+      } else {
+        const decoded = decodeTileDataValue(replacementGid);
+        const placedTile = layer.putTileAt(decoded.gid, x, y);
+        if (placedTile) {
+          placedTile.flipX = decoded.flipX;
+          placedTile.flipY = decoded.flipY;
+        }
       }
       this.currentBatch.push({
         layer: editorState.activeLayer,
         x,
         y,
         oldGid: targetGid,
-        newGid: fillGid,
+        newGid: replacementGid,
       });
 
       queue.push([x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]);

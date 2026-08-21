@@ -8,6 +8,7 @@ import {
   type PaletteMode,
   type ToolName,
 } from '../../config';
+import { getEditorToolButtonCopy, isMoreEditorTool } from './editorToolSelection';
 import {
   finalizeBackgroundUpload,
   listBackgroundImages,
@@ -280,7 +281,7 @@ export class EditorUiBridge {
           return;
         }
         this.actions.onSelectTool(tool);
-        if (tool !== 'rect' && tool !== 'fill') {
+        if (!isMoreEditorTool(tool)) {
           this.moreToolsOpen = false;
         }
       };
@@ -1396,6 +1397,14 @@ export class EditorUiBridge {
 
     for (const button of this.elements.toolButtons) {
       button.classList.toggle('active', button.dataset.tool === editorState.activeTool);
+      const copy = getEditorToolButtonCopy(button.dataset.tool as ToolName);
+      if (copy) {
+        const label = button.querySelector('.tool-label');
+        if (label) {
+          label.textContent = copy.label;
+        }
+        button.title = copy.title;
+      }
     }
 
     const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
@@ -1438,9 +1447,9 @@ export class EditorUiBridge {
     const showMoreTools =
       this.moreToolsOpen ||
       (editorState.paletteMode === 'tiles' &&
-        (editorState.activeTool === 'rect' || editorState.activeTool === 'fill'));
+        (isMoreEditorTool(editorState.activeTool)));
     const moreToolsActive =
-      showMoreTools || editorState.activeTool === 'rect' || editorState.activeTool === 'fill';
+      showMoreTools || isMoreEditorTool(editorState.activeTool);
     for (const button of this.elements.moreToolsButtons) {
       button.classList.toggle('active', moreToolsActive);
     }

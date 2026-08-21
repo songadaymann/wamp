@@ -157,7 +157,50 @@ describe('editor edit runtime document contracts', () => {
     expect(runtime.isRoomDirty).toBe(true);
     expect(host.updatePersistenceStatus).toHaveBeenLastCalledWith('Draft changes...');
   });
+
+  it('stamps filled and outline rectangles and ellipses, and flood-erases matching tiles', () => {
+    const { runtime, layers } = createHarness(createRoom());
+    const terrain = layers.get('terrain')!;
+
+    runtime.beginTileBatch();
+    runtime.stampShape('rect', 0, 0, 2, 2, { outline: false, erase: false });
+    runtime.commitTileBatch();
+    expect(countTiles(terrain)).toBe(9);
+
+    runtime.beginTileBatch();
+    runtime.stampShape('rect', 0, 0, 2, 2, { outline: true, erase: true });
+    runtime.commitTileBatch();
+    expect(terrain.getTileAt(1, 1)?.index).toBeTypeOf('number');
+    expect(terrain.getTileAt(0, 0)).toBeNull();
+    expect(countTiles(terrain)).toBe(1);
+
+    runtime.beginTileBatch();
+    runtime.stampShape('ellipse', 4, 4, 8, 8, { outline: false, erase: false });
+    runtime.commitTileBatch();
+    const ellipseCount = countTiles(terrain) - 1;
+    expect(ellipseCount).toBeGreaterThan(4);
+    expect(terrain.getTileAt(6, 6)?.index).toBeTypeOf('number');
+    expect(terrain.getTileAt(4, 4)).toBeNull();
+
+    runtime.beginTileBatch();
+    runtime.floodErase(6, 6);
+    runtime.commitTileBatch();
+    expect(countTiles(terrain)).toBe(1);
+    expect(terrain.getTileAt(1, 1)?.index).toBeTypeOf('number');
+  });
 });
+
+function countTiles(layer: FakeLayer): number {
+  let count = 0;
+  for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+    for (let x = 0; x < ROOM_WIDTH; x += 1) {
+      if (layer.getTileAt(x, y)) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
 
 function createHarness(room: RoomSnapshot) {
   const layers = new Map<LayerName, FakeLayer>(
