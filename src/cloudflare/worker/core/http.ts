@@ -91,16 +91,36 @@ function isLocalDevHostname(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
 }
 
-function isTrustedAppHostname(hostname: string): boolean {
+export function isTrustedAppHostname(hostname: string): boolean {
   return (
     hostname === 'wamp.land' ||
     hostname === 'www.wamp.land' ||
     hostname === 'api.wamp.land' ||
-    hostname === 'everybodys-platformer.novox-robot.workers.dev' ||
-    hostname === 'everybodys-platformer-safety.novox-robot.workers.dev' ||
+    isTrustedWorkersHostname(hostname) ||
     hostname === 'wampland.pages.dev' ||
-    hostname.endsWith('.wampland.pages.dev')
+    hostname.endsWith('.wampland.pages.dev') ||
+    hostname === 'wamp.pages.dev' ||
+    hostname.endsWith('.wamp.pages.dev')
   );
+}
+
+function isTrustedWorkersHostname(hostname: string): boolean {
+  const accountSuffix = 'novox-robot.workers.dev';
+  for (const workerName of ['everybodys-platformer-safety', 'everybodys-platformer'] as const) {
+    const canonical = `${workerName}.${accountSuffix}`;
+    if (hostname === canonical) {
+      return true;
+    }
+    // Version preview: <id>-everybodys-platformer.novox-robot.workers.dev
+    if (hostname.endsWith(`-${canonical}`)) {
+      return true;
+    }
+    // Env preview: <id>.everybodys-platformer.novox-robot.workers.dev
+    if (hostname.endsWith(`.${canonical}`)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isSafetyWorkerHostname(hostname: string): boolean {
