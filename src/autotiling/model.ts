@@ -26,6 +26,8 @@ export interface RoomSmartTerrainState {
   cells: Record<string, SmartTerrainCellState>;
   /** Sparse engine-owned foreground cells keyed as `x,y`. */
   generatedDecorations: Record<string, SmartGeneratedDecorationState>;
+  /** Sparse engine-owned background cells keyed as `x,y`, used when a feature notch needs two edges. */
+  generatedBackgroundDecorations: Record<string, SmartGeneratedDecorationState>;
   /** Owner/slot keys deliberately removed by a manual edit. */
   suppressedDecorationSlots: string[];
 }
@@ -44,8 +46,32 @@ export function createRoomSmartTerrainState(): RoomSmartTerrainState {
     detailsEnabled: true,
     cells: {},
     generatedDecorations: {},
+    generatedBackgroundDecorations: {},
     suppressedDecorationSlots: [],
   };
+}
+
+function normalizeGeneratedDecorations(value: unknown): Record<string, SmartGeneratedDecorationState> {
+  const generatedDecorations: Record<string, SmartGeneratedDecorationState> = {};
+  if (!value || typeof value !== 'object') return generatedDecorations;
+  for (const [key, decoration] of Object.entries(value)) {
+    if (!/^\d+,\d+$/.test(key) || !decoration || typeof decoration !== 'object') continue;
+    const entry = decoration as Partial<SmartGeneratedDecorationState>;
+    if (
+      typeof entry.ownerKey !== 'string'
+      || !/^\d+,\d+$/.test(entry.ownerKey)
+      || !['top', 'bottom', 'left', 'right', 'topLeft', 'topRight', 'bottomLeft', 'bottomRight'].includes(entry.slot ?? '')
+      || typeof entry.gid !== 'number'
+      || !Number.isInteger(entry.gid)
+      || entry.gid <= 0
+    ) continue;
+    generatedDecorations[key] = {
+      ownerKey: entry.ownerKey,
+      slot: entry.slot as SmartGeneratedDecorationState['slot'],
+      gid: entry.gid,
+    };
+  }
+  return generatedDecorations;
 }
 
 export function normalizeRoomSmartTerrainState(value: unknown): RoomSmartTerrainState {
@@ -78,36 +104,15 @@ export function normalizeRoomSmartTerrainState(value: unknown): RoomSmartTerrain
     }
   }
 
-  const generatedDecorations: Record<string, SmartGeneratedDecorationState> = {};
-  if (candidate.generatedDecorations && typeof candidate.generatedDecorations === 'object') {
-    for (const [key, decoration] of Object.entries(candidate.generatedDecorations)) {
-      if (!/^\d+,\d+$/.test(key) || !decoration || typeof decoration !== 'object') {
-        continue;
-      }
-      const entry = decoration as Partial<SmartGeneratedDecorationState>;
-      if (
-        typeof entry.ownerKey !== 'string'
-        || !/^\d+,\d+$/.test(entry.ownerKey)
-        || !['top', 'bottom', 'left', 'right', 'topLeft', 'topRight', 'bottomLeft', 'bottomRight'].includes(entry.slot ?? '')
-        || typeof entry.gid !== 'number'
-        || !Number.isInteger(entry.gid)
-        || entry.gid <= 0
-      ) {
-        continue;
-      }
-      generatedDecorations[key] = {
-        ownerKey: entry.ownerKey,
-        slot: entry.slot as SmartGeneratedDecorationState['slot'],
-        gid: entry.gid,
-      };
-    }
-  }
+  const generatedDecorations = normalizeGeneratedDecorations(candidate.generatedDecorations);
+  const generatedBackgroundDecorations = normalizeGeneratedDecorations(candidate.generatedBackgroundDecorations);
 
   return {
     version: SMART_TERRAIN_VERSION,
     detailsEnabled: candidate.detailsEnabled !== false,
     cells,
     generatedDecorations,
+    generatedBackgroundDecorations,
     suppressedDecorationSlots: Array.isArray(candidate.suppressedDecorationSlots)
       ? Array.from(new Set(candidate.suppressedDecorationSlots.filter(
           (entry): entry is string => typeof entry === 'string'
@@ -126,6 +131,9 @@ export function cloneRoomSmartTerrainState(value: unknown): RoomSmartTerrainStat
     ),
     generatedDecorations: Object.fromEntries(
       Object.entries(normalized.generatedDecorations).map(([key, decoration]) => [key, { ...decoration }]),
+    ),
+    generatedBackgroundDecorations: Object.fromEntries(
+      Object.entries(normalized.generatedBackgroundDecorations).map(([key, decoration]) => [key, { ...decoration }]),
     ),
     suppressedDecorationSlots: [...normalized.suppressedDecorationSlots],
   };

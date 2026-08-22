@@ -276,13 +276,13 @@ function resolveGroundLocalIndex(
   );
   const inner = SMART_TILESET_SLOTS.ground.innerVoid;
   if (!n && enclosedVoid(x, y - 1)) {
-    if (!w) return { localIndex: inner.topLeft };
-    if (!e) return { localIndex: inner.topRight };
+    if (!w) return { localIndex: inner.right, flipY: true };
+    if (!e) return { localIndex: inner.left, flipY: true };
     return { localIndex: stablePick([...inner.top], x, y, 7) };
   }
   if (!s && enclosedVoid(x, y + 1)) {
-    if (!w) return { localIndex: inner.bottomLeft };
-    if (!e) return { localIndex: inner.bottomRight };
+    if (!w) return { localIndex: inner.right };
+    if (!e) return { localIndex: inner.left };
     return { localIndex: stablePick([...inner.bottom], x, y, 9) };
   }
   if (!w && enclosedVoid(x - 1, y)) return { localIndex: inner.left };
@@ -300,10 +300,10 @@ function resolveGroundLocalIndex(
   const ne = sameFamily(tileData, state, x + 1, y - 1, cell);
   const sw = sameFamily(tileData, state, x - 1, y + 1, cell);
   const se = sameFamily(tileData, state, x + 1, y + 1, cell);
-  if (!nw && enclosedVoid(x - 1, y - 1)) return { localIndex: inner.topLeft };
-  if (!ne && enclosedVoid(x + 1, y - 1)) return { localIndex: inner.topRight };
-  if (!sw && enclosedVoid(x - 1, y + 1)) return { localIndex: inner.topLeft, flipY: true };
-  if (!se && enclosedVoid(x + 1, y + 1)) return { localIndex: inner.topRight, flipY: true };
+  if (!nw && enclosedVoid(x - 1, y - 1)) return { localIndex: inner.topRight };
+  if (!ne && enclosedVoid(x + 1, y - 1)) return { localIndex: inner.topLeft };
+  if (!sw && enclosedVoid(x - 1, y + 1)) return { localIndex: inner.topRight, flipY: true };
+  if (!se && enclosedVoid(x + 1, y + 1)) return { localIndex: inner.topLeft, flipY: true };
   if (!nw && rule.concaveTopLeft !== undefined) return { localIndex: rule.concaveTopLeft };
   if (!ne && rule.concaveTopRight !== undefined) return { localIndex: rule.concaveTopRight };
   if (!sw && rule.concaveBottomLeft !== undefined) return { localIndex: rule.concaveBottomLeft };
@@ -333,17 +333,24 @@ function resolveLocalIndex(
 }
 
 function clearOwnedDecorations(tileData: RoomTileData, state: RoomSmartTerrainState): void {
-  for (const [targetKey, decoration] of Object.entries(state.generatedDecorations)) {
-    const [x, y] = targetKey.split(',').map(Number);
-    if (!inBounds(x, y)) {
-      delete state.generatedDecorations[targetKey];
-      continue;
+  const clearLayer = (
+    layer: 'foreground' | 'background',
+    generated: Record<string, import('./model').SmartGeneratedDecorationState>,
+  ) => {
+    for (const [targetKey, decoration] of Object.entries(generated)) {
+      const [x, y] = targetKey.split(',').map(Number);
+      if (!inBounds(x, y)) {
+        delete generated[targetKey];
+        continue;
+      }
+      if (decodeTileDataValue(tileData[layer][y]?.[x] ?? -1).gid === decoration.gid) {
+        tileData[layer][y][x] = -1;
+      }
+      delete generated[targetKey];
     }
-    if (decodeTileDataValue(tileData.foreground[y]?.[x] ?? -1).gid === decoration.gid) {
-      tileData.foreground[y][x] = -1;
-    }
-    delete state.generatedDecorations[targetKey];
-  }
+  };
+  clearLayer('foreground', state.generatedDecorations);
+  clearLayer('background', state.generatedBackgroundDecorations);
 }
 
 function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): void {
@@ -382,13 +389,17 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     slot: import('./model').SmartGeneratedDecorationState['slot'],
     localIndex: number,
     flipX = false,
+    layer: 'foreground' | 'background' = 'foreground',
   ) => {
     if (!inBounds(targetX, targetY)) return;
     const slotKey = smartDecorationSlotKey(ownerKey, slot);
-    if (suppressed.has(slotKey) || decodeTileDataValue(tileData.foreground[targetY]?.[targetX] ?? -1).gid > 0) return;
+    if (suppressed.has(slotKey) || decodeTileDataValue(tileData[layer][targetY]?.[targetX] ?? -1).gid > 0) return;
     const gid = toGid(state.cells[ownerKey]!.theme, localIndex);
-    tileData.foreground[targetY][targetX] = encodeTileDataValue(gid, flipX, false);
-    state.generatedDecorations[smartCellKey(targetX, targetY)] = { ownerKey, slot, gid };
+    tileData[layer][targetY][targetX] = encodeTileDataValue(gid, flipX, false);
+    const generated = layer === 'foreground'
+      ? state.generatedDecorations
+      : state.generatedBackgroundDecorations;
+    generated[smartCellKey(targetX, targetY)] = { ownerKey, slot, gid };
   };
   const featureCandidates = new Map<string, SmartTerrainCellState>();
   for (const [ownerKey, cell] of Object.entries(state.cells)) {
@@ -442,6 +453,20 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
       else if (below && left) addDecoration(ownerKey, x, y, 'topRight', border.topLeft, true);
       else if (above && right) addDecoration(ownerKey, x, y, 'bottomLeft', border.bottomRight, true);
       else if (above && left) addDecoration(ownerKey, x, y, 'bottomRight', border.bottomRight);
+    } else if (cardinalCount === 3) {
+      if (!right) {
+        addDecoration(ownerKey, x, y, 'topRight', border.topLeft, true);
+        addDecoration(ownerKey, x, y, 'bottom', border.bottom, false, 'background');
+      } else if (!left) {
+        addDecoration(ownerKey, x, y, 'topLeft', border.topLeft);
+        addDecoration(ownerKey, x, y, 'bottom', border.bottom, false, 'background');
+      } else if (!below) {
+        addDecoration(ownerKey, x, y, 'bottomRight', border.bottomRight);
+        addDecoration(ownerKey, x, y, 'left', border.left, false, 'background');
+      } else if (!above) {
+        addDecoration(ownerKey, x, y, 'topRight', border.topLeft, true);
+        addDecoration(ownerKey, x, y, 'left', border.left, false, 'background');
+      }
     }
   }
 }
@@ -523,19 +548,25 @@ export function suppressGeneratedDecorationAt(
   document: SmartTerrainDocument,
   x: number,
   y: number,
+  requestedLayer?: 'foreground' | 'background',
 ): SmartTerrainDocument {
   const tileData = cloneTileData(document.tileData);
   const smartTerrain = cloneRoomSmartTerrainState(document.smartTerrain);
   const targetKey = smartCellKey(x, y);
-  const generated = smartTerrain.generatedDecorations[targetKey];
+  const layer = requestedLayer
+    ?? (smartTerrain.generatedDecorations[targetKey] ? 'foreground' : 'background');
+  const generatedMap = layer === 'foreground'
+    ? smartTerrain.generatedDecorations
+    : smartTerrain.generatedBackgroundDecorations;
+  const generated = generatedMap[targetKey];
   if (!generated) {
     return { tileData, smartTerrain };
   }
-  tileData.foreground[y][x] = -1;
+  tileData[layer][y][x] = -1;
   smartTerrain.suppressedDecorationSlots = Array.from(new Set([
     ...smartTerrain.suppressedDecorationSlots,
     smartDecorationSlotKey(generated.ownerKey, generated.slot),
   ]));
-  delete smartTerrain.generatedDecorations[targetKey];
+  delete generatedMap[targetKey];
   return { tileData, smartTerrain };
 }

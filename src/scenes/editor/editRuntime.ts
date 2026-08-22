@@ -813,7 +813,11 @@ export class EditorEditRuntime {
       let suppressedDecoration = false;
       for (const cell of cells) {
         const key = smartCellKey(cell.x, cell.y);
-        if (document.smartTerrain.generatedDecorations[key] && !document.smartTerrain.cells[key]) {
+        if (
+          (document.smartTerrain.generatedDecorations[key]
+            || document.smartTerrain.generatedBackgroundDecorations[key])
+          && !document.smartTerrain.cells[key]
+        ) {
           document = suppressGeneratedDecorationAt(document, cell.x, cell.y);
           suppressedDecoration = true;
         }
@@ -853,11 +857,14 @@ export class EditorEditRuntime {
         layer.removeTileAt(targetX, targetY);
         if (editorState.activeLayer === 'terrain') {
           delete this.smartTerrain.cells[smartCellKey(targetX, targetY)];
-        } else if (editorState.activeLayer === 'foreground') {
+        } else if (editorState.activeLayer === 'foreground' || editorState.activeLayer === 'background') {
           const slot = smartCellKey(targetX, targetY);
-          if (this.smartTerrain.generatedDecorations[slot]) {
+          const generated = editorState.activeLayer === 'foreground'
+            ? this.smartTerrain.generatedDecorations
+            : this.smartTerrain.generatedBackgroundDecorations;
+          if (generated[slot]) {
             this.smartTerrain = suppressGeneratedDecorationAt(
-              this.getSmartDocument(), targetX, targetY,
+              this.getSmartDocument(), targetX, targetY, editorState.activeLayer,
             ).smartTerrain;
           }
         }
@@ -907,19 +914,28 @@ export class EditorEditRuntime {
     }
 
     if (editorState.activeLayer === 'terrain') {
-      const foreground = this.host.getLayers().get('foreground');
-      for (const [targetKey, decoration] of Object.entries(this.smartTerrain.generatedDecorations)) {
-        const [x, y] = targetKey.split(',').map(Number);
-        const tile = foreground?.getTileAt(x, y);
-        if (!tile || tile.index !== decoration.gid) continue;
-        foreground?.removeTileAt(x, y);
-        actions.push({ layer: 'foreground', x, y, oldGid: decoration.gid, newGid: -1 });
+      for (const [layerName, generated] of [
+        ['foreground', this.smartTerrain.generatedDecorations],
+        ['background', this.smartTerrain.generatedBackgroundDecorations],
+      ] as const) {
+        const detailLayer = this.host.getLayers().get(layerName);
+        for (const [targetKey, decoration] of Object.entries(generated)) {
+          const [x, y] = targetKey.split(',').map(Number);
+          const tile = detailLayer?.getTileAt(x, y);
+          if (!tile || tile.index !== decoration.gid) continue;
+          detailLayer?.removeTileAt(x, y);
+          actions.push({ layer: layerName, x, y, oldGid: decoration.gid, newGid: -1 });
+        }
       }
       this.smartTerrain.cells = {};
       this.smartTerrain.generatedDecorations = {};
+      this.smartTerrain.generatedBackgroundDecorations = {};
       this.smartTerrain.suppressedDecorationSlots = [];
     } else if (editorState.activeLayer === 'foreground') {
       this.smartTerrain.generatedDecorations = {};
+      this.smartTerrain.suppressedDecorationSlots = [];
+    } else if (editorState.activeLayer === 'background') {
+      this.smartTerrain.generatedBackgroundDecorations = {};
       this.smartTerrain.suppressedDecorationSlots = [];
     }
     this.history.record({

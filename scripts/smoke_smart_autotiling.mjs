@@ -107,12 +107,14 @@ try {
     const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
     runtime.beginTileBatch();
     for (let y = 4; y <= 10; y += 1) runtime.placeTileAt(4 * 16 + 1, y * 16 + 1);
-    for (let y = 4; y <= 8; y += 1) {
-      for (let x = 11; x <= 15; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+    for (let y = 3; y <= 9; y += 1) {
+      for (let x = 10; x <= 18; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
     }
     runtime.commitTileBatch();
     runtime.beginTileBatch();
-    runtime.eraseTileAt(13 * 16 + 1, 6 * 16 + 1);
+    for (const [x, y] of [[12, 5], [16, 6], [17, 6], [17, 7]]) {
+      runtime.eraseTileAt(x * 16 + 1, y * 16 + 1);
+    }
     runtime.commitTileBatch();
     return runtime.exportRoomSnapshot();
   });
@@ -120,7 +122,7 @@ try {
     groundFixtures.tileData.terrain.slice(4, 11).map((row) => row[4]),
     Array(7).fill(38),
   );
-  assert.ok(groundFixtures.tileData.terrain[7][13] > 0);
+  assert.equal(groundFixtures.tileData.terrain[7][16], (1 << 21) + 38);
   summary.checks.verticalAndCaveTopology = true;
 
   await page.evaluate(() => {
@@ -131,7 +133,7 @@ try {
   const featureFixture = await page.evaluate(() => {
     const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
     runtime.beginTileBatch();
-    for (const [x, y] of [[25, 5], [26, 5], [26, 6]]) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+    for (const [x, y] of [[25, 5], [24, 6], [25, 7]]) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
     runtime.commitTileBatch();
     const before = runtime.exportRoomSnapshot();
     runtime.beginTileBatch();
@@ -139,14 +141,17 @@ try {
     runtime.commitTileBatch();
     const erased = runtime.exportRoomSnapshot();
     runtime.beginTileBatch();
-    runtime.placeTileAt(25 * 16 + 1, 5 * 16 + 1);
+    runtime.eraseTileAt(25 * 16 + 1, 6 * 16 + 1);
+    runtime.placeTileAt(24 * 16 + 1, 6 * 16 + 1);
     runtime.commitTileBatch();
     return { before, erased, restored: runtime.exportRoomSnapshot() };
   });
   assert.ok(featureFixture.before.smartTerrain.generatedDecorations['25,6']);
-  assert.equal(featureFixture.before.smartTerrain.generatedDecorations['24,4'], undefined);
+  assert.ok(featureFixture.before.smartTerrain.generatedBackgroundDecorations['25,6']);
   assert.equal(featureFixture.erased.tileData.foreground[6][25], -1);
+  assert.notEqual(featureFixture.erased.tileData.background[6][25], -1);
   assert.ok(featureFixture.restored.smartTerrain.generatedDecorations['25,6']);
+  assert.ok(featureFixture.restored.smartTerrain.generatedBackgroundDecorations['25,6']);
   summary.checks.featureCornersAndErase = true;
   const keepBuilding = page.locator('#btn-guest-builder-claim-continue');
   if (await keepBuilding.isVisible()) await keepBuilding.click();

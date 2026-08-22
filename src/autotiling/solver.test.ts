@@ -119,11 +119,35 @@ describe('smart terrain solver', () => {
     });
     const firstGid = getTilesetByKey('cave')!.firstGid;
     const local = (value: number) => decodeTileDataValue(value).gid - firstGid;
-    expect(result.tileData.terrain[6].slice(6, 9).map(local)).toEqual([35, 52, 33]);
+    expect(result.tileData.terrain[6].slice(6, 9).map(local)).toEqual([33, 52, 35]);
     expect(result.tileData.terrain[7].slice(6, 9).map(local)).toEqual([42, -firstGid - 1, 37]);
-    expect(result.tileData.terrain[8].slice(6, 9).map(local)).toEqual([35, 34, 33]);
+    expect(result.tileData.terrain[8].slice(6, 9).map(local)).toEqual([33, 34, 35]);
     expect(decodeTileDataValue(result.tileData.terrain[6][6]).flipY).toBe(true);
     expect(decodeTileDataValue(result.tileData.terrain[6][8]).flipY).toBe(true);
+  });
+
+  it.each([
+    { name: 'top-right', carved: [[10, 9], [11, 9], [11, 10]], localIndex: 37, flipY: true },
+    { name: 'top-left', carved: [[10, 9], [9, 9], [9, 10]], localIndex: 42, flipY: true },
+    { name: 'bottom-right', carved: [[11, 10], [11, 11], [10, 11]], localIndex: 37, flipY: false },
+    { name: 'bottom-left', carved: [[9, 10], [9, 11], [10, 11]], localIndex: 42, flipY: false },
+  ])('uses the flipped vertical wall art for an enclosed $name ground step', ({ carved, localIndex, flipY }) => {
+    const firstGid = getTilesetByKey('forest')!.firstGid;
+    let result = applySmartCells(emptyDocument(), {
+      cells: Array.from({ length: 49 }, (_, index) => ({ x: 7 + (index % 7), y: 7 + Math.floor(index / 7) })),
+      mode: 'paint',
+      theme: 'forest',
+      material: 'ground',
+    });
+    result = applySmartCells(result, {
+      cells: carved.map(([x, y]) => ({ x: x!, y: y! })),
+      mode: 'erase',
+      theme: 'forest',
+      material: 'ground',
+    });
+    const step = decodeTileDataValue(result.tileData.terrain[10][10]);
+    expect(step.gid - firstGid).toBe(localIndex);
+    expect(step.flipY).toBe(flipY);
   });
 
   it('repeats one clean wall tile down a one-cell-wide vertical column', () => {
@@ -159,6 +183,29 @@ describe('smart terrain solver', () => {
       material: 'feature',
     });
     expect(regenerated.tileData.foreground[5][4]).toBe(-1);
+  });
+
+  it('layers a corner and straight feature edge when a notch has three feature neighbors', () => {
+    const firstGid = getTilesetByKey('forest')!.firstGid;
+    const result = applySmartCells(emptyDocument(), {
+      cells: [{ x: 5, y: 4 }, { x: 4, y: 5 }, { x: 5, y: 6 }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'feature',
+    });
+    const front = decodeTileDataValue(result.tileData.foreground[5][5]);
+    const behind = decodeTileDataValue(result.tileData.background[5][5]);
+    expect(front.gid - firstGid).toBe(10);
+    expect(front.flipX).toBe(true);
+    expect(behind.gid - firstGid).toBe(24);
+    expect(result.smartTerrain.generatedDecorations['5,5']).toBeDefined();
+    expect(result.smartTerrain.generatedBackgroundDecorations['5,5']).toBeDefined();
+
+    const frontErased = suppressGeneratedDecorationAt(result, 5, 5);
+    expect(frontErased.tileData.foreground[5][5]).toBe(-1);
+    expect(frontErased.tileData.background[5][5]).not.toBe(-1);
+    const bothErased = suppressGeneratedDecorationAt(frontErased, 5, 5);
+    expect(bothErased.tileData.background[5][5]).toBe(-1);
   });
 
   it('uses all four approved sparse ground decoration variants', () => {
