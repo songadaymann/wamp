@@ -19,13 +19,16 @@ await context.addInitScript(() => {
 });
 const page = await context.newPage();
 page.on('console', (message) => {
-  if (message.type() === 'error') summary.consoleErrors.push(message.text());
+  if (message.type() === 'error' && !message.text().includes("ws://127.0.0.1:1999/parties/")) {
+    summary.consoleErrors.push(message.text());
+  }
 });
 page.on('pageerror', (error) => summary.pageErrors.push(error.message));
 
 try {
   await page.goto(url.toString(), { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => typeof window.run_preview_smoke_action === 'function');
+  await page.waitForFunction(() => document.body.dataset.appReady === 'true');
   const opened = await page.evaluate(() => window.run_preview_smoke_action?.('openSyntheticEditor'));
   assert.equal(opened?.ok, true);
   await page.waitForFunction(() => document.body.dataset.appMode === 'editor');
@@ -89,9 +92,70 @@ try {
 
   await page.screenshot({ path: path.join(outputDir, 'smart-editor.png') });
 
+  await page.evaluate(() => {
+    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime.clearCurrentLayer();
+  });
+  await page.evaluate(() => {
+    const theme = document.querySelector('#smart-theme-select');
+    const material = document.querySelector('#smart-material-select');
+    theme.value = 'forest';
+    theme.dispatchEvent(new Event('change', { bubbles: true }));
+    material.value = 'ground';
+    material.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const groundFixtures = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    for (let y = 4; y <= 10; y += 1) runtime.placeTileAt(4 * 16 + 1, y * 16 + 1);
+    for (let y = 4; y <= 8; y += 1) {
+      for (let x = 11; x <= 15; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+    }
+    runtime.commitTileBatch();
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(13 * 16 + 1, 6 * 16 + 1);
+    runtime.commitTileBatch();
+    return runtime.exportRoomSnapshot();
+  });
+  assert.deepEqual(
+    groundFixtures.tileData.terrain.slice(4, 11).map((row) => row[4]),
+    Array(7).fill(38),
+  );
+  assert.ok(groundFixtures.tileData.terrain[7][13] > 0);
+  summary.checks.verticalAndCaveTopology = true;
+
+  await page.evaluate(() => {
+    const material = document.querySelector('#smart-material-select');
+    material.value = 'feature';
+    material.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const featureFixture = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    for (const [x, y] of [[25, 5], [26, 5], [26, 6]]) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+    runtime.commitTileBatch();
+    const before = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(25 * 16 + 1, 6 * 16 + 1);
+    runtime.commitTileBatch();
+    const erased = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.placeTileAt(25 * 16 + 1, 5 * 16 + 1);
+    runtime.commitTileBatch();
+    return { before, erased, restored: runtime.exportRoomSnapshot() };
+  });
+  assert.ok(featureFixture.before.smartTerrain.generatedDecorations['25,6']);
+  assert.equal(featureFixture.before.smartTerrain.generatedDecorations['24,4'], undefined);
+  assert.equal(featureFixture.erased.tileData.foreground[6][25], -1);
+  assert.ok(featureFixture.restored.smartTerrain.generatedDecorations['25,6']);
+  summary.checks.featureCornersAndErase = true;
+  const keepBuilding = page.locator('#btn-guest-builder-claim-continue');
+  if (await keepBuilding.isVisible()) await keepBuilding.click();
+  await page.screenshot({ path: path.join(outputDir, 'topology-fixtures.png') });
+
   const welcomeContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   await welcomeContext.addInitScript(() => {
     window.localStorage.setItem('wamp.settings.builderMode', 'unselected');
+    window.localStorage.removeItem('wamp_welcome_modal_seen_v1');
   });
   const welcomePage = await welcomeContext.newPage();
   welcomePage.on('console', (message) => {

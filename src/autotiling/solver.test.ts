@@ -8,6 +8,7 @@ import {
   fillEmptySmartTerrain,
   lockSmartTerrainCell,
   setSmartTerrainDetailsEnabled,
+  suppressGeneratedDecorationAt,
 } from './solver';
 
 function emptyDocument() {
@@ -94,7 +95,7 @@ describe('smart terrain solver', () => {
         material: 'feature',
       });
       expect(result.tileData.terrain[4][3] - firstGid).toBe(12);
-      expect(Object.keys(result.smartTerrain.generatedDecorations)).toHaveLength(12);
+      expect(Object.keys(result.smartTerrain.generatedDecorations)).toHaveLength(8);
       for (const row of result.tileData.foreground) {
         for (const gid of row) {
           if (gid > 0) expect(getTerrainCollisionProfileForGid(decodeTileDataValue(gid).gid).hasCollision).toBe(false);
@@ -117,10 +118,60 @@ describe('smart terrain solver', () => {
       material: 'ground',
     });
     const firstGid = getTilesetByKey('cave')!.firstGid;
-    expect(result.tileData.terrain[6].slice(6, 9).map((gid) => gid - firstGid)).toEqual([47, 44, 43]);
-    expect(result.tileData.terrain[7][6] - firstGid).toBe(35);
-    expect(result.tileData.terrain[7][8] - firstGid).toBe(31);
-    expect(result.tileData.terrain[8].slice(6, 9).map((gid) => gid - firstGid)).toEqual([23, 20, 19]);
+    const local = (value: number) => decodeTileDataValue(value).gid - firstGid;
+    expect(result.tileData.terrain[6].slice(6, 9).map(local)).toEqual([35, 52, 33]);
+    expect(result.tileData.terrain[7].slice(6, 9).map(local)).toEqual([42, -firstGid - 1, 37]);
+    expect(result.tileData.terrain[8].slice(6, 9).map(local)).toEqual([35, 34, 33]);
+    expect(decodeTileDataValue(result.tileData.terrain[6][6]).flipY).toBe(true);
+    expect(decodeTileDataValue(result.tileData.terrain[6][8]).flipY).toBe(true);
+  });
+
+  it('repeats one clean wall tile down a one-cell-wide vertical column', () => {
+    const firstGid = getTilesetByKey('forest')!.firstGid;
+    const result = applySmartCells(emptyDocument(), {
+      cells: Array.from({ length: 6 }, (_, index) => ({ x: 7, y: 4 + index })),
+      mode: 'paint',
+      theme: 'forest',
+      material: 'ground',
+    });
+    expect(result.tileData.terrain.slice(4, 10).map((row) => decodeTileDataValue(row[7]).gid - firstGid))
+      .toEqual([37, 37, 37, 37, 37, 37]);
+  });
+
+  it('adds feature corner detail only to a real inside corner and lets it stay erased', () => {
+    const firstGid = getTilesetByKey('forest')!.firstGid;
+    const result = applySmartCells(emptyDocument(), {
+      cells: [{ x: 4, y: 4 }, { x: 5, y: 4 }, { x: 5, y: 5 }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'feature',
+    });
+    const insideCorner = decodeTileDataValue(result.tileData.foreground[5][4]);
+    expect(insideCorner.gid - firstGid).toBe(22);
+    expect(insideCorner.flipX).toBe(true);
+    expect(result.smartTerrain.generatedDecorations['3,3']).toBeUndefined();
+
+    const suppressed = suppressGeneratedDecorationAt(result, 4, 5);
+    const regenerated = applySmartCells(suppressed, {
+      cells: [{ x: 5, y: 6 }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'feature',
+    });
+    expect(regenerated.tileData.foreground[5][4]).toBe(-1);
+  });
+
+  it('uses all four approved sparse ground decoration variants', () => {
+    const firstGid = getTilesetByKey('forest')!.firstGid;
+    const result = applySmartCells(emptyDocument(), {
+      cells: Array.from({ length: 120 }, (_, index) => ({ x: index % 40, y: 4 + Math.floor(index / 40) * 4 })),
+      mode: 'paint',
+      theme: 'forest',
+      material: 'ground',
+    });
+    const variants = new Set(Object.values(result.smartTerrain.generatedDecorations)
+      .map(({ gid }) => gid - firstGid));
+    expect([...variants].sort((a, b) => a - b)).toEqual([2, 3, 4, 5]);
   });
 
   it('keeps an exact manual override locked until Smart repaints the cell', () => {

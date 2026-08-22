@@ -49,6 +49,12 @@ interface FamilyRule {
   platformRight: number;
 }
 
+interface ResolvedLocalTile {
+  localIndex: number;
+  flipX?: boolean;
+  flipY?: boolean;
+}
+
 /**
  * Local tile slots in the 12 x 6 Forest/Desert/Cave/Gothic sheets.
  * These are intentionally centralized so art-slot corrections do not require
@@ -60,24 +66,23 @@ export const SMART_TILESET_SLOTS = {
     topLeft: 14,
     top: [15, 16],
     topRight: 17,
-    left: [25, 37],
+    left: [37],
     center: [27, 28, 39, 40],
-    right: [30, 42],
+    right: [42],
     bottomLeft: 49,
     bottom: [50, 51, 52, 53],
     bottomRight: 54,
     outerConcave: { topLeft: 26, topRight: 29, bottomLeft: 38, bottomRight: 41 },
-    // The compact family at the sheet's upper-right makes an inside outline
-    // around a void that is enclosed by underground terrain.
+    // The no-grass family at the sheet's upper-right outlines enclosed air.
     innerVoid: {
-      topLeft: 19,
-      top: [20, 21],
-      topRight: 23,
-      left: 31,
-      right: 35,
-      bottomLeft: 43,
-      bottom: [44, 45, 46],
-      bottomRight: 47,
+      topLeft: 33,
+      top: [34],
+      topRight: 35,
+      left: 37,
+      right: 42,
+      bottomLeft: 49,
+      bottom: [50, 51, 52, 53],
+      bottomRight: 54,
     },
   },
   platform: {
@@ -100,7 +105,7 @@ export const SMART_TILESET_SLOTS = {
   },
   // Conservative first-pass allowlist. These are the exact slots to tune.
   // Only one in eight eligible exposed ground cells receives one.
-  groundDecoration: [3, 18],
+  groundDecoration: [2, 3, 4, 5],
 } as const;
 
 const COMMON_RULE: FamilyRule = {
@@ -213,6 +218,44 @@ function sameFamily(
   return classified?.theme === source.theme && classified.material === source.material;
 }
 
+function findEnclosedVoidCells(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+  source: SmartTerrainCellState,
+): Set<string> {
+  const exterior = new Set<string>();
+  const queue: SmartCellCoordinate[] = [];
+  const enqueue = (x: number, y: number) => {
+    const key = smartCellKey(x, y);
+    if (!inBounds(x, y) || exterior.has(key) || sameFamily(tileData, state, x, y, source)) return;
+    exterior.add(key);
+    queue.push({ x, y });
+  };
+  for (let x = 0; x < ROOM_WIDTH; x += 1) {
+    enqueue(x, 0);
+    enqueue(x, ROOM_HEIGHT - 1);
+  }
+  for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+    enqueue(0, y);
+    enqueue(ROOM_WIDTH - 1, y);
+  }
+  for (let index = 0; index < queue.length; index += 1) {
+    const { x, y } = queue[index]!;
+    enqueue(x, y - 1);
+    enqueue(x + 1, y);
+    enqueue(x, y + 1);
+    enqueue(x - 1, y);
+  }
+  const enclosed = new Set<string>();
+  for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+    for (let x = 0; x < ROOM_WIDTH; x += 1) {
+      const key = smartCellKey(x, y);
+      if (!exterior.has(key) && !sameFamily(tileData, state, x, y, source)) enclosed.add(key);
+    }
+  }
+  return enclosed;
+}
+
 function resolveGroundLocalIndex(
   rule: FamilyRule,
   tileData: RoomTileData,
@@ -220,57 +263,52 @@ function resolveGroundLocalIndex(
   x: number,
   y: number,
   cell: SmartTerrainCellState,
-): number {
+  enclosedVoidCells: Set<string>,
+): ResolvedLocalTile {
   const n = sameFamily(tileData, state, x, y - 1, cell);
   const e = sameFamily(tileData, state, x + 1, y, cell);
   const s = sameFamily(tileData, state, x, y + 1, cell);
   const w = sameFamily(tileData, state, x - 1, y, cell);
-  if (!n && !e && !s && !w) return rule.isolated;
-  const enclosedVoid = (targetX: number, targetY: number): boolean => {
-    if (!inBounds(targetX, targetY) || sameFamily(tileData, state, targetX, targetY, cell)) return false;
-    let surrounding = 0;
-    for (let oy = -1; oy <= 1; oy += 1) {
-      for (let ox = -1; ox <= 1; ox += 1) {
-        if ((ox !== 0 || oy !== 0) && sameFamily(tileData, state, targetX + ox, targetY + oy, cell)) surrounding += 1;
-      }
-    }
-    return surrounding >= 5;
-  };
+  if (!n && !e && !s && !w) return { localIndex: rule.isolated };
+  if (!e && !w && (n || s)) return { localIndex: SMART_TILESET_SLOTS.ground.left[0] };
+  const enclosedVoid = (targetX: number, targetY: number): boolean => (
+    enclosedVoidCells.has(smartCellKey(targetX, targetY))
+  );
   const inner = SMART_TILESET_SLOTS.ground.innerVoid;
   if (!n && enclosedVoid(x, y - 1)) {
-    if (!w) return inner.topLeft;
-    if (!e) return inner.topRight;
-    return stablePick([...inner.top], x, y, 7);
+    if (!w) return { localIndex: inner.topLeft };
+    if (!e) return { localIndex: inner.topRight };
+    return { localIndex: stablePick([...inner.top], x, y, 7) };
   }
   if (!s && enclosedVoid(x, y + 1)) {
-    if (!w) return inner.bottomLeft;
-    if (!e) return inner.bottomRight;
-    return stablePick([...inner.bottom], x, y, 9);
+    if (!w) return { localIndex: inner.bottomLeft };
+    if (!e) return { localIndex: inner.bottomRight };
+    return { localIndex: stablePick([...inner.bottom], x, y, 9) };
   }
-  if (!w && enclosedVoid(x - 1, y)) return inner.left;
-  if (!e && enclosedVoid(x + 1, y)) return inner.right;
-  if (!n && !w) return rule.topLeft;
-  if (!n && !e) return rule.topRight;
-  if (!s && !w) return rule.bottomLeft;
-  if (!s && !e) return rule.bottomRight;
-  if (!n) return stablePick(rule.top, x, y, 11);
-  if (!s) return stablePick(rule.bottom, x, y, 13);
-  if (!w) return stablePick(rule.left, x, y, 17);
-  if (!e) return stablePick(rule.right, x, y, 19);
+  if (!w && enclosedVoid(x - 1, y)) return { localIndex: inner.left };
+  if (!e && enclosedVoid(x + 1, y)) return { localIndex: inner.right };
+  if (!n && !w) return { localIndex: rule.topLeft };
+  if (!n && !e) return { localIndex: rule.topRight };
+  if (!s && !w) return { localIndex: rule.bottomLeft };
+  if (!s && !e) return { localIndex: rule.bottomRight };
+  if (!n) return { localIndex: stablePick(rule.top, x, y, 11) };
+  if (!s) return { localIndex: stablePick(rule.bottom, x, y, 13) };
+  if (!w) return { localIndex: stablePick(rule.left, x, y, 17) };
+  if (!e) return { localIndex: stablePick(rule.right, x, y, 19) };
 
   const nw = sameFamily(tileData, state, x - 1, y - 1, cell);
   const ne = sameFamily(tileData, state, x + 1, y - 1, cell);
   const sw = sameFamily(tileData, state, x - 1, y + 1, cell);
   const se = sameFamily(tileData, state, x + 1, y + 1, cell);
-  if (!nw && enclosedVoid(x - 1, y - 1)) return inner.topLeft;
-  if (!ne && enclosedVoid(x + 1, y - 1)) return inner.topRight;
-  if (!sw && enclosedVoid(x - 1, y + 1)) return inner.bottomLeft;
-  if (!se && enclosedVoid(x + 1, y + 1)) return inner.bottomRight;
-  if (!nw && rule.concaveTopLeft !== undefined) return rule.concaveTopLeft;
-  if (!ne && rule.concaveTopRight !== undefined) return rule.concaveTopRight;
-  if (!sw && rule.concaveBottomLeft !== undefined) return rule.concaveBottomLeft;
-  if (!se && rule.concaveBottomRight !== undefined) return rule.concaveBottomRight;
-  return stablePick(rule.center, x, y, 23);
+  if (!nw && enclosedVoid(x - 1, y - 1)) return { localIndex: inner.topLeft };
+  if (!ne && enclosedVoid(x + 1, y - 1)) return { localIndex: inner.topRight };
+  if (!sw && enclosedVoid(x - 1, y + 1)) return { localIndex: inner.topLeft, flipY: true };
+  if (!se && enclosedVoid(x + 1, y + 1)) return { localIndex: inner.topRight, flipY: true };
+  if (!nw && rule.concaveTopLeft !== undefined) return { localIndex: rule.concaveTopLeft };
+  if (!ne && rule.concaveTopRight !== undefined) return { localIndex: rule.concaveTopRight };
+  if (!sw && rule.concaveBottomLeft !== undefined) return { localIndex: rule.concaveBottomLeft };
+  if (!se && rule.concaveBottomRight !== undefined) return { localIndex: rule.concaveBottomRight };
+  return { localIndex: stablePick(rule.center, x, y, 23) };
 }
 
 function resolveLocalIndex(
@@ -279,18 +317,19 @@ function resolveLocalIndex(
   x: number,
   y: number,
   cell: SmartTerrainCellState,
-): number {
+  enclosedVoidCells: Set<string>,
+): ResolvedLocalTile {
   const rule = getFamilyRule(cell.theme, cell.material);
-  if (cell.material === 'feature') return SMART_TILESET_SLOTS.feature.base;
+  if (cell.material === 'feature') return { localIndex: SMART_TILESET_SLOTS.feature.base };
   if (cell.material === 'platform') {
     const left = sameFamily(tileData, state, x - 1, y, cell);
     const right = sameFamily(tileData, state, x + 1, y, cell);
-    if (!left && !right) return SMART_TILESET_SLOTS.platform.isolated;
-    if (!left) return rule.platformLeft;
-    if (!right) return rule.platformRight;
-    return stablePick(rule.platformMiddle, x, y, 29);
+    if (!left && !right) return { localIndex: SMART_TILESET_SLOTS.platform.isolated };
+    if (!left) return { localIndex: rule.platformLeft };
+    if (!right) return { localIndex: rule.platformRight };
+    return { localIndex: stablePick(rule.platformMiddle, x, y, 29) };
   }
-  return resolveGroundLocalIndex(rule, tileData, state, x, y, cell);
+  return resolveGroundLocalIndex(rule, tileData, state, x, y, cell, enclosedVoidCells);
 }
 
 function clearOwnedDecorations(tileData: RoomTileData, state: RoomSmartTerrainState): void {
@@ -310,14 +349,25 @@ function clearOwnedDecorations(tileData: RoomTileData, state: RoomSmartTerrainSt
 function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): void {
   clearOwnedDecorations(tileData, state);
 
+  const enclosedVoidCache = new Map<string, Set<string>>();
+
   for (const [key, cell] of Object.entries(state.cells)) {
     const [x, y] = key.split(',').map(Number);
     if (!inBounds(x, y)) {
       delete state.cells[key];
       continue;
     }
+    const familyKey = `${cell.theme}:${cell.material}`;
+    let enclosedVoidCells = enclosedVoidCache.get(familyKey);
+    if (!enclosedVoidCells) {
+      enclosedVoidCells = cell.material === 'ground'
+        ? findEnclosedVoidCells(tileData, state, cell)
+        : new Set<string>();
+      enclosedVoidCache.set(familyKey, enclosedVoidCells);
+    }
+    const resolved = resolveLocalIndex(tileData, state, x, y, cell, enclosedVoidCells);
     tileData.terrain[y][x] = cell.lockedGid
-      ?? toGid(cell.theme, resolveLocalIndex(tileData, state, x, y, cell));
+      ?? encodeTileDataValue(toGid(cell.theme, resolved.localIndex), resolved.flipX, resolved.flipY);
   }
 
   if (!state.detailsEnabled) {
@@ -340,35 +390,59 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     tileData.foreground[targetY][targetX] = encodeTileDataValue(gid, flipX, false);
     state.generatedDecorations[smartCellKey(targetX, targetY)] = { ownerKey, slot, gid };
   };
+  const featureCandidates = new Map<string, SmartTerrainCellState>();
   for (const [ownerKey, cell] of Object.entries(state.cells)) {
     const [x, y] = ownerKey.split(',').map(Number);
     if (!inBounds(x, y)) continue;
     if (cell.material === 'feature') {
-      const border = SMART_TILESET_SLOTS.feature.border;
-      const n = sameFamily(tileData, state, x, y - 1, cell);
-      const e = sameFamily(tileData, state, x + 1, y, cell);
-      const s = sameFamily(tileData, state, x, y + 1, cell);
-      const w = sameFamily(tileData, state, x - 1, y, cell);
-      if (!n) addDecoration(ownerKey, x, y - 1, 'top', border.top);
-      if (!s) addDecoration(ownerKey, x, y + 1, 'bottom', border.bottom);
-      if (!w) addDecoration(ownerKey, x - 1, y, 'left', border.left);
-      if (!e) addDecoration(ownerKey, x + 1, y, 'right', border.right);
-      if (!n && !w) addDecoration(ownerKey, x - 1, y - 1, 'topLeft', border.topLeft);
-      if (!n && !e) addDecoration(ownerKey, x + 1, y - 1, 'topRight', border.topLeft, true);
-      if (!s && !w) addDecoration(ownerKey, x - 1, y + 1, 'bottomLeft', border.bottomRight, true);
-      if (!s && !e) addDecoration(ownerKey, x + 1, y + 1, 'bottomRight', border.bottomRight);
+      for (const [targetX, targetY] of [[x, y - 1], [x + 1, y], [x, y + 1], [x - 1, y]]) {
+        if (inBounds(targetX, targetY) && !sameFamily(tileData, state, targetX, targetY, cell)) {
+          featureCandidates.set(smartCellKey(targetX, targetY), cell);
+        }
+      }
       continue;
     }
     if (cell.material !== 'ground' || sameFamily(tileData, state, x, y - 1, cell)) continue;
-    const eligibility = Math.abs(Math.imul(x + 31, 73856093) ^ Math.imul(y + 17, 19349663)) % 8;
-    if (eligibility !== 0) continue;
+    const decorationHash = Math.abs(Math.imul(x + 31, 73856093) ^ Math.imul(y + 17, 19349663));
+    if (decorationHash % 8 !== 0) continue;
     addDecoration(
       ownerKey,
       x,
       y - 1,
       'top',
-      stablePick([...SMART_TILESET_SLOTS.groundDecoration], x, y, 31),
+      SMART_TILESET_SLOTS.groundDecoration[
+        Math.floor(decorationHash / 8) % SMART_TILESET_SLOTS.groundDecoration.length
+      ]!,
     );
+  }
+
+  const border = SMART_TILESET_SLOTS.feature.border;
+  for (const [targetKey, cell] of featureCandidates) {
+    const [x, y] = targetKey.split(',').map(Number);
+    const above = sameFamily(tileData, state, x, y - 1, cell);
+    const right = sameFamily(tileData, state, x + 1, y, cell);
+    const below = sameFamily(tileData, state, x, y + 1, cell);
+    const left = sameFamily(tileData, state, x - 1, y, cell);
+    const cardinalCount = Number(above) + Number(right) + Number(below) + Number(left);
+    const adjacentOwners = [
+      above && smartCellKey(x, y - 1),
+      right && smartCellKey(x + 1, y),
+      below && smartCellKey(x, y + 1),
+      left && smartCellKey(x - 1, y),
+    ].filter((key): key is string => typeof key === 'string' && state.cells[key]?.material === 'feature').sort();
+    const ownerKey = adjacentOwners[0];
+    if (!ownerKey) continue;
+    if (cardinalCount === 1) {
+      if (below) addDecoration(ownerKey, x, y, 'top', border.top);
+      else if (above) addDecoration(ownerKey, x, y, 'bottom', border.bottom);
+      else if (right) addDecoration(ownerKey, x, y, 'left', border.left);
+      else if (left) addDecoration(ownerKey, x, y, 'right', border.right);
+    } else if (cardinalCount === 2) {
+      if (below && right) addDecoration(ownerKey, x, y, 'topLeft', border.topLeft);
+      else if (below && left) addDecoration(ownerKey, x, y, 'topRight', border.topLeft, true);
+      else if (above && right) addDecoration(ownerKey, x, y, 'bottomLeft', border.bottomRight, true);
+      else if (above && left) addDecoration(ownerKey, x, y, 'bottomRight', border.bottomRight);
+    }
   }
 }
 

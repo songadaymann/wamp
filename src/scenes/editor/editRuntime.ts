@@ -809,7 +809,20 @@ export class EditorEditRuntime {
       for (let dy = -radius; dy <= radius; dy += 1) {
         for (let dx = -radius; dx <= radius; dx += 1) cells.push({ x: tileX + dx, y: tileY + dy });
       }
-      this.applySmartDocument(applySmartCells(this.getSmartDocument(), {
+      let document = this.getSmartDocument();
+      let suppressedDecoration = false;
+      for (const cell of cells) {
+        const key = smartCellKey(cell.x, cell.y);
+        if (document.smartTerrain.generatedDecorations[key] && !document.smartTerrain.cells[key]) {
+          document = suppressGeneratedDecorationAt(document, cell.x, cell.y);
+          suppressedDecoration = true;
+        }
+      }
+      if (suppressedDecoration) {
+        this.applySmartDocument(document);
+        return;
+      }
+      this.applySmartDocument(applySmartCells(document, {
         cells,
         mode: 'erase',
         theme: editorState.smartTheme,

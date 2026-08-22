@@ -110,7 +110,8 @@ export function normalizeRoomSmartTerrainState(value: unknown): RoomSmartTerrain
     generatedDecorations,
     suppressedDecorationSlots: Array.isArray(candidate.suppressedDecorationSlots)
       ? Array.from(new Set(candidate.suppressedDecorationSlots.filter(
-          (entry): entry is string => typeof entry === 'string' && /^\d+,\d+:(top)$/.test(entry),
+          (entry): entry is string => typeof entry === 'string'
+            && /^\d+,\d+:(top|bottom|left|right|topLeft|topRight|bottomLeft|bottomRight)$/.test(entry),
         )))
       : [],
   };
