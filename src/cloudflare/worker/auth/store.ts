@@ -4,7 +4,8 @@ import {
   deriveProfileUsernameBase,
   PROFILE_USERNAME_MAX_LENGTH,
 } from '../../../profiles/username';
-import { HttpError, isTrustedAppHostname } from '../core/http';
+import { HttpError } from '../core/http';
+import { isTrustedAppHostname } from '../../../config';
 import type {
   ApiTokenRow,
   AuthSession,

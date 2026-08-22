@@ -26,6 +26,7 @@ describe('worker CORS trusted origins', () => {
       'https://preview.everybodys-platformer-safety.novox-robot.workers.dev',
       'https://feat-ellipse.wampland.pages.dev',
       'https://abc123.wamp.pages.dev',
+      'https://7637d1e5.wamp-9i6.pages.dev',
     ];
 
     for (const origin of previewOrigins) {

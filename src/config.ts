@@ -3,3 +3,4 @@ export * from './config/tilesets';
 export * from './config/backgrounds';
 export * from './config/objects';
 export * from './config/editorState';
+export * from './config/appHosts';

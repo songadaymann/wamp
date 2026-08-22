@@ -6,6 +6,7 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   getObjectById,
+  isTrustedAppHostname,
   type LayerName,
 } from '../../../config';
 import {
@@ -14,6 +15,8 @@ import {
 } from '../../../customSprites/model';
 import { cloneRoomSnapshot, parseRoomId, roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../../persistence/roomModel';
 import { type WorldChunkBounds } from '../../../persistence/worldModel';
+
+export { isTrustedAppHostname } from '../../../config';
 
 const MAX_ROOM_SNAPSHOT_BODY_BYTES = 2 * 1024 * 1024;
 const PLACED_OBJECT_POSITION_MARGIN_PX = TILE_SIZE * 8;
@@ -89,38 +92,6 @@ export function isTrustedOrigin(origin: string, requestUrl: string): boolean {
 
 function isLocalDevHostname(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
-}
-
-export function isTrustedAppHostname(hostname: string): boolean {
-  return (
-    hostname === 'wamp.land' ||
-    hostname === 'www.wamp.land' ||
-    hostname === 'api.wamp.land' ||
-    isTrustedWorkersHostname(hostname) ||
-    hostname === 'wampland.pages.dev' ||
-    hostname.endsWith('.wampland.pages.dev') ||
-    hostname === 'wamp.pages.dev' ||
-    hostname.endsWith('.wamp.pages.dev')
-  );
-}
-
-function isTrustedWorkersHostname(hostname: string): boolean {
-  const accountSuffix = 'novox-robot.workers.dev';
-  for (const workerName of ['everybodys-platformer-safety', 'everybodys-platformer'] as const) {
-    const canonical = `${workerName}.${accountSuffix}`;
-    if (hostname === canonical) {
-      return true;
-    }
-    // Version preview: <id>-everybodys-platformer.novox-robot.workers.dev
-    if (hostname.endsWith(`-${canonical}`)) {
-      return true;
-    }
-    // Env preview: <id>.everybodys-platformer.novox-robot.workers.dev
-    if (hostname.endsWith(`.${canonical}`)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function isSafetyWorkerHostname(hostname: string): boolean {

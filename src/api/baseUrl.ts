@@ -1,3 +1,5 @@
+import { getKnownProductionApiBase } from '../config/appHosts';
+
 export function getApiBaseUrl(): string {
   const configured = import.meta.env.VITE_ROOM_API_BASE_URL?.trim();
   if (configured) {
@@ -62,16 +64,4 @@ function isLocalLoopbackHost(hostname: string): boolean {
     hostname === '::1' ||
     hostname === '[::1]'
   );
-}
-
-function getKnownProductionApiBase(hostname: string): string {
-  if (
-    hostname === 'wamp.land' ||
-    hostname === 'wampland.pages.dev' ||
-    hostname.endsWith('.wampland.pages.dev')
-  ) {
-    return 'https://api.wamp.land';
-  }
-
-  return '';
 }
