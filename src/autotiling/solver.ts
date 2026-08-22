@@ -276,13 +276,13 @@ function resolveGroundLocalIndex(
   );
   const inner = SMART_TILESET_SLOTS.ground.innerVoid;
   if (!n && enclosedVoid(x, y - 1)) {
-    if (!w) return { localIndex: inner.right, flipY: true };
-    if (!e) return { localIndex: inner.left, flipY: true };
+    if (!w) return { localIndex: inner.bottomRight, flipY: true };
+    if (!e) return { localIndex: inner.bottomLeft, flipY: true };
     return { localIndex: stablePick([...inner.top], x, y, 7) };
   }
   if (!s && enclosedVoid(x, y + 1)) {
-    if (!w) return { localIndex: inner.right };
-    if (!e) return { localIndex: inner.left };
+    if (!w) return { localIndex: inner.bottomRight };
+    if (!e) return { localIndex: inner.bottomLeft };
     return { localIndex: stablePick([...inner.bottom], x, y, 9) };
   }
   if (!w && enclosedVoid(x - 1, y)) return { localIndex: inner.left };
