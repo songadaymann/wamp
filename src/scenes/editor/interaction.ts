@@ -321,13 +321,15 @@ export class EditorInteractionController {
       }
     }
 
-    const selection = editorState.selection;
+    const selection = editorState.paletteMode === 'smart'
+      ? { width: 1, height: 1, occupiedMask: [[true]] }
+      : editorState.selection;
     const stampOrigin =
       editorState.activeTool === 'pencil'
         ? this.getDraggedStampOrigin(tileX, tileY)
         : { x: tileX, y: tileY };
     const eraserBrushSize =
-      editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser'
+      editorState.activeTool === 'eraser'
         ? editorState.eraserBrushSize
         : 1;
     const cursorOrigin =
@@ -491,7 +493,7 @@ export class EditorInteractionController {
         return;
       }
 
-      if (editorState.paletteMode !== 'tiles') {
+      if (editorState.paletteMode === 'objects') {
         return;
       }
 
@@ -776,7 +778,7 @@ export class EditorInteractionController {
       return true;
     }
 
-    if (!this.isDrawing || editorState.paletteMode !== 'tiles') {
+    if (!this.isDrawing || editorState.paletteMode === 'objects') {
       return true;
     }
 
@@ -835,7 +837,7 @@ export class EditorInteractionController {
 
   private beginTileDrag(tileX: number, tileY: number): void {
     if (
-      editorState.paletteMode !== 'tiles' ||
+      editorState.paletteMode === 'objects' ||
       editorState.activeTool !== 'pencil'
     ) {
       this.clearTileDrag();
@@ -871,15 +873,15 @@ export class EditorInteractionController {
   private getDraggedStampOrigin(tileX: number, tileY: number): { x: number; y: number } {
     if (
       !this.isDrawing ||
-      editorState.paletteMode !== 'tiles' ||
+      editorState.paletteMode === 'objects' ||
       editorState.activeTool !== 'pencil' ||
       !this.tileDragStart
     ) {
       return { x: tileX, y: tileY };
     }
 
-    const selectionWidth = Math.max(1, editorState.selection.width);
-    const selectionHeight = Math.max(1, editorState.selection.height);
+    const selectionWidth = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.width);
+    const selectionHeight = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.height);
     if (selectionWidth === 1 && selectionHeight === 1) {
       return { x: tileX, y: tileY };
     }

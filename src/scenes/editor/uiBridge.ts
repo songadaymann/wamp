@@ -68,6 +68,7 @@ import {
   setText,
   setValue,
 } from './uiBridge/panels';
+import { getGameSettings, updateGameSettings } from '../../settings/userSettings';
 
 export type {
   EditorCourseUiViewModel,
@@ -440,6 +441,59 @@ export class EditorUiBridge {
       tab.addEventListener('click', handler);
       this.cleanupCallbacks.push(() => tab.removeEventListener('click', handler));
     }
+
+    for (const button of this.doc.querySelectorAll<HTMLButtonElement>('[data-builder-mode-choice]')) {
+      const handler = () => {
+        const builderMode = button.dataset.builderModeChoice === 'advanced' ? 'advanced' : 'beginner';
+        updateGameSettings({ builderMode });
+        this.doc.body.dataset.builderMode = builderMode;
+        if (builderMode === 'beginner' && editorState.paletteMode === 'tiles') {
+          editorState.paletteMode = 'smart';
+        }
+        this.syncEditorChromeState();
+      };
+      button.addEventListener('click', handler);
+      this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
+    }
+
+    const handleSmartThemeChange = () => {
+      const value = this.elements.smartThemeSelect?.value;
+      if (value === 'forest' || value === 'desert' || value === 'cave' || value === 'gothic') {
+        editorState.smartTheme = value;
+        updateGameSettings({ lastSmartTheme: value });
+        this.actions.onSetSmartTheme(value);
+        this.syncEditorChromeState();
+      }
+    };
+    this.elements.smartThemeSelect?.addEventListener('change', handleSmartThemeChange);
+    this.cleanupCallbacks.push(() => this.elements.smartThemeSelect?.removeEventListener('change', handleSmartThemeChange));
+
+    const handleSmartMaterialChange = () => {
+      const value = this.elements.smartMaterialSelect?.value;
+      if (value === 'ground' || value === 'platform' || value === 'feature') {
+        editorState.smartMaterial = value;
+        this.actions.onSetSmartMaterial(value);
+        this.syncEditorChromeState();
+      }
+    };
+    this.elements.smartMaterialSelect?.addEventListener('change', handleSmartMaterialChange);
+    this.cleanupCallbacks.push(() => this.elements.smartMaterialSelect?.removeEventListener('change', handleSmartMaterialChange));
+
+    const handleSmartDetailsChange = () => {
+      const enabled = this.elements.smartDetailsCheckbox?.checked ?? true;
+      editorState.smartDetailsEnabled = enabled;
+      this.actions.onSetSmartDetailsEnabled(enabled);
+      this.syncEditorChromeState();
+    };
+    this.elements.smartDetailsCheckbox?.addEventListener('change', handleSmartDetailsChange);
+    this.cleanupCallbacks.push(() => this.elements.smartDetailsCheckbox?.removeEventListener('change', handleSmartDetailsChange));
+    bindButton(this.cleanupCallbacks, this.elements.smartCaveFillButton, () => {
+      editorState.smartTheme = 'cave';
+      updateGameSettings({ lastSmartTheme: 'cave' });
+      this.actions.onSetSmartTheme('cave');
+      this.actions.onFillCaveTerrain();
+      this.syncEditorChromeState();
+    });
 
     for (const tab of this.elements.objectCategoryTabs) {
       const handler = () => {
@@ -1437,7 +1491,7 @@ export class EditorUiBridge {
 
     const showMoreTools =
       this.moreToolsOpen ||
-      (editorState.paletteMode === 'tiles' &&
+      (editorState.paletteMode !== 'objects' &&
         (editorState.activeTool === 'rect' || editorState.activeTool === 'fill'));
     const moreToolsActive =
       showMoreTools || editorState.activeTool === 'rect' || editorState.activeTool === 'fill';
@@ -1453,7 +1507,7 @@ export class EditorUiBridge {
     for (const controls of this.elements.eraseControls) {
       controls.classList.toggle('hidden', !showEraseControls);
     }
-    setHidden(this.elements.tileEraseControls, editorState.paletteMode !== 'tiles');
+    setHidden(this.elements.tileEraseControls, editorState.paletteMode === 'objects');
     for (const input of this.elements.eraseBrushSelects) {
       if (input.value !== String(editorState.eraserBrushSize)) {
         input.value = String(editorState.eraserBrushSize);
@@ -1496,13 +1550,26 @@ export class EditorUiBridge {
       tab.classList.toggle('active', tab.dataset.mode === editorState.paletteMode);
     }
     const paletteModeIsTiles = editorState.paletteMode === 'tiles';
+    const paletteModeIsSmart = editorState.paletteMode === 'smart';
     this.elements.tilesetSection?.classList.toggle('hidden', !paletteModeIsTiles);
     this.elements.tilePaletteSection?.classList.toggle('hidden', !paletteModeIsTiles);
-    this.elements.objectPaletteSection?.classList.toggle('hidden', paletteModeIsTiles);
+    this.elements.smartPaletteSection?.classList.toggle('hidden', !paletteModeIsSmart);
+    this.elements.objectPaletteSection?.classList.toggle('hidden', editorState.paletteMode !== 'objects');
+    setValue(this.elements.smartThemeSelect, editorState.smartTheme);
+    setValue(this.elements.smartMaterialSelect, editorState.smartMaterial);
+    if (this.elements.smartDetailsCheckbox) {
+      this.elements.smartDetailsCheckbox.checked = editorState.smartDetailsEnabled;
+    }
+    this.elements.smartCaveFillButton?.classList.toggle('hidden', editorState.smartTheme !== 'cave');
 
     const objectCategory = this.currentObjectCategory || 'all';
     const customObjectFilterActive = objectCategory === 'custom' || objectCategory === 'mine';
     this.doc.body.dataset.editorPaletteMode = editorState.paletteMode;
+    const builderMode = getGameSettings().builderMode === 'advanced' ? 'advanced' : 'beginner';
+    this.doc.body.dataset.builderMode = builderMode;
+    for (const button of this.doc.querySelectorAll<HTMLButtonElement>('[data-builder-mode-choice]')) {
+      button.classList.toggle('active', button.dataset.builderModeChoice === builderMode);
+    }
     this.doc.body.dataset.editorObjectCategory = objectCategory;
     this.doc.body.dataset.editorCustomObjectFilter = customObjectFilterActive ? 'true' : 'false';
 

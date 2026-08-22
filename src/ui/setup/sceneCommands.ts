@@ -14,6 +14,8 @@ import {
   getActiveOverworldScene,
   getOverworldScene,
 } from './sceneBridge';
+import { REQUEST_BUILDER_MODE_EVENT } from './welcomeModal';
+import { getGameSettings } from '../../settings/userSettings';
 import { configureOverworldHudBridgeRuntime } from '../../scenes/overworld/hud';
 
 export function setupSceneCommands(
@@ -159,8 +161,17 @@ export function setupSceneCommands(
       getActiveOverworldScene(game)?.editSelectedRoom?.();
     },
     onBuildRoom: () => {
-      closeWorldPanels();
-      getActiveOverworldScene(game)?.buildSelectedRoom?.();
+      const startBuild = () => {
+        closeWorldPanels();
+        getActiveOverworldScene(game)?.buildSelectedRoom?.();
+      };
+      if (getGameSettings().builderMode === 'unselected') {
+        window.dispatchEvent(new CustomEvent(REQUEST_BUILDER_MODE_EVENT, {
+          detail: { onSelected: startBuild },
+        }));
+        return;
+      }
+      startBuild();
     },
     onOpenCourseBuilder: () => {
       closeWorldPanels();

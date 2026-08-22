@@ -5,6 +5,50 @@
   gap: 2px;
 }
 
+.builder-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.smart-control-row,
+.smart-details-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.smart-control-row select {
+  min-width: 116px;
+}
+
+.smart-details-row {
+  justify-content: flex-start;
+  line-height: 1.35;
+}
+
+#btn-smart-cave-fill {
+  width: 100%;
+  margin-top: 10px;
+}
+
+body[data-app-mode='editor'][data-builder-mode='beginner'] .palette-tab[data-mode='tiles'],
+body[data-app-mode='editor'][data-builder-mode='beginner'] #tileset-section,
+body[data-app-mode='editor'][data-builder-mode='beginner'] #tile-palette-section,
+body[data-app-mode='editor'][data-builder-mode='beginner'] #layers-section,
+body[data-app-mode='editor'][data-builder-mode='beginner'] #editor-advanced,
+body[data-app-mode='editor'][data-builder-mode='beginner'] #tools-section,
+body[data-app-mode='editor'][data-builder-mode='beginner'] [data-tool='copy'],
+body[data-app-mode='editor'][data-builder-mode='beginner'] .editor-more-tools-toggle,
+body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature='music'],
+body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature='lighting'],
+body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature='sprite'] {
+  display: none !important;
+}
+
 .editor-layer-chip {
   display: inline-flex;
   align-items: center;

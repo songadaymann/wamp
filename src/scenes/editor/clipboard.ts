@@ -1,4 +1,5 @@
 import { ROOM_HEIGHT, ROOM_WIDTH, type LayerName } from '../../config';
+import type { SmartTerrainCellState } from '../../autotiling/model';
 
 export interface EditorClipboardState {
   sourceLayer: LayerName;
@@ -6,6 +7,7 @@ export interface EditorClipboardState {
   height: number;
   tiles: number[][];
   occupiedMask: boolean[][];
+  smartCells?: Record<string, SmartTerrainCellState>;
 }
 
 export interface ClipboardTileWrite {
@@ -24,6 +26,9 @@ export function cloneEditorClipboardState(
         height: state.height,
         tiles: state.tiles.map((row) => [...row]),
         occupiedMask: state.occupiedMask.map((row) => [...row]),
+        smartCells: state.smartCells
+          ? Object.fromEntries(Object.entries(state.smartCells).map(([key, cell]) => [key, { ...cell }]))
+          : undefined,
       }
     : null;
 }
@@ -35,6 +40,7 @@ export function buildEditorClipboardState(
   x2: number,
   y2: number,
   getEncodedTileValue: (x: number, y: number) => number,
+  getSmartCell?: (x: number, y: number) => SmartTerrainCellState | undefined,
 ): EditorClipboardState | null {
   const minX = Math.max(0, Math.min(x1, x2));
   const minY = Math.max(0, Math.min(y1, y2));
@@ -47,6 +53,7 @@ export function buildEditorClipboardState(
   const tiles: number[][] = [];
   const occupiedMask: boolean[][] = [];
   let hasOccupiedTiles = false;
+  const smartCells: Record<string, SmartTerrainCellState> = {};
   for (let dy = 0; dy < height; dy += 1) {
     const tileRow: number[] = [];
     const occupiedRow: boolean[] = [];
@@ -56,13 +63,18 @@ export function buildEditorClipboardState(
       tileRow.push(encodedTileValue);
       occupiedRow.push(occupied);
       hasOccupiedTiles ||= occupied;
+      const smartCell = getSmartCell?.(minX + dx, minY + dy);
+      if (smartCell) smartCells[`${dx},${dy}`] = { ...smartCell };
     }
     tiles.push(tileRow);
     occupiedMask.push(occupiedRow);
   }
 
   return hasOccupiedTiles
-    ? { sourceLayer, width, height, tiles, occupiedMask }
+    ? {
+        sourceLayer, width, height, tiles, occupiedMask,
+        ...(Object.keys(smartCells).length > 0 ? { smartCells } : {}),
+      }
     : null;
 }
 

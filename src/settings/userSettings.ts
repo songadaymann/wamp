@@ -4,7 +4,7 @@ import {
   type GameSettings,
 } from './model';
 
-export type { GameSettings, OverworldPanningStyle } from './model';
+export type { BuilderMode, GameSettings, OverworldPanningStyle, SmartThemeSetting } from './model';
 
 type GameSettingsListener = (settings: GameSettings) => void;
 
@@ -12,6 +12,8 @@ const ROOM_COMMENTS_VISIBLE_STORAGE_KEY = 'wamp.roomComments.visible';
 const MUSIC_VOLUME_STORAGE_KEY = 'wamp.settings.musicVolume';
 const SFX_VOLUME_STORAGE_KEY = 'wamp.settings.sfxVolume';
 const PANNING_STYLE_STORAGE_KEY = 'wamp.settings.panningStyle';
+const BUILDER_MODE_STORAGE_KEY = 'wamp.settings.builderMode';
+const SMART_THEME_STORAGE_KEY = 'wamp.settings.lastSmartTheme';
 
 let cachedSettings = readSettingsFromStorage();
 const listeners = new Set<GameSettingsListener>();
@@ -69,6 +71,8 @@ function readSettingsFromStorage(): GameSettings {
       musicVolume: readStoredVolume(MUSIC_VOLUME_STORAGE_KEY, DEFAULT_GAME_SETTINGS.musicVolume),
       sfxVolume: readStoredVolume(SFX_VOLUME_STORAGE_KEY, DEFAULT_GAME_SETTINGS.sfxVolume),
       panningStyle: readStoredPanningStyle(),
+      builderMode: readStoredBuilderMode(),
+      lastSmartTheme: readStoredSmartTheme(),
     });
   } catch {
     return { ...DEFAULT_GAME_SETTINGS };
@@ -88,9 +92,21 @@ function writeSettingsToStorage(settings: GameSettings): void {
     window.localStorage.setItem(MUSIC_VOLUME_STORAGE_KEY, settings.musicVolume.toFixed(2));
     window.localStorage.setItem(SFX_VOLUME_STORAGE_KEY, settings.sfxVolume.toFixed(2));
     window.localStorage.setItem(PANNING_STYLE_STORAGE_KEY, settings.panningStyle);
+    window.localStorage.setItem(BUILDER_MODE_STORAGE_KEY, settings.builderMode);
+    window.localStorage.setItem(SMART_THEME_STORAGE_KEY, settings.lastSmartTheme);
   } catch {
     // Settings still apply for the current session if storage is unavailable.
   }
+}
+
+function readStoredBuilderMode(): GameSettings['builderMode'] {
+  const value = window.localStorage.getItem(BUILDER_MODE_STORAGE_KEY);
+  return value === 'beginner' || value === 'advanced' ? value : 'unselected';
+}
+
+function readStoredSmartTheme(): GameSettings['lastSmartTheme'] {
+  const value = window.localStorage.getItem(SMART_THEME_STORAGE_KEY);
+  return value === 'desert' || value === 'cave' || value === 'gothic' ? value : 'forest';
 }
 
 function readStoredVolume(key: string, fallback: number): number {
@@ -114,5 +130,7 @@ function settingsEqual(left: GameSettings, right: GameSettings): boolean {
     && left.musicVolume === right.musicVolume
     && left.sfxVolume === right.sfxVolume
     && left.panningStyle === right.panningStyle
+    && left.builderMode === right.builderMode
+    && left.lastSmartTheme === right.lastSmartTheme
   );
 }

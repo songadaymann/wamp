@@ -484,6 +484,10 @@ export class CourseEditorScene extends Phaser.Scene {
         this.statusText = `Cleared all objects in ${this.getSliceLabel(slice)}.`;
         this.renderUi();
       },
+      onSetSmartTheme: (theme) => { editorState.smartTheme = theme; },
+      onSetSmartMaterial: (material) => { editorState.smartMaterial = material; },
+      onSetSmartDetailsEnabled: (enabled) => this.getSelectedSlice()?.runtime.setSmartDetailsEnabled(enabled),
+      onFillCaveTerrain: () => this.getSelectedSlice()?.runtime.fillCaveTerrain(),
       onSelectBackground: (backgroundId) => {
         editorState.selectedBackground = backgroundId;
         this.handleBackgroundChanged();

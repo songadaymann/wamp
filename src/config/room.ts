@@ -16,7 +16,7 @@ export const ERASER_BRUSH_SIZES = [1, 3, 5] as const;
 export type EraserBrushSize = typeof ERASER_BRUSH_SIZES[number];
 
 // ── Palette Modes ──
-export type PaletteMode = 'tiles' | 'objects';
+export type PaletteMode = 'smart' | 'tiles' | 'objects';
 
 // ── Tile Selection (multi-tile from palette) ──
 export interface TileSelection {

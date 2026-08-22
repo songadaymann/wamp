@@ -526,11 +526,43 @@
 
       <!-- Palette Mode Toggle -->
       <div class="sidebar-section" data-mobile-panel="palette">
+        <div class="builder-mode-switch" aria-label="Builder experience">
+          <button class="bar-btn bar-btn-small" type="button" data-builder-mode-choice="beginner">Beginner</button>
+          <button class="bar-btn bar-btn-small" type="button" data-builder-mode-choice="advanced">Advanced</button>
+        </div>
         <div class="palette-tabs">
-          <button class="palette-tab active" data-mode="tiles">Tiles</button>
+          <button class="palette-tab active" data-mode="smart">Smart</button>
+          <button class="palette-tab" data-mode="tiles">Tiles</button>
           <button class="palette-tab" data-mode="objects">Objects</button>
         </div>
         <div id="editor-layer-chip" class="editor-layer-chip" data-layer-tone="terrain">Placing on Gameplay</div>
+      </div>
+
+      <div class="sidebar-section palette-section" id="smart-palette-section" data-mobile-panel="palette" data-sidebar-collapsible="true">
+        <div class="section-label">Smart Terrain</div>
+        <label class="smart-control-row" for="smart-theme-select">
+          <span>Theme</span>
+          <select id="smart-theme-select">
+            <option value="forest">Forest</option>
+            <option value="desert">Desert</option>
+            <option value="cave">Cave</option>
+            <option value="gothic">Gothic</option>
+          </select>
+        </label>
+        <label class="smart-control-row" for="smart-material-select">
+          <span>Brush</span>
+          <select id="smart-material-select">
+            <option value="ground">Ground</option>
+            <option value="platform">Platform</option>
+            <option value="feature">Feature Blocks</option>
+          </select>
+        </label>
+        <label class="smart-details-row" for="smart-details-checkbox">
+          <input id="smart-details-checkbox" type="checkbox" checked />
+          <span>Add automatic edge details</span>
+        </label>
+        <button id="btn-smart-cave-fill" class="bar-btn bar-btn-small hidden" type="button">Fill Cave, Then Carve</button>
+        <div class="palette-hint">Draw blocks. Smart chooses edges and repairs neighbors. Right-click or Erase removes them.</div>
       </div>
 
       <!-- Tileset Selector (visible in tiles mode) -->
@@ -1907,6 +1939,13 @@
           <button id="btn-welcome-build" class="bar-btn welcome-lane-button" type="button">Build</button>
         </section>
       </div>
+      <div id="welcome-builder-choice" class="welcome-builder-choice hidden">
+        <div class="welcome-builder-choice-title">How would you like to build?</div>
+        <p>Beginner keeps the editor focused and uses Smart terrain. You can switch modes any time.</p>
+        <button class="bar-btn welcome-builder-choice-button" type="button" data-welcome-builder-mode="beginner">Beginner — Guide Me</button>
+        <button class="bar-btn welcome-builder-choice-button" type="button" data-welcome-builder-mode="advanced">Advanced — Show Everything</button>
+        <button id="btn-welcome-builder-back" class="bar-btn bar-btn-small" type="button">Back</button>
+      </div>
     </div>
   </div>
 
@@ -2463,6 +2502,25 @@
             <input id="settings-sfx-volume" class="settings-range" type="range" min="0" max="100" step="1" />
             <span id="settings-sfx-volume-value" class="settings-value">100%</span>
           </label>
+        </section>
+        <section class="settings-section">
+          <div class="settings-section-title">Builder Experience</div>
+          <div class="settings-choice-group">
+            <label class="settings-choice">
+              <input type="radio" name="settings-builder-mode" value="beginner" />
+              <span class="settings-choice-copy">
+                <span class="settings-choice-title">Beginner</span>
+                <span class="settings-choice-description">A guided editor with Smart terrain and the core tools.</span>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="settings-builder-mode" value="advanced" />
+              <span class="settings-choice-copy">
+                <span class="settings-choice-title">Advanced</span>
+                <span class="settings-choice-description">Every authoring control, with Smart and Manual tiles available together.</span>
+              </span>
+            </label>
+          </div>
         </section>
         <section class="settings-section">
           <div class="settings-section-title">Panning Style</div>

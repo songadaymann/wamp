@@ -34,11 +34,18 @@ describe('editor clipboard planning', () => {
   });
 
   it('deep-clones clipboard rows for cross-room reuse', () => {
-    const state = buildEditorClipboardState('terrain', 0, 0, 1, 0, (x) => x + 1)!;
+    const state = buildEditorClipboardState(
+      'terrain', 0, 0, 1, 0, (x) => x + 1,
+      (x) => x === 0 ? { theme: 'forest', material: 'ground', lockedGid: 61 } : undefined,
+    )!;
     const clone = cloneEditorClipboardState(state)!;
     clone.tiles[0][0] = 999;
     clone.occupiedMask[0][0] = false;
+    clone.smartCells!['0,0'].lockedGid = 99;
     expect(state.tiles[0][0]).toBe(1);
     expect(state.occupiedMask[0][0]).toBe(true);
+    expect(state.smartCells).toEqual({
+      '0,0': { theme: 'forest', material: 'ground', lockedGid: 61 },
+    });
   });
 });

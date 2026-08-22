@@ -41,6 +41,11 @@ export interface EditorUiElements {
   tilesetSection: HTMLElement | null;
   tilePaletteSection: HTMLElement | null;
   objectPaletteSection: HTMLElement | null;
+  smartPaletteSection: HTMLElement | null;
+  smartThemeSelect: HTMLSelectElement | null;
+  smartMaterialSelect: HTMLSelectElement | null;
+  smartDetailsCheckbox: HTMLInputElement | null;
+  smartCaveFillButton: HTMLButtonElement | null;
   objectCategoryTabs: HTMLElement[];
   backgroundSelect: HTMLSelectElement | null;
   backgroundSolidControls: HTMLElement | null;
@@ -219,6 +224,11 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     tilesetSection: byId<HTMLElement>(doc, 'tileset-section'),
     tilePaletteSection: byId<HTMLElement>(doc, 'tile-palette-section'),
     objectPaletteSection: byId<HTMLElement>(doc, 'object-palette-section'),
+    smartPaletteSection: byId<HTMLElement>(doc, 'smart-palette-section'),
+    smartThemeSelect: byId<HTMLSelectElement>(doc, 'smart-theme-select'),
+    smartMaterialSelect: byId<HTMLSelectElement>(doc, 'smart-material-select'),
+    smartDetailsCheckbox: byId<HTMLInputElement>(doc, 'smart-details-checkbox'),
+    smartCaveFillButton: byId<HTMLButtonElement>(doc, 'btn-smart-cave-fill'),
     objectCategoryTabs: all<HTMLElement>(doc, '.obj-cat-tab'),
     backgroundSelect: byId<HTMLSelectElement>(doc, 'background-select'),
     backgroundSolidControls: byId<HTMLElement>(doc, 'background-solid-controls'),

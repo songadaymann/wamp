@@ -134,6 +134,21 @@ import {
   type GoalPlacementMode,
 } from './goalDocument';
 import { EditorDocumentPresentationController } from './documentPresentationController';
+import {
+  cloneRoomSmartTerrainState,
+  createRoomSmartTerrainState,
+  normalizeRoomSmartTerrainState,
+  smartCellKey,
+  type RoomSmartTerrainState,
+} from '../../autotiling/model';
+import {
+  applySmartCells,
+  fillEmptySmartTerrain,
+  setSmartTerrainDetailsEnabled,
+  suppressGeneratedDecorationAt,
+  lockSmartTerrainCell,
+  type SmartTerrainDocument,
+} from '../../autotiling/solver';
 
 interface TileAction {
   layer: LayerName;
@@ -164,7 +179,12 @@ interface MusicAction {
 }
 
 type UndoAction =
-  | { kind: 'tiles'; actions: TileAction[] }
+  | {
+      kind: 'tiles';
+      actions: TileAction[];
+      smartBefore?: RoomSmartTerrainState;
+      smartAfter?: RoomSmartTerrainState;
+    }
   | { kind: 'objects'; action: ObjectsAction }
   | { kind: 'spawn'; action: SpawnAction }
   | { kind: 'goal'; action: GoalAction }
@@ -218,6 +238,8 @@ export class EditorEditRuntime {
   private goalPlacementMode: GoalPlacementMode = null;
   private readonly history = new EditorHistory<UndoAction>();
   private currentBatch: TileAction[] = [];
+  private currentBatchSmartBefore: RoomSmartTerrainState | null = null;
+  private smartTerrain = createRoomSmartTerrainState();
   private clipboardState: EditorClipboardState | null = null;
   private customRoomTiles: CustomRoomTileDefinition[] = [];
 
@@ -348,6 +370,8 @@ export class EditorEditRuntime {
     this.goalPlacementMode = null;
     this.history.reset();
     this.currentBatch = [];
+    this.currentBatchSmartBefore = null;
+    this.smartTerrain = createRoomSmartTerrainState();
     this.clipboardState = null;
     this.customRoomTiles = [];
   }
@@ -355,6 +379,8 @@ export class EditorEditRuntime {
   applyRoomSnapshot(room: RoomSnapshot): void {
     const tileData = room.tileData;
     this.customRoomTiles = normalizeCustomRoomTileDefinitions(room.customTiles);
+    this.smartTerrain = normalizeRoomSmartTerrainState(room.smartTerrain);
+    editorState.smartDetailsEnabled = this.smartTerrain.detailsEnabled;
     this.syncCustomRoomTileset();
 
     for (const layerName of LAYER_NAMES) {
@@ -403,6 +429,7 @@ export class EditorEditRuntime {
 
     this.history.reset();
     this.currentBatch = [];
+    this.currentBatchSmartBefore = null;
     this.roomDirty = false;
     this.lastDirtyAt = 0;
   }
@@ -429,6 +456,9 @@ export class EditorEditRuntime {
           ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
           : -1;
       },
+      editorState.activeLayer === 'terrain'
+        ? (x, y) => this.smartTerrain.cells[smartCellKey(x, y)]
+        : undefined,
     );
     return this.clipboardState !== null;
   }
@@ -472,7 +502,27 @@ export class EditorEditRuntime {
           oldGid,
           newGid,
         });
+        if (editorState.activeLayer === 'terrain') {
+          const existingSemantic = this.smartTerrain.cells[smartCellKey(tileX, tileY)];
+          if (existingSemantic) existingSemantic.lockedGid = decoded.gid;
+        }
         changed = true;
+    }
+
+    if (editorState.activeLayer === 'terrain' && clipboard.smartCells) {
+      let next = this.getSmartDocument();
+      for (const [relativeKey, cell] of Object.entries(clipboard.smartCells)) {
+        const [dx, dy] = relativeKey.split(',').map(Number);
+        const x = baseTileX + dx;
+        const y = baseTileY + dy;
+        if (x < 0 || x >= ROOM_WIDTH || y < 0 || y >= ROOM_HEIGHT) continue;
+        next = applySmartCells(next, {
+          cells: [{ x, y }], mode: 'paint', theme: cell.theme, material: cell.material,
+        });
+        if (cell.lockedGid) next = lockSmartTerrainCell(next, x, y, cell.lockedGid);
+        changed = true;
+      }
+      this.applySmartDocument(next);
     }
 
     return changed;
@@ -493,6 +543,7 @@ export class EditorEditRuntime {
       goal: cloneRoomGoal(this.roomGoal),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       tileData: this.serializeTileData(),
+      smartTerrain: cloneRoomSmartTerrainState(this.smartTerrain),
       placedObjects: this.host.getPlacedObjects().map((placed) => ({
         ...placed,
         customSpriteKind:
@@ -563,25 +614,86 @@ export class EditorEditRuntime {
   beginTileBatch(): void {
     if (!this.guardEditable()) {
       this.currentBatch = [];
+      this.currentBatchSmartBefore = null;
       return;
     }
     this.currentBatch = [];
+    this.currentBatchSmartBefore = cloneRoomSmartTerrainState(this.smartTerrain);
   }
 
   commitTileBatch(): void {
-    if (this.currentBatch.length === 0) {
+    const smartChanged = this.currentBatchSmartBefore !== null
+      && JSON.stringify(this.currentBatchSmartBefore) !== JSON.stringify(this.smartTerrain);
+    if (this.currentBatch.length === 0 && !smartChanged) {
+      this.currentBatchSmartBefore = null;
       return;
     }
 
     const placedTileCount = this.currentBatch.filter((action) => action.newGid >= 0).length;
-    this.history.record({ kind: 'tiles', actions: [...this.currentBatch] });
+    this.history.record({
+      kind: 'tiles',
+      actions: [...this.currentBatch],
+      smartBefore: this.currentBatchSmartBefore
+        ? cloneRoomSmartTerrainState(this.currentBatchSmartBefore)
+        : undefined,
+      smartAfter: cloneRoomSmartTerrainState(this.smartTerrain),
+    });
     this.currentBatch = [];
+    this.currentBatchSmartBefore = null;
     this.markRoomDirty();
     this.host.recordBuildPlacement(placedTileCount);
   }
 
   clearTileBatch(): void {
     this.currentBatch = [];
+    this.currentBatchSmartBefore = null;
+  }
+
+  private getSmartDocument(): SmartTerrainDocument {
+    return {
+      tileData: this.serializeTileData(),
+      smartTerrain: cloneRoomSmartTerrainState(this.smartTerrain),
+    };
+  }
+
+  private applySmartDocument(next: SmartTerrainDocument): void {
+    const previous = this.serializeTileData();
+    for (const layerName of LAYER_NAMES) {
+      const layer = this.host.getLayers().get(layerName);
+      if (!layer) continue;
+      for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+        for (let x = 0; x < ROOM_WIDTH; x += 1) {
+          const oldGid = previous[layerName][y]?.[x] ?? -1;
+          const newGid = next.tileData[layerName][y]?.[x] ?? -1;
+          if (oldGid === newGid) continue;
+          if (newGid < 0) {
+            layer.removeTileAt(x, y);
+          } else {
+            const decoded = decodeTileDataValue(newGid);
+            const tile = layer.putTileAt(decoded.gid, x, y);
+            if (tile) {
+              tile.flipX = decoded.flipX;
+              tile.flipY = decoded.flipY;
+            }
+          }
+          this.currentBatch.push({ layer: layerName, x, y, oldGid, newGid });
+        }
+      }
+    }
+    this.smartTerrain = cloneRoomSmartTerrainState(next.smartTerrain);
+  }
+
+  setSmartDetailsEnabled(enabled: boolean): void {
+    this.beginTileBatch();
+    this.applySmartDocument(setSmartTerrainDetailsEnabled(this.getSmartDocument(), enabled));
+    editorState.smartDetailsEnabled = enabled;
+    this.commitTileBatch();
+  }
+
+  fillCaveTerrain(): void {
+    this.beginTileBatch();
+    this.applySmartDocument(fillEmptySmartTerrain(this.getSmartDocument(), 'cave'));
+    this.commitTileBatch();
   }
 
   setRoomMusic(nextMusic: RoomMusic | null): RoomMusic | null {
@@ -625,6 +737,15 @@ export class EditorEditRuntime {
     const localPoint = this.toLocalWorldPoint(worldX, worldY);
     const baseTileX = Math.floor(localPoint.x / TILE_SIZE);
     const baseTileY = Math.floor(localPoint.y / TILE_SIZE);
+    if (editorState.paletteMode === 'smart') {
+      this.applySmartDocument(applySmartCells(this.getSmartDocument(), {
+        cells: [{ x: baseTileX, y: baseTileY }],
+        mode: 'paint',
+        theme: editorState.smartTheme,
+        material: editorState.smartMaterial,
+      }));
+      return;
+    }
     const layer = this.host.getLayers().get(editorState.activeLayer);
     if (!layer) {
       return;
@@ -665,6 +786,10 @@ export class EditorEditRuntime {
           oldGid,
           newGid,
         });
+        if (editorState.activeLayer === 'terrain') {
+          const semantic = this.smartTerrain.cells[smartCellKey(tileX, tileY)];
+          if (semantic) semantic.lockedGid = decodeTileDataValue(newGid).gid;
+        }
       }
     }
   }
@@ -678,6 +803,20 @@ export class EditorEditRuntime {
     const localPoint = this.toLocalWorldPoint(worldX, worldY);
     const tileX = Math.floor(localPoint.x / TILE_SIZE);
     const tileY = Math.floor(localPoint.y / TILE_SIZE);
+    if (editorState.paletteMode === 'smart') {
+      const radius = Math.floor(Math.max(1, editorState.eraserBrushSize) * 0.5);
+      const cells = [];
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) cells.push({ x: tileX + dx, y: tileY + dy });
+      }
+      this.applySmartDocument(applySmartCells(this.getSmartDocument(), {
+        cells,
+        mode: 'erase',
+        theme: editorState.smartTheme,
+        material: editorState.smartMaterial,
+      }));
+      return;
+    }
     const layer = this.host.getLayers().get(editorState.activeLayer);
     if (!layer) {
       return;
@@ -699,6 +838,16 @@ export class EditorEditRuntime {
 
         const oldGid = encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY);
         layer.removeTileAt(targetX, targetY);
+        if (editorState.activeLayer === 'terrain') {
+          delete this.smartTerrain.cells[smartCellKey(targetX, targetY)];
+        } else if (editorState.activeLayer === 'foreground') {
+          const slot = smartCellKey(targetX, targetY);
+          if (this.smartTerrain.generatedDecorations[slot]) {
+            this.smartTerrain = suppressGeneratedDecorationAt(
+              this.getSmartDocument(), targetX, targetY,
+            ).smartTerrain;
+          }
+        }
         this.currentBatch.push({
           layer: editorState.activeLayer,
           x: targetX,
@@ -721,6 +870,7 @@ export class EditorEditRuntime {
     }
 
     const actions: TileAction[] = [];
+    const smartBefore = cloneRoomSmartTerrainState(this.smartTerrain);
     for (let y = 0; y < ROOM_HEIGHT; y += 1) {
       for (let x = 0; x < ROOM_WIDTH; x += 1) {
         const existingTile = layer.getTileAt(x, y);
@@ -743,7 +893,25 @@ export class EditorEditRuntime {
       return;
     }
 
-    this.history.record({ kind: 'tiles', actions });
+    if (editorState.activeLayer === 'terrain') {
+      const foreground = this.host.getLayers().get('foreground');
+      for (const [targetKey, decoration] of Object.entries(this.smartTerrain.generatedDecorations)) {
+        const [x, y] = targetKey.split(',').map(Number);
+        const tile = foreground?.getTileAt(x, y);
+        if (!tile || tile.index !== decoration.gid) continue;
+        foreground?.removeTileAt(x, y);
+        actions.push({ layer: 'foreground', x, y, oldGid: decoration.gid, newGid: -1 });
+      }
+      this.smartTerrain.cells = {};
+      this.smartTerrain.generatedDecorations = {};
+      this.smartTerrain.suppressedDecorationSlots = [];
+    } else if (editorState.activeLayer === 'foreground') {
+      this.smartTerrain.generatedDecorations = {};
+      this.smartTerrain.suppressedDecorationSlots = [];
+    }
+    this.history.record({
+      kind: 'tiles', actions, smartBefore, smartAfter: cloneRoomSmartTerrainState(this.smartTerrain),
+    });
     this.markRoomDirty();
   }
 
@@ -753,6 +921,7 @@ export class EditorEditRuntime {
     }
 
     const actions: TileAction[] = [];
+    const smartBefore = cloneRoomSmartTerrainState(this.smartTerrain);
     for (const layerName of LAYER_NAMES) {
       const layer = this.host.getLayers().get(layerName);
       if (!layer) {
@@ -782,7 +951,10 @@ export class EditorEditRuntime {
       return;
     }
 
-    this.history.record({ kind: 'tiles', actions });
+    this.smartTerrain = createRoomSmartTerrainState();
+    this.history.record({
+      kind: 'tiles', actions, smartBefore, smartAfter: cloneRoomSmartTerrainState(this.smartTerrain),
+    });
     this.markRoomDirty();
   }
 
@@ -813,6 +985,19 @@ export class EditorEditRuntime {
     const minY = Math.max(0, Math.min(y1, y2));
     const maxX = Math.min(ROOM_WIDTH - 1, Math.max(x1, x2));
     const maxY = Math.min(ROOM_HEIGHT - 1, Math.max(y1, y2));
+    if (editorState.paletteMode === 'smart') {
+      const cells = [];
+      for (let y = minY; y <= maxY; y += 1) {
+        for (let x = minX; x <= maxX; x += 1) cells.push({ x, y });
+      }
+      this.applySmartDocument(applySmartCells(this.getSmartDocument(), {
+        cells,
+        mode: editorState.activeTool === 'eraser' ? 'erase' : 'paint',
+        theme: editorState.smartTheme,
+        material: editorState.smartMaterial,
+      }));
+      return;
+    }
     const layer = this.host.getLayers().get(editorState.activeLayer);
     if (!layer || editorState.selectedTileGid < 0) {
       return;
@@ -850,6 +1035,30 @@ export class EditorEditRuntime {
       return;
     }
     const layer = this.host.getLayers().get(editorState.activeLayer);
+    if (editorState.paletteMode === 'smart') {
+      if (!layer || startX < 0 || startX >= ROOM_WIDTH || startY < 0 || startY >= ROOM_HEIGHT) return;
+      const startTile = layer.getTileAt(startX, startY);
+      const targetGid = startTile?.index ?? -1;
+      const cells: Array<{ x: number; y: number }> = [];
+      const visited = new Set<string>();
+      const queue: Array<[number, number]> = [[startX, startY]];
+      while (queue.length > 0) {
+        const [x, y] = queue.shift()!;
+        const key = smartCellKey(x, y);
+        if (visited.has(key) || x < 0 || x >= ROOM_WIDTH || y < 0 || y >= ROOM_HEIGHT) continue;
+        visited.add(key);
+        if ((layer.getTileAt(x, y)?.index ?? -1) !== targetGid) continue;
+        cells.push({ x, y });
+        queue.push([x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]);
+      }
+      this.applySmartDocument(applySmartCells(this.getSmartDocument(), {
+        cells,
+        mode: 'paint',
+        theme: editorState.smartTheme,
+        material: editorState.smartMaterial,
+      }));
+      return;
+    }
     if (!layer || editorState.selectedTileGid < 0) {
       return;
     }
@@ -1917,7 +2126,14 @@ export class EditorEditRuntime {
           newGid: a.oldGid,
         });
       }
-      this.history.pushRedo({ kind: 'tiles', actions: reverseActions });
+      if (action.smartBefore) {
+        this.smartTerrain = cloneRoomSmartTerrainState(action.smartBefore);
+      }
+      this.history.pushRedo({
+        kind: 'tiles', actions: reverseActions,
+        smartBefore: action.smartAfter ? cloneRoomSmartTerrainState(action.smartAfter) : undefined,
+        smartAfter: action.smartBefore ? cloneRoomSmartTerrainState(action.smartBefore) : undefined,
+      });
       this.markRoomDirty();
       return;
     }
@@ -2010,7 +2226,14 @@ export class EditorEditRuntime {
           newGid: a.oldGid,
         });
       }
-      this.history.pushUndo({ kind: 'tiles', actions: reverseActions });
+      if (action.smartBefore) {
+        this.smartTerrain = cloneRoomSmartTerrainState(action.smartBefore);
+      }
+      this.history.pushUndo({
+        kind: 'tiles', actions: reverseActions,
+        smartBefore: action.smartAfter ? cloneRoomSmartTerrainState(action.smartAfter) : undefined,
+        smartAfter: action.smartBefore ? cloneRoomSmartTerrainState(action.smartBefore) : undefined,
+      });
       this.markRoomDirty();
       return;
     }

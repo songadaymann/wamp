@@ -350,6 +350,7 @@ export function setupEditorSidebarShell(doc: Document = document): void {
   appendSection(fixedStack, editorActions);
 
   appendSection(scrollShell, paletteModeSection);
+  appendSection(scrollShell, sectionById.get('smart-palette-section'));
   appendSection(scrollShell, sectionById.get('tileset-section'));
   appendSection(scrollShell, sectionById.get('tile-palette-section'));
   appendSection(scrollShell, sectionById.get('object-palette-section'));

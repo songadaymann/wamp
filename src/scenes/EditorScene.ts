@@ -33,6 +33,7 @@ import {
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
+import { getGameSettings } from '../settings/userSettings';
 import { getSolidColorFromBackgroundValue } from '../backgrounds/model';
 import {
   type CourseGoalType,
@@ -767,6 +768,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   create(data?: EditorSceneData): void {
+    const builderSettings = getGameSettings();
+    editorState.smartTheme = builderSettings.lastSmartTheme;
+    if (builderSettings.builderMode !== 'advanced' && editorState.paletteMode === 'tiles') {
+      editorState.paletteMode = 'smart';
+    }
     this.resetRuntimeState();
 
     this.initialRoomSnapshot = data?.roomSnapshot ? cloneRoomSnapshot(data.roomSnapshot) : null;
@@ -816,6 +822,10 @@ export class EditorScene extends Phaser.Scene {
       onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
       onClearAllTiles: () => this.toolController.clearAllTiles(),
       onClearAllObjects: () => this.toolController.clearAllObjects(),
+      onSetSmartTheme: (theme) => { editorState.smartTheme = theme; },
+      onSetSmartMaterial: (material) => { editorState.smartMaterial = material; },
+      onSetSmartDetailsEnabled: (enabled) => this.editRuntime.setSmartDetailsEnabled(enabled),
+      onFillCaveTerrain: () => this.editRuntime.fillCaveTerrain(),
       onSelectBackground: () => this.applySelectedBackground(),
       onSelectLighting: (mode) => this.applySelectedLightingMode(mode),
       onSetLightingDarkness: (darkness) => this.applySelectedLightingDarkness(darkness),

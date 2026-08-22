@@ -8,6 +8,7 @@ import type { RoomLightingMode } from '../../../lighting/model';
 import type { RoomWeatherMode } from '../../../weather/model';
 import type { NpcMode } from '../../../npcs/model';
 import type { EditorMarkerPlacementMode } from '../../../ui/setup/sceneBridge';
+import type { SmartTerrainMaterial, SmartTerrainTheme } from '../../../autotiling/model';
 
 export interface EditorGoalUiViewModel {
   goalTypeValue: string;
@@ -193,6 +194,10 @@ export interface EditorUiBridgeActions {
   onClearCurrentLayer: () => void;
   onClearAllTiles: () => void;
   onClearAllObjects: () => void;
+  onSetSmartTheme: (theme: SmartTerrainTheme) => void;
+  onSetSmartMaterial: (material: SmartTerrainMaterial) => void;
+  onSetSmartDetailsEnabled: (enabled: boolean) => void;
+  onFillCaveTerrain: () => void;
   onSelectBackground: (backgroundId: string) => void;
   onSelectLighting: (mode: RoomLightingMode) => void;
   onSetLightingDarkness: (darkness: number) => void;

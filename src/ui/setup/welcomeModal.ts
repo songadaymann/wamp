@@ -11,8 +11,10 @@ import type { WorldRepository } from '../../persistence/worldRepository';
 import { createWorldRepository } from '../../persistence/worldRepository';
 import { APP_READY_EVENT, isAppReady, isBusyOverlayVisible } from '../appFeedback';
 import { getActiveOverworldScene } from './sceneBridge';
+import { getGameSettings, updateGameSettings } from '../../settings/userSettings';
 
 const WELCOME_MODAL_SEEN_STORAGE_KEY = 'wamp_welcome_modal_seen_v1';
+export const REQUEST_BUILDER_MODE_EVENT = 'wamp:request-builder-mode';
 const WELCOME_MODAL_AUTO_OPEN_DELAY_MS = 540;
 const BUILD_FRONTIER_RADIUS = 24;
 const WELCOME_PLAY_ROOM_COORDINATES: RoomCoordinates = { x: 1, y: 0 };
@@ -25,6 +27,10 @@ type WelcomeModalElements = {
   buildButton: HTMLButtonElement | null;
   status: HTMLElement | null;
   authPanel: HTMLElement | null;
+  laneBody: HTMLElement | null;
+  builderChoice: HTMLElement | null;
+  builderModeButtons: HTMLButtonElement[];
+  builderBackButton: HTMLButtonElement | null;
 };
 
 export class WelcomeModalController {
@@ -33,6 +39,7 @@ export class WelcomeModalController {
   private dismissed = false;
   private autoOpened = false;
   private pending = false;
+  private builderChoiceContinuation: (() => void) | null = null;
 
   private readonly handleAppReady = () => {
     this.scheduleAutoOpen();
@@ -59,8 +66,27 @@ export class WelcomeModalController {
   };
 
   private readonly handleBuildClick = () => {
-    void this.handleBuildAction();
+    this.requestBuilderMode(() => void this.handleBuildAction());
   };
+
+  private readonly handleBuilderModeRequest = (event: Event) => {
+    const detail = (event as CustomEvent<{ onSelected?: () => void }>).detail;
+    if (typeof detail?.onSelected === 'function') this.requestBuilderMode(detail.onSelected);
+  };
+
+  private readonly handleBuilderModeClick = (event: Event) => {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLButtonElement)) return;
+    const builderMode = target.dataset.welcomeBuilderMode === 'advanced' ? 'advanced' : 'beginner';
+    updateGameSettings({ builderMode });
+    this.doc.body.dataset.builderMode = builderMode;
+    const continuation = this.builderChoiceContinuation;
+    this.builderChoiceContinuation = null;
+    this.showBuilderChoice(false);
+    continuation?.();
+  };
+
+  private readonly handleBuilderBackClick = () => this.showBuilderChoice(false);
 
   private readonly handleCloseClick = () => {
     this.close(true);
@@ -96,6 +122,10 @@ export class WelcomeModalController {
       buildButton: this.doc.getElementById('btn-welcome-build') as HTMLButtonElement | null,
       status: this.doc.getElementById('welcome-modal-status'),
       authPanel: this.doc.getElementById('auth-panel'),
+      laneBody: this.doc.querySelector('#welcome-modal .welcome-modal-body'),
+      builderChoice: this.doc.getElementById('welcome-builder-choice'),
+      builderModeButtons: Array.from(this.doc.querySelectorAll<HTMLButtonElement>('[data-welcome-builder-mode]')),
+      builderBackButton: this.doc.getElementById('btn-welcome-builder-back') as HTMLButtonElement | null,
     };
   }
 
@@ -105,11 +135,14 @@ export class WelcomeModalController {
     this.elements.exploreButton?.addEventListener('click', this.handleExploreClick);
     this.elements.playButton?.addEventListener('click', this.handlePlayClick);
     this.elements.buildButton?.addEventListener('click', this.handleBuildClick);
+    for (const button of this.elements.builderModeButtons) button.addEventListener('click', this.handleBuilderModeClick);
+    this.elements.builderBackButton?.addEventListener('click', this.handleBuilderBackClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.doc.addEventListener('visibilitychange', this.handleVisibilityChange);
     this.windowObj.addEventListener(APP_READY_EVENT, this.handleAppReady as EventListener);
     this.windowObj.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
+    this.windowObj.addEventListener(REQUEST_BUILDER_MODE_EVENT, this.handleBuilderModeRequest as EventListener);
 
     if (isAppReady()) {
       this.scheduleAutoOpen();
@@ -122,11 +155,14 @@ export class WelcomeModalController {
     this.elements.exploreButton?.removeEventListener('click', this.handleExploreClick);
     this.elements.playButton?.removeEventListener('click', this.handlePlayClick);
     this.elements.buildButton?.removeEventListener('click', this.handleBuildClick);
+    for (const button of this.elements.builderModeButtons) button.removeEventListener('click', this.handleBuilderModeClick);
+    this.elements.builderBackButton?.removeEventListener('click', this.handleBuilderBackClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     this.doc.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.windowObj.removeEventListener(APP_READY_EVENT, this.handleAppReady as EventListener);
     this.windowObj.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
+    this.windowObj.removeEventListener(REQUEST_BUILDER_MODE_EVENT, this.handleBuilderModeRequest as EventListener);
     this.close(false);
   }
 
@@ -140,6 +176,7 @@ export class WelcomeModalController {
     this.pending = false;
     this.setStatus(null, false);
     this.setButtonsDisabled(false);
+    this.showBuilderChoice(false);
     this.elements.authPanel?.classList.remove('menu-open');
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
@@ -151,6 +188,7 @@ export class WelcomeModalController {
     }
 
     this.pending = false;
+    this.builderChoiceContinuation = null;
     this.setButtonsDisabled(false);
     this.setStatus(null, false);
     this.elements.modal.classList.add('hidden');
@@ -327,6 +365,23 @@ export class WelcomeModalController {
     this.elements.playButton?.toggleAttribute('disabled', disabled);
     this.elements.buildButton?.toggleAttribute('disabled', disabled);
     this.elements.closeButton?.toggleAttribute('disabled', disabled);
+    for (const button of this.elements.builderModeButtons) button.toggleAttribute('disabled', disabled);
+    this.elements.builderBackButton?.toggleAttribute('disabled', disabled);
+  }
+
+  private requestBuilderMode(continuation: () => void): void {
+    if (getGameSettings().builderMode !== 'unselected') {
+      continuation();
+      return;
+    }
+    this.builderChoiceContinuation = continuation;
+    this.open();
+    this.showBuilderChoice(true);
+  }
+
+  private showBuilderChoice(visible: boolean): void {
+    this.elements.laneBody?.classList.toggle('hidden', visible);
+    this.elements.builderChoice?.classList.toggle('hidden', !visible);
   }
 
   private setStatus(message: string | null, isError: boolean): void {
