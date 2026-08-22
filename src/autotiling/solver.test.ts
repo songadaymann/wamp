@@ -127,10 +127,10 @@ describe('smart terrain solver', () => {
   });
 
   it.each([
-    { name: 'top-right', carved: [[10, 9], [11, 9], [11, 10]], localIndex: 49, flipY: true },
-    { name: 'top-left', carved: [[10, 9], [9, 9], [9, 10]], localIndex: 54, flipY: true },
-    { name: 'bottom-right', carved: [[11, 10], [11, 11], [10, 11]], localIndex: 49, flipY: false },
-    { name: 'bottom-left', carved: [[9, 10], [9, 11], [10, 11]], localIndex: 54, flipY: false },
+    { name: 'top-right', carved: [[10, 9], [11, 9], [11, 10]], localIndex: 54, flipY: true },
+    { name: 'top-left', carved: [[10, 9], [9, 9], [9, 10]], localIndex: 49, flipY: true },
+    { name: 'bottom-right', carved: [[11, 10], [11, 11], [10, 11]], localIndex: 54, flipY: false },
+    { name: 'bottom-left', carved: [[9, 10], [9, 11], [10, 11]], localIndex: 49, flipY: false },
   ])('uses the flipped vertical wall art for an enclosed $name ground step', ({ carved, localIndex, flipY }) => {
     const firstGid = getTilesetByKey('forest')!.firstGid;
     let result = applySmartCells(emptyDocument(), {

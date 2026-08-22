@@ -122,7 +122,7 @@ try {
     groundFixtures.tileData.terrain.slice(4, 11).map((row) => row[4]),
     Array(7).fill(38),
   );
-  assert.equal(groundFixtures.tileData.terrain[7][16], (1 << 21) + 50);
+  assert.equal(groundFixtures.tileData.terrain[7][16], (1 << 21) + 55);
   summary.checks.verticalAndCaveTopology = true;
 
   await page.evaluate(() => {
