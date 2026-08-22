@@ -447,9 +447,7 @@ export class EditorUiBridge {
         const builderMode = button.dataset.builderModeChoice === 'advanced' ? 'advanced' : 'beginner';
         updateGameSettings({ builderMode });
         this.doc.body.dataset.builderMode = builderMode;
-        if (builderMode === 'beginner' && editorState.paletteMode === 'tiles') {
-          editorState.paletteMode = 'smart';
-        }
+        editorState.paletteMode = builderMode === 'advanced' ? 'tiles' : 'smart';
         this.syncEditorChromeState();
       };
       button.addEventListener('click', handler);

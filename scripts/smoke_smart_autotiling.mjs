@@ -78,7 +78,13 @@ try {
 
   await page.locator('[data-builder-mode-choice="advanced"]').click();
   assert.equal(await page.locator('.palette-tab[data-mode="tiles"]').isVisible(), true);
+  assert.equal(await page.locator('.palette-tab[data-mode="tiles"]').getAttribute('class').then((value) => value?.includes('active')), true);
   assert.equal(await page.locator('[data-tool="copy"]').first().isVisible(), true);
+  await page.locator('.palette-tab[data-mode="smart"]').click();
+  const smartBox = await page.locator('#smart-palette-section').boundingBox();
+  summary.checks.smartPanelHeight = smartBox?.height ?? 0;
+  assert.ok(smartBox && smartBox.height > 120);
+  assert.equal(await page.locator('#smart-theme-select').isVisible(), true);
   summary.checks.advancedUi = true;
 
   await page.screenshot({ path: path.join(outputDir, 'smart-editor.png') });

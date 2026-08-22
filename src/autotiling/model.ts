@@ -15,7 +15,7 @@ export interface SmartTerrainCellState {
 
 export interface SmartGeneratedDecorationState {
   ownerKey: string;
-  slot: 'top';
+  slot: 'top' | 'bottom' | 'left' | 'right' | 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
   gid: number;
 }
 
@@ -88,7 +88,7 @@ export function normalizeRoomSmartTerrainState(value: unknown): RoomSmartTerrain
       if (
         typeof entry.ownerKey !== 'string'
         || !/^\d+,\d+$/.test(entry.ownerKey)
-        || entry.slot !== 'top'
+        || !['top', 'bottom', 'left', 'right', 'topLeft', 'topRight', 'bottomLeft', 'bottomRight'].includes(entry.slot ?? '')
         || typeof entry.gid !== 'number'
         || !Number.isInteger(entry.gid)
         || entry.gid <= 0
@@ -97,7 +97,7 @@ export function normalizeRoomSmartTerrainState(value: unknown): RoomSmartTerrain
       }
       generatedDecorations[key] = {
         ownerKey: entry.ownerKey,
-        slot: entry.slot,
+        slot: entry.slot as SmartGeneratedDecorationState['slot'],
         gid: entry.gid,
       };
     }
@@ -129,4 +129,3 @@ export function cloneRoomSmartTerrainState(value: unknown): RoomSmartTerrainStat
     suppressedDecorationSlots: [...normalized.suppressedDecorationSlots],
   };
 }
-

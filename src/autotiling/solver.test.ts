@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyTileData } from '../persistence/roomModel';
 import { getTerrainCollisionProfileForGid, getTilesetByKey } from '../config/tilesets';
+import { decodeTileDataValue } from '../config/editorState';
 import { createRoomSmartTerrainState } from './model';
 import {
   applySmartCells,
@@ -35,7 +36,7 @@ describe('smart terrain solver', () => {
 
       expect(first.tileData).toEqual(second.tileData);
       expect(Object.keys(first.smartTerrain.cells)).toHaveLength(4);
-      expect(Object.keys(first.smartTerrain.generatedDecorations)).toHaveLength(2);
+      expect(Object.keys(first.smartTerrain.generatedDecorations).length).toBeLessThanOrEqual(1);
       for (const row of first.tileData.terrain) {
         for (const gid of row) {
           if (gid > 0) expect(getTerrainCollisionProfileForGid(gid).hasCollision).toBe(true);
@@ -43,7 +44,7 @@ describe('smart terrain solver', () => {
       }
       for (const row of first.tileData.foreground) {
         for (const gid of row) {
-          if (gid > 0) expect(getTerrainCollisionProfileForGid(gid).hasCollision).toBe(false);
+          if (gid > 0) expect(getTerrainCollisionProfileForGid(decodeTileDataValue(gid).gid).hasCollision).toBe(false);
         }
       }
     },
@@ -66,6 +67,60 @@ describe('smart terrain solver', () => {
 
     expect(erased.tileData.terrain[3][3]).toBe(-1);
     expect(erased.tileData.terrain[3][2]).not.toBe(beforeLeft);
+  });
+
+  it.each(['forest', 'desert', 'cave', 'gothic'] as const)(
+    'uses real platform ends instead of hole/bridge art for %s',
+    (theme) => {
+      const firstGid = getTilesetByKey(theme)!.firstGid;
+      const result = applySmartCells(emptyDocument(), {
+        cells: [{ x: 2, y: 3 }, { x: 3, y: 3 }, { x: 4, y: 3 }],
+        mode: 'paint',
+        theme,
+        material: 'platform',
+      });
+      expect(result.tileData.terrain[3].slice(2, 5).map((gid) => gid - firstGid)).toEqual([44, 45, 46]);
+    },
+  );
+
+  it.each(['forest', 'desert', 'cave', 'gothic'] as const)(
+    'builds seamless %s feature blocks with a non-colliding detail outline',
+    (theme) => {
+      const firstGid = getTilesetByKey(theme)!.firstGid;
+      const result = applySmartCells(emptyDocument(), {
+        cells: [{ x: 3, y: 4 }, { x: 4, y: 4 }, { x: 3, y: 5 }, { x: 4, y: 5 }],
+        mode: 'paint',
+        theme,
+        material: 'feature',
+      });
+      expect(result.tileData.terrain[4][3] - firstGid).toBe(12);
+      expect(Object.keys(result.smartTerrain.generatedDecorations)).toHaveLength(12);
+      for (const row of result.tileData.foreground) {
+        for (const gid of row) {
+          if (gid > 0) expect(getTerrainCollisionProfileForGid(decodeTileDataValue(gid).gid).hasCollision).toBe(false);
+        }
+      }
+    },
+  );
+
+  it('uses the inner-void tie family around a carved underground hole', () => {
+    let result = applySmartCells(emptyDocument(), {
+      cells: Array.from({ length: 25 }, (_, index) => ({ x: 5 + (index % 5), y: 5 + Math.floor(index / 5) })),
+      mode: 'paint',
+      theme: 'cave',
+      material: 'ground',
+    });
+    result = applySmartCells(result, {
+      cells: [{ x: 7, y: 7 }],
+      mode: 'erase',
+      theme: 'cave',
+      material: 'ground',
+    });
+    const firstGid = getTilesetByKey('cave')!.firstGid;
+    expect(result.tileData.terrain[6].slice(6, 9).map((gid) => gid - firstGid)).toEqual([47, 44, 43]);
+    expect(result.tileData.terrain[7][6] - firstGid).toBe(35);
+    expect(result.tileData.terrain[7][8] - firstGid).toBe(31);
+    expect(result.tileData.terrain[8].slice(6, 9).map((gid) => gid - firstGid)).toEqual([23, 20, 19]);
   });
 
   it('keeps an exact manual override locked until Smart repaints the cell', () => {

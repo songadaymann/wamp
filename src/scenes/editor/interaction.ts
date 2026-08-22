@@ -866,8 +866,34 @@ export class EditorInteractionController {
       return;
     }
 
+    const previous = this.lastDraggedStampOrigin;
     this.lastDraggedStampOrigin = { ...stampOrigin };
-    this.host.placeTileAt(stampOrigin.x * TILE_SIZE, stampOrigin.y * TILE_SIZE);
+    if (editorState.paletteMode !== 'smart' || !previous) {
+      this.host.placeTileAt(stampOrigin.x * TILE_SIZE, stampOrigin.y * TILE_SIZE);
+      return;
+    }
+
+    // Pointer events can skip several grid cells during a quick stroke. Fill
+    // the segment so a vertical wall does not become disconnected grass caps.
+    let x = previous.x;
+    let y = previous.y;
+    const dx = Math.abs(stampOrigin.x - x);
+    const sx = x < stampOrigin.x ? 1 : -1;
+    const dy = -Math.abs(stampOrigin.y - y);
+    const sy = y < stampOrigin.y ? 1 : -1;
+    let error = dx + dy;
+    while (x !== stampOrigin.x || y !== stampOrigin.y) {
+      const doubled = error * 2;
+      if (doubled >= dy) {
+        error += dy;
+        x += sx;
+      }
+      if (doubled <= dx) {
+        error += dx;
+        y += sy;
+      }
+      this.host.placeTileAt(x * TILE_SIZE, y * TILE_SIZE);
+    }
   }
 
   private getDraggedStampOrigin(tileX: number, tileY: number): { x: number; y: number } {

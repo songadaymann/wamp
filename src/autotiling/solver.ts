@@ -1,5 +1,5 @@
 import { ROOM_HEIGHT, ROOM_WIDTH } from '../config/room';
-import { decodeTileDataValue } from '../config/editorState';
+import { decodeTileDataValue, encodeTileDataValue } from '../config/editorState';
 import { getTilesetByKey } from '../config/tilesets';
 import type { RoomTileData } from '../persistence/roomModel';
 import {
@@ -47,63 +47,84 @@ interface FamilyRule {
   platformLeft: number;
   platformMiddle: number[];
   platformRight: number;
-  detailTop: number[];
 }
 
+/**
+ * Local tile slots in the 12 x 6 Forest/Desert/Cave/Gothic sheets.
+ * These are intentionally centralized so art-slot corrections do not require
+ * touching the topology solver. Local index = row * 12 + column (zero-based).
+ */
+export const SMART_TILESET_SLOTS = {
+  ground: {
+    isolated: 47,
+    topLeft: 14,
+    top: [15, 16],
+    topRight: 17,
+    left: [25, 37],
+    center: [27, 28, 39, 40],
+    right: [30, 42],
+    bottomLeft: 49,
+    bottom: [50, 51, 52, 53],
+    bottomRight: 54,
+    outerConcave: { topLeft: 26, topRight: 29, bottomLeft: 38, bottomRight: 41 },
+    // The compact family at the sheet's upper-right makes an inside outline
+    // around a void that is enclosed by underground terrain.
+    innerVoid: {
+      topLeft: 19,
+      top: [20, 21],
+      topRight: 23,
+      left: 31,
+      right: 35,
+      bottomLeft: 43,
+      bottom: [44, 45, 46],
+      bottomRight: 47,
+    },
+  },
+  platform: {
+    // 47 is the circular hole/island art, not a platform end.
+    isolated: 45,
+    left: 44,
+    middle: [45],
+    right: 46,
+  },
+  feature: {
+    base: 12,
+    border: {
+      top: 0,
+      bottom: 24,
+      left: 1,
+      right: 13,
+      topLeft: 10,
+      bottomRight: 22,
+    },
+  },
+  // Conservative first-pass allowlist. These are the exact slots to tune.
+  // Only one in eight eligible exposed ground cells receives one.
+  groundDecoration: [3, 18],
+} as const;
+
 const COMMON_RULE: FamilyRule = {
-  isolated: 47,
-  topLeft: 14,
-  top: [15, 16],
-  topRight: 17,
-  left: [25, 37],
-  center: [27, 28, 39, 40],
-  right: [30, 42],
-  bottomLeft: 49,
-  bottom: [50, 51, 52, 53],
-  bottomRight: 54,
-  concaveTopLeft: 26,
-  concaveTopRight: 29,
-  concaveBottomLeft: 38,
-  concaveBottomRight: 41,
-  platformLeft: 44,
-  platformMiddle: [45, 46],
-  platformRight: 47,
-  detailTop: [2, 3, 4, 5, 6, 7, 8, 10],
+  isolated: SMART_TILESET_SLOTS.ground.isolated,
+  topLeft: SMART_TILESET_SLOTS.ground.topLeft,
+  top: [...SMART_TILESET_SLOTS.ground.top],
+  topRight: SMART_TILESET_SLOTS.ground.topRight,
+  left: [...SMART_TILESET_SLOTS.ground.left],
+  center: [...SMART_TILESET_SLOTS.ground.center],
+  right: [...SMART_TILESET_SLOTS.ground.right],
+  bottomLeft: SMART_TILESET_SLOTS.ground.bottomLeft,
+  bottom: [...SMART_TILESET_SLOTS.ground.bottom],
+  bottomRight: SMART_TILESET_SLOTS.ground.bottomRight,
+  concaveTopLeft: SMART_TILESET_SLOTS.ground.outerConcave.topLeft,
+  concaveTopRight: SMART_TILESET_SLOTS.ground.outerConcave.topRight,
+  concaveBottomLeft: SMART_TILESET_SLOTS.ground.outerConcave.bottomLeft,
+  concaveBottomRight: SMART_TILESET_SLOTS.ground.outerConcave.bottomRight,
+  platformLeft: SMART_TILESET_SLOTS.platform.left,
+  platformMiddle: [...SMART_TILESET_SLOTS.platform.middle],
+  platformRight: SMART_TILESET_SLOTS.platform.right,
 };
 
-const GOTHIC_RULE: FamilyRule = {
-  ...COMMON_RULE,
-  platformLeft: 68,
-  platformMiddle: [69, 70],
-  platformRight: 71,
-  detailTop: [1, 2, 3, 4, 5, 6, 7, 8],
-};
-
-const FEATURE_COMMON_RULE: FamilyRule = {
-  ...COMMON_RULE,
-  isolated: 35,
-  topLeft: 19,
-  top: [20, 21],
-  topRight: 23,
-  left: [31],
-  center: [32, 33],
-  right: [35],
-  bottomLeft: 43,
-  bottom: [55],
-  bottomRight: 55,
-  concaveTopLeft: 31,
-  concaveTopRight: 35,
-  concaveBottomLeft: 43,
-  concaveBottomRight: 55,
-};
-
-function getFamilyRule(theme: SmartTerrainTheme, material: SmartTerrainMaterial): FamilyRule {
-  if (material === 'feature') {
-    return theme === 'gothic'
-      ? { ...FEATURE_COMMON_RULE, detailTop: GOTHIC_RULE.detailTop }
-      : FEATURE_COMMON_RULE;
-  }
-  return theme === 'gothic' ? GOTHIC_RULE : COMMON_RULE;
+function getFamilyRule(_theme: SmartTerrainTheme, _material: SmartTerrainMaterial): FamilyRule {
+  return COMMON_RULE;
 }
 
 function getFirstGid(theme: SmartTerrainTheme): number {
@@ -132,6 +153,7 @@ function stablePick(values: number[], x: number, y: number, salt: number): numbe
 }
 
 function getFamilyLocalIndices(theme: SmartTerrainTheme, material: SmartTerrainMaterial): Set<number> {
+  if (material === 'feature') return new Set([SMART_TILESET_SLOTS.feature.base]);
   const rule = getFamilyRule(theme, material);
   return new Set([
     rule.isolated,
@@ -204,6 +226,29 @@ function resolveGroundLocalIndex(
   const s = sameFamily(tileData, state, x, y + 1, cell);
   const w = sameFamily(tileData, state, x - 1, y, cell);
   if (!n && !e && !s && !w) return rule.isolated;
+  const enclosedVoid = (targetX: number, targetY: number): boolean => {
+    if (!inBounds(targetX, targetY) || sameFamily(tileData, state, targetX, targetY, cell)) return false;
+    let surrounding = 0;
+    for (let oy = -1; oy <= 1; oy += 1) {
+      for (let ox = -1; ox <= 1; ox += 1) {
+        if ((ox !== 0 || oy !== 0) && sameFamily(tileData, state, targetX + ox, targetY + oy, cell)) surrounding += 1;
+      }
+    }
+    return surrounding >= 5;
+  };
+  const inner = SMART_TILESET_SLOTS.ground.innerVoid;
+  if (!n && enclosedVoid(x, y - 1)) {
+    if (!w) return inner.topLeft;
+    if (!e) return inner.topRight;
+    return stablePick([...inner.top], x, y, 7);
+  }
+  if (!s && enclosedVoid(x, y + 1)) {
+    if (!w) return inner.bottomLeft;
+    if (!e) return inner.bottomRight;
+    return stablePick([...inner.bottom], x, y, 9);
+  }
+  if (!w && enclosedVoid(x - 1, y)) return inner.left;
+  if (!e && enclosedVoid(x + 1, y)) return inner.right;
   if (!n && !w) return rule.topLeft;
   if (!n && !e) return rule.topRight;
   if (!s && !w) return rule.bottomLeft;
@@ -217,6 +262,10 @@ function resolveGroundLocalIndex(
   const ne = sameFamily(tileData, state, x + 1, y - 1, cell);
   const sw = sameFamily(tileData, state, x - 1, y + 1, cell);
   const se = sameFamily(tileData, state, x + 1, y + 1, cell);
+  if (!nw && enclosedVoid(x - 1, y - 1)) return inner.topLeft;
+  if (!ne && enclosedVoid(x + 1, y - 1)) return inner.topRight;
+  if (!sw && enclosedVoid(x - 1, y + 1)) return inner.bottomLeft;
+  if (!se && enclosedVoid(x + 1, y + 1)) return inner.bottomRight;
   if (!nw && rule.concaveTopLeft !== undefined) return rule.concaveTopLeft;
   if (!ne && rule.concaveTopRight !== undefined) return rule.concaveTopRight;
   if (!sw && rule.concaveBottomLeft !== undefined) return rule.concaveBottomLeft;
@@ -232,10 +281,11 @@ function resolveLocalIndex(
   cell: SmartTerrainCellState,
 ): number {
   const rule = getFamilyRule(cell.theme, cell.material);
+  if (cell.material === 'feature') return SMART_TILESET_SLOTS.feature.base;
   if (cell.material === 'platform') {
     const left = sameFamily(tileData, state, x - 1, y, cell);
     const right = sameFamily(tileData, state, x + 1, y, cell);
-    if (!left && !right) return rule.platformRight;
+    if (!left && !right) return SMART_TILESET_SLOTS.platform.isolated;
     if (!left) return rule.platformLeft;
     if (!right) return rule.platformRight;
     return stablePick(rule.platformMiddle, x, y, 29);
@@ -275,23 +325,50 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
   }
 
   const suppressed = new Set(state.suppressedDecorationSlots);
+  const addDecoration = (
+    ownerKey: string,
+    targetX: number,
+    targetY: number,
+    slot: import('./model').SmartGeneratedDecorationState['slot'],
+    localIndex: number,
+    flipX = false,
+  ) => {
+    if (!inBounds(targetX, targetY)) return;
+    const slotKey = smartDecorationSlotKey(ownerKey, slot);
+    if (suppressed.has(slotKey) || decodeTileDataValue(tileData.foreground[targetY]?.[targetX] ?? -1).gid > 0) return;
+    const gid = toGid(state.cells[ownerKey]!.theme, localIndex);
+    tileData.foreground[targetY][targetX] = encodeTileDataValue(gid, flipX, false);
+    state.generatedDecorations[smartCellKey(targetX, targetY)] = { ownerKey, slot, gid };
+  };
   for (const [ownerKey, cell] of Object.entries(state.cells)) {
     const [x, y] = ownerKey.split(',').map(Number);
-    if (!inBounds(x, y) || sameFamily(tileData, state, x, y - 1, cell)) {
+    if (!inBounds(x, y)) continue;
+    if (cell.material === 'feature') {
+      const border = SMART_TILESET_SLOTS.feature.border;
+      const n = sameFamily(tileData, state, x, y - 1, cell);
+      const e = sameFamily(tileData, state, x + 1, y, cell);
+      const s = sameFamily(tileData, state, x, y + 1, cell);
+      const w = sameFamily(tileData, state, x - 1, y, cell);
+      if (!n) addDecoration(ownerKey, x, y - 1, 'top', border.top);
+      if (!s) addDecoration(ownerKey, x, y + 1, 'bottom', border.bottom);
+      if (!w) addDecoration(ownerKey, x - 1, y, 'left', border.left);
+      if (!e) addDecoration(ownerKey, x + 1, y, 'right', border.right);
+      if (!n && !w) addDecoration(ownerKey, x - 1, y - 1, 'topLeft', border.topLeft);
+      if (!n && !e) addDecoration(ownerKey, x + 1, y - 1, 'topRight', border.topLeft, true);
+      if (!s && !w) addDecoration(ownerKey, x - 1, y + 1, 'bottomLeft', border.bottomRight, true);
+      if (!s && !e) addDecoration(ownerKey, x + 1, y + 1, 'bottomRight', border.bottomRight);
       continue;
     }
-    const targetY = y - 1;
-    if (!inBounds(x, targetY)) {
-      continue;
-    }
-    const slotKey = smartDecorationSlotKey(ownerKey, 'top');
-    if (suppressed.has(slotKey) || decodeTileDataValue(tileData.foreground[targetY]?.[x] ?? -1).gid > 0) {
-      continue;
-    }
-    const rule = getFamilyRule(cell.theme, cell.material);
-    const gid = toGid(cell.theme, stablePick(rule.detailTop, x, y, 31));
-    tileData.foreground[targetY][x] = gid;
-    state.generatedDecorations[smartCellKey(x, targetY)] = { ownerKey, slot: 'top', gid };
+    if (cell.material !== 'ground' || sameFamily(tileData, state, x, y - 1, cell)) continue;
+    const eligibility = Math.abs(Math.imul(x + 31, 73856093) ^ Math.imul(y + 17, 19349663)) % 8;
+    if (eligibility !== 0) continue;
+    addDecoration(
+      ownerKey,
+      x,
+      y - 1,
+      'top',
+      stablePick([...SMART_TILESET_SLOTS.groundDecoration], x, y, 31),
+    );
   }
 }
 
