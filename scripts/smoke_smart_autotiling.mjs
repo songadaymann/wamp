@@ -90,6 +90,42 @@ try {
   assert.equal(await page.locator('#smart-theme-select').isVisible(), true);
   summary.checks.advancedUi = true;
 
+  await page.locator('#btn-editor-top-tool-more').click();
+  const ellipseButton = page.locator('#editor-top-more-tools-panel [data-tool="ellipse"]');
+  await ellipseButton.click();
+  assert.equal(await ellipseButton.getAttribute('class').then((value) => value?.includes('active')), true);
+  const smartEllipse = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    runtime.stampShape('ellipse', 22, 14, 28, 20, { outline: false, erase: false });
+    runtime.commitTileBatch();
+    return runtime.exportRoomSnapshot();
+  });
+  assert.ok(smartEllipse.smartTerrain.cells['25,17']);
+  assert.equal(smartEllipse.smartTerrain.cells['22,14'], undefined);
+  assert.ok(smartEllipse.tileData.terrain[17][25] > 0);
+
+  const shapeKeepBuilding = page.locator('#btn-guest-builder-claim-continue');
+  if (await shapeKeepBuilding.isVisible()) await shapeKeepBuilding.click();
+  await ellipseButton.click();
+  assert.equal(await ellipseButton.locator('.tool-label').textContent(), 'Ellipse Outline');
+  const carvedSmartEllipse = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    runtime.stampShape('ellipse', 22, 14, 28, 20, { outline: true, erase: true });
+    runtime.commitTileBatch();
+    const carved = runtime.exportRoomSnapshot();
+    runtime.undo();
+    const restored = runtime.exportRoomSnapshot();
+    return { carved, restored };
+  });
+  assert.ok(carvedSmartEllipse.carved.smartTerrain.cells['25,17']);
+  assert.equal(carvedSmartEllipse.carved.smartTerrain.cells['25,14'], undefined);
+  assert.equal(carvedSmartEllipse.carved.tileData.terrain[14][25], -1);
+  assert.ok(carvedSmartEllipse.restored.smartTerrain.cells['25,14']);
+  summary.checks.smartShapeTools = true;
+  await page.screenshot({ path: path.join(outputDir, 'smart-ellipse.png') });
+
   await page.screenshot({ path: path.join(outputDir, 'smart-editor.png') });
 
   await page.evaluate(() => {

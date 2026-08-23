@@ -2639,7 +2639,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private pointerRequestsPan(pointer: Phaser.Input.Pointer): boolean {
     if (
       pointer.rightButtonDown() &&
-      editorState.paletteMode === 'tiles' &&
+      editorState.paletteMode !== 'objects' &&
       isShapeEditorTool(editorState.activeTool) &&
       !this.modifierKeys.SPACE?.isDown &&
       !this.modifierKeys.ALT?.isDown

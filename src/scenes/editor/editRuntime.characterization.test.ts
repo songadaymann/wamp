@@ -38,6 +38,9 @@ describe('editor edit runtime document contracts', () => {
   beforeEach(() => {
     editorState.activeLayer = 'terrain';
     editorState.activeTool = 'pencil';
+    editorState.paletteMode = 'tiles';
+    editorState.smartTheme = 'forest';
+    editorState.smartMaterial = 'ground';
     editorState.selectedTileGid = 1;
     editorState.selection = {
       tilesetKey: 'essentials',
@@ -187,6 +190,33 @@ describe('editor edit runtime document contracts', () => {
     runtime.commitTileBatch();
     expect(countTiles(terrain)).toBe(1);
     expect(terrain.getTileAt(1, 1)?.index).toBeTypeOf('number');
+  });
+
+  it('feeds Smart rectangle and ellipse shapes through semantic auto-tiling', () => {
+    editorState.paletteMode = 'smart';
+    const { runtime, layers } = createHarness(createRoom());
+    const terrain = layers.get('terrain')!;
+
+    runtime.beginTileBatch();
+    runtime.stampShape('ellipse', 4, 4, 8, 8, { outline: false, erase: false });
+    runtime.commitTileBatch();
+    const painted = runtime.exportRoomSnapshot();
+    expect(painted.smartTerrain!.cells['6,6']).toMatchObject({ theme: 'forest', material: 'ground' });
+    expect(painted.smartTerrain!.cells['4,4']).toBeUndefined();
+    expect(terrain.getTileAt(6, 6)?.index).toBeTypeOf('number');
+
+    runtime.beginTileBatch();
+    runtime.stampShape('ellipse', 4, 4, 8, 8, { outline: true, erase: true });
+    runtime.commitTileBatch();
+    const carved = runtime.exportRoomSnapshot();
+    expect(carved.smartTerrain!.cells['6,6']).toMatchObject({ theme: 'forest', material: 'ground' });
+    expect(carved.smartTerrain!.cells['6,4']).toBeUndefined();
+    expect(terrain.getTileAt(6, 4)).toBeNull();
+
+    runtime.undo();
+    const restored = runtime.exportRoomSnapshot();
+    expect(restored.smartTerrain!.cells['6,4']).toMatchObject({ theme: 'forest', material: 'ground' });
+    expect(terrain.getTileAt(6, 4)?.index).toBeTypeOf('number');
   });
 });
 
