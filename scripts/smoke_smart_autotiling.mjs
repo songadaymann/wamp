@@ -144,9 +144,46 @@ try {
 
   await page.evaluate(() => {
     const material = document.querySelector('#smart-material-select');
+    material.value = 'tunnel';
+    material.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  assert.equal(await page.locator('#smart-theme-select').inputValue(), 'water');
+  assert.equal(await page.locator('#smart-theme-select').isDisabled(), true);
+  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
+  const tunnelFixture = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    for (let y = 3; y <= 11; y += 1) {
+      for (let x = 20; x <= 28; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+    }
+    runtime.commitTileBatch();
+    runtime.beginTileBatch();
+    for (let y = 6; y <= 8; y += 1) {
+      for (let x = 23; x <= 25; x += 1) runtime.eraseTileAt(x * 16 + 1, y * 16 + 1);
+    }
+    runtime.commitTileBatch();
+    return runtime.exportRoomSnapshot();
+  });
+  assert.equal(Object.keys(tunnelFixture.smartTerrain.backdropCells).length, 72);
+  assert.equal(tunnelFixture.tileData.terrain[4][21], -1);
+  assert.ok(tunnelFixture.tileData.background[4][21] > 0);
+  assert.equal(tunnelFixture.tileData.background[7][22], 430);
+  assert.equal(tunnelFixture.tileData.background[7][26], 425);
+  assert.equal(tunnelFixture.tileData.background[5][22], (1 << 21) + 421);
+  assert.equal(tunnelFixture.tileData.background[7][24], -1);
+  summary.checks.tunnelBackdrop = true;
+  const tunnelKeepBuilding = page.locator('#btn-guest-builder-claim-continue');
+  if (await tunnelKeepBuilding.isVisible()) await tunnelKeepBuilding.click();
+  await page.screenshot({ path: path.join(outputDir, 'tunnel-backdrop.png') });
+
+  await page.evaluate(() => {
+    const material = document.querySelector('#smart-material-select');
     material.value = 'feature';
     material.dispatchEvent(new Event('change', { bubbles: true }));
   });
+  assert.equal(await page.locator('#smart-theme-select').inputValue(), 'forest');
+  assert.equal(await page.locator('#smart-theme-select').isEnabled(), true);
+  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
   const featureFixture = await page.evaluate(() => {
     const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
     runtime.beginTileBatch();

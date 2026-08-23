@@ -51,6 +51,59 @@ describe('smart terrain solver', () => {
     },
   );
 
+  it('paints a Water tunnel backdrop behind independent solid Ground', () => {
+    const waterFirstGid = getTilesetByKey('water')!.firstGid;
+    let result = applySmartCells(emptyDocument(), {
+      cells: [{ x: 7, y: 7 }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'ground',
+    });
+    const terrainBefore = result.tileData.terrain[7][7];
+    result = applySmartCells(result, {
+      cells: Array.from({ length: 9 }, (_, index) => ({ x: 6 + (index % 3), y: 6 + Math.floor(index / 3) })),
+      mode: 'paint',
+      theme: 'forest',
+      material: 'tunnel',
+    });
+
+    expect(result.tileData.terrain[7][7]).toBe(terrainBefore);
+    expect([27, 28, 39, 40]).toContain(
+      decodeTileDataValue(result.tileData.background[7][7]).gid - waterFirstGid,
+    );
+    expect(result.smartTerrain.cells['7,7']?.material).toBe('ground');
+    expect(result.smartTerrain.backdropCells['7,7']).toMatchObject({ theme: 'water', material: 'tunnel' });
+  });
+
+  it('uses Water rock edges and ties around a carved tunnel backdrop', () => {
+    const waterFirstGid = getTilesetByKey('water')!.firstGid;
+    let result = applySmartCells(emptyDocument(), {
+      cells: Array.from({ length: 25 }, (_, index) => ({ x: 5 + (index % 5), y: 5 + Math.floor(index / 5) })),
+      mode: 'paint',
+      theme: 'gothic',
+      material: 'tunnel',
+    });
+    result = applySmartCells(result, {
+      cells: [{ x: 7, y: 7 }],
+      mode: 'erase',
+      theme: 'forest',
+      material: 'tunnel',
+    });
+    const tile = (x: number, y: number) => decodeTileDataValue(result.tileData.background[y][x]);
+    expect(tile(6, 6).gid - waterFirstGid).toBe(33);
+    expect(tile(8, 6).gid - waterFirstGid).toBe(35);
+    expect(tile(6, 8).gid - waterFirstGid).toBe(33);
+    expect(tile(8, 8).gid - waterFirstGid).toBe(35);
+    expect(tile(6, 6).flipY).toBe(true);
+    expect(tile(8, 6).flipY).toBe(true);
+    expect(tile(6, 8).flipY).toBe(false);
+    expect(tile(8, 8).flipY).toBe(false);
+    expect(tile(6, 7).gid - waterFirstGid).toBe(42);
+    expect(tile(8, 7).gid - waterFirstGid).toBe(37);
+    expect(result.tileData.background[7][7]).toBe(-1);
+    expect(result.tileData.terrain[7][7]).toBe(-1);
+  });
+
   it('repairs neighbors after erasing a middle cell', () => {
     const painted = applySmartCells(emptyDocument(), {
       cells: [{ x: 2, y: 3 }, { x: 3, y: 3 }, { x: 4, y: 3 }],
@@ -270,6 +323,33 @@ describe('smart terrain solver', () => {
     });
     expect(unlocked.tileData.terrain[3][2]).not.toBe(firstGid + 60);
     expect(unlocked.smartTerrain.cells['2,3']?.lockedGid).toBeUndefined();
+  });
+
+  it('keeps a manual Behind Player override locked within a tunnel backdrop', () => {
+    const waterFirstGid = getTilesetByKey('water')!.firstGid;
+    const painted = applySmartCells(emptyDocument(), {
+      cells: [{ x: 2, y: 3 }, { x: 3, y: 3 }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'tunnel',
+    });
+    const locked = lockSmartTerrainCell(painted, 2, 3, waterFirstGid + 60, 'background');
+    const extended = applySmartCells(locked, {
+      cells: [{ x: 4, y: 3 }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'tunnel',
+    });
+    expect(extended.tileData.background[3][2]).toBe(waterFirstGid + 60);
+
+    const unlocked = applySmartCells(extended, {
+      cells: [{ x: 2, y: 3 }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'tunnel',
+    });
+    expect(unlocked.tileData.background[3][2]).not.toBe(waterFirstGid + 60);
+    expect(unlocked.smartTerrain.backdropCells['2,3']?.lockedGid).toBeUndefined();
   });
 
   it('connects to compatible legacy terrain without rewriting it', () => {

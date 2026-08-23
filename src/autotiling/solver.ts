@@ -182,7 +182,7 @@ function getFamilyLocalIndices(theme: SmartTerrainTheme, material: SmartTerrainM
 }
 
 export function classifySmartTerrainGid(gid: number): Omit<SmartTerrainCellState, 'lockedGid'> | null {
-  for (const theme of ['forest', 'desert', 'cave', 'gothic'] as const) {
+  for (const theme of ['forest', 'desert', 'cave', 'gothic', 'water'] as const) {
     const firstGid = getFirstGid(theme);
     const localIndex = gid - firstGid;
     if (localIndex < 0 || localIndex >= 72) {
@@ -190,7 +190,10 @@ export function classifySmartTerrainGid(gid: number): Omit<SmartTerrainCellState
     }
     // Specific sub-families win when the source sheet intentionally reuses a cap
     // (notably local tile 47) for a one-cell ground island and a platform end.
-    for (const material of ['feature', 'platform', 'ground'] as const) {
+    const materials: SmartTerrainMaterial[] = theme === 'water'
+      ? ['tunnel']
+      : ['feature', 'platform', 'ground'];
+    for (const material of materials) {
       if (getFamilyLocalIndices(theme, material).has(localIndex)) {
         return { theme, material };
       }
@@ -209,11 +212,13 @@ function sameFamily(
   if (!inBounds(x, y)) {
     return false;
   }
-  const semantic = state.cells[smartCellKey(x, y)];
+  const backdrop = source.material === 'tunnel';
+  const semantic = (backdrop ? state.backdropCells : state.cells)[smartCellKey(x, y)];
   if (semantic) {
     return semantic.theme === source.theme && semantic.material === source.material;
   }
-  const gid = decodeTileDataValue(tileData.terrain[y]?.[x] ?? -1).gid;
+  const layer = backdrop ? tileData.background : tileData.terrain;
+  const gid = decodeTileDataValue(layer[y]?.[x] ?? -1).gid;
   const classified = classifySmartTerrainGid(gid);
   return classified?.theme === source.theme && classified.material === source.material;
 }
@@ -320,6 +325,32 @@ function resolveLocalIndex(
   enclosedVoidCells: Set<string>,
 ): ResolvedLocalTile {
   const rule = getFamilyRule(cell.theme, cell.material);
+  if (cell.material === 'tunnel') {
+    const n = sameFamily(tileData, state, x, y - 1, cell);
+    const e = sameFamily(tileData, state, x + 1, y, cell);
+    const s = sameFamily(tileData, state, x, y + 1, cell);
+    const w = sameFamily(tileData, state, x - 1, y, cell);
+    const inner = SMART_TILESET_SLOTS.ground.innerVoid;
+    if (!n && !e && !s && !w) return { localIndex: SMART_TILESET_SLOTS.ground.isolated };
+    if (!e && !w && (n || s)) return { localIndex: inner.left };
+    if (!n && !w) return { localIndex: inner.bottomLeft, flipY: true };
+    if (!n && !e) return { localIndex: inner.bottomRight, flipY: true };
+    if (!s && !w) return { localIndex: inner.bottomLeft };
+    if (!s && !e) return { localIndex: inner.bottomRight };
+    if (!n) return { localIndex: stablePick([...inner.bottom], x, y, 31), flipY: true };
+    if (!s) return { localIndex: stablePick([...inner.bottom], x, y, 33) };
+    if (!w) return { localIndex: inner.left };
+    if (!e) return { localIndex: inner.right };
+    const nw = sameFamily(tileData, state, x - 1, y - 1, cell);
+    const ne = sameFamily(tileData, state, x + 1, y - 1, cell);
+    const sw = sameFamily(tileData, state, x - 1, y + 1, cell);
+    const se = sameFamily(tileData, state, x + 1, y + 1, cell);
+    if (!nw) return { localIndex: inner.topRight };
+    if (!ne) return { localIndex: inner.topLeft };
+    if (!sw) return { localIndex: inner.topRight, flipY: true };
+    if (!se) return { localIndex: inner.topLeft, flipY: true };
+    return { localIndex: stablePick(rule.center, x, y, 35) };
+  }
   if (cell.material === 'feature') return { localIndex: SMART_TILESET_SLOTS.feature.base };
   if (cell.material === 'platform') {
     const left = sameFamily(tileData, state, x - 1, y, cell);
@@ -374,6 +405,17 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     }
     const resolved = resolveLocalIndex(tileData, state, x, y, cell, enclosedVoidCells);
     tileData.terrain[y][x] = cell.lockedGid
+      ?? encodeTileDataValue(toGid(cell.theme, resolved.localIndex), resolved.flipX, resolved.flipY);
+  }
+
+  for (const [key, cell] of Object.entries(state.backdropCells)) {
+    const [x, y] = key.split(',').map(Number);
+    if (!inBounds(x, y) || cell.material !== 'tunnel') {
+      delete state.backdropCells[key];
+      continue;
+    }
+    const resolved = resolveLocalIndex(tileData, state, x, y, cell, new Set<string>());
+    tileData.background[y][x] = cell.lockedGid
       ?? encodeTileDataValue(toGid(cell.theme, resolved.localIndex), resolved.flipX, resolved.flipY);
   }
 
@@ -477,19 +519,25 @@ export function applySmartCells(
 ): SmartTerrainDocument {
   const tileData = cloneTileData(document.tileData);
   const smartTerrain = cloneRoomSmartTerrainState(document.smartTerrain);
+  const backdrop = options.material === 'tunnel';
+  const targetCells = backdrop ? smartTerrain.backdropCells : smartTerrain.cells;
+  const targetLayer = backdrop ? tileData.background : tileData.terrain;
   for (const { x, y } of options.cells) {
     if (!inBounds(x, y)) {
       continue;
     }
     const key = smartCellKey(x, y);
     if (options.mode === 'erase') {
-      delete smartTerrain.cells[key];
+      delete targetCells[key];
       smartTerrain.suppressedDecorationSlots = smartTerrain.suppressedDecorationSlots.filter(
         (slot) => !slot.startsWith(`${key}:`),
       );
-      tileData.terrain[y][x] = -1;
+      targetLayer[y][x] = -1;
     } else {
-      smartTerrain.cells[key] = { theme: options.theme, material: options.material };
+      targetCells[key] = {
+        theme: backdrop ? 'water' : options.theme === 'water' ? 'forest' : options.theme,
+        material: options.material,
+      };
       smartTerrain.suppressedDecorationSlots = smartTerrain.suppressedDecorationSlots.filter(
         (slot) => !slot.startsWith(`${key}:`),
       );
@@ -504,14 +552,16 @@ export function lockSmartTerrainCell(
   x: number,
   y: number,
   gid: number,
+  layer: 'terrain' | 'background' = 'terrain',
 ): SmartTerrainDocument {
   const tileData = cloneTileData(document.tileData);
   const smartTerrain = cloneRoomSmartTerrainState(document.smartTerrain);
   const key = smartCellKey(x, y);
-  const cell = smartTerrain.cells[key];
-  tileData.terrain[y][x] = gid;
+  const cells = layer === 'background' ? smartTerrain.backdropCells : smartTerrain.cells;
+  const cell = cells[key];
+  tileData[layer][y][x] = gid;
   if (cell) {
-    smartTerrain.cells[key] = { ...cell, lockedGid: gid };
+    cells[key] = { ...cell, lockedGid: gid };
   }
   resolveDocument(tileData, smartTerrain);
   return { tileData, smartTerrain };
@@ -534,9 +584,10 @@ export function fillEmptySmartTerrain(
   material: SmartTerrainMaterial = 'ground',
 ): SmartTerrainDocument {
   const cells: SmartCellCoordinate[] = [];
+  const layer = material === 'tunnel' ? document.tileData.background : document.tileData.terrain;
   for (let y = 0; y < ROOM_HEIGHT; y += 1) {
     for (let x = 0; x < ROOM_WIDTH; x += 1) {
-      if (decodeTileDataValue(document.tileData.terrain[y]?.[x] ?? -1).gid <= 0) {
+      if (decodeTileDataValue(layer[y]?.[x] ?? -1).gid <= 0) {
         cells.push({ x, y });
       }
     }

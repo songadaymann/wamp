@@ -458,7 +458,9 @@ export class EditorEditRuntime {
       },
       editorState.activeLayer === 'terrain'
         ? (x, y) => this.smartTerrain.cells[smartCellKey(x, y)]
-        : undefined,
+        : editorState.activeLayer === 'background'
+          ? (x, y) => this.smartTerrain.backdropCells[smartCellKey(x, y)]
+          : undefined,
     );
     return this.clipboardState !== null;
   }
@@ -505,11 +507,17 @@ export class EditorEditRuntime {
         if (editorState.activeLayer === 'terrain') {
           const existingSemantic = this.smartTerrain.cells[smartCellKey(tileX, tileY)];
           if (existingSemantic) existingSemantic.lockedGid = decoded.gid;
+        } else if (editorState.activeLayer === 'background') {
+          const existingSemantic = this.smartTerrain.backdropCells[smartCellKey(tileX, tileY)];
+          if (existingSemantic) existingSemantic.lockedGid = decoded.gid;
         }
         changed = true;
     }
 
-    if (editorState.activeLayer === 'terrain' && clipboard.smartCells) {
+    if (
+      (editorState.activeLayer === 'terrain' || editorState.activeLayer === 'background')
+      && clipboard.smartCells
+    ) {
       let next = this.getSmartDocument();
       for (const [relativeKey, cell] of Object.entries(clipboard.smartCells)) {
         const [dx, dy] = relativeKey.split(',').map(Number);
@@ -519,7 +527,9 @@ export class EditorEditRuntime {
         next = applySmartCells(next, {
           cells: [{ x, y }], mode: 'paint', theme: cell.theme, material: cell.material,
         });
-        if (cell.lockedGid) next = lockSmartTerrainCell(next, x, y, cell.lockedGid);
+        if (cell.lockedGid) next = lockSmartTerrainCell(
+          next, x, y, cell.lockedGid, editorState.activeLayer,
+        );
         changed = true;
       }
       this.applySmartDocument(next);
@@ -789,6 +799,9 @@ export class EditorEditRuntime {
         if (editorState.activeLayer === 'terrain') {
           const semantic = this.smartTerrain.cells[smartCellKey(tileX, tileY)];
           if (semantic) semantic.lockedGid = decodeTileDataValue(newGid).gid;
+        } else if (editorState.activeLayer === 'background') {
+          const semantic = this.smartTerrain.backdropCells[smartCellKey(tileX, tileY)];
+          if (semantic) semantic.lockedGid = decodeTileDataValue(newGid).gid;
         }
       }
     }
@@ -859,6 +872,7 @@ export class EditorEditRuntime {
           delete this.smartTerrain.cells[smartCellKey(targetX, targetY)];
         } else if (editorState.activeLayer === 'foreground' || editorState.activeLayer === 'background') {
           const slot = smartCellKey(targetX, targetY);
+          if (editorState.activeLayer === 'background') delete this.smartTerrain.backdropCells[slot];
           const generated = editorState.activeLayer === 'foreground'
             ? this.smartTerrain.generatedDecorations
             : this.smartTerrain.generatedBackgroundDecorations;
@@ -935,6 +949,7 @@ export class EditorEditRuntime {
       this.smartTerrain.generatedDecorations = {};
       this.smartTerrain.suppressedDecorationSlots = [];
     } else if (editorState.activeLayer === 'background') {
+      this.smartTerrain.backdropCells = {};
       this.smartTerrain.generatedBackgroundDecorations = {};
       this.smartTerrain.suppressedDecorationSlots = [];
     }

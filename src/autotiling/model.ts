@@ -1,9 +1,9 @@
 export const SMART_TERRAIN_VERSION = 1 as const;
 
-export const SMART_TERRAIN_THEMES = ['forest', 'desert', 'cave', 'gothic'] as const;
+export const SMART_TERRAIN_THEMES = ['forest', 'desert', 'cave', 'gothic', 'water'] as const;
 export type SmartTerrainTheme = typeof SMART_TERRAIN_THEMES[number];
 
-export const SMART_TERRAIN_MATERIALS = ['ground', 'platform', 'feature'] as const;
+export const SMART_TERRAIN_MATERIALS = ['ground', 'platform', 'feature', 'tunnel'] as const;
 export type SmartTerrainMaterial = typeof SMART_TERRAIN_MATERIALS[number];
 
 export interface SmartTerrainCellState {
@@ -24,6 +24,8 @@ export interface RoomSmartTerrainState {
   detailsEnabled: boolean;
   /** Sparse terrain-layer cells keyed as `x,y`. */
   cells: Record<string, SmartTerrainCellState>;
+  /** Sparse Behind Player cells keyed as `x,y`, currently used by the Water tunnel backdrop brush. */
+  backdropCells: Record<string, SmartTerrainCellState>;
   /** Sparse engine-owned foreground cells keyed as `x,y`. */
   generatedDecorations: Record<string, SmartGeneratedDecorationState>;
   /** Sparse engine-owned background cells keyed as `x,y`, used when a feature notch needs two edges. */
@@ -45,10 +47,34 @@ export function createRoomSmartTerrainState(): RoomSmartTerrainState {
     version: SMART_TERRAIN_VERSION,
     detailsEnabled: true,
     cells: {},
+    backdropCells: {},
     generatedDecorations: {},
     generatedBackgroundDecorations: {},
     suppressedDecorationSlots: [],
   };
+}
+
+function normalizeSmartCells(value: unknown, expectedLayer: 'terrain' | 'background'): Record<string, SmartTerrainCellState> {
+  const cells: Record<string, SmartTerrainCellState> = {};
+  if (!value || typeof value !== 'object') return cells;
+  for (const [key, cell] of Object.entries(value)) {
+    if (!/^\d+,\d+$/.test(key) || !cell || typeof cell !== 'object') continue;
+    const entry = cell as Partial<SmartTerrainCellState>;
+    if (
+      !SMART_TERRAIN_THEMES.includes(entry.theme as SmartTerrainTheme)
+      || !SMART_TERRAIN_MATERIALS.includes(entry.material as SmartTerrainMaterial)
+      || (expectedLayer === 'background') !== (entry.material === 'tunnel')
+      || (entry.theme === 'water') !== (entry.material === 'tunnel')
+    ) continue;
+    cells[key] = {
+      theme: entry.theme as SmartTerrainTheme,
+      material: entry.material as SmartTerrainMaterial,
+      ...(typeof entry.lockedGid === 'number' && Number.isInteger(entry.lockedGid) && entry.lockedGid > 0
+        ? { lockedGid: entry.lockedGid }
+        : {}),
+    };
+  }
+  return cells;
 }
 
 function normalizeGeneratedDecorations(value: unknown): Record<string, SmartGeneratedDecorationState> {
@@ -81,28 +107,8 @@ export function normalizeRoomSmartTerrainState(value: unknown): RoomSmartTerrain
   }
 
   const candidate = value as Partial<RoomSmartTerrainState>;
-  const cells: Record<string, SmartTerrainCellState> = {};
-  if (candidate.cells && typeof candidate.cells === 'object') {
-    for (const [key, cell] of Object.entries(candidate.cells)) {
-      if (!/^\d+,\d+$/.test(key) || !cell || typeof cell !== 'object') {
-        continue;
-      }
-      const entry = cell as Partial<SmartTerrainCellState>;
-      if (
-        !SMART_TERRAIN_THEMES.includes(entry.theme as SmartTerrainTheme)
-        || !SMART_TERRAIN_MATERIALS.includes(entry.material as SmartTerrainMaterial)
-      ) {
-        continue;
-      }
-      cells[key] = {
-        theme: entry.theme as SmartTerrainTheme,
-        material: entry.material as SmartTerrainMaterial,
-        ...(typeof entry.lockedGid === 'number' && Number.isInteger(entry.lockedGid) && entry.lockedGid > 0
-          ? { lockedGid: entry.lockedGid }
-          : {}),
-      };
-    }
-  }
+  const cells = normalizeSmartCells(candidate.cells, 'terrain');
+  const backdropCells = normalizeSmartCells(candidate.backdropCells, 'background');
 
   const generatedDecorations = normalizeGeneratedDecorations(candidate.generatedDecorations);
   const generatedBackgroundDecorations = normalizeGeneratedDecorations(candidate.generatedBackgroundDecorations);
@@ -111,6 +117,7 @@ export function normalizeRoomSmartTerrainState(value: unknown): RoomSmartTerrain
     version: SMART_TERRAIN_VERSION,
     detailsEnabled: candidate.detailsEnabled !== false,
     cells,
+    backdropCells,
     generatedDecorations,
     generatedBackgroundDecorations,
     suppressedDecorationSlots: Array.isArray(candidate.suppressedDecorationSlots)
@@ -128,6 +135,9 @@ export function cloneRoomSmartTerrainState(value: unknown): RoomSmartTerrainStat
     ...normalized,
     cells: Object.fromEntries(
       Object.entries(normalized.cells).map(([key, cell]) => [key, { ...cell }]),
+    ),
+    backdropCells: Object.fromEntries(
+      Object.entries(normalized.backdropCells).map(([key, cell]) => [key, { ...cell }]),
     ),
     generatedDecorations: Object.fromEntries(
       Object.entries(normalized.generatedDecorations).map(([key, decoration]) => [key, { ...decoration }]),

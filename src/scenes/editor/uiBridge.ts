@@ -468,8 +468,19 @@ export class EditorUiBridge {
 
     const handleSmartMaterialChange = () => {
       const value = this.elements.smartMaterialSelect?.value;
-      if (value === 'ground' || value === 'platform' || value === 'feature') {
+      if (value === 'ground' || value === 'platform' || value === 'feature' || value === 'tunnel') {
         editorState.smartMaterial = value;
+        if (value === 'tunnel') {
+          editorState.smartTheme = 'water';
+          editorState.activeLayer = 'background';
+          this.actions.onSetSmartTheme('water');
+        } else {
+          editorState.activeLayer = 'terrain';
+          if (editorState.smartTheme === 'water') {
+            editorState.smartTheme = getGameSettings().lastSmartTheme;
+            this.actions.onSetSmartTheme(editorState.smartTheme);
+          }
+        }
         this.actions.onSetSmartMaterial(value);
         this.syncEditorChromeState();
       }
@@ -1555,10 +1566,25 @@ export class EditorUiBridge {
     this.elements.objectPaletteSection?.classList.toggle('hidden', editorState.paletteMode !== 'objects');
     setValue(this.elements.smartThemeSelect, editorState.smartTheme);
     setValue(this.elements.smartMaterialSelect, editorState.smartMaterial);
+    const tunnelBackdropSelected = editorState.smartMaterial === 'tunnel';
+    if (this.elements.smartThemeSelect) {
+      this.elements.smartThemeSelect.disabled = tunnelBackdropSelected;
+      const waterOption = this.elements.smartThemeSelect.querySelector<HTMLOptionElement>('option[value="water"]');
+      if (waterOption) waterOption.hidden = !tunnelBackdropSelected;
+    }
     if (this.elements.smartDetailsCheckbox) {
       this.elements.smartDetailsCheckbox.checked = editorState.smartDetailsEnabled;
+      this.elements.smartDetailsCheckbox.closest('label')?.classList.toggle('hidden', tunnelBackdropSelected);
     }
-    this.elements.smartCaveFillButton?.classList.toggle('hidden', editorState.smartTheme !== 'cave');
+    this.elements.smartCaveFillButton?.classList.toggle(
+      'hidden', editorState.smartTheme !== 'cave' || editorState.smartMaterial === 'tunnel',
+    );
+    const smartHint = this.elements.smartPaletteSection?.querySelector<HTMLElement>('.palette-hint');
+    if (smartHint) {
+      smartHint.textContent = tunnelBackdropSelected
+        ? 'Draw non-colliding blue tunnel walls behind the player. Smart chooses rock edges and ties.'
+        : 'Draw blocks. Smart chooses edges and repairs neighbors. Right-click or Erase removes them.';
+    }
 
     const objectCategory = this.currentObjectCategory || 'all';
     const customObjectFilterActive = objectCategory === 'custom' || objectCategory === 'mine';
