@@ -109,22 +109,40 @@ try {
   if (await shapeKeepBuilding.isVisible()) await shapeKeepBuilding.click();
   await ellipseButton.click();
   assert.equal(await ellipseButton.locator('.tool-label').textContent(), 'Ellipse Outline');
-  const carvedSmartEllipse = await page.evaluate(() => {
+  const smartOutlines = await page.evaluate(() => {
     const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.clearCurrentLayer();
     runtime.beginTileBatch();
-    runtime.stampShape('ellipse', 22, 14, 28, 20, { outline: true, erase: true });
+    runtime.stampShape('rect', 4, 12, 12, 20, { outline: true, erase: false });
+    runtime.stampShape('ellipse', 20, 10, 30, 20, { outline: true, erase: false });
     runtime.commitTileBatch();
-    const carved = runtime.exportRoomSnapshot();
-    runtime.undo();
-    const restored = runtime.exportRoomSnapshot();
-    return { carved, restored };
+    return runtime.exportRoomSnapshot();
   });
-  assert.ok(carvedSmartEllipse.carved.smartTerrain.cells['25,17']);
-  assert.equal(carvedSmartEllipse.carved.smartTerrain.cells['25,14'], undefined);
-  assert.equal(carvedSmartEllipse.carved.tileData.terrain[14][25], -1);
-  assert.ok(carvedSmartEllipse.restored.smartTerrain.cells['25,14']);
+  assert.equal(smartOutlines.tileData.terrain[16][8], -1);
+  assert.ok([16, 17].includes(smartOutlines.tileData.terrain[12][8]));
+  assert.ok([51, 52, 53, 54].includes(smartOutlines.tileData.terrain[20][8]));
+  assert.equal(smartOutlines.tileData.terrain[16][4], 38);
+  assert.equal(smartOutlines.tileData.terrain[16][12], 43);
+  assert.equal(smartOutlines.tileData.terrain[15][25], -1);
+  const ellipseGids = Object.entries(smartOutlines.smartTerrain.cells)
+    .filter(([key]) => {
+      const [x, y] = key.split(',').map(Number);
+      return x >= 20 && x <= 30 && y >= 10 && y <= 20;
+    })
+    .map(([key]) => {
+      const [x, y] = key.split(',').map(Number);
+      return smartOutlines.tileData.terrain[y][x];
+    });
+  assert.ok(ellipseGids.length > 20);
+  assert.equal(ellipseGids.includes(48), false);
+  assert.equal(smartOutlines.smartTerrain.generatedDecorations['8,19'], undefined);
   summary.checks.smartShapeTools = true;
-  await page.screenshot({ path: path.join(outputDir, 'smart-ellipse.png') });
+  summary.checks.smartOutlineTopology = true;
+  await page.evaluate(() => {
+    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.fitToScreen();
+  });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(outputDir, 'smart-outlines.png') });
 
   await page.screenshot({ path: path.join(outputDir, 'smart-editor.png') });
 

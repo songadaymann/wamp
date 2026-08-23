@@ -143,6 +143,7 @@ import {
   type RoomSmartTerrainState,
 } from '../../autotiling/model';
 import {
+  applySmartOutlineCells,
   applySmartCells,
   fillEmptySmartTerrain,
   setSmartTerrainDetailsEnabled,
@@ -1044,12 +1045,22 @@ export class EditorEditRuntime {
     const outline = Boolean(options?.outline);
     if (editorState.paletteMode === 'smart') {
       const cells = iterateShapeTiles(kind, x1, y1, x2, y2, outline);
-      this.applySmartDocument(applySmartCells(this.getSmartDocument(), {
-        cells,
-        mode: erase ? 'erase' : 'paint',
-        theme: editorState.smartTheme,
-        material: editorState.smartMaterial,
-      }));
+      const document = this.getSmartDocument();
+      this.applySmartDocument(
+        outline && !erase
+          ? applySmartOutlineCells(document, {
+              filledCells: iterateShapeTiles(kind, x1, y1, x2, y2, false),
+              outlineCells: cells,
+              theme: editorState.smartTheme,
+              material: editorState.smartMaterial,
+            })
+          : applySmartCells(document, {
+              cells,
+              mode: erase ? 'erase' : 'paint',
+              theme: editorState.smartTheme,
+              material: editorState.smartMaterial,
+            }),
+      );
       return;
     }
     const layer = this.host.getLayers().get(editorState.activeLayer);

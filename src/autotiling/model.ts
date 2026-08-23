@@ -11,6 +11,8 @@ export interface SmartTerrainCellState {
   material: SmartTerrainMaterial;
   /** Exact baked gid protected from automatic re-resolution until Smart paints this cell again. */
   lockedGid?: number;
+  /** Shape-derived outward-facing gid; nearby Smart edits clear this so the cell can repair normally. */
+  shapeGid?: number;
 }
 
 export interface SmartGeneratedDecorationState {
@@ -71,6 +73,9 @@ function normalizeSmartCells(value: unknown, expectedLayer: 'terrain' | 'backgro
       material: entry.material as SmartTerrainMaterial,
       ...(typeof entry.lockedGid === 'number' && Number.isInteger(entry.lockedGid) && entry.lockedGid > 0
         ? { lockedGid: entry.lockedGid }
+        : {}),
+      ...(typeof entry.shapeGid === 'number' && Number.isInteger(entry.shapeGid) && entry.shapeGid > 0
+        ? { shapeGid: entry.shapeGid }
         : {}),
     };
   }

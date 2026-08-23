@@ -29,6 +29,13 @@ export interface ApplySmartCellsOptions {
   material: SmartTerrainMaterial;
 }
 
+export interface ApplySmartOutlineCellsOptions {
+  filledCells: Iterable<SmartCellCoordinate>;
+  outlineCells: Iterable<SmartCellCoordinate>;
+  theme: SmartTerrainTheme;
+  material: SmartTerrainMaterial;
+}
+
 interface FamilyRule {
   isolated: number;
   topLeft: number;
@@ -107,6 +114,12 @@ export const SMART_TILESET_SLOTS = {
   // Only one in eight eligible exposed ground cells receives one.
   groundDecoration: [2, 3, 4, 5],
 } as const;
+
+const GROUND_TOP_LOCAL_INDICES = new Set<number>([
+  SMART_TILESET_SLOTS.ground.topLeft,
+  ...SMART_TILESET_SLOTS.ground.top,
+  SMART_TILESET_SLOTS.ground.topRight,
+]);
 
 const COMMON_RULE: FamilyRule = {
   isolated: SMART_TILESET_SLOTS.ground.isolated,
@@ -404,7 +417,7 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
       enclosedVoidCache.set(familyKey, enclosedVoidCells);
     }
     const resolved = resolveLocalIndex(tileData, state, x, y, cell, enclosedVoidCells);
-    tileData.terrain[y][x] = cell.lockedGid
+    tileData.terrain[y][x] = cell.lockedGid ?? cell.shapeGid
       ?? encodeTileDataValue(toGid(cell.theme, resolved.localIndex), resolved.flipX, resolved.flipY);
   }
 
@@ -415,7 +428,7 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
       continue;
     }
     const resolved = resolveLocalIndex(tileData, state, x, y, cell, new Set<string>());
-    tileData.background[y][x] = cell.lockedGid
+    tileData.background[y][x] = cell.lockedGid ?? cell.shapeGid
       ?? encodeTileDataValue(toGid(cell.theme, resolved.localIndex), resolved.flipX, resolved.flipY);
   }
 
@@ -456,6 +469,10 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
       continue;
     }
     if (cell.material !== 'ground' || sameFamily(tileData, state, x, y - 1, cell)) continue;
+    if (cell.shapeGid) {
+      const localIndex = decodeTileDataValue(cell.shapeGid).gid - getFirstGid(cell.theme);
+      if (!GROUND_TOP_LOCAL_INDICES.has(localIndex)) continue;
+    }
     const decorationHash = Math.abs(Math.imul(x + 31, 73856093) ^ Math.imul(y + 17, 19349663));
     if (decorationHash % 8 !== 0) continue;
     addDecoration(
@@ -522,11 +539,18 @@ export function applySmartCells(
   const backdrop = options.material === 'tunnel';
   const targetCells = backdrop ? smartTerrain.backdropCells : smartTerrain.cells;
   const targetLayer = backdrop ? tileData.background : tileData.terrain;
+  const canonicalTheme = backdrop ? 'water' : options.theme === 'water' ? 'forest' : options.theme;
   for (const { x, y } of options.cells) {
     if (!inBounds(x, y)) {
       continue;
     }
     const key = smartCellKey(x, y);
+    for (const [neighborX, neighborY] of [[x, y - 1], [x + 1, y], [x, y + 1], [x - 1, y]]) {
+      const neighbor = targetCells[smartCellKey(neighborX, neighborY)];
+      if (neighbor?.theme === canonicalTheme && neighbor.material === options.material) {
+        delete neighbor.shapeGid;
+      }
+    }
     if (options.mode === 'erase') {
       delete targetCells[key];
       smartTerrain.suppressedDecorationSlots = smartTerrain.suppressedDecorationSlots.filter(
@@ -535,7 +559,7 @@ export function applySmartCells(
       targetLayer[y][x] = -1;
     } else {
       targetCells[key] = {
-        theme: backdrop ? 'water' : options.theme === 'water' ? 'forest' : options.theme,
+        theme: canonicalTheme,
         material: options.material,
       };
       smartTerrain.suppressedDecorationSlots = smartTerrain.suppressedDecorationSlots.filter(
@@ -545,6 +569,46 @@ export function applySmartCells(
   }
   resolveDocument(tileData, smartTerrain);
   return { tileData, smartTerrain };
+}
+
+/**
+ * Paints only a hollow shape's visible boundary, but resolves each boundary tile
+ * as if the shape were filled. This gives the outline a coherent outward-facing
+ * surface instead of treating it as a chain of one-cell islands.
+ */
+export function applySmartOutlineCells(
+  document: SmartTerrainDocument,
+  options: ApplySmartOutlineCellsOptions,
+): SmartTerrainDocument {
+  const filledCells = Array.from(options.filledCells).filter(({ x, y }) => inBounds(x, y));
+  const outlineCells = Array.from(options.outlineCells).filter(({ x, y }) => inBounds(x, y));
+  const reference = applySmartCells(document, {
+    cells: filledCells,
+    mode: 'paint',
+    theme: options.theme,
+    material: options.material,
+  });
+  const result = applySmartCells(document, {
+    cells: outlineCells,
+    mode: 'paint',
+    theme: options.theme,
+    material: options.material,
+  });
+  const backdrop = options.material === 'tunnel';
+  const layer = backdrop ? 'background' : 'terrain';
+  const targetCells = backdrop ? result.smartTerrain.backdropCells : result.smartTerrain.cells;
+
+  for (const { x, y } of outlineCells) {
+    const key = smartCellKey(x, y);
+    const cell = targetCells[key];
+    const resolvedGid = reference.tileData[layer][y]?.[x] ?? -1;
+    if (cell && resolvedGid > 0) {
+      targetCells[key] = { ...cell, shapeGid: resolvedGid };
+    }
+  }
+
+  resolveDocument(result.tileData, result.smartTerrain);
+  return result;
 }
 
 export function lockSmartTerrainCell(

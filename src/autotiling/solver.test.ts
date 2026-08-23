@@ -5,6 +5,7 @@ import { decodeTileDataValue } from '../config/editorState';
 import { createRoomSmartTerrainState } from './model';
 import {
   applySmartCells,
+  applySmartOutlineCells,
   fillEmptySmartTerrain,
   lockSmartTerrainCell,
   setSmartTerrainDetailsEnabled,
@@ -19,6 +20,43 @@ function emptyDocument() {
 }
 
 describe('smart terrain solver', () => {
+  it('resolves a hollow Ground outline from its filled outward topology', () => {
+    const firstGid = getTilesetByKey('forest')!.firstGid;
+    const filledCells = Array.from(
+      { length: 25 },
+      (_, index) => ({ x: 5 + (index % 5), y: 5 + Math.floor(index / 5) }),
+    );
+    const outlineCells = filledCells.filter(({ x, y }) => x === 5 || x === 9 || y === 5 || y === 9);
+    const result = applySmartOutlineCells(emptyDocument(), {
+      filledCells,
+      outlineCells,
+      theme: 'forest',
+      material: 'ground',
+    });
+    const local = (x: number, y: number) => decodeTileDataValue(result.tileData.terrain[y][x]);
+
+    expect([15, 16]).toContain(local(7, 5).gid - firstGid);
+    expect([50, 51, 52, 53]).toContain(local(7, 9).gid - firstGid);
+    expect(local(5, 7).gid - firstGid).toBe(37);
+    expect(local(9, 7).gid - firstGid).toBe(42);
+    expect(local(5, 5).gid - firstGid).toBe(14);
+    expect(local(9, 5).gid - firstGid).toBe(17);
+    expect(local(5, 9).gid - firstGid).toBe(49);
+    expect(local(9, 9).gid - firstGid).toBe(54);
+    expect(result.tileData.terrain[7][7]).toBe(-1);
+    expect(result.smartTerrain.cells['7,7']).toBeUndefined();
+    expect(result.smartTerrain.suppressedDecorationSlots).not.toContain('7,9:top');
+
+    const joined = applySmartCells(result, {
+      cells: [{ x: 7, y: 4 }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'ground',
+    });
+    expect(joined.smartTerrain.cells['7,5']?.shapeGid).toBeUndefined();
+    expect(joined.smartTerrain.cells['7,5']?.lockedGid).toBeUndefined();
+  });
+
   it.each(['forest', 'desert', 'cave', 'gothic'] as const)(
     'bakes connected %s ground with non-colliding deterministic details',
     (theme) => {
