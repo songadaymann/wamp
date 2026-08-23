@@ -150,6 +150,30 @@ describe('smart terrain solver', () => {
     expect(step.flipY).toBe(flipY);
   });
 
+  it.each([
+    { name: 'top-left', omitted: [9, 9], localIndex: 26, flipY: false },
+    { name: 'top-right', omitted: [11, 9], localIndex: 29, flipY: false },
+    { name: 'bottom-left', omitted: [9, 11], localIndex: 35, flipY: true },
+    { name: 'bottom-right', omitted: [11, 11], localIndex: 33, flipY: true },
+  ])('uses a surface tie at an ordinary exterior $name ground step', ({ omitted, localIndex, flipY }) => {
+    const firstGid = getTilesetByKey('forest')!.firstGid;
+    const cells = [];
+    for (let y = 9; y <= 11; y += 1) {
+      for (let x = 9; x <= 11; x += 1) {
+        if (x !== omitted[0] || y !== omitted[1]) cells.push({ x, y });
+      }
+    }
+    const result = applySmartCells(emptyDocument(), {
+      cells,
+      mode: 'paint',
+      theme: 'forest',
+      material: 'ground',
+    });
+    const tie = decodeTileDataValue(result.tileData.terrain[10][10]);
+    expect(tie.gid - firstGid).toBe(localIndex);
+    expect(tie.flipY).toBe(flipY);
+  });
+
   it('repeats one clean wall tile down a one-cell-wide vertical column', () => {
     const firstGid = getTilesetByKey('forest')!.firstGid;
     const result = applySmartCells(emptyDocument(), {

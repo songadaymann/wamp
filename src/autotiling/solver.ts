@@ -306,8 +306,8 @@ function resolveGroundLocalIndex(
   if (!se && enclosedVoid(x + 1, y + 1)) return { localIndex: inner.topLeft, flipY: true };
   if (!nw && rule.concaveTopLeft !== undefined) return { localIndex: rule.concaveTopLeft };
   if (!ne && rule.concaveTopRight !== undefined) return { localIndex: rule.concaveTopRight };
-  if (!sw && rule.concaveBottomLeft !== undefined) return { localIndex: rule.concaveBottomLeft };
-  if (!se && rule.concaveBottomRight !== undefined) return { localIndex: rule.concaveBottomRight };
+  if (!sw) return { localIndex: inner.topRight, flipY: true };
+  if (!se) return { localIndex: inner.topLeft, flipY: true };
   return { localIndex: stablePick(rule.center, x, y, 23) };
 }
 

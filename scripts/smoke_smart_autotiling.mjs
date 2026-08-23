@@ -110,6 +110,20 @@ try {
     for (let y = 3; y <= 9; y += 1) {
       for (let x = 10; x <= 18; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
     }
+    const ordinarySteps = [
+      [3, 33, 34],
+      [4, 33, 35],
+      [5, 32, 35],
+      [6, 31, 35],
+      [7, 30, 35],
+      [8, 30, 34],
+      [9, 30, 33],
+      [10, 30, 32],
+      [11, 30, 31],
+    ];
+    for (const [y, startX, endX] of ordinarySteps) {
+      for (let x = startX; x <= endX; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+    }
     runtime.commitTileBatch();
     runtime.beginTileBatch();
     for (const [x, y] of [[12, 5], [16, 6], [17, 6], [17, 7]]) {
@@ -123,7 +137,10 @@ try {
     Array(7).fill(38),
   );
   assert.equal(groundFixtures.tileData.terrain[7][16], (1 << 21) + 55);
+  assert.equal(groundFixtures.tileData.terrain[4][34], 30);
+  assert.equal(groundFixtures.tileData.terrain[7][34], (1 << 21) + 34);
   summary.checks.verticalAndCaveTopology = true;
+  summary.checks.ordinaryGroundTies = true;
 
   await page.evaluate(() => {
     const material = document.querySelector('#smart-material-select');
