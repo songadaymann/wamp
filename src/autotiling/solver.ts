@@ -91,6 +91,9 @@ export const SMART_TILESET_SLOTS = {
       bottom: [50, 51, 52, 53],
       bottomRight: 54,
     },
+    // Gothic tunnel floors use the cleaner masonry underside selected from
+    // row 5, column 3, flipped vertically to face the carved air above.
+    gothicTunnelFloor: 50,
   },
   platform: {
     // 47 is the circular hole/island art, not a platform end.
@@ -296,6 +299,9 @@ function resolveGroundLocalIndex(
   if (!n && enclosedVoid(x, y - 1)) {
     if (!w) return { localIndex: inner.bottomLeft, flipY: true };
     if (!e) return { localIndex: inner.bottomRight, flipY: true };
+    if (cell.theme === 'gothic') {
+      return { localIndex: SMART_TILESET_SLOTS.ground.gothicTunnelFloor, flipY: true };
+    }
     return { localIndex: stablePick([...inner.top], x, y, 7) };
   }
   if (!s && enclosedVoid(x, y + 1)) {

@@ -197,6 +197,43 @@ try {
   summary.checks.ordinaryGroundTies = true;
 
   await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.clearCurrentLayer();
+    const theme = document.querySelector('#smart-theme-select');
+    theme.value = 'gothic';
+    theme.dispatchEvent(new Event('change', { bubbles: true }));
+    runtime.beginTileBatch();
+    for (let y = 5; y <= 9; y += 1) {
+      for (let x = 5; x <= 9; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+    }
+    runtime.commitTileBatch();
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(7 * 16 + 1, 7 * 16 + 1);
+    runtime.commitTileBatch();
+  });
+  const gothicTunnelFloor = await page.evaluate(() => (
+    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime.exportRoomSnapshot()
+  ));
+  assert.equal(gothicTunnelFloor.tileData.terrain[8][7], (1 << 21) + 783);
+  summary.checks.gothicTunnelFloor = true;
+  await page.evaluate(() => {
+    const scene = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene;
+    scene.cameras.main.setZoom(3);
+    scene.cameras.main.centerOn(7.5 * 16, 7.5 * 16);
+  });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(outputDir, 'gothic-tunnel-floor.png') });
+  await page.evaluate(() => {
+    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.fitToScreen();
+  });
+
+  await page.evaluate(() => {
+    const theme = document.querySelector('#smart-theme-select');
+    theme.value = 'forest';
+    theme.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  await page.evaluate(() => {
     const material = document.querySelector('#smart-material-select');
     material.value = 'tunnel';
     material.dispatchEvent(new Event('change', { bubbles: true }));

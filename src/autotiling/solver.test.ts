@@ -217,6 +217,26 @@ describe('smart terrain solver', () => {
     expect(decodeTileDataValue(result.tileData.terrain[6][8]).flipY).toBe(true);
   });
 
+  it('uses the selected vertically flipped masonry tile for Gothic tunnel floors', () => {
+    let result = applySmartCells(emptyDocument(), {
+      cells: Array.from({ length: 25 }, (_, index) => ({ x: 5 + (index % 5), y: 5 + Math.floor(index / 5) })),
+      mode: 'paint',
+      theme: 'gothic',
+      material: 'ground',
+    });
+    result = applySmartCells(result, {
+      cells: [{ x: 7, y: 7 }],
+      mode: 'erase',
+      theme: 'gothic',
+      material: 'ground',
+    });
+
+    const firstGid = getTilesetByKey('gothic')!.firstGid;
+    const floor = decodeTileDataValue(result.tileData.terrain[8][7]);
+    expect(floor.gid - firstGid).toBe(50);
+    expect(floor.flipY).toBe(true);
+  });
+
   it.each([
     { name: 'top-right', carved: [[10, 9], [11, 9], [11, 10]], localIndex: 54, flipY: true },
     { name: 'top-left', carved: [[10, 9], [9, 9], [9, 10]], localIndex: 49, flipY: true },
