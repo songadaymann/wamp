@@ -113,9 +113,16 @@ export const SMART_TILESET_SLOTS = {
       bottomRight: 22,
     },
   },
-  // Conservative first-pass allowlist. These are the exact slots to tune.
-  // Only one in eight eligible exposed ground cells receives one.
-  groundDecoration: [2, 3, 4, 5],
+  // Theme-specific, non-colliding decoration allowlists. Only one in eight
+  // eligible exposed ground cells receives one.
+  groundDecoration: {
+    forest: [2, 3, 4, 5, 56, 58, 59],
+    // 2 and 3 hang down from a ceiling, so they do not belong on ground tops.
+    desert: [4, 5, 7, 8],
+    cave: [2, 3, 4, 5, 6, 57, 61],
+    gothic: [2, 3, 4, 5],
+    water: [],
+  },
 } as const;
 
 const GROUND_TOP_LOCAL_INDICES = new Set<number>([
@@ -481,14 +488,14 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     }
     const decorationHash = Math.abs(Math.imul(x + 31, 73856093) ^ Math.imul(y + 17, 19349663));
     if (decorationHash % 8 !== 0) continue;
+    const decorationVariants = SMART_TILESET_SLOTS.groundDecoration[cell.theme];
+    if (decorationVariants.length === 0) continue;
     addDecoration(
       ownerKey,
       x,
       y - 1,
       'top',
-      SMART_TILESET_SLOTS.groundDecoration[
-        Math.floor(decorationHash / 8) % SMART_TILESET_SLOTS.groundDecoration.length
-      ]!,
+      decorationVariants[Math.floor(decorationHash / 8) % decorationVariants.length]!,
     );
   }
 

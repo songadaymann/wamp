@@ -343,17 +343,23 @@ describe('smart terrain solver', () => {
     expect(bothErased.tileData.background[5][5]).toBe(-1);
   });
 
-  it('uses all four approved sparse ground decoration variants', () => {
-    const firstGid = getTilesetByKey('forest')!.firstGid;
+  it.each([
+    { theme: 'forest', expected: [2, 3, 4, 5, 56, 58, 59] },
+    { theme: 'desert', expected: [4, 5, 7, 8] },
+    { theme: 'cave', expected: [2, 3, 4, 5, 6, 57, 61] },
+    { theme: 'gothic', expected: [2, 3, 4, 5] },
+  ] as const)('uses exactly the approved sparse $theme ground decorations', ({ theme, expected }) => {
+    const firstGid = getTilesetByKey(theme)!.firstGid;
+    const rows = [2, 5, 8, 11, 14, 17, 20];
     const result = applySmartCells(emptyDocument(), {
-      cells: Array.from({ length: 120 }, (_, index) => ({ x: index % 40, y: 4 + Math.floor(index / 40) * 4 })),
+      cells: rows.flatMap((y) => Array.from({ length: 40 }, (_, x) => ({ x, y }))),
       mode: 'paint',
-      theme: 'forest',
+      theme,
       material: 'ground',
     });
     const variants = new Set(Object.values(result.smartTerrain.generatedDecorations)
       .map(({ gid }) => gid - firstGid));
-    expect([...variants].sort((a, b) => a - b)).toEqual([2, 3, 4, 5]);
+    expect([...variants].sort((a, b) => a - b)).toEqual(expected);
   });
 
   it('keeps an exact manual override locked until Smart repaints the cell', () => {

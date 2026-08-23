@@ -302,6 +302,42 @@ try {
   if (await keepBuilding.isVisible()) await keepBuilding.click();
   await page.screenshot({ path: path.join(outputDir, 'topology-fixtures.png') });
 
+  const decorationPools = {
+    forest: { firstGid: 1, expected: [2, 3, 4, 5, 56, 58, 59] },
+    desert: { firstGid: 73, expected: [4, 5, 7, 8] },
+    cave: { firstGid: 145, expected: [2, 3, 4, 5, 6, 57, 61] },
+    gothic: { firstGid: 733, expected: [2, 3, 4, 5] },
+  };
+  for (const [themeName, pool] of Object.entries(decorationPools)) {
+    const decorationFixture = await page.evaluate(({ theme }) => {
+      const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+      runtime.clearCurrentLayer();
+      const material = document.querySelector('#smart-material-select');
+      const themeSelect = document.querySelector('#smart-theme-select');
+      material.value = 'ground';
+      material.dispatchEvent(new Event('change', { bubbles: true }));
+      themeSelect.value = theme;
+      themeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      runtime.beginTileBatch();
+      for (const y of [2, 5, 8, 11, 14, 17, 20]) {
+        for (let x = 0; x < 40; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+      }
+      runtime.commitTileBatch();
+      return runtime.exportRoomSnapshot();
+    }, { theme: themeName });
+    const variants = new Set(Object.values(decorationFixture.smartTerrain.generatedDecorations)
+      .map(({ gid }) => gid - pool.firstGid));
+    assert.deepEqual([...variants].sort((a, b) => a - b), pool.expected);
+    const decorationKeepBuilding = page.locator('#btn-guest-builder-claim-continue');
+    if (await decorationKeepBuilding.isVisible()) await decorationKeepBuilding.click();
+    await page.evaluate(() => {
+      window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.fitToScreen();
+    });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(outputDir, `decorations-${themeName}.png`) });
+  }
+  summary.checks.themeDecorationPools = true;
+
   const welcomeContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   await welcomeContext.addInitScript(() => {
     window.localStorage.setItem('wamp.settings.builderMode', 'unselected');
