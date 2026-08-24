@@ -202,8 +202,8 @@ solver does not merely memorize one skyline.
 - Framed Panels resize by extending/repainting their source row; there is no
   separate drag-handle resize UI in this milestone.
 
-Safety preview: `https://safety-cyber-smart-tiles.wampland.pages.dev`;
-immutable deployment `e9465c93`; verified feature commit `3e94bc4`.
+Safety preview: `https://codex-smart-autotiling-cyber.wampland.pages.dev`;
+immutable deployment `d5b861aa`; verified feature commit `65513de`.
 Production remains a separate approval.
 
 ## Gated set tracks
