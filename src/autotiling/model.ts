@@ -125,6 +125,8 @@ export interface SmartGeneratedDecorationState {
   gid: number;
   /** Optional full encoded tile value; gid remains for legacy consumers. */
   value?: SmartEncodedTileValue;
+  /** Actual room layer holding the generated tile. Older snapshots omit this and normalize by map. */
+  layer: 'background' | 'terrain' | 'foreground';
 }
 
 /** v2 is a superset of v1 so the current editor/solver can migrate incrementally. */
@@ -148,9 +150,9 @@ export interface RoomSmartTerrainState {
   cells: Record<string, SmartTerrainCellState>;
   /** @deprecated Background-layer compatibility cells keyed as `x,y`. */
   backdropCells: Record<string, SmartTerrainCellState>;
-  /** @deprecated Engine-owned foreground cells keyed as `x,y`. */
+  /** @deprecated Sparse engine-owned primary detail cells keyed as `x,y`. */
   generatedDecorations: Record<string, SmartGeneratedDecorationState>;
-  /** @deprecated Engine-owned background cells keyed as `x,y`. */
+  /** @deprecated Sparse engine-owned secondary detail cells keyed as `x,y`. */
   generatedBackgroundDecorations: Record<string, SmartGeneratedDecorationState>;
   /** @deprecated Owner/slot keys deliberately removed by a manual edit. */
   suppressedDecorationSlots: string[];
@@ -331,10 +333,10 @@ function normalizeSmartCells(value: unknown, expectedLayer: 'terrain' | 'backgro
   for (const [key, cell] of Object.entries(value)) {
     if (!CELL_KEY_PATTERN.test(key) || !isRecord(cell)) continue;
     const theme = cell.theme;
-    const material = cell.material;
+    const material = cell.material === 'platform' ? 'ground' : cell.material;
     if (
       !SMART_TERRAIN_THEMES.includes(theme as SmartTerrainTheme)
-      || !SMART_TERRAIN_MATERIALS.includes(material as SmartTerrainMaterial)
+      || !SMART_TERRAIN_MATERIALS.includes(cell.material as SmartTerrainMaterial)
       || (expectedLayer === 'background') !== (material === 'tunnel')
       || (theme === 'water') !== (material === 'tunnel')
     ) continue;
@@ -386,7 +388,10 @@ function normalizeSemanticCells(value: unknown): Record<string, SmartSemanticCel
   return cells;
 }
 
-function normalizeGeneratedDecorations(value: unknown): Record<string, SmartGeneratedDecorationState> {
+function normalizeGeneratedDecorations(
+  value: unknown,
+  legacyLayer: SmartGeneratedDecorationState['layer'],
+): Record<string, SmartGeneratedDecorationState> {
   const decorations: Record<string, SmartGeneratedDecorationState> = {};
   if (!isRecord(value)) return decorations;
   for (const [key, decoration] of Object.entries(value)) {
@@ -402,6 +407,9 @@ function normalizeGeneratedDecorations(value: unknown): Record<string, SmartGene
       slot: slot as SmartGeneratedDecorationState['slot'],
       gid: decoration.gid,
       ...(isEncodedTileValue(decoration.value) ? { value: decoration.value } : {}),
+      layer: isLayerName(decoration.layer)
+        ? decoration.layer
+        : legacyLayer,
     };
   }
   return decorations;
@@ -651,9 +659,9 @@ function applySemanticCompatibilityViews(
 function applyLegacyOutputMirrors(
   outputs: Record<string, SmartOwnedOutputState>,
   decorations: Record<string, SmartGeneratedDecorationState>,
-  layer: 'background' | 'foreground',
 ): void {
   for (const [key, decoration] of Object.entries(decorations)) {
+    const layer = decoration.layer;
     const outputKey = `${layer}:${key}`;
     if (outputs[outputKey]) continue;
     outputs[outputKey] = {
@@ -677,13 +685,16 @@ function normalizeKnownState(candidate: Record<string, unknown>): RoomSmartTerra
 
   const recipes = normalizeRecipes(candidate.recipes);
   const recipeOwnerAliases = getRecipeOwnerAliases(candidate.recipes, recipes);
-  const generatedDecorations = normalizeGeneratedDecorations(candidate.generatedDecorations);
-  const generatedBackgroundDecorations = normalizeGeneratedDecorations(candidate.generatedBackgroundDecorations);
+  const generatedDecorations = normalizeGeneratedDecorations(candidate.generatedDecorations, 'foreground');
+  const generatedBackgroundDecorations = normalizeGeneratedDecorations(
+    candidate.generatedBackgroundDecorations,
+    'background',
+  );
   const ownedOutputs: Record<string, SmartOwnedOutputState> = Object.fromEntries(
     Object.entries(normalizeOwnedOutputs(candidate.ownedOutputs)).filter(([, output]) => output.kind !== 'legacy-decoration'),
   );
-  applyLegacyOutputMirrors(ownedOutputs, generatedDecorations, 'foreground');
-  applyLegacyOutputMirrors(ownedOutputs, generatedBackgroundDecorations, 'background');
+  applyLegacyOutputMirrors(ownedOutputs, generatedDecorations);
+  applyLegacyOutputMirrors(ownedOutputs, generatedBackgroundDecorations);
 
   const suppressedDecorationSlots = normalizeStringArray(candidate.suppressedDecorationSlots)
     .filter((entry) => DECORATION_SLOT_PATTERN.test(entry));

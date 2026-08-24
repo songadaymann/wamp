@@ -224,6 +224,7 @@ try {
   summary.checks.smartPanelHeight = smartBox?.height ?? 0;
   assert.ok(smartBox && smartBox.height > 120);
   assert.equal(await page.locator('#smart-theme-select').isVisible(), true);
+  assert.equal(await page.locator('#smart-material-select option[value="platform"]').count(), 0);
   summary.checks.advancedUi = true;
 
   await page.locator('#smart-theme-select').selectOption('cyber');
@@ -692,10 +693,10 @@ try {
     { op: 'commitBatch' },
     { op: 'capture', name: 'groundFixtures' },
   ]);
-  assert.deepEqual(
-    groundFixtures.tileData.terrain.slice(4, 11).map((row) => row[4]),
-    Array(7).fill(38),
-  );
+  const verticalThin = groundFixtures.tileData.terrain.slice(4, 11).map((row) => row[4]);
+  assert.equal(verticalThin[0], 20);
+  assert.ok(verticalThin.slice(1, -1).every((gid) => gid === 32 || gid === 44));
+  assert.equal(verticalThin.at(-1), 56);
   assert.equal(groundFixtures.tileData.terrain[7][16], (1 << 21) + 55);
   assert.equal(groundFixtures.tileData.terrain[4][34], 30);
   assert.equal(groundFixtures.tileData.terrain[7][34], (1 << 21) + 34);
@@ -782,16 +783,38 @@ try {
     { op: 'placeCells', cells: [{ x: 24, y: 6 }] },
     { op: 'commitBatch' },
     { op: 'capture', name: 'restored' },
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: [
+      [11, 14], [12, 14], [13, 14], [14, 14], [15, 14],
+      [11, 15], [15, 15],
+      [11, 16], [12, 16], [13, 16], [14, 16], [15, 16],
+      [30, 14], [31, 14], [32, 14],
+      [30, 15], [32, 15],
+      [30, 16], [31, 16], [32, 16],
+    ].map(([x, y]) => ({ x, y })) },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'gaps' },
   ]);
   assert.ok(featureFixture.before.smartTerrain.generatedDecorations['25,6']);
   assert.ok(featureFixture.before.smartTerrain.generatedBackgroundDecorations['25,6']);
-  assert.equal(featureFixture.erased.tileData.foreground[6][25], -1);
+  assert.equal(featureFixture.erased.tileData.terrain[6][25], -1);
   assert.notEqual(featureFixture.erased.tileData.background[6][25], -1);
   assert.ok(featureFixture.restored.smartTerrain.generatedDecorations['25,6']);
   assert.ok(featureFixture.restored.smartTerrain.generatedBackgroundDecorations['25,6']);
+  assert.deepEqual(featureFixture.gaps.tileData.terrain[15].slice(12, 15), [23, 1, 11]);
+  assert.deepEqual(featureFixture.gaps.tileData.background[15].slice(12, 15), [1, 25, 25]);
+  assert.equal(featureFixture.gaps.tileData.terrain[15][31], 11);
+  assert.equal(featureFixture.gaps.tileData.background[15][31], 23);
   summary.checks.featureCornersAndErase = true;
+  summary.checks.featureGapPairs = true;
   const keepBuilding = page.locator('#btn-guest-builder-claim-continue');
   if (await keepBuilding.isVisible()) await keepBuilding.click();
+  await page.evaluate(() => {
+    const scene = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene;
+    scene.cameras.main.setZoom(2.5);
+    scene.cameras.main.centerOn(21.5 * 16, 15 * 16);
+  });
+  await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outputDir, 'topology-fixtures.png') });
 
   const decorationPools = {
@@ -879,7 +902,8 @@ try {
   const welcomeUrl = new URL(url);
   welcomeUrl.searchParams.set('welcome', '1');
   await welcomePage.goto(welcomeUrl.toString(), { waitUntil: 'domcontentloaded' });
-  await welcomePage.locator('#welcome-modal:not(.hidden)').waitFor();
+  await welcomePage.waitForFunction(() => document.body.dataset.appReady === 'true', undefined, { timeout: 60_000 });
+  await welcomePage.locator('#welcome-modal:not(.hidden)').waitFor({ timeout: 10_000 });
   await welcomePage.locator('#btn-welcome-build').click();
   await welcomePage.locator('#welcome-builder-choice:not(.hidden)').waitFor();
   assert.equal(await welcomePage.locator('#welcome-builder-choice').isVisible(), true);

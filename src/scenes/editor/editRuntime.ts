@@ -143,6 +143,7 @@ import {
   normalizeRoomSmartTerrainState,
   serializeRoomSmartTerrainState,
   smartCellKey,
+  smartDecorationSlotKey,
   smartOwnedOutputPartKey,
   smartRecipeOwnerId,
   smartSemanticCellKey,
@@ -1110,14 +1111,24 @@ export class EditorEditRuntime {
         layer.removeTileAt(targetX, targetY);
         this.recordManualSmartEdit(editorState.activeLayer, targetX, targetY, -1);
         if (editorState.activeLayer === 'terrain') {
-          delete this.smartTerrain.cells[smartCellKey(targetX, targetY)];
+          const slot = smartCellKey(targetX, targetY);
+          if (this.smartTerrain.cells[slot]) {
+            delete this.smartTerrain.cells[slot];
+          } else if (
+            this.smartTerrain.generatedDecorations[slot]?.layer === 'terrain'
+            || this.smartTerrain.generatedBackgroundDecorations[slot]?.layer === 'terrain'
+          ) {
+            this.smartTerrain = suppressGeneratedDecorationAt(
+              this.getSmartDocument(), targetX, targetY, 'terrain',
+            ).smartTerrain;
+          }
         } else if (editorState.activeLayer === 'foreground' || editorState.activeLayer === 'background') {
           const slot = smartCellKey(targetX, targetY);
           if (editorState.activeLayer === 'background') delete this.smartTerrain.backdropCells[slot];
-          const generated = editorState.activeLayer === 'foreground'
-            ? this.smartTerrain.generatedDecorations
-            : this.smartTerrain.generatedBackgroundDecorations;
-          if (generated[slot]) {
+          if (
+            this.smartTerrain.generatedDecorations[slot]?.layer === editorState.activeLayer
+            || this.smartTerrain.generatedBackgroundDecorations[slot]?.layer === editorState.activeLayer
+          ) {
             this.smartTerrain = suppressGeneratedDecorationAt(
               this.getSmartDocument(), targetX, targetY, editorState.activeLayer,
             ).smartTerrain;
@@ -1189,33 +1200,41 @@ export class EditorEditRuntime {
     }
 
     if (editorState.activeLayer === 'terrain') {
-      for (const [layerName, generated] of [
-        ['foreground', this.smartTerrain.generatedDecorations],
-        ['background', this.smartTerrain.generatedBackgroundDecorations],
-      ] as const) {
-        const detailLayer = this.host.getLayers().get(layerName);
+      for (const generated of [
+        this.smartTerrain.generatedDecorations,
+        this.smartTerrain.generatedBackgroundDecorations,
+      ]) {
         for (const [targetKey, decoration] of Object.entries(generated)) {
           const [x, y] = targetKey.split(',').map(Number);
+          const detailLayer = this.host.getLayers().get(decoration.layer);
           const tile = detailLayer?.getTileAt(x, y);
           const encoded = tile
             ? encodeTileDataValue(tile.index, tile.flipX, tile.flipY)
             : -1;
           if (!tile || encoded !== (decoration.value ?? decoration.gid)) continue;
           detailLayer?.removeTileAt(x, y);
-          actions.push({ layer: layerName, x, y, oldGid: encoded, newGid: -1 });
+          actions.push({ layer: decoration.layer, x, y, oldGid: encoded, newGid: -1 });
         }
       }
       this.smartTerrain.cells = {};
       this.smartTerrain.generatedDecorations = {};
       this.smartTerrain.generatedBackgroundDecorations = {};
       this.smartTerrain.suppressedDecorationSlots = [];
-    } else if (editorState.activeLayer === 'foreground') {
-      this.smartTerrain.generatedDecorations = {};
-      this.smartTerrain.suppressedDecorationSlots = [];
-    } else if (editorState.activeLayer === 'background') {
-      this.smartTerrain.backdropCells = {};
-      this.smartTerrain.generatedBackgroundDecorations = {};
-      this.smartTerrain.suppressedDecorationSlots = [];
+    } else if (editorState.activeLayer === 'foreground' || editorState.activeLayer === 'background') {
+      if (editorState.activeLayer === 'background') this.smartTerrain.backdropCells = {};
+      for (const generated of [
+        this.smartTerrain.generatedDecorations,
+        this.smartTerrain.generatedBackgroundDecorations,
+      ]) {
+        for (const [targetKey, decoration] of Object.entries(generated)) {
+          if (decoration.layer !== editorState.activeLayer) continue;
+          this.smartTerrain.suppressedDecorationSlots = Array.from(new Set([
+            ...this.smartTerrain.suppressedDecorationSlots,
+            smartDecorationSlotKey(decoration.ownerKey, decoration.slot),
+          ]));
+          delete generated[targetKey];
+        }
+      }
     }
     this.smartTerrain = clearSmartRecipeLayerState(this.smartTerrain, editorState.activeLayer);
     if (actions.length === 0 && JSON.stringify(smartBefore) === JSON.stringify(this.smartTerrain)) {
