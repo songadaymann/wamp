@@ -34,7 +34,7 @@ describe('PresenceServer construction preview shared-output contract', () => {
       editor,
       roomPreviewPayload({ roomX: 1, roomY: 2, token })
     );
-    await harness.settleAsyncWork();
+    await harness.waitUntilPreviewStored('preview:1,2');
     await harness.advance(250);
     const lateObserver = await harness.connect('late-observer');
 

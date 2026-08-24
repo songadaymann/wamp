@@ -1,4 +1,4 @@
-import { setImmediate as realSetImmediate } from 'node:timers';
+import { setImmediate as realSetImmediate, setTimeout as realSetTimeout } from 'node:timers';
 import type * as Party from 'partykit/server';
 import { vi } from 'vitest';
 import PresenceServer from '../../partykit/presenceServer';
@@ -297,11 +297,34 @@ export class PresenceServerHarness {
   }
 
   async settleAsyncWork(): Promise<void> {
-    // Preview updates verify HMAC via crypto.subtle. Node finishes that on the
-    // libuv threadpool, which fake timers and nextTick do not drain. Yield the
-    // real event loop without installing real timers (that would drop pending
-    // fake timeouts such as population broadcasts).
-    for (let index = 0; index < 16; index += 1) {
+    await this.drainNativeCryptoWork(16);
+  }
+
+  async waitUntilPreviewStored(storageKey: string): Promise<void> {
+    await this.waitUntil(() => this.room.storage.peek(storageKey) !== undefined, storageKey);
+  }
+
+  async waitUntil(
+    predicate: () => boolean,
+    label: string,
+    maxAttempts = 400
+  ): Promise<void> {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (predicate()) {
+        return;
+      }
+      await this.drainNativeCryptoWork(1);
+      await new Promise<void>((resolve) => {
+        realSetTimeout(resolve, 1);
+      });
+    }
+    throw new Error(`Timed out waiting for ${label}`);
+  }
+
+  private async drainNativeCryptoWork(rounds: number): Promise<void> {
+    // HMAC verify finishes on the libuv threadpool. Yield the real event loop
+    // without installing real timers (that would drop pending fake timeouts).
+    for (let index = 0; index < rounds; index += 1) {
       await vi.advanceTimersByTimeAsync(0);
       await Promise.resolve();
       await new Promise<void>((resolve) => {
