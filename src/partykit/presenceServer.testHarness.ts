@@ -1,3 +1,4 @@
+import { setImmediate as realSetImmediate } from 'node:timers';
 import type * as Party from 'partykit/server';
 import { vi } from 'vitest';
 import PresenceServer from '../../partykit/presenceServer';
@@ -296,14 +297,15 @@ export class PresenceServerHarness {
   }
 
   async settleAsyncWork(): Promise<void> {
-    // Preview updates verify HMAC via crypto.subtle, which Node completes on the
-    // threadpool + nextTick. Fake timers do not drain that, so a few Promise
-    // hops are not enough when several updates are in flight (CI Linux flakes).
-    for (let index = 0; index < 20; index += 1) {
+    // Preview updates verify HMAC via crypto.subtle. Node finishes that on the
+    // libuv threadpool, which fake timers and nextTick do not drain. Yield the
+    // real event loop without installing real timers (that would drop pending
+    // fake timeouts such as population broadcasts).
+    for (let index = 0; index < 16; index += 1) {
       await vi.advanceTimersByTimeAsync(0);
       await Promise.resolve();
       await new Promise<void>((resolve) => {
-        process.nextTick(resolve);
+        realSetImmediate(resolve);
       });
     }
   }
