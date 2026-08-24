@@ -161,6 +161,20 @@ interface TileAction {
   newGid: number;
 }
 
+function coalesceTileActions(actions: readonly TileAction[]): TileAction[] {
+  const transactions = new Map<string, TileAction>();
+  for (const action of actions) {
+    const key = `${action.layer}:${action.x},${action.y}`;
+    const existing = transactions.get(key);
+    if (existing) {
+      existing.newGid = action.newGid;
+    } else {
+      transactions.set(key, { ...action });
+    }
+  }
+  return [...transactions.values()].filter((action) => action.oldGid !== action.newGid);
+}
+
 interface ObjectsAction {
   previous: PlacedObject[];
   next: PlacedObject[];
@@ -637,15 +651,16 @@ export class EditorEditRuntime {
   commitTileBatch(): void {
     const smartChanged = this.currentBatchSmartBefore !== null
       && JSON.stringify(this.currentBatchSmartBefore) !== JSON.stringify(this.smartTerrain);
-    if (this.currentBatch.length === 0 && !smartChanged) {
+    const actions = coalesceTileActions(this.currentBatch);
+    if (actions.length === 0 && !smartChanged) {
       this.currentBatchSmartBefore = null;
       return;
     }
 
-    const placedTileCount = this.currentBatch.filter((action) => action.newGid >= 0).length;
+    const placedTileCount = actions.filter((action) => action.newGid >= 0).length;
     this.history.record({
       kind: 'tiles',
-      actions: [...this.currentBatch],
+      actions,
       smartBefore: this.currentBatchSmartBefore
         ? cloneRoomSmartTerrainState(this.currentBatchSmartBefore)
         : undefined,

@@ -218,6 +218,33 @@ describe('editor edit runtime document contracts', () => {
     expect(restored.smartTerrain!.cells['6,4']).toMatchObject({ theme: 'forest', material: 'ground' });
     expect(terrain.getTileAt(6, 4)?.index).toBeTypeOf('number');
   });
+
+  it('undoes and redoes a multi-step Smart stroke as one exact transaction', () => {
+    editorState.paletteMode = 'smart';
+    const { runtime } = createHarness(createRoom());
+    const before = runtime.exportRoomSnapshot();
+
+    runtime.beginTileBatch();
+    for (let y = 4; y <= 10; y += 1) {
+      const width = 11 - y;
+      for (let x = 4; x < 4 + width; x += 1) {
+        runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+      }
+    }
+    runtime.commitTileBatch();
+    const painted = runtime.exportRoomSnapshot();
+    expect(Object.keys(painted.smartTerrain!.cells).length).toBeGreaterThan(20);
+
+    runtime.undo();
+    const undone = runtime.exportRoomSnapshot();
+    expect(undone.tileData).toEqual(before.tileData);
+    expect(undone.smartTerrain).toEqual(before.smartTerrain);
+
+    runtime.redo();
+    const redone = runtime.exportRoomSnapshot();
+    expect(redone.tileData).toEqual(painted.tileData);
+    expect(redone.smartTerrain).toEqual(painted.smartTerrain);
+  });
 });
 
 function countTiles(layer: FakeLayer): number {

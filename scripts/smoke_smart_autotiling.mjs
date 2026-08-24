@@ -38,6 +38,9 @@ try {
   assert.equal(await page.locator('[data-tool="copy"]').first().isVisible(), false);
   summary.checks.beginnerUi = true;
 
+  const beforePainted = await page.evaluate(() => (
+    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime.exportRoomSnapshot()
+  ));
   const painted = await page.evaluate(() => {
     const scene = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene;
     const runtime = scene?.editRuntime;
@@ -59,12 +62,12 @@ try {
     const undone = runtime.exportRoomSnapshot();
     runtime.redo();
     const redone = runtime.exportRoomSnapshot();
-    return {
-      undoneCells: Object.keys(undone.smartTerrain.cells).length,
-      redoneCells: Object.keys(redone.smartTerrain.cells).length,
-    };
+    return { undone, redone };
   });
-  assert.deepEqual(history, { undoneCells: 0, redoneCells: 6 });
+  assert.deepEqual(history.undone.tileData, beforePainted.tileData);
+  assert.deepEqual(history.undone.smartTerrain, beforePainted.smartTerrain);
+  assert.deepEqual(history.redone.tileData, painted.tileData);
+  assert.deepEqual(history.redone.smartTerrain, painted.smartTerrain);
   summary.checks.undoRedo = true;
 
   const copied = await page.evaluate(() => {
@@ -332,6 +335,49 @@ try {
   });
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outputDir, 'topology-fixtures.png') });
+
+  const smartStrokeBefore = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.clearCurrentLayer();
+    return runtime.exportRoomSnapshot();
+  });
+  const smartStrokePainted = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    const material = document.querySelector('#smart-material-select');
+    material.value = 'ground';
+    material.dispatchEvent(new Event('change', { bubbles: true }));
+    runtime.beginTileBatch();
+    for (let y = 4; y <= 10; y += 1) {
+      const width = 11 - y;
+      for (let x = 4; x < 4 + width; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+    }
+    runtime.commitTileBatch();
+    return runtime.exportRoomSnapshot();
+  });
+  await page.evaluate(() => {
+    const scene = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene;
+    scene.cameras.main.setZoom(2.5);
+    scene.cameras.main.centerOn(7 * 16, 7 * 16);
+  });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(outputDir, 'smart-stroke-before-undo.png') });
+  const smartStrokeUndone = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.undo();
+    return runtime.exportRoomSnapshot();
+  });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(outputDir, 'smart-stroke-after-undo.png') });
+  const smartStrokeRedone = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.redo();
+    return runtime.exportRoomSnapshot();
+  });
+  assert.deepEqual(smartStrokeUndone.tileData, smartStrokeBefore.tileData);
+  assert.deepEqual(smartStrokeUndone.smartTerrain, smartStrokeBefore.smartTerrain);
+  assert.deepEqual(smartStrokeRedone.tileData, smartStrokePainted.tileData);
+  assert.deepEqual(smartStrokeRedone.smartTerrain, smartStrokePainted.smartTerrain);
+  summary.checks.smartStrokeUndoTransaction = true;
 
   const welcomeContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   await welcomeContext.addInitScript(() => {
