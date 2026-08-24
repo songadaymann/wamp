@@ -2,7 +2,6 @@ import { ROOM_HEIGHT, ROOM_WIDTH, type LayerName } from '../config/room';
 import { decodeTileDataValue } from '../config/editorState';
 import type { RoomTileData } from '../persistence/roomModel';
 import {
-  CYBER_DETAIL_ALLOWLIST,
   CYBER_FAMILY_DEFINITIONS,
   CYBER_NEIGHBOR,
   resolveCyberFramedPanel,
@@ -14,8 +13,6 @@ import {
   resolveCyberStructureTile8,
   resolveCyberSupportSpan,
   resolveCyberTunnelOutlineTile,
-  selectCyberDetailCandidates,
-  type CyberDetailCandidate,
   type CyberFamilyId,
   type CyberResolvedTile,
   type CyberStyleId,
@@ -986,15 +983,6 @@ function resolveCyberRecipes(tileData: RoomTileData, state: RoomSmartTerrainStat
     const bounds = recipeBounds(recipe);
     if (!bounds || bounds.width < CYBER_FAMILY_DEFINITIONS['framed-panel'].minimumWidth) continue;
     const rows = resolveCyberFramedPanel(recipe.styleId, bounds.width);
-    if (state.detailsEnabled && bounds.width > 2) {
-      const detailColumn = Math.floor((bounds.width - 1) / 2);
-      rows[1]![detailColumn] = {
-        ...rows[1]![detailColumn]!,
-        localIndex: 59,
-        flipX: false,
-        flipY: false,
-      };
-    }
     for (let row = 0; row < rows.length; row += 1) {
       for (let column = 0; column < rows[row]!.length; column += 1) {
         addOwnedOutput(
@@ -1011,23 +999,6 @@ function resolveCyberRecipes(tileData: RoomTileData, state: RoomSmartTerrainStat
       }
     }
   }
-}
-
-function stableDetailTile(entry: CyberSemanticEntry): CyberResolvedTile {
-  const hash = Math.abs(
-    Math.imul(entry.x + 31, 73856093)
-      ^ Math.imul(entry.y + 17, 19349663),
-  );
-  const localIndex = CYBER_DETAIL_ALLOWLIST[hash % CYBER_DETAIL_ALLOWLIST.length]!;
-  const styleId = entry.cell.styleId as CyberStyleId;
-  return {
-    tilesetKey: getSmartStyleDefinition(styleId).tilesetKey,
-    localIndex,
-    layer: 'foreground',
-    flipX: (hash & 2) !== 0,
-    flipY: (hash & 4) !== 0,
-    styleId,
-  };
 }
 
 function resolveCyberRubbleBorders(
@@ -1131,31 +1102,9 @@ function resolveCyberRubbleBorders(
   }
 }
 
-function resolveCyberDetails(tileData: RoomTileData, state: RoomSmartTerrainState): void {
-  if (!state.detailsEnabled) return;
+function resolveCyberStructuralOverlays(tileData: RoomTileData, state: RoomSmartTerrainState): void {
   const entries = getCyberEntries(state);
-  const structureEntries = entries.filter(({ cell }) => cell.brushId === 'cyber.structure');
-  const detailCandidates: CyberDetailCandidate[] = structureEntries
-    .filter((entry) => {
-      const hash = Math.abs(Math.imul(entry.x + 31, 73856093) ^ Math.imul(entry.y + 17, 19349663));
-      return hash % 8 === 0;
-    })
-    .map((entry) => ({ x: entry.x, y: entry.y, tile: stableDetailTile(entry) }));
-  for (const candidate of selectCyberDetailCandidates(detailCandidates, structureEntries.length)) {
-    const semanticKey = smartSemanticCellKey('terrain', candidate.x, candidate.y);
-    addOwnedOutput(
-      tileData,
-      state,
-      `${CYBER_CELL_OWNER_PREFIX}${semanticKey}`,
-      'detail',
-      'semantic',
-      candidate.x,
-      candidate.y,
-      candidate.tile,
-      false,
-    );
-  }
-
+  // Rubble outlines are part of its basic shape grammar, not optional decor.
   resolveCyberRubbleBorders(
     tileData,
     state,
@@ -1172,7 +1121,7 @@ export function resolveSmartRecipeDocument(document: SmartRecipeDocument): Smart
   clearCyberOwnedOutputs(tileData, smartTerrain);
   resolveCyberSemanticCells(tileData, smartTerrain);
   resolveCyberRecipes(tileData, smartTerrain);
-  resolveCyberDetails(tileData, smartTerrain);
+  resolveCyberStructuralOverlays(tileData, smartTerrain);
   return { tileData, smartTerrain };
 }
 

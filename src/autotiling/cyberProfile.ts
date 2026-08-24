@@ -253,10 +253,12 @@ const STRUCTURE_ROLE_TILES = {
 } as const satisfies Record<CyberStructureRole, TileSpec>;
 
 const STRUCTURE_CONCAVE_TILES = {
-  topLeft: { localIndex: 25 },
-  topRight: { localIndex: 30 },
-  bottomLeft: { localIndex: 25, flipY: true },
-  bottomRight: { localIndex: 30, flipY: true },
+  // Cyber C12/C10 are the neutral diagonal ties, matching the upper-right
+  // tie family used by the legacy terrain sheets. C2/C7 remain outer corners.
+  topLeft: { localIndex: 35 },
+  topRight: { localIndex: 33 },
+  bottomLeft: { localIndex: 35, flipY: true },
+  bottomRight: { localIndex: 33, flipY: true },
 } as const satisfies Record<NonNullable<CyberStructureTopology['concaveCorner']>, TileSpec>;
 
 /** Cyber F5, G11, and G12 are the only neutral underground fill cells. */
@@ -506,10 +508,8 @@ export function resolveCyberStructureFacade(
       ),
     };
   } else if (topology.role === 'bottom') {
-    // Cyber F3/F4 are the only neutral straight lower-edge cells.
-    spec = {
-      localIndex: stableNeutralIndex([62, 63], context.worldX, context.worldY, 13),
-    };
+    // Cyber F4 contains black pixels that break a repeated lower edge.
+    spec = { localIndex: 62 }; // Cyber F3.
   }
   return makeStructuralTile(styleId, spec, CYBER_FAMILY_DEFINITIONS.structure.layer);
 }

@@ -28,7 +28,7 @@ import {
   type SmartRecipeDocument,
 } from './recipeSolver';
 import { getSmartStyleDefinition } from './registry';
-import { isCyberEmitterLocalIndex, type CyberStyleId } from './cyberProfile';
+import type { CyberStyleId } from './cyberProfile';
 
 interface CyberReferenceFixture {
   provenance: { roomVersion: number; snapshotSha256: string };
@@ -255,7 +255,7 @@ describe('Cyber Smart recipe solver', () => {
 
   it('outlines Cyber Rubble exactly like the established Feature brush', () => {
     const document = paint(
-      emptyDocument(true),
+      emptyDocument(false),
       'cyber.rubble',
       'cyber-yellow',
       rectangle(3, 4, 2, 2),
@@ -379,7 +379,7 @@ describe('Cyber Smart recipe solver', () => {
     const bottom = rowTokens(document, 'terrain', 'cyber-yellow', 32, 17, 8);
     expect(bottom[0]).toBe('25Y');
     expect(bottom[7]).toBe('30Y');
-    expect(bottom.slice(1, 7).every((value) => ['62', '63'].includes(value))).toBe(true);
+    expect(bottom.slice(1, 7)).toEqual(['62', '62', '62', '62', '62', '62']);
   });
 
   it('keeps neutral topology-owned wall art on inset edges of an irregular silhouette', () => {
@@ -405,14 +405,33 @@ describe('Cyber Smart recipe solver', () => {
       '14', '14X', '.', '.',
     ]);
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 3, 4)).toEqual([
-      '21X', '30', '14X', '.',
+      '21X', '33', '14X', '.',
     ]);
     const bottom = rowTokens(document, 'terrain', 'cyber-yellow', 2, 4, 4);
     expect(bottom[0]).toBe('25Y');
-    expect(['62', '63']).toContain(bottom[1]);
-    expect(bottom[2]).toBe('30');
+    expect(bottom[1]).toBe('62');
+    expect(bottom[2]).toBe('33');
     expect(bottom[3]).toBe('14X');
     staircase.forEach(({ x, y }) => expectCollision(document, x, y));
+  });
+
+  it.each([
+    { name: 'top-left', omittedX: 8, omittedY: 8, expected: '35' },
+    { name: 'top-right', omittedX: 10, omittedY: 8, expected: '33' },
+    { name: 'bottom-left', omittedX: 8, omittedY: 10, expected: '35Y' },
+    { name: 'bottom-right', omittedX: 10, omittedY: 10, expected: '33Y' },
+  ])('uses the Cyber C10/C12 tie family for a missing $name diagonal', ({
+    omittedX,
+    omittedY,
+    expected,
+  }) => {
+    const cells = rectangle(8, 8, 3, 3).filter(({ x, y }) => (
+      x !== omittedX || y !== omittedY
+    ));
+    const document = paint(emptyDocument(), 'cyber.structure', 'cyber-yellow', cells);
+
+    expect(tileToken(document.tileData.terrain[9]![9]!, 'cyber-yellow')).toBe(expected);
+    expectCollision(document, 9, 9);
   });
 
   it('uses neutral F9 platform middles and never joins styles', () => {
@@ -570,7 +589,7 @@ describe('Cyber Smart recipe solver', () => {
       'cyber-yellow',
       [{ x: 20, y: 12 }],
     );
-    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 20, 12)).toBe(30);
+    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 20, 12)).toBe(33);
   });
 
   it('preserves full X, Y, and XY locked values through neighboring re-resolution', () => {
@@ -847,7 +866,7 @@ describe('Cyber Smart recipe solver', () => {
     ))).toBe(true);
   });
 
-  it('uses Details for one anchor-relative, width-stable local-59 framed-panel accent', () => {
+  it('keeps Framed Panel neutral even when the legacy Details flag is enabled', () => {
     const first = paint(
       emptyDocument(true),
       'cyber.framed-panel',
@@ -864,7 +883,7 @@ describe('Cyber Smart recipe solver', () => {
     );
     const movedBottom = rowTokens(moved, 'foreground', 'cyber-yellow', 20, 12, 7);
 
-    expect(bottom.filter((token) => token.startsWith('59'))).toHaveLength(1);
+    expect(bottom).toEqual(['56', '57', '57', '57', '57', '57', '58']);
     expect(movedBottom).toEqual(bottom);
     expect(second).toEqual(first);
   });
@@ -903,7 +922,7 @@ describe('Cyber Smart recipe solver', () => {
     expect(document.tileData.terrain[8]![9]).toBeGreaterThan(0);
   });
 
-  it('generates deterministic details and caps lights by eligible structure area', () => {
+  it('keeps optional Cyber decoration disabled while base shapes are being tuned', () => {
     const cells = rectangle(0, 0, 16, 8);
     const first = paint(
       emptyDocument(true),
@@ -918,16 +937,9 @@ describe('Cyber Smart recipe solver', () => {
       [...cells].reverse(),
     );
     const details = Object.values(first.smartTerrain.ownedOutputs).filter(({ partId }) => partId === 'detail');
-    const emitterCount = details.filter(({ value }) => {
-      const localIndex = decodeTileDataValue(value).gid
-        - getSmartStyleDefinition('cyber-yellow').firstGid;
-      return isCyberEmitterLocalIndex('cyber-yellow', localIndex);
-    }).length;
-
     expect(first.tileData).toEqual(second.tileData);
     expect(first.smartTerrain.ownedOutputs).toEqual(second.smartTerrain.ownedOutputs);
-    expect(details.length).toBeGreaterThan(0);
-    expect(emitterCount).toBeLessThanOrEqual(2);
+    expect(details).toEqual([]);
     expect(resolveSmartRecipeDocument(first)).toEqual(first);
   });
 

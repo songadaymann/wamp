@@ -147,10 +147,10 @@ describe('Cyber Smart profile', () => {
     expect(resolveCyberStructureTopology8(253).concaveCorner).toBe('topRight');
     expect(resolveCyberStructureTopology8(223).concaveCorner).toBe('bottomLeft');
     expect(resolveCyberStructureTopology8(247).concaveCorner).toBe('bottomRight');
-    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 127 }))).toBe('25');
-    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 253 }))).toBe('30');
-    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 223 }))).toBe('25Y');
-    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 247 }))).toBe('30Y');
+    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 127 }))).toBe('35');
+    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 253 }))).toBe('33');
+    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 223 }))).toBe('35Y');
+    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 247 }))).toBe('33Y');
     expect(() => resolveCyberStructureTopology8(256)).toThrow(/0 through 255/);
   });
 

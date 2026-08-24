@@ -294,6 +294,7 @@ try {
   });
   assert.equal(await page.locator('[data-tool="ellipse"]').first().isEnabled(), true);
   assert.equal(await page.locator('[data-tool="fill"]').first().isEnabled(), true);
+  assert.equal(await page.locator('.smart-details-row').isHidden(), true);
   await page.screenshot({ path: path.join(outputDir, 'cyber-smart-palette.png') });
   summary.checks.cyberRegistryUi = true;
 
@@ -316,6 +317,11 @@ try {
     { op: 'beginBatch' },
     { op: 'stampShape', kind: 'rect', x1: 32, y1: 2, x2: 39, y2: 17, outline: false, erase: false },
     { op: 'stampShape', kind: 'ellipse', x1: 4, y1: 10, x2: 10, y2: 16, outline: false, erase: false },
+    { op: 'placeCells', cells: [
+      { x: 20, y: 2 }, { x: 21, y: 2 },
+      { x: 20, y: 3 }, { x: 21, y: 3 }, { x: 22, y: 3 },
+      { x: 20, y: 4 }, { x: 21, y: 4 }, { x: 22, y: 4 }, { x: 23, y: 4 },
+    ] },
     { op: 'commitBatch' },
     { op: 'capture', name: 'cyberStructure' },
   ]);
@@ -326,20 +332,15 @@ try {
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberStructure.tileData.terrain[4][35] === 1633 + localIndex
   )));
-  assert.ok([62, 63].some((localIndex) => (
-    cyberStructure.tileData.terrain[17][33] === 1633 + localIndex
-  )));
+  assert.equal(cyberStructure.tileData.terrain[17][33], 1633 + 62);
+  assert.equal(cyberStructure.tileData.terrain[3][21], 1633 + 33);
+  assert.equal(cyberStructure.tileData.terrain[4][21], 1633 + 62);
+  assert.equal(cyberStructure.tileData.terrain[4][22], 1633 + 33);
   assert.ok(Object.keys(cyberStructure.smartTerrain.semanticCells).length > 128);
-  const structureCellCount = Object.values(cyberStructure.smartTerrain.semanticCells)
-    .filter(({ brushId }) => brushId === 'cyber.structure').length;
-  const structureEmitterCount = Object.values(cyberStructure.smartTerrain.ownedOutputs)
-    .filter(({ partId, value }) => {
-      const baseValue = value & ~(FLIP_X | FLIP_Y);
-      return partId === 'detail' && (baseValue === 1633 + 2 || baseValue === 1633 + 3);
-    }).length;
-  assert.ok(structureEmitterCount <= Math.ceil(structureCellCount / 64));
+  assert.equal(Object.values(cyberStructure.smartTerrain.ownedOutputs)
+    .filter(({ partId }) => partId === 'detail').length, 0);
   summary.checks.cyberStructureAndShapes = true;
-  summary.checks.cyberEmitterCap = true;
+  summary.checks.cyberDecorationDisabled = true;
   await dismissKeepBuilding(page);
 
   const cyberCopyHistoryCaptures = await runEditorCommands(page, [
@@ -380,6 +381,9 @@ try {
   await runEditorCommands(page, [{ op: 'setCamera', zoom: 1, centerTileX: 35, centerTileY: 8 }]);
   await page.waitForTimeout(100);
   await page.screenshot({ path: path.join(outputDir, 'cyber-ground-tunnel.png') });
+  await runEditorCommands(page, [{ op: 'setCamera', zoom: 2, centerTileX: 21.5, centerTileY: 3 }]);
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: path.join(outputDir, 'cyber-ground-ties.png') });
   await runEditorCommands(page, [{ op: 'fitToScreen' }]);
 
   await page.locator('#smart-style-select').selectOption('cyber-pink');
@@ -529,6 +533,9 @@ try {
   assert.equal(countFramedPanelRecipes(cyberPanelClipboard.partial), 2);
   assert.deepEqual(cyberPanelClipboard.complete.tileData.foreground[3].slice(26, 31), [
     1717 + 44, 1717 + 45, 1717 + 45, 1717 + 45, 1717 + 46,
+  ]);
+  assert.deepEqual(cyberPanelClipboard.complete.tileData.foreground[4].slice(26, 31), [
+    1717 + 56, 1717 + 57, 1717 + 57, 1717 + 57, 1717 + 58,
   ]);
   assert.deepEqual(cyberPanelClipboard.complete.tileData.foreground[12].slice(26, 31), [
     1717 + 44, 1717 + 45, 1717 + 45, 1717 + 45, 1717 + 46,

@@ -135,7 +135,8 @@ Completed implementation sequence:
    decode/encode tests for none/X/Y/XY.
 2. Replaced the reference-tower facade with the reviewed neutral Ground
    vocabulary: B3/B3X and repeated B4 tops, B10X/B12X sides, C2Y/C7Y lower
-   corners, F3/F4 lower edges, and F5/G11/G12 underground fill.
+   corners, repeated F3 lower edges, and F5/G11/G12 underground fill. Diagonal
+   joints use the C12/C10 tie family rather than reusing C2/C7 outer corners.
 3. Added deterministic optional recipes for the neon strip and framed panel.
    Yellow remains the default structure; Pink is a stable accent/style choice,
    not a random competing topology.
@@ -164,15 +165,16 @@ solver does not merely memorize one skyline.
   reproduce the observed normal/X body pairs and alternating cap phase.
 - Framed Panel tests cover complete and partial clipboard selections, stable
   owner IDs, per-part manual suppression, repaint/merge cleanup, cross-style
-  replacement, whole-recipe Smart erase, and anchor-relative local-59 detail.
+  replacement, and whole-recipe Smart erase. Its rows remain neutral while
+  optional Cyber decoration is disabled.
 - Platform, Support, and Neon Strip are persisted span recipes with stable
   owner IDs, canonical anchors, explicit bounds, deterministic split/merge,
   suppression cleanup, and complete-versus-partial clipboard behavior.
 - Model tests cover v1 to v2 migration, canonical IDs such as `desert.ground`,
   unknown-future preservation, invalid brush/style/layer filtering, encoded
   locks, and configured 84/120/324-tile profiles.
-- The focused Cyber/model/editor/clipboard gate passes 121 tests. The full gate
-  passes 209 files / 1,427 tests, ESLint, TypeScript, generated-binding checks,
+- The focused Cyber/model/editor/clipboard gate passes 125 tests. The full gate
+  passes 209 files / 1,431 tests, ESLint, TypeScript, generated-binding checks,
   and the production build.
 - The expanded Smart browser gate passes in Canvas and WebGL with Fill, shapes,
   minimums, transformed Support banks, erase/repair, layer switching,
@@ -180,8 +182,11 @@ solver does not merely memorize one skyline.
   hard page reload and reopen, Course Editor, zero mutation requests, and zero
   console/page errors. Each run asserts that its requested Canvas or WebGL
   renderer is actually active.
-- Rubble repeats B1 as its colliding fill and, when Details is enabled, uses the
-  same deterministic A1/C1/A2/B2/A11/B11 outline grammar as legacy Feature.
+- Rubble repeats B1 as its colliding fill and always uses the same deterministic
+  A1/C1/A2/B2/A11/B11 structural outline grammar as legacy Feature.
+- Optional Cyber vents, lights, graffiti, and Framed Panel accents are disabled
+  while the base topology is being tuned. The editor hides the decoration toggle
+  for Cyber; the dormant curated pools can be reviewed again in a later pass.
 
 ### Intentional Cyber art boundaries
 

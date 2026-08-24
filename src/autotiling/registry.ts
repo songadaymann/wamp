@@ -243,7 +243,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
   {
     id: 'cyber.rubble',
     label: 'Cyber Rubble',
-    description: 'Small colliding Cyber terrain clusters.',
+    description: 'Small colliding Cyber terrain clusters with a structural edge outline.',
     ruleKind: 'stamp',
     algorithm: 'recipe',
     resolverKey: 'cyber.rubble',

@@ -1889,7 +1889,9 @@ export class EditorUiBridge {
     }
     if (this.elements.smartDetailsCheckbox) {
       this.elements.smartDetailsCheckbox.checked = editorState.smartDetailsEnabled;
-      this.elements.smartDetailsCheckbox.closest('label')?.classList.toggle('hidden', tunnelBackdropSelected);
+      this.elements.smartDetailsCheckbox.closest('label')?.classList.toggle(
+        'hidden', tunnelBackdropSelected || smartSelection.themeId === 'cyber',
+      );
     }
     this.elements.smartCaveFillButton?.classList.toggle(
       'hidden', smartSelection.themeId !== 'cave' || tunnelBackdropSelected,
