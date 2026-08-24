@@ -240,6 +240,10 @@ try {
       'cyber.framed-panel',
     ],
   );
+  assert.equal(
+    await page.locator('#smart-material-select option[value="cyber.structure"]').textContent(),
+    'Ground',
+  );
   assert.equal(await page.locator('#smart-style-row').isVisible(), true);
   assert.deepEqual(
     await page.locator('#smart-style-select option').all().then((options) =>
@@ -317,9 +321,14 @@ try {
   ]);
   assert.equal(cyberStructure.smartTerrain.version, 2);
   assert.equal(cyberStructure.smartTerrain.semanticCells['terrain:32,2'].brushId, 'cyber.structure');
-  assert.equal(cyberStructure.tileData.terrain[2][32], 1633 + 25);
-  assert.equal(cyberStructure.tileData.terrain[4][35], 1633 + 83 + FLIP_X + FLIP_Y);
-  assert.equal(cyberStructure.tileData.terrain[17][33], 1633 + 15 + FLIP_Y);
+  assert.equal(cyberStructure.tileData.terrain[2][32], 1633 + 14);
+  assert.equal(cyberStructure.tileData.terrain[2][39], 1633 + 14 + FLIP_X);
+  assert.ok([64, 82, 83].some((localIndex) => (
+    cyberStructure.tileData.terrain[4][35] === 1633 + localIndex
+  )));
+  assert.ok([62, 63].some((localIndex) => (
+    cyberStructure.tileData.terrain[17][33] === 1633 + localIndex
+  )));
   assert.ok(Object.keys(cyberStructure.smartTerrain.semanticCells).length > 128);
   const structureCellCount = Object.values(cyberStructure.smartTerrain.semanticCells)
     .filter(({ brushId }) => brushId === 'cyber.structure').length;
@@ -358,8 +367,20 @@ try {
   assert.equal(cyberCopyHistoryRepair.redoneCount, cyberCopyHistoryRepair.copiedCount);
   assert.equal(cyberCopyHistoryRepair.carved.smartTerrain.semanticCells['terrain:35,8'], undefined);
   assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[8][35], -1);
-  assert.ok(cyberCopyHistoryRepair.carved.tileData.terrain[7][34] > 0);
+  assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.foreground[7].slice(34, 37), [
+    1633 + 9, 1633 + 10, 1633 + 9 + FLIP_X,
+  ]);
+  assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.terrain[8].slice(34, 37), [
+    1633 + 21, -1, 1633 + 23,
+  ]);
+  assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.terrain[9].slice(34, 37), [
+    1633 + 33, 1633 + 34, 1633 + 35,
+  ]);
   summary.checks.cyberCopyUndoEraseRepair = true;
+  await runEditorCommands(page, [{ op: 'setCamera', zoom: 1, centerTileX: 35, centerTileY: 8 }]);
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: path.join(outputDir, 'cyber-ground-tunnel.png') });
+  await runEditorCommands(page, [{ op: 'fitToScreen' }]);
 
   await page.locator('#smart-style-select').selectOption('cyber-pink');
   await page.locator('#smart-material-select').selectOption('cyber.platform');
@@ -385,13 +406,13 @@ try {
       && recipe.sourceCells.some(({ layer, x, y }) => layer === 'terrain' && x === 20 && y === 18)
   )));
   assert.deepEqual(cyberPlatform.complete.tileData.terrain[18].slice(20, 25), [
-    1717 + 71 + FLIP_X, 1717 + 69, 1717 + 70, 1717 + 68, 1717 + 71,
+    1717 + 71 + FLIP_X, 1717 + 68, 1717 + 68, 1717 + 68, 1717 + 71,
   ]);
   assert.deepEqual(cyberPlatform.repaired.tileData.terrain[18].slice(20, 25), [
     1717 + 71 + FLIP_X, 1717 + 71, -1, 1717 + 71 + FLIP_X, 1717 + 71,
   ]);
   assert.deepEqual(cyberPlatform.restored.tileData.terrain[18].slice(20, 25), [
-    1717 + 71 + FLIP_X, 1717 + 69, 1717 + 70, 1717 + 68, 1717 + 71,
+    1717 + 71 + FLIP_X, 1717 + 68, 1717 + 68, 1717 + 68, 1717 + 71,
   ]);
 
   await page.locator('#smart-style-select').selectOption('cyber-yellow');
@@ -463,10 +484,27 @@ try {
   assert.deepEqual(cyberRubble.complete.tileData.terrain.slice(10, 12).map((row) => row.slice(20, 23)), [
     [1645, 1645, 1645], [1645, 1645, 1645],
   ]);
+  assert.deepEqual(cyberRubble.complete.tileData.foreground[9].slice(20, 23), [
+    1633, 1633, 1633,
+  ]);
+  assert.deepEqual(cyberRubble.complete.tileData.foreground.slice(10, 12).map((row) => (
+    [row[19], row[23]]
+  )), [
+    [1633 + 1, 1633 + 13], [1633 + 1, 1633 + 13],
+  ]);
+  assert.deepEqual(cyberRubble.complete.tileData.foreground[12].slice(20, 23), [
+    1633 + 24, 1633 + 24, 1633 + 24,
+  ]);
   assert.deepEqual(cyberRubble.repaired.tileData.terrain.slice(10, 12).map((row) => row.slice(20, 23)), [
     [1645, -1, 1645], [1645, 1645, 1645],
   ]);
+  assert.equal(cyberRubble.repaired.tileData.foreground[10][21], 1633 + 10 + FLIP_X);
+  assert.equal(cyberRubble.repaired.tileData.background[10][21], 1633 + 1);
   summary.checks.cyberPathMinimumsAndRepair = true;
+  await runEditorCommands(page, [{ op: 'setCamera', zoom: 1, centerTileX: 22, centerTileY: 13 }]);
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: path.join(outputDir, 'cyber-platform-rubble.png') });
+  await runEditorCommands(page, [{ op: 'fitToScreen' }]);
 
   await page.locator('#smart-style-select').selectOption('cyber-pink');
   await page.locator('#smart-material-select').selectOption('cyber.framed-panel');
@@ -527,7 +565,9 @@ try {
   assert.equal(countFramedPanelRecipes(cyberSuppressionAndReload.smartErased), 1);
   assert.deepEqual(cyberSuppressionAndReload.reloaded.smartTerrain, cyberSuppressionAndReload.smartErased.smartTerrain);
   assert.deepEqual(cyberSuppressionAndReload.reloaded.tileData, cyberSuppressionAndReload.smartErased.tileData);
-  assert.equal(cyberSuppressionAndReload.reloaded.tileData.terrain[4][35], 1633 + 83 + FLIP_X + FLIP_Y);
+  assert.ok([64, 82, 83].some((localIndex) => (
+    cyberSuppressionAndReload.reloaded.tileData.terrain[4][35] === 1633 + localIndex
+  )));
   summary.checks.cyberSuppressionAndReload = true;
   summary.checks.cyberFixedLayers = true;
   await dismissKeepBuilding(page);

@@ -207,8 +207,8 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
   },
   {
     id: 'cyber.structure',
-    label: 'Cyber Structure',
-    description: 'Connected colliding Cyber structure with transformed edges and corners.',
+    label: 'Ground',
+    description: 'Connected Cyber ground with neutral edges, underground fill, and layered tunnel trim.',
     ruleKind: 'terrain',
     algorithm: 'blob-8way',
     resolverKey: 'cyber.structure',
@@ -218,7 +218,10 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedLayers: ['terrain'],
     supportedThemeIds: ['cyber'],
     supportedStyleIds: CYBER_STYLE_IDS,
-    compatibleLegacyLocalIndices: [15, 17, 19, 21, 23, 25, 26, 29, 30, 31, 37, 38, 41, 61, 64, 82, 83],
+    compatibleLegacyLocalIndices: [
+      14, 15, 17, 19, 21, 23, 25, 26, 29, 30, 31, 33, 34, 35,
+      37, 38, 41, 61, 62, 63, 64, 82, 83,
+    ],
     outputLayers: ['terrain', 'foreground'],
   },
   {

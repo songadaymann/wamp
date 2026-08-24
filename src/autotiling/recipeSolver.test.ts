@@ -149,10 +149,10 @@ describe('Cyber Smart recipe solver', () => {
     document = paint(document, 'cyber.neon-strip', 'cyber-yellow', horizontal(19, 9, 3));
     document = paint(document, 'cyber.framed-panel', 'cyber-pink', horizontal(24, 3, 5));
 
-    expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 2, 2)).toEqual(['25', '30']);
-    expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 3, 2)).toEqual(['61', '61X']);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 2, 2)).toEqual(['14', '14X']);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 3, 2)).toEqual(['25Y', '30Y']);
     expect(rowTokens(document, 'terrain', 'cyber-pink', 6, 6, 5)).toEqual([
-      '71X', '69', '70', '68', '71',
+      '71X', '68', '68', '68', '71',
     ]);
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 12, 8, 3)).toEqual(['12', '12', '12']);
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 12, 9, 3)).toEqual(['12', '12', '12']);
@@ -253,6 +253,25 @@ describe('Cyber Smart recipe solver', () => {
     }
   });
 
+  it('outlines Cyber Rubble exactly like the established Feature brush', () => {
+    const document = paint(
+      emptyDocument(true),
+      'cyber.rubble',
+      'cyber-yellow',
+      rectangle(3, 4, 2, 2),
+    );
+
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 3, 4, 2)).toEqual(['12', '12']);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 3, 5, 2)).toEqual(['12', '12']);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 3, 3, 2)).toEqual(['0', '0']);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 2, 4, 4)).toEqual(['1', '.', '.', '13']);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 2, 5, 4)).toEqual(['1', '.', '.', '13']);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 3, 6, 2)).toEqual(['24', '24']);
+    expect(Object.values(document.smartTerrain.ownedOutputs).filter(({ partId }) => (
+      partId.startsWith('rubble-')
+    ))).toHaveLength(8);
+  });
+
   it('keeps span owner IDs stable across repaint and extension, then repairs split and merge owners', () => {
     let document = paint(
       emptyDocument(),
@@ -337,7 +356,7 @@ describe('Cyber Smart recipe solver', () => {
     });
   });
 
-  it('matches the v13 tower geometry, local indices, and transforms at world x32..39 and y2..17', () => {
+  it('uses only the audited neutral Ground vocabulary in a large rectangle', () => {
     const document = paint(
       emptyDocument(),
       'cyber.structure',
@@ -348,15 +367,22 @@ describe('Cyber Smart recipe solver', () => {
       roomVersion: 13,
       snapshotSha256: '84add9b8e02afe00736ff59f54b07b9ca61237b8866e0815e3a2b978224a41ec',
     });
-    const expected = Array.from({ length: 16 }, (_, row) => (
-      referenceRowTokens('terrain', 32, 2 + row, 8)
-    ));
-    expect(Array.from({ length: 16 }, (_, row) => (
-      rowTokens(document, 'terrain', 'cyber-yellow', 32, 2 + row, 8)
-    ))).toEqual(expected);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 32, 2, 8)).toEqual([
+      '14', '15', '15', '15', '15', '15', '15', '14X',
+    ]);
+    for (let y = 3; y < 17; y += 1) {
+      const row = rowTokens(document, 'terrain', 'cyber-yellow', 32, y, 8);
+      expect(row[0]).toBe('21X');
+      expect(row[7]).toBe('23X');
+      expect(row.slice(1, 7).every((value) => ['64', '82', '83'].includes(value))).toBe(true);
+    }
+    const bottom = rowTokens(document, 'terrain', 'cyber-yellow', 32, 17, 8);
+    expect(bottom[0]).toBe('25Y');
+    expect(bottom[7]).toBe('30Y');
+    expect(bottom.slice(1, 7).every((value) => ['62', '63'].includes(value))).toBe(true);
   });
 
-  it('keeps topology-owned facade art on inset edges of an irregular silhouette', () => {
+  it('keeps neutral topology-owned wall art on inset edges of an irregular silhouette', () => {
     const cells = [
       ...horizontal(4, 4, 4),
       ...horizontal(5, 5, 2),
@@ -364,7 +390,7 @@ describe('Cyber Smart recipe solver', () => {
     ];
     const document = paint(emptyDocument(), 'cyber.structure', 'cyber-yellow', cells);
 
-    expect(rowTokens(document, 'terrain', 'cyber-yellow', 5, 5, 2)).toEqual(['37', '37X']);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 5, 5, 2)).toEqual(['21X', '23X']);
   });
 
   it('frames a filled Structure staircase with colliding diagonal step art', () => {
@@ -376,18 +402,20 @@ describe('Cyber Smart recipe solver', () => {
     const document = paint(emptyDocument(), 'cyber.structure', 'cyber-yellow', staircase);
 
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 2, 4)).toEqual([
-      '25', '30', '.', '.',
+      '14', '14X', '.', '.',
     ]);
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 3, 4)).toEqual([
-      '37', '29', '30', '.',
+      '21X', '30', '14X', '.',
     ]);
-    expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 4, 4)).toEqual([
-      '61', '15Y', '29', '30',
-    ]);
+    const bottom = rowTokens(document, 'terrain', 'cyber-yellow', 2, 4, 4);
+    expect(bottom[0]).toBe('25Y');
+    expect(['62', '63']).toContain(bottom[1]);
+    expect(bottom[2]).toBe('30');
+    expect(bottom[3]).toBe('14X');
     staircase.forEach(({ x, y }) => expectCollision(document, x, y));
   });
 
-  it('uses the audited Yellow/Pink platform fixtures and never joins styles', () => {
+  it('uses neutral F9 platform middles and never joins styles', () => {
     let document = paint(
       emptyDocument(),
       'cyber.platform',
@@ -397,10 +425,10 @@ describe('Cyber Smart recipe solver', () => {
     document = paint(document, 'cyber.platform', 'cyber-pink', horizontal(7, 3, 5));
 
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 3, 5)).toEqual([
-      ...referenceRowTokens('terrain', 24, 5, 5),
+      '71X', '68', '68', '68', '71',
     ]);
     expect(rowTokens(document, 'terrain', 'cyber-pink', 7, 3, 5)).toEqual([
-      ...referenceRowTokens('terrain', 19, 2, 5),
+      '71X', '68', '68', '68', '71',
     ]);
 
     let structures = paint(
@@ -410,8 +438,36 @@ describe('Cyber Smart recipe solver', () => {
       [{ x: 18, y: 4 }],
     );
     structures = paint(structures, 'cyber.structure', 'cyber-pink', [{ x: 19, y: 4 }]);
-    expect(localIndexAt(structures, 'terrain', 'cyber-yellow', 18, 4)).toBe(23);
-    expect(localIndexAt(structures, 'terrain', 'cyber-pink', 19, 4)).toBe(23);
+    expect(localIndexAt(structures, 'terrain', 'cyber-yellow', 18, 4)).toBe(64);
+    expect(localIndexAt(structures, 'terrain', 'cyber-pink', 19, 4)).toBe(64);
+  });
+
+  it('keeps F10/F11 platform accents manual until the span is repainted', () => {
+    const firstGid = getSmartStyleDefinition('cyber-yellow').firstGid;
+    let document = paint(
+      emptyDocument(),
+      'cyber.platform',
+      'cyber-yellow',
+      horizontal(3, 4, 5),
+    );
+    const owner = Object.values(document.smartTerrain.recipes)[0]!.ownerId;
+    const manualTileData = cloneTileData(document);
+    manualTileData.terrain[4]![5] = firstGid + 69; // Cyber F10 paint-spill accent.
+    document = resolveSmartRecipeDocument({
+      tileData: manualTileData,
+      smartTerrain: applyManualSmartOutputEdit(document.smartTerrain, 'terrain', 5, 4, firstGid + 69),
+    });
+
+    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 5, 4)).toBe(69);
+    expect(document.smartTerrain.suppressedOutputParts).toContain(
+      smartOwnedOutputPartKey(owner, 'row-0:column-2'),
+    );
+
+    document = paint(document, 'cyber.platform', 'cyber-yellow', [{ x: 5, y: 4 }]);
+    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 5, 4)).toBe(68);
+    expect(document.smartTerrain.suppressedOutputParts).not.toContain(
+      smartOwnedOutputPartKey(owner, 'row-0:column-2'),
+    );
   });
 
   it('keeps adjacent framed panels separate by style', () => {
@@ -430,15 +486,47 @@ describe('Cyber Smart recipe solver', () => {
     expect(localIndexAt(document, 'foreground', 'cyber-pink', 6, 5)).toBe(44);
   });
 
-  it('uses diagonal-aware concaves around a painted hole', () => {
+  it('builds the layered neutral tunnel frame around an erased Ground cell', () => {
     const ring = rectangle(10, 10, 3, 3).filter(({ x, y }) => !(x === 11 && y === 11));
     const document = paint(emptyDocument(), 'cyber.structure', 'cyber-yellow', ring);
 
-    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 10, 10)).toBe(41);
-    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 12, 10)).toBe(38);
-    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 10, 12)).toBe(29);
-    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 12, 12)).toBe(26);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual([
+      '9', '10', '9X',
+    ]);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 10, 11, 3)).toEqual([
+      '21', '.', '23',
+    ]);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 10, 12, 3)).toEqual([
+      '33', '34', '35',
+    ]);
+    expect([64, 82, 83]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 10, 10));
+    expect([64, 82, 83]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 11, 10));
+    expect([64, 82, 83]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 12, 10));
     expect(document.tileData.terrain[11]![11]).toBe(-1);
+  });
+
+  it('suppresses only a manually edited Foreground tunnel part and restores it on repaint', () => {
+    const ring = rectangle(10, 10, 3, 3).filter(({ x, y }) => !(x === 11 && y === 11));
+    let document = paint(emptyDocument(), 'cyber.structure', 'cyber-yellow', ring);
+    const manualTileData = cloneTileData(document);
+    manualTileData.foreground[10]![11] = -1;
+    document = resolveSmartRecipeDocument({
+      tileData: manualTileData,
+      smartTerrain: applyManualSmartOutputEdit(document.smartTerrain, 'foreground', 11, 10, -1),
+    });
+
+    expect(document.tileData.foreground[10]![11]).toBe(-1);
+    expect(document.tileData.terrain[10]![11]).toBeGreaterThan(0);
+    expect(document.smartTerrain.suppressedOutputParts).toContain(
+      'cyber:cell:terrain:11,10:tunnel-ceiling',
+    );
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual(['9', '.', '9X']);
+
+    document = paint(document, 'cyber.structure', 'cyber-yellow', [{ x: 11, y: 10 }]);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual(['9', '10', '9X']);
+    expect(document.smartTerrain.suppressedOutputParts).not.toContain(
+      'cyber:cell:terrain:11,10:tunnel-ceiling',
+    );
   });
 
   it('treats only same-style legacy tiles as compatible neighbors', () => {
@@ -482,7 +570,7 @@ describe('Cyber Smart recipe solver', () => {
       'cyber-yellow',
       [{ x: 20, y: 12 }],
     );
-    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 20, 12)).toBe(29);
+    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 20, 12)).toBe(30);
   });
 
   it('preserves full X, Y, and XY locked values through neighboring re-resolution', () => {
@@ -541,7 +629,10 @@ describe('Cyber Smart recipe solver', () => {
     );
     expect(corners.map(({ x, y }) => localIndexAt(
       document, 'terrain', 'cyber-yellow', x, y,
-    ))).toEqual([41, 38, 29, 26]);
+    ))).toEqual([64, 64, 33, 35]);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual([
+      '9', '10', '9X',
+    ]);
     expect(corners.every(({ x, y }) => (
       document.smartTerrain.semanticCells[smartSemanticCellKey('terrain', x, y)]?.shapeValue === undefined
     ))).toBe(true);
@@ -552,10 +643,10 @@ describe('Cyber Smart recipe solver', () => {
       'cyber-yellow',
       [{ x: 11, y: 11 }],
     );
-    expect(corners.map(({ x, y }) => localIndexAt(
-      document, 'terrain', 'cyber-yellow', x, y,
-    ))).toEqual([25, 30, 61, 61]);
-    expect(decodeTileDataValue(document.tileData.terrain[12]![12]!)).toMatchObject({ flipX: true });
+    expect(corners.map(({ x, y }) => tileToken(
+      document.tileData.terrain[y]![x]!, 'cyber-yellow',
+    ))).toEqual(['14', '14X', '25Y', '30Y']);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual(['.', '.', '.']);
   });
 
   it('uses the v13 support-pair transform vocabulary and re-normalizes after repair', () => {
@@ -797,8 +888,8 @@ describe('Cyber Smart recipe solver', () => {
       'cyber:cell:terrain:9,8:primary',
     );
     expect(document.tileData.terrain[8]![9]).toBe(-1);
-    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 8, 8)).not.toBe(23);
-    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 10, 8)).not.toBe(23);
+    expect(tileToken(document.tileData.terrain[8]![8]!, 'cyber-yellow')).toBe('14');
+    expect(tileToken(document.tileData.terrain[8]![10]!, 'cyber-yellow')).toBe('14X');
 
     document = paint(
       document,

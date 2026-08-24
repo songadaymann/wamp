@@ -73,12 +73,13 @@ describe('smart authoring registry', () => {
   it('uses the public rule vocabulary and exposes runtime resolver metadata', () => {
     expect(SMART_RULE_KINDS).toEqual(['terrain', 'path', 'span', 'rectangle', 'stamp']);
     expect(getSmartBrushDefinition('cyber.structure')).toMatchObject({
+      label: 'Ground',
       ruleKind: 'terrain',
       algorithm: 'blob-8way',
       resolverKey: 'cyber.structure',
       collisionRole: 'solid',
       defaultLayer: 'terrain',
-      compatibleLegacyLocalIndices: expect.arrayContaining([15, 38, 64, 83]),
+      compatibleLegacyLocalIndices: expect.arrayContaining([14, 15, 21, 23, 62, 63, 64, 83]),
       outputLayers: ['terrain', 'foreground'],
     });
     expect(getSmartBrushDefinition('cyber.rubble').outputLayers).toEqual(['terrain', 'foreground']);

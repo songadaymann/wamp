@@ -3,8 +3,8 @@
 ## Outcome and current focus
 
 The existing Smart V1 foundation remains the safety-proven baseline for Forest,
-Desert, Cave, and Gothic terrain. The **Cyber** engine and brush milestone is
-implemented and is at its preview-only visual gate. Desert cactus/bridge, Cave
+Desert, Cave, and Gothic terrain. The **Cyber** engine is implemented and its
+neutral-art correction pass is at the preview-only visual gate. Desert cactus/bridge, Cave
 rail, Gothic fence/columns, WampOS windows, and Backrooms structures remain
 gated until the rule tier they need has been approved in an earlier set.
 
@@ -109,22 +109,22 @@ The frozen Cyber room makes the extension seam concrete:
   local 64 appears 39 times with X and 17 with Y; local 15 appears 18 times
   normal and 16 with Y. The transform is part of the recipe, not an editor-only
   afterthought.
-- A clean right-hand tower at `x=32..39, y=2..17` demonstrates mirrored side
-  caps, alternating body rows, transformed accents, a Pink interior strip,
-  background supports, and foreground trim. Its exact matrix is suitable for a
-  golden solver fixture.
+- A clean right-hand tower at `x=32..39, y=2..17` remains useful evidence for
+  transforms, supports, and authored accents. It is no longer copied as the
+  default Ground facade: the neutral atlas audit below is authoritative for
+  automatic Ground output.
 - The live atlas language also has a clean three-cell neon strip
   `[49, 50, 51]`, floating platforms using mirrored `71` end caps with
-  `68/69/70` interiors, and two-row framed panels using `44..46` over
+  `68/69/70` authored interiors, and two-row framed panels using `44..46` over
   `56..58`. These are named rules, not chance decorations.
 
 Implemented brush registry:
 
 | Brush | Rule kind / algorithm | Required output | Accepted authoring |
 | --- | --- | --- | --- |
-| Structure | Terrain / eight-way blob | Colliding Terrain | Pencil, Fill, Rectangle, Ellipse |
-| Platform | Path / horizontal strip | Colliding Terrain | Horizontal Pencil and Rectangle; minimum width 2 |
-| Rubble | Stamp / area recipe | Colliding Terrain plus optional owned Foreground fragments | Pencil, Fill, Rectangle, Ellipse |
+| Ground (`cyber.structure` persisted ID) | Terrain / eight-way blob | Colliding Terrain plus owned Foreground tunnel ceiling | Pencil, Fill, Rectangle, Ellipse |
+| Platform | Path / horizontal strip | Colliding Terrain | Horizontal Pencil and Rectangle; minimum width 2; automatic middle is neutral F9 only |
+| Rubble | Stamp / area recipe | Colliding Terrain plus Feature-style owned Foreground/Background outline | Pencil, Fill, Rectangle, Ellipse |
 | Support | Span / vertical strip | Non-colliding Background | Vertical Pencil or multi-column Rectangle bank |
 | Neon Strip | Path / horizontal strip | Colliding Terrain | Horizontal Pencil and Rectangle; minimum width 3 |
 | Framed Panel | Rectangle section | Non-colliding Foreground | Horizontal Pencil or Rectangle; fixed height 2 and minimum width 3 |
@@ -133,16 +133,18 @@ Completed implementation sequence:
 
 1. Introduced catalog-relative, transform-aware Cyber recipe output and exact
    decode/encode tests for none/X/Y/XY.
-2. Matched the structural vocabulary: top/bottom caps, left/right walls,
-   corner transitions, alternating interiors, rubble/foundation, and supports.
+2. Replaced the reference-tower facade with the reviewed neutral Ground
+   vocabulary: B3/B3X and repeated B4 tops, B10X/B12X sides, C2Y/C7Y lower
+   corners, F3/F4 lower edges, and F5/G11/G12 underground fill.
 3. Added deterministic optional recipes for the neon strip and framed panel.
    Yellow remains the default structure; Pink is a stable accent/style choice,
    not a random competing topology.
 4. Added coordinated background/foreground emissions while preserving terrain
    collision semantics and existing layer-specific manual locks.
-5. Proved the right-tower geometry/local-index/transform matrix plus filled
-   regions, holes, stairs, diagonals, irregular notches, thin runs, isolated
-   cells, erasure, undo/redo, and semantic copy/paste.
+5. Proved filled regions, holes, stairs, diagonals, irregular notches, thin
+   runs, isolated cells, erasure, undo/redo, and semantic copy/paste. Enclosed
+   holes use A10/A11/A10X on Foreground over colliding fill, B10/B12 side walls,
+   and C10/C11/C12 floors.
 6. Visually inspected the frozen Cyber reconstruction and newly authored
    fixtures in both Canvas and WebGL before opening the safety preview gate.
 
@@ -152,10 +154,12 @@ solver does not merely memorize one skyline.
 
 ### Cyber acceptance evidence
 
-- The v13 right tower drives the exact boundary, local-index, X/Y/XY, and
-  coordinate-phased façade golden. Yellow/Pink connectivity, irregular inset
-  edges, holes, stairs, and diagonal repair have separate novel-shape cases.
-- Yellow and Pink platform fixtures match the frozen room. Support short forms
+- The v13 right tower remains a transform/reference fixture, while the neutral
+  coordinate contract drives automatic Ground. Yellow/Pink connectivity,
+  irregular inset edges, layered holes, stairs, and diagonal repair have
+  separate novel-shape cases.
+- Yellow and Pink platforms generate `F12X, F9…, F12`; the F10 paint spill and
+  F11 open-bottom pieces remain available for manual accenting. Support short forms
   are `36`, `36/60`, `36/60/72`, then `36/48…/60/72`; normalized support banks
   reproduce the observed normal/X body pairs and alternating cap phase.
 - Framed Panel tests cover complete and partial clipboard selections, stable
@@ -176,6 +180,8 @@ solver does not merely memorize one skyline.
   hard page reload and reopen, Course Editor, zero mutation requests, and zero
   console/page errors. Each run asserts that its requested Canvas or WebGL
   renderer is actually active.
+- Rubble repeats B1 as its colliding fill and, when Details is enabled, uses the
+  same deterministic A1/C1/A2/B2/A11/B11 outline grammar as legacy Feature.
 
 ### Intentional Cyber art boundaries
 
@@ -185,8 +191,9 @@ solver does not merely memorize one skyline.
 - The one-cell Support cap is a documented safe fallback; it is not present in
   the frozen room. Multi-column transform phase is normalized to the authored
   Support bank rather than guessed from absolute room coordinates.
-- Yellow and Pink are explicit styles. Smart never invents random CyberText or
-  recreates the reference tower's hand-placed Pink writing/accent strip.
+- Yellow and Pink are explicit styles. Smart never invents random CyberText,
+  F10/F11 platform accents, or the reference tower's hand-placed Pink
+  writing/accent strip.
 - Framed Panels resize by extending/repainting their source row; there is no
   separate drag-handle resize UI in this milestone.
 

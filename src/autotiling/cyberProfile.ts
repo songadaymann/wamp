@@ -33,9 +33,11 @@ export const CYBER_CARDINAL_NEIGHBOR = {
   west: 8,
 } as const;
 
+/**
+ * Retained for v2 recipe compatibility. Cyber Ground now deliberately uses
+ * the same neutral art for both values; decorative tower facades stay manual.
+ */
 export type CyberStructureFacade = 'plain' | 'tower';
-
-export const CYBER_TOWER_REFERENCE_ORIGIN = { x: 32, y: 2 } as const;
 
 export interface CyberResolvedTile extends Omit<SmartResolvedTile, 'flipX' | 'flipY' | 'styleId'> {
   flipX: boolean;
@@ -80,7 +82,7 @@ export const CYBER_STYLE_PROFILES = {
 export const CYBER_FAMILY_DEFINITIONS = {
   structure: {
     id: 'structure',
-    label: 'Structure',
+    label: 'Ground',
     layer: 'terrain',
     minimumWidth: 1,
     minimumHeight: 1,
@@ -147,8 +149,14 @@ export const CYBER_DETAIL_ALLOWLIST = [
   13, 18, 22, 32,
 ] as const;
 
-export const CYBER_RUBBLE_DETAIL_LOCAL_INDICES = [12, 24] as const;
-export const CYBER_RUBBLE_DETAIL_CELL_INTERVAL = 8;
+export const CYBER_RUBBLE_BORDER_LOCAL_INDICES = {
+  top: 0,
+  bottom: 24,
+  left: 1,
+  right: 13,
+  topLeft: 10,
+  bottomRight: 22,
+} as const;
 
 const CYBER_DETAILS = new Set<number>(CYBER_DETAIL_ALLOWLIST);
 
@@ -225,125 +233,56 @@ interface TileSpec {
 }
 
 const STRUCTURE_ROLE_TILES = {
-  isolated: { localIndex: 23 },
-  topLeft: { localIndex: 17, flipX: true },
+  // Cyber F5 is the safest neutral fallback for a one-cell island/run.
+  isolated: { localIndex: 64 },
+  // Cyber B3 is the only neutral square top corner; mirror it for the right.
+  topLeft: { localIndex: 14 },
   top: { localIndex: 15 },
-  topRight: { localIndex: 17 },
-  left: { localIndex: 37 },
-  center: { localIndex: 38 },
-  right: { localIndex: 37, flipX: true },
-  bottomLeft: { localIndex: 61 },
-  bottom: { localIndex: 15, flipY: true },
-  bottomRight: { localIndex: 61, flipX: true },
+  topRight: { localIndex: 14, flipX: true },
+  // The neutral outer walls are the horizontally mirrored Cyber B10/B12.
+  left: { localIndex: 21, flipX: true },
+  center: { localIndex: 64 },
+  right: { localIndex: 23, flipX: true },
+  // Cyber C2/C7 become the neutral lower corners when flipped vertically.
+  bottomLeft: { localIndex: 25, flipY: true },
+  bottom: { localIndex: 62 },
+  bottomRight: { localIndex: 30, flipY: true },
   // Cyber has no 90-degree rotation bit. A neutral side-wall tile is the safe
   // fallback for a one-cell-wide vertical run.
-  vertical: { localIndex: 37 },
+  vertical: { localIndex: 64 },
 } as const satisfies Record<CyberStructureRole, TileSpec>;
 
-const TOWER_TOP_ROLE_TILES: Partial<Record<CyberStructureRole, TileSpec>> = {
-  topLeft: { localIndex: 25 },
-  top: { localIndex: 15 },
-  topRight: { localIndex: 30 },
-};
-
 const STRUCTURE_CONCAVE_TILES = {
-  topLeft: { localIndex: 26 },
-  topRight: { localIndex: 29 },
-  bottomLeft: { localIndex: 38 },
-  bottomRight: { localIndex: 41 },
+  topLeft: { localIndex: 25 },
+  topRight: { localIndex: 30 },
+  bottomLeft: { localIndex: 25, flipY: true },
+  bottomRight: { localIndex: 30, flipY: true },
 } as const satisfies Record<NonNullable<CyberStructureTopology['concaveCorner']>, TileSpec>;
 
-/**
- * The repeating facade vocabulary sampled from the live Cyber tower. For an
- * eight-cell-wide tower these rows reproduce its shell/panel rhythm exactly,
- * while wider rectangles cycle the six interior cells deterministically.
- */
-const TOWER_BODY_ROWS: readonly (readonly TileSpec[])[] = [
-  [
-    { localIndex: 37 },
-    { localIndex: 38 }, { localIndex: 38 }, { localIndex: 38 },
-    { localIndex: 38 }, { localIndex: 38 }, { localIndex: 38 },
-    { localIndex: 37, flipX: true },
-  ],
-  [
-    { localIndex: 21, flipX: true },
-    { localIndex: 64, flipX: true }, { localIndex: 19 }, { localIndex: 83, flipX: true, flipY: true },
-    { localIndex: 64, flipX: true }, { localIndex: 64, flipX: true }, { localIndex: 82, flipX: true },
-    { localIndex: 21 },
-  ],
-  [
-    { localIndex: 37 },
-    { localIndex: 38, flipX: true }, { localIndex: 31 }, { localIndex: 38, flipX: true },
-    { localIndex: 38, flipX: true }, { localIndex: 38 }, { localIndex: 38 },
-    { localIndex: 37, flipX: true },
-  ],
-  [
-    { localIndex: 21, flipX: true },
-    { localIndex: 64, flipX: true }, { localIndex: 31, flipX: true }, { localIndex: 64, flipX: true },
-    { localIndex: 19 }, { localIndex: 64, flipX: true }, { localIndex: 64, flipX: true },
-    { localIndex: 21 },
-  ],
-  [
-    { localIndex: 37 },
-    { localIndex: 38 }, { localIndex: 31, flipY: true }, { localIndex: 38, flipX: true },
-    { localIndex: 31, flipX: true }, { localIndex: 38, flipX: true }, { localIndex: 38, flipX: true },
-    { localIndex: 37, flipX: true },
-  ],
-  [
-    { localIndex: 21, flipX: true },
-    { localIndex: 64, flipX: true }, { localIndex: 31, flipX: true, flipY: true }, { localIndex: 64, flipX: true },
-    { localIndex: 31 }, { localIndex: 82 }, { localIndex: 19 },
-    { localIndex: 21 },
-  ],
-  [
-    { localIndex: 37 },
-    { localIndex: 38, flipX: true }, { localIndex: 31 }, { localIndex: 38, flipX: true },
-    { localIndex: 31, flipY: true }, { localIndex: 38, flipX: true }, { localIndex: 31 },
-    { localIndex: 37, flipX: true },
-  ],
-  [
-    { localIndex: 23 },
-    { localIndex: 83 }, { localIndex: 19, flipY: true }, { localIndex: 64, flipX: true },
-    { localIndex: 31, flipX: true, flipY: true }, { localIndex: 64, flipX: true }, { localIndex: 31, flipY: true },
-    { localIndex: 21 },
-  ],
-  [
-    { localIndex: 37 },
-    { localIndex: 38 }, { localIndex: 38 }, { localIndex: 38, flipX: true },
-    { localIndex: 31 }, { localIndex: 38, flipX: true }, { localIndex: 31 },
-    { localIndex: 37, flipX: true },
-  ],
-  [
-    { localIndex: 21, flipX: true },
-    { localIndex: 64, flipX: true }, { localIndex: 64, flipX: true }, { localIndex: 82 },
-    { localIndex: 19, flipY: true }, { localIndex: 83, flipX: true }, { localIndex: 31, flipX: true },
-    { localIndex: 21 },
-  ],
-  [
-    { localIndex: 37 },
-    { localIndex: 38 }, { localIndex: 38 }, { localIndex: 38 },
-    { localIndex: 38 }, { localIndex: 38 }, { localIndex: 31, flipX: true, flipY: true },
-    { localIndex: 37, flipX: true },
-  ],
-  [
-    { localIndex: 21, flipX: true },
-    { localIndex: 64, flipX: true }, { localIndex: 82, flipX: true }, { localIndex: 83, flipY: true },
-    { localIndex: 64, flipX: true }, { localIndex: 64, flipX: true }, { localIndex: 19, flipY: true },
-    { localIndex: 21 },
-  ],
-  [
-    { localIndex: 37 },
-    { localIndex: 38 }, { localIndex: 38 }, { localIndex: 38 },
-    { localIndex: 38 }, { localIndex: 38 }, { localIndex: 38 },
-    { localIndex: 37, flipX: true },
-  ],
-  [
-    { localIndex: 21, flipX: true },
-    { localIndex: 64 }, { localIndex: 64 }, { localIndex: 64 },
-    { localIndex: 64 }, { localIndex: 64 }, { localIndex: 64 },
-    { localIndex: 21 },
-  ],
-] as const;
+/** Cyber F5, G11, and G12 are the only neutral underground fill cells. */
+const STRUCTURE_UNDERGROUND_TILES = [64, 82, 83] as const;
+
+export type CyberTunnelOutlineRole =
+  | 'ceilingLeft'
+  | 'ceiling'
+  | 'ceilingRight'
+  | 'left'
+  | 'right'
+  | 'floorLeft'
+  | 'floor'
+  | 'floorRight';
+
+const TUNNEL_OUTLINE_TILES = {
+  // Cyber A12 contains a paint burst, so the neutral right corner is A10X.
+  ceilingLeft: { localIndex: 9, layer: 'foreground' },
+  ceiling: { localIndex: 10, layer: 'foreground' },
+  ceilingRight: { localIndex: 9, flipX: true, layer: 'foreground' },
+  left: { localIndex: 21, layer: 'terrain' },
+  right: { localIndex: 23, layer: 'terrain' },
+  floorLeft: { localIndex: 33, layer: 'terrain' },
+  floor: { localIndex: 34, layer: 'terrain' },
+  floorRight: { localIndex: 35, layer: 'terrain' },
+} as const satisfies Record<CyberTunnelOutlineRole, TileSpec & { layer: LayerName }>;
 
 function assertCyberStyle(styleId: CyberStyleId): void {
   if (!CYBER_STYLE_IDS.includes(styleId)) {
@@ -527,33 +466,19 @@ export function resolveCyberStructureTopology8(neighborMask8: number): CyberStru
   };
 }
 
-function resolveTowerBodySpec(
-  topology: CyberStructureTopology,
-  context: CyberStructureFacadeContext,
-): TileSpec | null {
-  const { x, y, width, height, worldX, worldY } = context;
-  if (
-    x === undefined || y === undefined || width === undefined || height === undefined
-    || width < 2 || height < 3
-    || x < 0 || x >= width || y <= 0 || y >= height - 1
-    || !['left', 'center', 'right'].includes(topology.role)
-  ) {
-    return null;
-  }
-  const positiveModulo = (value: number, divisor: number) => ((value % divisor) + divisor) % divisor;
-  const bodyRowIndex = worldY === undefined
-    ? y - 1
-    : worldY - (CYBER_TOWER_REFERENCE_ORIGIN.y + 1);
-  const recipe = TOWER_BODY_ROWS[positiveModulo(bodyRowIndex, TOWER_BODY_ROWS.length)]!;
-  // Irregular silhouettes can have a shell edge inside their component's
-  // rectangular bounds. Topology is authoritative for those edges; bounds are
-  // used only to phase genuinely interior facade art.
-  if (topology.role === 'left') return recipe[0]!;
-  if (topology.role === 'right') return recipe[recipe.length - 1]!;
-  const interiorColumnIndex = worldX === undefined
-    ? x - 1
-    : worldX - (CYBER_TOWER_REFERENCE_ORIGIN.x + 1);
-  return recipe[1 + positiveModulo(interiorColumnIndex, recipe.length - 2)]!;
+function stableNeutralIndex(
+  values: readonly number[],
+  worldX: number | undefined,
+  worldY: number | undefined,
+  salt: number,
+): number {
+  if (worldX === undefined || worldY === undefined || values.length === 1) return values[0]!;
+  const hash = Math.abs(
+    Math.imul(worldX + 31, 73856093)
+      ^ Math.imul(worldY + 17, 19349663)
+      ^ salt,
+  );
+  return values[hash % values.length]!;
 }
 
 /** Pass two: apply a style/facade recipe to a topology classification. */
@@ -563,7 +488,6 @@ export function resolveCyberStructureFacade(
   context: CyberStructureFacadeContext = {},
 ): CyberResolvedTile {
   assertCyberStyle(styleId);
-  const facade = context.facade ?? 'plain';
   if (topology.concaveCorner) {
     return makeStructuralTile(
       styleId,
@@ -571,10 +495,49 @@ export function resolveCyberStructureFacade(
       CYBER_FAMILY_DEFINITIONS.structure.layer,
     );
   }
-  const towerBody = facade === 'tower' ? resolveTowerBodySpec(topology, context) : null;
-  const towerTop = facade === 'tower' ? TOWER_TOP_ROLE_TILES[topology.role] : undefined;
-  const spec = towerBody ?? towerTop ?? STRUCTURE_ROLE_TILES[topology.role];
+  let spec: TileSpec = STRUCTURE_ROLE_TILES[topology.role];
+  if (topology.role === 'center') {
+    spec = {
+      localIndex: stableNeutralIndex(
+        STRUCTURE_UNDERGROUND_TILES,
+        context.worldX,
+        context.worldY,
+        23,
+      ),
+    };
+  } else if (topology.role === 'bottom') {
+    // Cyber F3/F4 are the only neutral straight lower-edge cells.
+    spec = {
+      localIndex: stableNeutralIndex([62, 63], context.worldX, context.worldY, 13),
+    };
+  }
   return makeStructuralTile(styleId, spec, CYBER_FAMILY_DEFINITIONS.structure.layer);
+}
+
+export function resolveCyberStructureUnderground(
+  styleId: CyberStyleId,
+  worldX?: number,
+  worldY?: number,
+): CyberResolvedTile {
+  return makeStructuralTile(
+    styleId,
+    { localIndex: stableNeutralIndex(STRUCTURE_UNDERGROUND_TILES, worldX, worldY, 23) },
+    CYBER_FAMILY_DEFINITIONS.structure.layer,
+  );
+}
+
+/**
+ * Resolves the authored Cyber A10/A11/A10X, B10/B12, C10/C11/C12 tunnel frame.
+ * The A-row trim is intentionally non-colliding Foreground art.
+ */
+export function resolveCyberTunnelOutlineTile(
+  styleId: CyberStyleId,
+  role: CyberTunnelOutlineRole,
+): CyberResolvedTile {
+  const spec = TUNNEL_OUTLINE_TILES[role];
+  return spec.layer === 'terrain'
+    ? makeStructuralTile(styleId, spec, spec.layer)
+    : makeSpecTile(styleId, spec, spec.layer);
 }
 
 export function resolveCyberStructureTile(options: ResolveCyberStructureTileOptions): CyberResolvedTile {
@@ -607,7 +570,7 @@ export function resolveCyberStructureRectangle(
       return resolveCyberStructureTile8({
         styleId: options.styleId,
         neighborMask8: neighborMask,
-        facade: options.facade ?? 'tower',
+        facade: options.facade ?? 'plain',
         x,
         y,
         width: options.width,
@@ -620,11 +583,12 @@ export function resolveCyberStructureRectangle(
 }
 
 const CYBER_PLATFORM_MIDDLES = {
-  'cyber-yellow': [{ localIndex: 68 }, { localIndex: 69 }, { localIndex: 68 }, { localIndex: 70 }],
-  'cyber-pink': [{ localIndex: 69 }, { localIndex: 70 }, { localIndex: 68 }],
+  // Cyber F9 is neutral. F10 (paint spill) and F11 (open bottom) remain manual accents.
+  'cyber-yellow': [{ localIndex: 68 }],
+  'cyber-pink': [{ localIndex: 68 }],
 } as const satisfies Record<CyberStyleId, readonly TileSpec[]>;
 
-/** Live Cyber platforms: mirrored 71 end caps around color-specific cycles. */
+/** Cyber F12 mirrored end caps around a repeating neutral F9 middle. */
 export function resolveCyberPlatformSpan(styleId: CyberStyleId, length: number): CyberResolvedTile[] {
   assertSpanLength('platform', length, 2);
   return repeatSpan(
@@ -658,43 +622,19 @@ export function resolveCyberRubbleArea(
   return Array.from({ length: height }, () => resolveCyberRubbleColumn(styleId, width));
 }
 
-/** Sparse owned foreground fragments for a local-12 rubble field. */
-export function resolveCyberRubbleDetail(
+/** Feature-style, non-colliding outline art for a local-12 rubble field. */
+export function resolveCyberRubbleBorderTile(
   styleId: CyberStyleId,
-  x: number,
-  y: number,
+  part: keyof typeof CYBER_RUBBLE_BORDER_LOCAL_INDICES,
+  flipX = false,
+  layer: Extract<LayerName, 'foreground' | 'background'> = 'foreground',
 ): CyberResolvedTile {
-  if (!Number.isInteger(x) || !Number.isInteger(y)) {
-    throw new RangeError('Cyber rubble detail coordinates must be integers.');
-  }
-  const hash = Math.abs(
-    Math.imul(x + 31, 73856093)
-      ^ Math.imul(y + 17, 19349663),
-  );
   return makeTile(
     styleId,
-    hash % 2 === 0 ? 12 : 24,
-    'foreground',
-    (hash & 2) !== 0,
-    (hash & 4) !== 0,
+    CYBER_RUBBLE_BORDER_LOCAL_INDICES[part],
+    layer,
+    flipX,
   );
-}
-
-export function resolveOptionalCyberRubbleDetail(
-  styleId: CyberStyleId,
-  x: number,
-  y: number,
-): CyberResolvedTile | null {
-  if (!Number.isInteger(x) || !Number.isInteger(y)) {
-    throw new RangeError('Cyber rubble detail coordinates must be integers.');
-  }
-  const densityHash = Math.abs(
-    Math.imul(x + 11, 83492791)
-      ^ Math.imul(y + 23, 2654435761),
-  );
-  return densityHash % CYBER_RUBBLE_DETAIL_CELL_INTERVAL === 0
-    ? resolveCyberRubbleDetail(styleId, x, y)
-    : null;
 }
 
 /**

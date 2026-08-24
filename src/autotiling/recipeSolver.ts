@@ -8,15 +8,18 @@ import {
   resolveCyberFramedPanel,
   resolveCyberNeonStrip,
   resolveCyberPlatformSpan,
+  resolveCyberRubbleBorderTile,
   resolveCyberRubbleColumn,
-  resolveCyberRubbleDetail,
+  resolveCyberStructureUnderground,
   resolveCyberStructureTile8,
   resolveCyberSupportSpan,
+  resolveCyberTunnelOutlineTile,
   selectCyberDetailCandidates,
   type CyberDetailCandidate,
   type CyberFamilyId,
   type CyberResolvedTile,
   type CyberStyleId,
+  type CyberTunnelOutlineRole,
 } from './cyberProfile';
 import {
   cloneRoomSmartTerrainState,
@@ -567,26 +570,106 @@ function neighborMask8(
   return mask;
 }
 
+function findEnclosedCyberVoidCells(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+  entry: CyberSemanticEntry,
+): Set<string> {
+  const exterior = new Set<string>();
+  const queue: SmartCellCoordinate[] = [];
+  const enqueue = (x: number, y: number): void => {
+    if (!inBounds(x, y)) return;
+    const key = smartCellKey(x, y);
+    if (exterior.has(key) || sameCyberFamily(
+      tileData,
+      state,
+      entry.layer,
+      x,
+      y,
+      entry.cell.styleId as CyberStyleId,
+      entry.cell.brushId,
+    )) return;
+    exterior.add(key);
+    queue.push({ x, y });
+  };
+  for (let x = 0; x < ROOM_WIDTH; x += 1) {
+    enqueue(x, 0);
+    enqueue(x, ROOM_HEIGHT - 1);
+  }
+  for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+    enqueue(0, y);
+    enqueue(ROOM_WIDTH - 1, y);
+  }
+  for (let index = 0; index < queue.length; index += 1) {
+    const { x, y } = queue[index]!;
+    enqueue(x, y - 1);
+    enqueue(x + 1, y);
+    enqueue(x, y + 1);
+    enqueue(x - 1, y);
+  }
+  const enclosed = new Set<string>();
+  for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+    for (let x = 0; x < ROOM_WIDTH; x += 1) {
+      const key = smartCellKey(x, y);
+      if (exterior.has(key) || sameCyberFamily(
+        tileData,
+        state,
+        entry.layer,
+        x,
+        y,
+        entry.cell.styleId as CyberStyleId,
+        entry.cell.brushId,
+      )) continue;
+      enclosed.add(key);
+    }
+  }
+  return enclosed;
+}
+
+function getCyberTunnelOutlineRole(
+  enclosedVoidCells: ReadonlySet<string>,
+  x: number,
+  y: number,
+): CyberTunnelOutlineRole | null {
+  const enclosed = (dx: number, dy: number) => enclosedVoidCells.has(smartCellKey(x + dx, y + dy));
+  if (enclosed(0, 1)) return 'ceiling';
+  if (enclosed(1, 0)) return 'left';
+  if (enclosed(-1, 0)) return 'right';
+  if (enclosed(0, -1)) return 'floor';
+  if (enclosed(1, 1)) return 'ceilingLeft';
+  if (enclosed(-1, 1)) return 'ceilingRight';
+  if (enclosed(1, -1)) return 'floorLeft';
+  if (enclosed(-1, -1)) return 'floorRight';
+  return null;
+}
+
 function resolveStructureComponent(
   tileData: RoomTileData,
   state: RoomSmartTerrainState,
   component: readonly CyberSemanticEntry[],
+  enclosedVoidCells: ReadonlySet<string>,
 ): void {
   const bounds = getBounds(component);
   for (const entry of component) {
     const styleId = entry.cell.styleId as CyberStyleId;
     const ownerId = `${CYBER_CELL_OWNER_PREFIX}${entry.semanticKey}`;
-    const resolved = resolveCyberStructureTile8({
-      styleId,
-      neighborMask8: neighborMask8(tileData, state, entry),
-      facade: 'tower',
-      x: entry.x - bounds.minX,
-      y: entry.y - bounds.minY,
-      width: bounds.width,
-      height: bounds.height,
-      worldX: entry.x,
-      worldY: entry.y,
-    });
+    const tunnelRole = getCyberTunnelOutlineRole(enclosedVoidCells, entry.x, entry.y);
+    const tunnelTile = tunnelRole ? resolveCyberTunnelOutlineTile(styleId, tunnelRole) : null;
+    const resolved = tunnelTile?.layer === 'terrain'
+      ? tunnelTile
+      : tunnelTile
+        ? resolveCyberStructureUnderground(styleId, entry.x, entry.y)
+        : resolveCyberStructureTile8({
+            styleId,
+            neighborMask8: neighborMask8(tileData, state, entry),
+            facade: 'plain',
+            x: entry.x - bounds.minX,
+            y: entry.y - bounds.minY,
+            width: bounds.width,
+            height: bounds.height,
+            worldX: entry.x,
+            worldY: entry.y,
+          });
     const lockedValue = entry.cell.lockedValue ?? entry.cell.shapeValue;
     if (lockedValue !== undefined) {
       tileData[entry.layer][entry.y][entry.x] = lockedValue;
@@ -599,6 +682,19 @@ function resolveStructureComponent(
       };
     } else {
       addOwnedOutput(tileData, state, ownerId, 'primary', 'semantic', entry.x, entry.y, resolved, true);
+    }
+    if (tunnelTile?.layer === 'foreground') {
+      addOwnedOutput(
+        tileData,
+        state,
+        ownerId,
+        'tunnel-ceiling',
+        'semantic',
+        entry.x,
+        entry.y,
+        tunnelTile,
+        false,
+      );
     }
   }
 }
@@ -749,7 +845,10 @@ function resolveCyberSemanticCells(tileData: RoomTileData, state: RoomSmartTerra
   for (const group of groups.values()) {
     const familyId = getCyberFamilyId(group[0]!.cell.brushId);
     if (familyId === 'structure') {
-      componentEntries(group).forEach((component) => resolveStructureComponent(tileData, state, component));
+      const enclosedVoidCells = findEnclosedCyberVoidCells(tileData, state, group[0]!);
+      componentEntries(group).forEach((component) => (
+        resolveStructureComponent(tileData, state, component, enclosedVoidCells)
+      ));
     } else if (familyId === 'framed-panel') {
       continue;
     } else if (familyId === 'support') {
@@ -780,7 +879,7 @@ function horizontalSpanMiddleTile(
   sourceOffset: number,
 ): CyberResolvedTile {
   const cycleLength = familyId === 'platform'
-    ? styleId === 'cyber-yellow' ? 4 : 3
+    ? 1
     : 5;
   const sample = familyId === 'platform'
     ? resolveCyberPlatformSpan(styleId, cycleLength + 2)
@@ -931,6 +1030,107 @@ function stableDetailTile(entry: CyberSemanticEntry): CyberResolvedTile {
   };
 }
 
+function resolveCyberRubbleBorders(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+  entries: readonly CyberSemanticEntry[],
+): void {
+  const candidates = new Map<string, CyberSemanticEntry>();
+  for (const entry of entries) {
+    for (const [targetX, targetY] of [
+      [entry.x, entry.y - 1],
+      [entry.x + 1, entry.y],
+      [entry.x, entry.y + 1],
+      [entry.x - 1, entry.y],
+    ]) {
+      if (!inBounds(targetX, targetY) || sameCyberFamily(
+        tileData,
+        state,
+        entry.layer,
+        targetX,
+        targetY,
+        entry.cell.styleId as CyberStyleId,
+        entry.cell.brushId,
+      )) continue;
+      const key = smartCellKey(targetX, targetY);
+      const existing = candidates.get(key);
+      if (!existing || entry.semanticKey.localeCompare(existing.semanticKey) < 0) {
+        candidates.set(key, entry);
+      }
+    }
+  }
+
+  const addBorder = (
+    owner: CyberSemanticEntry,
+    x: number,
+    y: number,
+    part: Parameters<typeof resolveCyberRubbleBorderTile>[1],
+    flipX = false,
+    layer: Extract<LayerName, 'foreground' | 'background'> = 'foreground',
+  ): void => addOwnedOutput(
+    tileData,
+    state,
+    `${CYBER_CELL_OWNER_PREFIX}${owner.semanticKey}`,
+    `rubble-${part}`,
+    'semantic',
+    x,
+    y,
+    resolveCyberRubbleBorderTile(owner.cell.styleId as CyberStyleId, part, flipX, layer),
+    false,
+  );
+
+  for (const [targetKey, candidate] of candidates) {
+    const [x, y] = targetKey.split(',').map(Number) as [number, number];
+    const same = (targetX: number, targetY: number) => sameCyberFamily(
+      tileData,
+      state,
+      candidate.layer,
+      targetX,
+      targetY,
+      candidate.cell.styleId as CyberStyleId,
+      candidate.cell.brushId,
+    );
+    const above = same(x, y - 1);
+    const right = same(x + 1, y);
+    const below = same(x, y + 1);
+    const left = same(x - 1, y);
+    const cardinalCount = Number(above) + Number(right) + Number(below) + Number(left);
+    const adjacentOwners = entries.filter((entry) => (
+      entry.cell.styleId === candidate.cell.styleId
+      && ((above && entry.x === x && entry.y === y - 1)
+        || (right && entry.x === x + 1 && entry.y === y)
+        || (below && entry.x === x && entry.y === y + 1)
+        || (left && entry.x === x - 1 && entry.y === y))
+    )).sort((first, second) => first.semanticKey.localeCompare(second.semanticKey));
+    const owner = adjacentOwners[0] ?? candidate;
+    if (cardinalCount === 1) {
+      if (below) addBorder(owner, x, y, 'top');
+      else if (above) addBorder(owner, x, y, 'bottom');
+      else if (right) addBorder(owner, x, y, 'left');
+      else if (left) addBorder(owner, x, y, 'right');
+    } else if (cardinalCount === 2) {
+      if (below && right) addBorder(owner, x, y, 'topLeft');
+      else if (below && left) addBorder(owner, x, y, 'topLeft', true);
+      else if (above && right) addBorder(owner, x, y, 'bottomRight', true);
+      else if (above && left) addBorder(owner, x, y, 'bottomRight');
+    } else if (cardinalCount === 3) {
+      if (!right) {
+        addBorder(owner, x, y, 'topLeft', true);
+        addBorder(owner, x, y, 'bottom', false, 'background');
+      } else if (!left) {
+        addBorder(owner, x, y, 'topLeft');
+        addBorder(owner, x, y, 'bottom', false, 'background');
+      } else if (!below) {
+        addBorder(owner, x, y, 'bottomRight');
+        addBorder(owner, x, y, 'left', false, 'background');
+      } else if (!above) {
+        addBorder(owner, x, y, 'topLeft', true);
+        addBorder(owner, x, y, 'left', false, 'background');
+      }
+    }
+  }
+}
+
 function resolveCyberDetails(tileData: RoomTileData, state: RoomSmartTerrainState): void {
   if (!state.detailsEnabled) return;
   const entries = getCyberEntries(state);
@@ -956,21 +1156,11 @@ function resolveCyberDetails(tileData: RoomTileData, state: RoomSmartTerrainStat
     );
   }
 
-  for (const entry of entries.filter(({ cell }) => cell.brushId === 'cyber.rubble')) {
-    const hash = Math.abs(Math.imul(entry.x + 31, 73856093) ^ Math.imul(entry.y + 17, 19349663));
-    if (hash % 8 !== 0) continue;
-    addOwnedOutput(
-      tileData,
-      state,
-      `${CYBER_CELL_OWNER_PREFIX}${entry.semanticKey}`,
-      'rubble-detail',
-      'semantic',
-      entry.x,
-      entry.y,
-      resolveCyberRubbleDetail(entry.cell.styleId as CyberStyleId, entry.x, entry.y),
-      false,
-    );
-  }
+  resolveCyberRubbleBorders(
+    tileData,
+    state,
+    entries.filter(({ cell }) => cell.brushId === 'cyber.rubble'),
+  );
 }
 
 export function resolveSmartRecipeDocument(document: SmartRecipeDocument): SmartRecipeDocument {
