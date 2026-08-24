@@ -35,6 +35,7 @@
     "partykit/presenceServer.ts",
     "cloudflare/cryptopunk-avatar-queue/runner/server.mjs",
     "scripts/api_performance_probe.mjs",
+    "scripts/analyze_smart_tile_reference.mjs",
     "scripts/backfill-room-token-metadata.ts",
     "scripts/backfill_badges.mjs",
     "scripts/build-player-combat-actions-atlas.mjs",

@@ -79,9 +79,9 @@ import {
   validatePlacedObjectPathTargetIds,
 } from '../placedObjects/objectPaths';
 import {
-  cloneRoomSmartTerrainState,
   createRoomSmartTerrainState,
   normalizeRoomSmartTerrainState,
+  serializeRoomSmartTerrainState,
   type RoomSmartTerrainState,
 } from '../autotiling/model';
 
@@ -745,7 +745,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot | RoomSnapshotView): RoomSn
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData,
     smartTerrain: room.smartTerrain
-      ? cloneRoomSmartTerrainState(normalizeRoomSmartTerrainState(room.smartTerrain))
+      ? serializeRoomSmartTerrainState(normalizeRoomSmartTerrainState(room.smartTerrain))
       : createRoomSmartTerrainState(),
     placedObjects,
     customSprites: normalizeCustomSpriteDefinitions(room.customSprites),

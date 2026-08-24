@@ -5,9 +5,34 @@ import { chromium } from 'playwright';
 
 const baseUrl = process.argv[2] || 'http://127.0.0.1:3000/';
 const outputDir = process.env.SMART_AUTOTILING_SMOKE_OUTPUT_DIR || 'output/web-game/smart-autotiling';
+const FLIP_X = 1 << 20;
+const FLIP_Y = 1 << 21;
 const url = new URL(baseUrl);
 url.searchParams.set('previewSmoke', '1');
 mkdirSync(outputDir, { recursive: true });
+
+async function readLocalEditorState(page) {
+  return page.evaluate(async () => {
+    if (location.hostname !== '127.0.0.1' && location.hostname !== 'localhost') return null;
+    const { editorState } = await import('/src/config/editorState.ts');
+    return {
+      theme: editorState.smartTheme,
+      brush: editorState.smartMaterial,
+      style: editorState.smartStyle,
+      layer: editorState.activeLayer,
+    };
+  });
+}
+
+async function assertLocalEditorState(page, expected) {
+  const actual = await readLocalEditorState(page);
+  if (actual !== null) assert.deepEqual(actual, expected);
+}
+
+async function dismissKeepBuilding(page) {
+  const button = page.locator('#btn-guest-builder-claim-continue');
+  if (await button.isVisible()) await button.click();
+}
 
 const summary = { url: url.toString(), consoleErrors: [], pageErrors: [], checks: {} };
 const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader'] });
@@ -90,6 +115,330 @@ try {
   assert.equal(await page.locator('#smart-theme-select').isVisible(), true);
   summary.checks.advancedUi = true;
 
+  await page.locator('#smart-theme-select').selectOption('cyber');
+  assert.deepEqual(
+    await page.locator('#smart-material-select option').all().then((options) =>
+      Promise.all(options.map((option) => option.getAttribute('value')))
+    ),
+    [
+      'cyber.structure',
+      'cyber.platform',
+      'cyber.rubble',
+      'cyber.support',
+      'cyber.neon-strip',
+      'cyber.framed-panel',
+    ],
+  );
+  assert.equal(await page.locator('#smart-style-row').isVisible(), true);
+  assert.deepEqual(
+    await page.locator('#smart-style-select option').all().then((options) =>
+      Promise.all(options.map(async (option) => ({
+        value: await option.getAttribute('value'),
+        label: await option.textContent(),
+      })))
+    ),
+    [
+      { value: 'cyber-yellow', label: 'Yellow' },
+      { value: 'cyber-pink', label: 'Pink' },
+    ],
+  );
+  await page.locator('#smart-style-select').selectOption('cyber-pink');
+  assert.equal(await page.locator('#smart-style-select').inputValue(), 'cyber-pink');
+
+  await page.locator('#smart-material-select').selectOption('cyber.support');
+  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
+  await assertLocalEditorState(page, {
+    theme: 'cyber',
+    brush: 'cyber.support',
+    style: 'cyber-pink',
+    layer: 'background',
+  });
+  assert.equal(await page.locator('[data-tool="rect"]').first().isEnabled(), true);
+  assert.equal(await page.locator('[data-tool="ellipse"]').first().isDisabled(), true);
+  assert.equal(await page.locator('[data-tool="fill"]').first().isDisabled(), true);
+  assert.match(await page.locator('#smart-palette-hint').textContent() ?? '', /Ellipse and Fill are unavailable/);
+  await page.locator('#btn-editor-top-tool-more').click();
+  await page.screenshot({ path: path.join(outputDir, 'cyber-support-tools.png') });
+  await page.locator('#btn-editor-top-tool-more').click();
+
+  await page.locator('#smart-material-select').selectOption('cyber.framed-panel');
+  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'foreground');
+  await assertLocalEditorState(page, {
+    theme: 'cyber',
+    brush: 'cyber.framed-panel',
+    style: 'cyber-pink',
+    layer: 'foreground',
+  });
+  await page.locator('#smart-material-select').selectOption('cyber.structure');
+  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
+  await assertLocalEditorState(page, {
+    theme: 'cyber',
+    brush: 'cyber.structure',
+    style: 'cyber-pink',
+    layer: 'terrain',
+  });
+  assert.equal(await page.locator('[data-tool="ellipse"]').first().isEnabled(), true);
+  assert.equal(await page.locator('[data-tool="fill"]').first().isEnabled(), true);
+  await page.screenshot({ path: path.join(outputDir, 'cyber-smart-palette.png') });
+  summary.checks.cyberRegistryUi = true;
+
+  await page.locator('#smart-style-select').selectOption('cyber-yellow');
+  const cyberFill = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.clearAllTiles();
+    runtime.beginTileBatch();
+    runtime.floodFill(0, 0);
+    runtime.commitTileBatch();
+    const filled = runtime.exportRoomSnapshot();
+    runtime.clearAllTiles();
+    return filled;
+  });
+  assert.equal(Object.keys(cyberFill.smartTerrain.semanticCells).length, 40 * 22);
+  assert.ok(cyberFill.tileData.terrain.every((row) => row.every((value) => value > 0)));
+  summary.checks.cyberFill = true;
+  await dismissKeepBuilding(page);
+
+  const cyberStructure = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.clearAllTiles();
+    runtime.beginTileBatch();
+    runtime.stampShape('rect', 32, 2, 39, 17, { outline: false, erase: false });
+    runtime.stampShape('ellipse', 4, 10, 10, 16, { outline: false, erase: false });
+    runtime.commitTileBatch();
+    return runtime.exportRoomSnapshot();
+  });
+  assert.equal(cyberStructure.smartTerrain.version, 2);
+  assert.equal(cyberStructure.smartTerrain.semanticCells['terrain:32,2'].brushId, 'cyber.structure');
+  assert.equal(cyberStructure.tileData.terrain[2][32], 1633 + 25);
+  assert.equal(cyberStructure.tileData.terrain[4][35], 1633 + 83 + FLIP_X + FLIP_Y);
+  assert.equal(cyberStructure.tileData.terrain[17][33], 1633 + 15 + FLIP_Y);
+  assert.ok(Object.keys(cyberStructure.smartTerrain.semanticCells).length > 128);
+  const structureCellCount = Object.values(cyberStructure.smartTerrain.semanticCells)
+    .filter(({ brushId }) => brushId === 'cyber.structure').length;
+  const structureEmitterCount = Object.values(cyberStructure.smartTerrain.ownedOutputs)
+    .filter(({ partId, value }) => {
+      const baseValue = value & ~(FLIP_X | FLIP_Y);
+      return partId === 'detail' && (baseValue === 1633 + 2 || baseValue === 1633 + 3);
+    }).length;
+  assert.ok(structureEmitterCount <= Math.ceil(structureCellCount / 64));
+  summary.checks.cyberStructureAndShapes = true;
+  summary.checks.cyberEmitterCap = true;
+  await dismissKeepBuilding(page);
+
+  const cyberCopyHistoryRepair = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.copyTilesToClipboard(32, 2, 33, 3);
+    runtime.beginTileBatch();
+    runtime.pasteClipboardAt(12, 2);
+    runtime.commitTileBatch();
+    const copied = runtime.exportRoomSnapshot();
+    runtime.undo();
+    const undone = runtime.exportRoomSnapshot();
+    runtime.redo();
+    const redone = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(35 * 16 + 1, 8 * 16 + 1);
+    runtime.commitTileBatch();
+    const carved = runtime.exportRoomSnapshot();
+    return {
+      copiedCount: Object.keys(copied.smartTerrain.semanticCells).length,
+      undoneCount: Object.keys(undone.smartTerrain.semanticCells).length,
+      redoneCount: Object.keys(redone.smartTerrain.semanticCells).length,
+      carved,
+    };
+  });
+  assert.equal(cyberCopyHistoryRepair.copiedCount, cyberCopyHistoryRepair.undoneCount + 4);
+  assert.equal(cyberCopyHistoryRepair.redoneCount, cyberCopyHistoryRepair.copiedCount);
+  assert.equal(cyberCopyHistoryRepair.carved.smartTerrain.semanticCells['terrain:35,8'], undefined);
+  assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[8][35], -1);
+  assert.ok(cyberCopyHistoryRepair.carved.tileData.terrain[7][34] > 0);
+  summary.checks.cyberCopyUndoEraseRepair = true;
+
+  await page.locator('#smart-style-select').selectOption('cyber-pink');
+  await page.locator('#smart-material-select').selectOption('cyber.platform');
+  const cyberPlatform = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    runtime.placeTileAt(20 * 16 + 1, 18 * 16 + 1);
+    const belowMinimum = runtime.exportRoomSnapshot();
+    for (let x = 21; x <= 24; x += 1) runtime.placeTileAt(x * 16 + 1, 18 * 16 + 1);
+    runtime.commitTileBatch();
+    const complete = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(22 * 16 + 1, 18 * 16 + 1);
+    runtime.commitTileBatch();
+    const repaired = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.placeTileAt(22 * 16 + 1, 18 * 16 + 1);
+    runtime.commitTileBatch();
+    return { belowMinimum, complete, repaired, restored: runtime.exportRoomSnapshot() };
+  });
+  assert.equal(cyberPlatform.belowMinimum.tileData.terrain[18][20], -1);
+  assert.ok(cyberPlatform.belowMinimum.smartTerrain.semanticCells['terrain:20,18']);
+  assert.deepEqual(cyberPlatform.complete.tileData.terrain[18].slice(20, 25), [
+    1717 + 71 + FLIP_X, 1717 + 69, 1717 + 70, 1717 + 68, 1717 + 71,
+  ]);
+  assert.deepEqual(cyberPlatform.repaired.tileData.terrain[18].slice(20, 25), [
+    1717 + 71 + FLIP_X, 1717 + 71, -1, 1717 + 71 + FLIP_X, 1717 + 71,
+  ]);
+  assert.deepEqual(cyberPlatform.restored.tileData.terrain[18].slice(20, 25), [
+    1717 + 71 + FLIP_X, 1717 + 69, 1717 + 70, 1717 + 68, 1717 + 71,
+  ]);
+
+  await page.locator('#smart-style-select').selectOption('cyber-yellow');
+  await page.locator('#smart-material-select').selectOption('cyber.support');
+  const cyberSupport = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    for (let y = 4; y <= 7; y += 1) runtime.placeTileAt(18 * 16 + 1, y * 16 + 1);
+    runtime.commitTileBatch();
+    const complete = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(18 * 16 + 1, 5 * 16 + 1);
+    runtime.commitTileBatch();
+    const repaired = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.placeTileAt(18 * 16 + 1, 5 * 16 + 1);
+    runtime.commitTileBatch();
+    runtime.beginTileBatch();
+    runtime.stampShape('rect', 32, 18, 35, 20, { outline: false, erase: false });
+    runtime.commitTileBatch();
+    return { complete, repaired, bank: runtime.exportRoomSnapshot() };
+  });
+  assert.deepEqual(cyberSupport.complete.tileData.background.slice(4, 8).map((row) => row[18]), [
+    1633 + 36, 1633 + 48, 1633 + 60, 1633 + 72,
+  ]);
+  assert.deepEqual(cyberSupport.repaired.tileData.background.slice(4, 8).map((row) => row[18]), [
+    1633 + 36, -1, 1633 + 36, 1633 + 60,
+  ]);
+  assert.deepEqual(cyberSupport.bank.tileData.background.slice(18, 21).map((row) => row.slice(32, 36)), [
+    [1633 + 36, 1633 + 36 + FLIP_X, 1633 + 36 + FLIP_X, 1633 + 36],
+    [1633 + 60, 1633 + 60 + FLIP_X, 1633 + 60, 1633 + 60 + FLIP_X],
+    [1633 + 72, 1633 + 72 + FLIP_X, 1633 + 72, 1633 + 72 + FLIP_X],
+  ]);
+  assert.deepEqual(cyberSupport.bank.tileData.terrain.slice(4, 8).map((row) => row[18]), [-1, -1, -1, -1]);
+
+  await page.locator('#smart-material-select').selectOption('cyber.neon-strip');
+  const cyberNeon = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    for (let x = 20; x <= 24; x += 1) runtime.placeTileAt(x * 16 + 1, 8 * 16 + 1);
+    runtime.commitTileBatch();
+    const complete = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(22 * 16 + 1, 8 * 16 + 1);
+    runtime.commitTileBatch();
+    const repaired = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.placeTileAt(22 * 16 + 1, 8 * 16 + 1);
+    runtime.commitTileBatch();
+    return { complete, repaired, restored: runtime.exportRoomSnapshot() };
+  });
+  assert.deepEqual(cyberNeon.complete.tileData.terrain[8].slice(20, 25), [
+    1633 + 49, 1633 + 50, 1633 + 73, 1633 + 74, 1633 + 51,
+  ]);
+  assert.deepEqual(cyberNeon.repaired.tileData.terrain[8].slice(20, 25), [-1, -1, -1, -1, -1]);
+  assert.deepEqual(cyberNeon.restored.tileData.terrain[8].slice(20, 25), [
+    1633 + 49, 1633 + 50, 1633 + 73, 1633 + 74, 1633 + 51,
+  ]);
+
+  await page.locator('#smart-material-select').selectOption('cyber.rubble');
+  const cyberRubble = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    runtime.stampShape('rect', 20, 10, 22, 11, { outline: false, erase: false });
+    runtime.commitTileBatch();
+    const complete = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(21 * 16 + 1, 10 * 16 + 1);
+    runtime.commitTileBatch();
+    return { complete, repaired: runtime.exportRoomSnapshot() };
+  });
+  assert.deepEqual(cyberRubble.complete.tileData.terrain.slice(10, 12).map((row) => row.slice(20, 23)), [
+    [1645, 1645, 1645], [1645, 1645, 1645],
+  ]);
+  assert.deepEqual(cyberRubble.repaired.tileData.terrain.slice(10, 12).map((row) => row.slice(20, 23)), [
+    [1645, -1, 1645], [1645, 1645, 1645],
+  ]);
+  summary.checks.cyberPathMinimumsAndRepair = true;
+
+  await page.locator('#smart-style-select').selectOption('cyber-pink');
+  await page.locator('#smart-material-select').selectOption('cyber.framed-panel');
+  const cyberPanelClipboard = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    for (let x = 26; x <= 30; x += 1) runtime.placeTileAt(x * 16 + 1, 3 * 16 + 1);
+    runtime.commitTileBatch();
+    runtime.copyTilesToClipboard(26, 3, 30, 4);
+    runtime.beginTileBatch();
+    runtime.pasteClipboardAt(26, 12);
+    runtime.commitTileBatch();
+    const complete = runtime.exportRoomSnapshot();
+    runtime.copyTilesToClipboard(26, 3, 30, 3);
+    runtime.beginTileBatch();
+    runtime.pasteClipboardAt(33, 12);
+    runtime.commitTileBatch();
+    const partial = runtime.exportRoomSnapshot();
+    return { complete, partial };
+  });
+  assert.equal(Object.keys(cyberPanelClipboard.complete.smartTerrain.recipes).length, 2);
+  assert.equal(Object.keys(cyberPanelClipboard.partial.smartTerrain.recipes).length, 2);
+  assert.deepEqual(cyberPanelClipboard.complete.tileData.foreground[3].slice(26, 31), [
+    1717 + 44, 1717 + 45, 1717 + 45, 1717 + 45, 1717 + 46,
+  ]);
+  assert.deepEqual(cyberPanelClipboard.complete.tileData.foreground[12].slice(26, 31), [
+    1717 + 44, 1717 + 45, 1717 + 45, 1717 + 45, 1717 + 46,
+  ]);
+  assert.deepEqual(cyberPanelClipboard.partial.tileData.foreground[12].slice(33, 38), [
+    1717 + 44, 1717 + 45, 1717 + 45, 1717 + 45, 1717 + 46,
+  ]);
+  summary.checks.cyberBrushesAndRecipeClipboard = true;
+
+  await page.locator('.palette-tab[data-mode="tiles"]').click();
+  await page.locator('.layer-btn[data-layer="foreground"]').click();
+  const suppressed = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(27 * 16 + 1, 3 * 16 + 1);
+    runtime.commitTileBatch();
+    return runtime.exportRoomSnapshot();
+  });
+  await page.locator('.palette-tab[data-mode="smart"]').click();
+  await page.locator('#smart-theme-select').selectOption('cyber');
+  await page.locator('#smart-style-select').selectOption('cyber-pink');
+  await page.locator('#smart-material-select').selectOption('cyber.framed-panel');
+  const smartErasureAndReload = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(28 * 16 + 1, 4 * 16 + 1);
+    runtime.commitTileBatch();
+    const smartErased = runtime.exportRoomSnapshot();
+    const serialized = JSON.parse(JSON.stringify(smartErased));
+    runtime.applyRoomSnapshot(serialized);
+    const reloaded = runtime.exportRoomSnapshot();
+    return { smartErased, reloaded };
+  });
+  const cyberSuppressionAndReload = { suppressed, ...smartErasureAndReload };
+  assert.ok(cyberSuppressionAndReload.suppressed.smartTerrain.suppressedOutputParts.some(
+    (entry) => entry.endsWith(':row-0:column-1'),
+  ));
+  assert.equal(Object.keys(cyberSuppressionAndReload.smartErased.smartTerrain.recipes).length, 1);
+  assert.deepEqual(cyberSuppressionAndReload.reloaded.smartTerrain, cyberSuppressionAndReload.smartErased.smartTerrain);
+  assert.deepEqual(cyberSuppressionAndReload.reloaded.tileData, cyberSuppressionAndReload.smartErased.tileData);
+  assert.equal(cyberSuppressionAndReload.reloaded.tileData.terrain[4][35], 1633 + 83 + FLIP_X + FLIP_Y);
+  summary.checks.cyberSuppressionAndReload = true;
+  summary.checks.cyberFixedLayers = true;
+  await dismissKeepBuilding(page);
+  await page.evaluate(() => {
+    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.fitToScreen();
+  });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(outputDir, 'cyber-recipes.png') });
+
+  await page.locator('#smart-theme-select').selectOption('forest');
+  assert.equal(await page.locator('#smart-material-select').inputValue(), 'forest.ground');
+  assert.equal(await page.locator('#smart-style-row').isVisible(), false);
+
   await page.locator('#btn-editor-top-tool-more').click();
   const ellipseButton = page.locator('#editor-top-more-tools-panel [data-tool="ellipse"]');
   await ellipseButton.click();
@@ -154,7 +503,7 @@ try {
     const material = document.querySelector('#smart-material-select');
     theme.value = 'forest';
     theme.dispatchEvent(new Event('change', { bubbles: true }));
-    material.value = 'ground';
+    material.value = 'forest.ground';
     material.dispatchEvent(new Event('change', { bubbles: true }));
   });
   const groundFixtures = await page.evaluate(() => {
@@ -211,6 +560,7 @@ try {
     runtime.eraseTileAt(7 * 16 + 1, 7 * 16 + 1);
     runtime.commitTileBatch();
   });
+  assert.equal(await page.locator('#smart-material-select').inputValue(), 'gothic.ground');
   const gothicTunnelFloor = await page.evaluate(() => (
     window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime.exportRoomSnapshot()
   ));
@@ -235,7 +585,7 @@ try {
 
   await page.evaluate(() => {
     const material = document.querySelector('#smart-material-select');
-    material.value = 'tunnel';
+    material.value = 'water.tunnel';
     material.dispatchEvent(new Event('change', { bubbles: true }));
   });
   assert.equal(await page.locator('#smart-theme-select').inputValue(), 'water');
@@ -269,7 +619,7 @@ try {
 
   await page.evaluate(() => {
     const material = document.querySelector('#smart-material-select');
-    material.value = 'feature';
+    material.value = 'forest.feature';
     material.dispatchEvent(new Event('change', { bubbles: true }));
   });
   assert.equal(await page.locator('#smart-theme-select').inputValue(), 'forest');
@@ -314,10 +664,10 @@ try {
       runtime.clearCurrentLayer();
       const material = document.querySelector('#smart-material-select');
       const themeSelect = document.querySelector('#smart-theme-select');
-      material.value = 'ground';
-      material.dispatchEvent(new Event('change', { bubbles: true }));
       themeSelect.value = theme;
       themeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      material.value = `${theme}.ground`;
+      material.dispatchEvent(new Event('change', { bubbles: true }));
       runtime.beginTileBatch();
       for (const y of [2, 5, 8, 11, 14, 17, 20]) {
         for (let x = 0; x < 40; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
@@ -337,6 +687,48 @@ try {
     await page.screenshot({ path: path.join(outputDir, `decorations-${themeName}.png`) });
   }
   summary.checks.themeDecorationPools = true;
+  await context.close();
+
+  const courseContext = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+  await courseContext.addInitScript(() => {
+    window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
+    window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+    window.localStorage.setItem('wamp.settings.builderMode', 'advanced');
+  });
+  const coursePage = await courseContext.newPage();
+  coursePage.on('console', (message) => {
+    if (message.type() === 'error' && !message.text().includes('ws://127.0.0.1:1999/parties/')) {
+      summary.consoleErrors.push(message.text());
+    }
+  });
+  coursePage.on('pageerror', (error) => summary.pageErrors.push(error.message));
+  await coursePage.goto(url.toString(), { waitUntil: 'domcontentloaded' });
+  await coursePage.waitForFunction(() => typeof window.run_preview_smoke_action === 'function');
+  await coursePage.waitForFunction(() => document.body.dataset.appReady === 'true');
+  const courseOpened = await coursePage.evaluate(() => (
+    window.run_preview_smoke_action?.('openSyntheticCourseEditor')
+  ));
+  assert.equal(courseOpened?.ok, true);
+  await coursePage.waitForFunction(() => document.body.dataset.editorCourseMode === 'true');
+  await coursePage.locator('#smart-theme-select').selectOption('cyber');
+  await coursePage.locator('#smart-style-select').selectOption('cyber-pink');
+  await coursePage.locator('#smart-material-select').selectOption('cyber.support');
+  assert.equal(await coursePage.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
+  await assertLocalEditorState(coursePage, {
+    theme: 'cyber',
+    brush: 'cyber.support',
+    style: 'cyber-pink',
+    layer: 'background',
+  });
+  assert.equal(await coursePage.locator('[data-tool="ellipse"]').first().isDisabled(), true);
+  assert.match(
+    await coursePage.locator('#smart-palette-hint').textContent() ?? '',
+    /Ellipse and Fill are unavailable/,
+  );
+  await coursePage.locator('#btn-editor-top-tool-more').click();
+  await coursePage.screenshot({ path: path.join(outputDir, 'cyber-course-support-tools.png') });
+  await courseContext.close();
+  summary.checks.cyberCourseRegistryUi = true;
 
   const welcomeContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   await welcomeContext.addInitScript(() => {

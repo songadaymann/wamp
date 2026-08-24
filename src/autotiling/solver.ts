@@ -4,13 +4,17 @@ import { getTilesetByKey } from '../config/tilesets';
 import type { RoomTileData } from '../persistence/roomModel';
 import {
   cloneRoomSmartTerrainState,
+  getSmartLegacyBrushId,
   smartCellKey,
   smartDecorationSlotKey,
+  smartOwnedOutputKey,
+  smartSemanticCellKey,
   type RoomSmartTerrainState,
   type SmartTerrainCellState,
   type SmartTerrainMaterial,
   type SmartTerrainTheme,
 } from './model';
+import { resolveSmartRecipeDocument } from './recipeSolver';
 
 export interface SmartCellCoordinate {
   x: number;
@@ -206,9 +210,10 @@ function getFamilyLocalIndices(theme: SmartTerrainTheme, material: SmartTerrainM
 
 export function classifySmartTerrainGid(gid: number): Omit<SmartTerrainCellState, 'lockedGid'> | null {
   for (const theme of ['forest', 'desert', 'cave', 'gothic', 'water'] as const) {
-    const firstGid = getFirstGid(theme);
+    const tileset = getTilesetByKey(theme);
+    const firstGid = tileset?.firstGid ?? 1;
     const localIndex = gid - firstGid;
-    if (localIndex < 0 || localIndex >= 72) {
+    if (localIndex < 0 || localIndex >= (tileset?.tileCount ?? 0)) {
       continue;
     }
     // Specific sub-families win when the source sheet intentionally reuses a cap
@@ -400,9 +405,12 @@ function clearOwnedDecorations(tileData: RoomTileData, state: RoomSmartTerrainSt
         delete generated[targetKey];
         continue;
       }
-      if (decodeTileDataValue(tileData[layer][y]?.[x] ?? -1).gid === decoration.gid) {
+      const currentValue = tileData[layer][y]?.[x] ?? -1;
+      const expectedValue = decoration.value ?? decoration.gid;
+      if (currentValue === expectedValue) {
         tileData[layer][y][x] = -1;
       }
+      delete state.ownedOutputs[smartOwnedOutputKey(layer, x, y)];
       delete generated[targetKey];
     }
   };
@@ -430,7 +438,7 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
       enclosedVoidCache.set(familyKey, enclosedVoidCells);
     }
     const resolved = resolveLocalIndex(tileData, state, x, y, cell, enclosedVoidCells);
-    tileData.terrain[y][x] = cell.lockedGid ?? cell.shapeGid
+    tileData.terrain[y][x] = cell.lockedValue ?? cell.lockedGid ?? cell.shapeValue ?? cell.shapeGid
       ?? encodeTileDataValue(toGid(cell.theme, resolved.localIndex), resolved.flipX, resolved.flipY);
   }
 
@@ -441,7 +449,7 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
       continue;
     }
     const resolved = resolveLocalIndex(tileData, state, x, y, cell, new Set<string>());
-    tileData.background[y][x] = cell.lockedGid ?? cell.shapeGid
+    tileData.background[y][x] = cell.lockedValue ?? cell.lockedGid ?? cell.shapeValue ?? cell.shapeGid
       ?? encodeTileDataValue(toGid(cell.theme, resolved.localIndex), resolved.flipX, resolved.flipY);
   }
 
@@ -457,17 +465,26 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     slot: import('./model').SmartGeneratedDecorationState['slot'],
     localIndex: number,
     flipX = false,
+    flipY = false,
     layer: 'foreground' | 'background' = 'foreground',
   ) => {
     if (!inBounds(targetX, targetY)) return;
     const slotKey = smartDecorationSlotKey(ownerKey, slot);
     if (suppressed.has(slotKey) || decodeTileDataValue(tileData[layer][targetY]?.[targetX] ?? -1).gid > 0) return;
     const gid = toGid(state.cells[ownerKey]!.theme, localIndex);
-    tileData[layer][targetY][targetX] = encodeTileDataValue(gid, flipX, false);
+    const value = encodeTileDataValue(gid, flipX, flipY);
+    tileData[layer][targetY][targetX] = value;
     const generated = layer === 'foreground'
       ? state.generatedDecorations
       : state.generatedBackgroundDecorations;
-    generated[smartCellKey(targetX, targetY)] = { ownerKey, slot, gid };
+    generated[smartCellKey(targetX, targetY)] = { ownerKey, slot, gid, value };
+    state.ownedOutputs[smartOwnedOutputKey(layer, targetX, targetY)] = {
+      ownerId: `legacy-cell:${ownerKey}`,
+      partId: slot,
+      kind: 'legacy-decoration',
+      layer,
+      value,
+    };
   };
   const featureCandidates = new Map<string, SmartTerrainCellState>();
   for (const [ownerKey, cell] of Object.entries(state.cells)) {
@@ -482,8 +499,9 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
       continue;
     }
     if (cell.material !== 'ground' || sameFamily(tileData, state, x, y - 1, cell)) continue;
-    if (cell.shapeGid) {
-      const localIndex = decodeTileDataValue(cell.shapeGid).gid - getFirstGid(cell.theme);
+    const shapeValue = cell.shapeValue ?? cell.shapeGid;
+    if (shapeValue) {
+      const localIndex = decodeTileDataValue(shapeValue).gid - getFirstGid(cell.theme);
       if (!GROUND_TOP_LOCAL_INDICES.has(localIndex)) continue;
     }
     const decorationHash = Math.abs(Math.imul(x + 31, 73856093) ^ Math.imul(y + 17, 19349663));
@@ -528,16 +546,16 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     } else if (cardinalCount === 3) {
       if (!right) {
         addDecoration(ownerKey, x, y, 'topRight', border.topLeft, true);
-        addDecoration(ownerKey, x, y, 'bottom', border.bottom, false, 'background');
+        addDecoration(ownerKey, x, y, 'bottom', border.bottom, false, false, 'background');
       } else if (!left) {
         addDecoration(ownerKey, x, y, 'topLeft', border.topLeft);
-        addDecoration(ownerKey, x, y, 'bottom', border.bottom, false, 'background');
+        addDecoration(ownerKey, x, y, 'bottom', border.bottom, false, false, 'background');
       } else if (!below) {
         addDecoration(ownerKey, x, y, 'bottomRight', border.bottomRight);
-        addDecoration(ownerKey, x, y, 'left', border.left, false, 'background');
+        addDecoration(ownerKey, x, y, 'left', border.left, false, false, 'background');
       } else if (!above) {
         addDecoration(ownerKey, x, y, 'topRight', border.topLeft, true);
-        addDecoration(ownerKey, x, y, 'left', border.left, false, 'background');
+        addDecoration(ownerKey, x, y, 'left', border.left, false, false, 'background');
       }
     }
   }
@@ -549,23 +567,30 @@ export function applySmartCells(
 ): SmartTerrainDocument {
   const tileData = cloneTileData(document.tileData);
   const smartTerrain = cloneRoomSmartTerrainState(document.smartTerrain);
+  if (smartTerrain.editingDisabled) return { tileData, smartTerrain };
   const backdrop = options.material === 'tunnel';
   const targetCells = backdrop ? smartTerrain.backdropCells : smartTerrain.cells;
   const targetLayer = backdrop ? tileData.background : tileData.terrain;
   const canonicalTheme = backdrop ? 'water' : options.theme === 'water' ? 'forest' : options.theme;
+  const brushId = getSmartLegacyBrushId(canonicalTheme, options.material);
+  if (!brushId) return { tileData, smartTerrain };
   for (const { x, y } of options.cells) {
     if (!inBounds(x, y)) {
       continue;
     }
     const key = smartCellKey(x, y);
+    const semanticKey = smartSemanticCellKey(backdrop ? 'background' : 'terrain', x, y);
+    delete smartTerrain.semanticCells[semanticKey];
     for (const [neighborX, neighborY] of [[x, y - 1], [x + 1, y], [x, y + 1], [x - 1, y]]) {
       const neighbor = targetCells[smartCellKey(neighborX, neighborY)];
       if (neighbor?.theme === canonicalTheme && neighbor.material === options.material) {
         delete neighbor.shapeGid;
+        delete neighbor.shapeValue;
       }
     }
     if (options.mode === 'erase') {
       delete targetCells[key];
+      delete smartTerrain.semanticCells[semanticKey];
       smartTerrain.suppressedDecorationSlots = smartTerrain.suppressedDecorationSlots.filter(
         (slot) => !slot.startsWith(`${key}:`),
       );
@@ -574,6 +599,13 @@ export function applySmartCells(
       targetCells[key] = {
         theme: canonicalTheme,
         material: options.material,
+        styleId: canonicalTheme,
+        brushId,
+      };
+      smartTerrain.semanticCells[semanticKey] = {
+        styleId: canonicalTheme,
+        brushId,
+        legacySource: true,
       };
       smartTerrain.suppressedDecorationSlots = smartTerrain.suppressedDecorationSlots.filter(
         (slot) => !slot.startsWith(`${key}:`),
@@ -581,7 +613,7 @@ export function applySmartCells(
     }
   }
   resolveDocument(tileData, smartTerrain);
-  return { tileData, smartTerrain };
+  return resolveSmartRecipeDocument({ tileData, smartTerrain });
 }
 
 /**
@@ -593,6 +625,12 @@ export function applySmartOutlineCells(
   document: SmartTerrainDocument,
   options: ApplySmartOutlineCellsOptions,
 ): SmartTerrainDocument {
+  if (document.smartTerrain.editingDisabled) {
+    return {
+      tileData: cloneTileData(document.tileData),
+      smartTerrain: cloneRoomSmartTerrainState(document.smartTerrain),
+    };
+  }
   const filledCells = Array.from(options.filledCells).filter(({ x, y }) => inBounds(x, y));
   const outlineCells = Array.from(options.outlineCells).filter(({ x, y }) => inBounds(x, y));
   const reference = applySmartCells(document, {
@@ -616,12 +654,14 @@ export function applySmartOutlineCells(
     const cell = targetCells[key];
     const resolvedGid = reference.tileData[layer][y]?.[x] ?? -1;
     if (cell && resolvedGid > 0) {
-      targetCells[key] = { ...cell, shapeGid: resolvedGid };
+      targetCells[key] = { ...cell, shapeValue: resolvedGid, shapeGid: resolvedGid };
+      const semantic = result.smartTerrain.semanticCells[smartSemanticCellKey(layer, x, y)];
+      if (semantic) semantic.shapeValue = resolvedGid;
     }
   }
 
   resolveDocument(result.tileData, result.smartTerrain);
-  return result;
+  return resolveSmartRecipeDocument(result);
 }
 
 export function lockSmartTerrainCell(
@@ -633,15 +673,18 @@ export function lockSmartTerrainCell(
 ): SmartTerrainDocument {
   const tileData = cloneTileData(document.tileData);
   const smartTerrain = cloneRoomSmartTerrainState(document.smartTerrain);
+  if (smartTerrain.editingDisabled) return { tileData, smartTerrain };
   const key = smartCellKey(x, y);
   const cells = layer === 'background' ? smartTerrain.backdropCells : smartTerrain.cells;
   const cell = cells[key];
   tileData[layer][y][x] = gid;
   if (cell) {
-    cells[key] = { ...cell, lockedGid: gid };
+    cells[key] = { ...cell, lockedValue: gid, lockedGid: gid };
+    const semantic = smartTerrain.semanticCells[smartSemanticCellKey(layer, x, y)];
+    if (semantic) semantic.lockedValue = gid;
   }
   resolveDocument(tileData, smartTerrain);
-  return { tileData, smartTerrain };
+  return resolveSmartRecipeDocument({ tileData, smartTerrain });
 }
 
 export function setSmartTerrainDetailsEnabled(
@@ -650,9 +693,10 @@ export function setSmartTerrainDetailsEnabled(
 ): SmartTerrainDocument {
   const tileData = cloneTileData(document.tileData);
   const smartTerrain = cloneRoomSmartTerrainState(document.smartTerrain);
+  if (smartTerrain.editingDisabled) return { tileData, smartTerrain };
   smartTerrain.detailsEnabled = enabled;
   resolveDocument(tileData, smartTerrain);
-  return { tileData, smartTerrain };
+  return resolveSmartRecipeDocument({ tileData, smartTerrain });
 }
 
 export function fillEmptySmartTerrain(
@@ -680,6 +724,7 @@ export function suppressGeneratedDecorationAt(
 ): SmartTerrainDocument {
   const tileData = cloneTileData(document.tileData);
   const smartTerrain = cloneRoomSmartTerrainState(document.smartTerrain);
+  if (smartTerrain.editingDisabled) return { tileData, smartTerrain };
   const targetKey = smartCellKey(x, y);
   const layer = requestedLayer
     ?? (smartTerrain.generatedDecorations[targetKey] ? 'foreground' : 'background');

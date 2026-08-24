@@ -1,4 +1,7 @@
-export const SMART_TERRAIN_VERSION = 1 as const;
+import { LAYER_NAMES, type LayerName } from '../config/room';
+
+export const SMART_TERRAIN_LEGACY_VERSION = 1 as const;
+export const SMART_TERRAIN_VERSION = 2 as const;
 
 export const SMART_TERRAIN_THEMES = ['forest', 'desert', 'cave', 'gothic', 'water'] as const;
 export type SmartTerrainTheme = typeof SMART_TERRAIN_THEMES[number];
@@ -6,38 +9,241 @@ export type SmartTerrainTheme = typeof SMART_TERRAIN_THEMES[number];
 export const SMART_TERRAIN_MATERIALS = ['ground', 'platform', 'feature', 'tunnel'] as const;
 export type SmartTerrainMaterial = typeof SMART_TERRAIN_MATERIALS[number];
 
+export const SMART_STYLE_IDS = [
+  'forest', 'desert', 'cave', 'gothic', 'water', 'cyber-yellow', 'cyber-pink',
+] as const;
+export type SmartStyleId = typeof SMART_STYLE_IDS[number];
+
+export const SMART_LEGACY_BRUSH_IDS = [
+  'forest.ground', 'forest.platform', 'forest.feature',
+  'desert.ground', 'desert.platform', 'desert.feature',
+  'cave.ground', 'cave.platform', 'cave.feature',
+  'gothic.ground', 'gothic.platform', 'gothic.feature',
+  'water.tunnel',
+] as const;
+export type SmartLegacyBrushId = typeof SMART_LEGACY_BRUSH_IDS[number];
+
+export const SMART_CYBER_BRUSH_IDS = [
+  'cyber.structure', 'cyber.platform', 'cyber.rubble',
+  'cyber.support', 'cyber.neon-strip', 'cyber.framed-panel',
+] as const;
+export type SmartCyberBrushId = typeof SMART_CYBER_BRUSH_IDS[number];
+
+export const SMART_BRUSH_IDS = [
+  ...SMART_LEGACY_BRUSH_IDS,
+  ...SMART_CYBER_BRUSH_IDS,
+] as const;
+export type SmartBrushId = typeof SMART_BRUSH_IDS[number];
+
+/** Accepted only while normalizing transient v2 payloads from pre-contract builds. */
+export const SMART_TRANSIENT_BRUSH_ALIASES = ['ground', 'platform', 'feature', 'tunnel'] as const;
+export type SmartTransientBrushAlias = typeof SMART_TRANSIENT_BRUSH_ALIASES[number];
+
+/** A complete room tile value: gid plus any encoded flip flags. */
+export type SmartEncodedTileValue = number;
+
 export interface SmartTerrainCellState {
   theme: SmartTerrainTheme;
   material: SmartTerrainMaterial;
-  /** Exact baked gid protected from automatic re-resolution until Smart paints this cell again. */
-  lockedGid?: number;
-  /** Shape-derived outward-facing gid; nearby Smart edits clear this so the cell can repair normally. */
-  shapeGid?: number;
+  /** Stable v2 aliases. Legacy callers may continue to use theme/material. */
+  styleId?: SmartStyleId;
+  brushId?: SmartBrushId;
+  lockedValue?: SmartEncodedTileValue;
+  shapeValue?: SmartEncodedTileValue;
+  /** @deprecated Compatibility alias for lockedValue. */
+  lockedGid?: SmartEncodedTileValue;
+  /** @deprecated Compatibility alias for shapeValue. */
+  shapeGid?: SmartEncodedTileValue;
 }
+
+export interface SmartSemanticCellState {
+  styleId: SmartStyleId;
+  brushId: SmartBrushId;
+  /** Full encoded tile value, including flip flags. */
+  lockedValue?: SmartEncodedTileValue;
+  /** Full encoded tile value, including flip flags. */
+  shapeValue?: SmartEncodedTileValue;
+  /** Compatibility mirror rebuilt from cells/backdropCells on normalization. */
+  legacySource?: true;
+}
+
+export interface SmartCellCoordinate {
+  x: number;
+  y: number;
+}
+
+export interface SmartLayerCellCoordinate extends SmartCellCoordinate {
+  layer: LayerName;
+}
+
+export type SmartSemanticCellKey = `${LayerName}:${number},${number}`;
+export type SmartRecipeParameterValue = string | number | boolean;
+
+export interface SmartRecipeInstanceState {
+  /** Stable recipe/profile ID; the record key is this instance's owner ID. */
+  recipeId: string;
+  styleId: SmartStyleId;
+  brushId: SmartBrushId;
+  anchor: SmartLayerCellCoordinate;
+  sourceCells: SmartLayerCellCoordinate[];
+  parameters: Record<string, SmartRecipeParameterValue>;
+}
+
+export const SMART_OWNED_OUTPUT_KINDS = ['semantic', 'recipe', 'legacy-decoration'] as const;
+export type SmartOwnedOutputKind = typeof SMART_OWNED_OUTPUT_KINDS[number];
+
+export interface SmartOwnedOutputState {
+  ownerId: string;
+  partId: string;
+  kind: SmartOwnedOutputKind;
+  layer: LayerName;
+  /** Full encoded tile value, including flip flags. */
+  value: SmartEncodedTileValue;
+}
+
+export type SmartOwnedOutputKey = `${LayerName}:${number},${number}`;
 
 export interface SmartGeneratedDecorationState {
   ownerKey: string;
   slot: 'top' | 'bottom' | 'left' | 'right' | 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
   gid: number;
+  /** Optional full encoded tile value; gid remains for legacy consumers. */
+  value?: SmartEncodedTileValue;
 }
 
+/** v2 is a superset of v1 so the current editor/solver can migrate incrementally. */
 export interface RoomSmartTerrainState {
-  version: typeof SMART_TERRAIN_VERSION;
+  /** Unknown future versions retain their source number and are opened read-only. */
+  version: number;
+  editingDisabled: boolean;
+  editingDisabledReason?: string;
+  /** Original unknown payload for lossless round-tripping by a newer client. */
+  preservedFutureState?: Record<string, unknown>;
   detailsEnabled: boolean;
-  /** Sparse terrain-layer cells keyed as `x,y`. */
+  /** Canonical, layer-qualified sources keyed as `layer:x,y`. */
+  semanticCells: Record<string, SmartSemanticCellState>;
+  /** Recipe instances keyed by stable instance/owner ID. */
+  recipes: Record<string, SmartRecipeInstanceState>;
+  /** Engine-owned rendered outputs keyed as `layer:x,y`. */
+  ownedOutputs: Record<string, SmartOwnedOutputState>;
+  /** Owner/part IDs deliberately removed by a manual edit. */
+  suppressedOutputParts: string[];
+  /** @deprecated Terrain-layer compatibility cells keyed as `x,y`. */
   cells: Record<string, SmartTerrainCellState>;
-  /** Sparse Behind Player cells keyed as `x,y`, currently used by the Water tunnel backdrop brush. */
+  /** @deprecated Background-layer compatibility cells keyed as `x,y`. */
   backdropCells: Record<string, SmartTerrainCellState>;
-  /** Sparse engine-owned foreground cells keyed as `x,y`. */
+  /** @deprecated Engine-owned foreground cells keyed as `x,y`. */
   generatedDecorations: Record<string, SmartGeneratedDecorationState>;
-  /** Sparse engine-owned background cells keyed as `x,y`, used when a feature notch needs two edges. */
+  /** @deprecated Engine-owned background cells keyed as `x,y`. */
   generatedBackgroundDecorations: Record<string, SmartGeneratedDecorationState>;
-  /** Owner/slot keys deliberately removed by a manual edit. */
+  /** @deprecated Owner/slot keys deliberately removed by a manual edit. */
   suppressedDecorationSlots: string[];
+}
+
+interface RoomSmartTerrainStateV1 {
+  version?: typeof SMART_TERRAIN_LEGACY_VERSION;
+  detailsEnabled?: boolean;
+  cells?: unknown;
+  backdropCells?: unknown;
+  generatedDecorations?: unknown;
+  generatedBackgroundDecorations?: unknown;
+  suppressedDecorationSlots?: unknown;
+}
+
+const CELL_KEY_PATTERN = /^\d+,\d+$/;
+const LAYER_CELL_KEY_PATTERN = /^(background|terrain|foreground):\d+,\d+$/;
+const DECORATION_SLOT_PATTERN = /^\d+,\d+:(top|bottom|left|right|topLeft|topRight|bottomLeft|bottomRight)$/;
+const LEGACY_SEMANTIC_OWNER_PREFIX = 'legacy-cell:';
+
+const LEGACY_STYLE_TO_THEME: Readonly<Partial<Record<SmartStyleId, SmartTerrainTheme>>> = {
+  forest: 'forest', desert: 'desert', cave: 'cave', gothic: 'gothic', water: 'water',
+};
+
+export interface LegacySmartBrushIdentity {
+  theme: SmartTerrainTheme;
+  material: SmartTerrainMaterial;
+}
+
+const LEGACY_BRUSH_IDENTITIES: Readonly<Record<SmartLegacyBrushId, LegacySmartBrushIdentity>> = {
+  'forest.ground': { theme: 'forest', material: 'ground' },
+  'forest.platform': { theme: 'forest', material: 'platform' },
+  'forest.feature': { theme: 'forest', material: 'feature' },
+  'desert.ground': { theme: 'desert', material: 'ground' },
+  'desert.platform': { theme: 'desert', material: 'platform' },
+  'desert.feature': { theme: 'desert', material: 'feature' },
+  'cave.ground': { theme: 'cave', material: 'ground' },
+  'cave.platform': { theme: 'cave', material: 'platform' },
+  'cave.feature': { theme: 'cave', material: 'feature' },
+  'gothic.ground': { theme: 'gothic', material: 'ground' },
+  'gothic.platform': { theme: 'gothic', material: 'platform' },
+  'gothic.feature': { theme: 'gothic', material: 'feature' },
+  'water.tunnel': { theme: 'water', material: 'tunnel' },
+};
+
+/** Maps the v1 theme/material pair to its stable v2 brush ID. */
+export function getSmartLegacyBrushId(
+  theme: SmartTerrainTheme,
+  material: SmartTerrainMaterial,
+): SmartLegacyBrushId | null {
+  const candidate = `${theme}.${material}`;
+  return SMART_LEGACY_BRUSH_IDS.includes(candidate as SmartLegacyBrushId)
+    ? candidate as SmartLegacyBrushId
+    : null;
+}
+
+/** Maps a canonical legacy brush ID back to the existing solver vocabulary. */
+export function getLegacySmartBrushIdentity(brushId: SmartBrushId): LegacySmartBrushIdentity | null {
+  return LEGACY_BRUSH_IDENTITIES[brushId as SmartLegacyBrushId] ?? null;
+}
+
+/** Canonicalizes a persisted brush ID, including the four short-lived generic v2 aliases. */
+export function normalizeSmartBrushId(styleId: SmartStyleId, value: unknown): SmartBrushId | null {
+  if (SMART_BRUSH_IDS.includes(value as SmartBrushId)) return value as SmartBrushId;
+  if (!SMART_TRANSIENT_BRUSH_ALIASES.includes(value as SmartTransientBrushAlias)) return null;
+  const theme = LEGACY_STYLE_TO_THEME[styleId];
+  return theme ? getSmartLegacyBrushId(theme, value as SmartTerrainMaterial) : null;
+}
+
+/**
+ * Validates the persisted source layer separately from the layers a brush may
+ * generate. This lives in the persistence model so malformed state cannot use
+ * a locked value to bypass the registry's required-layer contract.
+ */
+function isSmartBrushSourceCompatible(
+  styleId: SmartStyleId,
+  brushId: SmartBrushId,
+  layer: LayerName,
+): boolean {
+  const legacyIdentity = getLegacySmartBrushIdentity(brushId);
+  if (legacyIdentity) {
+    const sourceLayer = legacyIdentity.material === 'tunnel' ? 'background' : 'terrain';
+    return styleId === legacyIdentity.theme && layer === sourceLayer;
+  }
+  if (styleId !== 'cyber-yellow' && styleId !== 'cyber-pink') return false;
+  if (brushId === 'cyber.support') return layer === 'background';
+  if (brushId === 'cyber.framed-panel') return layer === 'foreground';
+  return layer === 'terrain' && (
+    brushId === 'cyber.structure'
+    || brushId === 'cyber.platform'
+    || brushId === 'cyber.rubble'
+    || brushId === 'cyber.neon-strip'
+  );
 }
 
 export function smartCellKey(x: number, y: number): string {
   return `${x},${y}`;
+}
+
+export function smartSemanticCellKey(layer: LayerName, x: number, y: number): SmartSemanticCellKey {
+  return `${layer}:${x},${y}`;
+}
+
+export function smartOwnedOutputKey(layer: LayerName, x: number, y: number): SmartOwnedOutputKey {
+  return `${layer}:${x},${y}`;
+}
+
+export function smartOwnedOutputPartKey(ownerId: string, partId: string): string {
+  return `${ownerId}:${partId}`;
 }
 
 export function smartDecorationSlotKey(ownerKey: string, slot: SmartGeneratedDecorationState['slot']): string {
@@ -47,7 +253,12 @@ export function smartDecorationSlotKey(ownerKey: string, slot: SmartGeneratedDec
 export function createRoomSmartTerrainState(): RoomSmartTerrainState {
   return {
     version: SMART_TERRAIN_VERSION,
+    editingDisabled: false,
     detailsEnabled: true,
+    semanticCells: {},
+    recipes: {},
+    ownedOutputs: {},
+    suppressedOutputParts: [],
     cells: {},
     backdropCells: {},
     generatedDecorations: {},
@@ -56,100 +267,342 @@ export function createRoomSmartTerrainState(): RoomSmartTerrainState {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function cloneJsonRecord(value: Record<string, unknown>): Record<string, unknown> {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(value) as Record<string, unknown>;
+  }
+  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+}
+
+function isEncodedTileValue(value: unknown): value is SmartEncodedTileValue {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function isLayerName(value: unknown): value is LayerName {
+  return LAYER_NAMES.includes(value as LayerName);
+}
+
+function isLayerCoordinate(value: unknown): value is SmartLayerCellCoordinate {
+  if (!isRecord(value)) return false;
+  return isLayerName(value.layer)
+    && Number.isInteger(value.x) && (value.x as number) >= 0
+    && Number.isInteger(value.y) && (value.y as number) >= 0;
+}
+
 function normalizeSmartCells(value: unknown, expectedLayer: 'terrain' | 'background'): Record<string, SmartTerrainCellState> {
   const cells: Record<string, SmartTerrainCellState> = {};
-  if (!value || typeof value !== 'object') return cells;
+  if (!isRecord(value)) return cells;
   for (const [key, cell] of Object.entries(value)) {
-    if (!/^\d+,\d+$/.test(key) || !cell || typeof cell !== 'object') continue;
-    const entry = cell as Partial<SmartTerrainCellState>;
+    if (!CELL_KEY_PATTERN.test(key) || !isRecord(cell)) continue;
+    const theme = cell.theme;
+    const material = cell.material;
     if (
-      !SMART_TERRAIN_THEMES.includes(entry.theme as SmartTerrainTheme)
-      || !SMART_TERRAIN_MATERIALS.includes(entry.material as SmartTerrainMaterial)
-      || (expectedLayer === 'background') !== (entry.material === 'tunnel')
-      || (entry.theme === 'water') !== (entry.material === 'tunnel')
+      !SMART_TERRAIN_THEMES.includes(theme as SmartTerrainTheme)
+      || !SMART_TERRAIN_MATERIALS.includes(material as SmartTerrainMaterial)
+      || (expectedLayer === 'background') !== (material === 'tunnel')
+      || (theme === 'water') !== (material === 'tunnel')
     ) continue;
+    const lockedValue = isEncodedTileValue(cell.lockedGid)
+      ? cell.lockedGid
+      : isEncodedTileValue(cell.lockedValue) ? cell.lockedValue : undefined;
+    const shapeValue = isEncodedTileValue(cell.shapeGid)
+      ? cell.shapeGid
+      : isEncodedTileValue(cell.shapeValue) ? cell.shapeValue : undefined;
+    const canonicalTheme = theme as SmartTerrainTheme;
+    const canonicalMaterial = material as SmartTerrainMaterial;
+    const brushId = getSmartLegacyBrushId(canonicalTheme, canonicalMaterial);
+    if (!brushId) continue;
     cells[key] = {
-      theme: entry.theme as SmartTerrainTheme,
-      material: entry.material as SmartTerrainMaterial,
-      ...(typeof entry.lockedGid === 'number' && Number.isInteger(entry.lockedGid) && entry.lockedGid > 0
-        ? { lockedGid: entry.lockedGid }
-        : {}),
-      ...(typeof entry.shapeGid === 'number' && Number.isInteger(entry.shapeGid) && entry.shapeGid > 0
-        ? { shapeGid: entry.shapeGid }
-        : {}),
+      theme: canonicalTheme,
+      material: canonicalMaterial,
+      styleId: canonicalTheme,
+      brushId,
+      ...(lockedValue === undefined ? {} : { lockedValue, lockedGid: lockedValue }),
+      ...(shapeValue === undefined ? {} : { shapeValue, shapeGid: shapeValue }),
+    };
+  }
+  return cells;
+}
+
+function normalizeSemanticCells(value: unknown): Record<string, SmartSemanticCellState> {
+  const cells: Record<string, SmartSemanticCellState> = {};
+  if (!isRecord(value)) return cells;
+  for (const [key, cell] of Object.entries(value)) {
+    if (!LAYER_CELL_KEY_PATTERN.test(key) || !isRecord(cell)) continue;
+    if (!SMART_STYLE_IDS.includes(cell.styleId as SmartStyleId)) continue;
+    const styleId = cell.styleId as SmartStyleId;
+    const brushId = normalizeSmartBrushId(styleId, cell.brushId);
+    if (!brushId) continue;
+    const layer = key.slice(0, key.indexOf(':')) as LayerName;
+    if (!isSmartBrushSourceCompatible(styleId, brushId, layer)) continue;
+    const lockedValue = isEncodedTileValue(cell.lockedValue) ? cell.lockedValue : undefined;
+    const shapeValue = isEncodedTileValue(cell.shapeValue) ? cell.shapeValue : undefined;
+    cells[key] = {
+      styleId,
+      brushId,
+      ...(lockedValue === undefined ? {} : { lockedValue }),
+      ...(shapeValue === undefined ? {} : { shapeValue }),
+      ...(cell.legacySource === true ? { legacySource: true as const } : {}),
     };
   }
   return cells;
 }
 
 function normalizeGeneratedDecorations(value: unknown): Record<string, SmartGeneratedDecorationState> {
-  const generatedDecorations: Record<string, SmartGeneratedDecorationState> = {};
-  if (!value || typeof value !== 'object') return generatedDecorations;
+  const decorations: Record<string, SmartGeneratedDecorationState> = {};
+  if (!isRecord(value)) return decorations;
   for (const [key, decoration] of Object.entries(value)) {
-    if (!/^\d+,\d+$/.test(key) || !decoration || typeof decoration !== 'object') continue;
-    const entry = decoration as Partial<SmartGeneratedDecorationState>;
+    if (!CELL_KEY_PATTERN.test(key) || !isRecord(decoration)) continue;
+    const slot = typeof decoration.slot === 'string' ? decoration.slot : '';
     if (
-      typeof entry.ownerKey !== 'string'
-      || !/^\d+,\d+$/.test(entry.ownerKey)
-      || !['top', 'bottom', 'left', 'right', 'topLeft', 'topRight', 'bottomLeft', 'bottomRight'].includes(entry.slot ?? '')
-      || typeof entry.gid !== 'number'
-      || !Number.isInteger(entry.gid)
-      || entry.gid <= 0
+      typeof decoration.ownerKey !== 'string' || !CELL_KEY_PATTERN.test(decoration.ownerKey)
+      || !['top', 'bottom', 'left', 'right', 'topLeft', 'topRight', 'bottomLeft', 'bottomRight'].includes(slot)
+      || !isEncodedTileValue(decoration.gid)
     ) continue;
-    generatedDecorations[key] = {
-      ownerKey: entry.ownerKey,
-      slot: entry.slot as SmartGeneratedDecorationState['slot'],
-      gid: entry.gid,
+    decorations[key] = {
+      ownerKey: decoration.ownerKey,
+      slot: slot as SmartGeneratedDecorationState['slot'],
+      gid: decoration.gid,
+      ...(isEncodedTileValue(decoration.value) ? { value: decoration.value } : {}),
     };
   }
-  return generatedDecorations;
+  return decorations;
 }
 
-export function normalizeRoomSmartTerrainState(value: unknown): RoomSmartTerrainState {
-  const fallback = createRoomSmartTerrainState();
-  if (!value || typeof value !== 'object') {
-    return fallback;
+function normalizeRecipes(value: unknown): Record<string, SmartRecipeInstanceState> {
+  const recipes: Record<string, SmartRecipeInstanceState> = {};
+  if (!isRecord(value)) return recipes;
+  for (const [instanceId, recipe] of Object.entries(value)) {
+    if (!instanceId || !isRecord(recipe) || typeof recipe.recipeId !== 'string' || !recipe.recipeId) continue;
+    if (!SMART_STYLE_IDS.includes(recipe.styleId as SmartStyleId)) continue;
+    const styleId = recipe.styleId as SmartStyleId;
+    const brushId = normalizeSmartBrushId(styleId, recipe.brushId);
+    if (!brushId) continue;
+    if (!isLayerCoordinate(recipe.anchor) || !Array.isArray(recipe.sourceCells)) continue;
+    if (!isSmartBrushSourceCompatible(styleId, brushId, recipe.anchor.layer)) continue;
+    if (!recipe.sourceCells.every(isLayerCoordinate)) continue;
+    const sourceCells = recipe.sourceCells as SmartLayerCellCoordinate[];
+    if (!sourceCells.every((cell) => isSmartBrushSourceCompatible(styleId, brushId, cell.layer))) continue;
+    const parameters: Record<string, SmartRecipeParameterValue> = {};
+    if (isRecord(recipe.parameters)) {
+      for (const [key, parameter] of Object.entries(recipe.parameters)) {
+        if (typeof parameter === 'string' || typeof parameter === 'number' || typeof parameter === 'boolean') {
+          parameters[key] = parameter;
+        }
+      }
+    }
+    recipes[instanceId] = {
+      recipeId: recipe.recipeId,
+      styleId,
+      brushId,
+      anchor: { ...recipe.anchor },
+      sourceCells: sourceCells.map((cell) => ({ ...cell })),
+      parameters,
+    };
   }
+  return recipes;
+}
 
-  const candidate = value as Partial<RoomSmartTerrainState>;
+function normalizeOwnedOutputs(value: unknown): Record<string, SmartOwnedOutputState> {
+  const outputs: Record<string, SmartOwnedOutputState> = {};
+  if (!isRecord(value)) return outputs;
+  for (const [key, output] of Object.entries(value)) {
+    if (!LAYER_CELL_KEY_PATTERN.test(key) || !isRecord(output)) continue;
+    if (typeof output.ownerId !== 'string' || !output.ownerId || typeof output.partId !== 'string' || !output.partId) continue;
+    if (!SMART_OWNED_OUTPUT_KINDS.includes(output.kind as SmartOwnedOutputKind)) continue;
+    if (!isLayerName(output.layer) || !key.startsWith(`${output.layer}:`) || !isEncodedTileValue(output.value)) continue;
+    outputs[key] = {
+      ownerId: output.ownerId,
+      partId: output.partId,
+      kind: output.kind as SmartOwnedOutputKind,
+      layer: output.layer,
+      value: output.value,
+    };
+  }
+  return outputs;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? Array.from(new Set(value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)))
+    : [];
+}
+
+function applyLegacyCellMirrors(
+  semanticCells: Record<string, SmartSemanticCellState>,
+  cells: Record<string, SmartTerrainCellState>,
+  backdropCells: Record<string, SmartTerrainCellState>,
+): void {
+  for (const [key, cell] of Object.entries(cells)) {
+    const semanticKey = `terrain:${key}`;
+    if (!semanticCells[semanticKey]) {
+      semanticCells[semanticKey] = {
+        styleId: cell.theme,
+        brushId: cell.brushId ?? getSmartLegacyBrushId(cell.theme, cell.material)!,
+        ...(cell.lockedValue === undefined ? {} : { lockedValue: cell.lockedValue }),
+        ...(cell.shapeValue === undefined ? {} : { shapeValue: cell.shapeValue }),
+        legacySource: true,
+      };
+    }
+  }
+  for (const [key, cell] of Object.entries(backdropCells)) {
+    const semanticKey = `background:${key}`;
+    if (!semanticCells[semanticKey]) {
+      semanticCells[semanticKey] = {
+        styleId: cell.theme,
+        brushId: cell.brushId ?? getSmartLegacyBrushId(cell.theme, cell.material)!,
+        ...(cell.lockedValue === undefined ? {} : { lockedValue: cell.lockedValue }),
+        ...(cell.shapeValue === undefined ? {} : { shapeValue: cell.shapeValue }),
+        legacySource: true,
+      };
+    }
+  }
+}
+
+function applySemanticCompatibilityViews(
+  semanticCells: Record<string, SmartSemanticCellState>,
+  cells: Record<string, SmartTerrainCellState>,
+  backdropCells: Record<string, SmartTerrainCellState>,
+): void {
+  for (const [semanticKey, semanticCell] of Object.entries(semanticCells)) {
+    if (semanticCell.legacySource) continue;
+    const separator = semanticKey.indexOf(':');
+    const layer = semanticKey.slice(0, separator) as LayerName;
+    const key = semanticKey.slice(separator + 1);
+    const theme = LEGACY_STYLE_TO_THEME[semanticCell.styleId];
+    const identity = getLegacySmartBrushIdentity(semanticCell.brushId);
+    if (!theme || !identity || identity.theme !== theme) continue;
+    const material = identity.material;
+    if ((layer === 'background') !== (material === 'tunnel')) continue;
+    if ((theme === 'water') !== (material === 'tunnel') || (layer !== 'terrain' && layer !== 'background')) continue;
+    const compatibilityCell: SmartTerrainCellState = {
+      theme,
+      material,
+      styleId: semanticCell.styleId,
+      brushId: semanticCell.brushId,
+      ...(semanticCell.lockedValue === undefined ? {} : {
+        lockedValue: semanticCell.lockedValue,
+        lockedGid: semanticCell.lockedValue,
+      }),
+      ...(semanticCell.shapeValue === undefined ? {} : {
+        shapeValue: semanticCell.shapeValue,
+        shapeGid: semanticCell.shapeValue,
+      }),
+    };
+    (layer === 'background' ? backdropCells : cells)[key] = compatibilityCell;
+  }
+}
+
+function applyLegacyOutputMirrors(
+  outputs: Record<string, SmartOwnedOutputState>,
+  decorations: Record<string, SmartGeneratedDecorationState>,
+  layer: 'background' | 'foreground',
+): void {
+  for (const [key, decoration] of Object.entries(decorations)) {
+    const outputKey = `${layer}:${key}`;
+    if (outputs[outputKey]) continue;
+    outputs[outputKey] = {
+      ownerId: `${LEGACY_SEMANTIC_OWNER_PREFIX}${decoration.ownerKey}`,
+      partId: decoration.slot,
+      kind: 'legacy-decoration',
+      layer,
+      value: decoration.value ?? decoration.gid,
+    };
+  }
+}
+
+function normalizeKnownState(candidate: Record<string, unknown>): RoomSmartTerrainState {
   const cells = normalizeSmartCells(candidate.cells, 'terrain');
   const backdropCells = normalizeSmartCells(candidate.backdropCells, 'background');
+  const semanticCells: Record<string, SmartSemanticCellState> = Object.fromEntries(
+    Object.entries(normalizeSemanticCells(candidate.semanticCells)).filter(([, cell]) => !cell.legacySource),
+  );
+  applyLegacyCellMirrors(semanticCells, cells, backdropCells);
+  applySemanticCompatibilityViews(semanticCells, cells, backdropCells);
 
   const generatedDecorations = normalizeGeneratedDecorations(candidate.generatedDecorations);
   const generatedBackgroundDecorations = normalizeGeneratedDecorations(candidate.generatedBackgroundDecorations);
+  const ownedOutputs: Record<string, SmartOwnedOutputState> = Object.fromEntries(
+    Object.entries(normalizeOwnedOutputs(candidate.ownedOutputs)).filter(([, output]) => output.kind !== 'legacy-decoration'),
+  );
+  applyLegacyOutputMirrors(ownedOutputs, generatedDecorations, 'foreground');
+  applyLegacyOutputMirrors(ownedOutputs, generatedBackgroundDecorations, 'background');
+
+  const suppressedDecorationSlots = normalizeStringArray(candidate.suppressedDecorationSlots)
+    .filter((entry) => DECORATION_SLOT_PATTERN.test(entry));
+  const nativeSuppressedParts = normalizeStringArray(candidate.suppressedOutputParts)
+    .filter((entry) => !entry.startsWith(LEGACY_SEMANTIC_OWNER_PREFIX));
+  const legacySuppressedParts = suppressedDecorationSlots.map((slot) => `${LEGACY_SEMANTIC_OWNER_PREFIX}${slot}`);
 
   return {
     version: SMART_TERRAIN_VERSION,
+    editingDisabled: false,
     detailsEnabled: candidate.detailsEnabled !== false,
+    semanticCells,
+    recipes: normalizeRecipes(candidate.recipes),
+    ownedOutputs,
+    suppressedOutputParts: Array.from(new Set([...nativeSuppressedParts, ...legacySuppressedParts])),
     cells,
     backdropCells,
     generatedDecorations,
     generatedBackgroundDecorations,
-    suppressedDecorationSlots: Array.isArray(candidate.suppressedDecorationSlots)
-      ? Array.from(new Set(candidate.suppressedDecorationSlots.filter(
-          (entry): entry is string => typeof entry === 'string'
-            && /^\d+,\d+:(top|bottom|left|right|topLeft|topRight|bottomLeft|bottomRight)$/.test(entry),
-        )))
-      : [],
+    suppressedDecorationSlots,
   };
 }
 
-export function cloneRoomSmartTerrainState(value: unknown): RoomSmartTerrainState {
-  const normalized = normalizeRoomSmartTerrainState(value);
+/** Explicit v1 -> v2 migration entry point. */
+export function migrateRoomSmartTerrainStateV1(value: unknown): RoomSmartTerrainState {
+  const candidate: RoomSmartTerrainStateV1 = isRecord(value) ? value : {};
+  return normalizeKnownState(candidate as Record<string, unknown>);
+}
+
+function preserveFutureState(candidate: Record<string, unknown>, version: number): RoomSmartTerrainState {
+  const preserved = isRecord(candidate.preservedFutureState)
+    ? cloneJsonRecord(candidate.preservedFutureState)
+    : cloneJsonRecord(candidate);
   return {
-    ...normalized,
-    cells: Object.fromEntries(
-      Object.entries(normalized.cells).map(([key, cell]) => [key, { ...cell }]),
-    ),
-    backdropCells: Object.fromEntries(
-      Object.entries(normalized.backdropCells).map(([key, cell]) => [key, { ...cell }]),
-    ),
-    generatedDecorations: Object.fromEntries(
-      Object.entries(normalized.generatedDecorations).map(([key, decoration]) => [key, { ...decoration }]),
-    ),
-    generatedBackgroundDecorations: Object.fromEntries(
-      Object.entries(normalized.generatedBackgroundDecorations).map(([key, decoration]) => [key, { ...decoration }]),
-    ),
-    suppressedDecorationSlots: [...normalized.suppressedDecorationSlots],
+    ...createRoomSmartTerrainState(),
+    version,
+    editingDisabled: true,
+    editingDisabledReason: `Smart terrain version ${version} is newer than supported version ${SMART_TERRAIN_VERSION}.`,
+    preservedFutureState: preserved,
+    detailsEnabled: candidate.detailsEnabled !== false,
   };
+}
+
+export function normalizeRoomSmartTerrainState(value: unknown): RoomSmartTerrainState {
+  if (!isRecord(value)) return createRoomSmartTerrainState();
+  const version = value.version;
+  if (typeof version === 'number' && Number.isInteger(version) && version > SMART_TERRAIN_VERSION) {
+    return preserveFutureState(value, version);
+  }
+  if (version === undefined || version === SMART_TERRAIN_LEGACY_VERSION) {
+    return migrateRoomSmartTerrainStateV1(value);
+  }
+  if (version !== SMART_TERRAIN_VERSION) return createRoomSmartTerrainState();
+  return normalizeKnownState(value);
+}
+
+export function isRoomSmartTerrainEditingDisabled(state: RoomSmartTerrainState): boolean {
+  return state.editingDisabled;
+}
+
+export function cloneRoomSmartTerrainState(value: unknown): RoomSmartTerrainState {
+  return normalizeRoomSmartTerrainState(value);
+}
+
+/**
+ * Returns the persisted wire value. Future-version payloads are emitted exactly
+ * as received so opening a room in an older editor cannot rewrite newer data.
+ */
+export function serializeRoomSmartTerrainState(value: unknown): RoomSmartTerrainState {
+  const normalized = normalizeRoomSmartTerrainState(value);
+  if (normalized.editingDisabled && normalized.preservedFutureState) {
+    return cloneJsonRecord(normalized.preservedFutureState) as unknown as RoomSmartTerrainState;
+  }
+  return normalized;
 }

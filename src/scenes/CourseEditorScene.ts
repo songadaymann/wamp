@@ -519,6 +519,7 @@ export class CourseEditorScene extends Phaser.Scene {
       },
       onSetSmartTheme: (theme) => { editorState.smartTheme = theme; },
       onSetSmartMaterial: (material) => { editorState.smartMaterial = material; },
+      onSetSmartStyle: (style) => { editorState.smartStyle = style; },
       onSetSmartDetailsEnabled: (enabled) => this.getSelectedSlice()?.runtime.setSmartDetailsEnabled(enabled),
       onFillCaveTerrain: () => this.getSelectedSlice()?.runtime.fillCaveTerrain(),
       onSelectBackground: (backgroundId) => {

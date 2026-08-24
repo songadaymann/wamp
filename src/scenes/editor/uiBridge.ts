@@ -70,6 +70,26 @@ import {
   setValue,
 } from './uiBridge/panels';
 import { getGameSettings, updateGameSettings } from '../../settings/userSettings';
+import {
+  SMART_THEME_IDS,
+  getSmartBrushDefinition,
+  getSmartBrushesForTheme,
+  getSmartStylesForBrush,
+  getSmartThemeDefinition,
+  isSmartBrushToolSupported,
+  listSmartThemeDefinitions,
+  type SmartBrushDefinition,
+  type SmartStyleDefinition,
+  type SmartThemeId,
+} from '../../autotiling/registry';
+import {
+  SMART_BRUSH_IDS,
+  SMART_STYLE_IDS,
+  getLegacySmartBrushIdentity,
+  getSmartLegacyBrushId,
+  type SmartBrushId,
+  type SmartStyleId,
+} from '../../autotiling/model';
 
 export type {
   EditorCourseUiViewModel,
@@ -91,6 +111,93 @@ const BACKGROUND_UPLOAD_SELECT_VALUE = '__upload_background__';
 const DEFAULT_BACKGROUND_PHOTOS_SORT: BackgroundPhotosSort = 'most_used';
 
 type BackgroundPhotosSort = 'most_used' | 'least_used' | 'newest' | 'oldest';
+
+type LegacySmartThemeId = Extract<SmartThemeId, 'forest' | 'desert' | 'cave' | 'gothic'>;
+
+const LEGACY_SMART_THEME_IDS: readonly LegacySmartThemeId[] = [
+  'forest',
+  'desert',
+  'cave',
+  'gothic',
+];
+const WATER_TUNNEL_BRUSH_ID = 'water.tunnel' as const;
+
+function isLegacySmartThemeId(themeId: SmartThemeId): themeId is LegacySmartThemeId {
+  return LEGACY_SMART_THEME_IDS.includes(themeId as LegacySmartThemeId);
+}
+
+const SMART_TOOL_LABELS: Readonly<Partial<Record<ToolName, string>>> = {
+  pencil: 'Draw',
+  rect: 'Rectangle',
+  ellipse: 'Ellipse',
+  fill: 'Fill',
+};
+
+function parseSmartThemeId(value: string | undefined): SmartThemeId | null {
+  return SMART_THEME_IDS.includes(value as SmartThemeId) ? value as SmartThemeId : null;
+}
+
+function parseSmartBrushId(value: string | undefined): SmartBrushId | null {
+  return SMART_BRUSH_IDS.includes(value as SmartBrushId) ? value as SmartBrushId : null;
+}
+
+function parseSmartStyleId(value: string | undefined): SmartStyleId | null {
+  return SMART_STYLE_IDS.includes(value as SmartStyleId) ? value as SmartStyleId : null;
+}
+
+function isRegistryControlledSmartTool(tool: ToolName): boolean {
+  return tool === 'pencil' || tool === 'rect' || tool === 'ellipse' || tool === 'fill';
+}
+
+function formatList(values: string[]): string {
+  if (values.length <= 1) return values[0] ?? '';
+  if (values.length === 2) return `${values[0]} and ${values[1]}`;
+  return `${values.slice(0, -1).join(', ')}, and ${values.at(-1)}`;
+}
+
+interface SmartUiSelection {
+  themeId: SmartThemeId;
+  brush: SmartBrushDefinition;
+  styles: SmartStyleDefinition[];
+  style: SmartStyleDefinition;
+}
+
+function getLegacyTunnelExitTheme(): SmartThemeId {
+  const savedTheme = getGameSettings().lastSmartTheme;
+  return isLegacySmartThemeId(savedTheme) ? savedTheme : 'forest';
+}
+
+function getEditorBrushesForTheme(themeId: SmartThemeId): SmartBrushDefinition[] {
+  const sourceTheme = themeId === 'water' ? getLegacyTunnelExitTheme() : themeId;
+  const brushes = getSmartBrushesForTheme(sourceTheme);
+  if (!isLegacySmartThemeId(sourceTheme)) return brushes;
+  return [...brushes, getSmartBrushDefinition(WATER_TUNNEL_BRUSH_ID)];
+}
+
+function getEditorStylesForBrush(
+  themeId: SmartThemeId,
+  brush: SmartBrushDefinition,
+): SmartStyleDefinition[] {
+  return getSmartStylesForBrush(brush.id).filter((style) => (
+    brush.id === WATER_TUNNEL_BRUSH_ID ? style.themeId === 'water' : style.themeId === themeId
+  ));
+}
+
+function getBrushOptionLabel(brush: SmartBrushDefinition): string {
+  return brush.id === WATER_TUNNEL_BRUSH_ID ? 'Tunnel Backdrop' : brush.label;
+}
+
+function getThemeEquivalentLegacyBrush(
+  themeId: SmartThemeId,
+  currentBrushId: SmartBrushId,
+  brushes: readonly SmartBrushDefinition[],
+): SmartBrushDefinition | undefined {
+  if (!isLegacySmartThemeId(themeId)) return undefined;
+  const identity = getLegacySmartBrushIdentity(currentBrushId);
+  if (!identity || identity.material === 'tunnel') return undefined;
+  const brushId = getSmartLegacyBrushId(themeId, identity.material);
+  return brushId ? brushes.find((brush) => brush.id === brushId) : undefined;
+}
 
 const PREFERRED_TILESET_OPTION_ORDER = [
   'essentials',
@@ -165,6 +272,7 @@ function getEditorFeatureLauncher(value: string | undefined): EditorFeatureLaunc
 export class EditorUiBridge {
   private readonly cleanupCallbacks: Array<() => void> = [];
   private readonly elements: EditorUiElements;
+  private readonly toolButtonDefaultTitles = new Map<HTMLButtonElement, string>();
   private destroyed = false;
   private moreToolsOpen = false;
   private activeFeatureLauncher: EditorFeatureLauncher | null = null;
@@ -183,6 +291,9 @@ export class EditorUiBridge {
     private readonly windowObj: Window = window,
   ) {
     this.elements = lookupEditorUiElements(this.doc);
+    for (const button of this.elements.toolButtons) {
+      this.toolButtonDefaultTitles.set(button, button.title);
+    }
     this.populateTilesetOptions();
 
     this.bindListeners();
@@ -209,6 +320,179 @@ export class EditorUiBridge {
       })
     );
     this.elements.tilesetSelect.value = selectedKey;
+  }
+
+  private replaceSelectOptions(
+    select: HTMLSelectElement | null,
+    options: Array<{ value: string; label: string }>,
+    selectedValue: string,
+  ): void {
+    if (!select) return;
+    const currentSignature = [...select.options]
+      .map((option) => `${option.value}\u0000${option.textContent ?? ''}`)
+      .join('\u0001');
+    const nextSignature = options
+      .map((option) => `${option.value}\u0000${option.label}`)
+      .join('\u0001');
+    if (currentSignature !== nextSignature) {
+      select.replaceChildren(...options.map(({ value, label }) => {
+        const option = this.doc.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        return option;
+      }));
+    }
+    select.value = selectedValue;
+  }
+
+  private normalizeSmartSelection(): SmartUiSelection {
+    const themeId = editorState.smartTheme;
+    const theme = getSmartThemeDefinition(themeId);
+    const brushes = getEditorBrushesForTheme(themeId);
+    const currentBrush = brushes.find((brush) => brush.id === editorState.smartMaterial);
+    const nonTunnelCurrentBrush = currentBrush?.id === WATER_TUNNEL_BRUSH_ID
+      ? undefined
+      : currentBrush;
+    const equivalentBrush = getThemeEquivalentLegacyBrush(
+      themeId,
+      editorState.smartMaterial,
+      brushes,
+    );
+    const brush = themeId === 'water'
+      ? getSmartBrushDefinition(WATER_TUNNEL_BRUSH_ID)
+      : nonTunnelCurrentBrush ?? equivalentBrush
+        ?? brushes.find((candidate) => candidate.id === theme.defaultBrushId) ?? brushes[0];
+    if (!brush) throw new Error(`Smart theme ${themeId} has no editor brushes.`);
+
+    const styles = getEditorStylesForBrush(themeId, brush);
+    const style = styles.find((candidate) => candidate.id === editorState.smartStyle)
+      ?? styles.find((candidate) => candidate.id === theme.defaultStyleId)
+      ?? styles[0];
+    if (!style) throw new Error(`Smart brush ${brush.id} has no styles for ${themeId}.`);
+
+    editorState.smartMaterial = brush.id;
+    editorState.smartStyle = style.id;
+    if (
+      editorState.paletteMode === 'smart'
+      && !brush.supportedLayers.includes(editorState.activeLayer)
+    ) {
+      editorState.activeLayer = brush.defaultLayer;
+    }
+    if (
+      editorState.paletteMode === 'smart'
+      && isRegistryControlledSmartTool(editorState.activeTool)
+      && !isSmartBrushToolSupported(brush.id, editorState.activeTool)
+    ) {
+      editorState.activeTool = 'pencil';
+    }
+    return { themeId, brush, styles, style };
+  }
+
+  private applySmartSelection(selection: SmartUiSelection, persistTheme: boolean): void {
+    editorState.smartTheme = selection.themeId;
+    editorState.smartMaterial = selection.brush.id;
+    editorState.smartStyle = selection.style.id;
+    editorState.activeLayer = selection.brush.defaultLayer;
+    if (persistTheme && selection.themeId !== 'water') {
+      updateGameSettings({ lastSmartTheme: selection.themeId });
+    }
+    this.actions.onSetSmartTheme(selection.themeId);
+    this.actions.onSetSmartMaterial(selection.brush.id);
+    this.actions.onSetSmartStyle(selection.style.id);
+    if (
+      editorState.paletteMode === 'smart'
+      && isRegistryControlledSmartTool(editorState.activeTool)
+      && !isSmartBrushToolSupported(selection.brush.id, editorState.activeTool)
+    ) {
+      this.actions.onSelectTool('pencil');
+    }
+    this.syncEditorChromeState();
+  }
+
+  private selectSmartTheme(themeId: SmartThemeId): void {
+    const theme = getSmartThemeDefinition(themeId);
+    const brushes = getEditorBrushesForTheme(themeId);
+    const currentBrush = brushes.find((brush) => brush.id === editorState.smartMaterial);
+    const nonTunnelCurrentBrush = currentBrush?.id === WATER_TUNNEL_BRUSH_ID
+      ? undefined
+      : currentBrush;
+    const equivalentBrush = getThemeEquivalentLegacyBrush(
+      themeId,
+      editorState.smartMaterial,
+      brushes,
+    );
+    const brush = themeId === 'water'
+      ? getSmartBrushDefinition(WATER_TUNNEL_BRUSH_ID)
+      : nonTunnelCurrentBrush ?? equivalentBrush
+        ?? brushes.find((candidate) => candidate.id === theme.defaultBrushId) ?? brushes[0];
+    if (!brush) return;
+    const styles = getEditorStylesForBrush(themeId, brush);
+    const style = styles.find((candidate) => candidate.id === editorState.smartStyle)
+      ?? styles.find((candidate) => candidate.id === theme.defaultStyleId)
+      ?? styles[0];
+    if (!style) return;
+    this.applySmartSelection({ themeId, brush, styles, style }, true);
+  }
+
+  private selectSmartBrush(brushId: SmartBrushId): void {
+    const displayedBrushes = getEditorBrushesForTheme(editorState.smartTheme);
+    const selectedBrush = displayedBrushes.find((brush) => brush.id === brushId);
+    if (!selectedBrush) return;
+
+    let themeId = editorState.smartTheme;
+    if (brushId === WATER_TUNNEL_BRUSH_ID) {
+      if (isLegacySmartThemeId(themeId)) {
+        updateGameSettings({ lastSmartTheme: themeId });
+      }
+      themeId = 'water';
+    } else if (themeId === 'water') {
+      themeId = getLegacyTunnelExitTheme();
+    }
+
+    const brushes = getEditorBrushesForTheme(themeId);
+    const brush = brushes.find((candidate) => candidate.id === brushId);
+    if (!brush) return;
+    const theme = getSmartThemeDefinition(themeId);
+    const styles = getEditorStylesForBrush(themeId, brush);
+    const style = styles.find((candidate) => candidate.id === editorState.smartStyle)
+      ?? styles.find((candidate) => candidate.id === theme.defaultStyleId)
+      ?? styles[0];
+    if (!style) return;
+    this.applySmartSelection({ themeId, brush, styles, style }, themeId !== 'water');
+  }
+
+  private selectSmartStyle(styleId: SmartStyleId): void {
+    const selection = this.normalizeSmartSelection();
+    const style = selection.styles.find((candidate) => candidate.id === styleId);
+    if (!style) return;
+    editorState.smartStyle = style.id;
+    this.actions.onSetSmartStyle(style.id);
+    this.syncEditorChromeState();
+  }
+
+  private syncSmartControlOptions(selection: SmartUiSelection): void {
+    this.replaceSelectOptions(
+      this.elements.smartThemeSelect,
+      listSmartThemeDefinitions().map((theme) => ({ value: theme.id, label: theme.label })),
+      selection.themeId,
+    );
+    this.replaceSelectOptions(
+      this.elements.smartMaterialSelect,
+      getEditorBrushesForTheme(selection.themeId).map((brush) => ({
+        value: brush.id,
+        label: getBrushOptionLabel(brush),
+      })),
+      selection.brush.id,
+    );
+    this.replaceSelectOptions(
+      this.elements.smartStyleSelect,
+      selection.styles.map((style) => ({ value: style.id, label: style.colorLabel })),
+      selection.style.id,
+    );
+    this.elements.smartStyleRow?.classList.toggle('hidden', selection.styles.length <= 1);
+    if (this.elements.smartStyleRow) {
+      this.elements.smartStyleRow.dataset.smartStyleCount = String(selection.styles.length);
+    }
   }
 
   render(viewModel: EditorUiViewModel): void {
@@ -277,6 +561,9 @@ export class EditorUiBridge {
 
     for (const button of this.elements.toolButtons) {
       const handler = () => {
+        if (button.disabled) {
+          return;
+        }
         const tool = button.dataset.tool as ToolName | undefined;
         if (!tool) {
           return;
@@ -382,6 +669,12 @@ export class EditorUiBridge {
       if (!layer) {
         return;
       }
+      if (
+        editorState.paletteMode === 'smart'
+        && !getSmartBrushDefinition(editorState.smartMaterial).supportedLayers.includes(layer)
+      ) {
+        return;
+      }
       editorState.activeLayer = layer;
       this.syncEditorChromeState();
     };
@@ -456,38 +749,25 @@ export class EditorUiBridge {
     }
 
     const handleSmartThemeChange = () => {
-      const value = this.elements.smartThemeSelect?.value;
-      if (value === 'forest' || value === 'desert' || value === 'cave' || value === 'gothic') {
-        editorState.smartTheme = value;
-        updateGameSettings({ lastSmartTheme: value });
-        this.actions.onSetSmartTheme(value);
-        this.syncEditorChromeState();
-      }
+      const themeId = parseSmartThemeId(this.elements.smartThemeSelect?.value);
+      if (themeId) this.selectSmartTheme(themeId);
     };
     this.elements.smartThemeSelect?.addEventListener('change', handleSmartThemeChange);
     this.cleanupCallbacks.push(() => this.elements.smartThemeSelect?.removeEventListener('change', handleSmartThemeChange));
 
     const handleSmartMaterialChange = () => {
-      const value = this.elements.smartMaterialSelect?.value;
-      if (value === 'ground' || value === 'platform' || value === 'feature' || value === 'tunnel') {
-        editorState.smartMaterial = value;
-        if (value === 'tunnel') {
-          editorState.smartTheme = 'water';
-          editorState.activeLayer = 'background';
-          this.actions.onSetSmartTheme('water');
-        } else {
-          editorState.activeLayer = 'terrain';
-          if (editorState.smartTheme === 'water') {
-            editorState.smartTheme = getGameSettings().lastSmartTheme;
-            this.actions.onSetSmartTheme(editorState.smartTheme);
-          }
-        }
-        this.actions.onSetSmartMaterial(value);
-        this.syncEditorChromeState();
-      }
+      const brushId = parseSmartBrushId(this.elements.smartMaterialSelect?.value);
+      if (brushId) this.selectSmartBrush(brushId);
     };
     this.elements.smartMaterialSelect?.addEventListener('change', handleSmartMaterialChange);
     this.cleanupCallbacks.push(() => this.elements.smartMaterialSelect?.removeEventListener('change', handleSmartMaterialChange));
+
+    const handleSmartStyleChange = () => {
+      const styleId = parseSmartStyleId(this.elements.smartStyleSelect?.value);
+      if (styleId) this.selectSmartStyle(styleId);
+    };
+    this.elements.smartStyleSelect?.addEventListener('change', handleSmartStyleChange);
+    this.cleanupCallbacks.push(() => this.elements.smartStyleSelect?.removeEventListener('change', handleSmartStyleChange));
 
     const handleSmartDetailsChange = () => {
       const enabled = this.elements.smartDetailsCheckbox?.checked ?? true;
@@ -498,9 +778,7 @@ export class EditorUiBridge {
     this.elements.smartDetailsCheckbox?.addEventListener('change', handleSmartDetailsChange);
     this.cleanupCallbacks.push(() => this.elements.smartDetailsCheckbox?.removeEventListener('change', handleSmartDetailsChange));
     bindButton(this.cleanupCallbacks, this.elements.smartCaveFillButton, () => {
-      editorState.smartTheme = 'cave';
-      updateGameSettings({ lastSmartTheme: 'cave' });
-      this.actions.onSetSmartTheme('cave');
+      this.selectSmartTheme('cave');
       this.actions.onFillCaveTerrain();
       this.syncEditorChromeState();
     });
@@ -1458,16 +1736,32 @@ export class EditorUiBridge {
       return;
     }
 
+    const paletteModeIsTiles = editorState.paletteMode === 'tiles';
+    const paletteModeIsSmart = editorState.paletteMode === 'smart';
+    const smartSelection = this.normalizeSmartSelection();
+    const tunnelBackdropSelected = smartSelection.brush.id === WATER_TUNNEL_BRUSH_ID;
+
     for (const button of this.elements.toolButtons) {
-      button.classList.toggle('active', button.dataset.tool === editorState.activeTool);
-      const copy = getEditorToolButtonCopy(button.dataset.tool as ToolName);
+      const tool = button.dataset.tool as ToolName;
+      const unsupported = paletteModeIsSmart
+        && isRegistryControlledSmartTool(tool)
+        && !isSmartBrushToolSupported(smartSelection.brush.id, tool);
+      button.disabled = unsupported;
+      button.setAttribute('aria-disabled', unsupported ? 'true' : 'false');
+      if (unsupported) button.dataset.smartToolUnsupported = 'true';
+      else delete button.dataset.smartToolUnsupported;
+      button.classList.toggle('active', !unsupported && tool === editorState.activeTool);
+      const copy = getEditorToolButtonCopy(tool);
       if (copy) {
         const label = button.querySelector('.tool-label');
         if (label) {
           label.textContent = copy.label;
         }
-        button.title = copy.title;
       }
+      const supportedTitle = copy?.title ?? this.toolButtonDefaultTitles.get(button) ?? '';
+      button.title = unsupported
+        ? `${SMART_TOOL_LABELS[tool] ?? supportedTitle} is unavailable for ${smartSelection.brush.label}.`
+        : supportedTitle;
     }
 
     const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
@@ -1532,11 +1826,24 @@ export class EditorUiBridge {
       }
     }
 
-    for (const button of this.elements.layerButtons) {
-      button.classList.toggle('active', button.dataset.layer === editorState.activeLayer);
-    }
-    for (const button of this.elements.layerMiniButtons) {
-      button.classList.toggle('active', button.dataset.layer === editorState.activeLayer);
+    for (const button of [...this.elements.layerButtons, ...this.elements.layerMiniButtons]) {
+      const layer = button.dataset.layer as LayerName | undefined;
+      const unsupported = Boolean(
+        paletteModeIsSmart
+        && layer
+        && !smartSelection.brush.supportedLayers.includes(layer),
+      );
+      const layerButton = button as HTMLButtonElement;
+      layerButton.disabled = unsupported;
+      layerButton.setAttribute('aria-disabled', unsupported ? 'true' : 'false');
+      if (unsupported) {
+        layerButton.dataset.smartLayerUnsupported = 'true';
+        layerButton.title = `${smartSelection.brush.label} places on ${getLayerUiLabel(smartSelection.brush.defaultLayer)}.`;
+      } else {
+        delete layerButton.dataset.smartLayerUnsupported;
+        layerButton.removeAttribute('title');
+      }
+      layerButton.classList.toggle('active', !unsupported && layer === editorState.activeLayer);
     }
     if (this.elements.layerChip) {
       this.elements.layerChip.textContent = `Placing on ${getLayerUiLabel(editorState.activeLayer)}`;
@@ -1567,17 +1874,16 @@ export class EditorUiBridge {
     for (const tab of this.elements.paletteTabs) {
       tab.classList.toggle('active', tab.dataset.mode === editorState.paletteMode);
     }
-    const paletteModeIsTiles = editorState.paletteMode === 'tiles';
-    const paletteModeIsSmart = editorState.paletteMode === 'smart';
     this.elements.tilesetSection?.classList.toggle('hidden', !paletteModeIsTiles);
     this.elements.tilePaletteSection?.classList.toggle('hidden', !paletteModeIsTiles);
     this.elements.smartPaletteSection?.classList.toggle('hidden', !paletteModeIsSmart);
     this.elements.objectPaletteSection?.classList.toggle('hidden', editorState.paletteMode !== 'objects');
-    setValue(this.elements.smartThemeSelect, editorState.smartTheme);
-    setValue(this.elements.smartMaterialSelect, editorState.smartMaterial);
-    const tunnelBackdropSelected = editorState.smartMaterial === 'tunnel';
+    this.syncSmartControlOptions(smartSelection);
     if (this.elements.smartThemeSelect) {
       this.elements.smartThemeSelect.disabled = tunnelBackdropSelected;
+      this.elements.smartThemeSelect.title = tunnelBackdropSelected
+        ? 'Choose another brush to return to the previous terrain theme.'
+        : '';
       const waterOption = this.elements.smartThemeSelect.querySelector<HTMLOptionElement>('option[value="water"]');
       if (waterOption) waterOption.hidden = !tunnelBackdropSelected;
     }
@@ -1586,13 +1892,20 @@ export class EditorUiBridge {
       this.elements.smartDetailsCheckbox.closest('label')?.classList.toggle('hidden', tunnelBackdropSelected);
     }
     this.elements.smartCaveFillButton?.classList.toggle(
-      'hidden', editorState.smartTheme !== 'cave' || editorState.smartMaterial === 'tunnel',
+      'hidden', smartSelection.themeId !== 'cave' || tunnelBackdropSelected,
     );
-    const smartHint = this.elements.smartPaletteSection?.querySelector<HTMLElement>('.palette-hint');
+    const smartHint = this.elements.smartPaletteHint;
     if (smartHint) {
+      const unsupportedTools = (['rect', 'ellipse', 'fill'] as const)
+        .filter((tool) => !isSmartBrushToolSupported(smartSelection.brush.id, tool))
+        .map((tool) => SMART_TOOL_LABELS[tool] ?? tool);
+      const supportExplanation = unsupportedTools.length > 0
+        ? ` ${formatList(unsupportedTools)} ${unsupportedTools.length === 1 ? 'is' : 'are'} unavailable for this brush.`
+        : '';
       smartHint.textContent = tunnelBackdropSelected
         ? 'Draw non-colliding blue tunnel walls behind the player. Smart chooses rock edges and ties.'
-        : 'Draw blocks. Smart chooses edges and repairs neighbors. Right-click or Erase removes them.';
+        : `${smartSelection.brush.description} Places on ${getLayerUiLabel(smartSelection.brush.defaultLayer)}.${supportExplanation} Right-click or Erase removes it.`;
+      smartHint.dataset.smartSupport = unsupportedTools.length > 0 ? 'limited' : 'full';
     }
 
     const objectCategory = this.currentObjectCategory || 'all';

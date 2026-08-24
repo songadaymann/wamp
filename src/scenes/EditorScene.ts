@@ -825,6 +825,7 @@ export class EditorScene extends Phaser.Scene {
       onClearAllObjects: () => this.toolController.clearAllObjects(),
       onSetSmartTheme: (theme) => { editorState.smartTheme = theme; },
       onSetSmartMaterial: (material) => { editorState.smartMaterial = material; },
+      onSetSmartStyle: (style) => { editorState.smartStyle = style; },
       onSetSmartDetailsEnabled: (enabled) => this.editRuntime.setSmartDetailsEnabled(enabled),
       onFillCaveTerrain: () => this.editRuntime.fillCaveTerrain(),
       onSelectBackground: () => this.applySelectedBackground(),

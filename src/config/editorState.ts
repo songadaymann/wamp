@@ -19,7 +19,8 @@ import {
   type ToolName,
 } from './room';
 import type { PlacedObject } from './objects';
-import type { SmartTerrainMaterial, SmartTerrainTheme } from '../autotiling/model';
+import type { SmartBrushId, SmartStyleId } from '../autotiling/model';
+import type { SmartThemeId } from '../autotiling/registry';
 
 // ── Editor State (shared between Phaser and HTML UI) ──
 export interface EditorState {
@@ -37,8 +38,9 @@ export interface EditorState {
   zoom: number;
   isPlaying: boolean;
   paletteMode: PaletteMode;
-  smartTheme: SmartTerrainTheme;
-  smartMaterial: SmartTerrainMaterial;
+  smartTheme: SmartThemeId;
+  smartMaterial: SmartBrushId;
+  smartStyle: SmartStyleId;
   smartDetailsEnabled: boolean;
   selectedObjectId: string | null;
   objectFacing: 'left' | 'right';
@@ -88,7 +90,8 @@ export const editorState: EditorState = {
   isPlaying: false,
   paletteMode: 'smart',
   smartTheme: 'forest',
-  smartMaterial: 'ground',
+  smartMaterial: 'forest.ground',
+  smartStyle: 'forest',
   smartDetailsEnabled: true,
   selectedObjectId: null,
   objectFacing: 'right',

@@ -25,6 +25,24 @@
   min-width: 116px;
 }
 
+.smart-control-row select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.tool-btn[data-smart-tool-unsupported='true'],
+.layer-btn[data-smart-layer-unsupported='true'],
+.layer-stack-mini-btn[data-smart-layer-unsupported='true'] {
+  cursor: not-allowed;
+  filter: grayscale(0.65);
+  opacity: 0.42;
+}
+
+#smart-palette-hint[data-smart-support='limited'] {
+  border-left: 2px solid var(--accent-warm);
+  padding-left: 8px;
+}
+
 .smart-details-row {
   justify-content: flex-start;
   line-height: 1.35;

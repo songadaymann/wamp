@@ -546,29 +546,22 @@
         <div class="section-label">Smart Terrain</div>
         <label class="smart-control-row" for="smart-theme-select">
           <span>Theme</span>
-          <select id="smart-theme-select">
-            <option value="forest">Forest</option>
-            <option value="desert">Desert</option>
-            <option value="cave">Cave</option>
-            <option value="gothic">Gothic</option>
-            <option value="water">Water</option>
-          </select>
+          <select id="smart-theme-select"></select>
         </label>
         <label class="smart-control-row" for="smart-material-select">
           <span>Brush</span>
-          <select id="smart-material-select">
-            <option value="ground">Ground</option>
-            <option value="platform">Platform</option>
-            <option value="feature">Feature Blocks</option>
-            <option value="tunnel">Tunnel Backdrop</option>
-          </select>
+          <select id="smart-material-select"></select>
+        </label>
+        <label id="smart-style-row" class="smart-control-row hidden" for="smart-style-select">
+          <span>Color</span>
+          <select id="smart-style-select"></select>
         </label>
         <label class="smart-details-row" for="smart-details-checkbox">
           <input id="smart-details-checkbox" type="checkbox" checked />
           <span>Add automatic decoration</span>
         </label>
         <button id="btn-smart-cave-fill" class="bar-btn bar-btn-small hidden" type="button">Fill Cave, Then Carve</button>
-        <div class="palette-hint">Draw blocks. Smart chooses edges and repairs neighbors. Right-click or Erase removes them.</div>
+        <div id="smart-palette-hint" class="palette-hint" aria-live="polite">Draw blocks. Smart chooses edges and repairs neighbors. Right-click or Erase removes them.</div>
       </div>
 
       <!-- Tileset Selector (visible in tiles mode) -->

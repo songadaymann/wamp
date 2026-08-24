@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createEmptyTileData } from '../persistence/roomModel';
 import { getTerrainCollisionProfileForGid, getTilesetByKey } from '../config/tilesets';
 import { decodeTileDataValue } from '../config/editorState';
-import { createRoomSmartTerrainState } from './model';
+import { createRoomSmartTerrainState, normalizeRoomSmartTerrainState } from './model';
 import {
   applySmartCells,
   applySmartOutlineCells,
@@ -449,5 +449,31 @@ describe('smart terrain solver', () => {
     const filled = fillEmptySmartTerrain(document, 'cave');
     expect(filled.tileData.terrain[0][0]).toBe(999);
     expect(Object.keys(filled.smartTerrain.cells)).toHaveLength(40 * 22 - 1);
+  });
+
+  it('leaves rooms using a future Smart version untouched by every legacy edit entry point', () => {
+    const document = emptyDocument();
+    document.tileData.terrain[4][4] = 999;
+    document.smartTerrain = normalizeRoomSmartTerrainState({
+      version: 99,
+      detailsEnabled: false,
+      futureRecipe: { owner: 'preserve-me' },
+    });
+    const expected = structuredClone(document);
+
+    const attempts = [
+      applySmartCells(document, {
+        cells: [{ x: 4, y: 4 }], mode: 'erase', theme: 'forest', material: 'ground',
+      }),
+      applySmartOutlineCells(document, {
+        filledCells: [{ x: 4, y: 4 }], outlineCells: [{ x: 4, y: 4 }],
+        theme: 'forest', material: 'ground',
+      }),
+      lockSmartTerrainCell(document, 4, 4, 123),
+      setSmartTerrainDetailsEnabled(document, true),
+      suppressGeneratedDecorationAt(document, 4, 4),
+    ];
+
+    for (const attempt of attempts) expect(attempt).toEqual(expected);
   });
 });
