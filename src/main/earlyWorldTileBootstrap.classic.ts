@@ -1587,8 +1587,13 @@ function resolveEarlyWorldTileApiBaseUrl(configured: string, win: Window, doc: D
   if (metaBase) return metaBase.replace(/\/+$/, '');
   if (
     hostname === 'wamp.land'
+    || hostname === 'www.wamp.land'
     || hostname === 'wampland.pages.dev'
     || hostname.endsWith('.wampland.pages.dev')
+    || hostname === 'wamp.pages.dev'
+    || hostname.endsWith('.wamp.pages.dev')
+    || hostname === 'wamp-9i6.pages.dev'
+    || hostname.endsWith('.wamp-9i6.pages.dev')
   ) return 'https://api.wamp.land';
   return '';
 }

@@ -5,6 +5,7 @@ import {
   PROFILE_USERNAME_MAX_LENGTH,
 } from '../../../profiles/username';
 import { HttpError } from '../core/http';
+import { isTrustedAppHostname } from '../../../config';
 import type {
   ApiTokenRow,
   AuthSession,
@@ -1276,11 +1277,7 @@ function isTrustedAuthRedirectHostname(hostname: string, env: Env): boolean {
     return true;
   }
 
-  if (hostname === 'everybodys-platformer.novox-robot.workers.dev') {
-    return true;
-  }
-
-  if (hostname === 'wampland.pages.dev' || hostname.endsWith('.wampland.pages.dev')) {
+  if (isTrustedAppHostname(hostname)) {
     return true;
   }
 

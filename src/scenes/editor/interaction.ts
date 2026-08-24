@@ -13,6 +13,20 @@ import { isTextInputFocused } from '../../ui/keyboardFocus';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { EditorClipboardState, GoalPlacementMode } from './editRuntime';
+import {
+  applyEditorToolSelection,
+  getEditorStampKind,
+  isDragStampEditorTool,
+  isEditorLineCurve,
+  isEditorShapeOutline,
+  isPathEditorTool,
+} from './editorToolSelection';
+import { iterateShapeTiles, resolveShapeEnd, snapLineEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
+
+function isPointerShiftDown(pointer: Phaser.Input.Pointer): boolean {
+  const event = pointer.event as MouseEvent | KeyboardEvent | TouchEvent | undefined;
+  return Boolean(event && 'shiftKey' in event && event.shiftKey);
+}
 
 function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
   switch (editorState.activeLayer) {
@@ -43,7 +57,15 @@ interface EditorInteractionHost {
   placeGoalMarker(tileX: number, tileY: number): void;
   placeTileAt(worldX: number, worldY: number): void;
   eraseTileAt(worldX: number, worldY: number): void;
-  fillRect(x1: number, y1: number, x2: number, y2: number): void;
+  stampShape(
+    kind: EditorShapeKind,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    options?: { outline?: boolean; erase?: boolean; mid?: TilePoint },
+  ): void;
+  floodErase(tileX: number, tileY: number): void;
   captureCopySelection(x1: number, y1: number, x2: number, y2: number): void;
   getClipboardPreview(): EditorClipboardState | null;
   isClipboardPastePreviewActive(): boolean;
@@ -68,6 +90,8 @@ export class EditorInteractionController {
   private lastDraggedStampOrigin: { x: number; y: number } | null = null;
   private spaceDown = false;
   private rectStart: { x: number; y: number } | null = null;
+  private shapeEraseActive = false;
+  private pathBend: { start: TilePoint; end: TilePoint; mid: TilePoint; erase: boolean } | null = null;
   private readonly cursorCoordsEls: HTMLElement[];
   private touchPointers = new Map<number, { x: number; y: number }>();
   private touchPrimaryPointerId: number | null = null;
@@ -105,6 +129,8 @@ export class EditorInteractionController {
 
   clearShapePreview(): void {
     this.rectStart = null;
+    this.shapeEraseActive = false;
+    this.pathBend = null;
     this.rectPreviewGraphics?.clear();
   }
 
@@ -167,6 +193,7 @@ export class EditorInteractionController {
     this.lastDraggedStampOrigin = null;
     this.spaceDown = false;
     this.rectStart = null;
+    this.shapeEraseActive = false;
     this.touchPointers = new Map();
     this.touchPrimaryPointerId = null;
     this.pinchDistance = 0;
@@ -395,6 +422,10 @@ export class EditorInteractionController {
         return;
       }
 
+      if (this.resolvePathBendPointer(pointer)) {
+        return;
+      }
+
       if (pointer.middleButtonDown() || this.spaceDown) {
         this.isPanning = true;
         this.panStartPointer = { x: pointer.x, y: pointer.y };
@@ -416,6 +447,20 @@ export class EditorInteractionController {
             return;
           }
           this.host.removeObjectAt(worldPoint.x, worldPoint.y);
+        } else if (editorState.activeTool === 'fill') {
+          this.host.beginTileBatch();
+          this.host.floodErase(Math.floor(worldPoint.x / TILE_SIZE), Math.floor(worldPoint.y / TILE_SIZE));
+          this.host.commitTileBatch();
+        } else if (isDragStampEditorTool(editorState.activeTool)) {
+          this.isDrawing = true;
+          this.shapeEraseActive = true;
+          if (!(isPathEditorTool(editorState.activeTool) && isEditorLineCurve())) {
+            this.host.beginTileBatch();
+          }
+          this.startRectDrawing(
+            Math.floor(worldPoint.x / TILE_SIZE),
+            Math.floor(worldPoint.y / TILE_SIZE),
+          );
         } else {
           this.isDrawing = true;
           this.host.beginTileBatch();
@@ -504,20 +549,32 @@ export class EditorInteractionController {
         }
       }
 
+      if (this.updatePathBendPreview(pointer)) {
+        return;
+      }
+
       if (this.isDrawing && pointer.rightButtonDown()) {
         const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        this.host.eraseTileAt(worldPoint.x, worldPoint.y);
+        if (this.shapeEraseActive && this.rectStart && isDragStampEditorTool(editorState.activeTool)) {
+          const end = this.resolvePointerShapeEnd(pointer, worldPoint);
+          this.drawActiveStampPreview(this.rectStart.x, this.rectStart.y, end.x, end.y);
+        } else if (!this.shapeEraseActive) {
+          this.host.eraseTileAt(worldPoint.x, worldPoint.y);
+        }
       }
 
       if (
-        (editorState.activeTool === 'rect' || editorState.activeTool === 'copy') &&
+        (isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy') &&
         this.rectStart &&
         pointer.leftButtonDown()
       ) {
         const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        const endX = Math.floor(worldPoint.x / TILE_SIZE);
-        const endY = Math.floor(worldPoint.y / TILE_SIZE);
-        this.drawRectPreview(this.rectStart.x, this.rectStart.y, endX, endY);
+        const end = this.resolvePointerShapeEnd(pointer, worldPoint);
+        if (editorState.activeTool === 'copy') {
+          this.drawRectPreview(this.rectStart.x, this.rectStart.y, end.x, end.y);
+        } else {
+          this.drawActiveStampPreview(this.rectStart.x, this.rectStart.y, end.x, end.y);
+        }
       }
     });
 
@@ -541,19 +598,30 @@ export class EditorInteractionController {
       }
 
       if (
-        (editorState.activeTool === 'rect' || editorState.activeTool === 'copy') &&
+        (isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy') &&
         this.rectStart &&
-        pointer.leftButtonReleased()
+        (pointer.leftButtonReleased() || (this.shapeEraseActive && pointer.rightButtonReleased()))
       ) {
         const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        const endX = Math.floor(worldPoint.x / TILE_SIZE);
-        const endY = Math.floor(worldPoint.y / TILE_SIZE);
+        const end = this.resolvePointerShapeEnd(pointer, worldPoint);
         if (editorState.activeTool === 'copy') {
-          this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, endX, endY);
+          this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, end.x, end.y);
+        } else if (isPathEditorTool(editorState.activeTool) && isEditorLineCurve()) {
+          this.beginPathBend(this.rectStart, end, this.shapeEraseActive);
+          this.isDrawing = false;
+          this.shapeEraseActive = false;
+          return;
         } else {
-          this.host.fillRect(this.rectStart.x, this.rectStart.y, endX, endY);
+          const kind = getEditorStampKind(editorState.activeTool);
+          if (kind) {
+            this.host.stampShape(kind, this.rectStart.x, this.rectStart.y, end.x, end.y, {
+              outline: isEditorShapeOutline(editorState.activeTool),
+              erase: this.shapeEraseActive,
+            });
+          }
         }
         this.rectStart = null;
+        this.shapeEraseActive = false;
         this.rectPreviewGraphics?.clear();
       }
 
@@ -583,14 +651,28 @@ export class EditorInteractionController {
       if (isTextInputFocused()) {
         return;
       }
-      editorState.activeTool = 'rect';
+      applyEditorToolSelection('rect');
+      this.host.updateToolUi();
+    });
+    keyboard.on('keydown-E', () => {
+      if (isTextInputFocused()) {
+        return;
+      }
+      applyEditorToolSelection('ellipse');
       this.host.updateToolUi();
     });
     keyboard.on('keydown-G', () => {
       if (isTextInputFocused()) {
         return;
       }
-      editorState.activeTool = 'fill';
+      applyEditorToolSelection('fill');
+      this.host.updateToolUi();
+    });
+    keyboard.on('keydown-L', () => {
+      if (isTextInputFocused()) {
+        return;
+      }
+      applyEditorToolSelection('line');
       this.host.updateToolUi();
     });
     keyboard.on('keydown-F', () => {
@@ -645,6 +727,120 @@ export class EditorInteractionController {
   }
 
   private drawRectPreview(x1: number, y1: number, x2: number, y2: number): void {
+    this.drawShapeTilesPreview('rect', x1, y1, x2, y2, false, true);
+  }
+
+  private drawActiveStampPreview(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    mid?: TilePoint,
+    curveBend = false,
+  ): void {
+    const kind = getEditorStampKind(editorState.activeTool, curveBend);
+    if (!kind) {
+      return;
+    }
+    this.drawShapeTilesPreview(kind, x1, y1, x2, y2, isEditorShapeOutline(editorState.activeTool), false, mid);
+  }
+
+  private beginPathBend(start: TilePoint, end: TilePoint, erase: boolean): void {
+    const mid = {
+      x: Math.round((start.x + end.x) / 2),
+      y: Math.round((start.y + end.y) / 2),
+    };
+    this.pathBend = {
+      start: { x: start.x, y: start.y },
+      end: { x: end.x, y: end.y },
+      mid,
+      erase,
+    };
+    this.rectStart = null;
+    this.drawPathBendPreview();
+  }
+
+  private drawPathBendPreview(): void {
+    if (!this.pathBend) {
+      return;
+    }
+    this.drawShapeTilesPreview(
+      'curve',
+      this.pathBend.start.x,
+      this.pathBend.start.y,
+      this.pathBend.end.x,
+      this.pathBend.end.y,
+      false,
+      false,
+      this.pathBend.mid,
+    );
+  }
+
+  private resolvePathBendPointer(pointer: Phaser.Input.Pointer): boolean {
+    if (!this.pathBend) {
+      return false;
+    }
+
+    if (pointer.rightButtonDown()) {
+      if (this.pathBend.erase) {
+        this.host.beginTileBatch();
+        this.host.stampShape(
+          'curve',
+          this.pathBend.start.x,
+          this.pathBend.start.y,
+          this.pathBend.end.x,
+          this.pathBend.end.y,
+          { erase: true, mid: this.pathBend.mid },
+        );
+        this.host.commitTileBatch();
+      }
+      this.clearShapePreview();
+      return true;
+    }
+
+    if (pointer.leftButtonDown()) {
+      if (!this.pathBend.erase) {
+        this.host.beginTileBatch();
+        this.host.stampShape(
+          'curve',
+          this.pathBend.start.x,
+          this.pathBend.start.y,
+          this.pathBend.end.x,
+          this.pathBend.end.y,
+          { erase: false, mid: this.pathBend.mid },
+        );
+        this.host.commitTileBatch();
+      }
+      this.clearShapePreview();
+      return true;
+    }
+
+    return false;
+  }
+
+  private updatePathBendPreview(pointer: Phaser.Input.Pointer): boolean {
+    if (!this.pathBend) {
+      return false;
+    }
+    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    this.pathBend.mid = {
+      x: Math.floor(worldPoint.x / TILE_SIZE),
+      y: Math.floor(worldPoint.y / TILE_SIZE),
+    };
+    this.drawPathBendPreview();
+    return true;
+  }
+
+  private drawShapeTilesPreview(
+    kind: EditorShapeKind,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    outline: boolean,
+    copySelection: boolean,
+    mid?: TilePoint,
+  ): void {
     this.rectPreviewGraphics?.clear();
     if (!this.rectPreviewGraphics) {
       return;
@@ -654,21 +850,46 @@ export class EditorInteractionController {
     const minY = Math.min(y1, y2);
     const maxX = Math.max(x1, x2);
     const maxY = Math.max(y1, y2);
+    const pathTool = kind === 'line' || kind === 'curve';
+    this.rectPreviewGraphics.fillStyle(RETRO_COLORS.draft, copySelection || !outline ? 0.15 : 0.22);
+    if (copySelection || (kind === 'rect' && !outline)) {
+      this.rectPreviewGraphics.fillRect(
+        minX * TILE_SIZE,
+        minY * TILE_SIZE,
+        (maxX - minX + 1) * TILE_SIZE,
+        (maxY - minY + 1) * TILE_SIZE,
+      );
+    } else {
+      for (const tile of iterateShapeTiles(kind, x1, y1, x2, y2, outline, mid)) {
+        this.rectPreviewGraphics.fillRect(tile.x * TILE_SIZE, tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      }
+    }
+    if (!pathTool) {
+      this.rectPreviewGraphics.lineStyle(1, RETRO_COLORS.draft, 0.65);
+      this.rectPreviewGraphics.strokeRect(
+        minX * TILE_SIZE,
+        minY * TILE_SIZE,
+        (maxX - minX + 1) * TILE_SIZE,
+        (maxY - minY + 1) * TILE_SIZE,
+      );
+    }
+  }
 
-    this.rectPreviewGraphics.fillStyle(RETRO_COLORS.draft, 0.15);
-    this.rectPreviewGraphics.fillRect(
-      minX * TILE_SIZE,
-      minY * TILE_SIZE,
-      (maxX - minX + 1) * TILE_SIZE,
-      (maxY - minY + 1) * TILE_SIZE,
-    );
-    this.rectPreviewGraphics.lineStyle(1, RETRO_COLORS.draft, 0.65);
-    this.rectPreviewGraphics.strokeRect(
-      minX * TILE_SIZE,
-      minY * TILE_SIZE,
-      (maxX - minX + 1) * TILE_SIZE,
-      (maxY - minY + 1) * TILE_SIZE,
-    );
+  private resolvePointerShapeEnd(
+    pointer: Phaser.Input.Pointer,
+    worldPoint: Phaser.Math.Vector2,
+  ): { x: number; y: number } {
+    const current = {
+      x: Math.floor(worldPoint.x / TILE_SIZE),
+      y: Math.floor(worldPoint.y / TILE_SIZE),
+    };
+    if (!this.rectStart || editorState.activeTool === 'copy' || !isPointerShiftDown(pointer)) {
+      return current;
+    }
+    if (isPathEditorTool(editorState.activeTool)) {
+      return snapLineEnd(this.rectStart, current);
+    }
+    return resolveShapeEnd(this.rectStart, current, true);
   }
 
   private updateCursorCoords(tileX: number, tileY: number): void {
@@ -704,6 +925,10 @@ export class EditorInteractionController {
       y: this.scene.cameras.main.scrollY,
     };
 
+    if (this.resolvePathBendPointer(pointer)) {
+      return true;
+    }
+
     const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const tileX = Math.floor(worldPoint.x / TILE_SIZE);
     const tileY = Math.floor(worldPoint.y / TILE_SIZE);
@@ -735,16 +960,30 @@ export class EditorInteractionController {
       return true;
     }
 
-    if (editorState.activeTool === 'rect' || editorState.activeTool === 'copy') {
+    if (isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy') {
       if (!this.rectStart) {
         this.rectStart = { x: tileX, y: tileY };
       } else {
+        const end = isPathEditorTool(editorState.activeTool)
+          ? { x: tileX, y: tileY }
+          : resolveShapeEnd(this.rectStart, { x: tileX, y: tileY }, false);
         if (editorState.activeTool === 'copy') {
-          this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, tileX, tileY);
+          this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, end.x, end.y);
+          this.clearShapePreview();
+        } else if (isPathEditorTool(editorState.activeTool) && isEditorLineCurve()) {
+          this.beginPathBend(this.rectStart, end, false);
         } else {
-          this.host.fillRect(this.rectStart.x, this.rectStart.y, tileX, tileY);
+          const kind = getEditorStampKind(editorState.activeTool);
+          if (kind) {
+            this.host.beginTileBatch();
+            this.host.stampShape(kind, this.rectStart.x, this.rectStart.y, end.x, end.y, {
+              outline: isEditorShapeOutline(editorState.activeTool),
+              erase: false,
+            });
+            this.host.commitTileBatch();
+          }
+          this.clearShapePreview();
         }
-        this.clearShapePreview();
       }
       return true;
     }
@@ -776,6 +1015,10 @@ export class EditorInteractionController {
       return true;
     }
 
+    if (this.updatePathBendPreview(pointer)) {
+      return true;
+    }
+
     if (!this.isDrawing || editorState.paletteMode !== 'tiles') {
       return true;
     }
@@ -785,10 +1028,14 @@ export class EditorInteractionController {
       this.placeDraggedTileStamp(worldPoint.x, worldPoint.y);
     } else if (editorState.activeTool === 'eraser') {
       this.host.eraseTileAt(worldPoint.x, worldPoint.y);
-    } else if ((editorState.activeTool === 'rect' || editorState.activeTool === 'copy') && this.rectStart) {
+    } else if ((isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy') && this.rectStart) {
       const tileX = Math.floor(worldPoint.x / TILE_SIZE);
       const tileY = Math.floor(worldPoint.y / TILE_SIZE);
-      this.drawRectPreview(this.rectStart.x, this.rectStart.y, tileX, tileY);
+      if (editorState.activeTool === 'copy') {
+        this.drawRectPreview(this.rectStart.x, this.rectStart.y, tileX, tileY);
+      } else {
+        this.drawActiveStampPreview(this.rectStart.x, this.rectStart.y, tileX, tileY);
+      }
     }
 
     return true;
@@ -823,6 +1070,11 @@ export class EditorInteractionController {
   }
 
   private finishCurrentTouchDraw(): void {
+    if (this.pathBend) {
+      this.isDrawing = false;
+      this.clearTileDrag();
+      return;
+    }
     if (this.isDrawing) {
       if (editorState.activeTool !== 'copy') {
         this.host.commitTileBatch();

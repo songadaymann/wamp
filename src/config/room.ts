@@ -10,7 +10,7 @@ export const LAYER_NAMES = ['background', 'terrain', 'foreground'] as const;
 export type LayerName = typeof LAYER_NAMES[number];
 
 // ── Tools ──
-export const TOOLS = ['pencil', 'rect', 'fill', 'eraser', 'copy'] as const;
+export const TOOLS = ['pencil', 'rect', 'ellipse', 'line', 'fill', 'eraser', 'copy'] as const;
 export type ToolName = typeof TOOLS[number];
 export const ERASER_BRUSH_SIZES = [1, 3, 5] as const;
 export type EraserBrushSize = typeof ERASER_BRUSH_SIZES[number];

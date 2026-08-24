@@ -11,6 +11,7 @@ import type { NpcQuestType, RoomGoalType } from '../../goals/roomGoals';
 import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import type { EditorClipboardState, EditorEditRuntime, GoalPlacementMode } from './editRuntime';
 import type { EditorPersistenceController } from './persistence';
+import { applyEditorToolSelection, isDragStampEditorTool } from './editorToolSelection';
 
 interface EditorToolControllerHost {
   startRectDrawing(tileX: number, tileY: number): void;
@@ -36,7 +37,7 @@ export class EditorToolController {
   }
 
   selectTool(tool: ToolName): void {
-    editorState.activeTool = tool;
+    applyEditorToolSelection(tool);
     this.updateToolUi();
   }
 
@@ -185,7 +186,11 @@ export class EditorToolController {
         this.editRuntime.eraseTileAt(worldPoint.x, worldPoint.y);
         break;
       case 'rect':
-        this.editRuntime.beginTileBatch();
+      case 'ellipse':
+      case 'line':
+        if (editorState.activeTool !== 'line' || !editorState.lineCurve) {
+          this.editRuntime.beginTileBatch();
+        }
         this.host.startRectDrawing(tileX, tileY);
         break;
       case 'fill':
@@ -232,7 +237,7 @@ export class EditorToolController {
       this.cancelClipboardPastePreview();
     }
 
-    if (editorState.activeTool !== 'rect' && editorState.activeTool !== 'copy') {
+    if (!isDragStampEditorTool(editorState.activeTool) && editorState.activeTool !== 'copy') {
       this.host.clearShapePreview();
     }
 
