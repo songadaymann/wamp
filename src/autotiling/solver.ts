@@ -99,13 +99,13 @@ export const SMART_TILESET_SLOTS = {
     // row 5, column 3, flipped vertically to face the carved air above.
     gothicTunnelFloor: 50,
     // Artist-authored family for regions that never become two tiles thick.
-    // Coordinates on every 12-column source sheet: B8/B9, C8, D8-D12, E8.
+    // Coordinates on every 12-column source sheet: B8/B9, C8, D8-D11, E8.
     thin: {
       verticalTop: 19,
       isolated: 20,
       verticalMiddle: [31, 43],
       horizontalLeft: 44,
-      horizontalMiddle: [45, 47, 46, 44, 20],
+      horizontalMiddle: [20, 44, 45, 46],
       horizontalRight: 46,
       verticalBottom: 55,
     },
