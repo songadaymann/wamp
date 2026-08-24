@@ -438,6 +438,33 @@ describe('editor edit runtime document contracts', () => {
     expect(getTileCoordinates(layers.get('terrain')!)).not.toContain('20,12');
     expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toHaveLength(6);
   });
+
+  it('undoes and redoes a multi-step Smart stroke as one exact transaction', () => {
+    editorState.paletteMode = 'smart';
+    const { runtime } = createHarness(createRoom());
+    const before = runtime.exportRoomSnapshot();
+
+    runtime.beginTileBatch();
+    for (let y = 4; y <= 10; y += 1) {
+      const width = 11 - y;
+      for (let x = 4; x < 4 + width; x += 1) {
+        runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+      }
+    }
+    runtime.commitTileBatch();
+    const painted = runtime.exportRoomSnapshot();
+    expect(Object.keys(painted.smartTerrain!.cells).length).toBeGreaterThan(20);
+
+    runtime.undo();
+    const undone = runtime.exportRoomSnapshot();
+    expect(undone.tileData).toEqual(before.tileData);
+    expect(undone.smartTerrain).toEqual(before.smartTerrain);
+
+    runtime.redo();
+    const redone = runtime.exportRoomSnapshot();
+    expect(redone.tileData).toEqual(painted.tileData);
+    expect(redone.smartTerrain).toEqual(painted.smartTerrain);
+  });
 });
 
 function selectCyberBrush(brushId: SmartBrushId): void {

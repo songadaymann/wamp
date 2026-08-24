@@ -183,25 +183,23 @@ try {
   assert.deepEqual(clearedLocalAfter, { ok: true, target: 'local' });
   summary.checks.localPersistenceReload = true;
 
-  await runEditorCommands(page, [
+  const historyCaptures = await runEditorCommands(page, [
     { op: 'clearAllTiles' },
+    { op: 'capture', name: 'historyBefore' },
     { op: 'beginBatch' },
     { op: 'placeCells', cells: rectangleCells(8, 12, 10, 13) },
     { op: 'commitBatch' },
-  ]);
-  await dismissKeepBuilding(page);
-
-  const historyCaptures = await runEditorCommands(page, [
+    { op: 'capture', name: 'historyPainted' },
     { op: 'undo' },
     { op: 'capture', name: 'undone' },
     { op: 'redo' },
     { op: 'capture', name: 'redone' },
   ]);
-  const history = {
-    undoneCells: Object.keys(historyCaptures.undone.smartTerrain.cells).length,
-    redoneCells: Object.keys(historyCaptures.redone.smartTerrain.cells).length,
-  };
-  assert.deepEqual(history, { undoneCells: 0, redoneCells: 6 });
+  await dismissKeepBuilding(page);
+  assert.deepEqual(historyCaptures.undone.tileData, historyCaptures.historyBefore.tileData);
+  assert.deepEqual(historyCaptures.undone.smartTerrain, historyCaptures.historyBefore.smartTerrain);
+  assert.deepEqual(historyCaptures.redone.tileData, historyCaptures.historyPainted.tileData);
+  assert.deepEqual(historyCaptures.redone.smartTerrain, historyCaptures.historyPainted.smartTerrain);
   summary.checks.undoRedo = true;
 
   const copiedCaptures = await runEditorCommands(page, [
