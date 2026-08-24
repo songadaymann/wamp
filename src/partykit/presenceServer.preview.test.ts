@@ -144,7 +144,7 @@ describe('PresenceServer construction preview baseline', () => {
     );
     await harness.waitUntil(
       () =>
-        mutationOperations(harness).some(
+        mutationOperations(activeHarness()).some(
           (operation) => operation.type === 'put' && operation.key === 'preview:1,2'
         ),
       'deferred preview put'
@@ -174,7 +174,7 @@ describe('PresenceServer construction preview baseline', () => {
 
     expect(harness.room.storage.releaseNextMutation()).toBe(true);
     await harness.waitUntil(
-      () => harness.room.storage.peek('preview:1,2') === undefined,
+      () => activeHarness().room.storage.peek('preview:1,2') === undefined,
       'deferred preview delete'
     );
     expect(harness.room.storage.peek('preview:1,2')).toBeUndefined();
@@ -204,7 +204,7 @@ describe('PresenceServer construction preview baseline', () => {
     const expiredViewer = await harness.connect('expired-viewer');
     await harness.waitUntil(
       () =>
-        mutationOperations(harness).some(
+        mutationOperations(activeHarness()).some(
           (operation) =>
             operation.type === 'delete' &&
             operation.key === 'preview:1,2' &&
@@ -365,6 +365,13 @@ describe('PresenceServer construction preview baseline', () => {
     expect(latestRoomPreviews(observer)).toEqual({});
   });
 });
+
+function activeHarness(): PresenceServerHarness {
+  if (!harness) {
+    throw new Error('Expected presence harness to be initialized');
+  }
+  return harness;
+}
 
 async function connectEditor(
   activeHarness: PresenceServerHarness,
