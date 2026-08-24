@@ -144,6 +144,7 @@ import {
   serializeRoomSmartTerrainState,
   smartCellKey,
   smartOwnedOutputPartKey,
+  smartRecipeOwnerId,
   smartSemanticCellKey,
   type SmartBrushId,
   type SmartStyleId,
@@ -715,11 +716,12 @@ export class EditorEditRuntime {
             suffix += 1;
           }
         }
-        next.smartTerrain.recipes[instanceId] = clipboardRecipe.recipe;
-        const sourceSuffix = clipboardRecipe.sourceInstanceId;
-        const ownerId = clipboardRecipe.sourceOwnerId.endsWith(sourceSuffix)
-          ? `${clipboardRecipe.sourceOwnerId.slice(0, -sourceSuffix.length)}${instanceId}`
-          : instanceId;
+        const recipe = {
+          ...clipboardRecipe.recipe,
+          ownerId: smartRecipeOwnerId(instanceId),
+        };
+        next.smartTerrain.recipes[instanceId] = recipe;
+        const ownerId = recipe.ownerId;
         next.smartTerrain.suppressedOutputParts.push(
           ...clipboardRecipe.suppressedPartIds.map(
             (partId) => smartOwnedOutputPartKey(ownerId, partId),
@@ -1156,9 +1158,9 @@ export class EditorEditRuntime {
         removedCyberOwners.add(`cyber:cell:${key}`);
       }
     }
-    for (const [instanceId, recipe] of Object.entries(smartBefore.recipes)) {
+    for (const recipe of Object.values(smartBefore.recipes)) {
       if (recipe.anchor.layer === editorState.activeLayer) {
-        removedCyberOwners.add(`cyber:recipe:${instanceId}`);
+        removedCyberOwners.add(recipe.ownerId);
       }
     }
     for (const [key, output] of Object.entries(smartBefore.ownedOutputs)) {

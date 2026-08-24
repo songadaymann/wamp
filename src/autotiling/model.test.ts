@@ -229,8 +229,95 @@ describe('smart authoring persistence model', () => {
     });
 
     expect(Object.keys(normalized.recipes)).toEqual(['validPanel', 'validLegacyAlias']);
-    expect(normalized.recipes.validPanel).toEqual(panel);
+    expect(normalized.recipes.validPanel).toEqual({
+      ...panel,
+      ownerId: 'cyber:recipe:validPanel',
+      bounds: { minX: 4, minY: 5, maxX: 6, maxY: 6, width: 3, height: 2 },
+    });
     expect(normalized.recipes.validLegacyAlias?.brushId).toBe('cave.feature');
+  });
+
+  it('upgrades old recipe geometry to a canonical owner, anchor, bounds, and source order', () => {
+    const normalized = normalizeRoomSmartTerrainState({
+      version: 2,
+      recipes: {
+        'cyber-platform-7': {
+          recipeId: 'cyber.platform',
+          ownerId: 'forged-owner',
+          styleId: 'cyber-yellow',
+          brushId: 'cyber.platform',
+          anchor: { layer: 'terrain', x: 99, y: 99 },
+          sourceCells: [
+            { layer: 'terrain', x: 6, y: 4 },
+            { layer: 'terrain', x: 4, y: 4 },
+            { layer: 'terrain', x: 5, y: 4 },
+            { layer: 'terrain', x: 5, y: 4 },
+          ],
+          parameters: { width: 3, height: 1 },
+        },
+        empty: {
+          recipeId: 'cyber.platform',
+          styleId: 'cyber-yellow',
+          brushId: 'cyber.platform',
+          anchor: { layer: 'terrain', x: 1, y: 1 },
+          sourceCells: [],
+          parameters: {},
+        },
+      },
+      ownedOutputs: {
+        'terrain:4,4': {
+          ownerId: 'forged-owner',
+          partId: 'row-0:column-0',
+          kind: 'recipe',
+          layer: 'terrain',
+          value: 1633 + 71 + TILE_FLIP_X_FLAG,
+        },
+      },
+      suppressedOutputParts: ['forged-owner:row-0:column-1'],
+    });
+
+    expect(normalized.recipes).toEqual({
+      'cyber-platform-7': {
+        recipeId: 'cyber.platform',
+        ownerId: 'cyber:recipe:cyber-platform-7',
+        styleId: 'cyber-yellow',
+        brushId: 'cyber.platform',
+        anchor: { layer: 'terrain', x: 4, y: 4 },
+        bounds: { minX: 4, minY: 4, maxX: 6, maxY: 4, width: 3, height: 1 },
+        sourceCells: [4, 5, 6].map((x) => ({ layer: 'terrain', x, y: 4 })),
+        parameters: { width: 3, height: 1 },
+      },
+    });
+    expect(normalized.ownedOutputs['terrain:4,4']?.ownerId).toBe(
+      'cyber:recipe:cyber-platform-7',
+    );
+    expect(normalized.suppressedOutputParts).toEqual([
+      'cyber:recipe:cyber-platform-7:row-0:column-1',
+    ]);
+  });
+
+  it('retains valid explicit output bounds that extend beyond recipe source cells', () => {
+    const normalized = normalizeRoomSmartTerrainState({
+      version: 2,
+      recipes: {
+        facade: {
+          recipeId: 'cyber.structure.facade',
+          ownerId: 'cyber:recipe:facade',
+          styleId: 'cyber-yellow',
+          brushId: 'cyber.structure',
+          anchor: { layer: 'terrain', x: 4, y: 5 },
+          bounds: { minX: 3, minY: 4, maxX: 7, maxY: 6, width: 5, height: 3 },
+          sourceCells: [4, 5, 6].map((x) => ({ layer: 'terrain', x, y: 5 })),
+          parameters: { width: 5, height: 3 },
+        },
+      },
+    });
+
+    expect(normalized.recipes.facade).toMatchObject({
+      ownerId: 'cyber:recipe:facade',
+      anchor: { layer: 'terrain', x: 3, y: 4 },
+      bounds: { minX: 3, minY: 4, maxX: 7, maxY: 6, width: 5, height: 3 },
+    });
   });
 
   it('preserves an unknown future payload and disables editing without nesting on reclone', () => {
@@ -280,9 +367,11 @@ describe('smart authoring persistence model', () => {
     const state = createRoomSmartTerrainState();
     state.recipes.tower = {
       recipeId: 'cyber.structure.tower',
+      ownerId: 'cyber:recipe:tower',
       styleId: 'cyber-yellow',
       brushId: 'cyber.structure',
       anchor: { layer: 'terrain', x: 2, y: 3 },
+      bounds: { minX: 2, minY: 3, maxX: 9, maxY: 3, width: 8, height: 1 },
       sourceCells: [{ layer: 'terrain', x: 2, y: 3 }],
       parameters: { width: 8, facade: 'tower', details: true },
     };
@@ -298,6 +387,7 @@ describe('smart authoring persistence model', () => {
     expect(cloned.recipes.tower).toEqual(state.recipes.tower);
     expect(cloned.recipes.tower).not.toBe(state.recipes.tower);
     expect(cloned.recipes.tower.anchor).not.toBe(state.recipes.tower.anchor);
+    expect(cloned.recipes.tower.bounds).not.toBe(state.recipes.tower.bounds);
     expect(cloned.ownedOutputs['terrain:2,3']?.value).toBe(encodedValue);
   });
 });

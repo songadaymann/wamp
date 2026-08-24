@@ -79,12 +79,26 @@ export interface SmartLayerCellCoordinate extends SmartCellCoordinate {
 export type SmartSemanticCellKey = `${LayerName}:${number},${number}`;
 export type SmartRecipeParameterValue = string | number | boolean;
 
+export interface SmartRecipeBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  width: number;
+  height: number;
+}
+
 export interface SmartRecipeInstanceState {
-  /** Stable recipe/profile ID; the record key is this instance's owner ID. */
+  /** Stable recipe/profile ID. */
   recipeId: string;
+  /** Stable rendered-output owner ID; recipe record renames must also replace this value. */
+  ownerId: string;
   styleId: SmartStyleId;
   brushId: SmartBrushId;
+  /** Canonical top-left source/output anchor. */
   anchor: SmartLayerCellCoordinate;
+  /** Canonical absolute bounds for this recipe's authored footprint. */
+  bounds: SmartRecipeBounds;
   sourceCells: SmartLayerCellCoordinate[];
   parameters: Record<string, SmartRecipeParameterValue>;
 }
@@ -246,6 +260,11 @@ export function smartOwnedOutputPartKey(ownerId: string, partId: string): string
   return `${ownerId}:${partId}`;
 }
 
+/** Canonical owner ID for a native Cyber recipe instance. */
+export function smartRecipeOwnerId(instanceId: string): string {
+  return `cyber:recipe:${instanceId}`;
+}
+
 export function smartDecorationSlotKey(ownerKey: string, slot: SmartGeneratedDecorationState['slot']): string {
   return `${ownerKey}:${slot}`;
 }
@@ -373,6 +392,76 @@ function normalizeGeneratedDecorations(value: unknown): Record<string, SmartGene
   return decorations;
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+function normalizeRecipeSourceCells(
+  sourceCells: readonly SmartLayerCellCoordinate[],
+): SmartLayerCellCoordinate[] {
+  const unique = new Map<string, SmartLayerCellCoordinate>();
+  for (const cell of sourceCells) {
+    unique.set(`${cell.layer}:${cell.x},${cell.y}`, { ...cell });
+  }
+  return [...unique.values()].sort((left, right) => (
+    LAYER_NAMES.indexOf(left.layer) - LAYER_NAMES.indexOf(right.layer)
+      || left.y - right.y
+      || left.x - right.x
+  ));
+}
+
+function getNormalizedRecipeBounds(
+  sourceCells: readonly SmartLayerCellCoordinate[],
+  parameters: Readonly<Record<string, SmartRecipeParameterValue>>,
+  persistedBounds: unknown,
+): SmartRecipeBounds {
+  const sourceMinX = Math.min(...sourceCells.map(({ x }) => x));
+  const sourceMinY = Math.min(...sourceCells.map(({ y }) => y));
+  const sourceMaxX = Math.max(...sourceCells.map(({ x }) => x));
+  const sourceMaxY = Math.max(...sourceCells.map(({ y }) => y));
+  const sourceWidth = sourceMaxX - sourceMinX + 1;
+  const sourceHeight = sourceMaxY - sourceMinY + 1;
+  const bounds = isRecord(persistedBounds) ? persistedBounds : {};
+  const hasCanonicalPersistedBounds = Number.isInteger(bounds.minX) && (bounds.minX as number) >= 0
+    && Number.isInteger(bounds.minY) && (bounds.minY as number) >= 0
+    && Number.isInteger(bounds.maxX) && (bounds.maxX as number) >= (bounds.minX as number)
+    && Number.isInteger(bounds.maxY) && (bounds.maxY as number) >= (bounds.minY as number)
+    && isPositiveInteger(bounds.width)
+    && isPositiveInteger(bounds.height)
+    && (bounds.maxX as number) - (bounds.minX as number) + 1 === bounds.width
+    && (bounds.maxY as number) - (bounds.minY as number) + 1 === bounds.height
+    && sourceMinX >= (bounds.minX as number)
+    && sourceMaxX <= (bounds.maxX as number)
+    && sourceMinY >= (bounds.minY as number)
+    && sourceMaxY <= (bounds.maxY as number);
+  if (hasCanonicalPersistedBounds) {
+    return {
+      minX: bounds.minX as number,
+      minY: bounds.minY as number,
+      maxX: bounds.maxX as number,
+      maxY: bounds.maxY as number,
+      width: bounds.width as number,
+      height: bounds.height as number,
+    };
+  }
+  const requestedWidth = isPositiveInteger(bounds.width)
+    ? bounds.width
+    : isPositiveInteger(parameters.width) ? parameters.width : sourceWidth;
+  const requestedHeight = isPositiveInteger(bounds.height)
+    ? bounds.height
+    : isPositiveInteger(parameters.height) ? parameters.height : sourceHeight;
+  const width = Math.max(sourceWidth, requestedWidth);
+  const height = Math.max(sourceHeight, requestedHeight);
+  return {
+    minX: sourceMinX,
+    minY: sourceMinY,
+    maxX: sourceMinX + width - 1,
+    maxY: sourceMinY + height - 1,
+    width,
+    height,
+  };
+}
+
 function normalizeRecipes(value: unknown): Record<string, SmartRecipeInstanceState> {
   const recipes: Record<string, SmartRecipeInstanceState> = {};
   if (!isRecord(value)) return recipes;
@@ -383,10 +472,14 @@ function normalizeRecipes(value: unknown): Record<string, SmartRecipeInstanceSta
     const brushId = normalizeSmartBrushId(styleId, recipe.brushId);
     if (!brushId) continue;
     if (!isLayerCoordinate(recipe.anchor) || !Array.isArray(recipe.sourceCells)) continue;
-    if (!isSmartBrushSourceCompatible(styleId, brushId, recipe.anchor.layer)) continue;
-    if (!recipe.sourceCells.every(isLayerCoordinate)) continue;
-    const sourceCells = recipe.sourceCells as SmartLayerCellCoordinate[];
-    if (!sourceCells.every((cell) => isSmartBrushSourceCompatible(styleId, brushId, cell.layer))) continue;
+    if (!recipe.sourceCells.every(isLayerCoordinate) || recipe.sourceCells.length === 0) continue;
+    const sourceCells = normalizeRecipeSourceCells(recipe.sourceCells as SmartLayerCellCoordinate[]);
+    const sourceLayer = sourceCells[0]!.layer;
+    if (recipe.anchor.layer !== sourceLayer) continue;
+    if (!isSmartBrushSourceCompatible(styleId, brushId, sourceLayer)) continue;
+    if (!sourceCells.every((cell) => (
+      cell.layer === sourceLayer && isSmartBrushSourceCompatible(styleId, brushId, cell.layer)
+    ))) continue;
     const parameters: Record<string, SmartRecipeParameterValue> = {};
     if (isRecord(recipe.parameters)) {
       for (const [key, parameter] of Object.entries(recipe.parameters)) {
@@ -395,12 +488,21 @@ function normalizeRecipes(value: unknown): Record<string, SmartRecipeInstanceSta
         }
       }
     }
+    const bounds = getNormalizedRecipeBounds(sourceCells, parameters, recipe.bounds);
+    const recipeId = recipe.recipeId;
+    const ownerId = recipeId.startsWith('cyber.')
+      ? smartRecipeOwnerId(instanceId)
+      : typeof recipe.ownerId === 'string' && recipe.ownerId.length > 0
+        ? recipe.ownerId
+        : instanceId;
     recipes[instanceId] = {
-      recipeId: recipe.recipeId,
+      recipeId,
+      ownerId,
       styleId,
       brushId,
-      anchor: { ...recipe.anchor },
-      sourceCells: sourceCells.map((cell) => ({ ...cell })),
+      anchor: { layer: sourceLayer, x: bounds.minX, y: bounds.minY },
+      bounds,
+      sourceCells,
       parameters,
     };
   }
@@ -430,6 +532,40 @@ function normalizeStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? Array.from(new Set(value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)))
     : [];
+}
+
+function getRecipeOwnerAliases(
+  candidateRecipes: unknown,
+  recipes: Readonly<Record<string, SmartRecipeInstanceState>>,
+): Map<string, string> {
+  const aliases = new Map<string, string>();
+  const persistedRecipes = isRecord(candidateRecipes) ? candidateRecipes : {};
+  for (const [instanceId, recipe] of Object.entries(recipes)) {
+    aliases.set(instanceId, recipe.ownerId);
+    aliases.set(recipe.ownerId, recipe.ownerId);
+    const persisted = persistedRecipes[instanceId];
+    if (isRecord(persisted) && typeof persisted.ownerId === 'string' && persisted.ownerId) {
+      aliases.set(persisted.ownerId, recipe.ownerId);
+    }
+  }
+  return aliases;
+}
+
+function canonicalizeRecipeOwnerReferences(
+  outputs: Record<string, SmartOwnedOutputState>,
+  suppressedParts: readonly string[],
+  aliases: ReadonlyMap<string, string>,
+): string[] {
+  for (const output of Object.values(outputs)) {
+    if (output.kind !== 'recipe') continue;
+    const ownerId = aliases.get(output.ownerId);
+    if (ownerId) output.ownerId = ownerId;
+  }
+  const orderedAliases = [...aliases.entries()].sort((left, right) => right[0].length - left[0].length);
+  return Array.from(new Set(suppressedParts.map((part) => {
+    const alias = orderedAliases.find(([ownerId]) => part.startsWith(`${ownerId}:`));
+    return alias ? `${alias[1]}:${part.slice(alias[0].length + 1)}` : part;
+  })));
 }
 
 function applyLegacyCellMirrors(
@@ -524,6 +660,8 @@ function normalizeKnownState(candidate: Record<string, unknown>): RoomSmartTerra
   applyLegacyCellMirrors(semanticCells, cells, backdropCells);
   applySemanticCompatibilityViews(semanticCells, cells, backdropCells);
 
+  const recipes = normalizeRecipes(candidate.recipes);
+  const recipeOwnerAliases = getRecipeOwnerAliases(candidate.recipes, recipes);
   const generatedDecorations = normalizeGeneratedDecorations(candidate.generatedDecorations);
   const generatedBackgroundDecorations = normalizeGeneratedDecorations(candidate.generatedBackgroundDecorations);
   const ownedOutputs: Record<string, SmartOwnedOutputState> = Object.fromEntries(
@@ -537,15 +675,20 @@ function normalizeKnownState(candidate: Record<string, unknown>): RoomSmartTerra
   const nativeSuppressedParts = normalizeStringArray(candidate.suppressedOutputParts)
     .filter((entry) => !entry.startsWith(LEGACY_SEMANTIC_OWNER_PREFIX));
   const legacySuppressedParts = suppressedDecorationSlots.map((slot) => `${LEGACY_SEMANTIC_OWNER_PREFIX}${slot}`);
+  const suppressedOutputParts = canonicalizeRecipeOwnerReferences(
+    ownedOutputs,
+    [...nativeSuppressedParts, ...legacySuppressedParts],
+    recipeOwnerAliases,
+  );
 
   return {
     version: SMART_TERRAIN_VERSION,
     editingDisabled: false,
     detailsEnabled: candidate.detailsEnabled !== false,
     semanticCells,
-    recipes: normalizeRecipes(candidate.recipes),
+    recipes,
     ownedOutputs,
-    suppressedOutputParts: Array.from(new Set([...nativeSuppressedParts, ...legacySuppressedParts])),
+    suppressedOutputParts,
     cells,
     backdropCells,
     generatedDecorations,

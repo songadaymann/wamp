@@ -14,6 +14,7 @@ import {
   createRoomSmartTerrainState,
   normalizeRoomSmartTerrainState,
   smartOwnedOutputKey,
+  smartOwnedOutputPartKey,
   smartSemanticCellKey,
   type SmartBrushId,
   type SmartCellCoordinate,
@@ -183,6 +184,157 @@ describe('Cyber Smart recipe solver', () => {
       expect(document.tileData.terrain[y]![x]).toBe(-1);
       expect(getTerrainCollisionProfileForGid(decodeTileDataValue(value).gid).hasCollision).toBe(false);
     }
+  });
+
+  it('persists Platform, Support, and Neon spans as explicit stable recipe owners', () => {
+    let document = paint(
+      emptyDocument(),
+      'cyber.platform',
+      'cyber-yellow',
+      horizontal(3, 4, 4),
+    );
+    document = paint(document, 'cyber.support', 'cyber-pink', rectangle(10, 2, 2, 4));
+    document = paint(document, 'cyber.neon-strip', 'cyber-yellow', horizontal(18, 8, 3));
+
+    const recipes = Object.values(document.smartTerrain.recipes);
+    expect(recipes).toHaveLength(3);
+    expect(recipes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        recipeId: 'cyber.platform',
+        brushId: 'cyber.platform',
+        styleId: 'cyber-yellow',
+        ownerId: 'cyber:recipe:cyber-platform-1',
+        anchor: { layer: 'terrain', x: 3, y: 4 },
+        bounds: { minX: 3, minY: 4, maxX: 6, maxY: 4, width: 4, height: 1 },
+        sourceCells: horizontal(3, 4, 4).map(({ x, y }) => ({ layer: 'terrain', x, y })),
+      }),
+      expect.objectContaining({
+        recipeId: 'cyber.support',
+        brushId: 'cyber.support',
+        styleId: 'cyber-pink',
+        ownerId: 'cyber:recipe:cyber-support-1',
+        anchor: { layer: 'background', x: 10, y: 2 },
+        bounds: { minX: 10, minY: 2, maxX: 11, maxY: 5, width: 2, height: 4 },
+        sourceCells: rectangle(10, 2, 2, 4).map(({ x, y }) => ({ layer: 'background', x, y })),
+      }),
+      expect.objectContaining({
+        recipeId: 'cyber.neon-strip',
+        brushId: 'cyber.neon-strip',
+        styleId: 'cyber-yellow',
+        ownerId: 'cyber:recipe:cyber-neon-strip-1',
+        anchor: { layer: 'terrain', x: 18, y: 8 },
+        bounds: { minX: 18, minY: 8, maxX: 20, maxY: 8, width: 3, height: 1 },
+        sourceCells: horizontal(18, 8, 3).map(({ x, y }) => ({ layer: 'terrain', x, y })),
+      }),
+    ]));
+    expect(Object.values(document.smartTerrain.semanticCells).some(({ brushId }) => (
+      brushId === 'cyber.platform' || brushId === 'cyber.support' || brushId === 'cyber.neon-strip'
+    ))).toBe(false);
+
+    const outputsByOwner = new Map<string, number>();
+    for (const output of Object.values(document.smartTerrain.ownedOutputs)) {
+      if (!output.ownerId.includes('cyber-platform')
+        && !output.ownerId.includes('cyber-support')
+        && !output.ownerId.includes('cyber-neon-strip')) continue;
+      expect(output).toMatchObject({ kind: 'recipe' });
+      expect(output.value).toBeGreaterThan(0);
+      outputsByOwner.set(output.ownerId, (outputsByOwner.get(output.ownerId) ?? 0) + 1);
+    }
+    expect(Object.fromEntries(outputsByOwner)).toEqual({
+      'cyber:recipe:cyber-platform-1': 4,
+      'cyber:recipe:cyber-support-1': 8,
+      'cyber:recipe:cyber-neon-strip-1': 3,
+    });
+    for (const [key, output] of Object.entries(document.smartTerrain.ownedOutputs)) {
+      if (output.kind !== 'recipe') continue;
+      const [, coordinate] = key.split(':');
+      const [x, y] = coordinate!.split(',').map(Number);
+      expect(document.tileData[output.layer][y]![x]).toBe(output.value);
+    }
+  });
+
+  it('keeps span owner IDs stable across repaint and extension, then repairs split and merge owners', () => {
+    let document = paint(
+      emptyDocument(),
+      'cyber.platform',
+      'cyber-yellow',
+      horizontal(4, 5, 4),
+    );
+    const originalId = Object.keys(document.smartTerrain.recipes)[0]!;
+    const originalOwner = document.smartTerrain.recipes[originalId]!.ownerId;
+
+    const manuallyEdited = cloneTileData(document);
+    manuallyEdited.terrain[5]![5] = -1;
+    document = resolveSmartRecipeDocument({
+      tileData: manuallyEdited,
+      smartTerrain: applyManualSmartOutputEdit(document.smartTerrain, 'terrain', 5, 5, -1),
+    });
+    expect(document.smartTerrain.suppressedOutputParts).toContain(
+      smartOwnedOutputPartKey(originalOwner, 'row-0:column-1'),
+    );
+
+    document = paint(document, 'cyber.platform', 'cyber-yellow', [{ x: 5, y: 5 }]);
+    expect(Object.keys(document.smartTerrain.recipes)).toEqual([originalId]);
+    expect(document.smartTerrain.suppressedOutputParts).not.toContain(
+      smartOwnedOutputPartKey(originalOwner, 'row-0:column-1'),
+    );
+    expect(document.tileData.terrain[5]![5]).toBeGreaterThan(0);
+
+    document = paint(document, 'cyber.platform', 'cyber-yellow', [{ x: 8, y: 5 }]);
+    expect(Object.keys(document.smartTerrain.recipes)).toEqual([originalId]);
+    expect(document.smartTerrain.recipes[originalId]).toMatchObject({
+      ownerId: originalOwner,
+      anchor: { layer: 'terrain', x: 4, y: 5 },
+      bounds: { minX: 4, minY: 5, maxX: 8, maxY: 5, width: 5, height: 1 },
+    });
+
+    document = erase(document, 'cyber.platform', 'cyber-yellow', [{ x: 6, y: 5 }]);
+    const splitIds = Object.keys(document.smartTerrain.recipes);
+    expect(splitIds).toHaveLength(2);
+    expect(splitIds).toContain(originalId);
+    const splitId = splitIds.find((instanceId) => instanceId !== originalId)!;
+    expect(document.smartTerrain.recipes[originalId]!.sourceCells).toEqual(
+      horizontal(4, 5, 2).map(({ x, y }) => ({ layer: 'terrain', x, y })),
+    );
+    expect(document.smartTerrain.recipes[splitId]!.sourceCells).toEqual(
+      horizontal(7, 5, 2).map(({ x, y }) => ({ layer: 'terrain', x, y })),
+    );
+    expect(document.smartTerrain.suppressedOutputParts.filter((entry) => (
+      entry.startsWith('cyber:recipe:')
+    ))).toEqual([]);
+
+    document = paint(document, 'cyber.platform', 'cyber-yellow', [{ x: 6, y: 5 }]);
+    expect(Object.keys(document.smartTerrain.recipes)).toEqual([originalId]);
+    expect(Object.values(document.smartTerrain.ownedOutputs)
+      .filter(({ kind }) => kind === 'recipe')
+      .every(({ ownerId }) => ownerId === originalOwner)).toBe(true);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 4, 5, 5)).not.toContain('.');
+  });
+
+  it('keeps Platform middle phase anchored when additional legacy tiles extend its left edge', () => {
+    const firstGid = getSmartStyleDefinition('cyber-yellow').firstGid;
+    const withLegacy = (count: number): SmartRecipeDocument => {
+      const tileData = createEmptyTileData();
+      for (let x = 4 - count; x < 4; x += 1) {
+        tileData.terrain[6]![x] = firstGid + 69;
+      }
+      return paint(
+        { tileData, smartTerrain: createRoomSmartTerrainState() },
+        'cyber.platform',
+        'cyber-yellow',
+        horizontal(4, 6, 5),
+      );
+    };
+
+    const oneLegacy = withLegacy(1);
+    const threeLegacy = withLegacy(3);
+    expect(rowTokens(oneLegacy, 'terrain', 'cyber-yellow', 4, 6, 5)).toEqual(
+      rowTokens(threeLegacy, 'terrain', 'cyber-yellow', 4, 6, 5),
+    );
+    expect(Object.values(threeLegacy.smartTerrain.recipes)[0]).toMatchObject({
+      anchor: { layer: 'terrain', x: 4, y: 6 },
+      bounds: { minX: 4, minY: 6, maxX: 8, maxY: 6, width: 5, height: 1 },
+    });
   });
 
   it('matches the v13 tower geometry, local indices, and transforms at world x32..39 and y2..17', () => {
@@ -420,6 +572,7 @@ describe('Cyber Smart recipe solver', () => {
       'cyber-yellow',
       rectangle(10, 3, 4, 3),
     );
+    const supportId = Object.keys(document.smartTerrain.recipes)[0]!;
     expect(rowTokens(document, 'background', 'cyber-yellow', 10, 3, 4)).toEqual([
       '36', '36X', '36X', '36',
     ]);
@@ -436,6 +589,12 @@ describe('Cyber Smart recipe solver', () => {
       'cyber-yellow',
       vertical(10, 3, 3),
     );
+    expect(Object.keys(document.smartTerrain.recipes)).toEqual([supportId]);
+    expect(document.smartTerrain.recipes[supportId]).toMatchObject({
+      ownerId: `cyber:recipe:${supportId}`,
+      anchor: { layer: 'background', x: 11, y: 3 },
+      bounds: { minX: 11, minY: 3, maxX: 13, maxY: 5, width: 3, height: 3 },
+    });
     expect(rowTokens(document, 'background', 'cyber-yellow', 11, 3, 3)).toEqual([
       '36', '36X', '36X',
     ]);
@@ -465,7 +624,10 @@ describe('Cyber Smart recipe solver', () => {
       [{ x: 2, y: 2 }],
     );
     expect(platform.tileData.terrain[2]![2]).toBe(-1);
-    expect(platform.smartTerrain.semanticCells['terrain:2,2']).toBeDefined();
+    expect(Object.values(platform.smartTerrain.recipes)).toContainEqual(expect.objectContaining({
+      brushId: 'cyber.platform',
+      sourceCells: [{ layer: 'terrain', x: 2, y: 2 }],
+    }));
     platform = paint(platform, 'cyber.platform', 'cyber-yellow', [{ x: 3, y: 2 }]);
     expect(rowTokens(platform, 'terrain', 'cyber-yellow', 2, 2, 2)).toEqual(['71X', '71']);
 

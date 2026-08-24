@@ -9,24 +9,89 @@ const FLIP_X = 1 << 20;
 const FLIP_Y = 1 << 21;
 const url = new URL(baseUrl);
 url.searchParams.set('previewSmoke', '1');
+if (!url.searchParams.has('renderer')) url.searchParams.set('renderer', 'webgl');
+const expectedRenderer = url.searchParams.get('renderer')?.toLowerCase();
+assert.ok(
+  expectedRenderer === 'canvas' || expectedRenderer === 'webgl',
+  'Smart autotiling smoke requires renderer=canvas or renderer=webgl.',
+);
 mkdirSync(outputDir, { recursive: true });
 
-async function readLocalEditorState(page) {
-  return page.evaluate(async () => {
-    if (location.hostname !== '127.0.0.1' && location.hostname !== 'localhost') return null;
-    const { editorState } = await import('/src/config/editorState.ts');
-    return {
-      theme: editorState.smartTheme,
-      brush: editorState.smartMaterial,
-      style: editorState.smartStyle,
-      layer: editorState.activeLayer,
-    };
+function rectangleCells(x1, y1, x2, y2) {
+  const cells = [];
+  for (let y = y1; y <= y2; y += 1) {
+    for (let x = x1; x <= x2; x += 1) cells.push({ x, y });
+  }
+  return cells;
+}
+
+function isCloudflareInsightsRumCorsNoise(message) {
+  const text = message.text();
+  const locationUrl = message.location().url ?? '';
+  const combined = `${text} ${locationUrl}`;
+  return combined.includes('cloudflareinsights.com/cdn-cgi/rum')
+    && (
+      combined.includes('CORS policy')
+      || combined.includes('net::ERR_FAILED')
+      || combined.includes('Failed to load resource')
+    );
+}
+
+function captureBrowserErrors(page, summary) {
+  page.on('console', (message) => {
+    if (message.type() === 'error' && !isCloudflareInsightsRumCorsNoise(message)) {
+      summary.consoleErrors.push(message.text());
+    }
+  });
+  page.on('pageerror', (error) => summary.pageErrors.push(error.message));
+}
+
+function isGuardedSyntheticRoomMutation(request) {
+  const method = request.method().toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false;
+  const pathname = new URL(request.url()).pathname.toLowerCase();
+  return pathname.includes('/api/rooms/99%2c99')
+    || pathname.includes('/api/rooms/99,99')
+    || pathname.includes('/api/guest-room-drafts');
+}
+
+async function guardSyntheticRoomMutations(page, summary) {
+  page.on('request', (request) => {
+    if (!isGuardedSyntheticRoomMutation(request)) return;
+    summary.mutatingRoomRequests.push(`${request.method().toUpperCase()} ${request.url()}`);
+  });
+  await page.route(/\/api\/(?:rooms\/99(?:%2c|,)99|guest-room-drafts)/i, async (route) => {
+    if (isGuardedSyntheticRoomMutation(route.request())) {
+      await route.abort('blockedbyclient');
+      return;
+    }
+    await route.continue();
   });
 }
 
-async function assertLocalEditorState(page, expected) {
-  const actual = await readLocalEditorState(page);
-  if (actual !== null) assert.deepEqual(actual, expected);
+async function runEditorCommands(page, editorCommands) {
+  const result = await page.evaluate((commands) => (
+    window.run_preview_smoke_action?.('runEditorCommands', { editorCommands: commands })
+  ), editorCommands);
+  assert.equal(
+    result?.ok,
+    true,
+    `Editor preview-smoke command failed: ${JSON.stringify(result)}`,
+  );
+  return result.captures ?? {};
+}
+
+async function readEditorState(page) {
+  return {
+    theme: await page.locator('#smart-theme-select').inputValue(),
+    brush: await page.locator('#smart-material-select').inputValue(),
+    style: await page.locator('#smart-style-select').inputValue(),
+    layer: await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'),
+  };
+}
+
+async function assertEditorState(page, expected) {
+  assert.deepEqual(await readEditorState(page), expected);
 }
 
 async function dismissKeepBuilding(page) {
@@ -34,7 +99,13 @@ async function dismissKeepBuilding(page) {
   if (await button.isVisible()) await button.click();
 }
 
-const summary = { url: url.toString(), consoleErrors: [], pageErrors: [], checks: {} };
+const summary = {
+  url: url.toString(),
+  consoleErrors: [],
+  pageErrors: [],
+  mutatingRoomRequests: [],
+  checks: {},
+};
 const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader'] });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
 await context.addInitScript(() => {
@@ -43,17 +114,21 @@ await context.addInitScript(() => {
   window.localStorage.setItem('wamp.settings.builderMode', 'beginner');
 });
 const page = await context.newPage();
-page.on('console', (message) => {
-  if (message.type() === 'error' && !message.text().includes("ws://127.0.0.1:1999/parties/")) {
-    summary.consoleErrors.push(message.text());
-  }
-});
-page.on('pageerror', (error) => summary.pageErrors.push(error.message));
+captureBrowserErrors(page, summary);
+await guardSyntheticRoomMutations(page, summary);
 
 try {
   await page.goto(url.toString(), { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => typeof window.run_preview_smoke_action === 'function');
   await page.waitForFunction(() => document.body.dataset.appReady === 'true');
+  const clearedLocalBefore = await page.evaluate(() => (
+    window.run_preview_smoke_action?.('clearSyntheticLocalRoom')
+  ));
+  assert.deepEqual(clearedLocalBefore, { ok: true, target: 'local' });
+  const rendererProof = await page.evaluate(() => window.capture_debug_info?.().renderer);
+  assert.equal(rendererProof?.requested, expectedRenderer);
+  assert.equal(rendererProof?.active, expectedRenderer);
+  summary.checks.renderer = { expected: expectedRenderer, active: rendererProof?.active };
   const opened = await page.evaluate(() => window.run_preview_smoke_action?.('openSyntheticEditor'));
   assert.equal(opened?.ok, true);
   await page.waitForFunction(() => document.body.dataset.appMode === 'editor');
@@ -63,44 +138,80 @@ try {
   assert.equal(await page.locator('[data-tool="copy"]').first().isVisible(), false);
   summary.checks.beginnerUi = true;
 
-  const painted = await page.evaluate(() => {
-    const scene = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene;
-    const runtime = scene?.editRuntime;
-    runtime.beginTileBatch();
-    for (const [x, y] of [[8, 12], [9, 12], [10, 12], [8, 13], [9, 13], [10, 13]]) {
-      runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
-    }
-    runtime.commitTileBatch();
-    return runtime.exportRoomSnapshot();
-  });
+  const { painted } = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: rectangleCells(8, 12, 10, 13) },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'painted' },
+  ]);
   assert.equal(Object.keys(painted.smartTerrain.cells).length, 6);
   assert.ok(Object.keys(painted.smartTerrain.generatedDecorations).length > 0);
   assert.ok(painted.tileData.terrain[12][8] > 0);
   summary.checks.paintAndDetails = true;
 
-  const history = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.undo();
-    const undone = runtime.exportRoomSnapshot();
-    runtime.redo();
-    const redone = runtime.exportRoomSnapshot();
-    return {
-      undoneCells: Object.keys(undone.smartTerrain.cells).length,
-      redoneCells: Object.keys(redone.smartTerrain.cells).length,
-    };
+  const localSave = await page.evaluate(() => (
+    window.run_preview_smoke_action?.('saveSyntheticEditorToLocal')
+  ));
+  assert.deepEqual(localSave, { ok: true, target: 'local', roomId: '99,99' });
+  // A hard reload can otherwise abort an in-flight three-second chat poll and
+  // turn the navigation itself into a console error. Leave chat mode first and
+  // wait for any current read-only poll to settle; no error is filtered here.
+  await page.evaluate(() => {
+    document.body.dataset.appMode = 'preview-smoke-reload';
   });
+  await page.waitForFunction(() => window.get_chat_debug_state?.().loading !== true);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => typeof window.run_preview_smoke_action === 'function');
+  await page.waitForFunction(() => document.body.dataset.appReady === 'true');
+  assert.equal(
+    await page.evaluate(() => window.capture_debug_info?.().renderer.active),
+    expectedRenderer,
+  );
+  const reopenedLocal = await page.evaluate(() => (
+    window.run_preview_smoke_action?.('openSyntheticEditorFromLocal')
+  ));
+  assert.equal(reopenedLocal?.ok, true);
+  assert.equal(reopenedLocal?.target, 'local');
+  assert.equal(reopenedLocal?.roomId, '99,99');
+  await page.waitForFunction(() => document.body.dataset.appMode === 'editor');
+  const { reopened } = await runEditorCommands(page, [{ op: 'capture', name: 'reopened' }]);
+  assert.deepEqual(reopened.smartTerrain, painted.smartTerrain);
+  assert.deepEqual(reopened.tileData, painted.tileData);
+  const clearedLocalAfter = await page.evaluate(() => (
+    window.run_preview_smoke_action?.('clearSyntheticLocalRoom')
+  ));
+  assert.deepEqual(clearedLocalAfter, { ok: true, target: 'local' });
+  summary.checks.localPersistenceReload = true;
+
+  await runEditorCommands(page, [
+    { op: 'clearAllTiles' },
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: rectangleCells(8, 12, 10, 13) },
+    { op: 'commitBatch' },
+  ]);
+  await dismissKeepBuilding(page);
+
+  const historyCaptures = await runEditorCommands(page, [
+    { op: 'undo' },
+    { op: 'capture', name: 'undone' },
+    { op: 'redo' },
+    { op: 'capture', name: 'redone' },
+  ]);
+  const history = {
+    undoneCells: Object.keys(historyCaptures.undone.smartTerrain.cells).length,
+    redoneCells: Object.keys(historyCaptures.redone.smartTerrain.cells).length,
+  };
   assert.deepEqual(history, { undoneCells: 0, redoneCells: 6 });
   summary.checks.undoRedo = true;
 
-  const copied = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.copyTilesToClipboard(8, 12, 10, 13);
-    runtime.beginTileBatch();
-    runtime.pasteClipboardAt(14, 12);
-    runtime.commitTileBatch();
-    const snapshot = runtime.exportRoomSnapshot();
-    return Object.keys(snapshot.smartTerrain.cells).length;
-  });
+  const copiedCaptures = await runEditorCommands(page, [
+    { op: 'copy', x1: 8, y1: 12, x2: 10, y2: 13 },
+    { op: 'beginBatch' },
+    { op: 'paste', x: 14, y: 12 },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'copied' },
+  ]);
+  const copied = Object.keys(copiedCaptures.copied.smartTerrain.cells).length;
   assert.equal(copied, 12);
   summary.checks.smartCopyPaste = true;
 
@@ -147,7 +258,7 @@ try {
 
   await page.locator('#smart-material-select').selectOption('cyber.support');
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
-  await assertLocalEditorState(page, {
+  await assertEditorState(page, {
     theme: 'cyber',
     brush: 'cyber.support',
     style: 'cyber-pink',
@@ -163,7 +274,7 @@ try {
 
   await page.locator('#smart-material-select').selectOption('cyber.framed-panel');
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'foreground');
-  await assertLocalEditorState(page, {
+  await assertEditorState(page, {
     theme: 'cyber',
     brush: 'cyber.framed-panel',
     style: 'cyber-pink',
@@ -171,7 +282,7 @@ try {
   });
   await page.locator('#smart-material-select').selectOption('cyber.structure');
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
-  await assertLocalEditorState(page, {
+  await assertEditorState(page, {
     theme: 'cyber',
     brush: 'cyber.structure',
     style: 'cyber-pink',
@@ -183,30 +294,27 @@ try {
   summary.checks.cyberRegistryUi = true;
 
   await page.locator('#smart-style-select').selectOption('cyber-yellow');
-  const cyberFill = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.clearAllTiles();
-    runtime.beginTileBatch();
-    runtime.floodFill(0, 0);
-    runtime.commitTileBatch();
-    const filled = runtime.exportRoomSnapshot();
-    runtime.clearAllTiles();
-    return filled;
-  });
+  const { cyberFill } = await runEditorCommands(page, [
+    { op: 'clearAllTiles' },
+    { op: 'beginBatch' },
+    { op: 'floodFill', x: 0, y: 0 },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'cyberFill' },
+    { op: 'clearAllTiles' },
+  ]);
   assert.equal(Object.keys(cyberFill.smartTerrain.semanticCells).length, 40 * 22);
   assert.ok(cyberFill.tileData.terrain.every((row) => row.every((value) => value > 0)));
   summary.checks.cyberFill = true;
   await dismissKeepBuilding(page);
 
-  const cyberStructure = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.clearAllTiles();
-    runtime.beginTileBatch();
-    runtime.stampShape('rect', 32, 2, 39, 17, { outline: false, erase: false });
-    runtime.stampShape('ellipse', 4, 10, 10, 16, { outline: false, erase: false });
-    runtime.commitTileBatch();
-    return runtime.exportRoomSnapshot();
-  });
+  const { cyberStructure } = await runEditorCommands(page, [
+    { op: 'clearAllTiles' },
+    { op: 'beginBatch' },
+    { op: 'stampShape', kind: 'rect', x1: 32, y1: 2, x2: 39, y2: 17, outline: false, erase: false },
+    { op: 'stampShape', kind: 'ellipse', x1: 4, y1: 10, x2: 10, y2: 16, outline: false, erase: false },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'cyberStructure' },
+  ]);
   assert.equal(cyberStructure.smartTerrain.version, 2);
   assert.equal(cyberStructure.smartTerrain.semanticCells['terrain:32,2'].brushId, 'cyber.structure');
   assert.equal(cyberStructure.tileData.terrain[2][32], 1633 + 25);
@@ -225,28 +333,27 @@ try {
   summary.checks.cyberEmitterCap = true;
   await dismissKeepBuilding(page);
 
-  const cyberCopyHistoryRepair = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.copyTilesToClipboard(32, 2, 33, 3);
-    runtime.beginTileBatch();
-    runtime.pasteClipboardAt(12, 2);
-    runtime.commitTileBatch();
-    const copied = runtime.exportRoomSnapshot();
-    runtime.undo();
-    const undone = runtime.exportRoomSnapshot();
-    runtime.redo();
-    const redone = runtime.exportRoomSnapshot();
-    runtime.beginTileBatch();
-    runtime.eraseTileAt(35 * 16 + 1, 8 * 16 + 1);
-    runtime.commitTileBatch();
-    const carved = runtime.exportRoomSnapshot();
-    return {
-      copiedCount: Object.keys(copied.smartTerrain.semanticCells).length,
-      undoneCount: Object.keys(undone.smartTerrain.semanticCells).length,
-      redoneCount: Object.keys(redone.smartTerrain.semanticCells).length,
-      carved,
-    };
-  });
+  const cyberCopyHistoryCaptures = await runEditorCommands(page, [
+    { op: 'copy', x1: 32, y1: 2, x2: 33, y2: 3 },
+    { op: 'beginBatch' },
+    { op: 'paste', x: 12, y: 2 },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'copied' },
+    { op: 'undo' },
+    { op: 'capture', name: 'undone' },
+    { op: 'redo' },
+    { op: 'capture', name: 'redone' },
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 35, y: 8 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'carved' },
+  ]);
+  const cyberCopyHistoryRepair = {
+    copiedCount: Object.keys(cyberCopyHistoryCaptures.copied.smartTerrain.semanticCells).length,
+    undoneCount: Object.keys(cyberCopyHistoryCaptures.undone.smartTerrain.semanticCells).length,
+    redoneCount: Object.keys(cyberCopyHistoryCaptures.redone.smartTerrain.semanticCells).length,
+    carved: cyberCopyHistoryCaptures.carved,
+  };
   assert.equal(cyberCopyHistoryRepair.copiedCount, cyberCopyHistoryRepair.undoneCount + 4);
   assert.equal(cyberCopyHistoryRepair.redoneCount, cyberCopyHistoryRepair.copiedCount);
   assert.equal(cyberCopyHistoryRepair.carved.smartTerrain.semanticCells['terrain:35,8'], undefined);
@@ -256,25 +363,27 @@ try {
 
   await page.locator('#smart-style-select').selectOption('cyber-pink');
   await page.locator('#smart-material-select').selectOption('cyber.platform');
-  const cyberPlatform = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    runtime.placeTileAt(20 * 16 + 1, 18 * 16 + 1);
-    const belowMinimum = runtime.exportRoomSnapshot();
-    for (let x = 21; x <= 24; x += 1) runtime.placeTileAt(x * 16 + 1, 18 * 16 + 1);
-    runtime.commitTileBatch();
-    const complete = runtime.exportRoomSnapshot();
-    runtime.beginTileBatch();
-    runtime.eraseTileAt(22 * 16 + 1, 18 * 16 + 1);
-    runtime.commitTileBatch();
-    const repaired = runtime.exportRoomSnapshot();
-    runtime.beginTileBatch();
-    runtime.placeTileAt(22 * 16 + 1, 18 * 16 + 1);
-    runtime.commitTileBatch();
-    return { belowMinimum, complete, repaired, restored: runtime.exportRoomSnapshot() };
-  });
+  const cyberPlatform = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: [{ x: 20, y: 18 }] },
+    { op: 'capture', name: 'belowMinimum' },
+    { op: 'placeCells', cells: rectangleCells(21, 18, 24, 18) },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'complete' },
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 22, y: 18 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'repaired' },
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: [{ x: 22, y: 18 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'restored' },
+  ]);
   assert.equal(cyberPlatform.belowMinimum.tileData.terrain[18][20], -1);
-  assert.ok(cyberPlatform.belowMinimum.smartTerrain.semanticCells['terrain:20,18']);
+  assert.ok(Object.values(cyberPlatform.belowMinimum.smartTerrain.recipes).some((recipe) => (
+    recipe.brushId === 'cyber.platform'
+      && recipe.sourceCells.some(({ layer, x, y }) => layer === 'terrain' && x === 20 && y === 18)
+  )));
   assert.deepEqual(cyberPlatform.complete.tileData.terrain[18].slice(20, 25), [
     1717 + 71 + FLIP_X, 1717 + 69, 1717 + 70, 1717 + 68, 1717 + 71,
   ]);
@@ -287,24 +396,23 @@ try {
 
   await page.locator('#smart-style-select').selectOption('cyber-yellow');
   await page.locator('#smart-material-select').selectOption('cyber.support');
-  const cyberSupport = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    for (let y = 4; y <= 7; y += 1) runtime.placeTileAt(18 * 16 + 1, y * 16 + 1);
-    runtime.commitTileBatch();
-    const complete = runtime.exportRoomSnapshot();
-    runtime.beginTileBatch();
-    runtime.eraseTileAt(18 * 16 + 1, 5 * 16 + 1);
-    runtime.commitTileBatch();
-    const repaired = runtime.exportRoomSnapshot();
-    runtime.beginTileBatch();
-    runtime.placeTileAt(18 * 16 + 1, 5 * 16 + 1);
-    runtime.commitTileBatch();
-    runtime.beginTileBatch();
-    runtime.stampShape('rect', 32, 18, 35, 20, { outline: false, erase: false });
-    runtime.commitTileBatch();
-    return { complete, repaired, bank: runtime.exportRoomSnapshot() };
-  });
+  const cyberSupport = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: rectangleCells(18, 4, 18, 7) },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'complete' },
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 18, y: 5 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'repaired' },
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: [{ x: 18, y: 5 }] },
+    { op: 'commitBatch' },
+    { op: 'beginBatch' },
+    { op: 'stampShape', kind: 'rect', x1: 32, y1: 18, x2: 35, y2: 20, outline: false, erase: false },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'bank' },
+  ]);
   assert.deepEqual(cyberSupport.complete.tileData.background.slice(4, 8).map((row) => row[18]), [
     1633 + 36, 1633 + 48, 1633 + 60, 1633 + 72,
   ]);
@@ -319,21 +427,20 @@ try {
   assert.deepEqual(cyberSupport.bank.tileData.terrain.slice(4, 8).map((row) => row[18]), [-1, -1, -1, -1]);
 
   await page.locator('#smart-material-select').selectOption('cyber.neon-strip');
-  const cyberNeon = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    for (let x = 20; x <= 24; x += 1) runtime.placeTileAt(x * 16 + 1, 8 * 16 + 1);
-    runtime.commitTileBatch();
-    const complete = runtime.exportRoomSnapshot();
-    runtime.beginTileBatch();
-    runtime.eraseTileAt(22 * 16 + 1, 8 * 16 + 1);
-    runtime.commitTileBatch();
-    const repaired = runtime.exportRoomSnapshot();
-    runtime.beginTileBatch();
-    runtime.placeTileAt(22 * 16 + 1, 8 * 16 + 1);
-    runtime.commitTileBatch();
-    return { complete, repaired, restored: runtime.exportRoomSnapshot() };
-  });
+  const cyberNeon = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: rectangleCells(20, 8, 24, 8) },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'complete' },
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 22, y: 8 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'repaired' },
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: [{ x: 22, y: 8 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'restored' },
+  ]);
   assert.deepEqual(cyberNeon.complete.tileData.terrain[8].slice(20, 25), [
     1633 + 49, 1633 + 50, 1633 + 73, 1633 + 74, 1633 + 51,
   ]);
@@ -343,17 +450,16 @@ try {
   ]);
 
   await page.locator('#smart-material-select').selectOption('cyber.rubble');
-  const cyberRubble = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    runtime.stampShape('rect', 20, 10, 22, 11, { outline: false, erase: false });
-    runtime.commitTileBatch();
-    const complete = runtime.exportRoomSnapshot();
-    runtime.beginTileBatch();
-    runtime.eraseTileAt(21 * 16 + 1, 10 * 16 + 1);
-    runtime.commitTileBatch();
-    return { complete, repaired: runtime.exportRoomSnapshot() };
-  });
+  const cyberRubble = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'stampShape', kind: 'rect', x1: 20, y1: 10, x2: 22, y2: 11, outline: false, erase: false },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'complete' },
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 21, y: 10 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'repaired' },
+  ]);
   assert.deepEqual(cyberRubble.complete.tileData.terrain.slice(10, 12).map((row) => row.slice(20, 23)), [
     [1645, 1645, 1645], [1645, 1645, 1645],
   ]);
@@ -364,25 +470,25 @@ try {
 
   await page.locator('#smart-style-select').selectOption('cyber-pink');
   await page.locator('#smart-material-select').selectOption('cyber.framed-panel');
-  const cyberPanelClipboard = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    for (let x = 26; x <= 30; x += 1) runtime.placeTileAt(x * 16 + 1, 3 * 16 + 1);
-    runtime.commitTileBatch();
-    runtime.copyTilesToClipboard(26, 3, 30, 4);
-    runtime.beginTileBatch();
-    runtime.pasteClipboardAt(26, 12);
-    runtime.commitTileBatch();
-    const complete = runtime.exportRoomSnapshot();
-    runtime.copyTilesToClipboard(26, 3, 30, 3);
-    runtime.beginTileBatch();
-    runtime.pasteClipboardAt(33, 12);
-    runtime.commitTileBatch();
-    const partial = runtime.exportRoomSnapshot();
-    return { complete, partial };
-  });
-  assert.equal(Object.keys(cyberPanelClipboard.complete.smartTerrain.recipes).length, 2);
-  assert.equal(Object.keys(cyberPanelClipboard.partial.smartTerrain.recipes).length, 2);
+  const cyberPanelClipboard = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: rectangleCells(26, 3, 30, 3) },
+    { op: 'commitBatch' },
+    { op: 'copy', x1: 26, y1: 3, x2: 30, y2: 4 },
+    { op: 'beginBatch' },
+    { op: 'paste', x: 26, y: 12 },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'complete' },
+    { op: 'copy', x1: 26, y1: 3, x2: 30, y2: 3 },
+    { op: 'beginBatch' },
+    { op: 'paste', x: 33, y: 12 },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'partial' },
+  ]);
+  const countFramedPanelRecipes = (snapshot) => Object.values(snapshot.smartTerrain.recipes)
+    .filter(({ brushId }) => brushId === 'cyber.framed-panel').length;
+  assert.equal(countFramedPanelRecipes(cyberPanelClipboard.complete), 2);
+  assert.equal(countFramedPanelRecipes(cyberPanelClipboard.partial), 2);
   assert.deepEqual(cyberPanelClipboard.complete.tileData.foreground[3].slice(26, 31), [
     1717 + 44, 1717 + 45, 1717 + 45, 1717 + 45, 1717 + 46,
   ]);
@@ -396,42 +502,36 @@ try {
 
   await page.locator('.palette-tab[data-mode="tiles"]').click();
   await page.locator('.layer-btn[data-layer="foreground"]').click();
-  const suppressed = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    runtime.eraseTileAt(27 * 16 + 1, 3 * 16 + 1);
-    runtime.commitTileBatch();
-    return runtime.exportRoomSnapshot();
-  });
+  const { suppressed } = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 27, y: 3 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'suppressed' },
+  ]);
   await page.locator('.palette-tab[data-mode="smart"]').click();
   await page.locator('#smart-theme-select').selectOption('cyber');
   await page.locator('#smart-style-select').selectOption('cyber-pink');
   await page.locator('#smart-material-select').selectOption('cyber.framed-panel');
-  const smartErasureAndReload = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    runtime.eraseTileAt(28 * 16 + 1, 4 * 16 + 1);
-    runtime.commitTileBatch();
-    const smartErased = runtime.exportRoomSnapshot();
-    const serialized = JSON.parse(JSON.stringify(smartErased));
-    runtime.applyRoomSnapshot(serialized);
-    const reloaded = runtime.exportRoomSnapshot();
-    return { smartErased, reloaded };
-  });
+  const smartErasureAndReload = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 28, y: 4 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'smartErased' },
+    { op: 'applyCapture', name: 'smartErased' },
+    { op: 'capture', name: 'reloaded' },
+  ]);
   const cyberSuppressionAndReload = { suppressed, ...smartErasureAndReload };
   assert.ok(cyberSuppressionAndReload.suppressed.smartTerrain.suppressedOutputParts.some(
     (entry) => entry.endsWith(':row-0:column-1'),
   ));
-  assert.equal(Object.keys(cyberSuppressionAndReload.smartErased.smartTerrain.recipes).length, 1);
+  assert.equal(countFramedPanelRecipes(cyberSuppressionAndReload.smartErased), 1);
   assert.deepEqual(cyberSuppressionAndReload.reloaded.smartTerrain, cyberSuppressionAndReload.smartErased.smartTerrain);
   assert.deepEqual(cyberSuppressionAndReload.reloaded.tileData, cyberSuppressionAndReload.smartErased.tileData);
   assert.equal(cyberSuppressionAndReload.reloaded.tileData.terrain[4][35], 1633 + 83 + FLIP_X + FLIP_Y);
   summary.checks.cyberSuppressionAndReload = true;
   summary.checks.cyberFixedLayers = true;
   await dismissKeepBuilding(page);
-  await page.evaluate(() => {
-    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.fitToScreen();
-  });
+  await runEditorCommands(page, [{ op: 'fitToScreen' }]);
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outputDir, 'cyber-recipes.png') });
 
@@ -443,13 +543,12 @@ try {
   const ellipseButton = page.locator('#editor-top-more-tools-panel [data-tool="ellipse"]');
   await ellipseButton.click();
   assert.equal(await ellipseButton.getAttribute('class').then((value) => value?.includes('active')), true);
-  const smartEllipse = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    runtime.stampShape('ellipse', 22, 14, 28, 20, { outline: false, erase: false });
-    runtime.commitTileBatch();
-    return runtime.exportRoomSnapshot();
-  });
+  const { smartEllipse } = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'stampShape', kind: 'ellipse', x1: 22, y1: 14, x2: 28, y2: 20, outline: false, erase: false },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'smartEllipse' },
+  ]);
   assert.ok(smartEllipse.smartTerrain.cells['25,17']);
   assert.equal(smartEllipse.smartTerrain.cells['22,14'], undefined);
   assert.ok(smartEllipse.tileData.terrain[17][25] > 0);
@@ -458,15 +557,14 @@ try {
   if (await shapeKeepBuilding.isVisible()) await shapeKeepBuilding.click();
   await ellipseButton.click();
   assert.equal(await ellipseButton.locator('.tool-label').textContent(), 'Ellipse Outline');
-  const smartOutlines = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.clearCurrentLayer();
-    runtime.beginTileBatch();
-    runtime.stampShape('rect', 4, 12, 12, 20, { outline: true, erase: false });
-    runtime.stampShape('ellipse', 20, 10, 30, 20, { outline: true, erase: false });
-    runtime.commitTileBatch();
-    return runtime.exportRoomSnapshot();
-  });
+  const { smartOutlines } = await runEditorCommands(page, [
+    { op: 'clearCurrentLayer' },
+    { op: 'beginBatch' },
+    { op: 'stampShape', kind: 'rect', x1: 4, y1: 12, x2: 12, y2: 20, outline: true, erase: false },
+    { op: 'stampShape', kind: 'ellipse', x1: 20, y1: 10, x2: 30, y2: 20, outline: true, erase: false },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'smartOutlines' },
+  ]);
   assert.equal(smartOutlines.tileData.terrain[16][8], -1);
   assert.ok([16, 17].includes(smartOutlines.tileData.terrain[12][8]));
   assert.ok([51, 52, 53, 54].includes(smartOutlines.tileData.terrain[20][8]));
@@ -487,17 +585,13 @@ try {
   assert.equal(smartOutlines.smartTerrain.generatedDecorations['8,19'], undefined);
   summary.checks.smartShapeTools = true;
   summary.checks.smartOutlineTopology = true;
-  await page.evaluate(() => {
-    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.fitToScreen();
-  });
+  await runEditorCommands(page, [{ op: 'fitToScreen' }]);
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outputDir, 'smart-outlines.png') });
 
   await page.screenshot({ path: path.join(outputDir, 'smart-editor.png') });
 
-  await page.evaluate(() => {
-    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime.clearCurrentLayer();
-  });
+  await runEditorCommands(page, [{ op: 'clearCurrentLayer' }]);
   await page.evaluate(() => {
     const theme = document.querySelector('#smart-theme-select');
     const material = document.querySelector('#smart-material-select');
@@ -506,35 +600,31 @@ try {
     material.value = 'forest.ground';
     material.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  const groundFixtures = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    for (let y = 4; y <= 10; y += 1) runtime.placeTileAt(4 * 16 + 1, y * 16 + 1);
-    for (let y = 3; y <= 9; y += 1) {
-      for (let x = 10; x <= 18; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
-    }
-    const ordinarySteps = [
-      [3, 33, 34],
-      [4, 33, 35],
-      [5, 32, 35],
-      [6, 31, 35],
-      [7, 30, 35],
-      [8, 30, 34],
-      [9, 30, 33],
-      [10, 30, 32],
-      [11, 30, 31],
-    ];
-    for (const [y, startX, endX] of ordinarySteps) {
-      for (let x = startX; x <= endX; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
-    }
-    runtime.commitTileBatch();
-    runtime.beginTileBatch();
-    for (const [x, y] of [[12, 5], [16, 6], [17, 6], [17, 7]]) {
-      runtime.eraseTileAt(x * 16 + 1, y * 16 + 1);
-    }
-    runtime.commitTileBatch();
-    return runtime.exportRoomSnapshot();
-  });
+  const ordinarySteps = [
+    [3, 33, 34],
+    [4, 33, 35],
+    [5, 32, 35],
+    [6, 31, 35],
+    [7, 30, 35],
+    [8, 30, 34],
+    [9, 30, 33],
+    [10, 30, 32],
+    [11, 30, 31],
+  ];
+  const groundCells = [
+    ...rectangleCells(4, 4, 4, 10),
+    ...rectangleCells(10, 3, 18, 9),
+    ...ordinarySteps.flatMap(([y, startX, endX]) => rectangleCells(startX, y, endX, y)),
+  ];
+  const { groundFixtures } = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: groundCells },
+    { op: 'commitBatch' },
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 12, y: 5 }, { x: 16, y: 6 }, { x: 17, y: 6 }, { x: 17, y: 7 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'groundFixtures' },
+  ]);
   assert.deepEqual(
     groundFixtures.tileData.terrain.slice(4, 11).map((row) => row[4]),
     Array(7).fill(38),
@@ -545,37 +635,28 @@ try {
   summary.checks.verticalAndCaveTopology = true;
   summary.checks.ordinaryGroundTies = true;
 
+  await runEditorCommands(page, [{ op: 'clearCurrentLayer' }]);
   await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.clearCurrentLayer();
     const theme = document.querySelector('#smart-theme-select');
     theme.value = 'gothic';
     theme.dispatchEvent(new Event('change', { bubbles: true }));
-    runtime.beginTileBatch();
-    for (let y = 5; y <= 9; y += 1) {
-      for (let x = 5; x <= 9; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
-    }
-    runtime.commitTileBatch();
-    runtime.beginTileBatch();
-    runtime.eraseTileAt(7 * 16 + 1, 7 * 16 + 1);
-    runtime.commitTileBatch();
   });
+  const { gothicTunnelFloor } = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: rectangleCells(5, 5, 9, 9) },
+    { op: 'commitBatch' },
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 7, y: 7 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'gothicTunnelFloor' },
+  ]);
   assert.equal(await page.locator('#smart-material-select').inputValue(), 'gothic.ground');
-  const gothicTunnelFloor = await page.evaluate(() => (
-    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime.exportRoomSnapshot()
-  ));
   assert.equal(gothicTunnelFloor.tileData.terrain[8][7], (1 << 21) + 783);
   summary.checks.gothicTunnelFloor = true;
-  await page.evaluate(() => {
-    const scene = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene;
-    scene.cameras.main.setZoom(3);
-    scene.cameras.main.centerOn(7.5 * 16, 7.5 * 16);
-  });
+  await runEditorCommands(page, [{ op: 'setCamera', zoom: 3, centerTileX: 7.5, centerTileY: 7.5 }]);
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outputDir, 'gothic-tunnel-floor.png') });
-  await page.evaluate(() => {
-    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.fitToScreen();
-  });
+  await runEditorCommands(page, [{ op: 'fitToScreen' }]);
 
   await page.evaluate(() => {
     const theme = document.querySelector('#smart-theme-select');
@@ -591,20 +672,15 @@ try {
   assert.equal(await page.locator('#smart-theme-select').inputValue(), 'water');
   assert.equal(await page.locator('#smart-theme-select').isDisabled(), true);
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
-  const tunnelFixture = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    for (let y = 3; y <= 11; y += 1) {
-      for (let x = 20; x <= 28; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
-    }
-    runtime.commitTileBatch();
-    runtime.beginTileBatch();
-    for (let y = 6; y <= 8; y += 1) {
-      for (let x = 23; x <= 25; x += 1) runtime.eraseTileAt(x * 16 + 1, y * 16 + 1);
-    }
-    runtime.commitTileBatch();
-    return runtime.exportRoomSnapshot();
-  });
+  const { tunnelFixture } = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: rectangleCells(20, 3, 28, 11) },
+    { op: 'commitBatch' },
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: rectangleCells(23, 6, 25, 8) },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'tunnelFixture' },
+  ]);
   assert.equal(Object.keys(tunnelFixture.smartTerrain.backdropCells).length, 72);
   assert.equal(tunnelFixture.tileData.terrain[4][21], -1);
   assert.ok(tunnelFixture.tileData.background[4][21] > 0);
@@ -625,22 +701,21 @@ try {
   assert.equal(await page.locator('#smart-theme-select').inputValue(), 'forest');
   assert.equal(await page.locator('#smart-theme-select').isEnabled(), true);
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
-  const featureFixture = await page.evaluate(() => {
-    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-    runtime.beginTileBatch();
-    for (const [x, y] of [[25, 5], [24, 6], [25, 7]]) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
-    runtime.commitTileBatch();
-    const before = runtime.exportRoomSnapshot();
-    runtime.beginTileBatch();
-    runtime.eraseTileAt(25 * 16 + 1, 6 * 16 + 1);
-    runtime.commitTileBatch();
-    const erased = runtime.exportRoomSnapshot();
-    runtime.beginTileBatch();
-    runtime.eraseTileAt(25 * 16 + 1, 6 * 16 + 1);
-    runtime.placeTileAt(24 * 16 + 1, 6 * 16 + 1);
-    runtime.commitTileBatch();
-    return { before, erased, restored: runtime.exportRoomSnapshot() };
-  });
+  const featureFixture = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: [{ x: 25, y: 5 }, { x: 24, y: 6 }, { x: 25, y: 7 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'before' },
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 25, y: 6 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'erased' },
+    { op: 'beginBatch' },
+    { op: 'eraseCells', cells: [{ x: 25, y: 6 }] },
+    { op: 'placeCells', cells: [{ x: 24, y: 6 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'restored' },
+  ]);
   assert.ok(featureFixture.before.smartTerrain.generatedDecorations['25,6']);
   assert.ok(featureFixture.before.smartTerrain.generatedBackgroundDecorations['25,6']);
   assert.equal(featureFixture.erased.tileData.foreground[6][25], -1);
@@ -659,30 +734,29 @@ try {
     gothic: { firstGid: 733, expected: [2, 3, 4, 5] },
   };
   for (const [themeName, pool] of Object.entries(decorationPools)) {
-    const decorationFixture = await page.evaluate(({ theme }) => {
-      const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
-      runtime.clearCurrentLayer();
+    await runEditorCommands(page, [{ op: 'clearCurrentLayer' }]);
+    await page.evaluate(({ theme }) => {
       const material = document.querySelector('#smart-material-select');
       const themeSelect = document.querySelector('#smart-theme-select');
       themeSelect.value = theme;
       themeSelect.dispatchEvent(new Event('change', { bubbles: true }));
       material.value = `${theme}.ground`;
       material.dispatchEvent(new Event('change', { bubbles: true }));
-      runtime.beginTileBatch();
-      for (const y of [2, 5, 8, 11, 14, 17, 20]) {
-        for (let x = 0; x < 40; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
-      }
-      runtime.commitTileBatch();
-      return runtime.exportRoomSnapshot();
     }, { theme: themeName });
+    const decorationCells = [2, 5, 8, 11, 14, 17, 20]
+      .flatMap((y) => rectangleCells(0, y, 39, y));
+    const { decorationFixture } = await runEditorCommands(page, [
+      { op: 'beginBatch' },
+      { op: 'placeCells', cells: decorationCells },
+      { op: 'commitBatch' },
+      { op: 'capture', name: 'decorationFixture' },
+    ]);
     const variants = new Set(Object.values(decorationFixture.smartTerrain.generatedDecorations)
       .map(({ gid }) => gid - pool.firstGid));
     assert.deepEqual([...variants].sort((a, b) => a - b), pool.expected);
     const decorationKeepBuilding = page.locator('#btn-guest-builder-claim-continue');
     if (await decorationKeepBuilding.isVisible()) await decorationKeepBuilding.click();
-    await page.evaluate(() => {
-      window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.fitToScreen();
-    });
+    await runEditorCommands(page, [{ op: 'fitToScreen' }]);
     await page.waitForTimeout(150);
     await page.screenshot({ path: path.join(outputDir, `decorations-${themeName}.png`) });
   }
@@ -696,15 +770,15 @@ try {
     window.localStorage.setItem('wamp.settings.builderMode', 'advanced');
   });
   const coursePage = await courseContext.newPage();
-  coursePage.on('console', (message) => {
-    if (message.type() === 'error' && !message.text().includes('ws://127.0.0.1:1999/parties/')) {
-      summary.consoleErrors.push(message.text());
-    }
-  });
-  coursePage.on('pageerror', (error) => summary.pageErrors.push(error.message));
+  captureBrowserErrors(coursePage, summary);
+  await guardSyntheticRoomMutations(coursePage, summary);
   await coursePage.goto(url.toString(), { waitUntil: 'domcontentloaded' });
   await coursePage.waitForFunction(() => typeof window.run_preview_smoke_action === 'function');
   await coursePage.waitForFunction(() => document.body.dataset.appReady === 'true');
+  assert.equal(
+    await coursePage.evaluate(() => window.capture_debug_info?.().renderer.active),
+    expectedRenderer,
+  );
   const courseOpened = await coursePage.evaluate(() => (
     window.run_preview_smoke_action?.('openSyntheticCourseEditor')
   ));
@@ -714,7 +788,7 @@ try {
   await coursePage.locator('#smart-style-select').selectOption('cyber-pink');
   await coursePage.locator('#smart-material-select').selectOption('cyber.support');
   assert.equal(await coursePage.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
-  await assertLocalEditorState(coursePage, {
+  await assertEditorState(coursePage, {
     theme: 'cyber',
     brush: 'cyber.support',
     style: 'cyber-pink',
@@ -736,10 +810,8 @@ try {
     window.localStorage.removeItem('wamp_welcome_modal_seen_v1');
   });
   const welcomePage = await welcomeContext.newPage();
-  welcomePage.on('console', (message) => {
-    if (message.type() === 'error') summary.consoleErrors.push(message.text());
-  });
-  welcomePage.on('pageerror', (error) => summary.pageErrors.push(error.message));
+  captureBrowserErrors(welcomePage, summary);
+  await guardSyntheticRoomMutations(welcomePage, summary);
   const welcomeUrl = new URL(url);
   welcomeUrl.searchParams.set('welcome', '1');
   await welcomePage.goto(welcomeUrl.toString(), { waitUntil: 'domcontentloaded' });
@@ -751,6 +823,7 @@ try {
   await welcomeContext.close();
   summary.checks.firstBuildChoice = true;
 
+  assert.deepEqual(summary.mutatingRoomRequests, []);
   summary.ok = summary.consoleErrors.length === 0 && summary.pageErrors.length === 0;
 } catch (error) {
   summary.ok = false;

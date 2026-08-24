@@ -5,6 +5,8 @@ import {
   smartOwnedOutputPartKey,
   smartSemanticCellKey,
 } from '../../autotiling/model';
+import { applySmartBrushCells, type SmartRecipeDocument } from '../../autotiling/recipeSolver';
+import { createEmptyTileData } from '../../persistence/roomModel';
 import {
   buildEditorClipboardState,
   cloneEditorClipboardState,
@@ -107,9 +109,11 @@ describe('editor clipboard planning', () => {
     const smartTerrain = createRoomSmartTerrainState();
     smartTerrain.recipes['cyber-panel-7'] = {
       recipeId: 'cyber.framed-panel',
+      ownerId: 'cyber:recipe:cyber-panel-7',
       styleId: 'cyber-pink',
       brushId: 'cyber.framed-panel',
       anchor: { layer: 'foreground', x: 4, y: 5 },
+      bounds: { minX: 4, minY: 5, maxX: 6, maxY: 6, width: 3, height: 2 },
       sourceCells: [4, 5, 6].map((x) => ({ layer: 'foreground' as const, x, y: 5 })),
       parameters: { width: 3, height: 2 },
     };
@@ -172,6 +176,133 @@ describe('editor clipboard planning', () => {
     expect(planEditorSmartClipboardPaste(complete, 39, 21, 'foreground').recipes).toEqual([]);
   });
 
+  it.each([
+    {
+      brushId: 'cyber.platform' as const,
+      styleId: 'cyber-yellow' as const,
+      layer: 'terrain' as const,
+      cells: [2, 3, 4, 5].map((x) => ({ x, y: 3 })),
+      bounds: { minX: 2, minY: 3, maxX: 5, maxY: 3, width: 4, height: 1 },
+      partial: { minX: 2, minY: 3, maxX: 4, maxY: 3 },
+    },
+    {
+      brushId: 'cyber.neon-strip' as const,
+      styleId: 'cyber-pink' as const,
+      layer: 'terrain' as const,
+      cells: [9, 10, 11].map((x) => ({ x, y: 7 })),
+      bounds: { minX: 9, minY: 7, maxX: 11, maxY: 7, width: 3, height: 1 },
+      partial: { minX: 9, minY: 7, maxX: 10, maxY: 7 },
+    },
+    {
+      brushId: 'cyber.support' as const,
+      styleId: 'cyber-yellow' as const,
+      layer: 'background' as const,
+      cells: [14, 15].flatMap((x) => [2, 3, 4].map((y) => ({ x, y }))),
+      bounds: { minX: 14, minY: 2, maxX: 15, maxY: 4, width: 2, height: 3 },
+      partial: { minX: 14, minY: 2, maxX: 14, maxY: 4 },
+    },
+  ])('copies complete $brushId recipes and bakes partial selections', ({
+    brushId, styleId, layer, cells, bounds, partial,
+  }) => {
+    let document: SmartRecipeDocument = {
+      tileData: createEmptyTileData(),
+      smartTerrain: createRoomSmartTerrainState(),
+    };
+    document = applySmartBrushCells(document, {
+      brushId,
+      styleId,
+      cells,
+      mode: 'paint',
+    });
+    const getTile = (x: number, y: number): number => document.tileData[layer][y]?.[x] ?? -1;
+
+    const complete = buildEditorClipboardState(
+      layer,
+      bounds.minX,
+      bounds.minY,
+      bounds.maxX,
+      bounds.maxY,
+      getTile,
+      undefined,
+      document.smartTerrain,
+    )!;
+    expect(complete.smartSemanticCells).toBeUndefined();
+    expect(complete.smartRecipes).toHaveLength(1);
+    expect(complete.smartRecipes?.[0]).toMatchObject({
+      sourceOwnerId: expect.stringMatching(/^cyber:recipe:/),
+      recipe: {
+        recipeId: brushId,
+        brushId,
+        ownerId: expect.stringMatching(/^cyber:recipe:/),
+        anchor: { layer, x: 0, y: 0 },
+        bounds: {
+          minX: 0,
+          minY: 0,
+          maxX: bounds.width - 1,
+          maxY: bounds.height - 1,
+          width: bounds.width,
+          height: bounds.height,
+        },
+      },
+    });
+    expect(complete.smartRecipes?.[0]?.recipe.sourceCells).toHaveLength(cells.length);
+
+    const translated = planEditorSmartClipboardPaste(complete, 20, 10, layer).recipes[0];
+    expect(translated?.recipe.anchor).toEqual({ layer, x: 20, y: 10 });
+    expect(translated?.recipe.bounds).toEqual({
+      minX: 20,
+      minY: 10,
+      maxX: 20 + bounds.width - 1,
+      maxY: 10 + bounds.height - 1,
+      width: bounds.width,
+      height: bounds.height,
+    });
+
+    const baked = buildEditorClipboardState(
+      layer,
+      partial.minX,
+      partial.minY,
+      partial.maxX,
+      partial.maxY,
+      getTile,
+      undefined,
+      document.smartTerrain,
+    )!;
+    expect(baked.smartRecipes).toBeUndefined();
+    expect(baked.smartSemanticCells).toBeUndefined();
+    expect(baked.tiles.flat().some((value) => value > 0)).toBe(true);
+  });
+
+  it('copies an invisible below-minimum span from its complete semantic footprint', () => {
+    const document = applySmartBrushCells({
+      tileData: createEmptyTileData(),
+      smartTerrain: createRoomSmartTerrainState(),
+    }, {
+      brushId: 'cyber.platform',
+      styleId: 'cyber-yellow',
+      cells: [{ x: 7, y: 8 }],
+      mode: 'paint',
+    });
+    expect(document.tileData.terrain[8]![7]).toBe(-1);
+
+    const clipboard = buildEditorClipboardState(
+      'terrain', 7, 8, 7, 8, () => -1, undefined, document.smartTerrain,
+    );
+    expect(clipboard).not.toBeNull();
+    expect(clipboard?.occupiedMask).toEqual([[false]]);
+    expect(clipboard?.smartRecipes?.[0]?.recipe).toMatchObject({
+      brushId: 'cyber.platform',
+      anchor: { layer: 'terrain', x: 0, y: 0 },
+      bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 1, height: 1 },
+      sourceCells: [{ layer: 'terrain', x: 0, y: 0 }],
+    });
+    expect(planEditorSmartClipboardPaste(clipboard!, 20, 12, 'terrain').recipes[0]?.recipe)
+      .toMatchObject({
+        anchor: { layer: 'terrain', x: 20, y: 12 },
+        sourceCells: [{ layer: 'terrain', x: 20, y: 12 }],
+      });
+  });
+
   it('deep-clones v2 semantic, suppression, and recipe payloads', () => {
     const smartTerrain = createRoomSmartTerrainState();
     smartTerrain.semanticCells[smartSemanticCellKey('foreground', 1, 1)] = {
@@ -179,9 +310,11 @@ describe('editor clipboard planning', () => {
     };
     smartTerrain.recipes.panel = {
       recipeId: 'cyber.framed-panel',
+      ownerId: 'cyber:recipe:panel',
       styleId: 'cyber-pink',
       brushId: 'cyber.framed-panel',
       anchor: { layer: 'foreground', x: 1, y: 1 },
+      bounds: { minX: 1, minY: 1, maxX: 1, maxY: 1, width: 1, height: 1 },
       sourceCells: [{ layer: 'foreground', x: 1, y: 1 }],
       parameters: { width: 1, height: 1 },
     };
@@ -202,6 +335,7 @@ describe('editor clipboard planning', () => {
     clone.smartSemanticCells!['0,0']!.lockedValue = 999;
     clone.smartSemanticSuppressions!['0,0']![0] = 'changed';
     clone.smartRecipes![0]!.recipe.anchor.x = 9;
+    clone.smartRecipes![0]!.recipe.bounds.minX = 9;
     clone.smartRecipes![0]!.recipe.sourceCells[0]!.x = 9;
     clone.smartRecipes![0]!.recipe.parameters.width = 9;
     clone.smartRecipes![0]!.footprint[0]!.x = 9;
@@ -210,6 +344,7 @@ describe('editor clipboard planning', () => {
     expect(state.smartSemanticCells!['0,0']!.lockedValue).toBe(123);
     expect(state.smartSemanticSuppressions!['0,0']).toEqual(['detail']);
     expect(state.smartRecipes![0]!.recipe.anchor.x).toBe(0);
+    expect(state.smartRecipes![0]!.recipe.bounds.minX).toBe(0);
     expect(state.smartRecipes![0]!.recipe.sourceCells[0]!.x).toBe(0);
     expect(state.smartRecipes![0]!.recipe.parameters.width).toBe(1);
     expect(state.smartRecipes![0]!.footprint[0]!.x).toBe(0);

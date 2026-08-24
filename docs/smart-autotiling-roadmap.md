@@ -161,17 +161,21 @@ solver does not merely memorize one skyline.
 - Framed Panel tests cover complete and partial clipboard selections, stable
   owner IDs, per-part manual suppression, repaint/merge cleanup, cross-style
   replacement, whole-recipe Smart erase, and anchor-relative local-59 detail.
+- Platform, Support, and Neon Strip are persisted span recipes with stable
+  owner IDs, canonical anchors, explicit bounds, deterministic split/merge,
+  suppression cleanup, and complete-versus-partial clipboard behavior.
 - Model tests cover v1 to v2 migration, canonical IDs such as `desert.ground`,
   unknown-future preservation, invalid brush/style/layer filtering, encoded
   locks, and configured 84/120/324-tile profiles.
-- The focused Cyber/model/editor/clipboard gate passes 107 tests. The full gate
-  passes 209 files / 1,413 tests, ESLint, TypeScript, generated-binding checks,
+- The focused Cyber/model/editor/clipboard gate passes 117 tests. The full gate
+  passes 209 files / 1,423 tests, ESLint, TypeScript, generated-binding checks,
   and the production build.
 - The expanded Smart browser gate passes in Canvas and WebGL with Fill, shapes,
   minimums, transformed Support banks, erase/repair, layer switching,
-  copy/paste, undo/redo, macro suppression, serialized reload, Course Editor,
-  and zero console/page errors. The official client reports a healthy render
-  loop in both renderers.
+  copy/paste, undo/redo, macro suppression, local-repository save followed by a
+  hard page reload and reopen, Course Editor, zero mutation requests, and zero
+  console/page errors. Each run asserts that its requested Canvas or WebGL
+  renderer is actually active.
 
 ### Intentional Cyber art boundaries
 
@@ -186,7 +190,7 @@ solver does not merely memorize one skyline.
 - Framed Panels resize by extending/repainting their source row; there is no
   separate drag-handle resize UI in this milestone.
 
-Safety preview: `https://safety-codex-smart-autotiling-cyber-2026-08-24.wampland.pages.dev`.
+Safety preview: `https://safety-cyber-smart-tiles.wampland.pages.dev`.
 Production remains a separate approval.
 
 ## Gated set tracks

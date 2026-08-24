@@ -71,6 +71,7 @@ function cloneRecipe(recipe: SmartRecipeInstanceState): SmartRecipeInstanceState
   return {
     ...recipe,
     anchor: cloneLayerCoordinate(recipe.anchor),
+    bounds: { ...recipe.bounds },
     sourceCells: recipe.sourceCells.map(cloneLayerCoordinate),
     parameters: { ...recipe.parameters },
   };
@@ -129,6 +130,7 @@ function getRecipeOwnerId(
   instanceId: string,
   recipe: SmartRecipeInstanceState,
 ): string {
+  if (recipe.ownerId) return recipe.ownerId;
   const matchingOutput = Object.values(state.ownedOutputs).find((output) => (
     output.kind === 'recipe'
       && (output.ownerId === instanceId || output.ownerId.endsWith(`:${instanceId}`))
@@ -167,22 +169,14 @@ function getRecipeFootprint(
     if (coordinate) add(coordinate);
   }
 
-  const sourceXs = recipe.sourceCells.map(({ x }) => x);
-  const sourceYs = recipe.sourceCells.map(({ y }) => y);
-  const fallbackWidth = sourceXs.length > 0
-    ? Math.max(...sourceXs) - Math.min(...sourceXs) + 1
-    : 1;
-  const fallbackHeight = sourceYs.length > 0
-    ? Math.max(...sourceYs) - Math.min(...sourceYs) + 1
-    : 1;
-  const width = isPositiveInteger(recipe.parameters.width) ? recipe.parameters.width : fallbackWidth;
-  const height = isPositiveInteger(recipe.parameters.height) ? recipe.parameters.height : fallbackHeight;
+  const width = isPositiveInteger(recipe.bounds.width) ? recipe.bounds.width : 1;
+  const height = isPositiveInteger(recipe.bounds.height) ? recipe.bounds.height : 1;
   for (let dy = 0; dy < height; dy += 1) {
     for (let dx = 0; dx < width; dx += 1) {
       add({
         layer: recipe.anchor.layer,
-        x: recipe.anchor.x + dx,
-        y: recipe.anchor.y + dy,
+        x: recipe.bounds.minX + dx,
+        y: recipe.bounds.minY + dy,
       });
     }
   }
@@ -233,6 +227,13 @@ function buildSmartClipboardFields(
     });
     const recipe = cloneRecipe(sourceRecipe);
     recipe.anchor = relativize(recipe.anchor);
+    recipe.bounds = {
+      ...recipe.bounds,
+      minX: recipe.bounds.minX - minX,
+      minY: recipe.bounds.minY - minY,
+      maxX: recipe.bounds.maxX - minX,
+      maxY: recipe.bounds.maxY - minY,
+    };
     recipe.sourceCells = recipe.sourceCells.map(relativize);
     smartRecipes.push({
       sourceInstanceId: instanceId,
@@ -288,10 +289,13 @@ export function buildEditorClipboardState(
     occupiedMask.push(occupiedRow);
   }
 
-  if (!hasOccupiedTiles) return null;
   const smartFields = smartTerrainState
     ? buildSmartClipboardFields(sourceLayer, minX, minY, maxX, maxY, smartTerrainState)
     : {};
+  const hasSmartPayload = Object.keys(smartCells).length > 0
+    || Boolean(smartFields.smartSemanticCells)
+    || Boolean(smartFields.smartRecipes);
+  if (!hasOccupiedTiles && !hasSmartPayload) return null;
   return {
     sourceLayer, width, height, tiles, occupiedMask,
     ...(Object.keys(smartCells).length > 0 ? { smartCells } : {}),
@@ -359,6 +363,13 @@ export function planEditorSmartClipboardPaste(
     if (!completeInTargetRoom) continue;
     const recipe = cloneRecipe(clipboardRecipe.recipe);
     recipe.anchor = translate(recipe.anchor);
+    recipe.bounds = {
+      ...recipe.bounds,
+      minX: recipe.bounds.minX + baseTileX,
+      minY: recipe.bounds.minY + baseTileY,
+      maxX: recipe.bounds.maxX + baseTileX,
+      maxY: recipe.bounds.maxY + baseTileY,
+    };
     recipe.sourceCells = recipe.sourceCells.map(translate);
     recipes.push({
       sourceInstanceId: clipboardRecipe.sourceInstanceId,
