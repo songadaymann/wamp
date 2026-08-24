@@ -8,7 +8,7 @@ import {
   type PaletteMode,
   type ToolName,
 } from '../../config';
-import { getEditorToolButtonCopy, isMoreEditorTool } from './editorToolSelection';
+import { getEditorToolButtonAppearance, isMoreEditorTool } from './editorToolSelection';
 import {
   finalizeBackgroundUpload,
   listBackgroundImages,
@@ -1396,14 +1396,18 @@ export class EditorUiBridge {
     }
 
     for (const button of this.elements.toolButtons) {
-      button.classList.toggle('active', button.dataset.tool === editorState.activeTool);
-      const copy = getEditorToolButtonCopy(button.dataset.tool as ToolName);
-      if (copy) {
-        const label = button.querySelector('.tool-label');
-        if (label) {
-          label.textContent = copy.label;
+      const selected = button.dataset.tool === editorState.activeTool;
+      button.classList.toggle('active', selected);
+      const appearance = getEditorToolButtonAppearance(button.dataset.tool as ToolName, selected);
+      if (appearance) {
+        const icon = button.querySelector('.tool-icon');
+        if (icon) {
+          icon.textContent = appearance.icon;
         }
-        button.title = copy.title;
+        button.title = appearance.title;
+        for (const part of button.querySelectorAll<HTMLElement>('.tool-mode')) {
+          part.classList.toggle('is-dim', Boolean(appearance.dimPart && part.dataset.part === appearance.dimPart));
+        }
       }
     }
 

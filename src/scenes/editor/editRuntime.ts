@@ -111,7 +111,7 @@ import {
   type NpcMode,
 } from '../../npcs/model';
 import { EditorHistory } from './history';
-import { iterateShapeTiles } from './shapeTiles';
+import { iterateShapeTiles, type EditorShapeKind, type TilePoint } from './shapeTiles';
 import {
   buildEditorClipboardState,
   cloneEditorClipboardState,
@@ -814,12 +814,12 @@ export class EditorEditRuntime {
   }
 
   stampShape(
-    kind: 'rect' | 'ellipse',
+    kind: EditorShapeKind,
     x1: number,
     y1: number,
     x2: number,
     y2: number,
-    options?: { outline?: boolean; erase?: boolean },
+    options?: { outline?: boolean; erase?: boolean; mid?: TilePoint },
   ): void {
     if (!this.guardEditable()) {
       return;
@@ -832,7 +832,7 @@ export class EditorEditRuntime {
     }
 
     const newGid = erase ? -1 : getSelectionTileValue(0, 0);
-    for (const tile of iterateShapeTiles(kind, x1, y1, x2, y2, outline)) {
+    for (const tile of iterateShapeTiles(kind, x1, y1, x2, y2, outline, options?.mid)) {
       if (tile.x < 0 || tile.x >= ROOM_WIDTH || tile.y < 0 || tile.y >= ROOM_HEIGHT) {
         continue;
       }

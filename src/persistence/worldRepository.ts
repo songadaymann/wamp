@@ -203,6 +203,11 @@ class LocalWorldRepository implements WorldRepository {
   }
 }
 
+const PUBLIC_WORLD_API_FETCH: RequestInit = {
+  credentials: 'omit',
+  mode: 'cors',
+};
+
 export class ApiWorldRepository implements WorldRepository {
   private compactWorldUnavailable = false;
   constructor(
@@ -296,6 +301,7 @@ export class ApiWorldRepository implements WorldRepository {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ references, detail: options.detail ?? 'full' }),
+        ...PUBLIC_WORLD_API_FETCH,
         ...(options.priority ? { priority: options.priority } : {}),
       };
       const response = await this.fetchWorldApi('/api/rooms/snapshots/query', requestInit);
@@ -346,7 +352,7 @@ export class ApiWorldRepository implements WorldRepository {
   }
 
   private async requestWorldWindow(path: string): Promise<WorldWindow> {
-    const response = await this.fetchWorldApi(path);
+    const response = await this.fetchWorldApi(path, PUBLIC_WORLD_API_FETCH);
 
     if (!response.ok) {
       const details = await response.text();
@@ -360,7 +366,7 @@ export class ApiWorldRepository implements WorldRepository {
   }
 
   private async requestWorldChunkWindow(path: string): Promise<WorldChunkWindow> {
-    const response = await this.fetchWorldApi(path);
+    const response = await this.fetchWorldApi(path, PUBLIC_WORLD_API_FETCH);
 
     if (!response.ok) {
       const details = await response.text();
@@ -374,7 +380,7 @@ export class ApiWorldRepository implements WorldRepository {
   }
 
   private async requestCompactWorldChunkWindow(path: string): Promise<CompactWorldChunkWindow> {
-    const response = await this.fetchWorldApi(path);
+    const response = await this.fetchWorldApi(path, PUBLIC_WORLD_API_FETCH);
     if (!response.ok) {
       const details = await response.text();
       throw new WorldApiError(details || `Compact world API request failed with status ${response.status}.`, response.status);
@@ -383,7 +389,7 @@ export class ApiWorldRepository implements WorldRepository {
   }
 
   private async requestPublishedRoom(path: string, signal?: AbortSignal): Promise<RoomSnapshot | null> {
-    const response = await this.fetchWorldApi(path, { signal });
+    const response = await this.fetchWorldApi(path, { signal, ...PUBLIC_WORLD_API_FETCH });
 
     if (response.status === 404) {
       return null;
