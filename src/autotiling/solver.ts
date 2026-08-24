@@ -223,11 +223,12 @@ function pickWeightedGroundCenter(x: number, y: number): number {
 
 function pickHorizontalMiddle(x: number, y: number): number {
   const bucket = stableHash(x, y, 29) % 20;
-  if (bucket < 12) return 45;
-  if (bucket < 16) return 47;
-  if (bucket < 18) return 46;
-  if (bucket < 19) return 44;
-  return 20;
+  const [sparse, leftAlternate, primary, rightAlternate] =
+    SMART_TILESET_SLOTS.ground.thin.horizontalMiddle;
+  if (bucket < 12) return primary;
+  if (bucket < 18) return rightAlternate;
+  if (bucket < 19) return leftAlternate;
+  return sparse;
 }
 
 function getFamilyLocalIndices(theme: SmartTerrainTheme, material: SmartTerrainMaterial): Set<number> {

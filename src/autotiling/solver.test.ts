@@ -197,8 +197,22 @@ describe('smart terrain solver', () => {
     },
   );
 
-  it('uses exactly the corrected horizontal middle tile set', () => {
+  it('emits exactly the corrected horizontal middle tile set without D12', () => {
+    const firstGid = getTilesetByKey('forest')!.firstGid;
+    const emitted = new Set<number>();
+    for (let y = 1; y < 21; y += 1) {
+      const result = applySmartCells(emptyDocument(), {
+        cells: Array.from({ length: 38 }, (_, index) => ({ x: index + 1, y })),
+        mode: 'paint',
+        theme: 'forest',
+        material: 'ground',
+      });
+      for (let x = 2; x < 38; x += 1) {
+        emitted.add(localAt(result, 'terrain', x, y, firstGid));
+      }
+    }
     expect(SMART_TILESET_SLOTS.ground.thin.horizontalMiddle).toEqual([20, 44, 45, 46]);
+    expect([...emitted].sort((a, b) => a - b)).toEqual([20, 44, 45, 46]);
   });
 
   it.each(['forest', 'desert', 'cave', 'gothic'] as const)(
