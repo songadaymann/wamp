@@ -162,6 +162,7 @@ try {
     const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
     runtime.beginTileBatch();
     for (let y = 4; y <= 10; y += 1) runtime.placeTileAt(4 * 16 + 1, y * 16 + 1);
+    for (let x = 1; x <= 38; x += 1) runtime.placeTileAt(x * 16 + 1, 14 * 16 + 1);
     for (let y = 3; y <= 9; y += 1) {
       for (let x = 10; x <= 18; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
     }
@@ -188,13 +189,20 @@ try {
     return runtime.exportRoomSnapshot();
   });
   const verticalThin = groundFixtures.tileData.terrain.slice(4, 11).map((row) => row[4]);
+  const horizontalThinLocals = groundFixtures.tileData.terrain[14]
+    .slice(2, 38)
+    .map((gid) => gid - 1);
   assert.equal(verticalThin[0], 20);
   assert.ok(verticalThin.slice(1, -1).every((gid) => gid === 32 || gid === 44));
   assert.equal(verticalThin.at(-1), 56);
+  assert.ok(horizontalThinLocals.length > 0);
+  assert.ok(horizontalThinLocals.every((local) => [20, 44, 45, 46].includes(local)));
+  assert.ok(!horizontalThinLocals.includes(47));
   assert.equal(groundFixtures.tileData.terrain[7][16], (1 << 21) + 55);
   assert.equal(groundFixtures.tileData.terrain[4][34], 30);
   assert.equal(groundFixtures.tileData.terrain[7][34], (1 << 21) + 34);
   summary.checks.verticalAndCaveTopology = true;
+  summary.checks.correctedHorizontalTiles = true;
   summary.checks.ordinaryGroundTies = true;
 
   await page.evaluate(() => {
