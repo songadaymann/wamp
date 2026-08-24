@@ -296,9 +296,15 @@ export class PresenceServerHarness {
   }
 
   async settleAsyncWork(): Promise<void> {
-    for (let index = 0; index < 4; index += 1) {
+    // Preview updates verify HMAC via crypto.subtle, which Node completes on the
+    // threadpool + nextTick. Fake timers do not drain that, so a few Promise
+    // hops are not enough when several updates are in flight (CI Linux flakes).
+    for (let index = 0; index < 20; index += 1) {
       await vi.advanceTimersByTimeAsync(0);
       await Promise.resolve();
+      await new Promise<void>((resolve) => {
+        process.nextTick(resolve);
+      });
     }
   }
 
