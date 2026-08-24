@@ -135,8 +135,9 @@ Completed implementation sequence:
    decode/encode tests for none/X/Y/XY.
 2. Replaced the reference-tower facade with the reviewed neutral Ground
    vocabulary: B3/B3X and repeated B4 tops, B10X/B12X sides, C2Y/C7Y lower
-   corners, repeated F3 lower edges, and F5/G11/G12 underground fill. Diagonal
-   joints use the C12/C10 tie family rather than reusing C2/C7 outer corners.
+   corners, repeated F3 lower edges, mirrored F12 one-cell stair ends, and
+   F5/G11/G12 underground fill. Diagonal joints retain that cardinal Terrain
+   art and add transformed transparent A10 ties on Foreground.
 3. Added deterministic optional recipes for the neon strip and framed panel.
    Yellow remains the default structure; Pink is a stable accent/style choice,
    not a random competing topology.
@@ -144,8 +145,8 @@ Completed implementation sequence:
    collision semantics and existing layer-specific manual locks.
 5. Proved filled regions, holes, stairs, diagonals, irregular notches, thin
    runs, isolated cells, erasure, undo/redo, and semantic copy/paste. Enclosed
-   holes use A10/A11/A10X on Foreground over colliding fill, B10/B12 side walls,
-   and C10/C11/C12 floors.
+   holes use transformed A10 Foreground corner ties over colliding fill,
+   B10/B12 side walls, and C11Y/C11 Terrain ceiling/floor middles.
 6. Visually inspected the frozen Cyber reconstruction and newly authored
    fixtures in both Canvas and WebGL before opening the safety preview gate.
 
@@ -159,6 +160,10 @@ solver does not merely memorize one skyline.
   coordinate contract drives automatic Ground. Yellow/Pink connectivity,
   irregular inset edges, layered holes, stairs, and diagonal repair have
   separate novel-shape cases.
+- Every missing-diagonal tie is Cyber A10 on Foreground (`A10XY`, `A10Y`,
+  `A10X`, or `A10`) while Terrain retains its independently resolved edge.
+  This preserves F3 under stair ties; unsupported stair ends use mirrored F12,
+  and straight interior-window ceilings use C11Y.
 - Yellow and Pink platforms generate `F12X, F9…, F12`; the F10 paint spill and
   F11 open-bottom pieces remain available for manual accenting. Support short forms
   are `36`, `36/60`, `36/60/72`, then `36/48…/60/72`; normalized support banks
@@ -173,7 +178,7 @@ solver does not merely memorize one skyline.
 - Model tests cover v1 to v2 migration, canonical IDs such as `desert.ground`,
   unknown-future preservation, invalid brush/style/layer filtering, encoded
   locks, and configured 84/120/324-tile profiles.
-- The focused Cyber/model/editor/clipboard gate passes 125 tests. The full gate
+- The focused Cyber/model/editor/clipboard gate passes 129 tests. The full gate
   passes 209 files / 1,431 tests, ESLint, TypeScript, generated-binding checks,
   and the production build.
 - The expanded Smart browser gate passes in Canvas and WebGL with Fill, shapes,

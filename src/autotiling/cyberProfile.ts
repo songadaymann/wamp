@@ -173,6 +173,8 @@ export const CYBER_DETAIL_EMITTER_CELL_INTERVAL = 64;
 
 type CyberStructureRole =
   | 'isolated'
+  | 'horizontalLeft'
+  | 'horizontalRight'
   | 'topLeft'
   | 'top'
   | 'topRight'
@@ -235,6 +237,10 @@ interface TileSpec {
 const STRUCTURE_ROLE_TILES = {
   // Cyber F5 is the safest neutral fallback for a one-cell island/run.
   isolated: { localIndex: 64 },
+  // A one-cell-thick stair end needs top, side, and bottom trim. Cyber F12 is
+  // the neutral three-sided end cap; mirror it at the left end.
+  horizontalLeft: { localIndex: 71, flipX: true },
+  horizontalRight: { localIndex: 71 },
   // Cyber B3 is the only neutral square top corner; mirror it for the right.
   topLeft: { localIndex: 14 },
   top: { localIndex: 15 },
@@ -252,13 +258,13 @@ const STRUCTURE_ROLE_TILES = {
   vertical: { localIndex: 64 },
 } as const satisfies Record<CyberStructureRole, TileSpec>;
 
-const STRUCTURE_CONCAVE_TILES = {
-  // Cyber C12/C10 are the neutral diagonal ties, matching the upper-right
-  // tie family used by the legacy terrain sheets. C2/C7 remain outer corners.
-  topLeft: { localIndex: 35 },
-  topRight: { localIndex: 33 },
-  bottomLeft: { localIndex: 35, flipY: true },
-  bottomRight: { localIndex: 33, flipY: true },
+const STRUCTURE_TIE_TILES = {
+  // Cyber A10 is transparent except for one corner. Keeping it on Foreground
+  // lets the cardinal Terrain tile retain its own top/side/bottom edge.
+  topLeft: { localIndex: 9, flipX: true, flipY: true },
+  topRight: { localIndex: 9, flipY: true },
+  bottomLeft: { localIndex: 9, flipX: true },
+  bottomRight: { localIndex: 9 },
 } as const satisfies Record<NonNullable<CyberStructureTopology['concaveCorner']>, TileSpec>;
 
 /** Cyber F5, G11, and G12 are the only neutral underground fill cells. */
@@ -275,15 +281,16 @@ export type CyberTunnelOutlineRole =
   | 'floorRight';
 
 const TUNNEL_OUTLINE_TILES = {
-  // Cyber A12 contains a paint burst, so the neutral right corner is A10X.
+  // Diagonal ties all use transparent Cyber A10 on Foreground. The straight
+  // interior-window ceiling is Cyber C11 flipped vertically on Terrain.
   ceilingLeft: { localIndex: 9, layer: 'foreground' },
-  ceiling: { localIndex: 10, layer: 'foreground' },
+  ceiling: { localIndex: 34, flipY: true, layer: 'terrain' },
   ceilingRight: { localIndex: 9, flipX: true, layer: 'foreground' },
   left: { localIndex: 21, layer: 'terrain' },
   right: { localIndex: 23, layer: 'terrain' },
-  floorLeft: { localIndex: 33, layer: 'terrain' },
+  floorLeft: { localIndex: 9, flipY: true, layer: 'foreground' },
   floor: { localIndex: 34, layer: 'terrain' },
-  floorRight: { localIndex: 35, layer: 'terrain' },
+  floorRight: { localIndex: 9, flipX: true, flipY: true, layer: 'foreground' },
 } as const satisfies Record<CyberTunnelOutlineRole, TileSpec & { layer: LayerName }>;
 
 function assertCyberStyle(styleId: CyberStyleId): void {
@@ -415,13 +422,13 @@ export function resolveCyberStructureTopology(neighborMask: number): CyberStruct
   const roles: readonly CyberStructureRole[] = [
     'isolated',
     'vertical',
-    'topLeft',
+    'horizontalLeft',
     'bottomLeft',
     'topLeft',
     'vertical',
     'topLeft',
     'left',
-    'topRight',
+    'horizontalRight',
     'bottomRight',
     'top',
     'bottom',
@@ -490,13 +497,6 @@ export function resolveCyberStructureFacade(
   context: CyberStructureFacadeContext = {},
 ): CyberResolvedTile {
   assertCyberStyle(styleId);
-  if (topology.concaveCorner) {
-    return makeStructuralTile(
-      styleId,
-      STRUCTURE_CONCAVE_TILES[topology.concaveCorner],
-      CYBER_FAMILY_DEFINITIONS.structure.layer,
-    );
-  }
   let spec: TileSpec = STRUCTURE_ROLE_TILES[topology.role];
   if (topology.role === 'center') {
     spec = {
@@ -514,6 +514,14 @@ export function resolveCyberStructureFacade(
   return makeStructuralTile(styleId, spec, CYBER_FAMILY_DEFINITIONS.structure.layer);
 }
 
+/** A diagonal tie is a separate non-colliding Cyber A10 Foreground overlay. */
+export function resolveCyberStructureTieTile(
+  styleId: CyberStyleId,
+  corner: NonNullable<CyberStructureTopology['concaveCorner']>,
+): CyberResolvedTile {
+  return makeSpecTile(styleId, STRUCTURE_TIE_TILES[corner], 'foreground');
+}
+
 export function resolveCyberStructureUnderground(
   styleId: CyberStyleId,
   worldX?: number,
@@ -527,8 +535,8 @@ export function resolveCyberStructureUnderground(
 }
 
 /**
- * Resolves the authored Cyber A10/A11/A10X, B10/B12, C10/C11/C12 tunnel frame.
- * The A-row trim is intentionally non-colliding Foreground art.
+ * Resolves the authored Cyber A10 ties, B10/B12 sides, and C11Y/C11
+ * interior-window frame. A10 is intentionally non-colliding Foreground art.
  */
 export function resolveCyberTunnelOutlineTile(
   styleId: CyberStyleId,

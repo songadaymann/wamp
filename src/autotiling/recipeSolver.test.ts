@@ -404,23 +404,30 @@ describe('Cyber Smart recipe solver', () => {
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 2, 4)).toEqual([
       '14', '14X', '.', '.',
     ]);
-    expect(rowTokens(document, 'terrain', 'cyber-yellow', 2, 3, 4)).toEqual([
-      '21X', '33', '14X', '.',
+    const middle = rowTokens(document, 'terrain', 'cyber-yellow', 2, 3, 4);
+    expect(middle[0]).toBe('21X');
+    expect(['64', '82', '83']).toContain(middle[1]);
+    expect(middle.slice(2)).toEqual(['14X', '.']);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 2, 3, 4)).toEqual([
+      '.', '9Y', '.', '.',
     ]);
     const bottom = rowTokens(document, 'terrain', 'cyber-yellow', 2, 4, 4);
     expect(bottom[0]).toBe('25Y');
     expect(bottom[1]).toBe('62');
-    expect(bottom[2]).toBe('33');
-    expect(bottom[3]).toBe('14X');
+    expect(bottom[2]).toBe('62');
+    expect(bottom[3]).toBe('71');
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 2, 4, 4)).toEqual([
+      '.', '.', '9Y', '.',
+    ]);
     staircase.forEach(({ x, y }) => expectCollision(document, x, y));
   });
 
   it.each([
-    { name: 'top-left', omittedX: 8, omittedY: 8, expected: '35' },
-    { name: 'top-right', omittedX: 10, omittedY: 8, expected: '33' },
-    { name: 'bottom-left', omittedX: 8, omittedY: 10, expected: '35Y' },
-    { name: 'bottom-right', omittedX: 10, omittedY: 10, expected: '33Y' },
-  ])('uses the Cyber C10/C12 tie family for a missing $name diagonal', ({
+    { name: 'top-left', omittedX: 8, omittedY: 8, expected: '9XY' },
+    { name: 'top-right', omittedX: 10, omittedY: 8, expected: '9Y' },
+    { name: 'bottom-left', omittedX: 8, omittedY: 10, expected: '9X' },
+    { name: 'bottom-right', omittedX: 10, omittedY: 10, expected: '9' },
+  ])('keeps Terrain intact and overlays Cyber A10 for a missing $name diagonal', ({
     omittedX,
     omittedY,
     expected,
@@ -430,7 +437,10 @@ describe('Cyber Smart recipe solver', () => {
     ));
     const document = paint(emptyDocument(), 'cyber.structure', 'cyber-yellow', cells);
 
-    expect(tileToken(document.tileData.terrain[9]![9]!, 'cyber-yellow')).toBe(expected);
+    expect(['64', '82', '83']).toContain(
+      tileToken(document.tileData.terrain[9]![9]!, 'cyber-yellow'),
+    );
+    expect(tileToken(document.tileData.foreground[9]![9]!, 'cyber-yellow')).toBe(expected);
     expectCollision(document, 9, 9);
   });
 
@@ -510,16 +520,24 @@ describe('Cyber Smart recipe solver', () => {
     const document = paint(emptyDocument(), 'cyber.structure', 'cyber-yellow', ring);
 
     expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual([
-      '9', '10', '9X',
+      '9', '.', '9X',
     ]);
+    const ceiling = rowTokens(document, 'terrain', 'cyber-yellow', 10, 10, 3);
+    expect(['64', '82', '83']).toContain(ceiling[0]);
+    expect(ceiling[1]).toBe('34Y');
+    expect(['64', '82', '83']).toContain(ceiling[2]);
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 10, 11, 3)).toEqual([
       '21', '.', '23',
     ]);
-    expect(rowTokens(document, 'terrain', 'cyber-yellow', 10, 12, 3)).toEqual([
-      '33', '34', '35',
+    const floor = rowTokens(document, 'terrain', 'cyber-yellow', 10, 12, 3);
+    expect(['64', '82', '83']).toContain(floor[0]);
+    expect(floor[1]).toBe('34');
+    expect(['64', '82', '83']).toContain(floor[2]);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 12, 3)).toEqual([
+      '9Y', '.', '9XY',
     ]);
     expect([64, 82, 83]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 10, 10));
-    expect([64, 82, 83]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 11, 10));
+    expect(tileToken(document.tileData.terrain[10]![11]!, 'cyber-yellow')).toBe('34Y');
     expect([64, 82, 83]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 12, 10));
     expect(document.tileData.terrain[11]![11]).toBe(-1);
   });
@@ -528,23 +546,23 @@ describe('Cyber Smart recipe solver', () => {
     const ring = rectangle(10, 10, 3, 3).filter(({ x, y }) => !(x === 11 && y === 11));
     let document = paint(emptyDocument(), 'cyber.structure', 'cyber-yellow', ring);
     const manualTileData = cloneTileData(document);
-    manualTileData.foreground[10]![11] = -1;
+    manualTileData.foreground[10]![10] = -1;
     document = resolveSmartRecipeDocument({
       tileData: manualTileData,
-      smartTerrain: applyManualSmartOutputEdit(document.smartTerrain, 'foreground', 11, 10, -1),
+      smartTerrain: applyManualSmartOutputEdit(document.smartTerrain, 'foreground', 10, 10, -1),
     });
 
-    expect(document.tileData.foreground[10]![11]).toBe(-1);
-    expect(document.tileData.terrain[10]![11]).toBeGreaterThan(0);
+    expect(document.tileData.foreground[10]![10]).toBe(-1);
+    expect(document.tileData.terrain[10]![10]).toBeGreaterThan(0);
     expect(document.smartTerrain.suppressedOutputParts).toContain(
-      'cyber:cell:terrain:11,10:tunnel-ceiling',
+      'cyber:cell:terrain:10,10:diagonal-tie',
     );
-    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual(['9', '.', '9X']);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual(['.', '.', '9X']);
 
-    document = paint(document, 'cyber.structure', 'cyber-yellow', [{ x: 11, y: 10 }]);
-    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual(['9', '10', '9X']);
+    document = paint(document, 'cyber.structure', 'cyber-yellow', [{ x: 10, y: 10 }]);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual(['9', '.', '9X']);
     expect(document.smartTerrain.suppressedOutputParts).not.toContain(
-      'cyber:cell:terrain:11,10:tunnel-ceiling',
+      'cyber:cell:terrain:10,10:diagonal-tie',
     );
   });
 
@@ -589,7 +607,8 @@ describe('Cyber Smart recipe solver', () => {
       'cyber-yellow',
       [{ x: 20, y: 12 }],
     );
-    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 20, 12)).toBe(33);
+    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 20, 12)).toBe(64);
+    expect(tileToken(document.tileData.foreground[12]![20]!, 'cyber-yellow')).toBe('9Y');
   });
 
   it('preserves full X, Y, and XY locked values through neighboring re-resolution', () => {
@@ -648,9 +667,12 @@ describe('Cyber Smart recipe solver', () => {
     );
     expect(corners.map(({ x, y }) => localIndexAt(
       document, 'terrain', 'cyber-yellow', x, y,
-    ))).toEqual([64, 64, 33, 35]);
+    )).every((localIndex) => [64, 82, 83].includes(localIndex))).toBe(true);
     expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual([
-      '9', '10', '9X',
+      '9', '.', '9X',
+    ]);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 12, 3)).toEqual([
+      '9Y', '.', '9XY',
     ]);
     expect(corners.every(({ x, y }) => (
       document.smartTerrain.semanticCells[smartSemanticCellKey('terrain', x, y)]?.shapeValue === undefined
@@ -907,8 +929,8 @@ describe('Cyber Smart recipe solver', () => {
       'cyber:cell:terrain:9,8:primary',
     );
     expect(document.tileData.terrain[8]![9]).toBe(-1);
-    expect(tileToken(document.tileData.terrain[8]![8]!, 'cyber-yellow')).toBe('14');
-    expect(tileToken(document.tileData.terrain[8]![10]!, 'cyber-yellow')).toBe('14X');
+    expect(tileToken(document.tileData.terrain[8]![8]!, 'cyber-yellow')).toBe('71X');
+    expect(tileToken(document.tileData.terrain[8]![10]!, 'cyber-yellow')).toBe('71');
 
     document = paint(
       document,

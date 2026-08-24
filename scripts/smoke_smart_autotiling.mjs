@@ -333,9 +333,14 @@ try {
     cyberStructure.tileData.terrain[4][35] === 1633 + localIndex
   )));
   assert.equal(cyberStructure.tileData.terrain[17][33], 1633 + 62);
-  assert.equal(cyberStructure.tileData.terrain[3][21], 1633 + 33);
+  assert.ok([64, 82, 83].some((localIndex) => (
+    cyberStructure.tileData.terrain[3][21] === 1633 + localIndex
+  )));
+  assert.equal(cyberStructure.tileData.foreground[3][21], 1633 + 9 + FLIP_Y);
   assert.equal(cyberStructure.tileData.terrain[4][21], 1633 + 62);
-  assert.equal(cyberStructure.tileData.terrain[4][22], 1633 + 33);
+  assert.equal(cyberStructure.tileData.terrain[4][22], 1633 + 62);
+  assert.equal(cyberStructure.tileData.foreground[4][22], 1633 + 9 + FLIP_Y);
+  assert.equal(cyberStructure.tileData.terrain[4][23], 1633 + 71);
   assert.ok(Object.keys(cyberStructure.smartTerrain.semanticCells).length > 128);
   assert.equal(Object.values(cyberStructure.smartTerrain.ownedOutputs)
     .filter(({ partId }) => partId === 'detail').length, 0);
@@ -369,13 +374,27 @@ try {
   assert.equal(cyberCopyHistoryRepair.carved.smartTerrain.semanticCells['terrain:35,8'], undefined);
   assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[8][35], -1);
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.foreground[7].slice(34, 37), [
-    1633 + 9, 1633 + 10, 1633 + 9 + FLIP_X,
+    1633 + 9, -1, 1633 + 9 + FLIP_X,
   ]);
+  assert.ok([64, 82, 83].some((localIndex) => (
+    cyberCopyHistoryRepair.carved.tileData.terrain[7][34] === 1633 + localIndex
+  )));
+  assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[7][35], 1633 + 34 + FLIP_Y);
+  assert.ok([64, 82, 83].some((localIndex) => (
+    cyberCopyHistoryRepair.carved.tileData.terrain[7][36] === 1633 + localIndex
+  )));
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.terrain[8].slice(34, 37), [
     1633 + 21, -1, 1633 + 23,
   ]);
-  assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.terrain[9].slice(34, 37), [
-    1633 + 33, 1633 + 34, 1633 + 35,
+  assert.ok([64, 82, 83].some((localIndex) => (
+    cyberCopyHistoryRepair.carved.tileData.terrain[9][34] === 1633 + localIndex
+  )));
+  assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[9][35], 1633 + 34);
+  assert.ok([64, 82, 83].some((localIndex) => (
+    cyberCopyHistoryRepair.carved.tileData.terrain[9][36] === 1633 + localIndex
+  )));
+  assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.foreground[9].slice(34, 37), [
+    1633 + 9 + FLIP_Y, -1, 1633 + 9 + FLIP_X + FLIP_Y,
   ]);
   summary.checks.cyberCopyUndoEraseRepair = true;
   await runEditorCommands(page, [{ op: 'setCamera', zoom: 1, centerTileX: 35, centerTileY: 8 }]);

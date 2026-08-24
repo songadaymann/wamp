@@ -18,6 +18,7 @@ import {
   resolveCyberRubbleBorderTile,
   resolveCyberRubbleColumn,
   resolveCyberStructureRectangle,
+  resolveCyberStructureTieTile,
   resolveCyberStructureUnderground,
   resolveCyberStructureTile,
   resolveCyberStructureTile8,
@@ -98,9 +99,9 @@ describe('Cyber Smart profile', () => {
 
   it('covers all sixteen structure masks with safe terrain outputs', () => {
     const expected = [
-      '64', '64', '14', '25Y',
+      '64', '64', '71X', '25Y',
       '14', '64', '14', '21X',
-      '14X', '30Y', '15', '62',
+      '71', '30Y', '15', '62',
       '14X', '23X', '15', '64',
     ];
     for (const styleId of ['cyber-yellow', 'cyber-pink'] as const) {
@@ -130,7 +131,7 @@ describe('Cyber Smart profile', () => {
     expect(() => resolveCyberStructureTopology(1.5)).toThrow(/0 through 15/);
   });
 
-  it('covers every 8-neighbor mask and resolves diagonal holes as concave corners', () => {
+  it('covers every 8-neighbor mask while keeping diagonal ties out of Terrain', () => {
     for (const styleId of ['cyber-yellow', 'cyber-pink'] as const) {
       const resolved = Array.from({ length: 256 }, (_, neighborMask8) => (
         resolveCyberStructureTile8({ styleId, neighborMask8 })
@@ -147,10 +148,17 @@ describe('Cyber Smart profile', () => {
     expect(resolveCyberStructureTopology8(253).concaveCorner).toBe('topRight');
     expect(resolveCyberStructureTopology8(223).concaveCorner).toBe('bottomLeft');
     expect(resolveCyberStructureTopology8(247).concaveCorner).toBe('bottomRight');
-    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 127 }))).toBe('35');
-    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 253 }))).toBe('33');
-    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 223 }))).toBe('35Y');
-    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 247 }))).toBe('33Y');
+    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 127 }))).toBe('64');
+    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 253 }))).toBe('64');
+    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 223 }))).toBe('64');
+    expect(token(resolveCyberStructureTile8({ styleId: 'cyber-yellow', neighborMask8: 247 }))).toBe('64');
+    expect(tokens([
+      resolveCyberStructureTieTile('cyber-yellow', 'topLeft'),
+      resolveCyberStructureTieTile('cyber-yellow', 'topRight'),
+      resolveCyberStructureTieTile('cyber-yellow', 'bottomLeft'),
+      resolveCyberStructureTieTile('cyber-yellow', 'bottomRight'),
+    ])).toEqual(['9XY', '9Y', '9X', '9']);
+    expect(resolveCyberStructureTieTile('cyber-yellow', 'topLeft').layer).toBe('foreground');
     expect(() => resolveCyberStructureTopology8(256)).toThrow(/0 through 255/);
   });
 
@@ -264,14 +272,14 @@ describe('Cyber Smart profile', () => {
     expect(token(centerAtBoundsEdge)).toBe('64');
   });
 
-  it('builds the narrow roof above the right tower without rotation', () => {
+  it('gives a one-cell-thick roof complete F12 end caps without rotation', () => {
     expect(resolveCyberStructureRectangle({
       styleId: 'cyber-yellow',
       width: 6,
       height: 1,
       facade: 'plain',
     }).map(tokens)).toEqual([
-      ['14', '15', '15', '15', '15', '14X'],
+      ['71X', '15', '15', '15', '15', '71'],
     ]);
   });
 
@@ -309,25 +317,30 @@ describe('Cyber Smart profile', () => {
     ))).toBe('22');
   });
 
-  it('uses neutral underground and the layered A/B/C 10-12 tunnel frame', () => {
+  it('uses C11Y for window ceilings and transformed A10 Foreground ties', () => {
     expect([64, 82, 83]).toContain(resolveCyberStructureUnderground('cyber-yellow', 12, 8).localIndex);
     expect(tokens([
       resolveCyberTunnelOutlineTile('cyber-yellow', 'ceilingLeft'),
       resolveCyberTunnelOutlineTile('cyber-yellow', 'ceiling'),
       resolveCyberTunnelOutlineTile('cyber-yellow', 'ceilingRight'),
-    ])).toEqual(['9', '10', '9X']);
+    ])).toEqual(['9', '34Y', '9X']);
     expect([
       resolveCyberTunnelOutlineTile('cyber-yellow', 'ceilingLeft').layer,
       resolveCyberTunnelOutlineTile('cyber-yellow', 'ceiling').layer,
       resolveCyberTunnelOutlineTile('cyber-yellow', 'ceilingRight').layer,
-    ]).toEqual(['foreground', 'foreground', 'foreground']);
+    ]).toEqual(['foreground', 'terrain', 'foreground']);
     expect(tokens([
       resolveCyberTunnelOutlineTile('cyber-yellow', 'left'),
       resolveCyberTunnelOutlineTile('cyber-yellow', 'right'),
       resolveCyberTunnelOutlineTile('cyber-yellow', 'floorLeft'),
       resolveCyberTunnelOutlineTile('cyber-yellow', 'floor'),
       resolveCyberTunnelOutlineTile('cyber-yellow', 'floorRight'),
-    ])).toEqual(['21', '23', '33', '34', '35']);
+    ])).toEqual(['21', '23', '9Y', '34', '9XY']);
+    expect([
+      resolveCyberTunnelOutlineTile('cyber-yellow', 'floorLeft').layer,
+      resolveCyberTunnelOutlineTile('cyber-yellow', 'floor').layer,
+      resolveCyberTunnelOutlineTile('cyber-yellow', 'floorRight').layer,
+    ]).toEqual(['foreground', 'terrain', 'foreground']);
   });
 
   it('uses exact short fallbacks and repeats 48 in longer vertical support paths', () => {

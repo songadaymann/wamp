@@ -10,7 +10,9 @@ import {
   resolveCyberRubbleBorderTile,
   resolveCyberRubbleColumn,
   resolveCyberStructureUnderground,
+  resolveCyberStructureTieTile,
   resolveCyberStructureTile8,
+  resolveCyberStructureTopology8,
   resolveCyberSupportSpan,
   resolveCyberTunnelOutlineTile,
   type CyberFamilyId,
@@ -650,6 +652,8 @@ function resolveStructureComponent(
   for (const entry of component) {
     const styleId = entry.cell.styleId as CyberStyleId;
     const ownerId = `${CYBER_CELL_OWNER_PREFIX}${entry.semanticKey}`;
+    const mask8 = neighborMask8(tileData, state, entry);
+    const topology = resolveCyberStructureTopology8(mask8);
     const tunnelRole = getCyberTunnelOutlineRole(enclosedVoidCells, entry.x, entry.y);
     const tunnelTile = tunnelRole ? resolveCyberTunnelOutlineTile(styleId, tunnelRole) : null;
     const resolved = tunnelTile?.layer === 'terrain'
@@ -658,7 +662,7 @@ function resolveStructureComponent(
         ? resolveCyberStructureUnderground(styleId, entry.x, entry.y)
         : resolveCyberStructureTile8({
             styleId,
-            neighborMask8: neighborMask8(tileData, state, entry),
+            neighborMask8: mask8,
             facade: 'plain',
             x: entry.x - bounds.minX,
             y: entry.y - bounds.minY,
@@ -680,16 +684,21 @@ function resolveStructureComponent(
     } else {
       addOwnedOutput(tileData, state, ownerId, 'primary', 'semantic', entry.x, entry.y, resolved, true);
     }
-    if (tunnelTile?.layer === 'foreground') {
+    const tieTile = tunnelTile?.layer === 'foreground'
+      ? tunnelTile
+      : topology.concaveCorner
+        ? resolveCyberStructureTieTile(styleId, topology.concaveCorner)
+        : null;
+    if (tieTile) {
       addOwnedOutput(
         tileData,
         state,
         ownerId,
-        'tunnel-ceiling',
+        'diagonal-tie',
         'semantic',
         entry.x,
         entry.y,
-        tunnelTile,
+        tieTile,
         false,
       );
     }
