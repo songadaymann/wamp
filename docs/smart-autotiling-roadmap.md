@@ -190,7 +190,8 @@ solver does not merely memorize one skyline.
 - Framed Panels resize by extending/repainting their source row; there is no
   separate drag-handle resize UI in this milestone.
 
-Safety preview: `https://safety-cyber-smart-tiles.wampland.pages.dev`.
+Safety preview: `https://safety-cyber-smart-tiles.wampland.pages.dev`;
+immutable deployment `1ec5c2dc`; verified feature commit `6b3c04f`.
 Production remains a separate approval.
 
 ## Gated set tracks
@@ -235,7 +236,7 @@ A set moves from gated/in progress to complete only when all of these pass:
 | --- | --- |
 | Existing Smart V1 safety foundation | Complete / safety-proven |
 | Frozen six-room reference corpus and offline analyzer/renderer | Complete |
-| Cyber transform-aware profile and golden fixtures | Implemented / safety preview gate |
+| Cyber transform-aware profile and golden fixtures | Complete / safety preview deployed and verified |
 | Cave rail and Gothic fence/columns | Gated on Tier 2 |
 | Desert cactus and bridge | Gated on Tier 2 span/junction proof |
 | WampOS window macros | Gated on Tier 3 layer ownership |
