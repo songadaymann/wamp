@@ -9,6 +9,7 @@ import {
   fillEmptySmartTerrain,
   lockSmartTerrainCell,
   setSmartTerrainDetailsEnabled,
+  SMART_TILESET_SLOTS,
   suppressGeneratedDecorationAt,
 } from './solver';
 
@@ -191,10 +192,14 @@ describe('smart terrain solver', () => {
       });
       const locals = result.tileData.terrain[3].slice(2, 5).map((gid) => gid - firstGid);
       expect(locals[0]).toBe(44);
-      expect([20, 44, 45, 46, 47]).toContain(locals[1]);
+      expect([20, 44, 45, 46]).toContain(locals[1]);
       expect(locals[2]).toBe(46);
     },
   );
+
+  it('uses exactly the corrected horizontal middle tile set', () => {
+    expect(SMART_TILESET_SLOTS.ground.thin.horizontalMiddle).toEqual([20, 44, 45, 46]);
+  });
 
   it.each(['forest', 'desert', 'cave', 'gothic'] as const)(
     'builds seamless %s feature blocks with a non-colliding detail outline',
@@ -341,12 +346,12 @@ describe('smart terrain solver', () => {
     {
       name: 'empty square',
       pattern: ['###', '#.#', '###'],
-      assertions: [[0, 0, [19]], [1, 0, [20, 44, 45, 46, 47]], [2, 0, [19]], [0, 1, [31, 43]], [0, 2, [55]], [2, 2, [55]]],
+      assertions: [[0, 0, [19]], [1, 0, [20, 44, 45, 46]], [2, 0, [19]], [0, 1, [31, 43]], [0, 2, [55]], [2, 2, [55]]],
     },
     {
       name: 'capital H',
       pattern: ['#.#', '###', '#.#'],
-      assertions: [[0, 0, [19]], [2, 0, [19]], [0, 1, [31, 43]], [1, 1, [20, 44, 45, 46, 47]], [2, 1, [31, 43]], [0, 2, [55]], [2, 2, [55]]],
+      assertions: [[0, 0, [19]], [2, 0, [19]], [0, 1, [31, 43]], [1, 1, [20, 44, 45, 46]], [2, 1, [31, 43]], [0, 2, [55]], [2, 2, [55]]],
     },
   ])('resolves the artist $name thin-region example', ({ pattern, assertions }) => {
     const firstGid = getTilesetByKey('forest')!.firstGid;
