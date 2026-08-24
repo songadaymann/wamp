@@ -19,6 +19,8 @@ export interface SmartGeneratedDecorationState {
   ownerKey: string;
   slot: 'top' | 'bottom' | 'left' | 'right' | 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
   gid: number;
+  /** Actual room layer holding the generated tile. Older snapshots omit this and normalize by map. */
+  layer: 'background' | 'terrain' | 'foreground';
 }
 
 export interface RoomSmartTerrainState {
@@ -28,9 +30,9 @@ export interface RoomSmartTerrainState {
   cells: Record<string, SmartTerrainCellState>;
   /** Sparse Behind Player cells keyed as `x,y`, currently used by the Water tunnel backdrop brush. */
   backdropCells: Record<string, SmartTerrainCellState>;
-  /** Sparse engine-owned foreground cells keyed as `x,y`. */
+  /** Sparse engine-owned primary detail cells keyed as `x,y`. */
   generatedDecorations: Record<string, SmartGeneratedDecorationState>;
-  /** Sparse engine-owned background cells keyed as `x,y`, used when a feature notch needs two edges. */
+  /** Sparse engine-owned secondary detail cells keyed as `x,y`, used when a feature gap needs two edges. */
   generatedBackgroundDecorations: Record<string, SmartGeneratedDecorationState>;
   /** Owner/slot keys deliberately removed by a manual edit. */
   suppressedDecorationSlots: string[];
@@ -62,15 +64,16 @@ function normalizeSmartCells(value: unknown, expectedLayer: 'terrain' | 'backgro
   for (const [key, cell] of Object.entries(value)) {
     if (!/^\d+,\d+$/.test(key) || !cell || typeof cell !== 'object') continue;
     const entry = cell as Partial<SmartTerrainCellState>;
+    const material = entry.material === 'platform' ? 'ground' : entry.material;
     if (
       !SMART_TERRAIN_THEMES.includes(entry.theme as SmartTerrainTheme)
       || !SMART_TERRAIN_MATERIALS.includes(entry.material as SmartTerrainMaterial)
-      || (expectedLayer === 'background') !== (entry.material === 'tunnel')
-      || (entry.theme === 'water') !== (entry.material === 'tunnel')
+      || (expectedLayer === 'background') !== (material === 'tunnel')
+      || (entry.theme === 'water') !== (material === 'tunnel')
     ) continue;
     cells[key] = {
       theme: entry.theme as SmartTerrainTheme,
-      material: entry.material as SmartTerrainMaterial,
+      material: material as SmartTerrainMaterial,
       ...(typeof entry.lockedGid === 'number' && Number.isInteger(entry.lockedGid) && entry.lockedGid > 0
         ? { lockedGid: entry.lockedGid }
         : {}),
@@ -82,7 +85,10 @@ function normalizeSmartCells(value: unknown, expectedLayer: 'terrain' | 'backgro
   return cells;
 }
 
-function normalizeGeneratedDecorations(value: unknown): Record<string, SmartGeneratedDecorationState> {
+function normalizeGeneratedDecorations(
+  value: unknown,
+  legacyLayer: SmartGeneratedDecorationState['layer'],
+): Record<string, SmartGeneratedDecorationState> {
   const generatedDecorations: Record<string, SmartGeneratedDecorationState> = {};
   if (!value || typeof value !== 'object') return generatedDecorations;
   for (const [key, decoration] of Object.entries(value)) {
@@ -100,6 +106,9 @@ function normalizeGeneratedDecorations(value: unknown): Record<string, SmartGene
       ownerKey: entry.ownerKey,
       slot: entry.slot as SmartGeneratedDecorationState['slot'],
       gid: entry.gid,
+      layer: entry.layer === 'background' || entry.layer === 'terrain' || entry.layer === 'foreground'
+        ? entry.layer
+        : legacyLayer,
     };
   }
   return generatedDecorations;
@@ -115,8 +124,11 @@ export function normalizeRoomSmartTerrainState(value: unknown): RoomSmartTerrain
   const cells = normalizeSmartCells(candidate.cells, 'terrain');
   const backdropCells = normalizeSmartCells(candidate.backdropCells, 'background');
 
-  const generatedDecorations = normalizeGeneratedDecorations(candidate.generatedDecorations);
-  const generatedBackgroundDecorations = normalizeGeneratedDecorations(candidate.generatedBackgroundDecorations);
+  const generatedDecorations = normalizeGeneratedDecorations(candidate.generatedDecorations, 'foreground');
+  const generatedBackgroundDecorations = normalizeGeneratedDecorations(
+    candidate.generatedBackgroundDecorations,
+    'background',
+  );
 
   return {
     version: SMART_TERRAIN_VERSION,

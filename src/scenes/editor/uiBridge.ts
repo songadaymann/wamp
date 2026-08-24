@@ -469,7 +469,7 @@ export class EditorUiBridge {
 
     const handleSmartMaterialChange = () => {
       const value = this.elements.smartMaterialSelect?.value;
-      if (value === 'ground' || value === 'platform' || value === 'feature' || value === 'tunnel') {
+      if (value === 'ground' || value === 'feature' || value === 'tunnel') {
         editorState.smartMaterial = value;
         if (value === 'tunnel') {
           editorState.smartTheme = 'water';
@@ -1574,6 +1574,7 @@ export class EditorUiBridge {
     this.elements.smartPaletteSection?.classList.toggle('hidden', !paletteModeIsSmart);
     this.elements.objectPaletteSection?.classList.toggle('hidden', editorState.paletteMode !== 'objects');
     setValue(this.elements.smartThemeSelect, editorState.smartTheme);
+    if (editorState.smartMaterial === 'platform') editorState.smartMaterial = 'ground';
     setValue(this.elements.smartMaterialSelect, editorState.smartMaterial);
     const tunnelBackdropSelected = editorState.smartMaterial === 'tunnel';
     if (this.elements.smartThemeSelect) {
