@@ -171,8 +171,8 @@ solver does not merely memorize one skyline.
 - Model tests cover v1 to v2 migration, canonical IDs such as `desert.ground`,
   unknown-future preservation, invalid brush/style/layer filtering, encoded
   locks, and configured 84/120/324-tile profiles.
-- The focused Cyber/model/editor/clipboard gate passes 117 tests. The full gate
-  passes 209 files / 1,423 tests, ESLint, TypeScript, generated-binding checks,
+- The focused Cyber/model/editor/clipboard gate passes 121 tests. The full gate
+  passes 209 files / 1,427 tests, ESLint, TypeScript, generated-binding checks,
   and the production build.
 - The expanded Smart browser gate passes in Canvas and WebGL with Fill, shapes,
   minimums, transformed Support banks, erase/repair, layer switching,
@@ -198,7 +198,7 @@ solver does not merely memorize one skyline.
   separate drag-handle resize UI in this milestone.
 
 Safety preview: `https://safety-cyber-smart-tiles.wampland.pages.dev`;
-immutable deployment `1ec5c2dc`; verified feature commit `6b3c04f`.
+immutable deployment `e9465c93`; verified feature commit `3e94bc4`.
 Production remains a separate approval.
 
 ## Gated set tracks
