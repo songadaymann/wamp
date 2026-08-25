@@ -221,7 +221,7 @@ function getEditorTilesets(): typeof TILESETS {
     PREFERRED_TILESET_OPTION_ORDER.map((key, index) => [key, index])
   );
 
-  return [...TILESETS].sort((left, right) => {
+  return TILESETS.filter((tileset) => !tileset.editorHidden).sort((left, right) => {
     const leftOrder = preferredOrder.get(left.key);
     const rightOrder = preferredOrder.get(right.key);
     if (leftOrder !== undefined || rightOrder !== undefined) {
@@ -310,8 +310,9 @@ export class EditorUiBridge {
     }
 
     const editorTilesets = getEditorTilesets();
-    const selectedKey =
-      getTilesetByKey(editorState.selectedTilesetKey)?.key ?? editorTilesets[0]?.key ?? '';
+    const selectedKey = editorTilesets.find(
+      (tileset) => tileset.key === getTilesetByKey(editorState.selectedTilesetKey)?.key,
+    )?.key ?? editorTilesets[0]?.key ?? '';
     this.elements.tilesetSelect.replaceChildren(
       ...editorTilesets.map((tileset) => {
         const option = this.doc.createElement('option');

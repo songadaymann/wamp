@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyTileData } from '../persistence/roomModel';
-import { getTerrainCollisionProfileForGid, getTilesetByKey } from '../config/tilesets';
+import {
+  AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+  getTerrainCollisionProfileForGid,
+  getTilesetByKey,
+} from '../config/tilesets';
 import { decodeTileDataValue } from '../config/editorState';
 import { createRoomSmartTerrainState, normalizeRoomSmartTerrainState } from './model';
 import {
@@ -204,6 +208,111 @@ describe('smart terrain solver', () => {
       expect(locals[2]).toBe(46);
     },
   );
+
+  it('composites a right-jutting Desert ledge from B3-B6 plus E5 and C6 alpha pieces', () => {
+    const desertFirstGid = getTilesetByKey('desert')!.firstGid;
+    const result = applySmartCells(emptyDocument(), {
+      cells: cellsFromPattern(['###...', '######', '###...'], 3, 4),
+      mode: 'paint',
+      theme: 'desert',
+      material: 'ground',
+    });
+
+    expect([15, 16]).toContain(localAt(result, 'terrain', 6, 5, desertFirstGid));
+    expect([15, 16]).toContain(localAt(result, 'terrain', 7, 5, desertFirstGid));
+    expect(localAt(result, 'terrain', 8, 5, desertFirstGid)).toBe(17);
+    expect(localAt(
+      result,
+      'foreground',
+      5,
+      5,
+      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+    )).toBe(2);
+    for (let x = 6; x <= 8; x += 1) {
+      expect(localAt(
+        result,
+        'foreground',
+        x,
+        5,
+        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+      )).toBe(0);
+    }
+  });
+
+  it('mirrors the Desert seam treatment for a left-jutting ledge', () => {
+    const desertFirstGid = getTilesetByKey('desert')!.firstGid;
+    const result = applySmartCells(emptyDocument(), {
+      cells: cellsFromPattern(['...###', '######', '...###'], 3, 4),
+      mode: 'paint',
+      theme: 'desert',
+      material: 'ground',
+    });
+
+    expect(localAt(result, 'terrain', 3, 5, desertFirstGid)).toBe(14);
+    expect([15, 16]).toContain(localAt(result, 'terrain', 4, 5, desertFirstGid));
+    expect([15, 16]).toContain(localAt(result, 'terrain', 5, 5, desertFirstGid));
+    expect(localAt(
+      result,
+      'foreground',
+      6,
+      5,
+      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+    )).toBe(1);
+    for (let x = 3; x <= 5; x += 1) {
+      expect(localAt(
+        result,
+        'foreground',
+        x,
+        5,
+        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+      )).toBe(0);
+    }
+  });
+
+  it('keeps structural Desert ledge overlays when optional details are disabled', () => {
+    const painted = applySmartCells(emptyDocument(), {
+      cells: cellsFromPattern(['###...', '######', '###...'], 3, 4),
+      mode: 'paint',
+      theme: 'desert',
+      material: 'ground',
+    });
+    const result = setSmartTerrainDetailsEnabled(painted, false);
+
+    expect(result.smartTerrain.detailsEnabled).toBe(false);
+    expect(localAt(
+      result,
+      'foreground',
+      5,
+      5,
+      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+    )).toBe(2);
+    expect(localAt(
+      result,
+      'foreground',
+      6,
+      5,
+      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+    )).toBe(0);
+  });
+
+  it('clears Desert ledge overlays when the protrusion becomes thick', () => {
+    const ledge = applySmartCells(emptyDocument(), {
+      cells: cellsFromPattern(['###...', '######', '###...'], 3, 4),
+      mode: 'paint',
+      theme: 'desert',
+      material: 'ground',
+    });
+    const thickened = applySmartCells(ledge, {
+      cells: [{ x: 6, y: 6 }, { x: 7, y: 6 }, { x: 8, y: 6 }],
+      mode: 'paint',
+      theme: 'desert',
+      material: 'ground',
+    });
+
+    expect(thickened.tileData.foreground[5].slice(5, 9)).toEqual([-1, -1, -1, -1]);
+    expect(Object.values(thickened.smartTerrain.generatedDecorations)
+      .some(({ gid }) => gid >= AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID)).toBe(false);
+  });
 
   it('emits exactly the corrected horizontal middle tile set without D12', () => {
     const firstGid = getTilesetByKey('forest')!.firstGid;

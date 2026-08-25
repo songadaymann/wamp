@@ -1,6 +1,9 @@
 import { ROOM_HEIGHT, ROOM_WIDTH } from '../config/room';
 import { decodeTileDataValue, encodeTileDataValue } from '../config/editorState';
-import { getTilesetByKey } from '../config/tilesets';
+import {
+  AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+  getTilesetByKey,
+} from '../config/tilesets';
 import type { RoomTileData } from '../persistence/roomModel';
 import {
   cloneRoomSmartTerrainState,
@@ -383,6 +386,56 @@ function isThinCell(
     && !participatesInThickRegion(tileData, state, x, y, cell);
 }
 
+interface HorizontalThinLedgeSegment {
+  y: number;
+  left: number;
+  right: number;
+  attachedLeft: boolean;
+  attachedRight: boolean;
+}
+
+function findDesertHorizontalThinLedges(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+): HorizontalThinLedgeSegment[] {
+  const visited = new Set<string>();
+  const segments: HorizontalThinLedgeSegment[] = [];
+  for (const [key, cell] of Object.entries(state.cells)) {
+    if (visited.has(key) || cell.theme !== 'desert' || cell.material !== 'ground') continue;
+    const [x, y] = key.split(',').map(Number);
+    if (!isThinCell(tileData, state, x, y, cell)) continue;
+
+    let left = x;
+    let right = x;
+    while (isThinCell(tileData, state, left - 1, y, cell)) left -= 1;
+    while (isThinCell(tileData, state, right + 1, y, cell)) right += 1;
+    for (let segmentX = left; segmentX <= right; segmentX += 1) {
+      visited.add(smartCellKey(segmentX, y));
+    }
+
+    const isPureHorizontal = Array.from(
+      { length: right - left + 1 },
+      (_, index) => left + index,
+    ).every((segmentX) => {
+      const segmentCell = state.cells[smartCellKey(segmentX, y)];
+      return segmentCell
+        && !segmentCell.lockedGid
+        && !segmentCell.shapeGid
+        && !isThinCell(tileData, state, segmentX, y - 1, cell)
+        && !isThinCell(tileData, state, segmentX, y + 1, cell);
+    });
+    if (!isPureHorizontal) continue;
+
+    const attachedLeft = sameFamily(tileData, state, left - 1, y, cell)
+      && participatesInThickRegion(tileData, state, left - 1, y, cell);
+    const attachedRight = sameFamily(tileData, state, right + 1, y, cell)
+      && participatesInThickRegion(tileData, state, right + 1, y, cell);
+    if (!attachedLeft && !attachedRight) continue;
+    segments.push({ y, left, right, attachedLeft, attachedRight });
+  }
+  return segments;
+}
+
 function resolveThinGroundLocalIndex(
   tileData: RoomTileData,
   state: RoomSmartTerrainState,
@@ -600,10 +653,6 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
       ?? encodeTileDataValue(toGid(cell.theme, resolved.localIndex), resolved.flipX, resolved.flipY);
   }
 
-  if (!state.detailsEnabled) {
-    return;
-  }
-
   const suppressed = new Set(state.suppressedDecorationSlots);
   const canAddDecoration = (
     ownerKey: string,
@@ -625,9 +674,10 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     flipY = false,
     layer: import('./model').SmartGeneratedDecorationState['layer'] = 'terrain',
     secondary = false,
+    gidOverride?: number,
   ) => {
     if (!canAddDecoration(ownerKey, targetX, targetY, slot, layer)) return;
-    const gid = toGid(state.cells[ownerKey]!.theme, localIndex);
+    const gid = gidOverride ?? toGid(state.cells[ownerKey]!.theme, localIndex);
     const value = encodeTileDataValue(gid, flipX, flipY);
     tileData[layer][targetY][targetX] = value;
     const generated = secondary
@@ -655,6 +705,66 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
       : 'background';
     addDecoration(ownerKey, targetX, targetY, slot, localIndex, flipX, false, layer, true);
   };
+
+  for (const segment of findDesertHorizontalThinLedges(tileData, state)) {
+    for (let x = segment.left; x <= segment.right; x += 1) {
+      const ownerKey = smartCellKey(x, segment.y);
+      const isOpenLeftEnd = x === segment.left && !segment.attachedLeft;
+      const isOpenRightEnd = x === segment.right && !segment.attachedRight;
+      const localIndex = isOpenLeftEnd
+        ? 14 // Desert B3: left cap.
+        : isOpenRightEnd
+          ? 17 // Desert B6: right cap.
+          : stablePick([15, 16], x, segment.y, 67); // Desert B4/B5: connected middle.
+      tileData.terrain[segment.y][x] = toGid('desert', localIndex);
+      addDecoration(
+        ownerKey,
+        x,
+        segment.y,
+        'bottom',
+        0,
+        false,
+        false,
+        'foreground',
+        false,
+        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+      );
+    }
+
+    if (segment.attachedLeft) {
+      addDecoration(
+        smartCellKey(segment.left, segment.y),
+        segment.left - 1,
+        segment.y,
+        'left',
+        0,
+        false,
+        false,
+        'foreground',
+        false,
+        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID + 2, // Desert C6 sand-only seam.
+      );
+    }
+    if (segment.attachedRight) {
+      addDecoration(
+        smartCellKey(segment.right, segment.y),
+        segment.right + 1,
+        segment.y,
+        'right',
+        0,
+        false,
+        false,
+        'foreground',
+        false,
+        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID + 1, // Desert C3 sand-only seam.
+      );
+    }
+  }
+
+  if (!state.detailsEnabled) {
+    return;
+  }
+
   const featureCandidates = new Map<string, SmartTerrainCellState>();
   const groundDecorationCandidates: Array<{
     ownerKey: string;
