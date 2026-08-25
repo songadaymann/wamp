@@ -26,6 +26,13 @@ function cellsFromPattern(pattern: readonly string[], originX = 4, originY = 4) 
   )));
 }
 
+function decorationFixtureCells() {
+  return Array.from({ length: 10 * 38 }, (_, index) => ({
+    x: 1 + (index % 38),
+    y: 2 + Math.floor(index / 38) * 2,
+  }));
+}
+
 function localAt(
   document: ReturnType<typeof emptyDocument>,
   layer: 'background' | 'terrain' | 'foreground',
@@ -92,7 +99,8 @@ describe('smart terrain solver', () => {
 
       expect(first.tileData).toEqual(second.tileData);
       expect(Object.keys(first.smartTerrain.cells)).toHaveLength(4);
-      expect(Object.keys(first.smartTerrain.generatedDecorations).length).toBeLessThanOrEqual(1);
+      expect(Object.keys(first.smartTerrain.generatedDecorations).length)
+        .toBeLessThanOrEqual(theme === 'desert' ? 2 : 1);
       for (const key of Object.keys(first.smartTerrain.cells)) {
         const [x, y] = key.split(',').map(Number);
         const gid = decodeTileDataValue(first.tileData.terrain[y][x]).gid;
@@ -526,21 +534,69 @@ describe('smart terrain solver', () => {
     expect(result.smartTerrain.generatedBackgroundDecorations['5,5']?.layer).toBe('foreground');
   });
 
-  it('uses all four approved sparse ground decoration variants', () => {
-    const firstGid = getTilesetByKey('forest')!.firstGid;
+  it.each([
+    ['forest', [2, 3, 4, 5, 56, 58, 59]],
+    ['cave', [3, 4, 5, 6, 57, 61]],
+  ] as const)('uses the artist-approved sparse %s decoration pool', (theme, expectedLocals) => {
+    const firstGid = getTilesetByKey(theme)!.firstGid;
     const result = applySmartCells(emptyDocument(), {
-      cells: Array.from({ length: 120 }, (_, index) => ({ x: index % 40, y: 4 + Math.floor(index / 40) * 4 })),
+      cells: decorationFixtureCells(),
       mode: 'paint',
-      theme: 'forest',
+      theme,
       material: 'ground',
     });
     const variants = new Set(Object.values(result.smartTerrain.generatedDecorations)
       .map(({ gid }) => gid - firstGid));
-    expect([...variants].sort((a, b) => a - b)).toEqual([2, 3, 4, 5]);
+    expect([...variants].sort((a, b) => a - b)).toEqual(expectedLocals);
     expect(Object.values(result.smartTerrain.generatedDecorations)
       .every(({ layer }) => layer === 'terrain')).toBe(true);
     expect(result.tileData.foreground.every((row) => row.every((gid) => gid === -1))).toBe(true);
   });
+
+  it('always emits Desert A8 and A9 together as a left-to-right pair', () => {
+    const firstGid = getTilesetByKey('desert')!.firstGid;
+    const result = applySmartCells(emptyDocument(), {
+      cells: decorationFixtureCells(),
+      mode: 'paint',
+      theme: 'desert',
+      material: 'ground',
+    });
+    const decorations = Object.fromEntries(Object.entries(result.smartTerrain.generatedDecorations)
+      .map(([key, { gid }]) => [key, gid - firstGid]));
+    const variants = new Set(Object.values(decorations));
+
+    expect([...variants].sort((a, b) => a - b)).toEqual([4, 5, 7, 8]);
+    for (const [key, local] of Object.entries(decorations)) {
+      const [x, y] = key.split(',').map(Number);
+      if (local === 7) expect(decorations[`${x + 1},${y}`]).toBe(8);
+      if (local === 8) expect(decorations[`${x - 1},${y}`]).toBe(7);
+    }
+  });
+
+  it.each([7, 8] as const)(
+    'suppresses both halves when Desert local %s is removed from a decoration pair',
+    (removedLocal) => {
+      const firstGid = getTilesetByKey('desert')!.firstGid;
+      const painted = applySmartCells(emptyDocument(), {
+        cells: decorationFixtureCells(),
+        mode: 'paint',
+        theme: 'desert',
+        material: 'ground',
+      });
+      const pairLeft = Object.entries(painted.smartTerrain.generatedDecorations)
+        .find(([, { gid }]) => gid - firstGid === 7);
+      expect(pairLeft).toBeDefined();
+      const [leftKey] = pairLeft!;
+      const [leftX, y] = leftKey.split(',').map(Number);
+      const removedX = removedLocal === 7 ? leftX : leftX + 1;
+      const suppressed = suppressGeneratedDecorationAt(painted, removedX, y, 'terrain');
+
+      expect(suppressed.smartTerrain.generatedDecorations[leftKey]).toBeUndefined();
+      expect(suppressed.smartTerrain.generatedDecorations[`${leftX + 1},${y}`]).toBeUndefined();
+      expect(suppressed.tileData.terrain[y][leftX]).toBe(-1);
+      expect(suppressed.tileData.terrain[y][leftX + 1]).toBe(-1);
+    },
+  );
 
   it('keeps an exact manual override locked until Smart repaints the cell', () => {
     const firstGid = getTilesetByKey('forest')!.firstGid;

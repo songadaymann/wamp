@@ -208,6 +208,45 @@ try {
   summary.checks.correctedHorizontalTiles = true;
   summary.checks.ordinaryGroundTies = true;
 
+  for (const [themeKey, firstGid, expectedLocals] of [
+    ['forest', 1, [2, 3, 4, 5, 56, 58, 59]],
+    ['cave', 145, [3, 4, 5, 6, 57, 61]],
+    ['desert', 73, [4, 5, 7, 8]],
+  ]) {
+    await page.evaluate((theme) => {
+      const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+      runtime.clearCurrentLayer();
+      const themeSelect = document.querySelector('#smart-theme-select');
+      themeSelect.value = theme;
+      themeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      runtime.beginTileBatch();
+      for (let y = 2; y <= 20; y += 2) {
+        for (let x = 1; x <= 38; x += 1) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+      }
+      runtime.commitTileBatch();
+    }, themeKey);
+    const decorationFixture = await page.evaluate(() => (
+      window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime.exportRoomSnapshot()
+    ));
+    const decorations = Object.fromEntries(Object.entries(
+      decorationFixture.smartTerrain.generatedDecorations,
+    ).map(([key, { gid }]) => [key, gid - firstGid]));
+    assert.deepEqual(
+      [...new Set(Object.values(decorations))].sort((a, b) => a - b),
+      expectedLocals,
+    );
+    if (themeKey === 'desert') {
+      for (const [key, local] of Object.entries(decorations)) {
+        const [x, y] = key.split(',').map(Number);
+        if (local === 7) assert.equal(decorations[`${x + 1},${y}`], 8);
+        if (local === 8) assert.equal(decorations[`${x - 1},${y}`], 7);
+      }
+      await page.screenshot({ path: path.join(outputDir, 'desert-decoration-pairs.png') });
+    }
+  }
+  summary.checks.artistDecorationPools = true;
+  summary.checks.desertDecorationPairs = true;
+
   await page.evaluate(() => {
     const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
     runtime.clearCurrentLayer();
