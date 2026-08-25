@@ -2,6 +2,7 @@ import { ROOM_HEIGHT, ROOM_WIDTH } from '../config/room';
 import { decodeTileDataValue, encodeTileDataValue } from '../config/editorState';
 import {
   AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+  AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES,
   getTilesetByKey,
 } from '../config/tilesets';
 import type { RoomTileData } from '../persistence/roomModel';
@@ -708,27 +709,22 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
 
   for (const segment of findDesertHorizontalThinLedges(tileData, state)) {
     for (let x = segment.left; x <= segment.right; x += 1) {
-      const ownerKey = smartCellKey(x, segment.y);
       const isOpenLeftEnd = x === segment.left && !segment.attachedLeft;
       const isOpenRightEnd = x === segment.right && !segment.attachedRight;
-      const localIndex = isOpenLeftEnd
-        ? 14 // Desert B3: left cap.
+      const gid = isOpenLeftEnd
+        ? toGid('desert', 14) // Desert B3: original left cap.
         : isOpenRightEnd
-          ? 17 // Desert B6: right cap.
-          : stablePick([15, 16], x, segment.y, 67); // Desert B4/B5: connected middle.
-      tileData.terrain[segment.y][x] = toGid('desert', localIndex);
-      addDecoration(
-        ownerKey,
-        x,
-        segment.y,
-        'bottom',
-        0,
-        false,
-        false,
-        'foreground',
-        false,
-        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-      );
+          ? toGid('desert', 17) // Desert B6: original right cap.
+          : AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID + stablePick(
+            [
+              AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
+              AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
+            ],
+            x,
+            segment.y,
+            67,
+          );
+      tileData.terrain[segment.y][x] = gid;
     }
 
     if (segment.attachedLeft) {
@@ -742,7 +738,8 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
         false,
         'foreground',
         false,
-        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID + 2, // Desert C6 sand-only seam.
+        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID
+          + AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC6,
       );
     }
     if (segment.attachedRight) {
@@ -756,7 +753,8 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
         false,
         'foreground',
         false,
-        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID + 1, // Desert C3 sand-only seam.
+        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID
+          + AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC3,
       );
     }
   }

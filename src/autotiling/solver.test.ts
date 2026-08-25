@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyTileData } from '../persistence/roomModel';
 import {
+  AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES,
   AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
   getTerrainCollisionProfileForGid,
   getTilesetByKey,
@@ -209,7 +210,7 @@ describe('smart terrain solver', () => {
     },
   );
 
-  it('composites a right-jutting Desert ledge from B3-B6 plus E5 and C6 alpha pieces', () => {
+  it('composites a right-jutting Desert ledge from authored B4/B5 middles, B6, and C6', () => {
     const desertFirstGid = getTilesetByKey('desert')!.firstGid;
     const result = applySmartCells(emptyDocument(), {
       cells: cellsFromPattern(['###...', '######', '###...'], 3, 4),
@@ -218,8 +219,26 @@ describe('smart terrain solver', () => {
       material: 'ground',
     });
 
-    expect([15, 16]).toContain(localAt(result, 'terrain', 6, 5, desertFirstGid));
-    expect([15, 16]).toContain(localAt(result, 'terrain', 7, 5, desertFirstGid));
+    expect([
+      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
+      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
+    ]).toContain(localAt(
+      result,
+      'terrain',
+      6,
+      5,
+      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+    ));
+    expect([
+      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
+      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
+    ]).toContain(localAt(
+      result,
+      'terrain',
+      7,
+      5,
+      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+    ));
     expect(localAt(result, 'terrain', 8, 5, desertFirstGid)).toBe(17);
     expect(localAt(
       result,
@@ -227,15 +246,9 @@ describe('smart terrain solver', () => {
       5,
       5,
       AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    )).toBe(2);
+    )).toBe(AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC6);
     for (let x = 6; x <= 8; x += 1) {
-      expect(localAt(
-        result,
-        'foreground',
-        x,
-        5,
-        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-      )).toBe(0);
+      expect(result.tileData.foreground[5][x]).toBe(-1);
     }
   });
 
@@ -249,23 +262,35 @@ describe('smart terrain solver', () => {
     });
 
     expect(localAt(result, 'terrain', 3, 5, desertFirstGid)).toBe(14);
-    expect([15, 16]).toContain(localAt(result, 'terrain', 4, 5, desertFirstGid));
-    expect([15, 16]).toContain(localAt(result, 'terrain', 5, 5, desertFirstGid));
+    expect([
+      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
+      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
+    ]).toContain(localAt(
+      result,
+      'terrain',
+      4,
+      5,
+      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+    ));
+    expect([
+      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
+      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
+    ]).toContain(localAt(
+      result,
+      'terrain',
+      5,
+      5,
+      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+    ));
     expect(localAt(
       result,
       'foreground',
       6,
       5,
       AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    )).toBe(1);
+    )).toBe(AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC3);
     for (let x = 3; x <= 5; x += 1) {
-      expect(localAt(
-        result,
-        'foreground',
-        x,
-        5,
-        AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-      )).toBe(0);
+      expect(result.tileData.foreground[5][x]).toBe(-1);
     }
   });
 
@@ -285,14 +310,18 @@ describe('smart terrain solver', () => {
       5,
       5,
       AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    )).toBe(2);
-    expect(localAt(
+    )).toBe(AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC6);
+    expect([
+      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
+      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
+    ]).toContain(localAt(
       result,
-      'foreground',
+      'terrain',
       6,
       5,
       AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    )).toBe(0);
+    ));
+    expect(result.tileData.foreground[5][6]).toBe(-1);
   });
 
   it('clears Desert ledge overlays when the protrusion becomes thick', () => {
@@ -310,6 +339,10 @@ describe('smart terrain solver', () => {
     });
 
     expect(thickened.tileData.foreground[5].slice(5, 9)).toEqual([-1, -1, -1, -1]);
+    expect(thickened.tileData.terrain[5].slice(6, 9).some(
+      (gid) => gid >= AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID
+        && gid < AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID + 4,
+    )).toBe(false);
     expect(Object.values(thickened.smartTerrain.generatedDecorations)
       .some(({ gid }) => gid >= AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID)).toBe(false);
   });
