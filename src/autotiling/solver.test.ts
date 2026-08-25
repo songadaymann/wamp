@@ -294,6 +294,38 @@ describe('smart terrain solver', () => {
     }
   });
 
+  it('keeps every authored Desert middle while a connected ledge grows across separate strokes', () => {
+    const desertFirstGid = getTilesetByKey('desert')!.firstGid;
+    let result = applySmartCells(emptyDocument(), {
+      cells: cellsFromPattern(['###', '###', '###'], 3, 4),
+      mode: 'paint',
+      theme: 'desert',
+      material: 'ground',
+    });
+
+    for (let right = 6; right <= 12; right += 1) {
+      result = applySmartCells(result, {
+        cells: [{ x: right, y: 5 }],
+        mode: 'paint',
+        theme: 'desert',
+        material: 'ground',
+      });
+      for (let x = 6; x < right; x += 1) {
+        expect([
+          AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
+          AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
+        ]).toContain(localAt(
+          result,
+          'terrain',
+          x,
+          5,
+          AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+        ));
+      }
+      expect(localAt(result, 'terrain', right, 5, desertFirstGid)).toBe(17);
+    }
+  });
+
   it('keeps structural Desert ledge overlays when optional details are disabled', () => {
     const painted = applySmartCells(emptyDocument(), {
       cells: cellsFromPattern(['###...', '######', '###...'], 3, 4),

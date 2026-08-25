@@ -114,6 +114,8 @@ await context.addInitScript(() => {
   window.localStorage.setItem('wamp.settings.builderMode', 'beginner');
 });
 const page = await context.newPage();
+const requestedUrls = [];
+page.on('request', (request) => requestedUrls.push(request.url()));
 captureBrowserErrors(page, summary);
 await guardSyntheticRoomMutations(page, summary);
 
@@ -725,19 +727,33 @@ try {
     { op: 'beginBatch' },
     { op: 'placeCells', cells: [
       [3, 4], [4, 4], [5, 4],
-      [3, 5], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5],
+      [3, 5], [4, 5], [5, 5],
       [3, 6], [4, 6], [5, 6],
       [6, 12], [7, 12], [8, 12],
-      [3, 13], [4, 13], [5, 13], [6, 13], [7, 13], [8, 13],
+      [6, 13], [7, 13], [8, 13],
       [6, 14], [7, 14], [8, 14],
     ].map(([x, y]) => ({ x, y })) },
     { op: 'commitBatch' },
+    ...[6, 7, 8, 9, 10, 11, 12].flatMap((x) => [
+      { op: 'beginBatch' },
+      { op: 'placeCells', cells: [{ x, y: 5 }] },
+      { op: 'commitBatch' },
+    ]),
+    ...[5, 4, 3].flatMap((x) => [
+      { op: 'beginBatch' },
+      { op: 'placeCells', cells: [{ x, y: 13 }] },
+      { op: 'commitBatch' },
+    ]),
     { op: 'capture', name: 'desertEdgeCaseFixture' },
   ]);
-  assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[5][6]));
-  assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[5][7]));
-  assert.equal(desertEdgeCaseFixture.tileData.terrain[5][8], 90);
-  assert.deepEqual(desertEdgeCaseFixture.tileData.foreground[5].slice(5, 9), [2076, -1, -1, -1]);
+  for (let x = 6; x < 12; x += 1) {
+    assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[5][x]));
+  }
+  assert.equal(desertEdgeCaseFixture.tileData.terrain[5][12], 90);
+  assert.deepEqual(
+    desertEdgeCaseFixture.tileData.foreground[5].slice(5, 13),
+    [2076, -1, -1, -1, -1, -1, -1, -1],
+  );
   assert.equal(desertEdgeCaseFixture.tileData.terrain[13][3], 87);
   assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[13][4]));
   assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[13][5]));
@@ -745,12 +761,31 @@ try {
   assert.equal(await page.locator(
     '#tileset-select option[value="autotile-edge-cases-desert"]',
   ).count(), 0);
+  const edgeCaseAtlasRuntime = await page.evaluate(() => {
+    const texture = window.__EVERYBODYS_PLATFORMER_GAME__?.textures
+      .get('autotile-edge-cases-desert');
+    const source = texture?.getSourceImage();
+    return {
+      width: source?.width,
+      height: source?.height,
+    };
+  });
+  assert.deepEqual(
+    [edgeCaseAtlasRuntime.width, edgeCaseAtlasRuntime.height],
+    [64, 16],
+  );
+  assert.match(
+    requestedUrls.find((requestUrl) => requestUrl.includes('autotile-edge-cases-desert.png')),
+    /autotile-edge-cases-desert\.png\?v=2026-08-25-authored-ledges-1$/,
+  );
   summary.checks.desertCompositeEdgeCases = true;
+  summary.checks.sequentialDesertCompositeEdges = true;
   summary.checks.hiddenEdgeCaseAtlas = true;
+  summary.checks.versionedEdgeCaseAtlas = true;
   await page.evaluate(() => {
     const scene = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene;
     scene.cameras.main.setZoom(4);
-    scene.cameras.main.centerOn(6 * 16, 5 * 16);
+    scene.cameras.main.centerOn(7.5 * 16, 5 * 16);
   });
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outputDir, 'desert-edge-case-right.png') });
