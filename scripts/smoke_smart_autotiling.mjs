@@ -211,7 +211,7 @@ try {
   for (const [themeKey, firstGid, expectedLocals] of [
     ['forest', 1, [2, 3, 4, 5, 56, 58, 59]],
     ['cave', 145, [3, 4, 5, 6, 57, 61]],
-    ['desert', 73, [4, 5, 7, 8]],
+    ['desert', 73, [2, 3, 4, 5, 7, 8]],
   ]) {
     await page.evaluate((theme) => {
       const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;

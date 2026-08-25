@@ -565,7 +565,7 @@ describe('smart terrain solver', () => {
       .map(([key, { gid }]) => [key, gid - firstGid]));
     const variants = new Set(Object.values(decorations));
 
-    expect([...variants].sort((a, b) => a - b)).toEqual([4, 5, 7, 8]);
+    expect([...variants].sort((a, b) => a - b)).toEqual([2, 3, 4, 5, 7, 8]);
     for (const [key, local] of Object.entries(decorations)) {
       const [x, y] = key.split(',').map(Number);
       if (local === 7) expect(decorations[`${x + 1},${y}`]).toBe(8);

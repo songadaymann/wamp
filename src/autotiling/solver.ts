@@ -131,12 +131,12 @@ export const SMART_TILESET_SLOTS = {
   // Artist-approved sparse details by 12-column sheet coordinate. Each nested
   // array is one atomic variant; Desert A8+A9 must be placed left-to-right.
   // Forest: A3/A4/A5/A6/E9/E11/E12 = 2/3/4/5/56/58/59.
-  // Desert: A5/A6 and paired A8+A9 = 4/5 and 7+8.
+  // Desert: A3/A4/A5/A6 and paired A8+A9 = 2/3/4/5 and 7+8.
   // Cave: A4/A5/A6/A7/E10/F2 = 3/4/5/6/57/61 (A3/local 2 excluded).
   // Gothic remains A3/A4/A5/A6 = 2/3/4/5.
   groundDecoration: {
     forest: [[2], [3], [4], [5], [56], [58], [59]],
-    desert: [[4], [5], [7, 8]],
+    desert: [[2], [3], [4], [5], [7, 8]],
     cave: [[3], [4], [5], [6], [57], [61]],
     gothic: [[2], [3], [4], [5]],
   },
