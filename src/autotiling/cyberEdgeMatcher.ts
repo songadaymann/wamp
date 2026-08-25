@@ -32,6 +32,61 @@ const SIDES = [
   { dx: -1, dy: 0, index: 3, opposite: 1 },
 ] as const;
 
+interface CanonicalConcretePick {
+  localIndex: number;
+  flipX: boolean;
+  flipY: boolean;
+}
+
+/**
+ * Cyber has many letter-compatible cells that are not visually neutral. Keep
+ * the audited Concrete vocabulary deterministic by socket, while retaining
+ * coordinate-stable variation only for the three true CCCC underground fills.
+ */
+const CANONICAL_CONCRETE_PICKS: Readonly<Partial<Record<string, readonly CanonicalConcretePick[]>>> = {
+  AAAA: [{ localIndex: 20, flipX: false, flipY: false }],
+  AAEA: [{ localIndex: 19, flipX: false, flipY: false }],
+  EAAA: [{ localIndex: 19, flipX: false, flipY: true }],
+  AAAE: [{ localIndex: 71, flipX: false, flipY: false }],
+  AEAA: [{ localIndex: 71, flipX: true, flipY: false }],
+  AEAE: [{ localIndex: 68, flipX: false, flipY: false }],
+  EAEA: [{ localIndex: 31, flipX: false, flipY: false }],
+  AEEA: [{ localIndex: 67, flipX: false, flipY: true }],
+  AAEE: [{ localIndex: 67, flipX: true, flipY: true }],
+  EEAA: [{ localIndex: 67, flipX: false, flipY: false }],
+  EAAE: [{ localIndex: 67, flipX: true, flipY: false }],
+  ABBA: [{ localIndex: 14, flipX: false, flipY: false }],
+  AABB: [{ localIndex: 14, flipX: true, flipY: false }],
+  ABCB: [{ localIndex: 15, flipX: false, flipY: false }],
+  CBAB: [{ localIndex: 62, flipX: false, flipY: false }],
+  BCBA: [{ localIndex: 21, flipX: true, flipY: false }],
+  BABC: [{ localIndex: 23, flipX: true, flipY: false }],
+  BBAA: [{ localIndex: 25, flipX: false, flipY: true }],
+  BAAB: [{ localIndex: 30, flipX: false, flipY: true }],
+  CCCC: [
+    { localIndex: 64, flipX: false, flipY: false },
+    { localIndex: 82, flipX: false, flipY: false },
+    { localIndex: 83, flipX: false, flipY: false },
+  ],
+  AEEE: [{ localIndex: 70, flipX: false, flipY: false }],
+  EEAE: [{ localIndex: 70, flipX: false, flipY: true }],
+  EEEA: [{ localIndex: 55, flipX: false, flipY: false }],
+  EAEE: [{ localIndex: 55, flipX: true, flipY: false }],
+};
+
+function canonicalConcreteMatches(
+  edgeKey: string,
+  matches: readonly CyberLetterPick[],
+): CyberLetterPick[] {
+  const preferred = CANONICAL_CONCRETE_PICKS[edgeKey];
+  if (!preferred) return [];
+  return matches.filter((candidate) => preferred.some((pick) => (
+    candidate.localIndex === pick.localIndex
+    && candidate.flipX === pick.flipX
+    && candidate.flipY === pick.flipY
+  )));
+}
+
 export function letterCellKey(x: number, y: number): string {
   return `${x},${y}`;
 }
@@ -145,9 +200,10 @@ function isFrameOrStubNeighbor(
 /**
  * Concrete 1-wide frames use E on occupied sides (AAEE corners, AEAE / EAEA
  * mids). Solid blobs use B on outer corners and C toward a filled interior.
- * A 4-connected cell with one empty diagonal is an inner corner (BBCC / CCBB
- * family, including flipX+flipY). A 3-connected edge uses E toward a thin
- * stub or 1-cell frame instead of C, so a protrusion can T-junction into a ring.
+ * Four-connected Concrete always stays neutral CCCC here; diagonal ties are
+ * transparent Cyber A10 foreground outputs resolved separately from the base
+ * tile. A 3-connected edge uses E toward a thin stub or 1-cell frame instead
+ * of C, so a protrusion can T-junction into a ring.
  */
 function inferConcreteOccupiedLetter(
   occupied: readonly boolean[],
@@ -159,22 +215,19 @@ function inferConcreteOccupiedLetter(
 ): CyberEdgeLetter {
   const count = occupied.filter(Boolean).length;
   const opposite = occupied[SIDES[sideIndex]!.opposite] === true;
-  if (count === 4) {
-    const flags = emptyDiagonalFlags(x, y, occupancy, inBounds);
-    const emptyDiagonals = [flags.se, flags.sw, flags.ne, flags.nw].filter(Boolean).length;
-    if (emptyDiagonals === 1) {
-      const towardBite = flags.se && (sideIndex === 1 || sideIndex === 2)
-        || flags.sw && (sideIndex === 2 || sideIndex === 3)
-        || flags.ne && (sideIndex === 0 || sideIndex === 1)
-        || flags.nw && (sideIndex === 0 || sideIndex === 3);
-      return towardBite ? 'B' : 'C';
-    }
-    return 'C';
-  }
+  if (count === 4) return 'C';
   if (count === 3) {
     const emptyIndex = occupied.findIndex((side) => !side);
     const interiorIndex = SIDES[emptyIndex]!.opposite;
-    const thin = isFrameOrStubNeighbor(
+    const flags = emptyDiagonalFlags(x, y, occupancy, inBounds);
+    const hasFilledDiagonalBesideEmptySide = emptyIndex === 0
+      ? !flags.nw || !flags.ne
+      : emptyIndex === 1
+        ? !flags.ne || !flags.se
+        : emptyIndex === 2
+          ? !flags.se || !flags.sw
+          : !flags.sw || !flags.nw;
+    const thin = hasFilledDiagonalBesideEmptySide && isFrameOrStubNeighbor(
       x + SIDES[sideIndex]!.dx,
       y + SIDES[sideIndex]!.dy,
       occupancy,
@@ -238,6 +291,13 @@ export function constraintsFromLetterNeighbors(
       occupancy,
       inBounds,
     );
+    // Concrete topology is fully determined by the local cardinal/diagonal
+    // shape. Reusing a neighboring pick here lets a B corner socket propagate
+    // through otherwise solid CCCC fill on later passes, producing isolated
+    // C10 corner pixels far away from the actual bite in the silhouette.
+    if (brushId === 'cyber.concrete' && neighbor.brushId === 'cyber.concrete') {
+      return inferred;
+    }
     if (!neighbor.pick) return inferred;
     const letter = edgeAt(neighbor.pick.edges, opposite);
     if (letter === 'A') return inferred;
@@ -292,7 +352,14 @@ function pickForConstraints(
   if (matches.length === 0) return null;
   const edgeKey = `${constraints[0]}${constraints[1]}${constraints[2]}${constraints[3]}`;
   const exact = matches.filter((candidate) => candidate.edges === edgeKey);
-  const pool = exact.length > 0 ? exact : matches;
+  const canonical = brushId === 'cyber.concrete'
+    ? canonicalConcreteMatches(edgeKey, exact)
+    : [];
+  const pool = canonical.length > 0
+    ? canonical
+    : exact.length > 0
+      ? exact
+      : matches;
   const salt = occupancy.get(letterCellKey(x, y))?.varietySalt ?? 0;
   return pickVariedCatalogCandidate(pool, x, y, { avoid, salt });
 }

@@ -929,6 +929,25 @@ function resolveCyberLetterCells(
     } else {
       addOwnedOutput(tileData, state, ownerId, 'primary', 'semantic', entry.x, entry.y, resolved, true);
     }
+    if (entry.cell.brushId === 'cyber.concrete') {
+      const topology = resolveCyberStructureTopology8(neighborMask8(tileData, state, entry));
+      const tieTile = topology.concaveCorner
+        ? resolveCyberStructureTieTile(styleId, topology.concaveCorner)
+        : null;
+      if (tieTile) {
+        addOwnedOutput(
+          tileData,
+          state,
+          ownerId,
+          'diagonal-tie',
+          'semantic',
+          entry.x,
+          entry.y,
+          tieTile,
+          false,
+        );
+      }
+    }
   }
 }
 

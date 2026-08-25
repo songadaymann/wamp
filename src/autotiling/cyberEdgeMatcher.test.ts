@@ -51,14 +51,22 @@ describe('resolveCyberLetterField concrete', () => {
     expect(picks.get('9,6')?.edges).toBe('AABB');
     expect(picks.get('4,9')?.edges).toBe('BBAA');
     expect(picks.get('9,9')?.edges).toBe('BAAB');
+    expect(picks.get('4,6')).toMatchObject({ localIndex: 14, flipX: false, flipY: false });
+    expect(picks.get('9,6')).toMatchObject({ localIndex: 14, flipX: true, flipY: false });
+    expect(picks.get('4,9')).toMatchObject({ localIndex: 25, flipX: false, flipY: true });
+    expect(picks.get('9,9')).toMatchObject({ localIndex: 30, flipX: false, flipY: true });
 
     for (const x of [5, 6, 7, 8]) {
       expect(picks.get(`${x},6`)?.edges).toBe('ABCB');
       expect(picks.get(`${x},9`)?.edges).toBe('CBAB');
+      expect(picks.get(`${x},6`)).toMatchObject({ localIndex: 15, flipX: false, flipY: false });
+      expect(picks.get(`${x},9`)).toMatchObject({ localIndex: 62, flipX: false, flipY: false });
     }
     for (const y of [7, 8]) {
       expect(picks.get(`4,${y}`)?.edges).toBe('BCBA');
       expect(picks.get(`9,${y}`)?.edges).toBe('BABC');
+      expect(picks.get(`4,${y}`)).toMatchObject({ localIndex: 21, flipX: true, flipY: false });
+      expect(picks.get(`9,${y}`)).toMatchObject({ localIndex: 23, flipX: true, flipY: false });
     }
     for (const y of [7, 8]) {
       for (const x of [5, 6, 7, 8]) {
@@ -107,16 +115,57 @@ describe('resolveCyberLetterField concrete', () => {
     expect(vertical.get('8,9')?.localIndex).toBe(19);
   });
 
-  it('uses BBCC-family inner corners around a 2x2 hole in a thick mass', () => {
+  it('uses only neutral F9 middles in a horizontal Concrete platform', () => {
+    const picks = resolveCyberLetterField(concreteCells(rectangle(8, 8, 5, 1)), inBounds);
+
+    expect(picks.get('8,8')).toMatchObject({ localIndex: 71, flipX: true, flipY: false });
+    for (const x of [9, 10, 11]) {
+      expect(picks.get(`${x},8`)).toMatchObject({ localIndex: 68, flipX: false, flipY: false });
+    }
+    expect(picks.get('12,8')).toMatchObject({ localIndex: 71, flipX: false, flipY: false });
+  });
+
+  it('keeps F3 along the lower stair edge before the F12 end cap', () => {
+    const picks = resolveCyberLetterField(concreteCells([
+      { x: 20, y: 2 }, { x: 21, y: 2 },
+      { x: 20, y: 3 }, { x: 21, y: 3 }, { x: 22, y: 3 },
+      { x: 20, y: 4 }, { x: 21, y: 4 }, { x: 22, y: 4 }, { x: 23, y: 4 },
+    ]), inBounds);
+
+    expect(picks.get('21,4')).toMatchObject({ localIndex: 62, flipX: false, flipY: false });
+    expect(picks.get('22,4')).toMatchObject({ localIndex: 62, flipX: false, flipY: false });
+    expect(picks.get('23,4')).toMatchObject({ localIndex: 71, flipX: false, flipY: false });
+  });
+
+  it('keeps neutral CCCC base tiles around a hole so foreground ties can own the corners', () => {
     const hole = new Set(['12,12', '13,12', '12,13', '13,13']);
     const cells = rectangle(10, 10, 6, 6).filter((cell) => !hole.has(`${cell.x},${cell.y}`));
     const picks = resolveCyberLetterField(concreteCells(cells), inBounds);
 
-    expect(picks.get('11,11')?.edges).toBe('CBBC');
-    expect(picks.get('14,11')?.edges).toBe('CCBB');
-    expect(picks.get('11,14')?.edges).toBe('BBCC');
-    expect(picks.get('14,14')?.edges).toBe('BCCB');
-    expect([11, 33, 35]).toContain(picks.get('11,11')?.localIndex);
-    expect([11, 33, 35]).toContain(picks.get('14,11')?.localIndex);
+    for (const coordinate of ['11,11', '14,11', '11,14', '14,14']) {
+      expect(picks.get(coordinate)?.edges).toBe('CCCC');
+      expect([64, 82, 83]).toContain(picks.get(coordinate)?.localIndex);
+    }
+  });
+
+  it('does not propagate C10-family corner art into solid cells of an irregular blob', () => {
+    const rows = [
+      '.##..',
+      '#####',
+      '####.',
+      '####.',
+      '####.',
+      '####.',
+      '.##..',
+    ];
+    const cells = rows.flatMap((row, y) => [...row].flatMap((value, x) => (
+      value === '#' ? [{ x: x + 10, y: y + 5 }] : []
+    )));
+    const picks = resolveCyberLetterField(concreteCells(cells), inBounds);
+
+    for (const coordinate of ['11,7', '12,7', '11,8', '12,8', '11,9', '12,9']) {
+      expect(picks.get(coordinate)?.edges).toBe('CCCC');
+      expect([64, 82, 83]).toContain(picks.get(coordinate)?.localIndex);
+    }
   });
 });

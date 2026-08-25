@@ -233,7 +233,8 @@ try {
     ),
     [
       'cyber.concrete',
-      'cyber.concrete',
+      'cyber.windows',
+      'cyber.shell',
       'cyber.rubble',
       'cyber.support',
       'cyber.neon',
@@ -242,7 +243,7 @@ try {
   );
   assert.equal(
     await page.locator('#smart-material-select option[value="cyber.concrete"]').textContent(),
-    'Ground',
+    'Concrete',
   );
   assert.equal(await page.locator('#smart-style-row').isVisible(), true);
   assert.deepEqual(
@@ -379,17 +380,17 @@ try {
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberCopyHistoryRepair.carved.tileData.terrain[7][34] === 1633 + localIndex
   )));
-  assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[7][35], 1633 + 34 + FLIP_Y);
+  assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[7][35], 1633 + 62);
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberCopyHistoryRepair.carved.tileData.terrain[7][36] === 1633 + localIndex
   )));
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.terrain[8].slice(34, 37), [
-    1633 + 21, -1, 1633 + 23,
+    1633 + 23 + FLIP_X, -1, 1633 + 21 + FLIP_X,
   ]);
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberCopyHistoryRepair.carved.tileData.terrain[9][34] === 1633 + localIndex
   )));
-  assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[9][35], 1633 + 34);
+  assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[9][35], 1633 + 15);
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberCopyHistoryRepair.carved.tileData.terrain[9][36] === 1633 + localIndex
   )));
@@ -423,11 +424,11 @@ try {
     { op: 'commitBatch' },
     { op: 'capture', name: 'restored' },
   ]);
-  assert.equal(cyberPlatform.belowMinimum.tileData.terrain[18][20], -1);
-  assert.ok(Object.values(cyberPlatform.belowMinimum.smartTerrain.recipes).some((recipe) => (
-    recipe.brushId === 'cyber.concrete'
-      && recipe.sourceCells.some(({ layer, x, y }) => layer === 'terrain' && x === 20 && y === 18)
-  )));
+  assert.equal(cyberPlatform.belowMinimum.tileData.terrain[18][20], 1717 + 20);
+  assert.equal(
+    cyberPlatform.belowMinimum.smartTerrain.semanticCells['terrain:20,18']?.brushId,
+    'cyber.concrete',
+  );
   assert.deepEqual(cyberPlatform.complete.tileData.terrain[18].slice(20, 25), [
     1717 + 71 + FLIP_X, 1717 + 68, 1717 + 68, 1717 + 68, 1717 + 71,
   ]);

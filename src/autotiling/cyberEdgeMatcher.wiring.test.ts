@@ -21,6 +21,20 @@ function localIndex(document: SmartRecipeDocument, x: number, y: number): number
   return gid - getSmartStyleDefinition('cyber-yellow').firstGid;
 }
 
+function decodedLocal(
+  document: SmartRecipeDocument,
+  layer: 'terrain' | 'foreground',
+  x: number,
+  y: number,
+): { localIndex: number; flipX: boolean; flipY: boolean } {
+  const decoded = decodeTileDataValue(document.tileData[layer][y]![x]!);
+  return {
+    localIndex: decoded.gid - getSmartStyleDefinition('cyber-yellow').firstGid,
+    flipX: decoded.flipX,
+    flipY: decoded.flipY,
+  };
+}
+
 describe('cyber letter matcher wiring', () => {
   it('paints isolated concrete as the AAAA seed tile', () => {
     const document = applySmartBrushCells(emptyDocument(), {
@@ -50,7 +64,7 @@ describe('cyber letter matcher wiring', () => {
     expect(localIndex(document, 4, 8)).toBe(49);
   });
 
-  it('does not overlay Cyber A10 on a concrete ring or a solid rectangle', () => {
+  it('uses flipped Cyber A10 foreground ties on a concrete ring but not a solid rectangle', () => {
     const ring = applySmartBrushCells(emptyDocument(), {
       cells: [
         { x: 10, y: 10 }, { x: 11, y: 10 }, { x: 12, y: 10 },
@@ -79,8 +93,28 @@ describe('cyber letter matcher wiring', () => {
           return gid >= firstGid && gid - firstGid === 9;
         }).length
     );
-    expect(a10Count(ring)).toBe(0);
+    expect(a10Count(ring)).toBe(4);
     expect(a10Count(block)).toBe(0);
+    expect(decodedLocal(ring, 'foreground', 10, 10)).toEqual({
+      localIndex: 9,
+      flipX: false,
+      flipY: false,
+    });
+    expect(decodedLocal(ring, 'foreground', 12, 10)).toEqual({
+      localIndex: 9,
+      flipX: true,
+      flipY: false,
+    });
+    expect(decodedLocal(ring, 'foreground', 10, 12)).toEqual({
+      localIndex: 9,
+      flipX: false,
+      flipY: true,
+    });
+    expect(decodedLocal(ring, 'foreground', 12, 12)).toEqual({
+      localIndex: 9,
+      flipX: true,
+      flipY: true,
+    });
   });
 
   it('paints a rectangle outline as a hollow E-frame instead of a filled ABCB rim', () => {
