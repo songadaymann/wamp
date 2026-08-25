@@ -1160,7 +1160,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: AUTOTILE_EDGE_CASES_DESERT_TILESET_KEY,
     name: 'Autotile Edge Cases — Desert',
-    path: 'assets/tilesets/autotile-edge-cases-desert.png',
+    path: 'assets/tilesets/autotile-edge-cases-desert.png?v=2026-08-25-authored-ledges-1',
     imageWidth: 64,
     imageHeight: 16,
     columns: 4,

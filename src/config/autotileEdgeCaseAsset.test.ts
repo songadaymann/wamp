@@ -84,6 +84,7 @@ describe('Desert autotile edge-case atlas', () => {
   it('registers the atlas for rendering but hides it from manual editor selection', () => {
     const tileset = getTilesetByKey(AUTOTILE_EDGE_CASES_DESERT_TILESET_KEY);
     expect(tileset).toMatchObject({
+      path: expect.stringMatching(/autotile-edge-cases-desert\.png\?v=[a-z0-9-]+$/),
       imageWidth: 64,
       imageHeight: 16,
       columns: 4,
