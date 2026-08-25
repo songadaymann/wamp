@@ -232,14 +232,14 @@ try {
     runtime.commitTileBatch();
     return runtime.exportRoomSnapshot();
   });
-  assert.ok([88, 89].includes(desertEdgeCaseFixture.tileData.terrain[5][6]));
-  assert.ok([88, 89].includes(desertEdgeCaseFixture.tileData.terrain[5][7]));
+  assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[5][6]));
+  assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[5][7]));
   assert.equal(desertEdgeCaseFixture.tileData.terrain[5][8], 90);
-  assert.deepEqual(desertEdgeCaseFixture.tileData.foreground[5].slice(5, 9), [2075, 2073, 2073, 2073]);
+  assert.deepEqual(desertEdgeCaseFixture.tileData.foreground[5].slice(5, 9), [2076, -1, -1, -1]);
   assert.equal(desertEdgeCaseFixture.tileData.terrain[13][3], 87);
-  assert.ok([88, 89].includes(desertEdgeCaseFixture.tileData.terrain[13][4]));
-  assert.ok([88, 89].includes(desertEdgeCaseFixture.tileData.terrain[13][5]));
-  assert.deepEqual(desertEdgeCaseFixture.tileData.foreground[13].slice(3, 7), [2073, 2073, 2073, 2074]);
+  assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[13][4]));
+  assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[13][5]));
+  assert.deepEqual(desertEdgeCaseFixture.tileData.foreground[13].slice(3, 7), [-1, -1, -1, 2075]);
   assert.equal(await page.locator(
     '#tileset-select option[value="autotile-edge-cases-desert"]',
   ).count(), 0);

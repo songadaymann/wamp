@@ -319,6 +319,12 @@ export const JUNGLE_VINES_TILESET_KEY = 'jungle-vines';
 export const JUNGLE_VINES_TILESET_FIRST_GID = 2001;
 export const AUTOTILE_EDGE_CASES_DESERT_TILESET_KEY = 'autotile-edge-cases-desert';
 export const AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID = 2073;
+export const AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES = {
+  horizontalLedgeMiddleB4: 0,
+  horizontalLedgeMiddleB5: 1,
+  thickBodySeamC3: 2,
+  thickBodySeamC6: 3,
+} as const;
 export const SPECIAL_TILESET_KEY = 'special';
 export const SPECIAL_TILESET_FIRST_GID = 669;
 export type SpecialTileKind =
@@ -1155,13 +1161,28 @@ export const TILESETS: TilesetConfig[] = [
     key: AUTOTILE_EDGE_CASES_DESERT_TILESET_KEY,
     name: 'Autotile Edge Cases — Desert',
     path: 'assets/tilesets/autotile-edge-cases-desert.png',
-    imageWidth: 48,
+    imageWidth: 64,
     imageHeight: 16,
-    columns: 3,
+    columns: 4,
     rows: 1,
-    tileCount: 3,
+    tileCount: 4,
     firstGid: AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    terrainCollisionProfiles: createTilesetCollisionProfiles([0, 1, 2], NO_COLLISION_PROFILE),
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(
+        [
+          AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
+          AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
+        ],
+        DECORATED_TOP_PROFILE,
+      ),
+      ...createTilesetCollisionProfiles(
+        [
+          AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC3,
+          AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC6,
+        ],
+        NO_COLLISION_PROFILE,
+      ),
+    },
     editorHidden: true,
     editorPaletteBackgroundColor: '#785f56',
   },
