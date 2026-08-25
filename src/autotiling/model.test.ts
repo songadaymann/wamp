@@ -113,6 +113,22 @@ describe('smart authoring persistence model', () => {
     expect(normalized.recipes.feature?.brushId).toBe('cave.feature');
   });
 
+  it('aliases retired cyber brush ids onto the v2 catalog brushes', () => {
+    const normalized = normalizeRoomSmartTerrainState({
+      version: 2,
+      semanticCells: {
+        'terrain:1,1': { styleId: 'cyber-yellow', brushId: 'cyber.structure' },
+        'terrain:2,1': { styleId: 'cyber-yellow', brushId: 'cyber.platform' },
+        'terrain:3,1': { styleId: 'cyber-pink', brushId: 'cyber.neon-strip' },
+        'foreground:4,1': { styleId: 'cyber-pink', brushId: 'cyber.framed-panel' },
+      },
+    });
+    expect(normalized.semanticCells['terrain:1,1']?.brushId).toBe('cyber.concrete');
+    expect(normalized.semanticCells['terrain:2,1']?.brushId).toBe('cyber.concrete');
+    expect(normalized.semanticCells['terrain:3,1']?.brushId).toBe('cyber.neon');
+    expect(normalized.semanticCells['foreground:4,1']?.brushId).toBe('cyber.fence');
+  });
+
   it('exports explicit canonical legacy brush mappings in both directions', () => {
     expect(SMART_LEGACY_BRUSH_IDS).toEqual([
       'forest.ground', 'forest.platform', 'forest.feature',
@@ -128,15 +144,15 @@ describe('smart authoring persistence model', () => {
       theme: 'gothic',
       material: 'platform',
     });
-    expect(getLegacySmartBrushIdentity('cyber.structure')).toBeNull();
+    expect(getLegacySmartBrushIdentity('cyber.concrete')).toBeNull();
   });
 
   it('keeps three semantic sources at one coordinate distinct by layer', () => {
     const input = createRoomSmartTerrainState();
     input.semanticCells = {
       'background:8,9': { styleId: 'cyber-pink', brushId: 'cyber.support' },
-      'terrain:8,9': { styleId: 'cyber-yellow', brushId: 'cyber.structure' },
-      'foreground:8,9': { styleId: 'cyber-pink', brushId: 'cyber.framed-panel' },
+      'terrain:8,9': { styleId: 'cyber-yellow', brushId: 'cyber.concrete' },
+      'foreground:8,9': { styleId: 'cyber-pink', brushId: 'cyber.fence' },
     };
 
     const normalized = normalizeRoomSmartTerrainState(input);
@@ -154,19 +170,19 @@ describe('smart authoring persistence model', () => {
       semanticCells: {
         'background:1,1': {
           styleId: 'cyber-yellow',
-          brushId: 'cyber.structure',
+          brushId: 'cyber.concrete',
           lockedValue: invalidLockedValue,
         },
-        'terrain:2,1': { styleId: 'desert', brushId: 'cyber.structure' },
+        'terrain:2,1': { styleId: 'desert', brushId: 'cyber.concrete' },
         'terrain:3,1': { styleId: 'desert', brushId: 'forest.ground' },
         'terrain:4,1': { styleId: 'cyber-pink', brushId: 'desert.ground' },
         'terrain:5,1': {
           styleId: 'cyber-pink',
-          brushId: 'cyber.structure',
+          brushId: 'cyber.concrete',
           lockedValue: 1717 + 37 + TILE_FLIP_Y_FLAG,
         },
         'background:6,1': { styleId: 'cyber-yellow', brushId: 'cyber.support' },
-        'foreground:7,1': { styleId: 'cyber-pink', brushId: 'cyber.framed-panel' },
+        'foreground:7,1': { styleId: 'cyber-pink', brushId: 'cyber.fence' },
         'terrain:8,1': { styleId: 'gothic', brushId: 'gothic.ground' },
       },
     });
@@ -174,11 +190,11 @@ describe('smart authoring persistence model', () => {
     expect(normalized.semanticCells).toEqual({
       'terrain:5,1': {
         styleId: 'cyber-pink',
-        brushId: 'cyber.structure',
+        brushId: 'cyber.concrete',
         lockedValue: 1717 + 37 + TILE_FLIP_Y_FLAG,
       },
       'background:6,1': { styleId: 'cyber-yellow', brushId: 'cyber.support' },
-      'foreground:7,1': { styleId: 'cyber-pink', brushId: 'cyber.framed-panel' },
+      'foreground:7,1': { styleId: 'cyber-pink', brushId: 'cyber.fence' },
       'terrain:8,1': { styleId: 'gothic', brushId: 'gothic.ground' },
     });
     expect(normalized.backdropCells['1,1']).toBeUndefined();
@@ -186,9 +202,9 @@ describe('smart authoring persistence model', () => {
 
   it('rejects recipes whose brush, style, anchor, or source-cell layer is incompatible', () => {
     const panel = {
-      recipeId: 'cyber.framed-panel',
+      recipeId: 'cyber.fence',
       styleId: 'cyber-pink',
-      brushId: 'cyber.framed-panel',
+      brushId: 'cyber.fence',
       anchor: { layer: 'foreground', x: 4, y: 5 },
       sourceCells: [4, 5, 6].map((x) => ({ layer: 'foreground', x, y: 5 })),
       parameters: { width: 3, height: 2 },
@@ -242,10 +258,10 @@ describe('smart authoring persistence model', () => {
       version: 2,
       recipes: {
         'cyber-platform-7': {
-          recipeId: 'cyber.platform',
+          recipeId: 'cyber.concrete',
           ownerId: 'forged-owner',
           styleId: 'cyber-yellow',
-          brushId: 'cyber.platform',
+          brushId: 'cyber.concrete',
           anchor: { layer: 'terrain', x: 99, y: 99 },
           sourceCells: [
             { layer: 'terrain', x: 6, y: 4 },
@@ -256,9 +272,9 @@ describe('smart authoring persistence model', () => {
           parameters: { width: 3, height: 1 },
         },
         empty: {
-          recipeId: 'cyber.platform',
+          recipeId: 'cyber.concrete',
           styleId: 'cyber-yellow',
-          brushId: 'cyber.platform',
+          brushId: 'cyber.concrete',
           anchor: { layer: 'terrain', x: 1, y: 1 },
           sourceCells: [],
           parameters: {},
@@ -278,10 +294,10 @@ describe('smart authoring persistence model', () => {
 
     expect(normalized.recipes).toEqual({
       'cyber-platform-7': {
-        recipeId: 'cyber.platform',
+        recipeId: 'cyber.concrete',
         ownerId: 'cyber:recipe:cyber-platform-7',
         styleId: 'cyber-yellow',
-        brushId: 'cyber.platform',
+        brushId: 'cyber.concrete',
         anchor: { layer: 'terrain', x: 4, y: 4 },
         bounds: { minX: 4, minY: 4, maxX: 6, maxY: 4, width: 3, height: 1 },
         sourceCells: [4, 5, 6].map((x) => ({ layer: 'terrain', x, y: 4 })),
@@ -301,10 +317,10 @@ describe('smart authoring persistence model', () => {
       version: 2,
       recipes: {
         facade: {
-          recipeId: 'cyber.structure.facade',
+          recipeId: 'cyber.concrete.facade',
           ownerId: 'cyber:recipe:facade',
           styleId: 'cyber-yellow',
-          brushId: 'cyber.structure',
+          brushId: 'cyber.concrete',
           anchor: { layer: 'terrain', x: 4, y: 5 },
           bounds: { minX: 3, minY: 4, maxX: 7, maxY: 6, width: 5, height: 3 },
           sourceCells: [4, 5, 6].map((x) => ({ layer: 'terrain', x, y: 5 })),
@@ -366,10 +382,10 @@ describe('smart authoring persistence model', () => {
     const encodedValue = 1633 + 64 + TILE_FLIP_Y_FLAG;
     const state = createRoomSmartTerrainState();
     state.recipes.tower = {
-      recipeId: 'cyber.structure.tower',
+      recipeId: 'cyber.concrete.tower',
       ownerId: 'cyber:recipe:tower',
       styleId: 'cyber-yellow',
-      brushId: 'cyber.structure',
+      brushId: 'cyber.concrete',
       anchor: { layer: 'terrain', x: 2, y: 3 },
       bounds: { minX: 2, minY: 3, maxX: 9, maxY: 3, width: 8, height: 1 },
       sourceCells: [{ layer: 'terrain', x: 2, y: 3 }],

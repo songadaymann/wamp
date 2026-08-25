@@ -224,8 +224,8 @@ describe('editor edit runtime document contracts', () => {
     expect(terrain.getTileAt(6, 4)?.index).toBeTypeOf('number');
   });
 
-  it('projects a diagonal Cyber Platform pencil gesture onto its anchored horizontal row', () => {
-    selectCyberBrush('cyber.platform');
+  it('paints a diagonal Cyber Concrete pencil gesture on every cell', () => {
+    selectCyberBrush('cyber.concrete');
     const { runtime, layers, host } = createHarness(createRoom());
 
     runtime.beginTileBatch();
@@ -234,31 +234,31 @@ describe('editor edit runtime document contracts', () => {
     placeSmartCell(runtime, 6, 7);
     runtime.commitTileBatch();
 
-    expect(getSmartSourceKeys(runtime, 'cyber.platform')).toEqual([
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
       'terrain:4,5',
-      'terrain:5,5',
-      'terrain:6,5',
+      'terrain:5,6',
+      'terrain:6,7',
     ]);
-    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['4,5', '5,5', '6,5']);
+    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['4,5', '5,6', '6,7']);
     expect(host.recordBuildPlacement).toHaveBeenCalledTimes(1);
     expect(runtime.hasUndoHistory()).toBe(true);
 
     runtime.undo();
-    expect(getSmartSourceKeys(runtime, 'cyber.platform')).toEqual([]);
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([]);
     expect(getTileCoordinates(layers.get('terrain')!)).toEqual([]);
     expect(runtime.hasUndoHistory()).toBe(false);
 
     runtime.redo();
-    expect(getSmartSourceKeys(runtime, 'cyber.platform')).toEqual([
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
       'terrain:4,5',
-      'terrain:5,5',
-      'terrain:6,5',
+      'terrain:5,6',
+      'terrain:6,7',
     ]);
-    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['4,5', '5,5', '6,5']);
+    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['4,5', '5,6', '6,7']);
   });
 
-  it('collapses a vertical Cyber Neon Strip pencil gesture to its anchored source cell', () => {
-    selectCyberBrush('cyber.neon-strip');
+  it('paints a vertical Cyber Neon pencil gesture on every cell', () => {
+    selectCyberBrush('cyber.neon');
     const { runtime, layers } = createHarness(createRoom());
 
     runtime.beginTileBatch();
@@ -268,8 +268,13 @@ describe('editor edit runtime document contracts', () => {
     placeSmartCell(runtime, 9, 6);
     runtime.commitTileBatch();
 
-    expect(getSmartSourceKeys(runtime, 'cyber.neon-strip')).toEqual(['terrain:9,3']);
-    expect(getTileCoordinates(layers.get('terrain')!)).toEqual([]);
+    expect(getSmartSourceKeys(runtime, 'cyber.neon')).toEqual([
+      'terrain:9,3',
+      'terrain:9,4',
+      'terrain:9,5',
+      'terrain:9,6',
+    ]);
+    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['9,3', '9,4', '9,5', '9,6']);
   });
 
   it('projects a diagonal Cyber Support pencil gesture onto its anchored vertical column', () => {
@@ -290,15 +295,15 @@ describe('editor edit runtime document contracts', () => {
     expect(getTileCoordinates(layers.get('background')!)).toEqual(['15,3', '15,4', '15,5']);
   });
 
-  it('normalizes Cyber path rectangles, preserves Support banks, and keeps panels two rows high', () => {
+  it('fills Cyber Concrete and Neon rectangles, preserves Support banks, and keeps panels two rows high', () => {
     const { runtime, layers } = createHarness(createRoom());
 
-    selectCyberBrush('cyber.platform');
+    selectCyberBrush('cyber.concrete');
     runtime.beginTileBatch();
     runtime.stampShape('rect', 2, 3, 6, 8, { outline: false, erase: false });
     runtime.commitTileBatch();
 
-    selectCyberBrush('cyber.neon-strip');
+    selectCyberBrush('cyber.neon');
     runtime.beginTileBatch();
     runtime.stampShape('rect', 8, 9, 12, 4, { outline: false, erase: false });
     runtime.commitTileBatch();
@@ -308,16 +313,20 @@ describe('editor edit runtime document contracts', () => {
     runtime.stampShape('rect', 18, 2, 22, 7, { outline: false, erase: false });
     runtime.commitTileBatch();
 
-    selectCyberBrush('cyber.framed-panel');
+    selectCyberBrush('cyber.fence');
     runtime.beginTileBatch();
     runtime.stampShape('rect', 24, 12, 29, 17, { outline: false, erase: false });
     runtime.commitTileBatch();
 
-    expect(getSmartSourceKeys(runtime, 'cyber.platform')).toEqual(
-      [2, 3, 4, 5, 6].map((x) => `terrain:${x},3`),
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual(
+      [2, 3, 4, 5, 6]
+        .flatMap((x) => [3, 4, 5, 6, 7, 8].map((y) => `terrain:${x},${y}`))
+        .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
     );
-    expect(getSmartSourceKeys(runtime, 'cyber.neon-strip')).toEqual(
-      [8, 9, 10, 11, 12].map((x) => `terrain:${x},9`),
+    expect(getSmartSourceKeys(runtime, 'cyber.neon')).toEqual(
+      [8, 9, 10, 11, 12]
+        .flatMap((x) => [4, 5, 6, 7, 8, 9].map((y) => `terrain:${x},${y}`))
+        .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
     );
     expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual(
       [18, 19, 20, 21, 22]
@@ -327,7 +336,7 @@ describe('editor edit runtime document contracts', () => {
 
     const snapshot = runtime.exportRoomSnapshot();
     const panelRecipe = Object.values(snapshot.smartTerrain!.recipes).find(
-      (recipe) => recipe.brushId === 'cyber.framed-panel',
+      (recipe) => recipe.brushId === 'cyber.fence',
     );
     expect(panelRecipe).toMatchObject({
       anchor: { layer: 'foreground', x: 24, y: 12 },
@@ -337,10 +346,15 @@ describe('editor edit runtime document contracts', () => {
       [24, 25, 26, 27, 28, 29].map((x) => ({ layer: 'foreground', x, y: 12 })),
     );
 
-    expect(getTileCoordinates(layers.get('terrain')!)).toEqual([
-      '2,3', '3,3', '4,3', '5,3', '6,3',
-      '8,9', '9,9', '10,9', '11,9', '12,9',
-    ]);
+    expect(
+      getTileCoordinates(layers.get('terrain')!)
+        .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
+    ).toEqual(
+      [
+        ...[2, 3, 4, 5, 6].flatMap((x) => [3, 4, 5, 6, 7, 8].map((y) => `${x},${y}`)),
+        ...[8, 9, 10, 11, 12].flatMap((x) => [4, 5, 6, 7, 8, 9].map((y) => `${x},${y}`)),
+      ].sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
+    );
     expect(getTileCoordinates(layers.get('background')!)).toEqual([
       '18,2', '19,2', '20,2', '21,2', '22,2',
       '18,3', '19,3', '20,3', '21,3', '22,3',
@@ -355,53 +369,43 @@ describe('editor edit runtime document contracts', () => {
     ]);
   });
 
-  it('round-trips complete Cyber span recipes through clipboard, undo, redo, and export', () => {
-    selectCyberBrush('cyber.platform');
+  it('round-trips Cyber Concrete through clipboard, undo, redo, and export', () => {
+    selectCyberBrush('cyber.concrete');
     const { runtime, layers } = createHarness(createRoom());
 
     runtime.beginTileBatch();
     runtime.stampShape('rect', 4, 5, 6, 5, { outline: false, erase: false });
     runtime.commitTileBatch();
-    const originalRecipe = Object.entries(runtime.exportRoomSnapshot().smartTerrain!.recipes)
-      .find(([, recipe]) => recipe.brushId === 'cyber.platform');
-    expect(originalRecipe).toBeDefined();
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
+      'terrain:4,5', 'terrain:5,5', 'terrain:6,5',
+    ]);
     expect(runtime.copyTilesToClipboard(4, 5, 6, 5)).toBe(true);
 
     runtime.beginTileBatch();
     expect(runtime.pasteClipboardAt(12, 9)).toBe(true);
     runtime.commitTileBatch();
 
-    const pasted = runtime.exportRoomSnapshot();
-    const platformRecipes = Object.entries(pasted.smartTerrain!.recipes)
-      .filter(([, recipe]) => recipe.brushId === 'cyber.platform');
-    expect(platformRecipes).toHaveLength(2);
-    expect(getSmartSourceKeys(runtime, 'cyber.platform')).toEqual([
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
       'terrain:4,5', 'terrain:5,5', 'terrain:6,5',
       'terrain:12,9', 'terrain:13,9', 'terrain:14,9',
     ]);
-    const copiedRecipe = platformRecipes.find(([instanceId]) => instanceId !== originalRecipe![0]);
-    expect(copiedRecipe?.[1]).toMatchObject({
-      ownerId: `cyber:recipe:${copiedRecipe?.[0]}`,
-      anchor: { layer: 'terrain', x: 12, y: 9 },
-      bounds: { minX: 12, minY: 9, maxX: 14, maxY: 9, width: 3, height: 1 },
-    });
+    expect(Object.values(runtime.exportRoomSnapshot().smartTerrain!.recipes)
+      .filter((recipe) => recipe.brushId === 'cyber.concrete')).toEqual([]);
 
+    const pasted = runtime.exportRoomSnapshot();
     const reloaded = createHarness(pasted).runtime;
-    expect(getSmartSourceKeys(reloaded, 'cyber.platform')).toEqual(
-      getSmartSourceKeys(runtime, 'cyber.platform'),
-    );
-    expect(reloaded.exportRoomSnapshot().smartTerrain!.ownedOutputs).toEqual(
-      pasted.smartTerrain!.ownedOutputs,
+    expect(getSmartSourceKeys(reloaded, 'cyber.concrete')).toEqual(
+      getSmartSourceKeys(runtime, 'cyber.concrete'),
     );
 
     runtime.undo();
-    expect(getSmartSourceKeys(runtime, 'cyber.platform')).toEqual([
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
       'terrain:4,5', 'terrain:5,5', 'terrain:6,5',
     ]);
     expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['4,5', '5,5', '6,5']);
 
     runtime.redo();
-    expect(getSmartSourceKeys(runtime, 'cyber.platform')).toEqual([
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
       'terrain:4,5', 'terrain:5,5', 'terrain:6,5',
       'terrain:12,9', 'terrain:13,9', 'terrain:14,9',
     ]);
@@ -410,13 +414,14 @@ describe('editor edit runtime document contracts', () => {
     runtime.beginTileBatch();
     expect(runtime.pasteClipboardAt(20, 12)).toBe(true);
     runtime.commitTileBatch();
-    expect(getSmartSourceKeys(runtime, 'cyber.platform')).not.toContain('terrain:20,12');
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toContain('terrain:20,12');
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toContain('terrain:21,12');
     expect(getTileCoordinates(layers.get('terrain')!)).toContain('20,12');
     expect(getTileCoordinates(layers.get('terrain')!)).toContain('21,12');
 
     runtime.undo();
     expect(getTileCoordinates(layers.get('terrain')!)).not.toContain('20,12');
-    expect(getSmartSourceKeys(runtime, 'cyber.platform')).toHaveLength(6);
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toHaveLength(6);
   });
 });
 
@@ -433,9 +438,13 @@ function placeSmartCell(runtime: EditorEditRuntime, x: number, y: number): void 
 
 function getSmartSourceKeys(runtime: EditorEditRuntime, brushId: SmartBrushId): string[] {
   const smartTerrain = runtime.exportRoomSnapshot().smartTerrain!;
-  return Object.values(smartTerrain.recipes)
+  const recipeKeys = Object.values(smartTerrain.recipes)
     .filter((recipe) => recipe.brushId === brushId)
-    .flatMap((recipe) => recipe.sourceCells.map(({ layer, x, y }) => `${layer}:${x},${y}`))
+    .flatMap((recipe) => recipe.sourceCells.map(({ layer, x, y }) => `${layer}:${x},${y}`));
+  const semanticKeys = Object.entries(smartTerrain.semanticCells)
+    .filter(([, cell]) => cell.brushId === brushId)
+    .map(([key]) => key);
+  return [...new Set([...recipeKeys, ...semanticKeys])]
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
 }
 

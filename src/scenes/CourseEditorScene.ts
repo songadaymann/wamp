@@ -2555,7 +2555,11 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     const copySelection = this.rectMode === 'copy';
-    const outline = !copySelection && isEditorShapeOutline(kind);
+    const outline = !copySelection && (
+      kind === 'ellipse'
+        ? editorState.ellipseOutline
+        : kind === 'rect' && editorState.rectOutline
+    );
     const minX = Math.min(x1, x2);
     const minY = Math.min(y1, y2);
     const width = Math.abs(x2 - x1) + 1;

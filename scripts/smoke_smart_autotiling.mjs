@@ -232,16 +232,16 @@ try {
       Promise.all(options.map((option) => option.getAttribute('value')))
     ),
     [
-      'cyber.structure',
-      'cyber.platform',
+      'cyber.concrete',
+      'cyber.concrete',
       'cyber.rubble',
       'cyber.support',
-      'cyber.neon-strip',
-      'cyber.framed-panel',
+      'cyber.neon',
+      'cyber.fence',
     ],
   );
   assert.equal(
-    await page.locator('#smart-material-select option[value="cyber.structure"]').textContent(),
+    await page.locator('#smart-material-select option[value="cyber.concrete"]').textContent(),
     'Ground',
   );
   assert.equal(await page.locator('#smart-style-row').isVisible(), true);
@@ -269,26 +269,26 @@ try {
     layer: 'background',
   });
   assert.equal(await page.locator('[data-tool="rect"]').first().isEnabled(), true);
-  assert.equal(await page.locator('[data-tool="ellipse"]').first().isDisabled(), true);
-  assert.equal(await page.locator('[data-tool="fill"]').first().isDisabled(), true);
-  assert.match(await page.locator('#smart-palette-hint').textContent() ?? '', /Ellipse and Fill are unavailable/);
+  assert.equal(await page.locator('[data-tool="ellipse"]').first().isEnabled(), true);
+  assert.equal(await page.locator('[data-tool="fill"]').first().isEnabled(), true);
+  assert.equal(await page.locator('[data-tool="line"]').first().isEnabled(), true);
   await page.locator('#btn-editor-top-tool-more').click();
   await page.screenshot({ path: path.join(outputDir, 'cyber-support-tools.png') });
   await page.locator('#btn-editor-top-tool-more').click();
 
-  await page.locator('#smart-material-select').selectOption('cyber.framed-panel');
+  await page.locator('#smart-material-select').selectOption('cyber.fence');
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'foreground');
   await assertEditorState(page, {
     theme: 'cyber',
-    brush: 'cyber.framed-panel',
+    brush: 'cyber.fence',
     style: 'cyber-pink',
     layer: 'foreground',
   });
-  await page.locator('#smart-material-select').selectOption('cyber.structure');
+  await page.locator('#smart-material-select').selectOption('cyber.concrete');
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
   await assertEditorState(page, {
     theme: 'cyber',
-    brush: 'cyber.structure',
+    brush: 'cyber.concrete',
     style: 'cyber-pink',
     layer: 'terrain',
   });
@@ -326,7 +326,7 @@ try {
     { op: 'capture', name: 'cyberStructure' },
   ]);
   assert.equal(cyberStructure.smartTerrain.version, 2);
-  assert.equal(cyberStructure.smartTerrain.semanticCells['terrain:32,2'].brushId, 'cyber.structure');
+  assert.equal(cyberStructure.smartTerrain.semanticCells['terrain:32,2'].brushId, 'cyber.concrete');
   assert.equal(cyberStructure.tileData.terrain[2][32], 1633 + 14);
   assert.equal(cyberStructure.tileData.terrain[2][39], 1633 + 14 + FLIP_X);
   assert.ok([64, 82, 83].some((localIndex) => (
@@ -406,7 +406,7 @@ try {
   await runEditorCommands(page, [{ op: 'fitToScreen' }]);
 
   await page.locator('#smart-style-select').selectOption('cyber-pink');
-  await page.locator('#smart-material-select').selectOption('cyber.platform');
+  await page.locator('#smart-material-select').selectOption('cyber.concrete');
   const cyberPlatform = await runEditorCommands(page, [
     { op: 'beginBatch' },
     { op: 'placeCells', cells: [{ x: 20, y: 18 }] },
@@ -425,7 +425,7 @@ try {
   ]);
   assert.equal(cyberPlatform.belowMinimum.tileData.terrain[18][20], -1);
   assert.ok(Object.values(cyberPlatform.belowMinimum.smartTerrain.recipes).some((recipe) => (
-    recipe.brushId === 'cyber.platform'
+    recipe.brushId === 'cyber.concrete'
       && recipe.sourceCells.some(({ layer, x, y }) => layer === 'terrain' && x === 20 && y === 18)
   )));
   assert.deepEqual(cyberPlatform.complete.tileData.terrain[18].slice(20, 25), [
@@ -470,7 +470,7 @@ try {
   ]);
   assert.deepEqual(cyberSupport.bank.tileData.terrain.slice(4, 8).map((row) => row[18]), [-1, -1, -1, -1]);
 
-  await page.locator('#smart-material-select').selectOption('cyber.neon-strip');
+  await page.locator('#smart-material-select').selectOption('cyber.neon');
   const cyberNeon = await runEditorCommands(page, [
     { op: 'beginBatch' },
     { op: 'placeCells', cells: rectangleCells(20, 8, 24, 8) },
@@ -530,7 +530,7 @@ try {
   await runEditorCommands(page, [{ op: 'fitToScreen' }]);
 
   await page.locator('#smart-style-select').selectOption('cyber-pink');
-  await page.locator('#smart-material-select').selectOption('cyber.framed-panel');
+  await page.locator('#smart-material-select').selectOption('cyber.fence');
   const cyberPanelClipboard = await runEditorCommands(page, [
     { op: 'beginBatch' },
     { op: 'placeCells', cells: rectangleCells(26, 3, 30, 3) },
@@ -547,7 +547,7 @@ try {
     { op: 'capture', name: 'partial' },
   ]);
   const countFramedPanelRecipes = (snapshot) => Object.values(snapshot.smartTerrain.recipes)
-    .filter(({ brushId }) => brushId === 'cyber.framed-panel').length;
+    .filter(({ brushId }) => brushId === 'cyber.fence').length;
   assert.equal(countFramedPanelRecipes(cyberPanelClipboard.complete), 2);
   assert.equal(countFramedPanelRecipes(cyberPanelClipboard.partial), 2);
   assert.deepEqual(cyberPanelClipboard.complete.tileData.foreground[3].slice(26, 31), [
@@ -575,7 +575,7 @@ try {
   await page.locator('.palette-tab[data-mode="smart"]').click();
   await page.locator('#smart-theme-select').selectOption('cyber');
   await page.locator('#smart-style-select').selectOption('cyber-pink');
-  await page.locator('#smart-material-select').selectOption('cyber.framed-panel');
+  await page.locator('#smart-material-select').selectOption('cyber.fence');
   const smartErasureAndReload = await runEditorCommands(page, [
     { op: 'beginBatch' },
     { op: 'eraseCells', cells: [{ x: 28, y: 4 }] },
@@ -860,11 +860,8 @@ try {
     style: 'cyber-pink',
     layer: 'background',
   });
-  assert.equal(await coursePage.locator('[data-tool="ellipse"]').first().isDisabled(), true);
-  assert.match(
-    await coursePage.locator('#smart-palette-hint').textContent() ?? '',
-    /Ellipse and Fill are unavailable/,
-  );
+  assert.equal(await coursePage.locator('[data-tool="ellipse"]').first().isEnabled(), true);
+  assert.equal(await coursePage.locator('[data-tool="fill"]').first().isEnabled(), true);
   await coursePage.locator('#btn-editor-top-tool-more').click();
   await coursePage.screenshot({ path: path.join(outputDir, 'cyber-course-support-tools.png') });
   await courseContext.close();

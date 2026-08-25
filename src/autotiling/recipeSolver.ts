@@ -4,15 +4,16 @@ import type { RoomTileData } from '../persistence/roomModel';
 import {
   CYBER_FAMILY_DEFINITIONS,
   CYBER_NEIGHBOR,
+  CYBER_STYLE_PROFILES,
   resolveCyberFramedPanel,
   resolveCyberNeonStrip,
   resolveCyberPlatformSpan,
   resolveCyberRubbleBorderTile,
   resolveCyberRubbleColumn,
-  resolveCyberStructureUnderground,
   resolveCyberStructureTieTile,
-  resolveCyberStructureTile8,
   resolveCyberStructureTopology8,
+  resolveCyberStructureUnderground,
+  resolveCyberStructureTile8,
   resolveCyberSupportSpan,
   resolveCyberTunnelOutlineTile,
   type CyberFamilyId,
@@ -20,6 +21,12 @@ import {
   type CyberStyleId,
   type CyberTunnelOutlineRole,
 } from './cyberProfile';
+import {
+  isCyberLetterBrushId,
+  isCyberLetterCatalogLocalIndex,
+  letterCellKey,
+  resolveCyberLetterField,
+} from './cyberEdgeMatcher';
 import {
   cloneRoomSmartTerrainState,
   smartCellKey,
@@ -77,28 +84,27 @@ interface Bounds {
 }
 
 const CYBER_CELL_OWNER_PREFIX = 'cyber:cell:';
-const CYBER_PANEL_RECIPE_ID = 'cyber.framed-panel';
+const CYBER_PANEL_RECIPE_ID = 'cyber.fence';
 const CYBER_BRUSH_PREFIX = 'cyber.';
 
-type CyberSpanBrushId = 'cyber.platform' | 'cyber.support' | 'cyber.neon-strip';
+type CyberSpanBrushId = 'cyber.support';
 
 const CYBER_SPAN_BRUSH_IDS: readonly CyberSpanBrushId[] = [
-  'cyber.platform', 'cyber.support', 'cyber.neon-strip',
+  'cyber.support',
 ];
 
 const CYBER_SPAN_INSTANCE_PREFIX: Readonly<Record<CyberSpanBrushId, string>> = {
-  'cyber.platform': 'cyber-platform',
   'cyber.support': 'cyber-support',
-  'cyber.neon-strip': 'cyber-neon-strip',
 };
 
 const CYBER_FAMILY_BY_BRUSH: Partial<Record<SmartBrushId, CyberFamilyId>> = {
-  'cyber.structure': 'structure',
-  'cyber.platform': 'platform',
+  'cyber.concrete': 'structure',
+  'cyber.windows': 'structure',
+  'cyber.shell': 'structure',
+  'cyber.neon': 'neon-strip',
   'cyber.rubble': 'rubble',
   'cyber.support': 'support',
-  'cyber.neon-strip': 'neon-strip',
-  'cyber.framed-panel': 'framed-panel',
+  'cyber.fence': 'framed-panel',
 };
 
 function cloneTileData(tileData: RoomTileData): RoomTileData {
@@ -178,6 +184,36 @@ function sameCyberLegacyTile(
     && getSmartBrushDefinition(brushId).compatibleLegacyLocalIndices.includes(localIndex);
 }
 
+function isCyberLetterOccupant(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+  layer: LayerName,
+  x: number,
+  y: number,
+): boolean {
+  if (!inBounds(x, y)) return false;
+  const semantic = state.semanticCells[smartSemanticCellKey(layer, x, y)];
+  if (semantic && isCyberStyleId(semantic.styleId) && isCyberLetterBrushId(semantic.brushId)) {
+    return true;
+  }
+  for (const recipe of Object.values(state.recipes)) {
+    if (!isCyberStyleId(recipe.styleId) || !isCyberLetterBrushId(recipe.brushId)) continue;
+    if (recipe.sourceCells.some((cell) => cell.layer === layer && cell.x === x && cell.y === y)) {
+      return true;
+    }
+  }
+  const decoded = decodeTileDataValue(tileData[layer][y]?.[x] ?? -1);
+  if (decoded.gid <= 0) return false;
+  for (const styleId of ['cyber-yellow', 'cyber-pink'] as const) {
+    const style = getSmartStyleDefinition(styleId);
+    const localIndex = decoded.gid - style.firstGid;
+    if (localIndex >= 0 && localIndex < style.tileCount && isCyberLetterCatalogLocalIndex(localIndex)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function sameCyberFamily(
   tileData: RoomTileData,
   state: RoomSmartTerrainState,
@@ -188,13 +224,27 @@ function sameCyberFamily(
   brushId: SmartBrushId,
 ): boolean {
   if (!inBounds(x, y)) return false;
+  if (isCyberLetterBrushId(brushId)) return isCyberLetterOccupant(tileData, state, layer, x, y);
   const semantic = state.semanticCells[smartSemanticCellKey(layer, x, y)];
-  if (semantic) return semantic.styleId === styleId && semantic.brushId === brushId;
+  if (semantic) {
+    if (brushId === 'cyber.rubble') {
+      return semantic.brushId === 'cyber.rubble' && isCyberStyleId(semantic.styleId);
+    }
+    return semantic.styleId === styleId && semantic.brushId === brushId;
+  }
   for (const recipe of Object.values(state.recipes)) {
-    if (recipe.styleId !== styleId || recipe.brushId !== brushId) continue;
+    if (brushId === 'cyber.rubble') {
+      if (recipe.brushId !== 'cyber.rubble' || !isCyberStyleId(recipe.styleId)) continue;
+    } else if (recipe.styleId !== styleId || recipe.brushId !== brushId) {
+      continue;
+    }
     if (recipe.sourceCells.some((cell) => cell.layer === layer && cell.x === x && cell.y === y)) {
       return true;
     }
+  }
+  if (brushId === 'cyber.rubble') {
+    return sameCyberLegacyTile(tileData, layer, x, y, 'cyber-yellow', brushId)
+      || sameCyberLegacyTile(tileData, layer, x, y, 'cyber-pink', brushId);
   }
   return sameCyberLegacyTile(tileData, layer, x, y, styleId, brushId);
 }
@@ -839,10 +889,59 @@ function resolveSupportComponent(
   }
 }
 
+function resolveCyberLetterCells(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+  entries: readonly CyberSemanticEntry[],
+): void {
+  if (entries.length === 0) return;
+  const picks = resolveCyberLetterField(
+    entries.map((entry) => ({
+      x: entry.x,
+      y: entry.y,
+      brushId: entry.cell.brushId as import('./cyberEdgeCatalog').CyberLetterBrushId,
+      varietySalt: entry.cell.varietySalt,
+    })),
+    inBounds,
+  );
+  for (const entry of entries) {
+    const styleId = entry.cell.styleId as CyberStyleId;
+    const ownerId = `${CYBER_CELL_OWNER_PREFIX}${entry.semanticKey}`;
+    const pick = picks.get(letterCellKey(entry.x, entry.y));
+    const resolved: CyberResolvedTile = {
+      tilesetKey: CYBER_STYLE_PROFILES[styleId].tilesetKey,
+      localIndex: pick?.localIndex ?? 64,
+      flipX: pick?.flipX ?? false,
+      flipY: pick?.flipY ?? false,
+      layer: 'terrain',
+      styleId,
+    };
+    const lockedValue = entry.cell.lockedValue;
+    if (lockedValue !== undefined) {
+      tileData[entry.layer][entry.y][entry.x] = lockedValue;
+      state.ownedOutputs[smartOwnedOutputKey(entry.layer, entry.x, entry.y)] = {
+        ownerId,
+        partId: 'primary',
+        kind: 'semantic',
+        layer: entry.layer,
+        value: lockedValue,
+      };
+    } else {
+      addOwnedOutput(tileData, state, ownerId, 'primary', 'semantic', entry.x, entry.y, resolved, true);
+    }
+  }
+}
+
 function resolveCyberSemanticCells(tileData: RoomTileData, state: RoomSmartTerrainState): void {
   const entries = getCyberEntries(state);
+  resolveCyberLetterCells(
+    tileData,
+    state,
+    entries.filter((entry) => isCyberLetterBrushId(entry.cell.brushId)),
+  );
   const groups = new Map<string, CyberSemanticEntry[]>();
   for (const entry of entries) {
+    if (isCyberLetterBrushId(entry.cell.brushId)) continue;
     const key = `${entry.layer}:${entry.cell.styleId}:${entry.cell.brushId}`;
     const group = groups.get(key) ?? [];
     group.push(entry);
@@ -850,16 +949,11 @@ function resolveCyberSemanticCells(tileData: RoomTileData, state: RoomSmartTerra
   }
   for (const group of groups.values()) {
     const familyId = getCyberFamilyId(group[0]!.cell.brushId);
-    if (familyId === 'structure') {
-      const enclosedVoidCells = findEnclosedCyberVoidCells(tileData, state, group[0]!);
-      componentEntries(group).forEach((component) => (
-        resolveStructureComponent(tileData, state, component, enclosedVoidCells)
-      ));
-    } else if (familyId === 'framed-panel') {
+    if (familyId === 'framed-panel') {
       continue;
     } else if (familyId === 'support') {
       componentEntries(group).forEach((component) => resolveSupportComponent(tileData, state, component));
-    } else {
+    } else if (familyId === 'rubble') {
       contiguousRuns(group, 'horizontal').forEach((run) => resolveRun(tileData, state, run, familyId));
     }
   }
@@ -972,23 +1066,34 @@ function resolveSupportRecipe(
   }
 }
 
+function flattenLetterSpanRecipes(state: RoomSmartTerrainState): void {
+  for (const [instanceId, recipe] of Object.entries(state.recipes)) {
+    if (!isCyberStyleId(recipe.styleId) || !isCyberLetterBrushId(recipe.brushId)) continue;
+    for (const source of recipe.sourceCells) {
+      if (!inBounds(source.x, source.y)) continue;
+      const semanticKey = smartSemanticCellKey(source.layer, source.x, source.y);
+      if (!state.semanticCells[semanticKey]) {
+        state.semanticCells[semanticKey] = {
+          styleId: recipe.styleId,
+          brushId: recipe.brushId,
+        };
+      }
+    }
+    clearOwnerSuppressions(state, recipe.ownerId);
+    delete state.recipes[instanceId];
+  }
+}
+
 function resolveCyberRecipes(tileData: RoomTileData, state: RoomSmartTerrainState): void {
   for (const recipe of Object.values(state.recipes)) {
     if (!isCyberStyleId(recipe.styleId)) continue;
-    if (recipe.brushId === 'cyber.platform') {
-      resolveHorizontalSpanRecipe(tileData, state, recipe, 'platform');
-      continue;
-    }
     if (recipe.brushId === 'cyber.support') {
       resolveSupportRecipe(tileData, state, recipe);
       continue;
     }
-    if (recipe.brushId === 'cyber.neon-strip') {
-      resolveHorizontalSpanRecipe(tileData, state, recipe, 'neon-strip');
+    if (recipe.brushId !== 'cyber.fence' && recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel') {
       continue;
     }
-    if (recipe.recipeId !== CYBER_PANEL_RECIPE_ID || recipe.brushId !== 'cyber.framed-panel') continue;
-    if (!isCyberStyleId(recipe.styleId)) continue;
     const bounds = recipeBounds(recipe);
     if (!bounds || bounds.width < CYBER_FAMILY_DEFINITIONS['framed-panel'].minimumWidth) continue;
     const rows = resolveCyberFramedPanel(recipe.styleId, bounds.width);
@@ -1125,6 +1230,7 @@ export function resolveSmartRecipeDocument(document: SmartRecipeDocument): Smart
   const tileData = cloneTileData(document.tileData);
   const smartTerrain = cloneRoomSmartTerrainState(document.smartTerrain);
   if (smartTerrain.editingDisabled) return { tileData, smartTerrain };
+  flattenLetterSpanRecipes(smartTerrain);
   const resetOwnerIds = canonicalizeCyberSpanRecipes(smartTerrain);
   discardOwnedOutputsForOwners(tileData, smartTerrain, resetOwnerIds);
   clearCyberOwnedOutputs(tileData, smartTerrain);
@@ -1153,7 +1259,7 @@ function clearShapeValuesAround(
   styleId: SmartStyleId,
   brushId: SmartBrushId,
 ): void {
-  const offsets: readonly (readonly [number, number])[] = brushId === 'cyber.structure'
+  const offsets: readonly (readonly [number, number])[] = isCyberLetterBrushId(brushId)
     ? [
       [0, 0], [0, -1], [1, -1], [1, 0], [1, 1],
       [0, 1], [-1, 1], [-1, 0], [-1, -1],
@@ -1163,8 +1269,8 @@ function clearShapeValuesAround(
     const targetX = x + dx;
     const targetY = y + dy;
     const semantic = state.semanticCells[smartSemanticCellKey(layer, targetX, targetY)];
-    const matches = brushId === 'cyber.structure'
-      ? semantic?.brushId === brushId
+    const matches = isCyberLetterBrushId(brushId)
+      ? Boolean(semantic && isCyberLetterBrushId(semantic.brushId))
       : semantic?.styleId === styleId && semantic.brushId === brushId;
     if (matches && semantic) delete semantic.shapeValue;
   }
@@ -1177,7 +1283,7 @@ function nextPanelInstanceId(state: RoomSmartTerrainState): string {
 }
 
 function isPanelRecipeAt(recipe: SmartRecipeInstanceState, x: number, y: number): boolean {
-  if (recipe.recipeId !== CYBER_PANEL_RECIPE_ID) return false;
+  if (recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel') return false;
   const bounds = recipeBounds(recipe);
   return Boolean(bounds && x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.minY + 1);
 }
@@ -1249,7 +1355,7 @@ function applyPanelCells(
   state.recipes[instanceId] = {
     recipeId: CYBER_PANEL_RECIPE_ID,
     ownerId,
-    brushId: 'cyber.framed-panel',
+    brushId: 'cyber.fence',
     styleId,
     anchor: { layer: 'foreground', x: bounds.minX, y: bounds.minY },
     bounds,
@@ -1349,7 +1455,7 @@ export function applySmartBrushCells(
   const cells = Array.from(options.cells).filter(({ x, y }) => inBounds(x, y));
   const migratedOwnerIds = canonicalizeCyberSpanRecipes(smartTerrain);
   discardOwnedOutputsForOwners(tileData, smartTerrain, migratedOwnerIds);
-  if (options.brushId === 'cyber.framed-panel') {
+  if (options.brushId === 'cyber.fence') {
     applyPanelCells(smartTerrain, cells, options.mode, options.styleId);
   } else if (isCyberSpanBrushId(options.brushId)) {
     applySpanCells(
@@ -1373,9 +1479,15 @@ export function applySmartBrushCells(
         delete smartTerrain.semanticCells[semanticKey];
         tileData[layer][y][x] = -1;
       } else {
+        const existing = smartTerrain.semanticCells[semanticKey];
+        const reroll = existing
+          && existing.brushId === options.brushId
+          && existing.styleId === options.styleId
+          && !existing.legacySource;
         smartTerrain.semanticCells[semanticKey] = {
           styleId: options.styleId,
           brushId: options.brushId,
+          ...(reroll ? { varietySalt: (existing.varietySalt ?? 0) + 1 } : {}),
         };
       }
       smartTerrain.suppressedOutputParts = smartTerrain.suppressedOutputParts.filter(
@@ -1392,8 +1504,11 @@ export function applySmartBrushOutlineCells(
   document: SmartRecipeDocument,
   options: ApplySmartBrushOutlineCellsOptions,
 ): SmartRecipeDocument {
-  const filledCells = Array.from(options.filledCells).filter(({ x, y }) => inBounds(x, y));
   const outlineCells = Array.from(options.outlineCells).filter(({ x, y }) => inBounds(x, y));
+  if (isCyberLetterBrushId(options.brushId)) {
+    return applySmartBrushCells(document, { ...options, cells: outlineCells, mode: 'paint' });
+  }
+  const filledCells = Array.from(options.filledCells).filter(({ x, y }) => inBounds(x, y));
   const reference = applySmartBrushCells(document, { ...options, cells: filledCells, mode: 'paint' });
   const result = applySmartBrushCells(document, { ...options, cells: outlineCells, mode: 'paint' });
   const brush = getSmartBrushDefinition(options.brushId);
@@ -1483,3 +1598,7 @@ export function clearSmartRecipeLayerState(
   ));
   return next;
 }
+
+void findEnclosedCyberVoidCells;
+void resolveStructureComponent;
+void resolveHorizontalSpanRecipe;

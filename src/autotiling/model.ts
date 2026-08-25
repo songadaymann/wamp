@@ -24,8 +24,8 @@ export const SMART_LEGACY_BRUSH_IDS = [
 export type SmartLegacyBrushId = typeof SMART_LEGACY_BRUSH_IDS[number];
 
 export const SMART_CYBER_BRUSH_IDS = [
-  'cyber.structure', 'cyber.platform', 'cyber.rubble',
-  'cyber.support', 'cyber.neon-strip', 'cyber.framed-panel',
+  'cyber.concrete', 'cyber.windows', 'cyber.shell', 'cyber.neon', 'cyber.fence',
+  'cyber.rubble', 'cyber.support',
 ] as const;
 export type SmartCyberBrushId = typeof SMART_CYBER_BRUSH_IDS[number];
 
@@ -63,6 +63,8 @@ export interface SmartSemanticCellState {
   lockedValue?: SmartEncodedTileValue;
   /** Full encoded tile value, including flip flags. */
   shapeValue?: SmartEncodedTileValue;
+  /** Increments when the same brush is painted again so catalog variety can re-roll. */
+  varietySalt?: number;
   /** Compatibility mirror rebuilt from cells/backdropCells on normalization. */
   legacySource?: true;
 }
@@ -210,8 +212,18 @@ export function getLegacySmartBrushIdentity(brushId: SmartBrushId): LegacySmartB
   return LEGACY_BRUSH_IDENTITIES[brushId as SmartLegacyBrushId] ?? null;
 }
 
+const CYBER_BRUSH_ALIASES: Readonly<Record<string, SmartCyberBrushId>> = {
+  'cyber.structure': 'cyber.concrete',
+  'cyber.platform': 'cyber.concrete',
+  'cyber.neon-strip': 'cyber.neon',
+  'cyber.framed-panel': 'cyber.fence',
+};
+
 /** Canonicalizes a persisted brush ID, including the four short-lived generic v2 aliases. */
 export function normalizeSmartBrushId(styleId: SmartStyleId, value: unknown): SmartBrushId | null {
+  if (typeof value === 'string' && value in CYBER_BRUSH_ALIASES) {
+    return CYBER_BRUSH_ALIASES[value]!;
+  }
   if (SMART_BRUSH_IDS.includes(value as SmartBrushId)) return value as SmartBrushId;
   if (!SMART_TRANSIENT_BRUSH_ALIASES.includes(value as SmartTransientBrushAlias)) return null;
   const theme = LEGACY_STYLE_TO_THEME[styleId];
@@ -235,12 +247,13 @@ function isSmartBrushSourceCompatible(
   }
   if (styleId !== 'cyber-yellow' && styleId !== 'cyber-pink') return false;
   if (brushId === 'cyber.support') return layer === 'background';
-  if (brushId === 'cyber.framed-panel') return layer === 'foreground';
+  if (brushId === 'cyber.fence') return layer === 'foreground';
   return layer === 'terrain' && (
-    brushId === 'cyber.structure'
-    || brushId === 'cyber.platform'
+    brushId === 'cyber.concrete'
+    || brushId === 'cyber.windows'
+    || brushId === 'cyber.shell'
+    || brushId === 'cyber.neon'
     || brushId === 'cyber.rubble'
-    || brushId === 'cyber.neon-strip'
   );
 }
 
@@ -360,11 +373,13 @@ function normalizeSemanticCells(value: unknown): Record<string, SmartSemanticCel
     if (!isSmartBrushSourceCompatible(styleId, brushId, layer)) continue;
     const lockedValue = isEncodedTileValue(cell.lockedValue) ? cell.lockedValue : undefined;
     const shapeValue = isEncodedTileValue(cell.shapeValue) ? cell.shapeValue : undefined;
+    const varietySalt = isPositiveInteger(cell.varietySalt) ? cell.varietySalt : undefined;
     cells[key] = {
       styleId,
       brushId,
       ...(lockedValue === undefined ? {} : { lockedValue }),
       ...(shapeValue === undefined ? {} : { shapeValue }),
+      ...(varietySalt === undefined ? {} : { varietySalt }),
       ...(cell.legacySource === true ? { legacySource: true as const } : {}),
     };
   }

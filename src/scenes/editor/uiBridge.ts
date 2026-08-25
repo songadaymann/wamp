@@ -83,10 +83,10 @@ import {
   type SmartThemeId,
 } from '../../autotiling/registry';
 import {
-  SMART_BRUSH_IDS,
   SMART_STYLE_IDS,
   getLegacySmartBrushIdentity,
   getSmartLegacyBrushId,
+  normalizeSmartBrushId,
   type SmartBrushId,
   type SmartStyleId,
 } from '../../autotiling/model';
@@ -130,6 +130,7 @@ const SMART_TOOL_LABELS: Readonly<Partial<Record<ToolName, string>>> = {
   pencil: 'Draw',
   rect: 'Rectangle',
   ellipse: 'Ellipse',
+  line: 'Line',
   fill: 'Fill',
 };
 
@@ -138,7 +139,7 @@ function parseSmartThemeId(value: string | undefined): SmartThemeId | null {
 }
 
 function parseSmartBrushId(value: string | undefined): SmartBrushId | null {
-  return SMART_BRUSH_IDS.includes(value as SmartBrushId) ? value as SmartBrushId : null;
+  return normalizeSmartBrushId('cyber-yellow', value);
 }
 
 function parseSmartStyleId(value: string | undefined): SmartStyleId | null {
@@ -146,7 +147,7 @@ function parseSmartStyleId(value: string | undefined): SmartStyleId | null {
 }
 
 function isRegistryControlledSmartTool(tool: ToolName): boolean {
-  return tool === 'pencil' || tool === 'rect' || tool === 'ellipse' || tool === 'fill';
+  return tool === 'pencil' || tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill';
 }
 
 function formatList(values: string[]): string {

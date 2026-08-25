@@ -64,7 +64,7 @@ describe('editor clipboard planning', () => {
     const sourceKey = smartSemanticCellKey('terrain', 5, 6);
     smartTerrain.semanticCells[sourceKey] = {
       styleId: 'cyber-yellow',
-      brushId: 'cyber.structure',
+      brushId: 'cyber.concrete',
       lockedValue,
       shapeValue: 0x4000004e,
     };
@@ -78,7 +78,7 @@ describe('editor clipboard planning', () => {
     expect(state.smartSemanticCells).toEqual({
       '1,1': {
         styleId: 'cyber-yellow',
-        brushId: 'cyber.structure',
+        brushId: 'cyber.concrete',
         lockedValue,
         shapeValue: 0x4000004e,
       },
@@ -92,7 +92,7 @@ describe('editor clipboard planning', () => {
         y: 12,
         cell: {
           styleId: 'cyber-yellow',
-          brushId: 'cyber.structure',
+          brushId: 'cyber.concrete',
           lockedValue,
           shapeValue: 0x4000004e,
         },
@@ -108,10 +108,10 @@ describe('editor clipboard planning', () => {
   it('keeps a complete framed-panel recipe but treats partial selections as baked manual tiles', () => {
     const smartTerrain = createRoomSmartTerrainState();
     smartTerrain.recipes['cyber-panel-7'] = {
-      recipeId: 'cyber.framed-panel',
+      recipeId: 'cyber.fence',
       ownerId: 'cyber:recipe:cyber-panel-7',
       styleId: 'cyber-pink',
-      brushId: 'cyber.framed-panel',
+      brushId: 'cyber.fence',
       anchor: { layer: 'foreground', x: 4, y: 5 },
       bounds: { minX: 4, minY: 5, maxX: 6, maxY: 6, width: 3, height: 2 },
       sourceCells: [4, 5, 6].map((x) => ({ layer: 'foreground' as const, x, y: 5 })),
@@ -177,22 +177,6 @@ describe('editor clipboard planning', () => {
   });
 
   it.each([
-    {
-      brushId: 'cyber.platform' as const,
-      styleId: 'cyber-yellow' as const,
-      layer: 'terrain' as const,
-      cells: [2, 3, 4, 5].map((x) => ({ x, y: 3 })),
-      bounds: { minX: 2, minY: 3, maxX: 5, maxY: 3, width: 4, height: 1 },
-      partial: { minX: 2, minY: 3, maxX: 4, maxY: 3 },
-    },
-    {
-      brushId: 'cyber.neon-strip' as const,
-      styleId: 'cyber-pink' as const,
-      layer: 'terrain' as const,
-      cells: [9, 10, 11].map((x) => ({ x, y: 7 })),
-      bounds: { minX: 9, minY: 7, maxX: 11, maxY: 7, width: 3, height: 1 },
-      partial: { minX: 9, minY: 7, maxX: 10, maxY: 7 },
-    },
     {
       brushId: 'cyber.support' as const,
       styleId: 'cyber-yellow' as const,
@@ -273,46 +257,73 @@ describe('editor clipboard planning', () => {
     expect(baked.tiles.flat().some((value) => value > 0)).toBe(true);
   });
 
-  it('copies an invisible below-minimum span from its complete semantic footprint', () => {
+  it('copies letter-matched concrete cells as semantic sources', () => {
     const document = applySmartBrushCells({
       tileData: createEmptyTileData(),
       smartTerrain: createRoomSmartTerrainState(),
     }, {
-      brushId: 'cyber.platform',
+      brushId: 'cyber.concrete',
+      styleId: 'cyber-yellow',
+      cells: [2, 3, 4, 5].map((x) => ({ x, y: 3 })),
+      mode: 'paint',
+    });
+    const getTile = (x: number, y: number): number => document.tileData.terrain[y]?.[x] ?? -1;
+    const clipboard = buildEditorClipboardState(
+      'terrain', 2, 3, 5, 3, getTile, undefined, document.smartTerrain,
+    )!;
+    expect(clipboard.smartRecipes).toBeUndefined();
+    expect(clipboard.smartSemanticCells).toEqual({
+      '0,0': { styleId: 'cyber-yellow', brushId: 'cyber.concrete' },
+      '1,0': { styleId: 'cyber-yellow', brushId: 'cyber.concrete' },
+      '2,0': { styleId: 'cyber-yellow', brushId: 'cyber.concrete' },
+      '3,0': { styleId: 'cyber-yellow', brushId: 'cyber.concrete' },
+    });
+    expect(getTile(2, 3)).toBeGreaterThan(0);
+  });
+
+  it('copies an isolated concrete cell from its semantic footprint', () => {
+    const document = applySmartBrushCells({
+      tileData: createEmptyTileData(),
+      smartTerrain: createRoomSmartTerrainState(),
+    }, {
+      brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
       cells: [{ x: 7, y: 8 }],
       mode: 'paint',
     });
-    expect(document.tileData.terrain[8]![7]).toBe(-1);
+    expect(document.tileData.terrain[8]![7]).toBeGreaterThan(0);
 
     const clipboard = buildEditorClipboardState(
-      'terrain', 7, 8, 7, 8, () => -1, undefined, document.smartTerrain,
+      'terrain', 7, 8, 7, 8,
+      (x, y) => document.tileData.terrain[y]?.[x] ?? -1,
+      undefined,
+      document.smartTerrain,
     );
     expect(clipboard).not.toBeNull();
-    expect(clipboard?.occupiedMask).toEqual([[false]]);
-    expect(clipboard?.smartRecipes?.[0]?.recipe).toMatchObject({
-      brushId: 'cyber.platform',
-      anchor: { layer: 'terrain', x: 0, y: 0 },
-      bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 1, height: 1 },
-      sourceCells: [{ layer: 'terrain', x: 0, y: 0 }],
+    expect(clipboard?.smartSemanticCells).toEqual({
+      '0,0': { styleId: 'cyber-yellow', brushId: 'cyber.concrete' },
     });
-    expect(planEditorSmartClipboardPaste(clipboard!, 20, 12, 'terrain').recipes[0]?.recipe)
-      .toMatchObject({
-        anchor: { layer: 'terrain', x: 20, y: 12 },
-        sourceCells: [{ layer: 'terrain', x: 20, y: 12 }],
-      });
+    expect(planEditorSmartClipboardPaste(clipboard!, 20, 12, 'terrain').semanticCells).toEqual([
+      {
+        layer: 'terrain',
+        x: 20,
+        y: 12,
+        cell: { styleId: 'cyber-yellow', brushId: 'cyber.concrete' },
+        suppressedPartIds: [],
+      },
+    ]);
   });
 
   it('deep-clones v2 semantic, suppression, and recipe payloads', () => {
     const smartTerrain = createRoomSmartTerrainState();
     smartTerrain.semanticCells[smartSemanticCellKey('foreground', 1, 1)] = {
-      styleId: 'cyber-pink', brushId: 'cyber.framed-panel', lockedValue: 123,
+      styleId: 'cyber-pink', brushId: 'cyber.fence', lockedValue: 123,
     };
     smartTerrain.recipes.panel = {
-      recipeId: 'cyber.framed-panel',
+      recipeId: 'cyber.fence',
       ownerId: 'cyber:recipe:panel',
       styleId: 'cyber-pink',
-      brushId: 'cyber.framed-panel',
+      brushId: 'cyber.fence',
       anchor: { layer: 'foreground', x: 1, y: 1 },
       bounds: { minX: 1, minY: 1, maxX: 1, maxY: 1, width: 1, height: 1 },
       sourceCells: [{ layer: 'foreground', x: 1, y: 1 }],

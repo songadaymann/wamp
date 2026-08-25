@@ -27,6 +27,7 @@ export interface EditorState {
   activeTool: ToolName;
   rectOutline: boolean;
   ellipseOutline: boolean;
+  lineCurve: boolean;
   activeLayer: LayerName;
   selectedTilesetKey: string;
   selectedTileGid: number;  // global tile ID of top-left of selection
@@ -78,6 +79,7 @@ export const editorState: EditorState = {
   activeTool: 'pencil',
   rectOutline: false,
   ellipseOutline: false,
+  lineCurve: false,
   activeLayer: 'terrain',
   selectedTilesetKey: DEFAULT_EDITOR_TILESET_KEY,
   selectedTileGid: DEFAULT_EDITOR_SELECTED_TILE_GID,

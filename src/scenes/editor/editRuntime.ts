@@ -111,7 +111,7 @@ import {
   type NpcMode,
 } from '../../npcs/model';
 import { EditorHistory } from './history';
-import { iterateShapeTiles } from './shapeTiles';
+import { iterateShapeTiles, type EditorShapeKind, type TilePoint } from './shapeTiles';
 import {
   buildEditorClipboardState,
   cloneEditorClipboardState,
@@ -226,9 +226,7 @@ type CyberSmartGestureAxis = 'horizontal' | 'vertical';
 
 function getCyberSmartGestureAxis(brushId: SmartBrushId): CyberSmartGestureAxis | null {
   switch (brushId) {
-    case 'cyber.platform':
-    case 'cyber.neon-strip':
-    case 'cyber.framed-panel':
+    case 'cyber.fence':
       return 'horizontal';
     case 'cyber.support':
       return 'vertical';
@@ -254,11 +252,7 @@ function getCyberSmartRectangleCells(
   x2: number,
   y2: number,
 ): Array<{ x: number; y: number }> | null {
-  if (
-    brushId === 'cyber.platform'
-    || brushId === 'cyber.neon-strip'
-    || brushId === 'cyber.framed-panel'
-  ) {
+  if (brushId === 'cyber.fence') {
     const minX = Math.min(x1, x2);
     const maxX = Math.max(x1, x2);
     return Array.from({ length: maxX - minX + 1 }, (_, offset) => ({
@@ -1304,12 +1298,12 @@ export class EditorEditRuntime {
   }
 
   stampShape(
-    kind: 'rect' | 'ellipse',
+    kind: EditorShapeKind,
     x1: number,
     y1: number,
     x2: number,
     y2: number,
-    options?: { outline?: boolean; erase?: boolean },
+    options?: { outline?: boolean; erase?: boolean; mid?: TilePoint },
   ): void {
     if (!this.guardEditable()) {
       return;
@@ -1328,13 +1322,13 @@ export class EditorEditRuntime {
         ));
         return;
       }
-      const cells = iterateShapeTiles(kind, x1, y1, x2, y2, outline);
+      const cells = iterateShapeTiles(kind, x1, y1, x2, y2, outline, options?.mid);
       const document = this.getSmartDocument();
       this.applySmartDocument(
         outline && !erase
           ? applySelectedSmartOutlineCells(
               document,
-              iterateShapeTiles(kind, x1, y1, x2, y2, false),
+              iterateShapeTiles(kind, x1, y1, x2, y2, false, options?.mid),
               cells,
             )
           : applySelectedSmartCells(document, cells, erase ? 'erase' : 'paint'),
@@ -1347,7 +1341,7 @@ export class EditorEditRuntime {
     }
 
     const newGid = erase ? -1 : getSelectionTileValue(0, 0);
-    for (const tile of iterateShapeTiles(kind, x1, y1, x2, y2, outline)) {
+    for (const tile of iterateShapeTiles(kind, x1, y1, x2, y2, outline, options?.mid)) {
       if (tile.x < 0 || tile.x >= ROOM_WIDTH || tile.y < 0 || tile.y >= ROOM_HEIGHT) {
         continue;
       }

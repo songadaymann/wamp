@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   constrainToSquare,
+  iterateCurveTiles,
   iterateEllipseTiles,
+  iterateLineTiles,
   iterateRectTiles,
   resolveShapeEnd,
+  snapLineEnd,
 } from './shapeTiles';
 
 describe('shapeTiles', () => {
@@ -62,5 +65,32 @@ describe('shapeTiles', () => {
     expect(outline).not.toContainEqual({ x: 2, y: 2 });
     expect(outline.length).toBeGreaterThan(0);
     expect(outline.length).toBeLessThan(filled.length);
+  });
+
+  it('rasters a one-tile-thick line and snaps to 45-degree increments', () => {
+    expect(iterateLineTiles(0, 0, 0, 0)).toEqual([{ x: 0, y: 0 }]);
+    expect(iterateLineTiles(0, 0, 3, 0)).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: 3, y: 0 },
+    ]);
+    expect(iterateLineTiles(0, 0, 2, 2)).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 2 },
+    ]);
+
+    expect(snapLineEnd({ x: 10, y: 10 }, { x: 16, y: 11 })).toEqual({ x: 16, y: 10 });
+    expect(snapLineEnd({ x: 10, y: 10 }, { x: 16, y: 15 })).toEqual({ x: 16, y: 16 });
+    expect(snapLineEnd({ x: 10, y: 10 }, { x: 10, y: 4 })).toEqual({ x: 10, y: 4 });
+  });
+
+  it('pulls a quadratic curve so the mouse tile sits at the arc midpoint', () => {
+    const tiles = iterateCurveTiles(0, 0, 4, 0, { x: 2, y: 2 });
+    expect(tiles[0]).toEqual({ x: 0, y: 0 });
+    expect(tiles[tiles.length - 1]).toEqual({ x: 4, y: 0 });
+    expect(tiles).toContainEqual({ x: 2, y: 2 });
+    expect(tiles.length).toBeGreaterThan(5);
   });
 });

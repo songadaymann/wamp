@@ -72,14 +72,14 @@ describe('smart authoring registry', () => {
 
   it('uses the public rule vocabulary and exposes runtime resolver metadata', () => {
     expect(SMART_RULE_KINDS).toEqual(['terrain', 'path', 'span', 'rectangle', 'stamp']);
-    expect(getSmartBrushDefinition('cyber.structure')).toMatchObject({
-      label: 'Ground',
+    expect(getSmartBrushDefinition('cyber.concrete')).toMatchObject({
+      label: 'Concrete',
       ruleKind: 'terrain',
       algorithm: 'blob-8way',
-      resolverKey: 'cyber.structure',
+      resolverKey: 'cyber.concrete',
       collisionRole: 'solid',
       defaultLayer: 'terrain',
-      compatibleLegacyLocalIndices: expect.arrayContaining([14, 15, 21, 23, 62, 63, 64, 83]),
+      compatibleLegacyLocalIndices: expect.arrayContaining([14, 15, 20, 64, 83]),
       outputLayers: ['terrain', 'foreground'],
     });
     expect(getSmartBrushDefinition('cyber.rubble').outputLayers).toEqual(['terrain', 'foreground']);
@@ -88,31 +88,32 @@ describe('smart authoring registry', () => {
   it('declares Cyber layers and authoring tools for Theme to Brush to Color UI', () => {
     expect(getSmartStylesForTheme('cyber').map(({ id }) => id)).toEqual(['cyber-yellow', 'cyber-pink']);
     expect(getSmartBrushesForTheme('cyber').map(({ id }) => id)).toEqual([
-      'cyber.structure',
-      'cyber.platform',
+      'cyber.concrete',
+      'cyber.windows',
+      'cyber.shell',
       'cyber.rubble',
       'cyber.support',
-      'cyber.neon-strip',
-      'cyber.framed-panel',
+      'cyber.neon',
+      'cyber.fence',
     ]);
     expect(getSmartBrushDefinition('cyber.support')).toMatchObject({
       defaultLayer: 'background',
       supportedLayers: ['background'],
       outputLayers: ['background'],
     });
-    expect(getSmartBrushDefinition('cyber.neon-strip')).toMatchObject({
+    expect(getSmartBrushDefinition('cyber.neon')).toMatchObject({
       defaultLayer: 'terrain',
       supportedLayers: ['terrain'],
-      outputLayers: ['terrain'],
+      outputLayers: ['terrain', 'foreground'],
     });
-    expect(getSmartBrushDefinition('cyber.framed-panel')).toMatchObject({
+    expect(getSmartBrushDefinition('cyber.fence')).toMatchObject({
       defaultLayer: 'foreground',
       supportedLayers: ['foreground'],
       outputLayers: ['foreground'],
     });
-    expect(isSmartBrushToolSupported('cyber.structure', 'fill')).toBe(true);
-    expect(isSmartBrushToolSupported('cyber.platform', 'fill')).toBe(false);
-    expect(isSmartBrushToolSupported('cyber.framed-panel', 'rect')).toBe(true);
+    expect(isSmartBrushToolSupported('cyber.concrete', 'fill')).toBe(true);
+    expect(isSmartBrushToolSupported('cyber.windows', 'fill')).toBe(true);
+    expect(isSmartBrushToolSupported('cyber.fence', 'line')).toBe(true);
   });
 
   it('lists only theme-qualified canonical brushes for every legacy theme', () => {

@@ -100,6 +100,7 @@ import {
 } from '../weather/model';
 import { buildRoomWeatherSurfaceSegments } from '../weather/surfaces';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
+import type { EditorShapeKind } from './editor/shapeTiles';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
 type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
@@ -111,13 +112,14 @@ export type EditorPreviewSmokeCommand =
   | { op: 'eraseCells'; cells: Array<{ x: number; y: number }> }
   | {
       op: 'stampShape';
-      kind: 'rect' | 'ellipse';
+      kind: EditorShapeKind;
       x1: number;
       y1: number;
       x2: number;
       y2: number;
       outline: boolean;
       erase: boolean;
+      mid?: { x: number; y: number };
     }
   | { op: 'floodFill'; x: number; y: number }
   | { op: 'copy'; x1: number; y1: number; x2: number; y2: number }
@@ -1352,7 +1354,7 @@ export class EditorScene extends Phaser.Scene {
               command.y1,
               command.x2,
               command.y2,
-              { outline: command.outline, erase: command.erase },
+              { outline: command.outline, erase: command.erase, mid: command.mid },
             );
             break;
           case 'floodFill':
