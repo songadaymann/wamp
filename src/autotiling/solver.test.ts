@@ -536,7 +536,7 @@ describe('smart terrain solver', () => {
 
   it.each([
     { theme: 'forest', expected: [2, 3, 4, 5, 56, 58, 59] },
-    { theme: 'desert', expected: [4, 5, 7, 8] },
+    { theme: 'desert', expected: [2, 3, 4, 5, 7, 8] },
     { theme: 'cave', expected: [3, 4, 5, 6, 57, 61] },
     { theme: 'gothic', expected: [2, 3, 4, 5] },
   ] as const)('uses exactly the approved sparse $theme ground decorations', ({ theme, expected }) => {
@@ -567,7 +567,7 @@ describe('smart terrain solver', () => {
       .map(([key, { gid }]) => [key, gid - firstGid]));
     const variants = new Set(Object.values(decorations));
 
-    expect([...variants].sort((a, b) => a - b)).toEqual([4, 5, 7, 8]);
+    expect([...variants].sort((a, b) => a - b)).toEqual([2, 3, 4, 5, 7, 8]);
     for (const [key, local] of Object.entries(decorations)) {
       const [x, y] = key.split(',').map(Number);
       if (local === 7) expect(decorations[`${x + 1},${y}`]).toBe(8);

@@ -825,7 +825,7 @@ try {
 
   const decorationPools = {
     forest: { firstGid: 1, expected: [2, 3, 4, 5, 56, 58, 59] },
-    desert: { firstGid: 73, expected: [4, 5, 7, 8] },
+    desert: { firstGid: 73, expected: [2, 3, 4, 5, 7, 8] },
     cave: { firstGid: 145, expected: [3, 4, 5, 6, 57, 61] },
     gothic: { firstGid: 733, expected: [2, 3, 4, 5] },
   };
