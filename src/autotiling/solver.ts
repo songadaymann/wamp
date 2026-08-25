@@ -132,15 +132,17 @@ export const SMART_TILESET_SLOTS = {
       bottomRight: 22,
     },
   },
-  // Theme-specific, non-colliding decoration allowlists. Only one in eight
-  // eligible exposed ground cells receives one.
+  // Artist-approved sparse details by 12-column sheet coordinate. Each nested
+  // array is one atomic variant; Desert A8+A9 must be placed left-to-right.
+  // Forest: A3/A4/A5/A6/E9/E11/E12 = 2/3/4/5/56/58/59.
+  // Desert: A5/A6 and paired A8+A9 = 4/5 and 7+8.
+  // Cave: A4/A5/A6/A7/E10/F2 = 3/4/5/6/57/61 (A3/local 2 excluded).
+  // Gothic remains A3/A4/A5/A6 = 2/3/4/5.
   groundDecoration: {
-    forest: [2, 3, 4, 5, 56, 58, 59],
-    // 2 and 3 hang down from a ceiling, so they do not belong on ground tops.
-    desert: [4, 5, 7, 8],
-    cave: [2, 3, 4, 5, 6, 57, 61],
-    gothic: [2, 3, 4, 5],
-    water: [],
+    forest: [[2], [3], [4], [5], [56], [58], [59]],
+    desert: [[4], [5], [7, 8]],
+    cave: [[3], [4], [5], [6], [57], [61]],
+    gothic: [[2], [3], [4], [5]],
   },
 } as const;
 
@@ -603,6 +605,16 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
   }
 
   const suppressed = new Set(state.suppressedDecorationSlots);
+  const canAddDecoration = (
+    ownerKey: string,
+    targetX: number,
+    targetY: number,
+    slot: import('./model').SmartGeneratedDecorationState['slot'],
+    layer: import('./model').SmartGeneratedDecorationState['layer'] = 'terrain',
+  ) => inBounds(targetX, targetY)
+    && Boolean(state.cells[ownerKey])
+    && !suppressed.has(smartDecorationSlotKey(ownerKey, slot))
+    && decodeTileDataValue(tileData[layer][targetY]?.[targetX] ?? -1).gid <= 0;
   const addDecoration = (
     ownerKey: string,
     targetX: number,
@@ -614,9 +626,7 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     layer: import('./model').SmartGeneratedDecorationState['layer'] = 'terrain',
     secondary = false,
   ) => {
-    if (!inBounds(targetX, targetY)) return;
-    const slotKey = smartDecorationSlotKey(ownerKey, slot);
-    if (suppressed.has(slotKey) || decodeTileDataValue(tileData[layer][targetY]?.[targetX] ?? -1).gid > 0) return;
+    if (!canAddDecoration(ownerKey, targetX, targetY, slot, layer)) return;
     const gid = toGid(state.cells[ownerKey]!.theme, localIndex);
     const value = encodeTileDataValue(gid, flipX, flipY);
     tileData[layer][targetY][targetX] = value;
@@ -646,6 +656,13 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     addDecoration(ownerKey, targetX, targetY, slot, localIndex, flipX, false, layer, true);
   };
   const featureCandidates = new Map<string, SmartTerrainCellState>();
+  const groundDecorationCandidates: Array<{
+    ownerKey: string;
+    cell: SmartTerrainCellState;
+    x: number;
+    y: number;
+    hash: number;
+  }> = [];
   for (const [ownerKey, cell] of Object.entries(state.cells)) {
     const [x, y] = ownerKey.split(',').map(Number);
     if (!inBounds(x, y)) continue;
@@ -665,15 +682,36 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     }
     const decorationHash = stableHash(x, y, 53);
     if (decorationHash % 8 !== 0) continue;
-    const decorationVariants = SMART_TILESET_SLOTS.groundDecoration[cell.theme];
-    if (decorationVariants.length === 0) continue;
-    addDecoration(
-      ownerKey,
-      x,
-      y - 1,
-      'top',
-      decorationVariants[Math.floor(decorationHash / 8) % decorationVariants.length]!,
-    );
+    groundDecorationCandidates.push({ ownerKey, cell, x, y, hash: decorationHash });
+  }
+
+  for (const { ownerKey, cell, x, y, hash } of groundDecorationCandidates) {
+    if (cell.theme === 'water') continue;
+    const variants = SMART_TILESET_SLOTS.groundDecoration[cell.theme];
+    const variant = variants[Math.floor(hash / 8) % variants.length] ?? variants[0];
+    if (!variant) continue;
+    if (variant.length === 1) {
+      addDecoration(ownerKey, x, y - 1, 'top', variant[0]!);
+      continue;
+    }
+
+    const rightOwnerKey = smartCellKey(x + 1, y);
+    const rightOwner = state.cells[rightOwnerKey];
+    const rightShapeValue = rightOwner?.shapeValue ?? rightOwner?.shapeGid;
+    const rightHasExposedTop = rightOwner
+      && rightOwner.theme === cell.theme
+      && rightOwner.material === 'ground'
+      && !sameFamily(tileData, state, x + 1, y - 1, rightOwner)
+      && (!rightShapeValue || GROUND_TOP_LOCAL_INDICES.has(
+        decodeTileDataValue(rightShapeValue).gid - getFirstGid(rightOwner.theme),
+      ));
+    if (
+      !rightHasExposedTop
+      || !canAddDecoration(ownerKey, x, y - 1, 'top')
+      || !canAddDecoration(rightOwnerKey, x + 1, y - 1, 'top')
+    ) continue;
+    addDecoration(ownerKey, x, y - 1, 'top', variant[0]!);
+    addDecoration(rightOwnerKey, x + 1, y - 1, 'top', variant[1]!);
   }
 
   const border = SMART_TILESET_SLOTS.feature.border;
@@ -907,11 +945,32 @@ export function suppressGeneratedDecorationAt(
   if (!generated) {
     return { tileData, smartTerrain };
   }
-  tileData[generated.layer][y][x] = -1;
-  smartTerrain.suppressedDecorationSlots = Array.from(new Set([
-    ...smartTerrain.suppressedDecorationSlots,
-    smartDecorationSlotKey(generated.ownerKey, generated.slot),
-  ]));
-  delete generatedMap![targetKey];
+  const removals = [[targetKey, generated] as const];
+  const ownerTheme = smartTerrain.cells[generated.ownerKey]?.theme;
+  const localIndex = ownerTheme ? generated.gid - getFirstGid(ownerTheme) : -1;
+  if (ownerTheme === 'desert' && (localIndex === 7 || localIndex === 8)) {
+    const companionX = localIndex === 7 ? x + 1 : x - 1;
+    const companionKey = smartCellKey(companionX, y);
+    const companion = generatedMap?.[companionKey];
+    const expectedLocal = localIndex === 7 ? 8 : 7;
+    if (
+      companion
+      && companion.layer === generated.layer
+      && companion.gid - getFirstGid(ownerTheme) === expectedLocal
+    ) {
+      removals.push([companionKey, companion]);
+    }
+  }
+  for (const [removalKey, removal] of removals) {
+    const [removalX, removalY] = removalKey.split(',').map(Number);
+    tileData[removal.layer][removalY][removalX] = -1;
+    smartTerrain.suppressedDecorationSlots.push(
+      smartDecorationSlotKey(removal.ownerKey, removal.slot),
+    );
+    delete generatedMap![removalKey];
+  }
+  smartTerrain.suppressedDecorationSlots = Array.from(new Set(
+    smartTerrain.suppressedDecorationSlots,
+  ));
   return { tileData, smartTerrain };
 }

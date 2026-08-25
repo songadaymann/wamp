@@ -826,7 +826,7 @@ try {
   const decorationPools = {
     forest: { firstGid: 1, expected: [2, 3, 4, 5, 56, 58, 59] },
     desert: { firstGid: 73, expected: [4, 5, 7, 8] },
-    cave: { firstGid: 145, expected: [2, 3, 4, 5, 6, 57, 61] },
+    cave: { firstGid: 145, expected: [3, 4, 5, 6, 57, 61] },
     gothic: { firstGid: 733, expected: [2, 3, 4, 5] },
   };
   for (const [themeName, pool] of Object.entries(decorationPools)) {
@@ -850,6 +850,17 @@ try {
     const variants = new Set(Object.values(decorationFixture.smartTerrain.generatedDecorations)
       .map(({ gid }) => gid - pool.firstGid));
     assert.deepEqual([...variants].sort((a, b) => a - b), pool.expected);
+    if (themeName === 'desert') {
+      const decorations = Object.fromEntries(Object.entries(
+        decorationFixture.smartTerrain.generatedDecorations,
+      ).map(([key, { gid }]) => [key, gid - pool.firstGid]));
+      for (const [key, local] of Object.entries(decorations)) {
+        const [x, y] = key.split(',').map(Number);
+        if (local === 7) assert.equal(decorations[`${x + 1},${y}`], 8);
+        if (local === 8) assert.equal(decorations[`${x - 1},${y}`], 7);
+      }
+      summary.checks.desertDecorationPairs = true;
+    }
     const decorationKeepBuilding = page.locator('#btn-guest-builder-claim-continue');
     if (await decorationKeepBuilding.isVisible()) await decorationKeepBuilding.click();
     await runEditorCommands(page, [{ op: 'fitToScreen' }]);
