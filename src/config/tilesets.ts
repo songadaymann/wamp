@@ -15,6 +15,8 @@ export interface TilesetConfig {
   lightEmissionProfiles?: Partial<Record<number, TileLightEmissionConfig>>;
   editorTileMetadata?: Partial<Record<number, EditorTileMetadata>>;
   editorPaletteBackgroundColor?: string;
+  /** Internal renderer atlas omitted from the manual Advanced tileset picker. */
+  editorHidden?: boolean;
   uiTheme?: TilesetUiThemeConfig;
   /** Optional curated structural recipes for agent-authored terrain. */
   authoringBuildStyles?: TilesetAuthoringBuildStyleDefinition[];
@@ -315,6 +317,8 @@ export const BOYGAME_TILESET_KEY = 'boygame';
 export const BOYGAME_TILESET_FIRST_GID = 1801;
 export const JUNGLE_VINES_TILESET_KEY = 'jungle-vines';
 export const JUNGLE_VINES_TILESET_FIRST_GID = 2001;
+export const AUTOTILE_EDGE_CASES_DESERT_TILESET_KEY = 'autotile-edge-cases-desert';
+export const AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID = 2073;
 export const SPECIAL_TILESET_KEY = 'special';
 export const SPECIAL_TILESET_FIRST_GID = 669;
 export type SpecialTileKind =
@@ -1146,7 +1150,21 @@ export const TILESETS: TilesetConfig[] = [
       accentHot: 0xb5dd78,
       accentAlt: 0x1f5b34,
     },
-  }
+  },
+  {
+    key: AUTOTILE_EDGE_CASES_DESERT_TILESET_KEY,
+    name: 'Autotile Edge Cases — Desert',
+    path: 'assets/tilesets/autotile-edge-cases-desert.png',
+    imageWidth: 48,
+    imageHeight: 16,
+    columns: 3,
+    rows: 1,
+    tileCount: 3,
+    firstGid: AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+    terrainCollisionProfiles: createTilesetCollisionProfiles([0, 1, 2], NO_COLLISION_PROFILE),
+    editorHidden: true,
+    editorPaletteBackgroundColor: '#785f56',
+  },
 ];
 
 const LEGACY_TILESET_KEY_ALIASES: Record<string, string> = {

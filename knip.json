@@ -42,6 +42,7 @@
     "scripts/convert_custom_sprite_objects_to_tiles.ts",
     "scripts/deploy_prod.mjs",
     "scripts/deploy_safety_branch.mjs",
+    "scripts/generate_autotile_edge_case_tiles.mjs",
     "scripts/install_cryptopunk_avatar_queue_launchd.mjs",
     "scripts/live_construction_play_smoke.ts",
     "scripts/mobile_smoke.mjs",

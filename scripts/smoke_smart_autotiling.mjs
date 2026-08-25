@@ -208,6 +208,60 @@ try {
   summary.checks.correctedHorizontalTiles = true;
   summary.checks.ordinaryGroundTies = true;
 
+  const desertEdgeCaseFixture = await page.evaluate(() => {
+    const runtime = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.editRuntime;
+    runtime.clearCurrentLayer();
+    const theme = document.querySelector('#smart-theme-select');
+    theme.value = 'desert';
+    theme.dispatchEvent(new Event('change', { bubbles: true }));
+    const background = document.querySelector('#background-select');
+    background.value = 'none';
+    background.dispatchEvent(new Event('change', { bubbles: true }));
+    const lighting = document.querySelector('#lighting-mode-select');
+    lighting.value = 'off';
+    lighting.dispatchEvent(new Event('change', { bubbles: true }));
+    runtime.beginTileBatch();
+    for (const [x, y] of [
+      [3, 4], [4, 4], [5, 4],
+      [3, 5], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5],
+      [3, 6], [4, 6], [5, 6],
+      [6, 12], [7, 12], [8, 12],
+      [3, 13], [4, 13], [5, 13], [6, 13], [7, 13], [8, 13],
+      [6, 14], [7, 14], [8, 14],
+    ]) runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+    runtime.commitTileBatch();
+    return runtime.exportRoomSnapshot();
+  });
+  assert.ok([88, 89].includes(desertEdgeCaseFixture.tileData.terrain[5][6]));
+  assert.ok([88, 89].includes(desertEdgeCaseFixture.tileData.terrain[5][7]));
+  assert.equal(desertEdgeCaseFixture.tileData.terrain[5][8], 90);
+  assert.deepEqual(desertEdgeCaseFixture.tileData.foreground[5].slice(5, 9), [2075, 2073, 2073, 2073]);
+  assert.equal(desertEdgeCaseFixture.tileData.terrain[13][3], 87);
+  assert.ok([88, 89].includes(desertEdgeCaseFixture.tileData.terrain[13][4]));
+  assert.ok([88, 89].includes(desertEdgeCaseFixture.tileData.terrain[13][5]));
+  assert.deepEqual(desertEdgeCaseFixture.tileData.foreground[13].slice(3, 7), [2073, 2073, 2073, 2074]);
+  assert.equal(await page.locator(
+    '#tileset-select option[value="autotile-edge-cases-desert"]',
+  ).count(), 0);
+  summary.checks.desertCompositeEdgeCases = true;
+  summary.checks.hiddenEdgeCaseAtlas = true;
+  await page.evaluate(() => {
+    const scene = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene;
+    scene.cameras.main.setZoom(4);
+    scene.cameras.main.centerOn(6 * 16, 5 * 16);
+  });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(outputDir, 'desert-edge-case-right.png') });
+  await page.evaluate(() => {
+    const scene = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene;
+    scene.cameras.main.centerOn(5.5 * 16, 13 * 16);
+  });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(outputDir, 'desert-edge-case-left.png') });
+  await page.evaluate(() => {
+    window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene?.fitToScreen();
+  });
+
   for (const [themeKey, firstGid, expectedLocals] of [
     ['forest', 1, [2, 3, 4, 5, 56, 58, 59]],
     ['cave', 145, [3, 4, 5, 6, 57, 61]],
