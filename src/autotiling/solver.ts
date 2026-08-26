@@ -1,4 +1,4 @@
-import { ROOM_HEIGHT, ROOM_WIDTH } from '../config/room';
+import { ROOM_HEIGHT, ROOM_WIDTH, type LayerName } from '../config/room';
 import { decodeTileDataValue, encodeTileDataValue } from '../config/editorState';
 import {
   AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
@@ -8,9 +8,11 @@ import {
 import type { RoomTileData } from '../persistence/roomModel';
 import {
   cloneRoomSmartTerrainState,
+  getLegacySmartBrushIdentity,
   getSmartLegacyBrushId,
   smartCellKey,
   smartDecorationSlotKey,
+  smartOwnedOutputPartKey,
   smartOwnedOutputKey,
   smartSemanticCellKey,
   type RoomSmartTerrainState,
@@ -35,6 +37,8 @@ export interface ApplySmartCellsOptions {
   mode: 'paint' | 'erase';
   theme: SmartTerrainTheme;
   material: SmartTerrainMaterial;
+  /** Advanced-mode source layer. Omitted callers retain the brush default. */
+  layer?: LayerName;
 }
 
 export interface ApplySmartOutlineCellsOptions {
@@ -42,6 +46,8 @@ export interface ApplySmartOutlineCellsOptions {
   outlineCells: Iterable<SmartCellCoordinate>;
   theme: SmartTerrainTheme;
   material: SmartTerrainMaterial;
+  /** Advanced-mode source layer. Omitted callers retain the brush default. */
+  layer?: LayerName;
 }
 
 interface FamilyRule {
@@ -306,6 +312,16 @@ function sameFamily(
 ): boolean {
   if (!inBounds(x, y)) {
     return false;
+  }
+  if (source.sourceLayer) {
+    const semantic = state.semanticCells[smartSemanticCellKey(source.sourceLayer, x, y)];
+    const identity = semantic ? getLegacySmartBrushIdentity(semantic.brushId) : null;
+    if (identity) {
+      return identity.theme === source.theme && identity.material === source.material;
+    }
+    const gid = decodeTileDataValue(tileData[source.sourceLayer][y]?.[x] ?? -1).gid;
+    const classified = classifySmartTerrainGid(gid);
+    return classified?.theme === source.theme && classified.material === source.material;
   }
   const backdrop = source.material === 'tunnel';
   const semantic = (backdrop ? state.backdropCells : state.cells)[smartCellKey(x, y)];
@@ -619,8 +635,292 @@ function clearOwnedDecorations(tileData: RoomTileData, state: RoomSmartTerrainSt
   clearLayer(state.generatedBackgroundDecorations);
 }
 
+const LEGACY_SEMANTIC_OWNER_PREFIX = 'legacy-semantic:';
+
+function clearNativeLegacyOutputs(tileData: RoomTileData, state: RoomSmartTerrainState): void {
+  for (const [key, output] of Object.entries(state.ownedOutputs)) {
+    if (!output.ownerId.startsWith(LEGACY_SEMANTIC_OWNER_PREFIX)) continue;
+    const separator = key.indexOf(':');
+    const layer = key.slice(0, separator) as LayerName;
+    const [x, y] = key.slice(separator + 1).split(',').map(Number);
+    if (inBounds(x, y)) {
+      const currentValue = tileData[layer][y]?.[x] ?? -1;
+      if (currentValue === output.value) tileData[layer][y][x] = -1;
+    }
+    delete state.ownedOutputs[key];
+  }
+}
+
+function addNativeLegacyOutput(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+  semanticKey: string,
+  partId: string,
+  layer: LayerName,
+  x: number,
+  y: number,
+  value: number,
+  force = false,
+): void {
+  if (!inBounds(x, y)) return;
+  const ownerId = `${LEGACY_SEMANTIC_OWNER_PREFIX}${semanticKey}`;
+  if (state.suppressedOutputParts.includes(smartOwnedOutputPartKey(ownerId, partId))) return;
+  if (!force && decodeTileDataValue(tileData[layer][y]?.[x] ?? -1).gid > 0) return;
+  tileData[layer][y][x] = value;
+  state.ownedOutputs[smartOwnedOutputKey(layer, x, y)] = {
+    ownerId,
+    partId,
+    kind: 'semantic',
+    layer,
+    value,
+  };
+}
+
+/** Resolves native v2 legacy-theme cells authored onto a non-default layer. */
+function resolveNativeLegacySemanticCells(tileData: RoomTileData, state: RoomSmartTerrainState): void {
+  const entries: Array<{
+    semanticKey: string;
+    layer: LayerName;
+    x: number;
+    y: number;
+    cell: SmartTerrainCellState;
+    lockedValue?: number;
+    shapeValue?: number;
+  }> = [];
+  for (const [semanticKey, semantic] of Object.entries(state.semanticCells)) {
+    if (semantic.legacySource) continue;
+    const identity = getLegacySmartBrushIdentity(semantic.brushId);
+    if (!identity) continue;
+    const separator = semanticKey.indexOf(':');
+    const layer = semanticKey.slice(0, separator) as LayerName;
+    const [x, y] = semanticKey.slice(separator + 1).split(',').map(Number);
+    if (!inBounds(x, y)) continue;
+    entries.push({
+      semanticKey,
+      layer,
+      x,
+      y,
+      cell: { ...identity, sourceLayer: layer },
+      lockedValue: semantic.lockedValue,
+      shapeValue: semantic.shapeValue,
+    });
+  }
+
+  const enclosedVoidCache = new Map<string, Set<string>>();
+  for (const entry of entries) {
+    const familyKey = `${entry.layer}:${entry.cell.theme}:${entry.cell.material}`;
+    let enclosedVoidCells = enclosedVoidCache.get(familyKey);
+    if (!enclosedVoidCells) {
+      enclosedVoidCells = entry.cell.material === 'ground'
+        ? findEnclosedVoidCells(tileData, state, entry.cell)
+        : new Set<string>();
+      enclosedVoidCache.set(familyKey, enclosedVoidCells);
+    }
+    const resolved = resolveLocalIndex(
+      tileData,
+      state,
+      entry.x,
+      entry.y,
+      entry.cell,
+      enclosedVoidCells,
+    );
+    const value = entry.lockedValue ?? entry.shapeValue ?? encodeTileDataValue(
+      toGid(entry.cell.theme, resolved.localIndex),
+      resolved.flipX,
+      resolved.flipY,
+    );
+    addNativeLegacyOutput(
+      tileData,
+      state,
+      entry.semanticKey,
+      'primary',
+      entry.layer,
+      entry.x,
+      entry.y,
+      value,
+      true,
+    );
+  }
+}
+
+interface NativeLegacyEntry {
+  semanticKey: string;
+  layer: LayerName;
+  x: number;
+  y: number;
+  cell: SmartTerrainCellState;
+}
+
+function getNativeLegacyEntries(state: RoomSmartTerrainState): NativeLegacyEntry[] {
+  const entries: NativeLegacyEntry[] = [];
+  for (const [semanticKey, semantic] of Object.entries(state.semanticCells)) {
+    if (semantic.legacySource) continue;
+    const identity = getLegacySmartBrushIdentity(semantic.brushId);
+    if (!identity) continue;
+    const separator = semanticKey.indexOf(':');
+    const layer = semanticKey.slice(0, separator) as LayerName;
+    const [x, y] = semanticKey.slice(separator + 1).split(',').map(Number);
+    if (!inBounds(x, y)) continue;
+    entries.push({ semanticKey, layer, x, y, cell: { ...identity, sourceLayer: layer } });
+  }
+  return entries;
+}
+
+function nativeCompanionLayer(tileData: RoomTileData, sourceLayer: LayerName, x: number, y: number): LayerName {
+  const candidates = sourceLayer === 'terrain'
+    ? (['background', 'foreground'] as const)
+    : (['terrain', sourceLayer === 'background' ? 'foreground' : 'background'] as const);
+  return candidates.find((layer) => decodeTileDataValue(tileData[layer][y]?.[x] ?? -1).gid <= 0)
+    ?? candidates[0];
+}
+
+function resolveNativeLegacyDecorations(tileData: RoomTileData, state: RoomSmartTerrainState): void {
+  const entries = getNativeLegacyEntries(state);
+  const byCoordinate = new Map(entries.map((entry) => [
+    `${entry.layer}:${smartCellKey(entry.x, entry.y)}`,
+    entry,
+  ]));
+  const add = (
+    owner: NativeLegacyEntry,
+    targetX: number,
+    targetY: number,
+    partId: string,
+    localIndex: number,
+    flipX = false,
+    layer: LayerName = owner.layer,
+  ) => addNativeLegacyOutput(
+    tileData,
+    state,
+    owner.semanticKey,
+    `${partId}:${targetX},${targetY}`,
+    layer,
+    targetX,
+    targetY,
+    encodeTileDataValue(toGid(owner.cell.theme, localIndex), flipX),
+  );
+
+  for (const entry of entries) {
+    if (entry.cell.material !== 'ground' || entry.cell.theme === 'water') continue;
+    if (sameFamily(tileData, state, entry.x, entry.y - 1, entry.cell)) continue;
+    const semantic = state.semanticCells[entry.semanticKey];
+    if (semantic?.shapeValue) {
+      const localIndex = decodeTileDataValue(semantic.shapeValue).gid - getFirstGid(entry.cell.theme);
+      if (!GROUND_TOP_LOCAL_INDICES.has(localIndex)) continue;
+    }
+    const hash = stableHash(entry.x, entry.y, 53);
+    if (hash % 8 !== 0) continue;
+    const variants = SMART_TILESET_SLOTS.groundDecoration[entry.cell.theme];
+    const variant = variants[Math.floor(hash / 8) % variants.length] ?? variants[0];
+    if (!variant) continue;
+    if (variant.length === 1) {
+      add(entry, entry.x, entry.y - 1, 'detail-top', variant[0]!);
+      continue;
+    }
+    const right = byCoordinate.get(`${entry.layer}:${smartCellKey(entry.x + 1, entry.y)}`);
+    if (
+      !right
+      || right.cell.theme !== entry.cell.theme
+      || right.cell.material !== 'ground'
+      || sameFamily(tileData, state, right.x, right.y - 1, right.cell)
+      || decodeTileDataValue(tileData[entry.layer][entry.y - 1]?.[entry.x] ?? -1).gid > 0
+      || decodeTileDataValue(tileData[entry.layer][entry.y - 1]?.[entry.x + 1] ?? -1).gid > 0
+    ) continue;
+    add(entry, entry.x, entry.y - 1, 'detail-top', variant[0]!);
+    add(right, right.x, right.y - 1, 'detail-top', variant[1]!);
+  }
+
+  const border = SMART_TILESET_SLOTS.feature.border;
+  const candidates = new Map<string, NativeLegacyEntry>();
+  for (const entry of entries) {
+    if (entry.cell.material !== 'feature') continue;
+    for (const [x, y] of [
+      [entry.x, entry.y - 1], [entry.x + 1, entry.y],
+      [entry.x, entry.y + 1], [entry.x - 1, entry.y],
+    ]) {
+      if (!inBounds(x, y) || sameFamily(tileData, state, x, y, entry.cell)) continue;
+      const key = `${entry.layer}:${entry.cell.theme}:${smartCellKey(x, y)}`;
+      const existing = candidates.get(key);
+      if (!existing || entry.semanticKey.localeCompare(existing.semanticKey) < 0) {
+        candidates.set(key, entry);
+      }
+    }
+  }
+
+  for (const [candidateKey, candidate] of candidates) {
+    const coordinateKey = candidateKey.slice(candidateKey.lastIndexOf(':') + 1);
+    const [x, y] = coordinateKey.split(',').map(Number);
+    const same = (targetX: number, targetY: number) => sameFamily(
+      tileData, state, targetX, targetY, candidate.cell,
+    );
+    const above = same(x, y - 1);
+    const right = same(x + 1, y);
+    const below = same(x, y + 1);
+    const left = same(x - 1, y);
+    const cardinalCount = Number(above) + Number(right) + Number(below) + Number(left);
+    const owners = entries.filter((entry) => (
+      entry.layer === candidate.layer
+      && entry.cell.theme === candidate.cell.theme
+      && entry.cell.material === 'feature'
+      && ((above && entry.x === x && entry.y === y - 1)
+        || (right && entry.x === x + 1 && entry.y === y)
+        || (below && entry.x === x && entry.y === y + 1)
+        || (left && entry.x === x - 1 && entry.y === y))
+    )).sort((first, second) => first.semanticKey.localeCompare(second.semanticKey));
+    const owner = owners[0] ?? candidate;
+    const secondary = (
+      partId: string,
+      localIndex: number,
+      flipX = false,
+    ) => add(
+      owner,
+      x,
+      y,
+      partId,
+      localIndex,
+      flipX,
+      nativeCompanionLayer(tileData, owner.layer, x, y),
+    );
+    if (cardinalCount === 1) {
+      if (below) add(owner, x, y, 'top', border.top);
+      else if (above) add(owner, x, y, 'bottom', border.bottom);
+      else if (right) add(owner, x, y, 'left', border.left);
+      else if (left) add(owner, x, y, 'right', border.right);
+    } else if (cardinalCount === 2) {
+      if (below && right) add(owner, x, y, 'topLeft', border.topLeft);
+      else if (below && left) add(owner, x, y, 'topRight', border.topLeft, true);
+      else if (above && right) add(owner, x, y, 'bottomLeft', border.bottomRight, true);
+      else if (above && left) add(owner, x, y, 'bottomRight', border.bottomRight);
+      else if (above && below) {
+        add(owner, x, y, 'top', border.top);
+        secondary('bottom', border.bottom);
+      } else if (left && right) {
+        add(owner, x, y, 'left', border.left);
+        secondary('right', border.right);
+      }
+    } else if (cardinalCount === 3) {
+      if (!right) {
+        add(owner, x, y, 'bottomRight', border.bottomRight);
+        secondary('top', border.top);
+      } else if (!left) {
+        add(owner, x, y, 'topLeft', border.topLeft);
+        secondary('bottom', border.bottom);
+      } else if (!below) {
+        add(owner, x, y, 'bottomRight', border.bottomRight);
+        secondary('left', border.left);
+      } else if (!above) {
+        add(owner, x, y, 'topLeft', border.topLeft, true);
+        secondary('right', border.right);
+      }
+    } else if (cardinalCount === 4) {
+      add(owner, x, y, 'topLeft', border.topLeft);
+      secondary('bottomRight', border.bottomRight);
+    }
+  }
+}
+
 function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): void {
   clearOwnedDecorations(tileData, state);
+  clearNativeLegacyOutputs(tileData, state);
 
   const enclosedVoidCache = new Map<string, Set<string>>();
 
@@ -653,6 +953,8 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     tileData.background[y][x] = cell.lockedValue ?? cell.lockedGid ?? cell.shapeValue ?? cell.shapeGid
       ?? encodeTileDataValue(toGid(cell.theme, resolved.localIndex), resolved.flipX, resolved.flipY);
   }
+
+  resolveNativeLegacySemanticCells(tileData, state);
 
   const suppressed = new Set(state.suppressedDecorationSlots);
   const canAddDecoration = (
@@ -874,6 +1176,8 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
       addSecondaryDecoration(ownerKey, x, y, 'bottomRight', border.bottomRight);
     }
   }
+
+  resolveNativeLegacyDecorations(tileData, state);
 }
 
 export function applySmartCells(
@@ -885,11 +1189,34 @@ export function applySmartCells(
   if (smartTerrain.editingDisabled) return { tileData, smartTerrain };
   const material: SmartTerrainMaterial = options.material === 'platform' ? 'ground' : options.material;
   const backdrop = material === 'tunnel';
+  const defaultLayer: LayerName = backdrop ? 'background' : 'terrain';
+  const sourceLayer = options.layer ?? defaultLayer;
   const targetCells = backdrop ? smartTerrain.backdropCells : smartTerrain.cells;
   const targetLayer = backdrop ? tileData.background : tileData.terrain;
   const canonicalTheme = backdrop ? 'water' : options.theme === 'water' ? 'forest' : options.theme;
   const brushId = getSmartLegacyBrushId(canonicalTheme, material);
   if (!brushId) return { tileData, smartTerrain };
+  if (sourceLayer !== defaultLayer) {
+    for (const { x, y } of options.cells) {
+      if (!inBounds(x, y)) continue;
+      const semanticKey = smartSemanticCellKey(sourceLayer, x, y);
+      const ownerId = `${LEGACY_SEMANTIC_OWNER_PREFIX}${semanticKey}`;
+      if (options.mode === 'erase') {
+        delete smartTerrain.semanticCells[semanticKey];
+        tileData[sourceLayer][y][x] = -1;
+      } else {
+        smartTerrain.semanticCells[semanticKey] = {
+          styleId: canonicalTheme,
+          brushId,
+        };
+      }
+      smartTerrain.suppressedOutputParts = smartTerrain.suppressedOutputParts.filter(
+        (entry) => !entry.startsWith(`${ownerId}:`),
+      );
+    }
+    resolveDocument(tileData, smartTerrain);
+    return resolveSmartRecipeDocument({ tileData, smartTerrain });
+  }
   for (const { x, y } of options.cells) {
     if (!inBounds(x, y)) {
       continue;
@@ -954,25 +1281,29 @@ export function applySmartOutlineCells(
     mode: 'paint',
     theme: options.theme,
     material: options.material,
+    layer: options.layer,
   });
   const result = applySmartCells(document, {
     cells: outlineCells,
     mode: 'paint',
     theme: options.theme,
     material: options.material,
+    layer: options.layer,
   });
   const backdrop = options.material === 'tunnel';
-  const layer = backdrop ? 'background' : 'terrain';
+  const defaultLayer: LayerName = backdrop ? 'background' : 'terrain';
+  const layer = options.layer ?? defaultLayer;
   const targetCells = backdrop ? result.smartTerrain.backdropCells : result.smartTerrain.cells;
 
   for (const { x, y } of outlineCells) {
-    const key = smartCellKey(x, y);
-    const cell = targetCells[key];
     const resolvedGid = reference.tileData[layer][y]?.[x] ?? -1;
-    if (cell && resolvedGid > 0) {
-      targetCells[key] = { ...cell, shapeValue: resolvedGid, shapeGid: resolvedGid };
-      const semantic = result.smartTerrain.semanticCells[smartSemanticCellKey(layer, x, y)];
-      if (semantic) semantic.shapeValue = resolvedGid;
+    if (resolvedGid <= 0) continue;
+    const semantic = result.smartTerrain.semanticCells[smartSemanticCellKey(layer, x, y)];
+    if (semantic) semantic.shapeValue = resolvedGid;
+    if (layer === defaultLayer) {
+      const key = smartCellKey(x, y);
+      const cell = targetCells[key];
+      if (cell) targetCells[key] = { ...cell, shapeValue: resolvedGid, shapeGid: resolvedGid };
     }
   }
 

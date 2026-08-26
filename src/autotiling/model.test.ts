@@ -163,7 +163,7 @@ describe('smart authoring persistence model', () => {
     ]);
   });
 
-  it('filters known v2 semantic cells with incompatible brush, style, or source layers', () => {
+  it('accepts every room layer while filtering incompatible brush and style pairs', () => {
     const invalidLockedValue = 1633 + 37 + TILE_FLIP_X_FLAG;
     const normalized = normalizeRoomSmartTerrainState({
       version: 2,
@@ -188,6 +188,11 @@ describe('smart authoring persistence model', () => {
     });
 
     expect(normalized.semanticCells).toEqual({
+      'background:1,1': {
+        styleId: 'cyber-yellow',
+        brushId: 'cyber.concrete',
+        lockedValue: invalidLockedValue,
+      },
       'terrain:5,1': {
         styleId: 'cyber-pink',
         brushId: 'cyber.concrete',
@@ -200,7 +205,7 @@ describe('smart authoring persistence model', () => {
     expect(normalized.backdropCells['1,1']).toBeUndefined();
   });
 
-  it('rejects recipes whose brush, style, anchor, or source-cell layer is incompatible', () => {
+  it('rejects recipes whose brush/style pair or internally consistent source layer is invalid', () => {
     const panel = {
       recipeId: 'cyber.fence',
       styleId: 'cyber-pink',

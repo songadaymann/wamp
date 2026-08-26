@@ -1,4 +1,5 @@
 import {
+  LAYER_NAMES,
   TILE_FLIP_X_FLAG,
   TILE_FLIP_Y_FLAG,
   type LayerName,
@@ -32,6 +33,7 @@ export type SmartThemeId = typeof SMART_THEME_IDS[number];
 export type SmartBrushTool = Extract<ToolName, 'pencil' | 'fill' | 'rect' | 'ellipse' | 'line'>;
 
 const FULL_PAINT_TOOLS: readonly SmartBrushTool[] = ['pencil', 'fill', 'rect', 'ellipse', 'line'];
+const ALL_SMART_LAYERS: readonly LayerName[] = [...LAYER_NAMES];
 export type SmartCollisionRole = 'solid' | 'non-colliding' | 'mixed';
 
 /** A tileset-local solver result. Rotation is deliberately not part of the room format. */
@@ -184,7 +186,7 @@ const LEGACY_BRUSH_DEFINITIONS: SmartBrushDefinition[] = LEGACY_SOLID_STYLE_IDS.
     ...template,
     id: getSmartLegacyBrushId(styleId, template.material) as SmartLegacyBrushId,
     defaultLayer: 'terrain',
-    supportedLayers: ['terrain'],
+    supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: [styleId],
     supportedStyleIds: [styleId],
   })),
@@ -202,7 +204,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'non-colliding',
     defaultLayer: 'background',
-    supportedLayers: ['background'],
+    supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: ['water'],
     supportedStyleIds: ['water'],
     compatibleLegacyLocalIndices: [14, 15, 16, 17, 26, 27, 28, 29, 33, 34, 35, 37, 38, 39, 40, 41, 42, 47, 49, 50, 51, 52, 53, 54],
@@ -218,7 +220,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     defaultLayer: 'terrain',
-    supportedLayers: ['terrain'],
+    supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: ['cyber'],
     supportedStyleIds: CYBER_STYLE_IDS,
     compatibleLegacyLocalIndices: catalogLocalIndicesForBrush('cyber.concrete'),
@@ -234,7 +236,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     defaultLayer: 'terrain',
-    supportedLayers: ['terrain'],
+    supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: ['cyber'],
     supportedStyleIds: CYBER_STYLE_IDS,
     compatibleLegacyLocalIndices: catalogLocalIndicesForBrush('cyber.windows'),
@@ -250,7 +252,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     defaultLayer: 'terrain',
-    supportedLayers: ['terrain'],
+    supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: ['cyber'],
     supportedStyleIds: CYBER_STYLE_IDS,
     compatibleLegacyLocalIndices: catalogLocalIndicesForBrush('cyber.shell'),
@@ -266,7 +268,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     defaultLayer: 'terrain',
-    supportedLayers: ['terrain'],
+    supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: ['cyber'],
     supportedStyleIds: CYBER_STYLE_IDS,
     compatibleLegacyLocalIndices: [12],
@@ -282,7 +284,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'non-colliding',
     defaultLayer: 'background',
-    supportedLayers: ['background'],
+    supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: ['cyber'],
     supportedStyleIds: CYBER_STYLE_IDS,
     compatibleLegacyLocalIndices: [36, 48, 60, 72],
@@ -298,7 +300,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     defaultLayer: 'terrain',
-    supportedLayers: ['terrain'],
+    supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: ['cyber'],
     supportedStyleIds: CYBER_STYLE_IDS,
     compatibleLegacyLocalIndices: catalogLocalIndicesForBrush('cyber.neon'),
@@ -314,7 +316,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'non-colliding',
     defaultLayer: 'foreground',
-    supportedLayers: ['foreground'],
+    supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: ['cyber'],
     supportedStyleIds: CYBER_STYLE_IDS,
     compatibleLegacyLocalIndices: [44, 45, 46, 56, 57, 58, 59],

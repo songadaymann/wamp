@@ -16,6 +16,14 @@ transforms, layers, and repetitions form a visual grammar. The shipped solver
 must then express that grammar deterministically for new shapes and retain the
 existing manual-lock, history, erase, and copy/paste guarantees.
 
+Layer authoring is mode-aware. Beginner treats each registry `defaultLayer` as
+the brush's required source layer and disables the other layer controls.
+Advanced leaves all three layer controls available and persists the selected
+Background, Gameplay, or Front layer on each semantic cell or recipe. Primary
+art follows that source layer. Coordinated same-cell overlays retain a separate
+companion layer through a deterministic layer swap, so moving a multi-output
+brush never causes one owned part to overwrite another.
+
 ## Frozen evidence set
 
 The production site serves room pages from `https://wamp.land/r/{x}/{y}`. The
@@ -122,7 +130,7 @@ The frozen Cyber room makes the extension seam concrete:
 
 Implemented brush registry:
 
-| Brush | Rule kind / algorithm | Required output | Accepted authoring |
+| Brush | Rule kind / algorithm | Beginner default output | Accepted authoring |
 | --- | --- | --- | --- |
 | Ground (`cyber.structure` persisted ID) | Terrain / eight-way blob | Colliding Terrain plus owned Foreground tunnel ceiling | Pencil, Fill, Rectangle, Ellipse |
 | Platform | Path / horizontal strip | Colliding Terrain | Horizontal Pencil and Rectangle; minimum width 2; automatic middle is neutral F9 only |
@@ -151,6 +159,10 @@ Completed implementation sequence:
    B10/B12 side walls, and C11Y/C11 Terrain ceiling/floor middles.
 6. Visually inspected the frozen Cyber reconstruction and newly authored
    fixtures in both Canvas and WebGL before opening the safety preview gate.
+7. Added Advanced source-layer overrides for every Cyber brush and the existing
+   Forest/Desert/Cave/Gothic/Water brushes. The selected layer survives
+   persistence, clipboard, manual locks/suppression, erase/repair, and exact
+   undo/redo; Beginner retains automatic layer routing.
 
 The reference is evidence, not a universal rule. A second set of deliberately
 constructed small shapes must accompany the reference-shaped fixture so the

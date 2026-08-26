@@ -201,10 +201,13 @@ function buildSmartClipboardFields(
     for (let x = minX; x <= maxX; x += 1) {
       const semanticKey = smartSemanticCellKey(sourceLayer, x, y);
       const cell = state.semanticCells[semanticKey];
-      if (!cell || cell.legacySource || !cell.brushId.startsWith('cyber.')) continue;
+      if (!cell || cell.legacySource) continue;
       const relativeKey = `${x - minX},${y - minY}`;
       smartSemanticCells[relativeKey] = { ...cell };
-      const suppressedPartIds = getSuppressedPartIds(state, `cyber:cell:${semanticKey}`);
+      const ownerId = cell.brushId.startsWith('cyber.')
+        ? `cyber:cell:${semanticKey}`
+        : `legacy-semantic:${semanticKey}`;
+      const suppressedPartIds = getSuppressedPartIds(state, ownerId);
       if (suppressedPartIds.length > 0) smartSemanticSuppressions[relativeKey] = suppressedPartIds;
     }
   }

@@ -67,6 +67,56 @@ async function guardSyntheticRoomMutations(page, summary) {
     }
     await route.continue();
   });
+  // This editor smoke does not exercise leaderboard data. Keep it hermetic so
+  // an unavailable local API cannot turn renderer verification into a network
+  // flake after every editor assertion has already passed.
+  await page.route('**/api/leaderboards/rooms/*', async (route) => {
+    if (route.request().method().toUpperCase() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    const requestUrl = new URL(route.request().url());
+    const roomId = decodeURIComponent(requestUrl.pathname.split('/').at(-1) ?? '99,99');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        roomId,
+        roomCoordinates: { x: 99, y: 99 },
+        roomTitle: 'Smart Autotiling Smoke',
+        roomVersion: 1,
+        displayRoomVersion: 1,
+        equivalentRoomVersions: [1],
+        leaderboardFamilyVersions: [1],
+        leaderboardSourceVersion: 1,
+        canonicalRoomVersion: 1,
+        currentPublishedVersion: 1,
+        goalType: 'reach_exit',
+        rankingMode: 'time',
+        difficulty: {
+          consensus: null,
+          counts: { easy: 0, medium: 0, hard: 0, extreme: 0 },
+          totalVotes: 0,
+          viewerVote: null,
+          viewerSignedIn: false,
+          viewerCanVote: false,
+          viewerNeedsRun: false,
+        },
+        quality: {
+          adjustedAverage: 0,
+          rawAverage: 0,
+          voteCount: 0,
+          weightedVoteCount: 0,
+          counts: { oneStar: 0, twoStar: 0, threeStar: 0, fourStar: 0, fiveStar: 0 },
+        },
+        viewerRating: null,
+        trophy: null,
+        entries: [],
+        viewerBest: null,
+        viewerRank: null,
+      }),
+    });
+  });
 }
 
 async function runEditorCommands(page, editorCommands) {
@@ -215,6 +265,14 @@ try {
   assert.equal(copied, 12);
   summary.checks.smartCopyPaste = true;
 
+  await page.locator('#smart-theme-select').selectOption('cyber');
+  await page.locator('#smart-material-select').selectOption('cyber.support');
+  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
+  assert.equal(await page.locator('.layer-btn[data-layer="foreground"]').isDisabled(), true);
+  await page.locator('#smart-material-select').selectOption('cyber.concrete');
+  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
+  summary.checks.beginnerSmartLayerRouting = true;
+
   await page.locator('[data-builder-mode-choice="advanced"]').click();
   assert.equal(await page.locator('.palette-tab[data-mode="tiles"]').isVisible(), true);
   assert.equal(await page.locator('.palette-tab[data-mode="tiles"]').getAttribute('class').then((value) => value?.includes('active')), true);
@@ -263,13 +321,36 @@ try {
   assert.equal(await page.locator('#smart-style-select').inputValue(), 'cyber-pink');
 
   await page.locator('#smart-material-select').selectOption('cyber.support');
-  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
+  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
   await assertEditorState(page, {
     theme: 'cyber',
     brush: 'cyber.support',
     style: 'cyber-pink',
-    layer: 'background',
+    layer: 'terrain',
   });
+  for (const layer of ['background', 'terrain', 'foreground']) {
+    assert.equal(await page.locator(`.layer-btn[data-layer="${layer}"]`).isEnabled(), true);
+  }
+  await page.locator('.layer-btn[data-layer="foreground"]').click();
+  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'foreground');
+  const { advancedLayerSupport } = await runEditorCommands(page, [
+    { op: 'clearAllTiles' },
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: rectangleCells(16, 2, 16, 5) },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'advancedLayerSupport' },
+  ]);
+  assert.deepEqual(advancedLayerSupport.tileData.foreground.slice(2, 6).map((row) => row[16]), [
+    1717 + 36, 1717 + 48, 1717 + 60, 1717 + 72,
+  ]);
+  assert.deepEqual(advancedLayerSupport.tileData.background.slice(2, 6).map((row) => row[16]), [
+    -1, -1, -1, -1,
+  ]);
+  assert.deepEqual(
+    Object.values(advancedLayerSupport.smartTerrain.recipes)[0]?.anchor,
+    { layer: 'foreground', x: 16, y: 2 },
+  );
+  summary.checks.advancedSmartLayerOutput = true;
   assert.equal(await page.locator('[data-tool="rect"]').first().isEnabled(), true);
   assert.equal(await page.locator('[data-tool="ellipse"]').first().isEnabled(), true);
   assert.equal(await page.locator('[data-tool="fill"]').first().isEnabled(), true);
@@ -287,12 +368,12 @@ try {
     layer: 'foreground',
   });
   await page.locator('#smart-material-select').selectOption('cyber.concrete');
-  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
+  assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'foreground');
   await assertEditorState(page, {
     theme: 'cyber',
     brush: 'cyber.concrete',
     style: 'cyber-pink',
-    layer: 'terrain',
+    layer: 'foreground',
   });
   assert.equal(await page.locator('[data-tool="ellipse"]').first().isEnabled(), true);
   assert.equal(await page.locator('[data-tool="fill"]').first().isEnabled(), true);
@@ -301,6 +382,7 @@ try {
   summary.checks.cyberRegistryUi = true;
 
   await page.locator('#smart-style-select').selectOption('cyber-yellow');
+  await page.locator('.layer-btn[data-layer="terrain"]').click();
   const { cyberFill } = await runEditorCommands(page, [
     { op: 'clearAllTiles' },
     { op: 'beginBatch' },
@@ -450,6 +532,7 @@ try {
 
   await page.locator('#smart-style-select').selectOption('cyber-yellow');
   await page.locator('#smart-material-select').selectOption('cyber.support');
+  await page.locator('.layer-btn[data-layer="background"]').click();
   const cyberSupport = await runEditorCommands(page, [
     { op: 'beginBatch' },
     { op: 'placeCells', cells: rectangleCells(18, 4, 18, 7) },
@@ -481,6 +564,7 @@ try {
   assert.deepEqual(cyberSupport.bank.tileData.terrain.slice(4, 8).map((row) => row[18]), [-1, -1, -1, -1]);
 
   await page.locator('#smart-material-select').selectOption('cyber.neon');
+  await page.locator('.layer-btn[data-layer="terrain"]').click();
   const cyberNeon = await runEditorCommands(page, [
     { op: 'beginBatch' },
     { op: 'placeCells', cells: rectangleCells(20, 8, 24, 8) },
@@ -541,6 +625,7 @@ try {
 
   await page.locator('#smart-style-select').selectOption('cyber-pink');
   await page.locator('#smart-material-select').selectOption('cyber.fence');
+  await page.locator('.layer-btn[data-layer="foreground"]').click();
   const cyberPanelClipboard = await runEditorCommands(page, [
     { op: 'beginBatch' },
     { op: 'placeCells', cells: rectangleCells(26, 3, 30, 3) },
@@ -605,13 +690,14 @@ try {
     cyberSuppressionAndReload.reloaded.tileData.terrain[4][35] === 1633 + localIndex
   )));
   summary.checks.cyberSuppressionAndReload = true;
-  summary.checks.cyberFixedLayers = true;
+  summary.checks.cyberOwnedLayers = true;
   await dismissKeepBuilding(page);
   await runEditorCommands(page, [{ op: 'fitToScreen' }]);
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outputDir, 'cyber-recipes.png') });
 
   await page.locator('#smart-theme-select').selectOption('forest');
+  await page.locator('.layer-btn[data-layer="terrain"]').click();
   assert.equal(await page.locator('#smart-material-select').inputValue(), 'forest.ground');
   assert.equal(await page.locator('#smart-style-row').isVisible(), false);
 
@@ -685,6 +771,7 @@ try {
     material.value = 'forest.ground';
     material.dispatchEvent(new Event('change', { bubbles: true }));
   });
+  await page.locator('.layer-btn[data-layer="terrain"]').click();
   const ordinarySteps = [
     [3, 33, 34],
     [4, 33, 35],
@@ -846,6 +933,7 @@ try {
     material.value = 'water.tunnel';
     material.dispatchEvent(new Event('change', { bubbles: true }));
   });
+  await page.locator('.layer-btn[data-layer="background"]').click();
   assert.equal(await page.locator('#smart-theme-select').inputValue(), 'water');
   assert.equal(await page.locator('#smart-theme-select').isDisabled(), true);
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
@@ -875,6 +963,7 @@ try {
     material.value = 'forest.feature';
     material.dispatchEvent(new Event('change', { bubbles: true }));
   });
+  await page.locator('.layer-btn[data-layer="terrain"]').click();
   assert.equal(await page.locator('#smart-theme-select').inputValue(), 'forest');
   assert.equal(await page.locator('#smart-theme-select').isEnabled(), true);
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
@@ -933,6 +1022,7 @@ try {
     gothic: { firstGid: 733, expected: [2, 3, 4, 5] },
   };
   for (const [themeName, pool] of Object.entries(decorationPools)) {
+    await page.locator('.layer-btn[data-layer="terrain"]').click();
     await runEditorCommands(page, [{ op: 'clearCurrentLayer' }]);
     await page.evaluate(({ theme }) => {
       const material = document.querySelector('#smart-material-select');
@@ -976,7 +1066,8 @@ try {
       const oldDecorationValue = decorationFixture.tileData.terrain[targetY][targetX];
       await page.locator('#smart-theme-select').selectOption('cyber');
       await page.locator('#smart-style-select').selectOption('cyber-yellow');
-      await page.locator('#smart-material-select').selectOption('cyber.concrete');
+  await page.locator('#smart-material-select').selectOption('cyber.concrete');
+  await page.locator('.layer-btn[data-layer="terrain"]').click();
       const decorationOverwriteCaptures = await runEditorCommands(page, [
         { op: 'beginBatch' },
         { op: 'placeCells', cells: [{ x: ownerX, y: ownerY }] },
@@ -1048,12 +1139,12 @@ try {
   await coursePage.locator('#smart-theme-select').selectOption('cyber');
   await coursePage.locator('#smart-style-select').selectOption('cyber-pink');
   await coursePage.locator('#smart-material-select').selectOption('cyber.support');
-  assert.equal(await coursePage.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
+  assert.equal(await coursePage.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
   await assertEditorState(coursePage, {
     theme: 'cyber',
     brush: 'cyber.support',
     style: 'cyber-pink',
-    layer: 'background',
+    layer: 'terrain',
   });
   assert.equal(await coursePage.locator('[data-tool="ellipse"]').first().isEnabled(), true);
   assert.equal(await coursePage.locator('[data-tool="fill"]').first().isEnabled(), true);

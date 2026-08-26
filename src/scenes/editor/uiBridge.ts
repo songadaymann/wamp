@@ -376,7 +376,8 @@ export class EditorUiBridge {
     editorState.smartStyle = style.id;
     if (
       editorState.paletteMode === 'smart'
-      && !brush.supportedLayers.includes(editorState.activeLayer)
+      && getGameSettings().builderMode !== 'advanced'
+      && editorState.activeLayer !== brush.defaultLayer
     ) {
       editorState.activeLayer = brush.defaultLayer;
     }
@@ -394,7 +395,9 @@ export class EditorUiBridge {
     editorState.smartTheme = selection.themeId;
     editorState.smartMaterial = selection.brush.id;
     editorState.smartStyle = selection.style.id;
-    editorState.activeLayer = selection.brush.defaultLayer;
+    if (getGameSettings().builderMode !== 'advanced') {
+      editorState.activeLayer = selection.brush.defaultLayer;
+    }
     if (persistTheme && selection.themeId !== 'water') {
       updateGameSettings({ lastSmartTheme: selection.themeId });
     }
@@ -673,7 +676,8 @@ export class EditorUiBridge {
       }
       if (
         editorState.paletteMode === 'smart'
-        && !getSmartBrushDefinition(editorState.smartMaterial).supportedLayers.includes(layer)
+        && getGameSettings().builderMode !== 'advanced'
+        && layer !== getSmartBrushDefinition(editorState.smartMaterial).defaultLayer
       ) {
         return;
       }
@@ -1835,12 +1839,14 @@ export class EditorUiBridge {
       }
     }
 
+    const advancedBuilder = getGameSettings().builderMode === 'advanced';
     for (const button of [...this.elements.layerButtons, ...this.elements.layerMiniButtons]) {
       const layer = button.dataset.layer as LayerName | undefined;
       const unsupported = Boolean(
         paletteModeIsSmart
+        && !advancedBuilder
         && layer
-        && !smartSelection.brush.supportedLayers.includes(layer),
+        && layer !== smartSelection.brush.defaultLayer,
       );
       const layerButton = button as HTMLButtonElement;
       layerButton.disabled = unsupported;
@@ -1913,9 +1919,12 @@ export class EditorUiBridge {
       const supportExplanation = unsupportedTools.length > 0
         ? ` ${formatList(unsupportedTools)} ${unsupportedTools.length === 1 ? 'is' : 'are'} unavailable for this brush.`
         : '';
-      smartHint.textContent = tunnelBackdropSelected
+      const layerExplanation = advancedBuilder
+        ? ` Primary tiles use the selected ${getLayerUiLabel(editorState.activeLayer)} layer; coordinated overlays may use a companion layer.`
+        : ` Places on ${getLayerUiLabel(smartSelection.brush.defaultLayer)}.`;
+      smartHint.textContent = tunnelBackdropSelected && !advancedBuilder
         ? 'Draw non-colliding blue tunnel walls behind the player. Smart chooses rock edges and ties.'
-        : `${smartSelection.brush.description} Places on ${getLayerUiLabel(smartSelection.brush.defaultLayer)}.${supportExplanation} Right-click or Erase removes it.`;
+        : `${smartSelection.brush.description}${layerExplanation}${supportExplanation} Right-click or Erase removes it.`;
       smartHint.dataset.smartSupport = unsupportedTools.length > 0 ? 'limited' : 'full';
     }
 

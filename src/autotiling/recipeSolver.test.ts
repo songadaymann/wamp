@@ -137,6 +137,47 @@ function expectCollision(document: SmartRecipeDocument, x: number, y: number): v
 }
 
 describe('Cyber Smart recipe solver and ownership contracts', () => {
+  it('retargets primary and companion Cyber outputs to an Advanced-selected layer', () => {
+    const ring = rectangle(10, 10, 3, 3).filter(({ x, y }) => !(x === 11 && y === 11));
+    let document = applySmartBrushCells(emptyDocument(), {
+      brushId: 'cyber.concrete',
+      styleId: 'cyber-yellow',
+      cells: ring,
+      mode: 'paint',
+      layer: 'foreground',
+    });
+
+    expect(document.smartTerrain.semanticCells['foreground:10,10']).toMatchObject({
+      brushId: 'cyber.concrete',
+      styleId: 'cyber-yellow',
+    });
+    expect(document.tileData.foreground[10]![10]).toBeGreaterThan(0);
+    expect(document.tileData.terrain[10]![10]).toBeGreaterThan(0);
+    expect(document.smartTerrain.ownedOutputs['foreground:10,10']).toMatchObject({
+      partId: 'primary',
+      layer: 'foreground',
+    });
+    expect(document.smartTerrain.ownedOutputs['terrain:10,10']).toMatchObject({
+      partId: 'diagonal-tie',
+      layer: 'terrain',
+    });
+
+    document = applySmartBrushCells(document, {
+      brushId: 'cyber.support',
+      styleId: 'cyber-pink',
+      cells: vertical(16, 2, 4),
+      mode: 'paint',
+      layer: 'foreground',
+    });
+    expect(vertical(16, 2, 4).map(({ x, y }) => (
+      tileToken(document.tileData.foreground[y]![x]!, 'cyber-pink')
+    ))).toEqual(['36', '48', '60', '72']);
+    expect(Object.values(document.smartTerrain.recipes)).toContainEqual(expect.objectContaining({
+      brushId: 'cyber.support',
+      anchor: expect.objectContaining({ layer: 'foreground' }),
+    }));
+  });
+
   it('discards middle-layer legacy decorations when Cyber replaces their Smart owner', () => {
     const legacyCells = Array.from({ length: 10 * 38 }, (_, index) => ({
       x: 1 + (index % 38),

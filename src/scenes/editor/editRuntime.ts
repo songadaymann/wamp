@@ -166,8 +166,12 @@ import {
   applySmartBrushOutlineCells,
   clearSmartRecipeLayerState,
   isCyberSmartBrushId,
-  resolveSmartRecipeDocument,
 } from '../../autotiling/recipeSolver';
+import { getGameSettings } from '../../settings/userSettings';
+
+function getSelectedSmartLayer(): LayerName | undefined {
+  return getGameSettings().builderMode === 'advanced' ? editorState.activeLayer : undefined;
+}
 
 function applySelectedSmartCells(
   document: SmartTerrainDocument,
@@ -180,6 +184,7 @@ function applySelectedSmartCells(
       mode,
       brushId: editorState.smartMaterial,
       styleId: editorState.smartStyle,
+      layer: getSelectedSmartLayer(),
     });
   }
   const legacyBrush = getLegacySmartBrushIdentity(editorState.smartMaterial);
@@ -189,6 +194,7 @@ function applySelectedSmartCells(
     mode,
     theme: legacyBrush.theme,
     material: legacyBrush.material,
+    layer: getSelectedSmartLayer(),
   });
 }
 
@@ -203,6 +209,7 @@ function applySelectedSmartOutlineCells(
       outlineCells,
       brushId: editorState.smartMaterial,
       styleId: editorState.smartStyle,
+      layer: getSelectedSmartLayer(),
     });
   }
   const legacyBrush = getLegacySmartBrushIdentity(editorState.smartMaterial);
@@ -212,6 +219,7 @@ function applySelectedSmartOutlineCells(
     outlineCells,
     theme: legacyBrush.theme,
     material: legacyBrush.material,
+    layer: getSelectedSmartLayer(),
   });
 }
 
@@ -667,35 +675,55 @@ export class EditorEditRuntime {
       let next = this.getSmartDocument();
       const semanticGroups = new Map<
         string,
-        { brushId: SmartBrushId; styleId: SmartStyleId; cells: Array<{ x: number; y: number }> }
+        {
+          brushId: SmartBrushId;
+          styleId: SmartStyleId;
+          layer: LayerName;
+          cells: Array<{ x: number; y: number }>;
+        }
       >();
       for (const semantic of smartPaste.semanticCells) {
-        if (!isCyberSmartBrushId(semantic.cell.brushId)) continue;
-        const groupKey = `${semantic.cell.brushId}:${semantic.cell.styleId}`;
+        const groupKey = `${semantic.layer}:${semantic.cell.brushId}:${semantic.cell.styleId}`;
         const group = semanticGroups.get(groupKey) ?? {
           brushId: semantic.cell.brushId,
           styleId: semantic.cell.styleId,
+          layer: semantic.layer,
           cells: [],
         };
         group.cells.push({ x: semantic.x, y: semantic.y });
         semanticGroups.set(groupKey, group);
       }
       for (const group of semanticGroups.values()) {
-        next = applySmartBrushCells(next, {
-          cells: group.cells,
-          mode: 'paint',
-          brushId: group.brushId,
-          styleId: group.styleId,
-        });
+        if (isCyberSmartBrushId(group.brushId)) {
+          next = applySmartBrushCells(next, {
+            cells: group.cells,
+            mode: 'paint',
+            brushId: group.brushId,
+            styleId: group.styleId,
+            layer: group.layer,
+          });
+        } else {
+          const identity = getLegacySmartBrushIdentity(group.brushId);
+          if (identity) {
+            next = applySmartCells(next, {
+              cells: group.cells,
+              mode: 'paint',
+              theme: identity.theme,
+              material: identity.material,
+              layer: group.layer,
+            });
+          }
+        }
       }
 
       for (const semantic of smartPaste.semanticCells) {
-        if (!isCyberSmartBrushId(semantic.cell.brushId)) continue;
         const semanticKey = smartSemanticCellKey(semantic.layer, semantic.x, semantic.y);
         const target = next.smartTerrain.semanticCells[semanticKey];
         if (!target) continue;
         next.smartTerrain.semanticCells[semanticKey] = { ...semantic.cell };
-        const ownerId = `cyber:cell:${semanticKey}`;
+        const ownerId = isCyberSmartBrushId(semantic.cell.brushId)
+          ? `cyber:cell:${semanticKey}`
+          : `legacy-semantic:${semanticKey}`;
         next.smartTerrain.suppressedOutputParts.push(
           ...semantic.suppressedPartIds.map((partId) => smartOwnedOutputPartKey(ownerId, partId)),
         );
@@ -728,7 +756,7 @@ export class EditorEditRuntime {
       next.smartTerrain.suppressedOutputParts = Array.from(
         new Set(next.smartTerrain.suppressedOutputParts),
       );
-      next = resolveSmartRecipeDocument(next);
+      next = setSmartTerrainDetailsEnabled(next, next.smartTerrain.detailsEnabled);
       this.applySmartDocument(next);
       changed = true;
     }

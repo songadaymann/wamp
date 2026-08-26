@@ -11,6 +11,7 @@ import {
 import { createDefaultRoomMusic, createDefaultRoomPatternMusic } from '../../music/model';
 import { createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
 import type { SmartBrushId } from '../../autotiling/model';
+import { updateGameSettings } from '../../settings/userSettings';
 import { EditorEditRuntime } from './editRuntime';
 
 vi.mock('phaser', () => ({
@@ -38,6 +39,7 @@ vi.mock('./documentPresentationController', () => ({
 
 describe('editor edit runtime document contracts', () => {
   beforeEach(() => {
+    updateGameSettings({ builderMode: 'beginner' });
     editorState.activeLayer = 'terrain';
     editorState.activeTool = 'pencil';
     editorState.paletteMode = 'tiles';
@@ -308,6 +310,39 @@ describe('editor edit runtime document contracts', () => {
       'background:15,5',
     ]);
     expect(getTileCoordinates(layers.get('background')!)).toEqual(['15,3', '15,4', '15,5']);
+  });
+
+  it('uses the Advanced-selected layer for Smart recipes and preserves it through undo/redo', () => {
+    updateGameSettings({ builderMode: 'advanced' });
+    selectCyberBrush('cyber.support');
+    editorState.activeLayer = 'foreground';
+    const { runtime, layers } = createHarness(createRoom());
+
+    runtime.beginTileBatch();
+    placeSmartCell(runtime, 15, 3);
+    placeSmartCell(runtime, 15, 4);
+    placeSmartCell(runtime, 15, 5);
+    runtime.commitTileBatch();
+
+    expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual([
+      'foreground:15,3',
+      'foreground:15,4',
+      'foreground:15,5',
+    ]);
+    expect(getTileCoordinates(layers.get('foreground')!)).toEqual(['15,3', '15,4', '15,5']);
+    expect(getTileCoordinates(layers.get('background')!)).toEqual([]);
+
+    runtime.undo();
+    expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual([]);
+    expect(getTileCoordinates(layers.get('foreground')!)).toEqual([]);
+
+    runtime.redo();
+    expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual([
+      'foreground:15,3',
+      'foreground:15,4',
+      'foreground:15,5',
+    ]);
+    expect(getTileCoordinates(layers.get('foreground')!)).toEqual(['15,3', '15,4', '15,5']);
   });
 
   it('fills Cyber Concrete and Neon rectangles, preserves Support banks, and keeps panels two rows high', () => {

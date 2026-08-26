@@ -98,17 +98,17 @@ describe('smart authoring registry', () => {
     ]);
     expect(getSmartBrushDefinition('cyber.support')).toMatchObject({
       defaultLayer: 'background',
-      supportedLayers: ['background'],
+      supportedLayers: ['background', 'terrain', 'foreground'],
       outputLayers: ['background'],
     });
     expect(getSmartBrushDefinition('cyber.neon')).toMatchObject({
       defaultLayer: 'terrain',
-      supportedLayers: ['terrain'],
+      supportedLayers: ['background', 'terrain', 'foreground'],
       outputLayers: ['terrain', 'foreground'],
     });
     expect(getSmartBrushDefinition('cyber.fence')).toMatchObject({
       defaultLayer: 'foreground',
-      supportedLayers: ['foreground'],
+      supportedLayers: ['background', 'terrain', 'foreground'],
       outputLayers: ['foreground'],
     });
     expect(isSmartBrushToolSupported('cyber.concrete', 'fill')).toBe(true);

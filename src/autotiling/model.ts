@@ -45,6 +45,8 @@ export type SmartEncodedTileValue = number;
 export interface SmartTerrainCellState {
   theme: SmartTerrainTheme;
   material: SmartTerrainMaterial;
+  /** Runtime resolver context for native v2 cells authored off the legacy layer. */
+  sourceLayer?: LayerName;
   /** Stable v2 aliases. Legacy callers may continue to use theme/material. */
   styleId?: SmartStyleId;
   brushId?: SmartBrushId;
@@ -233,9 +235,9 @@ export function normalizeSmartBrushId(styleId: SmartStyleId, value: unknown): Sm
 }
 
 /**
- * Validates the persisted source layer separately from the layers a brush may
- * generate. This lives in the persistence model so malformed state cannot use
- * a locked value to bypass the registry's required-layer contract.
+ * Validates persisted style/brush compatibility. Source layers are deliberately
+ * unrestricted in v2: Advanced authoring may place any Smart brush on any room
+ * layer, while Beginner mode continues to choose the authored default.
  */
 function isSmartBrushSourceCompatible(
   styleId: SmartStyleId,
@@ -244,18 +246,17 @@ function isSmartBrushSourceCompatible(
 ): boolean {
   const legacyIdentity = getLegacySmartBrushIdentity(brushId);
   if (legacyIdentity) {
-    const sourceLayer = legacyIdentity.material === 'tunnel' ? 'background' : 'terrain';
-    return styleId === legacyIdentity.theme && layer === sourceLayer;
+    return styleId === legacyIdentity.theme && isLayerName(layer);
   }
   if (styleId !== 'cyber-yellow' && styleId !== 'cyber-pink') return false;
-  if (brushId === 'cyber.support') return layer === 'background';
-  if (brushId === 'cyber.fence') return layer === 'foreground';
-  return layer === 'terrain' && (
+  return isLayerName(layer) && (
     brushId === 'cyber.concrete'
     || brushId === 'cyber.windows'
     || brushId === 'cyber.shell'
     || brushId === 'cyber.neon'
     || brushId === 'cyber.rubble'
+    || brushId === 'cyber.support'
+    || brushId === 'cyber.fence'
   );
 }
 

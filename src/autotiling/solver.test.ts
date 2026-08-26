@@ -49,6 +49,61 @@ function localAt(
 }
 
 describe('smart terrain solver', () => {
+  it('authors connected legacy Ground natively on an Advanced-selected layer', () => {
+    const firstGid = getTilesetByKey('forest')!.firstGid;
+    const painted = applySmartCells(emptyDocument(), {
+      cells: [{ x: 3, y: 4 }, { x: 4, y: 4 }, { x: 5, y: 4 }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'ground',
+      layer: 'foreground',
+    });
+
+    expect(painted.smartTerrain.cells).toEqual({});
+    expect(Object.keys(painted.smartTerrain.semanticCells)).toEqual([
+      'foreground:3,4', 'foreground:4,4', 'foreground:5,4',
+    ]);
+    expect(painted.tileData.terrain[4]!.slice(3, 6)).toEqual([-1, -1, -1]);
+    expect(painted.tileData.foreground[4]!.slice(3, 6).map((value) => (
+      decodeTileDataValue(value).gid - firstGid
+    ))).toEqual([44, 45, 46]);
+
+    const erased = applySmartCells(painted, {
+      cells: [{ x: 4, y: 4 }],
+      mode: 'erase',
+      theme: 'forest',
+      material: 'ground',
+      layer: 'foreground',
+    });
+    expect(erased.tileData.foreground[4]![4]).toBe(-1);
+    expect(decodeTileDataValue(erased.tileData.foreground[4]![3]).gid - firstGid).toBe(20);
+    expect(decodeTileDataValue(erased.tileData.foreground[4]![5]).gid - firstGid).toBe(20);
+  });
+
+  it('keeps native legacy Feature borders owned on the selected layer', () => {
+    const painted = applySmartCells(emptyDocument(), {
+      cells: [{ x: 8, y: 8 }],
+      mode: 'paint',
+      theme: 'desert',
+      material: 'feature',
+      layer: 'foreground',
+    });
+
+    expect(painted.tileData.terrain[8]![8]).toBe(-1);
+    expect(painted.tileData.foreground[8]![8]).toBeGreaterThan(0);
+    for (const [x, y] of [[8, 7], [9, 8], [8, 9], [7, 8]]) {
+      expect(painted.tileData.foreground[y]![x]).toBeGreaterThan(0);
+      expect(painted.smartTerrain.ownedOutputs[`foreground:${x},${y}`]?.ownerId)
+        .toBe('legacy-semantic:foreground:8,8');
+    }
+
+    const withoutDetails = setSmartTerrainDetailsEnabled(painted, false);
+    expect(withoutDetails.tileData.foreground[8]![8]).toBeGreaterThan(0);
+    for (const [x, y] of [[8, 7], [9, 8], [8, 9], [7, 8]]) {
+      expect(withoutDetails.tileData.foreground[y]![x]).toBe(-1);
+    }
+  });
+
   it('resolves a hollow Ground outline from its filled outward topology', () => {
     const firstGid = getTilesetByKey('forest')!.firstGid;
     const filledCells = Array.from(
