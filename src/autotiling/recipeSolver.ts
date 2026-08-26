@@ -28,6 +28,10 @@ import {
   resolveCyberLetterField,
 } from './cyberEdgeMatcher';
 import {
+  CYBER_EDGE_CATALOG,
+  type CyberLetterBrushId,
+} from './cyberEdgeCatalog';
+import {
   cloneRoomSmartTerrainState,
   smartCellKey,
   smartOwnedOutputKey,
@@ -87,14 +91,16 @@ const CYBER_CELL_OWNER_PREFIX = 'cyber:cell:';
 const CYBER_PANEL_RECIPE_ID = 'cyber.fence';
 const CYBER_BRUSH_PREFIX = 'cyber.';
 
-type CyberSpanBrushId = 'cyber.support';
+type CyberSpanBrushId = 'cyber.support' | 'cyber.neon';
 
 const CYBER_SPAN_BRUSH_IDS: readonly CyberSpanBrushId[] = [
   'cyber.support',
+  'cyber.neon',
 ];
 
 const CYBER_SPAN_INSTANCE_PREFIX: Readonly<Record<CyberSpanBrushId, string>> = {
   'cyber.support': 'cyber-support',
+  'cyber.neon': 'cyber-neon-strip',
 };
 
 const CYBER_FAMILY_BY_BRUSH: Partial<Record<SmartBrushId, CyberFamilyId>> = {
@@ -190,28 +196,26 @@ function isCyberLetterOccupant(
   layer: LayerName,
   x: number,
   y: number,
+  styleId: CyberStyleId,
 ): boolean {
   if (!inBounds(x, y)) return false;
   const semantic = state.semanticCells[smartSemanticCellKey(layer, x, y)];
-  if (semantic && isCyberStyleId(semantic.styleId) && isCyberLetterBrushId(semantic.brushId)) {
+  if (semantic?.styleId === styleId && isCyberLetterBrushId(semantic.brushId)) {
     return true;
   }
   for (const recipe of Object.values(state.recipes)) {
-    if (!isCyberStyleId(recipe.styleId) || !isCyberLetterBrushId(recipe.brushId)) continue;
+    if (recipe.styleId !== styleId || !isCyberLetterBrushId(recipe.brushId)) continue;
     if (recipe.sourceCells.some((cell) => cell.layer === layer && cell.x === x && cell.y === y)) {
       return true;
     }
   }
   const decoded = decodeTileDataValue(tileData[layer][y]?.[x] ?? -1);
   if (decoded.gid <= 0) return false;
-  for (const styleId of ['cyber-yellow', 'cyber-pink'] as const) {
-    const style = getSmartStyleDefinition(styleId);
-    const localIndex = decoded.gid - style.firstGid;
-    if (localIndex >= 0 && localIndex < style.tileCount && isCyberLetterCatalogLocalIndex(localIndex)) {
-      return true;
-    }
-  }
-  return false;
+  const style = getSmartStyleDefinition(styleId);
+  const localIndex = decoded.gid - style.firstGid;
+  return localIndex >= 0
+    && localIndex < style.tileCount
+    && isCyberLetterCatalogLocalIndex(localIndex);
 }
 
 function sameCyberFamily(
@@ -224,7 +228,9 @@ function sameCyberFamily(
   brushId: SmartBrushId,
 ): boolean {
   if (!inBounds(x, y)) return false;
-  if (isCyberLetterBrushId(brushId)) return isCyberLetterOccupant(tileData, state, layer, x, y);
+  if (isCyberLetterBrushId(brushId) && !isCyberSpanBrushId(brushId)) {
+    return isCyberLetterOccupant(tileData, state, layer, x, y, styleId);
+  }
   const semantic = state.semanticCells[smartSemanticCellKey(layer, x, y)];
   if (semantic) {
     if (brushId === 'cyber.rubble') {
@@ -895,57 +901,106 @@ function resolveCyberLetterCells(
   entries: readonly CyberSemanticEntry[],
 ): void {
   if (entries.length === 0) return;
-  const picks = resolveCyberLetterField(
-    entries.map((entry) => ({
-      x: entry.x,
-      y: entry.y,
-      brushId: entry.cell.brushId as import('./cyberEdgeCatalog').CyberLetterBrushId,
-      varietySalt: entry.cell.varietySalt,
-    })),
-    inBounds,
-  );
+  const groups = new Map<string, CyberSemanticEntry[]>();
   for (const entry of entries) {
-    const styleId = entry.cell.styleId as CyberStyleId;
-    const ownerId = `${CYBER_CELL_OWNER_PREFIX}${entry.semanticKey}`;
-    const pick = picks.get(letterCellKey(entry.x, entry.y));
-    const resolved: CyberResolvedTile = {
-      tilesetKey: CYBER_STYLE_PROFILES[styleId].tilesetKey,
-      localIndex: pick?.localIndex ?? 64,
-      flipX: pick?.flipX ?? false,
-      flipY: pick?.flipY ?? false,
-      layer: 'terrain',
-      styleId,
-    };
-    const lockedValue = entry.cell.lockedValue;
-    if (lockedValue !== undefined) {
-      tileData[entry.layer][entry.y][entry.x] = lockedValue;
-      state.ownedOutputs[smartOwnedOutputKey(entry.layer, entry.x, entry.y)] = {
-        ownerId,
-        partId: 'primary',
-        kind: 'semantic',
-        layer: entry.layer,
-        value: lockedValue,
-      };
-    } else {
-      addOwnedOutput(tileData, state, ownerId, 'primary', 'semantic', entry.x, entry.y, resolved, true);
+    const key = `${entry.layer}:${entry.cell.styleId}`;
+    const group = groups.get(key) ?? [];
+    group.push(entry);
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) {
+    const styleId = group[0]!.cell.styleId as CyberStyleId;
+    const layer = group[0]!.layer;
+    const concreteEntry = group.find((entry) => entry.cell.brushId === 'cyber.concrete');
+    const enclosedVoidCells = concreteEntry
+      ? findEnclosedCyberVoidCells(tileData, state, concreteEntry)
+      : new Set<string>();
+    const fieldCells = new Map<string, {
+      x: number;
+      y: number;
+      brushId: CyberLetterBrushId;
+      varietySalt?: number;
+    }>();
+    for (const entry of group) {
+      fieldCells.set(letterCellKey(entry.x, entry.y), {
+        x: entry.x,
+        y: entry.y,
+        brushId: entry.cell.brushId as CyberLetterBrushId,
+        varietySalt: entry.cell.varietySalt,
+      });
     }
-    if (entry.cell.brushId === 'cyber.concrete') {
-      const topology = resolveCyberStructureTopology8(neighborMask8(tileData, state, entry));
-      const tieTile = topology.concaveCorner
-        ? resolveCyberStructureTieTile(styleId, topology.concaveCorner)
+    const style = getSmartStyleDefinition(styleId);
+    for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+      for (let x = 0; x < ROOM_WIDTH; x += 1) {
+        const key = letterCellKey(x, y);
+        if (fieldCells.has(key) || hasCyberSmartSourceAt(state, layer, x, y)) continue;
+        const decoded = decodeTileDataValue(tileData[layer][y]?.[x] ?? -1);
+        const localIndex = decoded.gid - style.firstGid;
+        if (localIndex < 0 || localIndex >= style.tileCount) continue;
+        const catalogEntry = CYBER_EDGE_CATALOG.find((entry) => entry.localIndex === localIndex);
+        if (!catalogEntry) continue;
+        fieldCells.set(key, { x, y, brushId: catalogEntry.brushId });
+      }
+    }
+    const picks = resolveCyberLetterField(
+      [...fieldCells.values()].sort((left, right) => (
+        left.y - right.y || left.x - right.x || left.brushId.localeCompare(right.brushId)
+      )),
+      inBounds,
+    );
+    for (const entry of [...group].sort((left, right) => (
+      left.y - right.y || left.x - right.x || left.cell.brushId.localeCompare(right.cell.brushId)
+    ))) {
+      const styleId = entry.cell.styleId as CyberStyleId;
+      const ownerId = `${CYBER_CELL_OWNER_PREFIX}${entry.semanticKey}`;
+      const pick = picks.get(letterCellKey(entry.x, entry.y));
+      const tunnelRole = entry.cell.brushId === 'cyber.concrete'
+        ? getCyberTunnelOutlineRole(enclosedVoidCells, entry.x, entry.y)
         : null;
-      if (tieTile) {
-        addOwnedOutput(
-          tileData,
-          state,
+      const tunnelTile = tunnelRole ? resolveCyberTunnelOutlineTile(styleId, tunnelRole) : null;
+      const resolved: CyberResolvedTile = tunnelTile?.layer === 'terrain'
+        ? tunnelTile
+        : {
+            tilesetKey: CYBER_STYLE_PROFILES[styleId].tilesetKey,
+            localIndex: pick?.localIndex ?? 64,
+            flipX: pick?.flipX ?? false,
+            flipY: pick?.flipY ?? false,
+            layer: 'terrain',
+            styleId,
+          };
+      const lockedValue = entry.cell.lockedValue;
+      if (lockedValue !== undefined) {
+        tileData[entry.layer][entry.y][entry.x] = lockedValue;
+        state.ownedOutputs[smartOwnedOutputKey(entry.layer, entry.x, entry.y)] = {
           ownerId,
-          'diagonal-tie',
-          'semantic',
-          entry.x,
-          entry.y,
-          tieTile,
-          false,
-        );
+          partId: 'primary',
+          kind: 'semantic',
+          layer: entry.layer,
+          value: lockedValue,
+        };
+      } else {
+        addOwnedOutput(tileData, state, ownerId, 'primary', 'semantic', entry.x, entry.y, resolved, true);
+      }
+      if (entry.cell.brushId === 'cyber.concrete') {
+        const topology = resolveCyberStructureTopology8(neighborMask8(tileData, state, entry));
+        const tieTile = tunnelTile?.layer === 'foreground'
+          ? tunnelTile
+          : topology.concaveCorner
+            ? resolveCyberStructureTieTile(styleId, topology.concaveCorner)
+            : null;
+        if (tieTile) {
+          addOwnedOutput(
+            tileData,
+            state,
+            ownerId,
+            'diagonal-tie',
+            'semantic',
+            entry.x,
+            entry.y,
+            tieTile,
+            false,
+          );
+        }
       }
     }
   }
@@ -956,11 +1011,13 @@ function resolveCyberSemanticCells(tileData: RoomTileData, state: RoomSmartTerra
   resolveCyberLetterCells(
     tileData,
     state,
-    entries.filter((entry) => isCyberLetterBrushId(entry.cell.brushId)),
+    entries.filter((entry) => (
+      isCyberLetterBrushId(entry.cell.brushId) && !isCyberSpanBrushId(entry.cell.brushId)
+    )),
   );
   const groups = new Map<string, CyberSemanticEntry[]>();
   for (const entry of entries) {
-    if (isCyberLetterBrushId(entry.cell.brushId)) continue;
+    if (isCyberLetterBrushId(entry.cell.brushId) && !isCyberSpanBrushId(entry.cell.brushId)) continue;
     const key = `${entry.layer}:${entry.cell.styleId}:${entry.cell.brushId}`;
     const group = groups.get(key) ?? [];
     group.push(entry);
@@ -1087,7 +1144,11 @@ function resolveSupportRecipe(
 
 function flattenLetterSpanRecipes(state: RoomSmartTerrainState): void {
   for (const [instanceId, recipe] of Object.entries(state.recipes)) {
-    if (!isCyberStyleId(recipe.styleId) || !isCyberLetterBrushId(recipe.brushId)) continue;
+    if (
+      !isCyberStyleId(recipe.styleId)
+      || !isCyberLetterBrushId(recipe.brushId)
+      || isCyberSpanBrushId(recipe.brushId)
+    ) continue;
     for (const source of recipe.sourceCells) {
       if (!inBounds(source.x, source.y)) continue;
       const semanticKey = smartSemanticCellKey(source.layer, source.x, source.y);
@@ -1108,6 +1169,10 @@ function resolveCyberRecipes(tileData: RoomTileData, state: RoomSmartTerrainStat
     if (!isCyberStyleId(recipe.styleId)) continue;
     if (recipe.brushId === 'cyber.support') {
       resolveSupportRecipe(tileData, state, recipe);
+      continue;
+    }
+    if (recipe.brushId === 'cyber.neon') {
+      resolveHorizontalSpanRecipe(tileData, state, recipe, 'neon-strip');
       continue;
     }
     if (recipe.brushId !== 'cyber.fence' && recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel') {

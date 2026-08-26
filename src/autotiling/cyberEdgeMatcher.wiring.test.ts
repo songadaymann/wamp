@@ -47,21 +47,31 @@ describe('cyber letter matcher wiring', () => {
     expect(localIndex(document, 5, 5)).toBe(20);
   });
 
-  it('joins a neon seed to neighboring concrete instead of treating neon as isolated', () => {
+  it('routes Neon through its minimum-width horizontal recipe', () => {
     let document = applySmartBrushCells(emptyDocument(), {
-      cells: [{ x: 4, y: 8 }, { x: 5, y: 8 }, { x: 6, y: 8 }],
+      cells: [{ x: 3, y: 8 }, { x: 4, y: 8 }, { x: 5, y: 8 }, { x: 6, y: 8 }, { x: 7, y: 8 }],
       mode: 'paint',
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
     });
     document = applySmartBrushCells(document, {
-      cells: [{ x: 4, y: 8 }],
+      cells: [{ x: 4, y: 8 }, { x: 5, y: 8 }, { x: 6, y: 8 }],
       mode: 'paint',
       brushId: 'cyber.neon',
       styleId: 'cyber-yellow',
     });
-    expect(document.smartTerrain.semanticCells['terrain:4,8']?.brushId).toBe('cyber.neon');
+    expect(document.smartTerrain.semanticCells['terrain:4,8']).toBeUndefined();
+    expect(Object.values(document.smartTerrain.recipes)).toContainEqual(expect.objectContaining({
+      brushId: 'cyber.neon',
+      sourceCells: [
+        { layer: 'terrain', x: 4, y: 8 },
+        { layer: 'terrain', x: 5, y: 8 },
+        { layer: 'terrain', x: 6, y: 8 },
+      ],
+    }));
     expect(localIndex(document, 4, 8)).toBe(49);
+    expect(localIndex(document, 5, 8)).toBe(50);
+    expect(localIndex(document, 6, 8)).toBe(51);
   });
 
   it('uses flipped Cyber A10 foreground ties on a concrete ring but not a solid rectangle', () => {
@@ -117,7 +127,7 @@ describe('cyber letter matcher wiring', () => {
     });
   });
 
-  it('paints a rectangle outline as a hollow E-frame instead of a filled ABCB rim', () => {
+  it('paints a rectangle outline with the reviewed tunnel ceiling, floor, and sides', () => {
     const outline = applySmartBrushOutlineCells(emptyDocument(), {
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
@@ -136,10 +146,14 @@ describe('cyber letter matcher wiring', () => {
         ]),
       ],
     });
-    expect([68, 69]).toContain(localIndex(outline, 7, 6));
-    expect([68, 69]).toContain(localIndex(outline, 7, 10));
-    expect(localIndex(outline, 4, 8)).toBe(31);
-    expect(localIndex(outline, 11, 8)).toBe(31);
+    expect(decodedLocal(outline, 'terrain', 7, 6)).toEqual({
+      localIndex: 34, flipX: false, flipY: true,
+    });
+    expect(decodedLocal(outline, 'terrain', 7, 10)).toEqual({
+      localIndex: 34, flipX: false, flipY: false,
+    });
+    expect(localIndex(outline, 4, 8)).toBe(21);
+    expect(localIndex(outline, 11, 8)).toBe(23);
     expect(localIndex(outline, 4, 6)).toBe(67);
     expect(outline.tileData.terrain[8]![7]).toBe(-1);
   });

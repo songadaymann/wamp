@@ -135,7 +135,7 @@ function expectCollision(document: SmartRecipeDocument, x: number, y: number): v
   expect(getTerrainCollisionProfileForGid(decodeTileDataValue(value).gid).hasCollision).toBe(true);
 }
 
-describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by letter matcher)', () => {
+describe('Cyber Smart recipe solver and ownership contracts', () => {
   it('resolves all six brushes with their exact layer and collision contracts', () => {
     let document = paint(
       emptyDocument(),
@@ -186,7 +186,7 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
     }
   });
 
-  it('persists Platform, Support, and Neon spans as explicit stable recipe owners', () => {
+  it('keeps Concrete semantic while persisting Support and Neon as stable recipe owners', () => {
     let document = paint(
       emptyDocument(),
       'cyber.concrete',
@@ -197,17 +197,8 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
     document = paint(document, 'cyber.neon', 'cyber-yellow', horizontal(18, 8, 3));
 
     const recipes = Object.values(document.smartTerrain.recipes);
-    expect(recipes).toHaveLength(3);
+    expect(recipes).toHaveLength(2);
     expect(recipes).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        recipeId: 'cyber.concrete',
-        brushId: 'cyber.concrete',
-        styleId: 'cyber-yellow',
-        ownerId: 'cyber:recipe:cyber-platform-1',
-        anchor: { layer: 'terrain', x: 3, y: 4 },
-        bounds: { minX: 3, minY: 4, maxX: 6, maxY: 4, width: 4, height: 1 },
-        sourceCells: horizontal(3, 4, 4).map(({ x, y }) => ({ layer: 'terrain', x, y })),
-      }),
       expect.objectContaining({
         recipeId: 'cyber.support',
         brushId: 'cyber.support',
@@ -227,21 +218,22 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
         sourceCells: horizontal(18, 8, 3).map(({ x, y }) => ({ layer: 'terrain', x, y })),
       }),
     ]));
+    expect(Object.values(document.smartTerrain.semanticCells).filter(({ brushId }) => (
+      brushId === 'cyber.concrete'
+    ))).toHaveLength(4);
     expect(Object.values(document.smartTerrain.semanticCells).some(({ brushId }) => (
-      brushId === 'cyber.concrete' || brushId === 'cyber.support' || brushId === 'cyber.neon'
+      brushId === 'cyber.support' || brushId === 'cyber.neon'
     ))).toBe(false);
 
     const outputsByOwner = new Map<string, number>();
     for (const output of Object.values(document.smartTerrain.ownedOutputs)) {
-      if (!output.ownerId.includes('cyber-platform')
-        && !output.ownerId.includes('cyber-support')
+      if (!output.ownerId.includes('cyber-support')
         && !output.ownerId.includes('cyber-neon-strip')) continue;
       expect(output).toMatchObject({ kind: 'recipe' });
       expect(output.value).toBeGreaterThan(0);
       outputsByOwner.set(output.ownerId, (outputsByOwner.get(output.ownerId) ?? 0) + 1);
     }
     expect(Object.fromEntries(outputsByOwner)).toEqual({
-      'cyber:recipe:cyber-platform-1': 4,
       'cyber:recipe:cyber-support-1': 8,
       'cyber:recipe:cyber-neon-strip-1': 3,
     });
@@ -272,10 +264,10 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
     ))).toHaveLength(8);
   });
 
-  it('keeps span owner IDs stable across repaint and extension, then repairs split and merge owners', () => {
+  it('keeps Neon owner IDs stable across repaint and extension, then repairs split and merge owners', () => {
     let document = paint(
       emptyDocument(),
-      'cyber.concrete',
+      'cyber.neon',
       'cyber-yellow',
       horizontal(4, 5, 4),
     );
@@ -292,14 +284,14 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
       smartOwnedOutputPartKey(originalOwner, 'row-0:column-1'),
     );
 
-    document = paint(document, 'cyber.concrete', 'cyber-yellow', [{ x: 5, y: 5 }]);
+    document = paint(document, 'cyber.neon', 'cyber-yellow', [{ x: 5, y: 5 }]);
     expect(Object.keys(document.smartTerrain.recipes)).toEqual([originalId]);
     expect(document.smartTerrain.suppressedOutputParts).not.toContain(
       smartOwnedOutputPartKey(originalOwner, 'row-0:column-1'),
     );
     expect(document.tileData.terrain[5]![5]).toBeGreaterThan(0);
 
-    document = paint(document, 'cyber.concrete', 'cyber-yellow', [{ x: 8, y: 5 }]);
+    document = paint(document, 'cyber.neon', 'cyber-yellow', [{ x: 8, y: 5 }]);
     expect(Object.keys(document.smartTerrain.recipes)).toEqual([originalId]);
     expect(document.smartTerrain.recipes[originalId]).toMatchObject({
       ownerId: originalOwner,
@@ -307,7 +299,7 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
       bounds: { minX: 4, minY: 5, maxX: 8, maxY: 5, width: 5, height: 1 },
     });
 
-    document = erase(document, 'cyber.concrete', 'cyber-yellow', [{ x: 6, y: 5 }]);
+    document = erase(document, 'cyber.neon', 'cyber-yellow', [{ x: 6, y: 5 }]);
     const splitIds = Object.keys(document.smartTerrain.recipes);
     expect(splitIds).toHaveLength(2);
     expect(splitIds).toContain(originalId);
@@ -322,7 +314,7 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
       entry.startsWith('cyber:recipe:')
     ))).toEqual([]);
 
-    document = paint(document, 'cyber.concrete', 'cyber-yellow', [{ x: 6, y: 5 }]);
+    document = paint(document, 'cyber.neon', 'cyber-yellow', [{ x: 6, y: 5 }]);
     expect(Object.keys(document.smartTerrain.recipes)).toEqual([originalId]);
     expect(Object.values(document.smartTerrain.ownedOutputs)
       .filter(({ kind }) => kind === 'recipe')
@@ -330,16 +322,16 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 4, 5, 5)).not.toContain('.');
   });
 
-  it('keeps Platform middle phase anchored when additional legacy tiles extend its left edge', () => {
+  it('keeps Neon middle phase anchored when additional legacy tiles extend its left edge', () => {
     const firstGid = getSmartStyleDefinition('cyber-yellow').firstGid;
     const withLegacy = (count: number): SmartRecipeDocument => {
       const tileData = createEmptyTileData();
       for (let x = 4 - count; x < 4; x += 1) {
-        tileData.terrain[6]![x] = firstGid + 69;
+        tileData.terrain[6]![x] = firstGid + 50;
       }
       return paint(
         { tileData, smartTerrain: createRoomSmartTerrainState() },
-        'cyber.concrete',
+        'cyber.neon',
         'cyber-yellow',
         horizontal(4, 6, 5),
       );
@@ -467,11 +459,11 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
       [{ x: 18, y: 4 }],
     );
     structures = paint(structures, 'cyber.concrete', 'cyber-pink', [{ x: 19, y: 4 }]);
-    expect(localIndexAt(structures, 'terrain', 'cyber-yellow', 18, 4)).toBe(64);
-    expect(localIndexAt(structures, 'terrain', 'cyber-pink', 19, 4)).toBe(64);
+    expect(localIndexAt(structures, 'terrain', 'cyber-yellow', 18, 4)).toBe(20);
+    expect(localIndexAt(structures, 'terrain', 'cyber-pink', 19, 4)).toBe(20);
   });
 
-  it('keeps F10/F11 platform accents manual until the span is repainted', () => {
+  it('keeps F10/F11 platform accents manually locked until Concrete is repainted', () => {
     const firstGid = getSmartStyleDefinition('cyber-yellow').firstGid;
     let document = paint(
       emptyDocument(),
@@ -479,7 +471,6 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
       'cyber-yellow',
       horizontal(3, 4, 5),
     );
-    const owner = Object.values(document.smartTerrain.recipes)[0]!.ownerId;
     const manualTileData = cloneTileData(document);
     manualTileData.terrain[4]![5] = firstGid + 69; // Cyber F10 paint-spill accent.
     document = resolveSmartRecipeDocument({
@@ -488,15 +479,11 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
     });
 
     expect(localIndexAt(document, 'terrain', 'cyber-yellow', 5, 4)).toBe(69);
-    expect(document.smartTerrain.suppressedOutputParts).toContain(
-      smartOwnedOutputPartKey(owner, 'row-0:column-2'),
-    );
+    expect(document.smartTerrain.semanticCells['terrain:5,4']?.lockedValue).toBe(firstGid + 69);
 
     document = paint(document, 'cyber.concrete', 'cyber-yellow', [{ x: 5, y: 4 }]);
     expect(localIndexAt(document, 'terrain', 'cyber-yellow', 5, 4)).toBe(68);
-    expect(document.smartTerrain.suppressedOutputParts).not.toContain(
-      smartOwnedOutputPartKey(owner, 'row-0:column-2'),
-    );
+    expect(document.smartTerrain.semanticCells['terrain:5,4']?.lockedValue).toBeUndefined();
   });
 
   it('keeps adjacent framed panels separate by style', () => {
@@ -523,22 +510,20 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
       '9', '.', '9X',
     ]);
     const ceiling = rowTokens(document, 'terrain', 'cyber-yellow', 10, 10, 3);
-    expect(['64', '82', '83']).toContain(ceiling[0]);
+    expectCollision(document, 10, 10);
     expect(ceiling[1]).toBe('34Y');
-    expect(['64', '82', '83']).toContain(ceiling[2]);
+    expectCollision(document, 12, 10);
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 10, 11, 3)).toEqual([
       '21', '.', '23',
     ]);
     const floor = rowTokens(document, 'terrain', 'cyber-yellow', 10, 12, 3);
-    expect(['64', '82', '83']).toContain(floor[0]);
+    expectCollision(document, 10, 12);
     expect(floor[1]).toBe('34');
-    expect(['64', '82', '83']).toContain(floor[2]);
+    expectCollision(document, 12, 12);
     expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 12, 3)).toEqual([
       '9Y', '.', '9XY',
     ]);
-    expect([64, 82, 83]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 10, 10));
     expect(tileToken(document.tileData.terrain[10]![11]!, 'cyber-yellow')).toBe('34Y');
-    expect([64, 82, 83]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 12, 10));
     expect(document.tileData.terrain[11]![11]).toBe(-1);
   });
 
@@ -593,7 +578,9 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
       'cyber-yellow',
       [{ x: 9, y: 7 }],
     );
-    expect(document.tileData.terrain[7]![9]).toBe(-1);
+    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 9, 7)).toBe(20);
+    expect(document.tileData.terrain[7]![8]).toBe(mismatched.terrain[7]![8]);
+    expect(document.tileData.terrain[7]![10]).toBe(mismatched.terrain[7]![10]);
 
     const structureData = createEmptyTileData();
     for (const [dx, dy] of [
@@ -607,7 +594,7 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
       'cyber-yellow',
       [{ x: 20, y: 12 }],
     );
-    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 20, 12)).toBe(64);
+    expect([64, 82, 83]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 20, 12));
     expect(tileToken(document.tileData.foreground[12]![20]!, 'cyber-yellow')).toBe('9Y');
   });
 
@@ -642,7 +629,7 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
     expect(decodeTileDataValue(locked[2]!)).toMatchObject({ flipX: true, flipY: true });
   });
 
-  it('clears diagonal outline locks when a Structure hole is carved and repaired', () => {
+  it('repairs a letter-matched Structure outline without stale shape locks', () => {
     const filledCells = rectangle(10, 10, 3, 3);
     const outlineCells = filledCells.filter(({ x, y }) => !(x === 11 && y === 11));
     let document = applySmartBrushOutlineCells(emptyDocument(), {
@@ -656,7 +643,7 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
       { x: 10, y: 12 }, { x: 12, y: 12 },
     ];
     expect(corners.every(({ x, y }) => (
-      document.smartTerrain.semanticCells[smartSemanticCellKey('terrain', x, y)]?.shapeValue !== undefined
+      document.smartTerrain.semanticCells[smartSemanticCellKey('terrain', x, y)]?.shapeValue === undefined
     ))).toBe(true);
 
     document = erase(
@@ -665,9 +652,7 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
       'cyber-yellow',
       [{ x: 11, y: 11 }],
     );
-    expect(corners.map(({ x, y }) => localIndexAt(
-      document, 'terrain', 'cyber-yellow', x, y,
-    )).every((localIndex) => [64, 82, 83].includes(localIndex))).toBe(true);
+    corners.forEach(({ x, y }) => expectCollision(document, x, y));
     expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual([
       '9', '.', '9X',
     ]);
@@ -748,20 +733,15 @@ describe.skip('Cyber Smart recipe solver (v1 blob/span contracts; replaced by le
     ))).toEqual(['36', '48', '60', '72']);
   });
 
-  it('keeps spans invisible until their minimum width becomes valid', () => {
-    let platform = paint(
+  it('keeps recipe macros invisible until their minimum width becomes valid', () => {
+    const isolatedConcrete = paint(
       emptyDocument(),
       'cyber.concrete',
       'cyber-yellow',
       [{ x: 2, y: 2 }],
     );
-    expect(platform.tileData.terrain[2]![2]).toBe(-1);
-    expect(Object.values(platform.smartTerrain.recipes)).toContainEqual(expect.objectContaining({
-      brushId: 'cyber.concrete',
-      sourceCells: [{ layer: 'terrain', x: 2, y: 2 }],
-    }));
-    platform = paint(platform, 'cyber.concrete', 'cyber-yellow', [{ x: 3, y: 2 }]);
-    expect(rowTokens(platform, 'terrain', 'cyber-yellow', 2, 2, 2)).toEqual(['71X', '71']);
+    expect(rowTokens(isolatedConcrete, 'terrain', 'cyber-yellow', 2, 2, 1)).toEqual(['20']);
+    expect(Object.values(isolatedConcrete.smartTerrain.recipes)).toEqual([]);
 
     let neon = paint(
       emptyDocument(),

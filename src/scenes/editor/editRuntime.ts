@@ -228,6 +228,7 @@ type CyberSmartGestureAxis = 'horizontal' | 'vertical';
 function getCyberSmartGestureAxis(brushId: SmartBrushId): CyberSmartGestureAxis | null {
   switch (brushId) {
     case 'cyber.fence':
+    case 'cyber.neon':
       return 'horizontal';
     case 'cyber.support':
       return 'vertical';
@@ -253,7 +254,7 @@ function getCyberSmartRectangleCells(
   x2: number,
   y2: number,
 ): Array<{ x: number; y: number }> | null {
-  if (brushId === 'cyber.fence') {
+  if (brushId === 'cyber.fence' || brushId === 'cyber.neon') {
     const minX = Math.min(x1, x2);
     const maxX = Math.max(x1, x2);
     return Array.from({ length: maxX - minX + 1 }, (_, offset) => ({

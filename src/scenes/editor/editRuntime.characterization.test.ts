@@ -272,24 +272,24 @@ describe('editor edit runtime document contracts', () => {
     expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['4,5', '5,6', '6,7']);
   });
 
-  it('paints a vertical Cyber Neon pencil gesture on every cell', () => {
+  it('projects a diagonal Cyber Neon pencil gesture onto its anchored horizontal strip', () => {
     selectCyberBrush('cyber.neon');
     const { runtime, layers } = createHarness(createRoom());
 
     runtime.beginTileBatch();
     placeSmartCell(runtime, 9, 3);
-    placeSmartCell(runtime, 9, 4);
-    placeSmartCell(runtime, 9, 5);
-    placeSmartCell(runtime, 9, 6);
+    placeSmartCell(runtime, 10, 4);
+    placeSmartCell(runtime, 11, 5);
+    placeSmartCell(runtime, 12, 6);
     runtime.commitTileBatch();
 
     expect(getSmartSourceKeys(runtime, 'cyber.neon')).toEqual([
       'terrain:9,3',
-      'terrain:9,4',
-      'terrain:9,5',
-      'terrain:9,6',
+      'terrain:10,3',
+      'terrain:11,3',
+      'terrain:12,3',
     ]);
-    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['9,3', '9,4', '9,5', '9,6']);
+    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['9,3', '10,3', '11,3', '12,3']);
   });
 
   it('projects a diagonal Cyber Support pencil gesture onto its anchored vertical column', () => {
@@ -339,9 +339,7 @@ describe('editor edit runtime document contracts', () => {
         .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
     );
     expect(getSmartSourceKeys(runtime, 'cyber.neon')).toEqual(
-      [8, 9, 10, 11, 12]
-        .flatMap((x) => [4, 5, 6, 7, 8, 9].map((y) => `terrain:${x},${y}`))
-        .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
+      [8, 9, 10, 11, 12].map((x) => `terrain:${x},9`),
     );
     expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual(
       [18, 19, 20, 21, 22]
@@ -367,7 +365,7 @@ describe('editor edit runtime document contracts', () => {
     ).toEqual(
       [
         ...[2, 3, 4, 5, 6].flatMap((x) => [3, 4, 5, 6, 7, 8].map((y) => `${x},${y}`)),
-        ...[8, 9, 10, 11, 12].flatMap((x) => [4, 5, 6, 7, 8, 9].map((y) => `${x},${y}`)),
+        ...[8, 9, 10, 11, 12].map((x) => `${x},9`),
       ].sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
     );
     expect(getTileCoordinates(layers.get('background')!)).toEqual([
