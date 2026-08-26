@@ -29,6 +29,7 @@ import {
 } from './recipeSolver';
 import { getSmartStyleDefinition } from './registry';
 import type { CyberStyleId } from './cyberProfile';
+import { applySmartCells } from './solver';
 
 interface CyberReferenceFixture {
   provenance: { roomVersion: number; snapshotSha256: string };
@@ -136,6 +137,100 @@ function expectCollision(document: SmartRecipeDocument, x: number, y: number): v
 }
 
 describe('Cyber Smart recipe solver and ownership contracts', () => {
+  it('discards middle-layer legacy decorations when Cyber replaces their Smart owner', () => {
+    const legacyCells = Array.from({ length: 10 * 38 }, (_, index) => ({
+      x: 1 + (index % 38),
+      y: 2 + Math.floor(index / 38) * 2,
+    }));
+    let document = applySmartCells(emptyDocument(true), {
+      cells: legacyCells,
+      mode: 'paint',
+      theme: 'forest',
+      material: 'ground',
+    });
+    const decorationEntry = Object.entries(document.smartTerrain.generatedDecorations)[0];
+    expect(decorationEntry).toBeDefined();
+    const [targetKey, decoration] = decorationEntry!;
+    expect(decoration.layer).toBe('terrain');
+    expect(getTerrainCollisionProfileForGid(decoration.gid).hasCollision).toBe(false);
+
+    const [ownerX, ownerY] = decoration.ownerKey.split(',').map(Number);
+    const [targetX, targetY] = targetKey.split(',').map(Number);
+    const oldDecorationValue = document.tileData.terrain[targetY]![targetX];
+    document = paint(document, 'cyber.concrete', 'cyber-yellow', [{ x: ownerX, y: ownerY }]);
+
+    expect(document.smartTerrain.cells[decoration.ownerKey]).toBeUndefined();
+    expect(Object.values(document.smartTerrain.generatedDecorations).some(
+      (candidate) => candidate.ownerKey === decoration.ownerKey,
+    )).toBe(false);
+    expect(document.tileData.terrain[targetY]![targetX]).not.toBe(oldDecorationValue);
+    expect(Object.values(document.smartTerrain.ownedOutputs).some(
+      (output) => output.ownerId === `legacy-cell:${decoration.ownerKey}`,
+    )).toBe(false);
+  });
+
+  it('discards every layered Feature edge part when Cyber replaces its Smart owner', () => {
+    let document = applySmartCells(emptyDocument(true), {
+      cells: [{ x: 5, y: 4 }, { x: 4, y: 5 }, { x: 5, y: 6 }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'feature',
+    });
+    const front = document.smartTerrain.generatedDecorations['5,5'];
+    const behind = document.smartTerrain.generatedBackgroundDecorations['5,5'];
+    expect(front).toBeDefined();
+    expect(behind).toBeDefined();
+    expect(behind?.ownerKey).toBe(front?.ownerKey);
+
+    const [ownerX, ownerY] = front!.ownerKey.split(',').map(Number);
+    document = paint(document, 'cyber.concrete', 'cyber-yellow', [{ x: ownerX, y: ownerY }]);
+
+    for (const generated of [
+      document.smartTerrain.generatedDecorations,
+      document.smartTerrain.generatedBackgroundDecorations,
+    ]) {
+      expect(Object.values(generated).some(
+        (candidate) => candidate.ownerKey === front!.ownerKey,
+      )).toBe(false);
+    }
+    expect(document.tileData.terrain[5]![5]).toBe(-1);
+    expect(document.tileData.background[5]![5]).toBe(-1);
+  });
+
+  it('preserves Terrain decorations when a Background Support replaces only a tunnel', () => {
+    const legacyCells = Array.from({ length: 10 * 38 }, (_, index) => ({
+      x: 1 + (index % 38),
+      y: 2 + Math.floor(index / 38) * 2,
+    }));
+    let document = applySmartCells(emptyDocument(true), {
+      cells: legacyCells,
+      mode: 'paint',
+      theme: 'forest',
+      material: 'ground',
+    });
+    const [targetKey, decoration] = Object.entries(
+      document.smartTerrain.generatedDecorations,
+    )[0]!;
+    const [ownerX, ownerY] = decoration.ownerKey.split(',').map(Number);
+    const [targetX, targetY] = targetKey.split(',').map(Number);
+    document = applySmartCells(document, {
+      cells: [{ x: ownerX, y: ownerY }],
+      mode: 'paint',
+      theme: 'forest',
+      material: 'tunnel',
+    });
+    const decorationValue = document.tileData.terrain[targetY]![targetX];
+
+    document = paint(document, 'cyber.support', 'cyber-yellow', [{ x: ownerX, y: ownerY }]);
+
+    expect(document.smartTerrain.cells[decoration.ownerKey]).toBeDefined();
+    expect(Object.values(document.smartTerrain.generatedDecorations).some(
+      (candidate) => candidate.ownerKey === decoration.ownerKey,
+    )).toBe(true);
+    expect(document.tileData.terrain[targetY]![targetX]).toBe(decorationValue);
+    expect(document.tileData.background[ownerY]![ownerX]).toBeGreaterThan(0);
+  });
+
   it('resolves all six brushes with their exact layer and collision contracts', () => {
     let document = paint(
       emptyDocument(),

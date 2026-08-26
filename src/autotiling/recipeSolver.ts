@@ -1329,10 +1329,53 @@ function clearCompatibilityCellAt(
   layer: LayerName,
   x: number,
   y: number,
-): void {
+): string | null {
   const key = smartCellKey(x, y);
-  if (layer === 'terrain') delete state.cells[key];
-  if (layer === 'background') delete state.backdropCells[key];
+  if (layer === 'terrain' && state.cells[key]) {
+    delete state.cells[key];
+    return key;
+  }
+  if (layer === 'background' && state.backdropCells[key]) {
+    delete state.backdropCells[key];
+    // Legacy generated decorations are owned only by Terrain compatibility
+    // cells. A Background tunnel can share this coordinate with an independent
+    // Ground owner, so removing the tunnel must not discard the Ground details.
+    return null;
+  }
+  return null;
+}
+
+function discardLegacyDecorationsForOwners(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+  ownerKeys: ReadonlySet<string>,
+): void {
+  if (ownerKeys.size === 0) return;
+  for (const generated of [
+    state.generatedDecorations,
+    state.generatedBackgroundDecorations,
+  ]) {
+    for (const [targetKey, decoration] of Object.entries(generated)) {
+      if (!ownerKeys.has(decoration.ownerKey)) continue;
+      const [x, y] = targetKey.split(',').map(Number);
+      if (inBounds(x, y)) {
+        const expectedValue = decoration.value ?? decoration.gid;
+        if ((tileData[decoration.layer][y]?.[x] ?? -1) === expectedValue) {
+          tileData[decoration.layer][y][x] = -1;
+        }
+        const outputKey = smartOwnedOutputKey(decoration.layer, x, y);
+        const output = state.ownedOutputs[outputKey];
+        if (output?.ownerId === `legacy-cell:${decoration.ownerKey}`) {
+          delete state.ownedOutputs[outputKey];
+        }
+      }
+      delete generated[targetKey];
+    }
+  }
+  const ownerSlotPrefixes = [...ownerKeys].map((ownerKey) => `${ownerKey}:`);
+  state.suppressedDecorationSlots = state.suppressedDecorationSlots.filter(
+    (slot) => !ownerSlotPrefixes.some((prefix) => slot.startsWith(prefix)),
+  );
 }
 
 function clearShapeValuesAround(
@@ -1478,6 +1521,7 @@ function applySpanCells(
 ): void {
   const layer = getSmartBrushDefinition(brushId).defaultLayer;
   const touchedOwnerIds = new Set<string>();
+  const replacedLegacyOwnerKeys = new Set<string>();
   for (const { x, y } of cells) {
     const coordinateKey = smartCellKey(x, y);
     let alreadySameSource = false;
@@ -1500,7 +1544,8 @@ function applySpanCells(
 
     const semanticKey = smartSemanticCellKey(layer, x, y);
     delete state.semanticCells[semanticKey];
-    clearCompatibilityCellAt(state, layer, x, y);
+    const replacedLegacyOwnerKey = clearCompatibilityCellAt(state, layer, x, y);
+    if (replacedLegacyOwnerKey) replacedLegacyOwnerKeys.add(replacedLegacyOwnerKey);
     if (mode === 'paint' && !alreadySameSource) {
       state.semanticCells[semanticKey] = { styleId, brushId };
     } else if (mode === 'erase') {
@@ -1517,6 +1562,7 @@ function applySpanCells(
       }
     }
   }
+  discardLegacyDecorationsForOwners(tileData, state, replacedLegacyOwnerKeys);
   discardOwnedOutputsForOwners(tileData, state, touchedOwnerIds);
   const resetOwnerIds = canonicalizeCyberSpanRecipes(state);
   discardOwnedOutputsForOwners(tileData, state, resetOwnerIds);
@@ -1554,11 +1600,13 @@ export function applySmartBrushCells(
     const layer = brush.defaultLayer;
     const targetKeys = new Set(cells.map(({ x, y }) => smartCellKey(x, y)));
     const replacedOwnerIds = removeCyberSpanSourcesAt(smartTerrain, layer, targetKeys);
+    const replacedLegacyOwnerKeys = new Set<string>();
     discardOwnedOutputsForOwners(tileData, smartTerrain, replacedOwnerIds);
     for (const { x, y } of cells) {
       const semanticKey = smartSemanticCellKey(layer, x, y);
       clearShapeValuesAround(smartTerrain, layer, x, y, options.styleId, options.brushId);
-      clearCompatibilityCellAt(smartTerrain, layer, x, y);
+      const replacedLegacyOwnerKey = clearCompatibilityCellAt(smartTerrain, layer, x, y);
+      if (replacedLegacyOwnerKey) replacedLegacyOwnerKeys.add(replacedLegacyOwnerKey);
       if (options.mode === 'erase') {
         delete smartTerrain.semanticCells[semanticKey];
         tileData[layer][y][x] = -1;
@@ -1578,6 +1626,7 @@ export function applySmartBrushCells(
         (entry) => !entry.startsWith(`${CYBER_CELL_OWNER_PREFIX}${semanticKey}:`),
       );
     }
+    discardLegacyDecorationsForOwners(tileData, smartTerrain, replacedLegacyOwnerKeys);
     const resetOwnerIds = canonicalizeCyberSpanRecipes(smartTerrain);
     discardOwnedOutputsForOwners(tileData, smartTerrain, resetOwnerIds);
   }

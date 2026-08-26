@@ -964,6 +964,57 @@ try {
       }
       summary.checks.desertDecorationPairs = true;
     }
+    if (themeName === 'forest') {
+      const decorationEntry = Object.entries(
+        decorationFixture.smartTerrain.generatedDecorations,
+      )[0];
+      assert.ok(decorationEntry);
+      const [targetKey, decoration] = decorationEntry;
+      assert.equal(decoration.layer, 'terrain');
+      const [ownerX, ownerY] = decoration.ownerKey.split(',').map(Number);
+      const [targetX, targetY] = targetKey.split(',').map(Number);
+      const oldDecorationValue = decorationFixture.tileData.terrain[targetY][targetX];
+      await page.locator('#smart-theme-select').selectOption('cyber');
+      await page.locator('#smart-style-select').selectOption('cyber-yellow');
+      await page.locator('#smart-material-select').selectOption('cyber.concrete');
+      const decorationOverwriteCaptures = await runEditorCommands(page, [
+        { op: 'beginBatch' },
+        { op: 'placeCells', cells: [{ x: ownerX, y: ownerY }] },
+        { op: 'commitBatch' },
+        { op: 'capture', name: 'decorationOverwrite' },
+        { op: 'undo' },
+        { op: 'capture', name: 'decorationOverwriteUndone' },
+        { op: 'redo' },
+        { op: 'capture', name: 'decorationOverwriteRedone' },
+      ]);
+      const { decorationOverwrite, decorationOverwriteUndone, decorationOverwriteRedone } = (
+        decorationOverwriteCaptures
+      );
+      assert.equal(decorationOverwrite.smartTerrain.cells[decoration.ownerKey], undefined);
+      assert.equal(Object.values(decorationOverwrite.smartTerrain.generatedDecorations).some(
+        (candidate) => candidate.ownerKey === decoration.ownerKey,
+      ), false);
+      assert.notEqual(decorationOverwrite.tileData.terrain[targetY][targetX], oldDecorationValue);
+      assert.equal(Object.values(decorationOverwrite.smartTerrain.ownedOutputs).some(
+        (output) => output.ownerId === `legacy-cell:${decoration.ownerKey}`,
+      ), false);
+      assert.equal(
+        decorationOverwriteUndone.tileData.terrain[targetY][targetX],
+        oldDecorationValue,
+      );
+      assert.equal(Object.values(decorationOverwriteUndone.smartTerrain.generatedDecorations).some(
+        (candidate) => candidate.ownerKey === decoration.ownerKey,
+      ), true);
+      assert.deepEqual(decorationOverwriteRedone.tileData, decorationOverwrite.tileData);
+      assert.deepEqual(decorationOverwriteRedone.smartTerrain, decorationOverwrite.smartTerrain);
+      summary.checks.crossBrushDecorationCleanup = true;
+      await dismissKeepBuilding(page);
+      await runEditorCommands(page, [{
+        op: 'setCamera', zoom: 3, centerTileX: ownerX, centerTileY: ownerY - 0.5,
+      }]);
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: path.join(outputDir, 'decoration-overwrite.png') });
+    }
     const decorationKeepBuilding = page.locator('#btn-guest-builder-claim-continue');
     if (await decorationKeepBuilding.isVisible()) await decorationKeepBuilding.click();
     await runEditorCommands(page, [{ op: 'fitToScreen' }]);

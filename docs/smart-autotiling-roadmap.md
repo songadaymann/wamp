@@ -180,8 +180,8 @@ solver does not merely memorize one skyline.
 - Model tests cover v1 to v2 migration, canonical IDs such as `desert.ground`,
   unknown-future preservation, invalid brush/style/layer filtering, encoded
   locks, and configured 84/120/324-tile profiles.
-- The focused Cyber/model/editor/clipboard gate passes 8 files / 152 tests. The full gate
-  passes 215 files / 1,482 tests, ESLint, TypeScript, generated-binding checks,
+- The focused Cyber/model/editor/clipboard gate passes 8 files / 155 tests. The full gate
+  passes 215 files / 1,485 tests, ESLint, TypeScript, generated-binding checks,
   and the production build.
 - The expanded Smart browser gate passes in Canvas and WebGL with Fill, shapes,
   minimums, transformed Support banks, erase/repair, layer switching,
@@ -194,6 +194,11 @@ solver does not merely memorize one skyline.
 - Optional Cyber vents, lights, graffiti, and Framed Panel accents are disabled
   while the base topology is being tuned. The editor hides the decoration toggle
   for Cyber; the dormant curated pools can be reviewed again in a later pass.
+- Forest, Desert, Cave, and Gothic Ground decorations remain on the middle
+  Terrain layer with non-colliding per-tile profiles. Replacing a legacy Smart
+  owner with a Cyber brush discards every owned decoration output across
+  Terrain, Background, and Foreground; Undo restores them and Redo removes them
+  again. Higher-layer structural ties remain intentionally separate.
 
 ### Intentional Cyber art boundaries
 
