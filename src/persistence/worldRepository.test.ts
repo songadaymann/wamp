@@ -60,7 +60,7 @@ describe('world tile repository credentials', () => {
     expect(requests[1]?.init).toMatchObject({ credentials: 'omit', mode: 'cors' });
   });
 
-  it('keeps credentials on non-tile world requests by default', async () => {
+  it('loads public world windows without credentials so preview origins can use wildcard CORS', async () => {
     const fetchMock = vi.fn(async () => Response.json({
       center: { x: 0, y: 0 },
       radius: 0,
@@ -73,7 +73,7 @@ describe('world tile repository credentials', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.example/api/world?centerX=0&centerY=0&radius=0',
-      { credentials: 'include' },
+      { credentials: 'omit', mode: 'cors' },
     );
   });
 });

@@ -134,8 +134,10 @@ The editor is the core product. It needs to be dead simple for casual users but 
 | Tool | Description |
 |------|-------------|
 | **Single Tile** | Click to place one tile. The default tool |
-| **Rectangle Fill** | Click-drag to fill a rectangular area |
-| **Flood Fill** | Fill a contiguous area of same/empty tiles |
+| **Rectangle Filled / Outlined** | Click-drag two corners. Re-select (R) toggles filled vs outlined; hold Shift for a square. Right-drag erases the same shape |
+| **Ellipse Filled / Outlined** | Click-drag an ellipse (E). Re-select toggles filled vs outlined; hold Shift for a circle. Right-drag erases the same shape |
+| **Line / Curve** | Click-hold the start tile and drag to the end (L). Re-select toggles line vs curve; hold Shift to snap to 45°. Curve keeps a preview after release so the mouse pulls a bezier; left-click stamps, right-click cancels. Right-drag erases; curve erase confirms on a second right-click |
+| **Flood Fill** | Fill a contiguous area of same/empty tiles. Right-click flood-erases matching tiles |
 | **Eraser** | Click or drag to remove tiles |
 | **Object Placer** | Place enemies, springs, collectibles, etc. with property controls |
 | **Spawn / Goal Authoring** | Place the player spawn, exit, checkpoints, finish marker, and goal settings |

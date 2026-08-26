@@ -192,6 +192,21 @@ describe('editor edit runtime document contracts', () => {
     runtime.commitTileBatch();
     expect(countTiles(terrain)).toBe(1);
     expect(terrain.getTileAt(1, 1)?.index).toBeTypeOf('number');
+
+    runtime.beginTileBatch();
+    runtime.stampShape('line', 10, 0, 13, 0, { erase: false });
+    runtime.commitTileBatch();
+    expect(terrain.getTileAt(10, 0)?.index).toBeTypeOf('number');
+    expect(terrain.getTileAt(11, 0)?.index).toBeTypeOf('number');
+    expect(terrain.getTileAt(12, 0)?.index).toBeTypeOf('number');
+    expect(terrain.getTileAt(13, 0)?.index).toBeTypeOf('number');
+
+    runtime.beginTileBatch();
+    runtime.stampShape('curve', 20, 10, 24, 10, { erase: false, mid: { x: 22, y: 12 } });
+    runtime.commitTileBatch();
+    expect(terrain.getTileAt(20, 10)?.index).toBeTypeOf('number');
+    expect(terrain.getTileAt(24, 10)?.index).toBeTypeOf('number');
+    expect(terrain.getTileAt(22, 12)?.index).toBeTypeOf('number');
   });
 
   it('feeds Smart rectangle and ellipse shapes through semantic auto-tiling', () => {
@@ -457,7 +472,6 @@ function getTileCoordinates(layer: FakeLayer): string[] {
   }
   return coordinates;
 }
-
 function countTiles(layer: FakeLayer): number {
   let count = 0;
   for (let y = 0; y < ROOM_HEIGHT; y += 1) {

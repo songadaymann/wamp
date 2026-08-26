@@ -16,6 +16,19 @@
 
 .tool-btn-compact {
   min-width: 0;
+  height: auto;
+  min-height: 40px;
+  padding: 6px 4px;
+}
+
+.tool-btn .tool-mode.is-dim {
+  opacity: 0.5;
+}
+
+.tool-btn-compact .tool-label {
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
 }
 
 .editor-tool-popover {

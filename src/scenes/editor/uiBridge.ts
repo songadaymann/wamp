@@ -8,7 +8,7 @@ import {
   type PaletteMode,
   type ToolName,
 } from '../../config';
-import { getEditorToolButtonCopy, isMoreEditorTool } from './editorToolSelection';
+import { getEditorToolButtonAppearance, isMoreEditorTool } from './editorToolSelection';
 import {
   finalizeBackgroundUpload,
   listBackgroundImages,
@@ -1751,15 +1751,22 @@ export class EditorUiBridge {
       button.setAttribute('aria-disabled', unsupported ? 'true' : 'false');
       if (unsupported) button.dataset.smartToolUnsupported = 'true';
       else delete button.dataset.smartToolUnsupported;
-      button.classList.toggle('active', !unsupported && tool === editorState.activeTool);
-      const copy = getEditorToolButtonCopy(tool);
-      if (copy) {
-        const label = button.querySelector('.tool-label');
-        if (label) {
-          label.textContent = copy.label;
+      const selected = !unsupported && tool === editorState.activeTool;
+      button.classList.toggle('active', selected);
+      const appearance = getEditorToolButtonAppearance(tool, selected);
+      if (appearance) {
+        const icon = button.querySelector('.tool-icon');
+        if (icon) {
+          icon.textContent = appearance.icon;
+        }
+        for (const part of button.querySelectorAll<HTMLElement>('.tool-mode')) {
+          part.classList.toggle(
+            'is-dim',
+            Boolean(appearance.dimPart && part.dataset.part === appearance.dimPart),
+          );
         }
       }
-      const supportedTitle = copy?.title ?? this.toolButtonDefaultTitles.get(button) ?? '';
+      const supportedTitle = appearance?.title ?? this.toolButtonDefaultTitles.get(button) ?? '';
       button.title = unsupported
         ? `${SMART_TOOL_LABELS[tool] ?? supportedTitle} is unavailable for ${smartSelection.brush.label}.`
         : supportedTitle;
@@ -1802,8 +1809,8 @@ export class EditorUiBridge {
       useFeaturePanels ? this.activeFeatureLauncher !== 'lighting' : true,
     );
 
-    const showMoreTools =
-      this.moreToolsOpen ||
+      const showMoreTools =
+        this.moreToolsOpen ||
       (editorState.paletteMode !== 'objects' &&
         isMoreEditorTool(editorState.activeTool));
     const moreToolsActive =

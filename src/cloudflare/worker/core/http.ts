@@ -6,6 +6,7 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   getObjectById,
+  isTrustedAppHostname,
   type LayerName,
 } from '../../../config';
 import {
@@ -14,6 +15,8 @@ import {
 } from '../../../customSprites/model';
 import { cloneRoomSnapshot, parseRoomId, roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../../persistence/roomModel';
 import { type WorldChunkBounds } from '../../../persistence/worldModel';
+
+export { isTrustedAppHostname } from '../../../config';
 
 const MAX_ROOM_SNAPSHOT_BODY_BYTES = 2 * 1024 * 1024;
 const PLACED_OBJECT_POSITION_MARGIN_PX = TILE_SIZE * 8;
@@ -89,18 +92,6 @@ export function isTrustedOrigin(origin: string, requestUrl: string): boolean {
 
 function isLocalDevHostname(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
-}
-
-function isTrustedAppHostname(hostname: string): boolean {
-  return (
-    hostname === 'wamp.land' ||
-    hostname === 'www.wamp.land' ||
-    hostname === 'api.wamp.land' ||
-    hostname === 'everybodys-platformer.novox-robot.workers.dev' ||
-    hostname === 'everybodys-platformer-safety.novox-robot.workers.dev' ||
-    hostname === 'wampland.pages.dev' ||
-    hostname.endsWith('.wampland.pages.dev')
-  );
 }
 
 function isSafetyWorkerHostname(hostname: string): boolean {

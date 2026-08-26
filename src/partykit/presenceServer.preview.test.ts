@@ -86,7 +86,7 @@ describe('PresenceServer construction preview baseline', () => {
       editor,
       roomPreviewPayload({ roomX: 1, roomY: 2, token: validToken })
     );
-    await harness.settleAsyncWork();
+    await harness.waitUntilPreviewStored('preview:1,2');
 
     expect(mutationOperations(harness)).toEqual([
       expect.objectContaining({ type: 'put', key: 'preview:1,2', settled: true }),
@@ -104,7 +104,7 @@ describe('PresenceServer construction preview baseline', () => {
       editor,
       roomPreviewPayload({ roomX: 3, roomY: 4, token, timestamp: Date.now() - 50 })
     );
-    await harness.settleAsyncWork();
+    await harness.waitUntilPreviewStored('preview:3,4');
 
     const stored = harness.room.storage.peek<Record<string, unknown>>('preview:3,4');
     expect(stored).toMatchObject({
@@ -142,7 +142,13 @@ describe('PresenceServer construction preview baseline', () => {
       editor,
       roomPreviewPayload({ roomX: 1, roomY: 2, token })
     );
-    await harness.settleAsyncWork();
+    await harness.waitUntil(
+      () =>
+        mutationOperations(activeHarness()).some(
+          (operation) => operation.type === 'put' && operation.key === 'preview:1,2'
+        ),
+      'deferred preview put'
+    );
 
     expect(mutationOperations(harness)).toEqual([
       expect.objectContaining({ type: 'put', key: 'preview:1,2', settled: false }),
@@ -152,7 +158,7 @@ describe('PresenceServer construction preview baseline', () => {
     expect(latestRoomPreviews(observer)).toHaveProperty('1,2');
 
     expect(harness.room.storage.releaseNextMutation()).toBe(true);
-    await harness.settleAsyncWork();
+    await harness.waitUntilPreviewStored('preview:1,2');
     expect(harness.room.storage.peek('preview:1,2')).toBeDefined();
 
     observer.clearMessages();
@@ -167,7 +173,10 @@ describe('PresenceServer construction preview baseline', () => {
     expect(harness.room.storage.peek('preview:1,2')).toBeDefined();
 
     expect(harness.room.storage.releaseNextMutation()).toBe(true);
-    await harness.settleAsyncWork();
+    await harness.waitUntil(
+      () => activeHarness().room.storage.peek('preview:1,2') === undefined,
+      'deferred preview delete'
+    );
     expect(harness.room.storage.peek('preview:1,2')).toBeUndefined();
   });
 
@@ -182,7 +191,7 @@ describe('PresenceServer construction preview baseline', () => {
       editor,
       roomPreviewPayload({ roomX: 1, roomY: 2, token, timestamp: createdAt })
     );
-    await harness.settleAsyncWork();
+    await harness.waitUntilPreviewStored('preview:1,2');
     await harness.reactivate();
     harness.room.storage.clearOperationLog();
 
@@ -193,7 +202,16 @@ describe('PresenceServer construction preview baseline', () => {
 
     harness.setTime(createdAt + PREVIEW_TTL_MS + 1);
     const expiredViewer = await harness.connect('expired-viewer');
-    await harness.settleAsyncWork();
+    await harness.waitUntil(
+      () =>
+        mutationOperations(activeHarness()).some(
+          (operation) =>
+            operation.type === 'delete' &&
+            operation.key === 'preview:1,2' &&
+            operation.settled
+        ),
+      'expired preview delete'
+    );
     expect(latestRoomPreviews(expiredViewer)).toEqual({});
     expect(mutationOperations(harness)).toEqual([
       expect.objectContaining({ type: 'delete', key: 'preview:1,2', settled: true }),
@@ -211,7 +229,7 @@ describe('PresenceServer construction preview baseline', () => {
       editor,
       roomPreviewPayload({ roomX: 1, roomY: 2, token, timestamp: previewTimestamp })
     );
-    await harness.settleAsyncWork();
+    await harness.waitUntilPreviewStored('preview:1,2');
     await harness.reactivate();
     const clearer = await harness.connect('clearer');
     await harness.advance(250);
@@ -250,7 +268,7 @@ describe('PresenceServer construction preview baseline', () => {
       editor,
       roomPreviewPayload({ roomX: 1, roomY: 2, token: firstToken })
     );
-    await harness.settleAsyncWork();
+    await harness.waitUntilPreviewStored('preview:1,2');
     await harness.advance(250);
     editor.clearMessages();
     harness.room.storage.clearOperationLog();
@@ -265,7 +283,7 @@ describe('PresenceServer construction preview baseline', () => {
       editor,
       roomPreviewPayload({ roomX: 3, roomY: 4, token: secondToken })
     );
-    await harness.settleAsyncWork();
+    await harness.waitUntilPreviewStored('preview:3,4');
 
     expect(mutationOperations(harness).map((operation) => [operation.type, operation.key])).toEqual([
       ['delete', 'preview:1,2'],
@@ -315,7 +333,7 @@ describe('PresenceServer construction preview baseline', () => {
       editor,
       roomPreviewPayload({ roomX: 1, roomY: 2, token })
     );
-    await harness.settleAsyncWork();
+    await harness.waitUntilPreviewStored('preview:1,2');
     await harness.advance(250);
     observer.clearMessages();
     harness.room.storage.clearOperationLog();
@@ -335,7 +353,7 @@ describe('PresenceServer construction preview baseline', () => {
       editor,
       roomPreviewPayload({ roomX: 1, roomY: 2, token })
     );
-    await harness.settleAsyncWork();
+    await harness.waitUntilPreviewStored('preview:1,2');
     await harness.advance(250);
     observer.clearMessages();
     harness.room.storage.clearOperationLog();
@@ -347,6 +365,13 @@ describe('PresenceServer construction preview baseline', () => {
     expect(latestRoomPreviews(observer)).toEqual({});
   });
 });
+
+function activeHarness(): PresenceServerHarness {
+  if (!harness) {
+    throw new Error('Expected presence harness to be initialized');
+  }
+  return harness;
+}
 
 async function connectEditor(
   activeHarness: PresenceServerHarness,

@@ -1,4 +1,4 @@
-﻿export interface TilePoint {
+export interface TilePoint {
   x: number;
   y: number;
 }

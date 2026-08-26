@@ -1072,6 +1072,11 @@ export class EditorInteractionController {
   }
 
   private finishCurrentTouchDraw(): void {
+    if (this.pathBend) {
+      this.isDrawing = false;
+      this.clearTileDrag();
+      return;
+    }
     if (this.isDrawing) {
       if (editorState.activeTool !== 'copy') {
         this.host.commitTileBatch();

@@ -66,9 +66,9 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
     case 'eraser':
       return `Erase ${editorState.eraserBrushSize}x${editorState.eraserBrushSize}`;
     case 'rect':
-      return editorState.rectOutline ? 'Rectangle Outline' : 'Rectangle';
+      return editorState.rectOutline ? 'Rectangle Outlined' : 'Rectangle Filled';
     case 'ellipse':
-      return editorState.ellipseOutline ? 'Ellipse Outline' : 'Ellipse';
+      return editorState.ellipseOutline ? 'Ellipse Outlined' : 'Ellipse Filled';
     case 'line':
       return editorState.lineCurve ? 'Curve' : 'Line';
     case 'fill':
@@ -80,21 +80,33 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
   }
 }
 
-export function getEditorToolButtonCopy(tool: ToolName): { label: string; title: string } | null {
+export interface EditorToolButtonAppearance {
+  icon: string;
+  title: string;
+  dimPart: string | null;
+}
+
+export function getEditorToolButtonAppearance(tool: ToolName, selected: boolean): EditorToolButtonAppearance | null {
   if (tool === 'rect') {
-    return editorState.rectOutline
-      ? { label: 'Rectangle Outline', title: 'Rectangle Outline (R) hold Shift for proportional' }
-      : { label: 'Rect', title: 'Rectangle (R) hold Shift for proportional' };
+    return {
+      icon: editorState.rectOutline ? '\u25A1' : '\u25A0',
+      title: 'Rectangle Filled / Outlined (R) hold Shift for proportional',
+      dimPart: selected ? (editorState.rectOutline ? 'filled' : 'outlined') : null,
+    };
   }
   if (tool === 'ellipse') {
-    return editorState.ellipseOutline
-      ? { label: 'Ellipse Outline', title: 'Ellipse Outline (E) hold Shift for proportional' }
-      : { label: 'Ellipse', title: 'Ellipse (E) hold Shift for proportional' };
+    return {
+      icon: editorState.ellipseOutline ? '\u25CB' : '\u25CF',
+      title: 'Ellipse Filled / Outlined (E) hold Shift for proportional',
+      dimPart: selected ? (editorState.ellipseOutline ? 'filled' : 'outlined') : null,
+    };
   }
   if (tool === 'line') {
-    return editorState.lineCurve
-      ? { label: 'Curve', title: 'Line / Curve (L) hold Shift to snap' }
-      : { label: 'Line', title: 'Line / Curve (L) hold Shift to snap' };
+    return {
+      icon: editorState.lineCurve ? '\u223F' : '\u2571',
+      title: 'Line / Curve (L) hold Shift to snap',
+      dimPart: selected ? (editorState.lineCurve ? 'line' : 'curve') : null,
+    };
   }
   return null;
 }
