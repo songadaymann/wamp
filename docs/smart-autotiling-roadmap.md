@@ -2,9 +2,11 @@
 
 ## Outcome and current focus
 
-The existing Smart V1 foundation remains the safety-proven baseline for Forest,
-Desert, Cave, and Gothic terrain. The **Cyber** engine is implemented and its
-neutral-art correction pass is at the preview-only visual gate. Desert cactus/bridge, Cave
+The canonical preview candidate is now the consolidated Smart V2 branch,
+`codex/smart-autotiling-consolidated-2026-08-26`. It combines the safety-proven
+Forest, Desert, Cave, and Gothic behavior with the Cyber recipe engine and the
+current editor's filled/outline Rectangle, Ellipse, Line, and Curve tools. The
+**Cyber** neutral-art correction pass is at the preview-only visual gate. Desert cactus/bridge, Cave
 rail, Gothic fence/columns, WampOS windows, and Backrooms structures remain
 gated until the rule tier they need has been approved in an earlier set.
 
@@ -96,7 +98,7 @@ flips: the difficulty is rectangle grammar and layer ownership, not transform
 selection. Backrooms follows only after both path/span and rectangle/macro
 ownership are stable.
 
-## Cyber: first implementation track (preview gate)
+## Cyber: first implementation track (consolidated preview gate)
 
 The frozen Cyber room makes the extension seam concrete:
 
@@ -178,8 +180,8 @@ solver does not merely memorize one skyline.
 - Model tests cover v1 to v2 migration, canonical IDs such as `desert.ground`,
   unknown-future preservation, invalid brush/style/layer filtering, encoded
   locks, and configured 84/120/324-tile profiles.
-- The focused Cyber/model/editor/clipboard gate passes 129 tests. The full gate
-  passes 209 files / 1,431 tests, ESLint, TypeScript, generated-binding checks,
+- The focused Cyber/model/editor/clipboard gate passes 8 files / 152 tests. The full gate
+  passes 215 files / 1,482 tests, ESLint, TypeScript, generated-binding checks,
   and the production build.
 - The expanded Smart browser gate passes in Canvas and WebGL with Fill, shapes,
   minimums, transformed Support banks, erase/repair, layer switching,
@@ -207,9 +209,13 @@ solver does not merely memorize one skyline.
 - Framed Panels resize by extending/repainting their source row; there is no
   separate drag-handle resize UI in this milestone.
 
-Safety preview: `https://safety-cyber-smart-tiles.wampland.pages.dev`;
-immutable deployment `ed514749`; verified feature commit `2188b8a`.
-Production remains a separate approval.
+The earlier Cyber-only safety build remains available at
+`https://safety-cyber-smart-tiles.wampland.pages.dev` (immutable deployment
+`ed514749`, feature commit `2188b8a`) as historical comparison evidence. It is
+superseded for new work by the consolidated branch and does not contain the
+complete original-four/editor reconciliation. The consolidated candidate has
+passed local Canvas and WebGL preview gates but has not been deployed. Production
+remains a separate approval.
 
 ## Gated set tracks
 
@@ -251,9 +257,10 @@ A set moves from gated/in progress to complete only when all of these pass:
 
 | Milestone | Status |
 | --- | --- |
-| Existing Smart V1 safety foundation | Complete / safety-proven |
+| Consolidated Smart V2 preview candidate | Complete locally on `codex/smart-autotiling-consolidated-2026-08-26`; Canvas/WebGL and full repository gates pass; safety deployment pending |
+| Existing Smart V1 safety foundation | Complete / safety-proven and incorporated into the consolidated candidate |
 | Frozen six-room reference corpus and offline analyzer/renderer | Complete |
-| Cyber transform-aware profile and golden fixtures | Complete / safety preview deployed and verified |
+| Cyber transform-aware profile and golden fixtures | Complete locally in the consolidated candidate; prior Cyber-only safety preview retained as historical comparison |
 | Cave rail and Gothic fence/columns | Gated on Tier 2 |
 | Desert cactus and bridge | Gated on Tier 2 span/junction proof |
 | WampOS window macros | Gated on Tier 3 layer ownership |

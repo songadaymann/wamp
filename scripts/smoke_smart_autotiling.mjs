@@ -334,13 +334,13 @@ try {
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberStructure.tileData.terrain[4][35] === 1633 + localIndex
   )));
-  assert.equal(cyberStructure.tileData.terrain[17][33], 1633 + 62);
+  assert.equal(cyberStructure.tileData.terrain[17][33], 1633 + 62, 'Cyber rectangle bottom uses F3');
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberStructure.tileData.terrain[3][21] === 1633 + localIndex
   )));
   assert.equal(cyberStructure.tileData.foreground[3][21], 1633 + 9 + FLIP_Y);
-  assert.equal(cyberStructure.tileData.terrain[4][21], 1633 + 62);
-  assert.equal(cyberStructure.tileData.terrain[4][22], 1633 + 62);
+  assert.equal(cyberStructure.tileData.terrain[4][21], 1633 + 62, 'Cyber stair lower middle uses F3');
+  assert.equal(cyberStructure.tileData.terrain[4][22], 1633 + 62, 'Cyber stair lower middle before end uses F3');
   assert.equal(cyberStructure.tileData.foreground[4][22], 1633 + 9 + FLIP_Y);
   assert.equal(cyberStructure.tileData.terrain[4][23], 1633 + 71);
   assert.ok(Object.keys(cyberStructure.smartTerrain.semanticCells).length > 128);
@@ -381,17 +381,25 @@ try {
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberCopyHistoryRepair.carved.tileData.terrain[7][34] === 1633 + localIndex
   )));
-  assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[7][35], 1633 + 62);
+  assert.equal(
+    cyberCopyHistoryRepair.carved.tileData.terrain[7][35],
+    1633 + 34 + FLIP_Y,
+    'Cyber interior-window ceiling uses C11Y',
+  );
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberCopyHistoryRepair.carved.tileData.terrain[7][36] === 1633 + localIndex
   )));
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.terrain[8].slice(34, 37), [
-    1633 + 23 + FLIP_X, -1, 1633 + 21 + FLIP_X,
+    1633 + 21, -1, 1633 + 23,
   ]);
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberCopyHistoryRepair.carved.tileData.terrain[9][34] === 1633 + localIndex
   )));
-  assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[9][35], 1633 + 15);
+  assert.equal(
+    cyberCopyHistoryRepair.carved.tileData.terrain[9][35],
+    1633 + 34,
+    'Cyber interior-window floor uses C11',
+  );
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberCopyHistoryRepair.carved.tileData.terrain[9][36] === 1633 + localIndex
   )));
@@ -624,7 +632,16 @@ try {
   const shapeKeepBuilding = page.locator('#btn-guest-builder-claim-continue');
   if (await shapeKeepBuilding.isVisible()) await shapeKeepBuilding.click();
   await ellipseButton.click();
-  assert.equal(await ellipseButton.locator('.tool-label').textContent(), 'Ellipse Outline');
+  assert.equal(
+    await ellipseButton.locator('[data-part="filled"]').getAttribute('class')
+      .then((value) => value?.includes('is-dim')),
+    true,
+  );
+  assert.equal(
+    await ellipseButton.locator('[data-part="outlined"]').getAttribute('class')
+      .then((value) => value?.includes('is-dim')),
+    false,
+  );
   const { smartOutlines } = await runEditorCommands(page, [
     { op: 'clearCurrentLayer' },
     { op: 'beginBatch' },
