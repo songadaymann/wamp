@@ -458,7 +458,7 @@ try {
   assert.equal(cyberCopyHistoryRepair.carved.smartTerrain.semanticCells['terrain:35,8'], undefined);
   assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[8][35], -1);
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.foreground[7].slice(34, 37), [
-    1633 + 9, -1, 1633 + 9 + FLIP_X,
+    -1, -1, -1,
   ]);
   assert.ok([64, 82, 83].some((localIndex) => (
     cyberCopyHistoryRepair.carved.tileData.terrain[7][34] === 1633 + localIndex
@@ -486,7 +486,7 @@ try {
     cyberCopyHistoryRepair.carved.tileData.terrain[9][36] === 1633 + localIndex
   )));
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.foreground[9].slice(34, 37), [
-    1633 + 9 + FLIP_Y, -1, 1633 + 9 + FLIP_X + FLIP_Y,
+    -1, -1, -1,
   ]);
   summary.checks.cyberCopyUndoEraseRepair = true;
   await runEditorCommands(page, [{ op: 'setCamera', zoom: 1, centerTileX: 35, centerTileY: 8 }]);

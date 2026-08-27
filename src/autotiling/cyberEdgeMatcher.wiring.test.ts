@@ -74,12 +74,22 @@ describe('cyber letter matcher wiring', () => {
     expect(localIndex(document, 6, 8)).toBe(51);
   });
 
-  it('uses flipped Cyber A10 foreground ties on a concrete ring but not a solid rectangle', () => {
+  it('does not overlay Cyber A10 on a concrete ring or a plus', () => {
     const ring = applySmartBrushCells(emptyDocument(), {
       cells: [
         { x: 10, y: 10 }, { x: 11, y: 10 }, { x: 12, y: 10 },
         { x: 10, y: 11 }, { x: 12, y: 11 },
         { x: 10, y: 12 }, { x: 11, y: 12 }, { x: 12, y: 12 },
+      ],
+      mode: 'paint',
+      brushId: 'cyber.concrete',
+      styleId: 'cyber-yellow',
+    });
+    const plus = applySmartBrushCells(emptyDocument(), {
+      cells: [
+        { x: 11, y: 10 },
+        { x: 10, y: 11 }, { x: 11, y: 11 }, { x: 12, y: 11 },
+        { x: 11, y: 12 },
       ],
       mode: 'paint',
       brushId: 'cyber.concrete',
@@ -103,31 +113,12 @@ describe('cyber letter matcher wiring', () => {
           return gid >= firstGid && gid - firstGid === 9;
         }).length
     );
-    expect(a10Count(ring)).toBe(4);
+    expect(a10Count(ring)).toBe(0);
+    expect(a10Count(plus)).toBe(0);
     expect(a10Count(block)).toBe(0);
-    expect(decodedLocal(ring, 'foreground', 10, 10)).toEqual({
-      localIndex: 9,
-      flipX: false,
-      flipY: false,
-    });
-    expect(decodedLocal(ring, 'foreground', 12, 10)).toEqual({
-      localIndex: 9,
-      flipX: true,
-      flipY: false,
-    });
-    expect(decodedLocal(ring, 'foreground', 10, 12)).toEqual({
-      localIndex: 9,
-      flipX: false,
-      flipY: true,
-    });
-    expect(decodedLocal(ring, 'foreground', 12, 12)).toEqual({
-      localIndex: 9,
-      flipX: true,
-      flipY: true,
-    });
   });
 
-  it('paints a rectangle outline with the reviewed tunnel ceiling, floor, and sides', () => {
+  it('paints a rectangle outline as a hollow E-frame instead of inverted tunnel mids', () => {
     const outline = applySmartBrushOutlineCells(emptyDocument(), {
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
@@ -147,13 +138,13 @@ describe('cyber letter matcher wiring', () => {
       ],
     });
     expect(decodedLocal(outline, 'terrain', 7, 6)).toEqual({
-      localIndex: 34, flipX: false, flipY: true,
+      localIndex: 68, flipX: false, flipY: false,
     });
     expect(decodedLocal(outline, 'terrain', 7, 10)).toEqual({
-      localIndex: 34, flipX: false, flipY: false,
+      localIndex: 68, flipX: false, flipY: false,
     });
-    expect(localIndex(outline, 4, 8)).toBe(21);
-    expect(localIndex(outline, 11, 8)).toBe(23);
+    expect(localIndex(outline, 4, 8)).toBe(31);
+    expect(localIndex(outline, 11, 8)).toBe(31);
     expect(localIndex(outline, 4, 6)).toBe(67);
     expect(outline.tileData.terrain[8]![7]).toBe(-1);
   });

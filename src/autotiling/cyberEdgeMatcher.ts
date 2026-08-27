@@ -22,8 +22,21 @@ export interface CyberLetterPick extends CyberOrientedTile {
 
 export type CyberLetterOccupancy = ReadonlyMap<string, CyberLetterOccupant>;
 
-/** Empty side must be A. Occupied letter neighbor must not be A. */
+/**
+ * Empty side must be A. Occupied letter neighbor must not be A.
+ * Adjacent occupied cells must share the same letter on the shared edge.
+ */
 export type CyberEdgeConstraint = CyberEdgeLetter | 'connected';
+
+const SIDE_NAMES = ['top', 'right', 'bottom', 'left'] as const;
+
+export interface CyberLetterMismatch {
+  x: number;
+  y: number;
+  side: typeof SIDE_NAMES[number];
+  cellLetter: CyberEdgeLetter;
+  neighborLetter: CyberEdgeLetter | null;
+}
 
 const SIDES = [
   { dx: 0, dy: -1, index: 0, opposite: 2 },
@@ -63,15 +76,38 @@ const CANONICAL_CONCRETE_PICKS: Readonly<Partial<Record<string, readonly Canonic
   BABC: [{ localIndex: 23, flipX: true, flipY: false }],
   BBAA: [{ localIndex: 25, flipX: false, flipY: true }],
   BAAB: [{ localIndex: 30, flipX: false, flipY: true }],
+  BBCC: [
+    { localIndex: 33, flipX: false, flipY: false },
+    { localIndex: 35, flipX: true, flipY: false },
+    { localIndex: 11, flipX: true, flipY: true },
+  ],
+  BCCB: [
+    { localIndex: 35, flipX: false, flipY: false },
+    { localIndex: 33, flipX: true, flipY: false },
+    { localIndex: 11, flipX: false, flipY: true },
+  ],
+  CCBB: [
+    { localIndex: 11, flipX: false, flipY: false },
+    { localIndex: 33, flipX: true, flipY: true },
+    { localIndex: 35, flipX: false, flipY: true },
+  ],
+  CBBC: [
+    { localIndex: 11, flipX: true, flipY: false },
+    { localIndex: 33, flipX: false, flipY: true },
+    { localIndex: 35, flipX: true, flipY: true },
+  ],
   CCCC: [
     { localIndex: 64, flipX: false, flipY: false },
     { localIndex: 82, flipX: false, flipY: false },
     { localIndex: 83, flipX: false, flipY: false },
   ],
+  EEEE: [{ localIndex: 43, flipX: false, flipY: false }],
   AEEE: [{ localIndex: 70, flipX: false, flipY: false }],
   EEAE: [{ localIndex: 70, flipX: false, flipY: true }],
   EEEA: [{ localIndex: 55, flipX: false, flipY: false }],
   EAEE: [{ localIndex: 55, flipX: true, flipY: false }],
+  ACCC: [{ localIndex: 81, flipX: false, flipY: false }],
+  CCAC: [{ localIndex: 81, flipX: false, flipY: true }],
 };
 
 function canonicalConcreteMatches(
@@ -199,11 +235,15 @@ function isFrameOrStubNeighbor(
 
 /**
  * Concrete 1-wide frames use E on occupied sides (AAEE corners, AEAE / EAEA
- * mids). Solid blobs use B on outer corners and C toward a filled interior.
- * Four-connected Concrete always stays neutral CCCC here; diagonal ties are
- * transparent Cyber A10 foreground outputs resolved separately from the base
- * tile. A 3-connected edge uses E toward a thin stub or 1-cell frame instead
- * of C, so a protrusion can T-junction into a ring.
+ * mids, EEEA / AEEE T-junctions, EEEE crosses). Solid blobs use B on outer
+ * corners and C toward a filled interior.
+ * Four-connected Concrete with one empty diagonal is a concave corner
+ * (BBCC / CCBB / BCCB / CBBC; tiles 11, 33, 35), whether that bite is an
+ * enclosed hole or an exterior armpit of a plus.
+ * Cyber A10 foreground ties stay unused until their edge cases are named.
+ * A 3-connected edge uses E toward a thin stub or 1-cell frame instead of C,
+ * so a protrusion can T-junction into a ring. A 1-cell stub or chimney over an
+ * enclosed hole is the same socket (void opposite a thin arm): 55 / 70.
  */
 function inferConcreteOccupiedLetter(
   occupied: readonly boolean[],
@@ -215,10 +255,30 @@ function inferConcreteOccupiedLetter(
 ): CyberEdgeLetter {
   const count = occupied.filter(Boolean).length;
   const opposite = occupied[SIDES[sideIndex]!.opposite] === true;
-  if (count === 4) return 'C';
+  if (count === 4) {
+    const flags = emptyDiagonalFlags(x, y, occupancy, inBounds);
+    const emptyDiagonals = [flags.se, flags.sw, flags.ne, flags.nw].filter(Boolean).length;
+    if (emptyDiagonals === 4) return 'E';
+    if (emptyDiagonals === 1) {
+      const towardBite = flags.se && (sideIndex === 1 || sideIndex === 2)
+        || flags.sw && (sideIndex === 2 || sideIndex === 3)
+        || flags.ne && (sideIndex === 0 || sideIndex === 1)
+        || flags.nw && (sideIndex === 0 || sideIndex === 3);
+      return towardBite ? 'B' : 'C';
+    }
+    return 'C';
+  }
   if (count === 3) {
     const emptyIndex = occupied.findIndex((side) => !side);
     const interiorIndex = SIDES[emptyIndex]!.opposite;
+    if (isFrameOrStubNeighbor(
+      x + SIDES[interiorIndex]!.dx,
+      y + SIDES[interiorIndex]!.dy,
+      occupancy,
+      inBounds,
+    )) {
+      return 'E';
+    }
     const flags = emptyDiagonalFlags(x, y, occupancy, inBounds);
     const hasFilledDiagonalBesideEmptySide = emptyIndex === 0
       ? !flags.nw || !flags.ne
@@ -278,7 +338,7 @@ export function constraintsFromLetterNeighbors(
   return SIDES.map(({ dx, dy, opposite }, sideIndex) => {
     const nx = x + dx;
     const ny = y + dy;
-    if (!inBounds(nx, ny)) return 'A';
+    if (!occupied[sideIndex] || !inBounds(nx, ny)) return 'A';
     const neighbor = occupancy.get(letterCellKey(nx, ny));
     if (!neighbor) return 'A';
     const inferred = inferOccupiedLetter(
@@ -291,24 +351,70 @@ export function constraintsFromLetterNeighbors(
       occupancy,
       inBounds,
     );
-    // Concrete topology is fully determined by the local cardinal/diagonal
-    // shape. Reusing a neighboring pick here lets a B corner socket propagate
-    // through otherwise solid CCCC fill on later passes, producing isolated
-    // C10 corner pixels far away from the actual bite in the silhouette.
+    // Concrete letters come from occupancy so both sides of a shared edge
+    // independently get the same B/C/E. Copying a neighbor pick lets E caps
+    // and CCCC fill overwrite those sockets, then the fallback stamps 64
+    // (C against a void). Windows / Shell / Neon still match the neighbor's
+    // opposite letter so I/J/G/H abut.
     if (brushId === 'cyber.concrete' && neighbor.brushId === 'cyber.concrete') {
       return inferred;
     }
     if (!neighbor.pick) return inferred;
     const letter = edgeAt(neighbor.pick.edges, opposite);
     if (letter === 'A') return inferred;
-    // Fill CCCC neighbors would otherwise overwrite inner corners and
-    // T-junction E edges. Keep topology letters (B/C at a bite, E on a
-    // stub/frame) even when the opposite catalog edge is C.
     if (isInnerCornerCell(occupied, x, y, occupancy, inBounds) || inferred === 'E') {
       return inferred;
     }
     return letter;
   });
+}
+
+/** Empty sides must be A; occupied shared edges must be the same non-A letter. */
+export function listCyberLetterMismatches(
+  picks: ReadonlyMap<string, CyberLetterPick>,
+  inBounds: (x: number, y: number) => boolean,
+): CyberLetterMismatch[] {
+  const mismatches: CyberLetterMismatch[] = [];
+  for (const [key, pick] of picks) {
+    const [x, y] = key.split(',').map(Number);
+    for (const side of SIDES) {
+      const mine = edgeAt(pick.edges, side.index);
+      const neighbor = inBounds(x + side.dx, y + side.dy)
+        ? picks.get(letterCellKey(x + side.dx, y + side.dy))
+        : undefined;
+      if (!neighbor) {
+        if (mine !== 'A') {
+          mismatches.push({
+            x,
+            y,
+            side: SIDE_NAMES[side.index],
+            cellLetter: mine,
+            neighborLetter: null,
+          });
+        }
+        continue;
+      }
+      const theirs = edgeAt(neighbor.edges, side.opposite);
+      if (mine === 'A' || theirs === 'A' || mine !== theirs) {
+        mismatches.push({
+          x,
+          y,
+          side: SIDE_NAMES[side.index],
+          cellLetter: mine,
+          neighborLetter: theirs,
+        });
+      }
+    }
+  }
+  return mismatches;
+}
+
+/** Any edge that faces empty (or out of bounds) must be A. */
+export function listCyberVoidAViolations(
+  picks: ReadonlyMap<string, CyberLetterPick>,
+  inBounds: (x: number, y: number) => boolean,
+): CyberLetterMismatch[] {
+  return listCyberLetterMismatches(picks, inBounds).filter((mismatch) => mismatch.neighborLetter === null);
 }
 
 function seedWindowsOrNeon(
@@ -340,6 +446,34 @@ function seedShell(): CyberLetterPick {
   };
 }
 
+function voidLockedConstraints(
+  constraints: readonly CyberEdgeConstraint[],
+): CyberEdgeConstraint[] {
+  return constraints.map((constraint) => (constraint === 'A' ? 'A' : 'connected'));
+}
+
+function letterAgreementScore(
+  edges: `${CyberEdgeLetter}${CyberEdgeLetter}${CyberEdgeLetter}${CyberEdgeLetter}`,
+  constraints: readonly CyberEdgeConstraint[],
+): number {
+  let score = 0;
+  for (let index = 0; index < 4; index += 1) {
+    const constraint = constraints[index]!;
+    const letter = edgeAt(edges, index);
+    if (constraint === 'A') {
+      if (letter !== 'A') return Number.NEGATIVE_INFINITY;
+      continue;
+    }
+    if (constraint === 'connected') {
+      if (letter === 'A') return Number.NEGATIVE_INFINITY;
+      continue;
+    }
+    if (letter === 'A') return Number.NEGATIVE_INFINITY;
+    if (letter === constraint) score += 2;
+  }
+  return score;
+}
+
 function pickForConstraints(
   brushId: CyberLetterBrushId,
   x: number,
@@ -364,6 +498,36 @@ function pickForConstraints(
   return pickVariedCatalogCandidate(pool, x, y, { avoid, salt });
 }
 
+/** Catalog pick that always keeps A on void sides. Occupied letters may relax. */
+function pickRespectingVoids(
+  brushId: CyberLetterBrushId,
+  x: number,
+  y: number,
+  constraints: readonly CyberEdgeConstraint[],
+  occupancy: CyberLetterOccupancy,
+  avoid: readonly CyberOrientedTile[] = [],
+): CyberLetterPick | null {
+  const exact = pickForConstraints(brushId, x, y, constraints, occupancy, avoid);
+  if (exact) return exact;
+  if (!constraints.some((constraint) => constraint === 'A')) return null;
+  const matches = listCyberLetterMatches(brushId, voidLockedConstraints(constraints));
+  if (matches.length === 0) return null;
+  let best = Number.NEGATIVE_INFINITY;
+  for (const candidate of matches) {
+    best = Math.max(best, letterAgreementScore(candidate.edges, constraints));
+  }
+  const ranked = matches.filter((candidate) => (
+    letterAgreementScore(candidate.edges, constraints) === best
+  ));
+  const edgeKey = `${constraints[0]}${constraints[1]}${constraints[2]}${constraints[3]}`;
+  const canonical = brushId === 'cyber.concrete'
+    ? canonicalConcreteMatches(edgeKey, ranked.filter((candidate) => candidate.edges === edgeKey))
+    : [];
+  const pool = canonical.length > 0 ? canonical : ranked;
+  const salt = occupancy.get(letterCellKey(x, y))?.varietySalt ?? 0;
+  return pickVariedCatalogCandidate(pool, x, y, { avoid, salt });
+}
+
 export function seedCyberLetterPick(
   brushId: CyberLetterBrushId,
   x: number,
@@ -372,14 +536,15 @@ export function seedCyberLetterPick(
   inBounds: (nx: number, ny: number) => boolean,
 ): CyberLetterPick {
   const constraints = constraintsFromLetterNeighbors(x, y, occupancy, inBounds, brushId);
-  const matched = pickForConstraints(brushId, x, y, constraints, occupancy);
+  const matched = pickRespectingVoids(brushId, x, y, constraints, occupancy);
   if (matched) return matched;
   if (brushId === 'cyber.windows' || brushId === 'cyber.neon') {
     return seedWindowsOrNeon(brushId, x, y, occupancy);
   }
   if (brushId === 'cyber.shell') return seedShell();
   const isolated = constraints.every((constraint) => constraint === 'A');
-  const fallback = isolated
+  const facesVoid = constraints.some((constraint) => constraint === 'A');
+  const fallback = isolated || facesVoid
     ? CYBER_EDGE_CATALOG.find((entry) => entry.localIndex === 20 && entry.brushId === 'cyber.concrete')
     : CYBER_EDGE_CATALOG.find((entry) => entry.localIndex === 64 && entry.brushId === 'cyber.concrete');
   const entry = fallback ?? CYBER_EDGE_CATALOG.find((row) => row.brushId === 'cyber.concrete')!;
@@ -401,13 +566,8 @@ export function resolveCyberLetterPick(
   avoid: readonly CyberOrientedTile[] = [],
 ): CyberLetterPick {
   const constraints = constraintsFromLetterNeighbors(x, y, occupancy, inBounds, brushId);
-  const matched = pickForConstraints(brushId, x, y, constraints, occupancy, avoid);
+  const matched = pickRespectingVoids(brushId, x, y, constraints, occupancy, avoid);
   if (matched) return matched;
-  const occupancyOnly = constraints.map((constraint) => (
-    constraint === 'A' ? 'A' : 'connected'
-  ));
-  const relaxed = pickForConstraints(brushId, x, y, occupancyOnly, occupancy, avoid);
-  if (relaxed) return relaxed;
   return seedCyberLetterPick(brushId, x, y, occupancy, inBounds);
 }
 
@@ -442,6 +602,19 @@ export function resolveCyberLetterField(
         avoid,
       );
     }
+  }
+  for (const cell of cells) {
+    const occupant = occupancy.get(letterCellKey(cell.x, cell.y))!;
+    const constraints = constraintsFromLetterNeighbors(
+      cell.x, cell.y, occupancy, inBounds, cell.brushId,
+    );
+    if (
+      occupant.pick
+      && constraints.every((constraint, index) => (
+        constraint !== 'A' || edgeAt(occupant.pick!.edges, index) === 'A'
+      ))
+    ) continue;
+    occupant.pick = resolveCyberLetterPick(cell.brushId, cell.x, cell.y, occupancy, inBounds);
   }
   const resolved = new Map<string, CyberLetterPick>();
   for (const [key, occupant] of occupancy) {

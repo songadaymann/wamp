@@ -39,6 +39,8 @@ export type CyberV2BrushId = typeof CYBER_V2_BRUSH_IDS[number];
 
 /**
  * A: exterior. Faces empty space, or a brush outside the letter set (Fence, Rubble, Support).
+ *     Only A may touch a void, and a void may only touch A.
+ *     Occupied neighbors must share the same non-A letter on the shared edge.
  * B: exterior adjacent concrete
  * C: interior concrete
  * D: exterior adjacent shell
@@ -173,6 +175,17 @@ export function catalogEntriesForBrush(brushId: CyberLetterBrushId): readonly Cy
 
 export function catalogLocalIndicesForBrush(brushId: CyberLetterBrushId): number[] {
   return [...new Set(catalogEntriesForBrush(brushId).map((entry) => entry.localIndex))];
+}
+
+export function edgesForOrientedCatalogTile(
+  localIndex: number,
+  flipX: boolean,
+  flipY: boolean,
+  brushId: CyberLetterBrushId = 'cyber.concrete',
+): `${CyberEdgeLetter}${CyberEdgeLetter}${CyberEdgeLetter}${CyberEdgeLetter}` | null {
+  const entry = catalogEntriesForBrush(brushId).find((row) => row.localIndex === localIndex);
+  if (!entry) return null;
+  return flipCatalogEdges(entry.edges, flipX, flipY);
 }
 
 export function isCyberLetterCatalogLocalIndex(localIndex: number): boolean {

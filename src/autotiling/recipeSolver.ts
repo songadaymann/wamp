@@ -10,8 +10,6 @@ import {
   resolveCyberPlatformSpan,
   resolveCyberRubbleBorderTile,
   resolveCyberRubbleColumn,
-  resolveCyberStructureTieTile,
-  resolveCyberStructureTopology8,
   resolveCyberStructureUnderground,
   resolveCyberStructureTile8,
   resolveCyberSupportSpan,
@@ -29,6 +27,7 @@ import {
 } from './cyberEdgeMatcher';
 import {
   CYBER_EDGE_CATALOG,
+  edgesForOrientedCatalogTile,
   type CyberLetterBrushId,
 } from './cyberEdgeCatalog';
 import {
@@ -714,16 +713,33 @@ function getCyberTunnelOutlineRole(
   enclosedVoidCells: ReadonlySet<string>,
   x: number,
   y: number,
+  isSolid: (x: number, y: number) => boolean,
 ): CyberTunnelOutlineRole | null {
   const enclosed = (dx: number, dy: number) => enclosedVoidCells.has(smartCellKey(x + dx, y + dy));
-  if (enclosed(0, 1)) return 'ceiling';
-  if (enclosed(1, 0)) return 'left';
-  if (enclosed(-1, 0)) return 'right';
-  if (enclosed(0, -1)) return 'floor';
-  if (enclosed(1, 1)) return 'ceilingLeft';
-  if (enclosed(-1, 1)) return 'ceilingRight';
-  if (enclosed(1, -1)) return 'floorLeft';
-  if (enclosed(-1, -1)) return 'floorRight';
+  const south = enclosed(0, 1);
+  const east = enclosed(1, 0);
+  const west = enclosed(-1, 0);
+  const north = enclosed(0, -1);
+  const cardinalVoids = [south, east, west, north].filter(Boolean).length;
+  const isExterior = (dx: number, dy: number) => !enclosed(dx, dy) && !isSolid(x + dx, y + dy);
+  const southExt = isExterior(0, 1);
+  const eastExt = isExterior(1, 0);
+  const westExt = isExterior(-1, 0);
+  const northExt = isExterior(0, -1);
+  // 21 / 23 / 34 are letter-identical art for straight inner walls (A on the
+  // void, B on the rim, C behind). The solver may swap to them only when the
+  // matcher already picked those same four letters. A pinch with two void
+  // sides is ABBA/AABB/BBAA — 14 / 25 / 30 / 61 — and must keep that.
+  if (cardinalVoids === 1) {
+    if (south && (eastExt || westExt)) return null;
+    if (north && (eastExt || westExt)) return null;
+    if (east && (southExt || northExt)) return null;
+    if (west && (southExt || northExt)) return null;
+    if (south && isSolid(x, y - 1)) return 'ceiling';
+    if (east && isSolid(x - 1, y)) return 'left';
+    if (west && isSolid(x + 1, y)) return 'right';
+    if (north && isSolid(x, y + 1)) return 'floor';
+  }
   return null;
 }
 
@@ -738,8 +754,20 @@ function resolveStructureComponent(
     const styleId = entry.cell.styleId as CyberStyleId;
     const ownerId = `${CYBER_CELL_OWNER_PREFIX}${entry.semanticKey}`;
     const mask8 = neighborMask8(tileData, state, entry);
-    const topology = resolveCyberStructureTopology8(mask8);
-    const tunnelRole = getCyberTunnelOutlineRole(enclosedVoidCells, entry.x, entry.y);
+    const tunnelRole = getCyberTunnelOutlineRole(
+      enclosedVoidCells,
+      entry.x,
+      entry.y,
+      (nx, ny) => sameCyberFamily(
+        tileData,
+        state,
+        entry.layer,
+        nx,
+        ny,
+        styleId,
+        entry.cell.brushId,
+      ),
+    );
     const tunnelTile = tunnelRole ? resolveCyberTunnelOutlineTile(styleId, tunnelRole) : null;
     const resolved = tunnelTile?.layer === 'terrain'
       ? tunnelTile
@@ -771,25 +799,6 @@ function resolveStructureComponent(
         tileData, state, ownerId, 'primary', 'semantic', entry.x, entry.y, resolved, true,
         { brushId: entry.cell.brushId, sourceLayer: entry.layer },
       );
-    }
-    const tieTile = tunnelTile?.layer === 'foreground'
-      ? tunnelTile
-      : topology.concaveCorner
-        ? resolveCyberStructureTieTile(styleId, topology.concaveCorner)
-        : null;
-    if (tieTile) {
-      addOwnedOutput(
-        tileData,
-        state,
-        ownerId,
-        'diagonal-tie',
-        'semantic',
-        entry.x,
-        entry.y,
-          tieTile,
-          false,
-          { brushId: entry.cell.brushId, sourceLayer: entry.layer },
-        );
     }
   }
 }
@@ -988,11 +997,42 @@ function resolveCyberLetterCells(
       const styleId = entry.cell.styleId as CyberStyleId;
       const ownerId = `${CYBER_CELL_OWNER_PREFIX}${entry.semanticKey}`;
       const pick = picks.get(letterCellKey(entry.x, entry.y));
+      const isConcreteSolid = (nx: number, ny: number) => sameCyberFamily(
+        tileData,
+        state,
+        layer,
+        nx,
+        ny,
+        styleId,
+        'cyber.concrete',
+      );
       const tunnelRole = entry.cell.brushId === 'cyber.concrete'
-        ? getCyberTunnelOutlineRole(enclosedVoidCells, entry.x, entry.y)
+        ? getCyberTunnelOutlineRole(
+          enclosedVoidCells,
+          entry.x,
+          entry.y,
+          isConcreteSolid,
+        )
         : null;
       const tunnelTile = tunnelRole ? resolveCyberTunnelOutlineTile(styleId, tunnelRole) : null;
-      const resolved: CyberResolvedTile = tunnelTile?.layer === 'terrain'
+      const tunnelEdges = tunnelTile?.layer === 'terrain'
+        ? edgesForOrientedCatalogTile(
+          tunnelTile.localIndex,
+          tunnelTile.flipX,
+          tunnelTile.flipY,
+          'cyber.concrete',
+        )
+        : null;
+      // Tunnel 21 / 23 / 34 is only an art swap among letter-identical catalog
+      // rows (same four sides). Never stamp a tile whose letters disagree with
+      // the matcher — A faces voids, and occupied sides must match neighbors.
+      const useTunnelArt = Boolean(
+        tunnelTile
+        && tunnelEdges
+        && pick
+        && tunnelEdges === pick.edges,
+      );
+      const resolved: CyberResolvedTile = useTunnelArt && tunnelTile
         ? tunnelTile
         : {
             tilesetKey: CYBER_STYLE_PROFILES[styleId].tilesetKey,
@@ -1017,28 +1057,6 @@ function resolveCyberLetterCells(
           tileData, state, ownerId, 'primary', 'semantic', entry.x, entry.y, resolved, true,
           { brushId: entry.cell.brushId, sourceLayer: entry.layer },
         );
-      }
-      if (entry.cell.brushId === 'cyber.concrete') {
-        const topology = resolveCyberStructureTopology8(neighborMask8(tileData, state, entry));
-        const tieTile = tunnelTile?.layer === 'foreground'
-          ? tunnelTile
-          : topology.concaveCorner
-            ? resolveCyberStructureTieTile(styleId, topology.concaveCorner)
-            : null;
-        if (tieTile) {
-          addOwnedOutput(
-            tileData,
-            state,
-            ownerId,
-            'diagonal-tie',
-            'semantic',
-            entry.x,
-            entry.y,
-            tieTile,
-            false,
-            { brushId: entry.cell.brushId, sourceLayer: entry.layer },
-          );
-        }
       }
     }
   }
