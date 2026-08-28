@@ -915,6 +915,17 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
     expect(tileToken(document.tileData.foreground[10]![11]!, 'cyber-yellow')).toBe('9Y');
   });
 
+  it('keeps tile 37 on every Window end of a stacked band', () => {
+    let document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', rectangle(8, 6, 8, 6));
+    document = paint(document, 'cyber.windows', 'cyber-yellow', rectangle(8, 7, 8, 4));
+
+    for (const y of [7, 8, 9, 10]) {
+      expect(localIndexAt(document, 'terrain', 'cyber-yellow', 11, y)).toBe(38);
+      expect(localIndexAt(document, 'terrain', 'cyber-yellow', 8, y)).toBe(37);
+      expect(localIndexAt(document, 'terrain', 'cyber-yellow', 15, y)).toBe(37);
+    }
+  });
+
   it('does not overlay Cyber A10 on 1-wide nubs', () => {
     const cells = [
       ...rectangle(10, 8, 6, 6),

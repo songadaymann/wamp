@@ -528,3 +528,32 @@ describe('resolveCyberLetterField concrete', () => {
     }
   });
 });
+
+describe('resolveCyberLetterField windows', () => {
+  it('keeps a 1-high window strip as 38 mids and 37 caps', () => {
+    const band = new Set(rectangle(8, 8, 8, 1).map((cell) => `${cell.x},${cell.y}`));
+    const cells = rectangle(8, 7, 8, 3).map((cell) => ({
+      ...cell,
+      brushId: (band.has(`${cell.x},${cell.y}`) ? 'cyber.windows' : 'cyber.concrete') as 'cyber.windows' | 'cyber.concrete',
+    }));
+    const picks = resolveCyberLetterField(cells, inBounds);
+    expect(picks.get('8,8')?.localIndex).toBe(37);
+    expect(picks.get('15,8')?.localIndex).toBe(37);
+    expect(picks.get('11,8')?.localIndex).toBe(38);
+    expect(picks.get('11,8')?.edges).toBe('CICI');
+  });
+
+  it('uses pane 38 inside stacked window strips and tile 37 on every end', () => {
+    const band = new Set(rectangle(8, 7, 8, 4).map((cell) => `${cell.x},${cell.y}`));
+    const cells = rectangle(8, 6, 8, 6).map((cell) => ({
+      ...cell,
+      brushId: (band.has(`${cell.x},${cell.y}`) ? 'cyber.windows' : 'cyber.concrete') as 'cyber.windows' | 'cyber.concrete',
+    }));
+    const picks = resolveCyberLetterField(cells, inBounds);
+    for (const y of [7, 8, 9, 10]) {
+      expect(picks.get(`11,${y}`)?.localIndex).toBe(38);
+      expect(picks.get(`8,${y}`)?.localIndex).toBe(37);
+      expect(picks.get(`15,${y}`)?.localIndex).toBe(37);
+    }
+  });
+});

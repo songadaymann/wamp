@@ -381,9 +381,17 @@ export function constraintsFromLetterNeighbors(
     // Concrete letters come from occupancy so both sides of a shared edge
     // independently get the same B/C/E. Copying a neighbor pick lets E caps
     // and CCCC fill overwrite those sockets, then the fallback stamps 64
-    // (C against a void). Windows / Shell / Neon still match the neighbor's
-    // opposite letter so I/J/G/H abut.
+    // (C against a void). Window / Neon runs copy Concrete's B/C so a 1-high
+    // strip can stay CICI / CJCJ, but two Window (or Neon) cells must keep I
+    // (or J) on the shared edge or stacked strokes stay locked to the 1-high
+    // cap. Shell still matches the neighbor's opposite letter so G/H abut.
     if (brushId === 'cyber.concrete' && neighbor.brushId === 'cyber.concrete') {
+      return inferred;
+    }
+    if (
+      (brushId === 'cyber.windows' && neighbor.brushId === 'cyber.windows')
+      || (brushId === 'cyber.neon' && neighbor.brushId === 'cyber.neon')
+    ) {
       return inferred;
     }
     if (!neighbor.pick) return inferred;
@@ -681,7 +689,8 @@ function pickRespectingVoids(
 ): CyberLetterPick | null {
   const exact = pickForConstraints(brushId, x, y, constraints, occupancy, avoid);
   if (exact) return exact;
-  if (!constraints.some((constraint) => constraint === 'A')) return null;
+  const relaxOccupied = brushId === 'cyber.windows' || brushId === 'cyber.neon';
+  if (!relaxOccupied && !constraints.some((constraint) => constraint === 'A')) return null;
   const matches = listCyberLetterMatches(brushId, voidLockedConstraints(constraints));
   if (matches.length === 0) return null;
   let best = Number.NEGATIVE_INFINITY;
@@ -696,9 +705,32 @@ function pickRespectingVoids(
     ? canonicalConcreteMatches(edgeKey, ranked.filter((candidate) => candidate.edges === edgeKey))
     : [];
   const pool = canonical.length > 0 ? canonical : ranked;
+  const chosen = preferWindowOrNeonStackArt(brushId, constraints, pool);
   const salt = occupancy.get(letterCellKey(x, y))?.varietySalt ?? 0;
   const neighborAvoid = edgeKey === 'CCCC' ? [] : avoid;
-  return pickVariedCatalogCandidate(pool, x, y, { avoid: neighborAvoid, salt });
+  return pickVariedCatalogCandidate(chosen, x, y, { avoid: neighborAvoid, salt });
+}
+
+function preferWindowOrNeonStackArt(
+  brushId: CyberLetterBrushId,
+  constraints: readonly CyberEdgeConstraint[],
+  pool: readonly CyberLetterPick[],
+): readonly CyberLetterPick[] {
+  if (pool.length === 0) return pool;
+  if (brushId === 'cyber.windows') {
+    const endCap = constraints[1] === 'A' || constraints[3] === 'A';
+    const stacked = constraints[0] === 'I' && constraints[2] === 'I';
+    const preferredIndex = endCap || !stacked ? 37 : 38;
+    const preferred = pool.filter((candidate) => candidate.localIndex === preferredIndex);
+    return preferred.length > 0 ? preferred : pool;
+  }
+  if (brushId === 'cyber.neon') {
+    const stacked = constraints[0] === 'J' && constraints[2] === 'J';
+    const preferredIndex = stacked ? 73 : 49;
+    const preferred = pool.filter((candidate) => candidate.localIndex === preferredIndex);
+    return preferred.length > 0 ? preferred : pool;
+  }
+  return pool;
 }
 
 export function seedCyberLetterPick(
