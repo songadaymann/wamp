@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { listCyberLetterMismatches, listCyberLetterMatches, listCyberVoidAViolations, resolveCyberLetterField } from './cyberEdgeMatcher';
+import { listCyberLetterMismatches, listCyberLetterMatches, listCyberVoidAViolations, orientCyberA10Overlay, resolveCyberLetterField } from './cyberEdgeMatcher';
 
 const inBounds = (x: number, y: number): boolean => x >= 0 && x < 40 && y >= 0 && y < 22;
 
@@ -64,16 +64,24 @@ describe('resolveCyberLetterField concrete', () => {
     expect(picks.get('9,9')).toMatchObject({ localIndex: 30, flipX: false, flipY: true });
 
     for (const x of [5, 6, 7, 8]) {
-      expect(picks.get(`${x},6`)?.edges).toBe('ABCB');
-      expect(picks.get(`${x},9`)?.edges).toBe('CBAB');
-      expect(picks.get(`${x},6`)).toMatchObject({ localIndex: 15, flipX: false, flipY: false });
-      expect(picks.get(`${x},9`)).toMatchObject({ localIndex: 62, flipX: false, flipY: false });
+      const top = picks.get(`${x},6`)!;
+      const bottom = picks.get(`${x},9`)!;
+      expect(top.edges).toBe('ABCB');
+      expect([15, 16, 62]).toContain(top.localIndex);
+      expect(top.flipY).toBe(top.localIndex === 62);
+      expect(bottom.edges).toBe('CBAB');
+      expect([15, 16, 62]).toContain(bottom.localIndex);
+      expect(bottom.flipY).toBe(bottom.localIndex !== 62);
     }
     for (const y of [7, 8]) {
-      expect(picks.get(`4,${y}`)?.edges).toBe('BCBA');
-      expect(picks.get(`9,${y}`)?.edges).toBe('BABC');
-      expect(picks.get(`4,${y}`)).toMatchObject({ localIndex: 21, flipX: true, flipY: false });
-      expect(picks.get(`9,${y}`)).toMatchObject({ localIndex: 23, flipX: true, flipY: false });
+      const left = picks.get(`4,${y}`)!;
+      const right = picks.get(`9,${y}`)!;
+      expect(left.edges).toBe('BCBA');
+      expect([21, 23]).toContain(left.localIndex);
+      expect(left.flipX).toBe(left.localIndex === 21);
+      expect(right.edges).toBe('BABC');
+      expect([21, 23]).toContain(right.localIndex);
+      expect(right.flipX).toBe(right.localIndex === 23);
     }
     for (const y of [7, 8]) {
       for (const x of [5, 6, 7, 8]) {
@@ -81,6 +89,63 @@ describe('resolveCyberLetterField concrete', () => {
         expect([64, 82, 83]).toContain(picks.get(`${x},${y}`)?.localIndex);
       }
     }
+  });
+
+  it('varies side and fill flips without turning A away from the void', () => {
+    const picks = resolveCyberLetterField(concreteCells(rectangle(4, 4, 16, 14)), inBounds);
+    const leftLooks = new Set<string>();
+    const rightLooks = new Set<string>();
+    const topLooks = new Set<string>();
+    const bottomLooks = new Set<string>();
+    const fillLooks = new Set<string>();
+    let fill64Even = 0;
+    let fill64 = 0;
+
+    for (let y = 5; y <= 16; y += 1) {
+      const left = picks.get(`4,${y}`)!;
+      const right = picks.get(`19,${y}`)!;
+      expect(left.edges).toBe('BCBA');
+      expect(right.edges).toBe('BABC');
+      expect(left.flipX).toBe(left.localIndex === 21);
+      expect(right.flipX).toBe(right.localIndex === 23);
+      leftLooks.add(`${left.localIndex}:${Number(left.flipX)}${Number(left.flipY)}`);
+      rightLooks.add(`${right.localIndex}:${Number(right.flipX)}${Number(right.flipY)}`);
+    }
+    for (let x = 5; x <= 18; x += 1) {
+      const top = picks.get(`${x},4`)!;
+      const bottom = picks.get(`${x},17`)!;
+      expect(top.edges).toBe('ABCB');
+      expect([15, 16, 62]).toContain(top.localIndex);
+      expect(top.flipY).toBe(top.localIndex === 62);
+      expect(bottom.edges).toBe('CBAB');
+      expect([15, 16, 62]).toContain(bottom.localIndex);
+      expect(bottom.flipY).toBe(bottom.localIndex !== 62);
+      topLooks.add(String(top.localIndex));
+      bottomLooks.add(String(bottom.localIndex));
+    }
+    for (let y = 5; y <= 16; y += 1) {
+      for (let x = 5; x <= 18; x += 1) {
+        const fill = picks.get(`${x},${y}`)!;
+        expect(fill.edges).toBe('CCCC');
+        fillLooks.add(`${fill.localIndex}:${Number(fill.flipX)}${Number(fill.flipY)}`);
+        if (fill.localIndex !== 64) continue;
+        fill64 += 1;
+        if ((x + y) % 2 === 0) fill64Even += 1;
+      }
+    }
+
+    expect(leftLooks.size).toBeGreaterThan(1);
+    expect(rightLooks.size).toBeGreaterThan(1);
+    expect([...leftLooks, ...rightLooks].some((key) => key.endsWith('1'))).toBe(true);
+    expect(topLooks.has('15') || topLooks.has('16')).toBe(true);
+    expect(topLooks.has('62')).toBe(true);
+    expect(bottomLooks.has('62')).toBe(true);
+    expect(bottomLooks.has('15') || bottomLooks.has('16')).toBe(true);
+    expect(fillLooks.size).toBeGreaterThan(4);
+    expect(fill64).toBeGreaterThan(8);
+    expect(fill64Even / fill64).toBeGreaterThan(0.2);
+    expect(fill64Even / fill64).toBeLessThan(0.8);
+    expect(listCyberVoidAViolations(picks, inBounds)).toEqual([]);
   });
 
   it('uses an E T-junction when a stub meets a 1-cell-thick frame', () => {
@@ -162,6 +227,145 @@ describe('resolveCyberLetterField concrete', () => {
     expect(listCyberVoidAViolations(picks, inBounds)).toEqual([]);
   });
 
+  it('orients A10 as ZBBZ toward a missing diagonal beside a stepped hole', () => {
+    const hole = new Set(['11,9']);
+    const cells = [
+      ...rectangle(10, 8, 3, 1),
+      ...rectangle(10, 9, 4, 2).filter((cell) => !hole.has(`${cell.x},${cell.y}`)),
+    ];
+    const picks = resolveCyberLetterField(concreteCells(cells), inBounds);
+    expect(orientCyberA10Overlay(12, 9, picks.get('12,9')!, picks)).toEqual({
+      flipX: false,
+      flipY: true,
+    });
+    expect(orientCyberA10Overlay(12, 10, picks.get('12,10')!, picks)).toEqual({
+      flipX: true,
+      flipY: true,
+    });
+    expect(orientCyberA10Overlay(10, 8, picks.get('10,8')!, picks)).toBeNull();
+  });
+
+  it('overlays A10 on enclosed 1-cell tunnel corners', () => {
+    const cells = rectangle(8, 8, 5, 5).filter(({ x, y }) => !(x === 10 && y === 10));
+    const picks = resolveCyberLetterField(concreteCells(cells), inBounds);
+    expect(orientCyberA10Overlay(9, 9, picks.get('9,9')!, picks)).toEqual({
+      flipX: false,
+      flipY: false,
+    });
+    expect(orientCyberA10Overlay(11, 9, picks.get('11,9')!, picks)).toEqual({
+      flipX: true,
+      flipY: false,
+    });
+    expect(orientCyberA10Overlay(9, 11, picks.get('9,11')!, picks)).toEqual({
+      flipX: false,
+      flipY: true,
+    });
+    expect(orientCyberA10Overlay(11, 11, picks.get('11,11')!, picks)).toEqual({
+      flipX: true,
+      flipY: true,
+    });
+    expect(orientCyberA10Overlay(10, 9, picks.get('10,9')!, picks)).toBeNull();
+  });
+
+  it('overlays A10 on fill beside paired 1-cell tunnels', () => {
+    const holes = new Set(['12,10', '14,10']);
+    const cells = rectangle(10, 8, 7, 5).filter((cell) => !holes.has(`${cell.x},${cell.y}`));
+    const picks = resolveCyberLetterField(concreteCells(cells), inBounds);
+    expect(orientCyberA10Overlay(13, 9, picks.get('13,9')!, picks)).toEqual({
+      flipX: false,
+      flipY: false,
+    });
+    expect(orientCyberA10Overlay(13, 11, picks.get('13,11')!, picks)).toEqual({
+      flipX: false,
+      flipY: true,
+    });
+    expect(orientCyberA10Overlay(11, 9, picks.get('11,9')!, picks)).toEqual({
+      flipX: false,
+      flipY: false,
+    });
+  });
+
+  it('overlays A10 where a U-notch vertical and horizontal edges meet', () => {
+    const notch = new Set(['12,8', '13,8']);
+    const cells = rectangle(10, 8, 6, 4).filter((cell) => !notch.has(`${cell.x},${cell.y}`));
+    const picks = resolveCyberLetterField(concreteCells(cells), inBounds);
+    expect(orientCyberA10Overlay(11, 9, picks.get('11,9')!, picks)).toEqual({
+      flipX: false,
+      flipY: true,
+    });
+    expect(orientCyberA10Overlay(14, 9, picks.get('14,9')!, picks)).toEqual({
+      flipX: true,
+      flipY: true,
+    });
+  });
+
+  it('overlays A10 where a hole sits beside a top-right cut-out', () => {
+    const omitted = new Set(['15,7', '12,9', '14,9']);
+    const cells = rectangle(10, 7, 6, 5).filter((cell) => !omitted.has(`${cell.x},${cell.y}`));
+    const picks = resolveCyberLetterField(concreteCells(cells), inBounds);
+    expect(orientCyberA10Overlay(11, 8, picks.get('11,8')!, picks)).toEqual({
+      flipX: false,
+      flipY: false,
+    });
+    expect(orientCyberA10Overlay(13, 8, picks.get('13,8')!, picks)).toEqual({
+      flipX: false,
+      flipY: false,
+    });
+    expect(orientCyberA10Overlay(14, 8, picks.get('14,8')!, picks)).toEqual({
+      flipX: false,
+      flipY: true,
+    });
+    expect(orientCyberA10Overlay(11, 10, picks.get('11,10')!, picks)).toEqual({
+      flipX: false,
+      flipY: true,
+    });
+  });
+
+  it('does not overlay A10 on top, bottom, or side notches', () => {
+    const bottomNotch = resolveCyberLetterField(
+      concreteCells(rectangle(10, 8, 4, 2).filter((cell) => !(cell.x === 12 && cell.y === 9))),
+      inBounds,
+    );
+    const topNotch = resolveCyberLetterField(
+      concreteCells(rectangle(10, 8, 4, 2).filter((cell) => !(cell.x === 12 && cell.y === 8))),
+      inBounds,
+    );
+    const rightHall = resolveCyberLetterField(
+      concreteCells([...rectangle(10, 8, 6, 6), { x: 16, y: 10 }, { x: 17, y: 10 }, { x: 18, y: 10 }]),
+      inBounds,
+    );
+    const leftHall = resolveCyberLetterField(
+      concreteCells([...rectangle(10, 8, 6, 6), { x: 9, y: 10 }, { x: 8, y: 10 }, { x: 7, y: 10 }]),
+      inBounds,
+    );
+    const sideNubs = resolveCyberLetterField(
+      concreteCells([
+        ...rectangle(10, 8, 6, 6),
+        { x: 16, y: 9 },
+        { x: 16, y: 11 },
+        { x: 9, y: 9 },
+        { x: 9, y: 11 },
+      ]),
+      inBounds,
+    );
+    const verticalNubs = resolveCyberLetterField(
+      concreteCells([
+        ...rectangle(10, 8, 6, 6),
+        { x: 12, y: 7 },
+        { x: 14, y: 7 },
+        { x: 12, y: 14 },
+        { x: 14, y: 14 },
+      ]),
+      inBounds,
+    );
+    for (const picks of [bottomNotch, topNotch, rightHall, leftHall, sideNubs, verticalNubs]) {
+      for (const [key, pick] of picks) {
+        const [x, y] = key.split(',').map(Number);
+        expect(orientCyberA10Overlay(x, y, pick, picks)).toBeNull();
+      }
+    }
+  });
+
   it('uses tile 71 (AAAE) for a 1-cell cap on the left or right', () => {
     const horizontal = resolveCyberLetterField(concreteCells([
       { x: 8, y: 8 },
@@ -201,8 +405,10 @@ describe('resolveCyberLetterField concrete', () => {
       { x: 20, y: 4 }, { x: 21, y: 4 }, { x: 22, y: 4 }, { x: 23, y: 4 },
     ]), inBounds);
 
-    expect(picks.get('21,4')).toMatchObject({ localIndex: 62, flipX: false, flipY: false });
-    expect(picks.get('22,4')).toMatchObject({ localIndex: 62, flipX: false, flipY: false });
+    expect([15, 16, 62]).toContain(picks.get('21,4')?.localIndex);
+    expect(picks.get('21,4')?.flipY).toBe(picks.get('21,4')?.localIndex !== 62);
+    expect([15, 16, 62]).toContain(picks.get('22,4')?.localIndex);
+    expect(picks.get('22,4')?.flipY).toBe(picks.get('22,4')?.localIndex !== 62);
     expect(picks.get('23,4')).toMatchObject({ localIndex: 71, flipX: false, flipY: false });
   });
 

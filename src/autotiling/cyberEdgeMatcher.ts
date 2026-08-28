@@ -53,8 +53,11 @@ interface CanonicalConcretePick {
 
 /**
  * Cyber has many letter-compatible cells that are not visually neutral. Keep
- * the audited Concrete vocabulary deterministic by socket, while retaining
- * coordinate-stable variation only for the three true CCCC underground fills.
+ * the audited Concrete vocabulary by socket. Side tiles may swap left/right
+ * art (21 vs 23) as long as A still faces the void, and may flip along the
+ * wall. Top and bottom swap 15 / 62 the same way, flipping vertically so A
+ * stays on the exterior, and may also flip horizontally. CCCC fill uses
+ * 64 / 82 / 83 at every orientation.
  */
 const CANONICAL_CONCRETE_PICKS: Readonly<Partial<Record<string, readonly CanonicalConcretePick[]>>> = {
   AAAA: [{ localIndex: 20, flipX: false, flipY: false }],
@@ -70,10 +73,34 @@ const CANONICAL_CONCRETE_PICKS: Readonly<Partial<Record<string, readonly Canonic
   EAAE: [{ localIndex: 67, flipX: true, flipY: false }],
   ABBA: [{ localIndex: 14, flipX: false, flipY: false }],
   AABB: [{ localIndex: 14, flipX: true, flipY: false }],
-  ABCB: [{ localIndex: 15, flipX: false, flipY: false }],
-  CBAB: [{ localIndex: 62, flipX: false, flipY: false }],
-  BCBA: [{ localIndex: 21, flipX: true, flipY: false }],
-  BABC: [{ localIndex: 23, flipX: true, flipY: false }],
+  ABCB: [
+    { localIndex: 15, flipX: false, flipY: false },
+    { localIndex: 15, flipX: true, flipY: false },
+    { localIndex: 16, flipX: false, flipY: false },
+    { localIndex: 16, flipX: true, flipY: false },
+    { localIndex: 62, flipX: false, flipY: true },
+    { localIndex: 62, flipX: true, flipY: true },
+  ],
+  CBAB: [
+    { localIndex: 62, flipX: false, flipY: false },
+    { localIndex: 62, flipX: true, flipY: false },
+    { localIndex: 15, flipX: false, flipY: true },
+    { localIndex: 15, flipX: true, flipY: true },
+    { localIndex: 16, flipX: false, flipY: true },
+    { localIndex: 16, flipX: true, flipY: true },
+  ],
+  BCBA: [
+    { localIndex: 21, flipX: true, flipY: false },
+    { localIndex: 21, flipX: true, flipY: true },
+    { localIndex: 23, flipX: false, flipY: false },
+    { localIndex: 23, flipX: false, flipY: true },
+  ],
+  BABC: [
+    { localIndex: 23, flipX: true, flipY: false },
+    { localIndex: 23, flipX: true, flipY: true },
+    { localIndex: 21, flipX: false, flipY: false },
+    { localIndex: 21, flipX: false, flipY: true },
+  ],
   BBAA: [{ localIndex: 25, flipX: false, flipY: true }],
   BAAB: [{ localIndex: 30, flipX: false, flipY: true }],
   BBCC: [
@@ -96,11 +123,11 @@ const CANONICAL_CONCRETE_PICKS: Readonly<Partial<Record<string, readonly Canonic
     { localIndex: 33, flipX: false, flipY: true },
     { localIndex: 35, flipX: true, flipY: true },
   ],
-  CCCC: [
-    { localIndex: 64, flipX: false, flipY: false },
-    { localIndex: 82, flipX: false, flipY: false },
-    { localIndex: 83, flipX: false, flipY: false },
-  ],
+  CCCC: [64, 82, 83].flatMap((localIndex) => (
+    [false, true].flatMap((flipX) => (
+      [false, true].map((flipY) => ({ localIndex, flipX, flipY }))
+    ))
+  )),
   EEEE: [{ localIndex: 43, flipX: false, flipY: false }],
   AEEE: [{ localIndex: 70, flipX: false, flipY: false }],
   EEAE: [{ localIndex: 70, flipX: false, flipY: true }],
@@ -240,7 +267,7 @@ function isFrameOrStubNeighbor(
  * Four-connected Concrete with one empty diagonal is a concave corner
  * (BBCC / CCBB / BCCB / CBBC; tiles 11, 33, 35), whether that bite is an
  * enclosed hole or an exterior armpit of a plus.
- * Cyber A10 foreground ties stay unused until their edge cases are named.
+ * Cyber A10 is a foreground corner bit aimed at a missing diagonal.
  * A 3-connected edge uses E toward a thin stub or 1-cell frame instead of C,
  * so a protrusion can T-junction into a ring. A 1-cell stub or chimney over an
  * enclosed hole is the same socket (void opposite a thin arm): 55 / 70.
@@ -417,6 +444,150 @@ export function listCyberVoidAViolations(
   return listCyberLetterMismatches(picks, inBounds).filter((mismatch) => mismatch.neighborLetter === null);
 }
 
+/**
+ * Cyber A10 (index 9) is a foreground corner bit. Unflipped it is ZBBZ:
+ * B on the right and bottom, Z (ignored) on top and left. Flips aim that
+ * BB corner at a missing diagonal so two yellow edges can meet. That includes
+ * 11 / 33 / 35 (enclosed tunnels and exterior bites) and solid sides / fill
+ * with the same socket (stepped holes, paired-tunnel fill, stair treads).
+ * Skip 1-cell nubs and hallway T-junctions in every direction: those empty
+ * diagonals are open air beside a straight wall. Skip thin E frames; those
+ * edges are already the whole cell.
+ */
+const A10_SOCKETS = [
+  { flipX: false, flipY: false, b: [1, 2], ddx: 1, ddy: 1 },
+  { flipX: true, flipY: false, b: [3, 2], ddx: -1, ddy: 1 },
+  { flipX: false, flipY: true, b: [1, 0], ddx: 1, ddy: -1 },
+  { flipX: true, flipY: true, b: [3, 0], ddx: -1, ddy: -1 },
+] as const;
+
+function occupiedCardinals(
+  x: number,
+  y: number,
+  picks: ReadonlyMap<string, CyberLetterPick>,
+) {
+  return SIDES.filter((side) => picks.has(letterCellKey(x + side.dx, y + side.dy)));
+}
+
+function isOneCellStub(
+  x: number,
+  y: number,
+  picks: ReadonlyMap<string, CyberLetterPick>,
+): boolean {
+  if (!picks.has(letterCellKey(x, y))) return false;
+  return occupiedCardinals(x, y, picks).length <= 1;
+}
+
+const INNER_CORNER_INDICES = new Set([11, 33, 35]);
+
+function occupancyBounds(
+  picks: ReadonlyMap<string, CyberLetterPick>,
+): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  if (picks.size === 0) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const key of picks.keys()) {
+    const comma = key.indexOf(',');
+    const x = Number(key.slice(0, comma));
+    const y = Number(key.slice(comma + 1));
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function voidEscapesOccupancy(
+  x: number,
+  y: number,
+  picks: ReadonlyMap<string, CyberLetterPick>,
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+): boolean {
+  if (picks.has(letterCellKey(x, y))) return false;
+  const visited = new Set<string>();
+  const stack = [x, y];
+  while (stack.length > 0) {
+    const cy = stack.pop()!;
+    const cx = stack.pop()!;
+    if (cx < bounds.minX || cx > bounds.maxX || cy < bounds.minY || cy > bounds.maxY) {
+      return true;
+    }
+    const key = letterCellKey(cx, cy);
+    if (visited.has(key) || picks.has(key)) continue;
+    visited.add(key);
+    for (const side of SIDES) {
+      stack.push(cx + side.dx, cy + side.dy);
+    }
+  }
+  return false;
+}
+
+function classicA10Allowed(
+  x: number,
+  y: number,
+  pick: CyberLetterPick,
+  picks: ReadonlyMap<string, CyberLetterPick>,
+  diagonalX: number,
+  diagonalY: number,
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  socketIndexes: readonly number[],
+): boolean {
+  if (INNER_CORNER_INDICES.has(pick.localIndex)) return true;
+  const diagExterior = voidEscapesOccupancy(diagonalX, diagonalY, picks, bounds);
+  if (!diagExterior) return true;
+  const aEnclosed = SIDES.some((side, index) => (
+    edgeAt(pick.edges, index) === 'A'
+    && !picks.has(letterCellKey(x + side.dx, y + side.dy))
+    && !voidEscapesOccupancy(x + side.dx, y + side.dy, picks, bounds)
+  ));
+  if (aEnclosed) return true;
+  const aIndexes = SIDES
+    .map((side) => side.index)
+    .filter((index) => edgeAt(pick.edges, index) === 'A');
+  if (aIndexes.length === 0) return false;
+  return socketIndexes.some((sideIndex) => {
+    const side = SIDES[sideIndex]!;
+    if (!isOneCellStub(x + side.dx, y + side.dy, picks)) return false;
+    return aIndexes.some((aIndex) => (SIDES[aIndex]!.dx === 0) !== (side.dx === 0));
+  });
+}
+
+export function orientCyberA10Overlay(
+  x: number,
+  y: number,
+  pick: CyberLetterPick,
+  picks: ReadonlyMap<string, CyberLetterPick>,
+): { flipX: boolean; flipY: boolean } | null {
+  const bounds = occupancyBounds(picks);
+  if (!bounds) return null;
+  for (const socket of A10_SOCKETS) {
+    const diagonalX = x + socket.ddx;
+    const diagonalY = y + socket.ddy;
+    const diagonalOccupied = picks.has(letterCellKey(diagonalX, diagonalY));
+    const sides = socket.b.map((sideIndex) => {
+      const side = SIDES[sideIndex];
+      return {
+        letter: edgeAt(pick.edges, sideIndex),
+        occupied: picks.has(letterCellKey(x + side.dx, y + side.dy)),
+      };
+    });
+    if (!diagonalOccupied) {
+      const fits = sides.every((side) => side.letter !== 'E' && side.occupied);
+      if (
+        fits
+        && classicA10Allowed(x, y, pick, picks, diagonalX, diagonalY, bounds, socket.b)
+      ) {
+        return { flipX: socket.flipX, flipY: socket.flipY };
+      }
+      continue;
+    }
+  }
+  return null;
+}
+
 function seedWindowsOrNeon(
   brushId: 'cyber.windows' | 'cyber.neon',
   x: number,
@@ -495,7 +666,8 @@ function pickForConstraints(
       ? exact
       : matches;
   const salt = occupancy.get(letterCellKey(x, y))?.varietySalt ?? 0;
-  return pickVariedCatalogCandidate(pool, x, y, { avoid, salt });
+  const neighborAvoid = edgeKey === 'CCCC' ? [] : avoid;
+  return pickVariedCatalogCandidate(pool, x, y, { avoid: neighborAvoid, salt });
 }
 
 /** Catalog pick that always keeps A on void sides. Occupied letters may relax. */
@@ -525,7 +697,8 @@ function pickRespectingVoids(
     : [];
   const pool = canonical.length > 0 ? canonical : ranked;
   const salt = occupancy.get(letterCellKey(x, y))?.varietySalt ?? 0;
-  return pickVariedCatalogCandidate(pool, x, y, { avoid, salt });
+  const neighborAvoid = edgeKey === 'CCCC' ? [] : avoid;
+  return pickVariedCatalogCandidate(pool, x, y, { avoid: neighborAvoid, salt });
 }
 
 export function seedCyberLetterPick(

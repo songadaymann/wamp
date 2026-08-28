@@ -14,6 +14,7 @@ import {
   resolveCyberStructureTile8,
   resolveCyberSupportSpan,
   resolveCyberTunnelOutlineTile,
+  resolveCyberStructureTieTile,
   type CyberFamilyId,
   type CyberResolvedTile,
   type CyberStyleId,
@@ -23,6 +24,7 @@ import {
   isCyberLetterBrushId,
   isCyberLetterCatalogLocalIndex,
   letterCellKey,
+  orientCyberA10Overlay,
   resolveCyberLetterField,
 } from './cyberEdgeMatcher';
 import {
@@ -1057,6 +1059,30 @@ function resolveCyberLetterCells(
           tileData, state, ownerId, 'primary', 'semantic', entry.x, entry.y, resolved, true,
           { brushId: entry.cell.brushId, sourceLayer: entry.layer },
         );
+        const tieOrient = pick
+          ? orientCyberA10Overlay(entry.x, entry.y, pick, picks)
+          : null;
+        if (tieOrient) {
+          const corner = tieOrient.flipX && tieOrient.flipY
+            ? 'topLeft'
+            : tieOrient.flipY
+              ? 'topRight'
+              : tieOrient.flipX
+                ? 'bottomLeft'
+                : 'bottomRight';
+          addOwnedOutput(
+            tileData,
+            state,
+            ownerId,
+            'tie',
+            'semantic',
+            entry.x,
+            entry.y,
+            resolveCyberStructureTieTile(styleId, corner),
+            true,
+            { brushId: entry.cell.brushId, sourceLayer: entry.layer },
+          );
+        }
       }
     }
   }

@@ -102,11 +102,13 @@ function catalogCandidateWeight(tile: CyberOrientedTile): number {
 }
 
 function catalogVarietyHash(x: number, y: number, salt: number): number {
-  return Math.abs(
-    Math.imul(x + 31, 73856093)
-    ^ Math.imul(y + 17, 19349663)
-    ^ Math.imul(salt + 7, 83492791),
-  );
+  let h = 0x9e3779b9 ^ salt;
+  h = Math.imul(h ^ Math.imul(x + 0x7f4a7c15, 0x85ebca6b), 0xc2b2ae35);
+  h = Math.imul(h ^ Math.imul(y + 0x27d4eb2f, 0x165667b1), 0x27d4eb2f);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x7feb9d58);
+  h ^= h >>> 13;
+  return h >>> 0;
 }
 
 function orientedTileKey(tile: CyberOrientedTile): string {
