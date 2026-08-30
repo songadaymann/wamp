@@ -178,6 +178,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path == "/favicon.ico":
+            self.send_response(204)
+            self.end_headers()
+            return
         if parsed.path in {"/", "/index.html"}:
             html = (UI_DIR / "index.html").read_bytes()
             self._send(200, html, "text/html; charset=utf-8")

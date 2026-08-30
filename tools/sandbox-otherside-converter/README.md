@@ -11,7 +11,7 @@ This is a first cut. Bone mapping is a **draft**. Build the comparison `.blend`,
 ## Requirements
 
 - Python 3.10+
-- [Blender 4.5 LTS](https://www.blender.org/download/lts/4-5/) (same version the ODK docs use)
+- [Blender 4.0+](https://www.blender.org/download/) (ODK docs use 4.5 LTS; 4.0.2 is verified)
 - Optional: `pywebview` for a native window (`pip install -r requirements.txt`)
 
 ```bash
