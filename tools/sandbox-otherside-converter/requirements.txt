@@ -1,0 +1,3 @@
+pytest>=8.0
+# Optional native window wrapper. The converter falls back to a local browser tab.
+pywebview>=5.0

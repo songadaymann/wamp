@@ -1,0 +1,161 @@
+{
+  "draft": true,
+  "notes": "Best-guess The Sandbox / VoxEdit mesh aliases. DRAFT until a real Sandbox GLTF is overlaid on ODK_Sandbox_Compare.blend and the bone map is confirmed. More specific aliases are listed first so they win over generic 'arm' / 'leg' matches.",
+  "targetHeightMeters": 1.8,
+  "globalRotationEulerDeg": [0, 0, 0],
+  "globalScale": 1.0,
+  "parts": [
+    {
+      "id": "head",
+      "bone": "head",
+      "match": { "nameContains": ["head"] },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "neck",
+      "bone": "neck_01",
+      "match": { "nameContains": ["neck"] },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "hand_l",
+      "bone": "hand_l",
+      "match": { "nameContains": ["hand_l", "lefthand", "left_hand", "hand.l", "hand-l"] },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "hand_r",
+      "bone": "hand_r",
+      "match": { "nameContains": ["hand_r", "righthand", "right_hand", "hand.r", "hand-r"] },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "forearm_l",
+      "bone": "lowerarm_l",
+      "match": {
+        "nameContains": [
+          "forearm_l", "forearm.l", "forearm-l", "leftforearm", "left_forearm",
+          "lowerarm_l", "lowerarm.l", "leftlowerarm", "left_lowerarm"
+        ]
+      },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "forearm_r",
+      "bone": "lowerarm_r",
+      "match": {
+        "nameContains": [
+          "forearm_r", "forearm.r", "forearm-r", "rightforearm", "right_forearm",
+          "lowerarm_r", "lowerarm.r", "rightlowerarm", "right_lowerarm"
+        ]
+      },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "upperarm_l",
+      "bone": "upperarm_l",
+      "match": {
+        "nameContains": [
+          "upperarm_l", "upperarm.l", "upperarm-l", "leftupperarm", "left_upperarm",
+          "arm_l", "arm.l", "leftarm", "left_arm"
+        ]
+      },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "upperarm_r",
+      "bone": "upperarm_r",
+      "match": {
+        "nameContains": [
+          "upperarm_r", "upperarm.r", "upperarm-r", "rightupperarm", "right_upperarm",
+          "arm_r", "arm.r", "rightarm", "right_arm"
+        ]
+      },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "foot_l",
+      "bone": "foot_l",
+      "match": { "nameContains": ["foot_l", "foot.l", "leftfoot", "left_foot", "foot-l"] },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "foot_r",
+      "bone": "foot_r",
+      "match": { "nameContains": ["foot_r", "foot.r", "rightfoot", "right_foot", "foot-r"] },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "calf_l",
+      "bone": "calf_l",
+      "match": {
+        "nameContains": [
+          "lowerleg_l", "lowerleg.l", "leftlowerleg", "left_lowerleg",
+          "calf_l", "calf.l", "leftcalf", "leftleg", "left_leg", "leg_l", "leg.l"
+        ]
+      },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "calf_r",
+      "bone": "calf_r",
+      "match": {
+        "nameContains": [
+          "lowerleg_r", "lowerleg.r", "rightlowerleg", "right_lowerleg",
+          "calf_r", "calf.r", "rightcalf", "rightleg", "right_leg", "leg_r", "leg.r"
+        ]
+      },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "thigh_l",
+      "bone": "thigh_l",
+      "match": {
+        "nameContains": [
+          "upperleg_l", "upperleg.l", "leftupperleg", "left_upperleg",
+          "thigh_l", "thigh.l", "leftthigh", "leftupleg", "left_upleg", "upleg_l"
+        ]
+      },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "thigh_r",
+      "bone": "thigh_r",
+      "match": {
+        "nameContains": [
+          "upperleg_r", "upperleg.r", "rightupperleg", "right_upperleg",
+          "thigh_r", "thigh.r", "rightthigh", "rightupleg", "right_upleg", "upleg_r"
+        ]
+      },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "torso",
+      "bone": "spine_03",
+      "match": { "nameContains": ["torso", "chest", "spine", "body"] },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    },
+    {
+      "id": "pelvis",
+      "bone": "pelvis",
+      "match": { "nameContains": ["pelvis", "hip", "hips"] },
+      "rotationEulerDeg": [0, 0, 0],
+      "offset": [0, 0, 0]
+    }
+  ]
+}

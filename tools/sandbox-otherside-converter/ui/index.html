@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sandbox → Otherside Converter</title>
+  <style>
+    :root {
+      --bg: #12141a;
+      --panel: #1b1f28;
+      --panel-2: #232833;
+      --line: #323848;
+      --text: #e8ecf4;
+      --muted: #9aa3b5;
+      --accent: #7cdb8a;
+      --accent-2: #6aa8ff;
+      --warn: #f0c36a;
+      --bad: #ef7a7a;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); min-height: 100%; }
+    body { padding: 28px; }
+    h1 { font-size: 22px; font-weight: 650; margin: 0 0 6px; }
+    p.lead { margin: 0 0 22px; color: var(--muted); max-width: 72ch; line-height: 1.45; }
+    .layout { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font: inherit;
+    }
+    button {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button.primary { background: #244833; border-color: #35684a; color: var(--accent); }
+    button.danger { border-color: #6a3a3a; color: var(--bad); }
+    button:disabled { opacity: 0.5; cursor: wait; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .drop {
+      min-height: 180px;
+      border: 1.5px dashed #4a5568;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 24px;
+      background: linear-gradient(180deg, #202532, #1a1e27);
+    }
+    .drop.over { border-color: var(--accent); background: #1d2a22; }
+    .drop strong { display: block; font-size: 18px; margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    .status { font-weight: 650; }
+    .status.ready { color: var(--accent-2); }
+    .status.mapped { color: var(--accent); }
+    .status.warn { color: var(--warn); }
+    .status.bad { color: var(--bad); }
+    pre {
+      background: #10131a;
+      border-radius: 12px;
+      padding: 12px;
+      overflow: auto;
+      max-height: 280px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #c9d2e3;
+    }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .pill {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #2a3140;
+      margin: 0 4px 4px 0;
+      font-size: 11px;
+    }
+    .pill.miss { background: #3b2a2a; color: #ffc4c4; }
+  </style>
+</head>
+<body>
+  <h1>Sandbox → Otherside Avatar Converter</h1>
+  <p class="lead">
+    Drop The Sandbox voxel GLTF/GLB files here. Each body-part mesh is rigidly bound to one
+    Otherside ODK bone (no voxel-deforming weights), then exported as GLB + MML.
+    Mapping is a draft until you compare a real avatar against the skeleton template.
+  </p>
+  <div class="layout">
+    <aside class="card">
+      <div class="hint">Files stay on this machine. Conversion runs through local Blender.</div>
+      <label>Blender path</label>
+      <input id="blenderPath" type="text" placeholder="auto-detect Blender 4.5" />
+      <label>Output folder</label>
+      <input id="outputDir" type="text" placeholder="/path/to/output" />
+      <label>Mapping JSON</label>
+      <input id="mappingPath" type="text" />
+      <label>Target height (meters)</label>
+      <input id="targetHeight" type="number" min="1" max="2" step="0.05" value="1.8" />
+      <div class="row">
+        <button id="saveSettings">Save settings</button>
+        <button id="buildTemplate">Build skeleton template</button>
+        <button id="openOutput">Open output</button>
+      </div>
+      <p class="hint" id="settingsStatus"></p>
+    </aside>
+    <main>
+      <div class="card drop" id="drop">
+        <div>
+          <strong>Drag and drop GLTF / GLB files or folders</strong>
+          <div class="hint">You can also choose files. Bulk convert is supported.</div>
+          <div class="row" style="justify-content:center">
+            <button id="pickFiles">Choose files</button>
+            <input id="fileInput" type="file" accept=".gltf,.glb" multiple hidden />
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:18px">
+        <div class="row">
+          <button class="primary" id="inspectBtn">Inspect selected</button>
+          <button class="primary" id="convertBtn">Convert all</button>
+          <button id="overlayBtn">Overlay first file on template</button>
+          <button class="danger" id="clearBtn">Clear queue</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>File</th>
+              <th>Parts</th>
+              <th>Map</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="queue"></tbody>
+        </table>
+      </div>
+      <div class="card" style="margin-top:18px">
+        <div class="hint">Job log</div>
+        <pre id="log">Ready.</pre>
+      </div>
+    </main>
+  </div>
+  <script>
+    const state = { items: [], settings: {} };
+
+    const $ = (id) => document.getElementById(id);
+    const log = (message) => {
+      const el = $("log");
+      el.textContent = `${new Date().toLocaleTimeString()}  ${message}\n` + el.textContent;
+    };
+
+    async function api(path, options) {
+      const response = await fetch(path, options);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || response.statusText);
+      return data;
+    }
+
+    function renderQueue() {
+      $("queue").innerHTML = state.items.map((item, index) => {
+        const mapped = (item.mapped || []).map((row) => `<span class="pill">${row.mesh} → ${row.bone}</span>`).join("");
+        const unmapped = (item.unmapped || []).map((name) => `<span class="pill miss">${name}</span>`).join("");
+        const parts = (item.meshNames || []).join(", ");
+        return `<tr>
+          <td><input type="checkbox" data-index="${index}" ${item.selected ? "checked" : ""} /></td>
+          <td>${item.name}</td>
+          <td>${parts || "—"}</td>
+          <td>${mapped}${unmapped || ""}</td>
+          <td class="status ${item.statusClass || "ready"}">${item.status || "queued"}</td>
+        </tr>`;
+      }).join("");
+      $("queue").querySelectorAll("input[type=checkbox]").forEach((box) => {
+        box.addEventListener("change", () => {
+          state.items[Number(box.dataset.index)].selected = box.checked;
+        });
+      });
+    }
+
+    async function loadSettings() {
+      const data = await api("/api/settings");
+      state.settings = data;
+      $("blenderPath").value = data.blenderPath || "";
+      $("outputDir").value = data.outputDir || "";
+      $("mappingPath").value = data.mappingPath || "";
+      $("targetHeight").value = data.targetHeight || 1.8;
+      $("settingsStatus").textContent = data.blenderDetected
+        ? `Blender detected: ${data.blenderDetected}`
+        : "Blender not detected yet. Set the path if convert fails.";
+    }
+
+    function currentSettings() {
+      return {
+        blenderPath: $("blenderPath").value.trim(),
+        outputDir: $("outputDir").value.trim(),
+        mappingPath: $("mappingPath").value.trim(),
+        targetHeight: Number($("targetHeight").value || 1.8),
+      };
+    }
+
+    async function addFiles(fileList) {
+      const form = new FormData();
+      [...fileList].forEach((file) => form.append("files", file, file.name));
+      const data = await api("/api/queue", { method: "POST", body: form });
+      data.items.forEach((item) => {
+        item.selected = true;
+        item.status = "queued";
+        item.statusClass = "ready";
+        state.items.push(item);
+      });
+      renderQueue();
+      log(`Added ${data.items.length} file(s).`);
+    }
+
+    $("drop").addEventListener("dragover", (event) => {
+      event.preventDefault();
+      $("drop").classList.add("over");
+    });
+    $("drop").addEventListener("dragleave", () => $("drop").classList.remove("over"));
+    $("drop").addEventListener("drop", async (event) => {
+      event.preventDefault();
+      $("drop").classList.remove("over");
+      if (event.dataTransfer.files.length) await addFiles(event.dataTransfer.files);
+    });
+    $("pickFiles").addEventListener("click", () => $("fileInput").click());
+    $("fileInput").addEventListener("change", async (event) => {
+      if (event.target.files.length) await addFiles(event.target.files);
+    });
+
+    $("saveSettings").addEventListener("click", async () => {
+      await api("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(currentSettings()),
+      });
+      await loadSettings();
+      log("Settings saved.");
+    });
+
+    $("clearBtn").addEventListener("click", () => {
+      state.items = [];
+      renderQueue();
+    });
+
+    $("inspectBtn").addEventListener("click", async () => {
+      const selected = state.items.filter((item) => item.selected);
+      if (!selected.length) return log("Select at least one file to inspect.");
+      for (const item of selected) {
+        const data = await api("/api/inspect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: item.id, ...currentSettings() }),
+        });
+        Object.assign(item, data, {
+          status: data.unmappedCount ? `${data.mappedCount} mapped, ${data.unmappedCount} unmapped` : `${data.mappedCount} mapped`,
+          statusClass: data.unmappedCount ? "warn" : "mapped",
+        });
+        log(`Inspected ${item.name}: ${item.status}`);
+      }
+      renderQueue();
+    });
+
+    $("convertBtn").addEventListener("click", async () => {
+      if (!state.items.length) return log("Drop files first.");
+      $("convertBtn").disabled = true;
+      try {
+        for (const item of state.items) {
+          item.status = "converting…";
+          item.statusClass = "ready";
+          renderQueue();
+          const data = await api("/api/convert", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: item.id, ...currentSettings() }),
+          });
+          Object.assign(item, data, {
+            status: data.ok ? "converted" : "failed",
+            statusClass: data.ok ? "mapped" : "bad",
+          });
+          log(data.ok ? `Converted ${item.name} → ${data.outputGlb}` : `Failed ${item.name}\n${data.log || data.error || ""}`);
+          renderQueue();
+        }
+      } finally {
+        $("convertBtn").disabled = false;
+      }
+    });
+
+    $("buildTemplate").addEventListener("click", async () => {
+      const data = await api("/api/template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(currentSettings()),
+      });
+      log(data.ok ? `Template saved: ${data.outputBlend}\n${data.log || ""}` : `Template failed\n${data.log || data.error}`);
+    });
+
+    $("overlayBtn").addEventListener("click", async () => {
+      const item = state.items.find((entry) => entry.selected) || state.items[0];
+      if (!item) return log("Drop a Sandbox file first to overlay.");
+      const data = await api("/api/template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...currentSettings(), overlayId: item.id }),
+      });
+      log(data.ok ? `Template + overlay saved: ${data.outputBlend}` : `Overlay failed\n${data.log || data.error}`);
+    });
+
+    $("openOutput").addEventListener("click", async () => {
+      const data = await api("/api/open-output", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(currentSettings()),
+      });
+      log(data.ok ? `Opened ${data.outputDir}` : data.error || "Could not open folder.");
+    });
+
+    loadSettings().catch((error) => log(error.message));
+  </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.local/
+*.pyc
+ODK_Sandbox_Compare.blend
+ODK_Sandbox_Compare.blend1

@@ -26,6 +26,13 @@ env.local.*
 
 .claude/settings.local.json
 
+# Local Python converter scratch
+tools/sandbox-otherside-converter/.venv/
+tools/sandbox-otherside-converter/**/__pycache__/
+tools/sandbox-otherside-converter/.pytest_cache/
+tools/sandbox-otherside-converter/templates/ODK_Sandbox_Compare.blend
+tools/sandbox-otherside-converter/templates/ODK_Sandbox_Compare.blend1
+
 # Local-only personal exports and experiments.
 src/cloudflare/emailExportWorker.ts
 src/cloudflare/worker/exports/
