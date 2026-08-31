@@ -33,6 +33,7 @@ import {
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
+import { getGameSettings } from '../settings/userSettings';
 import { getSolidColorFromBackgroundValue } from '../backgrounds/model';
 import {
   type CourseGoalType,
@@ -99,13 +100,50 @@ import {
 } from '../weather/model';
 import { buildRoomWeatherSurfaceSegments } from '../weather/surfaces';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
+import type { EditorShapeKind } from './editor/shapeTiles';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
 type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
 
+export type EditorPreviewSmokeCommand =
+  | { op: 'beginBatch' }
+  | { op: 'commitBatch' }
+  | { op: 'placeCells'; cells: Array<{ x: number; y: number }> }
+  | { op: 'eraseCells'; cells: Array<{ x: number; y: number }> }
+  | {
+      op: 'stampShape';
+      kind: EditorShapeKind;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      outline: boolean;
+      erase: boolean;
+      mid?: { x: number; y: number };
+    }
+  | { op: 'floodFill'; x: number; y: number }
+  | { op: 'copy'; x1: number; y1: number; x2: number; y2: number }
+  | { op: 'paste'; x: number; y: number }
+  | { op: 'undo' }
+  | { op: 'redo' }
+  | { op: 'clearAllTiles' }
+  | { op: 'clearCurrentLayer' }
+  | { op: 'capture'; name: string }
+  | { op: 'applyCapture'; name: string }
+  | { op: 'fitToScreen' }
+  | { op: 'setCamera'; zoom: number; centerTileX: number; centerTileY: number };
+
+export interface EditorPreviewSmokeResult extends Record<string, unknown> {
+  ok: boolean;
+  reason?: string;
+  commandIndex?: number;
+  captures?: Record<string, RoomSnapshot>;
+}
+
 export class EditorScene extends Phaser.Scene {
   private uiBridge: EditorUiBridge | null = null;
   private roomEditCount = 0;
+  private previewSmokePersistenceIsolated = false;
   private readonly musicWorkflow: EditorMusicWorkflowCoordinator;
 
   // Tilemap
@@ -768,6 +806,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   create(data?: EditorSceneData): void {
+    const builderSettings = getGameSettings();
+    editorState.smartTheme = builderSettings.lastSmartTheme;
+    if (builderSettings.builderMode !== 'advanced' && editorState.paletteMode === 'tiles') {
+      editorState.paletteMode = 'smart';
+    }
     this.resetRuntimeState();
 
     this.initialRoomSnapshot = data?.roomSnapshot ? cloneRoomSnapshot(data.roomSnapshot) : null;
@@ -817,6 +860,11 @@ export class EditorScene extends Phaser.Scene {
       onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
       onClearAllTiles: () => this.toolController.clearAllTiles(),
       onClearAllObjects: () => this.toolController.clearAllObjects(),
+      onSetSmartTheme: (theme) => { editorState.smartTheme = theme; },
+      onSetSmartMaterial: (material) => { editorState.smartMaterial = material; },
+      onSetSmartStyle: (style) => { editorState.smartStyle = style; },
+      onSetSmartDetailsEnabled: (enabled) => this.editRuntime.setSmartDetailsEnabled(enabled),
+      onFillCaveTerrain: () => this.editRuntime.fillCaveTerrain(),
       onSelectBackground: () => this.applySelectedBackground(),
       onSelectLighting: (mode) => this.applySelectedLightingMode(mode),
       onSetLightingDarkness: (darkness) => this.applySelectedLightingDarkness(darkness),
@@ -893,7 +941,11 @@ export class EditorScene extends Phaser.Scene {
       this.updatePersistenceStatus('Loading room...');
     }
 
-    void this.loadPersistedRoom();
+    if (this.previewSmokePersistenceIsolated) {
+      this.updatePersistenceStatus('Preview smoke uses local persistence only.');
+    } else {
+      void this.loadPersistedRoom();
+    }
     this.presenceController.initialize();
     this.updateBottomBar();
     this.updateGoalUi();
@@ -1243,7 +1295,135 @@ export class EditorScene extends Phaser.Scene {
     return this.editRuntime.exportRoomSnapshot();
   }
 
+  /**
+   * Isolates the synthetic safety-preview room before Phaser starts the scene.
+   * This is deliberately separate from the command runner so a hard page reload
+   * cannot briefly resume normal editor loading or background persistence.
+   */
+  debugPreparePreviewSmokeEditor(): EditorPreviewSmokeResult {
+    const previewSmokeEnabled = import.meta.env.VITE_ENABLE_TEST_RESET === '1'
+      && new URLSearchParams(window.location.search).get('previewSmoke') === '1';
+    if (!previewSmokeEnabled) {
+      return { ok: false, reason: 'preview-smoke-disabled' };
+    }
+    this.previewSmokePersistenceIsolated = true;
+    return { ok: true };
+  }
+
+  /**
+   * Narrow command surface for safety-preview browser proof. The raw edit
+   * runtime remains private, and production builds cannot enable this path.
+   */
+  debugRunPreviewSmokeCommands(
+    commands: readonly EditorPreviewSmokeCommand[],
+  ): EditorPreviewSmokeResult {
+    const previewSmokeEnabled = import.meta.env.VITE_ENABLE_TEST_RESET === '1'
+      && new URLSearchParams(window.location.search).get('previewSmoke') === '1';
+    if (!previewSmokeEnabled) {
+      return { ok: false, reason: 'preview-smoke-disabled' };
+    }
+    if (!Array.isArray(commands as unknown) || commands.length > 5_000) {
+      return { ok: false, reason: 'invalid-editor-command-list' };
+    }
+
+    const captures: Record<string, RoomSnapshot> = {};
+    for (let commandIndex = 0; commandIndex < commands.length; commandIndex += 1) {
+      const command = commands[commandIndex]!;
+      try {
+        switch (command.op) {
+          case 'beginBatch':
+            this.editRuntime.beginTileBatch();
+            break;
+          case 'commitBatch':
+            this.editRuntime.commitTileBatch();
+            break;
+          case 'placeCells':
+            command.cells.forEach(({ x, y }) => {
+              this.editRuntime.placeTileAt(x * TILE_SIZE + 1, y * TILE_SIZE + 1);
+            });
+            break;
+          case 'eraseCells':
+            command.cells.forEach(({ x, y }) => {
+              this.editRuntime.eraseTileAt(x * TILE_SIZE + 1, y * TILE_SIZE + 1);
+            });
+            break;
+          case 'stampShape':
+            this.editRuntime.stampShape(
+              command.kind,
+              command.x1,
+              command.y1,
+              command.x2,
+              command.y2,
+              { outline: command.outline, erase: command.erase, mid: command.mid },
+            );
+            break;
+          case 'floodFill':
+            this.editRuntime.floodFill(command.x, command.y);
+            break;
+          case 'copy':
+            this.editRuntime.copyTilesToClipboard(command.x1, command.y1, command.x2, command.y2);
+            break;
+          case 'paste':
+            this.editRuntime.pasteClipboardAt(command.x, command.y);
+            break;
+          case 'undo':
+            this.editRuntime.undo();
+            break;
+          case 'redo':
+            this.editRuntime.redo();
+            break;
+          case 'clearAllTiles':
+            this.editRuntime.clearAllTiles();
+            break;
+          case 'clearCurrentLayer':
+            this.editRuntime.clearCurrentLayer();
+            break;
+          case 'capture':
+            if (!/^[a-z][a-zA-Z0-9]*$/.test(command.name)) {
+              return { ok: false, reason: 'invalid-capture-name', commandIndex };
+            }
+            captures[command.name] = this.editRuntime.exportRoomSnapshot();
+            break;
+          case 'applyCapture': {
+            const capture = captures[command.name];
+            if (!capture) {
+              return { ok: false, reason: 'capture-not-found', commandIndex };
+            }
+            this.applyRoomSnapshot(JSON.parse(JSON.stringify(capture)) as RoomSnapshot);
+            break;
+          }
+          case 'fitToScreen':
+            this.fitToScreen();
+            break;
+          case 'setCamera':
+            this.cameras.main.setZoom(command.zoom);
+            this.cameras.main.centerOn(
+              command.centerTileX * TILE_SIZE,
+              command.centerTileY * TILE_SIZE,
+            );
+            break;
+          default:
+            return {
+              ok: false,
+              reason: `unsupported-editor-command:${String((command as { op?: unknown }).op)}`,
+              commandIndex,
+            };
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          reason: error instanceof Error ? error.message : String(error),
+          commandIndex,
+        };
+      }
+    }
+    return { ok: true, captures };
+  }
+
   private maybeAutoSave(_time: number): void {
+    if (this.previewSmokePersistenceIsolated) {
+      return;
+    }
     this.persistenceController.maybeAutoSave(editorState.isPlaying);
   }
 

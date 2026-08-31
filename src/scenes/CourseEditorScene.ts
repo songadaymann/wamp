@@ -534,6 +534,11 @@ export class CourseEditorScene extends Phaser.Scene {
         this.statusText = `Cleared all objects in ${this.getSliceLabel(slice)}.`;
         this.renderUi();
       },
+      onSetSmartTheme: (theme) => { editorState.smartTheme = theme; },
+      onSetSmartMaterial: (material) => { editorState.smartMaterial = material; },
+      onSetSmartStyle: (style) => { editorState.smartStyle = style; },
+      onSetSmartDetailsEnabled: (enabled) => this.getSelectedSlice()?.runtime.setSmartDetailsEnabled(enabled),
+      onFillCaveTerrain: () => this.getSelectedSlice()?.runtime.fillCaveTerrain(),
       onSelectBackground: (backgroundId) => {
         editorState.selectedBackground = backgroundId;
         this.handleBackgroundChanged();
@@ -2785,7 +2790,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private pointerRequestsPan(pointer: Phaser.Input.Pointer): boolean {
     if (
       pointer.rightButtonDown() &&
-      editorState.paletteMode === 'tiles' &&
+      editorState.paletteMode !== 'objects' &&
       (isDragStampEditorTool(editorState.activeTool) || Boolean(this.pathBend)) &&
       !this.modifierKeys.SPACE?.isDown &&
       !this.modifierKeys.ALT?.isDown

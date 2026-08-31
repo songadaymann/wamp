@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { SPECIAL_TILE_ONE_WAY_PLATFORM_GID } from '../../config';
 
 vi.mock('phaser', () => ({
   default: {
@@ -49,5 +50,39 @@ describe('OverworldSpecialTilesController environment reuse', () => {
       onDamage: false,
     });
     expect(controller.getEnvironmentForBody(secondBody as never, 'down')).not.toBe(firstScan);
+  });
+});
+
+describe('OverworldSpecialTilesController one-way collision', () => {
+  it('lands from above and passes through Special A2 from below', () => {
+    const playerBody = {
+      prev: { y: 0 },
+      y: 2,
+      height: 14,
+      top: 2,
+      bottom: 16,
+      velocity: { x: 0, y: 20 },
+    };
+    const host = {
+      getCurrentTime: vi.fn(() => 0),
+      getPlayerBody: vi.fn(() => playerBody),
+    };
+    const controller = new OverworldSpecialTilesController({} as never, host as never);
+    const projectedBackgroundSurface = {
+      index: SPECIAL_TILE_ONE_WAY_PLATFORM_GID,
+      pixelX: 0,
+      pixelY: 16,
+    };
+
+    expect(controller.shouldCollidePlayerWithTerrainTile(projectedBackgroundSurface as never))
+      .toBe(true);
+
+    playerBody.prev.y = 18;
+    playerBody.y = 16;
+    playerBody.top = 16;
+    playerBody.bottom = 30;
+    playerBody.velocity.y = -120;
+    expect(controller.shouldCollidePlayerWithTerrainTile(projectedBackgroundSurface as never))
+      .toBe(false);
   });
 });

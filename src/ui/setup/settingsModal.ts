@@ -22,6 +22,7 @@ type SettingsModalElements = {
   sfxVolumeValue: HTMLElement | null;
   panningStyleInputs: HTMLInputElement[];
   performanceModeInputs: HTMLInputElement[];
+  builderModeInputs: HTMLInputElement[];
 };
 
 export class SettingsModalController {
@@ -89,6 +90,12 @@ export class SettingsModalController {
     setDevicePerformanceMode(target.value);
   };
 
+  private readonly handleBuilderModeChange = (event: Event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || !target.checked) return;
+    updateGameSettings({ builderMode: target.value === 'advanced' ? 'advanced' : 'beginner' });
+  };
+
   constructor(
     private readonly doc: Document = document,
   ) {
@@ -106,6 +113,9 @@ export class SettingsModalController {
       performanceModeInputs: Array.from(
         this.doc.querySelectorAll<HTMLInputElement>('input[name="settings-performance-mode"]'),
       ),
+      builderModeInputs: Array.from(
+        this.doc.querySelectorAll<HTMLInputElement>('input[name="settings-builder-mode"]'),
+      ),
     };
   }
 
@@ -120,6 +130,9 @@ export class SettingsModalController {
     }
     for (const input of this.elements.performanceModeInputs) {
       input.addEventListener('change', this.handlePerformanceModeChange);
+    }
+    for (const input of this.elements.builderModeInputs) {
+      input.addEventListener('change', this.handleBuilderModeChange);
     }
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.unsubscribeSettings = subscribeGameSettings((settings) => this.render(settings));
@@ -141,6 +154,9 @@ export class SettingsModalController {
     }
     for (const input of this.elements.performanceModeInputs) {
       input.removeEventListener('change', this.handlePerformanceModeChange);
+    }
+    for (const input of this.elements.builderModeInputs) {
+      input.removeEventListener('change', this.handleBuilderModeChange);
     }
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     this.unsubscribeSettings?.();
@@ -171,6 +187,7 @@ export class SettingsModalController {
   }
 
   private render(settings: GameSettings): void {
+    this.doc.body.dataset.builderMode = settings.builderMode === 'advanced' ? 'advanced' : 'beginner';
     if (this.elements.commentsCheckbox) {
       this.elements.commentsCheckbox.checked = settings.roomCommentsVisible;
     }
@@ -188,6 +205,9 @@ export class SettingsModalController {
 
     for (const input of this.elements.panningStyleInputs) {
       input.checked = normalizePanningStyle(input.value) === settings.panningStyle;
+    }
+    for (const input of this.elements.builderModeInputs) {
+      input.checked = input.value === (settings.builderMode === 'advanced' ? 'advanced' : 'beginner');
     }
   }
 

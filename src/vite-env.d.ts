@@ -58,23 +58,8 @@ interface Window {
     reset: () => import('./ui/setup/sceneBridge').MobilePortraitCameraTuningSnapshot;
   };
   run_preview_smoke_action?: (
-    action:
-      | 'selectEditableRoom'
-      | 'playSelectedRoom'
-      | 'returnToWorld'
-      | 'editSelectedRoom'
-      | 'openSyntheticEditor'
-      | 'setPlayerPosition'
-      | 'prepareTransitionDestination'
-      | 'clearTransitionDestinationPreparation',
-    payload?: {
-      roomId?: string | null;
-      x?: number;
-      y?: number;
-      velocityX?: number;
-      velocityY?: number;
-      bodyEnabled?: boolean;
-    },
+    action: import('./main/previewSmoke').PreviewSmokeAction,
+    payload?: import('./main/previewSmoke').PreviewSmokePayload,
   ) => Promise<Record<string, unknown>>;
   __EVERYBODYS_PLATFORMER_GAME__?: import('phaser').Game;
 }

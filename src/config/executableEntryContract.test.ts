@@ -79,8 +79,10 @@ for (const command of Object.values(packageJson.scripts)) {
 // named by package scripts. Keeping the list explicit prevents helper/test files
 // from becoming Knip roots merely because they live under scripts/.
 const manualScriptEntries = new Set([
+  'scripts/analyze_smart_tile_reference.mjs',
   'scripts/backfill-room-token-metadata.ts',
   'scripts/build-player-combat-actions-atlas.mjs',
+  'scripts/generate_autotile_edge_case_tiles.mjs',
   'scripts/overworld_zoom_perf_probe.mjs',
   'scripts/remote_rollout_check.mjs',
   'scripts/render-room-preview-data-url.mjs',

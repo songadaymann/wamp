@@ -10,6 +10,8 @@ import {
   type RoomRecord,
   type RoomSnapshot,
 } from '../persistence/roomModel';
+import { createLocalRoomRepository } from '../persistence/roomRepository';
+import { ROOM_STORAGE_PREFIX } from '../persistence/browserStorage';
 import { POLICE_PATROLMAN_OBJECT_ID, POLICEWOMAN_OBJECT_ID } from '../enemies/policeEnemy';
 import {
   BOYGAME_TILESET_FIRST_GID,
@@ -18,6 +20,10 @@ import {
   getObjectPlacementPointForTile,
 } from '../config';
 import { markAppReady } from '../ui/appFeedback';
+import type {
+  EditorPreviewSmokeCommand,
+  EditorPreviewSmokeResult,
+} from '../scenes/EditorScene';
 
 type PreviewSmokeScene = {
   describeState: () => Record<string, unknown>;
@@ -38,7 +44,7 @@ type PreviewSmokeScene = {
   draftRoomsById?: Map<string, { id: string; coordinates: { x: number; y: number } }>;
 };
 
-type PreviewSmokeAction =
+export type PreviewSmokeAction =
   | 'selectEditableRoom'
   | 'playSelectedRoom'
   | 'returnToWorld'
@@ -48,23 +54,34 @@ type PreviewSmokeAction =
   | 'openSyntheticBoygameEditor'
   | 'openSyntheticJungleEditor'
   | 'openSyntheticCourseEditor'
+  | 'clearSyntheticLocalRoom'
+  | 'saveSyntheticEditorToLocal'
+  | 'openSyntheticEditorFromLocal'
+  | 'runEditorCommands'
   | 'setPlayerPosition'
   | 'prepareTransitionDestination'
   | 'clearTransitionDestinationPreparation';
 
-interface PreviewSmokePayload {
+export interface PreviewSmokePayload {
   roomId?: string | null;
   x?: number;
   y?: number;
   velocityX?: number;
   velocityY?: number;
   bodyEnabled?: boolean;
+  editorCommands?: EditorPreviewSmokeCommand[];
 }
 
 export function installPreviewSmokeActions(
   game: Phaser.Game,
   getDebugState: () => Record<string, unknown>,
 ): void {
+  if (
+    import.meta.env.VITE_ENABLE_TEST_RESET !== '1'
+    || new URLSearchParams(window.location.search).get('previewSmoke') !== '1'
+  ) {
+    return;
+  }
   window.run_preview_smoke_action = async (action: PreviewSmokeAction, payload?: PreviewSmokePayload) => {
     switch (action) {
       case 'selectEditableRoom':
@@ -104,6 +121,14 @@ export function installPreviewSmokeActions(
         return openSyntheticEditorForPreviewSmoke(game, getDebugState, createJunglePreviewRoom());
       case 'openSyntheticCourseEditor':
         return openSyntheticCourseEditorForPreviewSmoke(game, getDebugState);
+      case 'clearSyntheticLocalRoom':
+        return clearSyntheticLocalRoomForPreviewSmoke();
+      case 'saveSyntheticEditorToLocal':
+        return saveSyntheticEditorToLocalForPreviewSmoke(game);
+      case 'openSyntheticEditorFromLocal':
+        return openSyntheticEditorFromLocalForPreviewSmoke(game, getDebugState);
+      case 'runEditorCommands':
+        return runEditorCommandsForPreviewSmoke(game, payload?.editorCommands);
       case 'setPlayerPosition':
         return runOverworldPreviewSmokeAction(
           game,
@@ -149,6 +174,66 @@ export function installPreviewSmokeActions(
         return { ok: false, reason: `unsupported-action:${action}` };
     }
   };
+}
+
+const PREVIEW_SMOKE_ROOM_ID = '99,99';
+const PREVIEW_SMOKE_ROOM_COORDINATES = { x: 99, y: 99 } as const;
+
+function clearSyntheticLocalRoomForPreviewSmoke(): Record<string, unknown> {
+  localStorage.removeItem(`${ROOM_STORAGE_PREFIX}${PREVIEW_SMOKE_ROOM_ID}`);
+  return { ok: true, target: createLocalRoomRepository().getLastPersistenceTarget() };
+}
+
+async function saveSyntheticEditorToLocalForPreviewSmoke(
+  game: Phaser.Game,
+): Promise<Record<string, unknown>> {
+  const result = runEditorCommandsForPreviewSmoke(game, [{ op: 'capture', name: 'current' }]);
+  const current = result.captures?.current;
+  if (!result.ok || !current) {
+    return { ok: false, reason: result.reason ?? 'editor-snapshot-unavailable' };
+  }
+  if (current.id !== PREVIEW_SMOKE_ROOM_ID) {
+    return { ok: false, reason: 'unexpected-preview-room-id' };
+  }
+  const repository = createLocalRoomRepository();
+  const record = await repository.saveDraft(current);
+  return {
+    ok: true,
+    target: repository.getLastPersistenceTarget(),
+    roomId: record.draft.id,
+  };
+}
+
+async function openSyntheticEditorFromLocalForPreviewSmoke(
+  game: Phaser.Game,
+  getDebugState: () => Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const repository = createLocalRoomRepository();
+  const record = await repository.loadRoom(PREVIEW_SMOKE_ROOM_ID, PREVIEW_SMOKE_ROOM_COORDINATES);
+  const opened = await openSyntheticEditorForPreviewSmoke(game, getDebugState, record.draft);
+  return {
+    ...opened,
+    target: repository.getLastPersistenceTarget(),
+    roomId: record.draft.id,
+  };
+}
+
+function runEditorCommandsForPreviewSmoke(
+  game: Phaser.Game,
+  commands: EditorPreviewSmokeCommand[] | undefined,
+): EditorPreviewSmokeResult {
+  const editorScene = game.scene.keys.EditorScene as unknown as {
+    debugRunPreviewSmokeCommands?: (
+      editorCommands: readonly EditorPreviewSmokeCommand[],
+    ) => EditorPreviewSmokeResult;
+  };
+  if (!editorScene?.debugRunPreviewSmokeCommands) {
+    return { ok: false, reason: 'editor-preview-smoke-interface-missing' };
+  }
+  if (!Array.isArray(commands)) {
+    return { ok: false, reason: 'editor-commands-required' };
+  }
+  return editorScene.debugRunPreviewSmokeCommands(commands);
 }
 
 async function openSyntheticCourseEditorForPreviewSmoke(
@@ -333,15 +418,16 @@ async function openSyntheticEditorForPreviewSmoke(
   fixtureRoom?: RoomSnapshot,
 ): Promise<Record<string, unknown>> {
   const editorScene = game.scene.keys.EditorScene as unknown as {
-    roomSession?: {
-      loadPersistedRoom: (initialRoomSnapshot: unknown) => Promise<boolean>;
-    };
+    debugPreparePreviewSmokeEditor?: () => EditorPreviewSmokeResult;
   };
-  if (!editorScene?.roomSession) {
+  if (!editorScene?.debugPreparePreviewSmokeEditor) {
     return { ok: false, reason: 'editor-scene-missing' };
   }
 
-  editorScene.roomSession.loadPersistedRoom = async () => true;
+  const prepared = editorScene.debugPreparePreviewSmokeEditor();
+  if (!prepared.ok) {
+    return prepared;
+  }
 
   const roomSnapshot = fixtureRoom ?? createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
   if (!fixtureRoom) {

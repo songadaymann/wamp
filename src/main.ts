@@ -381,7 +381,10 @@ window.get_room_music_debug_state = () => globalRoomMusicController.getDebugStat
 window.get_sword_hunter_debug = () => getSwordHunterDebugState(game);
 initializeGuestActivityTracking(getGuestActivitySnapshot);
 
-if (query.get('previewSmoke') === '1') {
+if (
+  import.meta.env.VITE_ENABLE_TEST_RESET === '1'
+  && query.get('previewSmoke') === '1'
+) {
   void ensureEditorScenesRegistered(game).then(() => installPreviewSmokeActions(game, getDebugState));
 }
 

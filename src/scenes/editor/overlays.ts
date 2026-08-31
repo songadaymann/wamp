@@ -132,7 +132,11 @@ export class EditorOverlayController {
         : editorState.activeLayer === 'background'
           ? '#2f6b7f'
           : '#ff6f3c';
-    const modeLabel = editorState.paletteMode === 'objects' ? 'Objects' : 'Tiles';
+    const modeLabel = editorState.paletteMode === 'objects'
+      ? 'Objects'
+      : editorState.paletteMode === 'smart'
+        ? 'Smart'
+        : 'Tiles';
     const toolLabel = getEditorToolHudLabel(
       editorState.activeTool,
       this.host.isClipboardPastePreviewActive(),

@@ -95,6 +95,7 @@ type CanonicalRoomFingerprintPayload = {
   goalIntroText: string | null;
   spawnPoint: [number, number] | null;
   tileData: Record<LayerName, number[]>;
+  smartTerrain: RoomSnapshot['smartTerrain'];
   placedObjects: CanonicalPlacedObjectPayload[];
   customSprites: Array<{
     id: string;
@@ -142,6 +143,7 @@ export function buildRoomVersionFingerprint(snapshot: RoomSnapshot): string {
       ? [Math.round(snapshot.spawnPoint.x), Math.round(snapshot.spawnPoint.y)]
       : null,
     tileData: buildTileFingerprint(snapshot),
+    smartTerrain: snapshot.smartTerrain ?? undefined,
     placedObjects: buildPlacedObjectFingerprint(snapshot.placedObjects),
     customSprites: normalizeCustomSpriteDefinitions(snapshot.customSprites).map((sprite) => ({
       id: sprite.id,

@@ -78,6 +78,12 @@ import {
   normalizePlacedObjectPathTargetIds,
   validatePlacedObjectPathTargetIds,
 } from '../placedObjects/objectPaths';
+import {
+  createRoomSmartTerrainState,
+  normalizeRoomSmartTerrainState,
+  serializeRoomSmartTerrainState,
+  type RoomSmartTerrainState,
+} from '../autotiling/model';
 
 export interface RoomCoordinates {
   x: number;
@@ -120,6 +126,7 @@ export interface RoomSnapshot {
   goal: RoomGoal | null;
   spawnPoint: RoomSpawnPoint | null;
   tileData: RoomTileData;
+  smartTerrain?: RoomSmartTerrainState;
   placedObjects: PlacedObject[];
   customSprites?: CustomSpriteDefinition[];
   customTiles?: CustomRoomTileDefinition[];
@@ -415,6 +422,7 @@ export function createDefaultRoomSnapshot(
     goal: null,
     spawnPoint: null,
     tileData: createEmptyTileData(),
+    smartTerrain: createRoomSmartTerrainState(),
     placedObjects: [],
     customSprites: [],
     customTiles: [],
@@ -736,6 +744,9 @@ export function cloneRoomSnapshot(room: RoomSnapshot | RoomSnapshotView): RoomSn
     goal: normalizeRoomGoal(room.goal),
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData,
+    smartTerrain: room.smartTerrain
+      ? serializeRoomSmartTerrainState(normalizeRoomSmartTerrainState(room.smartTerrain))
+      : createRoomSmartTerrainState(),
     placedObjects,
     customSprites: normalizeCustomSpriteDefinitions(room.customSprites),
     customTiles: normalizeCustomRoomTileDefinitions(room.customTiles),

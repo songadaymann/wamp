@@ -1,10 +1,14 @@
 export type OverworldPanningStyle = 'option-drag' | 'two-finger-drag';
+export type BuilderMode = 'unselected' | 'beginner' | 'advanced';
+export type SmartThemeSetting = 'forest' | 'desert' | 'cave' | 'gothic' | 'cyber';
 
 export interface GameSettings {
   roomCommentsVisible: boolean;
   musicVolume: number;
   sfxVolume: number;
   panningStyle: OverworldPanningStyle;
+  builderMode: BuilderMode;
+  lastSmartTheme: SmartThemeSetting;
 }
 
 export interface UserSettingsResponse {
@@ -27,6 +31,8 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   musicVolume: 1,
   sfxVolume: 1,
   panningStyle: 'option-drag',
+  builderMode: 'unselected',
+  lastSmartTheme: 'forest',
 };
 
 export function normalizeGameSettings(value: Partial<GameSettings> | null | undefined): GameSettings {
@@ -42,6 +48,17 @@ export function normalizeGameSettings(value: Partial<GameSettings> | null | unde
       source.panningStyle === 'two-finger-drag'
         ? 'two-finger-drag'
         : DEFAULT_GAME_SETTINGS.panningStyle,
+    builderMode:
+      source.builderMode === 'beginner' || source.builderMode === 'advanced'
+        ? source.builderMode
+        : DEFAULT_GAME_SETTINGS.builderMode,
+    lastSmartTheme:
+      source.lastSmartTheme === 'desert'
+      || source.lastSmartTheme === 'cave'
+      || source.lastSmartTheme === 'gothic'
+      || source.lastSmartTheme === 'cyber'
+        ? source.lastSmartTheme
+        : DEFAULT_GAME_SETTINGS.lastSmartTheme,
   };
 }
 

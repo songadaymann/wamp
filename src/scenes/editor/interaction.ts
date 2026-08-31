@@ -348,13 +348,15 @@ export class EditorInteractionController {
       }
     }
 
-    const selection = editorState.selection;
+    const selection = editorState.paletteMode === 'smart'
+      ? { width: 1, height: 1, occupiedMask: [[true]] }
+      : editorState.selection;
     const stampOrigin =
       editorState.activeTool === 'pencil'
         ? this.getDraggedStampOrigin(tileX, tileY)
         : { x: tileX, y: tileY };
     const eraserBrushSize =
-      editorState.paletteMode === 'tiles' && editorState.activeTool === 'eraser'
+      editorState.activeTool === 'eraser'
         ? editorState.eraserBrushSize
         : 1;
     const cursorOrigin =
@@ -536,7 +538,7 @@ export class EditorInteractionController {
         return;
       }
 
-      if (editorState.paletteMode !== 'tiles') {
+      if (editorState.paletteMode === 'objects') {
         return;
       }
 
@@ -1019,7 +1021,7 @@ export class EditorInteractionController {
       return true;
     }
 
-    if (!this.isDrawing || editorState.paletteMode !== 'tiles') {
+    if (!this.isDrawing || editorState.paletteMode === 'objects') {
       return true;
     }
 
@@ -1087,7 +1089,7 @@ export class EditorInteractionController {
 
   private beginTileDrag(tileX: number, tileY: number): void {
     if (
-      editorState.paletteMode !== 'tiles' ||
+      editorState.paletteMode === 'objects' ||
       editorState.activeTool !== 'pencil'
     ) {
       this.clearTileDrag();
@@ -1116,22 +1118,48 @@ export class EditorInteractionController {
       return;
     }
 
+    const previous = this.lastDraggedStampOrigin;
     this.lastDraggedStampOrigin = { ...stampOrigin };
-    this.host.placeTileAt(stampOrigin.x * TILE_SIZE, stampOrigin.y * TILE_SIZE);
+    if (editorState.paletteMode !== 'smart' || !previous) {
+      this.host.placeTileAt(stampOrigin.x * TILE_SIZE, stampOrigin.y * TILE_SIZE);
+      return;
+    }
+
+    // Pointer events can skip several grid cells during a quick stroke. Fill
+    // the segment so a vertical wall does not become disconnected grass caps.
+    let x = previous.x;
+    let y = previous.y;
+    const dx = Math.abs(stampOrigin.x - x);
+    const sx = x < stampOrigin.x ? 1 : -1;
+    const dy = -Math.abs(stampOrigin.y - y);
+    const sy = y < stampOrigin.y ? 1 : -1;
+    let error = dx + dy;
+    while (x !== stampOrigin.x || y !== stampOrigin.y) {
+      const doubled = error * 2;
+      if (doubled >= dy) {
+        error += dy;
+        x += sx;
+      }
+      if (doubled <= dx) {
+        error += dx;
+        y += sy;
+      }
+      this.host.placeTileAt(x * TILE_SIZE, y * TILE_SIZE);
+    }
   }
 
   private getDraggedStampOrigin(tileX: number, tileY: number): { x: number; y: number } {
     if (
       !this.isDrawing ||
-      editorState.paletteMode !== 'tiles' ||
+      editorState.paletteMode === 'objects' ||
       editorState.activeTool !== 'pencil' ||
       !this.tileDragStart
     ) {
       return { x: tileX, y: tileY };
     }
 
-    const selectionWidth = Math.max(1, editorState.selection.width);
-    const selectionHeight = Math.max(1, editorState.selection.height);
+    const selectionWidth = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.width);
+    const selectionHeight = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.height);
     if (selectionWidth === 1 && selectionHeight === 1) {
       return { x: tileX, y: tileY };
     }

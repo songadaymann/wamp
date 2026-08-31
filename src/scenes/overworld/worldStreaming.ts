@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import {
-  decodeTileDataValue,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -96,6 +95,7 @@ import {
 } from './previewStreaming';
 import type { PerformanceProfile } from '../../ui/deviceLayout';
 import {
+  getTerrainCollisionTileValue,
   getTerrainTileCollisionProfile,
   terrainTileDisablesTilemapCollision,
   terrainTileNeedsInsetBody,
@@ -4998,7 +4998,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   ): void {
     for (let y = Math.max(0, startRow); y < Math.min(ROOM_HEIGHT, endRow); y += 1) {
       for (let x = 0; x < ROOM_WIDTH; x += 1) {
-        const { gid, flipX, flipY } = decodeTileDataValue(room.tileData.terrain[y][x]);
+        const { gid, flipX, flipY } = getTerrainCollisionTileValue(room, x, y);
         if (gid <= 0) continue;
         const tile = terrainLayer.putTileAt(gid, x, y);
         if (tile) {

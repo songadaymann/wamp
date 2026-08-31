@@ -3,12 +3,15 @@ import {
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_WIDTH,
+  TILE_SIZE,
   editorState,
   type LayerName,
   type PlacedObject,
 } from '../../config';
 import { createDefaultRoomMusic, createDefaultRoomPatternMusic } from '../../music/model';
 import { createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
+import type { SmartBrushId } from '../../autotiling/model';
+import { updateGameSettings } from '../../settings/userSettings';
 import { EditorEditRuntime } from './editRuntime';
 
 vi.mock('phaser', () => ({
@@ -36,8 +39,12 @@ vi.mock('./documentPresentationController', () => ({
 
 describe('editor edit runtime document contracts', () => {
   beforeEach(() => {
+    updateGameSettings({ builderMode: 'beginner' });
     editorState.activeLayer = 'terrain';
     editorState.activeTool = 'pencil';
+    editorState.paletteMode = 'tiles';
+    editorState.smartTheme = 'forest';
+    editorState.smartMaterial = 'forest.ground';
     editorState.selectedTileGid = 1;
     editorState.selection = {
       tilesetKey: 'essentials',
@@ -203,8 +210,328 @@ describe('editor edit runtime document contracts', () => {
     expect(terrain.getTileAt(24, 10)?.index).toBeTypeOf('number');
     expect(terrain.getTileAt(22, 12)?.index).toBeTypeOf('number');
   });
+
+  it('feeds Smart rectangle and ellipse shapes through semantic auto-tiling', () => {
+    editorState.paletteMode = 'smart';
+    const { runtime, layers } = createHarness(createRoom());
+    const terrain = layers.get('terrain')!;
+
+    runtime.beginTileBatch();
+    runtime.stampShape('ellipse', 4, 4, 8, 8, { outline: false, erase: false });
+    runtime.commitTileBatch();
+    const painted = runtime.exportRoomSnapshot();
+    expect(painted.smartTerrain!.cells['6,6']).toMatchObject({ theme: 'forest', material: 'ground' });
+    expect(painted.smartTerrain!.semanticCells['terrain:6,6']).toMatchObject({
+      styleId: 'forest', brushId: 'forest.ground',
+    });
+    expect(painted.smartTerrain!.cells['4,4']).toBeUndefined();
+    expect(terrain.getTileAt(6, 6)?.index).toBeTypeOf('number');
+
+    runtime.beginTileBatch();
+    runtime.stampShape('ellipse', 4, 4, 8, 8, { outline: true, erase: true });
+    runtime.commitTileBatch();
+    const carved = runtime.exportRoomSnapshot();
+    expect(carved.smartTerrain!.cells['6,6']).toMatchObject({ theme: 'forest', material: 'ground' });
+    expect(carved.smartTerrain!.cells['6,4']).toBeUndefined();
+    expect(terrain.getTileAt(6, 4)).toBeNull();
+
+    runtime.undo();
+    const restored = runtime.exportRoomSnapshot();
+    expect(restored.smartTerrain!.cells['6,4']).toMatchObject({ theme: 'forest', material: 'ground' });
+    expect(terrain.getTileAt(6, 4)?.index).toBeTypeOf('number');
+  });
+
+  it('paints a diagonal Cyber Concrete pencil gesture on every cell', () => {
+    selectCyberBrush('cyber.concrete');
+    const { runtime, layers, host } = createHarness(createRoom());
+
+    runtime.beginTileBatch();
+    placeSmartCell(runtime, 4, 5);
+    placeSmartCell(runtime, 5, 6);
+    placeSmartCell(runtime, 6, 7);
+    runtime.commitTileBatch();
+
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
+      'terrain:4,5',
+      'terrain:5,6',
+      'terrain:6,7',
+    ]);
+    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['4,5', '5,6', '6,7']);
+    expect(host.recordBuildPlacement).toHaveBeenCalledTimes(1);
+    expect(runtime.hasUndoHistory()).toBe(true);
+
+    runtime.undo();
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([]);
+    expect(getTileCoordinates(layers.get('terrain')!)).toEqual([]);
+    expect(runtime.hasUndoHistory()).toBe(false);
+
+    runtime.redo();
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
+      'terrain:4,5',
+      'terrain:5,6',
+      'terrain:6,7',
+    ]);
+    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['4,5', '5,6', '6,7']);
+  });
+
+  it('projects a diagonal Cyber Neon pencil gesture onto its anchored horizontal strip', () => {
+    selectCyberBrush('cyber.neon');
+    const { runtime, layers } = createHarness(createRoom());
+
+    runtime.beginTileBatch();
+    placeSmartCell(runtime, 9, 3);
+    placeSmartCell(runtime, 10, 4);
+    placeSmartCell(runtime, 11, 5);
+    placeSmartCell(runtime, 12, 6);
+    runtime.commitTileBatch();
+
+    expect(getSmartSourceKeys(runtime, 'cyber.neon')).toEqual([
+      'terrain:9,3',
+      'terrain:10,3',
+      'terrain:11,3',
+      'terrain:12,3',
+    ]);
+    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['9,3', '10,3', '11,3', '12,3']);
+  });
+
+  it('projects a diagonal Cyber Support pencil gesture onto its anchored vertical column', () => {
+    selectCyberBrush('cyber.support');
+    const { runtime, layers } = createHarness(createRoom());
+
+    runtime.beginTileBatch();
+    placeSmartCell(runtime, 15, 3);
+    placeSmartCell(runtime, 16, 4);
+    placeSmartCell(runtime, 17, 5);
+    runtime.commitTileBatch();
+
+    expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual([
+      'background:15,3',
+      'background:15,4',
+      'background:15,5',
+    ]);
+    expect(getTileCoordinates(layers.get('background')!)).toEqual(['15,3', '15,4', '15,5']);
+  });
+
+  it('uses the Advanced-selected layer for Smart recipes and preserves it through undo/redo', () => {
+    updateGameSettings({ builderMode: 'advanced' });
+    selectCyberBrush('cyber.support');
+    editorState.activeLayer = 'foreground';
+    const { runtime, layers } = createHarness(createRoom());
+
+    runtime.beginTileBatch();
+    placeSmartCell(runtime, 15, 3);
+    placeSmartCell(runtime, 15, 4);
+    placeSmartCell(runtime, 15, 5);
+    runtime.commitTileBatch();
+
+    expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual([
+      'foreground:15,3',
+      'foreground:15,4',
+      'foreground:15,5',
+    ]);
+    expect(getTileCoordinates(layers.get('foreground')!)).toEqual(['15,3', '15,4', '15,5']);
+    expect(getTileCoordinates(layers.get('background')!)).toEqual([]);
+
+    runtime.undo();
+    expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual([]);
+    expect(getTileCoordinates(layers.get('foreground')!)).toEqual([]);
+
+    runtime.redo();
+    expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual([
+      'foreground:15,3',
+      'foreground:15,4',
+      'foreground:15,5',
+    ]);
+    expect(getTileCoordinates(layers.get('foreground')!)).toEqual(['15,3', '15,4', '15,5']);
+  });
+
+  it('fills Cyber Concrete and Neon rectangles, preserves Support banks, and keeps panels two rows high', () => {
+    const { runtime, layers } = createHarness(createRoom());
+
+    selectCyberBrush('cyber.concrete');
+    runtime.beginTileBatch();
+    runtime.stampShape('rect', 2, 3, 6, 8, { outline: false, erase: false });
+    runtime.commitTileBatch();
+
+    selectCyberBrush('cyber.neon');
+    runtime.beginTileBatch();
+    runtime.stampShape('rect', 8, 9, 12, 4, { outline: false, erase: false });
+    runtime.commitTileBatch();
+
+    selectCyberBrush('cyber.support');
+    runtime.beginTileBatch();
+    runtime.stampShape('rect', 18, 2, 22, 7, { outline: false, erase: false });
+    runtime.commitTileBatch();
+
+    selectCyberBrush('cyber.fence');
+    runtime.beginTileBatch();
+    runtime.stampShape('rect', 24, 12, 29, 17, { outline: false, erase: false });
+    runtime.commitTileBatch();
+
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual(
+      [2, 3, 4, 5, 6]
+        .flatMap((x) => [3, 4, 5, 6, 7, 8].map((y) => `terrain:${x},${y}`))
+        .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
+    );
+    expect(getSmartSourceKeys(runtime, 'cyber.neon')).toEqual(
+      [8, 9, 10, 11, 12].map((x) => `terrain:${x},9`),
+    );
+    expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual(
+      [18, 19, 20, 21, 22]
+        .flatMap((x) => [2, 3, 4, 5, 6, 7].map((y) => `background:${x},${y}`))
+        .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
+    );
+
+    const snapshot = runtime.exportRoomSnapshot();
+    const panelRecipe = Object.values(snapshot.smartTerrain!.recipes).find(
+      (recipe) => recipe.brushId === 'cyber.fence',
+    );
+    expect(panelRecipe).toMatchObject({
+      anchor: { layer: 'foreground', x: 24, y: 12 },
+      parameters: { width: 6, height: 2 },
+    });
+    expect(panelRecipe?.sourceCells).toEqual(
+      [24, 25, 26, 27, 28, 29].map((x) => ({ layer: 'foreground', x, y: 12 })),
+    );
+
+    expect(
+      getTileCoordinates(layers.get('terrain')!)
+        .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
+    ).toEqual(
+      [
+        ...[2, 3, 4, 5, 6].flatMap((x) => [3, 4, 5, 6, 7, 8].map((y) => `${x},${y}`)),
+        ...[8, 9, 10, 11, 12].map((x) => `${x},9`),
+      ].sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
+    );
+    expect(getTileCoordinates(layers.get('background')!)).toEqual([
+      '18,2', '19,2', '20,2', '21,2', '22,2',
+      '18,3', '19,3', '20,3', '21,3', '22,3',
+      '18,4', '19,4', '20,4', '21,4', '22,4',
+      '18,5', '19,5', '20,5', '21,5', '22,5',
+      '18,6', '19,6', '20,6', '21,6', '22,6',
+      '18,7', '19,7', '20,7', '21,7', '22,7',
+    ]);
+    expect(getTileCoordinates(layers.get('foreground')!)).toEqual([
+      '24,12', '25,12', '26,12', '27,12', '28,12', '29,12',
+      '24,13', '25,13', '26,13', '27,13', '28,13', '29,13',
+    ]);
+  });
+
+  it('round-trips Cyber Concrete through clipboard, undo, redo, and export', () => {
+    selectCyberBrush('cyber.concrete');
+    const { runtime, layers } = createHarness(createRoom());
+
+    runtime.beginTileBatch();
+    runtime.stampShape('rect', 4, 5, 6, 5, { outline: false, erase: false });
+    runtime.commitTileBatch();
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
+      'terrain:4,5', 'terrain:5,5', 'terrain:6,5',
+    ]);
+    expect(runtime.copyTilesToClipboard(4, 5, 6, 5)).toBe(true);
+
+    runtime.beginTileBatch();
+    expect(runtime.pasteClipboardAt(12, 9)).toBe(true);
+    runtime.commitTileBatch();
+
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
+      'terrain:4,5', 'terrain:5,5', 'terrain:6,5',
+      'terrain:12,9', 'terrain:13,9', 'terrain:14,9',
+    ]);
+    expect(Object.values(runtime.exportRoomSnapshot().smartTerrain!.recipes)
+      .filter((recipe) => recipe.brushId === 'cyber.concrete')).toEqual([]);
+
+    const pasted = runtime.exportRoomSnapshot();
+    const reloaded = createHarness(pasted).runtime;
+    expect(getSmartSourceKeys(reloaded, 'cyber.concrete')).toEqual(
+      getSmartSourceKeys(runtime, 'cyber.concrete'),
+    );
+
+    runtime.undo();
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
+      'terrain:4,5', 'terrain:5,5', 'terrain:6,5',
+    ]);
+    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['4,5', '5,5', '6,5']);
+
+    runtime.redo();
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual([
+      'terrain:4,5', 'terrain:5,5', 'terrain:6,5',
+      'terrain:12,9', 'terrain:13,9', 'terrain:14,9',
+    ]);
+
+    expect(runtime.copyTilesToClipboard(4, 5, 5, 5)).toBe(true);
+    runtime.beginTileBatch();
+    expect(runtime.pasteClipboardAt(20, 12)).toBe(true);
+    runtime.commitTileBatch();
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toContain('terrain:20,12');
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toContain('terrain:21,12');
+    expect(getTileCoordinates(layers.get('terrain')!)).toContain('20,12');
+    expect(getTileCoordinates(layers.get('terrain')!)).toContain('21,12');
+
+    runtime.undo();
+    expect(getTileCoordinates(layers.get('terrain')!)).not.toContain('20,12');
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toHaveLength(6);
+  });
+
+  it('undoes and redoes a multi-step Smart stroke as one exact transaction', () => {
+    editorState.paletteMode = 'smart';
+    const { runtime } = createHarness(createRoom());
+    const before = runtime.exportRoomSnapshot();
+
+    runtime.beginTileBatch();
+    for (let y = 4; y <= 10; y += 1) {
+      const width = 11 - y;
+      for (let x = 4; x < 4 + width; x += 1) {
+        runtime.placeTileAt(x * 16 + 1, y * 16 + 1);
+      }
+    }
+    runtime.commitTileBatch();
+    const painted = runtime.exportRoomSnapshot();
+    expect(Object.keys(painted.smartTerrain!.cells).length).toBeGreaterThan(20);
+
+    runtime.undo();
+    const undone = runtime.exportRoomSnapshot();
+    expect(undone.tileData).toEqual(before.tileData);
+    expect(undone.smartTerrain).toEqual(before.smartTerrain);
+
+    runtime.redo();
+    const redone = runtime.exportRoomSnapshot();
+    expect(redone.tileData).toEqual(painted.tileData);
+    expect(redone.smartTerrain).toEqual(painted.smartTerrain);
+  });
 });
 
+function selectCyberBrush(brushId: SmartBrushId): void {
+  editorState.paletteMode = 'smart';
+  editorState.smartTheme = 'cyber';
+  editorState.smartStyle = 'cyber-yellow';
+  editorState.smartMaterial = brushId;
+}
+
+function placeSmartCell(runtime: EditorEditRuntime, x: number, y: number): void {
+  runtime.placeTileAt(x * TILE_SIZE, y * TILE_SIZE);
+}
+
+function getSmartSourceKeys(runtime: EditorEditRuntime, brushId: SmartBrushId): string[] {
+  const smartTerrain = runtime.exportRoomSnapshot().smartTerrain!;
+  const recipeKeys = Object.values(smartTerrain.recipes)
+    .filter((recipe) => recipe.brushId === brushId)
+    .flatMap((recipe) => recipe.sourceCells.map(({ layer, x, y }) => `${layer}:${x},${y}`));
+  const semanticKeys = Object.entries(smartTerrain.semanticCells)
+    .filter(([, cell]) => cell.brushId === brushId)
+    .map(([key]) => key);
+  return [...new Set([...recipeKeys, ...semanticKeys])]
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+}
+
+function getTileCoordinates(layer: FakeLayer): string[] {
+  const coordinates: string[] = [];
+  for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+    for (let x = 0; x < ROOM_WIDTH; x += 1) {
+      if (layer.getTileAt(x, y)) coordinates.push(`${x},${y}`);
+    }
+  }
+  return coordinates;
+}
 function countTiles(layer: FakeLayer): number {
   let count = 0;
   for (let y = 0; y < ROOM_HEIGHT; y += 1) {

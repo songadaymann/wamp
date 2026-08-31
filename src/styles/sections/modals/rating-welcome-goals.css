@@ -840,6 +840,30 @@
   gap: 18px;
 }
 
+#welcome-modal .welcome-builder-choice {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 24px;
+  text-align: center;
+  color: #17140f;
+}
+
+#welcome-modal .welcome-builder-choice-title {
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+#welcome-modal .welcome-builder-choice p {
+  color: #50483d;
+}
+
+#welcome-modal .welcome-builder-choice-button {
+  display: block;
+  width: 100%;
+  margin: 10px 0;
+}
+
 #welcome-modal .welcome-lane-card {
   display: flex;
   flex-direction: column;

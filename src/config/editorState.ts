@@ -19,6 +19,8 @@ import {
   type ToolName,
 } from './room';
 import type { PlacedObject } from './objects';
+import type { SmartBrushId, SmartStyleId } from '../autotiling/model';
+import type { SmartThemeId } from '../autotiling/registry';
 
 // ── Editor State (shared between Phaser and HTML UI) ──
 export interface EditorState {
@@ -37,6 +39,10 @@ export interface EditorState {
   zoom: number;
   isPlaying: boolean;
   paletteMode: PaletteMode;
+  smartTheme: SmartThemeId;
+  smartMaterial: SmartBrushId;
+  smartStyle: SmartStyleId;
+  smartDetailsEnabled: boolean;
   selectedObjectId: string | null;
   objectFacing: 'left' | 'right';
   selectedBackground: string;        // BackgroundGroup.id or solid:#RRGGBB
@@ -84,7 +90,11 @@ export const editorState: EditorState = {
   selection: createDefaultEditorTileSelection(),
   zoom: 2,
   isPlaying: false,
-  paletteMode: 'tiles',
+  paletteMode: 'smart',
+  smartTheme: 'forest',
+  smartMaterial: 'forest.ground',
+  smartStyle: 'forest',
+  smartDetailsEnabled: true,
   selectedObjectId: null,
   objectFacing: 'right',
   selectedBackground: 'none',
