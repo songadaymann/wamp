@@ -2,13 +2,20 @@
 
 ## Outcome and current focus
 
-The canonical preview candidate is now the consolidated Smart V2 branch,
-`codex/smart-autotiling-consolidated-2026-08-26`. It combines the safety-proven
-Forest, Desert, Cave, and Gothic behavior with the Cyber recipe engine and the
-current editor's filled/outline Rectangle, Ellipse, Line, and Curve tools. The
-**Cyber** neutral-art correction pass is at the preview-only visual gate. Desert cactus/bridge, Cave
-rail, Gothic fence/columns, WampOS windows, and Backrooms structures remain
-gated until the rule tier they need has been approved in an earlier set.
+The canonical Smart V2 implementation is now live on `main`, merged from
+`codex/smart-autotiling-consolidated-2026-08-26` at `981fb05`. It combines the
+safety-proven Forest, Desert, Cave, and Gothic behavior with the Cyber recipe
+engine and the current editor's filled/outline Rectangle, Ellipse, Line, and
+Curve tools. The **Cyber** neutral-art foundation is live; further Cyber visual
+correction remains the current tileset focus. Desert cactus/bridge, Cave rail,
+Gothic fence/columns, WampOS windows, and Backrooms structures remain gated
+until the rule tier they need has been approved in an earlier set.
+
+The production asset contract is
+`authoring-catalog-v1:4b122cb7accc8026`. Renderer
+`production-2026-08-31-smart-autotiling-4b122cb7` was activated only after all
+797 objects, 546 published leaves, and every ancestor level passed readiness,
+object, and parity checks with no pending, failed, missing, or stale work.
 
 The artist's `rr_extras` v2 ledge delivery (SHA-256
 `0d03e27847884bf17f2d42c1ca66c00180dd848af6d78868303c75728b5ff334`) is active in the existing
@@ -134,7 +141,7 @@ flips: the difficulty is rectangle grammar and layer ownership, not transform
 selection. Backrooms follows only after both path/span and rectangle/macro
 ownership are stable.
 
-## Cyber: first implementation track (consolidated preview gate)
+## Cyber: first implementation track (live foundation)
 
 The frozen Cyber room makes the extension seam concrete:
 
