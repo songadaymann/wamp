@@ -105,14 +105,7 @@ export function resolveSmartRecipeDocument(
   );
 }
 
-export function getSmartRecipeSemanticOwnerId(
-  brushId: SmartBrushId,
-  semanticKey: string,
-): string {
-  return getSmartRecipeEngineAdapter(brushId).semanticOwnerId(semanticKey);
-}
-
-export function getSmartRecipeOwnerId(
+function getSmartRecipeOwnerId(
   brushId: SmartBrushId,
   instanceId: string,
 ): string {
@@ -169,7 +162,7 @@ export function applyManualSmartOutputEdit(
   return next;
 }
 
-export interface SmartRecipeLayerOutputRemoval {
+interface SmartRecipeLayerOutputRemoval {
   key: string;
   layer: LayerName;
   x: number;
@@ -177,7 +170,7 @@ export interface SmartRecipeLayerOutputRemoval {
   value: number;
 }
 
-export interface SmartRecipeLayerClearPlan {
+interface SmartRecipeLayerClearPlan {
   smartTerrain: RoomSmartTerrainState;
   removedOutputs: SmartRecipeLayerOutputRemoval[];
 }
@@ -244,4 +237,3 @@ export type {
   ApplySmartBrushOutlineCellsOptions,
   SmartRecipeDocument,
 };
-export { isCyberSmartBrushId } from './cyberRecipeFamily';

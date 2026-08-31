@@ -410,7 +410,6 @@ export function applyCyberSmartBrushOutlineCells(
   return resolveCyberRecipeDocument(result);
 }
 
-export { isCyberSmartBrushId } from './cyberRecipeFamily';
 export type {
   ApplySmartBrushCellsOptions,
   ApplySmartBrushOutlineCellsOptions,

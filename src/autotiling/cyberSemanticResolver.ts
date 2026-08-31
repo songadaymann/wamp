@@ -56,7 +56,7 @@ import {
   type CyberSemanticEntry,
 } from './cyberRecipeState';
 
-export function getCyberEntries(state: RoomSmartTerrainState): CyberSemanticEntry[] {
+function getCyberEntries(state: RoomSmartTerrainState): CyberSemanticEntry[] {
   const entries: CyberSemanticEntry[] = [];
   for (const [semanticKey, cell] of Object.entries(state.semanticCells)) {
     if (!isCyberSmartBrushId(cell.brushId) || !isCyberStyleId(cell.styleId)) continue;

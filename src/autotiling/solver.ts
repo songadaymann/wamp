@@ -18,23 +18,19 @@ import {
   smartOwnedOutputKey,
   smartSemanticCellKey,
   type RoomSmartTerrainState,
+  type SmartCellCoordinate,
   type SmartTerrainCellState,
   type SmartTerrainMaterial,
   type SmartTerrainTheme,
 } from './model';
 import { resolveSmartRecipeDocument } from './recipeSolver';
 
-export interface SmartCellCoordinate {
-  x: number;
-  y: number;
-}
-
 export interface SmartTerrainDocument {
   tileData: RoomTileData;
   smartTerrain: RoomSmartTerrainState;
 }
 
-export interface ApplySmartCellsOptions {
+interface ApplySmartCellsOptions {
   cells: Iterable<SmartCellCoordinate>;
   mode: 'paint' | 'erase';
   theme: SmartTerrainTheme;
@@ -43,7 +39,7 @@ export interface ApplySmartCellsOptions {
   layer?: LayerName;
 }
 
-export interface ApplySmartOutlineCellsOptions {
+interface ApplySmartOutlineCellsOptions {
   filledCells: Iterable<SmartCellCoordinate>;
   outlineCells: Iterable<SmartCellCoordinate>;
   theme: SmartTerrainTheme;
@@ -283,7 +279,7 @@ function getFamilyLocalIndices(theme: SmartTerrainTheme, material: SmartTerrainM
   ].filter((value): value is number => typeof value === 'number'));
 }
 
-export function classifySmartTerrainGid(gid: number): Omit<SmartTerrainCellState, 'lockedGid'> | null {
+function classifySmartTerrainGid(gid: number): Omit<SmartTerrainCellState, 'lockedGid'> | null {
   for (const theme of ['forest', 'desert', 'cave', 'gothic', 'water'] as const) {
     const tileset = getTilesetByKey(theme);
     const firstGid = tileset?.firstGid ?? 1;
