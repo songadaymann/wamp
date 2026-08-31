@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyTileData } from '../persistence/roomModel';
 import {
+  AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES,
+  AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
   AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES,
   AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
   getTerrainCollisionProfileForGid,
@@ -78,6 +80,33 @@ describe('smart terrain solver', () => {
     expect(erased.tileData.foreground[4]![4]).toBe(-1);
     expect(decodeTileDataValue(erased.tileData.foreground[4]![3]).gid - firstGid).toBe(20);
     expect(decodeTileDataValue(erased.tileData.foreground[4]![5]).gid - firstGid).toBe(20);
+  });
+
+  it('keeps the artist transition plus D9/D10/D11 continuation on an Advanced-selected Ground layer', () => {
+    const caveFirstGid = getTilesetByKey('cave')!.firstGid;
+    const painted = applySmartCells(emptyDocument(), {
+      cells: cellsFromPattern(['###....', '#######', '###....'], 3, 4),
+      mode: 'paint',
+      theme: 'cave',
+      material: 'ground',
+      layer: 'foreground',
+    });
+
+    expect(localAt(
+      painted,
+      'foreground',
+      6,
+      5,
+      AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+    )).toBe(AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.cave.rightTransition);
+    expect(localAt(painted, 'foreground', 7, 5, caveFirstGid)).toBe(44); // Cave D9.
+    expect(localAt(painted, 'foreground', 8, 5, caveFirstGid)).toBe(45); // Cave D10.
+    expect(localAt(painted, 'foreground', 9, 5, caveFirstGid)).toBe(46); // Cave D11.
+    expect(painted.smartTerrain.ownedOutputs['foreground:6,5']).toMatchObject({
+      ownerId: 'legacy-semantic:foreground:6,5',
+      partId: 'primary',
+      value: painted.tileData.foreground[5][6],
+    });
   });
 
   it('keeps native legacy Feature borders owned on the selected layer', () => {
@@ -265,36 +294,134 @@ describe('smart terrain solver', () => {
     },
   );
 
-  it('composites a right-jutting Desert ledge from authored B4/B5 middles, B6, and C6', () => {
+  it.each([
+    ['cave', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.cave],
+    ['forest', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.forest],
+    ['desert', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.desert],
+  ] as const)(
+    'places the artist %s right transition before D9, D10, and D11',
+    (theme, transitions) => {
+      const themeFirstGid = getTilesetByKey(theme)!.firstGid;
+      const result = applySmartCells(emptyDocument(), {
+        cells: cellsFromPattern(['###....', '#######', '###....'], 3, 4),
+        mode: 'paint',
+        theme,
+        material: 'ground',
+      });
+
+      expect(localAt(
+        result,
+        'terrain',
+        6,
+        5,
+        AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+      )).toBe(transitions.rightTransition);
+      expect(localAt(result, 'terrain', 7, 5, themeFirstGid)).toBe(44); // D9.
+      expect(localAt(result, 'terrain', 8, 5, themeFirstGid)).toBe(45); // D10.
+      expect(localAt(result, 'terrain', 9, 5, themeFirstGid)).toBe(46); // D11.
+      expect(decodeTileDataValue(result.tileData.terrain[5][6])).toMatchObject({
+        flipX: false,
+        flipY: false,
+      });
+    },
+  );
+
+  it.each([
+    ['cave', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.cave],
+    ['forest', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.forest],
+    ['desert', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.desert],
+  ] as const)(
+    'uses the artist %s transition as the one-cell ledge fallback',
+    (theme, transitions) => {
+      const right = applySmartCells(emptyDocument(), {
+        cells: cellsFromPattern(['###.', '####', '###.'], 3, 4),
+        mode: 'paint',
+        theme,
+        material: 'ground',
+      });
+      expect(localAt(
+        right,
+        'terrain',
+        6,
+        5,
+        AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+      )).toBe(transitions.rightTransition);
+
+      const left = applySmartCells(emptyDocument(), {
+        cells: cellsFromPattern(['.###', '####', '.###'], 3, 4),
+        mode: 'paint',
+        theme,
+        material: 'ground',
+      });
+      expect(localAt(
+        left,
+        'terrain',
+        3,
+        5,
+        AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+      )).toBe(transitions.leftTransition);
+    },
+  );
+
+  it.each([
+    ['cave', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.cave],
+    ['forest', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.forest],
+    ['desert', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.desert],
+  ] as const)(
+    'keeps the exposed platform cap in a two-cell %s ledge fallback',
+    (theme, transitions) => {
+      const themeFirstGid = getTilesetByKey(theme)!.firstGid;
+      const right = applySmartCells(emptyDocument(), {
+        cells: cellsFromPattern(['###..', '#####', '###..'], 3, 4),
+        mode: 'paint',
+        theme,
+        material: 'ground',
+      });
+      expect(localAt(
+        right,
+        'terrain',
+        6,
+        5,
+        AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+      )).toBe(transitions.rightTransition);
+      expect(localAt(right, 'terrain', 7, 5, themeFirstGid)).toBe(46); // D11.
+
+      const left = applySmartCells(emptyDocument(), {
+        cells: cellsFromPattern(['..###', '#####', '..###'], 3, 4),
+        mode: 'paint',
+        theme,
+        material: 'ground',
+      });
+      expect(localAt(left, 'terrain', 3, 5, themeFirstGid)).toBe(44); // D9.
+      expect(localAt(
+        left,
+        'terrain',
+        4,
+        5,
+        AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+      )).toBe(transitions.leftTransition);
+    },
+  );
+
+  it('keeps the existing alpha-only Desert C6 seam beside the new transition', () => {
     const desertFirstGid = getTilesetByKey('desert')!.firstGid;
     const result = applySmartCells(emptyDocument(), {
-      cells: cellsFromPattern(['###...', '######', '###...'], 3, 4),
+      cells: cellsFromPattern(['###....', '#######', '###....'], 3, 4),
       mode: 'paint',
       theme: 'desert',
       material: 'ground',
     });
 
-    expect([
-      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
-      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
-    ]).toContain(localAt(
+    expect(localAt(
       result,
       'terrain',
       6,
       5,
-      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    ));
-    expect([
-      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
-      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
-    ]).toContain(localAt(
-      result,
-      'terrain',
-      7,
-      5,
-      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    ));
-    expect(localAt(result, 'terrain', 8, 5, desertFirstGid)).toBe(17);
+      AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+    )).toBe(AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.desert.rightTransition);
+    expect(localAt(result, 'terrain', 7, 5, desertFirstGid)).toBe(44); // Desert D9.
+    expect(localAt(result, 'terrain', 8, 5, desertFirstGid)).toBe(45); // Desert D10.
+    expect(localAt(result, 'terrain', 9, 5, desertFirstGid)).toBe(46); // Desert D11.
     expect(localAt(
       result,
       'foreground',
@@ -302,54 +429,53 @@ describe('smart terrain solver', () => {
       5,
       AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
     )).toBe(AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC6);
-    for (let x = 6; x <= 8; x += 1) {
+    for (let x = 6; x <= 9; x += 1) {
       expect(result.tileData.foreground[5][x]).toBe(-1);
     }
   });
 
-  it('mirrors the Desert seam treatment for a left-jutting ledge', () => {
-    const desertFirstGid = getTilesetByKey('desert')!.firstGid;
-    const result = applySmartCells(emptyDocument(), {
-      cells: cellsFromPattern(['...###', '######', '...###'], 3, 4),
-      mode: 'paint',
-      theme: 'desert',
-      material: 'ground',
-    });
+  it.each([
+    ['cave', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.cave],
+    ['forest', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.forest],
+    ['desert', AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.desert],
+  ] as const)(
+    'uses D9, D10, and D11 before the artist %s left transition',
+    (theme, transitions) => {
+      const themeFirstGid = getTilesetByKey(theme)!.firstGid;
+      const result = applySmartCells(emptyDocument(), {
+        cells: cellsFromPattern(['....###', '#######', '....###'], 3, 4),
+        mode: 'paint',
+        theme,
+        material: 'ground',
+      });
 
-    expect(localAt(result, 'terrain', 3, 5, desertFirstGid)).toBe(14);
-    expect([
-      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
-      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
-    ]).toContain(localAt(
-      result,
-      'terrain',
-      4,
-      5,
-      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    ));
-    expect([
-      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
-      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
-    ]).toContain(localAt(
-      result,
-      'terrain',
-      5,
-      5,
-      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    ));
-    expect(localAt(
-      result,
-      'foreground',
-      6,
-      5,
-      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    )).toBe(AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC3);
-    for (let x = 3; x <= 5; x += 1) {
-      expect(result.tileData.foreground[5][x]).toBe(-1);
-    }
-  });
+      expect(localAt(result, 'terrain', 3, 5, themeFirstGid)).toBe(44); // D9.
+      expect(localAt(result, 'terrain', 4, 5, themeFirstGid)).toBe(45); // D10.
+      expect(localAt(result, 'terrain', 5, 5, themeFirstGid)).toBe(46); // D11.
+      expect(localAt(
+        result,
+        'terrain',
+        6,
+        5,
+        AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+      )).toBe(transitions.leftTransition);
+      expect(decodeTileDataValue(result.tileData.terrain[5][6])).toMatchObject({
+        flipX: false,
+        flipY: false,
+      });
+      if (theme === 'desert') {
+        expect(localAt(
+          result,
+          'foreground',
+          7,
+          5,
+          AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
+        )).toBe(AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC3);
+      }
+    },
+  );
 
-  it('keeps every authored Desert middle while a connected ledge grows across separate strokes', () => {
+  it('keeps the Desert transition and D9 anchored while D10 grows before D11', () => {
     const desertFirstGid = getTilesetByKey('desert')!.firstGid;
     let result = applySmartCells(emptyDocument(), {
       cells: cellsFromPattern(['###', '###', '###'], 3, 4),
@@ -365,19 +491,22 @@ describe('smart terrain solver', () => {
         theme: 'desert',
         material: 'ground',
       });
-      for (let x = 6; x < right; x += 1) {
-        expect([
-          AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
-          AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
-        ]).toContain(localAt(
-          result,
-          'terrain',
-          x,
-          5,
-          AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-        ));
+      expect(localAt(
+        result,
+        'terrain',
+        6,
+        5,
+        AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+      )).toBe(AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.desert.rightTransition);
+      if (right === 7) {
+        expect(localAt(result, 'terrain', right, 5, desertFirstGid)).toBe(46); // Desert D11.
+      } else if (right >= 8) {
+        expect(localAt(result, 'terrain', 7, 5, desertFirstGid)).toBe(44); // Desert D9.
+        for (let x = 8; x < right; x += 1) {
+          expect(localAt(result, 'terrain', x, 5, desertFirstGid)).toBe(45); // Desert D10.
+        }
+        expect(localAt(result, 'terrain', right, 5, desertFirstGid)).toBe(46); // Desert D11.
       }
-      expect(localAt(result, 'terrain', right, 5, desertFirstGid)).toBe(17);
     }
   });
 
@@ -398,16 +527,13 @@ describe('smart terrain solver', () => {
       5,
       AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
     )).toBe(AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC6);
-    expect([
-      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
-      AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
-    ]).toContain(localAt(
+    expect(localAt(
       result,
       'terrain',
       6,
       5,
-      AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
-    ));
+      AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+    )).toBe(AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.desert.rightTransition);
     expect(result.tileData.foreground[5][6]).toBe(-1);
   });
 
@@ -427,8 +553,11 @@ describe('smart terrain solver', () => {
 
     expect(thickened.tileData.foreground[5].slice(5, 9)).toEqual([-1, -1, -1, -1]);
     expect(thickened.tileData.terrain[5].slice(6, 9).some(
-      (gid) => gid >= AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID
-        && gid < AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID + 4,
+      (value) => {
+        const gid = decodeTileDataValue(value).gid;
+        return gid >= AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID
+          && gid < AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID + 72;
+      },
     )).toBe(false);
     expect(Object.values(thickened.smartTerrain.generatedDecorations)
       .some(({ gid }) => gid >= AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID)).toBe(false);

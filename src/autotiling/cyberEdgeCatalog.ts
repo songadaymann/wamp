@@ -39,6 +39,8 @@ export type CyberV2BrushId = typeof CYBER_V2_BRUSH_IDS[number];
 
 /**
  * A: exterior. Faces empty space, or a brush outside the letter set (Fence, Rubble, Support).
+ *     Only A may touch a void, and a void may only touch A.
+ *     Occupied neighbors must share the same non-A letter on the shared edge.
  * B: exterior adjacent concrete
  * C: interior concrete
  * D: exterior adjacent shell
@@ -61,6 +63,8 @@ export type CyberEdgeLetter =
  * Window / Neon: meant to start on a Concrete edge and run into it. Seed the
  * outer-end piece (BIBA / BJBA), then flipX so A stays on the outer/start side
  * and the run (I or J) continues toward more Window/Neon or interior Concrete.
+ * Stacked Window strokes reuse pane 38 with I on the shared vertical sides.
+ * End caps stay tile 37, including the middle rows of a 3+ row band.
  */
 export const CYBER_BRUSH_SEEDS = {
   'cyber.shell': {
@@ -100,11 +104,13 @@ function catalogCandidateWeight(tile: CyberOrientedTile): number {
 }
 
 function catalogVarietyHash(x: number, y: number, salt: number): number {
-  return Math.abs(
-    Math.imul(x + 31, 73856093)
-    ^ Math.imul(y + 17, 19349663)
-    ^ Math.imul(salt + 7, 83492791),
-  );
+  let h = 0x9e3779b9 ^ salt;
+  h = Math.imul(h ^ Math.imul(x + 0x7f4a7c15, 0x85ebca6b), 0xc2b2ae35);
+  h = Math.imul(h ^ Math.imul(y + 0x27d4eb2f, 0x165667b1), 0x27d4eb2f);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x7feb9d58);
+  h ^= h >>> 13;
+  return h >>> 0;
 }
 
 function orientedTileKey(tile: CyberOrientedTile): string {
@@ -175,6 +181,17 @@ export function catalogLocalIndicesForBrush(brushId: CyberLetterBrushId): number
   return [...new Set(catalogEntriesForBrush(brushId).map((entry) => entry.localIndex))];
 }
 
+export function edgesForOrientedCatalogTile(
+  localIndex: number,
+  flipX: boolean,
+  flipY: boolean,
+  brushId: CyberLetterBrushId = 'cyber.concrete',
+): `${CyberEdgeLetter}${CyberEdgeLetter}${CyberEdgeLetter}${CyberEdgeLetter}` | null {
+  const entry = catalogEntriesForBrush(brushId).find((row) => row.localIndex === localIndex);
+  if (!entry) return null;
+  return flipCatalogEdges(entry.edges, flipX, flipY);
+}
+
 export function isCyberLetterCatalogLocalIndex(localIndex: number): boolean {
   return CYBER_EDGE_CATALOG.some((entry) => entry.localIndex === localIndex);
 }
@@ -201,6 +218,11 @@ export const CYBER_EDGE_CATALOG: readonly CyberEdgeCatalogEntry[] = [
   { localIndex: 35, brushId: 'cyber.concrete', edges: 'BCCB' },
   { localIndex: 37, brushId: 'cyber.windows', edges: 'BIBA' },
   { localIndex: 38, brushId: 'cyber.windows', edges: 'CICI' },
+  { localIndex: 38, brushId: 'cyber.windows', edges: 'IIII' },
+  { localIndex: 38, brushId: 'cyber.windows', edges: 'CIII' },
+  { localIndex: 38, brushId: 'cyber.windows', edges: 'IIIC' },
+  { localIndex: 38, brushId: 'cyber.windows', edges: 'CIIC' },
+  { localIndex: 37, brushId: 'cyber.windows', edges: 'IIIA' },
   { localIndex: 39, brushId: 'cyber.windows', edges: 'HHCI' },
   { localIndex: 39, brushId: 'cyber.shell', edges: 'HHCI' },
   { localIndex: 40, brushId: 'cyber.shell', edges: 'HHHH', rare: true },

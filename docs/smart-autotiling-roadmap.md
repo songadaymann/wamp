@@ -10,11 +10,39 @@ current editor's filled/outline Rectangle, Ellipse, Line, and Curve tools. The
 rail, Gothic fence/columns, WampOS windows, and Backrooms structures remain
 gated until the rule tier they need has been approved in an earlier set.
 
+The artist's `rr_extras` v2 ledge delivery (SHA-256
+`0d03e27847884bf17f2d42c1ca66c00180dd848af6d78868303c75728b5ff334`) is active in the existing
+colliding Ground solver for Cave A1/A2, Forest B1/B2, and Desert C1/C2. Each
+row supplies distinct right- and left-facing transition cells, used without
+transforms. The transition connects to a complete base-platform subsection:
+transition/D9/D10.../D11 when protruding right, or D9/D10.../D11/transition
+when protruding left. Water D1/D2, Lava E1/E2, and Snow F1/F2 remain reserved
+rather than being forced into a different or not-yet-built rule.
+
 The central design rule is to learn *authored structure* from strong published
 examples without cloning a single room. A reference tells us which atlas cells,
 transforms, layers, and repetitions form a visual grammar. The shipped solver
 must then express that grammar deterministically for new shapes and retain the
 existing manual-lock, history, erase, and copy/paste guarantees.
+
+The editor boundary is now registry-driven. Each brush declares its solver
+engine, stroke axis, and Rectangle normalization alongside its rule kind,
+supported tools, layers, and styles. `SmartTileController` consumes that
+contract for paint/erase/outline gestures and semantic clipboard restoration;
+the general editor runtime no longer branches on Cyber versus legacy brush
+IDs. The generic `recipeSolver.ts` is now an engine-adapter coordinator and
+owns family-neutral locks, suppression, layer clearing, and output ownership.
+It is also the single recipe-engine registry: `brushEngine.ts` only bridges the
+legacy terrain solver, and editor layer clearing consumes the owning engine's
+exact clear plan instead of recognizing Cyber owner IDs. Cyber resolution is
+split by responsibility: `cyberRecipeDocument.ts` coordinates public editing
+operations, `cyberRecipeState.ts` owns canonical state and output ownership,
+`cyberSemanticResolver.ts` owns connected topology and structural overlays,
+and `cyberRecipeRenderer.ts` renders spans, supports, and panels. Family
+classification, individual span/rubble rules, structure profiles, and
+letter-edge matching remain in their focused modules. New recipe families
+should add a registered engine adapter and their own document/family resolvers
+rather than widening the editor runtime or inheriting a Cyber owner namespace.
 
 Layer authoring is mode-aware. Beginner treats each registry `defaultLayer` as
 the brush's required source layer and disables the other layer controls.
@@ -163,6 +191,11 @@ Completed implementation sequence:
    Forest/Desert/Cave/Gothic/Water brushes. The selected layer survives
    persistence, clipboard, manual locks/suppression, erase/repair, and exact
    undo/redo; Beginner retains automatic layer routing.
+8. Integrated the artist's three-commit `origin/cyber-v3` safety-preview stack
+   (`857fd8de`, `94b58033`, `0a2ace7e`) into the split Cyber modules. Concrete
+   now uses letter-validated neutral edge variety, A-facing-void constraints,
+   and socket-driven A10 overlays rather than a generic diagonal mask. Stacked
+   Window strokes merge into pane tile 38 with tile 37 at every row end.
 
 The reference is evidence, not a universal rule. A second set of deliberately
 constructed small shapes must accompany the reference-shaped fixture so the
@@ -174,10 +207,15 @@ solver does not merely memorize one skyline.
   coordinate contract drives automatic Ground. Yellow/Pink connectivity,
   irregular inset edges, layered holes, stairs, and diagonal repair have
   separate novel-shape cases.
-- Every missing-diagonal tie is Cyber A10 on Foreground (`A10XY`, `A10Y`,
-  `A10X`, or `A10`) while Terrain retains its independently resolved edge.
-  This preserves F3 under stair ties; unsupported stair ends use mirrored F12,
-  and straight interior-window ceilings use C11Y.
+- A10 appears on Foreground only at a validated ZBBZ corner socket, transformed
+  toward the missing diagonal. Thin frames, one-cell nubs, and ordinary side,
+  top, or bottom notches do not receive an errant overlay; true interior-hole,
+  stepped-hole, and U-notch corners retain the needed A10. Terrain remains
+  independently letter-matched beneath it.
+- Concrete tests assert shared edge-letter agreement and A-facing-void behavior
+  across rings, tunnels, cut-outs, T-junctions, crosses, concave/convex corners,
+  and coordinate-stable neutral variations. Window acceptance includes a
+  four-row band whose left/right cells are 37 and whose stacked panes are 38.
 - Yellow and Pink platforms generate `F12X, F9…, F12`; the F10 paint spill and
   F11 open-bottom pieces remain available for manual accenting. Support short forms
   are `36`, `36/60`, `36/60/72`, then `36/48…/60/72`; normalized support banks
@@ -192,15 +230,16 @@ solver does not merely memorize one skyline.
 - Model tests cover v1 to v2 migration, canonical IDs such as `desert.ground`,
   unknown-future preservation, invalid brush/style/layer filtering, encoded
   locks, and configured 84/120/324-tile profiles.
-- The focused Cyber/model/editor/clipboard gate passes 8 files / 155 tests. The full gate
-  passes 215 files / 1,485 tests, ESLint, TypeScript, generated-binding checks,
+- The focused Cyber edge/recipe gate passes 5 files / 86 tests. The full gate
+  passes 219 files / 1,550 tests, ESLint, TypeScript, generated-binding checks,
   and the production build.
 - The expanded Smart browser gate passes in Canvas and WebGL with Fill, shapes,
   minimums, transformed Support banks, erase/repair, layer switching,
   copy/paste, undo/redo, macro suppression, local-repository save followed by a
   hard page reload and reopen, Course Editor, zero mutation requests, and zero
   console/page errors. Each run asserts that its requested Canvas or WebGL
-  renderer is actually active.
+  renderer is actually active. The browser gate also paints and captures a
+  stacked Window band and checks its 37/38 contract in both renderers.
 - Rubble repeats B1 as its colliding fill and always uses the same deterministic
   A1/C1/A2/B2/A11/B11 structural outline grammar as legacy Feature.
 - Optional Cyber vents, lights, graffiti, and Framed Panel accents are disabled
@@ -278,6 +317,7 @@ A set moves from gated/in progress to complete only when all of these pass:
 | Existing Smart V1 safety foundation | Complete / safety-proven and incorporated into the consolidated candidate |
 | Frozen six-room reference corpus and offline analyzer/renderer | Complete |
 | Cyber transform-aware profile and golden fixtures | Complete locally in the consolidated candidate; prior Cyber-only safety preview retained as historical comparison |
+| Artist `rr_extras` Ground ledges | The 2026-08-29 v2 delivery is integrated locally for Cave A1/A2, Forest B1/B2, and Desert C1/C2; exact source hash, directional transition plus complete D9/D10/D11 platform-subsection fixtures, short-run fallbacks, Advanced-layer ownership, and Canvas/WebGL visual checks pass. Water/Lava/Snow rows remain reserved |
 | Cave rail and Gothic fence/columns | Gated on Tier 2 |
 | Desert cactus and bridge | Gated on Tier 2 span/junction proof |
 | WampOS window macros | Gated on Tier 3 layer ownership |

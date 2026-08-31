@@ -1,6 +1,8 @@
 import { ROOM_HEIGHT, ROOM_WIDTH, type LayerName } from '../config/room';
 import { decodeTileDataValue, encodeTileDataValue } from '../config/editorState';
 import {
+  AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES,
+  AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
   AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID,
   AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES,
   getTilesetByKey,
@@ -404,6 +406,7 @@ function isThinCell(
 }
 
 interface HorizontalThinLedgeSegment {
+  theme: Extract<SmartTerrainTheme, 'forest' | 'desert' | 'cave'>;
   y: number;
   left: number;
   right: number;
@@ -411,14 +414,24 @@ interface HorizontalThinLedgeSegment {
   attachedRight: boolean;
 }
 
-function findDesertHorizontalThinLedges(
+function getArtistHorizontalLedgeTransitions(
+  theme: SmartTerrainTheme,
+): { readonly rightTransition: number; readonly leftTransition: number } | undefined {
+  if (theme === 'forest') return AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.forest;
+  if (theme === 'desert') return AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.desert;
+  if (theme === 'cave') return AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.cave;
+  return undefined;
+}
+
+function findArtistHorizontalThinLedges(
   tileData: RoomTileData,
   state: RoomSmartTerrainState,
 ): HorizontalThinLedgeSegment[] {
   const visited = new Set<string>();
   const segments: HorizontalThinLedgeSegment[] = [];
   for (const [key, cell] of Object.entries(state.cells)) {
-    if (visited.has(key) || cell.theme !== 'desert' || cell.material !== 'ground') continue;
+    const artistTransitions = getArtistHorizontalLedgeTransitions(cell.theme);
+    if (visited.has(key) || !artistTransitions || cell.material !== 'ground') continue;
     const [x, y] = key.split(',').map(Number);
     if (!isThinCell(tileData, state, x, y, cell)) continue;
 
@@ -436,8 +449,12 @@ function findDesertHorizontalThinLedges(
     ).every((segmentX) => {
       const segmentCell = state.cells[smartCellKey(segmentX, y)];
       return segmentCell
+        && segmentCell.theme === cell.theme
+        && segmentCell.material === 'ground'
         && !segmentCell.lockedGid
+        && !segmentCell.lockedValue
         && !segmentCell.shapeGid
+        && !segmentCell.shapeValue
         && !isThinCell(tileData, state, segmentX, y - 1, cell)
         && !isThinCell(tileData, state, segmentX, y + 1, cell);
     });
@@ -448,9 +465,65 @@ function findDesertHorizontalThinLedges(
     const attachedRight = sameFamily(tileData, state, right + 1, y, cell)
       && participatesInThickRegion(tileData, state, right + 1, y, cell);
     if (!attachedLeft && !attachedRight) continue;
-    segments.push({ y, left, right, attachedLeft, attachedRight });
+    segments.push({
+      theme: cell.theme as HorizontalThinLedgeSegment['theme'],
+      y,
+      left,
+      right,
+      attachedLeft,
+      attachedRight,
+    });
   }
   return segments;
+}
+
+function resolveArtistHorizontalLedgeValue(
+  segment: HorizontalThinLedgeSegment,
+  x: number,
+): number {
+  const transitions = getArtistHorizontalLedgeTransitions(segment.theme)!;
+  const length = segment.right - segment.left + 1;
+  const platform = SMART_TILESET_SLOTS.platform;
+  const platformLeft = platform.left; // D9/local 44.
+  const platformMiddle = platform.middle[0]!; // D10/local 45 in all three source sheets.
+  const platformRight = platform.right; // D11/local 46.
+
+  if (segment.attachedLeft && segment.attachedRight) {
+    if (length === 1) return toGid(segment.theme, platformMiddle);
+    if (x === segment.left) {
+      return AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID + transitions.rightTransition;
+    }
+    if (x === segment.right) {
+      return AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID + transitions.leftTransition;
+    }
+    if (length >= 4 && x === segment.left + 1) {
+      return toGid(segment.theme, platformLeft);
+    }
+    if (length >= 4 && x === segment.right - 1) {
+      return toGid(segment.theme, platformRight);
+    }
+    return toGid(segment.theme, platformMiddle);
+  }
+
+  if (segment.attachedLeft) {
+    // Body → artist transition → D9 → repeated D10 → D11.
+    if (x === segment.left) {
+      return AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID + transitions.rightTransition;
+    }
+    // A two-cell fallback keeps the artist transition and the exposed D11 end.
+    if (x === segment.right) return toGid(segment.theme, platformRight);
+    if (x === segment.left + 1) return toGid(segment.theme, platformLeft);
+    return toGid(segment.theme, platformMiddle);
+  }
+
+  // D9 → repeated D10 → D11 → artist transition → body.
+  if (x === segment.right) {
+    return AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID + transitions.leftTransition;
+  }
+  // A two-cell fallback keeps the exposed D9 end and the artist transition.
+  if (x === segment.left) return toGid(segment.theme, platformLeft);
+  if (x === segment.right - 1) return toGid(segment.theme, platformRight);
+  return toGid(segment.theme, platformMiddle);
 }
 
 function resolveThinGroundLocalIndex(
@@ -766,6 +839,114 @@ function getNativeLegacyEntries(state: RoomSmartTerrainState): NativeLegacyEntry
   return entries;
 }
 
+interface NativeHorizontalThinLedgeSegment extends HorizontalThinLedgeSegment {
+  layer: LayerName;
+}
+
+function findNativeArtistHorizontalThinLedges(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+  entries: NativeLegacyEntry[],
+): NativeHorizontalThinLedgeSegment[] {
+  const byCoordinate = new Map(entries.map((entry) => [
+    `${entry.layer}:${smartCellKey(entry.x, entry.y)}`,
+    entry,
+  ]));
+  const visited = new Set<string>();
+  const segments: NativeHorizontalThinLedgeSegment[] = [];
+  const matchingEntry = (
+    layer: LayerName,
+    x: number,
+    y: number,
+    theme: SmartTerrainTheme,
+  ) => {
+    const entry = byCoordinate.get(`${layer}:${smartCellKey(x, y)}`);
+    return entry?.cell.theme === theme && entry.cell.material === 'ground' ? entry : undefined;
+  };
+
+  for (const entry of entries) {
+    const visitKey = `${entry.layer}:${smartCellKey(entry.x, entry.y)}`;
+    if (
+      visited.has(visitKey)
+      || entry.cell.material !== 'ground'
+      || !getArtistHorizontalLedgeTransitions(entry.cell.theme)
+      || !isThinCell(tileData, state, entry.x, entry.y, entry.cell)
+    ) continue;
+
+    let left = entry.x;
+    let right = entry.x;
+    while (
+      matchingEntry(entry.layer, left - 1, entry.y, entry.cell.theme)
+      && isThinCell(tileData, state, left - 1, entry.y, entry.cell)
+    ) left -= 1;
+    while (
+      matchingEntry(entry.layer, right + 1, entry.y, entry.cell.theme)
+      && isThinCell(tileData, state, right + 1, entry.y, entry.cell)
+    ) right += 1;
+    for (let segmentX = left; segmentX <= right; segmentX += 1) {
+      visited.add(`${entry.layer}:${smartCellKey(segmentX, entry.y)}`);
+    }
+
+    const isPureHorizontal = Array.from(
+      { length: right - left + 1 },
+      (_, index) => left + index,
+    ).every((segmentX) => {
+      const segmentEntry = matchingEntry(entry.layer, segmentX, entry.y, entry.cell.theme);
+      const semantic = segmentEntry && state.semanticCells[segmentEntry.semanticKey];
+      return segmentEntry
+        && !semantic?.lockedValue
+        && !semantic?.shapeValue
+        && !isThinCell(tileData, state, segmentX, entry.y - 1, entry.cell)
+        && !isThinCell(tileData, state, segmentX, entry.y + 1, entry.cell);
+    });
+    if (!isPureHorizontal) continue;
+
+    const attachedLeft = sameFamily(tileData, state, left - 1, entry.y, entry.cell)
+      && participatesInThickRegion(tileData, state, left - 1, entry.y, entry.cell);
+    const attachedRight = sameFamily(tileData, state, right + 1, entry.y, entry.cell)
+      && participatesInThickRegion(tileData, state, right + 1, entry.y, entry.cell);
+    if (!attachedLeft && !attachedRight) continue;
+    segments.push({
+      theme: entry.cell.theme as HorizontalThinLedgeSegment['theme'],
+      layer: entry.layer,
+      y: entry.y,
+      left,
+      right,
+      attachedLeft,
+      attachedRight,
+    });
+  }
+  return segments;
+}
+
+function resolveNativeArtistHorizontalLedges(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+): void {
+  const entries = getNativeLegacyEntries(state);
+  const byCoordinate = new Map(entries.map((entry) => [
+    `${entry.layer}:${smartCellKey(entry.x, entry.y)}`,
+    entry,
+  ]));
+  for (const segment of findNativeArtistHorizontalThinLedges(tileData, state, entries)) {
+    for (let x = segment.left; x <= segment.right; x += 1) {
+      const owner = byCoordinate.get(`${segment.layer}:${smartCellKey(x, segment.y)}`);
+      if (!owner) continue;
+      addNativeLegacyOutput(
+        tileData,
+        state,
+        owner.semanticKey,
+        'primary',
+        segment.layer,
+        x,
+        segment.y,
+        resolveArtistHorizontalLedgeValue(segment, x),
+        true,
+      );
+    }
+  }
+}
+
 function nativeCompanionLayer(tileData: RoomTileData, sourceLayer: LayerName, x: number, y: number): LayerName {
   const candidates = sourceLayer === 'terrain'
     ? (['background', 'foreground'] as const)
@@ -955,6 +1136,7 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
   }
 
   resolveNativeLegacySemanticCells(tileData, state);
+  resolveNativeArtistHorizontalLedges(tileData, state);
 
   const suppressed = new Set(state.suppressedDecorationSlots);
   const canAddDecoration = (
@@ -1009,27 +1191,15 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
     addDecoration(ownerKey, targetX, targetY, slot, localIndex, flipX, false, layer, true);
   };
 
-  for (const segment of findDesertHorizontalThinLedges(tileData, state)) {
+  for (const segment of findArtistHorizontalThinLedges(tileData, state)) {
     for (let x = segment.left; x <= segment.right; x += 1) {
-      const isOpenLeftEnd = x === segment.left && !segment.attachedLeft;
-      const isOpenRightEnd = x === segment.right && !segment.attachedRight;
-      const gid = isOpenLeftEnd
-        ? toGid('desert', 14) // Desert B3: original left cap.
-        : isOpenRightEnd
-          ? toGid('desert', 17) // Desert B6: original right cap.
-          : AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID + stablePick(
-            [
-              AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB4,
-              AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.horizontalLedgeMiddleB5,
-            ],
-            x,
-            segment.y,
-            67,
-          );
-      tileData.terrain[segment.y][x] = gid;
+      tileData.terrain[segment.y][x] = resolveArtistHorizontalLedgeValue(segment, x);
     }
 
-    if (segment.attachedLeft) {
+    // Desert keeps its existing alpha-only C3/C6 seam overlays. Cave and
+    // Forest already resolve the neighboring thick cell to their native C3/C6
+    // art, so the artist transition joins without an extra overlay.
+    if (segment.theme === 'desert' && segment.attachedLeft) {
       addDecoration(
         smartCellKey(segment.left, segment.y),
         segment.left - 1,
@@ -1044,7 +1214,7 @@ function resolveDocument(tileData: RoomTileData, state: RoomSmartTerrainState): 
           + AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES.thickBodySeamC6,
       );
     }
-    if (segment.attachedRight) {
+    if (segment.theme === 'desert' && segment.attachedRight) {
       addDecoration(
         smartCellKey(segment.right, segment.y),
         segment.right + 1,

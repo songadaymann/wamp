@@ -325,6 +325,21 @@ export const AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES = {
   thickBodySeamC3: 2,
   thickBodySeamC6: 3,
 } as const;
+export const AUTOTILE_ARTIST_EXTRAS_TILESET_KEY = 'autotile-artist-extras';
+export const AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID = 2077;
+/**
+ * Artist-authored directional ledge transitions in rr_extras.png. Coordinates use the
+ * 12 x 6 sheet directly: Cave A1/A2, Forest B1/B2, Desert C1/C2,
+ * Water D1/D2, Lava E1/E2, and Snow F1/F2.
+ */
+export const AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES = {
+  cave: { rightTransition: 0, leftTransition: 1 },
+  forest: { rightTransition: 12, leftTransition: 13 },
+  desert: { rightTransition: 24, leftTransition: 25 },
+  water: { rightTransition: 36, leftTransition: 37 },
+  lava: { rightTransition: 48, leftTransition: 49 },
+  snow: { rightTransition: 60, leftTransition: 61 },
+} as const;
 export const SPECIAL_TILESET_KEY = 'special';
 export const SPECIAL_TILESET_FIRST_GID = 669;
 export type SpecialTileKind =
@@ -368,6 +383,9 @@ export const SPECIAL_TILE_BREAKABLE_BRICK_LOCAL_INDEX =
   SPECIAL_TILE_LOCAL_INDICES.breakableBrick;
 export const SPECIAL_TILE_BREAKABLE_BRICK_GID =
   SPECIAL_TILESET_FIRST_GID + SPECIAL_TILE_BREAKABLE_BRICK_LOCAL_INDEX;
+/** Special A2 (local index 1): the canonical one-way platform collision tile. */
+export const SPECIAL_TILE_ONE_WAY_PLATFORM_GID =
+  SPECIAL_TILESET_FIRST_GID + SPECIAL_TILE_LOCAL_INDICES.oneWayPlatform;
 
 const SPECIAL_TILE_KIND_BY_LOCAL_INDEX: Partial<Record<number, SpecialTileKind>> =
   Object.fromEntries(
@@ -1185,6 +1203,36 @@ export const TILESETS: TilesetConfig[] = [
     },
     editorHidden: true,
     editorPaletteBackgroundColor: '#785f56',
+  },
+  {
+    key: AUTOTILE_ARTIST_EXTRAS_TILESET_KEY,
+    name: 'Autotile Artist Extras',
+    path: 'assets/tilesets/rr_extras.png?v=2026-08-29-artist-ledges-v2',
+    imageWidth: 192,
+    imageHeight: 96,
+    columns: 12,
+    rows: 6,
+    tileCount: 72,
+    firstGid: AUTOTILE_ARTIST_EXTRAS_TILESET_FIRST_GID,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(
+        Array.from({ length: 72 }, (_, index) => index),
+        NO_COLLISION_PROFILE,
+      ),
+      ...createTilesetCollisionProfiles(
+        [
+          AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.cave.rightTransition,
+          AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.cave.leftTransition,
+          AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.forest.rightTransition,
+          AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.forest.leftTransition,
+          AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.desert.rightTransition,
+          AUTOTILE_ARTIST_EXTRAS_LOCAL_INDICES.desert.leftTransition,
+        ],
+        DECORATED_TOP_PROFILE,
+      ),
+    },
+    editorHidden: true,
+    editorPaletteBackgroundColor: '#473b3b',
   },
 ];
 

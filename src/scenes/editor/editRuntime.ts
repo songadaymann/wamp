@@ -139,20 +139,14 @@ import { EditorDocumentPresentationController } from './documentPresentationCont
 import {
   cloneRoomSmartTerrainState,
   createRoomSmartTerrainState,
-  getLegacySmartBrushIdentity,
   normalizeRoomSmartTerrainState,
   serializeRoomSmartTerrainState,
   smartCellKey,
   smartDecorationSlotKey,
-  smartOwnedOutputPartKey,
-  smartRecipeOwnerId,
   smartSemanticCellKey,
-  type SmartBrushId,
-  type SmartStyleId,
   type RoomSmartTerrainState,
 } from '../../autotiling/model';
 import {
-  applySmartOutlineCells,
   applySmartCells,
   fillEmptySmartTerrain,
   setSmartTerrainDetailsEnabled,
@@ -162,66 +156,11 @@ import {
 } from '../../autotiling/solver';
 import {
   applyManualSmartOutputEdit,
-  applySmartBrushCells,
-  applySmartBrushOutlineCells,
   clearSmartRecipeLayerState,
-  isCyberSmartBrushId,
+  planSmartRecipeLayerClear,
 } from '../../autotiling/recipeSolver';
 import { getGameSettings } from '../../settings/userSettings';
-
-function getSelectedSmartLayer(): LayerName | undefined {
-  return getGameSettings().builderMode === 'advanced' ? editorState.activeLayer : undefined;
-}
-
-function applySelectedSmartCells(
-  document: SmartTerrainDocument,
-  cells: Iterable<{ x: number; y: number }>,
-  mode: 'paint' | 'erase',
-): SmartTerrainDocument {
-  if (isCyberSmartBrushId(editorState.smartMaterial)) {
-    return applySmartBrushCells(document, {
-      cells,
-      mode,
-      brushId: editorState.smartMaterial,
-      styleId: editorState.smartStyle,
-      layer: getSelectedSmartLayer(),
-    });
-  }
-  const legacyBrush = getLegacySmartBrushIdentity(editorState.smartMaterial);
-  if (!legacyBrush) return document;
-  return applySmartCells(document, {
-    cells,
-    mode,
-    theme: legacyBrush.theme,
-    material: legacyBrush.material,
-    layer: getSelectedSmartLayer(),
-  });
-}
-
-function applySelectedSmartOutlineCells(
-  document: SmartTerrainDocument,
-  filledCells: Iterable<{ x: number; y: number }>,
-  outlineCells: Iterable<{ x: number; y: number }>,
-): SmartTerrainDocument {
-  if (isCyberSmartBrushId(editorState.smartMaterial)) {
-    return applySmartBrushOutlineCells(document, {
-      filledCells,
-      outlineCells,
-      brushId: editorState.smartMaterial,
-      styleId: editorState.smartStyle,
-      layer: getSelectedSmartLayer(),
-    });
-  }
-  const legacyBrush = getLegacySmartBrushIdentity(editorState.smartMaterial);
-  if (!legacyBrush) return document;
-  return applySmartOutlineCells(document, {
-    filledCells,
-    outlineCells,
-    theme: legacyBrush.theme,
-    material: legacyBrush.material,
-    layer: getSelectedSmartLayer(),
-  });
-}
+import { SmartTileController } from './smartTileController';
 
 interface TileAction {
   layer: LayerName;
@@ -229,57 +168,6 @@ interface TileAction {
   y: number;
   oldGid: number;
   newGid: number;
-}
-
-type CyberSmartGestureAxis = 'horizontal' | 'vertical';
-
-function getCyberSmartGestureAxis(brushId: SmartBrushId): CyberSmartGestureAxis | null {
-  switch (brushId) {
-    case 'cyber.fence':
-    case 'cyber.neon':
-      return 'horizontal';
-    case 'cyber.support':
-      return 'vertical';
-    default:
-      return null;
-  }
-}
-
-function constrainCyberSmartCell(
-  cell: { x: number; y: number },
-  anchor: { x: number; y: number },
-  axis: CyberSmartGestureAxis,
-): { x: number; y: number } {
-  return axis === 'horizontal'
-    ? { x: cell.x, y: anchor.y }
-    : { x: anchor.x, y: cell.y };
-}
-
-function getCyberSmartRectangleCells(
-  brushId: SmartBrushId,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-): Array<{ x: number; y: number }> | null {
-  if (brushId === 'cyber.fence' || brushId === 'cyber.neon') {
-    const minX = Math.min(x1, x2);
-    const maxX = Math.max(x1, x2);
-    return Array.from({ length: maxX - minX + 1 }, (_, offset) => ({
-      x: minX + offset,
-      y: y1,
-    }));
-  }
-  if (brushId !== 'cyber.support') return null;
-  const minX = Math.min(x1, x2);
-  const maxX = Math.max(x1, x2);
-  const minY = Math.min(y1, y2);
-  const maxY = Math.max(y1, y2);
-  const cells: Array<{ x: number; y: number }> = [];
-  for (let x = minX; x <= maxX; x += 1) {
-    for (let y = minY; y <= maxY; y += 1) cells.push({ x, y });
-  }
-  return cells;
 }
 
 interface ObjectsAction {
@@ -353,6 +241,7 @@ interface EditorEditRuntimeHost {
 
 export class EditorEditRuntime {
   private readonly documentPresentation: EditorDocumentPresentationController;
+  private readonly smartTiles: SmartTileController;
   private roomGoal: RoomGoal | null = null;
   private roomGoalIntroText: string | null = null;
   private roomSpawnPoint: RoomSpawnPoint | null = null;
@@ -377,6 +266,13 @@ export class EditorEditRuntime {
       scene,
       () => this.host.syncBackgroundCameraIgnores(),
     );
+    this.smartTiles = new SmartTileController(() => ({
+      brushId: editorState.smartMaterial,
+      styleId: editorState.smartStyle,
+      sourceLayer: getGameSettings().builderMode === 'advanced'
+        ? editorState.activeLayer
+        : undefined,
+    }));
   }
 
   get placedObjectSprites(): Phaser.GameObjects.Sprite[] {
@@ -672,92 +568,10 @@ export class EditorEditRuntime {
       (smartPaste.semanticCells.length > 0 || smartPaste.recipes.length > 0)
       && !this.smartTerrain.editingDisabled
     ) {
-      let next = this.getSmartDocument();
-      const semanticGroups = new Map<
-        string,
-        {
-          brushId: SmartBrushId;
-          styleId: SmartStyleId;
-          layer: LayerName;
-          cells: Array<{ x: number; y: number }>;
-        }
-      >();
-      for (const semantic of smartPaste.semanticCells) {
-        const groupKey = `${semantic.layer}:${semantic.cell.brushId}:${semantic.cell.styleId}`;
-        const group = semanticGroups.get(groupKey) ?? {
-          brushId: semantic.cell.brushId,
-          styleId: semantic.cell.styleId,
-          layer: semantic.layer,
-          cells: [],
-        };
-        group.cells.push({ x: semantic.x, y: semantic.y });
-        semanticGroups.set(groupKey, group);
-      }
-      for (const group of semanticGroups.values()) {
-        if (isCyberSmartBrushId(group.brushId)) {
-          next = applySmartBrushCells(next, {
-            cells: group.cells,
-            mode: 'paint',
-            brushId: group.brushId,
-            styleId: group.styleId,
-            layer: group.layer,
-          });
-        } else {
-          const identity = getLegacySmartBrushIdentity(group.brushId);
-          if (identity) {
-            next = applySmartCells(next, {
-              cells: group.cells,
-              mode: 'paint',
-              theme: identity.theme,
-              material: identity.material,
-              layer: group.layer,
-            });
-          }
-        }
-      }
-
-      for (const semantic of smartPaste.semanticCells) {
-        const semanticKey = smartSemanticCellKey(semantic.layer, semantic.x, semantic.y);
-        const target = next.smartTerrain.semanticCells[semanticKey];
-        if (!target) continue;
-        next.smartTerrain.semanticCells[semanticKey] = { ...semantic.cell };
-        const ownerId = isCyberSmartBrushId(semantic.cell.brushId)
-          ? `cyber:cell:${semanticKey}`
-          : `legacy-semantic:${semanticKey}`;
-        next.smartTerrain.suppressedOutputParts.push(
-          ...semantic.suppressedPartIds.map((partId) => smartOwnedOutputPartKey(ownerId, partId)),
-        );
-      }
-
-      for (const clipboardRecipe of smartPaste.recipes) {
-        let instanceId = clipboardRecipe.sourceInstanceId;
-        if (next.smartTerrain.recipes[instanceId]) {
-          const baseId = `${instanceId}-copy`;
-          instanceId = baseId;
-          let suffix = 2;
-          while (next.smartTerrain.recipes[instanceId]) {
-            instanceId = `${baseId}-${suffix}`;
-            suffix += 1;
-          }
-        }
-        const recipe = {
-          ...clipboardRecipe.recipe,
-          ownerId: smartRecipeOwnerId(instanceId),
-        };
-        next.smartTerrain.recipes[instanceId] = recipe;
-        const ownerId = recipe.ownerId;
-        next.smartTerrain.suppressedOutputParts.push(
-          ...clipboardRecipe.suppressedPartIds.map(
-            (partId) => smartOwnedOutputPartKey(ownerId, partId),
-          ),
-        );
-      }
-
-      next.smartTerrain.suppressedOutputParts = Array.from(
-        new Set(next.smartTerrain.suppressedOutputParts),
-      );
-      next = setSmartTerrainDetailsEnabled(next, next.smartTerrain.detailsEnabled);
-      this.applySmartDocument(next);
+      this.applySmartDocument(this.smartTiles.applyClipboardPlan(
+        this.getSmartDocument(),
+        smartPaste,
+      ));
       changed = true;
     }
 
@@ -1023,16 +837,14 @@ export class EditorEditRuntime {
     const baseTileY = Math.floor(localPoint.y / TILE_SIZE);
     if (editorState.paletteMode === 'smart') {
       const rawCell = { x: baseTileX, y: baseTileY };
-      const axis = getCyberSmartGestureAxis(editorState.smartMaterial);
-      if (axis && !this.currentSmartGestureAnchor) {
-        this.currentSmartGestureAnchor = rawCell;
-      }
-      const cell = axis && this.currentSmartGestureAnchor
-        ? constrainCyberSmartCell(rawCell, this.currentSmartGestureAnchor, axis)
-        : rawCell;
-      this.applySmartDocument(applySelectedSmartCells(
+      const normalized = this.smartTiles.normalizeStrokeCell(
+        rawCell,
+        this.currentSmartGestureAnchor,
+      );
+      this.currentSmartGestureAnchor = normalized.anchor;
+      this.applySmartDocument(this.smartTiles.applyCells(
         this.getSmartDocument(),
-        [cell],
+        [normalized.cell],
         'paint',
       ));
       return;
@@ -1114,7 +926,7 @@ export class EditorEditRuntime {
         this.applySmartDocument(document);
         return;
       }
-      this.applySmartDocument(applySelectedSmartCells(document, cells, 'erase'));
+      this.applySmartDocument(this.smartTiles.applyCells(document, cells, 'erase'));
       return;
     }
     const layer = this.host.getLayers().get(editorState.activeLayer);
@@ -1186,21 +998,10 @@ export class EditorEditRuntime {
 
     const actions: TileAction[] = [];
     const smartBefore = cloneRoomSmartTerrainState(this.smartTerrain);
-    const removedCyberOwners = new Set<string>();
-    for (const [key, cell] of Object.entries(smartBefore.semanticCells)) {
-      if (key.startsWith(`${editorState.activeLayer}:`) && !cell.legacySource) {
-        removedCyberOwners.add(`cyber:cell:${key}`);
-      }
-    }
-    for (const recipe of Object.values(smartBefore.recipes)) {
-      if (recipe.anchor.layer === editorState.activeLayer) {
-        removedCyberOwners.add(recipe.ownerId);
-      }
-    }
-    for (const [key, output] of Object.entries(smartBefore.ownedOutputs)) {
-      if (output.layer === editorState.activeLayer || !removedCyberOwners.has(output.ownerId)) continue;
-      const coordinate = key.replace(/^[^:]+:/, '').split(',').map(Number);
-      const [x, y] = coordinate;
+    const recipeClearPlan = planSmartRecipeLayerClear(smartBefore, editorState.activeLayer);
+    for (const output of recipeClearPlan.removedOutputs) {
+      if (output.layer === editorState.activeLayer) continue;
+      const { x, y } = output;
       const outputLayer = this.host.getLayers().get(output.layer);
       const outputTile = outputLayer?.getTileAt(x, y);
       const oldGid = outputTile
@@ -1360,10 +1161,10 @@ export class EditorEditRuntime {
     const outline = Boolean(options?.outline);
     if (editorState.paletteMode === 'smart') {
       const constrainedCells = kind === 'rect' && !erase
-        ? getCyberSmartRectangleCells(editorState.smartMaterial, x1, y1, x2, y2)
+        ? this.smartTiles.getRectangleCells(x1, y1, x2, y2)
         : null;
       if (constrainedCells) {
-        this.applySmartDocument(applySelectedSmartCells(
+        this.applySmartDocument(this.smartTiles.applyCells(
           this.getSmartDocument(),
           constrainedCells,
           'paint',
@@ -1374,12 +1175,12 @@ export class EditorEditRuntime {
       const document = this.getSmartDocument();
       this.applySmartDocument(
         outline && !erase
-          ? applySelectedSmartOutlineCells(
+          ? this.smartTiles.applyOutlineCells(
               document,
               iterateShapeTiles(kind, x1, y1, x2, y2, false, options?.mid),
               cells,
             )
-          : applySelectedSmartCells(document, cells, erase ? 'erase' : 'paint'),
+          : this.smartTiles.applyCells(document, cells, erase ? 'erase' : 'paint'),
       );
       return;
     }
@@ -1452,7 +1253,7 @@ export class EditorEditRuntime {
         cells.push({ x, y });
         queue.push([x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]);
       }
-      this.applySmartDocument(applySelectedSmartCells(
+      this.applySmartDocument(this.smartTiles.applyCells(
         this.getSmartDocument(),
         cells,
         replacementGid < 0 ? 'erase' : 'paint',

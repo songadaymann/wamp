@@ -67,6 +67,28 @@ describe('pickVariedCatalogCandidate', () => {
     expect(pickVariedCatalogCandidate(rares, 0, 0).localIndex).toBe(11);
   });
 
+  it('does not fall into a two-color checkerboard across a grid', () => {
+    const candidates = pool(64, 82, 83);
+    let even64 = 0;
+    let odd64 = 0;
+    let total64 = 0;
+    const looks = new Set<string>();
+    for (let y = 0; y < 12; y += 1) {
+      for (let x = 0; x < 16; x += 1) {
+        const pick = pickVariedCatalogCandidate(candidates, x, y);
+        looks.add(`${pick.localIndex}:${Number(pick.flipX)}${Number(pick.flipY)}`);
+        if (pick.localIndex !== 64) continue;
+        total64 += 1;
+        if ((x + y) % 2 === 0) even64 += 1;
+        else odd64 += 1;
+      }
+    }
+    expect(looks.size).toBeGreaterThan(6);
+    expect(total64).toBeGreaterThan(20);
+    expect(even64 / total64).toBeGreaterThan(0.25);
+    expect(even64 / total64).toBeLessThan(0.75);
+  });
+
   it('skips a neighboring look when another alternate exists', () => {
     const candidates = pool(11, 33);
     const first = pickVariedCatalogCandidate(candidates, 2, 3);

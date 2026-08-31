@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createRoomSmartTerrainState,
+  normalizeRoomSmartTerrainState,
   smartOwnedOutputKey,
   smartOwnedOutputPartKey,
   smartSemanticCellKey,
@@ -13,6 +14,7 @@ import {
   planEditorClipboardPaste,
   planEditorSmartClipboardPaste,
 } from './clipboard';
+import { SmartTileController } from './smartTileController';
 
 describe('editor clipboard planning', () => {
   it('normalizes reversed bounds, clamps to the room, and retains sparse cells', () => {
@@ -40,6 +42,38 @@ describe('editor clipboard planning', () => {
     expect(planEditorClipboardPaste(state!, 39, 20)).toEqual([
       { x: 39, y: 21, encodedTileValue: 11 },
     ]);
+  });
+
+  it('bakes normalized legacy recipe aliases instead of restoring them as macros', () => {
+    const smartTerrain = normalizeRoomSmartTerrainState({
+      version: 2,
+      recipes: {
+        validLegacyAlias: {
+          recipeId: 'legacy.feature',
+          styleId: 'cave',
+          brushId: 'feature',
+          anchor: { layer: 'terrain', x: 9, y: 5 },
+          sourceCells: [{ layer: 'terrain', x: 9, y: 5 }],
+          parameters: {},
+        },
+      },
+    });
+    const clipboard = buildEditorClipboardState(
+      'terrain', 9, 5, 9, 5, () => 42, undefined, smartTerrain,
+    )!;
+    const plan = planEditorSmartClipboardPaste(clipboard, 12, 8, 'terrain');
+    const controller = new SmartTileController(() => ({
+      brushId: 'forest.ground',
+      styleId: 'forest',
+    }));
+
+    expect(clipboard.smartRecipes).toBeUndefined();
+    expect(clipboard.tiles).toEqual([[42]]);
+    expect(plan.recipes).toEqual([]);
+    expect(() => controller.applyClipboardPlan({
+      tileData: createEmptyTileData(),
+      smartTerrain: createRoomSmartTerrainState(),
+    }, plan)).not.toThrow();
   });
 
   it('deep-clones clipboard rows for cross-room reuse', () => {

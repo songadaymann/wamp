@@ -1922,9 +1922,14 @@ export class EditorUiBridge {
       const layerExplanation = advancedBuilder
         ? ` Primary tiles use the selected ${getLayerUiLabel(editorState.activeLayer)} layer; coordinated overlays may use a companion layer.`
         : ` Places on ${getLayerUiLabel(smartSelection.brush.defaultLayer)}.`;
+      const collisionExplanation = advancedBuilder
+        && editorState.activeLayer === 'background'
+        && smartSelection.brush.collisionRole === 'solid'
+        ? ' Exposed top edges are one-way landing surfaces; the rest stays pass-through.'
+        : '';
       smartHint.textContent = tunnelBackdropSelected && !advancedBuilder
         ? 'Draw non-colliding blue tunnel walls behind the player. Smart chooses rock edges and ties.'
-        : `${smartSelection.brush.description}${layerExplanation}${supportExplanation} Right-click or Erase removes it.`;
+        : `${smartSelection.brush.description}${layerExplanation}${collisionExplanation}${supportExplanation} Right-click or Erase removes it.`;
       smartHint.dataset.smartSupport = unsupportedTools.length > 0 ? 'limited' : 'full';
     }
 

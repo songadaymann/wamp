@@ -7,6 +7,11 @@ import {
   type SmartSemanticCellState,
   type SmartTerrainCellState,
 } from '../../autotiling/model';
+import {
+  getRegisteredSmartRecipeOwnerId,
+  getRegisteredSmartSemanticOwnerId,
+  isRegisteredSmartRecipeBrush,
+} from '../../autotiling/brushEngine';
 
 export interface EditorClipboardRecipeState {
   /** The source room's stable instance ID. Paste reuses it when available. */
@@ -136,7 +141,7 @@ function getRecipeOwnerId(
       && (output.ownerId === instanceId || output.ownerId.endsWith(`:${instanceId}`))
   ));
   if (matchingOutput) return matchingOutput.ownerId;
-  return recipe.recipeId.startsWith('cyber.') ? `cyber:recipe:${instanceId}` : instanceId;
+  return getRegisteredSmartRecipeOwnerId(recipe.brushId, instanceId);
 }
 
 function getSuppressedPartIds(state: RoomSmartTerrainState, ownerId: string): string[] {
@@ -204,9 +209,7 @@ function buildSmartClipboardFields(
       if (!cell || cell.legacySource) continue;
       const relativeKey = `${x - minX},${y - minY}`;
       smartSemanticCells[relativeKey] = { ...cell };
-      const ownerId = cell.brushId.startsWith('cyber.')
-        ? `cyber:cell:${semanticKey}`
-        : `legacy-semantic:${semanticKey}`;
+      const ownerId = getRegisteredSmartSemanticOwnerId(cell.brushId, semanticKey);
       const suppressedPartIds = getSuppressedPartIds(state, ownerId);
       if (suppressedPartIds.length > 0) smartSemanticSuppressions[relativeKey] = suppressedPartIds;
     }
@@ -214,7 +217,10 @@ function buildSmartClipboardFields(
 
   const smartRecipes: EditorClipboardRecipeState[] = [];
   for (const [instanceId, sourceRecipe] of Object.entries(state.recipes)) {
-    if (sourceRecipe.anchor.layer !== sourceLayer || !sourceRecipe.brushId.startsWith('cyber.')) continue;
+    if (
+      sourceRecipe.anchor.layer !== sourceLayer
+      || !isRegisteredSmartRecipeBrush(sourceRecipe.brushId)
+    ) continue;
     const sourceOwnerId = getRecipeOwnerId(state, instanceId, sourceRecipe);
     const footprint = getRecipeFootprint(state, instanceId, sourceOwnerId, sourceRecipe);
     const complete = footprint.length > 0 && footprint.every((coordinate) => (

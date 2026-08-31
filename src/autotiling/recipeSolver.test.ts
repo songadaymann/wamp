@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
-  TILE_FLIP_X_FLAG,
-  TILE_FLIP_Y_FLAG,
-  type LayerName,
-} from '../config/room';
+import { ROOM_HEIGHT, ROOM_WIDTH, TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG, type LayerName } from '../config/room';
 import { decodeTileDataValue } from '../config/editorState';
 import { getTerrainCollisionProfileForGid } from '../config/tilesets';
 import { createEmptyTileData } from '../persistence/roomModel';
@@ -24,12 +20,15 @@ import {
   applySmartBrushCells,
   applySmartBrushOutlineCells,
   lockSmartSemanticCell,
+  planSmartRecipeLayerClear,
   resolveSmartRecipeDocument,
   type SmartRecipeDocument,
 } from './recipeSolver';
 import { getSmartStyleDefinition } from './registry';
 import type { CyberStyleId } from './cyberProfile';
 import { applySmartCells } from './solver';
+import { edgesForOrientedCatalogTile } from './cyberEdgeCatalog';
+import { listCyberLetterMismatches, listCyberVoidAViolations } from './cyberEdgeMatcher';
 
 interface CyberReferenceFixture {
   provenance: { roomVersion: number; snapshotSha256: string };
@@ -122,6 +121,44 @@ function localIndexAt(
   return decodeTileDataValue(value).gid - getSmartStyleDefinition(styleId).firstGid;
 }
 
+function expectMatchingConcreteLetters(document: SmartRecipeDocument, styleId: CyberStyleId): void {
+  const picks = concretePicksFromDocument(document, styleId);
+  expect(listCyberLetterMismatches(picks, () => true)).toEqual([]);
+}
+
+function expectAFacesVoids(document: SmartRecipeDocument, styleId: CyberStyleId): void {
+  const picks = concretePicksFromDocument(document, styleId);
+  expect(listCyberVoidAViolations(picks, () => true)).toEqual([]);
+}
+
+function concretePicksFromDocument(document: SmartRecipeDocument, styleId: CyberStyleId) {
+  const style = getSmartStyleDefinition(styleId);
+  const picks = new Map<string, {
+    localIndex: number;
+    flipX: boolean;
+    flipY: boolean;
+    edges: NonNullable<ReturnType<typeof edgesForOrientedCatalogTile>>;
+  }>();
+  for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+    for (let x = 0; x < ROOM_WIDTH; x += 1) {
+      const value = document.tileData.terrain[y]![x]!;
+      if (value <= 0) continue;
+      const decoded = decodeTileDataValue(value);
+      const localIndex = decoded.gid - style.firstGid;
+      if (localIndex < 0 || localIndex >= style.tileCount) continue;
+      const edges = edgesForOrientedCatalogTile(localIndex, decoded.flipX, decoded.flipY, 'cyber.concrete');
+      if (!edges) continue;
+      picks.set(`${x},${y}`, {
+        localIndex,
+        flipX: decoded.flipX,
+        flipY: decoded.flipY,
+        edges,
+      });
+    }
+  }
+  return picks;
+}
+
 function cloneTileData(document: SmartRecipeDocument): SmartRecipeDocument['tileData'] {
   return {
     background: document.tileData.background.map((row) => [...row]),
@@ -137,6 +174,57 @@ function expectCollision(document: SmartRecipeDocument, x: number, y: number): v
 }
 
 describe('Cyber Smart recipe solver and ownership contracts', () => {
+  it('suppresses registered recipe outputs by ownership kind, not a Cyber prefix', () => {
+    const state = createRoomSmartTerrainState();
+    state.ownedOutputs[smartOwnedOutputKey('foreground', 3, 4)] = {
+      ownerId: 'future-family:recipe:panel-1',
+      partId: 'top-left',
+      kind: 'recipe',
+      layer: 'foreground',
+      value: 123,
+    };
+
+    const edited = applyManualSmartOutputEdit(state, 'foreground', 3, 4, -1);
+
+    expect(edited.ownedOutputs[smartOwnedOutputKey('foreground', 3, 4)]).toBeUndefined();
+    expect(edited.suppressedOutputParts).toContain(
+      'future-family:recipe:panel-1:top-left',
+    );
+  });
+
+  it('plans cross-layer recipe cleanup from stored ownership without an engine prefix', () => {
+    const state = createRoomSmartTerrainState();
+    state.recipes['panel-1'] = {
+      recipeId: 'cyber.framed-panel',
+      ownerId: 'future-family:recipe:panel-1',
+      brushId: 'cyber.fence',
+      styleId: 'cyber-yellow',
+      anchor: { layer: 'terrain', x: 3, y: 4 },
+      bounds: { minX: 3, minY: 4, maxX: 5, maxY: 5, width: 3, height: 2 },
+      sourceCells: [{ layer: 'terrain', x: 3, y: 4 }],
+      parameters: { width: 3, height: 2 },
+    };
+    state.ownedOutputs[smartOwnedOutputKey('foreground', 3, 4)] = {
+      ownerId: 'future-family:recipe:panel-1',
+      partId: 'top-left',
+      kind: 'recipe',
+      layer: 'foreground',
+      value: 123,
+    };
+
+    const plan = planSmartRecipeLayerClear(state, 'terrain');
+
+    expect(plan.smartTerrain.recipes).toEqual({});
+    expect(plan.smartTerrain.ownedOutputs).toEqual({});
+    expect(plan.removedOutputs).toEqual([{
+      key: 'foreground:3,4',
+      layer: 'foreground',
+      x: 3,
+      y: 4,
+      value: 123,
+    }]);
+  });
+
   it('retargets primary and companion Cyber outputs to an Advanced-selected layer', () => {
     const ring = rectangle(10, 10, 3, 3).filter(({ x, y }) => !(x === 11 && y === 11));
     let document = applySmartBrushCells(emptyDocument(), {
@@ -152,15 +240,12 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
       styleId: 'cyber-yellow',
     });
     expect(document.tileData.foreground[10]![10]).toBeGreaterThan(0);
-    expect(document.tileData.terrain[10]![10]).toBeGreaterThan(0);
+    expect(document.tileData.terrain[10]![10]).toBe(-1);
     expect(document.smartTerrain.ownedOutputs['foreground:10,10']).toMatchObject({
       partId: 'primary',
       layer: 'foreground',
     });
-    expect(document.smartTerrain.ownedOutputs['terrain:10,10']).toMatchObject({
-      partId: 'diagonal-tie',
-      layer: 'terrain',
-    });
+    expect(document.smartTerrain.ownedOutputs['terrain:10,10']).toBeUndefined();
 
     document = applySmartBrushCells(document, {
       brushId: 'cyber.support',
@@ -495,19 +580,23 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
       roomVersion: 13,
       snapshotSha256: '84add9b8e02afe00736ff59f54b07b9ca61237b8866e0815e3a2b978224a41ec',
     });
-    expect(rowTokens(document, 'terrain', 'cyber-yellow', 32, 2, 8)).toEqual([
-      '14', '15', '15', '15', '15', '15', '15', '14X',
-    ]);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 32, 2, 8)[0]).toBe('14');
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 32, 2, 8)[7]).toBe('14X');
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 32, 2, 8).slice(1, 7).every((value) => (
+      ['15', '15X', '16', '16X', '62Y', '62XY'].includes(value)
+    ))).toBe(true);
     for (let y = 3; y < 17; y += 1) {
       const row = rowTokens(document, 'terrain', 'cyber-yellow', 32, y, 8);
-      expect(row[0]).toBe('21X');
-      expect(row[7]).toBe('23X');
-      expect(row.slice(1, 7).every((value) => ['64', '82', '83'].includes(value))).toBe(true);
+      expect(['21X', '21XY', '23', '23Y']).toContain(row[0]);
+      expect(['23X', '23XY', '21', '21Y']).toContain(row[7]);
+      expect(row.slice(1, 7).every((value) => /^(64|82|83)X?Y?$/.test(value))).toBe(true);
     }
     const bottom = rowTokens(document, 'terrain', 'cyber-yellow', 32, 17, 8);
     expect(bottom[0]).toBe('25Y');
     expect(bottom[7]).toBe('30Y');
-    expect(bottom.slice(1, 7)).toEqual(['62', '62', '62', '62', '62', '62']);
+    expect(bottom.slice(1, 7).every((value) => (
+      ['62', '62X', '15Y', '15XY', '16Y', '16XY'].includes(value)
+    ))).toBe(true);
   });
 
   it('keeps neutral topology-owned wall art on inset edges of an irregular silhouette', () => {
@@ -518,7 +607,13 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
     ];
     const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
 
-    expect(rowTokens(document, 'terrain', 'cyber-yellow', 5, 5, 2)).toEqual(['21X', '23X']);
+    expect(['21X', '21XY', '23', '23Y']).toContain(
+      rowTokens(document, 'terrain', 'cyber-yellow', 5, 5, 2)[0],
+    );
+    expect(['23X', '23XY', '21', '21Y']).toContain(
+      rowTokens(document, 'terrain', 'cyber-yellow', 5, 5, 2)[1],
+    );
+    expectAFacesVoids(document, 'cyber-yellow');
   });
 
   it('frames a filled Structure staircase with colliding diagonal step art', () => {
@@ -533,42 +628,43 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
       '14', '14X', '.', '.',
     ]);
     const middle = rowTokens(document, 'terrain', 'cyber-yellow', 2, 3, 4);
-    expect(middle[0]).toBe('21X');
-    expect(['64', '82', '83']).toContain(middle[1]);
+    expect(['21X', '21XY', '23', '23Y']).toContain(middle[0]);
+    expect(['11', '33', '35']).toContain(middle[1].replace(/[XY]+$/, ''));
     expect(middle.slice(2)).toEqual(['14X', '.']);
     expect(rowTokens(document, 'foreground', 'cyber-yellow', 2, 3, 4)).toEqual([
       '.', '9Y', '.', '.',
     ]);
     const bottom = rowTokens(document, 'terrain', 'cyber-yellow', 2, 4, 4);
     expect(bottom[0]).toBe('25Y');
-    expect(bottom[1]).toBe('62');
-    expect(bottom[2]).toBe('62');
+    expect(['62', '62X', '15Y', '15XY', '16Y', '16XY']).toContain(bottom[1]);
+    expect(['62', '62X', '15Y', '15XY', '16Y', '16XY']).toContain(bottom[2]);
     expect(bottom[3]).toBe('71');
     expect(rowTokens(document, 'foreground', 'cyber-yellow', 2, 4, 4)).toEqual([
       '.', '.', '9Y', '.',
     ]);
     staircase.forEach(({ x, y }) => expectCollision(document, x, y));
+    expectAFacesVoids(document, 'cyber-yellow');
   });
 
   it.each([
-    { name: 'top-left', omittedX: 8, omittedY: 8, expected: '9XY' },
-    { name: 'top-right', omittedX: 10, omittedY: 8, expected: '9Y' },
-    { name: 'bottom-left', omittedX: 8, omittedY: 10, expected: '9X' },
-    { name: 'bottom-right', omittedX: 10, omittedY: 10, expected: '9' },
-  ])('keeps Terrain intact and overlays Cyber A10 for a missing $name diagonal', ({
+    { name: 'top-left', omittedX: 8, omittedY: 8, overlay: '9XY' },
+    { name: 'top-right', omittedX: 10, omittedY: 8, overlay: '9Y' },
+    { name: 'bottom-left', omittedX: 8, omittedY: 10, overlay: '9X' },
+    { name: 'bottom-right', omittedX: 10, omittedY: 10, overlay: '9' },
+  ])('overlays Cyber A10 on the inner corner of a missing $name diagonal', ({
     omittedX,
     omittedY,
-    expected,
+    overlay,
   }) => {
     const cells = rectangle(8, 8, 3, 3).filter(({ x, y }) => (
       x !== omittedX || y !== omittedY
     ));
     const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
 
-    expect(['64', '82', '83']).toContain(
-      tileToken(document.tileData.terrain[9]![9]!, 'cyber-yellow'),
+    expect([11, 33, 35]).toContain(
+      Number.parseInt(tileToken(document.tileData.terrain[9]![9]!, 'cyber-yellow').replace(/[XY]+$/, ''), 10),
     );
-    expect(tileToken(document.tileData.foreground[9]![9]!, 'cyber-yellow')).toBe(expected);
+    expect(tileToken(document.tileData.foreground[9]![9]!, 'cyber-yellow')).toBe(overlay);
     expectCollision(document, 9, 9);
   });
 
@@ -638,53 +734,269 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
     expect(localIndexAt(document, 'foreground', 'cyber-pink', 6, 5)).toBe(44);
   });
 
-  it('builds the layered neutral tunnel frame around an erased Ground cell', () => {
+  it('keeps a 1-cell-thick ring on E-frame mids instead of inverting tunnel fill', () => {
     const ring = rectangle(10, 10, 3, 3).filter(({ x, y }) => !(x === 11 && y === 11));
     const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', ring);
 
     expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual([
-      '9', '.', '9X',
+      '.', '.', '.',
     ]);
-    const ceiling = rowTokens(document, 'terrain', 'cyber-yellow', 10, 10, 3);
-    expectCollision(document, 10, 10);
-    expect(ceiling[1]).toBe('34Y');
-    expectCollision(document, 12, 10);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 10, 10, 3)).toEqual([
+      '67Y', '68', '67XY',
+    ]);
     expect(rowTokens(document, 'terrain', 'cyber-yellow', 10, 11, 3)).toEqual([
-      '21', '.', '23',
+      '31', '.', '31',
     ]);
-    const floor = rowTokens(document, 'terrain', 'cyber-yellow', 10, 12, 3);
-    expectCollision(document, 10, 12);
-    expect(floor[1]).toBe('34');
-    expectCollision(document, 12, 12);
+    expect(rowTokens(document, 'terrain', 'cyber-yellow', 10, 12, 3)).toEqual([
+      '67', '68', '67X',
+    ]);
     expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 12, 3)).toEqual([
-      '9Y', '.', '9XY',
+      '.', '.', '.',
     ]);
-    expect(tileToken(document.tileData.terrain[10]![11]!, 'cyber-yellow')).toBe('34Y');
     expect(document.tileData.terrain[11]![11]).toBe(-1);
+    expectCollision(document, 10, 10);
+    expectCollision(document, 11, 10);
+    expectCollision(document, 12, 11);
   });
 
-  it('suppresses only a manually edited Foreground tunnel part and restores it on repaint', () => {
-    const ring = rectangle(10, 10, 3, 3).filter(({ x, y }) => !(x === 11 && y === 11));
-    let document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', ring);
-    const manualTileData = cloneTileData(document);
-    manualTileData.foreground[10]![10] = -1;
-    document = resolveSmartRecipeDocument({
-      tileData: manualTileData,
-      smartTerrain: applyManualSmartOutputEdit(document.smartTerrain, 'foreground', 10, 10, -1),
+  it('uses 55 / 70 at 1-cell-thick T-junctions and 43 at a 1-cell-thick cross', () => {
+    const tee = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', [
+      { x: 10, y: 8 }, { x: 10, y: 9 }, { x: 10, y: 10 }, { x: 10, y: 11 },
+      { x: 11, y: 9 }, { x: 12, y: 9 },
+    ]);
+    expect(tileToken(tee.tileData.terrain[9]![10]!, 'cyber-yellow')).toBe('55');
+    expectMatchingConcreteLetters(tee, 'cyber-yellow');
+
+    const floorTee = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', [
+      { x: 10, y: 12 }, { x: 11, y: 12 }, { x: 12, y: 12 }, { x: 13, y: 12 },
+      { x: 12, y: 10 }, { x: 12, y: 11 },
+    ]);
+    expect(tileToken(floorTee.tileData.terrain[12]![12]!, 'cyber-yellow')).toBe('70Y');
+    expectMatchingConcreteLetters(floorTee, 'cyber-yellow');
+
+    const cross = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', [
+      { x: 12, y: 10 }, { x: 12, y: 11 },
+      { x: 10, y: 12 }, { x: 11, y: 12 }, { x: 12, y: 12 }, { x: 13, y: 12 }, { x: 14, y: 12 },
+      { x: 12, y: 13 }, { x: 12, y: 14 },
+    ]);
+    expect(tileToken(cross.tileData.terrain[12]![12]!, 'cyber-yellow')).toBe('43');
+    expectMatchingConcreteLetters(cross, 'cyber-yellow');
+  });
+
+  it('uses 70 between a 1-cell chimney and an enclosed hole instead of a tunnel ceiling', () => {
+    const hole = new Set(['12,11']);
+    const cells = [
+      ...rectangle(10, 10, 5, 5).filter((cell) => !hole.has(`${cell.x},${cell.y}`)),
+      { x: 12, y: 9 },
+    ];
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+
+    expect(tileToken(document.tileData.terrain[10]![12]!, 'cyber-yellow')).toBe('70Y');
+    expect(tileToken(document.tileData.terrain[9]![12]!, 'cyber-yellow')).toBe('19');
+    expect(document.tileData.terrain[11]![12]).toBe(-1);
+    expectAFacesVoids(document, 'cyber-yellow');
+  });
+
+  it('uses convex 14-family corners at inner steps of an enclosed hole instead of tunnel edges', () => {
+    const hole = new Set(['12,11', '13,11', '14,11', '12,12', '13,12', '14,12', '11,13', '12,13', '13,13', '14,13']);
+    const cells = rectangle(10, 10, 6, 6).filter((cell) => !hole.has(`${cell.x},${cell.y}`));
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+
+    expect([14, 25, 30, 61]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 11, 12));
+    expect(['21', '23', '34']).not.toContain(
+      tileToken(document.tileData.terrain[12]![11]!, 'cyber-yellow').replace(/[XY]+$/, ''),
+    );
+  });
+
+  it('uses 11 / 33 / 35 at concave hole corners and 14-family at convex plus armpits', () => {
+    const blockHole = new Set(['12,12', '13,12', '12,13', '13,13']);
+    const block = paint(
+      emptyDocument(),
+      'cyber.concrete',
+      'cyber-yellow',
+      rectangle(10, 10, 6, 6).filter((cell) => !blockHole.has(`${cell.x},${cell.y}`)),
+    );
+    for (const [x, y] of [[11, 11], [14, 11], [11, 14], [14, 14]] as const) {
+      expect([11, 33, 35]).toContain(localIndexAt(block, 'terrain', 'cyber-yellow', x, y));
+    }
+
+    const plusHole = new Set(['12,11', '11,12', '12,12', '13,12', '12,13']);
+    const plus = paint(
+      emptyDocument(),
+      'cyber.concrete',
+      'cyber-yellow',
+      rectangle(8, 8, 10, 10).filter((cell) => !plusHole.has(`${cell.x},${cell.y}`)),
+    );
+    for (const [x, y] of [[11, 11], [13, 11], [11, 13], [13, 13]] as const) {
+      expect([14, 25, 30, 61]).toContain(localIndexAt(plus, 'terrain', 'cyber-yellow', x, y));
+    }
+    for (const [x, y] of [[11, 10], [13, 10], [10, 11], [14, 11], [10, 13], [14, 13], [11, 14], [13, 14]] as const) {
+      expect([11, 33, 35]).toContain(localIndexAt(plus, 'terrain', 'cyber-yellow', x, y));
+    }
+    expect(tileToken(plus.tileData.terrain[10]![12]!, 'cyber-yellow')).toBe('34Y');
+    expect(tileToken(plus.tileData.terrain[14]![12]!, 'cyber-yellow')).toBe('34');
+    expect(tileToken(plus.tileData.terrain[12]![10]!, 'cyber-yellow')).toBe('21');
+    expect(tileToken(plus.tileData.terrain[12]![14]!, 'cyber-yellow')).toBe('23');
+    expectMatchingConcreteLetters(block, 'cyber-yellow');
+    expectMatchingConcreteLetters(plus, 'cyber-yellow');
+  });
+
+  it('uses 14 / 25 / 30 / 61 at the pinch where an inner hole meets an outer cut-out', () => {
+    const hole = new Set(['12,11', '13,11', '12,12', '13,12']);
+    const cells = rectangle(10, 8, 8, 10).filter(({ x, y }) => (
+      !hole.has(`${x},${y}`) && !(x >= 14 && y >= 13 && y <= 14)
+    ));
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+
+    expect([14, 25, 30, 61]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 14, 12));
+    expect([14, 25, 30, 61]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 13, 13));
+    expect(['11', '33', '35']).not.toContain(
+      tileToken(document.tileData.terrain[12]![14]!, 'cyber-yellow').replace(/[XY]+$/, ''),
+    );
+    expect(tileToken(document.tileData.terrain[10]![12]!, 'cyber-yellow')).toBe('34Y');
+    expect(tileToken(document.tileData.terrain[11]![11]!, 'cyber-yellow')).toBe('21');
+    expectMatchingConcreteLetters(document, 'cyber-yellow');
+  });
+
+  it('uses 11 / 33 / 35 at exterior concave corners of a painted plus', () => {
+    const cells = rectangle(10, 10, 7, 7).filter(({ x, y }) => {
+      const localX = x - 10;
+      const localY = y - 10;
+      return !((localX < 2 || localX > 4) && (localY < 2 || localY > 4));
     });
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
 
-    expect(document.tileData.foreground[10]![10]).toBe(-1);
+    for (const [x, y] of [[12, 12], [14, 12], [12, 14], [14, 14]] as const) {
+      expect([11, 33, 35]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', x, y));
+    }
+    expect(tileToken(document.tileData.foreground[12]![12]!, 'cyber-yellow')).toBe('9XY');
+  });
+
+  it('uses tunnel ceiling and sides only where Concrete backs the enclosed void', () => {
+    const cells = rectangle(8, 8, 5, 5).filter(({ x, y }) => !(x === 10 && y === 10));
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+
+    expect(tileToken(document.tileData.terrain[9]![10]!, 'cyber-yellow')).toBe('34Y');
+    expect(tileToken(document.tileData.terrain[11]![10]!, 'cyber-yellow')).toBe('34');
+    expect(tileToken(document.tileData.terrain[10]![9]!, 'cyber-yellow')).toBe('21');
+    expect(tileToken(document.tileData.terrain[10]![11]!, 'cyber-yellow')).toBe('23');
+    expect(document.tileData.terrain[10]![10]).toBe(-1);
+    for (const [x, y] of [[9, 9], [11, 9], [9, 11], [11, 11]] as const) {
+      expect([11, 33, 35]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', x, y));
+    }
+    expect(tileToken(document.tileData.foreground[9]![9]!, 'cyber-yellow')).toBe('9');
+    expect(tileToken(document.tileData.foreground[9]![11]!, 'cyber-yellow')).toBe('9X');
+    expect(tileToken(document.tileData.foreground[11]![9]!, 'cyber-yellow')).toBe('9Y');
+    expect(tileToken(document.tileData.foreground[11]![11]!, 'cyber-yellow')).toBe('9XY');
+    expectMatchingConcreteLetters(document, 'cyber-yellow');
+  });
+
+  it('uses 11 / 33 / 35 only on four-connected hole corners, not on solid sides beside a cut-out', () => {
+    const hole = new Set(['13,13']);
+    const cutout = new Set(['14,12', '15,12']);
+    const cells = rectangle(11, 10, 6, 7).filter(({ x, y }) => (
+      !hole.has(`${x},${y}`) && !cutout.has(`${x},${y}`)
+    ));
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+
+    for (const [x, y] of [[12, 12], [12, 14], [14, 14]] as const) {
+      expect([11, 33, 35]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', x, y));
+    }
+    expect([14, 25, 30, 61]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 13, 12));
+    expect([14, 25, 30, 61]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 14, 13));
+    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 12, 13)).toBe(21);
+    expect(tileToken(document.tileData.foreground[13]![13]!, 'cyber-yellow')).toBe('.');
+  });
+
+  it('does not overlay Cyber A10 on a concrete ring', () => {
+    const ring = rectangle(10, 10, 3, 3).filter(({ x, y }) => !(x === 11 && y === 11));
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', ring);
+
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual(['.', '.', '.']);
+    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 12, 3)).toEqual(['.', '.', '.']);
     expect(document.tileData.terrain[10]![10]).toBeGreaterThan(0);
-    expect(document.smartTerrain.suppressedOutputParts).toContain(
-      'cyber:cell:terrain:10,10:diagonal-tie',
-    );
-    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual(['.', '.', '9X']);
+  });
 
-    document = paint(document, 'cyber.concrete', 'cyber-yellow', [{ x: 10, y: 10 }]);
-    expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual(['9', '.', '9X']);
-    expect(document.smartTerrain.suppressedOutputParts).not.toContain(
-      'cyber:cell:terrain:10,10:diagonal-tie',
+  it('overlays Cyber A10 on the ZBBZ sockets beside a stepped hole', () => {
+    const hole = new Set(['11,9']);
+    const cells = [
+      ...rectangle(10, 8, 3, 1),
+      ...rectangle(10, 9, 4, 2).filter((cell) => !hole.has(`${cell.x},${cell.y}`)),
+    ];
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+
+    expect(tileToken(document.tileData.foreground[9]![12]!, 'cyber-yellow')).toBe('9Y');
+    expect(tileToken(document.tileData.foreground[10]![12]!, 'cyber-yellow')).toBe('9XY');
+    expect(['21', '23']).toContain(
+      tileToken(document.tileData.terrain[9]![12]!, 'cyber-yellow').replace(/[XY]+$/, ''),
     );
+    expect(['34', '62']).toContain(
+      tileToken(document.tileData.terrain[10]![12]!, 'cyber-yellow').replace(/[XY]+$/, ''),
+    );
+    expectCollision(document, 12, 9);
+    expectCollision(document, 12, 10);
+  });
+
+  it('overlays Cyber A10 on fill next to paired 1-cell tunnels', () => {
+    const holes = new Set(['12,10', '14,10']);
+    const cells = rectangle(10, 8, 7, 5).filter((cell) => !holes.has(`${cell.x},${cell.y}`));
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+
+    expect(tileToken(document.tileData.foreground[9]![13]!, 'cyber-yellow')).toBe('9');
+    expect(tileToken(document.tileData.foreground[11]![13]!, 'cyber-yellow')).toBe('9Y');
+    expect(tileToken(document.tileData.foreground[9]![11]!, 'cyber-yellow')).toBe('9');
+  });
+
+  it('overlays Cyber A10 on U-notch inner corners', () => {
+    const notch = new Set(['12,8', '13,8']);
+    const cells = rectangle(10, 8, 6, 4).filter((cell) => !notch.has(`${cell.x},${cell.y}`));
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+
+    expect(tileToken(document.tileData.foreground[9]![11]!, 'cyber-yellow')).toBe('9Y');
+    expect(tileToken(document.tileData.foreground[9]![14]!, 'cyber-yellow')).toBe('9XY');
+  });
+
+  it('overlays Cyber A10 where a hole sits beside a top-right cut-out', () => {
+    const omitted = new Set(['15,7', '12,9', '14,9']);
+    const cells = rectangle(10, 7, 6, 5).filter((cell) => !omitted.has(`${cell.x},${cell.y}`));
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+
+    expect(tileToken(document.tileData.foreground[8]![11]!, 'cyber-yellow')).toBe('9');
+    expect(tileToken(document.tileData.foreground[8]![13]!, 'cyber-yellow')).toBe('9');
+    expect(tileToken(document.tileData.foreground[8]![14]!, 'cyber-yellow')).toBe('9Y');
+    expect(tileToken(document.tileData.foreground[10]![11]!, 'cyber-yellow')).toBe('9Y');
+  });
+
+  it('keeps tile 37 on every Window end of a stacked band', () => {
+    let document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', rectangle(8, 6, 8, 6));
+    document = paint(document, 'cyber.windows', 'cyber-yellow', rectangle(8, 7, 8, 4));
+
+    for (const y of [7, 8, 9, 10]) {
+      expect(localIndexAt(document, 'terrain', 'cyber-yellow', 11, y)).toBe(38);
+      expect(localIndexAt(document, 'terrain', 'cyber-yellow', 8, y)).toBe(37);
+      expect(localIndexAt(document, 'terrain', 'cyber-yellow', 15, y)).toBe(37);
+    }
+  });
+
+  it('does not overlay Cyber A10 on 1-wide nubs', () => {
+    const cells = [
+      ...rectangle(10, 8, 6, 6),
+      { x: 16, y: 9 },
+      { x: 16, y: 11 },
+      { x: 9, y: 9 },
+      { x: 9, y: 11 },
+      { x: 12, y: 7 },
+      { x: 14, y: 7 },
+      { x: 12, y: 14 },
+      { x: 14, y: 14 },
+    ];
+    const document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+
+    for (const y of [7, 8, 9, 10, 11, 12, 13, 14]) {
+      for (const x of [9, 10, 12, 14, 15, 16]) {
+        expect(tileToken(document.tileData.foreground[y]![x]!, 'cyber-yellow')).toBe('.');
+      }
+    }
   });
 
   it('treats only same-style legacy tiles as compatible neighbors', () => {
@@ -722,7 +1034,7 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
     for (const [dx, dy] of [
       [0, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1],
     ]) {
-      structureData.terrain[12 + dy]![20 + dx] = yellow.firstGid + 38;
+      structureData.terrain[12 + dy]![20 + dx] = yellow.firstGid + 64;
     }
     document = paint(
       { tileData: structureData, smartTerrain: createRoomSmartTerrainState() },
@@ -730,7 +1042,7 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
       'cyber-yellow',
       [{ x: 20, y: 12 }],
     );
-    expect([64, 82, 83]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 20, 12));
+    expect([11, 33, 35]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 20, 12));
     expect(tileToken(document.tileData.foreground[12]![20]!, 'cyber-yellow')).toBe('9Y');
   });
 
@@ -790,10 +1102,10 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
     );
     corners.forEach(({ x, y }) => expectCollision(document, x, y));
     expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 10, 3)).toEqual([
-      '9', '.', '9X',
+      '.', '.', '.',
     ]);
     expect(rowTokens(document, 'foreground', 'cyber-yellow', 10, 12, 3)).toEqual([
-      '9Y', '.', '9XY',
+      '.', '.', '.',
     ]);
     expect(corners.every(({ x, y }) => (
       document.smartTerrain.semanticCells[smartSemanticCellKey('terrain', x, y)]?.shapeValue === undefined
