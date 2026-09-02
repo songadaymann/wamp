@@ -137,8 +137,8 @@ export const CYBER_FAMILY_DEFINITIONS = {
 export const CYBER_DECO_ONLY_LOCAL_INDICES = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
   13, 18, 22, 24, 32,
-  44, 45, 46, 47,
-  56, 57, 58, 59,
+  44, 45, 46, 47, 48,
+  56, 57, 58, 59, 60,
 ] as const;
 
 const CYBER_DECO_ONLY = new Set<number>(CYBER_DECO_ONLY_LOCAL_INDICES);
@@ -267,8 +267,8 @@ const STRUCTURE_TIE_TILES = {
   bottomRight: { localIndex: 9 },
 } as const satisfies Record<NonNullable<CyberStructureTopology['concaveCorner']>, TileSpec>;
 
-/** Cyber F5, G11, and G12 are the only neutral underground fill cells. */
-const STRUCTURE_UNDERGROUND_TILES = [64, 82, 83] as const;
+/** Cyber F5 is the only neutral underground fill cell. */
+const STRUCTURE_UNDERGROUND_TILES = [64] as const;
 
 export type CyberTunnelOutlineRole =
   | 'ceilingLeft'
@@ -648,6 +648,7 @@ export function resolveCyberRubbleBorderTile(
 /**
  * Cyber support is a vertical foundation path. Short paths use explicit cap
  * fallbacks; runs of four or more repeat 48 above the 60/72 lower/base pair.
+ * Atlas cells are 36, 48, 60, 72.
  */
 export function resolveCyberSupportSpan(
   styleId: CyberStyleId,
@@ -657,7 +658,7 @@ export function resolveCyberSupportSpan(
 ): CyberResolvedTile[] {
   assertSpanLength('support', length, 1);
   if (length === 1) {
-    return [makeStructuralTile(
+    return [makeSpecTile(
       styleId,
       { localIndex: 36, flipX: capFlipX },
       CYBER_FAMILY_DEFINITIONS.support.layer,
@@ -665,12 +666,12 @@ export function resolveCyberSupportSpan(
   }
   if (length === 2) {
     return [
-      makeStructuralTile(
+      makeSpecTile(
         styleId,
         { localIndex: 36, flipX: capFlipX },
         CYBER_FAMILY_DEFINITIONS.support.layer,
       ),
-      makeStructuralTile(
+      makeSpecTile(
         styleId,
         { localIndex: 60, flipX },
         CYBER_FAMILY_DEFINITIONS.support.layer,
@@ -685,7 +686,7 @@ export function resolveCyberSupportSpan(
         : index === length - 2
           ? 60
           : 48;
-    return makeStructuralTile(
+    return makeSpecTile(
       styleId,
       { localIndex, flipX: index === 0 ? capFlipX : flipX },
       CYBER_FAMILY_DEFINITIONS.support.layer,

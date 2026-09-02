@@ -79,7 +79,7 @@ describe('smart authoring registry', () => {
       resolverKey: 'cyber.concrete',
       collisionRole: 'solid',
       defaultLayer: 'terrain',
-      compatibleLegacyLocalIndices: expect.arrayContaining([14, 15, 20, 64, 83]),
+      compatibleLegacyLocalIndices: expect.arrayContaining([14, 15, 20, 64, 81]),
       outputLayers: ['terrain', 'foreground'],
     });
     expect(getSmartBrushDefinition('cyber.rubble').outputLayers).toEqual(['terrain', 'foreground']);

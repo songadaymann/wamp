@@ -252,16 +252,16 @@ const TOP_DECOR_INDICES_CYBERCITY = [
   12, 14, 15, 16, 17, 19, 20, 21, 23,
   25, 26, 27, 28, 29, 30, 31, 33, 34, 35,
   36, 37, 38, 39, 40, 41, 42, 43,
-  48, 49, 50, 51, 52, 53, 54, 55,
-  60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
+  49, 50, 51, 52, 53, 54, 55,
+  61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
   72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
 ];
 const DECO_ONLY_INDICES_CYBERCITY = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
   13, 18, 22,
   24, 32,
-  44, 45, 46, 47,
-  56, 57, 58, 59,
+  44, 45, 46, 47, 48,
+  56, 57, 58, 59, 60,
 ];
 const BOYGAME_BLANK_INDICES = [
   17, 18, 19, 22, 23,
@@ -1060,7 +1060,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'cybercity yellow',
     name: 'Cybercity Yellow',
-    path: 'assets/tilesets/cybercity_yellow.png?v=2026-08-08-expanded-cybercity',
+    path: 'assets/tilesets/cybercity_yellow.png?v=2026-09-01-tile82-revert',
     imageWidth: 192,
     imageHeight: 112,
     columns: 12,
@@ -1084,7 +1084,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'cybercity pink',
     name: 'Cybercity Pink',
-    path: 'assets/tilesets/cybercity_pink.png',
+    path: 'assets/tilesets/cybercity_pink.png?v=2026-09-01-tile82-revert',
     imageWidth: 192,
     imageHeight: 112,
     columns: 12,

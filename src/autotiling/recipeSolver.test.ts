@@ -537,7 +537,7 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
       const row = rowTokens(document, 'terrain', 'cyber-yellow', 32, y, 8);
       expect(['21X', '21XY', '23', '23Y']).toContain(row[0]);
       expect(['23X', '23XY', '21', '21Y']).toContain(row[7]);
-      expect(row.slice(1, 7).every((value) => /^(64|82|83)X?Y?$/.test(value))).toBe(true);
+      expect(row.slice(1, 7).every((value) => /^64$|^82[XY]*$/.test(value))).toBe(true);
     }
     const bottom = rowTokens(document, 'terrain', 'cyber-yellow', 32, 17, 8);
     expect(bottom[0]).toBe('25Y');
@@ -789,7 +789,7 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
     expectMatchingConcreteLetters(plus, 'cyber-yellow');
   });
 
-  it('uses 14 / 25 / 30 / 61 at the pinch where an inner hole meets an outer cut-out', () => {
+  it('uses 14 / 25 / 30 / 60 at the pinch where an inner hole meets an outer cut-out', () => {
     const hole = new Set(['12,11', '13,11', '12,12', '13,12']);
     const cells = rectangle(10, 8, 8, 10).filter(({ x, y }) => (
       !hole.has(`${x},${y}`) && !(x >= 14 && y >= 13 && y <= 14)
@@ -878,7 +878,7 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
     expect(['21', '23']).toContain(
       tileToken(document.tileData.terrain[9]![12]!, 'cyber-yellow').replace(/[XY]+$/, ''),
     );
-    expect(['34', '62']).toContain(
+    expect(['15', '16', '34', '62']).toContain(
       tileToken(document.tileData.terrain[10]![12]!, 'cyber-yellow').replace(/[XY]+$/, ''),
     );
     expectCollision(document, 12, 9);
@@ -924,6 +924,131 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
       expect(localIndexAt(document, 'terrain', 'cyber-yellow', 8, y)).toBe(37);
       expect(localIndexAt(document, 'terrain', 'cyber-yellow', 15, y)).toBe(37);
     }
+  });
+
+  it('paints a 3x3 Shell blob with 54, 66, 27, and 53', () => {
+    const document = paint(emptyDocument(), 'cyber.shell', 'cyber-yellow', rectangle(9, 9, 3, 3));
+    const used = rectangle(9, 9, 3, 3).map(({ x, y }) => localIndexAt(document, 'terrain', 'cyber-yellow', x, y));
+    expect(used.every((index) => [26, 27, 28, 40, 42, 52, 53, 54, 66, 79].includes(index))).toBe(true);
+    expect([53, 40]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 10, 10));
+    expect([27, 28]).toContain(localIndexAt(document, 'terrain', 'cyber-yellow', 10, 9));
+    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 11, 10)).toBe(54);
+    expect(localIndexAt(document, 'terrain', 'cyber-yellow', 11, 11)).toBe(66);
+  });
+
+  it('uses 79Y, 52Y, and 26Y on a bottom-right Shell triangle across Concrete', () => {
+    const shell = new Set([
+      '17,9',
+      '16,10', '17,10',
+      '15,11', '16,11', '17,11',
+      '13,12', '14,12', '15,12', '16,12', '17,12',
+    ]);
+    const cells = rectangle(10, 7, 8, 6).map((cell) => ({
+      x: cell.x,
+      y: cell.y,
+    }));
+    let document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+    document = paint(
+      document,
+      'cyber.shell',
+      'cyber-yellow',
+      cells.filter((cell) => shell.has(`${cell.x},${cell.y}`)),
+    );
+    expect(tileToken(document.tileData.terrain[9]![17]!, 'cyber-yellow')).toBe('79Y');
+    expect(tileToken(document.tileData.terrain[12]![13]!, 'cyber-yellow')).toBe('26Y');
+    expect(tileToken(document.tileData.terrain[10]![16]!, 'cyber-yellow')).toBe('52Y');
+    expect(tileToken(document.tileData.terrain[11]![15]!, 'cyber-yellow')).toBe('52Y');
+  });
+
+  it('uses 29X where a Shell stair meets the top Concrete edge, and 17 on the outer void corner', () => {
+    const topSeam = new Set([
+      '14,7', '15,7', '16,7', '17,7',
+      '13,8', '14,8', '15,8', '16,8', '17,8',
+      '12,9', '13,9', '14,9', '15,9', '16,9', '17,9',
+      '11,10', '12,10', '13,10', '14,10', '15,10', '16,10', '17,10',
+      '10,11', '11,11', '12,11', '13,11', '14,11', '15,11', '16,11', '17,11',
+      '10,12', '11,12', '12,12', '13,12', '14,12', '15,12', '16,12', '17,12',
+    ]);
+    const corner = new Set([
+      '17,7',
+      '16,8', '17,8',
+      '15,9', '16,9', '17,9',
+      '14,10', '15,10', '16,10', '17,10',
+      '13,11', '14,11', '15,11', '16,11', '17,11',
+      '12,12', '13,12', '14,12', '15,12', '16,12', '17,12',
+    ]);
+    const cells = rectangle(10, 7, 8, 6);
+    let document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+    document = paint(
+      document,
+      'cyber.shell',
+      'cyber-yellow',
+      cells.filter((cell) => topSeam.has(`${cell.x},${cell.y}`)),
+    );
+    expect(tileToken(document.tileData.terrain[7]![14]!, 'cyber-yellow')).toBe('29X');
+
+    document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+    document = paint(
+      document,
+      'cyber.shell',
+      'cyber-yellow',
+      cells.filter((cell) => corner.has(`${cell.x},${cell.y}`)),
+    );
+    expect(tileToken(document.tileData.terrain[7]![17]!, 'cyber-yellow')).toBe('17');
+  });
+
+  it('uses 29 and 17X on the opposite Shell diagonal at the top edge', () => {
+    const topSeam = new Set([
+      '10,7', '11,7', '12,7', '13,7',
+      '10,8', '11,8', '12,8', '13,8', '14,8',
+      '10,9', '11,9', '12,9', '13,9', '14,9', '15,9',
+      '10,10', '11,10', '12,10', '13,10', '14,10', '15,10', '16,10',
+      '10,11', '11,11', '12,11', '13,11', '14,11', '15,11', '16,11', '17,11',
+      '10,12', '11,12', '12,12', '13,12', '14,12', '15,12', '16,12', '17,12',
+    ]);
+    const corner = new Set([
+      '10,7',
+      '10,8', '11,8',
+      '10,9', '11,9', '12,9',
+      '10,10', '11,10', '12,10', '13,10',
+      '10,11', '11,11', '12,11', '13,11', '14,11',
+      '10,12', '11,12', '12,12', '13,12', '14,12', '15,12',
+    ]);
+    const cells = rectangle(10, 7, 8, 6);
+    let document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+    document = paint(
+      document,
+      'cyber.shell',
+      'cyber-yellow',
+      cells.filter((cell) => topSeam.has(`${cell.x},${cell.y}`)),
+    );
+    expect(tileToken(document.tileData.terrain[7]![13]!, 'cyber-yellow')).toBe('29');
+
+    document = paint(emptyDocument(), 'cyber.concrete', 'cyber-yellow', cells);
+    document = paint(
+      document,
+      'cyber.shell',
+      'cyber-yellow',
+      cells.filter((cell) => corner.has(`${cell.x},${cell.y}`)),
+    );
+    expect(tileToken(document.tileData.terrain[7]![10]!, 'cyber-yellow')).toBe('17X');
+  });
+
+  it('uses 78 where two Shell stairs meet beside a 1-high Concrete tip', () => {
+    const concrete = new Set([
+      '10,8', '11,8', '12,8',
+      '10,9', '11,9', '12,9', '13,9',
+      '10,10', '11,10', '12,10',
+    ]);
+    const cells = rectangle(10, 7, 8, 6);
+    let document = paint(emptyDocument(), 'cyber.shell', 'cyber-yellow', cells);
+    document = paint(
+      document,
+      'cyber.concrete',
+      'cyber-yellow',
+      cells.filter((cell) => concrete.has(`${cell.x},${cell.y}`)),
+    );
+    expect(tileToken(document.tileData.terrain[9]![14]!, 'cyber-yellow')).toBe('78');
   });
 
   it('does not overlay Cyber A10 on 1-wide nubs', () => {

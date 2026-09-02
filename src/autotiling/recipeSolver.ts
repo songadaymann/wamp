@@ -984,6 +984,7 @@ function resolveCyberLetterCells(
         if (localIndex < 0 || localIndex >= style.tileCount) continue;
         const catalogEntry = CYBER_EDGE_CATALOG.find((entry) => entry.localIndex === localIndex);
         if (!catalogEntry) continue;
+        if (localIndex === 36 || localIndex === 48 || localIndex === 60 || localIndex === 72) continue;
         fieldCells.set(key, { x, y, brushId: catalogEntry.brushId });
       }
     }

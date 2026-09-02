@@ -199,7 +199,7 @@ describe('Cyber Smart profile', () => {
       worldX: 32,
       worldY: 2,
     });
-    expect(worldPhasedReference.flat().filter((tile) => [64, 82, 83].includes(tile.localIndex)).length)
+    expect(worldPhasedReference.flat().filter((tile) => tile.localIndex === 64).length)
       .toBeGreaterThan(0);
     expect(worldPhasedReference.flat().every((tile) => (
       !['19', '31', '37', '38', '41', '61'].includes(String(tile.localIndex))
@@ -240,7 +240,7 @@ describe('Cyber Smart profile', () => {
       width: 12,
       height: 20,
     });
-    expect([64, 82, 83]).toContain(localPhaseAfterGrowth.localIndex);
+    expect(localPhaseAfterGrowth.localIndex).toBe(64);
   });
 
   it('lets topology own irregular ground edges while center art remains neutral', () => {
@@ -318,7 +318,7 @@ describe('Cyber Smart profile', () => {
   });
 
   it('uses C11Y for window ceilings and transformed A10 Foreground ties', () => {
-    expect([64, 82, 83]).toContain(resolveCyberStructureUnderground('cyber-yellow', 12, 8).localIndex);
+    expect(resolveCyberStructureUnderground('cyber-yellow', 12, 8).localIndex).toBe(64);
     expect(tokens([
       resolveCyberTunnelOutlineTile('cyber-yellow', 'ceilingLeft'),
       resolveCyberTunnelOutlineTile('cyber-yellow', 'ceiling'),
@@ -400,7 +400,6 @@ describe('Cyber Smart profile', () => {
       ...resolveCyberStructureRectangle({ styleId: 'cyber-pink', width: 11, height: 19 }).flat(),
       ...resolveCyberPlatformSpan('cyber-yellow', 20),
       ...resolveCyberRubbleColumn('cyber-yellow', 20),
-      ...resolveCyberSupportSpan('cyber-pink', 20),
       ...resolveCyberNeonStrip('cyber-yellow', 20),
     ];
     expect(structuralTiles.every((tile) => !CYBER_DECO_ONLY_LOCAL_INDICES.includes(

@@ -255,7 +255,10 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: ['cyber'],
     supportedStyleIds: CYBER_STYLE_IDS,
-    compatibleLegacyLocalIndices: catalogLocalIndicesForBrush('cyber.shell'),
+    compatibleLegacyLocalIndices: [
+      ...catalogLocalIndicesForBrush('cyber.shell'),
+      17, 26, 29, 39, 41, 42, 52, 65, 77, 78, 79, 80, 81,
+    ],
     outputLayers: ['terrain', 'foreground'],
   },
   {
@@ -319,7 +322,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     supportedLayers: ALL_SMART_LAYERS,
     supportedThemeIds: ['cyber'],
     supportedStyleIds: CYBER_STYLE_IDS,
-    compatibleLegacyLocalIndices: [44, 45, 46, 56, 57, 58, 59],
+    compatibleLegacyLocalIndices: [44, 45, 46, 56, 57, 58],
     outputLayers: ['foreground'],
   },
 ];
