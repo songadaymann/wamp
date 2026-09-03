@@ -11,6 +11,10 @@ import {
   isCyberDecoOnlyLocalIndex,
   isCyberDetailAllowed,
   isCyberEmitterLocalIndex,
+  applyCyberRubbleVariety,
+  CYBER_RUBBLE_PINK_PERIOD,
+  cyberRubbleEdgeFlipAxes,
+  resolveCyberFenceCell,
   resolveCyberFramedPanel,
   resolveCyberNeonStrip,
   resolveCyberPlatformSpan,
@@ -199,7 +203,7 @@ describe('Cyber Smart profile', () => {
       worldX: 32,
       worldY: 2,
     });
-    expect(worldPhasedReference.flat().filter((tile) => [64, 82, 83].includes(tile.localIndex)).length)
+    expect(worldPhasedReference.flat().filter((tile) => tile.localIndex === 64).length)
       .toBeGreaterThan(0);
     expect(worldPhasedReference.flat().every((tile) => (
       !['19', '31', '37', '38', '41', '61'].includes(String(tile.localIndex))
@@ -240,7 +244,7 @@ describe('Cyber Smart profile', () => {
       width: 12,
       height: 20,
     });
-    expect([64, 82, 83]).toContain(localPhaseAfterGrowth.localIndex);
+    expect(localPhaseAfterGrowth.localIndex).toBe(64);
   });
 
   it('lets topology own irregular ground edges while center art remains neutral', () => {
@@ -315,10 +319,53 @@ describe('Cyber Smart profile', () => {
     expect(token(resolveCyberRubbleBorderTile(
       'cyber-yellow', 'bottomRight', false, 'background',
     ))).toBe('22');
+
+    const samples = Array.from({ length: 256 }, (_, index) => applyCyberRubbleVariety(
+      resolveCyberRubbleColumn('cyber-yellow', 1)[0]!,
+      index % 16,
+      Math.floor(index / 16),
+    ));
+    const pinkCount = samples.filter((tile) => tile.styleId === 'cyber-pink').length;
+    expect(pinkCount).toBeGreaterThan(0);
+    expect(pinkCount).toBeLessThan(samples.length / 2);
+    expect(samples.some((tile) => tile.flipX || tile.flipY)).toBe(true);
+    expect(applyCyberRubbleVariety(samples[0]!, 0, 0)).toEqual(
+      applyCyberRubbleVariety(samples[0]!, 0, 0),
+    );
+    expect(CYBER_RUBBLE_PINK_PERIOD).toBe(8);
+    const tops = Array.from({ length: 64 }, (_, index) => applyCyberRubbleVariety(
+      resolveCyberRubbleBorderTile('cyber-yellow', 'top'),
+      index,
+      0,
+      0,
+      1,
+      cyberRubbleEdgeFlipAxes('top'),
+    ));
+    expect(tops.every((tile) => !tile.flipY)).toBe(true);
+    const sides = Array.from({ length: 64 }, (_, index) => applyCyberRubbleVariety(
+      resolveCyberRubbleBorderTile('cyber-yellow', 'left'),
+      0,
+      index,
+      0,
+      3,
+      cyberRubbleEdgeFlipAxes('left'),
+    ));
+    expect(sides.every((tile) => !tile.flipX)).toBe(true);
+    const corner = applyCyberRubbleVariety(
+      resolveCyberRubbleBorderTile('cyber-yellow', 'topLeft', true),
+      4,
+      7,
+      0,
+      5,
+      cyberRubbleEdgeFlipAxes('topLeft'),
+    );
+    expect(corner.localIndex).toBe(10);
+    expect(corner.flipX).toBe(true);
+    expect(corner.flipY).toBe(false);
   });
 
   it('uses C11Y for window ceilings and transformed A10 Foreground ties', () => {
-    expect([64, 82, 83]).toContain(resolveCyberStructureUnderground('cyber-yellow', 12, 8).localIndex);
+    expect(resolveCyberStructureUnderground('cyber-yellow', 12, 8).localIndex).toBe(64);
     expect(tokens([
       resolveCyberTunnelOutlineTile('cyber-yellow', 'ceilingLeft'),
       resolveCyberTunnelOutlineTile('cyber-yellow', 'ceiling'),
@@ -344,8 +391,8 @@ describe('Cyber Smart profile', () => {
   });
 
   it('uses exact short fallbacks and repeats 48 in longer vertical support paths', () => {
-    expect(tokens(resolveCyberSupportSpan('cyber-yellow', 1))).toEqual(['36']);
-    expect(tokens(resolveCyberSupportSpan('cyber-yellow', 2))).toEqual(['36', '60']);
+    expect(tokens(resolveCyberSupportSpan('cyber-yellow', 1))).toEqual(['72']);
+    expect(tokens(resolveCyberSupportSpan('cyber-yellow', 2))).toEqual(['60', '72']);
     expect(tokens(resolveCyberSupportSpan('cyber-yellow', 3))).toEqual(['36', '60', '72']);
     expect(tokens(resolveCyberSupportSpan('cyber-yellow', 4))).toEqual(['36', '48', '60', '72']);
     expect(tokens(resolveCyberSupportSpan('cyber-yellow', 6))).toEqual([
@@ -376,17 +423,31 @@ describe('Cyber Smart profile', () => {
       tile.layer === 'foreground' && isCyberDecoOnlyLocalIndex(tile.localIndex)
     ))).toBe(true);
     expect(() => resolveCyberNeonStrip('cyber-yellow', 2)).toThrow(/at least 3/);
-    expect(() => resolveCyberFramedPanel('cyber-pink', 2)).toThrow(/at least 3/);
+    expect(resolveCyberFramedPanel('cyber-pink', 2).map(tokens)).toEqual([
+      ['44', '46'],
+      ['56', '58'],
+    ]);
+    expect(resolveCyberFramedPanel('cyber-yellow', 1).map(tokens)).toEqual([['45'], ['57']]);
+    expect(resolveCyberFramedPanel('cyber-yellow', 1, 1).map(tokens)).toEqual([['45']]);
+    expect(resolveCyberFramedPanel('cyber-yellow', 2, 3).map(tokens)).toEqual([
+      ['44', '46'],
+      ['56', '58'],
+      ['56', '58'],
+    ]);
+    expect(tokens([
+      resolveCyberFenceCell('cyber-yellow', { left: false, right: false, above: false }),
+      resolveCyberFenceCell('cyber-yellow', { left: false, right: true, above: true }),
+      resolveCyberFenceCell('cyber-yellow', { left: true, right: false, above: true }),
+    ])).toEqual(['45', '56', '58']);
   });
 
   it('publishes and validates family minimum footprints', () => {
     expect(getCyberMinimumSize('platform')).toEqual({ width: 2, height: 1 });
-    expect(getCyberMinimumSize('framed-panel')).toEqual({ width: 3, height: 2 });
+    expect(getCyberMinimumSize('framed-panel')).toEqual({ width: 1, height: 1 });
     expect(validateCyberFootprint('structure', 1, 1)).toBeNull();
     expect(validateCyberFootprint('platform', 1, 1)).toMatch(/at least 2 x 1/);
     expect(validateCyberFootprint('platform', 2, 2)).toMatch(/exactly 1 cell tall/);
-    expect(validateCyberFootprint('framed-panel', 3, 1)).toMatch(/at least 3 x 2/);
-    expect(validateCyberFootprint('framed-panel', 3, 3)).toMatch(/exactly 2 cells tall/);
+    expect(validateCyberFootprint('framed-panel', 1, 1)).toBeNull();
     expect(validateCyberFootprint('support', 1, 8)).toBeNull();
     expect(validateCyberFootprint('rubble', 0, 1)).toMatch(/positive integers/);
     expect(Object.values(CYBER_FAMILY_DEFINITIONS)).toHaveLength(6);
@@ -400,7 +461,6 @@ describe('Cyber Smart profile', () => {
       ...resolveCyberStructureRectangle({ styleId: 'cyber-pink', width: 11, height: 19 }).flat(),
       ...resolveCyberPlatformSpan('cyber-yellow', 20),
       ...resolveCyberRubbleColumn('cyber-yellow', 20),
-      ...resolveCyberSupportSpan('cyber-pink', 20),
       ...resolveCyberNeonStrip('cyber-yellow', 20),
     ];
     expect(structuralTiles.every((tile) => !CYBER_DECO_ONLY_LOCAL_INDICES.includes(
@@ -410,7 +470,7 @@ describe('Cyber Smart profile', () => {
 
   it('uses a curated detail allowlist and style-aware emission metadata', () => {
     expect(isCyberDetailAllowed('cyber-yellow', 2)).toBe(true);
-    expect(isCyberDetailAllowed('cyber-pink', 4)).toBe(true);
+    expect(isCyberDetailAllowed('cyber-pink', 5)).toBe(true);
     expect(isCyberDetailAllowed('cyber-pink', 58)).toBe(false);
     expect(isCyberDetailAllowed('cyber-yellow', 12)).toBe(false);
     expect(isCyberDetailAllowed('cyber-yellow', 24)).toBe(false);
@@ -428,7 +488,7 @@ describe('Cyber Smart profile', () => {
       candidate('cyber-pink', 3, 1, 2),
       candidate('cyber-pink', 2, 2, 2),
       candidate('cyber-pink', 3, 3, 2),
-      candidate('cyber-pink', 4, 4, 1),
+      candidate('cyber-pink', 8, 4, 1),
       candidate('cyber-yellow', 5, 5, 1),
       candidate('cyber-pink', 44, 5, 2),
       candidate('cyber-yellow', 38, 6, 1),
@@ -441,7 +501,7 @@ describe('Cyber Smart profile', () => {
 
     expect(keys(selected)).toEqual(keys(reversed));
     expect(countCyberEmitters(selected)).toBe(3);
-    expect(selected.some(({ tile }) => tile.styleId === 'cyber-pink' && tile.localIndex === 4)).toBe(true);
+    expect(selected.some(({ tile }) => tile.styleId === 'cyber-pink' && tile.localIndex === 8)).toBe(true);
     expect(selected.some(({ tile }) => tile.styleId === 'cyber-yellow' && tile.localIndex === 5)).toBe(true);
     expect(selected.some(({ tile }) => tile.localIndex === 44)).toBe(false);
     expect(selected.some(({ tile }) => tile.localIndex === 38)).toBe(false);

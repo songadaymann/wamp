@@ -3,6 +3,7 @@ import { applySmartBrushCells, applySmartBrushOutlineCells, type SmartRecipeDocu
 import { createRoomSmartTerrainState } from './model';
 import { ROOM_HEIGHT, ROOM_WIDTH } from '../config/room';
 import { decodeTileDataValue } from '../config/editorState';
+import { CYBERCITY_EXTRAS_TILESET_FIRST_GID } from '../config/tilesets';
 import { getSmartStyleDefinition } from './registry';
 
 function emptyDocument(): SmartRecipeDocument {
@@ -16,8 +17,14 @@ function emptyDocument(): SmartRecipeDocument {
   };
 }
 
+const EXTRAS_TO_SMART_NEON: Readonly<Record<number, number>> = { 0: 7, 1: 4, 2: 6, 12: 7, 13: 4, 14: 6 };
+
 function localIndex(document: SmartRecipeDocument, x: number, y: number): number {
   const gid = decodeTileDataValue(document.tileData.terrain[y]![x]!).gid;
+  const extrasLocal = gid - CYBERCITY_EXTRAS_TILESET_FIRST_GID;
+  if (extrasLocal >= 0 && extrasLocal < 84 && EXTRAS_TO_SMART_NEON[extrasLocal] !== undefined) {
+    return EXTRAS_TO_SMART_NEON[extrasLocal]!;
+  }
   return gid - getSmartStyleDefinition('cyber-yellow').firstGid;
 }
 
@@ -47,31 +54,56 @@ describe('cyber letter matcher wiring', () => {
     expect(localIndex(document, 5, 5)).toBe(20);
   });
 
-  it('routes Neon through its minimum-width horizontal recipe', () => {
+  it('stamps 49 on a Concrete edge and 51 inside a Concrete blob on the first Neon click', () => {
+    const concrete = Array.from({ length: 30 }, (_, index) => ({
+      x: 3 + (index % 6),
+      y: 6 + Math.floor(index / 6),
+    }));
     let document = applySmartBrushCells(emptyDocument(), {
-      cells: [{ x: 3, y: 8 }, { x: 4, y: 8 }, { x: 5, y: 8 }, { x: 6, y: 8 }, { x: 7, y: 8 }],
+      cells: concrete,
       mode: 'paint',
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
     });
     document = applySmartBrushCells(document, {
-      cells: [{ x: 4, y: 8 }, { x: 5, y: 8 }, { x: 6, y: 8 }],
+      cells: [{ x: 3, y: 8 }],
       mode: 'paint',
       brushId: 'cyber.neon',
       styleId: 'cyber-yellow',
     });
-    expect(document.smartTerrain.semanticCells['terrain:4,8']).toBeUndefined();
-    expect(Object.values(document.smartTerrain.recipes)).toContainEqual(expect.objectContaining({
+    expect(document.smartTerrain.semanticCells['terrain:3,8']?.brushId).toBe('cyber.neon');
+    expect(Object.values(document.smartTerrain.recipes).some((recipe) => recipe.brushId === 'cyber.neon')).toBe(false);
+    expect(localIndex(document, 3, 8)).toBe(49);
+
+    document = applySmartBrushCells(document, {
+      cells: [{ x: 5, y: 8 }],
+      mode: 'paint',
       brushId: 'cyber.neon',
-      sourceCells: [
-        { layer: 'terrain', x: 4, y: 8 },
-        { layer: 'terrain', x: 5, y: 8 },
-        { layer: 'terrain', x: 6, y: 8 },
-      ],
-    }));
-    expect(localIndex(document, 4, 8)).toBe(49);
-    expect(localIndex(document, 5, 8)).toBe(50);
-    expect(localIndex(document, 6, 8)).toBe(51);
+      styleId: 'cyber-yellow',
+    });
+    expect(localIndex(document, 5, 8)).toBe(51);
+  });
+
+  it('stamps 51 when Neon is painted in the void', () => {
+    const document = applySmartBrushCells(emptyDocument(), {
+      cells: [{ x: 8, y: 4 }],
+      mode: 'paint',
+      brushId: 'cyber.neon',
+      styleId: 'cyber-yellow',
+    });
+    expect(localIndex(document, 8, 4)).toBe(51);
+  });
+
+  it('stamps 6 on a vertical Neon column in the void', () => {
+    const document = applySmartBrushCells(emptyDocument(), {
+      cells: [{ x: 8, y: 4 }, { x: 8, y: 5 }, { x: 8, y: 6 }],
+      mode: 'paint',
+      brushId: 'cyber.neon',
+      styleId: 'cyber-yellow',
+    });
+    expect(localIndex(document, 8, 4)).toBe(7);
+    expect(localIndex(document, 8, 5)).toBe(6);
+    expect(localIndex(document, 8, 6)).toBe(7);
   });
 
   it('does not overlay Cyber A10 on a concrete ring or a plus', () => {
@@ -149,7 +181,7 @@ describe('cyber letter matcher wiring', () => {
     expect(outline.tileData.terrain[8]![7]).toBe(-1);
   });
 
-  it('re-rolls catalog variety when the same concrete brush is painted again', () => {
+  it('stamps unflipped 64 for interior concrete fill', () => {
     let document = applySmartBrushCells(emptyDocument(), {
       cells: Array.from({ length: 24 }, (_, index) => ({
         x: 4 + (index % 6),
@@ -159,24 +191,71 @@ describe('cyber letter matcher wiring', () => {
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
     });
-    const first = localIndex(document, 6, 7);
+    expect(decodedLocal(document, 'terrain', 6, 7)).toEqual({
+      localIndex: 64, flipX: false, flipY: false,
+    });
     document = applySmartBrushCells(document, {
       cells: [{ x: 6, y: 7 }],
       mode: 'paint',
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
     });
-    expect(document.smartTerrain.semanticCells['terrain:6,7']?.varietySalt).toBe(1);
-    const seen = new Set<number>([first]);
-    for (let step = 0; step < 8; step += 1) {
-      document = applySmartBrushCells(document, {
-        cells: [{ x: 6, y: 7 }],
-        mode: 'paint',
-        brushId: 'cyber.concrete',
-        styleId: 'cyber-yellow',
-      });
-      seen.add(localIndex(document, 6, 7));
-    }
-    expect(seen.size).toBeGreaterThan(1);
+    expect([64, 82]).toContain(decodedLocal(document, 'terrain', 6, 7).localIndex);
+  });
+
+  it('stamps 83Y on the bottom-left of a Concrete NW / Shell SE square', () => {
+    const ox = 10;
+    const oy = 7;
+    const cells = Array.from({ length: 16 }, (_, index) => ({
+      x: ox + (index % 4),
+      y: oy + Math.floor(index / 4),
+    }));
+    let document = applySmartBrushCells(emptyDocument(), {
+      cells,
+      mode: 'paint',
+      brushId: 'cyber.concrete',
+      styleId: 'cyber-yellow',
+    });
+    document = applySmartBrushCells(document, {
+      cells: cells.filter((cell) => (cell.x - ox) + (cell.y - oy) >= 3),
+      mode: 'paint',
+      brushId: 'cyber.shell',
+      styleId: 'cyber-yellow',
+    });
+    expect(decodedLocal(document, 'terrain', 10, 10)).toEqual({
+      localIndex: 83, flipX: false, flipY: true,
+    });
+    expect(decodedLocal(document, 'terrain', 13, 7)).toEqual({
+      localIndex: 17, flipX: false, flipY: false,
+    });
+  });
+
+  it('keeps a Shell stair on 52 when the same brush is painted again', () => {
+    const ox = 10;
+    const oy = 7;
+    const cells = Array.from({ length: 16 }, (_, index) => ({
+      x: ox + (index % 4),
+      y: oy + Math.floor(index / 4),
+    }));
+    let document = applySmartBrushCells(emptyDocument(), {
+      cells,
+      mode: 'paint',
+      brushId: 'cyber.concrete',
+      styleId: 'cyber-yellow',
+    });
+    document = applySmartBrushCells(document, {
+      cells: cells.filter((cell) => (cell.x - ox) + (cell.y - oy) >= 3),
+      mode: 'paint',
+      brushId: 'cyber.shell',
+      styleId: 'cyber-yellow',
+    });
+    expect(decodedLocal(document, 'terrain', 12, 8).localIndex).toBe(52);
+    document = applySmartBrushCells(document, {
+      cells: [{ x: 12, y: 8 }],
+      mode: 'paint',
+      brushId: 'cyber.shell',
+      styleId: 'cyber-yellow',
+    });
+    expect(decodedLocal(document, 'terrain', 12, 8).localIndex).toBe(52);
   });
 });

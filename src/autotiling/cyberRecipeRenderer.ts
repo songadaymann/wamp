@@ -1,6 +1,7 @@
 /** Cyber span, support, and panel recipe rendering. */
 import type { RoomTileData } from '../persistence/roomModel';
 import type { CyberStyleId } from './cyberProfile';
+import { resolveCyberFenceCell } from './cyberProfile';
 import {
   CYBER_PANEL_RECIPE_ID,
   isCyberSpanBrushId,
@@ -8,7 +9,6 @@ import {
 } from './cyberRecipeFamily';
 import {
   getCyberFamilyMinimumWidth,
-  resolveCyberFramedPanelTiles,
   resolveCyberHorizontalMiddleTile,
   resolveCyberLinearFamilyTiles,
 } from './cyberSpanResolver';
@@ -147,6 +147,22 @@ export function flattenLetterSpanRecipes(state: RoomSmartTerrainState): void {
   }
 }
 
+function fenceOccupancy(
+  state: RoomSmartTerrainState,
+  styleId: CyberStyleId,
+  layer: SmartRecipeInstanceState['anchor']['layer'],
+): Set<string> {
+  const occupancy = new Set<string>();
+  for (const recipe of Object.values(state.recipes)) {
+    if (
+      recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel'
+    ) continue;
+    if (recipe.styleId !== styleId || recipe.anchor.layer !== layer) continue;
+    for (const cell of recipe.sourceCells) occupancy.add(`${cell.x},${cell.y}`);
+  }
+  return occupancy;
+}
+
 export function resolveCyberRecipes(tileData: RoomTileData, state: RoomSmartTerrainState): void {
   for (const recipe of Object.values(state.recipes)) {
     if (!isCyberStyleId(recipe.styleId)) continue;
@@ -161,24 +177,24 @@ export function resolveCyberRecipes(tileData: RoomTileData, state: RoomSmartTerr
     if (recipe.brushId !== 'cyber.fence' && recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel') {
       continue;
     }
-    const bounds = recipeBounds(recipe);
-    if (!bounds || bounds.width < getCyberFamilyMinimumWidth('framed-panel')) continue;
-    const rows = resolveCyberFramedPanelTiles(recipe.styleId, bounds.width);
-    for (let row = 0; row < rows.length; row += 1) {
-      for (let column = 0; column < rows[row]!.length; column += 1) {
-        addOwnedOutput(
-          tileData,
-          state,
-          recipe.ownerId,
-          `row-${row}:column-${column}`,
-          'recipe',
-          bounds.minX + column,
-          bounds.minY + row,
-          rows[row]![column]!,
-          true,
-          { brushId: recipe.brushId, sourceLayer: recipe.anchor.layer },
-        );
-      }
+    const occupancy = fenceOccupancy(state, recipe.styleId, recipe.anchor.layer);
+    for (const cell of recipe.sourceCells) {
+      addOwnedOutput(
+        tileData,
+        state,
+        recipe.ownerId,
+        `row-${cell.y - recipe.bounds.minY}:column-${cell.x - recipe.bounds.minX}`,
+        'recipe',
+        cell.x,
+        cell.y,
+        resolveCyberFenceCell(recipe.styleId, {
+          left: occupancy.has(`${cell.x - 1},${cell.y}`),
+          right: occupancy.has(`${cell.x + 1},${cell.y}`),
+          above: occupancy.has(`${cell.x},${cell.y - 1}`),
+        }),
+        true,
+        { brushId: recipe.brushId, sourceLayer: recipe.anchor.layer },
+      );
     }
   }
 }

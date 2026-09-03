@@ -82,7 +82,7 @@ describe('smart authoring registry', () => {
       rectangleMode: 'shape',
       collisionRole: 'solid',
       defaultLayer: 'terrain',
-      compatibleLegacyLocalIndices: expect.arrayContaining([14, 15, 20, 64, 83]),
+      compatibleLegacyLocalIndices: expect.arrayContaining([14, 15, 20, 64, 81]),
       outputLayers: ['terrain', 'foreground'],
     });
     expect(getSmartBrushDefinition('cyber.rubble').outputLayers).toEqual(['terrain', 'foreground']);
@@ -108,15 +108,15 @@ describe('smart authoring registry', () => {
       outputLayers: ['background'],
     });
     expect(getSmartBrushDefinition('cyber.neon')).toMatchObject({
-      strokeAxis: 'horizontal',
-      rectangleMode: 'horizontal-line',
+      strokeAxis: 'free',
+      rectangleMode: 'shape',
       defaultLayer: 'terrain',
       supportedLayers: ['background', 'terrain', 'foreground'],
       outputLayers: ['terrain', 'foreground'],
     });
     expect(getSmartBrushDefinition('cyber.fence')).toMatchObject({
-      strokeAxis: 'horizontal',
-      rectangleMode: 'horizontal-line',
+      strokeAxis: 'free',
+      rectangleMode: 'shape',
       defaultLayer: 'foreground',
       supportedLayers: ['background', 'terrain', 'foreground'],
       outputLayers: ['foreground'],

@@ -15,7 +15,7 @@ describe('Cyber recipe families', () => {
   it('keeps brush classification outside the document coordinator', () => {
     expect(getCyberFamilyId('cyber.concrete')).toBe('structure');
     expect(getCyberFamilyId('cyber.support')).toBe('support');
-    expect(isCyberSpanBrushId('cyber.neon')).toBe(true);
+    expect(isCyberSpanBrushId('cyber.neon')).toBe(false);
     expect(isCyberSpanBrushId('cyber.rubble')).toBe(false);
     expect(isCyberStyleId('cyber-pink')).toBe(true);
     expect(isCyberStyleId('forest')).toBe(false);

@@ -53,6 +53,7 @@ export function resolveCyberHorizontalMiddleTile(
 export function resolveCyberFramedPanelTiles(
   styleId: CyberStyleId,
   width: number,
+  height = 2,
 ): CyberResolvedTile[][] {
-  return resolveCyberFramedPanel(styleId, width);
+  return resolveCyberFramedPanel(styleId, width, height);
 }

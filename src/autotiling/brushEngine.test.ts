@@ -54,7 +54,7 @@ describe('registered Smart brush engine', () => {
   it('normalizes strokes and rectangles from registry metadata', () => {
     expect(constrainRegisteredSmartBrushStroke(
       'cyber.neon', { x: 8, y: 9 }, { x: 2, y: 3 },
-    )).toEqual({ x: 8, y: 3 });
+    )).toEqual({ x: 8, y: 9 });
     expect(constrainRegisteredSmartBrushStroke(
       'cyber.support', { x: 8, y: 9 }, { x: 2, y: 3 },
     )).toEqual({ x: 2, y: 9 });
@@ -62,9 +62,7 @@ describe('registered Smart brush engine', () => {
       'forest.ground', { x: 8, y: 9 }, { x: 2, y: 3 },
     )).toEqual({ x: 8, y: 9 });
 
-    expect(getRegisteredSmartBrushRectangleCells('cyber.fence', 5, 7, 2, 12)).toEqual([
-      { x: 2, y: 7 }, { x: 3, y: 7 }, { x: 4, y: 7 }, { x: 5, y: 7 },
-    ]);
+    expect(getRegisteredSmartBrushRectangleCells('cyber.fence', 5, 7, 2, 12)).toBeNull();
     expect(getRegisteredSmartBrushRectangleCells('cyber.support', 2, 3, 3, 4)).toEqual([
       { x: 2, y: 3 }, { x: 2, y: 4 }, { x: 3, y: 3 }, { x: 3, y: 4 },
     ]);

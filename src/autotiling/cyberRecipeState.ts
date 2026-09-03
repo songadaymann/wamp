@@ -1,5 +1,5 @@
 /** Shared Cyber recipe document types, canonicalization, and output ownership. */
-import { ROOM_HEIGHT, ROOM_WIDTH, type LayerName } from '../config/room';
+import { ROOM_HEIGHT, ROOM_WIDTH, TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG, type LayerName } from '../config/room';
 import type { RoomTileData } from '../persistence/roomModel';
 import type { CyberResolvedTile, CyberStyleId } from './cyberProfile';
 import {
@@ -20,6 +20,9 @@ import {
   type SmartSemanticCellState,
   type SmartStyleId,
 } from './model';
+import {
+  CYBERCITY_EXTRAS_TILESET_FIRST_GID,
+} from '../config/tilesets';
 import {
   getSmartBrushDefinition,
   resolveSmartTileValue,
@@ -371,6 +374,24 @@ export function clearCyberOwnedOutputs(tileData: RoomTileData, state: RoomSmartT
   }
 }
 
+const NEON_EXTRAS_LOCAL_INDEX: Readonly<Record<number, number>> = { 7: 0, 4: 1, 6: 2 };
+const NEON_EXTRAS_PINK_OFFSET = 12;
+
+function resolveNeonExtrasTileValue(
+  styleId: CyberStyleId,
+  localIndex: number,
+  flipX: boolean,
+  flipY: boolean,
+): number | null {
+  const base = NEON_EXTRAS_LOCAL_INDEX[localIndex];
+  if (base === undefined) return null;
+  const extrasIndex = styleId === 'cyber-pink' ? base + NEON_EXTRAS_PINK_OFFSET : base;
+  return CYBERCITY_EXTRAS_TILESET_FIRST_GID
+    + extrasIndex
+    + (flipX ? TILE_FLIP_X_FLAG : 0)
+    + (flipY ? TILE_FLIP_Y_FLAG : 0);
+}
+
 export function addOwnedOutput(
   tileData: RoomTileData,
   state: RoomSmartTerrainState,
@@ -388,7 +409,15 @@ export function addOwnedOutput(
   const outputTile = placement
     ? retargetCyberOutputTile(tile, placement.brushId, placement.sourceLayer)
     : tile;
-  const value = resolveSmartTileValue(outputTile.styleId, outputTile);
+  const neonExtrasValue = placement?.brushId === 'cyber.neon'
+    ? resolveNeonExtrasTileValue(
+      outputTile.styleId as CyberStyleId,
+      outputTile.localIndex,
+      outputTile.flipX ?? false,
+      outputTile.flipY ?? false,
+    )
+    : null;
+  const value = neonExtrasValue ?? resolveSmartTileValue(outputTile.styleId, outputTile);
   const existingValue = tileData[outputTile.layer][y]?.[x] ?? -1;
   if (!force && existingValue > 0) return;
   tileData[outputTile.layer][y][x] = value;

@@ -31,8 +31,10 @@ import {
   cloneTileData,
   discardOwnedOutputsForOwners,
   inBounds,
+  parseLayerCellKey,
   type ApplySmartBrushCellsOptions,
   type ApplySmartBrushOutlineCellsOptions,
+  type Bounds,
   type SmartRecipeDocument,
 } from './cyberRecipeState';
 import {
@@ -41,7 +43,6 @@ import {
 } from './cyberSemanticResolver';
 import {
   flattenLetterSpanRecipes,
-  recipeBounds,
   resolveCyberRecipes,
 } from './cyberRecipeRenderer';
 
@@ -144,26 +145,69 @@ function nextPanelInstanceId(state: RoomSmartTerrainState): string {
   return `cyber-panel-${index}`;
 }
 
-function isPanelRecipeAt(recipe: SmartRecipeInstanceState, layer: LayerName, x: number, y: number): boolean {
-  if (recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel') return false;
-  const bounds = recipeBounds(recipe);
-  return Boolean(
-    recipe.anchor.layer === layer
-    && bounds
-    && x >= bounds.minX
-    && x <= bounds.maxX
-    && y >= bounds.minY
-    && y <= bounds.minY + 1,
-  );
+function fenceCellsTouch(
+  cells: ReadonlySet<string>,
+  others: readonly { x: number; y: number }[],
+): boolean {
+  for (const { x, y } of others) {
+    if (
+      cells.has(`${x},${y}`)
+      || cells.has(`${x - 1},${y}`)
+      || cells.has(`${x + 1},${y}`)
+      || cells.has(`${x},${y - 1}`)
+      || cells.has(`${x},${y + 1}`)
+    ) return true;
+  }
+  return false;
 }
 
-function removePanelRecipe(state: RoomSmartTerrainState, instanceId: string): void {
+function fenceRecipeFromCells(
+  layer: LayerName,
+  cells: readonly { x: number; y: number }[],
+): {
+  sourceCells: Array<{ layer: LayerName; x: number; y: number }>;
+  bounds: Bounds;
+} {
+  const bMinX = Math.min(...cells.map(({ x }) => x));
+  const bMaxX = Math.max(...cells.map(({ x }) => x));
+  const bMinY = Math.min(...cells.map(({ y }) => y));
+  const bMaxY = Math.max(...cells.map(({ y }) => y));
+  return {
+    sourceCells: cells.map(({ x, y }) => ({ layer, x, y })),
+    bounds: {
+      minX: bMinX,
+      minY: bMinY,
+      maxX: bMaxX,
+      maxY: bMaxY,
+      width: bMaxX - bMinX + 1,
+      height: bMaxY - bMinY + 1,
+    },
+  };
+}
+
+function removePanelRecipe(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+  instanceId: string,
+): void {
   const ownerId = state.recipes[instanceId]?.ownerId ?? smartRecipeOwnerId(instanceId);
   delete state.recipes[instanceId];
+  for (const key of Object.keys(state.ownedOutputs)) {
+    const output = state.ownedOutputs[key];
+    if (output?.ownerId === ownerId) {
+      const coord = parseLayerCellKey(key);
+      if (coord && inBounds(coord.x, coord.y)) {
+        const current = tileData[output.layer][coord.y]?.[coord.x] ?? -1;
+        if (current === output.value) tileData[output.layer][coord.y][coord.x] = -1;
+      }
+      delete state.ownedOutputs[key];
+    }
+  }
   clearOwnerSuppressions(state, ownerId);
 }
 
 function applyPanelCells(
+  tileData: RoomTileData,
   state: RoomSmartTerrainState,
   cells: readonly SmartCellCoordinate[],
   mode: 'paint' | 'erase',
@@ -171,74 +215,68 @@ function applyPanelCells(
   layer: LayerName,
 ): void {
   if (mode === 'erase') {
-    const removed = new Set<string>();
-    for (const cell of cells) {
-      for (const [instanceId, recipe] of Object.entries(state.recipes)) {
-        if (isPanelRecipeAt(recipe, layer, cell.x, cell.y)) removed.add(instanceId);
+    const erased = new Set(cells.map(({ x, y }) => `${x},${y}`));
+    for (const [instanceId, recipe] of Object.entries(state.recipes)) {
+      if (recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel') continue;
+      if (recipe.anchor.layer !== layer) continue;
+      const remaining = recipe.sourceCells.filter((cell) => !erased.has(`${cell.x},${cell.y}`));
+      if (remaining.length === recipe.sourceCells.length) continue;
+      if (remaining.length === 0) {
+        removePanelRecipe(tileData, state, instanceId);
+        continue;
       }
-    }
-    for (const instanceId of removed) {
-      removePanelRecipe(state, instanceId);
+      const next = fenceRecipeFromCells(layer, remaining);
+      recipe.sourceCells = next.sourceCells;
+      recipe.bounds = next.bounds;
+      recipe.anchor = { layer, x: next.bounds.minX, y: next.bounds.minY };
+      recipe.parameters = { width: next.bounds.width, height: next.bounds.height };
+      clearOwnerSuppressions(state, recipe.ownerId);
     }
     return;
   }
   if (cells.length === 0) return;
-  const minX = Math.min(...cells.map(({ x }) => x));
-  const maxX = Math.max(...cells.map(({ x }) => x));
-  const anchorY = Math.min(...cells.map(({ y }) => y));
-  const matching = Object.entries(state.recipes).filter(([, recipe]) => {
-    if (
-      recipe.recipeId !== CYBER_PANEL_RECIPE_ID
-      || recipe.styleId !== styleId
-      || recipe.anchor.layer !== layer
-    ) return false;
-    const bounds = recipeBounds(recipe);
-    return Boolean(bounds
-      && bounds.minY === anchorY
-      && minX <= bounds.maxX + 1
-      && maxX >= bounds.minX - 1);
-  });
-  const matchingIds = new Set(matching.map(([instanceId]) => instanceId));
+  const cellSet = new Set(cells.map(({ x, y }) => `${x},${y}`));
   for (const [instanceId, recipe] of Object.entries(state.recipes)) {
     if (
-      recipe.recipeId !== CYBER_PANEL_RECIPE_ID
+      (recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel')
       || recipe.anchor.layer !== layer
-      || matchingIds.has(instanceId)
     ) continue;
-    const bounds = recipeBounds(recipe);
-    const overlapsOutput = Boolean(bounds
-      && minX <= bounds.maxX
-      && maxX >= bounds.minX
-      && anchorY <= bounds.minY + 1
-      && anchorY + 1 >= bounds.minY);
-    if (overlapsOutput) removePanelRecipe(state, instanceId);
+    if (recipe.styleId === styleId && fenceCellsTouch(cellSet, recipe.sourceCells)) {
+      for (const sc of recipe.sourceCells) cellSet.add(`${sc.x},${sc.y}`);
+      removePanelRecipe(tileData, state, instanceId);
+      continue;
+    }
+    if (recipe.styleId === styleId) continue;
+    const remaining = recipe.sourceCells.filter((sc) => !cellSet.has(`${sc.x},${sc.y}`));
+    if (remaining.length === recipe.sourceCells.length) continue;
+    if (remaining.length === 0) {
+      removePanelRecipe(tileData, state, instanceId);
+      continue;
+    }
+    const next = fenceRecipeFromCells(layer, remaining);
+    recipe.sourceCells = next.sourceCells;
+    recipe.bounds = next.bounds;
+    recipe.anchor = { layer, x: next.bounds.minX, y: next.bounds.minY };
+    recipe.parameters = { width: next.bounds.width, height: next.bounds.height };
+    clearOwnerSuppressions(state, recipe.ownerId);
   }
-  const instanceId = matching[0]?.[0] ?? nextPanelInstanceId(state);
-  const xValues = new Set<number>();
-  for (const [, recipe] of matching) {
-    recipe.sourceCells.forEach(({ x }) => xValues.add(x));
+  const allCells: Array<{ x: number; y: number }> = [];
+  for (const key of cellSet) {
+    const [xStr, yStr] = key.split(',');
+    allCells.push({ x: Number(xStr), y: Number(yStr) });
   }
-  for (let x = minX; x <= maxX; x += 1) xValues.add(x);
-  for (const [mergedId] of matching.slice(1)) removePanelRecipe(state, mergedId);
-  const orderedX = [...xValues].sort((left, right) => left - right);
+  const instanceId = nextPanelInstanceId(state);
   const ownerId = smartRecipeOwnerId(instanceId);
-  const bounds = {
-    minX: orderedX[0]!,
-    minY: anchorY,
-    maxX: orderedX[orderedX.length - 1]!,
-    maxY: anchorY + 1,
-    width: orderedX.length,
-    height: 2,
-  };
+  const next = fenceRecipeFromCells(layer, allCells);
   state.recipes[instanceId] = {
     recipeId: CYBER_PANEL_RECIPE_ID,
     ownerId,
     brushId: 'cyber.fence',
     styleId,
-    anchor: { layer, x: bounds.minX, y: bounds.minY },
-    bounds,
-    sourceCells: orderedX.map((x) => ({ layer, x, y: anchorY })),
-    parameters: { width: orderedX.length, height: 2 },
+    anchor: { layer, x: next.bounds.minX, y: next.bounds.minY },
+    bounds: next.bounds,
+    sourceCells: next.sourceCells,
+    parameters: { width: next.bounds.width, height: next.bounds.height },
   };
   clearOwnerSuppressions(state, ownerId);
 }
@@ -341,7 +379,7 @@ export function applyCyberSmartBrushCells(
   const migratedOwnerIds = canonicalizeCyberSpanRecipes(smartTerrain);
   discardOwnedOutputsForOwners(tileData, smartTerrain, migratedOwnerIds);
   if (options.brushId === 'cyber.fence') {
-    applyPanelCells(smartTerrain, cells, options.mode, options.styleId, layer);
+    applyPanelCells(tileData, smartTerrain, cells, options.mode, options.styleId, layer);
   } else if (isCyberSpanBrushId(options.brushId)) {
     applySpanCells(
       tileData,

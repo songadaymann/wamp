@@ -4,6 +4,8 @@ import { decodeTileDataValue } from '../config/editorState';
 import type { RoomTileData } from '../persistence/roomModel';
 import {
   CYBER_STYLE_PROFILES,
+  applyCyberRubbleVariety,
+  cyberRubbleEdgeFlipAxes,
   resolveCyberRubbleBorderTile,
   resolveCyberStructureTieTile,
   resolveCyberTunnelOutlineTile,
@@ -378,6 +380,15 @@ function resolveRun(
       };
       return;
     }
+    const tile = familyId === 'rubble'
+      ? applyCyberRubbleVariety(
+        resolved[before + index]!,
+        entry.x,
+        entry.y,
+        entry.cell.varietySalt ?? 0,
+        0,
+      )
+      : resolved[before + index]!;
     addOwnedOutput(
       tileData,
       state,
@@ -386,7 +397,7 @@ function resolveRun(
       'semantic',
       entry.x,
       entry.y,
-      resolved[before + index]!,
+      tile,
       true,
       { brushId: entry.cell.brushId, sourceLayer: entry.layer },
     );
@@ -572,7 +583,10 @@ export function resolveCyberSemanticCells(tileData: RoomTileData, state: RoomSma
   const groups = new Map<string, CyberSemanticEntry[]>();
   for (const entry of entries) {
     if (isCyberLetterBrushId(entry.cell.brushId) && !isCyberSpanBrushId(entry.cell.brushId)) continue;
-    const key = `${entry.layer}:${entry.cell.styleId}:${entry.cell.brushId}`;
+    const familyId = getCyberFamilyId(entry.cell.brushId);
+    const key = familyId === 'rubble'
+      ? `${entry.layer}:rubble`
+      : `${entry.layer}:${entry.cell.styleId}:${entry.cell.brushId}`;
     const group = groups.get(key) ?? [];
     group.push(entry);
     groups.set(key, group);
@@ -634,7 +648,14 @@ function resolveCyberRubbleBorders(
     'semantic',
     x,
     y,
-    resolveCyberRubbleBorderTile(owner.cell.styleId as CyberStyleId, part, flipX, layer),
+    applyCyberRubbleVariety(
+      resolveCyberRubbleBorderTile(owner.cell.styleId as CyberStyleId, part, flipX, layer),
+      x,
+      y,
+      owner.cell.varietySalt ?? 0,
+      part.charCodeAt(0) + (layer === 'background' ? 32 : 0),
+      cyberRubbleEdgeFlipAxes(part),
+    ),
     false,
     { brushId: owner.cell.brushId, sourceLayer: owner.layer },
   );
@@ -655,7 +676,7 @@ function resolveCyberRubbleBorders(
     const below = same(x, y + 1);
     const left = same(x - 1, y);
     const adjacentOwners = entries.filter((entry) => (
-      entry.cell.styleId === candidate.cell.styleId
+      entry.cell.brushId === 'cyber.rubble'
       && ((above && entry.x === x && entry.y === y - 1)
         || (right && entry.x === x + 1 && entry.y === y)
         || (below && entry.x === x && entry.y === y + 1)

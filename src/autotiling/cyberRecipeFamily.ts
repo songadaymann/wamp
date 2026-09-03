@@ -3,11 +3,10 @@ import type { CyberFamilyId, CyberStyleId } from './cyberProfile';
 
 export const CYBER_PANEL_RECIPE_ID = 'cyber.fence';
 
-export type CyberSpanBrushId = 'cyber.support' | 'cyber.neon';
+export type CyberSpanBrushId = 'cyber.support';
 
 const CYBER_SPAN_BRUSH_IDS: readonly CyberSpanBrushId[] = [
   'cyber.support',
-  'cyber.neon',
 ];
 
 const CYBER_FAMILY_BY_BRUSH: Partial<Record<SmartBrushId, CyberFamilyId>> = {
@@ -22,7 +21,6 @@ const CYBER_FAMILY_BY_BRUSH: Partial<Record<SmartBrushId, CyberFamilyId>> = {
 
 export const CYBER_SPAN_INSTANCE_PREFIX: Readonly<Record<CyberSpanBrushId, string>> = {
   'cyber.support': 'cyber-support',
-  'cyber.neon': 'cyber-neon-strip',
 };
 
 export function isCyberStyleId(styleId: SmartStyleId): styleId is CyberStyleId {

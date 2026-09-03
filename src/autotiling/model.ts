@@ -65,7 +65,7 @@ export interface SmartSemanticCellState {
   lockedValue?: SmartEncodedTileValue;
   /** Full encoded tile value, including flip flags. */
   shapeValue?: SmartEncodedTileValue;
-  /** Increments when the same brush is painted again so catalog variety can re-roll. */
+  /** Increments when the same brush is painted again so catalog variety cycles to the next look. */
   varietySalt?: number;
   /** Compatibility mirror rebuilt from cells/backdropCells on normalization. */
   legacySource?: true;
