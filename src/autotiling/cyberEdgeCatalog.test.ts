@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catalogLocalIndicesForBrush, pickVariedCatalogCandidate, type CyberOrientedTile } from './cyberEdgeCatalog';
+import { catalogLocalIndicesForBrush, pickCanonicalCatalogCandidate, pickVariedCatalogCandidate, type CyberOrientedTile } from './cyberEdgeCatalog';
 
 function pool(...localIndices: number[]): CyberOrientedTile[] {
   return localIndices.flatMap((localIndex) => (
@@ -195,6 +195,26 @@ describe('pickVariedCatalogCandidate', () => {
     const first = pickVariedCatalogCandidate(candidates, 2, 3);
     const next = pickVariedCatalogCandidate(candidates, 3, 3, { avoid: [first] });
     expect(next).not.toEqual(first);
+  });
+});
+
+describe('pickCanonicalCatalogCandidate', () => {
+  it('keeps the unflipped look when several flips all match', () => {
+    expect(pickCanonicalCatalogCandidate(pool(50))).toEqual({
+      localIndex: 50,
+      flipX: false,
+      flipY: false,
+    });
+  });
+
+  it('keeps a connecting flip when that is the only match', () => {
+    expect(pickCanonicalCatalogCandidate([
+      { localIndex: 51, flipX: true, flipY: false },
+    ])).toEqual({
+      localIndex: 51,
+      flipX: true,
+      flipY: false,
+    });
   });
 });
 

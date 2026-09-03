@@ -6,6 +6,7 @@ import {
   catalogEntriesForBrush,
   flipCatalogEdges,
   isCyberLetterBrushId,
+  pickCanonicalCatalogCandidate,
   pickVariedCatalogCandidate,
   type CyberEdgeLetter,
   type CyberLetterBrushId,
@@ -59,9 +60,18 @@ interface CanonicalConcretePick {
  * art (21 vs 23) as long as A still faces the void, and may flip along the
  * wall. Top and bottom swap 15 / 62 the same way, flipping vertically so A
  * stays on the exterior, and may also flip horizontally. Convex outer
- * corners use 14, 14X, 25Y, and 30Y. CCCC fill uses 64, with rare 82
- * (flips allowed). 64 is a flat fill so it does not cycle through flips.
+ * corners shuffle 14 / 25 / 30, flipped so A stays on the two void sides.
+ * CCCC fill uses 64, with rare 82 (flips allowed). 64 is a flat fill so
+ * it does not cycle through flips.
  */
+function concreteConvexCornerPicks(flipX: boolean, flipY: boolean): readonly CanonicalConcretePick[] {
+  return [
+    { localIndex: 14, flipX, flipY },
+    { localIndex: 25, flipX, flipY },
+    { localIndex: 30, flipX: !flipX, flipY },
+  ];
+}
+
 const CANONICAL_CONCRETE_PICKS: Readonly<Partial<Record<string, readonly CanonicalConcretePick[]>>> = {
   AAAA: [{ localIndex: 20, flipX: false, flipY: false }],
   AAEA: [{ localIndex: 19, flipX: false, flipY: false }],
@@ -74,8 +84,8 @@ const CANONICAL_CONCRETE_PICKS: Readonly<Partial<Record<string, readonly Canonic
   AAEE: [{ localIndex: 67, flipX: true, flipY: true }],
   EEAA: [{ localIndex: 67, flipX: false, flipY: false }],
   EAAE: [{ localIndex: 67, flipX: true, flipY: false }],
-  ABBA: [{ localIndex: 14, flipX: false, flipY: false }],
-  AABB: [{ localIndex: 14, flipX: true, flipY: false }],
+  ABBA: concreteConvexCornerPicks(false, false),
+  AABB: concreteConvexCornerPicks(true, false),
   ABCB: [
     { localIndex: 15, flipX: false, flipY: false },
     { localIndex: 15, flipX: true, flipY: false },
@@ -104,8 +114,8 @@ const CANONICAL_CONCRETE_PICKS: Readonly<Partial<Record<string, readonly Canonic
     { localIndex: 21, flipX: false, flipY: false },
     { localIndex: 21, flipX: false, flipY: true },
   ],
-  BBAA: [{ localIndex: 25, flipX: false, flipY: true }],
-  BAAB: [{ localIndex: 30, flipX: false, flipY: true }],
+  BBAA: concreteConvexCornerPicks(false, true),
+  BAAB: concreteConvexCornerPicks(true, true),
   BBCC: [
     { localIndex: 33, flipX: false, flipY: false },
     { localIndex: 35, flipX: true, flipY: false },
@@ -419,7 +429,9 @@ function inferOccupiedLetter(
   inBounds: (x: number, y: number) => boolean,
 ): CyberEdgeLetter {
   if (neighborBrushId === 'cyber.windows' || brushId === 'cyber.windows') return 'I';
-  if (neighborBrushId === 'cyber.neon' || brushId === 'cyber.neon') return 'J';
+  // Neon infers J for itself. Concrete still treats a Neon neighbor as filled
+  // occupancy (B/C/E) so armpits next to a pipe stay 11 / 33 / 35, not J-gap 64.
+  if (brushId === 'cyber.neon') return 'J';
   if (brushId === 'cyber.shell' || neighborBrushId === 'cyber.shell') {
     const count = occupied.filter(Boolean).length;
     const opposite = occupied[SIDES[sideIndex]!.opposite] === true;
@@ -559,6 +571,9 @@ export function listCyberVoidAViolations(
  * Skip 1-cell nubs and hallway T-junctions in every direction: those empty
  * diagonals are open air beside a straight wall. Skip thin E frames; those
  * edges are already the whole cell.
+ * extras 0 (index 7) uses A10 as a convex overlay: the tile already has the
+ * straight orange socket, and A10 adds the L when exactly two adjacent sides
+ * are void. Straight corridor ends and open void columns do not get it.
  */
 const A10_SOCKETS = [
   { flipX: false, flipY: false, b: [1, 2], ddx: 1, ddy: 1 },
@@ -661,12 +676,43 @@ function classicA10Allowed(
   });
 }
 
+function occupiedLetterNeighbor(
+  x: number,
+  y: number,
+  picks: ReadonlyMap<string, CyberLetterPick>,
+): boolean {
+  return picks.has(letterCellKey(x, y));
+}
+
+/**
+ * extras 0 (index 7) already has the straight orange socket. When that cell is
+ * also a convex drop-off (exactly two adjacent voids), A10 supplies the L.
+ */
+function orientNeonExtras0CornerOverlay(
+  x: number,
+  y: number,
+  picks: ReadonlyMap<string, CyberLetterPick>,
+): { flipX: boolean; flipY: boolean } | null {
+  const top = occupiedLetterNeighbor(x, y - 1, picks);
+  const right = occupiedLetterNeighbor(x + 1, y, picks);
+  const bot = occupiedLetterNeighbor(x, y + 1, picks);
+  const left = occupiedLetterNeighbor(x - 1, y, picks);
+  const voidCount = Number(!top) + Number(!right) + Number(!bot) + Number(!left);
+  if (voidCount !== 2) return null;
+  if (!bot && !right && top && left) return { flipX: false, flipY: false };
+  if (!bot && !left && top && right) return { flipX: true, flipY: false };
+  if (!top && !right && bot && left) return { flipX: false, flipY: true };
+  if (!top && !left && bot && right) return { flipX: true, flipY: true };
+  return null;
+}
+
 export function orientCyberA10Overlay(
   x: number,
   y: number,
   pick: CyberLetterPick,
   picks: ReadonlyMap<string, CyberLetterPick>,
 ): { flipX: boolean; flipY: boolean } | null {
+  if (pick.localIndex === 7) return orientNeonExtras0CornerOverlay(x, y, picks);
   const bounds = occupancyBounds(picks);
   if (!bounds) return null;
   for (const socket of A10_SOCKETS) {
@@ -694,15 +740,78 @@ export function orientCyberA10Overlay(
   return null;
 }
 
+function neonTouchesConcrete(
+  x: number,
+  y: number,
+  occupancy: CyberLetterOccupancy,
+): boolean {
+  return SIDES.some((side) => (
+    occupancy.get(letterCellKey(x + side.dx, y + side.dy))?.brushId === 'cyber.concrete'
+  ));
+}
+
+function concreteNearCell(
+  x: number,
+  y: number,
+  occupancy: CyberLetterOccupancy,
+): boolean {
+  for (let dy = -2; dy <= 2; dy += 1) {
+    for (let dx = -2; dx <= 2; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      if (occupancy.get(letterCellKey(x + dx, y + dy))?.brushId === 'cyber.concrete') return true;
+    }
+  }
+  return false;
+}
+
+/** Empty side that faces a Concrete hole, so 49/7 should socket into that edge. */
+function neonConcreteHoleSide(
+  x: number,
+  y: number,
+  occupancy: CyberLetterOccupancy,
+): number | null {
+  let winner: number | null = null;
+  for (const side of SIDES) {
+    const nx = x + side.dx;
+    const ny = y + side.dy;
+    if (occupancy.has(letterCellKey(nx, ny))) continue;
+    if (!concreteNearCell(nx, ny, occupancy)) continue;
+    if (winner !== null) return null;
+    winner = side.index;
+  }
+  return winner;
+}
+
 function seedWindowsOrNeon(
   brushId: 'cyber.windows' | 'cyber.neon',
   x: number,
   y: number,
   occupancy: CyberLetterOccupancy,
 ): CyberLetterPick {
-  const seed = CYBER_BRUSH_SEEDS[brushId];
-  const left = occupancy.has(letterCellKey(x - 1, y));
+  const top = occupancy.has(letterCellKey(x, y - 1));
   const right = occupancy.has(letterCellKey(x + 1, y));
+  const bottom = occupancy.has(letterCellKey(x, y + 1));
+  const left = occupancy.has(letterCellKey(x - 1, y));
+  if (brushId === 'cyber.neon') {
+    const onConcreteEdge = neonTouchesConcrete(x, y, occupancy) && !(top && right && bottom && left);
+    if (onConcreteEdge) {
+      const flipX = left && !right;
+      return {
+        localIndex: 49,
+        flipX,
+        flipY: false,
+        edges: flipCatalogEdges('BJBA', flipX, false),
+      };
+    }
+    const seed = CYBER_BRUSH_SEEDS['cyber.neon'];
+    return {
+      localIndex: seed.localIndex,
+      flipX: false,
+      flipY: false,
+      edges: seed.edges,
+    };
+  }
+  const seed = CYBER_BRUSH_SEEDS[brushId];
   const flipX = left && !right;
   const edges = flipCatalogEdges(seed.edges, flipX, false);
   return {
@@ -789,6 +898,9 @@ function pickShellCatalogLook(
   pool: readonly CyberLetterPick[],
   avoid: readonly CyberOrientedTile[],
 ): CyberLetterPick {
+  if (brushId === 'cyber.neon') {
+    return pickCanonicalCatalogCandidate(pool);
+  }
   const salt = occupancy.get(letterCellKey(x, y))?.varietySalt ?? 0;
   const edgeKey = `${constraints[0]}${constraints[1]}${constraints[2]}${constraints[3]}`;
   const neighborAvoid = edgeKey === 'CCCC' || edgeKey === 'HHHH' ? [] : avoid;
@@ -820,7 +932,13 @@ function pickForConstraints(
     : exact.length > 0
       ? exact
       : matches;
-  const chosen = preferShellCladdingArt(brushId, x, y, occupancy, pool);
+  const chosen = preferShellCladdingArt(
+    brushId,
+    x,
+    y,
+    occupancy,
+    preferWindowOrNeonStackArt(brushId, x, y, constraints, occupancy, pool),
+  );
   return pickShellCatalogLook(brushId, x, y, constraints, occupancy, chosen, avoid);
 }
 
@@ -870,7 +988,7 @@ function pickRespectingVoids(
     x,
     y,
     occupancy,
-    preferWindowOrNeonStackArt(brushId, constraints, pool),
+    preferWindowOrNeonStackArt(brushId, x, y, constraints, occupancy, pool),
   );
   return pickShellCatalogLook(brushId, x, y, constraints, occupancy, chosen, avoid);
 }
@@ -1181,9 +1299,31 @@ function preferShellStairValley(
   return null;
 }
 
+/** Open A side of a 3-connected neon cell on a filled blob (both inward diagonals occupied). */
+function neonFilledBlobOpenSide(
+  x: number,
+  y: number,
+  constraints: readonly CyberEdgeConstraint[],
+  occupancy: CyberLetterOccupancy,
+): number | null {
+  const open = constraints.findIndex((constraint) => constraint === 'A');
+  if (open < 0) return null;
+  if (constraints.filter((constraint) => constraint === 'A').length !== 1) return null;
+  if (constraints.filter((constraint) => constraint === 'J').length !== 3) return null;
+  const inward = SIDES[SIDES[open]!.opposite]!;
+  const along = SIDES.filter((side) => side.index !== open && side.index !== inward.index);
+  const filled = along.every((side) => occupancy.has(
+    letterCellKey(x + inward.dx + side.dx, y + inward.dy + side.dy),
+  ));
+  return filled ? open : null;
+}
+
 function preferWindowOrNeonStackArt(
   brushId: CyberLetterBrushId,
+  x: number,
+  y: number,
   constraints: readonly CyberEdgeConstraint[],
+  occupancy: CyberLetterOccupancy,
   pool: readonly CyberLetterPick[],
 ): readonly CyberLetterPick[] {
   if (pool.length === 0) return pool;
@@ -1195,9 +1335,39 @@ function preferWindowOrNeonStackArt(
     return preferred.length > 0 ? preferred : pool;
   }
   if (brushId === 'cyber.neon') {
-    const stacked = constraints[0] === 'J' && constraints[2] === 'J';
-    const preferredIndex = stacked ? 73 : 49;
-    const preferred = pool.filter((candidate) => candidate.localIndex === preferredIndex);
+    const jTop = constraints[0] === 'J';
+    const jRight = constraints[1] === 'J';
+    const jBot = constraints[2] === 'J';
+    const jLeft = constraints[3] === 'J';
+    const jCount = Number(jTop) + Number(jRight) + Number(jBot) + Number(jLeft);
+    const hasA = constraints.some((constraint) => constraint === 'A');
+    const onConcrete = constraints.some((constraint) => constraint === 'B' || constraint === 'C');
+    const blobOpen = neonFilledBlobOpenSide(x, y, constraints, occupancy);
+    const holeSide = neonConcreteHoleSide(x, y, occupancy);
+    const openA = constraints.findIndex((constraint) => constraint === 'A');
+    const edgeOpen = blobOpen
+      ?? holeSide
+      ?? (
+        hasA && neonTouchesConcrete(x, y, occupancy) && openA >= 0
+          ? openA
+          : null
+      );
+    let preferredIndex: number;
+    if (jCount === 4) preferredIndex = 73;
+    else if (edgeOpen === 1 || edgeOpen === 3) preferredIndex = 49;
+    else if (edgeOpen === 0 || edgeOpen === 2) preferredIndex = 7;
+    else if (jCount === 3) preferredIndex = (!jLeft || !jRight) ? 4 : 74;
+    else if (jCount === 2 && jTop && jBot) preferredIndex = 6;
+    else if (jCount === 2 && jLeft && jRight) preferredIndex = 50;
+    else if (jCount === 2) preferredIndex = 75;
+    else if (jCount === 1 && (jTop || jBot)) preferredIndex = 7;
+    else if (jCount === 1) preferredIndex = 51;
+    else preferredIndex = hasA && onConcrete ? 49 : 51;
+    let preferred = pool.filter((candidate) => candidate.localIndex === preferredIndex);
+    if (preferredIndex === 49 && (edgeOpen === 1 || edgeOpen === 3)) {
+      const towardHole = preferred.filter((candidate) => candidate.flipX === (edgeOpen === 1));
+      if (towardHole.length > 0) preferred = towardHole;
+    }
     return preferred.length > 0 ? preferred : pool;
   }
   return pool;

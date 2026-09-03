@@ -274,7 +274,7 @@ describe('editor edit runtime document contracts', () => {
     expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['4,5', '5,6', '6,7']);
   });
 
-  it('projects a diagonal Cyber Neon pencil gesture onto its anchored horizontal strip', () => {
+  it('paints a diagonal Cyber Neon pencil gesture without snapping to an axis', () => {
     selectCyberBrush('cyber.neon');
     const { runtime, layers } = createHarness(createRoom());
 
@@ -287,14 +287,14 @@ describe('editor edit runtime document contracts', () => {
 
     expect(getSmartSourceKeys(runtime, 'cyber.neon')).toEqual([
       'terrain:9,3',
-      'terrain:10,3',
-      'terrain:11,3',
-      'terrain:12,3',
+      'terrain:10,4',
+      'terrain:11,5',
+      'terrain:12,6',
     ]);
-    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['9,3', '10,3', '11,3', '12,3']);
+    expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['9,3', '10,4', '11,5', '12,6']);
   });
 
-  it('projects a diagonal Cyber Support pencil gesture onto its anchored vertical column', () => {
+  it('paints a diagonal Cyber Support pencil gesture without snapping to an axis', () => {
     selectCyberBrush('cyber.support');
     const { runtime, layers } = createHarness(createRoom());
 
@@ -306,10 +306,10 @@ describe('editor edit runtime document contracts', () => {
 
     expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual([
       'background:15,3',
-      'background:15,4',
-      'background:15,5',
+      'background:16,4',
+      'background:17,5',
     ]);
-    expect(getTileCoordinates(layers.get('background')!)).toEqual(['15,3', '15,4', '15,5']);
+    expect(getTileCoordinates(layers.get('background')!)).toEqual(['15,3', '16,4', '17,5']);
   });
 
   it('uses the Advanced-selected layer for Smart recipes and preserves it through undo/redo', () => {
@@ -374,7 +374,9 @@ describe('editor edit runtime document contracts', () => {
         .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
     );
     expect(getSmartSourceKeys(runtime, 'cyber.neon')).toEqual(
-      [8, 9, 10, 11, 12].map((x) => `terrain:${x},9`),
+      [8, 9, 10, 11, 12]
+        .flatMap((x) => [4, 5, 6, 7, 8, 9].map((y) => `terrain:${x},${y}`))
+        .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
     );
     expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual(
       [18, 19, 20, 21, 22]
@@ -388,11 +390,8 @@ describe('editor edit runtime document contracts', () => {
     );
     expect(panelRecipe).toMatchObject({
       anchor: { layer: 'foreground', x: 24, y: 12 },
-      parameters: { width: 6, height: 2 },
+      parameters: { width: 6, height: 6 },
     });
-    expect(panelRecipe?.sourceCells).toEqual(
-      [24, 25, 26, 27, 28, 29].map((x) => ({ layer: 'foreground', x, y: 12 })),
-    );
 
     expect(
       getTileCoordinates(layers.get('terrain')!)
@@ -400,7 +399,7 @@ describe('editor edit runtime document contracts', () => {
     ).toEqual(
       [
         ...[2, 3, 4, 5, 6].flatMap((x) => [3, 4, 5, 6, 7, 8].map((y) => `${x},${y}`)),
-        ...[8, 9, 10, 11, 12].map((x) => `${x},9`),
+        ...[8, 9, 10, 11, 12].flatMap((x) => [4, 5, 6, 7, 8, 9].map((y) => `${x},${y}`)),
       ].sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
     );
     expect(getTileCoordinates(layers.get('background')!)).toEqual([
@@ -414,6 +413,10 @@ describe('editor edit runtime document contracts', () => {
     expect(getTileCoordinates(layers.get('foreground')!)).toEqual([
       '24,12', '25,12', '26,12', '27,12', '28,12', '29,12',
       '24,13', '25,13', '26,13', '27,13', '28,13', '29,13',
+      '24,14', '25,14', '26,14', '27,14', '28,14', '29,14',
+      '24,15', '25,15', '26,15', '27,15', '28,15', '29,15',
+      '24,16', '25,16', '26,16', '27,16', '28,16', '29,16',
+      '24,17', '25,17', '26,17', '27,17', '28,17', '29,17',
     ]);
   });
 

@@ -1,13 +1,19 @@
-import { ROOM_HEIGHT, ROOM_WIDTH, type LayerName } from '../config/room';
+import { ROOM_HEIGHT, ROOM_WIDTH, TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG, type LayerName } from '../config/room';
 import { decodeTileDataValue } from '../config/editorState';
 import type { RoomTileData } from '../persistence/roomModel';
+import {
+  CYBERCITY_EXTRAS_TILESET_FIRST_GID,
+  CYBERCITY_EXTRAS_TILESET_KEY,
+} from '../config/tilesets';
 import {
   CYBER_FAMILY_DEFINITIONS,
   CYBER_NEIGHBOR,
   CYBER_STYLE_PROFILES,
-  resolveCyberFramedPanel,
+  resolveCyberFenceCell,
   resolveCyberNeonStrip,
   resolveCyberPlatformSpan,
+  applyCyberRubbleVariety,
+  cyberRubbleEdgeFlipAxes,
   resolveCyberRubbleBorderTile,
   resolveCyberRubbleColumn,
   resolveCyberStructureUnderground,
@@ -51,6 +57,29 @@ import {
   getSmartStyleDefinition,
   resolveSmartTileValue,
 } from './registry';
+
+/**
+ * Neon Smart indices 4, 6, 7 live on the extras tileset, not the style tileset.
+ * Yellow uses extras rows 0-2, pink uses extras rows 12-14.
+ * Map: Smart 7 → extras 0/12, Smart 4 → extras 1/13, Smart 6 → extras 2/14.
+ */
+const NEON_EXTRAS_LOCAL_INDEX: Readonly<Record<number, number>> = { 7: 0, 4: 1, 6: 2 };
+const NEON_EXTRAS_PINK_OFFSET = 12;
+
+function resolveNeonExtrasTileValue(
+  styleId: CyberStyleId,
+  localIndex: number,
+  flipX: boolean,
+  flipY: boolean,
+): number | null {
+  const base = NEON_EXTRAS_LOCAL_INDEX[localIndex];
+  if (base === undefined) return null;
+  const extrasIndex = styleId === 'cyber-pink' ? base + NEON_EXTRAS_PINK_OFFSET : base;
+  return CYBERCITY_EXTRAS_TILESET_FIRST_GID
+    + extrasIndex
+    + (flipX ? TILE_FLIP_X_FLAG : 0)
+    + (flipY ? TILE_FLIP_Y_FLAG : 0);
+}
 
 export interface SmartRecipeDocument {
   tileData: RoomTileData;
@@ -97,16 +126,14 @@ const LEGACY_SEMANTIC_OWNER_PREFIX = 'legacy-semantic:';
 const CYBER_PANEL_RECIPE_ID = 'cyber.fence';
 const CYBER_BRUSH_PREFIX = 'cyber.';
 
-type CyberSpanBrushId = 'cyber.support' | 'cyber.neon';
+type CyberSpanBrushId = 'cyber.support';
 
 const CYBER_SPAN_BRUSH_IDS: readonly CyberSpanBrushId[] = [
   'cyber.support',
-  'cyber.neon',
 ];
 
 const CYBER_SPAN_INSTANCE_PREFIX: Readonly<Record<CyberSpanBrushId, string>> = {
   'cyber.support': 'cyber-support',
-  'cyber.neon': 'cyber-neon-strip',
 };
 
 const CYBER_FAMILY_BY_BRUSH: Partial<Record<SmartBrushId, CyberFamilyId>> = {
@@ -596,7 +623,15 @@ function addOwnedOutput(
   const outputTile = placement
     ? retargetCyberOutputTile(tile, placement.brushId, placement.sourceLayer)
     : tile;
-  const value = resolveSmartTileValue(outputTile.styleId, outputTile);
+  const neonExtrasValue = placement?.brushId === 'cyber.neon'
+    ? resolveNeonExtrasTileValue(
+      outputTile.styleId as CyberStyleId,
+      outputTile.localIndex,
+      outputTile.flipX ?? false,
+      outputTile.flipY ?? false,
+    )
+    : null;
+  const value = neonExtrasValue ?? resolveSmartTileValue(outputTile.styleId, outputTile);
   const existingValue = tileData[outputTile.layer][y]?.[x] ?? -1;
   if (!force && existingValue > 0) return;
   tileData[outputTile.layer][y][x] = value;
@@ -906,6 +941,15 @@ function resolveRun(
       };
       return;
     }
+    const tile = familyId === 'rubble'
+      ? applyCyberRubbleVariety(
+        resolved[before + index]!,
+        entry.x,
+        entry.y,
+        entry.cell.varietySalt ?? 0,
+        0,
+      )
+      : resolved[before + index]!;
     addOwnedOutput(
       tileData,
       state,
@@ -914,7 +958,7 @@ function resolveRun(
       'semantic',
       entry.x,
       entry.y,
-      resolved[before + index]!,
+      tile,
       true,
       { brushId: entry.cell.brushId, sourceLayer: entry.layer },
     );
@@ -1101,7 +1145,10 @@ function resolveCyberSemanticCells(tileData: RoomTileData, state: RoomSmartTerra
   const groups = new Map<string, CyberSemanticEntry[]>();
   for (const entry of entries) {
     if (isCyberLetterBrushId(entry.cell.brushId) && !isCyberSpanBrushId(entry.cell.brushId)) continue;
-    const key = `${entry.layer}:${entry.cell.styleId}:${entry.cell.brushId}`;
+    const familyId = getCyberFamilyId(entry.cell.brushId);
+    const key = familyId === 'rubble'
+      ? `${entry.layer}:rubble`
+      : `${entry.layer}:${entry.cell.styleId}:${entry.cell.brushId}`;
     const group = groups.get(key) ?? [];
     group.push(entry);
     groups.set(key, group);
@@ -1263,24 +1310,24 @@ function resolveCyberRecipes(tileData: RoomTileData, state: RoomSmartTerrainStat
     if (recipe.brushId !== 'cyber.fence' && recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel') {
       continue;
     }
-    const bounds = recipeBounds(recipe);
-    if (!bounds || bounds.width < CYBER_FAMILY_DEFINITIONS['framed-panel'].minimumWidth) continue;
-    const rows = resolveCyberFramedPanel(recipe.styleId, bounds.width);
-    for (let row = 0; row < rows.length; row += 1) {
-      for (let column = 0; column < rows[row]!.length; column += 1) {
-        addOwnedOutput(
-          tileData,
-          state,
-          recipe.ownerId,
-          `row-${row}:column-${column}`,
-          'recipe',
-          bounds.minX + column,
-          bounds.minY + row,
-          rows[row]![column]!,
-          true,
-          { brushId: recipe.brushId, sourceLayer: recipe.anchor.layer },
-        );
-      }
+    const occupancy = fenceOccupancy(state, recipe.styleId, recipe.anchor.layer);
+    for (const cell of recipe.sourceCells) {
+      addOwnedOutput(
+        tileData,
+        state,
+        recipe.ownerId,
+        `row-${cell.y - recipe.bounds.minY}:column-${cell.x - recipe.bounds.minX}`,
+        'recipe',
+        cell.x,
+        cell.y,
+        resolveCyberFenceCell(recipe.styleId, {
+          left: occupancy.has(`${cell.x - 1},${cell.y}`),
+          right: occupancy.has(`${cell.x + 1},${cell.y}`),
+          above: occupancy.has(`${cell.x},${cell.y - 1}`),
+        }),
+        true,
+        { brushId: recipe.brushId, sourceLayer: recipe.anchor.layer },
+      );
     }
   }
 }
@@ -1330,7 +1377,14 @@ function resolveCyberRubbleBorders(
     'semantic',
     x,
     y,
-    resolveCyberRubbleBorderTile(owner.cell.styleId as CyberStyleId, part, flipX, layer),
+    applyCyberRubbleVariety(
+      resolveCyberRubbleBorderTile(owner.cell.styleId as CyberStyleId, part, flipX, layer),
+      x,
+      y,
+      owner.cell.varietySalt ?? 0,
+      part.charCodeAt(0) + (layer === 'background' ? 32 : 0),
+      cyberRubbleEdgeFlipAxes(part),
+    ),
     false,
     { brushId: owner.cell.brushId, sourceLayer: owner.layer },
   );
@@ -1352,7 +1406,7 @@ function resolveCyberRubbleBorders(
     const left = same(x - 1, y);
     const cardinalCount = Number(above) + Number(right) + Number(below) + Number(left);
     const adjacentOwners = entries.filter((entry) => (
-      entry.cell.styleId === candidate.cell.styleId
+      entry.cell.brushId === 'cyber.rubble'
       && ((above && entry.x === x && entry.y === y - 1)
         || (right && entry.x === x + 1 && entry.y === y)
         || (below && entry.x === x && entry.y === y + 1)
@@ -1498,24 +1552,89 @@ function nextPanelInstanceId(state: RoomSmartTerrainState): string {
 
 function isPanelRecipeAt(recipe: SmartRecipeInstanceState, layer: LayerName, x: number, y: number): boolean {
   if (recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel') return false;
-  const bounds = recipeBounds(recipe);
-  return Boolean(
-    recipe.anchor.layer === layer
-    && bounds
-    && x >= bounds.minX
-    && x <= bounds.maxX
-    && y >= bounds.minY
-    && y <= bounds.minY + 1,
-  );
+  return recipe.anchor.layer === layer
+    && recipe.sourceCells.some((cell) => cell.x === x && cell.y === y);
 }
 
-function removePanelRecipe(state: RoomSmartTerrainState, instanceId: string): void {
+function fenceOccupancy(
+  state: RoomSmartTerrainState,
+  styleId: CyberStyleId,
+  layer: LayerName,
+): Set<string> {
+  const occupancy = new Set<string>();
+  for (const recipe of Object.values(state.recipes)) {
+    if (
+      recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel'
+    ) continue;
+    if (recipe.styleId !== styleId || recipe.anchor.layer !== layer) continue;
+    for (const cell of recipe.sourceCells) occupancy.add(`${cell.x},${cell.y}`);
+  }
+  return occupancy;
+}
+
+function fenceCellsTouch(
+  cells: ReadonlySet<string>,
+  others: readonly { x: number; y: number }[],
+): boolean {
+  for (const { x, y } of others) {
+    if (
+      cells.has(`${x},${y}`)
+      || cells.has(`${x - 1},${y}`)
+      || cells.has(`${x + 1},${y}`)
+      || cells.has(`${x},${y - 1}`)
+      || cells.has(`${x},${y + 1}`)
+    ) return true;
+  }
+  return false;
+}
+
+function fenceRecipeFromCells(
+  layer: LayerName,
+  cells: readonly { x: number; y: number }[],
+): {
+  sourceCells: Array<{ layer: LayerName; x: number; y: number }>;
+  bounds: Bounds;
+} {
+  const bMinX = Math.min(...cells.map(({ x }) => x));
+  const bMaxX = Math.max(...cells.map(({ x }) => x));
+  const bMinY = Math.min(...cells.map(({ y }) => y));
+  const bMaxY = Math.max(...cells.map(({ y }) => y));
+  return {
+    sourceCells: cells.map(({ x, y }) => ({ layer, x, y })),
+    bounds: {
+      minX: bMinX,
+      minY: bMinY,
+      maxX: bMaxX,
+      maxY: bMaxY,
+      width: bMaxX - bMinX + 1,
+      height: bMaxY - bMinY + 1,
+    },
+  };
+}
+
+function removePanelRecipe(
+  tileData: RoomTileData,
+  state: RoomSmartTerrainState,
+  instanceId: string,
+): void {
   const ownerId = state.recipes[instanceId]?.ownerId ?? smartRecipeOwnerId(instanceId);
   delete state.recipes[instanceId];
+  for (const key of Object.keys(state.ownedOutputs)) {
+    const output = state.ownedOutputs[key];
+    if (output?.ownerId === ownerId) {
+      const coord = parseLayerCellKey(key);
+      if (coord && inBounds(coord.x, coord.y)) {
+        const current = tileData[output.layer][coord.y]?.[coord.x] ?? -1;
+        if (current === output.value) tileData[output.layer][coord.y][coord.x] = -1;
+      }
+      delete state.ownedOutputs[key];
+    }
+  }
   clearOwnerSuppressions(state, ownerId);
 }
 
 function applyPanelCells(
+  tileData: RoomTileData,
   state: RoomSmartTerrainState,
   cells: readonly SmartCellCoordinate[],
   mode: 'paint' | 'erase',
@@ -1523,74 +1642,68 @@ function applyPanelCells(
   layer: LayerName,
 ): void {
   if (mode === 'erase') {
-    const removed = new Set<string>();
-    for (const cell of cells) {
-      for (const [instanceId, recipe] of Object.entries(state.recipes)) {
-        if (isPanelRecipeAt(recipe, layer, cell.x, cell.y)) removed.add(instanceId);
+    const erased = new Set(cells.map(({ x, y }) => `${x},${y}`));
+    for (const [instanceId, recipe] of Object.entries(state.recipes)) {
+      if (recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel') continue;
+      if (recipe.anchor.layer !== layer) continue;
+      const remaining = recipe.sourceCells.filter((cell) => !erased.has(`${cell.x},${cell.y}`));
+      if (remaining.length === recipe.sourceCells.length) continue;
+      if (remaining.length === 0) {
+        removePanelRecipe(tileData, state, instanceId);
+        continue;
       }
-    }
-    for (const instanceId of removed) {
-      removePanelRecipe(state, instanceId);
+      const next = fenceRecipeFromCells(layer, remaining);
+      recipe.sourceCells = next.sourceCells;
+      recipe.bounds = next.bounds;
+      recipe.anchor = { layer, x: next.bounds.minX, y: next.bounds.minY };
+      recipe.parameters = { width: next.bounds.width, height: next.bounds.height };
+      clearOwnerSuppressions(state, recipe.ownerId);
     }
     return;
   }
   if (cells.length === 0) return;
-  const minX = Math.min(...cells.map(({ x }) => x));
-  const maxX = Math.max(...cells.map(({ x }) => x));
-  const anchorY = Math.min(...cells.map(({ y }) => y));
-  const matching = Object.entries(state.recipes).filter(([, recipe]) => {
-    if (
-      recipe.recipeId !== CYBER_PANEL_RECIPE_ID
-      || recipe.styleId !== styleId
-      || recipe.anchor.layer !== layer
-    ) return false;
-    const bounds = recipeBounds(recipe);
-    return Boolean(bounds
-      && bounds.minY === anchorY
-      && minX <= bounds.maxX + 1
-      && maxX >= bounds.minX - 1);
-  });
-  const matchingIds = new Set(matching.map(([instanceId]) => instanceId));
+  const cellSet = new Set(cells.map(({ x, y }) => `${x},${y}`));
   for (const [instanceId, recipe] of Object.entries(state.recipes)) {
     if (
-      recipe.recipeId !== CYBER_PANEL_RECIPE_ID
+      (recipe.recipeId !== CYBER_PANEL_RECIPE_ID && recipe.recipeId !== 'cyber.framed-panel')
       || recipe.anchor.layer !== layer
-      || matchingIds.has(instanceId)
     ) continue;
-    const bounds = recipeBounds(recipe);
-    const overlapsOutput = Boolean(bounds
-      && minX <= bounds.maxX
-      && maxX >= bounds.minX
-      && anchorY <= bounds.minY + 1
-      && anchorY + 1 >= bounds.minY);
-    if (overlapsOutput) removePanelRecipe(state, instanceId);
+    if (recipe.styleId === styleId && fenceCellsTouch(cellSet, recipe.sourceCells)) {
+      for (const sc of recipe.sourceCells) cellSet.add(`${sc.x},${sc.y}`);
+      removePanelRecipe(tileData, state, instanceId);
+      continue;
+    }
+    if (recipe.styleId === styleId) continue;
+    const remaining = recipe.sourceCells.filter((sc) => !cellSet.has(`${sc.x},${sc.y}`));
+    if (remaining.length === recipe.sourceCells.length) continue;
+    if (remaining.length === 0) {
+      removePanelRecipe(tileData, state, instanceId);
+      continue;
+    }
+    const next = fenceRecipeFromCells(layer, remaining);
+    recipe.sourceCells = next.sourceCells;
+    recipe.bounds = next.bounds;
+    recipe.anchor = { layer, x: next.bounds.minX, y: next.bounds.minY };
+    recipe.parameters = { width: next.bounds.width, height: next.bounds.height };
+    clearOwnerSuppressions(state, recipe.ownerId);
   }
-  const instanceId = matching[0]?.[0] ?? nextPanelInstanceId(state);
-  const xValues = new Set<number>();
-  for (const [, recipe] of matching) {
-    recipe.sourceCells.forEach(({ x }) => xValues.add(x));
+  const allCells: Array<{ x: number; y: number }> = [];
+  for (const key of cellSet) {
+    const [xStr, yStr] = key.split(',');
+    allCells.push({ x: Number(xStr), y: Number(yStr) });
   }
-  for (let x = minX; x <= maxX; x += 1) xValues.add(x);
-  for (const [mergedId] of matching.slice(1)) removePanelRecipe(state, mergedId);
-  const orderedX = [...xValues].sort((left, right) => left - right);
+  const instanceId = nextPanelInstanceId(state);
   const ownerId = smartRecipeOwnerId(instanceId);
-  const bounds = {
-    minX: orderedX[0]!,
-    minY: anchorY,
-    maxX: orderedX[orderedX.length - 1]!,
-    maxY: anchorY + 1,
-    width: orderedX.length,
-    height: 2,
-  };
+  const next = fenceRecipeFromCells(layer, allCells);
   state.recipes[instanceId] = {
     recipeId: CYBER_PANEL_RECIPE_ID,
     ownerId,
     brushId: 'cyber.fence',
     styleId,
-    anchor: { layer, x: bounds.minX, y: bounds.minY },
-    bounds,
-    sourceCells: orderedX.map((x) => ({ layer, x, y: anchorY })),
-    parameters: { width: orderedX.length, height: 2 },
+    anchor: { layer, x: next.bounds.minX, y: next.bounds.minY },
+    bounds: next.bounds,
+    sourceCells: next.sourceCells,
+    parameters: { width: next.bounds.width, height: next.bounds.height },
   };
   clearOwnerSuppressions(state, ownerId);
 }
@@ -1693,7 +1806,7 @@ export function applySmartBrushCells(
   const migratedOwnerIds = canonicalizeCyberSpanRecipes(smartTerrain);
   discardOwnedOutputsForOwners(tileData, smartTerrain, migratedOwnerIds);
   if (options.brushId === 'cyber.fence') {
-    applyPanelCells(smartTerrain, cells, options.mode, options.styleId, layer);
+    applyPanelCells(tileData, smartTerrain, cells, options.mode, options.styleId, layer);
   } else if (isCyberSpanBrushId(options.brushId)) {
     applySpanCells(
       tileData,

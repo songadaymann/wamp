@@ -16,6 +16,23 @@ function rectangle(x: number, y: number, width: number, height: number): Array<{
   }));
 }
 
+function expectConvexCorner(
+  pick: { localIndex: number; flipX: boolean; flipY: boolean } | undefined,
+  corner: 'tl' | 'tr' | 'bl' | 'br',
+): void {
+  expect(pick).toBeDefined();
+  const flipX = corner === 'tr' || corner === 'br';
+  const flipY = corner === 'bl' || corner === 'br';
+  expect([14, 25, 30]).toContain(pick!.localIndex);
+  if (pick!.localIndex === 30) {
+    expect(pick!.flipX).toBe(!flipX);
+    expect(pick!.flipY).toBe(flipY);
+  } else {
+    expect(pick!.flipX).toBe(flipX);
+    expect(pick!.flipY).toBe(flipY);
+  }
+}
+
 describe('resolveCyberLetterField concrete', () => {
   it('uses AAEE-family corners and AEAE / EAEA mids for a 3x3 ring', () => {
     const picks = resolveCyberLetterField(concreteCells([
@@ -58,10 +75,10 @@ describe('resolveCyberLetterField concrete', () => {
     expect(picks.get('9,6')?.edges).toBe('AABB');
     expect(picks.get('4,9')?.edges).toBe('BBAA');
     expect(picks.get('9,9')?.edges).toBe('BAAB');
-    expect(picks.get('4,6')).toMatchObject({ localIndex: 14, flipX: false, flipY: false });
-    expect(picks.get('9,6')).toMatchObject({ localIndex: 14, flipX: true, flipY: false });
-    expect(picks.get('4,9')).toMatchObject({ localIndex: 25, flipX: false, flipY: true });
-    expect(picks.get('9,9')).toMatchObject({ localIndex: 30, flipX: false, flipY: true });
+    expectConvexCorner(picks.get('4,6'), 'tl');
+    expectConvexCorner(picks.get('9,6'), 'tr');
+    expectConvexCorner(picks.get('4,9'), 'bl');
+    expectConvexCorner(picks.get('9,9'), 'br');
 
     for (const x of [5, 6, 7, 8]) {
       const top = picks.get(`${x},6`)!;
@@ -93,10 +110,10 @@ describe('resolveCyberLetterField concrete', () => {
 
   it('joins two 2x2 blobs into one 4x2 with edge tiles at the seam, not extra corners', () => {
     const picks = resolveCyberLetterField(concreteCells(rectangle(0, 0, 4, 2)), inBounds);
-    expect(picks.get('0,0')).toMatchObject({ localIndex: 14, flipX: false, flipY: false });
-    expect(picks.get('3,0')).toMatchObject({ localIndex: 14, flipX: true, flipY: false });
-    expect(picks.get('0,1')).toMatchObject({ localIndex: 25, flipX: false, flipY: true });
-    expect(picks.get('3,1')).toMatchObject({ localIndex: 30, flipX: false, flipY: true });
+    expectConvexCorner(picks.get('0,0'), 'tl');
+    expectConvexCorner(picks.get('3,0'), 'tr');
+    expectConvexCorner(picks.get('0,1'), 'bl');
+    expectConvexCorner(picks.get('3,1'), 'br');
     for (const x of [1, 2]) {
       expect(picks.get(`${x},0`)?.edges).toBe('ABCB');
       expect([15, 16, 62]).toContain(picks.get(`${x},0`)?.localIndex);
@@ -161,6 +178,20 @@ describe('resolveCyberLetterField concrete', () => {
     expect(fill64Even / fill64).toBeGreaterThan(0.2);
     expect(fill64Even / fill64).toBeLessThan(0.8);
     expect(listCyberVoidAViolations(picks, inBounds)).toEqual([]);
+  });
+
+  it('cycles square-blob corners through 14, 25, and 30 with A on the voids', () => {
+    const looks = new Set<string>();
+    for (let salt = 0; salt < 3; salt += 1) {
+      const cells = concreteCells(rectangle(0, 0, 4, 4)).map((cell) => ({
+        ...cell,
+        varietySalt: cell.x === 0 && cell.y === 0 ? salt : 0,
+      }));
+      const pick = resolveCyberLetterField(cells, inBounds).get('0,0')!;
+      expectConvexCorner(pick, 'tl');
+      looks.add(`${pick.localIndex}:${Number(pick.flipX)}${Number(pick.flipY)}`);
+    }
+    expect(looks.size).toBe(3);
   });
 
   it('uses an E T-junction when a stub meets a 1-cell-thick frame', () => {
@@ -573,6 +604,249 @@ describe('resolveCyberLetterField windows', () => {
   });
 });
 
+describe('resolveCyberLetterField neon', () => {
+  it('uses 49 on a Concrete blob edge, 51 among interior C sides, and 51 in the void', () => {
+    const concrete = new Set(rectangle(4, 6, 5, 5).map((cell) => `${cell.x},${cell.y}`));
+    concrete.delete('4,8');
+    concrete.delete('6,8');
+    const cells = [
+      ...[...concrete].map((key) => {
+        const [x, y] = key.split(',').map(Number);
+        return { x, y, brushId: 'cyber.concrete' as const };
+      }),
+      { x: 4, y: 8, brushId: 'cyber.neon' as const },
+      { x: 6, y: 8, brushId: 'cyber.neon' as const },
+      { x: 20, y: 8, brushId: 'cyber.neon' as const },
+    ];
+    const picks = resolveCyberLetterField(cells, inBounds);
+    expect(picks.get('4,8')?.localIndex).toBe(49);
+    expect(picks.get('4,8')?.flipX).toBe(false);
+    expect(picks.get('6,8')?.localIndex).toBe(51);
+    expect(picks.get('20,8')?.localIndex).toBe(51);
+  });
+
+  it('uses 6 on a vertical Neon run in the void', () => {
+    const picks = resolveCyberLetterField([
+      { x: 10, y: 8, brushId: 'cyber.neon' },
+      { x: 10, y: 9, brushId: 'cyber.neon' },
+      { x: 10, y: 10, brushId: 'cyber.neon' },
+    ], inBounds);
+    expect(picks.get('10,9')?.localIndex).toBe(6);
+    expect(picks.get('10,9')).toMatchObject({ flipX: false, flipY: false });
+    expect(picks.get('10,8')).toMatchObject({ localIndex: 7, flipX: false, flipY: true });
+    expect(picks.get('10,10')).toMatchObject({ localIndex: 7, flipX: false, flipY: false });
+    expect(orientCyberA10Overlay(10, 8, picks.get('10,8')!, picks)).toBeNull();
+    expect(orientCyberA10Overlay(10, 10, picks.get('10,10')!, picks)).toBeNull();
+  });
+
+  it('uses 75 on a void corner, 74 on an up/down T, 4 on a left/right T, and 73 on a cross', () => {
+    const picks = resolveCyberLetterField([
+      { x: 8, y: 8, brushId: 'cyber.neon' },
+      { x: 9, y: 8, brushId: 'cyber.neon' },
+      { x: 9, y: 9, brushId: 'cyber.neon' },
+      { x: 12, y: 8, brushId: 'cyber.neon' },
+      { x: 13, y: 8, brushId: 'cyber.neon' },
+      { x: 14, y: 8, brushId: 'cyber.neon' },
+      { x: 13, y: 9, brushId: 'cyber.neon' },
+      { x: 16, y: 6, brushId: 'cyber.neon' },
+      { x: 16, y: 7, brushId: 'cyber.neon' },
+      { x: 16, y: 8, brushId: 'cyber.neon' },
+      { x: 17, y: 7, brushId: 'cyber.neon' },
+      { x: 20, y: 6, brushId: 'cyber.neon' },
+      { x: 20, y: 7, brushId: 'cyber.neon' },
+      { x: 20, y: 8, brushId: 'cyber.neon' },
+      { x: 19, y: 7, brushId: 'cyber.neon' },
+      { x: 21, y: 7, brushId: 'cyber.neon' },
+    ], inBounds);
+    expect(picks.get('9,8')?.localIndex).toBe(75);
+    expect(picks.get('13,8')?.localIndex).toBe(74);
+    expect(picks.get('16,7')?.localIndex).toBe(4);
+    expect(picks.get('20,7')?.localIndex).toBe(73);
+  });
+
+  it('uses 49 and 7 on filled Neon blob edges instead of T tiles', () => {
+    const picks = resolveCyberLetterField(rectangle(10, 8, 3, 4).map((cell) => ({
+      ...cell,
+      brushId: 'cyber.neon' as const,
+    })), inBounds);
+    expect(picks.get('11,8')).toMatchObject({ localIndex: 7, flipY: true });
+    expect(picks.get('11,11')).toMatchObject({ localIndex: 7, flipY: false });
+    expect(picks.get('10,9')).toMatchObject({ localIndex: 49, flipX: false });
+    expect(picks.get('10,10')).toMatchObject({ localIndex: 49, flipX: false });
+    expect(picks.get('12,9')).toMatchObject({ localIndex: 49, flipX: true });
+    expect(picks.get('12,10')).toMatchObject({ localIndex: 49, flipX: true });
+    expect(picks.get('11,9')?.localIndex).toBe(73);
+    expect(picks.get('11,10')?.localIndex).toBe(73);
+  });
+
+  it('uses 49 toward both sides of a Concrete void tunnel, not T tiles', () => {
+    const hole = new Set(['12,8', '13,8', '12,9', '13,9', '12,10', '13,10', '12,11', '13,11']);
+    const cells = [
+      ...rectangle(8, 7, 10, 6)
+        .filter((cell) => !hole.has(`${cell.x},${cell.y}`))
+        .map((cell) => ({ ...cell, brushId: 'cyber.concrete' as const })),
+      { x: 8, y: 8, brushId: 'cyber.neon' as const },
+      { x: 9, y: 8, brushId: 'cyber.neon' as const },
+      { x: 10, y: 8, brushId: 'cyber.neon' as const },
+      { x: 11, y: 8, brushId: 'cyber.neon' as const },
+      { x: 8, y: 9, brushId: 'cyber.neon' as const },
+      { x: 11, y: 9, brushId: 'cyber.neon' as const },
+      { x: 8, y: 10, brushId: 'cyber.neon' as const },
+      { x: 11, y: 10, brushId: 'cyber.neon' as const },
+      { x: 8, y: 11, brushId: 'cyber.neon' as const },
+      { x: 9, y: 11, brushId: 'cyber.neon' as const },
+      { x: 10, y: 11, brushId: 'cyber.neon' as const },
+      { x: 11, y: 11, brushId: 'cyber.neon' as const },
+      { x: 14, y: 8, brushId: 'cyber.neon' as const },
+      { x: 15, y: 8, brushId: 'cyber.neon' as const },
+      { x: 16, y: 8, brushId: 'cyber.neon' as const },
+      { x: 17, y: 8, brushId: 'cyber.neon' as const },
+      { x: 14, y: 9, brushId: 'cyber.neon' as const },
+      { x: 17, y: 9, brushId: 'cyber.neon' as const },
+      { x: 14, y: 10, brushId: 'cyber.neon' as const },
+      { x: 17, y: 10, brushId: 'cyber.neon' as const },
+      { x: 14, y: 11, brushId: 'cyber.neon' as const },
+      { x: 15, y: 11, brushId: 'cyber.neon' as const },
+      { x: 16, y: 11, brushId: 'cyber.neon' as const },
+      { x: 17, y: 11, brushId: 'cyber.neon' as const },
+    ];
+    const picks = resolveCyberLetterField(cells, inBounds);
+    expect(picks.get('11,8')).toMatchObject({ localIndex: 49, flipX: true });
+    expect(picks.get('11,9')).toMatchObject({ localIndex: 49, flipX: true });
+    expect(picks.get('11,10')).toMatchObject({ localIndex: 49, flipX: true });
+    expect(picks.get('11,11')).toMatchObject({ localIndex: 49, flipX: true });
+    expect(picks.get('14,8')).toMatchObject({ localIndex: 49, flipX: false });
+    expect(picks.get('14,9')).toMatchObject({ localIndex: 49, flipX: false });
+    expect(picks.get('14,10')).toMatchObject({ localIndex: 49, flipX: false });
+    expect(picks.get('14,11')).toMatchObject({ localIndex: 49, flipX: false });
+  });
+
+  it('uses 50 for a void horizontal mid', () => {
+    const picks = resolveCyberLetterField([
+      { x: 5, y: 10, brushId: 'cyber.neon' },
+      { x: 6, y: 10, brushId: 'cyber.neon' },
+      { x: 7, y: 10, brushId: 'cyber.neon' },
+    ], inBounds);
+    expect(picks.get('5,10')).toMatchObject({ localIndex: 51, flipX: true, flipY: false });
+    expect(picks.get('6,10')).toMatchObject({ localIndex: 50, flipX: false, flipY: false });
+    expect(picks.get('7,10')).toMatchObject({ localIndex: 51, flipX: false, flipY: false });
+  });
+
+  it('does not variety-flip a Neon run', () => {
+    const picks = resolveCyberLetterField(
+      Array.from({ length: 8 }, (_, index) => ({ x: 4 + index, y: 12, brushId: 'cyber.neon' as const })),
+      inBounds,
+    );
+    for (let x = 5; x <= 10; x += 1) {
+      expect(picks.get(`${x},12`)).toMatchObject({ localIndex: 50, flipX: false, flipY: false });
+    }
+  });
+
+  it('keeps extras 0 socket on the Concrete side of a vertical takeoff', () => {
+    const cells = [
+      ...rectangle(8, 4, 5, 3).map((cell) => ({ ...cell, brushId: 'cyber.concrete' as const })),
+      { x: 10, y: 7, brushId: 'cyber.neon' as const },
+      { x: 10, y: 8, brushId: 'cyber.neon' as const },
+      { x: 10, y: 9, brushId: 'cyber.neon' as const },
+      ...rectangle(8, 10, 5, 3).map((cell) => ({ ...cell, brushId: 'cyber.concrete' as const })),
+    ];
+    const picks = resolveCyberLetterField(cells, inBounds);
+    expect(picks.get('10,7')).toMatchObject({ localIndex: 7, flipY: true });
+    expect(picks.get('10,9')).toMatchObject({ localIndex: 7, flipY: false });
+    expect(picks.get('10,8')?.localIndex).toBe(6);
+  });
+
+  it('uses 51 next to Shell instead of the Concrete-edge 49 cap', () => {
+    const picks = resolveCyberLetterField([
+      { x: 10, y: 10, brushId: 'cyber.shell' },
+      { x: 11, y: 10, brushId: 'cyber.neon' },
+    ], inBounds);
+    expect(picks.get('11,10')?.localIndex).toBe(51);
+  });
+
+  it('uses 11 / 33 / 35 armpits beside a Neon stem on a Concrete T', () => {
+    const cells = [
+      ...rectangle(12, 8, 3, 7).map((cell) => ({ ...cell, brushId: 'cyber.concrete' as const })),
+      ...rectangle(8, 10, 4, 3).map((cell) => ({ ...cell, brushId: 'cyber.concrete' as const })),
+      { x: 8, y: 11, brushId: 'cyber.neon' as const },
+      { x: 9, y: 11, brushId: 'cyber.neon' as const },
+      { x: 10, y: 11, brushId: 'cyber.neon' as const },
+      { x: 11, y: 11, brushId: 'cyber.neon' as const },
+    ];
+    const picks = resolveCyberLetterField(cells, inBounds);
+    expect([11, 33, 35]).toContain(picks.get('12,10')?.localIndex);
+    expect([11, 33, 35]).toContain(picks.get('12,12')?.localIndex);
+    expect(orientCyberA10Overlay(12, 10, picks.get('12,10')!, picks)).toEqual({
+      flipX: true,
+      flipY: true,
+    });
+    expect(orientCyberA10Overlay(12, 12, picks.get('12,12')!, picks)).toEqual({
+      flipX: true,
+      flipY: false,
+    });
+  });
+
+  it('uses extras 0 on Neon at a 1-cell void tunnel and A10 on the Concrete armpit', () => {
+    const hole = new Set(['12,12']);
+    const cells = [
+      ...rectangle(10, 8, 6, 5)
+        .filter((cell) => !hole.has(`${cell.x},${cell.y}`))
+        .map((cell) => ({ ...cell, brushId: 'cyber.concrete' as const })),
+      { x: 12, y: 11, brushId: 'cyber.neon' as const },
+    ];
+    const picks = resolveCyberLetterField(cells, inBounds);
+    expect(picks.get('12,11')).toMatchObject({ localIndex: 7, flipY: false });
+    expect([11, 33, 35]).toContain(picks.get('13,11')?.localIndex);
+    expect(orientCyberA10Overlay(13, 11, picks.get('13,11')!, picks)).toEqual({
+      flipX: true,
+      flipY: false,
+    });
+  });
+
+  it('overlays A10 on extras 0 when a vertical Neon end is a convex drop-off', () => {
+    const cells = [
+      ...rectangle(8, 8, 4, 4).map((cell) => ({ ...cell, brushId: 'cyber.concrete' as const })),
+      { x: 12, y: 8, brushId: 'cyber.neon' as const },
+      { x: 12, y: 9, brushId: 'cyber.neon' as const },
+      { x: 12, y: 10, brushId: 'cyber.neon' as const },
+      { x: 12, y: 11, brushId: 'cyber.neon' as const },
+    ];
+    const picks = resolveCyberLetterField(cells, inBounds);
+    expect(picks.get('12,11')).toMatchObject({ localIndex: 7, flipY: false });
+    expect(orientCyberA10Overlay(12, 11, picks.get('12,11')!, picks)).toEqual({
+      flipX: false,
+      flipY: false,
+    });
+    const leftCells = [
+      ...rectangle(10, 8, 4, 4).map((cell) => ({ ...cell, brushId: 'cyber.concrete' as const })),
+      { x: 9, y: 8, brushId: 'cyber.neon' as const },
+      { x: 9, y: 9, brushId: 'cyber.neon' as const },
+      { x: 9, y: 10, brushId: 'cyber.neon' as const },
+      { x: 9, y: 11, brushId: 'cyber.neon' as const },
+    ];
+    const leftPicks = resolveCyberLetterField(leftCells, inBounds);
+    expect(leftPicks.get('9,11')).toMatchObject({ localIndex: 7, flipY: false });
+    expect(orientCyberA10Overlay(9, 11, leftPicks.get('9,11')!, leftPicks)).toEqual({
+      flipX: true,
+      flipY: false,
+    });
+  });
+
+  it('does not overlay A10 on extras 0 in a 1-wide corridor end', () => {
+    const cells = [
+      ...rectangle(9, 8, 3, 4).map((cell) => ({ ...cell, brushId: 'cyber.concrete' as const })),
+      ...rectangle(13, 8, 3, 4).map((cell) => ({ ...cell, brushId: 'cyber.concrete' as const })),
+      { x: 12, y: 8, brushId: 'cyber.neon' as const },
+      { x: 12, y: 9, brushId: 'cyber.neon' as const },
+      { x: 12, y: 10, brushId: 'cyber.neon' as const },
+      { x: 12, y: 11, brushId: 'cyber.neon' as const },
+    ];
+    const picks = resolveCyberLetterField(cells, inBounds);
+    expect(picks.get('12,11')).toMatchObject({ localIndex: 7, flipY: false });
+    expect(orientCyberA10Overlay(12, 11, picks.get('12,11')!, picks)).toBeNull();
+  });
+});
+
 describe('resolveCyberLetterField shell', () => {
   const SHELL_TILES = new Set([17, 26, 27, 28, 29, 40, 42, 52, 53, 54, 61, 66, 78, 79, 83]);
 
@@ -748,10 +1022,10 @@ describe('resolveCyberLetterField shell', () => {
 
   it('uses 14-family corners on a filled Concrete blob, not 61', () => {
     const picks = resolveCyberLetterField(concreteCells(rectangle(0, 0, 5, 5)), inBounds);
-    expect(picks.get('0,0')).toMatchObject({ localIndex: 14, flipX: false, flipY: false });
-    expect(picks.get('4,0')).toMatchObject({ localIndex: 14, flipX: true, flipY: false });
-    expect(picks.get('0,4')).toMatchObject({ localIndex: 25, flipX: false, flipY: true });
-    expect(picks.get('4,4')).toMatchObject({ localIndex: 30, flipX: false, flipY: true });
+    expectConvexCorner(picks.get('0,0'), 'tl');
+    expectConvexCorner(picks.get('4,0'), 'tr');
+    expectConvexCorner(picks.get('0,4'), 'bl');
+    expectConvexCorner(picks.get('4,4'), 'br');
   });
 
   it('uses 61 on Shell corners of a 3x3 Concrete cross, never Support 36/48/60/72', () => {
@@ -786,10 +1060,10 @@ describe('resolveCyberLetterField shell', () => {
       }
     }
     const picks = resolveCyberLetterField(cells, inBounds);
-    expect(picks.get('1,1')).toMatchObject({ localIndex: 14, flipX: false, flipY: false });
-    expect(picks.get('2,1')).toMatchObject({ localIndex: 14, flipX: true, flipY: false });
-    expect(picks.get('1,2')).toMatchObject({ localIndex: 25, flipX: false, flipY: true });
-    expect(picks.get('2,2')).toMatchObject({ localIndex: 30, flipX: false, flipY: true });
+    expectConvexCorner(picks.get('1,1'), 'tl');
+    expectConvexCorner(picks.get('2,1'), 'tr');
+    expectConvexCorner(picks.get('1,2'), 'bl');
+    expectConvexCorner(picks.get('2,2'), 'br');
     expect(picks.get('1,0')).toMatchObject({ localIndex: 66, flipX: true, flipY: true });
     expect(picks.get('2,0')).toMatchObject({ localIndex: 66, flipX: false, flipY: true });
     expect(picks.get('0,1')).toMatchObject({ localIndex: 66, flipX: true, flipY: true });
@@ -813,10 +1087,10 @@ describe('resolveCyberLetterField shell', () => {
       ) as 'cyber.shell' | 'cyber.concrete',
     }));
     const picks = resolveCyberLetterField(cells, inBounds);
-    expect(picks.get('1,1')).toMatchObject({ localIndex: 14, flipX: false, flipY: false });
-    expect(picks.get('2,1')).toMatchObject({ localIndex: 14, flipX: true, flipY: false });
-    expect(picks.get('1,2')).toMatchObject({ localIndex: 25, flipX: false, flipY: true });
-    expect(picks.get('2,2')).toMatchObject({ localIndex: 30, flipX: false, flipY: true });
+    expectConvexCorner(picks.get('1,1'), 'tl');
+    expectConvexCorner(picks.get('2,1'), 'tr');
+    expectConvexCorner(picks.get('1,2'), 'bl');
+    expectConvexCorner(picks.get('2,2'), 'br');
     expect(picks.get('0,0')?.localIndex).toBe(66);
     expect(picks.get('3,0')?.localIndex).toBe(66);
     expect(picks.get('0,3')?.localIndex).toBe(66);
@@ -854,14 +1128,14 @@ describe('resolveCyberLetterField shell', () => {
       }
     }
     const picks = resolveCyberLetterField(cells, inBounds);
-    expect(picks.get('2,1')).toMatchObject({ localIndex: 14, flipX: false, flipY: false });
-    expect(picks.get('3,1')).toMatchObject({ localIndex: 14, flipX: true, flipY: false });
-    expect(picks.get('1,2')).toMatchObject({ localIndex: 14, flipX: false, flipY: false });
-    expect(picks.get('4,2')).toMatchObject({ localIndex: 14, flipX: true, flipY: false });
-    expect(picks.get('1,3')).toMatchObject({ localIndex: 25, flipX: false, flipY: true });
-    expect(picks.get('4,3')).toMatchObject({ localIndex: 30, flipX: false, flipY: true });
-    expect(picks.get('2,4')).toMatchObject({ localIndex: 25, flipX: false, flipY: true });
-    expect(picks.get('3,4')).toMatchObject({ localIndex: 30, flipX: false, flipY: true });
+    expectConvexCorner(picks.get('2,1'), 'tl');
+    expectConvexCorner(picks.get('3,1'), 'tr');
+    expectConvexCorner(picks.get('1,2'), 'tl');
+    expectConvexCorner(picks.get('4,2'), 'tr');
+    expectConvexCorner(picks.get('1,3'), 'bl');
+    expectConvexCorner(picks.get('4,3'), 'br');
+    expectConvexCorner(picks.get('2,4'), 'bl');
+    expectConvexCorner(picks.get('3,4'), 'br');
     expect([11, 33, 35]).toContain(picks.get('2,2')?.localIndex);
     expect([11, 33, 35]).toContain(picks.get('3,2')?.localIndex);
     expect([11, 33, 35]).toContain(picks.get('2,3')?.localIndex);

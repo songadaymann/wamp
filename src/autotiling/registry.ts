@@ -263,8 +263,8 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
   },
   {
     id: 'cyber.rubble',
-    label: 'Cyber Rubble',
-    description: 'Small colliding Cyber terrain clusters with a structural edge outline.',
+    label: 'Rubble',
+    description: 'Colliding rubble clusters. Yellow and pink mix; pink is rare. Random H/V flips on fill and edges.',
     ruleKind: 'stamp',
     algorithm: 'recipe',
     resolverKey: 'cyber.rubble',
@@ -279,7 +279,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
   },
   {
     id: 'cyber.support',
-    label: 'Cyber Support',
+    label: 'Support',
     description: 'Background support strips and columns.',
     ruleKind: 'span',
     algorithm: 'vertical-strip',
@@ -312,7 +312,7 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
   {
     id: 'cyber.fence',
     label: 'Fence',
-    description: 'Foreground fence stamp emitted as a two-row recipe.',
+    description: 'Foreground fence stamp matched from painted neighbors.',
     ruleKind: 'rectangle',
     algorithm: 'rectangle-section',
     resolverKey: 'cyber.fence',

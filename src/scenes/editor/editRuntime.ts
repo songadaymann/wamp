@@ -231,57 +231,6 @@ interface TileAction {
   newGid: number;
 }
 
-type CyberSmartGestureAxis = 'horizontal' | 'vertical';
-
-function getCyberSmartGestureAxis(brushId: SmartBrushId): CyberSmartGestureAxis | null {
-  switch (brushId) {
-    case 'cyber.fence':
-    case 'cyber.neon':
-      return 'horizontal';
-    case 'cyber.support':
-      return 'vertical';
-    default:
-      return null;
-  }
-}
-
-function constrainCyberSmartCell(
-  cell: { x: number; y: number },
-  anchor: { x: number; y: number },
-  axis: CyberSmartGestureAxis,
-): { x: number; y: number } {
-  return axis === 'horizontal'
-    ? { x: cell.x, y: anchor.y }
-    : { x: anchor.x, y: cell.y };
-}
-
-function getCyberSmartRectangleCells(
-  brushId: SmartBrushId,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-): Array<{ x: number; y: number }> | null {
-  if (brushId === 'cyber.fence' || brushId === 'cyber.neon') {
-    const minX = Math.min(x1, x2);
-    const maxX = Math.max(x1, x2);
-    return Array.from({ length: maxX - minX + 1 }, (_, offset) => ({
-      x: minX + offset,
-      y: y1,
-    }));
-  }
-  if (brushId !== 'cyber.support') return null;
-  const minX = Math.min(x1, x2);
-  const maxX = Math.max(x1, x2);
-  const minY = Math.min(y1, y2);
-  const maxY = Math.max(y1, y2);
-  const cells: Array<{ x: number; y: number }> = [];
-  for (let x = minX; x <= maxX; x += 1) {
-    for (let y = minY; y <= maxY; y += 1) cells.push({ x, y });
-  }
-  return cells;
-}
-
 interface ObjectsAction {
   previous: PlacedObject[];
   next: PlacedObject[];
@@ -364,7 +313,6 @@ export class EditorEditRuntime {
   private currentBatch: TileAction[] = [];
   private readonly currentBatchActionIndex = new Map<string, number>();
   private currentBatchSmartBefore: RoomSmartTerrainState | null = null;
-  private currentSmartGestureAnchor: { x: number; y: number } | null = null;
   private smartTerrain = createRoomSmartTerrainState();
   private clipboardState: EditorClipboardState | null = null;
   private customRoomTiles: CustomRoomTileDefinition[] = [];
@@ -498,7 +446,6 @@ export class EditorEditRuntime {
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
     this.currentBatchSmartBefore = null;
-    this.currentSmartGestureAnchor = null;
     this.smartTerrain = createRoomSmartTerrainState();
     this.clipboardState = null;
     this.customRoomTiles = [];
@@ -559,7 +506,6 @@ export class EditorEditRuntime {
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
     this.currentBatchSmartBefore = null;
-    this.currentSmartGestureAnchor = null;
     this.roomDirty = false;
     this.lastDirtyAt = 0;
   }
@@ -852,13 +798,11 @@ export class EditorEditRuntime {
       this.currentBatch = [];
       this.currentBatchActionIndex.clear();
       this.currentBatchSmartBefore = null;
-      this.currentSmartGestureAnchor = null;
       return;
     }
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
     this.currentBatchSmartBefore = cloneRoomSmartTerrainState(this.smartTerrain);
-    this.currentSmartGestureAnchor = null;
   }
 
   commitTileBatch(): void {
@@ -869,7 +813,6 @@ export class EditorEditRuntime {
       this.currentBatch = [];
       this.currentBatchActionIndex.clear();
       this.currentBatchSmartBefore = null;
-      this.currentSmartGestureAnchor = null;
       return;
     }
 
@@ -885,7 +828,6 @@ export class EditorEditRuntime {
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
     this.currentBatchSmartBefore = null;
-    this.currentSmartGestureAnchor = null;
     this.markRoomDirty();
     this.host.recordBuildPlacement(placedTileCount);
   }
@@ -894,7 +836,6 @@ export class EditorEditRuntime {
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
     this.currentBatchSmartBefore = null;
-    this.currentSmartGestureAnchor = null;
   }
 
   private recordTileBatchAction(action: TileAction): void {
@@ -1022,17 +963,9 @@ export class EditorEditRuntime {
     const baseTileX = Math.floor(localPoint.x / TILE_SIZE);
     const baseTileY = Math.floor(localPoint.y / TILE_SIZE);
     if (editorState.paletteMode === 'smart') {
-      const rawCell = { x: baseTileX, y: baseTileY };
-      const axis = getCyberSmartGestureAxis(editorState.smartMaterial);
-      if (axis && !this.currentSmartGestureAnchor) {
-        this.currentSmartGestureAnchor = rawCell;
-      }
-      const cell = axis && this.currentSmartGestureAnchor
-        ? constrainCyberSmartCell(rawCell, this.currentSmartGestureAnchor, axis)
-        : rawCell;
       this.applySmartDocument(applySelectedSmartCells(
         this.getSmartDocument(),
-        [cell],
+        [{ x: baseTileX, y: baseTileY }],
         'paint',
       ));
       return;
@@ -1359,17 +1292,6 @@ export class EditorEditRuntime {
     const erase = Boolean(options?.erase);
     const outline = Boolean(options?.outline);
     if (editorState.paletteMode === 'smart') {
-      const constrainedCells = kind === 'rect' && !erase
-        ? getCyberSmartRectangleCells(editorState.smartMaterial, x1, y1, x2, y2)
-        : null;
-      if (constrainedCells) {
-        this.applySmartDocument(applySelectedSmartCells(
-          this.getSmartDocument(),
-          constrainedCells,
-          'paint',
-        ));
-        return;
-      }
       const cells = iterateShapeTiles(kind, x1, y1, x2, y2, outline, options?.mid);
       const document = this.getSmartDocument();
       this.applySmartDocument(

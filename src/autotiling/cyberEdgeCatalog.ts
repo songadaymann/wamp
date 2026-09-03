@@ -75,9 +75,19 @@ export type CyberEdgeLetter =
  * void corner), 83 (ADBA; the 90° rotation 17 cannot flip to), and 78
  * (a 1-cell point where two stairs meet), flipped to the stair direction.
  *
- * Window / Neon: meant to start on a Concrete edge and run into it. Seed the
- * outer-end piece (BIBA / BJBA), then flipX so A stays on the outer/start side
- * and the run (I or J) continues toward more Window/Neon or interior Concrete.
+ * Window / Neon: Window seeds the outer-end piece (BIBA). Neon uses 49
+ * (BJBA) on a Concrete blob edge, and 51 (CCCJ / AAAJ) in the void, on
+ * non-Concrete neighbors, or among interior C sides. FlipX so A stays on
+ * the outer/start side and the run (I or J) continues toward more
+ * Window/Neon or interior Concrete.
+ * Void networks pick by J topology: 50 (AJAJ) horizontal mid, 6 (JAJA)
+ * vertical mid, 75 (JAAJ) corners, 74 (AJJJ) T with the stem up/down,
+ * 4 (JAJJ, extras 1/13) T with the stem left/right, 73 (JJJJ) cross,
+ * 7 (JAAA / JJAJ / JBAB, extras 0/12) vertical end or filled-blob top/bottom,
+ * 49 (JJJA / BJBA) filled-blob left/right instead of those T tiles.
+ * Convex drop-offs keep 7 and overlay A10 (tile 9) on the two void sides.
+ * 51 is the 1-wide horizontal end. Unflipped 7 has the socket on the bottom
+ * and J on top.
  * Stacked Window strokes reuse pane 38 with I on the shared vertical sides.
  * End caps stay tile 37, including the middle rows of a 3+ row band.
  */
@@ -93,8 +103,8 @@ export const CYBER_BRUSH_SEEDS = {
     fallback: 'outer-edge-flip-x',
   },
   'cyber.neon': {
-    localIndex: 49,
-    edges: 'BJBA',
+    localIndex: 51,
+    edges: 'CCCJ',
     fallback: 'outer-edge-flip-x',
   },
 } as const satisfies Partial<Record<CyberLetterBrushId, {
@@ -210,6 +220,26 @@ function pickWeightedCatalogLook<T extends CyberOrientedTile>(
   return pool[pool.length - 1]!;
 }
 
+/**
+ * Neon (and similar connectors) must not shuffle flips for variety.
+ * Prefer no flip, then flipX, then flipY, then both, among catalog hits
+ * that already match the edges.
+ */
+export function pickCanonicalCatalogCandidate<T extends CyberOrientedTile>(
+  candidates: readonly T[],
+): T {
+  if (candidates.length === 0) {
+    throw new RangeError('Cyber catalog pick requires at least one candidate.');
+  }
+  const unique = new Map<string, T>();
+  for (const candidate of candidates) {
+    const look = collapseFlipInvariantLook(candidate);
+    const key = orientedTileKey(look);
+    if (!unique.has(key)) unique.set(key, look);
+  }
+  return [...unique.values()].sort(compareCycleLooks)[0]!;
+}
+
 export function flipCatalogEdges(
   edges: `${CyberEdgeLetter}${CyberEdgeLetter}${CyberEdgeLetter}${CyberEdgeLetter}`,
   flipX: boolean,
@@ -262,6 +292,20 @@ export const CYBER_SUPPORT_ONLY_LOCAL_INDICES: ReadonlySet<number> = new Set([
 export const CYBER_SHELL_CLADDING_LOCAL_INDEX = 61;
 
 export const CYBER_EDGE_CATALOG: readonly CyberEdgeCatalogEntry[] = [
+  { localIndex: 4, brushId: 'cyber.neon', edges: 'JAJJ' }, /** extras 1/13: T stem left/right */
+  { localIndex: 4, brushId: 'cyber.neon', edges: 'JCJJ' },
+  { localIndex: 6, brushId: 'cyber.neon', edges: 'JAJA' }, /** vertical neon pipe */
+  { localIndex: 6, brushId: 'cyber.neon', edges: 'JCJC' },
+  { localIndex: 7, brushId: 'cyber.neon', edges: 'JBAB' }, /** extras 0/12: socket on bottom, J on top */
+  { localIndex: 7, brushId: 'cyber.neon', edges: 'JABA' },
+  { localIndex: 7, brushId: 'cyber.neon', edges: 'JACA' },
+  { localIndex: 7, brushId: 'cyber.neon', edges: 'JCAC' },
+  { localIndex: 7, brushId: 'cyber.neon', edges: 'JAAA' },
+  { localIndex: 7, brushId: 'cyber.neon', edges: 'JAAC' }, /** convex BR: void right+bottom */
+  { localIndex: 7, brushId: 'cyber.neon', edges: 'JAAB' },
+  { localIndex: 7, brushId: 'cyber.neon', edges: 'JCAA' }, /** convex BL: void left+bottom */
+  { localIndex: 7, brushId: 'cyber.neon', edges: 'JBAA' },
+  { localIndex: 7, brushId: 'cyber.neon', edges: 'JJAJ' }, /** filled blob bottom: A on bottom, J elsewhere */
   { localIndex: 11, brushId: 'cyber.concrete', edges: 'CCBB', rare: true },
   { localIndex: 14, brushId: 'cyber.concrete', edges: 'ABBA' },
   { localIndex: 15, brushId: 'cyber.concrete', edges: 'ABCB' },
@@ -293,8 +337,14 @@ export const CYBER_EDGE_CATALOG: readonly CyberEdgeCatalogEntry[] = [
   { localIndex: 42, brushId: 'cyber.shell', edges: 'BAGH' },
   { localIndex: 43, brushId: 'cyber.concrete', edges: 'EEEE' },
   { localIndex: 49, brushId: 'cyber.neon', edges: 'BJBA' },
+  { localIndex: 49, brushId: 'cyber.neon', edges: 'JJJA' }, /** filled blob left: A on left, J elsewhere */
+  { localIndex: 49, brushId: 'cyber.neon', edges: 'JAJA' }, /** vertical run along a hole */
+  { localIndex: 49, brushId: 'cyber.neon', edges: 'JCJA' }, /** hole on one side, Concrete on the other */
+  { localIndex: 49, brushId: 'cyber.neon', edges: 'CJJA' }, /** Concrete above, hole on the left */
   { localIndex: 50, brushId: 'cyber.neon', edges: 'CJCJ' },
+  { localIndex: 50, brushId: 'cyber.neon', edges: 'AJAJ' },
   { localIndex: 51, brushId: 'cyber.neon', edges: 'CCCJ' },
+  { localIndex: 51, brushId: 'cyber.neon', edges: 'AAAJ' },
   { localIndex: 52, brushId: 'cyber.shell', edges: 'HHCC' },
   { localIndex: 53, brushId: 'cyber.shell', edges: 'HHHH' }, /** full shell */
   { localIndex: 54, brushId: 'cyber.shell', edges: 'HAHH' },
@@ -312,8 +362,12 @@ export const CYBER_EDGE_CATALOG: readonly CyberEdgeCatalogEntry[] = [
   { localIndex: 71, brushId: 'cyber.concrete', edges: 'AAAE' },
   { localIndex: 73, brushId: 'cyber.neon', edges: 'JJJJ' }, /** neon cross */
   { localIndex: 74, brushId: 'cyber.neon', edges: 'CJJJ' },
+  { localIndex: 74, brushId: 'cyber.neon', edges: 'AJJJ' },
   { localIndex: 75, brushId: 'cyber.neon', edges: 'JCCJ' },
+  { localIndex: 75, brushId: 'cyber.neon', edges: 'JAAJ' },
   { localIndex: 76, brushId: 'cyber.neon', edges: 'CCJC' },
+  { localIndex: 76, brushId: 'cyber.neon', edges: 'AAJA' },
+  { localIndex: 76, brushId: 'cyber.neon', edges: 'ACJC' },
   { localIndex: 77, brushId: 'cyber.windows', edges: 'HHHI' },
   { localIndex: 78, brushId: 'cyber.shell', edges: 'HHHC' },
   { localIndex: 79, brushId: 'cyber.shell', edges: 'HABC' },

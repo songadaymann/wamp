@@ -124,11 +124,10 @@ export const CYBER_FAMILY_DEFINITIONS = {
   },
   'framed-panel': {
     id: 'framed-panel',
-    label: 'Framed Panel',
+    label: 'Fence',
     layer: 'foreground',
-    minimumWidth: 3,
-    minimumHeight: 2,
-    maximumHeight: 2,
+    minimumWidth: 1,
+    minimumHeight: 1,
     structural: false,
   },
 } as const satisfies Record<CyberFamilyId, CyberFamilyDefinition>;
@@ -145,7 +144,7 @@ const CYBER_DECO_ONLY = new Set<number>(CYBER_DECO_ONLY_LOCAL_INDICES);
 
 /** Audited optional Structure details. Panel and rubble fragments are separate recipes. */
 export const CYBER_DETAIL_ALLOWLIST = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+  0, 1, 2, 3, 5, 8, 9, 10,
   13, 18, 22, 32,
 ] as const;
 
@@ -161,8 +160,8 @@ export const CYBER_RUBBLE_BORDER_LOCAL_INDICES = {
 const CYBER_DETAILS = new Set<number>(CYBER_DETAIL_ALLOWLIST);
 
 export const CYBER_EMISSIVE_LOCAL_INDICES = {
-  'cyber-yellow': [2, 3, 49, 50, 51, 73, 74, 75, 76],
-  'cyber-pink': [2, 3, 44, 45, 46, 49, 50, 51, 56, 57, 58, 73, 74, 75, 76],
+  'cyber-yellow': [2, 3, 4, 6, 7, 49, 50, 51, 73, 74, 75, 76],
+  'cyber-pink': [2, 3, 4, 6, 7, 44, 45, 46, 49, 50, 51, 56, 57, 58, 73, 74, 75, 76],
 } as const satisfies Record<CyberStyleId, readonly number[]>;
 
 const CYBER_EMITTERS = Object.fromEntries(
@@ -610,6 +609,53 @@ export function resolveCyberPlatformSpan(styleId: CyberStyleId, length: number):
   );
 }
 
+export const CYBER_RUBBLE_PINK_PERIOD = 8;
+
+function rubbleVarietyHash(x: number, y: number, salt: number, channel: number): number {
+  return Math.abs(
+    Math.imul(x + 13, 73856093)
+    ^ Math.imul(y + 37, 19349663)
+    ^ Math.imul((salt | 0) + 1, 83492791)
+    ^ Math.imul(channel + 11, 50331653),
+  ) >>> 0;
+}
+
+/**
+ * Rubble is color-interchangeable. Fill and edges shuffle yellow/pink (pink rare)
+ * and random H/V flips, stable for a given cell and variety salt.
+ * Side edges never flip X; top/bottom edges never flip Y.
+ */
+export function cyberRubbleEdgeFlipAxes(
+  part: keyof typeof CYBER_RUBBLE_BORDER_LOCAL_INDICES,
+): { flipX: boolean; flipY: boolean } {
+  if (part === 'left' || part === 'right') return { flipX: false, flipY: true };
+  if (part === 'top' || part === 'bottom') return { flipX: true, flipY: false };
+  return { flipX: false, flipY: false };
+}
+
+export function applyCyberRubbleVariety(
+  tile: CyberResolvedTile,
+  x: number,
+  y: number,
+  salt = 0,
+  channel = 0,
+  axes: { flipX?: boolean; flipY?: boolean } = {},
+): CyberResolvedTile {
+  const hash = rubbleVarietyHash(x, y, salt, channel);
+  const styleId: CyberStyleId = hash % CYBER_RUBBLE_PINK_PERIOD === 0
+    ? 'cyber-pink'
+    : 'cyber-yellow';
+  const allowFlipX = axes.flipX !== false;
+  const allowFlipY = axes.flipY !== false;
+  return makeTile(
+    styleId,
+    tile.localIndex,
+    tile.layer,
+    allowFlipX ? Boolean(hash & 8) !== tile.flipX : tile.flipX,
+    allowFlipY ? Boolean(hash & 16) !== tile.flipY : tile.flipY,
+  );
+}
+
 export function resolveCyberRubbleColumn(
   styleId: CyberStyleId,
   length: number,
@@ -646,9 +692,9 @@ export function resolveCyberRubbleBorderTile(
 }
 
 /**
- * Cyber support is a vertical foundation path. Short paths use explicit cap
- * fallbacks; runs of four or more repeat 48 above the 60/72 lower/base pair.
- * Atlas cells are 36, 48, 60, 72.
+ * Cyber support is a vertical foundation column that grows upward from a base.
+ * 1 tile: 72 (base). 2 tiles: 60, 72. 3 tiles: 36, 60, 72.
+ * 4+: 36 (top cap), 48 (fill), 60, 72 (base). Atlas cells: 36, 48, 60, 72.
  */
 export function resolveCyberSupportSpan(
   styleId: CyberStyleId,
@@ -660,7 +706,7 @@ export function resolveCyberSupportSpan(
   if (length === 1) {
     return [makeSpecTile(
       styleId,
-      { localIndex: 36, flipX: capFlipX },
+      { localIndex: 72, flipX },
       CYBER_FAMILY_DEFINITIONS.support.layer,
     )];
   }
@@ -668,12 +714,12 @@ export function resolveCyberSupportSpan(
     return [
       makeSpecTile(
         styleId,
-        { localIndex: 36, flipX: capFlipX },
+        { localIndex: 60, flipX },
         CYBER_FAMILY_DEFINITIONS.support.layer,
       ),
       makeSpecTile(
         styleId,
-        { localIndex: 60, flipX },
+        { localIndex: 72, flipX },
         CYBER_FAMILY_DEFINITIONS.support.layer,
       ),
     ];
@@ -713,14 +759,38 @@ export function resolveCyberNeonStrip(styleId: CyberStyleId, length: number): Cy
   );
 }
 
-/** Two-row 44/45/46 + 56/57/58 grille/window macro. */
-export function resolveCyberFramedPanel(styleId: CyberStyleId, width: number): CyberResolvedTile[][] {
-  assertSpanLength('framed-panel', width, 3);
+/**
+ * Fence cell from cardinal occupancy. Only painted neighbors count —
+ * holes and uneven outlines stay empty.
+ *
+ * Top (no fence above): 44 left, 45 middle/single, 46 right.
+ * Lower: 56 left, 57 middle/single, 58 right. No flipping.
+ */
+export function resolveCyberFenceCell(
+  styleId: CyberStyleId,
+  neighbors: { left: boolean; right: boolean; above: boolean },
+): CyberResolvedTile {
   const layer = CYBER_FAMILY_DEFINITIONS['framed-panel'].layer;
-  return [
-    repeatSpan(styleId, width, { localIndex: 44 }, [{ localIndex: 45 }], { localIndex: 46 }, layer, false),
-    repeatSpan(styleId, width, { localIndex: 56 }, [{ localIndex: 57 }], { localIndex: 58 }, layer, false),
-  ];
+  const { left, right, above } = neighbors;
+  const localIndex = !above
+    ? (!left && right ? 44 : left && !right ? 46 : 45)
+    : (!left && right ? 56 : left && !right ? 58 : 57);
+  return makeSpecTile(styleId, { localIndex }, layer);
+}
+
+/** Filled-rectangle helper. Irregular fences resolve per painted cell instead. */
+export function resolveCyberFramedPanel(
+  styleId: CyberStyleId,
+  width: number,
+  height: number = 2,
+): CyberResolvedTile[][] {
+  return Array.from({ length: height }, (_, row) =>
+    Array.from({ length: width }, (_, column) => resolveCyberFenceCell(styleId, {
+      left: column > 0,
+      right: column < width - 1,
+      above: row > 0,
+    })),
+  );
 }
 
 function detailCandidateKey(candidate: CyberDetailCandidate): string {

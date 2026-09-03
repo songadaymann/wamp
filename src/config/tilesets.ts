@@ -248,6 +248,7 @@ const DECO_ONLY_INDICES_MICROMONO = [
   160, 161, 162, 163, 164, 165, 166, 167,
 ];
 const TOP_DECOR_INDICES_CYBERCITY = [
+  4, 6, 7,
   11,
   12, 14, 15, 16, 17, 19, 20, 21, 23,
   25, 26, 27, 28, 29, 30, 31, 33, 34, 35,
@@ -257,7 +258,7 @@ const TOP_DECOR_INDICES_CYBERCITY = [
   72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
 ];
 const DECO_ONLY_INDICES_CYBERCITY = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+  0, 1, 2, 3, 5, 8, 9, 10,
   13, 18, 22,
   24, 32,
   44, 45, 46, 47, 48,
@@ -305,6 +306,22 @@ function createJungleVinesEditorMetadata(): Partial<Record<number, EditorTileMet
   );
 }
 
+function createCybercityExtrasEditorMetadata(): Partial<Record<number, EditorTileMetadata>> {
+  const neon = new Set<number>(CYBERCITY_EXTRAS_NEON_LOCAL_INDICES);
+  return Object.fromEntries(
+    Array.from({ length: CYBERCITY_EXTRAS_TILE_COUNT }, (_, localIndex) => localIndex)
+      .filter((localIndex) => !neon.has(localIndex))
+      .map((localIndex) => [
+        localIndex,
+        {
+          label: 'Unused Cybercity Extras atlas cell',
+          description: 'Blank spacing. No collision.',
+          enabled: false,
+        },
+      ]),
+  );
+}
+
 const DEFAULT_TILESET_UI_THEME: TilesetUiThemeConfig = {
   accentCool: 0x5dc16b,
   accentWarm: 0xd7ac63,
@@ -319,6 +336,10 @@ export const JUNGLE_VINES_TILESET_KEY = 'jungle-vines';
 export const JUNGLE_VINES_TILESET_FIRST_GID = 2001;
 export const AUTOTILE_EDGE_CASES_DESERT_TILESET_KEY = 'autotile-edge-cases-desert';
 export const AUTOTILE_EDGE_CASES_DESERT_TILESET_FIRST_GID = 2073;
+export const CYBERCITY_EXTRAS_TILESET_KEY = 'cybercity extras';
+export const CYBERCITY_EXTRAS_TILESET_FIRST_GID = 2077;
+export const CYBERCITY_EXTRAS_TILE_COUNT = 84;
+export const CYBERCITY_EXTRAS_NEON_LOCAL_INDICES = [0, 1, 2, 12, 13, 14] as const;
 export const AUTOTILE_EDGE_CASES_DESERT_LOCAL_INDICES = {
   horizontalLedgeMiddleB4: 0,
   horizontalLedgeMiddleB5: 1,
@@ -609,7 +630,7 @@ const TEXTGLOW_INDICES = [
   32, 33, 34, 35, 36, 37, 38, 39,
   40, 41, 42, 43,
 ];
-const CYBERCITY_LIGHT_INDICES = [2,3,49,50,51,73, 74, 75, 76];
+const CYBERCITY_LIGHT_INDICES = [2, 3, 4, 6, 7, 49, 50, 51, 73, 74, 75, 76];
 const CYBERCITY_FENCE_INDICES = [44,45,46,56,57,58];
 
 // firstGid assignments: 0 = empty, then sequential per tileset.
@@ -1060,7 +1081,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'cybercity yellow',
     name: 'Cybercity Yellow',
-    path: 'assets/tilesets/cybercity_yellow.png?v=2026-09-01-tile82-revert',
+    path: 'assets/tilesets/cybercity_yellow.png?v=2026-09-02-neon-junctions',
     imageWidth: 192,
     imageHeight: 112,
     columns: 12,
@@ -1084,7 +1105,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: 'cybercity pink',
     name: 'Cybercity Pink',
-    path: 'assets/tilesets/cybercity_pink.png?v=2026-09-01-tile82-revert',
+    path: 'assets/tilesets/cybercity_pink.png?v=2026-09-02-neon-junctions',
     imageWidth: 192,
     imageHeight: 112,
     columns: 12,
@@ -1099,6 +1120,42 @@ export const TILESETS: TilesetConfig[] = [
       ...createTilesetLightEmissionProfiles(CYBERCITY_LIGHT_INDICES, CYBERCITY_LIGHT_EMISSION),
       ...createTilesetLightEmissionProfiles(CYBERCITY_FENCE_INDICES, CYBERCITY_FENCE_EMISSION),
     },
+    uiTheme: {
+      accentCool: 0x84b95d,
+      accentWarm: 0xcd9158,
+      accentHot: 0xe76f50,
+      accentAlt: 0xd8b373,
+    },
+  },
+  {
+    key: CYBERCITY_EXTRAS_TILESET_KEY,
+    name: 'Cybercity Extras',
+    path: 'assets/tilesets/cybercity_extras.png?v=2026-09-02-neon-0-12-rotate',
+    imageWidth: 192,
+    imageHeight: 112,
+    columns: 12,
+    rows: 7,
+    tileCount: CYBERCITY_EXTRAS_TILE_COUNT,
+    firstGid: CYBERCITY_EXTRAS_TILESET_FIRST_GID,
+    terrainCollisionProfiles: {
+      ...createTilesetCollisionProfiles(
+        [...CYBERCITY_EXTRAS_NEON_LOCAL_INDICES],
+        DECORATED_TOP_PROFILE,
+      ),
+      ...createTilesetCollisionProfiles(
+        Array.from({ length: CYBERCITY_EXTRAS_TILE_COUNT }, (_, localIndex) => localIndex)
+          .filter((localIndex) => !(CYBERCITY_EXTRAS_NEON_LOCAL_INDICES as readonly number[]).includes(localIndex)),
+        NO_COLLISION_PROFILE,
+      ),
+    },
+    lightEmissionProfiles: {
+      ...createTilesetLightEmissionProfiles(
+        [...CYBERCITY_EXTRAS_NEON_LOCAL_INDICES],
+        CYBERCITY_LIGHT_EMISSION,
+      ),
+    },
+    editorTileMetadata: createCybercityExtrasEditorMetadata(),
+    editorPaletteBackgroundColor: '#0b0b0b',
     uiTheme: {
       accentCool: 0x84b95d,
       accentWarm: 0xcd9158,
