@@ -15,7 +15,9 @@ import {
 } from '../auth/store';
 
 const PASSWORD_HASH_VERSION = 'pbkdf2-sha256';
-const PASSWORD_HASH_ITERATIONS = 120_000;
+// Cloudflare Workers Web Crypto rejects PBKDF2 iteration counts above 100_000.
+const PASSWORD_HASH_ITERATIONS = 100_000;
+const PASSWORD_HASH_MAX_ITERATIONS = 100_000;
 const PASSWORD_HASH_BYTES = 32;
 const PASSWORD_SALT_BYTES = 16;
 const USERNAME_PATTERN = /^[a-z0-9][a-z0-9_-]{2,23}$/;
@@ -705,7 +707,7 @@ async function verifyStudentPassword(password: string, storedHash: string): Prom
   }
 
   const iterations = Number(parts[1]);
-  if (!Number.isInteger(iterations) || iterations < 1) {
+  if (!Number.isInteger(iterations) || iterations < 1 || iterations > PASSWORD_HASH_MAX_ITERATIONS) {
     return false;
   }
 
