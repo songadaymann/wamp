@@ -10,7 +10,6 @@ import {
   createRoomSmartTerrainState,
   normalizeRoomSmartTerrainState,
   smartOwnedOutputKey,
-  smartOwnedOutputPartKey,
   smartSemanticCellKey,
   type SmartBrushId,
   type SmartCellCoordinate,
