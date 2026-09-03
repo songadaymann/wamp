@@ -4,6 +4,7 @@ import type {
   SchoolStudentCreateRequestBody,
   SchoolStudentCreateResponse,
   SchoolStudentDisableResponse,
+  SchoolStudentEnableResponse,
   SchoolStudentLoginRequestBody,
   SchoolStudentLoginResponse,
   SchoolStudentResetPasswordResponse,
@@ -23,6 +24,7 @@ import {
   createSchoolClassroom,
   createSchoolStudent,
   disableSchoolStudent,
+  enableSchoolStudent,
   listSchoolStudents,
   loadActiveSchoolClassroomBySlug,
   resetSchoolStudentPassword,
@@ -97,6 +99,15 @@ export async function handleSchoolRequest(
     const { classroom } = await requireTeacherClassroom(request, env, decodeURIComponent(disableMatch[1]));
     const responseBody: SchoolStudentDisableResponse = {
       student: await disableSchoolStudent(env, classroom.id, decodeURIComponent(disableMatch[2])),
+    };
+    return jsonResponse(request, responseBody);
+  }
+
+  const enableMatch = /^\/api\/school\/classrooms\/([^/]+)\/teacher\/students\/([^/]+)\/enable$/.exec(url.pathname);
+  if (enableMatch && request.method === 'POST') {
+    const { classroom } = await requireTeacherClassroom(request, env, decodeURIComponent(enableMatch[1]));
+    const responseBody: SchoolStudentEnableResponse = {
+      student: await enableSchoolStudent(env, classroom.id, decodeURIComponent(enableMatch[2])),
     };
     return jsonResponse(request, responseBody);
   }

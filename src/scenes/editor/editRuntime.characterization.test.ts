@@ -294,7 +294,7 @@ describe('editor edit runtime document contracts', () => {
     expect(getTileCoordinates(layers.get('terrain')!)).toEqual(['9,3', '10,4', '11,5', '12,6']);
   });
 
-  it('paints a diagonal Cyber Support pencil gesture without snapping to an axis', () => {
+  it('snaps a Cyber Support pencil gesture to a vertical column', () => {
     selectCyberBrush('cyber.support');
     const { runtime, layers } = createHarness(createRoom());
 
@@ -306,10 +306,10 @@ describe('editor edit runtime document contracts', () => {
 
     expect(getSmartSourceKeys(runtime, 'cyber.support')).toEqual([
       'background:15,3',
-      'background:16,4',
-      'background:17,5',
+      'background:15,4',
+      'background:15,5',
     ]);
-    expect(getTileCoordinates(layers.get('background')!)).toEqual(['15,3', '16,4', '17,5']);
+    expect(getTileCoordinates(layers.get('background')!)).toEqual(['15,3', '15,4', '15,5']);
   });
 
   it('uses the Advanced-selected layer for Smart recipes and preserves it through undo/redo', () => {

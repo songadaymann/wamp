@@ -76,7 +76,10 @@ describe('smart authoring registry', () => {
       label: 'Concrete',
       ruleKind: 'terrain',
       algorithm: 'blob-8way',
+      engine: 'cyber-recipe',
       resolverKey: 'cyber.concrete',
+      strokeAxis: 'free',
+      rectangleMode: 'shape',
       collisionRole: 'solid',
       defaultLayer: 'terrain',
       compatibleLegacyLocalIndices: expect.arrayContaining([14, 15, 20, 64, 81]),
@@ -97,16 +100,23 @@ describe('smart authoring registry', () => {
       'cyber.fence',
     ]);
     expect(getSmartBrushDefinition('cyber.support')).toMatchObject({
+      engine: 'cyber-recipe',
+      strokeAxis: 'vertical',
+      rectangleMode: 'filled-shape',
       defaultLayer: 'background',
       supportedLayers: ['background', 'terrain', 'foreground'],
       outputLayers: ['background'],
     });
     expect(getSmartBrushDefinition('cyber.neon')).toMatchObject({
+      strokeAxis: 'free',
+      rectangleMode: 'shape',
       defaultLayer: 'terrain',
       supportedLayers: ['background', 'terrain', 'foreground'],
       outputLayers: ['terrain', 'foreground'],
     });
     expect(getSmartBrushDefinition('cyber.fence')).toMatchObject({
+      strokeAxis: 'free',
+      rectangleMode: 'shape',
       defaultLayer: 'foreground',
       supportedLayers: ['background', 'terrain', 'foreground'],
       outputLayers: ['foreground'],
@@ -137,7 +147,10 @@ describe('smart authoring registry', () => {
     });
     expect(getSmartBrushDefinition('desert.ground')).toMatchObject({
       id: 'desert.ground',
+      engine: 'legacy-terrain',
       resolverKey: 'legacy.ground',
+      strokeAxis: 'free',
+      rectangleMode: 'shape',
       supportedThemeIds: ['desert'],
       supportedStyleIds: ['desert'],
     });

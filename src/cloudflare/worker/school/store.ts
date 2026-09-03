@@ -15,7 +15,9 @@ import {
 } from '../auth/store';
 
 const PASSWORD_HASH_VERSION = 'pbkdf2-sha256';
-const PASSWORD_HASH_ITERATIONS = 120_000;
+// Cloudflare Workers Web Crypto rejects PBKDF2 iteration counts above 100_000.
+const PASSWORD_HASH_ITERATIONS = 100_000;
+const PASSWORD_HASH_MAX_ITERATIONS = 100_000;
 const PASSWORD_HASH_BYTES = 32;
 const PASSWORD_SALT_BYTES = 16;
 const USERNAME_PATTERN = /^[a-z0-9][a-z0-9_-]{2,23}$/;
@@ -303,27 +305,48 @@ export async function disableSchoolStudent(
   classroomId: string,
   studentId: string,
 ): Promise<SchoolStudentRecord> {
+  return setSchoolStudentDisabled(env, classroomId, studentId, true);
+}
+
+export async function enableSchoolStudent(
+  env: Env,
+  classroomId: string,
+  studentId: string,
+): Promise<SchoolStudentRecord> {
+  return setSchoolStudentDisabled(env, classroomId, studentId, false);
+}
+
+export async function setSchoolStudentDisabled(
+  env: Env,
+  classroomId: string,
+  studentId: string,
+  disabled: boolean,
+): Promise<SchoolStudentRecord> {
   const student = await loadSchoolStudentById(env, classroomId, studentId);
   if (!student) {
     throw new HttpError(404, 'Student not found.');
   }
 
-  const disabledAt = student.disabled_at ?? new Date().toISOString();
-  await env.DB.batch([
+  const now = new Date().toISOString();
+  const disabledAt = disabled ? student.disabled_at ?? now : null;
+  const statements = [
     env.DB.prepare(
       `
         UPDATE school_students
         SET disabled_at = ?, updated_at = ?
         WHERE id = ? AND classroom_id = ?
       `,
-    ).bind(disabledAt, disabledAt, studentId, classroomId),
-    env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(student.user_id),
-  ]);
+    ).bind(disabledAt, now, studentId, classroomId),
+  ];
+  if (disabled) {
+    statements.push(env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(student.user_id));
+  }
+  await env.DB.batch(statements);
 
   return serializeStudent({
     ...student,
     disabled_at: disabledAt,
-    updated_at: disabledAt,
+    updated_at: now,
   });
 }
 
@@ -705,7 +728,7 @@ async function verifyStudentPassword(password: string, storedHash: string): Prom
   }
 
   const iterations = Number(parts[1]);
-  if (!Number.isInteger(iterations) || iterations < 1) {
+  if (!Number.isInteger(iterations) || iterations < 1 || iterations > PASSWORD_HASH_MAX_ITERATIONS) {
     return false;
   }
 

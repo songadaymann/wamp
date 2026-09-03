@@ -7,6 +7,7 @@ const baseUrl = process.argv[2] || 'http://127.0.0.1:3000/';
 const outputDir = process.env.SMART_AUTOTILING_SMOKE_OUTPUT_DIR || 'output/web-game/smart-autotiling';
 const FLIP_X = 1 << 20;
 const FLIP_Y = 1 << 21;
+const TILE_TRANSFORM_FLAGS = FLIP_X | FLIP_Y;
 const url = new URL(baseUrl);
 url.searchParams.set('previewSmoke', '1');
 if (!url.searchParams.has('renderer')) url.searchParams.set('renderer', 'webgl');
@@ -23,6 +24,18 @@ function rectangleCells(x1, y1, x2, y2) {
     for (let x = x1; x <= x2; x += 1) cells.push({ x, y });
   }
   return cells;
+}
+
+function decodedBaseGid(value) {
+  return value > 0 ? value & ~TILE_TRANSFORM_FLAGS : value;
+}
+
+function assertCyberLocalIndex(value, allowedLocalIndices, message) {
+  const actualLocalIndex = decodedBaseGid(value) - 1633;
+  assert.ok(
+    allowedLocalIndices.includes(actualLocalIndex),
+    `${message}: expected one of ${allowedLocalIndices.join(', ')}, received ${actualLocalIndex}`,
+  );
 }
 
 function isCloudflareInsightsRumCorsNoise(message) {
@@ -359,6 +372,46 @@ try {
   await page.screenshot({ path: path.join(outputDir, 'cyber-support-tools.png') });
   await page.locator('#btn-editor-top-tool-more').click();
 
+  await page.locator('#smart-theme-select').selectOption('forest');
+  await page.locator('#smart-material-select').selectOption('forest.ground');
+  await page.locator('.layer-btn[data-layer="background"]').click();
+  await assertEditorState(page, {
+    theme: 'forest',
+    brush: 'forest.ground',
+    style: 'forest',
+    layer: 'background',
+  });
+  assert.match(
+    await page.locator('#smart-palette-hint').textContent() ?? '',
+    /Exposed top edges are one-way landing surfaces/,
+  );
+  const backgroundGroundCells = rectangleCells(6, 4, 12, 7);
+  const { backgroundGround } = await runEditorCommands(page, [
+    { op: 'clearAllTiles' },
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: backgroundGroundCells },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'backgroundGround' },
+    { op: 'fitToScreen' },
+  ]);
+  for (const { x, y } of backgroundGroundCells) {
+    assert.ok(backgroundGround.tileData.background[y][x] > 0);
+    assert.equal(backgroundGround.tileData.terrain[y][x], -1);
+    assert.equal(
+      backgroundGround.smartTerrain.semanticCells[`background:${x},${y}`]?.brushId,
+      'forest.ground',
+    );
+  }
+  await page.waitForTimeout(150);
+  await dismissKeepBuilding(page);
+  await page.screenshot({ path: path.join(outputDir, 'background-ground-top-surface.png') });
+  summary.checks.advancedBackgroundGroundTopSurface = true;
+
+  await page.locator('#smart-theme-select').selectOption('cyber');
+  await page.locator('#smart-style-select').selectOption('cyber-pink');
+  await page.locator('#smart-material-select').selectOption('cyber.support');
+  await page.locator('.layer-btn[data-layer="foreground"]').click();
+
   await page.locator('#smart-material-select').selectOption('cyber.fence');
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'foreground');
   await assertEditorState(page, {
@@ -413,16 +466,32 @@ try {
   assert.equal(cyberStructure.smartTerrain.semanticCells['terrain:32,2'].brushId, 'cyber.concrete');
   assert.equal(cyberStructure.tileData.terrain[2][32], 1633 + 14);
   assert.equal(cyberStructure.tileData.terrain[2][39], 1633 + 14 + FLIP_X);
-  assert.ok([64, 82, 83].some((localIndex) => (
-    cyberStructure.tileData.terrain[4][35] === 1633 + localIndex
-  )));
-  assert.equal(cyberStructure.tileData.terrain[17][33], 1633 + 62, 'Cyber rectangle bottom uses F3');
-  assert.ok([64, 82, 83].some((localIndex) => (
-    cyberStructure.tileData.terrain[3][21] === 1633 + localIndex
-  )));
+  assertCyberLocalIndex(
+    cyberStructure.tileData.terrain[4][35],
+    [64, 82, 83],
+    'Cyber rectangle interior uses coordinate-stable neutral Concrete',
+  );
+  assertCyberLocalIndex(
+    cyberStructure.tileData.terrain[17][33],
+    [15, 16, 62],
+    'Cyber rectangle bottom uses neutral edge art',
+  );
+  assertCyberLocalIndex(
+    cyberStructure.tileData.terrain[3][21],
+    [11, 33, 35],
+    'Cyber stair inner corner uses matched Concrete corner art',
+  );
   assert.equal(cyberStructure.tileData.foreground[3][21], 1633 + 9 + FLIP_Y);
-  assert.equal(cyberStructure.tileData.terrain[4][21], 1633 + 62, 'Cyber stair lower middle uses F3');
-  assert.equal(cyberStructure.tileData.terrain[4][22], 1633 + 62, 'Cyber stair lower middle before end uses F3');
+  assertCyberLocalIndex(
+    cyberStructure.tileData.terrain[4][21],
+    [15, 16, 62],
+    'Cyber stair lower middle uses neutral bottom art',
+  );
+  assertCyberLocalIndex(
+    cyberStructure.tileData.terrain[4][22],
+    [15, 16, 62],
+    'Cyber stair lower middle before end uses neutral bottom art',
+  );
   assert.equal(cyberStructure.tileData.foreground[4][22], 1633 + 9 + FLIP_Y);
   assert.equal(cyberStructure.tileData.terrain[4][23], 1633 + 71);
   assert.ok(Object.keys(cyberStructure.smartTerrain.semanticCells).length > 128);
@@ -460,31 +529,39 @@ try {
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.foreground[7].slice(34, 37), [
     -1, -1, -1,
   ]);
-  assert.ok([64, 82, 83].some((localIndex) => (
-    cyberCopyHistoryRepair.carved.tileData.terrain[7][34] === 1633 + localIndex
-  )));
+  assertCyberLocalIndex(
+    cyberCopyHistoryRepair.carved.tileData.terrain[7][34],
+    [11, 33, 35],
+    'Cyber tunnel upper-left uses matched concave Concrete art',
+  );
   assert.equal(
     cyberCopyHistoryRepair.carved.tileData.terrain[7][35],
     1633 + 34 + FLIP_Y,
     'Cyber interior-window ceiling uses C11Y',
   );
-  assert.ok([64, 82, 83].some((localIndex) => (
-    cyberCopyHistoryRepair.carved.tileData.terrain[7][36] === 1633 + localIndex
-  )));
+  assertCyberLocalIndex(
+    cyberCopyHistoryRepair.carved.tileData.terrain[7][36],
+    [11, 33, 35],
+    'Cyber tunnel upper-right uses matched concave Concrete art',
+  );
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.terrain[8].slice(34, 37), [
     1633 + 21, -1, 1633 + 23,
   ]);
-  assert.ok([64, 82, 83].some((localIndex) => (
-    cyberCopyHistoryRepair.carved.tileData.terrain[9][34] === 1633 + localIndex
-  )));
+  assertCyberLocalIndex(
+    cyberCopyHistoryRepair.carved.tileData.terrain[9][34],
+    [11, 33, 35],
+    'Cyber tunnel lower-left uses matched concave Concrete art',
+  );
   assert.equal(
     cyberCopyHistoryRepair.carved.tileData.terrain[9][35],
     1633 + 34,
     'Cyber interior-window floor uses C11',
   );
-  assert.ok([64, 82, 83].some((localIndex) => (
-    cyberCopyHistoryRepair.carved.tileData.terrain[9][36] === 1633 + localIndex
-  )));
+  assertCyberLocalIndex(
+    cyberCopyHistoryRepair.carved.tileData.terrain[9][36],
+    [11, 33, 35],
+    'Cyber tunnel lower-right uses matched concave Concrete art',
+  );
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.foreground[9].slice(34, 37), [
     -1, -1, -1,
   ]);
@@ -495,6 +572,42 @@ try {
   await runEditorCommands(page, [{ op: 'setCamera', zoom: 2, centerTileX: 21.5, centerTileY: 3 }]);
   await page.waitForTimeout(100);
   await page.screenshot({ path: path.join(outputDir, 'cyber-ground-ties.png') });
+  await runEditorCommands(page, [{ op: 'fitToScreen' }]);
+
+  await page.locator('#smart-material-select').selectOption('cyber.concrete');
+  await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: rectangleCells(12, 9, 19, 15) },
+    { op: 'commitBatch' },
+  ]);
+  await page.locator('#smart-material-select').selectOption('cyber.windows');
+  const { cyberWindowBand } = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: rectangleCells(12, 10, 19, 13) },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'cyberWindowBand' },
+  ]);
+  for (const y of [10, 11, 12, 13]) {
+    assertCyberLocalIndex(
+      cyberWindowBand.tileData.terrain[y][12],
+      [37],
+      `Cyber Window left end at row ${y}`,
+    );
+    assertCyberLocalIndex(
+      cyberWindowBand.tileData.terrain[y][15],
+      [38],
+      `Cyber Window stacked pane at row ${y}`,
+    );
+    assertCyberLocalIndex(
+      cyberWindowBand.tileData.terrain[y][19],
+      [37],
+      `Cyber Window right end at row ${y}`,
+    );
+  }
+  summary.checks.cyberWindowBand = true;
+  await runEditorCommands(page, [{ op: 'setCamera', zoom: 1.5, centerTileX: 15.5, centerTileY: 12 }]);
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: path.join(outputDir, 'cyber-window-band.png') });
   await runEditorCommands(page, [{ op: 'fitToScreen' }]);
 
   await page.locator('#smart-style-select').selectOption('cyber-pink');
@@ -686,9 +799,11 @@ try {
   assert.equal(countFramedPanelRecipes(cyberSuppressionAndReload.smartErased), 1);
   assert.deepEqual(cyberSuppressionAndReload.reloaded.smartTerrain, cyberSuppressionAndReload.smartErased.smartTerrain);
   assert.deepEqual(cyberSuppressionAndReload.reloaded.tileData, cyberSuppressionAndReload.smartErased.tileData);
-  assert.ok([64, 82, 83].some((localIndex) => (
-    cyberSuppressionAndReload.reloaded.tileData.terrain[4][35] === 1633 + localIndex
-  )));
+  assertCyberLocalIndex(
+    cyberSuppressionAndReload.reloaded.tileData.terrain[4][35],
+    [64, 82, 83],
+    'Cyber neutral Concrete survives save/reload with transforms',
+  );
   summary.checks.cyberSuppressionAndReload = true;
   summary.checks.cyberOwnedLayers = true;
   await dismissKeepBuilding(page);
@@ -843,47 +958,60 @@ try {
       { op: 'placeCells', cells: [{ x, y: 5 }] },
       { op: 'commitBatch' },
     ]),
-    ...[5, 4, 3].flatMap((x) => [
+    ...[5, 4, 3, 2].flatMap((x) => [
       { op: 'beginBatch' },
       { op: 'placeCells', cells: [{ x, y: 13 }] },
       { op: 'commitBatch' },
     ]),
     { op: 'capture', name: 'desertEdgeCaseFixture' },
   ]);
-  for (let x = 6; x < 12; x += 1) {
-    assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[5][x]));
+  assert.equal(desertEdgeCaseFixture.tileData.terrain[5][6], 2101);
+  assert.equal(desertEdgeCaseFixture.tileData.terrain[5][7], 117);
+  for (let x = 8; x < 12; x += 1) {
+    assert.equal(desertEdgeCaseFixture.tileData.terrain[5][x], 118);
   }
-  assert.equal(desertEdgeCaseFixture.tileData.terrain[5][12], 90);
+  assert.equal(desertEdgeCaseFixture.tileData.terrain[5][12], 119);
   assert.deepEqual(
     desertEdgeCaseFixture.tileData.foreground[5].slice(5, 13),
     [2076, -1, -1, -1, -1, -1, -1, -1],
   );
-  assert.equal(desertEdgeCaseFixture.tileData.terrain[13][3], 87);
-  assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[13][4]));
-  assert.ok([2073, 2074].includes(desertEdgeCaseFixture.tileData.terrain[13][5]));
-  assert.deepEqual(desertEdgeCaseFixture.tileData.foreground[13].slice(3, 7), [-1, -1, -1, 2075]);
+  assert.equal(desertEdgeCaseFixture.tileData.terrain[13][2], 117);
+  assert.equal(desertEdgeCaseFixture.tileData.terrain[13][3], 118);
+  assert.equal(desertEdgeCaseFixture.tileData.terrain[13][4], 119);
+  assert.equal(desertEdgeCaseFixture.tileData.terrain[13][5], 2102);
+  assert.deepEqual(
+    desertEdgeCaseFixture.tileData.foreground[13].slice(2, 7),
+    [-1, -1, -1, -1, 2075],
+  );
   assert.equal(await page.locator(
     '#tileset-select option[value="autotile-edge-cases-desert"]',
   ).count(), 0);
+  assert.equal(await page.locator(
+    '#tileset-select option[value="autotile-artist-extras"]',
+  ).count(), 0);
   const edgeCaseAtlasRuntime = await page.evaluate(() => {
-    const texture = window.__EVERYBODYS_PLATFORMER_GAME__?.textures
-      .get('autotile-edge-cases-desert');
-    const source = texture?.getSourceImage();
+    const textures = window.__EVERYBODYS_PLATFORMER_GAME__?.textures;
+    const seamSource = textures?.get('autotile-edge-cases-desert')?.getSourceImage();
+    const artistSource = textures?.get('autotile-artist-extras')?.getSourceImage();
     return {
-      width: source?.width,
-      height: source?.height,
+      seam: [seamSource?.width, seamSource?.height],
+      artist: [artistSource?.width, artistSource?.height],
     };
   });
-  assert.deepEqual(
-    [edgeCaseAtlasRuntime.width, edgeCaseAtlasRuntime.height],
-    [64, 16],
-  );
+  assert.deepEqual(edgeCaseAtlasRuntime.seam, [64, 16]);
+  assert.deepEqual(edgeCaseAtlasRuntime.artist, [192, 96]);
   assert.match(
     requestedUrls.find((requestUrl) => requestUrl.includes('autotile-edge-cases-desert.png')),
     /autotile-edge-cases-desert\.png\?v=2026-08-25-authored-ledges-1$/,
   );
+  assert.match(
+    requestedUrls.find((requestUrl) => requestUrl.includes('rr_extras.png')),
+    /rr_extras\.png\?v=2026-08-29-artist-ledges-v2$/,
+  );
   summary.checks.desertCompositeEdgeCases = true;
   summary.checks.sequentialDesertCompositeEdges = true;
+  summary.checks.artistDirectionalTransition = true;
+  summary.checks.artistPlatformContinuation = true;
   summary.checks.hiddenEdgeCaseAtlas = true;
   summary.checks.versionedEdgeCaseAtlas = true;
   await page.evaluate(() => {
@@ -895,10 +1023,43 @@ try {
   await page.screenshot({ path: path.join(outputDir, 'desert-edge-case-right.png') });
   await page.evaluate(() => {
     const scene = window.__EVERYBODYS_PLATFORMER_GAME__?.scene.keys.EditorScene;
-    scene.cameras.main.centerOn(5.5 * 16, 13 * 16);
+    scene.cameras.main.centerOn(4.5 * 16, 13 * 16);
   });
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outputDir, 'desert-edge-case-left.png') });
+  await runEditorCommands(page, [{ op: 'fitToScreen' }]);
+  for (const fixture of [
+    { theme: 'cave', transitionGid: 2077, startGid: 189, middleGid: 190, capGid: 191 },
+    { theme: 'forest', transitionGid: 2089, startGid: 45, middleGid: 46, capGid: 47 },
+  ]) {
+    await page.evaluate((theme) => {
+      const select = document.querySelector('#smart-theme-select');
+      select.value = theme;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }, fixture.theme);
+    const { artistLedgeFixture } = await runEditorCommands(page, [
+      { op: 'clearCurrentLayer' },
+      { op: 'beginBatch' },
+      { op: 'placeCells', cells: [
+        [3, 4], [4, 4], [5, 4],
+        [3, 5], [4, 5], [5, 5], [6, 5], [7, 5], [8, 5], [9, 5],
+        [3, 6], [4, 6], [5, 6],
+      ].map(([x, y]) => ({ x, y })) },
+      { op: 'commitBatch' },
+      { op: 'capture', name: 'artistLedgeFixture' },
+      { op: 'setCamera', zoom: 4, centerTileX: 7, centerTileY: 5 },
+    ]);
+    assert.equal(artistLedgeFixture.tileData.terrain[5][6], fixture.transitionGid);
+    assert.equal(artistLedgeFixture.tileData.terrain[5][7], fixture.startGid);
+    assert.equal(artistLedgeFixture.tileData.terrain[5][8], fixture.middleGid);
+    assert.equal(artistLedgeFixture.tileData.terrain[5][9], fixture.capGid);
+    await page.waitForTimeout(150);
+    await page.screenshot({
+      path: path.join(outputDir, `${fixture.theme}-artist-ledge-right.png`),
+    });
+  }
+  summary.checks.caveArtistLedge = true;
+  summary.checks.forestArtistLedge = true;
   await runEditorCommands(page, [{ op: 'fitToScreen' }]);
   await page.evaluate(() => {
     const theme = document.querySelector('#smart-theme-select');

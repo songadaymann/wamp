@@ -17,7 +17,7 @@ const WELCOME_MODAL_SEEN_STORAGE_KEY = 'wamp_welcome_modal_seen_v1';
 export const REQUEST_BUILDER_MODE_EVENT = 'wamp:request-builder-mode';
 const WELCOME_MODAL_AUTO_OPEN_DELAY_MS = 540;
 const BUILD_FRONTIER_RADIUS = 24;
-const WELCOME_PLAY_ROOM_COORDINATES: RoomCoordinates = { x: 1, y: 0 };
+const WELCOME_PLAY_ROOM_COORDINATES: RoomCoordinates = { x: -11, y: -6 };
 
 type WelcomeModalElements = {
   modal: HTMLElement | null;

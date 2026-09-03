@@ -28,6 +28,15 @@ export const SMART_RULE_ALGORITHMS = [
 ] as const;
 export type SmartRuleAlgorithm = typeof SMART_RULE_ALGORITHMS[number];
 
+export const SMART_BRUSH_ENGINES = ['legacy-terrain', 'cyber-recipe'] as const;
+export type SmartBrushEngine = typeof SMART_BRUSH_ENGINES[number];
+
+export const SMART_BRUSH_STROKE_AXES = ['free', 'horizontal', 'vertical'] as const;
+export type SmartBrushStrokeAxis = typeof SMART_BRUSH_STROKE_AXES[number];
+
+export const SMART_BRUSH_RECTANGLE_MODES = ['shape', 'filled-shape', 'horizontal-line'] as const;
+export type SmartBrushRectangleMode = typeof SMART_BRUSH_RECTANGLE_MODES[number];
+
 export const SMART_THEME_IDS = ['forest', 'desert', 'cave', 'gothic', 'cyber', 'water'] as const;
 export type SmartThemeId = typeof SMART_THEME_IDS[number];
 export type SmartBrushTool = Extract<ToolName, 'pencil' | 'fill' | 'rect' | 'ellipse' | 'line'>;
@@ -75,7 +84,13 @@ export interface SmartBrushDefinition {
   description: string;
   ruleKind: SmartRuleKind;
   algorithm: SmartRuleAlgorithm;
+  /** Selects the document solver without teaching the editor about tileset families. */
+  engine: SmartBrushEngine;
   resolverKey: string;
+  /** Optional Pencil constraint interpreted by the generic Smart Tile controller. */
+  strokeAxis: SmartBrushStrokeAxis;
+  /** Defines whether Rectangle paints its shape or a normalized horizontal source span. */
+  rectangleMode: SmartBrushRectangleMode;
   supportedTools: readonly SmartBrushTool[];
   collisionRole: SmartCollisionRole;
   defaultLayer: LayerName;
@@ -135,7 +150,10 @@ interface LegacyBrushTemplate {
   description: string;
   ruleKind: SmartRuleKind;
   algorithm: SmartRuleAlgorithm;
+  engine: SmartBrushEngine;
   resolverKey: string;
+  strokeAxis: SmartBrushStrokeAxis;
+  rectangleMode: SmartBrushRectangleMode;
   supportedTools: readonly SmartBrushTool[];
   collisionRole: SmartCollisionRole;
   compatibleLegacyLocalIndices: readonly number[];
@@ -149,7 +167,10 @@ const LEGACY_BRUSH_TEMPLATES: readonly LegacyBrushTemplate[] = [
     description: 'Connected solid terrain with edges, corners, and fill.',
     ruleKind: 'terrain',
     algorithm: 'blob-8way',
+    engine: 'legacy-terrain',
     resolverKey: 'legacy.ground',
+    strokeAxis: 'free',
+    rectangleMode: 'shape',
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     compatibleLegacyLocalIndices: [14, 15, 16, 17, 26, 27, 28, 29, 33, 34, 35, 37, 38, 39, 40, 41, 42, 47, 49, 50, 51, 52, 53, 54],
@@ -161,7 +182,10 @@ const LEGACY_BRUSH_TEMPLATES: readonly LegacyBrushTemplate[] = [
     description: 'One-cell-high walkable strips with authored ends.',
     ruleKind: 'path',
     algorithm: 'horizontal-strip',
+    engine: 'legacy-terrain',
     resolverKey: 'legacy.platform',
+    strokeAxis: 'free',
+    rectangleMode: 'shape',
     supportedTools: ['pencil', 'rect'],
     collisionRole: 'solid',
     compatibleLegacyLocalIndices: [44, 45, 46],
@@ -173,7 +197,10 @@ const LEGACY_BRUSH_TEMPLATES: readonly LegacyBrushTemplate[] = [
     description: 'Connected structural accents within a terrain style.',
     ruleKind: 'terrain',
     algorithm: 'blob-8way',
+    engine: 'legacy-terrain',
     resolverKey: 'legacy.feature',
+    strokeAxis: 'free',
+    rectangleMode: 'shape',
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'mixed',
     compatibleLegacyLocalIndices: [0, 1, 10, 12, 13, 22, 24],
@@ -200,7 +227,10 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     description: 'Water tunnel backdrop authored behind the player.',
     ruleKind: 'terrain',
     algorithm: 'blob-8way',
+    engine: 'legacy-terrain',
     resolverKey: 'legacy.tunnel',
+    strokeAxis: 'free',
+    rectangleMode: 'shape',
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'non-colliding',
     defaultLayer: 'background',
@@ -216,7 +246,10 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     description: 'Letter-matched Cyber concrete that joins Windows, Shell, and Neon.',
     ruleKind: 'terrain',
     algorithm: 'blob-8way',
+    engine: 'cyber-recipe',
     resolverKey: 'cyber.concrete',
+    strokeAxis: 'free',
+    rectangleMode: 'shape',
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     defaultLayer: 'terrain',
@@ -232,7 +265,10 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     description: 'Window strips that start on a Concrete edge and join Shell and Neon.',
     ruleKind: 'terrain',
     algorithm: 'blob-8way',
+    engine: 'cyber-recipe',
     resolverKey: 'cyber.windows',
+    strokeAxis: 'free',
+    rectangleMode: 'shape',
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     defaultLayer: 'terrain',
@@ -248,7 +284,10 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     description: 'Shell cladding that joins Concrete and Windows.',
     ruleKind: 'terrain',
     algorithm: 'blob-8way',
+    engine: 'cyber-recipe',
     resolverKey: 'cyber.shell',
+    strokeAxis: 'free',
+    rectangleMode: 'shape',
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     defaultLayer: 'terrain',
@@ -267,7 +306,10 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     description: 'Colliding rubble clusters. Yellow and pink mix; pink is rare. Random H/V flips on fill and edges.',
     ruleKind: 'stamp',
     algorithm: 'recipe',
+    engine: 'cyber-recipe',
     resolverKey: 'cyber.rubble',
+    strokeAxis: 'free',
+    rectangleMode: 'shape',
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     defaultLayer: 'terrain',
@@ -283,7 +325,10 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     description: 'Background support strips and columns.',
     ruleKind: 'span',
     algorithm: 'vertical-strip',
+    engine: 'cyber-recipe',
     resolverKey: 'cyber.support',
+    strokeAxis: 'vertical',
+    rectangleMode: 'filled-shape',
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'non-colliding',
     defaultLayer: 'background',
@@ -299,7 +344,10 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     description: 'Neon runs that start on a Concrete edge and join Windows and Shell.',
     ruleKind: 'terrain',
     algorithm: 'blob-8way',
+    engine: 'cyber-recipe',
     resolverKey: 'cyber.neon',
+    strokeAxis: 'free',
+    rectangleMode: 'shape',
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'solid',
     defaultLayer: 'terrain',
@@ -315,7 +363,10 @@ const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
     description: 'Foreground fence stamp matched from painted neighbors.',
     ruleKind: 'rectangle',
     algorithm: 'rectangle-section',
+    engine: 'cyber-recipe',
     resolverKey: 'cyber.fence',
+    strokeAxis: 'free',
+    rectangleMode: 'shape',
     supportedTools: FULL_PAINT_TOOLS,
     collisionRole: 'non-colliding',
     defaultLayer: 'foreground',
