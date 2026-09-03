@@ -19,7 +19,6 @@ import {
   type RoomSmartTerrainState,
   type SmartBrushId,
   type SmartCellCoordinate,
-  type SmartRecipeInstanceState,
   type SmartStyleId,
 } from './model';
 import { getSmartBrushDefinition } from './registry';
