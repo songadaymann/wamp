@@ -305,27 +305,48 @@ export async function disableSchoolStudent(
   classroomId: string,
   studentId: string,
 ): Promise<SchoolStudentRecord> {
+  return setSchoolStudentDisabled(env, classroomId, studentId, true);
+}
+
+export async function enableSchoolStudent(
+  env: Env,
+  classroomId: string,
+  studentId: string,
+): Promise<SchoolStudentRecord> {
+  return setSchoolStudentDisabled(env, classroomId, studentId, false);
+}
+
+export async function setSchoolStudentDisabled(
+  env: Env,
+  classroomId: string,
+  studentId: string,
+  disabled: boolean,
+): Promise<SchoolStudentRecord> {
   const student = await loadSchoolStudentById(env, classroomId, studentId);
   if (!student) {
     throw new HttpError(404, 'Student not found.');
   }
 
-  const disabledAt = student.disabled_at ?? new Date().toISOString();
-  await env.DB.batch([
+  const now = new Date().toISOString();
+  const disabledAt = disabled ? student.disabled_at ?? now : null;
+  const statements = [
     env.DB.prepare(
       `
         UPDATE school_students
         SET disabled_at = ?, updated_at = ?
         WHERE id = ? AND classroom_id = ?
       `,
-    ).bind(disabledAt, disabledAt, studentId, classroomId),
-    env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(student.user_id),
-  ]);
+    ).bind(disabledAt, now, studentId, classroomId),
+  ];
+  if (disabled) {
+    statements.push(env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(student.user_id));
+  }
+  await env.DB.batch(statements);
 
   return serializeStudent({
     ...student,
     disabled_at: disabledAt,
-    updated_at: disabledAt,
+    updated_at: now,
   });
 }
 

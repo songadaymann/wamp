@@ -4,6 +4,7 @@ import type { MagicLinkRequestResponse } from './auth/model';
 import type {
   SchoolStudentCreateResponse,
   SchoolStudentDisableResponse,
+  SchoolStudentEnableResponse,
   SchoolStudentRecord,
   SchoolStudentResetPasswordResponse,
   SchoolTeacherStudentListResponse,
@@ -213,25 +214,33 @@ async function resetPassword(student: SchoolStudentRecord): Promise<void> {
   }
 }
 
-async function disableStudent(student: SchoolStudentRecord): Promise<void> {
-  if (!window.confirm(`Disable ${student.username}? They will be signed out and unable to log in.`)) {
+async function setStudentDisabled(student: SchoolStudentRecord, disabled: boolean): Promise<void> {
+  if (disabled) {
+    if (!window.confirm(`Disable ${student.username}? They will be signed out and unable to log in.`)) {
+      return;
+    }
+  } else if (!window.confirm(`Enable ${student.username}? They will be able to log in again.`)) {
     return;
   }
 
+  const action = disabled ? 'Disabling' : 'Enabling';
   setBusy(true);
-  setRosterStatus(`Disabling ${student.username}...`, false);
+  setRosterStatus(`${action} ${student.username}...`, false);
   hideCredential();
 
   try {
-    const response = await apiRequest<SchoolStudentDisableResponse>(
-      `/api/school/classrooms/${encodeURIComponent(classroomSlug)}/teacher/students/${encodeURIComponent(student.id)}/disable`,
+    const response = await apiRequest<SchoolStudentDisableResponse | SchoolStudentEnableResponse>(
+      `/api/school/classrooms/${encodeURIComponent(classroomSlug)}/teacher/students/${encodeURIComponent(student.id)}/${disabled ? 'disable' : 'enable'}`,
       { method: 'POST' },
     );
     students = students.map((item) => (item.id === response.student.id ? response.student : item));
-    setRosterStatus(`Disabled ${response.student.username}.`, false);
+    setRosterStatus(
+      disabled ? `Disabled ${response.student.username}.` : `Enabled ${response.student.username}.`,
+      false,
+    );
     renderStudents();
   } catch (error) {
-    setRosterStatus(getErrorMessage(error, 'Failed to disable student.'), true);
+    setRosterStatus(getErrorMessage(error, disabled ? 'Failed to disable student.' : 'Failed to enable student.'), true);
   } finally {
     setBusy(false);
   }
@@ -280,15 +289,21 @@ function renderStudents(): void {
     resetButton.addEventListener('click', () => {
       void resetPassword(student);
     });
-    const disableButton = document.createElement('button');
-    disableButton.type = 'button';
-    disableButton.className = 'danger';
-    disableButton.textContent = 'Disable';
-    disableButton.disabled = busy || Boolean(student.disabledAt);
-    disableButton.addEventListener('click', () => {
-      void disableStudent(student);
+    const accessButton = document.createElement('button');
+    accessButton.type = 'button';
+    accessButton.setAttribute('role', 'switch');
+    accessButton.setAttribute('aria-checked', student.disabledAt ? 'false' : 'true');
+    if (student.disabledAt) {
+      accessButton.textContent = 'Enable';
+    } else {
+      accessButton.className = 'danger';
+      accessButton.textContent = 'Disable';
+    }
+    accessButton.disabled = busy;
+    accessButton.addEventListener('click', () => {
+      void setStudentDisabled(student, !student.disabledAt);
     });
-    actionsCell.append(resetButton, ' ', disableButton);
+    actionsCell.append(resetButton, ' ', accessButton);
 
     row.append(nameCell, usernameCell, statusCell, lastLoginCell, actionsCell);
     studentsBody.append(row);

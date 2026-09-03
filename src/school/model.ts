@@ -68,6 +68,8 @@ export interface SchoolStudentDisableResponse {
   student: SchoolStudentRecord;
 }
 
+export type SchoolStudentEnableResponse = SchoolStudentDisableResponse;
+
 export interface SchoolStudentLoginRequestBody {
   username: string;
   password: string;
