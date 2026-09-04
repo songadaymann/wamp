@@ -138,6 +138,24 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
 
   const game = page.locator('#game-container');
   const terrain = page.locator('[data-editor-dock="terrain"]');
+  assert.match(await terrain.evaluate((button) => getComputedStyle(button).fontFamily), /IBM Plex Mono/i);
+  const dockIconAssets = {
+    terrain: 'tileset_forest.png',
+    stuff: 'key.png',
+    characters: 'penguin.png',
+    hazards: 'spikes.png',
+    deco: 'sign.png',
+    markers: 'flag-green.png',
+  };
+  for (const [dockItem, asset] of Object.entries(dockIconAssets)) {
+    const backgroundImage = await page.locator(`[data-editor-dock="${dockItem}"] .editor-game-icon`)
+      .evaluate((icon) => getComputedStyle(icon).backgroundImage);
+    assert.ok(backgroundImage.includes(asset), `${dockItem} should use ${asset}`);
+  }
+  const dockColors = await page.locator('.editor-shell-dock-grid > button').evaluateAll((buttons) => (
+    buttons.map((button) => getComputedStyle(button).backgroundColor)
+  ));
+  assert.ok(new Set(dockColors).size >= 5, 'dock should use the established WAMP accent palette');
   assert.equal(await page.evaluate(() => document.body.dataset.editorShellPanel), 'terrain');
   assert.equal(await page.locator('#sidebar').isVisible(), true);
   assert.equal(await page.locator('#btn-editor-drawer-close').count(), 0);
@@ -166,6 +184,29 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.ok(Math.abs((firstPreviewBox.width / firstPreviewBox.height) - (5 / 3)) < 0.03);
   assert.deepEqual(await firstPreview.evaluate((canvas) => [canvas.width, canvas.height]), [160, 96]);
   await page.screenshot({ path: path.join(viewportOutputDir, 'terrain-beginner.png') });
+
+  const markerTrigger = page.locator('[data-editor-dock="markers"]');
+  await markerTrigger.click();
+  const [markersPopoverBox, spawnButtonBox, goalButtonBox] = await Promise.all([
+    page.locator('#editor-markers-popover').boundingBox(),
+    page.locator('[data-editor-marker-action="spawn"]').boundingBox(),
+    page.locator('[data-editor-marker-action="goal"]').boundingBox(),
+  ]);
+  assert.ok(markersPopoverBox && spawnButtonBox && goalButtonBox);
+  assert.ok(markersPopoverBox.x >= 0 && markersPopoverBox.x + markersPopoverBox.width <= viewport.width + 1);
+  assert.ok(spawnButtonBox.height >= 82 && spawnButtonBox.width > spawnButtonBox.height);
+  assert.ok(goalButtonBox.height >= 82 && goalButtonBox.width > goalButtonBox.height);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'markers-responsive.png') });
+  await page.locator('#btn-editor-markers-close').click();
+
+  const shareTrigger = page.locator('[data-editor-shell-action="share"]');
+  await shareTrigger.click();
+  const sharePopoverBox = await page.locator('#editor-share-popover').boundingBox();
+  assert.ok(sharePopoverBox);
+  assert.ok(sharePopoverBox.x >= 0 && sharePopoverBox.x + sharePopoverBox.width <= viewport.width + 1);
+  assert.equal(await page.locator('#editor-share-popover .editor-share-icon').count(), 4);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'share-responsive.png') });
+  await page.keyboard.press('Escape');
 
   await page.locator('[data-smart-theme-id="cyber"]').click();
   assert.equal(await page.locator('[data-smart-brush-id="cyber.concrete"]').isVisible(), true);
@@ -283,9 +324,20 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.equal(await page.locator('#sidebar').isVisible(), true);
   assert.equal(await page.evaluate(() => document.body.dataset.editorShellPanel), panelBeforeMarkers);
   assert.deepEqual(
-    await page.locator('#editor-markers-popover [data-editor-marker-action]').allTextContents(),
-    ['🚩 Place Spawn', '⚑ Goal'],
+    await page.locator('#editor-markers-popover [data-editor-marker-action] > span:last-child').allTextContents(),
+    ['Place Spawn', 'Goal'],
   );
+  const [spawnMarkerBox, goalMarkerBox] = await Promise.all([
+    page.locator('[data-editor-marker-action="spawn"]').boundingBox(),
+    page.locator('[data-editor-marker-action="goal"]').boundingBox(),
+  ]);
+  assert.ok(spawnMarkerBox && goalMarkerBox);
+  assert.ok(spawnMarkerBox.height >= 82 && spawnMarkerBox.width > spawnMarkerBox.height);
+  assert.ok(goalMarkerBox.height >= 82 && goalMarkerBox.width > goalMarkerBox.height);
+  assert.ok((await page.locator('[data-editor-marker-action="spawn"] .editor-game-icon')
+    .evaluate((icon) => getComputedStyle(icon).backgroundImage)).includes('flag-green.png'));
+  assert.ok((await page.locator('[data-editor-marker-action="goal"] .editor-game-icon')
+    .evaluate((icon) => getComputedStyle(icon).backgroundImage)).includes('flag-checkered.png'));
   assert.equal((await page.locator('#editor-markers-popover').textContent()).toLowerCase().includes('checkpoint'), false);
   await page.screenshot({ path: path.join(viewportOutputDir, 'markers-over-panel.png') });
 
@@ -367,17 +419,23 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await share.click();
   assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
   assert.deepEqual(
-    await page.locator('#editor-share-popover [data-editor-share-action]').allTextContents(),
+    await page.locator('#editor-share-popover [data-editor-share-label]').allTextContents(),
     ['Wamp-O-Gram', 'Copy Room Link', 'Collect Room', 'Version History'],
   );
+  assert.equal(await page.locator('#editor-share-popover .editor-share-icon').count(), 4);
+  const shareColors = await page.locator('#editor-share-popover [data-editor-share-action]')
+    .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).backgroundColor));
+  assert.equal(new Set(shareColors).size, 4);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'share-popover.png') });
   await page.evaluate(() => {
     document.getElementById('btn-mint-room')?.classList.add('hidden');
     document.getElementById('btn-refresh-room-metadata')?.classList.remove('hidden');
   });
   await page.waitForFunction(() => (
-    document.querySelector('[data-editor-share-action="collect"]')?.textContent?.trim()
+    document.querySelector('[data-editor-share-action="collect"] [data-editor-share-label]')?.textContent?.trim()
       === 'Refresh Room Metadata'
   ));
+  assert.equal(await page.locator('[data-editor-share-action="collect"] .editor-share-icon').count(), 1);
   assert.equal(
     await page.locator('[data-editor-share-action="collect"]').isDisabled(),
     await page.locator('#btn-refresh-room-metadata').isDisabled(),

@@ -1102,10 +1102,10 @@
           <button class="editor-shell-chunky-button editor-shell-publish-button" type="button" data-editor-shell-action="publish"><span aria-hidden="true">&#128640;</span><span>Publish</span></button>
         </div>
         <div id="editor-share-popover" class="editor-shell-popover editor-share-popover hidden" role="dialog" aria-label="Share room" aria-hidden="true">
-          <button type="button" data-editor-share-action="wampogram">Wamp-O-Gram</button>
-          <button type="button" data-editor-share-action="copy">Copy Room Link</button>
-          <button type="button" data-editor-share-action="collect">Collect Room</button>
-          <button type="button" data-editor-share-action="history">Version History</button>
+          <button type="button" data-editor-share-action="wampogram"><span class="editor-share-icon" aria-hidden="true">&#9829;</span><span data-editor-share-label>Wamp-O-Gram</span></button>
+          <button type="button" data-editor-share-action="copy"><span class="editor-share-icon" aria-hidden="true">&#128279;</span><span data-editor-share-label>Copy Room Link</span></button>
+          <button type="button" data-editor-share-action="collect"><span class="editor-share-icon" aria-hidden="true">&#9670;</span><span data-editor-share-label>Collect Room</span></button>
+          <button type="button" data-editor-share-action="history"><span class="editor-share-icon" aria-hidden="true">&#8634;</span><span data-editor-share-label>Version History</span></button>
           <div id="editor-share-status" class="editor-shell-popover-status" aria-live="polite"></div>
         </div>
         <div id="editor-shell-status-slot" class="editor-shell-status-slot"></div>
@@ -1114,12 +1114,12 @@
 
     <div id="editor-shell-dock" class="editor-shell-dock" aria-label="Editor library">
       <div class="editor-shell-dock-grid">
-        <button type="button" data-editor-dock="terrain" aria-controls="sidebar" aria-expanded="false"><span aria-hidden="true">&#129521;</span><span>Terrain</span></button>
-        <button type="button" data-editor-dock="stuff" aria-controls="sidebar" aria-expanded="false"><span aria-hidden="true">&#9898;</span><span>Stuff</span></button>
-        <button type="button" data-editor-dock="characters" aria-controls="sidebar" aria-expanded="false"><span aria-hidden="true">&#128126;</span><span>Characters</span></button>
-        <button type="button" data-editor-dock="hazards" aria-controls="sidebar" aria-expanded="false"><span aria-hidden="true">&#9888;</span><span>Hazards</span></button>
-        <button type="button" data-editor-dock="deco" aria-controls="sidebar" aria-expanded="false"><span aria-hidden="true">&#127807;</span><span>Deco</span></button>
-        <button type="button" data-editor-dock="markers" aria-controls="editor-markers-popover" aria-expanded="false"><span aria-hidden="true">&#128681;</span><span>Markers</span></button>
+        <button type="button" data-editor-dock="terrain" aria-controls="sidebar" aria-expanded="false"><span class="editor-game-icon editor-game-icon-terrain" aria-hidden="true"></span><span>Terrain</span></button>
+        <button type="button" data-editor-dock="stuff" aria-controls="sidebar" aria-expanded="false"><span class="editor-game-icon editor-game-icon-key" aria-hidden="true"></span><span>Stuff</span></button>
+        <button type="button" data-editor-dock="characters" aria-controls="sidebar" aria-expanded="false"><span class="editor-game-icon editor-game-icon-penguin" aria-hidden="true"></span><span>Characters</span></button>
+        <button type="button" data-editor-dock="hazards" aria-controls="sidebar" aria-expanded="false"><span class="editor-game-icon editor-game-icon-spikes" aria-hidden="true"></span><span>Hazards</span></button>
+        <button type="button" data-editor-dock="deco" aria-controls="sidebar" aria-expanded="false"><span class="editor-game-icon editor-game-icon-sign" aria-hidden="true"></span><span>Deco</span></button>
+        <button type="button" data-editor-dock="markers" aria-controls="editor-markers-popover" aria-expanded="false"><span class="editor-game-icon editor-game-icon-flag-green" aria-hidden="true"></span><span>Markers</span></button>
       </div>
       <div id="editor-markers-popover" class="editor-shell-popover editor-markers-popover hidden" role="dialog" aria-label="Markers" aria-hidden="true">
         <div class="editor-shell-popover-heading">
@@ -1127,8 +1127,8 @@
           <button id="btn-editor-markers-close" class="editor-shell-square-button" type="button" aria-label="Close markers">&#10005;</button>
         </div>
         <div class="editor-markers-actions">
-          <button type="button" data-editor-marker-action="spawn">&#128681; Place Spawn</button>
-          <button type="button" data-editor-marker-action="goal">&#9873; Goal</button>
+          <button type="button" data-editor-marker-action="spawn"><span class="editor-game-icon editor-game-icon-flag-green" aria-hidden="true"></span><span>Place Spawn</span></button>
+          <button type="button" data-editor-marker-action="goal"><span class="editor-game-icon editor-game-icon-flag-checkered" aria-hidden="true"></span><span>Goal</span></button>
         </div>
         <div id="editor-marker-instructions" class="editor-shell-popover-status" aria-live="polite">Choose a marker, then place or configure it.</div>
       </div>

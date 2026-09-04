@@ -71,6 +71,12 @@ body[data-editor-dock-shell='true'] #bottom-bar #zoom-level {
   font-family: var(--editor-ui-font);
 }
 
+body[data-editor-dock-shell='true'] button {
+  font-family: var(--editor-button-font) !important;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
 body[data-editor-dock-shell='true'] #bottom-bar #btn-fit-screen {
   min-height: 26px;
   background: var(--editor-retro-paper);
@@ -306,12 +312,89 @@ body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button {
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button > span:first-child {
-  font-size: 22px;
   line-height: 1;
+}
+
+body[data-editor-dock-shell='true'] .editor-game-icon {
+  display: inline-block;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+body[data-editor-dock-shell='true'] .editor-game-icon-terrain {
+  background-image: url('/assets/tilesets/tileset_forest.png');
+  background-position: -64px -32px;
+  background-size: 384px 192px;
+}
+
+body[data-editor-dock-shell='true'] .editor-game-icon-key {
+  background-image: url('/assets/objects/key.png');
+  background-position: 0 0;
+  background-size: 256px 32px;
+}
+
+body[data-editor-dock-shell='true'] .editor-game-icon-penguin {
+  background-image: url('/assets/enemies/penguin.png');
+  background-position: 0 0;
+  background-size: 128px 32px;
+}
+
+body[data-editor-dock-shell='true'] .editor-game-icon-spikes {
+  background-image: url('/assets/enemies/spikes.png');
+  background-position: 0 0;
+  background-size: 128px 32px;
+}
+
+body[data-editor-dock-shell='true'] .editor-game-icon-sign {
+  background-image: url('/assets/objects/sign.png');
+  background-position: center;
+  background-size: 16px 32px;
+}
+
+body[data-editor-dock-shell='true'] .editor-game-icon-flag-green {
+  background-image: url('/assets/objects/flag-green.png');
+  background-position: 0 0;
+  background-size: 288px 32px;
+}
+
+body[data-editor-dock-shell='true'] .editor-game-icon-flag-checkered {
+  background-image: url('/assets/objects/flag-checkered.png');
+  background-position: 0 0;
+  background-size: 288px 32px;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='terrain'] {
+  background: var(--editor-retro-green);
+  color: var(--editor-retro-cream);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='stuff'] {
+  background: var(--editor-retro-yellow);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='characters'] {
+  background: var(--editor-retro-blue);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='hazards'] {
+  background: var(--editor-retro-red);
+  color: var(--editor-retro-cream);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='deco'] {
+  background: var(--editor-retro-pink);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='markers'] {
+  background: var(--editor-retro-paper);
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[aria-pressed='true'] {
   background: var(--editor-retro-yellow);
+  color: var(--editor-retro-ink);
   box-shadow: inset 0 0 0 2px var(--editor-retro-red), 3px 3px 0 var(--editor-retro-shadow);
 }
 
@@ -344,6 +427,43 @@ body[data-editor-dock-shell='true'] .editor-share-popover button,
 body[data-editor-dock-shell='true'] .editor-markers-actions button {
   min-height: 50px;
   padding: 8px;
+}
+
+body[data-editor-dock-shell='true'] .editor-share-popover button {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  text-align: left;
+}
+
+body[data-editor-dock-shell='true'] .editor-share-popover button[data-editor-share-action='wampogram'] {
+  background: var(--editor-retro-pink);
+}
+
+body[data-editor-dock-shell='true'] .editor-share-popover button[data-editor-share-action='copy'] {
+  background: var(--editor-retro-blue);
+}
+
+body[data-editor-dock-shell='true'] .editor-share-popover button[data-editor-share-action='collect'] {
+  background: var(--editor-retro-yellow);
+}
+
+body[data-editor-dock-shell='true'] .editor-share-popover button[data-editor-share-action='history'] {
+  background: var(--editor-retro-green);
+  color: var(--editor-retro-cream);
+}
+
+body[data-editor-dock-shell='true'] .editor-share-icon {
+  min-width: 28px;
+  font-size: 24px;
+  line-height: 1;
+  text-align: center;
+}
+
+body[data-editor-dock-shell='true'] .editor-share-popover button[data-editor-share-action='wampogram'] .editor-share-icon {
+  color: var(--editor-retro-red);
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-popover-status {
@@ -385,6 +505,25 @@ body[data-editor-dock-shell='true'] .editor-markers-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+body[data-editor-dock-shell='true'] .editor-markers-actions button {
+  display: flex;
+  min-height: 82px;
+  padding: 12px 14px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+body[data-editor-dock-shell='true'] .editor-markers-actions button[data-editor-marker-action='spawn'] {
+  background: var(--editor-retro-green);
+  color: var(--editor-retro-cream);
+}
+
+body[data-editor-dock-shell='true'] .editor-markers-actions button[data-editor-marker-action='goal'] {
+  background: var(--editor-retro-yellow);
 }
 
 body[data-editor-dock-shell='true'] #sidebar {

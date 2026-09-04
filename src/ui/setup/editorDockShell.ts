@@ -759,9 +759,12 @@ export class EditorDockShellController {
     const collectTarget = this.getCollectActionTarget();
     if (collect) {
       collect.disabled = !collectTarget || collectTarget.disabled;
-      collect.textContent = collectTarget?.id === 'btn-refresh-room-metadata'
+      const label = collect.querySelector<HTMLElement>('[data-editor-share-label]');
+      const labelText = collectTarget?.id === 'btn-refresh-room-metadata'
         ? 'Refresh Room Metadata'
         : 'Collect Room';
+      if (label) label.textContent = labelText;
+      else collect.textContent = labelText;
     }
   }
 
