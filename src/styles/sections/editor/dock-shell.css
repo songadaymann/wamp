@@ -338,8 +338,8 @@ body[data-editor-dock-shell='true'] .editor-game-icon-key {
 
 body[data-editor-dock-shell='true'] .editor-game-icon-penguin {
   background-image: url('/assets/enemies/penguin.png');
-  background-position: 0 0;
-  background-size: 128px 32px;
+  background-position: -4px -4px;
+  background-size: 160px 40px;
 }
 
 body[data-editor-dock-shell='true'] .editor-game-icon-spikes {
