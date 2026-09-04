@@ -86,3 +86,10 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 - Delivery complete: source commit `088e7b59` is pushed on `codex/editor-dock-redesign-2026-09-04`. The Pages-only safety preview is refreshed at `https://safety-codex-editor-dock-red.wampland.pages.dev` with immutable deployment `https://9f68a317.wampland.pages.dev`. No Worker, D1, PartyKit, renderer, room-data, or production deployment was performed.
 - Deployed validation: after one brief Pages propagation 404 and one transient safety-API 500/CORS response, the unchanged strict responsive smoke passed on retry at every desktop/tablet target plus the phone shell with zero new console, page, or HTTP errors. The previously recorded malformed Background thumbnail URLs remain reported separately as baseline findings. Deployed 1440×900 and 1024×768 Terrain captures were visually inspected.
 - Preview parity: the alias, immutable deployment, and safety build byte-match for entry `main-CHb7w2f7.js`, CSS `main-CeexhNr2.css`, runtime `main-BxWZKXEa.js`, and `EditorScene-DyjKvgds.js`.
+
+## 2026-09-04 — Penguin proportion correction
+
+- Root cause: the Penguin artwork occupies the bottom 15–16 rows of each 32px frame. Scaling the first frame to 40px while shifting it only 4px upward clipped its lower pixels, making the character look squashed.
+- Kept the uniform 1.25× sheet scale, switched the dock icon to the more upright second animation frame, and centered the complete visible sprite bounds within the unchanged 32px icon box. No axis-specific scaling, new asset, or dock-layout change was introduced.
+- Updated the responsive browser assertion to lock the corrected frame crop. The full dock smoke passes at 1920×1080, 1440×900, 1024×768, and the unchanged phone shell with zero console, page, or HTTP errors; the 1440px and 1024px Terrain captures were visually inspected.
+- Local validation: `npm run check` passes 225 files / 1,629 tests plus ESLint, TypeScript, generated bindings, and production build; `npm run smoke:dom-contract` passes 763 IDs / 160 required IDs. The official Canvas client reports a ready app, healthy Browse scene, and healthy graphics state.

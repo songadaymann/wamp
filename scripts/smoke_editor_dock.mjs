@@ -160,7 +160,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
         backgroundSize: style.backgroundSize,
       };
     });
-  assert.equal(penguinIconStyle.backgroundPosition, '-4px -4px');
+  assert.equal(penguinIconStyle.backgroundPosition, '-43px -8px');
   assert.equal(penguinIconStyle.backgroundSize, '160px 40px');
   const dockColors = await page.locator('.editor-shell-dock-grid > button').evaluateAll((buttons) => (
     buttons.map((button) => getComputedStyle(button).backgroundColor)
