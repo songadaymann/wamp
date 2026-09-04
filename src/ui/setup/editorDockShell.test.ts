@@ -20,23 +20,18 @@ describe('editor dock shell state', () => {
     expect(shouldSuppressEditorShellStatus('Draft save failed.')).toBe(false);
   });
 
-  it('keeps a dock selected when its drawer is toggled closed', () => {
-    const opened = reduce([{ type: 'toggle-dock', dock: 'terrain' }]);
-    expect(opened).toMatchObject({ activeDock: 'terrain', openPanel: 'terrain' });
-
-    const closed = reduce([{ type: 'toggle-dock', dock: 'terrain' }], opened);
-    expect(closed).toMatchObject({ activeDock: 'terrain', openPanel: null });
-
-    const reopened = reduce([{ type: 'toggle-dock', dock: 'terrain' }], closed);
-    expect(reopened).toMatchObject({ activeDock: 'terrain', openPanel: 'terrain' });
+  it('defaults to Terrain and keeps the drawer open when the active dock is selected again', () => {
+    expect(INITIAL_EDITOR_DOCK_SHELL_STATE).toMatchObject({ activeDock: 'terrain', openPanel: 'terrain' });
+    const unchanged = reduce([{ type: 'toggle-dock', dock: 'terrain' }]);
+    expect(unchanged).toMatchObject({ activeDock: 'terrain', openPanel: 'terrain' });
   });
 
-  it('makes drawer and popover workspaces mutually exclusive', () => {
+  it('keeps the current drawer workspace beneath mutually exclusive popovers', () => {
     const markers = reduce([
       { type: 'toggle-dock', dock: 'stuff' },
       { type: 'toggle-dock', dock: 'markers' },
     ]);
-    expect(markers).toMatchObject({ activeDock: 'markers', openPanel: null, markersOpen: true });
+    expect(markers).toMatchObject({ activeDock: 'stuff', openPanel: 'stuff', markersOpen: true });
 
     const share = reduce([{ type: 'toggle-share' }], markers);
     expect(share).toMatchObject({ markersOpen: false, shareOpen: true });
@@ -45,11 +40,10 @@ describe('editor dock shell state', () => {
     expect(goal).toMatchObject({ activeDock: 'markers', openPanel: 'goal', markersOpen: false, shareOpen: false });
   });
 
-  it('preserves the chosen Room subsection while the drawer closes and reopens', () => {
+  it('preserves the chosen Room subsection and does not collapse Room on a repeated click', () => {
     const state = reduce([
       { type: 'toggle-room' },
       { type: 'set-room-section', section: 'environment' },
-      { type: 'close-drawer' },
       { type: 'toggle-room' },
     ]);
     expect(state).toMatchObject({ openPanel: 'room', roomSection: 'environment' });
@@ -61,8 +55,8 @@ describe('editor dock shell state', () => {
       { type: 'start-spawn' },
     ]);
     expect(pending).toMatchObject({
-      activeDock: 'markers',
-      openPanel: null,
+      activeDock: 'terrain',
+      openPanel: 'terrain',
       markersOpen: false,
       spawnPlacementActive: true,
     });

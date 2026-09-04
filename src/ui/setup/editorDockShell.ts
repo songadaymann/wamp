@@ -42,7 +42,7 @@ export type EditorRoomSection = 'background' | 'environment' | 'music' | 'sprite
 type EditorObjectPanelScope = Exclude<EditorObjectScope, 'all'>;
 
 export interface EditorDockShellState {
-  openPanel: EditorDockPanelId | null;
+  openPanel: EditorDockPanelId;
   activeDock: EditorDockId | null;
   roomSection: EditorRoomSection;
   markersOpen: boolean;
@@ -54,7 +54,6 @@ export type EditorDockShellAction =
   | { type: 'toggle-dock'; dock: EditorDockId }
   | { type: 'toggle-room' }
   | { type: 'open-goal' }
-  | { type: 'close-drawer' }
   | { type: 'toggle-share' }
   | { type: 'close-popovers' }
   | { type: 'set-room-section'; section: EditorRoomSection }
@@ -63,8 +62,8 @@ export type EditorDockShellAction =
   | { type: 'deactivate' };
 
 export const INITIAL_EDITOR_DOCK_SHELL_STATE: EditorDockShellState = {
-  openPanel: null,
-  activeDock: null,
+  openPanel: 'terrain',
+  activeDock: 'terrain',
   roomSection: 'background',
   markersOpen: false,
   shareOpen: false,
@@ -78,20 +77,15 @@ export function reduceEditorDockShellState(
   switch (action.type) {
     case 'toggle-dock': {
       if (action.dock === 'markers') {
-        const markersOpen = state.activeDock === 'markers' ? !state.markersOpen : true;
         return {
           ...state,
-          openPanel: null,
-          activeDock: 'markers',
-          markersOpen,
+          markersOpen: !state.markersOpen,
           shareOpen: false,
         };
       }
       return {
         ...state,
-        openPanel: state.activeDock === action.dock && state.openPanel === action.dock
-          ? null
-          : action.dock,
+        openPanel: action.dock,
         activeDock: action.dock,
         markersOpen: false,
         shareOpen: false,
@@ -100,9 +94,10 @@ export function reduceEditorDockShellState(
     case 'toggle-room':
       return {
         ...state,
-        openPanel: state.openPanel === 'room' ? null : 'room',
+        openPanel: 'room',
         activeDock: null,
         markersOpen: false,
+        shareOpen: false,
       };
     case 'open-goal':
       return {
@@ -112,8 +107,6 @@ export function reduceEditorDockShellState(
         markersOpen: false,
         shareOpen: false,
       };
-    case 'close-drawer':
-      return { ...state, openPanel: null };
     case 'toggle-share':
       return { ...state, shareOpen: !state.shareOpen, markersOpen: false };
     case 'close-popovers':
@@ -123,8 +116,6 @@ export function reduceEditorDockShellState(
     case 'start-spawn':
       return {
         ...state,
-        openPanel: null,
-        activeDock: 'markers',
         markersOpen: false,
         shareOpen: false,
         spawnPlacementActive: true,
@@ -133,11 +124,7 @@ export function reduceEditorDockShellState(
       return { ...state, spawnPlacementActive: false };
     case 'deactivate':
       return {
-        ...state,
-        openPanel: null,
-        markersOpen: false,
-        shareOpen: false,
-        spawnPlacementActive: false,
+        ...INITIAL_EDITOR_DOCK_SHELL_STATE,
       };
   }
 }
@@ -191,7 +178,7 @@ function cloneObjectMemory(memory: ObjectPanelMemory): ObjectPanelMemory {
   return { ...memory };
 }
 
-function isObjectPanel(panel: EditorDockPanelId | null): panel is EditorObjectPanelScope {
+function isObjectPanel(panel: EditorDockPanelId): panel is EditorObjectPanelScope {
   return panel === 'stuff' || panel === 'characters' || panel === 'hazards' || panel === 'deco';
 }
 
@@ -335,9 +322,6 @@ export class EditorDockShellController {
   }
 
   private bindDrawerControls(): void {
-    this.doc.getElementById('btn-editor-drawer-close')?.addEventListener('click', () => {
-      this.dispatch({ type: 'close-drawer' }, null);
-    });
     this.doc.getElementById('btn-editor-markers-close')?.addEventListener('click', () => {
       this.dispatch({ type: 'close-popovers' });
       this.lastPopoverTrigger?.focus({ preventScroll: true });
@@ -471,10 +455,6 @@ export class EditorDockShellController {
         detail.handled = true;
         return;
       }
-      if (this.state.openPanel) {
-        this.dispatch({ type: 'close-drawer' }, null);
-        detail.handled = true;
-      }
     });
 
     this.doc.addEventListener('pointerdown', (event) => {
@@ -519,6 +499,7 @@ export class EditorDockShellController {
     if (this.active) {
       this.doc.body.dataset.editorDockShell = 'true';
       this.moveEditorChromeIntoShell();
+      this.preparePanel(this.state.openPanel);
       this.syncDom();
       this.queueLayoutResize();
       return;
@@ -556,22 +537,23 @@ export class EditorDockShellController {
 
   private syncDom(): void {
     if (!this.active) return;
-    const drawerOpen = this.state.openPanel !== null;
-    this.doc.body.dataset.editorDrawerOpen = drawerOpen ? 'true' : 'false';
-    this.doc.body.dataset.editorShellPanel = this.state.openPanel ?? 'none';
+    this.doc.body.dataset.editorDrawerOpen = 'true';
+    this.doc.body.dataset.editorShellPanel = this.state.openPanel;
     this.doc.body.dataset.editorRoomSection = this.state.roomSection;
     this.doc.body.dataset.editorSpawnPlacement = this.state.spawnPlacementActive ? 'true' : 'false';
 
     const sidebar = this.doc.getElementById('sidebar');
-    sidebar?.setAttribute('aria-hidden', drawerOpen ? 'false' : 'true');
+    sidebar?.setAttribute('aria-hidden', 'false');
     const drawerHeader = this.doc.getElementById('editor-drawer-header');
-    drawerHeader?.setAttribute('aria-hidden', drawerOpen ? 'false' : 'true');
+    drawerHeader?.setAttribute('aria-hidden', 'false');
     const drawerTitle = this.doc.getElementById('editor-drawer-title');
-    if (drawerTitle && this.state.openPanel) drawerTitle.textContent = PANEL_TITLES[this.state.openPanel];
+    if (drawerTitle) drawerTitle.textContent = PANEL_TITLES[this.state.openPanel];
 
     for (const button of this.doc.querySelectorAll<HTMLButtonElement>('[data-editor-dock]')) {
       const dock = button.dataset.editorDock as EditorDockId;
-      const selected = this.state.activeDock === dock;
+      const selected = dock === 'markers'
+        ? this.state.markersOpen || this.state.spawnPlacementActive || this.state.openPanel === 'goal'
+        : this.state.activeDock === dock;
       const expanded = dock === 'markers'
         ? this.state.markersOpen
         : this.state.openPanel === dock;
@@ -732,7 +714,7 @@ export class EditorDockShellController {
 
   private focusDrawer(): void {
     this.doc.defaultView?.requestAnimationFrame(() => {
-      this.doc.getElementById('btn-editor-drawer-close')?.focus({ preventScroll: true });
+      this.doc.getElementById('editor-drawer-header')?.focus({ preventScroll: true });
     });
   }
 

@@ -644,12 +644,6 @@ body[data-editor-dock-shell='true'] .smart-preview-canvas {
   image-rendering: pixelated;
 }
 
-body[data-editor-dock-shell='true'] #btn-editor-drawer-close {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-}
-
 body[data-editor-dock-shell='true'] .editor-workbench-heading {
   display: flex;
   min-height: 38px;

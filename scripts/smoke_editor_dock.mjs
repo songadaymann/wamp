@@ -122,6 +122,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
 
   const saveStatus = page.locator('#editor-top-save-status');
   const originalSaveStatus = await saveStatus.textContent();
+  assert.equal(/claimed by/i.test(originalSaveStatus ?? ''), false, 'editor status should not identify the room claimer');
   await saveStatus.evaluate((element) => { element.textContent = 'Claimed by Doinggreat.'; });
   await page.waitForFunction(() => document.querySelector('#editor-top-save-status')?.classList.contains('editor-shell-status-suppressed'));
   assert.equal(await saveStatus.isVisible(), false);
@@ -131,15 +132,20 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   await saveStatus.evaluate((element, text) => { element.textContent = text; }, originalSaveStatus ?? '');
 
   const game = page.locator('#game-container');
-  const closedGameBox = await game.boundingBox();
-  assert.ok(closedGameBox);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'drawer-closed.png') });
-
   const terrain = page.locator('[data-editor-dock="terrain"]');
+  assert.equal(await page.evaluate(() => document.body.dataset.editorShellPanel), 'terrain');
+  assert.equal(await page.locator('#sidebar').isVisible(), true);
+  assert.equal(await page.locator('#btn-editor-drawer-close').count(), 0);
+  assert.equal(await terrain.getAttribute('aria-pressed'), 'true');
+  assert.equal(await terrain.getAttribute('aria-expanded'), 'true');
+  const initialGameBox = await game.boundingBox();
+  assert.ok(initialGameBox && initialGameBox.width < viewport.width - 250);
+
   await terrain.click();
   await page.waitForFunction(() => document.body.dataset.editorShellPanel === 'terrain');
-  const openGameBox = await game.boundingBox();
-  assert.ok(openGameBox && openGameBox.width < closedGameBox.width - 200);
+  const repeatedTerrainGameBox = await game.boundingBox();
+  assert.ok(repeatedTerrainGameBox);
+  assert.ok(Math.abs(repeatedTerrainGameBox.width - initialGameBox.width) <= 1);
   assert.equal(await terrain.getAttribute('aria-pressed'), 'true');
   assert.equal(await terrain.getAttribute('aria-expanded'), 'true');
   assert.equal(await page.locator('[data-builder-mode-choice="beginner"]').isVisible(), true);
@@ -160,33 +166,31 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.equal(await page.locator('[data-smart-brush-id="cyber.concrete"]').isVisible(), true);
   await terrain.click();
   assert.equal(await terrain.getAttribute('aria-pressed'), 'true');
-  assert.equal(await terrain.getAttribute('aria-expanded'), 'false');
-  assert.equal(documentHasPanel(await page.evaluate(() => document.body.dataset.editorShellPanel)), false);
-  await terrain.click();
+  assert.equal(await terrain.getAttribute('aria-expanded'), 'true');
+  assert.equal(await page.evaluate(() => document.body.dataset.editorShellPanel), 'terrain');
   assert.equal(await page.locator('[data-smart-theme-id="cyber"]').getAttribute('aria-pressed'), 'true');
 
   const fitButton = page.locator('#btn-fit-screen');
   await fitButton.click();
-  const fittedOpenZoom = (await activeScene(page)).zoom;
-  await terrain.click();
-  await page.waitForTimeout(200);
-  const fittedClosedZoom = (await activeScene(page)).zoom;
-  assert.ok(fittedClosedZoom >= fittedOpenZoom);
+  const fittedDefaultZoom = (await activeScene(page)).zoom;
+
+  const deviceClass = await page.evaluate(() => document.body.dataset.deviceClass);
+  const expectedMax = Math.min(560, viewport.width - (deviceClass === 'tablet' ? 420 : 520));
+  const minWidth = await resizeDrawer(page, -1000);
+  assert.ok(Math.abs(minWidth - 280) <= 1, `expected 280px drawer, received ${minWidth}`);
+  const fittedMinZoom = (await activeScene(page)).zoom;
+  assert.ok(fittedMinZoom >= fittedDefaultZoom);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'drawer-min.png') });
 
   const canvas = page.locator('#game-container canvas').last();
   await canvas.hover();
   await page.mouse.wheel(0, -600);
   await page.waitForTimeout(100);
   const manualZoom = (await activeScene(page)).zoom;
+  await page.locator('[data-editor-dock="stuff"]').click();
   await terrain.click();
   await page.waitForTimeout(200);
   assert.equal((await activeScene(page)).zoom, manualZoom);
-
-  const deviceClass = await page.evaluate(() => document.body.dataset.deviceClass);
-  const expectedMax = Math.min(560, viewport.width - (deviceClass === 'tablet' ? 420 : 520));
-  const minWidth = await resizeDrawer(page, -1000);
-  assert.ok(Math.abs(minWidth - 280) <= 1, `expected 280px drawer, received ${minWidth}`);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'drawer-min.png') });
 
   await page.locator('[data-editor-dock="stuff"]').click();
   const twoColumnCount = countGridColumns(await page.locator('#object-grid').evaluate((element) => (
@@ -230,20 +234,16 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'false');
 
   return {
-    closedGameWidth: Math.round(closedGameBox.width),
-    openGameWidth: Math.round(openGameBox.width),
-    fittedOpenZoom,
-    fittedClosedZoom,
+    initialGameWidth: Math.round(initialGameBox.width),
+    repeatedTerrainGameWidth: Math.round(repeatedTerrainGameBox.width),
+    fittedDefaultZoom,
+    fittedMinZoom,
     manualZoom,
     minDrawerWidth: Math.round(minWidth),
     maxDrawerWidth: Math.round(maxWidth),
     minGridColumns: twoColumnCount,
     maxGridColumns: threeColumnCount,
   };
-}
-
-function documentHasPanel(value) {
-  return Boolean(value && value !== 'none');
 }
 
 async function verifyDetailedWorkflows(page, viewportOutputDir) {
@@ -273,13 +273,16 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
 
   await page.locator('.editor-shell-tools [data-tool="fill"]').click();
   const markerTrigger = page.locator('[data-editor-dock="markers"]');
+  const panelBeforeMarkers = await page.evaluate(() => document.body.dataset.editorShellPanel);
   await markerTrigger.click();
-  assert.equal(await page.locator('#sidebar').isVisible(), false);
+  assert.equal(await page.locator('#sidebar').isVisible(), true);
+  assert.equal(await page.evaluate(() => document.body.dataset.editorShellPanel), panelBeforeMarkers);
   assert.deepEqual(
     await page.locator('#editor-markers-popover [data-editor-marker-action]').allTextContents(),
     ['🚩 Place Spawn', '⚑ Goal'],
   );
   assert.equal((await page.locator('#editor-markers-popover').textContent()).toLowerCase().includes('checkpoint'), false);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'markers-over-panel.png') });
 
   const originalSpawn = (await activeScene(page)).spawnPoint;
   await page.locator('[data-editor-marker-action="spawn"]').click();
@@ -377,11 +380,12 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await page.keyboard.press('Escape');
   assert.equal(await share.getAttribute('aria-expanded'), 'false');
   assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
-  await page.keyboard.press('Escape');
-  assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'false');
+  await roomTrigger.click();
+  assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
 
   await page.locator('[data-editor-dock="terrain"]').click();
   await page.locator('[data-builder-mode-choice="advanced"]').click();
+  assert.equal(await page.evaluate(() => window.localStorage.getItem('wamp.settings.builderMode')), 'advanced');
   assert.equal(await page.locator('.palette-tab[data-mode="smart"]').isVisible(), true);
   assert.equal(await page.locator('.palette-tab[data-mode="tiles"]').isVisible(), true);
   const [builderModeBox, paletteTabsBox] = await Promise.all([
@@ -443,6 +447,9 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
     delete document.body.dataset.editorCourseMode;
   });
   await page.waitForFunction(() => document.body.dataset.editorDockShell === 'true');
+  assert.equal(await page.evaluate(() => document.body.dataset.editorShellPanel), 'terrain');
+  assert.equal(await page.locator('#sidebar').isVisible(), true);
+  assert.equal(await page.evaluate(() => document.body.dataset.builderMode), 'advanced');
 }
 
 try {

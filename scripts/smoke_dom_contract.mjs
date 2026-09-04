@@ -25,7 +25,6 @@ const requiredIdsByController = {
     'editor-marker-instructions',
     'editor-drawer-header',
     'editor-drawer-title',
-  'btn-editor-drawer-close',
   'btn-editor-music-close',
     'editor-drawer-room-tabs',
     'smart-visual-picker',
