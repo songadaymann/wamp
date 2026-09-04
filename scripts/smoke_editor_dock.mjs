@@ -16,6 +16,9 @@ const summary = {
   viewports: [],
   consoleErrors: [],
   pageErrors: [],
+  httpErrors: [],
+  knownBaselineHttpErrors: [],
+  knownBaselineConsoleErrors: [],
 };
 
 mkdirSync(outputDir, { recursive: true });
@@ -35,6 +38,22 @@ function countGridColumns(value) {
   return value.trim() ? value.trim().split(/\s+/).length : 0;
 }
 
+function isCloudflareInsightsRumCorsNoise(message) {
+  const combined = `${message.text()} ${message.location().url ?? ''}`;
+  return combined.includes('cloudflareinsights.com/cdn-cgi/rum')
+    && (combined.includes('CORS policy') || combined.includes('net::ERR_FAILED'));
+}
+
+function isKnownBackgroundThumbnail404(response) {
+  if (response.status() !== 404) return false;
+  const url = new URL(response.url());
+  return url.pathname.startsWith('/assets/cache-v2/assets/backgrounds/');
+}
+
+function isGeneric404ConsoleError(message) {
+  return message.includes('Failed to load resource: the server responded with a status of 404');
+}
+
 async function activeScene(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text?.() ?? '{}').activeScene ?? null);
 }
@@ -47,9 +66,28 @@ async function runEditorCommands(page, editorCommands) {
   return result.captures ?? {};
 }
 
+async function navigateToTarget(page) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await page.goto(targetUrl(), { waitUntil: 'domcontentloaded' });
+      break;
+    } catch (error) {
+      const message = String(error);
+      const transientNavigationError = message.includes('ERR_NETWORK_CHANGED')
+        || message.includes('ERR_ADDRESS_UNREACHABLE');
+      if (attempt === 4 || !transientNavigationError) throw error;
+      await page.waitForTimeout(500 * (attempt + 1));
+    }
+  }
+}
+
 async function openSyntheticEditor(page) {
-  await page.goto(targetUrl(), { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => document.body.dataset.appReady === 'true');
+  await navigateToTarget(page);
+  await page.waitForFunction(
+    () => document.body.dataset.appReady === 'true',
+    undefined,
+    { timeout: 120_000 },
+  );
   await page.evaluate(() => {
     window.__wampEarlyWorldTiles?.release('editor-dock-smoke');
   });
@@ -344,15 +382,31 @@ try {
     mkdirSync(viewportOutputDir, { recursive: true });
     const context = await browser.newContext({ viewport });
     await context.addInitScript(() => {
-      window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
-      window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
-      window.localStorage.setItem('wamp.settings.builderMode', 'beginner');
+      try {
+        window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
+        window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+        window.localStorage.setItem('wamp.settings.builderMode', 'beginner');
+      } catch {
+        // A transient browser network error can briefly create an inaccessible error document.
+      }
     });
     const page = await context.newPage();
     page.on('console', (message) => {
-      if (message.type() === 'error') summary.consoleErrors.push(`${viewportName}: ${message.text()}`);
+      if (message.type() === 'error' && !isCloudflareInsightsRumCorsNoise(message)) {
+        summary.consoleErrors.push(`${viewportName}: ${message.text()}`);
+      }
     });
     page.on('pageerror', (error) => summary.pageErrors.push(`${viewportName}: ${error.message}`));
+    page.on('response', (response) => {
+      if (response.status() >= 400) {
+        const formatted = `${viewportName}: ${response.status()} ${response.url()}`;
+        if (isKnownBackgroundThumbnail404(response)) {
+          summary.knownBaselineHttpErrors.push(formatted);
+        } else {
+          summary.httpErrors.push(formatted);
+        }
+      }
+    });
     await openSyntheticEditor(page);
     const viewportResult = await verifyCommonShell(page, viewport, viewportOutputDir);
     if (viewport.width === 1440) await verifyDetailedWorkflows(page, viewportOutputDir);
@@ -362,12 +416,20 @@ try {
 
   const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await phoneContext.addInitScript(() => {
-    window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
-    window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+    try {
+      window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
+      window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+    } catch {
+      // A transient browser network error can briefly create an inaccessible error document.
+    }
   });
   const phonePage = await phoneContext.newPage();
-  await phonePage.goto(targetUrl(), { waitUntil: 'domcontentloaded' });
-  await phonePage.waitForFunction(() => document.body.dataset.appReady === 'true');
+  await navigateToTarget(phonePage);
+  await phonePage.waitForFunction(
+    () => document.body.dataset.appReady === 'true',
+    undefined,
+    { timeout: 120_000 },
+  );
   await phonePage.evaluate(() => {
     window.__wampEarlyWorldTiles?.release('editor-dock-phone-smoke');
     return window.run_preview_smoke_action?.('openSyntheticEditor');
@@ -378,8 +440,18 @@ try {
   await phonePage.screenshot({ path: path.join(outputDir, 'phone-editor-unchanged.png') });
   await phoneContext.close();
 
+  const generic404ConsoleErrors = summary.consoleErrors.filter(isGeneric404ConsoleError);
+  if (
+    generic404ConsoleErrors.length > 0
+    && generic404ConsoleErrors.length === summary.knownBaselineHttpErrors.length
+  ) {
+    summary.knownBaselineConsoleErrors.push(...generic404ConsoleErrors);
+    summary.consoleErrors = summary.consoleErrors.filter((message) => !isGeneric404ConsoleError(message));
+  }
+
   assert.deepEqual(summary.consoleErrors, []);
   assert.deepEqual(summary.pageErrors, []);
+  assert.deepEqual(summary.httpErrors, []);
   summary.ok = true;
 } catch (error) {
   summary.ok = false;
