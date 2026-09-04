@@ -88,6 +88,7 @@ import {
   parseCourseSnapshotBody,
 } from './requestBodies';
 import { sqlIsVerificationAccepted } from '../runs/verificationSql';
+import { assertPrimeOnlyAuthoringRooms } from '../worlds/access';
 
 interface CoursePublishRouteOptions {
   enforceDailyPublishLimit?: boolean;
@@ -105,6 +106,7 @@ export async function handleCourseCreate(
     'rooms:write'
   );
   const snapshot = await parseCourseSnapshotBody(request);
+  await assertPrimeOnlyAuthoringRooms(env, snapshot.roomRefs.map((room) => room.roomId));
   const record = await createCourseDraft(env, snapshot, auth.user, auth.isAdmin, auth.source);
   return jsonResponse(request, record);
 }
@@ -181,6 +183,7 @@ export async function handleCourseDraftSave(
     'rooms:write'
   );
   const snapshot = await parseCourseSnapshotBody(request, courseId);
+  await assertPrimeOnlyAuthoringRooms(env, snapshot.roomRefs.map((room) => room.roomId));
   const record = await saveCourseDraft(env, snapshot, auth.user, auth.isAdmin, auth.source);
   return jsonResponse(request, record);
 }
@@ -201,6 +204,7 @@ export async function handleCoursePublish(
   if (!existing) {
     throw new HttpError(404, 'Course draft not found.');
   }
+  await assertPrimeOnlyAuthoringRooms(env, existing.draft.roomRefs.map((room) => room.roomId));
 
   if (options.enforceDailyPublishLimit !== false) {
     await assertUserCanPublishContent(env, auth.user.id, auth.source);

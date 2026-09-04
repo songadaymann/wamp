@@ -49,6 +49,7 @@ import {
   type WorldRoomSummary,
   type WorldWindow,
 } from '../persistence/worldModel';
+import { canBuildInActiveWorld, getActiveWorldId } from '../worlds/clientContext';
 import { RETRO_COLORS } from '../visuals/starfield';
 import type { RoomRushOverworldCapture } from '../social/roomRushShare';
 import { RoomLightingController } from '../lighting/controller';
@@ -5941,6 +5942,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private isFrontierBuildBlockedByClaimLimit(): boolean {
+    const activeWorldId = getActiveWorldId();
+    if (activeWorldId && canBuildInActiveWorld(activeWorldId)) return false;
     const authState = getAuthDebugState();
     return (
       authState.authenticated &&

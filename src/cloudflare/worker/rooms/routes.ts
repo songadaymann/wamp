@@ -316,7 +316,13 @@ export async function handleRoomRequest(
       'save room drafts',
       'rooms:write',
     );
-    const record = await saveDraft(env, snapshot, buildRoomMutationActor(auth), auth.isAdmin);
+    const record = await saveDraft(
+      env,
+      snapshot,
+      buildRoomMutationActor(auth),
+      auth.isAdmin,
+      { worldId: parseWorldIdContext(url) },
+    );
     return roomMutationResponse(request, url, record);
   }
 
@@ -380,6 +386,7 @@ export async function handleRoomRequest(
       body,
       buildRoomMutationActor(auth),
       auth.isAdmin,
+      { worldId: parseWorldIdContext(url) },
     );
     return roomMutationResponse(request, url, record, { commandRefs });
   }
@@ -401,6 +408,7 @@ export async function handleRoomRequest(
       auth.isAdmin,
     );
     const bypassDailyPublishLimit =
+      Boolean(parseWorldIdContext(url) || previousRecord.world) ||
       previousRecord.published !== null && previousRecord.claimerUserId === auth.user.id;
     if (!bypassDailyPublishLimit) {
       await assertUserCanPublishContent(env, auth.user.id, auth.source);
@@ -410,6 +418,7 @@ export async function handleRoomRequest(
       snapshot,
       buildRoomMutationActor(auth),
       auth.isAdmin,
+      { worldId: parseWorldIdContext(url) },
     );
     await awardRoomPublishPoints(
       env,
@@ -464,6 +473,7 @@ export async function handleRoomRequest(
       body.targetVersion,
       buildRoomMutationActor(auth),
       auth.isAdmin,
+      { worldId: parseWorldIdContext(url) },
     );
     await awardRoomPublishPoints(
       env,
@@ -510,6 +520,7 @@ export async function handleRoomRequest(
       body.targetVersion,
       buildRoomMutationActor(auth),
       auth.isAdmin,
+      { worldId: parseWorldIdContext(url) },
     );
     schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
     return roomMutationResponse(request, url, record);
@@ -617,6 +628,13 @@ function parseRoomVersionLimit(value: string | null): number {
     throw new HttpError(400, 'Room version limit must be between 1 and 100.');
   }
   return limit;
+}
+
+function parseWorldIdContext(url: URL): string | null {
+  const worldId = url.searchParams.get('worldId')?.trim() ?? '';
+  if (!worldId) return null;
+  if (worldId.length > 100) throw new HttpError(400, 'Invalid World context.');
+  return worldId;
 }
 
 function roomMutationResponse(

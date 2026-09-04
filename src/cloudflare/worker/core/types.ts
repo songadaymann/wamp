@@ -86,6 +86,7 @@ export interface Env {
   TILED_OVERWORLD_READS?: string;
   TILED_OVERWORLD_ROLLOUT_PERCENT?: string;
   WORLD_TILE_PUBLIC_BASE_URL?: string;
+  WORLDS_ENABLED?: string;
   WORLD_TILE_QUEUE?: QueueBinding<import('../worldTiles/service').WorldTileGenerationJob>;
   WORLD_TILE_BUCKET?: R2BucketBinding;
   ROOM_MINT_CHAIN_ID?: string;

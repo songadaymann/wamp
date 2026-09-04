@@ -19,6 +19,7 @@ import {
   type RoomSnapshotView,
 } from '../../persistence/roomModel';
 import { type WorldRoomSummary } from '../../persistence/worldModel';
+import { canBuildInActiveWorld, getActiveWorldId } from '../../worlds/clientContext';
 import type { RoomLeaderboardResponse } from '../../runs/model';
 import type { OverworldMode } from '../sceneData';
 import type {
@@ -239,7 +240,7 @@ export class OverworldHudStateController {
         currentUserId,
         currentWalletAddress,
         score: this.host.getScore(),
-        courseBuilderButtonDisabled: false,
+        courseBuilderButtonDisabled: Boolean(this.selectedSummary?.world),
         roomCommentsVisible: this.host.areRoomCommentsVisible(),
         zoom: this.host.getZoom(),
         getRoomDisplayTitle: (title, coordinates) => this.getRoomDisplayTitle(title, coordinates),
@@ -352,6 +353,8 @@ export class OverworldHudStateController {
   }
 
   private isFrontierBuildBlockedByClaimLimit(authState: ReturnType<typeof getAuthDebugState>): boolean {
+    const activeWorldId = getActiveWorldId();
+    if (activeWorldId && canBuildInActiveWorld(activeWorldId)) return false;
     return (
       authState.authenticated &&
       authState.roomClaimsRemainingToday !== null &&

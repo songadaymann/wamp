@@ -40,6 +40,7 @@ import { XpReceiptController } from './xpReceipts';
 import { WelcomeModalController } from './welcomeModal';
 import { configureEditorUiBridgeRuntime } from '../../scenes/editor/uiBridge';
 import { CUSTOM_SPRITES_CHANGED_EVENT } from '../../customSprites/registry';
+import { WorldsController } from '../worlds/controller';
 
 interface UiControllers {
   paletteController: PaletteController;
@@ -71,6 +72,7 @@ interface UiControllers {
   welcomeModal: WelcomeModalController;
   chatPanel: ChatPanelController;
   mobileUi: MobileUiController;
+  worlds: WorldsController;
 }
 
 export function setupUiControllers(game: Phaser.Game): void {
@@ -125,6 +127,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     welcomeModal,
     chatPanel: new ChatPanelController(),
     mobileUi: new MobileUiController(game),
+    worlds: new WorldsController(game),
   };
 }
 
@@ -157,6 +160,7 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.welcomeModal.init();
   controllers.chatPanel.init();
   controllers.mobileUi.init();
+  controllers.worlds.init();
 }
 
 function configureEditorBridge(controllers: UiControllers): void {
@@ -178,6 +182,7 @@ function configureEditorBridge(controllers: UiControllers): void {
       controllers.performanceSuggestionModal.deferForAppModeTransition();
       controllers.roomSequence.stop({ returnToWorld: false });
       controllers.wampOGramModal.close();
+      controllers.worlds.close();
     },
     openHistory: () => controllers.historyModal.open(),
   });

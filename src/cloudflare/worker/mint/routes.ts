@@ -114,6 +114,10 @@ export async function handleRoomMintConfirm(
   const body = await parseRoomMintConfirmBody(request);
   const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user);
 
+  if (!record.permissions.canMint && !isRoomMinted(record)) {
+    throw new HttpError(403, 'You do not have permission to mint this room.');
+  }
+
   if (record.claimerUserId && record.claimerUserId !== auth.user.id) {
     throw new HttpError(403, 'Only the current claimer can confirm this room mint.');
   }

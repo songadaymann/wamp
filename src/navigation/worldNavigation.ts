@@ -6,6 +6,7 @@ import {
   buildRoomSharePath,
   parseRoomSharePath,
 } from '../social/roomShareLinks';
+import { getResolvedWorldLinkCoordinates } from '../worlds/worldLinkResolver';
 
 function parseCoordinate(value: string | null): number | null {
   if (value === null) return null;
@@ -14,6 +15,7 @@ function parseCoordinate(value: string | null): number | null {
 }
 
 export function hasFocusedCoordinatesInUrl(): boolean {
+  if (getResolvedWorldLinkCoordinates()) return true;
   if (parseRoomSharePath(window.location.pathname)) {
     return true;
   }
@@ -23,6 +25,8 @@ export function hasFocusedCoordinatesInUrl(): boolean {
 }
 
 export function getFocusedCoordinatesFromUrl(): RoomCoordinates {
+  const worldCoordinates = getResolvedWorldLinkCoordinates();
+  if (worldCoordinates) return worldCoordinates;
   const pathCoordinates = parseRoomSharePath(window.location.pathname);
   if (pathCoordinates) {
     return pathCoordinates;

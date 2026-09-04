@@ -118,6 +118,7 @@ import { handleRoomShareRequest } from './worker/share/routes';
 import { handleSchoolRequest } from './worker/school/routes';
 import { handleWampOGramRequest } from './worker/wampOGram/routes';
 import { handleCustomSpriteRequest } from './worker/customSprites/routes';
+import { handleWorldGrantRequest, handleWorldsRequest } from './worker/worlds/routes';
 
 type WorkerExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
@@ -176,6 +177,20 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     auth: 'admin',
     handler: ({ request, url, env, executionContext }) =>
       handleAdminRequest(request, url, env, executionContext),
+  },
+  {
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    pattern: { prefix: '/api/worlds' },
+    auth: 'optional',
+    handler: ({ request, url, env, executionContext }) =>
+      handleWorldsRequest(request, url, env, executionContext),
+  },
+  {
+    methods: ['PUT', 'POST'],
+    pattern: { prefix: '/api/world-grants/' },
+    auth: 'authenticated',
+    handler: ({ request, url, env, executionContext }) =>
+      handleWorldGrantRequest(request, url, env, executionContext),
   },
   {
     methods: ['GET', 'POST', 'DELETE'],

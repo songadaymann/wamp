@@ -28,6 +28,12 @@ export interface WorldRoomSummary {
   publishedByDisplayName: string | null;
   course: CourseMembershipSummary | null;
   expandedRoom: ExpandedRoomMembershipSummary | null;
+  world?: {
+    id: string;
+    number: number;
+    name: string | null;
+    frozen: boolean;
+  };
 }
 
 export interface PublishedWorldRoomSource {
@@ -125,6 +131,7 @@ export function cloneCompactWorldChunkWindow(window: CompactWorldChunkWindow): C
         coordinates: { ...room.coordinates },
         course: room.course ? { ...room.course } : null,
         expandedRoom: room.expandedRoom ? { ...room.expandedRoom } : null,
+        ...(room.world ? { world: { ...room.world } } : {}),
       })),
     })),
   };
@@ -238,6 +245,7 @@ export function cloneWorldChunkWindow(window: WorldChunkWindow): WorldChunkWindo
         coordinates: { ...room.coordinates },
         course: room.course ? { ...room.course } : null,
         expandedRoom: room.expandedRoom ? { ...room.expandedRoom } : null,
+        ...(room.world ? { world: { ...room.world } } : {}),
       })),
       previewRooms: chunk.previewRooms.map((room) => cloneRoomSnapshot(room)),
       chunkPreviewHash: chunk.chunkPreviewHash,
@@ -254,6 +262,7 @@ export function cloneWorldWindow(window: WorldWindow): WorldWindow {
       coordinates: { ...room.coordinates },
       course: room.course ? { ...room.course } : null,
       expandedRoom: room.expandedRoom ? { ...room.expandedRoom } : null,
+      ...(room.world ? { world: { ...room.world } } : {}),
     })),
   };
 }

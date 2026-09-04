@@ -36,6 +36,14 @@ import type {
   RoomMetadataRefreshPrepareRequestBody,
   RoomMetadataRefreshPrepareResponse,
 } from '../mint/roomMetadata';
+import { getActiveWorldId, setActiveWorldContext, setActiveWorldId, withActiveWorldQuery } from '../worlds/clientContext';
+import {
+  loadWorldSeedEditorCurrent,
+  loadWorldSeedEditorRecord,
+  loadWorldSeedEditorSummary,
+  publishWorldSeedEditorDraft,
+  saveWorldSeedEditorDraft,
+} from '../worlds/seedEditorAdapter';
 
 export * from './roomModel';
 
@@ -334,7 +342,6 @@ class LocalRoomRepository implements RoomRepository {
       revertedFromVersion: target.version,
       leaderboardSourceVersion: null,
     });
-
     const nextRecord: RoomRecord = {
       draft,
       published,
@@ -615,6 +622,8 @@ class ApiRoomRepository implements RoomRepository {
   }
 
   async loadRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomRecord> {
+    const seedRecord = loadWorldSeedEditorRecord(roomId);
+    if (seedRecord) return seedRecord;
     const params = new URLSearchParams({
       x: String(coordinates.x),
       y: String(coordinates.y),
@@ -627,6 +636,8 @@ class ApiRoomRepository implements RoomRepository {
   }
 
   async loadRoomSummary(roomId: string, coordinates: RoomCoordinates): Promise<RoomSummary> {
+    const seedSummary = loadWorldSeedEditorSummary(roomId);
+    if (seedSummary) return seedSummary;
     const params = new URLSearchParams({ x: String(coordinates.x), y: String(coordinates.y) });
     return this.withFallback(
       () => this.request(`/api/rooms/${encodeURIComponent(roomId)}/summary?${params.toString()}`),
@@ -635,11 +646,15 @@ class ApiRoomRepository implements RoomRepository {
   }
 
   async loadRoomCurrent(roomId: string, coordinates: RoomCoordinates): Promise<RoomCurrentRecord> {
+    const seedCurrent = loadWorldSeedEditorCurrent(roomId);
+    if (seedCurrent) return seedCurrent;
     const params = new URLSearchParams({ x: String(coordinates.x), y: String(coordinates.y) });
-    return this.withFallback(
+    const current = await this.withFallback<RoomCurrentRecord>(
       () => this.request(`/api/rooms/${encodeURIComponent(roomId)}/current?${params.toString()}`),
       () => this.fallback?.loadRoomCurrent(roomId, coordinates),
     );
+    syncActiveWorldFromSummary(current.summary);
+    return current;
   }
 
   async loadRoomVersions(roomId: string, limit = 25, cursor?: string): Promise<RoomVersionsPage> {
@@ -666,28 +681,64 @@ class ApiRoomRepository implements RoomRepository {
   }
 
   async saveDraft(room: RoomSnapshot): Promise<RoomRecord> {
-    return this.withFallback(
+    const seedRecord = await saveWorldSeedEditorDraft(this.baseUrl, room);
+    if (seedRecord) {
+      this.lastPersistenceTarget = 'remote';
+      return seedRecord;
+    }
+    const params = withActiveWorldQuery(new URLSearchParams({ response: 'compact' }));
+    const record = await this.withFallback(
       async () => this.compactMutationRecord(
-        await this.request(`/api/rooms/${encodeURIComponent(room.id)}/draft?response=compact`, {
+        await this.request(`/api/rooms/${encodeURIComponent(room.id)}/draft?${params.toString()}`, {
           method: 'PUT',
           body: JSON.stringify(room),
         }),
       ),
       () => this.fallback?.saveDraft(room)
     );
+    syncActiveWorldFromRecord(record);
+    return record;
   }
 
   async publish(room: RoomSnapshot): Promise<RoomRecord> {
-    return this.withFallback(
+    const seedRecord = await publishWorldSeedEditorDraft(this.baseUrl, room);
+    if (seedRecord) {
+      this.lastPersistenceTarget = 'remote';
+      return seedRecord;
+    }
+    const params = withActiveWorldQuery(new URLSearchParams({ response: 'compact' }));
+    const record = await this.withFallback(
       async () => {
-        const current = await this.request<RoomCurrentRecord>(`/api/rooms/${encodeURIComponent(room.id)}/publish?response=compact`, {
-          method: 'POST',
-          body: JSON.stringify(room),
-        });
-        return this.compactMutationRecord(current);
+        try {
+          const current = await this.request<RoomCurrentRecord>(`/api/rooms/${encodeURIComponent(room.id)}/publish?${params.toString()}`, {
+            method: 'POST',
+            body: JSON.stringify(room),
+          });
+          return this.compactMutationRecord(current);
+        } catch (error) {
+          const worldId = getActiveWorldId();
+          if (!(error instanceof RoomApiError) || error.status !== 403 || !worldId || !error.message.includes('requires publication approval')) {
+            throw error;
+          }
+          const saved = await this.request<RoomCurrentRecord>(
+            `/api/rooms/${encodeURIComponent(room.id)}/draft?${params.toString()}`,
+            { method: 'PUT', body: JSON.stringify(room) },
+          );
+          await this.request(`/api/worlds/${encodeURIComponent(worldId)}/publication-requests`, {
+            method: 'POST',
+            body: JSON.stringify({
+              roomId: saved.draft.id,
+              x: saved.draft.coordinates.x,
+              y: saved.draft.coordinates.y,
+            }),
+          });
+          throw new RoomApiError('Draft saved and submitted for World approval.', 409);
+        }
       },
       () => this.fallback?.publish(room)
     );
+    syncActiveWorldFromRecord(record);
+    return record;
   }
 
   async revert(roomId: string, coordinates: RoomCoordinates, targetVersion: number): Promise<RoomRecord> {
@@ -696,6 +747,7 @@ class ApiRoomRepository implements RoomRepository {
       y: String(coordinates.y),
       response: 'compact',
     });
+    withActiveWorldQuery(params);
     const body: RoomRevertRequestBody = { targetVersion };
 
     return this.withFallback(
@@ -746,6 +798,7 @@ class ApiRoomRepository implements RoomRepository {
       y: String(coordinates.y),
       response: 'compact',
     });
+    withActiveWorldQuery(params);
 
     return this.withFallback(
       () =>
@@ -771,6 +824,7 @@ class ApiRoomRepository implements RoomRepository {
       y: String(coordinates.y),
       response: 'compact',
     });
+    withActiveWorldQuery(params);
     const body: RoomLeaderboardLineageRequestBody = { targetVersion, sourceVersion };
 
     return this.withFallback(
@@ -964,4 +1018,20 @@ function isRoomRecordResponse(value: unknown): value is RoomRecord {
       'versions' in value &&
       'permissions' in value
   );
+}
+
+function syncActiveWorldFromRecord(record: RoomRecord): void {
+  if (record.world) {
+    setActiveWorldContext(record.world);
+  } else if (record.claimerUserId || record.published) {
+    setActiveWorldId(null);
+  }
+}
+
+function syncActiveWorldFromSummary(summary: RoomSummary): void {
+  if (summary.world) {
+    setActiveWorldContext(summary.world);
+  } else if (summary.claimerUserId || summary.publishedVersion !== null) {
+    setActiveWorldId(null);
+  }
 }
