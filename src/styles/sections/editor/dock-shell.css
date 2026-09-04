@@ -46,10 +46,17 @@ body[data-editor-dock-shell='true'] #bottom-bar {
 }
 
 body[data-editor-dock-shell='true'] #bottom-bar .bar-left,
-body[data-editor-dock-shell='true'] #bottom-bar .bar-center,
 body[data-editor-dock-shell='true'] #bottom-bar #room-save-status,
 body[data-editor-dock-shell='true'] #auth-identity {
   display: none !important;
+}
+
+body[data-editor-dock-shell='true'] #bottom-bar .bar-center {
+  display: flex !important;
+}
+
+body[data-editor-dock-shell='true'] #bottom-bar .bar-center .world-only-control:not(.hidden) {
+  display: inline-flex;
 }
 
 body[data-editor-dock-shell='true'] #bottom-bar .bar-right {
@@ -248,6 +255,10 @@ body[data-editor-dock-shell='true'] #editor-room-feedback .editor-top-save-statu
   text-align: left;
 }
 
+body[data-editor-dock-shell='true'] #editor-room-feedback .editor-top-save-status.editor-shell-status-suppressed {
+  display: none;
+}
+
 body[data-editor-dock-shell='true'] #editor-room-feedback .editor-publish-nudge {
   grid-template-columns: minmax(0, 1fr) auto;
   width: 100%;
@@ -384,7 +395,7 @@ body[data-editor-dock-shell='true'] #sidebar {
   width: var(--app-sidebar-width);
   height: auto;
   padding: 10px;
-  gap: 10px;
+  gap: 8px;
   border-right: 2px solid var(--editor-retro-cream);
 }
 
@@ -398,17 +409,18 @@ body[data-editor-dock-shell='true'] #editor-drawer-header {
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 11px 12px;
-  border: 3px solid var(--editor-retro-blue);
+  gap: 8px;
+  min-height: 44px;
+  padding: 5px 7px;
+  border: 2px solid var(--editor-retro-blue);
   background: var(--editor-retro-cream);
-  box-shadow: 4px 4px 0 var(--editor-retro-shadow);
+  box-shadow: 3px 3px 0 var(--editor-retro-shadow);
 }
 
 body[data-editor-dock-shell='true'] .editor-drawer-title {
   color: var(--editor-retro-ink);
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 17px;
+  font-size: 13px;
   line-height: 1.2;
 }
 
@@ -442,7 +454,7 @@ body[data-editor-dock-shell='true'] .environment-choice-grid button.active {
 
 body[data-editor-dock-shell='true'] #editor-fixed-stack,
 body[data-editor-dock-shell='true'] #editor-sidebar-scroll {
-  display: none;
+  display: none !important;
 }
 
 body[data-editor-dock-shell='true'] #editor-sidebar-scroll {
@@ -450,7 +462,7 @@ body[data-editor-dock-shell='true'] #editor-sidebar-scroll {
   flex: 1 1 auto;
   min-height: 0;
   padding-right: 3px;
-  padding-bottom: 12px;
+  padding-bottom: 0 !important;
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -461,13 +473,13 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #edito
 body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #editor-sidebar-scroll,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #editor-sidebar-scroll,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='background'] #editor-sidebar-scroll {
-  display: flex;
+  display: flex !important;
 }
 
 body[data-editor-dock-shell='true'][data-editor-shell-panel='goal'] #editor-fixed-stack,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='environment'] #editor-fixed-stack {
   order: 0;
-  display: flex;
+  display: flex !important;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -567,6 +579,11 @@ body[data-editor-dock-shell='true'] #palette-mode-section .builder-mode-switch {
   margin: 0;
 }
 
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #palette-mode-section {
+  flex-direction: column !important;
+  align-items: stretch;
+}
+
 body[data-editor-dock-shell='true'] #palette-mode-section [data-builder-mode-choice],
 body[data-editor-dock-shell='true'] #palette-mode-section .palette-tab {
   min-height: 50px;
@@ -583,7 +600,7 @@ body[data-editor-dock-shell='true'][data-builder-mode='advanced'] #palette-mode-
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 9px;
+  margin-top: 18px;
 }
 
 body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section .smart-visual-picker {
@@ -611,7 +628,7 @@ body[data-editor-dock-shell='true'] .smart-brush-button {
   display: grid;
   gap: 6px;
   min-width: 0;
-  min-height: 86px;
+  min-height: 128px;
   padding: 7px;
   align-content: center;
   justify-items: stretch;
@@ -620,10 +637,35 @@ body[data-editor-dock-shell='true'] .smart-brush-button {
 
 body[data-editor-dock-shell='true'] .smart-preview-canvas {
   width: 100%;
-  height: 48px;
+  height: auto;
+  aspect-ratio: 5 / 3;
   border: 2px solid var(--editor-retro-shadow);
   background: #18161c;
   image-rendering: pixelated;
+}
+
+body[data-editor-dock-shell='true'] #btn-editor-drawer-close {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+}
+
+body[data-editor-dock-shell='true'] .editor-workbench-close-button {
+  display: inline-flex;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--editor-retro-shadow);
+  border-radius: 0;
+  background: var(--editor-retro-yellow);
+  color: var(--editor-retro-ink);
+  box-shadow: 3px 3px 0 var(--editor-retro-shadow);
+  font-family: var(--editor-ui-font);
+  font-size: 14px;
+  line-height: 1;
 }
 
 body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section .smart-control-row,
@@ -641,6 +683,17 @@ body[data-editor-dock-shell='true'] #object-palette-section > .section-label {
 body[data-editor-dock-shell='true'] #object-palette-section .sidebar-section-body {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #object-palette-section {
+  align-self: stretch;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
 }
 
 body[data-editor-dock-shell='true'] #object-palette-section .object-category-tabs {

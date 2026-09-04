@@ -1,13 +1,12 @@
 import {
   editorState,
-  getTilesetByKey,
+  TILE_SIZE,
   type PaletteMode,
   type ToolName,
 } from '../../config';
 import {
   getSmartBrushDefinition,
   getSmartBrushesForTheme,
-  getSmartStyleDefinition,
   listSmartThemeDefinitions,
   type SmartBrushDefinition,
   type SmartThemeId,
@@ -21,6 +20,11 @@ import {
 } from '../../scenes/editor/uiEvents';
 import { EDITOR_SIDEBAR_RESIZED_EVENT } from './sidebarSections';
 import { type EditorObjectScope, PaletteController } from './paletteController';
+import {
+  buildSmartPreviewTiles,
+  SMART_PREVIEW_COLUMNS,
+  SMART_PREVIEW_ROWS,
+} from './editorSmartPreview';
 
 export const EDITOR_DOCK_PANEL_IDS = [
   'terrain',
@@ -136,6 +140,10 @@ export function reduceEditorDockShellState(
         spawnPlacementActive: false,
       };
   }
+}
+
+export function shouldSuppressEditorShellStatus(text: string): boolean {
+  return /^Claimed by .+\.$/i.test(text.trim());
 }
 
 interface ObjectPanelMemory {
@@ -429,6 +437,15 @@ export class EditorDockShellController {
       ],
     });
 
+    const saveStatus = this.doc.getElementById('editor-top-save-status');
+    if (saveStatus) {
+      new win.MutationObserver(() => this.syncRoutineStatusVisibility()).observe(saveStatus, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
+
     win.addEventListener(EDITOR_UI_STATE_CHANGED_EVENT, () => {
       if (editorState.smartTheme !== 'water') {
         this.lastStandardTheme = editorState.smartTheme;
@@ -577,6 +594,16 @@ export class EditorDockShellController {
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
     this.syncChoiceButtons();
+    this.syncRoutineStatusVisibility();
+  }
+
+  private syncRoutineStatusVisibility(): void {
+    const status = this.doc.getElementById('editor-top-save-status');
+    if (!status) return;
+    status.classList.toggle(
+      'editor-shell-status-suppressed',
+      this.active && shouldSuppressEditorShellStatus(status.textContent ?? ''),
+    );
   }
 
   private syncPopover(id: string, open: boolean): void {
@@ -861,8 +888,8 @@ export class EditorDockShellController {
     button.type = 'button';
     const canvas = this.doc.createElement('canvas');
     canvas.className = 'smart-preview-canvas';
-    canvas.width = 96;
-    canvas.height = 48;
+    canvas.width = 160;
+    canvas.height = 96;
     canvas.setAttribute('aria-hidden', 'true');
     const labelElement = this.doc.createElement('span');
     labelElement.textContent = label;
@@ -879,54 +906,40 @@ export class EditorDockShellController {
     const styleId = brush.supportedStyleIds.includes(requestedStyleId)
       ? requestedStyleId
       : brush.supportedStyleIds[0];
-    const style = getSmartStyleDefinition(styleId);
-    const tileset = getTilesetByKey(style.tilesetKey);
     const context = canvas.getContext('2d');
-    if (!tileset || !context) return;
+    if (!context) return;
     context.imageSmoothingEnabled = false;
     context.fillStyle = '#18161c';
     context.fillRect(0, 0, canvas.width, canvas.height);
     try {
-      const image = await this.loadPreviewImage(tileset.path);
-      if (!canvas.isConnected) return;
-      const localIndex = brush.compatibleLegacyLocalIndices[0] ?? 0;
-      const sourceX = (localIndex % tileset.columns) * 16;
-      const sourceY = Math.floor(localIndex / tileset.columns) * 16;
-      const cells = this.getPreviewCells(brush);
-      const cellSize = 16;
-      const offsetX = Math.floor((canvas.width - 5 * cellSize) / 2);
-      for (const [x, y] of cells) {
+      const cellWidth = canvas.width / SMART_PREVIEW_COLUMNS;
+      const cellHeight = canvas.height / SMART_PREVIEW_ROWS;
+      for (const tile of buildSmartPreviewTiles(brush.id, styleId)) {
+        const image = await this.loadPreviewImage(tile.path);
+        if (!canvas.isConnected) return;
+        context.save();
+        context.translate(
+          tile.x * cellWidth + (tile.flipX ? cellWidth : 0),
+          tile.y * cellHeight + (tile.flipY ? cellHeight : 0),
+        );
+        context.scale(tile.flipX ? -1 : 1, tile.flipY ? -1 : 1);
         context.drawImage(
           image,
-          sourceX,
-          sourceY,
-          16,
-          16,
-          offsetX + x * cellSize,
-          y * cellSize,
-          cellSize,
-          cellSize,
+          tile.sourceX,
+          tile.sourceY,
+          TILE_SIZE,
+          TILE_SIZE,
+          0,
+          0,
+          cellWidth,
+          cellHeight,
         );
+        context.restore();
       }
     } catch {
       context.fillStyle = '#79ccde';
-      for (const [x, y] of this.getPreviewCells(brush)) {
-        context.fillRect(8 + x * 16, y * 16, 16, 16);
-      }
+      context.fillRect(0, 0, canvas.width, canvas.height);
     }
-  }
-
-  private getPreviewCells(brush: SmartBrushDefinition): Array<[number, number]> {
-    if (brush.strokeAxis === 'vertical') {
-      return [[2, 0], [2, 1], [2, 2]];
-    }
-    if (brush.strokeAxis === 'horizontal' || brush.ruleKind === 'path') {
-      return [[0, 1], [1, 1], [2, 1], [3, 1], [4, 1]];
-    }
-    if (brush.rectangleMode === 'filled-shape') {
-      return [[0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [1, 2], [2, 2], [3, 2]];
-    }
-    return [[0, 2], [1, 1], [1, 2], [2, 1], [2, 2], [3, 0], [3, 1], [3, 2], [4, 2]];
   }
 
   private loadPreviewImage(path: string): Promise<HTMLImageElement> {

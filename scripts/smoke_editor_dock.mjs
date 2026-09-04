@@ -116,6 +116,19 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   const tools = page.locator('.editor-shell-tools [data-tool]');
   assert.equal(await tools.count(), 7);
   for (const tool of await tools.all()) assert.equal(await tool.isVisible(), true);
+  for (const selector of ['#btn-world-settings', '#btn-guestbook-open', '#btn-world-controls']) {
+    assert.equal(await page.locator(selector).isVisible(), true, `${selector} should remain in the editor footer`);
+  }
+
+  const saveStatus = page.locator('#editor-top-save-status');
+  const originalSaveStatus = await saveStatus.textContent();
+  await saveStatus.evaluate((element) => { element.textContent = 'Claimed by Doinggreat.'; });
+  await page.waitForFunction(() => document.querySelector('#editor-top-save-status')?.classList.contains('editor-shell-status-suppressed'));
+  assert.equal(await saveStatus.isVisible(), false);
+  await saveStatus.evaluate((element) => { element.textContent = 'Saved'; });
+  await page.waitForFunction(() => !document.querySelector('#editor-top-save-status')?.classList.contains('editor-shell-status-suppressed'));
+  assert.equal(await saveStatus.isVisible(), true);
+  await saveStatus.evaluate((element, text) => { element.textContent = text; }, originalSaveStatus ?? '');
 
   const game = page.locator('#game-container');
   const closedGameBox = await game.boundingBox();
@@ -133,6 +146,14 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.equal(await page.locator('[data-builder-mode-choice="advanced"]').isVisible(), true);
   assert.equal(await page.locator('[data-smart-theme-id]').count(), 5);
   assert.ok(await page.locator('[data-smart-brush-id]').count() >= 4);
+  assert.equal(await page.locator('[data-smart-brush-id]').allTextContents().then((labels) => labels.includes('Tree Canopy')), true);
+  const drawerHeaderBox = await page.locator('#editor-drawer-header').boundingBox();
+  assert.ok(drawerHeaderBox && drawerHeaderBox.height <= 54, `drawer header should stay compact, received ${drawerHeaderBox?.height}px`);
+  const firstPreview = page.locator('.smart-preview-canvas').first();
+  const firstPreviewBox = await firstPreview.boundingBox();
+  assert.ok(firstPreviewBox);
+  assert.ok(Math.abs((firstPreviewBox.width / firstPreviewBox.height) - (5 / 3)) < 0.03);
+  assert.deepEqual(await firstPreview.evaluate((canvas) => [canvas.width, canvas.height]), [160, 96]);
   await page.screenshot({ path: path.join(viewportOutputDir, 'terrain-beginner.png') });
 
   await page.locator('[data-smart-theme-id="cyber"]').click();
@@ -179,6 +200,14 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
     getComputedStyle(element).gridTemplateColumns
   )));
   assert.equal(threeColumnCount, 3);
+  assert.equal(await page.locator('#editor-fixed-stack').isVisible(), false);
+  const [drawerScrollBox, objectPaletteBox] = await Promise.all([
+    page.locator('#editor-sidebar-scroll').boundingBox(),
+    page.locator('#object-palette-section').boundingBox(),
+  ]);
+  assert.ok(drawerScrollBox && objectPaletteBox);
+  const unusedPickerHeight = drawerScrollBox.y + drawerScrollBox.height - objectPaletteBox.y - objectPaletteBox.height;
+  assert.ok(unusedPickerHeight <= 4, `object picker should fill drawer; found ${unusedPickerHeight}px unused`);
   await page.screenshot({ path: path.join(viewportOutputDir, 'stuff-max.png') });
 
   return {
@@ -281,6 +310,8 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'true');
   assert.equal(await page.locator('#editor-music-overlay').isVisible(), true);
   assert.equal(await page.locator('#btn-editor-music-close').isVisible(), true);
+  assert.equal(await page.locator('#btn-editor-music-close').getAttribute('aria-label'), 'Back to Room settings');
+  await page.screenshot({ path: path.join(viewportOutputDir, 'music-workbench.png') });
   await page.locator('#btn-editor-music-close').click();
   await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'false');
   assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
@@ -289,6 +320,8 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await page.locator('[data-editor-room-section="sprite"]').click();
   await page.waitForFunction(() => document.body.dataset.editorSpriteMode === 'true');
   assert.equal(await page.locator('#editor-sprite-overlay').isVisible(), true);
+  assert.equal(await page.locator('#btn-editor-sprite-close').getAttribute('aria-label'), 'Back to Room settings');
+  await page.screenshot({ path: path.join(viewportOutputDir, 'sprite-workbench.png') });
   await page.locator('#btn-editor-sprite-close').click();
   await page.waitForFunction(() => document.body.dataset.editorSpriteMode === 'false');
   assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
@@ -323,6 +356,15 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await page.locator('[data-builder-mode-choice="advanced"]').click();
   assert.equal(await page.locator('.palette-tab[data-mode="smart"]').isVisible(), true);
   assert.equal(await page.locator('.palette-tab[data-mode="tiles"]').isVisible(), true);
+  const [builderModeBox, paletteTabsBox] = await Promise.all([
+    page.locator('.builder-mode-switch').boundingBox(),
+    page.locator('#palette-mode-section .palette-tabs').boundingBox(),
+  ]);
+  assert.ok(builderModeBox && paletteTabsBox);
+  assert.ok(
+    paletteTabsBox.y >= builderModeBox.y + builderModeBox.height + 12,
+    'Auto-Tile and Tilesets should occupy a padded row below Beginner and Advanced',
+  );
   await page.locator('.palette-tab[data-mode="tiles"]').click();
   assert.equal(await page.locator('#tileset-select').isVisible(), true);
   assert.equal(await page.locator('#btn-tile-flip-x').isVisible(), true);

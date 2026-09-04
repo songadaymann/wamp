@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   INITIAL_EDITOR_DOCK_SHELL_STATE,
   reduceEditorDockShellState,
+  shouldSuppressEditorShellStatus,
   type EditorDockShellState,
 } from './editorDockShell';
 
@@ -13,6 +14,12 @@ function reduce(
 }
 
 describe('editor dock shell state', () => {
+  it('suppresses idle claimer copy without hiding save or failure feedback', () => {
+    expect(shouldSuppressEditorShellStatus('Claimed by DoingGreat.')).toBe(true);
+    expect(shouldSuppressEditorShellStatus('Draft saved v4.')).toBe(false);
+    expect(shouldSuppressEditorShellStatus('Draft save failed.')).toBe(false);
+  });
+
   it('keeps a dock selected when its drawer is toggled closed', () => {
     const opened = reduce([{ type: 'toggle-dock', dock: 'terrain' }]);
     expect(opened).toMatchObject({ activeDock: 'terrain', openPanel: 'terrain' });
