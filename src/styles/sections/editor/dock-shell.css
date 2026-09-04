@@ -650,6 +650,22 @@ body[data-editor-dock-shell='true'] #btn-editor-drawer-close {
   height: 32px;
 }
 
+body[data-editor-dock-shell='true'] .editor-workbench-heading {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+body[data-editor-dock-shell='true'] .editor-workbench-heading-title {
+  color: var(--editor-retro-cream);
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 13px;
+  line-height: 1;
+}
+
 body[data-editor-dock-shell='true'] .editor-workbench-close-button {
   display: inline-flex;
   width: 38px;
@@ -666,6 +682,7 @@ body[data-editor-dock-shell='true'] .editor-workbench-close-button {
   font-family: var(--editor-ui-font);
   font-size: 14px;
   line-height: 1;
+  pointer-events: auto;
 }
 
 body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section .smart-control-row,
@@ -912,6 +929,21 @@ body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-contai
 
   body[data-editor-dock-shell='true'] .editor-shell-action-grid {
     grid-template-columns: repeat(3, minmax(58px, 1fr));
+  }
+
+  body[data-editor-dock-shell='true'] .editor-music-strip {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  body[data-editor-dock-shell='true'] .editor-music-tab-dock {
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  body[data-editor-dock-shell='true'] .editor-workbench-heading {
+    box-sizing: border-box;
+    padding-right: 50px;
   }
 }
 

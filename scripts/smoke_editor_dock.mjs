@@ -210,6 +210,25 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.ok(unusedPickerHeight <= 4, `object picker should fill drawer; found ${unusedPickerHeight}px unused`);
   await page.screenshot({ path: path.join(viewportOutputDir, 'stuff-max.png') });
 
+  const roomTrigger = page.locator('[data-editor-shell-action="room"]');
+  await roomTrigger.click();
+  await page.locator('[data-editor-room-section="music"]').click();
+  await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'true');
+  const [musicHeadingBox, musicCloseBox, musicStripBox, musicSwingBox] = await Promise.all([
+    page.locator('#editor-music-overlay .editor-workbench-heading').boundingBox(),
+    page.locator('#btn-editor-music-close').boundingBox(),
+    page.locator('.editor-music-strip').boundingBox(),
+    page.locator('#editor-music-swing-controls').boundingBox(),
+  ]);
+  assert.ok(musicHeadingBox && musicCloseBox && musicStripBox && musicSwingBox);
+  assert.ok(musicCloseBox.y < musicStripBox.y, 'Music exit should sit above the editing toolbar');
+  assert.ok(musicCloseBox.x + musicCloseBox.width <= musicHeadingBox.x + musicHeadingBox.width + 1);
+  assert.ok(musicSwingBox.x >= musicStripBox.x && musicSwingBox.x + musicSwingBox.width <= musicStripBox.x + musicStripBox.width + 1);
+  assert.ok(musicSwingBox.y >= musicStripBox.y && musicSwingBox.y + musicSwingBox.height <= musicStripBox.y + musicStripBox.height + 1);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'music-workbench.png') });
+  await page.locator('#btn-editor-music-close').click();
+  await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'false');
+
   return {
     closedGameWidth: Math.round(closedGameBox.width),
     openGameWidth: Math.round(openGameBox.width),
@@ -298,6 +317,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
 
   const roomTrigger = page.locator('[data-editor-shell-action="room"]');
   await roomTrigger.click();
+  await page.locator('[data-editor-room-section="background"]').click();
   assert.equal(await page.locator('#background-card-grid').isVisible(), true);
   assert.ok(await page.locator('#background-card-grid .background-card').count() > 5);
   assert.equal(await page.locator('#background-upload-controls').isVisible(), true);
@@ -311,6 +331,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.equal(await page.locator('#editor-music-overlay').isVisible(), true);
   assert.equal(await page.locator('#btn-editor-music-close').isVisible(), true);
   assert.equal(await page.locator('#btn-editor-music-close').getAttribute('aria-label'), 'Back to Room settings');
+  assert.equal(await page.locator('#editor-music-overlay .editor-workbench-heading-title').textContent(), 'Music Editor');
   await page.screenshot({ path: path.join(viewportOutputDir, 'music-workbench.png') });
   await page.locator('#btn-editor-music-close').click();
   await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'false');
@@ -321,6 +342,13 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await page.waitForFunction(() => document.body.dataset.editorSpriteMode === 'true');
   assert.equal(await page.locator('#editor-sprite-overlay').isVisible(), true);
   assert.equal(await page.locator('#btn-editor-sprite-close').getAttribute('aria-label'), 'Back to Room settings');
+  assert.equal(await page.locator('#editor-sprite-overlay .editor-workbench-heading-title').textContent(), 'Sprite Editor');
+  const [spriteCloseBox, spriteStripBox] = await Promise.all([
+    page.locator('#btn-editor-sprite-close').boundingBox(),
+    page.locator('.editor-sprite-strip').boundingBox(),
+  ]);
+  assert.ok(spriteCloseBox && spriteStripBox);
+  assert.ok(spriteCloseBox.y < spriteStripBox.y, 'Sprite exit should sit above the editing toolbar');
   await page.screenshot({ path: path.join(viewportOutputDir, 'sprite-workbench.png') });
   await page.locator('#btn-editor-sprite-close').click();
   await page.waitForFunction(() => document.body.dataset.editorSpriteMode === 'false');
