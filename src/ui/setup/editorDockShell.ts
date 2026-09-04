@@ -130,9 +130,9 @@ export function reduceEditorDockShellState(
 }
 
 export function shouldSuppressEditorShellStatus(text: string): boolean {
-  const normalized = text.trim();
+  const normalized = text.trim().replace(/\s+/g, ' ');
   return /^Claimed by .+\.$/i.test(normalized)
-    || /^Recovered local(?: guest)? draft\. Draft only\. Not visible in the world until published\.$/i.test(normalized);
+    || /^(?:Recovered local(?: guest)? draft\. )?Draft only\. Not visible in the world until published\.$/i.test(normalized);
 }
 
 interface ObjectPanelMemory {

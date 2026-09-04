@@ -131,6 +131,11 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   });
   await page.waitForFunction(() => document.querySelector('#editor-top-save-status')?.classList.contains('editor-shell-status-suppressed'));
   assert.equal(await saveStatus.isVisible(), false);
+  await saveStatus.evaluate((element) => {
+    element.textContent = 'Draft only. Not visible in the world until published.';
+  });
+  await page.waitForFunction(() => document.querySelector('#editor-top-save-status')?.classList.contains('editor-shell-status-suppressed'));
+  assert.equal(await saveStatus.isVisible(), false);
   await saveStatus.evaluate((element) => { element.textContent = 'Saving draft...'; });
   await page.waitForFunction(() => !document.querySelector('#editor-top-save-status')?.classList.contains('editor-shell-status-suppressed'));
   assert.equal(await saveStatus.isVisible(), true);
@@ -158,10 +163,14 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
       return {
         backgroundPosition: style.backgroundPosition,
         backgroundSize: style.backgroundSize,
+        width: style.width,
+        height: style.height,
       };
     });
-  assert.equal(penguinIconStyle.backgroundPosition, '-43px -8px');
-  assert.equal(penguinIconStyle.backgroundSize, '160px 40px');
+  assert.equal(penguinIconStyle.backgroundPosition, '-77px -32px');
+  assert.equal(penguinIconStyle.backgroundSize, '256px 64px');
+  assert.equal(penguinIconStyle.width, '36px');
+  assert.equal(penguinIconStyle.height, '32px');
   const dockColors = await page.locator('.editor-shell-dock-grid > button').evaluateAll((buttons) => (
     buttons.map((button) => getComputedStyle(button).backgroundColor)
   ));
@@ -194,6 +203,22 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.ok(Math.abs((firstPreviewBox.width / firstPreviewBox.height) - (5 / 3)) < 0.03);
   assert.deepEqual(await firstPreview.evaluate((canvas) => [canvas.width, canvas.height]), [160, 96]);
   await page.screenshot({ path: path.join(viewportOutputDir, 'terrain-beginner.png') });
+
+  const shellEraser = page.locator('#btn-editor-shell-eraser');
+  const eraserSizePicker = page.locator('#editor-shell-eraser-size-picker');
+  await shellEraser.click();
+  assert.equal(await shellEraser.getAttribute('aria-expanded'), 'true');
+  assert.equal(await eraserSizePicker.isVisible(), true);
+  for (const size of ['3', '5', '1']) {
+    const sizeButton = eraserSizePicker.locator(`[data-erase-brush-size="${size}"]`);
+    await sizeButton.click();
+    assert.equal(await sizeButton.getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('#editor-top-erase-brush-select').inputValue(), size);
+  }
+  await page.screenshot({ path: path.join(viewportOutputDir, 'terrain-erase-sizes.png') });
+  await page.keyboard.press('b');
+  assert.equal(await eraserSizePicker.isVisible(), false);
+  assert.equal(await shellEraser.getAttribute('aria-expanded'), 'false');
 
   const markerTrigger = page.locator('[data-editor-dock="markers"]');
   await markerTrigger.click();

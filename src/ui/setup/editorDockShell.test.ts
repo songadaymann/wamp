@@ -22,6 +22,9 @@ describe('editor dock shell state', () => {
     expect(shouldSuppressEditorShellStatus(
       'Recovered local guest draft. Draft only. Not visible in the world until published.',
     )).toBe(true);
+    expect(shouldSuppressEditorShellStatus(
+      'Draft only. Not visible in the world until published.',
+    )).toBe(true);
     expect(shouldSuppressEditorShellStatus('Saving draft...')).toBe(false);
     expect(shouldSuppressEditorShellStatus('Draft saved v4.')).toBe(false);
     expect(shouldSuppressEditorShellStatus('Draft save failed.')).toBe(false);

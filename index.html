@@ -1086,12 +1086,18 @@
     <div id="editor-shell-top" class="editor-shell-top" aria-label="Room editor controls">
       <div class="editor-shell-tools" aria-label="Drawing tools">
         <button class="tool-btn editor-shell-chunky-button active" data-tool="pencil" type="button" title="Draw (B or 1)"><span class="tool-icon">&#9998;</span><span class="tool-label">Draw</span></button>
-        <button class="tool-btn editor-shell-chunky-button" data-tool="eraser" type="button" title="Erase (E or 2)"><span class="tool-icon">&#9003;</span><span class="tool-label">Erase</span></button>
+        <button id="btn-editor-shell-eraser" class="tool-btn editor-shell-chunky-button" data-tool="eraser" type="button" title="Erase (E or 2)" aria-controls="editor-shell-eraser-size-picker" aria-expanded="false"><span class="tool-icon">&#9003;</span><span class="tool-label">Erase</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="copy" type="button" title="Copy (C or 3)"><span class="tool-icon">&#10697;</span><span class="tool-label">Copy</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="fill" type="button" title="Fill (F or G)"><span class="tool-icon">&#9687;</span><span class="tool-label">Fill</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="rect" type="button" title="Rectangle (R); select again to switch Filled / Outlined"><span class="tool-icon">&#9632;</span><span class="tool-label">Rectangle</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="ellipse" type="button" title="Circle (O); select again to switch Filled / Outlined"><span class="tool-icon">&#9679;</span><span class="tool-label">Circle</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="line" type="button" title="Line (L); select again to switch Line / Curve"><span class="tool-icon">&#9585;</span><span class="tool-label">Line</span></button>
+        <div id="editor-shell-eraser-size-picker" class="editor-shell-eraser-size-picker editor-eraser-controls hidden" role="group" aria-label="Eraser size">
+          <span class="editor-shell-eraser-size-label">Erase size</span>
+          <button class="editor-erase-brush-button" type="button" data-erase-brush-size="1" aria-pressed="true">1x1</button>
+          <button class="editor-erase-brush-button" type="button" data-erase-brush-size="3" aria-pressed="false">3x3</button>
+          <button class="editor-erase-brush-button" type="button" data-erase-brush-size="5" aria-pressed="false">5x5</button>
+        </div>
       </div>
       <div id="editor-shell-title-slot" class="editor-shell-title-slot"></div>
       <div class="editor-shell-actions" aria-label="Room actions">

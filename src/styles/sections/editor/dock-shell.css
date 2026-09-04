@@ -101,6 +101,7 @@ body[data-editor-dock-shell='true'] .editor-shell-top {
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-tools {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(4, minmax(62px, 78px));
   gap: 7px;
@@ -337,9 +338,57 @@ body[data-editor-dock-shell='true'] .editor-game-icon-key {
 }
 
 body[data-editor-dock-shell='true'] .editor-game-icon-penguin {
+  width: 36px;
+  min-width: 36px;
   background-image: url('/assets/enemies/penguin.png');
-  background-position: -43px -8px;
-  background-size: 160px 40px;
+  background-position: -77px -32px;
+  background-size: 256px 64px;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 18;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  padding: 8px;
+  border: 3px solid var(--editor-retro-blue);
+  background: var(--editor-retro-cream);
+  box-shadow: 4px 4px 0 var(--editor-retro-shadow);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-eraser-size-label {
+  color: var(--editor-retro-ink);
+  font-family: var(--editor-button-font);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker button {
+  width: 48px;
+  min-width: 48px;
+  height: 38px;
+  padding: 0;
+  border: 2px solid var(--editor-retro-shadow);
+  border-radius: 0;
+  background: var(--editor-retro-paper);
+  color: var(--editor-retro-ink);
+  box-shadow: 3px 3px 0 var(--editor-retro-shadow);
+  cursor: pointer;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker button.active {
+  background: var(--editor-retro-yellow);
+  box-shadow: inset 0 0 0 2px var(--editor-retro-red), 3px 3px 0 var(--editor-retro-shadow);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker button:focus-visible {
+  outline: 3px solid var(--editor-retro-yellow);
+  outline-offset: 2px;
 }
 
 body[data-editor-dock-shell='true'] .editor-game-icon-spikes {
