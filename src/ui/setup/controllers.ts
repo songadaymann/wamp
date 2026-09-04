@@ -8,6 +8,7 @@ import { ControlsModalController } from './controlsModal';
 import { CourseComposerPanelController } from './courseComposerPanel';
 import { setupCustomSpriteEditor } from './customSpriteEditor';
 import { ExploreModalController } from './exploreModal';
+import { setupEditorDockShell } from './editorDockShell';
 import { GuestBuilderClaimModalController } from './guestBuilderClaimModal';
 import { GuestRoomRecoveryModalController } from './guestRoomRecoveryModal';
 import { GuestbookModalController } from './guestbookModal';
@@ -79,6 +80,7 @@ export function setupUiControllers(game: Phaser.Game): void {
   controllers.paletteController.init();
   configureEditorBridge(controllers);
   setupEditorSidebarShell();
+  setupEditorDockShell(controllers.paletteController);
   setupCollapsibleSidebarSections();
   initUiControllers(controllers);
   setupUiControllerCommands(game, controllers);

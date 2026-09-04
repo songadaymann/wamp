@@ -15,6 +15,24 @@ for (const match of html.matchAll(/\bid\s*=\s*["']([^"']+)["']/g)) {
 }
 
 const requiredIdsByController = {
+  'EditorDockShellController': [
+    'editor-shell-top',
+    'editor-shell-title-slot',
+    'editor-shell-status-slot',
+    'editor-share-popover',
+    'editor-shell-dock',
+    'editor-markers-popover',
+    'editor-marker-instructions',
+    'editor-drawer-header',
+    'editor-drawer-title',
+  'btn-editor-drawer-close',
+  'btn-editor-music-close',
+    'editor-drawer-room-tabs',
+    'smart-visual-picker',
+    'smart-theme-button-grid',
+    'smart-brush-button-grid',
+    'goal-type-instructions',
+  ],
   'PaletteController': [
     'palette-canvas',
     'palette-container',
@@ -197,6 +215,28 @@ const earlyWorldTileMarkerIndex = html.indexOf('<!-- wamp-early-world-tiles-boot
 const mainModuleIndex = html.indexOf('<script type="module" src="/src/main/coarseFirstEntry.ts"></script>');
 const directMainModuleIndex = html.indexOf('<script type="module" src="/src/main.ts"></script>');
 const earlyWorldTileBootstrapContractErrors = [];
+const editorDockContractErrors = [];
+const dockOrder = [...html.matchAll(/data-editor-dock=["']([^"']+)["']/g)].map((match) => match[1]);
+const expectedDockOrder = ['terrain', 'stuff', 'characters', 'hazards', 'deco', 'markers'];
+if (dockOrder.join(',') !== expectedDockOrder.join(',')) {
+  editorDockContractErrors.push(`dock order must be ${expectedDockOrder.join(' -> ')}`);
+}
+const markerPopover = html.match(/id=["']editor-markers-popover["'][\s\S]*?<\/div>\s*<\/div>/)?.[0] ?? '';
+if (!markerPopover.includes('data-editor-marker-action="spawn"') || !markerPopover.includes('data-editor-marker-action="goal"')) {
+  editorDockContractErrors.push('Markers must expose Place Spawn and Goal actions');
+}
+if (/checkpoint/i.test(markerPopover)) {
+  editorDockContractErrors.push('Checkpoint must not be a top-level Markers action');
+}
+const expandableTriggers = [
+  ...html.matchAll(/<button[^>]+data-editor-dock=["'][^"']+["'][^>]*>/g),
+  ...html.matchAll(/<button[^>]+data-editor-shell-action=["'](?:room|share)["'][^>]*>/g),
+];
+for (const trigger of expandableTriggers) {
+  if (!trigger[0].includes('aria-expanded=')) {
+    editorDockContractErrors.push(`drawer/popover trigger is missing aria-expanded: ${trigger[0]}`);
+  }
+}
 if (earlyWorldTileMarkerIndex < 0) {
   earlyWorldTileBootstrapContractErrors.push('missing early world tile bootstrap marker');
 }
@@ -215,6 +255,7 @@ if (
   || missing.length > 0
   || stalePresent.length > 0
   || earlyWorldTileBootstrapContractErrors.length > 0
+  || editorDockContractErrors.length > 0
 ) {
   if (duplicateIds.size > 0) {
     console.error('Duplicate DOM IDs:');
@@ -237,6 +278,12 @@ if (
   if (earlyWorldTileBootstrapContractErrors.length > 0) {
     console.error('Early world tile bootstrap DOM contract errors:');
     for (const error of earlyWorldTileBootstrapContractErrors) {
+      console.error(`  ${error}`);
+    }
+  }
+  if (editorDockContractErrors.length > 0) {
+    console.error('Editor dock shell DOM contract errors:');
+    for (const error of editorDockContractErrors) {
       console.error(`  ${error}`);
     }
   }

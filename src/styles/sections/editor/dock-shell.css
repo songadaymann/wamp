@@ -1,0 +1,884 @@
+.editor-shell-top,
+.editor-shell-dock,
+.editor-drawer-header,
+.editor-drawer-room-tabs,
+.editor-shell-label,
+.smart-visual-picker,
+.goal-type-button-grid,
+.goal-type-instructions,
+.environment-choice-grid {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'] {
+  --editor-shell-top-height: 132px;
+  --editor-shell-dock-height: 92px;
+  --editor-shell-bottom-height: 36px;
+}
+
+body[data-editor-dock-shell='true'] #app {
+  grid-template-columns: 0 minmax(0, 1fr);
+  grid-template-rows:
+    var(--editor-shell-top-height)
+    minmax(0, 1fr)
+    var(--editor-shell-dock-height)
+    var(--editor-shell-bottom-height);
+  background: #0b0b0b;
+}
+
+body[data-editor-dock-shell='true'][data-editor-drawer-open='true'] #app {
+  grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
+}
+
+body[data-editor-dock-shell='true'] #game-container {
+  grid-column: 2;
+  grid-row: 2;
+  border: 3px solid var(--editor-retro-cream);
+  background: #050505;
+}
+
+body[data-editor-dock-shell='true'] #bottom-bar {
+  grid-column: 1 / -1;
+  grid-row: 4;
+  height: var(--editor-shell-bottom-height);
+  border-top: 2px solid var(--editor-retro-shadow);
+  background: #0b0b0b;
+}
+
+body[data-editor-dock-shell='true'] #bottom-bar .bar-left,
+body[data-editor-dock-shell='true'] #bottom-bar .bar-center,
+body[data-editor-dock-shell='true'] #bottom-bar #room-save-status,
+body[data-editor-dock-shell='true'] #auth-identity {
+  display: none !important;
+}
+
+body[data-editor-dock-shell='true'] #bottom-bar .bar-right {
+  margin-left: auto;
+}
+
+body[data-editor-dock-shell='true'] #bottom-bar #btn-fit-screen,
+body[data-editor-dock-shell='true'] #bottom-bar #zoom-level {
+  border-color: var(--editor-retro-cream);
+  border-radius: 0;
+  color: var(--editor-retro-cream);
+  font-family: var(--editor-ui-font);
+}
+
+body[data-editor-dock-shell='true'] #bottom-bar #btn-fit-screen {
+  min-height: 26px;
+  background: var(--editor-retro-paper);
+  color: var(--editor-retro-ink);
+  box-shadow: 2px 2px 0 var(--editor-retro-blue-deep);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-top {
+  grid-column: 2;
+  grid-row: 1;
+  z-index: 14;
+  display: grid;
+  grid-template-columns: minmax(292px, 1fr) minmax(250px, 430px) minmax(340px, 1fr);
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  padding: 10px 78px 10px 16px;
+  border-bottom: 2px solid var(--editor-retro-cream);
+  background: #0b0b0b;
+  color: var(--editor-retro-cream);
+  font-family: var(--editor-ui-font);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-tools {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(62px, 78px));
+  gap: 7px;
+  align-content: center;
+  justify-content: start;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-actions {
+  position: relative;
+  min-width: 0;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-action-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(60px, 1fr));
+  gap: 7px;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-chunky-button,
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button,
+body[data-editor-dock-shell='true'] .editor-shell-popover button,
+body[data-editor-dock-shell='true'] .editor-drawer-tab,
+body[data-editor-dock-shell='true'] .smart-theme-button,
+body[data-editor-dock-shell='true'] .smart-brush-button,
+body[data-editor-dock-shell='true'] .goal-type-button-grid button,
+body[data-editor-dock-shell='true'] .environment-choice-grid button,
+body[data-editor-dock-shell='true'] .editor-shell-square-button {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 2px solid var(--editor-retro-shadow);
+  border-radius: 0;
+  background: var(--editor-retro-paper);
+  color: var(--editor-retro-ink);
+  box-shadow: 3px 3px 0 var(--editor-retro-shadow);
+  font-family: var(--editor-ui-font);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.15;
+  cursor: pointer;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-chunky-button {
+  display: flex !important;
+  min-width: 0;
+  min-height: 44px;
+  padding: 5px 4px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  text-align: center;
+}
+
+body[data-editor-dock-shell='true'][data-builder-mode='beginner'] .editor-shell-tools [data-tool='copy'] {
+  display: flex !important;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-chunky-button:hover,
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button:hover,
+body[data-editor-dock-shell='true'] .editor-shell-popover button:hover,
+body[data-editor-dock-shell='true'] .editor-drawer-tab:hover,
+body[data-editor-dock-shell='true'] .smart-theme-button:hover,
+body[data-editor-dock-shell='true'] .smart-brush-button:hover,
+body[data-editor-dock-shell='true'] .goal-type-button-grid button:hover,
+body[data-editor-dock-shell='true'] .environment-choice-grid button:hover,
+body[data-editor-dock-shell='true'] .editor-shell-square-button:hover {
+  filter: brightness(1.05);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-chunky-button:active,
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button:active,
+body[data-editor-dock-shell='true'] .editor-shell-popover button:active,
+body[data-editor-dock-shell='true'] .editor-drawer-tab:active,
+body[data-editor-dock-shell='true'] .smart-theme-button:active,
+body[data-editor-dock-shell='true'] .smart-brush-button:active,
+body[data-editor-dock-shell='true'] .goal-type-button-grid button:active,
+body[data-editor-dock-shell='true'] .environment-choice-grid button:active,
+body[data-editor-dock-shell='true'] .editor-shell-square-button:active {
+  box-shadow: 1px 1px 0 var(--editor-retro-shadow);
+  transform: translate(2px, 2px);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-chunky-button:focus-visible,
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button:focus-visible,
+body[data-editor-dock-shell='true'] .editor-shell-popover button:focus-visible,
+body[data-editor-dock-shell='true'] .editor-drawer-tab:focus-visible,
+body[data-editor-dock-shell='true'] .smart-theme-button:focus-visible,
+body[data-editor-dock-shell='true'] .smart-brush-button:focus-visible,
+body[data-editor-dock-shell='true'] .goal-type-button-grid button:focus-visible,
+body[data-editor-dock-shell='true'] .environment-choice-grid button:focus-visible,
+body[data-editor-dock-shell='true'] .editor-shell-square-button:focus-visible {
+  outline: 3px solid var(--editor-retro-yellow);
+  outline-offset: 2px;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-chunky-button:disabled,
+body[data-editor-dock-shell='true'] .editor-shell-chunky-button[aria-disabled='true'] {
+  border-color: #8d877c;
+  background: #d2caba;
+  color: #5f5a53;
+  box-shadow: 2px 2px 0 #5f5a53;
+  cursor: not-allowed;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-chunky-button.active {
+  background: var(--editor-retro-green);
+  color: var(--editor-retro-cream);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-back-button {
+  background: var(--editor-retro-blue);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-test-button {
+  background: var(--editor-retro-green);
+  color: var(--editor-retro-cream);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-publish-button {
+  background: var(--editor-retro-red);
+  color: var(--editor-retro-cream);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-title-slot {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+body[data-editor-dock-shell='true'] #room-title-section.editor-room-title-overlay {
+  position: static;
+  display: flex;
+  width: 100%;
+  max-width: 430px;
+  transform: none;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-status-slot {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 17;
+  width: min(420px, 100%);
+}
+
+body[data-editor-dock-shell='true'] #editor-room-feedback.editor-room-feedback-overlay {
+  position: static;
+  display: flex;
+  width: 100%;
+  transform: none;
+}
+
+body[data-editor-dock-shell='true'] #editor-room-feedback .editor-top-save-status {
+  width: 100%;
+  max-height: 42px;
+  padding: 7px 9px;
+  text-align: left;
+}
+
+body[data-editor-dock-shell='true'] #editor-room-feedback .editor-publish-nudge {
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+}
+
+body[data-editor-dock-shell='true'] #editor-room-feedback .editor-publish-nudge-kicker {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock {
+  position: relative;
+  grid-column: 2;
+  grid-row: 3;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 10px 16px;
+  border-top: 2px solid var(--editor-retro-cream);
+  background: #0b0b0b;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(58px, 94px));
+  gap: 9px;
+  width: min(660px, 100%);
+  padding: 7px;
+  border: 3px solid var(--editor-retro-cream);
+  background: var(--editor-retro-green);
+  box-shadow: 5px 5px 0 var(--editor-retro-shadow);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button {
+  display: flex;
+  min-width: 0;
+  min-height: 62px;
+  padding: 6px 4px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-align: center;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button > span:first-child {
+  font-size: 22px;
+  line-height: 1;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[aria-pressed='true'] {
+  background: var(--editor-retro-yellow);
+  box-shadow: inset 0 0 0 2px var(--editor-retro-red), 3px 3px 0 var(--editor-retro-shadow);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-popover {
+  position: absolute;
+  z-index: 30;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 3px solid var(--editor-retro-shadow);
+  border-radius: 0;
+  background: var(--editor-retro-cream);
+  box-shadow: 6px 6px 0 var(--editor-retro-shadow);
+  color: var(--editor-retro-ink);
+  font-family: var(--editor-ui-font);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-popover.hidden {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'] .editor-share-popover {
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(320px, 100%);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body[data-editor-dock-shell='true'] .editor-share-popover button,
+body[data-editor-dock-shell='true'] .editor-markers-actions button {
+  min-height: 50px;
+  padding: 8px;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-popover-status {
+  grid-column: 1 / -1;
+  min-height: 16px;
+  color: var(--editor-retro-blue-deep);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+body[data-editor-dock-shell='true'] .editor-markers-popover {
+  left: 50%;
+  bottom: calc(100% + 10px);
+  width: min(560px, calc(100% - 32px));
+  transform: translateX(-50%);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-popover-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 16px;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-square-button {
+  display: inline-flex;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  background: var(--editor-retro-yellow);
+}
+
+body[data-editor-dock-shell='true'] .editor-markers-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body[data-editor-dock-shell='true'] #sidebar {
+  container-type: inline-size;
+  grid-column: 1;
+  grid-row: 1 / 4;
+  display: none;
+  width: var(--app-sidebar-width);
+  height: auto;
+  padding: 10px;
+  gap: 10px;
+  border-right: 2px solid var(--editor-retro-cream);
+}
+
+body[data-editor-dock-shell='true'][data-editor-drawer-open='true'] #sidebar {
+  display: flex;
+}
+
+body[data-editor-dock-shell='true'] #editor-drawer-header {
+  order: -4;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 3px solid var(--editor-retro-blue);
+  background: var(--editor-retro-cream);
+  box-shadow: 4px 4px 0 var(--editor-retro-shadow);
+}
+
+body[data-editor-dock-shell='true'] .editor-drawer-title {
+  color: var(--editor-retro-ink);
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+body[data-editor-dock-shell='true'] #editor-drawer-room-tabs {
+  order: -3;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 9px;
+  border: 2px solid var(--editor-retro-blue);
+  background: var(--editor-retro-cream);
+  box-shadow: 3px 3px 0 var(--editor-retro-shadow);
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'] #editor-drawer-room-tabs {
+  display: grid;
+}
+
+body[data-editor-dock-shell='true'] .editor-drawer-tab {
+  min-height: 48px;
+  padding: 7px;
+}
+
+body[data-editor-dock-shell='true'] .editor-drawer-tab.active,
+body[data-editor-dock-shell='true'] .smart-theme-button.active,
+body[data-editor-dock-shell='true'] .smart-brush-button.active,
+body[data-editor-dock-shell='true'] .goal-type-button-grid button.active,
+body[data-editor-dock-shell='true'] .environment-choice-grid button.active {
+  background: var(--editor-retro-yellow);
+  box-shadow: inset 0 0 0 2px var(--editor-retro-red), 3px 3px 0 var(--editor-retro-shadow);
+}
+
+body[data-editor-dock-shell='true'] #editor-fixed-stack,
+body[data-editor-dock-shell='true'] #editor-sidebar-scroll {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'] #editor-sidebar-scroll {
+  order: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-right: 3px;
+  padding-bottom: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #editor-sidebar-scroll,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #editor-sidebar-scroll,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #editor-sidebar-scroll,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #editor-sidebar-scroll,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #editor-sidebar-scroll,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='background'] #editor-sidebar-scroll {
+  display: flex;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='goal'] #editor-fixed-stack,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='environment'] #editor-fixed-stack {
+  order: 0;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+body[data-editor-dock-shell='true'] #sidebar .sidebar-section {
+  display: none;
+  flex: 0 0 auto;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #palette-mode-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #smart-palette-section:not(.hidden),
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tileset-section:not(.hidden),
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tile-palette-section:not(.hidden),
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'][data-builder-mode='advanced'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='background'] #background-section {
+  display: flex !important;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tile-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #object-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='background'] #background-section {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body[data-editor-dock-shell='true'] #sidebar .sidebar-section-toggle {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'] #sidebar .sidebar-section.is-collapsed .sidebar-section-body {
+  display: flex;
+}
+
+body[data-editor-dock-shell='true'] #editor-actions {
+  display: block !important;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='goal'] #goal-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='environment'] #editor-lighting-feature-panel {
+  display: block !important;
+}
+
+body[data-editor-dock-shell='true'] #editor-actions .editor-action-rail,
+body[data-editor-dock-shell='true'] #editor-actions .editor-top-tools-label,
+body[data-editor-dock-shell='true'] #editor-actions .editor-top-tools-rail,
+body[data-editor-dock-shell='true'] #editor-actions .editor-feature-launcher,
+body[data-editor-dock-shell='true'] #editor-actions > .mobile-editor-actions-panel,
+body[data-editor-dock-shell='true'] #editor-actions .editor-tool-popover {
+  display: none !important;
+}
+
+body[data-editor-dock-shell='true'] #editor-actions .editor-top-tools,
+body[data-editor-dock-shell='true'] #editor-actions .editor-feature-panels {
+  display: block !important;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+body[data-editor-dock-shell='true'] #goal-section .section-label,
+body[data-editor-dock-shell='true'] #editor-lighting-feature-panel > .section-label,
+body[data-editor-dock-shell='true'] #background-section > .section-label,
+body[data-editor-dock-shell='true'] #smart-palette-section > .section-label {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'] #goal-section,
+body[data-editor-dock-shell='true'] #editor-lighting-feature-panel {
+  border: 2px solid var(--editor-retro-blue);
+  background: var(--editor-retro-cream);
+}
+
+body[data-editor-dock-shell='true'] .legacy-editor-label {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-label {
+  display: inline;
+}
+
+body[data-editor-dock-shell='true'] #palette-mode-section .builder-mode-switch {
+  gap: 8px;
+  margin: 0;
+}
+
+body[data-editor-dock-shell='true'] #palette-mode-section [data-builder-mode-choice],
+body[data-editor-dock-shell='true'] #palette-mode-section .palette-tab {
+  min-height: 50px;
+  font-size: 12px;
+}
+
+body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #palette-mode-section .palette-tabs,
+body[data-editor-dock-shell='true'] #palette-mode-section .palette-tab[data-mode='objects'],
+body[data-editor-dock-shell='true'] #palette-mode-section #editor-layer-chip {
+  display: none !important;
+}
+
+body[data-editor-dock-shell='true'][data-builder-mode='advanced'] #palette-mode-section .palette-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 9px;
+}
+
+body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section .smart-visual-picker {
+  display: grid;
+  gap: 9px;
+}
+
+body[data-editor-dock-shell='true'] .smart-visual-picker h3 {
+  margin: 2px 0 0;
+  color: var(--editor-retro-ink);
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+body[data-editor-dock-shell='true'] .smart-theme-button-grid,
+body[data-editor-dock-shell='true'] .smart-brush-button-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+body[data-editor-dock-shell='true'] .smart-theme-button,
+body[data-editor-dock-shell='true'] .smart-brush-button {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  min-height: 86px;
+  padding: 7px;
+  align-content: center;
+  justify-items: stretch;
+  text-align: center;
+}
+
+body[data-editor-dock-shell='true'] .smart-preview-canvas {
+  width: 100%;
+  height: 48px;
+  border: 2px solid var(--editor-retro-shadow);
+  background: #18161c;
+  image-rendering: pixelated;
+}
+
+body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section .smart-control-row,
+body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section .smart-details-row,
+body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section #btn-smart-cave-fill,
+body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section #smart-palette-hint,
+body[data-editor-dock-shell='true'][data-builder-mode='advanced'] #smart-palette-section .smart-visual-picker {
+  display: none !important;
+}
+
+body[data-editor-dock-shell='true'] #object-palette-section > .section-label {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'] #object-palette-section .sidebar-section-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body[data-editor-dock-shell='true'] #object-palette-section .object-category-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body[data-editor-dock-shell='true'] #object-palette-section .obj-cat-tab {
+  display: none;
+  min-height: 48px;
+  padding: 7px;
+  font-size: 11px;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section .obj-cat-tab[data-category='custom'],
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section .obj-cat-tab[data-category='mine'],
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section .obj-cat-tab[data-category='collectible'],
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section .obj-cat-tab[data-category='interactive'],
+body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #object-palette-section .obj-cat-tab[data-category='enemy'],
+body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #object-palette-section .obj-cat-tab[data-category='npc'] {
+  display: block;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] .object-category-tabs,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] .object-category-tabs {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'] #object-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 180px;
+}
+
+body[data-editor-dock-shell='true'] #object-grid .object-item {
+  min-height: 82px;
+  padding: 8px 6px;
+}
+
+body[data-editor-dock-shell='true'] #object-grid .object-item img {
+  max-width: 76px;
+  max-height: 58px;
+}
+
+body[data-editor-dock-shell='true'] #object-grid .community-sprite-card {
+  grid-column: 1 / -1;
+}
+
+@container (max-width: 345px) {
+  body[data-editor-dock-shell='true'] #object-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+body[data-editor-dock-shell='true'] #goal-type-select,
+body[data-editor-dock-shell='true'] #lighting-mode-select,
+body[data-editor-dock-shell='true'] #weather-mode-select {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'] .goal-type-button-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body[data-editor-dock-shell='true'] .goal-type-button-grid button,
+body[data-editor-dock-shell='true'] .environment-choice-grid button {
+  min-height: 54px;
+  padding: 8px;
+}
+
+body[data-editor-dock-shell='true'] .goal-type-instructions {
+  display: block;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 2px solid var(--editor-retro-blue-deep);
+  background: var(--editor-retro-paper);
+  color: var(--editor-retro-blue-deep);
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow);
+  font-family: var(--editor-ui-font);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+body[data-editor-dock-shell='true'] .environment-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 7px;
+}
+
+body[data-editor-dock-shell='true'] .environment-weather-choice-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='background'] #background-select {
+  display: none;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='background'] #background-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+body[data-editor-dock-shell='true'] #background-card-grid .background-card {
+  display: flex;
+  min-width: 0;
+  min-height: 92px;
+  padding: 7px;
+  flex-direction: column;
+  gap: 6px;
+  border: 2px solid var(--editor-retro-shadow);
+  border-radius: 0;
+  background: var(--editor-retro-paper);
+  color: var(--editor-retro-ink);
+  box-shadow: 3px 3px 0 var(--editor-retro-shadow);
+  font-family: var(--editor-ui-font);
+  cursor: pointer;
+}
+
+body[data-editor-dock-shell='true'] #background-card-grid .background-card.active {
+  background: var(--editor-retro-yellow);
+  box-shadow: inset 0 0 0 2px var(--editor-retro-red), 3px 3px 0 var(--editor-retro-shadow);
+}
+
+body[data-editor-dock-shell='true'] #background-card-grid .background-card-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 2px solid var(--editor-retro-shadow);
+  border-radius: 0;
+  background-color: var(--background-card-tint, #18161c);
+  background-image: var(--background-card-front), var(--background-card-back);
+  background-size: contain, cover;
+  background-position: center bottom, center;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+body[data-editor-dock-shell='true'] #background-card-grid .background-card-none .background-card-art {
+  background: #0b0b0b;
+}
+
+body[data-editor-dock-shell='true'] #background-card-grid .background-card-solid .background-card-art {
+  background: var(--background-card-solid, #24324a);
+}
+
+body[data-editor-dock-shell='true'] #background-card-grid .background-card-label {
+  font-size: 10px;
+  text-align: center;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='background'] #background-upload-controls.hidden {
+  display: grid !important;
+}
+
+body[data-editor-dock-shell='true'] #background-section .sidebar-section-body {
+  display: block !important;
+  overflow-y: auto;
+}
+
+body[data-editor-dock-shell='true'][data-editor-music-mode='true'],
+body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] {
+  --editor-shell-top-height: 0px;
+  --editor-shell-dock-height: 0px;
+}
+
+body[data-editor-dock-shell='true'][data-editor-music-mode='true'] #editor-shell-top,
+body[data-editor-dock-shell='true'][data-editor-music-mode='true'] #editor-shell-dock,
+body[data-editor-dock-shell='true'][data-editor-music-mode='true'] #sidebar,
+body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #editor-shell-top,
+body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #editor-shell-dock,
+body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #sidebar {
+  display: none !important;
+}
+
+body[data-editor-dock-shell='true'][data-editor-music-mode='true'] #app,
+body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #app {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-editor-dock-shell='true'][data-editor-music-mode='true'] #game-container,
+body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-container {
+  grid-column: 1;
+}
+
+@media (max-width: 1250px) {
+  body[data-editor-dock-shell='true'] {
+    --editor-shell-top-height: 210px;
+  }
+
+  body[data-editor-dock-shell='true'] .editor-shell-top {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: 52px minmax(0, 1fr);
+    gap: 8px 12px;
+    padding-right: 68px;
+  }
+
+  body[data-editor-dock-shell='true'] .editor-shell-title-slot {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  body[data-editor-dock-shell='true'] .editor-shell-tools {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  body[data-editor-dock-shell='true'] .editor-shell-actions {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  body[data-editor-dock-shell='true'] .editor-shell-action-grid {
+    grid-template-columns: repeat(3, minmax(58px, 1fr));
+  }
+}
+
+@media (max-width: 930px) {
+  body[data-editor-dock-shell='true'] .editor-shell-tools {
+    grid-template-columns: repeat(4, minmax(48px, 1fr));
+  }
+
+  body[data-editor-dock-shell='true'] .editor-shell-top {
+    padding-right: 60px;
+    padding-left: 10px;
+  }
+
+  body[data-editor-dock-shell='true'] .editor-shell-chunky-button,
+  body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button {
+    font-size: 9px;
+  }
+
+  body[data-editor-dock-shell='true'] .editor-shell-dock-grid {
+    gap: 5px;
+    padding: 6px;
+  }
+}

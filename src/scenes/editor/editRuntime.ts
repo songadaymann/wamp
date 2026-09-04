@@ -97,6 +97,7 @@ import {
 } from '../../music/model';
 import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../../signs/model';
+import { EDITOR_SPAWN_PLACED_EVENT } from './uiEvents';
 import {
   DEFAULT_NPC_DEFEAT_MODE,
   DEFAULT_NPC_FRIENDLY_FIRE,
@@ -1341,6 +1342,8 @@ export class EditorEditRuntime {
 
     if (objectConfig.id === 'spawn_point') {
       this.placeSpawnPoint(tileX, tileY);
+      const editorWindow = this.scene.game?.canvas?.ownerDocument.defaultView;
+      editorWindow?.dispatchEvent(new editorWindow.Event(EDITOR_SPAWN_PLACED_EVENT));
       return null;
     }
 

@@ -197,10 +197,11 @@ try {
   const opened = await page.evaluate(() => window.run_preview_smoke_action?.('openSyntheticEditor'));
   assert.equal(opened?.ok, true);
   await page.waitForFunction(() => document.body.dataset.appMode === 'editor');
+  await page.locator('[data-editor-dock="terrain"]').click();
 
   assert.equal(await page.locator('.palette-tab[data-mode="smart"]').getAttribute('class').then((value) => value?.includes('active')), true);
   assert.equal(await page.locator('.palette-tab[data-mode="tiles"]').isVisible(), false);
-  assert.equal(await page.locator('[data-tool="copy"]').first().isVisible(), false);
+  assert.equal(await page.locator('.editor-shell-tools [data-tool="copy"]').isVisible(), true);
   summary.checks.beginnerUi = true;
 
   const { painted } = await runEditorCommands(page, [
@@ -239,6 +240,7 @@ try {
   assert.equal(reopenedLocal?.target, 'local');
   assert.equal(reopenedLocal?.roomId, '99,99');
   await page.waitForFunction(() => document.body.dataset.appMode === 'editor');
+  await page.locator('[data-editor-dock="terrain"]').click();
   const { reopened } = await runEditorCommands(page, [{ op: 'capture', name: 'reopened' }]);
   assert.deepEqual(reopened.smartTerrain, painted.smartTerrain);
   assert.deepEqual(reopened.tileData, painted.tileData);
@@ -278,18 +280,18 @@ try {
   assert.equal(copied, 12);
   summary.checks.smartCopyPaste = true;
 
-  await page.locator('#smart-theme-select').selectOption('cyber');
-  await page.locator('#smart-material-select').selectOption('cyber.support');
+  await page.locator('[data-smart-theme-id="cyber"]').click();
+  await page.locator('[data-smart-brush-id="cyber.support"]').click();
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'background');
   assert.equal(await page.locator('.layer-btn[data-layer="foreground"]').isDisabled(), true);
-  await page.locator('#smart-material-select').selectOption('cyber.concrete');
+  await page.locator('[data-smart-brush-id="cyber.concrete"]').click();
   assert.equal(await page.locator('#editor-layer-chip').getAttribute('data-layer-tone'), 'terrain');
   summary.checks.beginnerSmartLayerRouting = true;
 
   await page.locator('[data-builder-mode-choice="advanced"]').click();
   assert.equal(await page.locator('.palette-tab[data-mode="tiles"]').isVisible(), true);
   assert.equal(await page.locator('.palette-tab[data-mode="tiles"]').getAttribute('class').then((value) => value?.includes('active')), true);
-  assert.equal(await page.locator('[data-tool="copy"]').first().isVisible(), true);
+  assert.equal(await page.locator('.editor-shell-tools [data-tool="copy"]').isVisible(), true);
   await page.locator('.palette-tab[data-mode="smart"]').click();
   const smartBox = await page.locator('#smart-palette-section').boundingBox();
   summary.checks.smartPanelHeight = smartBox?.height ?? 0;
@@ -368,9 +370,7 @@ try {
   assert.equal(await page.locator('[data-tool="ellipse"]').first().isEnabled(), true);
   assert.equal(await page.locator('[data-tool="fill"]').first().isEnabled(), true);
   assert.equal(await page.locator('[data-tool="line"]').first().isEnabled(), true);
-  await page.locator('#btn-editor-top-tool-more').click();
   await page.screenshot({ path: path.join(outputDir, 'cyber-support-tools.png') });
-  await page.locator('#btn-editor-top-tool-more').click();
 
   await page.locator('#smart-theme-select').selectOption('forest');
   await page.locator('#smart-material-select').selectOption('forest.ground');
