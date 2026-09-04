@@ -14,8 +14,15 @@ function reduce(
 }
 
 describe('editor dock shell state', () => {
-  it('suppresses idle claimer copy without hiding save or failure feedback', () => {
+  it('suppresses redundant ownership and recovery copy without hiding save feedback', () => {
     expect(shouldSuppressEditorShellStatus('Claimed by DoingGreat.')).toBe(true);
+    expect(shouldSuppressEditorShellStatus(
+      'Recovered local draft. Draft only. Not visible in the world until published.',
+    )).toBe(true);
+    expect(shouldSuppressEditorShellStatus(
+      'Recovered local guest draft. Draft only. Not visible in the world until published.',
+    )).toBe(true);
+    expect(shouldSuppressEditorShellStatus('Saving draft...')).toBe(false);
     expect(shouldSuppressEditorShellStatus('Draft saved v4.')).toBe(false);
     expect(shouldSuppressEditorShellStatus('Draft save failed.')).toBe(false);
   });

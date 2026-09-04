@@ -126,7 +126,12 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   await saveStatus.evaluate((element) => { element.textContent = 'Claimed by Doinggreat.'; });
   await page.waitForFunction(() => document.querySelector('#editor-top-save-status')?.classList.contains('editor-shell-status-suppressed'));
   assert.equal(await saveStatus.isVisible(), false);
-  await saveStatus.evaluate((element) => { element.textContent = 'Saved'; });
+  await saveStatus.evaluate((element) => {
+    element.textContent = 'Recovered local guest draft. Draft only. Not visible in the world until published.';
+  });
+  await page.waitForFunction(() => document.querySelector('#editor-top-save-status')?.classList.contains('editor-shell-status-suppressed'));
+  assert.equal(await saveStatus.isVisible(), false);
+  await saveStatus.evaluate((element) => { element.textContent = 'Saving draft...'; });
   await page.waitForFunction(() => !document.querySelector('#editor-top-save-status')?.classList.contains('editor-shell-status-suppressed'));
   assert.equal(await saveStatus.isVisible(), true);
   await saveStatus.evaluate((element, text) => { element.textContent = text; }, originalSaveStatus ?? '');
