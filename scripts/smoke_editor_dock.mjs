@@ -187,6 +187,11 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
 
   const markerTrigger = page.locator('[data-editor-dock="markers"]');
   await markerTrigger.click();
+  await page.evaluate(async () => {
+    const image = new Image();
+    image.src = '/assets/objects/flag-checkered.png';
+    await image.decode();
+  });
   const [markersPopoverBox, spawnButtonBox, goalButtonBox] = await Promise.all([
     page.locator('#editor-markers-popover').boundingBox(),
     page.locator('[data-editor-marker-action="spawn"]').boundingBox(),
