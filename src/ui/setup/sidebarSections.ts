@@ -325,6 +325,9 @@ export function setupEditorSidebarShell(doc: Document = document): void {
   const sectionById = new Map<string, HTMLElement>();
   let paletteModeSection: HTMLElement | null = null;
   for (const section of sections) {
+    if (section.id === 'palette-mode-section') {
+      paletteModeSection = section;
+    }
     if (section.id) {
       sectionById.set(section.id, section);
     } else if (

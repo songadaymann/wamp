@@ -60,7 +60,7 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
 .editor-sprite-shell {
   width: min(1040px, calc(100% - 4px));
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   gap: 8px;
   padding: 8px 10px 12px;
   border: 2px solid #fff3db;

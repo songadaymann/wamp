@@ -322,15 +322,6 @@ export class EditorRoomSession {
       };
     }
 
-    if (this.claimerDisplayName) {
-      return {
-        text: `Claimed by ${this.claimerDisplayName}.`,
-        accentText: '',
-        linkLabel: '',
-        linkHref: null,
-      };
-    }
-
     if (this.publishedVersion > 0) {
       return {
         text: `Editing published room v${this.publishedVersion}.`,
