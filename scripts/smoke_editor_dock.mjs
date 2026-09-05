@@ -171,6 +171,20 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.equal(penguinIconStyle.backgroundSize, '256px 64px');
   assert.equal(penguinIconStyle.width, '36px');
   assert.equal(penguinIconStyle.height, '32px');
+  const signIconStyle = await page.locator('[data-editor-dock="deco"] .editor-game-icon')
+    .evaluate((icon) => {
+      const style = getComputedStyle(icon);
+      return {
+        backgroundPosition: style.backgroundPosition,
+        backgroundSize: style.backgroundSize,
+        width: style.width,
+        height: style.height,
+      };
+    });
+  assert.equal(signIconStyle.backgroundPosition, '1px -26px');
+  assert.equal(signIconStyle.backgroundSize, '32px 64px');
+  assert.equal(signIconStyle.width, '32px');
+  assert.equal(signIconStyle.height, '38px');
   const dockColors = await page.locator('.editor-shell-dock-grid > button').evaluateAll((buttons) => (
     buttons.map((button) => getComputedStyle(button).backgroundColor)
   ));

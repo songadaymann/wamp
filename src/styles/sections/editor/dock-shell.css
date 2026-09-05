@@ -398,9 +398,10 @@ body[data-editor-dock-shell='true'] .editor-game-icon-spikes {
 }
 
 body[data-editor-dock-shell='true'] .editor-game-icon-sign {
+  height: 38px;
   background-image: url('/assets/objects/sign.png');
-  background-position: center;
-  background-size: 16px 32px;
+  background-position: 1px -26px;
+  background-size: 32px 64px;
 }
 
 body[data-editor-dock-shell='true'] .editor-game-icon-flag-green {
