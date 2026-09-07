@@ -134,6 +134,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
     '.world-online-popover-title',
     '.world-online-popover-summary',
     '.world-online-popover-section-title',
+    '.world-online-popover-entry',
     '.world-online-popover-entry-name',
     '.world-online-popover-room',
   ]) {
