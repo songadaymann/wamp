@@ -85,6 +85,7 @@
   background: #fff3db;
   box-shadow: 4px 4px 0 #18161c;
   backdrop-filter: none;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
 }
 
 .world-online-popover-header {
@@ -97,8 +98,9 @@
 
 .world-online-popover-title {
   color: var(--world-online-green);
-  font-size: 10px;
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 700;
   line-height: 1.35;
 }
 
@@ -107,7 +109,7 @@
 .world-online-popover-room {
   color: #18161c;
   font-size: 10px;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: inherit;
   line-height: 1.2;
 }
 
@@ -128,7 +130,7 @@
 .world-online-multiplayer-invite-entry {
   border: 2px solid #18161c;
   border-radius: 0;
-  font-family: 'Early GameBoy', monospace;
+  font-family: inherit;
   line-height: 1.15;
   box-shadow: 2px 2px 0 #18161c;
   cursor: pointer;
@@ -169,7 +171,8 @@
 .world-online-multiplayer-panel-title {
   min-width: 0;
   color: #277b30;
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-family: inherit;
+  font-weight: 700;
   font-size: 10px;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -226,7 +229,7 @@
 .world-online-multiplayer-empty {
   color: #18161c;
   font-size: 10px;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: inherit;
   line-height: 1.2;
 }
 
@@ -237,7 +240,8 @@
 
 .world-online-popover-section-title {
   font-size: 9px;
-  font-family: 'Early GameBoy', monospace;
+  font-family: inherit;
+  font-weight: 700;
   line-height: 1.2;
 }
 
@@ -314,7 +318,7 @@
   min-width: 0;
   color: #18161c;
   font-size: 11px;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: inherit;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
