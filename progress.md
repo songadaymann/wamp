@@ -132,3 +132,13 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 - Confirmed both environments already have named `ADMIN_API_KEY` and `RESEND_API_KEY` secrets. Admin name-review notifications retain the established fallback recipient when `ADMIN_REVIEW_EMAIL` is not explicitly set.
 - Focused integration validation passes 7 files / 31 tests across Worlds geometry, growth, policy, access, migration, and editor-dock behavior. The combined DOM contract passes 767 IDs / 160 required IDs.
 - The complete post-integration `npm run check` passes 230 test files / 1,650 tests plus ESLint, TypeScript, generated bindings, and the production build, including the standalone Worlds admin entry.
+
+## 2026-09-07 — Worlds pilot production release
+
+- Deployed the safety Worker at version `c338224e-013c-42d0-9fd6-26939e273373` and Pages at immutable deployment `https://6f6c012b.wampland.pages.dev`. Safety migration `0045` created WAMP 0 and attributed all 461 existing claimed/published safety rooms. The public Worlds API, admin entry, and visually inspected Canvas Worlds modal pass; Cloudflare's preview-only analytics beacon was the sole blocked request.
+- Merged the pushed feature branch through clean literal `main` in merge commit `cbafee9d1dca41061964fc7df24795192b19963b` and pushed it to `origin/main`. The dirty/stale root checkout and its unrelated files remained untouched.
+- Applied production D1 migration `0045` before the dependent Worker deployment. WAMP 0 is fixed at `(0,0)`, all 607 existing claimed/published rooms have immutable Prime provenance, and the post-migration omission query returns zero.
+- Deployed production Worker version `5565b58b-da2d-4c55-b7e4-04357ecb81bb` and Pages deployment `https://27919412.wampland.pages.dev`. The guarded production smoke passes with D1 and email auth healthy and `WORLDS_ENABLED=1`; no PartyKit deployment was required.
+- Custom-domain verification passes for `https://api.wamp.land/api/worlds`, `https://wamp.land/?worlds=browse`, `https://wamp.land/w/0`, and `https://wamp.land/worlds-admin.html`. The public directory reports WAMP 0 with 607 rooms.
+- Local, immutable Pages, and custom-domain entry `main-BJ47grL2.js` byte-match at SHA-256 `3e69c0ff3a919e7ced672af62e888bc6d14deec7e1f85f28d6635c30b43e1d41`; runtime `main-D3g6-qaP.js` byte-matches at `00069e777ba99e47b06435a96e5644e87e1245801f9a628d679f92e147f3326b`; the Worlds admin bundle matches at `3738680d8cd9d26862c633a9977d3841ef03e2fc7211aee8356a93072b915933`.
+- The official live Canvas client opens the Worlds directory over the published Prime room with coherent WAMP 0 metadata, healthy graphics, an active render loop, and zero captured console or page errors.
