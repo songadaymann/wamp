@@ -641,6 +641,18 @@ export class EditorUiBridge {
         input.removeEventListener('change', handleEraserBrushChange)
       );
     }
+    for (const button of this.elements.eraseBrushButtons) {
+      const handleEraserBrushButton = () => {
+        const nextSize = Number.parseInt(button.dataset.eraseBrushSize ?? '', 10);
+        if (!ERASER_BRUSH_SIZES.includes(nextSize as EraserBrushSize)) return;
+        editorState.eraserBrushSize = nextSize as EraserBrushSize;
+        this.syncEditorChromeState();
+      };
+      button.addEventListener('click', handleEraserBrushButton);
+      this.cleanupCallbacks.push(() =>
+        button.removeEventListener('click', handleEraserBrushButton)
+      );
+    }
 
     for (const button of this.elements.clearLayerButtons) {
       bindButton(this.cleanupCallbacks, button, () => {
@@ -1833,10 +1845,24 @@ export class EditorUiBridge {
       controls.classList.toggle('hidden', !showEraseControls);
     }
     setHidden(this.elements.tileEraseControls, editorState.paletteMode === 'objects');
+    const showShellEraseSizes = showEraseControls && editorState.paletteMode !== 'objects';
+    this.doc.getElementById('editor-shell-eraser-size-picker')?.classList.toggle(
+      'hidden',
+      !showShellEraseSizes,
+    );
+    this.doc.getElementById('btn-editor-shell-eraser')?.setAttribute(
+      'aria-expanded',
+      showShellEraseSizes ? 'true' : 'false',
+    );
     for (const input of this.elements.eraseBrushSelects) {
       if (input.value !== String(editorState.eraserBrushSize)) {
         input.value = String(editorState.eraserBrushSize);
       }
+    }
+    for (const button of this.elements.eraseBrushButtons) {
+      const active = button.dataset.eraseBrushSize === String(editorState.eraserBrushSize);
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
 
     const advancedBuilder = getGameSettings().builderMode === 'advanced';

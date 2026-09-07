@@ -143,6 +143,12 @@ export const SMART_STYLE_DEFINITIONS: Readonly<Record<SmartStyleId, SmartStyleDe
 
 const LEGACY_SOLID_STYLE_IDS = ['forest', 'desert', 'cave', 'gothic'] as const;
 const CYBER_STYLE_IDS = ['cyber-yellow', 'cyber-pink'] as const;
+const LEGACY_FEATURE_LABELS: Readonly<Record<(typeof LEGACY_SOLID_STYLE_IDS)[number], string>> = {
+  forest: 'Tree Canopy',
+  desert: 'Tumbleweed',
+  cave: 'Gem Formation',
+  gothic: 'Skulls',
+};
 
 interface LegacyBrushTemplate {
   material: 'ground' | 'platform' | 'feature';
@@ -211,6 +217,7 @@ const LEGACY_BRUSH_TEMPLATES: readonly LegacyBrushTemplate[] = [
 const LEGACY_BRUSH_DEFINITIONS: SmartBrushDefinition[] = LEGACY_SOLID_STYLE_IDS.flatMap((styleId) =>
   LEGACY_BRUSH_TEMPLATES.map((template) => ({
     ...template,
+    label: template.material === 'feature' ? LEGACY_FEATURE_LABELS[styleId] : template.label,
     id: getSmartLegacyBrushId(styleId, template.material) as SmartLegacyBrushId,
     defaultLayer: 'terrain',
     supportedLayers: ALL_SMART_LAYERS,

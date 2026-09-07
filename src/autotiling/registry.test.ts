@@ -154,5 +154,9 @@ describe('smart authoring registry', () => {
       supportedThemeIds: ['desert'],
       supportedStyleIds: ['desert'],
     });
+    expect(getSmartBrushDefinition('forest.feature').label).toBe('Tree Canopy');
+    expect(getSmartBrushDefinition('desert.feature').label).toBe('Tumbleweed');
+    expect(getSmartBrushDefinition('cave.feature').label).toBe('Gem Formation');
+    expect(getSmartBrushDefinition('gothic.feature').label).toBe('Skulls');
   });
 });

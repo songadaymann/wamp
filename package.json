@@ -30,6 +30,7 @@
     "smoke:dom-contract": "node scripts/smoke_dom_contract.mjs",
     "smoke:community-sprites": "node scripts/smoke_community_sprites.mjs",
     "smoke:smart-autotiling": "node scripts/smoke_smart_autotiling.mjs",
+    "smoke:editor-dock": "node scripts/smoke_editor_dock.mjs",
     "smoke:worker-safety": "npx --yes --quiet tsx scripts/worker_safety_probes.ts",
     "smoke:partykit-identity": "npx --yes --quiet tsx scripts/partykit_identity_token_probe.ts",
     "smoke:live-construction-play": "npx --yes --quiet tsx scripts/live_construction_play_smoke.ts",

@@ -14,7 +14,6 @@ import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { EditorClipboardState, GoalPlacementMode } from './editRuntime';
 import {
-  applyEditorToolSelection,
   getEditorStampKind,
   isDragStampEditorTool,
   isEditorLineCurve,
@@ -132,6 +131,23 @@ export class EditorInteractionController {
     this.shapeEraseActive = false;
     this.pathBend = null;
     this.rectPreviewGraphics?.clear();
+  }
+
+  cancelPendingShapeOperation(): boolean {
+    const hasPendingShape = Boolean(
+      this.pathBend
+      || (this.rectStart && (isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy')),
+    );
+    if (!hasPendingShape) return false;
+
+    const hasOpenEmptyBatch = this.isDrawing
+      && editorState.activeTool !== 'copy'
+      && !(isPathEditorTool(editorState.activeTool) && isEditorLineCurve());
+    if (hasOpenEmptyBatch) this.host.commitTileBatch();
+    this.isDrawing = false;
+    this.clearShapePreview();
+    this.clearTileDrag();
+    return true;
   }
 
   private drawOccupiedCellPreview(
@@ -649,40 +665,6 @@ export class EditorInteractionController {
 
   setupKeyboard(): void {
     const keyboard = this.scene.input.keyboard!;
-    keyboard.on('keydown-R', () => {
-      if (isTextInputFocused()) {
-        return;
-      }
-      applyEditorToolSelection('rect');
-      this.host.updateToolUi();
-    });
-    keyboard.on('keydown-E', () => {
-      if (isTextInputFocused()) {
-        return;
-      }
-      applyEditorToolSelection('ellipse');
-      this.host.updateToolUi();
-    });
-    keyboard.on('keydown-G', () => {
-      if (isTextInputFocused()) {
-        return;
-      }
-      applyEditorToolSelection('fill');
-      this.host.updateToolUi();
-    });
-    keyboard.on('keydown-L', () => {
-      if (isTextInputFocused()) {
-        return;
-      }
-      applyEditorToolSelection('line');
-      this.host.updateToolUi();
-    });
-    keyboard.on('keydown-F', () => {
-      if (isTextInputFocused()) {
-        return;
-      }
-      this.fitToScreen();
-    });
     keyboard.on('keydown-SPACE', () => { this.spaceDown = true; });
     keyboard.on('keyup-SPACE', () => { this.spaceDown = false; this.isPanning = false; });
     keyboard.on('keydown-P', () => {

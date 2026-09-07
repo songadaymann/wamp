@@ -101,6 +101,11 @@ import {
 import { buildRoomWeatherSurfaceSegments } from '../weather/surfaces';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 import type { EditorShapeKind } from './editor/shapeTiles';
+import {
+  EDITOR_SHELL_ESCAPE_REQUESTED_EVENT,
+  type EditorShellEscapeRequestedDetail,
+} from './editor/uiEvents';
+import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
 
 const EDITOR_NEIGHBOR_RADIUS = 1;
 type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
@@ -206,6 +211,23 @@ export class EditorScene extends Phaser.Scene {
     this.updateBackgroundPreview();
     this.updateZoomUI();
   };
+  private readonly handleToolShortcutCapture = (event: KeyboardEvent): void => {
+    if (
+      !this.scene.isActive(this.scene.key)
+      || editorState.isPlaying
+      || event.metaKey
+      || event.ctrlKey
+      || event.altKey
+      || isTextInputFocused()
+    ) {
+      return;
+    }
+    const shortcutTool = getEditorToolForShortcutKey(event.key);
+    if (!shortcutTool) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.toolController.selectTool(shortcutTool);
+  };
   private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
     if (!this.scene.isActive(this.scene.key) || editorState.isPlaying) {
       return;
@@ -249,6 +271,17 @@ export class EditorScene extends Phaser.Scene {
         return;
       }
 
+      if (this.interactionController.cancelPendingShapeOperation()) {
+        return;
+      }
+
+      if (this.goalPlacementMode) {
+        this.courseController.clearPlacementMode();
+        this.editRuntime.currentGoalPlacementMode = null;
+        this.updateGoalUi();
+        return;
+      }
+
       if (this.inspectorController.isConnectingPressurePlate()) {
         this.cancelPressurePlateConnection();
         return;
@@ -261,6 +294,14 @@ export class EditorScene extends Phaser.Scene {
 
       if (this.inspectorController.hasPinnedInspector()) {
         this.inspectorController.clearPinnedSelection();
+        return;
+      }
+
+      const shellEscapeDetail: EditorShellEscapeRequestedDetail = { handled: false };
+      window.dispatchEvent(new CustomEvent(EDITOR_SHELL_ESCAPE_REQUESTED_EVENT, {
+        detail: shellEscapeDetail,
+      }));
+      if (shellEscapeDetail.handled) {
         return;
       }
 
@@ -349,6 +390,7 @@ export class EditorScene extends Phaser.Scene {
     }
   };
   private readonly handleShutdown = (): void => {
+    window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
     this.input.removeAllListeners();
@@ -923,6 +965,7 @@ export class EditorScene extends Phaser.Scene {
     this.setupCamera();
     this.setupInput();
     this.setupKeyboard();
+    window.addEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
     this.rebuildObjectSprites();
     this.syncBackgroundCameraIgnores();
     this.updateBackgroundPreview();

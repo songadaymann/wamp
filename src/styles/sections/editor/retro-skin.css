@@ -12,6 +12,7 @@ body[data-app-mode='editor'] {
   --editor-retro-shadow: #18161c;
   --editor-retro-ink: #18161c;
   --editor-ui-font: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  --editor-button-font: 'IBM Plex Mono', 'Courier New', monospace;
 }
 
 .editor-room-title-overlay {

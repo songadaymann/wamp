@@ -57,6 +57,27 @@ type VinePaletteFilter = 'all' | VinePaletteSubgroup;
 type TreePaletteFilter = 'all' | TreePaletteSubgroup;
 type TreeFamilyFilter = 'all' | TreePaletteFamily;
 
+export type EditorObjectScope = 'all' | 'stuff' | 'characters' | 'hazards' | 'deco';
+
+export function objectMatchesEditorScope(
+  objectConfig: Pick<GameObjectConfig, 'id' | 'category'>,
+  scope: EditorObjectScope,
+): boolean {
+  if (scope === 'all') return true;
+  if (scope === 'stuff') {
+    if (objectConfig.id === 'spawn_point') return false;
+    if (parseCustomSpriteObjectId(objectConfig.id)) return true;
+    return objectConfig.category === 'collectible'
+      || objectConfig.category === 'interactive'
+      || objectConfig.category === 'platform';
+  }
+  if (scope === 'characters') {
+    return objectConfig.category === 'enemy' || objectConfig.category === 'npc';
+  }
+  if (scope === 'hazards') return objectConfig.category === 'hazard';
+  return !parseCustomSpriteObjectId(objectConfig.id) && objectConfig.category === 'decoration';
+}
+
 type PaletteTooltipContent = {
   title: string;
   description?: string;
@@ -95,6 +116,7 @@ export class PaletteController {
   private readonly paletteTileOccupancy = new Map<string, boolean[]>();
   private readonly paletteTileVisibility = new Map<string, boolean[]>();
   private currentObjectCategory = 'all';
+  private currentObjectScope: EditorObjectScope = 'all';
   private currentCustomObjectSubcategory: CustomObjectSubcategory = 'all';
   private currentDecorationGroup: DecorationPaletteFilter = 'all';
   private currentVineSubcategory: VinePaletteFilter = 'all';
@@ -216,6 +238,13 @@ export class PaletteController {
     } else if (this.currentObjectCategory === 'mine') {
       void refreshOwnedCustomSprites().catch(() => undefined);
     }
+  }
+
+  setObjectScope(scope: EditorObjectScope): void {
+    if (this.currentObjectScope === scope) return;
+    this.currentObjectScope = scope;
+    this.resetObjectGridScroll();
+    this.renderObjectGrid();
   }
 
   updateSelection(
@@ -538,6 +567,7 @@ export class PaletteController {
     this.communityPagination?.classList.add('hidden');
 
     const filteredObjects = listEditorObjectConfigs().filter((objectConfig) => (
+      this.matchesObjectScope(objectConfig) &&
       this.matchesObjectCategoryFilter(objectConfig) &&
       this.matchesObjectSearchFilter(objectConfig)
     ));
@@ -1348,6 +1378,10 @@ export class PaletteController {
     }
 
     return objectConfig.category === this.currentObjectCategory;
+  }
+
+  private matchesObjectScope(objectConfig: GameObjectConfig): boolean {
+    return objectMatchesEditorScope(objectConfig, this.currentObjectScope);
   }
 
   private matchesObjectSearchFilter(objectConfig: GameObjectConfig): boolean {

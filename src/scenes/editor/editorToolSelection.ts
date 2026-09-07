@@ -97,7 +97,7 @@ export function getEditorToolButtonAppearance(tool: ToolName, selected: boolean)
   if (tool === 'ellipse') {
     return {
       icon: editorState.ellipseOutline ? '\u25CB' : '\u25CF',
-      title: 'Ellipse Filled / Outlined (E) hold Shift for proportional',
+      title: 'Circle Filled / Outlined (O) hold Shift for proportional',
       dimPart: selected ? (editorState.ellipseOutline ? 'filled' : 'outlined') : null,
     };
   }

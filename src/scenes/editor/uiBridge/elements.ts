@@ -27,6 +27,7 @@ export interface EditorUiElements {
   eraseControls: HTMLElement[];
   tileEraseControls: HTMLElement[];
   eraseBrushSelects: HTMLSelectElement[];
+  eraseBrushButtons: HTMLButtonElement[];
   clearLayerButtons: HTMLButtonElement[];
   clearAllButtons: HTMLButtonElement[];
   clearObjectButtons: HTMLButtonElement[];
@@ -213,6 +214,7 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     eraseControls: all<HTMLElement>(doc, '.editor-eraser-controls'),
     tileEraseControls: all<HTMLElement>(doc, '.editor-tile-erase-control'),
     eraseBrushSelects: all<HTMLSelectElement>(doc, '.editor-erase-brush-select'),
+    eraseBrushButtons: all<HTMLButtonElement>(doc, '.editor-erase-brush-button'),
     clearLayerButtons: all<HTMLButtonElement>(doc, '.editor-clear-layer-btn'),
     clearAllButtons: all<HTMLButtonElement>(doc, '.editor-clear-all-btn'),
     clearObjectButtons: all<HTMLButtonElement>(doc, '.editor-clear-objects-btn'),
