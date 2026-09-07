@@ -77,6 +77,10 @@ body[data-editor-dock-shell='true'] button {
   letter-spacing: 0;
 }
 
+body[data-editor-dock-shell='true'] #bottom-bar :is(.world-online-pill, .world-footer-controls-btn) {
+  font-family: 'Early GameBoy', monospace !important;
+}
+
 body[data-editor-dock-shell='true'] #bottom-bar #btn-fit-screen {
   min-height: 26px;
   background: var(--editor-retro-paper);
@@ -700,6 +704,61 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #object-pale
 body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='background'] #background-section {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'][data-builder-mode='advanced'] #layers-section {
+  display: grid !important;
+  grid-template-columns: minmax(58px, auto) minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
+}
+
+body[data-editor-dock-shell='true'] #layers-section > .section-label {
+  grid-column: 1;
+  margin: 11px 0 0;
+  align-self: start;
+  font-family: var(--editor-button-font);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+body[data-editor-dock-shell='true'] #layers-section > .sidebar-section-body {
+  grid-column: 2;
+  min-width: 0;
+}
+
+body[data-editor-dock-shell='true'] #layers-section #layers {
+  width: 100%;
+  gap: 8px;
+}
+
+body[data-editor-dock-shell='true'] #layers-section .layer-row {
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 8px;
+}
+
+body[data-editor-dock-shell='true'] #layers-section .layer-btn,
+body[data-editor-dock-shell='true'] #layers-section .layer-info-button {
+  min-height: 44px;
+}
+
+body[data-editor-dock-shell='true'] #layers-section .layer-info-button {
+  width: 40px;
+  min-width: 40px;
+}
+
+body[data-editor-dock-shell='true'] #layers-section .layer-btn-summary,
+body[data-editor-dock-shell='true'] #layers-section .layer-info-tooltip {
+  font-family: var(--editor-button-font);
+}
+
+body[data-editor-dock-shell='true'] #layers-section .layer-controls-row {
+  margin-top: 8px;
+}
+
+body[data-editor-dock-shell='true'] #layers-section #btn-editor-layer-guides {
+  width: 100%;
+  min-height: 44px;
 }
 
 body[data-editor-dock-shell='true'] #sidebar .sidebar-section-toggle {

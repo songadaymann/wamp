@@ -118,6 +118,41 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   for (const tool of await tools.all()) assert.equal(await tool.isVisible(), true);
   for (const selector of ['#btn-world-settings', '#btn-guestbook-open', '#btn-world-controls']) {
     assert.equal(await page.locator(selector).isVisible(), true, `${selector} should remain in the editor footer`);
+    assert.match(
+      await page.locator(selector).evaluate((button) => getComputedStyle(button).fontFamily),
+      /Early GameBoy/i,
+      `${selector} should use the GameBoy footer font`,
+    );
+  }
+  assert.match(
+    await page.locator('#world-online-count').evaluate((button) => getComputedStyle(button).fontFamily),
+    /Early GameBoy/i,
+    'the online footer button should use the GameBoy footer font',
+  );
+  for (const selector of [
+    '.world-online-popover',
+    '.world-online-popover-title',
+    '.world-online-popover-summary',
+    '.world-online-popover-section-title',
+    '.world-online-popover-entry-name',
+    '.world-online-popover-room',
+  ]) {
+    const target = page.locator(selector).first();
+    if (await target.count()) {
+      assert.match(
+        await target.evaluate((element) => getComputedStyle(element).fontFamily),
+        /IBM Plex Mono/i,
+        `${selector} should use the legible interface font`,
+      );
+    }
+  }
+  const onlineTrigger = page.locator('#world-online-count');
+  if (await onlineTrigger.isVisible()) {
+    await onlineTrigger.click();
+    await page.waitForFunction(() => !document.getElementById('world-online-popover')?.classList.contains('hidden'));
+    await page.screenshot({ path: path.join(viewportOutputDir, 'players-online.png') });
+    await onlineTrigger.click();
+    await page.waitForFunction(() => document.getElementById('world-online-popover')?.classList.contains('hidden'));
   }
 
   const saveStatus = page.locator('#editor-top-save-status');
@@ -520,6 +555,46 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.equal(await page.locator('#btn-tile-flip-y').isVisible(), true);
   assert.equal(await page.locator('#palette-canvas').isVisible(), true);
   assert.equal(await page.locator('#layers-section').isVisible(), true);
+  const layerLayout = await page.locator('#layers-section').evaluate((section) => {
+    const label = section.querySelector(':scope > .section-label');
+    const body = section.querySelector(':scope > .sidebar-section-body');
+    const firstRow = section.querySelector('.layer-row');
+    const firstButton = section.querySelector('.layer-btn');
+    const infoButton = section.querySelector('.layer-info-button');
+    const guidesButton = section.querySelector('#btn-editor-layer-guides');
+    if (!label || !body || !firstRow || !firstButton || !infoButton || !guidesButton) return null;
+    const labelBox = label.getBoundingClientRect();
+    const bodyBox = body.getBoundingClientRect();
+    const rowBox = firstRow.getBoundingClientRect();
+    const buttonBox = firstButton.getBoundingClientRect();
+    const infoBox = infoButton.getBoundingClientRect();
+    const guidesBox = guidesButton.getBoundingClientRect();
+    return {
+      display: getComputedStyle(section).display,
+      columns: getComputedStyle(section).gridTemplateColumns,
+      labelRight: labelBox.right,
+      bodyLeft: bodyBox.left,
+      labelTop: labelBox.top,
+      rowTop: rowBox.top,
+      bodyWidth: bodyBox.width,
+      rowWidth: rowBox.width,
+      buttonHeight: buttonBox.height,
+      infoHeight: infoBox.height,
+      guidesWidth: guidesBox.width,
+      labelFont: getComputedStyle(label).fontFamily,
+      summaryFont: getComputedStyle(firstButton.querySelector('.layer-btn-summary')).fontFamily,
+    };
+  });
+  assert.ok(layerLayout);
+  assert.equal(layerLayout.display, 'grid');
+  assert.equal(countGridColumns(layerLayout.columns), 2);
+  assert.ok(layerLayout.bodyLeft >= layerLayout.labelRight + 8, 'Layers label should occupy its own column');
+  assert.ok(Math.abs(layerLayout.labelTop - layerLayout.rowTop) <= 12, 'Layers label should align with the layer controls');
+  assert.ok(Math.abs(layerLayout.bodyWidth - layerLayout.rowWidth) <= 1, 'Layer rows should fill their control column');
+  assert.ok(layerLayout.buttonHeight >= 44 && layerLayout.infoHeight >= 44, 'Layer controls should remain chunky');
+  assert.ok(Math.abs(layerLayout.bodyWidth - layerLayout.guidesWidth) <= 1, 'See Layers should fill the control column');
+  assert.match(layerLayout.labelFont, /IBM Plex Mono/i);
+  assert.match(layerLayout.summaryFont, /IBM Plex Mono/i);
 
   const { beforeCancelledShape } = await runEditorCommands(page, [
     { op: 'capture', name: 'beforeCancelledShape' },
