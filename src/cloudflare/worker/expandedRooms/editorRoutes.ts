@@ -32,6 +32,7 @@ import {
 } from '../courses/store';
 import { resolveRoomCapabilities } from '../progression/store';
 import { loadRoomRecord } from '../rooms/store';
+import { assertPrimeOnlyAuthoringRooms } from '../worlds/access';
 
 interface ExpandedRoomCellMutationBody {
   roomId?: unknown;
@@ -52,6 +53,7 @@ export async function handleExpandedRoomCreate(
     'rooms:write'
   );
   const snapshot = await parseCourseSnapshotBody(request);
+  await assertPrimeOnlyAuthoringRooms(env, snapshot.roomRefs.map((room) => room.roomId));
   const record = await createCourseDraft(env, snapshot, auth.user, auth.isAdmin, auth.source);
   return jsonResponse(request, record);
 }
@@ -61,6 +63,7 @@ export async function handleExpandedRoomDraftByRoomLookup(
   env: Env,
   roomId: string
 ): Promise<Response> {
+  await assertPrimeOnlyAuthoringRooms(env, [roomId]);
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
@@ -115,6 +118,7 @@ export async function handleExpandedRoomDraftSave(
   );
   const courseId = legacyCourseIdForEditableExpandedRoom(expandedRoomId);
   const snapshot = await parseCourseSnapshotBody(request, courseId);
+  await assertPrimeOnlyAuthoringRooms(env, snapshot.roomRefs.map((room) => room.roomId));
   const record = await saveCourseDraft(env, snapshot, auth.user, auth.isAdmin, auth.source);
   return jsonResponse(request, record);
 }
@@ -162,6 +166,7 @@ export async function handleExpandedRoomCellAdd(
   const record = await requireEditableExpandedRoomRecord(env, courseId, auth.user.id, auth.isAdmin);
   const body = await parseJsonBody<ExpandedRoomCellMutationBody>(request);
   const target = normalizeExpandedRoomCellMutationBody(body);
+  await assertPrimeOnlyAuthoringRooms(env, [target.roomId]);
   const room = await loadRoomRecord(
     env,
     target.roomId,

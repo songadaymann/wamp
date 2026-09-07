@@ -22,6 +22,7 @@ import type {
 import { buildEditorPlayModeData } from './playMode';
 import { type EditorRoomSession } from './roomSession';
 import { shouldShowPublishNudge as shouldShowPublishNudgeHelper } from './viewModel';
+import { clearWorldSeedEditor, isWorldSeedEditorRoom } from '../../worlds/seedEditorAdapter';
 
 interface EditorSceneFlowHost {
   cancelClipboardPastePreview(): void;
@@ -155,6 +156,23 @@ export class EditorSceneFlowController {
 
   async returnToWorld(): Promise<void> {
     showBusyOverlay('Returning to world...', 'Saving room state...');
+    if (isWorldSeedEditorRoom(this.roomSession.currentRoomId)) {
+      const saved = this.host.getRoomDirty() ? await this.host.saveDraft(true) : true;
+      if (!saved) {
+        showBusyError(this.host.getPersistenceStatusText() || 'Failed to save the World seed draft.', {
+          closeHandler: () => hideBusyOverlay(),
+        });
+        return;
+      }
+      clearWorldSeedEditor();
+      this.host.stopEditorScene();
+      hideBusyOverlay();
+      this.host.wakeOverworld({
+        statusMessage: 'World seed draft saved. Publish it when you are ready to activate the World.',
+        mode: 'browse',
+      });
+      return;
+    }
     const wakeData = await this.roomSession.buildReturnToWorldWakeData();
     if (!wakeData) {
       showBusyError(this.host.getPersistenceStatusText() || 'Failed to return to world.', {

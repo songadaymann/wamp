@@ -8,7 +8,12 @@ import {
 } from '../../../persistence/roomModel';
 import { HttpError, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
-import { type RoomMutationActor, loadRoomRecordForMutation, saveDraft } from './store';
+import {
+  type RoomMutationActor,
+  type RoomMutationOptions,
+  loadRoomRecordForMutation,
+  saveDraft,
+} from './store';
 import {
   MAX_ROOM_DRAFT_COMMAND_BODY_BYTES,
   applyRoomDraftCommands,
@@ -51,6 +56,7 @@ export async function saveDraftFromCommandRequest(
   requestBody: RoomDraftCommandsRequestBody,
   actor: RoomMutationActor,
   actorIsAdmin = false,
+  options: RoomMutationOptions = {},
 ): Promise<SaveDraftFromCommandRequestResult> {
   const existing = await loadRoomRecordForMutation(env, roomId, coordinates, actor.ownerUser, actorIsAdmin);
   if (!existing.permissions.canSaveDraft) {
@@ -65,7 +71,7 @@ export async function saveDraftFromCommandRequest(
   base.id = roomId;
   base.coordinates = { ...coordinates };
   const applied = applyRoomDraftCommands(base, requestBody.commands);
-  const record = await saveDraft(env, applied.snapshot, actor, actorIsAdmin);
+  const record = await saveDraft(env, applied.snapshot, actor, actorIsAdmin, options);
   const persistedIds = new Set(record.draft.placedObjects.map((placed) => placed.instanceId));
   return {
     record,

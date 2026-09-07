@@ -43,6 +43,18 @@ import {
   enforceRoomMutationGuardrails,
   getDailyRoomClaimLimitForUser,
 } from './guardrails';
+import {
+  applyWorldRoomPermissions,
+  applyWorldRoomSummaryPermissions,
+  assertWorldFrontierClaim,
+} from '../worlds/access';
+import {
+  appendWorldDraftClaimStatements,
+  appendWorldPublishStatements,
+  appendWorldRevertStatements,
+  resolveWorldMutationAccess,
+  runWorldAwareRoomMutationBatch,
+} from '../worlds/roomMutationIntegration';
 
 export interface RoomClaimQuota {
   limit: number | null;
@@ -161,10 +173,19 @@ export async function loadRoomRecord(
     },
   };
 
-  return {
+  const permissionedRecord = {
     ...record,
     permissions: buildRoomPermissions(record, viewerUserId, viewerWalletAddress, viewerIsAdmin),
   };
+  return env.WORLDS_ENABLED === '1'
+    ? applyWorldRoomPermissions(env, row.id, permissionedRecord, viewerUserId, viewerIsAdmin)
+    : permissionedRecord;
+}
+
+export interface RoomMutationOptions {
+  worldId?: string | null;
+  usageUserId?: string | null;
+  transactionStatementsBefore?: D1PreparedStatement[];
 }
 
 interface CompactRoomRow extends RoomRow {
@@ -225,7 +246,10 @@ export async function loadRoomSummary(
     );
   }
 
-  return roomSummaryFromCompactRow(row, viewerUserId, viewerWalletAddress, viewerIsAdmin);
+  const summary = roomSummaryFromCompactRow(row, viewerUserId, viewerWalletAddress, viewerIsAdmin);
+  return env.WORLDS_ENABLED === '1'
+    ? applyWorldRoomSummaryPermissions(env, row.id, summary, viewerUserId, viewerIsAdmin)
+    : summary;
 }
 
 export async function loadRoomCurrent(
@@ -249,8 +273,11 @@ export async function loadRoomCurrent(
     };
   }
 
+  const summary = roomSummaryFromCompactRow(row, viewerUserId, viewerWalletAddress, viewerIsAdmin);
   return {
-    summary: roomSummaryFromCompactRow(row, viewerUserId, viewerWalletAddress, viewerIsAdmin),
+    summary: env.WORLDS_ENABLED === '1'
+      ? await applyWorldRoomSummaryPermissions(env, row.id, summary, viewerUserId, viewerIsAdmin)
+      : summary,
     draft: parseStoredSnapshot(row.draft_json, 'draft room'),
     published: row.published_json ? parseStoredSnapshot(row.published_json, 'published room') : null,
   };
@@ -838,7 +865,8 @@ export async function saveDraft(
   env: Env,
   incomingRoom: RoomSnapshot,
   actor: RoomMutationActor,
-  actorIsAdmin = false
+  actorIsAdmin = false,
+  options: RoomMutationOptions = {},
 ): Promise<RoomRecord> {
   const viewerUserId = actor.ownerUser?.id ?? null;
   const viewerWalletAddress = actor.ownerUser?.walletAddress ?? null;
@@ -849,6 +877,16 @@ export async function saveDraft(
     actor.ownerUser,
     actorIsAdmin
   );
+  const world = await resolveWorldMutationAccess(
+    env,
+    existing,
+    options.worldId,
+    viewerUserId,
+    actorIsAdmin,
+  );
+  if (world && !world.policy.canEditRooms) {
+    throw new HttpError(403, 'You do not have permission to edit rooms in this World.');
+  }
   if (!existing.permissions.canSaveDraft) {
     if (isRoomMinted(existing)) {
       throw new HttpError(403, 'Only the room token owner can save drafts for this minted room.');
@@ -866,9 +904,16 @@ export async function saveDraft(
     actor.principalDisplayName || actor.ownerUser?.displayName || existing.claimerDisplayName || 'Guest';
   const shouldClaimDraft =
     !existing.claimerUserId && actor.ownerUser !== null && existing.published === null;
-  if (shouldClaimDraft && !actorIsAdmin) {
-    await enforceFrontierClaimRule(env, incomingRoom.coordinates);
-    await enforceDailyRoomClaimLimit(env, actor.ownerUser!.id, now, actor.requestAuthSource);
+  if (shouldClaimDraft) {
+    if (world) {
+      if (!world.policy.canClaimRooms) {
+        throw new HttpError(403, 'You do not have permission to claim rooms in this World.');
+      }
+      await assertWorldFrontierClaim(env, world.id, incomingRoom.coordinates);
+    } else if (!actorIsAdmin) {
+      await enforceFrontierClaimRule(env, incomingRoom.coordinates);
+      await enforceDailyRoomClaimLimit(env, actor.ownerUser!.id, now, actor.requestAuthSource);
+    }
   }
   const claimerUserId = shouldClaimDraft ? actor.ownerUser!.id : existing.claimerUserId;
   const claimerPrincipalType = shouldClaimDraft ? actor.principalKind : existing.claimerPrincipalKind;
@@ -886,7 +931,7 @@ export async function saveDraft(
   };
   await assertCustomBackgroundApproved(env, draft.background);
 
-  await env.DB.batch([
+  const statements: D1PreparedStatement[] = [
     preparePersistRoomRecordStatement(env, {
       draft,
       published: existing.published,
@@ -909,7 +954,19 @@ export async function saveDraft(
       mintedMetadataUpdatedAt: existing.mintedMetadataUpdatedAt,
       mintedMetadataHash: existing.mintedMetadataHash,
     }),
-  ]);
+  ];
+  appendWorldDraftClaimStatements({
+    statements,
+    env,
+    world,
+    shouldClaim: shouldClaimDraft,
+    roomId: draft.id,
+    coordinates: draft.coordinates,
+    builderUserId: actor.ownerUser?.id ?? null,
+    principalKind: actor.principalKind,
+    now,
+  });
+  await runWorldAwareRoomMutationBatch(env, statements);
 
   return loadRoomRecord(
     env,
@@ -925,7 +982,8 @@ export async function publishRoom(
   env: Env,
   incomingRoom: RoomSnapshot,
   actor: RoomMutationActor,
-  actorIsAdmin = false
+  actorIsAdmin = false,
+  options: RoomMutationOptions = {},
 ): Promise<RoomRecord> {
   const viewerUserId = actor.ownerUser?.id ?? null;
   const viewerWalletAddress = actor.ownerUser?.walletAddress ?? null;
@@ -936,6 +994,21 @@ export async function publishRoom(
     actor.ownerUser,
     actorIsAdmin
   );
+  const world = await resolveWorldMutationAccess(
+    env,
+    existing,
+    options.worldId,
+    viewerUserId,
+    actorIsAdmin,
+  );
+  if (world && !world.policy.canPublishDirectly) {
+    throw new HttpError(
+      403,
+      world.policy.canSubmitForApproval
+        ? 'This World requires publication approval. Submit the draft for review.'
+        : 'You do not have permission to publish rooms in this World.',
+    );
+  }
   if (!existing.permissions.canPublish) {
     if (isRoomMinted(existing)) {
       throw new HttpError(403, 'Only the room token owner can publish this minted room.');
@@ -969,9 +1042,16 @@ export async function publishRoom(
   const publishedByUserId = actor.ownerUser?.id ?? null;
   const publishedByDisplayName = actor.principalDisplayName || actor.ownerUser?.displayName || 'Guest';
   const shouldClaim = !existing.claimerUserId && actor.ownerUser !== null;
-  if (shouldClaim && !actorIsAdmin) {
-    await enforceFrontierClaimRule(env, incomingRoom.coordinates);
-    await enforceDailyRoomClaimLimit(env, actor.ownerUser!.id, now, actor.requestAuthSource);
+  if (shouldClaim) {
+    if (world) {
+      if (!world.policy.canClaimRooms) {
+        throw new HttpError(403, 'You do not have permission to claim rooms in this World.');
+      }
+      await assertWorldFrontierClaim(env, world.id, incomingRoom.coordinates);
+    } else if (!actorIsAdmin) {
+      await enforceFrontierClaimRule(env, incomingRoom.coordinates);
+      await enforceDailyRoomClaimLimit(env, actor.ownerUser!.id, now, actor.requestAuthSource);
+    }
   }
   const claimerUserId = shouldClaim ? actor.ownerUser!.id : existing.claimerUserId;
   const claimerPrincipalType = shouldClaim ? actor.principalKind : existing.claimerPrincipalKind;
@@ -1001,7 +1081,8 @@ export async function publishRoom(
     displayName: publishedByDisplayName,
   });
 
-  await env.DB.batch([
+  const statements: D1PreparedStatement[] = [
+    ...(options.transactionStatementsBefore ?? []),
     preparePersistRoomRecordStatement(env, {
       draft,
       published,
@@ -1036,7 +1117,22 @@ export async function publishRoom(
       onConflictUpdate: true,
     }),
     ...musicPhraseStatements,
-  ]);
+  ];
+  const usageUserId = options.usageUserId ?? actor.ownerUser?.id ?? null;
+  appendWorldPublishStatements({
+    statements,
+    env,
+    world,
+    shouldClaim,
+    roomId: draft.id,
+    roomVersion: published.version,
+    coordinates: draft.coordinates,
+    actorUserId: actor.ownerUser?.id ?? null,
+    usageUserId,
+    principalKind: actor.principalKind,
+    now,
+  });
+  await runWorldAwareRoomMutationBatch(env, statements);
 
   return loadRoomRecord(
     env,
@@ -1054,7 +1150,8 @@ export async function revertRoom(
   coordinates: RoomCoordinates,
   targetVersion: number,
   actor: RoomMutationActor,
-  actorIsAdmin = false
+  actorIsAdmin = false,
+  options: RoomMutationOptions = {},
 ): Promise<RoomRecord> {
   if (!Number.isInteger(targetVersion) || targetVersion < 1) {
     throw new HttpError(400, 'targetVersion must be a positive integer.');
@@ -1068,6 +1165,13 @@ export async function revertRoom(
     coordinates,
     actor.ownerUser,
     actorIsAdmin
+  );
+  const world = await resolveWorldMutationAccess(
+    env,
+    existing,
+    options.worldId,
+    viewerUserId,
+    actorIsAdmin,
   );
   if (!existing.permissions.canRevert) {
     if (isRoomMinted(existing)) {
@@ -1101,7 +1205,7 @@ export async function revertRoom(
     status: 'draft',
   };
 
-  await env.DB.batch([
+  const statements: D1PreparedStatement[] = [
     preparePersistRoomRecordStatement(env, {
       draft,
       published,
@@ -1135,7 +1239,18 @@ export async function revertRoom(
       leaderboardSourceVersion: null,
       onConflictUpdate: false,
     }),
-  ]);
+  ];
+  appendWorldRevertStatements({
+    statements,
+    env,
+    world,
+    actorUserId: actor.ownerUser?.id ?? null,
+    roomId: draft.id,
+    targetVersion,
+    publishedVersion: published.version,
+    now,
+  });
+  await runWorldAwareRoomMutationBatch(env, statements);
 
   return loadRoomRecord(
     env,
@@ -1153,7 +1268,8 @@ export async function setCanonicalRoomVersion(
   coordinates: RoomCoordinates,
   targetVersion: number,
   actor: RoomMutationActor,
-  actorIsAdmin = false
+  actorIsAdmin = false,
+  options: RoomMutationOptions = {},
 ): Promise<RoomRecord> {
   if (!Number.isInteger(targetVersion) || targetVersion < 1) {
     throw new HttpError(400, 'targetVersion must be a positive integer.');
@@ -1167,6 +1283,13 @@ export async function setCanonicalRoomVersion(
     coordinates,
     actor.ownerUser,
     actorIsAdmin
+  );
+  await resolveWorldMutationAccess(
+    env,
+    existing,
+    options.worldId,
+    viewerUserId,
+    actorIsAdmin,
   );
 
   if (!existing.permissions.canRevert) {

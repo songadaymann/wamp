@@ -19,7 +19,10 @@ export default tseslint.config(
       parser: tseslint.parser,
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['scripts/runtime_performance_trace.test.ts'],
+          allowDefaultProject: [
+            'scripts/runtime_performance_trace.test.ts',
+            'scripts/smoke_worlds_pilot.ts',
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },

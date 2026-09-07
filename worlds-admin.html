@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAMP Worlds Admin</title>
+    <style>
+      @font-face { font-family: "Early GameBoy"; src: url("/assets/fonts/early-gameboy.ttf"); }
+      @font-face { font-family: "HomeVideo"; src: url("/assets/fonts/HomeVideo-Regular.ttf"); }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #08090b; color: #18161c; font: 15px/1.45 "HomeVideo", monospace; }
+      button, input { font: inherit; padding: 9px 12px; border: 2px solid #18161c; background: #fffaf0; box-shadow: 2px 2px 0 #18161c; }
+      button { cursor: pointer; font-weight: 700; }
+      a { color: #2c5071; font-weight: 700; }
+      h1, h2, h3 { margin: 0; font-family: "Early GameBoy", monospace; font-weight: 400; }
+      h1 { font-size: clamp(22px, 5vw, 38px); }
+      h2 { font-size: 18px; }
+      h3 { font-size: 13px; }
+      .shell { width: min(1180px, calc(100% - 28px)); margin: 20px auto 60px; display: grid; gap: 18px; }
+      .masthead, .auth, .admin-section { padding: 18px; border: 3px solid #18161c; background: #fff3db; box-shadow: 6px 6px 0 #000; }
+      .masthead { background: #79ccde; display: flex; justify-content: space-between; align-items: end; gap: 20px; flex-wrap: wrap; }
+      .auth, .admin-actions, form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+      .auth input { flex: 1 1 280px; }
+      #worlds-grant-form { padding: 14px; border: 2px solid #18161c; background: #fcea7c; }
+      #worlds-grant-email { flex: 1 1 260px; }
+      #worlds-admin-status { padding: 10px; border: 2px solid #18161c; background: #fcea7c; }
+      #worlds-admin-status.danger { color: #fff; background: #ed5f4b; }
+      #worlds-admin-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+      .growth-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+      .growth-grid label { display: grid; gap: 5px; }
+      .growth-grid button { align-self: end; }
+      .admin-section { display: grid; gap: 14px; align-content: start; }
+      .admin-list { display: grid; gap: 10px; }
+      .admin-card { display: grid; gap: 8px; padding: 12px; border: 2px solid #18161c; background: #fffaf0; }
+      .admin-meta { color: #615b65; overflow-wrap: anywhere; }
+      @media (max-width: 720px) {
+        #worlds-admin-content, .growth-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div><div>WAMP PILOT CONTROL</div><h1>Worlds Admin</h1></div>
+        <a href="/launch-admin.html">Launch Admin</a>
+      </header>
+      <section class="auth">
+        <input id="worlds-admin-key" type="password" autocomplete="current-password" placeholder="Admin API key" />
+        <button id="worlds-admin-load" type="button">Load</button>
+        <button id="worlds-admin-clear" type="button">Clear</button>
+      </section>
+      <form id="worlds-grant-form">
+        <strong>Complimentary World grant</strong>
+        <input id="worlds-grant-email" type="email" required placeholder="owner@example.com" />
+        <button type="submit">Create + email</button>
+      </form>
+      <section class="admin-section">
+        <h2>Growth collision simulator</h2>
+        <div class="admin-meta">Models daily frontier claims on the fixed 129-step origin grid. Directional bias estimates how often builders expand toward the nearest neighboring origin.</div>
+        <form id="worlds-growth-form" class="growth-grid">
+          <label>Worlds<input name="worldCount" type="number" min="1" max="25" step="1" value="2" required /></label>
+          <label>DAU per World<input name="dailyActiveBuildersPerWorld" type="number" min="0" max="1000" step="0.1" value="5" required /></label>
+          <label>Claims / builder / day<input name="claimsPerBuilderPerDay" type="number" min="0" max="25" step="0.1" value="1" required /></label>
+          <label>Directional bias %<input name="directionalBias" type="number" min="0" max="100" step="1" value="20" required /></label>
+          <label>Maximum days<input name="maxDays" type="number" min="1" max="20000" step="1" value="3650" required /></label>
+          <label>Trials<input name="trials" type="number" min="1" max="500" step="1" value="50" required /></label>
+          <button type="submit">Simulate</button>
+        </form>
+        <div id="worlds-growth-output" class="admin-meta" role="status">Choose assumptions and run the model.</div>
+      </section>
+      <div id="worlds-admin-status" role="status">Enter the admin key to load the pilot.</div>
+      <div id="worlds-admin-content"></div>
+    </main>
+    <script type="module" src="/src/worlds-admin.ts"></script>
+  </body>
+</html>

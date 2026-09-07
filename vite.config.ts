@@ -55,6 +55,7 @@ export default defineConfig(({ mode }) => {
           schoolAdmin: resolve(process.cwd(), 'school-admin.html'),
           schoolLogin: resolve(process.cwd(), 'school-login.html'),
           suspiciousAdmin: resolve(process.cwd(), 'suspicious-admin.html'),
+          worldsAdmin: resolve(process.cwd(), 'worlds-admin.html'),
           mintedRoom: resolve(process.cwd(), 'minted-room.html'),
           roomPreviewRender: resolve(process.cwd(), 'room-preview-render.html'),
           worldTileRender: resolve(process.cwd(), 'world-tile-render.html'),

@@ -28,6 +28,7 @@ import {
   loadUnavailableRoomIdsForClaim,
   loadWorldRoomSummariesInBounds,
 } from '../rooms/store';
+import { annotateNumberedWorldRooms } from '../worlds/access';
 
 export async function handleWorldRequest(
   request: Request,
@@ -59,6 +60,7 @@ export async function handleWorldRequest(
     { x: centerX, y: centerY },
     radius
   );
+  await annotateNumberedWorldRooms(env, worldWindow.rooms, { minX, maxX, minY, maxY });
   if (expandedRoomsEnabled) {
     applyExpandedRoomMemberships(worldWindow.rooms, memberships as ExpandedRoomCellMembership[]);
   } else {
@@ -90,6 +92,11 @@ export async function handleWorldChunksRequest(
   const chunkWindow = computeWorldChunkWindow(
     [...publishedRooms, ...claimedUnpublishedRooms],
     chunkBounds
+  );
+  await annotateNumberedWorldRooms(
+    env,
+    chunkWindow.chunks.flatMap((chunk) => chunk.rooms),
+    { minX, maxX, minY, maxY },
   );
   for (const chunk of chunkWindow.chunks) {
     if (expandedRoomsEnabled) {
@@ -127,6 +134,11 @@ export async function handleWorldChunkSummariesRequest(
       : loadPublishedCourseMembershipsInBounds(env, minX, maxX, minY, maxY),
   ]));
   const compactWindow = timing.measureSync('summaries', () => computeCompactWorldChunkWindow(summaries, chunkBounds));
+  await timing.measure('worlds', () => annotateNumberedWorldRooms(
+    env,
+    compactWindow.chunks.flatMap((chunk) => chunk.rooms),
+    { minX, maxX, minY, maxY },
+  ));
   for (const chunk of compactWindow.chunks) {
     if (expandedRoomsEnabled) applyExpandedRoomMemberships(chunk.rooms, memberships as ExpandedRoomCellMembership[]);
     else applyLegacyCourseMemberships(chunk.rooms, memberships as LegacyCourseMembership[]);

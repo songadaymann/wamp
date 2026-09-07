@@ -22,10 +22,17 @@ vi.mock('../../ui/appFeedback', () => ({
 }));
 
 import { EditorSceneFlowController } from './flow';
+import { createDefaultRoomSnapshot, DEFAULT_ROOM_COORDINATES, DEFAULT_ROOM_ID } from '../../persistence/roomModel';
+import {
+  beginWorldSeedEditor,
+  clearWorldSeedEditor,
+  isWorldSeedEditorRoom,
+} from '../../worlds/seedEditorAdapter';
 
 describe('editor return flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearWorldSeedEditor();
   });
 
   it('hides the busy overlay after stopping the editor and before waking the course builder', async () => {
@@ -91,12 +98,29 @@ describe('editor return flow', () => {
       host.wakeOverworld.mock.invocationCallOrder[0],
     );
   });
+
+  it('saves a World seed draft without activating it when leaving the editor', async () => {
+    beginWorldSeedEditor('grant-1', createDefaultRoomSnapshot(DEFAULT_ROOM_ID, DEFAULT_ROOM_COORDINATES));
+    const { controller, host, roomSession } = createHarness({ roomDirty: true });
+    host.saveDraft.mockResolvedValue({ draft: {} });
+
+    await controller.returnToWorld();
+
+    expect(host.saveDraft).toHaveBeenCalledWith(true);
+    expect(roomSession.buildReturnToWorldWakeData).not.toHaveBeenCalled();
+    expect(host.wakeOverworld).toHaveBeenCalledWith({
+      statusMessage: 'World seed draft saved. Publish it when you are ready to activate the World.',
+      mode: 'browse',
+    });
+    expect(isWorldSeedEditorRoom(DEFAULT_ROOM_ID)).toBe(false);
+  });
 });
 
 function createHarness(options: {
   returnFailure?: boolean;
   returnToCourseEditor?: boolean;
   activeCourseEdit?: boolean;
+  roomDirty?: boolean;
 } = {}) {
   const wakeData = {
     centerCoordinates: { x: 3, y: 4 },
@@ -108,6 +132,7 @@ function createHarness(options: {
     selectedCoordinates: { x: 3, y: 4 },
   };
   const roomSession = {
+    currentRoomId: DEFAULT_ROOM_ID,
     buildReturnToWorldWakeData: vi.fn(async () => (
       options.returnFailure ? null : { ...wakeData }
     )),
@@ -123,6 +148,8 @@ function createHarness(options: {
     wakeCourseComposer: vi.fn(),
     wakeOverworld: vi.fn(),
     getPersistenceStatusText: vi.fn(() => 'Room save failed.'),
+    getRoomDirty: vi.fn(() => options.roomDirty ?? false),
+    saveDraft: vi.fn(async () => ({ draft: {} })),
   };
 
   return {

@@ -39,6 +39,7 @@ import { handleAdminRoomCommentRequest } from '../roomComments/routes';
 import { handleAdminSchoolRequest } from '../school/routes';
 import { handleAdminWorldTileRequest } from '../worldTiles/routes';
 import { handleAdminCustomSpriteRequest } from '../customSprites/adminRoutes';
+import { handleAdminWorldsRequest } from '../worlds/adminRoutes';
 
 export async function handleAdminRequest(
   request: Request,
@@ -46,6 +47,10 @@ export async function handleAdminRequest(
   env: Env,
   context?: WorkerExecutionContextLike,
 ): Promise<Response> {
+  if (url.pathname.startsWith('/api/admin/worlds')) {
+    return handleAdminWorldsRequest(request, url, env);
+  }
+
   if (url.pathname.startsWith('/api/admin/world-tiles')) {
     return handleAdminWorldTileRequest(request, url, env, context);
   }

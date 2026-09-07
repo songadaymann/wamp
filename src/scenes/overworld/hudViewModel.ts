@@ -22,6 +22,7 @@ import type { ActiveCourseRunState } from './courseRuns';
 import type { GoalRunState } from './goalRuns';
 import type { ActiveRoomRushRunState } from './roomRushRuns';
 import type { ActiveSignState } from './signPosts';
+import { canBuildInActiveWorld } from '../../worlds/clientContext';
 
 export type SelectedCellState = 'published' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty';
 
@@ -52,6 +53,7 @@ interface SelectedSummaryViewData {
   title: string | null;
   creatorUserId: string | null;
   creatorDisplayName: string | null;
+  world?: { id: string; number: number };
 }
 
 export interface BuildOverworldHudViewModelOptions {
@@ -265,13 +267,18 @@ export function buildOverworldHudViewModel(
     currentWalletAddress &&
     currentWalletAddress === selectedOwnership.mintedOwnerWalletAddress.trim().toLowerCase(),
   );
+  const viewerCanEditWorldRoom = Boolean(
+    selectedSummary?.world && canBuildInActiveWorld(selectedSummary.world.id),
+  );
   const canEditSelectedRoom =
     selectedState === 'draft'
       ? true
       : selectedState === 'claimed_unpublished'
-        ? viewerOwnsSelectedRoom
+        ? viewerOwnsSelectedRoom || viewerCanEditWorldRoom
       : selectedState === 'published'
-        ? selectedOwnership === null || !selectedRoomMinted || viewerOwnsMintedRoom
+        ? selectedSummary?.world
+          ? viewerCanEditWorldRoom
+          : selectedOwnership === null || !selectedRoomMinted || viewerOwnsMintedRoom
         : false;
   const editButtonTitle =
     selectedState !== 'published' && selectedState !== 'draft' && selectedState !== 'claimed_unpublished'
@@ -287,8 +294,10 @@ export function buildOverworldHudViewModel(
   const selectedIsExpandedRoom = Boolean(selectedExpandedRoom);
   const courseBuilderButtonText = selectedIsExpandedRoom ? 'Expanded Room Setup' : 'Expand Room';
   const courseBuilderButtonTitle =
-    courseBuilderButtonDisabled
-      ? 'Loading expanded room builder...'
+    selectedSummary?.world
+      ? 'Expanded Room authoring is disabled in numbered Worlds.'
+      : courseBuilderButtonDisabled
+        ? 'Loading expanded room builder...'
       : selectedState !== 'published'
         ? 'Only published rooms can start an expanded room.'
         : !viewerOwnsSelectedRoom

@@ -52,6 +52,7 @@ import {
   getGameSettingsSyncDebugState,
   initializeGameSettingsSync,
 } from './settings/userSettingsSync';
+import { resolveWorldLinkBeforeBoot } from './worlds/worldLinkResolver';
 
 const gameContainer = document.getElementById('game-container')!;
 const query = new URLSearchParams(window.location.search);
@@ -68,6 +69,8 @@ logBootPhase('main:start', {
   preserveDrawingBuffer: debug_options.preserveDrawingBuffer,
   captureDebug: debug_options.captureDebug,
 });
+
+void resolveWorldLinkBeforeBoot();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: resolveRendererType(debug_options.renderer),

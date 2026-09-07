@@ -197,6 +197,7 @@ export interface RoomRecord {
   mintedMetadataUpdatedAt: string | null;
   mintedMetadataHash: string | null;
   permissions: RoomPermissions;
+  world?: import('../worlds/model').WorldRoomContext;
 }
 
 export interface RoomSummary {
@@ -227,6 +228,7 @@ export interface RoomSummary {
   mintedMetadataUpdatedAt: string | null;
   mintedMetadataHash: string | null;
   permissions: RoomPermissions;
+  world?: import('../worlds/model').WorldRoomContext;
 }
 
 export interface RoomCurrentRecord {
@@ -310,6 +312,7 @@ export function createRoomSummaryFromRecord(record: RoomRecord): RoomSummary {
     mintedMetadataUpdatedAt: record.mintedMetadataUpdatedAt,
     mintedMetadataHash: record.mintedMetadataHash,
     permissions: record.permissions,
+    ...(record.world ? { world: { ...record.world } } : {}),
   };
 }
 
@@ -341,6 +344,7 @@ export function createRoomRecordFromCurrent(
     mintedMetadataUpdatedAt: summary.mintedMetadataUpdatedAt,
     mintedMetadataHash: summary.mintedMetadataHash,
     permissions: { ...summary.permissions },
+    ...(summary.world ? { world: { ...summary.world } } : {}),
   };
 }
 
@@ -984,6 +988,7 @@ export function normalizeRoomRecord(
   const fallback = createDefaultRoomRecord(roomId, coordinates);
   const draft = isRoomSnapshotLike(record.draft) ? cloneRoomSnapshot(record.draft) : fallback.draft;
   const published = isRoomSnapshotLike(record.published) ? cloneRoomSnapshot(record.published) : null;
+  const world = normalizeWorldRoomContext(record.world);
 
   return {
     draft,
@@ -1042,6 +1047,7 @@ export function normalizeRoomRecord(
     mintedMetadataHash:
       typeof record.mintedMetadataHash === 'string' ? record.mintedMetadataHash : null,
     permissions: normalizeRoomPermissions(record.permissions),
+    ...(world ? { world } : {}),
   };
 }
 
@@ -1070,6 +1076,28 @@ export function cloneRoomRecord(record: RoomRecord): RoomRecord {
     mintedMetadataUpdatedAt: normalized.mintedMetadataUpdatedAt,
     mintedMetadataHash: normalized.mintedMetadataHash,
     permissions: { ...normalized.permissions },
+    ...(normalized.world ? { world: { ...normalized.world } } : {}),
+  };
+}
+
+function normalizeWorldRoomContext(value: unknown): import('../worlds/model').WorldRoomContext | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<import('../worlds/model').WorldRoomContext>;
+  if (
+    typeof candidate.worldId !== 'string' ||
+    !Number.isSafeInteger(candidate.worldNumber) ||
+    (candidate.worldName !== null && typeof candidate.worldName !== 'string') ||
+    !['owner', 'manager', 'builder', null].includes(candidate.viewerRole ?? null) ||
+    !['invited', 'requested', 'active', 'removed', 'blocked', null].includes(candidate.membershipStatus ?? null) ||
+    typeof candidate.frozen !== 'boolean'
+  ) return null;
+  return {
+    worldId: candidate.worldId,
+    worldNumber: candidate.worldNumber!,
+    worldName: candidate.worldName ?? null,
+    viewerRole: candidate.viewerRole ?? null,
+    membershipStatus: candidate.membershipStatus ?? null,
+    frozen: candidate.frozen,
   };
 }
 
