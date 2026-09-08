@@ -829,6 +829,25 @@ export class EditorEditRuntime {
     return clonePlacedObjectDocument(placedObjects);
   }
 
+  /** World-space stamp origins from one interpolated pointer segment. */
+  placeTileStroke(points: readonly { x: number; y: number }[]): void {
+    if (!this.guardEditable() || points.length === 0) return;
+    if (editorState.paletteMode !== 'smart') {
+      for (const point of points) this.placeTileAt(point.x, point.y);
+      return;
+    }
+    const cells = points.map((point) => {
+      const local = this.toLocalWorldPoint(point.x, point.y);
+      const normalized = this.smartTiles.normalizeStrokeCell(
+        { x: Math.floor(local.x / TILE_SIZE), y: Math.floor(local.y / TILE_SIZE) },
+        this.currentSmartGestureAnchor,
+      );
+      this.currentSmartGestureAnchor = normalized.anchor;
+      return normalized.cell;
+    });
+    this.applySmartDocument(this.smartTiles.applyStrokeCells(this.getSmartDocument(), cells));
+  }
+
   placeTileAt(worldX: number, worldY: number): void {
     if (!this.guardEditable()) {
       return;
@@ -837,17 +856,7 @@ export class EditorEditRuntime {
     const baseTileX = Math.floor(localPoint.x / TILE_SIZE);
     const baseTileY = Math.floor(localPoint.y / TILE_SIZE);
     if (editorState.paletteMode === 'smart') {
-      const rawCell = { x: baseTileX, y: baseTileY };
-      const normalized = this.smartTiles.normalizeStrokeCell(
-        rawCell,
-        this.currentSmartGestureAnchor,
-      );
-      this.currentSmartGestureAnchor = normalized.anchor;
-      this.applySmartDocument(this.smartTiles.applyCells(
-        this.getSmartDocument(),
-        [normalized.cell],
-        'paint',
-      ));
+      this.placeTileStroke([{ x: worldX, y: worldY }]);
       return;
     }
     const layer = this.host.getLayers().get(editorState.activeLayer);

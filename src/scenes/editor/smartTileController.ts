@@ -56,6 +56,19 @@ export class SmartTileController {
     });
   }
 
+  /** Coalesce terrain solves; recipe stamps retain their ordered placement semantics. */
+  applyStrokeCells(
+    document: SmartTerrainDocument,
+    cells: Iterable<SmartCellCoordinate>,
+  ): SmartTerrainDocument {
+    if (getSmartBrushDefinition(this.getSelection().brushId).engine === 'legacy-terrain') {
+      return this.applyCells(document, cells, 'paint');
+    }
+    let next = document;
+    for (const cell of cells) next = this.applyCells(next, [cell], 'paint');
+    return next;
+  }
+
   applyOutlineCells(
     document: SmartTerrainDocument,
     filledCells: Iterable<SmartCellCoordinate>,

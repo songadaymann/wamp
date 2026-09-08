@@ -1150,6 +1150,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.getRoomSnapshotViewForCoordinates(coordinates),
         getRoomSummaryById: (roomId) => this.roomSummariesById.get(roomId) ?? null,
         getRoomSummaries: () => this.roomSummariesById.values(),
+        getRoomSummariesRevision: () => this.worldStreamingController.getRoomSummariesRevision(),
         getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
         getCourseStartRoomRef: (course, lockedStartRoomId) =>
           this.coursePlaybackController.getCourseStartRoomRef(course, lockedStartRoomId),

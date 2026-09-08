@@ -107,6 +107,8 @@ function createHarness(options: {
   const roomsById = new Map((options.rooms ?? []).map((room) => [room.id, room]));
   const summaries = options.summaries ?? [];
   const summariesById = new Map(summaries.map((summary) => [summary.id, summary]));
+  let summariesRevision = 0;
+  const getRoomSummaries = vi.fn(() => summaries);
   const playArrangement = vi.fn<RoomMusicPlaybackPort['playArrangement']>();
   const stopArrangement = vi.fn<RoomMusicPlaybackPort['stopArrangement']>();
   const getCourseStartRoomRef = vi.fn(
@@ -122,7 +124,8 @@ function createHarness(options: {
       getRoomSnapshotViewForCoordinates: (coordinates) =>
         roomsById.get(roomIdFromCoordinates(coordinates)) ?? null,
       getRoomSummaryById: (roomId) => summariesById.get(roomId) ?? null,
-      getRoomSummaries: () => summaries,
+      getRoomSummaries,
+      getRoomSummariesRevision: () => summariesRevision,
       getExpandedRoomIdAt: () => options.expandedRoomIdAt ?? null,
       getCourseStartRoomRef,
     },
@@ -134,6 +137,14 @@ function createHarness(options: {
 
   return {
     controller,
+    getRoomSummaries,
+    summariesById,
+    changeSummaries: (next: WorldRoomSummary[]) => {
+      summaries.splice(0, summaries.length, ...next);
+      summariesById.clear();
+      next.forEach((summary) => summariesById.set(summary.id, summary));
+      summariesRevision += 1;
+    },
     getCourseStartRoomRef,
     playArrangement,
     roomsById,
@@ -403,5 +414,79 @@ describe('OverworldRoomMusicPlaybackController', () => {
       mode: 'world-play',
       transition: 'bar',
     });
+  });
+});
+
+describe('room music selection caching', () => {
+  it('does not rescan world summaries or serialize unchanged music over 60 frames', () => {
+    const music = createDefaultRoomMusic();
+    music.arrangement.laneAssignments.drums[0] = 'drums-1';
+    const musicKeyWork = vi.spyOn(music.arrangement.laneAssignments.drums, 'map');
+    const room = createRoom({ x: 0, y: 0 }, music);
+    const otherRooms = Array.from({ length: 999 }, (_, i) => createRoom({ x: i + 1, y: 0 }, null));
+    const harness = createHarness({
+      rooms: [room],
+      summaries: [createSummary(room, 'expanded', 2), ...otherRooms.map((other) => createSummary(other))],
+    });
+    for (let frame = 0; frame < 60; frame += 1) {
+      harness.controller.sync({ mode: 'play', currentRoomCoordinates: room.coordinates, activeCourseRun: null });
+    }
+    expect(harness.getRoomSummaries).toHaveBeenCalledOnce();
+    expect(musicKeyWork).toHaveBeenCalledOnce();
+    expect(harness.playArrangement).toHaveBeenCalledOnce();
+    musicKeyWork.mockRestore();
+  });
+
+  it('switches to an earlier source when its snapshot hydrates without a summary change', () => {
+    const earlier = createRoom({ x: 0, y: 0 }, createMusic('earlier'));
+    const current = createRoom({ x: 1, y: 0 }, createMusic('fallback'));
+    const harness = createHarness({
+      rooms: [current],
+      summaries: [earlier, current].map((room) => createSummary(room, 'expanded', 2)),
+    });
+    const input = { mode: 'play' as const, currentRoomCoordinates: current.coordinates, activeCourseRun: null };
+    harness.controller.sync(input);
+    harness.roomsById.set(earlier.id, earlier);
+    harness.controller.sync(input);
+    expect(harness.playArrangement).toHaveBeenCalledTimes(2);
+    expect(harness.playArrangement).toHaveBeenLastCalledWith(earlier.music, { mode: 'world-play', transition: 'bar' });
+    expect(harness.getRoomSummaries).toHaveBeenCalledOnce();
+  });
+
+  it('reselects when expanded-room membership changes and stops when the source becomes empty', () => {
+    const earlier = createRoom({ x: 0, y: 0 }, createMusic('earlier'));
+    const current = createRoom({ x: 1, y: 0 }, createMusic('current'));
+    const harness = createHarness({
+      rooms: [earlier, current],
+      summaries: [createSummary(earlier), createSummary(current, 'expanded', 2)],
+    });
+    const input = { mode: 'play' as const, currentRoomCoordinates: current.coordinates, activeCourseRun: null };
+    harness.controller.sync(input);
+    harness.changeSummaries([earlier, current].map((room) => createSummary(room, 'expanded', 2)));
+    harness.controller.sync(input);
+    expect(harness.playArrangement).toHaveBeenLastCalledWith(earlier.music, { mode: 'world-play', transition: 'bar' });
+    harness.roomsById.set(earlier.id, { ...earlier, music: null });
+    harness.roomsById.set(current.id, { ...current, music: null });
+    harness.controller.sync(input);
+    expect(harness.stopArrangement).toHaveBeenLastCalledWith({ transition: 'bar', fadeDurationSec: 0.18, mode: 'world-play' });
+    expect(harness.getRoomSummaries).toHaveBeenCalledTimes(2);
+  });
+
+  it('recognizes replacement music and revised content on the same source object', () => {
+    const room = createRoom({ x: 0, y: 0 }, createMusic('first'));
+    const harness = createHarness({ rooms: [room] });
+    const input = { mode: 'play' as const, currentRoomCoordinates: room.coordinates, activeCourseRun: null };
+    harness.controller.sync(input);
+    room.music = createMusic('replacement');
+    harness.controller.sync(input);
+    const music = room.music;
+    if (music?.kind !== 'stemArrangement') throw new Error('Expected stem music');
+    music.arrangement.laneAssignments.drums[0] = 'revised';
+    room.updatedAt = '2026-09-08T23:59:59.000Z';
+    harness.controller.sync(input);
+    expect(harness.playArrangement).toHaveBeenCalledTimes(3);
+    harness.controller.sync({ ...input, mode: 'browse' });
+    harness.controller.sync(input);
+    expect(harness.playArrangement).toHaveBeenCalledTimes(4);
   });
 });

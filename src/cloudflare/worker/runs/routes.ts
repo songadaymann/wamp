@@ -1,3 +1,4 @@
+import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../../../goals/roomGoals';
 import { cloneRoomSnapshot, type RoomRecord, type RoomSnapshot } from '../../../persistence/roomModel';
 import { computeRunScore, sortCompletedRunsForLeaderboard } from '../../../runs/scoring';
@@ -63,10 +64,8 @@ import {
   computeRoomSnapshotVerificationHash,
   createRoomVerificationTrigger,
   createRunVerificationNonce,
-  relaxVerificationTriggerForTrustTier,
   recordRunVerificationAudit,
   requireVerificationTrace,
-  type RunVerificationFailureReason,
   verifyRoomRunTrace,
 } from './verification';
 import {
@@ -349,85 +348,33 @@ export async function handleRunFinish(
     baseVerificationTrigger === null
       ? 'T0'
       : await loadEffectiveTrustTier(env, auth.user.id);
-  const verificationTrigger =
-    baseVerificationTrigger === null
-      ? null
-      : relaxVerificationTriggerForTrustTier(
-          baseVerificationTrigger,
-          effectiveTrustTier,
-        );
-  const shouldAuditRelaxedVerification =
-    effectiveTrustTier === 'T1' && Boolean(baseVerificationTrigger?.required);
-
+  const verification = await evaluateRunFinalizationVerification(
+    baseVerificationTrigger,
+    effectiveTrustTier,
+    async () => verifyRoomRunTrace({
+      trace: requireVerificationTrace(clampedBody.verificationTrace),
+      binding: {
+        verificationNonce: existing.verificationNonce ?? null,
+        verificationSnapshotHash: existing.verificationSnapshotHash ?? null,
+      },
+      room: snapshot,
+      elapsedMs: clampedBody.elapsedMs,
+    }),
+  );
+  const { status: verificationStatus, reason: verificationReason } = verification;
   let finalBody = clampedBody;
   let finalScore = provisionalScore;
-  let verificationStatus: 'not_required' | 'passed' | 'failed' | 'timeout' = 'not_required';
-  let verificationReason: RunVerificationFailureReason | null = null;
-  let verificationAudit:
-    | {
-        status: 'passed' | 'failed' | 'timeout';
-        reason: RunVerificationFailureReason | null;
-        summary: Record<string, unknown>;
-      }
-    | null = null;
-
-  if (verificationTrigger?.required) {
-    let verificationResult;
-    try {
-      verificationResult = await verifyRoomRunTrace({
-        trace: requireVerificationTrace(clampedBody.verificationTrace),
-        binding: {
-          verificationNonce: existing.verificationNonce ?? null,
-          verificationSnapshotHash: existing.verificationSnapshotHash ?? null,
-        },
-        room: snapshot,
-        elapsedMs: clampedBody.elapsedMs,
-      });
-    } catch (error) {
-      if (!(error instanceof HttpError)) {
-        throw error;
-      }
-      verificationResult = {
-        status: 'failed' as const,
-        reason: 'missing_trace' as const,
-        derivedMetrics: {
-          collectiblesCollected: 0,
-          enemyCollectiblesCollected: 0,
-          enemiesDefeated: 0,
-          checkpointsReached: 0,
-        },
-        summary: {
-          issue: 'missing_trace',
-        },
-      };
-    }
-
-    verificationStatus = verificationResult.status;
-    verificationReason = verificationResult.reason;
-    verificationAudit = {
-      status: verificationResult.status,
-      reason: verificationResult.reason,
-      summary: {
-        trigger: verificationTrigger,
-        verifier: verificationResult.summary,
+  if (verification.result?.status === 'passed') {
+    finalBody = normalizeFinalizedRunBody(
+      snapshot.goal,
+      {
+        ...applyVerifiedRunMetrics(clampedBody, verification.result.derivedMetrics),
+        enemyCollectiblesCollected: verification.result.derivedMetrics.enemyCollectiblesCollected,
       },
-    };
-
-    if (verificationResult.status === 'passed') {
-      finalBody = normalizeFinalizedRunBody(
-        snapshot.goal,
-        {
-        ...clampedBody,
-        collectiblesCollected: verificationResult.derivedMetrics.collectiblesCollected,
-        enemyCollectiblesCollected: verificationResult.derivedMetrics.enemyCollectiblesCollected,
-        enemiesDefeated: verificationResult.derivedMetrics.enemiesDefeated,
-        checkpointsReached: verificationResult.derivedMetrics.checkpointsReached,
-        },
-        metricCaps,
-        reportedElapsedMs,
-      );
-      finalScore = computeRunScore(snapshot.goal, finalBody);
-    }
+      metricCaps,
+      reportedElapsedMs,
+    );
+    finalScore = computeRunScore(snapshot.goal, finalBody);
   }
 
   await env.DB.batch([
@@ -462,31 +409,12 @@ export async function handleRunFinish(
     ),
   ]);
 
-  if (verificationTrigger?.required && verificationAudit) {
+  if (verification.audit) {
     await recordRunVerificationAudit(env, {
       attemptId,
       kind: 'room',
-      status: verificationAudit.status,
-      triggerReason: verificationTrigger.reason ?? 'record_gap',
-      verificationReason: verificationAudit.reason,
-      summary: verificationAudit.summary,
-      trace: finalBody.verificationTrace ?? null,
-      createdAt: finishedAt,
-    });
-  } else if (shouldAuditRelaxedVerification && baseVerificationTrigger) {
-    await recordRunVerificationAudit(env, {
-      attemptId,
-      kind: 'room',
-      status: 'skipped',
-      triggerReason: baseVerificationTrigger.reason ?? 'record_gap',
-      verificationReason: null,
-      summary: {
-        trigger: baseVerificationTrigger,
-        policy: 't1_audit_only',
-        trustTier: effectiveTrustTier,
-        verifier: null,
-      },
-      trace: null,
+      ...verification.audit,
+      trace: verification.audit.status === 'skipped' ? null : finalBody.verificationTrace ?? null,
       createdAt: finishedAt,
     });
   }

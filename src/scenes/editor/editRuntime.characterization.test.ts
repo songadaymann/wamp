@@ -5,6 +5,7 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   editorState,
+  getSelectionTileValue,
   type LayerName,
   type PlacedObject,
 } from '../../config';
@@ -13,6 +14,7 @@ import { createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/
 import type { SmartBrushId } from '../../autotiling/model';
 import { updateGameSettings } from '../../settings/userSettings';
 import { EditorEditRuntime } from './editRuntime';
+import { EditorInteractionController } from './interaction';
 
 vi.mock('phaser', () => ({
   default: {
@@ -473,6 +475,98 @@ describe('editor edit runtime document contracts', () => {
     runtime.undo();
     expect(getTileCoordinates(layers.get('terrain')!)).not.toContain('20,12');
     expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toHaveLength(6);
+  });
+
+  it('submits a skipped pointer segment once in Bresenham order', () => {
+    editorState.paletteMode = 'smart';
+    const host = { placeTileAt: vi.fn(), placeTileStroke: vi.fn() };
+    const interaction = new EditorInteractionController(
+      {} as never, host as never, { getElementById: () => null } as never,
+    ) as unknown as { placeDraggedTileStamp(x: number, y: number): void };
+    interaction.placeDraggedTileStamp(2 * TILE_SIZE, 3 * TILE_SIZE);
+    interaction.placeDraggedTileStamp(6 * TILE_SIZE, 5 * TILE_SIZE);
+    interaction.placeDraggedTileStamp(6 * TILE_SIZE, 5 * TILE_SIZE);
+    expect(host.placeTileAt).toHaveBeenCalledTimes(1);
+    expect(host.placeTileStroke).toHaveBeenCalledExactlyOnceWith([
+      { x: 3 * TILE_SIZE, y: 4 * TILE_SIZE },
+      { x: 4 * TILE_SIZE, y: 4 * TILE_SIZE },
+      { x: 5 * TILE_SIZE, y: 5 * TILE_SIZE },
+      { x: 6 * TILE_SIZE, y: 5 * TILE_SIZE },
+    ]);
+  });
+
+  it('preserves future Smart data when a batched stroke is attempted', () => {
+    const room = createRoom();
+    room.smartTerrain = { ...room.smartTerrain!, version: 999 };
+    const { runtime, host } = createHarness(room);
+    const before = runtime.exportRoomSnapshot();
+    editorState.paletteMode = 'smart';
+    runtime.beginTileBatch();
+    runtime.placeTileStroke([{ x: 48, y: 64 }, { x: 64, y: 64 }]);
+    runtime.commitTileBatch();
+    expect(runtime.exportRoomSnapshot().tileData).toEqual(before.tileData);
+    expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(before.smartTerrain);
+    expect(runtime.hasUndoHistory()).toBe(false);
+    expect(host.updatePersistenceStatus).toHaveBeenCalledWith(expect.stringContaining('newer'));
+  });
+
+  it('keeps batched manual stamps and read-only Smart strokes guarded', () => {
+    const { runtime, setEditable } = createHarness(createRoom());
+    const points = [{ x: 3 * TILE_SIZE, y: 4 * TILE_SIZE }, { x: 4 * TILE_SIZE, y: 4 * TILE_SIZE }];
+    runtime.beginTileBatch();
+    runtime.placeTileStroke(points);
+    runtime.commitTileBatch();
+    expect(runtime.exportRoomSnapshot().tileData.terrain[4].slice(3, 5)).toEqual([getSelectionTileValue(0, 0), getSelectionTileValue(0, 0)]);
+    runtime.undo();
+    const before = runtime.exportRoomSnapshot();
+    editorState.paletteMode = 'smart';
+    setEditable(false);
+    runtime.beginTileBatch();
+    runtime.placeTileStroke(points);
+    runtime.commitTileBatch();
+    expect(runtime.exportRoomSnapshot().tileData).toEqual(before.tileData);
+    expect(runtime.hasUndoHistory()).toBe(false);
+  });
+
+  it.each([
+    'forest.ground', 'forest.feature', 'cave.ground', 'cave.feature',
+    'desert.ground', 'desert.feature', 'gothic.ground', 'gothic.feature',
+    'water.tunnel', 'cyber.concrete', 'cyber.windows', 'cyber.shell',
+    'cyber.rubble', 'cyber.support', 'cyber.neon', 'cyber.fence',
+  ] as SmartBrushId[])('batches %s with exact ordered-stroke output and undo', (brushId) => {
+    editorState.paletteMode = 'smart';
+    editorState.smartMaterial = brushId;
+    editorState.smartStyle = brushId.startsWith('cyber.') ? 'cyber-yellow' : 'forest';
+    const room = createRoom();
+    // Existing manual output must survive beside and underneath generated details.
+    room.tileData.foreground[7][8] = 1;
+    room.tileData.background[8][9] = 2;
+    const sequential = createHarness(room).runtime;
+    const batched = createHarness(room).runtime;
+    const before = batched.exportRoomSnapshot();
+    const points = [
+      ...Array.from({ length: 10 }, (_, i) => ({ x: (4 + i) * TILE_SIZE, y: (5 + Math.floor(i / 3)) * TILE_SIZE })),
+      { x: 6 * TILE_SIZE, y: 6 * TILE_SIZE },
+      { x: -TILE_SIZE, y: 6 * TILE_SIZE },
+    ];
+    sequential.beginTileBatch();
+    batched.beginTileBatch();
+    for (const point of points) sequential.placeTileAt(point.x, point.y);
+    batched.placeTileStroke(points.slice(0, 4));
+    batched.placeTileStroke(points.slice(4));
+    sequential.commitTileBatch();
+    batched.commitTileBatch();
+    const expected = sequential.exportRoomSnapshot();
+    const actual = batched.exportRoomSnapshot();
+    expect(actual.tileData).toEqual(expected.tileData);
+    expect(actual.smartTerrain).toEqual(expected.smartTerrain);
+    batched.undo();
+    expect(batched.exportRoomSnapshot().tileData).toEqual(before.tileData);
+    expect(batched.exportRoomSnapshot().smartTerrain).toEqual(before.smartTerrain);
+    expect(batched.hasUndoHistory()).toBe(false);
+    batched.redo();
+    expect(batched.exportRoomSnapshot().tileData).toEqual(actual.tileData);
+    expect(batched.exportRoomSnapshot().smartTerrain).toEqual(actual.smartTerrain);
   });
 
   it('undoes and redoes a multi-step Smart stroke as one exact transaction', () => {

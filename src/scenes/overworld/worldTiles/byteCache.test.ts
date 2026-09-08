@@ -266,6 +266,8 @@ describe('world tile byte cache deferred persistence', () => {
   });
 
   it('coalesces verified persistent-hit touches into one metadata transaction', async () => {
+    // Keep the zero-delay drain pending until both async digest reads complete.
+    vi.useFakeTimers();
     const first = await createReady('first', 'first');
     const second = await createReady('second', 'second');
     const persistence = new FakeWorldTilePersistence();
