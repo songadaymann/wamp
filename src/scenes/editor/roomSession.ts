@@ -1046,7 +1046,16 @@ export class EditorRoomSession {
 
     const localDraftUpdatedAt = this.getSnapshotTimestamp(localRecord.draft);
     const remoteDraftUpdatedAt = this.getSnapshotTimestamp(remoteRecord.draft);
-    if (localDraftUpdatedAt <= remoteDraftUpdatedAt) {
+    // Missing remote rooms receive a fresh default snapshot on every load.
+    // Its timestamp describes the request, not a saved edit that supersedes
+    // this browser's guest draft.
+    const remoteIsUnclaimedPlaceholder = !remoteRecord.claimedAt
+      && !remoteRecord.claimerUserId
+      && !remoteRecord.claimerAgentId
+      && !remoteRecord.published
+      && !remoteRecord.mintedTokenId
+      && isRoomSnapshotBlank(remoteRecord.draft);
+    if (!remoteIsUnclaimedPlaceholder && localDraftUpdatedAt <= remoteDraftUpdatedAt) {
       return null;
     }
 

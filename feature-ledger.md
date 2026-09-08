@@ -58,3 +58,5 @@
 ## 2026-09-08 code-review cleanup
 
 Canonical branch: `codex/review-cleanup-2026-09-08`. Status: eight review findings implemented with Astra low agents in the sibling `review-cleanup-2026-09-08` worktree. The 1,778-test suite, lint, typecheck, generated bindings, build, DOM contract, Worker safety, and targeted editor/gameplay probes pass. Localhost is seeded for manual editor, music, run, and enemy checks; known baseline smoke-harness failures are recorded in progress.md. Push and hosted deployment are waiting for user acceptance; production is unchanged.
+
+Guest-save manual-QA follow-up: reopening an unclaimed room now restores its saved guest draft instead of preferring a newly generated blank server snapshot. Six regression tests and browser Save/autosave/reload/recovery checks cover the fix; local review continues before push.
