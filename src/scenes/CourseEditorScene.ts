@@ -500,6 +500,7 @@ export class CourseEditorScene extends Phaser.Scene {
       onZoomIn: () => this.zoomIn(),
       onZoomOut: () => this.zoomOut(),
       onSetRoomTitle: (title) => this.setRoomTitle(title),
+      onSetRoomCameraCentered: (centered) => this.getSelectedSlice()?.runtime.setRoomCameraMode(centered),
       onSelectTool: (tool) => {
         applyEditorToolSelection(tool);
         this.updateToolUi();
@@ -2900,6 +2901,7 @@ export class CourseEditorScene extends Phaser.Scene {
     this.uiBridge?.render(
       buildEditorUiViewModel({
         roomTitle: selectedSlice?.roomTitle ?? '',
+        roomCameraCentered: selectedSlice?.runtime.roomCameraMode === 'room',
         roomCoordinates: selectedSlice?.coordinates ?? { x: 0, y: 0 },
         roomGoal: null,
         roomGoalIntroText: null,

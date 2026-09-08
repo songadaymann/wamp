@@ -58,3 +58,7 @@
 ## 2026-09-08 code-review cleanup
 
 Status: live on https://wamp.land after user acceptance. Approved cleanup and guest-refresh recovery merged into current main as 99563142 and pushed. The combined release passes 1,787 tests, lint, typecheck, bindings, build, DOM contract, and Worker safety. API Worker 4a8cedff-ad01-4364-9caf-07a2bc5902a3 and Pages ea700901 are deployed; production smoke and byte-identical frontend assets pass. A live guest draw/autosave/refresh/reopen test restores all 15 tiles and exact Smart Terrain data using browser-only test storage. Full evidence and baseline harness limitations are recorded in progress.md.
+
+## 2026-09-08 — Per-room centered play camera
+
+Canonical branch: `codex/room-centered-camera` in `/tmp/wamp-room-centered-camera`. Status: implemented and verified locally; not deployed. All 1,794 tests and static/build/DOM checks pass. Desktop Canvas and phone WebGL prove saved toggle, fixed view, exit/reentry, respawn, viewport fit, and normal-camera restoration. Next: user review, then deploy the API Worker and Pages together.

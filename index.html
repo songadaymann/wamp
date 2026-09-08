@@ -212,6 +212,7 @@
       </div>
       <div id="editor-drawer-room-tabs" class="editor-drawer-room-tabs" aria-label="Room settings">
         <button class="editor-drawer-tab" type="button" data-editor-room-section="background">Background</button>
+        <button class="editor-drawer-tab" type="button" data-editor-room-section="camera">Camera</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="environment">Environment</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="music">Music</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="sprite">Sprite Editor</button>
@@ -371,6 +372,15 @@
             <button id="btn-editor-layer-guides" class="bar-btn bar-btn-small" type="button">See Layers</button>
           </div>
         </div>
+      </div>
+
+      <div class="sidebar-section" id="room-camera-section" data-mobile-panel="background" data-sidebar-collapsible="true">
+        <div class="section-label">Camera</div>
+        <label class="room-camera-option" for="room-camera-centered">
+          <input id="room-camera-centered" type="checkbox" aria-describedby="room-camera-description" />
+          Center and hold camera
+        </label>
+        <p id="room-camera-description" class="goal-summary">Fit the whole room on screen and keep the camera still while players are inside. Normal camera movement resumes when they leave.</p>
       </div>
 
       <!-- Background Selector -->

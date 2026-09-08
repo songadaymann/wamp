@@ -359,6 +359,7 @@ export function setupEditorSidebarShell(doc: Document = document): void {
   appendSection(scrollShell, sectionById.get('object-palette-section'));
   appendSection(scrollShell, sectionById.get('layers-section'));
   appendSection(scrollShell, sectionById.get('background-section'));
+  appendSection(scrollShell, sectionById.get('room-camera-section'));
   appendSection(scrollShell, sectionById.get('goal-section'));
   appendSection(scrollShell, sectionById.get('course-goal-section'));
   appendSection(scrollShell, sectionById.get('editor-advanced'));

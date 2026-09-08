@@ -871,6 +871,12 @@
           "publishedAt"
         ],
         "properties": {
+          "cameraMode": {
+            "type": "string",
+            "enum": ["follow", "room"],
+            "default": "follow",
+            "description": "Use room to fit and hold the play camera on this room until the player leaves."
+          },
           "id": { "type": "string" },
           "coordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
           "background": { "type": "string" },

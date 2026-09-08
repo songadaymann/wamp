@@ -35,6 +35,7 @@ export interface ZoomDebugState {
 interface OverworldViewportControllerHost {
   scene: Phaser.Scene;
   getMode(): OverworldMode;
+  isRoomCameraFixed?(): boolean;
   getCameraMode(): CameraMode;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
   getInspectZoom(): number;
@@ -206,6 +207,7 @@ export class OverworldViewportController {
   }
 
   adjustZoomByFactor(factor: number, screenX?: number, screenY?: number): void {
+    if (this.host.isRoomCameraFixed?.()) return;
     this.measure('zoom.adjustZoomByFactor', () => {
       const camera = this.host.scene.cameras.main;
       const anchorX = screenX ?? camera.width * 0.5;
@@ -258,6 +260,7 @@ export class OverworldViewportController {
   }
 
   private adjustButtonZoom(factor: number): void {
+    if (this.host.isRoomCameraFixed?.()) return;
     this.measure('zoom.adjustButtonZoom', () => {
       if (
         this.host.getMode() === 'play' &&
@@ -301,6 +304,7 @@ export class OverworldViewportController {
   }
 
   private handleWheelPan(deltaX: number, deltaY: number, deltaMode: number): void {
+    if (this.host.isRoomCameraFixed?.()) return;
     if (this.host.getMode() !== 'browse' && this.host.getCameraMode() !== 'inspect') {
       return;
     }

@@ -119,6 +119,8 @@ export interface RoomSnapshot {
   coordinates: RoomCoordinates;
   title: string | null;
   goalIntroText: string | null;
+  /** Fit and hold the play camera on this room; absent in older snapshots. */
+  cameraMode?: 'follow' | 'room';
   background: string;
   lighting: RoomLightingSettings;
   weather: RoomWeatherSettings;
@@ -419,6 +421,7 @@ export function createDefaultRoomSnapshot(
     coordinates: { ...coordinates },
     title: null,
     goalIntroText: null,
+    cameraMode: 'follow',
     background: DEFAULT_ROOM_BACKGROUND,
     lighting: cloneRoomLightingSettings(null),
     weather: cloneRoomWeatherSettings(null),
@@ -741,6 +744,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot | RoomSnapshotView): RoomSn
     coordinates: { ...room.coordinates },
     title: normalizeRoomTitle(room.title),
     goalIntroText: normalizeRoomGoalIntroText(room.goalIntroText),
+    cameraMode: room.cameraMode === 'room' ? 'room' : 'follow',
     background: normalizeRoomBackground(room.background),
     lighting: normalizeRoomLightingSettings(room.lighting),
     weather: normalizeRoomWeatherSettings(room.weather),
@@ -867,6 +871,7 @@ function normalizeRoomVersionRecord(value: unknown): RoomVersionRecord | null {
 }
 
 export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
+  if (room.cameraMode === 'room') return false;
   if (room.title) {
     return false;
   }

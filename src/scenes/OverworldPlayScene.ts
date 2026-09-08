@@ -1307,6 +1307,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.cameraController = new OverworldCameraController(
       {
         scene: this,
+        getCurrentRoom: () => this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates),
         getWorldWindow: () => this.worldWindow,
         getMode: () => this.mode,
         getCameraMode: () => this.cameraMode,
@@ -1330,6 +1331,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.viewportController = new OverworldViewportController(
       {
         scene: this,
+        isRoomCameraFixed: () => this.cameraController.isRoomCameraFixed(),
         getMode: () => this.mode,
         getCameraMode: () => this.cameraMode,
         getPlayer: () => this.player,
@@ -1957,6 +1959,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       renderHud: () => this.renderHud(),
     });
     this.inspectInputController = new OverworldInspectInputController(this, {
+      isRoomCameraFixed: () => this.cameraController.isRoomCameraFixed(),
       getMode: () => this.mode,
       getCameraMode: () => this.cameraMode,
       setCameraMode: (mode) => {
@@ -2400,6 +2403,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       if (combatStartedAt !== undefined) profiler?.endSegment('controller.combat', combatStartedAt);
       const roomTransitionStartedAt = controllerProfileSlot === 17 ? profiler?.beginSegment() : undefined;
       this.roomTransitionController.maybeAdvancePlayerRoom();
+      this.cameraController.syncRoomCamera();
       this.recordRankedRunTraceFrame(delta, movement);
       if (roomTransitionStartedAt !== undefined) {
         profiler?.endSegment('controller.roomTransition', roomTransitionStartedAt);
@@ -2782,6 +2786,11 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.resizeBackdrop();
     this.updateBackdrop();
     this.viewportController.handleResize();
+    if (this.cameraController.isRoomCameraFixed()) {
+      this.inspectZoom = this.getFitZoomForRoom();
+      this.cameraController.syncRoomCamera(false);
+      return;
+    }
 
     if (this.mode === 'play' && this.cameraMode === 'follow') {
       this.inspectZoom = this.getFitZoomForRoom();
@@ -4903,6 +4912,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   fitLoadedWorld(): void {
+    if (this.cameraController.syncRoomCamera(false)) return;
     this.flowController.fitLoadedWorld(this.worldWindow);
 
     if (this.mode === 'play' && this.cameraMode === 'follow' && this.player) {
@@ -6021,6 +6031,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.input.removeAllListeners();
     this.input.keyboard?.removeAllListeners();
     this.viewportController.destroy();
+    this.cameraController.reset();
     this.hudBridge?.destroy();
     this.hudBridge = null;
     this.combatPresentationController.destroyProjectiles();
@@ -6487,6 +6498,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       zoom: Number(camera.zoom.toFixed(3)),
       mobilePortraitCamera: this.buildMobilePortraitCameraTuningSnapshot(),
       camera: {
+        roomCentered: this.cameraController.isRoomCameraFixed(),
         scrollX: Math.round(camera.scrollX),
         scrollY: Math.round(camera.scrollY),
         width: Math.round(camera.width),

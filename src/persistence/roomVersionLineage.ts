@@ -91,6 +91,7 @@ type CanonicalPlacedObjectPayload = {
 };
 
 type CanonicalRoomFingerprintPayload = {
+  cameraMode?: 'room';
   goal: CanonicalGoalPayload | null;
   goalIntroText: string | null;
   spawnPoint: [number, number] | null;
@@ -137,6 +138,7 @@ export interface RoomVersionLineage {
 
 export function buildRoomVersionFingerprint(snapshot: RoomSnapshot): string {
   const payload: CanonicalRoomFingerprintPayload = {
+    ...(snapshot.cameraMode === 'room' ? { cameraMode: 'room' as const } : {}),
     goal: normalizeGoalForFingerprint(snapshot.goal),
     goalIntroText: snapshot.goalIntroText ?? null,
     spawnPoint: snapshot.spawnPoint

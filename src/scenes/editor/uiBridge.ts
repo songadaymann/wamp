@@ -552,6 +552,12 @@ export class EditorUiBridge {
       this.actions.onRequestRender();
     });
 
+    const cameraInput = this.elements.roomCameraCenteredInput;
+    if (cameraInput) {
+      const onCameraChange = () => this.actions.onSetRoomCameraCentered(cameraInput.checked);
+      cameraInput.addEventListener('change', onCameraChange);
+      this.cleanupCallbacks.push(() => cameraInput.removeEventListener('change', onCameraChange));
+    }
     const commitRoomTitle = () => {
       this.actions.onSetRoomTitle(this.elements.roomTitleInput?.value ?? null);
     };

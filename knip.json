@@ -69,6 +69,7 @@
     "scripts/smoke_jungle_vines.mjs",
     "scripts/smoke_dom_contract.mjs",
     "scripts/smoke_editor_dock.mjs",
+    "scripts/smoke_room_camera.mjs",
     "scripts/smoke_guest_builder_claim_modal.mjs",
     "scripts/smoke_guest_claim_modal.mjs",
     "scripts/smoke_launch_admin_game_jams.mjs",

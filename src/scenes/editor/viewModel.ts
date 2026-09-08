@@ -7,6 +7,7 @@ import type { EditorCourseUiState } from '../../ui/setup/sceneBridge';
 
 export interface BuildEditorUiViewModelOptions {
   roomTitle: string | null;
+  roomCameraCentered?: boolean;
   roomCoordinates: RoomCoordinates;
   roomGoal: RoomGoal | null;
   roomGoalIntroText: string | null;
@@ -83,6 +84,7 @@ export function buildEditorUiViewModel(
 
   return {
     roomTitleValue: roomTitle ?? '',
+    roomCameraCentered: options.roomCameraCentered === true,
     roomCoordinatesText: `Room (${roomCoordinates.x}, ${roomCoordinates.y})`,
     saveStatusText: saveStatus.text,
     saveStatusAccentText: saveStatus.accentText,

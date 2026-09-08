@@ -1209,3 +1209,21 @@ body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-contai
     padding: 6px;
   }
 }
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='camera'] #editor-sidebar-scroll,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='camera'] #room-camera-section {
+  display: flex !important;
+}
+
+.room-camera-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+body[data-editor-dock-shell='true'] #room-camera-section {
+  flex-direction: column;
+  align-items: stretch;
+}

@@ -13,6 +13,10 @@ export function renderEditorUiViewModel(
   viewModel: EditorUiViewModel,
 ): void {
   setValue(elements.roomTitleInput, viewModel.roomTitleValue);
+  if (elements.roomCameraCenteredInput) {
+    elements.roomCameraCenteredInput.checked = viewModel.roomCameraCentered === true;
+    elements.roomCameraCenteredInput.disabled = viewModel.saveDisabled;
+  }
   setText(elements.roomCoordsEls, viewModel.roomCoordinatesText);
   elements.separatorEl?.classList.toggle('hidden', false);
   renderSaveStatus(doc, elements.saveStatusEls, viewModel);

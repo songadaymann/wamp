@@ -245,6 +245,7 @@ export class EditorEditRuntime {
   private readonly smartTiles: SmartTileController;
   private roomGoal: RoomGoal | null = null;
   private roomGoalIntroText: string | null = null;
+  roomCameraMode: 'follow' | 'room' = 'follow';
   private roomSpawnPoint: RoomSpawnPoint | null = null;
   private roomMusic: RoomMusic | null = null;
   private roomDirty = false;
@@ -386,6 +387,7 @@ export class EditorEditRuntime {
 
     this.roomGoal = null;
     this.roomGoalIntroText = null;
+    this.roomCameraMode = 'follow';
     this.roomSpawnPoint = null;
     this.roomMusic = null;
     this.roomDirty = false;
@@ -446,6 +448,7 @@ export class EditorEditRuntime {
 
     this.roomGoal = cloneRoomGoal(room.goal);
     this.roomGoalIntroText = normalizeRoomGoalIntroText(room.goalIntroText);
+    this.roomCameraMode = room.cameraMode === 'room' ? 'room' : 'follow';
     this.roomSpawnPoint = room.spawnPoint ? { ...room.spawnPoint } : null;
     this.roomMusic = cloneRoomMusic(room.music);
     this.host.setPlacedObjects(room.placedObjects.map((placed) => ({ ...placed })));
@@ -586,6 +589,7 @@ export class EditorEditRuntime {
       id: metadata.roomId,
       coordinates: { ...metadata.coordinates },
       title: metadata.title,
+      cameraMode: this.roomCameraMode,
       goalIntroText: this.roomGoal ? normalizeRoomGoalIntroText(this.roomGoalIntroText) : null,
       background: normalizeRoomBackground(this.host.getSelectedBackground()),
       lighting: cloneRoomLightingSettings(this.host.getSelectedLightingSettings()),
@@ -2138,6 +2142,15 @@ export class EditorEditRuntime {
     }
     this.goalPlacementMode = null;
     this.updateRoomGoal(withNpcQuestType(this.roomGoal, questType));
+  }
+
+  setRoomCameraMode(centered: boolean): void {
+    if (!this.guardEditable()) return;
+    const mode = centered ? 'room' : 'follow';
+    if (mode === this.roomCameraMode) return;
+    this.roomCameraMode = mode;
+    this.markRoomDirty();
+    this.host.updateGoalUi();
   }
 
   setGoalIntroText(nextText: string | null): void {

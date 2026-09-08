@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
-import type { RoomCoordinates } from '../../persistence/roomModel';
+import type { RoomCoordinates, RoomSnapshotView } from '../../persistence/roomModel';
 import type { WorldWindow } from '../../persistence/worldModel';
 import type { OverworldMode } from '../sceneData';
 import {
@@ -14,6 +14,7 @@ import {
 interface OverworldCameraControllerHost {
   scene: Phaser.Scene;
   getWorldWindow(): WorldWindow | null;
+  getCurrentRoom(): RoomSnapshotView | null;
   getMode(): OverworldMode;
   getCameraMode(): CameraMode;
   setCameraMode(mode: CameraMode): void;
@@ -33,6 +34,60 @@ interface OverworldCameraControllerOptions {
 }
 
 export class OverworldCameraController {
+  private fixedRoomKey: string | null = null;
+  private cameraTransition: Phaser.Tweens.Tween | null = null;
+
+  isRoomCameraFixed(): boolean {
+    return this.host.getMode() === 'play'
+      && this.host.getPlayer() !== null
+      && this.host.getCurrentRoom()?.cameraMode === 'room';
+  }
+
+  /** Called after room transitions; reads the shared snapshot without cloning it. */
+  syncRoomCamera(animate: boolean = true): boolean {
+    if (!this.isRoomCameraFixed()) {
+      if (this.fixedRoomKey !== null) {
+        this.reset();
+        this.applyCameraMode();
+      }
+      return false;
+    }
+
+    const room = this.host.getCurrentRoom()!;
+    const camera = this.host.scene.cameras.main;
+    const key = `${room.id}:${room.coordinates.x}:${room.coordinates.y}:${camera.width}:${camera.height}`;
+    if (key === this.fixedRoomKey) return true;
+    this.reset();
+    this.fixedRoomKey = key;
+    camera.stopFollow();
+    camera.useBounds = false;
+    const origin = this.host.getRoomOrigin(room.coordinates);
+    // Do not clamp to the normal zoom floor: even narrow portrait screens must fit the whole room.
+    const zoom = Math.min(camera.width / ROOM_PX_WIDTH, camera.height / ROOM_PX_HEIGHT);
+    const scrollX = origin.x + ROOM_PX_WIDTH / 2 - camera.width * camera.originX;
+    const scrollY = origin.y + ROOM_PX_HEIGHT / 2 - camera.height * camera.originY;
+    if (animate) {
+      this.cameraTransition = this.host.scene.tweens.add({
+        targets: camera,
+        scrollX,
+        scrollY,
+        zoom,
+        duration: 250,
+        ease: 'Sine.easeInOut',
+      });
+    } else {
+      camera.setZoom(zoom);
+      camera.setScroll(scrollX, scrollY);
+    }
+    return true;
+  }
+
+  reset(): void {
+    this.cameraTransition?.remove();
+    this.cameraTransition = null;
+    this.fixedRoomKey = null;
+  }
+
   constructor(
     private readonly host: OverworldCameraControllerHost,
     private readonly options: OverworldCameraControllerOptions,
@@ -54,7 +109,7 @@ export class OverworldCameraController {
   }
 
   toggleCameraMode(): void {
-    if (this.host.getMode() !== 'play') {
+    if (this.host.getMode() !== 'play' || this.isRoomCameraFixed()) {
       return;
     }
 
@@ -66,6 +121,7 @@ export class OverworldCameraController {
   }
 
   applyCameraMode(forceCenter: boolean = false): void {
+    if (this.syncRoomCamera(false)) return;
     const camera = this.host.scene.cameras.main;
     const player = this.host.getPlayer();
     if (!player || this.host.getMode() !== 'play') {
@@ -92,6 +148,7 @@ export class OverworldCameraController {
   }
 
   centerCameraOnCoordinates(coordinates: RoomCoordinates): void {
+    if (this.syncRoomCamera(false)) return;
     const camera = this.host.scene.cameras.main;
     const origin = this.host.getRoomOrigin(coordinates);
     this.syncBoundsUsage();
@@ -102,6 +159,7 @@ export class OverworldCameraController {
   }
 
   startFollowCamera(camera: Phaser.Cameras.Scene2D.Camera = this.host.scene.cameras.main): void {
+    if (this.syncRoomCamera(false)) return;
     const player = this.host.getPlayer();
     if (!player) {
       return;
@@ -144,6 +202,6 @@ export class OverworldCameraController {
 
   syncBoundsUsage(): void {
     this.host.scene.cameras.main.useBounds =
-      this.host.getMode() === 'play' && this.host.getCameraMode() === 'follow';
+      this.host.getMode() === 'play' && this.host.getCameraMode() === 'follow' && !this.isRoomCameraFixed();
   }
 }

@@ -57,6 +57,7 @@ export class EditorChromeController {
     uiBridge.render(
       buildEditorUiViewModel({
         roomTitle: this.host.getRoomTitle(),
+        roomCameraCentered: this.editRuntime.roomCameraMode === 'room',
         roomCoordinates: this.host.getRoomCoordinates(),
         roomGoal,
         roomGoalIntroText: this.editRuntime.getGoalIntroText(),

@@ -122,6 +122,7 @@ export interface EditorInspectorState {
 
 export interface EditorUiViewModel {
   roomTitleValue: string;
+  roomCameraCentered?: boolean;
   roomCoordinatesText: string;
   saveStatusText: string;
   saveStatusAccentText: string;
@@ -191,6 +192,7 @@ export interface EditorUiBridgeActions {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onSetRoomTitle: (title: string | null) => void;
+  onSetRoomCameraCentered: (centered: boolean) => void;
   onSelectTool: (tool: ToolName) => void;
   onClearCurrentLayer: () => void;
   onClearAllTiles: () => void;

@@ -14,6 +14,7 @@ type PointerPosition = {
 
 interface OverworldInspectInputHost {
   getMode(): OverworldMode;
+  isRoomCameraFixed?(): boolean;
   getCameraMode(): CameraMode;
   setCameraMode(mode: CameraMode): void;
   applyCameraMode(): void;
@@ -136,6 +137,7 @@ export class OverworldInspectInputController {
   };
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer): void => {
+    if (this.host.isRoomCameraFixed?.()) return;
     if (this.handleTouchPointerDown(pointer)) {
       return;
     }
@@ -160,6 +162,10 @@ export class OverworldInspectInputController {
   };
 
   private readonly handlePointerMove = (pointer: Phaser.Input.Pointer): void => {
+    if (this.host.isRoomCameraFixed?.()) {
+      this.reset();
+      return;
+    }
     if (this.handleTouchPointerMove(pointer)) {
       return;
     }

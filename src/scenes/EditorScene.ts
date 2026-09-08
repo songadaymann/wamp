@@ -899,6 +899,7 @@ export class EditorScene extends Phaser.Scene {
       onZoomIn: () => this.zoomIn(),
       onZoomOut: () => this.zoomOut(),
       onSetRoomTitle: (title) => this.persistenceController.setRoomTitle(title),
+      onSetRoomCameraCentered: (centered) => this.editRuntime.setRoomCameraMode(centered),
       onSelectTool: (tool) => this.toolController.selectTool(tool),
       onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
       onClearAllTiles: () => this.toolController.clearAllTiles(),

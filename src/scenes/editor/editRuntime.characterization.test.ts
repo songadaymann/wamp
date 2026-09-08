@@ -61,9 +61,23 @@ describe('editor edit runtime document contracts', () => {
     editorState.selectedObjectId = null;
   });
 
+  it('marks camera changes dirty, preserves them across reload, and respects read-only rooms', () => {
+    const { runtime, setEditable } = createHarness(createRoom());
+    runtime.setRoomCameraMode(true);
+    expect(runtime.isRoomDirty).toBe(true);
+    const saved = runtime.exportRoomSnapshot();
+    expect(createHarness(saved).runtime.roomCameraMode).toBe('room');
+    setEditable(false);
+    runtime.setRoomCameraMode(false);
+    expect(runtime.roomCameraMode).toBe('room');
+    runtime.reset();
+    expect(runtime.roomCameraMode).toBe('follow');
+  });
+
   it('round-trips tile, object, spawn, goal, music, and metadata document state', () => {
     const room = createRoom();
     room.title = 'Characterization Room';
+    room.cameraMode = 'room';
     room.tileData.terrain[2][3] = 1;
     room.placedObjects = [object('coin-1')];
     room.spawnPoint = { x: 40, y: 64 };
@@ -77,6 +91,7 @@ describe('editor edit runtime document contracts', () => {
       id: room.id,
       coordinates: room.coordinates,
       title: room.title,
+      cameraMode: 'room',
       goalIntroText: 'Reach the flag!',
       spawnPoint: room.spawnPoint,
       goal: room.goal,
