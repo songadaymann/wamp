@@ -61,4 +61,4 @@ Status: live on https://wamp.land after user acceptance. Approved cleanup and gu
 
 ## 2026-09-08 — Per-room centered play camera
 
-Canonical branch: `codex/room-centered-camera` in `/tmp/wamp-room-centered-camera`. Status: implemented and verified locally; not deployed. All 1,794 tests and static/build/DOM checks pass. Desktop Canvas and phone WebGL prove saved toggle, fixed view, exit/reentry, respawn, viewport fit, and normal-camera restoration. Next: user review, then deploy the API Worker and Pages together.
+Canonical branch: `codex/room-centered-camera` in `/tmp/wamp-room-centered-camera`. Status: released to main as `cd5967a1` and deployed to the API Worker and Pages on 2026-09-08. All 1,794 tests and static/build/DOM checks pass. Desktop Canvas and phone WebGL prove saved toggle, fixed view, exit/reentry, respawn, viewport fit, and normal-camera restoration. Production health checks, entry-bundle byte parity, live OpenAPI, and guest Room → Camera → Test verification passed; camera framing stayed fixed while the player moved, with no page errors.
