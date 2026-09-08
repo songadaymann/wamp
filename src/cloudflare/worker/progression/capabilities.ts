@@ -8,11 +8,11 @@ const TRUST_TIER_CAPABILITIES: Record<
   TrustTier,
   { claimLimitPerDay: number; publishLimitPerDay: number; objectLimit: number; collectibleLimit: number }
 > = {
-  T0: { claimLimitPerDay: 1, publishLimitPerDay: 1, objectLimit: 250, collectibleLimit: 50 },
-  T1: { claimLimitPerDay: 2, publishLimitPerDay: 2, objectLimit: 400, collectibleLimit: 75 },
-  T2: { claimLimitPerDay: 4, publishLimitPerDay: 3, objectLimit: 700, collectibleLimit: 100 },
-  T3: { claimLimitPerDay: 6, publishLimitPerDay: 5, objectLimit: 1000, collectibleLimit: 125 },
-  T4: { claimLimitPerDay: 9, publishLimitPerDay: 9, objectLimit: 1500, collectibleLimit: 150 },
+  T0: { claimLimitPerDay: 5, publishLimitPerDay: 5, objectLimit: 250, collectibleLimit: 50 },
+  T1: { claimLimitPerDay: 10, publishLimitPerDay: 10, objectLimit: 400, collectibleLimit: 75 },
+  T2: { claimLimitPerDay: 15, publishLimitPerDay: 15, objectLimit: 700, collectibleLimit: 100 },
+  T3: { claimLimitPerDay: 20, publishLimitPerDay: 20, objectLimit: 1000, collectibleLimit: 125 },
+  T4: { claimLimitPerDay: 25, publishLimitPerDay: 25, objectLimit: 1500, collectibleLimit: 150 },
 };
 
 export function sanitizeOptionalOverride(value: number | string | null | undefined): number | null {
