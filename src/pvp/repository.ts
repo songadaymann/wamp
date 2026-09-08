@@ -1,3 +1,4 @@
+import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import { getApiBaseUrl } from '../api/baseUrl';
 import type {
   PvpMatchSubmissionRequestBody,
@@ -31,18 +32,7 @@ class ApiPvpRepository implements PvpRepository {
     });
 
     if (!response.ok) {
-      let message = `PVP API request failed with status ${response.status}.`;
-      try {
-        const parsed = (await response.json()) as { error?: unknown };
-        if (typeof parsed.error === 'string' && parsed.error.trim()) {
-          message = parsed.error;
-        }
-      } catch {
-        const text = await response.text().catch(() => '');
-        if (text.trim()) {
-          message = text.trim();
-        }
-      }
+      const message = await readApiErrorMessage(response, `PVP API request failed with status ${response.status}.`);
 
       throw new PvpApiError(message, response.status);
     }

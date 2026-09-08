@@ -1,3 +1,4 @@
+import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from '../runs/finalizationVerification';
 import {
   cloneCourseGoal,
   cloneCourseSnapshot,
@@ -68,10 +69,8 @@ import {
   computeCourseSnapshotVerificationHash,
   createCourseVerificationTrigger,
   createRunVerificationNonce,
-  relaxVerificationTriggerForTrustTier,
   recordRunVerificationAudit,
   requireVerificationTrace,
-  type RunVerificationFailureReason,
   verifyCourseRunTrace,
 } from '../runs/verification';
 import {
@@ -513,84 +512,31 @@ export async function handleCourseRunFinish(
     baseVerificationTrigger === null
       ? 'T0'
       : await loadEffectiveTrustTier(env, auth.user.id);
-  const verificationTrigger =
-    baseVerificationTrigger === null
-      ? null
-      : relaxVerificationTriggerForTrustTier(
-          baseVerificationTrigger,
-          effectiveTrustTier,
-        );
-  const shouldAuditRelaxedVerification =
-    effectiveTrustTier === 'T1' && Boolean(baseVerificationTrigger?.required);
-
+  const verification = await evaluateRunFinalizationVerification(
+    baseVerificationTrigger,
+    effectiveTrustTier,
+    async () => verifyCourseRunTrace({
+      trace: requireVerificationTrace(clampedBody.verificationTrace),
+      binding: {
+        verificationNonce: existing.verificationNonce ?? null,
+        verificationSnapshotHash: existing.verificationSnapshotHash ?? null,
+      },
+      course: snapshot,
+      roomsById: await loadCourseVerificationRoomsById(
+        env,
+        snapshot,
+        auth.user.id,
+        auth.user.walletAddress ?? null,
+      ),
+      elapsedMs: clampedBody.elapsedMs,
+    }),
+  );
+  const { status: verificationStatus, reason: verificationReason } = verification;
   let finalBody = clampedBody;
   let finalScore = provisionalScore;
-  let verificationStatus: 'not_required' | 'passed' | 'failed' | 'timeout' = 'not_required';
-  let verificationReason: RunVerificationFailureReason | null = null;
-  let verificationAudit:
-    | {
-        status: 'passed' | 'failed' | 'timeout';
-        reason: RunVerificationFailureReason | null;
-        summary: Record<string, unknown>;
-      }
-    | null = null;
-
-  if (verificationTrigger?.required) {
-    let verificationResult;
-    try {
-      verificationResult = await verifyCourseRunTrace({
-        trace: requireVerificationTrace(clampedBody.verificationTrace),
-        binding: {
-          verificationNonce: existing.verificationNonce ?? null,
-          verificationSnapshotHash: existing.verificationSnapshotHash ?? null,
-        },
-        course: snapshot,
-        roomsById: await loadCourseVerificationRoomsById(
-          env,
-          snapshot,
-          auth.user.id,
-          auth.user.walletAddress ?? null,
-        ),
-        elapsedMs: clampedBody.elapsedMs,
-      });
-    } catch (error) {
-      if (!(error instanceof HttpError)) {
-        throw error;
-      }
-      verificationResult = {
-        status: 'failed' as const,
-        reason: 'missing_trace' as const,
-        derivedMetrics: {
-          collectiblesCollected: 0,
-          enemiesDefeated: 0,
-          checkpointsReached: 0,
-        },
-        summary: {
-          issue: 'missing_trace',
-        },
-      };
-    }
-
-    verificationStatus = verificationResult.status;
-    verificationReason = verificationResult.reason;
-    verificationAudit = {
-      status: verificationResult.status,
-      reason: verificationResult.reason,
-      summary: {
-        trigger: verificationTrigger,
-        verifier: verificationResult.summary,
-      },
-    };
-
-    if (verificationResult.status === 'passed') {
-      finalBody = {
-        ...clampedBody,
-        collectiblesCollected: verificationResult.derivedMetrics.collectiblesCollected,
-        enemiesDefeated: verificationResult.derivedMetrics.enemiesDefeated,
-        checkpointsReached: verificationResult.derivedMetrics.checkpointsReached,
-      };
-      finalScore = computeCourseRunScore(snapshot.goal, finalBody);
-    }
+  if (verification.result?.status === 'passed') {
+    finalBody = applyVerifiedRunMetrics(clampedBody, verification.result.derivedMetrics);
+    finalScore = computeCourseRunScore(snapshot.goal, finalBody);
   }
 
   await env.DB.batch([
@@ -625,31 +571,12 @@ export async function handleCourseRunFinish(
     ),
   ]);
 
-  if (verificationTrigger?.required && verificationAudit) {
+  if (verification.audit) {
     await recordRunVerificationAudit(env, {
       attemptId,
       kind: 'course',
-      status: verificationAudit.status,
-      triggerReason: verificationTrigger.reason ?? 'record_gap',
-      verificationReason: verificationAudit.reason,
-      summary: verificationAudit.summary,
-      trace: finalBody.verificationTrace ?? null,
-      createdAt: finishedAt,
-    });
-  } else if (shouldAuditRelaxedVerification && baseVerificationTrigger) {
-    await recordRunVerificationAudit(env, {
-      attemptId,
-      kind: 'course',
-      status: 'skipped',
-      triggerReason: baseVerificationTrigger.reason ?? 'record_gap',
-      verificationReason: null,
-      summary: {
-        trigger: baseVerificationTrigger,
-        policy: 't1_audit_only',
-        trustTier: effectiveTrustTier,
-        verifier: null,
-      },
-      trace: null,
+      ...verification.audit,
+      trace: verification.audit.status === 'skipped' ? null : finalBody.verificationTrace ?? null,
       createdAt: finishedAt,
     });
   }

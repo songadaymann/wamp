@@ -1,3 +1,4 @@
+import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import { getApiBaseUrl } from '../api/baseUrl';
 
 const ADMIN_KEY_STORAGE_KEY = 'ep_launch_admin_api_key';
@@ -47,18 +48,7 @@ export async function setFeaturedRoomStatus(
   });
 
   if (!response.ok) {
-    let message = `Featured room request failed with status ${response.status}.`;
-    try {
-      const parsed = (await response.json()) as { error?: unknown };
-      if (typeof parsed.error === 'string' && parsed.error.trim()) {
-        message = parsed.error;
-      }
-    } catch {
-      const raw = await response.text();
-      if (raw.trim()) {
-        message = raw;
-      }
-    }
+    const message = await readApiErrorMessage(response, `Featured room request failed with status ${response.status}.`);
 
     throw new Error(message);
   }

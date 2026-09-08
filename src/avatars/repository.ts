@@ -1,3 +1,4 @@
+import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { appendCryptopunkUnlockOverrideHeaders } from './debug';
 import type {
@@ -62,18 +63,7 @@ class ApiAvatarRepository implements AvatarRepository {
     });
 
     if (!response.ok) {
-      let message = `Avatar API request failed with status ${response.status}.`;
-      try {
-        const parsed = (await response.json()) as { error?: unknown };
-        if (typeof parsed.error === 'string' && parsed.error.trim()) {
-          message = parsed.error;
-        }
-      } catch {
-        const raw = await response.text();
-        if (raw.trim()) {
-          message = raw;
-        }
-      }
+      const message = await readApiErrorMessage(response, `Avatar API request failed with status ${response.status}.`);
 
       throw new AvatarApiError(message, response.status);
     }

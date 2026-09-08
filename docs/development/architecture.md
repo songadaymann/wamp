@@ -21,8 +21,8 @@ Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 sto
 - `src/cloudflare/worker/` contains route groups for room storage, auth, chat, runs, leaderboards, admin review, school flows, background uploads, profiles, and share metadata.
 - D1 migrations live under `migrations/`.
 - `src/pages/worker.ts` is bundled by `scripts/build_pages_worker.mjs` to
-  `dist/_worker.js` for Pages-side route aliases and metadata injection. It keeps
-  the existing legacy handler behind the typed Pages entry while routes migrate.
+  `dist/_worker.js` for Pages-side route aliases and metadata injection. The
+  typed entry delegates to `src/pages/routes.ts` and its route collaborators.
 
 ## Realtime
 
@@ -52,3 +52,12 @@ Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 sto
   the inventory deterministic.
 - `npm run dead-code:report` uses Knip as a report-only audit. It is not part of
   `npm run check` or CI.
+- Treat unused-export reports as visibility candidates, not proof that an entire
+  implementation is unused. Schema/catalog constants can be used inside their
+  declaring module; test-facing helpers and command entry points need separate
+  reference checks. The September 2026 cleanup removed two unused forwarding
+  modules after checking callers, without removing catalog or test contracts.
+- Image probe scripts import the direct development dependency `sharp`.
+  The report also identifies the manual `remote_rollout_check.mjs` script's
+  undeclared `ethers` import and the atlas generator's external ImageMagick
+  `magick` command; these are separate tooling prerequisites, not app code.

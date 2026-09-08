@@ -3,6 +3,8 @@ import { editorState } from '../../config';
 import {
   buildCustomSpriteObjectId,
   getCustomSpriteKindLabel,
+  getCustomSpritePixelBounds,
+  type CustomSpritePixelBounds,
   type CustomSpriteDefinition,
   type CustomSpriteKind,
   type CustomSpriteSize,
@@ -39,18 +41,10 @@ import { withActiveEditorScene } from './sceneBridge';
 
 type SpritePaintTool = 'pencil' | 'eraser' | 'fill';
 type SpritePaintDragMode = 'paint' | 'erase';
-type SpritePixelBounds = {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-  width: number;
-  height: number;
-};
 type SpriteClipboard = {
   size: CustomSpriteSize;
   pixels: Array<string | null>;
-  bounds: SpritePixelBounds;
+  bounds: CustomSpritePixelBounds;
 };
 
 const SPRITE_PRESET_COLORS = [
@@ -118,39 +112,6 @@ function saveManualPaletteColors(colors: readonly string[]): void {
   } catch {
     // The in-memory palette still works if browser storage is unavailable.
   }
-}
-
-function getSpritePixelBounds(values: readonly (string | null)[], spriteSize: CustomSpriteSize): SpritePixelBounds | null {
-  let minX: number = spriteSize;
-  let minY: number = spriteSize;
-  let maxX = -1;
-  let maxY = -1;
-
-  for (let index = 0; index < values.length; index += 1) {
-    if (!values[index]) {
-      continue;
-    }
-
-    const x = index % spriteSize;
-    const y = Math.floor(index / spriteSize);
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
-  }
-
-  if (maxX < minX || maxY < minY) {
-    return null;
-  }
-
-  return {
-    minX,
-    minY,
-    maxX,
-    maxY,
-    width: maxX - minX + 1,
-    height: maxY - minY + 1,
-  };
 }
 
 export function setupCustomSpriteEditor(
@@ -445,7 +406,7 @@ export function setupCustomSpriteEditor(
   };
 
   const buildClipboardFromCurrentPixels = (): SpriteClipboard | null => {
-    const bounds = getSpritePixelBounds(pixels, size);
+    const bounds = getCustomSpritePixelBounds(pixels, size);
     if (!bounds) {
       setStatus('Draw something before copying.', 'error');
       return null;

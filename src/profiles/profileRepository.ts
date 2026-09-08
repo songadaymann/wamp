@@ -1,3 +1,4 @@
+import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { appendCryptopunkUnlockOverrideHeaders } from '../avatars/debug';
 import {
@@ -61,18 +62,7 @@ class ApiProfileRepository implements ProfileRepository {
     });
 
     if (!response.ok) {
-      let message = `Profile API request failed with status ${response.status}.`;
-      try {
-        const parsed = (await response.json()) as { error?: unknown };
-        if (typeof parsed.error === 'string' && parsed.error.trim()) {
-          message = parsed.error;
-        }
-      } catch {
-        const raw = await response.text();
-        if (raw.trim()) {
-          message = raw;
-        }
-      }
+      const message = await readApiErrorMessage(response, `Profile API request failed with status ${response.status}.`);
 
       throw new ProfileApiError(message, response.status);
     }

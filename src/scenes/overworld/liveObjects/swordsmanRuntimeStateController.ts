@@ -1,3 +1,4 @@
+import type { CollectSelectionState } from './swordsmanCollectSelection';
 import type { SwordsmanAiState } from '../../../enemies/swordsmanAi';
 import {
   getSwordsmanTraversalEdgeById,
@@ -79,6 +80,10 @@ export class SwordsmanRuntimeStateController {
     runtime.aiTargetX = input.targetX;
     runtime.aiTraversalEdgeId = null;
     runtime.aiTraversalCooldownUntil = input.cooldownUntil;
+  }
+
+  applyCollectSelection(runtime: LoadedRoomObjectRuntimeState, selection: CollectSelectionState): void {
+    Object.assign(runtime, selection);
   }
 
   clearCollectRoute(runtime: LoadedRoomObjectRuntimeState): void {

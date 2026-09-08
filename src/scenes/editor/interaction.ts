@@ -55,6 +55,7 @@ interface EditorInteractionHost {
   removeObjectAt(worldX: number, worldY: number): void;
   placeGoalMarker(tileX: number, tileY: number): void;
   placeTileAt(worldX: number, worldY: number): void;
+  placeTileStroke(points: readonly TilePoint[]): void;
   eraseTileAt(worldX: number, worldY: number): void;
   stampShape(
     kind: EditorShapeKind,
@@ -1116,6 +1117,7 @@ export class EditorInteractionController {
     const dy = -Math.abs(stampOrigin.y - y);
     const sy = y < stampOrigin.y ? 1 : -1;
     let error = dx + dy;
+    const points: TilePoint[] = [];
     while (x !== stampOrigin.x || y !== stampOrigin.y) {
       const doubled = error * 2;
       if (doubled >= dy) {
@@ -1126,8 +1128,9 @@ export class EditorInteractionController {
         error += dx;
         y += sy;
       }
-      this.host.placeTileAt(x * TILE_SIZE, y * TILE_SIZE);
+      points.push({ x: x * TILE_SIZE, y: y * TILE_SIZE });
     }
+    this.host.placeTileStroke(points);
   }
 
   private getDraggedStampOrigin(tileX: number, tileY: number): { x: number; y: number } {

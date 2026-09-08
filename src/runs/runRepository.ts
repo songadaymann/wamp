@@ -1,3 +1,4 @@
+import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import { getApiBaseUrl } from '../api/baseUrl';
 import {
@@ -264,18 +265,7 @@ class ApiRunRepository implements RunRepository {
     });
 
     if (!response.ok) {
-      let message = `Run API request failed with status ${response.status}.`;
-      try {
-        const parsed = (await response.json()) as { error?: unknown };
-        if (typeof parsed.error === 'string' && parsed.error.trim()) {
-          message = parsed.error;
-        }
-      } catch {
-        const raw = await response.text();
-        if (raw.trim()) {
-          message = raw;
-        }
-      }
+      const message = await readApiErrorMessage(response, `Run API request failed with status ${response.status}.`);
 
       throw new RunApiError(message, response.status);
     }

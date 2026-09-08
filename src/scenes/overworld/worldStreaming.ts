@@ -370,6 +370,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private loadedChunkBounds: WorldChunkBounds | null = null;
   private chunkPreviewHashesById = new Map<string, string>();
   private roomSummariesById = new Map<string, WorldRoomSummary>();
+  private roomSummariesRevision = 0;
   private draftRoomsById = new Map<string, RoomSnapshot>();
   private transientRoomOverridesById = new Map<string, RoomSnapshot>();
   private presencePreviewRoomsById = new Map<string, RoomSnapshot>();
@@ -531,6 +532,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.loadedChunkBounds = null;
     this.chunkPreviewHashesById = new Map();
     this.roomSummariesById = new Map();
+    this.roomSummariesRevision += 1;
     this.draftRoomsById = new Map();
     this.transientRoomOverridesById = new Map();
     this.presencePreviewRoomsById = new Map();
@@ -600,6 +602,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.loadedChunkBounds = null;
     this.chunkPreviewHashesById = new Map();
     this.roomSummariesById = new Map();
+    this.roomSummariesRevision += 1;
     this.draftRoomsById = new Map();
     this.transientRoomOverridesById = new Map();
     this.presencePreviewRoomsById = new Map();
@@ -738,6 +741,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       this.draftRoomsById.delete(nextPublishedRoom.id);
       this.previewCache.setRoomSnapshot(nextPublishedRoom);
       this.roomSummariesById.set(nextPublishedRoom.id, createPublishedRoomSummary(nextPublishedRoom));
+      this.roomSummariesRevision += 1;
       this.optimisticPublishedRoomsById.set(nextPublishedRoom.id, nextPublishedRoom);
       this.worldTileController.trackOptimisticPublishedRoom(nextPublishedRoom.id, nextPublishedRoom.version);
       touchedRoomIds.add(nextPublishedRoom.id);
@@ -1906,6 +1910,10 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.roomSummariesById;
   }
 
+  getRoomSummariesRevision(): number {
+    return this.roomSummariesRevision;
+  }
+
   getDraftRoomsById(): Map<string, RoomSnapshot> {
     return this.draftRoomsById;
   }
@@ -2102,6 +2110,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     );
 
     this.roomSummariesById = new Map(nextSummaries.map((summary) => [summary.id, summary]));
+    this.roomSummariesRevision += 1;
     if (this.worldWindow) {
       this.worldWindow.rooms = nextSummaries;
     }
@@ -2800,6 +2809,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     nextWorldWindow.rooms = mergedRoomSummaries;
     this.worldWindow = nextWorldWindow;
     this.roomSummariesById = new Map(mergedRoomSummaries.map((summary) => [summary.id, summary]));
+    this.roomSummariesRevision += 1;
     this.previewCache.hydrateChunkWindow(chunkWindow);
     this.captureChunkPreviewHashes(chunkWindow);
     this.activeChunkRadius = this.getChunkRadius(chunkWindow.chunkBounds);

@@ -622,6 +622,7 @@ export class EditorScene extends Phaser.Scene {
       removeObjectAt: (worldX, worldY) => this.removeObjectAt(worldX, worldY),
       placeGoalMarker: (tileX, tileY) => this.placeGoalMarker(tileX, tileY),
       placeTileAt: (worldX, worldY) => this.editRuntime.placeTileAt(worldX, worldY),
+      placeTileStroke: (points) => this.editRuntime.placeTileStroke(points),
       eraseTileAt: (worldX, worldY) => this.editRuntime.eraseTileAt(worldX, worldY),
       stampShape: (kind, x1, y1, x2, y2, options) => this.editRuntime.stampShape(kind, x1, y1, x2, y2, options),
       floodErase: (tileX, tileY) => this.editRuntime.floodErase(tileX, tileY),
