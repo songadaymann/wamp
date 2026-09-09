@@ -66,3 +66,5 @@ Canonical branch: `codex/room-centered-camera` in `/tmp/wamp-room-centered-camer
 ## 2026-09-09 — Guest replay
 
 Canonical branch `codex/guest-session-replay` in `/tmp/wamp-guest-session-replay`. Implemented and locally verified: desktop gameplay images, allowlisted timeline and screen labels, private admin viewer/filter/scrub/playback, opt-out deletion, and bounded seven-day D1 retention. Canvas/WebGL browser flows and the real Worker/local D1 flow pass, as do focused tests, lint, TypeScript, binding checks and build. Local preview at `http://127.0.0.1:3015/guest-replays.html`; production untouched. Next: review, then migration 0046 followed by API Worker and Pages deployment.
+
+Builder replay is now included in `codex/guest-session-replay`: editor canvas frames plus committed edits, undo/redo, tool selection and save/publish attempts; the viewer shares launch-admin session key storage. Full 1,803-test check and Canvas/WebGL builder browser flows pass. User approved production release; migration 0046 and clean-main API/Pages deployment are next.

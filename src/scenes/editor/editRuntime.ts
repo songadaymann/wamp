@@ -1,3 +1,4 @@
+import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
 import Phaser from 'phaser';
 import {
   getSolidColorFromBackgroundValue,
@@ -251,7 +252,7 @@ export class EditorEditRuntime {
   private roomDirty = false;
   private lastDirtyAt = 0;
   private goalPlacementMode: GoalPlacementMode = null;
-  private readonly history = new EditorHistory<UndoAction>();
+  private readonly history = new EditorHistory<UndoAction>((action) => recordReplayEditorAction(`${action.kind}_changed`));
   private currentBatch: TileAction[] = [];
   private readonly currentBatchActionIndex = new Map<string, number>();
   private currentBatchSmartBefore: RoomSmartTerrainState | null = null;
@@ -2330,6 +2331,7 @@ export class EditorEditRuntime {
     if (!action) {
       return;
     }
+    recordReplayEditorAction('undo');
 
     if (action.kind === 'tiles') {
       const reverseActions: TileAction[] = [];
@@ -2430,6 +2432,7 @@ export class EditorEditRuntime {
     if (!action) {
       return;
     }
+    recordReplayEditorAction('redo');
 
     if (action.kind === 'tiles') {
       const reverseActions: TileAction[] = [];

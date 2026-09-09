@@ -1,3 +1,4 @@
+import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
 import type {
   RoomPermissions,
   RoomRecord,
@@ -96,7 +97,9 @@ export class EditorPersistenceController {
     force: boolean = false,
     options?: SaveDraftOptions,
   ): Promise<RoomRecord | null> {
+    recordReplayEditorAction('save_attempt');
     const record = await this.roomSession.saveDraft(force, options);
+    if (record?.draft) recordReplayEditorAction('draft_saved');
     if (record?.draft) {
       this.host.syncActiveCourseRoomSessionSnapshot(record.draft, { published: false });
     }
@@ -104,6 +107,7 @@ export class EditorPersistenceController {
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
+    recordReplayEditorAction('publish_attempt');
     const publishValidationError = this.roomSession.getPublishValidationError();
     if (publishValidationError) {
       showBusyError(publishValidationError, {

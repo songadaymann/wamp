@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { EditorHistory } from './history';
 
 describe('EditorHistory', () => {
+  it('notifies only committed edits, not undo-stack transfers or resets', () => {
+    const recorded: string[] = [];
+    const history = new EditorHistory<string>(action => recorded.push(action));
+    history.record('tiles'); history.takeUndo(); history.pushRedo('tiles');
+    history.takeRedo(); history.pushUndo('tiles'); history.reset();
+    expect(recorded).toEqual(['tiles']);
+  });
   it('records in order and clears redo only when a new edit is recorded', () => {
     const history = new EditorHistory<string>();
     history.record('tile');

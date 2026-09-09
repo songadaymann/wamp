@@ -2,6 +2,8 @@ export class EditorHistory<TAction> {
   private undoStack: TAction[] = [];
   private redoStack: TAction[] = [];
 
+  constructor(private readonly onRecord?: (action: TAction) => void) {}
+
   reset(): void {
     this.undoStack = [];
     this.redoStack = [];
@@ -10,6 +12,7 @@ export class EditorHistory<TAction> {
   record(action: TAction): void {
     this.undoStack.push(action);
     this.redoStack = [];
+    this.onRecord?.(action);
   }
 
   takeUndo(): TAction | null {

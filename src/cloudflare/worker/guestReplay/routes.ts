@@ -42,6 +42,7 @@ export async function handleGuestReplay(request: Request, url: URL, env: Env): P
     }
     const result = await env.DB.prepare(`SELECT s.id, s.visitor_id, s.started_at, s.entry_path, s.referrer_host, s.viewport,
       s.played, s.moved, s.signup, s.signed_in,
+      EXISTS(SELECT 1 FROM guest_replay_samples b WHERE b.session_id = s.id AND json_extract(b.payload,'$.mode') = 'edit') AS built,
       (SELECT COUNT(*) FROM guest_replay_samples f WHERE f.session_id = s.id) AS samples,
       (SELECT COUNT(*) FROM guest_replay_sessions v WHERE v.visitor_id = s.visitor_id) AS visits
       FROM guest_replay_sessions s ORDER BY started_at DESC LIMIT 100`).all();

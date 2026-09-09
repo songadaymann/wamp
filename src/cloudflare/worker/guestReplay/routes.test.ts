@@ -35,12 +35,12 @@ async function start() { return (await call('/api/guest-replays/start',{visitor,
 describe('guest replay storage', () => {
   it('ingests, deduplicates retries, derives activity, and protects reads', async () => {
     const credentials = await start();
-    const batch = {...credentials,samples:[sample(),{...sample(1),actions:['signup_open','signed_in']}]};
+    const batch = {...credentials,samples:[sample(),{...sample(1),mode:'edit',actions:['tiles_changed','undo','redo','publish_attempt','signup_open','signed_in']}]};
     await call('/api/guest-replays/samples',batch);
     await call('/api/guest-replays/samples',batch);
     await expect(call('/api/admin/guest-replays')).rejects.toMatchObject({status:403});
     const list = await (await call('/api/admin/guest-replays',undefined,true)).json() as {sessions:Record<string,unknown>[]};
-    expect(list.sessions[0]).toMatchObject({samples:2,played:1,moved:1,signup:1,signed_in:1,visits:1});
+    expect(list.sessions[0]).toMatchObject({samples:2,built:1,played:1,moved:1,signup:1,signed_in:1,visits:1});
     expect(list.sessions[0]).not.toHaveProperty('write_token');
     const detail = await (await call(`/api/admin/guest-replays/${credentials.id}`,undefined,true)).json();
     expect(detail.samples).toHaveLength(2);

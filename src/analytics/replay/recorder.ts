@@ -1,6 +1,7 @@
+import { REPLAY_EDITOR_EVENT } from './editorEvents';
 import { getApiBaseUrl } from '../../api/baseUrl';
 import { getAuthDebugState, AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
-import { REPLAY_IMAGE_LIMIT, REPLAY_SECONDS, replayPosition, type ReplayAction, type ReplaySample } from './model';
+import { REPLAY_ACTIONS, REPLAY_IMAGE_LIMIT, REPLAY_SECONDS, replayPosition, type ReplayAction, type ReplaySample } from './model';
 import type { GuestActivitySnapshot } from '../guestActivity';
 import './notice.css';
 
@@ -33,13 +34,14 @@ export function initializeGuestReplay(host: Host): () => void {
   let failures = 0;
   let pending: ReplaySample[] = [];
   const actions: ReplayAction[] = [];
+  let lastTool = '';
   let lastGoal = { room: '', deaths: 0, result: '' };
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
   const notice = document.createElement('div');
   notice.className = 'guest-replay-notice';
   notice.setAttribute('role', 'status');
-  notice.append('We record brief gameplay to improve WAMP. No form entries. ');
+  notice.append('We record brief play and building sessions to improve WAMP. No form entries. ');
   const optOut = document.createElement('button');
   optOut.type = 'button';
   optOut.textContent = 'Don’t record me';
@@ -73,6 +75,11 @@ export function initializeGuestReplay(host: Host): () => void {
     const snapshot = host.snapshot();
     const room = snapshot.roomCoordinates;
     const state = host.state();
+    if (snapshot.mode === 'edit') {
+      const tool = `tool_${state.activeTool}`;
+      if (tool !== lastTool && REPLAY_ACTIONS.includes(tool as ReplayAction)) actions.push(tool as ReplayAction);
+      lastTool = tool;
+    }
     const goal = state.goalRun as {roomId?: string; deaths?: number; result?: string} | null;
     if (goal) {
       if (goal.roomId === lastGoal.room && Number(goal.deaths) > lastGoal.deaths) actions.push('death');
@@ -91,11 +98,11 @@ export function initializeGuestReplay(host: Host): () => void {
     due = false;
     let image: string | null = null;
     // Capture only the game canvas, never DOM, form values, chat, or auth data.
-    // Editor imagery is omitted because it can contain unpublished private work.
-    if (host.snapshot().mode === 'play' && context && host.canvas.width && host.canvas.height) {
+    if (host.snapshot().mode !== 'browse' && context && host.canvas.width && host.canvas.height) {
       try {
-        canvas.width = 640;
-        canvas.height = Math.min(480, Math.round(640 * host.canvas.height / host.canvas.width));
+        const scale = Math.min(640 / host.canvas.width, 480 / host.canvas.height);
+        canvas.width = Math.max(1, Math.round(host.canvas.width * scale));
+        canvas.height = Math.max(1, Math.round(host.canvas.height * scale));
         context.drawImage(host.canvas,0,0,canvas.width,canvas.height);
         image = canvas.toDataURL('image/jpeg',0.35);
         if (image.length > REPLAY_IMAGE_LIMIT) image = canvas.toDataURL('image/jpeg',0.12);
@@ -139,9 +146,14 @@ export function initializeGuestReplay(host: Host): () => void {
   }
   function click(event: MouseEvent): void {
     const target = event.target instanceof Element ? event.target.closest('button') : null;
+    if (host.snapshot().mode === 'edit' && event.target instanceof Element && event.target.closest('[data-object-id]') && actions.length < 12) actions.push('object_selected');
     if (!target) return;
     const action = ACTIONS[target.id] ?? ({test:'test',stop:'stop',restart:'restart'} as Record<string,ReplayAction>)[target.getAttribute('data-editor-shell-action') ?? ''];
     if (action && actions.length < 12) actions.push(action);
+  }
+  function editorAction(event: Event): void {
+    const action = (event as CustomEvent<ReplayAction>).detail;
+    if (!stopped && REPLAY_ACTIONS.includes(action) && actions.length < 12) actions.push(action);
   }
   function visibility(): void {
     if (!credentials || stopped) return;
@@ -156,6 +168,7 @@ export function initializeGuestReplay(host: Host): () => void {
     clearInterval(timer);
     removeFrame();
     notice.remove();
+    window.removeEventListener(REPLAY_EDITOR_EVENT, editorAction);
     document.removeEventListener('click', click);
     document.removeEventListener('visibilitychange',visibility);
     window.removeEventListener('pagehide',pagehide);
@@ -168,6 +181,7 @@ export function initializeGuestReplay(host: Host): () => void {
     stop();
     if (credentials) void post('discard',credentials,true).catch(() => {});
   });
+  window.addEventListener(REPLAY_EDITOR_EVENT, editorAction);
   document.addEventListener('click', click);
   document.addEventListener('visibilitychange',visibility);
   window.addEventListener('pagehide',pagehide);

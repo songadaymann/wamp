@@ -3,6 +3,7 @@ import type { ReplaySample, ReplaySession } from '../analytics/replay/model';
 import './replays.css';
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const key = element<HTMLInputElement>('replay-key');
+try { key.value = sessionStorage.getItem('ep_launch_admin_api_key') ?? ''; } catch { /* Key can be entered manually. */ }
 const status = element('replay-status');
 const visits = element('replay-visits');
 const filter = element<HTMLSelectElement>('replay-filter');
@@ -30,12 +31,12 @@ function draw(): void {
   frame.hidden = !sample.image;
   empty.hidden = !!sample.image;
   if (sample.image) frame.src = sample.image;
-  else empty.textContent = sample.mode === 'play' ? 'Gameplay frame unavailable' : sample.mode === 'edit' ? 'Building — editor imagery is not recorded' : 'Browsing — see the action timeline below';
+  else empty.textContent = sample.mode === 'play' ? 'Gameplay frame unavailable' : sample.mode === 'edit' ? 'Builder frame unavailable' : 'Browsing — see the action timeline below';
   element('replay-detail').textContent = `${sample.screen.replace(/_/g,' ')} · ${sample.mode} · room ${sample.room ?? '—'}${sample.player ? ` · position ${sample.player.x}, ${sample.player.y}` : ''}`;
 }
 function renderVisits(): void {
   visits.replaceChildren();
-  const shown = sessions.filter(s => filter.value === 'all' || (filter.value === 'no_play' && !s.played)
+  const shown = sessions.filter(s => filter.value === 'all' || (filter.value === 'built' && s.built) || (filter.value === 'no_play' && !s.played)
     || (filter.value === 'no_move' && s.played && !s.moved) || (filter.value === 'signup' && s.signup)
     || (filter.value === 'signed_in' && s.signed_in) || (filter.value === 'return' && s.visits > 1));
   for (const session of shown) {
@@ -44,7 +45,7 @@ function renderVisits(): void {
     button.dataset.sessionId = session.id;
     button.setAttribute('aria-pressed', String(current?.id === session.id));
     const date = new Date(session.started_at).toLocaleString();
-    button.textContent = `${date}\n${session.played ? session.moved ? 'Played' : 'Played without moving' : 'Never played'}${session.signup ? ' · signup opened' : ''}${session.signed_in ? ' · signed in' : ''}\n${session.viewport} · ${session.referrer_host || 'Direct / unknown'} · ${session.samples} samples · ${session.visits} visits this week`;
+    button.textContent = `${date}\n${session.built ? 'Built rooms · ' : ''}${session.played ? session.moved ? 'Played' : 'Played without moving' : 'Never played'}${session.signup ? ' · signup opened' : ''}${session.signed_in ? ' · signed in' : ''}\n${session.viewport} · ${session.referrer_host || 'Direct / unknown'} · ${session.samples} samples · ${session.visits} visits this week`;
     button.addEventListener('click', () => { void select(session); });
     visits.append(button);
   }
@@ -100,6 +101,7 @@ element<HTMLFormElement>('replay-auth').addEventListener('submit', event => {
   void (async () => {
     try {
       const data = await client.request<{sessions:ReplaySession[]}>('/api/admin/guest-replays');
+      try { sessionStorage.setItem('ep_launch_admin_api_key',key.value.trim()); } catch { /* Optional convenience only. */ }
       sessions = data.sessions;
       status.textContent = `${sessions.length} recent visits · first five minutes at 1 fps · seven-day retention · up to 100 recordings/day`;
       renderVisits();
@@ -133,3 +135,5 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 }
 requestAnimationFrame(animate);
+
+if (key.value) element<HTMLFormElement>('replay-auth').requestSubmit();
