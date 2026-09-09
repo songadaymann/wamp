@@ -1,6 +1,9 @@
 import type { PagesWorkerEnv } from './model';
 
 const STANDALONE_PAGE_ALIASES = new Map<string, string>([
+  ['/guest-replays', '/__standalone/guest-replays.asset'],
+  ['/guest-replays/', '/__standalone/guest-replays.asset'],
+  ['/guest-replays.html', '/__standalone/guest-replays.asset'],
   ['/jam', '/__standalone/jam.asset'],
   ['/jam.html', '/__standalone/jam.asset'],
   ['/school-admin', '/__standalone/school-admin.asset'],
