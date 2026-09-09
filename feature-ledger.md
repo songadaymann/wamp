@@ -74,3 +74,5 @@ Guest play and building replays are LIVE on main (`f6662533`) at https://wamp.la
 ## 2026-09-09 — Launch event replays and tutorial arrival
 
 Canonical branch `codex/dashboard-replays-arrival` in `/tmp/wamp-guest-session-replay`. Watch replay opens the linked guest recording inside Launch Admin using the existing admin login. Root visits default to -11,-6 for new and returning visitors; explicit destinations remain intact. Local real-recording/dashboard playback, returning arrival, explicit-origin navigation, SQL visit matching and DOM checks pass. Production release requires migration 0047 followed by API Worker and Pages.
+
+LIVE from main `9cd7a1eb`: migration 0047 applied, Worker `15bce7b0-dc3b-4703-b70c-2a356ea90850`, Pages `3192b485`. Full 1,820-test check and public asset parity pass. Production proves guest event → exact embedded replay with shared launch login, scrub/play/close/reopen, and test cleanup, plus new/returning -11,-6 arrival and preserved explicit /r/0/0. Zero page errors. Event links apply to recordings made after visit linkage was deployed; older recordings remain available in the standalone viewer.
