@@ -126,6 +126,7 @@ export interface LaunchStatsRecentSummary {
   at: string;
   actorUserId: string | null;
   actorGuestId?: string | null;
+  replaySessionId?: string | null;
   actorEmail?: string | null;
   actorWalletAddress?: string | null;
   actorDisplayName: string;

@@ -1,3 +1,4 @@
+import { DEFAULT_ARRIVAL_COORDINATES } from '../navigation/defaultArrival';
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildEarlyWorldTileManifestUrl,
@@ -71,12 +72,16 @@ describe('classic early world tile bootstrap', () => {
     expect(parseEarlyWorldTileBootstrapZoom('?worldTilesBootstrapZoom=nope')).toBe(0.18);
   });
 
+  it('keeps the inline bootstrap aligned with the main arrival room', () => {
+    expect(parseEarlyWorldTileFocus('/', '')).toEqual(DEFAULT_ARRIVAL_COORDINATES);
+  });
+
   it('prefers signed room-share paths, accepts safe query coordinates, and defaults safely', () => {
     expect(parseEarlyWorldTileFocus('/r/-17/42', '?x=8&y=9')).toEqual({ x: -17, y: 42 });
     expect(parseEarlyWorldTileFocus('/', '?x=-8&y=9')).toEqual({ x: -8, y: 9 });
-    expect(parseEarlyWorldTileFocus('/', '?x=&y=9')).toEqual({ x: 0, y: 0 });
+    expect(parseEarlyWorldTileFocus('/', '?x=&y=9')).toEqual({ x: -11, y: -6 });
     expect(parseEarlyWorldTileFocus('/', `?x=${Number.MAX_SAFE_INTEGER + 1}&y=9`))
-      .toEqual({ x: 0, y: 0 });
+      .toEqual({ x: -11, y: -6 });
   });
 
   it('selects the five initial pyramid levels at their exact zoom boundaries', () => {

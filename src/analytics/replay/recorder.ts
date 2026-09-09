@@ -1,3 +1,4 @@
+import { getGuestVisitSessionId } from '../guestActivity';
 import { REPLAY_EDITOR_EVENT } from './editorEvents';
 import { getApiBaseUrl } from '../../api/baseUrl';
 import { getAuthDebugState, AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
@@ -133,7 +134,7 @@ export function initializeGuestReplay(host: Host): () => void {
       let referrer = '';
       try { referrer = new URL(document.referrer).hostname; } catch { /* direct visit */ }
       try {
-        const response = await post('start', {visitor,path:location.pathname,referrer,viewport:`${innerWidth}x${innerHeight}`});
+        const response = await post('start', {visitor,visitSessionId:getGuestVisitSessionId(),path:location.pathname,referrer,viewport:`${innerWidth}x${innerHeight}`});
         if (!response.ok) throw new Error('Recording unavailable');
         credentials = await response.json() as {id:string;token:string};
         if (stopped) { await post('discard',credentials); return; }

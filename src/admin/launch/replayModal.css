@@ -1,0 +1,4 @@
+.launch-replay-dialog { width: min(1100px,95vw); height: 90vh; max-height: 90vh; padding: 16px; border: 2px solid #75cddd; background: #101b22; color: #edf2e8; }
+.launch-replay-dialog::backdrop { background: #080e13; }
+.launch-replay-dialog button { margin-bottom: 12px; }
+.launch-replay-dialog iframe { display: block; width: 100%; height: calc(100% - 48px); border: 0; }

@@ -1,5 +1,5 @@
+import { DEFAULT_ARRIVAL_COORDINATES } from './defaultArrival';
 import {
-  DEFAULT_ROOM_COORDINATES,
   type RoomCoordinates,
 } from '../persistence/roomModel';
 import {
@@ -37,7 +37,7 @@ export function getFocusedCoordinatesFromUrl(): RoomCoordinates {
   const y = parseCoordinate(params.get('y'));
 
   if (x === null || y === null) {
-    return { ...DEFAULT_ROOM_COORDINATES };
+    return { ...DEFAULT_ARRIVAL_COORDINATES };
   }
 
   return { x, y };

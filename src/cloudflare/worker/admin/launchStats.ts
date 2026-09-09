@@ -529,6 +529,7 @@ interface VisitOnlySummaryRow {
 }
 
 interface GuestVisitSummaryRow {
+  replay_session_id: string | null;
   at: string;
   actor_guest_id: string;
   actor_display_name: string;
@@ -678,6 +679,10 @@ async function loadGuestVisitSummaries(
           COALESCE(guest_visits.last_edit_at, '')
         ) AS at,
         guest_visits.guest_user_id AS actor_guest_id,
+        (SELECT r.id FROM guest_replay_sessions r WHERE r.visit_session_id = guest_visits.session_id
+         AND r.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         AND EXISTS(SELECT 1 FROM guest_replay_samples f WHERE f.session_id = r.id)
+         ORDER BY r.started_at DESC LIMIT 1) AS replay_session_id,
         guest_visits.guest_display_name AS actor_display_name,
         guest_visits.heartbeat_count AS heartbeat_count,
         MAX(
@@ -708,6 +713,7 @@ async function loadGuestVisitSummaries(
       at: row.at,
       actorUserId: null,
       actorGuestId: row.actor_guest_id,
+      replaySessionId: row.replay_session_id ?? null,
       actorDisplayName: row.actor_display_name,
       signupSource: null,
       sessionCount: null,

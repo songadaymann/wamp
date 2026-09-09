@@ -18,6 +18,7 @@ beforeEach(() => {
   db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
   db.exec(readFileSync('migrations/0046_guest_replays.sql','utf8'));
+  db.exec(readFileSync('migrations/0047_guest_replay_visit_link.sql','utf8'));
   env = {ADMIN_API_KEY:'test-key', DB:{prepare:statement, async batch(statements: D1PreparedStatement[]) {
     db.exec('BEGIN');
     try { const results = []; for (const s of statements) results.push(await s.all()); db.exec('COMMIT'); return results; }
@@ -31,7 +32,7 @@ function call(path: string, body?: unknown, admin = false, method = body ? 'POST
   return handleGuestReplay(request,url,env);
 }
 const sample = (sequence = 0) => ({sequence,time:1000+sequence*1000,mode:'play',screen:'game',room:'1,2',player:{x:sequence,y:3},actions:['welcome_play'],image:null});
-async function start() { return (await call('/api/guest-replays/start',{visitor,path:'/r/1/2',referrer:'example.com',viewport:'1440x900'})).json() as Promise<{id:string;token:string}>; }
+async function start(visitSessionId?: string) { return (await call('/api/guest-replays/start',{visitor,visitSessionId,path:'/r/1/2',referrer:'example.com',viewport:'1440x900'})).json() as Promise<{id:string;token:string}>; }
 describe('guest replay storage', () => {
   it('ingests, deduplicates retries, derives activity, and protects reads', async () => {
     const credentials = await start();
@@ -44,6 +45,16 @@ describe('guest replay storage', () => {
     expect(list.sessions[0]).not.toHaveProperty('write_token');
     const detail = await (await call(`/api/admin/guest-replays/${credentials.id}`,undefined,true)).json();
     expect(detail.samples).toHaveLength(2);
+  });
+  it('links a visit and opens only the requested recording', async () => {
+    const first = await start('dashboard-visit-123');
+    await start('other-visit-456');
+    expect(db.prepare('SELECT visit_session_id FROM guest_replay_sessions WHERE id=?').get(first.id))
+      .toMatchObject({visit_session_id:'dashboard-visit-123'});
+    const response = await call(`/api/admin/guest-replays?session=${first.id}`,undefined,true);
+    const list = await response.json() as {sessions:{id:string}[]};
+    expect(list.sessions.map(s => s.id)).toEqual([first.id]);
+    await expect(call('/api/admin/guest-replays?session=invalid',undefined,true)).rejects.toMatchObject({status:400});
   });
   it('rejects wrong write tokens and foreign origins', async () => {
     const credentials = await start();

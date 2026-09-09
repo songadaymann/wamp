@@ -1,3 +1,6 @@
+// This classic inline script is transpiled without module bundling. Keep its
+// arrival in sync with navigation/defaultArrival (covered by the bootstrap test).
+const DEFAULT_ARRIVAL_COORDINATES = { x: -11, y: -6 } as const;
 declare const __WAMP_EARLY_WORLD_TILE_API_BASE__: string;
 declare const __WAMP_WORLD_TILE_BYTE_CACHE_NAME__: string;
 declare const __WAMP_WORLD_TILE_BYTE_CACHE_HASH_PARAM__: string;
@@ -308,7 +311,7 @@ export function parseEarlyWorldTileFocus(
   const params = new URLSearchParams(search);
   const x = parseSafeEarlyWorldTileCoordinate(params.get('x'));
   const y = parseSafeEarlyWorldTileCoordinate(params.get('y'));
-  return x !== null && y !== null ? { x, y } : { x: 0, y: 0 };
+  return x !== null && y !== null ? { x, y } : { ...DEFAULT_ARRIVAL_COORDINATES };
 }
 
 export function calculateEarlyWorldTileViewport(input: {

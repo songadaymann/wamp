@@ -70,3 +70,7 @@ Canonical branch `codex/guest-session-replay` in `/tmp/wamp-guest-session-replay
 Builder replay is now included in `codex/guest-session-replay`: editor canvas frames plus committed edits, undo/redo, tool selection and save/publish attempts; the viewer shares launch-admin session key storage. Full 1,803-test check and Canvas/WebGL builder browser flows pass. User approved production release; migration 0046 and clean-main API/Pages deployment are next.
 
 Guest play and building replays are LIVE on main (`f6662533`) at https://wamp.land/guest-replays.html, using the existing launch-admin key. Migration 0046 applied; Worker `153f8d7e-f12a-4a19-9bb1-198c2a8af77d`, Pages `8577bfc6`. Live builder capture/admin playback/opt-out, protected reads, entry parity and production smoke pass. Recordings retain the first five minutes at 1 fps for seven days, with a 100/day capture limit. Next: review incoming guest sessions.
+
+## 2026-09-09 — Launch event replays and tutorial arrival
+
+Canonical branch `codex/dashboard-replays-arrival` in `/tmp/wamp-guest-session-replay`. Watch replay opens the linked guest recording inside Launch Admin using the existing admin login. Root visits default to -11,-6 for new and returning visitors; explicit destinations remain intact. Local real-recording/dashboard playback, returning arrival, explicit-origin navigation, SQL visit matching and DOM checks pass. Production release requires migration 0047 followed by API Worker and Pages.

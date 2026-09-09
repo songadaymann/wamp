@@ -15,3 +15,9 @@ button:hover:not(:disabled), button[aria-pressed=true] { background: #284c58; }
 .screen p { padding: 24px; }.controls { margin-top: 16px; } #replay-scrub { width: 100%; margin: 16px 0 0; padding: 0; }
 #replay-events { max-height: 240px; overflow: auto; list-style: none; padding: 0; } #replay-events button { border: 0; background: #101b22; padding: 4px 0; }
 [hidden] { display: none !important; } @media(max-width:800px) { .workspace { grid-template-columns: 1fr; } main { padding:16px; } }
+
+.embedded-replay main { padding: 16px; }
+.embedded-replay header, .embedded-replay main > label, .embedded-replay .workspace > section:first-child { display: none; }
+.embedded-replay .workspace { grid-template-columns: minmax(0,1fr); margin-top: 12px; }
+.embedded-replay .screen { height: min(45vh,420px); }
+.embedded-replay.replay-authorized #replay-auth { display: none; }

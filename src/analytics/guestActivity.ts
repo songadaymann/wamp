@@ -16,6 +16,7 @@ export interface GuestActivitySnapshot {
 const SESSION_STORAGE_KEY = 'ep_guest_visit_session_v1';
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
+let volatileSessionId: string | null = null;
 let initialized = false;
 let sessionReady = false;
 let heartbeatTimer: number | null = null;
@@ -125,7 +126,7 @@ export function getGuestVisitSessionId(): string {
     // Fall through to a new volatile id.
   }
 
-  const next = createSessionId();
+  const next = volatileSessionId ??= createSessionId();
   try {
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, next);
   } catch {

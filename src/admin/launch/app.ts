@@ -1,3 +1,4 @@
+import { setupLaunchReplayModal } from './replayModal';
 import type {
   AdminGameJamParticipant,
   AdminGameJamsResponse,
@@ -70,6 +71,7 @@ const activityRangeSummary = document.getElementById('activity-range-summary') a
 const activityFilterList = document.getElementById('activity-filter-list') as HTMLDivElement | null;
 const activityGrid = document.getElementById('activity-grid') as HTMLDivElement | null;
 const activityFeed = document.getElementById('activity-feed') as HTMLDivElement | null;
+setupLaunchReplayModal(activityFeed);
 const partykitSummary = document.getElementById('partykit-summary') as HTMLDivElement | null;
 const partykitShardsBody = document.getElementById('partykit-shards-body') as HTMLTableSectionElement | null;
 const progressionPanel = document.getElementById('progression-admin-panel') as HTMLElement | null;
@@ -1167,6 +1169,7 @@ function renderActivity(): void {
             ${summary.actorEmail ? `<span>Email: ${escapeHtml(summary.actorEmail)}</span>` : ''}
             ${summary.actorWalletAddress ? `<span>ETH: <code>${escapeHtml(summary.actorWalletAddress)}</code></span>` : ''}
           </div>` : ''}
+          ${summary.replaySessionId ? `<button type="button" data-replay-session="${escapeHtml(summary.replaySessionId)}">Watch replay</button>` : ''}
           ${detail ? `<div class="meta activity-detail">${escapeHtml(detail)}</div>` : ''}
         </article>
       `;

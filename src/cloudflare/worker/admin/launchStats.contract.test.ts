@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LaunchStatsActivityWindow, LaunchStatsRecentSummary } from '../../../admin/model';
 import type { Env } from '../core/types';
@@ -280,5 +281,42 @@ describe('admin activity identities', () => {
     expect(summaries[101]).toEqual(summaries[0]);
     expect(summaries[102]).toMatchObject({ actorEmail: null, actorWalletAddress: null });
     expect(summaries[103]).toMatchObject({ actorEmail: null, actorWalletAddress: null });
+  });
+});
+
+
+describe('dashboard replay visit links', () => {
+  it('links only the same visit, selecting the latest retained nonempty recording', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      for (const migration of ['0027_guest_visits', '0028_guest_activity_timestamps', '0046_guest_replays', '0047_guest_replay_visit_link']) {
+        db.exec(readRepoFile(`migrations/${migration}.sql`));
+      }
+      const now = new Date().toISOString();
+      db.prepare(`INSERT INTO guest_visits
+        (session_id,guest_user_id,guest_display_name,first_seen_at,last_seen_at,mode,last_play_at)
+        VALUES ('visit-one','guest-one','Guest one',?,?,'play',?)`).run(now,now,now);
+      const insert = db.prepare(`INSERT INTO guest_replay_sessions
+        (id,write_token,visitor_id,started_at,expires_at,entry_path,referrer_host,viewport,visit_session_id)
+        VALUES (?,'token','visitor',?,?,'/','','',?)`);
+      for (const [id,visit,started,expires,hasSample] of [
+        ['correct','visit-one','2026-01-01','2099-01-01',true],
+        ['other','visit-two','2026-01-02','2099-01-01',true],
+        ['expired','visit-one','2026-01-03','2000-01-01',true],
+        ['empty','visit-one','2026-01-04','2099-01-01',false],
+      ] as const) {
+        insert.run(id,started,expires,visit);
+        if (hasSample) db.prepare("INSERT INTO guest_replay_samples VALUES (?,0,'{}')").run(id);
+      }
+      const DB = createRecordingDatabase('app', [], query => query.sql.includes('AS replay_session_id')
+        ? {rows: db.prepare(query.sql).all(...query.bindings as []) as Record<string,unknown>[]}
+        : {});
+      const {env} = createEmptyLaunchEnv({DB});
+      const stats = await loadLaunchStats(env);
+      expect(stats.recentSummaries.find(s => s.kind === 'guest_visit')).toMatchObject({replaySessionId:'correct'});
+      db.prepare("DELETE FROM guest_replay_samples WHERE session_id='correct'").run();
+      const afterDelete = await loadLaunchStats(env);
+      expect(afterDelete.recentSummaries.find(s => s.kind === 'guest_visit')).toMatchObject({replaySessionId:null});
+    } finally { db.close(); }
   });
 });

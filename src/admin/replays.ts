@@ -2,6 +2,8 @@ import { createAdminApiClient } from './adminApiClient';
 import type { ReplaySample, ReplaySession } from '../analytics/replay/model';
 import './replays.css';
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const requestedSession = new URLSearchParams(location.search).get('session');
+if (new URLSearchParams(location.search).get('embedded') === '1') document.body.classList.add('embedded-replay');
 const key = element<HTMLInputElement>('replay-key');
 try { key.value = sessionStorage.getItem('ep_launch_admin_api_key') ?? ''; } catch { /* Key can be entered manually. */ }
 const status = element('replay-status');
@@ -100,11 +102,17 @@ element<HTMLFormElement>('replay-auth').addEventListener('submit', event => {
   event.preventDefault();
   void (async () => {
     try {
-      const data = await client.request<{sessions:ReplaySession[]}>('/api/admin/guest-replays');
+      const data = await client.request<{sessions:ReplaySession[]}>(`/api/admin/guest-replays${requestedSession ? '?session='+encodeURIComponent(requestedSession) : ''}`);
       try { sessionStorage.setItem('ep_launch_admin_api_key',key.value.trim()); } catch { /* Optional convenience only. */ }
+      document.body.classList.add('replay-authorized');
       sessions = data.sessions;
       status.textContent = `${sessions.length} recent visits · first five minutes at 1 fps · seven-day retention · up to 100 recordings/day`;
       renderVisits();
+      if (requestedSession) {
+        const selected = sessions.find(s => s.id === requestedSession);
+        if (selected) await select(selected);
+        else status.textContent = 'This recording has expired or was deleted.';
+      }
     } catch (error) { status.textContent = String(error); }
   })();
 });

@@ -40,12 +40,14 @@ export async function handleGuestReplay(request: Request, url: URL, env: Env): P
       const result = await env.DB.prepare('SELECT payload FROM guest_replay_samples WHERE session_id = ? ORDER BY sequence').bind(id).all<{payload: string}>();
       return reply(request, { samples: result.results.map(r => JSON.parse(r.payload)) });
     }
+    const selected = url.searchParams.get('session');
+    if (selected && !ID.test(selected)) throw new HttpError(400, 'Invalid session.');
     const result = await env.DB.prepare(`SELECT s.id, s.visitor_id, s.started_at, s.entry_path, s.referrer_host, s.viewport,
       s.played, s.moved, s.signup, s.signed_in,
       EXISTS(SELECT 1 FROM guest_replay_samples b WHERE b.session_id = s.id AND json_extract(b.payload,'$.mode') = 'edit') AS built,
       (SELECT COUNT(*) FROM guest_replay_samples f WHERE f.session_id = s.id) AS samples,
       (SELECT COUNT(*) FROM guest_replay_sessions v WHERE v.visitor_id = s.visitor_id) AS visits
-      FROM guest_replay_sessions s ORDER BY started_at DESC LIMIT 100`).all();
+      FROM guest_replay_sessions s WHERE (? IS NULL OR s.id = ?) ORDER BY started_at DESC LIMIT 100`).bind(selected, selected).all();
     return reply(request, { sessions: result.results });
   }
   const body = await parseJsonBody<Record<string, unknown>>(request, { maxBytes: 60_000 });
@@ -58,13 +60,14 @@ export async function handleGuestReplay(request: Request, url: URL, env: Env): P
     const since = new Date(now.getTime() - DAY).toISOString();
     // Atomic budget gate: bound anonymous ingestion even under concurrent requests.
     await env.DB.batch([env.DB.prepare(`INSERT INTO guest_replay_sessions
-      (id,write_token,visitor_id,started_at,expires_at,entry_path,referrer_host,viewport)
-      SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM guest_replay_sessions WHERE started_at > ?) < 100
+      (id,write_token,visitor_id,started_at,expires_at,entry_path,referrer_host,viewport,visit_session_id)
+      SELECT ?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM guest_replay_sessions WHERE started_at > ?) < 100
       AND (SELECT COUNT(*) FROM guest_replay_sessions WHERE visitor_id = ? AND started_at > ?) < 10`).bind(
       id, token, body.visitor, now.toISOString(), new Date(now.getTime() + 7 * DAY).toISOString(),
       typeof body.path === 'string' && /^\/[A-Za-z0-9/_,-]*$/.test(body.path) ? body.path.slice(0,120) : '/',
       typeof body.referrer === 'string' && /^[a-zA-Z0-9.-]{0,120}$/.test(body.referrer) ? body.referrer : '',
       typeof body.viewport === 'string' && /^\d{1,5}x\d{1,5}$/.test(body.viewport) ? body.viewport : '',
+      typeof body.visitSessionId === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(body.visitSessionId) ? body.visitSessionId : null,
       since, body.visitor, since,
     )]);
     const accepted = await env.DB.prepare('SELECT id FROM guest_replay_sessions WHERE id = ?').bind(id).first();
