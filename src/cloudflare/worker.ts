@@ -1,3 +1,4 @@
+import { handleGuestReplay, purgeGuestReplays } from './worker/guestReplay/routes';
 import { handleAdminRequest } from './worker/admin/routes';
 import { handleAuthRequest } from './worker/auth/routes';
 import {
@@ -172,6 +173,13 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     handler: ({ request, url, env }) => handleAgentRequest(request, url, env),
   },
   {
+    methods: ['GET', 'DELETE'],
+    pattern: { prefix: '/api/admin/guest-replays' },
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleGuestReplay(request, url, env),
+  },
+
+  {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     pattern: { prefix: '/api/admin/' },
     auth: 'admin',
@@ -219,6 +227,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
   },
   {
     methods: ['POST'],
+    pattern: { prefix: '/api/guest-replays/' },
+    auth: 'public',
+    handler: ({ request, url, env }) => handleGuestReplay(request, url, env),
+  },
+  {
+    methods: ['POST'],
     pattern: '/api/guest-activity/heartbeat',
     auth: 'optional',
     handler: ({ request, env }) => handleGuestActivityHeartbeat(request, env),
@@ -244,6 +258,7 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
 ];
 
 export default {
+  async scheduled(_event: unknown, env: Env): Promise<void> { await purgeGuestReplays(env); },
   async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 

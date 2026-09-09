@@ -85,7 +85,9 @@
     "scripts/world_tile_parity_probe.mjs",
     "scripts/world_tiles.mjs",
     "gen-avatar/prototype-punk-avatar.mjs",
-    "gen-avatar/run-first-test.mjs"
+    "gen-avatar/run-first-test.mjs",
+    "guest-replays.html",
+    "src/admin/replays.ts"
   ],
   "project": [
     "src/**/*.{js,mjs,ts}",

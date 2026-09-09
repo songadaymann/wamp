@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Guest replays · WAMP</title></head><body>
+<main><header><h1>Guest replays</h1><a href="/launch-admin.html">Launch admin</a></header>
+<form id="replay-auth"><label>Admin key <input id="replay-key" type="password" autocomplete="off" required></label><button>Load visits</button></form>
+<p id="replay-status" role="status">First five minutes · gameplay at 1 frame/second · retained for seven days</p>
+<label>Show <select id="replay-filter"><option value="all">All visits</option><option value="no_play">Never played</option><option value="no_move">Played without moving</option><option value="signup">Opened signup</option><option value="signed_in">Signed in</option><option value="return">Multiple visits this week</option></select></label>
+<div class="workspace"><section aria-label="Visits"><div class="visit-head">Visit / activity</div><div id="replay-visits"></div></section>
+<section aria-label="Playback"><h2 id="replay-title">Select a visit</h2><div class="screen"><img id="replay-frame" alt="Recorded gameplay" hidden><p id="replay-empty">Choose a visit to watch its gameplay and action timeline.</p></div>
+<div class="controls"><button id="replay-play" disabled>Play</button><label>Speed <select id="replay-speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label><output id="replay-time">0:00</output><button id="replay-delete" disabled>Delete visit</button></div>
+<input id="replay-scrub" type="range" min="0" max="0" value="0" aria-label="Playback position" disabled>
+<p id="replay-detail"></p><ol id="replay-events"></ol></section></div></main><script type="module" src="/src/admin/replays.ts"></script></body></html>

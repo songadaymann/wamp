@@ -62,3 +62,7 @@ Status: live on https://wamp.land after user acceptance. Approved cleanup and gu
 ## 2026-09-08 — Per-room centered play camera
 
 Canonical branch: `codex/room-centered-camera` in `/tmp/wamp-room-centered-camera`. Status: released to main as `cd5967a1` and deployed to the API Worker and Pages on 2026-09-08. All 1,794 tests and static/build/DOM checks pass. Desktop Canvas and phone WebGL prove saved toggle, fixed view, exit/reentry, respawn, viewport fit, and normal-camera restoration. Production health checks, entry-bundle byte parity, live OpenAPI, and guest Room → Camera → Test verification passed; camera framing stayed fixed while the player moved, with no page errors.
+
+## 2026-09-09 — Guest replay
+
+Canonical branch `codex/guest-session-replay` in `/tmp/wamp-guest-session-replay`. Implemented and locally verified: desktop gameplay images, allowlisted timeline and screen labels, private admin viewer/filter/scrub/playback, opt-out deletion, and bounded seven-day D1 retention. Canvas/WebGL browser flows and the real Worker/local D1 flow pass, as do focused tests, lint, TypeScript, binding checks and build. Local preview at `http://127.0.0.1:3015/guest-replays.html`; production untouched. Next: review, then migration 0046 followed by API Worker and Pages deployment.

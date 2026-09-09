@@ -51,6 +51,7 @@ export default defineConfig(({ mode }) => {
           jam: resolve(process.cwd(), 'jam.html'),
           dashboard: resolve(process.cwd(), 'dashboard.html'),
           launchAdmin: resolve(process.cwd(), 'launch-admin.html'),
+          guestReplays: resolve(process.cwd(), 'guest-replays.html'),
           backgroundAdmin: resolve(process.cwd(), 'background-admin.html'),
           schoolAdmin: resolve(process.cwd(), 'school-admin.html'),
           schoolLogin: resolve(process.cwd(), 'school-login.html'),

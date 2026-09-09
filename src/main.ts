@@ -1,3 +1,4 @@
+import { initializeGuestReplay } from './analytics/replay/recorder';
 import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
 import {
@@ -383,6 +384,15 @@ window.render_game_to_text = () =>
 window.get_room_music_debug_state = () => globalRoomMusicController.getDebugState();
 window.get_sword_hunter_debug = () => getSwordHunterDebugState(game);
 initializeGuestActivityTracking(getGuestActivitySnapshot);
+initializeGuestReplay({
+  canvas: game.canvas,
+  snapshot: getGuestActivitySnapshot,
+  state: getDebugState,
+  onFrame(callback) {
+    game.events.on(Phaser.Core.Events.POST_RENDER, callback);
+    return () => { game.events.off(Phaser.Core.Events.POST_RENDER, callback); };
+  },
+});
 
 if (
   import.meta.env.VITE_ENABLE_TEST_RESET === '1'
