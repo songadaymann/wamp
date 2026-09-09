@@ -447,7 +447,7 @@ function renderGameJamParticipant(participant: AdminGameJamParticipant): string 
       </td>
       <td>
         ${account?.walletAddress
-          ? `<code class="game-jam-wallet" title="${escapeHtml(account.walletAddress)}">${escapeHtml(shortenWallet(account.walletAddress))}</code>`
+          ? `<code class="game-jam-wallet" title="${escapeHtml(account.walletAddress)}">${escapeHtml(account.walletAddress)}</code>`
           : '<span class="meta">No wallet linked</span>'}
       </td>
       <td>${enteredMarkup}</td>
@@ -469,11 +469,6 @@ function normalizeComparableEmail(value: string | null): string {
   return value?.trim().toLowerCase() ?? '';
 }
 
-function shortenWallet(walletAddress: string): string {
-  return walletAddress.length > 16
-    ? `${walletAddress.slice(0, 8)}…${walletAddress.slice(-6)}`
-    : walletAddress;
-}
 
 async function searchProgressionUsers(): Promise<void> {
   if (!adminKey) {
@@ -1131,13 +1126,7 @@ function renderActivity(): void {
 
   if (activityRangeSummary) {
     const filterLabel = getActivityFilterLabel(selectedActivityFilterKey);
-    const filterPhrase =
-      selectedActivityFilterKey === 'all'
-        ? 'grouped player, guest, build, and signup activity'
-        : `${filterLabel.toLowerCase()} activity`;
-    activityRangeSummary.textContent =
-      `Showing ${filterPhrase} in ${selectedRange.description}. ` +
-      'Browse-only guest tabs are counted in guest visitors, but only play/build guests appear in the feed.';
+    activityRangeSummary.textContent = `${filterLabel} · ${selectedRange.label}`;
   }
 
   activityGrid.innerHTML = renderActivityWindowCards(selectedRange);
@@ -1174,6 +1163,10 @@ function renderActivity(): void {
             <span class="meta">${escapeHtml(formatTimestamp(summary.at))}</span>
           </div>
           <div class="activity-summary">${renderRecentSummaryMarkup(summary, selectedRange)}</div>
+          ${summary.actorEmail || summary.actorWalletAddress ? `<div class="meta activity-identity">
+            ${summary.actorEmail ? `<span>Email: ${escapeHtml(summary.actorEmail)}</span>` : ''}
+            ${summary.actorWalletAddress ? `<span>ETH: <code>${escapeHtml(summary.actorWalletAddress)}</code></span>` : ''}
+          </div>` : ''}
           ${detail ? `<div class="meta activity-detail">${escapeHtml(detail)}</div>` : ''}
         </article>
       `;

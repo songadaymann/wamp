@@ -56,6 +56,7 @@ export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
     Promise.all(ACTIVITY_RANGES.map((range) => loadActivityRange(env, now, range))),
     loadPartykitStatus(env),
   ]);
+  await attachActivityIdentities(env, ranges.flatMap((range) => range.recentSummaries));
   const defaultRange =
     ranges.find((range) => range.key === DEFAULT_ACTIVITY_RANGE_KEY) ??
     ranges[0] ??
@@ -1312,4 +1313,25 @@ function buildPartykitStatsUrl(env: Env): string | null {
   return `${protocol}://${host}/parties/${encodeURIComponent(party)}/${encodeURIComponent(
     METRICS_ROOM_ID
   )}/stats`;
+}
+
+// Resolve each account once across time ranges; stay below D1's bind limit.
+export async function attachActivityIdentities(
+  env: Env,
+  summaries: LaunchStatsRecentSummary[],
+): Promise<void> {
+  const ids = [...new Set(summaries.flatMap((summary) => summary.actorUserId ? [summary.actorUserId] : []))];
+  const accounts = new Map<string, { email: string | null; wallet_address: string | null }>();
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const batch = ids.slice(offset, offset + 100);
+    const result = await env.DB.prepare(
+      `SELECT id, email, wallet_address FROM users WHERE id IN (${batch.map(() => '?').join(',')})`
+    ).bind(...batch).all<{ id: string; email: string | null; wallet_address: string | null }>();
+    for (const account of result.results ?? []) accounts.set(account.id, account);
+  }
+  for (const summary of summaries) {
+    const account = summary.actorUserId ? accounts.get(summary.actorUserId) : undefined;
+    summary.actorEmail = account?.email ?? null;
+    summary.actorWalletAddress = account?.wallet_address ?? null;
+  }
 }

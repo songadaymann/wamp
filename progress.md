@@ -220,3 +220,11 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 - Plan: extend canvas capture to editor mode; emit allowlisted committed edit/undo/redo/save/publish events; add builder filter and shared admin-key session storage; validate local browser and Worker; migrate D1 and deploy from clean main; verify production.
 - Recorder images now preserve the source canvas aspect ratio. Form values and DOM/chat text are not serialized.
 - Validation passed: full `npm run check` (239 files / 1,803 tests, lint, TypeScript, generated bindings, build). Real Worker/local D1 browser flow in Canvas and WebGL captured changing editor images, committed painting, undo, redo, save attempt, builder filtering, playback and opt-out; zero page errors. Inspected screenshots in `/tmp/wamp-builder-replay-browser`.
+
+## 2026-09-09 — Launch Admin clarity
+
+- Swapped Recent Activity and Game Jams in page order and native hash navigation.
+- Added protected activity email/full wallet identities with deduplicated account lookups in batches of 100; guests and deleted accounts retain null identities. Game Jam wallets no longer truncate.
+- Reduced header copy and decorative framing, standardized type sizes, and collapsed secondary world/activity totals. Contact information uses a case-preserving monospace font.
+- Verified 18 focused contracts, lint, typecheck, production build, and desktop/mobile browser smoke. Local API returns 403 without an admin key and 200 with five activity ranges and populated account emails.
+- Local review runs at localhost:3003/launch-admin.html with an isolated copy of the previous QA database; production is unchanged.

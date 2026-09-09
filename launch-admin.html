@@ -64,8 +64,8 @@
         margin: 0;
         overflow-x: hidden;
         background:
-          linear-gradient(rgba(121, 204, 222, 0.07) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(121, 204, 222, 0.07) 1px, transparent 1px),
+          linear-gradient(#203039 1px, transparent 1px),
+          linear-gradient(90deg, #203039 1px, transparent 1px),
           var(--black);
         background-size: 32px 32px;
         color: var(--ink);
@@ -105,11 +105,11 @@
       }
 
       h1 {
-        font-size: clamp(22px, 3vw, 38px);
+        font-size: 24px;
       }
 
       h2 {
-        font-size: clamp(17px, 2vw, 24px);
+        font-size: 24px;
       }
 
       h3 {
@@ -160,7 +160,7 @@
       .label {
         color: var(--blue-deep);
         font-family: var(--pixel-font);
-        font-size: 10px;
+        font-size: 12px;
         letter-spacing: 0.04em;
         text-transform: uppercase;
       }
@@ -179,7 +179,7 @@
       .masthead-copy p {
         max-width: 720px;
         color: var(--muted);
-        font-size: 15px;
+        font-size: 14px;
       }
 
       .masthead-status {
@@ -247,7 +247,7 @@
         margin: 2px 4px 8px;
         color: var(--cream);
         font-family: var(--pixel-font);
-        font-size: 11px;
+        font-size: 12px;
         text-transform: uppercase;
       }
 
@@ -281,7 +281,7 @@
         flex: 0 0 auto;
         border: 2px solid currentColor;
         font-family: var(--pixel-font);
-        font-size: 13px;
+        font-size: 12px;
         line-height: 1;
       }
 
@@ -299,14 +299,14 @@
         background: var(--red);
         color: var(--cream);
         font-family: var(--pixel-font);
-        font-size: 9px;
+        font-size: 12px;
         text-align: center;
       }
 
       .nav-rule {
         height: 2px;
         margin: 6px 4px;
-        background: rgba(255, 243, 219, 0.3);
+        background: #615b65;
       }
 
       .admin-content {
@@ -340,7 +340,7 @@
       }
 
       .section-heading p {
-        color: rgba(24, 22, 28, 0.72);
+        color: #615b65;
       }
 
       .admin-section[data-tone="yellow"] {
@@ -422,14 +422,14 @@
         display: block;
         color: var(--ink);
         font-family: var(--pixel-font);
-        font-size: clamp(19px, 2.2vw, 30px);
+        font-size: 24px;
         line-height: 1.1;
       }
 
       .meta,
       .status {
         color: var(--muted);
-        font-size: 13px;
+        font-size: 12px;
         overflow-wrap: anywhere;
       }
 
@@ -452,14 +452,14 @@
         border-radius: 0;
         background: #fff;
         color: var(--ink);
-        box-shadow: inset 2px 2px 0 rgba(24, 22, 28, 0.1);
+        box-shadow: inset 2px 2px 0 #615b65;
       }
 
       input:focus,
       select:focus,
       textarea:focus {
         border-color: var(--green);
-        outline: 3px solid rgba(39, 123, 48, 0.18);
+        outline: 3px solid #277b30;
         outline-offset: 0;
       }
 
@@ -502,7 +502,7 @@
       button:disabled {
         cursor: not-allowed;
         filter: grayscale(0.7);
-        opacity: 0.48;
+        color: var(--muted); background: #e4dfd5;
         transform: none;
         box-shadow: none;
       }
@@ -563,7 +563,7 @@
         border: 2px solid var(--ink);
         background: var(--cream);
         color: var(--muted);
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 700;
       }
 
@@ -717,7 +717,7 @@
       .photo-preview-unavailable > span:first-child,
       .admin-empty-state > span:first-child {
         font-family: var(--pixel-font);
-        font-size: 28px;
+        font-size: 24px;
       }
 
       .photo-card-copy {
@@ -793,11 +793,11 @@
 
       @keyframes selected-flash {
         0% {
-          box-shadow: 0 0 0 0 rgba(121, 204, 222, 0.75);
+          box-shadow: 0 0 0 0 #203039;
         }
 
         100% {
-          box-shadow: 0 0 0 20px rgba(121, 204, 222, 0);
+          box-shadow: 0 0 0 20px #203039;
         }
       }
 
@@ -864,7 +864,7 @@
 
       .comment-review-body {
         padding: 10px;
-        border: 2px solid rgba(24, 22, 28, 0.18);
+        border: 2px solid #615b65;
         background: #fff;
         color: var(--ink);
         line-height: 1.55;
@@ -896,7 +896,7 @@
       .activity-filter-count {
         padding: 2px 5px;
         border: 1px solid currentColor;
-        font-size: 10px;
+        font-size: 12px;
       }
 
       .activity-stat-card {
@@ -915,7 +915,7 @@
       }
 
       .activity-stat-card .value {
-        font-size: clamp(18px, 1.7vw, 25px);
+        font-size: 24px;
       }
 
       .activity-tone-people,
@@ -1012,7 +1012,7 @@
       th,
       td {
         padding: 10px;
-        border-bottom: 2px solid rgba(24, 22, 28, 0.16);
+        border-bottom: 2px solid #615b65;
         text-align: left;
       }
 
@@ -1020,7 +1020,7 @@
         background: var(--cream);
         color: var(--blue-deep);
         font-family: var(--pixel-font);
-        font-size: 9px;
+        font-size: 12px;
         text-transform: uppercase;
       }
 
@@ -1116,7 +1116,7 @@
         .nav-icon {
           width: 24px;
           height: 24px;
-          font-size: 11px;
+          font-size: 12px;
         }
 
         .overview-grid {
@@ -1130,7 +1130,7 @@
 
       @media (max-width: 680px) {
         body {
-          font-size: 13px;
+          font-size: 12px;
         }
 
         .admin-masthead,
@@ -1174,9 +1174,22 @@
         .section-icon {
           width: 24px;
           height: 24px;
-          font-size: 11px;
+          font-size: 12px;
         }
       }
+      h2 { overflow-wrap: anywhere; }
+      /* Quiet structure keeps the feed and review actions in focus. */
+      .admin-masthead, .auth-strip, .admin-nav, .section-heading, .panel, .card { box-shadow: none; }
+      .section-heading { border-width: 0 0 2px; background: var(--paper); }
+      .panel { border-width: 0; }
+      .activity-feed { gap: 0; }
+      .activity-row { border-width: 0 0 1px; background: var(--paper); padding: 16px 0; }
+      .activity-identity { display: grid; gap: 2px; margin-top: 6px; overflow-wrap: anywhere; }
+      .activity-identity, .game-jam-contact, .game-jam-wallet { font-family: "Courier New", monospace; }
+      .activity-identity code, .game-jam-wallet { font-family: "Courier New", monospace; overflow-wrap: anywhere; white-space: normal; user-select: all; }
+      .secondary-details summary, details.panel > summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+      .secondary-details[open] summary { margin-bottom: 12px; }
+      .cards .card { border-width: 0 0 1px; }
     </style>
   </head>
   <body>
@@ -1184,11 +1197,10 @@
       <header class="admin-masthead">
         <div class="masthead-copy">
           <div>
-            <span class="masthead-kicker">WAMP Operator Console</span>
             <h1>Control Room</h1>
 <a href="/guest-replays.html">Guest replays</a>
           </div>
-          <p>Traffic, player support, content review, and world infrastructure in one place.</p>
+
         </div>
         <div class="masthead-status">
           <span class="label">Last Snapshot</span>
@@ -1216,7 +1228,7 @@
         <nav class="admin-nav" aria-label="Control room sections">
           <div class="admin-nav-title">Jump To</div>
           <a href="#overview"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">Overview</span></a>
-          <a href="#game-jams"><span class="nav-icon" aria-hidden="true">★</span><span class="nav-label">Game Jams</span></a>
+          <a href="#activity"><span class="nav-icon" aria-hidden="true">↯</span><span class="nav-label">Activity</span></a>
           <a href="#photo-review">
             <span class="nav-icon" aria-hidden="true">▣</span>
             <span class="nav-label">Photo Review</span>
@@ -1225,7 +1237,7 @@
           <a href="#sprite-review"><span class="nav-icon" aria-hidden="true">◆</span><span class="nav-label">Sprites</span></a>
           <a href="#comment-review"><span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Comments</span></a>
           <a href="#builders"><span class="nav-icon" aria-hidden="true">▲</span><span class="nav-label">Builders</span></a>
-          <a href="#activity"><span class="nav-icon" aria-hidden="true">↯</span><span class="nav-label">Activity</span></a>
+          <a href="#game-jams"><span class="nav-icon" aria-hidden="true">★</span><span class="nav-label">Game Jams</span></a>
           <a href="#infrastructure"><span class="nav-icon" aria-hidden="true">⌁</span><span class="nav-label">Infrastructure</span></a>
           <div class="nav-rule"></div>
           <a href="/suspicious-admin.html"><span class="nav-icon" aria-hidden="true">!</span><span class="nav-label">Suspicious Runs</span></a>
@@ -1237,9 +1249,7 @@
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">◎</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">01 / Status</span>
                 <h2>System Overview</h2>
-                <p>The launch pulse at a glance. Problems rise to the top.</p>
               </div>
             </header>
             <div class="overview-grid">
@@ -1254,56 +1264,31 @@
                 <h3>Configuration</h3>
                 <div id="config-chips" class="chips"></div>
               </section>
-              <section class="panel stack overview-wide">
-                <div class="panel-title-row">
-                  <h3>World Totals</h3>
-                  <span class="meta">All-time platform counts</span>
-                </div>
+              <details class="panel stack overview-wide"><summary>World totals</summary>
+
                 <div id="totals-grid" class="grid cards"></div>
-              </section>
+              </details>
             </div>
           </section>
 
-          <section id="game-jams" class="admin-section" data-tone="green">
+          <section id="activity" class="admin-section" data-tone="red">
             <header class="section-heading">
-              <span class="section-icon" aria-hidden="true">★</span>
+              <span class="section-icon" aria-hidden="true">↯</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">02 / Events</span>
-                <h2>Game Jams</h2>
-                <p>See who entered, how to identify them, and which level they submitted.</p>
+                <h2>Recent Activity</h2>
               </div>
             </header>
             <section class="panel stack">
-              <div class="game-jam-toolbar">
+              <div class="activity-toolbar">
+                <div class="meta" id="activity-range-summary">Choose a time window to see recent platform activity.</div>
                 <label class="field">
-                  <span class="label">Game Jam</span>
-                  <select id="game-jam-select" aria-label="Choose a Game Jam"></select>
+                  <span class="label">Time Window</span>
+                  <select id="activity-range-select"></select>
                 </label>
-                <button id="game-jam-refresh-button" type="button">
-                  <span aria-hidden="true">↻</span> Refresh Jams
-                </button>
-                <div id="game-jam-status" class="status">Paste the admin key to load entrants and submissions.</div>
               </div>
-              <div id="game-jam-summary" class="grid cards"></div>
-              <div class="table-wrap">
-                <table class="game-jam-table">
-                  <thead>
-                    <tr>
-                      <th>Person / Account</th>
-                      <th>Contact Email</th>
-                      <th>Wallet</th>
-                      <th>Entry</th>
-                      <th>Submission</th>
-                      <th>Level</th>
-                    </tr>
-                  </thead>
-                  <tbody id="game-jam-participants-body">
-                    <tr>
-                      <td colspan="6" class="meta">Game Jam data is locked.</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              <div id="activity-filter-list" class="activity-filter-list" role="group" aria-label="Activity type"></div>
+              <details class="secondary-details"><summary>Activity totals</summary><p class="meta">Guest visitors includes browsing; the feed shows guests who played or built.</p><div id="activity-grid" class="grid cards"></div></details>
+              <div id="activity-feed" class="activity-feed"></div>
             </section>
           </section>
 
@@ -1311,9 +1296,7 @@
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">▣</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">03 / Content</span>
                 <h2>Photo Approvals</h2>
-                <p>Review room backgrounds and manage who can upload them.</p>
               </div>
             </header>
             <div class="photo-workspace">
@@ -1344,7 +1327,6 @@
 
               <aside class="panel stack photo-access-panel">
                 <div>
-                  <span class="section-kicker">Upload Permissions</span>
                   <h3>Builder Photo Access</h3>
                 </div>
                 <p class="meta">Grant photo upload or automatic approval privileges to a trusted builder.</p>
@@ -1388,9 +1370,7 @@
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">◆</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">04 / Content</span>
                 <h2>Community Sprites</h2>
-                <p>Hide a sprite from discovery and future reuse. Existing rooms keep rendering their saved copy.</p>
               </div>
             </header>
             <section class="panel stack">
@@ -1420,9 +1400,7 @@
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">✎</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">04 / Content</span>
                 <h2>Room Comment Review</h2>
-                <p>Moderate player comments without leaving the control room.</p>
               </div>
             </header>
             <section id="room-comments-admin-panel" class="panel stack">
@@ -1457,9 +1435,7 @@
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">▲</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">05 / Support</span>
                 <h2>Builder Cap Overrides</h2>
-                <p>Inspect a builder and grant additional room-making capacity.</p>
               </div>
             </header>
             <section id="progression-admin-panel" class="panel stack">
@@ -1512,26 +1488,44 @@
             </section>
           </section>
 
-          <section id="activity" class="admin-section" data-tone="red">
+          <section id="game-jams" class="admin-section" data-tone="green">
             <header class="section-heading">
-              <span class="section-icon" aria-hidden="true">↯</span>
+              <span class="section-icon" aria-hidden="true">★</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">06 / Pulse</span>
-                <h2>Recent Activity</h2>
-                <p>See who played, built, signed up, claimed, or published.</p>
+                <h2>Game Jams</h2>
               </div>
             </header>
             <section class="panel stack">
-              <div class="activity-toolbar">
-                <div class="meta" id="activity-range-summary">Choose a time window to see recent platform activity.</div>
+              <div class="game-jam-toolbar">
                 <label class="field">
-                  <span class="label">Time Window</span>
-                  <select id="activity-range-select"></select>
+                  <span class="label">Game Jam</span>
+                  <select id="game-jam-select" aria-label="Choose a Game Jam"></select>
                 </label>
+                <button id="game-jam-refresh-button" type="button">
+                  <span aria-hidden="true">↻</span> Refresh Jams
+                </button>
+                <div id="game-jam-status" class="status">Paste the admin key to load entrants and submissions.</div>
               </div>
-              <div id="activity-filter-list" class="activity-filter-list" role="group" aria-label="Activity type"></div>
-              <div id="activity-grid" class="grid cards"></div>
-              <div id="activity-feed" class="activity-feed"></div>
+              <div id="game-jam-summary" class="grid cards"></div>
+              <div class="table-wrap">
+                <table class="game-jam-table">
+                  <thead>
+                    <tr>
+                      <th>Person / Account</th>
+                      <th>Contact Email</th>
+                      <th>Wallet</th>
+                      <th>Entry</th>
+                      <th>Submission</th>
+                      <th>Level</th>
+                    </tr>
+                  </thead>
+                  <tbody id="game-jam-participants-body">
+                    <tr>
+                      <td colspan="6" class="meta">Game Jam data is locked.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </section>
           </section>
 
@@ -1539,9 +1533,7 @@
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">⌁</span>
               <div class="section-heading-copy">
-                <span class="section-kicker">07 / Network</span>
                 <h2>Infrastructure</h2>
-                <p>Presence, shards, and the external systems behind WAMP.</p>
               </div>
             </header>
             <section class="panel stack">

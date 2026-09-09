@@ -98,12 +98,12 @@ describe('admin UI executable entry contract', () => {
     );
     expect(hashLinks).toEqual([
       '#overview',
-      '#game-jams',
+      '#activity',
       '#photo-review',
       '#sprite-review',
       '#comment-review',
       '#builders',
-      '#activity',
+      '#game-jams',
       '#infrastructure',
     ]);
 

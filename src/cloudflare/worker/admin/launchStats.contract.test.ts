@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { LaunchStatsActivityWindow } from '../../../admin/model';
+import type { LaunchStatsActivityWindow, LaunchStatsRecentSummary } from '../../../admin/model';
 import type { Env } from '../core/types';
-import { loadLaunchStats } from './launchStats';
+import { attachActivityIdentities, loadLaunchStats } from './launchStats';
 import {
   createRecordingDatabase,
   normalizeSql,
@@ -264,3 +264,21 @@ function createEmptyLaunchEnv(overrides: Partial<Env> = {}): {
     jamQueries,
   };
 }
+
+describe('admin activity identities', () => {
+  it('deduplicates accounts, bounds query bindings, and leaves guests unidentified', async () => {
+    const queries: RecordedD1Query[] = [];
+    const wallet = '0x1234567890abcdef1234567890abcdef12345678';
+    const DB = createRecordingDatabase('app', queries, (query) => ({
+      rows: query.bindings.filter((id) => id !== 'deleted').map((id) => ({ id, email: `${id}@example.test`, wallet_address: wallet })),
+    }));
+    const summaries = [...Array.from({ length: 101 }, (_, i) => ({ actorUserId: `user-${i}` })),
+      { actorUserId: 'user-0' }, { actorUserId: null }, { actorUserId: 'deleted' }] as LaunchStatsRecentSummary[];
+    await attachActivityIdentities({ DB } as Env, summaries);
+    expect(queries.map((query) => query.bindings.length)).toEqual([100, 2]);
+    expect(summaries[0]).toMatchObject({ actorEmail: 'user-0@example.test', actorWalletAddress: wallet });
+    expect(summaries[101]).toEqual(summaries[0]);
+    expect(summaries[102]).toMatchObject({ actorEmail: null, actorWalletAddress: null });
+    expect(summaries[103]).toMatchObject({ actorEmail: null, actorWalletAddress: null });
+  });
+});
