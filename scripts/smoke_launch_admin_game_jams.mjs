@@ -33,6 +33,11 @@ await page.addInitScript(() => {
   window.fetch = async (input, init) => {
     const rawUrl = typeof input === 'string' || input instanceof URL ? String(input) : input.url;
     const pathname = new URL(rawUrl, window.location.origin).pathname;
+    if (pathname === '/api/admin/launch-stats') {
+      const activity = Object.fromEntries(['newUsers', 'logins', 'guestVisitors', 'guestVisitHeartbeats', 'guestPlayBuildVisitors', 'guestPlaySeconds', 'guestEditSeconds', 'magicLinksCreated', 'chatMessages', 'roomClaims', 'roomPublishes', 'coursePublishes', 'expandedRoomPublishes', 'roomRunStarts', 'roomRunFinishes', 'courseRunStarts', 'courseRunFinishes', 'expandedRoomRunStarts', 'expandedRoomRunFinishes'].map((key) => [key, 0]));
+      const recentSummaries = [{ kind: 'signup', at: new Date().toISOString(), actorUserId: 'user-one', actorDisplayName: 'Jam Builder', actorEmail: 'account@example.com', actorWalletAddress: '0x1234567890abcdef1234567890abcdef12345678', signupSource: 'wallet', topRooms: [], topCourses: [] }];
+      return new Response(JSON.stringify({ generatedAt: new Date().toISOString(), config: { emailConfigured: true }, totals: {}, activity: { last5m: activity, last15m: activity, last60m: activity, defaultRangeKey: 'last24h', ranges: [{ key: 'last24h', label: 'Last 24h', description: 'the last 24 hours', activity, recentSummaries }] }, recentSummaries, partykit: { configured: false, reachable: false, stats: null } }), { headers: { 'Content-Type': 'application/json' } });
+    }
     if (pathname === '/api/admin/game-jams') {
       return new Response(JSON.stringify({
         generatedAt: '2026-07-26T23:30:00.000Z',
@@ -115,13 +120,20 @@ await expectText(page, '#game-jam-summary .card:nth-child(2) .value', '3');
 await expectText(page, '#game-jam-summary .card:nth-child(3) .value', '5');
 await expectContains(page, '#game-jam-participants-body', 'Jam Builder');
 await expectContains(page, '#game-jam-participants-body', 'builder@example.com');
-await expectContains(page, '#game-jam-participants-body', '0x123456…345678');
+await expectContains(page, '#game-jam-participants-body', '0x1234567890abcdef1234567890abcdef12345678');
 await expectContains(page, '#game-jam-participants-body', 'Room 6,12');
 await expectContains(page, '#game-jam-participants-body', 'Awaiting level');
 
+await expectContains(page, '#activity-feed', 'account@example.com');
+await expectContains(page, '#activity-feed', '0x1234567890abcdef1234567890abcdef12345678');
+const secondSection = await page.locator('.admin-content > section').nth(1).getAttribute('id');
+if (secondSection !== 'activity') throw new Error('Activity must be second');
+await page.addStyleTag({ content: 'html { scroll-behavior: auto !important; }' });
+await page.locator('a[href="#activity"]').click();
+await page.locator('#activity').scrollIntoViewIfNeeded();
 await page.screenshot({
   path: path.join(outputDir, 'desktop.png'),
-  fullPage: true,
+  fullPage: false,
 });
 
 await page.setViewportSize({ width: 390, height: 844 });
@@ -134,6 +146,8 @@ await page.screenshot({
   fullPage: true,
 });
 
+if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Page overflows on mobile');
+await expectContains(page, '#activity-feed', '0x1234567890abcdef1234567890abcdef12345678');
 if (consoleErrors.length > 0) {
   throw new Error(`Unexpected console errors:\n${consoleErrors.join('\n')}`);
 }

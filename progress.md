@@ -203,3 +203,12 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 - Dedicated browser smoke passes in desktop Canvas and real phone/touch WebGL: toggle/save/page reload/reopen, frozen framing while moving, zoom/Fit input, portrait refit, actual adjacent-room exit and reentry, respawn, return from play, and turning the saved setting off in the phone editor. Screenshots inspected under `/tmp/wamp-room-camera-smoke` and `/tmp/wamp-room-camera-phone`; zero runtime errors. Expected failed synthetic leaderboard/chat requests and blocked remote writes/telemetry are recorded separately as network warnings.
 - The official web-game client completed with inspected screenshot/state and healthy rendering. Its earlier attempts were interrupted by development reloads; the dedicated browser smoke provides the feature-level proof beyond its Welcome-overlay capture.
 - Released `cd5967a1` to main and deployed the API Worker and Pages together on 2026-09-08. Worker version `a9f6a400-3e0b-4ed3-9496-95d114f49614`; Pages `https://1e13b18e.wampland.pages.dev`. No database migration or PartyKit deployment was needed. Production health checks passed; the wamp.land entry bundle byte-matches the release and live OpenAPI includes cameraMode. A fresh guest browser enabled Room → Camera and entered Test: the player moved while camera scroll/zoom stayed fixed, with zero page errors. Screenshots and state are under `/tmp/wamp-room-camera-production`.
+
+
+## 2026-09-09 — Launch Admin clarity
+
+- Swapped Recent Activity and Game Jams in page order and native hash navigation.
+- Added protected activity email/full wallet identities with deduplicated account lookups in batches of 100; guests and deleted accounts retain null identities. Game Jam wallets no longer truncate.
+- Reduced header copy and decorative framing, standardized type sizes, and collapsed secondary world/activity totals. Contact information uses a case-preserving monospace font.
+- Verified 18 focused contracts, lint, typecheck, production build, and desktop/mobile browser smoke. Local API returns 403 without an admin key and 200 with five activity ranges and populated account emails.
+- Local review runs at localhost:3003/launch-admin.html with an isolated copy of the previous QA database; production is unchanged.
