@@ -1102,11 +1102,29 @@
         <button class="tool-btn editor-shell-chunky-button" data-tool="rect" type="button" title="Rectangle (R); select again to switch Filled / Outlined"><span class="tool-icon">&#9632;</span><span class="tool-label">Rectangle</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="ellipse" type="button" title="Circle (O); select again to switch Filled / Outlined"><span class="tool-icon">&#9679;</span><span class="tool-label">Circle</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="line" type="button" title="Line (L); select again to switch Line / Curve"><span class="tool-icon">&#9585;</span><span class="tool-label">Line</span></button>
-        <div id="editor-shell-eraser-size-picker" class="editor-shell-eraser-size-picker editor-eraser-controls hidden" role="group" aria-label="Eraser size">
-          <span class="editor-shell-eraser-size-label">Erase size</span>
-          <button class="editor-erase-brush-button" type="button" data-erase-brush-size="1" aria-pressed="true">1x1</button>
-          <button class="editor-erase-brush-button" type="button" data-erase-brush-size="3" aria-pressed="false">3x3</button>
-          <button class="editor-erase-brush-button" type="button" data-erase-brush-size="5" aria-pressed="false">5x5</button>
+        <div id="editor-shell-eraser-size-picker" class="editor-shell-eraser-size-picker editor-eraser-controls hidden" role="group" aria-label="Eraser actions">
+          <div class="editor-shell-eraser-size-actions editor-tile-erase-control" role="group" aria-label="Eraser size">
+            <span class="editor-shell-eraser-size-label">Erase size</span>
+            <button class="editor-erase-brush-button" type="button" data-erase-brush-size="1" aria-pressed="true">1x1</button>
+            <button class="editor-erase-brush-button" type="button" data-erase-brush-size="3" aria-pressed="false">3x3</button>
+            <button class="editor-erase-brush-button" type="button" data-erase-brush-size="5" aria-pressed="false">5x5</button>
+          </div>
+          <div class="editor-shell-eraser-danger-actions" role="group" aria-label="Clear room contents">
+            <button
+              id="btn-editor-shell-nuke-terrain"
+              class="bar-btn bar-btn-small bar-btn-danger editor-shell-nuke-button editor-clear-all-btn editor-tile-erase-control"
+              type="button"
+            >
+              Nuke Terrain
+            </button>
+            <button
+              id="btn-editor-shell-nuke-objects"
+              class="bar-btn bar-btn-small bar-btn-danger editor-shell-nuke-button editor-clear-objects-btn"
+              type="button"
+            >
+              Nuke Objects
+            </button>
+          </div>
         </div>
       </div>
       <div id="editor-shell-title-slot" class="editor-shell-title-slot"></div>

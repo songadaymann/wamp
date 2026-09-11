@@ -13,6 +13,7 @@ import {
 import {
   resolveGoalRunStartPoint,
 } from './goalRunStartGate';
+import { playPlayerAnimationIfReady } from './playerAnimation';
 import type {
   OverworldRoomEdgeWall,
 } from './runtimeController';
@@ -98,7 +99,7 @@ export class OverworldPlayerLifecycleController<TLiveObject = unknown> {
     );
     playerSprite.setOrigin(0.5, 1);
     playerSprite.setDepth(26);
-    playerSprite.play(playerAvatarPack.animationKeys.idle);
+    playPlayerAnimationIfReady(playerSprite, playerAvatarPack.animationKeys.idle);
     playerSprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
 
     this.host.syncBackdropCameraIgnores();

@@ -1851,14 +1851,14 @@ export class EditorUiBridge {
       controls.classList.toggle('hidden', !showEraseControls);
     }
     setHidden(this.elements.tileEraseControls, editorState.paletteMode === 'objects');
-    const showShellEraseSizes = showEraseControls && editorState.paletteMode !== 'objects';
+    const showShellEraseControls = showEraseControls;
     this.doc.getElementById('editor-shell-eraser-size-picker')?.classList.toggle(
       'hidden',
-      !showShellEraseSizes,
+      !showShellEraseControls,
     );
     this.doc.getElementById('btn-editor-shell-eraser')?.setAttribute(
       'aria-expanded',
-      showShellEraseSizes ? 'true' : 'false',
+      showShellEraseControls ? 'true' : 'false',
     );
     for (const input of this.elements.eraseBrushSelects) {
       if (input.value !== String(editorState.eraserBrushSize)) {
