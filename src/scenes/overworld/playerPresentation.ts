@@ -4,6 +4,7 @@ import {
 } from '../../player/defaultPlayer';
 import { resolveActivePlayerAvatarPack } from '../../player/avatar/runtime';
 import type { OverworldMovementPresentationState } from './movementController';
+import { playPlayerAnimationIfReady } from './playerAnimation';
 import {
   bodyIsBlockedInGravityDirection,
   getBodyVelocityAlongVector,
@@ -152,7 +153,7 @@ export class OverworldPlayerPresentationController {
       playerSprite.anims.currentAnim?.key !== nextAnimationKey
     ) {
       this.host.state.animationState = nextAnimation;
-      playerSprite.play(nextAnimationKey, true);
+      playPlayerAnimationIfReady(playerSprite, nextAnimationKey, true);
     }
 
     this.host.state.wasGrounded = grounded;

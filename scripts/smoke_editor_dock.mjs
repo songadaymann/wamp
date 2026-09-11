@@ -66,6 +66,24 @@ async function runEditorCommands(page, editorCommands) {
   return result.captures ?? {};
 }
 
+async function clickConfirmed(page, button, expectedMessage, accept) {
+  const dialogPromise = page.waitForEvent('dialog');
+  const clickPromise = button.click();
+  const dialog = await dialogPromise;
+  assert.equal(dialog.message(), expectedMessage);
+  if (accept) await dialog.accept();
+  else await dialog.dismiss();
+  await clickPromise;
+}
+
+function countTiles(tileData) {
+  return Object.values(tileData).reduce((total, rows) => (
+    total + rows.reduce((layerTotal, row) => (
+      layerTotal + row.filter((value) => value >= 0).length
+    ), 0)
+  ), 0);
+}
+
 async function navigateToTarget(page) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
@@ -256,15 +274,33 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
 
   const shellEraser = page.locator('#btn-editor-shell-eraser');
   const eraserSizePicker = page.locator('#editor-shell-eraser-size-picker');
+  const nukeTerrainButton = page.locator('#btn-editor-shell-nuke-terrain');
+  const nukeObjectsButton = page.locator('#btn-editor-shell-nuke-objects');
   await shellEraser.click();
   assert.equal(await shellEraser.getAttribute('aria-expanded'), 'true');
   assert.equal(await eraserSizePicker.isVisible(), true);
+  assert.equal(await nukeTerrainButton.isVisible(), true);
+  assert.equal(await nukeObjectsButton.isVisible(), true);
   for (const size of ['3', '5', '1']) {
     const sizeButton = eraserSizePicker.locator(`[data-erase-brush-size="${size}"]`);
     await sizeButton.click();
     assert.equal(await sizeButton.getAttribute('aria-pressed'), 'true');
     assert.equal(await page.locator('#editor-top-erase-brush-select').inputValue(), size);
   }
+  const [eraserPickerBox, nukeTerrainBox, nukeObjectsBox] = await Promise.all([
+    eraserSizePicker.boundingBox(),
+    nukeTerrainButton.boundingBox(),
+    nukeObjectsButton.boundingBox(),
+  ]);
+  assert.ok(eraserPickerBox && nukeTerrainBox && nukeObjectsBox);
+  assert.ok(eraserPickerBox.x >= 0 && eraserPickerBox.x + eraserPickerBox.width <= viewport.width + 1);
+  assert.ok(nukeTerrainBox.x >= eraserPickerBox.x && nukeTerrainBox.x + nukeTerrainBox.width <= eraserPickerBox.x + eraserPickerBox.width + 1);
+  assert.ok(nukeObjectsBox.x >= eraserPickerBox.x && nukeObjectsBox.x + nukeObjectsBox.width <= eraserPickerBox.x + eraserPickerBox.width + 1);
+  assert.notEqual(
+    await nukeTerrainButton.evaluate((button) => getComputedStyle(button).backgroundColor),
+    await page.locator('[data-erase-brush-size="1"]').evaluate((button) => getComputedStyle(button).backgroundColor),
+    'destructive actions should be visually distinct from Erase sizes',
+  );
   await page.screenshot({ path: path.join(viewportOutputDir, 'terrain-erase-sizes.png') });
   await page.keyboard.press('b');
   assert.equal(await eraserSizePicker.isVisible(), false);
@@ -383,8 +419,86 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
 }
 
 async function verifyDetailedWorkflows(page, viewportOutputDir) {
+  const terrain = page.locator('[data-editor-dock="terrain"]');
+  await terrain.click();
+  const { beforeNukeTerrain } = await runEditorCommands(page, [
+    { op: 'beginBatch' },
+    { op: 'placeCells', cells: [{ x: 3, y: 3 }, { x: 4, y: 3 }] },
+    { op: 'commitBatch' },
+    { op: 'capture', name: 'beforeNukeTerrain' },
+  ]);
+  assert.ok(countTiles(beforeNukeTerrain.tileData) > 0);
+  await page.locator('#btn-editor-shell-eraser').click();
+  const nukeTerrainButton = page.locator('#btn-editor-shell-nuke-terrain');
+  await clickConfirmed(
+    page,
+    nukeTerrainButton,
+    'Remove all tiles from Back, Gameplay, and Front?',
+    false,
+  );
+  const { afterCancelledNukeTerrain } = await runEditorCommands(page, [
+    { op: 'capture', name: 'afterCancelledNukeTerrain' },
+  ]);
+  assert.deepEqual(afterCancelledNukeTerrain.tileData, beforeNukeTerrain.tileData);
+  assert.deepEqual(afterCancelledNukeTerrain.smartTerrain, beforeNukeTerrain.smartTerrain);
+  await clickConfirmed(
+    page,
+    nukeTerrainButton,
+    'Remove all tiles from Back, Gameplay, and Front?',
+    true,
+  );
+  const { afterNukeTerrain, afterNukeTerrainUndo } = await runEditorCommands(page, [
+    { op: 'capture', name: 'afterNukeTerrain' },
+    { op: 'undo' },
+    { op: 'capture', name: 'afterNukeTerrainUndo' },
+  ]);
+  assert.equal(countTiles(afterNukeTerrain.tileData), 0);
+  assert.deepEqual(afterNukeTerrainUndo.tileData, beforeNukeTerrain.tileData);
+  assert.deepEqual(afterNukeTerrainUndo.smartTerrain, beforeNukeTerrain.smartTerrain);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'nuke-actions.png') });
+  await page.keyboard.press('b');
+
   const stuff = page.locator('[data-editor-dock="stuff"]');
   if (await stuff.getAttribute('aria-expanded') !== 'true') await stuff.click();
+  await page.locator('.obj-cat-tab[data-category="collectible"]').click();
+  const { beforeObjectPlacement } = await runEditorCommands(page, [
+    { op: 'capture', name: 'beforeObjectPlacement' },
+  ]);
+  await page.locator('.object-item[data-object-id="coin_gold"]').click();
+  const objectCanvas = page.locator('#game-container canvas').last();
+  const objectCanvasBox = await objectCanvas.boundingBox();
+  assert.ok(objectCanvasBox);
+  await page.mouse.click(
+    objectCanvasBox.x + objectCanvasBox.width * 0.52,
+    objectCanvasBox.y + objectCanvasBox.height * 0.52,
+  );
+  const { beforeNukeObjects } = await runEditorCommands(page, [
+    { op: 'capture', name: 'beforeNukeObjects' },
+  ]);
+  assert.equal(
+    beforeNukeObjects.placedObjects.length,
+    beforeObjectPlacement.placedObjects.length + 1,
+  );
+  await page.locator('#btn-editor-shell-eraser').click();
+  assert.equal(await page.locator('#editor-shell-eraser-size-picker').isVisible(), true);
+  assert.equal(await page.locator('#btn-editor-shell-nuke-terrain').isVisible(), false);
+  const nukeObjectsButton = page.locator('#btn-editor-shell-nuke-objects');
+  assert.equal(await nukeObjectsButton.isVisible(), true);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'nuke-objects.png') });
+  await clickConfirmed(
+    page,
+    nukeObjectsButton,
+    'Remove all placed objects from this room?',
+    true,
+  );
+  const { afterNukeObjects, afterNukeObjectsUndo } = await runEditorCommands(page, [
+    { op: 'capture', name: 'afterNukeObjects' },
+    { op: 'undo' },
+    { op: 'capture', name: 'afterNukeObjectsUndo' },
+  ]);
+  assert.equal(afterNukeObjects.placedObjects.length, 0);
+  assert.deepEqual(afterNukeObjectsUndo.placedObjects, beforeNukeObjects.placedObjects);
+  await page.keyboard.press('b');
   const visibleStuffFilters = await page.locator('.obj-cat-tab:visible').allTextContents();
   assert.deepEqual(visibleStuffFilters, ['Community', 'Mine', 'Collect', 'Utility']);
   await page.locator('.obj-cat-tab[data-category="collectible"]').click();
@@ -656,6 +770,7 @@ try {
         window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
         window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
         window.localStorage.setItem('wamp.settings.builderMode', 'beginner');
+        window.localStorage.setItem('wamp_replay_opt_out', '1');
       } catch {
         // A transient browser network error can briefly create an inaccessible error document.
       }
@@ -689,6 +804,7 @@ try {
     try {
       window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
       window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+      window.localStorage.setItem('wamp_replay_opt_out', '1');
     } catch {
       // A transient browser network error can briefly create an inaccessible error document.
     }

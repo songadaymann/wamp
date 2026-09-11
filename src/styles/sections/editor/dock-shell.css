@@ -357,11 +357,26 @@ body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker {
   display: flex;
   flex-direction: row;
   align-items: center;
+  flex-wrap: wrap;
   gap: 7px;
+  max-width: calc(100vw - 32px);
   padding: 8px;
   border: 3px solid var(--editor-retro-blue);
   background: var(--editor-retro-cream);
   box-shadow: 4px 4px 0 var(--editor-retro-shadow);
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-eraser-size-actions,
+body[data-editor-dock-shell='true'] .editor-shell-eraser-danger-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-eraser-danger-actions {
+  padding-left: 10px;
+  border-left: 3px solid var(--editor-retro-blue);
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-eraser-size-label {
@@ -383,6 +398,15 @@ body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker button {
   color: var(--editor-retro-ink);
   box-shadow: 3px 3px 0 var(--editor-retro-shadow);
   cursor: pointer;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker .editor-shell-nuke-button {
+  width: auto;
+  min-width: 112px;
+  padding: 0 10px;
+  border-color: var(--editor-retro-shadow);
+  background: var(--editor-retro-red);
+  color: var(--editor-retro-paper);
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker button.active {
