@@ -583,10 +583,16 @@ function resolveGroundLocalIndex(
   cell: SmartTerrainCellState,
   enclosedVoidCells: Set<string>,
 ): ResolvedLocalTile {
-  const n = sameFamily(tileData, state, x, y - 1, cell);
-  const e = sameFamily(tileData, state, x + 1, y, cell);
-  const s = sameFamily(tileData, state, x, y + 1, cell);
-  const w = sameFamily(tileData, state, x - 1, y, cell);
+  // The room boundary is a crop, not exposed air. Treat terrain continuing
+  // beyond that crop as connected so a filled room reaches its outer edges
+  // with center art instead of drawing top, side, or bottom caps.
+  const connected = (targetX: number, targetY: number): boolean => (
+    !inBounds(targetX, targetY) || sameFamily(tileData, state, targetX, targetY, cell)
+  );
+  const n = connected(x, y - 1);
+  const e = connected(x + 1, y);
+  const s = connected(x, y + 1);
+  const w = connected(x - 1, y);
   if (!participatesInThickRegion(tileData, state, x, y, cell)) {
     return resolveThinGroundLocalIndex(tileData, state, x, y, cell);
   }
@@ -618,10 +624,10 @@ function resolveGroundLocalIndex(
   if (!w) return { localIndex: stablePick(rule.left, x, y, 17) };
   if (!e) return { localIndex: stablePick(rule.right, x, y, 19) };
 
-  const nw = sameFamily(tileData, state, x - 1, y - 1, cell);
-  const ne = sameFamily(tileData, state, x + 1, y - 1, cell);
-  const sw = sameFamily(tileData, state, x - 1, y + 1, cell);
-  const se = sameFamily(tileData, state, x + 1, y + 1, cell);
+  const nw = connected(x - 1, y - 1);
+  const ne = connected(x + 1, y - 1);
+  const sw = connected(x - 1, y + 1);
+  const se = connected(x + 1, y + 1);
   if (!nw && enclosedVoid(x - 1, y - 1)) return { localIndex: inner.topRight };
   if (!ne && enclosedVoid(x + 1, y - 1)) return { localIndex: inner.topLeft };
   if (!sw && enclosedVoid(x - 1, y + 1)) return { localIndex: inner.topRight, flipY: true };

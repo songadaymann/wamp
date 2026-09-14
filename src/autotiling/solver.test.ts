@@ -769,6 +769,27 @@ describe('smart terrain solver', () => {
     expect([...counts.keys()].sort((a, b) => a - b)).toEqual([27, 28, 32, 38, 39, 40, 41]);
   });
 
+  it('continues thick Ground through every room edge with center art', () => {
+    const firstGid = getTilesetByKey('forest')!.firstGid;
+    const result = applySmartCells(emptyDocument(), {
+      cells: cellsFromPattern(Array.from({ length: 22 }, () => '#'.repeat(40)), 0, 0),
+      mode: 'paint',
+      theme: 'forest',
+      material: 'ground',
+    });
+    const centerTiles = new Set([27, 28, 32, 38, 39, 40, 41]);
+    const perimeter = [
+      ...Array.from({ length: 40 }, (_, x) => ({ x, y: 0 })),
+      ...Array.from({ length: 40 }, (_, x) => ({ x, y: 21 })),
+      ...Array.from({ length: 20 }, (_, index) => ({ x: 0, y: index + 1 })),
+      ...Array.from({ length: 20 }, (_, index) => ({ x: 39, y: index + 1 })),
+    ];
+
+    for (const { x, y } of perimeter) {
+      expect(centerTiles.has(localAt(result, 'terrain', x, y, firstGid))).toBe(true);
+    }
+  });
+
   it('uses both artist-approved top-corner alternates across thick regions', () => {
     const firstGid = getTilesetByKey('forest')!.firstGid;
     const cells = [];
