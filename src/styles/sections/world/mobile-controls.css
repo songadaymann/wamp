@@ -251,7 +251,7 @@
 
 @media (max-width: 900px) {
   .world-sign-panel {
-    bottom: calc(156px + var(--safe-bottom));
+    top: max(calc(68px + var(--safe-top)), 30%);
     width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
     padding: 10px 12px;
   }

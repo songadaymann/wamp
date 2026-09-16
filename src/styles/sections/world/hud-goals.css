@@ -510,7 +510,7 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
 .world-sign-panel {
   position: absolute;
   left: 50%;
-  bottom: calc(84px + var(--safe-bottom));
+  top: max(calc(72px + var(--safe-top)), 34%);
   z-index: 10;
   width: min(460px, calc(100vw - 32px - var(--safe-left) - var(--safe-right)));
   padding: 14px 16px;
@@ -518,7 +518,7 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
   border: 2px solid #1c0911;
   background: #fff3db;
   box-shadow: 0 12px 28px rgba(28, 9, 17, 0.22);
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   gap: 0;

@@ -265,3 +265,10 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 - Verification: the new regression test proves a registered zero-frame animation never reaches `Sprite.play()` and a complete animation still plays with its restart flag. Focused animation tests, focused ESLint, TypeScript, and `git diff --check` pass.
 - Browser verification: the visible localhost browser completed Play Room → goal START at the default room and then Stop → Warp → Play in the reported room `-7,-7`, with the player runtime active and zero captured console warnings/errors. Both resulting gameplay frames were visually inspected. The required generic web-game client was also attempted, but its known virtual-time/SwiftShader startup path stalled before the Play button became visible; the normal-clock visible-browser flow is the feature evidence.
 - Final live verification: the custom-domain room `-7,-7` loaded in Canvas mode, goal START created the player, and the timer advanced with zero captured browser warnings/errors. The reported Phaser animation `duration` crash did not recur. The local dev server stopped during the disconnected session; production is now the verified target.
+
+## 2026-09-16 — Sign text sightline
+
+- Request: move sign text away from the bottom controls and closer to the player's central sightline while running past signs.
+- Branch: `codex/center-sign-text-2026-09-16`, based on current `origin/main` `cd53438c`; the dirty/stale root checkout remains untouched.
+- Implementation: center the sign panel horizontally in the upper-middle of the game viewport (34% desktop, 30% mobile), with safe-area-aware minimum top clearance. Preserve its copy, activation behavior, width, and visual treatment.
+- Validation: TypeScript, production build, and `git diff --check` pass. The official web-game client completed and its screenshot was inspected. Dedicated 1440x900 and 390x844 browser captures forced the real sign DOM panel visible against the game world; both were visually inspected and confirm the panel sits in the intended upper-middle sightline without intersecting bottom controls.
