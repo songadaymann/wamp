@@ -185,6 +185,10 @@ export class EditorToolController {
         this.editRuntime.beginTileBatch();
         this.editRuntime.eraseTileAt(worldPoint.x, worldPoint.y);
         break;
+      case 'randomize':
+        this.editRuntime.beginTileBatch();
+        this.editRuntime.paintRandomizeAt(worldPoint.x, worldPoint.y);
+        break;
       case 'rect':
       case 'ellipse':
       case 'line':

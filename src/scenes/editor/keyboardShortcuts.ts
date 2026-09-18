@@ -9,6 +9,7 @@ export const EDITOR_TOOL_KEYBOARD_SHORTCUTS = {
   O: 'ellipse',
   L: 'line',
   G: 'fill',
+  V: 'randomize',
 } as const satisfies Readonly<Record<string, ToolName>>;
 
 export function getEditorToolForShortcutKey(key: string): ToolName | null {

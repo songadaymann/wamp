@@ -132,7 +132,7 @@ async function resizeDrawer(page, deltaX) {
 
 async function verifyCommonShell(page, viewport, viewportOutputDir) {
   const tools = page.locator('.editor-shell-tools [data-tool]');
-  assert.equal(await tools.count(), 7);
+  assert.equal(await tools.count(), 8);
   for (const tool of await tools.all()) assert.equal(await tool.isVisible(), true);
   for (const selector of ['#btn-world-settings', '#btn-guestbook-open', '#btn-world-controls']) {
     assert.equal(await page.locator(selector).isVisible(), true, `${selector} should remain in the editor footer`);

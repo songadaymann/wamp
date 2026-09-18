@@ -1,14 +1,18 @@
 import {
   ERASER_BRUSH_SIZES,
+  RANDOMIZE_BRUSH_SIZES,
   TILESETS,
   editorState,
   getTilesetByKey,
   type EraserBrushSize,
   type LayerName,
   type PaletteMode,
+  type RandomizeBrushSize,
   type ToolName,
 } from '../../config';
-import { getEditorToolButtonAppearance, isMoreEditorTool } from './editorToolSelection';
+import { getEditorToolButtonAppearance, isMoreEditorTool, isShapeFillEditorTool, type EditorToolButtonAppearance } from './editorToolSelection';
+import { clampRandomizeBrushSize, isScrambleOneByOne } from './randomizeTiles';
+import { countOccupiedSelectionTiles } from './selectionPattern';
 import {
   finalizeBackgroundUpload,
   listBackgroundImages,
@@ -132,7 +136,31 @@ const SMART_TOOL_LABELS: Readonly<Partial<Record<ToolName, string>>> = {
   ellipse: 'Ellipse',
   line: 'Line',
   fill: 'Fill',
+  randomize: 'Shuffle',
 };
+
+function applyEditorToolIcon(icon: Element, appearance: EditorToolButtonAppearance): void {
+  const kind = appearance.iconKind ?? 'glyph';
+  if (kind === 'mosaic') {
+    if (!icon.classList.contains('tool-icon-mosaic')) {
+      icon.className = 'tool-icon tool-icon-mosaic';
+      icon.innerHTML = '<span></span><span></span><span></span><span></span>';
+    }
+    return;
+  }
+  if (kind === 'broken-pencil') {
+    if (!icon.classList.contains('tool-icon-broken-pencil')) {
+      icon.className = 'tool-icon tool-icon-broken-pencil';
+      icon.innerHTML = '<span>\u270E</span><span>\u270E</span>';
+    }
+    return;
+  }
+  if (appearance.icon === undefined) {
+    return;
+  }
+  icon.className = 'tool-icon';
+  icon.textContent = appearance.icon;
+}
 
 function parseSmartThemeId(value: string | undefined): SmartThemeId | null {
   return SMART_THEME_IDS.includes(value as SmartThemeId) ? value as SmartThemeId : null;
@@ -658,6 +686,77 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() =>
         button.removeEventListener('click', handleEraserBrushButton)
       );
+    }
+
+    for (const button of this.elements.randomizeBrushButtons) {
+      const handleRandomizeBrushButton = () => {
+        const nextSize = Number.parseInt(button.dataset.randomizeBrushSize ?? '', 10);
+        if (!RANDOMIZE_BRUSH_SIZES.includes(nextSize as RandomizeBrushSize)) return;
+        const size = clampRandomizeBrushSize(nextSize);
+        editorState.randomizeBrushSize = size;
+        if (editorState.randomizeScramble) {
+          editorState.scrambleBrushSize = size;
+        } else {
+          editorState.shuffleBrushSize = size;
+        }
+        this.syncEditorChromeState();
+      };
+      button.addEventListener('click', handleRandomizeBrushButton);
+      this.cleanupCallbacks.push(() =>
+        button.removeEventListener('click', handleRandomizeBrushButton)
+      );
+    }
+    for (const input of this.elements.randomizeHorizontalInputs) {
+      const handleHorizontal = () => {
+        editorState.randomizeHorizontal = input.checked;
+        for (const other of this.elements.randomizeHorizontalInputs) {
+          other.checked = input.checked;
+        }
+      };
+      input.addEventListener('change', handleHorizontal);
+      this.cleanupCallbacks.push(() => input.removeEventListener('change', handleHorizontal));
+    }
+    for (const input of this.elements.randomizeVerticalInputs) {
+      const handleVertical = () => {
+        editorState.randomizeVertical = input.checked;
+        for (const other of this.elements.randomizeVerticalInputs) {
+          other.checked = input.checked;
+        }
+      };
+      input.addEventListener('change', handleVertical);
+      this.cleanupCallbacks.push(() => input.removeEventListener('change', handleVertical));
+    }
+    for (const input of this.elements.pencilContinuousInputs) {
+      const handleContinuous = () => {
+        editorState.pencilContinuousStamping = input.checked;
+        for (const other of this.elements.pencilContinuousInputs) {
+          other.checked = input.checked;
+        }
+      };
+      input.addEventListener('change', handleContinuous);
+      this.cleanupCallbacks.push(() => input.removeEventListener('change', handleContinuous));
+    }
+    for (const input of this.elements.fillIgnoreFlipInputs) {
+      const handleIgnoreFlip = () => {
+        editorState.fillIgnoreTileFlipping = input.checked;
+        for (const other of this.elements.fillIgnoreFlipInputs) {
+          other.checked = input.checked;
+        }
+      };
+      input.addEventListener('change', handleIgnoreFlip);
+      this.cleanupCallbacks.push(() => input.removeEventListener('change', handleIgnoreFlip));
+    }
+    for (const button of this.elements.shapeFillButtons) {
+      const handleShapeFill = () => {
+        const nextMode = button.dataset.shapeFillMode;
+        if (nextMode !== 'pattern' && nextMode !== 'shuffle') {
+          return;
+        }
+        editorState.shapeFillMode = nextMode;
+        this.syncEditorChromeState();
+      };
+      button.addEventListener('click', handleShapeFill);
+      this.cleanupCallbacks.push(() => button.removeEventListener('click', handleShapeFill));
     }
 
     for (const button of this.elements.clearLayerButtons) {
@@ -1767,9 +1866,13 @@ export class EditorUiBridge {
 
     for (const button of this.elements.toolButtons) {
       const tool = button.dataset.tool as ToolName;
-      const unsupported = paletteModeIsSmart
-        && isRegistryControlledSmartTool(tool)
-        && !isSmartBrushToolSupported(smartSelection.brush.id, tool);
+      const unsupported = paletteModeIsSmart && (
+        tool === 'randomize'
+        || (
+          isRegistryControlledSmartTool(tool)
+          && !isSmartBrushToolSupported(smartSelection.brush.id, tool)
+        )
+      );
       button.disabled = unsupported;
       button.setAttribute('aria-disabled', unsupported ? 'true' : 'false');
       if (unsupported) button.dataset.smartToolUnsupported = 'true';
@@ -1780,7 +1883,18 @@ export class EditorUiBridge {
       if (appearance) {
         const icon = button.querySelector('.tool-icon');
         if (icon) {
-          icon.textContent = appearance.icon;
+          applyEditorToolIcon(icon, appearance);
+        }
+        if (appearance.label) {
+          const modeLabel = button.querySelector<HTMLElement>('.tool-mode-label');
+          if (modeLabel) {
+            modeLabel.textContent = appearance.label;
+          } else {
+            const label = button.querySelector<HTMLElement>('.tool-label');
+            if (label && !label.querySelector('.tool-mode')) {
+              label.textContent = appearance.label;
+            }
+          }
         }
         for (const part of button.querySelectorAll<HTMLElement>('.tool-mode')) {
           part.classList.toggle(
@@ -1867,6 +1981,80 @@ export class EditorUiBridge {
     }
     for (const button of this.elements.eraseBrushButtons) {
       const active = button.dataset.eraseBrushSize === String(editorState.eraserBrushSize);
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+
+    const showRandomizeControls = editorState.activeTool === 'randomize';
+    for (const controls of this.elements.randomizeControls) {
+      controls.classList.toggle('hidden', !showRandomizeControls);
+      controls.dataset.scramble = editorState.randomizeScramble ? 'true' : 'false';
+      const popoverLabel = controls.querySelector('.editor-tool-popover-label');
+      if (popoverLabel) {
+        popoverLabel.textContent = editorState.randomizeScramble ? 'Scramble' : 'Shuffle';
+      }
+    }
+    this.doc.getElementById('editor-shell-randomize-picker')?.classList.toggle(
+      'hidden',
+      !showRandomizeControls,
+    );
+    this.doc.querySelector('[data-tool="randomize"][aria-controls="editor-shell-randomize-picker"]')
+      ?.setAttribute('aria-expanded', showRandomizeControls ? 'true' : 'false');
+    for (const button of this.elements.randomizeBrushButtons) {
+      const active = button.dataset.randomizeBrushSize === String(editorState.randomizeBrushSize);
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    const forceScrambleFlips = isScrambleOneByOne(
+      editorState.randomizeScramble,
+      editorState.randomizeBrushSize,
+    );
+    for (const input of this.elements.randomizeHorizontalInputs) {
+      input.checked = forceScrambleFlips || editorState.randomizeHorizontal;
+      input.disabled = forceScrambleFlips;
+    }
+    for (const input of this.elements.randomizeVerticalInputs) {
+      input.checked = forceScrambleFlips || editorState.randomizeVertical;
+      input.disabled = forceScrambleFlips;
+    }
+
+    const multiTileSelection = paletteModeIsTiles && countOccupiedSelectionTiles(editorState.selection) > 1;
+    const showPencilControls = editorState.activeTool === 'pencil' && multiTileSelection;
+    for (const controls of this.elements.pencilControls) {
+      controls.classList.toggle('hidden', !showPencilControls);
+    }
+    this.doc.getElementById('editor-shell-pencil-picker')?.classList.toggle(
+      'hidden',
+      !showPencilControls,
+    );
+    this.doc.querySelector('[data-tool="pencil"][aria-controls="editor-shell-pencil-picker"]')
+      ?.setAttribute('aria-expanded', showPencilControls ? 'true' : 'false');
+    for (const input of this.elements.pencilContinuousInputs) {
+      input.checked = editorState.pencilContinuousStamping;
+    }
+
+    const showFillControls = editorState.activeTool === 'fill' && paletteModeIsTiles;
+    for (const controls of this.elements.fillControls) {
+      controls.classList.toggle('hidden', !showFillControls);
+    }
+    this.doc.getElementById('editor-shell-fill-picker')?.classList.toggle(
+      'hidden',
+      !showFillControls,
+    );
+    for (const input of this.elements.fillIgnoreFlipInputs) {
+      input.checked = editorState.fillIgnoreTileFlipping;
+    }
+
+    const showShapeFillControls = isShapeFillEditorTool(editorState.activeTool) && multiTileSelection;
+    for (const controls of this.elements.shapeFillControls) {
+      controls.classList.toggle('hidden', !showShapeFillControls);
+    }
+    this.doc.getElementById('editor-shell-shape-fill-picker')?.classList.toggle(
+      'hidden',
+      !showShapeFillControls,
+    );
+    for (const button of this.elements.shapeFillButtons) {
+      const active = button.dataset.shapeFillMode === editorState.shapeFillMode;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }

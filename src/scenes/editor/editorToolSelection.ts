@@ -2,7 +2,7 @@ import { editorState, type ToolName } from '../../config';
 import type { EditorShapeKind } from './shapeTiles';
 
 export function isMoreEditorTool(tool: ToolName): boolean {
-  return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill';
+  return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill' || tool === 'randomize';
 }
 
 export function isShapeEditorTool(tool: ToolName): tool is 'rect' | 'ellipse' {
@@ -11,6 +11,10 @@ export function isShapeEditorTool(tool: ToolName): tool is 'rect' | 'ellipse' {
 
 export function isPathEditorTool(tool: ToolName): tool is 'line' {
   return tool === 'line';
+}
+
+export function isShapeFillEditorTool(tool: ToolName): boolean {
+  return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill';
 }
 
 export function isDragStampEditorTool(tool: ToolName): tool is 'rect' | 'ellipse' | 'line' {
@@ -29,6 +33,23 @@ export function applyEditorToolSelection(tool: ToolName): void {
   if (editorState.activeTool === tool && tool === 'line') {
     editorState.lineCurve = !editorState.lineCurve;
     return;
+  }
+  if (editorState.activeTool === tool && tool === 'randomize') {
+    if (editorState.randomizeScramble) {
+      editorState.scrambleBrushSize = editorState.randomizeBrushSize;
+    } else {
+      editorState.shuffleBrushSize = editorState.randomizeBrushSize;
+    }
+    editorState.randomizeScramble = !editorState.randomizeScramble;
+    editorState.randomizeBrushSize = editorState.randomizeScramble
+      ? editorState.scrambleBrushSize
+      : editorState.shuffleBrushSize;
+    return;
+  }
+  if (tool === 'randomize') {
+    editorState.randomizeBrushSize = editorState.randomizeScramble
+      ? editorState.scrambleBrushSize
+      : editorState.shuffleBrushSize;
   }
   editorState.activeTool = tool;
 }
@@ -71,6 +92,10 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
       return editorState.ellipseOutline ? 'Ellipse Outlined' : 'Ellipse Filled';
     case 'line':
       return editorState.lineCurve ? 'Curve' : 'Line';
+    case 'randomize':
+      return editorState.randomizeScramble
+        ? `Scramble ${editorState.randomizeBrushSize}x${editorState.randomizeBrushSize}`
+        : `Shuffle ${editorState.randomizeBrushSize}x${editorState.randomizeBrushSize}`;
     case 'fill':
       return 'Fill';
     case 'copy':
@@ -81,7 +106,9 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
 }
 
 export interface EditorToolButtonAppearance {
-  icon: string;
+  icon?: string;
+  iconKind?: 'glyph' | 'mosaic' | 'broken-pencil';
+  label?: string;
   title: string;
   dimPart: string | null;
 }
@@ -104,8 +131,21 @@ export function getEditorToolButtonAppearance(tool: ToolName, selected: boolean)
   if (tool === 'line') {
     return {
       icon: editorState.lineCurve ? '\u223F' : '\u2571',
-      title: 'Line / Curve (L) hold Shift to snap',
-      dimPart: selected ? (editorState.lineCurve ? 'line' : 'curve') : null,
+      label: editorState.lineCurve ? 'Curve' : 'Line',
+      title: editorState.lineCurve
+        ? 'Curve (L); select again to switch to Line. Hold Shift to snap'
+        : 'Line (L); select again to switch to Curve. Hold Shift to snap',
+      dimPart: null,
+    };
+  }
+  if (tool === 'randomize') {
+    return {
+      iconKind: editorState.randomizeScramble ? 'mosaic' : 'broken-pencil',
+      label: editorState.randomizeScramble ? 'Scramble' : 'Shuffle',
+      title: editorState.randomizeScramble
+        ? 'Scramble (V); select again to switch to Shuffle'
+        : 'Shuffle (V); select again to switch to Scramble',
+      dimPart: null,
     };
   }
   return null;
