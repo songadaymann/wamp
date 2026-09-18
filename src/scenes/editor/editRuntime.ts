@@ -115,6 +115,20 @@ import {
 import { EditorHistory } from './history';
 import { iterateShapeTiles, type EditorShapeKind, type TilePoint } from './shapeTiles';
 import {
+  clampRandomizeBrushSize,
+  collectOccupiedSelectionValues,
+  sampleDrawWindow,
+  scrambleWindow,
+  applyRandomizeFlipsToWindow,
+  isScrambleOneByOne,
+} from './randomizeTiles';
+import { encodedTilesMatchForFlood } from './floodFillMatch';
+import {
+  diagonalPatternIndex,
+  getOrderedSelectionValues,
+  pathPatternIndex,
+} from './selectionPattern';
+import {
   buildEditorClipboardState,
   cloneEditorClipboardState,
   planEditorClipboardPaste,
@@ -909,17 +923,102 @@ export class EditorEditRuntime {
     }
   }
 
+  paintRandomizeAt(worldX: number, worldY: number): void {
+    if (!this.guardEditable() || editorState.paletteMode === 'smart') {
+      return;
+    }
+    const layer = this.host.getLayers().get(editorState.activeLayer);
+    if (!layer) {
+      return;
+    }
+
+    const size = clampRandomizeBrushSize(editorState.randomizeBrushSize);
+    const forceFlip = isScrambleOneByOne(editorState.randomizeScramble, size);
+    const localPoint = this.toLocalWorldPoint(worldX, worldY);
+    const centerX = Math.floor(localPoint.x / TILE_SIZE);
+    const centerY = Math.floor(localPoint.y / TILE_SIZE);
+    const originX = centerX - Math.floor(size * 0.5);
+    const originY = centerY - Math.floor(size * 0.5);
+    const current: number[][] = [];
+    for (let dy = 0; dy < size; dy += 1) {
+      const row: number[] = [];
+      for (let dx = 0; dx < size; dx += 1) {
+        const tileX = originX + dx;
+        const tileY = originY + dy;
+        if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+          row.push(-1);
+          continue;
+        }
+        const existingTile = layer.getTileAt(tileX, tileY);
+        row.push(
+          existingTile
+            ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
+            : -1,
+        );
+      }
+      current.push(row);
+    }
+
+    const stamped = editorState.randomizeScramble
+      ? scrambleWindow(current)
+      : sampleDrawWindow(
+          size,
+          collectOccupiedSelectionValues(editorState.selection, getSelectionTileValue),
+        );
+    const next = applyRandomizeFlipsToWindow(
+      stamped,
+      forceFlip || editorState.randomizeHorizontal,
+      forceFlip || editorState.randomizeVertical,
+    );
+
+    for (let dy = 0; dy < size; dy += 1) {
+      for (let dx = 0; dx < size; dx += 1) {
+        const tileX = originX + dx;
+        const tileY = originY + dy;
+        if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+          continue;
+        }
+        const newGid = next[dy]?.[dx] ?? -1;
+        const oldGid = current[dy]?.[dx] ?? -1;
+        if (oldGid === newGid) {
+          continue;
+        }
+        if (newGid < 0) {
+          layer.removeTileAt(tileX, tileY);
+        } else {
+          const decoded = decodeTileDataValue(newGid);
+          const placedTile = layer.putTileAt(decoded.gid, tileX, tileY);
+          if (placedTile) {
+            placedTile.flipX = decoded.flipX;
+            placedTile.flipY = decoded.flipY;
+          }
+        }
+        this.recordTileBatchAction({
+          layer: editorState.activeLayer,
+          x: tileX,
+          y: tileY,
+          oldGid,
+          newGid,
+        });
+        this.recordManualSmartEdit(editorState.activeLayer, tileX, tileY, newGid);
+      }
+    }
+  }
+
   eraseTileAt(worldX: number, worldY: number): void {
     if (!this.guardEditable()) {
       return;
     }
 
-    const brushSize = Math.max(1, editorState.eraserBrushSize);
     const localPoint = this.toLocalWorldPoint(worldX, worldY);
     const tileX = Math.floor(localPoint.x / TILE_SIZE);
     const tileY = Math.floor(localPoint.y / TILE_SIZE);
+    const randomizeErase = editorState.activeTool === 'randomize';
+    const brushSize = randomizeErase
+      ? clampRandomizeBrushSize(editorState.randomizeBrushSize)
+      : Math.max(1, editorState.eraserBrushSize);
     if (editorState.paletteMode === 'smart') {
-      const radius = Math.floor(Math.max(1, editorState.eraserBrushSize) * 0.5);
+      const radius = Math.floor(brushSize * 0.5);
       const cells = [];
       for (let dy = -radius; dy <= radius; dy += 1) {
         for (let dx = -radius; dx <= radius; dx += 1) cells.push({ x: tileX + dx, y: tileY + dy });
@@ -949,56 +1048,89 @@ export class EditorEditRuntime {
       return;
     }
 
-    const radius = Math.floor(brushSize * 0.5);
-    for (let dy = -radius; dy <= radius; dy += 1) {
-      for (let dx = -radius; dx <= radius; dx += 1) {
-        const targetX = tileX + dx;
-        const targetY = tileY + dy;
-        if (targetX < 0 || targetX >= ROOM_WIDTH || targetY < 0 || targetY >= ROOM_HEIGHT) {
-          continue;
-        }
-
-        const existingTile = layer.getTileAt(targetX, targetY);
-        if (!existingTile) {
-          continue;
-        }
-
-        const oldGid = encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY);
-        layer.removeTileAt(targetX, targetY);
-        this.recordManualSmartEdit(editorState.activeLayer, targetX, targetY, -1);
-        if (editorState.activeLayer === 'terrain') {
-          const slot = smartCellKey(targetX, targetY);
-          if (this.smartTerrain.cells[slot]) {
-            delete this.smartTerrain.cells[slot];
-          } else if (
-            this.smartTerrain.generatedDecorations[slot]?.layer === 'terrain'
-            || this.smartTerrain.generatedBackgroundDecorations[slot]?.layer === 'terrain'
-          ) {
-            this.smartTerrain = suppressGeneratedDecorationAt(
-              this.getSmartDocument(), targetX, targetY, 'terrain',
-            ).smartTerrain;
-          }
-        } else if (editorState.activeLayer === 'foreground' || editorState.activeLayer === 'background') {
-          const slot = smartCellKey(targetX, targetY);
-          if (editorState.activeLayer === 'background') delete this.smartTerrain.backdropCells[slot];
-          if (
-            this.smartTerrain.generatedDecorations[slot]?.layer === editorState.activeLayer
-            || this.smartTerrain.generatedBackgroundDecorations[slot]?.layer === editorState.activeLayer
-          ) {
-            this.smartTerrain = suppressGeneratedDecorationAt(
-              this.getSmartDocument(), targetX, targetY, editorState.activeLayer,
-            ).smartTerrain;
-          }
-        }
-        this.recordTileBatchAction({
-          layer: editorState.activeLayer,
-          x: targetX,
-          y: targetY,
-          oldGid,
-          newGid: -1,
-        });
+    const originX = tileX - Math.floor(brushSize * 0.5);
+    const originY = tileY - Math.floor(brushSize * 0.5);
+    for (let dy = 0; dy < brushSize; dy += 1) {
+      for (let dx = 0; dx < brushSize; dx += 1) {
+        this.eraseLayerCell(layer, originX + dx, originY + dy);
       }
     }
+  }
+
+  eraseStampAt(worldX: number, worldY: number): void {
+    if (!this.guardEditable()) {
+      return;
+    }
+    if (editorState.paletteMode === 'smart') {
+      this.eraseTileAt(worldX, worldY);
+      return;
+    }
+    const layer = this.host.getLayers().get(editorState.activeLayer);
+    if (!layer) {
+      return;
+    }
+    const localPoint = this.toLocalWorldPoint(worldX, worldY);
+    const originX = Math.floor(localPoint.x / TILE_SIZE);
+    const originY = Math.floor(localPoint.y / TILE_SIZE);
+    const selection = editorState.selection;
+    for (let dy = 0; dy < selection.height; dy += 1) {
+      for (let dx = 0; dx < selection.width; dx += 1) {
+        if (!selection.occupiedMask[dy]?.[dx]) {
+          continue;
+        }
+        this.eraseLayerCell(layer, originX + dx, originY + dy);
+      }
+    }
+  }
+
+  private eraseLayerCell(
+    layer: Phaser.Tilemaps.TilemapLayer,
+    targetX: number,
+    targetY: number,
+  ): void {
+    if (targetX < 0 || targetX >= ROOM_WIDTH || targetY < 0 || targetY >= ROOM_HEIGHT) {
+      return;
+    }
+
+    const existingTile = layer.getTileAt(targetX, targetY);
+    if (!existingTile) {
+      return;
+    }
+
+    const oldGid = encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY);
+    layer.removeTileAt(targetX, targetY);
+    this.recordManualSmartEdit(editorState.activeLayer, targetX, targetY, -1);
+    if (editorState.activeLayer === 'terrain') {
+      const slot = smartCellKey(targetX, targetY);
+      if (this.smartTerrain.cells[slot]) {
+        delete this.smartTerrain.cells[slot];
+      } else if (
+        this.smartTerrain.generatedDecorations[slot]?.layer === 'terrain'
+        || this.smartTerrain.generatedBackgroundDecorations[slot]?.layer === 'terrain'
+      ) {
+        this.smartTerrain = suppressGeneratedDecorationAt(
+          this.getSmartDocument(), targetX, targetY, 'terrain',
+        ).smartTerrain;
+      }
+    } else if (editorState.activeLayer === 'foreground' || editorState.activeLayer === 'background') {
+      const slot = smartCellKey(targetX, targetY);
+      if (editorState.activeLayer === 'background') delete this.smartTerrain.backdropCells[slot];
+      if (
+        this.smartTerrain.generatedDecorations[slot]?.layer === editorState.activeLayer
+        || this.smartTerrain.generatedBackgroundDecorations[slot]?.layer === editorState.activeLayer
+      ) {
+        this.smartTerrain = suppressGeneratedDecorationAt(
+          this.getSmartDocument(), targetX, targetY, editorState.activeLayer,
+        ).smartTerrain;
+      }
+    }
+    this.recordTileBatchAction({
+      layer: editorState.activeLayer,
+      x: targetX,
+      y: targetY,
+      oldGid,
+      newGid: -1,
+    });
   }
 
   clearCurrentLayer(): void {
@@ -1204,12 +1336,16 @@ export class EditorEditRuntime {
       return;
     }
 
-    const newGid = erase ? -1 : getSelectionTileValue(0, 0);
-    for (const tile of iterateShapeTiles(kind, x1, y1, x2, y2, outline, options?.mid)) {
+    const pool = erase ? [] : getOrderedSelectionValues(editorState.selection, getSelectionTileValue);
+    const origin = { x: Math.min(x1, x2), y: Math.min(y1, y2) };
+    const tiles = iterateShapeTiles(kind, x1, y1, x2, y2, outline, options?.mid);
+    for (let step = 0; step < tiles.length; step += 1) {
+      const tile = tiles[step]!;
       if (tile.x < 0 || tile.x >= ROOM_WIDTH || tile.y < 0 || tile.y >= ROOM_HEIGHT) {
         continue;
       }
 
+      const newGid = erase ? -1 : this.resolveMultiTileStampValue(kind, tile, step, origin, pool);
       const existingTile = layer.getTileAt(tile.x, tile.y);
       const oldGid = existingTile
         ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
@@ -1218,7 +1354,10 @@ export class EditorEditRuntime {
         continue;
       }
 
-      if (erase) {
+      if (erase || newGid < 0) {
+        if (!existingTile) {
+          continue;
+        }
         layer.removeTileAt(tile.x, tile.y);
       } else {
         const decoded = decodeTileDataValue(newGid);
@@ -1233,18 +1372,118 @@ export class EditorEditRuntime {
         x: tile.x,
         y: tile.y,
         oldGid,
-        newGid,
+        newGid: erase ? -1 : newGid,
       });
-      this.recordManualSmartEdit(editorState.activeLayer, tile.x, tile.y, newGid);
+      this.recordManualSmartEdit(editorState.activeLayer, tile.x, tile.y, erase ? -1 : newGid);
     }
   }
 
+  private resolveMultiTileStampValue(
+    kind: EditorShapeKind | 'fill',
+    tile: TilePoint,
+    step: number,
+    origin: TilePoint,
+    pool: number[],
+  ): number {
+    if (pool.length === 0) {
+      return -1;
+    }
+    if (editorState.shapeFillMode === 'shuffle' && pool.length > 1) {
+      return pool[Math.min(pool.length - 1, Math.floor(Math.random() * pool.length))] ?? -1;
+    }
+    if (kind === 'line' || kind === 'curve') {
+      return pool[pathPatternIndex(step, pool.length)] ?? -1;
+    }
+    return pool[diagonalPatternIndex(tile.x - origin.x, tile.y - origin.y, pool.length)] ?? -1;
+  }
+
   floodFill(startX: number, startY: number): void {
-    this.floodReplace(startX, startY, getSelectionTileValue(0, 0));
+    if (editorState.paletteMode === 'smart') {
+      this.floodReplace(startX, startY, getSelectionTileValue(0, 0));
+      return;
+    }
+    const pool = getOrderedSelectionValues(editorState.selection, getSelectionTileValue);
+    if (pool.length <= 1) {
+      this.floodReplace(startX, startY, pool[0] ?? getSelectionTileValue(0, 0));
+      return;
+    }
+    this.floodPaintPattern(startX, startY, pool);
   }
 
   floodErase(startX: number, startY: number): void {
     this.floodReplace(startX, startY, -1);
+  }
+
+  private floodPaintPattern(startX: number, startY: number, pool: number[]): void {
+    if (!this.guardEditable() || pool.length === 0) {
+      return;
+    }
+    const layer = this.host.getLayers().get(editorState.activeLayer);
+    if (!layer || startX < 0 || startX >= ROOM_WIDTH || startY < 0 || startY >= ROOM_HEIGHT) {
+      return;
+    }
+
+    const startTile = layer.getTileAt(startX, startY);
+    const targetGid = startTile
+      ? encodeTileDataValue(startTile.index, startTile.flipX, startTile.flipY)
+      : -1;
+    const ignoreTileFlipping = editorState.fillIgnoreTileFlipping;
+    const cells: TilePoint[] = [];
+    const visited = new Set<string>();
+    const queue: Array<[number, number]> = [[startX, startY]];
+    while (queue.length > 0) {
+      const [x, y] = queue.shift()!;
+      const key = `${x},${y}`;
+      if (visited.has(key) || x < 0 || x >= ROOM_WIDTH || y < 0 || y >= ROOM_HEIGHT) {
+        continue;
+      }
+      const tile = layer.getTileAt(x, y);
+      const currentGid = tile
+        ? encodeTileDataValue(tile.index, tile.flipX, tile.flipY)
+        : -1;
+      if (!encodedTilesMatchForFlood(currentGid, targetGid, ignoreTileFlipping)) {
+        continue;
+      }
+      visited.add(key);
+      cells.push({ x, y });
+      queue.push([x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]);
+    }
+    if (cells.length === 0) {
+      return;
+    }
+
+    const origin = {
+      x: Math.min(...cells.map((cell) => cell.x)),
+      y: Math.min(...cells.map((cell) => cell.y)),
+    };
+    for (const cell of cells) {
+      const newGid = this.resolveMultiTileStampValue('fill', cell, 0, origin, pool);
+      const existingTile = layer.getTileAt(cell.x, cell.y);
+      const oldGid = existingTile
+        ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
+        : -1;
+      if (oldGid === newGid) {
+        continue;
+      }
+      if (newGid < 0) {
+        layer.removeTileAt(cell.x, cell.y);
+      } else {
+        const decoded = decodeTileDataValue(newGid);
+        const placedTile = layer.putTileAt(decoded.gid, cell.x, cell.y);
+        if (placedTile) {
+          placedTile.flipX = decoded.flipX;
+          placedTile.flipY = decoded.flipY;
+        }
+      }
+      this.recordTileBatchAction({
+        layer: editorState.activeLayer,
+        x: cell.x,
+        y: cell.y,
+        oldGid,
+        newGid,
+      });
+      this.recordManualSmartEdit(editorState.activeLayer, cell.x, cell.y, newGid);
+    }
   }
 
   private floodReplace(startX: number, startY: number, replacementGid: number): void {
@@ -1283,7 +1522,8 @@ export class EditorEditRuntime {
     const targetGid = targetTile
       ? encodeTileDataValue(targetTile.index, targetTile.flipX, targetTile.flipY)
       : -1;
-    if (targetGid === replacementGid) {
+    const ignoreTileFlipping = editorState.fillIgnoreTileFlipping;
+    if (!ignoreTileFlipping && targetGid === replacementGid) {
       return;
     }
 
@@ -1304,29 +1544,31 @@ export class EditorEditRuntime {
       const currentGid = tile
         ? encodeTileDataValue(tile.index, tile.flipX, tile.flipY)
         : -1;
-      if (currentGid !== targetGid) {
+      if (!encodedTilesMatchForFlood(currentGid, targetGid, ignoreTileFlipping)) {
         continue;
       }
 
       visited.add(key);
-      if (replacementGid < 0) {
-        layer.removeTileAt(x, y);
-      } else {
-        const decoded = decodeTileDataValue(replacementGid);
-        const placedTile = layer.putTileAt(decoded.gid, x, y);
-        if (placedTile) {
-          placedTile.flipX = decoded.flipX;
-          placedTile.flipY = decoded.flipY;
+      if (currentGid !== replacementGid) {
+        if (replacementGid < 0) {
+          layer.removeTileAt(x, y);
+        } else {
+          const decoded = decodeTileDataValue(replacementGid);
+          const placedTile = layer.putTileAt(decoded.gid, x, y);
+          if (placedTile) {
+            placedTile.flipX = decoded.flipX;
+            placedTile.flipY = decoded.flipY;
+          }
         }
+        this.recordTileBatchAction({
+          layer: editorState.activeLayer,
+          x,
+          y,
+          oldGid: currentGid,
+          newGid: replacementGid,
+        });
+        this.recordManualSmartEdit(editorState.activeLayer, x, y, replacementGid);
       }
-      this.recordTileBatchAction({
-        layer: editorState.activeLayer,
-        x,
-        y,
-        oldGid: targetGid,
-        newGid: replacementGid,
-      });
-      this.recordManualSmartEdit(editorState.activeLayer, x, y, replacementGid);
 
       queue.push([x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]);
     }

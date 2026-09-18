@@ -15,6 +15,7 @@ import {
   type EraserBrushSize,
   type LayerName,
   type PaletteMode,
+  type RandomizeBrushSize,
   type TileSelection,
   type ToolName,
 } from './room';
@@ -28,6 +29,15 @@ export interface EditorState {
   rectOutline: boolean;
   ellipseOutline: boolean;
   lineCurve: boolean;
+  randomizeScramble: boolean;
+  randomizeBrushSize: RandomizeBrushSize;
+  shuffleBrushSize: RandomizeBrushSize;
+  scrambleBrushSize: RandomizeBrushSize;
+  randomizeHorizontal: boolean;
+  randomizeVertical: boolean;
+  pencilContinuousStamping: boolean;
+  fillIgnoreTileFlipping: boolean;
+  shapeFillMode: 'pattern' | 'shuffle';
   activeLayer: LayerName;
   selectedTilesetKey: string;
   selectedTileGid: number;  // global tile ID of top-left of selection
@@ -72,6 +82,10 @@ export function createDefaultEditorTileSelection(): TileSelection {
     width: 1,
     height: 1,
     occupiedMask: [[true]],
+    patternOrder: [{
+      col: DEFAULT_EDITOR_SELECTION_START_COL,
+      row: DEFAULT_EDITOR_SELECTION_START_ROW,
+    }],
   };
 }
 
@@ -80,6 +94,15 @@ export const editorState: EditorState = {
   rectOutline: false,
   ellipseOutline: false,
   lineCurve: false,
+  randomizeScramble: false,
+  randomizeBrushSize: 3,
+  shuffleBrushSize: 3,
+  scrambleBrushSize: 3,
+  randomizeHorizontal: false,
+  randomizeVertical: false,
+  pencilContinuousStamping: false,
+  fillIgnoreTileFlipping: false,
+  shapeFillMode: 'pattern',
   activeLayer: 'terrain',
   selectedTilesetKey: DEFAULT_EDITOR_TILESET_KEY,
   selectedTileGid: DEFAULT_EDITOR_SELECTED_TILE_GID,

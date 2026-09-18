@@ -21,8 +21,104 @@
   padding: 6px 4px;
 }
 
-.tool-btn .tool-mode.is-dim {
-  opacity: 0.5;
+.tool-icon-mosaic {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  width: 14px;
+  height: 14px;
+}
+
+.tool-icon-mosaic span {
+  display: block;
+  background: currentColor;
+}
+
+.tool-icon-mosaic span:nth-child(1) { opacity: 1; }
+.tool-icon-mosaic span:nth-child(2) { opacity: 0.35; }
+.tool-icon-mosaic span:nth-child(3) { opacity: 0.62; }
+.tool-icon-mosaic span:nth-child(4) { opacity: 0.22; }
+
+.tool-icon-broken-pencil {
+  position: relative;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+}
+
+.tool-icon-broken-pencil > span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+}
+
+.tool-icon-broken-pencil > span:first-child {
+  clip-path: inset(0 52% 0 0);
+  transform: translate(-2px, 1px);
+}
+
+.tool-icon-broken-pencil > span:last-child {
+  clip-path: inset(0 0 0 52%);
+  transform: translate(2px, -1px);
+}
+
+.editor-randomize-size-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.editor-randomize-brush-button {
+  min-width: 36px;
+  height: 28px;
+  padding: 0 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.editor-randomize-brush-button.active {
+  background: var(--accent-cool-soft);
+  border-color: var(--accent-cool);
+  color: var(--text);
+}
+
+.editor-shape-fill-toggle {
+  display: inline-flex;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgba(243, 238, 226, 0.16);
+  border-radius: 8px;
+}
+
+.editor-shape-fill-button {
+  min-width: 72px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.editor-shape-fill-button + .editor-shape-fill-button {
+  border-left: 1px solid rgba(243, 238, 226, 0.16);
+}
+
+.editor-shape-fill-button.active {
+  background: var(--accent-cool-soft);
+  color: var(--text);
 }
 
 .tool-btn-compact .tool-label {

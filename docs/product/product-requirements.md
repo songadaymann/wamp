@@ -133,12 +133,14 @@ The editor is the core product. It needs to be dead simple for casual users but 
 
 | Tool | Description |
 |------|-------------|
-| **Single Tile** | Click to place one tile. The default tool |
-| **Rectangle Filled / Outlined** | Click-drag two corners. Re-select (R) toggles filled vs outlined; hold Shift for a square. Right-drag erases the same shape |
-| **Ellipse Filled / Outlined** | Click-drag an ellipse (E). Re-select toggles filled vs outlined; hold Shift for a circle. Right-drag erases the same shape |
-| **Line / Curve** | Click-hold the start tile and drag to the end (L). Re-select toggles line vs curve; hold Shift to snap to 45°. Curve keeps a preview after release so the mouse pulls a bezier; left-click stamps, right-click cancels. Right-drag erases; curve erase confirms on a second right-click |
-| **Flood Fill** | Fill a contiguous area of same/empty tiles. Right-click flood-erases matching tiles |
-| **Eraser** | Click or drag to remove tiles |
+| **Draw** | Click or drag to stamp the current Tilesets selection (B). With multiple tiles selected, optional Continuous Stamping (off by default) places a stamp on every hovered tile instead of snapping to the selection grid. Right-click erase follows the stamp preview, including gaps. Ctrl/Cmd-click on the palette adds or removes individual tiles; a drag sets order 1…N and numbers overlay the selection |
+| **Rectangle Filled / Outlined** | Click-drag two corners. Re-select (R) toggles filled vs outlined; hold Shift for a square. Right-drag erases the same shape. With multiple Tilesets tiles selected, Pattern (default) stamps a repeating diagonal from selection order; Shuffle samples randomly from those tiles |
+| **Ellipse Filled / Outlined** | Click-drag an ellipse (E / O). Re-select toggles filled vs outlined; hold Shift for a circle. Right-drag erases the same shape. Pattern and Shuffle match Rectangle, including outlined stamps |
+| **Line / Curve** | Click-hold the start tile and drag to the end (L). Re-select toggles line vs curve; hold Shift to snap to 45°. Curve keeps a preview after release so the mouse pulls a bezier; left-click stamps, right-click cancels. Right-drag erases; curve erase confirms on a second right-click. Pattern walks selected tiles in order along the path; Shuffle samples along the path |
+| **Flood Fill** | Fill a contiguous area of same/empty tiles (G / F). Right-click flood-erases matching tiles. Ignore tile flipping (off by default) treats horizontally or vertically flipped copies as the same tile. With multiple Tilesets tiles selected, Pattern fills the area with the diagonal; Shuffle samples per cell |
+| **Shuffle / Scramble** | Shuffle (V) paints a 1×1–5×5 window from occupied selected tiles (default 3×3, last size remembered per mode). Optional Flip H / Flip V randomize placed-tile flips. Re-select toggles Scramble, which reorders existing window tiles; 1×1 Scramble forces Flip H and Flip V on because a single cell cannot reorder |
+| **Eraser** | Click or drag to remove tiles. Right-click with Draw or Shuffle/Scramble uses that tool’s stamp or brush size |
+| **Copy** | Copy and paste a region of tiles |
 | **Object Placer** | Place enemies, springs, collectibles, etc. with property controls |
 | **Spawn / Goal Authoring** | Place the player spawn, exit, checkpoints, finish marker, and goal settings |
 

@@ -46,6 +46,19 @@ import {
 } from '../../customSprites/registry';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
+import {
+  cloneTileSelection,
+  isSelectionCellOccupied,
+  selectionHasOccupiedCells,
+  setSelectionRectOccupied,
+} from './paletteSelectionMask';
+import {
+  appendPatternCells,
+  collectOccupiedDragOrder,
+  removePatternCells,
+  rowMajorOccupiedOrder,
+  walkDragCells,
+} from '../../scenes/editor/selectionPattern';
 
 const MIN_SELECTION_OPAQUE_PIXELS = 96;
 const CUSTOM_OBJECT_SUBCATEGORIES = ['all', 'decoration', 'collectible', 'sign', 'solid', 'pushable'] as const;
@@ -124,6 +137,7 @@ export class PaletteController {
   private currentTreeFamily: TreeFamilyFilter = 'all';
   private currentObjectSearch = '';
   private paletteDragStart: { col: number; row: number } | null = null;
+  private paletteMaskPaint: { add: boolean; snapshot: TileSelection } | null = null;
   private paletteTooltipEl: HTMLDivElement | null = null;
   private communityEntries: CustomSpriteCatalogEntry[] = [];
   private communityNextCursor: string | null = null;
@@ -263,7 +277,6 @@ export class PaletteController {
     if (!ts) {
       return;
     }
-    const tilesetChanged = editorState.selectedTilesetKey !== tilesetKey;
     editorState.selectedTilesetKey = tilesetKey;
 
     const nextSelection = this.normalizeSelection(
@@ -273,8 +286,71 @@ export class PaletteController {
         startRow,
         endCol - startCol + 1,
         endRow - startRow + 1,
+        { col1, row1, col2, row2 },
       ),
     );
+    this.commitSelection(nextSelection);
+  }
+
+  private beginPaletteMaskPaint(tilesetKey: string, col: number, row: number): void {
+    let snapshot = editorState.selection;
+    if (snapshot.tilesetKey !== tilesetKey) {
+      editorState.selectedTilesetKey = tilesetKey;
+      snapshot = {
+        tilesetKey,
+        startCol: col,
+        startRow: row,
+        width: 1,
+        height: 1,
+        occupiedMask: [[false]],
+        patternOrder: [],
+      };
+    }
+    this.paletteMaskPaint = {
+      add: !isSelectionCellOccupied(snapshot, col, row),
+      snapshot: cloneTileSelection(snapshot),
+    };
+    this.applyPaletteMaskPaint(col, row);
+  }
+
+  private applyPaletteMaskPaint(col: number, row: number): void {
+    if (!this.paletteDragStart || !this.paletteMaskPaint) {
+      return;
+    }
+    let nextSelection = setSelectionRectOccupied(
+      this.paletteMaskPaint.snapshot,
+      this.paletteDragStart.col,
+      this.paletteDragStart.row,
+      col,
+      row,
+      this.paletteMaskPaint.add,
+    );
+    const paintedCells = walkDragCells(
+      this.paletteDragStart.col,
+      this.paletteDragStart.row,
+      col,
+      row,
+    );
+    nextSelection = {
+      ...nextSelection,
+      patternOrder: this.paletteMaskPaint.add
+        ? appendPatternCells(this.paletteMaskPaint.snapshot.patternOrder ?? [], paintedCells)
+        : removePatternCells(this.paletteMaskPaint.snapshot.patternOrder ?? [], paintedCells),
+    };
+    if (!selectionHasOccupiedCells(nextSelection)) {
+      editorState.selection = nextSelection;
+      this.ensureSelectionIsUsable();
+      nextSelection = editorState.selection;
+    }
+    this.commitSelection(nextSelection);
+  }
+
+  private commitSelection(nextSelection: TileSelection): void {
+    const ts = getTilesetByKey(nextSelection.tilesetKey);
+    if (!ts) {
+      return;
+    }
+    editorState.selectedTilesetKey = nextSelection.tilesetKey;
     editorState.selection = nextSelection;
     editorState.selectedTileGid = this.getPrimarySelectionGid(nextSelection, ts);
 
@@ -293,9 +369,7 @@ export class PaletteController {
 
     this.renderPalette();
     this.renderTilePreview();
-    if (tilesetChanged) {
-      this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
-    }
+    this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
   }
 
   renderPalette(): void {
@@ -370,6 +444,7 @@ export class PaletteController {
       ctx.fillRect(sx, sy, sw, sh);
       ctx.strokeRect(sx, sy, sw, sh);
       this.drawSelectionEmptyCellOverlay(ctx, selection, scaledTile, scaledTile, sx - 1, sy - 1);
+      this.drawSelectionPatternOrderOverlay(ctx, selection, scaledTile, scaledTile);
     }
 
     this.paletteCanvas.onpointerdown = (event: PointerEvent) => {
@@ -389,7 +464,12 @@ export class PaletteController {
           return;
         }
         this.paletteDragStart = { col, row };
-        this.updateSelection(ts.key, col, row, col, row);
+        if (event.ctrlKey || event.metaKey) {
+          this.beginPaletteMaskPaint(ts.key, col, row);
+        } else {
+          this.paletteMaskPaint = null;
+          this.updateSelection(ts.key, col, row, col, row);
+        }
         this.paletteCanvas?.setPointerCapture(event.pointerId);
       }
     };
@@ -411,12 +491,17 @@ export class PaletteController {
       const col = Math.min(ts.columns - 1, Math.max(0, Math.floor(x / scaledTile)));
       const row = Math.min(ts.rows - 1, Math.max(0, Math.floor(y / scaledTile)));
 
-      this.updateSelection(ts.key, this.paletteDragStart.col, this.paletteDragStart.row, col, row);
+      if (this.paletteMaskPaint) {
+        this.applyPaletteMaskPaint(col, row);
+      } else {
+        this.updateSelection(ts.key, this.paletteDragStart.col, this.paletteDragStart.row, col, row);
+      }
     };
 
     this.paletteCanvas.onpointerup = () => {
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
+        this.paletteMaskPaint = null;
         this.requestPhoneEditorAutoCollapse();
       }
     };
@@ -424,6 +509,7 @@ export class PaletteController {
     this.paletteCanvas.onpointercancel = () => {
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
+        this.paletteMaskPaint = null;
       }
       this.hidePaletteTooltip();
     };
@@ -431,6 +517,7 @@ export class PaletteController {
     this.paletteCanvas.onpointerleave = () => {
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
+        this.paletteMaskPaint = null;
       }
       this.hidePaletteTooltip();
     };
@@ -927,21 +1014,34 @@ export class PaletteController {
     startRow: number,
     width: number,
     height: number,
+    drag?: { col1: number; row1: number; col2: number; row2: number },
   ): TileSelection {
-    return {
+    const occupiedMask = this.buildSelectionOccupiedMask(
       tilesetKey,
       startCol,
       startRow,
       width,
       height,
-      occupiedMask: this.buildSelectionOccupiedMask(
-        tilesetKey,
-        startCol,
-        startRow,
-        width,
-        height,
-      ),
+    );
+    const selection: TileSelection = {
+      tilesetKey,
+      startCol,
+      startRow,
+      width,
+      height,
+      occupiedMask,
+      patternOrder: [],
     };
+    selection.patternOrder = drag
+      ? collectOccupiedDragOrder(
+          drag.col1,
+          drag.row1,
+          drag.col2,
+          drag.row2,
+          (col, row) => isSelectionCellOccupied(selection, col, row),
+        )
+      : rowMajorOccupiedOrder(selection);
+    return selection;
   }
 
   private ensureSelectionIsUsable(): void {
@@ -1292,6 +1392,13 @@ export class PaletteController {
   }
 
   private getPrimarySelectionGid(selection: TileSelection, ts: TilesetConfig): number {
+    const first = (selection.patternOrder && selection.patternOrder.length > 0
+      ? selection.patternOrder[0]
+      : null)
+      ?? null;
+    if (first && isSelectionCellOccupied(selection, first.col, first.row)) {
+      return ts.firstGid + first.row * ts.columns + first.col;
+    }
     for (let dy = 0; dy < selection.height; dy++) {
       for (let dx = 0; dx < selection.width; dx++) {
         if (!selection.occupiedMask[dy]?.[dx]) {
@@ -1342,6 +1449,37 @@ export class PaletteController {
       }
     }
 
+    ctx.restore();
+  }
+
+  private drawSelectionPatternOrderOverlay(
+    ctx: CanvasRenderingContext2D,
+    selection: TileSelection,
+    cellWidth: number,
+    cellHeight: number,
+  ): void {
+    const order = selection.patternOrder && selection.patternOrder.length > 0
+      ? selection.patternOrder
+      : rowMajorOccupiedOrder(selection);
+    if (order.length <= 1) {
+      return;
+    }
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `700 ${Math.max(8, Math.floor(Math.min(cellWidth, cellHeight) * 0.42))}px "IBM Plex Mono", monospace`;
+    ctx.lineWidth = Math.max(2, Math.min(cellWidth, cellHeight) * 0.08);
+    ctx.strokeStyle = 'rgba(8, 10, 14, 0.85)';
+    ctx.fillStyle = '#fff6de';
+
+    order.forEach((cell, index) => {
+      const x = (cell.col + 0.5) * cellWidth;
+      const y = (cell.row + 0.5) * cellHeight;
+      const label = String(index + 1);
+      ctx.strokeText(label, x, y);
+      ctx.fillText(label, x, y);
+    });
     ctx.restore();
   }
 

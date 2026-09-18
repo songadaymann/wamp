@@ -91,6 +91,8 @@ import {
   isEditorShapeOutline,
   isPathEditorTool,
 } from './editor/editorToolSelection';
+import { clampRandomizeBrushSize } from './editor/randomizeTiles';
+import { resolvePencilStampOrigin } from './editor/stampDrag';
 import { iterateShapeTiles, resolveShapeEnd, snapLineEnd, type EditorShapeKind, type TilePoint } from './editor/shapeTiles';
 import type { EditorStatusDetails } from './editor/roomSession';
 import { buildEditorUiViewModel } from './editor/viewModel';
@@ -143,7 +145,7 @@ function isPointerShiftDown(pointer: Phaser.Input.Pointer): boolean {
   return Boolean(event && 'shiftKey' in event && event.shiftKey);
 }
 
-type TileDragMode = 'pencil' | 'eraser' | null;
+type TileDragMode = 'pencil' | 'eraser' | 'randomize' | null;
 type RectMode = 'rect' | 'ellipse' | 'line' | 'copy' | null;
 type CourseGoalPlacementMode = EditorMarkerPlacementMode | null;
 
@@ -200,6 +202,8 @@ export class CourseEditorScene extends Phaser.Scene {
   private panStartScroll = { x: 0, y: 0 };
   private tileDragMode: TileDragMode = null;
   private activeTileDragRoomId: string | null = null;
+  private pencilDragStart: { x: number; y: number } | null = null;
+  private lastPencilStampOrigin: { x: number; y: number } | null = null;
   private rectMode: RectMode = null;
   private shapeEraseActive = false;
   private pathBend: {
@@ -388,6 +392,13 @@ export class CourseEditorScene extends Phaser.Scene {
     if (key === 'l') {
       event.preventDefault();
       applyEditorToolSelection('line');
+      this.updateToolUi();
+      return;
+    }
+
+    if (key === 'v') {
+      event.preventDefault();
+      applyEditorToolSelection('randomize');
       this.updateToolUi();
       return;
     }
@@ -2209,7 +2220,9 @@ export class CourseEditorScene extends Phaser.Scene {
     switch (editorState.activeTool) {
       case 'pencil':
         slice.runtime.beginTileBatch();
-        slice.runtime.placeTileAt(pointer.worldX, pointer.worldY);
+        this.pencilDragStart = { x: localTile.tileX, y: localTile.tileY };
+        this.lastPencilStampOrigin = null;
+        this.placeCoursePencilStamp(slice, localTile.tileX, localTile.tileY);
         this.tileDragMode = 'pencil';
         this.activeTileDragRoomId = slice.roomId;
         break;
@@ -2217,6 +2230,12 @@ export class CourseEditorScene extends Phaser.Scene {
         slice.runtime.beginTileBatch();
         slice.runtime.eraseTileAt(pointer.worldX, pointer.worldY);
         this.tileDragMode = 'eraser';
+        this.activeTileDragRoomId = slice.roomId;
+        break;
+      case 'randomize':
+        slice.runtime.beginTileBatch();
+        slice.runtime.paintRandomizeAt(pointer.worldX, pointer.worldY);
+        this.tileDragMode = 'randomize';
         this.activeTileDragRoomId = slice.roomId;
         break;
       case 'fill':
@@ -2298,6 +2317,8 @@ export class CourseEditorScene extends Phaser.Scene {
     slice.runtime.beginTileBatch();
     if (editorState.activeTool === 'fill') {
       slice.runtime.floodErase(localTile.tileX, localTile.tileY);
+    } else if (editorState.activeTool === 'pencil' && editorState.paletteMode === 'tiles') {
+      slice.runtime.eraseStampAt(pointer.worldX, pointer.worldY);
     } else {
       slice.runtime.eraseTileAt(pointer.worldX, pointer.worldY);
     }
@@ -2334,7 +2355,9 @@ export class CourseEditorScene extends Phaser.Scene {
       }
 
       if (this.tileDragMode === 'pencil') {
-        slice.runtime.placeTileAt(pointer.worldX, pointer.worldY);
+        this.placeCoursePencilStamp(slice, localTile.tileX, localTile.tileY);
+      } else if (this.tileDragMode === 'randomize') {
+        slice.runtime.paintRandomizeAt(pointer.worldX, pointer.worldY);
       } else {
         slice.runtime.eraseTileAt(pointer.worldX, pointer.worldY);
       }
@@ -2362,6 +2385,36 @@ export class CourseEditorScene extends Phaser.Scene {
     }
   }
 
+  private placeCoursePencilStamp(
+    slice: CourseRoomSlice,
+    tileX: number,
+    tileY: number,
+  ): void {
+    const selectionWidth = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.width);
+    const selectionHeight = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.height);
+    const origin = this.pencilDragStart
+      ? resolvePencilStampOrigin(
+          this.pencilDragStart,
+          { x: tileX, y: tileY },
+          selectionWidth,
+          selectionHeight,
+          editorState.pencilContinuousStamping,
+        )
+      : { x: tileX, y: tileY };
+    if (
+      this.lastPencilStampOrigin
+      && this.lastPencilStampOrigin.x === origin.x
+      && this.lastPencilStampOrigin.y === origin.y
+    ) {
+      return;
+    }
+    this.lastPencilStampOrigin = origin;
+    slice.runtime.placeTileAt(
+      slice.origin.x + origin.x * TILE_SIZE,
+      slice.origin.y + origin.y * TILE_SIZE,
+    );
+  }
+
   private finishPointerAction(pointer: Phaser.Input.Pointer): void {
     const activeSlice = this.activeTileDragRoomId
       ? this.roomSlices.get(this.activeTileDragRoomId) ?? null
@@ -2370,6 +2423,8 @@ export class CourseEditorScene extends Phaser.Scene {
       activeSlice.runtime.commitTileBatch();
       this.tileDragMode = null;
       this.activeTileDragRoomId = null;
+      this.pencilDragStart = null;
+      this.lastPencilStampOrigin = null;
       this.renderUi();
       return;
     }
@@ -2772,19 +2827,26 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     const color = this.courseGoalPlacementMode ? RETRO_COLORS.frontier : 0x7de5ff;
+    const brushSize = editorState.activeTool === 'eraser'
+      ? editorState.eraserBrushSize
+      : editorState.activeTool === 'randomize'
+        ? clampRandomizeBrushSize(editorState.randomizeBrushSize, editorState.randomizeScramble)
+        : 1;
+    const originX = tile.tileX - Math.floor(brushSize * 0.5);
+    const originY = tile.tileY - Math.floor(brushSize * 0.5);
     this.cursorGraphics.lineStyle(2, color, 0.88);
     this.cursorGraphics.fillStyle(color, 0.12);
     this.cursorGraphics.fillRect(
-      slice.origin.x + tile.tileX * TILE_SIZE,
-      slice.origin.y + tile.tileY * TILE_SIZE,
-      TILE_SIZE,
-      TILE_SIZE,
+      slice.origin.x + originX * TILE_SIZE,
+      slice.origin.y + originY * TILE_SIZE,
+      brushSize * TILE_SIZE,
+      brushSize * TILE_SIZE,
     );
     this.cursorGraphics.strokeRect(
-      slice.origin.x + tile.tileX * TILE_SIZE,
-      slice.origin.y + tile.tileY * TILE_SIZE,
-      TILE_SIZE,
-      TILE_SIZE,
+      slice.origin.x + originX * TILE_SIZE,
+      slice.origin.y + originY * TILE_SIZE,
+      brushSize * TILE_SIZE,
+      brushSize * TILE_SIZE,
     );
   }
 

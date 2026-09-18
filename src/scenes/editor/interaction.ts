@@ -20,6 +20,8 @@ import {
   isEditorShapeOutline,
   isPathEditorTool,
 } from './editorToolSelection';
+import { clampRandomizeBrushSize } from './randomizeTiles';
+import { resolvePencilStampOrigin } from './stampDrag';
 import { iterateShapeTiles, resolveShapeEnd, snapLineEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
 
 function isPointerShiftDown(pointer: Phaser.Input.Pointer): boolean {
@@ -55,8 +57,10 @@ interface EditorInteractionHost {
   removeObjectAt(worldX: number, worldY: number): void;
   placeGoalMarker(tileX: number, tileY: number): void;
   placeTileAt(worldX: number, worldY: number): void;
+  paintRandomizeAt(worldX: number, worldY: number): void;
   placeTileStroke(points: readonly TilePoint[]): void;
   eraseTileAt(worldX: number, worldY: number): void;
+  eraseStampAt(worldX: number, worldY: number): void;
   stampShape(
     kind: EditorShapeKind,
     x1: number,
@@ -376,25 +380,38 @@ export class EditorInteractionController {
       editorState.activeTool === 'eraser'
         ? editorState.eraserBrushSize
         : 1;
+    const randomizeBrushSize =
+      editorState.activeTool === 'randomize'
+        ? clampRandomizeBrushSize(editorState.randomizeBrushSize, editorState.randomizeScramble)
+        : 1;
     const cursorOrigin =
       editorState.activeTool === 'eraser'
         ? {
             x: tileX - Math.floor(eraserBrushSize * 0.5),
             y: tileY - Math.floor(eraserBrushSize * 0.5),
           }
+        : editorState.activeTool === 'randomize'
+          ? {
+              x: tileX - Math.floor(randomizeBrushSize * 0.5),
+              y: tileY - Math.floor(randomizeBrushSize * 0.5),
+            }
         : stampOrigin;
     const cursorW =
       editorState.activeTool === 'pencil'
         ? selection.width
         : editorState.activeTool === 'eraser'
           ? eraserBrushSize
-          : 1;
+          : editorState.activeTool === 'randomize'
+            ? randomizeBrushSize
+            : 1;
     const cursorH =
       editorState.activeTool === 'pencil'
         ? selection.height
         : editorState.activeTool === 'eraser'
           ? eraserBrushSize
-          : 1;
+          : editorState.activeTool === 'randomize'
+            ? randomizeBrushSize
+            : 1;
 
     if (editorState.activeTool === 'eraser') {
       this.cursorGraphics.lineStyle(2, RETRO_COLORS.danger, 0.85);
@@ -403,6 +420,20 @@ export class EditorInteractionController {
         cursorOrigin.y * TILE_SIZE,
         cursorW * TILE_SIZE,
         cursorH * TILE_SIZE,
+      );
+    } else if (editorState.activeTool === 'pencil' && pointer.rightButtonDown()) {
+      this.drawOccupiedCellPreview(
+        cursorOrigin.x,
+        cursorOrigin.y,
+        cursorW,
+        cursorH,
+        editorState.paletteMode === 'smart'
+          ? [[true]]
+          : editorState.selection.occupiedMask,
+        RETRO_COLORS.danger,
+        0.18,
+        0.9,
+        2,
       );
     } else {
       const layerAccent = getEditorLayerAccent();
@@ -483,7 +514,7 @@ export class EditorInteractionController {
         } else {
           this.isDrawing = true;
           this.host.beginTileBatch();
-          this.host.eraseTileAt(worldPoint.x, worldPoint.y);
+          this.eraseWithActiveBrush(worldPoint.x, worldPoint.y);
         }
         return;
       }
@@ -565,6 +596,8 @@ export class EditorInteractionController {
           this.placeDraggedTileStamp(worldPoint.x, worldPoint.y);
         } else if (editorState.activeTool === 'eraser') {
           this.host.eraseTileAt(worldPoint.x, worldPoint.y);
+        } else if (editorState.activeTool === 'randomize') {
+          this.host.paintRandomizeAt(worldPoint.x, worldPoint.y);
         }
       }
 
@@ -578,7 +611,7 @@ export class EditorInteractionController {
           const end = this.resolvePointerShapeEnd(pointer, worldPoint);
           this.drawActiveStampPreview(this.rectStart.x, this.rectStart.y, end.x, end.y);
         } else if (!this.shapeEraseActive) {
-          this.host.eraseTileAt(worldPoint.x, worldPoint.y);
+          this.eraseWithActiveBrush(worldPoint.x, worldPoint.y);
         }
       }
 
@@ -1013,6 +1046,8 @@ export class EditorInteractionController {
       this.placeDraggedTileStamp(worldPoint.x, worldPoint.y);
     } else if (editorState.activeTool === 'eraser') {
       this.host.eraseTileAt(worldPoint.x, worldPoint.y);
+    } else if (editorState.activeTool === 'randomize') {
+      this.host.paintRandomizeAt(worldPoint.x, worldPoint.y);
     } else if ((isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy') && this.rectStart) {
       const tileX = Math.floor(worldPoint.x / TILE_SIZE);
       const tileY = Math.floor(worldPoint.y / TILE_SIZE);
@@ -1068,6 +1103,14 @@ export class EditorInteractionController {
     }
     this.clearShapePreview();
     this.clearTileDrag();
+  }
+
+  private eraseWithActiveBrush(worldX: number, worldY: number): void {
+    if (editorState.activeTool === 'pencil' && editorState.paletteMode === 'tiles') {
+      this.host.eraseStampAt(worldX, worldY);
+      return;
+    }
+    this.host.eraseTileAt(worldX, worldY);
   }
 
   private beginTileDrag(tileX: number, tileY: number): void {
@@ -1145,16 +1188,13 @@ export class EditorInteractionController {
 
     const selectionWidth = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.width);
     const selectionHeight = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.height);
-    if (selectionWidth === 1 && selectionHeight === 1) {
-      return { x: tileX, y: tileY };
-    }
-
-    const dx = tileX - this.tileDragStart.x;
-    const dy = tileY - this.tileDragStart.y;
-    return {
-      x: this.tileDragStart.x + Math.floor(dx / selectionWidth) * selectionWidth,
-      y: this.tileDragStart.y + Math.floor(dy / selectionHeight) * selectionHeight,
-    };
+    return resolvePencilStampOrigin(
+      this.tileDragStart,
+      { x: tileX, y: tileY },
+      selectionWidth,
+      selectionHeight,
+      editorState.pencilContinuousStamping,
+    );
   }
 
   private beginPinchGesture(): void {

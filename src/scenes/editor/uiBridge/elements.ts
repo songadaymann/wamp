@@ -28,7 +28,17 @@ export interface EditorUiElements {
   eraseControls: HTMLElement[];
   tileEraseControls: HTMLElement[];
   eraseBrushSelects: HTMLSelectElement[];
-  eraseBrushButtons: HTMLButtonElement[];
+    eraseBrushButtons: HTMLButtonElement[];
+  randomizeControls: HTMLElement[];
+  randomizeBrushButtons: HTMLButtonElement[];
+  randomizeHorizontalInputs: HTMLInputElement[];
+  randomizeVerticalInputs: HTMLInputElement[];
+  pencilControls: HTMLElement[];
+  pencilContinuousInputs: HTMLInputElement[];
+  fillControls: HTMLElement[];
+  fillIgnoreFlipInputs: HTMLInputElement[];
+  shapeFillControls: HTMLElement[];
+  shapeFillButtons: HTMLButtonElement[];
   clearLayerButtons: HTMLButtonElement[];
   clearAllButtons: HTMLButtonElement[];
   clearObjectButtons: HTMLButtonElement[];
@@ -217,6 +227,16 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     tileEraseControls: all<HTMLElement>(doc, '.editor-tile-erase-control'),
     eraseBrushSelects: all<HTMLSelectElement>(doc, '.editor-erase-brush-select'),
     eraseBrushButtons: all<HTMLButtonElement>(doc, '.editor-erase-brush-button'),
+    randomizeControls: all<HTMLElement>(doc, '.editor-randomize-controls'),
+    randomizeBrushButtons: all<HTMLButtonElement>(doc, '.editor-randomize-brush-button'),
+    randomizeHorizontalInputs: all<HTMLInputElement>(doc, '.editor-randomize-horizontal'),
+    randomizeVerticalInputs: all<HTMLInputElement>(doc, '.editor-randomize-vertical'),
+    pencilControls: all<HTMLElement>(doc, '.editor-pencil-controls'),
+    pencilContinuousInputs: all<HTMLInputElement>(doc, '.editor-pencil-continuous'),
+    fillControls: all<HTMLElement>(doc, '.editor-fill-controls'),
+    fillIgnoreFlipInputs: all<HTMLInputElement>(doc, '.editor-fill-ignore-flip'),
+    shapeFillControls: all<HTMLElement>(doc, '.editor-shape-fill-controls'),
+    shapeFillButtons: all<HTMLButtonElement>(doc, '.editor-shape-fill-button'),
     clearLayerButtons: all<HTMLButtonElement>(doc, '.editor-clear-layer-btn'),
     clearAllButtons: all<HTMLButtonElement>(doc, '.editor-clear-all-btn'),
     clearObjectButtons: all<HTMLButtonElement>(doc, '.editor-clear-objects-btn'),
