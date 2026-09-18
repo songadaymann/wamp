@@ -1,17 +1,29 @@
 import {
   ERASER_BRUSH_SIZES,
   RANDOMIZE_BRUSH_SIZES,
+  SHAPE_FILL_MODES,
   TILESETS,
+  cycleTileFlipMode,
   editorState,
   getTilesetByKey,
   type EraserBrushSize,
   type LayerName,
   type PaletteMode,
   type RandomizeBrushSize,
+  type ShapeFillMode,
+  type TileFlipMode,
   type ToolName,
 } from '../../config';
-import { getEditorToolButtonAppearance, isMoreEditorTool, isShapeFillEditorTool, type EditorToolButtonAppearance } from './editorToolSelection';
-import { clampRandomizeBrushSize, isScrambleOneByOne } from './randomizeTiles';
+import {
+  getEditorToolButtonAppearance,
+  getEditorToolUnavailableTitle,
+  getShapeFillUiMode,
+  isEditorToolUnavailable,
+  isMoreEditorTool,
+  isPencilStampPlacement,
+  type EditorToolButtonAppearance,
+} from './editorToolSelection';
+import { clampRandomizeBrushSize } from './randomizeTiles';
 import { countOccupiedSelectionTiles } from './selectionPattern';
 import {
   finalizeBackgroundUpload,
@@ -136,7 +148,7 @@ const SMART_TOOL_LABELS: Readonly<Partial<Record<ToolName, string>>> = {
   ellipse: 'Ellipse',
   line: 'Line',
   fill: 'Fill',
-  randomize: 'Shuffle',
+      randomize: 'Scramble',
 };
 
 function applyEditorToolIcon(icon: Element, appearance: EditorToolButtonAppearance): void {
@@ -145,13 +157,6 @@ function applyEditorToolIcon(icon: Element, appearance: EditorToolButtonAppearan
     if (!icon.classList.contains('tool-icon-mosaic')) {
       icon.className = 'tool-icon tool-icon-mosaic';
       icon.innerHTML = '<span></span><span></span><span></span><span></span>';
-    }
-    return;
-  }
-  if (kind === 'broken-pencil') {
-    if (!icon.classList.contains('tool-icon-broken-pencil')) {
-      icon.className = 'tool-icon tool-icon-broken-pencil';
-      icon.innerHTML = '<span>\u270E</span><span>\u270E</span>';
     }
     return;
   }
@@ -694,11 +699,7 @@ export class EditorUiBridge {
         if (!RANDOMIZE_BRUSH_SIZES.includes(nextSize as RandomizeBrushSize)) return;
         const size = clampRandomizeBrushSize(nextSize);
         editorState.randomizeBrushSize = size;
-        if (editorState.randomizeScramble) {
-          editorState.scrambleBrushSize = size;
-        } else {
-          editorState.shuffleBrushSize = size;
-        }
+        editorState.scrambleBrushSize = size;
         this.syncEditorChromeState();
       };
       button.addEventListener('click', handleRandomizeBrushButton);
@@ -706,25 +707,17 @@ export class EditorUiBridge {
         button.removeEventListener('click', handleRandomizeBrushButton)
       );
     }
-    for (const input of this.elements.randomizeHorizontalInputs) {
-      const handleHorizontal = () => {
-        editorState.randomizeHorizontal = input.checked;
-        for (const other of this.elements.randomizeHorizontalInputs) {
-          other.checked = input.checked;
-        }
+    for (const button of this.elements.pencilBrushButtons) {
+      const handlePencilBrushButton = () => {
+        const nextSize = Number.parseInt(button.dataset.pencilBrushSize ?? '', 10);
+        if (!RANDOMIZE_BRUSH_SIZES.includes(nextSize as RandomizeBrushSize)) return;
+        editorState.pencilBrushSize = clampRandomizeBrushSize(nextSize);
+        this.syncEditorChromeState();
       };
-      input.addEventListener('change', handleHorizontal);
-      this.cleanupCallbacks.push(() => input.removeEventListener('change', handleHorizontal));
-    }
-    for (const input of this.elements.randomizeVerticalInputs) {
-      const handleVertical = () => {
-        editorState.randomizeVertical = input.checked;
-        for (const other of this.elements.randomizeVerticalInputs) {
-          other.checked = input.checked;
-        }
-      };
-      input.addEventListener('change', handleVertical);
-      this.cleanupCallbacks.push(() => input.removeEventListener('change', handleVertical));
+      button.addEventListener('click', handlePencilBrushButton);
+      this.cleanupCallbacks.push(() =>
+        button.removeEventListener('click', handlePencilBrushButton)
+      );
     }
     for (const input of this.elements.pencilContinuousInputs) {
       const handleContinuous = () => {
@@ -749,10 +742,10 @@ export class EditorUiBridge {
     for (const button of this.elements.shapeFillButtons) {
       const handleShapeFill = () => {
         const nextMode = button.dataset.shapeFillMode;
-        if (nextMode !== 'pattern' && nextMode !== 'shuffle') {
+        if (!SHAPE_FILL_MODES.includes(nextMode as ShapeFillMode)) {
           return;
         }
-        editorState.shapeFillMode = nextMode;
+        editorState.shapeFillMode = nextMode as ShapeFillMode;
         this.syncEditorChromeState();
       };
       button.addEventListener('click', handleShapeFill);
@@ -833,12 +826,12 @@ export class EditorUiBridge {
     }
 
     bindButton(this.cleanupCallbacks, this.elements.flipXButton, () => {
-      editorState.tileFlipX = !editorState.tileFlipX;
+      editorState.tileFlipXMode = cycleTileFlipMode(editorState.tileFlipXMode);
       runtimeConfig.paletteController?.renderTilePreview();
       this.syncEditorChromeState();
     });
     bindButton(this.cleanupCallbacks, this.elements.flipYButton, () => {
-      editorState.tileFlipY = !editorState.tileFlipY;
+      editorState.tileFlipYMode = cycleTileFlipMode(editorState.tileFlipYMode);
       runtimeConfig.paletteController?.renderTilePreview();
       this.syncEditorChromeState();
     });
@@ -1866,12 +1859,10 @@ export class EditorUiBridge {
 
     for (const button of this.elements.toolButtons) {
       const tool = button.dataset.tool as ToolName;
-      const unsupported = paletteModeIsSmart && (
-        tool === 'randomize'
-        || (
-          isRegistryControlledSmartTool(tool)
-          && !isSmartBrushToolSupported(smartSelection.brush.id, tool)
-        )
+      const unsupported = isEditorToolUnavailable(tool) || (
+        paletteModeIsSmart
+        && isRegistryControlledSmartTool(tool)
+        && !isSmartBrushToolSupported(smartSelection.brush.id, tool)
       );
       button.disabled = unsupported;
       button.setAttribute('aria-disabled', unsupported ? 'true' : 'false');
@@ -1904,9 +1895,10 @@ export class EditorUiBridge {
         }
       }
       const supportedTitle = appearance?.title ?? this.toolButtonDefaultTitles.get(button) ?? '';
-      button.title = unsupported
-        ? `${SMART_TOOL_LABELS[tool] ?? supportedTitle} is unavailable for ${smartSelection.brush.label}.`
-        : supportedTitle;
+      button.title = getEditorToolUnavailableTitle(tool)
+        ?? (unsupported
+          ? `${SMART_TOOL_LABELS[tool] ?? supportedTitle} is unavailable for ${smartSelection.brush.label}.`
+          : supportedTitle);
     }
 
     const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
@@ -1988,10 +1980,9 @@ export class EditorUiBridge {
     const showRandomizeControls = editorState.activeTool === 'randomize';
     for (const controls of this.elements.randomizeControls) {
       controls.classList.toggle('hidden', !showRandomizeControls);
-      controls.dataset.scramble = editorState.randomizeScramble ? 'true' : 'false';
       const popoverLabel = controls.querySelector('.editor-tool-popover-label');
       if (popoverLabel) {
-        popoverLabel.textContent = editorState.randomizeScramble ? 'Scramble' : 'Shuffle';
+        popoverLabel.textContent = 'Scramble';
       }
     }
     this.doc.getElementById('editor-shell-randomize-picker')?.classList.toggle(
@@ -2005,21 +1996,10 @@ export class EditorUiBridge {
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
-    const forceScrambleFlips = isScrambleOneByOne(
-      editorState.randomizeScramble,
-      editorState.randomizeBrushSize,
-    );
-    for (const input of this.elements.randomizeHorizontalInputs) {
-      input.checked = forceScrambleFlips || editorState.randomizeHorizontal;
-      input.disabled = forceScrambleFlips;
-    }
-    for (const input of this.elements.randomizeVerticalInputs) {
-      input.checked = forceScrambleFlips || editorState.randomizeVertical;
-      input.disabled = forceScrambleFlips;
-    }
 
     const multiTileSelection = paletteModeIsTiles && countOccupiedSelectionTiles(editorState.selection) > 1;
-    const showPencilControls = editorState.activeTool === 'pencil' && multiTileSelection;
+    const stampPlacement = isPencilStampPlacement();
+    const showPencilControls = editorState.activeTool === 'pencil' && paletteModeIsTiles;
     for (const controls of this.elements.pencilControls) {
       controls.classList.toggle('hidden', !showPencilControls);
     }
@@ -2029,6 +2009,17 @@ export class EditorUiBridge {
     );
     this.doc.querySelector('[data-tool="pencil"][aria-controls="editor-shell-pencil-picker"]')
       ?.setAttribute('aria-expanded', showPencilControls ? 'true' : 'false');
+    for (const button of this.elements.pencilBrushButtons) {
+      const active = button.dataset.pencilBrushSize === String(editorState.pencilBrushSize);
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    for (const row of this.doc.querySelectorAll<HTMLElement>('.editor-pencil-size-row')) {
+      row.classList.toggle('hidden', showPencilControls && multiTileSelection && stampPlacement);
+    }
+    for (const row of this.doc.querySelectorAll<HTMLElement>('.editor-pencil-continuous-row')) {
+      row.classList.toggle('hidden', !(showPencilControls && multiTileSelection && stampPlacement));
+    }
     for (const input of this.elements.pencilContinuousInputs) {
       input.checked = editorState.pencilContinuousStamping;
     }
@@ -2045,16 +2036,16 @@ export class EditorUiBridge {
       input.checked = editorState.fillIgnoreTileFlipping;
     }
 
-    const showShapeFillControls = isShapeFillEditorTool(editorState.activeTool) && multiTileSelection;
+    const showShapeFillControls = multiTileSelection;
+    const shapeFillUiMode = getShapeFillUiMode();
     for (const controls of this.elements.shapeFillControls) {
       controls.classList.toggle('hidden', !showShapeFillControls);
     }
-    this.doc.getElementById('editor-shell-shape-fill-picker')?.classList.toggle(
-      'hidden',
-      !showShapeFillControls,
-    );
     for (const button of this.elements.shapeFillButtons) {
-      const active = button.dataset.shapeFillMode === editorState.shapeFillMode;
+      const mode = button.dataset.shapeFillMode;
+      const stampOnly = mode === 'stamp';
+      button.classList.toggle('hidden', stampOnly && editorState.activeTool !== 'pencil');
+      const active = mode === shapeFillUiMode;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
@@ -2097,14 +2088,8 @@ export class EditorUiBridge {
 
     setValue(this.elements.tilesetSelect, editorState.selectedTilesetKey);
     applyTilesetTheme(this.doc, editorState.selectedTilesetKey);
-    if (this.elements.flipXButton) {
-      this.elements.flipXButton.classList.toggle('active', editorState.tileFlipX);
-      this.elements.flipXButton.setAttribute('aria-pressed', editorState.tileFlipX ? 'true' : 'false');
-    }
-    if (this.elements.flipYButton) {
-      this.elements.flipYButton.classList.toggle('active', editorState.tileFlipY);
-      this.elements.flipYButton.setAttribute('aria-pressed', editorState.tileFlipY ? 'true' : 'false');
-    }
+    this.syncTileFlipButton(this.elements.flipXButton, editorState.tileFlipXMode, 'H');
+    this.syncTileFlipButton(this.elements.flipYButton, editorState.tileFlipYMode, 'V');
 
     for (const tab of this.elements.paletteTabs) {
       tab.classList.toggle('active', tab.dataset.mode === editorState.paletteMode);
@@ -2113,6 +2098,14 @@ export class EditorUiBridge {
     this.elements.tilePaletteSection?.classList.toggle('hidden', !paletteModeIsTiles);
     this.elements.smartPaletteSection?.classList.toggle('hidden', !paletteModeIsSmart);
     this.elements.objectPaletteSection?.classList.toggle('hidden', editorState.paletteMode !== 'objects');
+    if (paletteModeIsTiles) {
+      this.windowObj.requestAnimationFrame(() => {
+        if (this.destroyed || editorState.paletteMode !== 'tiles') {
+          return;
+        }
+        runtimeConfig.paletteController?.renderPalette();
+      });
+    }
     this.syncSmartControlOptions(smartSelection);
     if (this.elements.smartThemeSelect) {
       this.elements.smartThemeSelect.disabled = tunnelBackdropSelected;
@@ -2234,6 +2227,21 @@ export class EditorUiBridge {
     }
     const usageCount = image.usageCount ?? 0;
     return `${image.filename} - used in ${usageCount} ${usageCount === 1 ? 'room' : 'rooms'}`;
+  }
+
+  private syncTileFlipButton(
+    button: HTMLButtonElement | null,
+    mode: TileFlipMode,
+    axis: 'H' | 'V',
+  ): void {
+    if (!button) {
+      return;
+    }
+    button.textContent = mode === 'rand' ? `Rand ${axis}` : `Flip ${axis}`;
+    button.classList.toggle('active', mode === 'on');
+    button.classList.toggle('flip-rand', mode === 'rand');
+    button.setAttribute('aria-pressed', mode === 'off' ? 'false' : 'true');
+    button.dataset.flipMode = mode;
   }
 }
 

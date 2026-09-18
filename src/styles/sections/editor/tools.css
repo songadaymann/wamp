@@ -39,40 +39,14 @@
 .tool-icon-mosaic span:nth-child(3) { opacity: 0.62; }
 .tool-icon-mosaic span:nth-child(4) { opacity: 0.22; }
 
-.tool-icon-broken-pencil {
-  position: relative;
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  line-height: 1;
-}
-
-.tool-icon-broken-pencil > span {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 1em;
-  height: 1em;
-  overflow: hidden;
-}
-
-.tool-icon-broken-pencil > span:first-child {
-  clip-path: inset(0 52% 0 0);
-  transform: translate(-2px, 1px);
-}
-
-.tool-icon-broken-pencil > span:last-child {
-  clip-path: inset(0 0 0 52%);
-  transform: translate(2px, -1px);
-}
-
 .editor-randomize-size-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
 
-.editor-randomize-brush-button {
+.editor-randomize-brush-button,
+.editor-pencil-brush-button {
   min-width: 36px;
   height: 28px;
   padding: 0 6px;
@@ -85,40 +59,27 @@
   cursor: pointer;
 }
 
-.editor-randomize-brush-button.active {
+.editor-randomize-brush-button.active,
+.editor-pencil-brush-button.active {
   background: var(--accent-cool-soft);
   border-color: var(--accent-cool);
   color: var(--text);
 }
 
+.editor-shape-fill-controls {
+  margin-top: 8px;
+}
+
 .editor-shape-fill-toggle {
-  display: inline-flex;
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid rgba(243, 238, 226, 0.16);
-  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .editor-shape-fill-button {
-  min-width: 72px;
-  padding: 6px 10px;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.editor-shape-fill-button + .editor-shape-fill-button {
-  border-left: 1px solid rgba(243, 238, 226, 0.16);
-}
-
-.editor-shape-fill-button.active {
-  background: var(--accent-cool-soft);
-  color: var(--text);
+  min-width: 0;
+  padding: 8px 16px;
+  border-radius: 0;
 }
 
 .tool-btn-compact .tool-label {

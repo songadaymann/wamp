@@ -90,6 +90,8 @@ import {
   isEditorLineCurve,
   isEditorShapeOutline,
   isPathEditorTool,
+  isPencilBrushPlacement,
+  isPencilStampPlacement,
 } from './editor/editorToolSelection';
 import { clampRandomizeBrushSize } from './editor/randomizeTiles';
 import { resolvePencilStampOrigin } from './editor/stampDrag';
@@ -2390,15 +2392,20 @@ export class CourseEditorScene extends Phaser.Scene {
     tileX: number,
     tileY: number,
   ): void {
-    const selectionWidth = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.width);
-    const selectionHeight = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.height);
+    const stampPlacement = isPencilStampPlacement();
+    const selectionWidth = editorState.paletteMode === 'smart' || !stampPlacement
+      ? 1
+      : Math.max(1, editorState.selection.width);
+    const selectionHeight = editorState.paletteMode === 'smart' || !stampPlacement
+      ? 1
+      : Math.max(1, editorState.selection.height);
     const origin = this.pencilDragStart
       ? resolvePencilStampOrigin(
           this.pencilDragStart,
           { x: tileX, y: tileY },
           selectionWidth,
           selectionHeight,
-          editorState.pencilContinuousStamping,
+          editorState.pencilContinuousStamping || !stampPlacement,
         )
       : { x: tileX, y: tileY };
     if (
@@ -2830,8 +2837,10 @@ export class CourseEditorScene extends Phaser.Scene {
     const brushSize = editorState.activeTool === 'eraser'
       ? editorState.eraserBrushSize
       : editorState.activeTool === 'randomize'
-        ? clampRandomizeBrushSize(editorState.randomizeBrushSize, editorState.randomizeScramble)
-        : 1;
+        ? clampRandomizeBrushSize(editorState.randomizeBrushSize)
+        : editorState.activeTool === 'pencil' && isPencilBrushPlacement()
+          ? clampRandomizeBrushSize(editorState.pencilBrushSize)
+          : 1;
     const originX = tile.tileX - Math.floor(brushSize * 0.5);
     const originY = tile.tileY - Math.floor(brushSize * 0.5);
     this.cursorGraphics.lineStyle(2, color, 0.88);

@@ -1047,8 +1047,8 @@ export class EditorScene extends Phaser.Scene {
     this.toolController.reset();
     this.guestBuilderActivityTracker.reset();
     this.roomEditCount = 0;
-    editorState.tileFlipX = false;
-    editorState.tileFlipY = false;
+    editorState.tileFlipXMode = 'off';
+    editorState.tileFlipYMode = 'off';
     this.setSelectedLightingSettings(null);
     this.setSelectedWeatherSettings(null);
     editorState.isPlaying = false;

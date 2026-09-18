@@ -118,9 +118,10 @@ import {
   clampRandomizeBrushSize,
   collectOccupiedSelectionValues,
   sampleDrawWindow,
+  samplePatternWindow,
   scrambleWindow,
-  applyRandomizeFlipsToWindow,
   isScrambleOneByOne,
+  applyEditorTileFlipModes,
 } from './randomizeTiles';
 import { encodedTilesMatchForFlood } from './floodFillMatch';
 import {
@@ -128,6 +129,7 @@ import {
   getOrderedSelectionValues,
   pathPatternIndex,
 } from './selectionPattern';
+import { isPencilBrushPlacement } from './editorToolSelection';
 import {
   buildEditorClipboardState,
   cloneEditorClipboardState,
@@ -666,8 +668,8 @@ export class EditorEditRuntime {
     editorState.selectedObjectId = null;
     editorState.activeTool = 'pencil';
     editorState.selectedTileGid = gid;
-    editorState.tileFlipX = false;
-    editorState.tileFlipY = false;
+    editorState.tileFlipXMode = 'off';
+    editorState.tileFlipYMode = 'off';
     editorState.selection = {
       tilesetKey: `${CUSTOM_ROOM_TILESET_KEY_PREFIX}:${nextTile.id}`,
       startCol: 0,
@@ -883,44 +885,81 @@ export class EditorEditRuntime {
       return;
     }
 
+    if (editorState.paletteMode === 'tiles' && isPencilBrushPlacement()) {
+      this.paintPencilBrushAt(layer, worldX, worldY);
+      return;
+    }
+
     const selection = editorState.selection;
     for (let dy = 0; dy < selection.height; dy += 1) {
       for (let dx = 0; dx < selection.width; dx += 1) {
         const tileX = baseTileX + dx;
         const tileY = baseTileY + dy;
-        if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
-          continue;
-        }
-
-        const newGid = getSelectionTileValue(dx, dy);
-        if (newGid < 0) {
-          continue;
-        }
-
-        const existingTile = layer.getTileAt(tileX, tileY);
-        const oldGid = existingTile
-          ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
-          : -1;
-        if (oldGid === newGid) {
-          continue;
-        }
-
-        const placedTile = layer.putTileAt(decodeTileDataValue(newGid).gid, tileX, tileY);
-        if (placedTile) {
-          const decoded = decodeTileDataValue(newGid);
-          placedTile.flipX = decoded.flipX;
-          placedTile.flipY = decoded.flipY;
-        }
-        this.recordTileBatchAction({
-          layer: editorState.activeLayer,
-          x: tileX,
-          y: tileY,
-          oldGid,
-          newGid,
-        });
-        this.recordManualSmartEdit(editorState.activeLayer, tileX, tileY, newGid);
+        const newGid = applyEditorTileFlipModes(getSelectionTileValue(dx, dy));
+        this.writeEncodedTile(layer, tileX, tileY, newGid);
       }
     }
+  }
+
+  private paintPencilBrushAt(
+    layer: Phaser.Tilemaps.TilemapLayer,
+    worldX: number,
+    worldY: number,
+  ): void {
+    const size = clampRandomizeBrushSize(editorState.pencilBrushSize);
+    const localPoint = this.toLocalWorldPoint(worldX, worldY);
+    const centerX = Math.floor(localPoint.x / TILE_SIZE);
+    const centerY = Math.floor(localPoint.y / TILE_SIZE);
+    const originX = centerX - Math.floor(size * 0.5);
+    const originY = centerY - Math.floor(size * 0.5);
+    const pool = editorState.shapeFillMode === 'pattern'
+      ? getOrderedSelectionValues(editorState.selection, getSelectionTileValue)
+      : collectOccupiedSelectionValues(editorState.selection, getSelectionTileValue);
+    const sampled = editorState.shapeFillMode === 'pattern'
+      ? samplePatternWindow(size, originX, originY, pool)
+      : sampleDrawWindow(size, pool);
+    for (let dy = 0; dy < size; dy += 1) {
+      for (let dx = 0; dx < size; dx += 1) {
+        this.writeEncodedTile(
+          layer,
+          originX + dx,
+          originY + dy,
+          applyEditorTileFlipModes(sampled[dy]?.[dx] ?? -1),
+        );
+      }
+    }
+  }
+
+  private writeEncodedTile(
+    layer: Phaser.Tilemaps.TilemapLayer,
+    tileX: number,
+    tileY: number,
+    newGid: number,
+  ): void {
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT || newGid < 0) {
+      return;
+    }
+    const existingTile = layer.getTileAt(tileX, tileY);
+    const oldGid = existingTile
+      ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
+      : -1;
+    if (oldGid === newGid) {
+      return;
+    }
+    const decoded = decodeTileDataValue(newGid);
+    const placedTile = layer.putTileAt(decoded.gid, tileX, tileY);
+    if (placedTile) {
+      placedTile.flipX = decoded.flipX;
+      placedTile.flipY = decoded.flipY;
+    }
+    this.recordTileBatchAction({
+      layer: editorState.activeLayer,
+      x: tileX,
+      y: tileY,
+      oldGid,
+      newGid,
+    });
+    this.recordManualSmartEdit(editorState.activeLayer, tileX, tileY, newGid);
   }
 
   paintRandomizeAt(worldX: number, worldY: number): void {
@@ -933,7 +972,7 @@ export class EditorEditRuntime {
     }
 
     const size = clampRandomizeBrushSize(editorState.randomizeBrushSize);
-    const forceFlip = isScrambleOneByOne(editorState.randomizeScramble, size);
+    const forceRandom = isScrambleOneByOne(size);
     const localPoint = this.toLocalWorldPoint(worldX, worldY);
     const centerX = Math.floor(localPoint.x / TILE_SIZE);
     const centerY = Math.floor(localPoint.y / TILE_SIZE);
@@ -959,17 +998,10 @@ export class EditorEditRuntime {
       current.push(row);
     }
 
-    const stamped = editorState.randomizeScramble
-      ? scrambleWindow(current)
-      : sampleDrawWindow(
-          size,
-          collectOccupiedSelectionValues(editorState.selection, getSelectionTileValue),
-        );
-    const next = applyRandomizeFlipsToWindow(
-      stamped,
-      forceFlip || editorState.randomizeHorizontal,
-      forceFlip || editorState.randomizeVertical,
-    );
+    const stamped = scrambleWindow(current);
+    const next = stamped.map((row) => row.map((value) => (
+      applyEditorTileFlipModes(value, { forceRandom })
+    )));
 
     for (let dy = 0; dy < size; dy += 1) {
       for (let dx = 0; dx < size; dx += 1) {
@@ -1072,6 +1104,17 @@ export class EditorEditRuntime {
     const localPoint = this.toLocalWorldPoint(worldX, worldY);
     const originX = Math.floor(localPoint.x / TILE_SIZE);
     const originY = Math.floor(localPoint.y / TILE_SIZE);
+    if (isPencilBrushPlacement()) {
+      const size = clampRandomizeBrushSize(editorState.pencilBrushSize);
+      const brushOriginX = originX - Math.floor(size * 0.5);
+      const brushOriginY = originY - Math.floor(size * 0.5);
+      for (let dy = 0; dy < size; dy += 1) {
+        for (let dx = 0; dx < size; dx += 1) {
+          this.eraseLayerCell(layer, brushOriginX + dx, brushOriginY + dy);
+        }
+      }
+      return;
+    }
     const selection = editorState.selection;
     for (let dy = 0; dy < selection.height; dy += 1) {
       for (let dx = 0; dx < selection.width; dx += 1) {
@@ -1345,7 +1388,7 @@ export class EditorEditRuntime {
         continue;
       }
 
-      const newGid = erase ? -1 : this.resolveMultiTileStampValue(kind, tile, step, origin, pool);
+      const newGid = erase ? -1 : applyEditorTileFlipModes(this.resolveMultiTileStampValue(kind, tile, step, origin, pool));
       const existingTile = layer.getTileAt(tile.x, tile.y);
       const oldGid = existingTile
         ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
@@ -1457,7 +1500,7 @@ export class EditorEditRuntime {
       y: Math.min(...cells.map((cell) => cell.y)),
     };
     for (const cell of cells) {
-      const newGid = this.resolveMultiTileStampValue('fill', cell, 0, origin, pool);
+      const newGid = applyEditorTileFlipModes(this.resolveMultiTileStampValue('fill', cell, 0, origin, pool));
       const existingTile = layer.getTileAt(cell.x, cell.y);
       const oldGid = existingTile
         ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
@@ -1523,7 +1566,8 @@ export class EditorEditRuntime {
       ? encodeTileDataValue(targetTile.index, targetTile.flipX, targetTile.flipY)
       : -1;
     const ignoreTileFlipping = editorState.fillIgnoreTileFlipping;
-    if (!ignoreTileFlipping && targetGid === replacementGid) {
+    const randomFlips = editorState.tileFlipXMode === 'rand' || editorState.tileFlipYMode === 'rand';
+    if (!ignoreTileFlipping && !randomFlips && targetGid === replacementGid) {
       return;
     }
 
@@ -1549,11 +1593,12 @@ export class EditorEditRuntime {
       }
 
       visited.add(key);
-      if (currentGid !== replacementGid) {
-        if (replacementGid < 0) {
+      const newGid = replacementGid < 0 ? -1 : applyEditorTileFlipModes(replacementGid);
+      if (currentGid !== newGid) {
+        if (newGid < 0) {
           layer.removeTileAt(x, y);
         } else {
-          const decoded = decodeTileDataValue(replacementGid);
+          const decoded = decodeTileDataValue(newGid);
           const placedTile = layer.putTileAt(decoded.gid, x, y);
           if (placedTile) {
             placedTile.flipX = decoded.flipX;
@@ -1565,9 +1610,9 @@ export class EditorEditRuntime {
           x,
           y,
           oldGid: currentGid,
-          newGid: replacementGid,
+          newGid,
         });
-        this.recordManualSmartEdit(editorState.activeLayer, x, y, replacementGid);
+        this.recordManualSmartEdit(editorState.activeLayer, x, y, newGid);
       }
 
       queue.push([x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]);

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG, editorState, getSelectionTileValue } from '../../config';
 import {
+  applyEditorTileFlipModes,
   applyRandomizeFlips,
   clampRandomizeBrushSize,
   collectOccupiedSelectionValues,
   isScrambleOneByOne,
   sampleDrawWindow,
+  samplePatternWindow,
   scrambleWindow,
 } from './randomizeTiles';
 
@@ -19,14 +21,27 @@ function sequenceRng(values: number[]): () => number {
 }
 
 describe('randomizeTiles', () => {
-  it('clamps shuffle and scramble sizes to 1–5', () => {
-    expect(clampRandomizeBrushSize(1, false)).toBe(1);
-    expect(clampRandomizeBrushSize(1, true)).toBe(1);
-    expect(clampRandomizeBrushSize(9, true)).toBe(5);
-    expect(clampRandomizeBrushSize(0, false)).toBe(1);
-    expect(isScrambleOneByOne(true, 1)).toBe(true);
-    expect(isScrambleOneByOne(true, 3)).toBe(false);
-    expect(isScrambleOneByOne(false, 1)).toBe(false);
+  it('clamps scramble and draw brush sizes to 1–5', () => {
+    expect(clampRandomizeBrushSize(1)).toBe(1);
+    expect(clampRandomizeBrushSize(9)).toBe(5);
+    expect(clampRandomizeBrushSize(0)).toBe(1);
+    expect(isScrambleOneByOne(1)).toBe(true);
+    expect(isScrambleOneByOne(3)).toBe(false);
+  });
+
+  it('lays a diagonal pattern across a draw brush without using selection size', () => {
+    expect(samplePatternWindow(2, 0, 0, [10, 20])).toEqual([
+      [10, 20],
+      [20, 10],
+    ]);
+  });
+
+  it('applies rand flip modes independently of the current flags', () => {
+    editorState.tileFlipXMode = 'rand';
+    editorState.tileFlipYMode = 'off';
+    expect(applyEditorTileFlipModes(12, { random: () => 0.1 })).toBe(12 + TILE_FLIP_X_FLAG);
+    editorState.tileFlipXMode = 'off';
+    editorState.tileFlipYMode = 'off';
   });
 
   it('weights the occupied palette pool evenly, including duplicates', () => {

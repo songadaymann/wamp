@@ -1,5 +1,6 @@
-import { editorState, type ToolName } from '../../config';
+import { editorState, type ShapeFillMode, type ToolName } from '../../config';
 import type { EditorShapeKind } from './shapeTiles';
+import { countOccupiedSelectionTiles } from './selectionPattern';
 
 export function isMoreEditorTool(tool: ToolName): boolean {
   return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill' || tool === 'randomize';
@@ -17,6 +18,27 @@ export function isShapeFillEditorTool(tool: ToolName): boolean {
   return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill';
 }
 
+export function isPencilStampPlacement(): boolean {
+  if (editorState.paletteMode !== 'tiles') {
+    return false;
+  }
+  if (countOccupiedSelectionTiles(editorState.selection) <= 1) {
+    return editorState.pencilBrushSize <= 1;
+  }
+  return editorState.shapeFillMode === 'stamp';
+}
+
+export function isPencilBrushPlacement(): boolean {
+  return editorState.paletteMode === 'tiles' && !isPencilStampPlacement();
+}
+
+export function getShapeFillUiMode(tool: ToolName = editorState.activeTool): ShapeFillMode {
+  if (tool === 'pencil') {
+    return editorState.shapeFillMode;
+  }
+  return editorState.shapeFillMode === 'shuffle' ? 'shuffle' : 'pattern';
+}
+
 export function isDragStampEditorTool(tool: ToolName): tool is 'rect' | 'ellipse' | 'line' {
   return isShapeEditorTool(tool) || isPathEditorTool(tool);
 }
@@ -25,7 +47,42 @@ export function isEditorLineCurve(): boolean {
   return editorState.lineCurve;
 }
 
+export function isEditorToolUnavailable(tool: ToolName): boolean {
+  if (tool === 'randomize') {
+    return editorState.paletteMode !== 'tiles';
+  }
+  if (tool === 'fill' || tool === 'rect' || tool === 'ellipse' || tool === 'line') {
+    return editorState.paletteMode === 'objects';
+  }
+  return false;
+}
+
+export function getEditorToolUnavailableTitle(tool: ToolName): string | null {
+  if (!isEditorToolUnavailable(tool)) {
+    return null;
+  }
+  if (tool === 'randomize') {
+    return 'Scramble is only available for Terrain with Advanced Tilesets';
+  }
+  if (tool === 'fill') {
+    return 'Fill is only available for Terrain';
+  }
+  if (tool === 'rect') {
+    return 'Rectangle is only available for Terrain';
+  }
+  if (tool === 'ellipse') {
+    return 'Circle is only available for Terrain';
+  }
+  if (tool === 'line') {
+    return 'Line/Curve is only available for Terrain';
+  }
+  return null;
+}
+
 export function applyEditorToolSelection(tool: ToolName): void {
+  if (isEditorToolUnavailable(tool)) {
+    return;
+  }
   if (editorState.activeTool === tool && isShapeEditorTool(tool)) {
     toggleEditorShapeOutline(tool);
     return;
@@ -34,22 +91,8 @@ export function applyEditorToolSelection(tool: ToolName): void {
     editorState.lineCurve = !editorState.lineCurve;
     return;
   }
-  if (editorState.activeTool === tool && tool === 'randomize') {
-    if (editorState.randomizeScramble) {
-      editorState.scrambleBrushSize = editorState.randomizeBrushSize;
-    } else {
-      editorState.shuffleBrushSize = editorState.randomizeBrushSize;
-    }
-    editorState.randomizeScramble = !editorState.randomizeScramble;
-    editorState.randomizeBrushSize = editorState.randomizeScramble
-      ? editorState.scrambleBrushSize
-      : editorState.shuffleBrushSize;
-    return;
-  }
   if (tool === 'randomize') {
-    editorState.randomizeBrushSize = editorState.randomizeScramble
-      ? editorState.scrambleBrushSize
-      : editorState.shuffleBrushSize;
+    editorState.randomizeBrushSize = editorState.scrambleBrushSize;
   }
   editorState.activeTool = tool;
 }
@@ -93,13 +136,15 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
     case 'line':
       return editorState.lineCurve ? 'Curve' : 'Line';
     case 'randomize':
-      return editorState.randomizeScramble
-        ? `Scramble ${editorState.randomizeBrushSize}x${editorState.randomizeBrushSize}`
-        : `Shuffle ${editorState.randomizeBrushSize}x${editorState.randomizeBrushSize}`;
+      return `Scramble ${editorState.randomizeBrushSize}x${editorState.randomizeBrushSize}`;
     case 'fill':
       return 'Fill';
     case 'copy':
       return pastePreviewActive ? 'Paste' : 'Copy';
+    case 'pencil':
+      return isPencilBrushPlacement() && editorState.pencilBrushSize > 1
+        ? `Draw ${editorState.pencilBrushSize}x${editorState.pencilBrushSize}`
+        : 'Draw';
     default:
       return 'Draw';
   }
@@ -107,7 +152,7 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
 
 export interface EditorToolButtonAppearance {
   icon?: string;
-  iconKind?: 'glyph' | 'mosaic' | 'broken-pencil';
+  iconKind?: 'glyph' | 'mosaic';
   label?: string;
   title: string;
   dimPart: string | null;
@@ -140,11 +185,9 @@ export function getEditorToolButtonAppearance(tool: ToolName, selected: boolean)
   }
   if (tool === 'randomize') {
     return {
-      iconKind: editorState.randomizeScramble ? 'mosaic' : 'broken-pencil',
-      label: editorState.randomizeScramble ? 'Scramble' : 'Shuffle',
-      title: editorState.randomizeScramble
-        ? 'Scramble (V); select again to switch to Shuffle'
-        : 'Shuffle (V); select again to switch to Scramble',
+      iconKind: 'mosaic',
+      label: 'Scramble',
+      title: 'Scramble (V)',
       dimPart: null,
     };
   }
