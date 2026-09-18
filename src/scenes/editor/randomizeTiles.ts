@@ -1,19 +1,53 @@
 import {
   decodeTileDataValue,
   encodeTileDataValue,
+  editorState,
   type RandomizeBrushSize,
+  type TileFlipMode,
   type TileSelection,
 } from '../../config';
+import { diagonalPatternIndex } from './selectionPattern';
 
 export type RandomizeRng = () => number;
 
-export function clampRandomizeBrushSize(size: number, _scramble = false): RandomizeBrushSize {
+export function clampRandomizeBrushSize(size: number): RandomizeBrushSize {
   const next = Math.min(5, Math.max(1, Math.round(size)));
   return next as RandomizeBrushSize;
 }
 
-export function isScrambleOneByOne(scramble: boolean, size: number): boolean {
-  return scramble && clampRandomizeBrushSize(size) === 1;
+export function isScrambleOneByOne(size: number): boolean {
+  return clampRandomizeBrushSize(size) === 1;
+}
+
+export function applyEditorTileFlipModes(
+  encoded: number,
+  options?: { forceRandom?: boolean; random?: RandomizeRng },
+): number {
+  if (encoded < 0) {
+    return encoded;
+  }
+  const random = options?.random ?? Math.random;
+  const decoded = decodeTileDataValue(encoded);
+  return encodeTileDataValue(
+    decoded.gid,
+    resolveFlip(decoded.flipX, editorState.tileFlipXMode, Boolean(options?.forceRandom), random),
+    resolveFlip(decoded.flipY, editorState.tileFlipYMode, Boolean(options?.forceRandom), random),
+  );
+}
+
+function resolveFlip(
+  current: boolean,
+  mode: TileFlipMode,
+  forceRandom: boolean,
+  random: RandomizeRng,
+): boolean {
+  if (forceRandom || mode === 'rand') {
+    return random() < 0.5;
+  }
+  if (mode === 'on') {
+    return true;
+  }
+  return current;
 }
 
 export function collectOccupiedSelectionValues(
@@ -48,6 +82,24 @@ export function sampleDrawWindow(
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
       grid[y]![x] = pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))] ?? -1;
+    }
+  }
+  return grid;
+}
+
+export function samplePatternWindow(
+  size: number,
+  originX: number,
+  originY: number,
+  pool: number[],
+): number[][] {
+  const grid = Array.from({ length: size }, () => Array.from({ length: size }, () => -1));
+  if (pool.length === 0 || size <= 0) {
+    return grid;
+  }
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      grid[y]![x] = pool[diagonalPatternIndex(originX + x, originY + y, pool.length)] ?? -1;
     }
   }
   return grid;

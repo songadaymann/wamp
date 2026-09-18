@@ -46,6 +46,7 @@ import {
 } from '../../customSprites/registry';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
+import { getTilesetPaletteAvailableWidth, getTilesetPaletteScale } from './paletteLayout';
 import {
   cloneTileSelection,
   isSelectionCellOccupied,
@@ -144,6 +145,7 @@ export class PaletteController {
   private communityStatus: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
   private communityLoadToken = 0;
   private communitySearchTimer: number | null = null;
+  private paletteResizeObserver: ResizeObserver | null = null;
 
   constructor(doc: Document = document) {
     this.doc = doc;
@@ -200,6 +202,7 @@ export class PaletteController {
     this.renderObjectGrid();
     this.renderObjectFacingControls();
     this.renderObjectSelectionDetails();
+    this.observePaletteLayout();
   }
 
   destroy(): void {
@@ -212,6 +215,8 @@ export class PaletteController {
       this.paletteCanvas.onclick = null;
     }
 
+    this.paletteResizeObserver?.disconnect();
+    this.paletteResizeObserver = null;
     this.paletteTooltipEl?.remove();
     this.paletteTooltipEl = null;
     if (this.objectSearchInput) {
@@ -372,6 +377,23 @@ export class PaletteController {
     this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
   }
 
+  private observePaletteLayout(): void {
+    const target = this.paletteContainer
+      ?? this.doc.getElementById('tile-palette-section');
+    if (!target || typeof this.doc.defaultView?.ResizeObserver !== 'function') {
+      return;
+    }
+    this.paletteResizeObserver?.disconnect();
+    this.paletteResizeObserver = new this.doc.defaultView.ResizeObserver(() => {
+      this.renderPalette();
+    });
+    this.paletteResizeObserver.observe(target);
+    const section = this.doc.getElementById('tile-palette-section');
+    if (section && section !== target) {
+      this.paletteResizeObserver.observe(section);
+    }
+  }
+
   renderPalette(): void {
     if (!this.paletteCanvas || !this.paletteContainer) {
       return;
@@ -383,13 +405,16 @@ export class PaletteController {
       return;
     }
 
-    const availableWidth = this.paletteContainer.clientWidth - 4;
+    const availableWidth = getTilesetPaletteAvailableWidth(this.paletteContainer.clientWidth);
     const layout = getDeviceLayoutState();
     const maxScale =
       layout.deviceClass === 'phone' && layout.coarsePointer
         ? 2
         : Number.POSITIVE_INFINITY;
-    const scale = Math.min(maxScale, Math.max(1, availableWidth / ts.imageWidth));
+    const scale = getTilesetPaletteScale(availableWidth, ts.imageWidth, maxScale);
+    if (scale === null) {
+      return;
+    }
     const scaledWidth = Math.floor(ts.imageWidth * scale);
     const scaledHeight = Math.floor(ts.imageHeight * scale);
     const scaledTile = TILE_SIZE * scale;
@@ -603,17 +628,17 @@ export class PaletteController {
           continue;
         }
 
-        const sourceDx = editorState.tileFlipX ? selection.width - 1 - dx : dx;
-        const sourceDy = editorState.tileFlipY ? selection.height - 1 - dy : dy;
+        const sourceDx = editorState.tileFlipXMode === 'on' ? selection.width - 1 - dx : dx;
+        const sourceDy = editorState.tileFlipYMode === 'on' ? selection.height - 1 - dy : dy;
         const sourceCol = selection.startCol + sourceDx;
         const sourceRow = selection.startRow + sourceDy;
 
         ctx.save();
         ctx.translate(
-          offsetX + dx * cellWidth + (editorState.tileFlipX ? cellWidth : 0),
-          offsetY + dy * cellHeight + (editorState.tileFlipY ? cellHeight : 0),
+          offsetX + dx * cellWidth + (editorState.tileFlipXMode === 'on' ? cellWidth : 0),
+          offsetY + dy * cellHeight + (editorState.tileFlipYMode === 'on' ? cellHeight : 0),
         );
-        ctx.scale(editorState.tileFlipX ? -1 : 1, editorState.tileFlipY ? -1 : 1);
+        ctx.scale(editorState.tileFlipXMode === 'on' ? -1 : 1, editorState.tileFlipYMode === 'on' ? -1 : 1);
         ctx.drawImage(
           img,
           sourceCol * TILE_SIZE,

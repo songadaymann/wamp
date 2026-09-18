@@ -142,11 +142,15 @@ export class EditorOverlayController {
       this.host.isClipboardPastePreviewActive(),
     );
     const flipLabels: string[] = [];
-    if (editorState.paletteMode === 'tiles' && editorState.tileFlipX) {
+    if (editorState.paletteMode === 'tiles' && editorState.tileFlipXMode === 'on') {
       flipLabels.push('Flip H');
+    } else if (editorState.paletteMode === 'tiles' && editorState.tileFlipXMode === 'rand') {
+      flipLabels.push('Rand H');
     }
-    if (editorState.paletteMode === 'tiles' && editorState.tileFlipY) {
+    if (editorState.paletteMode === 'tiles' && editorState.tileFlipYMode === 'on') {
       flipLabels.push('Flip V');
+    } else if (editorState.paletteMode === 'tiles' && editorState.tileFlipYMode === 'rand') {
+      flipLabels.push('Rand V');
     }
     const detailParts = [toolLabel, ...flipLabels];
     const text = `${modeLabel} -> ${layerLabel}\n${detailParts.join('  |  ')}`;

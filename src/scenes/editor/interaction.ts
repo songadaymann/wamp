@@ -19,6 +19,8 @@ import {
   isEditorLineCurve,
   isEditorShapeOutline,
   isPathEditorTool,
+  isPencilBrushPlacement,
+  isPencilStampPlacement,
 } from './editorToolSelection';
 import { clampRandomizeBrushSize } from './randomizeTiles';
 import { resolvePencilStampOrigin } from './stampDrag';
@@ -380,9 +382,14 @@ export class EditorInteractionController {
       editorState.activeTool === 'eraser'
         ? editorState.eraserBrushSize
         : 1;
+    const pencilBrushSize =
+      editorState.activeTool === 'pencil' && isPencilBrushPlacement()
+        ? clampRandomizeBrushSize(editorState.pencilBrushSize)
+        : 1;
+    const pencilUsesBrushWindow = editorState.activeTool === 'pencil' && isPencilBrushPlacement();
     const randomizeBrushSize =
       editorState.activeTool === 'randomize'
-        ? clampRandomizeBrushSize(editorState.randomizeBrushSize, editorState.randomizeScramble)
+        ? clampRandomizeBrushSize(editorState.randomizeBrushSize)
         : 1;
     const cursorOrigin =
       editorState.activeTool === 'eraser'
@@ -390,15 +397,15 @@ export class EditorInteractionController {
             x: tileX - Math.floor(eraserBrushSize * 0.5),
             y: tileY - Math.floor(eraserBrushSize * 0.5),
           }
-        : editorState.activeTool === 'randomize'
+        : editorState.activeTool === 'randomize' || pencilUsesBrushWindow
           ? {
-              x: tileX - Math.floor(randomizeBrushSize * 0.5),
-              y: tileY - Math.floor(randomizeBrushSize * 0.5),
+              x: tileX - Math.floor((pencilUsesBrushWindow ? pencilBrushSize : randomizeBrushSize) * 0.5),
+              y: tileY - Math.floor((pencilUsesBrushWindow ? pencilBrushSize : randomizeBrushSize) * 0.5),
             }
         : stampOrigin;
     const cursorW =
       editorState.activeTool === 'pencil'
-        ? selection.width
+        ? (pencilUsesBrushWindow ? pencilBrushSize : selection.width)
         : editorState.activeTool === 'eraser'
           ? eraserBrushSize
           : editorState.activeTool === 'randomize'
@@ -406,12 +413,17 @@ export class EditorInteractionController {
             : 1;
     const cursorH =
       editorState.activeTool === 'pencil'
-        ? selection.height
+        ? (pencilUsesBrushWindow ? pencilBrushSize : selection.height)
         : editorState.activeTool === 'eraser'
           ? eraserBrushSize
           : editorState.activeTool === 'randomize'
             ? randomizeBrushSize
             : 1;
+    const pencilMask = pencilUsesBrushWindow
+      ? Array.from({ length: pencilBrushSize }, () => Array.from({ length: pencilBrushSize }, () => true))
+      : editorState.paletteMode === 'smart'
+        ? [[true]]
+        : editorState.selection.occupiedMask;
 
     if (editorState.activeTool === 'eraser') {
       this.cursorGraphics.lineStyle(2, RETRO_COLORS.danger, 0.85);
@@ -427,9 +439,7 @@ export class EditorInteractionController {
         cursorOrigin.y,
         cursorW,
         cursorH,
-        editorState.paletteMode === 'smart'
-          ? [[true]]
-          : editorState.selection.occupiedMask,
+        pencilMask,
         RETRO_COLORS.danger,
         0.18,
         0.9,
@@ -439,7 +449,7 @@ export class EditorInteractionController {
       const layerAccent = getEditorLayerAccent();
       const occupiedMask =
         editorState.activeTool === 'pencil'
-          ? editorState.selection.occupiedMask
+          ? pencilMask
           : Array.from({ length: cursorH }, () => Array.from({ length: cursorW }, () => true));
       this.drawOccupiedCellPreview(
         cursorOrigin.x,
@@ -1186,14 +1196,19 @@ export class EditorInteractionController {
       return { x: tileX, y: tileY };
     }
 
-    const selectionWidth = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.width);
-    const selectionHeight = editorState.paletteMode === 'smart' ? 1 : Math.max(1, editorState.selection.height);
+    const stampPlacement = isPencilStampPlacement();
+    const selectionWidth = editorState.paletteMode === 'smart' || !stampPlacement
+      ? 1
+      : Math.max(1, editorState.selection.width);
+    const selectionHeight = editorState.paletteMode === 'smart' || !stampPlacement
+      ? 1
+      : Math.max(1, editorState.selection.height);
     return resolvePencilStampOrigin(
       this.tileDragStart,
       { x: tileX, y: tileY },
       selectionWidth,
       selectionHeight,
-      editorState.pencilContinuousStamping,
+      editorState.pencilContinuousStamping || !stampPlacement,
     );
   }
 

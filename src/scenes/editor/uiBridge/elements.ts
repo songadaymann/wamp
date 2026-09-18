@@ -31,11 +31,10 @@ export interface EditorUiElements {
     eraseBrushButtons: HTMLButtonElement[];
   randomizeControls: HTMLElement[];
   randomizeBrushButtons: HTMLButtonElement[];
-  randomizeHorizontalInputs: HTMLInputElement[];
-  randomizeVerticalInputs: HTMLInputElement[];
   pencilControls: HTMLElement[];
   pencilContinuousInputs: HTMLInputElement[];
-  fillControls: HTMLElement[];
+    pencilBrushButtons: HTMLButtonElement[];
+    fillControls: HTMLElement[];
   fillIgnoreFlipInputs: HTMLInputElement[];
   shapeFillControls: HTMLElement[];
   shapeFillButtons: HTMLButtonElement[];
@@ -229,10 +228,9 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     eraseBrushButtons: all<HTMLButtonElement>(doc, '.editor-erase-brush-button'),
     randomizeControls: all<HTMLElement>(doc, '.editor-randomize-controls'),
     randomizeBrushButtons: all<HTMLButtonElement>(doc, '.editor-randomize-brush-button'),
-    randomizeHorizontalInputs: all<HTMLInputElement>(doc, '.editor-randomize-horizontal'),
-    randomizeVerticalInputs: all<HTMLInputElement>(doc, '.editor-randomize-vertical'),
     pencilControls: all<HTMLElement>(doc, '.editor-pencil-controls'),
     pencilContinuousInputs: all<HTMLInputElement>(doc, '.editor-pencil-continuous'),
+    pencilBrushButtons: all<HTMLButtonElement>(doc, '.editor-pencil-brush-button'),
     fillControls: all<HTMLElement>(doc, '.editor-fill-controls'),
     fillIgnoreFlipInputs: all<HTMLInputElement>(doc, '.editor-fill-ignore-flip'),
     shapeFillControls: all<HTMLElement>(doc, '.editor-shape-fill-controls'),

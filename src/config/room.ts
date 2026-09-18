@@ -16,6 +16,10 @@ export const ERASER_BRUSH_SIZES = [1, 3, 5] as const;
 export type EraserBrushSize = typeof ERASER_BRUSH_SIZES[number];
 export const RANDOMIZE_BRUSH_SIZES = [1, 2, 3, 4, 5] as const;
 export type RandomizeBrushSize = typeof RANDOMIZE_BRUSH_SIZES[number];
+export const SHAPE_FILL_MODES = ['stamp', 'pattern', 'shuffle'] as const;
+export type ShapeFillMode = typeof SHAPE_FILL_MODES[number];
+export const TILE_FLIP_MODES = ['off', 'on', 'rand'] as const;
+export type TileFlipMode = typeof TILE_FLIP_MODES[number];
 
 // ── Palette Modes ──
 export type PaletteMode = 'smart' | 'tiles' | 'objects';
