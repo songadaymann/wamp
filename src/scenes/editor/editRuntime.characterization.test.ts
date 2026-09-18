@@ -56,8 +56,8 @@ describe('editor edit runtime document contracts', () => {
       height: 1,
       occupiedMask: [[true]],
     };
-    editorState.tileFlipX = false;
-    editorState.tileFlipY = false;
+    editorState.tileFlipXMode = 'off';
+    editorState.tileFlipYMode = 'off';
     editorState.selectedObjectId = null;
   });
 

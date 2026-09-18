@@ -262,15 +262,25 @@
               <span class="tool-icon">&#9687;</span>
               <span class="tool-label">Fill</span>
             </button>
-            <button class="tool-btn tool-btn-compact" data-tool="randomize" type="button" title="Shuffle (V); select again to switch to Scramble">
-              <span class="tool-icon tool-icon-broken-pencil" aria-hidden="true"><span>&#9998;</span><span>&#9998;</span></span>
-              <span class="tool-label"><span class="tool-mode-label">Shuffle</span></span>
+            <button class="tool-btn tool-btn-compact" data-tool="randomize" type="button" title="Scramble (V)">
+              <span class="tool-icon tool-icon-mosaic" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+              <span class="tool-label"><span class="tool-mode-label">Scramble</span></span>
             </button>
           </div>
         </div>
         <div id="pencil-controls" class="erase-controls editor-tool-popover editor-pencil-controls hidden">
           <div class="editor-tool-popover-label">Draw</div>
-          <div class="erase-controls-row">
+          <div class="erase-controls-row editor-tile-erase-control editor-pencil-size-row">
+            <span class="erase-controls-label">Brush</span>
+            <div class="editor-randomize-size-actions" role="group" aria-label="Draw brush size">
+              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="1">1x1</button>
+              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="2">2x2</button>
+              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="3">3x3</button>
+              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="4">4x4</button>
+              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="5">5x5</button>
+            </div>
+          </div>
+          <div class="erase-controls-row editor-pencil-continuous-row hidden">
             <label
               class="erase-controls-label"
               title="Turn on to remove gap between tile stamping."
@@ -315,20 +325,16 @@
           </div>
         </div>
         <div id="randomize-controls" class="erase-controls editor-tool-popover editor-randomize-controls hidden">
-          <div class="editor-tool-popover-label">Shuffle</div>
+          <div class="editor-tool-popover-label">Scramble</div>
           <div class="erase-controls-row editor-tile-erase-control">
             <span class="erase-controls-label">Brush</span>
-            <div class="editor-randomize-size-actions" role="group" aria-label="Randomize brush size">
+            <div class="editor-randomize-size-actions" role="group" aria-label="Scramble brush size">
               <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="1">1x1</button>
               <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="2">2x2</button>
               <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="3">3x3</button>
               <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="4">4x4</button>
               <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="5">5x5</button>
             </div>
-          </div>
-          <div class="erase-controls-row">
-            <label class="erase-controls-label"><input class="editor-randomize-horizontal" type="checkbox" /> Flip H</label>
-            <label class="erase-controls-label"><input class="editor-randomize-vertical" type="checkbox" /> Flip V</label>
           </div>
         </div>
         <div id="fill-controls" class="erase-controls editor-tool-popover editor-fill-controls hidden">
@@ -338,15 +344,6 @@
               <input class="editor-fill-ignore-flip" type="checkbox" />
               Ignore tile flipping
             </label>
-          </div>
-        </div>
-        <div id="shape-fill-controls" class="erase-controls editor-tool-popover editor-shape-fill-controls hidden">
-          <div class="editor-tool-popover-label">Tiles</div>
-          <div class="erase-controls-row">
-            <div class="editor-shape-fill-toggle" role="group" aria-label="Pattern or shuffle">
-              <button class="editor-shape-fill-button" type="button" data-shape-fill-mode="pattern" aria-pressed="true">Pattern</button>
-              <button class="editor-shape-fill-button" type="button" data-shape-fill-mode="shuffle" aria-pressed="false">Shuffle</button>
-            </div>
           </div>
         </div>
       </div>
@@ -662,7 +659,14 @@
           <canvas id="palette-canvas"></canvas>
         </div>
         <canvas id="tile-preview" width="64" height="64" hidden aria-hidden="true"></canvas>
-        <div class="palette-hint">Click to select. Drag to select multiple.</div>
+        <div class="palette-hint">Click to Select. Drag to Select a Group. Control+Click to add and remove tiles from selection.</div>
+        <div class="editor-shape-fill-controls hidden">
+          <div class="editor-shape-fill-toggle" role="group" aria-label="Stamp, pattern, or shuffle">
+            <button class="bar-btn bar-btn-small editor-shape-fill-button" type="button" data-shape-fill-mode="stamp" aria-pressed="true">Stamp</button>
+            <button class="bar-btn bar-btn-small editor-shape-fill-button" type="button" data-shape-fill-mode="pattern" aria-pressed="false">Pattern</button>
+            <button class="bar-btn bar-btn-small editor-shape-fill-button" type="button" data-shape-fill-mode="shuffle" aria-pressed="false">Shuffle</button>
+          </div>
+        </div>
       </div>
 
       <!-- Object Palette (visible in objects mode) -->
@@ -1063,15 +1067,25 @@
                 <span class="tool-icon">&#9687;</span>
                 <span class="tool-label">Fill</span>
               </button>
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="randomize" type="button" title="Shuffle (V); select again to switch to Scramble">
-                <span class="tool-icon tool-icon-broken-pencil" aria-hidden="true"><span>&#9998;</span><span>&#9998;</span></span>
-                <span class="tool-label"><span class="tool-mode-label">Shuffle</span></span>
+              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="randomize" type="button" title="Scramble (V)">
+                <span class="tool-icon tool-icon-mosaic" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+                <span class="tool-label"><span class="tool-mode-label">Scramble</span></span>
               </button>
             </div>
           </div>
           <div id="editor-top-pencil-controls" class="erase-controls editor-tool-popover editor-pencil-controls hidden">
             <div class="editor-tool-popover-label">Draw</div>
-            <div class="erase-controls-row">
+            <div class="erase-controls-row editor-tile-erase-control editor-pencil-size-row">
+              <span class="erase-controls-label">Brush</span>
+              <div class="editor-randomize-size-actions" role="group" aria-label="Draw brush size">
+                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="1">1x1</button>
+                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="2">2x2</button>
+                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="3">3x3</button>
+                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="4">4x4</button>
+                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="5">5x5</button>
+              </div>
+            </div>
+            <div class="erase-controls-row editor-pencil-continuous-row hidden">
               <label
                 class="erase-controls-label"
                 title="Turn on to remove gap between tile stamping."
@@ -1116,20 +1130,16 @@
             </div>
           </div>
           <div id="editor-top-randomize-controls" class="erase-controls editor-tool-popover editor-randomize-controls hidden">
-            <div class="editor-tool-popover-label">Shuffle</div>
+            <div class="editor-tool-popover-label">Scramble</div>
             <div class="erase-controls-row editor-tile-erase-control">
               <span class="erase-controls-label">Brush</span>
-              <div class="editor-randomize-size-actions" role="group" aria-label="Randomize brush size">
+              <div class="editor-randomize-size-actions" role="group" aria-label="Scramble brush size">
                 <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="1">1x1</button>
                 <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="2">2x2</button>
                 <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="3">3x3</button>
                 <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="4">4x4</button>
                 <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="5">5x5</button>
               </div>
-            </div>
-            <div class="erase-controls-row">
-              <label class="erase-controls-label"><input class="editor-randomize-horizontal" type="checkbox" /> Flip H</label>
-              <label class="erase-controls-label"><input class="editor-randomize-vertical" type="checkbox" /> Flip V</label>
             </div>
           </div>
           <div id="editor-top-fill-controls" class="erase-controls editor-tool-popover editor-fill-controls hidden">
@@ -1139,15 +1149,6 @@
                 <input class="editor-fill-ignore-flip" type="checkbox" />
                 Ignore tile flipping
               </label>
-            </div>
-          </div>
-          <div id="editor-top-shape-fill-controls" class="erase-controls editor-tool-popover editor-shape-fill-controls hidden">
-            <div class="editor-tool-popover-label">Tiles</div>
-            <div class="erase-controls-row">
-              <div class="editor-shape-fill-toggle" role="group" aria-label="Pattern or shuffle">
-                <button class="editor-shape-fill-button" type="button" data-shape-fill-mode="pattern" aria-pressed="true">Pattern</button>
-                <button class="editor-shape-fill-button" type="button" data-shape-fill-mode="shuffle" aria-pressed="false">Shuffle</button>
-              </div>
             </div>
           </div>
         </div>
@@ -1201,18 +1202,28 @@
         <button id="btn-editor-shell-eraser" class="tool-btn editor-shell-chunky-button" data-tool="eraser" type="button" title="Erase (E or 2)" aria-controls="editor-shell-eraser-size-picker" aria-expanded="false"><span class="tool-icon">&#9003;</span><span class="tool-label">Erase</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="copy" type="button" title="Copy (C or 3)"><span class="tool-icon">&#10697;</span><span class="tool-label">Copy</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="fill" type="button" title="Fill (F or G)"><span class="tool-icon">&#9687;</span><span class="tool-label">Fill</span></button>
-        <button class="tool-btn editor-shell-chunky-button" data-tool="randomize" type="button" title="Shuffle (V); select again to switch to Scramble" aria-controls="editor-shell-randomize-picker" aria-expanded="false"><span class="tool-icon tool-icon-broken-pencil" aria-hidden="true"><span>&#9998;</span><span>&#9998;</span></span><span class="tool-label"><span class="tool-mode-label">Shuffle</span></span></button>
+        <button class="tool-btn editor-shell-chunky-button" data-tool="randomize" type="button" title="Scramble (V)" aria-controls="editor-shell-randomize-picker" aria-expanded="false"><span class="tool-icon tool-icon-mosaic" aria-hidden="true"><span></span><span></span><span></span><span></span></span><span class="tool-label"><span class="tool-mode-label">Scramble</span></span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="rect" type="button" title="Rectangle (R); select again to switch Filled / Outlined"><span class="tool-icon">&#9632;</span><span class="tool-label">Rectangle</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="ellipse" type="button" title="Circle (O); select again to switch Filled / Outlined"><span class="tool-icon">&#9679;</span><span class="tool-label">Circle</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="line" type="button" title="Line (L); select again to switch to Curve. Hold Shift to snap"><span class="tool-icon">&#9585;</span><span class="tool-label">Line</span></button>
         <div id="editor-shell-pencil-picker" class="editor-shell-eraser-size-picker editor-pencil-controls hidden" role="group" aria-label="Draw options">
-          <label
-            class="editor-shell-eraser-size-label"
-            title="Turn on to remove gap between tile stamping."
-          >
-            <input class="editor-pencil-continuous" type="checkbox" title="Turn on to remove gap between tile stamping." />
-            Continuous Stamping
-          </label>
+          <div class="editor-shell-eraser-size-actions editor-tile-erase-control editor-pencil-size-row" role="group" aria-label="Draw brush size">
+            <span class="editor-shell-eraser-size-label">Size</span>
+            <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="1">1x1</button>
+            <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="2">2x2</button>
+            <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="3">3x3</button>
+            <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="4">4x4</button>
+            <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="5">5x5</button>
+          </div>
+          <div class="editor-pencil-continuous-row hidden">
+            <label
+              class="editor-shell-eraser-size-label"
+              title="Turn on to remove gap between tile stamping."
+            >
+              <input class="editor-pencil-continuous" type="checkbox" title="Turn on to remove gap between tile stamping." />
+              Continuous Stamping
+            </label>
+          </div>
         </div>
         <div id="editor-shell-eraser-size-picker" class="editor-shell-eraser-size-picker editor-eraser-controls hidden" role="group" aria-label="Eraser actions">
           <div class="editor-shell-eraser-size-actions editor-tile-erase-control" role="group" aria-label="Eraser size">
@@ -1238,18 +1249,14 @@
             </button>
           </div>
         </div>
-        <div id="editor-shell-randomize-picker" class="editor-shell-eraser-size-picker editor-randomize-controls hidden" role="group" aria-label="Randomize options">
-          <div class="editor-shell-eraser-size-actions editor-tile-erase-control" role="group" aria-label="Randomize brush size">
+        <div id="editor-shell-randomize-picker" class="editor-shell-eraser-size-picker editor-randomize-controls hidden" role="group" aria-label="Scramble options">
+          <div class="editor-shell-eraser-size-actions editor-tile-erase-control" role="group" aria-label="Scramble brush size">
             <span class="editor-shell-eraser-size-label">Size</span>
             <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="1">1x1</button>
             <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="2">2x2</button>
             <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="3">3x3</button>
             <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="4">4x4</button>
             <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="5">5x5</button>
-          </div>
-          <div class="editor-shell-eraser-size-actions" role="group" aria-label="Randomize axes">
-            <label class="editor-shell-eraser-size-label"><input class="editor-randomize-horizontal" type="checkbox" /> Flip H</label>
-            <label class="editor-shell-eraser-size-label"><input class="editor-randomize-vertical" type="checkbox" /> Flip V</label>
           </div>
         </div>
         <div id="editor-shell-fill-picker" class="editor-shell-eraser-size-picker editor-fill-controls hidden" role="group" aria-label="Fill options">
@@ -1260,12 +1267,6 @@
             <input class="editor-fill-ignore-flip" type="checkbox" />
             Ignore tile flipping
           </label>
-        </div>
-        <div id="editor-shell-shape-fill-picker" class="editor-shell-eraser-size-picker editor-shape-fill-controls hidden" role="group" aria-label="Pattern or shuffle">
-          <div class="editor-shape-fill-toggle" role="group" aria-label="Pattern or shuffle">
-            <button class="editor-shape-fill-button" type="button" data-shape-fill-mode="pattern" aria-pressed="true">Pattern</button>
-            <button class="editor-shape-fill-button" type="button" data-shape-fill-mode="shuffle" aria-pressed="false">Shuffle</button>
-          </div>
         </div>
       </div>
       <div id="editor-shell-title-slot" class="editor-shell-title-slot"></div>

@@ -16,6 +16,8 @@ import {
   type LayerName,
   type PaletteMode,
   type RandomizeBrushSize,
+  type ShapeFillMode,
+  type TileFlipMode,
   type TileSelection,
   type ToolName,
 } from './room';
@@ -29,21 +31,18 @@ export interface EditorState {
   rectOutline: boolean;
   ellipseOutline: boolean;
   lineCurve: boolean;
-  randomizeScramble: boolean;
   randomizeBrushSize: RandomizeBrushSize;
-  shuffleBrushSize: RandomizeBrushSize;
   scrambleBrushSize: RandomizeBrushSize;
-  randomizeHorizontal: boolean;
-  randomizeVertical: boolean;
+  pencilBrushSize: RandomizeBrushSize;
   pencilContinuousStamping: boolean;
   fillIgnoreTileFlipping: boolean;
-  shapeFillMode: 'pattern' | 'shuffle';
+  shapeFillMode: ShapeFillMode;
   activeLayer: LayerName;
   selectedTilesetKey: string;
   selectedTileGid: number;  // global tile ID of top-left of selection
   eraserBrushSize: EraserBrushSize;
-  tileFlipX: boolean;
-  tileFlipY: boolean;
+  tileFlipXMode: TileFlipMode;
+  tileFlipYMode: TileFlipMode;
   showLayerGuides: boolean;
   selection: TileSelection;
   zoom: number;
@@ -94,21 +93,18 @@ export const editorState: EditorState = {
   rectOutline: false,
   ellipseOutline: false,
   lineCurve: false,
-  randomizeScramble: false,
   randomizeBrushSize: 3,
-  shuffleBrushSize: 3,
   scrambleBrushSize: 3,
-  randomizeHorizontal: false,
-  randomizeVertical: false,
+  pencilBrushSize: 1,
   pencilContinuousStamping: false,
   fillIgnoreTileFlipping: false,
-  shapeFillMode: 'pattern',
+  shapeFillMode: 'stamp',
   activeLayer: 'terrain',
   selectedTilesetKey: DEFAULT_EDITOR_TILESET_KEY,
   selectedTileGid: DEFAULT_EDITOR_SELECTED_TILE_GID,
   eraserBrushSize: 1,
-  tileFlipX: false,
-  tileFlipY: false,
+  tileFlipXMode: 'off',
+  tileFlipYMode: 'off',
   showLayerGuides: false,
   selection: createDefaultEditorTileSelection(),
   zoom: 2,
@@ -183,8 +179,20 @@ export function getSelectionGid(dx: number, dy: number): number {
 }
 
 export function getSelectionTileValue(dx: number, dy: number): number {
-  const selectionDx = editorState.tileFlipX ? editorState.selection.width - 1 - dx : dx;
-  const selectionDy = editorState.tileFlipY ? editorState.selection.height - 1 - dy : dy;
+  const mirrorX = editorState.tileFlipXMode === 'on';
+  const mirrorY = editorState.tileFlipYMode === 'on';
+  const selectionDx = mirrorX ? editorState.selection.width - 1 - dx : dx;
+  const selectionDy = mirrorY ? editorState.selection.height - 1 - dy : dy;
   const gid = getSelectionGid(selectionDx, selectionDy);
-  return encodeTileDataValue(gid, editorState.tileFlipX, editorState.tileFlipY);
+  return encodeTileDataValue(gid, mirrorX, mirrorY);
+}
+
+export function cycleTileFlipMode(mode: TileFlipMode): TileFlipMode {
+  if (mode === 'off') {
+    return 'on';
+  }
+  if (mode === 'on') {
+    return 'rand';
+  }
+  return 'off';
 }
