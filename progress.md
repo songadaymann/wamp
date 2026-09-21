@@ -272,3 +272,10 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 - Branch: `codex/center-sign-text-2026-09-16`, based on current `origin/main` `cd53438c`; the dirty/stale root checkout remains untouched.
 - Implementation: center the sign panel horizontally in the upper-middle of the game viewport (34% desktop, 30% mobile), with safe-area-aware minimum top clearance. Preserve its copy, activation behavior, width, and visual treatment.
 - Validation: TypeScript, production build, and `git diff --check` pass. The official web-game client completed and its screenshot was inspected. Dedicated 1440x900 and 390x844 browser captures forced the real sign DOM panel visible against the game world; both were visually inspected and confirm the panel sits in the intended upper-middle sightline without intersecting bottom controls.
+
+## 2026-09-21 — Safer desktop camera shortcuts
+
+- Request: move the accidental-prone Play camera toggle from ` / ~ to 9, and overworld Fit from F to 0.
+- Branch: `codex/safer-camera-shortcuts-2026-09-21` from current `origin/main` `786ce38d`; dirty root checkout untouched.
+- Scope: overworld Play/Browse keyboard controls and Controls panel only. Editor-specific F shortcuts remain unchanged.
+- Verified: focused inspect-input test passes; typecheck and production build pass. Local Canvas gameplay smoke confirms 9 toggles follow/inspect while the former ` / ~ and F keys do not; no page errors. The inspect-input test verifies 0 invokes Fit and is unregistered on teardown. No push or deploy requested.
