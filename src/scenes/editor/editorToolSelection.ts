@@ -1,6 +1,26 @@
 import { editorState, type ShapeFillMode, type ToolName } from '../../config';
 import type { EditorShapeKind } from './shapeTiles';
 import { countOccupiedSelectionTiles } from './selectionPattern';
+import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
+import { isSolidCustomSpriteObjectConfig } from '../../config';
+import { getCustomSpriteDefinitionByObjectId } from '../../customSprites/registry';
+
+export function canRepeatSelectedEditorObject(): boolean {
+  const customSprite = getCustomSpriteDefinitionByObjectId(editorState.selectedObjectId);
+  if (customSprite) {
+    return customSprite.kind === 'decoration'
+      || customSprite.kind === 'collectible'
+      || customSprite.kind === 'solid';
+  }
+  const config = editorState.selectedObjectId
+    ? getEditorObjectConfigById(editorState.selectedObjectId)
+    : null;
+  return Boolean(config && (
+    (config.category === 'decoration' && config.id !== 'sign' && config.id !== 'sign_arrow') ||
+    config.category === 'collectible' ||
+    isSolidCustomSpriteObjectConfig(config)
+  ));
+}
 
 export function isMoreEditorTool(tool: ToolName): boolean {
   return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill' || tool === 'randomize';
@@ -51,7 +71,10 @@ export function isEditorToolUnavailable(tool: ToolName): boolean {
   if (tool === 'randomize') {
     return editorState.paletteMode !== 'tiles';
   }
-  if (tool === 'fill' || tool === 'rect' || tool === 'ellipse' || tool === 'line') {
+  if (tool === 'fill') {
+    return editorState.paletteMode === 'objects' && !canRepeatSelectedEditorObject();
+  }
+  if (tool === 'rect' || tool === 'ellipse' || tool === 'line') {
     return editorState.paletteMode === 'objects';
   }
   return false;
@@ -65,7 +88,7 @@ export function getEditorToolUnavailableTitle(tool: ToolName): string | null {
     return 'Scramble is only available for Terrain with Advanced Tilesets';
   }
   if (tool === 'fill') {
-    return 'Fill is only available for Terrain';
+    return 'Select a Decoration, Collectible, or Solid Block to fill';
   }
   if (tool === 'rect') {
     return 'Rectangle is only available for Terrain';

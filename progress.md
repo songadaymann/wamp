@@ -279,3 +279,12 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 - Branch: `codex/safer-camera-shortcuts-2026-09-21` from current `origin/main` `786ce38d`; dirty root checkout untouched.
 - Scope: overworld Play/Browse keyboard controls and Controls panel only. Editor-specific F shortcuts remain unchanged.
 - Verified: focused inspect-input test passes; typecheck and production build pass. Local Canvas gameplay smoke confirms 9 toggles follow/inspect while the former ` / ~ and F keys do not; no page errors. The inspect-input test verifies 0 invokes Fit and is unregistered on teardown. No push or deploy requested.
+
+## 2026-09-21 — Repeatable object brush and Fill
+
+- Request: allow dragging to place Decorations, Solid Blocks, and Collectibles like ground, and enable Fill for those objects.
+- Branch: `codex/object-drag-fill-2026-09-21` from current `origin/main` `82bc6a4c`; dirty root checkout untouched.
+- Scope: repeatable object categories only; one-off actors, hazards, and special interactive objects retain single placement. Fill follows the connected matching-terrain region on the active layer, skips occupied object cells, and changes no terrain tiles.
+- Implemented desktop/touch drag interpolation, one Undo action per stroke/Fill, live drag preview, Fill availability, and custom-sprite anchor lookup for Solid Blocks.
+- Validation: full `npm run check` passes 249 files / 1,847 tests plus lint, TypeScript, bindings, and production build. The official Canvas client ran and its screenshot was inspected. The dedicated browser smoke passes a five-cell collectible drag, six-cell connected-terrain Fill, three-cell decoration drag, one-step Undo for each, and zero browser errors; drag/Fill screenshots were visually inspected. The existing responsive editor-dock smoke passes desktop and phone layouts with zero new errors.
+- TODO: review in localhost; push/merge/deploy only if requested.

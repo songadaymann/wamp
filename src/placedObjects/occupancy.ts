@@ -1,11 +1,11 @@
 import {
   TILE_SIZE,
-  getObjectById,
   getPlacedObjectLayer,
   type LayerName,
   type PlacedObject,
 } from '../config';
 import { getPlacedObjectPathTargetIds } from './objectPaths';
+import { getEditorObjectConfigById } from '../customSprites/objectConfig';
 
 export interface PlacedObjectAnchorCell {
   tileX: number;
@@ -33,7 +33,7 @@ export function getPlacedObjectAnchorCell(
     return null;
   }
 
-  const objectConfig = getObjectById(placed.id);
+  const objectConfig = getEditorObjectConfigById(placed.id);
   if (!objectConfig) {
     return null;
   }

@@ -617,6 +617,10 @@ export class EditorScene extends Phaser.Scene {
       handleObjectModeSecondaryAction: (worldX, worldY) =>
         this.handleObjectModeSecondaryAction(worldX, worldY),
       handleObjectPlace: (pointer) => this.handleObjectPlace(pointer),
+      placeObjectAtTile: (tileX, tileY) => this.placeObjectAtTile(tileX, tileY),
+      floodFillObjects: (tileX, tileY) => this.editRuntime.floodFillObjects(tileX, tileY),
+      beginObjectBatch: (livePreview) => this.editRuntime.beginObjectBatch(livePreview),
+      commitObjectBatch: () => this.editRuntime.commitObjectBatch(),
       handleToolDown: (pointer) => this.toolController.handleToolDown(pointer),
       removeGoalMarkerAt: (worldX, worldY) => this.removeGoalMarkerAt(worldX, worldY),
       removeObjectAt: (worldX, worldY) => this.removeObjectAt(worldX, worldY),
@@ -1645,7 +1649,14 @@ export class EditorScene extends Phaser.Scene {
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const tileX = Math.floor(worldPoint.x / TILE_SIZE);
     const tileY = Math.floor(worldPoint.y / TILE_SIZE);
-    const placed = this.editRuntime.handleObjectPlace(worldPoint.x, worldPoint.y, tileX, tileY);
+    this.placeObjectAtTile(tileX, tileY);
+  }
+
+  private placeObjectAtTile(tileX: number, tileY: number): void {
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return;
+    const worldX = tileX * TILE_SIZE + TILE_SIZE / 2;
+    const worldY = tileY * TILE_SIZE + TILE_SIZE / 2;
+    const placed = this.editRuntime.handleObjectPlace(worldX, worldY, tileX, tileY);
     this.inspectorController.handleObjectPlaced(placed);
   }
 

@@ -163,6 +163,40 @@ describe('editor edit runtime document contracts', () => {
     expect(runtime.currentRoomMusic).not.toBeNull();
   });
 
+  it('groups a repeated-object drag into one Undo step', () => {
+    const { runtime, host } = createHarness(createRoom());
+    editorState.paletteMode = 'objects';
+    editorState.selectedObjectId = 'coin_gold';
+    runtime.beginObjectBatch(true);
+    for (let x = 3; x <= 5; x += 1) {
+      runtime.handleObjectPlace(x * TILE_SIZE + 8, 3 * TILE_SIZE + 8, x, 3);
+    }
+    runtime.commitObjectBatch();
+    expect(host.getPlacedObjects()).toHaveLength(3);
+    runtime.undo();
+    expect(host.getPlacedObjects()).toHaveLength(0);
+    runtime.redo();
+    expect(host.getPlacedObjects()).toHaveLength(3);
+  });
+
+  it('fills a connected terrain region with objects without replacing occupied cells', () => {
+    const room = createRoom();
+    for (const y of [2, 3]) for (const x of [2, 3]) room.tileData.terrain[y][x] = 1;
+    const { runtime, host } = createHarness(room);
+    editorState.paletteMode = 'objects';
+    editorState.activeTool = 'fill';
+    editorState.selectedObjectId = 'coin_gold';
+    runtime.handleObjectPlace(2 * TILE_SIZE + 8, 2 * TILE_SIZE + 8, 2, 2);
+    const existingId = host.getPlacedObjects()[0].instanceId;
+    expect(runtime.floodFillObjects(3, 3)).toBe(3);
+    expect(host.getPlacedObjects()).toHaveLength(4);
+    expect(host.getPlacedObjects()[0].instanceId).toBe(existingId);
+    runtime.undo();
+    expect(host.getPlacedObjects()).toHaveLength(1);
+    runtime.redo();
+    expect(host.getPlacedObjects()).toHaveLength(4);
+  });
+
   it('blocks edits while read-only and preserves dirty/status semantics when editable', () => {
     const { runtime, host, setEditable } = createHarness(createRoom());
     setEditable(false);
