@@ -58,7 +58,7 @@ export class OverworldInspectInputController {
   initialize(): void {
     const keyboard = this.scene.input.keyboard;
     if (keyboard) {
-      keyboard.on('keydown-F', this.handleFitWorldKeydown);
+      keyboard.on('keydown-ZERO', this.handleFitWorldKeydown);
       keyboard.on('keydown-P', this.handleReturnToWorldKeydown);
       keyboard.on('keydown-ESC', this.handleReturnToWorldKeydown);
       keyboard.on('keydown-ALT', this.handleAltKeydown);
@@ -75,7 +75,7 @@ export class OverworldInspectInputController {
   destroy(): void {
     const keyboard = this.scene.input.keyboard;
     if (keyboard) {
-      keyboard.off('keydown-F', this.handleFitWorldKeydown);
+      keyboard.off('keydown-ZERO', this.handleFitWorldKeydown);
       keyboard.off('keydown-P', this.handleReturnToWorldKeydown);
       keyboard.off('keydown-ESC', this.handleReturnToWorldKeydown);
       keyboard.off('keydown-ALT', this.handleAltKeydown);
