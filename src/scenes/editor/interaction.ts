@@ -14,6 +14,7 @@ import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { EditorClipboardState, GoalPlacementMode } from './editRuntime';
 import {
+  canRepeatSelectedEditorObject,
   getEditorStampKind,
   isDragStampEditorTool,
   isEditorLineCurve,
@@ -54,6 +55,10 @@ interface EditorInteractionHost {
   handleObjectModePrimaryAction(pointer: Phaser.Input.Pointer): boolean;
   handleObjectModeSecondaryAction(worldX: number, worldY: number): boolean;
   handleObjectPlace(pointer: Phaser.Input.Pointer): void;
+  placeObjectAtTile(tileX: number, tileY: number): void;
+  floodFillObjects(tileX: number, tileY: number): number;
+  beginObjectBatch(livePreview?: boolean): void;
+  commitObjectBatch(): void;
   handleToolDown(pointer: Phaser.Input.Pointer): void;
   removeGoalMarkerAt(worldX: number, worldY: number): boolean;
   removeObjectAt(worldX: number, worldY: number): void;
@@ -92,6 +97,7 @@ export class EditorInteractionController {
   private panStartPointer = { x: 0, y: 0 };
   private panStartScroll = { x: 0, y: 0 };
   private isDrawing = false;
+  private lastObjectDragCell: TilePoint | null = null;
   private tileDragStart: { x: number; y: number } | null = null;
   private lastDraggedStampOrigin: { x: number; y: number } | null = null;
   private spaceDown = false;
@@ -212,6 +218,7 @@ export class EditorInteractionController {
     this.rectPreviewGraphics = null;
     this.isPanning = false;
     this.isDrawing = false;
+    this.lastObjectDragCell = null;
     this.tileDragStart = null;
     this.lastDraggedStampOrigin = null;
     this.spaceDown = false;
@@ -556,7 +563,16 @@ export class EditorInteractionController {
           if (this.host.handleObjectModePrimaryAction(pointer)) {
             return;
           }
-          this.host.handleObjectPlace(pointer);
+          if (editorState.activeTool === 'fill') {
+            this.host.floodFillObjects(tileX, tileY);
+          } else if (editorState.activeTool === 'pencil' && canRepeatSelectedEditorObject()) {
+            this.host.beginObjectBatch(true);
+            this.host.placeObjectAtTile(tileX, tileY);
+            this.lastObjectDragCell = { x: tileX, y: tileY };
+            this.isDrawing = true;
+          } else {
+            this.host.handleObjectPlace(pointer);
+          }
         }
       } else {
         if (this.host.isClipboardPastePreviewActive()) {
@@ -597,6 +613,10 @@ export class EditorInteractionController {
       }
 
       if (editorState.paletteMode === 'objects') {
+        if (this.isDrawing && pointer.leftButtonDown() && this.lastObjectDragCell) {
+          const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+          this.placeDraggedObjects(Math.floor(worldPoint.x / TILE_SIZE), Math.floor(worldPoint.y / TILE_SIZE));
+        }
         return;
       }
 
@@ -656,6 +676,13 @@ export class EditorInteractionController {
       }
 
       if (!this.isDrawing) {
+        return;
+      }
+
+      if (this.lastObjectDragCell) {
+        this.host.commitObjectBatch();
+        this.lastObjectDragCell = null;
+        this.isDrawing = false;
         return;
       }
 
@@ -983,7 +1010,16 @@ export class EditorInteractionController {
         if (this.host.handleObjectModePrimaryAction(pointer)) {
           return true;
         }
-        this.host.handleObjectPlace(pointer);
+        if (editorState.activeTool === 'fill') {
+          this.host.floodFillObjects(tileX, tileY);
+        } else if (editorState.activeTool === 'pencil' && canRepeatSelectedEditorObject()) {
+          this.host.beginObjectBatch(true);
+          this.host.placeObjectAtTile(tileX, tileY);
+          this.lastObjectDragCell = { x: tileX, y: tileY };
+          this.isDrawing = true;
+        } else {
+          this.host.handleObjectPlace(pointer);
+        }
       }
       return true;
     }
@@ -1047,7 +1083,15 @@ export class EditorInteractionController {
       return true;
     }
 
-    if (!this.isDrawing || editorState.paletteMode === 'objects') {
+    if (editorState.paletteMode === 'objects') {
+      if (this.isDrawing && this.lastObjectDragCell) {
+        const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        this.placeDraggedObjects(Math.floor(worldPoint.x / TILE_SIZE), Math.floor(worldPoint.y / TILE_SIZE));
+      }
+      return true;
+    }
+
+    if (!this.isDrawing) {
       return true;
     }
 
@@ -1100,6 +1144,12 @@ export class EditorInteractionController {
   }
 
   private finishCurrentTouchDraw(): void {
+    if (this.lastObjectDragCell) {
+      this.host.commitObjectBatch();
+      this.lastObjectDragCell = null;
+      this.isDrawing = false;
+      return;
+    }
     if (this.pathBend) {
       this.isDrawing = false;
       this.clearTileDrag();
@@ -1121,6 +1171,28 @@ export class EditorInteractionController {
       return;
     }
     this.host.eraseTileAt(worldX, worldY);
+  }
+
+  private placeDraggedObjects(tileX: number, tileY: number): void {
+    const previous = this.lastObjectDragCell;
+    if (!previous) return;
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return;
+    let x = previous.x;
+    let y = previous.y;
+    const dx = Math.abs(tileX - x);
+    const sx = x < tileX ? 1 : -1;
+    const dy = -Math.abs(tileY - y);
+    const sy = y < tileY ? 1 : -1;
+    let error = dx + dy;
+    while (x !== tileX || y !== tileY) {
+      const doubled = error * 2;
+      if (doubled >= dy) { error += dy; x += sx; }
+      if (doubled <= dx) { error += dx; y += sy; }
+      if (x >= 0 && x < ROOM_WIDTH && y >= 0 && y < ROOM_HEIGHT) {
+        this.host.placeObjectAtTile(x, y);
+      }
+    }
+    this.lastObjectDragCell = { x: tileX, y: tileY };
   }
 
   private beginTileDrag(tileX: number, tileY: number): void {
@@ -1213,6 +1285,11 @@ export class EditorInteractionController {
   }
 
   private beginPinchGesture(): void {
+    if (this.lastObjectDragCell) {
+      this.host.commitObjectBatch();
+      this.lastObjectDragCell = null;
+      this.isDrawing = false;
+    }
     const points = Array.from(this.touchPointers.values());
     if (points.length < 2) {
       return;
