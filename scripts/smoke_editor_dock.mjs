@@ -458,8 +458,24 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await page.screenshot({ path: path.join(viewportOutputDir, 'nuke-actions.png') });
   await page.keyboard.press('b');
 
+  for (const [dock, layer] of [
+    ['stuff', 'background'],
+    ['characters', 'foreground'],
+    ['hazards', 'background'],
+    ['deco', 'foreground'],
+  ]) {
+    const trigger = page.locator(`[data-editor-dock="${dock}"]`);
+    if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+    assert.equal(await page.locator('#layers-section').isVisible(), true, `${dock} should show Layers`);
+    const layerButton = page.locator(`#layers-section .layer-btn[data-layer="${layer}"]`);
+    assert.equal(await layerButton.isEnabled(), true, `${dock} should allow ${layer}`);
+    await layerButton.click();
+    assert.equal((await activeScene(page))?.selectedLayer, layer);
+  }
   const stuff = page.locator('[data-editor-dock="stuff"]');
-  if (await stuff.getAttribute('aria-expanded') !== 'true') await stuff.click();
+  await stuff.click();
+  await page.locator('#layers-section .layer-btn[data-layer="background"]').click();
+  await page.screenshot({ path: path.join(viewportOutputDir, 'object-layer-stuff.png') });
   await page.locator('.obj-cat-tab[data-category="collectible"]').click();
   const { beforeObjectPlacement } = await runEditorCommands(page, [
     { op: 'capture', name: 'beforeObjectPlacement' },
@@ -479,6 +495,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
     beforeNukeObjects.placedObjects.length,
     beforeObjectPlacement.placedObjects.length + 1,
   );
+  assert.equal(beforeNukeObjects.placedObjects.at(-1)?.layer, 'background');
   await page.locator('#btn-editor-shell-eraser').click();
   assert.equal(await page.locator('#editor-shell-eraser-size-picker').isVisible(), true);
   assert.equal(await page.locator('#btn-editor-shell-nuke-terrain').isVisible(), false);
