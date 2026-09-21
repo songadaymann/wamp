@@ -288,3 +288,11 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 - Implemented desktop/touch drag interpolation, one Undo action per stroke/Fill, live drag preview, Fill availability, and custom-sprite anchor lookup for Solid Blocks.
 - Validation: full `npm run check` passes 249 files / 1,847 tests plus lint, TypeScript, bindings, and production build. The official Canvas client ran and its screenshot was inspected. The dedicated browser smoke passes a five-cell collectible drag, six-cell connected-terrain Fill, three-cell decoration drag, one-step Undo for each, and zero browser errors; drag/Fill screenshots were visually inspected. The existing responsive editor-dock smoke passes desktop and phone layouts with zero new errors.
 - TODO: review in localhost; push/merge/deploy only if requested.
+
+## 2026-09-21 — Restore object layer controls in the refreshed editor
+
+- Request: expose layer placement again in the refreshed Stuff, Hazards, and Deco object panels (also Characters, for parity with the former Objects palette).
+- Branch: `codex/restore-object-layer-controls-2026-09-21` from current `origin/main` `9e60f15d`; dirty root checkout untouched.
+- Root cause: shared Layers UI and placement logic remained intact, but dock-shell CSS only displayed the section on Terrain in Advanced mode; Beginner mode also hid the section. The existing Layers section now appears above the object grid in all four desktop/tablet object panels in either builder mode; Terrain and phone behavior remain unchanged.
+- Browser smoke: Stuff, Characters, Hazards, and Deco each expose usable layer buttons; placing a Coin while Back is selected records the object on the background layer. Responsive dock smoke passes 1920x1080, 1440x900, 1024x768, and phone with zero application errors. Screenshots at 1440x900 and 1024x768 were inspected.
+- Validation: full check passes 249 files / 1,847 tests plus lint, TypeScript, bindings, and production build; DOM contract passes 781 IDs / 160 required. Official Canvas client passes with a visually inspected healthy frame. A separate Advanced-mode browser probe confirms the Stuff layer selector is visible. No push/deploy requested.
