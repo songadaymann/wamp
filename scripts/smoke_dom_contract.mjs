@@ -35,7 +35,6 @@ const requiredIdsByController = {
   'PaletteController': [
     'palette-canvas',
     'palette-container',
-    'selection-info',
     'tile-preview',
     'object-palette-section',
     'object-grid',

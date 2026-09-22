@@ -49,9 +49,9 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #editor-actions { 
 body[data-app-mode='editor']:not([data-device-class='phone']) #tools-section { display: none; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #layers-section { order: 4; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #background-section { order: 5; }
-body[data-app-mode='editor']:not([data-device-class='phone']) #sidebar > .sidebar-section[data-mobile-panel='palette']:not(#tileset-section):not(#tile-palette-section):not(#object-palette-section) { order: 1; }
+body[data-app-mode='editor']:not([data-device-class='phone']) #sidebar > .sidebar-section[data-mobile-panel='palette']:not(#tileset-section):not(#tile-controls-section):not(#object-palette-section) { order: 1; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section { order: 2; }
-body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section,
+body[data-app-mode='editor']:not([data-device-class='phone']) #tile-controls-section { order: 3; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section { order: 3; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #course-goal-section { order: 7; }
 body[data-app-mode='editor']:not([data-device-class='phone']) #editor-advanced { order: 8; }

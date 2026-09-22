@@ -2,10 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { editorState } from '../../config';
 import {
   getEditorToolUnavailableTitle,
+  getEditorToolModePipState,
+  getShapeFillModeUnavailableTitle,
   getShapeFillUiMode,
+  getTileFlipModePipState,
   isEditorToolUnavailable,
   isPencilBrushPlacement,
   isPencilStampPlacement,
+  isShapeFillModeAvailable,
 } from './editorToolSelection';
 
 const originalMode = editorState.paletteMode;
@@ -86,5 +90,88 @@ describe('draw stamp vs brush placement', () => {
     editorState.shapeFillMode = 'stamp';
     expect(getShapeFillUiMode('fill')).toBe('pattern');
     expect(getShapeFillUiMode('pencil')).toBe('stamp');
+  });
+});
+
+describe('shape fill mode availability', () => {
+  const originalSelection = editorState.selection;
+  const originalTool = editorState.activeTool;
+  const originalPalette = editorState.paletteMode;
+
+  afterEach(() => {
+    editorState.selection = originalSelection;
+    editorState.activeTool = originalTool;
+    editorState.paletteMode = originalPalette;
+  });
+
+  function selectTwoTiles(): void {
+    editorState.selection = {
+      ...editorState.selection,
+      width: 2,
+      height: 1,
+      occupiedMask: [[true, true]],
+      patternOrder: [
+        { col: editorState.selection.startCol, row: editorState.selection.startRow },
+        { col: editorState.selection.startCol + 1, row: editorState.selection.startRow },
+      ],
+    };
+  }
+
+  it('greys stamp, pattern, and shuffle until more than one tile is selected', () => {
+    editorState.paletteMode = 'tiles';
+    editorState.activeTool = 'pencil';
+    editorState.selection = {
+      ...editorState.selection,
+      width: 1,
+      height: 1,
+      occupiedMask: [[true]],
+      patternOrder: [{ col: editorState.selection.startCol, row: editorState.selection.startRow }],
+    };
+    expect(isShapeFillModeAvailable('stamp')).toBe(false);
+    expect(isShapeFillModeAvailable('pattern')).toBe(false);
+    expect(isShapeFillModeAvailable('shuffle')).toBe(false);
+    expect(getShapeFillModeUnavailableTitle('stamp')).toBe(
+      'Select more than one tile to use Stamp, Pattern, or Shuffle',
+    );
+  });
+
+  it('greys only stamp when a multi-tile selection is used without Draw', () => {
+    editorState.paletteMode = 'tiles';
+    editorState.activeTool = 'rect';
+    selectTwoTiles();
+    expect(isShapeFillModeAvailable('stamp')).toBe(false);
+    expect(isShapeFillModeAvailable('pattern')).toBe(true);
+    expect(isShapeFillModeAvailable('shuffle')).toBe(true);
+    expect(getShapeFillModeUnavailableTitle('stamp')).toBe('Stamp is only available with the Draw tool');
+    expect(getShapeFillModeUnavailableTitle('pattern')).toBeNull();
+    editorState.activeTool = 'pencil';
+    expect(isShapeFillModeAvailable('stamp')).toBe(true);
+  });
+});
+
+describe('multi-state tool pips', () => {
+  const originalRect = editorState.rectOutline;
+  const originalEllipse = editorState.ellipseOutline;
+  const originalLine = editorState.lineCurve;
+
+  afterEach(() => {
+    editorState.rectOutline = originalRect;
+    editorState.ellipseOutline = originalEllipse;
+    editorState.lineCurve = originalLine;
+  });
+
+  it('maps rectangle, circle, line, and flip cycles to pip indexes', () => {
+    editorState.rectOutline = false;
+    editorState.ellipseOutline = true;
+    editorState.lineCurve = false;
+    expect(getEditorToolModePipState('rect')).toEqual({ count: 2, activeIndex: 0 });
+    expect(getEditorToolModePipState('ellipse')).toEqual({ count: 2, activeIndex: 1 });
+    expect(getEditorToolModePipState('line')).toEqual({ count: 2, activeIndex: 0 });
+    editorState.lineCurve = true;
+    expect(getEditorToolModePipState('line')).toEqual({ count: 2, activeIndex: 1 });
+    expect(getEditorToolModePipState('pencil')).toBeNull();
+    expect(getTileFlipModePipState('off')).toEqual({ count: 3, activeIndex: 0 });
+    expect(getTileFlipModePipState('on')).toEqual({ count: 3, activeIndex: 1 });
+    expect(getTileFlipModePipState('rand')).toEqual({ count: 3, activeIndex: 2 });
   });
 });

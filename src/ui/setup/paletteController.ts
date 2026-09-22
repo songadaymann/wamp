@@ -101,7 +101,6 @@ export class PaletteController {
   private readonly doc: Document;
   private readonly paletteCanvas: HTMLCanvasElement | null;
   private readonly paletteContainer: HTMLElement | null;
-  private readonly selectionInfo: HTMLElement | null;
   private readonly tilePreviewCanvas: HTMLCanvasElement | null;
   private readonly objectPaletteSection: HTMLElement | null;
   private readonly objectGrid: HTMLElement | null;
@@ -151,7 +150,6 @@ export class PaletteController {
     this.doc = doc;
     this.paletteCanvas = this.doc.getElementById('palette-canvas') as HTMLCanvasElement | null;
     this.paletteContainer = this.doc.getElementById('palette-container');
-    this.selectionInfo = this.doc.getElementById('selection-info');
     this.tilePreviewCanvas = this.doc.getElementById('tile-preview') as HTMLCanvasElement | null;
     this.objectPaletteSection = this.doc.getElementById('object-palette-section');
     this.objectGrid = this.doc.getElementById('object-grid');
@@ -359,19 +357,6 @@ export class PaletteController {
     editorState.selection = nextSelection;
     editorState.selectedTileGid = this.getPrimarySelectionGid(nextSelection, ts);
 
-    if (this.selectionInfo) {
-      const occupiedCount = this.countOccupiedSelectionCells(nextSelection);
-      const totalCells = nextSelection.width * nextSelection.height;
-
-      if (totalCells === 1) {
-        this.selectionInfo.textContent = occupiedCount === 0 ? '(empty)' : '';
-      } else if (occupiedCount === totalCells) {
-        this.selectionInfo.textContent = `(${nextSelection.width}x${nextSelection.height})`;
-      } else {
-        this.selectionInfo.textContent = `(${nextSelection.width}x${nextSelection.height}, ${occupiedCount} terrain cells)`;
-      }
-    }
-
     this.renderPalette();
     this.renderTilePreview();
     this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
@@ -379,7 +364,7 @@ export class PaletteController {
 
   private observePaletteLayout(): void {
     const target = this.paletteContainer
-      ?? this.doc.getElementById('tile-palette-section');
+      ?? this.doc.getElementById('tileset-section');
     if (!target || typeof this.doc.defaultView?.ResizeObserver !== 'function') {
       return;
     }
@@ -388,7 +373,7 @@ export class PaletteController {
       this.renderPalette();
     });
     this.paletteResizeObserver.observe(target);
-    const section = this.doc.getElementById('tile-palette-section');
+    const section = this.doc.getElementById('tileset-section');
     if (section && section !== target) {
       this.paletteResizeObserver.observe(section);
     }

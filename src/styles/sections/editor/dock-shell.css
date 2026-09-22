@@ -149,6 +149,8 @@ body[data-editor-dock-shell='true'] .editor-shell-square-button {
 
 body[data-editor-dock-shell='true'] .editor-shell-chunky-button {
   display: flex !important;
+  position: relative;
+  overflow: visible;
   min-width: 0;
   min-height: 44px;
   padding: 5px 4px;
@@ -710,7 +712,7 @@ body[data-editor-dock-shell='true'] #sidebar .sidebar-section {
 body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #palette-mode-section,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #smart-palette-section:not(.hidden),
 body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tileset-section:not(.hidden),
-body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tile-palette-section:not(.hidden),
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tile-controls-section:not(.hidden),
 body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'][data-builder-mode='advanced'] #layers-section,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #object-palette-section,
@@ -720,7 +722,7 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-
   display: flex !important;
 }
 
-body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tile-palette-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tileset-section,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #object-palette-section,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #object-palette-section,
@@ -735,6 +737,46 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'][data-buil
   grid-template-columns: minmax(58px, auto) minmax(0, 1fr);
   align-items: start;
   column-gap: 10px;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tileset-section:not(.hidden) {
+  display: grid !important;
+  grid-template-columns: minmax(58px, auto) minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
+  row-gap: 10px;
+}
+
+body[data-editor-dock-shell='true'] #tileset-section > .section-label {
+  grid-column: 1;
+  margin: 11px 0 0;
+  align-self: start;
+  font-family: var(--editor-button-font);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+body[data-editor-dock-shell='true'] #tileset-section > #tileset-select {
+  grid-column: 2;
+  min-height: 44px;
+}
+
+body[data-editor-dock-shell='true'] #tileset-section > .sidebar-section-body {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+body[data-editor-dock-shell='true'] #tile-controls-section > .section-label {
+  font-family: var(--editor-button-font);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tile-controls-section:not(.hidden) {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 body[data-editor-dock-shell='true'] #layers-section > .section-label {

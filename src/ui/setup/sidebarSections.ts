@@ -334,7 +334,7 @@ export function setupEditorSidebarShell(doc: Document = document): void {
       !paletteModeSection &&
       section.dataset.mobilePanel === 'palette' &&
       section.id !== 'tileset-section' &&
-      section.id !== 'tile-palette-section' &&
+      section.id !== 'tile-controls-section' &&
       section.id !== 'object-palette-section'
     ) {
       paletteModeSection = section;
@@ -355,7 +355,7 @@ export function setupEditorSidebarShell(doc: Document = document): void {
   appendSection(scrollShell, paletteModeSection);
   appendSection(scrollShell, sectionById.get('smart-palette-section'));
   appendSection(scrollShell, sectionById.get('tileset-section'));
-  appendSection(scrollShell, sectionById.get('tile-palette-section'));
+  appendSection(scrollShell, sectionById.get('tile-controls-section'));
   appendSection(scrollShell, sectionById.get('object-palette-section'));
   appendSection(scrollShell, sectionById.get('layers-section'));
   appendSection(scrollShell, sectionById.get('background-section'));

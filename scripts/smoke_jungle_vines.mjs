@@ -90,7 +90,7 @@ try {
 
   await setEarlyWorldTilesVisibility(page, false);
   await page.screenshot({ path: path.join(outputDir, 'jungle-editor.png') });
-  await page.locator('#tile-palette-section').screenshot({
+  await page.locator('#tileset-section').screenshot({
     path: path.join(outputDir, 'jungle-tile-palette-panel.png'),
   });
 
