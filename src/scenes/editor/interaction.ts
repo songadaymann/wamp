@@ -24,7 +24,7 @@ import {
   isPencilStampPlacement,
 } from './editorToolSelection';
 import { clampRandomizeBrushSize } from './randomizeTiles';
-import { resolvePencilStampOrigin } from './stampDrag';
+import { forEachDraggedTileCell, resolvePencilStampOrigin } from './stampDrag';
 import { iterateShapeTiles, resolveShapeEnd, snapLineEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
 
 function isPointerShiftDown(pointer: Phaser.Input.Pointer): boolean {
@@ -1177,21 +1177,11 @@ export class EditorInteractionController {
     const previous = this.lastObjectDragCell;
     if (!previous) return;
     if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return;
-    let x = previous.x;
-    let y = previous.y;
-    const dx = Math.abs(tileX - x);
-    const sx = x < tileX ? 1 : -1;
-    const dy = -Math.abs(tileY - y);
-    const sy = y < tileY ? 1 : -1;
-    let error = dx + dy;
-    while (x !== tileX || y !== tileY) {
-      const doubled = error * 2;
-      if (doubled >= dy) { error += dy; x += sx; }
-      if (doubled <= dx) { error += dx; y += sy; }
+    forEachDraggedTileCell(previous, { x: tileX, y: tileY }, (x, y) => {
       if (x >= 0 && x < ROOM_WIDTH && y >= 0 && y < ROOM_HEIGHT) {
         this.host.placeObjectAtTile(x, y);
       }
-    }
+    });
     this.lastObjectDragCell = { x: tileX, y: tileY };
   }
 

@@ -218,6 +218,8 @@ export class EditorScene extends Phaser.Scene {
       || event.metaKey
       || event.ctrlKey
       || event.altKey
+      || this.musicModeActive
+      || document.body.dataset.editorSpriteMode === 'true'
       || isTextInputFocused()
     ) {
       return;
@@ -229,7 +231,7 @@ export class EditorScene extends Phaser.Scene {
     this.toolController.selectTool(shortcutTool);
   };
   private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
-    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying) {
+    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying || event.defaultPrevented) {
       return;
     }
 
@@ -260,6 +262,10 @@ export class EditorScene extends Phaser.Scene {
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
+      if (document.body.dataset.editorSpriteMode === 'true') {
+        document.getElementById('btn-editor-sprite-close')?.click();
+        return;
+      }
       if (this.musicModeActive) {
         if (this.musicPatternController.isPastePreviewActive()) {
           this.musicPatternController.cancelPastePreview();
