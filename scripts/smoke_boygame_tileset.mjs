@@ -89,7 +89,7 @@ try {
   // The synthetic fixture bypasses the normal Browse-to-Editor transition that retires this DOM layer.
   await setEarlyWorldTilesVisibility(page, false);
   await page.screenshot({ path: path.join(outputDir, 'boygame-editor.png') });
-  await page.locator('#tile-palette-section').screenshot({
+  await page.locator('#tileset-section').screenshot({
     path: path.join(outputDir, 'boygame-palette-panel.png'),
   });
 

@@ -50,7 +50,7 @@ export interface EditorUiElements {
   flipYButton: HTMLButtonElement | null;
   paletteTabs: HTMLElement[];
   tilesetSection: HTMLElement | null;
-  tilePaletteSection: HTMLElement | null;
+  tileControlsSection: HTMLElement | null;
   objectPaletteSection: HTMLElement | null;
   smartPaletteSection: HTMLElement | null;
   smartThemeSelect: HTMLSelectElement | null;
@@ -247,7 +247,7 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     flipYButton: byId<HTMLButtonElement>(doc, 'btn-tile-flip-y'),
     paletteTabs: all<HTMLElement>(doc, '.palette-tab'),
     tilesetSection: byId<HTMLElement>(doc, 'tileset-section'),
-    tilePaletteSection: byId<HTMLElement>(doc, 'tile-palette-section'),
+    tileControlsSection: byId<HTMLElement>(doc, 'tile-controls-section'),
     objectPaletteSection: byId<HTMLElement>(doc, 'object-palette-section'),
     smartPaletteSection: byId<HTMLElement>(doc, 'smart-palette-section'),
     smartThemeSelect: byId<HTMLSelectElement>(doc, 'smart-theme-select'),

@@ -144,7 +144,7 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-se
   overflow: hidden;
 }
 
-body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section {
+body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section {
   flex: 0 0 auto;
   min-height: 0;
   max-height: none;
@@ -165,8 +165,8 @@ body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-se
   overflow: hidden;
 }
 
-body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section .sidebar-section-body,
-body[data-app-mode='editor']:not([data-device-class='phone']) #tile-palette-section #palette-container {
+body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section .sidebar-section-body,
+body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section #palette-container {
   flex: 0 0 auto;
   min-height: 0;
   overflow: visible;

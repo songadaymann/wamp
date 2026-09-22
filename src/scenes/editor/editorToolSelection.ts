@@ -1,4 +1,4 @@
-import { editorState, type ShapeFillMode, type ToolName } from '../../config';
+import { editorState, TILE_FLIP_MODES, type ShapeFillMode, type TileFlipMode, type ToolName } from '../../config';
 import type { EditorShapeKind } from './shapeTiles';
 import { countOccupiedSelectionTiles } from './selectionPattern';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
@@ -57,6 +57,35 @@ export function getShapeFillUiMode(tool: ToolName = editorState.activeTool): Sha
     return editorState.shapeFillMode;
   }
   return editorState.shapeFillMode === 'shuffle' ? 'shuffle' : 'pattern';
+}
+
+export function isShapeFillModeAvailable(
+  mode: ShapeFillMode,
+  tool: ToolName = editorState.activeTool,
+): boolean {
+  if (editorState.paletteMode !== 'tiles') {
+    return false;
+  }
+  if (countOccupiedSelectionTiles(editorState.selection) <= 1) {
+    return false;
+  }
+  if (mode === 'stamp') {
+    return tool === 'pencil';
+  }
+  return true;
+}
+
+export function getShapeFillModeUnavailableTitle(mode: ShapeFillMode): string | null {
+  if (isShapeFillModeAvailable(mode)) {
+    return null;
+  }
+  if (editorState.paletteMode !== 'tiles' || countOccupiedSelectionTiles(editorState.selection) <= 1) {
+    return 'Select more than one tile to use Stamp, Pattern, or Shuffle';
+  }
+  if (mode === 'stamp') {
+    return 'Stamp is only available with the Draw tool';
+  }
+  return null;
 }
 
 export function isDragStampEditorTool(tool: ToolName): tool is 'rect' | 'ellipse' | 'line' {
@@ -171,6 +200,29 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
     default:
       return 'Draw';
   }
+}
+
+export interface EditorModePipState {
+  count: number;
+  activeIndex: number;
+}
+
+export function getEditorToolModePipState(tool: ToolName): EditorModePipState | null {
+  if (tool === 'rect') {
+    return { count: 2, activeIndex: editorState.rectOutline ? 1 : 0 };
+  }
+  if (tool === 'ellipse') {
+    return { count: 2, activeIndex: editorState.ellipseOutline ? 1 : 0 };
+  }
+  if (tool === 'line') {
+    return { count: 2, activeIndex: editorState.lineCurve ? 1 : 0 };
+  }
+  return null;
+}
+
+export function getTileFlipModePipState(mode: TileFlipMode): EditorModePipState {
+  const activeIndex = Math.max(0, TILE_FLIP_MODES.indexOf(mode));
+  return { count: TILE_FLIP_MODES.length, activeIndex };
 }
 
 export interface EditorToolButtonAppearance {

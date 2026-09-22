@@ -72,13 +72,16 @@
 
 .editor-shape-fill-toggle {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 
 .editor-shape-fill-button {
   min-width: 0;
-  padding: 8px 16px;
+  flex: 1;
+  height: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
   border-radius: 0;
 }
 
@@ -158,6 +161,8 @@
   flex: 1;
   min-width: 56px;
   height: 40px;
+  position: relative;
+  overflow: visible;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -205,4 +210,27 @@
 .tool-btn.is-pressed {
   transform: translateY(2px);
   box-shadow: 0 0 0 rgba(0, 0, 0, 0.18);
+}
+
+.tool-mode-pips {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  gap: 2px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tool-mode-pips span {
+  display: block;
+  width: 5px;
+  height: 5px;
+  box-sizing: border-box;
+  background: transparent;
+  border: 1px solid #18161c;
+}
+
+.tool-mode-pips span.is-active {
+  background: #18161c;
 }

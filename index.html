@@ -642,25 +642,27 @@
         <div id="smart-palette-hint" class="palette-hint" aria-live="polite">Draw blocks. Smart chooses edges and repairs neighbors. Right-click or Erase removes them.</div>
       </div>
 
-      <!-- Tileset Selector (visible in tiles mode) -->
-      <div class="sidebar-section" id="tileset-section" data-mobile-panel="palette" data-sidebar-collapsible="true">
+      <!-- Tileset + palette (visible in tiles mode) -->
+      <div class="sidebar-section palette-section" id="tileset-section" data-mobile-panel="palette" data-sidebar-collapsible="true">
         <div class="section-label">Tileset</div>
-        <select id="tileset-select"></select>
-        <div class="tile-transform-controls">
-          <button id="btn-tile-flip-x" class="bar-btn bar-btn-small" type="button">Flip H</button>
-          <button id="btn-tile-flip-y" class="bar-btn bar-btn-small" type="button">Flip V</button>
+        <select id="tileset-select" aria-label="Tileset"></select>
+        <div class="sidebar-section-body">
+          <div id="palette-container">
+            <canvas id="palette-canvas"></canvas>
+          </div>
+          <canvas id="tile-preview" width="64" height="64" hidden aria-hidden="true"></canvas>
+          <div class="palette-hint">Click to Select. Drag to Select a Group. Control+Click to add and remove tiles from selection.</div>
         </div>
       </div>
 
-      <!-- Tile Palette (visible in tiles mode) -->
-      <div class="sidebar-section palette-section" id="tile-palette-section" data-mobile-panel="palette" data-sidebar-collapsible="true">
-        <div class="section-label">Selection <span id="selection-info" class="selection-info"></span></div>
-        <div id="palette-container">
-          <canvas id="palette-canvas"></canvas>
+      <!-- Tile Controls (visible in tiles mode) -->
+      <div class="sidebar-section" id="tile-controls-section" data-mobile-panel="palette" data-sidebar-collapsible="true">
+        <div class="section-label">Tile Controls</div>
+        <div class="tile-transform-controls">
+          <button id="btn-tile-flip-x" class="bar-btn bar-btn-small" type="button"><span class="tile-flip-label">Flip H</span></button>
+          <button id="btn-tile-flip-y" class="bar-btn bar-btn-small" type="button"><span class="tile-flip-label">Flip V</span></button>
         </div>
-        <canvas id="tile-preview" width="64" height="64" hidden aria-hidden="true"></canvas>
-        <div class="palette-hint">Click to Select. Drag to Select a Group. Control+Click to add and remove tiles from selection.</div>
-        <div class="editor-shape-fill-controls hidden">
+        <div class="editor-shape-fill-controls">
           <div class="editor-shape-fill-toggle" role="group" aria-label="Stamp, pattern, or shuffle">
             <button class="bar-btn bar-btn-small editor-shape-fill-button" type="button" data-shape-fill-mode="stamp" aria-pressed="true">Stamp</button>
             <button class="bar-btn bar-btn-small editor-shape-fill-button" type="button" data-shape-fill-mode="pattern" aria-pressed="false">Pattern</button>

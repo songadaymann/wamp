@@ -16,11 +16,16 @@ import {
 } from '../../config';
 import {
   getEditorToolButtonAppearance,
+  getEditorToolModePipState,
   getEditorToolUnavailableTitle,
+  getShapeFillModeUnavailableTitle,
   getShapeFillUiMode,
+  getTileFlipModePipState,
   isEditorToolUnavailable,
+  isShapeFillModeAvailable,
   isMoreEditorTool,
   isPencilStampPlacement,
+  type EditorModePipState,
   type EditorToolButtonAppearance,
 } from './editorToolSelection';
 import { clampRandomizeBrushSize } from './randomizeTiles';
@@ -165,6 +170,29 @@ function applyEditorToolIcon(icon: Element, appearance: EditorToolButtonAppearan
   }
   icon.className = 'tool-icon';
   icon.textContent = appearance.icon;
+}
+
+function syncModePips(host: HTMLElement, state: EditorModePipState | null): void {
+  let pips = host.querySelector<HTMLElement>('.tool-mode-pips');
+  if (!state) {
+    pips?.remove();
+    return;
+  }
+  if (!pips) {
+    pips = host.ownerDocument.createElement('span');
+    pips.className = 'tool-mode-pips';
+    pips.setAttribute('aria-hidden', 'true');
+    host.appendChild(pips);
+  }
+  while (pips.children.length < state.count) {
+    pips.appendChild(host.ownerDocument.createElement('span'));
+  }
+  while (pips.children.length > state.count) {
+    pips.lastElementChild?.remove();
+  }
+  Array.from(pips.children).forEach((pip, index) => {
+    pip.classList.toggle('is-active', index === state.activeIndex);
+  });
 }
 
 function parseSmartThemeId(value: string | undefined): SmartThemeId | null {
@@ -742,6 +770,9 @@ export class EditorUiBridge {
     for (const button of this.elements.shapeFillButtons) {
       const handleShapeFill = () => {
         const nextMode = button.dataset.shapeFillMode;
+        if (button.disabled || button.getAttribute('aria-disabled') === 'true') {
+          return;
+        }
         if (!SHAPE_FILL_MODES.includes(nextMode as ShapeFillMode)) {
           return;
         }
@@ -1899,6 +1930,7 @@ export class EditorUiBridge {
         ?? (unsupported
           ? `${SMART_TOOL_LABELS[tool] ?? supportedTitle} is unavailable for ${smartSelection.brush.label}.`
           : supportedTitle);
+      syncModePips(button, getEditorToolModePipState(tool));
     }
 
     const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
@@ -2036,18 +2068,23 @@ export class EditorUiBridge {
       input.checked = editorState.fillIgnoreTileFlipping;
     }
 
-    const showShapeFillControls = multiTileSelection;
     const shapeFillUiMode = getShapeFillUiMode();
     for (const controls of this.elements.shapeFillControls) {
-      controls.classList.toggle('hidden', !showShapeFillControls);
+      controls.classList.remove('hidden');
     }
     for (const button of this.elements.shapeFillButtons) {
-      const mode = button.dataset.shapeFillMode;
-      const stampOnly = mode === 'stamp';
-      button.classList.toggle('hidden', stampOnly && editorState.activeTool !== 'pencil');
-      const active = mode === shapeFillUiMode;
+      const mode = button.dataset.shapeFillMode as ShapeFillMode | undefined;
+      if (!mode || !SHAPE_FILL_MODES.includes(mode)) {
+        continue;
+      }
+      const unavailable = !isShapeFillModeAvailable(mode);
+      button.disabled = unavailable;
+      button.classList.remove('hidden');
+      button.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
+      const active = !unavailable && mode === shapeFillUiMode;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      button.title = getShapeFillModeUnavailableTitle(mode) ?? '';
     }
 
     const advancedBuilder = getGameSettings().builderMode === 'advanced';
@@ -2095,7 +2132,7 @@ export class EditorUiBridge {
       tab.classList.toggle('active', tab.dataset.mode === editorState.paletteMode);
     }
     this.elements.tilesetSection?.classList.toggle('hidden', !paletteModeIsTiles);
-    this.elements.tilePaletteSection?.classList.toggle('hidden', !paletteModeIsTiles);
+    this.elements.tileControlsSection?.classList.toggle('hidden', !paletteModeIsTiles);
     this.elements.smartPaletteSection?.classList.toggle('hidden', !paletteModeIsSmart);
     this.elements.objectPaletteSection?.classList.toggle('hidden', editorState.paletteMode !== 'objects');
     if (paletteModeIsTiles) {
@@ -2237,11 +2274,23 @@ export class EditorUiBridge {
     if (!button) {
       return;
     }
-    button.textContent = mode === 'rand' ? `Rand ${axis}` : `Flip ${axis}`;
+    let label = button.querySelector<HTMLElement>('.tile-flip-label');
+    if (!label) {
+      label = this.doc.createElement('span');
+      label.className = 'tile-flip-label';
+      button.prepend(label);
+    }
+    label.textContent = mode === 'rand' ? `Rand ${axis}` : `Flip ${axis}`;
+    for (const node of Array.from(button.childNodes)) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        node.remove();
+      }
+    }
     button.classList.toggle('active', mode === 'on');
     button.classList.toggle('flip-rand', mode === 'rand');
     button.setAttribute('aria-pressed', mode === 'off' ? 'false' : 'true');
     button.dataset.flipMode = mode;
+    syncModePips(button, getTileFlipModePipState(mode));
   }
 }
 
