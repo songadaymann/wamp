@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   INITIAL_EDITOR_DOCK_SHELL_STATE,
+  isEditorDockShellActive,
   reduceEditorDockShellState,
   shouldSuppressEditorShellStatus,
   type EditorDockShellState,
@@ -14,6 +15,15 @@ function reduce(
 }
 
 describe('editor dock shell state', () => {
+  it('uses the same desktop dock for ordinary and expanded room editing', () => {
+    const doc = { body: { dataset: { appMode: 'editor', deviceClass: 'desktop' } } } as unknown as Document;
+    expect(isEditorDockShellActive(doc)).toBe(true);
+    doc.body.dataset.editorCourseMode = 'true';
+    expect(isEditorDockShellActive(doc)).toBe(true);
+    doc.body.dataset.deviceClass = 'phone';
+    expect(isEditorDockShellActive(doc)).toBe(false);
+  });
+
   it('suppresses redundant ownership and recovery copy without hiding save feedback', () => {
     expect(shouldSuppressEditorShellStatus('Claimed by DoingGreat.')).toBe(true);
     expect(shouldSuppressEditorShellStatus(

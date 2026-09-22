@@ -4,6 +4,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 const baseUrl = process.argv[2] || 'http://localhost:3000/';
+const courseOnly = process.env.EDITOR_DOCK_SMOKE_COURSE_ONLY === '1';
 const outputDir = process.env.EDITOR_DOCK_SMOKE_OUTPUT_DIR || 'output/web-game/editor-dock';
 const viewports = [
   { width: 1920, height: 1080 },
@@ -50,8 +51,14 @@ function isKnownBackgroundThumbnail404(response) {
   return url.pathname.startsWith('/assets/cache-v2/assets/backgrounds/');
 }
 
-function isGeneric404ConsoleError(message) {
-  return message.includes('Failed to load resource: the server responded with a status of 404');
+function isKnownLocalPresenceIdentity503(response) {
+  return response.status() === 503
+    && new URL(response.url()).pathname === '/api/presence/identity-token'
+    && new URL(baseUrl).hostname === '127.0.0.1';
+}
+
+function isKnownResourceConsoleError(message) {
+  return /Failed to load resource: the server responded with a status of (404|503)/.test(message);
 }
 
 async function activeScene(page) {
@@ -116,6 +123,156 @@ async function openSyntheticEditor(page) {
       && document.body.dataset.editorDockShell === 'true'
   ));
   await page.waitForTimeout(250);
+}
+
+async function inspectCourse(page, tileX = 10, tileY = 10) {
+  const result = await page.evaluate(({ x, y }) => (
+    window.run_preview_smoke_action?.('inspectSyntheticCourseEditor', { x, y })
+  ), { x: tileX, y: tileY });
+  assert.equal(result?.ok, true, `Expanded room inspection failed: ${JSON.stringify(result)}`);
+  return result;
+}
+
+async function courseTileScreenPoint(page, tileX, tileY) {
+  const { screenPoint } = await inspectCourse(page, tileX, tileY);
+  const canvas = page.locator('#game-container canvas').last();
+  const box = await canvas.boundingBox();
+  const size = await canvas.evaluate((element) => ({ width: element.width, height: element.height }));
+  assert.ok(box);
+  return {
+    x: box.x + screenPoint.x * box.width / size.width,
+    y: box.y + screenPoint.y * box.height / size.height,
+  };
+}
+
+async function verifyExpandedRoomShell(page, viewport, viewportOutputDir) {
+  await navigateToTarget(page);
+  await page.waitForFunction(() => document.body.dataset.appReady === 'true', undefined, { timeout: 120_000 });
+  const opened = await page.evaluate(async () => {
+    window.__wampEarlyWorldTiles?.release('expanded-editor-dock-smoke');
+    return window.run_preview_smoke_action?.('openSyntheticCourseEditor');
+  });
+  assert.equal(opened?.ok, true);
+  await page.waitForFunction(() => (
+    document.body.dataset.editorCourseMode === 'true'
+    && document.body.dataset.editorDockShell === 'true'
+  ));
+  const topTools = page.locator('.editor-shell-tools [data-tool]');
+  assert.equal(await topTools.count(), 8);
+  for (const tool of await topTools.all()) assert.equal(await tool.isVisible(), true);
+  assert.equal(await page.locator('[data-editor-shell-action="back"] span:last-child').textContent(), 'Back to Setup');
+  assert.equal(await page.locator('[data-editor-shell-action="save"]').isVisible(), true);
+  assert.equal(await page.locator('[data-editor-shell-action="share"]').isVisible(), false);
+  assert.equal(await page.locator('[data-editor-shell-action="publish"] span:last-child').textContent(), 'Publish Cells');
+  assert.equal((await inspectCourse(page)).roomId, '99,99');
+
+  for (const [key, tool] of [
+    ['b', 'pencil'], ['e', 'eraser'], ['c', 'copy'], ['f', 'fill'],
+    ['r', 'rect'], ['o', 'ellipse'], ['l', 'line'], ['g', 'fill'],
+  ]) {
+    await page.keyboard.press(key);
+    assert.equal(await page.locator(`.editor-shell-tools [data-tool="${tool}"]`).getAttribute('class').then((value) => value?.includes('active')), true);
+  }
+  await page.locator('#room-title-input').focus();
+  await page.keyboard.press('e');
+  assert.equal(await page.locator('.editor-shell-tools [data-tool="fill"]').getAttribute('class').then((value) => value?.includes('active')), true);
+  await page.locator('[data-editor-dock="terrain"]').click();
+
+  await page.locator('[data-editor-dock="markers"]').click();
+  await page.locator('[data-editor-marker-action="goal"]').click();
+  assert.equal(await page.locator('#course-goal-section').isVisible(), true);
+  assert.equal(await page.locator('#goal-section').isVisible(), false);
+  assert.equal(await page.locator('#btn-course-editor-save-course').isVisible(), true);
+  assert.equal(await page.locator('#btn-course-editor-publish-course').isVisible(), true);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'expanded-goal.png') });
+  await page.locator('[data-editor-dock="markers"]').click();
+  await page.locator('[data-editor-marker-action="spawn"]').click();
+  assert.equal(await page.evaluate(() => document.body.dataset.editorSpawnPlacement), 'true');
+  const spawnPoint = await courseTileScreenPoint(page, 22, 10);
+  await page.mouse.click(spawnPoint.x, spawnPoint.y);
+  await page.waitForFunction(() => document.body.dataset.editorSpawnPlacement === 'false');
+  assert.deepEqual((await inspectCourse(page)).snapshot.spawnPoint, { x: 360, y: 176 });
+
+  await page.locator('[data-editor-shell-action="room"]').click();
+  for (const [section, target] of [
+    ['background', '#background-card-grid'],
+    ['camera', '#room-camera-section'],
+    ['environment', '#editor-lighting-feature-panel'],
+  ]) {
+    await page.locator(`button[data-editor-room-section="${section}"]`).click();
+    assert.equal(await page.locator(target).isVisible(), true, `Expanded room ${section} should be available`);
+  }
+  await page.screenshot({ path: path.join(viewportOutputDir, 'expanded-room-environment.png') });
+  await page.locator('button[data-editor-room-section="music"]').click();
+  assert.equal(await page.locator('#editor-music-overlay').isVisible(), true, 'Music Editor should open in expanded rooms');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'false');
+  assert.equal(await page.locator('#editor-music-overlay').isVisible(), false, 'Escape should close Music without leaving the expanded editor');
+  await page.locator('button[data-editor-room-section="sprite"]').click();
+  assert.equal(await page.locator('#editor-sprite-overlay').isVisible(), true, 'Sprite Editor should open in expanded rooms');
+  await page.locator('#btn-editor-sprite-pencil').focus();
+  await page.keyboard.press('e');
+  assert.equal(await page.locator('#btn-editor-sprite-eraser').getAttribute('aria-pressed'), 'true');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.body.dataset.editorSpriteMode === 'false');
+  assert.equal(await page.locator('#editor-sprite-overlay').isVisible(), false, 'Escape should close Sprite without leaving the expanded editor');
+  assert.equal(await page.evaluate(() => document.body.dataset.editorCourseMode), 'true');
+
+  await page.locator('[data-editor-dock="terrain"]').click();
+  await page.locator('[data-builder-mode-choice="advanced"]').click();
+  await page.locator('.palette-tab[data-mode="tiles"]').click();
+  for (const target of ['#tileset-select', '#tile-controls-section', '#layers-section', '#btn-tile-flip-x', '#btn-tile-flip-y']) {
+    assert.equal(await page.locator(target).isVisible(), true, `${target} should be available in expanded rooms`);
+  }
+  assert.deepEqual(await page.locator('.editor-shape-fill-button').allTextContents(), ['Stamp', 'Pattern', 'Shuffle']);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'expanded-advanced-terrain.png') });
+
+  await page.locator('#btn-editor-shell-eraser').click();
+  assert.equal(await page.locator('#btn-editor-shell-nuke-terrain').isVisible(), true);
+  assert.equal(await page.locator('#btn-editor-shell-nuke-objects').isVisible(), true);
+  await page.keyboard.press('b');
+
+  for (const dock of ['stuff', 'characters', 'hazards', 'deco']) {
+    await page.locator(`[data-editor-dock="${dock}"]`).click();
+    assert.equal(await page.locator('#object-grid').isVisible(), true, `${dock} objects should be visible`);
+    assert.equal(await page.locator('#layers-section').isVisible(), true, `${dock} layer controls should be visible`);
+  }
+  await page.locator('[data-editor-dock="stuff"]').click();
+  await page.locator('.obj-cat-tab[data-category="collectible"]').click();
+  await page.locator('.object-item[data-object-id="coin_gold"]').click();
+  await page.locator('#layers-section .layer-btn[data-layer="background"]').click();
+  const before = (await inspectCourse(page)).snapshot.placedObjects;
+  const start = await courseTileScreenPoint(page, 15, 10);
+  const end = await courseTileScreenPoint(page, 19, 10);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 3 });
+  await page.mouse.up();
+  const afterDrag = (await inspectCourse(page)).snapshot.placedObjects;
+  assert.equal(afterDrag.length, before.length + 5, 'expanded editor should interpolate a five-cell object drag');
+  assert.equal(afterDrag.slice(-5).every((placed) => placed.layer === 'background'), true);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'expanded-object-drag.png') });
+
+  await page.locator('#layers-section .layer-btn[data-layer="terrain"]').click();
+  await page.locator('.editor-shell-tools [data-tool="fill"]').click();
+  const beforeFill = await inspectCourse(page);
+  assert.deepEqual(beforeFill.toolState, {
+    paletteMode: 'objects', activeTool: 'fill', selectedObjectId: 'coin_gold', activeLayer: 'terrain', repeatable: true,
+  });
+  assert.equal(beforeFill.tileValue, 1);
+  const fillPoint = await courseTileScreenPoint(page, 10, 10);
+  await page.mouse.click(fillPoint.x, fillPoint.y);
+  const afterFillProbe = await inspectCourse(page);
+  const afterFill = afterFillProbe.snapshot.placedObjects;
+  assert.equal(afterFill.length, afterDrag.length + 6, `expanded editor should fill six cells: ${JSON.stringify({ before: { toolState: beforeFill.toolState, tileValue: beforeFill.tileValue, count: beforeFill.snapshot.placedObjects.length, fillPoint }, after: { toolState: afterFillProbe.toolState, tileValue: afterFillProbe.tileValue, count: afterFill.length } })}`);
+  assert.equal(afterFill.slice(-6).every((placed) => placed.layer === 'terrain'), true);
+  await page.screenshot({ path: path.join(viewportOutputDir, 'expanded-object-fill.png') });
+
+  await page.keyboard.press('Meta+z');
+  assert.equal((await inspectCourse(page)).snapshot.placedObjects.length, afterDrag.length, 'Fill should undo as one action');
+  await page.keyboard.press('Meta+z');
+  assert.equal((await inspectCourse(page)).snapshot.placedObjects.length, before.length, 'Drag should undo as one action');
+  return { viewport, tools: await topTools.count(), objectDragCells: 5, objectFillCells: 6 };
 }
 
 async function resizeDrawer(page, deltaX) {
@@ -619,7 +776,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
   assert.equal(await page.locator('button[data-editor-room-section="music"]').getAttribute('aria-pressed'), 'true');
 
-  await page.locator('[data-editor-room-section="sprite"]').click();
+  await page.locator('button[data-editor-room-section="sprite"]').click();
   await page.waitForFunction(() => document.body.dataset.editorSpriteMode === 'true');
   assert.equal(await page.locator('#editor-sprite-overlay').isVisible(), true);
   assert.equal(await page.locator('#btn-editor-sprite-close').getAttribute('aria-label'), 'Back to Room settings');
@@ -635,6 +792,13 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await page.waitForFunction(() => document.body.dataset.editorSpriteMode === 'false');
   assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
   assert.equal(await page.locator('button[data-editor-room-section="sprite"]').getAttribute('aria-pressed'), 'true');
+  await page.locator('button[data-editor-room-section="sprite"]').click();
+  await page.locator('#btn-editor-sprite-pencil').focus();
+  await page.keyboard.press('e');
+  assert.equal(await page.locator('#btn-editor-sprite-eraser').getAttribute('aria-pressed'), 'true');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.body.dataset.editorSpriteMode === 'false');
+  assert.equal(await page.evaluate(() => document.body.dataset.appMode), 'editor');
 
   const share = page.locator('[data-editor-shell-action="share"]');
   await share.click();
@@ -765,19 +929,22 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await page.evaluate(() => {
     document.body.dataset.editorCourseMode = 'true';
   });
-  await page.waitForFunction(() => document.body.dataset.editorDockShell !== 'true');
-  assert.equal(await page.locator('#editor-shell-top').isVisible(), false);
+  await page.waitForFunction(() => document.querySelector('[data-editor-shell-action="back"] span:last-child')?.textContent === 'Back to Setup');
+  assert.equal(await page.locator('#editor-shell-top').isVisible(), true);
+  assert.equal(await page.locator('[data-editor-shell-action="save"]').isVisible(), true);
+  assert.equal(await page.locator('[data-editor-shell-action="share"]').isVisible(), false);
   await page.evaluate(() => {
     delete document.body.dataset.editorCourseMode;
   });
-  await page.waitForFunction(() => document.body.dataset.editorDockShell === 'true');
+  await page.waitForFunction(() => document.querySelector('[data-editor-shell-action="back"] span:last-child')?.textContent === 'Back to World');
+  assert.equal(await page.locator('[data-editor-shell-action="save"]').isVisible(), false);
   assert.equal(await page.evaluate(() => document.body.dataset.editorShellPanel), 'terrain');
   assert.equal(await page.locator('#sidebar').isVisible(), true);
   assert.equal(await page.evaluate(() => document.body.dataset.builderMode), 'advanced');
 }
 
 try {
-  for (const viewport of viewports) {
+  for (const viewport of courseOnly ? [] : viewports) {
     const viewportName = `${viewport.width}x${viewport.height}`;
     const viewportOutputDir = path.join(outputDir, viewportName);
     mkdirSync(viewportOutputDir, { recursive: true });
@@ -802,7 +969,7 @@ try {
     page.on('response', (response) => {
       if (response.status() >= 400) {
         const formatted = `${viewportName}: ${response.status()} ${response.url()}`;
-        if (isKnownBackgroundThumbnail404(response)) {
+        if (isKnownBackgroundThumbnail404(response) || isKnownLocalPresenceIdentity503(response)) {
           summary.knownBaselineHttpErrors.push(formatted);
         } else {
           summary.httpErrors.push(formatted);
@@ -816,40 +983,85 @@ try {
     await context.close();
   }
 
-  const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  await phoneContext.addInitScript(() => {
-    try {
+  for (const viewport of viewports.slice(1)) {
+    const viewportName = `expanded-${viewport.width}x${viewport.height}`;
+    const viewportOutputDir = path.join(outputDir, viewportName);
+    mkdirSync(viewportOutputDir, { recursive: true });
+    const context = await browser.newContext({ viewport });
+    await context.addInitScript(() => {
       window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
       window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+      window.localStorage.setItem('wamp.settings.builderMode', 'advanced');
       window.localStorage.setItem('wamp_replay_opt_out', '1');
-    } catch {
-      // A transient browser network error can briefly create an inaccessible error document.
-    }
-  });
-  const phonePage = await phoneContext.newPage();
-  await navigateToTarget(phonePage);
-  await phonePage.waitForFunction(
-    () => document.body.dataset.appReady === 'true',
-    undefined,
-    { timeout: 120_000 },
-  );
-  await phonePage.evaluate(() => {
-    window.__wampEarlyWorldTiles?.release('editor-dock-phone-smoke');
-    return window.run_preview_smoke_action?.('openSyntheticEditor');
-  });
-  await phonePage.waitForFunction(() => document.body.dataset.appMode === 'editor');
-  assert.equal(await phonePage.evaluate(() => document.body.dataset.editorDockShell ?? null), null);
-  assert.equal(await phonePage.locator('#mobile-editor-nav').isVisible(), true);
-  await phonePage.screenshot({ path: path.join(outputDir, 'phone-editor-unchanged.png') });
-  await phoneContext.close();
+    });
+    const page = await context.newPage();
+    page.on('console', (message) => {
+      if (message.type() === 'error' && !isCloudflareInsightsRumCorsNoise(message)) {
+        summary.consoleErrors.push(`${viewportName}: ${message.text()}`);
+      }
+    });
+    page.on('pageerror', (error) => summary.pageErrors.push(`${viewportName}: ${error.message}`));
+    page.on('response', (response) => {
+      if (response.status() >= 400) {
+        const formatted = `${viewportName}: ${response.status()} ${response.url()}`;
+        if (isKnownBackgroundThumbnail404(response) || isKnownLocalPresenceIdentity503(response)) {
+          summary.knownBaselineHttpErrors.push(formatted);
+        } else {
+          summary.httpErrors.push(formatted);
+        }
+      }
+    });
+    summary.viewports.push(await verifyExpandedRoomShell(page, viewport, viewportOutputDir));
+    await context.close();
+  }
 
-  const generic404ConsoleErrors = summary.consoleErrors.filter(isGeneric404ConsoleError);
+  if (!courseOnly) {
+    const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await phoneContext.addInitScript(() => {
+      try {
+        window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
+        window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+        window.localStorage.setItem('wamp_replay_opt_out', '1');
+      } catch {
+        // A transient browser network error can briefly create an inaccessible error document.
+      }
+    });
+    const phonePage = await phoneContext.newPage();
+    await navigateToTarget(phonePage);
+    await phonePage.waitForFunction(
+      () => document.body.dataset.appReady === 'true',
+      undefined,
+      { timeout: 120_000 },
+    );
+    await phonePage.evaluate(() => {
+      window.__wampEarlyWorldTiles?.release('editor-dock-phone-smoke');
+      return window.run_preview_smoke_action?.('openSyntheticEditor');
+    });
+    await phonePage.waitForFunction(() => document.body.dataset.appMode === 'editor');
+    assert.equal(await phonePage.evaluate(() => document.body.dataset.editorDockShell ?? null), null);
+    assert.equal(await phonePage.locator('#mobile-editor-nav').isVisible(), true);
+    await phonePage.screenshot({ path: path.join(outputDir, 'phone-editor-unchanged.png') });
+    await navigateToTarget(phonePage);
+    await phonePage.waitForFunction(() => document.body.dataset.appReady === 'true', undefined, { timeout: 120_000 });
+    const phoneCourseOpened = await phonePage.evaluate(() => {
+      window.__wampEarlyWorldTiles?.release('expanded-editor-dock-phone-smoke');
+      return window.run_preview_smoke_action?.('openSyntheticCourseEditor');
+    });
+    assert.equal(phoneCourseOpened?.ok, true);
+    await phonePage.waitForFunction(() => document.body.dataset.editorCourseMode === 'true');
+    assert.equal(await phonePage.evaluate(() => document.body.dataset.editorDockShell ?? null), null);
+    assert.equal(await phonePage.locator('#mobile-editor-nav').isVisible(), true);
+    await phonePage.screenshot({ path: path.join(outputDir, 'phone-expanded-editor-unchanged.png') });
+    await phoneContext.close();
+  }
+
+  const knownResourceConsoleErrors = summary.consoleErrors.filter(isKnownResourceConsoleError);
   if (
-    generic404ConsoleErrors.length > 0
-    && generic404ConsoleErrors.length === summary.knownBaselineHttpErrors.length
+    knownResourceConsoleErrors.length > 0
+    && knownResourceConsoleErrors.length === summary.knownBaselineHttpErrors.length
   ) {
-    summary.knownBaselineConsoleErrors.push(...generic404ConsoleErrors);
-    summary.consoleErrors = summary.consoleErrors.filter((message) => !isGeneric404ConsoleError(message));
+    summary.knownBaselineConsoleErrors.push(...knownResourceConsoleErrors);
+    summary.consoleErrors = summary.consoleErrors.filter((message) => !isKnownResourceConsoleError(message));
   }
 
   assert.deepEqual(summary.consoleErrors, []);

@@ -54,6 +54,7 @@ export type PreviewSmokeAction =
   | 'openSyntheticBoygameEditor'
   | 'openSyntheticJungleEditor'
   | 'openSyntheticCourseEditor'
+  | 'inspectSyntheticCourseEditor'
   | 'clearSyntheticLocalRoom'
   | 'saveSyntheticEditorToLocal'
   | 'openSyntheticEditorFromLocal'
@@ -121,6 +122,13 @@ export function installPreviewSmokeActions(
         return openSyntheticEditorForPreviewSmoke(game, getDebugState, createJunglePreviewRoom());
       case 'openSyntheticCourseEditor':
         return openSyntheticCourseEditorForPreviewSmoke(game, getDebugState);
+      case 'inspectSyntheticCourseEditor': {
+        const scene = game.scene.keys.CourseEditorScene as unknown as {
+          debugInspectPreviewSmokeTile?: (x: number, y: number) => Record<string, unknown>;
+        };
+        return scene?.debugInspectPreviewSmokeTile?.(payload?.x ?? 10, payload?.y ?? 10)
+          ?? { ok: false, reason: 'course-editor-scene-missing' };
+      }
       case 'clearSyntheticLocalRoom':
         return clearSyntheticLocalRoomForPreviewSmoke();
       case 'saveSyntheticEditorToLocal':
@@ -255,6 +263,11 @@ async function openSyntheticCourseEditorForPreviewSmoke(
   ];
   roomSnapshots[0].title = 'Preview Smoke Left';
   roomSnapshots[0].spawnPoint = { x: 320, y: 176 };
+  for (let y = 10; y < 12; y += 1) {
+    for (let x = 10; x < 13; x += 1) {
+      roomSnapshots[0].tileData.terrain[y][x] = 1;
+    }
+  }
   roomSnapshots[1].title = 'Preview Smoke Right';
 
   const courseDraft = createDefaultCourseSnapshot('preview-smoke-expanded-room');

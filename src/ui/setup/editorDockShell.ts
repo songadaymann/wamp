@@ -184,10 +184,9 @@ function isObjectPanel(panel: EditorDockPanelId): panel is EditorObjectPanelScop
   return panel === 'stuff' || panel === 'characters' || panel === 'hazards' || panel === 'deco';
 }
 
-function isStandardEditorShellActive(doc: Document): boolean {
+export function isEditorDockShellActive(doc: Document): boolean {
   return doc.body.dataset.appMode === 'editor'
-    && doc.body.dataset.deviceClass !== 'phone'
-    && doc.body.dataset.editorCourseMode !== 'true';
+    && doc.body.dataset.deviceClass !== 'phone';
 }
 
 function dispatchSelectChange(select: HTMLSelectElement, value: string): void {
@@ -288,6 +287,9 @@ export class EditorDockShellController {
             break;
           case 'share':
             this.dispatch({ type: 'toggle-share' }, button);
+            break;
+          case 'save':
+            this.clickExistingButton('btn-save-draft');
             break;
           case 'test':
             this.clickExistingButton('btn-test-play');
@@ -480,6 +482,7 @@ export class EditorDockShellController {
     for (const targetId of [
       'btn-editor-back',
       'btn-test-play',
+      'btn-save-draft',
       'btn-publish-room',
       'btn-mint-room',
       'btn-refresh-room-metadata',
@@ -495,8 +498,11 @@ export class EditorDockShellController {
   }
 
   private syncActivation(): void {
-    const shouldBeActive = isStandardEditorShellActive(this.doc);
-    if (shouldBeActive === this.active) return;
+    const shouldBeActive = isEditorDockShellActive(this.doc);
+    if (shouldBeActive === this.active) {
+      if (this.active) this.syncDom();
+      return;
+    }
     this.active = shouldBeActive;
     if (this.active) {
       this.doc.body.dataset.editorDockShell = 'true';
@@ -539,6 +545,7 @@ export class EditorDockShellController {
 
   private syncDom(): void {
     if (!this.active) return;
+    const courseMode = this.doc.body.dataset.editorCourseMode === 'true';
     this.doc.body.dataset.editorDrawerOpen = 'true';
     this.doc.body.dataset.editorShellPanel = this.state.openPanel;
     this.doc.body.dataset.editorRoomSection = this.state.roomSection;
@@ -550,6 +557,12 @@ export class EditorDockShellController {
     drawerHeader?.setAttribute('aria-hidden', 'false');
     const drawerTitle = this.doc.getElementById('editor-drawer-title');
     if (drawerTitle) drawerTitle.textContent = PANEL_TITLES[this.state.openPanel];
+    const back = this.doc.querySelector<HTMLButtonElement>('[data-editor-shell-action="back"]');
+    const backLabel = back?.querySelector('span:last-child');
+    if (backLabel) backLabel.textContent = courseMode ? 'Back to Setup' : 'Back to World';
+    const publish = this.doc.querySelector<HTMLButtonElement>('[data-editor-shell-action="publish"]');
+    const publishLabel = publish?.querySelector('span:last-child');
+    if (publishLabel) publishLabel.textContent = courseMode ? 'Publish Cells' : 'Publish';
 
     for (const button of this.doc.querySelectorAll<HTMLButtonElement>('[data-editor-dock]')) {
       const dock = button.dataset.editorDock as EditorDockId;
@@ -748,6 +761,7 @@ export class EditorDockShellController {
     const proxyTargets: ReadonlyArray<[string, string]> = [
       ['back', 'btn-editor-back'],
       ['test', 'btn-test-play'],
+      ['save', 'btn-save-draft'],
       ['publish', 'btn-publish-room'],
     ];
     for (const [action, targetId] of proxyTargets) {

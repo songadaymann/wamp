@@ -85,6 +85,7 @@ import type { EditorCourseUiState, EditorMarkerPlacementMode } from '../ui/setup
 import { EditorUiBridge } from './editor/uiBridge';
 import {
   applyEditorToolSelection,
+  canRepeatSelectedEditorObject,
   getEditorStampKind,
   isDragStampEditorTool,
   isEditorLineCurve,
@@ -93,8 +94,13 @@ import {
   isPencilBrushPlacement,
   isPencilStampPlacement,
 } from './editor/editorToolSelection';
+import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
+import {
+  EDITOR_SHELL_ESCAPE_REQUESTED_EVENT,
+  type EditorShellEscapeRequestedDetail,
+} from './editor/uiEvents';
 import { clampRandomizeBrushSize } from './editor/randomizeTiles';
-import { resolvePencilStampOrigin } from './editor/stampDrag';
+import { forEachDraggedTileCell, resolvePencilStampOrigin } from './editor/stampDrag';
 import { iterateShapeTiles, resolveShapeEnd, snapLineEnd, type EditorShapeKind, type TilePoint } from './editor/shapeTiles';
 import type { EditorStatusDetails } from './editor/roomSession';
 import { buildEditorUiViewModel } from './editor/viewModel';
@@ -204,6 +210,8 @@ export class CourseEditorScene extends Phaser.Scene {
   private panStartScroll = { x: 0, y: 0 };
   private tileDragMode: TileDragMode = null;
   private activeTileDragRoomId: string | null = null;
+  private activeObjectDragRoomId: string | null = null;
+  private lastObjectDragCell: TilePoint | null = null;
   private pencilDragStart: { x: number; y: number } | null = null;
   private lastPencilStampOrigin: { x: number; y: number } | null = null;
   private rectMode: RectMode = null;
@@ -266,8 +274,29 @@ export class CourseEditorScene extends Phaser.Scene {
     event.preventDefault();
   };
 
+  private readonly handleToolShortcutCapture = (event: KeyboardEvent): void => {
+    if (
+      !this.scene.isActive(this.scene.key)
+      || editorState.isPlaying
+      || event.metaKey
+      || event.ctrlKey
+      || event.altKey
+      || this.musicModeActive
+      || document.body.dataset.editorSpriteMode === 'true'
+      || isTextInputFocused()
+    ) {
+      return;
+    }
+    const tool = getEditorToolForShortcutKey(event.key);
+    if (!tool) return;
+    event.preventDefault();
+    event.stopPropagation();
+    applyEditorToolSelection(tool);
+    this.updateToolUi();
+  };
+
   private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
-    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying) {
+    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying || event.defaultPrevented) {
       return;
     }
 
@@ -298,6 +327,19 @@ export class CourseEditorScene extends Phaser.Scene {
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
+      if (document.body.dataset.editorSpriteMode === 'true') {
+        document.getElementById('btn-editor-sprite-close')?.click();
+        return;
+      }
+      if (this.musicModeActive) {
+        if (this.musicPatternController.isPastePreviewActive()) {
+          this.musicPatternController.cancelPastePreview();
+          this.renderUi();
+          return;
+        }
+        this.setMusicModeActive(false);
+        return;
+      }
       if (this.objectInspectorController.isConnectingPressurePlate()) {
         this.objectInspectorController.cancelPressurePlateConnection();
         return;
@@ -319,6 +361,11 @@ export class CourseEditorScene extends Phaser.Scene {
         this.clearRectPreview();
         return;
       }
+      const shellEscapeDetail: EditorShellEscapeRequestedDetail = { handled: false };
+      window.dispatchEvent(new CustomEvent(EDITOR_SHELL_ESCAPE_REQUESTED_EVENT, {
+        detail: shellEscapeDetail,
+      }));
+      if (shellEscapeDetail.handled) return;
       void this.returnToCourseBuilder();
       return;
     }
@@ -326,7 +373,11 @@ export class CourseEditorScene extends Phaser.Scene {
     if (primaryModifier && key === 's') {
       event.preventDefault();
       event.stopPropagation();
-      void this.saveDraft(true, { promptForSignInOnUnauthorized: true });
+      if (this.musicModeActive) {
+        void this.saveRoomMusicDraftAndPhrases();
+      } else {
+        void this.saveDraft(true, { promptForSignInOnUnauthorized: true });
+      }
       return;
     }
 
@@ -366,41 +417,6 @@ export class CourseEditorScene extends Phaser.Scene {
     if (event.code === 'Digit3') {
       event.preventDefault();
       applyEditorToolSelection('copy');
-      this.updateToolUi();
-      return;
-    }
-
-    if (key === 'r') {
-      event.preventDefault();
-      applyEditorToolSelection('rect');
-      this.updateToolUi();
-      return;
-    }
-
-    if (key === 'e') {
-      event.preventDefault();
-      applyEditorToolSelection('ellipse');
-      this.updateToolUi();
-      return;
-    }
-
-    if (key === 'g') {
-      event.preventDefault();
-      applyEditorToolSelection('fill');
-      this.updateToolUi();
-      return;
-    }
-
-    if (key === 'l') {
-      event.preventDefault();
-      applyEditorToolSelection('line');
-      this.updateToolUi();
-      return;
-    }
-
-    if (key === 'v') {
-      event.preventDefault();
-      applyEditorToolSelection('randomize');
       this.updateToolUi();
       return;
     }
@@ -665,6 +681,7 @@ export class CourseEditorScene extends Phaser.Scene {
     this.game.canvas.addEventListener('wheel', this.handleCanvasWheel, { passive: false });
     this.setupPointerControls();
     this.setupKeyboard();
+    window.addEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
     this.renderMusicUi();
     void this.openFromData(data);
   }
@@ -1387,6 +1404,35 @@ export class CourseEditorScene extends Phaser.Scene {
     };
   }
 
+  debugInspectPreviewSmokeTile(tileX: number, tileY: number): Record<string, unknown> {
+    const slice = this.getSelectedSlice();
+    if (!slice) return { ok: false, reason: 'no-selected-course-room' };
+    const camera = this.cameras.main;
+    const worldX = slice.origin.x + (tileX + 0.5) * TILE_SIZE;
+    const worldY = slice.origin.y + (tileY + 0.5) * TILE_SIZE;
+    // Phaser exposes the render matrix at runtime, but omits it from Camera's public typings.
+    const cameraMatrix = (camera as unknown as {
+      matrix: { transformPoint: (x: number, y: number) => { x: number; y: number } };
+    }).matrix;
+    return {
+      ok: true,
+      roomId: slice.roomId,
+      toolState: {
+        paletteMode: editorState.paletteMode,
+        activeTool: editorState.activeTool,
+        selectedObjectId: editorState.selectedObjectId,
+        activeLayer: editorState.activeLayer,
+        repeatable: canRepeatSelectedEditorObject(),
+      },
+      tileValue: slice.layers.get(editorState.activeLayer)?.getTileAt(tileX, tileY)?.index ?? -1,
+      snapshot: slice.runtime.exportRoomSnapshot(),
+      screenPoint: cameraMatrix.transformPoint(
+        worldX - camera.scrollX,
+        worldY - camera.scrollY,
+      ),
+    };
+  }
+
   private async openFromData(data?: CourseEditorSceneData): Promise<void> {
     setAppMode('editor');
     document.body.dataset.editorCourseMode = 'true';
@@ -1452,6 +1498,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private destroyWorkspace(): void {
+    this.commitActiveObjectDrag();
     this.clearCourseMarkers();
     for (const slice of this.roomSlices.values()) {
       destroyCourseEditorRoomBackgroundVisuals(slice.backgroundVisuals);
@@ -2123,10 +2170,6 @@ export class CourseEditorScene extends Phaser.Scene {
       SPACE: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
       ALT: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ALT),
     };
-
-    keyboard.on('keydown-F', () => {
-      this.fitToScreen();
-    });
   }
 
   private handlePrimaryPointerDown(pointer: Phaser.Input.Pointer): void {
@@ -2199,6 +2242,24 @@ export class CourseEditorScene extends Phaser.Scene {
         if (!hasSelectedObject) {
           return;
         }
+      }
+
+      if (editorState.activeTool === 'fill' && canRepeatSelectedEditorObject()) {
+        const placed = slice.runtime.floodFillObjects(localTile.tileX, localTile.tileY);
+        this.statusText = placed > 0
+          ? `Filled ${placed} object cell${placed === 1 ? '' : 's'} in ${this.getSliceLabel(slice)}.`
+          : 'No empty matching cells to fill.';
+        this.renderUi();
+        return;
+      }
+
+      if (editorState.activeTool === 'pencil' && canRepeatSelectedEditorObject()) {
+        slice.runtime.beginObjectBatch(true);
+        this.placeObjectAtTile(slice, localTile.tileX, localTile.tileY);
+        this.activeObjectDragRoomId = slice.roomId;
+        this.lastObjectDragCell = { x: localTile.tileX, y: localTile.tileY };
+        this.renderUi();
+        return;
       }
 
       this.handleObjectPlace(slice, pointer, localTile.tileX, localTile.tileY);
@@ -2280,6 +2341,22 @@ export class CourseEditorScene extends Phaser.Scene {
     }
   }
 
+  private placeObjectAtTile(slice: CourseRoomSlice, tileX: number, tileY: number): void {
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return;
+    const worldX = slice.origin.x + tileX * TILE_SIZE + TILE_SIZE / 2;
+    const worldY = slice.origin.y + tileY * TILE_SIZE + TILE_SIZE / 2;
+    const placed = slice.runtime.handleObjectPlace(worldX, worldY, tileX, tileY);
+    this.objectInspectorController.handleObjectPlaced(placed);
+  }
+
+  private commitActiveObjectDrag(): void {
+    if (this.activeObjectDragRoomId) {
+      this.roomSlices.get(this.activeObjectDragRoomId)?.runtime.commitObjectBatch();
+    }
+    this.activeObjectDragRoomId = null;
+    this.lastObjectDragCell = null;
+  }
+
   private removeObjectAt(slice: CourseRoomSlice, worldX: number, worldY: number): void {
     const removed = slice.runtime.removeObjectAt(worldX, worldY);
     if (!removed) {
@@ -2340,6 +2417,21 @@ export class CourseEditorScene extends Phaser.Scene {
 
     const localTile = this.getLocalTileForPointer(pointer, slice);
     if (!localTile) {
+      return;
+    }
+
+    if (this.activeObjectDragRoomId && this.lastObjectDragCell && pointer.leftButtonDown()) {
+      if (slice.roomId !== this.activeObjectDragRoomId) {
+        this.commitActiveObjectDrag();
+        slice.runtime.beginObjectBatch(true);
+        this.placeObjectAtTile(slice, localTile.tileX, localTile.tileY);
+        this.activeObjectDragRoomId = slice.roomId;
+      } else {
+        forEachDraggedTileCell(this.lastObjectDragCell, { x: localTile.tileX, y: localTile.tileY }, (x, y) => {
+          this.placeObjectAtTile(slice, x, y);
+        });
+      }
+      this.lastObjectDragCell = { x: localTile.tileX, y: localTile.tileY };
       return;
     }
 
@@ -2423,6 +2515,11 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private finishPointerAction(pointer: Phaser.Input.Pointer): void {
+    if (this.activeObjectDragRoomId) {
+      this.commitActiveObjectDrag();
+      this.renderUi();
+      return;
+    }
     const activeSlice = this.activeTileDragRoomId
       ? this.roomSlices.get(this.activeTileDragRoomId) ?? null
       : null;
@@ -3083,6 +3180,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private handleShutdown = (): void => {
     this.isShuttingDown = true;
+    window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
     this.game.canvas.removeEventListener('contextmenu', this.handleCanvasContextMenu);

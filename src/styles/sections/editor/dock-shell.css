@@ -124,6 +124,18 @@ body[data-editor-dock-shell='true'] .editor-shell-action-grid {
   gap: 7px;
 }
 
+body[data-editor-dock-shell='true'] .editor-shell-action-grid .editor-shell-save-button {
+  display: none !important;
+}
+
+body[data-editor-dock-shell='true'][data-editor-course-mode='true'] .editor-shell-action-grid [data-editor-shell-action='share'] {
+  display: none !important;
+}
+
+body[data-editor-dock-shell='true'][data-editor-course-mode='true'] .editor-shell-action-grid .editor-shell-save-button {
+  display: flex !important;
+}
+
 body[data-editor-dock-shell='true'] .editor-shell-chunky-button,
 body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button,
 body[data-editor-dock-shell='true'] .editor-shell-popover button,
@@ -691,11 +703,12 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #editor-sid
 body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #editor-sidebar-scroll,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #editor-sidebar-scroll,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #editor-sidebar-scroll,
+body[data-editor-dock-shell='true'][data-editor-course-mode='true'][data-editor-shell-panel='goal'] #editor-sidebar-scroll,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='background'] #editor-sidebar-scroll {
   display: flex !important;
 }
 
-body[data-editor-dock-shell='true'][data-editor-shell-panel='goal'] #editor-fixed-stack,
+body[data-editor-dock-shell='true']:not([data-editor-course-mode='true'])[data-editor-shell-panel='goal'] #editor-fixed-stack,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='environment'] #editor-fixed-stack {
   order: 0;
   display: flex !important;
@@ -859,7 +872,8 @@ body[data-editor-dock-shell='true'] #editor-actions {
   box-shadow: none;
 }
 
-body[data-editor-dock-shell='true'][data-editor-shell-panel='goal'] #goal-section,
+body[data-editor-dock-shell='true']:not([data-editor-course-mode='true'])[data-editor-shell-panel='goal'] #goal-section,
+body[data-editor-dock-shell='true'][data-editor-course-mode='true'][data-editor-shell-panel='goal'] #course-goal-section,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='environment'] #editor-lighting-feature-panel {
   display: block !important;
 }
