@@ -2681,7 +2681,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       Q: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
       E: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
     };
-    this.cameraToggleKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.BACKTICK);
+    this.cameraToggleKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.NINE);
     keyboard.on('keydown-ESC', () => {
       if (this.roomCommentsController.handleEscapeKey()) {
         return;

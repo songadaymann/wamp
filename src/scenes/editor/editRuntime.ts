@@ -66,6 +66,7 @@ import {
 import {
   createPlacedObjectAnchorCell,
   findConflictingPlacedObjectAtAnchorCell,
+  getPlacedObjectAnchorCell,
 } from '../../placedObjects/occupancy';
 import {
   canPlacedObjectUseObjectPath,
@@ -99,6 +100,7 @@ import {
 import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../../signs/model';
 import { EDITOR_SPAWN_PLACED_EVENT } from './uiEvents';
+import { canRepeatSelectedEditorObject } from './editorToolSelection';
 import {
   DEFAULT_NPC_DEFEAT_MODE,
   DEFAULT_NPC_FRIENDLY_FIRE,
@@ -415,6 +417,10 @@ export class EditorEditRuntime {
     this.currentBatchActionIndex.clear();
     this.currentBatchSmartBefore = null;
     this.currentSmartGestureAnchor = null;
+    this.objectBatchBefore = null;
+    this.objectBatchNext = null;
+    this.objectBatchChanged = false;
+    this.objectBatchLivePreview = false;
     this.smartTerrain = createRoomSmartTerrainState();
     this.clipboardState = null;
     this.customRoomTiles = [];
@@ -695,6 +701,36 @@ export class EditorEditRuntime {
     this.currentBatchActionIndex.clear();
     this.currentBatchSmartBefore = cloneRoomSmartTerrainState(this.smartTerrain);
     this.currentSmartGestureAnchor = null;
+  }
+
+  private objectBatchBefore: PlacedObject[] | null = null;
+  private objectBatchNext: PlacedObject[] | null = null;
+  private objectBatchChanged = false;
+  private objectBatchLivePreview = false;
+
+  beginObjectBatch(livePreview = false): void {
+    if (!this.guardEditable()) return;
+    this.objectBatchBefore = this.clonePlacedObjects();
+    this.objectBatchNext = this.clonePlacedObjects(this.objectBatchBefore);
+    this.objectBatchChanged = false;
+    this.objectBatchLivePreview = livePreview;
+  }
+
+  commitObjectBatch(): void {
+    const previous = this.objectBatchBefore;
+    const next = this.objectBatchNext;
+    const changed = this.objectBatchChanged;
+    this.objectBatchBefore = null;
+    this.objectBatchNext = null;
+    this.objectBatchChanged = false;
+    this.objectBatchLivePreview = false;
+    if (!previous || !next || !changed) {
+      return;
+    }
+    this.host.setPlacedObjects(next);
+    this.history.record({ kind: 'objects', action: { previous, next: this.clonePlacedObjects(next) } });
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
   }
 
   commitTileBatch(): void {
@@ -1457,6 +1493,40 @@ export class EditorEditRuntime {
     this.floodReplace(startX, startY, -1);
   }
 
+  floodFillObjects(startX: number, startY: number): number {
+    if (!this.guardEditable() || !canRepeatSelectedEditorObject()) return 0;
+    const layer = this.host.getLayers().get(editorState.activeLayer);
+    if (!layer || startX < 0 || startX >= ROOM_WIDTH || startY < 0 || startY >= ROOM_HEIGHT) return 0;
+
+    const tileValue = (x: number, y: number): number => {
+      const tile = layer.getTileAt(x, y);
+      return tile ? encodeTileDataValue(tile.index, tile.flipX, tile.flipY) : -1;
+    };
+    const target = tileValue(startX, startY);
+    const occupied = new Set(this.host.getPlacedObjects().flatMap((placed) => {
+      const cell = getPlacedObjectAnchorCell(placed);
+      return cell && cell.layer === editorState.activeLayer ? [`${cell.tileX},${cell.tileY}`] : [];
+    }));
+    const visited = new Set<string>();
+    const queue: Array<[number, number]> = [[startX, startY]];
+    let placed = 0;
+    this.beginObjectBatch();
+    for (let index = 0; index < queue.length; index += 1) {
+      const [x, y] = queue[index];
+      if (x < 0 || x >= ROOM_WIDTH || y < 0 || y >= ROOM_HEIGHT) continue;
+      const key = `${x},${y}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      if (!encodedTilesMatchForFlood(tileValue(x, y), target, editorState.fillIgnoreTileFlipping)) continue;
+      if (!occupied.has(key) && this.handleObjectPlace(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, x, y)) {
+        placed += 1;
+      }
+      queue.push([x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]);
+    }
+    this.commitObjectBatch();
+    return placed;
+  }
+
   private floodPaintPattern(startX: number, startY: number, pool: number[]): void {
     if (!this.guardEditable() || pool.length === 0) {
       return;
@@ -1690,7 +1760,7 @@ export class EditorEditRuntime {
         : null,
     };
 
-    const previous = this.clonePlacedObjects();
+    const previous = this.objectBatchNext ?? this.clonePlacedObjects();
     const targetCell = createPlacedObjectAnchorCell(tileX, tileY, editorState.activeLayer);
     const conflict = findConflictingPlacedObjectAtAnchorCell(previous, targetCell, placed);
     if (
@@ -1709,13 +1779,22 @@ export class EditorEditRuntime {
           )
           .concat(placed)
       : [...previous, placed];
-    this.host.setPlacedObjects(next);
-    this.history.record({
-      kind: 'objects',
-      action: { previous, next: this.clonePlacedObjects(next) },
-    });
-    this.rebuildObjectSprites();
-    this.markRoomDirty();
+    if (this.objectBatchNext) {
+      this.objectBatchNext = next;
+      this.objectBatchChanged = true;
+      if (this.objectBatchLivePreview) {
+        this.host.setPlacedObjects(next);
+        this.rebuildObjectSprites();
+      }
+    } else {
+      this.host.setPlacedObjects(next);
+      this.history.record({
+        kind: 'objects',
+        action: { previous, next: this.clonePlacedObjects(next) },
+      });
+      this.rebuildObjectSprites();
+      this.markRoomDirty();
+    }
     this.host.recordBuildPlacement(1);
     return placed;
   }

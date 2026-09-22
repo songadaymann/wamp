@@ -272,3 +272,27 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 - Branch: `codex/center-sign-text-2026-09-16`, based on current `origin/main` `cd53438c`; the dirty/stale root checkout remains untouched.
 - Implementation: center the sign panel horizontally in the upper-middle of the game viewport (34% desktop, 30% mobile), with safe-area-aware minimum top clearance. Preserve its copy, activation behavior, width, and visual treatment.
 - Validation: TypeScript, production build, and `git diff --check` pass. The official web-game client completed and its screenshot was inspected. Dedicated 1440x900 and 390x844 browser captures forced the real sign DOM panel visible against the game world; both were visually inspected and confirm the panel sits in the intended upper-middle sightline without intersecting bottom controls.
+
+## 2026-09-21 — Safer desktop camera shortcuts
+
+- Request: move the accidental-prone Play camera toggle from ` / ~ to 9, and overworld Fit from F to 0.
+- Branch: `codex/safer-camera-shortcuts-2026-09-21` from current `origin/main` `786ce38d`; dirty root checkout untouched.
+- Scope: overworld Play/Browse keyboard controls and Controls panel only. Editor-specific F shortcuts remain unchanged.
+- Verified: focused inspect-input test passes; typecheck and production build pass. Local Canvas gameplay smoke confirms 9 toggles follow/inspect while the former ` / ~ and F keys do not; no page errors. The inspect-input test verifies 0 invokes Fit and is unregistered on teardown. No push or deploy requested.
+
+## 2026-09-21 — Repeatable object brush and Fill
+
+- Request: allow dragging to place Decorations, Solid Blocks, and Collectibles like ground, and enable Fill for those objects.
+- Branch: `codex/object-drag-fill-2026-09-21` from current `origin/main` `82bc6a4c`; dirty root checkout untouched.
+- Scope: repeatable object categories only; one-off actors, hazards, and special interactive objects retain single placement. Fill follows the connected matching-terrain region on the active layer, skips occupied object cells, and changes no terrain tiles.
+- Implemented desktop/touch drag interpolation, one Undo action per stroke/Fill, live drag preview, Fill availability, and custom-sprite anchor lookup for Solid Blocks.
+- Validation: full `npm run check` passes 249 files / 1,847 tests plus lint, TypeScript, bindings, and production build. The official Canvas client ran and its screenshot was inspected. The dedicated browser smoke passes a five-cell collectible drag, six-cell connected-terrain Fill, three-cell decoration drag, one-step Undo for each, and zero browser errors; drag/Fill screenshots were visually inspected. The existing responsive editor-dock smoke passes desktop and phone layouts with zero new errors.
+- TODO: review in localhost; push/merge/deploy only if requested.
+
+## 2026-09-21 — Restore object layer controls in the refreshed editor
+
+- Request: expose layer placement again in the refreshed Stuff, Hazards, and Deco object panels (also Characters, for parity with the former Objects palette).
+- Branch: `codex/restore-object-layer-controls-2026-09-21` from current `origin/main` `9e60f15d`; dirty root checkout untouched.
+- Root cause: shared Layers UI and placement logic remained intact, but dock-shell CSS only displayed the section on Terrain in Advanced mode; Beginner mode also hid the section. The existing Layers section now appears above the object grid in all four desktop/tablet object panels in either builder mode; Terrain and phone behavior remain unchanged.
+- Browser smoke: Stuff, Characters, Hazards, and Deco each expose usable layer buttons; placing a Coin while Back is selected records the object on the background layer. Responsive dock smoke passes 1920x1080, 1440x900, 1024x768, and phone with zero application errors. Screenshots at 1440x900 and 1024x768 were inspected.
+- Validation: full check passes 249 files / 1,847 tests plus lint, TypeScript, bindings, and production build; DOM contract passes 781 IDs / 160 required. Official Canvas client passes with a visually inspected healthy frame. A separate Advanced-mode browser probe confirms the Stuff layer selector is visible. No push/deploy requested.

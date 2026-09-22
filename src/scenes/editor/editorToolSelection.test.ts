@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { editorState } from '../../config';
+import { registerCustomSprite } from '../../customSprites/registry';
 import {
   getEditorToolUnavailableTitle,
   getEditorToolModePipState,
@@ -13,9 +14,11 @@ import {
 } from './editorToolSelection';
 
 const originalMode = editorState.paletteMode;
+const originalObjectId = editorState.selectedObjectId;
 
 afterEach(() => {
   editorState.paletteMode = originalMode;
+  editorState.selectedObjectId = originalObjectId;
 });
 
 describe('editorToolSelection availability', () => {
@@ -35,10 +38,35 @@ describe('editorToolSelection availability', () => {
     expect(getEditorToolUnavailableTitle('randomize')).toBeNull();
   });
 
-  it('greys fill and shape tools in object placement modes', () => {
+  it('offers Fill for repeatable objects but not one-off objects', () => {
     editorState.paletteMode = 'objects';
+    editorState.selectedObjectId = null;
     expect(isEditorToolUnavailable('fill')).toBe(true);
-    expect(getEditorToolUnavailableTitle('fill')).toBe('Fill is only available for Terrain');
+    expect(getEditorToolUnavailableTitle('fill')).toBe('Select a Decoration, Collectible, or Solid Block to fill');
+    editorState.selectedObjectId = 'coin_gold';
+    expect(isEditorToolUnavailable('fill')).toBe(false);
+    editorState.selectedObjectId = 'rock';
+    expect(isEditorToolUnavailable('fill')).toBe(false);
+    editorState.selectedObjectId = 'spawn_point';
+    expect(isEditorToolUnavailable('fill')).toBe(true);
+    editorState.selectedObjectId = 'sign';
+    expect(isEditorToolUnavailable('fill')).toBe(true);
+    for (const kind of ['solid', 'sign'] as const) {
+      registerCustomSprite({
+        id: `repeat-test-${kind}`,
+        name: `Repeat test ${kind}`,
+        size: 16,
+        kind,
+        pixels: Array.from({ length: 256 }, () => '#ffffff'),
+        status: 'active',
+        createdAt: '2026-09-21T00:00:00.000Z',
+        updatedAt: '2026-09-21T00:00:00.000Z',
+      }, { persist: false, notify: false });
+    }
+    editorState.selectedObjectId = 'custom_sprite:repeat-test-solid';
+    expect(isEditorToolUnavailable('fill')).toBe(false);
+    editorState.selectedObjectId = 'custom_sprite:repeat-test-sign';
+    expect(isEditorToolUnavailable('fill')).toBe(true);
     expect(isEditorToolUnavailable('rect')).toBe(true);
     expect(getEditorToolUnavailableTitle('rect')).toBe('Rectangle is only available for Terrain');
     expect(isEditorToolUnavailable('ellipse')).toBe(true);

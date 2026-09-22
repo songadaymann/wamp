@@ -714,6 +714,10 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #smart-pa
 body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tileset-section:not(.hidden),
 body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tile-controls-section:not(.hidden),
 body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'][data-builder-mode='advanced'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #layers-section,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #object-palette-section,
 body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #object-palette-section,
@@ -732,7 +736,11 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-
   min-height: 0;
 }
 
-body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'][data-builder-mode='advanced'] #layers-section {
+body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'][data-builder-mode='advanced'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #layers-section {
   display: grid !important;
   grid-template-columns: minmax(58px, auto) minmax(0, 1fr);
   align-items: start;
@@ -777,6 +785,13 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #tile-con
   display: flex !important;
   flex-direction: column;
   align-items: stretch;
+}
+
+body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #layers-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #layers-section {
+  order: 2;
 }
 
 body[data-editor-dock-shell='true'] #layers-section > .section-label {
