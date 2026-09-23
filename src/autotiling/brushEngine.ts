@@ -7,6 +7,7 @@ import {
 } from './model';
 import {
   getSmartRecipeEngineAdapter,
+  reconcileSmartRecipeSources,
 } from './recipeSolver';
 import {
   getSmartBrushDefinition,
@@ -71,7 +72,7 @@ export function applyRegisteredSmartBrushCells(
     });
   }
   assertRegisteredStyle(brush, options.styleId);
-  return getSmartRecipeEngineAdapter(options.brushId).applyCells(document, options);
+  return reconcileSmartRecipeSources(getSmartRecipeEngineAdapter(options.brushId).applyCells(document, options));
 }
 
 export function applyRegisteredSmartBrushOutlineCells(
@@ -90,7 +91,7 @@ export function applyRegisteredSmartBrushOutlineCells(
     });
   }
   assertRegisteredStyle(brush, options.styleId);
-  return getSmartRecipeEngineAdapter(options.brushId).applyOutlineCells(document, options);
+  return reconcileSmartRecipeSources(getSmartRecipeEngineAdapter(options.brushId).applyOutlineCells(document, options));
 }
 
 export function constrainRegisteredSmartBrushStroke(

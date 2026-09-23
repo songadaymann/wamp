@@ -90,6 +90,7 @@ import {
   getEditorStampKind,
   isDragStampEditorTool,
   isEditorLineCurve,
+  resolveEditorLineEnd,
   isEditorShapeOutline,
   isPathEditorTool,
   isPencilBrushPlacement,
@@ -102,7 +103,7 @@ import {
 } from './editor/uiEvents';
 import { clampRandomizeBrushSize } from './editor/randomizeTiles';
 import { forEachDraggedTileCell, resolvePencilStampOrigin } from './editor/stampDrag';
-import { iterateShapeTiles, resolveShapeEnd, snapLineEnd, type EditorShapeKind, type TilePoint } from './editor/shapeTiles';
+import { iterateShapeTiles, resolveShapeEnd, type EditorShapeKind, type TilePoint } from './editor/shapeTiles';
 import type { EditorStatusDetails } from './editor/roomSession';
 import { buildEditorUiViewModel } from './editor/viewModel';
 import {
@@ -2889,13 +2890,13 @@ export class CourseEditorScene extends Phaser.Scene {
     pointer: Phaser.Input.Pointer,
     current: { x: number; y: number },
   ): { x: number; y: number } {
-    if (!this.rectStart || this.rectMode === 'copy' || !isPointerShiftDown(pointer)) {
+    if (!this.rectStart || this.rectMode === 'copy') {
       return current;
     }
     if (this.rectMode === 'line' || isPathEditorTool(editorState.activeTool)) {
-      return snapLineEnd({ x: this.rectStart.x, y: this.rectStart.y }, current);
+      return resolveEditorLineEnd(this.rectStart, current, isPointerShiftDown(pointer));
     }
-    return resolveShapeEnd({ x: this.rectStart.x, y: this.rectStart.y }, current, true);
+    return resolveShapeEnd(this.rectStart, current, isPointerShiftDown(pointer));
   }
 
   private clearRectPreview(): void {

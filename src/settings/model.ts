@@ -1,6 +1,6 @@
 export type OverworldPanningStyle = 'option-drag' | 'two-finger-drag';
 export type BuilderMode = 'unselected' | 'beginner' | 'advanced';
-export type SmartThemeSetting = 'forest' | 'desert' | 'cave' | 'gothic' | 'cyber';
+export type SmartThemeSetting = 'forest' | 'desert' | 'cave' | 'gothic' | 'cyber' | 'wampos95';
 
 export interface GameSettings {
   roomCommentsVisible: boolean;
@@ -57,6 +57,7 @@ export function normalizeGameSettings(value: Partial<GameSettings> | null | unde
       || source.lastSmartTheme === 'cave'
       || source.lastSmartTheme === 'gothic'
       || source.lastSmartTheme === 'cyber'
+      || source.lastSmartTheme === 'wampos95'
         ? source.lastSmartTheme
         : DEFAULT_GAME_SETTINGS.lastSmartTheme,
   };

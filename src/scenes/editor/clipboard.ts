@@ -12,6 +12,7 @@ import {
   getRegisteredSmartSemanticOwnerId,
   isRegisteredSmartRecipeBrush,
 } from '../../autotiling/brushEngine';
+import { getSmartBrushDefinition } from '../../autotiling/registry';
 
 export interface EditorClipboardRecipeState {
   /** The source room's stable instance ID. Paste reuses it when available. */
@@ -224,7 +225,7 @@ function buildSmartClipboardFields(
     const sourceOwnerId = getRecipeOwnerId(state, instanceId, sourceRecipe);
     const footprint = getRecipeFootprint(state, instanceId, sourceOwnerId, sourceRecipe);
     const complete = footprint.length > 0 && footprint.every((coordinate) => (
-      coordinate.layer === sourceLayer
+      (coordinate.layer === sourceLayer || getSmartBrushDefinition(sourceRecipe.brushId).copyCompanionLayers)
         && coordinate.x >= minX && coordinate.x <= maxX
         && coordinate.y >= minY && coordinate.y <= maxY
     ));
@@ -365,7 +366,7 @@ export function planEditorSmartClipboardPaste(
     });
     const footprint = clipboardRecipe.footprint.map(translate);
     const completeInTargetRoom = footprint.every((coordinate) => (
-      coordinate.layer === targetLayer
+      (coordinate.layer === targetLayer || getSmartBrushDefinition(clipboardRecipe.recipe.brushId).copyCompanionLayers)
         && coordinate.x >= 0 && coordinate.x < ROOM_WIDTH
         && coordinate.y >= 0 && coordinate.y < ROOM_HEIGHT
     ));

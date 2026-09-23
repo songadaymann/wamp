@@ -30,6 +30,7 @@
     "smoke:dom-contract": "node scripts/smoke_dom_contract.mjs",
     "smoke:community-sprites": "node scripts/smoke_community_sprites.mjs",
     "smoke:smart-autotiling": "node scripts/smoke_smart_autotiling.mjs",
+    "smoke:wampos-window": "node scripts/smoke_wampos_window.mjs",
     "smoke:room-camera": "node scripts/smoke_room_camera.mjs",
     "smoke:editor-dock": "node scripts/smoke_editor_dock.mjs",
     "smoke:object-drag-fill": "node scripts/smoke_object_drag_fill.mjs",

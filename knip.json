@@ -79,6 +79,7 @@
     "scripts/smoke_progression_api_flow.mjs",
     "scripts/smoke_progression_rating_modal.mjs",
     "scripts/smoke_smart_autotiling.mjs",
+    "scripts/smoke_wampos_window.mjs",
     "scripts/smoke_wallet_email_link_modal.mjs",
     "scripts/smoke_worlds_pilot.ts",
     "scripts/webgl_recovery_probe.mjs",

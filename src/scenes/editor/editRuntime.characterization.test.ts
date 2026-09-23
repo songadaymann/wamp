@@ -396,6 +396,28 @@ describe('editor edit runtime document contracts', () => {
     expect(getTileCoordinates(layers.get('foreground')!)).toEqual(['15,3', '15,4', '15,5']);
   });
 
+  it('commits a reversed diagonal Start Bar drag as one horizontal row with exact Undo/Redo', () => {
+    const { runtime } = createHarness(createRoom());
+    editorState.paletteMode = 'smart';
+    editorState.smartTheme = 'wampos95';
+    editorState.smartMaterial = 'wampos95.start-bar';
+    editorState.smartStyle = 'wampos95';
+    const before = runtime.exportRoomSnapshot();
+    runtime.beginTileBatch();
+    runtime.stampShape('line', 25, 20, 2, 12);
+    runtime.commitTileBatch();
+    const after = runtime.exportRoomSnapshot();
+    expect(after.tileData.terrain[20].slice(2, 5)).toEqual([1045, 1046, 1047]);
+    expect(after.tileData.terrain[20][25]).toBe(1054);
+    expect(after.tileData.terrain.slice(0, 20)).toEqual(before.tileData.terrain.slice(0, 20));
+    expect(Object.values(after.smartTerrain!.recipes)[0].bounds.height).toBe(1);
+    runtime.undo();
+    expect(runtime.exportRoomSnapshot().tileData).toEqual(before.tileData);
+    runtime.redo();
+    expect(runtime.exportRoomSnapshot().tileData).toEqual(after.tileData);
+    expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(after.smartTerrain);
+  });
+
   it('fills Cyber Concrete and Neon rectangles, preserves Support banks, and keeps panels two rows high', () => {
     const { runtime, layers } = createHarness(createRoom());
 

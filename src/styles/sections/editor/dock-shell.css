@@ -1025,7 +1025,7 @@ body[data-editor-dock-shell='true'] .editor-workbench-close-button {
 body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section .smart-control-row,
 body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section .smart-details-row,
 body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section #btn-smart-cave-fill,
-body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section #smart-palette-hint,
+body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette-section #smart-palette-hint:not([data-smart-instructions='true']),
 body[data-editor-dock-shell='true'][data-builder-mode='advanced'] #smart-palette-section .smart-visual-picker {
   display: none !important;
 }
