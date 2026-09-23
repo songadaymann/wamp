@@ -16,6 +16,7 @@ import {
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import { getEditorToolHudLabel } from './editorToolSelection';
+import { drawEditorGrid } from './grid';
 
 interface EditorOverlayHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
@@ -176,18 +177,7 @@ export class EditorOverlayController {
   private createGrid(): void {
     this.gridGraphics?.destroy();
     this.gridGraphics = this.scene.add.graphics();
-    this.gridGraphics.lineStyle(1, RETRO_COLORS.grid, 0.12);
-
-    for (let x = 0; x <= ROOM_WIDTH; x += 1) {
-      this.gridGraphics.moveTo(x * TILE_SIZE, 0);
-      this.gridGraphics.lineTo(x * TILE_SIZE, ROOM_PX_HEIGHT);
-    }
-    for (let y = 0; y <= ROOM_HEIGHT; y += 1) {
-      this.gridGraphics.moveTo(0, y * TILE_SIZE);
-      this.gridGraphics.lineTo(ROOM_PX_WIDTH, y * TILE_SIZE);
-    }
-
-    this.gridGraphics.strokePath();
+    drawEditorGrid(this.gridGraphics, 0, 0);
     this.gridGraphics.setDepth(95);
   }
 

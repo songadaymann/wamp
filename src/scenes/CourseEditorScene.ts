@@ -83,6 +83,7 @@ import { requestSignTextEdit } from '../signs/events';
 import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../signs/model';
 import type { EditorCourseUiState, EditorMarkerPlacementMode } from '../ui/setup/sceneBridge';
 import { EditorUiBridge } from './editor/uiBridge';
+import { drawEditorGrid } from './editor/grid';
 import {
   applyEditorToolSelection,
   canRepeatSelectedEditorObject,
@@ -1553,16 +1554,7 @@ export class CourseEditorScene extends Phaser.Scene {
     border.setDepth(90);
 
     const grid = this.add.graphics();
-    grid.lineStyle(1, RETRO_COLORS.grid, 0.12);
-    for (let x = 0; x <= ROOM_WIDTH; x += 1) {
-      grid.moveTo(origin.x + x * TILE_SIZE, origin.y);
-      grid.lineTo(origin.x + x * TILE_SIZE, origin.y + ROOM_PX_HEIGHT);
-    }
-    for (let y = 0; y <= ROOM_HEIGHT; y += 1) {
-      grid.moveTo(origin.x, origin.y + y * TILE_SIZE);
-      grid.lineTo(origin.x + ROOM_PX_WIDTH, origin.y + y * TILE_SIZE);
-    }
-    grid.strokePath();
+    drawEditorGrid(grid, origin.x, origin.y);
     grid.setDepth(95);
 
     const label = this.add.text(origin.x + 10, origin.y + 10, roomRef.roomTitle?.trim() || `${roomRef.coordinates.x},${roomRef.coordinates.y}`, {
