@@ -1,0 +1,112 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import { chromium } from 'playwright';
+const target=new URL(process.argv[2] || 'http://127.0.0.1:3000/');
+target.searchParams.set('previewSmoke','1');
+if(!target.searchParams.has('renderer')) target.searchParams.set('renderer','canvas');
+const url=target.toString();
+await fs.mkdir('output/wampos95',{recursive:true});
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage({viewport:{width:1440,height:1000}});
+const errors=[]; const requests=[];
+page.on('pageerror',e=>errors.push(e.message));
+page.on('console',m=>{if(m.type()==='error') errors.push(m.text());});
+// Stub unrelated local telemetry/presence; forbid room writes during the smoke.
+await page.routeWebSocket(/(?:127\.0\.0\.1:1999|partykit\.dev)/, () => {});
+await page.route('**/api/**', async route => {
+  const request = route.request();
+  if (new URL(request.url()).pathname === '/api/presence/identity-token') return route.fulfill({json:{token:'smoke-local',expiresAt:new Date(Date.now()+3600000).toISOString()}});
+  if (new URL(request.url()).pathname === '/api/guest-activity/heartbeat') return route.fulfill({status:204});
+  if (!['GET','HEAD','OPTIONS'].includes(request.method())) { requests.push(request.method()+' '+request.url()); return route.abort(); }
+  return route.continue();
+});
+await page.addInitScript(()=>{localStorage.setItem('wamp_replay_opt_out','1');localStorage.setItem('wamp_install_help_dismissed_v1','1');localStorage.setItem('wamp_welcome_modal_seen_v1','1');localStorage.setItem('wamp.settings.builderMode','beginner');});
+const run=async commands=>{const r=await page.evaluate(editorCommands=>window.run_preview_smoke_action('runEditorCommands',{editorCommands}),commands);assert.equal(r.ok,true,JSON.stringify(r));return r.captures??{};};
+const dismiss=async()=>{const b=page.locator('#btn-guest-builder-claim-continue');if(await b.isVisible()) await b.click();};
+try {
+await page.goto(url,{waitUntil:'domcontentloaded'});
+await page.waitForFunction(()=>document.body.dataset.appReady==='true'&&typeof window.run_preview_smoke_action==='function');
+assert.equal(await page.evaluate(()=>window.capture_debug_info().renderer.active),target.searchParams.get('renderer'));
+assert.equal((await page.evaluate(()=>window.run_preview_smoke_action('openSyntheticEditor'))).ok,true);
+await page.waitForFunction(()=>document.body.dataset.appMode==='editor');
+await page.locator('#lighting-mode-select').selectOption('off',{force:true});
+await page.locator('[data-editor-dock="terrain"]').click();
+await page.locator('[data-smart-theme-id="wampos95"]').click();
+assert.equal(await page.locator('#smart-material-select').inputValue(),'wampos95.window');
+assert.ok((await page.locator('.editor-shell-tools [data-tool="rect"]').getAttribute('class')).includes('active'));
+assert.equal(await page.locator('.editor-shell-tools [data-tool="pencil"]').isDisabled(),true);
+await run([{op:'clearAllTiles'}]);
+const blank=(await run([{op:'capture',name:'blank'}])).blank;
+assert.equal(await page.locator('#smart-palette-hint').isVisible(),true);
+await page.waitForTimeout(300);
+const drag=async (start,end)=>{
+  const points=await page.evaluate(cells=>{
+    const d=window.capture_debug_info();const c=[...document.querySelectorAll('#game-container canvas')].at(-1);const b=c.getBoundingClientRect();
+    return cells.map(([x,y])=>({x:b.left+((x*16+8-d.activeScene.camera.scrollX-d.canvas.width/2)*d.activeScene.zoom+d.canvas.width/2)*b.width/d.canvas.width,y:b.top+((y*16+8-d.activeScene.camera.scrollY-d.canvas.height/2)*d.activeScene.zoom+d.canvas.height/2)*b.height/d.canvas.height}));
+  },[start,end]);
+  await page.mouse.move(points[0].x,points[0].y);await page.mouse.down();await page.mouse.move(points[1].x,points[1].y,{steps:8});await page.mouse.up();
+};
+await drag([2,15],[6,20]);
+const mousePainted=(await run([{op:'capture',name:'mousePainted'}])).mousePainted;
+assert.equal(mousePainted.tileData.terrain[20][6],1018,'Actual pointer drag creates the resize corner');
+await run([{op:'undo'}]);
+const stamp=(x1,y1,x2,y2)=>[{op:'beginBatch'},{op:'stampShape',kind:'rect',x1,y1,x2,y2,outline:true,erase:false},{op:'commitBatch'}];
+const {painted,undone,redone}=await run([...stamp(2,2,17,14),{op:'capture',name:'painted'},{op:'undo'},{op:'capture',name:'undone'},{op:'redo'},{op:'capture',name:'redone'}]);
+assert.equal(Object.keys(painted.smartTerrain.recipes).length,1);
+assert.equal(painted.tileData.terrain[14][17],1018);
+assert.equal(painted.tileData.background[7][7],962);
+assert.deepEqual(undone.tileData,blank.tileData);assert.deepEqual(undone.smartTerrain,blank.smartTerrain);
+assert.deepEqual(redone.tileData,painted.tileData);assert.deepEqual(redone.smartTerrain,painted.smartTerrain);
+await run([...stamp(20,2,29,9),...stamp(31,2,35,7)]);
+await dismiss();await page.waitForTimeout(300);await page.screenshot({path:'output/wampos95/editor-windows.png'});await page.locator('#game-container canvas').last().screenshot({path:'output/wampos95/windows-canvas.png'});
+await fs.writeFile('output/wampos95/editor-debug.json',JSON.stringify(await page.evaluate(()=>window.capture_debug_info()),null,2));
+const {beforeCopy,pasted,undoPaste}=await run([{op:'capture',name:'beforeCopy'},{op:'copy',x1:20,y1:2,x2:29,y2:9},{op:'beginBatch'},{op:'paste',x:20,y:12},{op:'commitBatch'},{op:'capture',name:'pasted'},{op:'undo'},{op:'capture',name:'undoPaste'}]);
+assert.equal(Object.keys(pasted.smartTerrain.recipes).length,4);
+assert.equal(pasted.tileData.background[15][22],962);
+assert.deepEqual(undoPaste.tileData,beforeCopy.tileData);assert.deepEqual(undoPaste.smartTerrain,beforeCopy.smartTerrain);
+// Exercise each new brush through the real picker and pointer/shape tools.
+await page.locator('[data-smart-brush-id="wampos95.inactive-window"]').click();
+await page.waitForTimeout(200);
+await drag([20,2],[29,9]);
+let current=(await run([{op:'capture',name:'current'}])).current;
+assert.deepEqual(current.tileData.terrain[2].slice(20,30),[932,...Array(8).fill(933),934]);
+assert.equal(current.tileData.terrain[9][29],1018);
+await page.locator('[data-smart-brush-id="wampos95.alert"]').click();
+await run(stamp(20,12,31,17));
+current=(await run([{op:'capture',name:'current'}])).current;
+assert.equal(current.tileData.terrain[17][31],1011);
+assert.equal(current.tileData.background[14][22],965);
+await page.locator('[data-smart-brush-id="wampos95.start-bar"]').click();
+const lineButton=page.locator('.editor-shell-tools [data-tool="line"]');
+assert.ok((await lineButton.getAttribute('class')).includes('active'));
+assert.equal(await page.locator('#smart-palette-hint').isVisible(),true);
+// Clicking the active tool again must keep this brush straight, even though
+// ordinary Line toggles into Curve and requires an extra click to finish.
+await lineButton.click();
+await page.waitForTimeout(300);
+await drag([39,21],[0,18]);
+const {family,barUndone,barRedone}=await run([{op:'capture',name:'family'},{op:'undo'},{op:'capture',name:'barUndone'},{op:'redo'},{op:'capture',name:'barRedone'}]);
+assert.equal(Object.keys(family.smartTerrain.recipes).length,5);
+assert.deepEqual(family.tileData.terrain[21].slice(0,3),[1045,1046,1047]);
+assert.deepEqual(family.tileData.terrain[21].slice(36),[1052,1053,1053,1054]);
+assert.deepEqual(family.tileData.terrain.slice(0,21),current.tileData.terrain.slice(0,21));
+assert.deepEqual(barUndone.tileData,current.tileData);assert.deepEqual(barUndone.smartTerrain,current.smartTerrain);
+assert.deepEqual(barRedone.tileData,family.tileData);assert.deepEqual(barRedone.smartTerrain,family.smartTerrain);
+const {alertPasted,alertUndo}=await run([{op:'copy',x1:20,y1:12,x2:31,y2:17},{op:'beginBatch'},{op:'paste',x:2,y:15},{op:'commitBatch'},{op:'capture',name:'alertPasted'},{op:'undo'},{op:'capture',name:'alertUndo'}]);
+assert.equal(alertPasted.tileData.background[16][3],965);
+assert.equal(alertPasted.tileData.terrain[20][13],1011);
+assert.deepEqual(alertUndo.tileData,family.tileData);assert.deepEqual(alertUndo.smartTerrain,family.smartTerrain);
+await page.screenshot({path:'output/wampos95/editor-family.png'});
+await page.locator('#game-container canvas').last().screenshot({path:'output/wampos95/family-canvas.png'});
+const saved=await page.evaluate(()=>window.run_preview_smoke_action('saveSyntheticEditorToLocal'));assert.equal(saved.ok,true);
+await page.evaluate(()=>document.body.dataset.appMode='preview-smoke-reload');
+await page.waitForFunction(()=>window.get_chat_debug_state?.().loading!==true);
+await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>document.body.dataset.appReady==='true');
+assert.equal((await page.evaluate(()=>window.run_preview_smoke_action('openSyntheticEditorFromLocal'))).ok,true);
+await page.waitForFunction(()=>document.body.dataset.appMode==='editor');
+const {reopened}=await run([{op:'capture',name:'reopened'}]);assert.deepEqual(reopened.tileData,family.tileData);assert.deepEqual(reopened.smartTerrain,family.smartTerrain);
+await dismiss();if(await page.locator('#menu-toggle').getAttribute('aria-expanded')==='true') await page.locator('#menu-toggle').click();await page.waitForTimeout(350);await page.screenshot({path:'output/wampos95/editor-reloaded.png'});
+assert.deepEqual(errors,[]);assert.deepEqual(requests,[]);
+await fs.writeFile('output/wampos95/browser-result.json',JSON.stringify({checks:['picker','actual pointer drag','rectangle tool selection','three window sizes','outline creates full window','undo/redo','copy/companion fill','paste undo','inactive window pointer drag','alert rectangle','Start Bar reverse diagonal drag','Start Bar straight tool enforcement','Start Bar undo/redo','alert copy/companion fill','local save/reload of all four brushes'],errors,requests},null,2));
+console.log(JSON.stringify({status:'passed',errors,requests}));
+}catch(error){await page.screenshot({path:'output/wampos95/browser-failure.png'});console.log(JSON.stringify({errors,requests}));throw error;}finally{await browser.close();}

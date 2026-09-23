@@ -20,6 +20,7 @@ import {
   getSmartBrushDefinition,
   type SmartBrushEngine,
 } from './registry';
+import { applyWamposWindowCells, applyWamposWindowOutline, resolveWamposWindowDocument, wamposWindowOwnerId } from './wamposWindowDocument';
 
 type SmartRecipeEngine = Exclude<SmartBrushEngine, 'legacy-terrain'>;
 
@@ -35,9 +36,19 @@ export interface SmartRecipeEngineAdapter {
   resolveDocument(document: SmartRecipeDocument): SmartRecipeDocument;
   semanticOwnerId(semanticKey: string): string;
   recipeOwnerId(instanceId: string): string;
+  /** Reconcile source ownership after another brush replaces part of a macro. */
+  reconcileExternalEdits?(document: SmartRecipeDocument): SmartRecipeDocument;
 }
 
 const SMART_RECIPE_ENGINE_ADAPTERS: Readonly<Record<SmartRecipeEngine, SmartRecipeEngineAdapter>> = {
+  'wampos-window': {
+    applyCells: applyWamposWindowCells,
+    applyOutlineCells: applyWamposWindowOutline,
+    resolveDocument: resolveWamposWindowDocument,
+    semanticOwnerId: (key) => `wampos95:cell:${key}`,
+    recipeOwnerId: wamposWindowOwnerId,
+    reconcileExternalEdits: resolveWamposWindowDocument,
+  },
   'cyber-recipe': {
     applyCells: applyCyberSmartBrushCells,
     applyOutlineCells: applyCyberSmartBrushOutlineCells,
@@ -46,6 +57,13 @@ const SMART_RECIPE_ENGINE_ADAPTERS: Readonly<Record<SmartRecipeEngine, SmartReci
     recipeOwnerId: (instanceId) => `cyber:recipe:${instanceId}`,
   },
 };
+
+export function reconcileSmartRecipeSources(document: SmartRecipeDocument): SmartRecipeDocument {
+  return Object.values(SMART_RECIPE_ENGINE_ADAPTERS).reduce(
+    (next, adapter) => adapter.reconcileExternalEdits?.(next) ?? next,
+    document,
+  );
+}
 
 export function getSmartRecipeEngineAdapter(brushId: SmartBrushId): SmartRecipeEngineAdapter {
   const brush = getSmartBrushDefinition(brushId);
@@ -85,14 +103,14 @@ export function applySmartBrushCells(
   document: SmartRecipeDocument,
   options: ApplySmartBrushCellsOptions,
 ): SmartRecipeDocument {
-  return getSmartRecipeEngineAdapter(options.brushId).applyCells(document, options);
+  return reconcileSmartRecipeSources(getSmartRecipeEngineAdapter(options.brushId).applyCells(document, options));
 }
 
 export function applySmartBrushOutlineCells(
   document: SmartRecipeDocument,
   options: ApplySmartBrushOutlineCellsOptions,
 ): SmartRecipeDocument {
-  return getSmartRecipeEngineAdapter(options.brushId).applyOutlineCells(document, options);
+  return reconcileSmartRecipeSources(getSmartRecipeEngineAdapter(options.brushId).applyOutlineCells(document, options));
 }
 
 /** Runs every registered recipe-family document pass after legacy terrain resolves. */

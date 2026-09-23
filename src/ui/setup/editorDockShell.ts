@@ -22,8 +22,7 @@ import { EDITOR_SIDEBAR_RESIZED_EVENT } from './sidebarSections';
 import { type EditorObjectScope, PaletteController } from './paletteController';
 import {
   buildSmartPreviewTiles,
-  SMART_PREVIEW_COLUMNS,
-  SMART_PREVIEW_ROWS,
+  getSmartPreviewSize,
 } from './editorSmartPreview';
 
 export const EDITOR_DOCK_PANEL_IDS = [
@@ -913,8 +912,9 @@ export class EditorDockShellController {
     context.fillStyle = '#18161c';
     context.fillRect(0, 0, canvas.width, canvas.height);
     try {
-      const cellWidth = canvas.width / SMART_PREVIEW_COLUMNS;
-      const cellHeight = canvas.height / SMART_PREVIEW_ROWS;
+      const size = getSmartPreviewSize(brush);
+      const cellWidth = canvas.width / size.width;
+      const cellHeight = canvas.height / size.height;
       for (const tile of buildSmartPreviewTiles(brush.id, styleId)) {
         const image = await this.loadPreviewImage(tile.path);
         if (!canvas.isConnected) return;

@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { editorState } from '../../config';
 import { registerCustomSprite } from '../../customSprites/registry';
 import {
+  applyEditorToolSelection,
+  isEditorLineCurve,
+  resolveEditorLineEnd,
+  getEditorToolButtonAppearance,
+  getEditorToolHudLabel,
   getEditorToolUnavailableTitle,
   getEditorToolModePipState,
   getShapeFillModeUnavailableTitle,
@@ -201,5 +206,31 @@ describe('multi-state tool pips', () => {
     expect(getTileFlipModePipState('off')).toEqual({ count: 3, activeIndex: 0 });
     expect(getTileFlipModePipState('on')).toEqual({ count: 3, activeIndex: 1 });
     expect(getTileFlipModePipState('rand')).toEqual({ count: 3, activeIndex: 2 });
+  });
+});
+
+
+describe('Smart straight Line constraints', () => {
+  const original = { paletteMode: editorState.paletteMode, smartMaterial: editorState.smartMaterial, activeTool: editorState.activeTool, lineCurve: editorState.lineCurve };
+  afterEach(() => { Object.assign(editorState, original); });
+
+  it('keeps Start Bar horizontal in either direction and restores normal Curve behavior for other tools', () => {
+    editorState.paletteMode = 'smart';
+    editorState.smartMaterial = 'wampos95.start-bar';
+    editorState.activeTool = 'line';
+    editorState.lineCurve = true;
+    expect(resolveEditorLineEnd({ x: 2, y: 18 }, { x: 25, y: 10 }, true)).toEqual({ x: 25, y: 18 });
+    expect(resolveEditorLineEnd({ x: 25, y: 18 }, { x: 2, y: 20 })).toEqual({ x: 2, y: 18 });
+    applyEditorToolSelection('line');
+    expect(isEditorLineCurve()).toBe(false);
+    expect(getEditorToolModePipState('line')).toBeNull();
+    expect(getEditorToolHudLabel('line')).toBe('Line');
+    expect(getEditorToolButtonAppearance('line', true)?.label).toBe('Line');
+    editorState.smartMaterial = 'cyber.concrete';
+    expect(isEditorLineCurve()).toBe(true);
+    expect(resolveEditorLineEnd({ x: 2, y: 18 }, { x: 25, y: 10 })).toEqual({ x: 25, y: 10 });
+    editorState.paletteMode = 'tiles';
+    editorState.smartMaterial = 'wampos95.start-bar';
+    expect(isEditorLineCurve()).toBe(true);
   });
 });

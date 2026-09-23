@@ -106,7 +106,7 @@ function readStoredBuilderMode(): GameSettings['builderMode'] {
 
 function readStoredSmartTheme(): GameSettings['lastSmartTheme'] {
   const value = window.localStorage.getItem(SMART_THEME_STORAGE_KEY);
-  return value === 'desert' || value === 'cave' || value === 'gothic' || value === 'cyber'
+  return value === 'desert' || value === 'cave' || value === 'gothic' || value === 'cyber' || value === 'wampos95'
     ? value
     : 'forest';
 }

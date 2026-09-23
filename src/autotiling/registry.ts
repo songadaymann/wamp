@@ -7,6 +7,7 @@ import {
 } from '../config/room';
 import { getTilesetByKey } from '../config/tilesets';
 import { catalogLocalIndicesForBrush } from './cyberEdgeCatalog';
+import { WAMPOS_ALERT_TILES, WAMPOS_INACTIVE_TITLE_TILES, WAMPOS_START_BAR_TILES, WAMPOS_WINDOW_TILES } from './wamposWindowProfile';
 import {
   getSmartLegacyBrushId,
   type SmartBrushId,
@@ -28,7 +29,7 @@ export const SMART_RULE_ALGORITHMS = [
 ] as const;
 export type SmartRuleAlgorithm = typeof SMART_RULE_ALGORITHMS[number];
 
-export const SMART_BRUSH_ENGINES = ['legacy-terrain', 'cyber-recipe'] as const;
+export const SMART_BRUSH_ENGINES = ['legacy-terrain', 'cyber-recipe', 'wampos-window'] as const;
 export type SmartBrushEngine = typeof SMART_BRUSH_ENGINES[number];
 
 export const SMART_BRUSH_STROKE_AXES = ['free', 'horizontal', 'vertical'] as const;
@@ -37,7 +38,7 @@ export type SmartBrushStrokeAxis = typeof SMART_BRUSH_STROKE_AXES[number];
 export const SMART_BRUSH_RECTANGLE_MODES = ['shape', 'filled-shape', 'horizontal-line'] as const;
 export type SmartBrushRectangleMode = typeof SMART_BRUSH_RECTANGLE_MODES[number];
 
-export const SMART_THEME_IDS = ['forest', 'desert', 'cave', 'gothic', 'cyber', 'water'] as const;
+export const SMART_THEME_IDS = ['forest', 'desert', 'cave', 'gothic', 'cyber', 'wampos95', 'water'] as const;
 export type SmartThemeId = typeof SMART_THEME_IDS[number];
 export type SmartBrushTool = Extract<ToolName, 'pencil' | 'fill' | 'rect' | 'ellipse' | 'line'>;
 
@@ -89,6 +90,8 @@ export interface SmartBrushDefinition {
   resolverKey: string;
   /** Optional Pencil constraint interpreted by the generic Smart Tile controller. */
   strokeAxis: SmartBrushStrokeAxis;
+  /** Optional straight Line constraint, shared by pointer preview and committed tiles. */
+  lineAxis?: Exclude<SmartBrushStrokeAxis, 'free'>;
   /** Defines whether Rectangle paints its shape or a normalized horizontal source span. */
   rectangleMode: SmartBrushRectangleMode;
   supportedTools: readonly SmartBrushTool[];
@@ -101,6 +104,10 @@ export interface SmartBrushDefinition {
   compatibleLegacyLocalIndices: readonly number[];
   /** Layers a rule or recipe is allowed to own, including secondary output. */
   outputLayers: readonly LayerName[];
+  /** Optional authored rectangle used by the visual brush picker. */
+  previewSize?: { width: number; height: number };
+  /** Complete source selections may regenerate owned companion-layer artwork. */
+  copyCompanionLayers?: boolean;
 }
 
 interface StyleSeed {
@@ -119,6 +126,7 @@ const STYLE_SEEDS: readonly StyleSeed[] = [
   { id: 'water', themeId: 'water', label: 'Water', colorLabel: 'Default', tilesetKey: 'water' },
   { id: 'cyber-yellow', themeId: 'cyber', label: 'Cyber Yellow', colorLabel: 'Yellow', tilesetKey: 'cybercity yellow' },
   { id: 'cyber-pink', themeId: 'cyber', label: 'Cyber Pink', colorLabel: 'Pink', tilesetKey: 'cybercity pink' },
+  { id: 'wampos95', themeId: 'wampos95', label: 'WampOS 95', colorLabel: 'Default', tilesetKey: 'wampos95' },
 ];
 
 function createStyleDefinition(seed: StyleSeed): SmartStyleDefinition {
@@ -226,8 +234,45 @@ const LEGACY_BRUSH_DEFINITIONS: SmartBrushDefinition[] = LEGACY_SOLID_STYLE_IDS.
   })),
 );
 
+const WAMPOS_BRUSH_DEFAULTS = {
+  algorithm: 'recipe', engine: 'wampos-window', strokeAxis: 'free', rectangleMode: 'filled-shape',
+  supportedTools: ['rect'], collisionRole: 'mixed', defaultLayer: 'terrain', supportedLayers: ALL_SMART_LAYERS,
+  supportedThemeIds: ['wampos95'], supportedStyleIds: ['wampos95'], outputLayers: ['terrain', 'background'],
+  previewSize: { width: 10, height: 6 }, copyCompanionLayers: true,
+} as const;
+
 const BRUSH_DEFINITIONS: readonly SmartBrushDefinition[] = [
   ...LEGACY_BRUSH_DEFINITIONS,
+  {
+    ...WAMPOS_BRUSH_DEFAULTS,
+    id: 'wampos95.window', label: 'Window',
+    description: 'Drag a rectangle at least 5 tiles wide and 6 tall. Adds a blue title bar, blank menu, white interior, scrollbars, and resize grip. Add words and icons with Tilesets.',
+    ruleKind: 'rectangle', resolverKey: 'wampos95.window',
+    compatibleLegacyLocalIndices: Object.values(WAMPOS_WINDOW_TILES),
+  },
+  {
+    ...WAMPOS_BRUSH_DEFAULTS,
+    id: 'wampos95.inactive-window', label: 'Inactive Window',
+    description: 'Drag a rectangle at least 5 tiles wide and 6 tall. A regular window with a grey title bar, menu, white interior, scrollbars, and resize grip. Add words and icons with Tilesets.',
+    ruleKind: 'rectangle', resolverKey: 'wampos95.inactive-window',
+    compatibleLegacyLocalIndices: Object.values({ ...WAMPOS_WINDOW_TILES, ...WAMPOS_INACTIVE_TITLE_TILES }),
+  },
+  {
+    ...WAMPOS_BRUSH_DEFAULTS,
+    id: 'wampos95.alert', label: 'Alert',
+    description: 'Drag a rectangle at least 3 tiles wide and 3 tall. Adds the demo alert’s grey title bar, grey body, and bevelled border. Add messages, buttons, and icons with Tilesets.',
+    ruleKind: 'rectangle', resolverKey: 'wampos95.alert',
+    compatibleLegacyLocalIndices: Object.values(WAMPOS_ALERT_TILES),
+  },
+  {
+    ...WAMPOS_BRUSH_DEFAULTS,
+    id: 'wampos95.start-bar', label: 'Start Bar',
+    description: 'Drag a line at least 8 tiles wide. Stays horizontal, with a blank Start button and clock tray. Add labels, icons, and app buttons with Tilesets.',
+    ruleKind: 'path', resolverKey: 'wampos95.start-bar',
+    strokeAxis: 'horizontal', lineAxis: 'horizontal', rectangleMode: 'horizontal-line', supportedTools: ['line'],
+    compatibleLegacyLocalIndices: Object.values(WAMPOS_START_BAR_TILES),
+    outputLayers: ['terrain'],
+  },
   {
     id: 'water.tunnel',
     label: 'Tunnel',
@@ -404,6 +449,7 @@ const THEME_SEEDS: readonly ThemeSeed[] = [
   { id: 'cave', label: 'Cave', defaultStyleId: 'cave', defaultBrushId: 'cave.ground' },
   { id: 'gothic', label: 'Gothic', defaultStyleId: 'gothic', defaultBrushId: 'gothic.ground' },
   { id: 'cyber', label: 'Cyber', defaultStyleId: 'cyber-yellow', defaultBrushId: 'cyber.concrete' },
+  { id: 'wampos95', label: 'WampOS 95', defaultStyleId: 'wampos95', defaultBrushId: 'wampos95.window' },
   { id: 'water', label: 'Water', defaultStyleId: 'water', defaultBrushId: 'water.tunnel' },
 ];
 

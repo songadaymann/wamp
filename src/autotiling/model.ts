@@ -10,7 +10,7 @@ export const SMART_TERRAIN_MATERIALS = ['ground', 'platform', 'feature', 'tunnel
 export type SmartTerrainMaterial = typeof SMART_TERRAIN_MATERIALS[number];
 
 export const SMART_STYLE_IDS = [
-  'forest', 'desert', 'cave', 'gothic', 'water', 'cyber-yellow', 'cyber-pink',
+  'forest', 'desert', 'cave', 'gothic', 'water', 'cyber-yellow', 'cyber-pink', 'wampos95',
 ] as const;
 export type SmartStyleId = typeof SMART_STYLE_IDS[number];
 
@@ -29,9 +29,19 @@ export const SMART_CYBER_BRUSH_IDS = [
 ] as const;
 export type SmartCyberBrushId = typeof SMART_CYBER_BRUSH_IDS[number];
 
+export const SMART_WAMPOS_BRUSH_IDS = [
+  'wampos95.window', 'wampos95.inactive-window', 'wampos95.alert', 'wampos95.start-bar',
+] as const;
+export type SmartWamposBrushId = typeof SMART_WAMPOS_BRUSH_IDS[number];
+
+export function isSmartWamposBrush(brushId: SmartBrushId): brushId is SmartWamposBrushId {
+  return SMART_WAMPOS_BRUSH_IDS.includes(brushId as SmartWamposBrushId);
+}
+
 export const SMART_BRUSH_IDS = [
   ...SMART_LEGACY_BRUSH_IDS,
   ...SMART_CYBER_BRUSH_IDS,
+  ...SMART_WAMPOS_BRUSH_IDS,
 ] as const;
 export type SmartBrushId = typeof SMART_BRUSH_IDS[number];
 
@@ -248,6 +258,7 @@ function isSmartBrushSourceCompatible(
   if (legacyIdentity) {
     return styleId === legacyIdentity.theme && isLayerName(layer);
   }
+  if (isSmartWamposBrush(brushId)) return styleId === 'wampos95' && isLayerName(layer);
   if (styleId !== 'cyber-yellow' && styleId !== 'cyber-pink') return false;
   return isLayerName(layer) && (
     brushId === 'cyber.concrete'

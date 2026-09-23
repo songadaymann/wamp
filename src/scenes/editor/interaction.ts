@@ -18,6 +18,7 @@ import {
   getEditorStampKind,
   isDragStampEditorTool,
   isEditorLineCurve,
+  resolveEditorLineEnd,
   isEditorShapeOutline,
   isPathEditorTool,
   isPencilBrushPlacement,
@@ -25,7 +26,7 @@ import {
 } from './editorToolSelection';
 import { clampRandomizeBrushSize } from './randomizeTiles';
 import { forEachDraggedTileCell, resolvePencilStampOrigin } from './stampDrag';
-import { iterateShapeTiles, resolveShapeEnd, snapLineEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
+import { iterateShapeTiles, resolveShapeEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
 
 function isPointerShiftDown(pointer: Phaser.Input.Pointer): boolean {
   const event = pointer.event as MouseEvent | KeyboardEvent | TouchEvent | undefined;
@@ -938,13 +939,13 @@ export class EditorInteractionController {
       x: Math.floor(worldPoint.x / TILE_SIZE),
       y: Math.floor(worldPoint.y / TILE_SIZE),
     };
-    if (!this.rectStart || editorState.activeTool === 'copy' || !isPointerShiftDown(pointer)) {
+    if (!this.rectStart || editorState.activeTool === 'copy') {
       return current;
     }
     if (isPathEditorTool(editorState.activeTool)) {
-      return snapLineEnd(this.rectStart, current);
+      return resolveEditorLineEnd(this.rectStart, current, isPointerShiftDown(pointer));
     }
-    return resolveShapeEnd(this.rectStart, current, true);
+    return resolveShapeEnd(this.rectStart, current, isPointerShiftDown(pointer));
   }
 
   private updateCursorCoords(tileX: number, tileY: number): void {
@@ -1029,7 +1030,7 @@ export class EditorInteractionController {
         this.rectStart = { x: tileX, y: tileY };
       } else {
         const end = isPathEditorTool(editorState.activeTool)
-          ? { x: tileX, y: tileY }
+          ? resolveEditorLineEnd(this.rectStart, { x: tileX, y: tileY })
           : resolveShapeEnd(this.rectStart, { x: tileX, y: tileY }, false);
         if (editorState.activeTool === 'copy') {
           this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, end.x, end.y);

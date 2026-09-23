@@ -100,7 +100,7 @@ import {
 import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../../signs/model';
 import { EDITOR_SPAWN_PLACED_EVENT } from './uiEvents';
-import { canRepeatSelectedEditorObject } from './editorToolSelection';
+import { canRepeatSelectedEditorObject, resolveEditorLineEnd } from './editorToolSelection';
 import {
   DEFAULT_NPC_DEFEAT_MODE,
   DEFAULT_NPC_FRIENDLY_FIRE,
@@ -1385,6 +1385,11 @@ export class EditorEditRuntime {
     }
     const erase = Boolean(options?.erase);
     const outline = Boolean(options?.outline);
+    if (kind === 'line') {
+      const end = resolveEditorLineEnd({ x: x1, y: y1 }, { x: x2, y: y2 });
+      x2 = end.x;
+      y2 = end.y;
+    }
     if (editorState.paletteMode === 'smart') {
       const constrainedCells = kind === 'rect' && !erase
         ? this.smartTiles.getRectangleCells(x1, y1, x2, y2)

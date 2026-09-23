@@ -20,6 +20,10 @@ import { createEmptyTileData } from '../../persistence/roomModel';
 export const SMART_PREVIEW_COLUMNS = 5;
 export const SMART_PREVIEW_ROWS = 3;
 
+export function getSmartPreviewSize(brush: SmartBrushDefinition): { width: number; height: number } {
+  return brush.previewSize ?? { width: SMART_PREVIEW_COLUMNS, height: SMART_PREVIEW_ROWS };
+}
+
 export interface SmartPreviewTile {
   x: number;
   y: number;
@@ -31,6 +35,14 @@ export interface SmartPreviewTile {
 }
 
 export function getSmartPreviewCells(brush: SmartBrushDefinition): Array<[number, number]> {
+  if (brush.lineAxis) {
+    const { width, height } = getSmartPreviewSize(brush);
+    return Array.from({ length: width }, (_, x) => [x, Math.floor(height / 2)]);
+  }
+  if (brush.previewSize) {
+    const { width, height } = brush.previewSize;
+    return Array.from({ length: width * height }, (_, index) => [index % width, Math.floor(index / width)]);
+  }
   if (brush.strokeAxis === 'vertical') {
     return [[2, 0], [2, 1], [2, 2]];
   }
@@ -87,9 +99,10 @@ export function buildSmartPreviewTiles(brushId: SmartBrushId, styleId: SmartStyl
       layer: brush.defaultLayer,
     });
     const tiles: SmartPreviewTile[] = [];
+    const size = getSmartPreviewSize(brush);
     for (const layer of ['background', 'terrain', 'foreground'] as const) {
-      for (let y = 0; y < SMART_PREVIEW_ROWS; y += 1) {
-        for (let x = 0; x < SMART_PREVIEW_COLUMNS; x += 1) {
+      for (let y = 0; y < size.height; y += 1) {
+        for (let x = 0; x < size.width; x += 1) {
           const value = document.tileData[layer][originY + y]?.[originX + x] ?? -1;
           const decoded = decodeTileDataValue(value);
           const tileset = getTilesetByGid(decoded.gid);

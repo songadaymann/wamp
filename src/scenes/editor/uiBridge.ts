@@ -447,7 +447,7 @@ export class EditorUiBridge {
       && isRegistryControlledSmartTool(editorState.activeTool)
       && !isSmartBrushToolSupported(brush.id, editorState.activeTool)
     ) {
-      editorState.activeTool = 'pencil';
+      editorState.activeTool = brush.supportedTools[0];
     }
     return { themeId, brush, styles, style };
   }
@@ -470,7 +470,7 @@ export class EditorUiBridge {
       && isRegistryControlledSmartTool(editorState.activeTool)
       && !isSmartBrushToolSupported(selection.brush.id, editorState.activeTool)
     ) {
-      this.actions.onSelectTool('pencil');
+      this.actions.onSelectTool(selection.brush.supportedTools[0]);
     }
     this.syncEditorChromeState();
   }
@@ -2155,7 +2155,7 @@ export class EditorUiBridge {
     if (this.elements.smartDetailsCheckbox) {
       this.elements.smartDetailsCheckbox.checked = editorState.smartDetailsEnabled;
       this.elements.smartDetailsCheckbox.closest('label')?.classList.toggle(
-        'hidden', tunnelBackdropSelected || smartSelection.themeId === 'cyber',
+        'hidden', tunnelBackdropSelected || smartSelection.themeId === 'cyber' || smartSelection.themeId === 'wampos95',
       );
     }
     this.elements.smartCaveFillButton?.classList.toggle(
@@ -2177,10 +2177,15 @@ export class EditorUiBridge {
         && smartSelection.brush.collisionRole === 'solid'
         ? ' Exposed top edges are one-way landing surfaces; the rest stays pass-through.'
         : '';
-      smartHint.textContent = tunnelBackdropSelected && !advancedBuilder
+      const singleShapeTool = smartSelection.brush.supportedTools.length === 1
+        && ['rect', 'line'].includes(smartSelection.brush.supportedTools[0]);
+      smartHint.textContent = singleShapeTool && !advancedBuilder
+        ? smartSelection.brush.description
+        : tunnelBackdropSelected && !advancedBuilder
         ? 'Draw non-colliding blue tunnel walls behind the player. Smart chooses rock edges and ties.'
         : `${smartSelection.brush.description}${layerExplanation}${collisionExplanation}${supportExplanation} Right-click or Erase removes it.`;
       smartHint.dataset.smartSupport = unsupportedTools.length > 0 ? 'limited' : 'full';
+      smartHint.dataset.smartInstructions = String(singleShapeTool);
     }
 
     const objectCategory = this.currentObjectCategory || 'all';

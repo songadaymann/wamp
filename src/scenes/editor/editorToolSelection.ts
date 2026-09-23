@@ -1,5 +1,6 @@
 import { editorState, TILE_FLIP_MODES, type ShapeFillMode, type TileFlipMode, type ToolName } from '../../config';
-import type { EditorShapeKind } from './shapeTiles';
+import { snapLineEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
+import { getSmartBrushDefinition } from '../../autotiling/registry';
 import { countOccupiedSelectionTiles } from './selectionPattern';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { isSolidCustomSpriteObjectConfig } from '../../config';
@@ -92,8 +93,19 @@ export function isDragStampEditorTool(tool: ToolName): tool is 'rect' | 'ellipse
   return isShapeEditorTool(tool) || isPathEditorTool(tool);
 }
 
+function getEditorLineAxis(): 'horizontal' | 'vertical' | undefined {
+  return editorState.paletteMode === 'smart' ? getSmartBrushDefinition(editorState.smartMaterial).lineAxis : undefined;
+}
+
+export function resolveEditorLineEnd(start: TilePoint, current: TilePoint, snap = false): TilePoint {
+  const axis = getEditorLineAxis();
+  if (axis === 'horizontal') return { x: current.x, y: start.y };
+  if (axis === 'vertical') return { x: start.x, y: current.y };
+  return snap ? snapLineEnd(start, current) : current;
+}
+
 export function isEditorLineCurve(): boolean {
-  return editorState.lineCurve;
+  return !getEditorLineAxis() && editorState.lineCurve;
 }
 
 export function isEditorToolUnavailable(tool: ToolName): boolean {
@@ -140,7 +152,7 @@ export function applyEditorToolSelection(tool: ToolName): void {
     return;
   }
   if (editorState.activeTool === tool && tool === 'line') {
-    editorState.lineCurve = !editorState.lineCurve;
+    if (!getEditorLineAxis()) editorState.lineCurve = !editorState.lineCurve;
     return;
   }
   if (tool === 'randomize') {
@@ -186,7 +198,7 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
     case 'ellipse':
       return editorState.ellipseOutline ? 'Ellipse Outlined' : 'Ellipse Filled';
     case 'line':
-      return editorState.lineCurve ? 'Curve' : 'Line';
+      return isEditorLineCurve() ? 'Curve' : 'Line';
     case 'randomize':
       return `Scramble ${editorState.randomizeBrushSize}x${editorState.randomizeBrushSize}`;
     case 'fill':
@@ -215,7 +227,7 @@ export function getEditorToolModePipState(tool: ToolName): EditorModePipState | 
     return { count: 2, activeIndex: editorState.ellipseOutline ? 1 : 0 };
   }
   if (tool === 'line') {
-    return { count: 2, activeIndex: editorState.lineCurve ? 1 : 0 };
+    return getEditorLineAxis() ? null : { count: 2, activeIndex: editorState.lineCurve ? 1 : 0 };
   }
   return null;
 }
@@ -249,10 +261,11 @@ export function getEditorToolButtonAppearance(tool: ToolName, selected: boolean)
     };
   }
   if (tool === 'line') {
+    const axis = getEditorLineAxis();
     return {
-      icon: editorState.lineCurve ? '\u223F' : '\u2571',
-      label: editorState.lineCurve ? 'Curve' : 'Line',
-      title: editorState.lineCurve
+      icon: isEditorLineCurve() ? '\u223F' : '\u2571',
+      label: isEditorLineCurve() ? 'Curve' : 'Line',
+      title: axis ? `Line (L); stays ${axis} for this brush` : isEditorLineCurve()
         ? 'Curve (L); select again to switch to Line. Hold Shift to snap'
         : 'Line (L); select again to switch to Curve. Hold Shift to snap',
       dimPart: null,
