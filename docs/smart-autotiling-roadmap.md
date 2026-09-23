@@ -2,12 +2,12 @@
 
 ## Outcome and current focus
 
-The 2026-09-23 local follow-on is WampOS 95 **Window**, **Inactive Window**,
+The 2026-09-23 production release adds WampOS 95 **Window**, **Inactive Window**,
 **Alert**, and **Start Bar**, derived from the artist's rooms `-11,10` and
 `-13,10`. Windows use rectangles (5x6 regular/inactive, 3x3 alert minimum);
 Start Bar uses a horizontal Line at least 8 cells wide. Words, icons, alert
-buttons, and task labels remain manual. Local review runs on
-`codex/wampos95-window`; production is unchanged.
+buttons, and task labels remain manual. Released on `main` as `9857b66c` and verified on
+`https://wamp.land`; the original local preview remains available.
 
 The canonical Smart V2 implementation is now live on `main`, merged from
 `codex/smart-autotiling-consolidated-2026-08-26` at `981fb05`. It combines the
@@ -334,5 +334,5 @@ A set moves from gated/in progress to complete only when all of these pass:
 | Artist `rr_extras` Ground ledges | The 2026-08-29 v2 delivery is integrated locally for Cave A1/A2, Forest B1/B2, and Desert C1/C2; exact source hash, directional transition plus complete D9/D10/D11 platform-subsection fixtures, short-run fallbacks, Advanced-layer ownership, and Canvas/WebGL visual checks pass. Water/Lava/Snow rows remain reserved |
 | Cave rail and Gothic fence/columns | Gated on Tier 2 |
 | Desert cactus and bridge | Gated on Tier 2 span/junction proof |
-| WampOS window macros | Locally implemented on `codex/wampos95-window` (2026-09-23): regular/inactive Window, Alert, and horizontal Start Bar, with explicit output ownership, manual overrides, copy/paste, and save/Undo proof. No release yet |
+| WampOS window macros | Released on `main` as `9857b66c` (2026-09-23): regular/inactive Window, Alert, and horizontal Start Bar, with explicit output ownership, manual overrides, copy/paste, save/Undo proof, and live WebGL drawing verified |
 | Backrooms grammar set | Gated on Tier 2 + Tier 3 completion |
