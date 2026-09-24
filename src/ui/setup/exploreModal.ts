@@ -291,6 +291,7 @@ export class ExploreModalController {
         this.discoverFilter,
         this.discoverSort,
         48,
+        this.discoverSort === 'newest' && this.discoverFilter === null,
       );
       this.setError(null);
     } catch (error) {
@@ -417,7 +418,9 @@ export class ExploreModalController {
       return;
     }
 
-    const results = (this.roomDiscovery?.results ?? []).filter((entry) => entry.goalType !== null);
+    const results = (this.roomDiscovery?.results ?? []).filter(
+      (entry) => entry.goalType !== null || (this.discoverSort === 'newest' && this.discoverFilter === null),
+    );
 
     if (results.length === 0) {
       this.elements.list.appendChild(
@@ -1184,6 +1187,9 @@ export class ExploreModalController {
   }
 
   private getRoomDiscoveryEmptyText(): string {
+    if (this.discoverSort === 'newest' && this.discoverFilter === null) {
+      return 'No published rooms found yet.';
+    }
     if (this.discoverSort === 'unbeaten') {
       return "No unbeaten published challenge levels found.";
     }
