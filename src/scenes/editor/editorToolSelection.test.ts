@@ -5,17 +5,19 @@ import {
   applyEditorToolSelection,
   isEditorLineCurve,
   resolveEditorLineEnd,
-  getEditorToolButtonAppearance,
   getEditorToolHudLabel,
   getEditorToolUnavailableTitle,
+  getEditorToolButtonAppearance,
   getEditorToolModePipState,
   getShapeFillModeUnavailableTitle,
   getShapeFillUiMode,
   getTileFlipModePipState,
   isEditorToolUnavailable,
   isPencilBrushPlacement,
+  isPencilSprayPlacement,
   isPencilStampPlacement,
   isShapeFillModeAvailable,
+  ensureEditorToolAvailable,
 } from './editorToolSelection';
 
 const originalMode = editorState.paletteMode;
@@ -41,6 +43,27 @@ describe('editorToolSelection availability', () => {
     editorState.paletteMode = 'tiles';
     expect(isEditorToolUnavailable('randomize')).toBe(false);
     expect(getEditorToolUnavailableTitle('randomize')).toBeNull();
+  });
+
+  it('keeps the current terrain tool across Auto-Tile and Tilesets, and falls back to Draw', () => {
+    const originalTool = editorState.activeTool;
+    const originalMaterial = editorState.smartMaterial;
+    const originalSpray = editorState.pencilSprayMode;
+    editorState.smartMaterial = 'forest.ground';
+    editorState.paletteMode = 'tiles';
+    editorState.activeTool = 'fill';
+    editorState.pencilSprayMode = false;
+    editorState.paletteMode = 'smart';
+    expect(ensureEditorToolAvailable()).toBe('fill');
+    editorState.paletteMode = 'tiles';
+    expect(ensureEditorToolAvailable()).toBe('fill');
+    editorState.activeTool = 'randomize';
+    editorState.paletteMode = 'smart';
+    expect(ensureEditorToolAvailable()).toBe('pencil');
+    expect(editorState.pencilSprayMode).toBe(false);
+    editorState.activeTool = originalTool;
+    editorState.smartMaterial = originalMaterial;
+    editorState.pencilSprayMode = originalSpray;
   });
 
   it('offers Fill for repeatable objects but not one-off objects', () => {
@@ -90,6 +113,7 @@ describe('draw stamp vs brush placement', () => {
   const originalMode = editorState.shapeFillMode;
   const originalTool = editorState.activeTool;
   const originalPalette = editorState.paletteMode;
+  const originalSpray = editorState.pencilSprayMode;
 
   afterEach(() => {
     editorState.selection = originalSelection;
@@ -97,6 +121,7 @@ describe('draw stamp vs brush placement', () => {
     editorState.shapeFillMode = originalMode;
     editorState.activeTool = originalTool;
     editorState.paletteMode = originalPalette;
+    editorState.pencilSprayMode = originalSpray;
   });
 
   it('stamps multi-tile selections by default and brushes when pattern or shuffle is selected', () => {
@@ -130,11 +155,13 @@ describe('shape fill mode availability', () => {
   const originalSelection = editorState.selection;
   const originalTool = editorState.activeTool;
   const originalPalette = editorState.paletteMode;
+  const originalSpray = editorState.pencilSprayMode;
 
   afterEach(() => {
     editorState.selection = originalSelection;
     editorState.activeTool = originalTool;
     editorState.paletteMode = originalPalette;
+    editorState.pencilSprayMode = originalSpray;
   });
 
   function selectTwoTiles(): void {
@@ -180,29 +207,58 @@ describe('shape fill mode availability', () => {
     editorState.activeTool = 'pencil';
     expect(isShapeFillModeAvailable('stamp')).toBe(true);
   });
+
+  it('greys stamp while Spray is selected and treats fill as pattern', () => {
+    editorState.paletteMode = 'tiles';
+    editorState.activeTool = 'pencil';
+    editorState.pencilSprayMode = true;
+    selectTwoTiles();
+    editorState.shapeFillMode = 'stamp';
+    expect(isShapeFillModeAvailable('stamp')).toBe(false);
+    expect(isShapeFillModeAvailable('pattern')).toBe(true);
+    expect(getShapeFillModeUnavailableTitle('stamp')).toBe('Stamp is only available with Draw, not Spray');
+    expect(getShapeFillUiMode('pencil')).toBe('pattern');
+    expect(isPencilSprayPlacement()).toBe(true);
+    expect(isPencilStampPlacement()).toBe(false);
+    expect(isPencilBrushPlacement()).toBe(false);
+    editorState.paletteMode = 'smart';
+    expect(isPencilSprayPlacement()).toBe(true);
+    expect(isPencilStampPlacement()).toBe(false);
+    expect(isPencilBrushPlacement()).toBe(false);
+  });
 });
 
 describe('multi-state tool pips', () => {
   const originalRect = editorState.rectOutline;
   const originalEllipse = editorState.ellipseOutline;
   const originalLine = editorState.lineCurve;
+  const originalSpray = editorState.pencilSprayMode;
+  const originalTool = editorState.activeTool;
 
   afterEach(() => {
     editorState.rectOutline = originalRect;
     editorState.ellipseOutline = originalEllipse;
     editorState.lineCurve = originalLine;
+    editorState.pencilSprayMode = originalSpray;
+    editorState.activeTool = originalTool;
   });
 
-  it('maps rectangle, circle, line, and flip cycles to pip indexes', () => {
+  it('maps rectangle, circle, line, draw/spray, and flip cycles to pip indexes', () => {
     editorState.rectOutline = false;
     editorState.ellipseOutline = true;
     editorState.lineCurve = false;
+    editorState.pencilSprayMode = false;
     expect(getEditorToolModePipState('rect')).toEqual({ count: 2, activeIndex: 0 });
     expect(getEditorToolModePipState('ellipse')).toEqual({ count: 2, activeIndex: 1 });
     expect(getEditorToolModePipState('line')).toEqual({ count: 2, activeIndex: 0 });
     editorState.lineCurve = true;
     expect(getEditorToolModePipState('line')).toEqual({ count: 2, activeIndex: 1 });
-    expect(getEditorToolModePipState('pencil')).toBeNull();
+    expect(getEditorToolModePipState('pencil')).toEqual({ count: 2, activeIndex: 0 });
+    editorState.activeTool = 'pencil';
+    applyEditorToolSelection('pencil');
+    expect(editorState.pencilSprayMode).toBe(true);
+    expect(getEditorToolModePipState('pencil')).toEqual({ count: 2, activeIndex: 1 });
+    expect(getEditorToolButtonAppearance('pencil', true)?.label).toBe('Spray');
     expect(getTileFlipModePipState('off')).toEqual({ count: 3, activeIndex: 0 });
     expect(getTileFlipModePipState('on')).toEqual({ count: 3, activeIndex: 1 });
     expect(getTileFlipModePipState('rand')).toEqual({ count: 3, activeIndex: 2 });

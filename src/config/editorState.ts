@@ -34,6 +34,9 @@ export interface EditorState {
   randomizeBrushSize: RandomizeBrushSize;
   scrambleBrushSize: RandomizeBrushSize;
   pencilBrushSize: RandomizeBrushSize;
+  pencilSprayMode: boolean;
+  pencilSprayBrushSize: number;
+  pencilSprayRate: number;
   pencilContinuousStamping: boolean;
   fillIgnoreTileFlipping: boolean;
   shapeFillMode: ShapeFillMode;
@@ -96,6 +99,9 @@ export const editorState: EditorState = {
   randomizeBrushSize: 3,
   scrambleBrushSize: 3,
   pencilBrushSize: 1,
+  pencilSprayMode: false,
+  pencilSprayBrushSize: 5,
+  pencilSprayRate: 0.5,
   pencilContinuousStamping: false,
   fillIgnoreTileFlipping: false,
   shapeFillMode: 'stamp',

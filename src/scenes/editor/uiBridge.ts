@@ -24,11 +24,14 @@ import {
   isEditorToolUnavailable,
   isShapeFillModeAvailable,
   isMoreEditorTool,
+  isPencilSprayPlacement,
   isPencilStampPlacement,
+  ensureEditorToolAvailable,
   type EditorModePipState,
   type EditorToolButtonAppearance,
 } from './editorToolSelection';
 import { clampRandomizeBrushSize } from './randomizeTiles';
+import { clampSprayBrushSize, clampSprayRate, SPRAY_BRUSH_SIZES } from './sprayTiles';
 import { countOccupiedSelectionTiles } from './selectionPattern';
 import {
   finalizeBackgroundUpload,
@@ -442,13 +445,7 @@ export class EditorUiBridge {
     ) {
       editorState.activeLayer = brush.defaultLayer;
     }
-    if (
-      editorState.paletteMode === 'smart'
-      && isRegistryControlledSmartTool(editorState.activeTool)
-      && !isSmartBrushToolSupported(brush.id, editorState.activeTool)
-    ) {
-      editorState.activeTool = brush.supportedTools[0];
-    }
+    ensureEditorToolAvailable();
     return { themeId, brush, styles, style };
   }
 
@@ -465,13 +462,7 @@ export class EditorUiBridge {
     this.actions.onSetSmartTheme(selection.themeId);
     this.actions.onSetSmartMaterial(selection.brush.id);
     this.actions.onSetSmartStyle(selection.style.id);
-    if (
-      editorState.paletteMode === 'smart'
-      && isRegistryControlledSmartTool(editorState.activeTool)
-      && !isSmartBrushToolSupported(selection.brush.id, editorState.activeTool)
-    ) {
-      this.actions.onSelectTool(selection.brush.supportedTools[0]);
-    }
+    ensureEditorToolAvailable();
     this.syncEditorChromeState();
   }
 
@@ -747,6 +738,28 @@ export class EditorUiBridge {
         button.removeEventListener('click', handlePencilBrushButton)
       );
     }
+    for (const button of this.elements.pencilSprayBrushButtons) {
+      const handleSprayBrushButton = () => {
+        const nextSize = Number.parseInt(button.dataset.sprayBrushSize ?? '', 10);
+        if (!SPRAY_BRUSH_SIZES.includes(nextSize as (typeof SPRAY_BRUSH_SIZES)[number])) return;
+        editorState.pencilSprayBrushSize = clampSprayBrushSize(nextSize);
+        this.syncEditorChromeState();
+      };
+      button.addEventListener('click', handleSprayBrushButton);
+      this.cleanupCallbacks.push(() =>
+        button.removeEventListener('click', handleSprayBrushButton)
+      );
+    }
+    for (const input of this.elements.pencilSprayRateInputs) {
+      const handleSprayRate = () => {
+        editorState.pencilSprayRate = clampSprayRate(Number.parseFloat(input.value));
+        for (const other of this.elements.pencilSprayRateInputs) {
+          other.value = String(editorState.pencilSprayRate);
+        }
+      };
+      input.addEventListener('input', handleSprayRate);
+      this.cleanupCallbacks.push(() => input.removeEventListener('input', handleSprayRate));
+    }
     for (const input of this.elements.pencilContinuousInputs) {
       const handleContinuous = () => {
         editorState.pencilContinuousStamping = input.checked;
@@ -873,9 +886,8 @@ export class EditorUiBridge {
         editorState.paletteMode = mode;
         if (mode === 'tiles') {
           editorState.selectedObjectId = null;
-        } else if (editorState.activeTool !== 'eraser') {
-          this.actions.onSelectTool('pencil');
         }
+        ensureEditorToolAvailable();
         runtimeConfig.paletteController?.renderTilePreview();
         this.syncEditorChromeState();
       };
@@ -889,6 +901,7 @@ export class EditorUiBridge {
         updateGameSettings({ builderMode });
         this.doc.body.dataset.builderMode = builderMode;
         editorState.paletteMode = builderMode === 'advanced' ? 'tiles' : 'smart';
+        ensureEditorToolAvailable();
         this.syncEditorChromeState();
       };
       button.addEventListener('click', handler);
@@ -1885,6 +1898,7 @@ export class EditorUiBridge {
 
     const paletteModeIsTiles = editorState.paletteMode === 'tiles';
     const paletteModeIsSmart = editorState.paletteMode === 'smart';
+    ensureEditorToolAvailable();
     const smartSelection = this.normalizeSmartSelection();
     const tunnelBackdropSelected = smartSelection.brush.id === WATER_TUNNEL_BRUSH_ID;
 
@@ -2031,7 +2045,9 @@ export class EditorUiBridge {
 
     const multiTileSelection = paletteModeIsTiles && countOccupiedSelectionTiles(editorState.selection) > 1;
     const stampPlacement = isPencilStampPlacement();
-    const showPencilControls = editorState.activeTool === 'pencil' && paletteModeIsTiles;
+    const sprayPlacement = isPencilSprayPlacement();
+    const showPencilControls = editorState.activeTool === 'pencil'
+      && (paletteModeIsTiles || sprayPlacement);
     for (const controls of this.elements.pencilControls) {
       controls.classList.toggle('hidden', !showPencilControls);
     }
@@ -2041,19 +2057,36 @@ export class EditorUiBridge {
     );
     this.doc.querySelector('[data-tool="pencil"][aria-controls="editor-shell-pencil-picker"]')
       ?.setAttribute('aria-expanded', showPencilControls ? 'true' : 'false');
+    for (const label of this.doc.querySelectorAll<HTMLElement>('.editor-pencil-controls .editor-tool-popover-label')) {
+      label.textContent = sprayPlacement ? 'Spray' : 'Draw';
+    }
     for (const button of this.elements.pencilBrushButtons) {
       const active = button.dataset.pencilBrushSize === String(editorState.pencilBrushSize);
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
+    for (const button of this.elements.pencilSprayBrushButtons) {
+      const active = button.dataset.sprayBrushSize === String(editorState.pencilSprayBrushSize);
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
     for (const row of this.doc.querySelectorAll<HTMLElement>('.editor-pencil-size-row')) {
-      row.classList.toggle('hidden', showPencilControls && multiTileSelection && stampPlacement);
+      row.classList.toggle('hidden', !showPencilControls || sprayPlacement || (multiTileSelection && stampPlacement));
+    }
+    for (const row of this.doc.querySelectorAll<HTMLElement>('.editor-pencil-spray-size-row')) {
+      row.classList.toggle('hidden', !(showPencilControls && sprayPlacement));
+    }
+    for (const row of this.doc.querySelectorAll<HTMLElement>('.editor-pencil-spray-rate-row')) {
+      row.classList.toggle('hidden', !(showPencilControls && sprayPlacement));
     }
     for (const row of this.doc.querySelectorAll<HTMLElement>('.editor-pencil-continuous-row')) {
-      row.classList.toggle('hidden', !(showPencilControls && multiTileSelection && stampPlacement));
+      row.classList.toggle('hidden', !(showPencilControls && multiTileSelection && stampPlacement && !sprayPlacement));
     }
     for (const input of this.elements.pencilContinuousInputs) {
       input.checked = editorState.pencilContinuousStamping;
+    }
+    for (const input of this.elements.pencilSprayRateInputs) {
+      input.value = String(editorState.pencilSprayRate);
     }
 
     const showFillControls = editorState.activeTool === 'fill' && paletteModeIsTiles;

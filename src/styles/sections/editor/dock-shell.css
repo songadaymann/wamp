@@ -388,6 +388,11 @@ body[data-editor-dock-shell='true'] .editor-shell-eraser-danger-actions {
   gap: 7px;
 }
 
+body[data-editor-dock-shell='true'] .editor-pencil-spray-size-row {
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+}
+
 body[data-editor-dock-shell='true'] .editor-shell-eraser-danger-actions {
   padding-left: 10px;
   border-left: 3px solid var(--editor-retro-blue);
@@ -431,6 +436,26 @@ body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker button.acti
 body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker button:focus-visible {
   outline: 3px solid var(--editor-retro-yellow);
   outline-offset: 2px;
+}
+
+body[data-editor-dock-shell='true'] .editor-pencil-spray-rate-row {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+body[data-editor-dock-shell='true'] .editor-pencil-spray-rate {
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+
+body[data-editor-dock-shell='true'] .editor-pencil-spray-rate-bound {
+  color: var(--editor-retro-ink);
+  font-family: var(--editor-button-font);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 body[data-editor-dock-shell='true'] .editor-game-icon-spikes {

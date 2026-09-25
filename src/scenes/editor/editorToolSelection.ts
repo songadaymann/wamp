@@ -1,9 +1,15 @@
-import { editorState, TILE_FLIP_MODES, type ShapeFillMode, type TileFlipMode, type ToolName } from '../../config';
+import { getSmartBrushDefinition, isSmartBrushToolSupported } from '../../autotiling/registry';
 import { snapLineEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
-import { getSmartBrushDefinition } from '../../autotiling/registry';
 import { countOccupiedSelectionTiles } from './selectionPattern';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
-import { isSolidCustomSpriteObjectConfig } from '../../config';
+import {
+  TILE_FLIP_MODES,
+  editorState,
+  isSolidCustomSpriteObjectConfig,
+  type ShapeFillMode,
+  type TileFlipMode,
+  type ToolName,
+} from '../../config';
 import { getCustomSpriteDefinitionByObjectId } from '../../customSprites/registry';
 
 export function canRepeatSelectedEditorObject(): boolean {
@@ -39,7 +45,16 @@ export function isShapeFillEditorTool(tool: ToolName): boolean {
   return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill';
 }
 
+export function isPencilSprayPlacement(): boolean {
+  return editorState.activeTool === 'pencil'
+    && editorState.pencilSprayMode
+    && (editorState.paletteMode === 'tiles' || editorState.paletteMode === 'smart');
+}
+
 export function isPencilStampPlacement(): boolean {
+  if (isPencilSprayPlacement()) {
+    return false;
+  }
   if (editorState.paletteMode !== 'tiles') {
     return false;
   }
@@ -50,11 +65,14 @@ export function isPencilStampPlacement(): boolean {
 }
 
 export function isPencilBrushPlacement(): boolean {
+  if (isPencilSprayPlacement()) {
+    return false;
+  }
   return editorState.paletteMode === 'tiles' && !isPencilStampPlacement();
 }
 
 export function getShapeFillUiMode(tool: ToolName = editorState.activeTool): ShapeFillMode {
-  if (tool === 'pencil') {
+  if (tool === 'pencil' && !editorState.pencilSprayMode) {
     return editorState.shapeFillMode;
   }
   return editorState.shapeFillMode === 'shuffle' ? 'shuffle' : 'pattern';
@@ -71,7 +89,7 @@ export function isShapeFillModeAvailable(
     return false;
   }
   if (mode === 'stamp') {
-    return tool === 'pencil';
+    return tool === 'pencil' && !editorState.pencilSprayMode;
   }
   return true;
 }
@@ -84,6 +102,9 @@ export function getShapeFillModeUnavailableTitle(mode: ShapeFillMode): string | 
     return 'Select more than one tile to use Stamp, Pattern, or Shuffle';
   }
   if (mode === 'stamp') {
+    if (editorState.activeTool === 'pencil' && editorState.pencilSprayMode) {
+      return 'Stamp is only available with Draw, not Spray';
+    }
     return 'Stamp is only available with the Draw tool';
   }
   return null;
@@ -121,6 +142,32 @@ export function isEditorToolUnavailable(tool: ToolName): boolean {
   return false;
 }
 
+export function isEditorToolAvailable(tool: ToolName): boolean {
+  if (isEditorToolUnavailable(tool)) {
+    return false;
+  }
+  if (
+    editorState.paletteMode === 'smart'
+    && (tool === 'pencil' || tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill')
+    && !isSmartBrushToolSupported(editorState.smartMaterial, tool)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function ensureEditorToolAvailable(): ToolName {
+  if (isEditorToolAvailable(editorState.activeTool)) {
+    return editorState.activeTool;
+  }
+  const previous = editorState.activeTool;
+  editorState.activeTool = 'pencil';
+  if (previous !== 'pencil') {
+    editorState.pencilSprayMode = false;
+  }
+  return editorState.activeTool;
+}
+
 export function getEditorToolUnavailableTitle(tool: ToolName): string | null {
   if (!isEditorToolUnavailable(tool)) {
     return null;
@@ -153,6 +200,10 @@ export function applyEditorToolSelection(tool: ToolName): void {
   }
   if (editorState.activeTool === tool && tool === 'line') {
     if (!getEditorLineAxis()) editorState.lineCurve = !editorState.lineCurve;
+    return;
+  }
+  if (editorState.activeTool === tool && tool === 'pencil') {
+    editorState.pencilSprayMode = !editorState.pencilSprayMode;
     return;
   }
   if (tool === 'randomize') {
@@ -206,6 +257,9 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
     case 'copy':
       return pastePreviewActive ? 'Paste' : 'Copy';
     case 'pencil':
+      if (isPencilSprayPlacement()) {
+        return `Spray ${editorState.pencilSprayBrushSize}x${editorState.pencilSprayBrushSize}`;
+      }
       return isPencilBrushPlacement() && editorState.pencilBrushSize > 1
         ? `Draw ${editorState.pencilBrushSize}x${editorState.pencilBrushSize}`
         : 'Draw';
@@ -220,6 +274,9 @@ export interface EditorModePipState {
 }
 
 export function getEditorToolModePipState(tool: ToolName): EditorModePipState | null {
+  if (tool === 'pencil') {
+    return { count: 2, activeIndex: editorState.pencilSprayMode ? 1 : 0 };
+  }
   if (tool === 'rect') {
     return { count: 2, activeIndex: editorState.rectOutline ? 1 : 0 };
   }
@@ -246,6 +303,16 @@ export interface EditorToolButtonAppearance {
 }
 
 export function getEditorToolButtonAppearance(tool: ToolName, selected: boolean): EditorToolButtonAppearance | null {
+  if (tool === 'pencil') {
+    return {
+      icon: editorState.pencilSprayMode ? '\u2592' : '\u270E',
+      label: editorState.pencilSprayMode ? 'Spray' : 'Draw',
+      title: editorState.pencilSprayMode
+        ? 'Spray (B or 1); select again to switch to Draw'
+        : 'Draw (B or 1); select again to switch to Spray',
+      dimPart: null,
+    };
+  }
   if (tool === 'rect') {
     return {
       icon: editorState.rectOutline ? '\u25A1' : '\u25A0',

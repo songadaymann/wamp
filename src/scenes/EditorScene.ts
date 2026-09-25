@@ -1008,12 +1008,13 @@ export class EditorScene extends Phaser.Scene {
     this.updateGoalUi();
   }
 
-  update(time: number): void {
+  update(time: number, delta = 16): void {
     this.maybeAutoSave(time);
     this.presenceController.sync();
     this.updateBackgroundPreview();
     this.updateLightingPreview();
     this.updateWeatherPreview();
+    this.interactionController.tickSpray(delta);
     this.updateCursorHighlight();
     this.overlayController.updateLayerGuideOverlay();
     this.overlayController.updatePressurePlateOverlay((graphics) => {
