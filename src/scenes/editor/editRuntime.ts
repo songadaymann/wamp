@@ -131,7 +131,14 @@ import {
   getOrderedSelectionValues,
   pathPatternIndex,
 } from './selectionPattern';
-import { isPencilBrushPlacement } from './editorToolSelection';
+import { isPencilBrushPlacement, isPencilSprayPlacement } from './editorToolSelection';
+import {
+  clampSprayBrushSize,
+  listCircleBrushOffsets,
+  pickSprayEraseOffset,
+  pickSprayOffset,
+  sampleSprayTileValue,
+} from './sprayTiles';
 import {
   buildEditorClipboardState,
   cloneEditorClipboardState,
@@ -912,6 +919,10 @@ export class EditorEditRuntime {
     const localPoint = this.toLocalWorldPoint(worldX, worldY);
     const baseTileX = Math.floor(localPoint.x / TILE_SIZE);
     const baseTileY = Math.floor(localPoint.y / TILE_SIZE);
+    if (isPencilSprayPlacement()) {
+      this.paintPencilSprayAt(worldX, worldY);
+      return;
+    }
     if (editorState.paletteMode === 'smart') {
       this.placeTileStroke([{ x: worldX, y: worldY }]);
       return;
@@ -935,6 +946,177 @@ export class EditorEditRuntime {
         this.writeEncodedTile(layer, tileX, tileY, newGid);
       }
     }
+  }
+
+  private getSprayBrushWindow(worldX: number, worldY: number): {
+    originX: number;
+    originY: number;
+    offsets: Array<{ dx: number; dy: number }>;
+    layer: Phaser.Tilemaps.TilemapLayer | undefined;
+  } {
+    const size = clampSprayBrushSize(editorState.pencilSprayBrushSize);
+    const localPoint = this.toLocalWorldPoint(worldX, worldY);
+    const originX = Math.floor(localPoint.x / TILE_SIZE) - Math.floor(size * 0.5);
+    const originY = Math.floor(localPoint.y / TILE_SIZE) - Math.floor(size * 0.5);
+    const offsets = listCircleBrushOffsets(size).filter((cell) => {
+      const tileX = originX + cell.dx;
+      const tileY = originY + cell.dy;
+      return tileX >= 0 && tileX < ROOM_WIDTH && tileY >= 0 && tileY < ROOM_HEIGHT;
+    });
+    return {
+      originX,
+      originY,
+      offsets,
+      layer: this.host.getLayers().get(editorState.activeLayer),
+    };
+  }
+
+  private getSpraySelectionPool(): number[] {
+    return editorState.shapeFillMode === 'shuffle'
+      ? collectOccupiedSelectionValues(editorState.selection, getSelectionTileValue)
+      : getOrderedSelectionValues(editorState.selection, getSelectionTileValue);
+  }
+
+  private getSmartSprayCell(tileX: number, tileY: number) {
+    const semantic = this.smartTerrain.semanticCells[smartSemanticCellKey(editorState.activeLayer, tileX, tileY)];
+    if (semantic) {
+      return semantic;
+    }
+    const key = smartCellKey(tileX, tileY);
+    if (editorState.activeLayer === 'background') {
+      return this.smartTerrain.backdropCells[key];
+    }
+    if (editorState.activeLayer === 'terrain') {
+      return this.smartTerrain.cells[key];
+    }
+    return undefined;
+  }
+
+  private sprayCellHasGeneratedDecoration(tileX: number, tileY: number): boolean {
+    const key = smartCellKey(tileX, tileY);
+    return Boolean(
+      this.smartTerrain.generatedDecorations[key]
+      || this.smartTerrain.generatedBackgroundDecorations[key],
+    );
+  }
+
+  private sprayCellMatchesSelection(
+    tileX: number,
+    tileY: number,
+    layer: Phaser.Tilemaps.TilemapLayer | undefined,
+    pool: readonly number[],
+  ): boolean {
+    if (editorState.paletteMode === 'smart') {
+      const cell = this.getSmartSprayCell(tileX, tileY);
+      if (!cell) {
+        return false;
+      }
+      const brushId = cell.brushId ?? `${cell.theme}.${cell.material}`;
+      return brushId === editorState.smartMaterial;
+    }
+    const existingTile = layer?.getTileAt(tileX, tileY);
+    if (!existingTile || existingTile.index <= 0) {
+      return false;
+    }
+    const existingGid = decodeTileDataValue(
+      encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY),
+    ).gid;
+    const ignoreFlip = editorState.tileFlipXMode === 'rand' || editorState.tileFlipYMode === 'rand';
+    if (editorState.shapeFillMode === 'shuffle') {
+      return pool.some((value) => decodeTileDataValue(value).gid === existingGid);
+    }
+    const intended = sampleSprayTileValue(tileX, tileY, pool, 'pattern');
+    if (intended < 0) {
+      return false;
+    }
+    if (ignoreFlip) {
+      return decodeTileDataValue(intended).gid === existingGid;
+    }
+    return encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
+      === applyEditorTileFlipModes(intended);
+  }
+
+  private sprayCellIsOccupied(
+    tileX: number,
+    tileY: number,
+    layer: Phaser.Tilemaps.TilemapLayer | undefined,
+  ): boolean {
+    const existing = layer?.getTileAt(tileX, tileY);
+    if (existing && existing.index > 0) {
+      return true;
+    }
+    if (editorState.paletteMode !== 'smart') {
+      return false;
+    }
+    return Boolean(this.getSmartSprayCell(tileX, tileY) || this.sprayCellHasGeneratedDecoration(tileX, tileY));
+  }
+
+  private paintPencilSprayAt(worldX: number, worldY: number): void {
+    const { originX, originY, offsets, layer } = this.getSprayBrushWindow(worldX, worldY);
+    const pool = this.getSpraySelectionPool();
+    const pick = pickSprayOffset(offsets, (dx, dy) => (
+      this.sprayCellMatchesSelection(originX + dx, originY + dy, layer, pool)
+    ));
+    if (!pick) {
+      return;
+    }
+    const tileX = originX + pick.dx;
+    const tileY = originY + pick.dy;
+    if (editorState.paletteMode === 'smart') {
+      this.applySmartDocument(this.smartTiles.applyStrokeCells(this.getSmartDocument(), [{ x: tileX, y: tileY }]));
+      return;
+    }
+    if (!layer) {
+      return;
+    }
+    const value = sampleSprayTileValue(
+      tileX,
+      tileY,
+      pool,
+      editorState.shapeFillMode === 'shuffle' ? 'shuffle' : 'pattern',
+    );
+    this.writeEncodedTile(layer, tileX, tileY, applyEditorTileFlipModes(value));
+  }
+
+  private erasePencilSprayAt(worldX: number, worldY: number): void {
+    const { originX, originY, offsets, layer } = this.getSprayBrushWindow(worldX, worldY);
+    const pick = pickSprayEraseOffset(
+      offsets,
+      (dx, dy) => this.sprayCellIsOccupied(originX + dx, originY + dy, layer),
+      Math.random,
+      (dx, dy) => Boolean(this.getSmartSprayCell(originX + dx, originY + dy)),
+    );
+    if (!pick) {
+      return;
+    }
+    const tileX = originX + pick.dx;
+    const tileY = originY + pick.dy;
+    if (editorState.paletteMode === 'smart') {
+      const key = smartCellKey(tileX, tileY);
+      let document = this.getSmartDocument();
+      const authored = Boolean(this.getSmartSprayCell(tileX, tileY));
+      if (
+        !authored
+        && (
+          document.smartTerrain.generatedDecorations[key]
+          || document.smartTerrain.generatedBackgroundDecorations[key]
+        )
+      ) {
+        document = suppressGeneratedDecorationAt(document, tileX, tileY, editorState.activeLayer);
+      } else {
+        document = this.smartTiles.applyCells(document, [{ x: tileX, y: tileY }], 'erase');
+      }
+      this.applySmartDocument(document);
+      const remaining = layer?.getTileAt(tileX, tileY);
+      if (layer && remaining && remaining.index > 0) {
+        this.eraseLayerCell(layer, tileX, tileY);
+      }
+      return;
+    }
+    if (!layer) {
+      return;
+    }
+    this.eraseLayerCell(layer, tileX, tileY);
   }
 
   private paintPencilBrushAt(
@@ -1127,6 +1309,10 @@ export class EditorEditRuntime {
 
   eraseStampAt(worldX: number, worldY: number): void {
     if (!this.guardEditable()) {
+      return;
+    }
+    if (isPencilSprayPlacement()) {
+      this.erasePencilSprayAt(worldX, worldY);
       return;
     }
     if (editorState.paletteMode === 'smart') {

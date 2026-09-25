@@ -46,7 +46,8 @@
 }
 
 .editor-randomize-brush-button,
-.editor-pencil-brush-button {
+.editor-pencil-brush-button,
+.editor-pencil-spray-brush-button {
   min-width: 36px;
   height: 28px;
   padding: 0 6px;
@@ -60,10 +61,32 @@
 }
 
 .editor-randomize-brush-button.active,
-.editor-pencil-brush-button.active {
+.editor-pencil-brush-button.active,
+.editor-pencil-spray-brush-button.active {
   background: var(--accent-cool-soft);
   border-color: var(--accent-cool);
   color: var(--text);
+}
+
+.editor-pencil-spray-rate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 100%;
+  width: 100%;
+}
+
+.editor-pencil-spray-rate {
+  flex: 1 1 auto;
+  min-width: 72px;
+  accent-color: var(--accent-cool, #2f6b7f);
+}
+
+.editor-pencil-spray-rate-bound {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .editor-shape-fill-controls {

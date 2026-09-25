@@ -34,6 +34,8 @@ export interface EditorUiElements {
   pencilControls: HTMLElement[];
   pencilContinuousInputs: HTMLInputElement[];
     pencilBrushButtons: HTMLButtonElement[];
+    pencilSprayBrushButtons: HTMLButtonElement[];
+    pencilSprayRateInputs: HTMLInputElement[];
     fillControls: HTMLElement[];
   fillIgnoreFlipInputs: HTMLInputElement[];
   shapeFillControls: HTMLElement[];
@@ -231,6 +233,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     pencilControls: all<HTMLElement>(doc, '.editor-pencil-controls'),
     pencilContinuousInputs: all<HTMLInputElement>(doc, '.editor-pencil-continuous'),
     pencilBrushButtons: all<HTMLButtonElement>(doc, '.editor-pencil-brush-button'),
+    pencilSprayBrushButtons: all<HTMLButtonElement>(doc, '.editor-pencil-spray-brush-button'),
+    pencilSprayRateInputs: all<HTMLInputElement>(doc, '.editor-pencil-spray-rate'),
     fillControls: all<HTMLElement>(doc, '.editor-fill-controls'),
     fillIgnoreFlipInputs: all<HTMLInputElement>(doc, '.editor-fill-ignore-flip'),
     shapeFillControls: all<HTMLElement>(doc, '.editor-shape-fill-controls'),

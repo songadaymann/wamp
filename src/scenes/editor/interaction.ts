@@ -22,9 +22,11 @@ import {
   isEditorShapeOutline,
   isPathEditorTool,
   isPencilBrushPlacement,
+  isPencilSprayPlacement,
   isPencilStampPlacement,
 } from './editorToolSelection';
 import { clampRandomizeBrushSize } from './randomizeTiles';
+import { clampSprayBrushSize, createCircleBrushMask, getSprayTilesPerSecond, listCircleBrushOffsets } from './sprayTiles';
 import { forEachDraggedTileCell, resolvePencilStampOrigin } from './stampDrag';
 import { iterateShapeTiles, resolveShapeEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
 
@@ -101,6 +103,7 @@ export class EditorInteractionController {
   private lastObjectDragCell: TilePoint | null = null;
   private tileDragStart: { x: number; y: number } | null = null;
   private lastDraggedStampOrigin: { x: number; y: number } | null = null;
+  private sprayRemainder = 0;
   private spaceDown = false;
   private rectStart: { x: number; y: number } | null = null;
   private shapeEraseActive = false;
@@ -130,6 +133,33 @@ export class EditorInteractionController {
 
   get rectPreviewOverlay(): Phaser.GameObjects.Graphics | null {
     return this.rectPreviewGraphics;
+  }
+
+  tickSpray(deltaMs: number): void {
+    if (!this.isDrawing || !isPencilSprayPlacement()) {
+      this.sprayRemainder = 0;
+      return;
+    }
+    const pointer = this.scene.input.activePointer;
+    const painting = pointer.leftButtonDown();
+    const erasing = pointer.rightButtonDown();
+    if (!painting && !erasing) {
+      return;
+    }
+    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const size = clampSprayBrushSize(editorState.pencilSprayBrushSize);
+    const tilesPerSecond = getSprayTilesPerSecond(size, editorState.pencilSprayRate);
+    this.sprayRemainder += tilesPerSecond * Math.max(0, deltaMs) / 1000;
+    const cellCount = Math.max(1, listCircleBrushOffsets(size).length);
+    const burst = Math.min(cellCount, Math.floor(this.sprayRemainder));
+    this.sprayRemainder -= burst;
+    for (let i = 0; i < burst; i += 1) {
+      if (erasing) {
+        this.host.eraseStampAt(worldPoint.x, worldPoint.y);
+      } else {
+        this.host.placeTileAt(worldPoint.x, worldPoint.y);
+      }
+    }
   }
 
   initializeOverlays(): void {
@@ -222,6 +252,7 @@ export class EditorInteractionController {
     this.lastObjectDragCell = null;
     this.tileDragStart = null;
     this.lastDraggedStampOrigin = null;
+    this.sprayRemainder = 0;
     this.spaceDown = false;
     this.rectStart = null;
     this.shapeEraseActive = false;
@@ -390,6 +421,10 @@ export class EditorInteractionController {
       editorState.activeTool === 'eraser'
         ? editorState.eraserBrushSize
         : 1;
+    const sprayPlacement = editorState.activeTool === 'pencil' && isPencilSprayPlacement();
+    const sprayBrushSize = sprayPlacement
+      ? clampSprayBrushSize(editorState.pencilSprayBrushSize)
+      : 1;
     const pencilBrushSize =
       editorState.activeTool === 'pencil' && isPencilBrushPlacement()
         ? clampRandomizeBrushSize(editorState.pencilBrushSize)
@@ -405,15 +440,19 @@ export class EditorInteractionController {
             x: tileX - Math.floor(eraserBrushSize * 0.5),
             y: tileY - Math.floor(eraserBrushSize * 0.5),
           }
-        : editorState.activeTool === 'randomize' || pencilUsesBrushWindow
+        : editorState.activeTool === 'randomize' || pencilUsesBrushWindow || sprayPlacement
           ? {
-              x: tileX - Math.floor((pencilUsesBrushWindow ? pencilBrushSize : randomizeBrushSize) * 0.5),
-              y: tileY - Math.floor((pencilUsesBrushWindow ? pencilBrushSize : randomizeBrushSize) * 0.5),
+              x: tileX - Math.floor(
+                (sprayPlacement ? sprayBrushSize : pencilUsesBrushWindow ? pencilBrushSize : randomizeBrushSize) * 0.5,
+              ),
+              y: tileY - Math.floor(
+                (sprayPlacement ? sprayBrushSize : pencilUsesBrushWindow ? pencilBrushSize : randomizeBrushSize) * 0.5,
+              ),
             }
         : stampOrigin;
     const cursorW =
       editorState.activeTool === 'pencil'
-        ? (pencilUsesBrushWindow ? pencilBrushSize : selection.width)
+        ? (sprayPlacement ? sprayBrushSize : pencilUsesBrushWindow ? pencilBrushSize : selection.width)
         : editorState.activeTool === 'eraser'
           ? eraserBrushSize
           : editorState.activeTool === 'randomize'
@@ -421,17 +460,19 @@ export class EditorInteractionController {
             : 1;
     const cursorH =
       editorState.activeTool === 'pencil'
-        ? (pencilUsesBrushWindow ? pencilBrushSize : selection.height)
+        ? (sprayPlacement ? sprayBrushSize : pencilUsesBrushWindow ? pencilBrushSize : selection.height)
         : editorState.activeTool === 'eraser'
           ? eraserBrushSize
           : editorState.activeTool === 'randomize'
             ? randomizeBrushSize
             : 1;
-    const pencilMask = pencilUsesBrushWindow
-      ? Array.from({ length: pencilBrushSize }, () => Array.from({ length: pencilBrushSize }, () => true))
-      : editorState.paletteMode === 'smart'
-        ? [[true]]
-        : editorState.selection.occupiedMask;
+    const pencilMask = sprayPlacement
+      ? createCircleBrushMask(sprayBrushSize)
+      : pencilUsesBrushWindow
+        ? Array.from({ length: pencilBrushSize }, () => Array.from({ length: pencilBrushSize }, () => true))
+        : editorState.paletteMode === 'smart'
+          ? [[true]]
+          : editorState.selection.occupiedMask;
 
     if (editorState.activeTool === 'eraser') {
       this.cursorGraphics.lineStyle(2, RETRO_COLORS.danger, 0.85);
@@ -623,7 +664,7 @@ export class EditorInteractionController {
 
       if (this.isDrawing && pointer.leftButtonDown()) {
         const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        if (editorState.activeTool === 'pencil') {
+        if (editorState.activeTool === 'pencil' && !isPencilSprayPlacement()) {
           this.placeDraggedTileStamp(worldPoint.x, worldPoint.y);
         } else if (editorState.activeTool === 'eraser') {
           this.host.eraseTileAt(worldPoint.x, worldPoint.y);
@@ -641,7 +682,7 @@ export class EditorInteractionController {
         if (this.shapeEraseActive && this.rectStart && isDragStampEditorTool(editorState.activeTool)) {
           const end = this.resolvePointerShapeEnd(pointer, worldPoint);
           this.drawActiveStampPreview(this.rectStart.x, this.rectStart.y, end.x, end.y);
-        } else if (!this.shapeEraseActive) {
+        } else if (!this.shapeEraseActive && !isPencilSprayPlacement()) {
           this.eraseWithActiveBrush(worldPoint.x, worldPoint.y);
         }
       }
@@ -1097,7 +1138,7 @@ export class EditorInteractionController {
     }
 
     const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    if (editorState.activeTool === 'pencil') {
+    if (editorState.activeTool === 'pencil' && !isPencilSprayPlacement()) {
       this.placeDraggedTileStamp(worldPoint.x, worldPoint.y);
     } else if (editorState.activeTool === 'eraser') {
       this.host.eraseTileAt(worldPoint.x, worldPoint.y);
@@ -1167,7 +1208,7 @@ export class EditorInteractionController {
   }
 
   private eraseWithActiveBrush(worldX: number, worldY: number): void {
-    if (editorState.activeTool === 'pencil' && editorState.paletteMode === 'tiles') {
+    if (isPencilSprayPlacement() || (editorState.activeTool === 'pencil' && editorState.paletteMode === 'tiles')) {
       this.host.eraseStampAt(worldX, worldY);
       return;
     }
