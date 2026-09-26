@@ -431,7 +431,13 @@ export class CourseEditorScene extends Phaser.Scene {
   };
 
   private readonly handleResize = (): void => {
-    this.fitToScreen();
+    // Dock/tool changes resize the canvas; keep the user's zoom and view center.
+    const camera = this.cameras.main;
+    const centerX = camera.midPoint.x;
+    const centerY = camera.midPoint.y;
+    this.syncCameraBounds();
+    camera.centerOn(centerX, centerY);
+    this.constrainCamera();
     this.renderUi();
   };
 
