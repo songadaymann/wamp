@@ -194,7 +194,7 @@ export class ChatPanelController {
 
     this.elements.form?.setAttribute('autocomplete', 'off');
     this.elements.input?.setAttribute('maxlength', String(CHAT_MESSAGE_MAX_LENGTH));
-    this.elements.input?.setAttribute('autocomplete', 'wamp-world-chat');
+    this.suppressBrowserInputHistory();
     this.elements.toggleButton?.addEventListener('click', this.handleToggleClick);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.form?.addEventListener('submit', this.handleFormSubmit);
@@ -483,6 +483,7 @@ export class ChatPanelController {
     try {
       const message = await sendChatMessage(trimmed);
       this.elements.input.value = '';
+      this.suppressBrowserInputHistory();
       this.appendMessages([message], false);
       playSfx('chat-send');
       this.setStatus('Sent.');
@@ -561,6 +562,19 @@ export class ChatPanelController {
     const response = await fetchChatMessages({ limit: DEFAULT_CHAT_MESSAGE_LIMIT });
     this.historyLoaded = true;
     this.applyChatResponse(response, false);
+  }
+
+  private suppressBrowserInputHistory(): void {
+    const input = this.elements.input;
+    if (!input) {
+      return;
+    }
+
+    // Chrome only treats the literal token "off" as disabling typed-history suggestions.
+    // An unknown token is ignored, which leaves suggestions on. History is also keyed by
+    // the field name, and this input previously matched on id "chat-input".
+    input.autocomplete = 'off';
+    input.name = `wamp-chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   }
 
   private setStatus(message: string): void {
