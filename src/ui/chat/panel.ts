@@ -192,7 +192,9 @@ export class ChatPanelController {
       return;
     }
 
+    this.elements.form?.setAttribute('autocomplete', 'off');
     this.elements.input?.setAttribute('maxlength', String(CHAT_MESSAGE_MAX_LENGTH));
+    this.elements.input?.setAttribute('autocomplete', 'wamp-world-chat');
     this.elements.toggleButton?.addEventListener('click', this.handleToggleClick);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.form?.addEventListener('submit', this.handleFormSubmit);
