@@ -31,6 +31,33 @@ export function getScrollForScreenAnchor(
   );
 }
 
+export interface CameraScreenRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export function clientPointToCameraScreen(
+  clientX: number,
+  clientY: number,
+  canvasRect: CameraScreenRect,
+  viewportWidth: number,
+  viewportHeight: number,
+): { x: number; y: number } | null {
+  if (canvasRect.width <= 0 || canvasRect.height <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
+    return null;
+  }
+
+  const x = ((clientX - canvasRect.left) / canvasRect.width) * viewportWidth;
+  const y = ((clientY - canvasRect.top) / canvasRect.height) * viewportHeight;
+  if (x < 0 || y < 0 || x > viewportWidth || y > viewportHeight) {
+    return null;
+  }
+
+  return { x, y };
+}
+
 export function getMobilePlayFollowOffsetY(
   camera: Phaser.Cameras.Scene2D.Camera,
   layout: DeviceLayoutState,

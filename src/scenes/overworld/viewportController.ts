@@ -4,6 +4,7 @@ import { RETRO_COLORS } from '../../visuals/starfield';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import type { OverworldMode } from '../sceneData';
 import {
+  clientPointToCameraScreen,
   getScreenAnchorWorldPoint as calculateScreenAnchorWorldPoint,
   getScrollForScreenAnchor as calculateScrollForScreenAnchor,
   type CameraMode,
@@ -76,22 +77,19 @@ export class OverworldViewportController {
       return;
     }
 
-    const rect = this.host.scene.game.canvas.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
+    const screenPoint = clientPointToCameraScreen(
+      event.clientX,
+      event.clientY,
+      this.host.scene.game.canvas.getBoundingClientRect(),
+      this.host.scene.scale.width,
+      this.host.scene.scale.height,
+    );
+    if (!screenPoint) {
       return;
     }
 
-    const screenX = ((event.clientX - rect.left) / rect.width) * this.host.scene.scale.width;
-    const screenY = ((event.clientY - rect.top) / rect.height) * this.host.scene.scale.height;
-
-    if (
-      screenX < 0 ||
-      screenX > this.host.scene.scale.width ||
-      screenY < 0 ||
-      screenY > this.host.scene.scale.height
-    ) {
-      return;
-    }
+    const screenX = screenPoint.x;
+    const screenY = screenPoint.y;
 
     event.preventDefault();
 
