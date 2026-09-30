@@ -15,6 +15,7 @@ import {
   clientPointToCameraScreen,
   getScreenAnchorWorldPoint,
   getScrollForScreenAnchor,
+  snapRoundedCameraScroll,
 } from './camera';
 
 describe('clientPointToCameraScreen', () => {
@@ -88,5 +89,71 @@ describe('cursor anchored zoom', () => {
     const anchored = getScreenAnchorWorldPoint(cursor.x, cursor.y, camera as never);
     expect(anchored.x).toBeCloseTo(anchor.x);
     expect(anchored.y).toBeCloseTo(anchor.y);
+  });
+
+  it('does not walk up-left when rounded scroll is snapped before the camera floors it', () => {
+    const screenOf = (worldX: number, worldY: number, camera: {
+      scrollX: number;
+      scrollY: number;
+      width: number;
+      height: number;
+      zoom: number;
+    }) => ({
+      x: (worldX - camera.scrollX - camera.width * 0.5) * camera.zoom + camera.width * 0.5,
+      y: (worldY - camera.scrollY - camera.height * 0.5) * camera.zoom + camera.height * 0.5,
+    });
+
+    const createCamera = () => {
+      const camera = {
+        x: 0,
+        y: 0,
+        width: 1020,
+        height: 640,
+        originX: 0.5,
+        originY: 0.5,
+        scrollX: 80.6,
+        scrollY: 40.2,
+        zoom: 1,
+        roundPixels: true,
+        displayWidth: 1020,
+        displayHeight: 640,
+        setZoom(zoom: number) {
+          this.zoom = zoom;
+          this.displayWidth = this.width / zoom;
+          this.displayHeight = this.height / zoom;
+        },
+        setScroll(x: number, y: number) {
+          this.scrollX = x;
+          this.scrollY = y;
+        },
+      };
+      return camera;
+    };
+
+    const zoomAroundCursor = (camera: ReturnType<typeof createCamera>, snap: 'floor' | 'nearest') => {
+      const cursor = { x: 333, y: 210 };
+      const fixed = getScreenAnchorWorldPoint(cursor.x, cursor.y, camera as never);
+      for (let step = 0; step < 30; step += 1) {
+        for (const factor of [1.08, 1 / 1.08]) {
+          const anchor = getScreenAnchorWorldPoint(cursor.x, cursor.y, camera as never);
+          camera.setZoom(Number((camera.zoom * factor).toFixed(3)));
+          const nextScroll = getScrollForScreenAnchor(anchor.x, anchor.y, cursor.x, cursor.y, camera as never);
+          camera.setScroll(nextScroll.x, nextScroll.y);
+          if (snap === 'floor') {
+            camera.setScroll(Math.floor(camera.scrollX), Math.floor(camera.scrollY));
+          } else {
+            snapRoundedCameraScroll(camera as never);
+          }
+        }
+      }
+      return screenOf(fixed.x, fixed.y, camera);
+    };
+
+    const floored = zoomAroundCursor(createCamera(), 'floor');
+    const snapped = zoomAroundCursor(createCamera(), 'nearest');
+    expect(floored.x - 333).toBeGreaterThan(10);
+    expect(floored.y - 210).toBeGreaterThan(10);
+    expect(Math.abs(snapped.x - 333)).toBeLessThan(1);
+    expect(Math.abs(snapped.y - 210)).toBeLessThan(1);
   });
 });

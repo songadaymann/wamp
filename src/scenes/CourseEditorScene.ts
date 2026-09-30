@@ -126,6 +126,7 @@ import {
   constrainInspectCamera,
   getScrollForScreenAnchor,
   getScreenAnchorWorldPoint,
+  snapRoundedCameraScroll,
 } from './overworld/camera';
 import { RETRO_COLORS } from '../visuals/starfield';
 import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
@@ -697,7 +698,9 @@ export class CourseEditorScene extends Phaser.Scene {
     this.containerGraphics = this.add.graphics();
     this.containerGraphics.setDepth(124);
     this.musicPatternController.create();
-    this.cameras.main.setRoundPixels(true);
+    // The game enables roundPixels on every camera. That floors scroll up and left
+    // after each zoom, so the cursor anchor walks. Leave this camera on fractional scroll.
+    this.cameras.main.setRoundPixels(false);
     this.events.on('wake', this.handleWake, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.scale.on('resize', this.handleResize, this);
@@ -3050,6 +3053,7 @@ export class CourseEditorScene extends Phaser.Scene {
     const nextScroll = getScrollForScreenAnchor(anchor.x, anchor.y, screenX, screenY, camera);
     camera.setScroll(nextScroll.x, nextScroll.y);
     this.constrainCamera();
+    snapRoundedCameraScroll(camera);
     this.renderUi();
   }
 

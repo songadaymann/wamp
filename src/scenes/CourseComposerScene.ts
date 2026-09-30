@@ -59,6 +59,7 @@ import {
   getFitZoomForRoom,
   getScrollForScreenAnchor,
   getScreenAnchorWorldPoint,
+  snapRoundedCameraScroll,
 } from './overworld/camera';
 import { OverworldWorldStreamingController } from './overworld/worldStreaming';
 import type { CourseComposerSceneData, EditorSceneData, OverworldPlaySceneData } from './sceneData';
@@ -1403,6 +1404,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     );
     camera.setScroll(nextScroll.x, nextScroll.y);
     this.constrainInspectCamera();
+    snapRoundedCameraScroll(camera);
     this.centerCoordinates = this.getCameraCenterCoordinates();
     void this.refreshAround(this.centerCoordinates);
   }

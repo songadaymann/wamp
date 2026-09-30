@@ -58,6 +58,18 @@ export function clientPointToCameraScreen(
   return { x, y };
 }
 
+/**
+ * Round-pixel cameras floor scroll toward negative infinity every frame.
+ * Cursor zoom has to land on whole pixels first, or that floor walks the view up and left.
+ */
+export function snapRoundedCameraScroll(camera: Phaser.Cameras.Scene2D.Camera): void {
+  if (!camera.roundPixels) {
+    return;
+  }
+
+  camera.setScroll(Math.round(camera.scrollX), Math.round(camera.scrollY));
+}
+
 export function getMobilePlayFollowOffsetY(
   camera: Phaser.Cameras.Scene2D.Camera,
   layout: DeviceLayoutState,
