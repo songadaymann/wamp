@@ -53,7 +53,14 @@ import {
   COURSE_COMPOSER_STATE_CHANGED_EVENT,
   type CourseComposerSceneBridge,
 } from '../ui/setup/sceneBridge';
-import { constrainInspectCamera, getFitZoomForRoom, getScrollForScreenAnchor, getScreenAnchorWorldPoint } from './overworld/camera';
+import {
+  clientPointToCameraScreen,
+  constrainInspectCamera,
+  getFitZoomForRoom,
+  getScrollForScreenAnchor,
+  getScreenAnchorWorldPoint,
+  snapRoundedCameraScroll,
+} from './overworld/camera';
 import { OverworldWorldStreamingController } from './overworld/worldStreaming';
 import type { CourseComposerSceneData, EditorSceneData, OverworldPlaySceneData } from './sceneData';
 
@@ -121,9 +128,20 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       return;
     }
 
+    const screenPoint = clientPointToCameraScreen(
+      event.clientX,
+      event.clientY,
+      this.game.canvas.getBoundingClientRect(),
+      this.scale.width,
+      this.scale.height,
+    );
+    if (!screenPoint) {
+      return;
+    }
+
     event.preventDefault();
     const zoomFactor = Phaser.Math.Clamp(Math.exp(-event.deltaY * 0.0018), 0.92, 1.08);
-    this.adjustZoomByFactor(zoomFactor, event.clientX, event.clientY);
+    this.adjustZoomByFactor(zoomFactor, screenPoint.x, screenPoint.y);
   };
 
   create(data?: CourseComposerSceneData): void {
@@ -1386,6 +1404,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     );
     camera.setScroll(nextScroll.x, nextScroll.y);
     this.constrainInspectCamera();
+    snapRoundedCameraScroll(camera);
     this.centerCoordinates = this.getCameraCenterCoordinates();
     void this.refreshAround(this.centerCoordinates);
   }

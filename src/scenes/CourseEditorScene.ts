@@ -121,7 +121,13 @@ import {
 } from './editor/musicWorkflow';
 import { getCourseGoalSummaryText } from './editor/courseEditing';
 import type { CourseComposerSceneData, CourseEditorSceneData, OverworldPlaySceneData } from './sceneData';
-import { constrainInspectCamera, getScrollForScreenAnchor, getScreenAnchorWorldPoint } from './overworld/camera';
+import {
+  clientPointToCameraScreen,
+  constrainInspectCamera,
+  getScrollForScreenAnchor,
+  getScreenAnchorWorldPoint,
+  snapRoundedCameraScroll,
+} from './overworld/camera';
 import { RETRO_COLORS } from '../visuals/starfield';
 import { cloneRoomLightingSettings, type RoomLightingSettings } from '../lighting/model';
 import { cloneRoomWeatherSettings, type RoomWeatherSettings } from '../weather/model';
@@ -446,9 +452,20 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
+    const screenPoint = clientPointToCameraScreen(
+      event.clientX,
+      event.clientY,
+      this.game.canvas.getBoundingClientRect(),
+      this.scale.width,
+      this.scale.height,
+    );
+    if (!screenPoint) {
+      return;
+    }
+
     event.preventDefault();
     const zoomFactor = Phaser.Math.Clamp(Math.exp(-event.deltaY * 0.0018), 0.92, 1.08);
-    this.adjustZoomByFactor(zoomFactor, event.clientX, event.clientY);
+    this.adjustZoomByFactor(zoomFactor, screenPoint.x, screenPoint.y);
   };
 
   constructor() {
@@ -681,7 +698,9 @@ export class CourseEditorScene extends Phaser.Scene {
     this.containerGraphics = this.add.graphics();
     this.containerGraphics.setDepth(124);
     this.musicPatternController.create();
-    this.cameras.main.setRoundPixels(true);
+    // The game enables roundPixels on every camera. That floors scroll up and left
+    // after each zoom, so the cursor anchor walks. Leave this camera on fractional scroll.
+    this.cameras.main.setRoundPixels(false);
     this.events.on('wake', this.handleWake, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.scale.on('resize', this.handleResize, this);
@@ -2989,16 +3008,19 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private syncCameraBounds(): void {
     const size = getCourseWorkspacePixelSize(this.workspaceBounds);
-    const zoom = Math.max(this.cameras.main.zoom || this.inspectZoom, MIN_ZOOM);
-    const visibleWidth = this.scale.width / zoom;
-    const visibleHeight = this.scale.height / zoom;
-    const dynamicMargin = Math.max(TILE_SIZE * 8, Math.max(visibleWidth, visibleHeight) * 0.35);
-    const margin = Math.min(dynamicMargin, Math.max(ROOM_PX_WIDTH, ROOM_PX_HEIGHT) * 2);
-    this.cameras.main.setBounds(
-      -margin,
-      -margin,
-      size.width + margin * 2,
-      size.height + margin * 2,
+    const camera = this.cameras.main;
+    const zoom = Math.max(camera.zoom || this.inspectZoom, MIN_ZOOM);
+    const visibleWidth = camera.width / zoom;
+    const visibleHeight = camera.height / zoom;
+    // The pan margin has to cover the whole viewport. A smaller margin clamps
+    // scroll while zooming out and pulls the view back toward the workspace center.
+    const marginX = Math.max(TILE_SIZE * 8, visibleWidth) + 4;
+    const marginY = Math.max(TILE_SIZE * 8, visibleHeight) + 4;
+    camera.setBounds(
+      -marginX,
+      -marginY,
+      size.width + marginX * 2,
+      size.height + marginY * 2,
     );
   }
 
@@ -3031,6 +3053,7 @@ export class CourseEditorScene extends Phaser.Scene {
     const nextScroll = getScrollForScreenAnchor(anchor.x, anchor.y, screenX, screenY, camera);
     camera.setScroll(nextScroll.x, nextScroll.y);
     this.constrainCamera();
+    snapRoundedCameraScroll(camera);
     this.renderUi();
   }
 
