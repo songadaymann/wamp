@@ -16,7 +16,27 @@ export interface RoomCameraFitPlan {
   zoom: number;
   scrollX: number;
   scrollY: number;
+  roomScreenX: number;
+  roomScreenY: number;
+  roomScreenWidth: number;
+  roomScreenHeight: number;
 }
+
+export interface WorldInset {
+  left?: number;
+  top?: number;
+  right?: number;
+  bottom?: number;
+}
+
+/** Drum row names are drawn just left of the room grid. */
+export const MUSIC_ROOM_LABEL_GUTTER = 72;
+/** Keep a strip of each neighboring room in frame. */
+export const MUSIC_ROOM_NEIGHBOR_PEEK = 48;
+/** Phrase column used to reserve camera space. The panel may draw wider, up to the drum names. */
+const MUSIC_WORKBENCH_COLUMN = 260;
+/** Widest drum short-label is 32px and ends 8px left of the grid, plus a small gap. */
+const MUSIC_LABEL_CLEARANCE = 8 + 32 + 6;
 
 const VIEW_PADDING = 10;
 const MIN_ZOOM = 0.05;
@@ -93,9 +113,10 @@ export function resolveMusicRoomViewport(input: {
     workbench
     && overlaps(workbench, canvasGame)
     && workbench.left < input.gameWidth * 0.45
-    && workbench.right < input.gameWidth * 0.6
+    && workbench.right < input.gameWidth * 0.75
   ) {
-    left = Math.max(left, workbench.right);
+    const columnRight = workbench.left + MUSIC_WORKBENCH_COLUMN * scaleX;
+    left = Math.max(left, Math.min(workbench.right, columnRight));
   }
 
   const x = left + VIEW_PADDING;
@@ -119,27 +140,93 @@ export function planRoomCameraFit(input: {
   roomWidth: number;
   roomHeight: number;
   viewport: SizeBox;
+  worldInset?: WorldInset;
 }): RoomCameraFitPlan {
+  const insetLeft = input.worldInset?.left ?? 0;
+  const insetTop = input.worldInset?.top ?? 0;
+  const insetRight = input.worldInset?.right ?? 0;
+  const insetBottom = input.worldInset?.bottom ?? 0;
+  const frameX = input.roomX - insetLeft;
+  const frameY = input.roomY - insetTop;
+  const frameWidth = input.roomWidth + insetLeft + insetRight;
+  const frameHeight = input.roomHeight + insetTop + insetBottom;
   const zoom = Math.max(
     MIN_ZOOM,
-    Math.min(MAX_ZOOM, input.viewport.width / input.roomWidth, input.viewport.height / input.roomHeight),
+    Math.min(MAX_ZOOM, input.viewport.width / frameWidth, input.viewport.height / frameHeight),
   );
-  const roomScreenWidth = input.roomWidth * zoom;
-  const roomScreenHeight = input.roomHeight * zoom;
-  const screenX = input.viewport.x + (input.viewport.width - roomScreenWidth) * 0.5;
-  const screenY = input.viewport.y + (input.viewport.height - roomScreenHeight) * 0.5;
+  const frameScreenWidth = frameWidth * zoom;
+  const frameScreenHeight = frameHeight * zoom;
+  const frameScreenX = input.viewport.x + (input.viewport.width - frameScreenWidth) * 0.5;
+  const frameScreenY = input.viewport.y + (input.viewport.height - frameScreenHeight) * 0.5;
   const displayWidth = input.cameraWidth / zoom;
   const displayHeight = input.cameraHeight / zoom;
 
   return {
     zoom,
     scrollX: Math.round(
-      input.roomX - input.cameraWidth * input.originX + displayWidth * 0.5 - screenX / zoom,
+      frameX - input.cameraWidth * input.originX + displayWidth * 0.5 - frameScreenX / zoom,
     ),
     scrollY: Math.round(
-      input.roomY - input.cameraHeight * input.originY + displayHeight * 0.5 - screenY / zoom,
+      frameY - input.cameraHeight * input.originY + displayHeight * 0.5 - frameScreenY / zoom,
     ),
+    roomScreenX: frameScreenX + insetLeft * zoom,
+    roomScreenY: frameScreenY + insetTop * zoom,
+    roomScreenWidth: input.roomWidth * zoom,
+    roomScreenHeight: input.roomHeight * zoom,
   };
+}
+
+export function resizeScaleToElement(
+  scale: { width: number; height: number; resize: (width: number, height: number) => void },
+  element: { clientWidth: number; clientHeight: number } | null,
+): void {
+  if (!element) {
+    return;
+  }
+
+  const width = Math.round(element.clientWidth);
+  const height = Math.round(element.clientHeight);
+  if (width <= 0 || height <= 0 || (scale.width === width && scale.height === height)) {
+    return;
+  }
+
+  scale.resize(width, height);
+}
+
+export function syncMusicWorkbenchFrame(
+  canvas: HTMLCanvasElement,
+  gameWidth: number,
+  gameHeight: number,
+  plan: RoomCameraFitPlan,
+): void {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = rect.width / Math.max(1, gameWidth);
+  const scaleY = rect.height / Math.max(1, gameHeight);
+  const roomTop = rect.top + plan.roomScreenY * scaleY;
+  const roomHeight = plan.roomScreenHeight * scaleY;
+  const workbench = canvas.ownerDocument.getElementById('editor-music-workbench');
+  const panelLeft = workbench?.getBoundingClientRect().left ?? rect.left + 10;
+  const gutterLeft = rect.left + (plan.roomScreenX - MUSIC_ROOM_LABEL_GUTTER * plan.zoom) * scaleX;
+  const nameLeft = rect.left + (plan.roomScreenX - MUSIC_LABEL_CLEARANCE * plan.zoom) * scaleX;
+  const designRight = panelLeft + MUSIC_WORKBENCH_COLUMN;
+  const nameLimit = nameLeft - 4;
+  let panelRight = designRight;
+  if (nameLimit < designRight) {
+    panelRight = Math.max(panelLeft + 168, nameLimit);
+  } else if (gutterLeft <= designRight + 36) {
+    panelRight = Math.min(nameLimit, designRight + 96);
+  }
+  const panelWidth = panelRight - panelLeft;
+  const root = canvas.ownerDocument.body;
+  root.style.setProperty('--editor-music-room-top', `${Math.round(roomTop)}px`);
+  root.style.setProperty('--editor-music-room-height', `${Math.round(Math.max(1, roomHeight))}px`);
+  root.style.setProperty('--editor-music-workbench-width', `${Math.round(panelWidth)}px`);
+}
+
+export function clearMusicWorkbenchFrame(doc: Document = document): void {
+  doc.body.style.removeProperty('--editor-music-room-top');
+  doc.body.style.removeProperty('--editor-music-room-height');
+  doc.body.style.removeProperty('--editor-music-workbench-width');
 }
 
 function visibleAxisBox(element: HTMLElement | null): AxisBox | null {
@@ -176,7 +263,7 @@ export function readMusicRoomViewport(
     },
     gameWidth,
     gameHeight,
-    shell: visibleAxisBox(doc.getElementById('editor-music-shell')),
+    shell: visibleAxisBox(doc.querySelector<HTMLElement>('.editor-music-shell')),
     workbench: visibleAxisBox(doc.getElementById('editor-music-workbench')),
   });
 }
@@ -209,6 +296,12 @@ export class MusicRoomFitController {
       this.observe(apply);
     }
     apply();
+    const generation = this.generation;
+    requestAnimationFrame(() => {
+      if (this.generation === generation && this.active) {
+        apply();
+      }
+    });
   }
 
   stop(): void {
@@ -229,7 +322,11 @@ export class MusicRoomFitController {
         apply();
       }
     });
-    for (const id of ['editor-music-shell', 'editor-music-workbench', 'game-container']) {
+    const shell = doc.querySelector<HTMLElement>('.editor-music-shell');
+    if (shell) {
+      this.observer.observe(shell);
+    }
+    for (const id of ['editor-music-workbench', 'game-container']) {
       const element = doc.getElementById(id);
       if (element) {
         this.observer.observe(element);

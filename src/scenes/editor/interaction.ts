@@ -30,9 +30,14 @@ import { clampSprayBrushSize, createCircleBrushMask, getSprayTilesPerSecond, lis
 import { forEachDraggedTileCell, resolvePencilStampOrigin } from './stampDrag';
 import { iterateShapeTiles, resolveShapeEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
 import {
+  clearMusicWorkbenchFrame,
+  MUSIC_ROOM_LABEL_GUTTER,
+  MUSIC_ROOM_NEIGHBOR_PEEK,
   MusicRoomFitController,
   planRoomCameraFit,
   readMusicRoomViewport,
+  resizeScaleToElement,
+  syncMusicWorkbenchFrame,
 } from './musicRoomFit';
 
 function isPointerShiftDown(pointer: Phaser.Input.Pointer): boolean {
@@ -121,6 +126,7 @@ export class EditorInteractionController {
   private pinchAnchorWorld = { x: 0, y: 0 };
   private hasUserAdjustedCamera = false;
   private readonly musicRoomFit = new MusicRoomFitController();
+  private musicFitLock = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -320,6 +326,7 @@ export class EditorInteractionController {
       this.host.isMusicModeActive(),
       () => this.applyMusicRoomFit(),
       () => {
+        clearMusicWorkbenchFrame();
         if (!this.host.isMusicModeActive()) {
           this.fitToScreen({ markManualAdjustment: false });
         }
@@ -328,32 +335,45 @@ export class EditorInteractionController {
   }
 
   private applyMusicRoomFit(): void {
-    if (!this.host.isMusicModeActive()) {
+    if (!this.host.isMusicModeActive() || this.musicFitLock) {
       return;
     }
 
-    const camera = this.scene.cameras.main;
-    const viewport = readMusicRoomViewport(
-      this.scene.game.canvas,
-      document,
-      camera.width,
-      camera.height,
-    );
-    const plan = planRoomCameraFit({
-      cameraWidth: camera.width,
-      cameraHeight: camera.height,
-      originX: camera.originX,
-      originY: camera.originY,
-      roomX: 0,
-      roomY: 0,
-      roomWidth: ROOM_PX_WIDTH,
-      roomHeight: ROOM_PX_HEIGHT,
-      viewport,
-    });
-    editorState.zoom = plan.zoom;
-    camera.setZoom(plan.zoom);
-    camera.setScroll(plan.scrollX, plan.scrollY);
-    this.host.updateBackgroundPreview();
+    this.musicFitLock = true;
+    try {
+      resizeScaleToElement(this.scene.scale, document.getElementById('game-container'));
+      const camera = this.scene.cameras.main;
+      const viewport = readMusicRoomViewport(
+        this.scene.game.canvas,
+        document,
+        camera.width,
+        camera.height,
+      );
+      const plan = planRoomCameraFit({
+        cameraWidth: camera.width,
+        cameraHeight: camera.height,
+        originX: camera.originX,
+        originY: camera.originY,
+        roomX: 0,
+        roomY: 0,
+        roomWidth: ROOM_PX_WIDTH,
+        roomHeight: ROOM_PX_HEIGHT,
+        viewport,
+        worldInset: {
+          left: MUSIC_ROOM_LABEL_GUTTER,
+          top: MUSIC_ROOM_NEIGHBOR_PEEK,
+          right: MUSIC_ROOM_NEIGHBOR_PEEK,
+          bottom: MUSIC_ROOM_NEIGHBOR_PEEK,
+        },
+      });
+      editorState.zoom = plan.zoom;
+      camera.setZoom(plan.zoom);
+      camera.setScroll(plan.scrollX, plan.scrollY);
+      syncMusicWorkbenchFrame(this.scene.game.canvas, camera.width, camera.height, plan);
+      this.host.updateBackgroundPreview();
+    } finally {
+      this.musicFitLock = false;
+    }
   }
 
   fitToScreen(options: { markManualAdjustment?: boolean } = {}): void {

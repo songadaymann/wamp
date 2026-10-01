@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planRoomCameraFit, resolveMusicRoomViewport } from './musicRoomFit';
+import { MUSIC_ROOM_LABEL_GUTTER, MUSIC_ROOM_NEIGHBOR_PEEK, planRoomCameraFit, resolveMusicRoomViewport } from './musicRoomFit';
 
 const canvas = { left: 0, top: 0, right: 1000, bottom: 600 };
 
@@ -26,6 +26,21 @@ describe('resolveMusicRoomViewport', () => {
       gameHeight: 600,
       shell: { left: 20, top: 8, right: 980, bottom: 140 },
       workbench: { left: 12, top: 160, right: 272, bottom: 560 },
+    })).toEqual({
+      x: 282,
+      y: 150,
+      width: 708,
+      height: 440,
+    });
+  });
+
+  it('does not let a wider phrase library push the room out of the window', () => {
+    expect(resolveMusicRoomViewport({
+      canvas,
+      gameWidth: 1000,
+      gameHeight: 600,
+      shell: { left: 20, top: 8, right: 980, bottom: 140 },
+      workbench: { left: 12, top: 160, right: 420, bottom: 560 },
     })).toEqual({
       x: 282,
       y: 150,
@@ -75,5 +90,31 @@ describe('planRoomCameraFit', () => {
     const worldY = plan.scrollY + 600 * 0.5 - displayHeight * 0.5 + screenY / zoom;
     expect(worldX).toBeCloseTo(0, 0);
     expect(worldY).toBeCloseTo(0, 0);
+  });
+
+  it('keeps neighboring rooms and the drum-name gutter inside the frame', () => {
+    const viewport = { x: 280, y: 140, width: 1500, height: 760 };
+    const plan = planRoomCameraFit({
+      cameraWidth: 1900,
+      cameraHeight: 1000,
+      originX: 0.5,
+      originY: 0.5,
+      roomX: 0,
+      roomY: 0,
+      roomWidth: 640,
+      roomHeight: 352,
+      viewport,
+      worldInset: {
+        left: MUSIC_ROOM_LABEL_GUTTER,
+        top: MUSIC_ROOM_NEIGHBOR_PEEK,
+        right: MUSIC_ROOM_NEIGHBOR_PEEK,
+        bottom: MUSIC_ROOM_NEIGHBOR_PEEK,
+      },
+    });
+    const frameWidth = 640 + MUSIC_ROOM_LABEL_GUTTER + MUSIC_ROOM_NEIGHBOR_PEEK;
+    const frameHeight = 352 + MUSIC_ROOM_NEIGHBOR_PEEK * 2;
+    expect(plan.zoom).toBeCloseTo(Math.min(viewport.width / frameWidth, viewport.height / frameHeight));
+    expect(plan.roomScreenX).toBeGreaterThan(viewport.x + MUSIC_ROOM_LABEL_GUTTER * plan.zoom - 1);
+    expect(plan.roomScreenY).toBeGreaterThan(viewport.y + MUSIC_ROOM_NEIGHBOR_PEEK * plan.zoom - 1);
   });
 });

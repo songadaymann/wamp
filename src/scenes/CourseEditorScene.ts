@@ -113,9 +113,14 @@ import {
 } from './editor/editRuntime';
 import { EditorMusicPatternController } from './editor/musicPatternEditor';
 import {
+  clearMusicWorkbenchFrame,
+  MUSIC_ROOM_LABEL_GUTTER,
+  MUSIC_ROOM_NEIGHBOR_PEEK,
   MusicRoomFitController,
   planRoomCameraFit,
   readMusicRoomViewport,
+  resizeScaleToElement,
+  syncMusicWorkbenchFrame,
 } from './editor/musicRoomFit';
 import {
   type EditorMusicComposerMode,
@@ -214,6 +219,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private readonly musicPatternController: EditorMusicPatternController;
   private readonly musicWorkflow: EditorMusicWorkflowCoordinator;
   private readonly musicRoomFit = new MusicRoomFitController();
+  private musicFitLock = false;
   private selectedRoomId: string | null = null;
   private loading = false;
   private statusText: string | null = null;
@@ -945,6 +951,7 @@ export class CourseEditorScene extends Phaser.Scene {
       this.musicModeActive && !this.isShuttingDown,
       () => this.applyMusicRoomFit(),
       () => {
+        clearMusicWorkbenchFrame();
         if (!this.musicModeActive && !this.isShuttingDown) {
           this.fitToScreen();
         }
@@ -953,7 +960,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private applyMusicRoomFit(): void {
-    if (!this.musicModeActive || this.isShuttingDown) {
+    if (!this.musicModeActive || this.isShuttingDown || this.musicFitLock) {
       return;
     }
 
@@ -963,26 +970,39 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
-    const viewport = readMusicRoomViewport(
-      this.game.canvas,
-      document,
-      camera.width,
-      camera.height,
-    );
-    const plan = planRoomCameraFit({
-      cameraWidth: camera.width,
-      cameraHeight: camera.height,
-      originX: camera.originX,
-      originY: camera.originY,
-      roomX: slice.origin.x,
-      roomY: slice.origin.y,
-      roomWidth: ROOM_PX_WIDTH,
-      roomHeight: ROOM_PX_HEIGHT,
-      viewport,
-    });
-    this.inspectZoom = plan.zoom;
-    camera.setZoom(plan.zoom);
-    camera.setScroll(plan.scrollX, plan.scrollY);
+    this.musicFitLock = true;
+    try {
+      resizeScaleToElement(this.scale, document.getElementById('game-container'));
+      const viewport = readMusicRoomViewport(
+        this.game.canvas,
+        document,
+        camera.width,
+        camera.height,
+      );
+      const plan = planRoomCameraFit({
+        cameraWidth: camera.width,
+        cameraHeight: camera.height,
+        originX: camera.originX,
+        originY: camera.originY,
+        roomX: slice.origin.x,
+        roomY: slice.origin.y,
+        roomWidth: ROOM_PX_WIDTH,
+        roomHeight: ROOM_PX_HEIGHT,
+        viewport,
+        worldInset: {
+          left: MUSIC_ROOM_LABEL_GUTTER,
+          top: MUSIC_ROOM_NEIGHBOR_PEEK,
+          right: MUSIC_ROOM_NEIGHBOR_PEEK,
+          bottom: MUSIC_ROOM_NEIGHBOR_PEEK,
+        },
+      });
+      this.inspectZoom = plan.zoom;
+      camera.setZoom(plan.zoom);
+      camera.setScroll(plan.scrollX, plan.scrollY);
+      syncMusicWorkbenchFrame(this.game.canvas, camera.width, camera.height, plan);
+    } finally {
+      this.musicFitLock = false;
+    }
   }
 
   fitToScreen(): void {
