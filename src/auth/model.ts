@@ -51,6 +51,12 @@ export interface MagicLinkRequestResponse {
   delivery: 'email' | 'debug';
   purpose: 'sign_in' | 'link_email';
   debugMagicLink?: string;
+  debugCode?: string;
+}
+
+export interface EmailCodeVerifyBody {
+  email: string;
+  code: string;
 }
 
 export interface WalletChallengeRequestBody {

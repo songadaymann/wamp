@@ -146,6 +146,11 @@ let authStatus: HTMLElement | null = null;
 let authSessionSummary: HTMLElement | null = null;
 let authSessionSummaryValue: HTMLElement | null = null;
 let authDebugLink: HTMLAnchorElement | null = null;
+let emailCodeModal: HTMLElement | null = null;
+let emailCodeInput: HTMLInputElement | null = null;
+let emailCodeStatus: HTMLElement | null = null;
+let pendingEmailCodeAddress = '';
+let pendingDebugEmailCode = '';
 let appKit: AppKit | null = null;
 let walletBootstrapPromise: Promise<AppKit> | null = null;
 let sessionRefreshListenersBound = false;
@@ -187,6 +192,9 @@ export async function setupAuthUi(): Promise<void> {
   authEmailRow = document.getElementById('auth-email-row');
   authEmailInput = document.getElementById('auth-email-input') as HTMLInputElement | null;
   authEmailButton = document.getElementById('btn-auth-email') as HTMLButtonElement | null;
+  document.getElementById('btn-auth-enter-code')?.addEventListener('click', () => {
+    if (pendingEmailCodeAddress) openEmailCodeModal(pendingEmailCodeAddress, pendingDebugEmailCode);
+  });
   authWalletButton = document.getElementById('btn-auth-wallet') as HTMLButtonElement | null;
   authLogoutButton = document.getElementById('btn-auth-logout') as HTMLButtonElement | null;
   authDisplayNameRow = document.getElementById('auth-display-name-row');
@@ -198,6 +206,20 @@ export async function setupAuthUi(): Promise<void> {
   authSessionSummary = document.getElementById('auth-session-summary');
   authSessionSummaryValue = document.getElementById('auth-session-summary-value');
   authDebugLink = document.getElementById('auth-debug-link') as HTMLAnchorElement | null;
+  emailCodeModal = document.getElementById('email-code-modal');
+  emailCodeInput = document.getElementById('email-code-input') as HTMLInputElement | null;
+  emailCodeStatus = document.getElementById('email-code-status');
+  document.getElementById('email-code-close')?.addEventListener('click', closeEmailCodeModal);
+  emailCodeModal?.addEventListener('click', (event) => {
+    if (event.target === emailCodeModal) closeEmailCodeModal();
+  });
+  document.getElementById('email-code-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void verifyEmailCode();
+  });
+  emailCodeInput?.addEventListener('input', () => {
+    if (emailCodeInput) emailCodeInput.value = emailCodeInput.value.replace(/\D/g, '').slice(0, 6);
+  });
 
   if (!authPanel) {
     return;
@@ -566,11 +588,12 @@ async function requestMagicLink(): Promise<void> {
     });
 
     state.debugMagicLink = normalizeDebugMagicLink(response.debugMagicLink);
+    openEmailCodeModal(email, response.debugCode);
     state.status =
       response.delivery === 'email'
         ? response.purpose === 'link_email'
-          ? 'Check your email to finish adding it to this account.'
-          : 'Check your email for the sign-in link.'
+          ? 'Check your email for a code or link to finish adding it.'
+          : 'Check your email for a sign-in code or link.'
         : response.purpose === 'link_email'
           ? 'Debug email verification link generated below.'
           : 'Debug sign-in link generated below.';
@@ -579,6 +602,57 @@ async function requestMagicLink(): Promise<void> {
     state.status = getErrorMessage(error, 'Failed to send sign-in link.');
   } finally {
     setLoading(false);
+  }
+}
+
+function openEmailCodeModal(email: string, debugCode?: string): void {
+  pendingEmailCodeAddress = email;
+  pendingDebugEmailCode = debugCode ?? '';
+  document.getElementById('btn-auth-enter-code')?.classList.remove('hidden');
+  if (emailCodeInput) emailCodeInput.value = '';
+  const address = document.getElementById('email-code-address');
+  if (address) address.textContent = email;
+  if (emailCodeStatus) emailCodeStatus.textContent = debugCode
+    ? `Debug code: ${debugCode}`
+    : 'The code expires in 15 minutes.';
+  emailCodeModal?.classList.remove('hidden');
+  emailCodeModal?.setAttribute('aria-hidden', 'false');
+  emailCodeInput?.focus();
+}
+
+function closeEmailCodeModal(): void {
+  emailCodeModal?.classList.add('hidden');
+  emailCodeModal?.setAttribute('aria-hidden', 'true');
+  emailCodeInput?.blur();
+}
+
+async function verifyEmailCode(): Promise<void> {
+  const code = emailCodeInput?.value.trim() ?? '';
+  if (!/^\d{6}$/.test(code)) {
+    if (emailCodeStatus) emailCodeStatus.textContent = 'Enter all six digits.';
+    return;
+  }
+  const submit = document.getElementById('email-code-submit') as HTMLButtonElement | null;
+  if (submit) submit.disabled = true;
+  if (emailCodeStatus) emailCodeStatus.textContent = 'Checking code...';
+  try {
+    await apiRequest('/api/auth/verify-code', {
+      method: 'POST',
+      body: JSON.stringify({ email: pendingEmailCodeAddress, code }),
+    });
+    closeEmailCodeModal();
+    pendingEmailCodeAddress = '';
+    pendingDebugEmailCode = '';
+    document.getElementById('btn-auth-enter-code')?.classList.add('hidden');
+    state.debugMagicLink = null;
+    state.status = 'Signed in with email.';
+    await refreshSession();
+  } catch (error) {
+    if (emailCodeStatus) emailCodeStatus.textContent = getErrorMessage(error, 'Could not verify code.');
+    emailCodeInput?.focus();
+    emailCodeInput?.select();
+  } finally {
+    if (submit) submit.disabled = false;
   }
 }
 

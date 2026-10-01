@@ -1057,6 +1057,38 @@ body[data-app-mode="play-world"] #global-chat {
   line-height: 1.35;
 }
 
+.email-code-modal {
+  z-index: 10020;
+}
+
+.history-modal .email-code-panel {
+  width: min(420px, calc(100vw - 32px));
+  border: 3px solid var(--auth-retro-ink);
+  box-shadow: 8px 8px 0 var(--auth-retro-shadow);
+}
+
+.email-code-help {
+  font-family: 'HomeVideo', 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.email-code-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+
+#email-code-input {
+  width: 170px;
+  max-width: 100%;
+  font-family: 'HomeVideo', 'IBM Plex Mono', monospace;
+  font-size: 28px;
+  letter-spacing: 0.15em;
+  text-align: center;
+}
+
 .auth-display-name-status {
   color: var(--auth-retro-ink);
   font-size: 11px;

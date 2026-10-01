@@ -50,7 +50,19 @@ await page.addInitScript(() => {
         ok: true,
         delivery: 'email',
         purpose: 'link_email',
+        debugCode: '123456',
       }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (pathname === '/api/auth/verify-code') {
+      const payload = JSON.parse(String(init?.body ?? '{}'));
+      if (payload.email !== 'wallet-player@example.com' || payload.code !== '123456') {
+        return new Response(JSON.stringify({ error: 'Wrong code payload.' }), { status: 400 });
+      }
+      window.localStorage.setItem('wallet-email-smoke-linked', payload.email);
+      return new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -96,8 +108,10 @@ await page.fill('#auth-email-input', 'wallet-player@example.com');
 await page.click('#btn-auth-email');
 await page.waitForFunction(
   () => document.querySelector('#auth-status')?.textContent
-    === 'Check your email to finish adding it to this account.',
+    === 'Check your email for a code or link to finish adding it.',
 );
+await page.locator('#email-code-modal:not(.hidden)').waitFor();
+await expectText(page, '#email-code-status', 'Debug code: 123456');
 const linkedEmailRequest = await page.evaluate(() => window.__walletEmailLinkRequest);
 if (linkedEmailRequest?.email !== 'wallet-player@example.com') {
   throw new Error(`Unexpected link request: ${JSON.stringify(linkedEmailRequest)}`);
@@ -106,10 +120,11 @@ await page.screenshot({
   path: path.join(outputDir, 'wallet-only-add-email.png'),
   fullPage: true,
 });
+await page.fill('#email-code-input', '123456');
+await page.click('#email-code-submit');
+await page.locator('#email-code-modal').waitFor({ state: 'hidden' });
+await page.waitForFunction(() => document.querySelector('#auth-session-summary-value')?.textContent?.includes('Wallet Player'));
 
-await page.evaluate(() => {
-  window.localStorage.setItem('wallet-email-smoke-linked', 'wallet-player@example.com');
-});
 await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForFunction(
   () => document.querySelector('#auth-session-summary-value')?.textContent?.includes('Wallet Player'),

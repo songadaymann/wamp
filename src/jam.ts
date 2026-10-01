@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from './api/baseUrl';
 import type { AuthSessionResponse, MagicLinkRequestResponse } from './auth/model';
+import { openEmailCodeDialog } from './auth/emailCodeDialog';
 import {
   parseJamRoomReference,
   type JamConfigResponse,
@@ -180,10 +181,11 @@ async function requestAccountLink(): Promise<void> {
         returnTo: new URL('/jam', window.location.origin).toString(),
       }),
     });
+    openEmailCodeDialog(emailInput.value.trim(), response.debugCode);
     setStatus(
       response.delivery === 'email'
-        ? 'Check your email to finish creating your WAMP account. You can set your username after signing in.'
-        : 'Your local WAMP sign-in link is ready in the main game.',
+        ? 'Check your email for a code or link to finish creating your WAMP account.'
+        : 'Your local WAMP sign-in code and link are ready.',
       false,
     );
   } catch (error) {

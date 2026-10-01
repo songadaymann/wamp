@@ -1,6 +1,7 @@
 import { apiRequest } from './api/request';
 import { getApiBaseUrl } from './api/baseUrl';
 import type { MagicLinkRequestResponse } from './auth/model';
+import { openEmailCodeDialog } from './auth/emailCodeDialog';
 import type {
   SchoolStudentCreateResponse,
   SchoolStudentDisableResponse,
@@ -108,11 +109,12 @@ async function requestTeacherLink(): Promise<void> {
         returnTo: buildReturnToUrl(),
       }),
     });
+    openEmailCodeDialog(email, response.debugCode);
     if (response.debugMagicLink) {
       showDebugLink(response.debugMagicLink);
       setPageStatus('Debug sign-in link generated below.', false);
     } else {
-      setPageStatus('Check your email for the sign-in link.', false);
+      setPageStatus('Check your email for a sign-in code or link.', false);
     }
   } catch (error) {
     setPageStatus(getErrorMessage(error, 'Failed to request sign-in link.'), true);
@@ -622,4 +624,3 @@ function formatDate(value: string): string {
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
-

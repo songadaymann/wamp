@@ -757,6 +757,8 @@ export interface MagicLinkJoinRow {
   user_id: string;
   email: string;
   token_hash: string;
+  code_hash: string | null;
+  code_attempts: number;
   expires_at: string;
   consumed_at: string | null;
   created_at: string;

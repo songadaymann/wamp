@@ -620,6 +620,8 @@ export async function loadMagicLinkByTokenHash(
         m.user_id,
         m.email,
         m.token_hash,
+        m.code_hash,
+        m.code_attempts,
         m.expires_at,
         m.consumed_at,
         m.created_at,
@@ -648,33 +650,60 @@ export async function createMagicLinkToken(
   userId: string,
   email: string,
   tokenHash: string,
+  codeHash: string,
   expiresAt: string,
   createdAt: string
 ): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(
       `
-        INSERT INTO magic_link_tokens (id, user_id, email, token_hash, expires_at, consumed_at, created_at)
-        VALUES (?, ?, ?, ?, ?, NULL, ?)
+        INSERT INTO magic_link_tokens (id, user_id, email, token_hash, code_hash, expires_at, consumed_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
       `
-    ).bind(crypto.randomUUID(), userId, email, tokenHash, expiresAt, createdAt),
+    ).bind(crypto.randomUUID(), userId, email, tokenHash, codeHash, expiresAt, createdAt),
   ]);
+}
+
+export async function loadLatestEmailCode(env: Env, email: string): Promise<MagicLinkJoinRow | null> {
+  const row = await env.DB.prepare(`
+    SELECT m.id, m.user_id, m.email, m.token_hash, m.code_hash, m.code_attempts,
+      m.expires_at, m.consumed_at, m.created_at,
+      u.email AS user_email, u.wallet_address, u.display_name,
+      NULL AS username, NULL AS avatar_url, NULL AS bio, NULL AS selected_avatar_id,
+      u.created_at AS user_created_at
+    FROM magic_link_tokens m JOIN users u ON u.id = m.user_id
+    WHERE m.email = ? ORDER BY m.created_at DESC, m.rowid DESC LIMIT 1
+  `).bind(email).first<MagicLinkJoinRow>();
+  return row ? withUserProfileFields(env, row, row.user_id) : null;
+}
+
+export async function hasRecentEmailSignInRequest(env: Env, email: string, since: string): Promise<boolean> {
+  const row = await env.DB.prepare(`
+    SELECT id FROM magic_link_tokens WHERE email = ? AND created_at > ? LIMIT 1
+  `).bind(email, since).first<{ id: string }>();
+  return Boolean(row);
+}
+
+export async function recordEmailCodeAttempt(env: Env, id: string): Promise<boolean> {
+  const result = await env.DB.prepare(`
+    UPDATE magic_link_tokens SET code_attempts = code_attempts + 1
+    WHERE id = ? AND consumed_at IS NULL AND code_attempts < 5
+    RETURNING id
+  `).bind(id).first<{ id: string }>();
+  return Boolean(result);
 }
 
 export async function consumeMagicLinkToken(
   env: Env,
   magicLinkId: string,
   consumedAt: string
-): Promise<void> {
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        UPDATE magic_link_tokens
-        SET consumed_at = ?
-        WHERE id = ?
-      `
-    ).bind(consumedAt, magicLinkId),
-  ]);
+): Promise<boolean> {
+  const result = await env.DB.prepare(`
+    UPDATE magic_link_tokens SET consumed_at = ?
+    WHERE id = ? AND consumed_at IS NULL AND expires_at > ?
+    RETURNING id
+  `).bind(consumedAt, magicLinkId, consumedAt).first<{ id: string }>();
+  return Boolean(result);
 }
 
 export async function loadWalletChallengeByNonceHash(
@@ -1334,7 +1363,8 @@ function hostnameMatchesTrustedRedirectCandidate(hostname: string, candidate: st
 export async function sendMagicLinkEmail(
   env: Env,
   email: string,
-  magicLink: string
+  magicLink: string,
+  code: string
 ): Promise<void> {
   if (!env.RESEND_API_KEY) {
     throw new HttpError(500, 'RESEND_API_KEY is missing.');
@@ -1346,19 +1376,24 @@ export async function sendMagicLinkEmail(
   const response = await resend.emails.send({
     from,
     to: email,
-    subject: "Your sign-in link for Everybody's Platformer",
+    subject: "Your sign-in code for Everybody's Platformer",
     text: [
-      "Use this link to sign in to Everybody's Platformer:",
+      "Enter this code on the page where you requested sign-in:",
+      code,
+      '',
+      'Or use this link:',
       magicLink,
       '',
-      'The link expires in 15 minutes.',
+      'The code and link expire in 15 minutes and can only be used once.',
     ].join('\n'),
     html: [
       '<div style="font-family: monospace; background: #050505; color: #f3eee2; padding: 24px;">',
       '<h2 style="margin: 0 0 16px;">Everybody&apos;s Platformer sign-in</h2>',
-      '<p style="margin: 0 0 16px;">Use this link to sign in:</p>',
+      '<p style="margin: 0 0 16px;">Enter this code on the page where you requested sign-in:</p>',
+      `<p style="font-size: 30px; letter-spacing: 0.2em; font-weight: bold;">${escapeHtml(code)}</p>`,
+      '<p style="margin: 0 0 16px;">Or use this link:</p>',
       `<p style="margin: 0 0 24px;"><a href="${escapeHtml(magicLink)}" style="color: #7de5ff;">${escapeHtml(magicLink)}</a></p>`,
-      '<p style="margin: 0; color: #8c877b;">This link expires in 15 minutes.</p>',
+      '<p style="margin: 0; color: #8c877b;">The code and link expire in 15 minutes and can only be used once.</p>',
       '</div>',
     ].join(''),
   });

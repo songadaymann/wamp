@@ -8,6 +8,7 @@ import type {
   DisplayNameUpdateResponse,
   AuthSessionResponse,
   AuthUser,
+  EmailCodeVerifyBody,
   MagicLinkRequestBody,
   MagicLinkRequestResponse,
   WalletChallengeRequestBody,
@@ -40,11 +41,14 @@ import {
   findUserByWallet,
   generateOpaqueToken,
   hashToken,
+  hasRecentEmailSignInRequest,
   isExpired,
   isValidAddress,
   isValidEmail,
   listApiTokensForUser,
   loadMagicLinkByTokenHash,
+  loadLatestEmailCode,
+  recordEmailCodeAttempt,
   loadWalletChallengeByNonceHash,
   normalizeAddress,
   normalizeApiTokenScopes,
@@ -97,6 +101,10 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
 
   if (url.pathname === '/api/auth/verify' && request.method === 'GET') {
     return handleVerifyMagicLink(request, url, env);
+  }
+
+  if (url.pathname === '/api/auth/verify-code' && request.method === 'POST') {
+    return handleVerifyEmailCode(request, env);
   }
 
   if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
@@ -163,6 +171,10 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
     throw new HttpError(400, 'Please enter a valid email address.');
   }
 
+  if (await hasRecentEmailSignInRequest(env, email, new Date(Date.now() - 60_000).toISOString())) {
+    throw new HttpError(429, 'Wait a minute before requesting another sign-in email.');
+  }
+
   const existingAuth = await loadOptionalRequestAuth(env, request);
   let purpose: MagicLinkRequestResponse['purpose'] = 'sign_in';
   let user: AuthUser;
@@ -186,10 +198,12 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
   }
   const token = generateOpaqueToken(32);
   const tokenHash = await hashToken(token);
+  const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, '0');
+  const codeHash = await hashToken(`${tokenHash}:${code}`);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + MAGIC_LINK_TTL_MS).toISOString();
 
-  await createMagicLinkToken(env, user.id, email, tokenHash, expiresAt, now.toISOString());
+  await createMagicLinkToken(env, user.id, email, tokenHash, codeHash, expiresAt, now.toISOString());
 
   const returnBaseUrl = resolveMagicLinkReturnUrl(request, env, body.returnTo);
   const verifyBaseUrl = resolveMagicLinkVerifyBaseUrl(request, env, returnBaseUrl);
@@ -209,8 +223,9 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
 
   if (env.AUTH_DEBUG_MAGIC_LINKS === '1') {
     responseBody.debugMagicLink = magicLink;
+    responseBody.debugCode = code;
   } else if (env.RESEND_API_KEY) {
-    await sendMagicLinkEmail(env, email, magicLink);
+    await sendMagicLinkEmail(env, email, magicLink, code);
   } else {
     throw new HttpError(
       500,
@@ -259,9 +274,11 @@ export async function handleVerifyMagicLink(
     return redirectResponse(invalidRedirectUrl);
   }
 
-  const sessionToken = await createSession(env, user.id);
   const now = new Date().toISOString();
-  await consumeMagicLinkToken(env, row.id, now);
+  if (!await consumeMagicLinkToken(env, row.id, now)) {
+    return redirectResponse(invalidRedirectUrl);
+  }
+  const sessionToken = await createSession(env, user.id);
   const redirectUrl = buildMagicLinkRedirectUrl(
     request,
     env,
@@ -271,6 +288,44 @@ export async function handleVerifyMagicLink(
 
   return redirectResponse(redirectUrl, {
     'Set-Cookie': createSessionCookie(request, sessionToken),
+  });
+}
+
+export async function handleVerifyEmailCode(request: Request, env: Env): Promise<Response> {
+  requireTrustedOriginForMutation(request);
+  const body = await parseJsonBody<EmailCodeVerifyBody>(request);
+  const email = normalizeEmail(body.email);
+  const code = typeof body.code === 'string' ? body.code.trim() : '';
+  if (!isValidEmail(email) || !/^\d{6}$/.test(code)) {
+    throw new HttpError(400, 'Enter your email and six-digit code.');
+  }
+  const row = await loadLatestEmailCode(env, email);
+  if (!row || !row.code_hash || row.consumed_at || isExpired(row.expires_at) || row.code_attempts >= 5) {
+    throw new HttpError(400, 'Code expired or invalid. Request a new email.');
+  }
+  if (!await recordEmailCodeAttempt(env, row.id)) {
+    throw new HttpError(400, 'Too many attempts. Request a new email.');
+  }
+  if (await hashToken(`${row.token_hash}:${code}`) !== row.code_hash) {
+    throw new HttpError(400, 'Incorrect code. Check the email and try again.');
+  }
+  let user: AuthUser = {
+    id: row.user_id, email: row.user_email, walletAddress: row.wallet_address,
+    displayName: row.display_name, username: row.username ?? null,
+    createdAt: row.user_created_at, avatarUrl: row.avatar_url,
+    bio: row.bio, selectedAvatarId: row.selected_avatar_id,
+  };
+  if (!user.email) {
+    user = await attachEmailToUser(env, user, row.email);
+  } else if (normalizeEmail(user.email) !== email) {
+    throw new HttpError(400, 'Code expired or invalid. Request a new email.');
+  }
+  if (!await consumeMagicLinkToken(env, row.id, new Date().toISOString())) {
+    throw new HttpError(400, 'Code already used. Request a new email.');
+  }
+  const sessionToken = await createSession(env, user.id);
+  return jsonResponse(request, { ok: true }, {
+    headers: { 'Set-Cookie': createSessionCookie(request, sessionToken) },
   });
 }
 
