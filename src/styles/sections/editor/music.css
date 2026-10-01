@@ -448,18 +448,19 @@ body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #btn-mobile-edi
 
 .editor-music-strip {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  overflow-x: auto;
+  overflow: visible;
   padding-bottom: 2px;
-  scrollbar-width: none;
   pointer-events: none;
 }
 
-.editor-music-strip::-webkit-scrollbar {
-  display: none;
+body[data-editor-music-mode='true'] #btn-fit-screen,
+body[data-editor-music-mode='true'] #zoom-level,
+body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
+  display: none !important;
 }
 
 .editor-music-tab-dock {

@@ -91,6 +91,7 @@ export interface EditorMusicWorkflowHost {
   saveDraft(force?: boolean, options?: { promptForSignInOnUnauthorized?: boolean }): Promise<RoomRecord | null>;
   shouldRenderAfterPreviewStop?(): boolean;
   updatePersistenceStatus(text: string): void;
+  onMusicUiRendered?(): void;
 }
 
 export class EditorMusicWorkflowCoordinator {
@@ -1122,6 +1123,7 @@ export class EditorMusicWorkflowCoordinator {
     this.renderMusicWorkbenchModeButtons(legacyLocked);
     this.renderMusicArrangementPanel(legacyLocked);
     this.renderMusicLibraryPanel(legacyLocked);
+    this.host.onMusicUiRendered?.();
   }
 
   private getDisplayPatternMusic() {

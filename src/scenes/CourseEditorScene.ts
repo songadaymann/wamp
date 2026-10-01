@@ -113,6 +113,11 @@ import {
 } from './editor/editRuntime';
 import { EditorMusicPatternController } from './editor/musicPatternEditor';
 import {
+  MusicRoomFitController,
+  planRoomCameraFit,
+  readMusicRoomViewport,
+} from './editor/musicRoomFit';
+import {
   type EditorMusicComposerMode,
 } from './editor/musicUi';
 import {
@@ -208,6 +213,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private readonly objectInspectorController: CourseEditorObjectInspectorController;
   private readonly musicPatternController: EditorMusicPatternController;
   private readonly musicWorkflow: EditorMusicWorkflowCoordinator;
+  private readonly musicRoomFit = new MusicRoomFitController();
   private selectedRoomId: string | null = null;
   private loading = false;
   private statusText: string | null = null;
@@ -437,6 +443,12 @@ export class CourseEditorScene extends Phaser.Scene {
   };
 
   private readonly handleResize = (): void => {
+    if (this.musicModeActive) {
+      this.applyMusicRoomFit();
+      this.renderUi();
+      return;
+    }
+
     // Dock/tool changes resize the canvas; keep the user's zoom and view center.
     const camera = this.cameras.main;
     const centerX = camera.midPoint.x;
@@ -464,6 +476,9 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     event.preventDefault();
+    if (this.musicModeActive) {
+      return;
+    }
     const zoomFactor = Phaser.Math.Clamp(Math.exp(-event.deltaY * 0.0018), 0.92, 1.08);
     this.adjustZoomByFactor(zoomFactor, screenPoint.x, screenPoint.y);
   };
@@ -499,6 +514,7 @@ export class CourseEditorScene extends Phaser.Scene {
         const slice = this.getSelectedSlice();
         return slice ? slice.runtime.replaceRoomMusicWithPattern() : cloneRoomMusic(this.roomMusic);
       },
+      onMusicUiRendered: () => this.syncMusicRoomCamera(),
       requestRender: () => this.renderUi(),
       saveDraft: (force = false, options) => this.saveDraft(force, options),
       shouldRenderAfterPreviewStop: () => !this.isShuttingDown,
@@ -924,7 +940,57 @@ export class CourseEditorScene extends Phaser.Scene {
     this.setActiveCourseDraft(nextDraft);
   }
 
+  syncMusicRoomCamera(): void {
+    this.musicRoomFit.sync(
+      this.musicModeActive && !this.isShuttingDown,
+      () => this.applyMusicRoomFit(),
+      () => {
+        if (!this.musicModeActive && !this.isShuttingDown) {
+          this.fitToScreen();
+        }
+      },
+    );
+  }
+
+  private applyMusicRoomFit(): void {
+    if (!this.musicModeActive || this.isShuttingDown) {
+      return;
+    }
+
+    const slice = this.getSelectedSlice();
+    const camera = this.cameras.main;
+    if (!slice || !camera) {
+      return;
+    }
+
+    const viewport = readMusicRoomViewport(
+      this.game.canvas,
+      document,
+      camera.width,
+      camera.height,
+    );
+    const plan = planRoomCameraFit({
+      cameraWidth: camera.width,
+      cameraHeight: camera.height,
+      originX: camera.originX,
+      originY: camera.originY,
+      roomX: slice.origin.x,
+      roomY: slice.origin.y,
+      roomWidth: ROOM_PX_WIDTH,
+      roomHeight: ROOM_PX_HEIGHT,
+      viewport,
+    });
+    this.inspectZoom = plan.zoom;
+    camera.setZoom(plan.zoom);
+    camera.setScroll(plan.scrollX, plan.scrollY);
+  }
+
   fitToScreen(): void {
+    if (this.musicModeActive) {
+      this.applyMusicRoomFit();
+      return;
+    }
+
     const size = getCourseWorkspacePixelSize(this.workspaceBounds);
     const fitZoom = Phaser.Math.Clamp(
       Math.min(
@@ -2102,6 +2168,10 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private setupPointerControls(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.musicModeActive && this.pointerRequestsPan(pointer)) {
+        return;
+      }
+
       if (this.pointerRequestsPan(pointer)) {
         this.beginPointerPan(pointer);
         if (
@@ -3040,6 +3110,10 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private adjustZoomByFactor(factor: number, screenX: number, screenY: number): void {
+    if (this.musicModeActive) {
+      return;
+    }
+
     const camera = this.cameras.main;
     const nextZoom = Phaser.Math.Clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM);
     if (Math.abs(nextZoom - camera.zoom) < 0.0001) {
@@ -3202,6 +3276,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private handleShutdown = (): void => {
     this.isShuttingDown = true;
+    this.musicRoomFit.stop();
     window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
