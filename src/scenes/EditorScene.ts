@@ -396,6 +396,7 @@ export class EditorScene extends Phaser.Scene {
     }
   };
   private readonly handleShutdown = (): void => {
+    this.interactionController.stopMusicRoomFit();
     window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
@@ -429,6 +430,7 @@ export class EditorScene extends Phaser.Scene {
       getSummaryScope: () => ({ kind: 'room' }),
       onMusicModeToolActivated: () => this.toolController.updateToolUi(),
       replaceLegacyRoomMusicWithPattern: () => this.editRuntime.replaceRoomMusicWithPattern(),
+      onMusicUiRendered: () => this.interactionController.syncMusicRoomCamera(),
       requestRender: () => this.renderEditorUi(),
       saveDraft: (force = false, options) => this.saveDraft(force, options),
       updatePersistenceStatus: (text) => this.updatePersistenceStatus(text),

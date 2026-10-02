@@ -364,11 +364,12 @@ body[data-editor-music-mode='true'] #editor-inspector {
 
 body[data-app-mode='editor']:not([data-device-class='phone']) .editor-music-workbench {
   position: fixed;
-  top: calc(274px + var(--safe-top));
-  bottom: calc(46px + var(--safe-bottom));
+  top: var(--editor-music-room-top, calc(274px + var(--safe-top)));
   left: calc(10px + var(--safe-left));
+  width: var(--editor-music-workbench-width, min(260px, calc(100vw - 20px - var(--safe-left) - var(--safe-right))));
+  height: var(--editor-music-room-height, auto);
+  bottom: auto;
   z-index: 16;
-  width: min(260px, calc(100vw - 20px - var(--safe-left) - var(--safe-right)));
   overflow: hidden;
 }
 
@@ -448,18 +449,19 @@ body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #btn-mobile-edi
 
 .editor-music-strip {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  overflow-x: auto;
+  overflow: visible;
   padding-bottom: 2px;
-  scrollbar-width: none;
   pointer-events: none;
 }
 
-.editor-music-strip::-webkit-scrollbar {
-  display: none;
+body[data-editor-music-mode='true'] #btn-fit-screen,
+body[data-editor-music-mode='true'] #zoom-level,
+body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
+  display: none !important;
 }
 
 .editor-music-tab-dock {

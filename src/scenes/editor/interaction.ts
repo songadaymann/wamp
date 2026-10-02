@@ -29,6 +29,15 @@ import { clampRandomizeBrushSize } from './randomizeTiles';
 import { clampSprayBrushSize, createCircleBrushMask, getSprayTilesPerSecond, listCircleBrushOffsets } from './sprayTiles';
 import { forEachDraggedTileCell, resolvePencilStampOrigin } from './stampDrag';
 import { iterateShapeTiles, resolveShapeEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
+import {
+  clearMusicWorkbenchFrame,
+  MUSIC_ROOM_LABEL_GUTTER,
+  MUSIC_ROOM_NEIGHBOR_PEEK,
+  MusicRoomFitController,
+  planRoomCameraFit,
+  readMusicRoomViewport,
+  syncMusicWorkbenchFrame,
+} from './musicRoomFit';
 
 function isPointerShiftDown(pointer: Phaser.Input.Pointer): boolean {
   const event = pointer.event as MouseEvent | KeyboardEvent | TouchEvent | undefined;
@@ -115,6 +124,8 @@ export class EditorInteractionController {
   private pinchAnchor = { x: 0, y: 0 };
   private pinchAnchorWorld = { x: 0, y: 0 };
   private hasUserAdjustedCamera = false;
+  private readonly musicRoomFit = new MusicRoomFitController();
+  private musicFitLock = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -125,6 +136,10 @@ export class EditorInteractionController {
       doc.getElementById('cursor-coords'),
       doc.getElementById('mobile-editor-cursor-coords'),
     ].filter((element): element is HTMLElement => Boolean(element));
+  }
+
+  stopMusicRoomFit(): void {
+    this.musicRoomFit.stop();
   }
 
   get cursorOverlay(): Phaser.GameObjects.Graphics | null {
@@ -287,6 +302,11 @@ export class EditorInteractionController {
   }
 
   handleViewportResize(): void {
+    if (this.host.isMusicModeActive()) {
+      this.applyMusicRoomFit();
+      return;
+    }
+
     if (!this.hasUserAdjustedCamera) {
       this.fitToScreen({ markManualAdjustment: false });
       return;
@@ -300,7 +320,66 @@ export class EditorInteractionController {
     this.centerCameraOnRoom();
   }
 
+  syncMusicRoomCamera(): void {
+    this.musicRoomFit.sync(
+      this.host.isMusicModeActive(),
+      () => this.applyMusicRoomFit(),
+      () => {
+        clearMusicWorkbenchFrame();
+        if (!this.host.isMusicModeActive()) {
+          this.fitToScreen({ markManualAdjustment: false });
+        }
+      },
+    );
+  }
+
+  private applyMusicRoomFit(): void {
+    if (!this.host.isMusicModeActive() || this.musicFitLock) {
+      return;
+    }
+
+    this.musicFitLock = true;
+    try {
+      const camera = this.scene.cameras.main;
+      const viewport = readMusicRoomViewport(
+        this.scene.game.canvas,
+        document,
+        camera.width,
+        camera.height,
+      );
+      const plan = planRoomCameraFit({
+        cameraWidth: camera.width,
+        cameraHeight: camera.height,
+        originX: camera.originX,
+        originY: camera.originY,
+        roomX: 0,
+        roomY: 0,
+        roomWidth: ROOM_PX_WIDTH,
+        roomHeight: ROOM_PX_HEIGHT,
+        viewport,
+        worldInset: {
+          left: MUSIC_ROOM_LABEL_GUTTER,
+          top: MUSIC_ROOM_NEIGHBOR_PEEK,
+          right: MUSIC_ROOM_NEIGHBOR_PEEK,
+          bottom: MUSIC_ROOM_NEIGHBOR_PEEK,
+        },
+      });
+      editorState.zoom = plan.zoom;
+      camera.setZoom(plan.zoom);
+      camera.setScroll(plan.scrollX, plan.scrollY);
+      syncMusicWorkbenchFrame(this.scene.game.canvas, camera.width, camera.height, plan);
+      this.host.updateBackgroundPreview();
+    } finally {
+      this.musicFitLock = false;
+    }
+  }
+
   fitToScreen(options: { markManualAdjustment?: boolean } = {}): void {
+    if (this.host.isMusicModeActive()) {
+      this.applyMusicRoomFit();
+      return;
+    }
+
     const viewW = this.scene.scale.width;
     const viewH = this.scene.scale.height;
     const usePhonePortraitFit = this.shouldUsePhonePortraitFit();
@@ -765,7 +844,7 @@ export class EditorInteractionController {
     });
 
     this.scene.input.on('wheel', (_pointer: Phaser.Input.Pointer, _gameObjects: unknown[], _deltaX: number, deltaY: number) => {
-      if (editorState.isPlaying) {
+      if (editorState.isPlaying || this.host.isMusicModeActive()) {
         return;
       }
 
@@ -811,6 +890,10 @@ export class EditorInteractionController {
   }
 
   private handleZoom(zoomFactor: number): void {
+    if (this.host.isMusicModeActive()) {
+      return;
+    }
+
     const nextZoom = Phaser.Math.Clamp(editorState.zoom * zoomFactor, 0.25, 6);
     if (Math.abs(nextZoom - editorState.zoom) < 0.0001) {
       return;
@@ -1009,6 +1092,12 @@ export class EditorInteractionController {
     }
 
     this.touchPointers.set(pointer.id, { x: pointer.x, y: pointer.y });
+    if (this.host.isMusicModeActive()) {
+      if (this.touchPointers.size === 1) {
+        this.host.handleMusicPointerDown(pointer);
+      }
+      return true;
+    }
     if (this.touchPointers.size >= 2) {
       this.finishCurrentTouchDraw();
       this.beginPinchGesture();
@@ -1112,6 +1201,12 @@ export class EditorInteractionController {
     }
 
     this.touchPointers.set(pointer.id, { x: pointer.x, y: pointer.y });
+    if (this.host.isMusicModeActive()) {
+      if (this.touchPointers.size === 1) {
+        this.host.handleMusicPointerMove(pointer);
+      }
+      return true;
+    }
     if (this.touchPointers.size >= 2) {
       this.handlePinchMove();
       return true;
@@ -1160,6 +1255,15 @@ export class EditorInteractionController {
   private handleTouchPointerUp(pointer: Phaser.Input.Pointer): boolean {
     if (!this.isTouchPointer(pointer)) {
       return false;
+    }
+
+    if (this.host.isMusicModeActive()) {
+      const wasPrimaryTouch = this.touchPointers.size <= 1;
+      this.touchPointers.delete(pointer.id);
+      if (wasPrimaryTouch) {
+        this.host.handleMusicPointerUp(pointer);
+      }
+      return true;
     }
 
     const wasPinching = this.touchPointers.size >= 2;
