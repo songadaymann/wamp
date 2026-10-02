@@ -17,6 +17,7 @@ import {
 import {
   ROOM_PATTERN_ACTIVE_STEP_COLUMNS,
 } from '../../music/pattern';
+import { resolveMusicPlayheadStep } from './musicPlayhead';
 import {
   ROOM_PATTERN_DRUM_GRID_START_ROW,
   ROOM_PATTERN_DRUM_ROWS,
@@ -143,6 +144,7 @@ export class EditorMusicPatternController {
   private lastAppliedCell: { step: number; row: number } | null = null;
   private clipboard: EditorMusicPatternClipboardState | null = null;
   private pastePreviewOrigin: { step: number; row: number } | null = null;
+  private labelResolution = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -702,6 +704,7 @@ export class EditorMusicPatternController {
     this.drawCells();
     this.drawPlayhead();
     this.drawMixControls();
+    this.syncMusicLabelResolution();
     this.updateRowLabels();
     this.updateMixLabels();
   }
@@ -1039,13 +1042,38 @@ export class EditorMusicPatternController {
     }
 
     const loopDurationSec = activePattern.loopDurationSec;
-    if (loopDurationSec <= 0) {
+    if (typeof loopDurationSec !== 'number') {
       return null;
     }
 
-    const elapsed = Math.max(0, audioCurrentTime - activePattern.startTime);
-    const loopOffset = elapsed % loopDurationSec;
-    return Math.max(0, Math.min(ROOM_PATTERN_ACTIVE_STEP_COLUMNS - 1, Math.floor((loopOffset / loopDurationSec) * ROOM_PATTERN_ACTIVE_STEP_COLUMNS)));
+    const transportStartTime = typeof playback.transportStartTime === 'number'
+      ? playback.transportStartTime
+      : null;
+    const patternStartTime = typeof activePattern.startTime === 'number'
+      ? activePattern.startTime
+      : null;
+    return resolveMusicPlayheadStep({
+      audioCurrentTime,
+      transportStartTime,
+      patternStartTime,
+      loopDurationSec,
+      stepCount: ROOM_PATTERN_ACTIVE_STEP_COLUMNS,
+    });
+  }
+
+  private syncMusicLabelResolution(): void {
+    const zoom = this.scene.cameras.main?.zoom ?? 1;
+    const resolution = Math.max(1, zoom);
+    if (Math.abs(resolution - this.labelResolution) < 0.01) {
+      return;
+    }
+
+    this.labelResolution = resolution;
+    for (const label of this.rowLabels) {
+      label.setResolution(resolution);
+    }
+    this.mixTitleLabel?.setResolution(resolution);
+    this.mixReadoutLabel?.setResolution(resolution);
   }
 
   private updateRowLabels(): void {
