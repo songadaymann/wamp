@@ -146,11 +146,10 @@ let authStatus: HTMLElement | null = null;
 let authSessionSummary: HTMLElement | null = null;
 let authSessionSummaryValue: HTMLElement | null = null;
 let authDebugLink: HTMLAnchorElement | null = null;
-let emailCodeModal: HTMLElement | null = null;
+let emailCodePanel: HTMLElement | null = null;
 let emailCodeInput: HTMLInputElement | null = null;
 let emailCodeStatus: HTMLElement | null = null;
 let pendingEmailCodeAddress = '';
-let pendingDebugEmailCode = '';
 let appKit: AppKit | null = null;
 let walletBootstrapPromise: Promise<AppKit> | null = null;
 let sessionRefreshListenersBound = false;
@@ -192,9 +191,6 @@ export async function setupAuthUi(): Promise<void> {
   authEmailRow = document.getElementById('auth-email-row');
   authEmailInput = document.getElementById('auth-email-input') as HTMLInputElement | null;
   authEmailButton = document.getElementById('btn-auth-email') as HTMLButtonElement | null;
-  document.getElementById('btn-auth-enter-code')?.addEventListener('click', () => {
-    if (pendingEmailCodeAddress) openEmailCodeModal(pendingEmailCodeAddress, pendingDebugEmailCode);
-  });
   authWalletButton = document.getElementById('btn-auth-wallet') as HTMLButtonElement | null;
   authLogoutButton = document.getElementById('btn-auth-logout') as HTMLButtonElement | null;
   authDisplayNameRow = document.getElementById('auth-display-name-row');
@@ -206,13 +202,9 @@ export async function setupAuthUi(): Promise<void> {
   authSessionSummary = document.getElementById('auth-session-summary');
   authSessionSummaryValue = document.getElementById('auth-session-summary-value');
   authDebugLink = document.getElementById('auth-debug-link') as HTMLAnchorElement | null;
-  emailCodeModal = document.getElementById('email-code-modal');
+  emailCodePanel = document.getElementById('auth-email-code');
   emailCodeInput = document.getElementById('email-code-input') as HTMLInputElement | null;
   emailCodeStatus = document.getElementById('email-code-status');
-  document.getElementById('email-code-close')?.addEventListener('click', closeEmailCodeModal);
-  emailCodeModal?.addEventListener('click', (event) => {
-    if (event.target === emailCodeModal) closeEmailCodeModal();
-  });
   document.getElementById('email-code-form')?.addEventListener('submit', (event) => {
     event.preventDefault();
     void verifyEmailCode();
@@ -588,12 +580,10 @@ async function requestMagicLink(): Promise<void> {
     });
 
     state.debugMagicLink = normalizeDebugMagicLink(response.debugMagicLink);
-    openEmailCodeModal(email, response.debugCode);
+    showEmailCodeEntry(email, response.debugCode);
     state.status =
       response.delivery === 'email'
-        ? response.purpose === 'link_email'
-          ? 'Check your email for a code or link to finish adding it.'
-          : 'Check your email for a sign-in code or link.'
+        ? ''
         : response.purpose === 'link_email'
           ? 'Debug email verification link generated below.'
           : 'Debug sign-in link generated below.';
@@ -605,25 +595,21 @@ async function requestMagicLink(): Promise<void> {
   }
 }
 
-function openEmailCodeModal(email: string, debugCode?: string): void {
+function showEmailCodeEntry(email: string, debugCode?: string): void {
   pendingEmailCodeAddress = email;
-  pendingDebugEmailCode = debugCode ?? '';
-  document.getElementById('btn-auth-enter-code')?.classList.remove('hidden');
   if (emailCodeInput) emailCodeInput.value = '';
   const address = document.getElementById('email-code-address');
   if (address) address.textContent = email;
   if (emailCodeStatus) emailCodeStatus.textContent = debugCode
     ? `Debug code: ${debugCode}`
     : 'The code expires in 15 minutes.';
-  emailCodeModal?.classList.remove('hidden');
-  emailCodeModal?.setAttribute('aria-hidden', 'false');
+  emailCodePanel?.classList.remove('hidden');
   emailCodeInput?.focus();
 }
 
-function closeEmailCodeModal(): void {
-  emailCodeModal?.classList.add('hidden');
-  emailCodeModal?.setAttribute('aria-hidden', 'true');
-  emailCodeInput?.blur();
+function hideEmailCodeEntry(): void {
+  pendingEmailCodeAddress = '';
+  emailCodePanel?.classList.add('hidden');
 }
 
 async function verifyEmailCode(): Promise<void> {
@@ -640,10 +626,7 @@ async function verifyEmailCode(): Promise<void> {
       method: 'POST',
       body: JSON.stringify({ email: pendingEmailCodeAddress, code }),
     });
-    closeEmailCodeModal();
-    pendingEmailCodeAddress = '';
-    pendingDebugEmailCode = '';
-    document.getElementById('btn-auth-enter-code')?.classList.add('hidden');
+    hideEmailCodeEntry();
     state.debugMagicLink = null;
     state.status = 'Signed in with email.';
     await refreshSession();
@@ -1095,6 +1078,7 @@ function renderAuthUi(): void {
 
   const showEmailRow = !state.authenticated || !state.user?.email;
   authEmailRow?.classList.toggle('hidden', !showEmailRow);
+  if (!showEmailRow) hideEmailCodeEntry();
 
   if (authEmailInput) {
     authEmailInput.placeholder =

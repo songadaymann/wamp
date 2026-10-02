@@ -183,7 +183,14 @@
         <div id="auth-email-row" class="auth-row">
           <input id="auth-email-input" type="email" placeholder="you@example.com" spellcheck="false" />
           <button id="btn-auth-email" class="bar-btn bar-btn-small">Sign In With Email</button>
-          <button id="btn-auth-enter-code" class="bar-btn bar-btn-small hidden" type="button">Enter Code</button>
+        </div>
+        <div id="auth-email-code" class="auth-email-code hidden">
+          <p class="auth-email-code-help">Click the magic link we sent to <strong id="email-code-address"></strong>, or enter the code you received:</p>
+          <form id="email-code-form" class="auth-row email-code-form">
+            <input id="email-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" aria-label="Six-digit email code" required />
+            <button id="email-code-submit" class="bar-btn bar-btn-small" type="submit">Verify Code</button>
+          </form>
+          <div id="email-code-status" class="auth-status" role="status">The code expires in 15 minutes.</div>
         </div>
         <div class="auth-row">
           <button id="btn-auth-wallet" class="bar-btn">Sign In With Wallet</button>
@@ -205,24 +212,6 @@
       </div>
       </div>
     </div>
-  <div id="email-code-modal" class="history-modal email-code-modal hidden" aria-hidden="true">
-    <div class="history-modal-panel email-code-panel" role="dialog" aria-modal="true" aria-labelledby="email-code-title">
-      <div class="history-modal-header">
-        <div class="history-modal-title-group">
-          <div class="history-modal-kicker">Sign In To WAMP</div>
-          <h2 id="email-code-title" class="history-modal-title">Check Your Email</h2>
-          <div id="email-code-address" class="history-modal-meta"></div>
-        </div>
-        <button id="email-code-close" class="bar-btn bar-btn-small" type="button">Close</button>
-      </div>
-      <p class="email-code-help">Enter or paste the six-digit code from the email. You can also use the link in that email.</p>
-      <form id="email-code-form" class="email-code-form">
-        <input id="email-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" aria-label="Six-digit email code" required />
-        <button id="email-code-submit" class="bar-btn" type="submit">Verify Code</button>
-      </form>
-      <div id="email-code-status" class="history-modal-meta" role="status">The code expires in 15 minutes.</div>
-    </div>
-  </div>
   <div id="app">
     <!-- Left Sidebar -->
     <div id="sidebar">
