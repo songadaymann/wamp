@@ -36,7 +36,6 @@ import {
   MusicRoomFitController,
   planRoomCameraFit,
   readMusicRoomViewport,
-  resizeScaleToElement,
   syncMusicWorkbenchFrame,
 } from './musicRoomFit';
 
@@ -341,7 +340,6 @@ export class EditorInteractionController {
 
     this.musicFitLock = true;
     try {
-      resizeScaleToElement(this.scene.scale, document.getElementById('game-container'));
       const camera = this.scene.cameras.main;
       const viewport = readMusicRoomViewport(
         this.scene.game.canvas,

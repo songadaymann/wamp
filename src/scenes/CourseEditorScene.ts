@@ -119,7 +119,6 @@ import {
   MusicRoomFitController,
   planRoomCameraFit,
   readMusicRoomViewport,
-  resizeScaleToElement,
   syncMusicWorkbenchFrame,
 } from './editor/musicRoomFit';
 import {
@@ -972,7 +971,6 @@ export class CourseEditorScene extends Phaser.Scene {
 
     this.musicFitLock = true;
     try {
-      resizeScaleToElement(this.scale, document.getElementById('game-container'));
       const viewport = readMusicRoomViewport(
         this.game.canvas,
         document,

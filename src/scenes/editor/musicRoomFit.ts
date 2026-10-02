@@ -176,23 +176,6 @@ export function planRoomCameraFit(input: {
   };
 }
 
-export function resizeScaleToElement(
-  scale: { width: number; height: number; resize: (width: number, height: number) => void },
-  element: { clientWidth: number; clientHeight: number } | null,
-): void {
-  if (!element) {
-    return;
-  }
-
-  const width = Math.round(element.clientWidth);
-  const height = Math.round(element.clientHeight);
-  if (width <= 0 || height <= 0 || (scale.width === width && scale.height === height)) {
-    return;
-  }
-
-  scale.resize(width, height);
-}
-
 export function syncMusicWorkbenchFrame(
   canvas: HTMLCanvasElement,
   gameWidth: number,
@@ -218,9 +201,15 @@ export function syncMusicWorkbenchFrame(
   }
   const panelWidth = panelRight - panelLeft;
   const root = canvas.ownerDocument.body;
-  root.style.setProperty('--editor-music-room-top', `${Math.round(roomTop)}px`);
-  root.style.setProperty('--editor-music-room-height', `${Math.round(Math.max(1, roomHeight))}px`);
-  root.style.setProperty('--editor-music-workbench-width', `${Math.round(panelWidth)}px`);
+  setFrameProperty(root, '--editor-music-room-top', `${Math.round(roomTop)}px`);
+  setFrameProperty(root, '--editor-music-room-height', `${Math.round(Math.max(1, roomHeight))}px`);
+  setFrameProperty(root, '--editor-music-workbench-width', `${Math.round(panelWidth)}px`);
+}
+
+function setFrameProperty(root: HTMLElement, name: string, value: string): void {
+  if (root.style.getPropertyValue(name) !== value) {
+    root.style.setProperty(name, value);
+  }
 }
 
 export function clearMusicWorkbenchFrame(doc: Document = document): void {
@@ -326,11 +315,9 @@ export class MusicRoomFitController {
     if (shell) {
       this.observer.observe(shell);
     }
-    for (const id of ['editor-music-workbench', 'game-container']) {
-      const element = doc.getElementById(id);
-      if (element) {
-        this.observer.observe(element);
-      }
+    const gameContainer = doc.getElementById('game-container');
+    if (gameContainer) {
+      this.observer.observe(gameContainer);
     }
   }
 
