@@ -154,4 +154,42 @@ describe('expanded draft backup scene controller', () => {
     expect(controller.backupFailed).toBe(true);
   });
 
+  it('lets an unrelated cell recover while another waits for a conflict choice', async () => {
+    const record = recordFixture();
+    const controller = new CourseDraftBackupController();
+    await controller.open(record, false);
+    const first = createDefaultRoomSnapshot('1,2', { x: 1, y: 2 });
+    const second = createDefaultRoomSnapshot('2,2', { x: 2, y: 2 });
+    const backup = new ExpandedRoomDraftBackup('user:alice', () => storage);
+    backup.writeRoom(record.draft.id, { ...first, title: 'First local' }, first);
+    backup.writeRoom(record.draft.id, { ...second, title: 'Second local' }, second);
+    let decide!: (restore: boolean) => void;
+    mock.choice.mockImplementationOnce(() => new Promise<boolean>((resolve) => { decide = resolve; }));
+    const conflicted = controller.recoverRoom(record.draft.id, { ...first, title: 'Account first', updatedAt: '2099-01-01T00:00:00.000Z' });
+    expect((await controller.recoverRoom(record.draft.id, second))?.title).toBe('Second local');
+    await Promise.resolve();
+    expect(mock.choice).toHaveBeenCalledTimes(1);
+    decide(false);
+    expect(await conflicted).toBeNull();
+    expect(backup.recoverRoom(record.draft.id, first).status).toBe('none');
+    expect(backup.recoverRoom(record.draft.id, second).status).toBe('recovered');
+  });
+
+  it('retains the original account backup when identity changes during a recovery choice', async () => {
+    const record = recordFixture();
+    const controller = new CourseDraftBackupController();
+    await controller.open(record, false);
+    const room = createDefaultRoomSnapshot('1,2', { x: 1, y: 2 });
+    const backup = new ExpandedRoomDraftBackup('user:alice', () => storage);
+    backup.writeRoom(record.draft.id, { ...room, title: 'Private local' }, room);
+    let decide!: (restore: boolean) => void;
+    mock.choice.mockImplementationOnce(() => new Promise<boolean>((resolve) => { decide = resolve; }));
+    const pending = controller.recoverRoom(record.draft.id, { ...room, updatedAt: '2099-01-01T00:00:00.000Z' });
+    await Promise.resolve();
+    mock.userId = 'bob';
+    decide(true);
+    expect(await pending).toBeNull();
+    expect(backup.recoverRoom(record.draft.id, room).status).toBe('recovered');
+  });
+
 });

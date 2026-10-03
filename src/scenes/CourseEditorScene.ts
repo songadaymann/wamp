@@ -1134,6 +1134,7 @@ export class CourseEditorScene extends Phaser.Scene {
         clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
       }
+      this.backupDebouncer.flush();
       this.statusText = this.localBackupFailed ? BACKUP_FAILED_TEXT : `Saved ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}.`;
       this.renderUi();
       return lastRecord;
@@ -1205,6 +1206,7 @@ export class CourseEditorScene extends Phaser.Scene {
         lastRecord = record;
       }
       await refreshAuthSession();
+      this.backupDebouncer.flush();
       this.statusText = this.localBackupFailed ? BACKUP_FAILED_TEXT : `Published ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}.`;
       await this.musicWorkflow.handleRoomPublished();
       this.renderUi();
