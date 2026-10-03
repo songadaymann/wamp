@@ -1677,281 +1677,41 @@ The fix stays the same and is small: gate the snapshot routes behind an env var 
 
 Not every table, and not permanent: reset clears the 33 tables in SNAPSHOT_TABLES in the main D1 only. JAM_DB, R2 tile objects and tables outside the list (e.g. room_rush_runs, pvp_matches, worlds and school tables) survive except through FK cascades, and D1 Time Travel can restore the main DB to the minute before the wipe. So the realistic worst case is an outage and recovery work, not "erasing WAMP". The bigger quiet risk is that snapshot/import can write rows into sessions, api_tokens, agent_tokens and chat_admins, which lets anyone with the key impersonate any user. That deserves the emphasis. Nothing in the code shows that safety and prod share one ADMIN_API_KEY. The .dev.vars fallback only shows the local key is used against safety, so the misconfiguration path is possible but unproven. Gate the routes with a new var such as ENABLE_SNAPSHOT_ADMIN, set only in env.safety vars (or as a --var in deploy_safety_branch.mjs), mirroring maintenance/routes.ts:10. Don't reuse ENABLE_TEST_RESET, which is "0" in wrangler.jsonc's safety env. Also rename or validate SAFETY_REFRESH_HEALTHCHECK_BASE_URL: only allow a safety workers.dev host, and never api.wamp.land. timingSafeEqual and rate limiting are optional low-value hardening. Cloudflare Access would need service tokens for script and worker callers, which takes more than a small effort.
 
-### F187: Chat @mentions and sign-in requests can burn the email budget, and then nobody can log in
+### F187: details withheld
 
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** defect · **impact:** medium · **effort:** small
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Summary.** Each chat message can email up to five people, one message per second is allowed, and nobody can turn these emails off. One harasser could flood someone's inbox with thousands of emails an hour. The same email account sends the sign-in codes, so that harassment could also use up the email quota and stop every player from logging in.
+### F042: details withheld
 
-**Technical detail.**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-Chat allows 1 msg/sec/user (chat/routes.ts:58, 155-160), and every message schedules mention emails (chat/routes.ts:170) to up to 5 recipients (chat/mentions.ts:8). There's no per-recipient cooldown, no daily cap and no opt-out (mentions.ts recipient loader just requires an email). `POST /api/auth/request-link` limits only per address per minute (auth/routes.ts:174). It has no IP limit and no Turnstile, and it creates a `users` row before the email is verified (auth/routes.ts:197), so a script can mail thousands of strangers and fill `users`. All of this shares one RESEND_API_KEY with magic links and codes (auth/routes.ts:224-228). Resend's rate limit, monthly quota and domain spam reputation are a single point of failure for sign-in. Fix: (1) a `chat_mention_email_log` table, with at most 1 email per (sender, recipient) per hour and at most 10 per recipient per day, plus a 'Email me when mentioned' toggle in user settings (default on). (2) A Workers Rate Limiting binding (`ratelimits` in wrangler.jsonc, keyed on CF-Connecting-IP) on request-link and verify-code, e.g. 5/min. Require Turnstile after 3 requests, reusing the guestbook verifier. (3) Create the user row only in verify/verify-code. (4) Optionally use a separate Resend sending subdomain for notifications so their reputation can't hurt sign-in mail.
+### F041: details withheld
 
-**Evidence.**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-- src/cloudflare/worker/chat/mentions.ts:8 — MAX_CHAT_MENTION_EMAILS = 5 per message
-- src/cloudflare/worker/chat/routes.ts:58 — CHAT_RATE_LIMIT_WINDOW_MS = 1000 (only throttle)
-- src/cloudflare/worker/chat/routes.ts:170 — every message schedules mention emails, no per-recipient cooldown
-- src/cloudflare/worker/auth/routes.ts:174 — sign-in email throttle is per-address only
-- src/cloudflare/worker/auth/routes.ts:197 — user row created for any typed email before verification
-- src/cloudflare/worker/auth/routes.ts:224-228 — sign-in emails use the same Resend key
+### F034: details withheld
 
-**Fact-check (confirmed, confirmed, partially confirmed).**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-Small corrections only:
-1. "Nobody can log in" goes too far. Wallet sign-in and existing session cookies would keep working; only email-link and email-code sign-in fail. Whether those actually fail depends on the Resend plan's per-second rate and monthly quota, which are set outside the code. At full speed, one chat sender makes about 5 Resend calls per second.
-2. A third sender shares the same key: room comment notification emails (roomComments/email.ts:18,51). A fix that adds per-recipient caps or a separate notification subdomain should cover them too.
-3. The anonymous request-link endpoint is the cheaper attack: it needs no account, while chat needs a signed-in account. Fixes (2) and (3) should come first. A per-user chat throttle can also be dodged with throwaway accounts, because accounts are free to create by email or wallet.
-4. worlds/store.ts:306 also calls createUserForEmail. That path is an admin or complimentary grant, so it is lower risk, but keep it in mind if user creation is moved to the verify step.
+### F243: details withheld
 
-A few small corrections to the claim's framing:
-- Harassment through chat needs a signed-in account, and every message is public in World Chat, where moderators can already ban the sender (chat_bans, plus the trust penalty in progression/trustCaps.ts). The flooding stops after a manual ban, not on its own.
-- The per-second throttle is weaker than the claim says. It is a read-then-insert check (chat/routes.ts:152-160), so requests sent at the same moment can get past it.
-- The claim leaves out one way this gets worse. A pre-verification users row gets the stranger's email and a username built from the part of their address before the @ (auth/store.ts:197 via 162-180 and 1438-1441). There is no email_verified flag, so an attacker can create a row for a stranger through request-link and then @mention that guessable username to email them repeatedly. That is why fix (3), creating the row only at verify time, matters most.
-- Login failing for everyone is a plausible worst case, not a demonstrated one.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-1. "Nobody can log in" is overstated. Existing sessions last 30 days (store.ts:23) and keep working, and wallet sign-in doesn't use email. What breaks is new or expired email sign-ins, plus every other email the game sends: room comments, worlds and admin review. During an attack this starts with Resend's per-second rate limit, before any monthly quota is reached.
-2. The 1 msg/sec chat limit can be beaten by sending requests at the same moment, because it checks the last message and then inserts (chat/routes.ts:152-166).
-3. Fix (3) is not small. magic_link_tokens.user_id is NOT NULL with a foreign key to users (migrations/0001_create_auth.sql:15,22), and both verify paths join users (store.ts:667-678). Moving user creation into the verify step needs a table rebuild and risky changes to sign-in. A cheaper alternative: keep the early row, but give out founder numbers and badges only after verification (move ensureFounderIdentityQualification into verify and verify-code), and prune old unverified rows.
-4. Two extra reasons to add an IP limit on verify-code:
-   - Anyone can request a new code for any address once a minute and get 5 guesses at it. That's about 7,200 guesses a day against 10^6 possible codes, roughly 0.7% per day of taking over that account, and each request also emails the victim.
-   - Mention emails should be skipped when the recipient was active in chat recently. That is the everyday annoyance players will actually notice.
-5. Suggested split:
-   - Small: cap mention emails per sender→recipient and per recipient per day, reusing the room-comment limits pattern; skip recipients who are active in chat; add a Workers rate limit keyed on IP to request-link and verify-code.
-   - Medium: an opt-out toggle in settings, Turnstile in the sign-in modal (needs work on mobile), founder and badge changes, and a separate Resend sending subdomain.
+### F051: details withheld
 
-### F042: 6-digit email sign-in code: per-request throttle is global, allowing parallel brute force of a known code window
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-- **Area:** Security & abuse resistance
-- **Type:** defect · **impact:** medium · **effort:** small
+### F050: details withheld
 
-**Summary.** The new email login code is a 6-digit number with only 5 guesses per emailed code, which is fine on its own. But the limit is enforced per issued code, and an attacker who can trigger many codes for a victim's address (one per minute) effectively multiplies their guesses, and the per-attempt counter is not transactional with the compare. Worth tightening before this becomes the primary login.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Technical detail.**
+### F045: details withheld
 
-handleVerifyEmailCode (auth/routes.ts:294-330) loads only the latest code row via loadLatestEmailCode (auth/store.ts:667-678, ORDER BY created_at DESC LIMIT 1) and caps at code_attempts>=5. recordEmailCodeAttempt (store.ts:687-694) increments atomically, good. But there is no per-email/per-IP ceiling on total verify attempts across code rotations: request-link is throttled to 1/min (auth/routes.ts:174-176, hasRecentEmailSignInRequest) yet an attacker who floods the victim with codes still only faces 5 guesses each against a 1e6 space — brute force is impractical here, so the real residual risk is (a) email-bomb amplification (each failed login attempt against the victim's address is cheap and there is no per-IP cap on verify-code) and (b) the code is derived from tokenHash+code (store.ts:201-202) but loadLatestEmailCode always targets the most recent row, so a second concurrently-issued code invalidates attempt accounting on the first. Recommend: add a per-email AND per-IP verify-attempt counter (e.g. 10/hour) independent of code rotation, and consider 8-digit codes. Note the compare uses hashToken equality (store.ts:309) not constant-time, but since it compares SHA-256 hashes of a secret the timing leak is not practically exploitable.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Evidence.**
+### F048: details withheld
 
-- src/cloudflare/worker/auth/routes.ts:303 — row.code_attempts >= 5 is the only per-code cap; no cross-row per-email/per-IP verify ceiling
-- src/cloudflare/worker/auth/store.ts:667 — loadLatestEmailCode only ever returns the newest row for an email
-- src/cloudflare/worker/auth/routes.ts:174 — request-link throttle is per-email 60s only, not per-IP
-
-**Fact-check (partially confirmed).**
-
-Corrections to the claim:
-1. The title is wrong to call the throttle "global". The request-link throttle is per email (routes.ts:174, store.ts:680-685). What is missing is any per-IP limit and any per-email cap on verify attempts across codes.
-2. The summary is wrong that the attempt counter is "not transactional with the compare". recordEmailCodeAttempt (store.ts:687-694) is an atomic conditional UPDATE...RETURNING that runs before the compare. Parallel requests cannot exceed 5 guesses per row.
-3. Point (a) is wrong: verify-code sends no email. Email volume comes from request-link, which allows 1 email per minute per address with no per-IP cap, so an attacker can spray many addresses.
-4. Point (b) is not something an attacker gains. When a new code is issued, the old code becomes unusable through the code path (its magic link still works). That does not reset or weaken attempt counting.
-5. Two citations point to the wrong file. Code generation is routes.ts:201-202 (store.ts:201-202 is unrelated user-insert code). The hash compare is routes.ts:309, not store.ts:309.
-6. "Brute force is impractical" understates the risk:
-   - Per target it is about 7,200 guesses per day, roughly 0.7% per day or 19% per month.
-   - With no per-IP limits, attacking many addresses at once makes some account takeovers expected.
-   - The code row is inserted before the email is sent (routes.ts:206 vs :228), so a failed or quota-limited Resend send does not stop guessing.
-7. Fix, small effort: reuse the guestbook IP-hash hourly limit pattern for verify-code and request-link, and add a per-email cap across codes (for example, 10-20 failed verifies per hour or day, counted from code_attempts). 8-digit codes are optional on top.
-
-### F041: Open redirect + OG spoofing on the public room-share page
-
-- **Area:** Security & abuse resistance
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** Anyone can craft a wamp.land share link that instantly redirects visitors to any website they choose, and that shows their own title/description/image in the link preview on social media. This lets scammers send 'api.wamp.land/...' links that look official but bounce people to phishing or scam pages.
-
-**Technical detail.**
-
-resolveRequestedPublicUrl (src/cloudflare/worker/share/routes.ts:262-277) takes the ?url= query param and accepts ANY http/https URL with no host allowlist. buildRoomShareMetadata (share/routes.ts:224) uses it as metadata.url, and buildRoomShareHtml (share/routes.ts:359-394) emits `<script>location.replace(<attacker url>)</script>` plus canonical/og:url/twitter meta using that value. Confirmed live: GET https://api.wamp.land/api/share/rooms/0,0?url=https://example.com/phish returned a page whose canonical, og:url, and location.replace() all point to example.com/phish. Because the response is Cache-Control public and cached at the edge (loadAnonymousPublicCache, share/routes.ts:73), a poisoned variant is also served to others who hit the same URL. Fix: only honor ?url= when its origin passes isTrustedAppHostname / resolveFrontendBaseUrl; otherwise derive the public URL from coordinates as the fallback branch already does.
-
-**Evidence.**
-
-- src/cloudflare/worker/share/routes.ts:263 — candidate = url.searchParams.get('url'); accepts any http/https origin
-- src/cloudflare/worker/share/routes.ts:390 — `<script>location.replace(${JSON.stringify(metadata.url)})` redirects to the attacker URL
-- src/cloudflare/worker/share/routes.ts:372-378 — title/canonical/og:url/og:description built from attacker-controlled values
-- live: GET https://api.wamp.land/api/share/rooms/0,0?url=https://example.com/phish redirected and set canonical/og:url to example.com/phish
-
-**Fact-check (partially confirmed).**
-
-The open redirect is real: GET https://api.wamp.land/api/share/rooms/<published x,y>?url=<any http(s) URL> serves a page that runs location.replace() to that URL, and canonical, og:url and the "Open this WAMP room" link also point there (routes.ts:230, 262-277, 365-391). Three corrections: (1) Attackers control only canonical, og:url, the <a href> and the redirect target. The title, description and image always come from the real room's data, so attackers cannot write their own preview text on this page; a crawler that follows og:url could still show the attacker's page. (2) There is no cache poisoning. The edge cache key is the full URL including the query string (publicCache.ts:18), so only the attacker's own URL variant is cached and normal share links are unaffected. (3) The route is on api.wamp.land, not wamp.land. Fix: either ignore ?url= on the HTML page variant (only /meta needs it; it is called from src/pages/shareMetadata.ts:93-96), or accept it only when its host passes isTrustedAppHostname. If you take the allowlist route, also allow *.wamp.land and localhost so preview and dev deploys (for example preview.wamp.land, used in shareMetadata.test.ts:189) keep the right canonical. Otherwise fall back to the coordinate-derived URL.
-
-### F034: Typing an email into sign-in creates an account and assigns a permanent WAMP founder number before the email is verified
-
-- **Area:** Backend performance, cost & reliability
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** Requesting a sign-in email immediately creates a user and gives it the next founder number, even if the address is a typo or a bot and the link is never clicked. Founder numbers are meant to be scarce identity markers, so they get used up. The only limit is one email per address per minute, so a script could create unlimited users and send unlimited emails on WAMP's email account. Two people signing up at the same moment can also collide and get a server error.
-
-**Technical detail.**
-
-handleRequestMagicLink rate-limits per email only (hasRecentEmailSignInRequest), then calls createUserForEmail before sending. createUserForEmail inserts the user and calls ensureFounderIdentityQualification, which does SELECT MAX(founder_number)+1 and then a separate upsert, plus backfill counts and syncUserBadges. founder_number is UNIQUE, so concurrent sign-ups race. The loser gets a 500 'UNIQUE constraint failed' during exactly the kind of spike when sign-ups cluster. The PRD says to assign the number after linking email to avoid burning numbers on throwaway accounts. Fix: (1) store the pending email on magic_link_tokens and create the user plus founder number only in the verify/consume path; (2) assign founder numbers atomically, e.g. `INSERT ... SELECT COALESCE(MAX(founder_number),0)+1` in one statement, or retry on the constraint error; (3) add a per-IP limit with a Workers Rate Limiting binding or a Cloudflare WAF rate rule on /api/auth/* (guestbook already does per-network limiting); (4) exclude unverified users from dashboard user counts.
-
-**Evidence.**
-
-- src/cloudflare/worker/auth/routes.ts:173-175 — the only throttle is one request per email per 60 s
-- src/cloudflare/worker/auth/routes.ts:194-195 — findUserByEmail ?? createUserForEmail runs before the email is sent or verified
-- src/cloudflare/worker/auth/store.ts:175-177 — insertUserRecord, then ensureFounderIdentityQualification
-- src/cloudflare/worker/progression/awards.ts:49-63 — MAX(founder_number)+1, then a separate upsert (non-atomic)
-- migrations/0019_progression.sql (user_progress) — founder_number INTEGER UNIQUE, so a lost race raises a constraint error
-- docs/product/xp-badges-ratings-prd.md:873-877 — 'award founder number when the account becomes a real WAMP identity ... avoids burning founder numbers on throwaway accounts'
-- src/cloudflare/worker/guestbook/routes.ts:224 — a per-network limit pattern already exists in the codebase
-
-**Fact-check (confirmed).**
-
-**Line numbers and wording:**
-- The throttle is at routes.ts:174, not 173-175.
-- The create-before-verify line is routes.ts:197, not 194-195.
-- The PRD literally recommends assigning the number "after linking email or wallet" instead of by Play.fun row order. The code follows that wording; the real gap is that the email link is never verified before the number is assigned.
-
-**Fix (1) is harder than written.** magic_link_tokens.user_id is `NOT NULL` and has a foreign key (migrations/0001_create_auth.sql:15,21). Creating the user only at verify time therefore needs a SQLite table rebuild.
-
-**Cheaper alternative for (1), still a small job:**
-- Remove ensureFounderIdentityQualification from createUserForEmail.
-- Call it in handleVerifyMagicLink and handleVerifyEmailCode after consumeMagicLinkToken succeeds, every time, not only when attachEmailToUser runs. This also repairs accounts that lost the race.
-- Count only users with a consumed token, or with a session, as real users in the dashboard and launch stats.
-
-**For (2):** besides the single-statement insert, the founder-number upsert should be retried when it hits the UNIQUE error.
-
-### F243: The server's private RPC URL is sent to every minter's browser and wallet
-
-- **Area:** Room ownership, NFT minting and wallet flow
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** The blockchain connection address that the docs tell you to store as a secret is handed to every player who presses Mint and is saved into their wallet's network list. If it contains a paid API key, anyone can copy it and use up the quota. Because every room save also depends on that RPC (first finding), that could take saving down.
-
-**Technical detail.**
-
-The docs say to store it with 'wrangler secret put ROOM_MINT_RPC_URL' (docs/development/frontend-redeploy-and-minting.md:131). The mint prepare and metadata prepare responses include chain.rpcUrl: config.rpcUrl (mint/routes.ts:72, 188). The client passes it to wallet_addEthereumChain as rpcUrls (auth/client.ts:1046), which persists it in the user's wallet. The production value could not be checked without POSTing, so impact depends on whether it is a keyed Alchemy/QuickNode/Infura URL. Fix: add a ROOM_MINT_PUBLIC_RPC_URL var (default https://mainnet.base.org for 8453) and return only that. Keep ROOM_MINT_RPC_URL server-only, and rotate the key if it was keyed.
-
-**Evidence.**
-
-- src/cloudflare/worker/mint/routes.ts:69-73 — prepare response chain.rpcUrl = config.rpcUrl
-- src/cloudflare/worker/mint/routes.ts:185-189 — same in the metadata prepare response
-- src/auth/client.ts:1040-1046 — wallet_addEthereumChain rpcUrls: [chain.rpcUrl]
-- docs/development/frontend-redeploy-and-minting.md:131 — the RPC URL is documented as a wrangler secret
-
-**Fact-check (partially confirmed).**
-
-The URL reaches only wallet-linked users who can mint, or refresh metadata on, a room they claimed. That is not every player, though any free account can reach that step. It is written into a wallet only when the wallet lacks chain 8453 (error 4902 path, client.ts:1029-1037), which is rare for Base mainnet. The main exposure is the prepare JSON response (mint/routes.ts:72, 188) and the public OpenAPI schema field (public/openapi.json:1856).
-
-Severity is conditional on the production secret being a keyed provider URL. That has not been verified. If it is, the save outage is real, because every room mutation does a chain read through loadRoomRecordForMutation → syncRoomOwnershipFromChain (rooms/store.ts:615, mint/service.ts:142-149), and RPC errors are rethrown.
-
-Fix: return a public RPC for the chain. Either add a ROOM_MINT_PUBLIC_RPC_URL var or hardcode a chainId → public RPC map (8453 → https://mainnet.base.org, 84532 → https://sepolia.base.org). Keep ROOM_MINT_RPC_URL server-only, and rotate the key if it was keyed. Separately, consider making the chain sync in the save path fail-open, so an RPC outage cannot block saves.
-
-### F051: Most mutating JSON endpoints parse request bodies with no size limit
-
-- **Area:** Security & abuse resistance
-- **Type:** improvement · **impact:** low · **effort:** small
-
-**Summary.** Only a handful of endpoints cap how big an incoming JSON body can be; the large majority call the generic parser with no limit, so a client can POST very large payloads that the worker fully buffers and parses before rejecting them — cheap memory/CPU pressure.
-
-**Technical detail.**
-
-parseJsonBody (core/http.ts:137-151) only enforces a limit when options.maxBytes is passed; otherwise it does request.json() with no cap. Across src/cloudflare/worker, ~80 non-test call sites use parseJsonBody< > and only 11 pass maxBytes (room snapshots 2MB via parseRoomSnapshot, guest replay 60KB, guest drafts 512KB, presence token 4KB). Comment creation, chat messages, playlist/profile/world/course mutations, etc. parse unbounded bodies. Cloudflare caps total request size, but a 50-100MB JSON blob still forces full buffering+parse per request and can be fired cross-origin from trusted-origin pages. Fix: give parseJsonBody a sane default maxBytes (e.g. 64KB) and raise it explicitly only where large bodies are legitimate.
-
-**Evidence.**
-
-- src/cloudflare/worker/core/http.ts:142 — without maxBytes the parser calls request.json() with no cap
-- grep: ~80 parseJsonBody call sites in worker, only 11 pass maxBytes
-
-**Fact-check (partially confirmed).**
-
-Correct the counts: 89 non-test call sites, and only 8 pass maxBytes (not ~80 and 11).
-
-Guest drafts do NOT use a 512KB parse limit. guestRoomDrafts/routes.ts:92 parses the body with no cap. MAX_GUEST_ROOM_SNAPSHOT_JSON_BYTES (512_000, line 29) is only checked at line 102, after the full parse, on the re-serialized snapshot. So this unauthenticated endpoint parses an unbounded body first and rejects it afterwards.
-
-The "cross-origin from trusted-origin pages" framing is wrong. The more relevant point is that guestbook create (guestbook/routes.ts:75), the guest activity heartbeat (guestActivity/routes.ts:26) and the guest draft PUT accept unbounded bodies with no auth and no trusted-origin check, so any non-browser client can reach them.
-
-Fix: set a default maxBytes in parseJsonBody, e.g. 64KB. Give the guest draft PUT an explicit limit of about 600KB, and leave the existing explicit room/world snapshot limits as they are.
-
-### F050: Public map-screenshot capture endpoint is an unauthenticated, expensive trigger
-
-- **Area:** Security & abuse resistance
-- **Type:** improvement · **impact:** low · **effort:** small
-
-**Summary.** The public map gallery under wamp.land/capture exposes a button (and underlying POST) that anyone can call to make the server launch a headless browser and render a full map screenshot. It's capped at 10/day, but there's no auth or rate limit, so a stranger can burn that budget and the browser-rendering compute every day.
-
-**Technical detail.**
-
-createPagesWorker proxies /capture/* straight to the map-screenshot worker including POST (src/pages/routes.ts:16-39, allows GET/HEAD/POST). The map-screenshot worker handles POST /api/capture with no auth (src/mapScreenshot/worker.ts:62-64) and runs captureMapScreenshot('manual'), which launches the MAP_SCREENSHOT_BROWSER binding and stitches tiles. The only ceiling is the per-day _0.._9 filename limit (capture.ts:104-113). Confirmed live: GET https://wamp.land/capture/api/health returns 200. An attacker can POST /capture/api/capture up to the daily cap every day, consuming browser-rendering minutes and denying the owner their own manual captures. Fix: require the admin key (or remove public POST from the proxy allowlist) for /api/capture; keep GET gallery public if desired.
-
-**Evidence.**
-
-- src/pages/routes.ts:17 — capture proxy explicitly allows POST from the public internet
-- src/mapScreenshot/worker.ts:63 — POST /api/capture runs a headless-browser capture with no auth check
-- live: GET https://wamp.land/capture/api/health returned 200 (endpoint publicly reachable)
-
-**Fact-check (partially confirmed).**
-
-1. The cap is not "10/day via _0.._9". Manual captures are limited to 9 a day (_1.._9; config.ts MAX_MANUAL_SHOTS_PER_DAY=9, storage.ts:199). The _0 file is reserved for the daily capture. The cap also does not hold under concurrent requests. nextManualFileName (storage.ts:189-205) lists R2 before the 20-60s render and only writes afterward (capture.ts:104-113 vs 230). Parallel POSTs therefore all pick the same free index, each launches its own browser, and they overwrite each other. That makes browser launches limited only by Cloudflare's own concurrency and rate limits, not by the 9-shot cap.
-
-2. Removing POST from the proxy allowlist would NOT fix this. wrangler.map-screenshot.jsonc does not set workers_dev:false, and the Worker answers directly at its *.workers.dev URL (live GET /api/health returned 200 there). The auth check has to live inside src/mapScreenshot/worker.ts. Options: an admin-key secret header, or Cloudflare Access on the route. Also set workers_dev:false. Give the gallery's "Take screenshot" button an admin-key prompt.
-
-3. A second unauthenticated trigger was missed: POST /api/capture/daily (worker.ts:67-70). Anyone can create the day's _0 file before the cron does, and the cron then skips (capture.ts:94-101). Once Twitter phase 2 is turned on, this would also let an outsider choose when the daily post happens.
-
-4. Manual captures also call saveZoomState (capture.ts:231-235). Outside spam can push the public time-lapse zoom up to 9x the intended 0.001/day step, and it adds junk files to the gallery and ZIP. This integrity harm matters more than the compute cost.
-
-5. A related issue, not tested live: GET /archive.zip with no month (worker.ts:93-113) loads every PNG into memory. That is currently 60 files, about 100MB (from the public /api/screenshots listing), and the code then copies the data twice while building the zip. This likely already exceeds the Worker's 128MB memory limit, and anyone can trigger it. It should stream or require a month.
-
-### F045: Display name is not unique and not escaped everywhere, enabling moderator/impersonation confusion
-
-- **Area:** Security & abuse resistance
-- **Type:** defect · **impact:** low · **effort:** small
-
-**Summary.** Two different accounts can hold the same display name (only usernames are unique). Chat moderation, chat admin granting, and room-comment author identity all key off display name, so a user can pick the exact display name of a moderator or popular builder and appear to be them in several surfaces.
-
-**Technical detail.**
-
-There is no unique index on users.display_name (migrations confirm only idx_users_username_lower in 0030; agents table has UNIQUE display_name but users do not). updateUserProfile/updateUserDisplayName only do a best-effort findUserByDisplayName check (auth/routes.ts:418-421, profiles/routes.ts:133-139) with a race window and no DB constraint, and findUserByDisplayName matches case-insensitively returning the first row (auth/store.ts:105-127). Impact points: (1) handleCreateChatAdmin looks up the grantee BY display name (chat/routes.ts:260 findUserByDisplayName) — an owner intending to promote one person can promote a namesake; (2) room comment author identity is stored as authorDisplayName from the user (roomComments/routes.ts, createRoomComment) and rendered as the comment author; (3) chat confirm dialogs show message.userDisplayName (ui/chat/panel.ts:503,534). Combined with no uniqueness this is an impersonation vector. Fix: add a unique (lower(display_name)) index with a migration + collision handling, and have chat-admin granting resolve by username/id rather than display name.
-
-**Evidence.**
-
-- migrations/0030_user_profile_usernames.sql:7 — only username has a unique lower() index; no equivalent for display_name
-- src/cloudflare/worker/auth/store.ts:120 — findUserByDisplayName matches lower(display_name) and returns first row
-- src/cloudflare/worker/chat/routes.ts:260 — chat admin grant resolves the target by display name
-- src/cloudflare/worker/auth/routes.ts:418 — uniqueness is a non-transactional check, not a constraint
-
-**Fact-check (partially confirmed).**
-
-Display names collide by design, not only through a race. Email signup uses the email's local part as the name (auth/store.ts:1438) and school accounts use their usernames, with no uniqueness check on either path. findUserByDisplayName returns an arbitrary match (LIMIT 1, no ORDER BY).
-
-The only thing that actually keys off display name is chat admin granting (chat/routes.ts:260, typed into chatModerationModal.ts:163). Chat delete and ban use userId, and the chat and comment UI escapes output properly (textContent, plus escapeHtml in the email).
-
-A unique lower(display_name) index would not stop impersonation, because lookalike and zero-width characters get past it (normalizeDisplayName only collapses whitespace). It would also need existing duplicates cleaned up before it can be added.
-
-Better fix:
-1. Have chat admin granting pick a user by username or userId, using the existing user search in chat/store.ts:122, and show @username in the admin list.
-2. Show @username, or an owner/admin badge, next to display names in chat and comments.
-3. Optional and lower priority: add confusable/zero-width normalization, then a unique index after dedupe.
-
-### F048: Session cookie never rotates on privilege change and sessions live 30 days with no server-side invalidation on email/wallet linking
-
-- **Area:** Security & abuse resistance
-- **Type:** improvement · **impact:** low · **effort:** small
-
-**Summary.** When a logged-in player links an email or wallet (which can merge identity and change what the account can do), their existing session token is kept as-is. Sessions also last 30 days and aren't rotated at login. If a session token ever leaks, there's a long window and no re-issue on sensitive changes.
-
-**Technical detail.**
-
-createSession (auth/store.ts:966-983) issues a 30-day token (SESSION_MAX_AGE_SECONDS, store.ts:23). On wallet verify/link (auth/routes.ts:579-590) and magic-link email-link (auth/routes.ts:269-291) the code attaches the identity but only sets a new cookie when there was NO prior session; an already-authenticated user who links keeps the same session id. There is no session-rotation-on-auth and no 'log out other sessions' on password/identity change (school password reset does delete sessions — school/store.ts:341-343 — but the main flows do not). Best practice: rotate the session token when linking an identity or elevating, and offer explicit session revocation. Lower severity because the cookie is HttpOnly+Secure and SameSite handling exists, but the long lifetime magnifies the CORS/CSRF issues above.
-
-**Evidence.**
-
-- src/cloudflare/worker/auth/store.ts:23 — SESSION_MAX_AGE_SECONDS = 30 days
-- src/cloudflare/worker/auth/routes.ts:584 — wallet link reuses the existing session (setCookie only set when no prior auth)
-- src/cloudflare/worker/school/store.ts:341 — school flow DOES delete sessions on disable, showing the pattern exists but isn't used on link/elevation
-
-**Fact-check (partially confirmed).**
-
-Only the wallet-link path keeps the existing session (routes.ts:579-590). Magic-link and email-code verification always issue a new session and cookie (routes.ts:281-291, 326-328). Linking never merges accounts: conflicts return 409 (store.ts:280-290, 316-322). Admin access comes from the x-admin-key header, not from identity (request.ts:186-197), so rotating the cookie on link brings almost no security gain against fixation on this host-only HttpOnly cookie.
-
-School password reset does NOT delete sessions (school/store.ts:268-300); only disabling a student does (school/store.ts:341-343). That is a real gap: a teacher-reset student password leaves old sessions valid for up to 30 days.
-
-Recommended reframe:
-1. Add a "sign out everywhere" endpoint and UI that runs DELETE FROM sessions WHERE user_id = ?.
-2. Add that same delete to resetSchoolStudentPassword.
-3. Optionally, delete the old session row when magic-link or code verification replaces a signed-in session, and purge expired rows on a schedule.
-
-Drop the "rotate cookie on wallet link" recommendation.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
 ### F052: A failed autosave retries every frame forever and keeps no local copy
 
@@ -5344,820 +5104,89 @@ DEFAULT_ROOM_MINT_CHAIN_ID = 84532 with name 'Base Sepolia' (mint/roomOwnership.
 
 5. product-requirements.md:124 ("content permanence ... later decision") is arguably still accurate. The clearly stale lines are :36, :83, :520 and :856.
 
-### F198: Anti-cheat rejects honest runs that include a death respawn, a portal jump, or more than about 8.5 minutes of play
+### F198: details withheld
 
-- **Area:** Leaderboard, XP & progression integrity (anti-cheat and economy)
-- **Type:** defect · **impact:** high · **effort:** medium
-- **Flagged before:** docs/2026-06-10-repo-improvement-plan.md (testing section, item 2) recommended starting vitest with runs/verification.ts. Vitest now exists, but there are still no direct tests of verifyRoomRunTrace or verifyPath (only finalizationVerification.contract.test.ts with a fixture trace).
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Summary.** When you die, the game instantly teleports you back to the spawn point (or to a course's start room), and portals teleport you too. The run checker reads that jump as an impossible speed and rejects the run. A new player who dies in the right half of a room and then clears it gets "Ranked run could not be verified": no XP, no points and no leaderboard spot, on exactly the first clears that are supposed to hook them.
+### F201: details withheld
 
-**Technical detail.**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-Mechanism: the trace recorder samples breadcrumbs every 250ms (rankedRunTraceRecorder.ts:11, 119-133) and has no event type for respawn or portal. Respawning is an immediate body.reset to the room spawn (playerLifecycle.ts:136-144), or to the course/expanded-room start room (OverworldPlayScene.ts:4410-4454), called synchronously from death handling (sessionReset.ts:60-63). Portals call teleportPlayerTo, which can cross rooms (portalObjects.ts:172-176). verifyPath allows at most 900px/s*dt+80px horizontally (about 310px between two breadcrumbs 256ms apart) and fails any breadcrumb or roomTransition that skips more than one room (verification.ts:543, 569, 589). Rooms are 640px wide, so a death more than about 320px from spawn fails, and a course death two or more rooms from the start always fails. Verification is mandatory for T0 accounts whenever a run earns points: every first clear and every PB (routes.ts:344 pointAwardPotential). New accounts stay T0 until trust reaches 40. A separate issue: MAX_BREADCRUMBS=2048 at 250ms covers only 512s, but MAX_TRACE_DURATION_MS is 30 min (verification.ts:21-25). Survival rooms with long durationMs and long courses fail with trace_size. On failure the route throws 409 before awarding anything (routes.ts:422-434), and the client only shows the error string (goalRuns.ts:1150-1162). Fix: (1) Add trace goal-event types 'respawn' {from,to} and 'portal' {sourceInstanceId,destInstanceId}, record them in sessionReset/portalObjects, and in verifyPath skip the speed and room-adjacency check for the one breadcrumb pair that a respawn/portal event explains. Validate that 'to' lies within about 48px of the snapshot spawn, course startPoint or portal partner position, which the server already has. (2) Make the breadcrumb interval adaptive (250ms for the first 2 minutes, then 500ms or 1s), or raise the cap to cover the 30-minute limit. (3) Size the impact first: GET the admin verification feed (admin/routes.ts:472) and count verification_reason in ('trace_path','trace_transition','trace_size'). (4) Add vitest cases that feed real recorded traces (death far from spawn, cross-room portal, course death in room 3) through verifyRoomRunTrace/verifyCourseRunTrace. Keep this separate from the already-reported quick-restart trace bug.
+### F199: details withheld
 
-**Evidence.**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-- src/scenes/overworld/playerLifecycle.ts:136-144 — respawnPlayerToRoom does playerBody.reset(spawn.x, spawn.y), an instant teleport
-- src/scenes/OverworldPlayScene.ts:4410-4454 — course runs respawn into the course start room, which can be several rooms away
-- src/scenes/overworld/sessionReset.ts:60-63 — a death records a death and respawns in the same frame; the run continues
-- src/scenes/overworld/portalObjects.ts:172-176 — portals call authorizeRoomTransition plus teleportPlayerTo, so they can cross rooms
-- src/scenes/overworld/rankedRunTraceRecorder.ts:11 — BREADCRUMB_INTERVAL_MS = 250; the recorder has no respawn or portal event
-- src/cloudflare/worker/runs/verification.ts:543 — horizontal check 900px/s*dt + 80px slack between consecutive breadcrumbs
-- src/cloudflare/worker/runs/verification.ts:569 and :589 — a breadcrumb jump of more than one room fails with trace_transition
-- src/cloudflare/worker/runs/verification.ts:21-25 — MAX_BREADCRUMBS 2048 (512s at 250ms) vs MAX_TRACE_DURATION_MS 30 min
-- src/cloudflare/worker/runs/routes.ts:344 — pointAwardPotential makes every first clear or PB of a T0 account require verification
-- src/cloudflare/worker/runs/routes.ts:422-434 — a failed verification throws 409 before any points or XP are awarded
+### F200: details withheld
 
-**Fact-check (confirmed, confirmed, confirmed).**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-Small refinements; none of them weakens the core claim.
+### F202: details withheld
 
-1. Who is affected. Trust is computed in progressRows.ts:477-484. Email gives +20 and a wallet gives +20, so an account with both starts at 40, which is T1. For T1 the verification is audit-only and the bug does not block the run. The block hits email-only or wallet-only accounts (score 20, T0) until they earn about 20 more trust. Each clear adds about +1, so that is roughly their first 20 clears. That is exactly the onboarding window.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-2. Course deaths. A death does not need to be two or more rooms from the start to fail. A death in the adjacent room, or in the start room itself far from the start point, already fails the horizontal speed check (trace_path). A death two or more rooms away additionally fails the room-transition check.
+### F203: details withheld
 
-3. Long runs. At 60fps breadcrumbs land about 250-267ms apart, so 2048 breadcrumbs cover roughly 8.5-9 minutes. MAX_INPUT_EVENTS is also 2048, and the recorder adds an event on every moveX/moveY change and every jump press. A long run with lots of input can therefore hit trace_size through input events even before the breadcrumb cap. Both limits should be scaled together.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-4. Previously recommended. The existing contract test does not feed a fixture trace through verifyPath. It mocks the verifier entirely (finalizationVerification.contract.test.ts:12), so verifyPath has zero test coverage.
+### F206: details withheld
 
-5. Possible extra case, not fully traced. A void-fall death respawns only after the player is 704px below the room bottom (RESPAWN_FALL_DISTANCE = 2 x 352). That would also exceed the 455px vertical limit, unless the room-transition logic ends the run first.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-The core claim is confirmed. Some details need softening or widening:
+### F204: details withheld
 
-**Threshold.** A single respawn breadcrumb pair fails when the jump is more than about 305-320px horizontally, more than about 455px vertically, or more than about 530px in total distance.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**"Right half of a room" depends on where spawn is.** That is true when the builder placed the spawn near the left edge. Without a spawn point, resolveGoalRunStartPoint (goalRunStartGate.ts:18-40) uses a surface point or the room's center x=320, so only deaths near the far edges fail.
+### F205: details withheld
 
-**Void falls also fail.** RESPAWN_FALL_DISTANCE is ROOM_PX_HEIGHT*2 = 704px (OverworldPlayScene.ts:311), so a fall death that happens in the void below a room should fail the vertical check wherever it lands horizontally. That case is inferred from the constants, not run.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**More runs need verification than the claim says.** T0 runs also need it for take_top_1 and enter_top_10, so nearly any completion on a new room with fewer than 10 entries is checked. T1+ accounts are skipped and only audited.
+### F207: details withheld
 
-**Run length.** MAX_INPUT_EVENTS=2048 (verification.ts:21) can end long runs with trace_size even sooner than the breadcrumb cap, because every moveX/moveY change and every jump press adds an event.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Possible quick fix (an alternative to the proposed fix).** The server could allow one breadcrumb discontinuity when the destination lands within about 48px of a position it already knows: the room spawn or start point, the course startPoint, or any portal's partner. That needs no client or schema change, which matters because changing RANKED_RUN_TRACE_SCHEMA_VERSION makes older cached clients fail with trace_client_outdated. The proposed event-based fix stays the more robust long-term option.
+### F208: details withheld
 
-The core claim holds. Details to tighten:
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-(1) What triggers the failure is distance from the room's spawn marker, not dying in "the right half." The limit is about 305-320px horizontally, or about 530px straight-line, measured from the last breadcrumb before the death. Rooms with no spawnPoint fall back to a spawn near the centre column (goalRunStartGate.ts resolveSurfaceGoalRunStartPoint), and those are effectively immune because the maximum horizontal distance is about 320px. Rooms with an edge spawn fail for deaths in roughly the far half. That was about 60% of sampled production goal rooms.
+### F209: details withheld
 
-(2) For course and expanded-room runs, a death in any non-start room almost always fails. An adjacent room fails on trace_path dx, not just rooms two or more away on trace_transition.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-(3) Cross-room portals during a single-room goal run don't fail verification. The room transition calls syncGoalRunForRoom('transition'), which clears the run. Portals only fail verification for same-room pairs more than about 305px apart, or for non-adjacent hops inside a course. Portals are rare in practice: none in the ~40 rooms sampled.
+### F211: details withheld
 
-(4) The proposed fix must also exempt the matching roomTransitions entry. A course respawn records a non-adjacent transition, which fails the second loop at verification.ts:587-590. Breadcrumbs alone aren't enough.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-(5) There is a cheaper mitigation that needs no client change: in verifyPath, accept a jump when the post-jump breadcrumb lies within about 900·dt+80px of the snapshot's resolved spawn or course startPoint. The server already has the room or course snapshot, and snapping back to spawn gives a cheater no advantage. This avoids a schema bump, which would make stale cached clients fail with trace_client_outdated. Add the explicit respawn/portal events later.
+### F210: details withheld
 
-(6) The trace_size cap of about 8.5 minutes is real but low-frequency. MAX_INPUT_EVENTS=2048 can bind at a similar or shorter duration for very active input.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F201: Republishing your own room resets first-clear points, XP and the #1 spot, with no limit
+### F219: details withheld
 
-- **Area:** Leaderboard, XP & progression integrity (anti-cheat and economy)
-- **Type:** defect · **impact:** high · **effort:** small
-- **Flagged before:** Backlog G-013's acceptance criterion says 'Progress rewards encourage playing other people's rooms rather than farming your own', and the PRD (xp-badges-ratings-prd.md:312, 825) says first-clear PXP is 'once per significant version lineage' and badges count 'only on unique, non-owned rooms'. Neither is implemented.
-- **Already in the product backlog.**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Summary.** Every publish, even an unchanged one, creates a new room version. Player rewards (first-clear points and XP, top-10 and #1 XP, the creator's '50 points per new player', clear-count badges) restart for each version. A builder can republish a walk-right room and clear it again, over and over, for about 150 points and 50 XP each loop. The daily publish limit doesn't apply when republishing your own room.
+### F212: details withheld
 
-**Technical detail.**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-publishRoom always appends lastPublishedVersion+1 (rooms/store.ts:1040-1041). Republishing your own published room bypasses the daily limit (rooms/routes.ts:410-415). The following are all keyed on the raw roomVersion: first-completion points (points.ts:257-296 loadBestCompletedRunForUserAndRoomVersion, used at routes.ts:440-452); PXP room_clear_first (awards.ts:359-371); the top-10/top-1 XP rank, computed from runs on that raw version only (awards.ts:399-447), so each republish is an empty board you instantly win; creator completion points, sourceKey room:version:finisher (points.ts:205), so one 1-hour-old alt re-pays the builder 50 points per republish up to 100 events per day (5,000 points per day); and the badge clear count, DISTINCT room_id, room_version including your own rooms (progressRows.ts:179-194), so 100 republishes earn 'player_100_clears'. The suspicious repeat detector includes version in its grouping key (suspiciousModel.ts:223), so the loop is never grouped. The fix is already half-built: buildRoomRatingWindow groups versions under 10% weighted change into one versionKey (ratings.ts:283-313), and builder BXP already uses it (awards.ts:462-488). Fix: (1) key points first-completion, room_clear_first PXP, the top-10/top-1 rank pool and creator completion points on the rating window versionKey or the leaderboard family (roomLeaderboardAggregation.ts) instead of the raw version. (2) Give no clear points or PXP when run.userId equals the version publisher or the room claimer; the PRD says badges and clears count 'only on unique, non-owned rooms'. (3) Count distinct versionKeys rather than raw versions for clear badges. (4) Optionally reject publishes whose snapshot hash equals the current published one.
+### F213: details withheld
 
-**Evidence.**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-- src/cloudflare/worker/rooms/store.ts:1040-1041 — every publish becomes lastPublishedVersion+1, even when nothing changed
-- src/cloudflare/worker/rooms/routes.ts:410-415 — republishing your own published room skips assertUserCanPublishContent
-- src/cloudflare/worker/runs/points.ts:257-296 — the first-completion check is per raw room_version
-- src/cloudflare/worker/progression/awards.ts:367 — the room_clear_first dedupe key uses the raw roomVersion
-- src/cloudflare/worker/progression/awards.ts:399-447 — top10_entry and top1_take are ranked against the raw version's runs only
-- src/cloudflare/worker/runs/points.ts:205 — creator completion sourceKey is roomId:roomVersion:finisherUserId
-- src/cloudflare/worker/progression/progressRows.ts:179-194 — clear count is DISTINCT room_id, room_version and includes your own rooms
-- src/cloudflare/worker/admin/suspiciousModel.ts:223 — the repeat detector groups by kind:source:version:elapsed, so versions never match
-- src/cloudflare/worker/progression/ratings.ts:283-313 — the significant-change versionKey window already exists and is used for BXP
+### F214: details withheld
 
-**Fact-check (confirmed, confirmed, partially confirmed).**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-Minor refinements; none of them change the core claim:
-1. **Detection is overstated.** The repeat_identical key (suspiciousModel.ts:223) also requires an exact elapsedMs match, so it would not catch a human replaying the room even without the version in the key. Saying "never grouped" is misleading. Other admin signals do not look at versions: point_burst_5m (500 points in 5 min, suspiciousModel.ts:21, 274-300) and run_burst_5m/60m (suspicious.ts:64-67, 398-399). A fast loop of about 4 cycles in 5 minutes would show up on the admin suspicious page. That is detection after the fact, not prevention, and a slow farmer avoids it.
-2. **The alt needs a linked email or wallet.** Generated/guest accounts cannot write leaderboard runs (generatedUsers/leaderboardIsolation.ts:42-46), and points.ts:196 skips them for creator points.
-3. **The public leaderboard is not reset.** handleRunFinish already resolves leaderboardFamilyVersions (runs/routes.ts ~239-262), and the public board aggregates the version family. Only the PXP rank pool (top10/top1) uses the raw version. That makes the fix easy: pass selection.leaderboardFamilyVersions into the rank computation.
-4. **Badge count has a second gap.** countDistinctRoomCompletions also ignores verification_status, so clears that failed verification still count toward badges.
-5. **Line references.** Run-finish usage is at runs/routes.ts:445-453 (the claim says 440-452). The room_clear_first block spans awards.ts:359-371.
+### F215: details withheld
 
-One detail is overstated. The room leaderboard that players see does not reset after an unchanged republish. resolveAggregatedRoomLeaderboardSelection / buildRoomLeaderboardLineage (runs/roomLeaderboardAggregation.ts:16-53, persistence/roomLeaderboardLineage.ts, roomVersionLineage.ts:162-194) group versions whose snapshot fingerprints match. The same family-aware rows feed the verification top-10 check in handleRunFinish (routes.ts:296-313). So the visible #1 holds after an identical republish; the board only resets when the snapshot changes. What actually resets is the top10_entry and top1_take XP payout, because awards.ts:399-447 ranks against the raw version's runs only. The farming loop for points, PXP, creator points and badges is otherwise exactly as described.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-Fix note: that grouping (buildRoomLeaderboardLineage / leaderboardFamilyVersions) already exists. Keying first-completion, the PXP rank pool, creator completion and the clear count on it, or on the rating-window versionKey, closes most of the hole cheaply. An owner/claimer exclusion is still needed to stop self-farming through small real edits.
+### F218: details withheld
 
-Leave the 'resets the #1 spot' wording out of the title. An unchanged republish keeps the public room leaderboard, because byte-identical versions share one leaderboard family (roomLeaderboardAggregation.ts / roomLeaderboardLineage.ts). It only re-awards the top10_entry and top1_take XP, which awards.ts:399-447 ranks against the raw version's runs alone. A republish with any content change (e.g. one tile) does start a fresh public board.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-Skipping the daily publish limit on republish is by design: the limit's error message says it covers new rooms (trustCaps.ts:198). The real defect is that republishes have no throttle and no snapshot-hash dedupe.
+### F216: details withheld
 
-Farming is not undetected. The run_burst_5m/60m signals (suspicious.ts:64-67, 398-399) flag 30+ completions an hour for admins, though nothing blocks them.
-
-Add this point: ordinary builders trigger the same reset with no cheating involved. The Publish button stays enabled for unchanged rooms (scenes/editor/viewModel.ts:110), and the global leaderboard ranks by total_points (leaderboards.ts:48), so every republish quietly inflates the public points ranking.
-
-Fix tweak: key first-completion and the rank pool on leaderboardFamilyVersions/equivalentRoomVersions, and key PXP on the rating-window versionKey. Keep the dedupe-key format so existing events still dedupe. For clear badges, exclude rooms the player owns via a claimer join.
-
-### F199: Ranked verification passes a fake trace: a single breadcrumb at the exit is enough
-
-- **Area:** Leaderboard, XP & progression integrity (anti-cheat and economy)
-- **Type:** defect · **impact:** high · **effort:** medium
-
-**Summary.** The server checks that a run's recording looks plausible, but it never checks that the recording starts at the spawn point or has no gaps. A scripted player can send one dot at the exit and still pass. For enemy-clearing rooms they don't even need that. Anyone with basic scripting skills can post a near-instant world record on any room, even while verification is switched on.
-
-**Technical detail.**
-
-verifyPath only compares consecutive breadcrumbs and starts at index 1 (verification.ts:519-524). A trace with 0 or 1 breadcrumbs passes trivially. Nothing anchors the first breadcrumb near the spawn or course startPoint at atMs≈0, and nothing limits the gap between breadcrumbs. A reach_exit run passes with one breadcrumb plus one reach_exit event at the exit marker, which is public in the room snapshot (hasGoalEventNearMarker, 32px; nearest-breadcrumb radius 208px at verification.ts:981-1027). Enemy events skip the path check entirely (verification.ts:772) and only need to be within 64px of the enemy's placed position. So a defeat_all trace can have zero breadcrumbs and N enemy events at t≈0. collect_race and survival have no trace-based completion check at all (verification.ts:899, 924). inputEvents are only counted and ordered (verification.ts:493) and never used. The speed caps are 6x real movement (900px/s vs PLAYER_SPEED 150 at OverworldPlayScene.ts:351). The only real floor is the wall clock between /start and /finish (routes.ts:920-932), so a script gets records of a few hundred ms. Personal API tokens can carry runs:write (auth/model.ts:17-22), which makes scripting official. Cheap hardening, all server-side in verification.ts: (a) require breadcrumbs[0].atMs ≤ 300 and within 48px of the snapshot spawn or startPoint; (b) require max breadcrumb gap ≤ 600ms, except where a respawn or portal event explains it (see the respawn finding); (c) require at least floor(traceDurationMs/400) breadcrumbs; (d) derive the speed caps from real physics constants plus launch objects (about 2x, not 6x); (e) require enemy and collectible events to have a breadcrumb within about 320px at that time; (f) compute a physics floor, minElapsed = straight-line spawn→exit distance / max speed, and reject runs below it. Optionally, (g) mark runs submitted with source 'api_token' as unranked. Longer term, replay the already-recorded inputEvents offline against the room for #1 runs only, in a queue rather than on the request path.
-
-**Evidence.**
-
-- src/cloudflare/worker/runs/verification.ts:519-524 — verifyPath loops from index 1; there is no first-breadcrumb, spawn or max-gap check
-- src/cloudflare/worker/runs/verification.ts:772 — enemy events (and enemy-actor collectibles) skip the goal-event-to-path distance check
-- src/cloudflare/worker/runs/verification.ts:899 and :924 — collect_race and survival have no completion checks
-- src/cloudflare/worker/runs/verification.ts:981-1027 — a goal event only needs some breadcrumb in the same room within 208px
-- src/cloudflare/worker/runs/verification.ts:27-31 — speed caps of 900/1500/1800 px/s plus 80px slack
-- src/scenes/OverworldPlayScene.ts:351 — PLAYER_SPEED = 150
-- src/runs/verificationTrace.ts:105-108 — missing arrays normalize to [], so empty breadcrumb lists are accepted
-- src/cloudflare/worker/runs/verification.ts:493 — inputEvents are only checked for ordering, never used
-- src/auth/model.ts:17-22 — personal API tokens can hold runs:write; routes.ts:80-85 accepts them for ranked runs
-
-**Fact-check (partially confirmed, partially confirmed, partially confirmed).**
-
-1) Wrong line cite: verificationTrace.ts:105-108 is normalizeInputEvents. Breadcrumbs normalize to [] at verificationTrace.ts:138-141. The behaviour is the same.
-2) collect_race is overstated. deriveMetricsForGoal has no case for it (verification.ts:899), but routes.ts:368-376 re-runs normalizeFinalizedRunBody on the metrics derived from the trace. routes.ts:968-981 then enforces exhaustion or time-limit and beating the Sword Hunter. Player collectible events are also path-checked and must be within 64px of the collectible. So collect_race is fakeable with made-up breadcrumbs, not "unchecked". Survival completion is checked only against the client-reported elapsedMs >= durationMs (routes.ts:991-994), which the client controls. Survival and collect_race are ranked by score, not time (scoring.ts:97-99). So the "near-instant world record" point applies to reach_exit, collect_target, defeat_all and checkpoint_sprint.
-3) Missing, and bigger: verification only runs for T0 accounts. relaxVerificationTriggerForTrustTier (verification.ts:213-233) and finalizationVerification.ts:23-35 set required=false for T1 and above. T1 means trust score of 40 or more (progression/shared.ts:168). Every completed room run adds +1 trust, de-duplicated only per attempt (awards.ts:449-459). A script needs about 40 completions, then submits ranked runs with no trace at all, which are stored as 'not_required' and accepted (verificationSql.ts:2). Verification also only triggers on a top-1 or top-10 entry, a record gap, or point gain. The fix has to cover this too: keep trace checks for #1 and top-10 entries at every tier, or at least for api_token sources. Without that, items (a) to (f) only stop fresh accounts.
-4) Further holes in the same code: checkpoint events are never checked against checkpoint marker positions, only checkpointIndex >= 0 (verification.ts:854-860). For checkpoint_sprint, any 'finish' event bypasses the finish-marker check (verification.ts:908).
-5) Suggestion (d), "about 2x", may be too tight. Tornadoes launch the player and the wall jump X velocity is 205 (OverworldPlayScene.ts:369). Derive the caps from the real launch velocities and tune them against stored passing traces in run_verification_audit.
-
-Detail fixes:
-(1) For reach_exit, ZERO breadcrumbs does not pass. getGoalEventPathDistance (verification.ts:981-990) returns null when no breadcrumb is in the event's room, so the run fails as goal_event_path_mismatch. One breadcrumb is the true minimum, which matches the claim's own reach_exit example. "0 or 1 breadcrumbs passes trivially" holds for verifyPath alone, not end to end.
-(2) collect_race is not unchecked. When the trace passes, the route replaces client metrics with trace-derived ones and calls normalizeFinalizedRunBody again (routes.ts:367-377). That function requires derived collectibles to equal the cap, or the reported time to reach the limit, and the player to beat the Sword Hunter (routes.ts:972-990). Player-collectible events go through the path and object-position checks (verification.ts:772-818). The run is still forgeable with sparse breadcrumbs, but the gate exists.
-(3) survival is score-ranked (runs/scoring.ts:95-99), so a "near-instant world record" doesn't apply. The real hole is different: completion needs elapsedMs ≥ durationMs (routes.ts:994), and elapsed is max(client-reported, wall clock). A script can report durationMs (and a matching traceDurationMs) about 300 ms after /start and complete it instantly for points and XP.
-(4) The fix list needs another item: POSITION_SLACK_PX is applied per breadcrumb pair. Bound it, for example with a minimum deltaMs per pair (the client samples every 250 ms, rankedRunTraceRecorder.ts:11) or a cumulative slack budget. Otherwise the max-gap and minimum-count rules can be beaten with dense 1 ms breadcrumbs.
-(5) The T1+ skip (verification.ts relaxVerificationTriggerForTrustTier; finalizationVerification.ts:23-34) means these fixes only protect T0 accounts. Consider always verifying take_top_1 runs regardless of tier.
-
-Corrected facts:
-- collect_race and survival completion IS enforced: routes.ts:376-384 → normalizeFinalizedRunBody (routes.ts:952-1012) runs on the trace-derived metrics. Both modes are ranked by score, not time, and player collectible events are still path-checked.
-- The near-instant-record exploit applies to the time-ranked goals (reach_exit, defeat_all, checkpoint_sprint, collect_target with a cheap fake path) for T0 accounts only.
-
-The larger, cheaper fix is missing from the claim. T1+ accounts skip verification entirely (verification.ts:215-234; finalizationVerification.ts:23-35), and T1 is reachable with just email + wallet (trust 40: progression/shared.ts:158-171, progressRows.ts:476-484). Step 1 should be: always verify take_top_1 and record_gap runs regardless of trust tier (relax only enter_top_10 and point_gain).
-
-Revised fixes:
-- (a) Anchor check: record the trace from the moment the run qualifies at spawn (buffer frames before /start returns), or allow first-breadcrumb distance ≤ 48px + maxSpeed × (run elapsed when the trace started).
-- (b) and (d): gap limits and tighter speed caps must account for respawn/portal events (add them to the trace) and for real fast movers (tornado lift 980 px/s). Calibrate against the traces stored in run_verification_audit before enforcing.
-- Keep (c), (e) and (f); they are sound.
-- Drop (g): session cookies script just as easily as API tokens.
-
-### F200: Trust tier T1 turns off ranked verification, and T1 takes about 20 scripted requests to reach
-
-- **Area:** Leaderboard, XP & progression integrity (anti-cheat and economy)
-- **Type:** defect · **impact:** medium · **effort:** small
-- **Flagged before:** The PRD's Hidden Trust Model (xp-badges-ratings-prd.md:451-495) specifies account age, non-owned play and negative signals for trust. None of these are implemented in the trust awards.
-
-**Summary.** Once an account reaches hidden trust tier T1, its record-setting runs are never checked, and the recording isn't even saved for later review. Every new email or wallet account starts halfway to T1, and every completed run adds a point, including repeat clears of your own room. A fresh account can switch off anti-cheat in a few minutes.
-
-**Technical detail.**
-
-relaxVerificationTriggerForTrustTier sets required=false for T1 and above (verification.ts:215-235). For T1, evaluateRunFinalizationVerification writes a 'skipped' audit (finalizationVerification.ts:25-33), and routes.ts:417 stores trace=null for skipped audits, so there is nothing to review later. T2 and above get no audit row at all. Trust sources: account creation calls ensureFounderIdentityQualification (auth/store.ts:177, 197), which creates the backfilled progress row with +20 for email and +20 for wallet (progressRows.ts:477-484). So a new account starts at trust 20, or at 40 (T1) if both are present when the row is first built. awardRoomRunProgression then adds +1 trust per completed attemptId with no cap, no own-room exclusion and no repeat-room exclusion (awards.ts:449-459). Repeat clears that are not PBs trigger no verification, so 20 start/finish pairs on your own walk-right room reach T1. The PRD wants the opposite: trust 'slower than XP and harder to game', earned from 'real play history on non-owned rooms' and account age (xp-badges-ratings-prd.md:451-483). Fix (small): (1) always verify take_top_1 and record_gap regardless of tier; verification is CPU-bounded at 2s and these events are rare. (2) For T1+, still persist the trace on point_gain/top-10 runs so they can be reviewed. (3) Change the trust dedupe key to trust:room_clear:{user}:{room}:{ratingWindow.versionKey}, skip it when the clearer is the publisher or claimer, and cap clear-derived trust at about 5 per UTC day. (4) Require account age of at least 3 days before T1 takes effect, for example inside loadEffectiveTrustState.
-
-**Evidence.**
-
-- src/cloudflare/worker/runs/verification.ts:215-235 — T1 sets required=false; T2+ also nulls the reason
-- src/cloudflare/worker/runs/finalizationVerification.ts:25-33 — T1 gets a 'skipped' audit; T2+ get no audit
-- src/cloudflare/worker/runs/routes.ts:417 — trace is stored as null when the audit status is 'skipped'
-- src/cloudflare/worker/progression/shared.ts:158-172 — T1 needs trust 40
-- src/cloudflare/worker/progression/progressRows.ts:477-484 — the initial trust row gives +20 for email and +20 for wallet
-- src/cloudflare/worker/auth/store.ts:177 and :197 — the progress row is created when the account is created
-- src/cloudflare/worker/progression/awards.ts:449-459 — +1 trust per completed attemptId with no own-room, repeat or daily cap
-- docs/product/xp-badges-ratings-prd.md:451-483 — trust should be slow and hard to game, based on non-owned play and account age
-
-**Fact-check (partially confirmed, partially confirmed, partially confirmed).**
-
-Room clear trust (awards.ts:449-499) only reaches the runner on their own rooms, or on rooms with no publisher. On anyone else's room, the runner's +1 is merged into delta.trust, saved to the CREATOR, and then zeroed. That is a second bug: creators gain uncapped +1 trust from every repeat clear anyone makes. Course clears (awards.ts:614) give +1 per attempt to the runner on any course. New accounts start at exactly 20, because only one identity exists at creation and linking the second one later adds no trust. The 40 start applies only to backfilled legacy users. Publishing a goal room adds +6 (awards.ts:126), so about 14 own-room clears reach T1. Negative signals are partly implemented: suspicious-invalidation audits and chat bans set effective trust to 0 for 30 days (trustCaps.ts:52-113). Fix: as proposed. Also persist the runner's clear trust separately from the creator's delta in the room path, the same way awardCourseRunProgression already does.
-
-1. The clear-trust path is not what the claim says. On someone else's room, awards.ts:479-497 adds the creator's +2 to the same `delta.trust` that already holds the clearer's +1. It saves the whole sum to the creator's progress row and then sets `delta.trust` to 0. So the clearer's hidden_trust_score only rises from clears of their own rooms, or rooms with no publisher. Clears of other people's rooms raise the creator's score by +1 per run, uncapped. That makes a creator's trust farmable with alt accounts, and it is a misattribution bug of its own. Because of this, fix (3), "skip when clearer is publisher", would remove the only way clears raise a clearer's own trust. The misattribution must be fixed first.
-
-2. There is a faster route than clears. Each first significant publish of a goal room gives +6 trust (awards.ts:126-137), and a course gives +8 (awards.ts:177-188). T0 may publish 5 rooms per day (capabilities.ts:11). So 4 trivial goal-room publishes take a new single-identity account from 20 to 44, which is T1, with zero runs. The day-one route is about 20 + 6 + 14 own-room repeat clears, or just publishes. The trust model needs caps and age gating on publish trust too, not only on clears.
-
-3. New accounts start at 20, not 40. createUserForEmail and createUserForWallet each create the account with a single identity. Linking a second identity later does not add +20: ensureFounderIdentityQualification (awards.ts:34-60) returns early once a founder number exists, and nothing recomputes trust.
-
-4. "Nothing to review" is overstated. The trace is not kept, but the run rows stay. The suspicious-admin dashboard flags runs under 1s and large improvements (suspiciousModel.ts:16, :154). Invalidating a run sets effective trust to 0 for 30 days (trustCaps.ts:93-103). This mitigation only works after the fact and depends on a human review.
-
-5. The T1 relaxation was the owner's explicit design (commit 20e94371, progress.md entry for 2026-04-07). Frame the finding as "trust accrual does not match the PRD, so the deliberate relaxation applies to brand-new accounts", not as an accidental bypass.
-
-1. New accounts start at exactly 20 trust. Accounts are created with one identity (auth/store.ts:162-200), and linking a second identity later never adds trust. The 40 start applies only to legacy users backfilled after both identities were linked.
-2. Reaching T1 takes about 20 completed start/finish pairs (around 40 requests), not 20 requests. The first clear of any room must pass verification at T0, because a first completion earns points and triggers point_gain. Repeat clears that are not personal bests, by a player already in the top 10, are never verified even at T0. A trivial room replayed by hand gets an account to T1 in minutes with no scripting, and ordinary active players reach T1 naturally.
-3. The T1 "extremely lax" and T2+ "verification off" policy was an explicit owner request (commit 20e94371, progress.md 2026-04-07). Present fix (1) as a product decision. The core defect to fix is that trust is cheap to earn: dedupe clear-based trust per room and version, give none for your own rooms, add a daily cap and an account-age gate.
-4. A 'skipped' audit row still records the trigger summary. The /suspicious-admin page flags runs under 1000 ms (admin/suspiciousModel.ts:16, :154), and an invalidation sets the user's effective trust to 0 for 30 days (trustCaps.ts:98-103). Blatant fakes are therefore detectable after the fact. Subtle fakes cannot be replayed because no trace is stored.
-5. The same issue applies to courses (courses/routes.ts:514, awards.ts:614-623) and expanded rooms (expandedRooms/runRoutes.ts:424).
-
-### F202: Personal-best points have no cap, and the server accepts a reported time slower than the real one, so global points are mintable
-
-- **Area:** Leaderboard, XP & progression integrity (anti-cheat and economy)
-- **Type:** defect · **impact:** medium · **effort:** small
-- **Flagged before:** The PRD's PB rules (xp-badges-ratings-prd.md:318-342, 1039-1040) were implemented for PXP but never for leaderboard points.
-
-**Summary.** Every new personal best pays 25 points, even 1 millisecond faster and as many times a day as you like. Those points drive the global leaderboard. A player can sandbag, running slowly and then a tiny bit faster each time. A T1 script can simply report a slightly smaller fake time each loop, because the server accepts any reported time as long as it isn't faster than real time.
-
-**Technical detail.**
-
-previewRunFinalizePoints adds RUN_PERSONAL_BEST_POINTS=25 whenever isNewPersonalBest (points.ts:145-149), keyed by attemptId (points.ts:97) with no minimum improvement and no daily cap. The global board sorts by total_points (leaderboards.ts:47-49). The XP side already caps PB to once per room per day (awards.ts:385-397), as the PRD requires (xp-badges-ratings-prd.md:318-342), but points don't. Server time: computeEffectiveElapsedMs returns max(reported, observed) (routes.ts:920-932). That gives a lower bound only; a reported elapsedMs far above the real wall-clock time is accepted. For T1+ there is no trace check, so start→finish with elapsedMs=600000−n mints +25 points per pair. Relatedly, the time-limit check uses reportedElapsedMs rather than the effective time (routes.ts:955-960), so a run that went over its time limit in real time still counts as a clear if the client reports a time under the limit. Fix: (1) award PB points only once per room lineage per UTC day, plus only when the leaderboard placement improves or the improvement is at least 5% / 500ms. (2) Reject a finish when reportedElapsedMs > observedElapsed + 10s grace, as Room Rush already does (roomRushLeaderboards.ts:388-394). (3) Use the effective elapsed time for timeLimitMs, collect_race and survival checks in normalizeFinalizedRunBody. Apply the same changes to courses/routes.ts and expandedRooms/runRoutes.ts, which share computeEffectiveElapsedMs.
-
-**Evidence.**
-
-- src/cloudflare/worker/runs/points.ts:145-149 — +25 points for any new PB, with no threshold
-- src/cloudflare/worker/runs/points.ts:94-99 — the run_finalized point event is keyed by attemptId, so every attempt can pay
-- src/cloudflare/worker/runs/leaderboards.ts:47-49 — the global leaderboard orders by total_points
-- src/cloudflare/worker/progression/awards.ts:385-397 — PB XP is deduped per room per day; points are not
-- src/cloudflare/worker/runs/routes.ts:920-932 — elapsed = max(reported, observed): a lower bound with no upper bound
-- src/cloudflare/worker/runs/routes.ts:955-960 — the time-limit check uses the client-reported elapsed time
-- src/cloudflare/worker/runs/roomRushLeaderboards.ts:388-394 — Room Rush already enforces an upper bound from the server clock
-- docs/product/xp-badges-ratings-prd.md:318-342 — PB rewards 'tightly guarded', at most once per board per day
-
-**Fact-check (confirmed, partially confirmed, partially confirmed).**
-
-Small corrections to the detail and the fix:
-
-1. **Survival is already on the effective time.** The survival and npc protect checks (routes.ts:994, 999) already use body.elapsedMs, which is the effective max(reported, observed) value passed in at routes.ts:223. Only the timeLimitMs check (routes.ts:955-960) and the collect_race finishedByTime check (routes.ts:972) use the raw reportedElapsedMs. Survival's real hole is the missing upper bound: a client can report elapsedMs ≥ durationMs right after start. Fix (2) closes that; fix (3) does not.
-
-2. **The helper is duplicated, not shared.** Courses and expanded rooms import their own copy of computeEffectiveElapsedMs from courses/requestBodies.ts:116. The one in runs/routes.ts:920 is a private duplicate. All three routes need the upper-bound fix.
-
-3. **The fake-time exploit is T1+ only.** T0 accounts must submit a trace for every PB, because pointAwardPotential forces verification. That trace is nonce-bound, its duration must match elapsedMs within 600ms (verification.ts:26, 494-498), and it is path-checked. Sandbagging with real play still pays +25 per PB at every trust tier.
-
-4. **Mitigation that already exists.** admin/suspicious.ts:398-399 has post-hoc run-burst signals (5m and 60m windows) for admin review, but nothing blocks the abuse at write time.
-
-5. **Use a grace on the time-limit switch.** The observed elapsed time includes network latency and load time from the start request. Switching the time-limit check to the effective time should add a grace margin, or it may reject honest runs that finish near the limit.
-
-Correct the claim on these points.
-(a) T0 accounts (all new users) do have a guard. Since 3872bd01, every point-awarding run requires a server-checked trace whose duration must match elapsedMs within 600ms (verification.ts:486-491). Fake slow times without a forged trace only work at T1+, which is easy to reach (email plus about 20 clears). At T0, sandbagging only works by actually playing slowly.
-(b) Abuse is detected after the fact through the admin suspicious signals (run_burst 10/5m and 30/60m, point_burst 500/5m), and invalidation deletes the points. This is a partial mitigation, not prevention.
-(c) Fix item 3 is partly wrong. The survival and protect checks already use the effective elapsed time, because body.elapsedMs is replaced by computeEffectiveElapsedMs at routes.ts:223 before normalizeFinalizedRunBody runs (routes.ts:994, 999). Switching collect_race's finishedByTime (routes.ts:970, which checks >=) to the effective time would make it easier to cheat, not harder. Only the timeLimitMs check (routes.ts:955-960) actually needs the effective time, and the upper-bound rejection (fix 2) is the real fix for all of them.
-(d) The three finalizers don't share a single helper. courses/requestBodies.ts:116 exports one copy, used by courses/routes.ts and expandedRooms/runRoutes.ts. runs/routes.ts:920 has its own private duplicate.
-The core problem stands: PB points are uncapped and there is no upper bound on the reported time.
-
-1. There is no upper bound on elapsedMs at all (http.ts:225-236), so "600000−n" understates the room to inflate times. Only rooms with a timeLimitMs are bounded, by the 409 at routes.ts:955-960.
-2. T0 is protected by mandatory trace verification on any run that awards points (verification.ts:410-413). The exploit needs T1, which is easy to reach because of the uncapped +1 trust per completed attempt (awards.ts:446-456; shared.ts:168). That uncapped trust grant should be capped too.
-3. computeEffectiveElapsedMs is not one shared function. There are two copies: a private one at runs/routes.ts:920 and an exported one at courses/requestBodies.ts:116, which courses/routes.ts:400 and expandedRooms/runRoutes.ts:311 use. Both need the upper bound.
-4. The PRD's PB rules were only partly built for XP. The once-per-day dedupe exists, but the 0.5s/1% minimum-improvement threshold (prd:330-333) is missing there too.
-5. Fix (3) is unsafe. The client timer adds up frame deltas (goalRuns.ts:279), so it stops when the Phaser loop pauses (tab hidden) and runs slow on low-FPS phones. Observed time routinely exceeds reported time for honest players. Using effective or observed time for the timeLimitMs, collect_race and survival checks would reject legitimate clears near the limit, especially on mobile. Keep the reported time for those checks once fix (2) caps it at observed + about 10s, or add a generous grace window. The time-limit sub-issue is minor anyway: the stored elapsed is still max(reported, observed).
-6. Admin burst detection exists (suspicious.ts:64-67, suspiciousModel.ts:21-22) but is manual and can be dodged by pacing.
-7. Recommended fix order: add the upper bound in all three finish paths, then key the PB point event per user, room lineage and UTC day (or require a placement change or a minimum improvement), then cap per-attempt trust.
-
-### F203: Room Rush has no run checking: a 0 ms entry is on the live board and a 2,048-room route would be accepted
-
-- **Area:** Leaderboard, XP & progression integrity (anti-cheat and economy)
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** Room Rush trusts the game client for the route, the time and the death count. The server only requires 0.1 seconds per room crossed and never compares the claimed time with the real time since the run started. The live Easy/Origin board already shows a 1-room run at 0 ms. A script could submit a path through 2,048 published rooms, take #1 on all four boards, and the admin cheat tools can't remove it.
-
-**Technical detail.**
-
-assertRoomRushTimingIsPlausible only enforces elapsedMs ≤ (finish−start)+10s and elapsedMs ≥ (route.length−1)*100ms (roomRushLeaderboards.ts:368-400; ROOM_RUSH_MIN_MS_PER_TRANSITION=100 at :45). There is no lower bound from server time. Crossing a 640px room at 150px/s takes about 4s, so the 100ms floor is about 40x too lenient. Routes of up to 2,048 steps are accepted (requestBodies.ts:29). Each step only has to be an adjacent published room (roomRushLeaderboards.ts:255-312, 402-435). Unique areas rank first (:41-42). There is no trace, and deaths and Hard mode's 'one death ends the run' are client-reported. Room Rush runs are absent from the suspicious-activity and invalidation code; neither admin/suspicious.ts nor suspiciousInvalidation.ts references room_rush_runs. Live GET of /api/leaderboards/room-rush on 2026-10-03: the easy:origin board's #3 entry is 1 room, elapsedMs 0, completed. Fix (small): (1) require elapsedMs ≥ observed(start→finish) − 10s; (2) raise the per-transition floor to about 1,500ms, or cap uniqueRooms at elapsedMs/2,000; (3) for runs entering the top 10, require the same breadcrumb trace the room runs use (reuse RankedRunTraceRecorder with kind 'room_rush') and check that each route step has breadcrumbs in that room; (4) add room_rush_runs to the suspicious scan (too-fast per room) and to the invalidation flow.
-
-**Evidence.**
-
-- src/cloudflare/worker/runs/roomRushLeaderboards.ts:45 — ROOM_RUSH_MIN_MS_PER_TRANSITION = 100
-- src/cloudflare/worker/runs/roomRushLeaderboards.ts:388-399 — only an upper bound from the server clock; the lower bound is route-length × 100ms
-- src/cloudflare/worker/runs/requestBodies.ts:29 — MAX_ROOM_RUSH_ROUTE_STEPS = 2048
-- src/cloudflare/worker/runs/roomRushLeaderboards.ts:41-42 — ranking is unique_rooms DESC first
-- src/cloudflare/worker/runs/roomRushLeaderboards.ts:193-250 — the client-supplied elapsed time, deaths and result are inserted as-is
-- Live GET https://api.wamp.land/api/leaderboards/room-rush (2026-10-03) — the easy:origin #3 entry is uniqueRooms 1, elapsedMs 0
-- src/cloudflare/worker/admin/suspiciousInvalidation.ts:156-168 — invalidation deletes only room_runs, course_runs and point_events; no Room Rush
-
-**Fact-check (confirmed, confirmed, partially confirmed).**
-
-These are small accuracy fixes. The core finding stands.
-1. The summary says the server "never compares the claimed time with the real time since the run started." That is wrong: it does check an upper bound (:388-394). The missing check is a lower bound from the server clock.
-2. "2,048 rooms" is the maximum number of route steps, revisits included. The ranked uniqueRooms is capped by how many connected published rooms (by expanded area) actually exist. A bot could still claim every reachable room. The current top Hard/Origin entry is 202 rooms, so a full scripted crawl would beat all four boards. The upper-bound and floor checks together force about (steps − 1) × 100ms − 10s of real waiting, roughly 195s for 2,048 steps, which does not stop a script.
-3. The 0ms entry belongs to the owner's own account. It is more likely an instant-end or client bug than deliberate cheating, but it still shows the validation gap.
-4. A flat 1,500ms per-transition floor could reject legitimate runs that hop back and forth across a room edge or corner, because the route counts every transition. A better floor is a minimum time per new unique area, e.g. elapsedMs ≥ (uniqueRooms − 1) × ~1,500ms, plus a lower bound from the server clock.
-5. Adding a breadcrumb trace (fix item 3) is medium effort. The other fixes are small.
-
-The core is correct, but three details need changing:
-
-1. **The 0 ms entry is most likely a real player, not a cheat.** The client only adds time on `tick()` (`src/scenes/overworld/roomRushRuns.ts:116`), and `endRoomRushRun` can be called straight away (`OverworldPlayScene.ts:4957`). Starting and immediately ending a run gives 1 room in 0 ms. It shows the server accepts a zero-time run; it does not show anyone has cheated.
-2. **2,048 is a cap on route steps, not on unique rooms.** Revisits do not add to the score, and every step must be next to a published room. The realistic attack is claiming more connected rooms than the leader in an impossibly short time (for example, 16 rooms in 1.5s).
-3. **Smaller blast radius than the claim implies.** Room Rush writes no `point_events` (the handler contains no `point_events` references), so XP and the global economy are untouched. Only the four Room Rush boards are affected, and they have little traffic. Admin tools cannot remove an entry; only a direct D1 SQL statement can.
-
-The suggested fixes are correct. The most useful pair is a lower bound from the server clock (`elapsedMs >= observed - 10s`, which also needs a minimum per room) plus a realistic per-room floor (multiple seconds per room, not 100ms).
-
-The core problem is real. The server trusts the client's route, time, deaths and result, has only a 100 ms-per-transition floor, and no admin or suspicious tool can remove Room Rush runs. The rest of the claim needs these corrections:
-- The live 0 ms, 1-room easy:origin entry is the owner's own run. It comes from starting a run and pressing End right away. It is not cheating, and it ranks below every run with 2 or more rooms. The tidy-up is to skip submitting runs with 0 transitions, or to hide them from the board.
-- Room Rush gives no XP or points, so the damage is limited to a small leaderboard: 14 entries across all four boards, none added since 2026-07-31. Impact is low (medium only if Room Rush gets promoted, e.g. in the Reddit port).
-- The real ceiling is the number of connected published rooms, not 2,048. That is still enough to take #1.
-- A sounder minimal fix (small):
-  (a) Cap uniqueRooms against elapsedMs at about 2 s per unique room. Real runs go at 4.4 to 10.3 s per room.
-  (b) Require the server window (finish minus start) to be at least uniqueRooms × about 2 s.
-  (c) Add a targeted admin delete or invalidate for room_rush_runs. Until then, a bad row can be removed by hand with wrangler d1 SQL.
-- Do NOT require elapsedMs ≥ wall time − 10 s. In-game time pauses during menus and hidden tabs, so real runs would fail.
-- Do NOT apply a 1,500 ms floor to every route step. Back-and-forth border crossings and falling through stacked rooms (about 0.7 s each) are legitimate.
-- Trace-based verification is medium effort. The current verifier caps traces at 30 min and 256 room transitions (verification.ts:22-25), but real Room Rush runs reach about 35 min and 202 rooms.
-
-### F206: Free wallet accounts can brigade trophies and difficulty labels and pay a builder in BXP and trust
-
-- **Area:** Leaderboard, XP & progression integrity (anti-cheat and economy)
-- **Type:** improvement · **impact:** medium · **effort:** small
-- **Flagged before:** The PRD's 'Make fraud expensive and visible' section (xp-badges-ratings-prd.md:166-174) and the 'alt-heavy traffic should be discounted' note (:387) were never implemented.
-
-**Summary.** Wallet sign-in creates unlimited free accounts, and an account can rate a room after one (even rejected) clear. About 17 brand-new accounts giving 5 stars earns a room the 'quality trophy'. Each rating also pays the builder XP and hidden trust, and a single vote decides the difficulty label. The PRD asked for detection of 'bursts of new accounts rating one creator', but it was never built.
-
-**Technical detail.**
-
-submitRoomRating requires only that the rater isn't the claimer and has any completed run in the version family (ratings.ts:577-592), with no verification filter (see the rejected-runs finding). T0 weight is 0.6 (shared.ts:174-187). The trophy needs weighted votes ≥ 10 and an adjusted average ≥ 4.2 with a 3.5×5 prior (shared.ts:52-55), so 17 fresh 5-star votes produce (17.5+51)/15.2 ≈ 4.5. Each first rating pays the creator +5 BXP and +1 trust (ratings.ts:664-692). Difficulty consensus is a plain plurality of weighted votes (difficultyModel.ts:23-36). Wallet accounts cost only a signature (auth/routes.ts:561). The only account-age gate in the economy is the 1-hour rule on creator completion points (points.ts:26, 605-627). Fix (small): (1) ratings from accounts under 7 days old or at effective T0 count at 0.25 weight and don't count toward TROPHY_MIN_WEIGHTED_VOTES; (2) require a verification-accepted run to rate; (3) creator BXP/trust from ratings only when the rater is T1+; (4) add a 'rating_ring' signal to suspiciousModel.ts: at least 5 ratings for one creator within 48h from accounts created within 72h of each other; (5) show 'Difficulty: unrated' until there are at least 3 weighted votes.
-
-**Evidence.**
-
-- src/cloudflare/worker/progression/ratings.ts:577-592 — rating gate: not the claimer, plus any completed run
-- src/cloudflare/worker/progression/shared.ts:52-55 — trophy threshold 4.2, minimum 10 weighted votes, prior 3.5 with weight 5
-- src/cloudflare/worker/progression/shared.ts:174-187 — T0 rating weight 0.6
-- src/cloudflare/worker/progression/ratings.ts:664-692 — each new rater pays the creator +5 BXP and +1 trust
-- src/cloudflare/worker/runs/difficultyModel.ts:23-36 — difficulty is a simple plurality, so one vote sets the label
-- src/cloudflare/worker/runs/points.ts:26 — a 1-hour account-age rule exists only for creator completion points
-- docs/product/xp-badges-ratings-prd.md:166-174 — 'detect and discount bursts of new accounts rating one creator'
-
-**Fact-check (partially confirmed).**
-
-Replace the difficultyModel.ts:23-36 evidence. That function reads the legacy room_difficulty_votes table. Its writer, upsertRoomDifficultyVote (runs/difficulty.ts:265), and its reader, buildRoomDifficultySummary (runs/difficulty.ts:232), have no callers, so it is dead code.
-
-The live difficulty label is a trust-weighted plurality in two places: ratings.ts:131-149 (summarizeDifficultyRatings) and playableContentIndex/store.ts:119-149 (consensus_difficulty, NULL only when votes = 0). Fix 5 has to go in both places. The claim that a single vote sets the label is still correct.
-
-Three additions to the finding:
-- Difficulty-only votes from handleRoomDifficultyVote (runs/routes.ts:525-571) also go through submitRoomRating, so they pay the creator +5 BXP and +1 trust too.
-- At 40 trust (T1), a player's runs skip leaderboard verification and are only audited (verification.ts:223-227).
-- A user can farm trust alone, because each of their own ratings gives +1 uncapped trust (ratings.ts:649-660). Fix 3 should therefore be paired with a cap on rater trust from ratings.
-
-Fix 2 should use the existing verificationSqlCondition helper (verificationSql.ts:2) in hasCompletedRoomRatingWindow and hasCompletedCourseRatingWindow.
-
-### F204: Runs rejected by verification still count for XP ranks, rating eligibility and badges
-
-- **Area:** Leaderboard, XP & progression integrity (anti-cheat and economy)
-- **Type:** defect · **impact:** low · **effort:** small
-
-**Summary.** A run that fails the cheat check is saved as 'completed', marked failed. Leaderboards hide it, but the XP and badge code still counts it. A cheater's rejected 0.3-second run can sit at #1 behind the scenes, so the honest player shown as #1 doesn't get the '#1 finisher' XP or badge. Rejected runs also let someone rate a room they never legitimately beat.
-
-**Technical detail.**
-
-handleRunFinish runs UPDATE room_runs SET result='completed', verification_status='failed' (routes.ts:383-411) and only then throws the 409 (routes.ts:422). The boards filter with sqlIsVerificationAccepted (leaderboards.ts:83), but these queries don't: (a) awards.ts:199-227 loadCompletedRoomRunsForVersion (and the course equivalent at :250-281) feeds computeRoomRankForAttempt, so a failed run outranks the honest #1 and top1_take / player_top1_finisher are never awarded; (b) ratings.ts:350-378 hasCompletedRoomRatingWindow, which gates star ratings, difficulty votes and the rating XP and creator BXP/trust they pay; (c) progressRows.ts:179-194, the distinct clear count behind the 1/10/100-clear badges. Fix: append AND ${sqlIsVerificationAccepted('room_runs')} (and the course/expanded equivalents) to those queries, or write result='rejected' for failed verifications so every result='completed' query is correct by default.
-
-**Evidence.**
-
-- src/cloudflare/worker/runs/routes.ts:383-411 — the row is updated to result='completed' with verification_status before the failure check
-- src/cloudflare/worker/runs/routes.ts:422-434 — the 409 is thrown only after the update
-- src/cloudflare/worker/progression/awards.ts:199-227 — the XP rank pool query has no verification filter
-- src/cloudflare/worker/progression/ratings.ts:350-378 — rating eligibility only requires result = 'completed'
-- src/cloudflare/worker/progression/progressRows.ts:179-194 — badge clear counts have no verification filter
-- src/cloudflare/worker/runs/verificationSql.ts:1-3 — the accepted-status helper exists but isn't used in progression
-
-**Fact-check (confirmed).**
-
-The core claim is accurate. Clarifications:
-- Rows with verification_status='timeout' leak the same way (routes.ts:433), not only 'failed'.
-- Only T0 accounts are ever verified (T1+ relaxed to not_required). The leak therefore comes from T0 users, including honest ones whose runs fail as trace_client_outdated or as verifier false positives.
-- The clear-count leak reaches badges through syncUserBadges → loadBackfillSeedMetrics (badgesTrophies.ts:345-389), and it also inflates backfilled PXP.
-- If the fix writes result='rejected' instead of adding filters, check every client and admin reader of result first. The schema has no CHECK constraint on result (migrations/0003:27), so the value will be accepted.
-- Impact is closer to low than medium, because only T0 users are affected, T0 ratings are trust-weighted, and the effects are mostly invisible XP and badges.
-
-### F205: Admin cheat cleanup leaves XP, trust, badges and ratings, and room clear breaks on rooms with more than 100 runs
-
-- **Area:** Leaderboard, XP & progression integrity (anti-cheat and economy)
-- **Type:** defect · **impact:** low · **effort:** medium
-
-**Summary.** When an admin wipes a cheater's runs, only runs and points are deleted. Their XP levels, hidden trust, badges, the ratings they cast and any trophies stay, and the trust penalty ends after 30 days. Clearing a busy room's leaderboard will likely fail outright, because it binds every run ID in one database query.
-
-**Technical detail.**
-
-handleAdminSuspiciousInvalidate deletes room_runs, course_runs and point_events, then recomputes user_stats (suspiciousInvalidation.ts:156-175). It never touches pxp_events, bxp_events, cxp_events or trust_events, user_progress totals, badge_awards, room_ratings/course_ratings or content_trophies. The only trust consequence is a 30-day window where effective trust is 0 (trustCaps.ts:34-40, 98-103; shared.ts:58), after which the farmed raw score returns. handleAdminRoomClear builds DELETE FROM point_events ... source_key IN (?,?,...) with one placeholder per attempt (admin/routes.ts:325-336). D1 caps a query at 100 bound parameters, and suspiciousInvalidation.ts:361 already chunks at 50 because of it, so any room with more than 100 attempts (failed and abandoned ones count) fails the whole atomic batch. It also deletes the legacy room_difficulty_votes table (admin/routes.ts:307) instead of room_ratings, and leaves XP and trophies behind. Fix (medium): the XP economy is already event-sourced with dedupe keys (laneEvents.ts:38-149), so (1) add voided_at, plus attempt_id where applicable, to room_runs and the four *_events tables; (2) add one admin 'void run' action that soft-voids the run and every point/lane event whose sourceId or breakdown references that attempt; (3) add recomputeUserProgress(userId) that re-sums non-voided events into user_progress and re-runs syncUserBadges (it would need to be able to revoke awards); (4) make the trust penalty permanent until an admin clears it; (5) switch the room-clear IN-list to json_each(?), the pattern leaderboards.ts:74-79 already uses.
-
-**Evidence.**
-
-- src/cloudflare/worker/admin/suspiciousInvalidation.ts:156-175 — deletes runs and point_events only, then upsertUserStats
-- src/cloudflare/worker/progression/trustCaps.ts:98-103 — the suspicious penalty only zeroes effective trust while the window is active
-- src/cloudflare/worker/progression/shared.ts:58 — TRUST_PENALTY_WINDOW_MS = 30 days
-- src/cloudflare/worker/admin/routes.ts:325-336 — one placeholder per attemptId in a single statement
-- src/cloudflare/worker/admin/suspiciousInvalidation.ts:361 — elsewhere the code chunks attempt IDs at 50 to stay under D1's bind limit
-- src/cloudflare/worker/admin/routes.ts:307 — room clear deletes room_difficulty_votes but not room_ratings (migrations/0019_progression.sql:87)
-- src/cloudflare/worker/progression/laneEvents.ts:118-149 — every XP and trust grant is an idempotent event row, so recomputing is straightforward
-
-**Fact-check (partially confirmed).**
-
-Remove the room_ratings part. Room ratings are cascade-deleted along with room_versions (migrations/0019_progression.sql:100-102), so the room_difficulty_votes delete at admin/routes.ts:307 is only redundant. What room clear actually leaves behind is orphaned content_trophies rows (no foreign key) and the XP/trust events and user_progress totals earned from the room.
-
-Describe the endpoint accurately: it is the operator-only admin delete-room action (POST /api/admin/rooms/:id/clear, no UI caller), not a leaderboard reset. With more than 100 room_runs rows it fails cleanly with a full rollback and an error. The easiest fix is `source_key IN (SELECT attempt_id FROM room_runs WHERE room_id = ?)`, ordered before the room_runs delete, or json_each(?).
-
-The XP, trust and badge retention after suspicious invalidation is accurate. Frame it as: raw trust and XP earned from voided runs (awards.ts:449, persistProgressIncrement at laneEvents.ts:11-35) are never subtracted, and badges are never revoked (badgesTrophies.ts:345-423). Do not frame the 30-day window itself as the bug.
-
-Effort: the bind-limit fix is small. Voiding events and recomputing progress is medium.
-
-### F207: Add a 'Verified' check mark on records and a review queue for new #1 runs, built on existing data
-
-- **Area:** Leaderboard, XP & progression integrity (anti-cheat and economy)
-- **Type:** idea · **impact:** medium · **effort:** medium
-
-**Summary.** Mark leaderboard times that passed the server's run check with a small check mark. Show other new #1 times as 'pending review' for a day while a staff queue looks at them. Players will trust the boards more, and records that don't hold up quietly disappear instead of sitting at #1 for good.
-
-**Technical detail.**
-
-Most of the data already exists. room_runs and course_runs carry verification_status (selected at routes.ts:640-660), but RankedRoomLeaderboardRow doesn't select it (leaderboards.ts:22-32, 58-72). Add verification_status to the CTE and a verified boolean to RoomLeaderboardEntry, and render a check mark in leaderboardModal. run_verification_audit stores the full trace for verified runs, and an admin list endpoint already exists (admin/routes.ts:460-490), but it has no filters. Add filters (status=failed, trigger_reason=take_top_1, last 24h) and join the run, user and room so it becomes a 'Top-run review' tab in the existing suspicious console. Include a minimal breadcrumb polyline drawn over the room thumbnail (not a ghost race, which another review already covered) and a one-click 'void' that calls the soft-void action from the admin-cleanup finding. Policy: a new #1 from an unverified or T1+ account shows as 'provisional' for 24h unless an admin approves it. This makes the T1 verification skip much safer and gives the community a visible fairness signal.
-
-**Evidence.**
-
-- src/cloudflare/worker/runs/routes.ts:640-660 — verification_status already exists on every room run row
-- src/cloudflare/worker/runs/leaderboards.ts:22-32 — the leaderboard row type omits verification_status
-- src/cloudflare/worker/admin/routes.ts:460-490 — the admin feed lists run_verification_audit rows with trace_json but has no filters
-- src/cloudflare/worker/runs/verification.ts:324-354 — audits persist the trigger reason, summary and full trace
-
-**Fact-check (partially confirmed).**
-
-Change how it is built, then build it:
-- **Close the blind spot first.** When a T1+ run would have triggered a check (take_top_1, enter_top_10 or record_gap), record an audit row for it and keep the trace. That means changing routes.ts:414 and the same lines in courses/routes.ts and expandedRooms/runRoutes.ts, and adding an audit for T2 and up.
-- **Run those checks in the background.** Run verifyRoomRunTrace through ctx.waitUntil after the response is sent. Store the result in a new 'deferred'/'passed' status, or an audit-linked status.
-- **Make 'provisional' clear itself.** A new #1 from a skipped run shows as provisional only until the background check finishes. A person looks at it only if that check fails. No manual approval inside 24 hours.
-- **Use one player-facing mark.** On the board, show 'checked' for passed runs, including ones that passed the background check, rather than a raw verified/unverified split. The raw split would wrongly label trusted players.
-- **Admin tab.** Filter run_verification_audit on status IN ('skipped', 'deferred-failed') plus the trigger reason, not status=failed. Join the run, user and room.
-- **Void.** Reuse the existing per-attempt suspicious invalidation (suspiciousInvalidation.ts) for the void button.
-- **Fix the citation.** verification_status is at runs/routes.ts:383-407 / 769-901, not 640-660.
-
-### F208: Students can chat with strangers, including anonymous guests, through in-room speech bubbles
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** defect · **impact:** high · **effort:** small
-
-**Summary.** Classroom accounts are blocked from World Chat, comments and the guestbook, but in-room 'Say' bubbles have no student check. A student can talk to anyone standing in the same room, and anyone can talk to them, including signed-out guests who picked their own name. Students can also read all of the public World Chat. For a school product, this open two-way channel between kids and strangers is the biggest child-safety gap.
-
-**Technical detail.**
-
-The PartyKit identity token carries no school flag. presence/routes.ts:47-49 signs only {userId, displayName, avatarId} plus a `source`. presenceServer.ts:800-818 parseIdentity then throws away even `source`, and ConnectionPresenceState (src/partykit/presenceProtocol.ts:54-62) has no school or guest field. handleRoomChatSay (presenceServer.ts:837-879) checks only channel, play mode, length and rate. The one gate is client-side (src/presence/roomChat.ts:166-170, authenticated only, no schoolManaged check), so even guests can send by hand-crafting a websocket message. Guest display names are chosen by the client (presence/routes.ts:89-104). Fix: (1) add `school: boolean` (or classroomId) and keep `source` in PartyKitIdentityTokenClaims when minting (auth.school is already in scope in handlePresenceIdentityTokenIssue via loadOptionalRequestAuth), and store both in ConnectionPresenceState. (2) In handleRoomChatSay, drop messages from guest or school senders, and in the sendRoomChatMessage filter skip delivery to school connections, or deliver only between connections with the same classroomId if a classroom chat is wanted later. (3) Apply the same filter to PvP invites (handlePvpInvite, presenceServer.ts:881) so strangers cannot pull students into matches. (4) On the client, hide the Say composer when schoolManaged. Also consider hiding World Chat message bodies for school accounts; panel.ts:762-764 currently shows them in read-only mode.
-
-**Evidence.**
-
-- partykit/presenceServer.ts:837-879 — handleRoomChatSay has no school/guest/source check before broadcasting to everyone in the room
-- partykit/presenceServer.ts:800-818 — parseIdentity keeps userId/displayName/avatarId only; token `source` is discarded
-- src/cloudflare/worker/presence/routes.ts:47-49 — identity token minted from auth.user without any school claim
-- src/cloudflare/worker/presence/routes.ts:89-104 — guest identity uses client-supplied displayName
-- src/presence/roomChat.ts:166-170 — only client-side gate is `authenticated`; no schoolManaged check
-- src/ui/chat/panel.ts:762-764 — 'Classroom accounts can read chat, but cannot post.'
-
-**Fact-check (confirmed, confirmed, confirmed).**
-
-No core correction needed. A few small additions and nuances:
-1. Guests cannot send bubbles from the normal UI. The send function (roomChat.ts:166) and the composer (overworld/roomChat.ts:228) are both gated on sign-in, so a guest has to hand-craft a websocket message, as the claim says. The everyday risk is any signed-in non-school stranger who is in the same room as a student. Guests do receive and read bubbles.
-2. Room-chat bubbles also skip the World Chat ban list and have no content filter. normalizeRoomChatText only trims the text and checks its length. So a user banned from World Chat can still send bubbles to students.
-3. PvP invites (relayProtocol.ts:49-74) carry no free text, so they are a lower-risk vector than the bubbles.
-4. The fix also needs a client gate in OverworldRoomChatController.openComposer (src/scenes/overworld/roomChat.ts:228), not only in WorldRoomChatClient.send.
-
-No core correction needed. Two additions:
-- normalizeRoomChatText (src/partykit/relayProtocol.ts:17-21) has no word filtering, so guest text and guest display names go out unfiltered.
-- The client-side check that allows only signed-in players is duplicated in src/scenes/overworld/roomChat.ts:225-226 and 410-415 (opening the composer and disabling its input). That file needs the same schoolManaged check as src/presence/roomChat.ts:166-170.
-
-**Guest part of the summary is overstated.**
-- A signed-out guest cannot send a bubble through the normal UI. Both `src/presence/roomChat.ts:167` and `OverworldRoomChatController.openComposer` require a signed-in account.
-- Guest names are not chosen through the UI. They are auto-generated as "Guest xxxx" (`src/presence/worldPresence.ts:858-861`).
-- A guest can only send, or pick a custom name, by hand-crafting the token request or the websocket message. The server does accept that.
-- Guests can, however, read students' bubbles. They open a room-chat socket and the broadcast filter at `presenceServer.ts` handleRoomChatSay does not exclude them.
-- So the realistic exposure is: any signed-in non-school user can talk with students both ways, and guests can watch.
-
-**Understated, worth adding to the same fix:**
-- The presence server never enforces chat bans either: no ban, moderation or report references in `partykit/presenceServer.ts`. A user banned from World Chat can still use in-room bubbles.
-- There is no profanity filter on room chat (`relayProtocol.ts:17-21`).
-
-**Implementation notes for the fix:**
-- `verifyPartykitIdentityToken` rebuilds the identity field by field (`identityToken.ts:195-212`), so its parsing must be extended to carry the new school claim.
-- Tokens issued before deploy will lack the claim until they expire.
-- The PartyKit server and the Worker are deployed separately, so both deploys are needed.
-
-**PvP invites:** `handlePvpInvite` (`presenceServer.ts:881-911`) has no school check, so the point is valid. Risk is lower because an invite carries only identity, no free text.
-
-### F209: School restrictions are opt-in per route, so many public-posting paths are still open to students
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** Each feature has to remember to block students on its own, and many don't. A student can rename themselves to any public name, publish public playlists with free-text descriptions, create public Wamp-O-Gram cards with messages, share pixel-art sprites to the public catalog, and create bot 'agents' with public names. The intended 'students can't post text' rule is easy to get around, and the only test checks that certain words appear in the source code.
-
-**Technical detail.**
-
-assertNotSchoolRestricted (school/restrictions.ts:4-10) is called only in roomComments, chat, backgroundImages, guestbook and profiles. Gaps: POST /api/auth/display-name (auth/routes.ts:403-430) has no school check, while the profile endpoint blocks the same change (profiles/routes.ts:129). Playlists create/update (playlists/routes.ts:54+) store title (60 characters) and description (280 characters) publicly. Wamp-O-Gram POST (wampOGram/routes.ts:29-39) stores title, message, sender/recipient names and a third party's recipientEmail. Custom sprite PUT (customSprites/routes.ts:66-79) and agent creation (agents/routes.ts:68-83) use requireCurrentSession (auth/request.ts:18-30), which never loads school context and never checks whether the classroom is disabled. API token creation (auth/routes.ts:467-475) has the same issue. Fix: switch to deny-by-default. In src/cloudflare/worker.ts, before dispatch, when the method is POST/PUT/PATCH/DELETE and the session resolves to auth.school, return 403 unless the path matches an explicit SCHOOL_ALLOWED_MUTATIONS list (room draft/publish/revert, runs, avatar select, presence identity token, logout, music phrases if desired). Make requireCurrentSession call the same school/disabled resolution. Replace routes.contract.test.ts (a readFileSync string grep) with a table-driven test that sends every mutating route with a school RequestAuth and expects 403 unless the route is allow-listed. New routes then fail closed.
-
-**Evidence.**
-
-- src/cloudflare/worker/school/restrictions.ts:4-10 — per-route opt-in guard
-- src/cloudflare/worker/auth/routes.ts:403-430 — handleUpdateDisplayName: no school check
-- src/cloudflare/worker/profiles/routes.ts:129 — the profile path blocks the same change ('edit profile text')
-- src/cloudflare/worker/customSprites/routes.ts:66-79 — public sprite catalog PUT via requireCurrentSession
-- src/cloudflare/worker/auth/request.ts:18-30 — requireCurrentSession does not attach school context or check disabled classrooms
-- src/cloudflare/worker/wampOGram/routes.ts:29-39 — public card creation with free-text message, no school check
-- src/cloudflare/worker/agents/routes.ts:68-83 — students can create agents with public display names
-- src/cloudflare/worker/school/routes.contract.test.ts:4-17 — only test is a source-text grep
-
-**Fact-check (partially confirmed, partially confirmed, partially confirmed).**
-
-1) Display name and playlists can only be changed through the API, because the client already hides both from students. The display-name row only appears when the user has no saved name (auth/client.ts:1096). Playlist creation is hidden whenever isSchoolAvatarOnlyEdit is true (profileModal.ts:573, 655, 1312). The real defect is that the server does not enforce what the UI intends.
-
-2) Agents and API tokens have no client UI, so they too are reachable only through the API. API tokens and agent tokens are not a restriction bypass. When a token is used, loadOptionalRequestAuth calls requireEnabledSchoolContext (request.ts:89, 273-279), which attaches the student's school context again and rejects disabled accounts. Students minting tokens is a minor issue.
-
-3) The missing disabled-classroom check in requireCurrentSession matters little in practice. Disabling a student deletes their sessions (school/store.ts:341-343). No route disables a classroom; nothing in the code runs UPDATE school_classrooms.
-
-4) Wamp-O-Grams are unlisted links with random slugs, not a public feed. recipientEmail is stored, but makePublicWampOGramRecord strips it, and no email is ever sent (delivery_status is 'draft', store.ts:~98).
-
-5) The gaps students can actually reach through the normal UI are these two:
-- Custom sprites (pixel art plus a 32-character name) are synced to the public catalog automatically for any signed-in user (customSprites/sync.ts:103-125). This contrasts with background-image uploads, which are blocked for students.
-- Wamp-O-Gram creation (wampOGramModal.ts:226, which only checks that the user is signed in).
-
-6) The proposed fix still stands. Router.ts already has an unused `auth` field on each route, which is a natural place for a deny-by-default gate. The gate also has to cover the hand-written if-chain in worker.ts, not just the route table.
-
-1. "requireCurrentSession never checks disabled" mostly doesn't apply. Disabling a student deletes all their sessions (school/store.ts:341-342 runs `DELETE FROM sessions WHERE user_id = ?`), so a disabled student has no session to use. The gap only matters for a classroom-level disable (`c.disabled_at`). No API route sets that; the school routes only expose per-student disable/enable (school/routes.ts:97-113). So it is a minor gap for manual DB disables, not a live hole.
-2. Letting students create API tokens is not a real bypass. When any bearer token (API token or agent token) is used, the code re-attaches the owner's school context through requireEnabledSchoolContext (auth/request.ts:79-89). Agent tokens are covered the same way, because agent auth sets user = owner (agents/store.ts:365-376). Existing guards still apply to those tokens.
-3. Agents have no client UI. Nothing outside the worker calls /api/agents, so that path is API-only. The display-name path is also mostly API-only: the UI hides the rename row once a name is saved (auth/client.ts:1096). It still works through a hand-made request from devtools on wamp.land. Playlists, Wamp-O-Gram and custom sprites, though, are reachable through the normal UI.
-4. school/routes.contract.test.ts:8-17 is a source-text grep, but it tests the teacher enable/disable toggle, not student restrictions. The accurate statement is that no server-side test covers school restrictions at all. The only restriction-related test is client-side UI state (src/scenes/overworld/roomCommentsComposerController.test.ts:90).
-5. Wamp-O-Gram's recipientEmail is stored and is not returned in public responses (wampOGram/model.ts:46-47, 85). It is not publicly exposed, but a student can still enter a third party's email address.
-The suggested fix (deny-by-default mutation allowlist plus a table-driven route test) is still appropriate. Any allowlist must account for room publish carrying free-text titles.
-
-What's real: playlists (always public, listed on student profiles, title up to 60 characters and description up to 280) and Wamp-O-Gram share cards (title, message and names) have no school check in either the API or the UI, so students can create them through normal use. Custom sprite catalog sharing is also ungated. The only worker-side school test is a source-text grep.
-
-Corrections:
-- Display-name rename, agent creation and API token creation are API-only for students. The UI hides the display-name row once a name exists, and no client code calls /api/agents or /api/auth/tokens.
-- Token and agent auth still carry the owner's school context, so they don't get around the existing chat and comment blocks.
-- The disabled-classroom gap in requireCurrentSession hardly matters: disabling a student deletes their sessions, and no route can disable a whole classroom.
-- recipientEmail is never emailed (cards stay 'draft') and is removed from the public record. Wamp-O-Grams are unlisted links, not a public feed.
-- Rooms already allow public free text through titles (40 characters) and sign objects (signText). A "students can't post text" rule never existed, and the proposed allowlist, which keeps room publish, wouldn't create one. First decide the policy: block social and communication channels only, or also moderate creative text.
-
-Recommended fix order: (1) add assertNotSchoolRestricted to playlist create/update, the Wamp-O-Gram POST, custom sprite PUT, display-name, agent create and token create, and hide those buttons when schoolManaged (small). (2) Add real request-level tests that send a school RequestAuth to each route. (3) Optionally, a deny-by-default guard in dispatch (medium effort, because the allowlist is long and the school lookup adds a query per request).
-
-### F211: Student login can be brute-forced, and accounts that were never logged into can be taken over
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** The student login has no limit on wrong guesses, and the starting passwords come from a small pool of about 400,000 combinations. Anyone who knows the classroom link and a student's username could keep guessing. If they guess a temporary password before the student first logs in, they get to set the new password and take the account. Also, when a teacher clicks 'Reset Password', anyone already logged in as that student stays logged in.
-
-**Technical detail.**
-
-handleStudentLogin (school/routes.ts:123-136) has no throttle, unlike the email code flow, which caps at 5 attempts (auth/routes.ts:303-307). Temporary passwords are word-word-NNN from 22 words × 21 × 900, about 415k (school/store.ts:25-48, 692-700). The first valid temporary password plus newPassword sets a password of the caller's choice (store.ts:375-402). An unknown username returns 401 before PBKDF2 runs, while a known one runs 100k iterations (store.ts:363-371), which leaks valid usernames through timing. Every guess also burns 100k PBKDF2 iterations of Worker CPU with no limit (store.ts:19). Classroom slugs can be looked up publicly (school/routes.ts:60-64) and default to the display name (store.ts:112). Reset does not revoke sessions (store.ts:281-289), but disable does (store.ts:341-343). Fix: (a) add a school_login_attempts table keyed by (classroom_id, lower(username)) and a hashed IP; after 8 failures in 15 minutes return 429 and show 'ask your teacher'. (b) On a missing username, verify against a fixed dummy hash so timing matches. (c) Use 3 words from a ~250-word list plus 2 digits (~1.5B), or have the teacher hand out a one-time 6-digit activation code that expires in 7 days. (d) Add DELETE FROM sessions WHERE user_id=? to resetSchoolStudentPassword. (e) Reject very common passwords such as 'password' and '12345678', since the current minimum is just 8 characters (store.ts:686).
-
-**Evidence.**
-
-- src/cloudflare/worker/school/routes.ts:123-136 — no rate limit or attempt counter
-- src/cloudflare/worker/school/store.ts:25-48 and 692-700 — 22-word list, word-word-NNN
-- src/cloudflare/worker/school/store.ts:363-371 — unknown username short-circuits before PBKDF2 (timing oracle)
-- src/cloudflare/worker/school/store.ts:375-402 — temporary password plus newPassword sets the attacker's password
-- src/cloudflare/worker/school/store.ts:281-289 — reset leaves existing sessions alive (contrast 341-343)
-- src/cloudflare/worker/auth/routes.ts:303-307 — email codes are capped at 5 attempts; student passwords are not
-
-**Fact-check (confirmed, confirmed, partially confirmed).**
-
-Every cited fact checks out; only the framing needs adjusting. (1) Takeover via temporary password works only while password_reset_required=1, i.e. before first login or after a teacher reset. The attacker must win that race, and it takes about 200k online guesses on average (out of about 415-436k combinations). (2) The steadier risk is guessing student-chosen passwords: the minimum is 8 characters with no blocklist (store.ts:686), and there is no throttle. (3) The fix can use Cloudflare's built-in Workers Rate Limiting binding (a ratelimits entry in wrangler.jsonc), keyed by classroom+username and by IP, instead of a new D1 table. Either works. Pair it with a dummy-hash verify when the username is unknown and a DELETE FROM sessions WHERE user_id=? in resetSchoolStudentPassword's batch (store.ts:281-289).
-
-The password pool is about 22×22×900 ≈ 436k, not 22×21×900. generateStudentPassword (store.ts:692-700) re-rolls the second word only once, so the same word can appear twice. The difference doesn't matter.
-
-The claim also understates the risk. An attacker doesn't have to target one student. They can try the same guesses against every student in a classroom who hasn't logged in yet. With 30 such students, roughly 7k guesses are expected to take over some account, compared with about 218k for a single student. That makes the per-classroom IP/username lockout in fix (a), together with longer temporary passwords or activation codes in fix (c), the priority.
-
-The route table at worker.ts:166 marks /api/school as 'authenticated', but the router never enforces that label (core/router.ts:26-40). It looks protected but isn't, and it should be corrected or enforced.
-
-How bad this is depends on how many classrooms are live, which the code alone can't show.
-
-The core claim is real. No rate limit or lockout exists on POST /api/school/classrooms/:slug/student-login (the router's 'authenticated' tag isn't enforced, core/router.ts:26-40). Temporary passwords are about 416k combinations. A guessed temporary password lets the guesser take over an account that hasn't been activated yet. Reset doesn't revoke sessions, and sessions last 30 days (auth/store.ts:23). Corrections:
-(1) The timing-oracle sub-point is close to moot, because student usernames are their public display_name (store.ts:222-225).
-(2) The 'burns Worker CPU' point is negligible in cost and needs a valid username.
-(3) Brute-forcing the temporary password only works while password_reset_required=1, usually a short window in a classroom. The more realistic exposures are reset not revoking sessions and unlimited guessing of weak passwords students chose themselves.
-(4) For the rate-limit design, don't key the lockout mainly on IP, because a school shares one NAT address and the whole class would get locked out. Key on (classroom_id, username), have teacher reset clear the counter, and add a generous IP limit only as a backstop. Cloudflare's Workers Rate Limiting binding is a simpler option than a new D1 table.
-Priority order: (d) add DELETE FROM sessions to the reset; then the per-username attempt cap; then the longer temporary passwords and the common-password blocklist.
-
-### F210: Student accounts can link a personal email or crypto wallet and then mint paid NFTs
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** A signed-in student can attach their own email address or crypto wallet to the school account. From then on they can sign in outside the teacher's classroom login, and with a wallet attached they can pay to mint rooms as NFTs on Base. A school-managed child account should not be able to collect a personal email, connect a wallet, or spend money.
-
-**Technical detail.**
-
-handleRequestMagicLink (auth/routes.ts:178-195): when an existing session has no email, the purpose becomes 'link_email' and the email is attached on verify (auth/routes.ts:271/319, attachEmailToUser). There is no auth.school check. handleWalletVerify (auth/routes.ts:574-585) calls attachWalletToUser for any existing session. Mint prepare only needs a linked wallet (mint/routes.ts:32 requireWalletLinkedRequestAuth). Students are created with email/wallet NULL (school/store.ts:222-225), so the system assumes they stay that way. Fix: when existingAuth.school is set, reject link_email and wallet link with 403 'Classroom accounts can't link email or wallets'. Add school to the mint prepare/confirm deny list (or the deny-by-default gate in the previous finding). Hide the link and mint UI when schoolManaged. Also add a one-off D1 audit query for school users that already have email or wallet_address set.
-
-**Evidence.**
-
-- src/cloudflare/worker/auth/routes.ts:178-195 — existing session plus no email becomes purpose 'link_email'; no school check
-- src/cloudflare/worker/auth/routes.ts:574-585 — wallet attached to any existing session auth
-- src/cloudflare/worker/mint/routes.ts:32 — mint gated only by requireWalletLinkedRequestAuth
-- src/cloudflare/worker/school/store.ts:222-225 — students are created with NULL email/wallet
-
-**Fact-check (confirmed, confirmed, partially confirmed).**
-
-Clarifications to the claim:
-
-- **The account stays classroom-managed after linking.** auth/request.ts:93-104 re-attaches the school context on every request, so the existing chat, comment and profile restrictions still apply. Teacher disable also still works, because a disabled student's session is deleted. What the student gains is a way to sign in that a teacher's password reset does not shut off. The bigger problem is that the account now holds a personal email or wallet.
-
-- **Minting is limited to rooms in the main world.** World rooms always return canMint false (worlds/access.ts:176). The mint fee comes from the student's own funded wallet, not a stored card.
-
-- **The client fix belongs in auth/client.ts renderAuthUi (lines 1073-1091).** For school accounts it should hide the "Add Email" row and the wallet button, not just the mint UI.
-
-Everything the claim says is accurate, with three clarifications. (1) There is now a second way to attach an email: the six-digit code verify at routes.ts:319 (handleVerifyEmailCode), alongside the magic-link verify at routes.ts:271. Both need the school check. (2) Signing in by email or wallet does not drop the school restrictions. School context is looked up by user_id on every request (auth/request.ts:248-266), so chat, comment and profile limits still apply and a teacher disabling the student still ends the session. The escape is a login the teacher's password reset can't revoke, plus a child's personal email and wallet being stored. (3) All four mint handlers (mint/routes.ts:32, 107, 149, 217) need the guard, not only prepare and confirm. The client is also part of the problem: renderAuthUi (src/auth/client.ts:1073-1092) offers 'Add Email' and the wallet button to student accounts.
-
-The core claim holds: there is no server or client gate on students linking an email or wallet, or on minting. Three details need correcting.
-1. Linking does not let a student escape teacher control. School context is re-attached by user_id on every request (auth/request.ts:93-97, 249-257). Teacher disable still ends email or wallet sessions, and the chat, comment and profile restrictions still apply.
-2. Minting requires a self-custodial Base wallet the child already holds and has funded with ETH, plus a claimed Prime-world room. There is no stored payment method, so "spend money" is rare.
-3. The main real harm is that the auth panel (src/auth/client.ts:1074-1091) shows every student an "Add Email" prompt, which collects a child's personal email and blocks that email for future use. Wallet linking and a permanent public on-chain mint are smaller, rarer risks.
-
-Impact is medium rather than high: this is a pilot-scale feature, and the main consequence is privacy and compliance, not loss of control. Effort remains small.
-
-### F219: Student logins last 30 days on shared school computers
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** improvement · **impact:** medium · **effort:** small
-
-**Summary.** When a student signs in, they stay signed in for a month. School laptops are often shared, so the next kid who opens WAMP on that laptop is playing, building and publishing as the previous student. Class accounts should sign out at the end of the school day.
-
-**Technical detail.**
-
-Student login calls the generic createSession (school/routes.ts:149), which always uses SESSION_MAX_AGE_SECONDS = 30 days (auth/store.ts:23, 966-971). The cookie Max-Age matches (auth/request.ts createSessionCookie). Fix: add an optional ttlSeconds parameter to createSession and pass about 10 hours for school logins, with a matching cookie Max-Age. Add a visible 'Not you? Switch student' button in the game HUD when schoolManaged that calls /api/auth/logout and returns to school-login.html?classroom=slug (the slug is already in auth.school.classroomSlug).
-
-**Evidence.**
-
-- src/cloudflare/worker/auth/store.ts:23 — SESSION_MAX_AGE_SECONDS = 30 days
-- src/cloudflare/worker/auth/store.ts:966-971 — createSession has no TTL override
-- src/cloudflare/worker/school/routes.ts:149 — student login uses the default session
-
-**Fact-check (confirmed).**
-
-A Logout button already exists. It is index.html:197, shown for school students too (auth/client.ts:1098). The real gap is that it is hidden in the menu and does not return to school-login.html?classroom=slug. The fix should reuse or redirect that button rather than add a separate logout path. When you add a ttlSeconds option, pass it to both createSession (store.ts:966) and createSessionCookie (request.ts:142); right now both read the single SESSION_MAX_AGE_SECONDS constant.
-
-### F212: Teachers can't see, hide, or delete what their students publish
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** improvement · **impact:** high · **effort:** medium
-
-**Summary.** The teacher page can only create students, reset passwords and turn accounts on or off. A teacher can't see which rooms a student built, can't take down an inappropriate room, and can't delete a student's data at the end of the year. Disabling a student leaves all their public rooms, playlists and sprites online under their name. Schools will expect these controls before using WAMP with children.
-
-**Technical detail.**
-
-Teacher routes are list/create/reset/disable/enable only (school/routes.ts:55-120). listSchoolStudents returns roster fields only (school/store.ts:170-199). setSchoolStudentDisabled updates school_students and deletes sessions only (store.ts:319-351). No account-deletion path exists anywhere in the worker: a grep for DELETE FROM users finds nothing. Admin room clear/restore exists only behind the admin key (admin/routes.ts:153-162). Fix: (1) GET /api/school/classrooms/:slug/teacher/activity joins rooms.claimer_user_id / last_published_by_user_id, playlists and custom sprites for the classroom's user_ids, and shows each student's rooms with links and last-published dates in school-admin. (2) POST .../teacher/rooms/:roomId/hide reuses the admin 'clear' logic, but only when the room's claimer is a student in that classroom. (3) 'Remove student data' deletes sessions, unpublishes or clears their rooms, anonymizes claimer_display_name to 'Former student', and deletes the users and school_students rows. (4) 'Export' downloads the student's rooms as JSON. These are the COPPA/FERPA-style basics a district privacy review will ask about.
-
-**Evidence.**
-
-- src/cloudflare/worker/school/routes.ts:55-120 — only roster, reset, disable and enable routes
-- src/cloudflare/worker/school/store.ts:319-351 — disable leaves the student's published content untouched
-- src/cloudflare/worker/admin/routes.ts:153-162 — room clear/restore exists, but only behind the admin key
-- src/cloudflare/worker/school/store.ts:170-199 — teacher list has no room or activity data
-
-**Fact-check (confirmed).**
-
-One small error: "a grep for DELETE FROM users finds nothing" is not literally true. src/cloudflare/worker/maintenance/routes.ts:72 runs "DELETE FROM users", but only as part of an admin maintenance wipe of all tables, not a per-account deletion. The core point (no per-student or per-account deletion path) stands. Two more facts are worth adding. First, students are already blocked from chat, comments, guestbook, profile text and background uploads (school/restrictions.ts and the call sites above), so the gap is specifically published rooms, custom sprites and playlists. Second, disabled students' content is not filtered anywhere, because school_students is never joined outside school/store.ts.
-
-### F213: Anyone can build next to a World's rooms without joining, skipping its review and limits
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** Worlds are supposed to grow from their own far-away starting point and be built only by members. But the main grid's 'build next to an existing room' rule counts a World's rooms too. A non-member, or a bot using the API, can claim and publish ordinary WAMP 0 rooms right on a World's edges. That skips the World's invite list, approval queue and daily limits, and a griefer could block a World from growing at all.
-
-**Technical detail.**
-
-When neither the existing room nor the request names a World, the claim falls through to the WAMP 0 path (rooms/store.ts:905-915 saveDraft; 1044-1053 publishRoom). enforceFrontierClaimRule then accepts any published orthogonal neighbor (rooms/store.ts:1496-1549) and doesn't check which World that neighbor belongs to. The World is resolved only from an existing claim or the optional, client-supplied ?worldId= (worlds/roomMutationIntegration.ts:26-40; rooms/routes.ts:634-637). The client sets that context heuristically from the last room it loaded (src/persistence/roomRepository.ts:1023-1029), and agents/API callers never send it. The PRD's 'Worlds may collide naturally' (worlds-mvp-prd.md:17) is about two frontiers meeting, not WAMP 0 jumping 129 coordinates to a World's border. Fix: in enforceFrontierClaimRule, join world_room_claims and require at least one neighbor whose world_id is WAMP_PRIME_WORLD_ID. Alternatively, when every published neighbor belongs to numbered World N, resolve world = N on the server and apply its policy (non-members get 403 'Join World N to build here'). Add a test: a non-member claim adjacent to a World-only room is rejected.
-
-**Evidence.**
-
-- src/cloudflare/worker/rooms/store.ts:1496-1526 — hasPublishedOrthogonalNeighbor counts rooms from any World
-- src/cloudflare/worker/rooms/store.ts:905-915 — with world null, a non-admin goes through enforceFrontierClaimRule with no membership check
-- src/cloudflare/worker/worlds/roomMutationIntegration.ts:26-40 — World comes only from an existing claim or the requested worldId
-- src/cloudflare/worker/rooms/routes.ts:634-637 — worldId is an optional query parameter
-- src/persistence/roomRepository.ts:1023-1029 — client World context is inferred from the last loaded room
-
-**Fact-check (confirmed).**
-
-Four details need correcting:
-1. Ordinary non-members using the normal UI are mostly protected by accident. After walking from a World's rooms, the client sends worldId=N and gets a 403. The real exposure is API/agent callers (skill.md never documents worldId) and clients whose context is stale or null.
-2. Claiming alone is enough to block a cell; no publish is needed. A saveDraft claim occupies the coordinate, and I found no expiry. The WAMP 0 daily limit still applies (T0 = 5/day), but that is enough for one account to wall off a fresh World origin's 4 neighbours. Once a World has a larger perimeter, it takes many accounts to stop it growing.
-3. Today there are no numbered Worlds in production (the /api/worlds directory lists only WAMP 0), so this is a pre-pilot fix, not an active exploit.
-4. The fix should LEFT JOIN world_room_claims and treat rooms with a NULL claim row as Prime, so any unattributed legacy rooms still count. It should also stop the frontier display from advertising World-only-adjacent cells as buildable to everyone: computeWorldWindow in persistence/worldModel.ts and the claimable-frontier window in world/routes.ts:183-209. Otherwise players will see "Build here" and then get a 409.
-
-### F214: Rooms waiting for World approval are already visible to everyone
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** defect · **impact:** medium · **effort:** medium
-
-**Summary.** In a World that requires owner approval before publishing, a member's new room still shows up in the game for every player as an 'under construction' room before anyone approves it. Anyone can also fetch any room's unpublished draft. So the review step doesn't actually keep unreviewed content out of sight. That matters a lot if Worlds become the safe space for classrooms.
-
-**Technical detail.**
-
-Claimed-but-unpublished rooms report state 'claimed_unpublished' (rooms/store.ts:762), and the batch snapshot loader serves their draft_json to any viewer (rooms/store.ts:395-400). The client then renders them as 'saved_construction_draft' (src/scenes/overworld/worldStreaming.ts:1417-1426). GET /api/rooms/:id/construction needs no auth (rooms/routes.ts:251-261), and GET /current returns the draft to unauthenticated callers (rooms/routes.ts:172-189; rooms/store.ts:255-281). That last one also exposes pending edits to published rooms everywhere. Live construction previews are broadcast over PartyKit to all viewers once the claimer gets a token (rooms/routes.ts:263-305). Fix: if a room's World has publish_policy = 'approval_required', omit claimed_unpublished rooms from public summaries and snapshots and refuse construction-preview tokens, unless the viewer has world.policy.canEditRooms. Make /current return draft only when permissions.canSaveDraft and published otherwise. Keep the existing Prime behavior if Jonathan wants public construction there.
-
-**Evidence.**
-
-- src/cloudflare/worker/rooms/store.ts:395-400 — claimed_unpublished snapshots return draft_json to any caller
-- src/scenes/overworld/worldStreaming.ts:1417-1426 — client renders saved construction drafts for all players
-- src/cloudflare/worker/rooms/routes.ts:251-261 — public /construction endpoint
-- src/cloudflare/worker/rooms/routes.ts:172-189 — /current returns the draft to any viewer
-- src/worlds/policies.ts:53-57 — approval_required only blocks the publish call, not visibility
-
-**Fact-check (confirmed).**
-
-The facts are right, but "defect" overstates it. This is a gap in the design: the code matches the PRD, which defines approval as governing publication only ("subject to owner/manager approval of an unchanged submitted draft"). The PRD also lists private play and Education as out of scope (docs/product/worlds-mvp-prd.md:14-16). Public construction previews are deliberate across WAMP (overworld-tile-pyramid.md dynamic precedence #4-5). So the classroom framing is speculative; this would be better filed as an "improvement".
-
-The claim also understates one thing: unapproved World rooms are playable by everyone, not just visible (runtimeController.ts:92-97, flow.ts:136-140).
-
-For whoever implements the fix:
-- The anonymous chunk-summaries response is publicly cached (loadAnonymousPublicCache, max-age=20). Filtering by viewer must keep that cached path free of approval-required drafts.
-- handleWorldRequest and handleWorldChunksRequest currently take no auth. They would need a World/publish_policy join, plus member-aware inclusion for signed-in viewers.
-- The baked tile renderer needs no change.
-
-### F215: Setting up a classroom needs an engineer, and adding 30 students is slow
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** improvement · **impact:** medium · **effort:** medium
-
-**Summary.** There's no screen for creating a classroom. It can only be done with a command that uses the secret admin key, and nothing can disable a classroom or change its teacher. Teachers then add students one at a time, typing a username each time, and each password is shown only once. For Jonathan to run school pilots himself, he needs a 'Classrooms' admin page, and teachers need a 'create my whole class and print login cards' button.
-
-**Technical detail.**
-
-Classroom creation exists only as POST /api/admin/school/classrooms with x-admin-key (school/routes.ts:35-53; auth/request.ts isAdminRequest). No client code calls it. No route sets school_classrooms.disabled_at or changes teacher_email, which is a single email, so co-teachers aren't possible (store.ts:494-503). The teacher UI creates one student per request (src/school-admin.ts:157-197) and shows the temporary password once (school-admin.ts:315-330). Usernames are free text (school-admin.html:239-240), and the username becomes the student's public display_name (school/store.ts:222-225) with no uniqueness check against existing display names, so teachers may use real first names that then appear publicly. Fix: add a Classrooms section to launch-admin (create, disable, change teacher email, list). Add a teacher 'Add class' form that takes N students (and optional local names), auto-generates pseudonymous usernames (adjective-animal-NN, unique against users.display_name), creates them in one batch, and renders a printable sheet of login cards (username, temporary password, QR code of studentLoginUrl). Add a 'teacher_emails' join table for co-teachers.
-
-**Evidence.**
-
-- src/cloudflare/worker/school/routes.ts:35-53 — classroom creation only through the admin-key API
-- src/cloudflare/worker/school/store.ts:494-503 — exactly one teacher email per classroom
-- src/school-admin.ts:157-197 — students created one at a time
-- school-admin.html:239-240 — free-text username field with placeholder 'blue-comet-12'
-- src/cloudflare/worker/school/store.ts:222-225 — username becomes the public display_name
-
-**Fact-check (confirmed).**
-
-Minor overstatements, none of which change the verdict:
-
-1. **"Free text" usernames.** They are not free text. `normalizeStudentUsername` (`store.ts:665-678`) forces 3-24 lowercase letters, digits, `_` or `-`, and blocks a few reserved words.
-
-2. **Real-name risk.** It is already partly handled.
-   - The page warns teachers: "Real student names are saved only in this browser… The game server only receives student usernames…" (`school-admin.html:202`).
-   - It has a separate "Local student name" field that stays in the browser's localStorage.
-   - The username placeholder suggests a pseudonym ("blue-comet-12").
-
-   A first name like "emma" would still be accepted and shown publicly, so auto-generating pseudonyms is still worth doing. But the claim should say there is a warning, not "no guard".
-
-3. **"Password shown only once."** A lost password can be recovered. The teacher can issue a new one through the reset-password route (`routes.ts:87-95`).
-
-4. **"No uniqueness check against existing display names."** This is weak as a defect, because display names aren't unique anywhere else on the site either. It only matters for making generated pseudonyms unique.
-
-### F218: Classroom Worlds: give each class its own reviewed World
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** idea · **impact:** medium · **effort:** medium
-
-**Summary.** Worlds already have most of what a teacher needs: an owner, members, an approval queue, daily limits and a freeze switch. Students can't join a World today, because World membership is tied to an email address and students don't have one. Letting a teacher turn a classroom into a World, with students as members and approval required by default, would give schools a safe, separate build space without new systems.
-
-**Technical detail.**
-
-World memberships require a verified email (worlds/memberships.ts:93 requestWorldMembership, 130 acceptWorldInvitation), but students are created with email NULL (school/store.ts:222-225). The PRD explicitly defers Education (worlds-mvp-prd.md:16). Proposal: add world_memberships.classroom_id (or a classroom-source membership row). An admin grant 'World for classroom X' makes the teacher email the owner, sets publish_policy='approval_required' and build_policy='invite_only', and auto-adds every school_students user as a builder. Have the deny-by-default school gate (see the earlier finding) allow room claims and publishes only when the resolved World is the student's classroom World. Prerequisites: fix the WAMP 0 border-claim leak and the pending-draft visibility leak first, or the isolation won't hold.
-
-**Evidence.**
-
-- src/cloudflare/worker/worlds/memberships.ts:93 — 'Link and verify an email before requesting World access.'
-- src/cloudflare/worker/worlds/memberships.ts:130 — invitations also require an email
-- src/cloudflare/worker/school/store.ts:222-225 — student users have NULL email
-- docs/product/worlds-mvp-prd.md:16 — Education is out of scope for this release
-
-**Fact-check (confirmed).**
-
-There is an implementation gap. Adding world_memberships.classroom_id alone will fail, because world_memberships.email is NOT NULL and the uniqueness key is UNIQUE(world_id, email) (migrations/0045_worlds_pilot.sql). Either:
-- give classroom-sourced memberships a synthetic, never-mailed key such as 'school-student:{userId}' (cheapest; access already resolves by user_id at access.ts:64-67), or
-- rebuild the table (SQLite requires a rebuild to drop NOT NULL) with email nullable and a separate unique index on (world_id, user_id).
-
-Also make sure memberships.ts invite, request and accept never treat that synthetic value as a real address. Keep notifications.ts from sending mail to it.
-
-The World also has no number until the teacher's seed room is published (activation.ts:36), so the flow needs a 'teacher publishes seed' step before students are auto-added.
-
-Effort is closer to medium than large. Large only applies if you count the separate border-claim and draft-visibility fixes it lists as prerequisites.
-
-### F216: The Game Jam is hard-coded for one event, so a second jam or weekly prompt needs a developer
-
-- **Area:** School/classroom accounts, Worlds pilot and Jam modes
-- **Type:** improvement · **impact:** low · **effort:** small
-
-**Summary.** The July jam's name, dates, rules text, prizes and closing messages are all written directly into the code and the jam page. The prize avatars were given out by hand in the database, because nothing in the code can grant them. The admin page can only list entries. To run a new jam or a weekly build prompt, Jonathan has to ask an engineer every time.
-
-**Technical detail.**
-
-JAM_SLUG and the claim/submission windows are constants (src/jam/model.ts:1-5). The 'closed July 28' and 'open July 20' messages are hard-coded (jam/routes.ts:164-180), and the claim-window error text is too (jam/routes.ts:228-235). Dates are duplicated in wrangler.jsonc:26-27 and 73-74, and in jam.html copy (jam.html:9, 14, 24, 168-169, 249-250). Admin is read-only: GET /api/admin/game-jams (admin/routes.ts:78; admin/gameJams.ts:45-98). user_avatar_entitlements is only ever read (avatars/entitlements.ts:8-43). No code inserts rows, so the jam-prize avatar grants were manual SQL. Fix: add a `jams` table in JAM_DB (slug, title, prompt, claim_open/close, submit_open/close, rules_md, prize_avatar_id, status). /api/jam?slug= returns the active jam, and jam.html/src/jam.ts render title, dates and rules from it. Build server messages from the configured dates using Intl. Add a launch-admin 'Jams' form to create, edit and close a jam, plus a 'Grant prize avatar to all submitters/registrants' action that batch-inserts into user_avatar_entitlements with source_type='jam', source_id=slug. jam_submissions already has a jam_slug column (jam-migrations/0003), so data storage is ready.
-
-**Evidence.**
-
-- src/jam/model.ts:1-5 — JAM_SLUG and windows are constants
-- src/cloudflare/worker/jam/routes.ts:164-180 — hard-coded 'July 20/July 28' messages
-- wrangler.jsonc:26-27 — jam dates in deploy config
-- jam.html:168-169 and 249-250 — dates and rules in static HTML
-- src/cloudflare/worker/admin/gameJams.ts:45-98 — admin view is read-only
-- src/cloudflare/worker/avatars/entitlements.ts:8-43 — entitlements are only read; nothing grants them
-
-**Fact-check (partially confirmed).**
-
-Use this smaller fix instead of the full jams-table and admin-form plan:
-1. Put the slug, the claim window, the submission window and the display timezone in one jam config module. Have routes.ts build its error messages (lines 167, 176, 179, 239) from those dates with Intl, and have src/jam.ts build its status text (lines 214, 220, 246, 309) from the /api/jam response. The claim window should also come from env vars, like the submission window already does.
-2. Add an admin-only POST action that grants a chosen avatar_id to a list of user IDs. It should write to user_avatar_entitlements with source_type='jam' and source_id=slug. The last jam's prizes went to selected users (the nine judged room owners plus 3 others), not to everyone who entered, so "grant to selected users" fits better than "grant to all".
-3. Keep jam.html as a hand-made page for each jam.
-
-Corrections to the claim's details:
-- The claim-window error is at routes.ts:239, not 228-235.
-- The submission window can already be changed with wrangler vars. The server messages just don't follow those vars.
-- The admin view already groups multiple jams by slug (gameJams.ts:92-94).
-- The claim missed the dates written into the client at src/jam.ts:214, 220, 246 and 309.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
 ### F169: Game key capture blocks arrow keys and Space in menus, so volume sliders, radio choices and modal scrolling don't work from the keyboard
 
@@ -6427,499 +5456,69 @@ The code evidence is accurate: 19 unlabeled fields, 14 buttons named only by a s
 (d) Also add: the palette's <img> has no alt text.
 The highest-value fixes are naming the -/+ buttons ("Zoom out", "Zoom in", "Tempo down" and so on), labeling the Warp inputs and the sliders through aria-labelledby, and turning .object-item into a <button type="button"> with aria-pressed.
 
-### F182: Any brand-new account (or agent token) can overwrite every unminted room, with no cap and no alert to the owner
+### F182: details withheld
 
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** defect · **impact:** high · **effort:** medium
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Summary.** WAMP's rooms are editable by anyone, like a wiki. That's on purpose, but none of the usual wiki protections against vandals exist. An account made five minutes ago, or a bot script, can publish over hundreds of other people's rooms in one day. The daily publish limit doesn't count these edits, and the original builders are never told. One troll could deface the whole map in an afternoon.
+### F184: details withheld
 
-**Technical detail.**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-Server permissions fall through to `true` for any published, unminted room (rooms/store.ts:1824-1836), so `canPublish` is granted to any signed-in principal. The publish route calls `assertUserCanPublishContent` for non-owners (rooms/routes.ts:410-415). But `countDailyRoomPublishes` only counts versions with `NOT EXISTS prior_versions` (trustCaps.ts:166-184), meaning brand-new rooms only. Republishing over an existing room never increments the count, so T0's 5/day limit doesn't apply to vandal edits. `buildBuilderCapabilitySummary` ignores `_requestAuthSource` (capabilities.ts:42), so agent and API tokens get full human caps, and `POST /api/agents` has no per-owner agent cap (agents/routes.ts:68-84). Fix, all small server changes: (1) add `countDailyEditsToOthersRooms`, counting room_versions where published_by_user_id = me AND rooms.claimer_user_id != me, with a tier table (e.g. T0: 3/day plus account age >= 24h, T1: 10, T2+: 30). Halve it for `agent_token`/`api_token`. (2) On a publish by a non-claimer, queue an email/in-app notice to the claimer with a one-click 'Revert to v{prev}' link. The revert route already exists. (3) Add an env var kill switch, `OTHERS_ROOM_EDIT_MIN_TIER` / `PUBLISHING_PAUSED=1`, checked in the publish and draft routes, so Jonathan can freeze edits during a raid from the Cloudflare dashboard without a code deploy. (4) Add a line to skill.md telling agents never to publish over rooms they didn't claim unless the claimer asked.
+### F183: details withheld
 
-**Evidence.**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-- src/cloudflare/worker/rooms/store.ts:1824-1836 — canSaveDraft/canPublish evaluate to `true` for any published unminted room regardless of viewer
-- src/cloudflare/worker/progression/trustCaps.ts:166-184 — daily publish count only includes rooms with no prior version (first publishes), so overwriting others' rooms is uncounted
-- src/cloudflare/worker/rooms/routes.ts:410-415 — the only publish-rate gate for non-owners is that first-publish counter
-- src/cloudflare/worker/progression/capabilities.ts:42 — `_requestAuthSource` unused; agent/API tokens get identical caps
-- src/cloudflare/worker/agents/routes.ts:68-84 — agent creation has no per-owner limit
-- docs/product/product-requirements.md:121 — 'Pre-mint rooms: Anyone can edit' (intended design, so needs anti-vandal guardrails)
+### F185: details withheld
 
-**Fact-check (confirmed, confirmed, partially confirmed).**
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-The core claim stands. Correct one detail: the missing per-owner agent cap (agents/routes.ts:68-84) does not multiply publish or claim quotas. Agent and API tokens act as the owning user (auth/actors.ts:7), and their versions are stored with the owner's `published_by_user_id`, so every agent shares the owner's caps. More agents only means more display names. Also note that two repair paths already exist: a claimer-only revert (rooms/routes.ts:452) and a single-room moderator restore (admin/routes.ts:209). What's missing is any alert to the claimer, any cap on overwrites, and any bulk revert-by-user tool.
+### F190: details withheld
 
-Two small clarifications; neither changes the core claim. (a) Because agent tokens act as the owner user (agents/store.ts:364-366) and every quota is keyed on auth.user.id, the missing per-owner agent limit does not multiply publish capacity. Its main effect is letting one person act under many disposable display names. (b) Non-claimer republishes are blocked once the user has already published their daily limit of new rooms that day (routes.ts:413-415 runs the check). So the loophole is unlimited for anyone who publishes no new rooms, rather than for every account in every case. Moderators do have a single-room restore (admin/routes.ts:210-240); what is missing is reverting everything one user published and a kill switch.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-Remove the agent-token and per-owner-agent-cap points as causes. Agent tokens publish as the owner user (auth/actors.ts:7), and skill.md:86 says quotas roll up to the human owner, so extra agents add no capacity. Change "brand-new account" to "any signed-in account, of any age or trust tier". Add three facts:
-1. Trust penalties (chat ban, suspicious flag) only drop a user to T0, which still allows unlimited overwrites (trustCaps.ts:93-111).
-2. There is no publish ban and no admin bulk-revert tool. Revert is claimer-only (store.ts:1835-1837), so recovery from a raid is manual, room by room. Rooms with no claimer can only be reverted by an admin.
-3. Damage can be undone through the version history, and vandals earn no points (runs/points.ts:57).
-For the fix, ship the env-var kill switch and the counter for edits to other people's rooms first (small). Then add a per-user ban that blocks publishing and an admin "revert all versions by user X since T" tool. Claimer notifications come after that. Add the skill.md warning, because accidental overwrites by agents are a realistic case.
+### F188: details withheld
 
-### F184: Admins can't stop a bad actor from building, and cleanup is one room at a time
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** defect · **impact:** high · **effort:** medium
+### F191: details withheld
 
-**Summary.** The only ban in WAMP is a chat ban. A banned troll can keep publishing rooms, uploading sprites, and running bots. The admin limit controls can't even set someone's publishing to zero. If a vandal hits 200 rooms, Jonathan has to open each room's History and restore it by hand, and the 'clear room' tool permanently deletes the room's whole history.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Technical detail.**
+### F049: details withheld
 
-`resolveChatModerationViewer().banned` (chat/moderation.ts:14-27) is enforced only in chat (chat/routes.ts:145-148) and room comments (roomComments/routes.ts:148-151). Room publish, draft save, custom sprites, agents, profiles and Wamp-O-Grams never check it. Admin cap overrides pass through `sanitizeOptionalOverride`, which turns 0 into null, i.e. back to the default (capabilities.ts:23, progression/admin.ts:168-169). `enforcePublishLimitForUser`, which does handle a limit <= 0, is defined (guardrails.ts:30-39) but never called. `handleAdminRoomClear` hard-deletes rooms, room_versions, runs and points (admin/routes.ts:242-330, DELETEs at 308-309), with no audit row and no undo. Fix: (1) add `users.suspended_at/suspended_reason` and check it in `requireAuthenticatedRequestAuth` for all mutating scopes, agent tokens included, by owner. Also revoke sessions and agent tokens on suspend. (2) Add `POST /api/admin/users/:id/revert-edits?since=ISO`. It selects room_versions WHERE published_by_user_id=? AND created_at>=?, groups by room, and calls existing `revertRoom` to the latest version before `since` that was authored by someone else. Also add a preview mode, like the suspicious-invalidation preview pattern. (3) Replace hard 'clear' with a soft `rooms.hidden_at` that world/playable-content reads filter, plus a `moderation_audit` table. (4) Put these three buttons on suspicious-admin's user detail page.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Evidence.**
+### F189: details withheld
 
-- src/cloudflare/worker/chat/moderation.ts:14-27 — ban state is chat-scoped only
-- src/cloudflare/worker/roomComments/routes.ts:148-151 and src/cloudflare/worker/chat/routes.ts:145-148 — the only two places a ban is enforced
-- src/cloudflare/worker/progression/capabilities.ts:23 — override values <= 0 are discarded, so admins cannot set publish limit to 0
-- src/cloudflare/worker/rooms/guardrails.ts:30-39 — enforcePublishLimitForUser (handles <= 0) has no callers
-- src/cloudflare/worker/admin/routes.ts:308-309 — admin clear permanently DELETEs room_versions and rooms with no audit trail
-- src/cloudflare/worker/admin/routes.ts:210-240 — restore exists but only per room/version
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Fact-check (partially confirmed, partially confirmed, confirmed).**
+### F192: details withheld
 
-1. A chat ban is not purely chat-scoped. While the ban is active, and for 30 days after it, trustCaps.ts:58-103 sets effective trust to 0. That drops the user to T0 caps (5 new rooms per day, 5 claims, 250 objects per room). So room publishing does indirectly check the ban, through assertUserCanPublishContent (rooms/routes.ts:414). It throttles new-room creation; it does not block publishing.
-2. The real gap is bigger than "a banned user can still publish". The daily cap counts only first versions of rooms (trustCaps.ts:166-185). Anyone can republish other users' published, unminted rooms (rooms/store.ts:1823-1834). Together that means editing other people's rooms is effectively unlimited for any user, banned or not, and even a publish-cap override of 1 does not limit it. Letting admins save an override of 0 is a quick partial fix: publishCount >= 0 would then block every publish that isn't bypassed.
-3. Room claimers can restore their own rooms themselves (canRevert). Cleanup is still one room at a time with no bulk tool, but it does not fall only on Jonathan.
-4. The clear endpoint needs the admin key and has no UI. The handler spans admin/routes.ts:242-360 and its DELETEs are at 306-336.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-A chat ban is not purely chat-scoped. Through the trust penalty (progression/trustCaps.ts:56-103), an active or recent chat ban drops the user to tier T0: 5 new-room claims and publishes per day, 250 objects and 50 collectibles. Uploads are not fully unmoderated either: custom sprites can be blocked one at a time (customSprites/adminRoutes.ts:32-41), and background images need review and per-user upload permission (backgroundImages/routes.ts:183-188, rooms/store.ts:932).
+### F194: details withheld
 
-The dead enforcePublishLimitForUser does not matter. The live limit check is assertUserCanPublishContent (trustCaps.ts:187-202, rooms/routes.ts:414), and it would already reject a limit of 0. Only sanitizeOptionalOverride (capabilities.ts:23) stops admins from setting 0.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-The real hole is bigger than the claim states. Published, non-minted rooms are editable by anyone (rooms/store.ts:1823-1834), and countDailyRoomPublishes (trustCaps.ts:166-185) counts only a room's first version. So overwriting other people's existing rooms is never counted, and even a chat-banned T0 user can vandalize any number of them per day.
+### F193: details withheld
 
-Restore is per room but open to delegated chat moderators (admin/routes.ts:218). Clear is admin-key only (line 248). It hard-deletes runs, difficulty votes, versions and the room at lines 304-309, with no audit.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-Quickest partial fix: let the cap override accept 0, which the existing assertUserCanPublishContent then blocks, and count republishes of other people's rooms toward a daily edit cap. Then add the suspension flag, bulk revert-by-user and soft-hide with an audit table.
+### F196: details withheld
 
-These are refinements; the core claim stands.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-1. **Owners can also undo vandalism, so it isn't all on Jonathan.** A room's owner (its claimer) can revert their own room (`canRevert` at rooms/store.ts:1835-1837). The real gap is that no tool reverts many rooms at once, or reverts everything one user did.
-2. **The function that actually matters is `assertUserCanPublishContent`, not `enforcePublishLimitForUser`.** It is the one that runs, and it would block publishing if the limit were 0 (count >= 0 is always true). Only `sanitizeOptionalOverride` stops admins from setting 0.
-3. **That function only counts brand-new rooms.** `countDailyRoomPublishes` (trustCaps.ts:166-185) only counts first versions of new rooms. Overwriting other people's published rooms is therefore unlimited for every tier, and any positive cap leaves it unlimited.
-4. **The fix should also cap edits to other people's rooms.** Count them, or add a per-user per-minute publish rate limit, alongside the suspension.
-5. **Restore and clear are protected differently.** Restore is gated by a chat-moderator session (`requireChatModeratorSession`), while clear needs the admin key (`requireAdminRequest`). A bulk-revert endpoint should use the moderator-session path so it can be a button in the UI.
-6. **Effort.** Suspension plus bulk revert is medium. Soft-hide with world-tile and index filtering is closer to large.
+### F134: details withheld
 
-### F183: Players have no way to report a room, user, chat message, or guest room
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** improvement · **impact:** high · **effort:** medium
-- **Flagged before:** docs/product/product-requirements.md:610-622 Moderation section + v1.5 checklist line 843 ('flagging system, admin review panel'), still not built
-- **Already in the product backlog.**
+### F127: details withheld
 
-**Summary.** When a player sees something offensive (a drawing, a sign, a slur in chat, a nasty guest room), there's no Report button anywhere, and the site lists no contact address either. Classroom student accounts can read world chat too. That means Jonathan only hears about problems by luck, and moderation can't scale past him personally watching.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Technical detail.**
+### F197: details withheld
 
-Neither the client nor the Worker has a report surface: no `/api/reports` route, and no report/flag strings in index.html or src/ui. The PRD's moderation plan (flagging, categories, review) is still an unchecked v1.5 item. Build it small: a `content_reports` table (id, target_type: room_version|user|chat_message|guest_draft|custom_sprite|wamp_o_gram, target_id, category, note, reporter_user_id or reporter_ip_hash, created_at, resolved_at, resolution). Add `POST /api/reports`: signed-in users, or guests with Turnstile, which is already wired for the guestbook. Rate limit it at 10/day/reporter. Reuse `sendAdminReviewNotificationEmail` (admin/reviewNotifications.ts) for the first report on each target. Add a 'Reports' tab to launch-admin next to the existing comment review queue. Auto-hide rule: content by T0/T1 authors gets hidden pending review after 3 distinct reporters. Put the client entry points in the room info/History modal, the chat message context menu, and Explore cards, with a large tap target on mobile.
-
-**Evidence.**
-
-- docs/product/product-requirements.md:614 — 'There is still no public room-flagging flow, review UI, or full moderation system'
-- docs/product/product-requirements.md:843 — '[ ] Moderation: flagging system, admin review panel' still unchecked
-- src/ui/chat/panel.ts:762-764 — 'Classroom accounts can read chat, but cannot post' (minors see unfiltered chat with no way to report)
-- src/cloudflare/worker/admin/reviewNotifications.ts:24-60 — existing admin email notifier can be reused for report alerts
-- src/cloudflare/worker/guestbook/routes.ts:94 — Turnstile verification already exists and can gate guest reports
-
-**Fact-check (confirmed).**
-
-Minor overstatements to fix in the write-up:
-(1) "The site lists no contact address" is too strong. There is no email or mailto, but index.html:165-171 has a visible "Join the Discord" link (discord.gg/bEpc3XsnvV), and the About page links @songadaymann on X (index.html:2945). Players have an informal side channel, just no report flow inside the game.
-(2) Moderators already have tools to act once they know about a problem. They can delete chat messages and ban/unban (chat/moderation.ts, chatModerationModal.ts), clear/restore rooms (admin/routes.ts:153-158), block custom sprites (catalogStore 'blocked' status) and roll back history in historyModal.ts:452-464. Background uploads get AI moderation. Room comments are already reviewed before they appear (roomComments/routes.ts:186 'pending_review'), so comments don't need a report target. The gap is only reporting itself: content gets published right away and nobody has a way to tell Jonathan about it. Resolution actions in the new Reports tab should call the existing clear/restore/block/ban endpoints rather than adding new ones.
-(3) Worth adding: there is no profanity or word filter on chat at all, which makes the classroom-account concern stronger.
-
-### F185: Production errors are invisible: no client error beacon, no request IDs, raw 500 messages
-
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** improvement · **impact:** high · **effort:** small
-
-**Summary.** When the game crashes or a save fails on someone's phone, nobody finds out unless that player tells Jonathan, and then there's no way to match their story to a server log. The game already catches its own errors, but it only prints them to that player's browser console. Sending them home is a small change.
-
-**Technical detail.**
-
-Client: `bootDiagnostics.ts:142-166` and `main.ts:168-175` already hook `error`/`unhandledrejection` and the render-loop recovery monitor, but write only to the console. No Sentry, no beacon (repo-wide grep). Worker: the catch-all at worker.ts:788-799 logs `console.error('API failure', error)` with no route, method, user id or `cf-ray`. It also returns `error.message` to the client even for 500s, so internal D1/SQL text can leak and players see confusing messages. Workers Logs is on at 100% (wrangler.jsonc:14-24), but nothing summarizes or alerts. Fix: (1) add `POST /api/client-errors`. Payload: message, source, line, stack (first 2KB), build hash, route, device-performance mode, WebGL context-lost flag. The client sends up to 10 per session, de-duped by hash. Use `navigator.sendBeacon` and IP rate limiting. The Worker `console.log(JSON.stringify({kind:'client_error',...}))` so entries are searchable in Workers Observability. (2) In the Worker catch, log `{route, method, status, ray: request.headers.get('cf-ray'), userId}`. For 5xx, return `{error:'Something went wrong', requestId: ray}`, and have the client toast show the id ('send this code to Jonathan'). (3) Use the existing hourly cron (worker.ts:261) to email a digest via sendAdminReviewNotificationEmail when the last hour's client_error or 5xx counts pass a threshold. Keep the counters in a small D1 table, or use Workers Analytics Engine.
-
-**Evidence.**
-
-- src/main/bootDiagnostics.ts:142-166 — window error/unhandledrejection captured into a local ring buffer + console only
-- src/main.ts:168-175 — runtime errors only forwarded to renderLoopRecoveryMonitor
-- src/cloudflare/worker.ts:788-799 — 5xx logged without context; raw error.message returned to clients
-- wrangler.jsonc:14-24 — observability logs enabled (sampling 1) but no alerting path in code
-- src/cloudflare/worker.ts:261 — hourly cron exists (only purges guest replays) and can host an alert digest
-
-**Fact-check (partially confirmed).**
-
-1. Server-side correlation is not zero. Workers Logs at 100% sampling already records each invocation's request URL, method, Ray ID and status next to the console.error stack. Admins can filter by route and time in Workers Observability today. The real Worker gaps are:
-   - no userId in the log;
-   - raw internal error.message, including D1/SQLite text, returned to clients on 500s;
-   - no request id the player can see and quote.
-2. The real blind spot is the client. Browser errors, unhandled rejections and render-loop stalls never leave the device. The existing Cloudflare Web Analytics beacon (commit 13fee102) records page views and load speed, not errors.
-3. Effort by part:
-   - (1) the client beacon endpoint with rate limiting: small.
-   - (2) sanitized 5xx responses plus the ray id shown in a toast: small.
-   - (3) the hourly digest email with a D1 counter table or Analytics Engine binding: closer to small-to-medium, and optional. Do (1) and (2) first.
-
-### F190: In-room chat bubbles skip sign-in and chat bans on the server
-
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** Only the game's own interface keeps guests and chat-banned players from talking in a room. The multiplayer server itself doesn't check either. Someone who connects directly can chat in rooms with no account, under any name they type (including 'jonathan'), even after being banned. Nothing is logged, so there's no evidence to act on.
-
-**Technical detail.**
-
-`/api/presence/identity-token` issues guest tokens with a caller-supplied displayName, up to 32 chars, with no filter (presence/routes.ts:88-100; identityToken.ts:81-98). `parseIdentity` keeps only channel/userId/displayName/avatarId and drops `source` (partykit/presenceServer.ts:800-816). `handleRoomChatSay` checks only the channel, play mode and a 1s rate limit before broadcasting (presenceServer.ts:837-876). The sign-in gate lives only in the client (scenes/overworld/roomChat.ts:226, 410-415). Fix: (1) add `source` and `chatBanned` claims to the identity token. The Worker already has `resolveChatModerationViewer` to compute the ban when issuing. (2) In handleRoomChatSay, drop messages when `source !== 'auth' || chatBanned`. (3) Have the server generate guest display names ('Guest 4aao') and stop accepting them from the request body. (4) Run the shared text filter (see the separate text-filter finding) on room-chat text. (5) Keep a 24h ring buffer of the last 200 room-chat lines per shard in PartyKit storage, so a future Report button can attach evidence.
-
-**Evidence.**
-
-- partykit/presenceServer.ts:837-876 — room chat broadcast with no auth-source or ban check
-- partykit/presenceServer.ts:800-816 — identity parsing drops the token's `source`
-- src/cloudflare/worker/presence/routes.ts:88-100 — guest tokens accept caller-chosen displayName
-- src/scenes/overworld/roomChat.ts:410-415 — sign-in requirement enforced only by disabling the input client-side
-
-**Fact-check (confirmed).**
-
-1. **Chat bans are not enforced anywhere for in-room chat, not even in the game's interface.** The summary says the interface keeps banned players out. It doesn't: `openComposer` (src/scenes/overworld/roomChat.ts:220-243), `renderComposer` (roomChat.ts:410-415) and `RoomChatClient.send` (src/presence/roomChat.ts:166-170) check only `authenticated`, never `chatModeration.banned`. Only the global chat panel checks bans (src/ui/chat/panel.ts:304, 767). So a banned signed-in player can post room-chat bubbles through the normal UI, with no direct connection needed. The client fix is to also disable the composer when `getAuthDebugState().chatModeration.banned` is true.
-
-2. **The name-impersonation point is overstated for chat.** Bubbles show only the message text, not the sender's name (createRenderedBubble, roomChat.ts:509-537). A bubble appears only when the sender also has a visible ghost with the same userId in that room (resolveBubbleAnchor, roomChat.ts:476-505). So an attacker has to publish presence too, which is easy with the same token. The 'jonathan' name would show up on the ghost and in presence lists. That comes from free-form guest presence names in general (also editable in localStorage, worldPresence.ts:840-860), not from chat specifically.
-
-3. **Implementation note:** the token is checked only in `onConnect` (presenceServer.ts:197), and the socket stays open after the 5-minute token TTL. A ban added after someone connects therefore won't apply until they reconnect, unless the server re-checks or the Worker pushes a revoke.
-
-### F188: Anonymous guest saves have no rate limit and can fill the database
-
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** Guests can save room drafts to the server without an account, at up to half a megabyte each, with no limit on how many. A simple script could fill WAMP's database to its 10 GB maximum. After that, nobody can save, publish, chat, or sign in until someone cleans it up by hand.
-
-**Technical detail.**
-
-`PUT /api/guest-room-drafts/:roomId` accepts snapshots up to 512 KB (guestRoomDrafts/routes.ts:29, 90-115). The guest id is self-asserted: anything starting with `guest-` passes (routes.ts:151). There's no IP rate limit, no Turnstile, no per-guest count and no expiry. `POST /api/auth/wallet/challenge` also inserts a row per anonymous call (auth/routes.ts:511-526). Expired wallet_challenges, magic_link_tokens and sessions are never purged: only the test-reset route deletes them (maintenance/routes.ts:46-48), and the cron only purges replays (worker.ts:261). D1 caps a database at 10 GB, and a full DB rejects every write. The repo already has the right pattern in guest replays: an atomic SQL budget gate (guestReplay/routes.ts:61-74). Fix: (1) copy that gate for guest drafts, e.g. at most 20 new drafts/day per ip_hash and at most 2,000/day globally, and require Turnstile on the first save. (2) Add a Workers Rate Limiting binding for anonymous POST/PUT routes: guest drafts, wallet challenge, request-link, guest-activity, guestbook. (3) Extend the hourly cron to delete expired wallet_challenges/magic_link_tokens/sessions and unsubmitted guest drafts older than 30 days. (4) Have the hourly cron email Jonathan if `PRAGMA page_count * page_size` passes 5 GB.
-
-**Evidence.**
-
-- src/cloudflare/worker/guestRoomDrafts/routes.ts:29 — MAX_GUEST_ROOM_SNAPSHOT_JSON_BYTES = 512_000
-- src/cloudflare/worker/guestRoomDrafts/routes.ts:90-115 — anonymous PUT with no rate limit, captcha, or quota
-- src/cloudflare/worker/guestRoomDrafts/routes.ts:151 — any string starting with 'guest-' is accepted as identity
-- src/cloudflare/worker/auth/routes.ts:511-526 — unauthenticated wallet challenge inserts
-- src/cloudflare/worker.ts:261 — scheduled handler only purges guest replays
-- src/cloudflare/worker/guestReplay/routes.ts:61-74 — existing atomic budget-gate pattern to copy
-
-**Fact-check (confirmed, confirmed, partially confirmed).**
-
-The core claim is accurate. Corrections and additions to the fix plan:
-(a) The guestbook already has protection: a D1 rate limit keyed by IP hash and guest session (assertGuestbookRateLimit, guestbook/routes.ts:86-91) plus server-side Turnstile verification (routes.ts:93, 245). Drop it from the list, or reuse its hashGuestbookIp pattern for the guest-draft ip_hash.
-(b) /api/auth/request-link already limits each email to one request per 60 seconds (auth/routes.ts:174-176). It is not throttled per IP, though, and it calls createUserForEmail for any new address (auth/routes.ts:197), so each new email adds a users row and sends a Resend email. That makes it a better rate-limit target than the claim suggests.
-(c) The design doc's retention policy says to keep non-empty active guest drafts indefinitely and purge discarded drafts after 30 days (guest-room-recovery-design.md:392-396). Deleting all unsubmitted drafts after 30 days would destroy recoverable guest work. Base expiry on last_seen_at with a longer window (e.g. 90-180 days), or check with Jonathan first.
-(d) Add to the fix: routes.ts:92 calls parseJsonBody without maxBytes, so a body of any size is read and JSON-parsed before the 512 KB check. Pass { maxBytes: ~600_000 } as guestReplay/routes.ts:53 does.
-
-The core claim holds, but parts of the proposed fix need adjusting:
-- **Guestbook:** remove it from the "add rate limiting" list. It already has an hourly per-IP limit and a per-minute per-session limit (`guestbook/routes.ts:88`, `212-224`), plus Turnstile siteverify (`guestbook/routes.ts:93`, `245-291`).
-- **Request-link:** it already has a per-email cooldown (`auth/store.ts:680-684`, `hasRecentEmailSignInRequest`). It is not fully open; it can still be abused by using a different email each time.
-- **No IP column:** `guest_room_drafts` has no `ip_hash` column (`migrations/0037`). A per-IP gate needs a small migration, or it has to rely on a guest-id-only limit plus a global budget. Effort is still small.
-- **Extra gaps in the same PUT:**
-  - It calls `parseJsonBody` with no `maxBytes` (`routes.ts:92`). The whole body is buffered and parsed before the 512 KB check. The normal room save path caps the body at 2 MB (`core/http.ts:21`, `374`).
-  - It skips `validateRoomSnapshotForWrite`, so tile and object data are not validated.
-- **Submit publishes right away:** `POST /:id/submit` flips `moderation_status` from private to public with no Turnstile (`store.ts:256-271`). The design doc recommended Turnstile at that step.
-
-The core claim stands: PUT /api/guest-room-drafts/:roomId has no IP limit, no quota, no Turnstile and no expiry, even though guest-room-recovery-design.md:302 planned an IP and guest-id rate limit. Corrections:
-
-(a) Take the guestbook off the fix list. It already has an IP rate limit and Turnstile (guestbook/routes.ts:84-93, 212-260).
-
-(b) Keep the wallet_challenges and magic_link_tokens purge as minor housekeeping. Those rows are tiny and cannot realistically fill the database.
-
-(c) Budget gate: base it on bytes or new rows per ip_hash, set high enough for a shared classroom IP (around 100 new drafts per day per IP). Add a total-bytes check across all guests that sends an alert instead of blocking every guest at a fixed 2,000 per day.
-
-(d) Do NOT delete active guest drafts after 30 days, because guests can still come back and claim them. Purge only discarded or hidden drafts. If active drafts must expire, use last_seen_at with a long window such as 180 days or more.
-
-(e) Pass maxBytes to parseJsonBody on the guest PUT (routes.ts:92), so oversized bodies are rejected before parsing.
-
-(f) For the size alert, read `meta.size_after` from any D1 query result instead of relying on PRAGMA.
-
-Impact should be medium, not high. It is a cheap, site-wide outage risk if someone abuses it, but nothing shows abuse today and normal play never triggers it.
-
-### F191: No word filter on titles, signs, NPC names, display names, or chat
-
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** improvement · **impact:** medium · **effort:** small
-
-**Summary.** Room titles, sign text, NPC names, display names, and chat only get spaces trimmed and a length check. Slurs or impersonation names like 'WAMP Admin' go straight live. Classroom accounts read this content too. A basic server-side filter is about a day of work and stops the worst of it.
-
-**Technical detail.**
-
-The normalizers only trim and slice: `normalizeRoomTitle` (persistence/roomModel.ts:374-385), `normalizeSignText` (signs/model.ts:25-36), profile `normalizeDisplayName` (profiles/routes.ts:212-218), account `normalizeDisplayName` (auth/routes.ts:634-640), guest draft names (guestRoomDrafts/routes.ts:157-163) and chat (chat/routes.ts:395-409). Usernames have a reserved list (profiles/username.ts:6), but display names don't. Fix: create `src/moderation/textFilter.ts`, built on the small MIT `obscenity` npm package (it handles leetspeak and has an English slur dataset) or a hand-picked hate-term list. Export `assertCleanName()` (reject) and `maskText()` (replace with ***), and call them from the normalizers above. Both the Worker and PartyKit import shared `src/` code, so one module covers everything. Add a reserved display-name list ('wamp', 'admin', 'moderator', 'jonathan', 'official'). Filter at write time, and keep a `moderation_flags` counter so repeat offenders show up in suspicious-admin.
-
-**Evidence.**
-
-- src/persistence/roomModel.ts:374-385 — room title: trim + slice only
-- src/signs/model.ts:25-36 — sign text: trim + slice(140) only
-- src/cloudflare/worker/profiles/routes.ts:212-218 — display name: whitespace collapse only
-- src/cloudflare/worker/chat/routes.ts:395-409 — chat text: trim + length only
-- src/profiles/username.ts:6 — reserved-name list exists for usernames but not display names
-
-**Fact-check (confirmed).**
-
-Small fixes to the implementation advice, not the core claim:
-1. The list misses some surfaces that also only trim: guestActivity/routes.ts:157 (guest display name), agents/routes.ts:208 (agent display name) and guestbook names (guestbook/routes.ts:159). Room comments already go through manual approval, so they need it least.
-2. Don't put the filter inside the shared `normalizeRoomTitle`/`normalizeSignText` in src/persistence/roomModel.ts and src/signs/model.ts. The client bundle imports those, and a word-list dataset would grow it (performance is a top priority). Call `assertCleanName`/`maskText` at the Worker write points instead: rooms/commandCore.ts:555/609, the publish/draft save paths, profiles/auth/agents/guest display-name routes, and chat create (chat/routes.ts:151). PartyKit doesn't need its own copy because it gets names from Worker-signed claims.
-3. Chat already has bans, deletion and a rate limit, and comments are pre-moderated. The real gaps are room titles, sign/NPC text, display names, guest draft names and chat text.
-4. This is not new: guest-room-recovery-design.md:409 recommended the same thing and it was never done. Set previously_recommended accordingly.
-
-### F049: Public guest-room repository serves unmoderated, user-controlled titles and names to all visitors
-
-- **Area:** Security & abuse resistance
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** Rooms submitted by anonymous guests go straight into the public Explore 'Guest Rooms' list with no review step — their chosen titles and display names are shown to everyone. The project's own design doc said to add abuse controls before shipping this, and the submit path has no CAPTCHA. Live data already shows guest-chosen titles like knife/among-us emoji.
-
-**Technical detail.**
-
-submitOwnedGuestRoomDraft (guestRoomDrafts/store.ts:255-273) flips moderation_status from 'private' to 'public' automatically on submit, and listSubmittedGuestRoomDrafts (store.ts:173-200) returns every status='submitted' AND moderation_status='public' row to unauthenticated callers. handleGuestRoomDraftRequest submit (guestRoomDrafts/routes.ts:116-131) requires only the guest recovery token, with no Turnstile and no rate limit in this handler (contrast guest-replays which has an atomic budget gate, guestReplay/routes.ts:62-74). Titles/display names are capped in length (routes.ts:156-163) but not content-moderated. The guest-room-recovery design doc explicitly says 'add Guest Rooms only after the backend submission path has abuse controls' and 'Turnstile or equivalent abuse check recommended' (docs/features/guest-room-recovery-design.md:332,369). Confirmed live: GET https://api.wamp.land/api/guest-room-drafts/submitted returns guest-authored titles. Rendering appears to use textContent in exploreModal so this is a spam/abuse-content issue, not stored XSS. Fix: default submitted guest rooms to pending review, add Turnstile + per-IP/token rate limiting on submit.
-
-**Evidence.**
-
-- src/cloudflare/worker/guestRoomDrafts/store.ts:264 — submit auto-promotes moderation_status 'private' -> 'public' with no review
-- src/cloudflare/worker/guestRoomDrafts/routes.ts:116 — submit requires only the guest recovery token, no Turnstile/rate limit
-- docs/features/guest-room-recovery-design.md:369 — design doc says ship Guest Rooms only after abuse controls exist
-- live: GET https://api.wamp.land/api/guest-room-drafts/submitted returned 6 public guest rooms with guest-chosen titles
-
-**Fact-check (partially confirmed).**
-
-Fix the citations: the submit handler is guestRoomDrafts/routes.ts:57-72 (not 116-131), and the display-name cap is routes.ts:157-164. Don't present the live list as abuse that has already happened. Only 6 guest rooms are public, and titles like '🔪among us' are harmless kid content, so this is a risk that hasn't been exploited yet. Add the missing key fact: no admin hide or takedown path exists for guest rooms at all. Nothing writes hidden_at on guest_room_drafts, so removing a room means editing the database directly. Also note that the PUT save (routes.ts:90-115) is just as unlimited (any invented guest id and token, up to 512KB per draft), and that /submitted sends full snapshots, so spam could also bloat the Explore payload. Recommended fix, in priority order: (1) add an admin-only hide endpoint modeled on handleGuestbookHide (guestbook/routes.ts:112-130); (2) add the guestbook's Turnstile check and IP/session rate-limit pattern (guestbook/routes.ts:29-31, 88-93) to submit and to PUT save; (3) optionally default submissions to 'pending' with a review queue.
-
-### F189: Takedowns leave the bad content reachable: room history, embedded sprites, and guest rooms
-
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** defect · **impact:** medium · **effort:** medium
-
-**Summary.** Restoring a vandalized room puts the good version back, but the vandal's version stays in the public History list and at its own link, cached for a year. Hiding a community sprite only removes it from the sprite picker; rooms that already use it keep showing it. Anonymous Guest Rooms go public in Explore instantly, and there's no admin button to hide one.
-
-**Technical detail.**
-
-Exact versions are public, with `Cache-Control: public, max-age=31536000, immutable` (rooms/routes.ts:566-576). The History modal lists every version to every viewer and gates only the revert buttons (historyModal.ts:454). Custom sprite moderation flips the catalog row's status (catalogStore.ts:330-349; the admin UI literally says 'Hide from Community', custom-sprite-admin.ts:133). Rooms embed full sprite definitions in their snapshot (persistence/roomModel.ts:133, 759), and the only status check is in mint metadata rendering, against the embedded copy (mint/roomMetadataRender.ts:416). Guest drafts become `moderation_status='public'` on submit (guestRoomDrafts/store.ts:263-265). The public listing respects `hidden_at` (store.ts:194-197), and the columns exist (migrations/0037_guest_room_drafts.sql:21-23), but no route ever sets `hidden_at`. Fix: (1) add `room_versions.redacted_at`. Redacted versions return a placeholder snapshot from /versions/:n and the share image routes, and drop the immutable cache header (use max-age=300). (2) Add a tiny public `GET /api/custom-sprites/blocked-ids` (cached 60s) that the room renderer uses to replace blocked ids with a neutral placeholder, or have block rewrite published_json for rooms found by the existing usage scan. (3) Add `POST /api/admin/guest-room-drafts/:id/hide` and an Explore-queue view in launch-admin. Consider defaulting guest submissions to review for the first submission per IP.
-
-**Evidence.**
-
-- src/cloudflare/worker/rooms/routes.ts:566-576 — any exact version served publicly with 1-year immutable cache
-- src/ui/setup/historyModal.ts:454 — history list shown to all viewers; only revert is gated
-- src/custom-sprite-admin.ts:133 — sprite moderation is 'Hide from Community' (catalog only)
-- src/persistence/roomModel.ts:133 — rooms embed `customSprites?: CustomSpriteDefinition[]`
-- src/cloudflare/worker/guestRoomDrafts/store.ts:263-265 — submit flips guest drafts straight to public
-- migrations/0037_guest_room_drafts.sql:21-23 — hidden_at/hidden_by columns exist but nothing writes them
-
-**Fact-check (partially confirmed).**
-
-1) "Stays in the public History list" overstates it. The History modal (`historyModal.ts:378-450`) shows only the version number, date and publisher, never the room content. `roomSession.ts:365-391` does download every version's snapshot into the browser of anyone who opens History, but nothing renders it. No player-facing URL loads an old version. The places where an old version is actually shown are courses pinned to it (`courses/roomRefs.ts:29-41`) and expanded-room share cells (`share/routes.ts:138-178`). The redaction fix must cover `loadRoomSnapshotsByReferences` / `queryRoomSnapshots` (`rooms/routes.ts:670`, `rooms/store.ts:367-388`), not just `/versions/:n`.
-
-2) "Cached for a year" means browser and intermediate caches only. The exact-version route sets `X-WAMP-Cache: bypass` and is not wrapped in `loadAnonymousPublicCache`, so Cloudflare does not cache it at the edge. Copies already fetched still persist, which is why changing the header still matters.
-
-3) A takedown path does exist, though a crude one: `POST /api/admin/rooms/:id/clear` (`admin/routes.ts:242+`, admin-key only, no UI) deletes all versions of a room. It cannot remove one version while keeping the good history.
-
-4) The mint renderer (`roomMetadataRender.ts:416`) is not the only status check. `customSprites/registry.ts:91` and `:230` and `customTiles/model.ts:134` also check `status !== 'blocked'`, but all of them read the embedded or local copy, so the conclusion stands. Sprites already converted into room tiles (`customTiles` in `roomModel.ts:134`) would also escape a blocked-ids filter and need handling too.
-
-5) The "default guest submissions to review" idea conflicts with the stated policy in `product-requirements.md:616` ("No pre-approval queue"). The hide button and admin queue are the right priority.
-
-### F192: The health check reports 'OK' without checking anything, and no outside monitor watches it
-
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** The /api/health page always answers 'ok'. It never checks whether the database, the multiplayer server, or the map tile generator works, and the post-deploy test trusts that answer. If WAMP goes down at 3am, nothing will tell Jonathan until a player does.
-
-**Technical detail.**
-
-/api/health returns a static object, `{ok:true, storage:'d1', auth:{...}}`, built from env vars alone (worker.ts:128-141). `smoke_prod.mjs:73-74` asserts `ok === true` and `storage === 'd1'`, both constants. The safety doc claims it reports 'healthy auth + D1 status' (docs/development/safety-backend-foundation.md:73). Fix: (1) /api/health runs `SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1` and compares it to a build-time constant of the newest file in migrations/. That catches the 'deployed code before running migrations' failure. It also checks `SELECT COUNT(*), MIN(created_at) FROM world_render_tile_outbox WHERE status='pending'`, does a 1s-timeout fetch to the PartyKit host, and returns HTTP 503 with details when anything is off. (2) Point a free external monitor (UptimeRobot or Better Stack) at it every 5 min with email/SMS alerts to Jonathan. Add a second check on `https://wamp.land/` so a broken Pages deploy is caught too.
-
-**Evidence.**
-
-- src/cloudflare/worker.ts:128-141 — health handler never touches D1, PartyKit, R2 or the tile queue
-- scripts/smoke_prod.mjs:73-74 — post-deploy smoke asserts only on those constants
-- docs/development/safety-backend-foundation.md:73 — doc claims health returns D1 status
-
-**Fact-check (confirmed).**
-
-1. The outbox query is wrong as written. The column is `state`, not `status`, and the table has `created_at` (worker/worldTiles/store.ts:815-824, 1013-1015; migrations/0041_world_render_tiles.sql:91). Use `SELECT COUNT(*), MIN(created_at) FROM world_render_tile_outbox WHERE state='pending'`. Better still, reuse the existing loadRendererStatus logic in worldTileRenderer/worker.ts.
-2. The post-deploy smoke test is not limited to health. It also checks that the frontend HTML loads, that the auth session endpoint reports the expected PartyKit host, and that the main bundle loads (smoke_prod.mjs:7-58, 76-87). The gap is that none of these checks touches D1 or the tile queue, and they only run after a deploy, never on a schedule. The suggested second monitor on wamp.land adds continuous coverage; the smoke test already checks it once per deploy.
-3. A partial outbox check already exists in the admin-authenticated `/api/admin/status` on the tile renderer worker. It is pull-only and sends no alerts.
-4. Implementation caution: /api/health is public (auth: 'public'), so the deeper checks should stay tiny (`LIMIT 1`, no large table scans). The result should also be cached for about 30-60s in module scope, or the PartyKit and D1 probes should be skipped unless something like `?deep=1` is passed. Otherwise anyone can turn the endpoint into a cheap D1 and PartyKit load amplifier.
-5. Stopgap: an external monitor could point at `/api/dashboard/stats` today, since it already runs real D1 queries. That gives a check that fails when the database is down without any code change.
-
-### F194: No database backup or restore plan beyond Cloudflare's built-in 30-day history
-
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** improvement · **impact:** medium · **effort:** small
-
-**Summary.** Every room, account, and leaderboard lives in a single Cloudflare database. Nothing in the repo explains how to recover it after a bad migration or a mass wipe, and no copy is kept anywhere else. A short written recipe plus a weekly automatic backup would protect years of community building.
-
-**Technical detail.**
-
-No doc or script mentions D1 Time Travel or `d1 export` (repo grep). Meanwhile several paths delete data destructively: admin clear (admin/routes.ts:308-309) and snapshot reset (admin/snapshot.ts:56-70). Time Travel is automatic, but it is lost if the database itself is deleted, and a restore rewinds *everyone's* work. Fix: (1) a weekly GitHub Action (cron) that runs `wrangler d1 export everybodys-platformer-db --remote --output=db.sql` (and the JAM_DB). It uploads to a dedicated R2 bucket with a 90-day lifecycle rule, using a scoped API token stored as a GitHub secret. (2) A short 'Disaster recovery' section in the existing deploy doc: `wrangler d1 time-travel info <db>`, `wrangler d1 time-travel restore <db> --timestamp=...`. Warn that this rewinds everything, and say to prefer per-room restore or bulk revert-by-user for vandalism. (3) Do a restore rehearsal once into the safety DB.
-
-**Evidence.**
-
-- src/cloudflare/worker/admin/routes.ts:308-309 — permanent DELETE of room history from an admin endpoint
-- src/cloudflare/worker/admin/snapshot.ts:56-70 — whole-table DELETEs reachable in production
-- wrangler.jsonc:52-65 — two production D1 databases (DB, JAM_DB) with no export/backup tooling in package.json scripts
-
-**Fact-check (partially confirmed).**
-
-"No copy is kept anywhere else" is roughly right but not literally true. A manual prod-to-safety D1 copy script exists (scripts/refresh_safety_from_prod.mjs, npm run db:safety:refresh). It was last verified 2026-03-25 and is now broken, because the snapshot import allowlist (src/cloudflare/worker/admin/snapshot.ts:10-46) omits about 49 current tables such as worlds, badge_awards, room_comments, room_ratings and school_*.
-
-The fix needs two changes:
-(1) Don't run plain `wrangler d1 export --remote` against prod on a schedule. Cloudflare documents that an export blocks all other database requests while it runs. Either run it at the lowest-traffic hour and accept a short outage window, or, better, reuse the refresh script's keyset-paged read-only `d1 execute` SELECTs to write gzipped per-table JSONL/SQL to a dedicated R2 bucket with a lifecycle rule. Cover both DB and JAM_DB.
-(2) The restore rehearsal has to import that dump into the safety DB. Time Travel can only restore a database onto itself, not clone it.
-
-Add a third item: gate POST /api/admin/snapshot/reset and /snapshot/import (admin/routes.ts:104-111) to the safety environment, for example with a SNAPSHOT_ENDPOINTS_ENABLED var set only in env.safety. Also make the refresh script refuse an admin base URL that is the production API. As things stand, one admin-key request can DELETE users, rooms and room_versions in production. Also note that user-uploaded backgrounds and custom sprites stored in Cloudflare Images are not covered by any D1 export.
-
-### F193: The deploy script doesn't check migrations or CI, and has no undo step
-
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** improvement · **impact:** medium · **effort:** small
-
-**Summary.** The one-command deploy correctly refuses to ship uncommitted code. But it can ship code that needs a database change nobody has applied yet, or a commit whose automated tests failed. If the after-deploy check fails, it just stops, leaving the broken version live with no instructions for rolling back.
-
-**Technical detail.**
-
-deploy_prod.mjs checks for a clean, synced main (lines 17-20, 55-82), builds, runs `wrangler deploy` (29), then deploys Pages and runs smoke (50). Migrations are a separate manual script, `cf:d1:migrate:remote` (package.json:84). The deploy never checks the GitHub 'Quality' workflow result for HEAD (.github/workflows/quality.yml runs on push but nothing waits for it). When smoke throws, nothing is rolled back, and no rollback runbook exists (docs/development/frontend-redeploy-and-minting.md has none). Fix: (1) preflight `wrangler d1 migrations list DB --remote` (and JAM_DB). Refuse if migrations are pending, unless `--migrate` is passed, in which case apply them before the Worker deploy. (2) Preflight `gh run list --commit <HEAD> --workflow Quality --json conclusion` and require success. (3) Before deploying, capture the current Worker version from `wrangler deployments list --json`. On smoke failure, print and offer `wrangler rollback <id>`, plus the Pages dashboard 'Rollback' path. (4) Add a plain-language 'How to undo a bad deploy' section to the existing deploy doc rather than a new md.
-
-**Evidence.**
-
-- scripts/deploy_prod.mjs:29 — Worker deploy with no pending-migration check
-- scripts/deploy_prod.mjs:50 — smoke runs after both deploys; failure leaves them live
-- package.json:84 — migrations applied by a separate manual script
-- .github/workflows/quality.yml — CI exists but deploy does not consult it
-
-**Fact-check (confirmed).**
-
-These are refinements, not errors:
-- The clean-main and sync checks are at deploy_prod.mjs:53-80, not 55-82.
-- `npm run build` already runs tsc, so type errors do block a deploy. Only lint and tests are unchecked.
-- The practical way to cover the CI gap is to run `npm run check` inside deploy_prod.mjs. Polling `gh run list` is weaker, because deploys usually happen right after the push while the Quality run is still in progress. That forces a wait loop or a gh auth dependency.
-- The migration preflight has the highest value, and it must cover both DB and the JAM database (wamp-solo-room-jam-db). Note that `wrangler d1 migrations list` reports pending migrations in its text output, so the script has to read that output rather than rely on an exit code.
-- The script deploys the Worker (:29) before Pages (:33). A Pages failure therefore leaves the new Worker running with the old frontend. A rollback note should cover that case too.
-- The script doesn't cause bad deploys today, because agents already do the migration preflight and the `npm run check` step by hand (progress.md:140, :242-243, :308). The problem is that nothing enforces those steps.
-
-### F196: No player-facing rules, privacy page, or contact link, despite session recording and classroom accounts
-
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** improvement · **impact:** medium · **effort:** small
-
-**Summary.** WAMP collects emails, records short gameplay clips from guests, has classroom accounts for students, and lets anyone publish. Yet the main site has no community rules, privacy page, or 'contact us' link. The only legal pages are for the Reddit version. Rules also give moderators something clear to point to when removing content.
-
-**Technical detail.**
-
-public/legal contains only reddit-wamp-privacy.html and reddit-wamp-terms.html. index.html has no terms/privacy/contact link (grep). The guest replay notice explains recording but links nowhere (analytics/replay/recorder.ts:43-48). School-managed student accounts exist (school/restrictions.ts; school-login.html). Fix: adapt the Reddit pages into /legal/terms.html, /legal/privacy.html and a short 'Community rules' page (no hate, harassment, sexual content, or doxxing; vandalizing others' rooms gets edits reverted and accounts suspended). Link them from the menu, sign-in dialog, replay notice, and agent landing page/skill.md. Add a moderation contact email. Small, mostly copy work. Mobile: keep the links in the hamburger menu, not a footer.
-
-**Evidence.**
-
-- public/legal — only reddit-wamp-privacy.html and reddit-wamp-terms.html exist
-- src/analytics/replay/recorder.ts:43-48 — recording notice with opt-out but no privacy link
-- src/cloudflare/worker/school/restrictions.ts:4-10 — school-managed student accounts are a supported user type
-
-**Fact-check (partially confirmed).**
-
-Correct "no contact link". The hamburger menu has a Discord link (`index.html:164-171`) and the About modal links Jonathan's X account (`index.html:2945`). What's missing is an email or moderation contact and any link to a policy. Some conduct rules already exist in `jam.html:246-258`, but only for the jam. They could seed the site-wide community rules, along with the edit/revert rules already in the About modal (`index.html:2965-2967`). The replay notice is at `recorder.ts:43-49`, not 43-48. Fix as proposed: add /legal/privacy.html, /legal/terms.html and a short rules page. Link them from the menu next to the Discord link, the email sign-in row, the replay notice, `school-login.html` and `school-admin.html`, and `public/skill.md`. Add a moderation email.
-
-### F134: Every room comment waits for Jonathan to approve it by hand
-
-- **Area:** New-player experience, retention & community loop
-- **Type:** improvement · **impact:** medium · **effort:** small
-
-**Summary.** Every comment on every room goes into a review queue and sends Jonathan an email. The builder hears about it (and the commenter's words appear) only after he approves it by hand. That delays feedback for builders, hides commenters' words from them, and will swamp Jonathan as WAMP grows. Trusted players could post instantly, with new accounts still reviewed.
-
-**Technical detail.**
-
-roomComments/routes.ts:140-190 handleRoomCommentCreate always returns status 'pending_review' and sends a per-comment admin email (sendRoomCommentAdminReviewNotification, routes.ts:182, 193-215). The builder email goes out only on manual approval (routes.ts:290-296). The hidden trust system already exists (TrustTier 'T0'-'T4' in progression/model.ts:4; loadEffectiveTrustTier in trustCaps.ts:116). Fix: auto-approve when the author's trust tier is ≥T2, or they have ≥3 previously approved comments and 0 rejections, and the body passes a small blocklist/link check. Keep the queue for T0/T1 and flagged text. Replace per-comment admin emails with a daily digest of pending items. Show authors their own pending comment marked 'awaiting review' so the submit doesn't feel lost. School-restricted accounts keep their current block (assertNotSchoolRestricted).
-
-**Evidence.**
-
-- src/cloudflare/worker/roomComments/routes.ts:182-189 — every new comment triggers an admin email and returns status 'pending_review'
-- src/cloudflare/worker/roomComments/routes.ts:290-296 — builder notification only after admin approval
-- src/progression/model.ts:4 — TrustTier 'T0' | 'T1' | 'T2' | 'T3' | 'T4'
-- src/cloudflare/worker/progression/trustCaps.ts:116 — loadEffectiveTrustTier available to gate auto-approval
-
-**Fact-check (confirmed).**
-
-The core claim is accurate. Implementation notes:
-1. The link check is already done (routes.ts:327-329 rejects http/www, :323 rejects angle brackets). Only a small word blocklist is new work.
-2. createRoomComment hard-codes 'pending_review' in SQL (store.ts:342), so it needs a status parameter.
-3. An auto-approved comment must also fire sendRoomCommentApprovedEmail and markRoomCommentNotificationSent, because today those run only in the admin review handler (routes.ts:290-296).
-4. Reuse the existing background-image auto-approve pattern: an env var for the minimum tier, plus compareTrustTier and parseOptionalTrustTier, which are currently private in backgroundImages/routes.ts:1278-1295 and should be moved into a shared module.
-5. Showing authors their own pending comment needs a list query that includes pending rows where author_user_id = viewer, because list queries filter to approved only (store.ts:148, 293).
-
-### F127: The admin dashboard can't show where players come from or whether they come back
-
-- **Area:** New-player experience, retention & community loop
-- **Type:** defect · **impact:** medium · **effort:** medium
-- **Flagged before:** guest-room-recovery-design.md:447 'Phase 4: Admin And Analytics' (signup conversion metrics), still undone.
-
-**Summary.** The admin dashboard counts visits, signups, and plays, but it can't answer the important questions: did people from Reddit or Discord stay, how many guests who beat a room went on to sign up, and how many visitors returned a week later? The 'referrer' it saves is always WAMP's own address, and the landing page gets overwritten as the player moves, so every growth experiment is guesswork.
-
-**Technical detail.**
-
-guest_visits.referrer is filled from the Referer header of the heartbeat fetch (guestActivity/routes.ts:104). That header is the WAMP page itself, not document.referrer. last_path is overwritten on every heartbeat (routes.ts:83), and setFocusedCoordinatesInUrl rewrites the path as the player moves, so the landing page is lost. The replay recorder does capture the real referrer host and entry path (analytics/replay/recorder.ts:135-137), but only for replay sessions, which are deleted after 7 days. users has no link to the guest identity used before signup (migrations/0001: id/email/wallet/display_name only). LaunchStatsActivityWindow (admin/model.ts:46-65) holds window counters only: no conversion or cohort retention. Fix: (1) Client: on the first heartbeat of a session, send landingPath, the document.referrer host, and utm_source/utm_campaign. Add guest_visits columns first_landing_path, first_referrer_host, utm_source, set once. (2) At sign-in, send X-Guest-User-Id (the same call as the guest-claim endpoint) and stamp users.signup_guest_user_id, signup_landing_path, signup_referrer_host. (3) Add a Launch Admin 'Funnel' card for 7/30 days: visitors → played a room → cleared a room → built (edit_seconds>0) → signed up → published. Split by referrer host and device class (phone/desktop from user_agent). Add D1/D7 return rate: guest_user_id or user seen on ≥2 distinct UTC days. (4) Add ?from=share|tweet|gram to every share URL builder (runShare.ts, roomShareLinks.ts, Wamp-O-Gram links) so shared-link arrivals can be counted. This is the instrumentation needed to know whether the other findings work.
-
-**Evidence.**
-
-- src/cloudflare/worker/guestActivity/routes.ts:104 — referrer = request.headers.get('Referer') of the API heartbeat (WAMP's own page), not the external referrer
-- src/cloudflare/worker/guestActivity/routes.ts:83 — last_path = excluded.last_path overwrites the landing path every 15 s
-- src/analytics/guestActivity.ts:95-102 — heartbeat body has no referrer/landing/utm fields
-- src/analytics/replay/recorder.ts:135-137 — the real document.referrer is captured only for 7-day replay sessions
-- src/admin/model.ts:46-65 — LaunchStatsActivityWindow: counts only, no conversion or retention metrics
-- migrations/0001 (users table) — no guest/landing/referrer attribution columns
-
-**Fact-check (partially confirmed, partially confirmed, partially confirmed).**
-
-The Referer read is at guestActivity/routes.ts:110, not :104. The referrer column is set-once via COALESCE at :84; the problem is that the value is always the WAMP origin (https://wamp.land/), because the heartbeat goes cross-origin to api.wamp.land under the default referrer policy. Replay capture is limited by more than the 7-day expiry: it is capped at 100 sessions per day across all visitors and skipped for DNT/GPC users and opt-outs. Partial funnel data already exists for each sampled replay session (played/moved/signup/signed_in/built/visits in guestReplay/routes.ts:45-50), and a guest-to-user link exists only through guest_room_drafts.claimed_by_user_id. Heartbeats stop for signed-in players (guestActivity.ts:80), so their retention has to come from sessions/users instead. D1/D7 guest return can already be computed from existing guest_visits rows (guest_user_id plus first_seen_at/last_seen_at).
-
-Overstated: the claim says the team can't see where players come from. Cloudflare Web Analytics is live on wamp.land (vite.config.ts:121-142; the beacon is in production HTML), so aggregate referrer hosts, landing paths and device split already exist outside the Launch Admin. Guest replay sessions (guestReplay/routes.ts:45-70, admin/replays.ts:50) record the real referrer host and entry path per visit, plus played, built, signup-opened and signed-in flags and visits per week. That covers up to 100 sessions a day for 7 days.
-
-What is actually missing:
-- a durable guest-to-account link at signup (guest_room_drafts.claimed_by_user_id exists but nothing writes it)
-- a combined visit → play → build → signup → publish funnel in the Launch Admin
-- D1/D7 return rates (guest returns are computable today from guest_visits, grouping guest_user_id by distinct UTC day of first_seen_at, with no client change)
-- source tags on share links
-
-The fix can drop most of step (1): reuse the replay recorder's existing referrer and entry-path capture in the first heartbeat instead of building a new channel. Minor detail: the Referer bind is at routes.ts:110, not :104. With the default referrer policy it holds the wamp.land origin.
-
-1. The referrer column is not overwritten. It is set once (COALESCE, routes.ts:84), but it always holds only the "https://wamp.land/" origin, because the browser trims the Referer header on cross-origin requests. Admin never shows it. The bind is at routes.ts:110, not 104.
-2. Some of this data already exists, so the "every growth experiment is guesswork" line is overstated:
-   - Cloudflare Web Analytics is live on production. It gives aggregate referrer hosts, paths and device types.
-   - Guest replays store the real referrer_host, entry_path, the played/signup/signed_in flags and a 7-day visit count for up to 100 guest sessions a day, all reachable from Launch Admin.
-   - guest_user_id persists in localStorage, so D1/D7 guest return rates can be computed and backfilled from the existing guest_visits rows with a query alone.
-3. What is really missing:
-   - attribution kept per visit and per user, for all traffic rather than a 7-day sample
-   - a stored link from guest identity to a new account at sign-in, outside of guest-draft claims
-   - aggregated funnel and cohort cards in Launch Admin
-   - any retention tracking for signed-in users, since guest heartbeats stop at sign-in
-4. Kind: this is mostly an improvement. The only defect is the referrer column, which never stores useful data.
-
-### F197: Dependencies are drifting: no Dependabot, wrangler 76 releases behind, 13 high audit advisories
-
-- **Area:** Trust & safety, moderation, ops & observability
-- **Type:** improvement · **impact:** low · **effort:** small
-
-**Summary.** Nothing automatically flags library updates, so several tools are far behind. The Cloudflare deploy tool is 76 versions out of date, and the security audit lists 13 'high' warnings. Most of those are in parts that never reach players, but a few are in the browser wallet code. Weekly automatic update PRs, which the existing CI already tests, would keep this from piling up.
-
-**Technical detail.**
-
-`npm outdated`: wrangler 4.71.0 → 4.147.0, resend 6.9.3 → 6.32.0, partysocket 1.1.16 → 1.3.0, @reown/appkit 1.8.22 → 1.8.24, viem 2.55.2 → 2.57.2. `npm audit --omit=dev`: 13 high / 5 moderate. Most come via @cloudflare/puppeteer (extract-zip, basic-ftp, proxy-agent: Node-side only). axios/form-data reach the browser bundle via @reown/appkit-adapter-wagmi → @base-org/account → @coinbase/cdp-sdk, and ws via viem/walletconnect. Non-breaking fixes are available for axios, form-data, ws, uuid/svix (via resend), defu, picomatch. .github contains only workflows/quality.yml, with no dependabot.yml. Fix: add .github/dependabot.yml with weekly npm plus github-actions updates, grouped (minor+patch in one PR, wallet stack in one). Run `npm audit fix` once (non-breaking). Bump wrangler and regenerate `world-tiles:types`, since CI runs `world-tiles:types:check`.
-
-**Evidence.**
-
-- npm outdated (snapshot) — wrangler 4.71.0 current vs 4.147.0 latest; resend 6.9.3 vs 6.32.0
-- npm audit --omit=dev (snapshot) — {moderate:5, high:13, critical:0}; axios via @reown/appkit-adapter-wagmi > @coinbase/cdp-sdk
-- .github/workflows/quality.yml — only CI file; no dependabot/renovate config
-- package.json:dependencies — resend ^6.9.3 pulls svix/uuid moderate advisories
-
-**Fact-check (partially confirmed).**
-
-None of the audit advisories reach shipped code. axios, form-data and ws are in the dependency tree of the wallet packages but are tree-shaken out of the production client bundle. I checked dist/assets/cache-v2/*.js: no axios, cdp-sdk, form-data, ws, defu or picomatch code. @coinbase/cdp-sdk is imported only by @base-org/account's server-side payment helpers (dist/interface/payment/charge.js, getOrCreateSubscriptionOwnerWallet.js). The Worker sources import none of the wallet stack. The 6 puppeteer-chain highs sit only on puppeteer's Node launcher path, never used in Workers, and npm's only fix for them is a semver-major downgrade, so `npm audit fix` will leave about 6 highs. Bumping @cloudflare/puppeteer to 1.4.0 probably won't clear them either, since 1.1.0 pins @puppeteer/browsers 2.2.4. The summary should say the advisories are dev/CI-only hygiene, not browser wallet exposure. Everything else checks out: no Dependabot, wrangler 4.71.0 vs 4.147.0, 13 high / 5 moderate, and the other version numbers.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
 ### F061: Add an in-repo AGENTS.md: the agent guide was deleted and the rules are scattered across 78 KB of logs
 
@@ -7449,115 +6048,17 @@ The core claim holds: at 1 fps it does a synchronous drawImage plus toDataURL, s
 
 Suggested fix: skip image capture on touch devices or battery-saver mode (or sample every 3–5 s there), clamp the scale to ≤1 and target about 320 px wide, keep one fixed-size 2D canvas, and compute describeState once per sample.
 
-### F043: No origin check or rate limit on magic-link / email-code requests enables email bombing of arbitrary addresses
+### F043: details withheld
 
-_Merged into F187; track it there._
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-- **Area:** Security & abuse resistance
-- **Type:** defect · **impact:** medium · **effort:** small
+### F044: details withheld
 
-**Summary.** Anyone, from any website, can make WAMP send a real sign-in email to any email address they type, limited only to one per minute per address. There is no CAPTCHA and no per-IP cap, so an attacker can sign up thousands of victim addresses and flood inboxes with WAMP mail (and burn the Resend quota/reputation).
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-**Technical detail.**
+### F047: details withheld
 
-The /api/auth prefix route is auth:'optional' (src/cloudflare/worker.ts:159-164) and handleRequestMagicLink (auth/routes.ts:166-237) does NOT call requireTrustedOriginForMutation for the unauthenticated sign_in path — it only does so when an existing session is linking email (routes.ts:183). So any cross-origin page can POST {email} and a real email is sent via sendMagicLinkEmail (store.ts:1363). The sole limiter is hasRecentEmailSignInRequest (routes.ts:174, 60s per email). There is no per-IP limit and no Turnstile, unlike the guestbook which does gate on Turnstile (guestbook/routes.ts:93, verifyTurnstileToken). For a brand-new address createUserForEmail (routes.ts:197) even creates a user row per unique address, so attackers can mass-create accounts. Fix: require a trusted origin for all POST /api/auth/request-link, add per-IP rate limiting, and add Turnstile on the unauthenticated request path.
-
-**Evidence.**
-
-- src/cloudflare/worker/auth/routes.ts:166 — handleRequestMagicLink sends email with no origin assertion on the sign_in branch
-- src/cloudflare/worker/auth/routes.ts:174 — only throttle is per-email 60s (hasRecentEmailSignInRequest)
-- src/cloudflare/worker/auth/routes.ts:197 — unknown address auto-creates a user before any verification
-- src/cloudflare/worker/guestbook/routes.ts:93 — contrast: guestbook gates writes behind Turnstile
-
-**Fact-check (partially confirmed).**
-
-(1) The origin-check part of the claim is mostly irrelevant. requireTrustedOriginForMutation guards cookie-authenticated mutations (CSRF), and isTrustedRequestOrigin (core/http.ts:58-61) treats a request with no Origin header as trusted. An attacker running curl or a script sends no Origin, so "require a trusted origin for all POST /api/auth/request-link" would stop almost nothing. The fixes that work are a per-IP limit (a Cloudflare Rate Limiting binding or WAF rule, or the guestbook's ipHash-table pattern), Turnstile on the unauthenticated path, and a global hourly/daily send cap so the Resend quota can't be drained. Draining the quota would block every real sign-in.
-(2) The throttle is weaker than "one per minute per address". normalizeEmail (store.ts:1443-1445) only trims and lowercases. Plus-addressing (victim+1@gmail.com, victim+2@...) and Gmail dot variants count as different addresses, so one victim's inbox can be flooded with no limit, and each variant also creates its own user row.
-(3) Extra effect the reviewer missed: createUserForEmail calls ensureFounderIdentityQualification (store.ts:177 → progression/awards.ts:34-64) before the email is verified. Every junk sign-up therefore takes a founder number and a badge sync, which inflates founder numbering for real players. Creating the user should wait until verify. magic_link_tokens already stores the email, so the row can be created at verify time.
-(4) Effort is small, not medium. The guestbook already has IP hashing, per-IP limits and Turnstile verification that can be reused, and a Rate Limiting binding or WAF rule needs no schema work. Moving user creation to verify time is the only part that leans toward medium.
-
-### F044: In-room live chat (PartyKit) has no content moderation or ban enforcement
-
-_Merged into F190; track it there._
-
-- **Area:** Security & abuse resistance
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** The floating speech-bubble chat that players see while playing a room is completely unmoderated: banned users can still use it, there is no profanity/length filtering beyond a character cap, and messages are broadcast live to everyone in the room with no record for review. World Chat (the other chat) does check bans; room chat does not.
-
-**Technical detail.**
-
-handleRoomChatSay (partykit/presenceServer.ts:838-879) accepts any message from a connection whose identity token verified, checks only presence.mode==='play' and a 1s rate limit (ROOM_CHAT_SEND_RATE_LIMIT_MS, presenceServer.ts:856), normalizes text only for non-empty and <=140 chars (relayProtocol.ts:17-21), then broadcasts via buildRoomChatBroadcast with the sender's userId/displayName (relayProtocol.ts:23-43). There is no call to resolveChatModerationViewer / isChatBannedUser — compare the HTTP World Chat path which rejects banned users (chat/routes.ts:143-150) and school-restricted users (chat/routes.ts:144). So a user banned from World Chat can still broadcast in room chat, and there is no server-side log for admin review or deletion. The identity token (presence/routes.ts:88-104) is even issued to guests, so guests can broadcast too. Fix: resolve the chat moderation viewer in onBeforeConnect or handleRoomChatSay and drop banned/school-restricted senders; consider persisting a short rolling log for moderation.
-
-**Evidence.**
-
-- partykit/presenceServer.ts:851 — only checks non-empty text, then 1s rate limit; no ban check
-- src/partykit/relayProtocol.ts:20 — content validation is length<=140 only
-- src/cloudflare/worker/chat/routes.ts:147 — World Chat rejects viewer.banned, room chat has no equivalent
-- src/cloudflare/worker/presence/routes.ts:88 — presence identity tokens are issued to guest identities too
-
-**Fact-check (confirmed, partially confirmed, partially confirmed).**
-
-Line references are slightly off. handleRoomChatSay starts at presenceServer.ts:837, not 838, and the rate-limit check is at 857, not 856 or 851. Two points the claim understates: (1) School-restricted (classroom) accounts are the bigger gap. Every other free-text UGC path calls assertNotSchoolRestricted: world chat (chat/routes.ts:144), room comments (roomComments/routes.ts:147), guestbook (guestbook/routes.ts:81) and profile text (profiles/routes.ts:129). Room chat has no such check on the server or the client, so students can send and receive free text with strangers. (2) Guest tokens accept any client-chosen displayName. Only the userId must match /^guest-.../ (src/presence/identityToken.ts:100-110, 248). A scripted guest could therefore broadcast room chat under someone else's name, for example a well-known creator's. One point is overstated: World Chat has no profanity filter either (chat/routes.ts:394-404 is trim and length only). Its real advantages are bans, school gating and persistence, not content filtering. Simplest fix, which is small: at token issuance (presence/routes.ts), where auth is already loaded, add claims such as roomChatAllowed = source==='auth' && !chatBanned && !school-restricted. Reject room-chat:say in handleRoomChatSay when the claim is false, and hide the composer on the client for those accounts. A rolling moderation log would be a separate, medium-effort follow-up. Note that tokens have a TTL, so a new ban only takes effect when the token expires.
-
-Corrections:
-- Line references: handleRoomChatSay starts at presenceServer.ts:837, not 838. The World Chat checks are chat/routes.ts:144 (assertNotSchoolRestricted) and 145-147 (ban).
-- Guests: the client UI already stops guests from sending, but the server does not enforce it. The token's `source: 'guest'` claim is verified and then thrown away in parseIdentity, so a raw socket can still send. Guests can also pick any display name, which allows impersonation in bubbles.
-- Profanity: World Chat has no profanity filter either, so drop that as a room-chat-specific gap.
-- Missing from the claim: the room-chat composer never checks authState.schoolManaged, unlike the World Chat panel and room comments. School student accounts can use room chat today.
-
-Practical fix:
-- PartyKit cannot cheaply query D1. Since identity tokens expire in 5 minutes (identityToken.ts:2), add a `chatRestricted` claim at issuance in presence/routes.ts. Set it to true when the user is chat-banned (resolveChatModerationViewer), school-managed (auth.school), or a guest.
-- Keep `source`/`chatRestricted` in the ConnectionPresenceState built by parseIdentity, and return early in handleRoomChatSay when it is set.
-- Also hide the room-chat composer, and optionally incoming bubbles, for schoolManaged users on the client.
-- A rolling server log for review is optional.
-
-Core is correct: room chat skips the chat-ban and school-restriction checks that World Chat (chat/routes.ts:144-147) and room comments (roomComments/routes.ts:147-150) enforce. Corrections:
-(a) The main concrete gap is school-managed student accounts. Commit 71638ea3 restricted every other text channel but not room chat. Students get an auth-source presence token and can both send and receive unmoderated room chat.
-(b) Guests cannot room-chat through the real UI (src/presence/roomChat.ts:168). Only a tampered client can, because presenceServer never checks claims.source.
-(c) World Chat has no profanity filter either, so that is not a difference between the two.
-(d) Persistent logging is a nice-to-have. Messages are ephemeral 6s bubbles.
-
-Recommended fix (small):
-1. In presence/routes.ts resolveIssueIdentity, add a claim such as `roomChat: 'ok' | 'banned' | 'school' | 'guest'`, computed with resolveChatModerationViewer and auth.school.
-2. In presenceServer.parseIdentity, store it on connection state, and in handleRoomChatSay drop messages unless it is 'ok'.
-3. Mirror the check client-side so banned and school users see 'Chat unavailable' instead of a silent drop.
-4. Optionally, have the room-chat client skip rendering incoming bubbles for school accounts.
-
-Ban changes will apply on reconnect (tokens have a 5-minute TTL but sockets are long-lived). An immediate kick would need a PARTYKIT_INTERNAL_TOKEN call from the ban route, and that is optional.
-
-### F047: Chat @mention emails can be used to email-bomb any user with an email on file
-
-_Merged into F187; track it there._
-
-- **Area:** Security & abuse resistance
-- **Type:** defect · **impact:** medium · **effort:** small
-
-**Summary.** Each World Chat message you post can trigger WAMP to email up to 5 mentioned users. The only limit on sending chat is 1 message per second per author, so a single malicious account can generate a continuous stream of 'X mentioned you' emails to chosen victims, and the victim's own chat message body is quoted into the email.
-
-**Technical detail.**
-
-handleCreateChatMessage (chat/routes.ts:143-172) rate-limits a user to one message per 1000ms (CHAT_RATE_LIMIT_WINDOW_MS, chat/routes.ts:58,157), then scheduleChatMentionNotificationEmails fires emails to every mentioned @username that has an email (mentions.ts:40-104, up to MAX_CHAT_MENTION_EMAILS=5, mentions.ts:8). There is no per-recipient cooldown or daily cap: one account can send ~5 emails/second to targets of its choice, and the message excerpt (attacker text) is embedded in the email (mentions.ts:100). Fix: add a per-recipient notification cooldown (e.g. at most one mention email per sender->recipient per N minutes) and a global per-sender daily mention-email budget.
-
-**Evidence.**
-
-- src/cloudflare/worker/chat/routes.ts:157 — only 1s/author rate limit gates message creation
-- src/cloudflare/worker/chat/mentions.ts:66 — emails sent to each mentioned user with an email, no cooldown
-- src/cloudflare/worker/chat/mentions.ts:100 — attacker-controlled excerpt embedded in the outbound email
-
-**Fact-check (partially confirmed).**
-
-1. The summary says "the victim's own chat message body is quoted into the email." That is wrong. The excerpt is the sender's (attacker's) message. It is capped at 140 characters by CHAT_MESSAGE_MAX_LENGTH (src/chat/model.ts:1), so the 500-character trim at mentions.ts:10 and 80 never applies. It is HTML-escaped (mentions.ts:100 and 191-197), so the risk is harassment or phishing text, not injected markup. The attacker-chosen display name also appears in the subject line (mentions.ts:88).
-2. The 1 message per second limit is not strictly enforced. It is a non-atomic read-then-insert (routes.ts:152-168, store.ts:155-172 and 51-66), so concurrent requests can push the email rate above about 5 per second.
-3. Recipients have no way to opt out or unsubscribe.
-4. A bigger risk than harassing one user is that mention emails share the Resend account and From address with sign-in emails (mentions.ts:5 and 77). Abuse could exhaust the Resend quota or damage the domain's reputation, and sign-in emails would stop arriving.
-
-Fix:
-- Add a per-recipient cooldown, for example a small D1 table keyed by sender and recipient, or a recipient_last_mention_email_at column, allowing one email per N minutes.
-- Add a per-sender daily email budget.
-- Make the chat rate limit atomic, using a conditional INSERT or the Workers rate-limit binding.
-- Add an opt-out flag for mention emails, or at least an unsubscribe link.
-- Optionally, send notification emails from a different From address than sign-in emails.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
 ### F053: Pinch-zooming in the mobile editor paints, places, or flood-fills under the first finger
 
@@ -7603,43 +6104,9 @@ The core claim is accurate, but the scope is slightly understated.
 3. "Undo after nearly every zoom" is slightly too strong. Nothing is recorded when the first finger lands outside the room bounds (tools.ts:175-177), or when the cell already holds that tile, because commitTileBatch filters out changes where oldGid === newGid (editRuntime.ts:744).
 4. editRuntime has no rollback helper. The cheapest fix is to commit and immediately undo (dropping the redo entry) when the second finger arrives within about 150-250 ms, or to defer the first finger's action.
 
-### F071: No production error reporting: client crashes on players' phones are invisible
+### F071: details withheld
 
-_Merged into F185; track it there._
-
-- **Area:** Code health & architecture (AI-agent friendliness)
-- **Type:** improvement · **impact:** medium · **effort:** small
-
-**Summary.** When the game hits an error on someone's phone, the information goes only to that phone's browser console. Neither you nor your AI agents can see it. Sending a small, rate-limited error report to the server would let agents fix real-world bugs from evidence instead of guessing.
-
-**Technical detail.**
-
-src/main/bootDiagnostics.ts:142-165 installs window 'error' and 'unhandledrejection' handlers. They only call logBootPhase → pushEntry (an in-memory ring, lines 35-40) and console. src/main.ts:168-175 forwards errors only to the render-loop recovery monitor. No Worker route ingests client errors (no telemetry or client-error route in src/cloudflare). Meanwhile the client has 214 `catch {` blocks and 126 console.warn/error calls outside the Worker, so many failures are deliberately swallowed.
-
-Fix:
-(1) Add a tiny `reportClientError({message, stack, phase, route, build, deviceClass})` with a per-session cap (e.g. 20), dedupe by message+top-frame hash, and sampling.
-(2) Send it with navigator.sendBeacon to a new `POST /api/client-errors` that writes to Workers Analytics Engine (cheap, no D1 writes) or a capped D1 table.
-(3) Call it from the global handlers and from the existing console.error sites in streaming, auth and save paths.
-(4) Show the top 20 errors in the existing dashboard.html or Launch Admin.
-Strip emails and tokens from messages before sending.
-
-**Evidence.**
-
-- src/main/bootDiagnostics.ts:142-165 — window error / unhandledrejection only call logBootPhase
-- src/main/bootDiagnostics.ts:35-40 — pushEntry keeps an in-memory array; printEntry logs to console
-- src/main.ts:168-175 — window error only notifies renderLoopRecoveryMonitor
-- grep src/cloudflare — no client-error / telemetry ingestion route
-- grep — 214 `catch {` blocks and 126 console.warn/error calls in client code
-
-**Fact-check (confirmed).**
-
-Some details need fixing.
-
-- The counts are a little high. In client code outside src/cloudflare and excluding tests, there are 176 `catch {` blocks (222 across all of src) and 128 console.warn/error calls, not 214 and 126.
-- The global handlers stay active after boot because they pass force:true, so they keep logging for the whole session — but only to an in-memory ring and the console.
-- There's a cheaper place to build this: the existing guest-replay upload pipeline (src/analytics/replay/recorder.ts posting to /api/guest-replays/*, with an admin viewer in src/admin/replays.ts). An agent could add an 'error' action or error samples there, or copy its request pattern (credentials:'omit', keepalive).
-- Because the new POST route would be unauthenticated, it needs a cap per visitor/IP and a payload size limit on the server, not only throttling on the client.
-- If it uses Analytics Engine, showing the results in the dashboard means querying the AE SQL API with an API token, which is a bit more work than a capped D1 table.
+Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
 ### F073: Modal handling is copy-pasted 18+ times, and Escape closes every open modal at once
 
@@ -8289,6 +6756,5 @@ Minor additions, not reversals:
 ## Dropped after fact-checking
 
 - **F007 The HUD forces a full page re-layout 10 times a second** (refuted): Not a 10-times-a-second full-page forced layout. The timer text changes every tick but is written after the measurement (hud.ts:1196 read, ~:1201/:1215 timer writes). The HUD writes before the read skip themselves when nothing changed (hud.ts:685-751, :808ff, :1157), so layout is normally clean when getBoundingClientRect runs. What is real: updateGoalPanelDockPosition() runs a querySelector and a rect read every 100 ms even when the goal panel is hidden. On the occasional tick where something else already changed layout (button-press class, status or selection change), it causes one extra incr
-- **F046 Authenticated SSRF-style open proxy: /api/avatars/cryptopunks/:id/files/* streams an arbitrary stored URL** (refuted): This is not an exploitable SSRF or open proxy. The route is unauthenticated, not authenticated. Every URL it fetches is built from operator env config (CRYPTOPUNK_AVATAR_PUBLIC_BASE_URL plus a prefix), an integer punkId of 0-9999, and one of 5 fixed file names. Both writers do this: cryptopunk-avatar-queue-worker.ts:136-188 and :278-325, and scripts/process_cryptopunk_avatar_queue.mjs:271-370. The only write a user can trigger (store.ts queueCryptopunkAvatarPack) only sets the URL columns to NULL. Adding an origin allowlist before fetch(sourceUrl) would be optional hardening at most, not a def
 - **F087 No overscroll containment: scrolling the phone editor sheet past the top can trigger Android pull-to-refresh** (refuted): Not a live defect. body has overflow:hidden at src/styles/sections/base.css:76-77, and html has no overflow rule, so the root viewport cannot scroll vertically. Chromium disables pull-to-refresh in that case: layer_tree_host_impl.cc:2618-2620 sets root_overflow_y_hidden, and overscroll_refresh.cc:174-176 resets the gesture. Swiping down on the phone editor sheet therefore cannot reload the page on Chrome Android. The most that could happen is a cosmetic rubber-band bounce on iOS Safari older than 16. If anything is kept, it should be an optional hardening note: `html, body { overscroll-behavio
 - **F181 The phone goal footer re-announces the running timer to screen readers every tenth of a second** (refuted): There is no timer spam. #mobile-goal-footer is always display:none (mobile-controls.css:193-194, plus phone-chrome.css:49-51 with !important) and has been unused since commit bdd3a5cf, so its live region never speaks. The real issues: (1) #world-goal-panel (index.html:1890), the goal panel shown on both desktop and phone, has no live region, so screen-reader users never hear goal progress, completion or failure. Fix: put aria-live="polite" on #world-goal-panel-progress only, or send goal-state changes to one visually hidden role="status" element, and leave #world-goal-panel-timer silent. (2) O

@@ -24,7 +24,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 | Performance (runtime) | B- | Strong foundations (renders at screen size rather than retina, device-aware streaming, per-frame work budgets). Held back by no 60fps cap, fog and dark rooms redrawn from scratch every frame, the map tiles being switched off, and the guest recorder stalling phones. |
 | Load time | C | All ~480 art files download before anyone can play. Android fetches them 6 at a time, a Google Fonts import blocks the first paint, and the PNGs are about 40% bigger than they need to be. |
 | Backend | B- | Read models, edge caching and Server-Timing are excellent. But leaderboards and saves load a room's entire version history (1.2 s on the spawn room, 10 MB on the public room endpoint), and finishing a run makes dozens of database calls one after another. |
-| Security | C | Room-write auth, presence tokens and wallet sign-in are solid. A trusted domain WAMP doesn't own, a database-wipe endpoint live in production, an open redirect and unthrottled sign-in emails all need closing now. |
+| Security | C | Details withheld from this public repo until the open items are fixed. |
 | Code health | B | Unusually clean typing, a real CI gate and a test-first refactor program. Weak spots: 6,000-line files, an unchecked scene-to-UI bridge, no in-repo AGENTS.md, and no tests on goal runs, auth or minting. |
 | Mobile | C | Portrait phone play is genuinely good. Tablets and sideways phones can't play at all, the phone editor is the old design with a stray tile on every pinch, and phone text is as small as 6–7px. |
 | Visual design | B- | A distinctive retro identity, with an XP colour system and button feel to build on. Hurt by no clear main/danger buttons, four leftover dark dialogs, colours hand-typed more than 1,400 times, and blurry in-between pixel-font sizes. |
@@ -32,20 +32,20 @@ This is the master checklist. Humans and AI agents can both read and update it.
 | Game feel | B- | Excellent jump forgiveness and gravity zones. Physics changes with refresh rate, pits don't kill, deaths and clears land flat, and the airborne hitbox is half the sprite's height. |
 | Level editor | B- | A fast edit-to-test loop and a polished desktop dock. Still missing: Undo/Redo buttons, starter templates, a move tool, and checks that stop unbeatable rooms from being published. The phone editor lags far behind. |
 | Accessibility | C- | Dialog markup and text-field focus handling are good. There's no pause, menus can't be used from the keyboard, focus is never moved into pop-ups, red buttons fail contrast, and there's no remapping or readable-text option. |
-| Trust & safety/ops | D+ | Background-image moderation and pre-approved comments are model work. But there's no Report button, no cap on vandal edits, no building ban, unmoderated room chat that reaches students, no error reporting, a health check that checks nothing, and no backup plan. |
+| Trust & safety/ops | D+ | Details withheld from this public repo until the open items are fixed. |
 
 ## Top 10 priorities
 
 1. **Close two dangerous back doors** ✅ (F040, F186). The server treats wamp.pages.dev as part of WAMP, but someone else controls that site, so a signed-in player who visits it could have their account quietly taken over. Separately, a test-only 'erase every user and room' tool is switched on in production, behind one shared password. Both are tiny config changes, and leaving them could be catastrophic.
 2. **Stop builders losing work** (F052, F060, F058, F057). Losing an hour of building is the fastest way to lose a builder. Today: - A failed autosave re-uploads forever and keeps no local backup. - A slow save can write one room's tiles into another room. - A second open tab or phone overwrites your laptop work with no warning. - Expanded-room edits live only in memory until you press Save.
 3. **Let tablets and sideways phones play** ✅ (F075, F077). Anyone on an iPad, or holding a phone sideways (the natural way to hold it for a platformer), presses Play and can't move. The installed Android app is even locked to that orientation. That shuts out a large share of players.
-4. **Make classroom accounts actually safe** (F208, F190, F209, F211). Students are blocked from World Chat, but they can talk to strangers through in-room speech bubbles. The multiplayer server doesn't check sign-in or bans for those bubbles at all. Other public-posting paths are also open to students, and student passwords can be guessed with no lockout. Fix these before any more school pilots.
+4. **Security/safety priority** (F208, F190, F209, F211). Details withheld from this public repo until fixed.
 5. **Switch the fast world map back on, safely** (F003, F010). The pre-drawn map tiles built over the summer have been off for about a month, because a tileset update was never re-rendered. Every visitor's phone is doing the heavy drawing instead. One re-render brings them back. At the same time, fix the per-frame tile scan that wakes up when tiles return, and add an alarm so this can't silently happen again.
 6. **Same jump on every screen, and cap phones at 60fps** (F138, F002). On 120/144Hz screens, quick-tap jumps come out lower, ice slides shorter, and jumps in gravity zones are about half as tall. Rooms get easier or harder depending on the device, and leaderboards aren't fair. A careful cap just above 60fps also cuts heat and battery drain on high-refresh phones.
 7. **Make building on phones and tablets stop fighting you** (F079, F157, F161, F158). Phone and tablet building has several problems: - Every pinch-zoom drops a stray tile or floods an area. - Shape tools don't work by touch. - iPads have no Undo button. - The phone editor still has the old layout, with Test and Publish hidden. - Phone builders can't configure pressure plates, NPCs or Sword Hunters.
 8. **Fix the first five minutes** (F093, F122, F126, F104). These are the moments that decide whether a visitor stays: - A shared room link opens the Welcome box on top of the room-goal box. - New players never see the controls before the timer starts. - 'Save Progress' doesn't actually keep a guest's clears when they sign up. - The Welcome box's Play, Explore and Build buttons don't lead anywhere obvious.
-9. **Make leaderboards trustworthy (and fast)** (F198, F201, F199, F200, F026). The run checker rejects some honest runs just because the player died and respawned. Meanwhile a script, or a builder republishing their own room, can farm points and #1 spots. Finishing a run on the spawn room also waits on a 1.2-second server step, three times. Competitive players notice both.
-10. **Protect the shared world from vandals** (F182, F184, F183). A brand-new account or a bot can publish over hundreds of other people's unminted rooms in a day, and the original builders are never told. There's no Report button, and the only ban is a chat ban. One troll could deface the map in an afternoon, and cleanup would go one room at a time.
+9. **Security/safety priority** (F198, F201, F199, F200, F026). Details withheld from this public repo until fixed.
+10. **Security/safety priority** (F182, F184, F183). Details withheld from this public repo until fixed.
 
 ## Quick wins
 
@@ -61,7 +61,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 - **Fill the Featured tab today** (F125). Explore opens on an empty Featured tab. Hand-pick 20 great rooms, and work out difficulty from real clear and death rates instead of 1–2 votes.
 - **Stop Escape from kicking you out of runs, and stop dropping quick taps** (F168, F085). Pressing Escape to close a menu also ends your run or PvP match. On phones, the double-tap guard swallows rapid taps, such as pressing Undo twice.
 - **Let phone builders name their rooms** (F082). The title box is hidden on phones, which is a big reason so many rooms are 'Untitled Level'.
-- **See errors and outages before players report them** (F185, F192). Send rate-limited client error reports to the server. Make /api/health actually check the database, and add a free uptime monitor.
+- **Security/safety quick win** (F185, F192). Details withheld from this public repo until fixed.
 - **Give Expanded Room links proper previews** (F132). Shared links to the best levels show 'WAMP room -4,12' instead of the level's name and builder. The server already has that data.
 - **Add a short AGENTS.md to the repo** (F061). Every AI session would start with the rules: which checks to run, don't use the stale checkout, how safety deploys and production deploys differ, and how scenes talk to the UI. That saves repeated mistakes.
 
@@ -69,8 +69,8 @@ This is the master checklist. Humans and AI agents can both read and update it.
 
 - **First Steps: a curated starter run that teaches and hooks** (F126, F122, F096, F118, F133). Turn Welcome → Play into a 6–8 room journey ('Room 2 of 8 · Next') that runs through the De Ja Vu tutorial and then the best community rooms. Each new room gets a banner crediting its builder, and every clear gets a real in-play celebration. Guest progress carries over on sign-up, so 'Save Progress' finally means it. Add a proud 'Your room is live!' screen, with a name field and share buttons, for a builder's first publish.
 - **Tell builders people are playing their stuff** (F123, F124, F130). The best reason to come back and build is knowing someone played your room. Add: - an activity bell on your profile card ('7 players beat Lava Gauntlet, tkinter took your #1'); - per-room plays, clear rate and average deaths, and later a map of where players die; - a weekly digest email. The server already records most of this.
-- **A weekly heartbeat, Song A Day style** (F128, F129, F135, F151, F216). Bring back the July jam's energy as a recurring weekly build prompt: enter with a checkbox at publish, with a winner badge and a featured slot as rewards. Pair it with: - a Room of the Day; - a 'This Week' leaderboard that newcomers can actually climb; - a weekly seeded Room Rush everyone plays from the same start. Make jams data-driven so Jonathan can run them without an engineer.
-- **Race the ghost** (F142, F207). Show a see-through ghost of the room's #1 run, or of your own best, and add a 'Race my ghost' share link. Add a 'Verified' check mark on trusted records. It's the core Trackmania loop, and every goal room gets it automatically.
+- **Safety big bet** (F128, F129, F135, F151, F216). Details withheld from this public repo until fixed.
+- **Safety big bet** (F142, F207). Details withheld from this public repo until fixed.
 - **Builder power tools** (F163, F159, F162, F166, F167). Make building easier at every step: - One-tap starter templates that match the neighbours' tileset. - A 'Clear Check' that confirms you beat your own room before publishing. - A Select/Move tool, a clipboard that works across rooms, and saved stamps. - Door arrows showing where the neighbouring rooms connect. - Later, a 'Describe a room → Sketch it' AI helper built on the existing agent API.
 - **Deeper platforming vocabulary** (F141, F139, F143, F150, F155, F144). Give builders more to build with: - respawn checkpoints, so long courses aren't punishing; - pits that actually kill; - crumbling blocks, sideways springs and a double-jump feather; - optional hearts per room; - boss mode for the Sword Hunter; - a world-wide 'Lost Song' collectible hunt that sends explorers into every room.
 - **Load only what a room needs** (F013, F019, F024). Download art on demand instead of all ~480 files at boot. Lazy-load the editor UI and the roughly 20 pop-up menus. Then lock the gains in with automatic size and load-time limits in CI, so a new art pack can't quietly double startup again.
@@ -82,11 +82,11 @@ Go one item at a time, and check each on the live site and on a real phone befor
 1. **One-line fixes.** Remove wamp.pages.dev and localhost from the trusted origins (F040). Turn off the database-wipe endpoint in production (F186). Fix the Android app's orientation lock (F077). Raise Android download concurrency (F014). Add the CORS max-age header and the missing index (F032, F027). Each takes minutes, and each is easy to verify.
 2. **Builders' work.** Fix the runaway autosave and add a local backup (F052). Then the cross-room save race (F060), then the two-editor overwrite (F058).
 3. **The world map.** Re-render and re-enable the tiles together with the per-frame tile-scan fix (F003 + F010). Then add the careful ~60fps cap (F002) and the refresh-rate physics fix (F138), and test them on a 120Hz phone.
-4. **Student safety.** Lock down room chat and school restrictions (F208, F190, F209, F211) before any new classroom pilots.
+4. **Security and safety items.** Details withheld from this public repo until fixed (F190, F208, F209, F211).
 5. **Mobile building.** Fix the pinch stray-tile bug and add Undo/Redo buttons (F079, F157).
 6. **Tablet and landscape controls.** Add these next (F075), since that's the biggest chunk of players who currently can't play.
 7. **First visits.** Fix the stacked modals on shared links, then guest progress carry-over (F093, F122).
-8. **Leaderboards and safety tools.** Fix the respawn false-rejects and republish farming (F198, F201), then vandal caps, a Report button and error reporting (F182, F183, F185).
+8. **Security and safety items.** Details withheld from this public repo until fixed (F182, F183, F185, F198, F201).
 9. **Quick wins and big bets.** Mix in quick wins between bigger items whenever a palate cleanser helps. Then pick one big bet at a time, starting with 'First Steps' or the builder-feedback inbox, since those most directly turn visitors into returning builders.
 
 ## Checklist by area
@@ -147,19 +147,19 @@ The server side is well instrumented, but a few hot paths do far more database w
 
 ### Security
 
-Most account and room protections are solid, but a few holes need closing now. The first two are one-line fixes with serious consequences if left open.
+Open items in this area are withheld from this public repo until fixed.
 
 - [x] **F040** API trusts wamp.pages.dev (a domain WAMP does not own), enabling cross-site account takeover · high impact · small effort — **done 2026-10-03** (715e7677). wamp.pages.dev removed from trusted hosts. Still open: localhost origins are trusted in production (kept on purpose for `dev:frontend:remote`).
 - [x] **F186** The live production server has a 'delete the whole database' endpoint behind one shared password · medium impact · small effort — **done 2026-10-03** (715e7677). Snapshot reset/import routes now 404 unless ENABLE_SNAPSHOT_ADMIN=1 (safety env only). Still open: separate ADMIN_API_KEY per environment, timing-safe compare.
-- [ ] **F187** Chat @mentions and sign-in requests can burn the email budget, and then nobody can log in (also covers F043, F047) · medium impact · small effort
-- [ ] **F042** 6-digit email sign-in code: per-request throttle is global, allowing parallel brute force of a known code window · medium impact · small effort
-- [ ] **F041** Open redirect + OG spoofing on the public room-share page · medium impact · small effort
-- [ ] **F034** Typing an email into sign-in creates an account and assigns a permanent WAMP founder number before the email is verified · medium impact · small effort
-- [ ] **F243** The server's private RPC URL is sent to every minter's browser and wallet · medium impact · small effort
-- [ ] **F051** Most mutating JSON endpoints parse request bodies with no size limit · low impact · small effort
-- [ ] **F050** Public map-screenshot capture endpoint is an unauthenticated, expensive trigger · low impact · small effort
-- [ ] **F045** Display name is not unique and not escaped everywhere, enabling moderator/impersonation confusion · low impact · small effort
-- [ ] **F048** Session cookie never rotates on privilege change and sessions live 30 days with no server-side invalidation on email/wallet linking · low impact · small effort
+- [ ] **F187** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) (also covers F043, F047) · medium impact · small effort
+- [ ] **F042** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F041** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F034** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F243** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F051** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F050** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F045** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F048** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
 
 ### Bugs: lost work and broken moments
 
@@ -310,34 +310,34 @@ The contract and server checks are carefully designed. The everyday experience a
 
 ### Leaderboard, XP and anti-cheat integrity
 
-The XP system is well designed against double-paying. But the run checker both rejects some honest runs and lets fakes and farming through, which undermines trust in the boards.
+Open items in this area are withheld from this public repo until fixed.
 
-- [ ] **F198** Anti-cheat rejects honest runs that include a death respawn, a portal jump, or more than about 8.5 minutes of play · high impact · medium effort
-- [ ] **F201** Republishing your own room resets first-clear points, XP and the #1 spot, with no limit · high impact · small effort
-- [ ] **F199** Ranked verification passes a fake trace: a single breadcrumb at the exit is enough · high impact · medium effort
-- [ ] **F200** Trust tier T1 turns off ranked verification, and T1 takes about 20 scripted requests to reach · medium impact · small effort
-- [ ] **F202** Personal-best points have no cap, and the server accepts a reported time slower than the real one, so global points are mintable · medium impact · small effort
-- [ ] **F203** Room Rush has no run checking: a 0 ms entry is on the live board and a 2,048-room route would be accepted · medium impact · small effort
-- [ ] **F206** Free wallet accounts can brigade trophies and difficulty labels and pay a builder in BXP and trust · medium impact · small effort
-- [ ] **F204** Runs rejected by verification still count for XP ranks, rating eligibility and badges · low impact · small effort
-- [ ] **F205** Admin cheat cleanup leaves XP, trust, badges and ratings, and room clear breaks on rooms with more than 100 runs · low impact · medium effort
-- [ ] **F207** Add a 'Verified' check mark on records and a review queue for new #1 runs, built on existing data · medium impact · medium effort
+- [ ] **F198** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · medium effort
+- [ ] **F201** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · small effort
+- [ ] **F199** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · medium effort
+- [ ] **F200** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F202** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F203** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F206** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F204** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F205** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · medium effort
+- [ ] **F207** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · medium effort
 
 ### School accounts, Worlds and Jams
 
-Student privacy is well designed, but several gaps let students reach strangers or post publicly, and teachers lack basic controls. Fix these before more classroom pilots.
+Open items in this area are withheld from this public repo until fixed.
 
-- [ ] **F208** Students can chat with strangers, including anonymous guests, through in-room speech bubbles · high impact · small effort
-- [ ] **F209** School restrictions are opt-in per route, so many public-posting paths are still open to students · medium impact · small effort
-- [ ] **F211** Student login can be brute-forced, and accounts that were never logged into can be taken over · medium impact · small effort
-- [ ] **F210** Student accounts can link a personal email or crypto wallet and then mint paid NFTs · medium impact · small effort
-- [ ] **F219** Student logins last 30 days on shared school computers · medium impact · small effort
-- [ ] **F212** Teachers can't see, hide, or delete what their students publish · high impact · medium effort
-- [ ] **F213** Anyone can build next to a World's rooms without joining, skipping its review and limits · medium impact · small effort
-- [ ] **F214** Rooms waiting for World approval are already visible to everyone · medium impact · medium effort
-- [ ] **F215** Setting up a classroom needs an engineer, and adding 30 students is slow · medium impact · medium effort
-- [ ] **F218** Classroom Worlds: give each class its own reviewed World · medium impact · medium effort
-- [ ] **F216** The Game Jam is hard-coded for one event, so a second jam or weekly prompt needs a developer · low impact · small effort
+- [ ] **F208** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · small effort
+- [ ] **F209** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F211** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F210** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F219** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F212** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · medium effort
+- [ ] **F213** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F214** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · medium effort
+- [ ] **F215** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · medium effort
+- [ ] **F218** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · medium effort
+- [ ] **F216** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
 
 ### Accessibility
 
@@ -356,24 +356,24 @@ Dialog markup is good. Players who rely on the keyboard, need to pause, read sma
 
 ### Trust and safety, moderation and ops
 
-WAMP is a shared world that anyone can edit, but most of the usual tools for vandals, reports, bans, error visibility and backups are missing. These matter more as WAMP grows.
+Open items in this area are withheld from this public repo until fixed.
 
-- [ ] **F182** Any brand-new account (or agent token) can overwrite every unminted room, with no cap and no alert to the owner · high impact · medium effort
-- [ ] **F184** Admins can't stop a bad actor from building, and cleanup is one room at a time · high impact · medium effort
-- [ ] **F183** Players have no way to report a room, user, chat message, or guest room · high impact · medium effort
-- [ ] **F185** Production errors are invisible: no client error beacon, no request IDs, raw 500 messages (also covers F071) · high impact · small effort
-- [ ] **F190** In-room chat bubbles skip sign-in and chat bans on the server (also covers F044) · medium impact · small effort
-- [ ] **F188** Anonymous guest saves have no rate limit and can fill the database · medium impact · small effort
-- [ ] **F191** No word filter on titles, signs, NPC names, display names, or chat · medium impact · small effort
-- [ ] **F049** Public guest-room repository serves unmoderated, user-controlled titles and names to all visitors · medium impact · small effort
-- [ ] **F189** Takedowns leave the bad content reachable: room history, embedded sprites, and guest rooms · medium impact · medium effort
-- [ ] **F192** The health check reports 'OK' without checking anything, and no outside monitor watches it · medium impact · small effort
-- [ ] **F194** No database backup or restore plan beyond Cloudflare's built-in 30-day history · medium impact · small effort
-- [ ] **F193** The deploy script doesn't check migrations or CI, and has no undo step · medium impact · small effort
-- [ ] **F196** No player-facing rules, privacy page, or contact link, despite session recording and classroom accounts · medium impact · small effort
-- [ ] **F134** Every room comment waits for Jonathan to approve it by hand · medium impact · small effort
-- [ ] **F127** The admin dashboard can't show where players come from or whether they come back · medium impact · medium effort
-- [ ] **F197** Dependencies are drifting: no Dependabot, wrangler 76 releases behind, 13 high audit advisories · low impact · small effort
+- [ ] **F182** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · medium effort
+- [ ] **F184** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · medium effort
+- [ ] **F183** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · medium effort
+- [ ] **F185** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) (also covers F071) · high impact · small effort
+- [ ] **F190** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) (also covers F044) · medium impact · small effort
+- [ ] **F188** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F191** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F049** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F189** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · medium effort
+- [ ] **F192** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F194** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F193** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F196** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F134** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F127** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · medium effort
+- [ ] **F197** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
 
 ### Code health (for AI agents)
 
