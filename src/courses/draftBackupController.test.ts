@@ -109,4 +109,49 @@ describe('expanded draft backup scene controller', () => {
     const record = getActiveCourseDraftSessionRecord()!;
     expect(new ExpandedRoomDraftBackup('user:bob', () => storage).recoverCourse(record.draft).status).toBe('none');
   });
+  it('removes its earlier backup when metadata is reverted to the saved state, including across scene handoff', async () => {
+    const remote = recordFixture();
+    const firstScene = new CourseDraftBackupController();
+    await firstScene.open(remote, false);
+    updateActiveCourseDraftSession((draft) => { draft.title = 'Temporary'; });
+    firstScene.flushCourse();
+    const nextScene = new CourseDraftBackupController();
+    await nextScene.open(getActiveCourseDraftSessionRecord()!, true);
+    updateActiveCourseDraftSession((draft) => { draft.title = remote.draft.title; });
+    expect(nextScene.flushCourse()).toBe(true);
+    expect(new ExpandedRoomDraftBackup('user:alice', () => storage).recoverCourse(remote.draft).status).toBe('none');
+  });
+
+  it('clears an earlier debounced backup when a newer revision is saved immediately', async () => {
+    const remote = recordFixture();
+    const controller = new CourseDraftBackupController();
+    await controller.open(remote, false);
+    updateActiveCourseDraftSession((draft) => { draft.title = 'A'; });
+    controller.flushCourse();
+    updateActiveCourseDraftSession((draft) => { draft.title = 'B'; });
+    const sent = getActiveCourseDraftSessionRecord()!.draft;
+    // Manual Save flushes synchronously before the request, without waiting for the debounce.
+    controller.flushCourse();
+    const saved = { ...remote, draft: { ...sent, updatedAt: '2099-01-01T00:00:00.000Z' } };
+    controller.savedCourse(sent, saved);
+    expect(new ExpandedRoomDraftBackup('user:alice', () => storage).recoverCourse(saved.draft).status).toBe('none');
+    expect(isActiveCourseDraftSessionDirty()).toBe(false);
+  });
+
+  it('reports failed rebackup while retaining newer in-flight edits as dirty after Save', async () => {
+    const remote = recordFixture();
+    const controller = new CourseDraftBackupController();
+    await controller.open(remote, false);
+    updateActiveCourseDraftSession((draft) => { draft.title = 'Sent'; });
+    const sent = getActiveCourseDraftSessionRecord()!.draft;
+    controller.flushCourse();
+    updateActiveCourseDraftSession((draft) => { draft.title = 'Newer'; });
+    vi.spyOn(storage, 'setItem').mockImplementation(() => { throw new Error('Quota'); });
+    const saved = { ...remote, draft: { ...sent, updatedAt: '2099-01-01T00:00:00.000Z' } };
+    controller.savedCourse(sent, saved);
+    expect(getActiveCourseDraftSessionRecord()?.draft.title).toBe('Newer');
+    expect(isActiveCourseDraftSessionDirty()).toBe(true);
+    expect(controller.backupFailed).toBe(true);
+  });
+
 });

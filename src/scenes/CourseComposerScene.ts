@@ -561,9 +561,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     this.renderUi();
     try {
       const sent = cloneCourseSnapshot(this.record.draft);
+      this.backupDebouncer.flush();
       const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
       this.record = this.draftBackup.savedCourse(sent, saved);
-      this.statusText = 'Expanded room setup saved. Open Edit Expanded Room to place goals and edit the cells together.';
+      this.statusText = this.draftBackup.backupFailed ? BACKUP_FAILED_TEXT : 'Expanded room setup saved. Open Edit Expanded Room to place goals and edit the cells together.';
       await this.refreshAround(this.centerCoordinates, true);
     } catch (error) {
       this.statusText = error instanceof Error ? error.message : 'Failed to save expanded room draft.';
@@ -591,11 +592,12 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     this.renderUi();
     try {
       const sent = cloneCourseSnapshot(this.record.draft);
+      this.backupDebouncer.flush();
       const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
       this.record = this.draftBackup.savedCourse(sent, saved);
       const published = await this.expandedRoomEditorRepository.publishExpandedRoom(this.record.draft.id);
       this.record = this.draftBackup.savedCourse(saved.draft, published);
-      this.statusText = 'Expanded room published.';
+      this.statusText = this.draftBackup.backupFailed ? BACKUP_FAILED_TEXT : 'Expanded room published.';
       await this.refreshAround(this.centerCoordinates, true);
     } catch (error) {
       this.statusText = error instanceof Error ? error.message : 'Failed to publish expanded room.';
@@ -826,7 +828,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   }
 
   private flushDraftBackup(): void {
-    if (!this.draftBackup.flushCourse()) this.statusText = BACKUP_FAILED_TEXT;
+    if (!this.draftBackup.flushCourse()) {
+      this.statusText = BACKUP_FAILED_TEXT;
+      this.renderUi();
+    }
   }
 
   private async createExpandedRoomDraftWithInitialCell(
@@ -869,6 +874,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     }
 
     const sent = cloneCourseSnapshot(this.record.draft);
+    this.backupDebouncer.flush();
     const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
     this.record = this.draftBackup.savedCourse(sent, saved);
     return this.record ?? saved;

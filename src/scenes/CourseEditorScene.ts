@@ -208,6 +208,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private readonly backupDebouncer = new DraftBackupDebouncer(() => this.flushDraftBackup());
   private draftLifecycle: EditorDraftLifecycle | null = null;
   private lastBackupChange = '';
+  private localBackupFailed = false;
   private roomBackupBases = new Map<string, Pick<RoomSnapshot, 'id' | 'updatedAt' | 'version'>>();
   private readonly roomRepository = createRoomRepository();
   private readonly localRoomRepository = createLocalRoomRepository();
@@ -753,7 +754,7 @@ export class CourseEditorScene extends Phaser.Scene {
     const change = `${getActiveCourseDraftSessionRevision()}:${this.getDirtySlices().map((slice) => `${slice.roomId}:${slice.runtime.currentLastDirtyAt}`).join(',')}`;
     if (change !== this.lastBackupChange) {
       this.lastBackupChange = change;
-      if (this.getDirtySlices().length || isActiveCourseDraftSessionDirty()) this.backupDebouncer.schedule();
+      this.backupDebouncer.schedule();
     }
     this.syncRoomSliceBackgrounds();
     this.objectInspectorController.updatePressurePlateOverlay(this.pressurePlateGraphics);
@@ -1127,12 +1128,13 @@ export class CourseEditorScene extends Phaser.Scene {
     try {
       for (const slice of dirtySlices) {
         const sent = slice.runtime.exportRoomSnapshot();
+        this.backupDebouncer.flush();
         const record = await this.roomRepository.saveDraft(sent);
         this.applySavedSliceResponse(slice, sent, record, true);
         clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
       }
-      this.statusText = `Saved ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}.`;
+      this.statusText = this.localBackupFailed ? BACKUP_FAILED_TEXT : `Saved ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}.`;
       this.renderUi();
       return lastRecord;
     } catch (error) {
@@ -1196,13 +1198,14 @@ export class CourseEditorScene extends Phaser.Scene {
 
       for (const slice of targetSlices) {
         const sent = slice.runtime.exportRoomSnapshot();
+        this.backupDebouncer.flush();
         const record = await this.roomRepository.publish(sent);
         this.applySavedSliceResponse(slice, sent, record, false);
         clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
       }
       await refreshAuthSession();
-      this.statusText = `Published ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}.`;
+      this.statusText = this.localBackupFailed ? BACKUP_FAILED_TEXT : `Published ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}.`;
       await this.musicWorkflow.handleRoomPublished();
       this.renderUi();
       return lastRecord;
@@ -1249,9 +1252,10 @@ export class CourseEditorScene extends Phaser.Scene {
     showBusyOverlay('Saving expanded room...', 'Saving expanded room goal and setup...');
     try {
       const sent = cloneCourseSnapshot(courseRecord.draft);
+      this.backupDebouncer.flush();
       const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
       this.courseRecord = this.draftBackup.savedCourse(sent, saved);
-      this.statusText = 'Expanded room changes saved.';
+      this.statusText = this.draftBackup.backupFailed ? BACKUP_FAILED_TEXT : 'Expanded room changes saved.';
       this.redrawCourseMarkers();
       this.renderUi();
     } catch (error) {
@@ -1278,13 +1282,14 @@ export class CourseEditorScene extends Phaser.Scene {
     showBusyOverlay('Publishing expanded room...', 'Saving expanded room goal and publishing the expanded room...');
     try {
       const sent = cloneCourseSnapshot(courseRecord.draft);
+      this.backupDebouncer.flush();
       const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
       this.courseRecord = this.draftBackup.savedCourse(sent, saved);
       const published = await this.expandedRoomEditorRepository.publishExpandedRoom(
         this.courseRecord?.draft.id ?? saved.draft.id
       );
       this.courseRecord = this.draftBackup.savedCourse(saved.draft, published);
-      this.statusText = 'Expanded room published.';
+      this.statusText = this.draftBackup.backupFailed ? BACKUP_FAILED_TEXT : 'Expanded room published.';
       this.redrawCourseMarkers();
       this.renderUi();
     } catch (error) {
@@ -1840,9 +1845,13 @@ export class CourseEditorScene extends Phaser.Scene {
     if (this.roomSlices.get(slice.roomId) !== slice || this.isShuttingDown) return;
     const remote = record.draft ?? record.published;
     this.roomBackupBases.set(slice.roomId, { id: remote.id, updatedAt: remote.updatedAt, version: remote.version });
-    const recovered = await this.draftBackup.recoverRoom(this.courseRecord?.draft.id ?? '', remote);
+    const recovered = record.permissions.canSaveDraft
+      ? await this.draftBackup.recoverRoom(this.courseRecord?.draft.id ?? '', remote)
+      : null;
     if (this.roomSlices.get(slice.roomId) !== slice || this.isShuttingDown) return;
-    const override = getActiveCourseDraftSessionRoomOverride(slice.roomId) ?? recovered;
+    const override = record.permissions.canSaveDraft
+      ? getActiveCourseDraftSessionRoomOverride(slice.roomId) ?? recovered
+      : null;
     const snapshot = override ?? record.draft ?? record.published ?? null;
     if (!snapshot) {
       return;
@@ -1929,7 +1938,11 @@ export class CourseEditorScene extends Phaser.Scene {
       const base = this.roomBackupBases.get(slice.roomId);
       if (base) saved = this.draftBackup.writeRoom(this.courseRecord.draft.id, slice.runtime.exportRoomSnapshot(), base) && saved;
     }
-    if (!saved) this.statusText = BACKUP_FAILED_TEXT;
+    this.localBackupFailed = !saved;
+    if (!saved) {
+      this.statusText = BACKUP_FAILED_TEXT;
+      this.renderUi();
+    }
   }
 
   private applySavedSliceResponse(slice: CourseRoomSlice, sent: RoomSnapshot, record: RoomRecord, keepOverride: boolean): void {
