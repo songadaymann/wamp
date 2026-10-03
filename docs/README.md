@@ -2,6 +2,10 @@
 
 This folder is organized by the kind of decision a reader is looking for.
 
+## Review
+
+- [WAMP Checkup, October 2026](review/wamp-checkup-2026-10.md): the fact-checked review of the whole game as a checklist (tick items off as they ship); full write-ups per item in [the details file](review/wamp-checkup-2026-10-details.md)
+
 ## Product
 
 - [Product requirements](product/product-requirements.md)
