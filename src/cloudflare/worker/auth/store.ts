@@ -664,17 +664,19 @@ export async function createMagicLinkToken(
   ]);
 }
 
-export async function loadLatestEmailCode(env: Env, email: string): Promise<MagicLinkJoinRow | null> {
-  const row = await env.DB.prepare(`
+/** The newest two unused, unexpired codes for an address, newest first. */
+export async function loadLiveEmailCodes(env: Env, email: string, nowIso: string): Promise<MagicLinkJoinRow[]> {
+  const { results } = await env.DB.prepare(`
     SELECT m.id, m.user_id, m.email, m.token_hash, m.code_hash, m.code_attempts,
       m.expires_at, m.consumed_at, m.created_at,
       u.email AS user_email, u.wallet_address, u.display_name,
       NULL AS username, NULL AS avatar_url, NULL AS bio, NULL AS selected_avatar_id,
       u.created_at AS user_created_at
     FROM magic_link_tokens m JOIN users u ON u.id = m.user_id
-    WHERE m.email = ? ORDER BY m.created_at DESC, m.rowid DESC LIMIT 1
-  `).bind(email).first<MagicLinkJoinRow>();
-  return row ? withUserProfileFields(env, row, row.user_id) : null;
+    WHERE m.email = ? AND m.consumed_at IS NULL AND m.code_hash IS NOT NULL AND m.expires_at > ?
+    ORDER BY m.created_at DESC, m.rowid DESC LIMIT 2
+  `).bind(email, nowIso).all<MagicLinkJoinRow>();
+  return Promise.all(results.map((row) => withUserProfileFields(env, row, row.user_id)));
 }
 
 export async function hasRecentEmailSignInRequest(env: Env, email: string, since: string): Promise<boolean> {

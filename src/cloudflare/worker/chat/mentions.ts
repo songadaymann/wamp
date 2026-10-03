@@ -4,7 +4,7 @@ import type { ChatMessageRecord } from '../../../chat/model';
 import { normalizeProfileUsername, validateProfileUsername } from '../../../profiles/username';
 import { DEFAULT_AUTH_EMAIL_FROM, findUserByUsername, resolvePublicBaseUrl } from '../auth/store';
 import type { Env } from '../core/types';
-import { hashRateLimitKey, isRateLimited, recordRateLimitEvent, type RateLimitRule } from '../core/rateLimit';
+import { hashRateLimitKey, releaseRateLimitSlots, takeRateLimitSlots, type RateLimitRule } from '../core/rateLimit';
 
 const MAX_CHAT_MENTION_EMAILS = 5;
 // Mentions still show in chat; only the emails are capped, so nobody can flood an inbox.
@@ -72,17 +72,22 @@ export async function sendChatMentionNotificationEmails(
   }
 
   const candidates = await loadChatMentionEmailRecipients(env, usernames, sender.id);
-  const recipients = [];
+  const recipients: Array<ChatMentionEmailRecipient & { slotIds: number[] }> = [];
   for (const candidate of candidates) {
-    const pairKey = await hashRateLimitKey(env, `mention:${sender.id}:${candidate.userId}`);
-    const recipientKey = await hashRateLimitKey(env, `mention-to:${candidate.userId}`);
-    if (
-      await isRateLimited(env, MENTION_EMAILS_PER_SENDER_AND_RECIPIENT, pairKey)
-      || await isRateLimited(env, MENTION_EMAILS_PER_RECIPIENT, recipientKey)
-    ) {
-      continue;
+    // Take both slots before sending so parallel messages cannot slip past the caps.
+    const slots = await takeRateLimitSlots(env, [
+      {
+        rule: MENTION_EMAILS_PER_SENDER_AND_RECIPIENT,
+        keyHash: await hashRateLimitKey(env, `mention:${sender.id}:${candidate.userId}`),
+      },
+      {
+        rule: MENTION_EMAILS_PER_RECIPIENT,
+        keyHash: await hashRateLimitKey(env, `mention-to:${candidate.userId}`),
+      },
+    ]);
+    if (!slots.limitedBy) {
+      recipients.push({ ...candidate, slotIds: slots.ids });
     }
-    recipients.push({ ...candidate, pairKey, recipientKey });
   }
   if (recipients.length === 0) {
     return {
@@ -103,55 +108,61 @@ export async function sendChatMentionNotificationEmails(
 
   const results = await Promise.all(
     recipients.map(async (recipient) => {
-      try {
-        const response = await resend.emails.send({
-          from,
-          to: recipient.email,
-          subject: `${sender.displayName} mentioned you in World Chat`,
-          text: [
-            `${sender.displayName} mentioned you in Everybody's Platformer World Chat:`,
-            '',
-            excerpt,
-            '',
-            `Open World Chat: ${chatUrl}`,
-          ].join('\n'),
-          html: [
-            '<div style="font-family: monospace; background: #050505; color: #f3eee2; padding: 24px;">',
-            '<h2 style="margin: 0 0 16px;">World Chat mention</h2>',
-            `<p style="margin: 0 0 12px;"><strong>${escapeHtml(sender.displayName)}</strong> mentioned you in Everybody&apos;s Platformer World Chat:</p>`,
-            `<blockquote style="margin: 0 0 20px; padding: 12px 14px; border-left: 4px solid #79ccde; background: #141414;">${escapeHtml(excerpt)}</blockquote>`,
-            `<p style="margin: 0;"><a href="${escapeHtml(chatUrl)}" style="color: #7de5ff;">Open World Chat</a></p>`,
-            '</div>',
-          ].join(''),
-        });
-
-        if (response.error) {
-          return {
-            sent: false,
-            error: response.error.message || `Email provider rejected @${recipient.username}.`,
-          };
-        }
-
-        if (!response.data?.id) {
-          return {
-            sent: false,
-            error: `Email provider did not return a message id for @${recipient.username}.`,
-          };
-        }
-
-        await recordRateLimitEvent(env, MENTION_EMAILS_PER_SENDER_AND_RECIPIENT.bucket, recipient.pairKey);
-        await recordRateLimitEvent(env, MENTION_EMAILS_PER_RECIPIENT.bucket, recipient.recipientKey);
-        return { sent: true, error: null };
-      } catch (error) {
-        return {
-          sent: false,
-          error: error instanceof Error
-            ? error.message
-            : `Unknown email provider failure for @${recipient.username}.`,
-        };
+      const result = await sendMentionEmail(recipient);
+      if (!result.sent) {
+        await releaseRateLimitSlots(env, recipient.slotIds);
       }
+      return result;
     })
   );
+
+  async function sendMentionEmail(recipient: ChatMentionEmailRecipient): Promise<{ sent: boolean; error: string | null }> {
+    try {
+      const response = await resend.emails.send({
+        from,
+        to: recipient.email,
+        subject: `${sender.displayName} mentioned you in World Chat`,
+        text: [
+          `${sender.displayName} mentioned you in Everybody's Platformer World Chat:`,
+          '',
+          excerpt,
+          '',
+          `Open World Chat: ${chatUrl}`,
+        ].join('\n'),
+        html: [
+          '<div style="font-family: monospace; background: #050505; color: #f3eee2; padding: 24px;">',
+          '<h2 style="margin: 0 0 16px;">World Chat mention</h2>',
+          `<p style="margin: 0 0 12px;"><strong>${escapeHtml(sender.displayName)}</strong> mentioned you in Everybody&apos;s Platformer World Chat:</p>`,
+          `<blockquote style="margin: 0 0 20px; padding: 12px 14px; border-left: 4px solid #79ccde; background: #141414;">${escapeHtml(excerpt)}</blockquote>`,
+          `<p style="margin: 0;"><a href="${escapeHtml(chatUrl)}" style="color: #7de5ff;">Open World Chat</a></p>`,
+          '</div>',
+        ].join(''),
+      });
+
+      if (response.error) {
+        return {
+          sent: false,
+          error: response.error.message || `Email provider rejected @${recipient.username}.`,
+        };
+      }
+
+      if (!response.data?.id) {
+        return {
+          sent: false,
+          error: `Email provider did not return a message id for @${recipient.username}.`,
+        };
+      }
+
+      return { sent: true, error: null };
+    } catch (error) {
+      return {
+        sent: false,
+        error: error instanceof Error
+          ? error.message
+          : `Unknown email provider failure for @${recipient.username}.`,
+      };
+    }
+  }
 
   return {
     attempted: recipients.length,
@@ -171,16 +182,18 @@ export function logChatMentionEmailFailures(result: ChatMentionEmailResult): voi
   console.warn(`Chat mention emails sent ${result.sent}/${result.attempted}: ${result.errors.join('; ')}`);
 }
 
-async function loadChatMentionEmailRecipients(
-  env: Env,
-  usernames: string[],
-  senderUserId: string
-): Promise<Array<{
+interface ChatMentionEmailRecipient {
   userId: string;
   displayName: string;
   username: string;
   email: string;
-}>> {
+}
+
+async function loadChatMentionEmailRecipients(
+  env: Env,
+  usernames: string[],
+  senderUserId: string
+): Promise<ChatMentionEmailRecipient[]> {
   const recipients = [];
   const seenUserIds = new Set<string>();
 

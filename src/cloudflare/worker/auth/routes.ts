@@ -17,8 +17,17 @@ import type {
   WalletVerifyResponse,
 } from '../../../auth/model';
 import { HttpError, jsonResponse, noContentResponse, parseJsonBody, redirectResponse } from '../core/http';
-import type { Env } from '../core/types';
-import { getClientIp, hashRateLimitKey, isRateLimited, recordRateLimitEvent, type RateLimitRule } from '../core/rateLimit';
+import type { Env, MagicLinkJoinRow } from '../core/types';
+import {
+  canonicalMailbox,
+  clearRateLimitEvents,
+  getClientIp,
+  hashRateLimitKey,
+  networkKeyForIp,
+  releaseRateLimitSlots,
+  takeRateLimitSlots,
+  type RateLimitRule,
+} from '../core/rateLimit';
 import { ensureFounderIdentityQualification } from '../progression/awards';
 import {
   attachEmailToUser,
@@ -49,7 +58,7 @@ import {
   isValidEmail,
   listApiTokensForUser,
   loadMagicLinkByTokenHash,
-  loadLatestEmailCode,
+  loadLiveEmailCodes,
   recordEmailCodeAttempt,
   loadWalletChallengeByNonceHash,
   normalizeAddress,
@@ -167,25 +176,58 @@ function resolvePublicWalletProjectId(env: Env): string | null {
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
-// Sign-in emails: generous for real people (a whole classroom on one school network still fits),
-// but a script can no longer mail thousands of strangers or flood one inbox all day.
-const SIGN_IN_EMAILS_PER_NETWORK: RateLimitRule = { bucket: 'sign-in-email:ip', limit: 30, windowMs: HOUR_MS };
-const SIGN_IN_EMAILS_PER_ADDRESS: RateLimitRule = { bucket: 'sign-in-email:address', limit: 10, windowMs: DAY_MS };
-// Wrong six-digit codes, counted across every code sent, so codes cannot be guessed over days.
-const WRONG_CODES_PER_NETWORK: RateLimitRule = { bucket: 'wrong-code:ip', limit: 30, windowMs: HOUR_MS };
-const WRONG_CODES_PER_ADDRESS: RateLimitRule = { bucket: 'wrong-code:address', limit: 10, windowMs: DAY_MS };
+// Sign-in emails. The network cap is sized for a busy shared network (a school or event wifi,
+// including resends) but stops a script mailing thousands of strangers. The daily cap is per
+// address *and* network, so a stranger elsewhere cannot use up the owner's allowance and lock
+// them out; the hourly inbox cap (plus-tags and Gmail dots count as one inbox) stops flooding.
+const SIGN_IN_EMAILS_PER_NETWORK: RateLimitRule = { bucket: 'sign-in-email:network', limit: 150, windowMs: HOUR_MS };
+const SIGN_IN_EMAILS_PER_ADDRESS_AND_NETWORK: RateLimitRule = { bucket: 'sign-in-email:address-network', limit: 10, windowMs: DAY_MS };
+const SIGN_IN_EMAILS_PER_INBOX: RateLimitRule = { bucket: 'sign-in-email:inbox', limit: 20, windowMs: HOUR_MS };
+// Wrong six-digit codes, counted across every code sent so a code cannot be ground down over
+// days. 30 a day per address is about a 1-in-33,000 chance; the emailed link always still works.
+const WRONG_CODES_PER_NETWORK: RateLimitRule = { bucket: 'wrong-code:network', limit: 100, windowMs: HOUR_MS };
+const WRONG_CODES_PER_ADDRESS_AND_NETWORK: RateLimitRule = { bucket: 'wrong-code:address-network', limit: 10, windowMs: DAY_MS };
+const WRONG_CODES_PER_ADDRESS: RateLimitRule = { bucket: 'wrong-code:address', limit: 30, windowMs: DAY_MS };
 
-async function rateLimitKeys(request: Request, env: Env, email: string): Promise<{ ip: string | null; address: string }> {
+interface AuthLimitKeys {
+  network: string | null;
+  address: string;
+  addressAndNetwork: string;
+  inbox: string;
+}
+
+async function authLimitKeys(request: Request, env: Env, email: string): Promise<AuthLimitKeys> {
   const ip = getClientIp(request);
+  const network = ip ? networkKeyForIp(ip) : 'network:unknown';
   return {
-    ip: ip ? await hashRateLimitKey(env, `ip:${ip}`) : null,
+    network: ip ? await hashRateLimitKey(env, network) : null,
     address: await hashRateLimitKey(env, `email:${email}`),
+    addressAndNetwork: await hashRateLimitKey(env, `email:${email}|${network}`),
+    inbox: await hashRateLimitKey(env, `inbox:${canonicalMailbox(email)}`),
   };
 }
 
-async function recordWrongCode(env: Env, keys: { ip: string | null; address: string }): Promise<void> {
-  if (keys.ip) await recordRateLimitEvent(env, WRONG_CODES_PER_NETWORK.bucket, keys.ip);
-  await recordRateLimitEvent(env, WRONG_CODES_PER_ADDRESS.bucket, keys.address);
+function signInEmailLimitMessage(rule: RateLimitRule): string {
+  if (rule === SIGN_IN_EMAILS_PER_NETWORK) return 'Too many sign-in emails from this network. Try again in an hour.';
+  if (rule === SIGN_IN_EMAILS_PER_INBOX) return 'Too many sign-in emails for this address. Try again in an hour.';
+  return 'Too many sign-in emails for this address today. Try again tomorrow.';
+}
+
+/** The owner just proved the address, so earlier wrong guesses against it stop counting. */
+async function clearWrongCodes(request: Request, env: Env, email: string): Promise<void> {
+  const keys = await authLimitKeys(request, env, normalizeEmail(email));
+  await clearRateLimitEvents(env, WRONG_CODES_PER_ADDRESS.bucket, keys.address);
+  await clearRateLimitEvents(env, WRONG_CODES_PER_ADDRESS_AND_NETWORK.bucket, keys.addressAndNetwork);
+}
+
+// Founder numbers are a bonus and must never fail a sign-in whose link or code is already
+// spent. The call is idempotent, so a miss is filled in on the next verified sign-in.
+async function assignFounderNumberSafely(env: Env, userId: string, at: string): Promise<void> {
+  try {
+    await ensureFounderIdentityQualification(env, userId, at);
+  } catch (error) {
+    console.error('Founder number assignment failed; will retry on next sign-in', error);
+  }
 }
 
 export async function handleRequestMagicLink(request: Request, env: Env): Promise<Response> {
@@ -199,14 +241,31 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
   if (await hasRecentEmailSignInRequest(env, email, new Date(Date.now() - 60_000).toISOString())) {
     throw new HttpError(429, 'Wait a minute before requesting another sign-in email.');
   }
-  const limitKeys = await rateLimitKeys(request, env, email);
-  if (limitKeys.ip && await isRateLimited(env, SIGN_IN_EMAILS_PER_NETWORK, limitKeys.ip)) {
-    throw new HttpError(429, 'Too many sign-in emails from this network. Try again in an hour.');
-  }
-  if (await isRateLimited(env, SIGN_IN_EMAILS_PER_ADDRESS, limitKeys.address)) {
-    throw new HttpError(429, 'Too many sign-in emails for this address today. Use a link you already received, or try again tomorrow.');
+  const keys = await authLimitKeys(request, env, email);
+  const slots = await takeRateLimitSlots(env, [
+    ...(keys.network ? [{ rule: SIGN_IN_EMAILS_PER_NETWORK, keyHash: keys.network }] : []),
+    { rule: SIGN_IN_EMAILS_PER_ADDRESS_AND_NETWORK, keyHash: keys.addressAndNetwork },
+    { rule: SIGN_IN_EMAILS_PER_INBOX, keyHash: keys.inbox },
+  ]);
+  if (slots.limitedBy) {
+    throw new HttpError(429, signInEmailLimitMessage(slots.limitedBy));
   }
 
+  try {
+    return await createAndSendSignInEmail(request, env, body, email);
+  } catch (error) {
+    // Nothing was sent (a 409, or the email provider failed), so it does not count.
+    await releaseRateLimitSlots(env, slots.ids);
+    throw error;
+  }
+}
+
+async function createAndSendSignInEmail(
+  request: Request,
+  env: Env,
+  body: MagicLinkRequestBody,
+  email: string,
+): Promise<Response> {
   const existingAuth = await loadOptionalRequestAuth(env, request);
   let purpose: MagicLinkRequestResponse['purpose'] = 'sign_in';
   let user: AuthUser;
@@ -236,8 +295,6 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
   const expiresAt = new Date(now.getTime() + MAGIC_LINK_TTL_MS).toISOString();
 
   await createMagicLinkToken(env, user.id, email, tokenHash, codeHash, expiresAt, now.toISOString());
-  if (limitKeys.ip) await recordRateLimitEvent(env, SIGN_IN_EMAILS_PER_NETWORK.bucket, limitKeys.ip);
-  await recordRateLimitEvent(env, SIGN_IN_EMAILS_PER_ADDRESS.bucket, limitKeys.address);
 
   const returnBaseUrl = resolveMagicLinkReturnUrl(request, env, body.returnTo);
   const verifyBaseUrl = resolveMagicLinkVerifyBaseUrl(request, env, returnBaseUrl);
@@ -312,9 +369,10 @@ export async function handleVerifyMagicLink(
   if (!await consumeMagicLinkToken(env, row.id, now)) {
     return redirectResponse(invalidRedirectUrl);
   }
-  // Accounts made by typing an email get their founder number only once the email is proven.
-  await ensureFounderIdentityQualification(env, user.id, now);
   const sessionToken = await createSession(env, user.id);
+  // Accounts made by typing an email get their founder number only once the email is proven.
+  await assignFounderNumberSafely(env, user.id, now);
+  await clearWrongCodes(request, env, row.email);
   const redirectUrl = buildMagicLinkRedirectUrl(
     request,
     env,
@@ -335,22 +393,52 @@ export async function handleVerifyEmailCode(request: Request, env: Env): Promise
   if (!isValidEmail(email) || !/^\d{6}$/.test(code)) {
     throw new HttpError(400, 'Enter your email and six-digit code.');
   }
-  const limitKeys = await rateLimitKeys(request, env, email);
-  if (limitKeys.ip && await isRateLimited(env, WRONG_CODES_PER_NETWORK, limitKeys.ip)) {
-    throw new HttpError(429, 'Too many incorrect codes from this network. Try again in an hour, or use the link in your email.');
+  const keys = await authLimitKeys(request, env, email);
+  const guess = await takeRateLimitSlots(env, [
+    ...(keys.network ? [{ rule: WRONG_CODES_PER_NETWORK, keyHash: keys.network }] : []),
+    { rule: WRONG_CODES_PER_ADDRESS_AND_NETWORK, keyHash: keys.addressAndNetwork },
+    { rule: WRONG_CODES_PER_ADDRESS, keyHash: keys.address },
+  ]);
+  if (guess.limitedBy) {
+    throw new HttpError(429, guess.limitedBy === WRONG_CODES_PER_NETWORK
+      ? 'Too many incorrect codes from this network. Use the link in your email, or try again in an hour.'
+      : 'Too many incorrect codes for this email today. Use the link in your email instead.');
   }
-  if (await isRateLimited(env, WRONG_CODES_PER_ADDRESS, limitKeys.address)) {
-    throw new HttpError(429, 'Too many incorrect codes for this email today. Use the link in your email instead.');
+
+  // Every guess holds a slot up front so parallel guesses cannot slip past the caps; only a
+  // wrong code keeps it.
+  let wrongCode = false;
+  try {
+    return await signInWithEmailCode(request, env, email, code);
+  } catch (error) {
+    wrongCode = error instanceof HttpError && error.message.startsWith('Incorrect code');
+    throw error;
+  } finally {
+    if (!wrongCode) {
+      await releaseRateLimitSlots(env, guess.ids);
+    }
   }
-  const row = await loadLatestEmailCode(env, email);
-  if (!row || !row.code_hash || row.consumed_at || isExpired(row.expires_at) || row.code_attempts >= 5) {
+}
+
+async function signInWithEmailCode(request: Request, env: Env, email: string, code: string): Promise<Response> {
+  // The newest two codes both work, so typing the code from an earlier email after pressing
+  // resend is not counted as a wrong guess.
+  const rows = await loadLiveEmailCodes(env, email, new Date().toISOString());
+  const newest = rows[0];
+  if (!newest || newest.code_attempts >= 5) {
     throw new HttpError(400, 'Code expired or invalid. Request a new email.');
   }
-  if (!await recordEmailCodeAttempt(env, row.id)) {
+  if (!await recordEmailCodeAttempt(env, newest.id)) {
     throw new HttpError(400, 'Too many attempts. Request a new email.');
   }
-  if (await hashToken(`${row.token_hash}:${code}`) !== row.code_hash) {
-    await recordWrongCode(env, limitKeys);
+  let row: MagicLinkJoinRow | null = null;
+  for (const candidate of rows) {
+    if (await hashToken(`${candidate.token_hash}:${code}`) === candidate.code_hash) {
+      row = candidate;
+      break;
+    }
+  }
+  if (!row) {
     throw new HttpError(400, 'Incorrect code. Check the email and try again.');
   }
   let user: AuthUser = {
@@ -368,8 +456,9 @@ export async function handleVerifyEmailCode(request: Request, env: Env): Promise
   if (!await consumeMagicLinkToken(env, row.id, verifiedAt)) {
     throw new HttpError(400, 'Code already used. Request a new email.');
   }
-  await ensureFounderIdentityQualification(env, user.id, verifiedAt);
   const sessionToken = await createSession(env, user.id);
+  await assignFounderNumberSafely(env, user.id, verifiedAt);
+  await clearWrongCodes(request, env, email);
   return jsonResponse(request, { ok: true }, {
     headers: { 'Set-Cookie': createSessionCookie(request, sessionToken) },
   });
