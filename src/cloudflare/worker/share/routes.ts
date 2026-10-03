@@ -6,7 +6,7 @@ import {
   type RoomSnapshot,
 } from '../../../persistence/roomModel';
 import { resolvePublicBaseUrl } from '../auth/store';
-import { corsHeaders, HttpError, jsonResponse } from '../core/http';
+import { corsHeaders, HttpError, isTrustedAppHostname, jsonResponse } from '../core/http';
 import type { Env, WorkerExecutionContextLike } from '../core/types';
 import { loadAnonymousPublicCache } from '../core/publicCache';
 import { resolveExpandedRoomAtCoordinates } from '../expandedRooms/store';
@@ -259,7 +259,7 @@ function buildRoomShareMetadata(
   };
 }
 
-function resolveRequestedPublicUrl(url: URL): string | null {
+export function resolveRequestedPublicUrl(url: URL): string | null {
   const candidate = url.searchParams.get('url')?.trim();
   if (!candidate) {
     return null;
@@ -270,10 +270,20 @@ function resolveRequestedPublicUrl(url: URL): string | null {
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       return null;
     }
-    return parsed.toString();
+    // The page redirects visitors to this URL, so only WAMP's own hosts are allowed; anything
+    // else falls back to the room's own URL instead of becoming an open redirect.
+    return isAllowedSharePageHost(parsed.hostname) ? parsed.toString() : null;
   } catch {
     return null;
   }
+}
+
+function isAllowedSharePageHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return isTrustedAppHostname(host)
+    || host.endsWith('.wamp.land')
+    || host === 'localhost'
+    || host === '127.0.0.1';
 }
 
 function resolveFrontendBaseUrl(request: Request, env: Env): string {

@@ -4,8 +4,16 @@ import type { ChatMessageRecord } from '../../../chat/model';
 import { normalizeProfileUsername, validateProfileUsername } from '../../../profiles/username';
 import { DEFAULT_AUTH_EMAIL_FROM, findUserByUsername, resolvePublicBaseUrl } from '../auth/store';
 import type { Env } from '../core/types';
+import { hashRateLimitKey, isRateLimited, recordRateLimitEvent, type RateLimitRule } from '../core/rateLimit';
 
 const MAX_CHAT_MENTION_EMAILS = 5;
+// Mentions still show in chat; only the emails are capped, so nobody can flood an inbox.
+const MENTION_EMAILS_PER_SENDER_AND_RECIPIENT: RateLimitRule = {
+  bucket: 'mention-email:pair', limit: 1, windowMs: 60 * 60 * 1000,
+};
+const MENTION_EMAILS_PER_RECIPIENT: RateLimitRule = {
+  bucket: 'mention-email:recipient', limit: 10, windowMs: 24 * 60 * 60 * 1000,
+};
 const CHAT_MENTION_TOKEN_PATTERN = /(^|[^A-Za-z0-9_-])@([A-Za-z0-9][A-Za-z0-9_-]{2,23})(?![A-Za-z0-9_-])/g;
 const CHAT_EMAIL_BODY_MAX_LENGTH = 500;
 
@@ -63,12 +71,26 @@ export async function sendChatMentionNotificationEmails(
     };
   }
 
-  const recipients = await loadChatMentionEmailRecipients(env, usernames, sender.id);
+  const candidates = await loadChatMentionEmailRecipients(env, usernames, sender.id);
+  const recipients = [];
+  for (const candidate of candidates) {
+    const pairKey = await hashRateLimitKey(env, `mention:${sender.id}:${candidate.userId}`);
+    const recipientKey = await hashRateLimitKey(env, `mention-to:${candidate.userId}`);
+    if (
+      await isRateLimited(env, MENTION_EMAILS_PER_SENDER_AND_RECIPIENT, pairKey)
+      || await isRateLimited(env, MENTION_EMAILS_PER_RECIPIENT, recipientKey)
+    ) {
+      continue;
+    }
+    recipients.push({ ...candidate, pairKey, recipientKey });
+  }
   if (recipients.length === 0) {
     return {
       attempted: 0,
       sent: 0,
-      skippedReason: 'No mentioned users have email addresses.',
+      skippedReason: candidates.length === 0
+        ? 'No mentioned users have confirmed email addresses.'
+        : 'Mention email limit reached for these recipients.',
       errors: [],
     };
   }
@@ -117,6 +139,8 @@ export async function sendChatMentionNotificationEmails(
           };
         }
 
+        await recordRateLimitEvent(env, MENTION_EMAILS_PER_SENDER_AND_RECIPIENT.bucket, recipient.pairKey);
+        await recordRateLimitEvent(env, MENTION_EMAILS_PER_RECIPIENT.bucket, recipient.recipientKey);
         return { sent: true, error: null };
       } catch (error) {
         return {
@@ -166,6 +190,11 @@ async function loadChatMentionEmailRecipients(
     if (!user || !email || user.id === senderUserId || seenUserIds.has(user.id)) {
       continue;
     }
+    // Typing an address into sign-in creates an account before the email is confirmed; only
+    // mail people who have actually used a sign-in link or code sent to that address.
+    if (!await hasConfirmedEmail(env, email)) {
+      continue;
+    }
 
     seenUserIds.add(user.id);
     recipients.push({
@@ -177,6 +206,15 @@ async function loadChatMentionEmailRecipients(
   }
 
   return recipients;
+}
+
+async function hasConfirmedEmail(env: Env, email: string): Promise<boolean> {
+  const row = await env.DB.prepare(
+    'SELECT 1 AS confirmed FROM magic_link_tokens WHERE email = ? AND consumed_at IS NOT NULL LIMIT 1'
+  )
+    .bind(email.toLowerCase())
+    .first<{ confirmed: number }>();
+  return row !== null;
 }
 
 function trimForEmail(value: string, maxLength: number): string {

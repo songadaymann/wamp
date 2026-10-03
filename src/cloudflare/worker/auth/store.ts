@@ -172,9 +172,9 @@ export async function createUserForEmail(env: Env, email: string): Promise<AuthU
     createdAt: now,
   };
 
+  // No founder number yet: typing an email proves nothing. The verify paths assign it once the
+  // email is confirmed, so throwaway or mistyped addresses do not use up founder numbers.
   await insertUserRecord(env, user, now);
-
-  await ensureFounderIdentityQualification(env, user.id, now);
 
   return user;
 }

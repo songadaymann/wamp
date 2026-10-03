@@ -18,6 +18,8 @@ import type {
 } from '../../../auth/model';
 import { HttpError, jsonResponse, noContentResponse, parseJsonBody, redirectResponse } from '../core/http';
 import type { Env } from '../core/types';
+import { getClientIp, hashRateLimitKey, isRateLimited, recordRateLimitEvent, type RateLimitRule } from '../core/rateLimit';
+import { ensureFounderIdentityQualification } from '../progression/awards';
 import {
   attachEmailToUser,
   attachWalletToUser,
@@ -163,6 +165,29 @@ function resolvePublicWalletProjectId(env: Env): string | null {
   return projectId || null;
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+// Sign-in emails: generous for real people (a whole classroom on one school network still fits),
+// but a script can no longer mail thousands of strangers or flood one inbox all day.
+const SIGN_IN_EMAILS_PER_NETWORK: RateLimitRule = { bucket: 'sign-in-email:ip', limit: 30, windowMs: HOUR_MS };
+const SIGN_IN_EMAILS_PER_ADDRESS: RateLimitRule = { bucket: 'sign-in-email:address', limit: 10, windowMs: DAY_MS };
+// Wrong six-digit codes, counted across every code sent, so codes cannot be guessed over days.
+const WRONG_CODES_PER_NETWORK: RateLimitRule = { bucket: 'wrong-code:ip', limit: 30, windowMs: HOUR_MS };
+const WRONG_CODES_PER_ADDRESS: RateLimitRule = { bucket: 'wrong-code:address', limit: 10, windowMs: DAY_MS };
+
+async function rateLimitKeys(request: Request, env: Env, email: string): Promise<{ ip: string | null; address: string }> {
+  const ip = getClientIp(request);
+  return {
+    ip: ip ? await hashRateLimitKey(env, `ip:${ip}`) : null,
+    address: await hashRateLimitKey(env, `email:${email}`),
+  };
+}
+
+async function recordWrongCode(env: Env, keys: { ip: string | null; address: string }): Promise<void> {
+  if (keys.ip) await recordRateLimitEvent(env, WRONG_CODES_PER_NETWORK.bucket, keys.ip);
+  await recordRateLimitEvent(env, WRONG_CODES_PER_ADDRESS.bucket, keys.address);
+}
+
 export async function handleRequestMagicLink(request: Request, env: Env): Promise<Response> {
   const body = await parseJsonBody<MagicLinkRequestBody>(request);
   const email = normalizeEmail(body.email);
@@ -173,6 +198,13 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
 
   if (await hasRecentEmailSignInRequest(env, email, new Date(Date.now() - 60_000).toISOString())) {
     throw new HttpError(429, 'Wait a minute before requesting another sign-in email.');
+  }
+  const limitKeys = await rateLimitKeys(request, env, email);
+  if (limitKeys.ip && await isRateLimited(env, SIGN_IN_EMAILS_PER_NETWORK, limitKeys.ip)) {
+    throw new HttpError(429, 'Too many sign-in emails from this network. Try again in an hour.');
+  }
+  if (await isRateLimited(env, SIGN_IN_EMAILS_PER_ADDRESS, limitKeys.address)) {
+    throw new HttpError(429, 'Too many sign-in emails for this address today. Use a link you already received, or try again tomorrow.');
   }
 
   const existingAuth = await loadOptionalRequestAuth(env, request);
@@ -204,6 +236,8 @@ export async function handleRequestMagicLink(request: Request, env: Env): Promis
   const expiresAt = new Date(now.getTime() + MAGIC_LINK_TTL_MS).toISOString();
 
   await createMagicLinkToken(env, user.id, email, tokenHash, codeHash, expiresAt, now.toISOString());
+  if (limitKeys.ip) await recordRateLimitEvent(env, SIGN_IN_EMAILS_PER_NETWORK.bucket, limitKeys.ip);
+  await recordRateLimitEvent(env, SIGN_IN_EMAILS_PER_ADDRESS.bucket, limitKeys.address);
 
   const returnBaseUrl = resolveMagicLinkReturnUrl(request, env, body.returnTo);
   const verifyBaseUrl = resolveMagicLinkVerifyBaseUrl(request, env, returnBaseUrl);
@@ -278,6 +312,8 @@ export async function handleVerifyMagicLink(
   if (!await consumeMagicLinkToken(env, row.id, now)) {
     return redirectResponse(invalidRedirectUrl);
   }
+  // Accounts made by typing an email get their founder number only once the email is proven.
+  await ensureFounderIdentityQualification(env, user.id, now);
   const sessionToken = await createSession(env, user.id);
   const redirectUrl = buildMagicLinkRedirectUrl(
     request,
@@ -299,6 +335,13 @@ export async function handleVerifyEmailCode(request: Request, env: Env): Promise
   if (!isValidEmail(email) || !/^\d{6}$/.test(code)) {
     throw new HttpError(400, 'Enter your email and six-digit code.');
   }
+  const limitKeys = await rateLimitKeys(request, env, email);
+  if (limitKeys.ip && await isRateLimited(env, WRONG_CODES_PER_NETWORK, limitKeys.ip)) {
+    throw new HttpError(429, 'Too many incorrect codes from this network. Try again in an hour, or use the link in your email.');
+  }
+  if (await isRateLimited(env, WRONG_CODES_PER_ADDRESS, limitKeys.address)) {
+    throw new HttpError(429, 'Too many incorrect codes for this email today. Use the link in your email instead.');
+  }
   const row = await loadLatestEmailCode(env, email);
   if (!row || !row.code_hash || row.consumed_at || isExpired(row.expires_at) || row.code_attempts >= 5) {
     throw new HttpError(400, 'Code expired or invalid. Request a new email.');
@@ -307,6 +350,7 @@ export async function handleVerifyEmailCode(request: Request, env: Env): Promise
     throw new HttpError(400, 'Too many attempts. Request a new email.');
   }
   if (await hashToken(`${row.token_hash}:${code}`) !== row.code_hash) {
+    await recordWrongCode(env, limitKeys);
     throw new HttpError(400, 'Incorrect code. Check the email and try again.');
   }
   let user: AuthUser = {
@@ -320,9 +364,11 @@ export async function handleVerifyEmailCode(request: Request, env: Env): Promise
   } else if (normalizeEmail(user.email) !== email) {
     throw new HttpError(400, 'Code expired or invalid. Request a new email.');
   }
-  if (!await consumeMagicLinkToken(env, row.id, new Date().toISOString())) {
+  const verifiedAt = new Date().toISOString();
+  if (!await consumeMagicLinkToken(env, row.id, verifiedAt)) {
     throw new HttpError(400, 'Code already used. Request a new email.');
   }
+  await ensureFounderIdentityQualification(env, user.id, verifiedAt);
   const sessionToken = await createSession(env, user.id);
   return jsonResponse(request, { ok: true }, {
     headers: { 'Set-Cookie': createSessionCookie(request, sessionToken) },

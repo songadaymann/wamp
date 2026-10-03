@@ -112,6 +112,7 @@ export interface Env {
   TURNSTILE_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
   GUESTBOOK_IP_HASH_SALT?: string;
+  RATE_LIMIT_HASH_SALT?: string;
   JAM_IP_HASH_SALT?: string;
   JAM_SUBMISSIONS_OPEN_AT?: string;
   JAM_SUBMISSIONS_CLOSE_AT?: string;

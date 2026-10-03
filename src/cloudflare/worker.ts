@@ -1,4 +1,5 @@
 import { handleGuestReplay, purgeGuestReplays } from './worker/guestReplay/routes';
+import { pruneRateLimitEvents } from './worker/core/rateLimit';
 import { handleAdminRequest } from './worker/admin/routes';
 import { handleAuthRequest } from './worker/auth/routes';
 import {
@@ -258,7 +259,10 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
 ];
 
 export default {
-  async scheduled(_event: unknown, env: Env): Promise<void> { await purgeGuestReplays(env); },
+  async scheduled(_event: unknown, env: Env): Promise<void> {
+    await purgeGuestReplays(env);
+    await pruneRateLimitEvents(env);
+  },
   async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 

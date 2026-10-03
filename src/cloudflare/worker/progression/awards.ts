@@ -41,28 +41,39 @@ export async function ensureFounderIdentityQualification(
     return null;
   }
 
-  const progress = await loadOrBackfillUserProgress(env, userId);
-  if (progress.founder_number !== null) {
-    return progress.founder_number;
+  // Two sign-ups at the same moment can both pick MAX+1; founder_number is UNIQUE, so the loser
+  // retries with the next number instead of failing the sign-in.
+  for (let attempt = 0; ; attempt += 1) {
+    const progress = await loadOrBackfillUserProgress(env, userId);
+    if (progress.founder_number !== null) {
+      return progress.founder_number;
+    }
+
+    const nextFounderRow = await env.DB.prepare(
+      `
+        SELECT COALESCE(MAX(founder_number), 0) + 1 AS next_founder_number
+        FROM user_progress
+      `
+    ).first<{ next_founder_number: number | string | null }>();
+
+    const founderNumber = Math.max(1, parseRowNumber(nextFounderRow?.next_founder_number));
+    const updated: UserProgressRow = {
+      ...progress,
+      founder_number: founderNumber,
+      first_identity_qualified_at: progress.first_identity_qualified_at ?? qualifiedAt,
+      updated_at: qualifiedAt,
+    };
+    try {
+      await upsertUserProgressRow(env, updated);
+    } catch (error) {
+      if (attempt < 3 && error instanceof Error && error.message.includes('UNIQUE')) {
+        continue;
+      }
+      throw error;
+    }
+    await syncUserBadges(env, userId);
+    return founderNumber;
   }
-
-  const nextFounderRow = await env.DB.prepare(
-    `
-      SELECT COALESCE(MAX(founder_number), 0) + 1 AS next_founder_number
-      FROM user_progress
-    `
-  ).first<{ next_founder_number: number | string | null }>();
-
-  const founderNumber = Math.max(1, parseRowNumber(nextFounderRow?.next_founder_number));
-  const updated: UserProgressRow = {
-    ...progress,
-    founder_number: founderNumber,
-    first_identity_qualified_at: progress.first_identity_qualified_at ?? qualifiedAt,
-    updated_at: qualifiedAt,
-  };
-  await upsertUserProgressRow(env, updated);
-  await syncUserBadges(env, userId);
-  return founderNumber;
 }
 
 export async function awardRoomPublishProgression(
