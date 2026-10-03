@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 17 of 214 done.**
+**Progress: 21 of 214 done.**
 
 ## How to use this file
 
@@ -37,7 +37,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 ## Top 10 priorities
 
 1. **Close two dangerous back doors** ✅ (F040, F186). The server treats wamp.pages.dev as part of WAMP, but someone else controls that site, so a signed-in player who visits it could have their account quietly taken over. Separately, a test-only 'erase every user and room' tool is switched on in production, behind one shared password. Both are tiny config changes, and leaving them could be catastrophic.
-2. **Stop builders losing work** (F052, F060, F058, F057). Losing an hour of building is the fastest way to lose a builder. Today: - A failed autosave re-uploads forever and keeps no local backup. - A slow save can write one room's tiles into another room. - A second open tab or phone overwrites your laptop work with no warning. - Expanded-room edits live only in memory until you press Save.
+2. **Stop builders losing work** ✅ (F052, F060, F058, F057). Shipped retry backoff/local backup, cross-room response guards, two-editor conflict choices, and expanded-room cell/setup recovery with lifecycle protection.
 3. **Let tablets and sideways phones play** ✅ (F075, F077). Anyone on an iPad, or holding a phone sideways (the natural way to hold it for a platformer), presses Play and can't move. The installed Android app is even locked to that orientation. That shuts out a large share of players.
 4. **Make classroom accounts actually safe** ✅ (F208, F190, F209, F211). Students are blocked from World Chat, but they can talk to strangers through in-room speech bubbles. The multiplayer server doesn't check sign-in or bans for those bubbles at all. Other public-posting paths are also open to students, and student passwords can be guessed with no lockout. Fix these before any more school pilots.
 5. **Switch the fast world map back on, safely** (F003, F010). The pre-drawn map tiles built over the summer have been off for about a month, because a tileset update was never re-rendered. Every visitor's phone is doing the heavy drawing instead. One re-render brings them back. At the same time, fix the per-frame tile scan that wakes up when tiles return, and add an alarm so this can't silently happen again.
@@ -112,7 +112,7 @@ How smoothly the game runs once it's loaded, especially on phones. The foundatio
 How long new players wait before they can play, and how much data that costs. The biggest win is not downloading every art file before the first room.
 
 - [ ] **F013** Startup downloads all 480 art files in the game before anyone can play (also covers F102) · high impact · medium effort
-- [ ] **F014** Android phones download game art only 6 files at a time · medium impact · small effort — **implemented locally 2026-10-03** (`5559f10e`): loader concurrency 32; Android/iOS/desktop runtime and cold-cache Android checks pass. Pending release.
+- [x] **F014** Android phones download game art only 6 files at a time · medium impact · small effort — **done 2026-10-03** (8a844ada). Android loader concurrency is 32; desktop/Android production Browse checks and live bundle parity pass.
 - [ ] **F094** Custom backgrounds always download the full original file (one is an 8.3 MB animated GIF) · medium impact · small effort
 - [ ] **F017** Game art PNGs are about twice as big as they need to be · medium impact · small effort
 - [ ] **F018** World data isn't requested until every sprite has finished downloading · medium impact · small effort
@@ -133,7 +133,7 @@ The server side is well instrumented, but a few hot paths do far more database w
 - [ ] **F030** A single network error switches a player to the old 7 MB world feed for the rest of the session · high impact · small effort
 - [ ] **F029** Finishing a run makes about 30 database round trips in a row before the player sees a result · high impact · medium effort
 - [ ] **F236** Every room save depends on a live Base RPC call, and an RPC hiccup blocks saving in every room · medium impact · small effort
-- [ ] **F027** Missing index on room_versions.published_by_user_id makes 15+ queries scan the whole table · medium impact · small effort — **implemented locally 2026-10-03** (`8faa819e`): covering publisher/date/room index in migration 0050; local migration replay and query plans pass. Pending production migration.
+- [x] **F027** Missing index on room_versions.published_by_user_id makes 15+ queries scan the whole table · medium impact · small effort — **done 2026-10-03** (8a844ada). Migration 0050 applied to production D1; publisher counts use the covering index.
 - [ ] **F028** Global chat polls every 3 seconds in every open tab, even with the chat panel closed · medium impact · small effort
 - [ ] **F031** Each signed-in request makes 3 database lookups to identify the player, and the Worker isn't placed near the database · medium impact · small effort
 - [ ] **F033** Profiles still use the slow all-in-one endpoint (≈0.5–1.3 s, 80 KB, never cached), including on every signed-in page load · medium impact · small effort
@@ -141,7 +141,7 @@ The server side is well instrumented, but a few hot paths do far more database w
 - [ ] **F037** Everyone arrives in the same map area, which one multiplayer server handles alone, and each player opens two connections per area · medium impact · medium effort
 - [ ] **F095** Each idle visitor holds 50 PartyKit websockets (25 presence + 25 chat), even in a background tab · medium impact · medium effort
 - [ ] **F036** Signed-in players get no edge caching; every leaderboard, room summary and discovery read goes to the database · low impact · medium effort
-- [ ] **F032** No CORS preflight caching, so most game requests make an extra round trip · low impact · small effort — **implemented locally 2026-10-03** (`1f53680b`): API OPTIONS responses cache preflights for two hours; existing origin/credential policy retained and tested. Pending Worker release.
+- [x] **F032** No CORS preflight caching, so most game requests make an extra round trip · low impact · small effort — **done 2026-10-03** (8a844ada). Live API OPTIONS responses expose Max-Age 7200; credentialed CORS origin policy remains unchanged.
 - [ ] **F039** Every non-GET API request also runs a world-tile queue check · low impact · small effort
 - [ ] **F038** Guest replay screenshots are stored in the main database, and nothing else is ever cleaned up · low impact · medium effort
 
@@ -168,7 +168,7 @@ Defects players and builders can hit today, with the ones that lose a builder's 
 - [x] **F052** A failed autosave retries every frame forever and keeps no local copy · high impact · small effort — **done 2026-10-03** (cfbcf8d8). Backoff 2s to 30s, stop on unfixable 4xx, local backup on failure, 30s save timeout, guarded localStorage.
 - [x] **F060** A save that finishes after you switch rooms can point the editor back at the old room · medium impact · small effort — **done 2026-10-03** (64798043). Session generation counter drops results that finish after the editor switched rooms.
 - [x] **F058** Two open editors (two tabs, or phone and laptop) silently overwrite each other · medium impact · medium effort — **done 2026-10-03** (0ae59b67). Editor sends ?baseUpdatedAt=; Worker returns 409 on conflict; Load Latest / Keep Mine choice.
-- [ ] **F057** Expanded-room edits stay in memory until Save, and neither editor warns before closing the tab · medium impact · medium effort — **implemented locally 2026-10-03** (`6baeb7aa`, `df787529` and follow-ups): scoped cell/setup backups, dirty recovery, explicit account/local conflict choices, and synchronous lifecycle flush/warnings. Desktop/Android reload and delayed/failed save checks pass; [delivery evidence](../development/checkup-delivery-2026-10-03.md). Pending release.
+- [x] **F057** Expanded-room edits stay in memory until Save, and neither editor warns before closing the tab · medium impact · medium effort — **done 2026-10-03** (8a844ada). Scoped expanded-room cell/setup backups and dirty recovery, conflict choices, lifecycle warnings/flushes, and in-flight save protection shipped; 16 local recovery scenarios and live editor-bundle parity pass.
 - [ ] **F056** What leaving the editor does depends on a 600 ms autosave race · medium impact · small effort
 - [ ] **F055** Quick restarts can wipe or swap the ranked-run verification trace, so record runs get rejected · medium impact · small effort
 - [ ] **F054** Releasing the mouse over a panel or outside the window leaves strokes uncommitted and pans stuck · medium impact · small effort

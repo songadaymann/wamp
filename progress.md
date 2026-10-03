@@ -383,3 +383,9 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 - Browser QA caught and fixed Phaser shutdown ordering: authored exits flush before tile destruction, shutdown only flushes surviving metadata, and delayed multi-cell saves stop before touching a destroyed workspace. Test and Back transitions both flush synchronously; setup keeps warning while cells remain unsaved.
 - Final full check passed 271 files / 2,003 tests plus ESLint, TypeScript, generated binding checks, and production build. DOM contract passed 787 IDs / 159 required. Official client Browse and targeted desktop/Android recovery screenshots were inspected. Reproducible synthetic probe: `npm run smoke:draft-recovery`, local test-enabled Vite on :3017; no account/room writes.
 - Review and release status is tracked in `docs/development/checkup-delivery-2026-10-03.md`. F014/F027/F032/F057 remain unchecked in the master until production delivery; release needs migration 0050, Worker and Pages, not Pages-only.
+
+### Production release 2026-10-03
+
+- Jonathan authorized deployment. PR #33 merged as `8a844ada`; clean literal-main release passed 271 files / 2,003 tests, lint, TypeScript, bindings and build. Migration 0050 applied using Wrangler 4.147.0 after the older CLI returned D1 7403.
+- Worker `61393dbf-a3bc-4a66-8534-6819f18c8815` and Pages `ef80fd8e` deployed. Production smoke, live covering-index query plan, Max-Age 7200 and credential policy, and byte-for-byte custom-domain/immutable Pages entry/runtime/editor/shared-state bundles pass. Desktop/Android production Browse has healthy graphics and zero console/page errors; screenshots inspected.
+- F014, F027, F032 and F057 are checked off; progress 21/214. Next recommended F010 + F003, with live renderer contract mismatch confirmed; follow with F002 + F138.
