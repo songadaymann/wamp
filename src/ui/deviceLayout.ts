@@ -6,6 +6,10 @@ export interface DeviceLayoutState {
   deviceClass: DeviceClass;
   orientationState: OrientationState;
   coarsePointer: boolean;
+  // True when touch is the device's main input ((pointer: coarse)). Touchscreen laptops have
+  // coarsePointer (so finger pan and pinch work) but not touchPrimary, so they get no on-screen
+  // play controls.
+  touchPrimary: boolean;
   performanceProfile: PerformanceProfile;
   viewport: {
     width: number;
@@ -23,6 +27,7 @@ const DEFAULT_STATE: DeviceLayoutState = {
   deviceClass: 'desktop',
   orientationState: 'landscape',
   coarsePointer: false,
+  touchPrimary: false,
   performanceProfile: 'default',
   viewport: {
     width: 0,
@@ -66,11 +71,8 @@ function computeState(): DeviceLayoutState {
   const viewport = window.visualViewport;
   const width = Math.max(0, Math.round(viewport?.width ?? window.innerWidth));
   const height = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
-  // Touchscreen laptops report touch points but also have a mouse or trackpad; treat them as
-  // desktops so they keep the desktop layout and do not get on-screen play controls.
-  const coarsePointer =
-    window.matchMedia('(pointer: coarse)').matches
-    || (navigator.maxTouchPoints > 0 && !window.matchMedia('(any-pointer: fine)').matches);
+  const touchPrimary = window.matchMedia('(pointer: coarse)').matches;
+  const coarsePointer = touchPrimary || navigator.maxTouchPoints > 0;
   const orientationState: OrientationState = width >= height ? 'landscape' : 'portrait';
   const deviceClass = classifyDeviceClass(width, height, coarsePointer);
   const performanceProfile = resolvePerformanceProfile(deviceClass, coarsePointer);
@@ -79,6 +81,7 @@ function computeState(): DeviceLayoutState {
     deviceClass,
     orientationState,
     coarsePointer,
+    touchPrimary,
     performanceProfile,
     viewport: {
       width,
@@ -101,6 +104,7 @@ function statesEqual(a: DeviceLayoutState, b: DeviceLayoutState): boolean {
     a.deviceClass === b.deviceClass &&
     a.orientationState === b.orientationState &&
     a.coarsePointer === b.coarsePointer &&
+    a.touchPrimary === b.touchPrimary &&
     a.performanceProfile === b.performanceProfile &&
     a.viewport.width === b.viewport.width &&
     a.viewport.height === b.viewport.height

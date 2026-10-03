@@ -811,6 +811,12 @@ async function runTouchOverlayPlay(page, scenarioSummary, scenarioDir, expected)
     !overlaps(rects['#world-goal-panel'], rects['#btn-chat-toggle']),
     `${label}: goal panel overlaps World Chat: ${JSON.stringify(rects)}`,
   );
+  for (const runButton of ['#btn-mobile-world-stop', '#btn-mobile-world-restart']) {
+    assertCondition(
+      !overlaps(rects['#btn-world-hud-toggle'], rects[runButton]),
+      `${label}: Room + overlaps ${runButton}, so a tap could end the run: ${JSON.stringify(rects)}`,
+    );
+  }
   assertCondition(
     rects['#mobile-move-stick'].width >= 120,
     `${label}: joystick should be large enough for a thumb: ${JSON.stringify(rects['#mobile-move-stick'])}`,

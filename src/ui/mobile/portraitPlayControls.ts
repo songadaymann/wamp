@@ -34,6 +34,7 @@ export class PortraitPlayControlsController {
   private movePointerLastPosition: { x: number; y: number } | null = null;
   private readonly activeActionPointerIds = new Map<TouchHoldAction, number>();
   private globalReleaseHandlersBound = false;
+  private lastLayoutKey = '';
 
   constructor(
     private readonly doc: Document = document,
@@ -51,6 +52,14 @@ export class PortraitPlayControlsController {
   }
 
   init(): void {
+    // The controls sit over the game canvas. Cancel touchstart so Phaser's window-level touch
+    // handler does not also treat a joystick or button press as a tap on the world underneath.
+    // Pointer events still fire, and the controls only use pointer events.
+    this.elements.mobilePlayControls?.addEventListener('touchstart', (event) => {
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+    }, { passive: false });
     this.bindMoveZone();
     this.bindActionButtons();
     this.bindGlobalReleaseHandlers();
@@ -61,11 +70,15 @@ export class PortraitPlayControlsController {
     this.unbindGlobalReleaseHandlers();
   }
 
-  render(isTouchPlay: boolean): void {
+  render(isTouchPlay: boolean, layoutKey = ''): void {
     this.elements.mobilePlayControls?.classList.toggle('hidden', !isTouchPlay);
     setTouchControlsActive(isTouchPlay);
 
-    if (!isTouchPlay) {
+    // Switching between the portrait console and the corner overlay moves the joystick, so
+    // drop any press that was in progress instead of steering from the old position.
+    const layoutChanged = layoutKey !== this.lastLayoutKey;
+    this.lastLayoutKey = layoutKey;
+    if (!isTouchPlay || layoutChanged) {
       this.releaseAllControlState();
     }
   }
@@ -263,6 +276,7 @@ export class PortraitPlayControlsController {
     return (
       layout.deviceClass !== 'desktop'
       && layout.coarsePointer
+      && layout.touchPrimary
       && this.doc.body.dataset.appMode === 'play-world'
       && this.doc.body.dataset.mobileControlsVisible === 'true'
     );

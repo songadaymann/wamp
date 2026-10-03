@@ -414,7 +414,8 @@ export class MobileUiController {
     const isPortraitPlay = isPortraitFocusedRoom && isPlay;
     // Every touch device gets play controls: phones held upright use the portrait console,
     // and landscape phones and tablets use the corner overlay drawn over the room.
-    const isTouchPlay = layout.coarsePointer && layout.deviceClass !== 'desktop' && isPlay;
+    const isTouchPlay =
+      layout.coarsePointer && layout.touchPrimary && layout.deviceClass !== 'desktop' && isPlay;
     const touchPlayLayout = !isTouchPlay ? 'none' : isPortraitPlay ? 'console' : 'overlay';
     const isCollapsibleWorldHud =
       layout.coarsePointer &&
@@ -486,7 +487,7 @@ export class MobileUiController {
       this.elements.mobileEditorToggleButton.disabled = musicModeActive;
     }
 
-    this.portraitPlayControls.render(isTouchPlay);
+    this.portraitPlayControls.render(isTouchPlay, `${touchPlayLayout}:${layout.orientationState}`);
     this.elements.mobileWorldStopButton?.classList.toggle(
       'hidden',
       !(isCollapsibleWorldHud && isTouchPlay && this.worldHudCollapsed),

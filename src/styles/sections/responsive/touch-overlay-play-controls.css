@@ -68,3 +68,22 @@ body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] #global
 body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] #btn-world-room-chat {
   right: calc(224px + var(--safe-right));
 }
+
+/* Tablet buttons are at least 44px tall, so Room + reaches 52px; keep Stop/Restart clear of it
+   so a tap on Room + cannot end the run. */
+body[data-mobile-touch-play-layout='overlay'][data-device-class='tablet'] .mobile-world-stop,
+body[data-mobile-touch-play-layout='overlay'][data-device-class='tablet'] .mobile-world-restart {
+  top: calc(60px + var(--safe-top));
+}
+
+/* When the room panel is opened mid-run on a short screen it reaches down to the joystick;
+   keep its buttons on top so they stay tappable. */
+body[data-mobile-touch-play-layout='overlay'][data-mobile-world-hud-collapsed='false'] #world-hud {
+  z-index: 15;
+}
+
+/* Signs are centred high on landscape phones; draw them above Stop/Restart (they ignore taps,
+   so the buttons still work) but below the joystick and action buttons. */
+body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] .world-sign-panel {
+  z-index: 13;
+}
