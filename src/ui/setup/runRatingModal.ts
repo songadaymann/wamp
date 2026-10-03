@@ -38,7 +38,7 @@ import { createProfileRepository, type ProfileRepository } from '../../profiles/
 import { requestProfileInvalidation } from './profileEvents';
 import { TILE_SIZE } from '../../config';
 import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
-import type { RoomSnapshot } from '../../persistence/roomModel';
+import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import {
   ROOM_DIFFICULTIES,
   ROOM_DIFFICULTY_LABELS,
@@ -99,7 +99,8 @@ type RunRatingElements = {
 };
 
 type PostRunShareScene = {
-  getPostRunShareRoomSnapshot?: () => RoomSnapshot | null;
+  getPostRunShareRoomSnapshot?: (coordinates?: RoomCoordinates) => RoomSnapshot | null;
+  isViewingRoomCoordinates?: (coordinates: RoomCoordinates) => boolean;
 };
 
 type RunRatingModalMode = PostRunPromptMode;
@@ -551,8 +552,8 @@ export class RunRatingModalController {
     }
 
     try {
-      const snapshot = this.getPostRunShareRoomSnapshot();
-      if (!snapshot) {
+      const snapshot = this.getPostRunShareRoomSnapshot(detail.roomCoordinates);
+      if (!snapshot || !roomSnapshotMatchesCoordinates(snapshot, detail.roomCoordinates)) {
         throw new Error('Completed room snapshot was not available.');
       }
 
@@ -575,7 +576,9 @@ export class RunRatingModalController {
         return;
       }
 
-      const fallbackDataUrl = this.captureCurrentCanvasDataUrl();
+      const fallbackDataUrl = this.canCaptureCurrentCanvasForCompletedRoom(detail)
+        ? this.captureCurrentCanvasDataUrl()
+        : null;
       if (fallbackDataUrl) {
         this.shareImage = {
           dataUrl: fallbackDataUrl,
@@ -634,12 +637,23 @@ export class RunRatingModalController {
     );
   }
 
-  private getPostRunShareRoomSnapshot(): RoomSnapshot | null {
+  private getPostRunShareRoomSnapshot(coordinates: RoomCoordinates): RoomSnapshot | null {
     try {
       const scene = this.game.scene.getScene('OverworldPlayScene') as PostRunShareScene;
-      return scene.getPostRunShareRoomSnapshot?.() ?? null;
+      return scene.getPostRunShareRoomSnapshot?.(coordinates) ?? null;
     } catch {
       return null;
+    }
+  }
+
+  private canCaptureCurrentCanvasForCompletedRoom(
+    detail: PostRunRatingRequestDetail & { contentType: 'room' },
+  ): boolean {
+    try {
+      const scene = this.game.scene.getScene('OverworldPlayScene') as PostRunShareScene;
+      return scene.isViewingRoomCoordinates?.(detail.roomCoordinates) ?? false;
+    } catch {
+      return false;
     }
   }
 
@@ -1114,6 +1128,14 @@ export class RunRatingModalController {
       // Reward rank stings can silently skip when the summary is unavailable.
     }
   }
+}
+
+function roomSnapshotMatchesCoordinates(
+  snapshot: RoomSnapshot,
+  coordinates: RoomCoordinates,
+): boolean {
+  return snapshot.coordinates.x === coordinates.x
+    && snapshot.coordinates.y === coordinates.y;
 }
 
 function formatRunResultSummary(detail: PostRunRatingRequestDetail): string {
