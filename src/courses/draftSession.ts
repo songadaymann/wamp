@@ -10,6 +10,7 @@ import { cloneRoomSnapshot, type RoomSnapshot } from '../persistence/roomModel';
 
 let activeCourseRecord: CourseRecord | null = null;
 let activePersistedCourseRecord: CourseRecord | null = null;
+let activeRevision = 0;
 let activeSelectedRoomId: string | null = null;
 let activeCourseRoomOverridesByRoomId = new Map<string, RoomSnapshot>();
 
@@ -56,11 +57,14 @@ export function getActiveCourseDraftSessionCourseId(): string | null {
 
 export function setActiveCourseDraftSessionRecord(
   record: CourseRecord | null,
-  options: { selectedRoomId?: string | null } = {}
+  options: { selectedRoomId?: string | null; preserveBaseline?: boolean } = {}
 ): CourseRecord | null {
   const previousCourseId = activeCourseRecord?.draft.id ?? null;
   activeCourseRecord = cloneRecordOrNull(record);
-  activePersistedCourseRecord = cloneRecordOrNull(record);
+  if (!options.preserveBaseline || previousCourseId !== record?.draft.id) {
+    activePersistedCourseRecord = cloneRecordOrNull(record);
+  }
+  activeRevision += 1;
   const nextCourseId = activeCourseRecord?.draft.id ?? null;
   if (previousCourseId !== nextCourseId) {
     activeCourseRoomOverridesByRoomId = new Map();
@@ -93,6 +97,7 @@ export function updateActiveCourseDraftSession(
   mutator(nextRecord.draft, nextRecord);
   nextRecord.draft.updatedAt = new Date().toISOString();
   activeCourseRecord = nextRecord;
+  activeRevision += 1;
   pruneActiveCourseRoomOverrides();
   if (
     activeSelectedRoomId &&
@@ -173,4 +178,27 @@ export function isActiveCourseDraftSessionDirty(): boolean {
     activeCourseRecord.draft,
     activePersistedCourseRecord.draft
   );
+}
+
+export function getActiveCourseDraftSessionRevision(): number {
+  return activeRevision;
+}
+
+export function getActiveCourseDraftSessionPersistedDraft(): CourseSnapshot | null {
+  return activePersistedCourseRecord ? cloneCourseSnapshot(activePersistedCourseRecord.draft) : null;
+}
+
+/** A saved response advances the baseline while retaining edits made after the request started. */
+export function acknowledgeActiveCourseDraftSessionSave(sent: CourseSnapshot, saved: CourseRecord): CourseRecord | null {
+  if (activeCourseRecord?.draft.id !== sent.id) return getActiveCourseDraftSessionRecord();
+  const current = cloneCourseSnapshot(activeCourseRecord.draft);
+  const changed = !areCourseSnapshotsEquivalent(current, sent);
+  const selectedRoomId = activeSelectedRoomId;
+  setActiveCourseDraftSessionRecord(saved, { selectedRoomId });
+  if (changed && activeCourseRecord) {
+    activeCourseRecord.draft = { ...current, version: saved.draft.version };
+    activeRevision += 1;
+    pruneActiveCourseRoomOverrides();
+  }
+  return getActiveCourseDraftSessionRecord();
 }

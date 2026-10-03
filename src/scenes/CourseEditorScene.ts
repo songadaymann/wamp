@@ -1,3 +1,6 @@
+import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draftBackupController';
+import { draftBackupRevision } from '../courses/localDraftBackup';
+import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecycle';
 import Phaser from 'phaser';
 import { getAuthDebugState, promptForSignIn, refreshAuthSession } from '../auth/client';
 import { globalRoomMusicController } from '../music/controller';
@@ -42,10 +45,10 @@ import {
   getActiveCourseDraftSessionCourseId,
   getActiveCourseDraftSessionDraft,
   getActiveCourseDraftSessionRecord,
+  getActiveCourseDraftSessionRevision,
   getActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionSelectedRoomId,
   isActiveCourseDraftSessionDirty,
-  setActiveCourseDraftSessionRecord,
   setActiveCourseDraftSessionRoomOverride,
   setActiveCourseDraftSessionSelectedRoom,
   updateActiveCourseDraftSession,
@@ -73,6 +76,7 @@ import {
   type RoomCoordinates,
   type RoomPermissions,
   type RoomRecord,
+  type RoomSnapshot,
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
 import { clearLocalRoomStorageEntry } from '../persistence/browserStorage';
@@ -200,6 +204,11 @@ interface CourseRoomSlice {
 }
 
 export class CourseEditorScene extends Phaser.Scene {
+  private readonly draftBackup = new CourseDraftBackupController();
+  private readonly backupDebouncer = new DraftBackupDebouncer(() => this.flushDraftBackup());
+  private draftLifecycle: EditorDraftLifecycle | null = null;
+  private lastBackupChange = '';
+  private roomBackupBases = new Map<string, Pick<RoomSnapshot, 'id' | 'updatedAt' | 'version'>>();
   private readonly roomRepository = createRoomRepository();
   private readonly localRoomRepository = createLocalRoomRepository();
   private readonly expandedRoomEditorRepository = createExpandedRoomEditorRepository();
@@ -550,6 +559,12 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   create(data?: CourseEditorSceneData): void {
+    this.draftLifecycle = new EditorDraftLifecycle({
+      isActive: () => this.scene.isActive(),
+      hasUnsavedChanges: () => this.getDirtySlices().length > 0 || isActiveCourseDraftSessionDirty(),
+      flush: () => this.backupDebouncer.flush(),
+    });
+    this.draftLifecycle.start();
     setAppMode('editor');
     document.body.dataset.editorCourseMode = 'true';
     this.uiBridge = new EditorUiBridge({
@@ -735,6 +750,11 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   update(): void {
+    const change = `${getActiveCourseDraftSessionRevision()}:${this.getDirtySlices().map((slice) => `${slice.roomId}:${slice.runtime.currentLastDirtyAt}`).join(',')}`;
+    if (change !== this.lastBackupChange) {
+      this.lastBackupChange = change;
+      if (this.getDirtySlices().length || isActiveCourseDraftSessionDirty()) this.backupDebouncer.schedule();
+    }
     this.syncRoomSliceBackgrounds();
     this.objectInspectorController.updatePressurePlateOverlay(this.pressurePlateGraphics);
     this.objectInspectorController.updateContainerOverlay(this.containerGraphics);
@@ -809,6 +829,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
   async returnToCourseBuilder(): Promise<void> {
     this.setMusicModeActive(false);
+    this.backupDebouncer.flush();
     this.persistSessionOverridesForPlayableSlices();
     const selectedSlice = this.getSelectedSlice();
     const wakeData: CourseComposerSceneData = {
@@ -1105,8 +1126,9 @@ export class CourseEditorScene extends Phaser.Scene {
     let lastRecord: RoomRecord | null = null;
     try {
       for (const slice of dirtySlices) {
-        const record = await this.roomRepository.saveDraft(slice.runtime.exportRoomSnapshot());
-        this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride: true });
+        const sent = slice.runtime.exportRoomSnapshot();
+        const record = await this.roomRepository.saveDraft(sent);
+        this.applySavedSliceResponse(slice, sent, record, true);
         clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
       }
@@ -1173,8 +1195,9 @@ export class CourseEditorScene extends Phaser.Scene {
       }
 
       for (const slice of targetSlices) {
-        const record = await this.roomRepository.publish(slice.runtime.exportRoomSnapshot());
-        this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride: false });
+        const sent = slice.runtime.exportRoomSnapshot();
+        const record = await this.roomRepository.publish(sent);
+        this.applySavedSliceResponse(slice, sent, record, false);
         clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
       }
@@ -1225,9 +1248,9 @@ export class CourseEditorScene extends Phaser.Scene {
 
     showBusyOverlay('Saving expanded room...', 'Saving expanded room goal and setup...');
     try {
-      const saved = await this.expandedRoomEditorRepository.saveDraft(courseRecord.draft);
-      setActiveCourseDraftSessionRecord(saved, { selectedRoomId: this.selectedRoomId });
-      this.courseRecord = getActiveCourseDraftSessionRecord();
+      const sent = cloneCourseSnapshot(courseRecord.draft);
+      const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
+      this.courseRecord = this.draftBackup.savedCourse(sent, saved);
       this.statusText = 'Expanded room changes saved.';
       this.redrawCourseMarkers();
       this.renderUi();
@@ -1254,14 +1277,13 @@ export class CourseEditorScene extends Phaser.Scene {
 
     showBusyOverlay('Publishing expanded room...', 'Saving expanded room goal and publishing the expanded room...');
     try {
-      const saved = await this.expandedRoomEditorRepository.saveDraft(courseRecord.draft);
-      setActiveCourseDraftSessionRecord(saved, { selectedRoomId: this.selectedRoomId });
-      this.courseRecord = getActiveCourseDraftSessionRecord();
+      const sent = cloneCourseSnapshot(courseRecord.draft);
+      const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
+      this.courseRecord = this.draftBackup.savedCourse(sent, saved);
       const published = await this.expandedRoomEditorRepository.publishExpandedRoom(
         this.courseRecord?.draft.id ?? saved.draft.id
       );
-      setActiveCourseDraftSessionRecord(published, { selectedRoomId: this.selectedRoomId });
-      this.courseRecord = getActiveCourseDraftSessionRecord();
+      this.courseRecord = this.draftBackup.savedCourse(saved.draft, published);
       this.statusText = 'Expanded room published.';
       this.redrawCourseMarkers();
       this.renderUi();
@@ -1506,6 +1528,7 @@ export class CourseEditorScene extends Phaser.Scene {
     const camera = this.cameras.main;
     return {
       scene: 'course-editor',
+      localDraftRecovery: this.draftBackup.recoveryStatus,
       courseId: this.courseRecord?.draft.id ?? null,
       roomCount: this.courseRecord?.draft.roomRefs.length ?? 0,
       selectedRoomId: this.selectedRoomId,
@@ -1545,6 +1568,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private async openFromData(data?: CourseEditorSceneData): Promise<void> {
+    this.backupDebouncer.flush();
     setAppMode('editor');
     document.body.dataset.editorCourseMode = 'true';
     this.isShuttingDown = false;
@@ -1571,6 +1595,7 @@ export class CourseEditorScene extends Phaser.Scene {
       } else {
         this.statusText = `Editing ${record.draft.title?.trim() || 'expanded room'} across ${getExpandedRoomCellUsageText(record)}.`;
       }
+      if (this.draftBackup.recoveryStatus) this.statusText = this.draftBackup.recoveryStatus;
       this.fitToScreen();
       this.redrawCourseMarkers();
       this.redrawSelection();
@@ -1587,7 +1612,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private async resolveCourseRecord(courseId: string | null): Promise<CourseRecord> {
     const session = getActiveCourseDraftSessionRecord();
     if (session && (!courseId || session.draft.id === courseId)) {
-      return session;
+      return this.draftBackup.open(session, true);
     }
 
     if (!courseId) {
@@ -1595,12 +1620,12 @@ export class CourseEditorScene extends Phaser.Scene {
     }
 
     const record = await this.expandedRoomEditorRepository.loadExpandedRoomRecord(courseId);
-    setActiveCourseDraftSessionRecord(record);
-    return record;
+    return this.draftBackup.open(record, false);
   }
 
   private rebuildWorkspace(record: CourseRecord): void {
     this.destroyWorkspace();
+    this.roomBackupBases.clear();
     this.workspaceBounds = getCourseWorkspaceBounds(record.draft.roomRefs);
     for (const roomRef of record.draft.roomRefs) {
       this.createRoomSlice(roomRef);
@@ -1812,7 +1837,12 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private async loadRoomSliceState(slice: CourseRoomSlice): Promise<void> {
     const record = await this.roomRepository.loadRoom(slice.roomId, slice.coordinates);
-    const override = getActiveCourseDraftSessionRoomOverride(slice.roomId);
+    if (this.roomSlices.get(slice.roomId) !== slice || this.isShuttingDown) return;
+    const remote = record.draft ?? record.published;
+    this.roomBackupBases.set(slice.roomId, { id: remote.id, updatedAt: remote.updatedAt, version: remote.version });
+    const recovered = await this.draftBackup.recoverRoom(this.courseRecord?.draft.id ?? '', remote);
+    if (this.roomSlices.get(slice.roomId) !== slice || this.isShuttingDown) return;
+    const override = getActiveCourseDraftSessionRoomOverride(slice.roomId) ?? recovered;
     const snapshot = override ?? record.draft ?? record.published ?? null;
     if (!snapshot) {
       return;
@@ -1824,8 +1854,12 @@ export class CourseEditorScene extends Phaser.Scene {
     });
     slice.runtime.applyRoomSnapshot(cloneRoomSnapshot(snapshot));
     if (override) {
+      slice.roomTitle = override.title;
+      slice.label.setText(slice.roomTitle?.trim() || `${slice.coordinates.x},${slice.coordinates.y}`);
       slice.runtime.isRoomDirty = true;
+      setActiveCourseDraftSessionRoomOverride(slice.runtime.exportRoomSnapshot());
     }
+    if (this.draftBackup.recoveryStatus) this.statusText = this.draftBackup.recoveryStatus;
     this.renderUi();
   }
 
@@ -1888,6 +1922,38 @@ export class CourseEditorScene extends Phaser.Scene {
     return this.courseRecord;
   }
 
+  private flushDraftBackup(): void {
+    if (!this.courseRecord) return;
+    let saved = this.draftBackup.flushCourse();
+    for (const slice of this.getDirtySlices()) {
+      const base = this.roomBackupBases.get(slice.roomId);
+      if (base) saved = this.draftBackup.writeRoom(this.courseRecord.draft.id, slice.runtime.exportRoomSnapshot(), base) && saved;
+    }
+    if (!saved) this.statusText = BACKUP_FAILED_TEXT;
+  }
+
+  private applySavedSliceResponse(slice: CourseRoomSlice, sent: RoomSnapshot, record: RoomRecord, keepOverride: boolean): void {
+    if (this.isShuttingDown || this.roomSlices.get(slice.roomId) !== slice) return;
+    const current = slice.runtime.exportRoomSnapshot();
+    const changed = draftBackupRevision(current) !== draftBackupRevision(sent);
+    this.draftBackup.savedRoom(this.courseRecord?.draft.id ?? '', sent);
+    this.roomBackupBases.set(slice.roomId, { id: record.draft.id, updatedAt: record.draft.updatedAt, version: record.draft.version });
+    if (changed) {
+      // Advance server metadata without resetting the live runtime or its undo history.
+      slice.updatedAt = record.draft.updatedAt;
+      slice.currentVersion = record.draft.version;
+      slice.publishedVersion = record.published?.version ?? slice.publishedVersion;
+      slice.publishedAt = record.published?.publishedAt ?? slice.publishedAt;
+      slice.permissions = record.permissions;
+      slice.roomVersionHistory = record.versions;
+      slice.runtime.isRoomDirty = true;
+      setActiveCourseDraftSessionRoomOverride(slice.runtime.exportRoomSnapshot());
+      this.flushDraftBackup();
+    } else {
+      this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride });
+    }
+  }
+
   private shouldPersistGuestDraftLocally(error: unknown): boolean {
     return isRoomApiError(error) && error.status === 401;
   }
@@ -1916,7 +1982,11 @@ export class CourseEditorScene extends Phaser.Scene {
   ): Promise<RoomRecord | null> {
     let lastRecord: RoomRecord | null = null;
     for (const slice of slices) {
-      const record = await this.localRoomRepository.saveDraft(slice.runtime.exportRoomSnapshot());
+      const snapshot = slice.runtime.exportRoomSnapshot();
+      const base = this.roomBackupBases.get(slice.roomId);
+      if (base) this.draftBackup.writeRoom(this.courseRecord?.draft.id ?? '', snapshot, base);
+      const record = await this.localRoomRepository.saveDraft(snapshot);
+      if (this.isShuttingDown || this.roomSlices.get(slice.roomId) !== slice) continue;
       this.applyStoredRoomRecordToSlice(slice, record, {
         keepDirty: false,
         keepOverride: options.keepOverride,
@@ -3293,6 +3363,10 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private handleShutdown = (): void => {
+    this.backupDebouncer.flush();
+    this.draftLifecycle?.destroy();
+    this.draftLifecycle = null;
+    this.backupDebouncer.cancel();
     this.isShuttingDown = true;
     this.musicRoomFit.stop();
     window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
