@@ -18,6 +18,8 @@ import {
 } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import {
+  clearRateLimitBucket,
+  clearRateLimitEvents,
   getClientIp,
   hashRateLimitKey,
   networkKeyForIp,
@@ -99,6 +101,7 @@ export async function handleSchoolRequest(
       classroom.id,
       decodeURIComponent(resetMatch[2]),
     );
+    await clearStudentLoginLockout(env, classroom.id, responseBody.student.username, getClientIp(request));
     return jsonResponse(request, responseBody);
   }
 
@@ -131,9 +134,43 @@ export async function handleSchoolRequest(
 // Student logins on a shared school computer end after a school day, not 30 days.
 const STUDENT_SESSION_MAX_AGE_SECONDS = 10 * 60 * 60;
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
-// Wrong passwords: a few tries per student (kids mistype), more for a whole school network.
-const STUDENT_LOGIN_FAILURES_PER_ACCOUNT: RateLimitRule = { bucket: 'student-login:account', limit: 8, windowMs: FIFTEEN_MINUTES_MS };
-const STUDENT_LOGIN_FAILURES_PER_NETWORK: RateLimitRule = { bucket: 'student-login:network', limit: 100, windowMs: FIFTEEN_MINUTES_MS };
+// Wrong passwords. Per student on one network: a few tries (kids mistype), and a teacher reset or
+// a correct login clears it, so a classmate cannot keep someone locked out. Per student across
+// networks: a looser cap that still stops guessing. Per classroom on one network: room for a
+// whole class's typos, and one prankster can only affect their own class, not the school.
+const STUDENT_LOGIN_FAILURES_PER_STUDENT_ON_NETWORK = 8;
+const STUDENT_LOGIN_FAILURES_PER_STUDENT: RateLimitRule = { bucket: 'student-login:student', limit: 30, windowMs: FIFTEEN_MINUTES_MS };
+const STUDENT_LOGIN_FAILURES_PER_CLASSROOM_NETWORK: RateLimitRule = { bucket: 'student-login:classroom-network', limit: 200, windowMs: FIFTEEN_MINUTES_MS };
+
+async function studentLoginLimitKeys(env: Env, classroomId: string, username: string, ip: string | null) {
+  const student = await hashRateLimitKey(env, `school:${classroomId}:${username.trim().toLowerCase()}`);
+  const network = ip ? networkKeyForIp(ip) : 'network:unknown';
+  return {
+    student,
+    // One bucket per student, keyed by network, so a reset can clear every network at once.
+    studentOnNetwork: {
+      rule: { bucket: `student-login:student-network:${student}`, limit: STUDENT_LOGIN_FAILURES_PER_STUDENT_ON_NETWORK, windowMs: FIFTEEN_MINUTES_MS },
+      keyHash: await hashRateLimitKey(env, network),
+    },
+    classroomNetwork: await hashRateLimitKey(env, `school:${classroomId}:${network}`),
+  };
+}
+
+/** A teacher reset (or a correct login) is the way out of a wrong-password lockout. */
+export async function clearStudentLoginLockout(
+  env: Env,
+  classroomId: string,
+  username: string,
+  teacherIp: string | null = null,
+): Promise<void> {
+  const keys = await studentLoginLimitKeys(env, classroomId, username, teacherIp);
+  await clearRateLimitEvents(env, STUDENT_LOGIN_FAILURES_PER_STUDENT.bucket, keys.student);
+  await clearRateLimitBucket(env, keys.studentOnNetwork.rule.bucket);
+  if (teacherIp) {
+    // The teacher is usually on the class network, so a reset also lifts a class-wide lock.
+    await clearRateLimitEvents(env, STUDENT_LOGIN_FAILURES_PER_CLASSROOM_NETWORK.bucket, keys.classroomNetwork);
+  }
+}
 
 async function handleStudentLogin(
   request: Request,
@@ -142,17 +179,17 @@ async function handleStudentLogin(
 ): Promise<Response> {
   const classroom = await loadActiveSchoolClassroomBySlug(env, rawSlug);
   const body = await parseJsonBody<SchoolStudentLoginRequestBody>(request);
-  const ip = getClientIp(request);
-  const accountKey = await hashRateLimitKey(
-    env,
-    `school:${classroom.id}:${typeof body.username === 'string' ? body.username.trim().toLowerCase() : ''}`,
-  );
+  const username = typeof body.username === 'string' ? body.username : '';
+  const keys = await studentLoginLimitKeys(env, classroom.id, username, getClientIp(request));
   const attempt = await takeRateLimitSlots(env, [
-    ...(ip ? [{ rule: STUDENT_LOGIN_FAILURES_PER_NETWORK, keyHash: await hashRateLimitKey(env, networkKeyForIp(ip)) }] : []),
-    { rule: STUDENT_LOGIN_FAILURES_PER_ACCOUNT, keyHash: accountKey },
+    { rule: STUDENT_LOGIN_FAILURES_PER_CLASSROOM_NETWORK, keyHash: keys.classroomNetwork },
+    { rule: STUDENT_LOGIN_FAILURES_PER_STUDENT, keyHash: keys.student },
+    keys.studentOnNetwork,
   ]);
   if (attempt.limitedBy) {
-    throw new HttpError(429, 'Too many wrong passwords. Wait 15 minutes, or ask your teacher to reset it.');
+    throw new HttpError(429, attempt.limitedBy === STUDENT_LOGIN_FAILURES_PER_CLASSROOM_NETWORK
+      ? 'Too many wrong sign-ins from this class right now. Wait 15 minutes, or ask your teacher to reset a password.'
+      : 'Too many wrong passwords for this username. Wait 15 minutes, or ask your teacher to reset your password.');
   }
   // Each attempt holds a slot so parallel guesses cannot slip past the limit; only a wrong
   // username or password keeps it.
@@ -172,6 +209,7 @@ async function handleStudentLogin(
     throw error;
   }
   await releaseRateLimitSlots(env, attempt.ids);
+  await clearStudentLoginLockout(env, classroom.id, username);
   const publicClassroom = serializePublicClassroom(classroom);
 
   if (result.passwordResetRequired || !result.user) {

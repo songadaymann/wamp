@@ -108,6 +108,11 @@ export async function clearRateLimitEvents(env: Env, bucket: string, keyHash: st
   ]);
 }
 
+/** Clears every key in a bucket (for buckets scoped to one account, keyed per network). */
+export async function clearRateLimitBucket(env: Env, bucket: string): Promise<void> {
+  await env.DB.batch([env.DB.prepare('DELETE FROM rate_limit_events WHERE bucket = ?').bind(bucket)]);
+}
+
 /** Called from the hourly cron; the longest window in use is one day. */
 export async function pruneRateLimitEvents(env: Env, now: number = Date.now()): Promise<void> {
   await env.DB.batch([
