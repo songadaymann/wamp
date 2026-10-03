@@ -94,7 +94,9 @@
     "deploy:safety:branch": "node scripts/deploy_safety_branch.mjs",
     "pages:deploy:prod": "node scripts/deploy_prod.mjs --pages-only --skip-smoke",
     "deploy:prod": "node scripts/deploy_prod.mjs",
-    "presence:deploy:safety": "partykit deploy --config partykit.safety.json"
+    "presence:deploy:safety": "partykit deploy --config partykit.safety.json",
+    "world-tiles:health": "node scripts/check_world_tile_availability.mjs",
+    "world-tiles:asset-contract:check": "npx --yes tsx scripts/world_tile_asset_contract_check.ts"
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.3",

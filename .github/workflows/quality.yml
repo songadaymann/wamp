@@ -21,5 +21,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run world-tiles:types:check
       - run: npm run build
+      - name: Check immutable world map asset compatibility
+        run: npx --yes tsx scripts/world_tile_asset_contract_check.ts
       - run: npm run smoke:dom-contract
       - run: npm run smoke:worker-safety

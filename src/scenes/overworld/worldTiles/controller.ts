@@ -78,10 +78,13 @@ import {
   calculateDirectionalGuardRect,
   clampWorldTileManifestBounds,
   getWorldTileAncestorClosure,
-  getWorldTileSiblingClosure,
   selectWorldTileBoundedDisplayLevel,
 } from './viewport';
 import { orderWorldTilesForContextRestoration } from './restoration';
+import {
+  WorldTileManifestIndex, WorldTileCoverageCandidates, WorldTileCoverageCache,
+  getWorldTileEntryAddressKey, getWorldTileEntryTaskKey, getWorldTileDisplayAvailabilityKeys,
+} from './manifestIndex';
 
 interface WorldTileClientControllerOptions {
   scene: Phaser.Scene;
@@ -121,6 +124,7 @@ interface UploadTask {
 }
 
 interface RetryState {
+  addressKey: string;
   failures: number;
   retryAtMs: number;
 }
@@ -195,7 +199,13 @@ export class WorldTileClientController {
   private rollout: WorldTileRolloutDecision | null = null;
   private activeRendererVersion: string | null = null;
   private previousRendererVersion: string | null = null;
-  private entriesByKey = new Map<string, WorldTileManifestEntry>();
+  private readonly manifestIndex = new WorldTileManifestIndex();
+  private readonly entriesByKey = this.manifestIndex.entries;
+  private readonly coverageCandidates = new WorldTileCoverageCandidates();
+  private readonly coverageCache = new WorldTileCoverageCache();
+  private coverageCandidateKeys: ReadonlySet<string> = new Set();
+  private coverageCandidateSource: ReadonlySet<string> | null = null;
+  private coverageCandidatePreviousVersion: string | null = null;
   private availabilityByKey = new Map<string, WorldTileAvailability>();
   private fetchQueue: FetchTask[] = [];
   private decodeQueue: DecodeTask[] = [];
@@ -253,7 +263,7 @@ export class WorldTileClientController {
     this.markCoverageNotReady();
     this.contextRestorePending = true;
     this.layer.discardGpuTexturesForContextRestore();
-    this.refreshAvailability();
+    this.refreshAvailability(this.entriesByKey.keys());
     if (!this.shouldScheduleRequest('context-restoration')) return;
     const addresses = orderWorldTilesForContextRestoration({
       visible: this.visibleTargets,
@@ -593,6 +603,7 @@ export class WorldTileClientController {
       rendererVersion: this.activeRendererVersion,
       ...roomToWorldTileCoordinate(this.committedLevel, coordinates.x, coordinates.y),
     };
+    this.refreshAvailability(getWorldTileDisplayAvailabilityKeys([target], this.previousRendererVersion));
     return resolveWorldTileDisplayPlan({
       targets: [target],
       availabilityByKey: this.availabilityByKey,
@@ -692,6 +703,8 @@ export class WorldTileClientController {
     this.desiredVisibleTargets = [];
     this.desiredGuardTargets = [];
     this.fallbackAncestors = [];
+    this.coverageCandidateKeys = new Set();
+    this.coverageCandidateSource = null;
     this.lastCameraSignature = '';
     this.pendingManifestRequest = null;
     this.nextManifestRetryAtMs = Number.POSITIVE_INFINITY;
@@ -880,12 +893,7 @@ export class WorldTileClientController {
       visible: visibleBounds,
       guard: unclampedGuardBounds,
     });
-    return {
-      visible: enumerateWorldTileBounds(rendererVersion, level, visibleBounds),
-      guard: enumerateWorldTileBounds(rendererVersion, level, manifestBounds),
-      visibleBounds,
-      manifestBounds,
-    };
+    return this.coverageCache.resolve(rendererVersion, level, visibleBounds, manifestBounds);
   }
 
   private issuePendingManifestRequest(): boolean {
@@ -914,13 +922,25 @@ export class WorldTileClientController {
       manifestRendererVersion: manifest.rendererVersion,
     });
     if (rendererRole === 'reject') return false;
+    const acceptedKeys: string[] = [];
     for (const entry of manifest.entries) {
-      const key = worldTileAddressKey(entry.address);
+      const key = getWorldTileEntryAddressKey(entry);
       const existing = this.entriesByKey.get(key);
       if (existing && existing.desiredGeneration > entry.desiredGeneration) continue;
-      this.entriesByKey.set(key, entry);
+      this.manifestIndex.set(entry);
+      acceptedKeys.push(key);
     }
-    this.refreshAvailability();
+    const protectedKeys = new Set([
+      ...acceptedKeys, ...this.coverageCandidateKeys, ...this.layer.getAttachedAddressKeys(),
+      ...this.fetchQueue.map((task) => getWorldTileEntryAddressKey(task.entry)),
+      ...this.decodeQueue.map((task) => getWorldTileEntryAddressKey(task.entry)),
+      ...this.uploadQueue.map((task) => getWorldTileEntryAddressKey(task.entry)),
+      ...[...this.retriesByKey.values()].map((retry) => retry.addressKey),
+    ]);
+    // In-flight tasks can finish after their queue entry is removed.
+    for (const taskKey of this.activeTaskKeys) protectedKeys.add(taskKey.slice(0, taskKey.lastIndexOf(':')));
+    for (const key of this.manifestIndex.prune(protectedKeys)) this.availabilityByKey.delete(key);
+    this.refreshAvailability(acceptedKeys);
     if (rendererRole === 'active') this.resolveOptimisticRooms(manifest);
     return true;
   }
@@ -939,20 +959,21 @@ export class WorldTileClientController {
     this.processFetchQueue();
   }
 
-  private refreshAvailability(): void {
-    for (const [key, entry] of this.entriesByKey) {
+  private refreshAvailability(keys: Iterable<string> = new Set([
+    ...this.coverageCandidateKeys, ...this.layer.getAttachedAddressKeys(),
+  ])): void {
+    for (const key of keys) {
+      const entry = this.entriesByKey.get(key);
+      if (!entry) continue;
+      const previous = this.availabilityByKey.get(key);
       if (entry.ready) {
         const gpuReady = this.layer.hasGpuTexture(key, entry.ready.contentHash);
-        this.availabilityByKey.set(key, {
-          state: 'ready-image',
-          decoded: gpuReady,
-          gpuReady,
-          stale: entry.ready.generation < entry.desiredGeneration || entry.staleRoomIds.length > 0,
-        });
-      } else if (entry.readyEmptyGeneration !== null) {
-        this.availabilityByKey.set(key, { state: 'ready-empty' });
+        const stale = entry.ready.generation < entry.desiredGeneration || entry.staleRoomIds.length > 0;
+        if (previous?.state === 'ready-image' && previous.gpuReady === gpuReady && previous.stale === stale) continue;
+        this.availabilityByKey.set(key, { state: 'ready-image', decoded: gpuReady, gpuReady, stale });
       } else {
-        this.availabilityByKey.set(key, { state: 'pending' });
+        const state = entry.readyEmptyGeneration !== null ? 'ready-empty' : 'pending';
+        if (previous?.state !== state) this.availabilityByKey.set(key, { state });
       }
     }
   }
@@ -967,42 +988,36 @@ export class WorldTileClientController {
     const previousDecodeQueueLength = this.decodeQueue.length;
     const previousUploadQueueLength = this.uploadQueue.length;
     const previousActiveTaskCount = this.activeTaskKeys.size;
-    const visibleKeys = new Set([
-      ...desiredVisible.map(worldTileAddressKey),
-      ...displayVisible.map(worldTileAddressKey),
-    ]);
-    const siblings = getWorldTileSiblingClosure([...desiredVisible, ...displayVisible]);
-    const siblingKeys = new Set(siblings.map(worldTileAddressKey));
-    const ancestors = getWorldTileAncestorClosure([...desiredVisible, ...displayVisible, ...siblings]);
-    const ancestorKeys = new Set(ancestors.map(worldTileAddressKey));
-    const guardKeys = new Set([
-      ...desiredGuards.map(worldTileAddressKey),
-      ...displayGuards.map(worldTileAddressKey),
-    ]);
     const selected = this.options.getSelectedCoordinates();
     const selectedKey = this.activeRendererVersion
-      ? worldTileAddressKey({
-          rendererVersion: this.activeRendererVersion,
-          level: 4,
-          x: selected.x,
-          y: selected.y,
-        })
+      ? worldTileAddressKey({ rendererVersion: this.activeRendererVersion, level: 4, ...selected })
       : null;
-    const center = getRectCenter(getCameraWorldRect(this.options.scene.cameras.main));
-    const candidates: WorldTileRequestCandidate[] = [...this.entriesByKey.values()].flatMap((entry) => {
-      const key = worldTileAddressKey(entry.address);
-      const selectedTarget = key === selectedKey;
-      if (
-        !selectedTarget
-        && !visibleKeys.has(key)
-        && !siblingKeys.has(key)
-        && !ancestorKeys.has(key)
-        && !guardKeys.has(key)
-      ) {
-        return [];
+    const { visibleKeys, siblingKeys, ancestorKeys, guardKeys, keys } = this.coverageCandidates.resolve(
+      desiredVisible, desiredGuards, displayVisible, displayGuards, selectedKey,
+    );
+    if (keys !== this.coverageCandidateSource || this.previousRendererVersion !== this.coverageCandidatePreviousVersion) {
+      this.manifestIndex.touch(keys);
+      // Refresh atomic guard groups and previous-renderer fallback availability too.
+      const availabilityKeys = getWorldTileDisplayAvailabilityKeys(
+        [...desiredGuards, ...displayGuards], this.previousRendererVersion,
+      );
+      for (const key of keys) {
+        availabilityKeys.add(key);
+        if (this.previousRendererVersion) availabilityKeys.add(`${this.previousRendererVersion}${key.slice(key.indexOf(':'))}`);
       }
+      this.coverageCandidateKeys = availabilityKeys;
+      this.coverageCandidateSource = keys;
+      this.coverageCandidatePreviousVersion = this.previousRendererVersion;
+    }
+    this.refreshAvailability();
+    const center = getRectCenter(getCameraWorldRect(this.options.scene.cameras.main));
+    const candidates: WorldTileRequestCandidate[] = [];
+    for (const key of keys) {
+      const entry = this.entriesByKey.get(key);
+      if (!entry?.ready) continue;
+      const selectedTarget = key === selectedKey;
       const distance = getAddressDistance(entry.address, center);
-      return [{
+      candidates.push({
         address: entry.address,
         uncoveredVisibleAncestor: ancestorKeys.has(key) && !this.isEntryGpuReady(entry),
         visibleTarget: visibleKeys.has(key),
@@ -1012,8 +1027,8 @@ export class WorldTileClientController {
         pointerDistance: selectedTarget ? 0 : null,
         centerDistance: distance,
         predictedDistance: distance,
-      }];
-    });
+      });
+    }
     const rankedEntries = rankWorldTileRequests(candidates).flatMap((candidate) => {
       const entry = this.entriesByKey.get(worldTileAddressKey(candidate.address));
       return entry?.ready ? [entry] : [];
@@ -1175,7 +1190,7 @@ export class WorldTileClientController {
     };
     await Promise.all(Array.from({ length: Math.min(concurrency, entries.length) }, worker));
     for (const entry of entries) this.releaseActiveTask(taskIdentity(entry), true, lifecycleEpoch);
-    if (lifecycleEpoch === this.lifecycleEpoch) this.refreshAvailability();
+    if (lifecycleEpoch === this.lifecycleEpoch) this.refreshAvailability(entries.map(getWorldTileEntryAddressKey));
   }
 
   private processFetchQueue(): boolean {
@@ -1349,6 +1364,7 @@ export class WorldTileClientController {
       this.options.getRuntimePerformanceProfile?.() ?? this.options.getPerformanceProfile(),
     ));
     let uploaded = 0;
+    const changedKeys = new Set<string>();
     while (
       uploaded < budgets.gpuUploadsPerFrame
       && this.uploadQueue.length > 0
@@ -1375,10 +1391,12 @@ export class WorldTileClientController {
         closeDecodedSource(task.source);
         this.recordTileFailure(task.entry, error, performance.now());
       }
+      changedKeys.add(getWorldTileEntryAddressKey(task.entry));
       this.releaseActiveTask(task.taskKey, true, task.lifecycleEpoch);
       uploaded += 1;
     }
     if (uploaded > 0) {
+      this.refreshAvailability(changedKeys);
       this.refreshAvailability();
       if (this.contextRestorePending && this.visibleTargets.every((address) => (
         this.isAddressDisplayable(address)
@@ -1578,7 +1596,11 @@ export class WorldTileClientController {
         continue;
       }
       if (retry.retryAtMs > nowMs || this.activeTaskKeys.has(taskKey)) continue;
-      const entry = [...this.entriesByKey.values()].find((candidate) => taskIdentity(candidate) === taskKey);
+      const entry = this.entriesByKey.get(retry.addressKey);
+      if (!entry || taskIdentity(entry) !== taskKey) {
+        this.retriesByKey.delete(taskKey);
+        continue;
+      }
       if (!entry?.ready || this.isEntryGpuReady(entry)) continue;
       this.activeTaskKeys.add(taskKey);
       this.queuedFetchKeys.add(taskKey);
@@ -1598,6 +1620,7 @@ export class WorldTileClientController {
     const key = taskIdentity(entry);
     const failures = (this.retriesByKey.get(key)?.failures ?? 0) + 1;
     this.retriesByKey.set(key, {
+      addressKey: getWorldTileEntryAddressKey(entry),
       failures,
       retryAtMs: nowMs + getWorldTileRetryDelayMs(failures),
     });
@@ -1627,7 +1650,7 @@ export class WorldTileClientController {
 
   private isEntryGpuReady(entry: WorldTileManifestEntry): boolean {
     return Boolean(entry.ready && this.layer.hasGpuTexture(
-      worldTileAddressKey(entry.address),
+      getWorldTileEntryAddressKey(entry),
       entry.ready.contentHash,
     ));
   }
@@ -2018,7 +2041,7 @@ function getAddressDistance(address: WorldTileAddress, center: { x: number; y: n
 }
 
 function taskIdentity(entry: WorldTileManifestEntry): string {
-  return `${worldTileAddressKey(entry.address)}:${entry.ready?.contentHash ?? 'empty'}`;
+  return getWorldTileEntryTaskKey(entry);
 }
 
 function assertDecodedDimensions(source: DecodedWorldTileSource, entry: WorldTileManifestEntry): void {

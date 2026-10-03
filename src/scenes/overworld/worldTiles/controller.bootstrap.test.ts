@@ -73,6 +73,46 @@ describe('world tile controller bootstrap ownership', () => {
     vi.unstubAllGlobals();
   });
 
+  it('limits frame work to current coverage even after a large browsing history', async () => {
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest: vi.fn(async (level: WorldTileLevel, bounds: WorldTileBounds) => readyEmptyManifest(level, bounds)),
+    });
+    const camera = createCamera();
+    await controller.prepare();
+    await controller.ensureInitialCoverage(camera);
+    const internals = controller as unknown as {
+      entriesByKey: Map<string, WorldTileManifest['entries'][number]>;
+      availabilityByKey: Map<string, unknown>;
+      retriesByKey: Map<string, { addressKey: string; failures: number; retryAtMs: number }>;
+      currentCoverageTaskKeys: Set<string>;
+      queueDueRetries(nowMs: number): boolean;
+      fetchQueue: unknown[];
+    };
+    const template = readyImageManifest(4, { minTileX: 0, maxTileX: 0, minTileY: 0, maxTileY: 0 }).entries[0]!;
+    for (let x = 10_000; x < 30_000; x++) {
+      internals.entriesByKey.set(`${rendererVersion}:4:${x}:0`, {
+        ...template, address: { rendererVersion, level: 4, x, y: 0 },
+      });
+    }
+    const values = vi.spyOn(internals.entriesByKey, 'values').mockImplementation(() => { throw new Error('history scan'); });
+    const iterator = vi.spyOn(internals.entriesByKey, Symbol.iterator).mockImplementation(() => { throw new Error('history scan'); });
+    const get = vi.spyOn(internals.entriesByKey, 'get');
+    controller.update(camera);
+    expect(get.mock.calls.length).toBeLessThan(500);
+    expect(internals.availabilityByKey.has(`${rendererVersion}:4:10000:0`)).toBe(false);
+    get.mockClear();
+    const addressKey = `${rendererVersion}:4:10000:0`;
+    const taskKey = `${addressKey}:${template.ready!.contentHash}`;
+    internals.currentCoverageTaskKeys.add(taskKey);
+    internals.retriesByKey.set(taskKey, { addressKey, failures: 1, retryAtMs: 0 });
+    expect(internals.queueDueRetries(1_000)).toBe(true);
+    expect(get).toHaveBeenCalledOnce();
+    expect(internals.fetchQueue.length).toBeGreaterThan(0);
+    values.mockRestore(); iterator.mockRestore();
+    controller.destroy();
+  });
+
   it('gives ensureInitialCoverage sole ownership of L0 across the prepare handoff and reset', async () => {
     let resolveConfig!: (value: WorldTileConfig) => void;
     let resolveQuota!: (value: StorageEstimate) => void;

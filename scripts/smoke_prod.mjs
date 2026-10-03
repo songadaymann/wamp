@@ -1,3 +1,5 @@
+import { checkWorldTileAvailability } from './check_world_tile_availability.mjs';
+
 const FRONTEND_URL = getUrlFromEnv('PROD_FRONTEND_URL', 'https://wamp.land');
 const API_BASE_URL = getBaseUrlFromEnv('PROD_API_BASE_URL', 'https://api.wamp.land');
 const EXPECTED_PARTYKIT_HOST =
@@ -70,6 +72,7 @@ assert(
   `Expected JSON from health endpoint, got ${healthContentType || 'unknown content type'}.`
 );
 const healthJson = await healthResponse.json();
+const worldTiles = await checkWorldTileAvailability(API_BASE_URL);
 assert(healthJson?.ok === true, 'Health endpoint did not report ok: true.');
 assert(healthJson?.storage === 'd1', `Expected storage=d1, got ${String(healthJson?.storage)}`);
 
@@ -103,6 +106,7 @@ const summary = {
   sessionAuthenticated: sessionJson?.authenticated ?? null,
   sessionWalletProjectConfigured: sessionWalletProjectId.length > 0,
   health: healthJson,
+  worldTiles,
   checkedAt: new Date().toISOString(),
 };
 
