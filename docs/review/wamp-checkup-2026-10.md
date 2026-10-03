@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 7 of 214 done.**
+**Progress: 11 of 214 done.**
 
 ## How to use this file
 
@@ -151,10 +151,10 @@ Open items in this area are withheld from this public repo until fixed.
 
 - [x] **F040** API trusts wamp.pages.dev (a domain WAMP does not own), enabling cross-site account takeover · high impact · small effort — **done 2026-10-03** (715e7677). wamp.pages.dev removed from trusted hosts. Still open: localhost origins are trusted in production (kept on purpose for `dev:frontend:remote`).
 - [x] **F186** The live production server has a 'delete the whole database' endpoint behind one shared password · medium impact · small effort — **done 2026-10-03** (715e7677). Snapshot reset/import routes now 404 unless ENABLE_SNAPSHOT_ADMIN=1 (safety env only). Still open: separate ADMIN_API_KEY per environment, timing-safe compare.
-- [ ] **F187** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) (also covers F043, F047) · medium impact · small effort
-- [ ] **F042** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
-- [ ] **F041** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
-- [ ] **F034** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [x] **F187** Chat @mentions and sign-in requests can burn the email budget, and then nobody can log in (also covers F043, F047) · medium impact · small effort — **done 2026-10-03** (1c4d942b, 59e096ca). Sign-in emails capped per network (150/h), per address on one network (10/day) and per inbox (20/h, plus-tags and Gmail dots merged); mention emails 1/h per sender-recipient, 10/day per recipient, confirmed addresses only. Still open: separate sending subdomain for notifications, opt-out toggle, room-comment email caps.
+- [x] **F042** 6-digit email sign-in code: per-request throttle is global, allowing parallel brute force of a known code window · medium impact · small effort — **done 2026-10-03** (1c4d942b, 59e096ca). Wrong codes capped per network (100/h), per address on one network (10/day) and per address (30/day); atomic slots; newest two codes accepted; success clears the count.
+- [x] **F041** Open redirect + OG spoofing on the public room-share page · medium impact · small effort — **done 2026-10-03** (1c4d942b). Share page ?url= honoured only for WAMP hosts; verified live.
+- [x] **F034** Typing an email into sign-in creates an account and assigns a permanent WAMP founder number before the email is verified · medium impact · small effort — **done 2026-10-03** (1c4d942b, 59e096ca). Founder numbers assigned at email verification (best-effort, retried on UNIQUE). Still open: dashboard counts still include unverified accounts.
 - [ ] **F243** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
 - [ ] **F051** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
 - [ ] **F050** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort

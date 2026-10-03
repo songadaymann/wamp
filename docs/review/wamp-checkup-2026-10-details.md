@@ -1677,21 +1677,139 @@ The fix stays the same and is small: gate the snapshot routes behind an env var 
 
 Not every table, and not permanent: reset clears the 33 tables in SNAPSHOT_TABLES in the main D1 only. JAM_DB, R2 tile objects and tables outside the list (e.g. room_rush_runs, pvp_matches, worlds and school tables) survive except through FK cascades, and D1 Time Travel can restore the main DB to the minute before the wipe. So the realistic worst case is an outage and recovery work, not "erasing WAMP". The bigger quiet risk is that snapshot/import can write rows into sessions, api_tokens, agent_tokens and chat_admins, which lets anyone with the key impersonate any user. That deserves the emphasis. Nothing in the code shows that safety and prod share one ADMIN_API_KEY. The .dev.vars fallback only shows the local key is used against safety, so the misconfiguration path is possible but unproven. Gate the routes with a new var such as ENABLE_SNAPSHOT_ADMIN, set only in env.safety vars (or as a --var in deploy_safety_branch.mjs), mirroring maintenance/routes.ts:10. Don't reuse ENABLE_TEST_RESET, which is "0" in wrangler.jsonc's safety env. Also rename or validate SAFETY_REFRESH_HEALTHCHECK_BASE_URL: only allow a safety workers.dev host, and never api.wamp.land. timingSafeEqual and rate limiting are optional low-value hardening. Cloudflare Access would need service tokens for script and worker callers, which takes more than a small effort.
 
-### F187: details withheld
+### F187: Chat @mentions and sign-in requests can burn the email budget, and then nobody can log in
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Trust & safety, moderation, ops & observability
+- **Type:** defect · **impact:** medium · **effort:** small
 
-### F042: details withheld
+**Summary.** Each chat message can email up to five people, one message per second is allowed, and nobody can turn these emails off. One harasser could flood someone's inbox with thousands of emails an hour. The same email account sends the sign-in codes, so that harassment could also use up the email quota and stop every player from logging in.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Technical detail.**
 
-### F041: details withheld
+Chat allows 1 msg/sec/user (chat/routes.ts:58, 155-160), and every message schedules mention emails (chat/routes.ts:170) to up to 5 recipients (chat/mentions.ts:8). There's no per-recipient cooldown, no daily cap and no opt-out (mentions.ts recipient loader just requires an email). `POST /api/auth/request-link` limits only per address per minute (auth/routes.ts:174). It has no IP limit and no Turnstile, and it creates a `users` row before the email is verified (auth/routes.ts:197), so a script can mail thousands of strangers and fill `users`. All of this shares one RESEND_API_KEY with magic links and codes (auth/routes.ts:224-228). Resend's rate limit, monthly quota and domain spam reputation are a single point of failure for sign-in. Fix: (1) a `chat_mention_email_log` table, with at most 1 email per (sender, recipient) per hour and at most 10 per recipient per day, plus a 'Email me when mentioned' toggle in user settings (default on). (2) A Workers Rate Limiting binding (`ratelimits` in wrangler.jsonc, keyed on CF-Connecting-IP) on request-link and verify-code, e.g. 5/min. Require Turnstile after 3 requests, reusing the guestbook verifier. (3) Create the user row only in verify/verify-code. (4) Optionally use a separate Resend sending subdomain for notifications so their reputation can't hurt sign-in mail.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Evidence.**
 
-### F034: details withheld
+- src/cloudflare/worker/chat/mentions.ts:8 — MAX_CHAT_MENTION_EMAILS = 5 per message
+- src/cloudflare/worker/chat/routes.ts:58 — CHAT_RATE_LIMIT_WINDOW_MS = 1000 (only throttle)
+- src/cloudflare/worker/chat/routes.ts:170 — every message schedules mention emails, no per-recipient cooldown
+- src/cloudflare/worker/auth/routes.ts:174 — sign-in email throttle is per-address only
+- src/cloudflare/worker/auth/routes.ts:197 — user row created for any typed email before verification
+- src/cloudflare/worker/auth/routes.ts:224-228 — sign-in emails use the same Resend key
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Fact-check (confirmed, confirmed, partially confirmed).**
+
+Small corrections only:
+1. "Nobody can log in" goes too far. Wallet sign-in and existing session cookies would keep working; only email-link and email-code sign-in fail. Whether those actually fail depends on the Resend plan's per-second rate and monthly quota, which are set outside the code. At full speed, one chat sender makes about 5 Resend calls per second.
+2. A third sender shares the same key: room comment notification emails (roomComments/email.ts:18,51). A fix that adds per-recipient caps or a separate notification subdomain should cover them too.
+3. The anonymous request-link endpoint is the cheaper attack: it needs no account, while chat needs a signed-in account. Fixes (2) and (3) should come first. A per-user chat throttle can also be dodged with throwaway accounts, because accounts are free to create by email or wallet.
+4. worlds/store.ts:306 also calls createUserForEmail. That path is an admin or complimentary grant, so it is lower risk, but keep it in mind if user creation is moved to the verify step.
+
+A few small corrections to the claim's framing:
+- Harassment through chat needs a signed-in account, and every message is public in World Chat, where moderators can already ban the sender (chat_bans, plus the trust penalty in progression/trustCaps.ts). The flooding stops after a manual ban, not on its own.
+- The per-second throttle is weaker than the claim says. It is a read-then-insert check (chat/routes.ts:152-160), so requests sent at the same moment can get past it.
+- The claim leaves out one way this gets worse. A pre-verification users row gets the stranger's email and a username built from the part of their address before the @ (auth/store.ts:197 via 162-180 and 1438-1441). There is no email_verified flag, so an attacker can create a row for a stranger through request-link and then @mention that guessable username to email them repeatedly. That is why fix (3), creating the row only at verify time, matters most.
+- Login failing for everyone is a plausible worst case, not a demonstrated one.
+
+1. "Nobody can log in" is overstated. Existing sessions last 30 days (store.ts:23) and keep working, and wallet sign-in doesn't use email. What breaks is new or expired email sign-ins, plus every other email the game sends: room comments, worlds and admin review. During an attack this starts with Resend's per-second rate limit, before any monthly quota is reached.
+2. The 1 msg/sec chat limit can be beaten by sending requests at the same moment, because it checks the last message and then inserts (chat/routes.ts:152-166).
+3. Fix (3) is not small. magic_link_tokens.user_id is NOT NULL with a foreign key to users (migrations/0001_create_auth.sql:15,22), and both verify paths join users (store.ts:667-678). Moving user creation into the verify step needs a table rebuild and risky changes to sign-in. A cheaper alternative: keep the early row, but give out founder numbers and badges only after verification (move ensureFounderIdentityQualification into verify and verify-code), and prune old unverified rows.
+4. Two extra reasons to add an IP limit on verify-code:
+   - Anyone can request a new code for any address once a minute and get 5 guesses at it. That's about 7,200 guesses a day against 10^6 possible codes, roughly 0.7% per day of taking over that account, and each request also emails the victim.
+   - Mention emails should be skipped when the recipient was active in chat recently. That is the everyday annoyance players will actually notice.
+5. Suggested split:
+   - Small: cap mention emails per sender→recipient and per recipient per day, reusing the room-comment limits pattern; skip recipients who are active in chat; add a Workers rate limit keyed on IP to request-link and verify-code.
+   - Medium: an opt-out toggle in settings, Turnstile in the sign-in modal (needs work on mobile), founder and badge changes, and a separate Resend sending subdomain.
+
+### F042: 6-digit email sign-in code: per-request throttle is global, allowing parallel brute force of a known code window
+
+- **Area:** Security & abuse resistance
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** The new email login code is a 6-digit number with only 5 guesses per emailed code, which is fine on its own. But the limit is enforced per issued code, and an attacker who can trigger many codes for a victim's address (one per minute) effectively multiplies their guesses, and the per-attempt counter is not transactional with the compare. Worth tightening before this becomes the primary login.
+
+**Technical detail.**
+
+handleVerifyEmailCode (auth/routes.ts:294-330) loads only the latest code row via loadLatestEmailCode (auth/store.ts:667-678, ORDER BY created_at DESC LIMIT 1) and caps at code_attempts>=5. recordEmailCodeAttempt (store.ts:687-694) increments atomically, good. But there is no per-email/per-IP ceiling on total verify attempts across code rotations: request-link is throttled to 1/min (auth/routes.ts:174-176, hasRecentEmailSignInRequest) yet an attacker who floods the victim with codes still only faces 5 guesses each against a 1e6 space — brute force is impractical here, so the real residual risk is (a) email-bomb amplification (each failed login attempt against the victim's address is cheap and there is no per-IP cap on verify-code) and (b) the code is derived from tokenHash+code (store.ts:201-202) but loadLatestEmailCode always targets the most recent row, so a second concurrently-issued code invalidates attempt accounting on the first. Recommend: add a per-email AND per-IP verify-attempt counter (e.g. 10/hour) independent of code rotation, and consider 8-digit codes. Note the compare uses hashToken equality (store.ts:309) not constant-time, but since it compares SHA-256 hashes of a secret the timing leak is not practically exploitable.
+
+**Evidence.**
+
+- src/cloudflare/worker/auth/routes.ts:303 — row.code_attempts >= 5 is the only per-code cap; no cross-row per-email/per-IP verify ceiling
+- src/cloudflare/worker/auth/store.ts:667 — loadLatestEmailCode only ever returns the newest row for an email
+- src/cloudflare/worker/auth/routes.ts:174 — request-link throttle is per-email 60s only, not per-IP
+
+**Fact-check (partially confirmed).**
+
+Corrections to the claim:
+1. The title is wrong to call the throttle "global". The request-link throttle is per email (routes.ts:174, store.ts:680-685). What is missing is any per-IP limit and any per-email cap on verify attempts across codes.
+2. The summary is wrong that the attempt counter is "not transactional with the compare". recordEmailCodeAttempt (store.ts:687-694) is an atomic conditional UPDATE...RETURNING that runs before the compare. Parallel requests cannot exceed 5 guesses per row.
+3. Point (a) is wrong: verify-code sends no email. Email volume comes from request-link, which allows 1 email per minute per address with no per-IP cap, so an attacker can spray many addresses.
+4. Point (b) is not something an attacker gains. When a new code is issued, the old code becomes unusable through the code path (its magic link still works). That does not reset or weaken attempt counting.
+5. Two citations point to the wrong file. Code generation is routes.ts:201-202 (store.ts:201-202 is unrelated user-insert code). The hash compare is routes.ts:309, not store.ts:309.
+6. "Brute force is impractical" understates the risk:
+   - Per target it is about 7,200 guesses per day, roughly 0.7% per day or 19% per month.
+   - With no per-IP limits, attacking many addresses at once makes some account takeovers expected.
+   - The code row is inserted before the email is sent (routes.ts:206 vs :228), so a failed or quota-limited Resend send does not stop guessing.
+7. Fix, small effort: reuse the guestbook IP-hash hourly limit pattern for verify-code and request-link, and add a per-email cap across codes (for example, 10-20 failed verifies per hour or day, counted from code_attempts). 8-digit codes are optional on top.
+
+### F041: Open redirect + OG spoofing on the public room-share page
+
+- **Area:** Security & abuse resistance
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Anyone can craft a wamp.land share link that instantly redirects visitors to any website they choose, and that shows their own title/description/image in the link preview on social media. This lets scammers send 'api.wamp.land/...' links that look official but bounce people to phishing or scam pages.
+
+**Technical detail.**
+
+resolveRequestedPublicUrl (src/cloudflare/worker/share/routes.ts:262-277) takes the ?url= query param and accepts ANY http/https URL with no host allowlist. buildRoomShareMetadata (share/routes.ts:224) uses it as metadata.url, and buildRoomShareHtml (share/routes.ts:359-394) emits `<script>location.replace(<attacker url>)</script>` plus canonical/og:url/twitter meta using that value. Confirmed live: GET https://api.wamp.land/api/share/rooms/0,0?url=https://example.com/phish returned a page whose canonical, og:url, and location.replace() all point to example.com/phish. Because the response is Cache-Control public and cached at the edge (loadAnonymousPublicCache, share/routes.ts:73), a poisoned variant is also served to others who hit the same URL. Fix: only honor ?url= when its origin passes isTrustedAppHostname / resolveFrontendBaseUrl; otherwise derive the public URL from coordinates as the fallback branch already does.
+
+**Evidence.**
+
+- src/cloudflare/worker/share/routes.ts:263 — candidate = url.searchParams.get('url'); accepts any http/https origin
+- src/cloudflare/worker/share/routes.ts:390 — `<script>location.replace(${JSON.stringify(metadata.url)})` redirects to the attacker URL
+- src/cloudflare/worker/share/routes.ts:372-378 — title/canonical/og:url/og:description built from attacker-controlled values
+- live: GET https://api.wamp.land/api/share/rooms/0,0?url=https://example.com/phish redirected and set canonical/og:url to example.com/phish
+
+**Fact-check (partially confirmed).**
+
+The open redirect is real: GET https://api.wamp.land/api/share/rooms/<published x,y>?url=<any http(s) URL> serves a page that runs location.replace() to that URL, and canonical, og:url and the "Open this WAMP room" link also point there (routes.ts:230, 262-277, 365-391). Three corrections: (1) Attackers control only canonical, og:url, the <a href> and the redirect target. The title, description and image always come from the real room's data, so attackers cannot write their own preview text on this page; a crawler that follows og:url could still show the attacker's page. (2) There is no cache poisoning. The edge cache key is the full URL including the query string (publicCache.ts:18), so only the attacker's own URL variant is cached and normal share links are unaffected. (3) The route is on api.wamp.land, not wamp.land. Fix: either ignore ?url= on the HTML page variant (only /meta needs it; it is called from src/pages/shareMetadata.ts:93-96), or accept it only when its host passes isTrustedAppHostname. If you take the allowlist route, also allow *.wamp.land and localhost so preview and dev deploys (for example preview.wamp.land, used in shareMetadata.test.ts:189) keep the right canonical. Otherwise fall back to the coordinate-derived URL.
+
+### F034: Typing an email into sign-in creates an account and assigns a permanent WAMP founder number before the email is verified
+
+- **Area:** Backend performance, cost & reliability
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Requesting a sign-in email immediately creates a user and gives it the next founder number, even if the address is a typo or a bot and the link is never clicked. Founder numbers are meant to be scarce identity markers, so they get used up. The only limit is one email per address per minute, so a script could create unlimited users and send unlimited emails on WAMP's email account. Two people signing up at the same moment can also collide and get a server error.
+
+**Technical detail.**
+
+handleRequestMagicLink rate-limits per email only (hasRecentEmailSignInRequest), then calls createUserForEmail before sending. createUserForEmail inserts the user and calls ensureFounderIdentityQualification, which does SELECT MAX(founder_number)+1 and then a separate upsert, plus backfill counts and syncUserBadges. founder_number is UNIQUE, so concurrent sign-ups race. The loser gets a 500 'UNIQUE constraint failed' during exactly the kind of spike when sign-ups cluster. The PRD says to assign the number after linking email to avoid burning numbers on throwaway accounts. Fix: (1) store the pending email on magic_link_tokens and create the user plus founder number only in the verify/consume path; (2) assign founder numbers atomically, e.g. `INSERT ... SELECT COALESCE(MAX(founder_number),0)+1` in one statement, or retry on the constraint error; (3) add a per-IP limit with a Workers Rate Limiting binding or a Cloudflare WAF rate rule on /api/auth/* (guestbook already does per-network limiting); (4) exclude unverified users from dashboard user counts.
+
+**Evidence.**
+
+- src/cloudflare/worker/auth/routes.ts:173-175 — the only throttle is one request per email per 60 s
+- src/cloudflare/worker/auth/routes.ts:194-195 — findUserByEmail ?? createUserForEmail runs before the email is sent or verified
+- src/cloudflare/worker/auth/store.ts:175-177 — insertUserRecord, then ensureFounderIdentityQualification
+- src/cloudflare/worker/progression/awards.ts:49-63 — MAX(founder_number)+1, then a separate upsert (non-atomic)
+- migrations/0019_progression.sql (user_progress) — founder_number INTEGER UNIQUE, so a lost race raises a constraint error
+- docs/product/xp-badges-ratings-prd.md:873-877 — 'award founder number when the account becomes a real WAMP identity ... avoids burning founder numbers on throwaway accounts'
+- src/cloudflare/worker/guestbook/routes.ts:224 — a per-network limit pattern already exists in the codebase
+
+**Fact-check (confirmed).**
+
+**Line numbers and wording:**
+- The throttle is at routes.ts:174, not 173-175.
+- The create-before-verify line is routes.ts:197, not 194-195.
+- The PRD literally recommends assigning the number "after linking email or wallet" instead of by Play.fun row order. The code follows that wording; the real gap is that the email link is never verified before the number is assigned.
+
+**Fix (1) is harder than written.** magic_link_tokens.user_id is `NOT NULL` and has a foreign key (migrations/0001_create_auth.sql:15,21). Creating the user only at verify time therefore needs a SQLite table rebuild.
+
+**Cheaper alternative for (1), still a small job:**
+- Remove ensureFounderIdentityQualification from createUserForEmail.
+- Call it in handleVerifyMagicLink and handleVerifyEmailCode after consumeMagicLinkToken succeeds, every time, not only when attachEmailToUser runs. This also repairs accounts that lost the race.
+- Count only users with a consumed token, or with a session, as real users in the dashboard and launch stats.
+
+**For (2):** besides the single-statement insert, the founder-number upsert should be retried when it hits the UNIQUE error.
 
 ### F243: details withheld
 
@@ -6048,17 +6166,69 @@ The core claim holds: at 1 fps it does a synchronous drawImage plus toDataURL, s
 
 Suggested fix: skip image capture on touch devices or battery-saver mode (or sample every 3–5 s there), clamp the scale to ≤1 and target about 320 px wide, keep one fixed-size 2D canvas, and compute describeState once per sample.
 
-### F043: details withheld
+### F043: No origin check or rate limit on magic-link / email-code requests enables email bombing of arbitrary addresses
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+_Merged into F187; track it there._
+
+- **Area:** Security & abuse resistance
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Anyone, from any website, can make WAMP send a real sign-in email to any email address they type, limited only to one per minute per address. There is no CAPTCHA and no per-IP cap, so an attacker can sign up thousands of victim addresses and flood inboxes with WAMP mail (and burn the Resend quota/reputation).
+
+**Technical detail.**
+
+The /api/auth prefix route is auth:'optional' (src/cloudflare/worker.ts:159-164) and handleRequestMagicLink (auth/routes.ts:166-237) does NOT call requireTrustedOriginForMutation for the unauthenticated sign_in path — it only does so when an existing session is linking email (routes.ts:183). So any cross-origin page can POST {email} and a real email is sent via sendMagicLinkEmail (store.ts:1363). The sole limiter is hasRecentEmailSignInRequest (routes.ts:174, 60s per email). There is no per-IP limit and no Turnstile, unlike the guestbook which does gate on Turnstile (guestbook/routes.ts:93, verifyTurnstileToken). For a brand-new address createUserForEmail (routes.ts:197) even creates a user row per unique address, so attackers can mass-create accounts. Fix: require a trusted origin for all POST /api/auth/request-link, add per-IP rate limiting, and add Turnstile on the unauthenticated request path.
+
+**Evidence.**
+
+- src/cloudflare/worker/auth/routes.ts:166 — handleRequestMagicLink sends email with no origin assertion on the sign_in branch
+- src/cloudflare/worker/auth/routes.ts:174 — only throttle is per-email 60s (hasRecentEmailSignInRequest)
+- src/cloudflare/worker/auth/routes.ts:197 — unknown address auto-creates a user before any verification
+- src/cloudflare/worker/guestbook/routes.ts:93 — contrast: guestbook gates writes behind Turnstile
+
+**Fact-check (partially confirmed).**
+
+(1) The origin-check part of the claim is mostly irrelevant. requireTrustedOriginForMutation guards cookie-authenticated mutations (CSRF), and isTrustedRequestOrigin (core/http.ts:58-61) treats a request with no Origin header as trusted. An attacker running curl or a script sends no Origin, so "require a trusted origin for all POST /api/auth/request-link" would stop almost nothing. The fixes that work are a per-IP limit (a Cloudflare Rate Limiting binding or WAF rule, or the guestbook's ipHash-table pattern), Turnstile on the unauthenticated path, and a global hourly/daily send cap so the Resend quota can't be drained. Draining the quota would block every real sign-in.
+(2) The throttle is weaker than "one per minute per address". normalizeEmail (store.ts:1443-1445) only trims and lowercases. Plus-addressing (victim+1@gmail.com, victim+2@...) and Gmail dot variants count as different addresses, so one victim's inbox can be flooded with no limit, and each variant also creates its own user row.
+(3) Extra effect the reviewer missed: createUserForEmail calls ensureFounderIdentityQualification (store.ts:177 → progression/awards.ts:34-64) before the email is verified. Every junk sign-up therefore takes a founder number and a badge sync, which inflates founder numbering for real players. Creating the user should wait until verify. magic_link_tokens already stores the email, so the row can be created at verify time.
+(4) Effort is small, not medium. The guestbook already has IP hashing, per-IP limits and Turnstile verification that can be reused, and a Rate Limiting binding or WAF rule needs no schema work. Moving user creation to verify time is the only part that leans toward medium.
 
 ### F044: details withheld
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F047: details withheld
+### F047: Chat @mention emails can be used to email-bomb any user with an email on file
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+_Merged into F187; track it there._
+
+- **Area:** Security & abuse resistance
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Each World Chat message you post can trigger WAMP to email up to 5 mentioned users. The only limit on sending chat is 1 message per second per author, so a single malicious account can generate a continuous stream of 'X mentioned you' emails to chosen victims, and the victim's own chat message body is quoted into the email.
+
+**Technical detail.**
+
+handleCreateChatMessage (chat/routes.ts:143-172) rate-limits a user to one message per 1000ms (CHAT_RATE_LIMIT_WINDOW_MS, chat/routes.ts:58,157), then scheduleChatMentionNotificationEmails fires emails to every mentioned @username that has an email (mentions.ts:40-104, up to MAX_CHAT_MENTION_EMAILS=5, mentions.ts:8). There is no per-recipient cooldown or daily cap: one account can send ~5 emails/second to targets of its choice, and the message excerpt (attacker text) is embedded in the email (mentions.ts:100). Fix: add a per-recipient notification cooldown (e.g. at most one mention email per sender->recipient per N minutes) and a global per-sender daily mention-email budget.
+
+**Evidence.**
+
+- src/cloudflare/worker/chat/routes.ts:157 — only 1s/author rate limit gates message creation
+- src/cloudflare/worker/chat/mentions.ts:66 — emails sent to each mentioned user with an email, no cooldown
+- src/cloudflare/worker/chat/mentions.ts:100 — attacker-controlled excerpt embedded in the outbound email
+
+**Fact-check (partially confirmed).**
+
+1. The summary says "the victim's own chat message body is quoted into the email." That is wrong. The excerpt is the sender's (attacker's) message. It is capped at 140 characters by CHAT_MESSAGE_MAX_LENGTH (src/chat/model.ts:1), so the 500-character trim at mentions.ts:10 and 80 never applies. It is HTML-escaped (mentions.ts:100 and 191-197), so the risk is harassment or phishing text, not injected markup. The attacker-chosen display name also appears in the subject line (mentions.ts:88).
+2. The 1 message per second limit is not strictly enforced. It is a non-atomic read-then-insert (routes.ts:152-168, store.ts:155-172 and 51-66), so concurrent requests can push the email rate above about 5 per second.
+3. Recipients have no way to opt out or unsubscribe.
+4. A bigger risk than harassing one user is that mention emails share the Resend account and From address with sign-in emails (mentions.ts:5 and 77). Abuse could exhaust the Resend quota or damage the domain's reputation, and sign-in emails would stop arriving.
+
+Fix:
+- Add a per-recipient cooldown, for example a small D1 table keyed by sender and recipient, or a recipient_last_mention_email_at column, allowing one email per N minutes.
+- Add a per-sender daily email budget.
+- Make the chat rate limit atomic, using a conditional INSERT or the Workers rate-limit binding.
+- Add an opt-out flag for mention emails, or at least an unsubscribe link.
+- Optionally, send notification emails from a different From address than sign-in emails.
 
 ### F053: Pinch-zooming in the mobile editor paints, places, or flood-fills under the first finger
 
