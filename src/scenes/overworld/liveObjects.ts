@@ -415,6 +415,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.triggerController.handleLockedDoorContact(loadedRoom, liveObject),
       shouldCollideWithLiveObject: (liveObject) =>
         this.shouldCollideWithLiveObject(liveObject),
+      isDistanceSleeping: (liveObject) => this.distanceSleepingObjects.has(liveObject),
       shouldCollideWithLadderTopSupport: (playerBody, supportBody) =>
         this.shouldCollideWithLadderTopSupport(playerBody, supportBody),
       getRuntimeSolidObjects: (loadedRoom) =>
@@ -1301,8 +1302,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     liveObject: LoadedRoomObject,
     playerBody: ArcadeObjectBody,
   ): boolean {
-    return Math.abs(liveObject.sprite.x - playerBody.center.x) > ROOM_PX_WIDTH * 1.5
-      || Math.abs(liveObject.sprite.y - playerBody.center.y) > ROOM_PX_HEIGHT * 1.75;
+    const outsideWakeRange = (x: number, y: number): boolean =>
+      Math.abs(x - playerBody.center.x) > ROOM_PX_WIDTH * 1.5
+      || Math.abs(y - playerBody.center.y) > ROOM_PX_HEIGHT * 1.75;
+
+    // A falling enemy can leave the wake range before reaching its respawn
+    // threshold. Keep it running while its spawn is nearby so it can recover.
+    return outsideWakeRange(liveObject.sprite.x, liveObject.sprite.y)
+      && (
+        liveObject.config.category !== 'enemy'
+        || outsideWakeRange(liveObject.runtime.baseX, liveObject.runtime.baseY)
+      );
   }
 
   attackEnemiesInRect(
