@@ -472,6 +472,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private mobilePortraitCameraZoomMultiplier = MOBILE_PORTRAIT_PLAY_CAMERA_ZOOM_MULTIPLIER;
   private mobilePortraitCameraTargetY = MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y;
   private mobilePortraitCameraTunerApi: Window['wampMobileCameraTuner'] | null = null;
+  private mobilePortraitUnobstructedHeight = { key: '', value: 0 };
+  private mobilePortraitFramingZoomStale = false;
   private shouldAutoPlayDeepLinkedRoomOnBoot = false;
   private nextFrameHudRenderAt = 0;
   private presenceSnapshotSyncPending = false;
@@ -2404,6 +2406,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       const roomTransitionStartedAt = controllerProfileSlot === 17 ? profiler?.beginSegment() : undefined;
       this.roomTransitionController.maybeAdvancePlayerRoom();
       this.cameraController.syncRoomCamera();
+      this.updateMobilePortraitRoomFraming();
       this.recordRankedRunTraceFrame(delta, movement);
       if (roomTransitionStartedAt !== undefined) {
         profiler?.endSegment('controller.roomTransition', roomTransitionStartedAt);
@@ -3979,13 +3982,10 @@ export class OverworldPlayScene extends Phaser.Scene {
       return fitZoom;
     }
 
-    return Number(
-      Phaser.Math.Clamp(
-        fitZoom * this.mobilePortraitCameraZoomMultiplier,
-        MIN_ZOOM,
-        MAX_ZOOM,
-      ).toFixed(3),
-    );
+    const tunedZoom = Phaser.Math.Clamp(fitZoom * this.mobilePortraitCameraZoomMultiplier, MIN_ZOOM, MAX_ZOOM);
+    // Zoom out just enough on short screens that the whole room height fits above the console.
+    const roomHeightFitZoom = this.getMobilePortraitUnobstructedHeight(this.cameras.main) / ROOM_PX_HEIGHT;
+    return Number(Math.min(tunedZoom, Math.max(MIN_ZOOM, roomHeightFitZoom)).toFixed(3));
   }
 
   getMobilePortraitCameraTuning(): MobilePortraitCameraTuningSnapshot {
@@ -4137,8 +4137,77 @@ export class OverworldPlayScene extends Phaser.Scene {
       camera.y + camera.height * this.mobilePortraitCameraTargetY,
       camera,
     );
-    camera.setScroll(scroll.x, scroll.y);
+    const framedCenterY = this.getMobilePortraitRoomFramingCenterY(camera);
+    camera.setScroll(scroll.x, framedCenterY === null ? scroll.y : framedCenterY - camera.height * 0.5);
     camera.preRender();
+  }
+
+  // Phones held upright frame the current room as a square: the whole room height sits centred
+  // in the space above the control console, the sides are cropped, and the camera follows the
+  // player left and right. Walking into the room above or below pans to frame that room.
+  private updateMobilePortraitRoomFraming(): void {
+    if (
+      !this.player
+      || this.cameraMode !== 'follow'
+      || !this.shouldApplyMobilePortraitCameraTuning()
+      || this.cameraController.isRoomCameraFixed()
+    ) {
+      return;
+    }
+
+    const camera = this.cameras.main;
+    if (this.mobilePortraitFramingZoomStale) {
+      // The console was measured (or the screen resized): refit the zoom to the new space.
+      this.mobilePortraitFramingZoomStale = false;
+      const zoom = this.getFitZoomForRoom();
+      if (Math.abs(camera.zoom - zoom) > 0.001) {
+        this.inspectZoom = zoom;
+        camera.setZoom(zoom);
+      }
+    }
+    const framedCenterY = this.getMobilePortraitRoomFramingCenterY(camera);
+    if (framedCenterY !== null) {
+      camera.setFollowOffset(0, this.player.y - framedCenterY);
+    }
+  }
+
+  /** World Y for the camera centre that frames the current room above the portrait console. */
+  private getMobilePortraitRoomFramingCenterY(camera: Phaser.Cameras.Scene2D.Camera): number | null {
+    if (!this.player || !(camera.zoom > 0)) {
+      return null;
+    }
+
+    const halfScreen = camera.height / 2 / camera.zoom;
+    const visibleHeight = this.getMobilePortraitUnobstructedHeight(camera) / camera.zoom;
+    const roomTop = this.getRoomOrigin(this.currentRoomCoordinates).y;
+    if (ROOM_PX_HEIGHT <= visibleHeight) {
+      return roomTop + ROOM_PX_HEIGHT / 2 - visibleHeight / 2 + halfScreen;
+    }
+
+    // Short screens cannot show the whole room: keep the player at the tuned anchor, but never
+    // show past the room's top or bottom edge.
+    const anchoredTop = this.player.y - (camera.height * this.mobilePortraitCameraTargetY) / camera.zoom;
+    const visibleTop = Phaser.Math.Clamp(anchoredTop, roomTop, roomTop + ROOM_PX_HEIGHT - visibleHeight);
+    return visibleTop + halfScreen;
+  }
+
+  /** Canvas height above the portrait control console, re-measured only when the size changes. */
+  private getMobilePortraitUnobstructedHeight(camera: Phaser.Cameras.Scene2D.Camera): number {
+    const key = `${camera.width}x${camera.height}:${window.innerWidth}x${window.innerHeight}`;
+    if (this.mobilePortraitUnobstructedHeight.key === key) {
+      return this.mobilePortraitUnobstructedHeight.value;
+    }
+
+    const controls = document.getElementById('mobile-play-controls');
+    if (!controls || controls.classList.contains('hidden')) {
+      return camera.height;
+    }
+
+    const controlsTop = controls.getBoundingClientRect().top - this.game.canvas.getBoundingClientRect().top;
+    const value = controlsTop > 0 ? Math.min(camera.height, controlsTop) : camera.height;
+    this.mobilePortraitUnobstructedHeight = { key, value };
+    this.mobilePortraitFramingZoomStale = true;
+    return value;
   }
 
   private buildMobilePortraitCameraTuningSnapshot(): MobilePortraitCameraTuningSnapshot {

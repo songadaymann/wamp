@@ -368,10 +368,20 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
       && state.activeScene.mobilePortraitCamera?.targetY === 0.34,
     `portrait camera should use the wider, centered mobile defaults: ${JSON.stringify(state.activeScene.mobilePortraitCamera)}`,
   );
+  const roomFraming = await page.evaluate(() => {
+    const scene = JSON.parse(window.render_game_to_text?.() || 'null')?.activeScene;
+    const view = scene?.camera?.worldView;
+    const roomTop = scene.currentRoom.y * 352;
+    return {
+      top: Math.round((roomTop - view.y) * scene.zoom),
+      bottom: Math.round((roomTop + 352 - view.y) * scene.zoom),
+    };
+  });
   assertCondition(
-    layout.playerScreen.y > layout.controls.top * 0.45
-      && layout.playerScreen.y < layout.controls.top * 0.6,
-    `portrait player should stay near the center of the unobstructed game view: ${JSON.stringify(layout)}`,
+    roomFraming.top >= -2
+      && roomFraming.bottom <= layout.controls.top + 2
+      && Math.abs((roomFraming.top + roomFraming.bottom) / 2 - layout.controls.top / 2) <= 6,
+    `portrait camera should show the whole room centred above the console: ${JSON.stringify({ roomFraming, controls: layout.controls })}`,
   );
   assertCondition(
     layout.playerScreen.y < layout.controls.top - 16,
@@ -655,15 +665,17 @@ async function runPhonePortraitCameraTuner(page, scenarioSummary, scenarioDir) {
     (snapshot) => snapshot.zoomMultiplier > before.zoomMultiplier,
     'zoom-in camera tuner adjustment',
   );
+  assertCondition(
+    afterZoom.cameraZoom > before.cameraZoom,
+    `zoom-in should zoom the portrait camera in: ${JSON.stringify({ before, afterZoom })}`,
+  );
+  // The player anchor only steers the camera when the room is too tall to fit above the console;
+  // otherwise the whole room stays framed.
   await clickElement(page, '[data-mobile-camera-tuner-action="player-up"]');
   const afterPlayerUp = await waitForCameraTunerSnapshot(
     page,
     (snapshot) => snapshot.targetY < afterZoom.targetY,
     'player-up camera tuner adjustment',
-  );
-  assertCondition(
-    afterPlayerUp.playerScreen.y < afterZoom.playerScreen.y,
-    `player-up should move the player higher in the tuned frame: ${JSON.stringify({ afterZoom, afterPlayerUp })}`,
   );
   const logged = await page.evaluate(() => window.wampMobileCameraTuner?.log('smoke-log') ?? null);
 
