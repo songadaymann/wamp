@@ -563,7 +563,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
   create(data?: CourseEditorSceneData): void {
     this.draftLifecycle = new EditorDraftLifecycle({
-      isActive: () => this.scene.isActive(),
+      isActive: () => !this.isShuttingDown && this.scene.isActive(),
       hasUnsavedChanges: () => this.getDirtySlices().length > 0 || isActiveCourseDraftSessionDirty(),
       flush: () => this.backupDebouncer.flush(),
     });
@@ -756,6 +756,7 @@ export class CourseEditorScene extends Phaser.Scene {
     const change = `${getActiveCourseDraftSessionRevision()}:${this.getDirtySlices().map((slice) => `${slice.roomId}:${slice.runtime.currentLastDirtyAt}`).join(',')}`;
     if (change !== this.lastBackupChange) {
       this.lastBackupChange = change;
+      for (const slice of this.getDirtySlices()) setActiveCourseDraftSessionRoomUnsaved(slice.roomId, true);
       this.backupDebouncer.schedule();
     }
     this.syncRoomSliceBackgrounds();
@@ -1129,9 +1130,11 @@ export class CourseEditorScene extends Phaser.Scene {
     let lastRecord: RoomRecord | null = null;
     try {
       for (const slice of dirtySlices) {
+        if (this.isShuttingDown || this.roomSlices.get(slice.roomId) !== slice) return lastRecord;
         const sent = slice.runtime.exportRoomSnapshot();
         this.backupDebouncer.flush();
         const record = await this.roomRepository.saveDraft(sent);
+        if (this.isShuttingDown || this.roomSlices.get(slice.roomId) !== slice) return lastRecord;
         this.applySavedSliceResponse(slice, sent, record, true);
         clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
@@ -1200,9 +1203,11 @@ export class CourseEditorScene extends Phaser.Scene {
       }
 
       for (const slice of targetSlices) {
+        if (this.isShuttingDown || this.roomSlices.get(slice.roomId) !== slice) return lastRecord;
         const sent = slice.runtime.exportRoomSnapshot();
         this.backupDebouncer.flush();
         const record = await this.roomRepository.publish(sent);
+        if (this.isShuttingDown || this.roomSlices.get(slice.roomId) !== slice) return lastRecord;
         this.applySavedSliceResponse(slice, sent, record, false);
         clearLocalRoomStorageEntry(record.draft.id);
         lastRecord = record;
@@ -1312,6 +1317,7 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
+    this.backupDebouncer.flush();
     this.persistSessionOverridesForPlayableSlices();
     const startRoom =
       (draft.startPoint
@@ -1939,7 +1945,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private flushDraftBackup(): void {
-    if (!this.courseRecord) return;
+    if (this.isShuttingDown || !this.courseRecord) return;
     let saved = this.draftBackup.flushCourse();
     for (const slice of this.getDirtySlices()) {
       setActiveCourseDraftSessionRoomUnsaved(slice.roomId, true);
@@ -2004,6 +2010,7 @@ export class CourseEditorScene extends Phaser.Scene {
   ): Promise<RoomRecord | null> {
     let lastRecord: RoomRecord | null = null;
     for (const slice of slices) {
+      if (this.isShuttingDown || this.roomSlices.get(slice.roomId) !== slice) return lastRecord;
       const snapshot = slice.runtime.exportRoomSnapshot();
       const base = this.roomBackupBases.get(slice.roomId);
       if (base) this.draftBackup.writeRoom(this.courseRecord?.draft.id ?? '', snapshot, base);
@@ -3386,11 +3393,13 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private handleShutdown = (): void => {
-    this.backupDebouncer.flush();
+    // Phaser has already destroyed display-list tile layers at SHUTDOWN.
+    // Authored exits flush before stop/sleep; never serialize dead runtimes here.
+    this.isShuttingDown = true;
+    this.backupDebouncer.cancel();
+    this.draftBackup.flushCourse();
     this.draftLifecycle?.destroy();
     this.draftLifecycle = null;
-    this.backupDebouncer.cancel();
-    this.isShuttingDown = true;
     this.musicRoomFit.stop();
     window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
     this.events.off('wake', this.handleWake, this);

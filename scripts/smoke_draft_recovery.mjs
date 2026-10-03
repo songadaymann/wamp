@@ -265,6 +265,65 @@ try {
     assert.equal(conflictRestored.title, 'Quota-failure edit stays dirty');
     assert.equal(conflictRestored.dirty, true);
     summary.scenarios.push({ name: 'newer-account-draft-explicit-restore', viewport, restored: conflictRestored });
+
+    await page.evaluate(() => {
+      const scene = window.__EVERYBODYS_PLATFORMER_GAME__.scene.keys.CourseEditorScene;
+      for (const slice of scene.roomSlices.values()) {
+        scene.selectRoomById(slice.roomId);
+        scene.setRoomTitle(`Pending Save cell ${slice.coordinates.x}`);
+      }
+      let calls = 0;
+      scene.roomRepository.saveDraft = (sent) => {
+        calls += 1;
+        window.__pendingCellSaveCalls = calls;
+        return new Promise((resolve) => {
+          window.__releasePendingCellSave = () => {
+            const record = structuredClone(window.__draftRecoveryFixtures.rooms.find((room) => room.draft.id === sent.id));
+            record.draft = { ...structuredClone(sent), updatedAt: '2026-10-03T17:00:00.000Z' };
+            resolve(record);
+          };
+        });
+      };
+      window.__pendingCellSave = scene.saveDraft();
+    });
+
+    await page.evaluate(() => {
+      const game = window.__EVERYBODYS_PLATFORMER_GAME__;
+      const composer = game.scene.keys.CourseComposerScene;
+      composer.expandedRoomEditorRepository.loadExpandedRoomRecord = async () => structuredClone(window.__draftRecoveryFixtures.course);
+      composer.roomRepository.loadRoom = async (id) => structuredClone(window.__draftRecoveryFixtures.rooms.find((room) => room.draft.id === id));
+      game.scene.run('CourseComposerScene', { courseId: window.__draftRecoveryFixtures.course.draft.id });
+    });
+    await page.waitForFunction(() => {
+      const composer = window.__EVERYBODYS_PLATFORMER_GAME__.scene.keys.CourseComposerScene;
+      return composer.record && !composer.loading;
+    });
+    await page.evaluate(async () => {
+      const game = window.__EVERYBODYS_PLATFORMER_GAME__;
+      game.scene.sleep('CourseComposerScene');
+      game.scene.keys.CourseEditorScene.selectRoomById('100,99');
+      game.scene.keys.CourseEditorScene.setRoomTitle('Last edit before returning');
+      await game.scene.keys.CourseEditorScene.returnToCourseBuilder();
+    });
+    await page.waitForFunction(() => window.__EVERYBODYS_PLATFORMER_GAME__.scene.isActive('CourseComposerScene'));
+    const lateSaveCalls = await page.evaluate(async () => {
+      window.__releasePendingCellSave();
+      await window.__pendingCellSave;
+      return window.__pendingCellSaveCalls;
+    });
+    assert.equal(lateSaveCalls, 1);
+    summary.scenarios.push({ name: 'pending-multi-cell-save-stops-after-editor-exit', viewport, calls: lateSaveCalls });
+    const handoff = await page.evaluate(async () => {
+      const session = await import('/src/courses/draftSession.ts');
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      const cellBackupKey = Object.keys(localStorage).find((key) => key.startsWith('wamp:expanded-draft-backup:v1:') && key.endsWith(':room:100%2C99'));
+      return { warned: event.defaultPrevented, metadataDirty: session.isActiveCourseDraftSessionDirty(),
+        unsavedCells: session.hasActiveCourseDraftSessionUnsavedRooms(),
+        title: JSON.parse(localStorage.getItem(cellBackupKey)).snapshot.title };
+    });
+    assert.deepEqual(handoff, { warned: true, metadataDirty: false, unsavedCells: true, title: 'Last edit before returning' });
+    summary.scenarios.push({ name: 'composer-handoff-keeps-unsaved-cell-warning', viewport, ...handoff });
     await context.close();
   }
   assert.deepEqual(summary.pageErrors, []);

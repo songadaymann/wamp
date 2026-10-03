@@ -572,7 +572,10 @@ export class EditorScene extends Phaser.Scene {
         this.roomSession.backupDraftForPageExit();
         this.scene.sleep();
       },
-      stopEditorScene: () => this.scene.stop(),
+      stopEditorScene: () => {
+        this.roomSession.backupDraftForPageExit();
+        this.scene.stop();
+      },
       wakeOverworld: (data) => this.scene.wake('OverworldPlayScene', data),
       wakeCourseComposer: (data) => this.scene.wake('CourseComposerScene', data),
       updateBottomBar: () => this.updateBottomBar(),
