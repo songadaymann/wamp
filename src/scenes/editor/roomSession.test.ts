@@ -1,12 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultRoomRecord, createRoomSummaryFromRecord, RoomApiError, type RoomRecord, type RoomRepository, type RoomSnapshot } from '../../persistence/roomRepository';
+import { cloneRoomSnapshot, createDefaultRoomRecord, createRoomSummaryFromRecord, RoomApiError, type RoomRecord, type RoomRepository, type RoomSnapshot } from '../../persistence/roomRepository';
 import { ROOM_STORAGE_PREFIX } from '../../persistence/browserStorage';
 import { EditorRoomSession } from './roomSession';
 import { showBusyError } from '../../ui/appFeedback';
 import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
+import { writeRoomDraftBackup } from '../../persistence/localDraftBackup';
+import { refreshAuthSession } from '../../auth/client';
 
 const authState = vi.hoisted(() => ({ authenticated: false }));
-vi.mock('../../auth/client', () => ({ getAuthDebugState: () => ({ authenticated: authState.authenticated }) }));
+vi.mock('../../auth/client', () => ({
+  getAuthDebugState: () => ({ authenticated: authState.authenticated }),
+  refreshAuthSession: vi.fn(async () => {}),
+}));
 vi.mock('../../ui/appFeedback', () => ({ showBusyError: vi.fn(), showBusyOverlay: vi.fn(), hideBusyOverlay: vi.fn(), updateBusyOverlay: vi.fn() }));
 vi.mock('../../mint/roomMetadataRender', () => ({ renderRoomSnapshotToPngDataUrl: vi.fn() }));
 
@@ -14,6 +19,71 @@ const coordinates = { x: 0, y: 1 };
 const roomId = '0,1';
 const savedAt = '2026-09-08T12:00:00.000Z';
 const openedAt = '2026-09-08T13:00:00.000Z';
+
+describe('room lifecycle backup recovery', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    });
+  });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it('recovers an intentional empty edit over nonblank initial/published terrain and keeps it dirty', async () => {
+    vi.setSystemTime(savedAt);
+    const remote = createDefaultRoomRecord(roomId, coordinates);
+    remote.claimerUserId = 'builder';
+    remote.claimedAt = savedAt;
+    remote.draft.tileData.terrain[9][9] = 17;
+    remote.published = { ...remote.draft, status: 'published' };
+    const erased = createDefaultRoomRecord(roomId, coordinates).draft;
+    vi.setSystemTime(openedAt);
+    writeRoomDraftBackup(erased, { userId: null, baseUpdatedAt: remote.draft.updatedAt });
+    const { session, applyRoomSnapshot } = reopen(remote);
+    await session.loadPersistedRoom(remote.draft);
+    expect(applyRoomSnapshot).toHaveBeenCalledWith(expect.objectContaining({ tileData: erased.tileData }));
+    expect(session.statusText).toContain('Recovered local');
+    expect(session.hasPendingEditConflict).toBe(false);
+  });
+
+  it('does not restore a backup made by a different signed-in user', async () => {
+    vi.setSystemTime(savedAt);
+    const remote = createDefaultRoomRecord(roomId, coordinates);
+    const local = createDefaultRoomRecord(roomId, coordinates).draft;
+    local.tileData.terrain[9][9] = 17;
+    vi.setSystemTime(openedAt);
+    writeRoomDraftBackup(local, { userId: 'different-account', baseUpdatedAt: remote.draft.updatedAt });
+    const { session, applyRoomSnapshot } = reopen(remote);
+    await session.loadPersistedRoom(null);
+    expect(applyRoomSnapshot).toHaveBeenCalledWith(expect.objectContaining({ tileData: remote.draft.tileData }));
+  });
+
+  it('keeps newer server edits instead of restoring an older remote baseline', async () => {
+    vi.setSystemTime(savedAt);
+    const local = createDefaultRoomRecord(roomId, coordinates).draft;
+    local.tileData.terrain[9][9] = 17;
+    const base = local.updatedAt;
+    vi.setSystemTime(openedAt);
+    writeRoomDraftBackup(local, { userId: null, baseUpdatedAt: base });
+    const remote = createDefaultRoomRecord(roomId, coordinates);
+    remote.claimerUserId = 'builder';
+    remote.claimedAt = savedAt;
+    remote.draft.tileData.terrain[9][9] = 33;
+    const { session, applyRoomSnapshot } = reopen(remote);
+    await session.loadPersistedRoom(null);
+    expect(applyRoomSnapshot).toHaveBeenCalledWith(expect.objectContaining({ tileData: remote.draft.tileData }));
+    expect(session.hasPendingEditConflict).toBe(true);
+    expect(vi.mocked(showBusyError).mock.calls.at(-1)?.[1]).toMatchObject({ retryLabel: 'Restore Local' });
+    // This also covers a Save committing after the tab closes: newer unsaved
+    // local edits have the old baseline, but remain recoverable by choice.
+    await vi.mocked(showBusyError).mock.calls.at(-1)?.[1]?.retryHandler?.();
+    expect(applyRoomSnapshot).toHaveBeenLastCalledWith(expect.objectContaining({ tileData: local.tileData }));
+    expect(session.hasPendingEditConflict).toBe(false);
+  });
+});
 
 function makeStoredDraft(blank = false): RoomRecord {
   vi.setSystemTime(savedAt);
@@ -207,6 +277,115 @@ describe('signed-in autosave after a failed save', () => {
     expect(vi.mocked(repository.saveDraft).mock.calls.length).toBe(2);
     expect(isDirty()).toBe(false);
     expect(values.has(backupKey)).toBe(false);
+  });
+});
+
+describe('edits made while a room save or publish is pending', () => {
+  const baselineAt = '2026-10-03T12:00:00.000Z';
+  const responseAt = '2026-10-03T12:01:00.000Z';
+  let values: Map<string, string>;
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((done) => { resolve = done; });
+    return { promise, resolve };
+  }
+
+  beforeEach(() => {
+    authState.authenticated = true;
+    vi.mocked(refreshAuthSession).mockReset().mockResolvedValue(undefined);
+    values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    });
+    vi.stubGlobal('window', { localStorage });
+  });
+  afterEach(() => {
+    authState.authenticated = false;
+    vi.mocked(refreshAuthSession).mockReset().mockResolvedValue(undefined);
+    vi.unstubAllGlobals();
+  });
+
+  async function openedEditor() {
+    const record = createDefaultRoomRecord(roomId, coordinates);
+    record.draft.updatedAt = baselineAt;
+    record.draft.title = 'Original title';
+    record.draft.tileData.terrain[9][9] = 17;
+    record.claimerUserId = 'builder';
+    record.claimedAt = baselineAt;
+    let snapshot = cloneRoomSnapshot(record.draft);
+    let dirty = false;
+    let lastDirtyAt = 100;
+    const response = deferred<RoomRecord>();
+    const saveDraft = vi.fn().mockReturnValue(response.promise);
+    const publish = vi.fn().mockReturnValue(response.promise);
+    const repository = {
+      loadRoomCurrent: vi.fn(async () => ({ summary: createRoomSummaryFromRecord(record), draft: record.draft, published: null })),
+      saveDraft, publish, getLastPersistenceTarget: () => 'remote',
+    } as unknown as RoomRepository;
+    const session: EditorRoomSession = new EditorRoomSession(repository, {
+      applyRoomSnapshot: (room) => { snapshot = cloneRoomSnapshot(room); },
+      exportRoomSnapshot: () => ({ ...cloneRoomSnapshot(snapshot), title: session.currentRoomTitle }),
+      getPublishValidationError: () => null, getRoomDirty: () => dirty,
+      setRoomDirty: (value) => { dirty = value; }, getLastDirtyAt: () => lastDirtyAt,
+      refreshUi: vi.fn(), refreshSurroundingRoomPreviews: vi.fn(),
+    });
+    session.currentRoomId = roomId;
+    session.currentRoomCoordinates = coordinates;
+    await session.loadPersistedRoom(null);
+    dirty = true;
+    const saved = { ...record, draft: { ...cloneRoomSnapshot(record.draft), updatedAt: responseAt } };
+    return {
+      session, response, saved, publish, isDirty: () => dirty,
+      editLater: () => {
+        session.currentRoomTitle = 'Later title';
+        snapshot.tileData.terrain[9][9] = 33;
+        dirty = true;
+        lastDirtyAt = 200;
+      },
+    };
+  }
+
+  function expectLaterBackup(session: EditorRoomSession) {
+    const stored = JSON.parse(values.get(`${ROOM_STORAGE_PREFIX}${roomId}`) ?? 'null');
+    expect(session.currentRoomTitle).toBe('Later title');
+    expect(stored.draft.title).toBe('Later title');
+    expect(stored.draft.tileData.terrain[9][9]).toBe(33);
+    expect(stored.localBackup).toEqual({ userId: null, baseUpdatedAt: responseAt });
+  }
+
+  it.each(['save', 'publish'] as const)('preserves later title and terrain edits after a delayed %s response', async (operation) => {
+    const { session, response, saved, editLater, isDirty, publish } = await openedEditor();
+    const pending = operation === 'save' ? session.saveDraft() : session.publishRoom();
+    if (operation === 'publish') {
+      await Promise.resolve();
+      expect(publish).toHaveBeenCalledTimes(1);
+      saved.published = { ...cloneRoomSnapshot(saved.draft), status: 'published' };
+    }
+    editLater();
+    session.backupDraftForPageExit();
+    response.resolve(saved);
+    expect(await pending).toBe(saved);
+    expect(isDirty()).toBe(true);
+    expectLaterBackup(session);
+  });
+
+  it('preserves edits made during the auth refresh after publishing', async () => {
+    const { session, response, saved, editLater, isDirty } = await openedEditor();
+    const authRefresh = deferred<void>();
+    vi.mocked(refreshAuthSession).mockResolvedValueOnce(undefined).mockReturnValueOnce(authRefresh.promise);
+    const pending = session.publishRoom();
+    await Promise.resolve();
+    response.resolve(saved);
+    await Promise.resolve();
+    expect(refreshAuthSession).toHaveBeenCalledTimes(2);
+    editLater();
+    authRefresh.resolve();
+    await pending;
+    expect(isDirty()).toBe(true);
+    expectLaterBackup(session);
   });
 });
 

@@ -10,7 +10,9 @@ import { cloneRoomSnapshot, type RoomSnapshot } from '../persistence/roomModel';
 
 let activeCourseRecord: CourseRecord | null = null;
 let activePersistedCourseRecord: CourseRecord | null = null;
+let activeRevision = 0;
 let activeSelectedRoomId: string | null = null;
+let activeUnsavedRoomIds = new Set<string>();
 let activeCourseRoomOverridesByRoomId = new Map<string, RoomSnapshot>();
 
 function cloneRecordOrNull(record: CourseRecord | null): CourseRecord | null {
@@ -24,6 +26,7 @@ function pruneActiveCourseRoomOverrides(): void {
   }
 
   const activeRoomIds = new Set(activeCourseRecord.draft.roomRefs.map((roomRef) => roomRef.roomId));
+  activeUnsavedRoomIds = new Set([...activeUnsavedRoomIds].filter((roomId) => activeRoomIds.has(roomId)));
   activeCourseRoomOverridesByRoomId = new Map(
     Array.from(activeCourseRoomOverridesByRoomId.entries()).filter(([roomId]) =>
       activeRoomIds.has(roomId)
@@ -35,6 +38,7 @@ export function clearActiveCourseDraftSession(): void {
   activeCourseRecord = null;
   activePersistedCourseRecord = null;
   activeSelectedRoomId = null;
+  activeUnsavedRoomIds.clear();
   activeCourseRoomOverridesByRoomId = new Map();
 }
 
@@ -56,13 +60,17 @@ export function getActiveCourseDraftSessionCourseId(): string | null {
 
 export function setActiveCourseDraftSessionRecord(
   record: CourseRecord | null,
-  options: { selectedRoomId?: string | null } = {}
+  options: { selectedRoomId?: string | null; preserveBaseline?: boolean } = {}
 ): CourseRecord | null {
   const previousCourseId = activeCourseRecord?.draft.id ?? null;
   activeCourseRecord = cloneRecordOrNull(record);
-  activePersistedCourseRecord = cloneRecordOrNull(record);
+  if (!options.preserveBaseline || previousCourseId !== record?.draft.id) {
+    activePersistedCourseRecord = cloneRecordOrNull(record);
+  }
+  activeRevision += 1;
   const nextCourseId = activeCourseRecord?.draft.id ?? null;
   if (previousCourseId !== nextCourseId) {
+    activeUnsavedRoomIds.clear();
     activeCourseRoomOverridesByRoomId = new Map();
   } else {
     pruneActiveCourseRoomOverrides();
@@ -93,6 +101,7 @@ export function updateActiveCourseDraftSession(
   mutator(nextRecord.draft, nextRecord);
   nextRecord.draft.updatedAt = new Date().toISOString();
   activeCourseRecord = nextRecord;
+  activeRevision += 1;
   pruneActiveCourseRoomOverrides();
   if (
     activeSelectedRoomId &&
@@ -162,6 +171,7 @@ export function setActiveCourseDraftSessionRoomOverride(room: RoomSnapshot): voi
 
 export function clearActiveCourseDraftSessionRoomOverride(roomId: string): void {
   activeCourseRoomOverridesByRoomId.delete(roomId);
+  activeUnsavedRoomIds.delete(roomId);
 }
 
 export function isActiveCourseDraftSessionDirty(): boolean {
@@ -173,4 +183,41 @@ export function isActiveCourseDraftSessionDirty(): boolean {
     activeCourseRecord.draft,
     activePersistedCourseRecord.draft
   );
+}
+
+export function getActiveCourseDraftSessionRevision(): number {
+  return activeRevision;
+}
+
+export function getActiveCourseDraftSessionPersistedDraft(): CourseSnapshot | null {
+  return activePersistedCourseRecord ? cloneCourseSnapshot(activePersistedCourseRecord.draft) : null;
+}
+
+/** A saved response advances the baseline while retaining edits made after the request started. */
+export function acknowledgeActiveCourseDraftSessionSave(sent: CourseSnapshot, saved: CourseRecord): CourseRecord | null {
+  if (activeCourseRecord?.draft.id !== sent.id) return getActiveCourseDraftSessionRecord();
+  const current = cloneCourseSnapshot(activeCourseRecord.draft);
+  const changed = !areCourseSnapshotsEquivalent(current, sent);
+  const selectedRoomId = activeSelectedRoomId;
+  setActiveCourseDraftSessionRecord(saved, { selectedRoomId });
+  if (changed && activeCourseRecord) {
+    activeCourseRecord.draft = { ...current, version: saved.draft.version };
+    activeRevision += 1;
+    pruneActiveCourseRoomOverrides();
+  }
+  return getActiveCourseDraftSessionRecord();
+}
+
+export function setActiveCourseDraftSessionRoomUnsaved(roomId: string, unsaved: boolean): void {
+  if (!isRoomInActiveCourseDraftSession(roomId)) return;
+  if (unsaved) activeUnsavedRoomIds.add(roomId);
+  else activeUnsavedRoomIds.delete(roomId);
+}
+
+export function hasActiveCourseDraftSessionUnsavedRooms(): boolean {
+  return activeUnsavedRoomIds.size > 0;
+}
+
+export function isActiveCourseDraftSessionRoomUnsaved(roomId: string): boolean {
+  return activeUnsavedRoomIds.has(roomId);
 }

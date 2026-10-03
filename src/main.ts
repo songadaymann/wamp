@@ -83,6 +83,10 @@ const config: Phaser.Types.Core.GameConfig = {
   preserveDrawingBuffer: debug_options.preserveDrawingBuffer,
   backgroundColor: '#050505',
   scene: [BootScene, OverworldPlayScene],
+  loader: {
+    // Use the desktop/iOS limit on Android too; our assets support HTTP multiplexing.
+    maxParallelDownloads: 32,
+  },
   physics: {
     default: 'arcade',
     arcade: {

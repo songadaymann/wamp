@@ -33,6 +33,7 @@
     "smoke:wampos-window": "node scripts/smoke_wampos_window.mjs",
     "smoke:room-camera": "node scripts/smoke_room_camera.mjs",
     "smoke:editor-dock": "node scripts/smoke_editor_dock.mjs",
+    "smoke:draft-recovery": "node scripts/smoke_draft_recovery.mjs",
     "smoke:object-drag-fill": "node scripts/smoke_object_drag_fill.mjs",
     "smoke:worker-safety": "npx --yes --quiet tsx scripts/worker_safety_probes.ts",
     "smoke:partykit-identity": "npx --yes --quiet tsx scripts/partykit_identity_token_probe.ts",

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { EditorDraftLifecycle } from './editor/draftLifecycle';
 import { getAuthDebugState } from '../auth/client';
 import {
   TILE_SIZE,
@@ -146,6 +147,7 @@ export interface EditorPreviewSmokeResult extends Record<string, unknown> {
 }
 
 export class EditorScene extends Phaser.Scene {
+  private draftLifecycle: EditorDraftLifecycle | null = null;
   private uiBridge: EditorUiBridge | null = null;
   private roomEditCount = 0;
   private previewSmokePersistenceIsolated = false;
@@ -396,6 +398,9 @@ export class EditorScene extends Phaser.Scene {
     }
   };
   private readonly handleShutdown = (): void => {
+    this.roomSession.backupDraftForPageExit();
+    this.draftLifecycle?.destroy();
+    this.draftLifecycle = null;
     this.interactionController.stopMusicRoomFit();
     window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
     this.events.off('wake', this.handleWake, this);
@@ -563,8 +568,14 @@ export class EditorScene extends Phaser.Scene {
       },
       hideObjectInspectorUi: () => this.hideObjectInspectorUi(),
       clearEditorPresence: () => this.presenceController.clear(),
-      sleepEditorScene: () => this.scene.sleep(),
-      stopEditorScene: () => this.scene.stop(),
+      sleepEditorScene: () => {
+        this.roomSession.backupDraftForPageExit();
+        this.scene.sleep();
+      },
+      stopEditorScene: () => {
+        this.roomSession.backupDraftForPageExit();
+        this.scene.stop();
+      },
       wakeOverworld: (data) => this.scene.wake('OverworldPlayScene', data),
       wakeCourseComposer: (data) => this.scene.wake('CourseComposerScene', data),
       updateBottomBar: () => this.updateBottomBar(),
@@ -992,6 +1003,12 @@ export class EditorScene extends Phaser.Scene {
     this.events.on('wake', this.handleWake, this);
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
+    this.draftLifecycle = new EditorDraftLifecycle({
+      isActive: () => this.scene.isActive(this.scene.key),
+      hasUnsavedChanges: () => this.roomDirty,
+      flush: () => { this.roomSession.backupDraftForPageExit(); },
+    });
+    this.draftLifecycle.start();
 
     if (this.initialRoomSnapshot) {
       const editableSnapshot = cloneRoomSnapshot(this.initialRoomSnapshot);

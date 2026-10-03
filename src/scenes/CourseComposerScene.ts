@@ -1,3 +1,5 @@
+import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draftBackupController';
+import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecycle';
 import Phaser from 'phaser';
 import { dispatchSignal } from '../events/typedEvent';
 import { getAuthDebugState } from '../auth/client';
@@ -32,6 +34,7 @@ import {
   getActiveCourseDraftSessionRecord,
   getActiveCourseDraftSessionSelectedRoomId,
   isActiveCourseDraftSessionDirty,
+  hasActiveCourseDraftSessionUnsavedRooms,
   setActiveCourseDraftSessionRecord,
   setActiveCourseDraftSessionSelectedRoom,
   updateActiveCourseDraftSession,
@@ -82,6 +85,9 @@ interface CoursePublishedRoomMeta {
 
 export class CourseComposerScene extends Phaser.Scene implements CourseComposerSceneBridge {
   private readonly worldRepository = createWorldRepository();
+  private readonly draftBackup = new CourseDraftBackupController();
+  private readonly backupDebouncer = new DraftBackupDebouncer(() => this.flushDraftBackup());
+  private draftLifecycle: EditorDraftLifecycle | null = null;
   private readonly roomRepository = createRoomRepository();
   private readonly expandedRoomEditorRepository = createExpandedRoomEditorRepository();
   private worldStreamingController!: OverworldWorldStreamingController;
@@ -145,6 +151,12 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   };
 
   create(data?: CourseComposerSceneData): void {
+    this.draftLifecycle = new EditorDraftLifecycle({
+      isActive: () => this.scene.isActive(),
+      hasUnsavedChanges: () => isActiveCourseDraftSessionDirty() || hasActiveCourseDraftSessionUnsavedRooms(),
+      flush: () => this.backupDebouncer.flush(),
+    });
+    this.draftLifecycle.start();
     this.worldStreamingController = new OverworldWorldStreamingController({
       scene: this,
       worldRepository: this.worldRepository,
@@ -181,6 +193,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     return {
       scene: 'course-composer',
       courseId: this.record?.draft.id ?? null,
+      localDraftRecovery: this.draftBackup.recoveryStatus,
       selectedCoordinates: { ...this.selectedCoordinates },
       centerCoordinates: { ...this.centerCoordinates },
       roomCount: this.record?.draft.roomRefs.length ?? 0,
@@ -202,6 +215,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       forceRefreshAround: true,
     };
 
+    this.backupDebouncer.flush();
     this.scene.stop('CourseComposerScene');
     this.scene.wake('OverworldPlayScene', wakeData);
   }
@@ -423,6 +437,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     }
 
     this.scene.run('EditorScene', editorData);
+    this.backupDebouncer.flush();
     this.scene.sleep();
   }
 
@@ -452,17 +467,20 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
     if (this.scene.isSleeping('CourseEditorScene') || this.scene.isPaused('CourseEditorScene')) {
       this.scene.wake('CourseEditorScene', sceneData);
+      this.backupDebouncer.flush();
       this.scene.sleep();
       return;
     }
 
     if (this.scene.isActive('CourseEditorScene')) {
       this.scene.bringToTop('CourseEditorScene');
+      this.backupDebouncer.flush();
       this.scene.sleep();
       return;
     }
 
     this.scene.run('CourseEditorScene', sceneData);
+    this.backupDebouncer.flush();
     this.scene.sleep();
   }
 
@@ -543,9 +561,11 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     this.statusText = 'Saving expanded room draft...';
     this.renderUi();
     try {
-      const saved = await this.expandedRoomEditorRepository.saveDraft(this.record.draft);
-      this.setRecord(saved, getActiveCourseDraftSessionSelectedRoomId());
-      this.statusText = 'Expanded room setup saved. Open Edit Expanded Room to place goals and edit the cells together.';
+      const sent = cloneCourseSnapshot(this.record.draft);
+      this.backupDebouncer.flush();
+      const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
+      this.record = this.draftBackup.savedCourse(sent, saved);
+      this.statusText = this.draftBackup.backupFailed ? BACKUP_FAILED_TEXT : 'Expanded room setup saved. Open Edit Expanded Room to place goals and edit the cells together.';
       await this.refreshAround(this.centerCoordinates, true);
     } catch (error) {
       this.statusText = error instanceof Error ? error.message : 'Failed to save expanded room draft.';
@@ -572,11 +592,13 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     this.statusText = 'Publishing expanded room...';
     this.renderUi();
     try {
-      const saved = await this.expandedRoomEditorRepository.saveDraft(this.record.draft);
-      this.setRecord(saved, getActiveCourseDraftSessionSelectedRoomId());
+      const sent = cloneCourseSnapshot(this.record.draft);
+      this.backupDebouncer.flush();
+      const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
+      this.record = this.draftBackup.savedCourse(sent, saved);
       const published = await this.expandedRoomEditorRepository.publishExpandedRoom(this.record.draft.id);
-      this.setRecord(published, getActiveCourseDraftSessionSelectedRoomId());
-      this.statusText = 'Expanded room published.';
+      this.record = this.draftBackup.savedCourse(saved.draft, published);
+      this.statusText = this.draftBackup.backupFailed ? BACKUP_FAILED_TEXT : 'Expanded room published.';
       await this.refreshAround(this.centerCoordinates, true);
     } catch (error) {
       this.statusText = error instanceof Error ? error.message : 'Failed to publish expanded room.';
@@ -658,18 +680,22 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     };
 
     this.scene.wake('OverworldPlayScene', wakeData);
+    this.backupDebouncer.flush();
     this.scene.sleep();
   }
 
   private async openFromData(data?: CourseComposerSceneData): Promise<void> {
+    this.backupDebouncer.flush();
     setAppMode('course-composer');
     this.loading = true;
     this.applySceneData(data);
     this.renderUi();
 
     try {
+      const existingSession = getActiveCourseDraftSessionRecord();
       const nextRecord = await this.resolveInitialRecord(data?.courseId ?? null);
-      this.setRecord(nextRecord, data?.courseEditedRoom?.roomId ?? roomIdFromCoordinates(this.selectedCoordinates));
+      this.record = await this.draftBackup.open(nextRecord, existingSession?.draft.id === nextRecord.draft.id);
+      setActiveCourseDraftSessionSelectedRoom(data?.courseEditedRoom?.roomId ?? roomIdFromCoordinates(this.selectedCoordinates));
 
       if (data?.courseEditedRoom) {
         setActiveCourseDraftSessionSelectedRoom(data.courseEditedRoom.roomId);
@@ -689,6 +715,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
           : DEFAULT_COURSE_COMPOSER_STATUS_TEXT;
       }
 
+      if (this.draftBackup.recoveryStatus) this.statusText = this.draftBackup.recoveryStatus;
       if (this.record?.draft.roomRefs.length) {
         this.fitCourseToView(false);
       } else {
@@ -797,7 +824,15 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       draft.roomRefs = sortCourseRoomRefsForStorage(draft.roomRefs);
     });
     this.record = getActiveCourseDraftSessionRecord();
+    this.backupDebouncer.schedule();
     this.renderUi();
+  }
+
+  private flushDraftBackup(): void {
+    if (!this.draftBackup.flushCourse()) {
+      this.statusText = BACKUP_FAILED_TEXT;
+      this.renderUi();
+    }
   }
 
   private async createExpandedRoomDraftWithInitialCell(
@@ -839,8 +874,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       return this.record;
     }
 
-    const saved = await this.expandedRoomEditorRepository.saveDraft(this.record.draft);
-    this.setRecord(saved, getActiveCourseDraftSessionSelectedRoomId());
+    const sent = cloneCourseSnapshot(this.record.draft);
+    this.backupDebouncer.flush();
+    const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
+    this.record = this.draftBackup.savedCourse(sent, saved);
     return this.record ?? saved;
   }
 
@@ -1488,6 +1525,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   }
 
   private handleShutdown(): void {
+    this.backupDebouncer.flush();
+    this.draftLifecycle?.destroy();
+    this.draftLifecycle = null;
+    this.backupDebouncer.cancel();
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
     this.worldStreamingController.destroy();

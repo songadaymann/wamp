@@ -372,3 +372,14 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 
 - Jonathan authorized deployment. Release plan: [ ] commit and push the exact fix; [ ] merge into current main in a clean release clone; [ ] run release checks; [ ] deploy Pages only; [ ] verify live bundle parity and actual -13,-5 gameplay.
 - Approved scope is the two frontend runtime modules, their two regression test files, and the existing progress/feature trackers. No API Worker, D1, PartyKit, room snapshot, or renderer changes are required.
+
+
+## 2026-10-03 — WAMP checkup delivery
+
+- User requested parallel agents for F014, F032, F027, followed by F057 expanded-room backup/recovery. Working from freshly fetched `008de53c` in a managed clean worktree; dirty primary checkout preserved.
+- Integrated Android loader concurrency 32, API preflight Max-Age 7200, and covering publisher index migration 0050. Focused Worker checks pass 3 files / 10 tests; local D1 migration replay and indexed query plans pass. First-three combined check passed 266 files / 1,970 tests plus lint, TypeScript, bindings, and build. Emulated Android cold-cache asset preload measured 19.58s → 14.96s in one controlled comparison.
+- F057 implementation follows the detailed fact-check corrections: synchronous lifecycle backups, persisted baseline retained across scene transitions, recover without marking edits saved. Production delivery has not been requested or performed.
+- F057 now backs up scoped expanded-room cell snapshots and setup/goal metadata, restores dirty edits, offers explicit local/account recovery on baseline divergence, and warns/flushes on page lifecycle events. Immediate Save, Undo-to-baseline, partial failures, storage quota, and edits during Save retain the correct revision. Standard-room lifecycle backup preserves history and intentional blank edits; delayed Save/Publish responses preserve newer title/terrain edits.
+- Browser QA caught and fixed Phaser shutdown ordering: authored exits flush before tile destruction, shutdown only flushes surviving metadata, and delayed multi-cell saves stop before touching a destroyed workspace. Test and Back transitions both flush synchronously; setup keeps warning while cells remain unsaved.
+- Final full check passed 271 files / 2,003 tests plus ESLint, TypeScript, generated binding checks, and production build. DOM contract passed 787 IDs / 159 required. Official client Browse and targeted desktop/Android recovery screenshots were inspected. Reproducible synthetic probe: `npm run smoke:draft-recovery`, local test-enabled Vite on :3017; no account/room writes.
+- Review and release status is tracked in `docs/development/checkup-delivery-2026-10-03.md`. F014/F027/F032/F057 remain unchecked in the master until production delivery; release needs migration 0050, Worker and Pages, not Pages-only.

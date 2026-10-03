@@ -25,6 +25,7 @@ import {
 } from '../../progression/guestBuilderClaimEvents';
 import { saveGuestRoomDraft } from '../../guestRooms/client';
 import { clearLocalRoomStorageEntry } from '../../persistence/browserStorage';
+import { readRoomDraftBackupMetadata, writeRoomDraftBackup } from '../../persistence/localDraftBackup';
 import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
 import {
   buildExplorerTxUrl,
@@ -480,7 +481,8 @@ export class EditorRoomSession {
       const remoteRecord = createRoomRecordFromCurrent(
         await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
       );
-      const localRecord = await this.getRecoverableLocalDraft(remoteRecord);
+      const recovery = options.forceInitialRoomSnapshot ? null : await this.getRecoverableLocalDraft(remoteRecord);
+      const localRecord = recovery?.conflictsWithServer ? null : recovery?.record ?? null;
       if (this.isStale(generation)) {
         return false;
       }
@@ -488,8 +490,12 @@ export class EditorRoomSession {
       this.syncRoomMetadata(activeRecord);
       this.serverDraftUpdatedAt = remoteRecord.draft.updatedAt;
       this.host.applyRoomSnapshot(
-        this.resolveRoomSnapshotForEditing(activeRecord, initialRoomSnapshot, options)
+        localRecord ? cloneRoomSnapshot(localRecord.draft)
+          : this.resolveRoomSnapshotForEditing(activeRecord, initialRoomSnapshot, options)
       );
+      if (localRecord) {
+        this.host.setRoomDirty(true);
+      }
       this.host.refreshSurroundingRoomPreviews();
       this.setStatusText(
         localRecord
@@ -498,6 +504,9 @@ export class EditorRoomSession {
             : `Recovered local guest draft. ${this.DRAFT_VISIBILITY_WARNING}`
           : this.getIdleStatusText()
       );
+      if (recovery?.conflictsWithServer) {
+        this.offerLocalDraftRecovery(generation, remoteRecord, recovery.record);
+      }
       return true;
     } catch (error) {
       if (this.isStale(generation)) {
@@ -564,13 +573,14 @@ export class EditorRoomSession {
         return null;
       }
       this.autoSaveBackoff = null;
-      this.syncRoomMetadata(record);
-      if (this.shouldClearLocalDraftAfterRepositoryMutation()) {
-        clearLocalRoomStorageEntry(this.roomId);
-      }
-
+      this.syncRoomMetadata(record, this.host.getLastDirtyAt() !== saveStartedAt);
       if (this.host.getLastDirtyAt() === saveStartedAt) {
         this.host.setRoomDirty(false);
+        if (this.shouldClearLocalDraftAfterRepositoryMutation()) {
+          clearLocalRoomStorageEntry(this.roomId);
+        }
+      } else {
+        this.backupDraftForPageExit();
       }
 
       const publishSuffix = this.publishedVersion > 0 ? ` Published v${this.publishedVersion}.` : '';
@@ -655,6 +665,7 @@ export class EditorRoomSession {
 
     this.saveInFlight = true;
     this.setStatusText('Publishing...');
+    const publishStartedAt = this.host.getLastDirtyAt();
 
     try {
       const record = await this.roomRepository.publish(this.host.exportRoomSnapshot(), {
@@ -663,15 +674,22 @@ export class EditorRoomSession {
       if (this.isStale(generation)) {
         return null;
       }
-      this.syncRoomMetadata(record);
-      if (this.shouldClearLocalDraftAfterRepositoryMutation()) {
-        clearLocalRoomStorageEntry(this.roomId);
+      this.syncRoomMetadata(record, this.host.getLastDirtyAt() !== publishStartedAt);
+      if (this.host.getLastDirtyAt() !== publishStartedAt) {
+        this.backupDraftForPageExit();
       }
       await refreshAuthSession();
       if (this.isStale(generation)) {
         return null;
       }
-      this.host.setRoomDirty(false);
+      if (this.host.getLastDirtyAt() === publishStartedAt) {
+        this.host.setRoomDirty(false);
+        if (this.shouldClearLocalDraftAfterRepositoryMutation()) {
+          clearLocalRoomStorageEntry(this.roomId);
+        }
+      } else {
+        this.backupDraftForPageExit();
+      }
       if (this.mintedTokenId && this.canRefreshMintMetadata() && !this.isMintMetadataCurrent()) {
         this.setStatusDetails({
           text: 'NFT metadata is stale. Refresh NFT Metadata to update the on-chain snapshot.',
@@ -1225,9 +1243,17 @@ export class EditorRoomSession {
     return this.roomPublishedAt === null || this.roomUpdatedAt !== this.roomPublishedAt;
   }
 
-  private async getRecoverableLocalDraft(remoteRecord: RoomRecord): Promise<RoomRecord | null> {
+  private async getRecoverableLocalDraft(remoteRecord: RoomRecord): Promise<{
+    record: RoomRecord;
+    conflictsWithServer: boolean;
+  } | null> {
+    const backup = readRoomDraftBackupMetadata(this.roomId);
+    if (backup && (backup.userId !== (getAuthDebugState().user?.id ?? null)
+      || !remoteRecord.permissions.canSaveDraft)) {
+      return null;
+    }
     const localRecord = await this.localRoomRepository.loadRoom(this.roomId, this.roomCoordinates);
-    if (isRoomSnapshotBlank(localRecord.draft)) {
+    if (!backup && isRoomSnapshotBlank(localRecord.draft)) {
       return null;
     }
 
@@ -1242,14 +1268,44 @@ export class EditorRoomSession {
       && !remoteRecord.published
       && !remoteRecord.mintedTokenId
       && isRoomSnapshotBlank(remoteRecord.draft);
-    if (!remoteIsUnclaimedPlaceholder && localDraftUpdatedAt <= remoteDraftUpdatedAt) {
+    const conflictsWithServer = Boolean(backup?.baseUpdatedAt && !remoteIsUnclaimedPlaceholder
+      && backup.baseUpdatedAt !== remoteRecord.draft.updatedAt);
+    if (!remoteIsUnclaimedPlaceholder && localDraftUpdatedAt <= remoteDraftUpdatedAt
+      && !backup) {
       return null;
     }
 
     return {
-      ...remoteRecord,
-      draft: cloneRoomSnapshot(localRecord.draft),
+      record: { ...remoteRecord, draft: cloneRoomSnapshot(localRecord.draft) },
+      conflictsWithServer,
     };
+  }
+
+  private offerLocalDraftRecovery(generation: number, remote: RoomRecord, local: RoomRecord): void {
+    this.editConflictPending = true;
+    const resolve = (restore: boolean): void => {
+      hideBusyOverlay();
+      if (this.isStale(generation)) return;
+      this.editConflictPending = false;
+      this.autoSaveBackoff = null;
+      if (restore) {
+        this.syncRoomMetadata(local);
+        this.serverDraftUpdatedAt = remote.draft.updatedAt;
+        this.host.applyRoomSnapshot(cloneRoomSnapshot(local.draft));
+        this.host.setRoomDirty(true);
+        this.setStatusText(`Recovered local draft. ${this.DRAFT_VISIBILITY_WARNING}`);
+      } else {
+        clearLocalRoomStorageEntry(this.roomId);
+      }
+      this.host.refreshUi();
+    };
+    showBusyError('This device has unsaved changes, and the account draft has changed. Choose which draft to continue editing.', {
+      title: 'Recover your room draft',
+      retryLabel: 'Restore Local',
+      retryHandler: () => resolve(true),
+      closeLabel: 'Use Account Draft',
+      closeHandler: () => resolve(false),
+    });
   }
 
   private getSnapshotTimestamp(snapshot: RoomSnapshot | null): number {
@@ -1412,11 +1468,19 @@ export class EditorRoomSession {
   }
 
   private async backupDraftLocally(): Promise<boolean> {
-    try {
-      await this.localRoomRepository.saveDraft(this.host.exportRoomSnapshot());
+    return this.backupDraftForPageExit();
+  }
+
+  backupDraftForPageExit(): boolean {
+    if (!this.host.getRoomDirty()) {
       return true;
-    } catch (error) {
-      console.warn('Failed to back up room draft locally', error);
+    }
+    try {
+      return writeRoomDraftBackup(this.host.exportRoomSnapshot(), {
+        userId: getAuthDebugState().user?.id ?? null,
+        baseUpdatedAt: this.serverDraftUpdatedAt,
+      });
+    } catch {
       return false;
     }
   }
@@ -1459,14 +1523,16 @@ export class EditorRoomSession {
     return true;
   }
 
-  private syncRoomMetadata(record: RoomRecord): void {
+  private syncRoomMetadata(record: RoomRecord, preserveCurrentTitle = false): void {
     this.serverDraftUpdatedAt = record.draft.updatedAt;
     this.roomId = record.draft.id;
     this.roomCoordinates = { ...record.draft.coordinates };
     this.roomVersion = record.draft.version;
     this.publishedVersion = record.published?.version ?? 0;
     this.canonicalVersion = record.canonicalVersion;
-    this.roomTitle = record.draft.title;
+    if (!preserveCurrentTitle) {
+      this.roomTitle = record.draft.title;
+    }
     this.roomCreatedAt = record.draft.createdAt;
     this.roomUpdatedAt = record.draft.updatedAt;
     this.roomPublishedAt = record.published?.publishedAt ?? null;
