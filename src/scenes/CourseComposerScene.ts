@@ -34,6 +34,7 @@ import {
   getActiveCourseDraftSessionRecord,
   getActiveCourseDraftSessionSelectedRoomId,
   isActiveCourseDraftSessionDirty,
+  hasActiveCourseDraftSessionUnsavedRooms,
   setActiveCourseDraftSessionRecord,
   setActiveCourseDraftSessionSelectedRoom,
   updateActiveCourseDraftSession,
@@ -152,7 +153,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   create(data?: CourseComposerSceneData): void {
     this.draftLifecycle = new EditorDraftLifecycle({
       isActive: () => this.scene.isActive(),
-      hasUnsavedChanges: () => isActiveCourseDraftSessionDirty(),
+      hasUnsavedChanges: () => isActiveCourseDraftSessionDirty() || hasActiveCourseDraftSessionUnsavedRooms(),
       flush: () => this.backupDebouncer.flush(),
     });
     this.draftLifecycle.start();

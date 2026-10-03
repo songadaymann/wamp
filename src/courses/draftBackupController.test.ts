@@ -171,6 +171,8 @@ describe('expanded draft backup scene controller', () => {
     expect(mock.choice).toHaveBeenCalledTimes(1);
     decide(false);
     expect(await conflicted).toBeNull();
+    expect(controller.mayRestoreSessionRoom(first.id)).toBe(false);
+    expect(controller.mayRestoreSessionRoom(second.id)).toBe(true);
     expect(backup.recoverRoom(record.draft.id, first).status).toBe('none');
     expect(backup.recoverRoom(record.draft.id, second).status).toBe('recovered');
   });

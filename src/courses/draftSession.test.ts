@@ -3,6 +3,9 @@ import { createDefaultCourseRecord, cloneCourseRecord } from './model';
 import {
   acknowledgeActiveCourseDraftSessionSave,
   clearActiveCourseDraftSession,
+  hasActiveCourseDraftSessionUnsavedRooms,
+  isActiveCourseDraftSessionRoomUnsaved,
+  setActiveCourseDraftSessionRoomUnsaved,
   getActiveCourseDraftSessionRecord,
   getActiveCourseDraftSessionPersistedDraft,
   isActiveCourseDraftSessionDirty,
@@ -47,4 +50,20 @@ describe('expanded-room session persistence baseline', () => {
     expect(getActiveCourseDraftSessionRecord()?.draft.id).toBe(next.draft.id);
     expect(getActiveCourseDraftSessionRecord()?.draft.title).toBe('Different room');
   });
+  it('keeps cell unsaved warnings across editor/composer handoff and removes them only for saved or removed cells', () => {
+    const record = createDefaultCourseRecord();
+    record.draft.roomRefs = [{ roomId: '1,2', coordinates: { x: 1, y: 2 }, roomVersion: 1, roomTitle: null }];
+    setActiveCourseDraftSessionRecord(record);
+    setActiveCourseDraftSessionRoomUnsaved('1,2', true);
+    expect(isActiveCourseDraftSessionDirty()).toBe(false);
+    expect(hasActiveCourseDraftSessionUnsavedRooms()).toBe(true);
+    setActiveCourseDraftSessionRecord(getActiveCourseDraftSessionRecord(), { preserveBaseline: true });
+    expect(isActiveCourseDraftSessionRoomUnsaved('1,2')).toBe(true);
+    setActiveCourseDraftSessionRoomUnsaved('1,2', false);
+    expect(hasActiveCourseDraftSessionUnsavedRooms()).toBe(false);
+    setActiveCourseDraftSessionRoomUnsaved('1,2', true);
+    updateActiveCourseDraftSession((draft) => { draft.roomRefs = []; });
+    expect(hasActiveCourseDraftSessionUnsavedRooms()).toBe(false);
+  });
+
 });

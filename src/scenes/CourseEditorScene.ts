@@ -49,6 +49,8 @@ import {
   getActiveCourseDraftSessionRoomOverride,
   getActiveCourseDraftSessionSelectedRoomId,
   isActiveCourseDraftSessionDirty,
+  isActiveCourseDraftSessionRoomUnsaved,
+  setActiveCourseDraftSessionRoomUnsaved,
   setActiveCourseDraftSessionRoomOverride,
   setActiveCourseDraftSessionSelectedRoom,
   updateActiveCourseDraftSession,
@@ -1852,22 +1854,24 @@ export class CourseEditorScene extends Phaser.Scene {
       : null;
     if (this.roomSlices.get(slice.roomId) !== slice || this.isShuttingDown) return;
     const override = record.permissions.canSaveDraft
-      ? getActiveCourseDraftSessionRoomOverride(slice.roomId) ?? recovered
+      ? recovered ?? (this.draftBackup.mayRestoreSessionRoom(slice.roomId) ? getActiveCourseDraftSessionRoomOverride(slice.roomId) : null)
       : null;
+    const overrideDirty = Boolean(recovered) || (Boolean(override) && isActiveCourseDraftSessionRoomUnsaved(slice.roomId));
     const snapshot = override ?? record.draft ?? record.published ?? null;
     if (!snapshot) {
       return;
     }
 
     this.applyStoredRoomRecordToSlice(slice, record, {
-      keepDirty: Boolean(override),
+      keepDirty: overrideDirty,
       keepOverride: Boolean(override),
     });
     slice.runtime.applyRoomSnapshot(cloneRoomSnapshot(snapshot));
     if (override) {
       slice.roomTitle = override.title;
       slice.label.setText(slice.roomTitle?.trim() || `${slice.coordinates.x},${slice.coordinates.y}`);
-      slice.runtime.isRoomDirty = true;
+      slice.runtime.isRoomDirty = overrideDirty;
+      setActiveCourseDraftSessionRoomUnsaved(slice.roomId, overrideDirty);
       setActiveCourseDraftSessionRoomOverride(slice.runtime.exportRoomSnapshot());
     }
     if (this.draftBackup.recoveryStatus) this.statusText = this.draftBackup.recoveryStatus;
@@ -1899,6 +1903,7 @@ export class CourseEditorScene extends Phaser.Scene {
     slice.label.setText(slice.roomTitle?.trim() || `${slice.coordinates.x},${slice.coordinates.y}`);
     slice.runtime.applyRoomSnapshot(cloneRoomSnapshot(snapshot));
     slice.runtime.isRoomDirty = options.keepDirty;
+    setActiveCourseDraftSessionRoomUnsaved(slice.roomId, options.keepDirty);
     if (options.keepOverride) {
       setActiveCourseDraftSessionRoomOverride(slice.runtime.exportRoomSnapshot());
     } else {
@@ -1937,6 +1942,7 @@ export class CourseEditorScene extends Phaser.Scene {
     if (!this.courseRecord) return;
     let saved = this.draftBackup.flushCourse();
     for (const slice of this.getDirtySlices()) {
+      setActiveCourseDraftSessionRoomUnsaved(slice.roomId, true);
       const base = this.roomBackupBases.get(slice.roomId);
       if (base) saved = this.draftBackup.writeRoom(this.courseRecord.draft.id, slice.runtime.exportRoomSnapshot(), base) && saved;
     }
@@ -1962,6 +1968,7 @@ export class CourseEditorScene extends Phaser.Scene {
       slice.permissions = record.permissions;
       slice.roomVersionHistory = record.versions;
       slice.runtime.isRoomDirty = true;
+      setActiveCourseDraftSessionRoomUnsaved(slice.roomId, true);
       setActiveCourseDraftSessionRoomOverride(slice.runtime.exportRoomSnapshot());
       this.flushDraftBackup();
     } else {
@@ -2006,6 +2013,7 @@ export class CourseEditorScene extends Phaser.Scene {
         keepDirty: false,
         keepOverride: options.keepOverride,
       });
+      setActiveCourseDraftSessionRoomUnsaved(slice.roomId, true);
       lastRecord = record;
     }
     this.statusText = successText;

@@ -33,6 +33,7 @@ export class CourseDraftBackupController {
   recoveryStatus: string | null = null;
   backupFailed = false;
   private ownedCourseBackup: CourseSnapshot | null = null;
+  private accountRoomChoices = new Set<string>();
   private recoveryQueue: Promise<void> = Promise.resolve();
 
   async open(record: CourseRecord, preserveSession: boolean): Promise<CourseRecord> {
@@ -42,6 +43,7 @@ export class CourseDraftBackupController {
     if (!preserveSession) this.ownedCourseBackup = null;
     this.backupFailed = false;
     this.recoveryStatus = null;
+    this.accountRoomChoices.clear();
     setActiveCourseDraftSessionRecord(record, { preserveBaseline: preserveSession });
     if (preserveSession && this.backup) {
       const base = getActiveCourseDraftSessionPersistedDraft();
@@ -112,9 +114,14 @@ export class CourseDraftBackupController {
         return recovery.snapshot;
       }
       this.currentBackup()?.discardRoom(courseId, recovery.snapshot);
+      this.accountRoomChoices.add(remote.id);
       this.recoveryStatus = 'Loaded the account draft.';
     }
     return null;
+  }
+
+  mayRestoreSessionRoom(roomId: string): boolean {
+    return !this.accountRoomChoices.has(roomId);
   }
 
   writeRoom(courseId: string, snapshot: RoomSnapshot, base: Pick<RoomSnapshot, 'id' | 'updatedAt' | 'version'>): boolean {
