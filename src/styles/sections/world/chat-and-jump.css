@@ -119,6 +119,32 @@ body[data-app-mode='editor'] #global-chat.is-open {
   box-shadow: 3px 3px 0 #18161c;
 }
 
+/* The chat button lives in the bar below the game (#bottom-bar). The floating copy inside the
+   chat panel is only used in the phone editor, where that bar is hidden. */
+#bottom-bar .world-footer-controls-btn.chat-footer-toggle {
+  display: none;
+  gap: 6px;
+}
+
+body[data-app-mode='world'] #bottom-bar .world-footer-controls-btn.chat-footer-toggle,
+body[data-app-mode='play-world'] #bottom-bar .world-footer-controls-btn.chat-footer-toggle,
+body[data-app-mode='editor'] #bottom-bar .world-footer-controls-btn.chat-footer-toggle {
+  display: inline-flex;
+}
+
+#global-chat .chat-toggle-floating {
+  display: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-open) .chat-toggle-floating {
+  display: inline-flex;
+}
+
+/* Sit left of the menu button instead of under it. */
+body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-open) {
+  right: calc(60px + var(--safe-right));
+}
+
 .chat-panel-body {
   width: 100%;
   display: flex;
@@ -372,4 +398,22 @@ body[data-app-mode='editor'] #global-chat.is-open {
   line-height: 1.1;
   text-transform: uppercase;
   box-shadow: 3px 3px 0 #18161c;
+}
+
+#bottom-bar .chat-footer-toggle .chat-unread-badge {
+  min-width: 14px;
+  padding: 1px 4px 0;
+  border-width: 1px;
+  box-shadow: none;
+  font-size: 7px;
+}
+
+/* In the desktop/tablet editor a tall chat window used to run up under the editor toolbar and
+   hide its Close button; keep it inside the room area. */
+body:not([data-device-class='phone'])[data-app-mode='editor'] #global-chat.is-open {
+  top: calc(12px + var(--safe-top));
+}
+
+body:not([data-device-class='phone'])[data-app-mode='editor'] #global-chat.is-open .chat-panel-body {
+  max-height: 100%;
 }

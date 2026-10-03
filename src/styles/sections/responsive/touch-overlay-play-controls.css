@@ -51,20 +51,7 @@ body[data-mobile-touch-play-layout='overlay'] .mobile-play-actions {
   bottom: calc(10px + var(--safe-bottom));
 }
 
-/* Tablets park World Chat under the menu in the top-right, where the goal box also sits, so the
-   goal box moves to the top centre during play. */
-body[data-mobile-touch-play-layout='overlay'][data-device-class='tablet'] .world-goal-panel {
-  right: auto;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-/* Phones keep World Chat and Say along the bottom; leave a clear gap from the action buttons. */
-body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] #global-chat:not(.is-open) {
-  right: calc(224px + var(--safe-right));
-  width: min(280px, calc(100vw - 424px - var(--safe-left) - var(--safe-right)));
-}
-
+/* Phones keep the Say button along the bottom; leave a clear gap from the action buttons. */
 body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] #btn-world-room-chat {
   right: calc(224px + var(--safe-right));
 }

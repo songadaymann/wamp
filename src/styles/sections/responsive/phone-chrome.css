@@ -28,13 +28,13 @@ body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-center {
   width: 100%;
   flex-wrap: nowrap;
   justify-content: center;
-  gap: 5px;
+  gap: 3px;
 }
 
 body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-btn,
 body[data-device-class='phone'][data-app-mode='world'] #bottom-bar #world-online-count {
   min-height: 30px;
-  padding: 4px 6px;
+  padding: 4px 5px;
   border-radius: 0;
   font-size: 7px;
   white-space: nowrap;

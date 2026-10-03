@@ -794,7 +794,13 @@ export class OverworldHudBridge {
   }
 
   private renderPlayersOnline(viewModel: OverworldHudViewModel): void {
-    this.setText(this.playersOnlineEl, viewModel.playersOnlineText);
+    // Phones fit the whole footer (including Chat) in one row with the short "N online" form.
+    this.setText(
+      this.playersOnlineEl,
+      this.doc.body.dataset.deviceClass === 'phone'
+        ? viewModel.playersOnlineText.replace(/ (?:person|people) online$/, ' online')
+        : viewModel.playersOnlineText,
+    );
     this.setText(this.playersOnlinePopoverSummaryEl, viewModel.playersOnlineSummaryText);
 
     const showPlayersOnline = viewModel.playersOnlineText.trim().length > 0;

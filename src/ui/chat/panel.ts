@@ -40,10 +40,11 @@ const RENDERED_MENTION_PATTERN = /(^|[^A-Za-z0-9_-])(@[A-Za-z0-9][A-Za-z0-9_-]{2
 
 type ChatElements = {
   root: HTMLElement | null;
-  toggleButton: HTMLButtonElement | null;
+  // The main toggle sits in the bar below the game; a floating copy covers the phone editor,
+  // where that bar is hidden.
+  toggleButtons: HTMLButtonElement[];
   body: HTMLElement | null;
   closeButton: HTMLButtonElement | null;
-  unreadBadge: HTMLElement | null;
   messages: HTMLElement | null;
   empty: HTMLElement | null;
   form: HTMLFormElement | null;
@@ -169,10 +170,9 @@ export class ChatPanelController {
   ) {
     this.elements = {
       root: this.doc.getElementById('global-chat'),
-      toggleButton: this.doc.getElementById('btn-chat-toggle') as HTMLButtonElement | null,
+      toggleButtons: Array.from(this.doc.querySelectorAll<HTMLButtonElement>('[data-chat-toggle]')),
       body: this.doc.getElementById('global-chat-body'),
       closeButton: this.doc.getElementById('btn-chat-close') as HTMLButtonElement | null,
-      unreadBadge: this.doc.getElementById('chat-unread-badge'),
       messages: this.doc.getElementById('chat-messages'),
       empty: this.doc.getElementById('chat-empty'),
       form: this.doc.getElementById('chat-form') as HTMLFormElement | null,
@@ -195,7 +195,9 @@ export class ChatPanelController {
     this.elements.form?.setAttribute('autocomplete', 'off');
     this.elements.input?.setAttribute('maxlength', String(CHAT_MESSAGE_MAX_LENGTH));
     this.suppressBrowserInputHistory();
-    this.elements.toggleButton?.addEventListener('click', this.handleToggleClick);
+    for (const button of this.elements.toggleButtons) {
+      button.addEventListener('click', this.handleToggleClick);
+    }
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.form?.addEventListener('submit', this.handleFormSubmit);
     this.elements.input?.addEventListener('input', this.handleComposerInput);
@@ -220,7 +222,9 @@ export class ChatPanelController {
 
   destroy(): void {
     this.destroyed = true;
-    this.elements.toggleButton?.removeEventListener('click', this.handleToggleClick);
+    for (const button of this.elements.toggleButtons) {
+      button.removeEventListener('click', this.handleToggleClick);
+    }
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.form?.removeEventListener('submit', this.handleFormSubmit);
     this.elements.input?.removeEventListener('input', this.handleComposerInput);
@@ -716,15 +720,14 @@ export class ChatPanelController {
       this.elements.body.classList.toggle('hidden', !this.open);
     }
 
-    if (this.elements.unreadBadge) {
-      this.elements.unreadBadge.textContent = String(this.unreadCount);
-      this.elements.unreadBadge.classList.toggle('hidden', this.unreadCount <= 0);
-    }
-
-    if (this.elements.toggleButton) {
-      this.elements.toggleButton.textContent = this.open ? 'World Chat -' : 'World Chat +';
-      if (this.elements.unreadBadge) {
-        this.elements.toggleButton.appendChild(this.elements.unreadBadge);
+    for (const button of this.elements.toggleButtons) {
+      const badge = button.querySelector<HTMLElement>('.chat-unread-badge');
+      button.textContent = this.open ? 'Chat -' : 'Chat +';
+      button.setAttribute('aria-expanded', this.open ? 'true' : 'false');
+      if (badge) {
+        badge.textContent = String(this.unreadCount);
+        badge.classList.toggle('hidden', this.unreadCount <= 0);
+        button.appendChild(badge);
       }
     }
 
