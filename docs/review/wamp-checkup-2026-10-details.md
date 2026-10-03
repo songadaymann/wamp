@@ -5262,25 +5262,208 @@ Security, safety or anti-cheat item; details withheld from this public repo unti
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F208: details withheld
+### F208: Students can chat with strangers, including anonymous guests, through in-room speech bubbles
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** School/classroom accounts, Worlds pilot and Jam modes
+- **Type:** defect · **impact:** high · **effort:** small
 
-### F209: details withheld
+**Summary.** Classroom accounts are blocked from World Chat, comments and the guestbook, but in-room 'Say' bubbles have no student check. A student can talk to anyone standing in the same room, and anyone can talk to them, including signed-out guests who picked their own name. Students can also read all of the public World Chat. For a school product, this open two-way channel between kids and strangers is the biggest child-safety gap.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Technical detail.**
 
-### F211: details withheld
+The PartyKit identity token carries no school flag. presence/routes.ts:47-49 signs only {userId, displayName, avatarId} plus a `source`. presenceServer.ts:800-818 parseIdentity then throws away even `source`, and ConnectionPresenceState (src/partykit/presenceProtocol.ts:54-62) has no school or guest field. handleRoomChatSay (presenceServer.ts:837-879) checks only channel, play mode, length and rate. The one gate is client-side (src/presence/roomChat.ts:166-170, authenticated only, no schoolManaged check), so even guests can send by hand-crafting a websocket message. Guest display names are chosen by the client (presence/routes.ts:89-104). Fix: (1) add `school: boolean` (or classroomId) and keep `source` in PartyKitIdentityTokenClaims when minting (auth.school is already in scope in handlePresenceIdentityTokenIssue via loadOptionalRequestAuth), and store both in ConnectionPresenceState. (2) In handleRoomChatSay, drop messages from guest or school senders, and in the sendRoomChatMessage filter skip delivery to school connections, or deliver only between connections with the same classroomId if a classroom chat is wanted later. (3) Apply the same filter to PvP invites (handlePvpInvite, presenceServer.ts:881) so strangers cannot pull students into matches. (4) On the client, hide the Say composer when schoolManaged. Also consider hiding World Chat message bodies for school accounts; panel.ts:762-764 currently shows them in read-only mode.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Evidence.**
 
-### F210: details withheld
+- partykit/presenceServer.ts:837-879 — handleRoomChatSay has no school/guest/source check before broadcasting to everyone in the room
+- partykit/presenceServer.ts:800-818 — parseIdentity keeps userId/displayName/avatarId only; token `source` is discarded
+- src/cloudflare/worker/presence/routes.ts:47-49 — identity token minted from auth.user without any school claim
+- src/cloudflare/worker/presence/routes.ts:89-104 — guest identity uses client-supplied displayName
+- src/presence/roomChat.ts:166-170 — only client-side gate is `authenticated`; no schoolManaged check
+- src/ui/chat/panel.ts:762-764 — 'Classroom accounts can read chat, but cannot post.'
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Fact-check (confirmed, confirmed, confirmed).**
 
-### F219: details withheld
+No core correction needed. A few small additions and nuances:
+1. Guests cannot send bubbles from the normal UI. The send function (roomChat.ts:166) and the composer (overworld/roomChat.ts:228) are both gated on sign-in, so a guest has to hand-craft a websocket message, as the claim says. The everyday risk is any signed-in non-school stranger who is in the same room as a student. Guests do receive and read bubbles.
+2. Room-chat bubbles also skip the World Chat ban list and have no content filter. normalizeRoomChatText only trims the text and checks its length. So a user banned from World Chat can still send bubbles to students.
+3. PvP invites (relayProtocol.ts:49-74) carry no free text, so they are a lower-risk vector than the bubbles.
+4. The fix also needs a client gate in OverworldRoomChatController.openComposer (src/scenes/overworld/roomChat.ts:228), not only in WorldRoomChatClient.send.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+No core correction needed. Two additions:
+- normalizeRoomChatText (src/partykit/relayProtocol.ts:17-21) has no word filtering, so guest text and guest display names go out unfiltered.
+- The client-side check that allows only signed-in players is duplicated in src/scenes/overworld/roomChat.ts:225-226 and 410-415 (opening the composer and disabling its input). That file needs the same schoolManaged check as src/presence/roomChat.ts:166-170.
+
+**Guest part of the summary is overstated.**
+- A signed-out guest cannot send a bubble through the normal UI. Both `src/presence/roomChat.ts:167` and `OverworldRoomChatController.openComposer` require a signed-in account.
+- Guest names are not chosen through the UI. They are auto-generated as "Guest xxxx" (`src/presence/worldPresence.ts:858-861`).
+- A guest can only send, or pick a custom name, by hand-crafting the token request or the websocket message. The server does accept that.
+- Guests can, however, read students' bubbles. They open a room-chat socket and the broadcast filter at `presenceServer.ts` handleRoomChatSay does not exclude them.
+- So the realistic exposure is: any signed-in non-school user can talk with students both ways, and guests can watch.
+
+**Understated, worth adding to the same fix:**
+- The presence server never enforces chat bans either: no ban, moderation or report references in `partykit/presenceServer.ts`. A user banned from World Chat can still use in-room bubbles.
+- There is no profanity filter on room chat (`relayProtocol.ts:17-21`).
+
+**Implementation notes for the fix:**
+- `verifyPartykitIdentityToken` rebuilds the identity field by field (`identityToken.ts:195-212`), so its parsing must be extended to carry the new school claim.
+- Tokens issued before deploy will lack the claim until they expire.
+- The PartyKit server and the Worker are deployed separately, so both deploys are needed.
+
+**PvP invites:** `handlePvpInvite` (`presenceServer.ts:881-911`) has no school check, so the point is valid. Risk is lower because an invite carries only identity, no free text.
+
+### F209: School restrictions are opt-in per route, so many public-posting paths are still open to students
+
+- **Area:** School/classroom accounts, Worlds pilot and Jam modes
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Each feature has to remember to block students on its own, and many don't. A student can rename themselves to any public name, publish public playlists with free-text descriptions, create public Wamp-O-Gram cards with messages, share pixel-art sprites to the public catalog, and create bot 'agents' with public names. The intended 'students can't post text' rule is easy to get around, and the only test checks that certain words appear in the source code.
+
+**Technical detail.**
+
+assertNotSchoolRestricted (school/restrictions.ts:4-10) is called only in roomComments, chat, backgroundImages, guestbook and profiles. Gaps: POST /api/auth/display-name (auth/routes.ts:403-430) has no school check, while the profile endpoint blocks the same change (profiles/routes.ts:129). Playlists create/update (playlists/routes.ts:54+) store title (60 characters) and description (280 characters) publicly. Wamp-O-Gram POST (wampOGram/routes.ts:29-39) stores title, message, sender/recipient names and a third party's recipientEmail. Custom sprite PUT (customSprites/routes.ts:66-79) and agent creation (agents/routes.ts:68-83) use requireCurrentSession (auth/request.ts:18-30), which never loads school context and never checks whether the classroom is disabled. API token creation (auth/routes.ts:467-475) has the same issue. Fix: switch to deny-by-default. In src/cloudflare/worker.ts, before dispatch, when the method is POST/PUT/PATCH/DELETE and the session resolves to auth.school, return 403 unless the path matches an explicit SCHOOL_ALLOWED_MUTATIONS list (room draft/publish/revert, runs, avatar select, presence identity token, logout, music phrases if desired). Make requireCurrentSession call the same school/disabled resolution. Replace routes.contract.test.ts (a readFileSync string grep) with a table-driven test that sends every mutating route with a school RequestAuth and expects 403 unless the route is allow-listed. New routes then fail closed.
+
+**Evidence.**
+
+- src/cloudflare/worker/school/restrictions.ts:4-10 — per-route opt-in guard
+- src/cloudflare/worker/auth/routes.ts:403-430 — handleUpdateDisplayName: no school check
+- src/cloudflare/worker/profiles/routes.ts:129 — the profile path blocks the same change ('edit profile text')
+- src/cloudflare/worker/customSprites/routes.ts:66-79 — public sprite catalog PUT via requireCurrentSession
+- src/cloudflare/worker/auth/request.ts:18-30 — requireCurrentSession does not attach school context or check disabled classrooms
+- src/cloudflare/worker/wampOGram/routes.ts:29-39 — public card creation with free-text message, no school check
+- src/cloudflare/worker/agents/routes.ts:68-83 — students can create agents with public display names
+- src/cloudflare/worker/school/routes.contract.test.ts:4-17 — only test is a source-text grep
+
+**Fact-check (partially confirmed, partially confirmed, partially confirmed).**
+
+1) Display name and playlists can only be changed through the API, because the client already hides both from students. The display-name row only appears when the user has no saved name (auth/client.ts:1096). Playlist creation is hidden whenever isSchoolAvatarOnlyEdit is true (profileModal.ts:573, 655, 1312). The real defect is that the server does not enforce what the UI intends.
+
+2) Agents and API tokens have no client UI, so they too are reachable only through the API. API tokens and agent tokens are not a restriction bypass. When a token is used, loadOptionalRequestAuth calls requireEnabledSchoolContext (request.ts:89, 273-279), which attaches the student's school context again and rejects disabled accounts. Students minting tokens is a minor issue.
+
+3) The missing disabled-classroom check in requireCurrentSession matters little in practice. Disabling a student deletes their sessions (school/store.ts:341-343). No route disables a classroom; nothing in the code runs UPDATE school_classrooms.
+
+4) Wamp-O-Grams are unlisted links with random slugs, not a public feed. recipientEmail is stored, but makePublicWampOGramRecord strips it, and no email is ever sent (delivery_status is 'draft', store.ts:~98).
+
+5) The gaps students can actually reach through the normal UI are these two:
+- Custom sprites (pixel art plus a 32-character name) are synced to the public catalog automatically for any signed-in user (customSprites/sync.ts:103-125). This contrasts with background-image uploads, which are blocked for students.
+- Wamp-O-Gram creation (wampOGramModal.ts:226, which only checks that the user is signed in).
+
+6) The proposed fix still stands. Router.ts already has an unused `auth` field on each route, which is a natural place for a deny-by-default gate. The gate also has to cover the hand-written if-chain in worker.ts, not just the route table.
+
+1. "requireCurrentSession never checks disabled" mostly doesn't apply. Disabling a student deletes all their sessions (school/store.ts:341-342 runs `DELETE FROM sessions WHERE user_id = ?`), so a disabled student has no session to use. The gap only matters for a classroom-level disable (`c.disabled_at`). No API route sets that; the school routes only expose per-student disable/enable (school/routes.ts:97-113). So it is a minor gap for manual DB disables, not a live hole.
+2. Letting students create API tokens is not a real bypass. When any bearer token (API token or agent token) is used, the code re-attaches the owner's school context through requireEnabledSchoolContext (auth/request.ts:79-89). Agent tokens are covered the same way, because agent auth sets user = owner (agents/store.ts:365-376). Existing guards still apply to those tokens.
+3. Agents have no client UI. Nothing outside the worker calls /api/agents, so that path is API-only. The display-name path is also mostly API-only: the UI hides the rename row once a name is saved (auth/client.ts:1096). It still works through a hand-made request from devtools on wamp.land. Playlists, Wamp-O-Gram and custom sprites, though, are reachable through the normal UI.
+4. school/routes.contract.test.ts:8-17 is a source-text grep, but it tests the teacher enable/disable toggle, not student restrictions. The accurate statement is that no server-side test covers school restrictions at all. The only restriction-related test is client-side UI state (src/scenes/overworld/roomCommentsComposerController.test.ts:90).
+5. Wamp-O-Gram's recipientEmail is stored and is not returned in public responses (wampOGram/model.ts:46-47, 85). It is not publicly exposed, but a student can still enter a third party's email address.
+The suggested fix (deny-by-default mutation allowlist plus a table-driven route test) is still appropriate. Any allowlist must account for room publish carrying free-text titles.
+
+What's real: playlists (always public, listed on student profiles, title up to 60 characters and description up to 280) and Wamp-O-Gram share cards (title, message and names) have no school check in either the API or the UI, so students can create them through normal use. Custom sprite catalog sharing is also ungated. The only worker-side school test is a source-text grep.
+
+Corrections:
+- Display-name rename, agent creation and API token creation are API-only for students. The UI hides the display-name row once a name exists, and no client code calls /api/agents or /api/auth/tokens.
+- Token and agent auth still carry the owner's school context, so they don't get around the existing chat and comment blocks.
+- The disabled-classroom gap in requireCurrentSession hardly matters: disabling a student deletes their sessions, and no route can disable a whole classroom.
+- recipientEmail is never emailed (cards stay 'draft') and is removed from the public record. Wamp-O-Grams are unlisted links, not a public feed.
+- Rooms already allow public free text through titles (40 characters) and sign objects (signText). A "students can't post text" rule never existed, and the proposed allowlist, which keeps room publish, wouldn't create one. First decide the policy: block social and communication channels only, or also moderate creative text.
+
+Recommended fix order: (1) add assertNotSchoolRestricted to playlist create/update, the Wamp-O-Gram POST, custom sprite PUT, display-name, agent create and token create, and hide those buttons when schoolManaged (small). (2) Add real request-level tests that send a school RequestAuth to each route. (3) Optionally, a deny-by-default guard in dispatch (medium effort, because the allowlist is long and the school lookup adds a query per request).
+
+### F211: Student login can be brute-forced, and accounts that were never logged into can be taken over
+
+- **Area:** School/classroom accounts, Worlds pilot and Jam modes
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** The student login has no limit on wrong guesses, and the starting passwords come from a small pool of about 400,000 combinations. Anyone who knows the classroom link and a student's username could keep guessing. If they guess a temporary password before the student first logs in, they get to set the new password and take the account. Also, when a teacher clicks 'Reset Password', anyone already logged in as that student stays logged in.
+
+**Technical detail.**
+
+handleStudentLogin (school/routes.ts:123-136) has no throttle, unlike the email code flow, which caps at 5 attempts (auth/routes.ts:303-307). Temporary passwords are word-word-NNN from 22 words × 21 × 900, about 415k (school/store.ts:25-48, 692-700). The first valid temporary password plus newPassword sets a password of the caller's choice (store.ts:375-402). An unknown username returns 401 before PBKDF2 runs, while a known one runs 100k iterations (store.ts:363-371), which leaks valid usernames through timing. Every guess also burns 100k PBKDF2 iterations of Worker CPU with no limit (store.ts:19). Classroom slugs can be looked up publicly (school/routes.ts:60-64) and default to the display name (store.ts:112). Reset does not revoke sessions (store.ts:281-289), but disable does (store.ts:341-343). Fix: (a) add a school_login_attempts table keyed by (classroom_id, lower(username)) and a hashed IP; after 8 failures in 15 minutes return 429 and show 'ask your teacher'. (b) On a missing username, verify against a fixed dummy hash so timing matches. (c) Use 3 words from a ~250-word list plus 2 digits (~1.5B), or have the teacher hand out a one-time 6-digit activation code that expires in 7 days. (d) Add DELETE FROM sessions WHERE user_id=? to resetSchoolStudentPassword. (e) Reject very common passwords such as 'password' and '12345678', since the current minimum is just 8 characters (store.ts:686).
+
+**Evidence.**
+
+- src/cloudflare/worker/school/routes.ts:123-136 — no rate limit or attempt counter
+- src/cloudflare/worker/school/store.ts:25-48 and 692-700 — 22-word list, word-word-NNN
+- src/cloudflare/worker/school/store.ts:363-371 — unknown username short-circuits before PBKDF2 (timing oracle)
+- src/cloudflare/worker/school/store.ts:375-402 — temporary password plus newPassword sets the attacker's password
+- src/cloudflare/worker/school/store.ts:281-289 — reset leaves existing sessions alive (contrast 341-343)
+- src/cloudflare/worker/auth/routes.ts:303-307 — email codes are capped at 5 attempts; student passwords are not
+
+**Fact-check (confirmed, confirmed, partially confirmed).**
+
+Every cited fact checks out; only the framing needs adjusting. (1) Takeover via temporary password works only while password_reset_required=1, i.e. before first login or after a teacher reset. The attacker must win that race, and it takes about 200k online guesses on average (out of about 415-436k combinations). (2) The steadier risk is guessing student-chosen passwords: the minimum is 8 characters with no blocklist (store.ts:686), and there is no throttle. (3) The fix can use Cloudflare's built-in Workers Rate Limiting binding (a ratelimits entry in wrangler.jsonc), keyed by classroom+username and by IP, instead of a new D1 table. Either works. Pair it with a dummy-hash verify when the username is unknown and a DELETE FROM sessions WHERE user_id=? in resetSchoolStudentPassword's batch (store.ts:281-289).
+
+The password pool is about 22×22×900 ≈ 436k, not 22×21×900. generateStudentPassword (store.ts:692-700) re-rolls the second word only once, so the same word can appear twice. The difference doesn't matter.
+
+The claim also understates the risk. An attacker doesn't have to target one student. They can try the same guesses against every student in a classroom who hasn't logged in yet. With 30 such students, roughly 7k guesses are expected to take over some account, compared with about 218k for a single student. That makes the per-classroom IP/username lockout in fix (a), together with longer temporary passwords or activation codes in fix (c), the priority.
+
+The route table at worker.ts:166 marks /api/school as 'authenticated', but the router never enforces that label (core/router.ts:26-40). It looks protected but isn't, and it should be corrected or enforced.
+
+How bad this is depends on how many classrooms are live, which the code alone can't show.
+
+The core claim is real. No rate limit or lockout exists on POST /api/school/classrooms/:slug/student-login (the router's 'authenticated' tag isn't enforced, core/router.ts:26-40). Temporary passwords are about 416k combinations. A guessed temporary password lets the guesser take over an account that hasn't been activated yet. Reset doesn't revoke sessions, and sessions last 30 days (auth/store.ts:23). Corrections:
+(1) The timing-oracle sub-point is close to moot, because student usernames are their public display_name (store.ts:222-225).
+(2) The 'burns Worker CPU' point is negligible in cost and needs a valid username.
+(3) Brute-forcing the temporary password only works while password_reset_required=1, usually a short window in a classroom. The more realistic exposures are reset not revoking sessions and unlimited guessing of weak passwords students chose themselves.
+(4) For the rate-limit design, don't key the lockout mainly on IP, because a school shares one NAT address and the whole class would get locked out. Key on (classroom_id, username), have teacher reset clear the counter, and add a generous IP limit only as a backstop. Cloudflare's Workers Rate Limiting binding is a simpler option than a new D1 table.
+Priority order: (d) add DELETE FROM sessions to the reset; then the per-username attempt cap; then the longer temporary passwords and the common-password blocklist.
+
+### F210: Student accounts can link a personal email or crypto wallet and then mint paid NFTs
+
+- **Area:** School/classroom accounts, Worlds pilot and Jam modes
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** A signed-in student can attach their own email address or crypto wallet to the school account. From then on they can sign in outside the teacher's classroom login, and with a wallet attached they can pay to mint rooms as NFTs on Base. A school-managed child account should not be able to collect a personal email, connect a wallet, or spend money.
+
+**Technical detail.**
+
+handleRequestMagicLink (auth/routes.ts:178-195): when an existing session has no email, the purpose becomes 'link_email' and the email is attached on verify (auth/routes.ts:271/319, attachEmailToUser). There is no auth.school check. handleWalletVerify (auth/routes.ts:574-585) calls attachWalletToUser for any existing session. Mint prepare only needs a linked wallet (mint/routes.ts:32 requireWalletLinkedRequestAuth). Students are created with email/wallet NULL (school/store.ts:222-225), so the system assumes they stay that way. Fix: when existingAuth.school is set, reject link_email and wallet link with 403 'Classroom accounts can't link email or wallets'. Add school to the mint prepare/confirm deny list (or the deny-by-default gate in the previous finding). Hide the link and mint UI when schoolManaged. Also add a one-off D1 audit query for school users that already have email or wallet_address set.
+
+**Evidence.**
+
+- src/cloudflare/worker/auth/routes.ts:178-195 — existing session plus no email becomes purpose 'link_email'; no school check
+- src/cloudflare/worker/auth/routes.ts:574-585 — wallet attached to any existing session auth
+- src/cloudflare/worker/mint/routes.ts:32 — mint gated only by requireWalletLinkedRequestAuth
+- src/cloudflare/worker/school/store.ts:222-225 — students are created with NULL email/wallet
+
+**Fact-check (confirmed, confirmed, partially confirmed).**
+
+Clarifications to the claim:
+
+- **The account stays classroom-managed after linking.** auth/request.ts:93-104 re-attaches the school context on every request, so the existing chat, comment and profile restrictions still apply. Teacher disable also still works, because a disabled student's session is deleted. What the student gains is a way to sign in that a teacher's password reset does not shut off. The bigger problem is that the account now holds a personal email or wallet.
+
+- **Minting is limited to rooms in the main world.** World rooms always return canMint false (worlds/access.ts:176). The mint fee comes from the student's own funded wallet, not a stored card.
+
+- **The client fix belongs in auth/client.ts renderAuthUi (lines 1073-1091).** For school accounts it should hide the "Add Email" row and the wallet button, not just the mint UI.
+
+Everything the claim says is accurate, with three clarifications. (1) There is now a second way to attach an email: the six-digit code verify at routes.ts:319 (handleVerifyEmailCode), alongside the magic-link verify at routes.ts:271. Both need the school check. (2) Signing in by email or wallet does not drop the school restrictions. School context is looked up by user_id on every request (auth/request.ts:248-266), so chat, comment and profile limits still apply and a teacher disabling the student still ends the session. The escape is a login the teacher's password reset can't revoke, plus a child's personal email and wallet being stored. (3) All four mint handlers (mint/routes.ts:32, 107, 149, 217) need the guard, not only prepare and confirm. The client is also part of the problem: renderAuthUi (src/auth/client.ts:1073-1092) offers 'Add Email' and the wallet button to student accounts.
+
+The core claim holds: there is no server or client gate on students linking an email or wallet, or on minting. Three details need correcting.
+1. Linking does not let a student escape teacher control. School context is re-attached by user_id on every request (auth/request.ts:93-97, 249-257). Teacher disable still ends email or wallet sessions, and the chat, comment and profile restrictions still apply.
+2. Minting requires a self-custodial Base wallet the child already holds and has funded with ETH, plus a claimed Prime-world room. There is no stored payment method, so "spend money" is rare.
+3. The main real harm is that the auth panel (src/auth/client.ts:1074-1091) shows every student an "Add Email" prompt, which collects a child's personal email and blocks that email for future use. Wallet linking and a permanent public on-chain mint are smaller, rarer risks.
+
+Impact is medium rather than high: this is a pilot-scale feature, and the main consequence is privacy and compliance, not loss of control. Effort remains small.
+
+### F219: Student logins last 30 days on shared school computers
+
+- **Area:** School/classroom accounts, Worlds pilot and Jam modes
+- **Type:** improvement · **impact:** medium · **effort:** small
+
+**Summary.** When a student signs in, they stay signed in for a month. School laptops are often shared, so the next kid who opens WAMP on that laptop is playing, building and publishing as the previous student. Class accounts should sign out at the end of the school day.
+
+**Technical detail.**
+
+Student login calls the generic createSession (school/routes.ts:149), which always uses SESSION_MAX_AGE_SECONDS = 30 days (auth/store.ts:23, 966-971). The cookie Max-Age matches (auth/request.ts createSessionCookie). Fix: add an optional ttlSeconds parameter to createSession and pass about 10 hours for school logins, with a matching cookie Max-Age. Add a visible 'Not you? Switch student' button in the game HUD when schoolManaged that calls /api/auth/logout and returns to school-login.html?classroom=slug (the slug is already in auth.school.classroomSlug).
+
+**Evidence.**
+
+- src/cloudflare/worker/auth/store.ts:23 — SESSION_MAX_AGE_SECONDS = 30 days
+- src/cloudflare/worker/auth/store.ts:966-971 — createSession has no TTL override
+- src/cloudflare/worker/school/routes.ts:149 — student login uses the default session
+
+**Fact-check (confirmed).**
+
+A Logout button already exists. It is index.html:197, shown for school students too (auth/client.ts:1098). The real gap is that it is hidden in the menu and does not return to school-login.html?classroom=slug. The fix should reuse or redirect that button rather than add a separate logout path. When you add a ttlSeconds option, pass it to both createSession (store.ts:966) and createSessionCookie (request.ts:142); right now both read the single SESSION_MAX_AGE_SECONDS constant.
 
 ### F212: details withheld
 
@@ -5590,9 +5773,31 @@ Security, safety or anti-cheat item; details withheld from this public repo unti
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F190: details withheld
+### F190: In-room chat bubbles skip sign-in and chat bans on the server
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Trust & safety, moderation, ops & observability
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Only the game's own interface keeps guests and chat-banned players from talking in a room. The multiplayer server itself doesn't check either. Someone who connects directly can chat in rooms with no account, under any name they type (including 'jonathan'), even after being banned. Nothing is logged, so there's no evidence to act on.
+
+**Technical detail.**
+
+`/api/presence/identity-token` issues guest tokens with a caller-supplied displayName, up to 32 chars, with no filter (presence/routes.ts:88-100; identityToken.ts:81-98). `parseIdentity` keeps only channel/userId/displayName/avatarId and drops `source` (partykit/presenceServer.ts:800-816). `handleRoomChatSay` checks only the channel, play mode and a 1s rate limit before broadcasting (presenceServer.ts:837-876). The sign-in gate lives only in the client (scenes/overworld/roomChat.ts:226, 410-415). Fix: (1) add `source` and `chatBanned` claims to the identity token. The Worker already has `resolveChatModerationViewer` to compute the ban when issuing. (2) In handleRoomChatSay, drop messages when `source !== 'auth' || chatBanned`. (3) Have the server generate guest display names ('Guest 4aao') and stop accepting them from the request body. (4) Run the shared text filter (see the separate text-filter finding) on room-chat text. (5) Keep a 24h ring buffer of the last 200 room-chat lines per shard in PartyKit storage, so a future Report button can attach evidence.
+
+**Evidence.**
+
+- partykit/presenceServer.ts:837-876 — room chat broadcast with no auth-source or ban check
+- partykit/presenceServer.ts:800-816 — identity parsing drops the token's `source`
+- src/cloudflare/worker/presence/routes.ts:88-100 — guest tokens accept caller-chosen displayName
+- src/scenes/overworld/roomChat.ts:410-415 — sign-in requirement enforced only by disabling the input client-side
+
+**Fact-check (confirmed).**
+
+1. **Chat bans are not enforced anywhere for in-room chat, not even in the game's interface.** The summary says the interface keeps banned players out. It doesn't: `openComposer` (src/scenes/overworld/roomChat.ts:220-243), `renderComposer` (roomChat.ts:410-415) and `RoomChatClient.send` (src/presence/roomChat.ts:166-170) check only `authenticated`, never `chatModeration.banned`. Only the global chat panel checks bans (src/ui/chat/panel.ts:304, 767). So a banned signed-in player can post room-chat bubbles through the normal UI, with no direct connection needed. The client fix is to also disable the composer when `getAuthDebugState().chatModeration.banned` is true.
+
+2. **The name-impersonation point is overstated for chat.** Bubbles show only the message text, not the sender's name (createRenderedBubble, roomChat.ts:509-537). A bubble appears only when the sender also has a visible ghost with the same userId in that room (resolveBubbleAnchor, roomChat.ts:476-505). So an attacker has to publish presence too, which is easy with the same token. The 'jonathan' name would show up on the ghost and in presence lists. That comes from free-form guest presence names in general (also editable in localStorage, worldPresence.ts:840-860), not from chat specifically.
+
+3. **Implementation note:** the token is checked only in `onConnect` (presenceServer.ts:197), and the socket stays open after the 5-minute token TTL. A ban added after someone connects therefore won't apply until they reconnect, unless the server re-checks or the Worker pushes a revoke.
 
 ### F188: details withheld
 
@@ -6193,9 +6398,55 @@ The /api/auth prefix route is auth:'optional' (src/cloudflare/worker.ts:159-164)
 (3) Extra effect the reviewer missed: createUserForEmail calls ensureFounderIdentityQualification (store.ts:177 → progression/awards.ts:34-64) before the email is verified. Every junk sign-up therefore takes a founder number and a badge sync, which inflates founder numbering for real players. Creating the user should wait until verify. magic_link_tokens already stores the email, so the row can be created at verify time.
 (4) Effort is small, not medium. The guestbook already has IP hashing, per-IP limits and Turnstile verification that can be reused, and a Rate Limiting binding or WAF rule needs no schema work. Moving user creation to verify time is the only part that leans toward medium.
 
-### F044: details withheld
+### F044: In-room live chat (PartyKit) has no content moderation or ban enforcement
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+_Merged into F190; track it there._
+
+- **Area:** Security & abuse resistance
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** The floating speech-bubble chat that players see while playing a room is completely unmoderated: banned users can still use it, there is no profanity/length filtering beyond a character cap, and messages are broadcast live to everyone in the room with no record for review. World Chat (the other chat) does check bans; room chat does not.
+
+**Technical detail.**
+
+handleRoomChatSay (partykit/presenceServer.ts:838-879) accepts any message from a connection whose identity token verified, checks only presence.mode==='play' and a 1s rate limit (ROOM_CHAT_SEND_RATE_LIMIT_MS, presenceServer.ts:856), normalizes text only for non-empty and <=140 chars (relayProtocol.ts:17-21), then broadcasts via buildRoomChatBroadcast with the sender's userId/displayName (relayProtocol.ts:23-43). There is no call to resolveChatModerationViewer / isChatBannedUser — compare the HTTP World Chat path which rejects banned users (chat/routes.ts:143-150) and school-restricted users (chat/routes.ts:144). So a user banned from World Chat can still broadcast in room chat, and there is no server-side log for admin review or deletion. The identity token (presence/routes.ts:88-104) is even issued to guests, so guests can broadcast too. Fix: resolve the chat moderation viewer in onBeforeConnect or handleRoomChatSay and drop banned/school-restricted senders; consider persisting a short rolling log for moderation.
+
+**Evidence.**
+
+- partykit/presenceServer.ts:851 — only checks non-empty text, then 1s rate limit; no ban check
+- src/partykit/relayProtocol.ts:20 — content validation is length<=140 only
+- src/cloudflare/worker/chat/routes.ts:147 — World Chat rejects viewer.banned, room chat has no equivalent
+- src/cloudflare/worker/presence/routes.ts:88 — presence identity tokens are issued to guest identities too
+
+**Fact-check (confirmed, partially confirmed, partially confirmed).**
+
+Line references are slightly off. handleRoomChatSay starts at presenceServer.ts:837, not 838, and the rate-limit check is at 857, not 856 or 851. Two points the claim understates: (1) School-restricted (classroom) accounts are the bigger gap. Every other free-text UGC path calls assertNotSchoolRestricted: world chat (chat/routes.ts:144), room comments (roomComments/routes.ts:147), guestbook (guestbook/routes.ts:81) and profile text (profiles/routes.ts:129). Room chat has no such check on the server or the client, so students can send and receive free text with strangers. (2) Guest tokens accept any client-chosen displayName. Only the userId must match /^guest-.../ (src/presence/identityToken.ts:100-110, 248). A scripted guest could therefore broadcast room chat under someone else's name, for example a well-known creator's. One point is overstated: World Chat has no profanity filter either (chat/routes.ts:394-404 is trim and length only). Its real advantages are bans, school gating and persistence, not content filtering. Simplest fix, which is small: at token issuance (presence/routes.ts), where auth is already loaded, add claims such as roomChatAllowed = source==='auth' && !chatBanned && !school-restricted. Reject room-chat:say in handleRoomChatSay when the claim is false, and hide the composer on the client for those accounts. A rolling moderation log would be a separate, medium-effort follow-up. Note that tokens have a TTL, so a new ban only takes effect when the token expires.
+
+Corrections:
+- Line references: handleRoomChatSay starts at presenceServer.ts:837, not 838. The World Chat checks are chat/routes.ts:144 (assertNotSchoolRestricted) and 145-147 (ban).
+- Guests: the client UI already stops guests from sending, but the server does not enforce it. The token's `source: 'guest'` claim is verified and then thrown away in parseIdentity, so a raw socket can still send. Guests can also pick any display name, which allows impersonation in bubbles.
+- Profanity: World Chat has no profanity filter either, so drop that as a room-chat-specific gap.
+- Missing from the claim: the room-chat composer never checks authState.schoolManaged, unlike the World Chat panel and room comments. School student accounts can use room chat today.
+
+Practical fix:
+- PartyKit cannot cheaply query D1. Since identity tokens expire in 5 minutes (identityToken.ts:2), add a `chatRestricted` claim at issuance in presence/routes.ts. Set it to true when the user is chat-banned (resolveChatModerationViewer), school-managed (auth.school), or a guest.
+- Keep `source`/`chatRestricted` in the ConnectionPresenceState built by parseIdentity, and return early in handleRoomChatSay when it is set.
+- Also hide the room-chat composer, and optionally incoming bubbles, for schoolManaged users on the client.
+- A rolling server log for review is optional.
+
+Core is correct: room chat skips the chat-ban and school-restriction checks that World Chat (chat/routes.ts:144-147) and room comments (roomComments/routes.ts:147-150) enforce. Corrections:
+(a) The main concrete gap is school-managed student accounts. Commit 71638ea3 restricted every other text channel but not room chat. Students get an auth-source presence token and can both send and receive unmoderated room chat.
+(b) Guests cannot room-chat through the real UI (src/presence/roomChat.ts:168). Only a tampered client can, because presenceServer never checks claims.source.
+(c) World Chat has no profanity filter either, so that is not a difference between the two.
+(d) Persistent logging is a nice-to-have. Messages are ephemeral 6s bubbles.
+
+Recommended fix (small):
+1. In presence/routes.ts resolveIssueIdentity, add a claim such as `roomChat: 'ok' | 'banned' | 'school' | 'guest'`, computed with resolveChatModerationViewer and auth.school.
+2. In presenceServer.parseIdentity, store it on connection state, and in handleRoomChatSay drop messages unless it is 'ok'.
+3. Mirror the check client-side so banned and school users see 'Chat unavailable' instead of a silent drop.
+4. Optionally, have the room-chat client skip rendering incoming bubbles for school accounts.
+
+Ban changes will apply on reconnect (tokens have a 5-minute TTL but sockets are long-lived). An immediate kick would need a PARTYKIT_INTERNAL_TOKEN call from the ban route, and that is optional.
 
 ### F047: Chat @mention emails can be used to email-bomb any user with an email on file
 

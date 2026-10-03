@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 11 of 214 done.**
+**Progress: 17 of 214 done.**
 
 ## How to use this file
 
@@ -39,7 +39,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 1. **Close two dangerous back doors** ✅ (F040, F186). The server treats wamp.pages.dev as part of WAMP, but someone else controls that site, so a signed-in player who visits it could have their account quietly taken over. Separately, a test-only 'erase every user and room' tool is switched on in production, behind one shared password. Both are tiny config changes, and leaving them could be catastrophic.
 2. **Stop builders losing work** (F052, F060, F058, F057). Losing an hour of building is the fastest way to lose a builder. Today: - A failed autosave re-uploads forever and keeps no local backup. - A slow save can write one room's tiles into another room. - A second open tab or phone overwrites your laptop work with no warning. - Expanded-room edits live only in memory until you press Save.
 3. **Let tablets and sideways phones play** ✅ (F075, F077). Anyone on an iPad, or holding a phone sideways (the natural way to hold it for a platformer), presses Play and can't move. The installed Android app is even locked to that orientation. That shuts out a large share of players.
-4. **Security/safety priority** (F208, F190, F209, F211). Details withheld from this public repo until fixed.
+4. **Make classroom accounts actually safe** ✅ (F208, F190, F209, F211). Students are blocked from World Chat, but they can talk to strangers through in-room speech bubbles. The multiplayer server doesn't check sign-in or bans for those bubbles at all. Other public-posting paths are also open to students, and student passwords can be guessed with no lockout. Fix these before any more school pilots.
 5. **Switch the fast world map back on, safely** (F003, F010). The pre-drawn map tiles built over the summer have been off for about a month, because a tileset update was never re-rendered. Every visitor's phone is doing the heavy drawing instead. One re-render brings them back. At the same time, fix the per-frame tile scan that wakes up when tiles return, and add an alarm so this can't silently happen again.
 6. **Same jump on every screen, and cap phones at 60fps** (F138, F002). On 120/144Hz screens, quick-tap jumps come out lower, ice slides shorter, and jumps in gravity zones are about half as tall. Rooms get easier or harder depending on the device, and leaderboards aren't fair. A careful cap just above 60fps also cuts heat and battery drain on high-refresh phones.
 7. **Make building on phones and tablets stop fighting you** (F079, F157, F161, F158). Phone and tablet building has several problems: - Every pinch-zoom drops a stray tile or floods an area. - Shape tools don't work by touch. - iPads have no Undo button. - The phone editor still has the old layout, with Test and Publish hidden. - Phone builders can't configure pressure plates, NPCs or Sword Hunters.
@@ -82,7 +82,7 @@ Go one item at a time, and check each on the live site and on a real phone befor
 1. **One-line fixes.** Remove wamp.pages.dev and localhost from the trusted origins (F040). Turn off the database-wipe endpoint in production (F186). Fix the Android app's orientation lock (F077). Raise Android download concurrency (F014). Add the CORS max-age header and the missing index (F032, F027). Each takes minutes, and each is easy to verify.
 2. **Builders' work.** Fix the runaway autosave and add a local backup (F052). Then the cross-room save race (F060), then the two-editor overwrite (F058).
 3. **The world map.** Re-render and re-enable the tiles together with the per-frame tile-scan fix (F003 + F010). Then add the careful ~60fps cap (F002) and the refresh-rate physics fix (F138), and test them on a 120Hz phone.
-4. **Security and safety items.** Details withheld from this public repo until fixed (F190, F208, F209, F211).
+4. **Student safety.** Lock down room chat and school restrictions (F208, F190, F209, F211) before any new classroom pilots.
 5. **Mobile building.** Fix the pinch stray-tile bug and add Undo/Redo buttons (F079, F157).
 6. **Tablet and landscape controls.** Add these next (F075), since that's the biggest chunk of players who currently can't play.
 7. **First visits.** Fix the stacked modals on shared links, then guest progress carry-over (F093, F122).
@@ -327,11 +327,11 @@ Open items in this area are withheld from this public repo until fixed.
 
 Open items in this area are withheld from this public repo until fixed.
 
-- [ ] **F208** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · small effort
-- [ ] **F209** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
-- [ ] **F211** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
-- [ ] **F210** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
-- [ ] **F219** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [x] **F208** Students can chat with strangers, including anonymous guests, through in-room speech bubbles · high impact · small effort — **done 2026-10-03** (9ccb7167). Presence token carries a room-chat permission; the PartyKit server drops bubbles from classroom accounts and never delivers bubbles to them; PvP invites to/from classroom accounts are blocked.
+- [x] **F209** School restrictions are opt-in per route, so many public-posting paths are still open to students · medium impact · small effort — **done 2026-10-03** (9ccb7167). Classroom accounts blocked from playlists, Wamp-O-Grams, display-name change, agents and API tokens. Still open: a deny-by-default gate for future routes; the community sprite catalog stays open on purpose (auto-sync).
+- [x] **F211** Student login can be brute-forced, and accounts that were never logged into can be taken over · medium impact · small effort — **done 2026-10-03** (9ccb7167, 60f321be). Wrong passwords limited per student per network (8), per student (30) and per class network (200) per 15 min; teacher reset or a correct login clears it; dummy hash for unknown usernames; ~13M temporary passwords; common passwords refused; reset ends sessions.
+- [x] **F210** Student accounts can link a personal email or crypto wallet and then mint paid NFTs · medium impact · small effort — **done 2026-10-03** (9ccb7167). Classroom accounts cannot add an email, link a wallet or mint; the menu hides both. Still open: audit query for accounts linked before this change.
+- [x] **F219** Student logins last 30 days on shared school computers · medium impact · small effort — **done 2026-10-03** (9ccb7167). Student sessions last 10 hours; logout returns to the class login page.
 - [ ] **F212** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · medium effort
 - [ ] **F213** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
 - [ ] **F214** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · medium effort
@@ -362,7 +362,7 @@ Open items in this area are withheld from this public repo until fixed.
 - [ ] **F184** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · medium effort
 - [ ] **F183** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · medium effort
 - [ ] **F185** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) (also covers F071) · high impact · small effort
-- [ ] **F190** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) (also covers F044) · medium impact · small effort
+- [x] **F190** In-room chat bubbles skip sign-in and chat bans on the server (also covers F044) · medium impact · small effort — **done 2026-10-03** (9ccb7167). PartyKit refuses bubbles from guests and chat-banned players; guest names must be the generated "Guest abcd" form (verified live). Still open: no word filter on bubble text (see F191); a ban takes effect on the next connection.
 - [ ] **F188** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
 - [ ] **F191** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
 - [ ] **F049** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
