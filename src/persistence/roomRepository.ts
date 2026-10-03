@@ -90,6 +90,13 @@ export interface RoomRepository {
   getLastPersistenceTarget(): RoomPersistenceTarget | null;
 }
 
+const ROOM_SAVE_TIMEOUT_MS = 30_000;
+
+// A hung save would otherwise block every later save in the editor.
+function createRoomSaveTimeoutSignal(): AbortSignal | undefined {
+  return typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(ROOM_SAVE_TIMEOUT_MS) : undefined;
+}
+
 function getStorageKey(roomId: string): string {
   return `${ROOM_STORAGE_PREFIX}${roomId}`;
 }
@@ -588,7 +595,7 @@ export function createLocalRoomRepository(): RoomRepository {
   return new LocalRoomRepository();
 }
 
-class RoomApiError extends Error {
+export class RoomApiError extends Error {
   constructor(
     message: string,
     readonly status: number
@@ -692,6 +699,7 @@ class ApiRoomRepository implements RoomRepository {
         await this.request(`/api/rooms/${encodeURIComponent(room.id)}/draft?${params.toString()}`, {
           method: 'PUT',
           body: JSON.stringify(room),
+          signal: createRoomSaveTimeoutSignal(),
         }),
       ),
       () => this.fallback?.saveDraft(room)

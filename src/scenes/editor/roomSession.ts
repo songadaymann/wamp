@@ -79,6 +79,28 @@ interface SaveDraftOptions {
 }
 
 const DAILY_ROOM_CLAIM_LIMIT_ERROR_PREFIX = 'Daily room claim limit reached.';
+const AUTO_SAVE_RETRY_BASE_MS = 2_000;
+const AUTO_SAVE_RETRY_MAX_MS = 30_000;
+
+// After a failed save, autosave waits before retrying (2s, 4s, 8s... up to 30s) and keeps a
+// copy of the room in this browser so a closed tab can be recovered on the next open.
+// Errors that retrying cannot fix stop autosave until a save succeeds.
+interface AutoSaveBackoff {
+  roomId: string;
+  failures: number;
+  retryAt: number;
+  backedUpDirtyAt: number;
+}
+
+function isPermanentSaveError(error: unknown): boolean {
+  if (!isRoomApiError(error)) {
+    return false;
+  }
+  if (error.status === 429) {
+    return error.message.startsWith(DAILY_ROOM_CLAIM_LIMIT_ERROR_PREFIX);
+  }
+  return error.status >= 400 && error.status < 500 && error.status !== 408;
+}
 const DAILY_ROOM_CLAIM_LIMIT_TITLE = "You've Reached Today's Room Claim Limit";
 const DAILY_ROOM_CLAIM_LIMIT_MESSAGE =
   "You've reached your daily room claim limit. To claim more rooms per day, increase your Builder XP by publishing more high quality rooms.";
@@ -116,6 +138,7 @@ export class EditorRoomSession {
   private mintedMetadataRoomVersion: number | null = null;
   private mintedMetadataUpdatedAt: string | null = null;
   private saveInFlight = false;
+  private autoSaveBackoff: AutoSaveBackoff | null = null;
   private persistenceStatus: EditorStatusDetails = {
     text: '',
     accentText: '',
@@ -405,6 +428,16 @@ export class EditorRoomSession {
       return;
     }
 
+    const backoff = this.autoSaveBackoff?.roomId === this.roomId ? this.autoSaveBackoff : null;
+    if (backoff && performance.now() < backoff.retryAt) {
+      const lastDirtyAt = this.host.getLastDirtyAt();
+      if (lastDirtyAt !== backoff.backedUpDirtyAt) {
+        backoff.backedUpDirtyAt = lastDirtyAt;
+        void this.backupDraftLocally();
+      }
+      return;
+    }
+
     void this.saveDraft();
   }
 
@@ -485,6 +518,7 @@ export class EditorRoomSession {
 
     try {
       const record = await this.roomRepository.saveDraft(this.host.exportRoomSnapshot());
+      this.autoSaveBackoff = null;
       this.syncRoomMetadata(record);
       if (this.shouldClearLocalDraftAfterRepositoryMutation()) {
         clearLocalRoomStorageEntry(this.roomId);
@@ -499,22 +533,29 @@ export class EditorRoomSession {
       return record;
     } catch (error) {
       if (this.shouldPersistGuestDraftLocally(error)) {
-        const record = await this.saveDraftLocally(
-          saveStartedAt,
-          options.promptForSignInOnUnauthorized
-            ? 'Draft saved locally. Sign in to save drafts to your account.'
-            : 'Draft saved locally. Sign in to publish.',
-          options.promptForSignInOnUnauthorized ? 'manual-save' : null
-        );
-        return record;
+        try {
+          return await this.saveDraftLocally(
+            saveStartedAt,
+            options.promptForSignInOnUnauthorized
+              ? 'Draft saved locally. Sign in to save drafts to your account.'
+              : 'Draft saved locally. Sign in to publish.',
+            options.promptForSignInOnUnauthorized ? 'manual-save' : null
+          );
+        } catch (localError) {
+          console.warn('Failed to save room draft locally', localError);
+        }
       }
+
+      const permanent = isPermanentSaveError(error);
+      this.recordAutoSaveFailure(permanent);
+      const backedUp = await this.backupDraftLocally();
 
       if (this.showDailyRoomClaimLimitModal(error)) {
         return null;
       }
 
       console.error('Failed to save room draft', error);
-      this.setStatusText('Draft save failed.');
+      this.setStatusText(this.getSaveFailureStatusText(error, permanent, backedUp));
     } finally {
       this.saveInFlight = false;
       this.host.refreshUi();
@@ -1111,6 +1152,7 @@ export class EditorRoomSession {
     guestBuilderClaimSource: GuestBuilderClaimSource | null = null,
   ): Promise<RoomRecord | null> {
     const record = await this.localRoomRepository.saveDraft(this.host.exportRoomSnapshot());
+    this.autoSaveBackoff = null;
     this.syncRoomMetadata(record);
 
     if (this.host.getLastDirtyAt() === saveStartedAt) {
@@ -1133,6 +1175,7 @@ export class EditorRoomSession {
     try {
       const snapshot = this.host.exportRoomSnapshot();
       const localRecord = await this.localRoomRepository.saveDraft(snapshot);
+      this.autoSaveBackoff = null;
       this.syncRoomMetadata(localRecord);
 
       try {
@@ -1149,10 +1192,45 @@ export class EditorRoomSession {
 
       this.requestGuestBuilderClaimPrompt(guestBuilderClaimSource);
       return localRecord;
+    } catch (error) {
+      console.error('Failed to save guest room draft', error);
+      this.recordAutoSaveFailure(false);
+      this.setStatusText('Could not save this draft on this device. Your browser storage may be full.');
+      return null;
     } finally {
       this.saveInFlight = false;
       this.host.refreshUi();
     }
+  }
+
+  private recordAutoSaveFailure(permanent: boolean): void {
+    const failures = this.autoSaveBackoff?.roomId === this.roomId ? this.autoSaveBackoff.failures + 1 : 1;
+    const delay = Math.min(AUTO_SAVE_RETRY_MAX_MS, AUTO_SAVE_RETRY_BASE_MS * 2 ** (failures - 1));
+    this.autoSaveBackoff = {
+      roomId: this.roomId,
+      failures,
+      retryAt: permanent ? Number.POSITIVE_INFINITY : performance.now() + delay,
+      backedUpDirtyAt: this.host.getLastDirtyAt(),
+    };
+  }
+
+  private async backupDraftLocally(): Promise<boolean> {
+    try {
+      await this.localRoomRepository.saveDraft(this.host.exportRoomSnapshot());
+      return true;
+    } catch (error) {
+      console.warn('Failed to back up room draft locally', error);
+      return false;
+    }
+  }
+
+  private getSaveFailureStatusText(error: unknown, permanent: boolean, backedUp: boolean): string {
+    const kept = backedUp ? ' Your changes are kept on this device.' : '';
+    if (permanent) {
+      const reason = error instanceof Error && error.message.trim() ? ` ${error.message.trim()}` : '';
+      return `Draft save failed.${reason}${kept}`;
+    }
+    return `Draft save failed. Retrying soon.${kept}`;
   }
 
   private requestGuestBuilderClaimPrompt(source: GuestBuilderClaimSource | null): void {

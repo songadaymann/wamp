@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultRoomRecord, createRoomSummaryFromRecord, type RoomRecord, type RoomRepository } from '../../persistence/roomRepository';
+import { createDefaultRoomRecord, createRoomSummaryFromRecord, RoomApiError, type RoomRecord, type RoomRepository } from '../../persistence/roomRepository';
 import { ROOM_STORAGE_PREFIX } from '../../persistence/browserStorage';
 import { EditorRoomSession } from './roomSession';
 
-vi.mock('../../auth/client', () => ({ getAuthDebugState: () => ({ authenticated: false }) }));
+const authState = vi.hoisted(() => ({ authenticated: false }));
+vi.mock('../../auth/client', () => ({ getAuthDebugState: () => ({ authenticated: authState.authenticated }) }));
+vi.mock('../../ui/appFeedback', () => ({ showBusyError: vi.fn(), showBusyOverlay: vi.fn(), hideBusyOverlay: vi.fn(), updateBusyOverlay: vi.fn() }));
 vi.mock('../../mint/roomMetadataRender', () => ({ renderRoomSnapshotToPngDataUrl: vi.fn() }));
 
 const coordinates = { x: 0, y: 1 };
@@ -107,5 +109,101 @@ describe('guest draft recovery when reopening the editor', () => {
     const { session, applyRoomSnapshot } = reopen(remote);
     await session.loadPersistedRoom(null);
     expect(applyRoomSnapshot).toHaveBeenCalledWith(expect.objectContaining({ tileData: saved.draft.tileData }));
+  });
+});
+
+describe('signed-in autosave after a failed save', () => {
+  let now = 0;
+  let values: Map<string, string>;
+
+  beforeEach(() => {
+    authState.authenticated = true;
+    now = 1_000;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    });
+    vi.stubGlobal('window', { localStorage });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    authState.authenticated = false;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  function editingSession(saveDraft: () => Promise<RoomRecord>) {
+    const room = createDefaultRoomRecord(roomId, coordinates);
+    room.draft.tileData.terrain[9][9] = 17;
+    let dirty = true;
+    const repository = {
+      saveDraft: vi.fn(saveDraft),
+      getLastPersistenceTarget: () => 'remote',
+    } as unknown as RoomRepository;
+    const session = new EditorRoomSession(repository, {
+      applyRoomSnapshot: vi.fn(), exportRoomSnapshot: () => room.draft,
+      getPublishValidationError: () => null, getRoomDirty: () => dirty,
+      setRoomDirty: (value: boolean) => { dirty = value; }, getLastDirtyAt: () => 100, refreshUi: vi.fn(),
+      refreshSurroundingRoomPreviews: vi.fn(),
+    });
+    session.currentRoomId = roomId;
+    session.currentRoomCoordinates = coordinates;
+    return { session, repository, room, isDirty: () => dirty };
+  }
+
+  async function runFrames(session: EditorRoomSession, ms: number): Promise<void> {
+    const end = now + ms;
+    while (now < end) {
+      session.maybeAutoSave(false);
+      for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      now += 16;
+    }
+  }
+
+  const backupKey = `${ROOM_STORAGE_PREFIX}${roomId}`;
+
+  it('backs off instead of retrying every frame, and keeps a copy on this device', async () => {
+    const { session, repository, room, isDirty } = editingSession(async () => { throw new TypeError('Failed to fetch'); });
+    await runFrames(session, 5_000);
+
+    // Attempts at ~1s, ~3s (2s later) and then not again until ~7s.
+    expect(vi.mocked(repository.saveDraft).mock.calls.length).toBe(2);
+    expect(isDirty()).toBe(true);
+    expect(session.statusDetails.text).toBe('Draft save failed. Retrying soon. Your changes are kept on this device.');
+    const backup = JSON.parse(values.get(backupKey) ?? 'null') as RoomRecord;
+    expect(backup.draft.tileData.terrain[9][9]).toBe(room.draft.tileData.terrain[9][9]);
+  });
+
+  it('stops retrying errors that retrying cannot fix and says why', async () => {
+    const { session, repository } = editingSession(async () => {
+      throw new RoomApiError('Only the room claimer can save drafts for this unpublished room.', 403);
+    });
+    await runFrames(session, 60_000);
+
+    expect(vi.mocked(repository.saveDraft).mock.calls.length).toBe(1);
+    expect(session.statusDetails.text).toBe(
+      'Draft save failed. Only the room claimer can save drafts for this unpublished room. Your changes are kept on this device.'
+    );
+    expect(values.has(backupKey)).toBe(true);
+  });
+
+  it('clears the device copy and resumes normal autosave once a save succeeds', async () => {
+    let online = false;
+    const { session, repository, room, isDirty } = editingSession(async () => {
+      if (!online) throw new TypeError('Failed to fetch');
+      return room;
+    });
+    await runFrames(session, 1_000);
+    expect(values.has(backupKey)).toBe(true);
+
+    online = true;
+    await runFrames(session, 3_000);
+    expect(vi.mocked(repository.saveDraft).mock.calls.length).toBe(2);
+    expect(isDirty()).toBe(false);
+    expect(values.has(backupKey)).toBe(false);
   });
 });
