@@ -11,7 +11,7 @@ Requested work: implement the Android download, API preflight cache, and publish
 - [x] F057: persist expanded-room cell edits and expanded-room settings locally without clearing dirty state; recover them when reopening the editor.
 - [x] F057: flush backups on page lifecycle events and warn about unsaved work in both editors; test reload, failed storage, save, and scene transitions.
 - [x] Final verification and implementation commits. Checklist items stay unticked until shipped.
-- [ ] Push the branch and open a draft PR for review.
+- [x] Push the branch and open [draft PR #33](https://github.com/songadaymann/wamp/pull/33) for review.
 
 ## Verification notes
 
