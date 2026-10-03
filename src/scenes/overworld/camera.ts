@@ -76,7 +76,7 @@ export function getMobilePlayFollowOffsetY(
   mobilePlayCameraTargetY: number,
   mobilePortraitPlayCameraTargetY: number = mobilePlayCameraTargetY,
 ): number {
-  if (layout.deviceClass !== 'phone' || !layout.coarsePointer) {
+  if (layout.deviceClass === 'desktop' || !layout.coarsePointer) {
     return 0;
   }
 

@@ -30,6 +30,12 @@ const profiles = {
     userAgent:
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
   },
+  tabletPortrait: {
+    viewport: { width: 820, height: 1180 },
+    deviceScaleFactor: 2,
+    userAgent:
+      'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  },
   tabletLandscape: {
     viewport: { width: 1180, height: 820 },
     deviceScaleFactor: 2,
@@ -74,9 +80,10 @@ const scenarios = [
     run: runPhoneLandscapeWelcomeModal,
   },
   {
-    name: 'phone-landscape-play-no-legacy-controls',
+    name: 'phone-landscape-play-overlay-controls',
     profile: profiles.phoneLandscape,
-    run: runPhoneLandscapePlayNoLegacyControls,
+    run: (page, scenarioSummary, scenarioDir) =>
+      runTouchOverlayPlay(page, scenarioSummary, scenarioDir, { deviceClass: 'phone', orientationState: 'landscape' }),
   },
   {
     name: 'phone-landscape-editor-sheets',
@@ -88,6 +95,18 @@ const scenarios = [
     profile: profiles.tabletLandscape,
     run: runTabletLandscapeBrowse,
   },
+  {
+    name: 'tablet-landscape-play-overlay-controls',
+    profile: profiles.tabletLandscape,
+    run: (page, scenarioSummary, scenarioDir) =>
+      runTouchOverlayPlay(page, scenarioSummary, scenarioDir, { deviceClass: 'tablet', orientationState: 'landscape' }),
+  },
+  {
+    name: 'tablet-portrait-play-overlay-controls',
+    profile: profiles.tabletPortrait,
+    run: (page, scenarioSummary, scenarioDir) =>
+      runTouchOverlayPlay(page, scenarioSummary, scenarioDir, { deviceClass: 'tablet', orientationState: 'portrait' }),
+  },
 ];
 
 mkdirSync(outputDir, { recursive: true });
@@ -98,7 +117,11 @@ const browser = await chromium.launch({
 });
 
 try {
+  const onlyScenarios = getStringArg('--only')?.split(',').map((name) => name.trim()).filter(Boolean) ?? [];
   for (const scenario of scenarios) {
+    if (onlyScenarios.length > 0 && !onlyScenarios.includes(scenario.name)) {
+      continue;
+    }
     await runScenario(browser, scenario);
   }
 
@@ -717,35 +740,111 @@ async function runPhoneLandscapeWelcomeModal(page, scenarioSummary, scenarioDir)
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'welcome-modal');
 }
 
-async function runPhoneLandscapePlayNoLegacyControls(page, scenarioSummary, scenarioDir) {
-  await waitForReadyOverworld(page, 'phone landscape play boot');
+// Landscape phones and tablets (either orientation) play with the corner overlay: joystick
+// bottom-left, Jump/Sword/Shoot bottom-right, Stop/Restart top-left, all over the room.
+async function runTouchOverlayPlay(page, scenarioSummary, scenarioDir, expected) {
+  const label = `${expected.deviceClass} ${expected.orientationState}`;
+  await waitForReadyOverworld(page, `${label} play boot`);
   await closeBlockingOverlays(page);
   await selectEditableRoom(page);
-  await runPreviewSmokeAction(page, 'playSelectedRoom');
-  await closeBlockingOverlays(page);
-  await waitForBodyAppMode(page, 'play-world', 'phone play app mode');
+  // The selected room can still be streaming in; Play is a no-op until it is, so retry.
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await runPreviewSmokeAction(page, 'playSelectedRoom');
+    await closeBlockingOverlays(page);
+    const mode = await page.evaluate(() => document.body.dataset.appMode ?? null);
+    if (mode === 'play-world') break;
+    await page.waitForTimeout(1500);
+  }
+  await waitForBodyAppMode(page, 'play-world', `${label} play app mode`);
   const state = await waitForAppState(
     page,
     (candidate) =>
-      candidate?.touch?.active === false
-      && candidate?.device?.deviceClass === 'phone'
-      && candidate.device.orientationState === 'landscape'
+      candidate?.touch?.active === true
+      && candidate?.device?.deviceClass === expected.deviceClass
+      && candidate.device.orientationState === expected.orientationState
       && candidate?.activeScene?.mode === 'play',
-    'phone landscape play mode without portrait controls',
+    `${label} play mode with touch controls`,
   );
   scenarioSummary.assertions.push({
-    label: 'entered phone landscape play without enabling legacy touch controls',
+    label: `entered ${label} play with touch controls`,
     activeScene: summarizeActiveScene(state.activeScene),
   });
+  await closeBlockingOverlaysUntilClear(page);
 
-  await assertHidden(page, '#mobile-play-controls', 'portrait-only mobile play controls in phone landscape');
-  await assertAbsent(page, '.mobile-dpad-btn', 'legacy mobile D-pad buttons in phone landscape play');
-  await assertAbsent(page, '#btn-mobile-right', 'legacy mobile right button in phone landscape play');
-  await assertAbsent(page, '#rotate-gate', 'rotate gate in phone landscape play');
-  await assertVisible(page, '#world-hud', 'world HUD remains available in phone landscape play');
+  const layoutName = await page.evaluate(() => document.body.dataset.mobileTouchPlayLayout ?? null);
+  assertCondition(layoutName === 'overlay', `${label} should use the overlay play layout, got ${layoutName}`);
+  await assertAbsent(page, '.mobile-dpad-btn', `legacy D-pad buttons in ${label} play`);
+  await assertAbsent(page, '#rotate-gate', `rotate gate in ${label} play`);
+  const controlSelectors = [
+    '#mobile-play-controls',
+    '#mobile-move-zone',
+    '#mobile-move-stick',
+    '#btn-mobile-jump',
+    '#btn-mobile-slash',
+    '#btn-mobile-shoot',
+    '#btn-mobile-world-stop',
+    '#btn-mobile-world-restart',
+  ];
+  for (const selector of controlSelectors) {
+    await assertVisible(page, selector, `${label} ${selector}`);
+  }
+  await assertSelectorsWithinViewport(page, controlSelectors.slice(1), `${label} overlay controls bounds`);
 
-  scenarioSummary.assertions.push({ label: 'phone landscape stays unblocked without old D-pad controls' });
-  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'play-no-legacy-controls');
+  const rects = await page.evaluate((selectors) => Object.fromEntries(selectors.map((selector) => {
+    const rect = document.querySelector(selector).getBoundingClientRect();
+    return [selector, { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }];
+  })), ['#mobile-move-stick', '#btn-mobile-jump', '#btn-mobile-slash', '#btn-mobile-shoot', '#btn-mobile-world-stop', '#btn-mobile-world-restart', '#btn-world-hud-toggle', '#world-goal-panel', '#btn-chat-toggle', '#btn-world-room-chat']);
+  const overlaps = (a, b) => a.width > 0 && b.width > 0 && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  const buttons = ['#btn-mobile-jump', '#btn-mobile-slash', '#btn-mobile-shoot'];
+  for (const button of buttons) {
+    assertCondition(!overlaps(rects['#mobile-move-stick'], rects[button]), `${label}: joystick overlaps ${button}: ${JSON.stringify(rects)}`);
+    assertCondition(rects[button].width >= 44 && rects[button].height >= 44, `${label}: ${button} is too small to tap: ${JSON.stringify(rects[button])}`);
+  }
+  const pad = (rect, by) => ({ ...rect, left: rect.left - by, top: rect.top - by, right: rect.right + by, bottom: rect.bottom + by });
+  for (const corner of ['#btn-mobile-world-stop', '#btn-mobile-world-restart', '#btn-world-hud-toggle', '#world-goal-panel', '#btn-chat-toggle', '#btn-world-room-chat']) {
+    for (const control of ['#mobile-move-stick', ...buttons]) {
+      // Keep a 12px gap so a thumb on a control does not catch another button.
+      assertCondition(!overlaps(pad(rects[corner], 12), rects[control]), `${label}: ${corner} crowds ${control}: ${JSON.stringify(rects)}`);
+    }
+  }
+  assertCondition(
+    !overlaps(rects['#world-goal-panel'], rects['#btn-chat-toggle']),
+    `${label}: goal panel overlaps World Chat: ${JSON.stringify(rects)}`,
+  );
+  assertCondition(
+    rects['#mobile-move-stick'].width >= 120,
+    `${label}: joystick should be large enough for a thumb: ${JSON.stringify(rects['#mobile-move-stick'])}`,
+  );
+  scenarioSummary.assertions.push({ label: `${label} overlay controls are visible, tappable and non-overlapping`, rects });
+
+  await dispatchPointerAt(page, '#mobile-move-stick', 'pointerdown', 61);
+  await dispatchPointerAt(page, '#mobile-move-stick', 'pointermove', 61, 24, 0);
+  await waitForAppState(
+    page,
+    (candidate) => candidate?.touch?.active === true && candidate.touch.moveX >= 0.9,
+    `dragged right with the ${label} joystick`,
+    5000,
+  );
+  const stick = await readMoveStickSnapshot(page);
+  assertCondition(
+    stick.knobCenter.x > stick.baseCenter.x + 12,
+    `${label} joystick knob should follow the drag: ${JSON.stringify(stick)}`,
+  );
+  await dispatchDocumentPointer(page, 'pointerup', 61);
+  await waitForAppState(
+    page,
+    (candidate) => candidate?.touch?.active === true && candidate.touch.moveX === 0 && candidate.touch.moveY === 0,
+    `released the ${label} joystick`,
+    5000,
+  );
+
+  await dispatchPointerAt(page, '#btn-mobile-jump', 'pointerdown', 62);
+  await waitForAppState(page, (candidate) => candidate?.touch?.jumpHeld === true, `${label} jump held`, 5000);
+  await dispatchPointerAt(page, '#btn-mobile-jump', 'pointerup', 62);
+  await waitForAppState(page, (candidate) => candidate?.touch?.jumpHeld === false, `${label} jump released`, 5000);
+  scenarioSummary.assertions.push({ label: `${label} joystick and jump drive touch input` });
+
+  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'play-overlay-controls');
 }
 
 async function runPhoneLandscapeEditorSheets(page, scenarioSummary, scenarioDir) {

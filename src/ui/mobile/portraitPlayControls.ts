@@ -61,11 +61,11 @@ export class PortraitPlayControlsController {
     this.unbindGlobalReleaseHandlers();
   }
 
-  render(isPortraitPlay: boolean): void {
-    this.elements.mobilePlayControls?.classList.toggle('hidden', !isPortraitPlay);
-    setTouchControlsActive(isPortraitPlay);
+  render(isTouchPlay: boolean): void {
+    this.elements.mobilePlayControls?.classList.toggle('hidden', !isTouchPlay);
+    setTouchControlsActive(isTouchPlay);
 
-    if (!isPortraitPlay) {
+    if (!isTouchPlay) {
       this.releaseAllControlState();
     }
   }
@@ -77,7 +77,7 @@ export class PortraitPlayControlsController {
     }
 
     moveZone.addEventListener('pointerdown', (event) => {
-      if (!this.isPortraitMoveZoneActive() || this.activeMovePointerId !== null) {
+      if (!this.isMoveZoneActive() || this.activeMovePointerId !== null) {
         return;
       }
 
@@ -103,7 +103,7 @@ export class PortraitPlayControlsController {
       }
 
       event.preventDefault();
-      if (!this.isPortraitMoveZoneActive()) {
+      if (!this.isMoveZoneActive()) {
         this.clearMoveZoneState();
         return;
       }
@@ -258,14 +258,13 @@ export class PortraitPlayControlsController {
     return Math.sign(deltaPx) * normalized;
   }
 
-  private isPortraitMoveZoneActive(): boolean {
+  private isMoveZoneActive(): boolean {
     const layout = getDeviceLayoutState();
     return (
-      layout.deviceClass === 'phone'
+      layout.deviceClass !== 'desktop'
       && layout.coarsePointer
-      && layout.orientationState === 'portrait'
       && this.doc.body.dataset.appMode === 'play-world'
-      && this.doc.body.dataset.mobilePortraitPlay === 'true'
+      && this.doc.body.dataset.mobileControlsVisible === 'true'
     );
   }
 

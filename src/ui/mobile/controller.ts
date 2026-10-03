@@ -412,6 +412,10 @@ export class MobileUiController {
       isWorld &&
       (isPlay || hasFocusedRoomLink);
     const isPortraitPlay = isPortraitFocusedRoom && isPlay;
+    // Every touch device gets play controls: phones held upright use the portrait console,
+    // and landscape phones and tablets use the corner overlay drawn over the room.
+    const isTouchPlay = layout.coarsePointer && layout.deviceClass !== 'desktop' && isPlay;
+    const touchPlayLayout = !isTouchPlay ? 'none' : isPortraitPlay ? 'console' : 'overlay';
     const isCollapsibleWorldHud =
       layout.coarsePointer &&
       layout.deviceClass !== 'desktop' &&
@@ -439,7 +443,7 @@ export class MobileUiController {
 
     if (this.previousAppMode !== appMode) {
       if (layout.coarsePointer && layout.deviceClass !== 'desktop') {
-        if (appMode === 'play-world' && isPortraitPlay) {
+        if (appMode === 'play-world' && isTouchPlay) {
           this.worldHudCollapsed = true;
         } else if (appMode === 'world') {
           this.worldHudCollapsed = false;
@@ -452,11 +456,12 @@ export class MobileUiController {
       this.previousAppMode = appMode;
     }
 
-    if (isPlay && !isPortraitPlay && this.worldHudCollapsed) {
+    if (isPlay && !isTouchPlay && this.worldHudCollapsed) {
       this.worldHudCollapsed = false;
     }
 
-    this.doc.body.dataset.mobileControlsVisible = isPortraitPlay ? 'true' : 'false';
+    this.doc.body.dataset.mobileControlsVisible = isTouchPlay ? 'true' : 'false';
+    this.doc.body.dataset.mobileTouchPlayLayout = touchPlayLayout;
     this.doc.body.dataset.mobilePortraitPlay = isPortraitPlay ? 'true' : 'false';
     this.doc.body.dataset.mobilePortraitFocusedRoom = isPortraitFocusedRoom ? 'true' : 'false';
 
@@ -481,14 +486,14 @@ export class MobileUiController {
       this.elements.mobileEditorToggleButton.disabled = musicModeActive;
     }
 
-    this.portraitPlayControls.render(isPortraitPlay);
+    this.portraitPlayControls.render(isTouchPlay);
     this.elements.mobileWorldStopButton?.classList.toggle(
       'hidden',
-      !(isCollapsibleWorldHud && isPortraitPlay && this.worldHudCollapsed),
+      !(isCollapsibleWorldHud && isTouchPlay && this.worldHudCollapsed),
     );
     this.elements.mobileWorldRestartButton?.classList.toggle(
       'hidden',
-      !(isCollapsibleWorldHud && isPortraitPlay && this.worldHudCollapsed),
+      !(isCollapsibleWorldHud && isTouchPlay && this.worldHudCollapsed),
     );
     this.elements.mobileCameraTuner?.classList.toggle(
       'hidden',

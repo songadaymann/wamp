@@ -66,8 +66,11 @@ function computeState(): DeviceLayoutState {
   const viewport = window.visualViewport;
   const width = Math.max(0, Math.round(viewport?.width ?? window.innerWidth));
   const height = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
+  // Touchscreen laptops report touch points but also have a mouse or trackpad; treat them as
+  // desktops so they keep the desktop layout and do not get on-screen play controls.
   const coarsePointer =
-    window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+    window.matchMedia('(pointer: coarse)').matches
+    || (navigator.maxTouchPoints > 0 && !window.matchMedia('(any-pointer: fine)').matches);
   const orientationState: OrientationState = width >= height ? 'landscape' : 'portrait';
   const deviceClass = classifyDeviceClass(width, height, coarsePointer);
   const performanceProfile = resolvePerformanceProfile(deviceClass, coarsePointer);

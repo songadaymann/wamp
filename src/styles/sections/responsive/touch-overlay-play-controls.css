@@ -1,0 +1,70 @@
+/* Landscape phones and tablets: a joystick in the bottom-left corner and Jump/Sword/Shoot in the
+   bottom-right, drawn over the room. Phones held upright use the portrait console instead. */
+
+body[data-mobile-touch-play-layout='overlay'] #mobile-move-zone {
+  --mobile-move-stick-x: 0px;
+  --mobile-move-stick-y: 0px;
+  left: calc(12px + var(--safe-left));
+  bottom: calc(10px + var(--safe-bottom));
+  width: 170px;
+  height: 170px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+body[data-mobile-touch-play-layout='overlay'] .mobile-move-stick {
+  position: absolute;
+  display: block;
+  left: 50%;
+  top: 50%;
+  width: 150px;
+  height: 150px;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(243, 238, 226, 0.3);
+  border-radius: 999px;
+  background: rgba(11, 11, 11, 0.42);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+body[data-mobile-touch-play-layout='overlay'] .mobile-move-stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 62px;
+  height: 62px;
+  transform: translate(
+    calc(-50% + var(--mobile-move-stick-x)),
+    calc(-50% + var(--mobile-move-stick-y))
+  );
+  border: 2px solid rgba(24, 22, 28, 0.6);
+  border-radius: 999px;
+  background: rgba(243, 238, 226, 0.78);
+}
+
+body[data-mobile-touch-play-layout='overlay'] #mobile-move-zone[data-mobile-move-active='true'] .mobile-move-stick {
+  border-color: rgba(243, 238, 226, 0.55);
+}
+
+body[data-mobile-touch-play-layout='overlay'] .mobile-play-actions {
+  right: calc(12px + var(--safe-right));
+  bottom: calc(10px + var(--safe-bottom));
+}
+
+/* Tablets park World Chat under the menu in the top-right, where the goal box also sits, so the
+   goal box moves to the top centre during play. */
+body[data-mobile-touch-play-layout='overlay'][data-device-class='tablet'] .world-goal-panel {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Phones keep World Chat and Say along the bottom; leave a clear gap from the action buttons. */
+body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] #global-chat:not(.is-open) {
+  right: calc(224px + var(--safe-right));
+  width: min(280px, calc(100vw - 424px - var(--safe-left) - var(--safe-right)));
+}
+
+body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] #btn-world-room-chat {
+  right: calc(224px + var(--safe-right));
+}

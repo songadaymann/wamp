@@ -2,6 +2,7 @@
 @import './responsive/phone-chrome.css';
 @import './responsive/phone-portrait-world-hud.css';
 @import './responsive/phone-portrait-play-controls.css';
+@import './responsive/touch-overlay-play-controls.css';
 @import './responsive/phone-world-chat.css';
 @import './responsive/phone-editor-shell.css';
 @import './responsive/phone-editor-tools.css';
