@@ -56,8 +56,8 @@ export interface RoomRepository {
   loadRoomVersions(roomId: string, limit?: number, cursor?: string): Promise<RoomVersionsPage>;
   loadExactRoomVersion(roomId: string, version: number): Promise<RoomVersionRecord>;
   queryRoomSnapshots(references: RoomSnapshotQueryReference[]): Promise<RoomSnapshotQueryResponse>;
-  saveDraft(room: RoomSnapshot): Promise<RoomRecord>;
-  publish(room: RoomSnapshot): Promise<RoomRecord>;
+  saveDraft(room: RoomSnapshot, options?: RoomWriteOptions): Promise<RoomRecord>;
+  publish(room: RoomSnapshot, options?: RoomWriteOptions): Promise<RoomRecord>;
   revert(roomId: string, coordinates: RoomCoordinates, targetVersion: number): Promise<RoomRecord>;
   adminRestore(roomId: string, coordinates: RoomCoordinates, targetVersion: number): Promise<RoomRecord>;
   setCanonicalVersion(
@@ -88,6 +88,19 @@ export interface RoomRepository {
     request: RoomMetadataRefreshConfirmRequestBody
   ): Promise<RoomRecord>;
   getLastPersistenceTarget(): RoomPersistenceTarget | null;
+}
+
+export interface RoomWriteOptions {
+  // The draft updatedAt this editor last loaded or saved. The server refuses the write with
+  // ROOM_EDIT_CONFLICT_MESSAGE if the room was saved elsewhere since. Omit to overwrite.
+  baseUpdatedAt?: string | null;
+}
+
+function withBaseUpdatedAt(params: URLSearchParams, options: RoomWriteOptions | undefined): URLSearchParams {
+  if (options?.baseUpdatedAt) {
+    params.set('baseUpdatedAt', options.baseUpdatedAt);
+  }
+  return params;
 }
 
 const ROOM_SAVE_TIMEOUT_MS = 30_000;
@@ -687,13 +700,13 @@ class ApiRoomRepository implements RoomRepository {
     );
   }
 
-  async saveDraft(room: RoomSnapshot): Promise<RoomRecord> {
+  async saveDraft(room: RoomSnapshot, options?: RoomWriteOptions): Promise<RoomRecord> {
     const seedRecord = await saveWorldSeedEditorDraft(this.baseUrl, room);
     if (seedRecord) {
       this.lastPersistenceTarget = 'remote';
       return seedRecord;
     }
-    const params = withActiveWorldQuery(new URLSearchParams({ response: 'compact' }));
+    const params = withBaseUpdatedAt(withActiveWorldQuery(new URLSearchParams({ response: 'compact' })), options);
     const record = await this.withFallback(
       async () => this.compactMutationRecord(
         await this.request(`/api/rooms/${encodeURIComponent(room.id)}/draft?${params.toString()}`, {
@@ -708,13 +721,13 @@ class ApiRoomRepository implements RoomRepository {
     return record;
   }
 
-  async publish(room: RoomSnapshot): Promise<RoomRecord> {
+  async publish(room: RoomSnapshot, options?: RoomWriteOptions): Promise<RoomRecord> {
     const seedRecord = await publishWorldSeedEditorDraft(this.baseUrl, room);
     if (seedRecord) {
       this.lastPersistenceTarget = 'remote';
       return seedRecord;
     }
-    const params = withActiveWorldQuery(new URLSearchParams({ response: 'compact' }));
+    const params = withBaseUpdatedAt(withActiveWorldQuery(new URLSearchParams({ response: 'compact' })), options);
     const record = await this.withFallback(
       async () => {
         try {

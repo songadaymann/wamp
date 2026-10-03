@@ -165,6 +165,7 @@ export function showBusyError(
     title?: string;
     variant?: BusyErrorVariant;
     closeLabel?: string;
+    retryLabel?: string;
     retryHandler?: (() => void | Promise<void>) | null;
     closeHandler?: (() => void | Promise<void>) | null;
   } = {}
@@ -187,6 +188,9 @@ export function showBusyError(
   if (refs.busyClose) {
     refs.busyClose.textContent = options.closeLabel?.trim() || 'Close';
   }
+  if (refs.busyRetry) {
+    refs.busyRetry.textContent = options.retryLabel?.trim() || 'Retry';
+  }
   refs.busyRetry?.classList.toggle('hidden', !busyRetryHandler);
   refs.busyClose?.classList.toggle('hidden', !busyCloseHandler);
 }
@@ -200,6 +204,9 @@ export function hideBusyOverlay(): void {
   busyCloseHandler = null;
   if (refs.busyClose) {
     refs.busyClose.textContent = 'Close';
+  }
+  if (refs.busyRetry) {
+    refs.busyRetry.textContent = 'Retry';
   }
 }
 

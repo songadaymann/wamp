@@ -25,6 +25,7 @@ import {
 } from '../../progression/guestBuilderClaimEvents';
 import { saveGuestRoomDraft } from '../../guestRooms/client';
 import { clearLocalRoomStorageEntry } from '../../persistence/browserStorage';
+import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
 import {
   buildExplorerTxUrl,
   formatWalletAddress,
@@ -92,6 +93,10 @@ interface AutoSaveBackoff {
   backedUpDirtyAt: number;
 }
 
+function isRoomEditConflict(error: unknown): boolean {
+  return isRoomApiError(error) && error.status === 409 && error.message === ROOM_EDIT_CONFLICT_MESSAGE;
+}
+
 function isPermanentSaveError(error: unknown): boolean {
   if (!isRoomApiError(error)) {
     return false;
@@ -143,6 +148,10 @@ export class EditorRoomSession {
   // start and drop their results if it changed, so a slow save or load for the previous room
   // can never repoint this session at that room or overwrite the room now being edited.
   private sessionGeneration = 0;
+  // The draft updatedAt the server last reported for this room. Saves and publishes send it so
+  // the server can refuse to overwrite a newer save from another tab or device.
+  private serverDraftUpdatedAt: string | null = null;
+  private editConflictPending = false;
   private persistenceStatus: EditorStatusDetails = {
     text: '',
     accentText: '',
@@ -258,6 +267,8 @@ export class EditorRoomSession {
 
   reset(): void {
     this.sessionGeneration += 1;
+    this.serverDraftUpdatedAt = null;
+    this.editConflictPending = false;
     this.roomId = DEFAULT_ROOM_ID;
     this.roomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
     this.roomVersion = 1;
@@ -291,6 +302,11 @@ export class EditorRoomSession {
       linkLabel: '',
       linkHref: null,
     };
+  }
+
+  // True while the "changed somewhere else" choice is waiting for the builder.
+  get hasPendingEditConflict(): boolean {
+    return this.editConflictPending;
   }
 
   private isStale(generation: number): boolean {
@@ -470,6 +486,7 @@ export class EditorRoomSession {
       }
       const activeRecord = localRecord ?? remoteRecord;
       this.syncRoomMetadata(activeRecord);
+      this.serverDraftUpdatedAt = remoteRecord.draft.updatedAt;
       this.host.applyRoomSnapshot(
         this.resolveRoomSnapshotForEditing(activeRecord, initialRoomSnapshot, options)
       );
@@ -540,7 +557,9 @@ export class EditorRoomSession {
     this.setStatusText('Saving draft...');
 
     try {
-      const record = await this.roomRepository.saveDraft(this.host.exportRoomSnapshot());
+      const record = await this.roomRepository.saveDraft(this.host.exportRoomSnapshot(), {
+        baseUpdatedAt: this.serverDraftUpdatedAt,
+      });
       if (this.isStale(generation)) {
         return null;
       }
@@ -559,6 +578,10 @@ export class EditorRoomSession {
       return record;
     } catch (error) {
       if (this.isStale(generation)) {
+        return null;
+      }
+      if (isRoomEditConflict(error)) {
+        await this.handleEditConflict();
         return null;
       }
       if (this.shouldPersistGuestDraftLocally(error)) {
@@ -634,7 +657,9 @@ export class EditorRoomSession {
     this.setStatusText('Publishing...');
 
     try {
-      const record = await this.roomRepository.publish(this.host.exportRoomSnapshot());
+      const record = await this.roomRepository.publish(this.host.exportRoomSnapshot(), {
+        baseUpdatedAt: this.serverDraftUpdatedAt,
+      });
       if (this.isStale(generation)) {
         return null;
       }
@@ -660,6 +685,10 @@ export class EditorRoomSession {
       return record;
     } catch (error) {
       if (this.isStale(generation)) {
+        return null;
+      }
+      if (isRoomEditConflict(error)) {
+        await this.handleEditConflict();
         return null;
       }
       if (this.shouldPersistGuestDraftLocally(error)) {
@@ -927,7 +956,7 @@ export class EditorRoomSession {
 
     const generation = this.sessionGeneration;
     const publishedRecord = await this.publishRoom('Auto-published on exit.');
-    if (this.isStale(generation)) {
+    if (this.isStale(generation) || this.editConflictPending) {
       return null;
     }
     if (publishedRecord) {
@@ -1271,6 +1300,7 @@ export class EditorRoomSession {
     const record = await this.localRoomRepository.saveDraft(this.host.exportRoomSnapshot());
     this.autoSaveBackoff = null;
     this.syncRoomMetadata(record);
+    this.serverDraftUpdatedAt = null;
 
     if (this.host.getLastDirtyAt() === saveStartedAt) {
       this.host.setRoomDirty(false);
@@ -1295,6 +1325,7 @@ export class EditorRoomSession {
       const localRecord = await this.localRoomRepository.saveDraft(snapshot);
       this.autoSaveBackoff = null;
       this.syncRoomMetadata(localRecord);
+      this.serverDraftUpdatedAt = null;
 
       try {
         await saveGuestRoomDraft(localRecord.draft);
@@ -1326,6 +1357,46 @@ export class EditorRoomSession {
         this.saveInFlight = false;
         this.host.refreshUi();
       }
+    }
+  }
+
+  private async handleEditConflict(): Promise<void> {
+    this.editConflictPending = true;
+    this.recordAutoSaveFailure(true);
+    await this.backupDraftLocally();
+    this.setStatusText('This room was changed in another tab or device. Choose which version to keep.');
+    const generation = this.sessionGeneration;
+    showBusyError(
+      'This room was saved from another tab or device after you opened it here. '
+        + 'Load Latest opens that newer version and discards the changes made here. '
+        + 'Keep Mine saves the version here over it.',
+      {
+        title: 'This Room Changed Somewhere Else',
+        retryLabel: 'Load Latest',
+        retryHandler: () => this.resolveEditConflict(generation, 'load-latest'),
+        closeLabel: 'Keep Mine',
+        closeHandler: () => this.resolveEditConflict(generation, 'keep-mine'),
+      },
+    );
+  }
+
+  private async resolveEditConflict(generation: number, choice: 'load-latest' | 'keep-mine'): Promise<void> {
+    hideBusyOverlay();
+    if (this.isStale(generation)) {
+      return;
+    }
+    this.editConflictPending = false;
+    this.autoSaveBackoff = null;
+    if (choice === 'keep-mine') {
+      // No baseline: this one save overwrites, then the new server timestamp protects later saves.
+      this.serverDraftUpdatedAt = null;
+      await this.saveDraft(true);
+      return;
+    }
+    // Drop this device's copy so loading does not "recover" it over the newer version.
+    clearLocalRoomStorageEntry(this.roomId);
+    if (await this.loadPersistedRoom(null)) {
+      this.host.setRoomDirty(false);
     }
   }
 
@@ -1389,6 +1460,7 @@ export class EditorRoomSession {
   }
 
   private syncRoomMetadata(record: RoomRecord): void {
+    this.serverDraftUpdatedAt = record.draft.updatedAt;
     this.roomId = record.draft.id;
     this.roomCoordinates = { ...record.draft.coordinates };
     this.roomVersion = record.draft.version;

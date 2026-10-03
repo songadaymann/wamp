@@ -321,7 +321,7 @@ export async function handleRoomRequest(
       snapshot,
       buildRoomMutationActor(auth),
       auth.isAdmin,
-      { worldId: parseWorldIdContext(url) },
+      { worldId: parseWorldIdContext(url), expectedDraftUpdatedAt: parseBaseDraftUpdatedAt(url) },
     );
     return roomMutationResponse(request, url, record);
   }
@@ -418,7 +418,7 @@ export async function handleRoomRequest(
       snapshot,
       buildRoomMutationActor(auth),
       auth.isAdmin,
-      { worldId: parseWorldIdContext(url) },
+      { worldId: parseWorldIdContext(url), expectedDraftUpdatedAt: parseBaseDraftUpdatedAt(url) },
     );
     await awardRoomPublishPoints(
       env,
@@ -628,6 +628,13 @@ function parseRoomVersionLimit(value: string | null): number {
     throw new HttpError(400, 'Room version limit must be between 1 and 100.');
   }
   return limit;
+}
+
+function parseBaseDraftUpdatedAt(url: URL): string | null {
+  const value = url.searchParams.get('baseUpdatedAt')?.trim() ?? '';
+  if (!value) return null;
+  if (value.length > 64) throw new HttpError(400, 'Invalid baseUpdatedAt.');
+  return value;
 }
 
 function parseWorldIdContext(url: URL): string | null {

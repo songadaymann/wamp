@@ -28,6 +28,7 @@ import { buildRoomVersionLineage } from '../../../persistence/roomVersionLineage
 import { getManualRoomLeaderboardSourceValidationError } from '../../../persistence/roomLeaderboardLineage';
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
+import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../../persistence/roomEditConflict';
 import type {
   D1PreparedStatement,
   Env,
@@ -184,6 +185,9 @@ export async function loadRoomRecord(
 
 export interface RoomMutationOptions {
   worldId?: string | null;
+  // The draft updatedAt the editor last loaded or saved. When set, the write is refused with a
+  // 409 if the stored draft has changed since (another tab or device saved it).
+  expectedDraftUpdatedAt?: string | null;
   usageUserId?: string | null;
   transactionStatementsBefore?: D1PreparedStatement[];
 }
@@ -861,6 +865,18 @@ function mapStoredRoomVersions(rows: RoomVersionRow[]): RoomVersionRecord[] {
   });
 }
 
+export function assertDraftUnchangedSince(existing: RoomRecord, expectedDraftUpdatedAt: string | null | undefined): void {
+  if (!expectedDraftUpdatedAt) {
+    return;
+  }
+  // Rooms that were never saved have no stored draft; their placeholder timestamp changes on
+  // every load, so there is nothing to compare against.
+  const hasStoredDraft = existing.claimedAt !== null || existing.published !== null;
+  if (hasStoredDraft && existing.draft.updatedAt !== expectedDraftUpdatedAt) {
+    throw new HttpError(409, ROOM_EDIT_CONFLICT_MESSAGE);
+  }
+}
+
 export async function saveDraft(
   env: Env,
   incomingRoom: RoomSnapshot,
@@ -894,6 +910,7 @@ export async function saveDraft(
 
     throw new HttpError(403, 'Only the room claimer can save drafts for this unpublished room.');
   }
+  assertDraftUnchangedSince(existing, options.expectedDraftUpdatedAt);
   const now = new Date().toISOString();
   if (!actorIsAdmin) {
     if (!actor.ownerUser) {
@@ -1016,6 +1033,7 @@ export async function publishRoom(
 
     throw new HttpError(403, 'Only the room claimer can publish this unpublished room.');
   }
+  assertDraftUnchangedSince(existing, options.expectedDraftUpdatedAt);
   if (!actorIsAdmin) {
     if (!actor.ownerUser) {
       throw new HttpError(401, 'Sign in to publish rooms.');

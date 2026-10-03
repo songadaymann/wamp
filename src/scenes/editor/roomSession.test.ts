@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDefaultRoomRecord, createRoomSummaryFromRecord, RoomApiError, type RoomRecord, type RoomRepository, type RoomSnapshot } from '../../persistence/roomRepository';
 import { ROOM_STORAGE_PREFIX } from '../../persistence/browserStorage';
 import { EditorRoomSession } from './roomSession';
+import { showBusyError } from '../../ui/appFeedback';
+import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
 
 const authState = vi.hoisted(() => ({ authenticated: false }));
 vi.mock('../../auth/client', () => ({ getAuthDebugState: () => ({ authenticated: authState.authenticated }) }));
@@ -294,5 +296,110 @@ describe('results that arrive after the editor switched rooms', () => {
     expect(await staleLoad).toBe(false);
     expect(applyRoomSnapshot).not.toHaveBeenCalled();
     expect(session.currentRoomId).toBe(roomB.id);
+  });
+});
+
+describe('the same room saved from another tab or device', () => {
+  const loadedAt = '2026-10-03T12:00:00.000Z';
+  const theirsAt = '2026-10-03T12:30:00.000Z';
+  let values: Map<string, string>;
+
+  beforeEach(() => {
+    authState.authenticated = true;
+    vi.spyOn(performance, 'now').mockImplementation(() => 10_000);
+    values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    });
+    vi.stubGlobal('window', { localStorage });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(showBusyError).mockClear();
+  });
+  afterEach(() => {
+    authState.authenticated = false;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  function serverRecord(updatedAt: string, tile: number): RoomRecord {
+    const record = createDefaultRoomRecord(roomId, coordinates);
+    record.claimerUserId = 'builder';
+    record.claimedAt = loadedAt;
+    record.draft.updatedAt = updatedAt;
+    record.draft.tileData.terrain[9][9] = tile;
+    return record;
+  }
+
+  async function openedEditor(saveDraft: RoomRepository['saveDraft'], latest: RoomRecord) {
+    let dirty = false;
+    const mine = serverRecord(loadedAt, 1);
+    mine.draft.tileData.terrain[9][9] = 77;
+    const applyRoomSnapshot = vi.fn();
+    const loadRoomCurrent = vi.fn()
+      .mockResolvedValueOnce({ summary: createRoomSummaryFromRecord(serverRecord(loadedAt, 1)), draft: serverRecord(loadedAt, 1).draft, published: null })
+      .mockResolvedValue({ summary: createRoomSummaryFromRecord(latest), draft: latest.draft, published: null });
+    const repository = { saveDraft: vi.fn(saveDraft), loadRoomCurrent, getLastPersistenceTarget: () => 'remote' } as unknown as RoomRepository;
+    const session = new EditorRoomSession(repository, {
+      applyRoomSnapshot, exportRoomSnapshot: () => mine.draft,
+      getPublishValidationError: () => null, getRoomDirty: () => dirty,
+      setRoomDirty: (value: boolean) => { dirty = value; }, getLastDirtyAt: () => 100, refreshUi: vi.fn(),
+      refreshSurroundingRoomPreviews: vi.fn(),
+    });
+    session.currentRoomId = roomId;
+    session.currentRoomCoordinates = coordinates;
+    await session.loadPersistedRoom(null);
+    dirty = true;
+    return { session, repository, applyRoomSnapshot, isDirty: () => dirty };
+  }
+
+  const conflict = () => new RoomApiError(ROOM_EDIT_CONFLICT_MESSAGE, 409);
+  const dialogOptions = () => vi.mocked(showBusyError).mock.calls.at(-1)?.[1];
+
+  it('tells the server which save it is based on', async () => {
+    const theirs = serverRecord(theirsAt, 5);
+    const { session, repository } = await openedEditor(async () => serverRecord(theirsAt, 77), theirs);
+    await session.saveDraft(true);
+    expect(repository.saveDraft).toHaveBeenCalledWith(expect.anything(), { baseUpdatedAt: loadedAt });
+    await session.saveDraft(true);
+    expect(repository.saveDraft).toHaveBeenLastCalledWith(expect.anything(), { baseUpdatedAt: theirsAt });
+  });
+
+  it('stops autosave, keeps a copy here, and asks which version to keep', async () => {
+    const theirs = serverRecord(theirsAt, 5);
+    const { session, repository } = await openedEditor(async () => { throw conflict(); }, theirs);
+    await session.saveDraft(true);
+
+    expect(session.hasPendingEditConflict).toBe(true);
+    expect(values.has(`${ROOM_STORAGE_PREFIX}${roomId}`)).toBe(true);
+    expect(dialogOptions()).toMatchObject({ retryLabel: 'Load Latest', closeLabel: 'Keep Mine' });
+    session.maybeAutoSave(false);
+    expect(repository.saveDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it('Keep Mine saves this version over the other one', async () => {
+    const theirs = serverRecord(theirsAt, 5);
+    const saveDraft = vi.fn<RoomRepository['saveDraft']>()
+      .mockRejectedValueOnce(conflict())
+      .mockResolvedValueOnce(serverRecord('2026-10-03T12:31:00.000Z', 77));
+    const { session, repository, isDirty } = await openedEditor(saveDraft, theirs);
+    await session.saveDraft(true);
+
+    await dialogOptions()!.closeHandler!();
+    expect(repository.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: roomId }), { baseUpdatedAt: null });
+    expect(isDirty()).toBe(false);
+    expect(session.hasPendingEditConflict).toBe(false);
+  });
+
+  it('Load Latest opens the other version and drops the copy here', async () => {
+    const theirs = serverRecord(theirsAt, 5);
+    const { session, applyRoomSnapshot, isDirty } = await openedEditor(async () => { throw conflict(); }, theirs);
+    await session.saveDraft(true);
+
+    await dialogOptions()!.retryHandler!();
+    expect(applyRoomSnapshot).toHaveBeenLastCalledWith(expect.objectContaining({ tileData: theirs.draft.tileData }));
+    expect(values.has(`${ROOM_STORAGE_PREFIX}${roomId}`)).toBe(false);
+    expect(isDirty()).toBe(false);
   });
 });

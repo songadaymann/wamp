@@ -175,6 +175,10 @@ export class EditorSceneFlowController {
     }
     const wakeData = await this.roomSession.buildReturnToWorldWakeData();
     if (!wakeData) {
+      if (this.roomSession.hasPendingEditConflict) {
+        // The "changed somewhere else" choice is showing; leave it up instead of replacing it.
+        return;
+      }
       showBusyError(this.host.getPersistenceStatusText() || 'Failed to return to world.', {
         closeHandler: () => hideBusyOverlay(),
       });
