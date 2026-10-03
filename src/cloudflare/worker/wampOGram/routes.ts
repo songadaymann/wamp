@@ -9,6 +9,7 @@ import {
   renderRoomSharePreviewPng,
 } from '../share/roomPreviewImage';
 import { requireAuthenticatedRequestAuth } from '../auth/request';
+import { assertNotSchoolRestricted } from '../school/restrictions';
 import {
   corsHeaders,
   HttpError,
@@ -35,6 +36,7 @@ export async function handleWampOGramRequest(
       'create Wamp-O-Grams',
       'rooms:write',
     );
+    assertNotSchoolRestricted(auth, 'send Wamp-O-Grams');
     const record = await createWampOGram(env, input, auth);
     return jsonResponse(request, record);
   }

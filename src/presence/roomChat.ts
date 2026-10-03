@@ -62,6 +62,7 @@ export type RoomChatSendResult =
       ok: false;
       reason:
         | 'unauthenticated'
+        | 'restricted'
         | 'not-playing'
         | 'connecting'
         | 'empty'
@@ -167,6 +168,10 @@ export class WorldRoomChatClient {
     const authState = getAuthDebugState();
     if (!authState.authenticated || !authState.user) {
       return { ok: false, reason: 'unauthenticated' };
+    }
+    // The presence server drops these anyway; stopping here gives the player a clear reason.
+    if (authState.schoolManaged || authState.chatModeration.banned) {
+      return { ok: false, reason: 'restricted' };
     }
 
     if (!this.localPresence || this.localPresence.mode !== 'play') {

@@ -12,6 +12,12 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
 export type PartyKitIdentityTokenSource = 'auth' | 'guest';
+/**
+ * Whether this player may use in-room speech bubbles: 'ok', 'muted' (banned from chat), or
+ * 'school' (classroom accounts neither send nor receive bubbles from strangers). Guests never
+ * send. Tokens issued before this claim existed carry none and are treated as 'ok' for 'auth'.
+ */
+export type RoomChatPermission = 'ok' | 'muted' | 'school';
 export type PartyKitIdentityTokenSecretSource =
   | 'PARTYKIT_IDENTITY_TOKEN_SECRET'
   | 'PARTYKIT_INTERNAL_TOKEN';
@@ -29,6 +35,7 @@ export interface PartyKitIdentity {
 
 export interface PartyKitIdentityTokenClaims extends PartyKitIdentity {
   source: PartyKitIdentityTokenSource;
+  roomChat?: RoomChatPermission;
   iat: number;
   exp: number;
   nonce: string;
@@ -49,6 +56,7 @@ export interface PartyKitIdentityTokenIssueResponse {
 }
 
 export interface PartyKitIdentityTokenCreateOptions {
+  roomChat?: RoomChatPermission;
   nowMs?: number;
   ttlMs?: number;
   nonce?: string;
@@ -121,6 +129,7 @@ export async function createPartykitIdentityToken(
   const claims: PartyKitIdentityTokenClaims = {
     ...identity,
     source,
+    ...(options.roomChat ? { roomChat: options.roomChat } : {}),
     iat: nowMs,
     exp: nowMs + ttlMs,
     nonce: normalizeIdentityString(options.nonce, MAX_NONCE_LENGTH) || crypto.randomUUID(),
@@ -214,13 +223,30 @@ function normalizeVerifiedClaims(
     return null;
   }
 
+  const roomChat = raw.roomChat === 'ok' || raw.roomChat === 'muted' || raw.roomChat === 'school'
+    ? raw.roomChat
+    : undefined;
   return {
     ...identity,
     source,
+    ...(roomChat ? { roomChat } : {}),
     iat,
     exp,
     nonce,
   };
+}
+
+export function canSendRoomChat(claims: { source: PartyKitIdentityTokenSource; roomChat?: RoomChatPermission }): boolean {
+  return claims.source === 'auth' && (claims.roomChat ?? 'ok') === 'ok';
+}
+
+export function canReceiveRoomChat(claims: { roomChat?: RoomChatPermission }): boolean {
+  return claims.roomChat !== 'school';
+}
+
+/** Guests keep the auto-generated "Guest abcd" name; anything else could impersonate a player. */
+export function isGeneratedGuestDisplayName(displayName: string): boolean {
+  return /^Guest [a-z0-9]{1,8}$/.test(displayName);
 }
 
 function normalizeSecret(value: unknown): string | null {

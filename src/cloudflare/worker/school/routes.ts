@@ -17,6 +17,14 @@ import {
   requireAuthenticatedRequestAuth,
 } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
+import {
+  getClientIp,
+  hashRateLimitKey,
+  networkKeyForIp,
+  releaseRateLimitSlots,
+  takeRateLimitSlots,
+  type RateLimitRule,
+} from '../core/rateLimit';
 import type { Env, RequestAuth } from '../core/types';
 import {
   assertTeacherCanManageClassroom,
@@ -120,6 +128,13 @@ export async function handleSchoolRequest(
   throw new HttpError(404, 'School route not found.');
 }
 
+// Student logins on a shared school computer end after a school day, not 30 days.
+const STUDENT_SESSION_MAX_AGE_SECONDS = 10 * 60 * 60;
+const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+// Wrong passwords: a few tries per student (kids mistype), more for a whole school network.
+const STUDENT_LOGIN_FAILURES_PER_ACCOUNT: RateLimitRule = { bucket: 'student-login:account', limit: 8, windowMs: FIFTEEN_MINUTES_MS };
+const STUDENT_LOGIN_FAILURES_PER_NETWORK: RateLimitRule = { bucket: 'student-login:network', limit: 100, windowMs: FIFTEEN_MINUTES_MS };
+
 async function handleStudentLogin(
   request: Request,
   env: Env,
@@ -127,13 +142,36 @@ async function handleStudentLogin(
 ): Promise<Response> {
   const classroom = await loadActiveSchoolClassroomBySlug(env, rawSlug);
   const body = await parseJsonBody<SchoolStudentLoginRequestBody>(request);
-  const result = await authenticateSchoolStudent(
+  const ip = getClientIp(request);
+  const accountKey = await hashRateLimitKey(
     env,
-    classroom,
-    body.username,
-    body.password,
-    body.newPassword,
+    `school:${classroom.id}:${typeof body.username === 'string' ? body.username.trim().toLowerCase() : ''}`,
   );
+  const attempt = await takeRateLimitSlots(env, [
+    ...(ip ? [{ rule: STUDENT_LOGIN_FAILURES_PER_NETWORK, keyHash: await hashRateLimitKey(env, networkKeyForIp(ip)) }] : []),
+    { rule: STUDENT_LOGIN_FAILURES_PER_ACCOUNT, keyHash: accountKey },
+  ]);
+  if (attempt.limitedBy) {
+    throw new HttpError(429, 'Too many wrong passwords. Wait 15 minutes, or ask your teacher to reset it.');
+  }
+  // Each attempt holds a slot so parallel guesses cannot slip past the limit; only a wrong
+  // username or password keeps it.
+  let result: Awaited<ReturnType<typeof authenticateSchoolStudent>>;
+  try {
+    result = await authenticateSchoolStudent(
+      env,
+      classroom,
+      body.username,
+      body.password,
+      body.newPassword,
+    );
+  } catch (error) {
+    if (!(error instanceof HttpError && error.status === 401)) {
+      await releaseRateLimitSlots(env, attempt.ids);
+    }
+    throw error;
+  }
+  await releaseRateLimitSlots(env, attempt.ids);
   const publicClassroom = serializePublicClassroom(classroom);
 
   if (result.passwordResetRequired || !result.user) {
@@ -146,7 +184,7 @@ async function handleStudentLogin(
     return jsonResponse(request, responseBody);
   }
 
-  const sessionToken = await createSession(env, result.user.id);
+  const sessionToken = await createSession(env, result.user.id, STUDENT_SESSION_MAX_AGE_SECONDS);
   const responseBody: SchoolStudentLoginResponse = {
     authenticated: true,
     passwordResetRequired: false,
@@ -155,7 +193,7 @@ async function handleStudentLogin(
   };
   return jsonResponse(request, responseBody, {
     headers: {
-      'Set-Cookie': createSessionCookie(request, sessionToken),
+      'Set-Cookie': createSessionCookie(request, sessionToken, STUDENT_SESSION_MAX_AGE_SECONDS),
     },
   });
 }

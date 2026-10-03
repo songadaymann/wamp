@@ -965,12 +965,16 @@ export async function loadApiTokenAuth(
   };
 }
 
-export async function createSession(env: Env, userId: string): Promise<string> {
+export async function createSession(
+  env: Env,
+  userId: string,
+  maxAgeSeconds: number = SESSION_MAX_AGE_SECONDS,
+): Promise<string> {
   const token = generateOpaqueToken(32);
   const tokenHash = await hashToken(token);
   const now = new Date();
   const nowIso = now.toISOString();
-  const expiresAt = new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000).toISOString();
+  const expiresAt = new Date(now.getTime() + maxAgeSeconds * 1000).toISOString();
 
   await env.DB.batch([
     env.DB.prepare(

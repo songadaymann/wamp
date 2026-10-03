@@ -643,9 +643,15 @@ async function logout(): Promise<void> {
   setLoading(true, 'Signing out...');
 
   try {
+    const classroomSlug = state.schoolManaged ? state.school?.classroomSlug ?? null : null;
     await apiRequest<{ ok: true }>('/api/auth/logout', {
       method: 'POST',
     });
+    if (classroomSlug) {
+      // Shared school computers: hand the device straight back to the class login page.
+      window.location.assign(`/school-login.html?classroom=${encodeURIComponent(classroomSlug)}`);
+      return;
+    }
 
     state.authenticated = false;
     state.user = null;
@@ -1076,7 +1082,8 @@ function renderAuthUi(): void {
     authEmailButton.disabled = state.loading;
   }
 
-  const showEmailRow = !state.authenticated || !state.user?.email;
+  // Classroom accounts never link a personal email or wallet (the server refuses it too).
+  const showEmailRow = !state.schoolManaged && (!state.authenticated || !state.user?.email);
   authEmailRow?.classList.toggle('hidden', !showEmailRow);
   if (!showEmailRow) hideEmailCodeEntry();
 
@@ -1089,6 +1096,7 @@ function renderAuthUi(): void {
   if (authWalletButton) {
     authWalletButton.disabled = state.loading || !state.walletProjectConfigured;
     authWalletButton.textContent = getWalletButtonLabel();
+    authWalletButton.classList.toggle('hidden', state.schoolManaged);
   }
 
   authPanel.classList.toggle('auth-panel-guest', !state.authenticated);

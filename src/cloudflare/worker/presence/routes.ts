@@ -6,7 +6,9 @@ import {
   type PartyKitIdentity,
   type PartyKitIdentityTokenIssueRequestBody,
   type PartyKitIdentityTokenIssueResponse,
+  isGeneratedGuestDisplayName,
   type PartyKitIdentityTokenSource,
+  type RoomChatPermission,
 } from '../../../presence/identityToken';
 import { DEFAULT_PLAYER_AVATAR_ID } from '../../../player/avatar/registry';
 import {
@@ -17,6 +19,7 @@ import { loadOptionalRequestAuth } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { hasUserAvatarEntitlement } from '../avatars/entitlements';
+import { isChatBannedUser } from '../chat/store';
 
 const MAX_IDENTITY_TOKEN_REQUEST_BYTES = 4096;
 
@@ -46,7 +49,13 @@ async function handlePresenceIdentityTokenIssue(
   });
   const auth = await loadOptionalRequestAuth(env, request);
   const { identity, source } = await resolveIssueIdentity(body, auth?.user ?? null, env);
-  const { token, claims } = await createPartykitIdentityToken(identity, source, signingSecret.secret);
+  // The presence server cannot query the database, so the bubble permission travels in the token.
+  const roomChat: RoomChatPermission | undefined = !auth?.user
+    ? undefined
+    : auth.school
+      ? 'school'
+      : await isChatBannedUser(env, auth.user.id) ? 'muted' : 'ok';
+  const { token, claims } = await createPartykitIdentityToken(identity, source, signingSecret.secret, { roomChat });
   const response: PartyKitIdentityTokenIssueResponse = {
     token,
     expiresAt: new Date(claims.exp).toISOString(),
@@ -86,9 +95,13 @@ async function resolveIssueIdentity(
     };
   }
 
+  const requestedGuestName = bodyIdentity.displayName ?? body.displayName;
+  const requestedGuestUserId = bodyIdentity.userId ?? body.userId;
   const identity = normalizePartykitGuestIdentity({
-    userId: bodyIdentity.userId ?? body.userId,
-    displayName: bodyIdentity.displayName ?? body.displayName,
+    userId: requestedGuestUserId,
+    displayName: typeof requestedGuestName === 'string' && isGeneratedGuestDisplayName(requestedGuestName.trim())
+      ? requestedGuestName
+      : `Guest ${String(requestedGuestUserId ?? '').replace(/[^a-z0-9]/gi, '').slice(-4).toLowerCase() || 'wamp'}`,
     avatarId: typeof requestedAvatarId === 'string'
       && isPlayerAvatarEntitlementGated(requestedAvatarId.trim())
       ? DEFAULT_PLAYER_AVATAR_ID

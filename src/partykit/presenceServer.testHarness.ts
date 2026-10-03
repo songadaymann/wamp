@@ -6,6 +6,7 @@ import {
   createPartykitIdentityToken,
   type PartyKitIdentity,
   type PartyKitIdentityTokenSource,
+  type RoomChatPermission,
 } from '../presence/identityToken';
 import { createConstructionPreviewToken } from '../presence/constructionPreviewToken';
 import {
@@ -259,6 +260,7 @@ export interface ConnectOptions {
   channel?: string;
   identity?: PartyKitIdentity;
   source?: PartyKitIdentityTokenSource;
+  roomChat?: RoomChatPermission;
   token?: string;
 }
 
@@ -277,7 +279,7 @@ export class PresenceServerHarness {
     const identity = options.identity ?? testIdentity(id);
     const token =
       options.token ??
-      (await createTestIdentityToken(identity, options.source ?? 'auth', this.identitySecret));
+      (await createTestIdentityToken(identity, options.source ?? 'auth', this.identitySecret, options.roomChat));
     const url = new URL(`https://presence.example.test/parties/main/${this.room.id}`);
     url.searchParams.set('identityToken', token);
     if (options.channel !== undefined) {
@@ -369,9 +371,11 @@ export function testIdentity(id: string): PartyKitIdentity {
 export async function createTestIdentityToken(
   identity: PartyKitIdentity,
   source: PartyKitIdentityTokenSource = 'auth',
-  secret = DEFAULT_IDENTITY_SECRET
+  secret = DEFAULT_IDENTITY_SECRET,
+  roomChat?: RoomChatPermission,
 ): Promise<string> {
   const { token } = await createPartykitIdentityToken(identity, source, secret, {
+    roomChat,
     nowMs: Date.now(),
     nonce: `nonce-${identity.userId}`,
   });

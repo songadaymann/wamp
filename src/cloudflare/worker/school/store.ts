@@ -22,30 +22,136 @@ const PASSWORD_HASH_BYTES = 32;
 const PASSWORD_SALT_BYTES = 16;
 const USERNAME_PATTERN = /^[a-z0-9][a-z0-9_-]{2,23}$/;
 const CLASSROOM_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{2,47}$/;
+// ~120 words keep temporary passwords easy for kids to type (word-word-123) while giving
+// about 13 million combinations, so they cannot be guessed before a student first logs in.
 const PASSWORD_WORDS = [
   'apple',
+  'acorn',
+  'anchor',
+  'arrow',
+  'badger',
+  'bamboo',
+  'banjo',
+  'basket',
   'beacon',
+  'beetle',
+  'berry',
+  'bison',
+  'blossom',
+  'bubble',
+  'bucket',
+  'cactus',
+  'canyon',
+  'carrot',
+  'castle',
+  'cedar',
+  'cherry',
+  'cloud',
+  'clover',
   'comet',
+  'coral',
+  'cricket',
+  'crystal',
+  'dolphin',
+  'dragon',
   'drum',
+  'eagle',
   'ember',
+  'falcon',
+  'feather',
+  'fern',
   'forest',
+  'fossil',
+  'fox',
+  'garden',
+  'gecko',
+  'glacier',
   'glider',
+  'grape',
   'harbor',
+  'hazel',
+  'hedgehog',
+  'helmet',
+  'honey',
   'island',
+  'ivy',
   'jacket',
+  'jaguar',
+  'jelly',
+  'kayak',
+  'kettle',
   'kite',
+  'koala',
   'ladder',
+  'lantern',
+  'lemon',
+  'lily',
+  'lizard',
+  'llama',
+  'magnet',
+  'maple',
   'meadow',
+  'melon',
+  'meteor',
+  'mitten',
+  'moose',
+  'nebula',
   'number',
+  'nutmeg',
+  'oak',
+  'ocean',
+  'olive',
   'orbit',
+  'otter',
+  'owl',
+  'panda',
+  'paddle',
+  'parrot',
+  'peach',
+  'pebble',
+  'pepper',
   'pixel',
+  'planet',
+  'plum',
+  'pony',
+  'puzzle',
   'quartz',
+  'quill',
+  'rabbit',
+  'radar',
+  'rainbow',
+  'raven',
+  'river',
+  'robin',
   'rocket',
+  'saddle',
   'signal',
+  'sparrow',
+  'spider',
+  'squid',
+  'sunset',
+  'tiger',
+  'tomato',
+  'tulip',
   'tunnel',
+  'turtle',
+  'valley',
   'violet',
+  'volcano',
+  'walnut',
+  'walrus',
   'window',
+  'wizard',
+  'yogurt',
+  'zebra',
 ];
+// Student-chosen passwords that are too common to allow.
+const COMMON_PASSWORDS = new Set([
+  'password', 'password1', 'password123', 'passw0rd', '12345678', '123456789', '1234567890',
+  '11111111', '00000000', '87654321', 'qwertyui', 'qwertyuiop', 'asdfghjk', 'abcdefgh', 'abcd1234',
+  'iloveyou', 'football', 'baseball', 'basketball', 'princess', 'sunshine', 'superman', 'batman123',
+  'minecraft', 'minecraft1', 'roblox123', 'fortnite', 'pokemon1', 'letmein1', 'welcome1', 'monkey123',
+]);
 
 interface SchoolClassroomRow {
   id: string;
@@ -286,6 +392,8 @@ export async function resetSchoolStudentPassword(
         WHERE id = ? AND classroom_id = ?
       `,
     ).bind(passwordHash, now, now, studentId, classroomId),
+    // A reset should lock out whoever had the old password, so end every existing login.
+    env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(student.user_id),
   ]);
 
   return {
@@ -364,6 +472,8 @@ export async function authenticateSchoolStudent(
   const password = normalizeStudentPassword(rawPassword, 'Password');
   const student = await loadSchoolStudentAuthByUsername(env, classroom.id, username);
   if (!student || student.disabled_at) {
+    // Spend the same hashing time as a real check so response timing does not reveal usernames.
+    await verifyStudentPassword(password, await getDummyPasswordHash());
     throw new HttpError(401, 'Username or password is incorrect.');
   }
 
@@ -383,6 +493,9 @@ export async function authenticateSchoolStudent(
     const newPassword = normalizeStudentPassword(rawNewPassword, 'New password');
     if (newPassword === password) {
       throw new HttpError(400, 'New password must be different from the temporary password.');
+    }
+    if (isTooCommonPassword(newPassword)) {
+      throw new HttpError(400, 'That password is too easy to guess. Try a longer one, like three words.');
     }
 
     const passwordHash = await hashStudentPassword(newPassword);
@@ -687,6 +800,17 @@ function normalizeStudentPassword(value: unknown, label: string): string {
     throw new HttpError(400, `${label} must be 8-80 characters.`);
   }
   return password;
+}
+
+let dummyPasswordHash: Promise<string> | null = null;
+function getDummyPasswordHash(): Promise<string> {
+  dummyPasswordHash ??= hashStudentPassword('not-a-real-student-password');
+  return dummyPasswordHash;
+}
+
+function isTooCommonPassword(password: string): boolean {
+  const lower = password.toLowerCase();
+  return COMMON_PASSWORDS.has(lower) || /^(.)\1+$/.test(lower) || '01234567890123456789'.includes(lower);
 }
 
 function generateStudentPassword(): string {

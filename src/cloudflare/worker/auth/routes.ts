@@ -29,6 +29,7 @@ import {
   type RateLimitRule,
 } from '../core/rateLimit';
 import { ensureFounderIdentityQualification } from '../progression/awards';
+import { assertNotSchoolRestricted, assertUserNotSchoolManaged } from '../school/restrictions';
 import {
   attachEmailToUser,
   attachWalletToUser,
@@ -272,6 +273,8 @@ async function createAndSendSignInEmail(
 
   if (existingAuth?.source === 'session') {
     requireTrustedOriginForMutation(request);
+    // Classroom accounts are created without an email; a child's personal address stays out.
+    assertNotSchoolRestricted(existingAuth, 'add an email address');
     const existingEmailUser = await findUserByEmail(env, email);
 
     if (existingAuth.user.email && normalizeEmail(existingAuth.user.email) !== email) {
@@ -537,6 +540,7 @@ export async function handleLogout(request: Request, env: Env): Promise<Response
 
 export async function handleUpdateDisplayName(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(env, request, 'update display name');
+  assertNotSchoolRestricted(auth, 'change their display name');
   const body = await parseJsonBody<DisplayNameUpdateRequestBody>(request);
   const displayName = normalizeDisplayName(body.displayName);
 
@@ -601,6 +605,7 @@ export async function handleListApiTokens(request: Request, env: Env): Promise<R
 
 export async function handleCreateApiToken(request: Request, env: Env): Promise<Response> {
   const session = await requireCurrentSession(env, request, 'manage API tokens');
+  await assertUserNotSchoolManaged(env, session.user.id, 'create API tokens');
   const body = await parseApiTokenCreateBody(request);
   const tokenId = crypto.randomUUID();
   const rawToken = `${API_TOKEN_PREFIX}${generateOpaqueToken(40)}`;
@@ -715,6 +720,7 @@ export async function handleWalletVerify(request: Request, env: Env): Promise<Re
     if (existingAuth.source === 'api_token' || existingAuth.source === 'agent_token') {
       throw new HttpError(403, 'API tokens cannot link wallets.');
     }
+    assertNotSchoolRestricted(existingAuth, 'link a wallet');
 
     user = await attachWalletToUser(env, existingAuth.user, address);
     linkedWallet = true;

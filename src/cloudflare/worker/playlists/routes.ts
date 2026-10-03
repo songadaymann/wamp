@@ -8,6 +8,7 @@ import {
   validatePlaylistSlug,
 } from '../../../playlists/model';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth } from '../auth/request';
+import { assertNotSchoolRestricted } from '../school/restrictions';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import {
@@ -58,6 +59,7 @@ export async function handlePlaylistCreate(request: Request, env: Env): Promise<
     'create playlists',
     'rooms:write',
   );
+  assertNotSchoolRestricted(auth, 'create playlists');
   const body = await parseJsonBody<Partial<RoomPlaylistCreateRequestBody>>(request);
   const playlist = await createRoomPlaylist(env, auth.user, body);
   return jsonResponse(request, playlist, { status: 201 });
@@ -74,6 +76,7 @@ export async function handlePlaylistUpdate(
     'update playlists',
     'rooms:write',
   );
+  assertNotSchoolRestricted(auth, 'update playlists');
   const body = await parseJsonBody<Partial<RoomPlaylistUpdateRequestBody>>(request);
   const playlist = await updateRoomPlaylist(env, auth.user, playlistId, body);
   return jsonResponse(request, playlist);
@@ -105,6 +108,7 @@ export async function handlePlaylistItemCreate(
     'add rooms to playlists',
     'rooms:write',
   );
+  assertNotSchoolRestricted(auth, 'add rooms to playlists');
   const body = await parseJsonBody<Partial<RoomPlaylistItemCreateRequestBody>>(request);
   const playlist = await addRoomToPlaylist(env, auth.user, playlistId, body);
   return jsonResponse(request, playlist, { status: 201 });

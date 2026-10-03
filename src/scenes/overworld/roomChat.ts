@@ -227,6 +227,14 @@ export class OverworldRoomChatController {
       this.options.showTransientStatus?.('Sign in to chat in-room.');
       return false;
     }
+    if (authState.schoolManaged) {
+      this.options.showTransientStatus?.('Room chat is off for classroom accounts.');
+      return false;
+    }
+    if (authState.chatModeration.banned) {
+      this.options.showTransientStatus?.('You are banned from chat.');
+      return false;
+    }
 
     if (!this.client || !this.snapshot?.enabled) {
       this.options.showTransientStatus?.('Room chat is unavailable right now.');
@@ -326,11 +334,13 @@ export class OverworldRoomChatController {
   }
 
   private getSendFailureMessage(
-    reason: 'unauthenticated' | 'not-playing' | 'connecting' | 'empty' | 'too-long' | 'rate-limited'
+    reason: 'unauthenticated' | 'restricted' | 'not-playing' | 'connecting' | 'empty' | 'too-long' | 'rate-limited'
   ): string {
     switch (reason) {
       case 'unauthenticated':
         return 'Sign in to chat in-room.';
+      case 'restricted':
+        return 'Room chat is not available on this account.';
       case 'not-playing':
         return 'Room chat only works while playing.';
       case 'connecting':

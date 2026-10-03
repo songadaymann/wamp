@@ -53,6 +53,11 @@ export interface RoomPreviewPayload {
 
 export interface ConnectionPresenceState {
   channel: RoomChatTransportChannel;
+  /** From the verified identity token: who may send and receive in-room speech bubbles. */
+  canSendRoomChat: boolean;
+  canReceiveRoomChat: boolean;
+  /** Classroom accounts: no PvP invites to or from strangers. */
+  school: boolean;
   userId: string;
   displayName: string;
   avatarId: string;

@@ -55,6 +55,9 @@ function state(
 ): Exclude<ConnectionPresenceState, null> {
   return {
     channel: 'presence',
+    canSendRoomChat: true,
+    canReceiveRoomChat: true,
+    school: false,
     userId,
     displayName,
     avatarId: `avatar-${userId}`,

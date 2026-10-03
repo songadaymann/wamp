@@ -62,6 +62,10 @@ export async function requireWalletLinkedRequestAuth(
   requiredScope: ApiTokenScope
 ): Promise<RequestAuth> {
   const auth = await requireAuthenticatedRequestAuth(env, request, actionLabel, requiredScope);
+  // Only minting uses this; classroom accounts never mint.
+  if (auth.school) {
+    throw new HttpError(403, `School-managed student accounts cannot ${actionLabel}.`);
+  }
   if (!auth.user.walletAddress) {
     throw new HttpError(403, `Link a wallet to ${actionLabel}.`);
   }
@@ -139,7 +143,11 @@ export function createSessionResponse(auth: RequestAuth | null): AuthSessionResp
   };
 }
 
-export function createSessionCookie(request: Request, token: string): string {
+export function createSessionCookie(
+  request: Request,
+  token: string,
+  maxAgeSeconds: number = SESSION_MAX_AGE_SECONDS,
+): string {
   const secure = new URL(request.url).protocol === 'https:';
   const sameSite = secure ? 'SameSite=None' : 'SameSite=Lax';
   return [
@@ -147,7 +155,7 @@ export function createSessionCookie(request: Request, token: string): string {
     'Path=/',
     'HttpOnly',
     sameSite,
-    `Max-Age=${SESSION_MAX_AGE_SECONDS}`,
+    `Max-Age=${maxAgeSeconds}`,
     secure ? 'Secure' : null,
   ]
     .filter(Boolean)

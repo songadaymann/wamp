@@ -20,6 +20,8 @@ import {
 import {
   resolvePartykitIdentitySigningSecret,
   verifyPartykitIdentityToken,
+  canReceiveRoomChat,
+  canSendRoomChat,
   type PartyKitIdentityTokenClaims,
 } from '../src/presence/identityToken';
 import {
@@ -810,6 +812,9 @@ export default class PresenceServer implements Party.Server {
 
     return {
       channel,
+      canSendRoomChat: canSendRoomChat(claims),
+      canReceiveRoomChat: canReceiveRoomChat(claims),
+      school: claims.roomChat === 'school',
       userId: claims.userId,
       displayName: claims.displayName,
       avatarId: claims.avatarId,
@@ -839,7 +844,8 @@ export default class PresenceServer implements Party.Server {
     message: RoomChatSayMessage
   ): void {
     const state = sender.state;
-    if (!state || state.channel !== 'room-chat') {
+    // Guests, chat-banned players and classroom accounts cannot send bubbles, whatever the client does.
+    if (!state || state.channel !== 'room-chat' || !state.canSendRoomChat) {
       return;
     }
 
@@ -872,6 +878,7 @@ export default class PresenceServer implements Party.Server {
       const peerPresence = connection.state?.presence;
       return (
         connection.state?.channel === 'room-chat' &&
+        connection.state.canReceiveRoomChat &&
         peerPresence?.mode === 'play' &&
         this.getRoomId(peerPresence.roomCoordinates) === roomId
       );
@@ -899,6 +906,10 @@ export default class PresenceServer implements Party.Server {
 
     const target = this.findConnectionById(invite.targetConnectionId);
     if (!target?.state || target.state.channel !== 'presence') {
+      return;
+    }
+    // Strangers cannot pull classroom accounts into matches, and students cannot invite strangers.
+    if (state.school || target.state.school) {
       return;
     }
 

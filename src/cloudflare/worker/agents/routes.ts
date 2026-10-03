@@ -9,6 +9,7 @@ import type {
 import { HttpError, jsonResponse, noContentResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { requireCurrentSession } from '../auth/request';
+import { assertUserNotSchoolManaged } from '../school/restrictions';
 import { findUserByDisplayName } from '../auth/store';
 import {
   createAgentForOwner,
@@ -67,6 +68,7 @@ async function handleListAgents(request: Request, env: Env): Promise<Response> {
 
 async function handleCreateAgent(request: Request, env: Env): Promise<Response> {
   const session = await requireCurrentSession(env, request, 'create agents');
+  await assertUserNotSchoolManaged(env, session.user.id, 'create agents');
   const body = await parseAgentCreateBody(request);
   const existingUser = await findUserByDisplayName(env, body.displayName);
   if (existingUser) {
