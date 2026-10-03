@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultRoomRecord, createRoomSummaryFromRecord, RoomApiError, type RoomRecord, type RoomRepository } from '../../persistence/roomRepository';
+import { createDefaultRoomRecord, createRoomSummaryFromRecord, RoomApiError, type RoomRecord, type RoomRepository, type RoomSnapshot } from '../../persistence/roomRepository';
 import { ROOM_STORAGE_PREFIX } from '../../persistence/browserStorage';
 import { EditorRoomSession } from './roomSession';
 
@@ -205,5 +205,94 @@ describe('signed-in autosave after a failed save', () => {
     expect(vi.mocked(repository.saveDraft).mock.calls.length).toBe(2);
     expect(isDirty()).toBe(false);
     expect(values.has(backupKey)).toBe(false);
+  });
+});
+
+describe('results that arrive after the editor switched rooms', () => {
+  const roomA = { id: '0,1', coordinates: { x: 0, y: 1 } };
+  const roomB = { id: '5,5', coordinates: { x: 5, y: 5 } };
+
+  beforeEach(() => {
+    authState.authenticated = true;
+    vi.spyOn(performance, 'now').mockImplementation(() => 10_000);
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    });
+    vi.stubGlobal('window', { localStorage });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    authState.authenticated = false;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((done) => { resolve = done; });
+    return { promise, resolve };
+  }
+
+  function sessionFor(repository: Partial<RoomRepository>) {
+    let dirty = true;
+    const setRoomDirty = vi.fn((value: boolean) => { dirty = value; });
+    const applyRoomSnapshot = vi.fn();
+    const session: EditorRoomSession = new EditorRoomSession({ getLastPersistenceTarget: () => 'remote', ...repository } as RoomRepository, {
+      applyRoomSnapshot, exportRoomSnapshot: (): RoomSnapshot => createDefaultRoomRecord(session.currentRoomId, session.currentRoomCoordinates).draft,
+      getPublishValidationError: () => null, getRoomDirty: () => dirty,
+      setRoomDirty, getLastDirtyAt: () => 100, refreshUi: vi.fn(),
+      refreshSurroundingRoomPreviews: vi.fn(),
+    });
+    session.currentRoomId = roomA.id;
+    session.currentRoomCoordinates = roomA.coordinates;
+    return { session, setRoomDirty, applyRoomSnapshot };
+  }
+
+  function openRoomB(session: EditorRoomSession) {
+    session.reset();
+    session.currentRoomId = roomB.id;
+    session.currentRoomCoordinates = roomB.coordinates;
+  }
+
+  it('ignores a slow save for the previous room instead of pointing the editor back at it', async () => {
+    const slowSaveA = deferred<RoomRecord>();
+    const saveB = deferred<RoomRecord>();
+    const saveDraft = vi.fn()
+      .mockReturnValueOnce(slowSaveA.promise)
+      .mockReturnValueOnce(saveB.promise);
+    const { session, setRoomDirty } = sessionFor({ saveDraft });
+
+    const staleSave = session.saveDraft(true);
+    openRoomB(session);
+    void session.saveDraft(true);
+    expect(saveDraft).toHaveBeenCalledTimes(2);
+
+    slowSaveA.resolve(createDefaultRoomRecord(roomA.id, roomA.coordinates));
+    expect(await staleSave).toBeNull();
+
+    expect(session.currentRoomId).toBe(roomB.id);
+    expect(session.currentRoomCoordinates).toEqual(roomB.coordinates);
+    expect(setRoomDirty).not.toHaveBeenCalled();
+    // Room B's own save is still in flight, so autosave must not start a second one.
+    session.maybeAutoSave(false);
+    expect(saveDraft).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not load the previous room into the editor when its load finishes late', async () => {
+    const slowLoadA = deferred<ReturnType<RoomRepository['loadRoomCurrent']> extends Promise<infer T> ? T : never>();
+    const loadRoomCurrent = vi.fn().mockReturnValueOnce(slowLoadA.promise);
+    const { session, applyRoomSnapshot } = sessionFor({ loadRoomCurrent });
+
+    const staleLoad = session.loadPersistedRoom(null);
+    openRoomB(session);
+    const recordA = createDefaultRoomRecord(roomA.id, roomA.coordinates);
+    slowLoadA.resolve({ summary: createRoomSummaryFromRecord(recordA), draft: recordA.draft, published: null });
+
+    expect(await staleLoad).toBe(false);
+    expect(applyRoomSnapshot).not.toHaveBeenCalled();
+    expect(session.currentRoomId).toBe(roomB.id);
   });
 });

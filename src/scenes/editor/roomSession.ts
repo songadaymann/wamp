@@ -139,6 +139,10 @@ export class EditorRoomSession {
   private mintedMetadataUpdatedAt: string | null = null;
   private saveInFlight = false;
   private autoSaveBackoff: AutoSaveBackoff | null = null;
+  // Bumped whenever the editor resets for another room. Network calls capture it before they
+  // start and drop their results if it changed, so a slow save or load for the previous room
+  // can never repoint this session at that room or overwrite the room now being edited.
+  private sessionGeneration = 0;
   private persistenceStatus: EditorStatusDetails = {
     text: '',
     accentText: '',
@@ -253,6 +257,7 @@ export class EditorRoomSession {
   }
 
   reset(): void {
+    this.sessionGeneration += 1;
     this.roomId = DEFAULT_ROOM_ID;
     this.roomCoordinates = { ...DEFAULT_ROOM_COORDINATES };
     this.roomVersion = 1;
@@ -286,6 +291,10 @@ export class EditorRoomSession {
       linkLabel: '',
       linkHref: null,
     };
+  }
+
+  private isStale(generation: number): boolean {
+    return generation !== this.sessionGeneration;
   }
 
   setStatusText(text: string): void {
@@ -386,10 +395,12 @@ export class EditorRoomSession {
 
   async loadHistory(): Promise<void> {
     if (this.historyLoaded || this.publishedVersion <= 0) return;
+    const generation = this.sessionGeneration;
     const metadata = [];
     let cursor: string | undefined;
     do {
       const page = await this.roomRepository.loadRoomVersions(this.roomId, 100, cursor);
+      if (this.isStale(generation)) return;
       metadata.push(...page.versions);
       cursor = page.nextCursor;
     } while (cursor);
@@ -402,6 +413,7 @@ export class EditorRoomSession {
         roomId: this.roomId,
         version: version.version,
       })));
+      if (this.isStale(generation)) return;
       if (response.missing.length > 0) throw new Error('One or more room history snapshots are unavailable.');
       for (const entry of response.snapshots) snapshotsByKey.set(entry.key, entry.snapshot);
     }
@@ -445,6 +457,7 @@ export class EditorRoomSession {
     initialRoomSnapshot: RoomSnapshot | null,
     options: { forceInitialRoomSnapshot?: boolean } = {},
   ): Promise<boolean> {
+    const generation = this.sessionGeneration;
     this.setStatusText('Loading draft...');
 
     try {
@@ -452,6 +465,9 @@ export class EditorRoomSession {
         await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
       );
       const localRecord = await this.getRecoverableLocalDraft(remoteRecord);
+      if (this.isStale(generation)) {
+        return false;
+      }
       const activeRecord = localRecord ?? remoteRecord;
       this.syncRoomMetadata(activeRecord);
       this.host.applyRoomSnapshot(
@@ -467,6 +483,9 @@ export class EditorRoomSession {
       );
       return true;
     } catch (error) {
+      if (this.isStale(generation)) {
+        return false;
+      }
       console.error('Failed to load room draft', error);
       this.setStatusText('Failed to load draft.');
       return false;
@@ -492,9 +511,13 @@ export class EditorRoomSession {
       return null;
     }
 
+    const generation = this.sessionGeneration;
     const saveStartedAt = this.host.getLastDirtyAt();
     if (options.promptForSignInOnUnauthorized) {
       await refreshAuthSession();
+      if (this.isStale(generation)) {
+        return null;
+      }
       if (!getAuthDebugState().authenticated) {
         await this.saveGuestDraft(
           saveStartedAt,
@@ -518,6 +541,9 @@ export class EditorRoomSession {
 
     try {
       const record = await this.roomRepository.saveDraft(this.host.exportRoomSnapshot());
+      if (this.isStale(generation)) {
+        return null;
+      }
       this.autoSaveBackoff = null;
       this.syncRoomMetadata(record);
       if (this.shouldClearLocalDraftAfterRepositoryMutation()) {
@@ -532,6 +558,9 @@ export class EditorRoomSession {
       this.setStatusText(`Draft saved v${this.roomVersion}.${publishSuffix}`);
       return record;
     } catch (error) {
+      if (this.isStale(generation)) {
+        return null;
+      }
       if (this.shouldPersistGuestDraftLocally(error)) {
         try {
           return await this.saveDraftLocally(
@@ -557,8 +586,10 @@ export class EditorRoomSession {
       console.error('Failed to save room draft', error);
       this.setStatusText(this.getSaveFailureStatusText(error, permanent, backedUp));
     } finally {
-      this.saveInFlight = false;
-      this.host.refreshUi();
+      if (!this.isStale(generation)) {
+        this.saveInFlight = false;
+        this.host.refreshUi();
+      }
     }
 
     return null;
@@ -585,7 +616,11 @@ export class EditorRoomSession {
       );
       return null;
     }
+    const generation = this.sessionGeneration;
     await refreshAuthSession();
+    if (this.isStale(generation)) {
+      return null;
+    }
     if (!getAuthDebugState().authenticated) {
       await this.saveGuestDraft(
         this.host.getLastDirtyAt(),
@@ -600,11 +635,17 @@ export class EditorRoomSession {
 
     try {
       const record = await this.roomRepository.publish(this.host.exportRoomSnapshot());
+      if (this.isStale(generation)) {
+        return null;
+      }
       this.syncRoomMetadata(record);
       if (this.shouldClearLocalDraftAfterRepositoryMutation()) {
         clearLocalRoomStorageEntry(this.roomId);
       }
       await refreshAuthSession();
+      if (this.isStale(generation)) {
+        return null;
+      }
       this.host.setRoomDirty(false);
       if (this.mintedTokenId && this.canRefreshMintMetadata() && !this.isMintMetadataCurrent()) {
         this.setStatusDetails({
@@ -618,6 +659,9 @@ export class EditorRoomSession {
       }
       return record;
     } catch (error) {
+      if (this.isStale(generation)) {
+        return null;
+      }
       if (this.shouldPersistGuestDraftLocally(error)) {
         await this.saveDraftLocally(
           this.host.getLastDirtyAt(),
@@ -635,8 +679,10 @@ export class EditorRoomSession {
       const message = error instanceof Error ? error.message : 'Publish failed.';
       this.setStatusText(message);
     } finally {
-      this.saveInFlight = false;
-      this.host.refreshUi();
+      if (!this.isStale(generation)) {
+        this.saveInFlight = false;
+        this.host.refreshUi();
+      }
     }
 
     return null;
@@ -658,22 +704,31 @@ export class EditorRoomSession {
       return null;
     }
 
+    const generation = this.sessionGeneration;
     this.saveInFlight = true;
     this.setStatusText(`Reverting to v${targetVersion}...`);
 
     try {
       const record = await this.roomRepository.revert(this.roomId, this.roomCoordinates, targetVersion);
+      if (this.isStale(generation)) {
+        return null;
+      }
       this.syncRoomMetadata(record);
       this.host.applyRoomSnapshot(this.resolveRoomSnapshotForEditing(record, initialRoomSnapshot));
       this.setStatusText(`Reverted to v${targetVersion}.`);
       return record;
     } catch (error) {
+      if (this.isStale(generation)) {
+        return null;
+      }
       console.error('Failed to revert room version', error);
       const message = error instanceof Error ? error.message : 'Revert failed.';
       this.setStatusText(message);
     } finally {
-      this.saveInFlight = false;
-      this.host.refreshUi();
+      if (!this.isStale(generation)) {
+        this.saveInFlight = false;
+        this.host.refreshUi();
+      }
     }
 
     return null;
@@ -694,6 +749,7 @@ export class EditorRoomSession {
       return null;
     }
 
+    const generation = this.sessionGeneration;
     this.saveInFlight = true;
     this.setStatusText(`Admin restoring to v${targetVersion}...`);
 
@@ -703,17 +759,25 @@ export class EditorRoomSession {
         this.roomCoordinates,
         targetVersion
       );
+      if (this.isStale(generation)) {
+        return null;
+      }
       this.syncRoomMetadata(record);
       this.host.applyRoomSnapshot(this.resolveRoomSnapshotForEditing(record, initialRoomSnapshot));
       this.setStatusText(`Admin restored room to v${targetVersion}.`);
       return record;
     } catch (error) {
+      if (this.isStale(generation)) {
+        return null;
+      }
       console.error('Failed to admin-restore room version', error);
       const message = error instanceof Error ? error.message : 'Admin restore failed.';
       this.setStatusText(message);
     } finally {
-      this.saveInFlight = false;
-      this.host.refreshUi();
+      if (!this.isStale(generation)) {
+        this.saveInFlight = false;
+        this.host.refreshUi();
+      }
     }
 
     return null;
@@ -732,6 +796,7 @@ export class EditorRoomSession {
       return null;
     }
 
+    const generation = this.sessionGeneration;
     this.saveInFlight = true;
     this.setStatusText(`Marking v${targetVersion} as canonical...`);
 
@@ -741,16 +806,24 @@ export class EditorRoomSession {
         this.roomCoordinates,
         targetVersion
       );
+      if (this.isStale(generation)) {
+        return null;
+      }
       this.syncRoomMetadata(record);
       this.setStatusText(`Canonical version set to v${targetVersion}.`);
       return record;
     } catch (error) {
+      if (this.isStale(generation)) {
+        return null;
+      }
       console.error('Failed to set canonical room version', error);
       const message = error instanceof Error ? error.message : 'Canonical version update failed.';
       this.setStatusText(message);
     } finally {
-      this.saveInFlight = false;
-      this.host.refreshUi();
+      if (!this.isStale(generation)) {
+        this.saveInFlight = false;
+        this.host.refreshUi();
+      }
     }
 
     return null;
@@ -772,6 +845,7 @@ export class EditorRoomSession {
       return null;
     }
 
+    const generation = this.sessionGeneration;
     this.saveInFlight = true;
     this.setStatusText(
       sourceVersion === null
@@ -786,6 +860,9 @@ export class EditorRoomSession {
         targetVersion,
         sourceVersion
       );
+      if (this.isStale(generation)) {
+        return null;
+      }
       this.syncRoomMetadata(record);
       this.setStatusText(
         sourceVersion === null
@@ -794,12 +871,17 @@ export class EditorRoomSession {
       );
       return record;
     } catch (error) {
+      if (this.isStale(generation)) {
+        return null;
+      }
       console.error('Failed to update room leaderboard lineage', error);
       const message = error instanceof Error ? error.message : 'Leaderboard lineage update failed.';
       this.setStatusText(message);
     } finally {
-      this.saveInFlight = false;
-      this.host.refreshUi();
+      if (!this.isStale(generation)) {
+        this.saveInFlight = false;
+        this.host.refreshUi();
+      }
     }
 
     return null;
@@ -843,7 +925,11 @@ export class EditorRoomSession {
       };
     }
 
+    const generation = this.sessionGeneration;
     const publishedRecord = await this.publishRoom('Auto-published on exit.');
+    if (this.isStale(generation)) {
+      return null;
+    }
     if (publishedRecord) {
       return {
         centerCoordinates: { ...this.roomCoordinates },
@@ -859,6 +945,9 @@ export class EditorRoomSession {
     }
 
     const draftRecord = await this.saveDraft(true);
+    if (this.isStale(generation)) {
+      return null;
+    }
     if (!draftRecord) {
       this.setStatusText('Publish failed. Draft save failed.');
       return null;
@@ -887,6 +976,7 @@ export class EditorRoomSession {
       return null;
     }
 
+    const generation = this.sessionGeneration;
     if (this.host.getRoomDirty() || this.publishedVersion === 0) {
       showBusyOverlay('Publishing room...', 'Preparing room for mint...');
       const publishedRecord = await this.publishRoom(
@@ -899,6 +989,9 @@ export class EditorRoomSession {
     }
 
     await refreshAuthSession();
+    if (this.isStale(generation)) {
+      return null;
+    }
     const authState = getAuthDebugState();
 
     if (!authState.authenticated) {
@@ -935,6 +1028,10 @@ export class EditorRoomSession {
       const record = await this.roomRepository.confirmMint(this.roomId, this.roomCoordinates, {
         txHash: tx.hash,
       });
+      if (this.isStale(generation)) {
+        hideBusyOverlay();
+        return null;
+      }
       this.syncRoomMetadata(record);
       this.host.setRoomDirty(false);
 
@@ -949,6 +1046,10 @@ export class EditorRoomSession {
       return record;
     } catch (error) {
       console.error('Failed to mint room', error);
+      if (this.isStale(generation)) {
+        hideBusyOverlay();
+        return null;
+      }
       if (isRoomApiError(error) && error.status === 409) {
         const refreshed = createRoomRecordFromCurrent(
           await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
@@ -960,8 +1061,10 @@ export class EditorRoomSession {
       this.setStatusText(message);
       hideBusyOverlay();
     } finally {
-      this.saveInFlight = false;
-      this.host.refreshUi();
+      if (!this.isStale(generation)) {
+        this.saveInFlight = false;
+        this.host.refreshUi();
+      }
     }
 
     return null;
@@ -987,7 +1090,11 @@ export class EditorRoomSession {
       return null;
     }
 
+    const generation = this.sessionGeneration;
     await refreshAuthSession();
+    if (this.isStale(generation)) {
+      return null;
+    }
     const authState = getAuthDebugState();
 
     if (!authState.authenticated) {
@@ -1044,6 +1151,10 @@ export class EditorRoomSession {
           metadataHash: built.metadataHash,
         }
       );
+      if (this.isStale(generation)) {
+        hideBusyOverlay();
+        return null;
+      }
       this.syncRoomMetadata(record);
 
       const explorerUrl = buildExplorerTxUrl(prepare.chain, tx.hash);
@@ -1057,6 +1168,10 @@ export class EditorRoomSession {
       return record;
     } catch (error) {
       console.error('Failed to refresh room NFT metadata', error);
+      if (this.isStale(generation)) {
+        hideBusyOverlay();
+        return null;
+      }
       if (isRoomApiError(error) && error.status === 409) {
         const refreshed = createRoomRecordFromCurrent(
           await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
@@ -1068,8 +1183,10 @@ export class EditorRoomSession {
       this.setStatusText(message);
       hideBusyOverlay();
     } finally {
-      this.saveInFlight = false;
-      this.host.refreshUi();
+      if (!this.isStale(generation)) {
+        this.saveInFlight = false;
+        this.host.refreshUi();
+      }
     }
 
     return null;
@@ -1169,6 +1286,7 @@ export class EditorRoomSession {
     successText: string,
     guestBuilderClaimSource: GuestBuilderClaimSource | null = null,
   ): Promise<RoomRecord | null> {
+    const generation = this.sessionGeneration;
     this.saveInFlight = true;
     this.setStatusText('Saving guest draft...');
 
@@ -1180,8 +1298,14 @@ export class EditorRoomSession {
 
       try {
         await saveGuestRoomDraft(localRecord.draft);
+        if (this.isStale(generation)) {
+          return localRecord;
+        }
         this.setStatusText(successText);
       } catch (error) {
+        if (this.isStale(generation)) {
+          return localRecord;
+        }
         console.warn('Failed to save durable guest room draft', error);
         this.setStatusText('Draft saved locally. Sign in to publish.');
       }
@@ -1198,8 +1322,10 @@ export class EditorRoomSession {
       this.setStatusText('Could not save this draft on this device. Your browser storage may be full.');
       return null;
     } finally {
-      this.saveInFlight = false;
-      this.host.refreshUi();
+      if (!this.isStale(generation)) {
+        this.saveInFlight = false;
+        this.host.refreshUi();
+      }
     }
   }
 
