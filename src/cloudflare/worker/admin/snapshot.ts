@@ -53,7 +53,16 @@ interface SnapshotImportRequestBody {
   rows: Array<Record<string, unknown>>;
 }
 
+// Snapshot reset/import wipe and overwrite core tables. They exist only for refreshing the
+// safety Worker from production, so every other Worker (including production) hides them.
+function requireSnapshotAdminEnabled(env: Env): void {
+  if (env.ENABLE_SNAPSHOT_ADMIN !== '1') {
+    throw new HttpError(404, 'Not found.');
+  }
+}
+
 export async function handleAdminSnapshotReset(request: Request, env: Env): Promise<Response> {
+  requireSnapshotAdminEnabled(env);
   requireAdminRequest(env, request, 'reset safety snapshot tables');
 
   const deleted = Object.fromEntries(
@@ -75,6 +84,7 @@ export async function handleAdminSnapshotImport(
   env: Env,
   tableName: string
 ): Promise<Response> {
+  requireSnapshotAdminEnabled(env);
   requireAdminRequest(env, request, `import safety snapshot rows into ${tableName}`);
 
   if (!isSnapshotTableName(tableName)) {

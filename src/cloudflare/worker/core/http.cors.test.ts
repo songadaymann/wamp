@@ -25,7 +25,6 @@ describe('worker CORS trusted origins', () => {
       'https://a1b2c3d4-everybodys-platformer-safety.novox-robot.workers.dev',
       'https://preview.everybodys-platformer-safety.novox-robot.workers.dev',
       'https://feat-ellipse.wampland.pages.dev',
-      'https://abc123.wamp.pages.dev',
       'https://7637d1e5.wamp-9i6.pages.dev',
     ];
 
@@ -33,6 +32,13 @@ describe('worker CORS trusted origins', () => {
       expect(isTrustedOrigin(origin, API_URL), origin).toBe(true);
       expect(allowOrigin(origin), origin).toBe(origin);
       expect(allowsCredentials(origin), origin).toBe(true);
+    }
+  });
+
+  it('does not trust wamp.pages.dev, which WAMP does not own', () => {
+    for (const origin of ['https://wamp.pages.dev', 'https://evil.wamp.pages.dev']) {
+      expect(isTrustedOrigin(origin, 'https://api.wamp.land/api/auth/tokens'), origin).toBe(false);
+      expect(allowsCredentials(origin, 'https://api.wamp.land/api/auth/session'), origin).toBe(false);
     }
   });
 

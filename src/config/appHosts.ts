@@ -1,9 +1,9 @@
 const PRODUCTION_API_BASE = 'https://api.wamp.land';
 const CLOUDFLARE_ACCOUNT_WORKERS_SUFFIX = 'novox-robot.workers.dev';
 const WORKER_NAMES = ['everybodys-platformer-safety', 'everybodys-platformer'] as const;
+// Only Pages projects WAMP owns. wamp.pages.dev belongs to an unrelated site and must never be trusted.
 const PAGES_PROJECT_HOSTS = [
   'wampland.pages.dev',
-  'wamp.pages.dev',
   'wamp-9i6.pages.dev',
 ] as const;
 

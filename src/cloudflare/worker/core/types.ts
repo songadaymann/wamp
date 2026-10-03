@@ -77,6 +77,7 @@ export interface Env {
   WALLET_CONNECT_PROJECT_ID?: string;
   VITE_WALLET_CONNECT_PROJECT_ID?: string;
   ENABLE_TEST_RESET?: string;
+  ENABLE_SNAPSHOT_ADMIN?: string;
   ROOM_DAILY_CLAIM_LIMIT?: string;
   ROOM_DAILY_PUBLISH_LIMIT?: string;
   EXPANDED_ROOMS_ENABLED?: string;

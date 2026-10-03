@@ -13,5 +13,8 @@ describe('trusted app hosts', () => {
     expect(isTrustedAppHostname('7637d1e5.wamp-9i6.pages.dev')).toBe(true);
     expect(isTrustedAppHostname('a1b2c3d4-everybodys-platformer.novox-robot.workers.dev')).toBe(true);
     expect(isTrustedAppHostname('unrelated.pages.dev')).toBe(false);
+    expect(isTrustedAppHostname('wamp.pages.dev')).toBe(false);
+    expect(isTrustedAppHostname('evil.wamp.pages.dev')).toBe(false);
+    expect(getKnownProductionApiBase('wamp.pages.dev')).toBe('');
   });
 });

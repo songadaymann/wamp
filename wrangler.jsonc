@@ -70,6 +70,7 @@
       "preview_urls": true,
       "vars": {
         "ENABLE_TEST_RESET": "0",
+        "ENABLE_SNAPSHOT_ADMIN": "1",
         "JAM_SUBMISSIONS_OPEN_AT": "2026-07-20T04:00:00.000Z",
         "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-28T12:00:00.000Z",
         "PARTYKIT_HOST": "everybodys-platformer-presence-safety.songadaymann.partykit.dev",
