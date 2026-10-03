@@ -4905,10 +4905,15 @@ export class OverworldPlayScene extends Phaser.Scene {
     return this.selectionController.isRoomInActiveCourse(coordinates);
   }
 
-  getPostRunShareRoomSnapshot(): RoomSnapshot | null {
+  getPostRunShareRoomSnapshot(coordinates?: RoomCoordinates): RoomSnapshot | null {
     const runState = this.goalRunController.getCurrentRun();
-    const coordinates = runState?.roomCoordinates ?? this.currentRoomCoordinates;
-    return this.worldStreamingController.cloneRoomSnapshotForCoordinates(coordinates);
+    const target = coordinates ?? runState?.roomCoordinates ?? this.currentRoomCoordinates;
+    return this.worldStreamingController.cloneRoomSnapshotForCoordinates(target);
+  }
+
+  isViewingRoomCoordinates(coordinates: RoomCoordinates): boolean {
+    return this.currentRoomCoordinates.x === coordinates.x
+      && this.currentRoomCoordinates.y === coordinates.y;
   }
 
   fitLoadedWorld(): void {
