@@ -212,6 +212,58 @@ describe('LiveObjectInteractionCoordinator', () => {
     expect(harness.controller.getReconciliationGeneration()).toBe(1);
   });
 
+  it('rebuilds sleeping enemy terrain and obstacle connections before its body wakes', () => {
+    const body = { enable: false };
+    const sleeper = createLiveObject('penguin', { body });
+    const disabled = createLiveObject('penguin', { key: 'disabled', body: { enable: false } });
+    const crate = createLiveObject('crate');
+    const room = createRoom('room', [sleeper, disabled, crate], { inset: true });
+    const neighbor = createRoom('neighbor', []);
+    const harness = createHarness([room, neighbor], {
+      isDistanceSleeping: (object: LoadedRoomObject) => object === sleeper,
+      getRuntimeSolidObjects: (candidate: typeof room) => candidate === room ? [crate] : [],
+    });
+
+    harness.controller.syncWorldColliders([room, neighbor]);
+    // A second reconciliation while asleep must retain the same connections.
+    harness.controller.syncWorldColliders([room, neighbor]);
+
+    expect(sleeper.worldColliders).toHaveLength(4);
+    expect(disabled.worldColliders).toHaveLength(0);
+    const current = harness.registrations.filter(({ result }) =>
+      sleeper.worldColliders.includes(result as never),
+    );
+    expect(current.map(({ object2 }) => object2)).toEqual([
+      room.terrainLayer, room.terrainInsetBodies, neighbor.terrainLayer, crate.sprite,
+    ]);
+    expect(current.every(({ process }) => process?.() === false)).toBe(true);
+
+    body.enable = true;
+    expect(current.every(({ process }) => process?.() === true)).toBe(true);
+  });
+
+  it('retains actor pairs with a sleeping solid NPC until the NPC wakes', () => {
+    const actor = createLiveObject('penguin');
+    const npcBody = { enable: false };
+    const npc = createLiveObject('jimothy', { body: npcBody });
+    const room = createRoom('room', [actor, npc]);
+    const harness = createHarness([room], {
+      isDistanceSleeping: (object: LoadedRoomObject) => object === npc,
+      getRuntimeSolidObjects: () => [npc],
+      usesDynamicObjectBody: () => true,
+    });
+
+    harness.controller.syncWorldColliders([room]);
+
+    const pair = harness.registrations.find(({ object1, object2 }) =>
+      object1 === actor.sprite && object2 === npc.sprite,
+    );
+    expect(pair).toBeDefined();
+    expect(pair?.process?.()).toBe(false);
+    npcBody.enable = true;
+    expect(pair?.process?.()).toBe(true);
+  });
+
   it('routes enemy collisions with block switches and pushables through domain callbacks', () => {
     const actor = createLiveObject('swordsman_ai', { key: 'actor' });
     const blockSwitch = createLiveObject('block_switch', { key: 'switch' });

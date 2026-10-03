@@ -129,6 +129,38 @@ function createController(
 }
 
 describe('OverworldLiveObjectController spatial partitions', () => {
+  it('keeps a fallen enemy awake near its spawn so it can reach the respawn threshold', () => {
+    const playerBody = createBody(500, 250, 16, 24);
+    const enemy = createLiveObject('penguin', createBody(1200, 900, 24, 28));
+    enemy.runtime.baseX = 1180;
+    enemy.runtime.baseY = 256;
+    const controller = createController(playerBody) as unknown as {
+      isLiveObjectOutsideWakeRange: (enemy: LoadedRoomObject, body: typeof playerBody) => boolean;
+    };
+
+    expect(controller.isLiveObjectOutsideWakeRange(enemy, playerBody)).toBe(false);
+
+    // Entering the second room must also allow this enemy to recover.
+    expect(controller.isLiveObjectOutsideWakeRange(enemy, createBody(720, 250, 16, 24))).toBe(false);
+  });
+
+  it('still sleeps enemies when both the enemy and its spawn are distant', () => {
+    const playerBody = createBody(80, 250, 16, 24);
+    const enemy = createLiveObject('penguin', createBody(1300, 900, 24, 28));
+    enemy.runtime.baseX = 1300;
+    enemy.runtime.baseY = 256;
+    const controller = createController(playerBody) as unknown as {
+      isLiveObjectOutsideWakeRange: (enemy: LoadedRoomObject, body: typeof playerBody) => boolean;
+    };
+
+    expect(controller.isLiveObjectOutsideWakeRange(enemy, playerBody)).toBe(true);
+
+    // An enemy that moves close to the player must wake even with a distant spawn.
+    enemy.sprite.x = 100;
+    enemy.sprite.y = 256;
+    expect(controller.isLiveObjectOutsideWakeRange(enemy, playerBody)).toBe(false);
+  });
+
   it('keeps a cold coin destination buildable when boot registered an empty animation', () => {
     const data = new Map<string, unknown>();
     const play = vi.fn(() => {

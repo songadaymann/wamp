@@ -72,6 +72,7 @@ export interface LiveObjectInteractionCoordinatorOptions<TEdgeWall> {
     liveObject: LoadedRoomObject,
   ) => void;
   shouldCollideWithLiveObject: (liveObject: LoadedRoomObject) => boolean;
+  isDistanceSleeping?: (liveObject: LoadedRoomObject) => boolean;
   shouldCollideWithLadderTopSupport: (
     playerBody: Phaser.Physics.Arcade.Body,
     supportBody: ArcadeObjectBody,
@@ -291,7 +292,7 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
       this.options.getRuntimeSolidObjects(loadedRoom)
         .filter(
           (candidate) =>
-            this.options.shouldCollideWithLiveObject(candidate) &&
+            this.shouldCreateWorldColliders(candidate) &&
             objectCollidesWithWorld(candidate.config),
         )
         .map((liveObject) => ({ loadedRoom, liveObject })),
@@ -307,7 +308,7 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
         this.options.destroyWorldColliders(liveObject);
 
         if (
-          !this.options.shouldCollideWithLiveObject(liveObject) ||
+          !this.shouldCreateWorldColliders(liveObject) ||
           !this.options.usesDynamicObjectBody(liveObject.config)
         ) {
           continue;
@@ -394,6 +395,17 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
         }
       }
     }
+  }
+
+  private shouldCreateWorldColliders(liveObject: LoadedRoomObject): boolean {
+    // Distance sleep temporarily disables physics, but the actor still needs
+    // its terrain and obstacle connections ready when its body wakes.
+    return this.options.shouldCollideWithLiveObject(liveObject)
+      || Boolean(
+        liveObject.sprite.active
+        && liveObject.sprite.body
+        && this.options.isDistanceSleeping?.(liveObject),
+      );
   }
 
   private shouldCollideLiveObjectPair(
