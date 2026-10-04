@@ -22,6 +22,14 @@ else commonArgs.push('--local');
 if (environment) commonArgs.push('--env', environment);
 
 if (action === 'repair') {
+  // Check the additive migration before rebuilding anything. An older schema
+  // cannot preserve the reviewed expanded-room version pins.
+  const schema = spawnSync('npx', [...commonArgs, '--command',
+    'SELECT target_key, target_version FROM featured_rooms LIMIT 0;'], { stdio: 'inherit', shell: false });
+  if (schema.error || schema.status !== 0) {
+    console.error('Apply migration 0054 before repairing the discovery index. No rebuild was attempted.');
+    process.exit(1);
+  }
   commonArgs.push('--file', 'migrations/0040_playable_content_index.sql');
 } else {
   commonArgs.push(
@@ -64,5 +72,11 @@ const result = spawnSync('npx', commonArgs, { stdio: 'inherit', shell: false });
 if (result.error) {
   console.error(result.error.message);
   process.exit(1);
+}
+if (result.status === 0 && action === 'repair') {
+  const pins = spawnSync('npx', [...commonArgs.slice(0, commonArgs.indexOf('--file')),
+    '--file', 'scripts/sql/refresh_featured_content_pins.sql'], { stdio: 'inherit', shell: false });
+  if (pins.error) console.error(pins.error.message);
+  process.exit(pins.status ?? 1);
 }
 process.exit(result.status ?? 1);

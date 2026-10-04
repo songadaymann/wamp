@@ -36,6 +36,7 @@ import {
 } from '../core/http';
 import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, ExpandedRoomRunRow, WorkerExecutionContextLike } from '../core/types';
+import { recordDiscoveryRunPlayer, scheduleDiscoveryMetrics } from '../playableContentIndex/runMetrics';
 import {
   refreshPlayableContentIndexForExpandedRoom,
   schedulePlayableContentIndexRefresh,
@@ -260,6 +261,7 @@ export async function handleExpandedRoomRunFinish(
   request: Request,
   env: Env,
   attemptId: string,
+  executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -540,6 +542,10 @@ export async function handleExpandedRoomRunFinish(
   if (!finalizedRun) {
     throw new HttpError(500, 'Failed to reload finalized expanded room run.');
   }
+  await scheduleDiscoveryMetrics(executionContext, recordDiscoveryRunPlayer(
+    env, 'expanded_room:' + existing.expandedRoomId, existing.expandedRoomVersion, auth.user.id,
+    { ...finalBody, finishedAt },
+  ));
 
   let isFirstCompletion = false;
   let isNewPersonalBest = false;

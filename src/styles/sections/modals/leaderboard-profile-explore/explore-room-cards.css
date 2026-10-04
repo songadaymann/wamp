@@ -24,7 +24,7 @@
 
 #explore-modal .explore-room-card {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-columns: 120px minmax(0, 1fr);
   align-items: stretch;
   gap: 12px;
   width: 100%;
@@ -102,12 +102,15 @@
 
 #explore-modal .explore-room-title-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
 }
 
 #explore-modal .explore-room-title {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
   color: #18161c;
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 14px;
@@ -150,6 +153,7 @@
 
 #explore-modal .explore-room-builder {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   min-width: 0;

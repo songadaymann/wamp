@@ -150,7 +150,7 @@ LEFT JOIN (
 LEFT JOIN room_rating_aggregates ratings
   ON ratings.room_id = rooms.id
  AND ratings.version_key = versions.version
-LEFT JOIN featured_rooms featured ON featured.room_id = rooms.id
+LEFT JOIN featured_rooms featured ON featured.room_id = rooms.id AND featured.room_version = versions.version
 WHERE rooms.published_json IS NOT NULL
   AND NOT EXISTS (
     SELECT 1 FROM published_expanded_members members WHERE members.room_id = rooms.id
@@ -189,7 +189,7 @@ expanded_metadata AS (
   INNER JOIN expanded_room_cells cells
     ON cells.expanded_room_id = expanded.id
    AND cells.expanded_room_version = expanded.published_version
-  LEFT JOIN featured_rooms featured ON featured.room_id = cells.room_id
+  LEFT JOIN featured_rooms featured ON featured.room_id = cells.room_id AND featured.room_version = cells.room_version
   WHERE expanded.published_json IS NOT NULL
     AND expanded.published_version IS NOT NULL
     AND expanded.archived_at IS NULL

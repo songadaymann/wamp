@@ -28,6 +28,7 @@ import {
 } from '../core/http';
 import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { CourseRunRow, Env, WorkerExecutionContextLike } from '../core/types';
+import { recordDiscoveryRunPlayer, scheduleDiscoveryMetrics } from '../playableContentIndex/runMetrics';
 import {
   refreshPlayableContentIndexForExpandedRoom,
   schedulePlayableContentIndexRefresh,
@@ -358,7 +359,8 @@ export async function handleCourseRunStart(
 export async function handleCourseRunFinish(
   request: Request,
   env: Env,
-  attemptId: string
+  attemptId: string,
+  executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -600,6 +602,10 @@ export async function handleCourseRunFinish(
   if (!finalizedRun) {
     throw new HttpError(500, 'Failed to reload finalized course run.');
   }
+  await scheduleDiscoveryMetrics(executionContext, recordDiscoveryRunPlayer(
+    env, 'expanded_room:course:' + existing.courseId, existing.courseVersion, auth.user.id,
+    { ...finalBody, finishedAt },
+  ));
 
   let isFirstCompletion = false;
   let isNewPersonalBest = false;

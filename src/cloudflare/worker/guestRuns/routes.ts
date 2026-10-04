@@ -1,6 +1,7 @@
 import { requireAuthenticatedRequestAuth, requireTrustedOriginForMutation } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
-import type { Env } from '../core/types';
+import type { Env, WorkerExecutionContextLike } from '../core/types';
+import { recordClaimedDiscoveryPlayers, scheduleDiscoveryMetrics } from '../playableContentIndex/runMetrics';
 import { assertWampLeaderboardWriteAllowed } from '../generatedUsers/leaderboardIsolation';
 import { findGuestRunStart, finishGuestRun, parseGuestRunStart, startGuestRun, validGuestRequestId } from './attempts';
 import { claimGuestRuns } from './claims';
@@ -35,7 +36,7 @@ export async function handleGuestProgressHistoryRequest(request: Request, origin
   const auth = await requireAuthenticatedRequestAuth(env, request, 'view saved guest clears');
   return jsonResponse(request, { ...await listClaimedGuestClears(env, auth.user.id), userId: auth.user.id });
 }
-export async function handleClaimGuestRequest(request: Request, originalEnv: Env): Promise<Response> {
+export async function handleClaimGuestRequest(request: Request, originalEnv: Env, context?: WorkerExecutionContextLike): Promise<Response> {
   const env = { ...originalEnv, DB: originalEnv.DB.withSession?.('first-primary') ?? originalEnv.DB };
   const auth = await requireAuthenticatedRequestAuth(env, request, 'save guest progress', 'runs:write');
   await assertWampLeaderboardWriteAllowed(env, auth, 'save guest progress');
@@ -48,5 +49,7 @@ export async function handleClaimGuestRequest(request: Request, originalEnv: Env
   if (typeof body.expectedUserId !== 'string' || body.expectedUserId !== auth.user.id) {
     throw new HttpError(409, 'Your account changed. Refresh sign-in before saving guest progress.');
   }
-  return jsonResponse(request, await claimGuestRuns(env, identity, auth.user.id, body.claimId));
+  const receipt = await claimGuestRuns(env, identity, auth.user.id, body.claimId);
+  await scheduleDiscoveryMetrics(context, recordClaimedDiscoveryPlayers(env, body.claimId, auth.user.id));
+  return jsonResponse(request, receipt);
 }

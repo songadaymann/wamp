@@ -347,15 +347,15 @@ Evidence is retained in ignored `output/web-game/first-play-controls/production-
 Final documentation is committed/pushed on `codex/checkup-first-play-controls-delivery-2026-10-04` from released main without another main build. Primary 25 unrelated dirty entries are preserved. Browser layouts/emulation are verified; physical F002/F138 certification and the separately reproduced F098 camera issue remain open. **F126 Welcome destinations is next**; it has not been started.
 
 
-## F126 Welcome destinations — in progress (2026-10-04)
+## F126 Welcome destinations — delivered (2026-10-04)
 
 Scope: use the existing six De Ja Vu tutorial rooms as an explicit First Steps sequence with controls, room progress, Next/Restart/Stop and a completion summary based on actual clears. Open the real room explorer from Welcome. Start Build with a playable floor/spawn/exit draft while preserving existing drafts and the Beginner/Advanced choice. Record welcome_explore alongside the existing lane actions.
 
-- [ ] Implement routes, starter snapshot and truthful completion.
-- [ ] Verify sequence lifecycle, loading failures, guest verification and draft protection.
-- [ ] Check native desktop/phone/tablet flows and the official game client; inspect screenshots.
-- [ ] Pass required quality checks, merge and deploy the API and frontend from clean current main (welcome_explore is validated by both).
-- [ ] Verify the exact release on wamp.land and update the checkup (currently 31/214).
+- [x] Implement routes, starter snapshot and truthful completion.
+- [x] Verify sequence lifecycle, loading failures, guest verification and draft protection.
+- [x] Check native desktop/phone/tablet flows and the official game client; inspect screenshots.
+- [x] Pass quality checks, merge and deploy the API and frontend from clean current main (welcome_explore is validated by both).
+- [x] Verify the exact release on wamp.land and update the checkup (now 32/214).
 
 Work lane: codex/checkup-welcome-destinations-2026-10-04 in the managed checkup worktree, starting at origin/main 0c618819 and carrying F104 delivery bookkeeping. Primary checkout's 25 unrelated dirty entries are preserved. F097 is covered by F126; F125 discovery curation/aggregates, F098 camera and physical F002/F138 checks remain separate.
 
@@ -363,3 +363,59 @@ Work lane: codex/checkup-welcome-destinations-2026-10-04 in the managed checkup 
 F126 implementation checkpoint: Welcome Play loads the current published versions of De Ja Vu 1–6 into First Steps. The existing controls/goal introductions and sequence navigation are reused; Stop cancels pending navigation. A dedicated summary counts actual completion events, deduplicates replays and distinguishes verified, queued and unverified guest clears without inventing XP. Welcome Explore opens the existing room list with guest-accessible Play All. Build keeps the Beginner/Advanced choice and opens a playable catalog-ground/spawn/exit starter with conflict protection, normal draft recovery and autosave. Guest presence does not request account-only construction preview tokens. Touch Next includes progress and stays near the controls.
 
 Pre-release checks: npm run check passes 301 files / 2,341 tests, including the new routing, lifecycle, summary, persistence and recorder-validation checks. DOM smoke passes 822 IDs / 159 required. The official client passes with inspected screenshots. Native desktop, portrait phone and narrow-phone checks pass all three lanes, including a real verified tutorial clear, skipped-room summary, guest Play All and a completed starter Test run. Tablet/landscape default-renderer checks and the final compiled-release checks are ongoing. The checkup remains 31/214 until production acceptance. API delivery is required because the new welcome_explore action is validated by the Worker; no D1 schema, room-data, PartyKit or renderer change is needed.
+
+LIVE F126, October 4: [PR #48](https://github.com/songadaymann/wamp/pull/48) delivers source `ae4b2556` and merge `c1847d8c`, API Worker `87a93cec-e15d-403f-8a44-cc3b5be6d529`, and verified Pages `750d1981-13c3-49b0-a8f9-d049c347f31c`. Welcome Play starts De Ja Vu 1–6 as First Steps, Explore opens the real room list with guest Play All, and Build opens a playable starter with normal guest/account draft protection, recovery and autosave. The summary counts actual version-matched clears and distinguishes verified, queued and unverified progress. Full quality passes 301 files / 2,341 tests; source and merged-main CI pass. All 15 actual wamp.land workflows across desktop, phone, tablet, landscape and narrow phone pass with zero unexpected browser errors, real tutorial clears and completed starter Test runs. Every fresh document loads `main-gQ_1zr0h.js`; HTML references/inline bootstrap and all 178 custom-domain/immutable JS/CSS files match the clean release. Native replay ingestion accepts `welcome_explore` with HTTP 200. Strict production smoke and fast-map email health pass. F126 (also F097) is checked; master **32/214**. Final tracking is retained on `codex/checkup-welcome-destinations-delivery-2026-10-04`. Next: **F125 discovery curation and rating/difficulty coverage**. F098 camera and physical F002/F138 acceptance remain open. Primary 25 unrelated dirty entries are preserved.
+
+### F126 release evidence and boundaries
+
+- Frozen source `ae4b2556a7cb33b6a959580fa286c34e4f7a3850` and released main `c1847d8c62e88aceba7d2ab83f921cdf276344fa` have identical trees. [Source quality run](https://github.com/songadaymann/wamp/actions/runs/37210948241) and [merged-main quality run](https://github.com/songadaymann/wamp/actions/runs/37211206548) succeeded. Local full quality passed 301 test files / 2,341 tests, the final build and DOM smoke (822 IDs / 159 required).
+- Guarded production delivery ran from clean literal main with HEAD equal to origin/main. The Worker update is necessary for the shared replay action validator. No migration, published-room data, renderer or PartyKit deployment was needed. The fast-map contract remains `authoring-catalog-v1:d9d6c8cf7dbb63c3`, rollout 100%, renderer `production-2026-10-03-checkup-d9d6c8cf`.
+- The automatic same-head Pages deployment `495eedb1` finished successfully before the production alias was restored to verified manual `750d1981`. Final `wamp.land` and immutable Pages HTML references, inline map bootstrap and all 178 JS/CSS files match the release. Entry `main-gQ_1zr0h.js`, stylesheet `main-C_zg1rzX.css`; final strict smoke passed at 15:04:18 UTC.
+- `scripts/smoke_welcome_destinations.mjs` completed all 15 native public flows with the default renderer: Explore/Play/Build on desktop 1280×800, phone 390×844, tablet 1024×768, landscape 844×390 and narrow phone 320×568. Each fresh browser context asserts the actual served entry. Public acceptance uses no preview telemetry workaround or game/API interception. Real desktop/phone tutorial clears yield an honest 1-of-6 summary with one verified clear; skipped runs yield 0-of-6. Every starter saves locally and its native Test run reaches the actual completed goal before movement stops. Touch Next is visible and at least 44 pixels tall. Selected guide, gameplay, summary, starter and Test screenshots were inspected.
+- Local and compiled-preview evidence is retained alongside the final public report in `output/web-game/welcome-destinations/`. The unchanged official game client completed the native keyboard scenario with inspected screenshots. Initial harness failures remain separate from the accepted final report.
+- Dedicated native public recorder proof uses a fresh guest without replay opt-out: actual Welcome Explore click is uploaded as `welcome_explore`, and both session start and sample ingestion return HTTP 200 with zero browser errors. The retained report includes only entry, action names and statuses, never credentials.
+- Lifecycle tests cover duplicate and cancelled loading, stale navigation, account changes, clear deduplication/status refresh, existing draft recovery, ownership/conflict protection and guest presence gating. The reusable smoke now waits for the real starter clear instead of holding movement past its exit into a neighbouring room.
+
+F125 curation, popular sorting, rating coverage and measured difficulty remain next. F096/F118/F133 celebrations and broader community/publish onboarding remain separate. Browser layouts and native emulated input are verified; physical F002/F138 certification and F098 camera remain open. Direct fast-map alerts stay enabled/configured for Jonathan with healthy scheduled state at 15:07:54 UTC and zero pending alerts, reverified at 15:08:13 UTC. The primary stale checkout remains on `21a697c4` with its original 25 unrelated dirty entries.
+
+
+## F125 discovery — in progress (2026-10-04)
+
+Scope: review and feature 15–25 current rooms with varied builders/difficulty; keep Featured limited to current featured versions and default to Popular below eight featured rooms. Popular counts distinct eligible players in the last 14 days. Difficulty estimates reuse the existing run heuristic, require three distinct non-builder completers, and yield to three or more explicit votes. Make quality trophies attainable with credible community voting while preserving version/award rules.
+
+- [x] Inspect current main, live discovery data and the fact-checked requirements.
+- [x] Implement indexed per-player run metrics, version-aware Featured, Popular and estimated difficulty; validate additive migration/backfill and refresh paths.
+- [ ] Verify native Explore sorting/filtering/queues and responsive labels, including default fallback and stale responses.
+- [ ] Review and feature a varied current-version room set; verify quality-trophy eligibility.
+- [ ] Pass quality checks, PR/merge, guarded migration/full API/Pages delivery and exact live acceptance before checking F125 (master currently 32/214).
+
+Work lane: `codex/checkup-discovery-2026-10-04` from released `c1847d8c`, carrying F126 delivery record `8205bd9e`. Primary stale checkout's 25 unrelated dirty entries remain preserved. F124 builder dashboards and physical F002/F138 acceptance remain separate.
+
+F125 implementation and local acceptance, October 4: Popular ranks distinct signed-in/claimed-guest players in the last 14 days on the current playable version. Migration 0054 stores one first verified completion sample per player/version and backfills room, expanded, legacy course and claimed-guest history; an idempotent post-cutover catch-up closes the migration/deploy interval. Builder self runs, generated players, abandonment and rejected/timed-out verification do not influence estimates. Estimates use the existing time/deaths/objective heuristic, require three distinct completers, and yield to at least three explicit difficulty votes. Featured is exclusive and pins the reviewed whole-level version; republishing clears the pin, including when an expanded anchor stays unchanged. Admin actions accept a valid older member snapshot pinned by a current expanded assembly. Expanded trophies use the exact whole-level version. Credible trophies now require at least three raw/weighted votes while retaining the 4.2 adjusted-score floor (attainable with four to five credible five-star votes); no votes or trophy awards were fabricated.
+
+Local quality passes 303 files / 2,359 tests, typecheck, lint, Worker binding checks, build and DOM contract. Native sorting/filtering/guest Play All and Next pass all five desktop/touch viewport layouts, with no unexpected browser errors. The seven-Featured boundary opens Popular; request-generation tests discard stale close/reopen replies. The unchanged official gameplay client passes movement/jump capture. All 20 selected production rooms from 14 builders were opened and played briefly with working collision/control responses and zero browser errors; 17 are community-built. Nineteen are featured; Race To The Top requires the new API's assembly-aware admin guard and will be added after cutover. F125 remains unchecked at 32/214 until guarded migration/full delivery and actual custom-domain acceptance. The unrelated narrow-screen auth/footer overflow observed during the local probe remains outside this discovery scope; Explore's panel/content fits the narrow screen.
+
+F125 reviewed selection (difficulty labels at review; production estimates can supersede sparse votes):
+
+| Room | Builder | Coordinates | Reviewed difficulty | Version |
+| --- | --- | --- | --- | --- |
+| The HI Room | doyle.productions | 4,1 | easy | v2 |
+| Vanglog's room | vanglog | 3,-8 | easy | v1 |
+| Aqua Prime | Rallsen.eth | 0,5 | easy | v1 |
+| Digestion: Dissociation | sharpteethsweet | 10,4 | easy | v1 |
+| tower 3 | fidgetmcwidget | 9,7 | easy | v1 |
+| Escape the Room | ADJ | 2,12 | medium | v3 |
+| Treasure Hunt - GJ | PlayGame4Fun | -4,10 | medium | v2 |
+| 💎 Maximum Greed 💎 | KamiSawZe | 8,4 | medium | v17 |
+| coin run | KamiSawZe | 0,-6 | medium | v2 |
+| 🍄 Learn2WAMP 3 | KamiSawZe | 1,-2 | medium | v27 |
+| Cybertowers | Farès | -4,12 | hard | expanded v1, member v4 |
+| Messy Desktop | Farès | -1,12 | hard | expanded v5, member v4 |
+| Brickthrough | Farès | 3,7 | extreme | v1 |
+| The Pit | BigBaby123 | 1,3 | extreme | v1 |
+| Death by Claw | ndx | 0,1 | hard | v1 |
+| retsasid | tmndz | -11,5 | hard | v1 |
+| Chuck's INTERGALACTIC UFO SHOW DIMENSION | chuckUFOSHOW | 10,-8 | Unlabelled | v36 |
+| If Heaven Is A Real Place | jonathan | -1,1 | medium | v16 |
+| Race To The Top | jonathan | 1,-8 | medium | expanded v2, member v8 |
+| into the fire | jonathan | -5,3 | hard | v13 |

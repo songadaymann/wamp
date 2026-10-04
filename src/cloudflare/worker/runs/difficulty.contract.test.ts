@@ -49,8 +49,9 @@ describe('T14 difficulty model contracts', () => {
 
     expectHttpError(() => parseRoomDifficultyOrThrow('impossible'), 400,
       'difficulty must be easy, medium, hard, or extreme.');
-    expectHttpError(() => parseRoomDiscoverySortOrThrow('popular'), 400,
-      'sort must be featured, quality, newest, builder, unbeaten, unvisited, or unrated.');
+    expect(parseRoomDiscoverySortOrThrow('popular')).toBe('popular');
+    expectHttpError(() => parseRoomDiscoverySortOrThrow('random'), 400,
+      'sort must be featured, popular, quality, newest, builder, unbeaten, unvisited, or unrated.');
     expectHttpError(() => parseBuilderDiscoverySortOrThrow('quality'), 400,
       'sort must be alphabet, rooms, or recent.');
   });
@@ -142,15 +143,14 @@ describe('T14 discovery and difficulty route source contracts', () => {
     for (const sourceContract of [
       'env.PLAYABLE_CONTENT_INDEX_READS?.trim().toLowerCase()',
       "raw === '1' || raw === 'true' || raw === 'on'",
-      "sort !== 'newest' && sort !== 'featured' && sort !== 'quality'",
-      'const candidateLimit = limit + 1;',
-      "String(error).toLowerCase().includes('playable_content_index')",
-      'Playable-content index is enabled but unavailable; falling back to legacy discovery reads.',
+      "['newest', 'featured', 'quality', 'popular']",
+      'limit + 1',
+      'Discovery index is unavailable; falling back to legacy discovery reads.',
       'throw error;',
     ]) {
       expect(difficultyClosure).toContain(sourceContract);
     }
-    expect(normalizedDifficulty).toMatch(/\bFROM playable_content_index index_row\b/i);
+    expect(normalizedDifficulty).toMatch(/\bFROM playable_content_index current_target\b/i);
     expect(normalizedDifficulty).toMatch(/\bLEFT JOIN playable_content_index_members member\b/i);
     expect(normalizedDifficulty).toMatch(/\bFROM rooms\b/i);
     expect(normalizedDifficulty).toMatch(/\b(?:FROM|JOIN) room_versions\b/i);

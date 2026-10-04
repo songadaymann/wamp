@@ -473,6 +473,7 @@ export async function syncContentTrophy(
   if (
     quality.adjustedAverage !== null &&
     quality.adjustedAverage >= TROPHY_THRESHOLD &&
+    quality.voteCount >= 3 &&
     quality.weightedVoteCount >= TROPHY_MIN_WEIGHTED_VOTES
   ) {
     await env.DB.batch([
