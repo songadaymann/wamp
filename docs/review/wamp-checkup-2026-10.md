@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 30 of 214 done.**
+**Progress: 31 of 214 done.**
 
 ## How to use this file
 
@@ -43,7 +43,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 5. **Switch the fast world map back on, safely** ✅ (F003, F010). Compatible pre-rendered imagery is active again. Tile work stays within the current viewport and bounded metadata; strict production smoke, direct outage/recovery emails and blocking production release compatibility checks protect the restored map.
 6. **Same jump on every screen, and cap phones at 60fps** (F138, F002). On 120/144Hz screens, quick-tap jumps come out lower, ice slides shorter, and jumps in gravity zones are about half as tall. Rooms get easier or harder depending on the device, and leaderboards aren't fair. A careful cap just above 60fps also cuts heat and battery drain on high-refresh phones.
 7. **Make building on phones and tablets stop fighting you** ✅ (F079, F157, F161, F158). Pinch cancellation and touch shapes are delivered in both editors (PR #40), along with Undo/Redo (PR #39). The shared phone dock, persistent Test/Publish, scoped libraries and touch Spawn cancellation are delivered (PR #41). Phone object settings, Done and link Cancel are delivered in both editors (PR #42), including expanded character settings.
-8. **Fix the first five minutes** (F093, F122, F126, F104). Shared links now show only the room-goal intro, with Welcome deferred until Stop (PR #43). Verified guest clears and drafts now carry into an account after sign-in (PR #44). Remaining: first-play control guidance and clearer Welcome destinations.
+8. **Fix the first five minutes** (F093, F122, F126, F104). Shared links now show only the room-goal intro, with Welcome deferred until Stop (PR #43). Verified guest clears and drafts now carry into an account after sign-in (PR #44). Keyboard/touch guidance now appears before first Play, including expanded rooms, playlists and Room Rush (PRs #45–47). Remaining: clearer Welcome destinations.
 9. **Security/safety priority** (F198, F201, F199, F200, F026). Details withheld from this public repo until fixed.
 10. **Security/safety priority** (F182, F184, F183). Details withheld from this public repo until fixed.
 
@@ -85,7 +85,7 @@ Go one item at a time, and check each on the live site and on a real phone befor
 4. **Student safety.** Lock down room chat and school restrictions (F208, F190, F209, F211) before any new classroom pilots.
 5. **Mobile building.** Fix the pinch stray-tile bug and add Undo/Redo buttons (F079, F157).
 6. **Tablet and landscape controls.** Add these next (F075), since that's the biggest chunk of players who currently can't play.
-7. **First visits.** Shared-link modal deferral and guest progress carry-over are delivered (F093, F122). Next: first-play control guidance and clearer Welcome destinations (F104, F126).
+7. **First visits.** Shared-link modal deferral, guest progress carry-over and first-play control guidance are delivered (F093, F122, F104). Next: clearer Welcome destinations (F126).
 8. **Security and safety items.** Details withheld from this public repo until fixed (F182, F183, F185, F198, F201).
 9. **Quick wins and big bets.** Mix in quick wins between bigger items whenever a palate cleanser helps. Then pick one big bet at a time, starting with 'First Steps' or the builder-feedback inbox, since those most directly turn visitors into returning builders.
 
@@ -223,7 +223,7 @@ What happens in a newcomer's first five minutes, and what brings players and bui
 - [ ] **F126** Welcome 'Play' runs one room, 'Explore' just closes the window, and 'Build' drops you into an empty room (also covers F097) · medium impact · medium effort
 - [ ] **F125** Explore's default 'Featured' tab has nothing featured, and 88% of rooms have no rating, so discovery is mostly noise · high impact · small effort
 - [ ] **F096** Clearing a room feels flat: no in-play celebration, no 'Next room', and the XP reward only appears after you press Stop · medium impact · small effort
-- [ ] **F104** New players never see the controls before the timer starts · medium impact · small effort
+- [x] **F104** New players never see the controls before the timer starts · medium impact · small effort — **done 2026-10-04** (`0c618819`). Keyboard/touch guidance precedes ordinary and expanded first Play and appears in playlist/Room Rush entry; movement/timers wait for Start and acknowledgement is remembered per input. Expanded Start retains its chosen course, map imagery stays below ready dialogs, and twelve live workflows pass across six browser layouts.
 - [ ] **F123** Builders never find out that someone played, beat, rated, or took #1 on their room · high impact · medium effort
 - [ ] **F124** Builders can't see how many people played their room, how many beat it, or where they died (also covers F164) · high impact · medium effort
 - [ ] **F130** After-run rating prompts and sign-up prompts disappear unless the player goes back to the map · medium impact · small effort
