@@ -6,6 +6,8 @@ Each item lists the plain-language summary, the technical detail, the evidence t
 
 ### F003: The pre-rendered world-map tile pyramid is switched off in production (asset hash mismatch since ~Sep 3)
 
+**Delivery update.** Delivered 2026-10-03 (`57b607c7`): compatible renderer `production-2026-10-03-checkup-d9d6c8cf` is active at 100%; 972 generations and 952 nonempty objects pass readiness/parity. Public availability smoke, scheduled six-hour health checks and CI asset-contract diagnostics are in place. See [delivery evidence](../development/checkup-map-recovery-2026-10-03.md).
+
 - **Area:** Runtime performance (frame rate, GC, memory)
 - **Type:** defect · **impact:** high · **effort:** small
 
@@ -423,6 +425,8 @@ Fix, incrementally:
 Tablets and other coarse-pointer devices automatically use the reduced profile (1 full room). They only get 9 rooms if the user picks full-quality mode. Desktops with 4 or fewer cores or 4 GB or less of memory are also reduced. Local play pressure (playPressure.ts:76-80) already drops to 1 full room when the 3×3 area has a pressure score of 620 or more, so the densest areas, such as spawn next to the 119-crab room, are already capped. The real exposure is mid-density areas: the Learn2WAMP 2 (1,-1) area scores 586, keeps 9 rooms, and builds an estimated 1,950–2,400 colliders, with cannons in 1,-1 and 1,-2. The ×2 terrain factor only applies to rooms that have inset tiles. Distance sleeping removes far objects from the rebuild, which shrinks C. Because colliders are destroyed before the body.enable check, a sleeping enemy also loses its colliders on every rebuild and gets nothing back when it wakes. The incremental per-object fix should handle this too: re-add colliders when an object wakes, or keep colliders through sleep. Most of the queue cost comes from ProcessQueue.add's pending.indexOf scan. Measured: 1.56 ms at 2k colliders, 3.07 ms at 3k, 10.9 ms at 6k on desktop, before allocating new colliders and closures.
 
 ### F010: World-map tile code re-scans every tile it has ever seen, every frame, and never forgets any
+
+**Delivery update.** Delivered 2026-10-03 (`57b607c7`): direct address/task lookups, stable coverage/candidate/identity caching, relevant availability refresh and a 2,048-entry metadata soft cap replace history-wide frame scans. Timed LOD/fallback transitions remain active every frame. A 20,000-history regression, protected metadata, retries and transition tests pass. See [delivery evidence](../development/checkup-map-recovery-2026-10-03.md).
 
 - **Area:** Runtime performance (frame rate, GC, memory)
 - **Type:** defect · **impact:** medium · **effort:** small

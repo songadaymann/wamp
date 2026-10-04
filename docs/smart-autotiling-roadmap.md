@@ -19,10 +19,13 @@ Gothic fence/columns and Backrooms structures remain gated
 until the rule tier they need has been approved in an earlier set.
 
 The production asset contract is
-`authoring-catalog-v1:4b122cb7accc8026`. Renderer
-`production-2026-08-31-smart-autotiling-4b122cb7` was activated only after all
-797 objects, 546 published leaves, and every ancestor level passed readiness,
-object, and parity checks with no pending, failed, missing, or stale work.
+`authoring-catalog-v1:d9d6c8cf7dbb63c3`. Renderer
+`production-2026-10-03-checkup-d9d6c8cf` is active at 100% rollout after all
+972 generations (665 published leaves and 307 ancestors) and 952 nonempty image
+objects passed readiness, object and pixel-parity checks with no pending, failed,
+missing or stale work. Desktop/Android production coverage and public zoom/pan
+checks pass. Production smoke and a six-hour GitHub health check now require
+compatible, available imagery; CI reports an asset-contract mismatch.
 
 The artist's `rr_extras` v2 ledge delivery (SHA-256
 `0d03e27847884bf17f2d42c1ca66c00180dd848af6d78868303c75728b5ff334`) is active in the existing

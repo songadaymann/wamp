@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 21 of 214 done.**
+**Progress: 23 of 214 done.**
 
 ## How to use this file
 
@@ -40,7 +40,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 2. **Stop builders losing work** ✅ (F052, F060, F058, F057). Shipped retry backoff/local backup, cross-room response guards, two-editor conflict choices, and expanded-room cell/setup recovery with lifecycle protection.
 3. **Let tablets and sideways phones play** ✅ (F075, F077). Anyone on an iPad, or holding a phone sideways (the natural way to hold it for a platformer), presses Play and can't move. The installed Android app is even locked to that orientation. That shuts out a large share of players.
 4. **Make classroom accounts actually safe** ✅ (F208, F190, F209, F211). Students are blocked from World Chat, but they can talk to strangers through in-room speech bubbles. The multiplayer server doesn't check sign-in or bans for those bubbles at all. Other public-posting paths are also open to students, and student passwords can be guessed with no lockout. Fix these before any more school pilots.
-5. **Switch the fast world map back on, safely** (F003, F010). The pre-drawn map tiles built over the summer have been off for about a month, because a tileset update was never re-rendered. Every visitor's phone is doing the heavy drawing instead. One re-render brings them back. At the same time, fix the per-frame tile scan that wakes up when tiles return, and add an alarm so this can't silently happen again.
+5. **Switch the fast world map back on, safely** ✅ (F003, F010). Compatible pre-rendered imagery is active again. Tile work stays within the current viewport and bounded metadata; strict production smoke, scheduled availability checks and CI contract diagnostics protect the restored map.
 6. **Same jump on every screen, and cap phones at 60fps** (F138, F002). On 120/144Hz screens, quick-tap jumps come out lower, ice slides shorter, and jumps in gravity zones are about half as tall. Rooms get easier or harder depending on the device, and leaderboards aren't fair. A careful cap just above 60fps also cuts heat and battery drain on high-refresh phones.
 7. **Make building on phones and tablets stop fighting you** (F079, F157, F161, F158). Phone and tablet building has several problems: - Every pinch-zoom drops a stray tile or floods an area. - Shape tools don't work by touch. - iPads have no Undo button. - The phone editor still has the old layout, with Test and Publish hidden. - Phone builders can't configure pressure plates, NPCs or Sword Hunters.
 8. **Fix the first five minutes** (F093, F122, F126, F104). These are the moments that decide whether a visitor stays: - A shared room link opens the Welcome box on top of the room-goal box. - New players never see the controls before the timer starts. - 'Save Progress' doesn't actually keep a guest's clears when they sign up. - The Welcome box's Play, Explore and Build buttons don't lead anywhere obvious.
@@ -95,7 +95,7 @@ Go one item at a time, and check each on the live site and on a real phone befor
 
 How smoothly the game runs once it's loaded, especially on phones. The foundations are good, but a few effects and missing caps waste a lot of phone power.
 
-- [ ] **F003** The pre-rendered world-map tile pyramid is switched off in production (asset hash mismatch since ~Sep 3) (also covers F016) · high impact · small effort
+- [x] **F003** The pre-rendered world-map tile pyramid is switched off in production (asset hash mismatch since ~Sep 3) (also covers F016) · high impact · small effort — **done 2026-10-03** (`57b607c7`). Matching renderer rebuilt and active at 100%; 972 ready generations, pixel/object parity, public desktop/Android coverage, strict availability smoke and scheduled health checks.
 - [ ] **F002** No 60 fps cap: 120 Hz phones run all game logic and rendering twice per physics step (also covers F081) · high impact · small effort
 - [ ] **F001** Guest session recorder stalls the game once a second for new players (also covers F022) · medium impact · small effort
 - [ ] **F004** Fog and rain rebuild hundreds of shapes from scratch every frame · medium impact · small effort
@@ -103,7 +103,7 @@ How smoothly the game runs once it's loaded, especially on phones. The foundatio
 - [ ] **F080** Portrait play draws the whole game behind the opaque controller panel, wasting ~35–40% of rendering · medium impact · small effort
 - [ ] **F011** 'Battery Saver' and auto-reduced mode don't turn down any visual effects · medium impact · small effort
 - [ ] **F008** Physics collision links grow with every room loaded, and are all rebuilt on room loads, bullet despawns and crate breaks · medium impact · medium effort
-- [ ] **F010** World-map tile code re-scans every tile it has ever seen, every frame, and never forgets any · medium impact · small effort
+- [x] **F010** World-map tile code re-scans every tile it has ever seen, every frame, and never forgets any · medium impact · small effort — **done 2026-10-03** (`57b607c7`). Viewport candidates and retries use direct lookups; coverage/identity caching and bounded metadata eliminate history-wide frame scans while preserving timed transitions.
 - [ ] **F012** Leftover per-frame garbage in the play loop · low impact · small effort
 - [ ] **F006** Every moving body re-scans the tile map and allocates ~100 small objects per frame for special-tile checks · low impact · small effort
 
