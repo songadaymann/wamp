@@ -53,6 +53,7 @@ import {
   getGameSettingsSyncDebugState,
   initializeGameSettingsSync,
 } from './settings/userSettingsSync';
+import { installFrameCadencePacing, getFrameCadenceDebugState } from './main/frameCadence';
 import { resolveWorldLinkBeforeBoot } from './worlds/worldLinkResolver';
 
 const gameContainer = document.getElementById('game-container')!;
@@ -114,6 +115,8 @@ logBootPhase('phaser-game:create-start', {
 });
 const game = new Phaser.Game(config);
 logBootPhase('phaser-game:created');
+const destroyFrameCadencePacing = installFrameCadencePacing(game.loop.raf);
+game.events.once(Phaser.Core.Events.DESTROY, destroyFrameCadencePacing);
 let gamePostStepCount = 0;
 let rendererPostRenderCount = 0;
 let lastGamePostStepAtMs: number | null = null;
@@ -191,7 +194,7 @@ const applyDevicePerformanceMode = () => {
 applyDevicePerformanceMode();
 subscribeDevicePerformanceMode(applyDevicePerformanceMode);
 initializeGameSettingsSync();
-window.get_wamp_resource_debug = () => getRuntimeResourceDebugState(game);
+window.get_wamp_resource_debug = () => ({ ...getRuntimeResourceDebugState(game), frameCadence: getFrameCadenceDebugState() });
 installRuntimeResourceDebugLogger(game, query);
 
 if (import.meta.env.DEV) {
@@ -370,6 +373,7 @@ window.render_game_to_text = () =>
     music: globalRoomMusicController.getDebugState(),
     settings: {
       values: getGameSettings(),
+      frameRate: getFrameCadenceDebugState(),
       sync: getGameSettingsSyncDebugState(),
       performance: {
         selectedMode: getDevicePerformanceMode(),
