@@ -11,7 +11,7 @@ function fixture() {
   const elements = new Map<string, ReturnType<typeof element>>();
   function element() {
     const classes = new Set(['hidden']);
-    return Object.assign(new EventTarget(), { textContent: '', disabled: false, setAttribute: vi.fn(), replaceChildren: vi.fn(),
+    return Object.assign(new EventTarget(), { textContent: '', disabled: false, focus: vi.fn(), setAttribute: vi.fn(), replaceChildren: vi.fn(),
       classList: { contains: (name: string) => classes.has(name), add: (...names: string[]) => names.forEach(name => classes.add(name)),
         remove: (...names: string[]) => names.forEach(name => classes.delete(name)), toggle: (name: string, force: boolean) => force ? classes.add(name) : classes.delete(name) } });
   }
@@ -34,6 +34,23 @@ const leaderboard = { roomId: '0,0', roomVersion: 1, rankingMode: 'time', entrie
 async function settle() { for (let i = 0; i < 4; i++) await Promise.resolve(); }
 afterEach(() => vi.clearAllMocks());
 describe('deferred guest result', () => {
+  it('recovers the exact room rating without inventing a new run or share card', async () => {
+    const f = fixture(); f.roomRepo.loadRoomLeaderboard.mockRejectedValue(new Error('Offline'));
+    await f.controller.openForSequence({ roomId: '0,0', roomCoordinates: { x:0,y:0 }, roomVersion: 7, roomTitle: 'Recovered room' });
+    expect(f.roomRepo.loadRoomLeaderboard).toHaveBeenCalledWith('0,0',{x:0,y:0},7,5);
+    for (const id of ['run-rating-result','run-rating-suggestion','run-rating-share']) expect(f.elements.get(id)?.classList.contains('hidden')).toBe(true);
+    expect(f.elements.get('run-rating-result')?.textContent).toBe('');
+    f.controller.close(); f.request(detail); f.stop(); await settle();
+    expect(f.elements.get('run-rating-result')?.classList.contains('hidden')).toBe(false);
+    expect(f.elements.get('run-rating-result')?.textContent).toBe('0:15.5 · 2 deaths · 10 pts'); f.controller.destroy();
+  });
+  it('recovers a native expanded rating using its own target and version', async () => {
+    const f = fixture(); f.expandedRepo.loadExpandedRoomLeaderboard.mockRejectedValue(new Error('Offline'));
+    await f.controller.openForSequence({ roomId:'0,0',roomCoordinates:{x:0,y:0},roomVersion:1,expandedRoomId:'native',expandedRoomVersion:3,legacyCourseId:'legacy' });
+    expect(f.expandedRepo.loadExpandedRoomLeaderboard).toHaveBeenCalledWith('native',3,5);
+    expect(f.roomRepo.loadRoomLeaderboard).not.toHaveBeenCalled();
+    expect(f.elements.get('run-rating-result')?.classList.contains('hidden')).toBe(true); f.controller.destroy();
+  });
   it('keeps playing uninterrupted, then shows room, time, deaths and the matching best', async () => {
     const f = fixture(); f.roomRepo.loadRoomLeaderboard.mockResolvedValue(leaderboard); f.request(detail);
     expect(f.elements.get('run-rating-modal')?.classList.contains('hidden')).toBe(true); expect(f.roomRepo.loadRoomLeaderboard).not.toHaveBeenCalled();

@@ -200,6 +200,10 @@ class ApiRunRepository implements RunRepository {
     }
 
     const path = `/api/leaderboards/rooms/discover?${params.toString()}`;
+    // Personal lists must follow the current session, including an account switch in this tab.
+    if (sort === 'unrated' || sort === 'unbeaten' || sort === 'unvisited') {
+      return this.request<RoomDiscoveryResponse>(path);
+    }
     return loadWithStaleWhileRevalidate(
       `discovery:${this.baseUrl}${path}`,
       () => this.request<RoomDiscoveryResponse>(path),

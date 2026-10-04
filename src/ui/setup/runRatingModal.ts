@@ -61,6 +61,7 @@ import {
   type PostRunPromptQueueEntry,
   type PostRunPromptMode,
 } from './postRunRatingQueue';
+import type { RoomSequenceEntry } from './roomSequenceEvents';
 
 type RunRatingElements = {
   modal: HTMLElement | null;
@@ -178,6 +179,20 @@ export class RunRatingModalController {
 
     this.close();
   };
+  private readonly recoveryKeys = new Set<string>();
+  private readonly handleRecoveryKeydown = (event: KeyboardEvent) => {
+    if (!this.ratingOnly || this.elements.modal?.classList.contains('hidden')) return;
+    this.recoveryKeys.add(event.code); event.stopImmediatePropagation();
+    if (event.key === 'Escape') { event.preventDefault(); this.close(); return; }
+    const active = this.doc.activeElement;
+    if ((event.key === ' ' || event.key === 'Enter') && active instanceof HTMLButtonElement && this.elements.modal?.contains(active)) {
+      event.preventDefault(); if (!event.repeat) active.click();
+    }
+  };
+  private readonly handleRecoveryKeyup = (event: KeyboardEvent) => {
+    if (!this.recoveryKeys.delete(event.code)) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+  };
 
   private readonly handleOpenRequest = (event: Event) => {
     const detail =
@@ -293,6 +308,8 @@ export class RunRatingModalController {
     this.elements.guestClaimContinueButton?.addEventListener('click', this.handleGuestClaimContinueClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
+    this.windowObj.addEventListener('keydown', this.handleRecoveryKeydown, true);
+    this.windowObj.addEventListener('keyup', this.handleRecoveryKeyup, true);
     this.windowObj.addEventListener(
       POST_RUN_RATING_REQUEST_EVENT,
       this.handleOpenRequest as EventListener
@@ -344,6 +361,9 @@ export class RunRatingModalController {
     this.elements.guestClaimContinueButton?.removeEventListener('click', this.handleGuestClaimContinueClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
+    this.windowObj.removeEventListener('keydown', this.handleRecoveryKeydown, true);
+    this.windowObj.removeEventListener('keyup', this.handleRecoveryKeyup, true);
+    this.recoveryKeys.clear();
     this.windowObj.removeEventListener(
       POST_RUN_RATING_REQUEST_EVENT,
       this.handleOpenRequest as EventListener
@@ -412,17 +432,30 @@ export class RunRatingModalController {
     this.hideAndReset();
   }
 
-  private async open(detail: PostRunRatingRequestDetail): Promise<void> {
+  async openForSequence(entry: RoomSequenceEntry): Promise<void> {
+    this.close();
+    const base = { contentTitle: entry.roomTitle ?? null, previousViewerRank: null,
+      elapsedMs: 0, deaths: 0, score: null, autoSuggestedDifficulty: 'medium' as const };
+    const detail: PostRunRatingRequestDetail = entry.expandedRoomId && entry.expandedRoomVersion
+      ? { ...base, contentType: 'expanded_room', contentId: entry.expandedRoomId, expandedRoomId: entry.expandedRoomId,
+          legacyCourseId: entry.legacyCourseId, version: entry.expandedRoomVersion }
+      : { ...base, contentType: 'room', contentId: entry.roomId, roomCoordinates: entry.roomCoordinates, version: entry.roomVersion };
+    await this.open(detail, true);
+  }
+
+  private ratingOnly = false;
+  private async open(detail: PostRunRatingRequestDetail, ratingOnly = false): Promise<void> {
     if (!this.elements.modal) {
       return;
     }
 
     this.mode = 'rating';
+    this.ratingOnly = ratingOnly;
     this.activeRequest = detail;
     this.roomSummary = null;
     this.courseSummary = null;
     this.currentQualityStars = null;
-    this.currentDifficultyChoice = detail.autoSuggestedDifficulty;
+    this.currentDifficultyChoice = ratingOnly ? null : detail.autoSuggestedDifficulty;
     this.submitting = false;
     this.loadingSummary = true;
     this.savedProgression = null;
@@ -430,15 +463,16 @@ export class RunRatingModalController {
     this.baselineProgression = null;
     this.baselineProgressionLoad = null;
     this.shareImage = null;
-    this.shareImageLoading = detail.contentType === 'room';
-    this.shareStatusText = detail.contentType === 'room' ? 'Rendering room snapshot...' : null;
+    this.shareImageLoading = !ratingOnly && detail.contentType === 'room';
+    this.shareStatusText = !ratingOnly && detail.contentType === 'room' ? 'Rendering room snapshot...' : null;
     this.shareStatusTone = 'default';
     this.setError(null);
     const loadToken = ++this.loadToken;
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.render();
-    void this.prepareShareImage(detail, loadToken);
+    if (ratingOnly) this.elements.closeButton?.focus();
+    if (!ratingOnly) void this.prepareShareImage(detail, loadToken);
 
     this.baselineProgressionLoad = this.loadBaselineProgression(loadToken);
     try {
@@ -547,6 +581,7 @@ export class RunRatingModalController {
   }
 
   private hideAndReset(): void {
+    this.ratingOnly = false;
     if (!this.elements.modal) {
       return;
     }
@@ -749,9 +784,12 @@ export class RunRatingModalController {
     this.submitting = true;
     this.setError(null);
     this.render();
+    const loadToken = this.loadToken;
+    const authUserId = getAuthDebugState().user?.id?.trim() ?? null;
+    const isCurrent = () => loadToken === this.loadToken && this.activeRequest === request
+      && authUserId === (getAuthDebugState().user?.id?.trim() ?? null);
 
     try {
-      const authUserId = getAuthDebugState().user?.id?.trim() ?? null;
       if (request.contentType === 'room') {
         const response = await this.runRepository.submitRoomRating(request.contentId, {
           roomCoordinates: request.roomCoordinates,
@@ -760,11 +798,13 @@ export class RunRatingModalController {
           difficultyChoice: this.currentDifficultyChoice,
           autoSuggestedDifficulty: request.autoSuggestedDifficulty,
         });
+        if (!isCurrent()) return;
         this.roomSummary = this.mergeRoomSummary(response);
         this.savedProgression = response.progression;
         this.savedDeltaText = formatProgressionDelta(response.progressionDelta);
         await this.baselineProgressionLoad;
         await this.ensureCurrentSummary(request);
+        if (!isCurrent()) return;
         if (authUserId) {
           saveSeenRewardProgression(authUserId, response.progression);
         }
@@ -784,11 +824,13 @@ export class RunRatingModalController {
               difficultyChoice: this.currentDifficultyChoice,
               autoSuggestedDifficulty: request.autoSuggestedDifficulty,
             });
+        if (!isCurrent()) return;
         this.courseSummary = this.mergeCourseSummary(response);
         this.savedProgression = response.progression;
         this.savedDeltaText = formatProgressionDelta(response.progressionDelta);
         await this.baselineProgressionLoad;
         await this.ensureCurrentSummary(request);
+        if (!isCurrent()) return;
         if (authUserId) {
           saveSeenRewardProgression(authUserId, response.progression);
         }
@@ -807,11 +849,11 @@ export class RunRatingModalController {
               : null,
       });
       this.promptQueue.markCurrentRated();
+      if (this.ratingOnly) this.hideAndReset();
     } catch (error) {
-      this.setError(error instanceof Error ? error.message : 'Failed to save your rating.');
+      if (isCurrent()) this.setError(error instanceof Error ? error.message : 'Failed to save your rating.');
     } finally {
-      this.submitting = false;
-      this.render();
+      if (isCurrent()) { this.submitting = false; this.render(); }
     }
   }
 
@@ -878,8 +920,8 @@ export class RunRatingModalController {
       }
     }
     if (this.elements.result) {
-      this.elements.result.classList.remove('hidden');
-      this.elements.result.textContent = request ? formatRunResultSummary(request) : '';
+      this.elements.result.classList.toggle('hidden', this.ratingOnly);
+      this.elements.result.textContent = request && !this.ratingOnly ? formatRunResultSummary(request) : '';
     }
     if (this.elements.leaderboard) {
       this.elements.leaderboard.classList.remove('hidden');
@@ -891,7 +933,7 @@ export class RunRatingModalController {
         : formatLeaderboardSummary(roomSummary, courseSummary);
     }
     if (this.elements.suggestion) {
-      this.elements.suggestion.classList.toggle('hidden', guestClaimMode);
+      this.elements.suggestion.classList.toggle('hidden', guestClaimMode || this.ratingOnly);
       this.elements.suggestion.textContent = request
         ? `Suggested difficulty: ${ROOM_DIFFICULTY_LABELS[request.autoSuggestedDifficulty]}.`
         : '';
@@ -902,7 +944,7 @@ export class RunRatingModalController {
         ? 'Saving your post-run rating...'
         : this.savedProgression
           ? buildSavedStatus(this.savedDeltaText, this.savedProgression)
-          : buildPromptStatus(request);
+          : this.ratingOnly ? 'Choose a quality rating and difficulty.' : buildPromptStatus(request);
     }
     if (this.elements.reward) {
       const rewardText = this.savedProgression
@@ -1020,7 +1062,7 @@ export class RunRatingModalController {
   }
 
   private renderShare(request: PostRunRatingRequestDetail | null): void {
-    const visible = this.mode === 'rating' && request?.contentType === 'room';
+    const visible = this.mode === 'rating' && !this.ratingOnly && request?.contentType === 'room';
     this.elements.shareSection?.classList.toggle('hidden', !visible);
     if (!visible || !request) {
       return;

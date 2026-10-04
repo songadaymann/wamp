@@ -53,6 +53,13 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); });
 
 describe('guest account claim lifecycle', () => {
+  it('allows an explicit history entry during Play while automatic claims stay deferred', async () => {
+    const f = fixture(); f.doc.body.dataset.appMode = 'play-world'; f.records([legacy]);
+    await vi.advanceTimersByTimeAsync(300); expect(f.visible()).toBe(false);
+    f.controller.openFromReminder(); expect(f.visible()).toBe(true);
+    expect(f.elements.get('guest-progress-list')!.textContent).toContain('Browser-only clear');
+    f.controller.close(); expect(f.visible()).toBe(false); f.controller.destroy();
+  });
   it('does not create a rapid retry loop from repeated queued-finish notifications', async () => {
     const f = fixture();
     const progress = () => f.win.dispatchEvent(Object.assign(new Event('wamp:guest-run-progress-changed'), { detail: { clientRunId: 'run', status: 'queued' } }));
