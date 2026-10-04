@@ -17,6 +17,7 @@ function harness() {
     width: 1200, height: 700, originX: 0.5, originY: 0.5,
     scrollX: 0, scrollY: 0, zoom: 2, useBounds: true,
     stopFollow: vi.fn(), startFollow: vi.fn(), centerOn: vi.fn(),
+    setLerp: vi.fn(),
     setZoom(value: number) { this.zoom = value; },
     setScroll(x: number, y: number) { this.scrollX = x; this.scrollY = y; },
   };
@@ -54,6 +55,16 @@ function expectCentered(camera: ReturnType<typeof harness>['camera'], room: Room
 }
 
 describe('room-centered play camera', () => {
+  it('eases once per physics tick and combines two catch-up ticks without easing duplicate renders', () => {
+    const h = harness();
+    h.controller.updateFollowPacing(0); expect(h.camera.setLerp).toHaveBeenLastCalledWith(0, 0);
+    h.controller.updateFollowPacing(1);
+    expect(h.camera.setLerp.mock.lastCall?.[0]).toBeCloseTo(0.1, 12);
+    h.controller.updateFollowPacing(2);
+    expect(h.camera.setLerp.mock.lastCall?.[0]).toBeCloseTo(0.19, 12);
+    h.setMode('browse'); h.camera.setLerp.mockClear(); h.controller.updateFollowPacing(1);
+    expect(h.camera.setLerp).not.toHaveBeenCalled();
+  });
   it('centers on entry, stays still as the player moves, then restores follow and normal zoom on exit', () => {
     const h = harness();
     h.setRoom(fixedRoom());

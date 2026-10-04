@@ -20,6 +20,7 @@ import {
   getObjectPlacementPointForTile,
 } from '../config';
 import { markAppReady } from '../ui/appFeedback';
+import { createPhysicsPreviewRoom, type PreviewPhysicsFixture } from './previewPhysicsRoom';
 import type {
   EditorPreviewSmokeCommand,
   EditorPreviewSmokeResult,
@@ -51,6 +52,7 @@ export type PreviewSmokeAction =
   | 'editSelectedRoom'
   | 'openSyntheticEditor'
   | 'openSyntheticPoliceEditor'
+  | 'openSyntheticPhysicsEditor'
   | 'openSyntheticBoygameEditor'
   | 'openSyntheticJungleEditor'
   | 'openSyntheticCourseEditor'
@@ -71,6 +73,7 @@ export interface PreviewSmokePayload {
   velocityY?: number;
   bodyEnabled?: boolean;
   editorCommands?: EditorPreviewSmokeCommand[];
+  physicsFixture?: PreviewPhysicsFixture;
 }
 
 export function installPreviewSmokeActions(
@@ -116,6 +119,8 @@ export function installPreviewSmokeActions(
         return openSyntheticEditorForPreviewSmoke(game, getDebugState);
       case 'openSyntheticPoliceEditor':
         return openSyntheticEditorForPreviewSmoke(game, getDebugState, createPoliceEnemyPreviewRoom());
+      case 'openSyntheticPhysicsEditor':
+        return openSyntheticEditorForPreviewSmoke(game, getDebugState, createPhysicsPreviewRoom(payload?.physicsFixture));
       case 'openSyntheticBoygameEditor':
         return openSyntheticEditorForPreviewSmoke(game, getDebugState, createBoygamePreviewRoom());
       case 'openSyntheticJungleEditor':

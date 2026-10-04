@@ -498,7 +498,7 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
     }
   }
 
-  private syncNameLabel(liveObject: LoadedRoomObject): void {
+  syncNameLabel(liveObject: LoadedRoomObject): void {
     const label = liveObject.npcNameLabel;
     if (!label) {
       return;

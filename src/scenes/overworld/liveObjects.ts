@@ -676,6 +676,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           body.setAllowGravity(false);
           body.setImmovable(true);
           body.setBounce(0, 0);
+          // Rider transport is owned by carryMovingPlatformRiders. Arcade's
+          // automatic friction would carry a second time in catch-up steps.
+          body.setFriction(0, 0);
           body.pushable = false;
         }
         if (isPushableObjectConfig(config) || config.id === 'cage') {
@@ -784,6 +787,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   syncLiveObjectInteractions(loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {
     this.interactionCoordinator.syncPlayerInteractions(loadedRooms);
+  }
+
+  syncLiveObjectPresentation(loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {
+    for (const room of loadedRooms) {
+      if (room.runtimeSuspended) continue;
+      for (const liveObject of this.partitionIndex.getUpdatingObjects(room)) {
+        if (!liveObject.sprite.active) continue;
+        if (liveObject.config.category === 'npc') this.npcController.syncNameLabel(liveObject);
+        this.syncLiveObjectGravityPresentation(liveObject);
+      }
+    }
   }
 
   updateLiveObjects(

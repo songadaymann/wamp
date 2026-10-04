@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRequire } from 'node:module';
+import { EventEmitter } from 'node:events';
+import type Phaser from 'phaser';
+import type { SpecialTilePlayerEnvironment } from './specialTiles';
+import { OverworldPhysicsCadence } from './physicsCadence';
 
 const audio = vi.hoisted(() => ({
   playSfx: vi.fn(),
@@ -193,7 +198,10 @@ function createBody(): FakeBody {
   return body;
 }
 
-function createHarness() {
+function createHarness(environment: SpecialTilePlayerEnvironment = {
+  inWater: false, onIce: false, onSticky: false, conveyorX: 0, windX: 0, gravityDirection: 'down',
+  onBounce: false, onDamage: false,
+}) {
   let now = 1_000;
   let forceFullBody = false;
   const body = createBody();
@@ -215,14 +223,7 @@ function createHarness() {
     getCurrentTime: () => now,
     getPlayer: () => player,
     getPlayerBody: () => body,
-    getSpecialTileEnvironment: () => ({
-      inWater: false,
-      onIce: false,
-      onSticky: false,
-      conveyorX: 0,
-      windX: 0,
-      gravityDirection: 'down' as const,
-    }),
+    getSpecialTileEnvironment: () => environment,
     getPlayerFacing: () => 1 as const,
     getCurrentRoomCoordinates: () => ({ x: 0, y: 0 }),
     getRoomOrigin: () => ({ x: 0, y: 0 }),
@@ -494,5 +495,133 @@ describe('OverworldMovementController state ownership', () => {
       crouching: false,
       ladderKey: null,
     });
+  });
+});
+
+interface TrajectorySample { x: number; y: number; vx: number; vy: number }
+const phaserRequire = createRequire(import.meta.url);
+const ArcadeWorld = phaserRequire('phaser/src/physics/arcade/World.js') as typeof Phaser.Physics.Arcade.World;
+const ArcadeBody = phaserRequire('phaser/src/physics/arcade/Body.js') as typeof Phaser.Physics.Arcade.Body;
+
+function runActualPhysics(hz: number, scenario: string, legacyRenderMovement = false, shapedPlayer = false, legacyHitbox = false): TrajectorySample[] {
+  const environment: SpecialTilePlayerEnvironment = {
+    inWater: scenario === 'water', onIce: scenario.startsWith('ice'), onSticky: false,
+    conveyorX: scenario === 'ice-conveyor' ? 1 : 0,
+    windX: scenario.includes('wind') ? 1 : 0,
+    gravityDirection: scenario.startsWith('gravity-') ? scenario.slice(8) as SpecialTilePlayerEnvironment['gravityDirection'] : 'down',
+    onDamage: false, onBounce: false,
+  };
+  const h = createHarness(environment);
+  h.setForceFullBody(true);
+  const world = new ArcadeWorld({ sys: { scale: { width: 20000, height: 20000 } } } as never,
+    { gravity: { x: 0, y: environment.gravityDirection === 'down' ? 700 : 0 }, debug: false });
+  const gameObject = {
+    x: 0, y: 0, angle: 0, rotation: 0, scaleX: 1, scaleY: 1,
+    displayOriginX: 5, displayOriginY: 13, displayWidth: 10, displayHeight: 26,
+    setPosition(x: number, y: number) { this.x = x; this.y = y; },
+  };
+  const body = new ArcadeBody(world, shapedPlayer ? gameObject as never : undefined);
+  if (shapedPlayer) h.host.getPlayer = () => gameObject;
+  body.setSize(10, 26, false); body.reset(0, 0); body.setCollideWorldBounds(true);
+  switch (environment.gravityDirection) {
+    case 'down': world.setBounds(-10000, -10000, 20000, 10026, false, false, false, true); break;
+    case 'up': world.setBounds(-10000, 0, 20000, 10000, false, false, true, false); break;
+    case 'left': world.setBounds(0, -10000, 10000, 20000, true, false, false, false); break;
+    case 'right': world.setBounds(-10000, -10000, 10010, 20000, false, true, false, false); break;
+  }
+  world.add(body);
+  h.host.getPlayerBody = () => body as never;
+  const scene = new EventEmitter();
+  const cadence = new OverworldPhysicsCadence(scene, world, {
+    canSimulate: () => true, getPlayerIdentity: () => body,
+    captureInput: () => {
+      const value = h.controller.captureInput();
+      h.cursors.space.justDown = false;
+      return value;
+    },
+    simulateEnvironment: () => {},
+    simulateMovement: (delta, input) => {
+      const sprite = body.gameObject;
+      if (legacyHitbox) body.gameObject = undefined as never;
+      try { return h.controller.updateMovement(delta, scenario === 'quicksand', input); }
+      finally { body.gameObject = sprite; }
+    },
+  });
+  if (legacyRenderMovement) cadence.destroy();
+  // Settle against the actual world boundary before pressing jump or starting a slide.
+  for (let i = 0; i < 12; i += 1) {
+    h.controller.updateMovement(1000 / 60, false);
+    world.update(i * 1000 / 60, 1000 / 60); world.postUpdate();
+  }
+  if (shapedPlayer) h.setForceFullBody(false);
+  if (scenario.startsWith('ice')) body.setVelocityX(120);
+  const samples: TrajectorySample[] = [];
+  world.on('worldstep', () => samples.push({ x: body.x, y: body.y, vx: body.velocity.x, vy: body.velocity.y }));
+  for (let frame = 1; frame <= hz * 4; frame += 1) {
+    const time = frame * 1000 / hz;
+    h.setNow(1000 + time);
+    const jumping = !scenario.startsWith('ice') && !scenario.includes('wind');
+    h.cursors.space.isDown = jumping && (scenario === 'tap' || scenario === 'quicksand' ? time < 80 : true);
+    h.cursors.space.justDown = jumping && frame === 1;
+    h.cursors.right.isDown = scenario === 'ice-acceleration';
+    scene.emit('preupdate');
+    world.update(time, 1000 / hz);
+    if (legacyRenderMovement) {
+      h.controller.updateMovement(1000 / hz, scenario === 'quicksand');
+      h.cursors.space.justDown = false;
+    }
+    world.postUpdate();
+  }
+  cadence.destroy(); world.destroy();
+  return samples.slice(0, 180);
+}
+
+describe('actual Arcade trajectories with fixed-step movement', () => {
+  it('keeps changing airborne hitboxes aligned during catch-up steps', () => {
+    const baseline = runActualPhysics(60, 'held', false, true);
+    expect(Math.min(...baseline.map(sample => sample.vy))).toBeLessThan(-150);
+    for (const hz of [30, 90, 120, 144, 165, 240]) {
+      const samples = runActualPhysics(hz, 'held', false, true);
+      expect(samples).toHaveLength(baseline.length);
+      for (let i = 0; i < samples.length; i += 1) {
+        for (const key of ['x', 'y', 'vx', 'vy'] as const) {
+          expect(samples[i][key], `${hz}Hz step ${i} ${key}`).toBeCloseTo(baseline[i][key], 8);
+        }
+      }
+    }
+    const previous60 = runActualPhysics(60, 'held', false, true, true);
+    const previous30 = runActualPhysics(30, 'held', false, true, true);
+    expect(Math.min(...baseline.map(sample => sample.y)))
+      .toBeCloseTo(Math.min(...previous60.map(sample => sample.y)), 8);
+    expect(Math.max(...previous30.map((sample, i) => Math.abs(sample.y - previous60[i].y))))
+      .toBeGreaterThan(8);
+  });
+  it.each(['tap', 'held', 'quicksand', 'water', 'ice-coast', 'ice-acceleration', 'ice-conveyor', 'ice-wind',
+    'wind', 'gravity-up', 'gravity-left', 'gravity-right'])('%s follows the same trajectory at all seven render rates', scenario => {
+    const baseline = runActualPhysics(60, scenario);
+    expect(baseline).toHaveLength(180);
+    for (const hz of [30, 90, 120, 144, 165, 240]) {
+      const samples = runActualPhysics(hz, scenario);
+      expect(samples, `${scenario} at ${hz}Hz`).toHaveLength(180);
+      for (let i = 0; i < samples.length; i += 1) {
+        for (const key of ['x', 'y', 'vx', 'vy'] as const) {
+          expect(samples[i][key], `${scenario} ${hz}Hz step ${i} ${key}`).toBeCloseTo(baseline[i][key], 8);
+        }
+      }
+    }
+  });
+
+  it('keeps the original 60Hz tap-jump apex and ice travel, and detects the original high-refresh defects', () => {
+    for (const scenario of ['tap', 'held', 'ice-coast', 'ice-acceleration', 'gravity-up']) {
+      const legacy = runActualPhysics(60, scenario, true);
+      const fixed = runActualPhysics(60, scenario);
+      const maxDisplacement = (samples: TrajectorySample[]) => Math.max(...samples.map(s => Math.abs(s.y)));
+      if (scenario.startsWith('ice')) expect(fixed.at(-1)!.x).toBeCloseTo(legacy.at(-1)!.x, 8);
+      else expect(maxDisplacement(fixed)).toBeCloseTo(maxDisplacement(legacy), 8);
+    }
+    const apex = (hz: number) => Math.max(...runActualPhysics(hz, 'gravity-up', true).map(s => s.y));
+    expect(apex(120)).toBeLessThan(apex(60) * 0.7);
+    const coast = (hz: number) => runActualPhysics(hz, 'ice-coast', true).at(-1)!.x;
+    expect(coast(120)).toBeLessThan(coast(60) * 0.7);
   });
 });
