@@ -6,7 +6,7 @@ import type { RoomRecord, RoomSnapshot } from '../../../persistence/roomModel';
 import type { ProgressionDelta } from '../../../progression/model';
 import type { RoomRunRecord } from '../../../runs/model';
 import { sortCompletedRunsForLeaderboard } from '../../../runs/scoring';
-import type { CourseRunRow, Env, RoomRunRow, UserProgressRow } from '../core/types';
+import type { CourseRunRow, Env, RoomRunRow } from '../core/types';
 import {
   computeCourseWeightedChange,
   computeRoomWeightedChange,
@@ -16,7 +16,6 @@ import { awardLaneDelta, persistProgressIncrement } from './laneEvents';
 import {
   loadOrBackfillUserProgress,
   loadUserIdentityRow,
-  upsertUserProgressRow,
 } from './progressRows';
 import {
   builderContributionWeightFromTier,
@@ -57,14 +56,12 @@ export async function ensureFounderIdentityQualification(
     ).first<{ next_founder_number: number | string | null }>();
 
     const founderNumber = Math.max(1, parseRowNumber(nextFounderRow?.next_founder_number));
-    const updated: UserProgressRow = {
-      ...progress,
-      founder_number: founderNumber,
-      first_identity_qualified_at: progress.first_identity_qualified_at ?? qualifiedAt,
-      updated_at: qualifiedAt,
-    };
     try {
-      await upsertUserProgressRow(env, updated);
+      const assigned = await env.DB.prepare(`UPDATE user_progress SET founder_number = ?,
+        first_identity_qualified_at = COALESCE(first_identity_qualified_at, ?), updated_at = ?
+        WHERE user_id = ? AND founder_number IS NULL RETURNING founder_number`)
+        .bind(founderNumber, qualifiedAt, qualifiedAt, userId).first<{ founder_number: number }>();
+      if (!assigned) continue;
     } catch (error) {
       if (attempt < 3 && error instanceof Error && error.message.includes('UNIQUE')) {
         continue;

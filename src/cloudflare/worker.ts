@@ -15,6 +15,8 @@ import { handleDashboardStatsRequest } from './worker/dashboard/routes';
 import { handleChatRequest } from './worker/chat/routes';
 import { handleGuestActivityHeartbeat } from './worker/guestActivity/routes';
 import { handleGuestRoomDraftRequest } from './worker/guestRoomDrafts/routes';
+import { handleClaimGuestRequest, handleGuestProgressHistoryRequest, handleGuestRunRequest } from './worker/guestRuns/routes';
+import { pruneGuestRuns } from './worker/guestRuns/attempts';
 import { handleGuestbookRequest } from './worker/guestbook/routes';
 import { handleJamRequest } from './worker/jam/routes';
 import {
@@ -249,6 +251,18 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     handler: ({ request, url, env }) => handleGuestRoomDraftRequest(request, url, env),
   },
   {
+    methods: ['GET', 'POST'], pattern: { prefix: '/api/guest-runs/' }, auth: 'public',
+    handler: ({ request, url, env }) => handleGuestRunRequest(request, url, env),
+  },
+  {
+    methods: ['POST'], pattern: '/api/me/claim-guest', auth: 'authenticated',
+    handler: ({ request, env }) => handleClaimGuestRequest(request, env),
+  },
+  {
+    methods: ['GET'], pattern: '/api/me/guest-progress', auth: 'authenticated',
+    handler: ({ request, env }) => handleGuestProgressHistoryRequest(request, env),
+  },
+  {
     methods: ['GET', 'POST', 'DELETE'],
     pattern: { prefix: '/api/guestbook' },
     auth: 'optional',
@@ -270,6 +284,7 @@ export default {
       return;
     }
     await purgeGuestReplays(env);
+    await pruneGuestRuns(env);
     await pruneRateLimitEvents(env);
   },
   async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {

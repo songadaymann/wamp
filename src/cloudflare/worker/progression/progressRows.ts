@@ -93,7 +93,7 @@ export async function loadUserProgressRow(env: Env, userId: string): Promise<Use
   };
 }
 
-export async function upsertUserProgressRow(env: Env, row: UserProgressRow): Promise<void> {
+async function insertUserProgressRowIfAbsent(env: Env, row: UserProgressRow): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(
       `
@@ -123,31 +123,7 @@ export async function upsertUserProgressRow(env: Env, row: UserProgressRow): Pro
           updated_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET
-          total_pxp = excluded.total_pxp,
-          total_bxp = excluded.total_bxp,
-          total_cxp = excluded.total_cxp,
-          player_level = excluded.player_level,
-          builder_level = excluded.builder_level,
-          curator_level = excluded.curator_level,
-          hidden_trust_score = excluded.hidden_trust_score,
-          trust_tier_internal = excluded.trust_tier_internal,
-          founder_number = COALESCE(user_progress.founder_number, excluded.founder_number),
-          builder_claim_limit_override = excluded.builder_claim_limit_override,
-          builder_publish_limit_override = excluded.builder_publish_limit_override,
-          builder_object_limit_override = excluded.builder_object_limit_override,
-          builder_collectible_limit_override = excluded.builder_collectible_limit_override,
-          builder_expanded_room_cell_limit_override = excluded.builder_expanded_room_cell_limit_override,
-          builder_cap_override_reason = excluded.builder_cap_override_reason,
-          builder_cap_override_updated_at = excluded.builder_cap_override_updated_at,
-          builder_cap_override_updated_by = excluded.builder_cap_override_updated_by,
-          badge_count = excluded.badge_count,
-          trophy_count = excluded.trophy_count,
-          first_identity_qualified_at = COALESCE(
-            user_progress.first_identity_qualified_at,
-            excluded.first_identity_qualified_at
-          ),
-          updated_at = excluded.updated_at
+        ON CONFLICT(user_id) DO NOTHING
       `
     ).bind(
       row.user_id,
@@ -528,6 +504,6 @@ export async function loadOrBackfillUserProgress(
   }
 
   const created = await createBackfilledUserProgressRow(env, userId);
-  await upsertUserProgressRow(env, created);
+  await insertUserProgressRowIfAbsent(env, created);
   return (await loadUserProgressRow(env, userId)) ?? created;
 }

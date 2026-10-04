@@ -16,7 +16,6 @@ import {
   loadBackfillSeedMetrics,
   loadOrBackfillUserProgress,
   loadReadOnlyUserProgress,
-  upsertUserProgressRow,
 } from './progressRows';
 import { loadBuilderCapabilitySummary } from './trustCaps';
 import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
@@ -331,15 +330,11 @@ async function loadBadgeAwardRows(env: Env, userId: string): Promise<BadgeAwardR
 }
 
 async function syncBadgeAndTrophyCounts(env: Env, userId: string): Promise<void> {
-  const progress = await loadOrBackfillUserProgress(env, userId);
+  await loadOrBackfillUserProgress(env, userId);
   const badgeRows = await loadBadgeAwardRows(env, userId);
   const trophyCount = await countOwnedTrophies(env, userId);
-  await upsertUserProgressRow(env, {
-    ...progress,
-    badge_count: badgeRows.length,
-    trophy_count: trophyCount,
-    updated_at: new Date().toISOString(),
-  });
+  await env.DB.batch([env.DB.prepare(`UPDATE user_progress SET badge_count = ?, trophy_count = ?, updated_at = ?
+    WHERE user_id = ?`).bind(badgeRows.length, trophyCount, new Date().toISOString(), userId)]);
 }
 
 export async function syncUserBadges(env: Env, userId: string): Promise<void> {
