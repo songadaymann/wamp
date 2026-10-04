@@ -74,6 +74,7 @@ assert(
 const healthJson = await healthResponse.json();
 const worldTiles = await checkWorldTileAvailability(API_BASE_URL);
 assert(healthJson?.ok === true, 'Health endpoint did not report ok: true.');
+assert(healthJson?.worldMapAlertsConfigured === true, 'Fast-map direct alerts are not configured in production.');
 assert(healthJson?.storage === 'd1', `Expected storage=d1, got ${String(healthJson?.storage)}`);
 
 let mainBundleContainsPartyKitHost = null;

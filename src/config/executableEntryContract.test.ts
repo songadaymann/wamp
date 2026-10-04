@@ -93,6 +93,7 @@ const manualScriptEntries = new Set([
 
 const importedOnlyScriptModules = new Set([
   'scripts/overworld_tile_pyramid_probe_helpers.mjs',
+  'scripts/world_tile_release_guard.mjs',
 ]);
 
 const scriptModules = new Set(

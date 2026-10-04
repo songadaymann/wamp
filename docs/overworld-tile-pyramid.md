@@ -68,6 +68,51 @@ does not match the current registry, config reports tiled reads unavailable and 
 404, activating the current browser-composed fallback instead of serving stale parent imagery.
 Backfill and activate a matching immutable renderer to restore tiled reads after registry changes.
 
+## Direct alerts and production release gate
+
+Production checks `https://api.wamp.land/api/world/tiles/config` every 15 minutes
+(`7,22,37,52 * * * *`). The existing hourly maintenance schedule remains separate.
+A disabled/incompatible map or failed HTTP check queues one outage email, daily
+reminders while unhealthy, and a recovery email. The recipient is the private
+`WORLD_MAP_ALERT_EMAIL` override, then `ADMIN_REVIEW_EMAIL`, then the existing admin
+email destination. Production enables this with `WORLD_MAP_HEALTH_ALERTS_ENABLED=1`
+and the existing `RESEND_API_KEY`; safety does not enable it.
+
+Migration `0051_world_map_health_alerts.sql` stores observations and a durable email
+outbox. Conditional claims, two-minute leases, stable message bodies and provider
+idempotency keys prevent concurrent duplicate sends and allow retries. A rejected
+send remains pending and makes the scheduled run fail visibly. Unsent messages are
+retained; successful messages are kept for 30 days.
+
+Authenticated admin health status is available at
+`GET /api/admin/world-tiles/health`. `POST` performs a check; a stable `testId` in its
+JSON body sends an explicitly labelled setup email once. These endpoints require
+`X-Admin-Key`, use private/no-store caching, and retain mutation-origin checks.
+
+`npm run world-tiles:release:check` fails unless the live map is available and its
+active asset fingerprint matches this checkout. `deploy:prod`, `cf:deploy`, and
+`pages:deploy:prod` run this gate before building or deploying, including with
+`--skip-smoke`. Cloudflare Pages main builds run the same gate through `prebuild`.
+Production smoke also requires configured direct alerts. PR diagnostics remain
+warnings so new catalog assets can be built into an immutable preview for rendering.
+
+For a tileset/catalog change, build an immutable preview, deploy its renderer,
+backfill the new catalog fingerprint, and complete the existing pixel/parity gates.
+Then release from clean main matching origin/main with the private admin key in the
+environment:
+
+```bash
+npm run deploy:prod -- --world-tile-renderer <verified-renderer-version>
+```
+
+The coordinated release verifies all published leaves, all four ancestor levels,
+ready generations, immutable render origin and object metadata before deployment.
+It deploys the API Worker, activates the verified renderer, repeats the public
+compatibility check, and only then publishes Pages. An incomplete rebuild blocks
+release. `--pages-only` cannot be combined with a staged renderer. Automatic Pages
+main builds remain blocked until matching imagery is active; preview builds remain
+available to prepare that imagery. Existing strict renderer compatibility is kept.
+
 ## Client coverage contract
 
 Cold entry paints the smallest complete L0 cover first and then refines. Attached parents, stale

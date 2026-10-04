@@ -3,7 +3,7 @@
   "name": "everybodys-platformer",
   "main": "src/cloudflare/worker.ts",
   "keep_vars": true,
-  "triggers": { "crons": ["17 * * * *"] },
+  "triggers": { "crons": ["17 * * * *", "7,22,37,52 * * * *"] },
   "compatibility_date": "2026-03-08",
   "assets": {
     "directory": "./dist",
@@ -23,6 +23,7 @@
     }
   },
   "vars": {
+    "WORLD_MAP_HEALTH_ALERTS_ENABLED": "1",
     "JAM_SUBMISSIONS_OPEN_AT": "2026-07-20T04:00:00.000Z",
     "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-28T12:00:00.000Z",
     "PARTYKIT_HOST": "everybodys-platformer-presence.songadaymann.partykit.dev",

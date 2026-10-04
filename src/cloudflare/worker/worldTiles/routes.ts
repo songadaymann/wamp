@@ -6,6 +6,7 @@ import {
   type WorldTileBounds,
   type WorldTileLevel,
 } from '../../../worldTiles/model';
+import { checkAndAlertWorldMap, loadWorldMapHealthStatus } from './health';
 import { normalizeImmutablePagesDeploymentOrigin } from '../../../worldTiles/rendererOrigin';
 import {
   requireAdminRequest,
@@ -121,6 +122,17 @@ export async function handleAdminWorldTileRequest(
   requireAdminRequest(env, request, 'manage world tiles');
   requireTrustedOriginForMutation(request);
 
+  if (url.pathname === '/api/admin/world-tiles/health' && request.method === 'GET') {
+    return jsonResponse(request, await loadWorldMapHealthStatus(env), { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+  if (url.pathname === '/api/admin/world-tiles/health' && request.method === 'POST') {
+    const body = await parseJsonBody<{ testId?: unknown }>(request);
+    if (body.testId !== undefined && (typeof body.testId !== 'string' || !/^[a-zA-Z0-9_-]{8,128}$/.test(body.testId))) {
+      throw new HttpError(400, 'testId must be a stable 8-128 character identifier.');
+    }
+    const result = await checkAndAlertWorldMap(env, { testId: body.testId as string | undefined });
+    return jsonResponse(request, { ...result, ...(await loadWorldMapHealthStatus(env)) }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
   if (url.pathname === '/api/admin/world-tiles/status' && request.method === 'GET') {
     return handleWorldTileStatus(request, url, env);
   }

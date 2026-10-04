@@ -92,7 +92,8 @@
     "guest-replays.html",
     "src/admin/replays.ts",
     "scripts/check_world_tile_availability.mjs",
-    "scripts/world_tile_asset_contract_check.ts"
+    "scripts/world_tile_asset_contract_check.ts",
+    "scripts/check_pages_release.mjs"
   ],
   "project": [
     "src/**/*.{js,mjs,ts}",
