@@ -16,13 +16,21 @@ const report = { checkedAt: new Date().toISOString(), base, scenarios: [], pageE
 const browser = await chromium.launch();
 let activePage, activeName;
 let navigating = false;
+const pendingChat = new WeakMap();
 const visit = async (page, path) => {
+  await Promise.all([...(pendingChat.get(page) || [])].map(async request => {
+    const response = await request.response();
+    if (response) await response.finished();
+  }));
   navigating = true;
   try { await page.goto(`${base}${path}${rendererQuery}`, { waitUntil: 'domcontentloaded' }); }
   finally { navigating = false; }
 };
 const state = page => page.evaluate(() => JSON.parse(window.render_game_to_text()).activeScene);
-const ready = page => page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 });
+const ready = async page => {
+  await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 });
+  await page.waitForTimeout(500);
+};
 const intro = page => page.locator('#room-goal-intro-modal');
 async function checkGuide(page, touch) {
   const controls = page.locator('#room-goal-intro-controls');
@@ -80,6 +88,10 @@ try {
         localStorage.setItem('wamp.devicePerformanceMode.v1', JSON.stringify({ version: 1, mode: 'full-quality' }));
       }, { home: kind === 'home', laptop: device === 'touch-laptop' });
       const page = await context.newPage(); activePage = page;
+      const chatRequests = new Set(); pendingChat.set(page, chatRequests);
+      page.on('request', request => { if (new URL(request.url()).pathname === '/api/chat/messages') chatRequests.add(request); });
+      page.on('requestfinished', request => chatRequests.delete(request));
+      page.on('requestfailed', request => chatRequests.delete(request));
       page.on('pageerror', error => report.pageErrors.push({ name, message: error.message }));
       page.on('requestfailed', request => {
         if (navigating && new URL(request.url()).pathname === '/api/chat/messages' && request.failure()?.errorText === 'net::ERR_ABORTED') {
