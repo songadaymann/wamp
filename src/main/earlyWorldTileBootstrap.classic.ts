@@ -1118,7 +1118,13 @@ async function refineEarlyWorldTileBootstrap(
     );
     const stagedSignature = getEarlyWorldTileViewportSignature(display);
     options.doc.body.prepend(nextLayer);
-    await waitForEarlyWorldTilePaint(options.win, signal);
+    try {
+      await waitForEarlyWorldTilePaint(options.win, signal);
+    } catch (error) {
+      // Staged imagery is not yet owned by attachLayer; cancellation must remove it here.
+      nextLayer.remove();
+      throw error;
+    }
     if (options.isReleased() || signal.aborted) {
       nextLayer.remove();
       return;

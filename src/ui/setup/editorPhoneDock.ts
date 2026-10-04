@@ -19,13 +19,15 @@ export class EditorPhoneDock {
     }
     doc.getElementById('btn-editor-phone-menu')?.addEventListener('click', () => {
       if (!this.active) return;
+      this.closeInspector();
       this.menuOpen = !this.menuOpen;
       if (this.menuOpen) this.closePopovers();
       this.render();
     });
     doc.getElementById('btn-mobile-editor-toggle')?.addEventListener('click', () => {
       if (!this.active) return;
-      if (doc.body.dataset.editorSpawnPlacement === 'true') this.cancelSpawn();
+      if (doc.body.dataset.editorPhoneInspector === 'true' || doc.body.dataset.editorPhoneLinking === 'true') this.closeInspector();
+      else if (doc.body.dataset.editorSpawnPlacement === 'true') this.cancelSpawn();
       else this.setCollapsed(!this.collapsed);
     });
     doc.getElementById('btn-editor-phone-account')?.addEventListener('click', event => {
@@ -67,8 +69,14 @@ export class EditorPhoneDock {
     if (this.active) this.render();
   }
 
-  expand(): void { if (this.active) this.setCollapsed(false); }
+  expand(): void { if (this.active) { this.closeInspector(); this.setCollapsed(false); } }
   collapse(): void { if (this.active) this.setCollapsed(true); }
+
+  private closeInspector(): void {
+    if (this.doc.body.dataset.editorPhoneInspector === 'true' || this.doc.body.dataset.editorPhoneLinking === 'true') {
+      this.doc.getElementById('btn-editor-inspector-done')?.click();
+    }
+  }
 
   private move(element: HTMLElement | null, target: HTMLElement | null, before?: HTMLElement | null): void {
     if (!element || !target) return;
@@ -123,6 +131,7 @@ export class EditorPhoneDock {
     if (!this.active) return;
     const locked = this.doc.body.dataset.editorMusicMode === 'true' || this.doc.body.dataset.editorMusicUiLocked === 'true'
       || this.doc.body.dataset.editorSpriteUiLocked === 'true';
+    const inspecting = this.doc.body.dataset.editorPhoneInspector === 'true' || this.doc.body.dataset.editorPhoneLinking === 'true';
     const placingSpawn = this.doc.body.dataset.editorSpawnPlacement === 'true';
     this.doc.body.dataset.mobileEditorCollapsed = this.collapsed ? 'true' : 'false';
     delete this.doc.body.dataset.mobileEditorSheet;
@@ -130,8 +139,8 @@ export class EditorPhoneDock {
     sidebar?.setAttribute('aria-hidden', this.collapsed || locked ? 'true' : 'false');
     const toggle = this.doc.getElementById('btn-mobile-editor-toggle') as HTMLButtonElement | null;
     if (toggle) {
-      toggle.textContent = placingSpawn ? 'Cancel' : this.collapsed ? 'Show' : 'Hide';
-      toggle.setAttribute('aria-label', placingSpawn ? 'Cancel spawn placement' : this.collapsed ? 'Show editor library' : 'Hide editor library');
+      toggle.textContent = inspecting ? 'Done' : placingSpawn ? 'Cancel' : this.collapsed ? 'Show' : 'Hide';
+      toggle.setAttribute('aria-label', inspecting ? 'Close object settings' : placingSpawn ? 'Cancel spawn placement' : this.collapsed ? 'Show editor library' : 'Hide editor library');
       toggle.setAttribute('aria-expanded', this.collapsed ? 'false' : 'true');
       toggle.setAttribute('aria-controls', 'sidebar');
       toggle.disabled = locked;

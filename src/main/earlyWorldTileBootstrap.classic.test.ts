@@ -328,6 +328,26 @@ describe('classic early world tile bootstrap', () => {
     handle.release('test-complete');
   });
 
+  it.each([0, 1])('removes staged sharp imagery when released after %i paint frames', async (paintedFrames) => {
+    const environment = await createBootstrapEnvironment('/r/-17/-9');
+    const handle = installEarlyWorldTileBootstrap(environment.options);
+    await handle.ready;
+    await environment.waitForTargetManifestCount(1);
+    environment.releaseCacheWrites();
+    await environment.waitForFrame();
+    expect(environment.layers()).toHaveLength(2);
+    if (paintedFrames > 0) {
+      environment.flushFrame(16);
+      await environment.waitForFrame();
+    }
+    handle.release('switch-to-editor');
+    await handle.sharp;
+    expect(handle.getState().status).toBe('released');
+    expect(environment.layers()).toHaveLength(0);
+    expect(environment.pendingFrameCount()).toBe(0);
+    expect(environment.sharpEvents).toHaveLength(0);
+  });
+
   it('keeps the early coarse manifest coverage-only', () => {
     const url = new URL(buildEarlyWorldTileManifestUrl(
       'https://api.example',

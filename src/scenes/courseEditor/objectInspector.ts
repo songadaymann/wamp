@@ -1,3 +1,7 @@
+import { buildActorInspectorState, isInspectorActor } from '../editor/actorInspectorViewModel';
+import type { NpcMode } from '../../npcs/model';
+import type { PoliceBehaviorMode } from '../../enemies/policeEnemy';
+import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../../enemies/swordsmanObjectives';
 import Phaser from 'phaser';
 import {
   canObjectBeStoredInContainer,
@@ -61,7 +65,7 @@ export class CourseEditorObjectInspectorController {
   private pressurePlateStatusText: string | null = null;
   private focusedContainerInstanceId: string | null = null;
   private containerStatusText: string | null = null;
-  private pinnedInspector: { kind: 'pressure' | 'container'; instanceId: string } | null = null;
+  private pinnedInspector: { kind: 'pressure' | 'container' | 'actor'; instanceId: string } | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -174,6 +178,60 @@ export class CourseEditorObjectInspectorController {
     this.host.renderInspector(createEmptyCourseInspectorState());
   }
 
+  private editFocusedActor(edit: (runtime: EditorEditRuntime, instanceId: string) => boolean): void {
+    if (this.pinnedInspector?.kind !== 'actor') return;
+    const ref = this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId);
+    if (ref && isInspectorActor(ref.placed) && edit(ref.slice.runtime, ref.placed.instanceId ?? '')) this.renderInspectorUi();
+  }
+
+  setFocusedSwordsmanObjectiveMode(objectiveMode: SwordsmanObjectiveMode): void {
+    this.editFocusedActor((runtime, id) => runtime.setSwordsmanObjectiveMode(id, objectiveMode));
+  }
+
+  setFocusedSwordsmanDefeatMode(defeatMode: SwordsmanDefeatMode): void {
+    this.editFocusedActor((runtime, id) => runtime.setSwordsmanDefeatMode(id, defeatMode));
+  }
+
+  setFocusedPoliceBehaviorMode(mode: PoliceBehaviorMode): void {
+    this.editFocusedActor((runtime, id) => runtime.setPoliceBehaviorMode(id, mode));
+  }
+
+  setFocusedPolicePatrolShoots(shoots: boolean): void {
+    this.editFocusedActor((runtime, id) => runtime.setPolicePatrolShoots(id, shoots));
+  }
+
+  setFocusedNpcMode(mode: NpcMode): void {
+    this.editFocusedActor((runtime, id) => runtime.setNpcMode(id, mode));
+  }
+
+  setFocusedNpcPushable(value: boolean): void {
+    this.editFocusedActor((runtime, id) => runtime.setNpcPushable(id, value));
+  }
+
+  setFocusedNpcCanJumpFall(value: boolean): void {
+    this.editFocusedActor((runtime, id) => runtime.setNpcCanJumpFall(id, value));
+  }
+
+  setFocusedNpcPlayerCollision(value: boolean): void {
+    this.editFocusedActor((runtime, id) => runtime.setNpcPlayerCollision(id, value));
+  }
+
+  setFocusedNpcFriendlyFire(value: boolean): void {
+    this.editFocusedActor((runtime, id) => runtime.setNpcFriendlyFire(id, value));
+  }
+
+  setFocusedNpcName(name: string): void {
+    this.editFocusedActor((runtime, id) => runtime.setNpcName(id, name));
+  }
+
+  setFocusedNpcDialogue(text: string): void {
+    this.editFocusedActor((runtime, id) => runtime.setNpcDialogue(id, text));
+  }
+
+  setFocusedNpcDefeatMode(mode: SwordsmanDefeatMode): void {
+    this.editFocusedActor((runtime, id) => runtime.setNpcDefeatMode(id, mode));
+  }
+
   clearPinnedInspector(): void {
     this.clearTransientState();
     this.renderInspectorUi();
@@ -203,7 +261,22 @@ export class CourseEditorObjectInspectorController {
     this.pressurePlateStatusText = null;
   }
 
+  handleActorPrimaryAction(slice: CourseInspectorRoomSlice, worldX: number, worldY: number): boolean {
+    const actor = slice.runtime.findPlacedObjectAt(worldX, worldY, isInspectorActor);
+    if (!actor?.instanceId) return false;
+    this.clearTransientState();
+    this.pinInspector('actor', actor.instanceId);
+    this.renderInspectorUi();
+    return true;
+  }
+
   handleObjectPlaced(placed: PlacedObject | null): boolean {
+    if (placed?.instanceId && isInspectorActor(placed)) {
+      this.clearTransientState();
+      this.pinInspector('actor', placed.instanceId);
+      this.renderInspectorUi();
+      return true;
+    }
     if (placed && canPlacedObjectUseObjectLink(placed)) {
       this.focusedContainerInstanceId = null;
       this.focusedPressurePlateInstanceId = placed.instanceId ?? null;
@@ -546,7 +619,7 @@ export class CourseEditorObjectInspectorController {
     this.renderInspectorUi();
   }
 
-  private pinInspector(kind: 'pressure' | 'container', instanceId: string): void {
+  private pinInspector(kind: 'pressure' | 'container' | 'actor', instanceId: string): void {
     this.pinnedInspector = { kind, instanceId };
   }
 
@@ -988,10 +1061,23 @@ export class CourseEditorObjectInspectorController {
   }
 
   private renderInspectorUi(): void {
+    const render = (state: EditorInspectorState) => this.host.renderInspector({
+      ...state,
+      pinned: this.pinnedInspector !== null,
+      connecting: this.connectingPressurePlateInstanceId !== null,
+      selectionId: this.connectingPressurePlateInstanceId ?? this.pinnedInspector?.instanceId ?? null,
+    });
     const hiddenState = createEmptyCourseInspectorState();
     if (editorState.isPlaying) {
-      this.host.renderInspector(hiddenState);
+      render(hiddenState);
       return;
+    }
+
+    if (this.pinnedInspector?.kind === 'actor') {
+      const ref = this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId);
+      const state = ref ? buildActorInspectorState(ref.placed) : null;
+      if (state && editorState.paletteMode === 'objects') { render(state); return; }
+      this.pinnedInspector = null;
     }
 
     const connectMode = this.connectingPressurePlateInstanceId !== null;
@@ -1003,7 +1089,7 @@ export class CourseEditorObjectInspectorController {
       const targets = this.getCourseObjectLinkTargetRefs(source);
       const targetSummary = this.getObjectLinkTargetsSummary(source, targets);
       const eligibleTargetCount = this.getCourseObjectLinkEligibleTargets(source).length;
-      this.host.renderInspector(
+      render(
         buildPressurePlateInspectorState({
           statusText:
             this.pressurePlateStatusText ??
@@ -1024,7 +1110,7 @@ export class CourseEditorObjectInspectorController {
 
     const slice = this.host.getSelectedSlice();
     if (!slice) {
-      this.host.renderInspector(hiddenState);
+      render(hiddenState);
       return;
     }
 
@@ -1044,7 +1130,7 @@ export class CourseEditorObjectInspectorController {
         selectedObject?.category === 'enemy' || selectedObject?.category === 'collectible';
       const canStoreSelected = canObjectBeStoredInContainer(focusedContainer.id, selectedObject);
       const currentContentsLabel = slice.runtime.getContainerContentsLabel(focusedContainer);
-      this.host.renderInspector(
+      render(
         buildContainerInspectorState({
           containerObjectId: focusedContainer.id,
           statusText: this.containerStatusText,
@@ -1058,6 +1144,6 @@ export class CourseEditorObjectInspectorController {
       return;
     }
 
-    this.host.renderInspector(hiddenState);
+    render(hiddenState);
   }
 }
