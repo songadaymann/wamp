@@ -430,24 +430,22 @@ export class OverworldSceneFlowController {
       return;
     }
 
+    const selectedCourseId = this.host.getSelectedPublishedCourseId();
+    if (!selectedCourseId) return;
+
     const mode = this.host.getMode();
     const coordinates = this.host.getSelectedCoordinates();
     if (getRoomGoalIntroModalController()?.openControlsIfNeeded(() => {
       const selected = this.host.getSelectedCoordinates();
       if (this.host.getMode() === mode && selected.x === coordinates.x && selected.y === coordinates.y) {
-        void this.playSelectedCourse();
+        void this.startSelectedPublishedCourse(selectedCourseId);
       }
     })) return;
 
-    await this.startSelectedPublishedCourse();
+    await this.startSelectedPublishedCourse(selectedCourseId);
   }
 
-  private async startSelectedPublishedCourse(): Promise<void> {
-    const selectedCourseId = this.host.getSelectedPublishedCourseId();
-    if (!selectedCourseId) {
-      return;
-    }
-
+  private async startSelectedPublishedCourse(selectedCourseId: string): Promise<void> {
     showBusyOverlay('Starting expanded room...', 'Loading expanded room...');
     try {
       const snapshot = await this.host.loadPublishedCourseSnapshot(selectedCourseId);
