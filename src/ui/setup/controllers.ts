@@ -1,3 +1,4 @@
+import { ActivityInboxController } from './activityInbox';
 import Phaser from 'phaser';
 import { ChatPanelController } from '../chat/panel';
 import { MobileUiController } from '../mobile/controller';
@@ -46,6 +47,7 @@ import { CUSTOM_SPRITES_CHANGED_EVENT } from '../../customSprites/registry';
 import { WorldsController } from '../worlds/controller';
 
 interface UiControllers {
+  activityInbox: ActivityInboxController;
   paletteController: PaletteController;
   historyModal: RoomHistoryModalController;
   leaderboardModal: LeaderboardModalController;
@@ -81,6 +83,7 @@ interface UiControllers {
 
 export function setupUiControllers(game: Phaser.Game): void {
   const controllers = createUiControllers(game);
+  game.events.once('destroy', () => controllers.activityInbox.destroy());
 
   controllers.paletteController.init();
   configureEditorBridge(controllers);
@@ -110,6 +113,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
   game.events.once('destroy', () => firstStepsSummary.destroy());
 
   return {
+    activityInbox: new ActivityInboxController(),
     paletteController: new PaletteController(),
     historyModal: new RoomHistoryModalController(game),
     leaderboardModal,
@@ -145,6 +149,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
 }
 
 function initUiControllers(controllers: UiControllers): void {
+  controllers.activityInbox.init();
   controllers.historyModal.init();
   controllers.leaderboardModal.init();
   controllers.exploreModal.init();

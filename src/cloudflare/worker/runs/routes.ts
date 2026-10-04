@@ -1,3 +1,4 @@
+import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../../../goals/roomGoals';
 import { cloneRoomSnapshot, type RoomRecord, type RoomSnapshot } from '../../../persistence/roomModel';
@@ -489,6 +490,7 @@ export async function handleRunFinish(
     roomRecord,
     completedAt: finishedAt,
   });
+  scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
   await upsertUserStats(env, auth.user.id);
   return noContentResponse(request);
 }

@@ -29,6 +29,9 @@ import {
 } from './shared';
 import { buildCourseRatingWindow, buildRoomRatingWindow } from './ratings';
 import { loadEffectiveTrustTier } from './trustCaps';
+import { resolveAggregatedRoomLeaderboardSelection } from '../runs/roomLeaderboardAggregation';
+import { sqlIsVerificationAccepted } from '../runs/verificationSql';
+import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
 
 export async function ensureFounderIdentityQualification(
   env: Env,
@@ -199,10 +202,11 @@ export async function awardCoursePublishProgression(
   return delta;
 }
 
-async function loadCompletedRoomRunsForVersion(
+async function loadLeaderboardRoomRunsForVersions(
   env: Env,
   roomId: string,
-  roomVersion: number,
+  roomVersions: number[],
+  goal: RoomGoal,
 ): Promise<RoomRunRecord[]> {
   const result = await env.DB.prepare(
     `
@@ -227,11 +231,13 @@ async function loadCompletedRoomRunsForVersion(
         checkpoints_reached
       FROM room_runs
       WHERE room_id = ?
-        AND room_version = ?
-        AND result = 'completed'
+        AND room_version IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
+        AND ${goal.type === 'npc_quest' && goal.questType === 'protect' ? "result IN ('completed', 'failed')" : "result = 'completed'"}
+        AND ${sqlIsVerificationAccepted('room_runs')}
+        AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
     `
   )
-    .bind(roomId, roomVersion)
+    .bind(roomId, JSON.stringify(roomVersions))
     .all<RoomRunRow>();
 
   return result.results.map((row) => ({
@@ -283,6 +289,8 @@ async function loadCompletedCourseRunsForVersion(
       WHERE course_id = ?
         AND course_version = ?
         AND result = 'completed'
+        AND ${sqlIsVerificationAccepted('course_runs')}
+        AND ${sqlUserIdIsNotLegacyGeneratedOnly('course_runs.user_id')}
     `
   )
     .bind(courseId, courseVersion)
@@ -312,6 +320,7 @@ function computeRoomRankForAttempt(
   runs: RoomRunRecord[],
   goal: RoomGoal,
   attemptId: string,
+  userId?: string,
 ): number | null {
   const bestByUser = new Map<string, RoomRunRecord>();
   for (const run of runs) {
@@ -322,7 +331,7 @@ function computeRoomRankForAttempt(
   }
 
   const ranked = sortCompletedRunsForLeaderboard([...bestByUser.values()], goal);
-  const index = ranked.findIndex((entry) => entry.attemptId === attemptId);
+  const index = ranked.findIndex((entry) => userId ? entry.userId === userId : entry.attemptId === attemptId);
   return index >= 0 ? index + 1 : null;
 }
 
@@ -330,6 +339,7 @@ function computeCourseRankForAttempt(
   runs: CourseRunRecord[],
   goal: CourseGoal,
   attemptId: string,
+  userId?: string,
 ): number | null {
   const bestByUser = new Map<string, CourseRunRecord>();
   for (const run of runs) {
@@ -340,7 +350,7 @@ function computeCourseRankForAttempt(
   }
 
   const ranked = [...bestByUser.values()].sort((left, right) => compareCourseLeaderboardEntries(left, right, goal));
-  const index = ranked.findIndex((entry) => entry.attemptId === attemptId);
+  const index = ranked.findIndex((entry) => userId ? entry.userId === userId : entry.attemptId === attemptId);
   return index >= 0 ? index + 1 : null;
 }
 
@@ -357,7 +367,7 @@ export async function awardRoomRunProgression(
   },
 ): Promise<ProgressionDelta> {
   const delta = createEmptyProgressionDelta();
-  if (params.run.result !== 'completed') {
+  if (params.run.result !== 'completed' || (params.run.verificationStatus !== undefined && !['not_required', 'passed'].includes(params.run.verificationStatus))) {
     return delta;
   }
 
@@ -404,12 +414,14 @@ export async function awardRoomRunProgression(
     );
   }
 
-  const runs = await loadCompletedRoomRunsForVersion(env, params.run.roomId, params.run.roomVersion);
+  const family = resolveAggregatedRoomLeaderboardSelection(params.roomRecord, params.run.roomVersion).leaderboardFamilyVersions;
+  const runs = await loadLeaderboardRoomRunsForVersions(env, params.run.roomId, family, params.goal);
   const currentRank = computeRoomRankForAttempt(runs, params.goal, params.run.attemptId);
   const previousRank = computeRoomRankForAttempt(
     runs.filter((entry) => entry.attemptId !== params.run.attemptId),
     params.goal,
     params.run.attemptId,
+    params.run.userId,
   );
 
   if (currentRank !== null && currentRank <= 10 && (previousRank === null || previousRank > 10)) {
@@ -441,6 +453,8 @@ export async function awardRoomRunProgression(
     );
   }
   if (currentRank === 1 && previousRank !== 1) {
+    const priorLeader = sortCompletedRunsForLeaderboard(runs.filter(entry => entry.attemptId !== params.run.attemptId), params.goal)[0];
+
     delta.pxp += await awardLaneDelta(
       env,
       params.run.userId,
@@ -451,6 +465,8 @@ export async function awardRoomRunProgression(
       `pxp:room_top1_take:${params.run.attemptId}`,
       LANE_BASE_XP.top1,
       params.completedAt,
+      { activity: { contentType: 'room', contentId: params.run.roomId, version: params.run.roomVersion,
+        builderUserId: params.creatorUserId, dethronedUserId: priorLeader?.userId ?? null } },
     );
   }
 
@@ -483,6 +499,7 @@ export async function awardRoomRunProgression(
       `bxp:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
       creatorBxp,
       params.completedAt,
+      { activity: { contentType: 'room', contentId: params.run.roomId, version: params.run.roomVersion, actorUserId: params.run.userId } },
     );
     delta.trust += await awardLaneDelta(
       env,
@@ -524,7 +541,7 @@ export async function awardCourseRunProgression(
   },
 ): Promise<ProgressionDelta> {
   const delta = createEmptyProgressionDelta();
-  if (params.run.result !== 'completed') {
+  if (params.run.result !== 'completed' || (params.run.verificationStatus !== undefined && !['not_required', 'passed'].includes(params.run.verificationStatus))) {
     return delta;
   }
 
@@ -575,6 +592,7 @@ export async function awardCourseRunProgression(
     runs.filter((entry) => entry.attemptId !== params.run.attemptId),
     params.goal,
     params.run.attemptId,
+    params.run.userId,
   );
 
   if (currentRank !== null && currentRank <= 10 && (previousRank === null || previousRank > 10)) {
@@ -606,6 +624,9 @@ export async function awardCourseRunProgression(
     );
   }
   if (currentRank === 1 && previousRank !== 1) {
+    const priorLeader = runs.filter(entry => entry.attemptId !== params.run.attemptId)
+      .sort((left, right) => compareCourseLeaderboardEntries(left, right, params.goal))[0];
+
     delta.pxp += await awardLaneDelta(
       env,
       params.run.userId,
@@ -616,6 +637,8 @@ export async function awardCourseRunProgression(
       `pxp:course_top1_take:${params.run.attemptId}`,
       LANE_BASE_XP.top1,
       params.completedAt,
+      { activity: { contentType: 'course', contentId: params.run.courseId, version: params.run.courseVersion,
+        builderUserId: params.creatorUserId, dethronedUserId: priorLeader?.userId ?? null } },
     );
   }
 
@@ -650,6 +673,7 @@ export async function awardCourseRunProgression(
         `bxp:course_unique_completion:${params.creatorUserId}:${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
         creatorBxp,
         params.completedAt,
+        { activity: { contentType: 'course', contentId: params.run.courseId, version: params.run.courseVersion, actorUserId: params.run.userId } },
       ),
       cxp: 0,
       trust: await awardLaneDelta(

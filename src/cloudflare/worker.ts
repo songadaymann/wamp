@@ -1,3 +1,6 @@
+import { handleMyActivity } from './worker/activity/routes';
+import { handleActivityUnsubscribe } from './worker/activity/unsubscribe';
+import { runActivityEmails } from './worker/activity/emails';
 import { handleGuestReplay, purgeGuestReplays } from './worker/guestReplay/routes';
 import { pruneRateLimitEvents } from './worker/core/rateLimit';
 import { handleAdminRequest } from './worker/admin/routes';
@@ -148,6 +151,14 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     }),
   },
   {
+    methods: ['GET', 'POST', 'PUT'], pattern: { prefix: '/api/me/activity' }, auth: 'authenticated',
+    handler: ({ request, url, env }) => handleMyActivity(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST'], pattern: '/api/activity/unsubscribe', auth: 'public',
+    handler: ({ request, url, env }) => handleActivityUnsubscribe(request, url, env.DB.withSession?.('first-primary') ?? env.DB),
+  },
+  {
     methods: ['GET'],
     pattern: '/api/authoring/catalog',
     auth: 'public',
@@ -281,11 +292,13 @@ export default {
     if (event.cron === WORLD_MAP_HEALTH_CRON) {
       const result = await checkAndAlertWorldMap(env);
       console.log(JSON.stringify({ event: 'world-map-health', ...result }));
-      return;
+    } else {
+      await purgeGuestReplays(env);
+      await pruneGuestRuns(env);
+      await pruneRateLimitEvents(env);
     }
-    await purgeGuestReplays(env);
-    await pruneGuestRuns(env);
-    await pruneRateLimitEvents(env);
+    const activity = await runActivityEmails(env, { now: new Date(event.scheduledTime).toISOString() });
+    console.log(JSON.stringify({ event: 'activity-email-scheduled', ...activity }));
   },
   async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {
     const url = new URL(request.url);

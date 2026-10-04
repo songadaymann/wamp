@@ -1,3 +1,5 @@
+import { activityDescription } from '../../activity/model';
+import { createActivityRepository, type ActivityRepository } from '../../activity/repository';
 import { AUTH_SESSION_REFRESHED_EVENT, type AuthDebugState } from '../../auth/client';
 import { createProfileRepository, type ProfileRepository } from '../../profiles/profileRepository';
 import {
@@ -48,6 +50,7 @@ export class RewardStingCatchupController {
     private readonly profileRepository: ProfileRepository = createProfileRepository(),
     private readonly windowObj: Window = window,
     private readonly storage: Storage = window.localStorage,
+    private readonly activityRepository: ActivityRepository = createActivityRepository(),
   ) {}
 
   init(): void {
@@ -102,6 +105,13 @@ export class RewardStingCatchupController {
         return;
       }
 
+      let reason = 'While you were away';
+      if (profile.progression.builder.xp > previousProgression.builder.xp) {
+        const activity = await this.activityRepository.load().catch(() => null);
+        if (this.activeUserId !== userId) return;
+        const entry = activity?.entries.find(entry => entry.unread && (entry.kind === 'completion' || entry.kind === 'rating'));
+        if (entry) reason = activityDescription(entry);
+      }
       dispatchProgressionFeedback({
         previousProgression,
         currentProgression: profile.progression,
@@ -110,7 +120,7 @@ export class RewardStingCatchupController {
         contentType: 'room',
         contentId: 'profile-catchup',
         contentTitle: null,
-        reason: 'While you were away',
+        reason,
         windowObj: this.windowObj,
       });
     } catch {
