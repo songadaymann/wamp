@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-async function classify(options: { width: number; height: number; coarse: boolean; touchPoints: number }) {
+async function classify(options: { width: number; height: number; coarse: boolean; touchPoints: number; visualViewport?: { width: number; height: number; scale: number } }) {
   vi.resetModules();
   vi.stubGlobal('window', {
     innerWidth: options.width,
     innerHeight: options.height,
-    visualViewport: undefined,
+    visualViewport: options.visualViewport ? { ...options.visualViewport, addEventListener: () => {} } : undefined,
     matchMedia: (query: string) => ({ matches: query.includes('pointer: coarse') ? options.coarse : false }),
     addEventListener: () => {},
   });
@@ -34,5 +34,11 @@ describe('device layout classification', () => {
   it('treats a mouse-only computer as a desktop', async () => {
     const layout = await classify({ width: 1440, height: 900, coarse: false, touchPoints: 0 });
     expect(layout).toMatchObject({ deviceClass: 'desktop', coarsePointer: false, touchPrimary: false });
+  });
+
+  it('returns to the phone layout when a mobile browser fits overflowing tablet content', async () => {
+    const layout = await classify({ width: 738, height: 1598, coarse: true, touchPoints: 5,
+      visualViewport: { width: 738, height: 1597.1078, scale: 390 / 738 } });
+    expect(layout).toMatchObject({ deviceClass: 'phone', orientationState: 'portrait', viewport: { width: 390, height: 844 } });
   });
 });

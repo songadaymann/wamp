@@ -86,7 +86,12 @@ const scenarios = [
       runTouchOverlayPlay(page, scenarioSummary, scenarioDir, { deviceClass: 'phone', orientationState: 'landscape' }),
   },
   {
-    name: 'phone-landscape-editor-sheets',
+    name: 'phone-portrait-editor-dock',
+    profile: profiles.phonePortrait,
+    run: runPhoneLandscapeEditorSheets,
+  },
+  {
+    name: 'phone-landscape-editor-dock',
     profile: profiles.phoneLandscape,
     run: runPhoneLandscapeEditorSheets,
   },
@@ -880,54 +885,25 @@ async function runPhoneLandscapeEditorSheets(page, scenarioSummary, scenarioDir)
     activeScene: summarizeActiveScene(editorState.activeScene),
   });
 
-  await assertVisible(page, '#mobile-editor-nav', 'mobile editor nav');
-  await assertVisible(page, '#sidebar', 'mobile editor sheet');
-
-  const editorNav = await page.evaluate(() => {
-    const tabs = Array.from(document.querySelectorAll('#mobile-editor-nav [data-mobile-editor-sheet]'));
-    return tabs.map((tab) => ({
-      sheet: tab.getAttribute('data-mobile-editor-sheet'),
-      text: tab.textContent?.trim() ?? '',
-      ariaLabel: tab.getAttribute('aria-label'),
-    }));
-  });
-  assertCondition(
-    editorNav[0]?.sheet === 'actions'
-      && editorNav[0]?.text === '← World'
-      && editorNav[0]?.ariaLabel === 'World and editor actions',
-    `mobile editor should lead with an explicit World action tab: ${JSON.stringify(editorNav)}`,
-  );
-
-  await clickElement(page, '[data-mobile-editor-sheet="actions"]');
-  await page.waitForFunction(() => document.body.dataset.mobileEditorSheet === 'actions');
-  await assertVisible(page, '#editor-actions', 'editor actions sheet');
-  const worldActionLabel = await page.$eval('#btn-editor-back .tool-label', (element) => element.textContent?.trim() ?? '');
-  assertCondition(worldActionLabel === 'World', `expected World action label, received ${worldActionLabel}`);
-  await assertSelectorsWithinViewport(
-    page,
-    ['#mobile-editor-nav', '#sidebar'],
-    'mobile editor World actions bounds',
-  );
-  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'editor-world-actions');
-
-  for (const sheet of ['tools', 'background', 'palette', 'objects', 'goal']) {
-    await clickElement(page, `[data-mobile-editor-sheet="${sheet}"]`);
-    await page.waitForFunction((expectedSheet) => document.body.dataset.mobileEditorSheet === expectedSheet, sheet);
-    await assertVisible(page, '#sidebar', `mobile editor ${sheet} sheet`);
-    await assertSelectorsWithinViewport(page, ['#mobile-editor-nav', '#sidebar'], `mobile editor ${sheet} bounds`);
-    scenarioSummary.assertions.push({ label: `mobile editor sheet selectable: ${sheet}` });
+  await assertHidden(page, '#mobile-editor-nav', 'legacy editor nav');
+  await assertVisible(page, '#editor-shell-phone-bar', 'persistent phone actions');
+  await assertSelectorsWithinViewport(page, ['#editor-shell-phone-bar', '#editor-shell-dock', '#sidebar'], 'phone editor bounds');
+  for (const action of ['test', 'publish']) await assertVisible(page, `[data-editor-shell-action="${action}"]`, `phone ${action}`);
+  for (const panel of ['terrain', 'stuff', 'characters', 'hazards', 'deco']) {
+    await page.locator(`[data-editor-dock="${panel}"]`).scrollIntoViewIfNeeded();
+    await clickElement(page, `[data-editor-dock="${panel}"]`);
+    await page.waitForFunction(expected => document.body.dataset.editorShellPanel === expected, panel);
+    await assertVisible(page, '#sidebar', `${panel} library`);
+    scenarioSummary.assertions.push({ label: `phone library selectable: ${panel}` });
   }
-
-  await clickElement(page, '[data-mobile-editor-sheet="actions"]');
-  await page.waitForFunction(() => document.body.dataset.mobileEditorSheet === 'actions');
+  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'editor-dock');
   await clickElement(page, '#btn-mobile-editor-toggle');
   await page.waitForFunction(() => document.body.dataset.mobileEditorCollapsed === 'true');
-  scenarioSummary.assertions.push({ label: 'mobile editor sheet collapses' });
+  await assertHidden(page, '#sidebar', 'collapsed library');
+  await assertVisible(page, '[data-editor-shell-action="test"]', 'Test remains reachable');
+  await assertVisible(page, '[data-editor-shell-action="publish"]', 'Publish remains reachable');
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'editor-collapsed');
-  scenarioSummary.assertions.push({
-    label: 'leftmost World tab reveals the actions sheet and remains visible when collapsed',
-    editorNav,
-  });
+  scenarioSummary.assertions.push({ label: 'persistent actions remain visible with the library hidden' });
 }
 
 async function runTabletLandscapeBrowse(page, scenarioSummary, scenarioDir) {

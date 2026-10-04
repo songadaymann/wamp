@@ -1,3 +1,4 @@
+import { EditorPhoneDock } from './editorPhoneDock';
 import {
   editorState,
   TILE_SIZE,
@@ -184,8 +185,7 @@ function isObjectPanel(panel: EditorDockPanelId): panel is EditorObjectPanelScop
 }
 
 export function isEditorDockShellActive(doc: Document): boolean {
-  return doc.body.dataset.appMode === 'editor'
-    && doc.body.dataset.deviceClass !== 'phone';
+  return doc.body.dataset.appMode === 'editor';
 }
 
 function dispatchSelectChange(select: HTMLSelectElement, value: string): void {
@@ -196,6 +196,7 @@ function dispatchSelectChange(select: HTMLSelectElement, value: string): void {
 export class EditorDockShellController {
   private state: EditorDockShellState = { ...INITIAL_EDITOR_DOCK_SHELL_STATE };
   private active = false;
+  private readonly phoneDock: EditorPhoneDock;
   private lastDrawerTrigger: HTMLElement | null = null;
   private lastPopoverTrigger: HTMLElement | null = null;
   private lastStandardTheme: Exclude<SmartThemeId, 'water'> = 'forest';
@@ -212,7 +213,10 @@ export class EditorDockShellController {
   constructor(
     private readonly paletteController: PaletteController,
     private readonly doc: Document = document,
-  ) {}
+  ) {
+    this.phoneDock = new EditorPhoneDock(doc, () => this.finishSpawnPlacement(true),
+      () => this.dispatch({ type: 'close-popovers' }));
+  }
 
   init(): void {
     this.bindDockButtons();
@@ -249,6 +253,7 @@ export class EditorDockShellController {
       this.lastPopoverTrigger = trigger ?? this.lastPopoverTrigger;
     }
 
+    if ((action.type === 'toggle-dock' && action.dock !== 'markers') || action.type === 'toggle-room' || action.type === 'open-goal') this.phoneDock.expand();
     this.syncDom();
     if (drawerChanged) {
       this.queueLayoutResize();
@@ -420,7 +425,9 @@ export class EditorDockShellController {
         'data-device-class',
         'data-editor-course-mode',
         'data-editor-music-mode',
+        'data-editor-music-ui-locked',
         'data-editor-sprite-mode',
+        'data-editor-sprite-ui-locked',
       ],
     });
 
@@ -503,6 +510,7 @@ export class EditorDockShellController {
       return;
     }
     this.active = shouldBeActive;
+    if (!this.active) this.phoneDock.sync();
     if (this.active) {
       this.doc.body.dataset.editorDockShell = 'true';
       this.moveEditorChromeIntoShell();
@@ -591,6 +599,7 @@ export class EditorDockShellController {
     }
     this.syncChoiceButtons();
     this.syncRoutineStatusVisibility();
+    this.phoneDock.sync();
   }
 
   private syncRoutineStatusVisibility(): void {
@@ -684,6 +693,7 @@ export class EditorDockShellController {
       };
     }
     this.state = reduceEditorDockShellState(this.state, { type: 'start-spawn' });
+    this.phoneDock.collapse();
     editorState.paletteMode = 'objects';
     editorState.selectedObjectId = 'spawn_point';
     editorState.activeTool = 'pencil';
@@ -728,7 +738,10 @@ export class EditorDockShellController {
 
   private focusDrawer(): void {
     this.doc.defaultView?.requestAnimationFrame(() => {
-      this.doc.getElementById('editor-drawer-header')?.focus({ preventScroll: true });
+      const target = this.doc.body.dataset.editorPhoneDock === 'true'
+        ? this.doc.querySelector<HTMLButtonElement>('[data-editor-dock][aria-pressed="true"]')
+        : this.doc.getElementById('editor-drawer-header');
+      target?.focus({ preventScroll: true });
     });
   }
 
@@ -779,6 +792,7 @@ export class EditorDockShellController {
       if (label) label.textContent = labelText;
       else collect.textContent = labelText;
     }
+    this.phoneDock.sync();
   }
 
   private getCollectActionTarget(): HTMLButtonElement | null {

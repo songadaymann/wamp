@@ -69,8 +69,11 @@ function resolvePerformanceProfile(
 
 function computeState(): DeviceLayoutState {
   const viewport = window.visualViewport;
-  const width = Math.max(0, Math.round(viewport?.width ?? window.innerWidth));
-  const height = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
+  // Mobile browsers can zoom out to fit the previous desktop layout during a resize.
+  // Use the actual screen area in that case, so wide content cannot trap a phone in tablet mode.
+  const fitScale = Math.min(1, viewport?.scale ?? 1);
+  const width = Math.max(0, Math.round((viewport?.width ?? window.innerWidth) * fitScale));
+  const height = Math.max(0, Math.round((viewport?.height ?? window.innerHeight) * fitScale));
   const touchPrimary = window.matchMedia('(pointer: coarse)').matches;
   const coarsePointer = touchPrimary || navigator.maxTouchPoints > 0;
   const orientationState: OrientationState = width >= height ? 'landscape' : 'portrait';

@@ -103,6 +103,7 @@ export class MobileUiController {
   };
 
   private readonly handleAutoCollapse = () => {
+    if (this.doc.body.dataset.editorPhoneDock === 'true') return;
     const layout = getDeviceLayoutState();
     if (layout.deviceClass !== 'phone' || !layout.coarsePointer) {
       return;
@@ -172,6 +173,7 @@ export class MobileUiController {
 
   private bindMobileEditorActions(): void {
     this.elements.mobileEditorToggleButton?.addEventListener('click', () => {
+      if (this.doc.body.dataset.editorPhoneDock === 'true') return;
       if (this.doc.body.dataset.editorMusicMode === 'true') {
         return;
       }
@@ -430,7 +432,8 @@ export class MobileUiController {
       this.editorSheetCollapsed = false;
     }
 
-    if (isEditor && musicModeActive) {
+    const phoneDockActive = this.doc.body.dataset.editorPhoneDock === 'true';
+    if (isEditor && musicModeActive && !phoneDockActive) {
       this.activeEditorSheet = 'actions';
       this.editorSheetCollapsed = false;
       this.doc.body.dataset.mobileEditorSheet = 'actions';
@@ -463,7 +466,7 @@ export class MobileUiController {
     if (this.elements.mobileEditorNav) {
       this.elements.mobileEditorNav.classList.toggle(
         'hidden',
-        !(isPhone && layout.coarsePointer && isEditor),
+        !(isPhone && layout.coarsePointer && isEditor) || phoneDockActive,
       );
       this.elements.mobileEditorNav
         .querySelectorAll<HTMLButtonElement>('[data-mobile-editor-sheet]')
@@ -473,8 +476,8 @@ export class MobileUiController {
         });
     }
 
-    this.doc.body.dataset.mobileEditorCollapsed = this.editorSheetCollapsed ? 'true' : 'false';
-    if (this.elements.mobileEditorToggleButton) {
+    if (!phoneDockActive) this.doc.body.dataset.mobileEditorCollapsed = this.editorSheetCollapsed ? 'true' : 'false';
+    if (this.elements.mobileEditorToggleButton && !phoneDockActive) {
       this.elements.mobileEditorToggleButton.disabled = musicModeActive;
     }
 

@@ -34,7 +34,7 @@ It covers:
 - phone landscape browse HUD and shortcuts
 - phone landscape first-visit welcome modal
 - phone landscape play staying unblocked without the old D-pad controls
-- phone landscape editor sheets and collapse behavior
+- phone portrait and landscape shared editor dock, persistent actions and library collapse behavior
 - tablet landscape browse layout
 
 ## Local Phone On LAN
