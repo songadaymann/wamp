@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 31 of 214 done.**
+**Progress: 32 of 214 done.**
 
 ## How to use this file
 
@@ -43,7 +43,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 5. **Switch the fast world map back on, safely** ✅ (F003, F010). Compatible pre-rendered imagery is active again. Tile work stays within the current viewport and bounded metadata; strict production smoke, direct outage/recovery emails and blocking production release compatibility checks protect the restored map.
 6. **Same jump on every screen, and cap phones at 60fps** (F138, F002). On 120/144Hz screens, quick-tap jumps come out lower, ice slides shorter, and jumps in gravity zones are about half as tall. Rooms get easier or harder depending on the device, and leaderboards aren't fair. A careful cap just above 60fps also cuts heat and battery drain on high-refresh phones.
 7. **Make building on phones and tablets stop fighting you** ✅ (F079, F157, F161, F158). Pinch cancellation and touch shapes are delivered in both editors (PR #40), along with Undo/Redo (PR #39). The shared phone dock, persistent Test/Publish, scoped libraries and touch Spawn cancellation are delivered (PR #41). Phone object settings, Done and link Cancel are delivered in both editors (PR #42), including expanded character settings.
-8. **Fix the first five minutes** (F093, F122, F126, F104). Shared links now show only the room-goal intro, with Welcome deferred until Stop (PR #43). Verified guest clears and drafts now carry into an account after sign-in (PR #44). Keyboard/touch guidance now appears before first Play, including expanded rooms, playlists and Room Rush (PRs #45–47). Remaining: clearer Welcome destinations.
+8. **Fix the first five minutes** ✅ (F093, F122, F126, F104). Shared links now show only the room-goal intro, with Welcome deferred until Stop (PR #43). Verified guest clears and drafts now carry into an account after sign-in (PR #44). Keyboard/touch guidance now appears before first Play, including expanded rooms, playlists and Room Rush (PRs #45–47). Welcome now opens a six-room First Steps run with truthful clear summary, the real explorer, or a playable starter draft (PR #48).
 9. **Security/safety priority** (F198, F201, F199, F200, F026). Details withheld from this public repo until fixed.
 10. **Security/safety priority** (F182, F184, F183). Details withheld from this public repo until fixed.
 
@@ -67,7 +67,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 
 ## Big bets
 
-- **First Steps: a curated starter run that teaches and hooks** (F126, F122, F096, F118, F133). Turn Welcome → Play into a 6–8 room journey ('Room 2 of 8 · Next') that runs through the De Ja Vu tutorial and then the best community rooms. Each new room gets a banner crediting its builder, and every clear gets a real in-play celebration. Guest progress carry-over is delivered (PR #44). Add a proud 'Your room is live!' screen, with a name field and share buttons, for a builder's first publish.
+- **First Steps: a curated starter run that teaches and hooks** (F126, F122, F096, F118, F133). The six-room De Ja Vu sequence now has controls, progress, touch Next and a truthful completion summary (PR #48); guest progress carry-over is delivered (PR #44). Remaining: community-room curation, builder credits and real in-play celebrations, plus a proud 'Your room is live!' screen with a name field and share buttons for a builder's first publish.
 - **Tell builders people are playing their stuff** (F123, F124, F130). The best reason to come back and build is knowing someone played your room. Add: - an activity bell on your profile card ('7 players beat Lava Gauntlet, tkinter took your #1'); - per-room plays, clear rate and average deaths, and later a map of where players die; - a weekly digest email. The server already records most of this.
 - **Safety big bet** (F128, F129, F135, F151, F216). Details withheld from this public repo until fixed.
 - **Safety big bet** (F142, F207). Details withheld from this public repo until fixed.
@@ -85,7 +85,7 @@ Go one item at a time, and check each on the live site and on a real phone befor
 4. **Student safety.** Lock down room chat and school restrictions (F208, F190, F209, F211) before any new classroom pilots.
 5. **Mobile building.** Fix the pinch stray-tile bug and add Undo/Redo buttons (F079, F157).
 6. **Tablet and landscape controls.** Add these next (F075), since that's the biggest chunk of players who currently can't play.
-7. **First visits.** Shared-link modal deferral, guest progress carry-over and first-play control guidance are delivered (F093, F122, F104). Next: clearer Welcome destinations (F126).
+7. **First visits.** Shared-link modal deferral, guest progress carry-over, first-play control guidance and Welcome destinations are delivered (F093, F122, F104, F126). Next: discovery curation and rating/difficulty coverage (F125).
 8. **Security and safety items.** Details withheld from this public repo until fixed (F182, F183, F185, F198, F201).
 9. **Quick wins and big bets.** Mix in quick wins between bigger items whenever a palate cleanser helps. Then pick one big bet at a time, starting with 'First Steps' or the builder-feedback inbox, since those most directly turn visitors into returning builders.
 
@@ -220,7 +220,7 @@ What happens in a newcomer's first five minutes, and what brings players and bui
 
 - [x] **F093** Shared room links stack the Welcome modal over the room-goal modal; the run timer ticks under it · high impact · small effort — **done 2026-10-04** (`ce144c6e`). Automatic Welcome waits for readiness and defers synchronously on Play without persisting dismissal. Native desktop/phone shared/home Start/timer/Stop/reload and modal traces pass on actual wamp.land; home onboarding remains intact.
 - [x] **F122** Signing up throws away a guest's clears, even though the game says 'Save Progress' · high impact · medium effort — **done 2026-10-04** (`ef5a966b`). Server-verified guest clears carry into an account for 14 days with canonical XP awarded once, durable retries and all common auth refresh paths; legacy browser clears retain truthful Replay. Guest drafts resume across tabs with preserved edits and an explicit new location if their spot is taken. Full API/Pages release, actual tutorial clear → 20 XP and draft save/retry pass on wamp.land.
-- [ ] **F126** Welcome 'Play' runs one room, 'Explore' just closes the window, and 'Build' drops you into an empty room (also covers F097) · medium impact · medium effort
+- [x] **F126** Welcome 'Play' runs one room, 'Explore' just closes the window, and 'Build' drops you into an empty room (also covers F097) · medium impact · medium effort — **done 2026-10-04** (`c1847d8c`). Play starts the existing six tutorial rooms as First Steps with controls, progress and a summary of actual verified/queued/unverified clears. Explore opens the room list with guest Play All. Build opens a playable floor/spawn/exit starter with draft recovery and autosave. All 15 live desktop/touch flows, exact served release and the new replay event pass; discovery curation remains F125.
 - [ ] **F125** Explore's default 'Featured' tab has nothing featured, and 88% of rooms have no rating, so discovery is mostly noise · high impact · small effort
 - [ ] **F096** Clearing a room feels flat: no in-play celebration, no 'Next room', and the XP reward only appears after you press Stop · medium impact · small effort
 - [x] **F104** New players never see the controls before the timer starts · medium impact · small effort — **done 2026-10-04** (`0c618819`). Keyboard/touch guidance precedes ordinary and expanded first Play and appears in playlist/Room Rush entry; movement/timers wait for Start and acknowledgement is remembered per input. Expanded Start retains its chosen course, map imagery stays below ready dialogs, and twelve live workflows pass across six browser layouts.
