@@ -91,6 +91,7 @@
           <div id="xp-receipt-level" class="xp-receipt-level">LVL 1</div>
           <div id="xp-receipt-detail" class="xp-receipt-detail">10 / 25 XP</div>
         </div>
+        <button id="activity-catchup" class="activity-catchup hidden" type="button">Open Activity</button>
         <div class="xp-receipt-meter" aria-hidden="true">
           <div id="xp-receipt-meter-fill" class="xp-receipt-meter-fill"></div>
         </div>
@@ -152,6 +153,10 @@
             </div>
           </div>
         </div>
+      </button>
+      <button id="btn-activity-open" class="activity-bell hidden" type="button" aria-label="Open Activity" title="Activity">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 17h14l-2-3V9a5 5 0 0 0-10 0v5l-2 3Z M10 20h4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <span id="activity-unread-count" class="activity-badge hidden">0</span>
       </button>
       <button id="menu-toggle" type="button" aria-label="Menu">
         <span class="hamburger-line"></span>
@@ -2088,6 +2093,27 @@
     </div>
   </div>
 
+  <div id="activity-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel activity-panel" role="dialog" aria-modal="true" aria-labelledby="activity-title">
+      <div class="history-modal-header">
+        <h2 id="activity-title" class="history-modal-title">Activity</h2>
+        <button id="btn-activity-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div class="activity-scroll">
+        <p id="activity-status" class="history-modal-meta" role="status"></p>
+        <button id="btn-activity-retry" class="bar-btn bar-btn-small hidden" type="button">Try Again</button>
+        <ul id="activity-list" class="activity-list"></ul>
+        <button id="btn-activity-more" class="bar-btn bar-btn-small hidden" type="button">Older Activity</button>
+        <fieldset class="activity-preferences">
+          <legend>Email updates</legend>
+          <label><input id="activity-weekly-digest" type="checkbox"> Weekly activity digest</label>
+          <label><input id="activity-dethrone-alerts" type="checkbox"> Tell me when someone takes my #1</label>
+          <p id="activity-preferences-status" class="history-modal-meta" role="status"></p>
+          <button id="btn-activity-save" class="bar-btn bar-btn-small" type="button">Save Email Preferences</button>
+        </fieldset>
+      </div>
+    </div>
+  </div>
   <div id="room-history-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-history-title">
       <div class="history-modal-header">
@@ -2501,6 +2527,7 @@
   <div id="profile-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel profile-modal-panel" role="dialog" aria-modal="true" aria-label="Profile">
       <div class="history-modal-header profile-modal-header">
+          <button id="btn-profile-activity" class="bar-btn bar-btn-small hidden" type="button">Activity</button>
         <button id="btn-profile-share" class="bar-btn bar-btn-small hidden" type="button">Copy Link</button>
         <button id="btn-profile-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>

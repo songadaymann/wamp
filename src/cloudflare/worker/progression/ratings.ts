@@ -674,6 +674,7 @@ export async function submitRoomRating(
         `bxp:room_unique_rating:${params.roomRecord.claimerUserId}:${published.id}:${ratingWindow.versionKey}:${params.userId}`,
         LANE_BASE_XP.uniqueRating,
         now,
+        { activity: { contentType: 'room', contentId: published.id, version: published.version, actorUserId: params.userId, qualityStars } },
       ),
       cxp: 0,
       trust: await awardLaneDelta(
@@ -834,6 +835,7 @@ export async function submitCourseRating(
         `bxp:course_unique_rating:${params.courseRecord.ownerUserId}:${published.id}:${ratingWindow.versionKey}:${params.userId}`,
         LANE_BASE_XP.uniqueRating,
         now,
+        { activity: { contentType: 'course', contentId: published.id, version: published.version, actorUserId: params.userId, qualityStars } },
       ),
       cxp: 0,
       trust: await awardLaneDelta(

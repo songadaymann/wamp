@@ -294,6 +294,10 @@ export class ProfileModalController {
 
   init(): void {
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
+    this.doc.getElementById('btn-profile-activity')?.addEventListener('click', () => {
+      if (!this.authState.authenticated || this.currentProfile?.userId !== this.authState.user?.id) return;
+      this.close(); this.windowObj.dispatchEvent(new CustomEvent('activity-open-request'));
+    });
     this.elements.shareButton?.addEventListener('click', this.handleShareClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.elements.avatarPickerModal?.addEventListener('click', this.handleAvatarPickerBackdropClick);
@@ -569,6 +573,8 @@ export class ProfileModalController {
 
     const profile = this.currentProfile;
     const canEdit = Boolean(profile?.canEdit);
+    this.doc.getElementById('btn-profile-activity')?.classList.toggle('hidden',
+      !this.authState.authenticated || this.authState.source !== 'session' || profile?.userId !== this.authState.user?.id);
     const avatarOnlyEdit = this.isSchoolAvatarOnlyEdit(profile);
     const canEditProfileText = canEdit && !avatarOnlyEdit;
     const titleText = this.loading

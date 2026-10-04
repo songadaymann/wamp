@@ -1,3 +1,4 @@
+import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from '../runs/finalizationVerification';
 import {
   cloneCourseGoal,
@@ -652,6 +653,7 @@ export async function handleCourseRunFinish(
     courseRecord,
     completedAt: finishedAt,
   });
+  scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
   await upsertUserStats(env, auth.user.id);
   return noContentResponse(request);
 }

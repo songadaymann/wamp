@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { escapeEmailHtml as escapeHtml } from '../email/delivery';
 import type { AdminRoomCommentRecord } from '../../../roomComments/model';
 import { DEFAULT_AUTH_EMAIL_FROM, resolvePublicBaseUrl } from '../auth/store';
 import type { Env } from '../core/types';
@@ -96,13 +97,4 @@ export async function sendRoomCommentApprovedEmail(
     skippedReason: null,
     error: null,
   };
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
