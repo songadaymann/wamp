@@ -35,7 +35,7 @@ export class RoomInsightsController {
     this.retry?.addEventListener('click',this.onRetry); this.toggle?.addEventListener('change',this.onToggle);
     this.win.addEventListener('room-insights-open',this.onOpen); this.win.addEventListener(EDITOR_UI_STATE_CHANGED_EVENT,this.onEditorChange);
     this.win.addEventListener(APP_MODE_CHANGED_EVENT,this.onEditorChange);
-    this.doc.addEventListener('click',this.onEditorClick); this.doc.addEventListener('keydown',this.onKeydown,true);
+    this.doc.addEventListener('click',this.onEditorClick); this.win.addEventListener('keydown',this.onKeydown,true);
   }
   destroy(): void {
     this.close(); this.clearMap(); this.lifecycle.detach();
@@ -43,7 +43,7 @@ export class RoomInsightsController {
     this.toggle?.removeEventListener('change',this.onToggle); this.win.removeEventListener('room-insights-open',this.onOpen);
     this.win.removeEventListener(EDITOR_UI_STATE_CHANGED_EVENT,this.onEditorChange); this.doc.removeEventListener('click',this.onEditorClick);
     this.win.removeEventListener(APP_MODE_CHANGED_EVENT,this.onEditorChange);
-    this.doc.removeEventListener('keydown',this.onKeydown,true);
+    this.win.removeEventListener('keydown',this.onKeydown,true);
   }
   private currentEditor(): InsightScene | null {
     if (this.doc.body.dataset.appMode !== 'editor') return null;
