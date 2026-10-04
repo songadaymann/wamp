@@ -31,6 +31,14 @@ import {
   type RoomStorageBackend,
 } from './runtimeConfig';
 import { dispatchTypedEvent } from '../events/typedEvent';
+import {
+  collectConnectorWalletIds,
+  getAnnouncedBrowserWalletRdns,
+  isBrowserWalletInstalled,
+  requestBrowserWalletProviders,
+  startBrowserWalletDiscovery,
+  type InjectedBrowserProvider,
+} from './browserWallets';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
 export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
@@ -958,11 +966,14 @@ async function ensureWalletModal(): Promise<AppKit> {
   }
 
   walletBootstrapPromise = (async () => {
-    const [{ createAppKit }, { WagmiAdapter }, { base, baseSepolia, mainnet }] = await Promise.all([
-      import('@reown/appkit'),
-      import('@reown/appkit-adapter-wagmi'),
-      import('@reown/appkit/networks'),
-    ]);
+    startBrowserWalletDiscovery();
+    const [{ createAppKit }, { WagmiAdapter }, { base, baseSepolia, mainnet }, { ConnectionController, ConnectorController }] =
+      await Promise.all([
+        import('@reown/appkit'),
+        import('@reown/appkit-adapter-wagmi'),
+        import('@reown/appkit/networks'),
+        import('@reown/appkit-controllers'),
+      ]);
     const networks: [typeof base, typeof mainnet, typeof baseSepolia] = [base, mainnet, baseSepolia];
     const wagmiAdapter = new WagmiAdapter({ projectId, networks });
 
@@ -985,6 +996,8 @@ async function ensureWalletModal(): Promise<AppKit> {
     });
 
     await walletModal.ready();
+    requestBrowserWalletProviders();
+    patchBrowserWalletDetection(ConnectionController, ConnectorController);
     syncWalletAccount(walletModal.getAccount('eip155'));
     walletModal.subscribeAccount((account) => {
       syncWalletAccount(account);
@@ -997,6 +1010,42 @@ async function ensureWalletModal(): Promise<AppKit> {
   })();
 
   return walletBootstrapPromise;
+}
+
+const patchedBrowserWalletChecks = new WeakSet<(ids?: string[]) => boolean>();
+
+function patchBrowserWalletDetection(
+  connectionController: {
+    _getClient(): { checkInstalled?: (ids?: string[]) => boolean } | undefined;
+  },
+  connectorController: {
+    state: { connectors: Parameters<typeof collectConnectorWalletIds>[0] };
+  },
+): void {
+  const client = connectionController._getClient();
+  const original = client?.checkInstalled;
+  if (!client || !original || patchedBrowserWalletChecks.has(original)) {
+    return;
+  }
+
+  const checkInstalled = (ids?: string[]) => {
+    const ethereum = (window as Window & { ethereum?: InjectedBrowserProvider }).ethereum;
+    if (
+      isBrowserWalletInstalled({
+        ids,
+        announcedRdns: getAnnouncedBrowserWalletRdns(),
+        connectorIds: collectConnectorWalletIds(connectorController.state.connectors),
+        ethereum,
+      })
+    ) {
+      return true;
+    }
+
+    return original(ids);
+  };
+
+  patchedBrowserWalletChecks.add(checkInstalled);
+  client.checkInstalled = checkInstalled;
 }
 
 function requireHexValue(value: string, label: string): `0x${string}` {
