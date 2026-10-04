@@ -15,6 +15,10 @@ for (const match of html.matchAll(/\bid\s*=\s*["']([^"']+)["']/g)) {
 }
 
 const requiredIdsByController = {
+  'FirstPublishModalController': ['first-publish-modal', 'first-publish-heading', 'first-publish-name-form', 'first-publish-name',
+    'btn-first-publish-confirm', 'btn-first-publish-close', 'first-publish-live', 'first-publish-title', 'first-publish-preview',
+    'first-publish-preview-fallback', 'first-publish-link', 'btn-first-publish-share', 'btn-first-publish-copy',
+    'btn-first-publish-x', 'btn-first-publish-wampogram', 'btn-first-publish-play', 'first-publish-status'],
   'EditorDockShellController': [
     'editor-shell-top',
     'editor-shell-title-slot',

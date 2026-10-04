@@ -1,4 +1,7 @@
 import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
+import { getAuthDebugState } from '../../auth/client';
+import { requestRoomPublishName, suggestRoomTitle } from '../../publishing/events';
+import { capturePublishProgression, reportPublishProgression } from '../../publishing/feedback';
 import type {
   RoomPermissions,
   RoomRecord,
@@ -31,9 +34,11 @@ interface EditorPersistenceControllerHost {
   getInitialRoomSnapshot(): RoomSnapshot | null;
   syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: { published: boolean }): void;
   onRoomMarkedDirty(): void;
+  onRoomPublished?(room: RoomSnapshot, firstPublish: boolean, userId: string): void;
 }
 
 export class EditorPersistenceController {
+  private publishing = false;
   constructor(
     private readonly roomSession: EditorRoomSession,
     private readonly host: EditorPersistenceControllerHost,
@@ -64,6 +69,7 @@ export class EditorPersistenceController {
   }
 
   maybeAutoSave(isPlaying: boolean): void {
+    if (this.publishing) return;
     this.roomSession.maybeAutoSave(isPlaying);
   }
 
@@ -107,6 +113,7 @@ export class EditorPersistenceController {
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
+    if (this.publishing) return null;
     recordReplayEditorAction('publish_attempt');
     const publishValidationError = this.roomSession.getPublishValidationError();
     if (publishValidationError) {
@@ -118,15 +125,38 @@ export class EditorPersistenceController {
       return null;
     }
 
-    showBusyOverlay('Publishing room...', 'Saving the latest version...');
+    const roomId = this.roomSession.currentRoomId;
+    const auth = getAuthDebugState();
+    const userId = auth.authenticated ? auth.user?.id ?? null : null;
+    const firstPublish = this.roomSession.currentPublishedVersion === 0;
+    this.publishing = true;
+    let showingBusy = false;
     try {
+      if (userId && this.host.getRoomPermissions().canPublish && !this.host.getRoomTitle()?.trim()) {
+        const title = await requestRoomPublishName(userId, suggestRoomTitle(this.host.getInitialRoomSnapshot()?.goal?.type));
+        if (!title || this.roomSession.currentRoomId !== roomId || getAuthDebugState().user?.id !== userId) return null;
+        this.setRoomTitle(title);
+      }
+      const previousProgression = await capturePublishProgression(userId);
+      if (this.roomSession.currentRoomId !== roomId || (userId && getAuthDebugState().user?.id !== userId)) return null;
+      showBusyOverlay('Publishing room...', 'Saving the latest version...'); showingBusy = true;
       const record = await this.roomSession.publishRoom(successText);
       if (record?.published) {
         this.host.syncActiveCourseRoomSessionSnapshot(record.published, { published: true });
+        if (userId && record.lastPublishedByUserId === userId) {
+          void reportPublishProgression({ userId, previousProgression, contentType: 'room',
+            contentId: record.published.id, title: record.published.title });
+          // World-seed and private World publishes retain their existing activation/access flow.
+          if (!record.world && !record.published.id.startsWith('world-seed:')) {
+            hideBusyOverlay(); showingBusy = false;
+            this.host.onRoomPublished?.(record.published, firstPublish, userId);
+          }
+        }
       }
       return record;
     } finally {
-      if (getAppFeedbackDebugState().busyState !== 'error') {
+      this.publishing = false;
+      if (showingBusy && getAppFeedbackDebugState().busyState !== 'error') {
         hideBusyOverlay();
       }
     }

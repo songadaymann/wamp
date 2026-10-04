@@ -17,6 +17,17 @@ vi.mock('../../ui/appFeedback', () => ({
 }));
 
 import { OverworldWindowController } from './windowController';
+import { createDefaultCourseRecord, type CourseSnapshot } from '../../courses/model';
+
+it('hands a published expanded Play intent to course playback instead of the ordinary room refresh', async () => {
+  const startPublishedCoursePlayback = vi.fn(async (_snapshot: CourseSnapshot) => {});
+  const controller = new OverworldWindowController({} as never, { startPublishedCoursePlayback } as never);
+  vi.spyOn(controller, 'applySceneData').mockImplementation(() => {});
+  const publishedCourse = { ...createDefaultCourseRecord('published').draft, status: 'published' as const };
+  await controller.handleWakeAsync({ publishedCourse, mode: 'browse', forceRefreshAround: true });
+  expect(startPublishedCoursePlayback).toHaveBeenCalledExactlyOnceWith(publishedCourse);
+  expect(startPublishedCoursePlayback.mock.calls[0][0]).not.toBe(publishedCourse);
+});
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;

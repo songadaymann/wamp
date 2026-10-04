@@ -3,6 +3,8 @@ import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecy
 import Phaser from 'phaser';
 import { dispatchSignal } from '../events/typedEvent';
 import { getAuthDebugState } from '../auth/client';
+import { announceFirstPublishedExpandedRoom } from '../publishing/events';
+import { capturePublishProgression, reportPublishProgression } from '../publishing/feedback';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../config';
 import { createExpandedRoomEditorRepository } from '../expandedRooms/editorRepository';
 import {
@@ -577,7 +579,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   }
 
   async publishCourseDraft(): Promise<void> {
-    if (!this.record) {
+    if (!this.record || this.loading) {
       return;
     }
 
@@ -592,14 +594,31 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     this.statusText = 'Publishing expanded room...';
     this.renderUi();
     try {
+      const courseId = this.record.draft.id;
+      const userId = getAuthDebugState().user?.id ?? null;
+      const firstPublish = !this.record.published && this.record.versions.length === 0;
+      const previousProgression = await capturePublishProgression(userId);
+      if (!this.scene.isActive() || this.record?.draft.id !== courseId || getAuthDebugState().user?.id !== userId) return;
       const sent = cloneCourseSnapshot(this.record.draft);
       this.backupDebouncer.flush();
       const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
+      if (!this.scene.isActive() || this.record?.draft.id !== courseId || getAuthDebugState().user?.id !== userId) return;
       this.record = this.draftBackup.savedCourse(sent, saved);
       const published = await this.expandedRoomEditorRepository.publishExpandedRoom(this.record.draft.id);
+      if (!this.scene.isActive() || this.record?.draft.id !== courseId || getAuthDebugState().user?.id !== userId) return;
       this.record = this.draftBackup.savedCourse(saved.draft, published);
       this.statusText = this.draftBackup.backupFailed ? BACKUP_FAILED_TEXT : 'Expanded room published.';
       await this.refreshAround(this.centerCoordinates, true);
+      if (userId && published.published && this.scene.isActive() && getAuthDebugState().user?.id === userId) {
+        const snapshot = cloneCourseSnapshot(published.published);
+        void reportPublishProgression({ userId, previousProgression, contentType: 'expanded_room', contentId: snapshot.id, title: snapshot.title });
+        if (firstPublish) announceFirstPublishedExpandedRoom({ userId, snapshot,
+          play: coordinates => {
+            this.backupDebouncer.flush(); this.scene.sleep();
+            this.scene.wake('OverworldPlayScene', { centerCoordinates: { ...coordinates }, roomCoordinates: { ...coordinates },
+              mode: 'browse', publishedCourse: snapshot, courseDraftPreviewId: null, draftRoom: null, forceRefreshAround: true });
+          } });
+      }
     } catch (error) {
       this.statusText = error instanceof Error ? error.message : 'Failed to publish expanded room.';
       this.renderUi();
@@ -901,6 +920,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     const zoom = this.cameras.main?.zoom ?? this.inspectZoom;
 
     this.uiState = buildCourseEditorUiState({
+      busy: this.loading,
       record: this.record,
       dirty: isActiveCourseDraftSessionDirty(),
       zoomText: `Zoom: ${zoom.toFixed(2)}x`,

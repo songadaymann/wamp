@@ -7,6 +7,8 @@ import Phaser from 'phaser';
 import { CourseTouchController } from './editor/courseTouch';
 import { editorTouchToolKey } from './editor/touchGesture';
 import { getAuthDebugState, promptForSignIn, refreshAuthSession } from '../auth/client';
+import { announceFirstPublishedExpandedRoom } from '../publishing/events';
+import { capturePublishProgression, reportPublishProgression } from '../publishing/feedback';
 import { globalRoomMusicController } from '../music/controller';
 import {
   cloneRoomMusic,
@@ -221,6 +223,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private readonly expandedRoomEditorRepository = createExpandedRoomEditorRepository();
   private uiBridge: EditorUiBridge | null = null;
   private courseRecord: CourseRecord | null = null;
+  private coursePublishing = false;
   private workspaceBounds: CourseWorkspaceBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   private roomSlices = new Map<string, CourseRoomSlice>();
   private courseMarkerSprites: Phaser.GameObjects.Sprite[] = [];
@@ -1366,6 +1369,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   async publishCourseDraft(): Promise<void> {
+    if (this.coursePublishing) return;
     const courseRecord = this.syncCourseRecordFromSession();
     if (!courseRecord) {
       return;
@@ -1378,23 +1382,45 @@ export class CourseEditorScene extends Phaser.Scene {
       return;
     }
 
+    const userId = getAuthDebugState().user?.id ?? null;
+    const courseId = courseRecord.draft.id;
+    const firstPublish = !courseRecord.published && courseRecord.versions.length === 0;
+    const current = () => this.scene.isActive() && this.courseRecord?.draft.id === courseId
+      && getAuthDebugState().user?.id === userId;
+    this.coursePublishing = true;
     showBusyOverlay('Publishing expanded room...', 'Saving expanded room goal and publishing the expanded room...');
     try {
+      const previousProgression = await capturePublishProgression(userId);
+      if (!current()) return;
       const sent = cloneCourseSnapshot(courseRecord.draft);
       this.backupDebouncer.flush();
       const saved = await this.expandedRoomEditorRepository.saveDraft(sent);
+      if (!current()) return;
       this.courseRecord = this.draftBackup.savedCourse(sent, saved);
       const published = await this.expandedRoomEditorRepository.publishExpandedRoom(
         this.courseRecord?.draft.id ?? saved.draft.id
       );
+      if (!current()) return;
       this.courseRecord = this.draftBackup.savedCourse(saved.draft, published);
       this.statusText = this.draftBackup.backupFailed ? BACKUP_FAILED_TEXT : 'Expanded room published.';
       this.redrawCourseMarkers();
       this.renderUi();
+      if (userId && published.published) {
+        const snapshot = cloneCourseSnapshot(published.published);
+        void reportPublishProgression({ userId, previousProgression, contentType: 'expanded_room', contentId: snapshot.id, title: snapshot.title });
+        hideBusyOverlay();
+        if (firstPublish) announceFirstPublishedExpandedRoom({ userId, snapshot, play: coordinates => {
+          this.handleTouchBlur(); this.hideObjectInspectorUi(); this.setMusicModeActive(false);
+          this.backupDebouncer.flush(); this.scene.sleep();
+          this.scene.wake('OverworldPlayScene', { centerCoordinates: { ...coordinates }, roomCoordinates: { ...coordinates },
+            mode: 'browse', publishedCourse: snapshot, courseDraftPreviewId: null, courseEditorReturnTarget: null, draftRoom: null, forceRefreshAround: true });
+        } });
+      }
     } catch (error) {
       this.statusText = error instanceof Error ? error.message : 'Failed to publish expanded room.';
       this.renderUi();
     } finally {
+      this.coursePublishing = false;
       hideBusyOverlay();
     }
   }

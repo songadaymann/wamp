@@ -1,4 +1,5 @@
 import type { RoomCoordinates, RoomSnapshot } from '../persistence/roomModel';
+import type { CourseSnapshot } from '../courses/model';
 
 export interface EditorCourseEditData {
   courseId: string;
@@ -67,6 +68,7 @@ export interface OverworldPlaySceneData {
   statusMessage?: string | null;
   courseEditorReturned?: boolean;
   courseDraftPreviewId?: string | null;
+  publishedCourse?: CourseSnapshot;
   courseEditedRoom?: CourseEditedRoomData | null;
   courseEditorReturnTarget?: CourseComposerReturnTarget | null;
   editorPlaytestReturnTarget?: EditorPlaytestReturnTarget | null;

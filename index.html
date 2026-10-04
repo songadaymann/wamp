@@ -2084,6 +2084,38 @@
 
   <div id="worlds-modal-root"></div>
 
+  <div id="first-publish-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel first-publish-panel" role="dialog" aria-modal="true" aria-labelledby="first-publish-heading">
+      <div class="history-modal-header">
+        <h2 id="first-publish-heading" class="history-modal-title">Your room is live!</h2>
+        <button id="btn-first-publish-close" class="bar-btn" type="button" aria-label="Close published room">&#10005;</button>
+      </div>
+      <div class="first-publish-scroll">
+        <form id="first-publish-name-form" class="hidden">
+          <label for="first-publish-name">Room name</label>
+          <input id="first-publish-name" class="goal-input" type="text" maxlength="40" autocomplete="off" required />
+          <button id="btn-first-publish-confirm" class="bar-btn" type="submit">Publish Room</button>
+        </form>
+        <div id="first-publish-live" class="hidden">
+          <p id="first-publish-title"></p>
+          <div id="first-publish-preview"></div>
+          <p id="first-publish-preview-fallback" role="status"></p>
+          <label for="first-publish-link">Live room link</label>
+          <input id="first-publish-link" class="goal-input" type="text" readonly spellcheck="false" />
+          <div class="first-publish-actions">
+            <button id="btn-first-publish-share" class="bar-btn" type="button">Share</button>
+            <button id="btn-first-publish-copy" class="bar-btn" type="button">Copy Link</button>
+            <button id="btn-first-publish-x" class="bar-btn" type="button">Share on X</button>
+            <button id="btn-first-publish-wampogram" class="bar-btn" type="button">Wamp-O-Gram</button>
+            <button id="btn-first-publish-play" class="bar-btn" type="button">Play It Now</button>
+          </div>
+          <p class="first-publish-activity">Clears and ratings appear in your Activity inbox.</p>
+        </div>
+        <p id="first-publish-status" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+
   <div id="mobile-jump-sheet" class="history-modal mobile-sheet hidden" aria-hidden="true">
     <div class="history-modal-panel mobile-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-jump-title">
       <div class="history-modal-header">

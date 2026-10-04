@@ -106,7 +106,8 @@
     "scripts/smoke_first_play_controls.mjs",
     "scripts/smoke_welcome_destinations.mjs",
     "scripts/smoke_discovery.mjs",
-    "scripts/smoke_post_run_reminders.mjs"
+    "scripts/smoke_post_run_reminders.mjs",
+    "scripts/smoke_first_publish.mjs"
   ],
   "project": [
     "src/**/*.{js,mjs,ts}",

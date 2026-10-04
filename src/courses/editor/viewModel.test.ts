@@ -38,8 +38,9 @@ function createCompleteRecord(): CourseRecord {
   return record;
 }
 
-function buildState(record: CourseRecord, dirty: boolean) {
+function buildState(record: CourseRecord, dirty: boolean, busy = false) {
   return buildCourseEditorUiState({
+    busy,
     record,
     dirty,
     zoomText: '100%',
@@ -67,6 +68,12 @@ function buildState(record: CourseRecord, dirty: boolean) {
 }
 
 describe('active expanded-room composer view model', () => {
+  it('keeps Publish disabled while a ready expanded room is loading or saving', () => {
+    const record = createCompleteRecord(); record.permissions.canPublish = true;
+    expect(buildState(record, true).canPublishCourse).toBe(true);
+    expect(buildState(record, true, true).canPublishCourse).toBe(false);
+    expect(buildState(record, true, true).publishCourseDisabledReason).toBe('Please wait…');
+  });
   it('preserves editable title, cells, goal, dirty, and publish presentation', () => {
     const record = createCompleteRecord();
     const state = buildState(record, true);

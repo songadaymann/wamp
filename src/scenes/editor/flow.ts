@@ -96,6 +96,14 @@ export class EditorSceneFlowController {
     this.host.updateBottomBar();
   }
 
+  startPublishedPlayMode(room: RoomSnapshot): void {
+    this.host.cancelClipboardPastePreview(); this.host.hideObjectInspectorUi(); this.host.clearEditorPresence();
+    this.host.sleepEditorScene();
+    this.host.wakeOverworld({ centerCoordinates: { ...room.coordinates }, roomCoordinates: { ...room.coordinates },
+      mode: 'play', draftRoom: null, publishedRoom: room, clearDraftRoomId: room.id, forceRefreshAround: true });
+    this.host.updateBottomBar();
+  }
+
   async handlePublishNudgeAction(): Promise<void> {
     if (!this.shouldShowPublishNudge()) {
       return;
