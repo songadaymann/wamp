@@ -10,6 +10,7 @@ import type { WorldRoomSummary } from '../../persistence/worldModel';
 import type { WorldRepository } from '../../persistence/worldRepository';
 import { createWorldRepository } from '../../persistence/worldRepository';
 import { APP_READY_EVENT, isAppReady, isBusyOverlayVisible } from '../appFeedback';
+import { APP_MODE_CHANGED_EVENT } from '../appMode';
 import { getActiveOverworldScene } from './sceneBridge';
 import { getGameSettings, updateGameSettings } from '../../settings/userSettings';
 
@@ -54,6 +55,15 @@ export class WelcomeModalController {
   };
 
   private readonly handleAuthStateChanged = () => {
+    this.scheduleAutoOpen();
+  };
+
+  private readonly handleAppModeChanged = () => {
+    if (this.doc.body.dataset.appMode === 'play-world'
+      && this.elements.modal && !this.elements.modal.classList.contains('hidden')) {
+      this.close(false);
+      this.autoOpened = false;
+    }
     this.scheduleAutoOpen();
   };
 
@@ -141,6 +151,7 @@ export class WelcomeModalController {
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.doc.addEventListener('visibilitychange', this.handleVisibilityChange);
     this.windowObj.addEventListener(APP_READY_EVENT, this.handleAppReady as EventListener);
+    this.windowObj.addEventListener(APP_MODE_CHANGED_EVENT, this.handleAppModeChanged);
     this.windowObj.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
     this.windowObj.addEventListener(REQUEST_BUILDER_MODE_EVENT, this.handleBuilderModeRequest as EventListener);
 
@@ -161,6 +172,7 @@ export class WelcomeModalController {
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     this.doc.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.windowObj.removeEventListener(APP_READY_EVENT, this.handleAppReady as EventListener);
+    this.windowObj.removeEventListener(APP_MODE_CHANGED_EVENT, this.handleAppModeChanged);
     this.windowObj.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
     this.windowObj.removeEventListener(REQUEST_BUILDER_MODE_EVENT, this.handleBuilderModeRequest as EventListener);
     this.close(false);
@@ -233,6 +245,10 @@ export class WelcomeModalController {
   }
 
   private shouldAutoOpen(): boolean {
+    if (!isAppReady()) {
+      return false;
+    }
+
     if (this.dismissed || this.autoOpened || this.pending) {
       return false;
     }

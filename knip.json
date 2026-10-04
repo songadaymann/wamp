@@ -98,7 +98,8 @@
     "src/admin/replays.ts",
     "scripts/check_world_tile_availability.mjs",
     "scripts/world_tile_asset_contract_check.ts",
-    "scripts/check_pages_release.mjs"
+    "scripts/check_pages_release.mjs",
+    "scripts/smoke_first_visit.mjs"
   ],
   "project": [
     "src/**/*.{js,mjs,ts}",
