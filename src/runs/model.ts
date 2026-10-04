@@ -1,3 +1,4 @@
+import type { RoomInsightSummary } from '../insights/model';
 import type { ExpandedRoomSource } from '../expandedRooms/model';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import type { RoomGoal, RoomGoalType } from '../goals/roomGoals';
@@ -169,6 +170,7 @@ export interface RoomDifficultyVoteRequestBody {
 }
 
 export interface RoomDiscoveryEntry {
+  insights?: RoomInsightSummary;
   roomId: string;
   roomCoordinates: RoomCoordinates;
   roomTitle: string | null;

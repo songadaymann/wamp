@@ -1,3 +1,6 @@
+import { drawDeathMap } from './deathMapOverlay';
+import type { DeathMapCell } from '../../insights/model';
+import type { RoomCoordinates } from '../../persistence/roomModel';
 import Phaser from 'phaser';
 import {
   LAYER_NAMES,
@@ -25,6 +28,7 @@ interface EditorOverlayHost {
 }
 
 export class EditorOverlayController {
+  private deathMapGraphics: Phaser.GameObjects.Graphics | null = null;
   private gridGraphics: Phaser.GameObjects.Graphics | null = null;
   private borderGraphics: Phaser.GameObjects.Graphics | null = null;
   private layerGuideGraphics: Phaser.GameObjects.Graphics | null = null;
@@ -58,7 +62,18 @@ export class EditorOverlayController {
     this.createLayerIndicator();
   }
 
+  setDeathMap(points: DeathMapCell[], coordinates: RoomCoordinates): void {
+    this.deathMapGraphics ??= this.scene.add.graphics().setDepth(102);
+    drawDeathMap(this.deathMapGraphics, points, cell => cell.x === coordinates.x && cell.y === coordinates.y ? { x: 0, y: 0 } : null);
+    this.deathMapGraphics.setVisible(!editorState.isPlaying);
+  }
+
+  clearDeathMap(): void {
+    this.deathMapGraphics?.clear();
+  }
+
   reset(): void {
+    this.deathMapGraphics?.destroy(); this.deathMapGraphics = null;
     this.layerIndicatorText?.destroy();
     this.layerIndicatorText = null;
     this.layerGuideGraphics?.destroy();
@@ -117,6 +132,7 @@ export class EditorOverlayController {
   }
 
   updateLayerIndicator(): void {
+    this.deathMapGraphics?.setVisible(!editorState.isPlaying);
     if (!this.layerIndicatorText) {
       return;
     }

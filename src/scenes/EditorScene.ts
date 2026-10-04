@@ -1,3 +1,5 @@
+import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
+import { getActiveCourseDraftSessionPublished } from '../courses/draftSession';
 import Phaser from 'phaser';
 import { EditorDraftLifecycle } from './editor/draftLifecycle';
 import { getAuthDebugState } from '../auth/client';
@@ -871,6 +873,23 @@ export class EditorScene extends Phaser.Scene {
     options: { published: boolean }
   ): void {
     this.courseController.syncActiveCourseRoomSessionSnapshot(room, options);
+  }
+
+  getRoomInsightsTarget(): RoomInsightTarget | null {
+    const course = this.buildCourseEditedRoomData();
+    if (course) {
+      const published = getActiveCourseDraftSessionPublished();
+      return published?.id === course.courseId ? { contentType: 'course', contentId: published.id, version: published.version } : null;
+    }
+    return this.publishedVersion > 0 ? { contentType: 'room', contentId: this.roomId, version: this.publishedVersion } : null;
+  }
+
+  setRoomDeathMap(points: DeathMapCell[]): void {
+    this.overlayController.setDeathMap(points,this.roomCoordinates);
+  }
+
+  clearRoomDeathMap(): void {
+    this.overlayController.clearDeathMap();
   }
 
   getCourseEditorState(): EditorCourseUiState {

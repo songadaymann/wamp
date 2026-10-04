@@ -1,3 +1,5 @@
+import { drawDeathMap } from './editor/deathMapOverlay';
+import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draftBackupController';
 import { draftBackupRevision } from '../courses/localDraftBackup';
 import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecycle';
@@ -639,6 +641,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   create(data?: CourseEditorSceneData): void {
+    this.roomDeathMap = null;
     this.draftLifecycle = new EditorDraftLifecycle({
       isActive: () => !this.isShuttingDown && this.scene.isActive(),
       hasUnsavedChanges: () => this.getDirtySlices().length > 0 || isActiveCourseDraftSessionDirty(),
@@ -1625,6 +1628,23 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private renderMusicUi(): void {
     this.musicWorkflow.renderUi();
+  }
+
+  private roomDeathMap: Phaser.GameObjects.Graphics | null = null;
+  getRoomInsightsTarget(): RoomInsightTarget | null {
+    const published = this.courseRecord?.published;
+    return published ? { contentType: 'course', contentId: published.id, version: published.version } : null;
+  }
+  setRoomDeathMap(points: DeathMapCell[]): void {
+    this.roomDeathMap ??= this.add.graphics().setDepth(102);
+    drawDeathMap(this.roomDeathMap, points, cell => {
+      for (const slice of this.roomSlices.values()) if (slice.coordinates.x === cell.x && slice.coordinates.y === cell.y) return slice.origin;
+      return null;
+    });
+  }
+
+  clearRoomDeathMap(): void {
+    this.roomDeathMap?.clear();
   }
 
   describeState(): Record<string, unknown> {
@@ -3548,6 +3568,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private handleShutdown = (): void => {
+    this.roomDeathMap?.destroy(); this.roomDeathMap = null;
     // Phaser has already destroyed display-list tile layers at SHUTDOWN.
     // Authored exits flush before stop/sleep; never serialize dead runtimes here.
     this.isShuttingDown = true;

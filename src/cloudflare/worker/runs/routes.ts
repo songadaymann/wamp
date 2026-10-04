@@ -1,3 +1,4 @@
+import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../../../goals/roomGoals';
@@ -395,7 +396,9 @@ export async function handleRunFinish(
           enemies_defeated = ?,
           checkpoints_reached = ?,
           verification_status = ?,
-          verification_reason = ?
+          verification_reason = ?,
+          insight_deaths_json = ?,
+          insight_play_ms = ?
         WHERE attempt_id = ?
       `
     ).bind(
@@ -409,6 +412,8 @@ export async function handleRunFinish(
       finalBody.checkpointsReached,
       verificationStatus,
       verificationReason,
+      deathLocationsJson(finalBody.verificationTrace, { verificationNonce: existing.verificationNonce, snapshotHash: existing.verificationSnapshotHash }, [existing.roomCoordinates], finalBody.elapsedMs, finalBody.deaths),
+      Math.min(30 * 60 * 1000, reportedElapsedMs),
       attemptId
     ),
   ]);

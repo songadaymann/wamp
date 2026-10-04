@@ -92,7 +92,7 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
       const status = scenario === 'relaxed' ? 'not_required' : scenario === 'missing_trace' ? 'failed' : scenario;
       const reason = scenario === 'failed' ? 'trace_goal' : scenario === 'missing_trace' ? 'missing_trace' : scenario === 'timeout' ? 'trace_timeout' : null;
       for (const write of writes) {
-        expect(write.values.slice(8)).toEqual([status, reason, 'attempt']);
+        expect(write.values.slice(8)).toEqual([status, reason, null, 1000, 'attempt']);
         expect(write.values.slice(5, 8)).toEqual(scenario === 'passed' ? [3, 4, 5] : scenario === 'not_required' ? [0, 0, 0] : [8, 7, 6]);
         expect(write.values[0]).toBe('2026-09-08T12:00:01.000Z');
         expect(write.values.slice(2, 4)).toEqual([1000, 2]);
@@ -119,7 +119,7 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
       if (policy === 'untriggered') mocks.trigger.mockReturnValue({ ...trigger, required: false });
       else mocks.tier.mockResolvedValue('T2');
       const { writes } = await finish();
-      expect(writes[0].values.slice(8)).toEqual(['not_required', null, 'attempt']);
+      expect(writes[0].values.slice(8)).toEqual(['not_required', null, null, 1000, 'attempt']);
       expect(mocks.verify).not.toHaveBeenCalled();
       expect(mocks.audit).not.toHaveBeenCalled();
     });
@@ -127,7 +127,7 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
     it('retains HttpError classification from verifier or snapshot lookup', async () => {
       mocks.verify.mockRejectedValue(new HttpError(503, 'snapshot unavailable'));
       const { writes, error } = await finish();
-      expect(writes[0].values.slice(8)).toEqual(['failed', 'missing_trace', 'attempt']);
+      expect(writes[0].values.slice(8)).toEqual(['failed', 'missing_trace', null, 1000, 'attempt']);
       expect(error).toMatchObject({ status: 409 });
       expect(mocks.audit.mock.calls[0][1].summary.verifier).toEqual({ issue: 'missing_trace' });
     });

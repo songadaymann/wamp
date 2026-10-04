@@ -1,3 +1,4 @@
+import { attachRoomInsights } from '../insights/store';
 import type {
   ProfilePublishedRoomEntry,
   ProfilePublishedRoomExpandedRoomTarget,
@@ -209,7 +210,7 @@ export async function loadUserProfileRoomsPage(
       ).bind(targetUserId, limit + 1, offset).all<ProfilePlayableContentRow>());
       const hasMore = result.results.length > limit;
       return {
-        results: result.results.slice(0, limit).map(mapProfilePlayableContentRow),
+        results: await attachRoomInsights(env, result.results.slice(0, limit).map(mapProfilePlayableContentRow)),
         ...(hasMore ? { nextCursor: encodeProfileRoomsCursor(offset + limit) } : {}),
       };
     } catch (error) {
@@ -428,11 +429,11 @@ async function buildPublishedRooms(
     })),
   );
 
-  return sortedEntries.map((entry) => ({
+  return attachRoomInsights(env, sortedEntries.map((entry) => ({
     ...entry,
     ...(ratingSummaries.get(buildProfileRoomRatingKey(entry.roomId, entry.roomVersion))
       ?? createEmptyProfileRoomRatingSummary()),
-  }));
+  })));
 }
 
 async function resolveProfilePublishedRoomEntries(

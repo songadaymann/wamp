@@ -1,3 +1,4 @@
+import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from '../runs/finalizationVerification';
 import {
@@ -556,7 +557,9 @@ export async function handleCourseRunFinish(
           enemies_defeated = ?,
           checkpoints_reached = ?,
           verification_status = ?,
-          verification_reason = ?
+          verification_reason = ?,
+          insight_deaths_json = ?,
+          insight_play_ms = ?
         WHERE attempt_id = ?
       `
     ).bind(
@@ -570,6 +573,8 @@ export async function handleCourseRunFinish(
       finalBody.checkpointsReached,
       verificationStatus,
       verificationReason,
+      deathLocationsJson(finalBody.verificationTrace, { verificationNonce: existing.verificationNonce, snapshotHash: existing.verificationSnapshotHash }, snapshot.roomRefs.map(ref => ref.coordinates), finalBody.elapsedMs, finalBody.deaths),
+      Math.min(30 * 60 * 1000, reportedElapsedMs),
       attemptId
     ),
   ]);

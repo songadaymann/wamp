@@ -23,6 +23,7 @@ interface OverworldSessionResetHost {
   isPvpDamageActive(): boolean;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
   recordGoalRunDeath(): void;
+  recordRunDeathLocation?(): void;
   recordCourseRunDeath(): void;
   recordRoomRushDeath(reason: string): boolean;
   recordPvpSelfDeath(reason: string): boolean;
@@ -57,6 +58,7 @@ export class OverworldSessionResetController {
       return;
     }
 
+    this.host.recordRunDeathLocation?.();
     this.host.recordGoalRunDeath();
     this.host.recordCourseRunDeath();
     this.host.playPlayerFailFx();

@@ -1,3 +1,4 @@
+import { insightSummaryText, insightTargetForRoom } from '../../insights/model';
 import type { ProfilePublishedRoomEntry } from '../../profiles/model';
 import { ROOM_DIFFICULTY_LABELS } from '../../runs/model';
 
@@ -83,12 +84,21 @@ function createRoomRow(
   meta.textContent = getProfileRoomMeta(room, options.formatShortDate);
 
   copy.append(title, meta, createRoomRatingRow(doc, room));
+  if (room.insights) {
+    const stats = doc.createElement('div'); stats.className = 'profile-room-card-meta room-insight-summary';
+    stats.textContent = `${room.insights.uniquePlayers.toLocaleString()} players · ${insightSummaryText(room.insights)}`;
+    copy.append(stats);
+  }
   button.append(preview, copy);
   options.observeRoomPreview(room, preview, previewImage, previewFallback);
   if (options.canEdit) {
     const row = doc.createElement('div');
     row.className = 'profile-room-playlist-row';
-    row.append(button, createAddRoomToPlaylistButton(doc, room, options));
+    const actions = doc.createElement('div'); actions.className = 'profile-room-actions';
+    const insights = doc.createElement('button'); insights.type = 'button'; insights.className = 'bar-btn bar-btn-small'; insights.textContent = 'Insights';
+    insights.addEventListener('click', () => doc.defaultView?.dispatchEvent(new CustomEvent('room-insights-open', { detail: insightTargetForRoom(room) })));
+    actions.append(insights, createAddRoomToPlaylistButton(doc, room, options));
+    row.append(button, actions);
     return row;
   }
 

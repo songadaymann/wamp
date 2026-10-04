@@ -1,3 +1,4 @@
+import { handleRoomInsights } from './worker/insights/routes';
 import { handleMyActivity } from './worker/activity/routes';
 import { handleActivityUnsubscribe } from './worker/activity/unsubscribe';
 import { runActivityEmails } from './worker/activity/emails';
@@ -135,6 +136,11 @@ type WorkerExecutionContext = {
 };
 
 const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[] = [
+  {
+    methods: ['GET'], pattern: /^\/api\/(rooms|expanded-rooms|courses)\/([^/]+)\/stats$/, auth: 'public',
+    handler: ({ request, url, env }, match) => handleRoomInsights(request, url, env,
+      match![1] === 'rooms' ? 'room' : match![1] === 'courses' ? 'course' : 'expanded_room', decodeURIComponent(match![2])),
+  },
   {
     methods: ['GET'],
     pattern: '/api/health',
