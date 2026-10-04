@@ -58,6 +58,11 @@ try {
    await page.waitForTimeout(500);
    await click(page,'[data-editor-shell-action="room"]',touch);await click(page,'#editor-drawer-room-tabs [data-room-insights-open]',touch);
    await page.locator('#room-insights-metrics dd').first().waitFor();
+   const selectedTools=()=>page.locator('.tool-btn.active').evaluateAll(items=>items.map(el=>el.dataset.tool));
+   const beforeTools=await selectedTools();await page.keyboard.press('e');assert.deepEqual(await selectedTools(),beforeTools,'Editor shortcuts must not change tools behind Insights');
+   await page.locator('#btn-room-insights-close').focus();await page.keyboard.press('Shift+Tab');assert.equal(await page.evaluate(()=>document.activeElement.id),'room-insights-map');
+   await page.keyboard.press('Space');assert.equal(await page.locator('#room-insights-map').isChecked(),true);await page.keyboard.press('Space');assert.equal(await page.locator('#room-insights-map').isChecked(),false);
+   await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.id),'btn-room-insights-close');
    assert.equal(await page.locator('#room-insights-metrics dd').nth(0).textContent(),'12');
    assert.equal(await page.locator('#room-insights-metrics dd').nth(2).textContent(),'5');
    assert.equal(await page.locator('#room-insights-metrics dd').nth(3).textContent(),'42%');
@@ -76,7 +81,7 @@ try {
     await click(page,'[data-editor-shell-action="share"]',touch);await click(page,'#editor-share-popover [data-room-insights-open]',touch);await page.locator('#room-insights-metrics dd').first().waitFor();await page.keyboard.press('Escape');assert.equal(await page.locator('#room-insights-modal').isVisible(),false);
    }
    console.log(name+' '+(expanded?'expanded':'room')+': metrics and editor map pass.');
-   report.scenarios.push({name,expanded,checks:['real versioned API metrics','viewport fit','native Room Insights','drawn map','Hide Map','Close',...(!expanded?['Share Insights','Escape']:[])]});
+   report.scenarios.push({name,expanded,checks:['real versioned API metrics','viewport fit','native Room Insights','keyboard isolation and focus','native keyboard map toggle','drawn map','Hide Map','Close',...(!expanded?['Share Insights','Escape']:[])]});
   }
   deliberateFailure=true;await click(page,'#editor-drawer-room-tabs [data-room-insights-open]',touch);await page.locator('#btn-room-insights-retry').waitFor({state:'visible'});assert.match(await page.locator('#room-insights-status').textContent(),/unavailable/);
   deliberateFailure=false;await click(page,'#btn-room-insights-retry',touch);await page.locator('#room-insights-metrics dd').first().waitFor();await click(page,'#btn-room-insights-close',touch);
@@ -104,6 +109,7 @@ try {
   await click(page,'#menu-toggle',touch);await click(page,'#auth-identity',touch);await click(page,'#btn-profile-tab-rooms',touch);
   const profileRoom=page.locator('.profile-room-playlist-row').filter({has:page.locator('.profile-room-card-title',{hasText:'Insights Gauntlet'})}).first();
   await profileRoom.locator('.room-insight-summary').waitFor();assert.match(await profileRoom.locator('.room-insight-summary').textContent(),/12 attempts.*5 clears.*42% clear/);
+  await profileRoom.locator('.room-insight-summary').scrollIntoViewIfNeeded();
   await page.screenshot({path:`${output}/${name}-profile.png`});
   if(touch)await profileRoom.locator('.profile-room-actions button:has-text("Insights")').tap();else await profileRoom.locator('.profile-room-actions button:has-text("Insights")').click();await page.locator('#room-insights-metrics dd').first().waitFor();assert.equal(await page.locator('#profile-modal').isVisible(),false);assert.equal(await page.locator('#room-insights-map').isDisabled(),true);await click(page,'#btn-room-insights-close',touch);
   if(await page.locator('#auth-panel').evaluate(el=>el.classList.contains('menu-open')))await click(page,'#menu-toggle',touch);

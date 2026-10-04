@@ -83,6 +83,7 @@ export class RoomInsightsController {
   private readonly onMappedExit = () => this.clearMap();
   private readonly onKeydown = (event: KeyboardEvent) => {
     if (!this.lifecycle.isOpen()) return;
+    event.stopImmediatePropagation();
     if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); this.close(); return; }
     if (event.key !== 'Tab') return;
     const items = Array.from(this.modal?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)') ?? []).filter(el => el.getClientRects().length);
