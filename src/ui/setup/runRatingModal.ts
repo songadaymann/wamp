@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { getAuthDebugState, promptForSignIn } from '../../auth/client';
+import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState, promptForSignIn } from '../../auth/client';
 import {
   createCourseRepository,
   type CourseRepository,
@@ -196,7 +196,7 @@ export class RunRatingModalController {
       event instanceof CustomEvent
         ? (event.detail as PostRunRatingRequestDetail | undefined)
         : undefined;
-    if (!detail) {
+    if (!detail || getAuthDebugState().authenticated) {
       return;
     }
 
@@ -217,6 +217,15 @@ export class RunRatingModalController {
 
   private readonly handleAppModeChange = () => {
     this.presentQueuedBatch();
+  };
+
+  private readonly handleAuthChanged = () => {
+    if (getAuthDebugState().authenticated) {
+      this.promptQueue.discardGuestClaims();
+      if (this.mode === 'guest-claim') this.hideAndReset();
+      else if (this.activeRequest) this.render();
+      this.presentQueuedBatch();
+    }
   };
 
   constructor(
@@ -293,6 +302,7 @@ export class RunRatingModalController {
     );
     this.windowObj.addEventListener(REWARD_STINGS_IDLE_EVENT, this.handleRewardStingsIdle);
     this.windowObj.addEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestSaveChanged);
+    this.windowObj.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthChanged);
     const MutationObserverCtor = (
       this.windowObj as Window & { MutationObserver?: typeof MutationObserver }
     ).MutationObserver;
@@ -343,6 +353,7 @@ export class RunRatingModalController {
     );
     this.windowObj.removeEventListener(REWARD_STINGS_IDLE_EVENT, this.handleRewardStingsIdle);
     this.windowObj.removeEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestSaveChanged);
+    this.windowObj.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthChanged);
     this.appModeObserver?.disconnect();
     this.appModeObserver = null;
     this.close();

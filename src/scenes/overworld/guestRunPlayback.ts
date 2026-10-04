@@ -16,7 +16,7 @@ export interface GuestPlaybackRunState {
   snapshotHash: string | null;
   guestProgress?: GuestRunSaveResult;
 }
-interface GuestPlaybackEntry { session: GuestRunSession; finished: boolean; kind: 'room' | 'course' }
+interface GuestPlaybackEntry { session: GuestRunSession; finished: boolean; kind: 'room' | 'course'; result?: RunFinishRequestBody['result'] }
 interface GuestRunPlaybackOptions {
   service?: Pick<GuestRunService, 'begin'>;
   getCurrentRun(kind: 'room' | 'course'): GuestPlaybackRunState | null;
@@ -33,6 +33,14 @@ export class GuestRunPlaybackController {
   constructor(private readonly options: GuestRunPlaybackOptions) { this.service = options.service ?? getGuestRunService(); }
 
   has(run: GuestPlaybackRunState): boolean { return this.entries.has(run); }
+
+  refreshProgress(result: GuestRunSaveResult): void {
+    for (const kind of ['room', 'course'] as const) {
+      const run = this.options.getCurrentRun(kind);
+      const entry = run ? this.entries.get(run) : null;
+      if (run && entry?.finished && run.guestProgress?.clientRunId === result.clientRunId) this.applyProgress(run, entry, result);
+    }
+  }
 
   begin(run: GuestPlaybackRunState, kind: 'room' | 'course', target: Omit<GuestRunStartBody, 'clientRunId'>): void {
     if (this.has(run)) return;
@@ -61,7 +69,7 @@ export class GuestRunPlaybackController {
   finish(run: GuestPlaybackRunState, body: RunFinishRequestBody, detail?: PostRunRatingRequestDetail): void {
     const entry = this.entries.get(run);
     if (!entry || entry.finished) return;
-    entry.finished = true; run.pendingResult = null; run.submissionState = 'finishing'; run.submissionMessage = 'Verifying guest clear...';
+    entry.finished = true; entry.result = body.result; run.pendingResult = null; run.submissionState = 'finishing'; run.submissionMessage = 'Verifying guest clear...';
     const pending = entry.session.finish(body);
     run.guestProgress = entry.session.progress;
     if (this.traceOwner === run) { this.options.clearTrace(); this.traceOwner = null; }
@@ -71,13 +79,17 @@ export class GuestRunPlaybackController {
     }
     void pending.then(result => {
       // History and the durable queue survive even if this run has already left the scene.
+      this.applyProgress(run, entry, result);
+    });
+  }
+
+  private applyProgress(run: GuestPlaybackRunState, entry: GuestPlaybackEntry, result: GuestRunSaveResult): void {
       run.guestProgress = result; run.attemptId = result.attemptId;
       run.submissionState = result.status === 'saved' ? 'submitted' : result.status === 'queued' ? 'finishing' : 'local-only';
-      run.submissionMessage = body.result !== 'completed' ? 'Guest run ended.'
+      run.submissionMessage = entry.result !== 'completed' ? 'Guest run ended.'
         : result.status === 'saved' ? 'Verified clear saved. Sign in within 14 days to keep it.'
           : result.status === 'queued' ? result.durable ? 'Clear waiting for a connection.' : 'Keep this tab open while the clear retries.'
             : 'Clear could not be verified. Sign in and replay to earn XP.';
       if (this.options.getCurrentRun(entry.kind) === run) this.options.renderHud();
-    });
   }
 }

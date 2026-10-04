@@ -85,6 +85,17 @@ function harness() {
 async function settle(): Promise<void> { for (let i = 0; i < 12; i++) await Promise.resolve(); }
 
 describe('ordinary guest playback lifecycle', () => {
+  it('updates the current queued-clear HUD when a later flush saves it, without changing a newer trace', async () => {
+    const h = harness(); vi.mocked(h.repo.finish).mockRejectedValueOnce(new TypeError('Offline'));
+    h.goals.syncRunForRoom(room(), 'spawn'); h.goals.markCompleted('Exit reached.'); await settle();
+    const run = h.goals.getCurrentRun()!; expect(run.guestProgress?.status).toBe('queued');
+    const saved = { ...run.guestProgress!, status: 'saved' as const, durable: true, reason: null };
+    h.guests.refreshProgress(saved); expect(run.submissionState).toBe('submitted'); expect(run.submissionMessage).toContain('Verified clear saved');
+    const count = h.renderHud.mock.calls.length;
+    h.goals.syncRunForRoom({ ...room(), version: 2 }, 'spawn');
+    h.guests.refreshProgress(saved); expect(h.goals.getCurrentRun()?.guestProgress?.status).not.toBe('saved');
+    expect(h.renderHud).toHaveBeenCalledTimes(count); expect(h.recorder.buildTrace(0)).not.toBeNull();
+  });
   it('starts at qualified spawn and captures a quick clear before the start reply', async () => {
     const h = harness(); const pending = deferred<GuestRunStartResponse>(); vi.mocked(h.repo.start).mockReturnValue(pending.promise);
     h.goals.syncRunForRoom(room(), 'spawn'); h.recorder.recordFrame(1000, { ...frame, x: 144 }); h.goals.tick(1000);

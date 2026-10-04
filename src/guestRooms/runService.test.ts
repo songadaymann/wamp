@@ -43,8 +43,8 @@ function repository(): GuestRunRepository {
     start: vi.fn(async body => binding(body)), findStart: vi.fn(async clientRunId => binding({ ...target, clientRunId })),
     finish: vi.fn(async (attemptId: string) => ({ attemptId, result: 'completed' as const, verificationStatus: 'passed' as const, verificationReason: null, saved: true })),
     listPending: vi.fn(async () => ({ clears: [], totalClears: 0 })),
-    claim: vi.fn(async claimId => ({ claimId, clearsSaved: 0, pxpAwarded: 0, remainingClears: 0 })),
-    listClaimed: vi.fn(async () => ({ clears: [], totalClears: 0 })),
+    claim: vi.fn(async claimId => ({ claimId, userId: 'account', clearsSaved: 0, pxpAwarded: 0, remainingClears: 0 })),
+    listClaimed: vi.fn(async () => ({ userId: 'account', clears: [], totalClears: 0 })),
   };
 }
 function deferred<T>() {
@@ -196,7 +196,7 @@ describe('guest API transport', () => {
     const repo = createGuestRunRepository('https://api.test');
     await repo.start({ ...target, clientRunId: id() }, identity); await repo.findStart(id(), identity);
     await repo.finish(id(900), finishBody(), identity); await repo.listPending(identity);
-    await repo.claim(id(800), identity); await repo.listClaimed();
+    await repo.claim(id(800), identity, 'account'); await repo.listClaimed();
     expect(fetcher.mock.calls.map(([, options]) => options.credentials)).toEqual(['omit', 'omit', 'omit', 'omit', 'include', 'include']);
     expect(fetcher.mock.calls[0][1].headers.get('X-Guest-Recovery-Token')).toBe(identity.recoveryToken);
     expect(fetcher.mock.calls[5][1].headers.has('X-Guest-Recovery-Token')).toBe(false);

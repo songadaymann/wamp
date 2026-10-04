@@ -33,7 +33,7 @@ export async function handleGuestRunRequest(request: Request, url: URL, original
 export async function handleGuestProgressHistoryRequest(request: Request, originalEnv: Env): Promise<Response> {
   const env = { ...originalEnv, DB: originalEnv.DB.withSession?.('first-primary') ?? originalEnv.DB };
   const auth = await requireAuthenticatedRequestAuth(env, request, 'view saved guest clears');
-  return jsonResponse(request, await listClaimedGuestClears(env, auth.user.id));
+  return jsonResponse(request, { ...await listClaimedGuestClears(env, auth.user.id), userId: auth.user.id });
 }
 export async function handleClaimGuestRequest(request: Request, originalEnv: Env): Promise<Response> {
   const env = { ...originalEnv, DB: originalEnv.DB.withSession?.('first-primary') ?? originalEnv.DB };
@@ -41,9 +41,12 @@ export async function handleClaimGuestRequest(request: Request, originalEnv: Env
   await assertWampLeaderboardWriteAllowed(env, auth, 'save guest progress');
   const identity = await guestRunIdentity(request);
   await limitGuestRunRequest(env, request, identity, 'claim');
-  const body = await parseJsonBody<{ claimId?: unknown }>(request, { maxBytes: 8192 });
+  const body = await parseJsonBody<{ claimId?: unknown; expectedUserId?: unknown }>(request, { maxBytes: 8192 });
   if (!body || typeof body.claimId !== 'string' || !validGuestRequestId(body.claimId)) {
     throw new HttpError(400, 'A stable claim id is required.');
+  }
+  if (typeof body.expectedUserId !== 'string' || body.expectedUserId !== auth.user.id) {
+    throw new HttpError(409, 'Your account changed. Refresh sign-in before saving guest progress.');
   }
   return jsonResponse(request, await claimGuestRuns(env, identity, auth.user.id, body.claimId));
 }

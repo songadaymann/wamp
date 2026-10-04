@@ -180,6 +180,9 @@
         <div class="auth-row auth-menu-action-row">
           <button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button">Chat Moderation</button>
         </div>
+        <div class="auth-row auth-menu-action-row">
+          <button id="btn-auth-guest-progress" class="bar-btn auth-menu-action-btn" type="button">Guest Clears</button>
+        </div>
         <div id="auth-email-row" class="auth-row">
           <input id="auth-email-input" type="email" placeholder="you@example.com" spellcheck="false" />
           <button id="btn-auth-email" class="bar-btn bar-btn-small">Sign In With Email</button>
@@ -2637,6 +2640,21 @@
           <button id="btn-editor-music-phrase-save-confirm" class="bar-btn" type="button">Save Phrase</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="guest-progress-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="guest-progress-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <h2 id="guest-progress-title" class="history-modal-title">Guest clears</h2>
+          <div id="guest-progress-meta" class="history-modal-meta"></div>
+        </div>
+        <button id="btn-guest-progress-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="guest-progress-status" class="history-modal-error" role="status" aria-live="polite"></div>
+      <div id="guest-progress-list" class="leaderboard-panel"></div>
+      <button id="btn-guest-progress-signin" class="bar-btn hidden" type="button">Sign In</button>
     </div>
   </div>
 

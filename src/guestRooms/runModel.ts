@@ -23,6 +23,7 @@ export interface GuestRunFinishResponse {
 }
 export interface GuestRunClaimResponse {
   claimId: string;
+  userId: string;
   clearsSaved: number;
   pxpAwarded: number;
   remainingClears: number;
@@ -42,3 +43,5 @@ export interface GuestRunClearListResponse {
   clears: GuestRunSavedClear[];
   totalClears: number;
 }
+
+export interface GuestRunClaimedListResponse extends GuestRunClearListResponse { userId: string }

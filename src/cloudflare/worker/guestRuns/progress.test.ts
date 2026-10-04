@@ -401,8 +401,15 @@ describe('verified guest progress and account claims on the real schema', () => 
   it('claims through the actual cookie-authenticated route and never exposes recovery secrets', async () => {
     await complete();
     const session = await createSession(env, 'user');
-    const response = await handleClaimGuestRequest(request({ claimId: crypto.randomUUID() }, { ...HEADERS, Cookie: `ep_session=${session}` }), env);
-    expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ clearsSaved: 1, pxpAwarded: 20 });
+    const response = await handleClaimGuestRequest(request({ claimId: crypto.randomUUID(), expectedUserId: 'user' }, { ...HEADERS, Cookie: `ep_session=${session}` }), env);
+    expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ userId: 'user', clearsSaved: 1, pxpAwarded: 20 });
+  });
+  it('rejects claims before transfer when the cookie account differs from the intended account', async () => {
+    await complete(); const session = await createSession(env, 'other');
+    await expect(handleClaimGuestRequest(request({ claimId: crypto.randomUUID(), expectedUserId: 'user' },
+      { ...HEADERS, Cookie: `ep_session=${session}` }), env)).rejects.toMatchObject({ status: 409 });
+    expect(read('SELECT COUNT(*) AS count FROM guest_run_claims')?.count).toBe(0);
+    expect((await listPendingGuestClears(env, identity)).totalClears).toBe(1);
   });
   it('recovers pending and claimed history with the correct guest secret or account only', async () => {
     const { start } = await complete();

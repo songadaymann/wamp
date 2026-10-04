@@ -1257,3 +1257,51 @@ body[data-device-class='phone'][data-orientation-state='portrait'] #welcome-moda
   justify-content: flex-end;
   padding-top: 4px;
 }
+
+
+#guest-progress-modal .history-modal-panel {
+  width: min(760px, calc(100vw - 36px));
+  max-height: calc(100dvh - 32px);
+  color: #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#guest-progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+
+#guest-progress-list p {
+  margin: 0;
+}
+
+#guest-progress-list .guest-progress-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border: 2px solid #18161c;
+  background: #fffaf0;
+}
+
+#guest-progress-modal .guest-progress-row .bar-btn,
+#guest-progress-modal #btn-guest-progress-signin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  color: #18161c;
+  background: #79ccde;
+  font: inherit;
+  text-transform: uppercase;
+  text-decoration: none;
+  box-shadow: 3px 3px 0 #18161c;
+}

@@ -22,6 +22,24 @@ function makeRoomPrompt(
 }
 
 describe('PostRunRatingQueue', () => {
+  it('retires queued guest sign-in prompts without losing signed-in ratings', () => {
+    const queue = new PostRunRatingQueue();
+    queue.enqueue({ mode: 'guest-claim', detail: makeRoomPrompt('guest', 'Guest clear') });
+    queue.enqueue({ mode: 'rating', detail: makeRoomPrompt('signed', 'Signed clear') });
+    queue.discardGuestClaims();
+    expect(queue.beginBatch()?.detail.contentId).toBe('signed');
+    queue.enqueue({ mode: 'guest-claim', detail: makeRoomPrompt('guest-late', 'Late guest clear') });
+    queue.discardGuestClaims(); expect(queue.getCurrent()?.detail.contentId).toBe('signed'); expect(queue.getSnapshot().total).toBe(1);
+  });
+  it('retires an active guest prompt after sign-in and keeps the next account rating', () => {
+    const queue = new PostRunRatingQueue();
+    queue.enqueue({ mode: 'guest-claim', detail: makeRoomPrompt('guest', 'Guest clear') }); queue.beginBatch();
+    queue.enqueue({ mode: 'rating', detail: makeRoomPrompt('signed', 'Signed clear') });
+    queue.discardGuestClaims(); expect(queue.getCurrent()).toMatchObject({ mode: 'rating', status: 'active' });
+    expect(queue.getSnapshot().total).toBe(1);
+    queue.dismissAll(); queue.enqueue({ mode: 'guest-claim', detail: makeRoomPrompt('guest', 'Guest clear') }); queue.beginBatch();
+    queue.discardGuestClaims(); expect(queue.getCurrent()).toBeNull(); expect(queue.beginBatch()).toBeNull();
+  });
   it('holds prompts until a batch is explicitly begun', () => {
     const queue = new PostRunRatingQueue();
 

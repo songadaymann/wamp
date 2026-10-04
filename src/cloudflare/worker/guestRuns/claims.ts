@@ -77,5 +77,5 @@ export async function claimGuestRuns(env: Env, identity: GuestRunIdentity, userI
   await refreshProgressLevels(env, userId);
   const remaining = await env.DB.prepare(`SELECT COUNT(*) AS count FROM guest_run_attempts WHERE ${ELIGIBLE}`)
     .bind(...eligible).first<{ count: number }>();
-  return { claimId, clearsSaved: receipt.clear_count, pxpAwarded: receipt.pxp_awarded, remainingClears: remaining?.count ?? 0 };
+  return { claimId, userId, clearsSaved: receipt.clear_count, pxpAwarded: receipt.pxp_awarded, remainingClears: remaining?.count ?? 0 };
 }

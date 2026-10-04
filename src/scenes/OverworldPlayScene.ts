@@ -267,6 +267,7 @@ import {
 } from './overworld/rankedRunTraceRecorder';
 import type { RankedRunVerificationTrace } from '../runs/verificationTrace';
 import { GuestRunPlaybackController } from './overworld/guestRunPlayback';
+import { GUEST_RUN_PROGRESS_CHANGED_EVENT, type GuestRunSaveResult } from '../guestRooms/runService';
 import {
   getScrollForScreenAnchor,
   type CameraMode,
@@ -532,6 +533,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly browseOverlayController: OverworldBrowseOverlayController;
   private readonly roomCellController: OverworldRoomCellController;
   private readonly coursePlaybackController: OverworldCoursePlaybackController;
+  private readonly guestRunPlaybackController: GuestRunPlaybackController;
   private readonly goalMarkerController: OverworldGoalMarkerController;
   private readonly cameraController: OverworldCameraController;
   private readonly runtimeController: OverworldRuntimeController<LoadedRoomObject>;
@@ -619,7 +621,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       showTransientStatus: (message) => this.showTransientStatus(message),
     });
     const thisScene = this;
-    const guestRuns = new GuestRunPlaybackController({
+    const guestRuns = this.guestRunPlaybackController = new GuestRunPlaybackController({
       getCurrentRun: kind => kind === 'room' ? this.goalRunController?.getCurrentRun() ?? null : this.activeCourseRun,
       startTrace: (kind, binding) => this.startRankedRunTrace(kind, binding),
       clearTrace: () => this.clearRankedRunTrace(),
@@ -2181,6 +2183,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.initializeRoomChatClient();
     this.initializeRoomComments();
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
+    window.addEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestRunProgressChanged);
     window.addEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
     this.syncBackdropCameraIgnores();
 
@@ -3032,6 +3035,13 @@ export class OverworldPlayScene extends Phaser.Scene {
     );
     this.resetPerformanceAdvisorEvidence('room-transition', atMs);
   }
+  private readonly handleGuestRunProgressChanged = (event: Event): void => {
+    const result = (event as CustomEvent<GuestRunSaveResult>).detail;
+    if (result?.clientRunId && ['saved', 'queued', 'unverified'].includes(result.status)) {
+      this.guestRunPlaybackController.refreshProgress(result);
+    }
+  };
+
   private readonly handleAuthStateChanged = (): void => {
     const identityChanged = this.presenceController.refreshIdentity();
     const roomChatIdentityChanged = this.roomChatController.refreshIdentity();
@@ -6117,6 +6127,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.weatherController.destroy();
     this.clearPresenceSnapshotSyncTimer();
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
+    window.removeEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestRunProgressChanged);
     window.removeEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
     this.clearRoomGoalIntroState();
     this.scenePauseApplied = false;

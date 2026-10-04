@@ -107,6 +107,18 @@ export class PostRunRatingQueue {
     this.finishBatch();
   }
 
+  discardGuestClaims(): void {
+    const current = this.getCurrent();
+    const waiting = this.waiting.filter(prompt => prompt.mode !== 'guest-claim');
+    this.waiting.splice(0, this.waiting.length, ...waiting);
+    if (!this.batch) return;
+    this.batch = this.batch.filter(prompt => prompt.mode !== 'guest-claim');
+    this.currentIndex = current?.mode === 'rating' ? this.batch.findIndex(prompt => prompt.key === current.key)
+      : this.batch.findIndex(prompt => prompt.status === 'waiting');
+    if (this.currentIndex < 0) this.finishBatch();
+    else this.batch[this.currentIndex].status = 'active';
+  }
+
   private hasKey(key: string): boolean {
     return (
       this.waiting.some((prompt) => getPostRunPromptKey(prompt.detail) === key)
