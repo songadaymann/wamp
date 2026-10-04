@@ -1242,6 +1242,8 @@
 
     <div id="editor-shell-top" class="editor-shell-top" aria-label="Room editor controls">
       <div class="editor-shell-tools" aria-label="Drawing tools">
+        <button class="editor-shell-chunky-button" data-editor-history="undo" type="button" title="Undo (Cmd/Ctrl+Z)" disabled><span aria-hidden="true">&#8630;</span><span>Undo</span></button>
+        <button class="editor-shell-chunky-button" data-editor-history="redo" type="button" title="Redo (Cmd/Ctrl+Shift+Z or Ctrl+Y)" disabled><span aria-hidden="true">&#8631;</span><span>Redo</span></button>
         <button class="tool-btn editor-shell-chunky-button active" data-tool="pencil" type="button" title="Draw (B or 1)" aria-controls="editor-shell-pencil-picker" aria-expanded="false"><span class="tool-icon">&#9998;</span><span class="tool-label">Draw</span></button>
         <button id="btn-editor-shell-eraser" class="tool-btn editor-shell-chunky-button" data-tool="eraser" type="button" title="Erase (E or 2)" aria-controls="editor-shell-eraser-size-picker" aria-expanded="false"><span class="tool-icon">&#9003;</span><span class="tool-label">Erase</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="copy" type="button" title="Copy (C or 3)"><span class="tool-icon">&#10697;</span><span class="tool-label">Copy</span></button>
@@ -2024,6 +2026,7 @@
       </div>
     </div>
     <div id="mobile-editor-nav" class="mobile-editor-nav hidden" aria-label="Editor panels">
+      <div class="mobile-editor-tabs">
       <button
         class="bar-btn bar-btn-small mobile-editor-tab mobile-editor-world-tab"
         type="button"
@@ -2035,8 +2038,12 @@
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="palette">Palette</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="objects">Objects</button>
       <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="goal">Goal</button>
-      <button id="btn-mobile-editor-undo" class="bar-btn bar-btn-small mobile-editor-utility" type="button">Undo</button>
+      </div>
+      <div class="mobile-editor-utilities" aria-label="Editing actions">
+      <button id="btn-mobile-editor-undo" class="bar-btn bar-btn-small mobile-editor-utility" data-editor-history="undo" type="button" title="Undo (Cmd/Ctrl+Z)" disabled>Undo</button>
+      <button id="btn-mobile-editor-redo" class="bar-btn bar-btn-small mobile-editor-utility" data-editor-history="redo" type="button" title="Redo (Cmd/Ctrl+Shift+Z or Ctrl+Y)" disabled>Redo</button>
       <button id="btn-mobile-editor-toggle" class="bar-btn bar-btn-small mobile-editor-utility" type="button">Hide</button>
+      </div>
     </div>
   </div>
 

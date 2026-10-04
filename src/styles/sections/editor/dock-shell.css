@@ -107,7 +107,7 @@ body[data-editor-dock-shell='true'] .editor-shell-top {
 body[data-editor-dock-shell='true'] .editor-shell-tools {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(4, minmax(62px, 78px));
+  grid-template-columns: repeat(5, minmax(52px, 78px));
   gap: 7px;
   align-content: center;
   justify-content: start;
@@ -1311,7 +1311,7 @@ body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-contai
 
 @media (max-width: 930px) {
   body[data-editor-dock-shell='true'] .editor-shell-tools {
-    grid-template-columns: repeat(4, minmax(48px, 1fr));
+    grid-template-columns: repeat(5, minmax(38px, 1fr));
   }
 
   body[data-editor-dock-shell='true'] .editor-shell-top {
@@ -1346,4 +1346,12 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-
 body[data-editor-dock-shell='true'] #room-camera-section {
   flex-direction: column;
   align-items: stretch;
+}
+
+body[data-editor-dock-shell='true'] [data-editor-history]:disabled {
+  opacity: 1;
+  filter: none;
+  background: #303030;
+  color: #b7b7b7;
+  cursor: default;
 }

@@ -109,3 +109,39 @@ body[data-device-class='phone'][data-app-mode='editor'] .object-item {
 body[data-device-class='phone'][data-app-mode='editor'] .palette-hint {
   padding-top: 2px;
 }
+
+/* Keep history reachable while the panel tabs scroll on narrow phones. */
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav {
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+.mobile-editor-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mobile-editor-utilities {
+  display: flex;
+  flex: 0 0 auto;
+  border-left: 1px solid #343434;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav [data-editor-history] {
+  opacity: 1;
+  border-radius: 0;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav [data-editor-history]:disabled {
+  color: #b7b7b7;
+  background: #303030;
+  cursor: default;
+}
+
+/* Native repeated history clicks remain enabled without double-tap zoom. */
+[data-editor-history] {
+  touch-action: manipulation;
+}

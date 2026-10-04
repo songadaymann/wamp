@@ -96,3 +96,7 @@ Canonical branch `codex/fix-expanded-enemy-recovery-2026-10-03` in `/Users/jonat
 Exact level confirmed: Farès's "Go home" at `-13,-5`. The local fix now also preserves terrain/obstacle collider connections while actors sleep, preventing all five second-cell police enemies from falling through the floor when they wake. Actual pinned-level baseline reproduces the failure; corrected desktop and normal-camera WebGL phone probes pass. Latest full check: 1,908 tests. Same branch/worktree; local only, awaiting release authorization.
 
 Production deployment authorized by Jonathan. Deliver the existing enemy recovery fix through a clean main release and Pages-only deploy; verify the live Go home expanded room. Preserve unrelated edits in the primary checkout.
+
+## 2026-10-04 — Checkup F157 editor history
+
+Canonical lane `codex/checkup-mobile-building-2026-10-04` in managed `wamp-checkup-first-three`. Local F157 implementation verified in both editors on desktop/tablet/phone; production pending. Checkup delivery document records scope/proof. Native F079 pinch baseline fails as reported; implement touch cancellation and shapes next. Keep overnight goal active and checklist unchanged until delivery.
