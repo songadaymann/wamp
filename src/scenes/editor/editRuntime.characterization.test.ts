@@ -6,6 +6,7 @@ import {
   TILE_SIZE,
   editorState,
   getSelectionTileValue,
+  encodeTileDataValue,
   type LayerName,
   type PlacedObject,
 } from '../../config';
@@ -101,6 +102,84 @@ describe('editor edit runtime document contracts', () => {
     expect(exported.tileData.terrain[2][3]).toBe(1);
     expect(runtime.isRoomDirty).toBe(false);
     expect(runtime.hasUndoHistory()).toBe(false);
+  });
+
+  it('cancels an unfinished tile gesture without changing earlier history, dirty state or flips', () => {
+    const room = createRoom();
+    room.tileData.terrain[2][2] = encodeTileDataValue(1, true, true);
+    const { runtime, layers, host } = createHarness(room);
+    runtime.beginTileBatch();
+    runtime.placeTileAt(3 * TILE_SIZE, 3 * TILE_SIZE);
+    runtime.commitTileBatch();
+    runtime.undo();
+    const before = runtime.exportRoomSnapshot();
+    const dirty = runtime.isRoomDirty;
+    const dirtyAt = runtime.currentLastDirtyAt;
+    host.recordBuildPlacement.mockClear();
+    runtime.beginTileBatch();
+    runtime.eraseTileAt(2 * TILE_SIZE, 2 * TILE_SIZE);
+    runtime.placeTileAt(5 * TILE_SIZE, 5 * TILE_SIZE);
+    runtime.placeTileAt(5 * TILE_SIZE, 5 * TILE_SIZE);
+    expect(runtime.exportRoomSnapshot().tileData).not.toEqual(before.tileData);
+    runtime.cancelTileBatch();
+    runtime.cancelTileBatch();
+    expect(runtime.exportRoomSnapshot()).toEqual(before);
+    expect(runtime.isRoomDirty).toBe(dirty);
+    expect(runtime.currentLastDirtyAt).toBe(dirtyAt);
+    expect(runtime.hasUndoHistory()).toBe(false);
+    expect(runtime.hasRedoHistory()).toBe(true);
+    expect(host.recordBuildPlacement).not.toHaveBeenCalled();
+    runtime.commitTileBatch();
+    expect(runtime.hasUndoHistory()).toBe(false);
+    runtime.redo();
+    expect(layers.get('terrain')!.getTileAt(3, 3)).not.toBeNull();
+  });
+
+  it('cancels Smart output and semantic changes without making a clean draft dirty', () => {
+    editorState.paletteMode = 'smart';
+    const { runtime, host, setEditable } = createHarness(createRoom());
+    const before = runtime.exportRoomSnapshot();
+    const dirtyAt = runtime.currentLastDirtyAt;
+    runtime.beginTileBatch();
+    runtime.placeTileStroke([{ x: 80, y: 80 }, { x: 96, y: 80 }, { x: 96, y: 96 }]);
+    expect(runtime.exportRoomSnapshot().smartTerrain).not.toEqual(before.smartTerrain);
+    // Cancellation must still work if permissions change during the gesture.
+    setEditable(false);
+    runtime.cancelTileBatch();
+    expect(runtime.exportRoomSnapshot()).toEqual(before);
+    expect(runtime.isRoomDirty).toBe(false);
+    expect(runtime.currentLastDirtyAt).toBe(dirtyAt);
+    expect(runtime.hasUndoHistory()).toBe(false);
+    expect(runtime.hasRedoHistory()).toBe(false);
+    expect(host.recordBuildPlacement).not.toHaveBeenCalled();
+  });
+
+  it('restores a canceled live object preview while preserving Redo and committed objects', () => {
+    const room = createRoom();
+    room.placedObjects = [object('existing')];
+    const { runtime, host } = createHarness(room);
+    editorState.selectedObjectId = 'coin_gold';
+    runtime.beginObjectBatch(true);
+    runtime.handleObjectPlace(4 * TILE_SIZE, 4 * TILE_SIZE, 4, 4);
+    runtime.commitObjectBatch();
+    expect(host.recordBuildPlacement).toHaveBeenLastCalledWith(1);
+    runtime.undo();
+    const before = runtime.exportRoomSnapshot();
+    const dirtyAt = runtime.currentLastDirtyAt;
+    host.recordBuildPlacement.mockClear();
+    runtime.beginObjectBatch(true);
+    runtime.handleObjectPlace(6 * TILE_SIZE, 6 * TILE_SIZE, 6, 6);
+    runtime.handleObjectPlace(7 * TILE_SIZE, 6 * TILE_SIZE, 7, 6);
+    expect(host.getPlacedObjects()).toHaveLength(3);
+    runtime.cancelObjectBatch();
+    runtime.commitObjectBatch();
+    expect(runtime.exportRoomSnapshot()).toEqual(before);
+    expect(runtime.currentLastDirtyAt).toBe(dirtyAt);
+    expect(runtime.hasUndoHistory()).toBe(false);
+    expect(runtime.hasRedoHistory()).toBe(true);
+    expect(host.recordBuildPlacement).not.toHaveBeenCalled();
+    runtime.redo();
+    expect(host.getPlacedObjects()).toHaveLength(2);
   });
 
   it('treats omitted overview tile rows as empty while the full room loads', () => {
