@@ -19,12 +19,13 @@ async function startGoal(page,touch,allowPlaying=false) {
  await page.waitForTimeout(300);
 }
 async function holdRight(page,context,touch,ms) {
- if(!touch) {await page.keyboard.down('ArrowRight');await page.waitForTimeout(ms);await page.keyboard.up('ArrowRight');return;}
+ const wait=()=>ms===null?page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result==='completed',null,{timeout:20000}):page.waitForTimeout(ms);
+ if(!touch) {await page.keyboard.down('ArrowRight');try {await wait();}finally {await page.keyboard.up('ArrowRight');}return;}
  const box=await page.locator('#mobile-move-stick').boundingBox();assert.ok(box);
  const cdp=await context.newCDPSession(page),x=box.x+box.width/2,y=box.y+box.height/2;
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+34,y,id:1}]});
- await page.waitForTimeout(ms);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
+ try {await wait();}finally {await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();}
 }
 try {
  for(const [name,width,height,touch] of devices) for(const lane of ['explore','play','build']) {
@@ -60,7 +61,7 @@ try {
    if(touch)assert.ok(next.height>=44,`Next is too small: ${JSON.stringify(next)}`);
    await page.screenshot({path:`${output}/${scenario}-run.png`});
    if(name==='desktop'||name==='phone') {
-    await holdRight(page,context,touch,5400);
+    await holdRight(page,context,touch,null);
     await page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result==='completed',{},{timeout:20000});
     await page.waitForTimeout(1200);
    }
@@ -91,7 +92,7 @@ try {
    await page.waitForFunction(roomId=>JSON.parse(localStorage.getItem('everybodys-platformer:room:'+roomId)||'null')?.draft?.title==='My First Room',before.roomId,{timeout:30000});
    await click(page,'[data-editor-shell-action="test"]',touch);
    await startGoal(page,touch,true);
-   await holdRight(page,context,touch,5400);
+   await holdRight(page,context,touch,null);
    await page.screenshot({path:`${output}/${scenario}-test.png`});
    const tested=await state(page);writeFileSync(`${output}/${scenario}-test.json`,JSON.stringify(tested,null,2));
    assert.equal(tested.goalRun?.result,'completed');
