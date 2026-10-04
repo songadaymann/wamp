@@ -22,6 +22,7 @@ export default tseslint.config(
           allowDefaultProject: [
             'scripts/runtime_performance_trace.test.ts',
             'scripts/smoke_worlds_pilot.ts',
+            'scripts/world_tile_asset_contract_check.ts',
           ],
         },
         tsconfigRootDir: import.meta.dirname,

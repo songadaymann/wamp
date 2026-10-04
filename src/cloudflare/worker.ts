@@ -122,6 +122,9 @@ import { handleWampOGramRequest } from './worker/wampOGram/routes';
 import { handleCustomSpriteRequest } from './worker/customSprites/routes';
 import { handleWorldGrantRequest, handleWorldsRequest } from './worker/worlds/routes';
 
+import { checkAndAlertWorldMap, WORLD_MAP_HEALTH_CRON, worldMapAlertsConfigured } from './worker/worldTiles/health';
+import type { ScheduledController } from '@cloudflare/workers-types';
+
 type WorkerExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
 };
@@ -134,6 +137,7 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     handler: ({ request, env }) => jsonResponse(request, {
       ok: true,
       storage: 'd1',
+      worldMapAlertsConfigured: worldMapAlertsConfigured(env),
       auth: {
         emailConfigured: Boolean(env.RESEND_API_KEY),
         debugMagicLinks: env.AUTH_DEBUG_MAGIC_LINKS === '1',
@@ -259,7 +263,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
 ];
 
 export default {
-  async scheduled(_event: unknown, env: Env): Promise<void> {
+  async scheduled(event: ScheduledController, env: Env): Promise<void> {
+    if (event.cron === WORLD_MAP_HEALTH_CRON) {
+      const result = await checkAndAlertWorldMap(env);
+      console.log(JSON.stringify({ event: 'world-map-health', ...result }));
+      return;
+    }
     await purgeGuestReplays(env);
     await pruneRateLimitEvents(env);
   },

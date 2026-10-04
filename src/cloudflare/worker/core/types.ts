@@ -1,3 +1,4 @@
+/// <reference path="../../../../generated-bindings/api-worker-configuration.d.ts" />
 import type { ApiTokenRecord, ApiTokenScope, AuthUser } from '../../../auth/model';
 import type { AgentAccount, AgentTokenRecord, RequestAuthSource, RequestPrincipal } from '../../../agents/model';
 import type { CourseSnapshot } from '../../../courses/model';
@@ -63,6 +64,8 @@ export interface Env {
   ADMIN_API_KEY?: string;
   CHAT_OWNER_EMAILS?: string;
   ADMIN_REVIEW_EMAIL?: string;
+  WORLD_MAP_ALERT_EMAIL?: string;
+  WORLD_MAP_HEALTH_ALERTS_ENABLED?: ApiBindings['WORLD_MAP_HEALTH_ALERTS_ENABLED'];
   PARTYKIT_HOST?: string;
   PARTYKIT_PARTY?: string;
   PARTYKIT_INTERNAL_TOKEN?: string;

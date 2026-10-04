@@ -2,7 +2,7 @@ import { Resend } from 'resend';
 import { DEFAULT_AUTH_EMAIL_FROM, resolvePublicBaseUrl } from '../auth/store';
 import type { Env } from '../core/types';
 
-const DEFAULT_ADMIN_REVIEW_EMAIL = 'jonathan@jonathanmann.net';
+export const DEFAULT_ADMIN_REVIEW_EMAIL = 'jonathan@jonathanmann.net';
 
 export interface AdminReviewNotificationEmailResult {
   attempted: boolean;

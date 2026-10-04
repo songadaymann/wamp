@@ -6,7 +6,7 @@ Each item lists the plain-language summary, the technical detail, the evidence t
 
 ### F003: The pre-rendered world-map tile pyramid is switched off in production (asset hash mismatch since ~Sep 3)
 
-**Delivery update.** Delivered 2026-10-03 (`57b607c7`): compatible renderer `production-2026-10-03-checkup-d9d6c8cf` is active at 100%; 972 generations and 952 nonempty objects pass readiness/parity. Public availability smoke, scheduled six-hour health checks and CI asset-contract diagnostics are in place. See [delivery evidence](../development/checkup-map-recovery-2026-10-03.md).
+**Delivery update.** Delivered 2026-10-03 (`57b607c7`): compatible renderer `production-2026-10-03-checkup-d9d6c8cf` is active at 100%; 972 generations and 952 nonempty objects pass readiness/parity. Public availability smoke, scheduled six-hour health checks and CI asset-contract diagnostics are in place. See [delivery evidence](../development/checkup-map-recovery-2026-10-03.md). Follow-up adds direct 15-minute outage/recovery emails with durable retries and blocking CLI/Pages production compatibility gates; see [alert and release plan](../development/world-map-alert-release-gate-2026-10-03.md).
 
 - **Area:** Runtime performance (frame rate, GC, memory)
 - **Type:** defect · **impact:** high · **effort:** small
