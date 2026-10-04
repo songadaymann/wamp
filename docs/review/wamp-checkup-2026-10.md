@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 24 of 214 done.**
+**Progress: 25 of 214 done.**
 
 ## How to use this file
 
@@ -42,7 +42,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 4. **Make classroom accounts actually safe** ✅ (F208, F190, F209, F211). Students are blocked from World Chat, but they can talk to strangers through in-room speech bubbles. The multiplayer server doesn't check sign-in or bans for those bubbles at all. Other public-posting paths are also open to students, and student passwords can be guessed with no lockout. Fix these before any more school pilots.
 5. **Switch the fast world map back on, safely** ✅ (F003, F010). Compatible pre-rendered imagery is active again. Tile work stays within the current viewport and bounded metadata; strict production smoke, direct outage/recovery emails and blocking production release compatibility checks protect the restored map.
 6. **Same jump on every screen, and cap phones at 60fps** (F138, F002). On 120/144Hz screens, quick-tap jumps come out lower, ice slides shorter, and jumps in gravity zones are about half as tall. Rooms get easier or harder depending on the device, and leaderboards aren't fair. A careful cap just above 60fps also cuts heat and battery drain on high-refresh phones.
-7. **Make building on phones and tablets stop fighting you** (F079, F157, F161, F158). Phone and tablet building has several problems: - Every pinch-zoom drops a stray tile or floods an area. - Shape tools don't work by touch. - Undo/Redo is delivered in both editors (PR #39). - The phone editor still has the old layout, with Test and Publish hidden. - Phone builders can't configure pressure plates, NPCs or Sword Hunters.
+7. **Make building on phones and tablets stop fighting you** (F079, F157, F161, F158). Pinch cancellation and touch shapes are delivered in both editors (PR #40), along with Undo/Redo (PR #39). Remaining phone building problems: - The phone editor still has the old layout, with Test and Publish hidden. - Phone builders can't configure pressure plates, NPCs or Sword Hunters.
 8. **Fix the first five minutes** (F093, F122, F126, F104). These are the moments that decide whether a visitor stays: - A shared room link opens the Welcome box on top of the room-goal box. - New players never see the controls before the timer starts. - 'Save Progress' doesn't actually keep a guest's clears when they sign up. - The Welcome box's Play, Explore and Build buttons don't lead anywhere obvious.
 9. **Security/safety priority** (F198, F201, F199, F200, F026). Details withheld from this public repo until fixed.
 10. **Security/safety priority** (F182, F184, F183). Details withheld from this public repo until fixed.
@@ -183,7 +183,7 @@ Defects players and builders can hit today, with the ones that lose a builder's 
 Portrait phone play is good, but tablets and sideways phones can't play, and building on a phone still fights you. These items bring mobile up to the standing 'works everywhere' rule.
 
 - [x] **F075** Tablets and landscape phones have no way to play: touch controls exist only in phone portrait (also covers F092) · high impact · medium effort — **done 2026-10-03** (a2ae8327, 14c8c5df). Corner overlay controls for landscape phones and tablets; phones held upright keep the console.
-- [ ] **F079** Phone/tablet editor: starting a pinch-zoom paints a stray tile (or flood-fills); shape tools need a hidden second tap (also covers F053, F160) · medium impact · medium effort
+- [x] **F079** Phone/tablet editor: starting a pinch-zoom paints a stray tile (or flood-fills); shape tools need a hidden second tap (also covers F053, F160) · medium impact · medium effort — **done 2026-10-04** (`e572e9da`, PR #40): deferred taps, reversible brush/object previews, touch shape/copy/Curve and cross-cell pinch cancellation; 226 native scenarios and live guest draft/history proof pass.
 - [x] **F077** Installed Android app is locked to landscape, the one orientation with no controls · medium impact · small effort — **done 2026-10-03** (a2ae8327). app.webmanifest orientation is now "any".
 - [ ] **F161** Phone editor still has the old layout: Spawn in Objects→Utility, Test/Publish behind "← World" (also covers F110) · high impact · medium effort
 - [ ] **F158** On phones, pressure plates, chests, Sword Hunters, police and NPCs can't be configured · high impact · medium effort
