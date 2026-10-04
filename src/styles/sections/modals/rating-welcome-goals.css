@@ -213,6 +213,18 @@
   letter-spacing: 0.02em;
 }
 
+#run-rating-modal.run-rating-modal--guest-clear .run-rating-result,
+#run-rating-modal.run-rating-modal--guest-clear #run-rating-leaderboard {
+  padding: 0;
+  border: 0;
+  background: #fff3db;
+  box-shadow: none;
+  font-family: 'Early GameBoy', monospace;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
 #run-rating-modal .run-rating-summary-card {
   margin-top: 0;
   padding: 10px 12px;

@@ -152,6 +152,7 @@
 }
 
 .reward-sting-detail {
+  white-space: pre-line;
   font-family: 'Early GameBoy', monospace;
   font-size: 9px;
   line-height: 1.25;
@@ -162,6 +163,11 @@
   position: absolute;
   inset: -8px;
   pointer-events: none;
+}
+
+.reward-sting-card--guest-clear .reward-sting-detail {
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .reward-sting-particle {

@@ -74,7 +74,7 @@ export class GuestRunPlaybackController {
     run.guestProgress = entry.session.progress;
     if (this.traceOwner === run) { this.options.clearTrace(); this.traceOwner = null; }
     if (body.result === 'completed' && detail) {
-      notifyRewardStings([createPostRunClearReward(detail)]);
+      notifyRewardStings([createPostRunClearReward({ ...detail, guestProgress: run.guestProgress ?? null })]);
       requestPostRunGuestClaim({ ...detail, guestProgress: run.guestProgress });
     }
     void pending.then(result => {

@@ -1,0 +1,65 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+vi.mock('phaser', () => ({ default: {} }));
+vi.mock('../../auth/client', () => ({ AUTH_STATE_CHANGED_EVENT: 'auth', getAuthDebugState: () => ({ authenticated: false }), promptForSignIn: vi.fn() }));
+vi.mock('../../mint/roomMetadataRender', () => ({ renderRoomSnapshotToPngDataUrl: vi.fn() }));
+import type { PostRunRatingRequestDetail } from '../../progression/postRunRatingEvents';
+import { POST_RUN_GUEST_CLAIM_REQUEST_EVENT } from '../../progression/postRunRatingEvents';
+import { REWARD_STINGS_IDLE_EVENT } from '../../progression/rewardStings';
+import { RunRatingModalController } from './runRatingModal';
+
+function fixture() {
+  const elements = new Map<string, ReturnType<typeof element>>();
+  function element() {
+    const classes = new Set(['hidden']);
+    return Object.assign(new EventTarget(), { textContent: '', disabled: false, setAttribute: vi.fn(), replaceChildren: vi.fn(),
+      classList: { contains: (name: string) => classes.has(name), add: (...names: string[]) => names.forEach(name => classes.add(name)),
+        remove: (...names: string[]) => names.forEach(name => classes.delete(name)), toggle: (name: string, force: boolean) => force ? classes.add(name) : classes.delete(name) } });
+  }
+  const doc = Object.assign(new EventTarget(), { body: { dataset: { appMode: 'play-world' } }, getElementById: (id: string) => {
+    if (!elements.has(id)) elements.set(id, element()); return elements.get(id);
+  }, querySelector: () => element(), querySelectorAll: () => [] });
+  const win = Object.assign(new EventTarget(), { setTimeout, clearTimeout });
+  const roomRepo = { loadRoomLeaderboard: vi.fn() }, expandedRepo = { loadExpandedRoomLeaderboard: vi.fn() };
+  const controller = new RunRatingModalController({} as never, roomRepo as never, {} as never, expandedRepo as never, {} as never, doc as unknown as Document, win as unknown as Window);
+  controller.init();
+  const request = (detail: PostRunRatingRequestDetail) => win.dispatchEvent(new CustomEvent(POST_RUN_GUEST_CLAIM_REQUEST_EVENT, { detail }));
+  const stop = () => { doc.body.dataset.appMode = 'world'; win.dispatchEvent(new CustomEvent(REWARD_STINGS_IDLE_EVENT)); };
+  return { controller, roomRepo, expandedRepo, elements, doc, request, stop };
+}
+function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
+const detail: PostRunRatingRequestDetail = { contentType: 'room', contentId: '0,0', roomCoordinates: { x: 0, y: 0 }, contentTitle: 'Test Room', version: 1,
+  previousViewerRank: null, elapsedMs: 15557, deaths: 2, score: 10, autoSuggestedDifficulty: 'easy',
+  guestProgress: { clientRunId: 'clear-1', attemptId: null, status: 'saved', durable: true, reason: null } };
+const leaderboard = { roomId: '0,0', roomVersion: 1, rankingMode: 'time', entries: [{ elapsedMs: 3500, score: 100, userDisplayName: 'Fast Player' }] };
+async function settle() { for (let i = 0; i < 4; i++) await Promise.resolve(); }
+afterEach(() => vi.clearAllMocks());
+describe('deferred guest result', () => {
+  it('keeps playing uninterrupted, then shows room, time, deaths and the matching best', async () => {
+    const f = fixture(); f.roomRepo.loadRoomLeaderboard.mockResolvedValue(leaderboard); f.request(detail);
+    expect(f.elements.get('run-rating-modal')?.classList.contains('hidden')).toBe(true); expect(f.roomRepo.loadRoomLeaderboard).not.toHaveBeenCalled();
+    f.stop(); await settle();
+    expect(f.elements.get('run-rating-meta')?.textContent).toBe('Test Room');
+    expect(f.elements.get('run-rating-result')?.classList.contains('hidden')).toBe(false);
+    expect(f.elements.get('run-rating-result')?.textContent).toBe('0:15.5 · 2 deaths · 10 pts');
+    expect(f.elements.get('run-rating-leaderboard')?.textContent).toBe('Best: Fast Player · 0:03.5 · 0:12.0 behind');
+    expect(f.elements.get('run-guest-claim-copy')?.textContent).toContain('within 14 days'); f.controller.destroy();
+  });
+  it('does not reopen a closed prompt or adopt a different version from a delayed reply', async () => {
+    const f = fixture(); const old = deferred<typeof leaderboard>(); f.roomRepo.loadRoomLeaderboard.mockReturnValueOnce(old.promise);
+    f.request(detail); f.stop(); f.controller.close(); old.resolve(leaderboard); await settle();
+    expect(f.elements.get('run-rating-modal')?.classList.contains('hidden')).toBe(true);
+    f.roomRepo.loadRoomLeaderboard.mockResolvedValue({ ...leaderboard, roomVersion: 1 });
+    f.request({ ...detail, version: 2, elapsedMs: 2000 }); await settle();
+    expect(f.elements.get('run-rating-result')?.textContent).toContain('0:02.0');
+    expect(f.elements.get('run-rating-leaderboard')?.textContent).toBe('Best run unavailable.'); f.controller.destroy();
+  });
+  it('uses the expanded target/version while accepting a legacy course identity, and preserves the claim when offline', async () => {
+    const f = fixture(); f.expandedRepo.loadExpandedRoomLeaderboard.mockResolvedValue({ ...leaderboard, roomId: undefined,
+      expandedRoomId: 'course:test', expandedRoomVersion: 2, courseId: 'test', courseVersion: 2 });
+    f.request({ ...detail, contentType: 'expanded_room', contentId: 'course:test', expandedRoomId: 'course:test', version: 2 }); f.stop(); await settle();
+    expect(f.elements.get('run-rating-leaderboard')?.textContent).toContain('Best: Fast Player'); f.controller.close();
+    f.roomRepo.loadRoomLeaderboard.mockRejectedValue(new TypeError('Offline')); f.request(detail); await settle();
+    expect(f.elements.get('run-rating-leaderboard')?.textContent).toBe('Best run unavailable.');
+    expect(f.elements.get('btn-run-guest-claim-signin')?.textContent).toBe('Save Progress'); f.controller.destroy();
+  });
+});

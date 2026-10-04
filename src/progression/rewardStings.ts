@@ -1,4 +1,6 @@
 import type { SfxCue } from '../audio/sfx';
+import type { GuestRunSaveResult } from '../guestRooms/runService';
+import { formatClearTime, formatPostRunBest, type PostRunBest } from './postRunBest';
 import type {
   BadgeAwardSummary,
   ProgressionBadgeCategory,
@@ -44,6 +46,8 @@ export interface RewardSting {
   emphasis: 'normal' | 'hero';
   durationMs: number;
   sfxCue?: SfxCue | null;
+  /** null means a guest clear with no verified save; undefined is an account reward. */
+  guestProgress?: GuestRunSaveResult | null;
 }
 
 export interface RewardStingsDetail {
@@ -187,6 +191,8 @@ export function createPostRunClearReward(options: {
   elapsedMs: number;
   deaths: number;
   score: number | null;
+  bestRun?: PostRunBest | null;
+  guestProgress?: GuestRunSaveResult | null;
 }): RewardSting {
   const isCourse = options.contentType === 'course';
   const isExpandedRoom = options.contentType === 'expanded_room';
@@ -198,11 +204,13 @@ export function createPostRunClearReward(options: {
     kicker: `${label} Clear`,
     title: `${label.toUpperCase()} CLEAR!`,
     subtitle: options.contentTitle?.trim() || `${label} complete`,
-    detail: formatPostRunClearDetail(options.elapsedMs, options.deaths, options.score),
+    detail: [formatPostRunClearDetail(options.elapsedMs, options.deaths, options.score),
+      formatPostRunBest(options.bestRun, options.elapsedMs)].filter(Boolean).join('\n'),
+    guestProgress: options.guestProgress,
     iconSrc: isCourse ? CURATOR_ICON_SRC : PLAYER_ICON_SRC,
     iconAlt: `${label} clear icon`,
     emphasis: 'normal',
-    durationMs: getRewardStingDurationMs(kind, isCourse ? 'curator' : 'player'),
+    durationMs: options.guestProgress !== undefined ? 2600 : getRewardStingDurationMs(kind, isCourse ? 'curator' : 'player'),
     sfxCue: 'goal-success',
   };
 }
@@ -440,18 +448,9 @@ function formatPostRunClearDetail(
   deaths: number,
   score: number | null,
 ): string {
-  const parts = [formatElapsedMs(elapsedMs), `${deaths} death${deaths === 1 ? '' : 's'}`];
+  const parts = [formatClearTime(elapsedMs), `${deaths} death${deaths === 1 ? '' : 's'}`];
   if (typeof score === 'number') {
     parts.push(`${score} pts`);
   }
   return parts.join(' · ');
-}
-
-function formatElapsedMs(elapsedMs: number): string {
-  const totalMs = Math.max(0, Math.round(elapsedMs));
-  const totalSeconds = Math.floor(totalMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  const tenths = Math.floor((totalMs % 1000) / 100);
-  return `${minutes}:${seconds.toString().padStart(2, '0')}.${tenths}`;
 }
