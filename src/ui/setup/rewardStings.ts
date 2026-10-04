@@ -1,4 +1,6 @@
 import { playSfx } from '../../audio/sfx';
+import { GUEST_RUN_PROGRESS_CHANGED_EVENT, type GuestRunSaveResult } from '../../guestRooms/runService';
+import { guestRunClaimCopy } from '../../progression/guestRunClaimCopy';
 import {
   REWARD_STINGS_EVENT,
   REWARD_STINGS_IDLE_EVENT,
@@ -13,6 +15,7 @@ type RewardStingElements = {
   title: HTMLElement | null;
   subtitle: HTMLElement | null;
   detail: HTMLElement | null;
+  guestProgress: HTMLElement | null;
   meter: HTMLElement | null;
   meterFill: HTMLElement | null;
   icon: HTMLImageElement | null;
@@ -24,6 +27,16 @@ export class RewardStingController {
   private activeReward: RewardSting | null = null;
   private displayTimer: number | null = null;
   private exitTimer: number | null = null;
+
+  private readonly handleGuestProgress = (event: Event) => {
+    const progress = event instanceof CustomEvent ? event.detail as GuestRunSaveResult | undefined : undefined;
+    if (!progress?.clientRunId) return;
+    for (const reward of [this.activeReward, ...this.queue]) {
+      if (reward?.guestProgress?.clientRunId !== progress.clientRunId) continue;
+      reward.guestProgress = progress;
+      if (reward === this.activeReward) this.renderGuestProgress(reward);
+    }
+  };
 
   private readonly handleRewardRequest = (event: Event) => {
     const detail =
@@ -51,6 +64,7 @@ export class RewardStingController {
       title: this.doc.getElementById('reward-sting-title'),
       subtitle: this.doc.getElementById('reward-sting-subtitle'),
       detail: this.doc.getElementById('reward-sting-detail'),
+      guestProgress: this.doc.getElementById('reward-sting-guest-progress'),
       meter: this.doc.getElementById('reward-sting-meter'),
       meterFill: this.doc.getElementById('reward-sting-meter-fill'),
       icon: this.doc.getElementById('reward-sting-icon') as HTMLImageElement | null,
@@ -59,10 +73,12 @@ export class RewardStingController {
 
   init(): void {
     this.windowObj.addEventListener(REWARD_STINGS_EVENT, this.handleRewardRequest as EventListener);
+    this.windowObj.addEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestProgress);
   }
 
   destroy(): void {
     this.windowObj.removeEventListener(REWARD_STINGS_EVENT, this.handleRewardRequest as EventListener);
+    this.windowObj.removeEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestProgress);
     this.clearTimers();
     this.queue.length = 0;
     this.activeReward = null;
@@ -147,9 +163,11 @@ export class RewardStingController {
     this.elements.card.className = `reward-sting-card reward-sting-card--${reward.tone}${
       reward.emphasis === 'hero' ? ' reward-sting-card--hero' : ''
     }`;
+    this.elements.card.classList.toggle('reward-sting-card--guest-clear', reward.guestProgress !== undefined);
 
     if (this.elements.kicker) {
       this.elements.kicker.textContent = reward.kicker;
+      this.elements.kicker.classList.toggle('hidden', reward.guestProgress !== undefined);
     }
     if (this.elements.title) {
       this.elements.title.textContent = reward.title;
@@ -162,6 +180,7 @@ export class RewardStingController {
       this.elements.detail.textContent = detail;
       this.elements.detail.classList.toggle('hidden', detail.length === 0);
     }
+    this.renderGuestProgress(reward);
     if (this.elements.meter && this.elements.meterFill) {
       const hasProgress = typeof reward.progressValue === 'number';
       this.elements.meter.classList.toggle('hidden', !hasProgress);
@@ -177,6 +196,13 @@ export class RewardStingController {
       this.elements.icon.src = reward.iconSrc;
       this.elements.icon.alt = reward.iconAlt;
     }
+  }
+
+  private renderGuestProgress(reward: RewardSting): void {
+    if (!this.elements.guestProgress) return;
+    const isGuest = reward.guestProgress !== undefined;
+    this.elements.guestProgress.textContent = isGuest ? guestRunClaimCopy(reward.guestProgress).inPlay : '';
+    this.elements.guestProgress.classList.toggle('hidden', !isGuest);
   }
 
   private clearTimers(): void {

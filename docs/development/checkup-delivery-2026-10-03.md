@@ -379,15 +379,15 @@ LIVE F126, October 4: [PR #48](https://github.com/songadaymann/wamp/pull/48) del
 F125 curation, popular sorting, rating coverage and measured difficulty remain next. F096/F118/F133 celebrations and broader community/publish onboarding remain separate. Browser layouts and native emulated input are verified; physical F002/F138 certification and F098 camera remain open. Direct fast-map alerts stay enabled/configured for Jonathan with healthy scheduled state at 15:07:54 UTC and zero pending alerts, reverified at 15:08:13 UTC. The primary stale checkout remains on `21a697c4` with its original 25 unrelated dirty entries.
 
 
-## F125 discovery — in progress (2026-10-04)
+## F125 discovery — delivered (2026-10-04)
 
 Scope: review and feature 15–25 current rooms with varied builders/difficulty; keep Featured limited to current featured versions and default to Popular below eight featured rooms. Popular counts distinct eligible players in the last 14 days. Difficulty estimates reuse the existing run heuristic, require three distinct non-builder completers, and yield to three or more explicit votes. Make quality trophies attainable with credible community voting while preserving version/award rules.
 
 - [x] Inspect current main, live discovery data and the fact-checked requirements.
 - [x] Implement indexed per-player run metrics, version-aware Featured, Popular and estimated difficulty; validate additive migration/backfill and refresh paths.
-- [ ] Verify native Explore sorting/filtering/queues and responsive labels, including default fallback and stale responses.
-- [ ] Review and feature a varied current-version room set; verify quality-trophy eligibility.
-- [ ] Pass quality checks, PR/merge, guarded migration/full API/Pages delivery and exact live acceptance before checking F125 (master currently 32/214).
+- [x] Verify native Explore sorting/filtering/queues and responsive labels, including default fallback and stale responses.
+- [x] Review and feature a varied current-version room set; verify quality-trophy eligibility.
+- [x] Pass quality checks, PR/merge, guarded migration/full API/Pages delivery and exact live acceptance before checking F125 (master now 33/214).
 
 Work lane: `codex/checkup-discovery-2026-10-04` from released `c1847d8c`, carrying F126 delivery record `8205bd9e`. Primary stale checkout's 25 unrelated dirty entries remain preserved. F124 builder dashboards and physical F002/F138 acceptance remain separate.
 
@@ -419,3 +419,28 @@ F125 reviewed selection (difficulty labels at review; production estimates can s
 | If Heaven Is A Real Place | jonathan | -1,1 | medium | v16 |
 | Race To The Top | jonathan | 1,-8 | medium | expanded v2, member v8 |
 | into the fire | jonathan | -5,3 | hard | v13 |
+
+LIVE F125, October 4: [PR #49](https://github.com/songadaymann/wamp/pull/49) ships source `fbaae4ad` and merge `a45580fd`, migration `0054_discovery_run_players.sql`, API Worker `ee79e845-730f-412b-96be-39dfcc2a83aa`, and Pages `84ec0fe8-ef40-4e99-8ff8-653132a3365c`. The guarded full release and strict production smoke pass. The migration completed in 713 ms; the idempotent post-Worker catch-up succeeded (593 ms), retaining 1,734 unique player/version rows. All 20 reviewed selections are live, including Race To The Top's current expanded v2 / pinned member v8; 17 community rooms span 14 builders. Featured defaults only at eight current selections and is exclusive; Popular covers all 319 goal targets in the correct distinct-player order with no duplicate pagination entries. Sixty-three current levels have measured labels, and unlabelled levels decrease from 271 to 233. The current Featured mix is 6 Easy, 4 Medium, 6 Hard, 3 Extreme and 1 unlabelled. No generated ratings or trophies were written; the existing community has no qualifying trophy yet, and credible future votes now have an attainable minimum with the quality floor retained.
+
+All five actual wamp.land desktop/touch viewport workflows pass sorting, rating counts, estimated labels, difficulty filtering, guest Play All and Next, with zero unexpected browser errors. Every document serves `./assets/cache-v2/main-eVtYpAb9.js`; HTML references/inline bootstrap and all 178 custom-domain/immutable JS/CSS assets match the clean release. The live First Steps real-clear/Next/summary regression passes. Source and merged-main quality CI pass; all source Pages checks pass. Knip has the same existing debt as unchanged main and no new discovery warnings. D1 confirms 20 current Featured targets, zero unpinned selections and zero stale pins. Final Pages canonical head remains `a45580fd` with wamp.land on the verified manual deployment. Fast-map monitoring and email configuration remain healthy, with zero pending alerts and matching active asset contract `authoring-catalog-v1:d9d6c8cf7dbb63c3`.
+
+F125 is checked and the master is **33/214**. Final delivery bookkeeping is retained on `codex/checkup-discovery-delivery-2026-10-04`, including a smoke-harness correction to match the real Untitled Level/Untitled Room fallback captions discovered during live verification. That correction changes only the validation script. Next: **F096 ordinary room-clear celebration and immediate XP feedback**. F124 builder dashboards, F098 camera and physical F002/F138 acceptance remain separate. The primary checkout still has its original 25 unrelated dirty entries at `21a697c4`; none were changed. Evidence is kept under ignored `output/web-game/discovery/` (curated-production, production-api, production-final, production-first-steps, local fallback/stale probes and reviewed room captures) plus `/tmp/wamp-f125-*` migration, catch-up, CI, parity and release logs.
+
+
+## F096 room-clear feedback — in progress (2026-10-04)
+
+Scope: complete the fact-checked guest clear feedback using the existing reward card and deferred claim queue. Show actual run time/deaths, the matching version's best ranked time, and truthful verified/pending/unverified progress with an XP sign-in hint. Preserve continuous play and existing sequence Next/Restart; XP is awarded only by the server after eligible sign-in/claim. F122 already emits a guest reward; cover its legacy local-only fallback too. Free-roam destination selection remains the separate medium-effort change described by the fact-check.
+
+- [x] Implement clear results and progress updates without replaying rewards or showing stale run results.
+- [x] Verify ordinary/expanded guest clears, deferred results, delayed/offline replies, replay/Next and native desktop/touch screenshots.
+- [ ] Pass quality checks, PR/merge, guarded frontend deployment and exact wamp.land acceptance.
+- [ ] Mark F096 complete only after production verification (master currently 33/214).
+
+Work lane: `codex/checkup-room-clear-2026-10-04` from released `a45580fd`, carrying the F125 delivery record. The primary checkout's 25 unrelated dirty entries remain preserved.
+
+
+F096 local acceptance, October 4: the shared guest reward shows time/deaths/points, the matching room version's ranked best and a comparison, plus truthful verified/pending/unverified XP sign-in feedback. Progress events update only their own active/queued reward; late replies do not replay a dismissed card. The ordinary local-only fallback also celebrates once without promising a verified save. Guest claim prompts remain deferred until Browse and now show the room title, actual results and freshly loaded version-matched best; unavailable leaderboards do not block saving. Expanded/legacy course identity and close/reopen/version races are covered. Clear cards and later results share the frozen HUD's timer precision; guest results use simple readable text.
+
+Quality passes 306 files / 2,368 tests, lint, types, Worker binding checks and build; the final 25 focused lifecycle/entry-contract tests and DOM 823/159 pass. Knip retains the same existing 481 unused exports, 256 types, one binary, one unlisted dependency and seven unresolved imports with no new clear-feedback warnings. Four native desktop/portrait/narrow-phone/landscape real-room flows pass with zero unexpected errors, including replay, frozen time and deferred results. An original local finish reply delayed by one second updates the same card successfully. Two additional phone/narrow-phone modal title/Close visibility checks pass. The unchanged official game client completes a verified tutorial run with healthy visible gameplay; the First Steps actual-clear/Next/summary regression passes. Screenshots are inspected. Earlier harness failures retain evidence: the seeded local database had no ranked history; CSS uppercase needed textContent assertions; slower verification may finish after the brief card expires, so acceptance separately checks the visible pending state and later verified result.
+
+F096 stays unchecked at 33/214 until PR/merge, guarded frontend-only delivery and exact wamp.land acceptance. No Worker, D1, room-data, PartyKit or renderer change is required. Evidence: ignored `output/web-game/room-clear-feedback/` and `/tmp/wamp-f096-*`. The primary checkout's 25 unrelated dirty entries are preserved.

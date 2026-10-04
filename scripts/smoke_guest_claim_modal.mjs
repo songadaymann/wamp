@@ -21,8 +21,9 @@ page.on('pageerror', (error) => {
 });
 
 await page.goto(url, { waitUntil: 'domcontentloaded' });
-await page.waitForTimeout(1500);
+await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 });
 
+// This fixture exercises deferred UI only. The real-clear smoke covers durable saving and verification.
 await page.evaluate(() => {
   document.body.dataset.appReady = 'true';
   document.body.dataset.appMode = 'play-world';
@@ -57,9 +58,6 @@ const deferredState = await page.evaluate(() => ({
 }));
 if (deferredState.appMode !== 'play-world' || !deferredState.modalHidden) {
   throw new Error(`Expected guest claim prompt to remain hidden during Play: ${JSON.stringify(deferredState)}`);
-}
-if (!deferredState.recordsRaw) {
-  throw new Error('Expected guest clear progress to be recorded before the deferred prompt opens.');
 }
 
 await page.evaluate(() => {
@@ -97,15 +95,15 @@ if (modalState.guestClaimHidden) {
 if (!modalState.qualityHidden || !modalState.difficultyHidden) {
   throw new Error('Expected rating controls to be hidden for guest claim mode.');
 }
-if (!modalState.resultHidden) {
-  throw new Error('Expected run-result details to be hidden for guest claim mode.');
+if (modalState.resultHidden || !modalState.text.includes('0:42.1') || !modalState.text.includes('1 death')) {
+  throw new Error('Expected the actual run time and deaths in guest claim mode.');
 }
 const normalizedModalText = modalState.text.toLowerCase();
 if (
   !normalizedModalText.includes('you did it') ||
-  !normalizedModalText.includes('you earned 20 xp') ||
-  !normalizedModalText.includes('sign in to save your xp and leaderboard progress') ||
-  !normalizedModalText.includes('save progress')
+  !normalizedModalText.includes('this clear could not be verified') ||
+  !normalizedModalText.includes('sign in and replay to earn xp') ||
+  !normalizedModalText.includes('smoke room')
 ) {
   throw new Error('Expected guest claim copy and CTA in modal text.');
 }
@@ -114,9 +112,6 @@ if (normalizedModalText.includes('run complete')) {
 }
 if (normalizedModalText.includes('potential pxp') || normalizedModalText.includes('guest bank')) {
   throw new Error('Expected simplified guest claim modal without guest-bank stats.');
-}
-if (!modalState.records?.records?.length) {
-  throw new Error('Expected guest progress record in localStorage.');
 }
 
 await page.screenshot({
@@ -136,7 +131,7 @@ const signInState = await page.evaluate(() => ({
 if (!signInState.modalHidden || !signInState.authOpen) {
   throw new Error('Expected Save Progress to close the modal and open auth.');
 }
-if (!signInState.authStatus.includes('save your XP')) {
+if (!signInState.authStatus.includes('replay to earn XP')) {
   throw new Error(`Unexpected auth status after Save Progress: ${signInState.authStatus}`);
 }
 

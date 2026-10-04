@@ -31,6 +31,7 @@ import {
   loadGuestRunProgress,
 } from '../../progression/guestRunProgress';
 import { guestRunClaimCopy } from '../../progression/guestRunClaimCopy';
+import { formatClearTime, formatPostRunBest, getPostRunBest } from '../../progression/postRunBest';
 import { GUEST_RUN_PROGRESS_CHANGED_EVENT, type GuestRunSaveResult } from '../../guestRooms/runService';
 import { REWARD_STINGS_IDLE_EVENT } from '../../progression/rewardStings';
 import { dispatchProgressionFeedback } from '../../progression/progressionFeedback';
@@ -498,7 +499,7 @@ export class RunRatingModalController {
     this.currentQualityStars = null;
     this.currentDifficultyChoice = null;
     this.submitting = false;
-    this.loadingSummary = false;
+    this.loadingSummary = true;
     this.savedProgression = null;
     this.savedDeltaText = null;
     this.baselineProgression = null;
@@ -508,10 +509,36 @@ export class RunRatingModalController {
     this.shareStatusText = null;
     this.shareStatusTone = 'default';
     this.setError(null);
-    this.loadToken += 1;
+    const loadToken = ++this.loadToken;
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.render();
+    void this.loadGuestLeaderboard(detail, loadToken);
+  }
+
+  private async loadGuestLeaderboard(detail: PostRunRatingRequestDetail, loadToken: number): Promise<void> {
+    try {
+      if (detail.contentType === 'room') {
+        const summary = await this.runRepository.loadRoomLeaderboard(detail.contentId, detail.roomCoordinates, detail.version, 5, true);
+        if (loadToken !== this.loadToken || this.activeRequest !== detail) return;
+        if (summary.roomId === detail.contentId && summary.roomVersion === detail.version) this.roomSummary = summary;
+      } else if (detail.contentType === 'expanded_room' || detail.expandedRoomId) {
+        const summary = await this.expandedRoomRepository.loadExpandedRoomLeaderboard(detail.expandedRoomId ?? detail.contentId, detail.version, 5);
+        if (loadToken !== this.loadToken || this.activeRequest !== detail) return;
+        if (summary.expandedRoomId === (detail.expandedRoomId ?? detail.contentId) && summary.expandedRoomVersion === detail.version) this.courseSummary = summary;
+      } else {
+        const summary = await this.courseRepository.loadCourseLeaderboard(detail.contentId, detail.version, 5);
+        if (loadToken !== this.loadToken || this.activeRequest !== detail) return;
+        if (summary.courseId === detail.contentId && summary.courseVersion === detail.version) this.courseSummary = summary;
+      }
+    } catch {
+      // Saving a clear remains available when its public leaderboard is offline.
+    } finally {
+      if (loadToken === this.loadToken && this.activeRequest === detail) {
+        this.loadingSummary = false;
+        this.render();
+      }
+    }
   }
 
   close(): void {
@@ -823,6 +850,7 @@ export class RunRatingModalController {
     const roomSummary = this.roomSummary;
     const courseSummary = this.courseSummary;
     const guestClaimMode = this.mode === 'guest-claim';
+    this.elements.modal?.classList.toggle('run-rating-modal--guest-clear', guestClaimMode);
     const summaryTitle = guestClaimMode
       ? 'You did it!'
       : request?.contentType === 'room'
@@ -835,9 +863,9 @@ export class RunRatingModalController {
       this.elements.title.textContent = summaryTitle;
     }
     if (this.elements.meta) {
-      this.elements.meta.classList.toggle('hidden', guestClaimMode);
+      this.elements.meta.classList.remove('hidden');
       if (guestClaimMode) {
-        this.elements.meta.textContent = '';
+        this.elements.meta.textContent = request ? formatPromptTitle(request) : '';
       } else if (request) {
         this.elements.meta.textContent =
           request.contentType === 'room'
@@ -850,12 +878,15 @@ export class RunRatingModalController {
       }
     }
     if (this.elements.result) {
-      this.elements.result.classList.toggle('hidden', guestClaimMode);
+      this.elements.result.classList.remove('hidden');
       this.elements.result.textContent = request ? formatRunResultSummary(request) : '';
     }
     if (this.elements.leaderboard) {
-      this.elements.leaderboard.classList.toggle('hidden', guestClaimMode);
-      this.elements.leaderboard.textContent = this.loadingSummary
+      this.elements.leaderboard.classList.remove('hidden');
+      const best = getPostRunBest(roomSummary ?? courseSummary) ?? request?.bestRun;
+      this.elements.leaderboard.textContent = guestClaimMode
+        ? formatPostRunBest(best, request?.elapsedMs ?? 0) || (this.loadingSummary ? 'Loading best run...' : roomSummary || courseSummary ? 'No ranked clears yet.' : 'Best run unavailable.')
+        : this.loadingSummary
         ? 'Loading latest leaderboard summary...'
         : formatLeaderboardSummary(roomSummary, courseSummary);
     }
@@ -1157,7 +1188,7 @@ function roomSnapshotMatchesCoordinates(
 
 function formatRunResultSummary(detail: PostRunRatingRequestDetail): string {
   const parts = [
-    formatElapsedMs(detail.elapsedMs),
+    formatClearTime(detail.elapsedMs),
     `${detail.deaths} death${detail.deaths === 1 ? '' : 's'}`,
   ];
   if (typeof detail.score === 'number') {
@@ -1188,13 +1219,6 @@ function formatPromptQueueStatus(
     return 'Skipped';
   }
   return isCurrent ? 'Now' : 'Waiting';
-}
-
-function formatElapsedMs(elapsedMs: number): string {
-  const totalSeconds = Math.max(0, Math.round(elapsedMs / 100) / 10);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds - minutes * 60;
-  return `${minutes}:${seconds.toFixed(1).padStart(4, '0')}`;
 }
 
 function formatLeaderboardSummary(

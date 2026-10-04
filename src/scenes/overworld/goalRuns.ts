@@ -21,6 +21,7 @@ import {
   type GoalRunStartPoint,
 } from './goalRunStartGate';
 import { suggestProgressionDifficulty } from '../../progression/autoDifficulty';
+import { getPostRunBest } from '../../progression/postRunBest';
 import {
   requestPostRunGuestClaim,
   requestPostRunRating,
@@ -1014,12 +1015,13 @@ export class OverworldGoalRunController {
       enemyCollectiblesCollected: runState.enemyCollectiblesCollected,
       verificationTrace: null,
     });
-    runState.submissionMessage = 'Guest clear saved on this browser.';
+    runState.submissionMessage = 'Clear could not be verified. Sign in and replay to earn XP.';
 
-    requestPostRunGuestClaim({
+    const detail: RoomPostRunRatingRequestDetail = {
       contentType: 'room',
       contentId: runState.roomId,
-      contentTitle: this.currentRoomLeaderboard?.roomTitle ?? null,
+      contentTitle: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? this.currentRoomLeaderboard!.roomTitle : null,
+      bestRun: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? getPostRunBest(this.currentRoomLeaderboard) : null,
       roomCoordinates: { ...runState.roomCoordinates },
       version: runState.roomVersion,
       previousViewerRank: null,
@@ -1033,7 +1035,9 @@ export class OverworldGoalRunController {
         enemiesDefeated: runState.enemiesDefeated,
         checkpointsReached: runState.checkpointsReached,
       }),
-    });
+    };
+    notifyRewardStings([createPostRunClearReward({ ...detail, guestProgress: null })]);
+    requestPostRunGuestClaim(detail);
   }
 
   private shouldPromptGuestClaimForLocalClear(runState: GoalRunState): boolean {
@@ -1192,6 +1196,7 @@ export class OverworldGoalRunController {
   private guestClearDetail(runState: GoalRunState, body: RunFinishRequestBody): RoomPostRunRatingRequestDetail {
     return { contentType: 'room', contentId: runState.roomId,
       contentTitle: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? this.currentRoomLeaderboard!.roomTitle : null,
+      bestRun: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? getPostRunBest(this.currentRoomLeaderboard) : null,
       roomCoordinates: { ...runState.roomCoordinates }, version: runState.roomVersion, previousViewerRank: null,
       elapsedMs: body.elapsedMs, deaths: body.deaths, score: body.score ?? null,
       autoSuggestedDifficulty: suggestProgressionDifficulty(body) };

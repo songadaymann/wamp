@@ -2,6 +2,7 @@ import type { RoomCoordinates } from '../persistence/roomModel';
 import type { ProgressionDifficulty } from './model';
 import type { GuestRunSaveResult } from '../guestRooms/runService';
 import { recordGuestRunClear } from './guestRunProgress';
+import type { PostRunBest } from './postRunBest';
 
 export const POST_RUN_RATING_REQUEST_EVENT = 'post-run-rating-request';
 export const POST_RUN_GUEST_CLAIM_REQUEST_EVENT = 'post-run-guest-claim-request';
@@ -19,6 +20,7 @@ interface BasePostRunRatingRequestDetail {
   score: number | null;
   autoSuggestedDifficulty: ProgressionDifficulty;
   guestProgress?: GuestRunSaveResult;
+  bestRun?: PostRunBest | null;
 }
 
 export interface RoomPostRunRatingRequestDetail extends BasePostRunRatingRequestDetail {

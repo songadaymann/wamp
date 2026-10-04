@@ -103,6 +103,7 @@ describe('ordinary guest playback lifecycle', () => {
     expect(h.startTrace).toHaveBeenCalledTimes(1); expect(h.clearTrace).toHaveBeenCalledTimes(1);
     expect(requestPostRunGuestClaim).toHaveBeenCalledTimes(1); expect(notifyRewardStings).toHaveBeenCalledTimes(1);
     expect(requestPostRunGuestClaim.mock.calls[0][0]).toMatchObject({ contentType: 'room', guestProgress: { status: 'queued' } });
+    expect(notifyRewardStings.mock.calls[0][0][0]).toMatchObject({ kind: 'room-clear', guestProgress: { status: 'queued' } });
     expect(h.repo.finish).not.toHaveBeenCalled(); expect(h.rankedStart).not.toHaveBeenCalled();
     pending.resolve(startResponse(vi.mocked(h.repo.start).mock.calls[0][0])); await settle();
     expect(h.goals.getCurrentRun()).toMatchObject({ submissionState: 'submitted', guestProgress: { status: 'saved' }, leaderboardEligible: false });
@@ -118,6 +119,14 @@ describe('ordinary guest playback lifecycle', () => {
   it('keeps draft playtests local and does not offer a saved guest clear', () => {
     const h = harness(); h.goals.syncRunForRoom({ ...room(), status: 'draft' }, 'spawn'); h.goals.markCompleted('Clear');
     expect(h.repo.start).not.toHaveBeenCalled(); expect(h.repo.finish).not.toHaveBeenCalled(); expect(requestPostRunGuestClaim).not.toHaveBeenCalled();
+  });
+  it('celebrates an ordinary local-only fallback once without pretending it is verified', () => {
+    const goals = new OverworldGoalRunController({ playerHeight: 26, runRepository: {} as RunRepository,
+      getAuthenticated: () => false, getAuthSource: () => null, getAuthDisplayName: () => null,
+      getScore: () => 0, countRoomObjectsByCategory: () => 1 });
+    goals.syncRunForRoom(room(), 'spawn'); goals.tick(1000); goals.markCompleted('Exit'); goals.markCompleted('Exit');
+    expect(notifyRewardStings).toHaveBeenCalledExactlyOnceWith([expect.objectContaining({ kind: 'room-clear', guestProgress: null, detail: '0:01.0 · 0 deaths · 0 pts' })]);
+    expect(requestPostRunGuestClaim).toHaveBeenCalledOnce(); expect(goals.getCurrentRun()?.submissionMessage).toContain('could not be verified');
   });
   it('keeps the original guest run when the player signs in during play', async () => {
     const h = harness(); h.goals.syncRunForRoom(room(), 'spawn'); auth.authenticated = true; h.goals.markCompleted('Clear'); await settle();
