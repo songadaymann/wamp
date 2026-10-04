@@ -1867,7 +1867,8 @@ export class EditorUiBridge {
   }
 
   private usesDesktopFeaturePanels(): boolean {
-    return this.doc.body.dataset.appMode === 'editor' && this.doc.body.dataset.deviceClass !== 'phone';
+    return this.doc.body.dataset.appMode === 'editor'
+      && (this.doc.body.dataset.deviceClass !== 'phone' || this.doc.body.dataset.editorDockShell === 'true');
   }
 
   private requestPhoneEditorAutoCollapse(): void {

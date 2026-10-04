@@ -73,7 +73,7 @@ try {
         if (scene.roomSession) scene.roomSession.maybeAutoSave = () => {};
         if (document.querySelector('#auth-panel.menu-open')) document.getElementById('menu-toggle')?.click();
       });
-      const prefix = name.startsWith('phone') ? '#mobile-editor-nav ' : '.editor-shell-tools ';
+      const prefix = name.startsWith('phone') ? '#editor-shell-phone-bar ' : '.editor-shell-tools ';
       const undo = page.locator(`${prefix}[data-editor-history="undo"]`);
       const redo = page.locator(`${prefix}[data-editor-history="redo"]`);
       for (const button of [undo, redo]) {

@@ -15,12 +15,14 @@ function reduce(
 }
 
 describe('editor dock shell state', () => {
-  it('uses the same desktop dock for ordinary and expanded room editing', () => {
+  it('uses the same dock model for ordinary and expanded rooms on every device', () => {
     const doc = { body: { dataset: { appMode: 'editor', deviceClass: 'desktop' } } } as unknown as Document;
     expect(isEditorDockShellActive(doc)).toBe(true);
     doc.body.dataset.editorCourseMode = 'true';
     expect(isEditorDockShellActive(doc)).toBe(true);
     doc.body.dataset.deviceClass = 'phone';
+    expect(isEditorDockShellActive(doc)).toBe(true);
+    doc.body.dataset.appMode = 'world';
     expect(isEditorDockShellActive(doc)).toBe(false);
   });
 

@@ -218,6 +218,7 @@
       <div id="editor-drawer-header" class="editor-drawer-header" tabindex="-1" aria-hidden="true">
         <div id="editor-drawer-title" class="editor-drawer-title">Terrain</div>
       </div>
+      <div id="editor-phone-tools"></div>
       <div id="editor-drawer-room-tabs" class="editor-drawer-room-tabs" aria-label="Room settings">
         <button class="editor-drawer-tab" type="button" data-editor-room-section="background">Background</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="camera">Camera</button>
@@ -1241,6 +1242,12 @@
     </div>
 
     <div id="editor-shell-top" class="editor-shell-top" aria-label="Room editor controls">
+      <div id="editor-shell-phone-bar" aria-label="Editing actions">
+        <button id="btn-editor-phone-menu" class="editor-shell-chunky-button" type="button" aria-controls="editor-phone-menu" aria-expanded="false">More</button>
+      </div>
+      <div id="editor-phone-menu" class="hidden" role="dialog" aria-label="Room and sharing" aria-hidden="true">
+        <button id="btn-editor-phone-account" class="editor-shell-chunky-button" type="button">Account &amp; menu</button>
+      </div>
       <div class="editor-shell-tools" aria-label="Drawing tools">
         <button class="editor-shell-chunky-button" data-editor-history="undo" type="button" title="Undo (Cmd/Ctrl+Z)" disabled><span aria-hidden="true">&#8630;</span><span>Undo</span></button>
         <button class="editor-shell-chunky-button" data-editor-history="redo" type="button" title="Redo (Cmd/Ctrl+Shift+Z or Ctrl+Y)" disabled><span aria-hidden="true">&#8631;</span><span>Redo</span></button>

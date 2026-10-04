@@ -417,7 +417,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.equal(await terrain.getAttribute('aria-expanded'), 'true');
   assert.equal(await page.locator('[data-builder-mode-choice="beginner"]').isVisible(), true);
   assert.equal(await page.locator('[data-builder-mode-choice="advanced"]').isVisible(), true);
-  assert.equal(await page.locator('[data-smart-theme-id]').count(), 5);
+  assert.deepEqual(await page.locator('[data-smart-theme-id]').evaluateAll(buttons => buttons.map(button => button.dataset.smartThemeId)), ['forest', 'desert', 'cave', 'gothic', 'cyber', 'wampos95']);
   assert.ok(await page.locator('[data-smart-brush-id]').count() >= 4);
   assert.equal(await page.locator('[data-smart-brush-id]').allTextContents().then((labels) => labels.includes('Tree Canopy')), true);
   const drawerHeaderBox = await page.locator('#editor-drawer-header').boundingBox();
@@ -793,6 +793,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
   assert.equal(await page.locator('button[data-editor-room-section="sprite"]').getAttribute('aria-pressed'), 'true');
   await page.locator('button[data-editor-room-section="sprite"]').click();
+  await page.waitForFunction(() => document.activeElement?.id === 'editor-sprite-name');
   await page.locator('#btn-editor-sprite-pencil').focus();
   await page.keyboard.press('e');
   assert.equal(await page.locator('#btn-editor-sprite-eraser').getAttribute('aria-pressed'), 'true');
@@ -1038,9 +1039,11 @@ try {
       return window.run_preview_smoke_action?.('openSyntheticEditor');
     });
     await phonePage.waitForFunction(() => document.body.dataset.appMode === 'editor');
-    assert.equal(await phonePage.evaluate(() => document.body.dataset.editorDockShell ?? null), null);
-    assert.equal(await phonePage.locator('#mobile-editor-nav').isVisible(), true);
-    await phonePage.screenshot({ path: path.join(outputDir, 'phone-editor-unchanged.png') });
+    assert.equal(await phonePage.evaluate(() => document.body.dataset.editorDockShell), 'true');
+    assert.equal(await phonePage.locator('#mobile-editor-nav').isVisible(), false);
+    assert.equal(await phonePage.locator('#editor-shell-phone-bar').isVisible(), true);
+    assert.equal(await phonePage.locator('#editor-shell-dock').isVisible(), true);
+    await phonePage.screenshot({ path: path.join(outputDir, 'phone-editor-dock.png') });
     await navigateToTarget(phonePage);
     await phonePage.waitForFunction(() => document.body.dataset.appReady === 'true', undefined, { timeout: 120_000 });
     const phoneCourseOpened = await phonePage.evaluate(() => {
@@ -1049,9 +1052,11 @@ try {
     });
     assert.equal(phoneCourseOpened?.ok, true);
     await phonePage.waitForFunction(() => document.body.dataset.editorCourseMode === 'true');
-    assert.equal(await phonePage.evaluate(() => document.body.dataset.editorDockShell ?? null), null);
-    assert.equal(await phonePage.locator('#mobile-editor-nav').isVisible(), true);
-    await phonePage.screenshot({ path: path.join(outputDir, 'phone-expanded-editor-unchanged.png') });
+    assert.equal(await phonePage.evaluate(() => document.body.dataset.editorDockShell), 'true');
+    assert.equal(await phonePage.locator('#mobile-editor-nav').isVisible(), false);
+    assert.equal(await phonePage.locator('#editor-shell-phone-bar').isVisible(), true);
+    assert.equal(await phonePage.locator('#editor-shell-dock').isVisible(), true);
+    await phonePage.screenshot({ path: path.join(outputDir, 'phone-expanded-editor-dock.png') });
     await phoneContext.close();
   }
 
