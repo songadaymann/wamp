@@ -50,6 +50,13 @@ function startResponse(row: GuestRunRow): GuestRunStartResponse {
     verificationSchemaVersion: RANKED_RUN_TRACE_SCHEMA_VERSION, verificationNonce: row.verification_nonce,
     snapshotHash: row.snapshot_hash };
 }
+export async function findGuestRunStart(env: Env, identity: GuestRunIdentity, clientRunId: string): Promise<GuestRunStartResponse> {
+  const row = await env.DB.prepare(`SELECT * FROM guest_run_attempts
+    WHERE guest_user_id = ? AND recovery_token_hash = ? AND client_run_id = ?`)
+    .bind(identity.guestUserId, identity.recoveryTokenHash, clientRunId).first<GuestRunRow>();
+  if (!row) throw new HttpError(404, 'Guest run start not found.');
+  return startResponse(row);
+}
 async function existingStart(env: Env, identity: GuestRunIdentity, body: GuestRunStartBody): Promise<GuestRunRow | null> {
   const row = await env.DB.prepare(`SELECT * FROM guest_run_attempts
     WHERE guest_user_id = ? AND recovery_token_hash = ? AND client_run_id = ?`)

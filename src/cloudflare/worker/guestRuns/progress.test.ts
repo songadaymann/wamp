@@ -171,6 +171,18 @@ describe('verified guest progress and account claims on the real schema', () => 
     room.goal = { type: 'collect_target', requiredCount: 10, timeLimitMs: null }; putRoom(room);
     at(1000); expect((await finishGuestRun(env, identity, starts[0].attemptId, request(resultBody(starts[0])))).saved).toBe(true);
   });
+  it('recovers only an existing original start by client id, protected by the recovery identity', async () => {
+    const body = startBody(); const started = await startGuestRun(env, identity, body);
+    const path = `/api/guest-runs/by-client/${body.clientRunId}`;
+    const lookup = (headers = HEADERS, lookupPath = path) => handleGuestRunRequest(
+      new Request(`https://api.wamp.land${lookupPath}`, { headers }), new URL(`https://api.wamp.land${lookupPath}`), env);
+    expect(await (await lookup()).json()).toEqual(started);
+    await expect(lookup({ ...HEADERS, 'X-Guest-Recovery-Token': 'b'.repeat(64) })).rejects.toMatchObject({ status: 404 });
+    await expect(lookup(HEADERS, `/api/guest-runs/by-client/${crypto.randomUUID()}`)).rejects.toMatchObject({ status: 404 });
+    expect(read('SELECT COUNT(*) AS count FROM guest_run_attempts')?.count).toBe(1);
+    const completed = await finishGuestRun(env, identity, started.attemptId, request(resultBody(started)));
+    expect(completed.saved).toBe(true); expect(await (await lookup()).json()).toEqual(started);
+  });
   it('uses the real verifier and derived metrics, leaving all ranked tables empty', async () => {
     const completed = await complete(); expect(completed.response.saved).toBe(true);
     const stored = read('SELECT metrics_json, snapshot_json, recovery_token_hash FROM guest_run_attempts');

@@ -1,4 +1,6 @@
 const GUEST_RECOVERY_TOKEN_STORAGE_KEY = 'ep_guest_recovery_token_v1';
+const volatileTokens = new WeakMap<Storage, string>();
+let unavailableStorageToken: string | null = null;
 
 export function resolveGuestRecoveryToken(storage: Storage | null = getLocalStorage()): string {
   try {
@@ -10,12 +12,14 @@ export function resolveGuestRecoveryToken(storage: Storage | null = getLocalStor
     // Fall through to a new volatile token.
   }
 
-  const token = createRecoveryToken();
+  const token = storage ? volatileTokens.get(storage) ?? createRecoveryToken()
+    : unavailableStorageToken ?? createRecoveryToken();
   try {
     storage?.setItem(GUEST_RECOVERY_TOKEN_STORAGE_KEY, token);
   } catch {
-    // A volatile token is still better than blocking guest editing.
+    if (storage) volatileTokens.set(storage, token);
   }
+  if (!storage) unavailableStorageToken = token;
   return token;
 }
 

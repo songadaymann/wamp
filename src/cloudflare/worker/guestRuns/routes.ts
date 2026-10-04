@@ -2,7 +2,7 @@ import { requireAuthenticatedRequestAuth, requireTrustedOriginForMutation } from
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { assertWampLeaderboardWriteAllowed } from '../generatedUsers/leaderboardIsolation';
-import { finishGuestRun, parseGuestRunStart, startGuestRun, validGuestRequestId } from './attempts';
+import { findGuestRunStart, finishGuestRun, parseGuestRunStart, startGuestRun, validGuestRequestId } from './attempts';
 import { claimGuestRuns } from './claims';
 import { guestRunIdentity, limitGuestRunRequest } from './identity';
 import { listClaimedGuestClears, listPendingGuestClears } from './history';
@@ -13,6 +13,11 @@ export async function handleGuestRunRequest(request: Request, url: URL, original
   const identity = await guestRunIdentity(request);
   if (url.pathname === '/api/guest-runs/mine' && request.method === 'GET') {
     return jsonResponse(request, await listPendingGuestClears(env, identity));
+  }
+  const lookup = /^\/api\/guest-runs\/by-client\/([a-f0-9-]{36})$/i.exec(url.pathname);
+  if (lookup && validGuestRequestId(lookup[1]) && request.method === 'GET') {
+    await limitGuestRunRequest(env, request, identity, 'start');
+    return jsonResponse(request, await findGuestRunStart(env, identity, lookup[1]));
   }
   if (url.pathname === '/api/guest-runs/start' && request.method === 'POST') {
     await limitGuestRunRequest(env, request, identity, 'start');

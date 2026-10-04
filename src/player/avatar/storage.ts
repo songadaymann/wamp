@@ -20,12 +20,14 @@ export function getRequestedPlayerAvatarId(): PlayerAvatarId | null {
 }
 
 export function getStoredPlayerAvatarId(): PlayerAvatarId | null {
-  if (typeof window === 'undefined' || !window.localStorage) {
+  try {
+    if (typeof window === 'undefined') return null;
+    const stored = window.localStorage?.getItem(PLAYER_AVATAR_STORAGE_KEY);
+    return typeof stored === 'string' && stored.trim().length > 0 ? stored.trim() : null;
+  } catch {
+    // Guest play and recovery can use the default avatar when browser storage is blocked.
     return null;
   }
-
-  const stored = window.localStorage.getItem(PLAYER_AVATAR_STORAGE_KEY);
-  return typeof stored === 'string' && stored.trim().length > 0 ? stored.trim() : null;
 }
 
 export function setStoredPlayerAvatarId(avatarId: PlayerAvatarId | null): void {
