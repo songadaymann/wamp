@@ -22,6 +22,7 @@ export class RoomInsightsController {
   private openingEditorKey: string | null = null;
   private mappedKey: string | null = null;
   private returnFocus: HTMLElement | null = null;
+  private readonly blockedKeys = new Set<string>();
   constructor(private readonly game: Phaser.Game, private readonly doc: Document = document, private readonly win: Window = window,
     private readonly load = loadRoomInsights) {
     this.modal = doc.getElementById('room-insights-modal'); this.closeButton = doc.getElementById('btn-room-insights-close');
@@ -36,6 +37,7 @@ export class RoomInsightsController {
     this.win.addEventListener('room-insights-open',this.onOpen); this.win.addEventListener(EDITOR_UI_STATE_CHANGED_EVENT,this.onEditorChange);
     this.win.addEventListener(APP_MODE_CHANGED_EVENT,this.onEditorChange);
     this.doc.addEventListener('click',this.onEditorClick); this.win.addEventListener('keydown',this.onKeydown,true);
+    this.win.addEventListener('keyup',this.onKeyup,true);
   }
   destroy(): void {
     this.close(); this.clearMap(); this.lifecycle.detach();
@@ -44,6 +46,7 @@ export class RoomInsightsController {
     this.win.removeEventListener(EDITOR_UI_STATE_CHANGED_EVENT,this.onEditorChange); this.doc.removeEventListener('click',this.onEditorClick);
     this.win.removeEventListener(APP_MODE_CHANGED_EVENT,this.onEditorChange);
     this.win.removeEventListener('keydown',this.onKeydown,true);
+    this.win.removeEventListener('keyup',this.onKeyup,true); this.blockedKeys.clear();
   }
   private currentEditor(): InsightScene | null {
     if (this.doc.body.dataset.appMode !== 'editor') return null;
@@ -83,12 +86,25 @@ export class RoomInsightsController {
   private readonly onMappedExit = () => this.clearMap();
   private readonly onKeydown = (event: KeyboardEvent) => {
     if (!this.lifecycle.isOpen()) return;
+    this.blockedKeys.add(event.code);
     event.stopImmediatePropagation();
     if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); this.close(); return; }
+    const active = this.doc.activeElement;
+    if ((event.key === ' ' || event.key === 'Enter') && this.modal?.contains(active)
+      && (active === this.toggle || active instanceof HTMLButtonElement)) {
+      event.preventDefault();
+      if (!(active as HTMLInputElement | HTMLButtonElement).disabled && !event.repeat) (active as HTMLElement).click();
+      return;
+    }
     if (event.key !== 'Tab') return;
     const items = Array.from(this.modal?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)') ?? []).filter(el => el.getClientRects().length);
-    if (event.shiftKey && this.doc.activeElement === items[0]) { event.preventDefault(); items.at(-1)?.focus(); }
-    else if (!event.shiftKey && this.doc.activeElement === items.at(-1)) { event.preventDefault(); items[0]?.focus(); }
+    event.preventDefault();
+    const index = items.indexOf(active as HTMLElement);
+    items[(index + (event.shiftKey ? -1 : 1) + items.length) % items.length]?.focus();
+  };
+  private readonly onKeyup = (event: KeyboardEvent) => {
+    if (!this.blockedKeys.delete(event.code)) return;
+    event.preventDefault(); event.stopImmediatePropagation();
   };
   private readonly onEditorChange = () => {
     if (this.lifecycle.isOpen() && this.editorSource && (this.currentEditor() !== this.editorSource || JSON.stringify(this.editorSource.getRoomInsightsTarget()) !== this.openingEditorKey)) this.close();
