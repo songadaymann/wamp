@@ -803,7 +803,8 @@ export class RunRatingModalController {
         this.savedProgression = response.progression;
         this.savedDeltaText = formatProgressionDelta(response.progressionDelta);
         await this.baselineProgressionLoad;
-        await this.ensureCurrentSummary(request);
+        if (!isCurrent()) return;
+        await this.ensureCurrentSummary(request, isCurrent);
         if (!isCurrent()) return;
         if (authUserId) {
           saveSeenRewardProgression(authUserId, response.progression);
@@ -829,7 +830,8 @@ export class RunRatingModalController {
         this.savedProgression = response.progression;
         this.savedDeltaText = formatProgressionDelta(response.progressionDelta);
         await this.baselineProgressionLoad;
-        await this.ensureCurrentSummary(request);
+        if (!isCurrent()) return;
+        await this.ensureCurrentSummary(request, isCurrent);
         if (!isCurrent()) return;
         if (authUserId) {
           saveSeenRewardProgression(authUserId, response.progression);
@@ -1185,25 +1187,26 @@ export class RunRatingModalController {
         : 'Rated a room';
   }
 
-  private async ensureCurrentSummary(request: PostRunRatingRequestDetail): Promise<void> {
+  private async ensureCurrentSummary(request: PostRunRatingRequestDetail, isCurrent: () => boolean): Promise<void> {
     try {
       if (request.contentType === 'room') {
         if (this.roomSummary) {
           return;
         }
-        this.roomSummary = await this.runRepository.loadRoomLeaderboard(
+        const summary = await this.runRepository.loadRoomLeaderboard(
           request.contentId,
           request.roomCoordinates,
           request.version,
           5,
         );
+        if (isCurrent()) this.roomSummary = summary;
         return;
       }
 
       if (this.courseSummary) {
         return;
       }
-      this.courseSummary = request.contentType === 'expanded_room' || request.expandedRoomId
+      const summary = request.contentType === 'expanded_room' || request.expandedRoomId
         ? await this.expandedRoomRepository.loadExpandedRoomLeaderboard(
             request.expandedRoomId ?? request.contentId,
             request.version,
@@ -1214,6 +1217,7 @@ export class RunRatingModalController {
             request.version,
             5,
           );
+      if (isCurrent()) this.courseSummary = summary;
     } catch {
       // Reward rank stings can silently skip when the summary is unavailable.
     }
