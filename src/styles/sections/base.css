@@ -82,6 +82,11 @@ body {
   user-select: none;
 }
 
+/* Retain the startup cover while placing ready-world imagery below the interface. */
+body[data-app-ready='true'] {
+  --wamp-early-world-tiles-z-index: 1;
+}
+
 #shell-root {
   min-height: 100vh;
 }

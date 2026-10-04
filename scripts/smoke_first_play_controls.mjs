@@ -41,6 +41,13 @@ async function checkGuide(page, touch) {
     const box = await page.locator(selector).boundingBox();
     assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= page.viewportSize().width + 1 && box.y + box.height <= page.viewportSize().height + 1, `${selector} clipped: ${JSON.stringify(box)}`);
   }
+  const layers = await page.evaluate(() => {
+    const modalZ = Number(getComputedStyle(document.getElementById('room-goal-intro-modal')).zIndex);
+    return [...document.querySelectorAll('[data-wamp-early-world-tiles]')].map(layer => ({
+      mapZ: Number(getComputedStyle(layer).zIndex), modalZ,
+    }));
+  });
+  for (const layer of layers) assert.ok(layer.mapZ < layer.modalZ, `Startup map covers controls: ${JSON.stringify(layer)}`);
   return text;
 }
 async function moveAndJump(page, context, touch) {

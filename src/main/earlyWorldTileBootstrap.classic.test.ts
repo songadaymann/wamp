@@ -189,7 +189,7 @@ describe('classic early world tile bootstrap', () => {
       top: '0px',
       width: '1440px',
       height: '864px',
-      zIndex: '139',
+      zIndex: 'var(--wamp-early-world-tiles-z-index, 139)',
       pointerEvents: 'none',
       background: 'transparent',
     });

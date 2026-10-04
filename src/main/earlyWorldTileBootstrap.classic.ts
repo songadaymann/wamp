@@ -453,7 +453,7 @@ export function getEarlyWorldTileLayerStyle(
     top: `${rect.top}px`,
     width: `${rect.width}px`,
     height: `${rect.height}px`,
-    zIndex: '139',
+    zIndex: 'var(--wamp-early-world-tiles-z-index, 139)',
     overflow: 'hidden',
     pointerEvents: 'none',
     contain: 'strict',
