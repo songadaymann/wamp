@@ -31,9 +31,28 @@ try {
       localStorage.setItem('wamp.devicePerformanceMode.v1', JSON.stringify({ version: 1, mode: 'full-quality' }));
     });
     const page = await context.newPage(); activePage = page;
+    const pendingLeaderboards = new Set(); let leaderboardChangedAt = 0;
+    const leaderboardRequest = request => new URL(request.url()).pathname.startsWith('/api/leaderboards/');
+    page.on('request', request => { if (leaderboardRequest(request)) { pendingLeaderboards.add(request); leaderboardChangedAt = Date.now(); } });
+    const finished = request => { if (pendingLeaderboards.delete(request)) leaderboardChangedAt = Date.now(); };
+    page.on('requestfinished', finished); page.on('requestfailed', finished);
+    const settleLeaderboards = async () => {
+      const deadline = Date.now() + 20000;
+      while (pendingLeaderboards.size || Date.now() - leaderboardChangedAt < 500) {
+        assert.ok(Date.now() < deadline, 'Public leaderboard reads must finish before leaving the fixture page');
+        await page.waitForTimeout(100);
+      }
+    };
     let deliberateError = false, seen = false;
     let prefs = { weeklyDigest: false, dethroneAlerts: false, emailAvailable: true };
     if (fixtures) {
+      await page.route('**/api/**', route => {
+        const request = route.request(), path = new URL(request.url()).pathname;
+        if (!['GET', 'OPTIONS'].includes(request.method()) && path !== '/api/rooms/snapshots/query') {
+          return route.fulfill({ status: 403, json: { error: 'Private UI fixture cannot write to the production API.' } });
+        }
+        return route.fallback();
+      });
       await page.route('**/api/auth/session', route => route.fulfill({ json: data.session }));
       await page.route('**/api/profiles/f123-builder*', route => route.fulfill({ json: data.profile }));
       await page.route('**/api/me/activity**', async route => {
@@ -47,6 +66,12 @@ try {
       await page.route('**/api/presence/identity*', route => route.fulfill({ status: 403, json: { error: 'Fixture presence disabled.' } }));
       await page.route('**/api/settings/me', route => route.fulfill({ json: { settings: null, updatedAt: null } }));
       await page.route('**/api/me/guest-progress', route => route.fulfill({ json: { clears: [], claims: [] } }));
+      await page.route('**/api/runs/start', route => {
+        const body = route.request().postDataJSON();
+        return route.fulfill({ json: { attemptId: crypto.randomUUID(), roomId: body.roomId, roomVersion: body.roomVersion,
+          goalType: body.goal.type, startedAt: new Date().toISOString(), userId: 'f123-builder', userDisplayName: 'Activity Builder',
+          verificationSchemaVersion: 1, verificationNonce: 'private-ui-fixture', snapshotHash: 'private-ui-fixture' } });
+      });
     }
     page.on('pageerror', error => report.errors.push({ name, message: error.message }));
     page.on('console', message => {
@@ -58,6 +83,7 @@ try {
     });
     await page.goto(`${base}/?welcome=0`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 });
+    if (fixtures) await settleLeaderboards();
     const entry = await page.locator('script[type="module"]').first().getAttribute('src'); report.documents.push({ name, entry });
     if (process.env.EXPECTED_ENTRY) assert.equal(entry, process.env.EXPECTED_ENTRY);
     await page.waitForFunction(() => document.getElementById('activity-unread-count')?.textContent === '36');
@@ -100,14 +126,17 @@ try {
     await page.locator('#btn-activity-retry').waitFor({ state: 'visible' }); assert.ok((await page.locator('#activity-status').textContent()).includes('could not load'));
     await click(page, '#btn-activity-retry', touch); await page.waitForFunction(() => document.querySelectorAll('#activity-list li').length === 30);
     await page.unroute(match, failure);
+    if (fixtures) await settleLeaderboards();
     await page.goto(`${base}/?welcome=0&activity=1`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.querySelectorAll('#activity-list li').length === 30);
     assert.equal(await page.locator('#activity-modal').isVisible(), true, 'Email link must open the signed-in inbox');
+    if (fixtures) { await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 }); await settleLeaderboards(); }
     const link = page.locator('#activity-list a').first(); await link.scrollIntoViewIfNeeded();
     await page.waitForTimeout(400); await (touch ? link.tap() : link.click());
     await page.waitForURL('**/r/-11/-6'); await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 });
     await page.locator('#room-goal-intro-modal').waitFor({ state: 'visible' });
     assert.ok((await page.locator('#room-goal-intro-title').textContent()).includes('de ja vu 1'));
+    if (fixtures) await settleLeaderboards();
     await page.screenshot({ path: `${output}/${name}-room-link.png` });
     report.scenarios.push({ name, pass: true, checks: ['44px bell', 'private history', 'snapshot read', 'pagination', 'saved opt-in/out', 'profile entry', 'Escape', 'offline retry', 'email inbox link', 'real public room link'], unexpectedErrors: report.errors.filter(error => error.name === name).length });
     await context.close();
