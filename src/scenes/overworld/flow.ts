@@ -400,7 +400,7 @@ export class OverworldSceneFlowController {
     this.scene.scene.sleep();
   }
 
-  async openEditor(editorData: EditorSceneData): Promise<void> {
+  async openEditor(editorData: EditorSceneData, canOpen: () => boolean = () => true): Promise<void> {
     showBusyOverlay('Opening editor...', 'Loading room...');
     try {
       await ensureEditorScenesRegistered(this.scene.game);
@@ -408,6 +408,8 @@ export class OverworldSceneFlowController {
       showBusyError(error instanceof Error ? error.message : 'Failed to load the room editor.');
       return;
     }
+
+    if (!canOpen()) { hideBusyOverlay(); return; }
 
     if (
       this.scene.scene.isActive('EditorScene')

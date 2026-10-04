@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 28 of 214 done.**
+**Progress: 29 of 214 done.**
 
 ## How to use this file
 
@@ -43,7 +43,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 5. **Switch the fast world map back on, safely** ✅ (F003, F010). Compatible pre-rendered imagery is active again. Tile work stays within the current viewport and bounded metadata; strict production smoke, direct outage/recovery emails and blocking production release compatibility checks protect the restored map.
 6. **Same jump on every screen, and cap phones at 60fps** (F138, F002). On 120/144Hz screens, quick-tap jumps come out lower, ice slides shorter, and jumps in gravity zones are about half as tall. Rooms get easier or harder depending on the device, and leaderboards aren't fair. A careful cap just above 60fps also cuts heat and battery drain on high-refresh phones.
 7. **Make building on phones and tablets stop fighting you** ✅ (F079, F157, F161, F158). Pinch cancellation and touch shapes are delivered in both editors (PR #40), along with Undo/Redo (PR #39). The shared phone dock, persistent Test/Publish, scoped libraries and touch Spawn cancellation are delivered (PR #41). Phone object settings, Done and link Cancel are delivered in both editors (PR #42), including expanded character settings.
-8. **Fix the first five minutes** (F093, F122, F126, F104). These are the moments that decide whether a visitor stays: - A shared room link opens the Welcome box on top of the room-goal box. - New players never see the controls before the timer starts. - 'Save Progress' doesn't actually keep a guest's clears when they sign up. - The Welcome box's Play, Explore and Build buttons don't lead anywhere obvious.
+8. **Fix the first five minutes** (F093, F122, F126, F104). Shared links now show only the room-goal intro, with Welcome deferred until Stop (PR #43). Remaining: first-play control guidance, guest progress carry-over at sign-in, and clearer Welcome destinations.
 9. **Security/safety priority** (F198, F201, F199, F200, F026). Details withheld from this public repo until fixed.
 10. **Security/safety priority** (F182, F184, F183). Details withheld from this public repo until fixed.
 
@@ -218,7 +218,7 @@ WAMP's retro look is distinctive. These items make the main actions obvious, fin
 
 What happens in a newcomer's first five minutes, and what brings players and builders back. These are the highest-leverage product moves for growth.
 
-- [ ] **F093** Shared room links stack the Welcome modal over the room-goal modal; the run timer ticks under it · high impact · small effort
+- [x] **F093** Shared room links stack the Welcome modal over the room-goal modal; the run timer ticks under it · high impact · small effort — **done 2026-10-04** (`ce144c6e`). Automatic Welcome waits for readiness and defers synchronously on Play without persisting dismissal. Native desktop/phone shared/home Start/timer/Stop/reload and modal traces pass on actual wamp.land; home onboarding remains intact.
 - [ ] **F122** Signing up throws away a guest's clears, even though the game says 'Save Progress' · high impact · medium effort
 - [ ] **F126** Welcome 'Play' runs one room, 'Explore' just closes the window, and 'Build' drops you into an empty room (also covers F097) · medium impact · medium effort
 - [ ] **F125** Explore's default 'Featured' tab has nothing featured, and 88% of rooms have no rating, so discovery is mostly noise · high impact · small effort

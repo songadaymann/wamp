@@ -6,7 +6,6 @@ import { buildLaneSummary } from './shared';
 import {
   loadOrBackfillUserProgress,
   loadUserIdentityRow,
-  upsertUserProgressRow,
 } from './progressRows';
 import { loadBuilderCapabilitySummary, loadEffectiveTrustState } from './trustCaps';
 
@@ -164,7 +163,7 @@ export async function updateAdminBuilderCapOverride(
     operatorLabel: string;
   },
 ): Promise<AdminProgressionIdentitySummary> {
-  const progress = await loadOrBackfillUserProgress(env, params.userId);
+  await loadOrBackfillUserProgress(env, params.userId);
   const claimLimitPerDay = sanitizeOptionalOverride(params.claimLimitPerDay);
   const publishLimitPerDay = sanitizeOptionalOverride(params.publishLimitPerDay);
   const objectLimit = sanitizeOptionalOverride(params.objectLimit);
@@ -180,18 +179,13 @@ export async function updateAdminBuilderCapOverride(
   const normalizedReason = params.reason?.trim() ? params.reason.trim() : null;
   const normalizedOperator = params.operatorLabel.trim() || 'Admin';
 
-  await upsertUserProgressRow(env, {
-    ...progress,
-    builder_claim_limit_override: claimLimitPerDay,
-    builder_publish_limit_override: publishLimitPerDay,
-    builder_object_limit_override: objectLimit,
-    builder_collectible_limit_override: collectibleLimit,
-    builder_expanded_room_cell_limit_override: expandedRoomCellLimit,
-    builder_cap_override_reason: overrideActive ? normalizedReason : null,
-    builder_cap_override_updated_at: overrideActive ? now : null,
-    builder_cap_override_updated_by: overrideActive ? normalizedOperator : null,
-    updated_at: now,
-  });
+  await env.DB.batch([env.DB.prepare(`UPDATE user_progress SET builder_claim_limit_override = ?,
+    builder_publish_limit_override = ?, builder_object_limit_override = ?, builder_collectible_limit_override = ?,
+    builder_expanded_room_cell_limit_override = ?, builder_cap_override_reason = ?,
+    builder_cap_override_updated_at = ?, builder_cap_override_updated_by = ?, updated_at = ? WHERE user_id = ?`)
+    .bind(claimLimitPerDay, publishLimitPerDay, objectLimit, collectibleLimit, expandedRoomCellLimit,
+      overrideActive ? normalizedReason : null, overrideActive ? now : null,
+      overrideActive ? normalizedOperator : null, now, params.userId)]);
 
   return loadAdminProgressionUser(env, params.userId);
 }

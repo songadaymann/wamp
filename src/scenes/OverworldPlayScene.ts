@@ -266,6 +266,8 @@ import {
   type RankedRunTraceFrameInput,
 } from './overworld/rankedRunTraceRecorder';
 import type { RankedRunVerificationTrace } from '../runs/verificationTrace';
+import { GuestRunPlaybackController } from './overworld/guestRunPlayback';
+import { GUEST_RUN_PROGRESS_CHANGED_EVENT, type GuestRunSaveResult } from '../guestRooms/runService';
 import {
   getScrollForScreenAnchor,
   type CameraMode,
@@ -531,6 +533,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly browseOverlayController: OverworldBrowseOverlayController;
   private readonly roomCellController: OverworldRoomCellController;
   private readonly coursePlaybackController: OverworldCoursePlaybackController;
+  private readonly guestRunPlaybackController: GuestRunPlaybackController;
   private readonly goalMarkerController: OverworldGoalMarkerController;
   private readonly cameraController: OverworldCameraController;
   private readonly runtimeController: OverworldRuntimeController<LoadedRoomObject>;
@@ -618,9 +621,16 @@ export class OverworldPlayScene extends Phaser.Scene {
       showTransientStatus: (message) => this.showTransientStatus(message),
     });
     const thisScene = this;
+    const guestRuns = this.guestRunPlaybackController = new GuestRunPlaybackController({
+      getCurrentRun: kind => kind === 'room' ? this.goalRunController?.getCurrentRun() ?? null : this.activeCourseRun,
+      startTrace: (kind, binding) => this.startRankedRunTrace(kind, binding),
+      clearTrace: () => this.clearRankedRunTrace(),
+      renderHud: () => this.renderHud(),
+    });
     this.goalRunController = new OverworldGoalRunController({
       playerHeight: this.PLAYER_HEIGHT,
       runRepository: createRunRepository(),
+      guestRuns,
       getScore: () => this.score,
       getAuthenticated: () => getAuthDebugState().authenticated,
       getAuthSource: () => getAuthDebugState().source ?? null,
@@ -1116,6 +1126,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.worldStreamingController.waitForBrowseCommentDiscoveryReady(signal),
     });
     this.coursePlaybackController = new OverworldCoursePlaybackController({
+      guestRuns,
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getActiveCourseRun: () => this.activeCourseRun,
       setActiveCourseRun: (runState) => {
@@ -1395,6 +1406,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         shouldCollidePlayerWithTerrainTile: (tile) =>
           this.specialTilesController.shouldCollidePlayerWithTerrainTile(tile),
         createPlayer: (room) => this.createPlayer(room),
+        afterCoursePlayerSpawn: () => this.coursePlaybackController.startGuestRunAfterSpawn(),
         destroyPlayer: () => this.destroyPlayer(),
         syncAppMode: () => this.syncAppMode(),
         setCameraMode: (mode) => {
@@ -2171,6 +2183,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.initializeRoomChatClient();
     this.initializeRoomComments();
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
+    window.addEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestRunProgressChanged);
     window.addEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
     this.syncBackdropCameraIgnores();
 
@@ -3022,6 +3035,13 @@ export class OverworldPlayScene extends Phaser.Scene {
     );
     this.resetPerformanceAdvisorEvidence('room-transition', atMs);
   }
+  private readonly handleGuestRunProgressChanged = (event: Event): void => {
+    const result = (event as CustomEvent<GuestRunSaveResult>).detail;
+    if (result?.clientRunId && ['saved', 'queued', 'unverified'].includes(result.status)) {
+      this.guestRunPlaybackController.refreshProgress(result);
+    }
+  };
+
   private readonly handleAuthStateChanged = (): void => {
     const identityChanged = this.presenceController.refreshIdentity();
     const roomChatIdentityChanged = this.roomChatController.refreshIdentity();
@@ -4601,6 +4621,12 @@ export class OverworldPlayScene extends Phaser.Scene {
       return null;
     }
 
+    if (result === 'completed') {
+      const frame = this.getCurrentRankedRunTraceFrame();
+      if (frame) this.rankedRunTraceRecorder.recordGoalEvent({ type: 'complete', actor: 'player',
+        roomId: roomIdFromCoordinates(frame.roomCoordinates), roomX: frame.roomCoordinates.x, roomY: frame.roomCoordinates.y,
+        x: frame.x, y: frame.y, instanceId: null, checkpointIndex: null });
+    }
     return this.rankedRunTraceRecorder.buildTrace(elapsedMs);
   }
 
@@ -5821,13 +5847,21 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.flowController.buildSelectedRoom();
   }
 
-  openGuestDraftRoom(roomSnapshot: RoomSnapshot): void {
-    void this.flowController.openEditor({
+  async openGuestDraftRoom(roomSnapshot: RoomSnapshot): Promise<boolean> {
+    const accountId = getAuthDebugState().user?.id ?? null;
+    const canOpen = () => (getAuthDebugState().user?.id ?? null) === accountId;
+    await this.flowController.openEditor({
       roomCoordinates: { ...roomSnapshot.coordinates },
       source: 'world',
       roomSnapshot,
       forceRoomSnapshot: true,
-    });
+    }, canOpen);
+    // Phaser queues scene starts requested during a frame; wait for that handoff.
+    const deadline = performance.now() + 5000;
+    while (canOpen() && !this.scene.isActive('EditorScene') && performance.now() < deadline) {
+      await new Promise<void>(resolve => window.setTimeout(resolve, 20));
+    }
+    return canOpen() && this.scene.isActive('EditorScene');
   }
 
   editSelectedRoom(): void {
@@ -6101,6 +6135,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.weatherController.destroy();
     this.clearPresenceSnapshotSyncTimer();
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
+    window.removeEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestRunProgressChanged);
     window.removeEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
     this.clearRoomGoalIntroState();
     this.scenePauseApplied = false;

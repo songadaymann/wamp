@@ -24,6 +24,7 @@ import { suggestProgressionDifficulty } from '../../progression/autoDifficulty';
 import {
   requestPostRunGuestClaim,
   requestPostRunRating,
+  type RoomPostRunRatingRequestDetail,
 } from '../../progression/postRunRatingEvents';
 import {
   buildLeaderboardRankRewardStings,
@@ -31,6 +32,8 @@ import {
   notifyRewardStings,
 } from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
+import type { GuestRunPlaybackController } from './guestRunPlayback';
+import type { GuestRunSaveResult } from '../../guestRooms/runService';
 
 export type GoalRunLeaderboardState = 'idle' | 'loading' | 'ready' | 'error';
 export type GoalRunMutationEvent = 'start' | 'checkpoint' | 'complete' | 'fail' | 'abandon';
@@ -67,6 +70,7 @@ export interface GoalRunState {
   verificationSchemaVersion: number | null;
   verificationNonce: string | null;
   snapshotHash: string | null;
+  guestProgress?: GuestRunSaveResult;
 }
 
 export interface GoalRunMutationResult {
@@ -90,6 +94,7 @@ export interface OverworldGoalRunSnapshot {
 interface OverworldGoalRunControllerOptions {
   playerHeight: number;
   runRepository: RunRepository;
+  guestRuns?: GuestRunPlaybackController;
   getScore: () => number;
   getAuthenticated: () => boolean;
   getAuthSource: () => SurfaceAuthSource;
@@ -812,6 +817,7 @@ export class OverworldGoalRunController {
             verificationSchemaVersion: this.currentGoalRun.verificationSchemaVersion,
             verificationNonce: this.currentGoalRun.verificationNonce,
             snapshotHash: this.currentGoalRun.snapshotHash,
+            guestProgress: this.currentGoalRun.guestProgress ? { ...this.currentGoalRun.guestProgress } : undefined,
           }
         : null,
       leaderboards: {
@@ -921,6 +927,8 @@ export class OverworldGoalRunController {
         startedAt: this.nowIso(),
       });
 
+      if (this.currentGoalRun !== runState) return;
+
       runState.attemptId = response.attemptId;
       runState.verificationSchemaVersion = response.verificationSchemaVersion;
       runState.verificationNonce = response.verificationNonce;
@@ -958,6 +966,14 @@ export class OverworldGoalRunController {
 
   private maybeSubmitGoalRunResult(runState: GoalRunState): void {
     if (runState.pendingResult === null) {
+      return;
+    }
+
+    if (this.options.guestRuns?.has(runState)) {
+      const payload = this.buildRunFinishPayload(runState, runState.pendingResult);
+      runState.submittedScore = computeRunScore(runState.goal, payload);
+      this.options.guestRuns.finish(runState, payload,
+        payload.result === 'completed' ? this.guestClearDetail(runState, payload) : undefined);
       return;
     }
 
@@ -1044,6 +1060,10 @@ export class OverworldGoalRunController {
 
     if (runState.leaderboardEligible) {
       void this.startRemoteGoalRun(runState);
+    } else if (runState.roomStatus === 'published' && !this.options.getAuthenticated()) {
+      this.options.guestRuns?.begin(runState, 'room', {
+        contentType: 'room', contentId: runState.roomId, version: runState.roomVersion,
+      });
     }
 
     if (runState.goal.type === 'defeat_all' && runState.enemyTarget === 0) {
@@ -1091,7 +1111,7 @@ export class OverworldGoalRunController {
       runState.pendingResult = null;
       runState.submissionState = 'submitted';
       runState.submittedScore = computeRunScore(runState.goal, payload);
-      this.options.clearVerificationTrace?.();
+      if (this.currentGoalRun === runState) this.options.clearVerificationTrace?.();
       runState.submissionMessage =
         result === 'completed'
           ? `Submitted score ${runState.submittedScore}.`
@@ -1158,7 +1178,7 @@ export class OverworldGoalRunController {
       const message = formatGoalRunSubmissionErrorMessage(error, result);
       runState.submissionState = 'error';
       runState.submissionMessage = message;
-      this.options.clearVerificationTrace?.();
+      if (this.currentGoalRun === runState) this.options.clearVerificationTrace?.();
       if (result === 'completed') {
         this.options.showTransientStatus?.(message);
       }
@@ -1167,6 +1187,14 @@ export class OverworldGoalRunController {
 
   private buildPostRunRatingPromptKey(runState: GoalRunState): string {
     return `${runState.roomId}:${runState.roomVersion}`;
+  }
+
+  private guestClearDetail(runState: GoalRunState, body: RunFinishRequestBody): RoomPostRunRatingRequestDetail {
+    return { contentType: 'room', contentId: runState.roomId,
+      contentTitle: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? this.currentRoomLeaderboard!.roomTitle : null,
+      roomCoordinates: { ...runState.roomCoordinates }, version: runState.roomVersion, previousViewerRank: null,
+      elapsedMs: body.elapsedMs, deaths: body.deaths, score: body.score ?? null,
+      autoSuggestedDifficulty: suggestProgressionDifficulty(body) };
   }
 
   private leaderboardMatchesRun(

@@ -95,6 +95,7 @@ describe('overworld runtime room hydration', () => {
       isPlayableRoomCollisionReady: vi.fn(() => options.collisionReady),
       destroyPlayer: vi.fn(),
       createPlayer: vi.fn(),
+      afterCoursePlayerSpawn: vi.fn(),
       getActiveCourseRun: vi.fn(() => null),
       getActiveRoomRushRun: vi.fn(() => null),
       clearCurrentGoalRun: vi.fn(),
@@ -155,6 +156,20 @@ describe('overworld runtime room hydration', () => {
       coordinates: { x: -2, y: 0 },
     });
     expect(host.setShouldRespawnPlayer).toHaveBeenCalledWith(false);
+  });
+
+  it('starts course recording after creating the collision-ready player', () => {
+    const { controller, host } = createCollisionReadySpawnHarness({ collisionReady: true, shouldRespawn: true });
+    host.getActiveCourseRun.mockReturnValue({} as never);
+    controller.syncModeRuntime();
+    expect(host.afterCoursePlayerSpawn).toHaveBeenCalledTimes(1);
+    expect(host.createPlayer.mock.invocationCallOrder[0]).toBeLessThan(host.afterCoursePlayerSpawn.mock.invocationCallOrder[0]);
+  });
+
+  it('does not start course recording while collision or spawn is pending', () => {
+    const { controller, host } = createCollisionReadySpawnHarness({ collisionReady: false, shouldRespawn: true });
+    host.getActiveCourseRun.mockReturnValue({} as never);
+    controller.syncModeRuntime(); expect(host.afterCoursePlayerSpawn).not.toHaveBeenCalled();
   });
 });
 

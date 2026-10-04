@@ -1,6 +1,7 @@
 #leaderboard-modal,
 #explore-modal,
 #profile-modal,
+#guest-progress-modal,
 #editor-music-phrase-save-modal {
   background: rgba(24, 22, 28, 0.8);
   backdrop-filter: none;
@@ -9,6 +10,7 @@
 #leaderboard-modal .history-modal-panel,
 #explore-modal .history-modal-panel,
 #profile-modal .history-modal-panel,
+#guest-progress-modal .history-modal-panel,
 #editor-music-phrase-save-modal .history-modal-panel {
   gap: 16px;
   padding: 20px 18px 18px;
@@ -43,6 +45,7 @@
 #leaderboard-modal .history-modal-kicker,
 #explore-modal .history-modal-kicker,
 #profile-modal .history-modal-kicker,
+#guest-progress-modal .history-modal-kicker,
 #editor-music-phrase-save-modal .history-modal-kicker {
   color: #2c5071;
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
@@ -55,6 +58,7 @@
 #leaderboard-modal .history-modal-title,
 #explore-modal .history-modal-title,
 #profile-modal .history-modal-title,
+#guest-progress-modal .history-modal-title,
 #editor-music-phrase-save-modal .history-modal-title {
   margin-top: 6px;
   color: #18161c;
@@ -66,6 +70,7 @@
 #leaderboard-modal .history-modal-meta,
 #explore-modal .history-modal-meta,
 #profile-modal .history-modal-meta,
+#guest-progress-modal .history-modal-meta,
 #editor-music-phrase-save-modal .history-modal-meta,
 #leaderboard-modal .leaderboard-secondary,
 #explore-modal .leaderboard-secondary,
@@ -79,6 +84,7 @@
 #leaderboard-modal .history-modal-error,
 #explore-modal .history-modal-error,
 #profile-modal .history-modal-error,
+#guest-progress-modal .history-modal-error,
 #editor-music-phrase-save-modal .history-modal-error {
   padding: 12px;
   border: 2px solid #18161c;
@@ -94,6 +100,7 @@
 #leaderboard-modal .history-modal-header > .bar-btn,
 #explore-modal .history-modal-header > .bar-btn,
 #profile-modal .history-modal-header > .bar-btn,
+#guest-progress-modal .history-modal-header > .bar-btn,
 #editor-music-phrase-save-modal .history-modal-header > .bar-btn,
 #leaderboard-modal .leaderboard-tabs .bar-btn,
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn,
@@ -118,6 +125,7 @@
 #leaderboard-modal .history-modal-header > .bar-btn:hover,
 #explore-modal .history-modal-header > .bar-btn:hover,
 #profile-modal .history-modal-header > .bar-btn:hover,
+#guest-progress-modal .history-modal-header > .bar-btn:hover,
 #editor-music-phrase-save-modal .history-modal-header > .bar-btn:hover,
 #leaderboard-modal .leaderboard-tabs .bar-btn:hover,
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn:hover,
@@ -132,6 +140,7 @@
 #leaderboard-modal .history-modal-header > .bar-btn:disabled,
 #explore-modal .history-modal-header > .bar-btn:disabled,
 #profile-modal .history-modal-header > .bar-btn:disabled,
+#guest-progress-modal .history-modal-header > .bar-btn:disabled,
 #editor-music-phrase-save-modal .history-modal-header > .bar-btn:disabled,
 #leaderboard-modal .leaderboard-tabs .bar-btn:disabled,
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn:disabled,

@@ -160,6 +160,19 @@ describe('guest draft recovery when reopening the editor', () => {
     expect(applyRoomSnapshot).toHaveBeenCalledWith(expect.objectContaining({ tileData: remote.draft.tileData }));
   });
 
+  it('keeps a forced guest snapshot title through the first account save and skips unrelated local recovery', async () => {
+    const saved = makeStoredDraft(); saved.draft.title = 'Original guest room';
+    const local = makeStoredDraft(); local.draft.title = 'Old local backup';
+    localStorage.setItem(`${ROOM_STORAGE_PREFIX}${roomId}`, JSON.stringify(local));
+    vi.setSystemTime(openedAt);
+    const remote = createDefaultRoomRecord(roomId, coordinates);
+    const { session, applyRoomSnapshot } = reopen(remote);
+    await session.loadPersistedRoom(saved.draft, { forceInitialRoomSnapshot: true });
+    expect(applyRoomSnapshot).toHaveBeenCalledWith(expect.objectContaining({ title: 'Original guest room', tileData: saved.draft.tileData }));
+    expect(session.currentRoomTitle).toBe('Original guest room');
+    expect(session.statusText).not.toContain('Recovered local');
+  });
+
   it('keeps newer nonblank remote content even without ownership metadata', async () => {
     localStorage.setItem(`${ROOM_STORAGE_PREFIX}${roomId}`, JSON.stringify(makeStoredDraft()));
     vi.setSystemTime(openedAt);

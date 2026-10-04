@@ -567,7 +567,7 @@ export class ExploreModalController {
 
     const openDraft = () => {
       this.close();
-      getActiveOverworldScene(this.game)?.openGuestDraftRoom?.(draft.snapshot);
+      void getActiveOverworldScene(this.game)?.openGuestDraftRoom?.(draft.snapshot);
     };
     card.addEventListener('click', openDraft);
     card.addEventListener('keydown', (event) => {

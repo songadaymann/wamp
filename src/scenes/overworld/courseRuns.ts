@@ -7,6 +7,7 @@ import type {
 import { courseGoalRequiresStartPoint } from '../../courses/model';
 import type { GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates } from '../../persistence/roomModel';
+import type { GuestRunSaveResult } from '../../guestRooms/runService';
 
 export interface ActiveCourseRunState {
   course: CourseSnapshot;
@@ -37,6 +38,7 @@ export interface ActiveCourseRunState {
   verificationSchemaVersion: number | null;
   verificationNonce: string | null;
   snapshotHash: string | null;
+  guestProgress?: GuestRunSaveResult;
 }
 
 export interface CreateActiveCourseRunStateOptions {

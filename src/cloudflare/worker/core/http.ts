@@ -388,7 +388,7 @@ export async function parseRoomSnapshot(request: Request, roomId: string): Promi
   }
 }
 
-function validateRoomSnapshotForWrite(snapshot: RoomSnapshot, roomId: string): void {
+export function validateRoomSnapshotForWrite(snapshot: RoomSnapshot, roomId: string): void {
   validateRoomSnapshotIdentity(snapshot, roomId);
   validateRoomSnapshotTileData(snapshot.tileData);
   validateRoomSnapshotPlacedObjects(snapshot);

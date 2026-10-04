@@ -1,6 +1,6 @@
 import type { ProgressionDelta } from '../../../progression/model';
 import type { Env, UserProgressRow } from '../core/types';
-import { loadOrBackfillUserProgress, upsertUserProgressRow } from './progressRows';
+import { loadOrBackfillUserProgress, loadUserProgressRow } from './progressRows';
 import {
   levelForXp,
   type LaneEventConfig,
@@ -14,25 +14,32 @@ export async function persistProgressIncrement(
   delta: ProgressionDelta,
   updatedAt: string,
 ): Promise<UserProgressRow> {
-  const progress = await loadOrBackfillUserProgress(env, userId);
-  const totalPxp = progress.total_pxp + delta.pxp;
-  const totalBxp = progress.total_bxp + delta.bxp;
-  const totalCxp = progress.total_cxp + delta.cxp;
-  const trustScore = Math.max(0, progress.hidden_trust_score + delta.trust);
-  const updated: UserProgressRow = {
-    ...progress,
-    total_pxp: totalPxp,
-    total_bxp: totalBxp,
-    total_cxp: totalCxp,
-    player_level: levelForXp(totalPxp),
-    builder_level: levelForXp(totalBxp),
-    curator_level: levelForXp(totalCxp),
-    hidden_trust_score: trustScore,
-    trust_tier_internal: trustTierFromScore(trustScore),
-    updated_at: updatedAt,
-  };
-  await upsertUserProgressRow(env, updated);
-  return updated;
+  await loadOrBackfillUserProgress(env, userId);
+  await env.DB.batch([env.DB.prepare(`UPDATE user_progress SET
+    total_pxp = total_pxp + ?, total_bxp = total_bxp + ?, total_cxp = total_cxp + ?,
+    hidden_trust_score = MAX(0, hidden_trust_score + ?), updated_at = ? WHERE user_id = ?`)
+    .bind(delta.pxp, delta.bxp, delta.cxp, delta.trust, updatedAt, userId)]);
+  return refreshProgressLevels(env, userId);
+}
+
+export async function refreshProgressLevels(env: Env, userId: string): Promise<UserProgressRow> {
+  for (let retry = 0; retry <= 3; retry += 1) {
+    const progress = await loadUserProgressRow(env, userId);
+    if (!progress) throw new Error('Progress row is missing.');
+    const playerLevel = levelForXp(progress.total_pxp);
+    const builderLevel = levelForXp(progress.total_bxp);
+    const curatorLevel = levelForXp(progress.total_cxp);
+    const trustTier = trustTierFromScore(progress.hidden_trust_score);
+    if (progress.player_level === playerLevel && progress.builder_level === builderLevel
+      && progress.curator_level === curatorLevel && progress.trust_tier_internal === trustTier) return progress;
+    if (retry === 3) break;
+    await env.DB.batch([env.DB.prepare(`UPDATE user_progress SET player_level = ?, builder_level = ?,
+      curator_level = ?, trust_tier_internal = ? WHERE user_id = ? AND total_pxp = ? AND total_bxp = ?
+      AND total_cxp = ? AND hidden_trust_score = ?`)
+      .bind(playerLevel, builderLevel, curatorLevel, trustTier, userId, progress.total_pxp, progress.total_bxp,
+        progress.total_cxp, progress.hidden_trust_score)]);
+  }
+  throw new Error('Progress changed during the receipt; retry to refresh it.');
 }
 
 async function progressEventExists(

@@ -5,6 +5,7 @@ import {
 } from '../persistence/roomModel';
 import {
   WorldPresenceClient,
+  resolveWorldPresenceGuestIdentity,
   type WorldPresenceRoomPreview,
   type WorldPresenceSnapshot,
 } from './worldPresence';
@@ -12,6 +13,20 @@ import {
 type PresenceHarness = Record<string, unknown>;
 
 describe('WorldPresenceClient room preview ownership', () => {
+  it.each(['getter', 'read'] as const)('retains the guest recovery identity when the storage %s is blocked', kind => {
+    const target = { location: { search: '' } };
+    Object.defineProperty(target, 'localStorage', kind === 'getter' ? {
+      get: () => { throw new Error('Blocked'); },
+    } : { value: {
+      getItem: () => { throw new Error('Blocked'); }, setItem: () => { throw new Error('Blocked'); },
+    } });
+    vi.stubGlobal('window', target);
+    try {
+      const first = resolveWorldPresenceGuestIdentity();
+      expect(first.userId).toMatch(/^guest-/);
+      expect(resolveWorldPresenceGuestIdentity().userId).toBe(first.userId);
+    } finally { vi.unstubAllGlobals(); }
+  });
   it('clones changed wire ingress once and re-emits its owned snapshot without cloning', () => {
     const onSnapshot = vi.fn<(snapshot: WorldPresenceSnapshot) => void>();
     const harness = createHarness(onSnapshot);

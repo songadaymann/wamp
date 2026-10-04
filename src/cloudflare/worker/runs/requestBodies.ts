@@ -1,4 +1,4 @@
-import { normalizeRoomGoal } from '../../../goals/roomGoals';
+import { normalizeRoomGoal, type RoomGoal } from '../../../goals/roomGoals';
 import { roomIdFromCoordinates } from '../../../persistence/roomModel';
 import type {
   RoomDifficultyVoteRequestBody,
@@ -58,6 +58,13 @@ export async function parseRunStartBody(request: Request): Promise<RunStartReque
 
 export async function parseRunFinishBody(request: Request): Promise<RunFinishRequestBody> {
   const body = await parseJsonBody<RunFinishRequestBody>(request);
+  return normalizeRunFinishRequestBody(body);
+}
+
+export function normalizeRunFinishRequestBody(body: Partial<RunFinishRequestBody>): RunFinishRequestBody {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new HttpError(400, 'Run results must be an object.');
+  }
   const verificationTrace =
     body.verificationTrace === undefined
       ? null
@@ -267,4 +274,86 @@ function normalizeNonEmptyString(value: unknown, label: string, maxLength: numbe
   }
 
   return text;
+}
+
+export function normalizeFinalizedRunBody(
+  goal: RoomGoal,
+  body: RunFinishRequestBody,
+  metricCaps: {
+    maxCollectibles: number;
+    maxEnemies: number;
+    maxCheckpoints: number;
+  },
+  reportedElapsedMs: number
+): RunFinishRequestBody {
+  if (body.result !== 'completed') {
+    return {
+      ...body,
+      collectiblesCollected: 0,
+      enemyCollectiblesCollected: 0,
+      enemiesDefeated: 0,
+      checkpointsReached: 0,
+    };
+  }
+
+  if (
+    'timeLimitMs' in goal &&
+    goal.timeLimitMs !== null &&
+    reportedElapsedMs > goal.timeLimitMs
+  ) {
+    throw new HttpError(409, 'Completed runs must finish within the published time limit.');
+  }
+
+  switch (goal.type) {
+    case 'collect_target':
+      if (body.collectiblesCollected < goal.requiredCount) {
+        throw new HttpError(409, 'Completed collect-target runs must meet the published goal.');
+      }
+      break;
+    case 'collect_race': {
+      const totalCollected = body.collectiblesCollected + body.enemyCollectiblesCollected;
+      const finishedByTime = goal.timeLimitMs !== null && reportedElapsedMs >= goal.timeLimitMs;
+      const finishedByExhaustion = totalCollected >= metricCaps.maxCollectibles;
+      if (!finishedByTime && !finishedByExhaustion) {
+        throw new HttpError(
+          409,
+          'Completed collect-race runs must end when time expires or all collectibles are claimed.',
+        );
+      }
+      if (body.collectiblesCollected <= body.enemyCollectiblesCollected) {
+        throw new HttpError(409, 'Completed collect-race runs must beat the Sword Hunter.');
+      }
+      break;
+    }
+    case 'defeat_all':
+      if (body.enemiesDefeated < metricCaps.maxEnemies) {
+        throw new HttpError(409, 'Completed defeat-all runs must clear every published enemy.');
+      }
+      break;
+    case 'checkpoint_sprint':
+      if (body.checkpointsReached < metricCaps.maxCheckpoints) {
+        throw new HttpError(409, 'Completed checkpoint-sprint runs must hit every checkpoint.');
+      }
+      break;
+    case 'survival':
+      if (body.elapsedMs < goal.durationMs) {
+        throw new HttpError(409, 'Completed survival runs must last the full published duration.');
+      }
+      break;
+    case 'npc_quest':
+      if (goal.questType === 'protect' && body.elapsedMs < goal.durationMs) {
+        throw new HttpError(409, 'Completed protect runs must last the full published duration.');
+      }
+      if (
+        goal.questType === 'give' &&
+        body.collectiblesCollected < goal.requiredCount
+      ) {
+        throw new HttpError(409, 'Completed give runs must collect the published target.');
+      }
+      break;
+    case 'reach_exit':
+      break;
+  }
+
+  return body;
 }

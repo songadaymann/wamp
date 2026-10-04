@@ -31,6 +31,7 @@ const PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 25;
 const PRESENCE_IDLE_KEEPALIVE_MS = 5_000;
 const REMOTE_PRESENCE_SNAPSHOT_FLUSH_INTERVAL_MS = 140;
 const PRESENCE_GUEST_IDENTITY_STORAGE_KEY = 'ep_presence_guest_identity_v1';
+let volatileGuestIdentity: WorldPresenceIdentity | null = null;
 const ROOM_PREVIEW_TTL_MS = 120_000;
 
 export interface WorldPresenceIdentity {
@@ -855,6 +856,8 @@ export function resolveWorldPresenceGuestIdentity(): WorldPresenceIdentity {
     // Fall through to a new guest identity.
   }
 
+  if (volatileGuestIdentity) return { ...volatileGuestIdentity, avatarId };
+
   const guestIdentity: WorldPresenceIdentity = {
     userId: `guest-${createRandomUuid()}`,
     displayName: `Guest ${Math.random().toString(36).slice(2, 6)}`,
@@ -863,7 +866,8 @@ export function resolveWorldPresenceGuestIdentity(): WorldPresenceIdentity {
   try {
     window.localStorage.setItem(PRESENCE_GUEST_IDENTITY_STORAGE_KEY, JSON.stringify(guestIdentity));
   } catch {
-    // Ignore storage failures for guest identities.
+    // Preserve this session's recovery identity even when browser storage is blocked.
+    volatileGuestIdentity = guestIdentity;
   }
 
   return guestIdentity;

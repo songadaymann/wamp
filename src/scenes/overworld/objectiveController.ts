@@ -382,17 +382,6 @@ export class OverworldObjectiveController {
       return;
     }
 
-    const playerOrigin = this.host.getPlayerEffectOrigin();
-    if (playerOrigin) {
-      this.host.recordRankedGoalEvent({
-        type: 'complete',
-        roomId: null,
-        roomCoordinates: this.host.getCurrentRoomCoordinates(),
-        x: playerOrigin.x,
-        y: playerOrigin.y,
-        checkpointIndex: null,
-      });
-    }
     activeCourseRun.result = 'completed';
     activeCourseRun.completionMessage = message;
     this.host.showTransientStatus(message);
@@ -410,17 +399,6 @@ export class OverworldObjectiveController {
 
     if (result.event === 'complete') {
       const runState = this.host.goalRunController.getCurrentRun();
-      const origin = this.host.getPlayerEffectOrigin();
-      if (runState && origin) {
-        this.host.recordRankedGoalEvent({
-          type: 'complete',
-          roomId: runState.roomId,
-          roomCoordinates: runState.roomCoordinates,
-          x: origin.x,
-          y: origin.y,
-          checkpointIndex: null,
-        });
-      }
       if (runState) {
         this.host.setRoomNpcsVictorious(runState.roomId, true);
       }

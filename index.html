@@ -180,6 +180,10 @@
         <div class="auth-row auth-menu-action-row">
           <button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button">Chat Moderation</button>
         </div>
+        <div class="auth-row auth-menu-action-row">
+          <button id="btn-auth-guest-progress" class="bar-btn auth-menu-action-btn" type="button">Guest Clears</button>
+          <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button">Guest Drafts</button>
+        </div>
         <div id="auth-email-row" class="auth-row">
           <input id="auth-email-input" type="email" placeholder="you@example.com" spellcheck="false" />
           <button id="btn-auth-email" class="bar-btn bar-btn-small">Sign In With Email</button>
@@ -2416,16 +2420,20 @@
         <button id="btn-guest-room-recovery-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div class="guest-room-recovery-body">
+        <label id="guest-room-recovery-drafts-label" class="hidden">Saved draft
+          <select id="guest-room-recovery-drafts" aria-label="Saved guest draft"></select>
+        </label>
         <div id="guest-room-recovery-preview" class="guest-room-recovery-preview" aria-label="Saved room preview">
           <div id="guest-room-recovery-preview-fallback" class="guest-room-recovery-preview-fallback">Saved Room</div>
         </div>
         <div id="guest-room-recovery-copy" class="guest-room-recovery-copy">
           Your room is still saved for this browser. Sign in to make it yours and publish it in the world.
         </div>
-        <div class="guest-room-recovery-benefits">
+        <div id="guest-room-recovery-benefits" class="guest-room-recovery-benefits">
           Guest Rooms are playable, but guest-published rooms do not earn XP, profile credit, minting rights, or other account benefits.
         </div>
         <div id="guest-room-recovery-status" class="history-modal-meta guest-room-recovery-status hidden"></div>
+        <div id="guest-room-recovery-locations" class="guest-room-recovery-actions hidden" aria-label="Choose a new spot"></div>
         <div class="guest-room-recovery-actions">
           <button id="btn-guest-room-recovery-signin" class="bar-btn" type="button">Sign In To Publish</button>
           <button id="btn-guest-room-recovery-submit" class="bar-btn bar-btn-small" type="button">Publish To Guest Rooms</button>
@@ -2640,6 +2648,21 @@
     </div>
   </div>
 
+  <div id="guest-progress-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel leaderboard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="guest-progress-title">
+      <div class="history-modal-header">
+        <div class="history-modal-title-group">
+          <h2 id="guest-progress-title" class="history-modal-title">Guest clears</h2>
+          <div id="guest-progress-meta" class="history-modal-meta"></div>
+        </div>
+        <button id="btn-guest-progress-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <div id="guest-progress-status" class="history-modal-error" role="status" aria-live="polite"></div>
+      <div id="guest-progress-list" class="leaderboard-panel"></div>
+      <button id="btn-guest-progress-signin" class="bar-btn hidden" type="button">Sign In</button>
+    </div>
+  </div>
+
   <div id="run-rating-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel run-rating-modal-panel" role="dialog" aria-modal="true" aria-labelledby="run-rating-title">
       <div class="history-modal-header">
@@ -2663,11 +2686,11 @@
         <div id="run-rating-suggestion" class="history-modal-meta run-rating-summary-card run-rating-summary-card-suggestion">Suggested difficulty: Medium.</div>
 
         <div id="run-guest-claim" class="run-rating-section run-guest-claim hidden">
-          <div id="run-guest-claim-xp" class="run-guest-claim-xp">You earned 20 XP</div>
-          <div id="run-guest-claim-copy" class="run-guest-claim-copy">Sign in to save your XP and leaderboard progress.</div>
+          <div id="run-guest-claim-xp" class="run-guest-claim-xp">Room cleared</div>
+          <div id="run-guest-claim-copy" class="run-guest-claim-copy">Sign in and replay to earn XP.</div>
           <div class="run-guest-claim-actions">
             <button id="btn-run-guest-claim-continue" class="bar-btn bar-btn-small" type="button">Keep Playing</button>
-            <button id="btn-run-guest-claim-signin" class="bar-btn" type="button">Save Progress</button>
+            <button id="btn-run-guest-claim-signin" class="bar-btn" type="button">Sign In</button>
           </div>
         </div>
 

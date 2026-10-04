@@ -10,6 +10,7 @@ import type {
   GuestRoomDraftSaveRequestBody,
   GuestRoomDraftSaveResponse,
   GuestRoomDraftSubmitResponse,
+  GuestRoomDraftClaimBody,
 } from '../../../guestRooms/model';
 import {
   HttpError,
@@ -25,6 +26,8 @@ import {
   submitOwnedGuestRoomDraft,
   upsertGuestRoomDraft,
 } from './store';
+import { requireAuthenticatedRequestAuth } from '../auth/request';
+import { claimGuestRoomDraft } from './claims';
 
 const MAX_GUEST_ROOM_SNAPSHOT_JSON_BYTES = 512_000;
 
@@ -52,6 +55,17 @@ export async function handleGuestRoomDraftRequest(
       drafts: await listSubmittedGuestRoomDrafts(env, limit),
     };
     return jsonResponse(request, responseBody);
+  }
+
+  const claimMatch = /^\/api\/guest-room-drafts\/([^/]+)\/claim$/.exec(url.pathname);
+  if (claimMatch && request.method === 'POST') {
+    const auth = await requireAuthenticatedRequestAuth(env, request, 'transfer your guest draft', 'rooms:write');
+    const identity = await resolveGuestRecoveryIdentityFromHeaders(request);
+    const body = await parseJsonBody<GuestRoomDraftClaimBody>(request, { maxBytes: 8_192 });
+    if (!body || typeof body.expectedUserId !== 'string') throw new HttpError(400, 'expectedUserId is required.');
+    const response = await claimGuestRoomDraft(env, identity, auth, normalizeDraftId(decodeURIComponent(claimMatch[1])), body);
+    return jsonResponse(request, response, { status: response.outcome === 'conflict' ? 409 : 200,
+      headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   const submitMatch = /^\/api\/guest-room-drafts\/([^/]+)\/submit$/.exec(url.pathname);

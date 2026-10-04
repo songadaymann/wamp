@@ -186,6 +186,9 @@ export async function runWorldAwareRoomMutationBatch(
     await env.DB.batch(statements);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('room_mutation_owner')) throw new HttpError(409, 'This room changed before the save. Reload before trying again.');
+    if (message.includes('room_mutation_frontier')) throw new HttpError(409, 'This spot no longer touches a published room. Pick a new location.');
+    if (message.includes('room_mutation_claim_quota')) throw new HttpError(429, 'Daily room claim limit reached. Your draft is still saved.');
     if (message.includes('world_daily_usage')) {
       throw new HttpError(429, 'This builder has reached the World daily limit.');
     }

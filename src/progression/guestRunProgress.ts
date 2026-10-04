@@ -1,4 +1,6 @@
 import type { PostRunRatingRequestDetail } from './postRunRatingEvents';
+import type { GuestRunSaveResult } from '../guestRooms/runService';
+import type { RoomCoordinates } from '../persistence/roomModel';
 
 const STORAGE_KEY = 'wamp_guest_run_progress_v1';
 const MAX_RECORDS = 50;
@@ -17,6 +19,9 @@ export interface GuestRunProgressRecord {
   score: number | null;
   potentialPxp: number;
   completedAt: string;
+  guestProgress?: GuestRunSaveResult;
+  roomCoordinates?: RoomCoordinates;
+  expandedRoomId?: string | null;
 }
 
 export interface GuestRunProgressSummary {
@@ -48,6 +53,9 @@ export function recordGuestRunClear(
     score: typeof detail.score === 'number' ? Math.round(detail.score) : null,
     potentialPxp: getPotentialPxp(detail.contentType),
     completedAt: now.toISOString(),
+    guestProgress: detail.guestProgress ? { ...detail.guestProgress } : undefined,
+    roomCoordinates: detail.contentType === 'room' ? { ...detail.roomCoordinates } : undefined,
+    expandedRoomId: detail.contentType !== 'room' ? detail.expandedRoomId : undefined,
   };
 
   const storage = getStorage();
@@ -55,7 +63,8 @@ export function recordGuestRunClear(
     return summarizeRecords([record], record);
   }
 
-  const records = [record, ...readRecords(storage)].slice(0, MAX_RECORDS);
+  const records = [record, ...readRecords(storage).filter(existing => !detail.guestProgress
+    || existing.guestProgress?.clientRunId !== detail.guestProgress.clientRunId)].slice(0, MAX_RECORDS);
   writeRecords(storage, records);
   return summarizeRecords(records, record);
 }
@@ -63,6 +72,18 @@ export function recordGuestRunClear(
 export function loadGuestRunProgress(): GuestRunProgressSummary {
   const storage = getStorage();
   return summarizeRecords(storage ? readRecords(storage) : [], null);
+}
+
+export function updateGuestRunClearStatus(result: GuestRunSaveResult): void {
+  const storage = getStorage();
+  if (!storage) return;
+  const records = readRecords(storage);
+  let changed = false;
+  for (const record of records) {
+    if (record.guestProgress?.clientRunId !== result.clientRunId) continue;
+    record.guestProgress = { ...result }; changed = true;
+  }
+  if (changed) writeRecords(storage, records);
 }
 
 function getPotentialPxp(contentType: PostRunRatingRequestDetail['contentType']): number {
@@ -180,7 +201,19 @@ function normalizeRecord(value: unknown): GuestRunProgressRecord | null {
     score: typeof record.score === 'number' ? Math.round(record.score) : null,
     potentialPxp: Math.max(0, Math.round(record.potentialPxp)),
     completedAt: record.completedAt,
+    guestProgress: normalizeGuestProgress(record.guestProgress),
+    roomCoordinates: record.roomCoordinates && Number.isSafeInteger(record.roomCoordinates.x)
+      && Number.isSafeInteger(record.roomCoordinates.y) ? { ...record.roomCoordinates } : undefined,
+    expandedRoomId: typeof record.expandedRoomId === 'string' ? record.expandedRoomId : undefined,
   };
+}
+
+function normalizeGuestProgress(value: unknown): GuestRunSaveResult | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const progress = value as Partial<GuestRunSaveResult>;
+  if (typeof progress.clientRunId !== 'string' || !['saved', 'queued', 'unverified'].includes(progress.status ?? '')) return undefined;
+  return { clientRunId: progress.clientRunId, attemptId: typeof progress.attemptId === 'string' ? progress.attemptId : null,
+    status: progress.status!, durable: progress.durable === true, reason: typeof progress.reason === 'string' ? progress.reason : null };
 }
 
 function getStorage(): Storage | null {
