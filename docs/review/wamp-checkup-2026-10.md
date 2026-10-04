@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 33 of 214 done.**
+**Progress: 34 of 214 done.**
 
 ## How to use this file
 
@@ -67,7 +67,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 
 ## Big bets
 
-- **First Steps: a curated starter run that teaches and hooks** (F126, F122, F096, F118, F133). The six-room De Ja Vu sequence now has controls, progress, touch Next and a truthful completion summary (PR #48); guest progress carry-over is delivered (PR #44). Curated community discovery is delivered (F125, PR #49). Remaining: builder credits and real in-play celebrations, plus a proud 'Your room is live!' screen with a name field and share buttons for a builder's first publish.
+- **First Steps: a curated starter run that teaches and hooks** (F126, F122, F096, F118, F133). The six-room De Ja Vu sequence now has controls, progress, touch Next and a truthful completion summary (PR #48); guest progress carry-over is delivered (PR #44). Curated community discovery is delivered (F125, PR #49), and guest clear results/save feedback appear during play (F096, PR #50). Remaining: builder credits, plus a proud 'Your room is live!' screen with a name field and share buttons for a builder's first publish.
 - **Tell builders people are playing their stuff** (F123, F124, F130). The best reason to come back and build is knowing someone played your room. Add: - an activity bell on your profile card ('7 players beat Lava Gauntlet, tkinter took your #1'); - per-room plays, clear rate and average deaths, and later a map of where players die; - a weekly digest email. The server already records most of this.
 - **Safety big bet** (F128, F129, F135, F151, F216). Details withheld from this public repo until fixed.
 - **Safety big bet** (F142, F207). Details withheld from this public repo until fixed.
@@ -85,7 +85,7 @@ Go one item at a time, and check each on the live site and on a real phone befor
 4. **Student safety.** Lock down room chat and school restrictions (F208, F190, F209, F211) before any new classroom pilots.
 5. **Mobile building.** Fix the pinch stray-tile bug and add Undo/Redo buttons (F079, F157).
 6. **Tablet and landscape controls.** Add these next (F075), since that's the biggest chunk of players who currently can't play.
-7. **First visits.** Shared-link modal deferral, guest progress carry-over, first-play control guidance and Welcome destinations are delivered (F093, F122, F104, F126). Curated discovery and run-based difficulty are also delivered (F125). Next: ordinary clear celebration and immediate XP feedback (F096).
+7. **First visits.** Shared-link modal deferral, guest progress carry-over, first-play control guidance and Welcome destinations are delivered (F093, F122, F104, F126). Curated discovery and run-based difficulty are also delivered (F125). Guest clear celebration, run results and truthful save/XP guidance are delivered (F096). Next: builder activity notifications (F123), then per-room feedback (F124).
 8. **Security and safety items.** Details withheld from this public repo until fixed (F182, F183, F185, F198, F201).
 9. **Quick wins and big bets.** Mix in quick wins between bigger items whenever a palate cleanser helps. Then pick one big bet at a time, starting with 'First Steps' or the builder-feedback inbox, since those most directly turn visitors into returning builders.
 
@@ -222,7 +222,7 @@ What happens in a newcomer's first five minutes, and what brings players and bui
 - [x] **F122** Signing up throws away a guest's clears, even though the game says 'Save Progress' · high impact · medium effort — **done 2026-10-04** (`ef5a966b`). Server-verified guest clears carry into an account for 14 days with canonical XP awarded once, durable retries and all common auth refresh paths; legacy browser clears retain truthful Replay. Guest drafts resume across tabs with preserved edits and an explicit new location if their spot is taken. Full API/Pages release, actual tutorial clear → 20 XP and draft save/retry pass on wamp.land.
 - [x] **F126** Welcome 'Play' runs one room, 'Explore' just closes the window, and 'Build' drops you into an empty room (also covers F097) · medium impact · medium effort — **done 2026-10-04** (`c1847d8c`). Play starts the existing six tutorial rooms as First Steps with controls, progress and a summary of actual verified/queued/unverified clears. Explore opens the room list with guest Play All. Build opens a playable floor/spawn/exit starter with draft recovery and autosave. All 15 live desktop/touch flows, exact served release and the new replay event pass; discovery curation remains F125.
 - [x] **F125** Explore's default 'Featured' tab has nothing featured, and 88% of rooms have no rating, so discovery is mostly noise · high impact · small effort — **done 2026-10-04** (`a45580fd`). Twenty reviewed current-version selections (17 community rooms, 14 builders); exclusive version-pinned Featured with Popular fallback below eight, distinct recent players, clearly labelled run-based difficulty (63 live estimates), rating counts and attainable credible trophies. Full quality, all five live browser layouts, guest Play All/Next, exact served release and fast-map health pass.
-- [ ] **F096** Clearing a room feels flat: no in-play celebration, no 'Next room', and the XP reward only appears after you press Stop · medium impact · small effort
+- [x] **F096** Clearing a room feels flat: no in-play celebration, no 'Next room', and the XP reward only appears after you press Stop · medium impact · small effort — **done 2026-10-04** (`61d947fa`, fact-checked guest scope). In-play time/deaths, matching ranked best/comparison and truthful save/XP sign-in feedback, with once-only fallback celebration and deferred results. Existing queues provide Next; selecting a free-roam destination remains a separate medium-effort addition. Four live desktop/touch clear flows, three First Steps navigation/summary flows, exact served release and fast-map health pass.
 - [x] **F104** New players never see the controls before the timer starts · medium impact · small effort — **done 2026-10-04** (`0c618819`). Keyboard/touch guidance precedes ordinary and expanded first Play and appears in playlist/Room Rush entry; movement/timers wait for Start and acknowledgement is remembered per input. Expanded Start retains its chosen course, map imagery stays below ready dialogs, and twelve live workflows pass across six browser layouts.
 - [ ] **F123** Builders never find out that someone played, beat, rated, or took #1 on their room · high impact · medium effort
 - [ ] **F124** Builders can't see how many people played their room, how many beat it, or where they died (also covers F164) · high impact · medium effort
