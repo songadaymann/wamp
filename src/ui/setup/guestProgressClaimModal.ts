@@ -118,14 +118,15 @@ export class GuestProgressClaimModalController {
     if (this.doc.body.dataset.appMode !== 'world' && this.lifecycle.isOpen()) this.close();
     this.tryPresent();
   };
-  private readonly onMenu = () => {
+  openFromReminder(): void {
     this.doc.getElementById('auth-panel')?.classList.remove('menu-open');
-    if (!this.canPresent()) return;
+    if (!this.canPresent(true)) return;
     const receipt = this.service.receipts().find(value => value.clearsSaved > 0);
-    if (receipt) { this.tryPresent(); return; }
-    this.open(null);
+    if (receipt) this.service.markPresented(receipt);
+    this.open(receipt ?? null);
     this.scheduleSync(0);
-  };
+  }
+  private readonly onMenu = () => this.openFromReminder();
 
   private scheduleSync(delay: number): void {
     if (this.destroyed) return;
@@ -163,10 +164,11 @@ export class GuestProgressClaimModalController {
     }
   }
 
-  private canPresent(): boolean {
+  private canPresent(allowPlay = false): boolean {
     if (this.destroyed || !this.modal || this.doc.visibilityState !== 'visible' || this.doc.body.dataset.appReady !== 'true'
       || (typeof this.doc.hasFocus === 'function' && !this.doc.hasFocus())
-      || this.doc.body.dataset.appMode !== 'world' || this.doc.getElementById('auth-panel')?.classList.contains('menu-open')) return false;
+      || !(this.doc.body.dataset.appMode === 'world' || (allowPlay && this.doc.body.dataset.appMode === 'play-world'))
+      || this.doc.getElementById('auth-panel')?.classList.contains('menu-open')) return false;
     if (['busy-overlay', 'reward-sting-layer', 'xp-receipt-layer'].some(id => {
       const element = this.doc.getElementById(id); return element && !element.classList.contains('hidden');
     })) return false;

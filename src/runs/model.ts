@@ -220,6 +220,8 @@ export interface RoomDiscoveryResponse {
   sort: RoomDiscoverySort;
   results: RoomDiscoveryEntry[];
   nextCursor?: string;
+  /** Exact filtered count before pagination, supplied for the personal Unrated list. */
+  totalCount?: number;
 }
 
 export interface BuilderDiscoveryEntry {

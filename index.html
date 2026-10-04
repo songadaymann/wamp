@@ -187,6 +187,7 @@
           <button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button">Chat Moderation</button>
         </div>
         <div class="auth-row auth-menu-action-row">
+          <button id="btn-auth-rate-clears" class="bar-btn auth-menu-action-btn hidden" type="button">Rate rooms</button>
           <button id="btn-auth-guest-progress" class="bar-btn auth-menu-action-btn" type="button">Guest Clears</button>
           <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button">Guest Drafts</button>
         </div>
@@ -1399,6 +1400,10 @@
 
     <!-- Game Canvas -->
     <div id="game-container">
+      <div id="post-run-reminder" class="hidden" aria-label="Unfinished progress">
+        <button id="btn-post-run-reminder" class="bar-btn" type="button">Guest clears</button>
+        <button id="btn-post-run-reminder-dismiss" class="bar-btn" type="button" aria-label="Hide progress reminder" title="Hide reminder">×</button>
+      </div>
       <div id="room-title-section" class="editor-room-title-overlay" data-mobile-panel="goal">
         <label class="editor-room-title-label" for="room-title-input">Room</label>
         <input id="room-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Name this room" />

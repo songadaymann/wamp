@@ -31,6 +31,7 @@ import { RoomGoalIntroModalController } from './roomGoalIntroModal';
 import { RoomRushModalController } from './roomRushModal';
 import { RoomRushResultModalController } from './roomRushResultModal';
 import { RunRatingModalController } from './runRatingModal';
+import { PostRunReminderController } from './postRunReminder';
 import { SettingsModalController } from './settingsModal';
 import { SignTextModalController } from './signTextModal';
 import {
@@ -75,6 +76,7 @@ interface UiControllers {
   roomRushModal: RoomRushModalController;
   roomRushResultModal: RoomRushResultModalController;
   runRatingModal: RunRatingModalController;
+  postRunReminder: PostRunReminderController;
   signTextModal: SignTextModalController;
   wampOGramModal: WampOGramModalController;
   welcomeModal: WelcomeModalController;
@@ -85,7 +87,7 @@ interface UiControllers {
 
 export function setupUiControllers(game: Phaser.Game): void {
   const controllers = createUiControllers(game);
-  game.events.once('destroy', () => { controllers.activityInbox.destroy(); controllers.roomInsights.destroy(); });
+  game.events.once('destroy', () => { controllers.activityInbox.destroy(); controllers.roomInsights.destroy(); controllers.postRunReminder.destroy(); });
 
   controllers.paletteController.init();
   configureEditorBridge(controllers);
@@ -106,6 +108,8 @@ function createUiControllers(game: Phaser.Game): UiControllers {
   const controlsModal = new ControlsModalController();
   const playlistIntroModal = new PlaylistIntroModalController();
   const exploreModal = new ExploreModalController(game);
+  const runRatingModal = new RunRatingModalController(game);
+  const guestProgressClaimModal = new GuestProgressClaimModalController();
   const openExplore = () => exploreModal.open();
   const welcomeModal = new WelcomeModalController(game, undefined, undefined, undefined, undefined, undefined, { explore: openExplore });
   const firstStepsSummary = new FirstStepsSummaryController({
@@ -121,10 +125,10 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     historyModal: new RoomHistoryModalController(game),
     leaderboardModal,
     exploreModal,
-    roomSequence: new RoomSequenceController(game, leaderboardModal, playlistIntroModal, welcomeModal, undefined, undefined, firstStepsSummary),
+    roomSequence: new RoomSequenceController(game, leaderboardModal, playlistIntroModal, welcomeModal, undefined, undefined, firstStepsSummary, runRatingModal),
     guestBuilderClaimModal: new GuestBuilderClaimModalController(),
     guestRoomRecoveryModal: new GuestRoomRecoveryModalController(game),
-    guestProgressClaimModal: new GuestProgressClaimModalController(),
+    guestProgressClaimModal,
     guestbookModal: new GuestbookModalController(),
     settingsModal: new SettingsModalController(),
     controlsModal,
@@ -141,7 +145,12 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     roomGoalIntroModal: new RoomGoalIntroModalController(),
     roomRushModal: new RoomRushModalController(game),
     roomRushResultModal: new RoomRushResultModalController(game),
-    runRatingModal: new RunRatingModalController(game),
+    runRatingModal,
+    postRunReminder: new PostRunReminderController({
+      openUnrated: () => { void exploreModal.open('unrated'); },
+      openGuestHistory: () => guestProgressClaimModal.openFromReminder(),
+      beforeOpen: () => runRatingModal.close(),
+    }),
     signTextModal: new SignTextModalController(game),
     wampOGramModal: new WampOGramModalController(game),
     welcomeModal,
@@ -178,6 +187,7 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.roomRushModal.init();
   controllers.roomRushResultModal.init();
   controllers.runRatingModal.init();
+  controllers.postRunReminder.init();
   controllers.signTextModal.init();
   controllers.wampOGramModal.init();
   controllers.welcomeModal.init();

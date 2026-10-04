@@ -1,0 +1,49 @@
+#post-run-reminder {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  z-index: 17;
+  display: flex;
+  max-width: calc(100% - 16px);
+  transform: translateX(-50%);
+  border: 2px solid #222;
+  background: #fff3db;
+}
+
+#post-run-reminder.hidden {
+  display: none;
+}
+
+#post-run-reminder .bar-btn {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: #fff3db;
+  color: #222;
+  font-size: 12px;
+}
+
+#post-run-reminder .bar-btn:hover,
+#post-run-reminder .bar-btn:focus-visible {
+  background: #79ccde;
+}
+
+#post-run-reminder .bar-btn:focus-visible {
+  outline: 3px solid #222;
+  outline-offset: -3px;
+}
+
+#btn-post-run-reminder {
+  min-width: 0;
+}
+
+#post-run-reminder #btn-post-run-reminder-dismiss {
+  min-width: 44px;
+  border-left: 2px solid #222;
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] #post-run-reminder {
+  position: fixed;
+  bottom: calc(var(--mobile-portrait-console-height) + var(--safe-bottom) + 12px);
+}

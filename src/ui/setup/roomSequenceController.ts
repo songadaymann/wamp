@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import type { RunRatingModalController } from './runRatingModal';
+import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../../auth/client';
 import {
   POST_RUN_RATING_SUBMITTED_EVENT,
   type PostRunRatingSubmittedDetail,
@@ -51,6 +53,12 @@ type RoomSequenceDebugWindow = Window & {
 };
 
 export class RoomSequenceController {
+  private ratingAccount = getAuthDebugState().user?.id;
+  private readonly onRatingAccountChanged = () => {
+    const account = getAuthDebugState().user?.id;
+    if (account !== this.ratingAccount && this.activeSequence?.mode === 'rate') this.stop({ returnToWorld: false });
+    this.ratingAccount = account;
+  };
   private readonly elements: RoomSequenceElements;
   private activeSequence: ActiveRoomSequence | null = null;
   private navigating = false;
@@ -145,6 +153,7 @@ export class RoomSequenceController {
     private readonly doc: Document = document,
     private readonly windowObj: RoomSequenceDebugWindow = window,
     private readonly firstStepsSummary?: Pick<FirstStepsSummaryController, 'reset' | 'finish'>,
+    private readonly ratingModal?: Pick<RunRatingModalController, 'openForSequence' | 'close'>,
   ) {
     this.elements = {
       hud: this.doc.getElementById('room-sequence-hud'),
@@ -163,6 +172,7 @@ export class RoomSequenceController {
   }
 
   init(): void {
+    this.windowObj.addEventListener(AUTH_STATE_CHANGED_EVENT, this.onRatingAccountChanged);
     this.windowObj.addEventListener(ROOM_SEQUENCE_START_EVENT, this.handleStartRequest as EventListener);
     this.windowObj.addEventListener(POST_RUN_RATING_SUBMITTED_EVENT, this.handleRunRatingSubmitted as EventListener);
     this.elements.currentButton?.addEventListener('click', this.handleCurrentClick);
@@ -179,6 +189,7 @@ export class RoomSequenceController {
   }
 
   destroy(): void {
+    this.windowObj.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.onRatingAccountChanged);
     this.activeSequence = null;
     this.firstStepsSummary?.reset([]);
     this.windowObj.removeEventListener(ROOM_SEQUENCE_START_EVENT, this.handleStartRequest as EventListener);
@@ -246,6 +257,7 @@ export class RoomSequenceController {
   stop(options: { returnToWorld?: boolean } = {}): void {
     const shouldReturnToWorld = options.returnToWorld ?? true;
     const wasPlaying = this.activeSequence?.mode === 'play';
+    if (this.activeSequence?.mode === 'rate') this.ratingModal?.close();
     this.clearAdvanceTimer();
     this.activeSequence = null;
     this.firstStepsSummary?.reset([]);
@@ -318,7 +330,8 @@ export class RoomSequenceController {
         scene.playSelectedRoom({ forceGoalIntro: sequence.forceGoalIntro });
         sequence.statusText = 'Playing. Use Next for another room.';
       } else {
-        await this.leaderboardModal.open('room');
+        if (this.ratingModal) await this.ratingModal.openForSequence(entry);
+        else await this.leaderboardModal.open('room');
         sequence.statusText = 'Rate this room, then the queue will advance.';
       }
       sequence.statusTone = 'default';

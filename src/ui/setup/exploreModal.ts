@@ -106,12 +106,21 @@ export class ExploreModalController {
 
   private readonly handleAuthStateChanged = (event: Event) => {
     const detail = event instanceof CustomEvent ? (event.detail as AuthDebugState | undefined) : undefined;
+    const previousUserId = this.authState.user?.id;
     this.authState = detail ?? getAuthDebugState();
     if (!this.authState.authenticated) {
       this.myPlaylists = [];
       this.myPlaylistsLoaded = false;
       this.playlistPickerRoomId = null;
       this.playlistPickerSelectedId = null;
+    }
+    if (previousUserId !== this.authState.user?.id && ['unrated', 'unbeaten', 'unvisited'].includes(this.discoverSort)) {
+      this.discoveryRequestId++;
+      this.roomDiscovery = null;
+      if (!this.elements.modal?.classList.contains('hidden')) {
+        if (!this.authState.authenticated) { this.close(); return; }
+        void this.loadDiscoveryResults(false);
+      }
     }
     this.render();
   };
@@ -244,7 +253,7 @@ export class ExploreModalController {
     this.close();
   }
 
-  async open(): Promise<void> {
+  async open(sort?: 'unrated'): Promise<void> {
     if (!this.elements.modal) {
       return;
     }
@@ -266,12 +275,12 @@ export class ExploreModalController {
     this.clearPlaylistFeedback();
     this.exploreMode = 'rooms';
     this.discoverFilter = null;
-    this.discoverSort = 'featured';
+    this.discoverSort = sort ?? 'featured';
     this.builderSort = 'alphabet';
     this.featurePendingRoomId = null;
     this.setError(null);
     this.render();
-    await this.loadDiscoveryResults(true);
+    await this.loadDiscoveryResults(sort === undefined);
   }
 
   close(): void {

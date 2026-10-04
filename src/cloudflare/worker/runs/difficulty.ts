@@ -349,6 +349,7 @@ async function loadRoomDiscoveryResponseWithoutInsights(
       difficultyFilter,
       sort,
       results: [],
+      ...(sort === 'unrated' ? { totalCount: 0 } : {}),
     };
   }
 
@@ -535,6 +536,7 @@ async function loadRoomDiscoveryResponseWithoutInsights(
     difficultyFilter,
     sort,
     results,
+    ...(sort === 'unrated' ? { totalCount: orderedResults.length } : {}),
     ...(hasMore ? { nextCursor: encodeRoomDiscoveryCursor(sort, cursorOffset + limit) } : {}),
   };
 }
