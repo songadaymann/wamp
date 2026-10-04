@@ -1,5 +1,7 @@
 import type { RoomSnapshot } from '../../persistence/roomRepository';
 import { createModalLifecycle } from './modalLifecycle';
+import { DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
+import { getPlayControlsStorage, hasSeenPlayControls, markPlayControlsSeen, renderPlayControlHints } from './playControlHints';
 
 const ROOM_GOAL_INTRO_SEEN_STORAGE_PREFIX = 'everybodys-platformer:room-goal-intro-seen:v1:';
 
@@ -8,6 +10,8 @@ type RoomGoalIntroElements = {
   title: HTMLElement | null;
   meta: HTMLElement | null;
   body: HTMLElement | null;
+  copy: HTMLElement | null;
+  controls: HTMLElement | null;
   startButton: HTMLButtonElement | null;
 };
 
@@ -32,12 +36,14 @@ export class RoomGoalIntroModalController {
   private readonly lifecycle: ReturnType<typeof createModalLifecycle>;
 
   private readonly handleStartClick = () => {
-    this.finish(true, true);
+    if (this.isOpen()) this.finish(true, true);
   };
+  private readonly handleLayoutChange = () => renderPlayControlHints(this.elements.controls, this.doc);
 
   constructor(
-    private readonly storage: Storage = window.localStorage,
+    private readonly storage: Storage | null = getPlayControlsStorage(),
     private readonly doc: Document = document,
+    private readonly windowObj: Window = window,
   ) {
     ensureRoomGoalIntroModalMarkup(this.doc);
     this.elements = {
@@ -45,6 +51,8 @@ export class RoomGoalIntroModalController {
       title: this.doc.getElementById('room-goal-intro-title'),
       meta: this.doc.getElementById('room-goal-intro-meta'),
       body: this.doc.getElementById('room-goal-intro-body'),
+      copy: this.doc.getElementById('room-goal-intro-copy'),
+      controls: this.doc.getElementById('room-goal-intro-controls'),
       startButton: this.doc.getElementById('btn-room-goal-intro-start') as HTMLButtonElement | null,
     };
     this.lifecycle = createModalLifecycle({
@@ -57,6 +65,8 @@ export class RoomGoalIntroModalController {
   init(): void {
     activeRoomGoalIntroModalController = this;
     this.elements.startButton?.addEventListener('click', this.handleStartClick);
+    this.windowObj.addEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleLayoutChange);
+    this.handleLayoutChange();
     this.lifecycle.attach();
   }
 
@@ -65,6 +75,7 @@ export class RoomGoalIntroModalController {
       activeRoomGoalIntroModalController = null;
     }
     this.elements.startButton?.removeEventListener('click', this.handleStartClick);
+    this.windowObj.removeEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleLayoutChange);
     this.lifecycle.detach();
     this.finish(false, false);
   }
@@ -74,11 +85,18 @@ export class RoomGoalIntroModalController {
   }
 
   shouldShowForRoom(room: RoomSnapshot | null): boolean {
-    if (!room || room.status !== 'published' || !room.goal) {
-      return false;
-    }
+    if (!room) return false;
+    return !hasSeenPlayControls(this.storage, this.doc)
+      || (room.status === 'published' && Boolean(room.goal) && !this.hasSeenRoom(room));
+  }
 
-    return !this.hasSeenRoom(room);
+  openControlsIfNeeded(onStart: () => void): boolean {
+    if (!this.elements.modal || hasSeenPlayControls(this.storage, this.doc)) return false;
+    if (this.isOpen()) return true;
+    this.pendingStart = onStart;
+    this.activeSeenKey = null;
+    this.show('How to play', '', '');
+    return true;
   }
 
   open(options: RoomGoalIntroOpenOptions): void {
@@ -88,11 +106,21 @@ export class RoomGoalIntroModalController {
     }
 
     this.pendingStart = options.onStart;
-    this.activeSeenKey = this.getSeenKey(options.room);
-    this.setText(this.elements.title, options.titleText);
-    this.setText(this.elements.meta, options.metaText);
-    this.setText(this.elements.body, options.bodyText);
+    this.activeSeenKey = options.room.status === 'published' && options.room.goal
+      ? this.getSeenKey(options.room)
+      : null;
+    this.show(options.titleText, options.metaText, options.bodyText);
+  }
+
+  private show(title: string, meta: string, body: string): void {
+    this.setText(this.elements.title, title);
+    this.setText(this.elements.meta, meta);
+    this.setText(this.elements.body, body);
+    this.elements.meta?.classList.toggle('hidden', !meta);
+    this.elements.copy?.classList.toggle('hidden', !body);
+    this.handleLayoutChange();
     this.lifecycle.show();
+    this.elements.startButton?.focus({ preventScroll: true });
   }
 
   forceClose(): void {
@@ -109,20 +137,21 @@ export class RoomGoalIntroModalController {
 
     if (markSeen && seenKey) {
       try {
-        this.storage.setItem(seenKey, '1');
+        this.storage?.setItem(seenKey, '1');
       } catch {
         // Ignore storage failures and continue starting the run.
       }
     }
 
     if (triggerStart) {
+      if (markSeen && startHandler) markPlayControlsSeen(this.storage, this.doc);
       startHandler?.();
     }
   }
 
   private hasSeenRoom(room: RoomSnapshot): boolean {
     try {
-      return this.storage.getItem(this.getSeenKey(room)) === '1';
+      return this.storage?.getItem(this.getSeenKey(room)) === '1';
     } catch {
       return false;
     }
@@ -146,14 +175,14 @@ function ensureRoomGoalIntroModalMarkup(doc: Document): void {
       <div class="history-modal-panel room-goal-intro-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-goal-intro-title">
         <div class="history-modal-header room-goal-intro-header">
           <div class="history-modal-title-group">
-            <div class="history-modal-kicker">Room Goal</div>
             <h2 id="room-goal-intro-title" class="history-modal-title">Reach Exit</h2>
             <div id="room-goal-intro-meta" class="history-modal-meta">Collect 3</div>
           </div>
         </div>
-        <div class="room-goal-intro-copy">
+        <div id="room-goal-intro-copy" class="room-goal-intro-copy">
           <div id="room-goal-intro-body" class="room-goal-intro-body">Reach the exit as fast as you can!</div>
         </div>
+        <div id="room-goal-intro-controls" class="play-intro-controls" aria-label="Play controls"></div>
         <div class="room-goal-intro-actions">
           <button id="btn-room-goal-intro-start" class="bar-btn" type="button">Start</button>
         </div>

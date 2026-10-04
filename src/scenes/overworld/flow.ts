@@ -17,6 +17,7 @@ import { createExpandedRoomRepository } from '../../expandedRooms/repository';
 import { setFocusedCoordinatesInUrl } from '../../navigation/worldNavigation';
 import { roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomModel';
 import { hideBusyOverlay, showBusyError, showBusyOverlay } from '../../ui/appFeedback';
+import { getRoomGoalIntroModalController } from '../../ui/setup/roomGoalIntroModal';
 import type {
   CourseComposerReturnTarget,
   CourseComposerSceneData,
@@ -428,6 +429,15 @@ export class OverworldSceneFlowController {
       this.returnToWorld();
       return;
     }
+
+    const mode = this.host.getMode();
+    const coordinates = this.host.getSelectedCoordinates();
+    if (getRoomGoalIntroModalController()?.openControlsIfNeeded(() => {
+      const selected = this.host.getSelectedCoordinates();
+      if (this.host.getMode() === mode && selected.x === coordinates.x && selected.y === coordinates.y) {
+        void this.playSelectedCourse();
+      }
+    })) return;
 
     await this.startSelectedPublishedCourse();
   }

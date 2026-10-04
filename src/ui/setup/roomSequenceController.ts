@@ -200,8 +200,7 @@ export class RoomSequenceController {
 
     if (
       sequence.kind === 'playlist' &&
-      sequence.showDesktopControlsIntro &&
-      this.shouldShowDesktopControlsIntro()
+      sequence.showDesktopControlsIntro
     ) {
       await this.playlistIntroModal.open({
         title: sequence.kickerLabel,
@@ -364,17 +363,6 @@ export class RoomSequenceController {
       this.activeSequence &&
       this.activeSequence.index >= this.activeSequence.entries.length,
     );
-  }
-
-  private shouldShowDesktopControlsIntro(): boolean {
-    const deviceClass = this.doc.body.dataset.deviceClass;
-    if (deviceClass === 'phone') {
-      return false;
-    }
-    if (deviceClass === 'desktop') {
-      return true;
-    }
-    return this.windowObj.matchMedia?.('(hover: hover) and (pointer: fine)').matches ?? true;
   }
 
   private setButtonHidden(button: HTMLButtonElement | null, hidden: boolean): void {

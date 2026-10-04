@@ -4,16 +4,20 @@ import type {
   RoomRushStartRule,
 } from '../../scenes/overworld/roomRushRuns';
 import { getActiveOverworldScene } from './sceneBridge';
+import { DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
+import { getPlayControlsStorage, markPlayControlsSeen, renderPlayControlHints } from './playControlHints';
 
 type RoomRushModalElements = {
   modal: HTMLElement | null;
   closeButton: HTMLButtonElement | null;
   status: HTMLElement | null;
+  controls: HTMLElement | null;
   modeButtons: HTMLButtonElement[];
 };
 
 export class RoomRushModalController {
   private readonly elements: RoomRushModalElements;
+  private readonly handleLayoutChange = () => renderPlayControlHints(this.elements.controls, this.doc);
 
   private readonly handleCloseClick = (): void => {
     this.close();
@@ -36,11 +40,13 @@ export class RoomRushModalController {
   constructor(
     private readonly game: Phaser.Game,
     private readonly doc: Document = document,
+    private readonly windowObj: Window = window,
   ) {
     this.elements = {
       modal: this.doc.getElementById('room-rush-modal'),
       closeButton: this.doc.getElementById('btn-room-rush-close') as HTMLButtonElement | null,
       status: this.doc.getElementById('room-rush-status'),
+      controls: this.doc.getElementById('room-rush-controls'),
       modeButtons: Array.from(
         this.doc.querySelectorAll<HTMLButtonElement>('[data-room-rush-difficulty][data-room-rush-start-rule]'),
       ),
@@ -51,6 +57,7 @@ export class RoomRushModalController {
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
+    this.windowObj.addEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleLayoutChange);
     for (const button of this.elements.modeButtons) {
       button.addEventListener('click', () => {
         void this.startRunFromButton(button);
@@ -62,6 +69,7 @@ export class RoomRushModalController {
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
+    this.windowObj.removeEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleLayoutChange);
     this.close();
   }
 
@@ -71,6 +79,7 @@ export class RoomRushModalController {
     }
 
     this.setStatus(null);
+    this.handleLayoutChange();
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
   }
@@ -102,6 +111,7 @@ export class RoomRushModalController {
     try {
       const started = await scene.startRoomRushRun({ difficulty, startRule });
       if (started) {
+        markPlayControlsSeen(getPlayControlsStorage(), this.doc);
         this.close();
       } else {
         this.setStatus('Select an available room to start Room Rush.');

@@ -1,11 +1,14 @@
 import type { RoomSequenceEntry } from './roomSequenceEvents';
 import { createModalLifecycle } from './modalLifecycle';
+import { DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
+import { getPlayControlsStorage, markPlayControlsSeen, renderPlayControlHints } from './playControlHints';
 
 type PlaylistIntroElements = {
   modal: HTMLElement | null;
   title: HTMLElement | null;
   meta: HTMLElement | null;
   levels: HTMLElement | null;
+  controls: HTMLElement | null;
   startButton: HTMLButtonElement | null;
 };
 
@@ -21,15 +24,18 @@ export class PlaylistIntroModalController {
   private pendingResolve: (() => void) | null = null;
 
   private readonly handleStartClick = () => {
+    markPlayControlsSeen(getPlayControlsStorage(), this.doc);
     this.close();
   };
+  private readonly handleLayoutChange = () => renderPlayControlHints(this.elements.controls, this.doc);
 
-  constructor(private readonly doc: Document = document) {
+  constructor(private readonly doc: Document = document, private readonly windowObj: Window = window) {
     this.elements = {
       modal: this.doc.getElementById('playlist-intro-modal'),
       title: this.doc.getElementById('playlist-intro-title'),
       meta: this.doc.getElementById('playlist-intro-meta'),
       levels: this.doc.getElementById('playlist-intro-levels'),
+      controls: this.doc.getElementById('playlist-intro-controls'),
       startButton: this.doc.getElementById('btn-playlist-intro-start') as HTMLButtonElement | null,
     };
     this.lifecycle = createModalLifecycle({
@@ -41,11 +47,13 @@ export class PlaylistIntroModalController {
 
   init(): void {
     this.elements.startButton?.addEventListener('click', this.handleStartClick);
+    this.windowObj.addEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleLayoutChange);
     this.lifecycle.attach();
   }
 
   destroy(): void {
     this.elements.startButton?.removeEventListener('click', this.handleStartClick);
+    this.windowObj.removeEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleLayoutChange);
     this.lifecycle.detach();
     this.close();
   }
@@ -56,6 +64,7 @@ export class PlaylistIntroModalController {
     }
 
     this.render(detail);
+    this.handleLayoutChange();
     this.lifecycle.show();
     this.elements.startButton?.focus({ preventScroll: true });
 
