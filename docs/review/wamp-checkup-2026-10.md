@@ -242,6 +242,7 @@ What happens in a newcomer's first five minutes, and what brings players and bui
 The movement has a great base. These items make it fair on every screen, make deaths and hits feel punchy, and give builders new toys.
 
 - [ ] **F138** Jump height, ice and gravity zones change with screen refresh rate (120/144Hz vs 60Hz vs laggy 30fps) · high impact · small effort
+  - Production implementation delivered in PR #38; controlled desktop/phone verification passes. Combined F002/F138 physical 120Hz phone acceptance remains open.
 - [ ] **F139** Pits never kill: invisible floor under rooms, and falling into the room below abandons your timed run · high impact · medium effort
 - [ ] **F141** Add respawn checkpoints: deaths in courses/expanded rooms send you back to the very first screen · high impact · medium effort
 - [ ] **F147** Add hitstop, a short death beat, the unused death sound, and hold-to-bounce higher on stomps (also covers F111) · medium impact · small effort
