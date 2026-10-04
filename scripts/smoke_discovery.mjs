@@ -41,7 +41,7 @@ try{
   await click(page,`[data-explore-sort="${sort}"]`,touch);await loaded(page,sort);const body=await serverDiscovery(sort);
   assert.equal(await page.locator('#explore-modal .explore-room-card').count(),body.results.length);
   const titles=await page.locator('#explore-modal .explore-room-title').allTextContents();
-  assert.deepEqual(titles,body.results.map(row=>row.roomTitle||`Room ${row.roomCoordinates.x}, ${row.roomCoordinates.y}`));
+  assert.deepEqual(titles,body.results.map(row=>row.roomTitle?.trim()||(row.goalType?'Untitled Level':'Untitled Room')));
   if(sort==='featured')assert.ok(body.results.every(row=>row.featured));
   if(sort==='popular')for(let i=1;i<body.results.length;i++)assert.ok(body.results[i-1].recentPlayers>=body.results[i].recentPlayers);
   if(body.results.some(row=>row.quality.voteCount>0))assert.ok((await page.locator('.explore-room-quality-label').allTextContents()).some(text=>text.includes('rating')));
