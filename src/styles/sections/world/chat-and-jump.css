@@ -138,11 +138,13 @@ body[data-app-mode='editor'] #bottom-bar .world-footer-controls-btn.chat-footer-
 
 body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-open) .chat-toggle-floating {
   display: inline-flex;
+  pointer-events: auto;
 }
 
 /* Sit left of the menu button instead of under it. */
 body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-open) {
   right: calc(60px + var(--safe-right));
+  pointer-events: none;
 }
 
 .chat-panel-body {

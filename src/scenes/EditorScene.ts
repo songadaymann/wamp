@@ -569,10 +569,12 @@ export class EditorScene extends Phaser.Scene {
       hideObjectInspectorUi: () => this.hideObjectInspectorUi(),
       clearEditorPresence: () => this.presenceController.clear(),
       sleepEditorScene: () => {
+        this.interactionController.cancelTouchEdit();
         this.roomSession.backupDraftForPageExit();
         this.scene.sleep();
       },
       stopEditorScene: () => {
+        this.interactionController.cancelTouchEdit();
         this.roomSession.backupDraftForPageExit();
         this.scene.stop();
       },
@@ -640,6 +642,7 @@ export class EditorScene extends Phaser.Scene {
       floodFillObjects: (tileX, tileY) => this.editRuntime.floodFillObjects(tileX, tileY),
       beginObjectBatch: (livePreview) => this.editRuntime.beginObjectBatch(livePreview),
       commitObjectBatch: () => this.editRuntime.commitObjectBatch(),
+      cancelObjectBatch: () => this.editRuntime.cancelObjectBatch(),
       handleToolDown: (pointer) => this.toolController.handleToolDown(pointer),
       removeGoalMarkerAt: (worldX, worldY) => this.removeGoalMarkerAt(worldX, worldY),
       removeObjectAt: (worldX, worldY) => this.removeObjectAt(worldX, worldY),
@@ -658,6 +661,7 @@ export class EditorScene extends Phaser.Scene {
       cancelClipboardPastePreview: () => this.toolController.cancelClipboardPastePreview(),
       beginTileBatch: () => this.editRuntime.beginTileBatch(),
       commitTileBatch: () => this.editRuntime.commitTileBatch(),
+      cancelTileBatch: () => this.editRuntime.cancelTileBatch(),
       startPlayMode: () => this.startPlayMode(),
       updateToolUi: () => this.toolController.updateToolUi(),
       updateBackgroundPreview: () => this.updateBackgroundPreview(),
@@ -1009,7 +1013,10 @@ export class EditorScene extends Phaser.Scene {
     this.draftLifecycle = new EditorDraftLifecycle({
       isActive: () => this.scene.isActive(this.scene.key),
       hasUnsavedChanges: () => this.roomDirty,
-      flush: () => { this.roomSession.backupDraftForPageExit(); },
+      flush: () => {
+        this.interactionController.cancelTouchEdit();
+        this.roomSession.backupDraftForPageExit();
+      },
     });
     this.draftLifecycle.start();
 
@@ -1031,6 +1038,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   update(time: number, delta = 16): void {
+    this.interactionController.validateTouchEdit();
     this.maybeAutoSave(time);
     this.presenceController.sync();
     this.updateBackgroundPreview();
@@ -1501,7 +1509,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private maybeAutoSave(_time: number): void {
-    if (this.previewSmokePersistenceIsolated) {
+    if (this.previewSmokePersistenceIsolated || this.interactionController.hasPendingTouchEdit) {
       return;
     }
     this.persistenceController.maybeAutoSave(editorState.isPlaying);
@@ -1515,6 +1523,7 @@ export class EditorScene extends Phaser.Scene {
     force: boolean = false,
     options?: { promptForSignInOnUnauthorized?: boolean }
   ): Promise<RoomRecord | null> {
+    if (this.interactionController.hasPendingTouchEdit) this.interactionController.cancelTouchEdit();
     return this.persistenceController.saveDraft(force, options);
   }
 

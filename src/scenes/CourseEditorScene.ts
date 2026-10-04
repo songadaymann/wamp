@@ -2,6 +2,8 @@ import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draf
 import { draftBackupRevision } from '../courses/localDraftBackup';
 import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecycle';
 import Phaser from 'phaser';
+import { CourseTouchController } from './editor/courseTouch';
+import { editorTouchToolKey } from './editor/touchGesture';
 import { getAuthDebugState, promptForSignIn, refreshAuthSession } from '../auth/client';
 import { globalRoomMusicController } from '../music/controller';
 import {
@@ -240,6 +242,12 @@ export class CourseEditorScene extends Phaser.Scene {
   private panStartPointer = { x: 0, y: 0 };
   private panStartScroll = { x: 0, y: 0 };
   private tileDragMode: TileDragMode = null;
+  private readonly touchControls: CourseTouchController;
+  private readonly touchTileRooms = new Set<string>();
+  private readonly touchObjectRooms = new Set<string>();
+  private readonly handleTouchBlur = (): void => {
+    if (this.touchControls.isEditing) this.touchControls.cancel();
+  };
   private activeTileDragRoomId: string | null = null;
   private activeObjectDragRoomId: string | null = null;
   private lastObjectDragCell: TilePoint | null = null;
@@ -559,13 +567,85 @@ export class CourseEditorScene extends Phaser.Scene {
         globalRoomMusicController.previewPatternCell(pattern, instrumentId, row),
     });
     this.musicWorkflow.attachPatternController(this.musicPatternController);
+    this.touchControls = new CourseTouchController({
+      schedule: (delay, callback) => {
+        const timer = this.time.delayedCall(delay, callback);
+        return () => timer.remove(false);
+      },
+      signature: () => `${editorTouchToolKey()}:${this.musicModeActive}:${this.courseGoalPlacementMode}:${document.body.dataset.editorSpriteUiLocked}`,
+      classify: () => this.pathBend ? 'bend'
+        : this.courseGoalPlacementMode || this.clipboardPastePreviewActive || editorState.activeTool === 'fill'
+          ? 'tap'
+          : editorState.paletteMode === 'objects'
+            ? editorState.activeTool === 'pencil' && canRepeatSelectedEditorObject() ? 'objects' : 'tap'
+            : ['pencil', 'eraser', 'randomize'].includes(editorState.activeTool) ? 'brush' : 'draw',
+      begin: (pointer) => {
+        this.handlePrimaryPointerDown(pointer);
+        if (this.activeTileDragRoomId) this.touchTileRooms.add(this.activeTileDragRoomId);
+      },
+      beginBrush: (world) => {
+        const slice = this.getSliceAtWorldPoint(world.x, world.y);
+        if (!slice) return;
+        this.selectRoomById(slice.roomId);
+        slice.runtime.beginTileBatch();
+        this.touchTileRooms.add(slice.roomId);
+        const x = Math.floor((world.x - slice.origin.x) / TILE_SIZE);
+        const y = Math.floor((world.y - slice.origin.y) / TILE_SIZE);
+        this.pencilDragStart = { x, y };
+        this.lastPencilStampOrigin = null;
+        if (editorState.activeTool === 'pencil') this.placeCoursePencilStamp(slice, x, y);
+        else if (editorState.activeTool === 'eraser') slice.runtime.eraseTileAt(world.x, world.y);
+        else if (editorState.activeTool === 'randomize') slice.runtime.paintRandomizeAt(world.x, world.y);
+        this.tileDragMode = editorState.activeTool as TileDragMode;
+        this.activeTileDragRoomId = slice.roomId;
+      },
+      beginObjects: (point) => {
+        const world = this.cameras.main.getWorldPoint(point.x, point.y);
+        const slice = this.getSliceAtWorldPoint(world.x, world.y);
+        if (!slice || this.objectInspectorController.isConnectingPressurePlate()) return;
+        const x = Math.floor((world.x - slice.origin.x) / TILE_SIZE);
+        const y = Math.floor((world.y - slice.origin.y) / TILE_SIZE);
+        this.selectRoomById(slice.roomId);
+        slice.runtime.beginObjectBatch(true);
+        this.touchObjectRooms.add(slice.roomId);
+        this.placeObjectAtTile(slice, x, y);
+        this.activeObjectDragRoomId = slice.roomId;
+        this.lastObjectDragCell = { x, y };
+      },
+      move: (pointer) => this.handlePointerDrag(pointer),
+      tap: (pointer) => {
+        this.handlePrimaryPointerDown(pointer);
+        this.finishPointerAction(pointer);
+        this.commitTouchBatches();
+      },
+      finish: (pointer, bend) => {
+        if (bend) this.commitTouchPathBend(pointer);
+        else this.finishPointerAction(pointer);
+        this.commitTouchBatches();
+      },
+      cancel: () => this.cancelTouchBatches(),
+      worldPoint: (x, y) => getScreenAnchorWorldPoint(x, y, this.cameras.main),
+      pinch: (factor, anchor, x, y) => {
+        const camera = this.cameras.main;
+        this.inspectZoom = Phaser.Math.Clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+        camera.setZoom(this.inspectZoom);
+        this.syncCameraBounds();
+        const scroll = getScrollForScreenAnchor(anchor.x, anchor.y, x, y, camera);
+        camera.setScroll(scroll.x, scroll.y);
+        this.constrainCamera();
+        this.renderUi();
+      },
+    });
   }
 
   create(data?: CourseEditorSceneData): void {
     this.draftLifecycle = new EditorDraftLifecycle({
       isActive: () => !this.isShuttingDown && this.scene.isActive(),
       hasUnsavedChanges: () => this.getDirtySlices().length > 0 || isActiveCourseDraftSessionDirty(),
-      flush: () => this.backupDebouncer.flush(),
+      flush: () => {
+        this.handleTouchBlur();
+        this.backupDebouncer.flush();
+      },
     });
     this.draftLifecycle.start();
     setAppMode('editor');
@@ -756,6 +836,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   update(): void {
+    this.touchControls.validate();
     const change = `${getActiveCourseDraftSessionRevision()}:${this.getDirtySlices().map((slice) => `${slice.roomId}:${slice.runtime.currentLastDirtyAt}`).join(',')}`;
     if (change !== this.lastBackupChange) {
       this.lastBackupChange = change;
@@ -835,6 +916,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   async returnToCourseBuilder(): Promise<void> {
+    this.handleTouchBlur();
     this.setMusicModeActive(false);
     this.backupDebouncer.flush();
     this.persistSessionOverridesForPlayableSlices();
@@ -1105,6 +1187,7 @@ export class CourseEditorScene extends Phaser.Scene {
     _force?: boolean,
     options: { promptForSignInOnUnauthorized?: boolean } = {}
   ): Promise<RoomRecord | null> {
+    this.handleTouchBlur();
     const dirtySlices = this.getDirtySlices();
     if (dirtySlices.length === 0) {
       this.statusText = 'No room draft changes to save.';
@@ -1313,6 +1396,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   async startPlayMode(): Promise<void> {
+    this.handleTouchBlur();
     const draft = this.getActiveCourseDraft();
     if (!draft || draft.roomRefs.length === 0) {
       this.statusText = 'Add expanded room cells before testing.';
@@ -1949,6 +2033,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private flushDraftBackup(): void {
     if (this.isShuttingDown || !this.courseRecord) return;
+    if (this.touchControls.isEditing) { this.backupDebouncer.schedule(); return; }
     let saved = this.draftBackup.flushCourse();
     for (const slice of this.getDirtySlices()) {
       setActiveCourseDraftSessionRoomUnsaved(slice.roomId, true);
@@ -2288,7 +2373,10 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private setupPointerControls(): void {
+    this.game.events.on('blur', this.handleTouchBlur);
+    this.events.on('sleep', this.handleTouchBlur);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.down(pointer); return; }
       if (this.musicModeActive && this.pointerRequestsPan(pointer)) {
         return;
       }
@@ -2317,6 +2405,7 @@ export class CourseEditorScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.move(pointer); return; }
       if (this.pendingRightClickPanPointerId === pointer.id) {
         const distance = Phaser.Math.Distance.Between(
           this.panStartPointer.x,
@@ -2347,7 +2436,11 @@ export class CourseEditorScene extends Phaser.Scene {
       this.handlePointerDrag(pointer);
     });
 
+    this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch && !this.musicModeActive) this.touchControls.up(pointer);
+    });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.up(pointer); return; }
       if (this.pendingRightClickPanPointerId === pointer.id) {
         this.pendingRightClickPanPointerId = null;
         this.handleSecondaryPointerClick(pointer);
@@ -2631,8 +2724,15 @@ export class CourseEditorScene extends Phaser.Scene {
 
     if (this.activeObjectDragRoomId && this.lastObjectDragCell && pointer.leftButtonDown()) {
       if (slice.roomId !== this.activeObjectDragRoomId) {
-        this.commitActiveObjectDrag();
-        slice.runtime.beginObjectBatch(true);
+        if (this.touchControls.isEditing) {
+          if (!this.touchObjectRooms.has(slice.roomId)) {
+            slice.runtime.beginObjectBatch(true);
+            this.touchObjectRooms.add(slice.roomId);
+          }
+        } else {
+          this.commitActiveObjectDrag();
+          slice.runtime.beginObjectBatch(true);
+        }
         this.placeObjectAtTile(slice, localTile.tileX, localTile.tileY);
         this.activeObjectDragRoomId = slice.roomId;
       } else {
@@ -2652,8 +2752,17 @@ export class CourseEditorScene extends Phaser.Scene {
         const previous = this.activeTileDragRoomId
           ? this.roomSlices.get(this.activeTileDragRoomId) ?? null
           : null;
-        previous?.runtime.commitTileBatch();
-        slice.runtime.beginTileBatch();
+        if (this.touchControls.isEditing) {
+          if (!this.touchTileRooms.has(slice.roomId)) {
+            slice.runtime.beginTileBatch();
+            this.touchTileRooms.add(slice.roomId);
+          }
+        } else {
+          previous?.runtime.commitTileBatch();
+          slice.runtime.beginTileBatch();
+        }
+        this.pencilDragStart = { x: localTile.tileX, y: localTile.tileY };
+        this.lastPencilStampOrigin = null;
         this.activeTileDragRoomId = slice.roomId;
       }
 
@@ -2686,6 +2795,42 @@ export class CourseEditorScene extends Phaser.Scene {
         this.drawActiveCourseStampPreview(startSlice, this.rectStart.x, this.rectStart.y, end.x, end.y);
       }
     }
+  }
+
+  private commitTouchBatches(): void {
+    for (const id of this.touchTileRooms) this.roomSlices.get(id)?.runtime.commitTileBatch();
+    for (const id of this.touchObjectRooms) this.roomSlices.get(id)?.runtime.commitObjectBatch();
+    this.touchTileRooms.clear();
+    this.touchObjectRooms.clear();
+    this.renderUi();
+  }
+
+  private cancelTouchBatches(): void {
+    for (const id of this.touchTileRooms) this.roomSlices.get(id)?.runtime.cancelTileBatch();
+    for (const id of this.touchObjectRooms) this.roomSlices.get(id)?.runtime.cancelObjectBatch();
+    this.touchTileRooms.clear();
+    this.touchObjectRooms.clear();
+    this.activeTileDragRoomId = null;
+    this.activeObjectDragRoomId = null;
+    this.lastObjectDragCell = null;
+    this.tileDragMode = null;
+    this.pencilDragStart = null;
+    this.lastPencilStampOrigin = null;
+    this.clearRectPreview();
+  }
+
+  private commitTouchPathBend(pointer: Phaser.Input.Pointer): void {
+    this.updateCoursePathBendPreview(pointer);
+    const bend = this.pathBend;
+    if (!bend) return;
+    const slice = this.roomSlices.get(bend.roomId);
+    if (slice) {
+      slice.runtime.beginTileBatch();
+      slice.runtime.stampShape('curve', bend.start.x, bend.start.y, bend.end.x, bend.end.y,
+        { erase: bend.erase, mid: bend.mid });
+      slice.runtime.commitTileBatch();
+    }
+    this.clearRectPreview();
   }
 
   private placeCoursePencilStamp(
@@ -3401,6 +3546,11 @@ export class CourseEditorScene extends Phaser.Scene {
     // Phaser has already destroyed display-list tile layers at SHUTDOWN.
     // Authored exits flush before stop/sleep; never serialize dead runtimes here.
     this.isShuttingDown = true;
+    this.game.events.off('blur', this.handleTouchBlur);
+    this.events.off('sleep', this.handleTouchBlur);
+    this.touchControls.reset();
+    this.touchTileRooms.clear();
+    this.touchObjectRooms.clear();
     this.backupDebouncer.cancel();
     this.draftBackup.flushCourse();
     this.draftLifecycle?.destroy();

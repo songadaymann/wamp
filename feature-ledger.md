@@ -102,3 +102,8 @@ Production deployment authorized by Jonathan. Deliver the existing enemy recover
 Canonical lane `codex/checkup-mobile-building-2026-10-04` in managed `wamp-checkup-first-three`. Local F157 implementation verified in both editors on desktop/tablet/phone; production pending. Checkup delivery document records scope/proof. Native F079 pinch baseline fails as reported; implement touch cancellation and shapes next. Keep overnight goal active and checklist unchanged until delivery.
 
 LIVE F157: PR #39 merged `ca16829c`, verified Pages `f71405ae`, final custom-domain/immutable asset parity and desktop/tablet/phone guest history flow. Next canonical lane `codex/checkup-touch-gestures-2026-10-04` from that main; native F079 pinch and shape/copy failures reproduced, implementation pending. Master 24/214; full overnight goal and physical F002/F138 acceptance remain open.
+
+
+LOCAL F079 implementation in `codex/checkup-touch-gestures-2026-10-04` (base `ca16829c`, managed checkup worktree). Shared touch owner/candidate, rollback APIs, both editor paths, shape/copy/Curve and persistence boundaries implemented. Full 2,127-test check and eight history scenarios pass; tablet lifecycle proof passes both editors. Full native device matrix/final screenshot review and approved production delivery remain pending. Do not mark F079 or the overall goal complete; master stays 24/214.
+
+F079 final local verification passes 226 native editor scenarios plus 12 ordinary guest Build scenarios; screenshot review and official client complete. Closed-chat input interception and rapid native button clicks are included. The branch remains local pending final checks/PR/approved Pages-only production delivery. F161/F158 and physical F002/F138 stay open.

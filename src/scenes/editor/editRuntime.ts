@@ -428,6 +428,7 @@ export class EditorEditRuntime {
     this.objectBatchNext = null;
     this.objectBatchChanged = false;
     this.objectBatchLivePreview = false;
+    this.objectBatchPlacedCount = 0;
     this.smartTerrain = createRoomSmartTerrainState();
     this.clipboardState = null;
     this.customRoomTiles = [];
@@ -714,6 +715,7 @@ export class EditorEditRuntime {
   private objectBatchNext: PlacedObject[] | null = null;
   private objectBatchChanged = false;
   private objectBatchLivePreview = false;
+  private objectBatchPlacedCount = 0;
 
   beginObjectBatch(livePreview = false): void {
     if (!this.guardEditable()) return;
@@ -721,16 +723,19 @@ export class EditorEditRuntime {
     this.objectBatchNext = this.clonePlacedObjects(this.objectBatchBefore);
     this.objectBatchChanged = false;
     this.objectBatchLivePreview = livePreview;
+    this.objectBatchPlacedCount = 0;
   }
 
   commitObjectBatch(): void {
     const previous = this.objectBatchBefore;
     const next = this.objectBatchNext;
     const changed = this.objectBatchChanged;
+    const placedCount = this.objectBatchPlacedCount;
     this.objectBatchBefore = null;
     this.objectBatchNext = null;
     this.objectBatchChanged = false;
     this.objectBatchLivePreview = false;
+    this.objectBatchPlacedCount = 0;
     if (!previous || !next || !changed) {
       return;
     }
@@ -738,6 +743,22 @@ export class EditorEditRuntime {
     this.history.record({ kind: 'objects', action: { previous, next: this.clonePlacedObjects(next) } });
     this.rebuildObjectSprites();
     this.markRoomDirty();
+    this.host.recordBuildPlacement(placedCount);
+  }
+
+  /** Discard only the unfinished object gesture, preserving history and dirty state. */
+  cancelObjectBatch(): void {
+    const previous = this.objectBatchBefore;
+    const restorePreview = this.objectBatchLivePreview && this.objectBatchChanged;
+    this.objectBatchBefore = null;
+    this.objectBatchNext = null;
+    this.objectBatchChanged = false;
+    this.objectBatchLivePreview = false;
+    this.objectBatchPlacedCount = 0;
+    if (previous && restorePreview) {
+      this.host.setPlacedObjects(previous);
+      this.rebuildObjectSprites();
+    }
   }
 
   commitTileBatch(): void {
@@ -774,6 +795,28 @@ export class EditorEditRuntime {
     this.currentBatchActionIndex.clear();
     this.currentBatchSmartBefore = null;
     this.currentSmartGestureAnchor = null;
+  }
+
+  /** Revert the owned preview without recording an Undo or invalidating Redo. */
+  cancelTileBatch(): void {
+    for (const action of this.currentBatch) {
+      const layer = this.host.getLayers().get(action.layer);
+      if (!layer) continue;
+      if (action.oldGid === -1) {
+        layer.removeTileAt(action.x, action.y);
+      } else {
+        const decoded = decodeTileDataValue(action.oldGid);
+        const tile = layer.putTileAt(decoded.gid, action.x, action.y);
+        if (tile) {
+          tile.flipX = decoded.flipX;
+          tile.flipY = decoded.flipY;
+        }
+      }
+    }
+    if (this.currentBatchSmartBefore !== null) {
+      this.smartTerrain = cloneRoomSmartTerrainState(this.currentBatchSmartBefore);
+    }
+    this.clearTileBatch();
   }
 
   private recordTileBatchAction(action: TileAction): void {
@@ -1973,6 +2016,7 @@ export class EditorEditRuntime {
     if (this.objectBatchNext) {
       this.objectBatchNext = next;
       this.objectBatchChanged = true;
+      this.objectBatchPlacedCount += 1;
       if (this.objectBatchLivePreview) {
         this.host.setPlacedObjects(next);
         this.rebuildObjectSprites();
@@ -1985,8 +2029,8 @@ export class EditorEditRuntime {
       });
       this.rebuildObjectSprites();
       this.markRoomDirty();
+      this.host.recordBuildPlacement(1);
     }
-    this.host.recordBuildPlacement(1);
     return placed;
   }
 
