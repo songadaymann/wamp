@@ -19,6 +19,7 @@ import {
 } from '../core/http';
 import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, RoomRunRow, WorkerExecutionContextLike } from '../core/types';
+import { recordDiscoveryRunPlayer, scheduleDiscoveryMetrics } from '../playableContentIndex/runMetrics';
 import { loadAnonymousPublicCache } from '../core/publicCache';
 import {
   refreshPlayableContentIndexForRoom,
@@ -168,7 +169,8 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
 export async function handleRunFinish(
   request: Request,
   env: Env,
-  attemptId: string
+  attemptId: string,
+  executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
   if (!attemptId) {
     throw new HttpError(400, 'Attempt id is required.');
@@ -439,6 +441,9 @@ export async function handleRunFinish(
   if (!finalizedRun) {
     throw new HttpError(500, 'Failed to reload finalized run.');
   }
+  await scheduleDiscoveryMetrics(executionContext, recordDiscoveryRunPlayer(
+    env, 'room:' + existing.roomId, existing.roomVersion, auth.user.id, { ...finalBody, finishedAt },
+  ));
 
   let isFirstCompletion = false;
   let isNewPersonalBest = false;

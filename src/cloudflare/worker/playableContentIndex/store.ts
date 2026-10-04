@@ -153,6 +153,9 @@ async function refreshStandalonePlayableContentIndexRow(env: Env, roomId: string
           ON versions.room_id = rooms.id
          AND versions.version = CAST(json_extract(rooms.published_json, '$.version') AS INTEGER)
         LEFT JOIN featured_rooms featured ON featured.room_id = rooms.id
+          AND featured.room_version = versions.version
+          AND featured.target_key = 'room:' || rooms.id
+          AND featured.target_version = versions.version
         CROSS JOIN ratings
         WHERE rooms.id = ?
           AND rooms.published_json IS NOT NULL
@@ -185,6 +188,9 @@ function buildExpandedRoomIndexInsert(env: Env, expandedRoomId: string) {
           ON cells.expanded_room_id = expanded.id
          AND cells.expanded_room_version = expanded.published_version
         LEFT JOIN featured_rooms featured ON featured.room_id = cells.room_id
+          AND featured.room_version = cells.room_version
+          AND featured.target_key = 'expanded_room:' || expanded.id
+          AND featured.target_version = expanded.published_version
         WHERE expanded.id = ?
       ), ratings AS (
         SELECT

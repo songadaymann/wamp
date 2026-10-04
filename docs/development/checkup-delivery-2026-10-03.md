@@ -377,3 +377,45 @@ LIVE F126, October 4: [PR #48](https://github.com/songadaymann/wamp/pull/48) del
 - Lifecycle tests cover duplicate and cancelled loading, stale navigation, account changes, clear deduplication/status refresh, existing draft recovery, ownership/conflict protection and guest presence gating. The reusable smoke now waits for the real starter clear instead of holding movement past its exit into a neighbouring room.
 
 F125 curation, popular sorting, rating coverage and measured difficulty remain next. F096/F118/F133 celebrations and broader community/publish onboarding remain separate. Browser layouts and native emulated input are verified; physical F002/F138 certification and F098 camera remain open. Direct fast-map alerts stay enabled/configured for Jonathan with healthy scheduled state at 15:07:54 UTC and zero pending alerts, reverified at 15:08:13 UTC. The primary stale checkout remains on `21a697c4` with its original 25 unrelated dirty entries.
+
+
+## F125 discovery — in progress (2026-10-04)
+
+Scope: review and feature 15–25 current rooms with varied builders/difficulty; keep Featured limited to current featured versions and default to Popular below eight featured rooms. Popular counts distinct eligible players in the last 14 days. Difficulty estimates reuse the existing run heuristic, require three distinct non-builder completers, and yield to three or more explicit votes. Make quality trophies attainable with credible community voting while preserving version/award rules.
+
+- [x] Inspect current main, live discovery data and the fact-checked requirements.
+- [x] Implement indexed per-player run metrics, version-aware Featured, Popular and estimated difficulty; validate additive migration/backfill and refresh paths.
+- [ ] Verify native Explore sorting/filtering/queues and responsive labels, including default fallback and stale responses.
+- [ ] Review and feature a varied current-version room set; verify quality-trophy eligibility.
+- [ ] Pass quality checks, PR/merge, guarded migration/full API/Pages delivery and exact live acceptance before checking F125 (master currently 32/214).
+
+Work lane: `codex/checkup-discovery-2026-10-04` from released `c1847d8c`, carrying F126 delivery record `8205bd9e`. Primary stale checkout's 25 unrelated dirty entries remain preserved. F124 builder dashboards and physical F002/F138 acceptance remain separate.
+
+F125 implementation and local acceptance, October 4: Popular ranks distinct signed-in/claimed-guest players in the last 14 days on the current playable version. Migration 0054 stores one first verified completion sample per player/version and backfills room, expanded, legacy course and claimed-guest history; an idempotent post-cutover catch-up closes the migration/deploy interval. Builder self runs, generated players, abandonment and rejected/timed-out verification do not influence estimates. Estimates use the existing time/deaths/objective heuristic, require three distinct completers, and yield to at least three explicit difficulty votes. Featured is exclusive and pins the reviewed whole-level version; republishing clears the pin, including when an expanded anchor stays unchanged. Admin actions accept a valid older member snapshot pinned by a current expanded assembly. Expanded trophies use the exact whole-level version. Credible trophies now require at least three raw/weighted votes while retaining the 4.2 adjusted-score floor (attainable with four to five credible five-star votes); no votes or trophy awards were fabricated.
+
+Local quality passes 303 files / 2,359 tests, typecheck, lint, Worker binding checks, build and DOM contract. Native sorting/filtering/guest Play All and Next pass all five desktop/touch viewport layouts, with no unexpected browser errors. The seven-Featured boundary opens Popular; request-generation tests discard stale close/reopen replies. The unchanged official gameplay client passes movement/jump capture. All 20 selected production rooms from 14 builders were opened and played briefly with working collision/control responses and zero browser errors; 17 are community-built. Nineteen are featured; Race To The Top requires the new API's assembly-aware admin guard and will be added after cutover. F125 remains unchecked at 32/214 until guarded migration/full delivery and actual custom-domain acceptance. The unrelated narrow-screen auth/footer overflow observed during the local probe remains outside this discovery scope; Explore's panel/content fits the narrow screen.
+
+F125 reviewed selection (difficulty labels at review; production estimates can supersede sparse votes):
+
+| Room | Builder | Coordinates | Reviewed difficulty | Version |
+| --- | --- | --- | --- | --- |
+| The HI Room | doyle.productions | 4,1 | easy | v2 |
+| Vanglog's room | vanglog | 3,-8 | easy | v1 |
+| Aqua Prime | Rallsen.eth | 0,5 | easy | v1 |
+| Digestion: Dissociation | sharpteethsweet | 10,4 | easy | v1 |
+| tower 3 | fidgetmcwidget | 9,7 | easy | v1 |
+| Escape the Room | ADJ | 2,12 | medium | v3 |
+| Treasure Hunt - GJ | PlayGame4Fun | -4,10 | medium | v2 |
+| 💎 Maximum Greed 💎 | KamiSawZe | 8,4 | medium | v17 |
+| coin run | KamiSawZe | 0,-6 | medium | v2 |
+| 🍄 Learn2WAMP 3 | KamiSawZe | 1,-2 | medium | v27 |
+| Cybertowers | Farès | -4,12 | hard | expanded v1, member v4 |
+| Messy Desktop | Farès | -1,12 | hard | expanded v5, member v4 |
+| Brickthrough | Farès | 3,7 | extreme | v1 |
+| The Pit | BigBaby123 | 1,3 | extreme | v1 |
+| Death by Claw | ndx | 0,1 | hard | v1 |
+| retsasid | tmndz | -11,5 | hard | v1 |
+| Chuck's INTERGALACTIC UFO SHOW DIMENSION | chuckUFOSHOW | 10,-8 | Unlabelled | v36 |
+| If Heaven Is A Real Place | jonathan | -1,1 | medium | v16 |
+| Race To The Top | jonathan | 1,-8 | medium | expanded v2, member v8 |
+| into the fire | jonathan | -5,3 | hard | v13 |

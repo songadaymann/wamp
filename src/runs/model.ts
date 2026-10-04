@@ -16,6 +16,7 @@ export const ROOM_DIFFICULTIES = ['easy', 'medium', 'hard', 'extreme'] as const;
 export type RoomDifficulty = typeof ROOM_DIFFICULTIES[number];
 export const ROOM_DISCOVERY_SORTS = [
   'featured',
+  'popular',
   'quality',
   'newest',
   'builder',
@@ -181,6 +182,9 @@ export interface RoomDiscoveryEntry {
   canonicalRoomVersion: number | null;
   goalType: RoomGoalType | null;
   consensusDifficulty: RoomDifficulty | null;
+  difficultySource?: 'votes' | 'measured' | null;
+  measuredPlayerCount?: number;
+  recentPlayers?: number;
   voteCount: number;
   quality: QualityRatingSummary;
   trophy: TrophyAwardSummary | null;

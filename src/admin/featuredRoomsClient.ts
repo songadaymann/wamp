@@ -26,7 +26,7 @@ export function hasFeaturedRoomsAdminKey(
 
 export async function setFeaturedRoomStatus(
   roomId: string,
-  body: { roomVersion: number; featured: boolean },
+  body: { roomVersion: number; featured: boolean; targetKey?: string; targetVersion?: number },
   options: {
     storage?: Storage;
     baseUrl?: string;

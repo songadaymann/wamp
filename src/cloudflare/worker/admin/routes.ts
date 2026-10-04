@@ -205,6 +205,8 @@ async function handleAdminBadgeBackfill(request: Request, env: Env): Promise<Res
 interface AdminRoomFeatureRequestBody {
   roomVersion: number;
   featured: boolean;
+  targetKey?: string;
+  targetVersion?: number;
 }
 
 async function handleAdminRoomRestore(
@@ -377,7 +379,7 @@ async function handleAdminRoomFeature(
       SELECT
         rooms.id,
         rooms.published_json,
-        latest.version AS current_published_version
+        CAST(json_extract(rooms.published_json, '$.version') AS INTEGER) AS current_published_version
       FROM rooms
       INNER JOIN (
         SELECT room_id, MAX(version) AS version
@@ -403,26 +405,50 @@ async function handleAdminRoomFeature(
     throw new HttpError(404, 'Published room not found.');
   }
 
-  if (roomVersion !== roomRow.current_published_version) {
+  // An expanded level can intentionally pin an older member-room snapshot.
+  // Review the published assembly, rather than that room's standalone head.
+  const expanded = await env.DB.prepare(`
+    SELECT 'expanded_room:' || expanded.id AS target_key, expanded.published_version AS version_key,
+      cells.room_version
+    FROM expanded_rooms expanded INNER JOIN expanded_room_cells cells
+      ON cells.expanded_room_id = expanded.id AND cells.expanded_room_version = expanded.published_version
+    WHERE cells.room_id = ? AND expanded.published_json IS NOT NULL AND expanded.archived_at IS NULL
+      AND (SELECT COUNT(*) FROM expanded_room_cells all_cells
+        WHERE all_cells.expanded_room_id = expanded.id
+          AND all_cells.expanded_room_version = expanded.published_version) > 1
+    LIMIT 1
+  `).bind(roomId).first<{ target_key: string; version_key: number; room_version: number }>();
+  if (roomVersion !== (expanded?.room_version ?? roomRow.current_published_version)) {
     throw new HttpError(409, 'Only the current published room version can be featured.');
   }
 
   const now = new Date().toISOString();
   if (body.featured) {
+    const targetKey = expanded?.target_key ?? 'room:' + roomId;
+    const targetVersion = expanded?.version_key ?? roomVersion;
+    if (body.targetKey !== undefined || body.targetVersion !== undefined) {
+      if (body.targetKey !== targetKey || normalizePositiveInteger(body.targetVersion, 'targetVersion') !== targetVersion) {
+        throw new HttpError(409, 'This room has been republished. Reload Explore before featuring it.');
+      }
+    }
     await env.DB.prepare(
       `
         INSERT INTO featured_rooms (
           room_id,
           room_version,
-          featured_at
+          featured_at,
+          target_key,
+          target_version
         )
-        VALUES (?, ?, ?)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(room_id) DO UPDATE SET
           room_version = excluded.room_version,
-          featured_at = excluded.featured_at
+          featured_at = excluded.featured_at,
+          target_key = excluded.target_key,
+          target_version = excluded.target_version
       `
     )
-      .bind(roomId, roomVersion, now)
+      .bind(roomId, roomVersion, now, targetKey, targetVersion)
       .all();
   } else {
     await env.DB.prepare(

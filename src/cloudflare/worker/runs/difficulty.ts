@@ -1,10 +1,12 @@
+import { loadIndexedDiscoveryRows, type IndexedDiscoveryRow } from '../playableContentIndex/discovery';
+import { loadDiscoveryRunMetrics, resolveDiscoveryDifficulty } from '../playableContentIndex/runMetrics';
+import { loadExpandedDiscoveryTrophies, expandedTrophyKey } from '../playableContentIndex/trophies';
 import type {
   RoomCoordinates,
   RoomSnapshot,
 } from '../../../persistence/roomModel';
 import { ROOM_GOAL_TYPES, type RoomGoalType } from '../../../goals/roomGoals';
 import type {
-  ExpandedRoomSource,
   ResolvedExpandedRoomTarget,
 } from '../../../expandedRooms/model';
 import type {
@@ -78,6 +80,8 @@ interface FeaturedRoomRow {
   room_id: string;
   room_version: number;
   featured_at: string;
+  target_key: string | null;
+  target_version: number | null;
 }
 
 interface BuilderProgressionRow {
@@ -146,32 +150,6 @@ interface RoomDiscoveryAreaCandidate {
   expandedRoomVersionKey: DiscoveryExpandedRoomVersionKey | null;
 }
 
-interface IndexedDiscoveryRow {
-  target_type: 'room' | 'expanded_room';
-  content_id: string;
-  version_key: number | string;
-  representative_room_id: string;
-  representative_room_version: number | string;
-  room_x: number | string;
-  room_y: number | string;
-  builder_user_id: string | null;
-  builder_display_name: string | null;
-  title: string | null;
-  goal_type: string | null;
-  published_at: string;
-  first_published_at: string | null;
-  cell_count: number | string;
-  anchor_x: number | string;
-  anchor_y: number | string;
-  source_type: ExpandedRoomSource;
-  legacy_course_id: string | null;
-  canonical_room_version: number | string | null;
-  featured_at: string | null;
-  quality_adjusted_average: number | string | null;
-  quality_vote_count: number | string | null;
-  consensus_difficulty: string | null;
-  difficulty_vote_count: number | string | null;
-}
 
 type PublishedRoomDiscoveryEntry = ReturnType<typeof mapPublishedRoomDiscoveryRow>;
 
@@ -447,6 +425,7 @@ export async function loadRoomDiscoveryResponse(
     ] as const),
   );
 
+  const runMetrics = await loadDiscoveryRunMetrics(env);
   const orderedResults = discoveryAreas
     .map((area): RoomDiscoveryEntry => {
       const room = area.representative;
@@ -473,6 +452,11 @@ export async function loadRoomDiscoveryResponse(
           ? null
           : getDiscoveryAreaViewerState(area, viewerStates, expandedRoomViewerStates);
       const expandedRoom = area.expandedRoom;
+      const targetKey = area.expandedRoomVersionKey
+        ? 'expanded_room:' + area.expandedRoomVersionKey.expandedRoomId : 'room:' + room.roomId;
+      const targetVersion = area.expandedRoomVersionKey?.expandedRoomVersion ?? room.roomVersion;
+      const metricRow = runMetrics.get(targetKey);
+      const metrics = metricRow?.version_key === targetVersion ? metricRow : undefined;
 
       return {
         roomId: room.roomId,
@@ -487,7 +471,9 @@ export async function loadRoomDiscoveryResponse(
         leaderboardSourceVersion: null,
         canonicalRoomVersion: room.canonicalRoomVersion,
         goalType: normalizeDiscoveryGoalType(expandedRoom?.goalType ?? room.goalType),
-        consensusDifficulty: ratingSummary.consensusDifficulty,
+        ...resolveDiscoveryDifficulty(ratingSummary.consensusDifficulty, ratingSummary.totalDifficultyVotes, metrics),
+        measuredPlayerCount: metrics?.measured_players ?? 0,
+        recentPlayers: metrics?.recent_players ?? 0,
         voteCount,
         quality: ratingSummary.quality,
         trophy: getDiscoveryAreaTrophy(area, trophyByRoomId),
@@ -514,6 +500,7 @@ export async function loadRoomDiscoveryResponse(
       };
     })
     .filter((entry) => includeAllPublishedRooms || entry.goalType !== null)
+    .filter((entry) => sort !== 'featured' || entry.featured)
     .filter((entry) => difficultyFilter === null || entry.consensusDifficulty === difficultyFilter)
     .filter((entry) => {
       if (!isPersonalRoomDiscoverySort(sort)) {
@@ -535,6 +522,12 @@ export async function loadRoomDiscoveryResponse(
     .sort((left, right) => compareRoomDiscoveryEntries(left, right, sort));
   const pageOffset = cursorOffset;
   const results = orderedResults.slice(pageOffset, pageOffset + limit);
+  const expandedTrophies = await loadExpandedDiscoveryTrophies(env, results.flatMap(entry => entry.expandedRoom
+    ? [{ expandedRoomId: entry.expandedRoom.expandedRoomId, expandedRoomVersion: entry.expandedRoom.expandedRoomVersion ?? 0 }] : []));
+  for (const entry of results) {
+    if (entry.expandedRoom) entry.trophy = expandedTrophies.get(expandedTrophyKey(
+      entry.expandedRoom.expandedRoomId, entry.expandedRoom.expandedRoomVersion ?? 0)) ?? null;
+  }
   const hasMore = orderedResults.length > pageOffset + limit;
 
   return {
@@ -545,83 +538,6 @@ export async function loadRoomDiscoveryResponse(
   };
 }
 
-async function loadIndexedDiscoveryRows(
-  env: Env,
-  difficultyFilter: RoomDifficulty | null,
-  limit: number,
-  sort: RoomDiscoverySort,
-  includeAllPublishedRooms: boolean,
-  cursorOffset: number,
-): Promise<IndexedDiscoveryRow[] | null> {
-  if (
-    !playableContentIndexReadsEnabled(env)
-    || (sort !== 'newest' && sort !== 'featured' && sort !== 'quality')
-  ) {
-    return null;
-  }
-
-  const orderClause = sort === 'newest'
-    ? 'index_row.first_published_at DESC, index_row.published_at DESC, index_row.target_key ASC'
-    : sort === 'quality'
-      ? 'index_row.quality_adjusted_average DESC, index_row.quality_vote_count DESC, index_row.published_at DESC, index_row.target_key ASC'
-      : '(index_row.featured_at IS NOT NULL) DESC, index_row.featured_at DESC, index_row.quality_adjusted_average DESC, index_row.quality_vote_count DESC, index_row.published_at DESC, index_row.target_key ASC';
-  const candidateLimit = limit + 1;
-
-  try {
-    const rows = await env.DB.prepare(
-      `
-        SELECT
-          index_row.target_type,
-          index_row.content_id,
-          index_row.version_key,
-          index_row.representative_room_id,
-          COALESCE(member.room_version, index_row.version_key) AS representative_room_version,
-          index_row.room_x,
-          index_row.room_y,
-          index_row.builder_user_id,
-          index_row.builder_display_name,
-          index_row.title,
-          index_row.goal_type,
-          index_row.published_at,
-          index_row.first_published_at,
-          index_row.cell_count,
-          index_row.anchor_x,
-          index_row.anchor_y,
-          index_row.source_type,
-          index_row.legacy_course_id,
-          index_row.canonical_room_version,
-          index_row.featured_at,
-          index_row.quality_adjusted_average,
-          index_row.quality_vote_count,
-          index_row.consensus_difficulty,
-          index_row.difficulty_vote_count
-        FROM playable_content_index index_row
-        LEFT JOIN playable_content_index_members member
-          ON member.target_key = index_row.target_key
-         AND member.room_id = index_row.representative_room_id
-        WHERE (? = 1 OR index_row.goal_type IS NOT NULL)
-          AND (? IS NULL OR index_row.consensus_difficulty = ?)
-        ORDER BY ${orderClause}
-        LIMIT ? OFFSET ?
-      `,
-    )
-      .bind(
-        includeAllPublishedRooms ? 1 : 0,
-        difficultyFilter,
-        difficultyFilter,
-        candidateLimit,
-        cursorOffset,
-      )
-      .all<IndexedDiscoveryRow>();
-    return rows.results;
-  } catch (error) {
-    if (String(error).toLowerCase().includes('playable_content_index')) {
-      console.warn('Playable-content index is enabled but unavailable; falling back to legacy discovery reads.');
-      return null;
-    }
-    throw error;
-  }
-}
 
 async function buildIndexedDiscoveryResponse(
   env: Env,
@@ -647,7 +563,7 @@ async function buildIndexedDiscoveryResponse(
   const builderUserIds = Array.from(new Set(
     pageRows.map((row) => row.builder_user_id?.trim() ?? '').filter(Boolean),
   ));
-  const [trophyRows, builderRows, viewerStates, expandedViewerStates] = await Promise.all([
+  const [trophyRows, builderRows, viewerStates, expandedViewerStates, expandedTrophies] = await Promise.all([
     measureDiscovery(timing, 'discovery_trophies', () => loadRoomDiscoveryTrophyRows(env, roomVersionKeys)),
     measureDiscovery(timing, 'discovery_builders', () => loadBuilderProgressionRows(env, builderUserIds)),
     viewerUserId
@@ -656,6 +572,7 @@ async function buildIndexedDiscoveryResponse(
     viewerUserId
       ? measureDiscovery(timing, 'discovery_expanded_viewer', () => loadDiscoveryViewerExpandedRoomStates(env, viewerUserId, expandedRoomVersionKeys))
       : Promise.resolve(new Map<string, DiscoveryViewerRoomState>()),
+    loadExpandedDiscoveryTrophies(env, expandedRoomVersionKeys),
   ]);
   const trophies = new Map<string, TrophyAwardSummary>();
   for (const row of trophyRows.results) {
@@ -699,6 +616,9 @@ async function buildIndexedDiscoveryResponse(
       canonicalRoomVersion: row.canonical_room_version === null ? null : parseRowNumber(row.canonical_room_version),
       goalType: normalizeDiscoveryGoalType(row.goal_type),
       consensusDifficulty: normalizeRoomDifficulty(row.consensus_difficulty),
+      difficultySource: row.difficulty_source ?? (row.consensus_difficulty ? 'votes' : null),
+      measuredPlayerCount: parseRowNumber(row.measured_players),
+      recentPlayers: parseRowNumber(row.recent_players),
       voteCount: Math.max(qualityVoteCount, parseRowNumber(row.difficulty_vote_count)),
       quality: {
         adjustedAverage,
@@ -707,7 +627,9 @@ async function buildIndexedDiscoveryResponse(
         weightedVoteCount: qualityVoteCount,
         counts: { oneStar: 0, twoStar: 0, threeStar: 0, fourStar: 0, fiveStar: 0 },
       },
-      trophy: trophies.get(row.representative_room_id) ?? null,
+      trophy: row.target_type === 'expanded_room'
+        ? expandedTrophies.get(expandedTrophyKey(row.content_id, expandedVersion)) ?? null
+        : trophies.get(row.representative_room_id) ?? null,
       publishedAt: row.published_at,
       firstPublishedAt: row.first_published_at,
       featured: row.featured_at !== null,
@@ -953,7 +875,10 @@ function getDiscoveryAreaFeaturedRow(
   let bestRow: FeaturedRoomRow | null = null;
   for (const key of area.roomVersionKeys) {
     const row = featuredByRoomId.get(key.roomId) ?? null;
-    if (!row || row.room_version !== key.roomVersion) {
+    const targetKey = area.expandedRoomVersionKey
+      ? 'expanded_room:' + area.expandedRoomVersionKey.expandedRoomId : 'room:' + key.roomId;
+    const targetVersion = area.expandedRoomVersionKey?.expandedRoomVersion ?? key.roomVersion;
+    if (!row || row.room_version !== key.roomVersion || row.target_key !== targetKey || row.target_version !== targetVersion) {
       continue;
     }
     if (!bestRow || compareTimestampsDesc(row.featured_at, bestRow.featured_at) < 0) {
@@ -1583,7 +1508,9 @@ async function loadFeaturedRoomRows(
         SELECT
           room_id,
           room_version,
-          featured_at
+          featured_at,
+          target_key,
+          target_version
         FROM featured_rooms
         WHERE room_id IN (${roomIdChunk.map(() => '?').join(', ')})
       `

@@ -52,7 +52,7 @@ export interface DifficultyAccumulator {
 export const QUALITY_PRIOR_MEAN = 3.5;
 export const QUALITY_PRIOR_WEIGHT = 5;
 export const TROPHY_THRESHOLD = 4.2;
-export const TROPHY_MIN_WEIGHTED_VOTES = 10;
+export const TROPHY_MIN_WEIGHTED_VOTES = 3;
 export const ROOM_SIGNIFICANT_CHANGE_THRESHOLD = 0.1;
 export const COURSE_SIGNIFICANT_CHANGE_THRESHOLD = 0.1;
 export const TRUST_PENALTY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;

@@ -57,7 +57,7 @@ export function parseRoomDiscoverySortOrThrow(value: unknown): RoomDiscoverySort
   if (!normalized) {
     throw new HttpError(
       400,
-      'sort must be featured, quality, newest, builder, unbeaten, unvisited, or unrated.',
+      'sort must be featured, popular, quality, newest, builder, unbeaten, unvisited, or unrated.',
     );
   }
 
@@ -78,6 +78,12 @@ export function compareRoomDiscoveryEntries(
   right: RoomDiscoveryEntry,
   sort: RoomDiscoverySort,
 ): number {
+  if (sort === 'popular') {
+    const players = (right.recentPlayers ?? 0) - (left.recentPlayers ?? 0);
+    if (players !== 0) return players;
+    const newest = compareTimestampsDesc(left.firstPublishedAt, right.firstPublishedAt);
+    return newest || left.roomId.localeCompare(right.roomId);
+  }
   if (sort === 'featured') {
     const featuredCompare = compareBooleansDesc(left.featured, right.featured);
     if (featuredCompare !== 0) return featuredCompare;

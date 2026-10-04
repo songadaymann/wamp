@@ -256,7 +256,7 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
   },
   {
     methods: ['POST'], pattern: '/api/me/claim-guest', auth: 'authenticated',
-    handler: ({ request, env }) => handleClaimGuestRequest(request, env),
+    handler: ({ request, env, executionContext }) => handleClaimGuestRequest(request, env, executionContext),
   },
   {
     methods: ['GET'], pattern: '/api/me/guest-progress', auth: 'authenticated',
@@ -685,7 +685,7 @@ export default {
 
       const finishRunMatch = /^\/api\/runs\/([^/]+)\/finish$/.exec(url.pathname);
       if (finishRunMatch && request.method === 'POST') {
-        return await handleRunFinish(request, env, decodeURIComponent(finishRunMatch[1]));
+        return await handleRunFinish(request, env, decodeURIComponent(finishRunMatch[1]), ctx);
       }
 
       const finishExpandedRoomRunMatch = /^\/api\/expanded-room-runs\/([^/]+)\/finish$/.exec(url.pathname);
@@ -694,12 +694,13 @@ export default {
           request,
           env,
           decodeURIComponent(finishExpandedRoomRunMatch[1]),
+          ctx,
         );
       }
 
       const finishCourseRunMatch = /^\/api\/course-runs\/([^/]+)\/finish$/.exec(url.pathname);
       if (finishCourseRunMatch && request.method === 'POST') {
-        return await handleCourseRunFinish(request, env, decodeURIComponent(finishCourseRunMatch[1]));
+        return await handleCourseRunFinish(request, env, decodeURIComponent(finishCourseRunMatch[1]), ctx);
       }
 
       if (url.pathname === '/api/leaderboards/rooms/discover' && request.method === 'GET') {

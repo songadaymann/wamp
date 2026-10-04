@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { loadExploreDiscovery } from './exploreDiscovery';
 import {
   hasFeaturedRoomsAdminKey,
   setFeaturedRoomStatus,
@@ -83,6 +84,7 @@ export class ExploreModalController {
   private discoverSort: Exclude<RoomDiscoverySort, 'builder'> = 'featured';
   private builderSort: BuilderDiscoverySort = 'alphabet';
   private featurePendingRoomId: string | null = null;
+  private discoveryRequestId = 0;
 
   private readonly handleCloseClick = () => {
     this.close();
@@ -269,10 +271,11 @@ export class ExploreModalController {
     this.featurePendingRoomId = null;
     this.setError(null);
     this.render();
-    await this.loadDiscoveryResults();
+    await this.loadDiscoveryResults(true);
   }
 
   close(): void {
+    this.discoveryRequestId++;
     if (!this.elements.modal) {
       return;
     }
@@ -282,26 +285,30 @@ export class ExploreModalController {
     this.setError(null);
   }
 
-  private async loadDiscoveryResults(): Promise<void> {
+  private async loadDiscoveryResults(chooseDefault = false): Promise<void> {
+    const requestId = ++this.discoveryRequestId;
+    const isCurrent = () => requestId === this.discoveryRequestId;
     this.loading = true;
     this.loaded = false;
     this.render();
     try {
-      this.roomDiscovery = await this.runRepository.loadRoomDiscovery(
-        this.discoverFilter,
-        this.discoverSort,
-        48,
-        this.discoverSort === 'newest' && this.discoverFilter === null,
-      );
+      const result = await loadExploreDiscovery(this.runRepository, this.discoverFilter, this.discoverSort,
+        chooseDefault, isCurrent);
+      if (!result) return;
+      this.roomDiscovery = result.response;
+      this.discoverSort = result.sort;
       this.setError(null);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Failed to load room explorer', error);
       this.roomDiscovery = null;
       this.setError(error instanceof Error ? error.message : 'Failed to load room explorer.');
     } finally {
-      this.loading = false;
-      this.loaded = true;
-      this.render();
+      if (isCurrent()) {
+        this.loading = false;
+        this.loaded = true;
+        this.render();
+      }
     }
   }
 
@@ -376,6 +383,8 @@ export class ExploreModalController {
       button.disabled = this.loading || (this.isPersonalRoomSort(sort) && !this.authState.authenticated);
       if (this.isPersonalRoomSort(sort) && !this.authState.authenticated) {
         button.title = 'Sign in to sort by your room history.';
+      } else if (sort === 'popular') {
+        button.title = 'Distinct players in the last 14 days';
       } else {
         button.removeAttribute('title');
       }
@@ -947,7 +956,7 @@ export class ExploreModalController {
     label.textContent =
       average === null
         ? 'Not rated yet'
-        : `${average.toFixed(1)} stars`;
+        : `${average.toFixed(1)} stars · ${entry.quality.voteCount} rating${entry.quality.voteCount === 1 ? '' : 's'}`;
 
     row.append(stars, label);
     return row;
@@ -965,7 +974,12 @@ export class ExploreModalController {
     const difficulty = entry.consensusDifficulty;
     if (difficulty) {
       badge.dataset.difficulty = difficulty;
-      badge.textContent = ROOM_DIFFICULTY_LABELS[difficulty];
+      badge.dataset.source = entry.difficultySource ?? 'votes';
+      badge.textContent = entry.difficultySource === 'measured'
+        ? 'Est. ' + ROOM_DIFFICULTY_LABELS[difficulty] : ROOM_DIFFICULTY_LABELS[difficulty];
+      if (entry.difficultySource === 'measured') {
+        badge.title = `Estimated from ${entry.measuredPlayerCount ?? 0} players' first clears.`;
+      }
     } else {
       badge.dataset.difficulty = 'unrated';
       badge.textContent = 'Unrated';
@@ -1111,6 +1125,8 @@ export class ExploreModalController {
       await setFeaturedRoomStatus(entry.roomId, {
         roomVersion: entry.roomVersion,
         featured: !entry.featured,
+        targetKey: entry.expandedRoom ? 'expanded_room:' + entry.expandedRoom.expandedRoomId : 'room:' + entry.roomId,
+        targetVersion: entry.expandedRoom?.expandedRoomVersion ?? entry.roomVersion,
       });
       this.setError(null);
       await this.loadDiscoveryResults();
@@ -1143,6 +1159,7 @@ export class ExploreModalController {
   private parseExploreSortButtonValue(value: string | undefined): ExploreSortButtonValue | null {
     if (
       value === 'featured'
+      || value === 'popular'
       || value === 'quality'
       || value === 'newest'
       || value === 'unbeaten'
@@ -1191,6 +1208,7 @@ export class ExploreModalController {
   }
 
   private getRoomDiscoveryEmptyText(): string {
+    if (this.discoverSort === 'featured' && this.discoverFilter === null) return 'No Featured rooms yet. Try Popular.';
     if (this.discoverSort === 'newest' && this.discoverFilter === null) {
       return 'No published rooms found yet.';
     }
