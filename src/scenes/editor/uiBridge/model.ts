@@ -132,6 +132,8 @@ export interface EditorUiViewModel {
   publishNudgeText: string;
   publishNudgeActionText: string;
   zoomText: string;
+  canUndo: boolean;
+  canRedo: boolean;
   backButtonHidden: boolean;
   backButtonText: string;
   backButtonTitle: string;
@@ -178,6 +180,9 @@ export interface EditorUiRuntimeConfig {
 }
 
 export interface EditorUiBridgeActions {
+  isActive: () => boolean;
+  onUndo: () => void;
+  onRedo: () => void;
   onRequestRender: () => void;
   onDocumentKeyDown: (event: KeyboardEvent) => void;
   onAuthStateChanged: () => void;

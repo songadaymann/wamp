@@ -56,6 +56,8 @@ export class EditorChromeController {
 
     uiBridge.render(
       buildEditorUiViewModel({
+        canUndo: this.host.getRoomPermissions().canSaveDraft && this.editRuntime.hasUndoHistory(),
+        canRedo: this.host.getRoomPermissions().canSaveDraft && this.editRuntime.hasRedoHistory(),
         roomTitle: this.host.getRoomTitle(),
         roomCameraCentered: this.editRuntime.roomCameraMode === 'room',
         roomCoordinates: this.host.getRoomCoordinates(),

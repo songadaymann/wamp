@@ -899,6 +899,9 @@ export class EditorScene extends Phaser.Scene {
     setAppMode('editor');
     delete document.body.dataset.editorCourseMode;
     this.uiBridge = new EditorUiBridge({
+      isActive: () => this.scene.isActive(),
+      onUndo: () => this.undoAction(),
+      onRedo: () => this.redoAction(),
       onRequestRender: () => this.renderEditorUi(),
       onDocumentKeyDown: this.handleDocumentKeyDown,
       onAuthStateChanged: () => {

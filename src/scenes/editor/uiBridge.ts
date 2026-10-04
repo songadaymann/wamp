@@ -1,3 +1,4 @@
+import { EditorHistoryControls } from './historyControls';
 import {
   ERASER_BRUSH_SIZES,
   RANDOMIZE_BRUSH_SIZES,
@@ -342,6 +343,7 @@ export class EditorUiBridge {
   private moreToolsOpen = false;
   private activeFeatureLauncher: EditorFeatureLauncher | null = null;
   private currentObjectCategory = 'all';
+  private readonly historyControls: EditorHistoryControls;
   private lastViewModel: EditorUiViewModel | null = null;
   private backgroundImages: BackgroundImageSummary[] = [];
   private backgroundUploadPolicy: BackgroundUploadPolicy | null = null;
@@ -356,6 +358,7 @@ export class EditorUiBridge {
     private readonly windowObj: Window = window,
   ) {
     this.elements = lookupEditorUiElements(this.doc);
+    this.historyControls = new EditorHistoryControls(this.doc, this.actions.onUndo, this.actions.onRedo, this.actions.isActive);
     for (const button of this.elements.toolButtons) {
       this.toolButtonDefaultTitles.set(button, button.title);
     }
@@ -558,6 +561,7 @@ export class EditorUiBridge {
     }
 
     this.lastViewModel = viewModel;
+    this.historyControls.render(viewModel.canUndo, viewModel.canRedo);
     renderEditorUiViewModel(this.elements, this.doc, viewModel);
     this.syncEditorChromeState();
   }
@@ -579,6 +583,7 @@ export class EditorUiBridge {
     setHidden(this.elements.pressurePanel, true);
     setHidden(this.elements.containerPanel, true);
     this.destroyed = true;
+    this.historyControls.destroy();
     for (const cleanup of this.cleanupCallbacks) {
       cleanup();
     }

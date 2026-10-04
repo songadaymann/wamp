@@ -24,6 +24,8 @@ export interface BuildEditorUiViewModelOptions {
   roomVersionHistory: RoomVersionRecord[];
   entrySource: 'world' | 'direct';
   zoomText: string;
+  canUndo: boolean;
+  canRedo: boolean;
   saveStatus: EditorStatusDetails;
   publishNudgeVisible: boolean;
   publishNudgeText: string;
@@ -94,6 +96,8 @@ export function buildEditorUiViewModel(
     publishNudgeText,
     publishNudgeActionText,
     zoomText,
+    canUndo: options.canUndo,
+    canRedo: options.canRedo,
     backButtonHidden: entrySource !== 'world' && !canReturnToCourseBuilder,
     backButtonText: canReturnToCourseBuilder ? 'Expanded Room' : 'World',
     backButtonTitle: canReturnToCourseBuilder ? 'Return to Expanded Room Builder (Esc)' : 'Return to World (Esc)',

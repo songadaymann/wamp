@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { getDeviceLayoutState, initializeDeviceLayout, DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
-import { getActiveOverworldScene, withActiveEditorScene } from '../setup/sceneBridge';
+import { getActiveOverworldScene } from '../setup/sceneBridge';
 import { hasFocusedRoomCoordinateLink } from './focusedRoomLink';
 import { PortraitPlayControlsController } from './portraitPlayControls';
 
@@ -8,7 +8,6 @@ type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'goal' | '
 
 type Elements = {
   mobileEditorNav: HTMLElement | null;
-  mobileEditorUndoButton: HTMLButtonElement | null;
   mobileEditorToggleButton: HTMLButtonElement | null;
   mobileWorldStopButton: HTMLButtonElement | null;
   mobileWorldRestartButton: HTMLButtonElement | null;
@@ -48,7 +47,6 @@ export class MobileUiController {
   ) {
     this.elements = {
       mobileEditorNav: doc.getElementById('mobile-editor-nav'),
-      mobileEditorUndoButton: doc.getElementById('btn-mobile-editor-undo') as HTMLButtonElement | null,
       mobileEditorToggleButton: doc.getElementById('btn-mobile-editor-toggle') as HTMLButtonElement | null,
       mobileWorldStopButton: doc.getElementById('btn-mobile-world-stop') as HTMLButtonElement | null,
       mobileWorldRestartButton: doc.getElementById('btn-mobile-world-restart') as HTMLButtonElement | null,
@@ -173,12 +171,6 @@ export class MobileUiController {
   }
 
   private bindMobileEditorActions(): void {
-    this.elements.mobileEditorUndoButton?.addEventListener('click', () => {
-      withActiveEditorScene(this.game, (scene) => {
-        scene.undoAction?.();
-      });
-    });
-
     this.elements.mobileEditorToggleButton?.addEventListener('click', () => {
       if (this.doc.body.dataset.editorMusicMode === 'true') {
         return;
@@ -299,7 +291,7 @@ export class MobileUiController {
 
     return Boolean(
       target.closest(
-        'input, textarea, select, option, label, [contenteditable=""], [contenteditable="true"]'
+        '[data-editor-history], input, textarea, select, option, label, [contenteditable=""], [contenteditable="true"]'
       )
     );
   }
@@ -480,9 +472,6 @@ export class MobileUiController {
     }
 
     this.doc.body.dataset.mobileEditorCollapsed = this.editorSheetCollapsed ? 'true' : 'false';
-    if (this.elements.mobileEditorUndoButton) {
-      this.elements.mobileEditorUndoButton.disabled = musicModeActive;
-    }
     if (this.elements.mobileEditorToggleButton) {
       this.elements.mobileEditorToggleButton.disabled = musicModeActive;
     }

@@ -571,6 +571,9 @@ export class CourseEditorScene extends Phaser.Scene {
     setAppMode('editor');
     document.body.dataset.editorCourseMode = 'true';
     this.uiBridge = new EditorUiBridge({
+      isActive: () => this.scene.isActive(),
+      onUndo: () => this.undoAction(),
+      onRedo: () => this.redoAction(),
       onRequestRender: () => this.renderUi(),
       onDocumentKeyDown: this.handleDocumentKeyDown,
       onAuthStateChanged: () => this.renderUi(),
@@ -3282,6 +3285,8 @@ export class CourseEditorScene extends Phaser.Scene {
 
     this.uiBridge?.render(
       buildEditorUiViewModel({
+        canUndo: !this.loading && selectedPermissions.canSaveDraft && (selectedSlice?.runtime.hasUndoHistory() ?? false),
+        canRedo: !this.loading && selectedPermissions.canSaveDraft && (selectedSlice?.runtime.hasRedoHistory() ?? false),
         roomTitle: selectedSlice?.roomTitle ?? '',
         roomCameraCentered: selectedSlice?.runtime.roomCameraMode === 'room',
         roomCoordinates: selectedSlice?.coordinates ?? { x: 0, y: 0 },
