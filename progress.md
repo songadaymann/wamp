@@ -1,6 +1,6 @@
 ## 2026-10-03: Direct fast-map alerts and blocking releases
 
-Implemented a 15-minute Worker monitor using the existing admin email service, durable outage/reminder/recovery events, leased delivery and provider idempotency. Production releases and automatic Pages main builds now block on an unavailable map or mismatched catalog; coordinated staged-renderer delivery verifies complete readiness before API/activation/Pages. Migration 0051 is additive. Work and release evidence: `docs/development/world-map-alert-release-gate-2026-10-03.md`. The dirty primary checkout is preserved; F002/F138 remain next.
+Delivered a 15-minute Worker monitor using the existing admin email service, durable outage/reminder/recovery events, leased delivery and provider idempotency. Production releases and automatic Pages main builds now block on an unavailable map or mismatched catalog; coordinated staged-renderer delivery verifies complete readiness before API/activation/Pages. Migration 0051 is applied. PRs #35/#36 pass; 2,060 tests and live alert delivery/deduplication pass. Healthy setup and recovery messages are confirmed in the admin inbox; the first setup false alert was corrected with public Worker fetch routing. Work and release evidence: `docs/development/world-map-alert-release-gate-2026-10-03.md`. The dirty primary checkout is preserved; F002/F138 remain next.
 
 Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clean current-main worktree, verify it in the browser, push the branch, and publish a frontend-only safety Pages preview.
 

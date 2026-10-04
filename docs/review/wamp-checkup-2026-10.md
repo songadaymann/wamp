@@ -95,7 +95,7 @@ Go one item at a time, and check each on the live site and on a real phone befor
 
 How smoothly the game runs once it's loaded, especially on phones. The foundations are good, but a few effects and missing caps waste a lot of phone power.
 
-- [x] **F003** The pre-rendered world-map tile pyramid is switched off in production (asset hash mismatch since ~Sep 3) (also covers F016) · high impact · small effort — **done 2026-10-03** (`57b607c7`). Matching renderer rebuilt and active at 100%; 972 ready generations, pixel/object parity, public desktop/Android coverage, strict availability smoke and scheduled health checks.
+- [x] **F003** The pre-rendered world-map tile pyramid is switched off in production (asset hash mismatch since ~Sep 3) (also covers F016) · high impact · small effort — **done 2026-10-03** (`57b607c7`). Matching renderer rebuilt and active at 100%; 972 ready generations, pixel/object parity, public desktop/Android coverage, strict availability smoke, direct outage/recovery emails and blocking production compatibility gates.
 - [ ] **F002** No 60 fps cap: 120 Hz phones run all game logic and rendering twice per physics step (also covers F081) · high impact · small effort
 - [ ] **F001** Guest session recorder stalls the game once a second for new players (also covers F022) · medium impact · small effort
 - [ ] **F004** Fog and rain rebuild hundreds of shapes from scratch every frame · medium impact · small effort
