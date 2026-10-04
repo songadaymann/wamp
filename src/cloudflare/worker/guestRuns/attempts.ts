@@ -4,7 +4,7 @@ import type { RunFinishRequestBody } from '../../../runs/model';
 import { RANKED_RUN_TRACE_SCHEMA_VERSION } from '../../../runs/verificationTrace';
 import { HttpError, normalizePositiveInteger, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
-import { computeEffectiveElapsedMs, normalizeFinalizedCourseRunBody } from '../courses/requestBodies';
+import { normalizeFinalizedCourseRunBody } from '../courses/requestBodies';
 import { getRunMetricCapsForSnapshot } from '../runs/points';
 import { normalizeFinalizedRunBody, normalizeRunFinishRequestBody } from '../runs/requestBodies';
 import { createRunVerificationNonce, verifyCourseRunTrace, verifyRoomRunTrace } from '../runs/verification';
@@ -83,11 +83,11 @@ export async function startGuestRun(env: Env, identity: GuestRunIdentity, body: 
        content_title, progress_source_type, progress_source_id, snapshot_json, verification_nonce, snapshot_hash, started_at, expires_at)
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE (SELECT COUNT(*) FROM guest_run_attempts WHERE guest_user_id = ? AND recovery_token_hash = ?
-        AND claim_id IS NULL AND expires_at > ? AND (result = 'completed' OR (result = 'active' AND started_at > ?))) < 100`)
+        AND claim_id IS NULL AND expires_at > ? AND result IN ('completed', 'active')) < 100`)
       .bind(attemptId, identity.guestUserId, identity.recoveryTokenHash, body.clientRunId, body.contentType,
         body.contentId, body.version, context.title, context.progressSourceType, context.progressSourceId,
         json, createRunVerificationNonce(), context.snapshotHash, now, expiresAt,
-        identity.guestUserId, identity.recoveryTokenHash, now, new Date(Date.parse(now) - MAX_RUN_MS).toISOString()),
+        identity.guestUserId, identity.recoveryTokenHash, now),
     ...roomJson.map(room => env.DB.prepare(`INSERT INTO guest_run_snapshot_rooms (attempt_id, room_id, snapshot_json)
       SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM guest_run_attempts WHERE attempt_id = ?)`)
       .bind(attemptId, room.roomId, room.json, attemptId)),
@@ -115,7 +115,7 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
     return finishResponse(row);
   }
   const now = new Date().toISOString();
-  if (row.expires_at <= now || Date.parse(now) - Date.parse(row.started_at) > MAX_RUN_MS + 60_000) {
+  if (row.expires_at <= now) {
     throw new HttpError(410, 'This guest run expired. Replay the room to save a new clear.');
   }
   if (!row.snapshot_json) throw new HttpError(409, 'The guest run snapshot is unavailable.');
@@ -125,11 +125,18 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
       .bind(attemptId).all<{ snapshot_json: string }>();
     snapshot.rooms = cells.results.map(cell => JSON.parse(cell.snapshot_json) as RoomSnapshot);
   }
-  const elapsedMs = computeEffectiveElapsedMs(row.started_at, now, body.elapsedMs);
+  // Guest clears can arrive after a lost reply or offline queue replay. Network wait is
+  // not simulated play time. Use the captured duration with the same strict physics
+  // verifier, bounded by the original server start and the 30-minute trace ceiling.
+  // These attempts never enter ranked tables or receive time/PB bonuses.
+  const elapsedMs = body.elapsedMs;
+  const observedElapsedMs = Math.max(0, Date.parse(now) - Date.parse(row.started_at));
+  const durationPossible = elapsedMs <= MAX_RUN_MS && elapsedMs <= observedElapsedMs + 600;
   let verificationStatus: GuestRunFinishResponse['verificationStatus'] = 'failed';
   let reason: string | null = body.result === 'completed' ? 'missing_trace' : 'not_completed';
   let metrics = { elapsedMs, deaths: body.deaths, collectiblesCollected: 0, enemyCollectiblesCollected: 0, enemiesDefeated: 0, checkpointsReached: 0 };
-  if (body.result === 'completed' && body.verificationTrace) {
+  if (body.result === 'completed' && !durationPossible) reason = 'trace_duration';
+  if (body.result === 'completed' && body.verificationTrace && durationPossible) {
     const binding = { verificationNonce: row.verification_nonce, verificationSnapshotHash: row.snapshot_hash };
     const verified = snapshot.kind === 'room'
       ? await verifyRoomRunTrace({ trace: body.verificationTrace, binding, room: snapshot.room, elapsedMs })
@@ -167,7 +174,6 @@ export async function pruneGuestRuns(env: Env): Promise<void> {
   const now = new Date().toISOString();
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM guest_run_attempts WHERE claim_id IS NULL AND
-      (expires_at <= ? OR (result = 'active' AND started_at < ?) OR result IN ('failed', 'abandoned'))`)
-      .bind(now, new Date(Date.parse(now) - MAX_RUN_MS - 60_000).toISOString()),
+      (expires_at <= ? OR result IN ('failed', 'abandoned'))`).bind(now),
   ]);
 }

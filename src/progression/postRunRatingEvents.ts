@@ -1,5 +1,7 @@
 import type { RoomCoordinates } from '../persistence/roomModel';
 import type { ProgressionDifficulty } from './model';
+import type { GuestRunSaveResult } from '../guestRooms/runService';
+import { recordGuestRunClear } from './guestRunProgress';
 
 export const POST_RUN_RATING_REQUEST_EVENT = 'post-run-rating-request';
 export const POST_RUN_GUEST_CLAIM_REQUEST_EVENT = 'post-run-guest-claim-request';
@@ -16,6 +18,7 @@ interface BasePostRunRatingRequestDetail {
   deaths: number;
   score: number | null;
   autoSuggestedDifficulty: ProgressionDifficulty;
+  guestProgress?: GuestRunSaveResult;
 }
 
 export interface RoomPostRunRatingRequestDetail extends BasePostRunRatingRequestDetail {
@@ -54,6 +57,7 @@ export function requestPostRunRating(detail: PostRunRatingRequestDetail): void {
 }
 
 export function requestPostRunGuestClaim(detail: PostRunRatingRequestDetail): void {
+  recordGuestRunClear(detail);
   window.dispatchEvent(
     new CustomEvent<PostRunRatingRequestDetail>(POST_RUN_GUEST_CLAIM_REQUEST_EVENT, {
       detail,

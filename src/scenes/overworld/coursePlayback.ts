@@ -50,6 +50,9 @@ import {
   notifyRewardStings,
 } from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
+import type { GuestRunPlaybackController } from './guestRunPlayback';
+import type { RunFinishRequestBody } from '../../runs/model';
+import type { PostRunRatingRequestDetail } from '../../progression/postRunRatingEvents';
 
 export type CoursePlaybackRoomSourceMode = 'published' | 'draftPreview';
 type RankedCourseRunStartBinding = Pick<
@@ -80,6 +83,7 @@ interface OverworldCoursePlaybackHost {
     result: 'completed' | 'failed' | 'abandoned',
   ) => RankedRunVerificationTrace | null;
   clearVerificationTrace?: () => void;
+  guestRuns?: GuestRunPlaybackController;
 }
 
 export class OverworldCoursePlaybackController {
@@ -88,6 +92,7 @@ export class OverworldCoursePlaybackController {
   private readonly expandedRoomRepository = createExpandedRoomRepository();
   private readonly activeCourseRoomOverrideIds = new Set<string>();
   private readonly pinnedCourseRoomSnapshotCache = new Map<string, RoomSnapshot>();
+  private playbackRoomSourceMode: CoursePlaybackRoomSourceMode = 'published';
 
   constructor(private readonly host: OverworldCoursePlaybackHost) {}
 
@@ -107,6 +112,7 @@ export class OverworldCoursePlaybackController {
       roomOverrides?: RoomSnapshot[];
     },
   ): Promise<void> {
+    this.playbackRoomSourceMode = options.mode;
     this.clearActiveCourseRoomOverrides();
     const overrideByRoomId = new Map<string, RoomSnapshot>();
     if (options.mode === 'draftPreview') {
@@ -204,7 +210,7 @@ export class OverworldCoursePlaybackController {
     try {
       const { response, submissionTarget } = await this.startRankedCourseRun(runState);
       const activeCourseRun = this.host.getActiveCourseRun();
-      if (activeCourseRun?.course.id !== runState.course.id) {
+      if (activeCourseRun !== runState) {
         return;
       }
 
@@ -225,7 +231,7 @@ export class OverworldCoursePlaybackController {
     } catch (error) {
       console.error('Failed to start ranked course run', error);
       const activeCourseRun = this.host.getActiveCourseRun();
-      if (activeCourseRun?.course.id !== runState.course.id) {
+      if (activeCourseRun !== runState) {
         return;
       }
 
@@ -253,6 +259,17 @@ export class OverworldCoursePlaybackController {
     }
 
     activeCourseRun.pendingResult = result;
+    if (this.host.guestRuns?.has(activeCourseRun)) {
+      const body: RunFinishRequestBody = { result, elapsedMs: Math.round(activeCourseRun.elapsedMs), deaths: activeCourseRun.deaths,
+        collectiblesCollected: activeCourseRun.collectiblesCollected, enemyCollectiblesCollected: 0,
+        enemiesDefeated: activeCourseRun.enemiesDefeated, checkpointsReached: activeCourseRun.checkpointsReached,
+        score: null, finishedAt: new Date().toISOString(),
+        verificationTrace: this.host.buildVerificationTrace?.(activeCourseRun, result) ?? null };
+      this.host.guestRuns.finish(activeCourseRun, body,
+        result === 'completed' ? this.guestClearDetail(activeCourseRun, body) : undefined);
+      this.host.renderHud();
+      return;
+    }
     const attemptId = activeCourseRun.attemptId;
     if (!attemptId || activeCourseRun.submissionState === 'local-only') {
       activeCourseRun.submissionState = 'submitted';
@@ -421,6 +438,25 @@ export class OverworldCoursePlaybackController {
       !runState.leaderboardEligible &&
       !authState.authenticated
     );
+  }
+
+  startGuestRunAfterSpawn(): void {
+    const run = this.host.getActiveCourseRun();
+    if (!run || this.playbackRoomSourceMode !== 'published' || run.course.status !== 'published' || run.leaderboardEligible || getAuthDebugState().authenticated
+      || run.result !== 'active' || run.pendingResult || this.host.guestRuns?.has(run)) return;
+    this.host.guestRuns?.begin(run, 'course', run.expandedRoomId
+      ? { contentType: 'expanded_room', contentId: run.expandedRoomId, version: run.expandedRoomVersion ?? run.course.version }
+      : { contentType: 'course', contentId: run.course.id, version: run.course.version });
+  }
+
+  private guestClearDetail(run: ActiveCourseRunState, body: RunFinishRequestBody): PostRunRatingRequestDetail {
+    const base = { contentTitle: run.course.title, version: run.expandedRoomVersion ?? run.course.version,
+      previousViewerRank: null, elapsedMs: body.elapsedMs, deaths: body.deaths, score: null,
+      autoSuggestedDifficulty: suggestProgressionDifficulty(body) };
+    return run.expandedRoomId ? { ...base, contentType: 'expanded_room', contentId: run.expandedRoomId,
+      expandedRoomId: run.expandedRoomId,
+      legacyCourseId: run.expandedRoomId === expandedRoomIdFromLegacyCourseId(run.course.id) ? run.course.id : undefined }
+      : { ...base, contentType: 'course', contentId: run.course.id };
   }
 
   private async startRankedCourseRun(

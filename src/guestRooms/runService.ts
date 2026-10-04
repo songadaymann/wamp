@@ -4,6 +4,7 @@ import { GuestRunFinishQueue, type GuestRunQueuedFinish } from './runFinishQueue
 import { captureGuestRunIdentity, createGuestRunRepository, GuestRunApiError,
   type GuestRunRecoveryIdentity, type GuestRunRepository } from './runRepository';
 import type { GuestRunStartBody, GuestRunStartResponse } from './runModel';
+import { updateGuestRunClearStatus } from '../progression/guestRunProgress';
 
 export const GUEST_RUN_PROGRESS_CHANGED_EVENT = 'wamp:guest-run-progress-changed';
 export interface GuestRunSaveResult {
@@ -15,6 +16,7 @@ export interface GuestRunSaveResult {
 }
 export interface GuestRunSession {
   clientRunId: string;
+  readonly progress: GuestRunSaveResult;
   /** Start the recorder immediately; bind its captured copy once the original start is acknowledged. */
   initialBinding: { verificationSchemaVersion: number; verificationNonce: string; snapshotHash: string };
   ready: Promise<GuestRunStartResponse | null>;
@@ -47,6 +49,7 @@ export class GuestRunService {
     this.uuid = options.uuid ?? (() => crypto.randomUUID());
     this.now = options.now ?? Date.now;
     this.notify = options.notify ?? (result => {
+      updateGuestRunClearStatus(result);
       if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(GUEST_RUN_PROGRESS_CHANGED_EVENT, { detail: result }));
     });
   }
@@ -58,8 +61,10 @@ export class GuestRunService {
     const pendingStart: Promise<StartResult> = this.repository.start(start, identity)
       .then(binding => ({ binding, error: null }), error => ({ binding: null, error }));
     let finished: Promise<GuestRunSaveResult> | null = null;
+    let progress: GuestRunSaveResult = { clientRunId: start.clientRunId, attemptId: null, status: 'queued', durable: false, reason: null };
     return {
       clientRunId: start.clientRunId,
+      get progress() { return { ...progress }; },
       initialBinding: { verificationSchemaVersion: RANKED_RUN_TRACE_SCHEMA_VERSION,
         verificationNonce: `pending-${start.clientRunId}`, snapshotHash: 'pending-guest-start' },
       ready: pendingStart.then(result => result.binding),
@@ -71,8 +76,9 @@ export class GuestRunService {
         const entry: GuestRunQueuedFinish = { schemaVersion: 1, start, identity, body: copy,
           binding: null, createdAt: this.now() };
         const durable = this.queue.put(entry);
-        this.notify(this.result(entry, 'queued', durable, null));
-        finished = this.deliver(entry, durable, pendingStart);
+        progress = this.result(entry, 'queued', durable, null);
+        this.notify(progress);
+        finished = this.deliver(entry, durable, pendingStart).then(result => { progress = result; return result; });
         return finished;
       },
     };
@@ -137,6 +143,11 @@ export class GuestRunService {
   private result(entry: GuestRunQueuedFinish, status: GuestRunSaveResult['status'], durable: boolean, reason: string | null): GuestRunSaveResult {
     return { clientRunId: entry.start.clientRunId, attemptId: entry.binding?.attemptId ?? null, status, durable, reason };
   }
+}
+
+let guestRunService: GuestRunService | null = null;
+export function getGuestRunService(): GuestRunService {
+  return guestRunService ??= new GuestRunService();
 }
 
 function terminal(error: unknown): boolean {

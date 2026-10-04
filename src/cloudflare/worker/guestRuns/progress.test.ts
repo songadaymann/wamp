@@ -180,7 +180,7 @@ describe('verified guest progress and account claims on the real schema', () => 
     await expect(lookup({ ...HEADERS, 'X-Guest-Recovery-Token': 'b'.repeat(64) })).rejects.toMatchObject({ status: 404 });
     await expect(lookup(HEADERS, `/api/guest-runs/by-client/${crypto.randomUUID()}`)).rejects.toMatchObject({ status: 404 });
     expect(read('SELECT COUNT(*) AS count FROM guest_run_attempts')?.count).toBe(1);
-    const completed = await finishGuestRun(env, identity, started.attemptId, request(resultBody(started)));
+    at(1000); const completed = await finishGuestRun(env, identity, started.attemptId, request(resultBody(started)));
     expect(completed.saved).toBe(true); expect(await (await lookup()).json()).toEqual(started);
   });
   it('uses the real verifier and derived metrics, leaving all ranked tables empty', async () => {
@@ -201,6 +201,36 @@ describe('verified guest progress and account claims on the real schema', () => 
     if (defect === 'path') trace.breadcrumbs[1].x = 10000;
     at(1000); expect((await finishGuestRun(env, identity, start.attemptId, request(finish))).saved).toBe(false);
     expect((await claim()).pxpAwarded).toBe(0);
+  });
+  it.each(['room', 'course'] as const)('verifies %s play time when the first finish is delayed offline', async kind => {
+    const start = await startGuestRun(env, identity, startBody(kind, kind === 'room' ? room.id : course.id));
+    const finish = resultBody(start); finish.finishedAt = new Date(Date.parse(NOW) + 1000).toISOString();
+    at(2 * 86400000); await pruneGuestRuns(env);
+    expect((await finishGuestRun(env, identity, start.attemptId, request(finish))).saved).toBe(true);
+    expect(JSON.parse(String(read('SELECT metrics_json FROM guest_run_attempts')?.metrics_json)).elapsedMs).toBe(1000);
+    expect(await finishGuestRun(env, identity, start.attemptId, request(finish))).toMatchObject({ saved: true });
+    expect((await claim()).pxpAwarded).toBe(kind === 'room' ? 20 : 40);
+  });
+  it.each(['future', 'ceiling', 'mismatch'] as const)('rejects a %s simulated duration without weakening the trace verifier', async defect => {
+    const start = await startGuestRun(env, identity, startBody()); const finish = resultBody(start);
+    if (defect === 'future') at(0);
+    if (defect === 'ceiling') { at(31 * 60000); finish.elapsedMs = 31 * 60000; }
+    if (defect === 'mismatch') { at(10000); finish.elapsedMs = 5000; }
+    expect(await finishGuestRun(env, identity, start.attemptId, request(finish))).toMatchObject({ saved: false, verificationReason: 'trace_duration' });
+    expect((await claim()).pxpAwarded).toBe(0);
+  });
+  it('does not use delivery delay to satisfy a survival goal', async () => {
+    room.goal = { type: 'survival', durationMs: 10000 }; putRoom(room);
+    const start = await startGuestRun(env, identity, startBody()); const finish = resultBody(start);
+    finish.verificationTrace!.goalEvents[0].type = 'complete'; at(60000);
+    expect((await finishGuestRun(env, identity, start.attemptId, request(finish))).saved).toBe(false);
+  });
+  it('bounds retained offline starts as well as recent starts', async () => {
+    for (let index = 0; index < 100; index += 1) await startGuestRun(env, identity, startBody());
+    at(2 * 86400000); await pruneGuestRuns(env);
+    await expect(startGuestRun(env, identity, startBody())).rejects.toMatchObject({ status: 429 });
+    at(15 * 86400000); await pruneGuestRuns(env);
+    await expect(startGuestRun(env, identity, startBody())).resolves.toMatchObject({ contentId: room.id });
   });
   it('requires the recovery secret, handles identical finish retries, and rejects rewritten finishes', async () => {
     const { start, finish, response } = await complete();
@@ -388,7 +418,7 @@ describe('verified guest progress and account claims on the real schema', () => 
   });
   it('expires active attempts and removes their captured cells, retaining claimed clear history', async () => {
     await complete(); await claim(); at(0); await startGuestRun(env, identity, startBody('course', course.id));
-    at(32 * 60 * 1000); await pruneGuestRuns(env);
+    at(15 * 86400000); await pruneGuestRuns(env);
     expect(read('SELECT COUNT(*) AS count FROM guest_run_snapshot_rooms')?.count).toBe(0);
     expect(read('SELECT COUNT(*) AS count FROM guest_run_attempts')?.count).toBe(1);
   });

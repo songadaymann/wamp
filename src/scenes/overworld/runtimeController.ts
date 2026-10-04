@@ -53,6 +53,7 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
   shouldCollidePlayerWithTerrainTile(tile: Phaser.Tilemaps.Tile): boolean;
   createPlayer(room: RoomSnapshot): void;
+  afterCoursePlayerSpawn?: () => void;
   destroyPlayer(): void;
   syncAppMode(): void;
   setCameraMode(mode: CameraMode): void;
@@ -165,6 +166,7 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
     if (this.host.getActiveCourseRun() || this.host.getActiveRoomRushRun()) {
       this.host.clearCurrentGoalRun();
       this.host.redrawGoalMarkers();
+      if (this.host.getActiveCourseRun()) this.host.afterCoursePlayerSpawn?.();
     } else {
       this.host.syncGoalRunForRoom(currentRoom, 'spawn');
     }

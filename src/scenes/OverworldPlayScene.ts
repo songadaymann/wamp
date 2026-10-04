@@ -266,6 +266,7 @@ import {
   type RankedRunTraceFrameInput,
 } from './overworld/rankedRunTraceRecorder';
 import type { RankedRunVerificationTrace } from '../runs/verificationTrace';
+import { GuestRunPlaybackController } from './overworld/guestRunPlayback';
 import {
   getScrollForScreenAnchor,
   type CameraMode,
@@ -618,9 +619,16 @@ export class OverworldPlayScene extends Phaser.Scene {
       showTransientStatus: (message) => this.showTransientStatus(message),
     });
     const thisScene = this;
+    const guestRuns = new GuestRunPlaybackController({
+      getCurrentRun: kind => kind === 'room' ? this.goalRunController?.getCurrentRun() ?? null : this.activeCourseRun,
+      startTrace: (kind, binding) => this.startRankedRunTrace(kind, binding),
+      clearTrace: () => this.clearRankedRunTrace(),
+      renderHud: () => this.renderHud(),
+    });
     this.goalRunController = new OverworldGoalRunController({
       playerHeight: this.PLAYER_HEIGHT,
       runRepository: createRunRepository(),
+      guestRuns,
       getScore: () => this.score,
       getAuthenticated: () => getAuthDebugState().authenticated,
       getAuthSource: () => getAuthDebugState().source ?? null,
@@ -1116,6 +1124,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.worldStreamingController.waitForBrowseCommentDiscoveryReady(signal),
     });
     this.coursePlaybackController = new OverworldCoursePlaybackController({
+      guestRuns,
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getActiveCourseRun: () => this.activeCourseRun,
       setActiveCourseRun: (runState) => {
@@ -1395,6 +1404,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         shouldCollidePlayerWithTerrainTile: (tile) =>
           this.specialTilesController.shouldCollidePlayerWithTerrainTile(tile),
         createPlayer: (room) => this.createPlayer(room),
+        afterCoursePlayerSpawn: () => this.coursePlaybackController.startGuestRunAfterSpawn(),
         destroyPlayer: () => this.destroyPlayer(),
         syncAppMode: () => this.syncAppMode(),
         setCameraMode: (mode) => {
@@ -4601,6 +4611,12 @@ export class OverworldPlayScene extends Phaser.Scene {
       return null;
     }
 
+    if (result === 'completed') {
+      const frame = this.getCurrentRankedRunTraceFrame();
+      if (frame) this.rankedRunTraceRecorder.recordGoalEvent({ type: 'complete', actor: 'player',
+        roomId: roomIdFromCoordinates(frame.roomCoordinates), roomX: frame.roomCoordinates.x, roomY: frame.roomCoordinates.y,
+        x: frame.x, y: frame.y, instanceId: null, checkpointIndex: null });
+    }
     return this.rankedRunTraceRecorder.buildTrace(elapsedMs);
   }
 

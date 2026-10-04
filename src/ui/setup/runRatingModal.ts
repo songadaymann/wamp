@@ -28,9 +28,10 @@ import {
   type PostRunRatingRequestDetail,
 } from '../../progression/postRunRatingEvents';
 import {
-  recordGuestRunClear,
-  type GuestRunProgressSummary,
+  loadGuestRunProgress,
 } from '../../progression/guestRunProgress';
+import { guestRunClaimCopy } from '../../progression/guestRunClaimCopy';
+import { GUEST_RUN_PROGRESS_CHANGED_EVENT, type GuestRunSaveResult } from '../../guestRooms/runService';
 import { REWARD_STINGS_IDLE_EVENT } from '../../progression/rewardStings';
 import { dispatchProgressionFeedback } from '../../progression/progressionFeedback';
 import { saveSeenRewardProgression } from '../../progression/rewardStingSeenState';
@@ -55,7 +56,6 @@ import {
   type RunShareImage,
 } from '../../social/runShare';
 import {
-  getPostRunPromptKey,
   PostRunRatingQueue,
   type PostRunPromptQueueEntry,
   type PostRunPromptMode,
@@ -120,10 +120,9 @@ export class RunRatingModalController {
   private baselineProgression: ProgressionSummary | null = null;
   private baselineProgressionLoad: Promise<void> | null = null;
   private readonly promptQueue = new PostRunRatingQueue();
-  private readonly guestProgressByPromptKey = new Map<string, GuestRunProgressSummary>();
   private appModeObserver: MutationObserver | null = null;
   private mode: RunRatingModalMode = 'rating';
-  private guestProgressSummary: GuestRunProgressSummary | null = null;
+  private readonly guestSaveResults = new Map<string, GuestRunSaveResult>();
   private shareImage: RunShareImage | null = null;
   private shareImageLoading = false;
   private shareStatusText: string | null = null;
@@ -143,8 +142,9 @@ export class RunRatingModalController {
 
   private readonly handleGuestClaimSignInClick = (event: Event) => {
     event.stopPropagation();
+    const message = guestRunClaimCopy(this.getCurrentGuestSaveResult()).signInMessage;
     this.close();
-    promptForSignIn('Sign in to save your XP and leaderboard progress.');
+    promptForSignIn(message);
   };
 
   private readonly handleGuestClaimContinueClick = () => {
@@ -201,6 +201,14 @@ export class RunRatingModalController {
     }
 
     this.enqueuePrompt({ mode: 'guest-claim', detail });
+  };
+
+  private readonly handleGuestSaveChanged = (event: Event) => {
+    const result = event instanceof CustomEvent ? event.detail as GuestRunSaveResult | undefined : undefined;
+    if (!result?.clientRunId) return;
+    this.guestSaveResults.set(result.clientRunId, result);
+    if (this.guestSaveResults.size > 50) this.guestSaveResults.delete(this.guestSaveResults.keys().next().value!);
+    if (this.activeRequest?.guestProgress?.clientRunId === result.clientRunId) this.renderGuestClaim();
   };
 
   private readonly handleRewardStingsIdle = () => {
@@ -284,6 +292,7 @@ export class RunRatingModalController {
       this.handleGuestClaimRequest as EventListener
     );
     this.windowObj.addEventListener(REWARD_STINGS_IDLE_EVENT, this.handleRewardStingsIdle);
+    this.windowObj.addEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestSaveChanged);
     const MutationObserverCtor = (
       this.windowObj as Window & { MutationObserver?: typeof MutationObserver }
     ).MutationObserver;
@@ -333,6 +342,7 @@ export class RunRatingModalController {
       this.handleGuestClaimRequest as EventListener
     );
     this.windowObj.removeEventListener(REWARD_STINGS_IDLE_EVENT, this.handleRewardStingsIdle);
+    this.windowObj.removeEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestSaveChanged);
     this.appModeObserver?.disconnect();
     this.appModeObserver = null;
     this.close();
@@ -343,12 +353,6 @@ export class RunRatingModalController {
       return;
     }
 
-    if (prompt.mode === 'guest-claim') {
-      this.guestProgressByPromptKey.set(
-        getPostRunPromptKey(prompt.detail),
-        recordGuestRunClear(prompt.detail),
-      );
-    }
     if (this.activeRequest) {
       this.render();
     }
@@ -373,10 +377,7 @@ export class RunRatingModalController {
 
   private presentPrompt(prompt: PostRunPromptQueueEntry): void {
     if (prompt.mode === 'guest-claim') {
-      this.openGuestClaim(
-        prompt.detail,
-        this.guestProgressByPromptKey.get(prompt.key) ?? null,
-      );
+      this.openGuestClaim(prompt.detail);
       return;
     }
     void this.open(prompt.detail);
@@ -394,7 +395,6 @@ export class RunRatingModalController {
     }
 
     this.promptQueue.finishBatch();
-    this.guestProgressByPromptKey.clear();
     this.hideAndReset();
   }
 
@@ -405,7 +405,6 @@ export class RunRatingModalController {
 
     this.mode = 'rating';
     this.activeRequest = detail;
-    this.guestProgressSummary = null;
     this.roomSummary = null;
     this.courseSummary = null;
     this.currentQualityStars = null;
@@ -474,7 +473,6 @@ export class RunRatingModalController {
 
   private openGuestClaim(
     detail: PostRunRatingRequestDetail,
-    guestProgressSummary: GuestRunProgressSummary | null,
   ): void {
     if (!this.elements.modal) {
       return;
@@ -482,7 +480,6 @@ export class RunRatingModalController {
 
     this.mode = 'guest-claim';
     this.activeRequest = detail;
-    this.guestProgressSummary = guestProgressSummary;
     this.roomSummary = null;
     this.courseSummary = null;
     this.currentQualityStars = null;
@@ -506,7 +503,6 @@ export class RunRatingModalController {
 
   close(): void {
     this.promptQueue.dismissAll();
-    this.guestProgressByPromptKey.clear();
     this.hideAndReset();
   }
 
@@ -519,7 +515,6 @@ export class RunRatingModalController {
     this.elements.modal.setAttribute('aria-hidden', 'true');
     this.mode = 'rating';
     this.activeRequest = null;
-    this.guestProgressSummary = null;
     this.roomSummary = null;
     this.courseSummary = null;
     this.currentQualityStars = null;
@@ -913,19 +908,28 @@ export class RunRatingModalController {
   }
 
   private renderGuestClaim(): void {
-    const xp = this.guestProgressSummary?.latest?.potentialPxp ?? 0;
+    const copy = guestRunClaimCopy(this.getCurrentGuestSaveResult());
     if (this.elements.guestClaimXp) {
-      this.elements.guestClaimXp.textContent = `You earned ${xp > 0 ? xp : 20} XP`;
+      this.elements.guestClaimXp.textContent = copy.heading;
     }
     if (this.elements.guestClaimCopy) {
       this.elements.guestClaimCopy.textContent =
-        'Sign in to save your XP and leaderboard progress.';
+        copy.copy;
     }
+    if (this.elements.guestClaimSignInButton) this.elements.guestClaimSignInButton.textContent = copy.button;
     if (this.elements.guestClaimContinueButton) {
       const queue = this.promptQueue.getSnapshot();
       const hasNext = queue.currentIndex >= 0 && queue.currentIndex < queue.total - 1;
       this.elements.guestClaimContinueButton.textContent = hasNext ? 'Next Room' : 'Keep Playing';
     }
+  }
+
+  private getCurrentGuestSaveResult(): GuestRunSaveResult | undefined {
+    const initial = this.activeRequest?.guestProgress;
+    if (!initial) return undefined;
+    return this.guestSaveResults.get(initial.clientRunId)
+      ?? loadGuestRunProgress().records.find(record => record.guestProgress?.clientRunId === initial.clientRunId)?.guestProgress
+      ?? initial;
   }
 
   private renderBatchQueue(): void {
