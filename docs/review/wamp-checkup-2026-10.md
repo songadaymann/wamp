@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 23 of 214 done.**
+**Progress: 24 of 214 done.**
 
 ## How to use this file
 
@@ -42,7 +42,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 4. **Make classroom accounts actually safe** ✅ (F208, F190, F209, F211). Students are blocked from World Chat, but they can talk to strangers through in-room speech bubbles. The multiplayer server doesn't check sign-in or bans for those bubbles at all. Other public-posting paths are also open to students, and student passwords can be guessed with no lockout. Fix these before any more school pilots.
 5. **Switch the fast world map back on, safely** ✅ (F003, F010). Compatible pre-rendered imagery is active again. Tile work stays within the current viewport and bounded metadata; strict production smoke, direct outage/recovery emails and blocking production release compatibility checks protect the restored map.
 6. **Same jump on every screen, and cap phones at 60fps** (F138, F002). On 120/144Hz screens, quick-tap jumps come out lower, ice slides shorter, and jumps in gravity zones are about half as tall. Rooms get easier or harder depending on the device, and leaderboards aren't fair. A careful cap just above 60fps also cuts heat and battery drain on high-refresh phones.
-7. **Make building on phones and tablets stop fighting you** (F079, F157, F161, F158). Phone and tablet building has several problems: - Every pinch-zoom drops a stray tile or floods an area. - Shape tools don't work by touch. - iPads have no Undo button. - The phone editor still has the old layout, with Test and Publish hidden. - Phone builders can't configure pressure plates, NPCs or Sword Hunters.
+7. **Make building on phones and tablets stop fighting you** (F079, F157, F161, F158). Phone and tablet building has several problems: - Every pinch-zoom drops a stray tile or floods an area. - Shape tools don't work by touch. - Undo/Redo is delivered in both editors (PR #39). - The phone editor still has the old layout, with Test and Publish hidden. - Phone builders can't configure pressure plates, NPCs or Sword Hunters.
 8. **Fix the first five minutes** (F093, F122, F126, F104). These are the moments that decide whether a visitor stays: - A shared room link opens the Welcome box on top of the room-goal box. - New players never see the controls before the timer starts. - 'Save Progress' doesn't actually keep a guest's clears when they sign up. - The Welcome box's Play, Explore and Build buttons don't lead anywhere obvious.
 9. **Security/safety priority** (F198, F201, F199, F200, F026). Details withheld from this public repo until fixed.
 10. **Security/safety priority** (F182, F184, F183). Details withheld from this public repo until fixed.
@@ -263,7 +263,8 @@ The movement has a great base. These items make it fair on every screen, make de
 
 The desktop editor is fast and polished. The gaps are safety nets (Undo buttons, publish checks), getting started (templates), and moving things around.
 
-- [ ] **F157** No on-screen Undo/Redo in the desktop/tablet editor; iPad builders have no Undo at all · high impact · small effort
+- [x] **F157** No on-screen Undo/Redo in the desktop/tablet editor; iPad builders have no Undo at all · high impact · small effort
+  Delivered in PR #39; desktop/tablet controls and pinned phone Undo/Redo pass local native touch checks in both editors and the live guest Build flow. Physical hardware testing is separate from these controlled browser checks.
 - [ ] **F156** Rooms that can't be beaten (or are beaten instantly) can be published · medium impact · small effort
 - [ ] **F163** Starter room templates (backlog G-001): build them as command scripts (also covers F106) · high impact · medium effort
 - [ ] **F159** Add a "Clear Check" plus a Ready-to-Publish checklist (Mario Maker style) · high impact · medium effort
