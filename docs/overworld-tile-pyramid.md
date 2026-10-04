@@ -72,6 +72,8 @@ Backfill and activate a matching immutable renderer to restore tiled reads after
 
 Production checks `https://api.wamp.land/api/world/tiles/config` every 15 minutes
 (`7,22,37,52 * * * *`). The existing hourly maintenance schedule remains separate.
+`global_fetch_strictly_public` is required so same-zone requests reach the public
+API Worker rather than bypassing it for an unused DNS origin.
 A disabled/incompatible map or failed HTTP check queues one outage email, daily
 reminders while unhealthy, and a recovery email. The recipient is the private
 `WORLD_MAP_ALERT_EMAIL` override, then `ADMIN_REVIEW_EMAIL`, then the existing admin

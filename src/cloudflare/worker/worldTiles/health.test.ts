@@ -61,6 +61,13 @@ describe('direct world map alerts with durable delivery', () => {
   const check = (now = NOW) => checkAndAlertWorldMap(env, { now, fetcher });
   const events = () => sqlite.prepare('SELECT kind, sent_at, attempts FROM world_map_health_alerts ORDER BY rowid').all() as { kind: string; sent_at: string | null; attempts: number }[];
 
+  it('routes same-zone health requests through the public Worker and keeps maintenance separate', () => {
+    const config = readFileSync(new URL('../../../../wrangler.jsonc', import.meta.url), 'utf8');
+    expect(config).toMatch(/"compatibility_flags"\s*:\s*\["global_fetch_strictly_public"\]/);
+    expect(config).toContain('"17 * * * *"');
+    expect(config).toContain('"7,22,37,52 * * * *"');
+  });
+
   it('stays quiet while healthy; sends one outage, a daily reminder, and recovery', async () => {
     await check(); expect(deliveries.size).toBe(0);
     config.available = false; await check(later(15)); await check(later(30));
