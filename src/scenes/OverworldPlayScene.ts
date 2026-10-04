@@ -5850,14 +5850,14 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.flowController.buildSelectedRoom();
   }
 
-  async openGuestDraftRoom(roomSnapshot: RoomSnapshot): Promise<boolean> {
+  async openGuestDraftRoom(roomSnapshot: RoomSnapshot, isCurrent: () => boolean = () => true, forceRoomSnapshot = true): Promise<boolean> {
     const accountId = getAuthDebugState().user?.id ?? null;
-    const canOpen = () => (getAuthDebugState().user?.id ?? null) === accountId;
+    const canOpen = () => isCurrent() && (getAuthDebugState().user?.id ?? null) === accountId;
     await this.flowController.openEditor({
       roomCoordinates: { ...roomSnapshot.coordinates },
       source: 'world',
       roomSnapshot,
-      forceRoomSnapshot: true,
+      forceRoomSnapshot,
     }, canOpen);
     // Phaser queues scene starts requested during a frame; wait for that handoff.
     const deadline = performance.now() + 5000;

@@ -493,7 +493,8 @@ export class EditorRoomSession {
         : this.resolveRoomSnapshotForEditing(activeRecord, initialRoomSnapshot, options);
       this.roomTitle = editableSnapshot.title;
       this.host.applyRoomSnapshot(editableSnapshot);
-      if (localRecord) {
+      if (localRecord || (initialRoomSnapshot && (options.forceInitialRoomSnapshot
+        || (isRoomSnapshotBlank(activeRecord.draft) && !isRoomSnapshotBlank(initialRoomSnapshot))))) {
         this.host.setRoomDirty(true);
       }
       this.host.refreshSurroundingRoomPreviews();

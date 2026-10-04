@@ -345,3 +345,21 @@ Final public acceptance passes **twelve workflows across six browser layouts**: 
 Evidence is retained in ignored `output/web-game/first-play-controls/production-layer-expanded/report.json`, `production-layer-shared-recheck/report.json` and its `documents.json`, screenshots, `/tmp/wamp-first-play-parity.json`, `/tmp/wamp-first-play-layer-prod-smoke.log`, `/tmp/wamp-first-play-layer-pages-admin.json`, the main retry log and the original failure reports. At **14:00:47 UTC**, direct fast-map email health is enabled/configured for `jonathan@jonathanmann.net`, healthy with zero pending alerts; the blocking compatibility gate passes.
 
 Final documentation is committed/pushed on `codex/checkup-first-play-controls-delivery-2026-10-04` from released main without another main build. Primary 25 unrelated dirty entries are preserved. Browser layouts/emulation are verified; physical F002/F138 certification and the separately reproduced F098 camera issue remain open. **F126 Welcome destinations is next**; it has not been started.
+
+
+## F126 Welcome destinations — in progress (2026-10-04)
+
+Scope: use the existing six De Ja Vu tutorial rooms as an explicit First Steps sequence with controls, room progress, Next/Restart/Stop and a completion summary based on actual clears. Open the real room explorer from Welcome. Start Build with a playable floor/spawn/exit draft while preserving existing drafts and the Beginner/Advanced choice. Record welcome_explore alongside the existing lane actions.
+
+- [ ] Implement routes, starter snapshot and truthful completion.
+- [ ] Verify sequence lifecycle, loading failures, guest verification and draft protection.
+- [ ] Check native desktop/phone/tablet flows and the official game client; inspect screenshots.
+- [ ] Pass required quality checks, merge and deploy the API and frontend from clean current main (welcome_explore is validated by both).
+- [ ] Verify the exact release on wamp.land and update the checkup (currently 31/214).
+
+Work lane: codex/checkup-welcome-destinations-2026-10-04 in the managed checkup worktree, starting at origin/main 0c618819 and carrying F104 delivery bookkeeping. Primary checkout's 25 unrelated dirty entries are preserved. F097 is covered by F126; F125 discovery curation/aggregates, F098 camera and physical F002/F138 checks remain separate.
+
+
+F126 implementation checkpoint: Welcome Play loads the current published versions of De Ja Vu 1–6 into First Steps. The existing controls/goal introductions and sequence navigation are reused; Stop cancels pending navigation. A dedicated summary counts actual completion events, deduplicates replays and distinguishes verified, queued and unverified guest clears without inventing XP. Welcome Explore opens the existing room list with guest-accessible Play All. Build keeps the Beginner/Advanced choice and opens a playable catalog-ground/spawn/exit starter with conflict protection, normal draft recovery and autosave. Guest presence does not request account-only construction preview tokens. Touch Next includes progress and stays near the controls.
+
+Pre-release checks: npm run check passes 301 files / 2,341 tests, including the new routing, lifecycle, summary, persistence and recorder-validation checks. DOM smoke passes 822 IDs / 159 required. The official client passes with inspected screenshots. Native desktop, portrait phone and narrow-phone checks pass all three lanes, including a real verified tutorial clear, skipped-room summary, guest Play All and a completed starter Test run. Tablet/landscape default-renderer checks and the final compiled-release checks are ongoing. The checkup remains 31/214 until production acceptance. API delivery is required because the new welcome_explore action is validated by the Worker; no D1 schema, room-data, PartyKit or renderer change is needed.

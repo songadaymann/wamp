@@ -3,7 +3,7 @@ import type { RoomCoordinates } from '../../persistence/roomModel';
 export const ROOM_SEQUENCE_START_EVENT = 'room-sequence-start';
 
 export type RoomSequenceMode = 'play' | 'rate';
-export type RoomSequenceKind = 'explore' | 'playlist';
+export type RoomSequenceKind = 'explore' | 'playlist' | 'welcome';
 
 export interface RoomSequenceEntry {
   roomId: string;

@@ -7,7 +7,7 @@
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run test && npm run typecheck && npm run world-tiles:types:check && npm run build",
     "dead-code:report": "knip --no-exit-code",
-    "lint": "eslint src partykit scripts/api_performance_probe.mjs scripts/backfill_badges.mjs scripts/overworld_tile_pyramid_probe.mjs scripts/overworld_tile_pyramid_probe_helpers.mjs scripts/playable_content_index.mjs scripts/runtime_performance_trace.mjs scripts/runtime_performance_trace.test.ts scripts/smoke_boygame_tileset.mjs scripts/smoke_community_sprites.mjs scripts/smoke_jungle_vines.mjs scripts/smoke_police_enemies.mjs scripts/smoke_physics_cadence.mjs scripts/smoke_editor_history.mjs scripts/smoke_editor_phone_dock.mjs scripts/smoke_editor_phone_inspector.mjs scripts/smoke_first_visit.mjs scripts/smoke_first_play_controls.mjs scripts/smoke_editor_touch.mjs scripts/smoke_smart_autotiling.mjs scripts/smoke_worlds_pilot.ts scripts/webgl_recovery_probe.mjs scripts/world_tile_parity_probe.mjs scripts/world_tiles.mjs scripts/check_pages_release.mjs scripts/deploy_prod.mjs scripts/world_tile_release_guard.mjs scripts/world_tile_asset_contract_check.ts --max-warnings=0",
+    "lint": "eslint src partykit scripts/api_performance_probe.mjs scripts/backfill_badges.mjs scripts/overworld_tile_pyramid_probe.mjs scripts/overworld_tile_pyramid_probe_helpers.mjs scripts/playable_content_index.mjs scripts/runtime_performance_trace.mjs scripts/runtime_performance_trace.test.ts scripts/smoke_boygame_tileset.mjs scripts/smoke_community_sprites.mjs scripts/smoke_jungle_vines.mjs scripts/smoke_police_enemies.mjs scripts/smoke_physics_cadence.mjs scripts/smoke_editor_history.mjs scripts/smoke_editor_phone_dock.mjs scripts/smoke_editor_phone_inspector.mjs scripts/smoke_first_visit.mjs scripts/smoke_first_play_controls.mjs scripts/smoke_welcome_destinations.mjs scripts/smoke_editor_touch.mjs scripts/smoke_smart_autotiling.mjs scripts/smoke_worlds_pilot.ts scripts/webgl_recovery_probe.mjs scripts/world_tile_parity_probe.mjs scripts/world_tiles.mjs scripts/check_pages_release.mjs scripts/deploy_prod.mjs scripts/world_tile_release_guard.mjs scripts/world_tile_asset_contract_check.ts --max-warnings=0",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "dev": "vite --strictPort --port 3000",
@@ -105,7 +105,8 @@
     "world-tiles:release:check": "npx --yes tsx scripts/world_tile_asset_contract_check.ts --strict",
     "smoke:physics-cadence": "node scripts/smoke_physics_cadence.mjs",
     "smoke:first-visit": "node scripts/smoke_first_visit.mjs",
-    "smoke:first-play-controls": "node scripts/smoke_first_play_controls.mjs"
+    "smoke:first-play-controls": "node scripts/smoke_first_play_controls.mjs",
+    "smoke:welcome-destinations": "node scripts/smoke_welcome_destinations.mjs"
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.3",

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../../auth/client';
 import {
-  createDefaultRoomSnapshot,
+  createLocalRoomRepository,
   createRoomRepository,
   type RoomCoordinates,
   type RoomRepository,
@@ -13,12 +13,14 @@ import { APP_READY_EVENT, isAppReady, isBusyOverlayVisible } from '../appFeedbac
 import { APP_MODE_CHANGED_EVENT } from '../appMode';
 import { getActiveOverworldScene } from './sceneBridge';
 import { getGameSettings, updateGameSettings } from '../../settings/userSettings';
+import { isRoomSnapshotBlank } from '../../persistence/roomModel';
+import { createStarterRoomSnapshot, loadFirstSteps } from './firstSteps';
+import { requestRoomSequenceStart } from './roomSequenceEvents';
 
 const WELCOME_MODAL_SEEN_STORAGE_KEY = 'wamp_welcome_modal_seen_v1';
 export const REQUEST_BUILDER_MODE_EVENT = 'wamp:request-builder-mode';
 const WELCOME_MODAL_AUTO_OPEN_DELAY_MS = 540;
 const BUILD_FRONTIER_RADIUS = 24;
-const WELCOME_PLAY_ROOM_COORDINATES: RoomCoordinates = { x: -11, y: -6 };
 
 type WelcomeModalElements = {
   modal: HTMLElement | null;
@@ -40,6 +42,7 @@ export class WelcomeModalController {
   private dismissed = false;
   private autoOpened = false;
   private pending = false;
+  private actionGeneration = 0;
   private builderChoiceContinuation: (() => void) | null = null;
 
   private readonly handleAppReady = () => {
@@ -55,6 +58,12 @@ export class WelcomeModalController {
   };
 
   private readonly handleAuthStateChanged = () => {
+    if (this.pending) {
+      this.actionGeneration += 1;
+      this.pending = false;
+      this.setButtonsDisabled(false);
+      this.setStatus('Sign-in changed. Choose Play or Build again.', false);
+    }
     this.scheduleAutoOpen();
   };
 
@@ -68,7 +77,9 @@ export class WelcomeModalController {
   };
 
   private readonly handleExploreClick = () => {
+    if (this.pending) return;
     this.close(true);
+    void this.destinations.explore?.();
   };
 
   private readonly handlePlayClick = () => {
@@ -76,7 +87,7 @@ export class WelcomeModalController {
   };
 
   private readonly handleBuildClick = () => {
-    this.requestBuilderMode(() => void this.handleBuildAction());
+    this.beginBuild();
   };
 
   private readonly handleBuilderModeRequest = (event: Event) => {
@@ -123,6 +134,7 @@ export class WelcomeModalController {
     private readonly storage: Storage = window.localStorage,
     private readonly doc: Document = document,
     private readonly windowObj: Window = window,
+    private readonly destinations: { explore?: () => Promise<void> | void; localRooms?: RoomRepository } = {},
   ) {
     this.elements = {
       modal: this.doc.getElementById('welcome-modal'),
@@ -179,6 +191,7 @@ export class WelcomeModalController {
   }
 
   open(): void {
+    this.actionGeneration += 1;
     if (!this.elements.modal) {
       return;
     }
@@ -195,6 +208,7 @@ export class WelcomeModalController {
   }
 
   close(persistDismissal: boolean): void {
+    this.actionGeneration += 1;
     if (!this.elements.modal) {
       return;
     }
@@ -289,7 +303,8 @@ export class WelcomeModalController {
 
     this.pending = true;
     this.setButtonsDisabled(true);
-    this.setStatus('Heading to a level...', false);
+    const generation = ++this.actionGeneration;
+    this.setStatus('Loading six tutorial rooms...', false);
 
     try {
       const overworld = getActiveOverworldScene(this.game);
@@ -297,15 +312,23 @@ export class WelcomeModalController {
         throw new Error('The overworld is not ready yet.');
       }
 
+      const sequence = await loadFirstSteps(this.roomRepository);
+      if (generation !== this.actionGeneration) return;
       this.close(true);
-      await overworld.jumpToCoordinates(WELCOME_PLAY_ROOM_COORDINATES);
-      overworld.playSelectedRoom();
+      requestRoomSequenceStart(sequence);
     } catch (error) {
+      if (generation !== this.actionGeneration) return;
       console.error('Failed to launch welcome Play action', error);
       this.pending = false;
       this.setButtonsDisabled(false);
       this.setStatus(error instanceof Error ? error.message : 'Failed to start a level.', true);
     }
+  }
+
+  beginBuild(): void {
+    if (this.pending) return;
+    if (this.elements.modal?.classList.contains('hidden')) this.open();
+    this.requestBuilderMode(() => void this.handleBuildAction());
   }
 
   private async handleBuildAction(): Promise<void> {
@@ -314,12 +337,16 @@ export class WelcomeModalController {
     }
 
     const overworld = getActiveOverworldScene(this.game);
-    if (!overworld?.jumpToCoordinates) {
+    if (!overworld?.jumpToCoordinates || !overworld.openGuestDraftRoom) {
       this.setStatus('The overworld is not ready yet.', true);
       return;
     }
 
     this.pending = true;
+    const generation = ++this.actionGeneration;
+    const accountId = getAuthDebugState().user?.id ?? null;
+    const isCurrent = () => generation === this.actionGeneration
+      && (getAuthDebugState().user?.id ?? null) === accountId;
     this.setButtonsDisabled(true);
     this.setStatus('Finding an open room to build...', false);
 
@@ -334,21 +361,31 @@ export class WelcomeModalController {
       if (!targetRoom) {
         throw new Error('No open frontier rooms are available nearby.');
       }
-
-      if (authState.authenticated) {
-        await this.roomRepository.saveDraft(
-          createDefaultRoomSnapshot(targetRoom.id, targetRoom.coordinates)
-        );
+      if (!isCurrent()) return;
+      const localRooms = this.destinations.localRooms ?? createLocalRoomRepository();
+      const local = await localRooms.loadRoom(targetRoom.id, targetRoom.coordinates);
+      if (!isCurrent()) return;
+      if (!isRoomSnapshotBlank(local.draft)) {
+        throw new Error('This browser already has a draft here. Try Build again to find another room.');
       }
-
-      this.close(true);
+      const current = await this.roomRepository.loadRoomCurrent(targetRoom.id, targetRoom.coordinates);
+      if (!isCurrent()) return;
+      if (current.summary.claimedAt || current.published || !isRoomSnapshotBlank(current.draft)) {
+        throw new Error('This room was just taken. Try Build again to find another room.');
+      }
+      const starter = createStarterRoomSnapshot(targetRoom.id, targetRoom.coordinates);
+      if (authState.authenticated) {
+        await this.roomRepository.saveDraft(starter, { baseUpdatedAt: current.draft.updatedAt });
+      }
+      if (!isCurrent()) return;
       await overworld.jumpToCoordinates(targetRoom.coordinates);
-      if (authState.authenticated) {
-        overworld.editSelectedRoom?.();
-      } else {
-        overworld.buildSelectedRoom?.();
-      }
+      if (!isCurrent()) return;
+      const opened = await overworld.openGuestDraftRoom(starter, isCurrent, false);
+      if (!isCurrent()) return;
+      if (opened === false) throw new Error('The editor could not open. Please try again.');
+      this.close(true);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Failed to launch welcome Build action', error);
       this.pending = false;
       this.setButtonsDisabled(false);

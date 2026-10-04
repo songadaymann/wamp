@@ -100,7 +100,8 @@
     "scripts/world_tile_asset_contract_check.ts",
     "scripts/check_pages_release.mjs",
     "scripts/smoke_first_visit.mjs",
-    "scripts/smoke_first_play_controls.mjs"
+    "scripts/smoke_first_play_controls.mjs",
+    "scripts/smoke_welcome_destinations.mjs"
   ],
   "project": [
     "src/**/*.{js,mjs,ts}",

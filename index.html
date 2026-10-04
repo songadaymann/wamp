@@ -1941,6 +1941,7 @@
       >
         Restart
       </button>
+      <button id="btn-mobile-room-sequence-next" class="bar-btn mobile-room-sequence-next hidden" type="button">Next</button>
       <div id="mobile-play-controls" class="mobile-play-controls hidden">
         <div id="mobile-move-zone" class="mobile-move-zone" aria-label="Move">
           <div id="mobile-move-stick" class="mobile-move-stick" aria-hidden="true">
@@ -2263,11 +2264,26 @@
     </div>
   </div>
 
+  <div id="first-steps-summary-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="first-steps-summary-title">
+      <div class="history-modal-header">
+        <h2 id="first-steps-summary-title" class="history-modal-title">First Steps Complete</h2>
+        <button id="btn-first-steps-close" class="bar-btn" type="button">Close</button>
+      </div>
+      <p id="first-steps-summary-count" class="history-modal-meta"></p>
+      <p id="first-steps-summary-progress" class="history-modal-meta" aria-live="polite"></p>
+      <div class="first-steps-summary-actions">
+        <button id="btn-first-steps-save" class="bar-btn hidden" type="button">Save Progress</button>
+        <button id="btn-first-steps-explore" class="bar-btn" type="button">Explore Rooms</button>
+        <button id="btn-first-steps-build" class="bar-btn" type="button">Build Your Own</button>
+      </div>
+    </div>
+  </div>
+
   <div id="welcome-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel welcome-modal-panel" role="dialog" aria-modal="true" aria-labelledby="welcome-modal-title">
         <div class="history-modal-header">
         <div class="history-modal-title-group">
-          <div class="history-modal-kicker">WELCOME TO WAMP!</div>
           <h2 id="welcome-modal-title" class="history-modal-title">We All Make A Platformer</h2>
         </div>
         <div class="history-modal-header-actions">
@@ -2282,10 +2298,10 @@
           </div>
           <div class="welcome-lane-title">EXPLORE</div>
           <div class="welcome-lane-copy">
-            Explore the overworld and find cool levels. Have fun running from room to room, completing challenges.
+            Find community rooms in the room list. Pick one, or use Play All for a run.
           </div>
           <div class="welcome-lane-subcopy">
-            Rate the levels you've beat to earn Curator XP.
+            Featured rooms and top-rated picks are a good place to start.
           </div>
           <button id="btn-welcome-explore" class="bar-btn welcome-lane-button" type="button">Explore</button>
         </section>
@@ -2296,10 +2312,10 @@
           </div>
           <div class="welcome-lane-title">PLAY</div>
           <div class="welcome-lane-copy">
-            Some rooms are easy, some are devilishly difficult, and new ones are being built every day.
+            Learn to move, jump, climb and beat challenges in six tutorial rooms.
           </div>
           <div class="welcome-lane-subcopy">
-            Beat as many as you can to earn Player XP.
+            First Steps has Next, Restart and Stop. Play at your own pace.
           </div>
           <button id="btn-welcome-play" class="bar-btn welcome-lane-button" type="button">Play</button>
         </section>
@@ -2310,10 +2326,10 @@
           </div>
           <div class="welcome-lane-title">BUILD</div>
           <div class="welcome-lane-copy">
-            Every level is created by someone just like you. Pick an open room and start making your own challenge.
+            Make a room of your own. Start with a floor, a spawn point and an exit.
           </div>
           <div class="welcome-lane-subcopy">
-            The more people beat your level, the higher your XP. Build rooms to earn Builder XP.
+            Try Test Play, then add your own challenge. Sign in to publish to the overworld.
           </div>
           <button id="btn-welcome-build" class="bar-btn welcome-lane-button" type="button">Build</button>
         </section>

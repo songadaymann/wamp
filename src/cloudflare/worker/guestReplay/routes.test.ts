@@ -56,6 +56,14 @@ describe('guest replay storage', () => {
     expect(list.sessions.map(s => s.id)).toEqual([first.id]);
     await expect(call('/api/admin/guest-replays?session=invalid',undefined,true)).rejects.toMatchObject({status:400});
   });
+
+  it('accepts the Welcome Explore action with the rest of the recorded session', async () => {
+    const credentials = await start();
+    const response = await call('/api/guest-replays/samples', { ...credentials, samples: [{ ...sample(), actions: ['welcome_explore'] }] });
+    expect(response.status).toBe(200);
+    const saved = db.prepare('SELECT payload FROM guest_replay_samples WHERE session_id=?').get(credentials.id) as { payload: string };
+    expect(JSON.parse(saved.payload).actions).toEqual(['welcome_explore']);
+  });
   it('rejects wrong write tokens and foreign origins', async () => {
     const credentials = await start();
     await expect(call('/api/guest-replays/samples',{...credentials,token:visitor,samples:[sample()]})).rejects.toMatchObject({status:403});
