@@ -81,6 +81,9 @@ export interface EditorCourseUiViewModel {
 
 export interface EditorInspectorState {
   visible: boolean;
+  pinned: boolean;
+  connecting: boolean;
+  selectionId: string | null;
   pressureVisible: boolean;
   pressureStatusText: string;
   pressureConnectHidden: boolean;
@@ -227,6 +230,7 @@ export interface EditorUiBridgeActions {
   onSetCourseGoalSurvivalSeconds: (seconds: number) => void;
   onStartCourseGoalMarkerPlacement: (mode: EditorMarkerPlacementMode) => void;
   onClearCourseGoalMarkers: () => void;
+  onClearPinnedInspector: () => void;
   onBeginPressurePlateConnection: () => void;
   onClearPressurePlateConnection: () => void;
   onCancelPressurePlateConnection: () => void;

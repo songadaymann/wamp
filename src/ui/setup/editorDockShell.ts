@@ -428,6 +428,8 @@ export class EditorDockShellController {
         'data-editor-music-ui-locked',
         'data-editor-sprite-mode',
         'data-editor-sprite-ui-locked',
+        'data-editor-phone-inspector',
+        'data-editor-phone-linking',
       ],
     });
 

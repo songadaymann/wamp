@@ -23,6 +23,9 @@ export interface ContainerInspectorOptions {
 export function createEmptyEditorInspectorState(): EditorInspectorState {
   return {
     visible: false,
+    pinned: false,
+    connecting: false,
+    selectionId: null,
     pressureVisible: false,
     pressureStatusText: '',
     pressureConnectHidden: true,

@@ -792,22 +792,23 @@ export class CourseEditorScene extends Phaser.Scene {
       onSetCourseGoalSurvivalSeconds: (seconds) => this.setCourseGoalSurvivalSeconds(seconds),
       onStartCourseGoalMarkerPlacement: (mode) => this.startCourseGoalMarkerPlacement(mode),
       onClearCourseGoalMarkers: () => this.clearCourseGoalMarkers(),
+      onClearPinnedInspector: () => this.objectInspectorController.clearPinnedInspector(),
       onBeginPressurePlateConnection: () => this.objectInspectorController.beginFocusedPressurePlateConnection(),
       onClearPressurePlateConnection: () => this.objectInspectorController.clearFocusedPressurePlateConnection(),
       onCancelPressurePlateConnection: () => this.objectInspectorController.cancelPressurePlateConnection(),
       onClearContainerContents: () => this.objectInspectorController.clearFocusedContainerContents(),
-      onSetFocusedSwordsmanObjectiveMode: () => {},
-      onSetFocusedSwordsmanDefeatMode: () => {},
-      onSetFocusedPoliceBehaviorMode: () => {},
-      onSetFocusedPolicePatrolShoots: () => {},
-      onSetFocusedNpcMode: () => {},
-      onSetFocusedNpcPushable: () => {},
-      onSetFocusedNpcCanJumpFall: () => {},
-      onSetFocusedNpcPlayerCollision: () => {},
-      onSetFocusedNpcFriendlyFire: () => {},
-      onSetFocusedNpcName: () => {},
-      onSetFocusedNpcDialogue: () => {},
-      onSetFocusedNpcDefeatMode: () => {},
+      onSetFocusedSwordsmanObjectiveMode: (objectiveMode) => this.objectInspectorController.setFocusedSwordsmanObjectiveMode(objectiveMode),
+      onSetFocusedSwordsmanDefeatMode: (defeatMode) => this.objectInspectorController.setFocusedSwordsmanDefeatMode(defeatMode),
+      onSetFocusedPoliceBehaviorMode: (mode) => this.objectInspectorController.setFocusedPoliceBehaviorMode(mode),
+      onSetFocusedPolicePatrolShoots: (shoots) => this.objectInspectorController.setFocusedPolicePatrolShoots(shoots),
+      onSetFocusedNpcMode: (mode) => this.objectInspectorController.setFocusedNpcMode(mode),
+      onSetFocusedNpcPushable: (value) => this.objectInspectorController.setFocusedNpcPushable(value),
+      onSetFocusedNpcCanJumpFall: (value) => this.objectInspectorController.setFocusedNpcCanJumpFall(value),
+      onSetFocusedNpcPlayerCollision: (value) => this.objectInspectorController.setFocusedNpcPlayerCollision(value),
+      onSetFocusedNpcFriendlyFire: (value) => this.objectInspectorController.setFocusedNpcFriendlyFire(value),
+      onSetFocusedNpcName: (name) => this.objectInspectorController.setFocusedNpcName(name),
+      onSetFocusedNpcDialogue: (text) => this.objectInspectorController.setFocusedNpcDialogue(text),
+      onSetFocusedNpcDefeatMode: (mode) => this.objectInspectorController.setFocusedNpcDefeatMode(mode),
     });
     this.selectionGraphics = this.add.graphics();
     this.selectionGraphics.setDepth(120);
@@ -2510,6 +2511,10 @@ export class CourseEditorScene extends Phaser.Scene {
         }
 
         this.removeObjectAt(slice, pointer.worldX, pointer.worldY);
+        this.renderUi();
+        return;
+      }
+      if (this.objectInspectorController.handleActorPrimaryAction(slice, pointer.worldX, pointer.worldY)) {
         this.renderUi();
         return;
       }

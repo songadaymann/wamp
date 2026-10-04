@@ -1,3 +1,4 @@
+import { buildActorInspectorState } from './actorInspectorViewModel';
 import Phaser from 'phaser';
 import {
   canObjectBeStoredInContainer,
@@ -17,8 +18,6 @@ import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
 import {
   DEFAULT_POLICE_BEHAVIOR_MODE,
   POLICE_BEHAVIOR_MODE_LABELS,
-  getPlacedPoliceBehaviorMode,
-  getPlacedPolicePatrolShoots,
   isPoliceEnemyObjectId,
   normalizePoliceBehaviorMode,
   type PoliceBehaviorMode,
@@ -40,14 +39,7 @@ import { type EditorEditRuntime } from './editRuntime';
 import type { EditorInspectorState } from './uiBridge';
 import {
   NPC_MODE_LABELS,
-  getPlacedNpcMode,
   isNpcObjectId,
-  normalizeNpcCanJumpFall,
-  normalizeNpcDefeatMode,
-  normalizeNpcFriendlyFire,
-  normalizeNpcName,
-  normalizeNpcPlayerCollision,
-  normalizeNpcPushable,
   type NpcMode,
 } from '../../npcs/model';
 import {
@@ -844,9 +836,15 @@ export class EditorInspectorController {
   }
 
   private renderInspectorUi(): void {
+    const render = (state: EditorInspectorState) => this.renderInspector({
+      ...state,
+      pinned: this.pinnedInspector !== null,
+      connecting: this.connectingPressurePlateInstanceId !== null,
+      selectionId: this.connectingPressurePlateInstanceId ?? this.pinnedInspector?.instanceId ?? null,
+    });
     const hiddenState = createEmptyEditorInspectorState();
     if (editorState.isPlaying) {
-      this.renderInspector(hiddenState);
+      render(hiddenState);
       return;
     }
 
@@ -865,7 +863,7 @@ export class EditorInspectorController {
             : targets.length > 0
               ? this.getObjectLinkLinkedStatus(source, targets)
               : `${this.getObjectLinkSourceLabel(source)} is not linked yet.`);
-      this.renderInspector(buildPressurePlateInspectorState({
+      render(buildPressurePlateInspectorState({
         statusText: pressureStatusText,
         connectMode,
         targetSummary: targets.length > 0 ? pressureStatusText : null,
@@ -888,7 +886,7 @@ export class EditorInspectorController {
         selectedObject?.category === 'enemy' || selectedObject?.category === 'collectible';
       const canStoreSelected = canObjectBeStoredInContainer(focusedContainer.id, selectedObject);
       const currentContentsLabel = this.editRuntime.getContainerContentsLabel(focusedContainer);
-      this.renderInspector(buildContainerInspectorState({
+      render(buildContainerInspectorState({
         containerObjectId: focusedContainer.id,
         statusText: this.containerStatusText,
         selectedObject,
@@ -900,78 +898,15 @@ export class EditorInspectorController {
       return;
     }
 
-    const focusedSwordsman = this.getFocusedSwordsman();
-    if (focusedSwordsman && editorState.paletteMode === 'objects' && !this.connectingPressurePlateInstanceId) {
-      const objectiveMode =
-        normalizeSwordsmanObjectiveMode(focusedSwordsman.swordsmanObjectiveMode)
-        ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE;
-      const defeatMode =
-        normalizeSwordsmanDefeatMode(focusedSwordsman.swordsmanDefeatMode)
-        ?? DEFAULT_SWORDSMAN_DEFEAT_MODE;
-      this.renderInspector({
-        ...hiddenState,
-        visible: true,
-        swordsmanVisible: true,
-        swordsmanStatusText:
-          this.swordsmanStatusText
-          ?? `This Sword Hunter is set to ${SWORDSMAN_OBJECTIVE_MODE_LABELS[objectiveMode]} / ${SWORDSMAN_DEFEAT_MODE_LABELS[defeatMode]}.`,
-        swordsmanObjectiveModeValue: objectiveMode,
-        swordsmanObjectiveModeDisabled: false,
-        swordsmanDefeatModeValue: defeatMode,
-        swordsmanDefeatModeDisabled: false,
-      });
-      return;
+    const actor = this.getFocusedSwordsman() ?? this.getFocusedPolice() ?? this.getFocusedNpc();
+    if (actor && editorState.paletteMode === 'objects' && !connectMode) {
+      const status = actor.id === SWORDSMAN_AI_OBJECT_ID ? this.swordsmanStatusText
+        : isPoliceEnemyObjectId(actor.id) ? this.policeStatusText : this.npcStatusText;
+      const state = buildActorInspectorState(actor, status);
+      if (state) { render(state); return; }
     }
 
-    const focusedPolice = this.getFocusedPolice();
-    if (focusedPolice && editorState.paletteMode === 'objects' && !this.connectingPressurePlateInstanceId) {
-      const mode = getPlacedPoliceBehaviorMode(focusedPolice) ?? DEFAULT_POLICE_BEHAVIOR_MODE;
-      const patrolShoots = getPlacedPolicePatrolShoots(focusedPolice);
-      const objectName = getObjectById(focusedPolice.id)?.name ?? 'Police enemy';
-      this.renderInspector({
-        ...hiddenState,
-        visible: true,
-        policeVisible: true,
-        policeStatusText:
-          this.policeStatusText
-          ?? (mode === 'hunter'
-            ? `${objectName} will chase and shoot the player.`
-            : `${objectName} will patrol ${patrolShoots ? 'and shoot on sight' : 'without shooting'}.`),
-        policeBehaviorModeValue: mode,
-        policeBehaviorModeDisabled: false,
-        policePatrolShootsChecked: patrolShoots,
-        policePatrolShootsHidden: mode !== 'patrol',
-      });
-      return;
-    }
-
-    const focusedNpc = this.getFocusedNpc();
-    if (focusedNpc && editorState.paletteMode === 'objects' && !this.connectingPressurePlateInstanceId) {
-      const mode = getPlacedNpcMode(focusedNpc);
-      const objectName = getObjectById(focusedNpc.id)?.name ?? 'NPC';
-      this.renderInspector({
-        ...hiddenState,
-        visible: true,
-        npcVisible: true,
-        npcStatusText: this.npcStatusText ?? `${objectName} is set to ${NPC_MODE_LABELS[mode]}.`,
-        npcModeValue: mode,
-        npcModeDisabled: false,
-        npcPushableChecked: normalizeNpcPushable(focusedNpc.npcPushable, mode),
-        npcPushableHidden: mode !== 'idle',
-        npcJumpFallChecked: normalizeNpcCanJumpFall(focusedNpc.npcCanJumpFall, mode),
-        npcJumpFallHidden: mode === 'idle' || mode === 'follow',
-        npcPlayerCollisionChecked: normalizeNpcPlayerCollision(
-          focusedNpc.npcPlayerCollision,
-        ),
-        npcFriendlyFireChecked: normalizeNpcFriendlyFire(focusedNpc.npcFriendlyFire),
-        npcNameValue: normalizeNpcName(focusedNpc.npcName, objectName),
-        npcDialogueValue: getPlacedObjectSignText(focusedNpc) ?? '',
-        npcDefeatModeValue: normalizeNpcDefeatMode(focusedNpc.npcDefeatMode),
-      });
-      return;
-    }
-
-    this.renderInspector(hiddenState);
+    render(hiddenState);
   }
 
   private beginPressurePlateConnection(triggerInstanceId: string, autoPlaced: boolean): void {
@@ -1085,6 +1020,7 @@ export class EditorInspectorController {
   }
 
   private clearPinnedInspector(): void {
+    this.connectingPressurePlateInstanceId = null;
     this.pinnedInspector = null;
     this.focusedPressurePlateInstanceId = null;
     this.focusedContainerInstanceId = null;

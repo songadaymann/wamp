@@ -961,6 +961,7 @@ export class EditorScene extends Phaser.Scene {
       onSetCourseGoalSurvivalSeconds: (seconds) => this.setCourseGoalSurvivalSeconds(seconds),
       onStartCourseGoalMarkerPlacement: (mode) => this.startCourseGoalMarkerPlacement(mode),
       onClearCourseGoalMarkers: () => this.clearCourseGoalMarkers(),
+      onClearPinnedInspector: () => this.inspectorController.clearPinnedSelection(),
       onBeginPressurePlateConnection: () => this.beginFocusedPressurePlateConnection(),
       onClearPressurePlateConnection: () => this.clearFocusedPressurePlateConnection(),
       onCancelPressurePlateConnection: () => this.cancelPressurePlateConnection(),
