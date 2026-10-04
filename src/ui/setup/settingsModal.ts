@@ -1,3 +1,4 @@
+import { getFrameRateMode, setFrameRateMode, subscribeFrameRateMode, type FrameRateMode } from '../../performance/frameRateMode';
 import {
   getGameSettings,
   subscribeGameSettings,
@@ -22,12 +23,14 @@ type SettingsModalElements = {
   sfxVolumeValue: HTMLElement | null;
   panningStyleInputs: HTMLInputElement[];
   performanceModeInputs: HTMLInputElement[];
+  frameRateInputs: HTMLInputElement[];
   builderModeInputs: HTMLInputElement[];
 };
 
 export class SettingsModalController {
   private readonly elements: SettingsModalElements;
   private unsubscribeSettings: (() => void) | null = null;
+  private unsubscribeFrameRate: (() => void) | null = null;
   private unsubscribePerformanceMode: (() => void) | null = null;
 
   private readonly handleCloseClick = () => {
@@ -90,6 +93,11 @@ export class SettingsModalController {
     setDevicePerformanceMode(target.value);
   };
 
+  private readonly handleFrameRateChange = (event: Event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.checked) setFrameRateMode(target.value);
+  };
+
   private readonly handleBuilderModeChange = (event: Event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || !target.checked) return;
@@ -113,6 +121,7 @@ export class SettingsModalController {
       performanceModeInputs: Array.from(
         this.doc.querySelectorAll<HTMLInputElement>('input[name="settings-performance-mode"]'),
       ),
+      frameRateInputs: Array.from(this.doc.querySelectorAll<HTMLInputElement>('input[name="settings-frame-rate"]')),
       builderModeInputs: Array.from(
         this.doc.querySelectorAll<HTMLInputElement>('input[name="settings-builder-mode"]'),
       ),
@@ -134,6 +143,8 @@ export class SettingsModalController {
     for (const input of this.elements.builderModeInputs) {
       input.addEventListener('change', this.handleBuilderModeChange);
     }
+    for (const input of this.elements.frameRateInputs) input.addEventListener('change', this.handleFrameRateChange);
+    this.unsubscribeFrameRate = subscribeFrameRateMode(mode => this.renderFrameRate(mode));
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.unsubscribeSettings = subscribeGameSettings((settings) => this.render(settings));
     this.unsubscribePerformanceMode = subscribeDevicePerformanceMode(({ mode }) => {
@@ -141,6 +152,7 @@ export class SettingsModalController {
     });
     this.render(getGameSettings());
     this.renderPerformanceMode(getDevicePerformanceMode());
+    this.renderFrameRate(getFrameRateMode());
   }
 
   destroy(): void {
@@ -158,6 +170,8 @@ export class SettingsModalController {
     for (const input of this.elements.builderModeInputs) {
       input.removeEventListener('change', this.handleBuilderModeChange);
     }
+    for (const input of this.elements.frameRateInputs) input.removeEventListener('change', this.handleFrameRateChange);
+    this.unsubscribeFrameRate?.(); this.unsubscribeFrameRate = null;
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     this.unsubscribeSettings?.();
     this.unsubscribeSettings = null;
@@ -173,6 +187,7 @@ export class SettingsModalController {
 
     this.render(getGameSettings());
     this.renderPerformanceMode(getDevicePerformanceMode());
+    this.renderFrameRate(getFrameRateMode());
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
   }
@@ -209,6 +224,10 @@ export class SettingsModalController {
     for (const input of this.elements.builderModeInputs) {
       input.checked = input.value === (settings.builderMode === 'advanced' ? 'advanced' : 'beginner');
     }
+  }
+
+  private renderFrameRate(mode: FrameRateMode): void {
+    for (const input of this.elements.frameRateInputs) input.checked = input.value === mode;
   }
 
   private renderPerformanceMode(mode: DevicePerformanceMode): void {
