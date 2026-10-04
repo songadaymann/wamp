@@ -3793,7 +3793,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     const goalRoom = room;
     const roomGoalIntroModal = getRoomGoalIntroModalController();
-    if (!goalRoom?.goal || !roomGoalIntroModal) {
+    if (!goalRoom || !roomGoalIntroModal) {
       this.objectiveController.syncGoalRunForRoom(room, entryContext);
       return;
     }
@@ -3804,14 +3804,16 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncScenePauseState();
     roomGoalIntroModal.open({
       room: goalRoom,
-      titleText: goalRoom.title?.trim() ? goalRoom.title : `Room ${goalRoom.coordinates.x},${goalRoom.coordinates.y}`,
-      metaText: formatRoomGoalShortText(goalRoom.goal, {
+      titleText: goalRoom.goal
+        ? goalRoom.title?.trim() || `Room ${goalRoom.coordinates.x},${goalRoom.coordinates.y}`
+        : 'How to play',
+      metaText: goalRoom.goal ? formatRoomGoalShortText(goalRoom.goal, {
         enemyCount: this.countRoomObjectsByCategory(goalRoom, 'enemy'),
-      }),
-      bodyText: resolveRoomGoalIntroText(goalRoom.goal, {
+      }) : '',
+      bodyText: goalRoom.goal ? resolveRoomGoalIntroText(goalRoom.goal, {
         customText: goalRoom.goalIntroText,
         enemyCount: this.countRoomObjectsByCategory(goalRoom, 'enemy'),
-      }),
+      }) : '',
       onStart: () => {
         this.roomGoalIntroPauseRequested = false;
         this.syncScenePauseState();
@@ -3848,7 +3850,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       return false;
     }
 
-    return forceGoalIntro || roomGoalIntroModal.shouldShowForRoom(room);
+    return (forceGoalIntro && room.status === 'published' && Boolean(room.goal))
+      || roomGoalIntroModal.shouldShowForRoom(room);
   }
 
   private clearRoomGoalIntroState(options: { keepPauseRequest?: boolean } = {}): void {
