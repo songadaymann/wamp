@@ -182,6 +182,7 @@
         </div>
         <div class="auth-row auth-menu-action-row">
           <button id="btn-auth-guest-progress" class="bar-btn auth-menu-action-btn" type="button">Guest Clears</button>
+          <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button">Guest Drafts</button>
         </div>
         <div id="auth-email-row" class="auth-row">
           <input id="auth-email-input" type="email" placeholder="you@example.com" spellcheck="false" />
@@ -2419,16 +2420,20 @@
         <button id="btn-guest-room-recovery-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div class="guest-room-recovery-body">
+        <label id="guest-room-recovery-drafts-label" class="hidden">Saved draft
+          <select id="guest-room-recovery-drafts" aria-label="Saved guest draft"></select>
+        </label>
         <div id="guest-room-recovery-preview" class="guest-room-recovery-preview" aria-label="Saved room preview">
           <div id="guest-room-recovery-preview-fallback" class="guest-room-recovery-preview-fallback">Saved Room</div>
         </div>
         <div id="guest-room-recovery-copy" class="guest-room-recovery-copy">
           Your room is still saved for this browser. Sign in to make it yours and publish it in the world.
         </div>
-        <div class="guest-room-recovery-benefits">
+        <div id="guest-room-recovery-benefits" class="guest-room-recovery-benefits">
           Guest Rooms are playable, but guest-published rooms do not earn XP, profile credit, minting rights, or other account benefits.
         </div>
         <div id="guest-room-recovery-status" class="history-modal-meta guest-room-recovery-status hidden"></div>
+        <div id="guest-room-recovery-locations" class="guest-room-recovery-actions hidden" aria-label="Choose a new spot"></div>
         <div class="guest-room-recovery-actions">
           <button id="btn-guest-room-recovery-signin" class="bar-btn" type="button">Sign In To Publish</button>
           <button id="btn-guest-room-recovery-submit" class="bar-btn bar-btn-small" type="button">Publish To Guest Rooms</button>

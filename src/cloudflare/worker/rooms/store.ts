@@ -29,6 +29,7 @@ import { getManualRoomLeaderboardSourceValidationError } from '../../../persiste
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
 import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../../persistence/roomEditConflict';
+import { prepareRoomMutationGuards } from './mutationGuards';
 import type {
   D1PreparedStatement,
   Env,
@@ -190,6 +191,7 @@ export interface RoomMutationOptions {
   expectedDraftUpdatedAt?: string | null;
   usageUserId?: string | null;
   transactionStatementsBefore?: D1PreparedStatement[];
+  transactionStatementsAfter?: D1PreparedStatement[];
 }
 
 interface CompactRoomRow extends RoomRow {
@@ -949,6 +951,11 @@ export async function saveDraft(
   await assertCustomBackgroundApproved(env, draft.background);
 
   const statements: D1PreparedStatement[] = [
+    ...(options.transactionStatementsBefore ?? []),
+    ...prepareRoomMutationGuards(env, existing, { admin: actorIsAdmin, publicClaim: shouldClaimDraft && !world && !actorIsAdmin,
+      claimUserId: viewerUserId, claimLimit: shouldClaimDraft && !world && !actorIsAdmin
+        ? await getDailyRoomClaimLimitForUser(env, viewerUserId!, actor.requestAuthSource) : null,
+      now, expectedDraftUpdatedAt: options.expectedDraftUpdatedAt }),
     preparePersistRoomRecordStatement(env, {
       draft,
       published: existing.published,
@@ -983,6 +990,7 @@ export async function saveDraft(
     principalKind: actor.principalKind,
     now,
   });
+  statements.push(...(options.transactionStatementsAfter ?? []));
   await runWorldAwareRoomMutationBatch(env, statements);
 
   return loadRoomRecord(
@@ -1101,6 +1109,10 @@ export async function publishRoom(
 
   const statements: D1PreparedStatement[] = [
     ...(options.transactionStatementsBefore ?? []),
+    ...prepareRoomMutationGuards(env, existing, { admin: actorIsAdmin, publicClaim: shouldClaim && !world && !actorIsAdmin,
+      claimUserId: viewerUserId, claimLimit: shouldClaim && !world && !actorIsAdmin
+        ? await getDailyRoomClaimLimitForUser(env, viewerUserId!, actor.requestAuthSource) : null,
+      now, expectedDraftUpdatedAt: options.expectedDraftUpdatedAt }),
     preparePersistRoomRecordStatement(env, {
       draft,
       published,

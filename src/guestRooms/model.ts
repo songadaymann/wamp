@@ -1,4 +1,4 @@
-import type { RoomSnapshot } from '../persistence/roomModel';
+import type { RoomCoordinates, RoomRecord, RoomSnapshot } from '../persistence/roomModel';
 
 export type GuestRoomDraftStatus = 'active' | 'claimed' | 'submitted' | 'discarded' | 'hidden';
 
@@ -16,7 +16,32 @@ export interface GuestRoomDraftSummary {
   submittedAt: string | null;
   moderationStatus: string;
   snapshot: RoomSnapshot;
+  claimedByUserId?: string | null;
+  claimedRoomId?: string | null;
+  claimedAt?: string | null;
 }
+
+export interface GuestRoomDraftClaimBody {
+  expectedUserId: string;
+  coordinates?: RoomCoordinates;
+}
+
+export type GuestRoomDraftClaimResponse = {
+  outcome: 'claimed';
+  userId: string;
+  draftId: string;
+  roomId: string;
+  claimedAt: string;
+  room: RoomRecord;
+} | {
+  outcome: 'conflict';
+  userId: string;
+  draftId: string;
+  reason: 'occupied' | 'not_frontier';
+  message: string;
+  coordinates: RoomCoordinates;
+  suggestedCoordinates: RoomCoordinates[];
+};
 
 export interface GuestRoomDraftSaveRequestBody {
   guestUserId: string;

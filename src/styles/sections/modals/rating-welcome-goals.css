@@ -545,6 +545,18 @@
   gap: 10px;
 }
 
+#guest-room-recovery-modal #guest-room-recovery-locations button,
+#guest-room-recovery-modal #guest-room-recovery-drafts,
+#guest-room-recovery-modal .guest-room-recovery-actions button {
+  min-height: 44px;
+}
+
+#guest-room-recovery-modal #guest-room-recovery-drafts {
+  width: 100%;
+  font: inherit;
+  margin-top: 6px;
+}
+
 #guest-room-recovery-modal #btn-guest-room-recovery-close,
 #guest-room-recovery-modal #btn-guest-room-recovery-submit,
 #guest-room-recovery-modal #btn-guest-room-recovery-go {

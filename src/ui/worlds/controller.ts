@@ -340,7 +340,7 @@ export class WorldsController {
     const snapshot = beginWorldSeedEditor(grant.id, source);
     document.body.dataset.worldSeedEditor = 'true';
     this.close();
-    scene.openGuestDraftRoom(snapshot);
+    void scene.openGuestDraftRoom(snapshot);
   }
 
   private async warp(

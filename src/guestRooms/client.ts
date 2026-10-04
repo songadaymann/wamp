@@ -1,4 +1,6 @@
 import { apiRequest } from '../api/request';
+import { getApiBaseUrl } from '../api/baseUrl';
+import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import { resolveWorldPresenceGuestIdentity } from '../presence/worldPresence';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { resolveGuestRecoveryToken } from './identity';
@@ -8,7 +10,10 @@ import type {
   GuestRoomDraftSaveRequestBody,
   GuestRoomDraftSaveResponse,
   GuestRoomDraftSubmitResponse,
+  GuestRoomDraftClaimBody,
+  GuestRoomDraftClaimResponse,
 } from './model';
+import { captureGuestRunIdentity, type GuestRunRecoveryIdentity } from './runRepository';
 
 export async function saveGuestRoomDraft(snapshot: RoomSnapshot): Promise<GuestRoomDraftSaveResponse> {
   const identity = resolveWorldPresenceGuestIdentity();
@@ -29,10 +34,11 @@ export async function saveGuestRoomDraft(snapshot: RoomSnapshot): Promise<GuestR
   );
 }
 
-export function listMyGuestRoomDrafts(): Promise<GuestRoomDraftListResponse> {
+export function listMyGuestRoomDrafts(identity = captureGuestRunIdentity()): Promise<GuestRoomDraftListResponse> {
   return apiRequest<GuestRoomDraftListResponse>('/api/guest-room-drafts/mine', {
     credentials: 'omit',
-    prepareHeaders: appendGuestRecoveryHeaders,
+    prepareHeaders: headers => appendGuestRecoveryHeaders(headers, identity),
+    signal: AbortSignal.timeout(15_000),
   });
 }
 
@@ -76,8 +82,25 @@ export async function submitLatestGuestRoomDraftForRoom(roomId: string): Promise
   return submitGuestRoomDraft(draft.id);
 }
 
-function appendGuestRecoveryHeaders(headers: Headers): void {
-  const identity = resolveWorldPresenceGuestIdentity();
-  headers.set('X-Guest-User-Id', identity.userId);
-  headers.set('X-Guest-Recovery-Token', resolveGuestRecoveryToken());
+export class GuestRoomDraftApiError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
+
+export async function claimGuestRoomDraft(draftId: string, body: GuestRoomDraftClaimBody,
+  identity: GuestRunRecoveryIdentity = captureGuestRunIdentity()): Promise<GuestRoomDraftClaimResponse> {
+  const headers = new Headers({ 'Content-Type': 'application/json' }); appendGuestRecoveryHeaders(headers, identity);
+  const response = await fetch(`${getApiBaseUrl()}/api/guest-room-drafts/${encodeURIComponent(draftId)}/claim`, {
+    method: 'POST', headers, credentials: 'include', body: JSON.stringify(body), signal: AbortSignal.timeout(15_000),
+  });
+  if (response.status === 409) {
+    const data = await response.clone().json().catch(() => null) as GuestRoomDraftClaimResponse | null;
+    if (data?.outcome === 'conflict') return data;
+  }
+  if (!response.ok) throw new GuestRoomDraftApiError(response.status, await readApiErrorMessage(response, 'Your guest draft is still saved. Try again.'));
+  return response.json() as Promise<GuestRoomDraftClaimResponse>;
+}
+
+function appendGuestRecoveryHeaders(headers: Headers, identity: GuestRunRecoveryIdentity = captureGuestRunIdentity()): void {
+  headers.set('X-Guest-User-Id', identity.guestUserId);
+  headers.set('X-Guest-Recovery-Token', identity.recoveryToken);
 }

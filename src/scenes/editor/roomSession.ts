@@ -489,10 +489,10 @@ export class EditorRoomSession {
       const activeRecord = localRecord ?? remoteRecord;
       this.syncRoomMetadata(activeRecord);
       this.serverDraftUpdatedAt = remoteRecord.draft.updatedAt;
-      this.host.applyRoomSnapshot(
-        localRecord ? cloneRoomSnapshot(localRecord.draft)
-          : this.resolveRoomSnapshotForEditing(activeRecord, initialRoomSnapshot, options)
-      );
+      const editableSnapshot = localRecord ? cloneRoomSnapshot(localRecord.draft)
+        : this.resolveRoomSnapshotForEditing(activeRecord, initialRoomSnapshot, options);
+      this.roomTitle = editableSnapshot.title;
+      this.host.applyRoomSnapshot(editableSnapshot);
       if (localRecord) {
         this.host.setRoomDirty(true);
       }

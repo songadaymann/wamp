@@ -7,6 +7,7 @@ import {
 } from '../../../persistence/roomModel';
 import type { GuestRoomDraftStatus, GuestRoomDraftSummary } from '../../../guestRooms/model';
 import type { Env } from '../core/types';
+import { HttpError } from '../core/http';
 
 export interface GuestRoomDraftRow {
   id: string;
@@ -23,6 +24,9 @@ export interface GuestRoomDraftRow {
   updated_at: string;
   submitted_at: string | null;
   moderation_status: string;
+  claimed_by_user_id: string | null;
+  claimed_room_id: string | null;
+  claimed_at: string | null;
 }
 
 interface UpsertGuestRoomDraftInput {
@@ -47,6 +51,7 @@ export async function upsertGuestRoomDraft(
         AND recovery_token_hash = ?
         AND room_id = ?
         AND status = 'active'
+        AND hidden_at IS NULL
       ORDER BY updated_at DESC
       LIMIT 1
     `,
@@ -71,6 +76,9 @@ export async function upsertGuestRoomDraft(
               updated_at = ?,
               last_seen_at = ?
           WHERE id = ?
+            AND guest_user_id = ? AND recovery_token_hash = ?
+            AND status = 'active' AND hidden_at IS NULL
+          RETURNING id
         `,
       ).bind(
           input.guestDisplayName,
@@ -81,8 +89,14 @@ export async function upsertGuestRoomDraft(
           input.nowIso,
           input.nowIso,
           draftId,
+          input.guestUserId,
+          input.recoveryTokenHash,
         ),
-    ]);
+    ]).then(results => {
+      if (!(results[0] as { results?: unknown[] })?.results?.length) {
+        throw new HttpError(409, 'This guest draft was transferred while saving. Reload to continue in your account.');
+      }
+    });
   } else {
     await env.DB.batch([
       env.DB.prepare(
@@ -155,16 +169,17 @@ export async function listOwnedGuestRoomDrafts(
         updated_at,
         submitted_at,
         moderation_status
+        , claimed_by_user_id, claimed_room_id, claimed_at
       FROM guest_room_drafts
       WHERE guest_user_id = ?
         AND recovery_token_hash = ?
-        AND status = 'active'
+        AND (status = 'active' OR (status = 'claimed' AND claimed_at >= ?))
         AND hidden_at IS NULL
-      ORDER BY updated_at DESC
+      ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, updated_at DESC
       LIMIT 10
     `,
   )
-    .bind(guestUserId, recoveryTokenHash)
+    .bind(guestUserId, recoveryTokenHash, new Date(Date.now() - 14 * 86400_000).toISOString())
     .all<GuestRoomDraftRow>();
 
   return rows.results.map(rowToGuestRoomDraftSummary).filter((draft): draft is GuestRoomDraftSummary => draft !== null);
@@ -191,6 +206,7 @@ export async function listSubmittedGuestRoomDrafts(
         updated_at,
         submitted_at,
         moderation_status
+        , claimed_by_user_id, claimed_room_id, claimed_at
       FROM guest_room_drafts
       WHERE status = 'submitted'
         AND moderation_status = 'public'
@@ -230,6 +246,7 @@ export async function loadOwnedGuestRoomDraft(
         updated_at,
         submitted_at,
         moderation_status
+        , claimed_by_user_id, claimed_room_id, claimed_at
       FROM guest_room_drafts
       WHERE id = ?
         AND guest_user_id = ?
@@ -276,7 +293,7 @@ export async function submitOwnedGuestRoomDraft(
   return loadOwnedGuestRoomDraft(env, input);
 }
 
-function rowToGuestRoomDraftSummary(row: GuestRoomDraftRow | null): GuestRoomDraftSummary | null {
+export function rowToGuestRoomDraftSummary(row: GuestRoomDraftRow | null): GuestRoomDraftSummary | null {
   if (!row) {
     return null;
   }
@@ -314,6 +331,9 @@ function rowToGuestRoomDraftSummary(row: GuestRoomDraftRow | null): GuestRoomDra
       submittedAt: row.submitted_at,
       moderationStatus: row.moderation_status,
       snapshot,
+      claimedByUserId: row.claimed_by_user_id ?? null,
+      claimedRoomId: row.claimed_room_id ?? null,
+      claimedAt: row.claimed_at ?? null,
     };
   } catch {
     return null;
