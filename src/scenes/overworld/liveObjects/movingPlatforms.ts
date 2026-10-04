@@ -69,11 +69,24 @@ function carryPlayerOnMovingPlatform(
 
   const velocityX = playerBody.velocity.x;
   const playerBounds = getArcadeBodyBounds(playerBody);
-  playerBody.reset(
+  resetDynamicBodyAtCenter(playerBody,
     playerBounds.centerX + deltaX,
     platformBody.top - playerBounds.height * 0.5,
   );
   playerBody.setVelocity(velocityX, 0);
+}
+
+function resetDynamicBodyAtCenter(body: Phaser.Physics.Arcade.Body, centerX: number, centerY: number): void {
+  const sprite = body.gameObject as Phaser.GameObjects.Sprite | undefined;
+  if (!sprite) { body.reset(centerX, centerY); return; }
+  // A WORLD_STEP can run before Arcade publishes motion to the sprite. Include
+  // that motion, and retain the sprite's origin/offset when positioning the body.
+  const x = sprite.x + body.x - body.prevFrame.x + centerX - body.center.x;
+  const y = sprite.y + body.y - body.prevFrame.y + centerY - body.center.y;
+  body.reset(x, y);
+  body.updateFromGameObject();
+  body.prev.copy(body.position);
+  body.prevFrame.copy(body.position);
 }
 
 function carryObjectsOnMovingPlatform(
@@ -173,10 +186,8 @@ function moveCarriedLiveObjectToPlatformTop(
 
   if (isDynamicArcadeBody(body)) {
     const velocityX = body.velocity.x;
-    body.reset(nextSpriteX, nextSpriteY);
-    body.updateFromGameObject();
+    resetDynamicBodyAtCenter(body, targetBodyCenterX, targetBodyCenterY);
     body.setVelocity(velocityX, 0);
-    liveObject.sprite.setPosition(nextSpriteX, nextSpriteY);
     return;
   }
 

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { OverworldMovementInput } from './physicsCadence';
 import { playSfx, stopSfx } from '../../audio/sfx';
 import {
   ROOM_HEIGHT,
@@ -58,6 +59,13 @@ const RUNTIME_OBJECT_SUPPORT_EDGE_INSET_PX = 1;
 const BUTT_STOMP_FALL_SPEED = 520;
 const BUTT_STOMP_FLIP_MS = 190;
 const BUTT_STOMP_IMPACT_GRACE_MS = 120;
+
+function consumePressedAliases(first: Phaser.Input.Keyboard.Key, second: Phaser.Input.Keyboard.Key): boolean {
+  // Consume both aliases even when the first is pressed, so the second cannot replay next frame.
+  const firstPressed = Phaser.Input.Keyboard.JustDown(first);
+  const secondPressed = Phaser.Input.Keyboard.JustDown(second);
+  return firstPressed || secondPressed;
+}
 
 export interface OverworldCrateInteraction {
   crateBody: Phaser.Physics.Arcade.Body;
@@ -379,7 +387,33 @@ export class OverworldMovementController {
     this.syncPlayerHitbox(false);
   }
 
-  updateMovement(delta: number, inQuicksand: boolean): OverworldMovementStepResult {
+  captureInput(): OverworldMovementInput {
+    const touch = getTouchInputState();
+    const cursors = this.host.getCursors();
+    const wasd = this.host.getWasd();
+    const touchLeft = touch.active && touch.moveX <= -0.28;
+    const touchRight = touch.active && touch.moveX >= 0.28;
+    const touchUp = touch.active && touch.moveY <= -0.42;
+    const touchDown = touch.active && touch.moveY >= 0.42;
+    const upPressed = consumePressedAliases(cursors.up, wasd.W);
+    const downPressed = consumePressedAliases(cursors.down, wasd.S);
+    const leftPressed = consumePressedAliases(cursors.left, wasd.A);
+    const rightPressed = consumePressedAliases(cursors.right, wasd.D);
+    const spacePressed = Phaser.Input.Keyboard.JustDown(cursors.space!);
+    const touchJumpPressed = consumeTouchAction('jump');
+    return {
+      left: cursors.left.isDown || wasd.A.isDown || touchLeft,
+      right: cursors.right.isDown || wasd.D.isDown || touchRight,
+      upKeyHeld: cursors.up.isDown || wasd.W.isDown,
+      downHeld: cursors.down.isDown || wasd.S.isDown || touchDown,
+      spaceHeld: cursors.space!.isDown || touch.jumpHeld,
+      touchLeft, touchRight, touchUp, touchDown,
+      upPressed, downPressed, leftPressed, rightPressed,
+      spacePressed: spacePressed || touchJumpPressed,
+    };
+  }
+
+  updateMovement(delta: number, inQuicksand: boolean, frameInput?: OverworldMovementInput): OverworldMovementStepResult {
     const player = this.host.getPlayer();
     const playerBody = this.host.getPlayerBody();
     if (!player || !playerBody) {
@@ -392,38 +426,16 @@ export class OverworldMovementController {
       };
     }
 
-    const touchInput = getTouchInputState();
-    const touchLeft = touchInput.active && touchInput.moveX <= -0.28;
-    const touchRight = touchInput.active && touchInput.moveX >= 0.28;
-    const touchUp = touchInput.active && touchInput.moveY <= -0.42;
-    const touchDown = touchInput.active && touchInput.moveY >= 0.42;
-    const cursors = this.host.getCursors();
-    const wasd = this.host.getWasd();
-    const left = cursors.left.isDown || wasd.A.isDown || touchLeft;
-    const right = cursors.right.isDown || wasd.D.isDown || touchRight;
+    const {
+      left, right, upKeyHeld, downHeld, spaceHeld,
+      touchLeft, touchRight, touchUp, touchDown,
+      upPressed, downPressed, leftPressed, rightPressed, spacePressed,
+    } = frameInput ?? this.captureInput();
     const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
-    const touchJumpPressed = consumeTouchAction('jump');
     const overlappingLadder = this.host.findOverlappingLadder();
     const touchClimbUpHeld = overlappingLadder !== null && touchUp;
-    const upHeld = cursors.up.isDown || wasd.W.isDown || touchClimbUpHeld;
-    const downHeld = cursors.down.isDown || wasd.S.isDown || touchDown;
+    const upHeld = upKeyHeld || touchClimbUpHeld;
     const verticalInput = (downHeld ? 1 : 0) - (upHeld ? 1 : 0);
-    const upPressed =
-      Phaser.Input.Keyboard.JustDown(cursors.up) ||
-      Phaser.Input.Keyboard.JustDown(wasd.W);
-    const downPressed =
-      Phaser.Input.Keyboard.JustDown(cursors.down) ||
-      Phaser.Input.Keyboard.JustDown(wasd.S);
-    const leftPressed =
-      Phaser.Input.Keyboard.JustDown(cursors.left) ||
-      Phaser.Input.Keyboard.JustDown(wasd.A);
-    const rightPressed =
-      Phaser.Input.Keyboard.JustDown(cursors.right) ||
-      Phaser.Input.Keyboard.JustDown(wasd.D);
-    const spacePressed =
-      Phaser.Input.Keyboard.JustDown(cursors.space!) ||
-      touchJumpPressed;
-    const spaceHeld = cursors.space!.isDown || touchInput.jumpHeld;
     const stayOnLadder =
       overlappingLadder !== null &&
       !spacePressed &&
@@ -643,7 +655,7 @@ export class OverworldMovementController {
         }
       }
 
-      const jumpHeld = upHeld || cursors.space!.isDown || touchInput.jumpHeld;
+      const jumpHeld = upHeld || spaceHeld;
       if (
         !jumpHeld &&
         playerBody.velocity.y < 0 &&
@@ -1146,6 +1158,7 @@ export class OverworldMovementController {
       Boolean((playerBody.blocked.down || playerBody.touching.down) && playerBody.velocity.y >= 0);
     const nextHeight = this.getPlayerHitboxHeight(playerBody, groundedProfile);
     const previousBottom = playerBody.bottom;
+    const previousOffsetY = playerBody.offset.y;
     const nextIsPushProfile = this.isPushHitboxProfile(nextHeight, groundedProfile);
     const currentIsPushProfile = this.isCurrentPushHitboxProfile(playerBody);
     if (playerBody.width !== this.options.playerWidth || playerBody.height !== nextHeight) {
@@ -1153,6 +1166,16 @@ export class OverworldMovementController {
       playerBody.setOffset(0, this.options.playerStandingHeight - nextHeight);
       if (nextIsPushProfile || currentIsPushProfile) {
         playerBody.y = previousBottom - nextHeight;
+        playerBody.updateCenter();
+      } else if (playerBody.gameObject) {
+        // Arcade resyncs offsets in preUpdate, which runs once per rendered frame.
+        // Apply the geometry change now so a second catch-up step sees the same
+        // hitbox. Move the frame origin too: resizing must not move the player.
+        const offsetDelta = (playerBody.offset.y - previousOffsetY)
+          * Math.abs(this.host.getPlayer()?.scaleY ?? 1);
+        playerBody.y += offsetDelta;
+        playerBody.prev.y += offsetDelta;
+        playerBody.prevFrame.y += offsetDelta;
         playerBody.updateCenter();
       }
     }

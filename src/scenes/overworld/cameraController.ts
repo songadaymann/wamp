@@ -180,6 +180,12 @@ export class OverworldCameraController {
     );
   }
 
+  updateFollowPacing(physicsSteps: number): void {
+    if (this.host.getMode() !== 'play' || this.host.getCameraMode() !== 'follow') return;
+    const lerp = 1 - Math.pow(1 - this.options.followCameraLerp, Math.max(0, physicsSteps));
+    this.host.scene.cameras.main.setLerp(lerp, lerp);
+  }
+
   constrainInspectCamera(): void {
     if (!this.host.getWorldWindow()) {
       return;

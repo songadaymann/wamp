@@ -200,6 +200,7 @@ import {
 import {
   OverworldMovementController,
 } from './overworld/movementController';
+import { OverworldPhysicsCadence, type OverworldMovementInput } from './overworld/physicsCadence';
 import { OverworldQuicksandController } from './overworld/quicksandController';
 import {
   OverworldPlayerPresentationController,
@@ -537,6 +538,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly playerPresentationController: OverworldPlayerPresentationController;
   private readonly objectiveController: OverworldObjectiveController;
   private readonly movementController: OverworldMovementController;
+  private physicsCadence: OverworldPhysicsCadence | null = null;
   private readonly quicksandController: OverworldQuicksandController;
   private readonly combatPresentationController: OverworldCombatPresentationController;
   private readonly combatController: OverworldCombatController;
@@ -2178,6 +2180,14 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.captureCriticalFrameStart,
       this,
     );
+    this.physicsCadence?.destroy();
+    this.physicsCadence = new OverworldPhysicsCadence(this.events, this.physics.world, {
+      canSimulate: () => this.mode === 'play' && !this.scenePauseApplied,
+      getPlayerIdentity: () => this.playerBody?.enable ? this.playerBody : null,
+      captureInput: () => this.movementController.captureInput(),
+      simulateEnvironment: (stepDelta) => this.simulatePhysicsEnvironment(stepDelta),
+      simulateMovement: (stepDelta, input) => this.simulateMovementStep(stepDelta, input),
+    });
     this.events.on(Phaser.Scenes.Events.WAKE, this.handleWake, this);
     this.events.on(
       Phaser.Scenes.Events.SLEEP,
@@ -2241,7 +2251,6 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (controllerProfileSlot >= 0) {
       this.mobilePerformanceControllerProfileSlot = (controllerProfileSlot + 1) % 20;
     }
-    profiler?.beginFrame(delta, this.buildMobilePerformanceContext());
     try {
       const worldUpdateStartedAt = profiler?.beginSegment();
       const streamingStartedAt = controllerProfileSlot === 0 ? profiler?.beginSegment() : undefined;
@@ -2262,10 +2271,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       if (gridOverlayStartedAt !== undefined) {
         profiler?.endSegment('controller.gridOverlay', gridOverlayStartedAt);
       }
-      const liveObjectsStartedAt = controllerProfileSlot === 3 ? profiler?.beginSegment() : undefined;
-      this.updateLiveObjects(delta);
-      if (liveObjectsStartedAt !== undefined) {
-        profiler?.endSegment('controller.liveObjects', liveObjectsStartedAt);
+      if (this.mode === 'play' && this.physicsCadence?.getStepsThisFrame() === 0) {
+        this.liveObjectController.syncLiveObjectPresentation(this.getCollisionReadyLoadedFullRooms());
       }
       const signStartedAt = controllerProfileSlot === 4 ? profiler?.beginSegment() : undefined;
       this.signController.update();
@@ -2365,29 +2372,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       const gunInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
       const swordPressed = !pvpCountdownLocked && swordInputPressed;
       const gunPressed = !pvpCountdownLocked && gunInputPressed;
-      const inQuicksand = this.quicksandController.isActive();
       const playerUpdateStartedAt = profiler?.beginSegment();
-      const specialTilesStartedAt = controllerProfileSlot === 14 ? profiler?.beginSegment() : undefined;
-      this.updateSpecialTiles();
-      if (specialTilesStartedAt !== undefined) {
-        profiler?.endSegment('controller.specialTiles', specialTilesStartedAt);
-      }
       const portalsStartedAt = controllerProfileSlot === 15 ? profiler?.beginSegment() : undefined;
       this.updatePortalObjects();
       if (portalsStartedAt !== undefined) profiler?.endSegment('controller.portals', portalsStartedAt);
-      const movementStartedAt = controllerProfileSlot === 11 ? profiler?.beginSegment() : undefined;
-      const movement = this.movementController.updateMovement(delta, inQuicksand);
-      this.setLastMovementInput(movement.horizontalInput, movement.verticalInput);
-      if (movement.downHeld && movement.jumpPressed) {
-        this.specialTilesController.beginOneWayDropThrough();
-      }
-      if (pvpCountdownLocked) {
-        this.playerBody.setVelocityX(0);
-        if (this.playerBody.blocked.down || this.playerBody.touching.down) {
-          this.playerBody.setVelocityY(0);
-        }
-      }
-      if (movementStartedAt !== undefined) profiler?.endSegment('controller.movement', movementStartedAt);
+      const movement = this.physicsCadence!.getMovement();
       const combatStartedAt = controllerProfileSlot === 16 ? profiler?.beginSegment() : undefined;
       this.combatController.handleCombatInput({
         swordPressed,
@@ -2406,6 +2395,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       const roomTransitionStartedAt = controllerProfileSlot === 17 ? profiler?.beginSegment() : undefined;
       this.roomTransitionController.maybeAdvancePlayerRoom();
       this.cameraController.syncRoomCamera();
+      this.cameraController.updateFollowPacing(this.physicsCadence!.getStepsThisFrame());
       this.updateMobilePortraitRoomFraming();
       this.recordRankedRunTraceFrame(delta, movement);
       if (roomTransitionStartedAt !== undefined) {
@@ -3439,6 +3429,36 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.liveObjectController.updateLiveObjects(this.getCollisionReadyLoadedFullRooms(), delta);
   }
 
+  private simulatePhysicsEnvironment(delta: number): void {
+    const profiler = this.mobilePerformanceProfiler;
+    const controllerProfileSlot = profiler && this.mobilePerformanceControllerProfilingEnabled
+      ? this.mobilePerformanceControllerProfileSlot : -1;
+    const liveStartedAt = controllerProfileSlot === 3 ? profiler?.beginSegment() : undefined;
+    this.updateLiveObjects(delta);
+    if (liveStartedAt !== undefined) profiler?.endSegment('controller.liveObjects', liveStartedAt);
+    if (!this.player || !this.playerBody?.enable) return;
+    const specialStartedAt = controllerProfileSlot === 14 ? profiler?.beginSegment() : undefined;
+    this.updateSpecialTiles();
+    if (specialStartedAt !== undefined) profiler?.endSegment('controller.specialTiles', specialStartedAt);
+  }
+
+  private simulateMovementStep(delta: number, input: OverworldMovementInput) {
+    if (!this.player || !this.playerBody?.enable) return null;
+    const profiler = this.mobilePerformanceProfiler;
+    const controllerProfileSlot = profiler && this.mobilePerformanceControllerProfilingEnabled
+      ? this.mobilePerformanceControllerProfileSlot : -1;
+    const movementStartedAt = controllerProfileSlot === 11 ? profiler?.beginSegment() : undefined;
+    const movement = this.movementController.updateMovement(delta, this.quicksandController.isActive(), input);
+    this.setLastMovementInput(movement.horizontalInput, movement.verticalInput);
+    if (movement.downHeld && movement.jumpPressed) this.specialTilesController.beginOneWayDropThrough();
+    if (this.isPvpCountdownActive()) {
+      this.playerBody.setVelocityX(0);
+      if (this.playerBody.blocked.down || this.playerBody.touching.down) this.playerBody.setVelocityY(0);
+    }
+    if (movementStartedAt !== undefined) profiler?.endSegment('controller.movement', movementStartedAt);
+    return movement;
+  }
+
   private setActiveCourseRun(runState: ActiveCourseRunState | null): void {
     this.activeCourseRun = runState;
     this.syncActiveCourseObjectLinks(this.loadedFullRoomsById.values());
@@ -3891,6 +3911,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private destroyPlayer(): void {
+    this.physicsCadence?.reset();
     this.combatController.destroyProjectiles();
     this.playerLifecycleController.destroyPlayer(
       this.getPlayerEntities(),
@@ -4345,6 +4366,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
     this.clampPendingWarpSpawnIntoRoom(startRoom);
     this.externalLaunchGraceUntil = 0;
+    this.physicsCadence?.reset();
     this.movementController.handlePlayerCreated();
     this.combatController.clearAttackAnimation();
     this.playerPresentationController.handlePlayerCreated();
@@ -4497,6 +4519,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.combatController.clearAttackAnimation();
     this.externalLaunchGraceUntil = 0;
+    this.physicsCadence?.reset();
     this.movementController.handleRespawnReset();
     this.combatController.destroyProjectiles();
     this.playerLifecycleController.respawnPlayerToRoom(currentRoom, entities);
@@ -4511,6 +4534,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.combatController.clearAttackAnimation();
     this.externalLaunchGraceUntil = 0;
+    this.physicsCadence?.reset();
     this.movementController.handleRespawnReset();
     this.combatController.destroyProjectiles();
     this.currentRoomCoordinates = { ...coordinates };
@@ -4849,6 +4873,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.heldKeyCount = 0;
     this.score = 0;
     this.clearRankedRunTrace();
+    this.physicsCadence?.reset();
     this.movementController.resetTransientPlayState();
     this.combatController.clearAttackAnimation();
     this.externalLaunchGraceUntil = 0;
@@ -5522,6 +5547,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.combatController.clearAttackAnimation();
     this.combatController.destroyProjectiles();
     this.externalLaunchGraceUntil = 0;
+    this.physicsCadence?.reset();
     this.movementController.handleRespawnReset();
     this.player.setPosition(spawn.x, spawn.y);
     this.playerBody.reset(spawn.x, spawn.y);
@@ -6079,6 +6105,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.clearRoomGoalIntroState();
     this.scenePauseApplied = false;
     getRoomGoalIntroModalController()?.forceClose();
+    this.physicsCadence?.destroy();
+    this.physicsCadence = null;
     this.scale.off('resize', this.handleResize, this);
     this.events.off(
       Phaser.Scenes.Events.PRE_UPDATE,
@@ -6131,8 +6159,9 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.presenceOverlayController.destroy();
   };
 
-  private captureCriticalFrameStart = (): void => {
+  private captureCriticalFrameStart = (_time: number, delta: number): void => {
     const atMs = performance.now();
+    this.mobilePerformanceProfiler?.beginFrame(delta, this.buildMobilePerformanceContext());
     this.currentWallFrameDeltaMs = this.previousCriticalFrameStartedAtMs === null
       ? 0
       : Math.max(0, atMs - this.previousCriticalFrameStartedAtMs);
@@ -6535,6 +6564,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         projectileCount: this.combatController.getProjectileCount(),
       },
       specialTiles: this.specialTilesController.getPlayerEnvironment(),
+      physicsCadence: this.physicsCadence?.describe() ?? null,
       presence: {
         status: presenceDebug.snapshot?.status ?? 'disabled',
         subscribedShardCount: presenceDebug.snapshot?.subscribedShards.length ?? 0,
