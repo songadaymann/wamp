@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 34 of 214 done.**
+**Progress: 35 of 214 done.**
 
 ## How to use this file
 
@@ -85,7 +85,7 @@ Go one item at a time, and check each on the live site and on a real phone befor
 4. **Student safety.** Lock down room chat and school restrictions (F208, F190, F209, F211) before any new classroom pilots.
 5. **Mobile building.** Fix the pinch stray-tile bug and add Undo/Redo buttons (F079, F157).
 6. **Tablet and landscape controls.** Add these next (F075), since that's the biggest chunk of players who currently can't play.
-7. **First visits.** Shared-link modal deferral, guest progress carry-over, first-play control guidance and Welcome destinations are delivered (F093, F122, F104, F126). Curated discovery and run-based difficulty are also delivered (F125). Guest clear celebration, run results and truthful save/XP guidance are delivered (F096). Next: builder activity notifications (F123), then per-room feedback (F124).
+7. **First visits.** Shared-link modal deferral, guest progress carry-over, first-play control guidance and Welcome destinations are delivered (F093, F122, F104, F126). Curated discovery and run-based difficulty are also delivered (F125). Guest clear celebration, run results and truthful save/XP guidance are delivered (F096). The private builder activity inbox and opt-in weekly/lost-#1 emails are delivered (F123). Next: per-room plays, clear rate, deaths and feedback (F124).
 8. **Security and safety items.** Details withheld from this public repo until fixed (F182, F183, F185, F198, F201).
 9. **Quick wins and big bets.** Mix in quick wins between bigger items whenever a palate cleanser helps. Then pick one big bet at a time, starting with 'First Steps' or the builder-feedback inbox, since those most directly turn visitors into returning builders.
 
@@ -224,7 +224,7 @@ What happens in a newcomer's first five minutes, and what brings players and bui
 - [x] **F125** Explore's default 'Featured' tab has nothing featured, and 88% of rooms have no rating, so discovery is mostly noise · high impact · small effort — **done 2026-10-04** (`a45580fd`). Twenty reviewed current-version selections (17 community rooms, 14 builders); exclusive version-pinned Featured with Popular fallback below eight, distinct recent players, clearly labelled run-based difficulty (63 live estimates), rating counts and attainable credible trophies. Full quality, all five live browser layouts, guest Play All/Next, exact served release and fast-map health pass.
 - [x] **F096** Clearing a room feels flat: no in-play celebration, no 'Next room', and the XP reward only appears after you press Stop · medium impact · small effort — **done 2026-10-04** (`61d947fa`, fact-checked guest scope). In-play time/deaths, matching ranked best/comparison and truthful save/XP sign-in feedback, with once-only fallback celebration and deferred results. Existing queues provide Next; selecting a free-roam destination remains a separate medium-effort addition. Four live desktop/touch clear flows, three First Steps navigation/summary flows, exact served release and fast-map health pass.
 - [x] **F104** New players never see the controls before the timer starts · medium impact · small effort — **done 2026-10-04** (`0c618819`). Keyboard/touch guidance precedes ordinary and expanded first Play and appears in playlist/Room Rush entry; movement/timers wait for Start and acknowledgement is remembered per input. Expanded Start retains its chosen course, map imagery stays below ready dialogs, and twelve live workflows pass across six browser layouts.
-- [ ] **F123** Builders never find out that someone played, beat, rated, or took #1 on their room · high impact · medium effort
+- [x] **F123** Builders never find out that someone played, beat, rated, or took #1 on their room · high impact · medium effort — **done 2026-10-04** (`a13a6490`). Private bell/inbox with named and anonymous guest clears, first-rating stars, approved comments and genuine verified #1 changes; room links, unread watermark and preserved XP catch-up. Independently opt-in weekly/lost-#1 emails have signed scoped unsubscribe, bounded durable retries and duplicate guards. Full API/Pages release, 2,395 tests, four live-assets private fixtures, four real guest-clear flows, three First Steps regressions and exact served assets pass. Six new verified guest events projected once; email delivery tested with a fake sender and no test messages sent to players.
 - [ ] **F124** Builders can't see how many people played their room, how many beat it, or where they died (also covers F164) · high impact · medium effort
 - [ ] **F130** After-run rating prompts and sign-up prompts disappear unless the player goes back to the map · medium impact · small effort
 - [ ] **F133** Publishing your first room ends with a line of status text: no celebration, no share prompt, no title prompt (also covers F105) · medium impact · small effort

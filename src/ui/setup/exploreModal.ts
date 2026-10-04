@@ -699,6 +699,11 @@ export class ExploreModalController {
     if (areaMeta) {
       copy.appendChild(areaMeta);
     }
+    if (entry.insights) {
+      const plays = this.doc.createElement('div'); plays.className = 'explore-room-area-meta room-insight-players';
+      plays.textContent = `Played by ${entry.insights.uniquePlayers.toLocaleString()}`;
+      copy.appendChild(plays);
+    }
     copy.appendChild(this.createQualityRow(entry));
     copy.appendChild(this.createDifficultyBadge(entry));
 

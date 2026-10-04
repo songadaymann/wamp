@@ -235,6 +235,7 @@
         <button class="editor-drawer-tab" type="button" data-editor-room-section="environment">Environment</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="music">Music</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="sprite">Sprite Editor</button>
+        <button class="editor-drawer-tab" type="button" data-room-insights-open>Insights</button>
       </div>
       <!-- Tools -->
       <div class="sidebar-section" id="tools-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
@@ -1361,6 +1362,7 @@
           <button type="button" data-editor-share-action="wampogram"><span class="editor-share-icon" aria-hidden="true">&#9829;</span><span data-editor-share-label>Wamp-O-Gram</span></button>
           <button type="button" data-editor-share-action="copy"><span class="editor-share-icon" aria-hidden="true">&#128279;</span><span data-editor-share-label>Copy Room Link</span></button>
           <button type="button" data-editor-share-action="collect"><span class="editor-share-icon" aria-hidden="true">&#9670;</span><span data-editor-share-label>Collect Room</span></button>
+          <button type="button" data-room-insights-open data-editor-share-action="insights"><span class="editor-share-icon" aria-hidden="true">&#9638;</span><span>Insights</span></button>
           <button type="button" data-editor-share-action="history"><span class="editor-share-icon" aria-hidden="true">&#8634;</span><span data-editor-share-label>Version History</span></button>
           <div id="editor-share-status" class="editor-shell-popover-status" aria-live="polite"></div>
         </div>
@@ -1401,6 +1403,7 @@
         <label class="editor-room-title-label" for="room-title-input">Room</label>
         <input id="room-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Name this room" />
       </div>
+      <div id="editor-death-map-key" class="hidden"><span>Death map · orange = busiest tiles</span><button id="btn-editor-death-map-clear" class="bar-btn bar-btn-small" type="button">Hide Map</button></div>
       <div id="editor-room-feedback" class="editor-room-feedback-overlay">
         <div id="editor-top-save-status" class="editor-top-save-status">Draft ready.</div>
         <div id="editor-publish-nudge" class="editor-publish-nudge hidden">
@@ -2093,6 +2096,19 @@
     </div>
   </div>
 
+  <div id="room-insights-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel room-insights-panel" role="dialog" aria-modal="true" aria-labelledby="room-insights-title">
+      <div class="history-modal-header"><h2 id="room-insights-title" class="history-modal-title">Room Insights</h2><button id="btn-room-insights-close" class="bar-btn bar-btn-small" type="button">Close</button></div>
+      <div class="room-insights-scroll">
+        <p id="room-insights-status" class="history-modal-meta" role="status"></p>
+        <button id="btn-room-insights-retry" class="bar-btn bar-btn-small hidden" type="button">Try Again</button>
+        <dl id="room-insights-metrics" class="room-insights-metrics"></dl>
+        <p class="history-modal-meta">Finished attempts include clears, failures and reported abandonments. Builder tests, invalid clears and unfinished attempts are excluded. New intro-only visits are excluded; older counts use saved server results. Guests are included; a claim does not add another play.</p>
+        <label class="room-insights-map-toggle"><input id="room-insights-map" type="checkbox" disabled> Show death map in editor</label>
+        <p id="room-insights-coverage" class="history-modal-meta"></p>
+      </div>
+    </div>
+  </div>
   <div id="activity-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel activity-panel" role="dialog" aria-modal="true" aria-labelledby="activity-title">
       <div class="history-modal-header">

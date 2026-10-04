@@ -1635,6 +1635,13 @@ export class OverworldPlayScene extends Phaser.Scene {
       setActiveCourseRun: (runState) => {
         this.setActiveCourseRun(runState);
       },
+      recordRunDeathLocation: () => {
+        const run = this.goalRunController.getCurrentRun();
+        if (this.activeCourseRun && this.activeCourseRun.result !== 'active') return;
+        if (!this.activeCourseRun && (run?.result !== 'active' || run.qualificationState !== 'qualified')) return;
+        const frame = this.getCurrentRankedRunTraceFrame();
+        if (frame) this.rankedRunTraceRecorder.recordDeath(frame);
+      },
       recordGoalRunDeath: () => {
         this.goalRunController.recordDeath();
       },

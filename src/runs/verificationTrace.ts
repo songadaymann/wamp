@@ -51,6 +51,11 @@ export interface RankedRunTraceGoalEvent {
   checkpointIndex: number | null;
 }
 
+export interface RankedRunTraceDeathEvent {
+  atMs: number; roomX: number; roomY: number; tileX: number; tileY: number;
+}
+export const MAX_RUN_DEATH_LOCATIONS = 50;
+
 export interface RankedRunVerificationTrace {
   schemaVersion: number;
   verificationNonce: string;
@@ -60,6 +65,7 @@ export interface RankedRunVerificationTrace {
   breadcrumbs: RankedRunTraceBreadcrumb[];
   roomTransitions: RankedRunTraceRoomTransition[];
   goalEvents: RankedRunTraceGoalEvent[];
+  deathEvents?: RankedRunTraceDeathEvent[];
 }
 
 export function normalizeRankedRunVerificationTrace(
@@ -99,6 +105,7 @@ export function normalizeRankedRunVerificationTrace(
     breadcrumbs,
     roomTransitions,
     goalEvents,
+    ...(Array.isArray(candidate.deathEvents) ? { deathEvents: normalizeDeathEvents(candidate.deathEvents) } : {}),
   };
 }
 
@@ -306,4 +313,16 @@ function normalizeTraceValue(value: unknown): number | boolean | null {
     return value;
   }
   return normalizeNumber(value);
+}
+
+function normalizeDeathEvents(value: unknown[]): RankedRunTraceDeathEvent[] {
+  const events: RankedRunTraceDeathEvent[] = [];
+  for (const raw of value.slice(0, MAX_RUN_DEATH_LOCATIONS)) {
+    if (!raw || typeof raw !== 'object') continue;
+    const e = raw as RankedRunTraceDeathEvent;
+    if ([e.atMs, e.roomX, e.roomY, e.tileX, e.tileY].every(Number.isSafeInteger) && e.atMs >= 0) {
+      events.push({ atMs: e.atMs, roomX: e.roomX, roomY: e.roomY, tileX: e.tileX, tileY: e.tileY });
+    }
+  }
+  return events;
 }

@@ -1,3 +1,4 @@
+import type { RoomInsightSummary } from '../insights/model';
 import type { AuthUser } from '../auth/model';
 import type { ExpandedRoomSource } from '../expandedRooms/model';
 import type { RoomGoalType } from '../goals/roomGoals';
@@ -8,6 +9,7 @@ import type { ProgressionSummary, QualityRatingSummary } from '../progression/mo
 import type { RoomDifficulty } from '../runs/model';
 
 export interface ProfilePublishedRoomEntry {
+  insights?: RoomInsightSummary;
   roomId: string;
   roomCoordinates: RoomCoordinates;
   roomTitle: string | null;

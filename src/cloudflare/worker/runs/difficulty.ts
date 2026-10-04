@@ -1,3 +1,4 @@
+import { attachRoomInsights } from '../insights/store';
 import { loadIndexedDiscoveryRows, type IndexedDiscoveryRow } from '../playableContentIndex/discovery';
 import { loadDiscoveryRunMetrics, resolveDiscoveryDifficulty } from '../playableContentIndex/runMetrics';
 import { loadExpandedDiscoveryTrophies, expandedTrophyKey } from '../playableContentIndex/trophies';
@@ -270,7 +271,7 @@ export async function upsertRoomDifficultyVote(
   ]);
 }
 
-export async function loadRoomDiscoveryResponse(
+async function loadRoomDiscoveryResponseWithoutInsights(
   env: Env,
   difficultyFilter: RoomDifficulty | null,
   limit: number,
@@ -1873,4 +1874,12 @@ function parseRoomGoalType(value: string | null): RoomGoalType | null {
   return value && ROOM_GOAL_TYPES.includes(value as RoomGoalType)
     ? (value as RoomGoalType)
     : null;
+}
+
+export async function loadRoomDiscoveryResponse(
+  env: Env, difficultyFilter: RoomDifficulty | null, limit: number, sort: RoomDiscoverySort,
+  includeGoalLessRooms = false, viewerUserId: string | null = null, timing: ServerTiming | null = null, cursorOffset = 0,
+): Promise<RoomDiscoveryResponse> {
+  const result = await loadRoomDiscoveryResponseWithoutInsights(env, difficultyFilter, limit, sort, includeGoalLessRooms, viewerUserId, timing, cursorOffset);
+  return { ...result, results: await attachRoomInsights(env, result.results) };
 }

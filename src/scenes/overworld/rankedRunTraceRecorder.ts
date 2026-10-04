@@ -1,5 +1,8 @@
+import { ROOM_WIDTH, ROOM_HEIGHT, TILE_SIZE } from '../../config/room';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import {
+  MAX_RUN_DEATH_LOCATIONS,
+  type RankedRunTraceDeathEvent,
   RANKED_RUN_TRACE_SCHEMA_VERSION,
   type RankedRunTraceBreadcrumb,
   type RankedRunTraceGoalEvent,
@@ -38,6 +41,7 @@ interface ActiveTraceState {
   breadcrumbs: RankedRunTraceBreadcrumb[];
   roomTransitions: RankedRunTraceRoomTransition[];
   goalEvents: RankedRunTraceGoalEvent[];
+  deathEvents: RankedRunTraceDeathEvent[];
   lastBreadcrumbAtMs: number;
   lastRoomCoordinates: RoomCoordinates | null;
   lastHorizontalInput: number | null;
@@ -61,6 +65,7 @@ export class RankedRunTraceRecorder {
       breadcrumbs: [],
       roomTransitions: [],
       goalEvents: [],
+      deathEvents: [],
       lastBreadcrumbAtMs: 0,
       lastRoomCoordinates: initialFrame ? { ...initialFrame.roomCoordinates } : null,
       lastHorizontalInput: null,
@@ -148,6 +153,15 @@ export class RankedRunTraceRecorder {
     });
   }
 
+  recordDeath(frame: RankedRunTraceFrameInput): void {
+    if (!this.active || this.active.deathEvents.length >= MAX_RUN_DEATH_LOCATIONS) return;
+    this.active.deathEvents.push({ atMs: Math.round(this.active.elapsedMs),
+      roomX: frame.roomCoordinates.x, roomY: frame.roomCoordinates.y,
+      tileX: Math.max(0, Math.min(ROOM_WIDTH - 1, Math.floor(frame.x / TILE_SIZE))),
+      tileY: Math.max(0, Math.min(ROOM_HEIGHT - 1, Math.floor(frame.y / TILE_SIZE))),
+    });
+  }
+
   buildTrace(traceDurationMs: number): RankedRunVerificationTrace | null {
     if (!this.active) {
       return null;
@@ -162,6 +176,7 @@ export class RankedRunTraceRecorder {
       breadcrumbs: [...this.active.breadcrumbs],
       roomTransitions: [...this.active.roomTransitions],
       goalEvents: [...this.active.goalEvents],
+      deathEvents: [...this.active.deathEvents],
     };
   }
 

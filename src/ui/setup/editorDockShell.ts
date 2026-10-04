@@ -320,6 +320,9 @@ export class EditorDockShellController {
             this.getCollectActionTarget()?.click();
             this.dispatch({ type: 'close-popovers' });
             break;
+          case 'insights':
+            this.dispatch({ type: 'close-popovers' });
+            break;
           case 'history':
             this.clickExistingButton('btn-room-history');
             this.dispatch({ type: 'close-popovers' });

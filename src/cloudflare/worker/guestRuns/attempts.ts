@@ -1,3 +1,4 @@
+import { deathLocationsJson } from '../insights/deathLocations';
 import type { GuestRunFinishResponse, GuestRunStartBody, GuestRunStartResponse } from '../../../guestRooms/runModel';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { RunFinishRequestBody } from '../../../runs/model';
@@ -160,10 +161,11 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
   }
   await env.DB.batch([
     env.DB.prepare(`UPDATE guest_run_attempts SET result = ?, verification_status = ?, verification_reason = ?,
-      finish_request_hash = ?, finished_at = ?, expires_at = ?, metrics_json = ?, snapshot_json = NULL
+      finish_request_hash = ?, finished_at = ?, expires_at = ?, metrics_json = ?, insight_deaths_json = ?, snapshot_json = NULL
       WHERE attempt_id = ? AND result = 'active'`)
       .bind(body.result, verificationStatus, reason, requestHash, now,
-        new Date(Date.parse(now) + GUEST_RUN_RETENTION_MS).toISOString(), JSON.stringify(metrics), attemptId),
+        new Date(Date.parse(now) + GUEST_RUN_RETENTION_MS).toISOString(), JSON.stringify(metrics), deathLocationsJson(body.verificationTrace, { verificationNonce: row.verification_nonce, snapshotHash: row.snapshot_hash },
+          snapshot.kind === 'room' ? [snapshot.room.coordinates] : snapshot.course.roomRefs.map(ref => ref.coordinates), elapsedMs, metrics.deaths), attemptId),
     env.DB.prepare('DELETE FROM guest_run_snapshot_rooms WHERE attempt_id = ?').bind(attemptId),
   ]);
   const final = await load();
