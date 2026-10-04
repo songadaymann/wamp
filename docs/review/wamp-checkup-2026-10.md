@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 26 of 214 done.**
+**Progress: 28 of 214 done.**
 
 ## How to use this file
 
@@ -42,7 +42,7 @@ This is the master checklist. Humans and AI agents can both read and update it.
 4. **Make classroom accounts actually safe** ✅ (F208, F190, F209, F211). Students are blocked from World Chat, but they can talk to strangers through in-room speech bubbles. The multiplayer server doesn't check sign-in or bans for those bubbles at all. Other public-posting paths are also open to students, and student passwords can be guessed with no lockout. Fix these before any more school pilots.
 5. **Switch the fast world map back on, safely** ✅ (F003, F010). Compatible pre-rendered imagery is active again. Tile work stays within the current viewport and bounded metadata; strict production smoke, direct outage/recovery emails and blocking production release compatibility checks protect the restored map.
 6. **Same jump on every screen, and cap phones at 60fps** (F138, F002). On 120/144Hz screens, quick-tap jumps come out lower, ice slides shorter, and jumps in gravity zones are about half as tall. Rooms get easier or harder depending on the device, and leaderboards aren't fair. A careful cap just above 60fps also cuts heat and battery drain on high-refresh phones.
-7. **Make building on phones and tablets stop fighting you** (F079, F157, F161, F158). Pinch cancellation and touch shapes are delivered in both editors (PR #40), along with Undo/Redo (PR #39). The shared phone dock, persistent Test/Publish, scoped libraries and touch Spawn cancellation are delivered (PR #41). Object settings on phones remain next (F158).
+7. **Make building on phones and tablets stop fighting you** ✅ (F079, F157, F161, F158). Pinch cancellation and touch shapes are delivered in both editors (PR #40), along with Undo/Redo (PR #39). The shared phone dock, persistent Test/Publish, scoped libraries and touch Spawn cancellation are delivered (PR #41). Phone object settings, Done and link Cancel are delivered in both editors (PR #42), including expanded character settings.
 8. **Fix the first five minutes** (F093, F122, F126, F104). These are the moments that decide whether a visitor stays: - A shared room link opens the Welcome box on top of the room-goal box. - New players never see the controls before the timer starts. - 'Save Progress' doesn't actually keep a guest's clears when they sign up. - The Welcome box's Play, Explore and Build buttons don't lead anywhere obvious.
 9. **Security/safety priority** (F198, F201, F199, F200, F026). Details withheld from this public repo until fixed.
 10. **Security/safety priority** (F182, F184, F183). Details withheld from this public repo until fixed.
@@ -186,7 +186,7 @@ Portrait phone play is good, but tablets and sideways phones can't play, and bui
 - [x] **F079** Phone/tablet editor: starting a pinch-zoom paints a stray tile (or flood-fills); shape tools need a hidden second tap (also covers F053, F160) · medium impact · medium effort — **done 2026-10-04** (`e572e9da`, PR #40): deferred taps, reversible brush/object previews, touch shape/copy/Curve and cross-cell pinch cancellation; 226 native scenarios and live guest draft/history proof pass.
 - [x] **F077** Installed Android app is locked to landscape, the one orientation with no controls · medium impact · small effort — **done 2026-10-03** (a2ae8327). app.webmanifest orientation is now "any".
 - [x] **F161** Phone editor still has the old layout: Spawn in Objects→Utility, Test/Publish behind "← World" (also covers F110) · high impact · medium effort
-- [ ] **F158** On phones, pressure plates, chests, Sword Hunters, police and NPCs can't be configured · high impact · medium effort
+- [x] **F158** On phones, pressure plates, chests, Sword Hunters, police and NPCs can't be configured · high impact · medium effort — **done 2026-10-04** (`f877ebfd`). Shared pinned settings sheet, Done and visible link Cancel in both editors; six phone combinations/48 workflows, 152 touch regressions and actual live guest configuration verified.
 - [ ] **F140** Touch: holding the stick slightly down in mid-air triggers a butt stomp (breaks drop-through and puzzle crates) (also covers F083) · medium impact · small effort
 - [ ] **F109** Phone chrome uses 6–7px text and 20–30px tap targets (also covers F084, F103, F176) · medium impact · small effort
 - [ ] **F076** Typing on a phone (chat, Say, sign-in email) zooms the page and flips the layout to 'landscape' · medium impact · small effort
@@ -269,7 +269,7 @@ The desktop editor is fast and polished. The gaps are safety nets (Undo buttons,
 - [ ] **F163** Starter room templates (backlog G-001): build them as command scripts (also covers F106) · high impact · medium effort
 - [ ] **F159** Add a "Clear Check" plus a Ready-to-Publish checklist (Mario Maker style) · high impact · medium effort
 - [ ] **F162** No way to move things: add a Select/Move tool, a clipboard that works across rooms, and saved stamps · high impact · large effort
-- [ ] **F065** Expanded-room editor silently drops NPC, police, swordsman and goal-intro settings (duplicated inspector) · medium impact · medium effort
+- [x] **F065** Expanded-room editor cannot configure NPC, police and Sword Hunter settings (duplicated inspector) · medium impact · medium effort — **done 2026-10-04** (`f877ebfd`). Shared actor view model and existing slice runtime setters replace no-op handlers; native field edits, snapshot/reselection, second-cell isolation and Undo/Redo verified. Fact-check excludes goal intro because expanded room goals are intentionally hidden.
 - [ ] **F165** Undo history grows without limit and copies the whole terrain twice per stroke · medium impact · small effort
 - [ ] **F166** Show neighbor openings at the room edges so the world actually connects · medium impact · small effort
 - [ ] **F167** Use the existing agent API for an in-editor "Sketch my room" AI helper · medium impact · large effort
