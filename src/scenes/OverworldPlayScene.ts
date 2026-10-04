@@ -1223,6 +1223,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       activateDraftCoursePreview: (snapshot, draftRoom) =>
         this.coursePlaybackController.activateDraftCoursePreview(snapshot, draftRoom),
+      startPublishedCoursePlayback: snapshot => this.flowController.startCoursePlayback(snapshot, 'published'),
       updateSelectedSummary: () => this.updateSelectedSummary(),
       refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
       updateCameraBounds: () => this.updateCameraBounds(),

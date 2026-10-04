@@ -100,6 +100,9 @@ export class RewardStingCatchupController {
       }
 
       const previousProgression = loadSeenRewardProgression(userId, this.storage);
+      // A profile requested before a publish/rating can finish after its immediate feedback.
+      if (previousProgression && (['player', 'builder', 'curator'] as const).some(lane =>
+        profile.progression[lane].xp < previousProgression[lane].xp)) return;
       saveSeenRewardProgression(userId, profile.progression, this.storage);
       if (!previousProgression) {
         return;

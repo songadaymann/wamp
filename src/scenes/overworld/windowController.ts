@@ -102,6 +102,7 @@ interface OverworldWindowControllerHost {
     snapshot: CourseSnapshot,
     draftRoom: RoomSnapshot | null
   ): Promise<void>;
+  startPublishedCoursePlayback(snapshot: CourseSnapshot): Promise<void>;
   updateSelectedSummary(): void;
   refreshLeaderboardForSelection(): Promise<void>;
   updateCameraBounds(): void;
@@ -149,6 +150,10 @@ export class OverworldWindowController {
 
   async handleWakeAsync(data?: OverworldPlaySceneData): Promise<void> {
     this.applySceneData(data);
+    if (data?.publishedCourse) {
+      await this.host.startPublishedCoursePlayback(cloneCourseSnapshot(data.publishedCourse));
+      return;
+    }
     if (data?.courseDraftPreviewId) {
       const draft = getActiveCourseDraftSessionDraft();
       if (draft?.id === data.courseDraftPreviewId && draft.goal) {

@@ -67,6 +67,7 @@ import { EditorRoomSession } from './editor/roomSession';
 import { EditorBackgroundController } from './editor/backgrounds';
 import { EditorEditRuntime, type GoalPlacementMode } from './editor/editRuntime';
 import { EditorSceneFlowController } from './editor/flow';
+import { announceFirstPublishedRoom } from '../publishing/events';
 import { EditorInspectorController } from './editor/inspector';
 import { EditorInteractionController } from './editor/interaction';
 import { GuestBuilderActivityTracker } from './editor/guestBuilderActivityTracker';
@@ -534,6 +535,11 @@ export class EditorScene extends Phaser.Scene {
         this.roomEditCount += 1;
         this.presenceController.markConstructionPreviewDirty();
         this.flowController.maybeTriggerPublishNudge();
+      },
+      onRoomPublished: (room, firstPublish, userId) => {
+        if (firstPublish) announceFirstPublishedRoom({ userId, contentType: 'room', contentId: room.id,
+          title: room.title || 'My WAMP Room', coordinates: { ...room.coordinates }, snapshot: cloneRoomSnapshot(room),
+          play: () => this.flowController.startPublishedPlayMode(room) });
       },
     });
     this.toolController = new EditorToolController(

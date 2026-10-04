@@ -1,4 +1,5 @@
 import { RoomInsightsController } from './roomInsights';
+import { FirstPublishModalController } from './firstPublishModal';
 import { ActivityInboxController } from './activityInbox';
 import Phaser from 'phaser';
 import { ChatPanelController } from '../chat/panel';
@@ -49,6 +50,7 @@ import { CUSTOM_SPRITES_CHANGED_EVENT } from '../../customSprites/registry';
 import { WorldsController } from '../worlds/controller';
 
 interface UiControllers {
+  firstPublishModal: FirstPublishModalController;
   activityInbox: ActivityInboxController;
   roomInsights: RoomInsightsController;
   paletteController: PaletteController;
@@ -87,7 +89,7 @@ interface UiControllers {
 
 export function setupUiControllers(game: Phaser.Game): void {
   const controllers = createUiControllers(game);
-  game.events.once('destroy', () => { controllers.activityInbox.destroy(); controllers.roomInsights.destroy(); controllers.postRunReminder.destroy(); });
+  game.events.once('destroy', () => { controllers.activityInbox.destroy(); controllers.roomInsights.destroy(); controllers.postRunReminder.destroy(); controllers.firstPublishModal.destroy(); });
 
   controllers.paletteController.init();
   configureEditorBridge(controllers);
@@ -119,6 +121,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
   game.events.once('destroy', () => firstStepsSummary.destroy());
 
   return {
+    firstPublishModal: new FirstPublishModalController(),
     activityInbox: new ActivityInboxController(),
     roomInsights: new RoomInsightsController(game),
     paletteController: new PaletteController(),
@@ -161,6 +164,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
 }
 
 function initUiControllers(controllers: UiControllers): void {
+  controllers.firstPublishModal.init();
   controllers.activityInbox.init();
   controllers.roomInsights.init();
   controllers.historyModal.init();
@@ -200,6 +204,7 @@ function configureEditorBridge(controllers: UiControllers): void {
   configureEditorUiBridgeRuntime({
     paletteController: controllers.paletteController,
     closePanels: () => {
+      controllers.firstPublishModal.close();
       controllers.historyModal.close();
       controllers.leaderboardModal.close();
       controllers.exploreModal.close();

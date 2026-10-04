@@ -12,7 +12,7 @@ import type {
 } from './model';
 
 export interface ProfileRepository {
-  loadProfile(userId: string): Promise<UserProfileResponse>;
+  loadProfile(userId: string, options?: { fresh?: boolean }): Promise<UserProfileResponse>;
   loadProfileByUsername(username: string): Promise<UserProfileResponse>;
   updateMyProfile(body: UserProfileUpdateRequestBody): Promise<UserProfileUpdateResponse>;
 }
@@ -29,8 +29,12 @@ class ProfileApiError extends Error {
 class ApiProfileRepository implements ProfileRepository {
   constructor(private readonly baseUrl: string) {}
 
-  async loadProfile(userId: string): Promise<UserProfileResponse> {
+  async loadProfile(userId: string, options?: { fresh?: boolean }): Promise<UserProfileResponse> {
     const path = `/api/profiles/${encodeURIComponent(userId)}`;
+    if (options?.fresh) {
+      invalidateStaleWhileRevalidateCache('profile:');
+      return this.request<UserProfileResponse>(path, { cache: 'no-store', signal: AbortSignal.timeout(8_000) });
+    }
     return loadWithStaleWhileRevalidate(`profile:${this.baseUrl}${path}`, () => this.request<UserProfileResponse>(path));
   }
 

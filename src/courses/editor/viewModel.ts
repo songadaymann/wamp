@@ -16,6 +16,7 @@ import {
 } from './state';
 
 export interface BuildCourseEditorUiStateOptions {
+  busy?: boolean;
   record: CourseRecord | null;
   dirty: boolean;
   zoomText: string;
@@ -65,7 +66,7 @@ export function buildCourseEditorUiState(
   const saveDraftDisabledReason = permissions?.canSaveDraft
     ? getCurrentCourseDraftSaveDisabledReason(record, dirty)
     : 'This expanded room is read-only for your account.';
-  const publishCourseDisabledReason = permissions?.canPublish
+  const publishCourseDisabledReason = options.busy ? 'Please wait…' : permissions?.canPublish
     ? getCurrentCourseDraftPublishDisabledReason(record)
     : 'This expanded room is read-only for your account.';
   const unpublishCourseDisabledReason = getCourseUnpublishDisabledReason(record, permissions);

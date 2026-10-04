@@ -4,6 +4,23 @@ Delivered a 15-minute Worker monitor using the existing admin email service, dur
 
 Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clean current-main worktree, verify it in the browser, push the branch, and publish a frontend-only safety Pages preview.
 
+## 2026-10-04 — F133 first publish (including F105), in progress
+
+Continue one checkup item on `codex/checkup-first-publish-2026-10-04`, based on fresh main `860302d1`, carrying F130 delivery bookkeeping as `d85f3737`. The master stays 37/214 until production acceptance. Preserve the stale primary checkout's 25 dirty entries.
+
+- [x] Prompt an unnamed ordinary room before explicit publish, then show the first actual public publish with the saved title, preview, clean live link, sharing and Play. Include the first expanded-room publish; retain its existing required-title validation.
+- [x] Show publish XP using fresh profiles before/after the successful mutation and remember it so later catch-up cannot repeat it. Optional feedback failure must not turn a successful publish into a failure.
+- [x] Verify cancellation, failures, repeated versions, identity/scene changes, safe sharing fallback, keyboard/focus and four responsive layouts through actual ordinary editor entry and publication.
+- [ ] Commit/push/PR/merge, guarded production delivery and exact custom-domain acceptance; then update the existing checklist/ledger/delivery notes and stop before F099.
+
+Scope: frontend only using the existing title/publish/profile APIs. Guest draft/sign-in remains truthful; a local draft or failed publish never says it is live. Wamp-O-Gram remains the existing ordinary-room flow. No new emails, migrations, room-data rollout, PartyKit or renderer changes.
+
+Source acceptance: full quality passes 317 files / 2,452 tests, TypeScript, generated bindings and build; the final focused checks pass 43 tests plus lint/typecheck, and DOM contract passes 869 IDs / 176 required IDs. Naming/publishing pauses ordinary autosave and expanded Publish waits for loading. Both expanded setup and full-editor Publish use the same celebration/XP feedback. Play It Now starts the actual published expanded run, with pinned room versions, rather than its first ordinary cell.
+
+The final native matrix (`output/web-game/first-publish/local-entry/report.json`) passes all four layouts with zero unexpected browser errors: real ordinary editor entry, cancelled naming, failed publish/retry, saved titles, horizontal/vertical previews, 25/40 BXP, native-share/copy/X/Wamp-O-Gram entry and manual clipboard fallback, repeated publication/reload, and ordinary/expanded live Play. Expanded fixture setup uses the existing scene entry action and follow-camera rooms because F098 camera return and the phone World HUD overlap remain open; publication and every new dialog control still use pointer/touch. The unchanged installed game client against the real production API passes with visually inspected healthy gameplay. Responsive name/live/expanded/Play screenshots are inspected.
+
+All diagnostics remain retained: earlier reused fixture coordinates consumed global reward deduplication or retained expanded membership; fixtures now use unique coordinates and publish seed cells through the real local API. Build tooling restarted that API during an earlier matrix; stable acceptance runs only after tooling finishes. The full-editor harness initially used the old hidden Goal toggle, and later setup runs reproduced the existing F098 fixed-camera/return defects. Those failures are retained separately; no failed matrix counts as acceptance. Only exact known thumbnail misses, local presence limitations and request-proven aborted navigation reads are separated from unexpected errors. Master stays 37/214 pending production acceptance.
+
 ## 2026-09-04 — Editor dock redesign
 
 - Created `codex/editor-dock-redesign-2026-09-04` from verified `origin/main` at `fee5804d818e2d2c23302fb349e0e49ab474bcca` in the planned sibling worktree.
