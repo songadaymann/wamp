@@ -246,7 +246,7 @@ export interface OverworldSceneBridge {
   playSelectedCourse?: () => Promise<void> | void;
   editSelectedRoom?: () => void;
   buildSelectedRoom?: () => void;
-  openGuestDraftRoom?: (roomSnapshot: RoomSnapshot) => void | Promise<boolean>;
+  openGuestDraftRoom?: (roomSnapshot: RoomSnapshot, canOpen?: () => boolean, forceRoomSnapshot?: boolean) => void | Promise<boolean>;
   zoomIn?: () => void;
   zoomOut?: () => void;
   jumpToCoordinates?: (coordinates: RoomCoordinates) => Promise<void> | void;

@@ -445,10 +445,11 @@ export class ExploreModalController {
     const entries = mode ? this.getQueueEntries(mode) : [];
     const visible =
       !buildersActive
+      && this.exploreMode === 'rooms'
       && activeLoaded
       && !this.loading
       && mode !== null
-      && this.authState.authenticated;
+      && (mode === 'play' || this.authState.authenticated);
     container.classList.toggle('hidden', !visible);
     if (!visible || mode === null) {
       return;
@@ -467,7 +468,8 @@ export class ExploreModalController {
       requestExploreQueueStart({
         mode,
         entries,
-        sourceLabel: mode === 'play' ? 'Unbeaten rooms' : 'Unrated rooms',
+        sourceLabel: mode === 'rate' ? 'Unrated rooms'
+          : this.discoverSort === 'unbeaten' ? 'Unbeaten rooms' : 'Community rooms',
       });
       this.close();
     });
@@ -1166,7 +1168,7 @@ export class ExploreModalController {
     if (this.discoverSort === 'unrated') {
       return 'rate';
     }
-    return null;
+    return 'play';
   }
 
   private getQueueEntries(mode: ExploreQueueMode): RoomDiscoveryEntry[] {
@@ -1183,7 +1185,9 @@ export class ExploreModalController {
         );
       });
     }
-    return results.filter((entry) => entry.viewerState?.completed !== true);
+    return this.discoverSort === 'unbeaten'
+      ? results.filter((entry) => entry.viewerState?.completed !== true)
+      : results;
   }
 
   private getRoomDiscoveryEmptyText(): string {

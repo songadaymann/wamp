@@ -6,6 +6,7 @@ import { showBusyError } from '../../ui/appFeedback';
 import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
 import { writeRoomDraftBackup } from '../../persistence/localDraftBackup';
 import { refreshAuthSession } from '../../auth/client';
+import { createStarterRoomSnapshot } from '../../ui/setup/firstSteps';
 
 const authState = vi.hoisted(() => ({ authenticated: false }));
 vi.mock('../../auth/client', () => ({
@@ -96,18 +97,19 @@ function makeStoredDraft(blank = false): RoomRecord {
 
 function reopen(remote: RoomRecord) {
   const applyRoomSnapshot = vi.fn();
+  const setRoomDirty = vi.fn();
   const repository = {
     loadRoomCurrent: vi.fn(async () => ({ summary: createRoomSummaryFromRecord(remote), draft: remote.draft, published: remote.published })),
   } as unknown as RoomRepository;
   const session = new EditorRoomSession(repository, {
     applyRoomSnapshot, exportRoomSnapshot: () => remote.draft,
     getPublishValidationError: () => null, getRoomDirty: () => false,
-    setRoomDirty: vi.fn(), getLastDirtyAt: () => 0, refreshUi: vi.fn(),
+    setRoomDirty, getLastDirtyAt: () => 0, refreshUi: vi.fn(),
     refreshSurroundingRoomPreviews: vi.fn(),
   });
   session.currentRoomId = roomId;
   session.currentRoomCoordinates = coordinates;
-  return { session, applyRoomSnapshot };
+  return { session, applyRoomSnapshot, setRoomDirty };
 }
 
 describe('guest draft recovery when reopening the editor', () => {
@@ -158,6 +160,22 @@ describe('guest draft recovery when reopening the editor', () => {
     const { session, applyRoomSnapshot } = reopen(remote);
     await session.loadPersistedRoom(null);
     expect(applyRoomSnapshot).toHaveBeenCalledWith(expect.objectContaining({ tileData: remote.draft.tileData }));
+  });
+
+  it('backs up an unsaved starter through the normal dirty-draft path', async () => {
+    const remote = createDefaultRoomRecord(roomId, coordinates);
+    const { session, applyRoomSnapshot, setRoomDirty } = reopen(remote);
+    await session.loadPersistedRoom(createStarterRoomSnapshot(roomId, coordinates));
+    expect(applyRoomSnapshot).toHaveBeenCalledWith(expect.objectContaining({ title: 'My First Room' }));
+    expect(setRoomDirty).toHaveBeenCalledWith(true);
+  });
+
+  it('preserves a remote edit that arrived while a starter was opening', async () => {
+    const remote = createDefaultRoomRecord(roomId, coordinates); remote.draft.title = 'New server draft';
+    const { session, applyRoomSnapshot, setRoomDirty } = reopen(remote);
+    await session.loadPersistedRoom(createStarterRoomSnapshot(roomId, coordinates));
+    expect(applyRoomSnapshot).toHaveBeenCalledWith(expect.objectContaining({ title: 'New server draft' }));
+    expect(setRoomDirty).not.toHaveBeenCalled();
   });
 
   it('keeps a forced guest snapshot title through the first account save and skips unrelated local recovery', async () => {

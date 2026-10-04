@@ -373,6 +373,8 @@ export class RunRatingModalController {
   private presentQueuedBatch(): void {
     if (
       this.doc.body.dataset.appMode !== 'world'
+      || this.doc.body.dataset.roomSequenceKind === 'welcome'
+      || this.doc.getElementById('first-steps-summary-modal')?.classList.contains('hidden') === false
       || this.isRewardStingVisible()
       || this.activeRequest
       || (this.elements.modal && !this.elements.modal.classList.contains('hidden'))

@@ -9,6 +9,7 @@ import './notice.css';
 const OPT_OUT = 'wamp_replay_opt_out';
 const VISITOR = 'wamp_replay_visitor';
 const ACTIONS: Record<string, ReplayAction> = {
+  'btn-welcome-explore': 'welcome_explore',
   'btn-world-play': 'play_toggle', 'btn-world-restart': 'restart', 'btn-room-sequence-stop': 'stop', 'btn-room-sequence-restart': 'restart', 'btn-room-goal-intro-start': 'room_start', 'btn-welcome-play': 'welcome_play', 'btn-welcome-build': 'welcome_build',
   'menu-toggle': 'menu', 'btn-auth-email': 'email_submit', 'btn-auth-wallet': 'wallet_open',
   'btn-guest-builder-claim-signin': 'signup_open', 'btn-guest-room-recovery-signin': 'signup_open',

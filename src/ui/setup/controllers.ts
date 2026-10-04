@@ -40,6 +40,7 @@ import { setupSceneCommands } from './sceneCommands';
 import { WampOGramModalController } from './wampOGramModal';
 import { XpReceiptController } from './xpReceipts';
 import { WelcomeModalController } from './welcomeModal';
+import { FirstStepsSummaryController } from './firstStepsSummary';
 import { configureEditorUiBridgeRuntime } from '../../scenes/editor/uiBridge';
 import { CUSTOM_SPRITES_CHANGED_EVENT } from '../../customSprites/registry';
 import { WorldsController } from '../worlds/controller';
@@ -99,14 +100,21 @@ function createUiControllers(game: Phaser.Game): UiControllers {
   const leaderboardModal = new LeaderboardModalController(game);
   const controlsModal = new ControlsModalController();
   const playlistIntroModal = new PlaylistIntroModalController();
-  const welcomeModal = new WelcomeModalController(game);
+  const exploreModal = new ExploreModalController(game);
+  const openExplore = () => exploreModal.open();
+  const welcomeModal = new WelcomeModalController(game, undefined, undefined, undefined, undefined, undefined, { explore: openExplore });
+  const firstStepsSummary = new FirstStepsSummaryController({
+    explore: () => { void openExplore(); }, build: () => welcomeModal.beginBuild(),
+  });
+  firstStepsSummary.init();
+  game.events.once('destroy', () => firstStepsSummary.destroy());
 
   return {
     paletteController: new PaletteController(),
     historyModal: new RoomHistoryModalController(game),
     leaderboardModal,
-    exploreModal: new ExploreModalController(game),
-    roomSequence: new RoomSequenceController(game, leaderboardModal, playlistIntroModal, welcomeModal),
+    exploreModal,
+    roomSequence: new RoomSequenceController(game, leaderboardModal, playlistIntroModal, welcomeModal, undefined, undefined, firstStepsSummary),
     guestBuilderClaimModal: new GuestBuilderClaimModalController(),
     guestRoomRecoveryModal: new GuestRoomRecoveryModalController(game),
     guestProgressClaimModal: new GuestProgressClaimModalController(),

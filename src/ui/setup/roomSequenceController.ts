@@ -7,6 +7,7 @@ import { getActiveOverworldScene } from './sceneBridge';
 import type { LeaderboardModalController } from './leaderboardModal';
 import type { PlaylistIntroModalController } from './playlistIntroModal';
 import type { WelcomeModalController } from './welcomeModal';
+import type { FirstStepsSummaryController } from './firstStepsSummary';
 import {
   ROOM_SEQUENCE_START_EVENT,
   type RoomSequenceKind,
@@ -23,6 +24,9 @@ type RoomSequenceElements = {
   stopButton: HTMLButtonElement | null;
   restartButton: HTMLButtonElement | null;
   nextButton: HTMLButtonElement | null;
+  mobileNextButton: HTMLButtonElement | null;
+  mobileStopButton: HTMLButtonElement | null;
+  mobileRestartButton: HTMLButtonElement | null;
   commentButton: HTMLButtonElement | null;
 };
 
@@ -83,6 +87,15 @@ export class RoomSequenceController {
     void this.advance();
   };
 
+  private readonly handleMobileStopClick = (event: Event): void => {
+    if (!this.activeSequence) return;
+    event.stopImmediatePropagation(); this.stop();
+  };
+  private readonly handleMobileRestartClick = (event: Event): void => {
+    if (!this.activeSequence) return;
+    event.stopImmediatePropagation(); this.handleRestartClick();
+  };
+
   private readonly handleCommentClick = (): void => {
     const sequence = this.activeSequence;
     if (!sequence || sequence.mode !== 'play' || this.navigating || this.isComplete()) {
@@ -131,6 +144,7 @@ export class RoomSequenceController {
     private readonly welcomeModal: Pick<WelcomeModalController, 'close'>,
     private readonly doc: Document = document,
     private readonly windowObj: RoomSequenceDebugWindow = window,
+    private readonly firstStepsSummary?: Pick<FirstStepsSummaryController, 'reset' | 'finish'>,
   ) {
     this.elements = {
       hud: this.doc.getElementById('room-sequence-hud'),
@@ -141,6 +155,9 @@ export class RoomSequenceController {
       stopButton: this.doc.getElementById('btn-room-sequence-stop') as HTMLButtonElement | null,
       restartButton: this.doc.getElementById('btn-room-sequence-restart') as HTMLButtonElement | null,
       nextButton: this.doc.getElementById('btn-room-sequence-next') as HTMLButtonElement | null,
+      mobileNextButton: this.doc.getElementById('btn-mobile-room-sequence-next') as HTMLButtonElement | null,
+      mobileStopButton: this.doc.getElementById('btn-mobile-world-stop') as HTMLButtonElement | null,
+      mobileRestartButton: this.doc.getElementById('btn-mobile-world-restart') as HTMLButtonElement | null,
       commentButton: this.doc.getElementById('btn-room-sequence-comment') as HTMLButtonElement | null,
     };
   }
@@ -152,6 +169,9 @@ export class RoomSequenceController {
     this.elements.stopButton?.addEventListener('click', this.handleStopClick);
     this.elements.restartButton?.addEventListener('click', this.handleRestartClick);
     this.elements.nextButton?.addEventListener('click', this.handleNextClick);
+    this.elements.mobileNextButton?.addEventListener('click', this.handleNextClick);
+    this.elements.mobileStopButton?.addEventListener('click', this.handleMobileStopClick);
+    this.elements.mobileRestartButton?.addEventListener('click', this.handleMobileRestartClick);
     this.elements.commentButton?.addEventListener('click', this.handleCommentClick);
     this.windowObj.get_room_sequence_state = () => this.getDebugState();
     this.windowObj.get_explore_queue_state = () => this.getDebugState();
@@ -159,12 +179,17 @@ export class RoomSequenceController {
   }
 
   destroy(): void {
+    this.activeSequence = null;
+    this.firstStepsSummary?.reset([]);
     this.windowObj.removeEventListener(ROOM_SEQUENCE_START_EVENT, this.handleStartRequest as EventListener);
     this.windowObj.removeEventListener(POST_RUN_RATING_SUBMITTED_EVENT, this.handleRunRatingSubmitted as EventListener);
     this.elements.currentButton?.removeEventListener('click', this.handleCurrentClick);
     this.elements.stopButton?.removeEventListener('click', this.handleStopClick);
     this.elements.restartButton?.removeEventListener('click', this.handleRestartClick);
     this.elements.nextButton?.removeEventListener('click', this.handleNextClick);
+    this.elements.mobileNextButton?.removeEventListener('click', this.handleNextClick);
+    this.elements.mobileStopButton?.removeEventListener('click', this.handleMobileStopClick);
+    this.elements.mobileRestartButton?.removeEventListener('click', this.handleMobileRestartClick);
     this.elements.commentButton?.removeEventListener('click', this.handleCommentClick);
     this.clearAdvanceTimer();
     if (this.windowObj.get_room_sequence_state) {
@@ -174,6 +199,7 @@ export class RoomSequenceController {
       delete this.windowObj.get_explore_queue_state;
     }
     this.setSequenceActiveBodyFlag(false);
+    this.doc.body.dataset.roomSequenceKind = '';
   }
 
   async start(detail: RoomSequenceStartDetail): Promise<void> {
@@ -194,15 +220,17 @@ export class RoomSequenceController {
       showDesktopControlsIntro: detail.showDesktopControlsIntro === true,
     };
     this.activeSequence = sequence;
+    this.firstStepsSummary?.reset(sequence.kind === 'welcome' ? sequence.entries : []);
     this.navigating = false;
     this.welcomeModal.close(true);
     this.render();
 
     if (
-      sequence.kind === 'playlist' &&
+      (sequence.kind === 'playlist' || sequence.kind === 'welcome') &&
       sequence.showDesktopControlsIntro
     ) {
       await this.playlistIntroModal.open({
+        startLabel: sequence.kind === 'welcome' ? 'Start First Steps' : undefined,
         title: sequence.kickerLabel,
         sourceLabel: sequence.sourceLabel,
         entries: sequence.entries,
@@ -220,6 +248,7 @@ export class RoomSequenceController {
     const wasPlaying = this.activeSequence?.mode === 'play';
     this.clearAdvanceTimer();
     this.activeSequence = null;
+    this.firstStepsSummary?.reset([]);
     this.navigating = false;
     this.render();
 
@@ -235,6 +264,14 @@ export class RoomSequenceController {
     }
 
     if (sequence.index >= sequence.entries.length - 1) {
+      if (sequence.kind === 'welcome') {
+        this.leaderboardModal.close();
+        getActiveOverworldScene(this.game)?.returnToWorld?.();
+        this.activeSequence = null;
+        this.render();
+        this.firstStepsSummary?.finish();
+        return;
+      }
       sequence.index = sequence.entries.length;
       sequence.statusText = sequence.kind === 'playlist' ? 'Playlist complete.' : 'Queue complete.';
       sequence.statusTone = 'done';
@@ -272,6 +309,7 @@ export class RoomSequenceController {
 
     try {
       await scene.jumpToCoordinates(entry.roomCoordinates);
+      if (this.activeSequence !== sequence) return;
       if (sequence.mode === 'play') {
         if (!scene.playSelectedRoom) {
           throw new Error('The room player is not ready yet.');
@@ -285,12 +323,15 @@ export class RoomSequenceController {
       }
       sequence.statusTone = 'default';
     } catch (error) {
+      if (this.activeSequence !== sequence) return;
       console.error('Failed to present room sequence entry.', error);
       sequence.statusText = error instanceof Error ? error.message : 'Failed to load this room.';
       sequence.statusTone = 'error';
     } finally {
-      this.navigating = false;
-      this.render();
+      if (this.activeSequence === sequence) {
+        this.navigating = false;
+        this.render();
+      }
     }
   }
 
@@ -310,11 +351,14 @@ export class RoomSequenceController {
     this.elements.hud?.classList.toggle('active', Boolean(sequence));
     this.elements.hud?.setAttribute('aria-hidden', sequence ? 'false' : 'true');
     this.setSequenceActiveBodyFlag(Boolean(sequence));
+    this.setButtonHidden(this.elements.mobileNextButton, !sequence || sequence.mode !== 'play' || complete);
+    this.doc.body.dataset.roomSequenceKind = sequence?.kind ?? '';
     if (!sequence) {
       return;
     }
 
     this.elements.hud?.setAttribute('data-sequence-mode', sequence.mode);
+    this.elements.hud?.setAttribute('data-sequence-kind', sequence.kind);
     this.elements.hud?.setAttribute('data-sequence-tone', sequence.statusTone);
     if (this.elements.kicker) {
       this.elements.kicker.textContent = sequence.kickerLabel;
@@ -327,7 +371,9 @@ export class RoomSequenceController {
           : 'Queue Complete';
     }
     if (this.elements.meta) {
-      const progress = complete
+      const progress = sequence.kind === 'welcome'
+        ? `Room ${sequence.index + 1} of ${sequence.entries.length}`
+        : complete
         ? `${sequence.entries.length}/${sequence.entries.length}`
         : `${sequence.index + 1}/${sequence.entries.length}`;
       const status = sequence.statusText ? ` · ${sequence.statusText}` : '';
@@ -352,6 +398,10 @@ export class RoomSequenceController {
       this.elements.nextButton.textContent =
         sequence.index >= sequence.entries.length - 1 ? 'Finish' : 'Next';
       this.elements.nextButton.disabled = this.navigating || complete;
+    }
+    if (this.elements.mobileNextButton) {
+      this.elements.mobileNextButton.textContent = `${sequence.index >= sequence.entries.length - 1 ? 'Finish' : 'Next'} · ${sequence.index + 1}/${sequence.entries.length}`;
+      this.elements.mobileNextButton.disabled = this.navigating || complete;
     }
     if (this.elements.commentButton) {
       this.elements.commentButton.disabled = this.navigating || complete;

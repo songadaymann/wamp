@@ -5,6 +5,7 @@ import {
 import { roomIdFromCoordinates, type RoomCoordinates, type RoomSnapshot } from '../../persistence/roomRepository';
 import { roomToChunkCoordinates } from '../../persistence/worldModel';
 import { apiRequest } from '../../api/request';
+import { getAuthDebugState } from '../../auth/client';
 import type { ConstructionPreviewTokenIssueResponse } from '../../presence/constructionPreviewToken';
 import {
   resolveWorldPresenceConfig,
@@ -130,6 +131,11 @@ export class EditorPresenceController {
 
   private syncSharedConstructionPreview(options?: { force?: boolean }): void {
     if (!this.client) {
+      return;
+    }
+
+    if (!getAuthDebugState().authenticated) {
+      this.clearSharedConstructionPreview();
       return;
     }
 

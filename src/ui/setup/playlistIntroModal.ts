@@ -13,6 +13,7 @@ type PlaylistIntroElements = {
 };
 
 export type PlaylistIntroDetail = {
+  startLabel?: string;
   title: string;
   sourceLabel: string;
   entries: RoomSequenceEntry[];
@@ -64,6 +65,7 @@ export class PlaylistIntroModalController {
     }
 
     this.render(detail);
+    if (this.elements.startButton) this.elements.startButton.textContent = detail.startLabel ?? 'Start Playlist';
     this.handleLayoutChange();
     this.lifecycle.show();
     this.elements.startButton?.focus({ preventScroll: true });

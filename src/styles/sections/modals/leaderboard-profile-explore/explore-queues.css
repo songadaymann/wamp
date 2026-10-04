@@ -126,6 +126,86 @@ body[data-room-sequence-active='true'] #world-hud .world-hud-row-primary-actions
   display: none !important;
 }
 
+.first-steps-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+#first-steps-summary-modal .history-modal-panel {
+  width: min(680px, calc(100vw - 28px));
+  height: auto;
+  min-height: 0;
+  max-height: calc(100dvh - 28px);
+  background: #fff3db;
+  border: 3px solid #fff;
+  border-radius: 0;
+  box-shadow: 8px 8px 0 #18161c;
+}
+
+#first-steps-summary-modal .history-modal-title {
+  color: #18161c;
+  font-family: 'Super Mario Bros. NES', monospace;
+  font-size: 18px;
+}
+
+#first-steps-summary-modal .history-modal-meta {
+  color: #2c5071;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#first-steps-summary-modal .bar-btn {
+  min-height: 44px;
+  padding: 8px 12px;
+  color: #000;
+  background: #79ccde;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+}
+
+.room-sequence-hud[data-sequence-kind='welcome'] .room-sequence-kicker {
+  display: none;
+}
+
+.first-steps-summary-actions .bar-btn {
+  min-height: 44px;
+}
+
+body[data-coarse-pointer='true'] .room-sequence-buttons .bar-btn {
+  min-height: 44px;
+}
+
+.mobile-room-sequence-next {
+  display: none;
+}
+
+body[data-coarse-pointer='true'][data-mobile-world-hud-collapsed='true'][data-app-mode='play-world'] .mobile-room-sequence-next:not(.hidden) {
+  display: block;
+  position: fixed;
+  right: calc(12px + var(--safe-right));
+  bottom: calc(196px + var(--safe-bottom));
+  z-index: 17;
+  min-height: 44px;
+  min-width: 100px;
+  padding: 8px;
+  background: #fcea7c;
+  color: #000;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #18161c;
+  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 11px;
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-room-sequence-next:not(.hidden) {
+  bottom: calc(var(--mobile-portrait-console-height) + var(--safe-bottom) + 8px);
+}
+
 body[data-room-sequence-active='true'] #world-hud .world-hud-row-primary-actions > .room-sequence-hud {
   display: grid;
 }
