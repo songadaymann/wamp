@@ -37,6 +37,27 @@
   user-select: none;
 }
 
+.mobile-world-share {
+  display: none;
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-world-share {
+  display: inline-flex;
+  position: fixed;
+  top: calc(12px + var(--safe-top));
+  right: calc(64px + var(--safe-right));
+  z-index: 20;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  background: #79ccde;
+  color: #18161c;
+  font-family: var(--hud-ui-font);
+  font-size: 13px;
+  box-shadow: 3px 3px 0 #18161c;
+}
+
 .mobile-world-restart {
   position: absolute;
   top: calc(46px + var(--safe-top));

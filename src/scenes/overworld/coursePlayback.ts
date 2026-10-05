@@ -281,6 +281,7 @@ export class OverworldCoursePlaybackController {
           contentId: activeCourseRun.course.id,
           contentTitle: activeCourseRun.course.title,
           expandedRoomId: activeCourseRun.expandedRoomId,
+          shareCoordinates: this.getRunShareCoordinates(activeCourseRun),
           version: activeCourseRun.course.version,
           previousViewerRank: null,
           elapsedMs: Math.round(activeCourseRun.elapsedMs),
@@ -375,6 +376,7 @@ export class OverworldCoursePlaybackController {
         if (shouldPromptForRating) {
           const baseRatingRequest = {
             contentTitle,
+            shareCoordinates: this.getRunShareCoordinates(currentActiveCourseRun),
             version: currentActiveCourseRun.course.version,
             previousViewerRank: currentActiveCourseRun.previousViewerRank,
             suppressLeaderboardRewardStings: leaderboardRewards.length > 0,
@@ -451,12 +453,19 @@ export class OverworldCoursePlaybackController {
 
   private guestClearDetail(run: ActiveCourseRunState, body: RunFinishRequestBody): PostRunRatingRequestDetail {
     const base = { contentTitle: run.course.title, version: run.expandedRoomVersion ?? run.course.version,
+      shareCoordinates: this.getRunShareCoordinates(run),
       previousViewerRank: null, elapsedMs: body.elapsedMs, deaths: body.deaths, score: null,
       autoSuggestedDifficulty: suggestProgressionDifficulty(body) };
     return run.expandedRoomId ? { ...base, contentType: 'expanded_room', contentId: run.expandedRoomId,
       expandedRoomId: run.expandedRoomId,
       legacyCourseId: run.expandedRoomId === expandedRoomIdFromLegacyCourseId(run.course.id) ? run.course.id : undefined }
       : { ...base, contentType: 'course', contentId: run.course.id };
+  }
+
+  private getRunShareCoordinates(run: ActiveCourseRunState): RoomCoordinates {
+    const start = run.course.roomRefs.find(ref => ref.roomId === run.startRoomId)
+      ?? run.course.roomRefs[0];
+    return { ...(start?.coordinates ?? run.returnCoordinates) };
   }
 
   private async startRankedCourseRun(

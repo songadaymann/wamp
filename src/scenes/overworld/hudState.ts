@@ -45,6 +45,7 @@ import {
 export interface SelectedRoomContext {
   roomId: string;
   coordinates: RoomCoordinates;
+  shareTitle?: string | null;
   state: SelectedCellState;
   courseId: string | null;
   courseTitle: string | null;
@@ -149,10 +150,15 @@ export class OverworldHudStateController {
 
   getSelectedRoomContext(): SelectedRoomContext {
     const selectedCoordinates = this.host.getSelectedCoordinates();
+    const selectedRoomId = roomIdFromCoordinates(selectedCoordinates);
     const selectedCourse = this.getSelectedCourseContext();
+    const activeCourse = this.host.getMode() === 'play' ? this.host.getActiveCourseRun()?.course : null;
+    const playingTitle = activeCourse?.roomRefs.some(ref => ref.roomId === selectedRoomId) ? activeCourse.title : null;
     return {
-      roomId: roomIdFromCoordinates(selectedCoordinates),
+      roomId: selectedRoomId,
       coordinates: { ...selectedCoordinates },
+      shareTitle: playingTitle ?? this.selectedSummary?.expandedRoom?.title ?? selectedCourse?.courseTitle
+        ?? this.host.getRoomSnapshotForCoordinates(selectedCoordinates)?.title ?? this.selectedSummary?.title ?? null,
       state: this.host.getCellStateAt(selectedCoordinates),
       courseId: selectedCourse?.courseId ?? null,
       courseTitle: selectedCourse?.courseTitle ?? null,

@@ -15,6 +15,9 @@ for (const match of html.matchAll(/\bid\s*=\s*["']([^"']+)["']/g)) {
 }
 
 const requiredIdsByController = {
+  'RoomSharingController': ['btn-world-share', 'btn-mobile-world-share', 'world-share-status'],
+  'RunRatingModalController': ['run-rating-modal', 'run-rating-share', 'run-share-preview', 'run-share-message',
+    'run-share-status', 'btn-run-share-native', 'btn-run-share-copy', 'btn-run-share-twitter', 'btn-run-share-download'],
   'FirstPublishModalController': ['first-publish-modal', 'first-publish-heading', 'first-publish-name-form', 'first-publish-name',
     'btn-first-publish-confirm', 'btn-first-publish-close', 'first-publish-live', 'first-publish-title', 'first-publish-preview',
     'first-publish-preview-fallback', 'first-publish-link', 'btn-first-publish-share', 'btn-first-publish-copy',

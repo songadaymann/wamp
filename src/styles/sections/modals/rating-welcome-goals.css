@@ -619,6 +619,10 @@
   align-items: stretch;
 }
 
+#run-rating-modal .run-share-text-only .run-share-card {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 #run-rating-modal .run-share-preview-shell {
   position: relative;
   min-height: 118px;
@@ -683,7 +687,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 34px;
+  min-height: 44px;
   padding: 8px 12px 7px;
   border: 2px solid #18161c;
   border-radius: 0;
@@ -729,6 +733,11 @@
 
 #run-rating-modal #run-share-status[data-run-share-tone='error'] {
   color: #ed5f4b;
+}
+
+#run-rating-modal #run-share-status {
+  overflow-wrap: anywhere;
+  user-select: text;
 }
 
 .run-rating-section {

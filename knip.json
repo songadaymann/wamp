@@ -79,6 +79,7 @@
     "scripts/smoke_room_insights.mjs",
     "scripts/smoke_guest_builder_claim_modal.mjs",
     "scripts/smoke_guest_draft_reminders.mjs",
+    "scripts/smoke_clear_sharing.mjs",
     "scripts/smoke_guest_claim_modal.mjs",
     "scripts/smoke_room_clear_feedback.mjs",
     "scripts/smoke_builder_activity.mjs",

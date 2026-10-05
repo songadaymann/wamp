@@ -166,6 +166,7 @@ export interface EditorSceneBridge {
 export type OverworldSelectedRoomContext = {
   roomId: string;
   coordinates: RoomCoordinates;
+  shareTitle?: string | null;
   state: 'published' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty';
   courseId: string | null;
   courseTitle: string | null;

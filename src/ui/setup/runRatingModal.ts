@@ -50,12 +50,12 @@ import { createRunRepository, type RunRepository } from '../../runs/runRepositor
 import {
   buildRunShareText,
   buildRunShareUrl,
-  canShareRunImage,
   createRunShareImageFile,
   downloadRunShareImage,
   openTwitterShareIntent,
   type RunShareImage,
 } from '../../social/runShare';
+import { copyShareLink, shareLink } from '../../social/linkSharing';
 import {
   PostRunRatingQueue,
   type PostRunPromptQueueEntry,
@@ -84,11 +84,13 @@ type RunRatingElements = {
   ratingActions: HTMLElement | null;
   error: HTMLElement | null;
   shareSection: HTMLElement | null;
+  sharePreview: HTMLElement | null;
   sharePreviewImage: HTMLImageElement | null;
   sharePreviewPlaceholder: HTMLElement | null;
   shareMessage: HTMLElement | null;
   shareStatus: HTMLElement | null;
-  shareSignInButton: HTMLButtonElement | null;
+  shareButton: HTMLButtonElement | null;
+  shareCopyButton: HTMLButtonElement | null;
   shareTwitterButton: HTMLButtonElement | null;
   shareDownloadButton: HTMLButtonElement | null;
   guestClaimSection: HTMLElement | null;
@@ -138,10 +140,6 @@ export class RunRatingModalController {
     this.advancePrompt(this.savedProgression ? 'rated' : 'skipped');
   };
 
-  private readonly handleShareSignInClick = () => {
-    promptForSignIn('Sign in to save ranked clears and share your WAMP runs.');
-  };
-
   private readonly handleGuestClaimSignInClick = (event: Event) => {
     event.stopPropagation();
     const message = guestRunClaimCopy(this.getCurrentGuestSaveResult()).signInMessage;
@@ -154,8 +152,16 @@ export class RunRatingModalController {
   };
 
   private readonly handleShareTwitterClick = () => {
-    void this.shareRun();
+    const request = this.activeRequest;
+    if (!request || this.ratingOnly) return;
+    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    if (!url) return;
+    openTwitterShareIntent(this.windowObj, buildRunShareText(request, this.getShareContentTitle(request)), url);
+    this.setShareStatus('Opened X.', 'default');
   };
+
+  private readonly handleShareClick = () => { void this.shareRun(); };
+  private readonly handleShareCopyClick = () => { void this.copyRunLink(); };
 
   private readonly handleShareDownloadClick = () => {
     if (!this.shareImage) {
@@ -274,11 +280,13 @@ export class RunRatingModalController {
       ratingActions: this.doc.querySelector<HTMLElement>('#run-rating-modal .run-rating-actions'),
       error: this.doc.getElementById('run-rating-error'),
       shareSection: this.doc.getElementById('run-rating-share'),
+      sharePreview: this.doc.getElementById('run-share-preview'),
       sharePreviewImage: this.doc.getElementById('run-share-preview-image') as HTMLImageElement | null,
       sharePreviewPlaceholder: this.doc.getElementById('run-share-preview-placeholder'),
       shareMessage: this.doc.getElementById('run-share-message'),
       shareStatus: this.doc.getElementById('run-share-status'),
-      shareSignInButton: this.doc.getElementById('btn-run-share-signin') as HTMLButtonElement | null,
+      shareButton: this.doc.getElementById('btn-run-share-native') as HTMLButtonElement | null,
+      shareCopyButton: this.doc.getElementById('btn-run-share-copy') as HTMLButtonElement | null,
       shareTwitterButton: this.doc.getElementById('btn-run-share-twitter') as HTMLButtonElement | null,
       shareDownloadButton: this.doc.getElementById('btn-run-share-download') as HTMLButtonElement | null,
       guestClaimSection: this.doc.getElementById('run-guest-claim'),
@@ -301,7 +309,8 @@ export class RunRatingModalController {
     this.elements.submitButton?.addEventListener('click', () => {
       void this.submit();
     });
-    this.elements.shareSignInButton?.addEventListener('click', this.handleShareSignInClick);
+    this.elements.shareButton?.addEventListener('click', this.handleShareClick);
+    this.elements.shareCopyButton?.addEventListener('click', this.handleShareCopyClick);
     this.elements.shareTwitterButton?.addEventListener('click', this.handleShareTwitterClick);
     this.elements.shareDownloadButton?.addEventListener('click', this.handleShareDownloadClick);
     this.elements.guestClaimSignInButton?.addEventListener('click', this.handleGuestClaimSignInClick);
@@ -354,7 +363,8 @@ export class RunRatingModalController {
   destroy(): void {
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.skipButton?.removeEventListener('click', this.handleSkipClick);
-    this.elements.shareSignInButton?.removeEventListener('click', this.handleShareSignInClick);
+    this.elements.shareButton?.removeEventListener('click', this.handleShareClick);
+    this.elements.shareCopyButton?.removeEventListener('click', this.handleShareCopyClick);
     this.elements.shareTwitterButton?.removeEventListener('click', this.handleShareTwitterClick);
     this.elements.shareDownloadButton?.removeEventListener('click', this.handleShareDownloadClick);
     this.elements.guestClaimSignInButton?.removeEventListener('click', this.handleGuestClaimSignInClick);
@@ -539,14 +549,15 @@ export class RunRatingModalController {
     this.baselineProgression = null;
     this.baselineProgressionLoad = null;
     this.shareImage = null;
-    this.shareImageLoading = false;
-    this.shareStatusText = null;
+    this.shareImageLoading = detail.contentType === 'room';
+    this.shareStatusText = detail.contentType === 'room' ? 'Rendering room snapshot...' : null;
     this.shareStatusTone = 'default';
     this.setError(null);
     const loadToken = ++this.loadToken;
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
     this.render();
+    void this.prepareShareImage(detail, loadToken);
     void this.loadGuestLeaderboard(detail, loadToken);
   }
 
@@ -638,8 +649,7 @@ export class RunRatingModalController {
         dataUrl,
         fileName: this.buildShareImageFileName(detail),
       };
-      this.shareStatusText = 'Snapshot ready.';
-      this.shareStatusTone = 'default';
+      this.setShareImageStatus('Snapshot ready.', 'default');
     } catch (error) {
       console.warn('Failed to render room share snapshot.', error);
       if (!this.isActiveRequest(detail, loadToken)) {
@@ -654,12 +664,10 @@ export class RunRatingModalController {
           dataUrl: fallbackDataUrl,
           fileName: this.buildShareImageFileName(detail),
         };
-        this.shareStatusText = 'Snapshot ready from the current view.';
-        this.shareStatusTone = 'default';
+        this.setShareImageStatus('Snapshot ready from the current view.', 'default');
       } else {
         this.shareImage = null;
-        this.shareStatusText = 'Snapshot unavailable. You can still share the text.';
-        this.shareStatusTone = 'error';
+        this.setShareImageStatus('Snapshot unavailable. You can still share the text.', 'error');
       }
     } finally {
       if (this.isActiveRequest(detail, loadToken)) {
@@ -671,40 +679,46 @@ export class RunRatingModalController {
 
   private async shareRun(): Promise<void> {
     const request = this.activeRequest;
-    if (!request || request.contentType !== 'room') {
+    if (!request || this.ratingOnly) {
       return;
     }
-
+    const loadToken = this.loadToken;
     const text = buildRunShareText(request, this.getShareContentTitle(request));
     const url = buildRunShareUrl(request, this.windowObj.location.href);
-    const file = this.shareImage ? createRunShareImageFile(this.shareImage) : null;
-
-    if (file && canShareRunImage(this.windowObj.navigator, file)) {
-      try {
-        await this.windowObj.navigator.share({
-          title: 'WAMP room clear',
-          text,
-          url,
-          files: [file],
-        });
-        this.setShareStatus('Share sheet opened with the snapshot.', 'default');
-        return;
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          this.setShareStatus('Share canceled.', 'default');
-          return;
-        }
-        console.warn('Native run share failed; falling back to Twitter intent.', error);
+    if (!url) return;
+    try {
+      const file = this.shareImage ? createRunShareImageFile(this.shareImage) : null;
+      const result = await shareLink(this.doc, this.windowObj.navigator, {
+        title: 'WAMP clear', text, url, ...(file ? { files: [file] } : {}),
+      });
+      if (this.isActiveRequest(request, loadToken)) {
+        this.setShareStatus(result === 'shared' ? 'Shared.' : result === 'canceled' ? 'Share canceled.' : 'Link copied.', 'default');
       }
+    } catch {
+      if (this.isActiveRequest(request, loadToken)) this.setShareStatus(`Copy this link: ${url}`, 'error');
     }
+  }
 
-    openTwitterShareIntent(this.windowObj, text, url);
-    this.setShareStatus(
-      file
-        ? 'Opened X with the achievement text. Download the snapshot if you want to attach it manually.'
-        : 'Opened X with the achievement text. Snapshot image was not available.',
-      'default'
-    );
+  private setShareImageStatus(message: string, tone: 'default' | 'error'): void {
+    // Rendering can finish after Copy Link or Share. Keep the player's action confirmation.
+    if (this.shareStatusText === null || this.shareStatusText === 'Rendering room snapshot...') {
+      this.shareStatusText = message;
+      this.shareStatusTone = tone;
+    }
+  }
+
+  private async copyRunLink(): Promise<void> {
+    const request = this.activeRequest;
+    if (!request || this.ratingOnly) return;
+    const loadToken = this.loadToken;
+    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    if (!url) return;
+    try {
+      await copyShareLink(this.doc, this.windowObj.navigator, url);
+      if (this.isActiveRequest(request, loadToken)) this.setShareStatus('Link copied.', 'default');
+    } catch {
+      if (this.isActiveRequest(request, loadToken)) this.setShareStatus(`Copy this link: ${url}`, 'error');
+    }
   }
 
   private getPostRunShareRoomSnapshot(coordinates: RoomCoordinates): RoomSnapshot | null {
@@ -1064,13 +1078,16 @@ export class RunRatingModalController {
   }
 
   private renderShare(request: PostRunRatingRequestDetail | null): void {
-    const visible = this.mode === 'rating' && !this.ratingOnly && request?.contentType === 'room';
+    const visible = !this.ratingOnly && request !== null;
     this.elements.shareSection?.classList.toggle('hidden', !visible);
     if (!visible || !request) {
       return;
     }
 
-    const authState = getAuthDebugState();
+    const hasRoomImage = request.contentType === 'room';
+    this.elements.sharePreview?.classList.toggle('hidden', !hasRoomImage);
+    this.elements.shareSection?.classList.toggle('run-share-text-only', !hasRoomImage);
+    const url = buildRunShareUrl(request, this.windowObj.location.href);
     const shareText = buildRunShareText(request, this.getShareContentTitle(request));
     if (this.elements.shareMessage) {
       this.elements.shareMessage.textContent = shareText;
@@ -1091,18 +1108,17 @@ export class RunRatingModalController {
       this.elements.sharePreviewPlaceholder.classList.toggle('hidden', Boolean(this.shareImage));
     }
     if (this.elements.shareStatus) {
-      this.elements.shareStatus.textContent = this.shareStatusText ?? '';
-      this.elements.shareStatus.classList.toggle('hidden', !this.shareStatusText);
-      this.elements.shareStatus.setAttribute('data-run-share-tone', this.shareStatusTone);
+      const status = url ? this.shareStatusText : 'The completed level link is unavailable.';
+      this.elements.shareStatus.textContent = status ?? '';
+      this.elements.shareStatus.classList.toggle('hidden', !status);
+      this.elements.shareStatus.setAttribute('data-run-share-tone', url ? this.shareStatusTone : 'error');
     }
-    if (this.elements.shareSignInButton) {
-      this.elements.shareSignInButton.classList.toggle('hidden', authState.authenticated);
-    }
-    if (this.elements.shareTwitterButton) {
-      this.elements.shareTwitterButton.disabled = this.shareImageLoading;
+    for (const button of [this.elements.shareButton, this.elements.shareCopyButton, this.elements.shareTwitterButton]) {
+      if (button) button.disabled = !url;
     }
     if (this.elements.shareDownloadButton) {
       this.elements.shareDownloadButton.disabled = !this.shareImage;
+      this.elements.shareDownloadButton.classList.toggle('hidden', !hasRoomImage);
     }
   }
 

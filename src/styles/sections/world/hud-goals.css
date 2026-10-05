@@ -231,6 +231,23 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
   color: var(--text);
 }
 
+.world-share-status {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 8px 12px;
+  border: 2px solid #18161c;
+  background: #fffaf0;
+  color: #18161c;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .world-hud-value-button {
   padding: 0;
   border: 0;
