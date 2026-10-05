@@ -15,6 +15,7 @@ export class ActivityInboxController {
   private readonly catchup;
   private readonly weekly;
   private readonly dethrone;
+  private readonly daily;
   private readonly save;
   private readonly preferencesStatus;
   private readonly lifecycle;
@@ -38,6 +39,7 @@ export class ActivityInboxController {
     this.status = doc.getElementById('activity-status'); this.catchup = doc.getElementById('activity-catchup');
     this.weekly = doc.getElementById('activity-weekly-digest') as HTMLInputElement | null;
     this.dethrone = doc.getElementById('activity-dethrone-alerts') as HTMLInputElement | null;
+    this.daily = doc.getElementById('activity-daily-features') as HTMLInputElement | null;
     this.save = doc.getElementById('btn-activity-save') as HTMLButtonElement | null;
     this.preferencesStatus = doc.getElementById('activity-preferences-status');
     this.lifecycle = createModalLifecycle({ doc, modal: this.modal, onClose: () => this.close() });
@@ -152,6 +154,7 @@ export class ActivityInboxController {
   private renderPreferences(response: ActivityResponse): void {
     if (this.weekly) { this.weekly.checked = response.preferences.weeklyDigest; this.weekly.disabled = !response.preferences.emailAvailable; }
     if (this.dethrone) { this.dethrone.checked = response.preferences.dethroneAlerts; this.dethrone.disabled = !response.preferences.emailAvailable; }
+    if (this.daily) { this.daily.checked = Boolean(response.preferences.dailyFeatures); this.daily.disabled = !response.preferences.emailAvailable; }
     if (this.save) this.save.disabled = !response.preferences.emailAvailable;
     if (this.preferencesStatus) this.preferencesStatus.textContent = response.preferences.emailAvailable
       ? 'Weekly: Monday, noon UTC. Lost #1: at most once per UTC day.' : 'Sign in with an email account to receive activity emails.';
@@ -161,7 +164,7 @@ export class ActivityInboxController {
     const userId = this.userId, generation = this.generation;
     this.saving = true; if (this.save) this.save.disabled = true;
     try {
-      const preferences = await this.repository.savePreferences({ weeklyDigest: Boolean(this.weekly?.checked), dethroneAlerts: Boolean(this.dethrone?.checked) });
+      const preferences = await this.repository.savePreferences({ weeklyDigest: Boolean(this.weekly?.checked), dethroneAlerts: Boolean(this.dethrone?.checked), dailyFeatures: Boolean(this.daily?.checked) });
       if (!this.valid(userId, generation)) return;
       if (this.latest) this.latest.preferences = preferences;
       if (this.preferencesStatus) this.preferencesStatus.textContent = 'Email preferences saved.';

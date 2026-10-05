@@ -34,7 +34,7 @@ export function fixture(includeActivity = true) {
   const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys = ON');
   const directory = new URL('../../../../migrations/', import.meta.url);
   for (const file of readdirSync(directory).filter(name => name.endsWith('.sql')).sort()) {
-    if (!includeActivity && file.startsWith('0055_')) continue;
+    if (!includeActivity && (file.startsWith('0055_') || file.startsWith('0057_'))) continue;
     sqlite.exec(readFileSync(new URL(file, directory), 'utf8'));
   }
   for (const user of ['builder', 'p1', 'p2', 'p3', 'generated']) sqlite.prepare('INSERT INTO users (id,email,display_name,created_at,updated_at) VALUES (?,?,?,?,?)')
@@ -47,7 +47,10 @@ export function fixture(includeActivity = true) {
   sqlite.prepare(`INSERT INTO rooms (id,x,y,draft_json,published_json,published_title,claimer_user_id) VALUES ('0,0',0,0,?,?,'Lava Gauntlet','builder')`).run(json, json);
   sqlite.prepare(`INSERT INTO room_versions (room_id,version,snapshot_json,title,created_at,published_by_user_id) VALUES ('0,0',1,?,'Lava Gauntlet',?,'builder')`).run(json, NOW);
   const db = new Database(sqlite); const env: Env = { DB: db, JAM_DB: db, ASSETS: { fetch: async () => new Response() } };
-  return { sqlite, env, record, migrate: () => sqlite.exec(readFileSync(new URL('0055_builder_activity.sql', directory), 'utf8')) };
+  return { sqlite, env, record, migrate: () => {
+    sqlite.exec(readFileSync(new URL('0055_builder_activity.sql', directory), 'utf8'));
+    sqlite.exec(readFileSync(new URL('0057_daily_rooms.sql', directory), 'utf8'));
+  } };
 }
 export function award(f: ReturnType<typeof fixture>, id: string, kind = 'unique_completion_room', actor = 'p1', at = NOW, structured = true): void {
   f.sqlite.prepare(`INSERT OR IGNORE INTO bxp_events (id,user_id,event_type,source_type,source_id,dedupe_key,amount,breakdown_json,created_at) VALUES (?,'builder',?,'room_completion',?,?,1,?,?)`)

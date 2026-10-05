@@ -3,7 +3,7 @@ import type { ActivityPreferences, ActivityResponse } from './model';
 export interface ActivityRepository {
   load(before?: number): Promise<ActivityResponse>;
   markSeen(latestId: number): Promise<void>;
-  savePreferences(preferences: Pick<ActivityPreferences, 'weeklyDigest' | 'dethroneAlerts'>): Promise<ActivityPreferences>;
+  savePreferences(preferences: Pick<ActivityPreferences, 'weeklyDigest' | 'dethroneAlerts' | 'dailyFeatures'>): Promise<ActivityPreferences>;
 }
 export function createActivityRepository(): ActivityRepository {
   return {

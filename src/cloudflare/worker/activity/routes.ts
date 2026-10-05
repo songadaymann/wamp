@@ -21,10 +21,12 @@ export async function handleMyActivity(request: Request, url: URL, env: Env): Pr
     return jsonResponse(request, { ok: true });
   }
   if (url.pathname === '/api/me/activity/preferences' && request.method === 'PUT') {
-    const body = await parseJsonBody<{ weeklyDigest?: unknown; dethroneAlerts?: unknown }>(request, { maxBytes: 1024 });
+    const body = await parseJsonBody<{ weeklyDigest?: unknown; dethroneAlerts?: unknown; dailyFeatures?: unknown }>(request, { maxBytes: 1024 });
     if (!body || typeof body.weeklyDigest !== 'boolean' || typeof body.dethroneAlerts !== 'boolean') throw new HttpError(400, 'Choose both email preferences.');
-    if (!emailAvailable && (body.weeklyDigest || body.dethroneAlerts)) throw new HttpError(409, 'An email account is needed for activity emails.');
-    await saveActivityPreferences(db, auth.user.id, body as { weeklyDigest: boolean; dethroneAlerts: boolean }, new Date().toISOString());
+    if (body.dailyFeatures !== undefined && typeof body.dailyFeatures !== 'boolean') throw new HttpError(400,'Choose whether to receive Room of the Day emails.');
+    if (!emailAvailable && (body.weeklyDigest || body.dethroneAlerts || body.dailyFeatures)) throw new HttpError(409, 'An email account is needed for activity emails.');
+    await saveActivityPreferences(db, auth.user.id, {weeklyDigest:body.weeklyDigest,dethroneAlerts:body.dethroneAlerts,
+      dailyFeatures: typeof body.dailyFeatures === 'boolean' ? body.dailyFeatures : undefined}, new Date().toISOString());
     return jsonResponse(request, publicPreferences(await loadActivityPreferences(db, auth.user.id), emailAvailable));
   }
   throw new HttpError(404, 'Activity route not found.');

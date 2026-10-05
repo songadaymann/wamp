@@ -32,6 +32,7 @@ import { loadEffectiveTrustTier } from './trustCaps';
 import { resolveAggregatedRoomLeaderboardSelection } from '../runs/roomLeaderboardAggregation';
 import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
+import { awardDailyClear } from '../daily/store';
 
 export async function ensureFounderIdentityQualification(
   env: Env,
@@ -374,6 +375,8 @@ export async function awardRoomRunProgression(
   const dayKey = getUtcDayKey(params.completedAt);
   const weekKey = getUtcWeekKey(params.completedAt);
 
+  delta.pxp += await awardDailyClear(env,params.run.userId,'room',params.run.roomId,params.run.roomVersion,params.completedAt);
+
   if (params.isFirstCompletion) {
     delta.pxp += await awardLaneDelta(
       env,
@@ -547,6 +550,8 @@ export async function awardCourseRunProgression(
 
   const dayKey = getUtcDayKey(params.completedAt);
   const weekKey = getUtcWeekKey(params.completedAt);
+
+  delta.pxp += await awardDailyClear(env,params.run.userId,'course',params.run.courseId,params.run.courseVersion,params.completedAt);
 
   if (params.isFirstCompletion) {
     delta.pxp += await awardLaneDelta(

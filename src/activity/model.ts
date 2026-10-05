@@ -13,6 +13,7 @@ export interface BuilderActivity {
 export interface ActivityPreferences {
   weeklyDigest: boolean;
   dethroneAlerts: boolean;
+  dailyFeatures?: boolean;
   emailAvailable: boolean;
 }
 export interface ActivityResponse {

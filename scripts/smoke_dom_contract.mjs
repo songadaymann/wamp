@@ -15,6 +15,9 @@ for (const match of html.matchAll(/\bid\s*=\s*["']([^"']+)["']/g)) {
 }
 
 const requiredIdsByController = {
+  'DailyRoomController': ['daily-room-modal','daily-room-chip','btn-daily-open','btn-auth-daily','btn-daily-dismiss',
+    'btn-daily-close','btn-daily-play','btn-daily-copy','btn-daily-save','btn-daily-retry','daily-room-title','daily-room-builder',
+    'daily-room-status','daily-room-progress','daily-room-board','daily-room-date','activity-daily-features'],
   'RoomSharingController': ['btn-world-share', 'btn-mobile-world-share', 'world-share-status'],
   'RunRatingModalController': ['run-rating-modal', 'run-rating-share', 'run-share-preview', 'run-share-message',
     'run-share-status', 'btn-run-share-native', 'btn-run-share-copy', 'btn-run-share-twitter', 'btn-run-share-download'],

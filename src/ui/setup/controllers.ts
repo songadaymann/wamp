@@ -1,4 +1,5 @@
 import { RoomInsightsController } from './roomInsights';
+import { DailyRoomController } from './dailyRoom';
 import { FirstPublishModalController } from './firstPublishModal';
 import { ActivityInboxController } from './activityInbox';
 import Phaser from 'phaser';
@@ -89,6 +90,8 @@ interface UiControllers {
 
 export function setupUiControllers(game: Phaser.Game): void {
   const controllers = createUiControllers(game);
+  const dailyRoom = new DailyRoomController(); dailyRoom.init();
+  game.events.once('destroy',()=>dailyRoom.destroy());
   game.events.once('destroy', () => { controllers.activityInbox.destroy(); controllers.roomInsights.destroy(); controllers.postRunReminder.destroy(); controllers.firstPublishModal.destroy(); });
 
   controllers.paletteController.init();

@@ -1,0 +1,70 @@
+#daily-room-chip {
+  position: absolute;
+  top: calc(72px + var(--safe-top));
+  right: calc(12px + var(--safe-right));
+  z-index: 17;
+  display: flex;
+  max-width: calc(100% - 24px);
+  border: 2px solid #222;
+  background: #fff3db;
+}
+#daily-room-chip.hidden,
+body:has(.history-modal:not(.hidden)) #daily-room-chip,
+body:has(#auth-panel.menu-open) #daily-room-chip {
+  display: none;
+}
+#daily-room-chip .bar-btn {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 0;
+  background: #fff3db;
+  color: #222;
+  font-size: 12px;
+}
+#daily-room-chip #btn-daily-dismiss {
+  min-width: 44px;
+  border-left: 2px solid #222;
+}
+#daily-room-chip .bar-btn:hover,
+#daily-room-chip .bar-btn:focus-visible {
+  background: #79ccde;
+}
+#daily-room-modal {
+  width: 100dvw;
+  height: 100dvh;
+  right: auto;
+  bottom: auto;
+  padding: calc(12px + var(--safe-top)) 12px calc(12px + var(--safe-bottom));
+}
+#daily-room-modal .daily-room-content {
+  width: min(600px, calc(100vw - 24px));
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 24px);
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  background: #fff3db;
+  color: #18161c;
+  border: 2px solid #18161c;
+  border-radius: 0;
+  box-shadow: none;
+}
+#daily-room-modal .history-modal-header { flex-direction: row; align-items: center; gap: 12px; }
+#daily-room-modal .history-modal-title { font-size: 16px; color: #18161c; }
+#daily-room-modal .history-modal-meta { color: #18161c; }
+.daily-room-content > * { flex-shrink: 0; }
+.daily-room-content h3 { margin: 0; font-size: 16px; }
+.daily-room-content p,
+.daily-room-content li,
+.daily-room-content a,
+.daily-room-content button { margin: 0; font-size: 12px; line-height: 1.5; }
+.daily-room-content a { color: #005a78; touch-action: manipulation; }
+.daily-room-content ol { padding: 0; list-style: none; }
+.daily-room-content li { padding: 8px 0; border-bottom: 1px solid #222; }
+.daily-room-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#daily-room-modal .bar-btn { min-height: 44px; min-width: 44px; border-radius: 0; color: #18161c; background: #ffe093; border: 2px solid #18161c; opacity: 1; }
+#daily-room-modal .bar-btn:hover,
+#daily-room-modal .bar-btn:focus-visible { background: #79ccde; }
+.daily-room-actions a.bar-btn { display: inline-flex; align-items: center; text-decoration: none; }
+@media (max-width: 400px) { #daily-room-modal .daily-room-content { padding: 12px; } }
