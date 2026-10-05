@@ -69,6 +69,8 @@ export function filterGlobalLeaderboardForCurrentSurface(
       : null;
 
   return {
+    ...response,
+    viewerNext: response.viewerNext && isGeneratedLeaderboardExcludedDisplayName(response.viewerNext.userDisplayName) ? null : response.viewerNext,
     entries,
     viewerEntry,
   };

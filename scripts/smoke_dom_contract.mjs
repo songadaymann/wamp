@@ -88,7 +88,9 @@ const requiredIdsByController = {
     'btn-course-workbench-fit',
     'btn-course-workbench-back-world',
   ],
+  'GlobalLeaderboardPanelController': ['btn-leaderboard-global-week', 'btn-leaderboard-global-all', 'btn-leaderboard-global-refresh'],
   'LeaderboardModalController': [
+    'btn-auth-leaderboard',
     'leaderboard-modal',
     'leaderboard-modal-title',
     'leaderboard-modal-meta',

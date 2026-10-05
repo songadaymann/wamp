@@ -1,3 +1,4 @@
+import { parseGlobalLeaderboardWindow } from './globalLeaderboards';
 import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
@@ -719,6 +720,7 @@ export async function handleGlobalLeaderboard(
   env: Env,
   context?: WorkerExecutionContextLike,
 ): Promise<Response> {
+  const window = parseGlobalLeaderboardWindow(url.searchParams.get('window'));
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read global leaderboards');
@@ -727,13 +729,15 @@ export async function handleGlobalLeaderboard(
     const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
     const leaderboard = await timing.measure(
       'leaderboard',
-      () => buildGlobalLeaderboardResponse(env, limit, auth?.user.id ?? null),
+      () => buildGlobalLeaderboardResponse(env, limit, auth?.user.id ?? null, window),
     );
-    timing.setDiagnostic('cache', authenticated ? 'private-20' : 'public-20');
+    const cache = window === 'week' ? 'private, no-store' : authenticated ? 'private, max-age=20' : 'public, max-age=20';
+    timing.setDiagnostic('cache', window === 'week' ? 'no-store' : authenticated ? 'private-20' : 'public-20');
     return timedJsonResponse(request, leaderboard, timing, {
-      headers: { 'Cache-Control': authenticated ? 'private, max-age=20' : 'public, max-age=20' },
+      headers: { 'Cache-Control': cache },
     });
   };
+  if (window === 'week') return loadResponse();
   return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
 }
 

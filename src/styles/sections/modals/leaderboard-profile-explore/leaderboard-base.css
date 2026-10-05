@@ -95,3 +95,119 @@
   color: var(--text-muted);
   padding: 6px 0;
 }
+
+.leaderboard-global-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.leaderboard-global-controls .bar-btn {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 0;
+}
+
+.leaderboard-global-controls .bar-btn.active {
+  background: #79ccde;
+  color: #18161c;
+  border-color: #18161c;
+}
+
+.leaderboard-row.leaderboard-week-row,
+body[data-device-class='phone'] .leaderboard-row.leaderboard-global-row.leaderboard-week-row {
+  grid-template-columns: 32px minmax(0, 1fr) max-content;
+}
+
+body[data-device-class='phone'] .leaderboard-row.leaderboard-week-row > :nth-child(n + 3) {
+  grid-column: 3;
+}
+
+#leaderboard-global-viewer {
+  line-height: 1.5;
+}
+
+#leaderboard-global-viewer .profile-trigger {
+  min-height: 44px;
+}
+
+#leaderboard-modal #leaderboard-global-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: #fff3db;
+  box-shadow: none;
+}
+
+#leaderboard-modal #leaderboard-global-panel #leaderboard-global-summary,
+#leaderboard-modal #leaderboard-global-panel #leaderboard-global-viewer {
+  padding: 0;
+  border: 0;
+  background: #fff3db;
+  box-shadow: none;
+}
+
+#leaderboard-modal #leaderboard-global-viewer .leaderboard-viewer {
+  color: #2c5071;
+}
+
+#leaderboard-global-panel .leaderboard-global-controls .bar-btn.active {
+  background: #79ccde;
+  color: #18161c;
+}
+
+#leaderboard-global-panel .leaderboard-row.leaderboard-global-row.leaderboard-week-row {
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid #79ccde;
+  background: #fff3db;
+  box-shadow: none;
+}
+
+#leaderboard-modal .leaderboard-week-row .leaderboard-rank {
+  font-size: 12px;
+}
+
+body[data-device-class='phone'] #leaderboard-modal {
+  left: 0;
+  top: 0;
+  right: auto;
+  bottom: auto;
+  width: 100vw;
+  height: 100dvh;
+  padding: 0;
+  align-items: stretch;
+}
+
+body[data-device-class='phone'] #leaderboard-modal .leaderboard-modal-panel {
+  width: 100vw;
+  min-width: 0;
+  max-width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100dvh;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+#leaderboard-modal #leaderboard-global-panel #leaderboard-global-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  gap: 0;
+  padding: 0;
+}
+
+#leaderboard-modal .history-modal-panel button.bar-btn,
+#leaderboard-modal #leaderboard-global-panel .profile-trigger {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  body[data-device-class='phone'] #leaderboard-modal .history-modal-header {
+    flex-direction: row;
+    align-items: center;
+  }
+}

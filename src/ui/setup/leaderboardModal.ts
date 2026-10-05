@@ -1,3 +1,4 @@
+import { GlobalLeaderboardPanelController } from './globalLeaderboardPanel';
 import Phaser from 'phaser';
 import { getAuthDebugState } from '../../auth/client';
 import { dispatchProgressionFeedback } from '../../progression/progressionFeedback';
@@ -6,8 +7,6 @@ import type { ProgressionSummary } from '../../progression/model';
 import {
   ROOM_DIFFICULTIES,
   ROOM_DIFFICULTY_LABELS,
-  type GlobalLeaderboardEntry,
-  type GlobalLeaderboardResponse,
   type RoomRushDifficulty,
   type RoomRushLeaderboardEntry,
   type RoomRushLeaderboardModeKey,
@@ -74,9 +73,6 @@ type LeaderboardModalElements = {
   roomRushSummary: HTMLElement | null;
   roomRushViewer: HTMLElement | null;
   roomRushList: HTMLElement | null;
-  globalSummary: HTMLElement | null;
-  globalViewer: HTMLElement | null;
-  globalList: HTMLElement | null;
 };
 
 export class LeaderboardModalController {
@@ -88,7 +84,7 @@ export class LeaderboardModalController {
   private roomLeaderboard: RoomLeaderboardResponse | null = null;
   private courseLeaderboard: CourseLeaderboardResponse | null = null;
   private roomRushLeaderboards: RoomRushLeaderboardsResponse | null = null;
-  private globalLeaderboard: GlobalLeaderboardResponse | null = null;
+  private readonly globalController: GlobalLeaderboardPanelController;
   private roomContext: OverworldSelectedRoomContext | null = null;
   private loading = false;
   private roomLoading = false;
@@ -98,11 +94,15 @@ export class LeaderboardModalController {
   private roomRushLoading = false;
   private readonly roomRushLoadedModes = new Set<RoomRushLeaderboardModeKey>();
   private readonly roomRushFailedModes = new Set<RoomRushLeaderboardModeKey>();
-  private globalLoading = false;
-  private globalLoaded = false;
   private voteSubmitting = false;
   private selectedRoomRushMode: RoomRushLeaderboardModeKey = 'easy:selected';
   private preferredInitialTab: LeaderboardTab | null = null;
+  private returnFocus: HTMLElement | null = null;
+
+  private readonly handleMenuOpen = () => {
+    this.doc.getElementById('auth-panel')?.classList.remove('menu-open');
+    void this.open('global');
+  };
 
   private readonly handleCloseClick = () => {
     this.close();
@@ -115,11 +115,21 @@ export class LeaderboardModalController {
   };
 
   private readonly handleDocumentKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || this.elements.modal?.classList.contains('hidden')) {
-      return;
+    const modal = this.elements.modal;
+    if (!modal || modal.classList.contains('hidden')) return;
+    const active = this.doc.activeElement;
+    // A profile opened from a leaderboard owns its own keyboard interaction.
+    if (active instanceof HTMLElement && active.closest('.history-modal') && !modal.contains(active)) return;
+    if (event.key === 'Escape') { event.preventDefault(); this.close(); return; }
+    if (event.key !== 'Tab') return;
+    const controls = Array.from(modal.querySelectorAll<HTMLElement>('button:not(:disabled), select:not(:disabled), [tabindex="0"]'))
+      .filter(element => element.getClientRects().length > 0);
+    const first = controls[0], last = controls.at(-1);
+    if (event.shiftKey && (active === first || !modal.contains(active))) {
+      event.preventDefault(); last?.focus();
+    } else if (!event.shiftKey && (active === last || !modal.contains(active))) {
+      event.preventDefault(); first?.focus();
     }
-
-    this.close();
   };
 
   private readonly handleRunRatingSubmitted = (event: Event) => {
@@ -188,13 +198,12 @@ export class LeaderboardModalController {
       roomRushSummary: this.doc.getElementById('leaderboard-room-rush-summary'),
       roomRushViewer: this.doc.getElementById('leaderboard-room-rush-viewer'),
       roomRushList: this.doc.getElementById('leaderboard-room-rush-list'),
-      globalSummary: this.doc.getElementById('leaderboard-global-summary'),
-      globalViewer: this.doc.getElementById('leaderboard-global-viewer'),
-      globalList: this.doc.getElementById('leaderboard-global-list'),
     };
+    this.globalController = new GlobalLeaderboardPanelController(this.runRepository, this.doc);
   }
 
   init(): void {
+    this.doc.getElementById('btn-auth-leaderboard')?.addEventListener('click', this.handleMenuOpen);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
@@ -253,11 +262,13 @@ export class LeaderboardModalController {
   }
 
   destroy(): void {
+    this.doc.getElementById('btn-auth-leaderboard')?.removeEventListener('click', this.handleMenuOpen);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     window.removeEventListener(POST_RUN_RATING_SUBMITTED_EVENT, this.handleRunRatingSubmitted as EventListener);
     this.close();
+    this.globalController.destroy();
   }
 
   async open(initialTab: LeaderboardTab = 'room'): Promise<void> {
@@ -265,9 +276,11 @@ export class LeaderboardModalController {
       return;
     }
 
+    this.returnFocus = this.doc.activeElement instanceof HTMLElement ? this.doc.activeElement : null;
     this.preferredInitialTab = initialTab;
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
+    this.elements.closeButton?.focus();
     this.setError(null);
     this.loading = true;
     this.roomLoading = false;
@@ -275,15 +288,13 @@ export class LeaderboardModalController {
     this.courseLoading = false;
     this.courseLoaded = false;
     this.roomRushLoading = false;
-    this.globalLoading = false;
-    this.globalLoaded = false;
+    this.globalController.close();
     this.voteSubmitting = false;
     this.roomLeaderboard = null;
     this.courseLeaderboard = null;
     this.roomRushLeaderboards = null;
     this.roomRushLoadedModes.clear();
     this.roomRushFailedModes.clear();
-    this.globalLeaderboard = null;
     this.roomVersionOptions = [];
     this.currentPublishedVersion = null;
     this.selectedVersion = null;
@@ -298,9 +309,16 @@ export class LeaderboardModalController {
       return;
     }
 
+    const wasOpen = !this.elements.modal.classList.contains('hidden');
+    this.globalController.close();
     this.elements.modal.classList.add('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'true');
     this.setError(null);
+    if (wasOpen) {
+      const target = this.returnFocus?.isConnected && this.returnFocus.getClientRects().length ? this.returnFocus : this.doc.getElementById('menu-toggle');
+      target?.focus();
+    }
+    this.returnFocus = null;
   }
 
   private async activateTab(nextTab: LeaderboardTab): Promise<void> {
@@ -325,9 +343,7 @@ export class LeaderboardModalController {
         await this.ensureRoomRushModeLoaded(this.selectedRoomRushMode);
         return;
       case 'global':
-        if (!this.globalLoaded && !this.globalLoading) {
-          await this.loadGlobalLeaderboard();
-        }
+        this.globalController.setActive(true);
         return;
     }
   }
@@ -473,24 +489,6 @@ export class LeaderboardModalController {
     };
   }
 
-  private async loadGlobalLeaderboard(): Promise<void> {
-    this.globalLoading = true;
-    this.globalLoaded = false;
-    this.render();
-    try {
-      this.globalLeaderboard = await this.runRepository.loadGlobalLeaderboard(25);
-      this.setError(null);
-    } catch (error) {
-      console.error('Failed to load global leaderboard', error);
-      this.globalLeaderboard = null;
-      this.setError(error instanceof Error ? error.message : 'Failed to load global leaderboard.');
-    } finally {
-      this.globalLoading = false;
-      this.globalLoaded = true;
-      this.render();
-    }
-  }
-
   private async submitRoomDifficultyVote(difficulty: RoomDifficulty): Promise<void> {
     await this.submitRoomRatingUpdate({
       difficultyChoice: difficulty,
@@ -576,6 +574,8 @@ export class LeaderboardModalController {
   }
 
   private render(): void {
+    this.elements.meta?.classList.toggle('hidden', this.activeTab === 'global');
+    this.elements.error?.classList.toggle('hidden', this.activeTab === 'global' || !this.elements.error.textContent);
     const roomAvailable = this.roomContext?.state === 'published';
     const courseAvailable = Boolean(this.roomContext?.courseId);
     this.elements.roomTabButton?.classList.toggle('active', this.activeTab === 'room');
@@ -604,7 +604,7 @@ export class LeaderboardModalController {
     this.renderRoomPanel();
     this.renderCoursePanel();
     this.renderRoomRushPanel();
-    this.renderGlobalPanel();
+    this.globalController.setActive(this.activeTab === 'global' && !this.elements.modal?.classList.contains('hidden'));
   }
 
   private async loadBaselineProgression(userId: string): Promise<ProgressionSummary | null> {
@@ -884,48 +884,6 @@ export class LeaderboardModalController {
     }
   }
 
-  private renderGlobalPanel(): void {
-    if (!this.elements.globalList || !this.elements.globalSummary || !this.elements.globalViewer) {
-      return;
-    }
-
-    const globalPending =
-      this.loading || this.globalLoading || (this.activeTab === 'global' && !this.globalLoaded);
-    this.elements.globalList.replaceChildren();
-    this.elements.globalSummary.textContent = globalPending
-      ? 'Loading global leaderboard...'
-      : 'Points for publishing rooms and finishing challenges.';
-
-    const viewer = this.globalLeaderboard?.viewerEntry ?? null;
-    this.elements.globalViewer.classList.toggle('hidden', globalPending || viewer === null);
-    if (!globalPending && viewer) {
-      this.elements.globalViewer.textContent =
-        `You: #${viewer.rank} · ${viewer.totalPoints} pts · ${viewer.completedRuns} clears · ${viewer.totalRoomsPublished} rooms`;
-    } else {
-      this.elements.globalViewer.textContent = '';
-    }
-
-    if (globalPending) {
-      const loading = this.doc.createElement('div');
-      loading.className = 'leaderboard-empty';
-      loading.textContent = 'Loading global leaderboard...';
-      this.elements.globalList.appendChild(loading);
-      return;
-    }
-
-    if (!this.globalLeaderboard || this.globalLeaderboard.entries.length === 0) {
-      const empty = this.doc.createElement('div');
-      empty.className = 'leaderboard-empty';
-      empty.textContent = 'No global points yet.';
-      this.elements.globalList.appendChild(empty);
-      return;
-    }
-
-    for (const entry of this.globalLeaderboard.entries) {
-      this.elements.globalList.appendChild(this.renderGlobalEntry(entry));
-    }
-  }
-
   private renderRoomEntry(entry: RoomLeaderboardEntry, rankingMode: RoomLeaderboardResponse['rankingMode']): HTMLElement {
     const row = this.doc.createElement('div');
     row.className = 'history-version-row leaderboard-row';
@@ -944,26 +902,6 @@ export class LeaderboardModalController {
     row.appendChild(this.createCell('leaderboard-primary', this.formatRoomMetric(entry, rankingMode)));
     row.appendChild(this.createCell('leaderboard-secondary', `${entry.deaths} deaths`));
     row.appendChild(this.createCell('leaderboard-secondary', this.formatShortDate(entry.finishedAt)));
-    return row;
-  }
-
-  private renderGlobalEntry(entry: GlobalLeaderboardEntry): HTMLElement {
-    const row = this.doc.createElement('div');
-    row.className = 'history-version-row leaderboard-row leaderboard-global-row';
-
-    row.appendChild(this.createCell('leaderboard-rank', `#${entry.rank}`));
-    row.appendChild(
-      createProfileTriggerElement(
-        this.doc,
-        entry.userId,
-        entry.userDisplayName,
-        'leaderboard-primary',
-        'div'
-      )
-    );
-    row.appendChild(this.createCell('leaderboard-primary', `${entry.totalPoints} pts`));
-    row.appendChild(this.createCell('leaderboard-secondary', `${entry.completedRuns} clears`));
-    row.appendChild(this.createCell('leaderboard-secondary', `${entry.totalRoomsPublished} rooms`));
     return row;
   }
 
@@ -1253,6 +1191,6 @@ export class LeaderboardModalController {
     }
 
     this.elements.error.textContent = message;
-    this.elements.error.classList.remove('hidden');
+    this.elements.error.classList.toggle('hidden', this.activeTab === 'global');
   }
 }

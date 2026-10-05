@@ -2,16 +2,13 @@ import type { RoomGoal } from '../../../goals/roomGoals';
 import type { RoomRecord, RoomSnapshot } from '../../../persistence/roomModel';
 import { getLeaderboardRankingMode } from '../../../runs/scoring';
 import type {
-  GlobalLeaderboardEntry,
-  GlobalLeaderboardResponse,
   RoomLeaderboardEntry,
   RoomLeaderboardResponse,
 } from '../../../runs/model';
 import { buildRoomLeaderboardVersionSelectionState } from '../../../runs/roomLeaderboardVersions';
 import { HttpError } from '../core/http';
-import type { Env, UserStatsRow } from '../core/types';
+import type { Env } from '../core/types';
 import {
-  sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix,
   sqlUserIdIsNotLegacyGeneratedOnly,
 } from '../generatedUsers/leaderboardIsolation';
 import { loadRoomAggregateRatingSummaryForVersion } from '../progression/store';
@@ -31,10 +28,6 @@ interface RankedRoomLeaderboardRow {
   overall_rank: number | string | null;
 }
 
-export interface RankedGlobalLeaderboardRow extends UserStatsRow {
-  overall_rank: number | string | null;
-}
-
 function getRoomLeaderboardSqlOrderClause(goal: RoomGoal): string {
   if (goal.type === 'npc_quest' && goal.questType === 'protect') {
     return 'elapsed_ms DESC, deaths ASC, finished_at ASC, attempt_id ASC';
@@ -42,10 +35,6 @@ function getRoomLeaderboardSqlOrderClause(goal: RoomGoal): string {
   return getLeaderboardRankingMode(goal) === 'time'
     ? 'elapsed_ms ASC, deaths ASC, score DESC, finished_at ASC, attempt_id ASC'
     : 'score DESC, deaths ASC, elapsed_ms ASC, finished_at ASC, attempt_id ASC';
-}
-
-function getGlobalLeaderboardSqlOrderClause(): string {
-  return 'total_points DESC, completed_runs DESC, total_rooms_published DESC, user_display_name ASC, user_id ASC';
 }
 
 function buildRankedRoomLeaderboardCte(goal: RoomGoal): string {
@@ -205,160 +194,6 @@ function mapRankedRoomLeaderboardEntry(
   };
 }
 
-async function loadRankedGlobalLeaderboardRows(
-  env: Env,
-  limit: number
-): Promise<RankedGlobalLeaderboardRow[]> {
-  if (limit <= 0) {
-    return [];
-  }
-
-  const orderClause = getGlobalLeaderboardSqlOrderClause();
-  const result = await env.DB.prepare(
-    `
-      WITH ranked_stats AS (
-        SELECT
-          user_id,
-          user_display_name,
-          total_points,
-          total_score,
-          total_deaths,
-          total_collectibles,
-          total_enemies_defeated,
-          total_checkpoints,
-          total_rooms_published,
-          completed_runs,
-          failed_runs,
-          abandoned_runs,
-          pvp_wins,
-          pvp_losses,
-          pvp_draws,
-          best_score,
-          fastest_clear_ms,
-          updated_at,
-          ROW_NUMBER() OVER (
-            ORDER BY ${orderClause}
-          ) AS overall_rank
-        FROM user_stats
-        WHERE ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
-          AND ${sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix('user_stats.user_id')}
-      )
-      SELECT
-        user_id,
-        user_display_name,
-        total_points,
-        total_score,
-        total_deaths,
-        total_collectibles,
-        total_enemies_defeated,
-        total_checkpoints,
-        total_rooms_published,
-        completed_runs,
-        failed_runs,
-        abandoned_runs,
-        pvp_wins,
-        pvp_losses,
-        pvp_draws,
-        best_score,
-        fastest_clear_ms,
-        updated_at,
-        overall_rank
-      FROM ranked_stats
-      ORDER BY overall_rank
-      LIMIT ?
-    `
-  )
-    .bind(limit)
-    .all<RankedGlobalLeaderboardRow>();
-
-  return result.results;
-}
-
-export async function loadViewerRankedGlobalLeaderboardRow(
-  env: Env,
-  viewerUserId: string
-): Promise<RankedGlobalLeaderboardRow | null> {
-  const orderClause = getGlobalLeaderboardSqlOrderClause();
-  const row = await env.DB.prepare(
-    `
-      WITH ranked_stats AS (
-        SELECT
-          user_id,
-          user_display_name,
-          total_points,
-          total_score,
-          total_deaths,
-          total_collectibles,
-          total_enemies_defeated,
-          total_checkpoints,
-          total_rooms_published,
-          completed_runs,
-          failed_runs,
-          abandoned_runs,
-          pvp_wins,
-          pvp_losses,
-          pvp_draws,
-          best_score,
-          fastest_clear_ms,
-          updated_at,
-          ROW_NUMBER() OVER (
-            ORDER BY ${orderClause}
-          ) AS overall_rank
-        FROM user_stats
-        WHERE ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
-          AND ${sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix('user_stats.user_id')}
-      )
-      SELECT
-        user_id,
-        user_display_name,
-        total_points,
-        total_score,
-        total_deaths,
-        total_collectibles,
-        total_enemies_defeated,
-        total_checkpoints,
-        total_rooms_published,
-        completed_runs,
-        failed_runs,
-        abandoned_runs,
-        pvp_wins,
-        pvp_losses,
-        pvp_draws,
-        best_score,
-        fastest_clear_ms,
-        updated_at,
-        overall_rank
-      FROM ranked_stats
-      WHERE user_id = ?
-      LIMIT 1
-    `
-  )
-    .bind(viewerUserId)
-    .first<RankedGlobalLeaderboardRow>();
-
-  return row ?? null;
-}
-
-function mapRankedGlobalLeaderboardEntry(row: RankedGlobalLeaderboardRow): GlobalLeaderboardEntry {
-  return {
-    rank: Number(row.overall_rank),
-    userId: row.user_id,
-    userDisplayName: row.user_display_name,
-    totalPoints: row.total_points,
-    totalScore: row.total_score,
-    totalRoomsPublished: row.total_rooms_published,
-    completedRuns: row.completed_runs,
-    failedRuns: row.failed_runs,
-    abandonedRuns: row.abandoned_runs,
-    pvpWins: Number(row.pvp_wins ?? 0),
-    pvpLosses: Number(row.pvp_losses ?? 0),
-    pvpDraws: Number(row.pvp_draws ?? 0),
-    bestScore: row.best_score,
-    fastestClearMs: row.fastest_clear_ms,
-    updatedAt: row.updated_at,
-  };
-}
-
 export async function buildRoomLeaderboardResponse(
   env: Env,
   record: RoomRecord,
@@ -429,25 +264,4 @@ export async function buildRoomLeaderboardResponse(
   };
 }
 
-export async function buildGlobalLeaderboardResponse(
-  env: Env,
-  limit: number,
-  viewerUserId: string | null = null
-): Promise<GlobalLeaderboardResponse> {
-  const entries = (await loadRankedGlobalLeaderboardRows(env, limit)).map(
-    mapRankedGlobalLeaderboardEntry
-  );
-  let viewerEntry: GlobalLeaderboardEntry | null = null;
-  if (viewerUserId !== null) {
-    viewerEntry = entries.find((entry) => entry.userId === viewerUserId) ?? null;
-    if (viewerEntry === null) {
-      const viewerRow = await loadViewerRankedGlobalLeaderboardRow(env, viewerUserId);
-      viewerEntry = viewerRow ? mapRankedGlobalLeaderboardEntry(viewerRow) : null;
-    }
-  }
-
-  return {
-    entries,
-    viewerEntry,
-  };
-}
+export { buildGlobalLeaderboardResponse, loadViewerRankedGlobalLeaderboardRow } from './globalLeaderboards';

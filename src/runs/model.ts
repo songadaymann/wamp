@@ -241,7 +241,16 @@ export interface BuilderDiscoveryResponse {
 export type RoomProgressRatingRequestBody = RoomRatingRequestBody;
 export type RoomProgressRatingResponse = RoomRatingResponse;
 
+export type GlobalLeaderboardWindow = 'all' | 'week';
+
+export interface GlobalLeaderboardPeriod {
+  startsAt: string;
+  endsAt: string;
+}
+
 export interface GlobalLeaderboardEntry {
+  /** Selected-window points; totalPoints and the other stats remain lifetime values. */
+  pointsInWindow?: number;
   rank: number;
   userId: string;
   userDisplayName: string;
@@ -260,6 +269,10 @@ export interface GlobalLeaderboardEntry {
 }
 
 export interface GlobalLeaderboardResponse {
+  window?: GlobalLeaderboardWindow;
+  period?: GlobalLeaderboardPeriod | null;
+  serverTime?: string;
+  viewerNext?: { userId: string; userDisplayName: string; pointsToPass: number } | null;
   entries: GlobalLeaderboardEntry[];
   viewerEntry: GlobalLeaderboardEntry | null;
 }
