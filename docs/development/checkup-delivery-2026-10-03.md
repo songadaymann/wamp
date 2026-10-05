@@ -1,5 +1,9 @@
 # WAMP checkup delivery: F014, F032, F027, then F057
 
+## 2026-10-05 — F137 returning-draft reminder timing and pause, in progress
+
+Audit confirms F122 already guards timer/session presentation behind app readiness, focused visible Browse and other modals. Reproduce the remaining autosave-stamp repeat; extend the existing recovery controller with a three-day guest/account pause on intentional dismiss or successful resume. Keep the manual Guest Drafts menu, safe draft data/transfer retries, and new explicit sign-in continuation. Source quality passes 318 files / 2,476 tests and all required checks; the final four-layout native recovery report has zero unexpected errors and 20 successful draft saves. Chosen Sign In uses the same stopped click as the other guest dialogs; pending anonymous sign-in cannot reopen recovery during the pause. Unchanged official-client source gameplay passes against the real API. Final native tests settle room/draft reads before navigation; earlier failed reports remain diagnostics. Existing F098 camera framing and physical-device acceptance remain separate. Production/live acceptance is pending. Master stays 40/214; next after acceptance is F131.
+
 Requested work: implement the Android download, API preflight cache, and publisher-index fixes with independent agents, then protect expanded-room edits against tab loss. Base: `008de53c` from freshly fetched `origin/main`. The dirty primary checkout is preserved.
 
 ## Plan

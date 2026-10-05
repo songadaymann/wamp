@@ -12,6 +12,9 @@ import { requestProfileInvalidation } from './profileEvents';
 
 export const PENDING_SIGN_IN_DRAFT_KEY = 'ep_guest_room_recovery_pending_signin_draft_v1';
 export const GUEST_DRAFT_SEEN_PREFIX = 'wamp_guest_draft_seen_v1:';
+export const GUEST_DRAFT_SNOOZE_PREFIX = 'wamp_guest_draft_snooze_until_v1:';
+const PENDING_SIGN_IN_TIME_KEY = `${PENDING_SIGN_IN_DRAFT_KEY}:requested_at`;
+const RECOVERY_SNOOZE_MS = 3 * 24 * 60 * 60 * 1000;
 interface Options {
   service?: Pick<GuestDraftRecoveryService, 'sync' | 'transfer'>;
   account?: () => string | null;
@@ -33,12 +36,14 @@ export class GuestRoomRecoveryModalController {
   private readonly menu;
   private readonly selector;
   private readonly seen = new Set<string>();
+  private readonly snoozed = new Map<string, number>();
   private readonly invalidated = new Set<string>();
   private items: GuestDraftRecoveryItem[] = [];
   private itemsAccount: string | null = null;
   private active: GuestDraftRecoveryItem | null = null;
   private visibleAccount: string | null = null;
   private pendingId: string | null = null;
+  private pendingRequestedAt = 0;
   private syncing = false;
   private rerun = false;
   private loading = false;
@@ -56,7 +61,7 @@ export class GuestRoomRecoveryModalController {
     this.signInButton = doc.getElementById('btn-guest-room-recovery-signin'); this.submitButton = doc.getElementById('btn-guest-room-recovery-submit');
     this.goButton = doc.getElementById('btn-guest-room-recovery-go'); this.closeButton = doc.getElementById('btn-guest-room-recovery-close');
     this.menu = doc.getElementById('btn-auth-guest-drafts'); this.selector = doc.getElementById('guest-room-recovery-drafts') as HTMLSelectElement | null;
-    this.lifecycle = createModalLifecycle({ doc, modal: this.modal, onClose: () => this.close() });
+    this.lifecycle = createModalLifecycle({ doc, modal: this.modal, onClose: () => this.dismiss() });
   }
 
   init(): void {
@@ -89,7 +94,12 @@ export class GuestRoomRecoveryModalController {
     this.generation++; this.lifecycle.hide(); this.visibleAccount = null;
   }
 
-  private readonly onClose = () => this.close();
+  private dismiss(): void {
+    if (this.lifecycle.isOpen() && this.active) this.snooze();
+    this.close();
+  }
+
+  private readonly onClose = () => this.dismiss();
   private readonly onGameDestroy = () => this.destroy();
   private readonly onSelection = () => {
     this.active = this.items.find(item => item.draft.id === this.selector?.value) ?? this.active;
@@ -108,18 +118,26 @@ export class GuestRoomRecoveryModalController {
   private readonly onVisibility = () => { if (this.doc.visibilityState === 'visible') this.onWake(); };
   private readonly onStorage = (event: Event) => {
     const key = (event as StorageEvent).key;
-    if (key === null || key === 'ep_guest_recovery_token_v1' || key === 'ep_presence_guest_identity_v1' || key?.startsWith(GUEST_DRAFT_SEEN_PREFIX)) this.scheduleSync(200);
+    if (key === null) this.snoozed.clear();
+    else if (key?.startsWith(GUEST_DRAFT_SNOOZE_PREFIX)) this.snoozed.delete(key);
+    if (key === null || key === 'ep_guest_recovery_token_v1' || key === 'ep_presence_guest_identity_v1'
+      || key?.startsWith(GUEST_DRAFT_SEEN_PREFIX) || key?.startsWith(GUEST_DRAFT_SNOOZE_PREFIX)) this.scheduleSync(200);
   };
   private readonly onMenu = () => {
     this.doc.getElementById('auth-panel')?.classList.remove('menu-open');
     if (!this.canPresent()) return;
     this.open(this.items[0] ?? null); this.scheduleSync(0);
   };
-  private readonly onSignIn = () => {
+  private readonly onSignIn = (event: Event) => {
     if (this.loading || !this.active) return;
+    event.stopPropagation();
     if (this.account()) { void this.transfer(); return; }
     this.pendingId = this.active.draft.id;
-    try { this.win.sessionStorage.setItem(PENDING_SIGN_IN_DRAFT_KEY, this.pendingId); } catch { /* Keep same-tab intent in memory. */ }
+    this.pendingRequestedAt = Date.now();
+    try {
+      this.win.sessionStorage.setItem(PENDING_SIGN_IN_DRAFT_KEY, this.pendingId);
+      this.win.sessionStorage.setItem(PENDING_SIGN_IN_TIME_KEY, String(this.pendingRequestedAt));
+    } catch { /* Keep same-tab intent in memory. */ }
     this.close(); promptForSignIn('Sign in to save this guest draft to your account.');
   };
   private readonly onGo = () => { void this.resume(); };
@@ -181,9 +199,16 @@ export class GuestRoomRecoveryModalController {
   private tryPresent(): void {
     if (this.destroyed || this.lifecycle.isOpen() || this.loading || this.itemsAccount !== this.account()) return;
     if (this.presentTimer !== null) { this.win.clearTimeout(this.presentTimer); this.presentTimer = null; }
-    try { this.pendingId ??= this.win.sessionStorage.getItem(PENDING_SIGN_IN_DRAFT_KEY); } catch { /* Memory intent still works. */ }
-    const item = this.items.find(value => value.draft.id === this.pendingId)
-      ?? this.items.find(value => !this.wasSeen(value));
+    try {
+      this.pendingId ??= this.win.sessionStorage.getItem(PENDING_SIGN_IN_DRAFT_KEY);
+      const requestedAt = Number(this.win.sessionStorage.getItem(PENDING_SIGN_IN_TIME_KEY));
+      if (!this.pendingRequestedAt && Number.isFinite(requestedAt) && requestedAt > 0 && requestedAt <= Date.now()) this.pendingRequestedAt = requestedAt;
+    } catch { /* Memory intent still works. */ }
+    const pending = this.account() ? this.items.find(value => value.draft.id === this.pendingId) : undefined;
+    const until = this.snoozeUntil();
+    // A new explicit sign-in choice may continue; an older intent cannot undo a later Close.
+    if (until > Date.now() && (!pending || this.pendingRequestedAt <= until - RECOVERY_SNOOZE_MS)) return;
+    const item = pending ?? this.items.find(value => !this.wasSeen(value));
     if (!item) return;
     if (!this.canPresent()) { this.presentTimer = this.win.setTimeout(() => { this.presentTimer = null; this.tryPresent(); }, 300); return; }
     this.active = item;
@@ -265,9 +290,13 @@ export class GuestRoomRecoveryModalController {
       if (this.destroyed || this.account() !== userId) return;
       if (opened === false) { this.status('The editor could not open. Your draft is still saved. Try again.', true); return; }
       if (this.pendingId === item.draft.id) {
-        this.pendingId = null; try { this.win.sessionStorage.removeItem(PENDING_SIGN_IN_DRAFT_KEY); } catch { /* Memory intent is cleared. */ }
+        this.pendingId = null; this.pendingRequestedAt = 0;
+        try {
+          this.win.sessionStorage.removeItem(PENDING_SIGN_IN_DRAFT_KEY);
+          this.win.sessionStorage.removeItem(PENDING_SIGN_IN_TIME_KEY);
+        } catch { /* Memory intent is cleared. */ }
       }
-      this.markSeen(item); this.close();
+      this.snooze(); this.markSeen(item); this.close();
     } catch { this.status('The editor could not open. Your draft is still saved. Try again.', true); }
     finally { this.setLoading(false); }
   }
@@ -282,6 +311,19 @@ export class GuestRoomRecoveryModalController {
   private markSeen(item: GuestDraftRecoveryItem): void {
     const key = this.key(item); const stamp = this.stamp(item); this.seen.add(`${key}:${stamp}`);
     try { this.win.localStorage.setItem(key, stamp); } catch { /* Do not prevent recovery when storage is blocked. */ }
+  }
+  private snoozeKey(): string { return `${GUEST_DRAFT_SNOOZE_PREFIX}${this.account() ?? 'guest'}`; }
+  private snooze(): void {
+    const key = this.snoozeKey(); const until = Date.now() + RECOVERY_SNOOZE_MS; this.snoozed.set(key, until);
+    try { this.win.localStorage.setItem(key, String(until)); } catch { /* Keep the pause for this page when storage is blocked. */ }
+  }
+  private snoozeUntil(): number {
+    const key = this.snoozeKey(); let until = this.snoozed.get(key) ?? 0;
+    try {
+      const saved = Number(this.win.localStorage.getItem(key));
+      if (Number.isFinite(saved) && saved > 0 && saved <= Date.now() + RECOVERY_SNOOZE_MS) until = Math.max(until, saved);
+    } catch { /* The in-memory pause still works. */ }
+    return until;
   }
   private setLoading(value: boolean): void {
     this.loading = value;
