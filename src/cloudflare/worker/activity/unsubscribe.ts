@@ -3,7 +3,7 @@ import type { D1DatabaseSession } from '../core/types';
 import { unsubscribeActivityEmail, type PreferenceRow } from './store';
 import { escapeEmailHtml } from '../email/delivery';
 
-type Scope = 'digest' | 'dethroned';
+type Scope = 'digest' | 'dethroned' | 'daily';
 interface Claims { userId: string; scope: Scope; expiresAt: number }
 const bytes = (value: string) => new TextEncoder().encode(value);
 function encode(value: Uint8Array): string { return btoa(String.fromCharCode(...value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
@@ -23,12 +23,12 @@ export async function handleActivityUnsubscribe(request: Request, url: URL, db: 
     const parts = token.split('.');
     if (parts.length !== 2) throw new Error('Invalid token');
     claims = JSON.parse(new TextDecoder().decode(decode(parts[0]))) as Claims;
-    if (typeof claims.userId !== 'string' || !['digest', 'dethroned'].includes(claims.scope)
+    if (typeof claims.userId !== 'string' || !['digest', 'dethroned','daily'].includes(claims.scope)
       || !Number.isSafeInteger(claims.expiresAt) || claims.expiresAt <= now) throw new Error('Expired token');
     prefs = await db.prepare('SELECT * FROM builder_activity_preferences WHERE user_id = ?').bind(claims.userId).first<PreferenceRow>();
     if (!prefs || !await crypto.subtle.verify('HMAC', await key(prefs.unsubscribe_secret), decode(parts[1]), bytes(parts[0]))) throw new Error('Invalid signature');
   } catch { throw new HttpError(400, 'This unsubscribe link is invalid or expired. Change your preferences in Activity.'); }
-  const label = claims.scope === 'digest' ? 'weekly activity emails' : 'lost #1 emails';
+  const label = claims.scope === 'digest' ? 'weekly activity emails' : claims.scope === 'daily' ? 'Room of the Day emails' : 'lost #1 emails';
   if (request.method === 'POST') {
     await unsubscribeActivityEmail(db, claims.userId, claims.scope, new Date(now).toISOString());
   }

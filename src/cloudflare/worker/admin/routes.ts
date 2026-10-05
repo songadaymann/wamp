@@ -40,6 +40,7 @@ import { handleAdminSchoolRequest } from '../school/routes';
 import { handleAdminWorldTileRequest } from '../worldTiles/routes';
 import { handleAdminCustomSpriteRequest } from '../customSprites/adminRoutes';
 import { handleAdminWorldsRequest } from '../worlds/adminRoutes';
+import { handleAdminDaily } from '../daily/routes';
 
 export async function handleAdminRequest(
   request: Request,
@@ -47,6 +48,9 @@ export async function handleAdminRequest(
   env: Env,
   context?: WorkerExecutionContextLike,
 ): Promise<Response> {
+  if (url.pathname === '/api/admin/daily' && ['GET','PUT'].includes(request.method)) {
+    return handleAdminDaily(request,env);
+  }
   if (url.pathname.startsWith('/api/admin/worlds')) {
     return handleAdminWorldsRequest(request, url, env);
   }

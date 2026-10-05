@@ -295,7 +295,7 @@ export class MobileUiController {
       target.closest(
         // CSS disables browser double-tap zoom on the canvas and native controls.
         // Preventing touchend strands Phaser gestures and swallows button clicks.
-        '#game-container > canvas, button, [data-editor-history], .object-item, input, textarea, select, option, label, [contenteditable=""], [contenteditable="true"]'
+        '#game-container > canvas, button, a[href], [data-editor-history], .object-item, input, textarea, select, option, label, [contenteditable=""], [contenteditable="true"]'
       )
     );
   }

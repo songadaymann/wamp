@@ -5,6 +5,7 @@ import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboard
 export interface PreferenceRow {
   user_id: string; seen_id: number; weekly_digest: number; dethrone_alerts: number;
   digest_enabled_at: string | null; dethrone_enabled_at: string | null; unsubscribe_secret: string;
+  daily_features?: number; daily_enabled_at?: string | null;
 }
 interface ActivityRow {
   id: number; kind: BuilderActivity['kind']; actor_name: string; content_title: string | null;
@@ -54,7 +55,7 @@ export async function loadActivityPreferences(db: D1DatabaseSession, userId: str
   return row;
 }
 export function publicPreferences(row: PreferenceRow, emailAvailable: boolean): ActivityPreferences {
-  return { weeklyDigest: row.weekly_digest === 1, dethroneAlerts: row.dethrone_alerts === 1, emailAvailable };
+  return { weeklyDigest: row.weekly_digest === 1, dethroneAlerts: row.dethrone_alerts === 1, dailyFeatures: row.daily_features === 1, emailAvailable };
 }
 export async function loadActivity(db: D1DatabaseSession, userId: string, emailAvailable: boolean, before?: number): Promise<ActivityResponse> {
   const prefs = await loadActivityPreferences(db, userId);
@@ -74,7 +75,7 @@ export async function markActivitySeen(db: D1DatabaseSession, userId: string, id
     WHERE user_id = ? AND (? = 0 OR EXISTS (SELECT 1 FROM builder_activity WHERE recipient_user_id = ? AND id = ?))`)
     .bind(id, new Date().toISOString(), userId, id, userId, id).all();
 }
-export async function saveActivityPreferences(db: D1DatabaseSession, userId: string, prefs: Pick<ActivityPreferences, 'weeklyDigest' | 'dethroneAlerts'>, now: string): Promise<void> {
+export async function saveActivityPreferences(db: D1DatabaseSession, userId: string, prefs: Pick<ActivityPreferences, 'weeklyDigest' | 'dethroneAlerts' | 'dailyFeatures'>, now: string): Promise<void> {
   await loadActivityPreferences(db, userId);
   await db.batch([
     db.prepare(`UPDATE builder_activity_preferences SET
@@ -88,10 +89,14 @@ export async function saveActivityPreferences(db: D1DatabaseSession, userId: str
       AND (kind = 'digest' AND ? = 0 OR kind = 'dethroned' AND ? = 0)`)
       .bind(now, userId, +prefs.weeklyDigest, +prefs.dethroneAlerts),
   ]);
+  if (prefs.dailyFeatures !== undefined) await db.prepare(`UPDATE builder_activity_preferences SET
+    daily_enabled_at = CASE WHEN ? = 1 AND daily_features = 0 THEN ? WHEN ? = 0 THEN NULL ELSE daily_enabled_at END,
+    daily_features = ?, updated_at = ? WHERE user_id = ?`)
+    .bind(+prefs.dailyFeatures,now,+prefs.dailyFeatures,+prefs.dailyFeatures,now,userId).all();
 }
-export async function unsubscribeActivityEmail(db: D1DatabaseSession, userId: string, kind: 'digest' | 'dethroned', now: string): Promise<void> {
-  const flag = kind === 'digest' ? 'weekly_digest' : 'dethrone_alerts';
-  const enabledAt = kind === 'digest' ? 'digest_enabled_at' : 'dethrone_enabled_at';
+export async function unsubscribeActivityEmail(db: D1DatabaseSession, userId: string, kind: 'digest' | 'dethroned' | 'daily', now: string): Promise<void> {
+  const flag = kind === 'digest' ? 'weekly_digest' : kind === 'daily' ? 'daily_features' : 'dethrone_alerts';
+  const enabledAt = kind === 'digest' ? 'digest_enabled_at' : kind === 'daily' ? 'daily_enabled_at' : 'dethrone_enabled_at';
   // Change only the signed scope. A concurrent opt-out for the other email must survive.
   await db.batch([
     db.prepare(`UPDATE builder_activity_preferences SET ${flag} = 0, ${enabledAt} = NULL, updated_at = ? WHERE user_id = ?`).bind(now, userId),

@@ -1238,6 +1238,7 @@
           <a href="#comment-review"><span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Comments</span></a>
           <a href="#builders"><span class="nav-icon" aria-hidden="true">▲</span><span class="nav-label">Builders</span></a>
           <a href="#game-jams"><span class="nav-icon" aria-hidden="true">★</span><span class="nav-label">Game Jams</span></a>
+          <a href="#daily-challenge"><span class="nav-icon" aria-hidden="true">☀</span><span class="nav-label">Room of the Day</span></a>
           <a href="#infrastructure"><span class="nav-icon" aria-hidden="true">⌁</span><span class="nav-label">Infrastructure</span></a>
           <div class="nav-rule"></div>
           <a href="/suspicious-admin.html"><span class="nav-icon" aria-hidden="true">!</span><span class="nav-label">Suspicious Runs</span></a>
@@ -1245,6 +1246,18 @@
         </nav>
 
         <div class="admin-content">
+          <section id="daily-challenge" class="admin-section">
+            <header class="section-heading"><h2>Room of the Day</h2></header>
+            <div class="panel stack">
+              <p id="daily-admin-status" role="status">Use your admin key to view today’s pick.</p>
+              <form id="daily-admin-form" class="auth-actions">
+                <label class="field"><span class="label">Room coordinates</span><input id="daily-admin-coordinates" placeholder="x,y" maxlength="40" /></label>
+                <button id="daily-admin-choose" type="submit" disabled>Choose for Today</button>
+              </form>
+              <p class="meta">Choose a published goal level with a verified clear. Today’s pick locks when a run starts or its builder is notified. Resets at midnight UTC.</p>
+              <a href="/today" target="_blank" rel="noopener">Open today’s challenge</a>
+            </div>
+          </section>
           <section id="overview" class="admin-section">
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">◎</span>

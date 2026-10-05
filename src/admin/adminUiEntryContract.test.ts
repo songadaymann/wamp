@@ -104,6 +104,7 @@ describe('admin UI executable entry contract', () => {
       '#comment-review',
       '#builders',
       '#game-jams',
+      '#daily-challenge',
       '#infrastructure',
     ]);
 

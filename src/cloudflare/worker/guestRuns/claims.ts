@@ -6,6 +6,7 @@ import { refreshProgressLevels } from '../progression/laneEvents';
 import { LANE_BASE_XP } from '../progression/shared';
 import { GUEST_RUN_RETENTION_MS } from './attempts';
 import type { GuestRunIdentity } from './identity';
+import { DAILY_CLEAR_PXP } from '../../../daily/model';
 
 interface ClaimRow {
   id: string; guest_user_id: string; recovery_token_hash: string; user_id: string;
@@ -58,6 +59,16 @@ export async function claimGuestRuns(env: Env, identity: GuestRunIdentity, userI
         ORDER BY finished_at, attempt_id`)
         .bind(claimId, userId, userId, LANE_BASE_XP.roomClear, LANE_BASE_XP.courseClear, claimId,
           claimId, userId, ...fresh, userId, userId),
+      env.DB.prepare(`INSERT OR IGNORE INTO pxp_events
+        (id,user_id,event_type,source_type,source_id,dedupe_key,amount,breakdown_json,created_at)
+        SELECT 'guest-claim:' || ? || ':daily:' || d.date, ?, 'daily_clear', 'daily_room', d.date,
+          'pxp:daily_clear:' || ? || ':' || d.date, ?, json_object('guestClaimId', ?), MIN(guest.finished_at)
+        FROM guest_run_attempts guest JOIN daily_rooms d ON d.date = substr(guest.finished_at,1,10)
+          AND guest.content_version = d.version AND (guest.content_type = d.target_type AND guest.content_id = d.content_id
+            OR d.target_type = 'expanded_room' AND guest.content_type = 'course' AND guest.content_id = d.legacy_course_id)
+        WHERE guest.claim_id = ? AND guest.claimed_user_id = ? AND ${FRESH_CLAIM}
+        GROUP BY d.date ORDER BY d.date`)
+        .bind(claimId,userId,userId,DAILY_CLEAR_PXP,claimId,claimId,userId,...fresh),
       env.DB.prepare(`UPDATE guest_run_claims SET clear_count = (SELECT COUNT(*) FROM guest_run_attempts WHERE claim_id = ? AND claimed_user_id = ?),
         pxp_awarded = (SELECT COALESCE(SUM(amount), 0) FROM pxp_events WHERE id LIKE ? AND user_id = ?)
         WHERE id = ? AND ${FRESH_CLAIM}`)

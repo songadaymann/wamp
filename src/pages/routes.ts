@@ -2,6 +2,7 @@ import type { PagesWorkerHandler } from './model';
 import { handleRoomImageRequest } from './roomImageRenderer';
 import { handleSharePageRequest, parseRoomImageCoordinates } from './shareRoutes';
 import { handleStaticAssetRequest } from './staticAssets';
+import { handleToday } from './dailyRoute';
 
 const MAP_SCREENSHOT_ORIGIN =
   'https://everybodys-platformer-map-screenshots.novox-robot.workers.dev';
@@ -42,6 +43,7 @@ export function createPagesWorker(): PagesWorkerHandler {
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
+      if (url.pathname === '/today' || url.pathname === '/today/') return handleToday(request,env,url);
       if (isCapturePath(url.pathname)) {
         return proxyMapScreenshotGallery(request, url);
       }

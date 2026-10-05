@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { createDailyRepository } from '../daily/repository';
+import { dailyEntryReady } from '../daily/entry';
 import { playSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
 import { globalRoomMusicController } from '../music/controller';
@@ -2248,9 +2250,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       .refreshAround(this.windowCenterCoordinates, {
         forceChunkReload: data?.forceRefreshAround ?? false,
       })
-      .then((refreshed) => {
-        this.maybeAutoPlayDeepLinkedRoomOnBoot(refreshed);
-      });
+      .then((refreshed) => this.maybeAutoPlayDeepLinkedRoomOnBoot(refreshed));
     this.runtimeContext.setLifecycle('active');
     this.performanceAdvisorSceneActive = true;
     this.syncPerformanceAdvisorEligibility(performance.now());
@@ -3165,7 +3165,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     );
   }
 
-  private maybeAutoPlayDeepLinkedRoomOnBoot(refreshed: boolean): void {
+  private async maybeAutoPlayDeepLinkedRoomOnBoot(refreshed: boolean): Promise<void> {
     if (!this.shouldAutoPlayDeepLinkedRoomOnBoot) {
       return;
     }
@@ -3180,6 +3180,26 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
+    const dailyDate = new URLSearchParams(window.location.search).get('daily');
+    if (dailyDate) {
+      const coordinates = { ...this.selectedCoordinates };
+      try {
+        const ready = await dailyEntryReady(createDailyRepository(),dailyDate,coordinates,
+          this.getRoomSnapshotForCoordinates(coordinates)?.version ?? null);
+        if (this.mode !== 'browse' || coordinates.x !== this.selectedCoordinates.x || coordinates.y !== this.selectedCoordinates.y) return;
+        if (!ready) {
+          this.showTransientStatus('Today’s challenge changed. Open Room of the Day to choose the current level.');
+          window.dispatchEvent(new Event('daily-room-open-request'));
+          return;
+        }
+      } catch {
+        if (this.mode === 'browse') {
+          this.showTransientStatus('Today’s challenge could not load. Open Room of the Day to retry.');
+          window.dispatchEvent(new Event('daily-room-open-request'));
+        }
+        return;
+      }
+    }
     this.flowController.playSelectedRoom();
   }
 

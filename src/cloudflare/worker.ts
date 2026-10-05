@@ -1,4 +1,7 @@
 import { handleRoomInsights } from './worker/insights/routes';
+import { handleDaily } from './worker/daily/routes';
+import { ensureDailyPick } from './worker/daily/store';
+import { sendDailyFeatureEmail } from './worker/daily/emails';
 import { handleMyActivity } from './worker/activity/routes';
 import { handleActivityUnsubscribe } from './worker/activity/unsubscribe';
 import { runActivityEmails } from './worker/activity/emails';
@@ -136,6 +139,8 @@ type WorkerExecutionContext = {
 };
 
 const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[] = [
+  { methods: ['GET'], pattern: '/api/daily', auth: 'optional',
+    handler: ({ request, env }) => handleDaily(request,env) },
   {
     methods: ['GET'], pattern: /^\/api\/(rooms|expanded-rooms|courses)\/([^/]+)\/stats$/, auth: 'public',
     handler: ({ request, url, env }, match) => handleRoomInsights(request, url, env,
@@ -305,6 +310,10 @@ export default {
     }
     const activity = await runActivityEmails(env, { now: new Date(event.scheduledTime).toISOString() });
     console.log(JSON.stringify({ event: 'activity-email-scheduled', ...activity }));
+    const now = new Date(event.scheduledTime).toISOString();
+    await ensureDailyPick(env,now);
+    const dailyNotices = await sendDailyFeatureEmail(env,now);
+    console.log(JSON.stringify({event:'daily-feature-email-scheduled',sent:dailyNotices}));
   },
   async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {
     const url = new URL(request.url);

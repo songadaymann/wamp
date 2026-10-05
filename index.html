@@ -188,6 +188,7 @@
         </div>
         <div class="auth-row auth-menu-action-row">
           <button id="btn-auth-rate-clears" class="bar-btn auth-menu-action-btn hidden" type="button">Rate rooms</button>
+          <button id="btn-auth-daily" class="bar-btn auth-menu-action-btn hidden" type="button">Room of the Day</button>
           <button id="btn-auth-guest-progress" class="bar-btn auth-menu-action-btn" type="button">Guest Clears</button>
           <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button">Guest Drafts</button>
         </div>
@@ -1400,6 +1401,10 @@
 
     <!-- Game Canvas -->
     <div id="game-container">
+      <div id="daily-room-chip" class="hidden" aria-label="Daily community challenge">
+        <button id="btn-daily-open" class="bar-btn" type="button">Room of the Day</button>
+        <button id="btn-daily-dismiss" class="bar-btn" type="button" aria-label="Hide today’s challenge reminder">×</button>
+      </div>
       <div id="post-run-reminder" class="hidden" aria-label="Unfinished progress">
         <button id="btn-post-run-reminder" class="bar-btn" type="button">Guest clears</button>
         <button id="btn-post-run-reminder-dismiss" class="bar-btn" type="button" aria-label="Hide progress reminder" title="Hide reminder">×</button>
@@ -2164,6 +2169,7 @@
           <legend>Email updates</legend>
           <label><input id="activity-weekly-digest" type="checkbox"> Weekly activity digest</label>
           <label><input id="activity-dethrone-alerts" type="checkbox"> Tell me when someone takes my #1</label>
+          <label><input id="activity-daily-features" type="checkbox"> Tell me when my level is Room of the Day</label>
           <p id="activity-preferences-status" class="history-modal-meta" role="status"></p>
           <button id="btn-activity-save" class="bar-btn bar-btn-small" type="button">Save Email Preferences</button>
         </fieldset>
@@ -2543,6 +2549,30 @@
     </div>
   </div>
 
+  <div id="daily-room-modal" class="history-modal hidden" role="dialog" aria-modal="true" aria-labelledby="daily-room-heading" aria-hidden="true">
+    <div class="history-modal-panel daily-room-content">
+      <div class="history-modal-header">
+        <h2 id="daily-room-heading" class="history-modal-title">Room of the Day</h2>
+        <button id="btn-daily-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <p id="daily-room-date" class="history-modal-meta"></p>
+      <h3 id="daily-room-title">Loading…</h3>
+      <p id="daily-room-builder"></p>
+      <p id="daily-room-status" role="status"></p>
+      <p id="daily-room-progress"></p>
+      <div class="daily-room-actions">
+        <a id="btn-daily-play" class="bar-btn hidden" href="/today">Play Today’s Level</a>
+        <button id="btn-daily-retry" class="bar-btn hidden" type="button">Retry</button>
+        <button id="btn-daily-save" class="bar-btn hidden" type="button">Save My Clear</button>
+      </div>
+      <h3>Today’s leaderboard</h3>
+      <ol id="daily-room-board" aria-label="Today’s leaderboard"></ol>
+      <div class="daily-room-actions">
+        <button id="btn-daily-copy" class="bar-btn" type="button">Copy Link</button>
+        <a href="https://wamp.land/today">wamp.land/today</a>
+      </div>
+    </div>
+  </div>
   <div id="explore-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel explore-modal-panel" role="dialog" aria-modal="true" aria-labelledby="explore-modal-title">
       <div class="history-modal-header">
