@@ -82,9 +82,20 @@ try {
       }
       if (request.method() !== 'GET' && request.method() !== 'OPTIONS') report.mutations.push({name,path:url.pathname,method:request.method(),destination:'127.0.0.1:8788'});
       const headers = new Headers(request.headers()); headers.set('Cookie','ep_session='+account.cookie); headers.delete('host'); headers.delete('content-length');
+      // Keep local fixture connections independent. Transport errors stay fatal,
+      // and an ambiguous mutation is never replayed.
+      headers.set('connection','close');
       const startedAt=Date.now();
-      const response = await fetch(localUrl,{method:request.method(),headers,body:request.postData()||undefined});
-      const body=Buffer.from(await response.arrayBuffer());
+      let response,body;
+      try {
+        response = await fetch(localUrl,{method:request.method(),headers,body:request.postData()||undefined});
+        body=Buffer.from(await response.arrayBuffer());
+      } catch(error) {
+        const failure={name,path:url.pathname,method:request.method(),message:'Local fixture forwarding failed',code:error.cause?.code||error.name};
+        report.errors.push(failure);console.error(JSON.stringify(failure));
+        await route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:'Local publication fixture connection failed.'})}).catch(()=>{});
+        return;
+      }
       if(url.pathname===`/api/profiles/${account.userId}`){
         const data=JSON.parse(body.toString());
         report.profiles.push({name,at:new Date(startedAt).toISOString(),elapsedMs:Date.now()-startedAt,status:response.status,
@@ -162,8 +173,9 @@ try {
     // Use the existing entry action for fixture setup; F098 camera return and phone HUD overlap remain separate.
     // Publication and every new modal control still use actual pointer/touch input and real local mutations.
     navigating=true; await page.goto(`${base}/r/${account.x+2}/${account.y}?welcome=0&renderer=canvas`,{waitUntil:'domcontentloaded'}); await readyWorld(page,touch,true); navigating=false;
-    report.entryLimitations.push({name,control:'World expanded-room entry',reason:'Existing scene entry action used for fixture setup because F098 camera return and phone account-card overlap remain open. Publish and new modal actions use pointer/touch.'});
-    await page.evaluate(()=>window.__EVERYBODYS_PLATFORMER_GAME__.scene.getScene('OverworldPlayScene').openCourseComposer());
+    const entryControl=await page.locator('#btn-world-course-builder').evaluate(button=>({disabled:button.disabled,title:button.title,visible:button.getClientRects().length>0}));
+    report.entryLimitations.push({name,control:'World expanded-room entry',entryControl,reason:'Existing entry click handler invoked directly for fixture setup because F098 camera return and phone account-card overlap remain open. Publish and new modal actions use pointer/touch.'});
+    await page.locator('#btn-world-course-builder').dispatchEvent('click');
     await page.waitForFunction(id=>JSON.parse(window.render_game_to_text()).activeScene?.courseId===id,account.courseId);
     let expandedEditor='setup';
     if(name==='desktop'){
@@ -200,6 +212,8 @@ try {
     navigating=true; await page.goto(`${base}/r/${account.x+5}/${account.y}?welcome=0&renderer=canvas`,{waitUntil:'domcontentloaded'}); await readyWorld(page,touch); navigating=false;
     await page.locator('#btn-world-edit:not(:disabled)').waitFor({state:'visible'}); await click(page,'#btn-world-edit',touch);
     await page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.scene==='editor');
+    await page.waitForFunction(()=>document.getElementById('room-title-input')?.value==='My Ready Adventure',null,{timeout:60000});
+    await page.locator('#busy-overlay').waitFor({state:'hidden'});
     await click(page,'[data-editor-shell-action="publish"]',touch); await page.locator('#first-publish-live').waitFor({state:'visible',timeout:60000});
     assert.equal(await page.locator('#first-publish-title').textContent(),'My Ready Adventure');
     assert.equal(await page.locator('#first-publish-name-form').isVisible(),false);
