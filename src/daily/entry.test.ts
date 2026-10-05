@@ -17,4 +17,12 @@ describe('daily deep-link autoplay gate',()=>{
     expect(await dailyEntryReady({load:async()=>expanded},'2026-10-05',{x:-11,y:-5},1)).toBe(true);
     expect(await dailyEntryReady({load:async()=>({...expanded,pick:{...expanded.pick,available:false}})},'2026-10-05',{x:-11,y:-5},1)).toBe(false);
   });
+  it('accepts published tile-preview metadata before the full room is hydrated, while rejecting stale or unknown versions',async()=>{
+    const repo={load:async()=>response},coordinates={x:-11,y:-5};
+    expect(await dailyEntryReady(repo,'2026-10-05',coordinates,null,2)).toBe(true);
+    expect(await dailyEntryReady(repo,'2026-10-05',coordinates,null,3)).toBe(false);
+    expect(await dailyEntryReady(repo,'2026-10-05',coordinates,null,null)).toBe(false);
+    expect(await dailyEntryReady(repo,'2026-10-05',coordinates,3,2)).toBe(false);
+    expect(await dailyEntryReady({load:async()=>({...response,pick:{...response.pick!,available:false}})},'2026-10-05',coordinates,null,2)).toBe(false);
+  });
 });

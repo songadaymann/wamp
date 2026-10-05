@@ -6,6 +6,8 @@ Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clea
 
 ## 2026-10-05 — F129 Room of the Day, in progress
 
+Live follow-up: PR #60 / merge 370b5491 and migration 0057 are deployed (Worker 5934f463, Pages 1a77026b). Stable public daily reads, /today GET/HEAD/405, attributed share image, anonymous admin denial and all 179 custom-domain/immutable/local JS/CSS files pass. Today is Pushgression by Farès, room 6,6 v12. The live ordinary-room landing exposed a tiled Browse case absent from the expanded fixture: publication metadata is available before the full snapshot, so a null snapshot was falsely treated as a version change. The narrow frontend follow-up accepts the published summary version only when the full snapshot is absent, retaining stale-snapshot and unavailable-pick rejection. Add the regression, run final source/main checks and real-API ordinary daily landings, then release Pages only and complete acceptance. Keep F129 unchecked until this passes.
+
 - [x] Audit published community targets, verified run identity, progression, builder notices and mobile/deep-link entry.
 - [x] Add one stable UTC pick with a pinned published version, a daily board, a +5 PXP verified-clear bonus, gentle seven-day progress and an admin override.
 - [x] Add a compact dismissible daily entry and shareable /today destination, retaining guest play and builder notification preferences; verify desktop/phone, midnight, concurrency and republish behavior.
