@@ -189,6 +189,7 @@
         <div class="auth-row auth-menu-action-row">
           <button id="btn-auth-rate-clears" class="bar-btn auth-menu-action-btn hidden" type="button">Rate rooms</button>
           <button id="btn-auth-build-prompt" class="bar-btn auth-menu-action-btn hidden" type="button">Build Prompt</button>
+          <button id="btn-auth-leaderboard" class="bar-btn auth-menu-action-btn" type="button">Leaderboard</button>
           <button id="btn-auth-daily" class="bar-btn auth-menu-action-btn hidden" type="button">Room of the Day</button>
           <button id="btn-auth-guest-progress" class="bar-btn auth-menu-action-btn" type="button">Guest Clears</button>
           <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button">Guest Drafts</button>
@@ -2290,7 +2291,6 @@
     <div class="history-modal-panel leaderboard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="leaderboard-modal-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
-          <div class="history-modal-kicker">Leaderboards</div>
           <h2 id="leaderboard-modal-title" class="history-modal-title">Leaderboard</h2>
           <div id="leaderboard-modal-meta" class="history-modal-meta">Browse room and world rankings.</div>
         </div>
@@ -2347,7 +2347,12 @@
         <div id="leaderboard-room-rush-list" class="history-version-list"></div>
       </div>
       <div id="leaderboard-global-panel" class="leaderboard-panel hidden">
-        <div id="leaderboard-global-summary" class="history-modal-meta">World points leaderboard.</div>
+        <div class="leaderboard-global-controls" role="group" aria-label="Points leaderboard window">
+          <button id="btn-leaderboard-global-week" class="bar-btn" type="button" aria-pressed="false">This Week</button>
+          <button id="btn-leaderboard-global-all" class="bar-btn" type="button" aria-pressed="false">All Time</button>
+          <button id="btn-leaderboard-global-refresh" class="bar-btn" type="button">Refresh</button>
+        </div>
+        <div id="leaderboard-global-summary" class="history-modal-meta" role="status" aria-live="polite">World points leaderboard.</div>
         <div id="leaderboard-global-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-global-list" class="history-version-list"></div>
       </div>

@@ -1,3 +1,4 @@
+import { globalLeaderboardWeek } from './globalLeaderboardWindow';
 import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import { getApiBaseUrl } from '../api/baseUrl';
@@ -9,6 +10,7 @@ import type {
   BuilderDiscoveryResponse,
   BuilderDiscoverySort,
   GlobalLeaderboardResponse,
+  GlobalLeaderboardWindow,
   RoomDifficulty,
   RoomDiscoveryResponse,
   RoomDiscoverySort,
@@ -59,7 +61,7 @@ export interface RunRepository {
     sort?: BuilderDiscoverySort,
     limit?: number
   ): Promise<BuilderDiscoveryResponse>;
-  loadGlobalLeaderboard(limit?: number): Promise<GlobalLeaderboardResponse>;
+  loadGlobalLeaderboard(limit?: number, window?: GlobalLeaderboardWindow, signal?: AbortSignal): Promise<GlobalLeaderboardResponse>;
 }
 
 class RunApiError extends Error {
@@ -226,16 +228,22 @@ class ApiRunRepository implements RunRepository {
     );
   }
 
-  async loadGlobalLeaderboard(limit: number = 10): Promise<GlobalLeaderboardResponse> {
-    const params = new URLSearchParams({
-      limit: String(limit),
+  async loadGlobalLeaderboard(
+    limit: number = 10, window: GlobalLeaderboardWindow = 'all', signal?: AbortSignal,
+  ): Promise<GlobalLeaderboardResponse> {
+    const params = new URLSearchParams({ limit: String(limit), window });
+    // Viewer identity and a Monday rollover must never come from shared stale data.
+    const response = await this.request<GlobalLeaderboardResponse>(`/api/leaderboards/global?${params}`, {
+      cache: 'no-store', signal,
     });
-
-    const path = `/api/leaderboards/global?${params.toString()}`;
-    const response = await loadWithStaleWhileRevalidate(
-      this.leaderboardCacheKey(path),
-      () => this.request<GlobalLeaderboardResponse>(path),
-    );
+    if (window === 'week' && (response.window !== 'week' || !response.period || !response.serverTime
+      || !Number.isFinite(Date.parse(response.serverTime))
+      || response.period.startsAt !== globalLeaderboardWeek(new Date(response.serverTime)).startsAt
+      || response.period.endsAt !== globalLeaderboardWeek(new Date(response.serverTime)).endsAt
+      || response.entries.some(entry => !Number.isFinite(entry.pointsInWindow))
+      || (response.viewerEntry !== null && !Number.isFinite(response.viewerEntry.pointsInWindow)))) {
+      throw new Error('This Week is unavailable. Try Refresh.');
+    }
     return filterGlobalLeaderboardForCurrentSurface(response);
   }
 
