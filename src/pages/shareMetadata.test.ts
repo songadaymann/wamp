@@ -120,6 +120,84 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('Expanded Room share previews', () => {
+  it.each(['native_expanded_room', 'legacy_course'])(
+    'uses the published %s level and builder instead of a named member cell',
+    async (source) => {
+      const imageUrl = `${API_ORIGIN}/api/share/rooms/11%2C-12/image?x=11&y=-12&v=7&area=course%3Afixture&av=3`;
+      const fetchMock = stubFetch(async (input) => requestUrl(input).includes('/api/share/')
+        ? Response.json({
+          title: 'Cybertowers by Farès on WAMP',
+          description: 'Cybertowers by Farès is a 2-cell Expanded Room in WAMP.',
+          url: `${PAGE_ORIGIN}/r/11/-12`, imageUrl, imageWidth: 1200, imageHeight: 630,
+          roomVersion: 7, builderDisplayName: 'Farès',
+          expandedRoom: { expandedRoomId: 'course:fixture', title: 'Cybertowers', cellCount: 2, source },
+        })
+        : Response.json({ title: 'Individual cell title', version: 9 }));
+
+      const result = await loadRoomMetadata(createRequest('/r/11/-12?from=share'), createEnv(),
+        new URL(`${PAGE_ORIGIN}/r/11/-12?from=share`), COORDINATES);
+
+      expect(result).toMatchObject({ title: 'Cybertowers by Farès on WAMP',
+        description: 'Cybertowers by Farès is a 2-cell Expanded Room in WAMP.',
+        url: `${PAGE_ORIGIN}/r/11/-12`, imageUrl, imageWidth: 1200, imageHeight: 630 });
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(requestUrl(fetchMock.mock.calls[0][0])).toContain('/api/share/rooms/11%2C-12/meta?');
+    },
+  );
+
+  it('retains the local ordinary-room image while using public builder credit', async () => {
+    stubFetch(async (input) => requestUrl(input).includes('/api/share/')
+      ? Response.json({ title: 'Into the fire by Builder on WAMP',
+        description: 'Into the fire by Builder is a playable WAMP room.',
+        roomVersion: 7, builderDisplayName: 'Builder', expandedRoom: null,
+        imageUrl: `${API_ORIGIN}/api/share/rooms/11%2C-12/image?v=7` })
+      : Response.json({ title: 'Into the fire', version: 7 }));
+
+    const result = await loadRoomMetadata(createRequest('/r/11/-12'), createEnv(),
+      new URL(`${PAGE_ORIGIN}/r/11/-12`), COORDINATES);
+
+    expect(result.title).toBe('Into the fire by Builder on WAMP');
+    expect(result.description).toContain('by Builder');
+    expect(result.imageUrl).toBe(`${PAGE_ORIGIN}/r/11/-12/image.png?v=7&renderer=assets-v5`);
+  });
+
+  it.each([
+    { label: 'unavailable', response: () => new Response(null, { status: 503 }) },
+    { label: 'missing', response: () => new Response(null, { status: 404 }) },
+    { label: 'empty', response: () => Response.json({}) },
+    { label: 'null', response: () => Response.json(null) },
+    { label: 'malformed JSON', response: () => new Response('{') },
+    { label: 'network failure', response: () => { throw new Error('Unavailable'); } },
+  ])('falls back to a published cell when the share metadata is $label', async ({ response }) => {
+    const fetchMock = stubFetch(async input => requestUrl(input).includes('/api/share/')
+      ? response() : Response.json({ title: 'Published fallback', version: 9 }));
+    const result = await loadRoomMetadata(createRequest('/r/11/-12'), createEnv(),
+      new URL(`${PAGE_ORIGIN}/r/11/-12`), COORDINATES);
+    expect(result).toMatchObject({ title: 'Published fallback - WAMP room 11,-12',
+      imageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?v=9&renderer=assets-v5` });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(requestUrl(fetchMock.mock.calls[1][0])).toContain('/api/rooms/11%2C-12/published?');
+  });
+
+  it.each([
+    { label: 'another host', imageUrl: 'https://other.test/api/share/rooms/11%2C-12/image?area=course%3Afixture' },
+    { label: 'another cell', imageUrl: `${API_ORIGIN}/api/share/rooms/12%2C-12/image?area=course%3Afixture` },
+    { label: 'another level', imageUrl: `${API_ORIGIN}/api/share/rooms/11%2C-12/image?area=course%3Aother` },
+    { label: 'an ordinary image', imageUrl: `${API_ORIGIN}/api/share/rooms/11%2C-12/image` },
+    { label: 'a non-footprint', cellCount: 1 },
+    { label: 'a malformed footprint', cellCount: '2' },
+  ])('retains the level title but rejects a footprint image for $label', async ({ imageUrl, cellCount }) => {
+    stubFetch(async () => Response.json({ title: 'Whole Adventure by Builder on WAMP', roomVersion: 7,
+      expandedRoom: { expandedRoomId: 'course:fixture', cellCount: cellCount ?? 2 },
+      imageUrl: imageUrl ?? `${API_ORIGIN}/api/share/rooms/11%2C-12/image?area=course%3Afixture` }));
+    const result = await loadRoomMetadata(createRequest('/r/11/-12'), createEnv(),
+      new URL(`${PAGE_ORIGIN}/r/11/-12`), COORDINATES);
+    expect(result.title).toBe('Whole Adventure by Builder on WAMP');
+    expect(result.imageUrl).toBe(`${PAGE_ORIGIN}/r/11/-12/image.png?v=7&renderer=assets-v5`);
+  });
+});
+
 describe('share metadata request contracts', () => {
   it.each(METADATA_OPERATIONS)(
     'preserves exact request headers and clears successful timers for $label',
@@ -128,7 +206,7 @@ describe('share metadata request contracts', () => {
       const capturedInits: Array<RequestInit | undefined> = [];
       const fetchMock = stubFetch(async (_input, init) => {
         capturedInits.push(init);
-        return Response.json({});
+        return Response.json({ title: 'Fixture metadata' });
       });
 
       await run(
@@ -149,16 +227,12 @@ describe('share metadata request contracts', () => {
     },
   );
 
-  it('requests published room metadata before the share-meta fallback and forces the local image URL', async () => {
+  it('uses public share metadata directly and retains the local image for an ordinary room', async () => {
     vi.useFakeTimers();
     const calls: string[] = [];
     const fetchMock = stubFetch(async (input, init) => {
       calls.push(requestUrl(input));
       expectRequestHeaders(init, 'Fixture Share Bot');
-      if (calls.length === 1) {
-        return new Response('not published', { status: 404 });
-      }
-
       return Response.json({
         title: '  Legacy\n Share   Room  ',
         description: '  A\t remote   description. ',
@@ -185,10 +259,9 @@ describe('share metadata request contracts', () => {
       imageHeight: 480,
     });
     expect(calls).toEqual([
-      `${API_ORIGIN}/api/rooms/11%2C-12/published?x=11&y=-12`,
       `${API_ORIGIN}/api/share/rooms/11%2C-12/meta?x=11&y=-12&url=https%3A%2F%2Fpreview.wamp.land%2Fr%2F11%2F-12`,
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
   });
 });
@@ -236,7 +309,10 @@ describe('share metadata timeout contracts', () => {
       imageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png`,
     });
     expect(signals[1]?.aborted).toBe(true);
-    expect(calls).toHaveLength(2);
+    expect(calls).toEqual([
+      `${API_ORIGIN}/api/share/rooms/11%2C-12/meta?x=11&y=-12&url=https%3A%2F%2Fpreview.wamp.land%2Fr%2F11%2F-12`,
+      `${API_ORIGIN}/api/rooms/11%2C-12/published?x=11&y=-12`,
+    ]);
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -323,11 +399,7 @@ describe('share metadata timeout contracts', () => {
 
 describe('share metadata normalization edge cases', () => {
   it('normalizes malformed room share-meta fields and rejects unsafe URL schemes', async () => {
-    const fetchMock = stubFetch(async (_input) => {
-      if (fetchMock.mock.calls.length === 1) {
-        return new Response('not published', { status: 404 });
-      }
-
+    stubFetch(async () => {
       return new Response(JSON.stringify({
         title: ['not text'],
         description: '  Kept\n   description\t text. ',
@@ -377,7 +449,9 @@ describe('share metadata normalization edge cases', () => {
       expectedImageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?renderer=assets-v5`,
     },
   ])('preserves the $label published-room version rule', async ({ payload, expectedImageUrl }) => {
-    stubFetch(async () => new Response(payload));
+    stubFetch(async (input) => requestUrl(input).includes('/api/share/')
+      ? new Response('share metadata unavailable', { status: 503 })
+      : new Response(payload));
 
     const result = await loadRoomMetadata(
       createRequest('/r/11/-12'),

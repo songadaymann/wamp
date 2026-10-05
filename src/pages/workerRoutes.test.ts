@@ -4,15 +4,34 @@ import type { PagesWorkerEnv } from './model';
 
 const APP_SHELL = '<!doctype html><html><head><title>WAMP</title></head><body>app</body></html>';
 
+function roomMetadataPath(x: number, y: number): string {
+  const publicUrl = `https://preview.wamp.land/r/${x}/${y}`;
+  return `/api/share/rooms/${encodeURIComponent(`${x},${y}`)}/meta?x=${x}&y=${y}&url=${encodeURIComponent(publicUrl)}`;
+}
+
 const SHARE_PAGE_ROUTES = [
+  ...(['native_expanded_room', 'legacy_course'] as const).map(source => ({
+    label: `${source} focused member`, pathname: '/r/11/-12?from=share',
+    metadataPath: roomMetadataPath(11, -12),
+    metadata: { title: 'Whole <Adventure> by Farès on WAMP',
+      description: 'Whole <Adventure> by Farès is a 2-cell Expanded Room in WAMP.', roomVersion: 7,
+      expandedRoom: { expandedRoomId: 'course:fixture', cellCount: 2, source },
+      imageUrl: 'https://api.example.test/api/share/rooms/11%2C-12/image?x=11&y=-12&v=7&area=course%3Afixture&av=3' },
+    expected: { title: 'Whole &lt;Adventure&gt; by Farès on WAMP',
+      description: 'Whole &lt;Adventure&gt; by Farès is a 2-cell Expanded Room in WAMP.',
+      canonicalUrl: 'https://preview.wamp.land/r/11/-12',
+      imageUrl: 'https://api.example.test/api/share/rooms/11%2C-12/image?x=11&amp;y=-12&amp;v=7&amp;area=course%3Afixture&amp;av=3',
+      ogType: 'website' },
+  })),
   {
     label: 'direct room path',
     pathname: '/r/11/-12',
-    metadataPath: '/api/rooms/11%2C-12/published?x=11&y=-12',
-    metadata: { title: 'Safety <Room> & "Friends"', version: 7 },
+    metadataPath: roomMetadataPath(11, -12),
+    metadata: { title: 'Safety <Room> & "Friends" by Builder <Public> on WAMP',
+      description: 'Play Safety <Room> & "Friends" by Builder <Public> in WAMP.', roomVersion: 7, expandedRoom: null },
     expected: {
-      title: 'Safety &lt;Room&gt; &amp; &quot;Friends&quot; - WAMP room 11,-12',
-      description: 'Play &quot;Safety &lt;Room&gt; &amp; &quot;Friends&quot;&quot; in WAMP. Can you do better?',
+      title: 'Safety &lt;Room&gt; &amp; &quot;Friends&quot; by Builder &lt;Public&gt; on WAMP',
+      description: 'Play Safety &lt;Room&gt; &amp; &quot;Friends&quot; by Builder &lt;Public&gt; in WAMP.',
       canonicalUrl: 'https://preview.wamp.land/r/11/-12',
       imageUrl: 'https://preview.wamp.land/r/11/-12/image.png?v=7&amp;renderer=assets-v5',
       ogType: 'website',
@@ -21,11 +40,12 @@ const SHARE_PAGE_ROUTES = [
   {
     label: 'room query',
     pathname: '/?x=11&y=-12',
-    metadataPath: '/api/rooms/11%2C-12/published?x=11&y=-12',
-    metadata: { title: 'Safety <Room> & "Friends"', version: 7 },
+    metadataPath: roomMetadataPath(11, -12),
+    metadata: { title: 'Safety <Room> & "Friends" by Builder <Public> on WAMP',
+      description: 'Play Safety <Room> & "Friends" by Builder <Public> in WAMP.', roomVersion: 7, expandedRoom: null },
     expected: {
-      title: 'Safety &lt;Room&gt; &amp; &quot;Friends&quot; - WAMP room 11,-12',
-      description: 'Play &quot;Safety &lt;Room&gt; &amp; &quot;Friends&quot;&quot; in WAMP. Can you do better?',
+      title: 'Safety &lt;Room&gt; &amp; &quot;Friends&quot; by Builder &lt;Public&gt; on WAMP',
+      description: 'Play Safety &lt;Room&gt; &amp; &quot;Friends&quot; by Builder &lt;Public&gt; in WAMP.',
       canonicalUrl: 'https://preview.wamp.land/r/11/-12',
       imageUrl: 'https://preview.wamp.land/r/11/-12/image.png?v=7&amp;renderer=assets-v5',
       ogType: 'website',
@@ -470,24 +490,24 @@ describe('Pages share route dispatch matrix', () => {
     {
       label: 'leading zeros and a direct trailing slash',
       pathname: '/r/00011/-0012/',
-      metadataPath: '/api/rooms/11%2C-12/published?x=11&y=-12',
+      metadataPath: roomMetadataPath(11, -12),
       canonicalUrl: 'https://preview.wamp.land/r/11/-12',
     },
     {
       label: 'an unsafe direct integer rounded by parseInt',
       pathname: '/r/9007199254740993/-0/',
-      metadataPath: '/api/rooms/9007199254740992%2C0/published?x=9007199254740992&y=0',
+      metadataPath: roomMetadataPath(9007199254740992, 0),
       canonicalUrl: 'https://preview.wamp.land/r/9007199254740992/0',
     },
     {
       label: 'strict safe integers on /index.html',
       pathname: '/index.html?x=-0&y=00012',
-      metadataPath: '/api/rooms/0%2C12/published?x=0&y=12',
+      metadataPath: roomMetadataPath(0, 12),
       canonicalUrl: 'https://preview.wamp.land/r/0/12',
     },
   ])('preserves the room coordinate parsing quirk for $label', async ({ pathname, metadataPath, canonicalUrl }) => {
     const calls: string[] = [];
-    stubMetadataFetch(metadataPath, { version: 3 }, calls);
+    stubMetadataFetch(metadataPath, { title: 'Coordinate fixture', roomVersion: 3 }, calls);
     const fetchAsset = createAppShellFetch(calls);
 
     const response = await worker.fetch(

@@ -23,6 +23,7 @@ interface RoomShareMetadata {
   roomId: string;
   coordinates: RoomCoordinates;
   roomVersion: number;
+  builderDisplayName: string | null;
   title: string;
   description: string;
   url: string;
@@ -45,6 +46,7 @@ interface RoomShareExpandedRoomMetadata {
 
 interface RoomShareTarget {
   focusSnapshot: RoomSnapshot;
+  builderDisplayName: string | null;
   expandedRoom: ResolvedExpandedRoomTarget | null;
   previewCells: ExpandedRoomSharePreviewCell[];
 }
@@ -87,7 +89,9 @@ async function loadRoomShareTarget(
   roomId: string,
   coordinates: RoomCoordinates,
 ): Promise<RoomShareTarget | null> {
-  const expandedRoom = await loadExpandedRoomShareTarget(env, coordinates);
+  const resolvedRoom = await loadResolvedRoomShareTarget(env, coordinates);
+  const expandedRoom = resolvedRoom && resolvedRoom.cellCount > 1 ? resolvedRoom : null;
+  const builderDisplayName = resolvedRoom?.ownerDisplayName?.replace(/\s+/g, ' ').trim() || null;
   const focusCell = expandedRoom?.cells.find(
     (cell) => cell.roomId === roomId || coordinatesEqual(cell.coordinates, coordinates),
   ) ?? null;
@@ -101,6 +105,7 @@ async function loadRoomShareTarget(
     if (focusSnapshot) {
       return {
         focusSnapshot,
+        builderDisplayName,
         expandedRoom,
         previewCells: previewCells.length > 0
           ? previewCells
@@ -113,13 +118,14 @@ async function loadRoomShareTarget(
   return focusSnapshot
     ? {
         focusSnapshot,
+        builderDisplayName,
         expandedRoom: null,
         previewCells: [{ snapshot: focusSnapshot, coordinates }],
       }
     : null;
 }
 
-async function loadExpandedRoomShareTarget(
+async function loadResolvedRoomShareTarget(
   env: Env,
   coordinates: RoomCoordinates,
 ): Promise<ResolvedExpandedRoomTarget | null> {
@@ -127,8 +133,7 @@ async function loadExpandedRoomShareTarget(
     return null;
   }
 
-  const target = await resolveExpandedRoomAtCoordinates(env, coordinates);
-  return target && target.cellCount > 1 ? target : null;
+  return resolveExpandedRoomAtCoordinates(env, coordinates);
 }
 
 async function loadExpandedRoomSharePreviewCells(
@@ -227,6 +232,7 @@ function buildRoomShareMetadata(
   const snapshot = target.focusSnapshot;
   const expandedRoom = target.expandedRoom;
   const titleText = expandedRoom ? getExpandedRoomDisplayTitle(expandedRoom, snapshot) : getRoomDisplayTitle(snapshot);
+  const creditedTitle = target.builderDisplayName ? `${titleText} by ${target.builderDisplayName}` : titleText;
   const publicUrl = resolveRequestedPublicUrl(url)
     ?? new URL(buildRoomSharePath(snapshot.coordinates), resolveFrontendBaseUrl(request, env)).toString();
   const imageUrl = new URL(
@@ -247,10 +253,11 @@ function buildRoomShareMetadata(
     roomId: snapshot.id,
     coordinates: { ...snapshot.coordinates },
     roomVersion: snapshot.version,
-    title: `${titleText} on WAMP`,
+    builderDisplayName: target.builderDisplayName,
+    title: `${creditedTitle} on WAMP`,
     description: expandedRoom
-      ? buildExpandedRoomShareDescription(expandedRoom, snapshot, titleText)
-      : buildRoomShareDescription(snapshot, titleText),
+      ? buildExpandedRoomShareDescription(expandedRoom, snapshot, creditedTitle)
+      : buildRoomShareDescription(snapshot, creditedTitle),
     url: publicUrl,
     imageUrl: imageUrl.toString(),
     imageWidth: ROOM_SHARE_IMAGE_WIDTH,
@@ -333,7 +340,7 @@ function buildExpandedRoomShareDescription(
     ? ` Beat the ${goalType.replace(/_/g, ' ')} challenge.`
     : '';
   const cellText = target.cellCount === 1 ? '1-cell' : `${target.cellCount}-cell`;
-  return `${titleText} is a ${cellText} WAMP room focused at ${snapshot.coordinates.x},${snapshot.coordinates.y}.${goalText}`;
+  return `${titleText} is a ${cellText} Expanded Room in WAMP.${goalText}`;
 }
 
 function mapRoomShareExpandedRoomMetadata(

@@ -67,8 +67,10 @@ interface RoomMetadataInput {
   description?: unknown;
   url?: unknown;
   imageUrl?: unknown;
-  imageWidth?: number;
-  imageHeight?: number;
+  imageWidth?: unknown;
+  imageHeight?: unknown;
+  roomVersion?: unknown;
+  expandedRoom?: unknown;
 }
 
 export async function loadRoomMetadata(
@@ -81,13 +83,9 @@ export async function loadRoomMetadata(
   const roomId = `${coordinates.x},${coordinates.y}`;
   const publicUrl = `${url.origin}/r/${coordinates.x}/${coordinates.y}`;
   const fallback = buildFallbackMetadata(coordinates, publicUrl);
-  const publishedRoom = await loadPublishedRoomSnapshot(request, env, url, coordinates, ROOM_META_TIMEOUT_MS);
-  if (publishedRoom) {
-    return buildPublishedRoomMetadata(publishedRoom, fallback, coordinates);
-  }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ROOM_META_TIMEOUT_MS);
+  let metadata: RoomShareMetadata | null = null;
 
   try {
     const metaUrl = new URL(`/api/share/rooms/${encodeURIComponent(roomId)}/meta`, apiBaseUrl);
@@ -101,19 +99,18 @@ export async function loadRoomMetadata(
       },
       signal: controller.signal,
     });
-    if (!response.ok) {
-      return fallback;
+    if (response.ok) {
+      metadata = normalizeMetadata(await response.json(), fallback, apiBaseUrl, roomId);
     }
-
-    return {
-      ...normalizeMetadata(await response.json(), fallback),
-      imageUrl: fallback.imageUrl,
-    };
   } catch {
-    return fallback;
+    // A published single-cell snapshot can still provide a useful preview during an API outage.
   } finally {
     clearTimeout(timeout);
   }
+
+  if (metadata) return metadata;
+  const publishedRoom = await loadPublishedRoomSnapshot(request, env, url, coordinates, ROOM_META_TIMEOUT_MS);
+  return publishedRoom ? buildPublishedRoomMetadata(publishedRoom, fallback, coordinates) : fallback;
 }
 
 export async function loadProfileMetadata(
@@ -407,25 +404,53 @@ export async function loadPublishedRoomSnapshot(
 }
 
 function normalizeMetadata(
-  value: RoomMetadataInput | null,
+  value: unknown,
   fallback: RoomShareMetadata,
-): RoomShareMetadata {
-  if (!value || typeof value !== 'object') {
-    return fallback;
+  apiBaseUrl: string,
+  roomId: string,
+): RoomShareMetadata | null {
+  if (!isRoomMetadataInput(value) || (!cleanText(value.title) && !cleanText(value.description))) {
+    return null;
   }
 
+  const expandedRoom = value.expandedRoom;
+  const expanded = isExpandedRoomMetadata(expandedRoom);
+  const version = typeof value.roomVersion === 'number' ? value.roomVersion : undefined;
+  const roomImageUrl = version === undefined ? fallback.imageUrl : withRoomVersionQuery(fallback.imageUrl, version);
   return {
     title: cleanText(value.title) || fallback.title,
     description: cleanText(value.description) || fallback.description,
     url: cleanUrl(value.url) || fallback.url,
-    imageUrl: cleanUrl(value.imageUrl) || fallback.imageUrl,
+    imageUrl: expanded
+      ? expandedRoomImageUrl(value.imageUrl, apiBaseUrl, roomId, expandedRoom.expandedRoomId) || roomImageUrl
+      : roomImageUrl,
     imageWidth: finiteNumberOr(value.imageWidth, fallback.imageWidth),
     imageHeight: finiteNumberOr(value.imageHeight, fallback.imageHeight),
   };
 }
 
-function finiteNumberOr(value: number | undefined, fallback: number): number {
-  return Number.isFinite(value) ? (value as number) : fallback;
+function isRoomMetadataInput(value: unknown): value is RoomMetadataInput {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isExpandedRoomMetadata(value: unknown): value is { expandedRoomId: string; cellCount: number } {
+  return value !== null && typeof value === 'object'
+    && 'expandedRoomId' in value && Boolean(cleanText(value.expandedRoomId))
+    && 'cellCount' in value && typeof value.cellCount === 'number'
+    && Number.isSafeInteger(value.cellCount) && value.cellCount > 1;
+}
+
+function expandedRoomImageUrl(value: unknown, apiBaseUrl: string, roomId: string, expandedRoomId: string): string | null {
+  const imageUrl = cleanUrl(value);
+  if (!imageUrl) return null;
+  const image = new URL(imageUrl);
+  const expected = new URL(`/api/share/rooms/${encodeURIComponent(roomId)}/image`, apiBaseUrl);
+  return image.origin === expected.origin && [expected.pathname, `${expected.pathname}.png`].includes(image.pathname)
+    && image.searchParams.get('area') === expandedRoomId ? image.toString() : null;
+}
+
+function finiteNumberOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 function cleanText(value: unknown): string {
