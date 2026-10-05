@@ -6,9 +6,6 @@ import {
   type GuestBuilderClaimRequestDetail,
 } from '../../progression/guestBuilderClaimEvents';
 
-const STORAGE_KEY = 'wamp_guest_builder_claim_prompt_seen_v1';
-const inMemorySeenRoomIds = new Set<string>();
-
 type GuestBuilderClaimElements = {
   modal: HTMLElement | null;
   closeButton: HTMLButtonElement | null;
@@ -79,21 +76,16 @@ export class GuestBuilderClaimModalController {
       event instanceof CustomEvent
         ? (event.detail as GuestBuilderClaimRequestDetail | undefined)
         : undefined;
-    if (!detail || getAuthDebugState().authenticated) {
+    if (!detail || getAuthDebugState().authenticated
+      || (detail.source !== 'manual-save' && detail.source !== 'publish-attempt')) {
       return;
     }
 
-    if ((detail.source === 'auto-save' || detail.source === 'build-threshold') && this.hasSeen(detail.roomId)) {
-      return;
-    }
-
-    this.markSeen(detail.roomId);
     this.open(detail);
   };
 
   constructor(
     private readonly doc: Document = document,
-    private readonly storage: Storage | null = window.localStorage,
   ) {
     this.elements = {
       modal: this.doc.getElementById('guest-builder-claim-modal'),
@@ -182,46 +174,7 @@ export class GuestBuilderClaimModalController {
       return 'Your draft is safe locally. Sign in to publish it.';
     }
 
-    if (detail?.source === 'build-threshold') {
-      const count = Math.max(0, Math.round(detail.buildActivityCount ?? 0));
-      return count > 0
-        ? `You've placed ${count} tiles and items in ${roomLabel}.`
-        : `${roomLabel} is saved locally on this browser.`;
-    }
-
     return `${roomLabel} is saved locally on this browser.`;
-  }
-
-  private hasSeen(roomId: string): boolean {
-    if (inMemorySeenRoomIds.has(roomId)) {
-      return true;
-    }
-
-    try {
-      const raw = this.storage?.getItem(STORAGE_KEY);
-      if (!raw) {
-        return false;
-      }
-      const parsed = JSON.parse(raw) as { roomIds?: unknown };
-      return Array.isArray(parsed.roomIds) && parsed.roomIds.includes(roomId);
-    } catch {
-      return false;
-    }
-  }
-
-  private markSeen(roomId: string): void {
-    inMemorySeenRoomIds.add(roomId);
-    try {
-      const raw = this.storage?.getItem(STORAGE_KEY);
-      const parsed = raw ? (JSON.parse(raw) as { roomIds?: unknown }) : {};
-      const roomIds = Array.isArray(parsed.roomIds)
-        ? parsed.roomIds.filter((value): value is string => typeof value === 'string')
-        : [];
-      const nextRoomIds = [roomId, ...roomIds.filter((value) => value !== roomId)].slice(0, 50);
-      this.storage?.setItem(STORAGE_KEY, JSON.stringify({ roomIds: nextRoomIds }));
-    } catch {
-      // The prompt is a conversion aid; storage failures should not block editing.
-    }
   }
 
   private setText(element: HTMLElement | null, value: string): void {
