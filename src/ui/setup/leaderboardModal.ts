@@ -99,6 +99,14 @@ export class LeaderboardModalController {
   private preferredInitialTab: LeaderboardTab | null = null;
   private returnFocus: HTMLElement | null = null;
 
+  private readonly syncVisualViewport = () => {
+    const viewport = this.doc.defaultView?.visualViewport;
+    if (!viewport) return;
+    // Mobile menu focus can pan the visual viewport without changing window.scrollX.
+    this.elements.modal?.style.setProperty('--leaderboard-visual-left', `${viewport.offsetLeft}px`);
+    this.elements.modal?.style.setProperty('--leaderboard-visual-top', `${viewport.offsetTop}px`);
+  };
+
   private readonly handleMenuOpen = () => {
     this.doc.getElementById('auth-panel')?.classList.remove('menu-open');
     void this.open('global');
@@ -203,6 +211,8 @@ export class LeaderboardModalController {
   }
 
   init(): void {
+    this.doc.defaultView?.visualViewport?.addEventListener('scroll', this.syncVisualViewport);
+    this.doc.defaultView?.visualViewport?.addEventListener('resize', this.syncVisualViewport);
     this.doc.getElementById('btn-auth-leaderboard')?.addEventListener('click', this.handleMenuOpen);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
@@ -262,6 +272,8 @@ export class LeaderboardModalController {
   }
 
   destroy(): void {
+    this.doc.defaultView?.visualViewport?.removeEventListener('scroll', this.syncVisualViewport);
+    this.doc.defaultView?.visualViewport?.removeEventListener('resize', this.syncVisualViewport);
     this.doc.getElementById('btn-auth-leaderboard')?.removeEventListener('click', this.handleMenuOpen);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
@@ -280,7 +292,8 @@ export class LeaderboardModalController {
     this.preferredInitialTab = initialTab;
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
-    this.elements.closeButton?.focus();
+    this.elements.closeButton?.focus({ preventScroll: true });
+    this.syncVisualViewport();
     this.setError(null);
     this.loading = true;
     this.roomLoading = false;
