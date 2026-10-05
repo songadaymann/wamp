@@ -68,6 +68,10 @@ const BADGE_DEFINITIONS: Record<
     label: '#1',
     description: 'Took the top spot on a leaderboard.',
   },
+  builder_prompt_winner: {
+    category: 'builder', label: 'Prompt Winner',
+    description: 'Built a winning level in a weekly Build Prompt.',
+  },
   builder_first_published_challenge: {
     category: 'builder',
     label: 'First Room',

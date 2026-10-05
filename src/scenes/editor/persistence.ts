@@ -1,3 +1,4 @@
+import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../../buildPrompts/publishing';
 import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
 import { getAuthDebugState } from '../../auth/client';
 import { requestRoomPublishName, suggestRoomTitle } from '../../publishing/events';
@@ -137,6 +138,8 @@ export class EditorPersistenceController {
         if (!title || this.roomSession.currentRoomId !== roomId || getAuthDebugState().user?.id !== userId) return null;
         this.setRoomTitle(title);
       }
+      const promptChoice = await prepareBuildPromptEntry(userId, `room:${roomId}`);
+      if (!promptChoice || this.roomSession.currentRoomId !== roomId || (userId && getAuthDebugState().user?.id !== userId)) return null;
       const previousProgression = await capturePublishProgression(userId);
       if (this.roomSession.currentRoomId !== roomId || (userId && getAuthDebugState().user?.id !== userId)) return null;
       showBusyOverlay('Publishing room...', 'Saving the latest version...'); showingBusy = true;
@@ -146,6 +149,7 @@ export class EditorPersistenceController {
         if (userId && record.lastPublishedByUserId === userId) {
           void reportPublishProgression({ userId, previousProgression, contentType: 'room',
             contentId: record.published.id, title: record.published.title });
+          await completeBuildPromptEntry(promptChoice, userId, `room:${record.published.id}`, record.published.version, record.published.title ?? 'Your level');
           // World-seed and private World publishes retain their existing activation/access flow.
           if (!record.world && !record.published.id.startsWith('world-seed:')) {
             hideBusyOverlay(); showingBusy = false;

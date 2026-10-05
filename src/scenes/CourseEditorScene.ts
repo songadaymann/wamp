@@ -1,3 +1,5 @@
+import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../buildPrompts/publishing';
+import { expandedRoomIdFromLegacyCourseId } from '../expandedRooms/model';
 import { drawDeathMap } from './editor/deathMapOverlay';
 import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draftBackupController';
@@ -1388,8 +1390,10 @@ export class CourseEditorScene extends Phaser.Scene {
     const current = () => this.scene.isActive() && this.courseRecord?.draft.id === courseId
       && getAuthDebugState().user?.id === userId;
     this.coursePublishing = true;
-    showBusyOverlay('Publishing expanded room...', 'Saving expanded room goal and publishing the expanded room...');
     try {
+      const promptChoice = await prepareBuildPromptEntry(userId, `expanded_room:${expandedRoomIdFromLegacyCourseId(courseId)}`);
+      if (!promptChoice || !current()) return;
+      showBusyOverlay('Publishing expanded room...', 'Saving expanded room goal and publishing the expanded room...');
       const previousProgression = await capturePublishProgression(userId);
       if (!current()) return;
       const sent = cloneCourseSnapshot(courseRecord.draft);
@@ -1408,6 +1412,8 @@ export class CourseEditorScene extends Phaser.Scene {
       if (userId && published.published) {
         const snapshot = cloneCourseSnapshot(published.published);
         void reportPublishProgression({ userId, previousProgression, contentType: 'expanded_room', contentId: snapshot.id, title: snapshot.title });
+        await completeBuildPromptEntry(promptChoice, userId, `expanded_room:${expandedRoomIdFromLegacyCourseId(snapshot.id)}`, snapshot.version, snapshot.title ?? 'Your expanded room');
+        if (!current()) return;
         hideBusyOverlay();
         if (firstPublish) announceFirstPublishedExpandedRoom({ userId, snapshot, play: coordinates => {
           this.handleTouchBlur(); this.hideObjectInspectorUi(); this.setMusicModeActive(false);

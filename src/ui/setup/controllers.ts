@@ -1,3 +1,4 @@
+import { BuildPromptsController } from './buildPrompts';
 import { RoomInsightsController } from './roomInsights';
 import { DailyRoomController } from './dailyRoom';
 import { FirstPublishModalController } from './firstPublishModal';
@@ -113,6 +114,8 @@ function createUiControllers(game: Phaser.Game): UiControllers {
   const controlsModal = new ControlsModalController();
   const playlistIntroModal = new PlaylistIntroModalController();
   const exploreModal = new ExploreModalController(game);
+  const buildPrompts = new BuildPromptsController(() => exploreModal.close()); buildPrompts.init();
+  game.events.once('destroy', () => buildPrompts.destroy());
   const runRatingModal = new RunRatingModalController(game);
   const guestProgressClaimModal = new GuestProgressClaimModalController();
   const openExplore = () => exploreModal.open();

@@ -149,7 +149,7 @@ export function setupSceneCommands(
     onPlayRoom: () => {
       const overworldScene = getActiveOverworldScene(game);
       closeWorldPanels();
-      overworldScene?.playSelectedRoom?.();
+      void overworldScene?.playSelectedRoom?.();
     },
     onRestartRun: () => {
       closeWorldPanels();

@@ -1,3 +1,4 @@
+import { handleAdminBuildPrompts } from '../buildPrompts/routes';
 import type {
   AdminProgressionCapsUpdateRequest,
   AdminProgressionCapsUpdateResponse,
@@ -48,6 +49,9 @@ export async function handleAdminRequest(
   env: Env,
   context?: WorkerExecutionContextLike,
 ): Promise<Response> {
+  if (url.pathname === '/api/admin/build-prompts') {
+    return handleAdminBuildPrompts(request,url,env);
+  }
   if (url.pathname === '/api/admin/daily' && ['GET','PUT'].includes(request.method)) {
     return handleAdminDaily(request,env);
   }

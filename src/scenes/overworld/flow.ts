@@ -125,7 +125,7 @@ export class OverworldSceneFlowController {
     camera.setZoom(clampedZoom);
   }
 
-  playSelectedRoom(options: { forceGoalIntro?: boolean } = {}): void {
+  playSelectedRoom(options: { forceGoalIntro?: boolean; expectedCourseVersion?: number; canStart?: () => boolean } = {}): void | Promise<void> {
     if (this.host.getMode() === 'play') {
       this.returnToWorld();
       return;
@@ -142,8 +142,7 @@ export class OverworldSceneFlowController {
     }
 
     if (selectedState === 'published' && this.host.getSelectedPublishedCourseId()) {
-      void this.playSelectedCourse();
-      return;
+      return this.playSelectedCourse(options.expectedCourseVersion, options.canStart);
     }
 
     this.host.resetPlaySession();
@@ -424,7 +423,7 @@ export class OverworldSceneFlowController {
     this.scene.scene.sleep();
   }
 
-  async playSelectedCourse(): Promise<void> {
+  async playSelectedCourse(expectedVersion?: number, canStart?: () => boolean): Promise<void> {
     if (this.host.getActiveCourseRun()) {
       this.returnToWorld();
       return;
@@ -438,25 +437,32 @@ export class OverworldSceneFlowController {
     if (getRoomGoalIntroModalController()?.openControlsIfNeeded(() => {
       const selected = this.host.getSelectedCoordinates();
       if (this.host.getMode() === mode && selected.x === coordinates.x && selected.y === coordinates.y) {
-        void this.startSelectedPublishedCourse(selectedCourseId);
+        void this.startSelectedPublishedCourse(selectedCourseId, expectedVersion, canStart);
       }
     })) return;
 
-    await this.startSelectedPublishedCourse(selectedCourseId);
+    await this.startSelectedPublishedCourse(selectedCourseId, expectedVersion, canStart);
   }
 
-  private async startSelectedPublishedCourse(selectedCourseId: string): Promise<void> {
+  private async startSelectedPublishedCourse(selectedCourseId: string, expectedVersion?: number, canStart?: () => boolean): Promise<void> {
     showBusyOverlay('Starting expanded room...', 'Loading expanded room...');
     try {
-      const snapshot = await this.host.loadPublishedCourseSnapshot(selectedCourseId);
+      const snapshot = expectedVersion === undefined
+        ? await this.host.loadPublishedCourseSnapshot(selectedCourseId)
+        : (await this.courseRepository.loadCourse(selectedCourseId)).published;
       if (!snapshot) {
         throw new Error('This expanded room is not published yet.');
+      }
+      if (canStart && !canStart()) { hideBusyOverlay(); return; }
+      if (expectedVersion !== undefined && snapshot.version !== expectedVersion) {
+        throw new Error('This expanded entry has changed. Open Build Prompt to refresh the list.');
       }
       if (!snapshot.goal) {
         throw new Error('Published expanded room is missing objective data. Reopen the builder and publish again.');
       }
 
-      await this.startCoursePlayback(snapshot, 'published');
+      if (canStart) await this.startCoursePlayback(snapshot, 'published', canStart);
+      else await this.startCoursePlayback(snapshot, 'published');
       hideBusyOverlay();
     } catch (error) {
       console.error('Failed to start expanded room', error);
@@ -469,11 +475,13 @@ export class OverworldSceneFlowController {
   async startCoursePlayback(
     snapshot: CourseSnapshot,
     roomSourceMode: CoursePlaybackRoomSourceMode,
+    canStart: () => boolean = () => true,
   ): Promise<void> {
     this.host.resetPlaySession();
     this.host.clearTouchGestureState();
     this.host.clearGoalRun();
     await this.host.prepareActiveCourseRoomOverrides(snapshot, { mode: roomSourceMode });
+    if (!canStart()) return;
     const runState = this.host.createCourseRunState(snapshot, {
       hadPreviousCompletion: false,
       previousViewerRank: null,
