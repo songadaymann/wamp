@@ -107,7 +107,8 @@
     "scripts/smoke_welcome_destinations.mjs",
     "scripts/smoke_discovery.mjs",
     "scripts/smoke_post_run_reminders.mjs",
-    "scripts/smoke_first_publish.mjs"
+    "scripts/smoke_first_publish.mjs",
+    "scripts/smoke_returning_guest_panel.mjs"
   ],
   "project": [
     "src/**/*.{js,mjs,ts}",

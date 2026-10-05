@@ -175,7 +175,6 @@ const FEATURED_REOWN_WALLET_IDS = [
 const DEFAULT_GUEST_STATUS = 'Use email or wallet.';
 const DEFAULT_SIGN_IN_PROMPT_STATUS = 'Sign in to continue.';
 const WALLET_NOT_CONFIGURED_MESSAGE = 'Wallet sign-in is not configured on this deployment.';
-let guestPanelAutoOpened = false;
 
 export async function setupAuthUi(): Promise<void> {
   authPanel = document.getElementById('auth-panel');
@@ -280,7 +279,6 @@ export async function setupAuthUi(): Promise<void> {
   bindIdentityRefreshListeners();
   await initializeWalletConnect();
   await refreshSession();
-  maybeAutoOpenGuestPanel();
   renderAuthUi();
   window.dispatchEvent(
     new CustomEvent(AUTH_SESSION_REFRESHED_EVENT, {
@@ -1336,17 +1334,6 @@ function getWalletButtonLabel(): string {
   }
 
   return 'Sign In With Wallet';
-}
-
-function maybeAutoOpenGuestPanel(): void {
-  if (guestPanelAutoOpened || state.authenticated || state.loading || !authPanel) {
-    return;
-  }
-
-  guestPanelAutoOpened = true;
-  authPanel.classList.add('menu-open');
-  authEmailInput?.focus();
-  authEmailInput?.select();
 }
 
 function setLoading(loading: boolean, status?: string): void {
