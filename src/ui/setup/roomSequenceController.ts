@@ -1,3 +1,4 @@
+import { matchesPromptRoom, verifyPromptPlayback } from '../../buildPrompts/playback';
 import Phaser from 'phaser';
 import type { RunRatingModalController } from './runRatingModal';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../../auth/client';
@@ -320,6 +321,8 @@ export class RoomSequenceController {
     this.render();
 
     try {
+      if (entry.buildPrompt) await verifyPromptPlayback(entry);
+      if (this.activeSequence !== sequence) return;
       await scene.jumpToCoordinates(entry.roomCoordinates);
       if (this.activeSequence !== sequence) return;
       if (sequence.mode === 'play') {
@@ -327,7 +330,14 @@ export class RoomSequenceController {
           throw new Error('The room player is not ready yet.');
         }
         this.leaderboardModal.close();
-        scene.playSelectedRoom({ forceGoalIntro: sequence.forceGoalIntro });
+        if (entry.buildPrompt && !matchesPromptRoom(entry, scene.getSelectedRoomContext?.())) {
+          throw new Error('The loaded level does not match the submitted version. Open Build Prompt to refresh.');
+        }
+        await scene.playSelectedRoom(entry.buildPrompt ? { forceGoalIntro: sequence.forceGoalIntro,
+          expectedCourseVersion: entry.legacyCourseId ? entry.expandedRoomVersion ?? undefined : undefined,
+          canStart: () => this.activeSequence === sequence && this.getCurrentEntry() === entry }
+          : { forceGoalIntro: sequence.forceGoalIntro });
+        if (this.activeSequence !== sequence) return;
         sequence.statusText = 'Playing. Use Next for another room.';
       } else {
         if (this.ratingModal) await this.ratingModal.openForSequence(entry);

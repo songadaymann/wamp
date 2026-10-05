@@ -165,6 +165,8 @@ export interface EditorSceneBridge {
 
 export type OverworldSelectedRoomContext = {
   roomId: string;
+  publishedVersion?: number | null;
+  expandedRoomId?: string | null;
   coordinates: RoomCoordinates;
   shareTitle?: string | null;
   state: 'published' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty';
@@ -230,7 +232,7 @@ export interface OverworldSceneBridge {
   canPresentPerformanceAdvisorSuggestion?: () => boolean;
   dismissPerformanceAdvisorSuggestion?: (suggestionId: number) => boolean;
   setPerformanceSuggestionPauseRequested?: (requested: boolean) => void;
-  playSelectedRoom?: (options?: { forceGoalIntro?: boolean }) => void;
+  playSelectedRoom?: (options?: { forceGoalIntro?: boolean; expectedCourseVersion?: number; canStart?: () => boolean }) => void | Promise<void>;
   restartCurrentRun?: () => Promise<void> | void;
   startRoomRushRun?: (options: {
     difficulty: RoomRushDifficulty;

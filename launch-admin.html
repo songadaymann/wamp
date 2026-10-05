@@ -1190,6 +1190,7 @@
       .secondary-details summary, details.panel > summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
       .secondary-details[open] summary { margin-bottom: 12px; }
       .cards .card { border-width: 0 0 1px; }
+      #build-prompt-admin-form textarea { width: 100%; padding: 10px; border: 2px solid #18161c; border-radius: 0; font: inherit; color: #18161c; background: #fff3db; }
     </style>
   </head>
   <body>
@@ -1239,6 +1240,7 @@
           <a href="#builders"><span class="nav-icon" aria-hidden="true">▲</span><span class="nav-label">Builders</span></a>
           <a href="#game-jams"><span class="nav-icon" aria-hidden="true">★</span><span class="nav-label">Game Jams</span></a>
           <a href="#daily-challenge"><span class="nav-icon" aria-hidden="true">☀</span><span class="nav-label">Room of the Day</span></a>
+          <a href="#build-prompts"><span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Build Prompts</span></a>
           <a href="#infrastructure"><span class="nav-icon" aria-hidden="true">⌁</span><span class="nav-label">Infrastructure</span></a>
           <div class="nav-rule"></div>
           <a href="/suspicious-admin.html"><span class="nav-icon" aria-hidden="true">!</span><span class="nav-label">Suspicious Runs</span></a>
@@ -1256,6 +1258,21 @@
               </form>
               <p class="meta">Choose a published goal level with a verified clear. Today’s pick locks when a run starts or its builder is notified. Resets at midnight UTC.</p>
               <a href="/today" target="_blank" rel="noopener">Open today’s challenge</a>
+            </div>
+          </section>
+          <section id="build-prompts" class="admin-section">
+            <header class="section-heading"><h2>Build Prompts</h2></header>
+            <div class="panel stack">
+              <p id="build-prompt-admin-status" role="status">Use your admin key to manage Build Prompts.</p>
+              <label class="field"><span class="label">Scheduled prompts and results</span><select id="build-prompt-admin-select" disabled><option value="">Create a prompt</option></select></label>
+              <form id="build-prompt-admin-form" class="stack">
+                <label class="field"><span class="label">Slug</span><input id="build-prompt-admin-slug" pattern="[a-z0-9][a-z0-9-]{0,79}" maxlength="80" required disabled placeholder="your-prompt-title" /></label>
+                <label class="field"><span class="label">Title</span><input id="build-prompt-admin-title" maxlength="80" required disabled /></label>
+                <label class="field"><span class="label">Building constraint</span><textarea id="build-prompt-admin-constraint" maxlength="400" rows="3" required disabled></textarea></label>
+                <label class="field"><span class="label">Opening Monday (00:00 UTC)</span><input id="build-prompt-admin-week" type="date" required disabled /></label>
+                <div class="auth-actions"><button id="build-prompt-admin-save" type="submit" disabled>Save Prompt</button><button id="build-prompt-admin-delete" type="button" class="secondary" disabled>Remove Empty Prompt</button></div>
+              </form>
+              <p class="meta">One week, Monday to Monday. The first entry locks the theme. Builders publish a public goal level during that week, then opt in. Eligible verified quality ratings determine up to three winners, with at least one rating required. Winners receive a profile badge, a result ribbon and a featured slot.</p>
             </div>
           </section>
           <section id="overview" class="admin-section">

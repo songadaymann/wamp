@@ -1,3 +1,5 @@
+import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../buildPrompts/publishing';
+import { expandedRoomIdFromLegacyCourseId } from '../expandedRooms/model';
 import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draftBackupController';
 import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecycle';
 import Phaser from 'phaser';
@@ -597,6 +599,8 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       const courseId = this.record.draft.id;
       const userId = getAuthDebugState().user?.id ?? null;
       const firstPublish = !this.record.published && this.record.versions.length === 0;
+      const promptChoice = await prepareBuildPromptEntry(userId, `expanded_room:${expandedRoomIdFromLegacyCourseId(courseId)}`);
+      if (!promptChoice || !this.scene.isActive() || this.record?.draft.id !== courseId || getAuthDebugState().user?.id !== userId) return;
       const previousProgression = await capturePublishProgression(userId);
       if (!this.scene.isActive() || this.record?.draft.id !== courseId || getAuthDebugState().user?.id !== userId) return;
       const sent = cloneCourseSnapshot(this.record.draft);
@@ -612,6 +616,8 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       if (userId && published.published && this.scene.isActive() && getAuthDebugState().user?.id === userId) {
         const snapshot = cloneCourseSnapshot(published.published);
         void reportPublishProgression({ userId, previousProgression, contentType: 'expanded_room', contentId: snapshot.id, title: snapshot.title });
+        await completeBuildPromptEntry(promptChoice, userId, `expanded_room:${expandedRoomIdFromLegacyCourseId(snapshot.id)}`, snapshot.version, snapshot.title ?? 'Your expanded room');
+        if (!this.scene.isActive() || getAuthDebugState().user?.id !== userId) return;
         if (firstPublish) announceFirstPublishedExpandedRoom({ userId, snapshot,
           play: coordinates => {
             this.backupDebouncer.flush(); this.scene.sleep();

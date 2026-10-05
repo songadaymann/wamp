@@ -44,6 +44,8 @@ import {
 
 export interface SelectedRoomContext {
   roomId: string;
+  publishedVersion?: number | null;
+  expandedRoomId?: string | null;
   coordinates: RoomCoordinates;
   shareTitle?: string | null;
   state: SelectedCellState;
@@ -156,6 +158,8 @@ export class OverworldHudStateController {
     const playingTitle = activeCourse?.roomRefs.some(ref => ref.roomId === selectedRoomId) ? activeCourse.title : null;
     return {
       roomId: selectedRoomId,
+      publishedVersion: this.host.getRoomSnapshotForCoordinates(selectedCoordinates)?.version ?? null,
+      expandedRoomId: this.selectedSummary?.expandedRoom?.expandedRoomId ?? null,
       coordinates: { ...selectedCoordinates },
       shareTitle: playingTitle ?? this.selectedSummary?.expandedRoom?.title ?? selectedCourse?.courseTitle
         ?? this.host.getRoomSnapshotForCoordinates(selectedCoordinates)?.title ?? this.selectedSummary?.title ?? null,

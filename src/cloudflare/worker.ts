@@ -1,3 +1,5 @@
+import { handleBuildPrompts } from './worker/buildPrompts/routes';
+import { settleExpiredBuildPrompts } from './worker/buildPrompts/store';
 import { handleRoomInsights } from './worker/insights/routes';
 import { handleDaily } from './worker/daily/routes';
 import { ensureDailyPick } from './worker/daily/store';
@@ -139,6 +141,8 @@ type WorkerExecutionContext = {
 };
 
 const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[] = [
+  { methods: ['GET','POST','DELETE'], pattern: {prefix:'/api/build-prompts'}, auth:'optional',
+    handler: ({request,url,env}) => handleBuildPrompts(request,url,env) },
   { methods: ['GET'], pattern: '/api/daily', auth: 'optional',
     handler: ({ request, env }) => handleDaily(request,env) },
   {
@@ -311,6 +315,8 @@ export default {
     const activity = await runActivityEmails(env, { now: new Date(event.scheduledTime).toISOString() });
     console.log(JSON.stringify({ event: 'activity-email-scheduled', ...activity }));
     const now = new Date(event.scheduledTime).toISOString();
+    const promptsSettled = await settleExpiredBuildPrompts(env,now);
+    console.log(JSON.stringify({event:'build-prompts-settled',count:promptsSettled}));
     await ensureDailyPick(env,now);
     const dailyNotices = await sendDailyFeatureEmail(env,now);
     console.log(JSON.stringify({event:'daily-feature-email-scheduled',sent:dailyNotices}));

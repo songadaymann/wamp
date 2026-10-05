@@ -3,9 +3,10 @@ import type { RoomCoordinates } from '../../persistence/roomModel';
 export const ROOM_SEQUENCE_START_EVENT = 'room-sequence-start';
 
 export type RoomSequenceMode = 'play' | 'rate';
-export type RoomSequenceKind = 'explore' | 'playlist' | 'welcome';
+export type RoomSequenceKind = 'explore' | 'playlist' | 'welcome' | 'build-prompt';
 
 export interface RoomSequenceEntry {
+  buildPrompt?: { slug: string; targetKey: string; offset: number };
   roomId: string;
   roomCoordinates: RoomCoordinates;
   roomVersion: number;

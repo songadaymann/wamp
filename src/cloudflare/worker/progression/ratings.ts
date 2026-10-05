@@ -49,6 +49,7 @@ import {
 import { awardLaneDelta, persistProgressIncrement } from './laneEvents';
 import { loadOrBackfillUserProgress } from './progressRows';
 import { loadEffectiveTrustTier } from './trustCaps';
+import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 
 function summarizeQualityRatings(
   rows: Array<{ quality_stars: number | null; trust_weight: number }>,
@@ -411,6 +412,7 @@ async function upsertRoomRatingRow(
   env: Env,
   params: {
     roomId: string;
+    publishedVersion: number;
     ratingWindow: RatingWindow;
     userId: string;
     qualityStars: number | null;
@@ -437,12 +439,18 @@ async function upsertRoomRatingRow(
           updated_at,
           rewarded_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, (
+          SELECT attempt_id FROM room_runs
+          WHERE room_id = ? AND room_version = ? AND user_id = ? AND result = 'completed'
+            AND ${sqlIsVerificationAccepted('room_runs')}
+          ORDER BY finished_at DESC, attempt_id DESC LIMIT 1
+        ), ?, ?, NULL)
         ON CONFLICT(room_id, version_key, user_id) DO UPDATE SET
           quality_stars = excluded.quality_stars,
           difficulty_choice = excluded.difficulty_choice,
           auto_difficulty_choice = excluded.auto_difficulty_choice,
           trust_weight = excluded.trust_weight,
+          completed_attempt_id = excluded.completed_attempt_id,
           updated_at = excluded.updated_at
       `
     ).bind(
@@ -454,6 +462,9 @@ async function upsertRoomRatingRow(
       params.difficultyChoice,
       params.autoSuggestedDifficulty,
       params.trustWeight,
+      params.roomId,
+      params.publishedVersion,
+      params.userId,
       params.now,
       params.now,
     ),
@@ -467,6 +478,7 @@ async function upsertCourseRatingRow(
   env: Env,
   params: {
     courseId: string;
+    publishedVersion: number;
     ratingWindow: RatingWindow;
     userId: string;
     qualityStars: number | null;
@@ -493,12 +505,18 @@ async function upsertCourseRatingRow(
           updated_at,
           rewarded_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, (
+          SELECT attempt_id FROM course_runs
+          WHERE course_id = ? AND course_version = ? AND user_id = ? AND result = 'completed'
+            AND ${sqlIsVerificationAccepted('course_runs')}
+          ORDER BY finished_at DESC, attempt_id DESC LIMIT 1
+        ), ?, ?, NULL)
         ON CONFLICT(course_id, version_key, user_id) DO UPDATE SET
           quality_stars = excluded.quality_stars,
           difficulty_choice = excluded.difficulty_choice,
           auto_difficulty_choice = excluded.auto_difficulty_choice,
           trust_weight = excluded.trust_weight,
+          completed_attempt_id = excluded.completed_attempt_id,
           updated_at = excluded.updated_at
       `
     ).bind(
@@ -510,6 +528,9 @@ async function upsertCourseRatingRow(
       params.difficultyChoice,
       params.autoSuggestedDifficulty,
       params.trustWeight,
+      params.courseId,
+      params.publishedVersion,
+      params.userId,
       params.now,
       params.now,
     ),
@@ -601,6 +622,7 @@ export async function submitRoomRating(
 
   await upsertRoomRatingRow(env, {
     roomId: published.id,
+    publishedVersion: published.version,
     ratingWindow,
     userId: params.userId,
     qualityStars,
@@ -762,6 +784,7 @@ export async function submitCourseRating(
 
   await upsertCourseRatingRow(env, {
     courseId: published.id,
+    publishedVersion: published.version,
     ratingWindow,
     userId: params.userId,
     qualityStars,

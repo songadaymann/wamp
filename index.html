@@ -188,6 +188,7 @@
         </div>
         <div class="auth-row auth-menu-action-row">
           <button id="btn-auth-rate-clears" class="bar-btn auth-menu-action-btn hidden" type="button">Rate rooms</button>
+          <button id="btn-auth-build-prompt" class="bar-btn auth-menu-action-btn hidden" type="button">Build Prompt</button>
           <button id="btn-auth-daily" class="bar-btn auth-menu-action-btn hidden" type="button">Room of the Day</button>
           <button id="btn-auth-guest-progress" class="bar-btn auth-menu-action-btn" type="button">Guest Clears</button>
           <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button">Guest Drafts</button>
@@ -2573,6 +2574,30 @@
       </div>
     </div>
   </div>
+  <div id="build-prompt-modal" class="history-modal hidden" role="dialog" aria-modal="true" aria-labelledby="build-prompt-title" aria-hidden="true">
+    <div class="history-modal-content build-prompt-content">
+      <div class="history-modal-header"><h2 id="build-prompt-title" class="history-modal-title">Build Prompt</h2><button id="btn-build-prompt-close" class="bar-btn bar-btn-small" type="button">Close</button></div>
+      <p id="build-prompt-window"></p><p id="build-prompt-constraint"></p>
+      <select id="build-prompt-history" class="hidden" aria-label="Previous prompts"></select>
+      <p id="build-prompt-status" role="status">Loading Build Prompt…</p>
+      <div class="build-prompt-actions"><button id="btn-build-prompt-play-all" class="bar-btn bar-btn-small" type="button" disabled>Play All</button><button id="btn-build-prompt-refresh" class="bar-btn bar-btn-small" type="button">Refresh</button></div>
+      <ol id="build-prompt-entries"></ol>
+      <button id="btn-build-prompt-more" class="bar-btn bar-btn-small hidden" type="button">Load More</button>
+      <p id="build-prompt-rules" class="hidden">One entry per builder. Withdraw to choose another level. Updating an entered level requires entering the new publication; its ratings start again. Play signed in, clear the submitted version and rate its quality to vote. Builder ratings do not count. Up to three winners receive a Prompt Winner badge, a result ribbon and a featured slot. Adjusted quality uses the existing rating weights and a 3.5-star starting score with the weight of five ratings. At least one verified rating is required.</p>
+    </div>
+  </div>
+  <div id="build-prompt-publish-modal" class="history-modal hidden" role="dialog" aria-modal="true" aria-labelledby="build-prompt-publish-title" aria-hidden="true">
+    <form id="build-prompt-publish-form" class="history-modal-content build-prompt-content">
+      <h2 id="build-prompt-publish-title">Build Prompt</h2><p id="build-prompt-publish-constraint"></p>
+      <label class="build-prompt-checkbox"><input id="build-prompt-enter" type="checkbox" />Enter this week’s prompt</label>
+      <p>Optional. Enter one public goal level per week. Your saved publication will be the submitted version.</p>
+      <div class="build-prompt-actions"><button id="btn-build-prompt-publish" class="bar-btn" type="submit">Publish</button><button id="btn-build-prompt-publish-cancel" class="bar-btn" type="button">Cancel</button></div>
+    </form>
+  </div>
+  <aside id="build-prompt-result" class="hidden" aria-label="Build Prompt entry result">
+    <p id="build-prompt-result-status" role="status"></p>
+    <div class="build-prompt-actions"><button id="btn-build-prompt-entry-retry" class="bar-btn hidden" type="button">Retry Entry</button><button id="btn-build-prompt-view" class="bar-btn" type="button">View Prompt</button><button id="btn-build-prompt-result-close" class="bar-btn" type="button">Dismiss</button></div>
+  </aside>
   <div id="explore-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel explore-modal-panel" role="dialog" aria-modal="true" aria-labelledby="explore-modal-title">
       <div class="history-modal-header">
@@ -2588,6 +2613,7 @@
         <button class="bar-btn bar-btn-small" type="button" data-explore-difficulty="hard">Hard</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-difficulty="extreme">Extreme</button>
       </div>
+      <button id="btn-explore-build-prompt" class="bar-btn bar-btn-small" type="button">Build Prompt</button>
       <div id="explore-sorts" class="leaderboard-discover-filters leaderboard-discover-sorts explore-sorts">
         <button class="bar-btn bar-btn-small active" type="button" data-explore-sort="featured">Featured</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="popular" title="Distinct players in the last 14 days">Popular</button>

@@ -3201,7 +3201,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         return;
       }
     }
-    this.flowController.playSelectedRoom();
+    await this.flowController.playSelectedRoom();
   }
 
   zoomIn(): void {
@@ -5082,7 +5082,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.constrainInspectCamera();
   }
 
-  playSelectedRoom(options: { forceGoalIntro?: boolean } = {}): void {
+  playSelectedRoom(options: { forceGoalIntro?: boolean; expectedCourseVersion?: number; canStart?: () => boolean } = {}): void | Promise<void> {
     if (this.mode === 'play') {
       if (this.activeRoomRushRun) {
         this.endRoomRushRun();
@@ -5092,7 +5092,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    this.flowController.playSelectedRoom(options);
+    return this.flowController.playSelectedRoom(options);
   }
 
   async startRoomRushRun(options: {
@@ -5904,8 +5904,8 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.editSelectedRoom();
   }
 
-  async playSelectedCourse(): Promise<void> {
-    await this.flowController.playSelectedCourse();
+  async playSelectedCourse(expectedVersion?: number, canStart?: () => boolean): Promise<void> {
+    await this.flowController.playSelectedCourse(expectedVersion, canStart);
   }
 
   async openCourseEditor(): Promise<void> {
