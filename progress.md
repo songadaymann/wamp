@@ -4,6 +4,21 @@ Delivered a 15-minute Worker monitor using the existing admin email service, dur
 
 Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clean current-main worktree, verify it in the browser, push the branch, and publish a frontend-only safety Pages preview.
 
+## 2026-10-04 — F099 returning guest menu, in progress
+
+Continue one checkup item on `codex/checkup-returning-guest-panel-2026-10-04`, from fresh main `d962aa4a`, carrying F133 delivery bookkeeping as `c3c7ca2f`. Master remains 38/214 until live acceptance. Preserve the stale primary checkout's original 25 dirty entries.
+
+- [x] Reproduce the startup sign-in panel and review its email-focus action for a returning guest.
+- [x] Remove the startup auto-open/focus action from its existing auth owner. Retain explicit menu and contextual sign-in entry.
+- [x] Verify home/reload/shared links, fresh Welcome, native movement and explicit save-progress sign-in across desktop, phone, narrow phone and landscape; run quality and the unchanged official game client.
+- [ ] Commit/push/PR/merge, guarded Pages-only delivery and actual custom-domain acceptance; update the existing checklist/ledger/delivery notes and stop before F100.
+
+Scope: reverse the deliberate auth-first startup decision. Use the existing player-chosen sign-in moments without adding visit counters, throttling, new copy or signup prompts. Frontend only; F100's early guest-builder modal remains separate.
+
+Behavior acceptance: the pre-fix desktop/local and landscape/actual-production checks both fail with the guest menu open on boot. Those reports and screenshots remain under `output/web-game/returning-guest-panel/baseline*`. They prove the menu opening; the source's focus call did not produce an observed email-focus event in these runs. The change removes the existing auth owner's call, helper and one-shot state (13 lines); explicit menu and `promptForSignIn` remain authoritative.
+
+The four-layout `local` matrix passes home, reload, shared-room intro/Start, native keyboard/touch movement, manual menu and fresh Welcome with zero unexpected errors and no auth mutation requests. Desktop additionally completes a real server-verified guest clear and chooses Save 1 clear, opening sign-in with the existing 14-day message and email focus. The only separated error is a request-proven leaderboard GET cancelled by navigation, matching the previously reproduced unchanged-main condition. The unchanged installed official client against this frontend and the real production API reports healthy Play/rendering with no captured errors; screenshots/state are inspected. Final source quality passes all 317 files / 2,452 tests, lint, TypeScript, generated bindings, build, DOM contract and Worker safety with two test workers and original assertions/timeouts. The initial run failed only because the new browser script was missing from the executable registry; its failed log is retained, and the registry is corrected before the full passing rerun. The maintained smoke is registered in the package commands, lint and Knip. Master remains 38/214.
+
 ## 2026-10-04 — F133 first publish (including F105), delivered
 
 Delivered one checkup item on `codex/checkup-first-publish-2026-10-04`, based on main `860302d1` with F130 bookkeeping carried as `d85f3737`. F133 is live in PR #54, merge `d962aa4a`; master 38/214.
