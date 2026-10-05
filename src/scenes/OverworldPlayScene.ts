@@ -3185,7 +3185,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       const coordinates = { ...this.selectedCoordinates };
       try {
         const ready = await dailyEntryReady(createDailyRepository(),dailyDate,coordinates,
-          this.getRoomSnapshotForCoordinates(coordinates)?.version ?? null);
+          this.getRoomSnapshotForCoordinates(coordinates)?.version ?? null,
+          this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.version ?? null);
         if (this.mode !== 'browse' || coordinates.x !== this.selectedCoordinates.x || coordinates.y !== this.selectedCoordinates.y) return;
         if (!ready) {
           this.showTransientStatus('Today’s challenge changed. Open Room of the Day to choose the current level.');
