@@ -7,6 +7,7 @@ import {
 import { isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/profileEvents';
 
 interface OverworldHudRuntimeConfig {
+  onShareRoom: () => void | Promise<void>;
   onPlayRoom: () => void | Promise<void>;
   onRestartRun: () => void | Promise<void>;
   onPlayCourse: () => void | Promise<void>;
@@ -32,6 +33,7 @@ interface OverworldHudRuntimeConfig {
 }
 
 const runtimeConfig: OverworldHudRuntimeConfig = {
+  onShareRoom: () => {},
   onPlayRoom: () => {},
   onRestartRun: () => {},
   onPlayCourse: () => {},
@@ -56,6 +58,7 @@ const runtimeConfig: OverworldHudRuntimeConfig = {
 export function configureOverworldHudBridgeRuntime(
   config: Partial<OverworldHudRuntimeConfig>,
 ): void {
+  if (config.onShareRoom) runtimeConfig.onShareRoom = config.onShareRoom;
   if (config.onPlayRoom) {
     runtimeConfig.onPlayRoom = config.onPlayRoom;
   }
@@ -149,6 +152,9 @@ export interface OverworldHudViewModel {
   playButtonText: string;
   playButtonDisabled: boolean;
   playButtonActive: boolean;
+  shareButtonDisabled: boolean;
+  shareButtonHidden: boolean;
+  mobileShareButtonHidden: boolean;
   restartButtonText: string;
   restartButtonDisabled: boolean;
   restartButtonActive: boolean;
@@ -227,6 +233,8 @@ export class OverworldHudBridge {
   private readonly selectedGoalEl: HTMLElement | null;
   private readonly leaderboardEl: HTMLElement | null;
   private readonly playButton: HTMLButtonElement | null;
+  private readonly shareButton: HTMLButtonElement | null;
+  private readonly mobileShareButton: HTMLButtonElement | null;
   private readonly restartButton: HTMLButtonElement | null;
   private readonly playCourseButton: HTMLButtonElement | null;
   private readonly roomRushButton: HTMLButtonElement | null;
@@ -370,6 +378,8 @@ export class OverworldHudBridge {
     void runtimeConfig.onPlayRoom();
   };
 
+  private readonly handleShareRoomClick = (): void => { void runtimeConfig.onShareRoom(); };
+
   private readonly handleRestartRunClick = (): void => {
     void runtimeConfig.onRestartRun();
   };
@@ -476,6 +486,8 @@ export class OverworldHudBridge {
     this.selectedGoalEl = this.doc.getElementById('world-selected-goal');
     this.leaderboardEl = this.doc.getElementById('world-leaderboard');
     this.playButton = this.doc.getElementById('btn-world-play') as HTMLButtonElement | null;
+    this.shareButton = this.doc.getElementById('btn-world-share') as HTMLButtonElement | null;
+    this.mobileShareButton = this.doc.getElementById('btn-mobile-world-share') as HTMLButtonElement | null;
     this.restartButton = this.doc.getElementById('btn-world-restart') as HTMLButtonElement | null;
     this.playCourseButton = this.doc.getElementById('btn-world-play-course') as HTMLButtonElement | null;
     this.roomRushButton = this.doc.getElementById('btn-world-room-rush') as HTMLButtonElement | null;
@@ -527,6 +539,8 @@ export class OverworldHudBridge {
     this.selectedCreatorCardEl?.addEventListener('click', this.handleSelectedCreatorClick);
     this.selectedCreatorEl?.addEventListener('click', this.handleSelectedCreatorClick);
     this.playButton?.addEventListener('click', this.handlePlayRoomClick);
+    this.shareButton?.addEventListener('click', this.handleShareRoomClick);
+    this.mobileShareButton?.addEventListener('click', this.handleShareRoomClick);
     this.restartButton?.addEventListener('click', this.handleRestartRunClick);
     this.playCourseButton?.addEventListener('click', this.handlePlayCourseClick);
     this.roomRushButton?.addEventListener('click', this.handleRoomRushClick);
@@ -602,6 +616,11 @@ export class OverworldHudBridge {
     this.setText(this.bottomBarZoomEl, viewModel.bottomBarZoomText);
     this.setButton(this.playButton, viewModel.playButtonText, viewModel.playButtonDisabled);
     this.setActive(this.playButton, viewModel.playButtonActive);
+    this.setButton(this.shareButton, 'Share', viewModel.shareButtonDisabled);
+    this.setActive(this.shareButton, viewModel.playButtonActive);
+    this.shareButton?.classList.toggle('hidden', viewModel.shareButtonHidden);
+    this.setButton(this.mobileShareButton, 'Share', viewModel.shareButtonDisabled);
+    this.mobileShareButton?.classList.toggle('hidden', viewModel.mobileShareButtonHidden);
     this.setButton(this.restartButton, viewModel.restartButtonText, viewModel.restartButtonDisabled);
     this.setActive(this.restartButton, viewModel.restartButtonActive);
     this.restartButton?.classList.toggle('hidden', viewModel.restartButtonHidden);
@@ -660,6 +679,8 @@ export class OverworldHudBridge {
     this.selectedCreatorCardEl?.removeEventListener('click', this.handleSelectedCreatorClick);
     this.selectedCreatorEl?.removeEventListener('click', this.handleSelectedCreatorClick);
     this.playButton?.removeEventListener('click', this.handlePlayRoomClick);
+    this.shareButton?.removeEventListener('click', this.handleShareRoomClick);
+    this.mobileShareButton?.removeEventListener('click', this.handleShareRoomClick);
     this.restartButton?.removeEventListener('click', this.handleRestartRunClick);
     this.playCourseButton?.removeEventListener('click', this.handlePlayCourseClick);
     this.roomRushButton?.removeEventListener('click', this.handleRoomRushClick);

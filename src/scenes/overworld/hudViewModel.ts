@@ -488,6 +488,9 @@ export function buildOverworldHudViewModel(
             selectedState !== 'draft' &&
             selectedState !== 'claimed_unpublished',
     playButtonActive: mode === 'play' && !activeRoomRushRun,
+    shareButtonDisabled: selectedState !== 'published',
+    shareButtonHidden: selectedState !== 'published',
+    mobileShareButtonHidden: mode !== 'play' || selectedState !== 'published',
     restartButtonText: 'Restart',
     restartButtonDisabled: mode !== 'play',
     restartButtonActive: mode === 'play',

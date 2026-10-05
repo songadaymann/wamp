@@ -4,6 +4,17 @@ Delivered a 15-minute Worker monitor using the existing admin email service, dur
 
 Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clean current-main worktree, verify it in the browser, push the branch, and publish a frontend-only safety Pages preview.
 
+## 2026-10-05 — F131 guest and Expanded Room sharing, in progress
+
+- [x] Audit result modes, queued clear targets, selected-room HUD and existing sharing behavior.
+- [x] Enable account-independent clear sharing, exact completed-level links with attribution, Copy Link and native sharing with clipboard fallback; retain X and valid room snapshots.
+- [x] Verify URL identity, cancellation/failure handling and guest/rating-only regressions; run native desktop/phone/narrow/landscape flows, official gameplay and full quality checks.
+- [ ] Commit/push/PR/merge, guarded production delivery and custom-domain verification; update this plan, the existing ledger/delivery notes and master. Stop before F132.
+
+Source verification: the unchanged live entry `main-CiUPQKpR.js` hides sharing after an actual verified guest clear (finish HTTP 200) and has no selected-room Share. The final source passes 323 files / 2,514 tests, lint, types, bindings, build, map-asset, DOM (874 IDs / 188 required) and Worker safety checks. Guest native desktop, portrait phone, narrow phone and landscape flows verify eight real ordinary/expanded clears, deferred results, share/copy/X payloads, snapshot download, cancellation, unsupported/rejected sharing, clipboard failure/retry and expanded-link round trips. A fresh signed-in local actor passes both clear types too. These fixtures have zero unexpected errors; exact missing local presence-signing 503s are separated (98 guest / 54 signed). The unchanged official game client independently passes source gameplay against the real production API with healthy rendering/collision/loop and no captured errors; its screenshot is inspected. The last snapshot-status race has a regression test. Existing F098 framing and far-away Browse streaming limitations remain separate; adjacent new local fixture cells provide sharing acceptance. Earlier failed diagnostics are retained. Release and exact live acceptance remain pending.
+
+Scope is F131 only. Preserve the original 25 dirty primary entries and use the attached clean worktree. Expanded/course results share text and their original published start cell; room images remain matched to the completed room. Native QA intercepts sharing payloads without posting social messages. No new repository Markdown files.
+
 ## 2026-10-05 — F137 returning-draft reminder timing and pause, delivered
 
 - [x] Audit current presentation guards and reproduce a newer autosave reopening the reminder after Close and Go To Room.

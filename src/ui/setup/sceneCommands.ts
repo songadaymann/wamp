@@ -17,6 +17,7 @@ import {
 import { REQUEST_BUILDER_MODE_EVENT } from './welcomeModal';
 import { getGameSettings } from '../../settings/userSettings';
 import { configureOverworldHudBridgeRuntime } from '../../scenes/overworld/hud';
+import { RoomSharingController } from './roomSharing';
 
 export function setupSceneCommands(
   game: Phaser.Game,
@@ -38,6 +39,7 @@ export function setupSceneCommands(
   const worldJumpInput = doc.getElementById('world-jump-input') as HTMLInputElement | null;
   const courseSaveBtn = doc.getElementById('btn-course-editor-save-course');
   const coursePublishBtn = doc.getElementById('btn-course-editor-publish-course');
+  const roomSharing = new RoomSharingController(() => getActiveOverworldScene(game)?.getSelectedRoomContext?.() ?? null, doc, doc.defaultView ?? window);
 
   const closeMenu = () => {
     authPanel?.classList.remove('menu-open');
@@ -143,6 +145,7 @@ export function setupSceneCommands(
   doc.addEventListener('keydown', handleRoomCommentShortcut, { capture: true });
 
   configureOverworldHudBridgeRuntime({
+    onShareRoom: () => roomSharing.shareSelectedRoom(),
     onPlayRoom: () => {
       const overworldScene = getActiveOverworldScene(game);
       closeWorldPanels();

@@ -31,12 +31,14 @@ export interface RoomPostRunRatingRequestDetail extends BasePostRunRatingRequest
 export interface CoursePostRunRatingRequestDetail extends BasePostRunRatingRequestDetail {
   contentType: 'course';
   expandedRoomId?: string | null;
+  shareCoordinates?: RoomCoordinates;
 }
 
 export interface ExpandedRoomPostRunRatingRequestDetail extends BasePostRunRatingRequestDetail {
   contentType: 'expanded_room';
   expandedRoomId: string;
   legacyCourseId?: string | null;
+  shareCoordinates?: RoomCoordinates;
 }
 
 export type PostRunRatingRequestDetail =
