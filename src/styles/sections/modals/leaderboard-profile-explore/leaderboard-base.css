@@ -170,8 +170,8 @@ body[data-device-class='phone'] .leaderboard-row.leaderboard-week-row > :nth-chi
 }
 
 body[data-device-class='phone'] #leaderboard-modal {
-  left: 0;
-  top: 0;
+  left: var(--leaderboard-visual-left, 0px);
+  top: var(--leaderboard-visual-top, 0px);
   right: auto;
   bottom: auto;
   width: 100vw;
