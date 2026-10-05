@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 39 of 214 done.**
+**Progress: 40 of 214 done.**
 
 ## How to use this file
 
@@ -85,7 +85,7 @@ Go one item at a time, and check each on the live site and on a real phone befor
 4. **Student safety.** Lock down room chat and school restrictions (F208, F190, F209, F211) before any new classroom pilots.
 5. **Mobile building.** Fix the pinch stray-tile bug and add Undo/Redo buttons (F079, F157).
 6. **Tablet and landscape controls.** Add these next (F075), since that's the biggest chunk of players who currently can't play.
-7. **First visits.** Shared-link modal deferral, guest progress carry-over, first-play control guidance and Welcome destinations are delivered (F093, F122, F104, F126). Curated discovery and run-based difficulty are also delivered (F125). Guest clear celebration, run results and truthful save/XP guidance are delivered (F096). The private builder activity inbox and opt-in weekly/lost-#1 emails are delivered (F123). Published-version room statistics and editor death maps are delivered (F124, including F164). Recoverable after-run rating and guest save/history reminders are delivered in Browse and Play (F130). First-publish naming, celebration, sharing and publish XP are delivered for ordinary and expanded rooms (F133, including F105). Returning guests now keep the sign-in menu closed until they choose it (F099). Next: remove the sign-in interruption after a guest builder's first brush stroke (F100).
+7. **First visits.** Shared-link modal deferral, guest progress carry-over, first-play control guidance and Welcome destinations are delivered (F093, F122, F104, F126). Curated discovery and run-based difficulty are also delivered (F125). Guest clear celebration, run results and truthful save/XP guidance are delivered (F096). The private builder activity inbox and opt-in weekly/lost-#1 emails are delivered (F123). Published-version room statistics and editor death maps are delivered (F124, including F164). Recoverable after-run rating and guest save/history reminders are delivered in Browse and Play (F130). First-publish naming, celebration, sharing and publish XP are delivered for ordinary and expanded rooms (F133, including F105). Returning guests now keep the sign-in menu closed until they choose it (F099). Guest builders can now draw and autosave without the blocking sign-in dialog until they choose Save or Publish (F100). Next: returning-draft popup timing and repeat prompts (F137).
 8. **Security and safety items.** Details withheld from this public repo until fixed (F182, F183, F185, F198, F201).
 9. **Quick wins and big bets.** Mix in quick wins between bigger items whenever a palate cleanser helps. Then pick one big bet at a time, starting with 'First Steps' or the builder-feedback inbox, since those most directly turn visitors into returning builders.
 
@@ -229,7 +229,7 @@ What happens in a newcomer's first five minutes, and what brings players and bui
 - [x] **F130** After-run rating prompts and sign-up prompts disappear unless the player goes back to the map · medium impact · small effort — **done 2026-10-04** (`860302d1`). Dismissible Browse/Play reminders recover exact current-version unrated counts and truthful 14-day guest save/history state after reload; the account menu remains accessible, and the existing full rating form advances ordinary/expanded Rate All queues. Full API/Pages release, 2,430 tests, four real live guest-clear/reload flows, four live-asset signed/local-API fixtures and all 179 served JS/CSS files pass.
 - [x] **F133** Publishing your first room ends with a line of status text: no celebration, no share prompt, no title prompt (also covers F105) · medium impact · small effort — **done 2026-10-04** (`d962aa4a`, PR #54). Unnamed rooms prompt before publishing; first ordinary/expanded publications show their saved title, preview, sharing, publish XP and Play, including the full published expanded run.
 - [x] **F099** Returning guests get the sign-in panel popped open on every visit (full-screen on phone landscape) · medium impact · small effort — **done 2026-10-04** (`30ae62a4`, PR #55). Remove startup menu/focus action; manual menu and Save clears sign-in remain. Four live guest layouts and healthy official-client gameplay pass.
-- [ ] **F100** Guest builders are interrupted by a sign-in modal after their first brush stroke · medium impact · small effort
+- [x] **F100** Guest builders are interrupted by a sign-in modal after their first brush stroke · medium impact · small effort — **done 2026-10-05** (`00add785`, PR #56). Only explicit Save/Publish opens the claim dialog; drawing/autosave stays uninterrupted, with draft recovery retained. Four live-asset native layouts, healthy real-API gameplay and all 2,457 tests pass.
 - [ ] **F137** The 'You left a room unfinished' popup can interrupt a shared-link run and returns every visit · low impact · small effort
 - [ ] **F131** Guests and Expanded Room players can't share a clear, and the map has no 'Share this room' button · medium impact · small effort
 - [ ] **F132** Link previews for the best levels (Expanded Rooms) say 'WAMP room -4,12' with no title or builder · medium impact · small effort
