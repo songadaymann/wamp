@@ -4,6 +4,17 @@ Delivered a 15-minute Worker monitor using the existing admin email service, dur
 
 Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clean current-main worktree, verify it in the browser, push the branch, and publish a frontend-only safety Pages preview.
 
+## 2026-10-05 — F132 Expanded Room link previews, in progress
+
+- [x] Audit the live Pages preview and public share metadata for native, legacy and ordinary rooms.
+- [x] Resolve published share metadata before per-cell fallback; credit the published builder and use the existing full-footprint Expanded Room image.
+- [x] Verify published membership, image selection, unavailable metadata, timeouts, escaping, GET/HEAD and responsive shared-link gameplay; run full quality.
+- [ ] Complete exact-source hosted checks, merge, guarded API/Pages delivery and live metadata/image/gameplay verification; update existing notes and master, then stop.
+
+Live baseline: Cybertowers (-4,12), The Zone of truth (-16,-1) and The Mountain (8,0) have generic per-cell titles and images on wamp.land, while the share API already supplies whole-level titles and footprint images. The resolved published target already has the public builder display name; expose it in share metadata without adding a database query or migration. Reuse the attached worktree and preserve the primary's original 25 unrelated dirty entries. No production fixture/account writes, test emails/social posts or new repository Markdown files.
+
+Source acceptance: three preview regressions fail on unchanged code and pass after the fix. Full quality passes 324 files / 2,541 tests, lint, types, bindings, public-config build, map-asset compatibility, DOM (874 IDs / 188 required) and Worker safety. The built Pages worker and isolated API pass five native/legacy/ordinary/focused-cell metadata, GET/HEAD and 1200×630 PNG checks. Four fresh guest layouts pass nine shared-link intro/Start, exact destination, collision/loop/readiness and quiet-menu flows, with zero unexpected errors or aborted requests; 42 exact local presence-signing 503s are separated. The unchanged official game client separately passes source gameplay against the real production API with healthy rendering, collision and loop, configured wallet, disabled test reset and no captured errors; its screenshot is inspected. Full-footprint PNGs and responsive screenshots are inspected. Existing F098 camera/framing and physical 120Hz acceptance remain separate. The first local Pages runner used the API configuration and was corrected to run the actual built Pages worker from an isolated directory; earlier diagnostics are retained. Evidence is in ignored output/web-game/expanded-link-previews/ and /tmp/wamp-f132-*; no new repository Markdown files. Release remains pending.
+
 ## 2026-10-05 — F131 guest and Expanded Room sharing, delivered
 
 - [x] Audit result modes, queued clear targets, selected-room HUD and existing sharing behavior.
