@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 47 of 214 done.**
+**Progress: 48 of 214 done.**
 
 ## How to use this file
 
@@ -244,7 +244,7 @@ The movement has a great base. These items make it fair on every screen, make de
 - [ ] **F138** Jump height, ice and gravity zones change with screen refresh rate (120/144Hz vs 60Hz vs laggy 30fps) · high impact · small effort
   - Production implementation delivered in PR #38; controlled desktop/phone verification passes. Combined F002/F138 physical 120Hz phone acceptance remains open.
 - [x] **F139** Pits never kill: invisible floor under rooms, and falling into the room below abandons your timed run · high impact · medium effort — **done 2026-10-05** (`fd59a68c`, PR #65). Optional Deadly pits is off by default for ordinary rooms and Expanded Room roots. On makes exposed outer bottom falls use death/respawn while retaining timed attempts; Off and internal Expanded Room drops retain downward connections. Persisted Goal/Setup controls and exposed-edge guides; all 2,648 tests, exact-source/main checks, desktop/portrait-touch settings and solid-floor physics, guest clear/practice, official public gameplay and all 179 served JS/CSS files pass. Existing editor asset-preload paths reproduce on the previous release and remain separate.
-- [ ] **F141** Add respawn checkpoints: deaths in courses/expanded rooms send you back to the very first screen · high impact · medium effort
+- [x] **F141** Add respawn checkpoints: deaths in courses/expanded rooms send you back to the very first screen · high impact · medium effort — **done 2026-10-06** (`fd9e1159`) Placeable touched flags and reached Sprint markers retain timed/death-counted room/course/expanded attempts; reset on fresh play. Explicit ranked respawns reject forged jumps; coordinated map/catalog release and desktop/phone authoring/gameplay pass.
 - [ ] **F147** Add hitstop, a short death beat, the unused death sound, and hold-to-bounce higher on stomps (also covers F111) · medium impact · small effort
 - [ ] **F145** Player sprite is ~38px tall but the airborne hitbox is 14px: head sinks into ceilings, air slash hits at knee height · medium impact · medium effort
 - [ ] **F153** Sword only checks hits on the button-press frame; 'damage' values actually control max hits and bullet radius · medium impact · small effort
