@@ -11,6 +11,7 @@ function harness(qualificationState: 'qualified' | 'practice' = 'qualified', sur
   const host = { getCurrentGoalRun: () => run, getActiveCourseRun: () => null, getActiveRoomRushRun: () => null,
     hasActivePvpMatch: () => false, recordGoalRunDeath: vi.fn(() => { run.deaths++; }),
     recordCourseRunDeath: vi.fn(), recordRunDeathLocation: vi.fn(), playPlayerFailFx: vi.fn(),
+    cancelPlayerAttack: vi.fn(),
     respawnPlayerToCurrentRoom: vi.fn(), clearRespawnCheckpoints: vi.fn(), showTransientStatus: vi.fn(),
     getRoomSnapshotForCoordinates: () => room, failGoalRun: vi.fn(), restartGoalRunForRoom: vi.fn(),
     refreshLeaderboardForSelection: vi.fn(), resetRoomChallengeState: vi.fn(), abandonGoalRun: vi.fn(),
@@ -47,6 +48,8 @@ describe('death and fresh-session checkpoint boundaries', () => {
       runDeathBeat: (respawn: () => void) => { pending = true; finishBeat = respawn; } });
     h.controller.handlePlayerDeath('Ouch.'); h.controller.handlePlayerDeath('Second overlapping hazard.');
     expect(h.run.deaths).toBe(1);
+    expect(h.host.cancelPlayerAttack).toHaveBeenCalledTimes(1);
+    expect(h.host.cancelPlayerAttack.mock.invocationCallOrder[0]).toBeLessThan(h.host.recordGoalRunDeath.mock.invocationCallOrder[0]);
     expect(h.host.playPlayerFailFx).toHaveBeenCalledTimes(1);
     expect(h.host.respawnPlayerToCurrentRoom).not.toHaveBeenCalled();
     h.run.elapsedMs += 180; finishBeat();
@@ -65,5 +68,14 @@ describe('death and fresh-session checkpoint boundaries', () => {
     finishBeat();
     expect(h.host.failGoalRun).toHaveBeenCalledTimes(1);
     expect(h.host.restartGoalRunForRoom).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains the attack when PvP damage is currently disabled', () => {
+    const h = harness();
+    Object.assign(h.host, { hasActivePvpMatch: () => true, isPvpDamageActive: () => false });
+    h.controller.handlePlayerDeath('Ignored contact.');
+    expect(h.host.cancelPlayerAttack).not.toHaveBeenCalled();
+    expect(h.run.deaths).toBe(0);
+    expect(h.host.respawnPlayerToCurrentRoom).not.toHaveBeenCalled();
   });
 });

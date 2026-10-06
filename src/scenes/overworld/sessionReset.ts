@@ -21,6 +21,7 @@ interface OverworldSessionResetHost {
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   hasActivePvpMatch(): boolean;
   isPvpDamageActive(): boolean;
+  cancelPlayerAttack(): void;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
   recordGoalRunDeath(): void;
   recordRunDeathLocation?(): void;
@@ -61,6 +62,8 @@ export class OverworldSessionResetController {
     if (activePvpMatch && !this.host.isPvpDamageActive()) {
       return;
     }
+
+    this.host.cancelPlayerAttack();
 
     // These deaths start a fresh run or end survival, so keep its original spawn.
     if (activeCourseRun?.course.goal?.type === 'survival'
