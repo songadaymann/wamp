@@ -1354,9 +1354,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   attackEnemiesInRect(
     loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
     attackRect: Phaser.Geom.Rectangle,
-    maxHits = Number.POSITIVE_INFINITY
+    maxHits = Number.POSITIVE_INFINITY,
+    hitKeys?: Set<string>,
   ): WeaponHitResult[] {
-    return this.enemyLifecycleController.attackEnemiesInRect(loadedRooms, attackRect, maxHits);
+    return this.enemyLifecycleController.attackEnemiesInRect(loadedRooms, attackRect, maxHits, hitKeys);
   }
 
   attackEnemyAtPoint(

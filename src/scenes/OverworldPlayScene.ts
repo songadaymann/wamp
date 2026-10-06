@@ -405,6 +405,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly TORNADO_COOLDOWN_MS = 90;
   private readonly SWORD_COOLDOWN_MS = 220;
   private readonly SWORD_ATTACK_MS = 170;
+  private readonly SWORD_ACTIVE_MS = 100;
   private readonly WEAPON_KNOCKBACK_MS = 90;
   private readonly SWORD_HIT_LUNGE_VELOCITY = 90;
   private readonly DOWNWARD_SLASH_BOUNCE_VELOCITY = -210;
@@ -1684,18 +1685,19 @@ export class OverworldPlayScene extends Phaser.Scene {
         getPlayerBody: () => this.playerBody,
         getPlayerFacing: () => this.playerFacing as -1 | 1,
         isPlayerCrouching: () => this.movementController.isCrouching(),
-        attackEnemiesInRect: (attackRect, damage) =>
+        attackEnemiesInRect: (attackRect, maxHits, hitKeys) =>
           this.liveObjectController.attackEnemiesInRect(
             this.loadedFullRoomsById.values(),
             attackRect,
-            damage,
+            maxHits,
+            hitKeys,
           ),
-        attackEnemyAtPoint: (worldX, worldY, damage) =>
+        attackEnemyAtPoint: (worldX, worldY, radius) =>
           this.liveObjectController.attackEnemyAtPoint(
             this.loadedFullRoomsById.values(),
             worldX,
             worldY,
-            damage,
+            radius,
           ),
         attackPeerInRect: (attackRect, source) => this.attackPvpPeerInRect(attackRect, source),
         attackPeerAtPoint: (worldX, worldY, source) => this.attackPvpPeerAtPoint(worldX, worldY, source),
@@ -1714,12 +1716,13 @@ export class OverworldPlayScene extends Phaser.Scene {
         playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
         swordCooldownMs: this.SWORD_COOLDOWN_MS,
         swordAttackMs: this.SWORD_ATTACK_MS,
-        swordHitDamage: 3,
+        swordActiveMs: this.SWORD_ACTIVE_MS,
+        swordMaxHitsPerSwing: 3,
         swordHitLungeVelocity: this.SWORD_HIT_LUNGE_VELOCITY,
         downwardSlashBounceVelocity: this.DOWNWARD_SLASH_BOUNCE_VELOCITY,
         gunCooldownMs: this.GUN_COOLDOWN_MS,
         gunAttackMs: this.GUN_ATTACK_MS,
-        gunHitDamage: 5,
+        gunHitRadius: 5,
         gunRecoilVelocity: this.GUN_RECOIL_VELOCITY,
         projectileSpeed: this.PROJECTILE_SPEED,
         projectileLifetimeMs: this.PROJECTILE_LIFETIME_MS,
@@ -1732,6 +1735,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveRoomRushRun: () => this.activeRoomRushRun,
       hasActivePvpMatch: () => this.isPvpMatchActive(),
       isPvpDamageActive: () => this.isPvpDamageActive(),
+      cancelPlayerAttack: () => this.combatController.clearAttackAnimation(),
       setActiveCourseRun: (runState) => {
         this.setActiveCourseRun(runState);
       },
@@ -2517,6 +2521,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         grounded: movement.grounded,
       });
       this.quicksandController.updateVisualSink();
+      this.combatController.updateSwordSwing();
       this.combatController.updateProjectiles(delta);
       this.maybeApplyRemotePvpActionHit();
       this.maybeStompPvpPeer();
@@ -6697,6 +6702,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         buttStompFlipMs: movementDebug.buttStompFlipMs,
         buttStompImpactGraceMs: movementDebug.buttStompImpactGraceMs,
         activeAttackAnimation: this.combatController.getActiveAttackAnimation(),
+        swordSwing: this.combatController.getSwordSwingState(this.time.now),
         crateInteractionMode: movementDebug.crateInteractionMode,
         crateInteractionFacing: movementDebug.crateInteractionFacing,
         meleeCooldownMs: this.combatController.getMeleeCooldownRemainingMs(this.time.now),

@@ -22,8 +22,8 @@ interface OverworldCombatControllerHost {
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
   getPlayerFacing(): -1 | 1;
   isPlayerCrouching(): boolean;
-  attackEnemiesInRect(attackRect: Phaser.Geom.Rectangle, damage: number): WeaponHitResult[];
-  attackEnemyAtPoint(worldX: number, worldY: number, damage: number): WeaponHitResult | null;
+  attackEnemiesInRect(attackRect: Phaser.Geom.Rectangle, maxHits: number, hitKeys: Set<string>): WeaponHitResult[];
+  attackEnemyAtPoint(worldX: number, worldY: number, radius: number): WeaponHitResult | null;
   attackPeerInRect(attackRect: Phaser.Geom.Rectangle, source: 'sword'): WeaponHitResult | null;
   attackPeerAtPoint(worldX: number, worldY: number, source: 'gun'): WeaponHitResult | null;
   isProjectileBlocked(worldX: number, worldY: number): boolean;
@@ -43,16 +43,29 @@ interface OverworldCombatControllerOptions {
   playerStandingHeight: number;
   swordCooldownMs: number;
   swordAttackMs: number;
-  swordHitDamage: number;
+  swordActiveMs: number;
+  swordMaxHitsPerSwing: number;
   swordHitLungeVelocity: number;
   downwardSlashBounceVelocity: number;
   gunCooldownMs: number;
   gunAttackMs: number;
-  gunHitDamage: number;
+  gunHitRadius: number;
   gunRecoilVelocity: number;
   projectileSpeed: number;
   projectileLifetimeMs: number;
   playerSpeed: number;
+}
+
+interface ActiveSwordSwing {
+  until: number;
+  facing: -1 | 1;
+  downward: boolean;
+  remainingEnemyHits: number;
+  enemyHitKeys: Set<string>;
+  peerHit: boolean;
+  connected: boolean;
+  lastCheckedAt: number | null;
+  attackRect: Phaser.Geom.Rectangle | null;
 }
 
 export class OverworldCombatController {
@@ -61,6 +74,7 @@ export class OverworldCombatController {
   private meleeCooldownUntil = 0;
   private rangedCooldownUntil = 0;
   private playerProjectiles: OverworldPlayerProjectile[] = [];
+  private activeSwordSwing: ActiveSwordSwing | null = null;
 
   constructor(
     private readonly host: OverworldCombatControllerHost,
@@ -77,6 +91,7 @@ export class OverworldCombatController {
   clearAttackAnimation(): void {
     this.activeAttackAnimation = null;
     this.activeAttackAnimationUntil = 0;
+    this.activeSwordSwing = null;
   }
 
   getCurrentAttackAnimation(now: number): DefaultPlayerAnimationState | null {
@@ -101,6 +116,24 @@ export class OverworldCombatController {
 
   getProjectileCount(): number {
     return this.playerProjectiles.length;
+  }
+
+  getSwordSwingState(now: number) {
+    const swing = this.activeSwordSwing;
+    if (!swing || now >= swing.until) return null;
+    return {
+      remainingMs: swing.until - now,
+      remainingEnemyHits: swing.remainingEnemyHits,
+      enemyContacts: swing.enemyHitKeys.size,
+      peerHit: swing.peerHit,
+      connected: swing.connected,
+      facing: swing.facing,
+      downward: swing.downward,
+      rect: swing.attackRect ? {
+        x: swing.attackRect.x, y: swing.attackRect.y,
+        width: swing.attackRect.width, height: swing.attackRect.height,
+      } : null,
+    };
   }
 
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
@@ -152,7 +185,7 @@ export class OverworldCombatController {
       for (let index = 1; index <= sampleCount; index += 1) {
         const sampleX = Phaser.Math.Linear(startX, nextX, index / sampleCount);
         const sampleY = projectileRect.y;
-        const enemyHit = this.host.attackEnemyAtPoint(sampleX, sampleY, this.options.gunHitDamage);
+        const enemyHit = this.host.attackEnemyAtPoint(sampleX, sampleY, this.options.gunHitRadius);
         if (enemyHit) {
           playSfx('enemy-hit');
           this.host.playBulletImpactFx(enemyHit.x, enemyHit.y - 2);
@@ -186,6 +219,53 @@ export class OverworldCombatController {
     }
   }
 
+  updateSwordSwing(): void {
+    const swing = this.activeSwordSwing;
+    if (!swing) return;
+    const now = this.host.getCurrentTime();
+    const playerBody = this.host.getPlayerBody();
+    if (now >= swing.until || !playerBody || !this.host.getPlayer()) {
+      this.activeSwordSwing = null;
+      return;
+    }
+    if (swing.lastCheckedAt === now) return;
+    swing.lastCheckedAt = now;
+    const forwardRect = createForwardSwordAttackRect({
+      centerX: playerBody.center.x, feetY: playerBody.bottom,
+      facing: swing.facing, standingHeight: this.options.playerStandingHeight,
+    });
+    const attackRect = swing.downward
+      ? new Phaser.Geom.Rectangle(playerBody.center.x - 12, playerBody.bottom - 2, 24, 28)
+      : new Phaser.Geom.Rectangle(forwardRect.x, forwardRect.y, forwardRect.width, forwardRect.height);
+    swing.attackRect = attackRect;
+    const hits = swing.remainingEnemyHits > 0
+      ? this.host.attackEnemiesInRect(attackRect, swing.remainingEnemyHits, swing.enemyHitKeys)
+      : [];
+    if (this.activeSwordSwing !== swing) return;
+    swing.remainingEnemyHits = Math.max(0, swing.remainingEnemyHits - hits.length);
+    const peerHit = swing.peerHit ? null : this.host.attackPeerInRect(attackRect, 'sword');
+    if (this.activeSwordSwing !== swing) return;
+    if (peerHit) {
+      swing.peerHit = true;
+      this.host.playPeerHitFx(peerHit.x, peerHit.y);
+    }
+    if ((hits.length === 0 && !peerHit) || swing.connected) return;
+    swing.connected = true;
+    playSfx('enemy-hit');
+    if (swing.downward) {
+      playerBody.setVelocityY(this.options.downwardSlashBounceVelocity);
+    } else {
+      this.host.applyWeaponKnockback(
+        Phaser.Math.Clamp(
+          playerBody.velocity.x + swing.facing * this.options.swordHitLungeVelocity,
+          -this.options.playerSpeed * 1.35,
+          this.options.playerSpeed * 1.35,
+        ),
+      );
+    }
+    this.host.shakeCamera(50, 0.002);
+  }
+
   destroyProjectiles(): void {
     for (const projectile of this.playerProjectiles) {
       this.host.destroyPresentedProjectile(projectile.presentation);
@@ -206,23 +286,18 @@ export class OverworldCombatController {
     this.activeAttackAnimation = attackAnimation;
     this.activeAttackAnimationUntil = now + this.options.swordAttackMs;
     this.meleeCooldownUntil = now + this.options.swordCooldownMs;
+    this.activeSwordSwing = {
+      until: now + this.options.swordActiveMs,
+      facing: playerFacing, downward,
+      remainingEnemyHits: this.options.swordMaxHitsPerSwing,
+      enemyHitKeys: new Set(), peerHit: false, connected: false,
+      lastCheckedAt: null, attackRect: null,
+    };
 
     if (downward && playerBody.velocity.y < 120) {
       playerBody.setVelocityY(120);
     }
 
-    const forwardRect = createForwardSwordAttackRect({
-      centerX: playerBody.center.x, feetY: playerBody.bottom,
-      facing: playerFacing, standingHeight: this.options.playerStandingHeight,
-    });
-    const attackRect = downward
-      ? new Phaser.Geom.Rectangle(playerBody.center.x - 12, playerBody.bottom - 2, 24, 28)
-      : new Phaser.Geom.Rectangle(
-          forwardRect.x, forwardRect.y, forwardRect.width, forwardRect.height,
-        );
-
-    const hits = this.host.attackEnemiesInRect(attackRect, this.options.swordHitDamage);
-    const peerHit = this.host.attackPeerInRect(attackRect, 'sword');
     const event = this.createCombatPresentationEvent({
       source: 'sword',
       player,
@@ -236,29 +311,7 @@ export class OverworldCombatController {
     });
     this.host.presentCombatEvent(event);
     this.host.publishCombatAction(event);
-
-    if (hits.length === 0 && !peerHit) {
-      return;
-    }
-
-    if (hits.length > 0 || peerHit) {
-      playSfx('enemy-hit');
-    }
-    if (peerHit) {
-      this.host.playPeerHitFx(peerHit.x, peerHit.y);
-    }
-    if (downward) {
-      playerBody.setVelocityY(this.options.downwardSlashBounceVelocity);
-    } else {
-      this.host.applyWeaponKnockback(
-        Phaser.Math.Clamp(
-          playerBody.velocity.x + playerFacing * this.options.swordHitLungeVelocity,
-          -this.options.playerSpeed * 1.35,
-          this.options.playerSpeed * 1.35,
-        ),
-      );
-    }
-    this.host.shakeCamera(50, 0.002);
+    this.updateSwordSwing();
   }
 
   private fireGunProjectile(
@@ -266,6 +319,7 @@ export class OverworldCombatController {
     playerBody: Phaser.Physics.Arcade.Body,
     now: number,
   ): void {
+    this.activeSwordSwing = null;
     const playerFacing = this.host.getPlayerFacing();
     this.activeAttackAnimation = 'gun-fire';
     this.activeAttackAnimationUntil = now + this.options.gunAttackMs;

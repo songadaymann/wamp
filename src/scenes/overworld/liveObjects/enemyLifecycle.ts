@@ -93,13 +93,17 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
   attackEnemiesInRect(
     loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
     attackRect: Phaser.Geom.Rectangle,
-    maxHits = Number.POSITIVE_INFINITY
+    maxHits = Number.POSITIVE_INFINITY,
+    hitKeys?: Set<string>,
   ): WeaponHitResult[] {
     const hits: WeaponHitResult[] = [];
+    if (maxHits <= 0) return hits;
 
     for (const loadedRoom of loadedRooms) {
       for (const liveObject of [...loadedRoom.liveObjects]) {
+        const hitKey = `${loadedRoom.room.id}:${liveObject.key}`;
         if (
+          hitKeys?.has(hitKey) ||
           (liveObject.config.category !== 'enemy' && liveObject.config.category !== 'npc') ||
           (liveObject.config.category === 'npc' && !liveObject.runtime.npcFriendlyFire) ||
           !liveObject.sprite.active ||
@@ -113,6 +117,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
           continue;
         }
 
+        hitKeys?.add(hitKey);
         const hit = this.defeatEnemy(loadedRoom, liveObject);
         if (!hit) {
           continue;
