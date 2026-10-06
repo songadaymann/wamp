@@ -22,6 +22,7 @@ function harness() {
     stopFollow: vi.fn(), startFollow: vi.fn(), centerOn: vi.fn(),
     setLerp: vi.fn(),
     setFollowOffset: vi.fn(), setDeadzone: vi.fn(),
+    midPoint: { x: 0, y: 0, set(x: number, y: number) { this.x = x; this.y = y; } },
     setZoom(value: number) { this.zoom = value; },
     setScroll(x: number, y: number) { this.scrollX = x; this.scrollY = y; },
   };
@@ -158,6 +159,32 @@ describe('room-centered play camera', () => {
     expect(h.camera.setLerp.mock.lastCall![1]).toBeCloseTo(0.3);
     h.controller.updateFollowPacing(0);
     expect(h.camera.setLerp).toHaveBeenLastCalledWith(0, 0);
+  });
+
+  it('preserves a pending follow view across refreshes but centers after explicit reseeding', () => {
+    const h = harness();
+    const recenter = () => {
+      const args = h.camera.startFollow.mock.lastCall!;
+      const target = args[0] as unknown as { x: number; y: number };
+      h.camera.setScroll(target.x - args[4] - h.camera.width / 2,
+        target.y - args[5] - h.camera.height / 2);
+      h.camera.midPoint.set(target.x - args[4], target.y - args[5]);
+    };
+    h.camera.startFollow.mockImplementation(recenter);
+    h.camera.setDeadzone.mockImplementation(recenter);
+    h.controller.startFollowCamera();
+    h.body.velocity.x = 200; h.controller.updateFollowPacing(18);
+    h.camera.setScroll(-465, -275);
+    h.controller.applyCameraMode(false);
+    expect(h.camera.scrollX).toBe(-465); expect(h.camera.scrollY).toBe(-275);
+    expect(h.camera.midPoint).toMatchObject({ x: 135, y: 75 });
+    h.camera.zoom = 3; h.controller.startFollowCamera();
+    expect(h.camera.scrollX).toBe(-465); expect(h.camera.scrollY).toBe(-275);
+    h.player.x = 800; h.player.y = 400; h.controller.applyCameraMode(true);
+    expect(h.camera.scrollX).toBe(200); expect(h.camera.scrollY).toBe(50);
+    h.player.x = 80; h.player.y = 200; h.controller.resetFollowAnchor();
+    h.controller.startFollowCamera();
+    expect(h.camera.scrollX).toBe(-520); expect(h.camera.scrollY).toBe(-150);
   });
 
   it('keeps horizontal lookahead when portrait framing owns the vertical center', () => {

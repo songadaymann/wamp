@@ -28,8 +28,12 @@ export class OverworldFollowCameraMotion {
         this.anchorY = Math.max(input.playerY - cushion,
           Math.min(input.playerY + cushion, this.anchorY));
       }
-      const targetLead = Math.abs(input.velocityX) > 20
-        ? Math.sign(input.velocityX) * Math.min(48, input.visibleWidth * 0.12) : 0;
+      // Airborne reversals and wall kicks should not swing the view sideways.
+      const leadLimit = Math.min(48, input.visibleWidth * 0.12);
+      const targetLead = input.grounded
+        ? Math.abs(input.velocityX) > 20
+          ? Math.sign(input.velocityX) * leadLimit : 0
+        : Math.max(-leadLimit, Math.min(leadLimit, this.leadX));
       const blend = 1 - Math.exp(-input.physicsSteps * (1000 / 60) / 300);
       this.leadX += (targetLead - this.leadX) * blend;
     }

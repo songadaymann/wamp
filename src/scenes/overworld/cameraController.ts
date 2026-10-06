@@ -43,6 +43,7 @@ export class OverworldCameraController {
   private cameraTransition: Phaser.Tweens.Tween | null = null;
   private readonly followMotion = new OverworldFollowCameraMotion();
   private followedPlayer: Phaser.GameObjects.Rectangle | null = null;
+  private followedCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private portraitCenterY: number | null = null;
   private readonly followTarget = {
     // Arcade updates the sprite after Scene.update; read X at camera preRender, as before.
@@ -184,6 +185,9 @@ export class OverworldCameraController {
       return;
     }
     if (forceCenter || this.followedPlayer !== player) this.resetFollowAnchor();
+    const preserveView = this.followedCamera === camera;
+    const previousScrollX = camera.scrollX;
+    const previousScrollY = camera.scrollY;
 
     camera.startFollow(
       this.followTarget,
@@ -199,6 +203,12 @@ export class OverworldCameraController {
       ),
     );
     camera.setDeadzone(Math.min(16, camera.width / camera.zoom * 0.06), 0);
+    // Phaser recenters in both startFollow and setDeadzone; routine refreshes must keep the view.
+    if (preserveView) {
+      camera.setScroll(previousScrollX, previousScrollY);
+      camera.midPoint.set(previousScrollX + camera.width / 2, previousScrollY + camera.height / 2);
+    }
+    this.followedCamera = camera;
   }
 
   updateFollowPacing(physicsSteps: number): void {
@@ -232,6 +242,7 @@ export class OverworldCameraController {
     }
     const player = this.host.getPlayer();
     this.followedPlayer = player;
+    this.followedCamera = null;
     this.followMotion.reset(player?.y);
     this.portraitCenterY = null;
   }
@@ -253,6 +264,7 @@ export class OverworldCameraController {
 
   private clearFollowMotion(): void {
     this.followedPlayer = null;
+    this.followedCamera = null;
     this.followMotion.reset();
     this.portraitCenterY = null;
   }
