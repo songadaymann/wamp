@@ -3883,6 +3883,10 @@ Keep the idea but fix the plan.
 - **Scope:** start with time-ranked goals only.
 - **Docs:** note the existing PRD line at docs/product/product-requirements.md:461.
 
+**Delivery (2026-10-06, PRs #73/#74/#75; final app main `b05c96ed`).** Delivered for time-ranked ordinary rooms. No ghost / Race #1 / Race my best use a standalone noncolliding avatar, the real run clock, safe Hermite movement, death/portal/seam snaps and refreshed newly beaten bests on Restart. Migration 0059 retains bounded movement-only personal bests; exact/equivalent family lookup uses the actual winning attempt. Verified guest bests persist on this browser. Private credentials/inputs/analytics stay excluded; old or mismatched recordings remain explicitly unavailable. The original reported game time is independently verified before trusted recording, while public timestamps/velocities align to the stored ranked time. Ranking/XP policy and 250ms trace sampling remain unchanged. Expanded Room/course and score/protect ghosts stay outside this first release.
+
+All seven full checks pass with 356 files / 2,841 tests. Eight source and eight published desktop/touch cases plus two unchanged official public-API iterations each pass; actual screenshots are viewed and unexpected errors are zero. Exact source/main checks, guarded API/Pages delivery, strict map/live smoke and all 179 served JS/CSS assets plus death audio/HTML bootstrap pass. Fixture writes stay local, first Build Prompt stays unset and primary edits stay preserved. Master 54/214. See `docs/development/checkup-delivery-2026-10-03.md` and ignored `output/web-game/ghost-races/` for acceptance; F143 is next.
+
 ### F143: Idea: Traversal object pack: crumbling blocks, sideways springs, double-jump feather
 
 - **Area:** Gameplay feel & new gameplay ideas
