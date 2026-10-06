@@ -12,6 +12,7 @@ import type {
   MultiplayerParticipantIdentity,
 } from '../../multiplayer/model';
 import type { WeaponHitResult } from './liveObjects';
+import { createPvpRemoteActionDamageRect } from './pvpCombatGeometry';
 import { PVP_HEART_HEAD_CLEARANCE_PX, PvpHeartDisplay } from './pvpHeartDisplay';
 import {
   PVP_INVULNERABILITY_FX_DEPTH,
@@ -23,6 +24,7 @@ interface MultiplayerRemotePlayerRendererOptions {
   scene: Phaser.Scene;
   playerWidth: number;
   playerHeight: number;
+  playerStandingHeight: number;
   presentCombatEvent: (event: MultiplayerInstanceCombatEvent, receivedAt: number) => void;
   onDisplayObjectsChanged?: () => void;
 }
@@ -201,37 +203,12 @@ export class MultiplayerRemotePlayerRenderer {
       return null;
     }
 
-    if (this.opponent.action === 'gun') {
-      const width = 88;
-      const rect = new Phaser.Geom.Rectangle(
-        this.opponent.facing > 0 ? bodyRect.centerX : bodyRect.centerX - width,
-        bodyRect.centerY - 12,
-        width,
-        24,
-      );
-      Phaser.Geom.Rectangle.Inflate(rect, 8, 4);
-      return rect;
-    }
-
-    if (this.opponent.actionDownward) {
-      const rect = new Phaser.Geom.Rectangle(
-        bodyRect.centerX - 12,
-        bodyRect.bottom - 2,
-        24,
-        28,
-      );
-      Phaser.Geom.Rectangle.Inflate(rect, 14, 8);
-      return rect;
-    }
-
-    const rect = new Phaser.Geom.Rectangle(
-      bodyRect.centerX + this.opponent.facing * 8 - 14,
-      bodyRect.top + 2,
-      28,
-      bodyRect.height + 10,
-    );
-    Phaser.Geom.Rectangle.Inflate(rect, 14, 8);
-    return rect;
+    const rect = createPvpRemoteActionDamageRect({
+      bodyRect, facing: this.opponent.facing, action: this.opponent.action,
+      downward: this.opponent.actionDownward,
+      playerStandingHeight: this.options.playerStandingHeight,
+    });
+    return new Phaser.Geom.Rectangle(rect.x, rect.y, rect.width, rect.height);
   }
 
   getRemoteActionState(): {

@@ -7,6 +7,7 @@ import type {
   PresentedProjectile,
 } from './combatPresentation';
 import type { WeaponHitResult } from './liveObjects';
+import { createForwardSwordAttackRect } from './swordGeometry';
 
 export interface OverworldPlayerProjectile {
   presentation: PresentedProjectile;
@@ -39,6 +40,7 @@ interface OverworldCombatControllerHost {
 }
 
 interface OverworldCombatControllerOptions {
+  playerStandingHeight: number;
   swordCooldownMs: number;
   swordAttackMs: number;
   swordHitDamage: number;
@@ -209,13 +211,14 @@ export class OverworldCombatController {
       playerBody.setVelocityY(120);
     }
 
+    const forwardRect = createForwardSwordAttackRect({
+      centerX: playerBody.center.x, feetY: playerBody.bottom,
+      facing: playerFacing, standingHeight: this.options.playerStandingHeight,
+    });
     const attackRect = downward
       ? new Phaser.Geom.Rectangle(playerBody.center.x - 12, playerBody.bottom - 2, 24, 28)
       : new Phaser.Geom.Rectangle(
-          playerBody.center.x + playerFacing * 8 - 14,
-          playerBody.top + 2,
-          28,
-          playerBody.height + 10,
+          forwardRect.x, forwardRect.y, forwardRect.width, forwardRect.height,
         );
 
     const hits = this.host.attackEnemiesInRect(attackRect, this.options.swordHitDamage);
@@ -227,7 +230,7 @@ export class OverworldCombatController {
       facing: playerFacing,
       durationMs: this.options.swordAttackMs,
       effectX: player.x,
-      effectY: downward ? playerBody.bottom - 2 : playerBody.center.y,
+      effectY: downward ? playerBody.bottom - 2 : playerBody.bottom - this.options.playerStandingHeight * 0.5,
       downward,
       projectile: null,
     });

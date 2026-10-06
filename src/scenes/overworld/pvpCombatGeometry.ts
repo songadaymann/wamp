@@ -1,3 +1,5 @@
+import { createForwardSwordAttackRect } from './swordGeometry';
+
 export interface PvpCombatRect {
   x: number;
   y: number;
@@ -100,6 +102,7 @@ export function createPvpRemoteActionDamageRect(input: {
   facing: -1 | 1;
   action: 'sword' | 'gun';
   downward?: boolean;
+  playerStandingHeight?: number;
 }): PvpCombatRect {
   const { bodyRect, facing, action } = input;
   if (action === 'gun') {
@@ -119,12 +122,10 @@ export function createPvpRemoteActionDamageRect(input: {
         width: 24,
         height: 28,
       }
-    : {
-        x: getPvpRectCenterX(bodyRect) + facing * 8 - 14,
-        y: bodyRect.y + 2,
-        width: 28,
-        height: bodyRect.height + 10,
-      };
+    : createForwardSwordAttackRect({
+        centerX: getPvpRectCenterX(bodyRect), feetY: getPvpRectBottom(bodyRect),
+        facing, standingHeight: input.playerStandingHeight ?? 26,
+      });
   return inflatePvpCombatRect(swordRect, 14, 8);
 }
 

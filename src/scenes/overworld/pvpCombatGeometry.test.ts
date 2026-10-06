@@ -29,7 +29,7 @@ describe('PvP combat geometry', () => {
     const body = { x: 91, y: 190, width: 18, height: 30 };
 
     expect(createPvpRemoteActionDamageRect({ bodyRect: body, facing: 1, action: 'sword' }))
-      .toEqual({ x: 80, y: 184, width: 56, height: 56 });
+      .toEqual({ x: 80, y: 186, width: 56, height: 46 });
     expect(createPvpRemoteActionDamageRect({
       bodyRect: body,
       facing: -1,
@@ -38,6 +38,19 @@ describe('PvP combat geometry', () => {
     })).toEqual({ x: 74, y: 210, width: 52, height: 44 });
     expect(createPvpRemoteActionDamageRect({ bodyRect: body, facing: -1, action: 'gun' }))
       .toEqual({ x: 4, y: 189, width: 104, height: 32 });
+  });
+
+  it.each([14, 26])('keeps remote forward reach at the same feet with a %ipx presence body', (height) => {
+    expect(createPvpRemoteActionDamageRect({
+      bodyRect: { x: 91, y: 220 - height, width: 18, height }, facing: 1, action: 'sword',
+    })).toEqual({ x: 80, y: 186, width: 56, height: 46 });
+  });
+
+  it('uses the same configured standing profile as the local attack', () => {
+    expect(createPvpRemoteActionDamageRect({
+      bodyRect: { x: 91, y: 206, width: 18, height: 14 }, facing: 1, action: 'sword',
+      playerStandingHeight: 30,
+    })).toEqual({ x: 80, y: 182, width: 56, height: 50 });
   });
 
   it('requires descending top contact and preserves the ten-pixel stomp tolerance', () => {
