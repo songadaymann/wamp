@@ -1,3 +1,14 @@
+## 2026-10-06 — F154 swimmable water, in progress
+
+- [x] Preserve the existing lethal water ids, art and bodies; add accurate Toxic Water names and separate swimmable pool/ripple objects.
+- [x] Feed bounded terrain-layer water overlap queries into the shared player/actor environment, retaining water tiles and gravity/reset behavior.
+- [ ] Verify placement, persistence, desktop/touch swimming, dry exits, lethal compatibility and verified guest clears with native and official clients; complete full quality.
+- [ ] Complete exact-commit checks, coordinated renderer/API readiness and map activation, guarded Pages publication and live acceptance before checking F154.
+
+Morning continuation on `codex/checkup-swimmable-water-2026-10-06` from clean current main `963e65c9`. Reuse the attached game-feel worktree and preserve the primary checkout's 25 unrelated dirty entries. The existing production audit found 1,121 legacy lethal objects in 42 of 666 published rooms, with no query writes. Distinct new ids opt into existing swimming physics; background/foreground placements stay decorative. Full registry changes alter the authoring catalog, so the renderer and API must agree before Pages publication. Keep the first Build Prompt unset. Use existing repository Markdown; fixture/account/room writes remain local.
+
+F154 source quality passes **352 files / 2,815 tests** and all seven checks at 2026-10-06T10:30:05.922Z. Ten new behavioral cases cover enabled terrain-only volumes, strict positive edge overlap, adjacent pool/ripple continuity, room seams and unload/replacement, spatial bin queries, all four gravity environments and dry/browse resets, retained player/NPC toxic-water interaction and nonsolid new water. Six native desktop/portrait-touch cases pass at 10:33:45.414Z with zero unexpected errors: real swimming slowdown/stroke/dry exits, retained toxic deaths and visual-only background/foreground water with Restart. Both swimming runs complete through the actual local API and are verified/durably saved as guest clears. Actual swimming screenshots are viewed. Initial harness dry-speed expectations incorrectly assumed 170px/s; the observed and existing 150px/s speed is retained, and final native checks assert it. The isolated Worker first opened an empty persistence directory; it now uses the existing local test D1 with test reset, map generation and health email disabled. Four authored fixtures remain local. Editor/official acceptance and coordinated release are pending; F154 remains unchecked, master **52/214**. Evidence: `/tmp/wamp-f154-*` and ignored `output/web-game/swimmable-water/`.
+
 ## 2026-10-06 — F146 follow camera, delivered
 
 - [x] Audit follow/fixed/inspect/zoom ownership, F138 physics pacing, Arcade postUpdate ordering and portrait framing.

@@ -76,6 +76,7 @@ interface OverworldSpecialTilesControllerHost<TLiveObject, TEdgeWall> {
   getMode: () => OverworldMode;
   getCurrentTime: () => number;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
+  isBodyInSwimmableWater?: (body: Phaser.Physics.Arcade.Body) => boolean;
   getLoadedFullRooms: () => Iterable<LoadedFullRoom<TLiveObject, TEdgeWall>>;
   getLoadedFullRoomById: (roomId: string) => LoadedFullRoom<TLiveObject, TEdgeWall> | null;
   getRoomCoordinatesForPoint: (x: number, y: number) => RoomCoordinates;
@@ -296,7 +297,8 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
       return false;
     }
 
-    return this.findSpecialTilesOverlappingBody(body).some((match) => match.kind === 'water');
+    return Boolean(this.host.isBodyInSwimmableWater?.(body)) ||
+      this.findSpecialTilesOverlappingBody(body).some((match) => match.kind === 'water');
   }
 
   beginOneWayDropThrough(): void {
@@ -442,6 +444,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     environment: SpecialTilePlayerEnvironment,
   ): SpecialTilePlayerEnvironment {
     resetEnvironment(environment, currentGravityDirection);
+    environment.inWater = this.host.isBodyInSwimmableWater?.(body) ?? false;
     const overlaps = this.findSpecialTilesOverlappingBody(body);
     environment.gravityDirection =
       this.getGravityDirectionFromMatches(overlaps) ?? environment.gravityDirection;

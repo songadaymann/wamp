@@ -22,6 +22,40 @@ function createBody(offset: number) {
 }
 
 describe('OverworldSpecialTilesController environment reuse', () => {
+  it.each(['up', 'down', 'left', 'right'] as const)(
+    'shares object swimming with actors under %s gravity and clears it on dry/browse scans',
+    (gravityDirection) => {
+      const wetBody = createBody(0);
+      const dryBody = createBody(20);
+      let wet = true;
+      let mode = 'play';
+      const host = {
+        getMode: () => mode,
+        isBodyInSwimmableWater: (body: unknown) => wet && body === wetBody,
+        getLoadedFullRooms: () => [],
+        getLoadedFullRoomById: () => null,
+        getRoomCoordinatesForPoint: () => ({ x: 0, y: 0 }),
+        getRoomOrigin: () => ({ x: 0, y: 0 }),
+      };
+      const controller = new OverworldSpecialTilesController({} as never, host as never);
+      const environment = controller.getEnvironmentForBody(wetBody as never, gravityDirection);
+      expect(environment.inWater).toBe(true);
+      expect(controller.isBodyInWater(wetBody as never)).toBe(true);
+      expect(environment.gravityDirection).toBe(gravityDirection);
+      expect(controller.getEnvironmentForBody(dryBody as never).inWater).toBe(false);
+      wet = false;
+      expect(controller.getEnvironmentForBody(wetBody as never, gravityDirection)).toBe(environment);
+      expect(environment.inWater).toBe(false);
+      expect(controller.isBodyInWater(wetBody as never)).toBe(false);
+      wet = true;
+      mode = 'browse';
+      expect(controller.getEnvironmentForBody(wetBody as never).inWater).toBe(false);
+      expect(controller.isBodyInWater(wetBody as never)).toBe(false);
+      mode = 'play';
+      expect(controller.getEnvironmentForBody(wetBody as never).inWater).toBe(true);
+    },
+  );
+
   it('reuses and fully resets one environment per body', () => {
     const host = {
       getMode: vi.fn(() => 'play'),

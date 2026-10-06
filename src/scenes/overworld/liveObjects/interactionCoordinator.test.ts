@@ -147,6 +147,22 @@ function createHarness(
 }
 
 describe('LiveObjectInteractionCoordinator', () => {
+  it('retains both toxic-water hazards and gives new water no solid or lethal player interaction', () => {
+    const toxicPool = createLiveObject('water_surface_a');
+    const toxicRipple = createLiveObject('water_surface_b');
+    const pool = createLiveObject('swimmable_water_pool');
+    const ripple = createLiveObject('swimmable_water_ripple');
+    const room = createRoom('water', [toxicPool, toxicRipple, pool, ripple]);
+    const harness = createHarness([room]);
+    harness.controller.syncPlayerInteractions([room]);
+    expect(harness.addHazardInteraction.mock.calls).toEqual([
+      [room, toxicPool, harness.player], [room, toxicRipple, harness.player],
+    ]);
+    expect(pool.interactions).toEqual([]);
+    expect(ripple.interactions).toEqual([]);
+    expect(harness.registrations).toEqual([]);
+  });
+
   it('rebuilds active collectible interactions with the pickup sensor and ignores suspended rooms', () => {
     const activeCoin = createLiveObject('coin_gold');
     const suspendedCoin = createLiveObject('coin_silver');

@@ -33,6 +33,9 @@ interface RoomLiveObjectPartition {
   runtimeSolids: LoadedRoomObject[];
   runtimeSolidRoomBoundsPadding: number;
   runtimeSolidSpatialIndex: LiveObjectSpatialIndex | null;
+  water: LoadedRoomObject[];
+  waterRoomBoundsPadding: number;
+  waterSpatialIndex: LiveObjectSpatialIndex | null;
   pathTargetsByInstanceId: Map<string, LoadedRoomObject>;
 }
 
@@ -52,7 +55,7 @@ interface LiveObjectSpatialIndex {
   maxY: number;
 }
 
-type SpatialCategory = 'ladder' | 'pushable' | 'runtimeSolid';
+type SpatialCategory = 'ladder' | 'pushable' | 'runtimeSolid' | 'water';
 
 const LIVE_OBJECT_SPATIAL_BIN_SIZE_PX = TILE_SIZE * 4;
 
@@ -170,6 +173,18 @@ export class LiveObjectPartitionIndex<TEdgeWall = unknown> {
     yield* this.queryObjectsInBounds('runtimeSolid', bounds, paddingX, paddingY);
   }
 
+  overlapsSwimmableWater(bounds: Phaser.Geom.Rectangle): boolean {
+    for (const object of this.queryObjectsInBounds('water', bounds, 0, 0)) {
+      const body = object.sprite.body as ArcadeObjectBody | null;
+      if (object.sprite.active && body?.enable &&
+        bounds.right > body.left && bounds.left < body.right &&
+        bounds.bottom > body.top && bounds.top < body.bottom) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private getPartition(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
   ): RoomLiveObjectPartition {
@@ -185,12 +200,20 @@ export class LiveObjectPartitionIndex<TEdgeWall = unknown> {
     const ladders: LoadedRoomObject[] = [];
     const pushables: LoadedRoomObject[] = [];
     const runtimeSolids: LoadedRoomObject[] = [];
+    const water: LoadedRoomObject[] = [];
     let ladderRoomBoundsPadding = 0;
     let pushableRoomBoundsPadding = 0;
     let runtimeSolidRoomBoundsPadding = 0;
+    let waterRoomBoundsPadding = 0;
     const pathTargetsByInstanceId = new Map<string, LoadedRoomObject>();
 
     for (const liveObject of loadedRoom.liveObjects) {
+      if (liveObject.config.swimmable && liveObject.layer === 'terrain') {
+        water.push(liveObject);
+        waterRoomBoundsPadding = Math.max(
+          waterRoomBoundsPadding, this.getLiveObjectRoomBoundsPadding(liveObject),
+        );
+      }
       const behavior = getLiveObjectBehavior(liveObject.config.id);
       if (
         liveObjectBehaviorUpdatesEveryFrame(behavior) ||
@@ -243,6 +266,9 @@ export class LiveObjectPartitionIndex<TEdgeWall = unknown> {
       runtimeSolids,
       runtimeSolidRoomBoundsPadding,
       runtimeSolidSpatialIndex: null,
+      water,
+      waterRoomBoundsPadding,
+      waterSpatialIndex: null,
       pathTargetsByInstanceId,
     };
     for (const liveObject of loadedRoom.liveObjects) {
@@ -253,7 +279,7 @@ export class LiveObjectPartitionIndex<TEdgeWall = unknown> {
   }
 
   private *queryObjectsInBounds(
-    category: 'pushable' | 'runtimeSolid',
+    category: Exclude<SpatialCategory, 'ladder'>,
     bounds: Phaser.Geom.Rectangle,
     paddingX: number,
     paddingY: number,
@@ -265,10 +291,10 @@ export class LiveObjectPartitionIndex<TEdgeWall = unknown> {
       const partition = this.getPartition(loadedRoom);
       const existingIndex = category === 'pushable'
         ? partition.pushableSpatialIndex
-        : partition.runtimeSolidSpatialIndex;
+        : category === 'water' ? partition.waterSpatialIndex : partition.runtimeSolidSpatialIndex;
       const roomBoundsPadding = category === 'pushable'
         ? partition.pushableRoomBoundsPadding
-        : partition.runtimeSolidRoomBoundsPadding;
+        : category === 'water' ? partition.waterRoomBoundsPadding : partition.runtimeSolidRoomBoundsPadding;
       if (
         !existingIndex &&
         !this.boundsCouldOverlapRoom(
@@ -317,6 +343,9 @@ export class LiveObjectPartitionIndex<TEdgeWall = unknown> {
       case 'runtimeSolid':
         partition.runtimeSolidSpatialIndex ??= this.createSpatialIndex(partition.runtimeSolids);
         return partition.runtimeSolidSpatialIndex;
+      case 'water':
+        partition.waterSpatialIndex ??= this.createSpatialIndex(partition.water);
+        return partition.waterSpatialIndex;
     }
   }
 

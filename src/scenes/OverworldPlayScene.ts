@@ -863,6 +863,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getMode: () => this.mode,
       getCurrentTime: () => this.time.now,
       getPlayerBody: () => this.playerBody,
+      isBodyInSwimmableWater: (body) => this.liveObjectController.isBodyInSwimmableWater(body),
       getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
       getLoadedFullRoomById: (roomId) => this.getCollisionReadyLoadedFullRoomById(roomId),
       getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
