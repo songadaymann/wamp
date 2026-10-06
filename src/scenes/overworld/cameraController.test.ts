@@ -67,8 +67,10 @@ describe('room-centered play camera', () => {
     h.controller.updateFollowPacing(0); expect(h.camera.setLerp).toHaveBeenLastCalledWith(0, 0);
     h.controller.updateFollowPacing(1);
     expect(h.camera.setLerp.mock.lastCall?.[0]).toBeCloseTo(0.1, 12);
+    expect(h.camera.setLerp.mock.lastCall?.[1]).toBeCloseTo(0.3, 12);
     h.controller.updateFollowPacing(2);
     expect(h.camera.setLerp.mock.lastCall?.[0]).toBeCloseTo(0.19, 12);
+    expect(h.camera.setLerp.mock.lastCall?.[1]).toBeCloseTo(0.51, 12);
     h.setMode('browse'); h.camera.setLerp.mockClear(); h.controller.updateFollowPacing(1);
     expect(h.camera.setLerp).not.toHaveBeenCalled();
   });
@@ -86,7 +88,7 @@ describe('room-centered play camera', () => {
     expect(h.controller.syncRoomCamera()).toBe(false);
     expect(h.camera.zoom).toBe(2);
     expect(h.camera.useBounds).toBe(true);
-    expect(h.camera.startFollow).toHaveBeenCalledWith(expect.objectContaining({ x: 240, y: 50 }), true, 0.1, 0.1, -0, 0);
+    expect(h.camera.startFollow).toHaveBeenCalledWith(expect.objectContaining({ x: 240, y: 50 }), true, 0.1, 0.3, -0, 0);
     expect(h.remove).toHaveBeenCalledOnce();
   });
 
@@ -134,18 +136,28 @@ describe('room-centered play camera', () => {
     expect(h.camera.startFollow).not.toHaveBeenCalled();
   });
 
-  it('reads horizontal motion after Arcade postUpdate and holds the vertical anchor through a hop', () => {
+  it('reads horizontal motion after Arcade postUpdate and promptly follows the predicted jump height', () => {
     const h = harness(); h.controller.startFollowCamera();
     const target = h.camera.startFollow.mock.lastCall![0] as unknown as { x: number; y: number };
     h.player.x = 100; expect(target.x).toBe(100);
     h.setGrounded(false); h.player.y = 20; h.body.y = 35;
     h.controller.updateFollowPacing(1);
-    expect(target.y).toBe(50);
-    expect(h.camera.setLerp.mock.lastCall![1]).toBe(0);
+    expect(target.y).toBe(27);
+    expect(h.camera.setLerp.mock.lastCall![1]).toBeCloseTo(0.3);
     h.setGrounded(true); h.player.y = 10; h.body.y = 38;
     h.controller.updateFollowPacing(1);
     expect(target.y).toBe(8); // Includes the pending Arcade sprite delta.
-    expect(h.camera.setLerp.mock.lastCall![1]).toBeCloseTo(0.1);
+    expect(h.camera.setLerp.mock.lastCall![1]).toBeCloseTo(0.3);
+  });
+
+  it('does not freeze vertical catch-up when a new jump stays within the landing cushion', () => {
+    const h = harness(); h.controller.startFollowCamera();
+    h.player.y = 2; h.controller.updateFollowPacing(1);
+    h.setGrounded(false); h.player.y = -4; h.controller.updateFollowPacing(1);
+    expect(h.controller.getFollowAnchorY()).toBe(2);
+    expect(h.camera.setLerp.mock.lastCall![1]).toBeCloseTo(0.3);
+    h.controller.updateFollowPacing(0);
+    expect(h.camera.setLerp).toHaveBeenLastCalledWith(0, 0);
   });
 
   it('keeps horizontal lookahead when portrait framing owns the vertical center', () => {

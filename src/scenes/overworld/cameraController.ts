@@ -12,6 +12,8 @@ import {
   type CameraMode,
 } from './camera';
 
+const FOLLOW_CAMERA_VERTICAL_LERP = 0.3;
+
 interface OverworldCameraControllerHost {
   scene: Phaser.Scene;
   getWorldWindow(): WorldWindow | null;
@@ -187,7 +189,7 @@ export class OverworldCameraController {
       this.followTarget,
       true,
       this.options.followCameraLerp,
-      this.options.followCameraLerp,
+      FOLLOW_CAMERA_VERTICAL_LERP,
       -this.followMotion.describe().leadX,
       calculateMobilePlayFollowOffsetY(
         camera,
@@ -206,7 +208,6 @@ export class OverworldCameraController {
     if (!player) { camera.stopFollow(); this.clearFollowMotion(); return; }
     if (this.followedPlayer !== player) this.startFollowCamera(camera);
     const body = this.host.getPlayerBody();
-    const previousAnchor = this.followMotion.getAnchorY();
     const grounded = this.host.isPlayerGrounded();
     // Match the Y Arcade will apply in postUpdate without moving its body or sprite.
     const playerY = player.y + (body ? body.y - body.prevFrame.y : 0);
@@ -217,10 +218,11 @@ export class OverworldCameraController {
     camera.setFollowOffset(-motion.leadX, calculateMobilePlayFollowOffsetY(camera,
       getDeviceLayoutState(), this.options.mobilePlayCameraTargetY,
       this.options.getMobilePortraitPlayCameraTargetY()));
-    const lerp = 1 - Math.pow(1 - this.options.followCameraLerp, Math.max(0, physicsSteps));
-    // Pixel-rounded easing can drift on a catch-up frame even with an unchanged target.
-    // Hold the actual vertical view during an ordinary hop; landings and long falls resume it.
-    camera.setLerp(lerp, !grounded && motion.anchorY === previousAnchor ? 0 : lerp);
+    const steps = Math.max(0, physicsSteps);
+    const lerp = 1 - Math.pow(1 - this.options.followCameraLerp, steps);
+    const verticalLerp = 1 - Math.pow(1 - FOLLOW_CAMERA_VERTICAL_LERP, steps);
+    // Finish catching up even if the player immediately jumps from a new landing.
+    camera.setLerp(lerp, verticalLerp);
   }
 
   resetFollowAnchor(): void {

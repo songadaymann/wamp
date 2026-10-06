@@ -7,7 +7,7 @@ export interface FollowCameraMotionInput {
   physicsSteps: number;
 }
 
-/** Presentation only: platform anchors absorb hops, with bounded room for long falls. */
+/** Presentation only: a small cushion absorbs jitter without holding back jumps or falls. */
 export class OverworldFollowCameraMotion {
   private anchorY: number | null = null;
   private leadX = 0;
@@ -24,10 +24,9 @@ export class OverworldFollowCameraMotion {
     if (input.physicsSteps > 0) {
       if (input.grounded) this.anchorY = input.playerY;
       else {
-        const riseMargin = Math.min(96, input.visibleHeight * 0.28);
-        const fallMargin = Math.min(96, input.visibleHeight * 0.35);
-        this.anchorY = Math.max(input.playerY - fallMargin,
-          Math.min(input.playerY + riseMargin, this.anchorY));
+        const cushion = Math.min(12, input.visibleHeight * 0.04);
+        this.anchorY = Math.max(input.playerY - cushion,
+          Math.min(input.playerY + cushion, this.anchorY));
       }
       const targetLead = Math.abs(input.velocityX) > 20
         ? Math.sign(input.velocityX) * Math.min(48, input.visibleWidth * 0.12) : 0;
