@@ -1710,6 +1710,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         publishCombatAction: (event) => this.publishPvpCombatAction(event),
       },
       {
+        playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
         swordCooldownMs: this.SWORD_COOLDOWN_MS,
         swordAttackMs: this.SWORD_ATTACK_MS,
         swordHitDamage: 3,
