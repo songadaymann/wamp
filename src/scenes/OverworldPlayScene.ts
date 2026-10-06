@@ -1085,6 +1085,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       scene: this,
       playerWidth: this.PLAYER_WIDTH,
       playerHeight: this.PLAYER_HEIGHT,
+      playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
       presentCombatEvent: (event, receivedAt) => this.presentRemotePvpCombatEvent(event, receivedAt),
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
@@ -5516,7 +5517,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   ): PvpCombatRect {
     const ghostRect = this.getPvpGhostRect(renderedGhost);
     const facing = renderedGhost.presence.facing < 0 ? -1 : 1;
-    return createPvpRemoteActionDamageRect({ bodyRect: ghostRect, facing, action });
+    return createPvpRemoteActionDamageRect({
+      bodyRect: ghostRect, facing, action, playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
+    });
   }
 
   private resolvePvpPeerCollision(): void {
