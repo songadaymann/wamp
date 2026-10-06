@@ -7,7 +7,10 @@ User request: "ok do it and let me test locally on the remote api". Work on `cod
 - [x] Leave a running local preview on the remote API, record validation and let Jonathan assess the feel.
 
 - [x] Investigate Jonathan's leftward-jerk feedback in `-5,-9`, The Climb; hold sideways lead through airborne direction changes and preserve the camera view during routine follow refreshes.
-- [ ] Jonathan's local review of the second camera candidate, including repeated upward jumps in The Climb. Release remains pending that review; F143 stays next afterward.
+- [x] Jonathan tested the second camera candidate and confirmed the correction: "that did seem to fix it, 'ets push that to be live". Production release is authorized; F143 stays next afterward.
+- [ ] Complete remaining release quality checks and exact-source/main hosted checks.
+- [ ] Push and merge the narrow camera change, then publish Pages from clean literal main matching origin/main through the guarded map release check.
+- [ ] Verify live camera behavior in The Climb, desktop/touch/fixed framing and exact custom-domain/immutable asset bytes; record delivery.
 
 Preserved comparison points: `224d91c1` is current-main immediately before F146's hop-holding/lookahead changes, `179e3874` contains the released F146 camera before this local correction, and `77f387ef` contains the faster local vertical response. The earlier camera is reachable in main history; any restoration should selectively restore its camera behavior while retaining later gameplay work.
 
