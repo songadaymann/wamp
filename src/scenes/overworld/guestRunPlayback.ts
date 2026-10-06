@@ -23,6 +23,7 @@ interface GuestRunPlaybackOptions {
   startTrace(kind: 'room' | 'course', binding: RankedRunTraceBinding): void;
   clearTrace(): void;
   renderHud(): void;
+  onSaved?: (run: GuestPlaybackRunState) => void;
 }
 
 /** Owns guest trace lifetime independently of network replies or the current account. */
@@ -85,6 +86,7 @@ export class GuestRunPlaybackController {
 
   private applyProgress(run: GuestPlaybackRunState, entry: GuestPlaybackEntry, result: GuestRunSaveResult): void {
       run.guestProgress = result; run.attemptId = result.attemptId;
+      if (result.status === 'saved') this.options.onSaved?.(run);
       run.submissionState = result.status === 'saved' ? 'submitted' : result.status === 'queued' ? 'finishing' : 'local-only';
       run.submissionMessage = entry.result !== 'completed' ? 'Guest run ended.'
         : result.status === 'saved' ? 'Verified clear saved. Sign in within 14 days to keep it.'

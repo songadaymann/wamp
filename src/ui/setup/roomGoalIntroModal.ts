@@ -2,6 +2,8 @@ import type { RoomSnapshot } from '../../persistence/roomRepository';
 import { createModalLifecycle } from './modalLifecycle';
 import { DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
 import { getPlayControlsStorage, hasSeenPlayControls, markPlayControlsSeen, renderPlayControlHints } from './playControlHints';
+import { GhostRaceIntro } from './ghostRaceIntro';
+import type { RunGhost, GhostRaceChoice } from '../../runs/ghostRace';
 
 const ROOM_GOAL_INTRO_SEEN_STORAGE_PREFIX = 'everybodys-platformer:room-goal-intro-seen:v1:';
 
@@ -20,7 +22,8 @@ type RoomGoalIntroOpenOptions = {
   titleText: string;
   metaText: string;
   bodyText: string;
-  onStart: () => void;
+  signedIn?: boolean;
+  onStart: (ghost?: RunGhost | null, choice?: GhostRaceChoice) => void;
 };
 
 let activeRoomGoalIntroModalController: RoomGoalIntroModalController | null = null;
@@ -31,7 +34,8 @@ export function getRoomGoalIntroModalController(): RoomGoalIntroModalController 
 
 export class RoomGoalIntroModalController {
   private readonly elements: RoomGoalIntroElements;
-  private pendingStart: (() => void) | null = null;
+  private pendingStart: RoomGoalIntroOpenOptions['onStart'] | null = null;
+  private readonly ghosts: GhostRaceIntro;
   private activeSeenKey: string | null = null;
   private readonly lifecycle: ReturnType<typeof createModalLifecycle>;
 
@@ -46,6 +50,7 @@ export class RoomGoalIntroModalController {
     private readonly windowObj: Window = window,
   ) {
     ensureRoomGoalIntroModalMarkup(this.doc);
+    this.ghosts = new GhostRaceIntro(this.doc);
     this.elements = {
       modal: this.doc.getElementById('room-goal-intro-modal'),
       title: this.doc.getElementById('room-goal-intro-title'),
@@ -78,6 +83,7 @@ export class RoomGoalIntroModalController {
     this.windowObj.removeEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleLayoutChange);
     this.lifecycle.detach();
     this.finish(false, false);
+    this.ghosts.destroy();
   }
 
   isOpen(): boolean {
@@ -94,6 +100,7 @@ export class RoomGoalIntroModalController {
     if (!this.elements.modal || hasSeenPlayControls(this.storage, this.doc)) return false;
     if (this.isOpen()) return true;
     this.pendingStart = onStart;
+    this.ghosts.close();
     this.activeSeenKey = null;
     this.show('How to play', '', '');
     return true;
@@ -106,6 +113,7 @@ export class RoomGoalIntroModalController {
     }
 
     this.pendingStart = options.onStart;
+    this.ghosts.open(options.room, options.signedIn ?? false);
     this.activeSeenKey = options.room.status === 'published' && options.room.goal
       ? this.getSeenKey(options.room)
       : null;
@@ -132,6 +140,8 @@ export class RoomGoalIntroModalController {
 
     const seenKey = this.activeSeenKey;
     const startHandler = this.pendingStart;
+    const race = triggerStart ? this.ghosts.take() : null;
+    if (!triggerStart) this.ghosts.close();
     this.activeSeenKey = null;
     this.pendingStart = null;
 
@@ -145,7 +155,7 @@ export class RoomGoalIntroModalController {
 
     if (triggerStart) {
       if (markSeen && startHandler) markPlayControlsSeen(this.storage, this.doc);
-      startHandler?.();
+      startHandler?.(race?.ghost, race?.choice);
     }
   }
 
@@ -183,6 +193,15 @@ function ensureRoomGoalIntroModalMarkup(doc: Document): void {
           <div id="room-goal-intro-body" class="room-goal-intro-body">Reach the exit as fast as you can!</div>
         </div>
         <div id="room-goal-intro-controls" class="play-intro-controls" aria-label="Play controls"></div>
+        <div id="room-ghost-race" class="room-ghost-race hidden">
+          <label for="room-ghost-race-choice">Ghost race</label>
+          <select id="room-ghost-race-choice">
+            <option value="off">No ghost</option>
+            <option value="top" disabled>Race #1 · unavailable</option>
+            <option value="personal" disabled>Race my best · unavailable</option>
+          </select>
+          <div id="room-ghost-race-status" role="status"></div>
+        </div>
         <div class="room-goal-intro-actions">
           <button id="btn-room-goal-intro-start" class="bar-btn" type="button">Start</button>
         </div>

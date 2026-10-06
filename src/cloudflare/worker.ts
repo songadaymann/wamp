@@ -1,3 +1,4 @@
+import { handleRoomGhosts } from './worker/runs/ghosts';
 import { handleBuildPrompts } from './worker/buildPrompts/routes';
 import { settleExpiredBuildPrompts } from './worker/buildPrompts/store';
 import { handleRoomInsights } from './worker/insights/routes';
@@ -141,6 +142,8 @@ type WorkerExecutionContext = {
 };
 
 const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[] = [
+  { methods: ['GET'], pattern: /^\/api\/rooms\/([^/]+)\/ghosts$/, auth: 'optional',
+    handler: ({ request, url, env }, match) => handleRoomGhosts(request, url, env, decodeURIComponent(match![1])) },
   { methods: ['GET','POST','DELETE'], pattern: {prefix:'/api/build-prompts'}, auth:'optional',
     handler: ({request,url,env}) => handleBuildPrompts(request,url,env) },
   { methods: ['GET'], pattern: '/api/daily', auth: 'optional',

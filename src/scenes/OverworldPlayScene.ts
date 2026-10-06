@@ -1,3 +1,5 @@
+import { OverworldGhostRaceController } from './overworld/ghostRace';
+import { supportsGhostRace } from '../runs/ghostRace';
 import Phaser from 'phaser';
 import { PLAYER_BASE_HEIGHT } from '../player/geometry';
 import { createDailyRepository } from '../daily/repository';
@@ -528,6 +530,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly multiplayerRoomStateEventIds = new Set<string>();
   private heldKeyCount = 0;
   private score = 0;
+  private readonly ghostRaceController: OverworldGhostRaceController;
   private readonly rankedRunTraceRecorder = new RankedRunTraceRecorder();
   private readonly respawnCheckpointController: OverworldRespawnCheckpointController;
   private readonly respawnController: OverworldRespawnController;
@@ -643,11 +646,19 @@ export class OverworldPlayScene extends Phaser.Scene {
       restorePlayerVisual: () => this.playerDeathPresentation.restore(),
       fadeInPlayer: duration => this.playerDeathPresentation.fadeIn(duration),
     });
+    this.ghostRaceController = new OverworldGhostRaceController({
+      scene: this, getRun: () => this.goalRunController?.getCurrentRun() ?? null,
+      getMode: () => this.mode,
+      getUserId: () => getAuthDebugState().authenticated ? getAuthDebugState().user?.id ?? null : null,
+      getRoomOrigin: coordinates => this.getRoomOrigin(coordinates),
+      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+    });
     const guestRuns = this.guestRunPlaybackController = new GuestRunPlaybackController({
       getCurrentRun: kind => kind === 'room' ? this.goalRunController?.getCurrentRun() ?? null : this.activeCourseRun,
       startTrace: (kind, binding) => this.startRankedRunTrace(kind, binding),
       clearTrace: () => this.clearRankedRunTrace(),
       renderHud: () => this.renderHud(),
+      onSaved: run => this.ghostRaceController.confirmGuest(run),
     });
     this.goalRunController = new OverworldGoalRunController({
       playerHeight: this.PLAYER_HEIGHT,
@@ -2582,6 +2593,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         worldTileSharedBudgetConsumedMs,
       );
     } finally {
+      this.ghostRaceController.update();
       this.recordPerformanceAdvisorFrame(
         criticalUpdateMs ?? Math.max(
           0,
@@ -3953,8 +3965,10 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.redrawGoalMarkers();
     this.roomGoalIntroPauseRequested = true;
     this.syncScenePauseState();
+    const raceUserId = getAuthDebugState().user?.id ?? null;
     roomGoalIntroModal.open({
       room: goalRoom,
+      signedIn: getAuthDebugState().authenticated,
       titleText: goalRoom.goal
         ? goalRoom.title?.trim() || `Room ${goalRoom.coordinates.x},${goalRoom.coordinates.y}`
         : 'How to play',
@@ -3965,7 +3979,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         customText: goalRoom.goalIntroText,
         enemyCount: this.countRoomObjectsByCategory(goalRoom, 'enemy'),
       }) : '',
-      onStart: () => {
+      onStart: (ghost, choice = 'off') => {
+        if (choice === 'personal' && raceUserId !== (getAuthDebugState().user?.id ?? null)) ghost = null;
+        this.ghostRaceController.select(ghost ?? null, choice, goalRoom);
         this.roomGoalIntroPauseRequested = false;
         this.syncScenePauseState();
 
@@ -4002,6 +4018,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     return (forceGoalIntro && room.status === 'published' && Boolean(room.goal))
+      || (room.status === 'published' && supportsGhostRace(room.goal))
       || roomGoalIntroModal.shouldShowForRoom(room);
   }
 
@@ -4736,7 +4753,11 @@ export class OverworldPlayScene extends Phaser.Scene {
         roomId: roomIdFromCoordinates(frame.roomCoordinates), roomX: frame.roomCoordinates.x, roomY: frame.roomCoordinates.y,
         x: frame.x, y: frame.y, instanceId: null, checkpointIndex: null });
     }
-    return this.rankedRunTraceRecorder.buildTrace(elapsedMs);
+    const trace = this.rankedRunTraceRecorder.buildTrace(elapsedMs);
+    if (trace && kind === 'room' && result === 'completed') {
+      this.ghostRaceController.captureGuest(this.currentGoalRun, trace, resolveActivePlayerAvatarId());
+    }
+    return trace;
   }
 
   private clearRankedRunTrace(): void {
@@ -6234,6 +6255,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleShutdown = (): void => {
+    this.ghostRaceController.clear();
     this.gameFeelController.reset();
     this.runtimeContext.setLifecycle('shutting-down');
     this.performanceAdvisorSceneActive = false;
@@ -6699,6 +6721,7 @@ export class OverworldPlayScene extends Phaser.Scene {
             opponentGhost: this.serializePvpOpponentGhost(),
           }
         : null,
+      ghostRace: this.ghostRaceController.getDebugSnapshot(),
       leaderboards: goalRunSnapshot.leaderboards,
       collectibles: this.countLiveObjectsByCategory('collectible'),
       hazards: this.countLiveObjectsByCategory('hazard'),
