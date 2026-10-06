@@ -72,6 +72,7 @@ interface OverworldCoursePlaybackHost {
   countRoomObjectsByCategory(room: RoomSnapshot, category: GameObjectConfig['category']): number;
   showTransientStatus(message: string): void;
   renderHud(): void;
+  onRankedRunPreparing?(kind: 'course'): void;
   onRankedRunStarted?(binding: {
     kind: 'course';
     verificationSchemaVersion: number;
@@ -93,8 +94,18 @@ export class OverworldCoursePlaybackController {
   private readonly activeCourseRoomOverrideIds = new Set<string>();
   private readonly pinnedCourseRoomSnapshotCache = new Map<string, RoomSnapshot>();
   private playbackRoomSourceMode: CoursePlaybackRoomSourceMode = 'published';
+  private readonly startedRankedRuns = new WeakSet<ActiveCourseRunState>();
+  private readonly pendingRankedTraces = new WeakMap<ActiveCourseRunState, RankedRunVerificationTrace | null>();
 
   constructor(private readonly host: OverworldCoursePlaybackHost) {}
+
+  getDebugSnapshot() {
+    const run = this.host.getActiveCourseRun();
+    return run ? { courseId: run.course.id, expandedRoomId: run.expandedRoomId, startRoomId: run.startRoomId,
+      elapsedMs: Math.round(run.elapsedMs), deaths: run.deaths, checkpointsReached: run.checkpointsReached,
+      nextCheckpointIndex: run.nextCheckpointIndex, result: run.result, attemptId: run.attemptId,
+      submissionState: run.submissionState, guestProgress: run.guestProgress ?? null } : null;
+  }
 
   hasActiveCourseRoomOverride(roomId: string): boolean {
     return this.activeCourseRoomOverrideIds.has(roomId);
@@ -207,6 +218,7 @@ export class OverworldCoursePlaybackController {
   }
 
   async startRemoteCourseRun(runState: ActiveCourseRunState): Promise<void> {
+    this.host.onRankedRunPreparing?.('course');
     try {
       const { response, submissionTarget } = await this.startRankedCourseRun(runState);
       const activeCourseRun = this.host.getActiveCourseRun();
@@ -221,13 +233,16 @@ export class OverworldCoursePlaybackController {
       activeCourseRun.snapshotHash = response.snapshotHash;
       activeCourseRun.submissionState = 'active';
       activeCourseRun.submissionMessage = 'Ranked expanded room run active.';
-      this.host.onRankedRunStarted?.({
-        kind: 'course',
-        verificationSchemaVersion: response.verificationSchemaVersion,
-        verificationNonce: response.verificationNonce,
-        snapshotHash: response.snapshotHash,
+      const pendingResult = activeCourseRun.pendingResult;
+      if (!pendingResult) this.host.onRankedRunStarted?.({
+        kind: 'course', verificationSchemaVersion: response.verificationSchemaVersion,
+        verificationNonce: response.verificationNonce, snapshotHash: response.snapshotHash,
       });
       this.host.renderHud();
+      if (pendingResult) {
+        activeCourseRun.pendingResult = null;
+        await this.finalizeActiveCourseRun(pendingResult);
+      }
     } catch (error) {
       console.error('Failed to start ranked course run', error);
       const activeCourseRun = this.host.getActiveCourseRun();
@@ -270,6 +285,14 @@ export class OverworldCoursePlaybackController {
       this.host.renderHud();
       return;
     }
+    if (!activeCourseRun.attemptId && activeCourseRun.leaderboardEligible
+      && activeCourseRun.submissionState === 'starting') {
+      this.pendingRankedTraces.set(activeCourseRun, this.host.buildVerificationTrace?.(activeCourseRun, result) ?? null);
+      this.host.clearVerificationTrace?.();
+      activeCourseRun.submissionMessage = 'Waiting to verify the expanded room run...';
+      this.host.renderHud();
+      return;
+    }
     const attemptId = activeCourseRun.attemptId;
     if (!attemptId || activeCourseRun.submissionState === 'local-only') {
       activeCourseRun.submissionState = 'submitted';
@@ -305,7 +328,14 @@ export class OverworldCoursePlaybackController {
     activeCourseRun.submissionMessage = 'Submitting expanded room run...';
     this.host.renderHud();
 
-    const verificationTrace = this.host.buildVerificationTrace?.(activeCourseRun, result) ?? null;
+    const captured = this.pendingRankedTraces.has(activeCourseRun)
+      ? this.pendingRankedTraces.get(activeCourseRun) ?? null
+      : this.host.buildVerificationTrace?.(activeCourseRun, result) ?? null;
+    this.pendingRankedTraces.delete(activeCourseRun);
+    const verificationTrace = captured ? { ...captured,
+      schemaVersion: activeCourseRun.verificationSchemaVersion ?? captured.schemaVersion,
+      verificationNonce: activeCourseRun.verificationNonce ?? captured.verificationNonce,
+      snapshotHash: activeCourseRun.snapshotHash ?? captured.snapshotHash } : null;
     if (!verificationTrace) {
       console.warn('Submitting ranked course finish without verification trace', {
         attemptId,
@@ -440,6 +470,19 @@ export class OverworldCoursePlaybackController {
       !runState.leaderboardEligible &&
       !authState.authenticated
     );
+  }
+
+  startRunAfterSpawn(): void {
+    const run = this.host.getActiveCourseRun();
+    if (!run || this.playbackRoomSourceMode !== 'published' || run.course.status !== 'published'
+      || run.result !== 'active' || run.pendingResult) return;
+    if (run.leaderboardEligible) {
+      if (this.startedRankedRuns.has(run)) return;
+      this.startedRankedRuns.add(run);
+      void this.startRemoteCourseRun(run);
+      return;
+    }
+    this.startGuestRunAfterSpawn();
   }
 
   startGuestRunAfterSpawn(): void {

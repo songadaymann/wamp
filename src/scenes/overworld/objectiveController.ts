@@ -44,6 +44,7 @@ interface OverworldObjectiveControllerHost {
   setRoomNpcsVictorious(roomId: string, victorious: boolean): void;
   showTransientStatus(message: string): void;
   redrawGoalMarkers(): void;
+  activateRespawnCheckpoint?(point: CourseMarkerPoint, checkpointIndex: number): void;
   playGoalFx(
     effect: 'start' | 'checkpoint' | 'success' | 'fail' | 'abandon',
     x: number,
@@ -289,7 +290,12 @@ export class OverworldObjectiveController {
           y: nextCheckpoint.y,
           checkpointIndex: runState.nextCheckpointIndex,
         });
-        this.applyGoalRunMutation(this.host.goalRunController.recordCheckpointReached());
+        const mutation = this.host.goalRunController.recordCheckpointReached();
+        if (mutation.changed) this.host.activateRespawnCheckpoint?.(
+          { roomId: runState.roomId, x: nextCheckpoint.x, y: nextCheckpoint.y },
+          runState.nextCheckpointIndex - 1,
+        );
+        this.applyGoalRunMutation(mutation);
       }
       return;
     }
@@ -355,10 +361,17 @@ export class OverworldObjectiveController {
     }
 
     if (result.verificationGoalEvent) {
+      if (result.verificationGoalEvent.type === 'checkpoint' && result.verificationGoalEvent.checkpointIndex !== null) {
+        this.host.activateRespawnCheckpoint?.(
+          result.verificationGoalEvent.marker, result.verificationGoalEvent.checkpointIndex,
+        );
+      }
       this.host.recordRankedGoalEvent({
         type: result.verificationGoalEvent.type,
         roomId: result.verificationGoalEvent.marker.roomId,
-        roomCoordinates: this.host.getCurrentRoomCoordinates(),
+        roomCoordinates: this.host.getActiveCourseRun()?.course.roomRefs.find(
+          ref => ref.roomId === result.verificationGoalEvent?.marker.roomId,
+        )?.coordinates ?? this.host.getCurrentRoomCoordinates(),
         x: result.verificationGoalEvent.marker.x,
         y: result.verificationGoalEvent.marker.y,
         checkpointIndex: result.verificationGoalEvent.checkpointIndex,

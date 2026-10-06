@@ -87,6 +87,8 @@ import type {
 import { LiveObjectLifecycleController } from './liveObjects/lifecycleController';
 import { LiveObjectInteractionCoordinator } from './liveObjects/interactionCoordinator';
 import { LiveObjectPartitionIndex } from './liveObjects/partitionIndex';
+import { LiveObjectRespawnCheckpointController } from './liveObjects/respawnCheckpoint';
+import type { RespawnCheckpoint } from '../../goals/respawnCheckpoints';
 
 export { isDynamicArcadeBody } from './liveObjects/bodies';
 export type { ArcadeObjectBody } from './liveObjects/bodies';
@@ -160,6 +162,8 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   getCurrentTime: () => number;
   addScore: (delta: number) => void;
   onKeyCollected: () => void;
+  onRespawnCheckpointTouched?: (checkpoint: RespawnCheckpoint) => void;
+  isRespawnCheckpointReached?: (roomId: string, instanceId: string) => boolean;
   tryConsumeHeldKey: () => boolean;
   touchQuicksand: () => void;
   grantExternalLaunchGrace: (durationMs: number) => void;
@@ -249,10 +253,16 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly lifecycleController: LiveObjectLifecycleController<TEdgeWall>;
   private readonly interactionCoordinator: LiveObjectInteractionCoordinator<TEdgeWall>;
   private readonly partitionIndex: LiveObjectPartitionIndex<TEdgeWall>;
+  private readonly checkpointController: LiveObjectRespawnCheckpointController<TEdgeWall>;
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
   private roomStateEventSuppressionDepth = 0;
 
   constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {
+    this.checkpointController = new LiveObjectRespawnCheckpointController({
+      scene: this.options.scene,
+      isReached: (roomId, instanceId) => this.options.isRespawnCheckpointReached?.(roomId, instanceId) ?? false,
+      onTouched: checkpoint => this.options.onRespawnCheckpointTouched?.(checkpoint),
+    });
     this.partitionIndex = new LiveObjectPartitionIndex({
       getLoadedFullRooms: this.options.getLoadedFullRooms,
       getRoomOrigin: this.options.getRoomOrigin,
@@ -413,6 +423,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.hazardController.addBouncePadInteraction(loadedRoom, liveObject, player),
       handleLockedDoorContact: (loadedRoom, liveObject) =>
         this.triggerController.handleLockedDoorContact(loadedRoom, liveObject),
+      handleRespawnCheckpointContact: (loadedRoom, liveObject) =>
+        this.checkpointController.touch(loadedRoom, liveObject),
       shouldCollideWithLiveObject: (liveObject) =>
         this.shouldCollideWithLiveObject(liveObject),
       isDistanceSleeping: (liveObject) => this.distanceSleepingObjects.has(liveObject),
@@ -781,12 +793,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
 
     this.triggerController.initializePressureControlledObjectState(liveObject);
+    this.checkpointController.syncObject(loadedRoom, liveObject);
 
     return liveObject;
   }
 
   syncLiveObjectInteractions(loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {
     this.interactionCoordinator.syncPlayerInteractions(loadedRooms);
+  }
+
+  syncRespawnCheckpointPresentation(): void {
+    this.checkpointController.sync(this.options.getLoadedFullRooms());
   }
 
   syncLiveObjectPresentation(loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {

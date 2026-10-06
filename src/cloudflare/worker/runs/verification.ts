@@ -12,10 +12,12 @@ import {
   type RankedRunTraceBreadcrumb,
   type RankedRunTraceGoalEvent,
   type RankedRunTraceRoomTransition,
+  type RankedRunTraceRespawnEvent,
   type RankedRunVerificationTrace,
 } from '../../../runs/verificationTrace';
 import { HttpError } from '../core/http';
 import type { Env } from '../core/types';
+import { buildTracePhysicalSamples, validateTraceRespawns, type RankedRunPhysicalSample } from './respawnVerification';
 
 const VERIFICATION_TIMEOUT_MS = 2_000;
 const MAX_INPUT_EVENTS = 2_048;
@@ -241,6 +243,7 @@ export async function verifyRoomRunTrace(input: {
   binding: RunVerificationBinding;
   room: RoomSnapshot;
   elapsedMs: number;
+  deaths: number;
 }): Promise<RunVerificationResult> {
   const deadline = Date.now() + VERIFICATION_TIMEOUT_MS;
   const validated = validateTraceEnvelope(input.trace, input.binding, input.elapsedMs);
@@ -249,7 +252,11 @@ export async function verifyRoomRunTrace(input: {
   }
 
   const trace = input.trace;
-  const pathCheck = verifyPath(trace.breadcrumbs, trace.roomTransitions, deadline);
+  const respawnCheck = validateTraceRespawns({ ...input, roomsById: new Map([[input.room.id, input.room]]), deadline });
+  if ('reason' in respawnCheck) return createFailedVerification(
+    respawnCheck.reason === 'trace_timeout' ? 'timeout' : 'failed', respawnCheck.reason, respawnCheck.summary,
+  );
+  const pathCheck = verifyPath(trace.breadcrumbs, trace.roomTransitions, deadline, respawnCheck.respawns);
   if (pathCheck) {
     return pathCheck;
   }
@@ -259,6 +266,7 @@ export async function verifyRoomRunTrace(input: {
     trace.breadcrumbs,
     trace.goalEvents,
     deadline,
+    respawnCheck.respawns,
   );
   if ('status' in derivedMetrics) {
     return derivedMetrics;
@@ -274,6 +282,7 @@ export async function verifyRoomRunTrace(input: {
       inputEvents: trace.inputEvents.length,
       goalEvents: trace.goalEvents.length,
       roomTransitions: trace.roomTransitions.length,
+      respawnEvents: trace.respawnEvents?.length ?? 0,
       traceDurationMs: trace.traceDurationMs,
     },
   };
@@ -285,6 +294,7 @@ export async function verifyCourseRunTrace(input: {
   course: CourseSnapshot;
   roomsById: Map<string, RoomSnapshot>;
   elapsedMs: number;
+  deaths: number;
 }): Promise<RunVerificationResult> {
   const deadline = Date.now() + VERIFICATION_TIMEOUT_MS;
   const validated = validateTraceEnvelope(input.trace, input.binding, input.elapsedMs);
@@ -293,7 +303,11 @@ export async function verifyCourseRunTrace(input: {
   }
 
   const trace = input.trace;
-  const pathCheck = verifyPath(trace.breadcrumbs, trace.roomTransitions, deadline);
+  const respawnCheck = validateTraceRespawns({ ...input, deadline });
+  if ('reason' in respawnCheck) return createFailedVerification(
+    respawnCheck.reason === 'trace_timeout' ? 'timeout' : 'failed', respawnCheck.reason, respawnCheck.summary,
+  );
+  const pathCheck = verifyPath(trace.breadcrumbs, trace.roomTransitions, deadline, respawnCheck.respawns);
   if (pathCheck) {
     return pathCheck;
   }
@@ -304,6 +318,7 @@ export async function verifyCourseRunTrace(input: {
     trace.breadcrumbs,
     trace.goalEvents,
     deadline,
+    respawnCheck.respawns,
   );
   if ('status' in derivedMetrics) {
     return derivedMetrics;
@@ -319,6 +334,7 @@ export async function verifyCourseRunTrace(input: {
       inputEvents: trace.inputEvents.length,
       goalEvents: trace.goalEvents.length,
       roomTransitions: trace.roomTransitions.length,
+      respawnEvents: trace.respawnEvents?.length ?? 0,
       traceDurationMs: trace.traceDurationMs,
     },
   };
@@ -521,7 +537,8 @@ function validateTraceEnvelope(
 function verifyPath(
   breadcrumbs: RankedRunTraceBreadcrumb[],
   roomTransitions: RankedRunTraceRoomTransition[],
-  deadline: number
+  deadline: number,
+  respawns?: ReadonlyMap<number, RankedRunTraceRespawnEvent>,
 ): RunVerificationResult | null {
   for (let index = 1; index < breadcrumbs.length; index += 1) {
     if (Date.now() > deadline) {
@@ -531,9 +548,11 @@ function verifyPath(
     }
 
     const previous = breadcrumbs[index - 1];
-    const current = breadcrumbs[index];
+    const respawn = respawns?.get(index);
+    const current = respawn ? { ...breadcrumbs[index], atMs: respawn.atMs,
+      roomX: respawn.fromRoomX, roomY: respawn.fromRoomY, x: respawn.fromX, y: respawn.fromY } : breadcrumbs[index];
     const deltaMs = current.atMs - previous.atMs;
-    if (deltaMs <= 0) {
+    if (deltaMs < 0 || (deltaMs === 0 && !respawn)) {
       return createFailedVerification('failed', 'trace_time', {
         field: 'breadcrumbs',
         atIndex: index,
@@ -600,7 +619,8 @@ function deriveRoomMetricsFromTrace(
   room: RoomSnapshot,
   breadcrumbs: RankedRunTraceBreadcrumb[],
   goalEvents: RankedRunTraceGoalEvent[],
-  deadline: number
+  deadline: number,
+  respawns: ReadonlyMap<number, RankedRunTraceRespawnEvent>,
 ): RunVerificationDerivedMetrics | RunVerificationResult {
   const collectibleIds = new Set<string>();
   const enemyIds = new Set<string>();
@@ -629,6 +649,7 @@ function deriveRoomMetricsFromTrace(
     breadcrumbs,
     goalEvents,
     deadline,
+    respawns,
     allowedRoomIds: new Set([room.id]),
     roomCoordinatesById: new Map([[room.id, room.coordinates]]),
     collectibleIdsByRoomId: new Map([[room.id, collectibleIds]]),
@@ -643,7 +664,8 @@ function deriveCourseMetricsFromTrace(
   roomsById: Map<string, RoomSnapshot>,
   breadcrumbs: RankedRunTraceBreadcrumb[],
   goalEvents: RankedRunTraceGoalEvent[],
-  deadline: number
+  deadline: number,
+  respawns: ReadonlyMap<number, RankedRunTraceRespawnEvent>,
 ): RunVerificationDerivedMetrics | RunVerificationResult {
   const allowedRoomIds = new Set<string>();
   const roomCoordinatesById = new Map<string, RoomCoordinates>();
@@ -710,6 +732,7 @@ function deriveCourseMetricsFromTrace(
     breadcrumbs,
     goalEvents,
     deadline,
+    respawns,
     allowedRoomIds,
     roomCoordinatesById,
     collectibleIdsByRoomId,
@@ -724,6 +747,7 @@ function deriveMetricsForGoal(input: {
   breadcrumbs: RankedRunTraceBreadcrumb[];
   goalEvents: RankedRunTraceGoalEvent[];
   deadline: number;
+  respawns: ReadonlyMap<number, RankedRunTraceRespawnEvent>;
   allowedRoomIds: Set<string>;
   roomCoordinatesById: Map<string, RoomCoordinates>;
   collectibleIdsByRoomId: Map<string, Set<string>>;
@@ -737,12 +761,13 @@ function deriveMetricsForGoal(input: {
   const checkpoints = new Set<number>();
   let reachedExit = false;
   let reachedFinish = false;
+  const physicalSamples = buildTracePhysicalSamples(input.breadcrumbs, input.respawns);
 
   const burstCheck = verifyGoalEventBurstPattern(input.goalEvents, input.breadcrumbs);
   if (burstCheck) {
     return burstCheck;
   }
-  for (const event of input.goalEvents) {
+  for (const [eventIndex, event] of input.goalEvents.entries()) {
     if (Date.now() > input.deadline) {
       return createFailedVerification('timeout', 'trace_timeout', {
         phase: 'goal_events',
@@ -772,7 +797,8 @@ function deriveMetricsForGoal(input: {
     }
 
     if (event.type !== 'enemy' && !(event.type === 'collectible' && event.actor === 'enemy')) {
-      const pathDistance = getGoalEventPathDistance(event, input.breadcrumbs);
+      const segment = [...input.respawns.values()].filter(respawn => respawn.goalEventCount <= eventIndex).length;
+      const pathDistance = getGoalEventPathDistance(event, physicalSamples, segment);
       if (pathDistance === null || pathDistance.distancePx > pathDistance.maxDistancePx) {
         return createFailedVerification('failed', 'trace_goal', {
           issue: 'goal_event_path_mismatch',
@@ -860,6 +886,9 @@ function deriveMetricsForGoal(input: {
           });
         }
         checkpoints.add(event.checkpointIndex);
+        break;
+      case 'respawn_checkpoint':
+        // Authorship, actual touch and reset destination are checked separately.
         break;
       case 'reach_exit':
         reachedExit = true;
@@ -982,10 +1011,11 @@ function isEventNearBoundObject(
 
 function getGoalEventPathDistance(
   event: RankedRunTraceGoalEvent,
-  breadcrumbs: RankedRunTraceBreadcrumb[],
+  breadcrumbs: RankedRunPhysicalSample[],
+  segment: number,
 ): { distancePx: number; maxDistancePx: number } | null {
   const matching = breadcrumbs.filter(
-    (breadcrumb) => breadcrumb.roomX === event.roomX && breadcrumb.roomY === event.roomY,
+    (breadcrumb) => breadcrumb.segment === segment && breadcrumb.roomX === event.roomX && breadcrumb.roomY === event.roomY,
   );
   if (matching.length === 0) {
     return null;

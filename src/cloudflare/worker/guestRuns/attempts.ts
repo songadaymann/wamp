@@ -140,9 +140,9 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
   if (body.result === 'completed' && body.verificationTrace && durationPossible) {
     const binding = { verificationNonce: row.verification_nonce, verificationSnapshotHash: row.snapshot_hash };
     const verified = snapshot.kind === 'room'
-      ? await verifyRoomRunTrace({ trace: body.verificationTrace, binding, room: snapshot.room, elapsedMs })
+      ? await verifyRoomRunTrace({ trace: body.verificationTrace, binding, room: snapshot.room, elapsedMs, deaths: body.deaths })
       : await verifyCourseRunTrace({ trace: body.verificationTrace, binding, course: snapshot.course,
-        roomsById: new Map(snapshot.rooms.map(room => [room.id, room])), elapsedMs });
+        roomsById: new Map(snapshot.rooms.map(room => [room.id, room])), elapsedMs, deaths: body.deaths });
     verificationStatus = verified.status; reason = verified.reason;
     if (verified.status === 'passed') {
       const derived = { ...body, elapsedMs, ...verified.derivedMetrics };
