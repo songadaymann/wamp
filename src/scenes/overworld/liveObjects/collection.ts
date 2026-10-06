@@ -20,6 +20,7 @@ interface LiveObjectCollectionEvent {
 
 interface LiveObjectCollectionHost {
   scene: Phaser.Scene;
+  canPlayerCollect?: () => boolean;
   isCollectedObjectKey: (key: string) => boolean;
   markCollectedObjectKey: (key: string) => void;
   addScore: (delta: number) => void;
@@ -53,6 +54,7 @@ export function collectLiveObject<TEdgeWall>(
   }
 
   const collector = options.collector ?? 'player';
+  if (collector === 'player' && host.canPlayerCollect?.() === false) return;
   host.markCollectedObjectKey(liveObject.key);
   const scoreDelta = getCollectibleScoreValue(liveObject.config.id);
   if (collector === 'player') {

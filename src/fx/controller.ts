@@ -62,6 +62,21 @@ export class SceneFxController {
     }
   }
 
+  playPlayerDeathFx(x: number, y: number): void {
+    this.playAnimatedFx(FX_ANIMATION_KEYS.hit, x, y - 16, {
+      scale: 1.6,
+      depth: 30,
+      tint: 0xff6b6b,
+    });
+    this.playAnimatedFx(FX_ANIMATION_KEYS.dust, x, y - 10, {
+      scale: 1.3,
+      depth: 29,
+      tint: 0xff8b8b,
+    });
+    this.spawnRing(x, y - 10, 0xff6b6b);
+    playSfx('player-death');
+  }
+
   playBounceFx(
     x: number,
     y: number,

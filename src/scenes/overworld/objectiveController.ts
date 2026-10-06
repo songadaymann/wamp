@@ -95,14 +95,14 @@ export class OverworldObjectiveController {
     this.applyGoalRunMutation(this.host.goalRunController.restartRunForRoom(room, entryContext));
   }
 
-  update(delta: number): void {
+  update(delta: number, interactionsSuspended = false): void {
     if (this.host.getActiveCourseRun()) {
-      this.updateCourseRun(delta);
+      this.updateCourseRun(delta, interactionsSuspended);
       return;
     }
 
     const playerBody = this.host.getPlayerBody();
-    if (playerBody) {
+    if (playerBody && !interactionsSuspended) {
       this.applyGoalRunMutation(
         this.host.goalRunController.qualifyPracticeRunAt({
           x: playerBody.center.x,
@@ -111,7 +111,8 @@ export class OverworldObjectiveController {
       );
     }
 
-    this.applyGoalRunMutation(this.host.goalRunController.tick(delta));
+    this.applyGoalRunMutation(this.host.goalRunController.tick(delta, { suspendGoalResolution: interactionsSuspended }));
+    if (interactionsSuspended) return;
 
     const runState = this.host.goalRunController.getCurrentRun();
     if (!runState || runState.result !== 'active') {
@@ -333,10 +334,11 @@ export class OverworldObjectiveController {
     this.applyGoalRunMutation(this.host.goalRunController.markCompleted(message));
   }
 
-  private updateCourseRun(delta: number): void {
+  private updateCourseRun(delta: number, interactionsSuspended: boolean): void {
     this.applyCourseRunMutation(
       tickActiveCourseRun(this.host.getActiveCourseRun(), {
         delta,
+        suspendGoalResolution: interactionsSuspended,
         touchesCoursePoint: (point) => this.playerTouchesGoalPoint(this.host.toWorldCoursePoint(point)),
         getPlayerEffectOrigin: () => this.host.getPlayerEffectOrigin(),
       }),

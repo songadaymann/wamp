@@ -85,6 +85,23 @@ function harness() {
 async function settle(): Promise<void> { for (let i = 0; i < 12; i++) await Promise.resolve(); }
 
 describe('ordinary guest playback lifecycle', () => {
+  it('keeps the clock running while a dead player cannot win survival or pass the timer', () => {
+    const h = harness();
+    const survivalRoom = { ...room(), goal: { type: 'survival' as const, durationMs: 1000 } };
+    h.goals.syncRunForRoom(survivalRoom, 'spawn'); h.goals.tick(950);
+    h.goals.recordDeath(); h.goals.tick(180, { suspendGoalResolution: true });
+    expect(h.goals.getCurrentRun()).toMatchObject({ result: 'active', elapsedMs: 1130, deaths: 1 });
+    expect(notifyRewardStings).not.toHaveBeenCalled();
+    h.goals.markFailed('Survival failed.');
+    expect(h.goals.getCurrentRun()?.result).toBe('failed');
+
+    h.goals.syncRunForRoom({ ...room(), version: 2,
+      goal: { type: 'reach_exit', exit: { x: 144, y: 128 }, timeLimitMs: 1000 } }, 'spawn');
+    h.goals.tick(950); h.goals.tick(180, { suspendGoalResolution: true });
+    expect(h.goals.getCurrentRun()).toMatchObject({ result: 'active', elapsedMs: 1130 });
+    h.goals.tick(1);
+    expect(h.goals.getCurrentRun()?.result).toBe('failed');
+  });
   it('updates the current queued-clear HUD when a later flush saves it, without changing a newer trace', async () => {
     const h = harness(); vi.mocked(h.repo.finish).mockRejectedValueOnce(new TypeError('Offline'));
     h.goals.syncRunForRoom(room(), 'spawn'); h.goals.markCompleted('Exit reached.'); await settle();

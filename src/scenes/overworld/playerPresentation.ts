@@ -5,6 +5,7 @@ import {
 import { resolveActivePlayerAvatarPack } from '../../player/avatar/runtime';
 import type { OverworldMovementPresentationState } from './movementController';
 import { playPlayerAnimationIfReady } from './playerAnimation';
+import { PlayerBodyFeedback } from './playerBodyFeedback';
 import {
   bodyIsBlockedInGravityDirection,
   getBodyVelocityAlongVector,
@@ -50,12 +51,17 @@ interface OverworldPlayerPresentationControllerOptions {
 }
 
 export class OverworldPlayerPresentationController {
+  private readonly bodyFeedback = new PlayerBodyFeedback();
+  private baseScaleX = 1;
+  private baseScaleY = 1;
+
   constructor(
     private readonly host: OverworldPlayerPresentationControllerHost,
     private readonly options: OverworldPlayerPresentationControllerOptions,
   ) {}
 
   reset(): void {
+    this.resetBodyFeedback();
     this.host.state.animationState = 'idle';
     this.host.state.facing = 1;
     this.host.state.wasGrounded = false;
@@ -63,28 +69,39 @@ export class OverworldPlayerPresentationController {
   }
 
   handlePlayerCreated(): void {
+    const sprite = this.host.getPlayerSprite();
+    this.baseScaleX = sprite?.scaleX ?? 1;
+    this.baseScaleY = sprite?.scaleY ?? 1;
+    this.resetBodyFeedback();
     this.host.state.animationState = 'idle';
     this.host.state.facing = 1;
     this.host.state.wasGrounded = true;
     this.host.state.landAnimationUntil = 0;
-    this.syncPlayerVisual();
+    this.syncPlayerVisual(false);
   }
 
   handlePlayerDestroyed(): void {
+    this.resetBodyFeedback();
     this.host.state.landAnimationUntil = 0;
     this.host.state.wasGrounded = false;
+  }
+
+  describeBodyFeedback() {
+    return this.bodyFeedback.describe();
   }
 
   handleRespawned(): void {
+    this.resetBodyFeedback();
     this.host.state.wasGrounded = false;
-    this.syncPlayerVisual();
+    this.syncPlayerVisual(false);
   }
 
   resetTransientPlayState(): void {
+    this.resetBodyFeedback();
     this.host.state.landAnimationUntil = 0;
   }
 
-  syncPlayerVisual(): void {
+  syncPlayerVisual(sampleBodyFeedback = true): void {
     const player = this.host.getPlayer();
     const playerBody = this.host.getPlayerBody();
     const playerSprite = this.host.getPlayerSprite();
@@ -134,7 +151,20 @@ export class OverworldPlayerPresentationController {
     const grounded =
       this.host.getGroundedOverride() ??
       bodyIsBlockedInGravityDirection(playerBody, gravityDirection);
-    if (!movement.isClimbingLadder && grounded && !this.host.state.wasGrounded) {
+    const gravity = getGravityVector(gravityDirection);
+    // Arcade settles the reset body's offsets in preUpdate. Its immediate reset
+    // geometry must not become the apex for a subsequent short spawn drop.
+    const feedback = sampleBodyFeedback ? this.bodyFeedback.sample({
+      now,
+      grounded,
+      climbing: movement.isClimbingLadder,
+      gravityDirection,
+      positionAlongGravity: playerBody.center.x * gravity.x + playerBody.center.y * gravity.y
+        + (Math.abs(gravity.x) * playerBody.width + Math.abs(gravity.y) * playerBody.height) * 0.5,
+      velocityAlongGravity: getBodyVelocityAlongVector(playerBody, gravity),
+    }) : { landed: false, scaleX: 1, scaleY: 1 };
+    playerSprite.setScale(this.baseScaleX * feedback.scaleX, this.baseScaleY * feedback.scaleY);
+    if (feedback.landed) {
       this.host.state.landAnimationUntil = now + this.options.landingAnimationMs;
       this.host.playLandingDustFx(player.x, playerBody.bottom, this.host.state.facing);
     }
@@ -157,6 +187,11 @@ export class OverworldPlayerPresentationController {
     }
 
     this.host.state.wasGrounded = grounded;
+  }
+
+  private resetBodyFeedback(): void {
+    this.bodyFeedback.reset();
+    this.host.getPlayerSprite()?.setScale(this.baseScaleX, this.baseScaleY);
   }
 
   syncPlayerPickupSensor(): void {

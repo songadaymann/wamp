@@ -205,6 +205,8 @@ import {
   OverworldMovementController,
 } from './overworld/movementController';
 import { OverworldPhysicsCadence, type OverworldMovementInput } from './overworld/physicsCadence';
+import { OverworldGameFeelController } from './overworld/gameFeel';
+import { OverworldPlayerDeathPresentation } from './overworld/playerDeathPresentation';
 import { OverworldQuicksandController } from './overworld/quicksandController';
 import {
   OverworldPlayerPresentationController,
@@ -548,6 +550,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly objectiveController: OverworldObjectiveController;
   private readonly movementController: OverworldMovementController;
   private physicsCadence: OverworldPhysicsCadence | null = null;
+  private readonly gameFeelController: OverworldGameFeelController;
+  private readonly playerDeathPresentation: OverworldPlayerDeathPresentation;
   private readonly quicksandController: OverworldQuicksandController;
   private readonly combatPresentationController: OverworldCombatPresentationController;
   private readonly combatController: OverworldCombatController;
@@ -627,6 +631,17 @@ export class OverworldPlayScene extends Phaser.Scene {
       showTransientStatus: (message) => this.showTransientStatus(message),
     });
     const thisScene = this;
+    this.playerDeathPresentation = new OverworldPlayerDeathPresentation(this, () => this.playerSprite);
+    this.gameFeelController = new OverworldGameFeelController({
+      canApplyFeedback: () => this.mode === 'play' && this.playerBody !== null,
+      isPvpActive: () => this.isPvpMatchActive(),
+      isPhysicsPaused: () => this.physics.world.isPaused,
+      pausePhysics: () => this.physics.world.pause(),
+      resumePhysics: () => this.physics.world.resume(),
+      hidePlayer: () => this.playerDeathPresentation.hide(),
+      restorePlayerVisual: () => this.playerDeathPresentation.restore(),
+      fadeInPlayer: duration => this.playerDeathPresentation.fadeIn(duration),
+    });
     const guestRuns = this.guestRunPlaybackController = new GuestRunPlaybackController({
       getCurrentRun: kind => kind === 'room' ? this.goalRunController?.getCurrentRun() ?? null : this.activeCourseRun,
       startTrace: (kind, binding) => this.startRankedRunTrace(kind, binding),
@@ -726,9 +741,15 @@ export class OverworldPlayScene extends Phaser.Scene {
       markCollectedObjectKey: (key) => {
         this.collectedObjectKeys.add(key);
       },
-      getPlayer: () => this.player,
-      getPlayerPickupSensor: () => this.playerPickupSensor,
-      getPlayerBody: () => this.playerBody,
+      getPlayer: () => this.gameFeelController.isDeathPending() ? null : this.player,
+      getPlayerPickupSensor: () => this.gameFeelController.isDeathPending() ? null : this.playerPickupSensor,
+      getPlayerBody: () => this.gameFeelController.isDeathPending() ? null : this.playerBody,
+      getEnemyStompBounceVelocity: () => {
+        const jumpHeld = this.cursors.up.isDown || this.cursors.space.isDown
+          || this.wasd.W.isDown || getTouchInputState().jumpHeld;
+        return this.JUMP_VELOCITY * (jumpHeld ? 1 : 0.58);
+      },
+      playEnemyStompImpact: () => this.cameras.main.shake(50, 0.002),
       getConveyorDirectionForBody: (body, gravityDirection) =>
         this.specialTilesController.getConveyorDirectionForBody(body, gravityDirection),
       getBodyRoomId: (body) => this.specialTilesController.getBodyRoomId(body),
@@ -777,12 +798,14 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.handleRoomSwitchStateChangedForMultiplayer(event),
       playRoomSfx: (cue, roomCoordinates) =>
         this.roomAudioController.playRoomSfx(cue, roomCoordinates),
-      playEnemyKillFx: (x, y, roomCoordinates) =>
+      playEnemyKillFx: (x, y, roomCoordinates) => {
         this.fxController?.playEnemyKillFx(
           x,
           y,
           this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
-        ),
+        );
+        this.gameFeelController.hitstop();
+      },
       playCollectFx: (x, y, scoreDelta, roomCoordinates, cue) =>
         this.fxController?.playCollectFx(
           x,
@@ -1527,7 +1550,10 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.updateSelectedSummary(); this.shouldCenterCamera = true; setFocusedCoordinatesInUrl(coordinates);
       },
       respawnPlayerToRoom: (room, entities) => this.playerLifecycleController.respawnPlayerToRoom(room, entities),
-      presentRespawn: () => this.playerPresentationController.handleRespawned(),
+      presentRespawn: () => {
+        this.playerPresentationController.handleRespawned();
+        this.gameFeelController.playerAvailable();
+      },
       recordRespawn: reference => {
         const frame = this.getCurrentRankedRunTraceFrame();
         if (frame) this.rankedRunTraceRecorder.recordRespawn(frame, reference);
@@ -1536,7 +1562,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       destroyPlayer: () => this.destroyPlayer(),
       requestPlayerCreation: () => { this.shouldRespawnPlayer = true; },
       refreshAround: coordinates => this.refreshAround(coordinates, { forceChunkReload: true }),
-      playRespawnSound: () => playSfx('respawn'),
+      playRespawnSound: () => {
+        if (this.gameFeelController.shouldPlayRespawnCue()) playSfx('respawn');
+      },
     });
     const playerPresentationState: OverworldPlayerPresentationControllerState = {
       get animationState() {
@@ -1722,9 +1750,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       recordPvpSelfDeath: (reason) => this.recordPvpSelfDeath(reason),
       playPlayerFailFx: () => {
         if (this.player && this.playerBody) {
-          this.fxController?.playGoalFx('fail', this.player.x, this.playerBody.bottom - 10, null);
+          this.fxController?.playPlayerDeathFx(this.player.x, this.playerBody.bottom - 10);
         }
       },
+      isPlayerDeathPending: () => this.gameFeelController.isDeathPending(),
+      runDeathBeat: respawn => this.gameFeelController.deathBeat(respawn),
       respawnPlayerToCurrentRoom: () => this.respawnPlayerToCurrentRoom(),
       clearRespawnCheckpoints: () => {
         this.respawnCheckpointController.clear(); this.respawnController.reset();
@@ -2275,7 +2305,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     );
     this.physicsCadence?.destroy();
     this.physicsCadence = new OverworldPhysicsCadence(this.events, this.physics.world, {
-      canSimulate: () => this.mode === 'play' && !this.scenePauseApplied,
+      canSimulate: () => this.mode === 'play' && !this.scenePauseApplied && !this.gameFeelController.isDeathPending(),
       getPlayerIdentity: () => this.playerBody?.enable ? this.playerBody : null,
       captureInput: () => this.movementController.captureInput(),
       simulateEnvironment: (stepDelta) => this.simulatePhysicsEnvironment(stepDelta),
@@ -2461,8 +2491,17 @@ export class OverworldPlayScene extends Phaser.Scene {
       const pvpCountdownLocked = this.isPvpCountdownActive();
       const swordInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
       const gunInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
-      const swordPressed = !pvpCountdownLocked && swordInputPressed;
-      const gunPressed = !pvpCountdownLocked && gunInputPressed;
+      if (this.gameFeelController.isHoldingPhysics()) {
+        this.gameFeelController.bufferCombatInput({ swordPressed: swordInputPressed, gunPressed: gunInputPressed });
+        this.recordRankedRunTraceFrame(delta, this.physicsCadence!.getMovement());
+        this.objectiveController.update(delta, this.gameFeelController.isDeathPending());
+        this.tickRoomRushRun(delta);
+        this.renderFrameHud();
+        return;
+      }
+      const combatInput = this.gameFeelController.consumeCombatInput({ swordPressed: swordInputPressed, gunPressed: gunInputPressed });
+      const swordPressed = !pvpCountdownLocked && combatInput.swordPressed;
+      const gunPressed = !pvpCountdownLocked && combatInput.gunPressed;
       const playerUpdateStartedAt = profiler?.beginSegment();
       const portalsStartedAt = controllerProfileSlot === 15 ? profiler?.beginSegment() : undefined;
       this.updatePortalObjects();
@@ -2484,7 +2523,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.maybeRespawnFromVoid();
       if (combatStartedAt !== undefined) profiler?.endSegment('controller.combat', combatStartedAt);
       const roomTransitionStartedAt = controllerProfileSlot === 17 ? profiler?.beginSegment() : undefined;
-      this.roomTransitionController.maybeAdvancePlayerRoom();
+      if (!this.gameFeelController.isDeathPending()) this.roomTransitionController.maybeAdvancePlayerRoom();
       this.cameraController.syncRoomCamera();
       this.cameraController.updateFollowPacing(this.physicsCadence!.getStepsThisFrame());
       this.updateMobilePortraitRoomFraming();
@@ -2495,7 +2534,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       const playerPresentationStartedAt = controllerProfileSlot === 18 ? profiler?.beginSegment() : undefined;
       try {
         this.playerPresentationGroundedOverride = movement.grounded;
-        this.playerPresentationController.syncPlayerVisual();
+        if (!this.gameFeelController.isDeathPending()) this.playerPresentationController.syncPlayerVisual();
       } finally {
         this.playerPresentationGroundedOverride = null;
       }
@@ -2514,7 +2553,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         profiler?.endSegment('controller.environment', environmentStartedAt);
       }
       const objectiveStartedAt = controllerProfileSlot === 19 ? profiler?.beginSegment() : undefined;
-      this.objectiveController.update(delta);
+      this.objectiveController.update(delta, this.gameFeelController.isDeathPending());
       this.tickRoomRushRun(delta);
       if (objectiveStartedAt !== undefined) {
         profiler?.endSegment('controller.objectiveRoomRush', objectiveStartedAt);
@@ -3172,9 +3211,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    this.playerPresentationController.syncPlayerVisual();
+    this.playerPresentationController.syncPlayerVisual(false);
     if (!isDynamicPlayerAvatarId(avatarId) || loadedAvatarId === avatarId) {
-      this.playerSprite?.setVisible(true);
+      this.playerSprite?.setVisible(!this.gameFeelController.isDeathPending());
     }
     this.syncLocalPresence(true);
     this.renderHud();
@@ -4034,6 +4073,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private destroyPlayer(): void {
+    this.playerDeathPresentation.detach();
     this.physicsCadence?.reset();
     this.combatController.destroyProjectiles();
     this.playerLifecycleController.destroyPlayer(
@@ -4495,6 +4535,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.playerPresentationController.handlePlayerCreated();
     this.maybeApplyPvpStartingPosition();
     this.respawnController.handlePlayerCreated();
+    this.gameFeelController.playerAvailable();
     void this.ensureCurrentAvatarPackLoaded();
   }
 
@@ -4951,6 +4992,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private resetTransientPlayState(): void {
+    this.gameFeelController.reset();
     this.collectedObjectKeys.clear();
     this.heldKeyCount = 0;
     this.score = 0;
@@ -6176,6 +6218,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleShutdown = (): void => {
+    this.gameFeelController.reset();
     this.runtimeContext.setLifecycle('shutting-down');
     this.performanceAdvisorSceneActive = false;
     this.performanceSuggestionPauseRequested = false;
@@ -6658,6 +6701,14 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       specialTiles: this.specialTilesController.getPlayerEnvironment(),
       physicsCadence: this.physicsCadence?.describe() ?? null,
+      gameFeel: {
+        ...this.gameFeelController.describe(),
+        bodyFeedback: this.playerPresentationController.describeBodyFeedback(),
+        playerVisible: this.playerSprite?.visible ?? false,
+        playerAlpha: this.playerSprite?.alpha ?? null,
+        visualScaleX: this.playerSprite?.scaleX ?? null,
+        visualScaleY: this.playerSprite?.scaleY ?? null,
+      },
       presence: {
         status: presenceDebug.snapshot?.status ?? 'disabled',
         subscribedShardCount: presenceDebug.snapshot?.subscribedShards.length ?? 0,

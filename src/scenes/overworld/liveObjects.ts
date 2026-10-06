@@ -145,6 +145,8 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   getPlayer: () => Phaser.GameObjects.GameObject | null;
   getPlayerPickupSensor: () => Phaser.GameObjects.GameObject | null;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
+  getEnemyStompBounceVelocity?: () => number;
+  playEnemyStompImpact?: () => void;
   getConveyorDirectionForBody: (
     body: Phaser.Physics.Arcade.Body,
     gravityDirection: PlayerGravityDirection,
@@ -369,6 +371,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       getPlayer: this.options.getPlayer,
       getPlayerBody: this.options.getPlayerBody,
       addScore: this.options.addScore,
+      getEnemyStompBounceVelocity: this.options.getEnemyStompBounceVelocity,
+      playEnemyStompImpact: this.options.playEnemyStompImpact,
       playEnemyKillFx: this.options.playEnemyKillFx,
       playBounceFx: this.options.playBounceFx,
       showTransientStatus: this.options.showTransientStatus,
@@ -423,8 +427,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.hazardController.addBouncePadInteraction(loadedRoom, liveObject, player),
       handleLockedDoorContact: (loadedRoom, liveObject) =>
         this.triggerController.handleLockedDoorContact(loadedRoom, liveObject),
-      handleRespawnCheckpointContact: (loadedRoom, liveObject) =>
-        this.checkpointController.touch(loadedRoom, liveObject),
+      handleRespawnCheckpointContact: (loadedRoom, liveObject) => {
+        if (this.options.getPlayerBody()) this.checkpointController.touch(loadedRoom, liveObject);
+      },
       shouldCollideWithLiveObject: (liveObject) =>
         this.shouldCollideWithLiveObject(liveObject),
       isDistanceSleeping: (liveObject) => this.distanceSleepingObjects.has(liveObject),
@@ -2431,6 +2436,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   ): void {
     collectLiveObjectWithFx(loadedRoom, liveObject, {
       scene: this.options.scene,
+      canPlayerCollect: () => this.options.getPlayerBody() !== null,
       isCollectedObjectKey: this.options.isCollectedObjectKey,
       markCollectedObjectKey: this.options.markCollectedObjectKey,
       addScore: this.options.addScore,
