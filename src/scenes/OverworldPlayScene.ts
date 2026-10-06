@@ -234,7 +234,7 @@ import {
   OverworldSelectionController,
 } from './overworld/selection';
 import { OverworldSignController } from './overworld/signPosts';
-import { OverworldSpecialTilesController } from './overworld/specialTiles';
+import { getBodyVelocityAlongVector, getGravityVector, OverworldSpecialTilesController } from './overworld/specialTiles';
 import {
   createPortalTargetRoomPreparationAdapter,
   OverworldPortalObjectController,
@@ -1394,6 +1394,10 @@ export class OverworldPlayScene extends Phaser.Scene {
         },
         getInspectZoom: () => this.inspectZoom,
         getPlayer: () => this.player,
+        getPlayerBody: () => this.playerBody,
+        isPlayerGrounded: () => Boolean(this.playerBody && this.physicsCadence?.getMovement().grounded
+          && getBodyVelocityAlongVector(this.playerBody,
+            getGravityVector(this.specialTilesController.getPlayerEnvironment().gravityDirection)) >= 0),
         getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
         renderHud: () => this.renderHud(),
       },
@@ -1553,6 +1557,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       respawnPlayerToRoom: (room, entities) => this.playerLifecycleController.respawnPlayerToRoom(room, entities),
       presentRespawn: () => {
+        this.cameraController.resetFollowAnchor();
         this.playerPresentationController.handleRespawned();
         this.gameFeelController.playerAvailable();
       },
@@ -4358,7 +4363,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
     const framedCenterY = this.getMobilePortraitRoomFramingCenterY(camera);
     if (framedCenterY !== null) {
-      camera.setFollowOffset(0, this.player.y - framedCenterY);
+      this.cameraController.framePortraitRoom(framedCenterY);
     }
   }
 
@@ -4377,7 +4382,8 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     // Short screens cannot show the whole room: keep the player at the tuned anchor, but never
     // show past the room's top or bottom edge.
-    const anchoredTop = this.player.y - (camera.height * this.mobilePortraitCameraTargetY) / camera.zoom;
+    const anchoredTop = this.cameraController.getFollowAnchorY()
+      - (camera.height * this.mobilePortraitCameraTargetY) / camera.zoom;
     const visibleTop = Phaser.Math.Clamp(anchoredTop, roomTop, roomTop + ROOM_PX_HEIGHT - visibleHeight);
     return visibleTop + halfScreen;
   }
@@ -6757,6 +6763,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       mobilePortraitCamera: this.buildMobilePortraitCameraTuningSnapshot(),
       camera: {
         roomCentered: this.cameraController.isRoomCameraFixed(),
+        followMotion: this.cameraController.describeFollowMotion(),
         scrollX: Math.round(camera.scrollX),
         scrollY: Math.round(camera.scrollY),
         width: Math.round(camera.width),
