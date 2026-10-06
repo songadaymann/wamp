@@ -446,11 +446,12 @@ async function loadNativeExpandedRoomTarget(
     const source = normalizeExpandedRoomSource(row.source_type, cells.length);
     const legacyCourseId =
       row.legacy_course_id ?? (source === 'legacy_course' ? getLegacyCourseIdFromExpandedRoomId(row.id) : null);
-    const goalType = getExpandedRoomGoalTypeFromJson(row.published_json);
+    const { goalType, pitsAreDeadly } = getPublishedGameplaySettings(row.published_json);
     return {
       expandedRoomId: row.id,
       title: row.published_title,
       goalType,
+      ...(pitsAreDeadly ? { pitsAreDeadly: true } : {}),
       cellCount: cells.length,
       source,
       legacyCourseId,
@@ -515,6 +516,7 @@ function normalizeNativeMembershipRows(
 ): ExpandedRoomCellMembership[] {
   const memberships: ExpandedRoomCellMembership[] = [];
   const membershipsByRoomId = new Map<string, ExpandedRoomCellMembership>();
+  const settingsById = new Map<string, ReturnType<typeof getPublishedGameplaySettings>>();
   for (const row of rows) {
     const cellCount = Number(row.cell_count ?? 0);
     const source = normalizeExpandedRoomSource(row.source_type, cellCount);
@@ -523,10 +525,16 @@ function normalizeNativeMembershipRows(
       (source === 'legacy_course'
         ? getLegacyCourseIdFromExpandedRoomId(row.expanded_room_id)
         : null);
+    let settings = settingsById.get(row.expanded_room_id);
+    if (!settings) {
+      settings = getPublishedGameplaySettings(row.published_json);
+      settingsById.set(row.expanded_room_id, settings);
+    }
     const membership: ExpandedRoomCellMembership = {
       expandedRoomId: row.expanded_room_id,
       title: row.published_title,
-      goalType: getExpandedRoomGoalTypeFromJson(row.published_json),
+      goalType: settings.goalType,
+      ...(settings.pitsAreDeadly ? { pitsAreDeadly: true } : {}),
       cellCount,
       source,
       legacyCourseId,
@@ -619,22 +627,21 @@ async function loadLegacyCourseMembershipsAsExpandedRoomsForRoomIds(
         room_count: number;
       }>();
 
-    const goalTypeByCourseId = new Map<string, CourseGoalType | null>();
+    const settingsByCourseId = new Map<string, ReturnType<typeof getPublishedGameplaySettings>>();
     for (const row of result.results) {
-      const goalType = (() => {
-        if (goalTypeByCourseId.has(row.course_id)) {
-          return goalTypeByCourseId.get(row.course_id) ?? null;
-        }
-
-        const parsed = getLegacyCourseGoalTypeFromJson(row.published_json);
-        goalTypeByCourseId.set(row.course_id, parsed);
-        return parsed;
-      })();
+      let settings = settingsByCourseId.get(row.course_id);
+      if (!settings) {
+        settings = getPublishedGameplaySettings(row.published_json);
+        settingsByCourseId.set(row.course_id, settings);
+      }
+      const goalType: CourseGoalType | null = settings.goalType === 'collect_race' || settings.goalType === 'npc_quest'
+        ? null : settings.goalType;
       memberships.push({
         ...createExpandedRoomSummaryFromLegacyCourse({
           courseId: row.course_id,
           courseTitle: row.published_title,
           goalType,
+          pitsAreDeadly: settings.pitsAreDeadly,
           roomCount: Number(row.room_count ?? 0),
         }),
         roomId: row.room_id,
@@ -700,6 +707,7 @@ async function loadLegacyCourseExpandedRoomTarget(
       courseId,
       courseTitle: snapshot.title,
       goalType: snapshot.goal?.type ?? null,
+      pitsAreDeadly: snapshot.pitsAreDeadly,
       roomCount: cells.length,
     }),
     ownerUserId: record.ownerUserId,
@@ -820,6 +828,7 @@ async function loadStandaloneRoomExpandedRoomTarget(
       roomId: row.id,
       roomTitle: snapshot.title,
       goalType: snapshot.goal?.type ?? null,
+      pitsAreDeadly: snapshot.pitsAreDeadly,
     }),
     ownerUserId: row.claimer_user_id ?? row.last_published_by_user_id,
     ownerDisplayName: row.claimer_display_name ?? row.last_published_by_display_name,
@@ -884,22 +893,21 @@ function normalizeExpandedRoomSource(value: string | null, cellCount: number): E
   return cellCount <= 1 ? 'standalone_room' : 'native_expanded_room';
 }
 
-function getExpandedRoomGoalTypeFromJson(raw: string | null): ExpandedRoomGoalType | null {
-  if (!raw) {
-    return null;
-  }
-
+function getPublishedGameplaySettings(raw: string | null): {
+  goalType: ExpandedRoomGoalType | null;
+  pitsAreDeadly: boolean;
+} {
+  if (!raw) return { goalType: null, pitsAreDeadly: false };
   try {
-    const parsed = JSON.parse(raw) as { goal?: { type?: unknown } };
-    return isExpandedRoomGoalType(parsed.goal?.type) ? parsed.goal.type : null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') throw new Error('Invalid snapshot');
+    const goal = 'goal' in parsed ? parsed.goal : null;
+    const goalType = goal && typeof goal === 'object' && 'type' in goal && isExpandedRoomGoalType(goal.type)
+      ? goal.type : null;
+    return { goalType, pitsAreDeadly: 'pitsAreDeadly' in parsed && parsed.pitsAreDeadly === true };
   } catch {
     throw new HttpError(500, 'Stored expanded room data is invalid.');
   }
-}
-
-function getLegacyCourseGoalTypeFromJson(raw: string | null): CourseGoalType | null {
-  const goalType = getExpandedRoomGoalTypeFromJson(raw);
-  return goalType === 'collect_race' || goalType === 'npc_quest' ? null : goalType;
 }
 
 function getLegacyCourseIdFromExpandedRoomId(expandedRoomId: string): string | null {

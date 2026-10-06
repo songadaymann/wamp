@@ -97,7 +97,7 @@ import { requestSignTextEdit } from '../signs/events';
 import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../signs/model';
 import type { EditorCourseUiState, EditorMarkerPlacementMode } from '../ui/setup/sceneBridge';
 import { EditorUiBridge } from './editor/uiBridge';
-import { drawEditorGrid } from './editor/grid';
+import { drawDeadlyPitBoundary, drawEditorGrid } from './editor/grid';
 import {
   applyEditorToolSelection,
   canRepeatSelectedEditorObject,
@@ -685,6 +685,7 @@ export class CourseEditorScene extends Phaser.Scene {
       onZoomOut: () => this.zoomOut(),
       onSetRoomTitle: (title) => this.setRoomTitle(title),
       onSetRoomCameraCentered: (centered) => this.getSelectedSlice()?.runtime.setRoomCameraMode(centered),
+      onSetCoursePitsAreDeadly: (enabled) => this.setCoursePitsAreDeadly(enabled),
       onSelectTool: (tool) => {
         applyEditorToolSelection(tool);
         this.updateToolUi();
@@ -875,6 +876,8 @@ export class CourseEditorScene extends Phaser.Scene {
         ? `${cellUsageText} · editing ${this.getSelectedSlice()?.coordinates.x ?? 0},${this.getSelectedSlice()?.coordinates.y ?? 0}`
         : '',
       canReturnToCourseBuilder: true,
+      pitsAreDeadly: draft?.pitsAreDeadly === true,
+      pitsDisabled: this.loading || !this.courseRecord?.permissions.canSaveDraft,
       goalTypeValue: goal?.type ?? '',
       goalTypeDisabled: false,
       timeLimitHidden:
@@ -972,6 +975,13 @@ export class CourseEditorScene extends Phaser.Scene {
 
   setGoalSurvivalSeconds(_seconds: number): void {
     // Room goals stay hidden in course edit mode.
+  }
+
+  setCoursePitsAreDeadly(enabled: boolean): void {
+    const draft = this.getActiveCourseDraft();
+    if (this.loading || !this.courseRecord?.permissions.canSaveDraft || !draft || draft.pitsAreDeadly === enabled) return;
+    this.setActiveCourseDraft({ ...cloneCourseSnapshot(draft), pitsAreDeadly: enabled });
+    this.backupDebouncer.schedule();
   }
 
   setCourseGoalType(goalType: CourseGoalType | null): void {
@@ -2194,6 +2204,7 @@ export class CourseEditorScene extends Phaser.Scene {
     const normalized = cloneCourseSnapshot(nextDraft);
     updateActiveCourseDraftSession((draft) => {
       draft.title = normalized.title;
+      draft.pitsAreDeadly = normalized.pitsAreDeadly;
       draft.roomRefs = normalized.roomRefs;
       draft.objectLinks = normalized.objectLinks;
       draft.pressurePlateLinks = normalized.pressurePlateLinks;
@@ -2366,6 +2377,16 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private redrawCourseMarkers(): void {
+    const pitDraft = this.getActiveCourseDraft();
+    for (const slice of this.roomSlices.values()) {
+      const origin = getCourseWorkspaceRoomOrigin(slice.coordinates, this.workspaceBounds);
+      slice.grid.clear();
+      drawEditorGrid(slice.grid, origin.x, origin.y);
+      if (pitDraft?.pitsAreDeadly === true && !pitDraft.roomRefs.some(ref =>
+        ref.coordinates.x === slice.coordinates.x && ref.coordinates.y === slice.coordinates.y + 1)) {
+        drawDeadlyPitBoundary(slice.grid, origin.x, origin.y);
+      }
+    }
     this.clearCourseMarkers();
     const draft = this.getActiveCourseDraft();
     const goal = draft?.goal ?? null;

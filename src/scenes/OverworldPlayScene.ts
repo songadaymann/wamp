@@ -1446,6 +1446,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         requestWindowRefreshForUnknownNeighbor: (roomCoordinates, neighborCoordinates) =>
           this.requestWindowRefreshForUnknownNeighbor(roomCoordinates, neighborCoordinates),
         getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
+        getExpandedRoomMembershipAt: (coordinates) => this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.expandedRoom ?? null,
         isPlayableRoomCollisionReady: (coordinates) =>
           this.worldStreamingController.isPlayableRoomCollisionReady(coordinates),
         syncBackdropCameraIgnores: () => this.syncBackdropCameraIgnores(),
@@ -1855,6 +1856,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       updateSelectedSummary: () => this.updateSelectedSummary(),
       getActiveCourseRun: () => this.activeCourseRun,
+      getActiveCourseSnapshot: () => this.activeCourseSnapshot,
+      getExpandedRoomMembershipAt: (coordinates) => this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.expandedRoom ?? null,
+      handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
       getActiveRoomRushRun: () => this.activeRoomRushRun,
       recordRoomRushVisit: (room) => this.recordRoomRushVisit(room),
       syncGoalRunForRoom: (room, entryContext) => {

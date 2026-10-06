@@ -615,6 +615,15 @@ export class EditorUiBridge {
       this.actions.onRequestRender();
     });
 
+    for (const [input, setEnabled] of [
+      [this.elements.roomPitsDeadlyInput, this.actions.onSetRoomPitsAreDeadly],
+      [this.elements.coursePitsDeadlyInput, this.actions.onSetCoursePitsAreDeadly],
+    ] as const) {
+      if (!input || !setEnabled) continue;
+      const onChange = () => setEnabled(input.checked);
+      input.addEventListener('change', onChange);
+      this.cleanupCallbacks.push(() => input.removeEventListener('change', onChange));
+    }
     const cameraInput = this.elements.roomCameraCenteredInput;
     if (cameraInput) {
       const onCameraChange = () => this.actions.onSetRoomCameraCentered(cameraInput.checked);

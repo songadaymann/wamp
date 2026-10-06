@@ -19,10 +19,11 @@ import {
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import { getEditorToolHudLabel } from './editorToolSelection';
-import { drawEditorGrid } from './grid';
+import { drawDeadlyPitBoundary, drawEditorGrid } from './grid';
 
 interface EditorOverlayHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
+  hasDeadlyPits?(): boolean;
   getPlacedObjects(): PlacedObject[];
   isClipboardPastePreviewActive(): boolean;
 }
@@ -190,10 +191,17 @@ export class EditorOverlayController {
     this.borderGraphics.setDepth(90);
   }
 
+  redrawGrid(): void {
+    if (!this.gridGraphics) return;
+    this.gridGraphics.clear();
+    drawEditorGrid(this.gridGraphics, 0, 0);
+    if (this.host.hasDeadlyPits?.()) drawDeadlyPitBoundary(this.gridGraphics, 0, 0);
+  }
+
   private createGrid(): void {
     this.gridGraphics?.destroy();
     this.gridGraphics = this.scene.add.graphics();
-    drawEditorGrid(this.gridGraphics, 0, 0);
+    this.redrawGrid();
     this.gridGraphics.setDepth(95);
   }
 

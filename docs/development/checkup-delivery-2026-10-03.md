@@ -1,5 +1,11 @@
 # WAMP checkup delivery: F014, F032, F027, then F057
 
+## 2026-10-05 — F139 optional Deadly pits, in progress
+
+Approved scope: a room/level Deadly pits setting, off by default for both existing and newly created content. Off retains today's downward room traversal; On kills at the level's outer bottom edge and uses the existing death/respawn behavior. Internal Expanded Room drops remain connections. Do not auto-enable new goal rooms or convert every active goal-run exit into death. Carry F135 bookkeeping, preserve the primary checkout and keep all feature fixtures on an isolated local API. Master stays 46/214 until release and live acceptance; stop before F141 checkpoints.
+
+Implementation and source quality: room/expanded-root opt-in, strict backward-compatible snapshot normalization and hashes, published-only membership settings, Goal/Setup controls and exposed-bottom editor guides. Both invisible seam walls open for enabled outer falls; actual body feet are checked before transition/run abandonment. Internal Expanded Room drops and ordinary Off traversal remain connected. Reuse existing death/respawn owners and collaborator wiring; no schema, binding, renderer, PartyKit or room-data delivery. Full 336 files / 2,648 tests (two workers), lint/build/types/bindings, strict map asset contract, DOM 925/212 and Worker safety pass. Isolated local API Save/Publish and native ordinary/vertical-expanded physics pass; desktop controls pass. Phone/guest/practice acceptance and guarded release remain pending.
+
 ## 2026-10-05 — F135 This Week global leaderboard, delivered
 
 The global board adds Monday-to-Monday UTC point_events totals with the existing time index and generated-account exclusions. This Week defaults for guests and players outside the lifetime top 50; All Time and profile ranks retain lifetime points/tie-breakers. A single bounded snapshot includes an exact off-list viewer rank and points needed to pass the immediately preceding player. Weekly scores are pointsInWindow; existing statistics remain lifetime values. Publishing points count. No schema change or global Top-3 reward/staff-label automation is included.

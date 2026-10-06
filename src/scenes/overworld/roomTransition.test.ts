@@ -4,6 +4,9 @@ vi.mock('phaser', () => ({
   default: {},
 }));
 
+import { createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
+import { createDefaultCourseSnapshot, type CourseSnapshot } from '../../courses/model';
+import type { ExpandedRoomMembershipSummary } from '../../expandedRooms/model';
 import { OverworldRoomTransitionController } from './roomTransition';
 import {
   PERFORMANCE_ADVISOR_THRESHOLDS,
@@ -22,6 +25,8 @@ function createHarness() {
   const body = {
     width: 16,
     height: 24,
+    bottomOffsetY: 0,
+    get bottom() { return player.y + body.height * 0.5 + body.bottomOffsetY; },
     velocity: { x: 150, y: 0 },
     reset: vi.fn((x: number, y: number) => {
       player.x = x;
@@ -59,7 +64,10 @@ function createHarness() {
     updateSelectedSummary: vi.fn(),
     getActiveCourseRun: vi.fn(() => null),
     syncGoalRunForRoom: vi.fn(),
-    getRoomSnapshotForCoordinates: vi.fn(() => null),
+    getRoomSnapshotForCoordinates: vi.fn((): RoomSnapshot | null => null),
+    getActiveCourseSnapshot: vi.fn((): CourseSnapshot | null => null),
+    getExpandedRoomMembershipAt: vi.fn((): ExpandedRoomMembershipSummary | null => null),
+    handlePlayerDeath: vi.fn(),
     refreshLeaderboardForSelection: vi.fn(async () => undefined),
     setFocusedCoordinates: vi.fn(),
     getActiveRoomRushRun: vi.fn(() => null),
@@ -409,5 +417,55 @@ describe('overworld room transition hydration', () => {
     expect(host.prefetchPlayableRoomForTransition).toHaveBeenCalledWith({ x: 1, y: 0 });
     expect(host.prefetchPlayableRoomForTransition).toHaveBeenCalledWith({ x: 0, y: 1 });
     expect(host.preparePlayableRoomForTransition).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('opt-in bottom falls before navigation', () => {
+  it.each([true, false])('kills even when the lower room readiness is %s, retaining the active room', ready => {
+    const { controller, host, player, body } = createHarness();
+    host.getRoomSnapshotForCoordinates.mockReturnValue({ ...createDefaultRoomSnapshot(), pitsAreDeadly: true });
+    host.isNeighborReachable.mockReturnValue(ready);
+    host.preparePlayableRoomForTransition.mockReturnValue(ready);
+    player.y = 353; body.velocity.y = 400;
+    controller.maybeAdvancePlayerRoom();
+    expect(host.handlePlayerDeath).toHaveBeenCalledExactlyOnceWith('You fell.');
+    expect(host.resetChallengeStateForRoomExit).not.toHaveBeenCalled();
+    expect(host.preparePlayableRoomForTransition).not.toHaveBeenCalled();
+    expect(host.setCurrentRoomCoordinates).not.toHaveBeenCalled();
+  });
+  it('detects feet at the seam even if a lower top-row platform catches the body', () => {
+    const { controller, host, player, body } = createHarness();
+    host.getRoomSnapshotForCoordinates.mockReturnValue({ ...createDefaultRoomSnapshot(), pitsAreDeadly: true });
+    player.y = 334; body.bottomOffsetY = 6; body.velocity.y = 0;
+    controller.maybeAdvancePlayerRoom();
+    expect(host.handlePlayerDeath).toHaveBeenCalledExactlyOnceWith('You fell.');
+    expect(host.resetChallengeStateForRoomExit).not.toHaveBeenCalled();
+  });
+  it('preserves ordinary downward navigation with pits disabled', () => {
+    const { controller, host, player } = createHarness();
+    host.getRoomSnapshotForCoordinates.mockReturnValue(createDefaultRoomSnapshot()); player.y = 353;
+    controller.maybeAdvancePlayerRoom();
+    expect(host.handlePlayerDeath).not.toHaveBeenCalled();
+    expect(host.setCurrentRoomCoordinates).toHaveBeenCalledWith({ x: 0, y: 1 });
+  });
+  it('preserves an internal vertical drop with the root setting enabled', () => {
+    const { controller, host, player } = createHarness();
+    const course = createDefaultCourseSnapshot('vertical'); course.pitsAreDeadly = true;
+    course.roomRefs = [0, 1].map(y => ({ roomId: `0,${y}`, coordinates: { x: 0, y }, roomVersion: 1, roomTitle: null }));
+    host.getActiveCourseSnapshot.mockReturnValue(course);
+    host.getRoomSnapshotForCoordinates.mockReturnValue(createDefaultRoomSnapshot()); player.y = 353;
+    controller.maybeAdvancePlayerRoom();
+    expect(host.handlePlayerDeath).not.toHaveBeenCalled();
+    expect(host.setCurrentRoomCoordinates).toHaveBeenCalledWith({ x: 0, y: 1 });
+  });
+  it('allows an authorized downward portal to bypass the natural-fall rule', () => {
+    const { controller, host, player } = createHarness();
+    host.getRoomSnapshotForCoordinates.mockReturnValue({ ...createDefaultRoomSnapshot(), pitsAreDeadly: true });
+    controller.authorizeTeleportTransition({ x: 0, y: 1 }); player.y = 353;
+    controller.maybeAdvancePlayerRoom();
+    expect(host.handlePlayerDeath).not.toHaveBeenCalled();
+    expect(host.preparePlayableRoomForTransition).toHaveBeenCalledWith({ x: 0, y: 1 }, true);
+    expect(host.setCurrentRoomCoordinates).toHaveBeenCalledWith({ x: 0, y: 1 });
   });
 });

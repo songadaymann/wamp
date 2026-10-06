@@ -156,6 +156,7 @@ export async function loadPublishedCourseMembershipsInBounds(
     courseTitle: string | null;
     goalType: CourseGoalType | null;
     roomCount: number;
+    pitsAreDeadly?: boolean;
   }>
 > {
   const result = await env.DB.prepare(
@@ -192,25 +193,22 @@ export async function loadPublishedCourseMembershipsInBounds(
       room_count: number;
     }>();
 
-  const goalTypeByCourseId = new Map<string, CourseGoalType | null>();
-  return result.results.map((row) => ({
-    goalType: (() => {
-      if (goalTypeByCourseId.has(row.course_id)) {
-        return goalTypeByCourseId.get(row.course_id) ?? null;
-      }
-
-      const goalType =
-        row.published_json
-          ? parseStoredCourseSnapshot(row.published_json, row.course_id).goal?.type ?? null
-          : null;
-      goalTypeByCourseId.set(row.course_id, goalType);
-      return goalType;
-    })(),
-    roomId: row.room_id,
-    courseId: row.course_id,
-    courseTitle: row.published_title,
-    roomCount: Number(row.room_count ?? 0),
-  }));
+  const snapshotsByCourseId = new Map<string, CourseSnapshot | null>();
+  return result.results.map((row) => {
+    if (!snapshotsByCourseId.has(row.course_id)) {
+      snapshotsByCourseId.set(row.course_id, row.published_json
+        ? parseStoredCourseSnapshot(row.published_json, row.course_id) : null);
+    }
+    const snapshot = snapshotsByCourseId.get(row.course_id);
+    return {
+      goalType: snapshot?.goal?.type ?? null,
+      ...(snapshot?.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
+      roomId: row.room_id,
+      courseId: row.course_id,
+      courseTitle: row.published_title,
+      roomCount: Number(row.room_count ?? 0),
+    };
+  });
 }
 
 export async function createCourseDraft(

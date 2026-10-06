@@ -272,6 +272,7 @@ export class EditorEditRuntime {
   private roomGoal: RoomGoal | null = null;
   private roomGoalIntroText: string | null = null;
   roomCameraMode: 'follow' | 'room' = 'follow';
+  roomPitsAreDeadly = false;
   private roomSpawnPoint: RoomSpawnPoint | null = null;
   private roomMusic: RoomMusic | null = null;
   private roomDirty = false;
@@ -414,6 +415,7 @@ export class EditorEditRuntime {
     this.roomGoal = null;
     this.roomGoalIntroText = null;
     this.roomCameraMode = 'follow';
+    this.roomPitsAreDeadly = false;
     this.roomSpawnPoint = null;
     this.roomMusic = null;
     this.roomDirty = false;
@@ -480,6 +482,7 @@ export class EditorEditRuntime {
     this.roomGoal = cloneRoomGoal(room.goal);
     this.roomGoalIntroText = normalizeRoomGoalIntroText(room.goalIntroText);
     this.roomCameraMode = room.cameraMode === 'room' ? 'room' : 'follow';
+    this.roomPitsAreDeadly = room.pitsAreDeadly === true;
     this.roomSpawnPoint = room.spawnPoint ? { ...room.spawnPoint } : null;
     this.roomMusic = cloneRoomMusic(room.music);
     this.host.setPlacedObjects(room.placedObjects.map((placed) => ({ ...placed })));
@@ -621,6 +624,7 @@ export class EditorEditRuntime {
       coordinates: { ...metadata.coordinates },
       title: metadata.title,
       cameraMode: this.roomCameraMode,
+      pitsAreDeadly: this.roomPitsAreDeadly,
       goalIntroText: this.roomGoal ? normalizeRoomGoalIntroText(this.roomGoalIntroText) : null,
       background: normalizeRoomBackground(this.host.getSelectedBackground()),
       lighting: cloneRoomLightingSettings(this.host.getSelectedLightingSettings()),
@@ -2744,6 +2748,13 @@ export class EditorEditRuntime {
     }
     this.goalPlacementMode = null;
     this.updateRoomGoal(withNpcQuestType(this.roomGoal, questType));
+  }
+
+  setRoomPitsAreDeadly(enabled: boolean): void {
+    if (!this.guardEditable() || this.roomPitsAreDeadly === enabled) return;
+    this.roomPitsAreDeadly = enabled;
+    this.markRoomDirty();
+    this.host.updateGoalUi();
   }
 
   setRoomCameraMode(centered: boolean): void {

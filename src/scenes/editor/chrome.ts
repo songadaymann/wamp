@@ -60,6 +60,7 @@ export class EditorChromeController {
         canRedo: this.host.getRoomPermissions().canSaveDraft && this.editRuntime.hasRedoHistory(),
         roomTitle: this.host.getRoomTitle(),
         roomCameraCentered: this.editRuntime.roomCameraMode === 'room',
+        roomPitsAreDeadly: this.editRuntime.roomPitsAreDeadly,
         roomCoordinates: this.host.getRoomCoordinates(),
         roomGoal,
         roomGoalIntroText: this.editRuntime.getGoalIntroText(),

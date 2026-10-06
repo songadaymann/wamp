@@ -224,6 +224,11 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     this.scene.wake('OverworldPlayScene', wakeData);
   }
 
+  setCoursePitsAreDeadly(enabled: boolean): void {
+    if (this.record?.draft.pitsAreDeadly === enabled) return;
+    this.mutateDraft(draft => { draft.pitsAreDeadly = enabled; });
+  }
+
   setCourseTitle(title: string | null): void {
     this.mutateDraft((draft) => {
       draft.title = title?.trim() ? title.trim() : null;

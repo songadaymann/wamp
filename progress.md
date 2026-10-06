@@ -4,6 +4,19 @@ Delivered a 15-minute Worker monitor using the existing admin email service, dur
 
 Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clean current-main worktree, verify it in the browser, push the branch, and publish a frontend-only safety Pages preview.
 
+## 2026-10-05 — F139 optional Deadly pits, in progress
+
+- [x] Audit ordinary/expanded settings, save/publish/recovery, bottom walls, transitions and death/run ownership.
+- [x] Add an explicit Deadly pits option, off by default for every room/level, preserving ordinary downward travel and internal Expanded Room drops.
+- [ ] Verify persisted on/off settings and real falling behavior for ordinary and expanded levels, frontier/ready lower neighbours, qualified/practice runs, desktop and phone.
+- [ ] Complete full quality, exact-source/main release checks, guarded delivery and live proof; update existing notes/master and stop before F141.
+
+Human approval: implement the optional room/level setting. Off preserves existing travel into the room below; On makes the outer bottom edge deadly. Internal Expanded Room cell connections remain traversable. This overrides the original proposal to auto-enable new goal rooms or unconditionally kill downward goal-run exits. Reuse the canonical attached worktree on codex/checkup-deadly-pits-2026-10-05, carry F135 delivery bookkeeping and preserve the primary's 25 unrelated dirty entries. Keep fixture/account writes local; no production fixture/account writes, test emails or social posts. Leave the first Build Prompt unset, use existing Markdown notes and run full local tests with two workers. Inspect extracted owners before adding scene glue.
+
+Implementation: strict boolean opt-in persists through ordinary snapshots/history, expanded root metadata, local recovery and published membership. Absent/false keeps old gameplay fingerprints and ranked verification bindings; enabled pits change them. Goal controls reuse the existing 44px labels and authoring save paths. A red dashed editor guide marks exposed bottom boundaries. The root setting overrides individual cells and preserves all internal vertical connections, including irregular footprints. The runtime opens both invisible walls at opted-in bottom seams and checks the actual physics-body feet before lower-room navigation or run abandonment, so a ready lower top-row platform cannot silently catch the fall. Existing death/respawn owners retain timed attempts and survival/practice behavior. Scene changes remain minimal collaborator wiring; no migration, new binding or renderer change is required.
+
+Final code quality passes lint, build/types, generated bindings, strict map asset compatibility, 925 DOM IDs / 212 required and Worker safety, with 336 files / 2,648 tests and two workers. Isolated API Save/Publish proves ordinary and expanded On/Off round trips and prevents private drafts from leaking into public membership. Built-game native falls prove frontier and ready lower-room pit deaths keep the same timed attempt, Off traverses into the lower room, and a vertical Expanded Room keeps its internal drop open before outer death returns to the start with one ongoing timer/attempt. Desktop controls prove ordinary autosave/reload and Setup/canvas root save/return; phone and final guest/practice acceptance remain in progress. Raw diagnostics and screenshots stay in ignored output/web-game/deadly-pits/ and /tmp/wamp-f139-*; master remains 46/214 until release.
+
 ## 2026-10-05 — F135 This Week global leaderboard, delivered
 
 - [x] Audit the points ledger, accepted/generated identity, global ranking, client cache and modal ownership.

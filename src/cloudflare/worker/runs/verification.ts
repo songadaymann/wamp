@@ -119,6 +119,7 @@ export interface RunVerificationTriggerResult {
 export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot): Promise<string> {
   return hashVerificationPayload({
     kind: 'room',
+    ...(snapshot.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
     id: snapshot.id,
     version: snapshot.version,
     coordinates: snapshot.coordinates,
@@ -152,6 +153,7 @@ export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot
 export async function computeCourseSnapshotVerificationHash(snapshot: CourseSnapshot): Promise<string> {
   return hashVerificationPayload({
     kind: 'course',
+    ...(snapshot.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
     id: snapshot.id,
     version: snapshot.version,
     goal: snapshot.goal,

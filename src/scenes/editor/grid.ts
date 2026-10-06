@@ -28,3 +28,13 @@ export function drawEditorGrid(graphics: Phaser.GameObjects.Graphics, originX: n
   drawLines(1, 0.12, false);
   drawLines(2, 0.18, true);
 }
+
+export function drawDeadlyPitBoundary(graphics: Phaser.GameObjects.Graphics, originX: number, originY: number): void {
+  graphics.lineStyle(2, 0xff5858, 1);
+  graphics.beginPath();
+  for (let x = 0; x < ROOM_PX_WIDTH; x += TILE_SIZE) {
+    graphics.moveTo(originX + x, originY + ROOM_PX_HEIGHT - 1);
+    graphics.lineTo(originX + x + TILE_SIZE / 2, originY + ROOM_PX_HEIGHT - 1);
+  }
+  graphics.strokePath();
+}

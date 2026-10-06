@@ -36,6 +36,7 @@ export interface CourseEditorCheckpointEntry {
 export interface CourseEditorUiState {
   visible: boolean;
   title: string;
+  pitsAreDeadly?: boolean;
   canEdit: boolean;
   zoomText: string;
   tool: CourseEditorTool;
