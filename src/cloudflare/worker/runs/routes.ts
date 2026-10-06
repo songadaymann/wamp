@@ -1,4 +1,5 @@
 import { parseGlobalLeaderboardWindow } from './globalLeaderboards';
+import { savePersonalBestGhost } from './ghosts';
 import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
@@ -471,6 +472,14 @@ export async function handleRunFinish(
         finalizedRun.attemptId;
   }
 
+  if (isNewPersonalBest) {
+    try {
+      await savePersonalBestGhost(env, finalizedRun, snapshot, finalBody,
+        auth.user.selectedAvatarId ?? 'default-player', verificationStatus === 'passed');
+    } catch {
+      console.error(JSON.stringify({ event: 'run-ghost-save-failed', attemptId }));
+    }
+  }
   await awardRunFinalizePoints(env, finalizedRun, {
     isFirstCompletion,
     isNewPersonalBest,

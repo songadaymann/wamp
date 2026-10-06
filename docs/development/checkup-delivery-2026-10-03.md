@@ -1,5 +1,12 @@
 # WAMP checkup delivery: F014, F032, F027, then F057
 
+## 2026-10-06 — F142 ghost races, source validated
+
+Bounded movement-only #1 and account-best ghosts use new D1 migration 0059 and verified ranked audit fallback. Exact/equivalent layouts only; historical recordings may be unavailable. Optional No ghost / Race #1 / Race my best choices and `?race=1` precede intentional room Play. Hermite playback is independent of multiplayer/physics and shares the qualified run timer; restarts rewind and death/portal/room discontinuities snap. Verified guest bests survive reload on this browser with bounded exact-version storage. This first slice covers time-ranked ordinary room goals, leaving Expanded Room/course and score/protect races separate.
+
+Full source quality passes 356 files / 2,836 tests and all seven checks. Seven native desktop/portrait-touch cases pass with real local ranked and verified guest recording, reload, death/restart, noncolliding ghosts and normal unavailable-recording Start, with zero unexpected errors; screenshots are viewed. All fixture/account/room writes remain local. Publication and live acceptance pending. Evidence: `/tmp/wamp-f142-*` and ignored `output/web-game/ghost-races`.
+
+
 ## 2026-10-06 — F154 swimmable water, delivered
 
 - [x] Preserve existing lethal water ids, art and bodies; add truthful Toxic Water names and distinct swimmable pool/ripple objects.

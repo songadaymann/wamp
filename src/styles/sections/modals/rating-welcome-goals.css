@@ -1354,3 +1354,8 @@ body[data-device-class='phone'][data-orientation-state='portrait'] #welcome-moda
   text-decoration: none;
   box-shadow: 3px 3px 0 #18161c;
 }
+
+.room-ghost-race { display: grid; gap: 8px; color: #18161c; }
+.room-ghost-race label { font-family: 'HomeVideo', monospace; font-size: 16px; }
+.room-ghost-race select { width: 100%; min-height: 44px; border: 2px solid #2c5071; border-radius: 0; padding: 8px; background: #fffaf0; color: #18161c; font: 16px 'HomeVideo', monospace; }
+#room-ghost-race-status { font: 12px/1.4 'IBM Plex Mono', monospace; }
