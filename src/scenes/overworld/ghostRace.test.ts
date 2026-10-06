@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type Phaser from 'phaser';
 import { createDefaultRoomSnapshot } from '../../persistence/roomModel';
 import type { GoalRunState } from './goalRuns';
@@ -27,11 +27,14 @@ function fixture() {
   const scene = { add: { sprite: vi.fn(() => sprite), text: vi.fn(() => label) }, physics } as unknown as Phaser.Scene;
   const room = createDefaultRoomSnapshot('1,2', { x: 1, y: 2 }); room.version = 2;
   room.goal = { type: 'reach_exit', exit: { x: 100, y: 100 }, timeLimitMs: null };
-  const run = { roomId: '1,2', roomVersion: 2, qualificationState: 'qualified', elapsedMs: 0, deaths: 0 } as GoalRunState;
+  const run = { roomId: '1,2', roomCoordinates: { x: 1, y: 2 }, roomVersion: 2, goal: room.goal,
+    qualificationState: 'qualified', elapsedMs: 0, deaths: 0 } as GoalRunState;
+  const status = vi.fn();
   const controller = new OverworldGhostRaceController({ scene, getRun: () => run, getMode: () => mode,
-    getUserId: () => user, getRoomOrigin: () => ({ x: 640, y: 704 }), onDisplayObjectsChanged: vi.fn() });
-  return { controller, sprite, physics, run, room, setUser: (value: string | null) => { user = value; }, stop: () => { mode = 'browse'; } };
+    getUserId: () => user, getRoomOrigin: () => ({ x: 640, y: 704 }), onDisplayObjectsChanged: vi.fn(), showStatus: status });
+  return { controller, sprite, physics, run, room, status, setUser: (value: string | null) => { user = value; }, stop: () => { mode = 'browse'; } };
 }
+afterEach(() => vi.unstubAllGlobals());
 describe('independent race presentation', () => {
   it('shares the run timer through death and restart, while accepting a matching equivalent-version ghost', async () => {
     const f = fixture(); f.controller.select(ghost, 'top', f.room); await Promise.resolve(); f.controller.update();
@@ -49,5 +52,39 @@ describe('independent race presentation', () => {
     expect(f.controller.getDebugSnapshot().choice).toBe('off');
     f.controller.select(ghost, 'top', f.room); await Promise.resolve(); f.stop(); f.controller.update();
     expect(f.controller.getDebugSnapshot().visible).toBe(false);
+  });
+  it('uses the newly verified guest best on the next Restart', async () => {
+    const f = fixture(), best = { ...ghost, attemptId: 'new-best', roomVersion: 2, elapsedMs: 800 };
+    vi.stubGlobal('window', { localStorage: { getItem: () => JSON.stringify([{ ghost: best, deaths: 0 }]) } });
+    f.controller.select(ghost, 'personal', f.room); await Promise.resolve();
+    await f.controller.refreshAfterRestart(); await Promise.resolve();
+    expect(f.controller.getDebugSnapshot()).toMatchObject({ attemptId: 'new-best', elapsedMs: 800 });
+  });
+  it('reloads account bests without stale cache and ignores a response after Stop', async () => {
+    const f = fixture(); f.setUser('viewer');
+    const best = { ...ghost, attemptId: 'account-new-best', roomVersion: 2, elapsedMs: 750 };
+    const fetch = vi.fn(async () => Response.json({ roomId: '1,2', roomVersion: 2, personal: { ghost: best } }));
+    vi.stubGlobal('fetch', fetch);
+    f.controller.select(ghost, 'personal', f.room); await Promise.resolve();
+    await f.controller.refreshAfterRestart();
+    expect(f.controller.getDebugSnapshot().attemptId).toBe('account-new-best');
+    expect(fetch.mock.calls[0]).toMatchObject([expect.any(String), { cache: 'no-store', credentials: 'include' }]);
+    let resolve!: (value: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(r => { resolve = r; })));
+    const pending = f.controller.refreshAfterRestart(); f.stop(); f.controller.clear();
+    resolve(Response.json({ roomId: '1,2', roomVersion: 2, personal: { ghost: best } })); await pending;
+    expect(f.controller.getDebugSnapshot().choice).toBe('off');
+  });
+  it('explains refresh failures and clears a recording that becomes unavailable', async () => {
+    const f = fixture(); f.setUser('viewer');
+    f.controller.select(ghost, 'top', f.room); await Promise.resolve();
+    vi.stubGlobal('fetch', vi.fn(async () => { throw Error('offline'); }));
+    await f.controller.refreshAfterRestart();
+    expect(f.controller.getDebugSnapshot().attemptId).toBe('top');
+    expect(f.status).toHaveBeenCalledWith('Ghost could not refresh. Racing the previous recording.');
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ roomId: '1,2', roomVersion: 2, top: { ghost: null } })));
+    await f.controller.refreshAfterRestart();
+    expect(f.controller.getDebugSnapshot().choice).toBe('off');
+    expect(f.status).toHaveBeenCalledWith('Ghost recording unavailable. Playing on your own.');
   });
 });
