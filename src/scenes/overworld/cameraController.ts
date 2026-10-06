@@ -4,6 +4,7 @@ import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { RoomCoordinates, RoomSnapshotView } from '../../persistence/roomModel';
 import type { WorldWindow } from '../../persistence/worldModel';
 import type { OverworldMode } from '../sceneData';
+import { OverworldFollowCameraMotion } from './followCameraMotion';
 import {
   constrainInspectCamera,
   getFitZoomForRoom as calculateFitZoomForRoom,
@@ -20,6 +21,8 @@ interface OverworldCameraControllerHost {
   setCameraMode(mode: CameraMode): void;
   getInspectZoom(): number;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
+  getPlayerBody(): Phaser.Physics.Arcade.Body | null;
+  isPlayerGrounded(): boolean;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   renderHud(): void;
 }
@@ -36,6 +39,15 @@ interface OverworldCameraControllerOptions {
 export class OverworldCameraController {
   private fixedRoomKey: string | null = null;
   private cameraTransition: Phaser.Tweens.Tween | null = null;
+  private readonly followMotion = new OverworldFollowCameraMotion();
+  private followedPlayer: Phaser.GameObjects.Rectangle | null = null;
+  private portraitCenterY: number | null = null;
+  private readonly followTarget = {
+    // Arcade updates the sprite after Scene.update; read X at camera preRender, as before.
+    get x(): number { return this.controller.host.getPlayer()?.x ?? 0; },
+    get y(): number { return this.controller.portraitCenterY ?? this.controller.getFollowAnchorY(); },
+    controller: this,
+  };
 
   isRoomCameraFixed(): boolean {
     return this.host.getMode() === 'play'
@@ -60,6 +72,7 @@ export class OverworldCameraController {
     this.reset();
     this.fixedRoomKey = key;
     camera.stopFollow();
+    camera.setDeadzone();
     camera.useBounds = false;
     const origin = this.host.getRoomOrigin(room.coordinates);
     // Do not clamp to the normal zoom floor: even narrow portrait screens must fit the whole room.
@@ -86,6 +99,7 @@ export class OverworldCameraController {
     this.cameraTransition?.remove();
     this.cameraTransition = null;
     this.fixedRoomKey = null;
+    this.clearFollowMotion();
   }
 
   constructor(
@@ -127,6 +141,7 @@ export class OverworldCameraController {
     if (!player || this.host.getMode() !== 'play') {
       this.syncBoundsUsage();
       camera.stopFollow();
+      this.clearFollowMotion();
       camera.setZoom(this.host.getInspectZoom());
       return;
     }
@@ -134,12 +149,13 @@ export class OverworldCameraController {
     if (this.host.getCameraMode() === 'follow') {
       this.syncBoundsUsage();
       camera.setZoom(this.host.getInspectZoom());
-      this.startFollowCamera(camera);
+      this.startFollowCamera(camera, forceCenter);
       return;
     }
 
     this.syncBoundsUsage();
     camera.stopFollow();
+    this.clearFollowMotion();
     camera.setZoom(this.host.getInspectZoom());
     if (forceCenter) {
       camera.centerOn(player.x, player.y);
@@ -154,23 +170,25 @@ export class OverworldCameraController {
     this.syncBoundsUsage();
     camera.setZoom(this.host.getInspectZoom());
     camera.stopFollow();
+    this.clearFollowMotion();
     camera.centerOn(origin.x + ROOM_PX_WIDTH / 2, origin.y + ROOM_PX_HEIGHT / 2);
     this.constrainInspectCamera();
   }
 
-  startFollowCamera(camera: Phaser.Cameras.Scene2D.Camera = this.host.scene.cameras.main): void {
+  startFollowCamera(camera: Phaser.Cameras.Scene2D.Camera = this.host.scene.cameras.main, forceCenter = false): void {
     if (this.syncRoomCamera(false)) return;
     const player = this.host.getPlayer();
     if (!player) {
       return;
     }
+    if (forceCenter || this.followedPlayer !== player) this.resetFollowAnchor();
 
     camera.startFollow(
-      player,
+      this.followTarget,
       true,
       this.options.followCameraLerp,
       this.options.followCameraLerp,
-      0,
+      -this.followMotion.describe().leadX,
       calculateMobilePlayFollowOffsetY(
         camera,
         getDeviceLayoutState(),
@@ -178,12 +196,63 @@ export class OverworldCameraController {
         this.options.getMobilePortraitPlayCameraTargetY(),
       ),
     );
+    camera.setDeadzone(Math.min(16, camera.width / camera.zoom * 0.06), 0);
   }
 
   updateFollowPacing(physicsSteps: number): void {
-    if (this.host.getMode() !== 'play' || this.host.getCameraMode() !== 'follow') return;
+    if (this.host.getMode() !== 'play' || this.host.getCameraMode() !== 'follow' || this.isRoomCameraFixed()) return;
+    const camera = this.host.scene.cameras.main;
+    const player = this.host.getPlayer();
+    if (!player) { this.clearFollowMotion(); return; }
+    if (this.followedPlayer !== player) this.resetFollowAnchor();
+    const body = this.host.getPlayerBody();
+    const previousAnchor = this.followMotion.getAnchorY();
+    const grounded = this.host.isPlayerGrounded();
+    // Match the Y Arcade will apply in postUpdate without moving its body or sprite.
+    const playerY = player.y + (body ? body.y - body.prevFrame.y : 0);
+    const motion = this.followMotion.update({ playerY, velocityX: body?.velocity.x ?? 0,
+      grounded, visibleWidth: camera.width / camera.zoom,
+      visibleHeight: camera.height / camera.zoom, physicsSteps });
+    this.portraitCenterY = null;
+    camera.setFollowOffset(-motion.leadX, calculateMobilePlayFollowOffsetY(camera,
+      getDeviceLayoutState(), this.options.mobilePlayCameraTargetY,
+      this.options.getMobilePortraitPlayCameraTargetY()));
     const lerp = 1 - Math.pow(1 - this.options.followCameraLerp, Math.max(0, physicsSteps));
-    this.host.scene.cameras.main.setLerp(lerp, lerp);
+    // Pixel-rounded easing can drift on a catch-up frame even with an unchanged target.
+    // Hold the actual vertical view during an ordinary hop; landings and long falls resume it.
+    camera.setLerp(lerp, !grounded && motion.anchorY === previousAnchor ? 0 : lerp);
+  }
+
+  resetFollowAnchor(): void {
+    if (this.isRoomCameraFixed() || this.host.getMode() !== 'play' || this.host.getCameraMode() !== 'follow') {
+      this.clearFollowMotion();
+      return;
+    }
+    const player = this.host.getPlayer();
+    this.followedPlayer = player;
+    this.followMotion.reset(player?.y);
+    this.portraitCenterY = null;
+  }
+
+  getFollowAnchorY(): number {
+    return this.followMotion.getAnchorY() ?? this.host.getPlayer()?.y ?? 0;
+  }
+
+  framePortraitRoom(centerY: number): void {
+    this.portraitCenterY = centerY;
+    this.host.scene.cameras.main.setFollowOffset(-this.followMotion.describe().leadX, 0);
+  }
+
+  describeFollowMotion() {
+    const motion = this.followMotion.describe();
+    return { anchorY: motion.anchorY === null ? null : Math.round(motion.anchorY),
+      leadX: Number(motion.leadX.toFixed(2)) };
+  }
+
+  private clearFollowMotion(): void {
+    this.followedPlayer = null;
+    this.followMotion.reset();
+    this.portraitCenterY = null;
   }
 
   constrainInspectCamera(): void {

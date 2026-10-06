@@ -13,11 +13,14 @@ function harness() {
   let mode: OverworldMode = 'play';
   let cameraMode: CameraMode = 'follow';
   const player = { x: 40, y: 50 };
+  const body = { y: 40, prevFrame: { y: 40 }, velocity: { x: 0, y: 0 } };
+  let grounded = true;
   const camera = {
     width: 1200, height: 700, originX: 0.5, originY: 0.5,
     scrollX: 0, scrollY: 0, zoom: 2, useBounds: true,
     stopFollow: vi.fn(), startFollow: vi.fn(), centerOn: vi.fn(),
     setLerp: vi.fn(),
+    setFollowOffset: vi.fn(), setDeadzone: vi.fn(),
     setZoom(value: number) { this.zoom = value; },
     setScroll(x: number, y: number) { this.scrollX = x; this.scrollY = y; },
   };
@@ -32,11 +35,13 @@ function harness() {
     getMode: () => mode, getCameraMode: () => cameraMode,
     setCameraMode: (value) => { cameraMode = value; }, getInspectZoom: () => 2,
     getPlayer: () => player as never,
+    getPlayerBody: () => body as never, isPlayerGrounded: () => grounded,
     getRoomOrigin: (coordinates) => ({ x: coordinates.x * ROOM_PX_WIDTH, y: coordinates.y * ROOM_PX_HEIGHT }),
     renderHud: vi.fn(),
   }, { minZoom: 0.5, maxZoom: 4, playRoomFitPadding: 40, followCameraLerp: 0.1,
     mobilePlayCameraTargetY: 0.5, getMobilePortraitPlayCameraTargetY: () => 0.34 });
-  return { controller, camera, player, add, remove,
+  return { controller, camera, player, body, add, remove,
+    setGrounded: (value: boolean) => { grounded = value; },
     setRoom: (value: RoomSnapshot | null) => { room = value; },
     setMode: (value: OverworldMode) => { mode = value; },
     setCameraMode: (value: CameraMode) => { cameraMode = value; },
@@ -79,7 +84,7 @@ describe('room-centered play camera', () => {
     expect(h.controller.syncRoomCamera()).toBe(false);
     expect(h.camera.zoom).toBe(2);
     expect(h.camera.useBounds).toBe(true);
-    expect(h.camera.startFollow).toHaveBeenCalledWith(h.player, true, 0.1, 0.1, 0, 0);
+    expect(h.camera.startFollow).toHaveBeenCalledWith(expect.objectContaining({ x: 240, y: 50 }), true, 0.1, 0.1, -0, 0);
     expect(h.remove).toHaveBeenCalledOnce();
   });
 
@@ -125,5 +130,53 @@ describe('room-centered play camera', () => {
     h.controller.centerCameraOnCoordinates({ x: 8, y: 8 });
     expectCentered(h.camera, fixedRoom());
     expect(h.camera.startFollow).not.toHaveBeenCalled();
+  });
+
+  it('reads horizontal motion after Arcade postUpdate and holds the vertical anchor through a hop', () => {
+    const h = harness(); h.controller.startFollowCamera();
+    const target = h.camera.startFollow.mock.lastCall![0] as unknown as { x: number; y: number };
+    h.player.x = 100; expect(target.x).toBe(100);
+    h.setGrounded(false); h.player.y = 20; h.body.y = 35;
+    h.controller.updateFollowPacing(1);
+    expect(target.y).toBe(50);
+    expect(h.camera.setLerp.mock.lastCall![1]).toBe(0);
+    h.setGrounded(true); h.player.y = 10; h.body.y = 38;
+    h.controller.updateFollowPacing(1);
+    expect(target.y).toBe(8); // Includes the pending Arcade sprite delta.
+    expect(h.camera.setLerp.mock.lastCall![1]).toBeCloseTo(0.1);
+  });
+
+  it('keeps horizontal lookahead when portrait framing owns the vertical center', () => {
+    const h = harness(); h.controller.startFollowCamera(); h.body.velocity.x = 200;
+    h.controller.updateFollowPacing(18);
+    const lead = h.controller.describeFollowMotion().leadX;
+    expect(lead).toBeGreaterThan(20);
+    h.controller.framePortraitRoom(300);
+    expect(h.camera.setFollowOffset.mock.lastCall![0]).toBeCloseTo(-lead, 2);
+    expect(h.camera.setFollowOffset.mock.lastCall![1]).toBe(0);
+    const target = h.camera.startFollow.mock.lastCall![0] as unknown as { y: number };
+    expect(target.y).toBe(300);
+  });
+
+  it('preserves the airborne anchor on zoom, but reseeds it and drops lookahead on respawn or inspect entry', () => {
+    const h = harness(); h.controller.startFollowCamera(); h.body.velocity.x = 200;
+    h.controller.updateFollowPacing(18); h.setGrounded(false); h.player.y = 5;
+    h.controller.startFollowCamera(); expect(h.controller.getFollowAnchorY()).toBe(50);
+    h.player.y = 200; h.controller.resetFollowAnchor();
+    expect(h.controller.describeFollowMotion()).toEqual({ anchorY: 200, leadX: 0 });
+    h.controller.toggleCameraMode(); expect(h.controller.describeFollowMotion().anchorY).toBeNull();
+    h.player.y = 400; h.controller.toggleCameraMode();
+    expect(h.controller.getFollowAnchorY()).toBe(400);
+  });
+
+  it('does not let follow updates move a fixed-room camera or retain old offsets after reset', () => {
+    const h = harness(); h.controller.startFollowCamera(); h.body.velocity.x = 200;
+    h.controller.updateFollowPacing(18); h.setRoom(fixedRoom()); h.controller.syncRoomCamera(false);
+    h.controller.resetFollowAnchor();
+    h.camera.setFollowOffset.mockClear(); h.camera.setLerp.mockClear();
+    h.controller.updateFollowPacing(1);
+    expect(h.camera.setFollowOffset).not.toHaveBeenCalled(); expect(h.camera.setLerp).not.toHaveBeenCalled();
+    expect(h.controller.describeFollowMotion()).toEqual({ anchorY: null, leadX: 0 });
+    expectCentered(h.camera, fixedRoom());
   });
 });
