@@ -1,4 +1,5 @@
 import { normalizeRunGhost, type RunGhost } from './ghostRace';
+import { notifyGhostBestUpdated } from './ghostRepository';
 
 const KEY = 'wamp:guest-ghost-bests:v1';
 interface StoredBest { ghost: RunGhost; deaths: number }
@@ -21,7 +22,12 @@ export function saveLocalGhostBest(storage: Storage | null, ghost: RunGhost, dea
     || (previous.ghost.elapsedMs === ghost.elapsedMs && previous.deaths <= deaths))) return false;
   const next = [{ ghost, deaths }, ...entries.filter(entry => entry !== previous)].slice(0, 20);
   while (next.length > 1 && JSON.stringify(next).length > 2_000_000) next.pop();
-  try { storage?.setItem(KEY, JSON.stringify(next)); return storage !== null; } catch { return false; }
+  try {
+    if (!storage) return false;
+    storage.setItem(KEY, JSON.stringify(next));
+    notifyGhostBestUpdated(ghost.roomId);
+    return true;
+  } catch { return false; }
 }
 export function getGhostStorage(): Storage | null {
   try { return window.localStorage; } catch { return null; }

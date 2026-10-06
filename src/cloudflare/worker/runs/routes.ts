@@ -365,7 +365,9 @@ export async function handleRunFinish(
         verificationSnapshotHash: existing.verificationSnapshotHash ?? null,
       },
       room: snapshot,
-      elapsedMs: clampedBody.elapsedMs,
+      // The trace follows the simulation clock. Network/finish latency stays
+      // in the ranked server-time floor, rather than invalidating its movement.
+      elapsedMs: reportedElapsedMs,
       deaths: clampedBody.deaths,
     }),
   );
@@ -522,6 +524,7 @@ export async function handleRoomLeaderboard(
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read room leaderboards');
   const authenticated = auth !== null;
+  const fresh = url.searchParams.get('fresh') === '1';
   const loadResponse = async () => {
     const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
     const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
@@ -538,12 +541,12 @@ export async function handleRoomLeaderboard(
     const leaderboard = await timing.measure('leaderboard', () => buildRoomLeaderboardResponse(
       env, record, selection, limit, auth?.user.id ?? null,
     ));
-    timing.setDiagnostic('cache', authenticated ? 'private-20' : 'public-20');
+    timing.setDiagnostic('cache', fresh ? 'fresh' : authenticated ? 'private-20' : 'public-20');
     return timedJsonResponse(request, leaderboard, timing, {
-      headers: { 'Cache-Control': authenticated ? 'private, max-age=20' : 'public, max-age=20' },
+      headers: { 'Cache-Control': fresh ? 'private, no-store' : authenticated ? 'private, max-age=20' : 'public, max-age=20' },
     });
   };
-  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
+  return loadAnonymousPublicCache(request, authenticated || fresh ? undefined : context, loadResponse);
 }
 
 export async function handleRoomDifficultyVote(
