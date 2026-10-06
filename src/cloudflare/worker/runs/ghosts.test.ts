@@ -89,7 +89,7 @@ describe('personal best persistence', () => {
   const body = { verificationTrace: trace } as unknown as RunFinishRequestBody;
   it('stores a bounded whitelist and uses a conditional upsert so slower concurrent finishes cannot replace it', async () => {
     const db = database();
-    await savePersonalBestGhost(db.env, run, room, body, 'default-player', true);
+    await savePersonalBestGhost(db.env, run, room, body, 'default-player', true, 1000);
     expect(mocks.verify).not.toHaveBeenCalled();
     expect(db.batch).toHaveBeenCalledTimes(1);
     expect(db.writes[0].sql).toContain('excluded.elapsed_ms < run_ghosts.elapsed_ms');
@@ -99,8 +99,18 @@ describe('personal best persistence', () => {
   it('verifies trust-exempt runs before recording and leaves failed ghosts unavailable', async () => {
     const db = database();
     mocks.verify.mockResolvedValue({ status: 'failed' });
-    await savePersonalBestGhost(db.env, run, room, body, 'default-player', false);
+    await savePersonalBestGhost(db.env, run, room, body, 'default-player', false, 1000);
     expect(mocks.verify.mock.calls[0][0].binding).toEqual({ verificationNonce: 'secret', verificationSnapshotHash: 'secret-hash' });
     expect(db.batch).not.toHaveBeenCalled();
+  });
+  it('verifies the reported game time while preserving and replaying the ranked server-time floor', async () => {
+    const db = database();
+    await savePersonalBestGhost(db.env, { ...run, elapsedMs: 1800 }, room, body, 'default-player', false, 1000);
+    expect(mocks.verify.mock.calls[0][0].elapsedMs).toBe(1000);
+    expect(db.batch).toHaveBeenCalledOnce();
+    const saved = JSON.parse(db.writes[0].values[6] as string) as RunGhost;
+    expect(saved.elapsedMs).toBe(1800);
+    expect(saved.points.map(point => point.atMs)).toEqual([0, 1800]);
+    expect(db.writes[0].values[4]).toBe(1800);
   });
 });

@@ -27,7 +27,8 @@ export function buildRunGhost(
   metadata: Omit<RunGhost, 'schemaVersion' | 'points'>,
   trace: RankedRunVerificationTrace,
 ): RunGhost | null {
-  if (trace.breadcrumbs.length < 2 || trace.breadcrumbs.length > 2048
+  if (!Number.isFinite(trace.traceDurationMs) || trace.traceDurationMs <= 0
+    || trace.breadcrumbs.length < 2 || trace.breadcrumbs.length > 2048
     || trace.roomTransitions.length > 256 || (trace.respawnEvents?.length ?? 0) > 256) return null;
   const respawns = new Set(trace.respawnEvents?.map(event => event.breadcrumbIndex) ?? []);
   const points: GhostPoint[] = trace.breadcrumbs.map((point, index) => ({
@@ -41,12 +42,20 @@ export function buildRunGhost(
   });
   const finish = [...trace.goalEvents].reverse().find(event => event.type === 'complete' && event.actor === 'player');
   if (finish) points.push({
-    atMs: Math.min(metadata.elapsedMs, finish.atMs), roomX: finish.roomX, roomY: finish.roomY,
+    atMs: Math.min(trace.traceDurationMs, finish.atMs), roomX: finish.roomX, roomY: finish.roomY,
     x: finish.x, y: finish.y, vx: 0, vy: 0, grounded: true, snap: false,
   });
   points.sort((a, b) => a.atMs - b.atMs);
   for (let i = 1; i < points.length; i++) {
     if (points[i].roomX !== points[i - 1].roomX || points[i].roomY !== points[i - 1].roomY) points[i].snap = true;
+  }
+  // Ranked elapsed time can include a server-time floor. Scale the public
+  // timeline and velocities together so the ghost finishes at its displayed best.
+  const timeScale = metadata.elapsedMs / trace.traceDurationMs;
+  for (const point of points) {
+    point.atMs = Math.round(point.atMs * timeScale);
+    point.vx /= timeScale;
+    point.vy /= timeScale;
   }
   return normalizeRunGhost({ ...metadata, schemaVersion: 1, points });
 }

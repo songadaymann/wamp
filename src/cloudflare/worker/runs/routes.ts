@@ -475,7 +475,7 @@ export async function handleRunFinish(
   if (isNewPersonalBest) {
     try {
       await savePersonalBestGhost(env, finalizedRun, snapshot, finalBody,
-        auth.user.selectedAvatarId ?? 'default-player', verificationStatus === 'passed');
+        auth.user.selectedAvatarId ?? 'default-player', verificationStatus === 'passed', reportedElapsedMs);
     } catch {
       console.error(JSON.stringify({ event: 'run-ghost-save-failed', attemptId }));
     }
