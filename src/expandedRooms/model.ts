@@ -10,6 +10,7 @@ export interface ExpandedRoomMembershipSummary {
   expandedRoomId: string;
   title: string | null;
   goalType: ExpandedRoomGoalType | null;
+  pitsAreDeadly?: boolean;
   cellCount: number;
   source: ExpandedRoomSource;
   legacyCourseId: string | null;
@@ -73,11 +74,13 @@ export function createExpandedRoomSummaryFromLegacyCourse(input: {
   courseTitle: string | null;
   goalType: CourseGoalType | null;
   roomCount: number;
+  pitsAreDeadly?: boolean;
 }): ExpandedRoomMembershipSummary {
   return {
     expandedRoomId: expandedRoomIdFromLegacyCourseId(input.courseId),
     title: input.courseTitle,
     goalType: input.goalType,
+    ...(input.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
     cellCount: input.roomCount,
     source: 'legacy_course',
     legacyCourseId: input.courseId,
@@ -88,11 +91,13 @@ export function createExpandedRoomSummaryFromStandaloneRoom(input: {
   roomId: string;
   roomTitle: string | null;
   goalType: RoomGoalType | null;
+  pitsAreDeadly?: boolean;
 }): ExpandedRoomMembershipSummary {
   return {
     expandedRoomId: expandedRoomIdFromStandaloneRoomId(input.roomId),
     title: input.roomTitle,
     goalType: input.goalType,
+    ...(input.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
     cellCount: 1,
     source: 'standalone_room',
     legacyCourseId: null,
@@ -106,6 +111,7 @@ export function createExpandedRoomSummaryFromResolvedTarget(
     expandedRoomId: target.expandedRoomId,
     title: target.title,
     goalType: target.goalType,
+    ...(target.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
     cellCount: target.cellCount,
     source: target.source,
     legacyCourseId: target.legacyCourseId,

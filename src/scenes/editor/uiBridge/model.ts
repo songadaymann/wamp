@@ -49,6 +49,8 @@ export interface EditorGoalUiViewModel {
 }
 
 export interface EditorCourseUiViewModel {
+  pitsAreDeadly?: boolean;
+  pitsDisabled?: boolean;
   visible: boolean;
   statusHidden: boolean;
   statusText: string;
@@ -126,6 +128,7 @@ export interface EditorInspectorState {
 export interface EditorUiViewModel {
   roomTitleValue: string;
   roomCameraCentered?: boolean;
+  roomPitsAreDeadly?: boolean;
   roomCoordinatesText: string;
   saveStatusText: string;
   saveStatusAccentText: string;
@@ -201,6 +204,8 @@ export interface EditorUiBridgeActions {
   onZoomOut: () => void;
   onSetRoomTitle: (title: string | null) => void;
   onSetRoomCameraCentered: (centered: boolean) => void;
+  onSetRoomPitsAreDeadly?: (enabled: boolean) => void;
+  onSetCoursePitsAreDeadly?: (enabled: boolean) => void;
   onSelectTool: (tool: ToolName) => void;
   onClearCurrentLayer: () => void;
   onClearAllTiles: () => void;

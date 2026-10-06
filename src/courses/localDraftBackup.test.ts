@@ -16,6 +16,20 @@ function storageFixture() {
 const room = () => createDefaultRoomSnapshot('7,8', { x: 7, y: 8 });
 
 describe('expanded draft backup persistence and recovery', () => {
+  it('recovers root pit changes and ordinary cell pit changes without losing either baseline', () => {
+    const { backup } = storageFixture();
+    const base = createDefaultCourseSnapshot('pits');
+    const remoteRoom = room();
+    const draft = { ...base, pitsAreDeadly: true };
+    const localRoom = { ...remoteRoom, pitsAreDeadly: true };
+    expect(backup.writeCourse(draft, base)).toBe(true);
+    expect(backup.writeRoom(base.id, localRoom, remoteRoom)).toBe(true);
+    expect(backup.recoverCourse(base)).toEqual({ status: 'recovered', snapshot: draft });
+    expect(backup.recoverRoom(base.id, remoteRoom)).toEqual({ status: 'recovered', snapshot: localRoom });
+    expect(base.pitsAreDeadly).toBe(false);
+    expect(remoteRoom.pitsAreDeadly).toBe(false);
+  });
+
   it('recovers course metadata and cells independently without changing the snapshots or baseline', () => {
     const { backup } = storageFixture();
     const base = createDefaultCourseSnapshot('course:one');

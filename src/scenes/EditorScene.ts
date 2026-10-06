@@ -687,6 +687,7 @@ export class EditorScene extends Phaser.Scene {
     });
     this.musicWorkflow.attachPatternController(this.musicPatternController);
     this.overlayController = new EditorOverlayController(this, {
+      hasDeadlyPits: () => !this.courseController.hasActiveCourseEdit() && this.editRuntime.roomPitsAreDeadly,
       getLayers: () => this.layers,
       getPlacedObjects: () => editorState.placedObjects,
       isClipboardPastePreviewActive: () => this.toolController.isClipboardPastePreviewActive(),
@@ -957,6 +958,7 @@ export class EditorScene extends Phaser.Scene {
       onZoomOut: () => this.zoomOut(),
       onSetRoomTitle: (title) => this.persistenceController.setRoomTitle(title),
       onSetRoomCameraCentered: (centered) => this.editRuntime.setRoomCameraMode(centered),
+      onSetRoomPitsAreDeadly: (enabled) => this.editRuntime.setRoomPitsAreDeadly(enabled),
       onSelectTool: (tool) => this.toolController.selectTool(tool),
       onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
       onClearAllTiles: () => this.toolController.clearAllTiles(),
@@ -1861,6 +1863,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private updateGoalUi(): void {
+    this.overlayController?.redrawGrid();
     this.chromeController.refreshGoalUi();
   }
 

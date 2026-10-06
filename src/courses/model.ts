@@ -78,6 +78,8 @@ export type CourseGoal =
 export interface CourseSnapshot {
   id: string;
   title: string | null;
+  /** Applies to the outer footprint only; internal cell drops stay connected. */
+  pitsAreDeadly?: boolean;
   roomRefs: CourseRoomRef[];
   objectLinks: CourseObjectLink[];
   pressurePlateLinks: CoursePressurePlateLink[];
@@ -218,6 +220,7 @@ export function createDefaultCourseSnapshot(
     id: courseId,
     title: null,
     roomRefs: [],
+    pitsAreDeadly: false,
     objectLinks: [],
     pressurePlateLinks: [],
     startPoint: null,
@@ -403,6 +406,7 @@ export function cloneCourseSnapshot(snapshot: CourseSnapshot): CourseSnapshot {
   return {
     ...snapshot,
     title: normalizeCourseTitle(snapshot.title),
+    pitsAreDeadly: snapshot.pitsAreDeadly === true,
     roomRefs: snapshot.roomRefs.map(cloneCourseRoomRef),
     objectLinks,
     pressurePlateLinks: objectLinks.map(cloneCoursePressurePlateLink),
@@ -475,6 +479,7 @@ export function getComparableCourseSnapshot(snapshot: CourseSnapshot) {
     });
   return {
     title: snapshot.title,
+    ...(snapshot.pitsAreDeadly === true ? { pitsAreDeadly: true as const } : {}),
     roomRefs: sortCourseRoomRefsForStorage(snapshot.roomRefs).map((roomRef) => ({
       roomId: roomRef.roomId,
       coordinates: roomRef.coordinates,
@@ -710,6 +715,7 @@ export function normalizeCourseSnapshot(
     id: typeof snapshot.id === 'string' && snapshot.id.trim() ? snapshot.id.trim() : fallbackCourseId,
     title: normalizeCourseTitle(snapshot.title),
     roomRefs,
+    pitsAreDeadly: snapshot.pitsAreDeadly === true,
     objectLinks,
     pressurePlateLinks: objectLinks.map(cloneCoursePressurePlateLink),
     startPoint: isCourseMarkerPointLike(snapshot.startPoint)

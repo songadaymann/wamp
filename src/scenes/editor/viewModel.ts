@@ -8,6 +8,7 @@ import type { EditorCourseUiState } from '../../ui/setup/sceneBridge';
 export interface BuildEditorUiViewModelOptions {
   roomTitle: string | null;
   roomCameraCentered?: boolean;
+  roomPitsAreDeadly?: boolean;
   roomCoordinates: RoomCoordinates;
   roomGoal: RoomGoal | null;
   roomGoalIntroText: string | null;
@@ -87,6 +88,7 @@ export function buildEditorUiViewModel(
   return {
     roomTitleValue: roomTitle ?? '',
     roomCameraCentered: options.roomCameraCentered === true,
+    roomPitsAreDeadly: options.roomPitsAreDeadly === true,
     roomCoordinatesText: `Room (${roomCoordinates.x}, ${roomCoordinates.y})`,
     saveStatusText: saveStatus.text,
     saveStatusAccentText: saveStatus.accentText,
@@ -191,6 +193,8 @@ export function buildEditorUiViewModel(
       placeNpcDestinationActive: roomPlacementMode === 'npc_destination',
     },
     course: {
+      pitsAreDeadly: courseEditorState.pitsAreDeadly === true,
+      pitsDisabled: courseEditorState.pitsDisabled !== false,
       visible: courseEditorState.visible,
       statusHidden: courseEditorState.statusHidden,
       statusText: courseEditorState.statusText ?? '',

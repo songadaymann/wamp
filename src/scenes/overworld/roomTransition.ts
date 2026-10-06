@@ -1,4 +1,7 @@
 import Phaser from 'phaser';
+import type { CourseSnapshot } from '../../courses/model';
+import type { ExpandedRoomMembershipSummary } from '../../expandedRooms/model';
+import { hasDeadlyBottomEdge } from './pits';
 import {
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -26,6 +29,9 @@ interface OverworldRoomTransitionHost {
   resetChallengeStateForRoomExit(nextRoomCoordinates: RoomCoordinates): void;
   updateSelectedSummary(): void;
   getActiveCourseRun(): unknown | null;
+  getActiveCourseSnapshot?(): CourseSnapshot | null;
+  getExpandedRoomMembershipAt?(coordinates: RoomCoordinates): ExpandedRoomMembershipSummary | null;
+  handlePlayerDeath?(reason: string): void;
   syncGoalRunForRoom(room: RoomSnapshot | null, entryContext?: 'transition' | 'spawn' | 'respawn'): void;
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   refreshLeaderboardForSelection(): Promise<void>;
@@ -129,6 +135,28 @@ export class OverworldRoomTransitionController {
 
     const currentRoomCoordinates = this.host.getCurrentRoomCoordinates();
     const nextRoomCoordinates = this.host.getRoomCoordinatesForPoint(player.x, player.y);
+    const authorizedTeleport = this.consumeAuthorizedTeleport(nextRoomCoordinates);
+    const body = this.host.getPlayerBody();
+    const bottom = this.host.getRoomOrigin(currentRoomCoordinates).y + ROOM_PX_HEIGHT;
+    // Check the feet at the seam, including a lower room's collision clamp.
+    // Waiting for the center to enter that room can let its top row catch the fall.
+    const feetY = body && Number.isFinite(body.bottom) ? body.bottom : player.y + (body?.height ?? 0) * 0.5;
+    if (!authorizedTeleport && !this.host.isRoomTransitionLocked()
+      && nextRoomCoordinates.x === currentRoomCoordinates.x
+      && feetY >= bottom - 1 && (!body || body.velocity.y >= 0)
+      && hasDeadlyBottomEdge(
+        this.host.getRoomSnapshotForCoordinates(currentRoomCoordinates),
+        this.host.getActiveCourseSnapshot?.() ?? null,
+        this.host.getExpandedRoomMembershipAt?.(currentRoomCoordinates) ?? null,
+        this.host.getExpandedRoomMembershipAt?.({ x: currentRoomCoordinates.x, y: currentRoomCoordinates.y + 1 }) ?? null,
+      ) && this.host.handlePlayerDeath) {
+      this.lastSafePlayerTransform.valid = false;
+      this.clearPendingPreparation();
+      this.host.clearPredictedPlayableRoomForTransition();
+      this.clearActiveUnpreparedTransition();
+      this.host.handlePlayerDeath('You fell.');
+      return;
+    }
     if (
       nextRoomCoordinates.x === currentRoomCoordinates.x &&
       nextRoomCoordinates.y === currentRoomCoordinates.y
@@ -155,7 +183,6 @@ export class OverworldRoomTransitionController {
 
     this.host.setTransitionPreparationSeamUrgent?.(true);
 
-    const authorizedTeleport = this.consumeAuthorizedTeleport(nextRoomCoordinates);
     if (
       this.shouldBlockRoomTransition(
         currentRoomCoordinates,

@@ -17,6 +17,14 @@ export function renderEditorUiViewModel(
     elements.roomCameraCenteredInput.checked = viewModel.roomCameraCentered === true;
     elements.roomCameraCenteredInput.disabled = viewModel.saveDisabled;
   }
+  if (elements.roomPitsDeadlyInput) {
+    elements.roomPitsDeadlyInput.checked = viewModel.roomPitsAreDeadly === true;
+    elements.roomPitsDeadlyInput.disabled = viewModel.saveDisabled;
+  }
+  if (elements.coursePitsDeadlyInput) {
+    elements.coursePitsDeadlyInput.checked = viewModel.course.pitsAreDeadly === true;
+    elements.coursePitsDeadlyInput.disabled = viewModel.course.pitsDisabled !== false;
+  }
   setText(elements.roomCoordsEls, viewModel.roomCoordinatesText);
   elements.separatorEl?.classList.toggle('hidden', false);
   renderSaveStatus(doc, elements.saveStatusEls, viewModel);

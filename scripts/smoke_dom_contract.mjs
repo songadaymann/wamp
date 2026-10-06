@@ -41,6 +41,8 @@ const requiredIdsByController = {
     'smart-theme-button-grid',
     'smart-brush-button-grid',
     'goal-type-instructions',
+    'room-pits-deadly',
+    'course-pits-deadly',
   ],
   'PaletteController': [
     'palette-canvas',
@@ -60,6 +62,7 @@ const requiredIdsByController = {
   'CourseComposerPanelController': [
     'course-editor-shell',
     'course-workbench-title-input',
+    'course-workbench-pits-deadly',
     'course-workbench-status',
     'course-workbench-selected-room-summary',
     'course-workbench-selected-room-status',

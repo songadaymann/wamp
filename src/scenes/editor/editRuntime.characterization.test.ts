@@ -62,6 +62,18 @@ describe('editor edit runtime document contracts', () => {
     editorState.selectedObjectId = null;
   });
 
+  it('persists opted-in pits, blocks read-only changes, and resets them off', () => {
+    const { runtime, setEditable } = createHarness(createRoom());
+    runtime.setRoomPitsAreDeadly(false);
+    expect(runtime.isRoomDirty).toBe(false);
+    runtime.setRoomPitsAreDeadly(true);
+    expect(runtime.isRoomDirty).toBe(true);
+    expect(createHarness(runtime.exportRoomSnapshot()).runtime.roomPitsAreDeadly).toBe(true);
+    setEditable(false); runtime.setRoomPitsAreDeadly(false);
+    expect(runtime.roomPitsAreDeadly).toBe(true);
+    runtime.reset(); expect(runtime.roomPitsAreDeadly).toBe(false);
+  });
+
   it('marks camera changes dirty, preserves them across reload, and respects read-only rooms', () => {
     const { runtime, setEditable } = createHarness(createRoom());
     runtime.setRoomCameraMode(true);

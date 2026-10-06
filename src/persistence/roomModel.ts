@@ -121,6 +121,8 @@ export interface RoomSnapshot {
   goalIntroText: string | null;
   /** Fit and hold the play camera on this room; absent in older snapshots. */
   cameraMode?: 'follow' | 'room';
+  /** Opt-in death at the bottom boundary; absent in older snapshots means off. */
+  pitsAreDeadly?: boolean;
   background: string;
   lighting: RoomLightingSettings;
   weather: RoomWeatherSettings;
@@ -422,6 +424,7 @@ export function createDefaultRoomSnapshot(
     title: null,
     goalIntroText: null,
     cameraMode: 'follow',
+    pitsAreDeadly: false,
     background: DEFAULT_ROOM_BACKGROUND,
     lighting: cloneRoomLightingSettings(null),
     weather: cloneRoomWeatherSettings(null),
@@ -745,6 +748,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot | RoomSnapshotView): RoomSn
     title: normalizeRoomTitle(room.title),
     goalIntroText: normalizeRoomGoalIntroText(room.goalIntroText),
     cameraMode: room.cameraMode === 'room' ? 'room' : 'follow',
+    pitsAreDeadly: room.pitsAreDeadly === true,
     background: normalizeRoomBackground(room.background),
     lighting: normalizeRoomLightingSettings(room.lighting),
     weather: normalizeRoomWeatherSettings(room.weather),
@@ -871,6 +875,7 @@ function normalizeRoomVersionRecord(value: unknown): RoomVersionRecord | null {
 }
 
 export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
+  if (room.pitsAreDeadly === true) return false;
   if (room.cameraMode === 'room') return false;
   if (room.title) {
     return false;

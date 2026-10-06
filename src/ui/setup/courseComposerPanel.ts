@@ -8,6 +8,7 @@ import {
 type CourseEditorPanelElements = {
   shell: HTMLElement | null;
   titleInput: HTMLInputElement | null;
+  pitsInput: HTMLInputElement | null;
   status: HTMLElement | null;
   selectedRoomSummary: HTMLElement | null;
   selectedRoomStatus: HTMLElement | null;
@@ -52,6 +53,7 @@ export class CourseComposerPanelController {
     this.elements = {
       shell: this.doc.getElementById('course-editor-shell'),
       titleInput: this.doc.getElementById('course-workbench-title-input') as HTMLInputElement | null,
+      pitsInput: this.doc.getElementById('course-workbench-pits-deadly') as HTMLInputElement | null,
       status: this.doc.getElementById('course-workbench-status'),
       selectedRoomSummary: this.doc.getElementById('course-workbench-selected-room-summary'),
       selectedRoomStatus: this.doc.getElementById('course-workbench-selected-room-status'),
@@ -85,6 +87,9 @@ export class CourseComposerPanelController {
   init(): void {
     this.windowObj.addEventListener(COURSE_COMPOSER_STATE_CHANGED_EVENT, this.handleStateChanged);
 
+    this.elements.pitsInput?.addEventListener('change', () => {
+      getActiveCourseComposerScene(this.game)?.setCoursePitsAreDeadly?.(this.elements.pitsInput?.checked === true);
+    });
     this.elements.titleInput?.addEventListener('input', () => {
       getActiveCourseComposerScene(this.game)?.setCourseTitle?.(this.elements.titleInput?.value ?? null);
     });
@@ -174,6 +179,10 @@ export class CourseComposerPanelController {
     }
 
     this.setValue(this.elements.titleInput, state.title);
+    if (this.elements.pitsInput) {
+      this.elements.pitsInput.checked = state.pitsAreDeadly === true;
+      this.elements.pitsInput.disabled = !state.canEdit;
+    }
     this.setText(this.elements.status, state.statusText ?? '');
     this.setHidden(this.elements.status, !state.statusText);
     this.setText(this.elements.selectedRoomSummary, state.selectedRoomSummary);

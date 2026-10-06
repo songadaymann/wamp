@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import type { ExpandedRoomMembershipSummary } from '../../expandedRooms/model';
+import { hasDeadlyBottomEdge } from './pits';
 import {
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -83,6 +85,7 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
     neighborCoordinates: RoomCoordinates,
   ) => void;
   getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null;
+  getExpandedRoomMembershipAt?(coordinates: RoomCoordinates): ExpandedRoomMembershipSummary | null;
   isPlayableRoomCollisionReady(coordinates: RoomCoordinates): boolean;
   syncBackdropCameraIgnores(): void;
 }
@@ -256,7 +259,15 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
 
   private syncEdgeWallsForRoomIds(roomIds: ReadonlySet<string> | null): void {
     let changed = false;
-    for (const loadedRoom of this.host.getLoadedFullRooms()) {
+    const loadedRooms = Array.from(this.host.getLoadedFullRooms());
+    const roomsById = new Map(loadedRooms.map(loaded => [loaded.room.id, loaded.room]));
+    const isDeadly = (coordinates: RoomCoordinates) => !this.host.isRoomTransitionLocked() && hasDeadlyBottomEdge(
+      roomsById.get(roomIdFromCoordinates(coordinates)) ?? null,
+      this.host.getActiveCourseSnapshot(),
+      this.host.getExpandedRoomMembershipAt?.(coordinates) ?? null,
+      this.host.getExpandedRoomMembershipAt?.({ x: coordinates.x, y: coordinates.y + 1 }) ?? null,
+    );
+    for (const loadedRoom of loadedRooms) {
       if (roomIds && !roomIds.has(loadedRoom.room.id)) {
         continue;
       }
@@ -269,6 +280,9 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
       }
 
       for (const neighbor of getOrthogonalNeighbors(loadedRoom.room.coordinates)) {
+        // Both sides of a blocked seam must open for an opted-in fall.
+        if (neighbor.y === loadedRoom.room.coordinates.y + 1 && isDeadly(loadedRoom.room.coordinates)) continue;
+        if (neighbor.y === loadedRoom.room.coordinates.y - 1 && isDeadly(neighbor)) continue;
         if (this.isNeighborTraversalReady(loadedRoom.room.coordinates, neighbor)) {
           continue;
         }

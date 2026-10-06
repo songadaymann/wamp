@@ -1,6 +1,8 @@
 export interface EditorUiElements {
   roomTitleInput: HTMLInputElement | null;
   roomCameraCenteredInput: HTMLInputElement | null;
+  roomPitsDeadlyInput: HTMLInputElement | null;
+  coursePitsDeadlyInput: HTMLInputElement | null;
   roomCoordsEls: HTMLElement[];
   separatorEl: HTMLElement | null;
   saveStatusEls: HTMLElement[];
@@ -187,6 +189,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
   return {
     roomTitleInput: byId<HTMLInputElement>(doc, 'room-title-input'),
     roomCameraCenteredInput: byId<HTMLInputElement>(doc, 'room-camera-centered'),
+    roomPitsDeadlyInput: byId<HTMLInputElement>(doc, 'room-pits-deadly'),
+    coursePitsDeadlyInput: byId<HTMLInputElement>(doc, 'course-pits-deadly'),
     roomCoordsEls: existing([
       byId<HTMLElement>(doc, 'room-coords'),
       byId<HTMLElement>(doc, 'mobile-editor-room-coords'),
