@@ -110,6 +110,7 @@ export class OverworldWallMovementStateController {
   private contactGraceUntil = 0;
   private sliding = false;
   private jumpLockUntil = 0;
+  private jumpStartedAt = 0;
   private jumpActive = false;
   private jumpDirection: -1 | 1 | 0 = 0;
   private jumpChainActive = false;
@@ -149,6 +150,7 @@ export class OverworldWallMovementStateController {
   reset(): void {
     this.clearContact();
     this.jumpLockUntil = 0;
+    this.jumpStartedAt = 0;
     this.jumpActive = false;
     this.jumpDirection = 0;
     this.jumpChainActive = false;
@@ -201,15 +203,22 @@ export class OverworldWallMovementStateController {
   commitJump(direction: -1 | 1, now: number, inputLockMs: number): void {
     this.clearContact();
     this.jumpLockUntil = now + inputLockMs;
+    this.jumpStartedAt = now;
     this.jumpActive = true;
     this.jumpDirection = direction;
     this.jumpChainActive = true;
+  }
+
+  cancelLockForOppositeInput(tangentInput: number, now: number, minimumPushMs: number): void {
+    if (this.jumpDirection !== 0 && tangentInput * this.jumpDirection < 0 &&
+      now >= this.jumpStartedAt + minimumPushMs) this.jumpLockUntil = 0;
   }
 
   finishGroundJump(): void {
     this.jumpActive = false;
     this.jumpDirection = 0;
     this.jumpLockUntil = 0;
+    this.jumpStartedAt = 0;
     this.clearContact();
     this.jumpChainActive = false;
   }

@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
 import type Phaser from 'phaser';
-import type { SpecialTilePlayerEnvironment } from './specialTiles';
+import { getGravityVector, getGravityRightVector, getBodyVelocityAlongVector,
+  type SpecialTilePlayerEnvironment } from './specialTiles';
+import { OverworldJumpCornerCorrection } from './jumpCornerCorrection';
+import { GAME_OBJECTS } from '../../config';
 import { OverworldPhysicsCadence } from './physicsCadence';
 
 const audio = vi.hoisted(() => ({
@@ -252,8 +255,8 @@ function createHarness(environment: SpecialTilePlayerEnvironment = {
     cratePushSpeed: 52,
     cratePullSpeed: 42,
     crateInteractionMaxGap: 4,
-    coyoteMs: 80,
-    jumpBufferMs: 100,
+    coyoteMs: 110,
+    jumpBufferMs: 120,
     wallJumpBufferMs: 240,
     wallContactGraceMs: 140,
     jumpVelocity: -220,
@@ -395,7 +398,8 @@ describe('OverworldMovementController state ownership', () => {
 
     expect(harness.controller.getDebugSnapshot()).toMatchObject({
       jumpBuffered: true,
-      jumpBufferMs: 224,
+      jumpBufferMs: 120,
+      wallJumpBufferMs: 240,
       coyoteMs: 0,
     });
 
@@ -555,6 +559,11 @@ function runActualPhysics(hz: number, scenario: string, legacyRenderMovement = f
   }
   if (shapedPlayer) h.setForceFullBody(false);
   if (scenario.startsWith('ice')) body.setVelocityX(120);
+  if (scenario === 'buffered-release') { body.reset(0, -32); h.controller.reset(); }
+  if (scenario === 'coyote-release') {
+    body.setCollideWorldBounds(false); h.controller.reset(); h.seam.state.coyoteTime = 110;
+  }
+  let forgivenPressed = false;
   const samples: TrajectorySample[] = [];
   world.on('worldstep', () => samples.push({ x: body.x, y: body.y, vx: body.velocity.x, vy: body.velocity.y }));
   for (let frame = 1; frame <= hz * 4; frame += 1) {
@@ -563,6 +572,12 @@ function runActualPhysics(hz: number, scenario: string, legacyRenderMovement = f
     const jumping = !scenario.startsWith('ice') && !scenario.includes('wind');
     h.cursors.space.isDown = jumping && (scenario === 'tap' || scenario === 'quicksand' ? time < 80 : true);
     h.cursors.space.justDown = jumping && frame === 1;
+    if (scenario === 'buffered-release' || scenario === 'coyote-release') {
+      const ready = scenario === 'buffered-release' ? body.y >= -14 : samples.length >= 4;
+      h.cursors.space.justDown = !forgivenPressed && ready;
+      if (h.cursors.space.justDown) forgivenPressed = true;
+      h.cursors.space.isDown = false;
+    }
     h.cursors.right.isDown = scenario === 'ice-acceleration';
     scene.emit('preupdate');
     world.update(time, 1000 / hz);
@@ -597,7 +612,7 @@ describe('actual Arcade trajectories with fixed-step movement', () => {
       .toBeGreaterThan(8);
   });
   it.each(['tap', 'held', 'quicksand', 'water', 'ice-coast', 'ice-acceleration', 'ice-conveyor', 'ice-wind',
-    'wind', 'gravity-up', 'gravity-left', 'gravity-right'])('%s follows the same trajectory at all seven render rates', scenario => {
+    'wind', 'gravity-up', 'gravity-left', 'gravity-right', 'buffered-release', 'coyote-release'])('%s follows the same trajectory at all seven render rates', scenario => {
     const baseline = runActualPhysics(60, scenario);
     expect(baseline).toHaveLength(180);
     for (const hz of [30, 90, 120, 144, 165, 240]) {
@@ -623,5 +638,155 @@ describe('actual Arcade trajectories with fixed-step movement', () => {
     expect(apex(120)).toBeLessThan(apex(60) * 0.7);
     const coast = (hz: number) => runActualPhysics(hz, 'ice-coast', true).at(-1)!.x;
     expect(coast(120)).toBeLessThan(coast(60) * 0.7);
+  });
+});
+
+
+describe('jump forgiveness boundaries', () => {
+  const directions = ['down', 'up', 'left', 'right'] as const;
+  const environment = (gravityDirection: SpecialTilePlayerEnvironment['gravityDirection']): SpecialTilePlayerEnvironment => ({
+    inWater: false, onIce: false, onSticky: false, conveyorX: 0, windX: 0,
+    gravityDirection, onBounce: false, onDamage: false,
+  });
+  const groundSide = (gravity: typeof directions[number]) => gravity;
+
+  it.each(directions)('%s uses 110ms coyote grace and protects a released late jump', gravity => {
+    const h = createHarness(environment(gravity)), normal = getGravityVector(gravity);
+    h.seam.state.coyoteTime = 110;
+    h.cursors.space.justDown = true;
+    h.controller.updateMovement(100, false);
+    expect(getBodyVelocityAlongVector(h.body as never, normal)).toBe(-220);
+    expect(h.controller.getDebugSnapshot().protectedJumpMs).toBe(70);
+    h.cursors.space.justDown = false;
+    h.controller.updateMovement(60, false);
+    expect(h.controller.getDebugSnapshot().protectedJumpMs).toBe(10);
+    h.controller.updateMovement(10, false);
+    expect(h.controller.getDebugSnapshot().protectedJumpMs).toBe(0);
+    expect(getBodyVelocityAlongVector(h.body as never, normal)).toBeGreaterThan(-220);
+    const expired = createHarness(environment(gravity));
+    expired.seam.state.coyoteTime = 110; expired.cursors.space.justDown = true;
+    expired.controller.updateMovement(110, false);
+    expect(expired.host.playJumpDustFx).not.toHaveBeenCalled();
+  });
+
+  it.each(directions)('%s caps landing at 120ms while retaining 240ms wall buffering', gravity => {
+    for (const elapsed of [119, 120]) {
+      const h = createHarness(environment(gravity)); h.cursors.space.justDown = true;
+      h.controller.updateMovement(16, false);
+      expect(h.controller.getDebugSnapshot()).toMatchObject({ jumpBufferMs: 120, wallJumpBufferMs: 240 });
+      h.cursors.space.justDown = false; h.body.blocked[groundSide(gravity)] = true;
+      h.controller.updateMovement(elapsed, false);
+      expect(h.host.playJumpDustFx).toHaveBeenCalledTimes(elapsed === 119 ? 1 : 0);
+      if (elapsed === 119) expect(h.controller.getDebugSnapshot()).toMatchObject({
+        protectedJumpMs: 70, jumpBufferMs: 0, wallJumpBufferMs: 0,
+      });
+      else expect(h.controller.getDebugSnapshot()).toMatchObject({ jumpBufferMs: 0, wallJumpBufferMs: 120 });
+    }
+    const wall = createHarness(environment(gravity)); wall.cursors.space.justDown = true;
+    wall.controller.updateMovement(16, false); wall.cursors.space.justDown = false;
+    const tangent = getGravityRightVector(gravity);
+    const side = tangent.x === 1 ? 'right' : tangent.x === -1 ? 'left' : tangent.y === 1 ? 'down' : 'up';
+    wall.body.blocked[side] = true; wall.controller.updateMovement(200, false);
+    expect(wall.host.playJumpDustFx).toHaveBeenCalledOnce();
+    expect(wall.controller.getDebugSnapshot()).toMatchObject({ wallJumpActive: true,
+      protectedJumpMs: 70, jumpBufferMs: 0, wallJumpBufferMs: 0 });
+  });
+
+  it.each(['reset', 'handleNoPlayerRuntime', 'handlePlayerCreated', 'handlePlayerDestroyed',
+    'handleRespawnReset', 'resetTransientPlayState'] as const)('%s clears pending and protected jumps', method => {
+    const h = createHarness(); h.cursors.space.justDown = true; h.controller.updateMovement(16, false);
+    h.controller[method]();
+    expect(h.controller.getDebugSnapshot()).toMatchObject({ jumpBuffered: false, jumpBufferMs: 0,
+      wallJumpBufferMs: 0, protectedJumpMs: 0, coyoteMs: 0, cornerCorrections: 0 });
+  });
+
+  it('gives released buffered jumps useful height in actual Arcade physics', () => {
+    const samples = runActualPhysics(60, 'buffered-release');
+    const launched = samples.findIndex(sample => sample.vy < -150);
+    expect(launched).toBeGreaterThan(0);
+    const launchFeet = samples[launched].y;
+    expect(launchFeet - Math.min(...samples.slice(launched).map(sample => sample.y))).toBeGreaterThan(18);
+  });
+});
+
+function createCornerHarness(gravity: SpecialTilePlayerEnvironment['gravityDirection']) {
+  const world = new ArcadeWorld({ sys: { scale: { width: 640, height: 352 } } } as never,
+    { gravity: { x: 0, y: 0 }, debug: false });
+  const player = { x: 100, y: 100, angle: 0, rotation: 0, scaleX: 1, scaleY: 1,
+    displayOriginX: 0, displayOriginY: 0, displayWidth: 10, displayHeight: 14,
+    setPosition(x: number, y: number) { this.x = x; this.y = y; } };
+  const body = new ArcadeBody(world, player as never); body.setSize(10, 14, false); body.reset(100, 100);
+  const room = { coordinates: { x: 0, y: 0 } };
+  const host = {
+    getCurrentRoomCoordinates: () => room.coordinates, getRoomOrigin: () => ({ x: 0, y: 0 }),
+    getRoomSnapshotForCoordinates: () => room as never,
+    isSolidTerrainAtWorldPoint: vi.fn((_room: unknown, _x: number, _y: number) => false),
+    getRuntimeSolidLiveObjectsInBounds: () => [] as LoadedRoomObject[],
+    getArcadeBodyBounds: (other: { left: number; top: number; width: number; height: number }) =>
+      new MockRectangle(other.left, other.top, other.width, other.height) as never,
+  };
+  const controller = new OverworldJumpCornerCorrection(host);
+  const normal = getGravityVector(gravity), tangent = getGravityRightVector(gravity);
+  body.setVelocity(-normal.x * 200, -normal.y * 200); controller.remember(body, gravity);
+  const head: 'up' | 'down' | 'left' | 'right' = gravity === 'down' ? 'up' : gravity === 'up' ? 'down' : gravity === 'left' ? 'right' : 'left';
+  body.setVelocity(0, 0); body.blocked[head] = true;
+  return { world, player, body, host, controller, normal, tangent, head };
+}
+
+describe('actual Arcade corner correction', () => {
+  it.each(['down', 'up', 'left', 'right'] as const)('%s clears a two-pixel corner and restores the rise', gravity => {
+    const h = createCornerHarness(gravity);
+    const edge = h.tangent.x ? h.body.right - 2 : h.body.bottom - 2;
+    h.host.isSolidTerrainAtWorldPoint.mockImplementation((_room, x, y) => {
+      const headCoordinate = x * h.normal.x + y * h.normal.y;
+      const bodyHead = h.normal.x === 1 ? h.body.left : h.normal.x === -1 ? -h.body.right :
+        h.normal.y === 1 ? h.body.top : -h.body.bottom;
+      return headCoordinate < bodyHead && (h.tangent.x ? x : y) >= edge;
+    });
+    const before = { x: h.body.x, y: h.body.y, px: h.player.x, py: h.player.y,
+      prevX: h.body.prev.x, frameX: h.body.prevFrame.x };
+    expect(h.controller.correct(h.player as never, h.body, gravity)).toBe(true);
+    const dx = h.body.x - before.x, dy = h.body.y - before.y;
+    expect(Math.abs(dx) + Math.abs(dy)).toBe(2);
+    expect(h.player.x - before.px).toBe(dx); expect(h.player.y - before.py).toBe(dy);
+    expect(h.body.prev.x - before.prevX).toBe(dx); expect(h.body.prevFrame.x - before.frameX).toBe(dx);
+    expect(getBodyVelocityAlongVector(h.body, h.normal)).toBe(-200);
+    expect(h.body.blocked[h.head]).toBe(false);
+    expect(h.controller.describe().cornerCorrections).toBe(1); h.world.destroy();
+  });
+
+  it('retains Arcade gravity for the collided step and keeps sprite/body alignment after postUpdate', () => {
+    const h = createCornerHarness('down'); h.world.gravity.y = 700;
+    expect(h.controller.correct(h.player as never, h.body, 'down', 1000 / 60)).toBe(true);
+    expect(h.body.velocity.y).toBeCloseTo(-200 + 700 / 60, 8);
+    h.body.postUpdate();
+    expect(h.player.x).toBe(h.body.x); expect(h.player.y).toBe(h.body.y);
+    h.world.destroy();
+  });
+
+  it('rejects broad ceilings, missing rooms, room edges, resets and falling motion', () => {
+    for (const kind of ['broad', 'missing', 'edge', 'reset', 'falling']) {
+      const h = createCornerHarness('down');
+      if (kind === 'broad') h.host.isSolidTerrainAtWorldPoint.mockReturnValue(true);
+      if (kind === 'missing') h.host.getRoomSnapshotForCoordinates = () => null as never;
+      if (kind === 'edge') { h.body.x = 0; h.body.y = 0; h.body.updateCenter(); }
+      if (kind === 'reset') h.controller.reset();
+      if (kind === 'falling') { h.body.setVelocityY(20); h.controller.remember(h.body, 'down'); }
+      expect(h.controller.correct(h.player as never, h.body, 'down'), kind).toBe(false);
+      expect(h.controller.describe().cornerCorrections).toBe(0); h.world.destroy();
+    }
+  });
+
+  it('checks enabled runtime solids across the complete candidate body', () => {
+    const h = createCornerHarness('down');
+    const config = GAME_OBJECTS.find(object => object.id === 'brick_box')!;
+    const object = { config, layer: 'terrain', runtime: { npcPlayerCollision: false }, sprite: {
+      active: true, body: { enable: true, left: 90, top: 99, right: 120, bottom: 130, width: 30, height: 31 },
+    } } as unknown as LoadedRoomObject;
+    h.host.getRuntimeSolidLiveObjectsInBounds = () => [object];
+    expect(h.controller.correct(h.player as never, h.body, 'down')).toBe(false);
+    (object.sprite.body as Phaser.Physics.Arcade.Body).enable = false;
+    expect(h.controller.correct(h.player as never, h.body, 'down')).toBe(true);
+    h.world.destroy();
   });
 });

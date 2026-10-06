@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { OverworldMovementInput } from './physicsCadence';
+import { OverworldJumpCornerCorrection } from './jumpCornerCorrection';
 import { playSfx, stopSfx } from '../../audio/sfx';
 import {
   ROOM_HEIGHT,
@@ -37,6 +38,8 @@ import {
   type SpecialTilePlayerEnvironment,
 } from './specialTiles';
 
+const FORGIVEN_JUMP_MIN_RISE_MS = 70;
+const WALL_JUMP_STEER_BACK_MS = 120;
 const CRATE_PULL_DRAG_COMPENSATION_SCALE = 2.25;
 const SINGLE_TILE_GAP_ASSIST_MAX_DROP_PX = 4;
 const SINGLE_TILE_GAP_ASSIST_FOOT_PROBE_PX = 1;
@@ -91,6 +94,8 @@ interface OverworldMovementControllerState {
   coyoteTime: number;
   jumpBuffered: boolean;
   jumpBufferTime: number;
+  wallJumpBufferTime: number;
+  protectedJumpTime: number;
 }
 
 interface OverworldMovementControllerHost {
@@ -187,6 +192,10 @@ export interface OverworldMovementDebugSnapshot {
   climbing: boolean;
   jumpBuffered: boolean;
   jumpBufferMs: number;
+  wallJumpBufferMs: number;
+  protectedJumpMs: number;
+  cornerCorrections: number;
+  lastCornerShiftPx: number;
   coyoteMs: number;
   wallSliding: boolean;
   wallContactSide: -1 | 1 | 0;
@@ -208,6 +217,8 @@ function createMovementControllerState(): OverworldMovementControllerState {
     coyoteTime: 0,
     jumpBuffered: false,
     jumpBufferTime: 0,
+    wallJumpBufferTime: 0,
+    protectedJumpTime: 0,
   };
 }
 
@@ -217,12 +228,14 @@ export class OverworldMovementController {
   private readonly buttStompState = new OverworldButtStompMovementStateController();
   private readonly crateState = new OverworldCrateMovementStateController();
   private readonly wallState = new OverworldWallMovementStateController();
+  private readonly cornerCorrection: OverworldJumpCornerCorrection;
   private readonly presentationState: Readonly<OverworldMovementPresentationState>;
 
   constructor(
     private readonly host: OverworldMovementControllerHost,
     private readonly options: OverworldMovementControllerOptions,
   ) {
+    this.cornerCorrection = new OverworldJumpCornerCorrection(host);
     const state = this.state;
     const ladderState = this.ladderState;
     const buttStompState = this.buttStompState;
@@ -279,6 +292,9 @@ export class OverworldMovementController {
       climbing: this.ladderState.isClimbing(),
       jumpBuffered: this.state.jumpBuffered,
       jumpBufferMs: Math.max(0, Math.round(this.state.jumpBufferTime)),
+      wallJumpBufferMs: Math.max(0, Math.round(this.state.wallJumpBufferTime)),
+      protectedJumpMs: Math.max(0, Math.round(this.state.protectedJumpTime)),
+      ...this.cornerCorrection.describe(),
       coyoteMs: Math.max(0, Math.round(this.state.coyoteTime)),
       wallSliding: this.wallState.isSliding(),
       wallContactSide: this.wallState.getContactSide(),
@@ -294,9 +310,7 @@ export class OverworldMovementController {
   }
 
   reset(): void {
-    this.state.coyoteTime = 0;
-    this.state.jumpBuffered = false;
-    this.state.jumpBufferTime = 0;
+    this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
@@ -308,12 +322,14 @@ export class OverworldMovementController {
   }
 
   handleNoPlayerRuntime(): void {
+    this.resetJumpForgiveness();
     this.clearCrateInteractionState();
     this.resetWallMovementState();
     this.clearButtStompState();
   }
 
   handlePlayerCreated(): void {
+    this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
@@ -326,6 +342,7 @@ export class OverworldMovementController {
   }
 
   handlePlayerDestroyed(): void {
+    this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
@@ -337,6 +354,7 @@ export class OverworldMovementController {
   }
 
   handleRespawnReset(): void {
+    this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
@@ -349,6 +367,7 @@ export class OverworldMovementController {
   }
 
   resetTransientPlayState(): void {
+    this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearButtStompState();
     this.clearCrateInteractionState();
@@ -414,6 +433,41 @@ export class OverworldMovementController {
   }
 
   updateMovement(delta: number, inQuicksand: boolean, frameInput?: OverworldMovementInput): OverworldMovementStepResult {
+    this.state.jumpBufferTime = Math.max(0, this.state.jumpBufferTime - delta);
+    this.state.wallJumpBufferTime = Math.max(0, this.state.wallJumpBufferTime - delta);
+    this.state.protectedJumpTime = Math.max(0, this.state.protectedJumpTime - delta);
+    this.state.jumpBuffered = this.state.jumpBufferTime > 0 || this.state.wallJumpBufferTime > 0;
+    const player = this.host.getPlayer(), body = this.host.getPlayerBody();
+    const environment = this.host.getSpecialTileEnvironment();
+    if (!player || !body) this.resetJumpForgiveness();
+    const canCorrect = player && body && !inQuicksand && !environment.inWater &&
+      !this.ladderState.isClimbing() && !this.buttStompState.isActive();
+    if (canCorrect) this.cornerCorrection.correct(player, body, environment.gravityDirection, delta);
+    const result = this.stepMovement(delta, inQuicksand, frameInput);
+    this.cornerCorrection.remember(canCorrect ? body : null, environment.gravityDirection);
+    return result;
+  }
+
+  private clearPendingJump(): void {
+    this.state.jumpBuffered = false;
+    this.state.jumpBufferTime = 0;
+    this.state.wallJumpBufferTime = 0;
+  }
+
+  private resetJumpForgiveness(): void {
+    this.clearPendingJump();
+    this.state.coyoteTime = 0;
+    this.state.protectedJumpTime = 0;
+    this.cornerCorrection.reset();
+  }
+
+  private bufferJump(): void {
+    this.state.jumpBuffered = true;
+    this.state.jumpBufferTime = this.options.jumpBufferMs;
+    this.state.wallJumpBufferTime = this.options.wallJumpBufferMs;
+  }
+
+  private stepMovement(delta: number, inQuicksand: boolean, frameInput?: OverworldMovementInput): OverworldMovementStepResult {
     const player = this.host.getPlayer();
     const playerBody = this.host.getPlayerBody();
     if (!player || !playerBody) {
@@ -443,6 +497,7 @@ export class OverworldMovementController {
     const jumpedOffLadder = this.ladderState.isClimbing() && spacePressed;
     const specialEnvironment = this.host.getSpecialTileEnvironment();
     const playerGravityDirection = specialEnvironment.gravityDirection;
+    if (specialEnvironment.inWater) { this.clearPendingJump(); this.state.protectedJumpTime = 0; }
     playerBody.setAllowGravity(playerGravityDirection === 'down');
 
     if (playerGravityDirection !== 'down') {
@@ -480,9 +535,7 @@ export class OverworldMovementController {
       const ladderDeltaX = overlappingLadder.sprite.x - (player.x ?? playerBody.center.x);
       playerBody.setVelocityX(Phaser.Math.Clamp(ladderDeltaX * 12, -45, 45));
       playerBody.setVelocityY(verticalInput * this.options.ladderClimbSpeed);
-      this.state.coyoteTime = 0;
-      this.state.jumpBuffered = false;
-      this.state.jumpBufferTime = 0;
+      this.resetJumpForgiveness();
       this.state.isCrouching = false;
       this.clearButtStompState();
       this.clearCrateInteractionState();
@@ -544,6 +597,7 @@ export class OverworldMovementController {
       !this.state.isCrouching &&
       !this.buttStompState.isActive();
     this.updateWallMovementState(horizontalInput, grounded, canWallAttach);
+    this.wallState.cancelLockForOppositeInput(horizontalInput, this.host.getCurrentTime(), WALL_JUMP_STEER_BACK_MS);
     if (grounded) {
       this.state.coyoteTime = this.options.coyoteMs;
     } else {
@@ -614,10 +668,10 @@ export class OverworldMovementController {
             : this.options.jumpVelocity;
 
     if (jumpedOffLadder) {
+      this.state.protectedJumpTime = 0;
       playerBody.setVelocityY(specialJumpVelocity);
       this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
-      this.state.jumpBuffered = false;
-      this.state.jumpBufferTime = 0;
+      this.clearPendingJump();
       this.state.coyoteTime = 0;
       this.resetWallMovementState();
     } else {
@@ -625,39 +679,28 @@ export class OverworldMovementController {
         if (specialEnvironment.inWater) {
           playerBody.setVelocityY(WATER_SWIM_KICK_VELOCITY);
           this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
-          this.state.jumpBuffered = false;
-          this.state.jumpBufferTime = 0;
+          this.clearPendingJump();
           this.state.coyoteTime = 0;
         } else if (!this.tryPerformWallJump(player, playerBody)) {
-          this.state.jumpBuffered = true;
-          this.state.jumpBufferTime =
-            !grounded && this.state.coyoteTime <= 0
-              ? this.options.wallJumpBufferMs
-              : this.options.jumpBufferMs;
+          this.bufferJump();
         }
       }
 
-      if (this.state.jumpBuffered && this.tryPerformWallJump(player, playerBody)) {
+      if (this.state.wallJumpBufferTime > 0 && this.tryPerformWallJump(player, playerBody, 'down', true)) {
         // Wall-jump buffering lets the player press jump just before reaching the next wall.
-      } else if (this.state.jumpBuffered && this.state.coyoteTime > 0) {
+      } else if (this.state.jumpBufferTime > 0 && this.state.coyoteTime > 0) {
+        this.state.protectedJumpTime = !jumpPressed || !grounded ? FORGIVEN_JUMP_MIN_RISE_MS : 0;
         playerBody.setVelocityY(specialJumpVelocity);
         this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
-        this.state.jumpBuffered = false;
-        this.state.jumpBufferTime = 0;
+        this.clearPendingJump();
         this.state.coyoteTime = 0;
         this.wallState.finishGroundJump();
-      }
-
-      if (this.state.jumpBufferTime > 0) {
-        this.state.jumpBufferTime -= delta;
-        if (this.state.jumpBufferTime <= 0) {
-          this.state.jumpBuffered = false;
-        }
       }
 
       const jumpHeld = upHeld || spaceHeld;
       if (
         !jumpHeld &&
+        this.state.protectedJumpTime <= 0 &&
         playerBody.velocity.y < 0 &&
         this.host.getCurrentTime() >= this.host.getExternalLaunchGraceUntil()
       ) {
@@ -762,6 +805,7 @@ export class OverworldMovementController {
       !this.state.isCrouching &&
       !specialEnvironment.inWater;
     this.updateWallMovementState(controls.tangentInput, grounded, canWallAttach, gravityDirection);
+    this.wallState.cancelLockForOppositeInput(controls.tangentInput, this.host.getCurrentTime(), WALL_JUMP_STEER_BACK_MS);
 
     const moveSpeedBase = this.state.isCrouching
       ? this.options.crawlSpeed
@@ -813,8 +857,7 @@ export class OverworldMovementController {
             : this.options.jumpVelocity;
       setBodyVelocityAlongVector(playerBody, gravityVector, launchVelocity);
       this.host.playJumpDustFx(player.x ?? playerBody.center.x, playerBody.bottom, this.host.getPlayerFacing());
-      this.state.jumpBuffered = false;
-      this.state.jumpBufferTime = 0;
+      this.clearPendingJump();
       this.state.coyoteTime = 0;
       this.wallState.finishGroundJump();
     };
@@ -823,34 +866,25 @@ export class OverworldMovementController {
       if (specialEnvironment.inWater) {
         performGravityJump();
       } else if (!this.tryPerformWallJump(player, playerBody, gravityDirection)) {
-        this.state.jumpBuffered = true;
-        this.state.jumpBufferTime =
-          !grounded && this.state.coyoteTime <= 0
-            ? this.options.wallJumpBufferMs
-            : this.options.jumpBufferMs;
+        this.bufferJump();
       }
     }
 
     if (
-      this.state.jumpBuffered &&
+      this.state.wallJumpBufferTime > 0 &&
       !specialEnvironment.inWater &&
-      this.tryPerformWallJump(player, playerBody, gravityDirection)
+      this.tryPerformWallJump(player, playerBody, gravityDirection, true)
     ) {
       // Wall-jump buffering lets the player press jump just before reaching the next wall.
-    } else if (this.state.jumpBuffered && this.state.coyoteTime > 0) {
+    } else if (this.state.jumpBufferTime > 0 && this.state.coyoteTime > 0) {
+      this.state.protectedJumpTime = !jumpPressed || !grounded ? FORGIVEN_JUMP_MIN_RISE_MS : 0;
       performGravityJump();
-    }
-
-    if (this.state.jumpBufferTime > 0) {
-      this.state.jumpBufferTime -= delta;
-      if (this.state.jumpBufferTime <= 0) {
-        this.state.jumpBuffered = false;
-      }
     }
 
     const currentNormalVelocity = getBodyVelocityAlongVector(playerBody, gravityVector);
     if (
       !controls.jumpHeld &&
+      this.state.protectedJumpTime <= 0 &&
       currentNormalVelocity < 0 &&
       this.host.getCurrentTime() >= this.host.getExternalLaunchGraceUntil()
     ) {
@@ -974,9 +1008,7 @@ export class OverworldMovementController {
 
   private startButtStomp(playerBody: Phaser.Physics.Arcade.Body): void {
     this.buttStompState.start(this.host.getCurrentTime(), BUTT_STOMP_FLIP_MS);
-    this.state.jumpBuffered = false;
-    this.state.jumpBufferTime = 0;
-    this.state.coyoteTime = 0;
+    this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearCrateInteractionState();
     this.resetWallMovementState();
@@ -1008,6 +1040,7 @@ export class OverworldMovementController {
     player: Phaser.GameObjects.Rectangle,
     playerBody: Phaser.Physics.Arcade.Body,
     gravityDirection: PlayerGravityDirection = 'down',
+    buffered = false,
   ): boolean {
     const wallJumpDirection = this.wallState.getJumpDirectionFromContact();
     if (wallJumpDirection === 0) {
@@ -1029,9 +1062,9 @@ export class OverworldMovementController {
       playerBody.bottom,
       this.host.getPlayerFacing(),
     );
-    this.state.jumpBuffered = false;
-    this.state.jumpBufferTime = 0;
+    this.clearPendingJump();
     this.state.coyoteTime = 0;
+    this.state.protectedJumpTime = buffered ? FORGIVEN_JUMP_MIN_RISE_MS : 0;
     this.wallState.commitJump(
       wallJumpDirection,
       this.host.getCurrentTime(),

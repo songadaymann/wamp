@@ -370,8 +370,8 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly CRATE_PUSH_SPEED = 78;
   private readonly CRATE_PULL_SPEED = 66;
   private readonly CRATE_INTERACTION_MAX_GAP = 14;
-  private readonly COYOTE_MS = 80;
-  private readonly JUMP_BUFFER_MS = 100;
+  private readonly COYOTE_MS = 110;
+  private readonly JUMP_BUFFER_MS = 120;
   private readonly WALL_JUMP_BUFFER_MS = 240;
   private readonly WALL_CONTACT_GRACE_MS = 140;
   private readonly WALL_SLIDE_MAX_FALL_SPEED = 70;
@@ -6792,12 +6792,17 @@ export class OverworldPlayScene extends Phaser.Scene {
             climbing: movementDebug.climbing,
             jumpBuffered: movementDebug.jumpBuffered,
             jumpBufferMs: movementDebug.jumpBufferMs,
+            wallJumpBufferMs: movementDebug.wallJumpBufferMs,
+            protectedJumpMs: movementDebug.protectedJumpMs,
+            cornerCorrections: movementDebug.cornerCorrections,
+            lastCornerShiftPx: movementDebug.lastCornerShiftPx,
             coyoteMs: movementDebug.coyoteMs,
             wallSliding: movementDebug.wallSliding,
             wallContactSide: movementDebug.wallContactSide,
             wallContactGraceSide: movementDebug.wallContactGraceSide,
             wallContactGraceMs: movementDebug.wallContactGraceMs,
             wallJumpActive: movementDebug.wallJumpActive,
+            wallJumpDirection: movementDebug.wallJumpDirection,
             wallJumpChainActive: movementDebug.wallJumpChainActive,
             wallJumpLockMs: movementDebug.wallJumpLockMs,
             ladderKey: movementDebug.ladderKey,

@@ -113,3 +113,18 @@ describe('movement state controllers', () => {
     expect(state.getContactGraceSide()).toBe(0);
   });
 });
+
+
+describe('wall jump steering compatibility', () => {
+  it('retains the full 240ms neutral/away push and cancels opposite input at 120ms', () => {
+    const state = new OverworldWallMovementStateController(); state.commitJump(-1, 1000, 240);
+    state.cancelLockForOppositeInput(1, 1119, 120); expect(state.getJumpLockUntil()).toBe(1240);
+    state.cancelLockForOppositeInput(0, 1120, 120); expect(state.getJumpLockUntil()).toBe(1240);
+    state.cancelLockForOppositeInput(-1, 1200, 120); expect(state.getJumpLockUntil()).toBe(1240);
+    state.cancelLockForOppositeInput(1, 1120, 120); expect(state.getJumpLockUntil()).toBe(0);
+    expect(state.isJumpActive()).toBe(true); expect(state.getJumpDirection()).toBe(-1);
+    state.reset(); state.commitJump(1, 2000, 240);
+    state.cancelLockForOppositeInput(-1, 2119, 120); expect(state.getJumpLockUntil()).toBe(2240);
+    state.cancelLockForOppositeInput(-1, 2120, 120); expect(state.getJumpLockUntil()).toBe(0);
+  });
+});
