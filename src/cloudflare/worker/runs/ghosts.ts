@@ -13,12 +13,14 @@ import { verifyRoomRunTrace } from './verification';
 
 export async function savePersonalBestGhost(
   env: Env, run: RoomRunRecord, room: RoomSnapshot, body: RunFinishRequestBody,
-  avatarId: string, alreadyVerified: boolean,
+  avatarId: string, alreadyVerified: boolean, reportedElapsedMs: number,
 ): Promise<void> {
   if (!supportsGhostRace(room.goal) || !body.verificationTrace || run.elapsedMs === null) return;
   const trace = body.verificationTrace;
   if (!alreadyVerified) {
-    const result = await verifyRoomRunTrace({ trace, room, elapsedMs: run.elapsedMs, deaths: run.deaths,
+    // The leaderboard keeps its server-time floor; the recording follows the
+    // client's reported simulation clock, as it did before finalization.
+    const result = await verifyRoomRunTrace({ trace, room, elapsedMs: reportedElapsedMs, deaths: run.deaths,
       binding: { verificationNonce: run.verificationNonce ?? null, verificationSnapshotHash: run.verificationSnapshotHash ?? null } });
     if (result.status !== 'passed') return;
   }

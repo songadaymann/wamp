@@ -52,6 +52,18 @@ describe('movement-only ghosts', () => {
   });
 });
 describe('ghost timing', () => {
+  it('aligns movement and finish with the ranked time without changing Hermite geometry', () => {
+    const t = trace();
+    t.goalEvents = [{ atMs: 1000, type: 'complete', actor: 'player', roomId: '1,2',
+      roomX: 1, roomY: 2, x: 100, y: 100, instanceId: null, checkpointIndex: null }];
+    const recording = buildRunGhost(ghost({ elapsedMs: 2000 }), t)!;
+    expect(recording.points.map(point => point.atMs)).toEqual([0, 500, 2000, 2000]);
+    expect(recording.points[0].vx).toBe(50);
+    const playback = new GhostRacePlayback(recording);
+    expect(playback.sample(250).x).toBeCloseTo(12.5);
+    expect(playback.sample(2000).x).toBe(100);
+    expect(buildRunGhost(ghost(), { ...t, traceDurationMs: 0 })).toBeNull();
+  });
   it('smooths between samples, freezes at the end and rewinds on restart', () => {
     const playback = new GhostRacePlayback(ghost());
     expect(playback.sample(125).x).toBeCloseTo(12.5);
