@@ -606,6 +606,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     yield* this.partitionIndex.queryRuntimeSolidsInBounds(bounds, paddingX, paddingY);
   }
 
+  isBodyInSwimmableWater(body: Phaser.Physics.Arcade.Body): boolean {
+    return this.partitionIndex.overlapsSwimmableWater(getArcadeBodyBounds(body));
+  }
+
   private createLiveObjectEntry(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     options: CreateLiveObjectEntryOptions,

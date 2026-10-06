@@ -116,6 +116,8 @@ export interface GameObjectConfig {
   interaction?: ObjectInteraction;
   /** allows the player to climb this object like a ladder */
   climbable?: boolean;
+  /** terrain-layer overlap supplies the existing swimming environment */
+  swimmable?: boolean;
   /** first-level editor grouping used inside the built-in Deco palette */
   decorationPaletteGroup?: DecorationPaletteGroup;
   /** optional second-level grouping for large decoration families */
@@ -298,8 +300,10 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'quicksand',   name: 'Quicksand',   category: 'hazard',      path: 'assets/enemies/quicksand.png',   frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 8,  bodyWidth: 28, bodyHeight: 18, behavior: 'animated', description: 'Viscous sand that drags you down and slows movement.' },
   { id: 'cactus_spike',name: 'Cactus Spike',category: 'hazard',      path: 'assets/enemies/cactus_spike.png',frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  facingDirection: 'left', bodyWidth: 8,  bodyHeight: 7,  bodyOffsetX: 4, bodyOffsetY: 5, previewWidth: 8, previewHeight: 7, previewOffsetX: 4, previewOffsetY: 5, behavior: 'static',   description: 'Single cactus spike. Kills on contact.' },
   { id: 'lava_surface',name: 'Lava Pool',   category: 'hazard',      path: 'assets/deco/lava_surface.png',   frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 8,  bodyWidth: 44, bodyHeight: 22, bodyOffsetX: 2, bodyOffsetY: 24, behavior: 'animated', lightEmission: LAVA_OBJECT_LIGHT_EMISSION, description: 'Animated lava surface. There is no swimming, only death.' },
-  { id: 'water_surface_a', name: 'Water Pool', category: 'hazard',   path: 'assets/deco/water_surface_a.png',frameWidth: 32, frameHeight: 32, frameCount: 8,  fps: 8,  bodyWidth: 28, bodyHeight: 16, bodyOffsetX: 2, bodyOffsetY: 16, behavior: 'animated', description: 'Animated water surface. No swim move exists yet, so it is lethal.' },
-  { id: 'water_surface_b', name: 'Water Ripple', category: 'hazard', path: 'assets/deco/water_surface_b.png',frameWidth: 16, frameHeight: 16, frameCount: 5,  fps: 8,  bodyWidth: 14, bodyHeight: 8,  bodyOffsetX: 1, bodyOffsetY: 8,  behavior: 'animated', description: 'Small water hazard. Touching it is lethal for now.' },
+  { id: 'water_surface_a', name: 'Toxic Water Pool', category: 'hazard', path: 'assets/deco/water_surface_a.png', frameWidth: 32, frameHeight: 32, frameCount: 8, fps: 8, bodyWidth: 28, bodyHeight: 16, bodyOffsetX: 2, bodyOffsetY: 16, behavior: 'animated', description: 'Toxic water. Kills on contact.' },
+  { id: 'water_surface_b', name: 'Toxic Water Ripple', category: 'hazard', path: 'assets/deco/water_surface_b.png', frameWidth: 16, frameHeight: 16, frameCount: 5, fps: 8, bodyWidth: 14, bodyHeight: 8, bodyOffsetX: 1, bodyOffsetY: 8, behavior: 'animated', description: 'Small toxic water hazard. Kills on contact.' },
+  { id: 'swimmable_water_pool', name: 'Water Pool', category: 'interactive', path: 'assets/deco/water_surface_a.png', frameWidth: 32, frameHeight: 32, frameCount: 8, fps: 8, bodyWidth: 32, bodyHeight: 24, bodyOffsetX: 0, bodyOffsetY: 8, behavior: 'animated', swimmable: true, description: 'Swimmable water. Press Jump for a swim stroke. Place on Terrain for swimming.' },
+  { id: 'swimmable_water_ripple', name: 'Water Ripple', category: 'interactive', path: 'assets/deco/water_surface_b.png', frameWidth: 16, frameHeight: 16, frameCount: 5, fps: 8, bodyWidth: 16, bodyHeight: 12, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'animated', swimmable: true, description: 'Small swimmable water. Press Jump for a swim stroke. Place on Terrain for swimming.' },
   { id: 'tornado_sand',name: 'Sand Tornado',category: 'interactive', path: 'assets/enemies/tornado_sand.png',frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 10, bodyWidth: 28, bodyHeight: 40, behavior: 'animated', description: 'Utility tornado. Launches player in air.' },
   { id: 'tornado',     name: 'Tornado',     category: 'interactive', path: 'assets/enemies/tornado.png',     frameWidth: 48, frameHeight: 48, frameCount: 8,  fps: 10, bodyWidth: 28, bodyHeight: 40, behavior: 'animated', description: 'Utility tornado. Launches player in air.' },
 

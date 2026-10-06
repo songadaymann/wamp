@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getObjectById } from '../../../config';
 import {
   getNpcEnvironmentalObjectInteraction,
   resolveNpcRoomBoundaryCorrection,
@@ -6,6 +7,15 @@ import {
 } from './npcEnvironment';
 
 describe('NPC environmental object interactions', () => {
+  it('preserves legacy toxic-water deaths and lets actors use the new water environment', () => {
+    for (const id of ['water_surface_a', 'water_surface_b']) {
+      expect(getNpcEnvironmentalObjectInteraction(getObjectById(id)!)).toBe('lethal');
+    }
+    for (const id of ['swimmable_water_pool', 'swimmable_water_ripple']) {
+      expect(getNpcEnvironmentalObjectInteraction(getObjectById(id)!)).toBe('none');
+    }
+  });
+
   it('separates forces from lethal hazards', () => {
     expect(getNpcEnvironmentalObjectInteraction({
       id: 'tornado',

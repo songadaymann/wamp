@@ -83,6 +83,71 @@ function rectangle(x: number, y: number, width: number, height: number) {
 }
 
 describe('LiveObjectPartitionIndex', () => {
+  it('swims only within the enabled terrain water volume, excluding solids and toxic water', () => {
+    const poolBody = createBody(8, 8, 32, 24);
+    const pool = createLiveObject('swimmable_water_pool', poolBody);
+    const room = createRoom('water', { x: 0, y: 0 }, [pool,
+      createLiveObject('water_surface_a', createBody(100, 8, 28, 16)),
+      createLiveObject('swimmable_water_pool', createBody(200, 8, 32, 24), { layer: 'background' }),
+      createLiveObject('swimmable_water_ripple', createBody(300, 8, 16, 12), { layer: 'foreground' }),
+    ]);
+    const index = createIndex([room]);
+    expect(index.overlapsSwimmableWater(rectangle(10, 10, 14, 14))).toBe(true);
+    expect(index.getRuntimeSolidObjects(room)).toEqual([]);
+    for (const x of [100, 200, 300]) {
+      expect(index.overlapsSwimmableWater(rectangle(x, 10, 14, 14))).toBe(false);
+    }
+    pool.sprite.active = false;
+    expect(index.overlapsSwimmableWater(rectangle(10, 10, 14, 14))).toBe(false);
+    pool.sprite.active = true;
+    poolBody.enable = false;
+    expect(index.overlapsSwimmableWater(rectangle(10, 10, 14, 14))).toBe(false);
+    poolBody.enable = true;
+    expect(index.overlapsSwimmableWater(rectangle(10, 10, 14, 14))).toBe(true);
+  });
+
+  it('does not swim while merely touching an edge, and joins adjacent water without a gap', () => {
+    const pool = createLiveObject('swimmable_water_pool', createBody(32, 32, 32, 24));
+    const ripple = createLiveObject('swimmable_water_ripple', createBody(64, 32, 16, 12));
+    const index = createIndex([createRoom('water', { x: 0, y: 0 }, [pool, ripple])]);
+    for (const bounds of [rectangle(18, 32, 14, 14), rectangle(80, 32, 14, 14),
+      rectangle(32, 18, 14, 14), rectangle(32, 56, 14, 14)]) {
+      expect(index.overlapsSwimmableWater(bounds)).toBe(false);
+    }
+    for (const x of [31.5, 57, 63.5, 65, 79.5]) {
+      expect(index.overlapsSwimmableWater(rectangle(x, 32, 1, 1))).toBe(true);
+    }
+  });
+
+  it('uses water across a room seam and drops unloaded or replaced volumes', () => {
+    const water = createLiveObject('swimmable_water_pool', createBody(630, 8, 32, 24));
+    const room = createRoom('water', { x: 0, y: 0 }, [water]);
+    const rooms = [room];
+    const index = createIndex(rooms);
+    const bounds = rectangle(646, 10, 14, 14);
+    expect(index.overlapsSwimmableWater(bounds)).toBe(true);
+    room.liveObjects = [];
+    expect(index.overlapsSwimmableWater(bounds)).toBe(false);
+    room.liveObjects = [water];
+    expect(index.overlapsSwimmableWater(bounds)).toBe(true);
+    rooms.length = 0;
+    expect(index.overlapsSwimmableWater(bounds)).toBe(false);
+  });
+
+  it('queries spatial bins without scanning distant water bodies each frame', () => {
+    const near = createLiveObject('swimmable_water_pool', createBody(8, 8, 32, 24));
+    const distantBody = createBody(500, 8, 32, 24);
+    const distantRight = vi.fn(() => 532);
+    Object.defineProperty(distantBody, 'right', { get: distantRight });
+    const index = createIndex([createRoom('water', { x: 0, y: 0 }, [near,
+      createLiveObject('swimmable_water_pool', distantBody),
+    ])]);
+    expect(index.overlapsSwimmableWater(rectangle(40, 10, 14, 14))).toBe(false);
+    distantRight.mockClear();
+    expect(index.overlapsSwimmableWater(rectangle(41, 10, 14, 14))).toBe(false);
+    expect(distantRight).not.toHaveBeenCalled();
+  });
+
   it('categorizes in source order, includes behavior-driven police, and keeps the last path target', () => {
     const brick = createLiveObject('brick_box', createBody(8, 8, 16, 16));
     const police = createLiveObject('police_patrolman', createBody(28, 8, 16, 16));
