@@ -36,6 +36,8 @@ interface EnemyLifecycleOptions<TEdgeWall> {
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   getPlayer: () => Phaser.GameObjects.GameObject | null;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
+  getEnemyStompBounceVelocity?: () => number;
+  playEnemyStompImpact?: () => void;
   addScore: (delta: number) => void;
   playEnemyKillFx: (x: number, y: number, roomCoordinates: RoomCoordinates) => void;
   playBounceFx: (
@@ -151,8 +153,8 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
 
     if (liveObject.config.id === SWORDSMAN_AI_OBJECT_ID) {
       if (stomped) {
-        playerBody.setVelocityY(this.options.settings.enemyStompBounceVelocity);
-        this.defeatEnemy(loadedRoom, liveObject);
+        playerBody.setVelocityY(this.getStompBounceVelocity());
+        if (this.defeatEnemy(loadedRoom, liveObject)) this.options.playEnemyStompImpact?.();
         if (this.options.getSwordsmanDefeatMode(liveObject) === 'invincible') {
           this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y, loadedRoom.room.coordinates);
         }
@@ -170,8 +172,8 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       return;
     }
 
-    playerBody.setVelocityY(this.options.settings.enemyStompBounceVelocity);
-    this.defeatEnemy(loadedRoom, liveObject);
+    playerBody.setVelocityY(this.getStompBounceVelocity());
+    if (this.defeatEnemy(loadedRoom, liveObject)) this.options.playEnemyStompImpact?.();
   }
 
   handleNpcContact(
@@ -189,8 +191,9 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       return;
     }
 
-    playerBody.setVelocityY(this.options.settings.enemyStompBounceVelocity);
+    playerBody.setVelocityY(this.getStompBounceVelocity());
     const defeated = this.defeatEnemy(loadedRoom, liveObject);
+    if (defeated) this.options.playEnemyStompImpact?.();
     if (!defeated && liveObject.runtime.npcDefeatMode === 'invincible') {
       this.options.playBounceFx(
         liveObject.sprite.x,
@@ -208,6 +211,10 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       return null;
     }
     return this.defeatEnemy(loadedRoom, liveObject);
+  }
+
+  private getStompBounceVelocity(): number {
+    return this.options.getEnemyStompBounceVelocity?.() ?? this.options.settings.enemyStompBounceVelocity;
   }
 
   private defeatEnemy(

@@ -72,6 +72,7 @@ export interface CourseRunMutationResult {
 
 export interface TickActiveCourseRunOptions {
   delta: number;
+  suspendGoalResolution?: boolean;
   touchesCoursePoint: (point: CourseMarkerPoint) => boolean;
   getPlayerEffectOrigin: () => GoalMarkerPoint | null;
 }
@@ -145,6 +146,7 @@ export function tickActiveCourseRun(
   }
 
   runState.elapsedMs += options.delta;
+  if (options.suspendGoalResolution) return NOOP_MUTATION_RESULT;
   const goal = runState.course.goal;
   if (!goal) {
     return NOOP_MUTATION_RESULT;

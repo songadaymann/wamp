@@ -4,11 +4,11 @@ Delivered a 15-minute Worker monitor using the existing admin email service, dur
 
 Original prompt: Implement the approved WAMP Editor Dock Redesign plan in a clean current-main worktree, verify it in the browser, push the branch, and publish a frontend-only safety Pages preview.
 
-## 2026-10-06 — F147 game feel, local preparation
+## 2026-10-06 — F147 game feel, source accepted; production pending
 
 - [x] Audit the fact-checked scope, fixed-step physics, death/reset/goal owners, presentation and sound asset delivery.
-- [ ] Add bounded kill hitstop, a short death beat with a distinct sound and respawn fade, stronger held-jump stomps, visual jump/land feedback and a minimum fall for landing dust/sound.
-- [ ] Verify timers, counted deaths/checkpoint respawns, Stop/Restart/lifecycle cancellation, PvP exclusions, enemy contacts and held/released stomps on desktop and portrait touch; run full quality with two workers.
+- [x] Add bounded kill hitstop, a short death beat with a distinct sound and respawn fade, stronger held-jump stomps, visual jump/land feedback and a minimum fall for landing dust/sound.
+- [x] Verify timers, counted deaths/checkpoint respawns, Stop/Restart/lifecycle cancellation, PvP exclusions, enemy contacts and held/released stomps on desktop and portrait touch; run full quality with two workers.
 - [ ] After F141 is released and accepted, deliver F147 through exact-source/main checks and guarded release; update the master and continue the overnight goal.
 
 Human authorization continues through 5am Eastern. F147 is prepared in the separate managed `wamp-checkup-game-feel` worktree on `codex/checkup-game-feel-2026-10-06`, based on F141 merge `fd9e1159`. F141 is released and accepted, with closure bookkeeping carried here; master is 48/214. The original source and clean release clone remain isolated. No agents are started, no production fixtures/accounts or messages are written, primary edits remain intact and the first Build Prompt remains unset. Use existing extracted owners and existing Markdown notes.

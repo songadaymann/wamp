@@ -38,4 +38,32 @@ describe('death and fresh-session checkpoint boundaries', () => {
     expect(h.host.clearRespawnCheckpoints.mock.invocationCallOrder[0]).toBeLessThan(h.host.abandonGoalRun.mock.invocationCallOrder[0]);
     expect(h.host.resetGoalRunController).toHaveBeenCalledTimes(1);
   });
+
+  it('counts a death once immediately and delays only the respawn, retaining elapsed time', () => {
+    const h = harness();
+    let pending = false;
+    let finishBeat = () => {};
+    Object.assign(h.host, { isPlayerDeathPending: () => pending,
+      runDeathBeat: (respawn: () => void) => { pending = true; finishBeat = respawn; } });
+    h.controller.handlePlayerDeath('Ouch.'); h.controller.handlePlayerDeath('Second overlapping hazard.');
+    expect(h.run.deaths).toBe(1);
+    expect(h.host.playPlayerFailFx).toHaveBeenCalledTimes(1);
+    expect(h.host.respawnPlayerToCurrentRoom).not.toHaveBeenCalled();
+    h.run.elapsedMs += 180; finishBeat();
+    expect(h.host.respawnPlayerToCurrentRoom).toHaveBeenCalledTimes(1);
+    expect(h.run.elapsedMs).toBe(3180);
+    expect(h.host.restartGoalRunForRoom).not.toHaveBeenCalled();
+  });
+
+  it('holds survival failure and its fresh attempt until the death beat finishes', () => {
+    const h = harness('qualified', true);
+    let finishBeat = () => {};
+    Object.assign(h.host, { runDeathBeat: (respawn: () => void) => { finishBeat = respawn; } });
+    h.controller.handlePlayerDeath('Ouch.');
+    expect(h.host.failGoalRun).not.toHaveBeenCalled();
+    expect(h.host.restartGoalRunForRoom).not.toHaveBeenCalled();
+    finishBeat();
+    expect(h.host.failGoalRun).toHaveBeenCalledTimes(1);
+    expect(h.host.restartGoalRunForRoom).toHaveBeenCalledTimes(1);
+  });
 });

@@ -274,7 +274,7 @@ export class OverworldGoalRunController {
     return this.activateQualifiedRun(this.currentGoalRun, false);
   }
 
-  tick(delta: number): GoalRunMutationResult {
+  tick(delta: number, options: { suspendGoalResolution?: boolean } = {}): GoalRunMutationResult {
     if (
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
@@ -284,6 +284,7 @@ export class OverworldGoalRunController {
     }
 
     this.currentGoalRun.elapsedMs += delta;
+    if (options.suspendGoalResolution) return NOOP_MUTATION_RESULT;
 
     if (
       this.currentGoalRun.goal.type === 'collect_race' &&

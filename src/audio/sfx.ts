@@ -1,3 +1,5 @@
+import { resolveSfxAssetUrl } from './assetUrl';
+
 type CueConfig = {
   path: string;
   volume: number;
@@ -168,9 +170,9 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
     cooldownMs: 90,
   },
   'player-death': {
-    path: 'assets/sfx/goals/game-fail.wav',
+    path: 'assets/sfx/combat/player-death.wav',
     volume: 0.58,
-    playbackRate: 0.92,
+    playbackRate: 1,
     cooldownMs: 120,
   },
   'sword-slash': {
@@ -354,9 +356,7 @@ function resolveAssetUrl(path: string): string {
   const compressedPath = path.endsWith('.wav')
     ? path.replace(/\.wav$/, resolveCompressedSfxExtension())
     : path;
-  const normalizedPath = compressedPath.replace(/^\/+/, '');
-  const baseUrl = new URL(base, window.location.href);
-  return new URL(normalizedPath, baseUrl).toString();
+  return resolveSfxAssetUrl(compressedPath, base, window.location.href);
 }
 
 function resolveCompressedSfxExtension(): '.ogg' | '.m4a' {

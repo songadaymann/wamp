@@ -28,6 +28,8 @@ interface OverworldSessionResetHost {
   recordRoomRushDeath(reason: string): boolean;
   recordPvpSelfDeath(reason: string): boolean;
   playPlayerFailFx(): void;
+  isPlayerDeathPending?(): boolean;
+  runDeathBeat?(respawn: () => void): void;
   respawnPlayerToCurrentRoom(): void;
   clearRespawnCheckpoints?(): void;
   failCourseRun(message: string): void;
@@ -51,6 +53,7 @@ export class OverworldSessionResetController {
   constructor(private readonly host: OverworldSessionResetHost) {}
 
   handlePlayerDeath(reason: string): void {
+    if (this.host.isPlayerDeathPending?.()) return;
     const activeRun = this.host.getCurrentGoalRun();
     const activeCourseRun = this.host.getActiveCourseRun();
     const activeRoomRushRun = this.host.getActiveRoomRushRun();
@@ -69,53 +72,57 @@ export class OverworldSessionResetController {
     this.host.recordGoalRunDeath();
     this.host.recordCourseRunDeath();
     this.host.playPlayerFailFx();
-    this.host.respawnPlayerToCurrentRoom();
+    const afterBeat = () => {
+      this.host.respawnPlayerToCurrentRoom();
 
-    if (activePvpMatch) {
-      const terminal = this.host.recordPvpSelfDeath(reason);
-      if (terminal) {
+      if (activePvpMatch) {
+        const terminal = this.host.recordPvpSelfDeath(reason);
+        if (terminal) {
+          return;
+        }
         return;
       }
-      return;
-    }
 
-    if (activeRoomRushRun) {
-      const terminal = this.host.recordRoomRushDeath(reason);
-      if (terminal) {
+      if (activeRoomRushRun) {
+        const terminal = this.host.recordRoomRushDeath(reason);
+        if (terminal) {
+          return;
+        }
         return;
       }
-      return;
-    }
 
-    if (activeCourseRun?.course.goal?.type === 'survival') {
-      this.host.failCourseRun('Expanded room survival failed.');
-      this.host.showTransientStatus(`${reason} Expanded room run failed.`);
-      return;
-    }
-
-    if (activeRun?.goal.type === 'survival') {
-      const goalRoom = this.host.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
-      this.host.failGoalRun('Survival failed.');
-      if (goalRoom?.goal) {
-        this.resetChallengeStateForRun(activeRun);
-        this.host.restartGoalRunForRoom(goalRoom);
-        this.host.refreshLeaderboardForSelection();
-        this.host.showTransientStatus(`${reason} Survival run restarted.`);
-      }
-      return;
-    }
-
-    if (activeRun?.qualificationState === 'practice') {
-      const goalRoom = this.host.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
-      if (goalRoom?.goal) {
-        this.resetChallengeStateForRun(activeRun);
-        this.host.restartGoalRunForRoom(goalRoom);
-        this.host.refreshLeaderboardForSelection();
+      if (activeCourseRun?.course.goal?.type === 'survival') {
+        this.host.failCourseRun('Expanded room survival failed.');
+        this.host.showTransientStatus(`${reason} Expanded room run failed.`);
         return;
       }
-    }
 
-    this.host.showTransientStatus(reason);
+      if (activeRun?.goal.type === 'survival') {
+        const goalRoom = this.host.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
+        this.host.failGoalRun('Survival failed.');
+        if (goalRoom?.goal) {
+          this.resetChallengeStateForRun(activeRun);
+          this.host.restartGoalRunForRoom(goalRoom);
+          this.host.refreshLeaderboardForSelection();
+          this.host.showTransientStatus(`${reason} Survival run restarted.`);
+        }
+        return;
+      }
+
+      if (activeRun?.qualificationState === 'practice') {
+        const goalRoom = this.host.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
+        if (goalRoom?.goal) {
+          this.resetChallengeStateForRun(activeRun);
+          this.host.restartGoalRunForRoom(goalRoom);
+          this.host.refreshLeaderboardForSelection();
+          return;
+        }
+      }
+
+      this.host.showTransientStatus(reason);
+    };
+    if (this.host.runDeathBeat) this.host.runDeathBeat(afterBeat);
+    else afterBeat();
   }
 
   resetPlaySession(): void {
