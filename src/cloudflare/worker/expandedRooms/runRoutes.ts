@@ -443,6 +443,7 @@ export async function handleExpandedRoomRunFinish(
         auth.user.walletAddress ?? null,
       ),
       elapsedMs: clampedBody.elapsedMs,
+      deaths: clampedBody.deaths,
     }),
     existing.expandedRoomId,
   );

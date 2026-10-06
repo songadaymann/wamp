@@ -1,4 +1,7 @@
+import type { RespawnCheckpointReference } from '../goals/respawnCheckpoints';
+
 export const RANKED_RUN_TRACE_SCHEMA_VERSION = 1;
+export const MAX_RUN_RESPAWN_EVENTS = 256;
 
 export type RankedRunTraceControl = 'moveX' | 'moveY' | 'jump';
 
@@ -33,6 +36,7 @@ export type RankedRunTraceGoalEventType =
   | 'collectible'
   | 'enemy'
   | 'checkpoint'
+  | 'respawn_checkpoint'
   | 'reach_exit'
   | 'finish'
   | 'complete';
@@ -56,6 +60,18 @@ export interface RankedRunTraceDeathEvent {
 }
 export const MAX_RUN_DEATH_LOCATIONS = 50;
 
+export interface RankedRunTraceRespawnEvent extends RespawnCheckpointReference {
+  atMs: number;
+  /** Index of the first breadcrumb after the respawn, not a normal transition. */
+  breadcrumbIndex: number;
+  /** Goal events recorded before this death, excluding same-frame post-respawn touches. */
+  goalEventCount: number;
+  fromRoomX: number;
+  fromRoomY: number;
+  fromX: number;
+  fromY: number;
+}
+
 export interface RankedRunVerificationTrace {
   schemaVersion: number;
   verificationNonce: string;
@@ -66,6 +82,7 @@ export interface RankedRunVerificationTrace {
   roomTransitions: RankedRunTraceRoomTransition[];
   goalEvents: RankedRunTraceGoalEvent[];
   deathEvents?: RankedRunTraceDeathEvent[];
+  respawnEvents?: RankedRunTraceRespawnEvent[];
 }
 
 export function normalizeRankedRunVerificationTrace(
@@ -91,8 +108,9 @@ export function normalizeRankedRunVerificationTrace(
   const breadcrumbs = normalizeBreadcrumbs(candidate.breadcrumbs);
   const roomTransitions = normalizeRoomTransitions(candidate.roomTransitions);
   const goalEvents = normalizeGoalEvents(candidate.goalEvents);
+  const respawnEvents = normalizeRespawnEvents(candidate.respawnEvents);
 
-  if (!inputEvents || !breadcrumbs || !roomTransitions || !goalEvents) {
+  if (!inputEvents || !breadcrumbs || !roomTransitions || !goalEvents || respawnEvents === null) {
     return null;
   }
 
@@ -106,6 +124,7 @@ export function normalizeRankedRunVerificationTrace(
     roomTransitions,
     goalEvents,
     ...(Array.isArray(candidate.deathEvents) ? { deathEvents: normalizeDeathEvents(candidate.deathEvents) } : {}),
+    ...(respawnEvents ? { respawnEvents } : {}),
   };
 }
 
@@ -245,6 +264,7 @@ function normalizeGoalEvents(value: unknown): RankedRunTraceGoalEvent[] | null {
       candidate.type !== 'collectible' &&
       candidate.type !== 'enemy' &&
       candidate.type !== 'checkpoint' &&
+      candidate.type !== 'respawn_checkpoint' &&
       candidate.type !== 'reach_exit' &&
       candidate.type !== 'finish' &&
       candidate.type !== 'complete'
@@ -325,4 +345,31 @@ function normalizeDeathEvents(value: unknown[]): RankedRunTraceDeathEvent[] {
     }
   }
   return events;
+}
+
+function normalizeRespawnEvents(value: unknown): RankedRunTraceRespawnEvent[] | null | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > MAX_RUN_RESPAWN_EVENTS) return null;
+  const normalized: RankedRunTraceRespawnEvent[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') return null;
+    const event = raw as Partial<RankedRunTraceRespawnEvent>;
+    const { atMs, breadcrumbIndex, goalEventCount, fromRoomX, fromRoomY, fromX, fromY } = event;
+    if (![atMs, breadcrumbIndex, goalEventCount, fromRoomX, fromRoomY].every(Number.isSafeInteger)
+      || typeof atMs !== 'number' || atMs < 0
+      || typeof breadcrumbIndex !== 'number' || breadcrumbIndex < 1
+      || typeof goalEventCount !== 'number' || goalEventCount < 0
+      || typeof fromRoomX !== 'number' || typeof fromRoomY !== 'number'
+      || typeof fromX !== 'number' || !Number.isFinite(fromX)
+      || typeof fromY !== 'number' || !Number.isFinite(fromY)) return null;
+    const instanceId = typeof event.instanceId === 'string' && event.instanceId.trim() ? event.instanceId : null;
+    const checkpointIndex = Number.isSafeInteger(event.checkpointIndex) ? event.checkpointIndex ?? null : null;
+    if (event.kind !== 'start' && event.kind !== 'object' && event.kind !== 'goal') return null;
+    if (event.kind === 'object' ? !instanceId || event.checkpointIndex != null
+      : event.kind === 'goal' ? checkpointIndex === null || checkpointIndex < 0 || event.instanceId != null
+        : event.instanceId != null || event.checkpointIndex != null) return null;
+    normalized.push({ atMs, breadcrumbIndex, goalEventCount, fromRoomX, fromRoomY, fromX, fromY,
+      kind: event.kind, instanceId, checkpointIndex });
+  }
+  return normalized;
 }

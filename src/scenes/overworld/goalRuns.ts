@@ -106,6 +106,7 @@ interface OverworldGoalRunControllerOptions {
     category: GameObjectConfig['category']
   ) => number;
   getNowIso?: () => string;
+  onRankedRunPreparing?: (kind: 'room') => void;
   onRankedRunStarted?: (binding: {
     kind: 'room';
     verificationSchemaVersion: number;
@@ -918,6 +919,7 @@ export class OverworldGoalRunController {
 
     runState.submissionState = 'starting';
     runState.submissionMessage = 'Starting ranked run...';
+    this.options.onRankedRunPreparing?.('room');
 
     try {
       const response = await this.options.runRepository.startRun({

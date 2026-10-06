@@ -29,6 +29,7 @@ interface OverworldSessionResetHost {
   recordPvpSelfDeath(reason: string): boolean;
   playPlayerFailFx(): void;
   respawnPlayerToCurrentRoom(): void;
+  clearRespawnCheckpoints?(): void;
   failCourseRun(message: string): void;
   failGoalRun(message: string): void;
   showTransientStatus(message: string): void;
@@ -56,6 +57,12 @@ export class OverworldSessionResetController {
     const activePvpMatch = this.host.hasActivePvpMatch();
     if (activePvpMatch && !this.host.isPvpDamageActive()) {
       return;
+    }
+
+    // These deaths start a fresh run or end survival, so keep its original spawn.
+    if (activeCourseRun?.course.goal?.type === 'survival'
+      || (!activeCourseRun && (activeRun?.goal.type === 'survival' || activeRun?.qualificationState === 'practice'))) {
+      this.host.clearRespawnCheckpoints?.();
     }
 
     this.host.recordRunDeathLocation?.();
@@ -112,6 +119,7 @@ export class OverworldSessionResetController {
   }
 
   resetPlaySession(): void {
+    this.host.clearRespawnCheckpoints?.();
     const activeCourseRun = this.host.getActiveCourseRun();
     const activeRoomRushRun = this.host.getActiveRoomRushRun();
     const singleRoomRunToReset = activeCourseRun || activeRoomRushRun ? null : this.host.getCurrentGoalRun();

@@ -365,6 +365,7 @@ export async function handleRunFinish(
       },
       room: snapshot,
       elapsedMs: clampedBody.elapsedMs,
+      deaths: clampedBody.deaths,
     }),
   );
   const { status: verificationStatus, reason: verificationReason } = verification;

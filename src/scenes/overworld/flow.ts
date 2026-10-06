@@ -89,7 +89,6 @@ interface OverworldSceneFlowHost {
   getActiveCourseRun(): ActiveCourseRunState | null;
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
-  startRemoteCourseRun(runState: ActiveCourseRunState): void;
   emitCourseComposerStateChanged(): void;
   renderHud(): void;
 }
@@ -488,10 +487,6 @@ export class OverworldSceneFlowController {
     });
     this.host.setActiveCourseRun(runState);
     this.preloadCourseCompletionHistory(snapshot, runState);
-
-    if (runState.leaderboardEligible) {
-      this.host.startRemoteCourseRun(runState);
-    }
 
     const startRoom =
       this.host.getCourseStartRoomRef(runState.course, runState.startRoomId) ??

@@ -1,8 +1,10 @@
 import { ROOM_WIDTH, ROOM_HEIGHT, TILE_SIZE } from '../../config/room';
 import type { RoomCoordinates } from '../../persistence/roomModel';
+import type { RespawnCheckpointReference } from '../../goals/respawnCheckpoints';
 import {
   MAX_RUN_DEATH_LOCATIONS,
   type RankedRunTraceDeathEvent,
+  type RankedRunTraceRespawnEvent,
   RANKED_RUN_TRACE_SCHEMA_VERSION,
   type RankedRunTraceBreadcrumb,
   type RankedRunTraceGoalEvent,
@@ -42,6 +44,8 @@ interface ActiveTraceState {
   roomTransitions: RankedRunTraceRoomTransition[];
   goalEvents: RankedRunTraceGoalEvent[];
   deathEvents: RankedRunTraceDeathEvent[];
+  respawnEvents: RankedRunTraceRespawnEvent[];
+  pendingDeath: { frame: RankedRunTraceFrameInput; goalEventCount: number } | null;
   lastBreadcrumbAtMs: number;
   lastRoomCoordinates: RoomCoordinates | null;
   lastHorizontalInput: number | null;
@@ -50,6 +54,17 @@ interface ActiveTraceState {
 
 export class RankedRunTraceRecorder {
   private active: ActiveTraceState | null = null;
+
+  prepare(kind: TraceKind, initialFrame: RankedRunTraceFrameInput | null): void {
+    this.start(kind, { verificationSchemaVersion: RANKED_RUN_TRACE_SCHEMA_VERSION,
+      verificationNonce: '', snapshotHash: '' }, initialFrame);
+  }
+
+  bindPrepared(kind: TraceKind, binding: RankedRunTraceBinding): boolean {
+    if (!this.active || this.active.kind !== kind || this.active.binding.verificationNonce) return false;
+    this.active.binding = { ...binding };
+    return true;
+  }
 
   start(kind: TraceKind, binding: RankedRunTraceBinding, initialFrame: RankedRunTraceFrameInput | null): void {
     this.active = {
@@ -66,6 +81,8 @@ export class RankedRunTraceRecorder {
       roomTransitions: [],
       goalEvents: [],
       deathEvents: [],
+      respawnEvents: [],
+      pendingDeath: null,
       lastBreadcrumbAtMs: 0,
       lastRoomCoordinates: initialFrame ? { ...initialFrame.roomCoordinates } : null,
       lastHorizontalInput: null,
@@ -154,12 +171,31 @@ export class RankedRunTraceRecorder {
   }
 
   recordDeath(frame: RankedRunTraceFrameInput): void {
-    if (!this.active || this.active.deathEvents.length >= MAX_RUN_DEATH_LOCATIONS) return;
+    if (!this.active) return;
+    if (!this.active.breadcrumbs.length) this.recordFrame(0, frame);
+    this.active.pendingDeath = { frame: { ...frame, roomCoordinates: { ...frame.roomCoordinates } },
+      goalEventCount: this.active.goalEvents.length };
+    if (this.active.deathEvents.length >= MAX_RUN_DEATH_LOCATIONS) return;
     this.active.deathEvents.push({ atMs: Math.round(this.active.elapsedMs),
       roomX: frame.roomCoordinates.x, roomY: frame.roomCoordinates.y,
       tileX: Math.max(0, Math.min(ROOM_WIDTH - 1, Math.floor(frame.x / TILE_SIZE))),
       tileY: Math.max(0, Math.min(ROOM_HEIGHT - 1, Math.floor(frame.y / TILE_SIZE))),
     });
+  }
+
+  recordRespawn(frame: RankedRunTraceFrameInput, reference: RespawnCheckpointReference): void {
+    if (!this.active?.pendingDeath) return;
+    const { frame: from, goalEventCount } = this.active.pendingDeath;
+    this.active.pendingDeath = null;
+    const atMs = Math.round(this.active.elapsedMs);
+    this.active.respawnEvents.push({ ...reference, atMs,
+      breadcrumbIndex: this.active.breadcrumbs.length, goalEventCount,
+      fromRoomX: from.roomCoordinates.x, fromRoomY: from.roomCoordinates.y, fromX: from.x, fromY: from.y });
+    this.active.breadcrumbs.push({ atMs, roomX: frame.roomCoordinates.x, roomY: frame.roomCoordinates.y,
+      x: frame.x, y: frame.y, vx: frame.vx, vy: frame.vy, grounded: frame.grounded });
+    this.active.lastBreadcrumbAtMs = this.active.elapsedMs;
+    // A respawn is recorded above; the next normal frame must not invent a room transition.
+    this.active.lastRoomCoordinates = { ...frame.roomCoordinates };
   }
 
   buildTrace(traceDurationMs: number): RankedRunVerificationTrace | null {
@@ -177,6 +213,7 @@ export class RankedRunTraceRecorder {
       roomTransitions: [...this.active.roomTransitions],
       goalEvents: [...this.active.goalEvents],
       deathEvents: [...this.active.deathEvents],
+      ...(this.active.respawnEvents.length ? { respawnEvents: [...this.active.respawnEvents] } : {}),
     };
   }
 

@@ -533,6 +533,7 @@ export async function handleCourseRunFinish(
         auth.user.walletAddress ?? null,
       ),
       elapsedMs: clampedBody.elapsedMs,
+      deaths: clampedBody.deaths,
     }),
   );
   const { status: verificationStatus, reason: verificationReason } = verification;

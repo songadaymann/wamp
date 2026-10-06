@@ -31,6 +31,7 @@ export interface OverworldPlayerEntities {
 
 interface OverworldPlayerLifecycleHost<TLiveObject> {
   scene: Phaser.Scene;
+  getRespawnCheckpointForRoom?(room: RoomSnapshot): { x: number; y: number } | null;
   getActiveCourseSnapshot(): CourseSnapshot | null;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   clearRoomInteractions(
@@ -144,6 +145,12 @@ export class OverworldPlayerLifecycleController<TLiveObject = unknown> {
   }
 
   private getPlayerSpawn(room: RoomSnapshot): { x: number; y: number } {
+    const checkpoint = this.host.getRespawnCheckpointForRoom?.(room);
+    if (checkpoint) {
+      const origin = this.host.getRoomOrigin(room.coordinates);
+      return { x: origin.x + checkpoint.x,
+        y: origin.y + checkpoint.y - this.options.playerBodyAnchorHeight / 2 };
+    }
     const activeCourseSnapshot = this.host.getActiveCourseSnapshot();
     if (activeCourseSnapshot?.startPoint?.roomId === room.id) {
       const origin = this.host.getRoomOrigin(room.coordinates);

@@ -15,6 +15,7 @@ import { getNpcEnvironmentalObjectInteraction } from './npcEnvironment';
 import type { ArcadeObjectBody } from './bodies';
 import type { LoadedRoomObject } from './model';
 import { liveObjectBlocksPlayerMovement } from '../playerCollisionObjects';
+import { RESPAWN_CHECKPOINT_OBJECT_ID } from '../../../goals/respawnCheckpoints';
 
 export interface LiveObjectInteractionCoordinatorOptions<TEdgeWall> {
   scene: Phaser.Scene;
@@ -68,6 +69,10 @@ export interface LiveObjectInteractionCoordinatorOptions<TEdgeWall> {
     player: Phaser.GameObjects.GameObject,
   ) => void;
   handleLockedDoorContact: (
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ) => void;
+  handleRespawnCheckpointContact?: (
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
   ) => void;
@@ -224,7 +229,11 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
             }
             break;
           case 'interactive': {
-            if (isClimbableObjectConfig(liveObject.config)) {
+            if (liveObject.config.id === RESPAWN_CHECKPOINT_OBJECT_ID) {
+              liveObject.interactions.push(this.options.scene.physics.add.overlap(
+                player, liveObject.sprite, () => this.options.handleRespawnCheckpointContact?.(loadedRoom, liveObject),
+              ));
+            } else if (isClimbableObjectConfig(liveObject.config)) {
               const supportZone = liveObject.helpers[0];
               if (supportZone?.body) {
                 liveObject.interactions.push(

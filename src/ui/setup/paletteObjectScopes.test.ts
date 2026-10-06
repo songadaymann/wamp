@@ -5,6 +5,7 @@ const objects = {
   spawn: { id: 'spawn_point', category: 'interactive' },
   collectible: { id: 'coin', category: 'collectible' },
   utility: { id: 'spring', category: 'interactive' },
+  checkpoint: { id: 'checkpoint_flag', category: 'interactive' },
   platform: { id: 'moving_platform', category: 'platform' },
   custom: { id: 'custom_sprite:mine-1', category: 'decoration' },
   enemy: { id: 'slime', category: 'enemy' },
@@ -21,7 +22,7 @@ function included(scope: EditorObjectScope): string[] {
 
 describe('editor object workspace membership', () => {
   it('keeps Stuff to community/mine, collect, and utility objects without spawn', () => {
-    expect(included('stuff')).toEqual(['collectible', 'utility', 'platform', 'custom']);
+    expect(included('stuff')).toEqual(['collectible', 'utility', 'checkpoint', 'platform', 'custom']);
   });
 
   it('separates characters, hazards, and decoration', () => {
