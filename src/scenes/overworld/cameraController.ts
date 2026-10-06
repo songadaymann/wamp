@@ -44,7 +44,7 @@ export class OverworldCameraController {
   private portraitCenterY: number | null = null;
   private readonly followTarget = {
     // Arcade updates the sprite after Scene.update; read X at camera preRender, as before.
-    get x(): number { return this.controller.host.getPlayer()?.x ?? 0; },
+    get x(): number { return this.controller.host.getPlayer()?.x ?? this.controller.followedPlayer?.x ?? 0; },
     get y(): number { return this.controller.portraitCenterY ?? this.controller.getFollowAnchorY(); },
     controller: this,
   };
@@ -203,8 +203,8 @@ export class OverworldCameraController {
     if (this.host.getMode() !== 'play' || this.host.getCameraMode() !== 'follow' || this.isRoomCameraFixed()) return;
     const camera = this.host.scene.cameras.main;
     const player = this.host.getPlayer();
-    if (!player) { this.clearFollowMotion(); return; }
-    if (this.followedPlayer !== player) this.resetFollowAnchor();
+    if (!player) { camera.stopFollow(); this.clearFollowMotion(); return; }
+    if (this.followedPlayer !== player) this.startFollowCamera(camera);
     const body = this.host.getPlayerBody();
     const previousAnchor = this.followMotion.getAnchorY();
     const grounded = this.host.isPlayerGrounded();

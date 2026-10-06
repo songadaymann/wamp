@@ -13,6 +13,7 @@ function harness() {
   let mode: OverworldMode = 'play';
   let cameraMode: CameraMode = 'follow';
   const player = { x: 40, y: 50 };
+  let currentPlayer: typeof player | null = player;
   const body = { y: 40, prevFrame: { y: 40 }, velocity: { x: 0, y: 0 } };
   let grounded = true;
   const camera = {
@@ -34,13 +35,14 @@ function harness() {
     getCurrentRoom: () => room, getWorldWindow: () => null,
     getMode: () => mode, getCameraMode: () => cameraMode,
     setCameraMode: (value) => { cameraMode = value; }, getInspectZoom: () => 2,
-    getPlayer: () => player as never,
+    getPlayer: () => currentPlayer as never,
     getPlayerBody: () => body as never, isPlayerGrounded: () => grounded,
     getRoomOrigin: (coordinates) => ({ x: coordinates.x * ROOM_PX_WIDTH, y: coordinates.y * ROOM_PX_HEIGHT }),
     renderHud: vi.fn(),
   }, { minZoom: 0.5, maxZoom: 4, playRoomFitPadding: 40, followCameraLerp: 0.1,
     mobilePlayCameraTargetY: 0.5, getMobilePortraitPlayCameraTargetY: () => 0.34 });
   return { controller, camera, player, body, add, remove,
+    setPlayer: (value: typeof player | null) => { currentPlayer = value; },
     setGrounded: (value: boolean) => { grounded = value; },
     setRoom: (value: RoomSnapshot | null) => { room = value; },
     setMode: (value: OverworldMode) => { mode = value; },
@@ -178,5 +180,17 @@ describe('room-centered play camera', () => {
     expect(h.camera.setFollowOffset).not.toHaveBeenCalled(); expect(h.camera.setLerp).not.toHaveBeenCalled();
     expect(h.controller.describeFollowMotion()).toEqual({ anchorY: null, leadX: 0 });
     expectCentered(h.camera, fixedRoom());
+  });
+
+  it('retains the last horizontal position during an unloaded-player gap and resumes on the new player', () => {
+    const h = harness(); h.controller.startFollowCamera(); h.player.x = 800;
+    const target = h.camera.startFollow.mock.lastCall![0] as unknown as { x: number; y: number };
+    h.setPlayer(null); expect(target.x).toBe(800); expect(target.y).toBe(50);
+    h.controller.updateFollowPacing(1);
+    expect(h.camera.stopFollow).toHaveBeenCalled();
+    expect(h.controller.describeFollowMotion()).toEqual({ anchorY: null, leadX: 0 });
+    h.setPlayer({ x: 1200, y: 400 }); h.controller.updateFollowPacing(1);
+    expect(h.camera.startFollow).toHaveBeenCalledTimes(2);
+    expect(target.x).toBe(1200); expect(target.y).toBe(400);
   });
 });
