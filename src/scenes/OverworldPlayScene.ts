@@ -652,6 +652,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getUserId: () => getAuthDebugState().authenticated ? getAuthDebugState().user?.id ?? null : null,
       getRoomOrigin: coordinates => this.getRoomOrigin(coordinates),
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+      showStatus: message => this.showTransientStatus(message),
     });
     const guestRuns = this.guestRunPlaybackController = new GuestRunPlaybackController({
       getCurrentRun: kind => kind === 'room' ? this.goalRunController?.getCurrentRun() ?? null : this.activeCourseRun,
@@ -5963,6 +5964,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     }
 
     await this.flowController.restartCurrentRun();
+    void this.ghostRaceController.refreshAfterRestart();
   }
 
   returnToWorld(): void {
