@@ -5,6 +5,7 @@ import {
   type MultiplayerModeId,
 } from '../../multiplayer/model';
 import { isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/profileEvents';
+import type { GhostRaceInfo } from './ghostRace';
 
 interface OverworldHudRuntimeConfig {
   onShareRoom: () => void | Promise<void>;
@@ -263,6 +264,9 @@ export class OverworldHudBridge {
   private readonly playersOnlinePopoverEmptyEl: HTMLElement | null;
   private readonly playersOnlinePopoverListEl: HTMLElement | null;
   private readonly saveStatusEl: HTMLElement | null;
+  private readonly ghostRaceEl: HTMLElement | null;
+  private readonly ghostRaceNameEl: HTMLElement | null;
+  private readonly ghostRaceTimeEl: HTMLElement | null;
   private readonly fitButton: HTMLElement | null;
   private readonly bottomBarZoomEl: HTMLElement | null;
   private readonly goalPanelEl: HTMLElement | null;
@@ -516,6 +520,9 @@ export class OverworldHudBridge {
     this.playersOnlinePopoverEmptyEl = this.doc.getElementById('world-online-popover-empty');
     this.playersOnlinePopoverListEl = this.doc.getElementById('world-online-popover-list');
     this.saveStatusEl = this.doc.getElementById('room-save-status');
+    this.ghostRaceEl = this.doc.getElementById('world-ghost-race');
+    this.ghostRaceNameEl = this.doc.getElementById('world-ghost-race-name');
+    this.ghostRaceTimeEl = this.doc.getElementById('world-ghost-race-time');
     this.fitButton = this.doc.getElementById('btn-fit-screen');
     this.bottomBarZoomEl = this.doc.getElementById('zoom-level');
     this.goalPanelEl = this.doc.getElementById('world-goal-panel');
@@ -669,7 +676,16 @@ export class OverworldHudBridge {
     this.renderSignPanel(viewModel);
   }
 
+  setGhostRaceInfo(info: GhostRaceInfo | null): void {
+    if (this.destroyed) return;
+    this.setText(this.ghostRaceNameEl, info?.name ?? '');
+    this.setText(this.ghostRaceTimeEl, info ? `${(info.elapsedMs / 1000).toFixed(2)}s` : '');
+    this.setTitle(this.ghostRaceEl, info ? `${info.name} · ${(info.elapsedMs / 1000).toFixed(2)}s` : '');
+    this.ghostRaceEl?.classList.toggle('hidden', !info);
+  }
+
   destroy(): void {
+    this.setGhostRaceInfo(null);
     this.destroyed = true;
     this.playersOnlineWrapEl?.removeEventListener('pointerenter', this.handlePlayersOnlinePointerEnter);
     this.playersOnlineWrapEl?.removeEventListener('pointerleave', this.handlePlayersOnlinePointerLeave);

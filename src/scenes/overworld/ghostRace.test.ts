@@ -31,30 +31,39 @@ function fixture() {
   room.goal = { type: 'reach_exit', exit: { x: 100, y: 100 }, timeLimitMs: null };
   const run = { roomId: '1,2', roomCoordinates: { x: 1, y: 2 }, roomVersion: 2, goal: room.goal,
     qualificationState: 'qualified', elapsedMs: 0, deaths: 0, result: 'active' } as GoalRunState;
-  const status = vi.fn();
+  const status = vi.fn(), raceInfo = vi.fn();
   const controller = new OverworldGhostRaceController({ scene, getRun: () => run, getMode: () => mode,
-    getUserId: () => user, getRoomOrigin: () => ({ x: 640, y: 704 }), onDisplayObjectsChanged: vi.fn(), showStatus: status });
+    getUserId: () => user, getRoomOrigin: () => ({ x: 640, y: 704 }), onDisplayObjectsChanged: vi.fn(),
+    onRaceInfoChanged: raceInfo, showStatus: status });
   controllers.add(controller);
-  return { controller, sprite, physics, run, room, status, setUser: (value: string | null) => { user = value; }, stop: () => { mode = 'browse'; } };
+  return { controller, sprite, physics, run, room, status, raceInfo, scene,
+    setUser: (value: string | null) => { user = value; }, stop: () => { mode = 'browse'; } };
 }
 afterEach(() => { for (const controller of controllers) controller.clear(); controllers.clear(); vi.unstubAllGlobals(); });
 describe('independent race presentation', () => {
   it('shares the run timer through death and restart, while accepting a matching equivalent-version ghost', async () => {
     const f = fixture(); f.controller.select(ghost, 'top', f.room); await Promise.resolve(); f.controller.update();
     expect(f.controller.getDebugSnapshot()).toMatchObject({ choice: 'top', visible: true, hasPhysicsBody: false });
+    expect(f.raceInfo).toHaveBeenLastCalledWith({ name: '#1 Leader', elapsedMs: 1000 });
+    expect(f.scene.add.text).not.toHaveBeenCalled();
     f.run.elapsedMs = 500; f.run.deaths++; f.controller.update();
     expect(f.controller.getDebugSnapshot().position?.x).toBe(690);
     f.run.elapsedMs = 0; f.controller.update();
     expect(f.controller.getDebugSnapshot().position?.x).toBe(640);
     expect(f.physics.add.sprite).not.toHaveBeenCalled();
+    expect(f.raceInfo).toHaveBeenCalledTimes(1);
   });
   it('clears on Stop or account changes, and cancels pending avatar creation', async () => {
     const f = fixture(); f.controller.select(ghost, 'top', f.room); f.controller.clear(); await Promise.resolve();
     expect(f.sprite.setPosition).not.toHaveBeenCalled();
-    f.controller.select(ghost, 'personal', f.room); await Promise.resolve(); f.setUser('different'); f.controller.update();
+    f.controller.select(ghost, 'personal', f.room); await Promise.resolve(); f.controller.update();
+    expect(f.raceInfo).toHaveBeenLastCalledWith({ name: 'Leader', elapsedMs: 1000 });
+    f.setUser('different'); f.controller.update();
     expect(f.controller.getDebugSnapshot().choice).toBe('off');
-    f.controller.select(ghost, 'top', f.room); await Promise.resolve(); f.stop(); f.controller.update();
+    expect(f.raceInfo).toHaveBeenLastCalledWith(null);
+    f.controller.select(ghost, 'top', f.room); await Promise.resolve(); f.controller.update(); f.stop(); f.controller.update();
     expect(f.controller.getDebugSnapshot().visible).toBe(false);
+    expect(f.raceInfo).toHaveBeenLastCalledWith(null);
   });
   it('uses the newly verified guest best on the next Restart', async () => {
     const f = fixture(), best = { ...ghost, attemptId: 'new-best', roomVersion: 2, elapsedMs: 800 };
@@ -62,6 +71,8 @@ describe('independent race presentation', () => {
     f.controller.select(ghost, 'personal', f.room); await Promise.resolve();
     await f.controller.refreshAfterRestart(); await Promise.resolve();
     expect(f.controller.getDebugSnapshot()).toMatchObject({ attemptId: 'new-best', elapsedMs: 800 });
+    f.controller.update();
+    expect(f.raceInfo).toHaveBeenLastCalledWith({ name: 'Leader', elapsedMs: 800 });
   });
   it('reloads account bests without stale cache and ignores a response after Stop', async () => {
     const f = fixture(); f.setUser('viewer');
@@ -80,14 +91,16 @@ describe('independent race presentation', () => {
   });
   it('explains refresh failures and clears a recording that becomes unavailable', async () => {
     const f = fixture(); f.setUser('viewer');
-    f.controller.select(ghost, 'top', f.room); await Promise.resolve();
+    f.controller.select(ghost, 'top', f.room); await Promise.resolve(); f.controller.update();
     vi.stubGlobal('fetch', vi.fn(async () => { throw Error('offline'); }));
     await f.controller.refreshAfterRestart();
     expect(f.controller.getDebugSnapshot().attemptId).toBe('top');
+    expect(f.raceInfo).toHaveBeenLastCalledWith({ name: '#1 Leader', elapsedMs: 1000 });
     expect(f.status).toHaveBeenCalledWith('Ghost could not refresh. Racing the previous recording.');
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ roomId: '1,2', roomVersion: 2, top: { ghost: null } })));
     await f.controller.refreshAfterRestart();
     expect(f.controller.getDebugSnapshot()).toMatchObject({ choice: 'top', attemptId: null, visible: false });
+    expect(f.raceInfo).toHaveBeenLastCalledWith(null);
     expect(f.status).toHaveBeenCalledWith('Ghost recording unavailable. Playing on your own.');
     f.controller.clear();
   });

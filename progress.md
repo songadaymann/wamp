@@ -1,3 +1,20 @@
+## 2026-10-07 — Ghost race name/time in the bottom bar
+
+Original prompt: "Idea for racing ghosts: the label on the ghost is distracting. can we put the person's name and their time at the bottom, the very bottom, where settings etc is."
+
+Canonical local branch: `codex/ghost-race-footer-2026-10-07`, based on delivered `d1210e01` plus F143 delivery notes. Keep the primary checkout's 25 unrelated dirty entries untouched. This narrow UI change is for local review; the prior F143 publication is complete.
+
+- [x] Remove the race ghost's Phaser text and publish metadata changes through the existing HUD bridge. Scene orchestration changes by one callback only; playback and physics stay owned by the existing controller.
+- [x] Place name/time immediately beside Settings in the bottom bar; keep the time visible when long names truncate. Place the same footer at the very bottom of the portrait phone control panel.
+- [x] Verify ghost lifecycle and UI contracts, lint/type/build, native desktop/phone movement, Restart/Stop/solo, and inspected official-client screenshots.
+- [x] Record the reviewable local result and preservation proof. F150 remains next on the larger checkup list.
+
+Evidence: `/tmp/wamp-ghost-footer-2026-10-07/`. Existing Vite 3001 uses the remote API and 3040 remains the local traversal demo; preserve both.
+
+Validation: four focused files / 31 tests pass, including replacement best metadata, Stop/account cleanup, missing recordings, and no Phaser text creation. Full ESLint, TypeScript, production build, 928-ID / 215-required-ID DOM contract, and whitespace checks pass. The unmodified installed web-game client reaches actual racing gameplay; its screenshot/state are inspected with no browser errors. Native desktop 1280x800, narrow desktop 820x650, portrait phone 390x844, and landscape phone 844x390 all compare footer name/time against the actual remote API recording, verify bottom placement, move and jump through native inputs, Restart, Stop, and choose solo. All four pass with zero errors and healthy graphics. Inspected full screenshots show the unlabelled race sprite, the footer beside Settings, the portrait footer below the touch controls, and cleared metadata after Stop.
+
+Native probe notes: the first jump probe sent a zero-duration key press between headless frames; a subsequent readiness probe referenced a nonexistent `player.grounded` debug property. The runner now waits for the existing coyote-time signal and holds the real input until a rendered frame consumes it. No gameplay code changed to accommodate those harness failures. The primary HEAD/status/staged/unstaged bytes match the preservation snapshot. This UI candidate remains local; production is still the delivered F143 release.
+
 ## 2026-10-07 — F143 traversal pack delivered
 
 Jonathan accepted app `77782065` and authorized publication. [PR #79](https://github.com/songadaymann/wamp/pull/79) merges authorization `18a6f414` as `d1210e01`, preserving the accepted application and existing camera/ghost behavior.

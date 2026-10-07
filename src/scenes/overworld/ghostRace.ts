@@ -8,6 +8,11 @@ import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import type { GoalRunState } from './goalRuns';
 
+export interface GhostRaceInfo {
+  name: string;
+  elapsedMs: number;
+}
+
 interface GhostRaceOptions {
   scene: Phaser.Scene;
   getRun(): GoalRunState | null;
@@ -15,6 +20,7 @@ interface GhostRaceOptions {
   getUserId(): string | null;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   onDisplayObjectsChanged(): void;
+  onRaceInfoChanged(info: GhostRaceInfo | null): void;
   showStatus?: (message: string) => void;
 }
 /** One presentation-only sprite. It never enters Arcade, presence, combat or objective collections. */
@@ -27,7 +33,7 @@ export class OverworldGhostRaceController {
   private identity: string | null = null;
   private generation = 0;
   private sprite: Phaser.GameObjects.Sprite | null = null;
-  private label: Phaser.GameObjects.Text | null = null;
+  private footerGhost: RunGhost | null = null;
   private pack: ResolvedPlayerAvatarPack | null = null;
   private position: { x: number; y: number; atMs: number } | null = null;
   private readonly guestCandidates = new WeakMap<object, RunGhost>();
@@ -46,13 +52,13 @@ export class OverworldGhostRaceController {
     else void this.refreshRecording();
   }
   private setRecording(ghost: RunGhost | null): void {
-    const changed = Boolean(this.sprite || this.label);
-    this.generation++; this.sprite?.destroy(); this.label?.destroy();
-    this.sprite = null; this.label = null; this.pack = null; this.position = null;
+    const changed = Boolean(this.sprite);
+    this.generation++; this.sprite?.destroy();
+    this.sprite = null; this.pack = null; this.position = null;
+    this.updateRaceInfo(null);
     this.playback = ghost ? new GhostRacePlayback(ghost) : null;
     if (changed) this.options.onDisplayObjectsChanged();
     if (!ghost) return;
-    const choice = this.choice;
     const generation = this.generation;
     void ensureSceneAvatarPackLoaded(this.options.scene, ghost.avatarId).then(pack => {
       if (generation !== this.generation || !this.playback) return;
@@ -60,10 +66,6 @@ export class OverworldGhostRaceController {
       this.sprite = this.options.scene.add.sprite(0, 0, pack.idleTextureKey, pack.idleFrame)
         .setOrigin(0.5, 1).setAlpha(0.42).setTint(0x70e5ff).setDepth(24).setVisible(false);
       this.sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-      this.label = this.options.scene.add.text(0, 0,
-        `${choice === 'top' ? '#1 ' + ghost.displayName : 'Your best'} · ${(ghost.elapsedMs / 1000).toFixed(2)}s`,
-        { fontFamily: 'Courier New', fontSize: '11px', color: '#70e5ff', backgroundColor: '#050505',
-          padding: { x: 4, y: 2 } }).setOrigin(0.5, 1).setDepth(25).setVisible(false);
       this.options.onDisplayObjectsChanged();
     }).catch(() => { if (generation === this.generation) this.clear(); });
   }
@@ -72,20 +74,28 @@ export class OverworldGhostRaceController {
     if (this.options.getMode() !== 'play' || this.identity !== this.options.getUserId()) { this.clear(); return; }
     const visible = Boolean(run && ghost && run.roomId === ghost.roomId && run.roomVersion === this.targetVersion
       && run.qualificationState === 'qualified');
-    this.sprite?.setVisible(visible); this.label?.setVisible(visible);
+    this.sprite?.setVisible(visible);
+    this.updateRaceInfo(visible && this.sprite && ghost ? ghost : null);
     if (!visible || !run || !this.playback) { this.position = null; return; }
     const p = this.playback.sample(Math.min(run.elapsedMs, this.playback.ghost.elapsedMs));
     const origin = this.options.getRoomOrigin({ x: p.roomX, y: p.roomY });
     const x = origin.x + p.x, y = origin.y + p.y;
     this.position = { x, y, atMs: Math.round(run.elapsedMs) };
     this.sprite?.setPosition(x, y);
-    this.label?.setPosition(x, y - 30);
     if (this.sprite && this.pack) {
       if (Math.abs(p.vx) > 1) this.sprite.setFlipX(p.vx < 0);
       const state = p.grounded ? (Math.abs(p.vx) > 5 ? 'run' : 'idle') : (p.vy < 0 ? 'jump-rise' : 'jump-fall');
       const animation = this.pack.animationKeys[state];
       if (this.sprite.anims.currentAnim?.key !== animation) this.sprite.play(animation, true);
     }
+  }
+  private updateRaceInfo(ghost: RunGhost | null): void {
+    if (this.footerGhost === ghost) return;
+    this.footerGhost = ghost;
+    this.options.onRaceInfoChanged(ghost ? {
+      name: `${this.choice === 'top' ? '#1 ' : ''}${ghost.displayName}`,
+      elapsedMs: ghost.elapsedMs,
+    } : null);
   }
   captureGuest(run: GoalRunState | null, trace: RankedRunVerificationTrace, avatarId: string): void {
     if (!run || this.options.getUserId() || !supportsGhostRace(run.goal)) return;
@@ -128,11 +138,12 @@ export class OverworldGhostRaceController {
     }
   }
   clear(): void {
-    const changed = Boolean(this.sprite || this.label);
+    const changed = Boolean(this.sprite);
     this.refreshRequest?.abort(); this.refreshRequest = null;
     this.unsubscribe?.(); this.unsubscribe = null; this.targetRoom = null;
-    this.generation++; this.sprite?.destroy(); this.label?.destroy();
-    this.sprite = null; this.label = null; this.pack = null; this.position = null;
+    this.generation++; this.sprite?.destroy();
+    this.sprite = null; this.pack = null; this.position = null;
+    this.updateRaceInfo(null);
     this.playback = null; this.choice = 'off'; this.identity = this.options.getUserId();
     if (changed) this.options.onDisplayObjectsChanged();
   }
