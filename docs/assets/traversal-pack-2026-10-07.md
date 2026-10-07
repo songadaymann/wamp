@@ -29,3 +29,7 @@ Original generated sources on this machine:
 - `/Users/jonathanmann/.codex/generated_images/01a10381-8f4c-7c51-b777-38e797e73bc5/exec-3f515bd9-f0f0-4838-bbe3-0a25a2060345.png`
 
 The native ordinary/expanded editor and desktop/portrait gameplay screenshots were inspected. Accepted local screenshots and the preparation script are retained under `/tmp/wamp-f143-2026-10-07/`; the final prepared PNGs above are the production inputs.
+
+## Verified production delivery
+
+PR #79 / merge `d1210e01` delivers this exact artwork through immutable renderer origin `https://5893c1dd.wampland.pages.dev`, active map `production-2026-10-07-traversal-020c7c1d`, matching catalog `authoring-catalog-v1:020c7c1d1777764e`, API `30732882` and canonical Pages `37ca7e04`. All four prepared PNGs match the custom-domain and immutable final release bytes. Complete 994-tile/681-room readiness, all 974 nonempty object keys and public pixel/gutter/parent parity pass before frontend publication. Published-frontend desktop/portrait native gameplay is inspected using explicitly isolated local API fixtures; no production fixture rooms are created.
