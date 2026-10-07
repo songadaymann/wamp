@@ -790,3 +790,79 @@ describe('actual Arcade corner correction', () => {
     h.world.destroy();
   });
 });
+
+describe('traversal jumps and springs through the movement owner', () => {
+  const enablePickup = (h: ReturnType<typeof createHarness>) => Object.assign(h.body, { enable: true });
+  const pressJump = (h: ReturnType<typeof createHarness>) => {
+    h.cursors.space.justDown = true; h.cursors.space.isDown = true;
+    h.controller.updateMovement(16, false);
+    h.cursors.space.justDown = false;
+  };
+
+  it('takes a grounded feather through the normal jump, spends it once in midair, and clears both buffers', () => {
+    const h = createHarness(); enablePickup(h); h.body.blocked.down = true;
+    expect(h.controller.grantAirJump()).toBe(true); expect(h.controller.grantAirJump()).toBe(false);
+    pressJump(h); expect(h.body.velocity.y).toBe(-220);
+    expect(h.controller.getDebugSnapshot().airJumpAvailable).toBe(true);
+    h.body.blocked.down = false; h.body.velocity.y = 40; pressJump(h);
+    expect(h.body.velocity.y).toBe(-220);
+    expect(h.controller.getDebugSnapshot()).toMatchObject({ airJumpAvailable: false, jumpBufferMs: 0, wallJumpBufferMs: 0 });
+    h.body.velocity.y = 60; pressJump(h); expect(h.body.velocity.y).toBe(60);
+  });
+
+  it.each(['down', 'up', 'left', 'right'] as const)('restarts the rise against %s gravity and preserves tangent velocity', direction => {
+    const environment = { inWater: false, onIce: false, onSticky: false, conveyorX: 0 as const, windX: 0 as const,
+      gravityDirection: direction, onBounce: false, onDamage: false };
+    const h = createHarness(environment); enablePickup(h); h.cursors.right.isDown = direction === 'down';
+    expect(h.controller.grantAirJump()).toBe(true); pressJump(h);
+    expect(getBodyVelocityAlongVector(h.body as never, getGravityVector(direction))).toBe(-220);
+    expect(h.controller.getDebugSnapshot().airJumpAvailable).toBe(false);
+    expect(h.controller.grantAirJump()).toBe(true); h.body.setVelocity(0, 100); pressJump(h);
+    expect(getBodyVelocityAlongVector(h.body as never, getGravityVector(direction))).toBe(-220);
+  });
+
+  it('prioritizes a coyote jump and keeps the feather for a later jump', () => {
+    const h = createHarness(); enablePickup(h); h.seam.state.coyoteTime = 80;
+    h.controller.grantAirJump(); pressJump(h);
+    expect(h.controller.getDebugSnapshot().airJumpAvailable).toBe(true);
+    h.body.velocity.y = 80; pressJump(h);
+    expect(h.controller.getDebugSnapshot().airJumpAvailable).toBe(false);
+  });
+
+  it('clears the charge on landing, wall attachment and every play reset', () => {
+    const h = createHarness(); enablePickup(h);
+    h.controller.grantAirJump(); h.body.blocked.down = true; h.controller.updateMovement(16, false);
+    expect(h.controller.getDebugSnapshot().airJumpAvailable).toBe(false);
+    h.body.blocked.down = false; h.controller.updateMovement(16, false); h.controller.grantAirJump();
+    h.body.blocked.right = true; h.body.velocity.y = 140; h.cursors.right.isDown = true;
+    h.controller.updateMovement(16, false);
+    expect(h.controller.getDebugSnapshot().airJumpAvailable).toBe(false);
+    h.body.blocked.right = false; h.cursors.right.isDown = false; h.controller.updateMovement(16, false);
+    for (const method of ['reset', 'handleNoPlayerRuntime', 'handlePlayerCreated', 'handlePlayerDestroyed', 'handleRespawnReset', 'resetTransientPlayState'] as const) {
+      h.controller.grantAirJump(); h.controller.launchFromSpring(300, -300, 180); h.controller[method]();
+      expect(h.controller.getDebugSnapshot()).toMatchObject({ airJumpAvailable: false, springInputLockMs: 0 });
+    }
+  });
+
+  it('does not replay the consumed air-jump input when a wall arrives next frame', () => {
+    const h = createHarness(); enablePickup(h); h.controller.grantAirJump(); pressJump(h);
+    h.body.velocity.y = 100; h.body.blocked.right = true; h.cursors.right.isDown = true;
+    h.controller.updateMovement(16, false);
+    expect(h.body.velocity.y).toBe(70);
+    expect(h.controller.getDebugSnapshot().wallJumpActive).toBe(false);
+  });
+
+  it('preserves a spring launch against opposing input, then restores steering and cancels on a wall', () => {
+    const h = createHarness(); h.cursors.left.isDown = true;
+    h.controller.launchFromSpring(350, -300, 180); h.controller.updateMovement(16, false);
+    expect(h.body.velocity).toEqual({ x: 350, y: -300 });
+    h.setNow(1181); h.controller.updateMovement(16, false); expect(h.body.velocity.x).toBe(-120);
+    h.controller.launchFromSpring(350, -300, 180); h.body.blocked.right = true;
+    h.controller.updateMovement(16, false); expect(h.body.velocity.x).toBe(-120);
+  });
+
+  it('lets the feather interrupt a butt stomp without losing its jump', () => {
+    const h = createHarness(); enablePickup(h); h.controller.grantAirJump(); h.seam.startButtStomp(h.body);
+    pressJump(h); expect(h.controller.isButtStomping()).toBe(false); expect(h.body.velocity.y).toBe(-220);
+  });
+});

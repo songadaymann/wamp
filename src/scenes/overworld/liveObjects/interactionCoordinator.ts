@@ -68,6 +68,7 @@ export interface LiveObjectInteractionCoordinatorOptions<TEdgeWall> {
     liveObject: LoadedRoomObject,
     player: Phaser.GameObjects.GameObject,
   ) => void;
+  addJumpFeatherInteraction?: (loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>, liveObject: LoadedRoomObject, player: Phaser.GameObjects.GameObject) => void;
   handleLockedDoorContact: (
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
     liveObject: LoadedRoomObject,
@@ -248,7 +249,9 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
                   ),
                 );
               }
-            } else if (liveObject.config.id === 'bounce_pad') {
+            } else if (liveObject.config.id === 'double_jump_feather') {
+              this.options.addJumpFeatherInteraction?.(loadedRoom, liveObject, player);
+            } else if (liveObject.config.behavior === 'bounce') {
               this.options.addBouncePadInteraction(loadedRoom, liveObject, player);
             } else if (
               liveObject.config.id === 'tornado' ||

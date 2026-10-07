@@ -60,6 +60,7 @@ import { isAnimationSafelyPlayable } from './liveObjects/animationReadiness';
 import { collectLiveObject as collectLiveObjectWithFx } from './liveObjects/collection';
 import { LiveObjectTriggerController } from './liveObjects/triggerController';
 import { LiveObjectHazardController } from './liveObjects/hazardController';
+import { LiveObjectJumpFeatherController } from './liveObjects/jumpFeather';
 import { LiveObjectEnemyLifecycleController } from './liveObjects/enemyLifecycle';
 import { LiveObjectSwordsmanController } from './liveObjects/swordsmanController';
 import {
@@ -169,6 +170,9 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   tryConsumeHeldKey: () => boolean;
   touchQuicksand: () => void;
   grantExternalLaunchGrace: (durationMs: number) => void;
+  getPlayerGravityDirection?: () => PlayerGravityDirection;
+  launchPlayerFromSpring?: (x: number, y: number, durationMs: number) => void;
+  grantPlayerAirJump?: () => boolean;
   showTransientStatus: (message: string) => void;
   handlePlayerDeath: (reason: string) => void;
   onEnemyDefeated: (event: {
@@ -249,6 +253,7 @@ const GROUND_ENEMY_EDGE_SAFE_SPECIAL_TILE_KINDS = new Set<SpecialTileKind>([
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly triggerController: LiveObjectTriggerController<TEdgeWall>;
   private readonly hazardController: LiveObjectHazardController<TEdgeWall>;
+  private readonly jumpFeatherController: LiveObjectJumpFeatherController;
   private readonly swordsmanController: LiveObjectSwordsmanController<TEdgeWall>;
   private readonly npcController: LiveObjectNpcController<TEdgeWall>;
   private readonly enemyLifecycleController: LiveObjectEnemyLifecycleController<TEdgeWall>;
@@ -308,6 +313,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       getPlayer: this.options.getPlayer,
       getPlayerBody: this.options.getPlayerBody,
       grantExternalLaunchGrace: this.options.grantExternalLaunchGrace,
+      getPlayerGravityDirection: this.options.getPlayerGravityDirection,
+      launchPlayerFromSpring: this.options.launchPlayerFromSpring,
       touchQuicksand: this.options.touchQuicksand,
       handlePlayerDeath: this.options.handlePlayerDeath,
       playBounceFx: this.options.playBounceFx,
@@ -323,6 +330,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       handleNpcHazardContact: (loadedRoom, npc) => {
         this.enemyLifecycleController.defeatNpc(loadedRoom, npc);
       },
+    });
+    this.jumpFeatherController = new LiveObjectJumpFeatherController({
+      scene: this.options.scene,
+      getCurrentTime: this.options.getCurrentTime,
+      grantAirJump: () => this.options.grantPlayerAirJump?.() ?? false,
+      showTransientStatus: this.options.showTransientStatus,
+      playPickupFx: (object, coordinates) => this.options.playBounceFx(object.sprite.x, object.sprite.y, coordinates, 'collect-gem'),
     });
     this.npcController = new LiveObjectNpcController({
       scene: this.options.scene,
@@ -425,6 +439,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.triggerController.maybeTriggerBlockSwitch(loadedRoom, liveObject),
       addBouncePadInteraction: (loadedRoom, liveObject, player) =>
         this.hazardController.addBouncePadInteraction(loadedRoom, liveObject, player),
+      addJumpFeatherInteraction: (room, object, player) => this.jumpFeatherController.addInteraction(object, player, room.room.coordinates),
       handleLockedDoorContact: (loadedRoom, liveObject) =>
         this.triggerController.handleLockedDoorContact(loadedRoom, liveObject),
       handleRespawnCheckpointContact: (loadedRoom, liveObject) => {
@@ -908,6 +923,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               break;
             case 'bouncePad':
               this.hazardController.updateBouncePadObject(liveObject);
+              break;
+            case 'jumpFeather':
+              this.jumpFeatherController.update(liveObject);
               break;
             case 'movingPlatform':
               this.updateMovingPlatformObject(rooms, liveObject, delta);

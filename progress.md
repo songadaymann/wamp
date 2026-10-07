@@ -1,12 +1,52 @@
-## 2026-10-07 — Accepted running-avatar correction, publication in progress
+## 2026-10-07 — F143 accepted; production release authorized
+
+Jonathan: "that is coooool! let's deploy! what is next?" The tested local source `77782065652b754659f73e607af4c71d90a41dda` is accepted. Complete push/PR/merge, matching immutable map imagery, guarded coordinated API/renderer/Pages publication and targeted live acceptance. Preserve the primary checkout and delivered camera/ghost behavior. Do not start F150 implementation in this release.
+
+- [x] Confirm the accepted clean candidate, unchanged current application main `2d808784`, existing release clone and primary preservation snapshot.
+- [ ] Push the accepted candidate and authorization notes; pass exact-source quality and preview checks.
+- [ ] Prepare an immutable asset origin, renderer and complete published leaf/ancestor rebuild; verify object and pixel parity.
+- [ ] Merge, validate clean literal main matching origin/main and complete the guarded coordinated release.
+- [ ] Verify custom-domain runtime/art/catalog/map alerts and desktop/touch traversal; check F143 only after successful live acceptance.
+- [ ] Save final delivery and next item: F150 optional hearts/healing, then F155 boss mode and F144 Lost Song hunt.
+
+Release evidence: `/tmp/wamp-f143-release-2026-10-07/`. New map asset contract is `authoring-catalog-v1:020c7c1d1777764e`; the previous active map must remain usable while its successor is building. No D1 schema migration or PartyKit change is needed.
+
+## 2026-10-07 — F143 traversal pack, complete locally
+
+Original prompt: "ok yeah that’s pretty cool. let’s implement these!" Jonathan accepts all three F143 mechanics: paintable crumbling terrain, sideways/diagonal springs, and a touchable floating feather that grants one extra midair Jump and then respawns. Canonical branch: `codex/checkup-traversal-pack-2026-10-07`, based on deployed application `2d808784` plus delivery notes `9a89c810`. The primary checkout, camera/avatar corrections and automatic ghost racing are preserved. Publication of this new pack is not yet requested.
+
+- [x] Extend the existing terrain/object catalogs and editor placement for all three mechanics with readable visuals.
+- [x] Implement crumble timing/restore, directional spring launch/grace, and a nonstacking feather jump charge/respawn across gravity directions.
+- [x] Verify placement/persistence, gameplay chains, death/restart cleanup, ordinary/expanded rooms, keyboard/touch and goal/trust isolation.
+- [x] Run behavioral and repository quality checks, official gameplay client and inspected native screenshots; leave a reviewable local candidate.
+
+Special slot 18 is solid crumbling terrain, leaving Portal A/B slots 16/17 intact. The versioned atlas preserves all 16,128 other pixels. Springs use existing saved facing and prepared bounce-pad artwork; their 180ms tangent momentum/grace prevents movement input or jump release from erasing the launch. Existing bounce pads follow gravity. Interactive Jump Feather grants one nonstacking midair charge, hides its overlap body for 3s and leaves score/collection/goal events untouched. Normal/coyote/wall jumps retain priority; landing, wall attachment, water, ladder and play resets clear the charge. Crumbling terrain retains collision during its 400ms warning, removes physical and movement-query support, waits 2s and postpones return while occupied. Saved snapshots stay unchanged. See `docs/assets/traversal-pack-2026-10-07.md` for prepared art and generation prompts.
+
+Full quality passes **363 files / 2,895 tests**, lint and build (including TypeScript), generated API/renderer bindings, DOM contract (925 IDs / 212 required), Worker safety and whitespace checks. The nonstrict map asset check correctly reports new catalog `authoring-catalog-v1:020c7c1d1777764e` versus current production `authoring-catalog-v1:31d8d3ff3504cf17`: matching renderer imagery must be prepared and verified before coordinated API/Pages publication. No release gate is bypassed, production data is untouched and F143 remains unchecked in the master at **54/214** until delivery.
+
+Native ordinary and expanded authoring uses real palette/facing controls. Ordinary save/reload preserves six blocks and all three objects; expanded Undo/Redo preserves placement. Desktop gameplay covers pickup, one air jump/no third jump, 3s respawn, landing reset, shake/drop/return, a physical/query hole without a saved-snapshot mutation, both launches and Restart. Portrait touch adds actual joystick movement, Jump/no third jump, both springs, terrain drop/return and native Restart. Expanded native Test covers both springs (including a right diagonal), pickup/air jump, crumble/drop/return and an actual spike death: course deaths becomes one and the charge clears. All final native cases have zero page errors. Ordinary desktop/phone HTTP failures are exclusively the local fixture API’s missing presence-signing-key 503; expanded test stays local-only.
+
+Installed official gameplay client completes its action loop and state capture. The accepted adapter only adds boot readiness/full-quality preferences and compositor capture for a WebGL canvas without preserveDrawingBuffer; actual actions and time stepping remain unchanged. Its final screenshot is healthy and inspected; its sole console error is the same local presence 503. The earlier advisory-covered and blank raw-canvas captures are excluded. Earlier expanded harness failures were caused by a goal-less synthetic course, an incorrect hazard search/category, and confusing editor-local origin (0,0) with gameplay world coordinates (99,99); corrected fixtures and native controls pass without application changes. Initial fixed-framing captures reproduce the separately known distant-room camera defect and are excluded. Failed diagnostics are retained.
+
+Local demo: `http://127.0.0.1:3040/r/82/40?welcome=0`, using the owned local API on 8787 with test reset disabled. The remote-API preview on 3001 remains separate; new catalog objects should be authored against the local API until publication. Accepted reports/screenshots and preservation/quality logs are in `/tmp/wamp-f143-2026-10-07/{native-accepted,phone,editors,expanded-play}` and ignored `output/web-game/traversal/official-compositor`. Final gameplay/editor screenshots are inspected. Primary HEAD, status and staged/unstaged diffs exactly match the starting snapshot, preserving all 25 unrelated changes. The temporary test-reset-enabled 3041 server can be stopped after verification; keep the user demo available.
+
+## 2026-10-07 — Accepted running-avatar correction, delivered
 
 Original prompt: "oh yeah much smoother! what was it? let's make that live". Jonathan accepts local application commit `36b55477` and authorizes production publication. Use a clean release checkout and the guarded Pages-only path for this frontend presentation correction; preserve the delivered ghost racing, primary edits and old camera comparison commits. F143 remains deferred until delivery finishes.
 
 - [x] Verify the accepted application diff and prior 359-file / 2,870-test quality pass; confirm production main remains `c8f57939`.
-- [ ] Push the narrow PR, pass exact-source checks, merge and pass exact-main hosted checks.
-- [ ] Validate clean literal main matching origin/main, then publish Pages through the strict map release gate.
-- [ ] Verify public desktop/touch running in clip room `-17,10` and adjacent `-18,10`, ghost behavior, custom-domain/immutable assets and production smoke.
-- [ ] Record live delivery and primary preservation. Release evidence: `/tmp/wamp-avatar-release-2026-10-07/`.
+- [x] Push the narrow PR, pass exact-source checks, merge and pass exact-main hosted checks.
+- [x] Validate clean literal main matching origin/main, then publish Pages through the strict map release gate.
+- [x] Verify public desktop running in `-17,10` and `-18,10`, portrait touch running/Restart in `-17,10`, ghost behavior, custom-domain/immutable assets and production smoke.
+- [x] Record live delivery and primary preservation. Release evidence: `/tmp/wamp-avatar-release-2026-10-07/`.
+
+Accepted source `36b55477` and authorization `29e34e36` are merged in [PR #78](https://github.com/songadaymann/wamp/pull/78) as `2d808784c383984105d064a618f5af508217e1f4`, with identical source/merge trees. All three source and all three exact-merge hosted checks pass; both quality runs pass 359 files / 2,870 tests. The reused release clone is clean literal main matching origin/main and passes lint, TypeScript, generated bindings, asset compatibility, DOM contract and whitespace checks. No application code changes follow the accepted local candidate.
+
+Guarded Pages-only publication passes the strict map gate, production build and upload after automatic builds finish. Accepted Pages snapshot is [777a8017](https://777a8017.wampland.pages.dev), live entry `main-Bn9U3CS5.js`. All **179 JS/CSS assets, three death-audio files, HTML asset references and early bootstrap** match the tested release, custom-domain and immutable bytes; the compiled runtime includes the current-body horizontal avatar placement. The immediate post-upload smoke returns a main-bundle propagation 404 and the wrapper exits 1; an unchanged fresh smoke retry passes. This diagnostic is retained, with no bypass, app correction or repeated publication. API Worker, D1, PartyKit and renderer/catalog delivery are unnecessary; active renderer remains `production-2026-10-06-water-31d8d3ff`, map rollout 100%, matching asset contract and direct map alerts configured. Test reset remains disabled.
+
+Four final public native cases pass with zero captured page/console errors: red-avatar desktop movement and Restart in clip room `-17,10` and neighbor `-18,10`; red-avatar portrait joystick movement/Restart in `-17,10`; and automatic room-record ghost playback/Restart in public room `-11,-6`. The movement samples span 272, 265 and 272 world pixels with actual left/right input. The ghost defaults to #1 and remains outside physics; Restart retains its selected recording. Final desktop, neighbor, portrait, mobile Restart and ghost-racing screenshots are inspected and show healthy gameplay. Production checks use public diagnostics and exact compiled-asset proof; direct post-render sprite/body alignment remains covered by the accepted local tests. No fixture rooms/accounts or imported recordings are created.
+
+Delivery notes are retained on `codex/running-avatar-delivery-notes-2026-10-07` so a notes-only push cannot overtake the byte-verified production snapshot with a differently configured automatic build. The local remote-API preview remains available on port 3001 with the same application source. Primary HEAD, status, staged and unstaged diffs and all 25 unrelated entries remain preserved. Master stays **54/214**; next is F143 traversal pack. Existing fixed-camera entry, neighboring coarse fallback artwork and physical 120Hz acceptance remain separate. Preserve old camera comparison commits and the already delivered ghost follow-up.
 
 ## 2026-10-07 — Ghost follow-up delivered; running hiccup corrected locally
 

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { OverworldMovementInput } from './physicsCadence';
 import { OverworldJumpCornerCorrection } from './jumpCornerCorrection';
+import { OverworldTraversalMovementState } from './traversalMovement';
 import { playSfx, stopSfx } from '../../audio/sfx';
 import {
   ROOM_HEIGHT,
@@ -181,6 +182,8 @@ export interface OverworldMovementPresentationState {
 }
 
 export interface OverworldMovementDebugSnapshot {
+  airJumpAvailable: boolean;
+  springInputLockMs: number;
   crouching: boolean;
   buttStomping: boolean;
   buttStompFlipMs: number;
@@ -229,6 +232,7 @@ export class OverworldMovementController {
   private readonly crateState = new OverworldCrateMovementStateController();
   private readonly wallState = new OverworldWallMovementStateController();
   private readonly cornerCorrection: OverworldJumpCornerCorrection;
+  private readonly traversalState = new OverworldTraversalMovementState();
   private readonly presentationState: Readonly<OverworldMovementPresentationState>;
 
   constructor(
@@ -271,6 +275,28 @@ export class OverworldMovementController {
     return this.buttStompState.isActive();
   }
 
+  grantAirJump(): boolean {
+    const body = this.host.getPlayerBody();
+    if (!body?.enable) return false;
+    const environment = this.host.getSpecialTileEnvironment();
+    if (environment.inWater || this.wallState.getContactSide() !== 0) return false;
+    this.traversalState.observeSupport(bodyIsBlockedInGravityDirection(body, environment.gravityDirection),
+      this.wallState.getContactSide() !== 0, environment.inWater);
+    return this.traversalState.grantAirJump();
+  }
+
+  launchFromSpring(x: number, y: number, durationMs: number): void {
+    const body = this.host.getPlayerBody();
+    if (!body) return;
+    this.clearButtStompState();
+    this.setPlayerLadderState(null);
+    this.resetWallMovementState();
+    this.resetJumpForgiveness();
+    body.setVelocity(x, y);
+    this.state.protectedJumpTime = durationMs;
+    this.traversalState.beginSpringLaunch(x, y, this.host.getCurrentTime(), durationMs);
+  }
+
   isButtStompImpactActive(): boolean {
     return this.buttStompState.isImpactActive(this.host.getCurrentTime());
   }
@@ -294,6 +320,7 @@ export class OverworldMovementController {
       jumpBufferMs: Math.max(0, Math.round(this.state.jumpBufferTime)),
       wallJumpBufferMs: Math.max(0, Math.round(this.state.wallJumpBufferTime)),
       protectedJumpMs: Math.max(0, Math.round(this.state.protectedJumpTime)),
+      ...this.traversalState.describe(now),
       ...this.cornerCorrection.describe(),
       coyoteMs: Math.max(0, Math.round(this.state.coyoteTime)),
       wallSliding: this.wallState.isSliding(),
@@ -310,6 +337,7 @@ export class OverworldMovementController {
   }
 
   reset(): void {
+    this.traversalState.reset();
     this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearButtStompState();
@@ -322,6 +350,7 @@ export class OverworldMovementController {
   }
 
   handleNoPlayerRuntime(): void {
+    this.traversalState.reset();
     this.resetJumpForgiveness();
     this.clearCrateInteractionState();
     this.resetWallMovementState();
@@ -329,6 +358,7 @@ export class OverworldMovementController {
   }
 
   handlePlayerCreated(): void {
+    this.traversalState.reset();
     this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearButtStompState();
@@ -342,6 +372,7 @@ export class OverworldMovementController {
   }
 
   handlePlayerDestroyed(): void {
+    this.traversalState.reset();
     this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearButtStompState();
@@ -354,6 +385,7 @@ export class OverworldMovementController {
   }
 
   handleRespawnReset(): void {
+    this.traversalState.reset();
     this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearButtStompState();
@@ -367,6 +399,7 @@ export class OverworldMovementController {
   }
 
   resetTransientPlayState(): void {
+    this.traversalState.reset();
     this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearButtStompState();
@@ -531,6 +564,7 @@ export class OverworldMovementController {
     }
 
     if (stayOnLadder && overlappingLadder) {
+      this.traversalState.reset();
       this.setPlayerLadderState(overlappingLadder);
       const ladderDeltaX = overlappingLadder.sprite.x - (player.x ?? playerBody.center.x);
       playerBody.setVelocityX(Phaser.Math.Clamp(ladderDeltaX * 12, -45, 45));
@@ -598,6 +632,7 @@ export class OverworldMovementController {
       !this.buttStompState.isActive();
     this.updateWallMovementState(horizontalInput, grounded, canWallAttach);
     this.wallState.cancelLockForOppositeInput(horizontalInput, this.host.getCurrentTime(), WALL_JUMP_STEER_BACK_MS);
+    this.traversalState.observeSupport(grounded, this.wallState.getContactSide() !== 0, specialEnvironment.inWater);
     if (grounded) {
       this.state.coyoteTime = this.options.coyoteMs;
     } else {
@@ -605,6 +640,7 @@ export class OverworldMovementController {
     }
 
     const buttStompInFlipPause = this.isButtStompInFlipPause();
+    const springTangent = this.traversalState.getSpringTangentVelocity('down', this.host.getCurrentTime(), playerBody);
     if (crateInteraction) {
       const moveSpeed =
         crateInteraction.mode === 'push' ? this.options.cratePushSpeed : this.options.cratePullSpeed;
@@ -614,6 +650,8 @@ export class OverworldMovementController {
         playerBody.setVelocityX(0);
       } else if (this.host.getCurrentTime() < this.state.weaponKnockbackUntil) {
         playerBody.setVelocityX(this.state.weaponKnockbackVelocityX);
+      } else if (springTangent !== null) {
+        playerBody.setVelocityX(springTangent);
       } else if (
         this.host.getCurrentTime() < this.wallState.getJumpLockUntil() &&
         this.wallState.getJumpDirection() !== 0
@@ -654,6 +692,7 @@ export class OverworldMovementController {
       }
     }
 
+    if ((spacePressed || upPressed) && !grounded && this.traversalState.hasAirJump()) this.clearButtStompState();
     const jumpPressed =
       !this.state.isCrouching &&
       !this.buttStompState.isActive() &&
@@ -695,6 +734,9 @@ export class OverworldMovementController {
         this.clearPendingJump();
         this.state.coyoteTime = 0;
         this.wallState.finishGroundJump();
+      } else if (this.state.jumpBufferTime > 0 && !grounded && !specialEnvironment.inWater &&
+          this.traversalState.consumeAirJump()) {
+        this.performAirJump(playerBody, 'down');
       }
 
       const jumpHeld = upHeld || spaceHeld;
@@ -806,6 +848,8 @@ export class OverworldMovementController {
       !specialEnvironment.inWater;
     this.updateWallMovementState(controls.tangentInput, grounded, canWallAttach, gravityDirection);
     this.wallState.cancelLockForOppositeInput(controls.tangentInput, this.host.getCurrentTime(), WALL_JUMP_STEER_BACK_MS);
+    this.traversalState.observeSupport(grounded, this.wallState.getContactSide() !== 0, specialEnvironment.inWater);
+    const springTangent = this.traversalState.getSpringTangentVelocity(gravityDirection, this.host.getCurrentTime(), playerBody);
 
     const moveSpeedBase = this.state.isCrouching
       ? this.options.crawlSpeed
@@ -819,7 +863,9 @@ export class OverworldMovementController {
         crateInteraction.mode === 'push' ? this.options.cratePushSpeed : this.options.cratePullSpeed;
       this.applyCrateInteraction(playerBody, crateInteraction, moveSpeed, delta);
     } else {
-      if (
+      if (springTangent !== null) {
+        setBodyVelocityAlongVector(playerBody, rightVector, springTangent);
+      } else if (
         this.host.getCurrentTime() < this.wallState.getJumpLockUntil() &&
         this.wallState.getJumpDirection() !== 0
       ) {
@@ -879,6 +925,9 @@ export class OverworldMovementController {
     } else if (this.state.jumpBufferTime > 0 && this.state.coyoteTime > 0) {
       this.state.protectedJumpTime = !jumpPressed || !grounded ? FORGIVEN_JUMP_MIN_RISE_MS : 0;
       performGravityJump();
+    } else if (this.state.jumpBufferTime > 0 && !grounded && !specialEnvironment.inWater &&
+        this.traversalState.consumeAirJump()) {
+      this.performAirJump(playerBody, gravityDirection);
     }
 
     const currentNormalVelocity = getBodyVelocityAlongVector(playerBody, gravityVector);
@@ -993,6 +1042,16 @@ export class OverworldMovementController {
       verticalInput !== 0 &&
       Math.abs(playerBody?.velocity.y ?? 0) > 6;
     this.setLadderClimbSfxPlaying(shouldPlay);
+  }
+
+  private performAirJump(body: Phaser.Physics.Arcade.Body, direction: PlayerGravityDirection): void {
+    this.clearButtStompState();
+    this.state.protectedJumpTime = FORGIVEN_JUMP_MIN_RISE_MS;
+    setBodyVelocityAlongVector(body, getGravityVector(direction), this.options.jumpVelocity);
+    this.host.playJumpDustFx(body.center.x, body.bottom, this.host.getPlayerFacing());
+    this.clearPendingJump();
+    this.state.coyoteTime = 0;
+    this.wallState.finishGroundJump();
   }
 
   private resetWallMovementState(): void {

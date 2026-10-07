@@ -25,6 +25,7 @@ export type LiveObjectBehavior =
   | { kind: 'bomb' }
   | { kind: 'lightning' }
   | { kind: 'bouncePad' }
+  | { kind: 'jumpFeather' }
   | { kind: 'movingPlatform' }
   | { kind: 'blockSwitch' }
   | { kind: 'npc' }
@@ -82,6 +83,9 @@ const BEHAVIORS_BY_OBJECT_ID: Record<string, LiveObjectBehavior> = {
   bomb: { kind: 'bomb' },
   lightning: { kind: 'lightning' },
   bounce_pad: { kind: 'bouncePad' },
+  spring_side: { kind: 'bouncePad' },
+  spring_diagonal: { kind: 'bouncePad' },
+  double_jump_feather: { kind: 'jumpFeather' },
   moving_platform: { kind: 'movingPlatform' },
   block_switch: { kind: 'blockSwitch' },
 };
@@ -98,5 +102,6 @@ export function liveObjectBehaviorCanSleepAtDistance(behavior: LiveObjectBehavio
   return behavior.kind !== 'none'
     && behavior.kind !== 'movingPlatform'
     && behavior.kind !== 'blockSwitch'
-    && behavior.kind !== 'bouncePad';
+    && behavior.kind !== 'bouncePad'
+    && behavior.kind !== 'jumpFeather';
 }

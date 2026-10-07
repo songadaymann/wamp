@@ -379,7 +379,8 @@ export type SpecialTileKind =
   | 'gravityRight'
   | 'water'
   | 'windLeft'
-  | 'windRight';
+  | 'windRight'
+  | 'crumbling';
 
 export const SPECIAL_TILE_LOCAL_INDICES = {
   breakableBrick: 0,
@@ -398,6 +399,8 @@ export const SPECIAL_TILE_LOCAL_INDICES = {
   water: 13,
   windLeft: 14,
   windRight: 15,
+  // Slots 16 and 17 contain the existing Portal A/B artwork.
+  crumbling: 18,
 } as const satisfies Record<SpecialTileKind, number>;
 
 export const SPECIAL_TILE_BREAKABLE_BRICK_LOCAL_INDEX =
@@ -427,7 +430,8 @@ const SPECIAL_TILE_NO_COLLISION_INDICES = [
   SPECIAL_TILE_LOCAL_INDICES.water,
   SPECIAL_TILE_LOCAL_INDICES.windLeft,
   SPECIAL_TILE_LOCAL_INDICES.windRight,
-  ...Array.from({ length: SPECIAL_TILE_COUNT - 16 }, (_, index) => index + 16),
+  ...Array.from({ length: SPECIAL_TILE_COUNT - 16 }, (_, index) => index + 16)
+    .filter((index) => index !== SPECIAL_TILE_LOCAL_INDICES.crumbling),
 ];
 
 function createSpecialTileEditorMetadata(): Partial<Record<number, EditorTileMetadata>> {
@@ -521,6 +525,12 @@ function createSpecialTileEditorMetadata(): Partial<Record<number, EditorTileMet
       enabled: false,
     };
   }
+
+  metadata[SPECIAL_TILE_LOCAL_INDICES.crumbling] = {
+    label: 'Crumbling Block',
+    description: 'Shakes when stepped on, crumbles after a moment, and returns after two seconds.',
+    enabled: true,
+  };
 
   return metadata;
 }
@@ -944,7 +954,7 @@ export const TILESETS: TilesetConfig[] = [
   {
     key: SPECIAL_TILESET_KEY,
     name: 'Special',
-    path: 'assets/tilesets/special.png',
+    path: 'assets/tilesets/special-traversal-v1.png',
     imageWidth: 128,
     imageHeight: 128,
     columns: 8,

@@ -14,6 +14,7 @@ import type { LoadedFullRoom } from '../worldStreaming';
 import { isDynamicArcadeBody } from './bodies';
 import type { ArcadeObjectBody } from './bodies';
 import { CANNON_BULLET_CONFIG } from './projectiles';
+import { getBodyVelocityAlongVector, getGravityVector, setBodyVelocityAlongVector, type PlayerGravityDirection } from '../specialTiles';
 
 const BOUNCE_PAD_LAUNCH_GRACE_MS = 180;
 const TORNADO_LAUNCH_GRACE_MS = 280;
@@ -41,6 +42,8 @@ interface LiveObjectHazardControllerOptions<TEdgeWall> {
   getPlayer: () => Phaser.GameObjects.GameObject | null;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
   grantExternalLaunchGrace: (durationMs: number) => void;
+  getPlayerGravityDirection?: () => PlayerGravityDirection;
+  launchPlayerFromSpring?: (x: number, y: number, durationMs: number) => void;
   touchQuicksand: () => void;
   handlePlayerDeath: (reason: string) => void;
   playBounceFx: (
@@ -119,31 +122,50 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
           return;
         }
 
-        if (
-          this.options.getCurrentTime() < liveObject.runtime.cooldownUntil ||
-          activePlayerBody.velocity.y < -24
-        ) {
-          return;
-        }
-
-        const playerBottom = activePlayerBody.bottom;
-        const padTop = padBody.top;
-        if (playerBottom > padTop + 12) {
-          return;
+        if (this.options.getCurrentTime() < liveObject.runtime.cooldownUntil) return;
+        const directional = liveObject.config.id !== 'bounce_pad';
+        const speed = Math.abs(this.options.settings.bouncePadVelocity);
+        let velocityX = (liveObject.runtime.directionX < 0 ? -1 : 1) * speed;
+        let velocityY = 0;
+        const gravityDirection = this.options.getPlayerGravityDirection?.() ?? 'down';
+        const gravityVector = getGravityVector(gravityDirection);
+        if (directional) {
+          if (liveObject.config.id === 'spring_diagonal') {
+            velocityX /= Math.SQRT2;
+            velocityY = -speed / Math.SQRT2;
+          }
+          const nx = velocityX / speed, ny = velocityY / speed;
+          // Touch the spring's exposed side while moving into it, not its back.
+          if ((activePlayerBody.center.x - padBody.center.x) * nx +
+              (activePlayerBody.center.y - padBody.center.y) * ny < -8 ||
+              activePlayerBody.velocity.x * nx + activePlayerBody.velocity.y * ny > 24) return;
+        } else {
+          if (getBodyVelocityAlongVector(activePlayerBody, gravityVector) < -24) return;
+          const behindSurface = gravityDirection === 'up' ? activePlayerBody.top < padBody.bottom - 12
+            : gravityDirection === 'left' ? activePlayerBody.left < padBody.right - 12
+            : gravityDirection === 'right' ? activePlayerBody.right > padBody.left + 12
+            : activePlayerBody.bottom > padBody.top + 12;
+          if (behindSurface) return;
         }
 
         liveObject.runtime.cooldownUntil =
           this.options.getCurrentTime() + this.options.settings.bouncePadCooldownMs;
         liveObject.runtime.activatedUntil =
           this.options.getCurrentTime() + this.options.settings.bouncePadActiveMs;
-        activePlayerBody.setVelocityY(this.options.settings.bouncePadVelocity);
+        if (directional) {
+          if (this.options.launchPlayerFromSpring) {
+            this.options.launchPlayerFromSpring(velocityX, velocityY, BOUNCE_PAD_LAUNCH_GRACE_MS);
+          } else activePlayerBody.setVelocity(velocityX, velocityY);
+        } else {
+          setBodyVelocityAlongVector(activePlayerBody, gravityVector, this.options.settings.bouncePadVelocity);
+        }
         this.options.grantExternalLaunchGrace(BOUNCE_PAD_LAUNCH_GRACE_MS);
         this.options.playBounceFx(
           liveObject.sprite.x,
           liveObject.sprite.y - 2,
           loadedRoom.room.coordinates
         );
-        this.options.showTransientStatus('Bounce pad launched you.');
+        this.options.showTransientStatus(`${liveObject.config.name} launched you.`);
       })
     );
   }
