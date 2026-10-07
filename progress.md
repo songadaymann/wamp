@@ -1,3 +1,13 @@
+## 2026-10-07 — Accepted running-avatar correction, publication in progress
+
+Original prompt: "oh yeah much smoother! what was it? let's make that live". Jonathan accepts local application commit `36b55477` and authorizes production publication. Use a clean release checkout and the guarded Pages-only path for this frontend presentation correction; preserve the delivered ghost racing, primary edits and old camera comparison commits. F143 remains deferred until delivery finishes.
+
+- [x] Verify the accepted application diff and prior 359-file / 2,870-test quality pass; confirm production main remains `c8f57939`.
+- [ ] Push the narrow PR, pass exact-source checks, merge and pass exact-main hosted checks.
+- [ ] Validate clean literal main matching origin/main, then publish Pages through the strict map release gate.
+- [ ] Verify public desktop/touch running in clip room `-17,10` and adjacent `-18,10`, ghost behavior, custom-domain/immutable assets and production smoke.
+- [ ] Record live delivery and primary preservation. Release evidence: `/tmp/wamp-avatar-release-2026-10-07/`.
+
 ## 2026-10-07 — Ghost follow-up delivered; running hiccup corrected locally
 
 Original prompt: "oh deploy the ghost racing. the camera is almost there"; investigate the subtle running hiccup using the supplied normal-speed and frame-by-frame videos. Production publication of the tested ghost follow-up is authorized. Keep camera investigation separate from that release, preserve the primary checkout, and defer F143.
