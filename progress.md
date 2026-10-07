@@ -1,3 +1,16 @@
+## 2026-10-07 — F143 accepted; production release authorized
+
+Jonathan: "that is coooool! let's deploy! what is next?" The tested local source `77782065652b754659f73e607af4c71d90a41dda` is accepted. Complete push/PR/merge, matching immutable map imagery, guarded coordinated API/renderer/Pages publication and targeted live acceptance. Preserve the primary checkout and delivered camera/ghost behavior. Do not start F150 implementation in this release.
+
+- [x] Confirm the accepted clean candidate, unchanged current application main `2d808784`, existing release clone and primary preservation snapshot.
+- [ ] Push the accepted candidate and authorization notes; pass exact-source quality and preview checks.
+- [ ] Prepare an immutable asset origin, renderer and complete published leaf/ancestor rebuild; verify object and pixel parity.
+- [ ] Merge, validate clean literal main matching origin/main and complete the guarded coordinated release.
+- [ ] Verify custom-domain runtime/art/catalog/map alerts and desktop/touch traversal; check F143 only after successful live acceptance.
+- [ ] Save final delivery and next item: F150 optional hearts/healing, then F155 boss mode and F144 Lost Song hunt.
+
+Release evidence: `/tmp/wamp-f143-release-2026-10-07/`. New map asset contract is `authoring-catalog-v1:020c7c1d1777764e`; the previous active map must remain usable while its successor is building. No D1 schema migration or PartyKit change is needed.
+
 ## 2026-10-07 — F143 traversal pack, complete locally
 
 Original prompt: "ok yeah that’s pretty cool. let’s implement these!" Jonathan accepts all three F143 mechanics: paintable crumbling terrain, sideways/diagonal springs, and a touchable floating feather that grants one extra midair Jump and then respawns. Canonical branch: `codex/checkup-traversal-pack-2026-10-07`, based on deployed application `2d808784` plus delivery notes `9a89c810`. The primary checkout, camera/avatar corrections and automatic ghost racing are preserved. Publication of this new pack is not yet requested.
