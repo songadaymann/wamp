@@ -9,6 +9,8 @@ import {
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
   ROOM_WIDTH,
+  SPECIAL_TILESET_KEY,
+  SPECIAL_TILE_LOCAL_INDICES,
   TILE_SIZE,
   type LayerName,
   type SpecialTileKind,
@@ -24,6 +26,7 @@ import type { SfxCue } from '../../audio/sfx';
 import type { OverworldMode } from '../sceneData';
 import { getTerrainTileCollisionProfile } from './terrainCollision';
 import type { LoadedFullRoom } from './worldStreaming';
+import { OverworldCrumblingTilesController, type CrumblingTileAddress } from './crumblingTiles';
 
 export type PlayerGravityDirection = 'down' | 'up' | 'left' | 'right';
 
@@ -209,11 +212,24 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   private latchedGravityDirection: PlayerGravityDirection = 'down';
   private latchedGravityRoomId: string | null = null;
   private readonly brokenSpecialBrickTileKeysByRoomId = new Map<string, Set<string>>();
+  private readonly crumblingTiles: OverworldCrumblingTilesController;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly host: OverworldSpecialTilesControllerHost<TLiveObject, TEdgeWall>,
-  ) {}
+  ) {
+    this.crumblingTiles = new OverworldCrumblingTilesController({
+      showWarning: tile => this.showCrumblingTileWarning(tile),
+      removeTile: tile => this.host.getLoadedFullRoomById(tile.roomId)?.terrainLayer
+        .removeTileAt(tile.tileX, tile.tileY, true, true),
+      restoreTile: tile => this.restoreCrumblingTile(tile),
+      isOccupied: tile => this.isCrumblingTileOccupied(tile),
+      refreshRoom: roomId => {
+        const room = this.host.getLoadedFullRoomById(roomId);
+        if (room) this.refreshLoadedRoomTerrainTexture(room);
+      },
+    });
+  }
 
   update(): void {
     if (this.host.getMode() !== 'play') {
@@ -223,6 +239,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     }
 
     this.scanPlayerEnvironment(this.playerEnvironment);
+    this.updateCrumblingTiles();
     this.applyImmediatePlayerEffects();
     this.maybeBreakSpecialBrickTile();
   }
@@ -230,6 +247,12 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   getPlayerEnvironment(): Readonly<SpecialTilePlayerEnvironment> {
     return this.playerEnvironment;
   }
+
+  isTerrainTileTemporarilyRemoved(roomId: string, tileX: number, tileY: number): boolean {
+    return this.crumblingTiles.isGone(roomId, tileX, tileY) || this.isSpecialBrickTileBroken(roomId, tileX, tileY);
+  }
+
+  describeCrumblingTiles() { return this.crumblingTiles.describe(this.host.getCurrentTime()); }
 
   getEnvironmentForBody(
     body: Phaser.Physics.Arcade.Body,
@@ -356,6 +379,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   }
 
   handleFullRoomDestroyed(roomId: string): void {
+    this.crumblingTiles.destroyRoom(roomId);
     this.brokenSpecialBrickTileKeysByRoomId.delete(roomId);
     if (this.latchedGravityRoomId === roomId) {
       this.resetGravityLatch();
@@ -375,6 +399,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   }
 
   resetForRoom(loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>): void {
+    this.crumblingTiles.resetRoom(loadedRoom.room.id);
     const brokenTiles = this.brokenSpecialBrickTileKeysByRoomId.get(loadedRoom.room.id);
     if (!brokenTiles || brokenTiles.size === 0) {
       return;
@@ -931,19 +956,72 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
   ): RoomSnapshot {
     const brokenTiles = this.brokenSpecialBrickTileKeysByRoomId.get(loadedRoom.room.id);
-    if (!brokenTiles || brokenTiles.size === 0) {
+    const crumblingTiles = Array.from(this.crumblingTiles.getHiddenTiles(loadedRoom.room.id));
+    if ((!brokenTiles || brokenTiles.size === 0) && crumblingTiles.length === 0) {
       return loadedRoom.room;
     }
 
     const snapshot = cloneRoomSnapshot(loadedRoom.room);
-    for (const tileKey of brokenTiles) {
+    for (const tileKey of brokenTiles ?? []) {
       const parsed = this.parseSpecialBrickTileKey(tileKey);
       if (!parsed) {
         continue;
       }
       snapshot.tileData.terrain[parsed.tileY][parsed.tileX] = -1;
     }
+    for (const tile of crumblingTiles) snapshot.tileData.terrain[tile.tileY][tile.tileX] = -1;
     return snapshot;
+  }
+
+  private updateCrumblingTiles(): void {
+    const body = this.host.getPlayerBody();
+    const direction = this.playerEnvironment.gravityDirection;
+    const contacts = body && bodyIsBlockedInGravityDirection(body, direction) &&
+      getBodyVelocityAlongVector(body, getGravityVector(direction)) >= -24
+      ? this.findSpecialTilesAtGravityContact(body, direction).filter(match =>
+        match.kind === 'crumbling' && match.layerName === 'terrain' &&
+        Boolean(match.loadedRoom.terrainLayer.getTileAt(match.tileX, match.tileY)))
+      : [];
+    this.crumblingTiles.update(this.host.getCurrentTime(), contacts.map(match => ({
+      roomId: match.loadedRoom.room.id, tileX: match.tileX, tileY: match.tileY,
+    })));
+  }
+
+  private showCrumblingTileWarning(tile: CrumblingTileAddress): { shake: (offset: number) => void; destroy: () => void } | null {
+    const room = this.host.getLoadedFullRoomById(tile.roomId);
+    if (!room) return null;
+    const texture = this.scene.textures.get(SPECIAL_TILESET_KEY);
+    const frame = 'crumbling-warning';
+    const index = SPECIAL_TILE_LOCAL_INDICES.crumbling;
+    if (!texture.has(frame)) texture.add(frame, 0, (index % 8) * TILE_SIZE, Math.floor(index / 8) * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    const bounds = this.getSpecialBrickTileWorldBounds(room, tile.tileX, tile.tileY);
+    const decoded = decodeTileDataValue(room.room.tileData.terrain[tile.tileY][tile.tileX]);
+    const x = bounds.left + TILE_SIZE / 2;
+    const sprite = this.scene.add.image(x, bounds.top + TILE_SIZE / 2, SPECIAL_TILESET_KEY, frame);
+    sprite.setDepth(room.image.depth + 0.01).setFlip(decoded.flipX, decoded.flipY);
+    return { shake: offset => sprite.setX(x + offset), destroy: () => sprite.destroy() };
+  }
+
+  private restoreCrumblingTile(tile: CrumblingTileAddress): void {
+    const room = this.host.getLoadedFullRoomById(tile.roomId);
+    if (!room) return;
+    const decoded = decodeTileDataValue(room.room.tileData.terrain[tile.tileY][tile.tileX]);
+    if (!isSpecialTileKindGid(decoded.gid, 'crumbling')) return;
+    const restored = room.terrainLayer.putTileAt(decoded.gid, tile.tileX, tile.tileY);
+    if (!restored) return;
+    restored.flipX = decoded.flipX;
+    restored.flipY = decoded.flipY;
+    const profile = getTerrainTileCollisionProfile(room.room, tile.tileX, tile.tileY);
+    restored.setCollision(profile.hasCollision, profile.hasCollision, profile.hasCollision, profile.hasCollision);
+    room.terrainLayer.calculateFacesWithin(Math.max(0, tile.tileX - 1), Math.max(0, tile.tileY - 1), 3, 3);
+  }
+
+  private isCrumblingTileOccupied(tile: CrumblingTileAddress): boolean {
+    const room = this.host.getLoadedFullRoomById(tile.roomId);
+    const body = this.host.getPlayerBody();
+    if (!room || !body) return false;
+    const bounds = this.getSpecialBrickTileWorldBounds(room, tile.tileX, tile.tileY);
+    return body.left < bounds.right && body.right > bounds.left && body.top < bounds.bottom && body.bottom > bounds.top;
   }
 
   private refreshLoadedRoomTerrainTexture(

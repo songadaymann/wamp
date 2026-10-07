@@ -800,6 +800,9 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.time.now + durationMs
         );
       },
+      getPlayerGravityDirection: () => this.specialTilesController.getPlayerEnvironment().gravityDirection,
+      launchPlayerFromSpring: (x, y, durationMs) => this.movementController.launchFromSpring(x, y, durationMs),
+      grantPlayerAirJump: () => this.movementController.grantAirJump(),
       showTransientStatus: (message) => this.showTransientStatus(message),
       handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
       onEnemyDefeated: (event) => this.handleEnemyDefeated(event),
@@ -4675,6 +4678,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       return false;
     }
 
+    if (this.specialTilesController.isTerrainTileTemporarilyRemoved(room.id, localX, localY)) return false;
+
     const localPixelY = worldY - roomOrigin.y - localY * TILE_SIZE;
     return terrainTileCollidesAtLocalPixel(room as RoomSnapshot, localX, localY, localPixelY);
   }
@@ -6726,6 +6731,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       ghostRace: this.ghostRaceController.getDebugSnapshot(),
       leaderboards: goalRunSnapshot.leaderboards,
       collectibles: this.countLiveObjectsByCategory('collectible'),
+      crumblingTiles: this.specialTilesController.describeCrumblingTiles(),
       hazards: this.countLiveObjectsByCategory('hazard'),
       enemies: this.countLiveObjectsByCategory('enemy'),
       combat: {
@@ -6818,6 +6824,8 @@ export class OverworldPlayScene extends Phaser.Scene {
             bodyHeight: Math.round(this.playerBody.height),
             bodyTop: Math.round(this.playerBody.top),
             bodyBottom: Math.round(this.playerBody.bottom),
+            airJumpAvailable: movementDebug.airJumpAvailable,
+            springInputLockMs: movementDebug.springInputLockMs,
             crouching: movementDebug.crouching,
             buttStomping: movementDebug.buttStomping,
             buttStompFlipMs: movementDebug.buttStompFlipMs,

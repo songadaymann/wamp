@@ -1,5 +1,16 @@
 # WAMP checkup delivery: F014, F032, F027, then F057
 
+
+## 2026-10-07 — F143 traversal pack, complete locally
+
+Branch `codex/checkup-traversal-pack-2026-10-07` implements crumbling terrain, sideways/diagonal springs with saved Left/Right facing, and a floating Jump Feather granting one extra air jump. Blocks shake for 400ms, disappear for 2s and wait if occupied. A feather cannot stack, reappears after 3s, and stays outside score/collection goals. Existing normal/coyote/wall jump priority and all gravity directions are retained. Spring momentum is protected for 180ms; death and play resets clear the charge. Terrain removal affects actual collision and movement support while leaving saved layouts intact.
+
+Acceptance: **363 files / 2,895 tests**, lint, TypeScript/build, generated bindings, DOM contract and Worker safety pass. Native ordinary/expanded editor placement, facing, save/reload and Undo/Redo pass. Desktop and portrait gameplay cover pickup/single air jump, terrain warning/drop/return, both springs and Restart; expanded native Test includes an actual spike death clearing the charge. Screenshots are inspected, with no page errors. The official action loop completes with a minimal readiness/preferences/WebGL compositor adapter; its sole console failure is the documented local presence-token 503.
+
+Review playground: `http://127.0.0.1:3040/r/82/40?welcome=0`, local API only. Source and acceptance evidence: `progress.md`, `docs/assets/traversal-pack-2026-10-07.md`, `/tmp/wamp-f143-2026-10-07/` and ignored `output/web-game/traversal/official-compositor`. The primary checkout’s HEAD, status and both diffs remain byte-identical to the start.
+
+Publication is not yet requested. The asset check reports new contract `authoring-catalog-v1:020c7c1d1777764e` against production `authoring-catalog-v1:31d8d3ff3504cf17`; prepare matching map imagery and complete coordinated renderer/API/Pages delivery through the existing strict release gate when authorized. No database migration or PartyKit change is introduced. F143 stays unchecked and the master stays **54/214** until verified delivery.
+
 ## 2026-10-06 — F142 ghost races, delivered
 
 - [x] Audit ranked traces, exact/equivalent versions and time-ranked goals; preserve private verification and analytics data.
