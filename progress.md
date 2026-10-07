@@ -1,3 +1,15 @@
+## 2026-10-07 — Ghost release and running hiccup investigation, in progress
+
+Original prompt: "oh deploy the ghost racing. the camera is almost there"; investigate the subtle running hiccup using the supplied normal-speed and frame-by-frame videos. Production publication of the tested ghost follow-up is authorized. Keep camera investigation separate from that release, preserve the primary checkout, and defer F143.
+
+- [x] Confirm the clean tested ghost candidate `c12def43` and current application main `a6350f06`; snapshot the primary checkout before release.
+- [ ] Push/review/merge the narrow ghost follow-up, pass exact-commit hosted checks, and deploy API Worker + Pages through the guarded clean-main workflow.
+- [ ] Verify fresh leaderboard behavior, automatic room-record selection, playback and served custom-domain/immutable assets in production.
+- [ ] Inspect both original clips and measure frame movement; reproduce and isolate the running hiccup before choosing a correction.
+- [ ] Validate any camera/rendering correction locally on the remote API and leave it reviewable for Jonathan.
+
+Video evidence remains local: `Screen Recording 2026-10-07 at 9.19.00 AM.mov` (21.61s, variable frame timestamps) and `short run clip.mov` (0.8s, 24 frames at 30fps). Analysis artifacts are in `/tmp/wamp-camera-hiccup-2026-10-07/`; release/preservation evidence is in `/tmp/wamp-ghost-release-2026-10-07/`. No production camera correction has been requested at this point.
+
 ## 2026-10-06 — Automatic room-record ghost and faster clear visibility, complete locally
 
 User request: "before we do that, i think ghost racing may be a killer feature"; make newly completed runs available sooner and choose a rival automatically. Jonathan clarified: "Race the room record holder (recommended)". F143 is deferred until this follow-up is assessed. Canonical branch: `codex/ghost-race-default-refresh-2026-10-06`, starting at clean `origin/main` `a6350f06`; preserve the unrelated primary checkout and the delivered camera.
