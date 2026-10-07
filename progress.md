@@ -1,12 +1,20 @@
-## 2026-10-07 — Accepted running-avatar correction, publication in progress
+## 2026-10-07 — Accepted running-avatar correction, delivered
 
 Original prompt: "oh yeah much smoother! what was it? let's make that live". Jonathan accepts local application commit `36b55477` and authorizes production publication. Use a clean release checkout and the guarded Pages-only path for this frontend presentation correction; preserve the delivered ghost racing, primary edits and old camera comparison commits. F143 remains deferred until delivery finishes.
 
 - [x] Verify the accepted application diff and prior 359-file / 2,870-test quality pass; confirm production main remains `c8f57939`.
-- [ ] Push the narrow PR, pass exact-source checks, merge and pass exact-main hosted checks.
-- [ ] Validate clean literal main matching origin/main, then publish Pages through the strict map release gate.
-- [ ] Verify public desktop/touch running in clip room `-17,10` and adjacent `-18,10`, ghost behavior, custom-domain/immutable assets and production smoke.
-- [ ] Record live delivery and primary preservation. Release evidence: `/tmp/wamp-avatar-release-2026-10-07/`.
+- [x] Push the narrow PR, pass exact-source checks, merge and pass exact-main hosted checks.
+- [x] Validate clean literal main matching origin/main, then publish Pages through the strict map release gate.
+- [x] Verify public desktop running in `-17,10` and `-18,10`, portrait touch running/Restart in `-17,10`, ghost behavior, custom-domain/immutable assets and production smoke.
+- [x] Record live delivery and primary preservation. Release evidence: `/tmp/wamp-avatar-release-2026-10-07/`.
+
+Accepted source `36b55477` and authorization `29e34e36` are merged in [PR #78](https://github.com/songadaymann/wamp/pull/78) as `2d808784c383984105d064a618f5af508217e1f4`, with identical source/merge trees. All three source and all three exact-merge hosted checks pass; both quality runs pass 359 files / 2,870 tests. The reused release clone is clean literal main matching origin/main and passes lint, TypeScript, generated bindings, asset compatibility, DOM contract and whitespace checks. No application code changes follow the accepted local candidate.
+
+Guarded Pages-only publication passes the strict map gate, production build and upload after automatic builds finish. Accepted Pages snapshot is [777a8017](https://777a8017.wampland.pages.dev), live entry `main-Bn9U3CS5.js`. All **179 JS/CSS assets, three death-audio files, HTML asset references and early bootstrap** match the tested release, custom-domain and immutable bytes; the compiled runtime includes the current-body horizontal avatar placement. The immediate post-upload smoke returns a main-bundle propagation 404 and the wrapper exits 1; an unchanged fresh smoke retry passes. This diagnostic is retained, with no bypass, app correction or repeated publication. API Worker, D1, PartyKit and renderer/catalog delivery are unnecessary; active renderer remains `production-2026-10-06-water-31d8d3ff`, map rollout 100%, matching asset contract and direct map alerts configured. Test reset remains disabled.
+
+Four final public native cases pass with zero captured page/console errors: red-avatar desktop movement and Restart in clip room `-17,10` and neighbor `-18,10`; red-avatar portrait joystick movement/Restart in `-17,10`; and automatic room-record ghost playback/Restart in public room `-11,-6`. The movement samples span 272, 265 and 272 world pixels with actual left/right input. The ghost defaults to #1 and remains outside physics; Restart retains its selected recording. Final desktop, neighbor, portrait, mobile Restart and ghost-racing screenshots are inspected and show healthy gameplay. Production checks use public diagnostics and exact compiled-asset proof; direct post-render sprite/body alignment remains covered by the accepted local tests. No fixture rooms/accounts or imported recordings are created.
+
+Delivery notes are retained on `codex/running-avatar-delivery-notes-2026-10-07` so a notes-only push cannot overtake the byte-verified production snapshot with a differently configured automatic build. The local remote-API preview remains available on port 3001 with the same application source. Primary HEAD, status, staged and unstaged diffs and all 25 unrelated entries remain preserved. Master stays **54/214**; next is F143 traversal pack. Existing fixed-camera entry, neighboring coarse fallback artwork and physical 120Hz acceptance remain separate. Preserve old camera comparison commits and the already delivered ghost follow-up.
 
 ## 2026-10-07 — Ghost follow-up delivered; running hiccup corrected locally
 
