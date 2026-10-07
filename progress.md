@@ -1,14 +1,36 @@
-## 2026-10-07 — Ghost release and running hiccup investigation, in progress
+## 2026-10-07 — Accepted running-avatar correction, publication in progress
+
+Original prompt: "oh yeah much smoother! what was it? let's make that live". Jonathan accepts local application commit `36b55477` and authorizes production publication. Use a clean release checkout and the guarded Pages-only path for this frontend presentation correction; preserve the delivered ghost racing, primary edits and old camera comparison commits. F143 remains deferred until delivery finishes.
+
+- [x] Verify the accepted application diff and prior 359-file / 2,870-test quality pass; confirm production main remains `c8f57939`.
+- [ ] Push the narrow PR, pass exact-source checks, merge and pass exact-main hosted checks.
+- [ ] Validate clean literal main matching origin/main, then publish Pages through the strict map release gate.
+- [ ] Verify public desktop/touch running in clip room `-17,10` and adjacent `-18,10`, ghost behavior, custom-domain/immutable assets and production smoke.
+- [ ] Record live delivery and primary preservation. Release evidence: `/tmp/wamp-avatar-release-2026-10-07/`.
+
+## 2026-10-07 — Ghost follow-up delivered; running hiccup corrected locally
 
 Original prompt: "oh deploy the ghost racing. the camera is almost there"; investigate the subtle running hiccup using the supplied normal-speed and frame-by-frame videos. Production publication of the tested ghost follow-up is authorized. Keep camera investigation separate from that release, preserve the primary checkout, and defer F143.
 
 - [x] Confirm the clean tested ghost candidate `c12def43` and current application main `a6350f06`; snapshot the primary checkout before release.
-- [ ] Push/review/merge the narrow ghost follow-up, pass exact-commit hosted checks, and deploy API Worker + Pages through the guarded clean-main workflow.
-- [ ] Verify fresh leaderboard behavior, automatic room-record selection, playback and served custom-domain/immutable assets in production.
-- [ ] Inspect both original clips and measure frame movement; reproduce and isolate the running hiccup before choosing a correction.
-- [ ] Validate any camera/rendering correction locally on the remote API and leave it reviewable for Jonathan.
+- [x] Push/review/merge the narrow ghost follow-up, pass exact-commit hosted checks, and deploy API Worker + Pages through the guarded clean-main workflow.
+- [x] Verify fresh leaderboard behavior, automatic room-record selection, playback and served custom-domain/immutable assets in production.
+- [x] Inspect both original clips and measure frame movement; reproduce and isolate the running hiccup before choosing a correction.
+- [x] Validate the avatar/camera synchronization correction locally on the remote API and leave it reviewable for Jonathan.
 
 Video evidence remains local: `Screen Recording 2026-10-07 at 9.19.00 AM.mov` (21.61s, variable frame timestamps) and `short run clip.mov` (0.8s, 24 frames at 30fps). Analysis artifacts are in `/tmp/wamp-camera-hiccup-2026-10-07/`; release/preservation evidence is in `/tmp/wamp-ghost-release-2026-10-07/`. No production camera correction has been requested at this point.
+
+Ghost follow-up delivered in [PR #77](https://github.com/songadaymann/wamp/pull/77): application source `c12def43`, release authorization `44f214ca`, merge `c8f57939302fd141a8031adefeaee22ae735fcb0`. Application trees match; all three exact-source and all three merge hosted checks pass. Clean literal `main`, matching `origin/main`, passes full lint, TypeScript, generated bindings, production build, map compatibility, DOM contract and whitespace checks. Full guarded `npm run deploy:prod` passes the strict map gate, Worker + Pages publication and live smoke. API Worker `69d8ebb3-2c2c-4252-b361-fb42dac98357` is verified at 100%; Pages snapshot is [e5379c95](https://e5379c95.wampland.pages.dev). All 179 JS/CSS assets, three death-audio assets, HTML asset references and early bootstrap match local release, custom-domain and immutable bytes. Renderer remains `production-2026-10-06-water-31d8d3ff`, with matching asset contract and configured direct map alerts. No new migration, room-data, renderer/catalog or PartyKit publication is needed.
+
+Production fresh leaderboard reads return `private, no-store`; ordinary reads retain the 20-second public cache. Native public gameplay passes desktop and portrait touch: public room `-11,-6` v11 automatically selects Farès's 3.629s room record, plays the actual noncolliding ghost with the run clock, and retains its recording on Restart. No captured browser errors; final screenshots are inspected. The production check uses an existing recording, without creating fixture rooms/accounts or importing recordings. The source candidate retains its prior full 358-file / 2,864-test acceptance.
+
+Jonathan identified the supplied clip room as `-17,10`. Unique room-edge motion in the 30fps clip varies between approximately 8.5 and 38.5 screen pixels per frame; periodic tile matches are ambiguous and are excluded from quantitative evidence. The red avatar matches `gamejew-red`. Native keyboard reproduction isolates a presentation handoff: Arcade advances the physics body before `Scene.update`, then synchronizes the player game object in `POST_UPDATE`. Down-gravity artwork used the previous game-object X, while the camera rendered after the current X arrived. Uneven physics steps produce a measured avatar offset of -10 to +10.5 world pixels. This is a concrete synchronization defect; the clips alone do not establish that every visible frame-pacing or room-streaming hitch has the same cause.
+
+Local branch `codex/fix-running-avatar-sync-2026-10-07`, based on delivered `c8f57939`, changes the existing presentation owner to use the current body's horizontal center. Camera easing, movement/collision and other gravity placements retain their behavior. Six behavioral cases cover left/right uneven steps, collision correction, artwork-only rounding and up/left/right feet placement; three cases fail against unchanged source and all six pass with the correction. Final full quality passes **359 files / 2,870 tests**, full lint, TypeScript, production build and whitespace checks. Native default/red desktop and red portrait joystick movement pass, including mobile Restart: maximum rounded avatar/player position mismatch is zero, with only normal 0–0.5-pixel artwork rounding and no captured page errors. All final native screenshots are inspected. Software-rendered timing is evidence of synchronization, not a hardware FPS or physical 120Hz acceptance result.
+
+The unchanged official client also passes local remote-API gameplay in headed mode with the actual red avatar, loaded room collision, native left/right inputs and no captured errors; the final screenshot shows healthy Play with the intro closed. Headless attempts that hit the client's five-second Start timeout or retained an early hidden-canvas handle are excluded, as are live captures covered by the performance advisory. The bounds helper's first ambiguous canvas locator is corrected to the visible direct Phaser canvas; none of these diagnostics requires an app-code change. Acceptance evidence lives in `/tmp/wamp-camera-hiccup-2026-10-07/` and ignored `output/web-game/running-avatar-sync/official-headed-final`; the native reports/screenshots remain in the temporary evidence directory.
+
+The correction is local only. Preview: `http://127.0.0.1:3001/r/-17/10?welcome=0`, connected to `https://api.wamp.land`, with test reset disabled. Jonathan should assess sustained left/right running before any camera/avatar publication. Existing distant fixed-camera solo entry remains a separate follow-up. Some neighboring-room coarse fallback artwork appears in native baseline/candidate views and is not resolved or claimed as fully hydrated seamless rendering by this correction. Master stays **54/214**, with F143 deferred; preserve the old camera comparison commits and all 25 unrelated primary-checkout entries.
 
 ## 2026-10-06 — Automatic room-record ghost and faster clear visibility, complete locally
 
