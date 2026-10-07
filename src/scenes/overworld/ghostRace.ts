@@ -3,7 +3,7 @@ import { ensureSceneAvatarPackLoaded } from '../../player/avatar/dynamic';
 import type { ResolvedPlayerAvatarPack } from '../../player/avatar/model';
 import { GhostRacePlayback, buildRunGhost, supportsGhostRace, type GhostRaceChoice, type RunGhost } from '../../runs/ghostRace';
 import { getGhostStorage, loadLocalGhostBest, saveLocalGhostBest } from '../../runs/localGhostBest';
-import { loadRaceGhost } from '../../runs/ghostRepository';
+import { loadRaceGhost, subscribeGhostBestUpdates } from '../../runs/ghostRepository';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import type { GoalRunState } from './goalRuns';
@@ -22,6 +22,8 @@ export class OverworldGhostRaceController {
   private playback: GhostRacePlayback | null = null;
   private choice: GhostRaceChoice = 'off';
   private targetVersion = 0;
+  private targetRoom: Pick<RoomSnapshot, 'id' | 'version' | 'goal' | 'coordinates'> | null = null;
+  private unsubscribe: (() => void) | null = null;
   private identity: string | null = null;
   private generation = 0;
   private sprite: Phaser.GameObjects.Sprite | null = null;
@@ -32,11 +34,25 @@ export class OverworldGhostRaceController {
   private refreshRequest: AbortController | null = null;
   constructor(private readonly options: GhostRaceOptions) {}
 
-  select(ghost: RunGhost | null, choice: GhostRaceChoice, room: Pick<RoomSnapshot, 'id' | 'version' | 'goal'>): void {
+  select(ghost: RunGhost | null, choice: GhostRaceChoice, room: Pick<RoomSnapshot, 'id' | 'version' | 'goal' | 'coordinates'>): void {
     this.clear();
-    if (!ghost || ghost.roomId !== room.id || !supportsGhostRace(room.goal)) return;
-    this.playback = new GhostRacePlayback(ghost); this.choice = choice; this.targetVersion = room.version;
+    if (choice === 'off' || (ghost && ghost.roomId !== room.id) || !supportsGhostRace(room.goal)) return;
+    this.choice = choice; this.targetVersion = room.version; this.targetRoom = room;
     this.identity = this.options.getUserId();
+    this.unsubscribe = subscribeGhostBestUpdates(room.id, () => {
+      if (this.options.getRun()?.result === 'active') void this.refreshAfterRestart();
+    });
+    if (ghost) this.setRecording(ghost);
+    else void this.refreshRecording();
+  }
+  private setRecording(ghost: RunGhost | null): void {
+    const changed = Boolean(this.sprite || this.label);
+    this.generation++; this.sprite?.destroy(); this.label?.destroy();
+    this.sprite = null; this.label = null; this.pack = null; this.position = null;
+    this.playback = ghost ? new GhostRacePlayback(ghost) : null;
+    if (changed) this.options.onDisplayObjectsChanged();
+    if (!ghost) return;
+    const choice = this.choice;
     const generation = this.generation;
     void ensureSceneAvatarPackLoaded(this.options.scene, ghost.avatarId).then(pack => {
       if (generation !== this.generation || !this.playback) return;
@@ -85,28 +101,36 @@ export class OverworldGhostRaceController {
       (run as GoalRunState).deaths);
   }
   async refreshAfterRestart(): Promise<void> {
-    const run = this.options.getRun(), choice = this.choice;
-    if (!run || !this.playback || choice === 'off' || this.options.getMode() !== 'play'
-      || run.roomId !== this.playback.ghost.roomId || run.roomVersion !== this.targetVersion) return;
+    const run = this.options.getRun();
+    if (!run || run.roomId !== this.targetRoom?.id || run.roomVersion !== this.targetVersion) return;
+    await this.refreshRecording(run);
+  }
+  private async refreshRecording(expectedRun?: GoalRunState): Promise<void> {
+    const room = this.targetRoom, choice = this.choice;
+    if (!room || choice === 'off' || this.options.getMode() !== 'play') return;
     this.refreshRequest?.abort();
     const request = this.refreshRequest = new AbortController(), generation = this.generation;
     const identity = this.options.getUserId();
     const current = () => this.refreshRequest === request && !request.signal.aborted && generation === this.generation
-      && this.options.getMode() === 'play' && this.options.getRun() === run && this.options.getUserId() === identity;
+      && this.options.getMode() === 'play' && (!expectedRun || this.options.getRun() === expectedRun)
+      && this.options.getUserId() === identity && this.targetRoom === room;
     try {
       const ghost = choice === 'personal' && !identity
-        ? loadLocalGhostBest(getGhostStorage(), run.roomId, run.roomVersion)
-        : await loadRaceGhost(run.roomId, run.roomVersion, run.roomCoordinates, choice, request.signal);
+        ? loadLocalGhostBest(getGhostStorage(), room.id, room.version)
+        : await loadRaceGhost(room.id, room.version, room.coordinates, choice, request.signal);
       if (!current()) return;
-      this.select(ghost, choice, { id: run.roomId, version: run.roomVersion, goal: run.goal });
+      this.setRecording(ghost);
       if (!ghost) this.options.showStatus?.('Ghost recording unavailable. Playing on your own.');
     } catch {
-      if (current()) this.options.showStatus?.('Ghost could not refresh. Racing the previous recording.');
+      if (current()) this.options.showStatus?.(this.playback
+        ? 'Ghost could not refresh. Racing the previous recording.'
+        : 'Ghost could not load. Playing on your own.');
     }
   }
   clear(): void {
     const changed = Boolean(this.sprite || this.label);
     this.refreshRequest?.abort(); this.refreshRequest = null;
+    this.unsubscribe?.(); this.unsubscribe = null; this.targetRoom = null;
     this.generation++; this.sprite?.destroy(); this.label?.destroy();
     this.sprite = null; this.label = null; this.pack = null; this.position = null;
     this.playback = null; this.choice = 'off'; this.identity = this.options.getUserId();

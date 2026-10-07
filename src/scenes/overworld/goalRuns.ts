@@ -35,6 +35,7 @@ import {
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 import type { GuestRunPlaybackController } from './guestRunPlayback';
 import type { GuestRunSaveResult } from '../../guestRooms/runService';
+import { notifyGhostBestUpdated } from '../../runs/ghostRepository';
 
 export type GoalRunLeaderboardState = 'idle' | 'loading' | 'ready' | 'error';
 export type GoalRunMutationEvent = 'start' | 'checkpoint' | 'complete' | 'fail' | 'abandon';
@@ -1102,19 +1103,17 @@ export class OverworldGoalRunController {
     runState.submissionMessage = 'Submitting run...';
 
     const payload = this.buildRunFinishPayload(runState, result);
-    let previousLeaderboard = this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard)
+    const previousLeaderboard = this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard)
       ? this.currentRoomLeaderboard
       : null;
-    if (result === 'completed' && previousLeaderboard === null) {
-      previousLeaderboard = await this.loadFreshRoomLeaderboard(runState);
-    }
-    const previousViewerBest = previousLeaderboard?.viewerBest ?? null;
-    const previousViewerRank = previousLeaderboard?.viewerRank ?? null;
-    const previousRoomTitle = previousLeaderboard?.roomTitle ?? null;
+    // Begin both requests immediately; a slow prior-board read must not delay saving the clear.
+    const previousLeaderboardRequest = result === 'completed' && previousLeaderboard === null
+      ? this.loadFreshRoomLeaderboard(runState) : Promise.resolve(previousLeaderboard);
     const postRunPromptKey = this.buildPostRunRatingPromptKey(runState);
 
     try {
       await this.options.runRepository.finishRun(runState.attemptId, payload);
+      if (result === 'completed') notifyGhostBestUpdated(runState.roomId);
       runState.pendingResult = null;
       runState.submissionState = 'submitted';
       runState.submittedScore = computeRunScore(runState.goal, payload);
@@ -1126,6 +1125,10 @@ export class OverworldGoalRunController {
             ? 'Failed run submitted.'
             : 'Run marked abandoned.';
       if (result === 'completed') {
+        const priorLeaderboard = await previousLeaderboardRequest;
+        const previousViewerBest = priorLeaderboard?.viewerBest ?? null;
+        const previousViewerRank = priorLeaderboard?.viewerRank ?? null;
+        const previousRoomTitle = priorLeaderboard?.roomTitle ?? null;
         const refreshedLeaderboard = await this.loadFreshRoomLeaderboard(runState);
         const currentViewerRank = refreshedLeaderboard?.viewerRank ?? null;
         const contentTitle = refreshedLeaderboard?.roomTitle ?? previousRoomTitle;

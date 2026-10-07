@@ -3,6 +3,7 @@ import type Phaser from 'phaser';
 import { createDefaultRoomSnapshot } from '../../persistence/roomModel';
 import type { GoalRunState } from './goalRuns';
 import type { RunGhost } from '../../runs/ghostRace';
+import { notifyGhostBestUpdated } from '../../runs/ghostRepository';
 vi.mock('phaser', () => ({ default: { Textures: { FilterMode: { NEAREST: 0 } } } }));
 vi.mock('../../player/avatar/dynamic', () => ({ ensureSceneAvatarPackLoaded: async () => ({
   idleTextureKey: 'idle', idleFrame: '0', animationKeys: { idle: 'idle', run: 'run', 'jump-rise': 'rise', 'jump-fall': 'fall' },
@@ -13,6 +14,7 @@ const ghost: RunGhost = { schemaVersion: 1, attemptId: 'top', roomId: '1,2', roo
     { atMs: 0, roomX: 1, roomY: 2, x: 0, y: 100, vx: 100, vy: 0, grounded: true, snap: false },
     { atMs: 1000, roomX: 1, roomY: 2, x: 100, y: 100, vx: 100, vy: 0, grounded: true, snap: false },
   ] };
+const controllers = new Set<OverworldGhostRaceController>();
 function fixture() {
   let user: string | null = null, mode = 'play';
   const object = () => {
@@ -28,13 +30,14 @@ function fixture() {
   const room = createDefaultRoomSnapshot('1,2', { x: 1, y: 2 }); room.version = 2;
   room.goal = { type: 'reach_exit', exit: { x: 100, y: 100 }, timeLimitMs: null };
   const run = { roomId: '1,2', roomCoordinates: { x: 1, y: 2 }, roomVersion: 2, goal: room.goal,
-    qualificationState: 'qualified', elapsedMs: 0, deaths: 0 } as GoalRunState;
+    qualificationState: 'qualified', elapsedMs: 0, deaths: 0, result: 'active' } as GoalRunState;
   const status = vi.fn();
   const controller = new OverworldGhostRaceController({ scene, getRun: () => run, getMode: () => mode,
     getUserId: () => user, getRoomOrigin: () => ({ x: 640, y: 704 }), onDisplayObjectsChanged: vi.fn(), showStatus: status });
+  controllers.add(controller);
   return { controller, sprite, physics, run, room, status, setUser: (value: string | null) => { user = value; }, stop: () => { mode = 'browse'; } };
 }
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { for (const controller of controllers) controller.clear(); controllers.clear(); vi.unstubAllGlobals(); });
 describe('independent race presentation', () => {
   it('shares the run timer through death and restart, while accepting a matching equivalent-version ghost', async () => {
     const f = fixture(); f.controller.select(ghost, 'top', f.room); await Promise.resolve(); f.controller.update();
@@ -84,7 +87,42 @@ describe('independent race presentation', () => {
     expect(f.status).toHaveBeenCalledWith('Ghost could not refresh. Racing the previous recording.');
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ roomId: '1,2', roomVersion: 2, top: { ghost: null } })));
     await f.controller.refreshAfterRestart();
-    expect(f.controller.getDebugSnapshot().choice).toBe('off');
+    expect(f.controller.getDebugSnapshot()).toMatchObject({ choice: 'top', attemptId: null, visible: false });
     expect(f.status).toHaveBeenCalledWith('Ghost recording unavailable. Playing on your own.');
+    f.controller.clear();
+  });
+  it('loads the automatic ghost after a quick Start at the existing run time', async () => {
+    const f = fixture(); let resolve!: (value: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(done => { resolve = done; })));
+    f.controller.select(null, 'top', f.room);
+    f.run.elapsedMs = 500;
+    resolve(Response.json({ roomId: '1,2', roomVersion: 2, top: { ghost } }));
+    await vi.waitFor(() => expect(f.controller.getDebugSnapshot().attemptId).toBe('top'));
+    f.controller.update();
+    expect(f.controller.getDebugSnapshot()).toMatchObject({ visible: true, position: { x: 690, atMs: 500 }, hasPhysicsBody: false });
+    expect(f.run.elapsedMs).toBe(500); f.controller.clear();
+  });
+  it('picks up a prior clear saved after Restart even when no ghost was initially available', async () => {
+    const f = fixture(); const best = { ...ghost, attemptId: 'late-best', elapsedMs: 800 };
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json({ roomId: '1,2', roomVersion: 2, top: { ghost: null } }))
+      .mockResolvedValueOnce(Response.json({ roomId: '1,2', roomVersion: 2, top: { ghost: best } })); vi.stubGlobal('fetch', fetch);
+    f.controller.select(null, 'top', f.room);
+    await vi.waitFor(() => expect(f.status).toHaveBeenCalledWith('Ghost recording unavailable. Playing on your own.'));
+    notifyGhostBestUpdated(f.room.id);
+    await vi.waitFor(() => expect(f.controller.getDebugSnapshot().attemptId).toBe('late-best'));
+    f.controller.clear();
+  });
+  it('never turns a chosen solo run into a race when a pending clear saves', async () => {
+    const f = fixture(), fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+    f.controller.select(null, 'off', f.room); notifyGhostBestUpdated(f.room.id); await Promise.resolve();
+    expect(fetch).not.toHaveBeenCalled(); expect(f.controller.getDebugSnapshot().choice).toBe('off');
+    f.controller.clear();
+  });
+  it('explains a failed initial recording lookup without claiming a previous ghost exists', async () => {
+    const f = fixture(); vi.stubGlobal('fetch', vi.fn(async () => { throw Error('offline'); }));
+    f.controller.select(null, 'top', f.room);
+    await vi.waitFor(() => expect(f.status).toHaveBeenCalledWith('Ghost could not load. Playing on your own.'));
+    expect(f.controller.getDebugSnapshot()).toMatchObject({ attemptId: null, visible: false });
+    f.controller.clear();
   });
 });

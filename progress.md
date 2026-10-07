@@ -1,3 +1,35 @@
+## 2026-10-07 — Ghost release and running hiccup investigation, in progress
+
+Original prompt: "oh deploy the ghost racing. the camera is almost there"; investigate the subtle running hiccup using the supplied normal-speed and frame-by-frame videos. Production publication of the tested ghost follow-up is authorized. Keep camera investigation separate from that release, preserve the primary checkout, and defer F143.
+
+- [x] Confirm the clean tested ghost candidate `c12def43` and current application main `a6350f06`; snapshot the primary checkout before release.
+- [ ] Push/review/merge the narrow ghost follow-up, pass exact-commit hosted checks, and deploy API Worker + Pages through the guarded clean-main workflow.
+- [ ] Verify fresh leaderboard behavior, automatic room-record selection, playback and served custom-domain/immutable assets in production.
+- [ ] Inspect both original clips and measure frame movement; reproduce and isolate the running hiccup before choosing a correction.
+- [ ] Validate any camera/rendering correction locally on the remote API and leave it reviewable for Jonathan.
+
+Video evidence remains local: `Screen Recording 2026-10-07 at 9.19.00 AM.mov` (21.61s, variable frame timestamps) and `short run clip.mov` (0.8s, 24 frames at 30fps). Analysis artifacts are in `/tmp/wamp-camera-hiccup-2026-10-07/`; release/preservation evidence is in `/tmp/wamp-ghost-release-2026-10-07/`. No production camera correction has been requested at this point.
+
+## 2026-10-06 — Automatic room-record ghost and faster clear visibility, complete locally
+
+User request: "before we do that, i think ghost racing may be a killer feature"; make newly completed runs available sooner and choose a rival automatically. Jonathan clarified: "Race the room record holder (recommended)". F143 is deferred until this follow-up is assessed. Canonical branch: `codex/ghost-race-default-refresh-2026-10-06`, starting at clean `origin/main` `a6350f06`; preserve the unrelated primary checkout and the delivered camera.
+
+- [x] Trace ghost lookup, completion and leaderboard caching; confirm automatic opponent is #1, including the viewer when they hold the record.
+- [x] Select #1 automatically, preserve explicit solo/personal choices and retain the choice if Start precedes lookup completion.
+- [x] Refresh open ghost choices and quick Restart after a successful save; bypass stale post-clear leaderboard data and avoid delaying finish submission for a prior-board lookup.
+- [x] Verify save/reentry/Restart races, missing recordings, identity/layout boundaries, native desktop/touch gameplay and the unchanged official client; complete quality checks.
+- [x] Record the local candidate and reviewable result. Production publication has not been requested for this follow-up.
+
+Time-ranked ordinary rooms now select the room record holder automatically, including the viewer when they hold #1. A bounded 30-second cache reuses only public record ghosts; personal account recordings always use the current session. Open choices react to a successful account or guest save, and active quick Starts/Restarts refresh their selected recording without resetting the run clock. Explicit solo and personal choices remain available. Stop, cancellation, account changes and incompatible room layouts retain their guards.
+
+Finish submission now starts alongside the prior-leaderboard read. Successful mutations bypass both the in-memory and 20-second HTTP/edge room-board cache using a private/no-store fresh read. Native T0 verification also exposed a valid trace being rejected because verification compared its simulation duration to the larger server-time floor. Core movement verification now uses the original reported duration; ranking retains its existing server-time floor and all nonce, snapshot, movement, goal and reward rules. The final delayed-upload clear verifies as passed: trace 3,288ms, ranked time 4,404ms, with a deliberately added 400ms upload delay.
+
+Final source quality passes **358 files / 2,864 tests**, full lint, TypeScript through the production build, generated bindings, DOM contract and whitespace checks. Nineteen added cases cover automatic selection, stale/canceled lookup, account/cache isolation, late recording handoff, explicit choices, save notifications and fresh room-board behavior. Four final native cases pass save/reentry/new-record Restart, phone quick Start, desktop solo and verified phone guest-best playback with zero unexpected browser errors. The record updates the already open intro 134ms after release of the save reply; Restart rewinds and picks up that record. All ghost sprites remain outside physics. The unchanged official client passes actual public-API gameplay, collision, a running timer and zero captured errors; final screenshots are viewed. No app code changes follow the full quality pass.
+
+Retained diagnostics include a genuine pre-fix T0 trace-duration rejection, an intercepted successful 204 finish reported by Chrome as aborted, canceled background reads during explicit test teardown, and official-client attempts that clicked too early or opened chat with Enter. They are excluded from accepted evidence. A blank solo view in the distant fixed-camera fixture also reproduces with unchanged `a6350f06` frontend source; its camera stays at the streamed window's minimum rather than the room. This existing fixed-camera entry issue is recorded for follow-up. The final fixture uses a following camera and renders both solo and ghost play. Fixture rooms/accounts/runs and migrations remain local, with no production writes or imported production secrets.
+
+The full local preview is `http://127.0.0.1:3040/r/81/40?welcome=0` with local API port 8787. The ordinary-room frontend preview remains `http://127.0.0.1:3001/` on the production API; the backend timing/cache correction is not live there. A later authorized release needs API Worker and Pages delivery, with no new migration, PartyKit, renderer or catalog change. Primary HEAD/status and all 25 unrelated dirty entries remain preserved. Master remains **54/214**; F143 stays deferred. Evidence: `/tmp/wamp-ghost-followup-*` and ignored `output/web-game/ghost-race-followup/{native-ready,official-complete,native-complete}`.
+
 ## 2026-10-06 — Camera response correction, delivered
 
 Initial user request: "ok do it and let me test locally on the remote api". Work started on `codex/camera-vertical-response-2026-10-06` from `origin/main` `179e3874`, preserving the unrelated dirty primary checkout. The initial delivery boundary was a local frontend connected to `https://api.wamp.land`; Jonathan subsequently accepted the correction and authorized publication.

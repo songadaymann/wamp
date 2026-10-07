@@ -74,6 +74,7 @@ class RunApiError extends Error {
 }
 
 class ApiRunRepository implements RunRepository {
+  private bypassRoomLeaderboardCacheUntil = 0;
   constructor(private readonly baseUrl: string) {}
 
   async startRun(body: RunStartRequestBody): Promise<RunStartResponse> {
@@ -108,11 +109,13 @@ class ApiRunRepository implements RunRepository {
       params.set('version', String(version));
     }
 
+    const fresh = Date.now() < this.bypassRoomLeaderboardCacheUntil;
+    if (fresh) params.set('fresh', '1');
     const path = `/api/leaderboards/rooms/${encodeURIComponent(roomId)}?${params.toString()}`;
     const cacheKey = cacheAsCurrent || version === null
       ? this.currentRoomLeaderboardCacheKey(roomId, coordinates, limit)
       : this.leaderboardCacheKey(path);
-    const response = await loadWithStaleWhileRevalidate(
+    const response = fresh ? await this.request<RoomLeaderboardResponse>(path, { cache: 'no-store' }) : await loadWithStaleWhileRevalidate(
       cacheKey,
       () => this.request<RoomLeaderboardResponse>(path),
     );
@@ -260,6 +263,8 @@ class ApiRunRepository implements RunRepository {
   }
 
   private invalidateLeaderboards(): void {
+    // The HTTP/edge cache also lasts 20 seconds, independently of our memory cache.
+    this.bypassRoomLeaderboardCacheUntil = Date.now() + 20_000;
     invalidateStaleWhileRevalidateCache(`leaderboard:${this.baseUrl}`);
   }
 

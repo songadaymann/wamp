@@ -5,6 +5,7 @@ import type { RunRepository } from '../../runs/runRepository';
 import { OverworldCoursePlaybackController } from './coursePlayback';
 import { OverworldGoalRunController } from './goalRuns';
 import { RankedRunTraceRecorder, type RankedRunTraceFrameInput } from './rankedRunTraceRecorder';
+import { subscribeGhostBestUpdates } from '../../runs/ghostRepository';
 
 const { courseStart, expandedStart, courseFinish, expandedFinish } = vi.hoisted(() => ({
   courseStart: vi.fn(), expandedStart: vi.fn(), courseFinish: vi.fn().mockResolvedValue(undefined), expandedFinish: vi.fn().mockResolvedValue(undefined),
@@ -47,6 +48,29 @@ async function settle() { for (let i = 0; i < 12; i++) await Promise.resolve(); 
 afterEach(() => vi.clearAllMocks());
 
 describe('ranked trace capture while the start request is pending', () => {
+  it('submits a clear immediately and refreshes ghost choices even while the prior leaderboard read is slow', async () => {
+    let resolveBoard!: (value: null) => void;
+    const slowBoard = new Promise<null>(resolve => { resolveBoard = resolve; });
+    const board = vi.fn().mockResolvedValue(null), finish = vi.fn().mockResolvedValue(undefined);
+    const goals = new OverworldGoalRunController({ playerHeight: 14,
+      runRepository: { startRun: vi.fn().mockResolvedValue({ ...binding, attemptId: 'finish-now', userDisplayName: 'Builder' }),
+        finishRun: finish, loadRoomLeaderboard: board, loadGlobalLeaderboard: vi.fn().mockResolvedValue(null) } as unknown as RunRepository,
+      getScore: () => 0, getAuthenticated: () => true, getAuthSource: () => 'session', getAuthDisplayName: () => 'Builder',
+      countRoomObjectsByCategory: () => 0, buildVerificationTrace: () => ({ schemaVersion: 1, verificationNonce: 'signed-binding',
+        snapshotHash: 'published-snapshot', traceDurationMs: 1000, inputEvents: [], breadcrumbs: [], roomTransitions: [], goalEvents: [] }),
+    });
+    const room = { ...createDefaultRoomSnapshot(), status: 'published' as const, spawnPoint: { x: 64, y: 256 },
+      goal: { type: 'reach_exit' as const, exit: { x: 96, y: 256 }, timeLimitMs: null } };
+    goals.syncRunForRoom(room, 'spawn'); await settle();
+    board.mockReturnValue(slowBoard);
+    const refreshed = vi.fn(), unsubscribe = subscribeGhostBestUpdates(room.id, refreshed);
+    try {
+      goals.getCurrentRun()!.elapsedMs = 1000; goals.markCompleted('Done');
+      expect(finish).toHaveBeenCalledTimes(1); await settle();
+      expect(refreshed).toHaveBeenCalledTimes(1);
+      expect(goals.getCurrentRun()?.submissionState).toBe('submitted');
+    } finally { unsubscribe(); resolveBoard(null); await settle(); }
+  });
   it('retains an ordinary room checkpoint and death before the signed binding arrives', async () => {
     const pending = deferred(); const recorder = new RankedRunTraceRecorder();
     const startRun = vi.fn(() => pending.promise);

@@ -33,3 +33,19 @@ describe('fresh global windows', () => {
     await expect(createRunRepository().loadGlobalLeaderboard(25, 'week')).rejects.toThrow('This Week is unavailable');
   });
 });
+
+describe('post-clear room leaderboard freshness', () => {
+  it('bypasses both memory and HTTP caching for an immediate return after a saved run', async () => {
+    const board = { roomId: '1,2', roomVersion: 1, entries: [], viewerBest: null, viewerRank: null };
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json(board))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(Response.json({ ...board, roomTitle: 'Fresh clear' })); vi.stubGlobal('fetch', fetch);
+    const repo = createRunRepository();
+    await repo.loadRoomLeaderboard('1,2', { x: 1, y: 2 }, 1);
+    await repo.finishRun('new-clear', { result: 'completed', elapsedMs: 1000, deaths: 0, collectiblesCollected: 0,
+      enemiesDefeated: 0, checkpointsReached: 0, score: null, finishedAt: '2026-10-06T19:00:00Z', enemyCollectiblesCollected: 0 });
+    expect((await repo.loadRoomLeaderboard('1,2', { x: 1, y: 2 }, 1)).roomTitle).toBe('Fresh clear');
+    expect(fetch.mock.calls[2][0]).toContain('fresh=1');
+    expect(fetch.mock.calls[2][1]).toMatchObject({ cache: 'no-store', credentials: 'include' });
+  });
+});
