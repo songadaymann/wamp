@@ -127,7 +127,8 @@ export class OverworldPlayerPresentationController {
         break;
       case 'down':
       default:
-        this.setPlayerSpritePixelPosition(playerSprite, player.x, playerBody.bottom + visualOffset);
+        // Arcade updates the game object's X in postUpdate; its body is already current here.
+        this.setPlayerSpritePixelPosition(playerSprite, playerBody.center.x, playerBody.bottom + visualOffset);
         break;
     }
 
