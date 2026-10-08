@@ -1,0 +1,8 @@
+[hidden] { display: none !important; }
+#bug-admin-notes { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; border: 2px solid #18161c; color: #18161c; background: #fffaf0; }
+#bug-admin-context { overflow-wrap: anywhere; }
+#bug-admin-diagnostics { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+#bug-admin-screenshot { max-height: 240px; max-width: 100%; }
+#bug-admin-detail .controls { flex-wrap: wrap; }
+#bug-admin-list { max-height: 75vh; overflow-y: auto; }
+@media(max-width: 720px) { .workspace { grid-template-columns: 1fr; } #bug-admin-list { max-height: 30vh; } }

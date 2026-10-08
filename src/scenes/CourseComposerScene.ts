@@ -193,6 +193,12 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     return this.uiState;
   }
 
+  getBugReportContext(): Record<string, unknown> {
+    return { scene: 'course-composer', mode: 'edit', source: 'draft', coordinates: this.selectedCoordinates,
+      courseId: this.record?.draft.id, courseVersion: this.record?.draft.version,
+      camera: { x: this.cameras.main.scrollX, y: this.cameras.main.scrollY, zoom: this.cameras.main.zoom } };
+  }
+
   describeState(): Record<string, unknown> {
     return {
       scene: 'course-composer',

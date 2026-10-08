@@ -9,6 +9,7 @@ import { handleMyActivity } from './worker/activity/routes';
 import { handleActivityUnsubscribe } from './worker/activity/unsubscribe';
 import { runActivityEmails } from './worker/activity/emails';
 import { handleGuestReplay, purgeGuestReplays } from './worker/guestReplay/routes';
+import { handleBugReports, purgeBugReports } from './worker/bugReports/routes';
 import { pruneRateLimitEvents } from './worker/core/rateLimit';
 import { handleAdminRequest } from './worker/admin/routes';
 import { handleAuthRequest } from './worker/auth/routes';
@@ -217,6 +218,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
 
   {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    pattern: { prefix: '/api/admin/bug-reports' },
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleBugReports(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     pattern: { prefix: '/api/admin/' },
     auth: 'admin',
     handler: ({ request, url, env, executionContext }) =>
@@ -260,6 +267,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     auth: 'optional',
     handler: ({ request, url, env, executionContext }) =>
       handleChatRequest(request, url, env, executionContext),
+  },
+  {
+    methods: ['POST'],
+    pattern: '/api/bug-reports',
+    auth: 'optional',
+    handler: ({ request, url, env }) => handleBugReports(request, url, env),
   },
   {
     methods: ['POST'],
@@ -312,6 +325,7 @@ export default {
       console.log(JSON.stringify({ event: 'world-map-health', ...result }));
     } else {
       await purgeGuestReplays(env);
+      await purgeBugReports(env);
       await pruneGuestRuns(env);
       await pruneRateLimitEvents(env);
     }

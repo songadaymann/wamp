@@ -15,6 +15,9 @@ for (const match of html.matchAll(/\bid\s*=\s*["']([^"']+)["']/g)) {
 }
 
 const requiredIdsByController = {
+  bugReporter: ['bug-report-modal', 'bug-report-form', 'bug-report-notes', 'bug-report-status', 'btn-bug-report-send',
+    'btn-bug-report-close', 'bug-report-attach', 'bug-recording-enabled', 'bug-report-context', 'bug-report-evidence-summary',
+    'bug-report-frame', 'bug-report-empty', 'bug-report-play', 'bug-report-scrub', 'bug-report-time', 'bug-report-screenshot'],
   'DailyRoomController': ['daily-room-modal','daily-room-chip','btn-daily-open','btn-auth-daily','btn-daily-dismiss',
     'btn-daily-close','btn-daily-play','btn-daily-copy','btn-daily-save','btn-daily-retry','daily-room-title','daily-room-builder',
     'daily-room-status','daily-room-progress','daily-room-board','daily-room-date','activity-daily-features'],

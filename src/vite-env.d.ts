@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  readonly VITE_APP_BUILD_ID?: string;
   readonly VITE_ROOM_API_BASE_URL?: string;
   readonly VITE_ROOM_STORAGE_BACKEND?: 'auto' | 'local' | 'remote';
   readonly VITE_REOWN_PROJECT_ID?: string;

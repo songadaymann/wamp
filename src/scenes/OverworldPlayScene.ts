@@ -6527,6 +6527,22 @@ export class OverworldPlayScene extends Phaser.Scene {
     };
   }
 
+  canCaptureBugReportImages(): boolean {
+    return !this.roomChatController.hasRenderedChatBubbles();
+  }
+
+  getBugReportContext(): Record<string, unknown> {
+    const coordinates = this.mode === 'play' ? this.currentRoomCoordinates : this.selectedCoordinates;
+    const room = this.getRoomSnapshotViewForCoordinates(coordinates);
+    const course = this.activeCourseRun;
+    return { scene: 'overworld-play', mode: this.mode, coordinates, roomVersion: room?.version,
+      publishedVersion: room?.status === 'published' ? room.version : null,
+      source: room?.status === 'draft' || course?.course.status === 'draft' ? 'draft' : room ? 'published' : 'unknown',
+      courseId: course?.course.id, courseVersion: course?.expandedRoomVersion ?? course?.course.version,
+      expandedRoomId: course?.expandedRoomId, player: this.player ? { x: this.player.x, y: this.player.y } : null,
+      camera: { x: this.cameras.main.scrollX, y: this.cameras.main.scrollY, zoom: this.cameras.main.zoom } };
+  }
+
   describeState(): Record<string, unknown> {
     const camera = this.cameras.main;
     const cameraBounds = camera.getBounds();

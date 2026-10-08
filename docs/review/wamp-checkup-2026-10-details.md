@@ -1603,7 +1603,7 @@ Order the fixes by value-to-effort:
 - **Area:** Backend performance, cost & reliability
 - **Type:** idea · **impact:** medium · **effort:** medium
 - **Added:** 2026-10-08, at Jonathan's request; not part of the original October 3 review
-- **Status:** planned; after F150 and before the larger F155/F144 gameplay additions
+- **Status:** local candidate ready on 2026-10-08, stacked on F150; review and coordinated delivery pending before F155/F144
 - **Reference:** [gsimone's in-game bug-report demonstration](https://x.com/ggsimm/status/2108245377899966491)
 
 **Summary.** Let a player or builder report a problem while it is happening, with a short description and the previous 10–20 seconds of gameplay attached. Automatically include the exact room and version, application build, browser/device details and relevant errors. Jonathan can review the report and replay together in a private admin inbox. This would make intermittent camera, avatar and rendering hiccups easier to investigate.
@@ -1617,7 +1617,11 @@ Order the fixes by value-to-effort:
 - Keep capture within explicit runtime, memory and storage budgets. Verify desktop and phone gameplay with reporting enabled, including camera smoothness. Reuse F001's recorder improvements and F038's bounded storage design rather than adding another synchronous screenshot encoder to the play loop.
 - Respect existing recording preferences. If capture is disabled, explain the available evidence and still permit a text report. Reconstructing or resuming the exact simulation can be considered later; it is not provided by today's screenshot replay system.
 
-**Current groundwork, checked against `d534619c` on 2026-10-08.**
+**2026-10-08 implementation candidate.** `codex/checkup-bug-reporter-2026-10-08` adds the report dialog, a bounded approximately 15-second visual replay/current screenshot, allowlisted room/draft/course/build/device/error context, written-only fallback, stored-receipt confirmation and stable retries. Capture uses bitmap/toBlob asynchronously, reads context only at the capture cadence and omits canvas frames containing room-chat bubbles. Shared opt-out works with DNT/GPC, blocked storage and changes from another tab. A private admin inbox provides playback/scrubbing, room links, details, open/resolved status, Reopen and Delete. Atomic D1 gates bound reports and evidence; notes last 30 days and images seven.
+
+Full **371 files / 2,967 tests**, quality gates, native desktop/phone/play/build/Expanded Room/touch/persistence and inspected installed-client screenshots pass. Local Chromium movement p95 is **9.9ms** with capture off/on, with no frames over 50ms in either five-second sample. This first delivery uses screenshot replay rather than a full simulation trace. [Local demo](http://127.0.0.1:3040/r/84/40?welcome=0&avatar=gamejew-red). The checklist remains unticked pending local review, migration 0060 and API Worker + Pages publication. See [candidate receipt](../development/checkup-delivery-2026-10-03.md); evidence `/tmp/wamp-bug-reporter-2026-10-08/`. F001/F038 and physical-device performance certification remain separate.
+
+**Original groundwork, checked against `d534619c` on 2026-10-08.**
 
 Guest session recording and private replay viewing already exist, but they do not provide a player-submitted bug report. The recorder stops after sign-in and its samples contain screenshots, coarse position and selected actions rather than a complete simulation/input trace. Extending this needs an explicit report flow and a capture path that also supports signed-in players.
 

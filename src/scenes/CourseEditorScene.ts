@@ -1699,6 +1699,15 @@ export class CourseEditorScene extends Phaser.Scene {
     this.roomDeathMap?.clear();
   }
 
+  getBugReportContext(): Record<string, unknown> {
+    const slice = this.getSelectedSlice();
+    return { scene: 'course-editor', mode: 'edit', source: 'draft', coordinates: slice?.coordinates,
+      roomVersion: slice?.currentVersion, publishedVersion: slice?.publishedVersion,
+      dirty: this.getDirtySlices().length > 0, courseId: this.courseRecord?.draft.id,
+      courseVersion: this.courseRecord?.draft.version,
+      camera: { x: this.cameras.main.scrollX, y: this.cameras.main.scrollY, zoom: this.cameras.main.zoom } };
+  }
+
   describeState(): Record<string, unknown> {
     const camera = this.cameras.main;
     return {

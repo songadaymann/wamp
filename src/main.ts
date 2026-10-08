@@ -1,4 +1,5 @@
 import { initializeGuestReplay } from './analytics/replay/recorder';
+import { initializeBugReporter } from './bugReports/runtime';
 import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
 import {
@@ -386,16 +387,19 @@ window.render_game_to_text = () =>
       ...getAppFeedbackDebugState(),
     },
     graphics: getGraphicsDebugState(),
+    bugReports: bugReporter.debug(),
     bootDiagnostics: getBootDiagnostics(),
   });
 
 window.get_room_music_debug_state = () => globalRoomMusicController.getDebugState();
 window.get_sword_hunter_debug = () => getSwordHunterDebugState(game);
 initializeGuestActivityTracking(getGuestActivitySnapshot);
+const bugReporter = initializeBugReporter(game);
 initializeGuestReplay({
   canvas: game.canvas,
   snapshot: getGuestActivitySnapshot,
   state: getDebugState,
+  latestImage: bugReporter.latestImage,
   onFrame(callback) {
     game.events.on(Phaser.Core.Events.POST_RENDER, callback);
     return () => { game.events.off(Phaser.Core.Events.POST_RENDER, callback); };

@@ -3,6 +3,7 @@ const auth = vi.hoisted(() => ({loading:false,authenticated:false}));
 vi.mock('../../auth/client', () => ({getAuthDebugState:()=>auth,AUTH_STATE_CHANGED_EVENT:'auth-state-changed'}));
 vi.mock('../../api/baseUrl', () => ({getApiBaseUrl:()=>''}));
 import { initializeGuestReplay } from './recorder';
+import { bugRecordingAllowed, setBugRecordingAllowed } from '../../bugReports/recordingPreference';
 let frame: () => void;
 let optOut: EventTarget;
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -16,6 +17,7 @@ beforeEach(() => {
   const storage = new Map<string,string>();
   vi.stubGlobal('localStorage',{getItem:(k:string)=>storage.get(k),setItem:(k:string,v:string)=>storage.set(k,v)});
   vi.stubGlobal('navigator',{doNotTrack:'0'});
+  setBugRecordingAllowed(true);
   vi.stubGlobal('location',{pathname:'/'});
   vi.stubGlobal('innerWidth',1440);vi.stubGlobal('innerHeight',900);
   const doc = new EventTarget();
@@ -29,7 +31,7 @@ beforeEach(() => {
   fetchMock=vi.fn(async (url:string) => Response.json(url.endsWith('/start') ? {id:'id',token:'token'} : {ok:true}));
   vi.stubGlobal('fetch',fetchMock);
 });
-afterEach(()=>{stop?.();stop=undefined;vi.useRealTimers();vi.unstubAllGlobals();});
+afterEach(()=>{stop?.();stop=undefined;setBugRecordingAllowed(true);vi.useRealTimers();vi.unstubAllGlobals();});
 async function boot() {
   stop=initializeGuestReplay({canvas:{} as HTMLCanvasElement,snapshot:()=>({mode:'play',roomCoordinates:{x:1,y:2}}),
     state:()=>({player:{x:3,y:4,email:'secret@example.com'},auth:{token:'secret'}}),onFrame:callback=>{frame=callback;return vi.fn();}});
@@ -60,4 +62,19 @@ it('persists opt-out, discards this recording, and stops future samples',async()
 it('does not record an already signed-in visitor',async()=>{
   auth.authenticated=true;await boot();await vi.advanceTimersByTimeAsync(3000);
   expect(fetchMock).not.toHaveBeenCalled();
+});
+it('shares notice opt-out with the bug recorder even when storage writes fail',async()=>{
+  await boot(); vi.spyOn(localStorage,'setItem').mockImplementation(()=>{throw new Error('Storage blocked');});
+  optOut.dispatchEvent(new Event('click')); await vi.advanceTimersByTimeAsync(0);
+  expect(bugRecordingAllowed()).toBe(false);
+  expect(fetchMock.mock.calls.some(([url])=>String(url).endsWith('/discard'))).toBe(true);
+  const count=fetchMock.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(5000);frame();expect(fetchMock).toHaveBeenCalledTimes(count);
+});
+it('stops the guest session when recording is disabled in another tab',async()=>{
+  await boot(); localStorage.setItem('wamp_replay_opt_out','1'); events.dispatchEvent(new Event('storage'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(fetchMock.mock.calls.some(([url])=>String(url).endsWith('/discard'))).toBe(true);
+  const count=fetchMock.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(5000);frame();expect(fetchMock).toHaveBeenCalledTimes(count);
 });

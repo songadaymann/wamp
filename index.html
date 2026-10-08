@@ -167,6 +167,7 @@
       <div id="menu-body">
         <div class="auth-row auth-menu-action-row">
           <button id="btn-about-open" class="bar-btn auth-menu-action-btn" type="button">About WAMP</button>
+          <button id="btn-menu-report-bug" class="bar-btn auth-menu-action-btn" type="button" data-bug-report-open>Report a bug</button>
           <a
             id="auth-discord-link"
             class="auth-discord-link"
@@ -2075,6 +2076,7 @@
           <span id="world-ghost-race-time"></span>
         </span>
         <button id="btn-world-settings" class="bar-btn bar-btn-small world-footer-controls-btn world-footer-settings world-only-control" type="button">Settings</button>
+        <button id="btn-world-report-bug" class="bar-btn bar-btn-small world-footer-controls-btn" type="button" data-bug-report-open>Report a bug</button>
         <button id="btn-guestbook-open" class="bar-btn bar-btn-small world-footer-controls-btn world-only-control" type="button">Guestbook</button>
         <button id="btn-world-controls" class="bar-btn bar-btn-small world-footer-controls-btn world-only-control" type="button">Controls</button>
         <button id="btn-chat-toggle" class="bar-btn bar-btn-small world-footer-controls-btn chat-footer-toggle" type="button" data-chat-toggle>
@@ -3022,6 +3024,35 @@
     </div>
   </div>
 
+  <div id="bug-report-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="bug-report-title">
+      <div class="history-modal-header">
+        <h2 id="bug-report-title" class="history-modal-title">Report a bug</h2>
+        <button id="btn-bug-report-close" class="bar-btn bar-btn-small" type="button">Close</button>
+      </div>
+      <form id="bug-report-form">
+        <label for="bug-report-notes">What happened?</label>
+        <textarea id="bug-report-notes" maxlength="2000" required placeholder="What were you trying to do, and what went wrong?"></textarea>
+        <p id="bug-report-context"></p>
+        <label><input id="bug-report-attach" type="checkbox" checked> Attach the recent replay and screenshot</label>
+        <p id="bug-report-evidence-summary"></p>
+        <div class="bug-report-preview">
+          <img id="bug-report-frame" alt="Preview of recent gameplay or building" hidden>
+          <p id="bug-report-empty">No game images attached</p>
+          <div class="bug-report-player-controls">
+            <button id="bug-report-play" class="bar-btn bar-btn-small" type="button" disabled>Play replay</button>
+            <output id="bug-report-time">0.0s / 0.0s</output>
+          </div>
+          <input id="bug-report-scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Replay position" disabled>
+          <details><summary>Latest screenshot</summary><img id="bug-report-screenshot" alt="Latest game screenshot" hidden></details>
+        </div>
+        <p>Only game images and diagnostic details are attached. Form entries and chat are excluded. Reports are private.</p>
+      </form>
+      <p id="bug-report-status" role="status" aria-live="polite"></p>
+      <div class="bug-report-actions"><button id="btn-bug-report-send" class="bar-btn" type="submit" form="bug-report-form" disabled>Send report</button></div>
+    </div>
+  </div>
+
   <div id="settings-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel settings-modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
       <div class="history-modal-header">
@@ -3056,6 +3087,15 @@
               </span>
             </label>
           </div>
+        </section>
+        <section class="settings-section">
+          <div class="settings-section-title">Bug reports</div>
+          <label class="settings-toggle-row" for="bug-recording-enabled">
+            <span class="settings-label-copy"><span class="settings-label-title">Keep recent game replay</span>
+              <span class="settings-choice-description">Kept on this device for about 15 seconds. Attached when you send a report. Turning this off also disables guest session recording.</span></span>
+            <input id="bug-recording-enabled" class="settings-checkbox" type="checkbox" checked>
+          </label>
+          <button class="bar-btn bar-btn-small" type="button" data-bug-report-open>Report a bug</button>
         </section>
         <section class="settings-section">
           <div class="settings-section-title">Frame rate</div>

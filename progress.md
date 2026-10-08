@@ -1,3 +1,26 @@
+## 2026-10-08 — F249 in-game bug reporter
+
+Original prompt: "Ok let’s move on to bug reporter"
+
+Canonical branch: `codex/checkup-bug-reporter-2026-10-08`, stacked on the saved F150 candidate `9b68b756` / draft PR #81. Preserve F150 and the dirty primary checkout; keep Vite 3040/local D1 8787 for review. No production publication is requested.
+
+- [x] Map diagnostics, replay capture, authoring context and private admin/storage paths; establish bounded capture and retention.
+- [x] Build the guest/signed-in report flow with notes, preview, explicit unavailable evidence and retry, plus the private admin inbox/playback/status controls.
+- [x] Verify persistence/auth/abuse limits, desktop/phone play and building, capture performance and the installed web-game client with inspected screenshots.
+- [x] Complete quality checks, save a reviewable candidate and local demo, and record release requirements. Keep F249 unticked until delivered.
+
+Evidence directory: `/tmp/wamp-bug-reporter-2026-10-08/`. The report buffer stays in RAM until explicit submission, honors existing opt-out/DNT/GPC and supports signed-in players. Shared bitmap/toBlob capture replaces synchronous JPEG encoding in the existing guest recorder. Context reads use the capture cadence and immutable room views; canvas images containing room-chat bubbles are omitted. The existing guest recorder retains its separate upload lifecycle and shares the recording preference, including blocked storage and changes from another tab.
+
+Local candidate: Report a bug is available beside Settings, in the menu and in Settings during play/building. Notes, recent screenshot replay and current screenshot are previewed before submission. Published/draft room and course versions, build, coarse device/viewport, position/camera and bounded diagnostic kinds/locations are copied through explicit allowlists; raw error messages, form values and chat contents are excluded. Written reports work with recording disabled or unreadable graphics. A stored-but-lost reply retry preserves the exact identity/body and creates one report. The admin-key-protected inbox provides playback/scrubbing, room links, device/context details, open/resolved filters, Reopen and Delete.
+
+Full **371 files / 2,967 tests**, lint, TypeScript/build, API/renderer bindings, DOM **953 IDs / 234 required**, Worker safety and strict map asset contract pass. Native guest/signed-in play, pause/resume, retry, phone submission, ordinary/Expanded Room drafts, portrait touch movement, disabled recording and private inbox/status cases pass with no page errors. Screenshots are inspected, including notes contrast and mobile confirmation. Phone builder checks enter the existing editor at desktop width and use its phone handoff, then More → Account & menu → Report a bug. The installed client runs unchanged with only a preferences preload; its inspected screenshot shows healthy gameplay/capture. Its sole console failure is the documented local presence identity 503 because no PartyKit service is configured.
+
+An ordinary five-second Chromium movement comparison records median **8.3ms**, p95 **9.9ms**, zero frames over 50ms, and max **10.4ms** with recording both off and on. Enabled capture holds 47 frames / 359,831 JSON characters and max 28ms total asynchronous capture latency. This is local Chromium evidence; physical-device and high-refresh certification remain separate. Capture starts at 8fps desktop / 4fps phone and adapts down to 1fps for costly snapshots; the bounded visual replay is not a complete simulation trace.
+
+Migration **0060** and API Worker + Pages publication will be required together after local review. Notes expire after 30 days, images after seven; one atomic D1 batch enforces identity/network/daily/storage budgets and confirms stored receipts. No new binding or catalog/renderer/PartyKit delivery is introduced. The catalog remains `authoring-catalog-v1:020c7c1d1777764e`. Primary HEAD, all-untracked status and both diffs match their starting hashes. F249 and F150 remain unticked at **55/215 delivered**. Local demo: `http://127.0.0.1:3040/r/84/40?welcome=0&avatar=gamejew-red`; inbox: `http://127.0.0.1:3040/bug-reports.html` (local-only key `local-bug-report-review`).
+
+Retained diagnostics include the corrected fetch receiver, guest-notice stacking, missing standalone Knip entry, temporary-runner selector/actionability races and tablet/phone menu handoff setup. Accepted reports follow their fixes; no production state was written. Candidate review and delivery precede F155 boss modes, then F144 Lost Song hunt.
+
 ## 2026-10-08 — F150 optional player hearts and healing
 
 Original prompt: "Ok let’s move on to th next things on the list!"

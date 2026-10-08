@@ -2122,6 +2122,12 @@ export class EditorScene extends Phaser.Scene {
     this.musicWorkflow.renderUi();
   }
 
+  getBugReportContext(): Record<string, unknown> {
+    return { scene: 'editor', mode: 'edit', coordinates: this.roomCoordinates, roomVersion: this.roomVersion,
+      publishedVersion: this.publishedVersion, source: 'draft', dirty: this.roomDirty,
+      camera: { x: this.cameras.main.scrollX, y: this.cameras.main.scrollY, zoom: this.cameras.main.zoom } };
+  }
+
   describeState(): Record<string, unknown> {
     return {
       scene: 'editor',

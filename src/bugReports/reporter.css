@@ -1,0 +1,28 @@
+#bug-report-modal { z-index: 10002; padding: 12px; background: rgba(5,5,5,.8); }
+#bug-report-modal .history-modal-panel { width: min(680px, calc(100vw - 24px)); min-height: 0; background: #fff3db; color: #18161c; border: 2px solid #79ccde; border-radius: 0; }
+#bug-report-modal .history-modal-header { flex-direction: row; align-items: center; flex: 0 0 auto; }
+#btn-bug-report-close { width: auto; }
+#bug-report-modal .history-modal-title { color: #18161c; }
+#bug-report-form { display: grid; gap: 12px; min-width: 0; min-height: 0; overflow-y: auto; }
+#bug-report-form p { margin: 0; font-size: 12px; line-height: 1.5; }
+#bug-report-notes { box-sizing: border-box; width: 100%; min-height: 90px; resize: vertical; padding: 10px; border: 2px solid #18161c; border-radius: 0; color: #18161c; background: #fffaf0; font: 14px 'HomeVideo', monospace; }
+.bug-report-preview { display: grid; gap: 7px; border: 2px solid #18161c; background: #fffaf0; padding: 8px; }
+.bug-report-preview img { display: block; max-height: 220px; max-width: 100%; width: 100%; object-fit: contain; background: #18161c; image-rendering: auto; }
+.bug-report-preview img[hidden], #bug-report-modal [hidden] { display: none; }
+.bug-report-player-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#bug-report-scrub { width: 100%; min-height: 24px; }
+#bug-report-context { overflow-wrap: anywhere; color: #006c82; }
+.bug-report-actions { display: flex; justify-content: flex-end; gap: 8px; }
+#bug-report-modal button { min-height: 36px; }
+#bug-report-modal input[type='checkbox'] { accent-color: #006c82; }
+#bug-report-status { font-weight: bold; margin: 0; font-size: 12px; }
+#bug-report-screenshot { max-height: 120px; }
+body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-report-bug { min-height: 20px; padding: 3px 7px; font-size: 7px; }
+@media (max-width: 540px) {
+  #bug-report-modal .history-modal-panel { padding: 12px; max-height: calc(100dvh - 24px); }
+  #bug-report-modal .history-modal-title { font-size: 16px; }
+  #bug-report-form { gap: 9px; }
+  #bug-report-modal button { min-height: 44px; }
+  .bug-report-preview img { max-height: 160px; }
+  #bug-report-screenshot { max-height: 80px; }
+}
