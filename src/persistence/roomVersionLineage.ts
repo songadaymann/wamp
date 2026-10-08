@@ -5,6 +5,7 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../config';
+import { normalizePlayerHearts, type PlayerHearts } from '../player/hearts';
 import {
   normalizeSwordsmanDefeatMode,
   normalizeSwordsmanObjectiveMode,
@@ -93,6 +94,7 @@ type CanonicalPlacedObjectPayload = {
 type CanonicalRoomFingerprintPayload = {
   cameraMode?: 'room';
   pitsAreDeadly?: true;
+  playerHearts?: PlayerHearts;
   goal: CanonicalGoalPayload | null;
   goalIntroText: string | null;
   spawnPoint: [number, number] | null;
@@ -141,6 +143,7 @@ export function buildRoomVersionFingerprint(snapshot: RoomSnapshot): string {
   const payload: CanonicalRoomFingerprintPayload = {
     ...(snapshot.cameraMode === 'room' ? { cameraMode: 'room' as const } : {}),
     ...(snapshot.pitsAreDeadly === true ? { pitsAreDeadly: true as const } : {}),
+    ...(normalizePlayerHearts(snapshot.playerHearts) > 1 ? { playerHearts: normalizePlayerHearts(snapshot.playerHearts) } : {}),
     goal: normalizeGoalForFingerprint(snapshot.goal),
     goalIntroText: snapshot.goalIntroText ?? null,
     spawnPoint: snapshot.spawnPoint

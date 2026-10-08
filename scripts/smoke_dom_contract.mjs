@@ -43,6 +43,9 @@ const requiredIdsByController = {
     'goal-type-instructions',
     'room-pits-deadly',
     'course-pits-deadly',
+    'room-player-hearts',
+    'course-player-hearts',
+    'course-workbench-player-hearts',
   ],
   'PaletteController': [
     'palette-canvas',

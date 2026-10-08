@@ -625,6 +625,15 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => input.removeEventListener('change', onChange));
     }
     const cameraInput = this.elements.roomCameraCenteredInput;
+    for (const [select, setHearts] of [
+      [this.elements.roomPlayerHeartsSelect, this.actions.onSetRoomPlayerHearts],
+      [this.elements.coursePlayerHeartsSelect, this.actions.onSetCoursePlayerHearts],
+    ] as const) {
+      if (!select || !setHearts) continue;
+      const onChange = () => setHearts(Number(select.value));
+      select.addEventListener('change', onChange);
+      this.cleanupCallbacks.push(() => select.removeEventListener('change', onChange));
+    }
     if (cameraInput) {
       const onCameraChange = () => this.actions.onSetRoomCameraCentered(cameraInput.checked);
       cameraInput.addEventListener('change', onCameraChange);

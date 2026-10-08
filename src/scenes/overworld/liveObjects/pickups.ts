@@ -1,5 +1,9 @@
 import type { SfxCue } from '../../../audio/sfx';
 
+export function isHealingCollectible(objectId: string): boolean {
+  return objectId === 'heart' || objectId === 'boygame_heart' || objectId === 'health_potion';
+}
+
 export function getCollectibleScoreValue(objectId: string): number {
   switch (objectId) {
     case 'gem':

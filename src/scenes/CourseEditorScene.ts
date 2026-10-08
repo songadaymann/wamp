@@ -686,6 +686,7 @@ export class CourseEditorScene extends Phaser.Scene {
       onSetRoomTitle: (title) => this.setRoomTitle(title),
       onSetRoomCameraCentered: (centered) => this.getSelectedSlice()?.runtime.setRoomCameraMode(centered),
       onSetCoursePitsAreDeadly: (enabled) => this.setCoursePitsAreDeadly(enabled),
+      onSetCoursePlayerHearts: (hearts) => this.setCoursePlayerHearts(hearts),
       onSelectTool: (tool) => {
         applyEditorToolSelection(tool);
         this.updateToolUi();
@@ -877,6 +878,7 @@ export class CourseEditorScene extends Phaser.Scene {
         : '',
       canReturnToCourseBuilder: true,
       pitsAreDeadly: draft?.pitsAreDeadly === true,
+      playerHearts: draft?.playerHearts ?? 1,
       pitsDisabled: this.loading || !this.courseRecord?.permissions.canSaveDraft,
       goalTypeValue: goal?.type ?? '',
       goalTypeDisabled: false,
@@ -981,6 +983,14 @@ export class CourseEditorScene extends Phaser.Scene {
     const draft = this.getActiveCourseDraft();
     if (this.loading || !this.courseRecord?.permissions.canSaveDraft || !draft || draft.pitsAreDeadly === enabled) return;
     this.setActiveCourseDraft({ ...cloneCourseSnapshot(draft), pitsAreDeadly: enabled });
+    this.backupDebouncer.schedule();
+  }
+
+  setCoursePlayerHearts(value: number): void {
+    const draft = this.getActiveCourseDraft();
+    const hearts = value === 2 || value === 3 ? value : 1;
+    if (this.loading || !this.courseRecord?.permissions.canSaveDraft || !draft || draft.playerHearts === hearts) return;
+    this.setActiveCourseDraft({ ...cloneCourseSnapshot(draft), playerHearts: hearts });
     this.backupDebouncer.schedule();
   }
 
@@ -2205,6 +2215,7 @@ export class CourseEditorScene extends Phaser.Scene {
     updateActiveCourseDraftSession((draft) => {
       draft.title = normalized.title;
       draft.pitsAreDeadly = normalized.pitsAreDeadly;
+      draft.playerHearts = normalized.playerHearts;
       draft.roomRefs = normalized.roomRefs;
       draft.objectLinks = normalized.objectLinks;
       draft.pressurePlateLinks = normalized.pressurePlateLinks;

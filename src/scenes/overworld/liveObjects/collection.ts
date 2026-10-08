@@ -6,6 +6,7 @@ import type { LoadedFullRoom } from '../worldStreaming';
 import {
   getCollectibleCue,
   getCollectibleScoreValue,
+  isHealingCollectible,
 } from './pickups';
 
 type LiveObjectCollector = 'player' | 'enemy';
@@ -25,6 +26,7 @@ interface LiveObjectCollectionHost {
   markCollectedObjectKey: (key: string) => void;
   addScore: (delta: number) => void;
   onKeyCollected: () => void;
+  onHealingCollected?: () => boolean;
   playRoomSfx: (cue: SfxCue, roomCoordinates: RoomCoordinates) => void;
   playCollectFx: (
     x: number,
@@ -59,6 +61,7 @@ export function collectLiveObject<TEdgeWall>(
   const scoreDelta = getCollectibleScoreValue(liveObject.config.id);
   if (collector === 'player') {
     host.addScore(scoreDelta);
+    const healed = isHealingCollectible(liveObject.config.id) && host.onHealingCollected?.();
     if (liveObject.config.id === 'key') {
       host.onKeyCollected();
     }
@@ -69,7 +72,7 @@ export function collectLiveObject<TEdgeWall>(
       loadedRoom.room.coordinates,
       getCollectibleCue(liveObject.config.id)
     );
-    host.showTransientStatus(`${liveObject.config.name} collected.`);
+    host.showTransientStatus(healed ? `${liveObject.config.name} restored a heart.` : `${liveObject.config.name} collected.`);
   } else {
     host.playRoomSfx(getCollectibleCue(liveObject.config.id), loadedRoom.room.coordinates);
   }

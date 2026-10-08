@@ -2,6 +2,7 @@ import type { CourseGoalType } from '../courses/model';
 import type { RoomGoalType } from '../goals/roomGoals';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import type { TrustTier } from '../progression/model';
+import { normalizePlayerHearts, type PlayerHearts } from '../player/hearts';
 
 export type ExpandedRoomSource = 'native_expanded_room' | 'standalone_room' | 'legacy_course';
 export type ExpandedRoomGoalType = CourseGoalType | RoomGoalType;
@@ -11,6 +12,7 @@ export interface ExpandedRoomMembershipSummary {
   title: string | null;
   goalType: ExpandedRoomGoalType | null;
   pitsAreDeadly?: boolean;
+  playerHearts?: PlayerHearts;
   cellCount: number;
   source: ExpandedRoomSource;
   legacyCourseId: string | null;
@@ -75,12 +77,14 @@ export function createExpandedRoomSummaryFromLegacyCourse(input: {
   goalType: CourseGoalType | null;
   roomCount: number;
   pitsAreDeadly?: boolean;
+  playerHearts?: PlayerHearts;
 }): ExpandedRoomMembershipSummary {
   return {
     expandedRoomId: expandedRoomIdFromLegacyCourseId(input.courseId),
     title: input.courseTitle,
     goalType: input.goalType,
     ...(input.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
+    ...(normalizePlayerHearts(input.playerHearts) > 1 ? { playerHearts: normalizePlayerHearts(input.playerHearts) } : {}),
     cellCount: input.roomCount,
     source: 'legacy_course',
     legacyCourseId: input.courseId,
@@ -92,12 +96,14 @@ export function createExpandedRoomSummaryFromStandaloneRoom(input: {
   roomTitle: string | null;
   goalType: RoomGoalType | null;
   pitsAreDeadly?: boolean;
+  playerHearts?: PlayerHearts;
 }): ExpandedRoomMembershipSummary {
   return {
     expandedRoomId: expandedRoomIdFromStandaloneRoomId(input.roomId),
     title: input.roomTitle,
     goalType: input.goalType,
     ...(input.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
+    ...(normalizePlayerHearts(input.playerHearts) > 1 ? { playerHearts: normalizePlayerHearts(input.playerHearts) } : {}),
     cellCount: 1,
     source: 'standalone_room',
     legacyCourseId: null,
@@ -112,6 +118,7 @@ export function createExpandedRoomSummaryFromResolvedTarget(
     title: target.title,
     goalType: target.goalType,
     ...(target.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
+    ...(normalizePlayerHearts(target.playerHearts) > 1 ? { playerHearts: normalizePlayerHearts(target.playerHearts) } : {}),
     cellCount: target.cellCount,
     source: target.source,
     legacyCourseId: target.legacyCourseId,

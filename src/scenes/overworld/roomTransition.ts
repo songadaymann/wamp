@@ -31,7 +31,7 @@ interface OverworldRoomTransitionHost {
   getActiveCourseRun(): unknown | null;
   getActiveCourseSnapshot?(): CourseSnapshot | null;
   getExpandedRoomMembershipAt?(coordinates: RoomCoordinates): ExpandedRoomMembershipSummary | null;
-  handlePlayerDeath?(reason: string): void;
+  handlePlayerDeath?(reason: string, bypassHealth?: boolean): void;
   syncGoalRunForRoom(room: RoomSnapshot | null, entryContext?: 'transition' | 'spawn' | 'respawn'): void;
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   refreshLeaderboardForSelection(): Promise<void>;
@@ -154,7 +154,7 @@ export class OverworldRoomTransitionController {
       this.clearPendingPreparation();
       this.host.clearPredictedPlayableRoomForTransition();
       this.clearActiveUnpreparedTransition();
-      this.host.handlePlayerDeath('You fell.');
+      this.host.handlePlayerDeath('You fell.', true);
       return;
     }
     if (

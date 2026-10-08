@@ -1,4 +1,5 @@
 import type { AuthUser } from '../../../auth/model';
+import { normalizePlayerHearts, type PlayerHearts } from '../../../player/hearts';
 import type { RequestAuthSource } from '../../../agents/model';
 import {
   cloneCourseRecord,
@@ -157,6 +158,7 @@ export async function loadPublishedCourseMembershipsInBounds(
     goalType: CourseGoalType | null;
     roomCount: number;
     pitsAreDeadly?: boolean;
+    playerHearts?: PlayerHearts;
   }>
 > {
   const result = await env.DB.prepare(
@@ -203,6 +205,7 @@ export async function loadPublishedCourseMembershipsInBounds(
     return {
       goalType: snapshot?.goal?.type ?? null,
       ...(snapshot?.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
+      ...(normalizePlayerHearts(snapshot?.playerHearts) > 1 ? { playerHearts: normalizePlayerHearts(snapshot?.playerHearts) } : {}),
       roomId: row.room_id,
       courseId: row.course_id,
       courseTitle: row.published_title,

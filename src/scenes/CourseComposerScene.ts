@@ -229,6 +229,12 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     this.mutateDraft(draft => { draft.pitsAreDeadly = enabled; });
   }
 
+  setCoursePlayerHearts(value: number): void {
+    const hearts = value === 2 || value === 3 ? value : 1;
+    if (this.record?.draft.playerHearts === hearts) return;
+    this.mutateDraft(draft => { draft.playerHearts = hearts; });
+  }
+
   setCourseTitle(title: string | null): void {
     this.mutateDraft((draft) => {
       draft.title = title?.trim() ? title.trim() : null;

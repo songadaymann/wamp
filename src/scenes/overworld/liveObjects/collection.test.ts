@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { collectLiveObject } from './collection';
 
-function fixture() {
+function fixture(objectId = 'coin') {
   let alive = false;
+  let collected = false;
   const object = { key: 'coin', placedInstanceId: 'coin', countsTowardGoals: true,
-    config: { id: 'coin', name: 'Coin' }, sprite: { active: true, x: 64, y: 128, destroy: vi.fn() } };
+    config: { id: objectId, name: 'Pickup' }, sprite: { active: true, x: 64, y: 128, destroy: vi.fn() } };
   const room = { room: { id: '0,0', coordinates: { x: 0, y: 0 } }, liveObjects: [object] };
   const host = { canPlayerCollect: () => alive, scene: { tweens: { add: vi.fn() } },
-    isCollectedObjectKey: () => false, markCollectedObjectKey: vi.fn(), addScore: vi.fn(),
+    isCollectedObjectKey: () => collected, markCollectedObjectKey: vi.fn(() => { collected = true; }), addScore: vi.fn(),
+    onHealingCollected: vi.fn(() => true),
     onKeyCollected: vi.fn(), playCollectFx: vi.fn(), playRoomSfx: vi.fn(), showTransientStatus: vi.fn(),
     getRoomOrigin: () => ({ x: 0, y: 0 }), onCollectibleCollected: vi.fn(), onEnemyCollectibleCollected: vi.fn(),
     onLiveObjectRemoved: vi.fn(), destroyLiveObjectInteractions: vi.fn() };
@@ -35,5 +37,19 @@ describe('collections during a death beat', () => {
     expect(f.room.liveObjects).toHaveLength(0);
     expect(f.host.onEnemyCollectibleCollected).toHaveBeenCalledTimes(1);
     expect(f.host.addScore).not.toHaveBeenCalled();
+  });
+
+  it.each(['heart', 'boygame_heart', 'health_potion'])('heals once for %s while retaining collectible score and goal credit', id => {
+    const f = fixture(id); f.revive(); f.collect(); f.collect();
+    expect(f.host.onHealingCollected).toHaveBeenCalledTimes(1);
+    expect(f.host.addScore).toHaveBeenCalledExactlyOnceWith(1);
+    expect(f.host.onCollectibleCollected).toHaveBeenCalledTimes(1);
+    expect(f.host.showTransientStatus).toHaveBeenCalledWith('Pickup restored a heart.');
+  });
+
+  it('an enemy taking a heart never heals the player', () => {
+    const f = fixture('heart'); f.collect('enemy');
+    expect(f.host.onHealingCollected).not.toHaveBeenCalled();
+    expect(f.host.onEnemyCollectibleCollected).toHaveBeenCalledTimes(1);
   });
 });

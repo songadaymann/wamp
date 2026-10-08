@@ -1,4 +1,5 @@
 import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
+import { normalizePlayerHearts, type PlayerHearts } from '../../player/hearts';
 import Phaser from 'phaser';
 import {
   getSolidColorFromBackgroundValue,
@@ -273,6 +274,7 @@ export class EditorEditRuntime {
   private roomGoalIntroText: string | null = null;
   roomCameraMode: 'follow' | 'room' = 'follow';
   roomPitsAreDeadly = false;
+  roomPlayerHearts: PlayerHearts = 1;
   private roomSpawnPoint: RoomSpawnPoint | null = null;
   private roomMusic: RoomMusic | null = null;
   private roomDirty = false;
@@ -416,6 +418,7 @@ export class EditorEditRuntime {
     this.roomGoalIntroText = null;
     this.roomCameraMode = 'follow';
     this.roomPitsAreDeadly = false;
+    this.roomPlayerHearts = 1;
     this.roomSpawnPoint = null;
     this.roomMusic = null;
     this.roomDirty = false;
@@ -483,6 +486,7 @@ export class EditorEditRuntime {
     this.roomGoalIntroText = normalizeRoomGoalIntroText(room.goalIntroText);
     this.roomCameraMode = room.cameraMode === 'room' ? 'room' : 'follow';
     this.roomPitsAreDeadly = room.pitsAreDeadly === true;
+    this.roomPlayerHearts = normalizePlayerHearts(room.playerHearts);
     this.roomSpawnPoint = room.spawnPoint ? { ...room.spawnPoint } : null;
     this.roomMusic = cloneRoomMusic(room.music);
     this.host.setPlacedObjects(room.placedObjects.map((placed) => ({ ...placed })));
@@ -625,6 +629,7 @@ export class EditorEditRuntime {
       title: metadata.title,
       cameraMode: this.roomCameraMode,
       pitsAreDeadly: this.roomPitsAreDeadly,
+      playerHearts: this.roomPlayerHearts,
       goalIntroText: this.roomGoal ? normalizeRoomGoalIntroText(this.roomGoalIntroText) : null,
       background: normalizeRoomBackground(this.host.getSelectedBackground()),
       lighting: cloneRoomLightingSettings(this.host.getSelectedLightingSettings()),
@@ -2753,6 +2758,14 @@ export class EditorEditRuntime {
   setRoomPitsAreDeadly(enabled: boolean): void {
     if (!this.guardEditable() || this.roomPitsAreDeadly === enabled) return;
     this.roomPitsAreDeadly = enabled;
+    this.markRoomDirty();
+    this.host.updateGoalUi();
+  }
+
+  setRoomPlayerHearts(value: number): void {
+    const hearts = normalizePlayerHearts(value);
+    if (!this.guardEditable() || this.roomPlayerHearts === hearts) return;
+    this.roomPlayerHearts = hearts;
     this.markRoomDirty();
     this.host.updateGoalUi();
   }

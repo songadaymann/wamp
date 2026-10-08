@@ -44,6 +44,7 @@ export type EditorCourseUiState = {
   roomStepText: string;
   canReturnToCourseBuilder: boolean;
   pitsAreDeadly?: boolean;
+  playerHearts?: 1 | 2 | 3;
   pitsDisabled?: boolean;
   goalTypeValue: string;
   goalTypeDisabled: boolean;
@@ -212,6 +213,7 @@ export interface CourseComposerSceneBridge {
   returnToWorld?: () => Promise<void> | void;
   setCourseTitle?: (title: string | null) => void;
   setCoursePitsAreDeadly?: (enabled: boolean) => void;
+  setCoursePlayerHearts?: (hearts: number) => void;
   centerSelectedRoom?: () => void;
   selectRoom?: (roomId: string) => void;
   toggleSelectedRoomMembership?: () => void;

@@ -5,6 +5,7 @@ import {
   type RoomCoordinates,
 } from '../persistence/roomModel';
 import { createRandomUuid } from '../utils/randomId';
+import { normalizePlayerHearts, type PlayerHearts } from '../player/hearts';
 
 export const COURSE_GOAL_TYPES = [
   'reach_exit',
@@ -80,6 +81,8 @@ export interface CourseSnapshot {
   title: string | null;
   /** Applies to the outer footprint only; internal cell drops stay connected. */
   pitsAreDeadly?: boolean;
+  /** Shared health for the entire course or Expanded Room footprint. */
+  playerHearts?: PlayerHearts;
   roomRefs: CourseRoomRef[];
   objectLinks: CourseObjectLink[];
   pressurePlateLinks: CoursePressurePlateLink[];
@@ -221,6 +224,7 @@ export function createDefaultCourseSnapshot(
     title: null,
     roomRefs: [],
     pitsAreDeadly: false,
+    playerHearts: 1,
     objectLinks: [],
     pressurePlateLinks: [],
     startPoint: null,
@@ -407,6 +411,7 @@ export function cloneCourseSnapshot(snapshot: CourseSnapshot): CourseSnapshot {
     ...snapshot,
     title: normalizeCourseTitle(snapshot.title),
     pitsAreDeadly: snapshot.pitsAreDeadly === true,
+    playerHearts: normalizePlayerHearts(snapshot.playerHearts),
     roomRefs: snapshot.roomRefs.map(cloneCourseRoomRef),
     objectLinks,
     pressurePlateLinks: objectLinks.map(cloneCoursePressurePlateLink),
@@ -480,6 +485,7 @@ export function getComparableCourseSnapshot(snapshot: CourseSnapshot) {
   return {
     title: snapshot.title,
     ...(snapshot.pitsAreDeadly === true ? { pitsAreDeadly: true as const } : {}),
+    ...(normalizePlayerHearts(snapshot.playerHearts) > 1 ? { playerHearts: normalizePlayerHearts(snapshot.playerHearts) } : {}),
     roomRefs: sortCourseRoomRefsForStorage(snapshot.roomRefs).map((roomRef) => ({
       roomId: roomRef.roomId,
       coordinates: roomRef.coordinates,
@@ -716,6 +722,7 @@ export function normalizeCourseSnapshot(
     title: normalizeCourseTitle(snapshot.title),
     roomRefs,
     pitsAreDeadly: snapshot.pitsAreDeadly === true,
+    playerHearts: normalizePlayerHearts(snapshot.playerHearts),
     objectLinks,
     pressurePlateLinks: objectLinks.map(cloneCoursePressurePlateLink),
     startPoint: isCourseMarkerPointLike(snapshot.startPoint)

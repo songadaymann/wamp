@@ -3952,6 +3952,10 @@ Finally, correct the evidence: the game already has bounce tiles, wind, gravity 
 
 ### F150: Idea: Optional player hearts per room (and make the Heart pickup actually heal)
 
+**2026-10-08 implementation candidate.** Ready for local play review on `codex/checkup-player-hearts-2026-10-08`. Ordinary rooms and shared course/Expanded Room roots expose 1–3 hearts through desktop and phone controls, defaulting to one. Nonfatal hits give bounded recoil and 1,000ms blink protection; all three healing pickups restore one while retaining score and collect-goal credit. Hearts clamp on transitions and refill on spawn/Restart. Deadly outer falls bypass health and protection; Room Rush stays at one and PvP retains its server health. Nondefault counts enter version fingerprints and ranked verification hashes; manual leaderboard carry-over across counts is blocked. Legacy one-heart hashes remain unchanged.
+
+Full **366 files / 2,936 tests**, lint, types, bindings, build, DOM contract, Worker safety and strict map asset checks pass. Native local desktop/touch and real save/publish/history/Expanded Room checks pass; a guest clear is server-verified and screenshots are inspected. [Local demo](http://127.0.0.1:3040/r/84/40?welcome=0&avatar=gamejew-red). The checklist remains unticked pending Jonathan's play review and coordinated API Worker/Pages delivery. See [candidate receipt](../development/checkup-delivery-2026-10-03.md); evidence `/tmp/wamp-player-hearts-2026-10-08/`. F249 follows.
+
 - **Area:** Gameplay feel & new gameplay ideas
 - **Type:** idea · **impact:** medium · **effort:** medium
 

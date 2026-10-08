@@ -1,4 +1,5 @@
 import type { ToolName } from '../../../config';
+import type { PlayerHearts } from '../../../player/hearts';
 import type { CourseGoalType } from '../../../courses/model';
 import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../../../enemies/swordsmanObjectives';
 import type { PoliceBehaviorMode } from '../../../enemies/policeEnemy';
@@ -50,6 +51,7 @@ export interface EditorGoalUiViewModel {
 
 export interface EditorCourseUiViewModel {
   pitsAreDeadly?: boolean;
+  playerHearts?: PlayerHearts;
   pitsDisabled?: boolean;
   visible: boolean;
   statusHidden: boolean;
@@ -129,6 +131,7 @@ export interface EditorUiViewModel {
   roomTitleValue: string;
   roomCameraCentered?: boolean;
   roomPitsAreDeadly?: boolean;
+  roomPlayerHearts?: PlayerHearts;
   roomCoordinatesText: string;
   saveStatusText: string;
   saveStatusAccentText: string;
@@ -206,6 +209,8 @@ export interface EditorUiBridgeActions {
   onSetRoomCameraCentered: (centered: boolean) => void;
   onSetRoomPitsAreDeadly?: (enabled: boolean) => void;
   onSetCoursePitsAreDeadly?: (enabled: boolean) => void;
+  onSetRoomPlayerHearts?: (hearts: number) => void;
+  onSetCoursePlayerHearts?: (hearts: number) => void;
   onSelectTool: (tool: ToolName) => void;
   onClearCurrentLayer: () => void;
   onClearAllTiles: () => void;

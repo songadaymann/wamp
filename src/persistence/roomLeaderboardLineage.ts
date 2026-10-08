@@ -5,6 +5,7 @@ import {
   type RoomVersionLineage,
 } from './roomVersionLineage';
 import { getLeaderboardRankingMode } from '../runs/scoring';
+import { normalizePlayerHearts } from '../player/hearts';
 
 export interface RoomLeaderboardFamily {
   representativeVersion: number;
@@ -217,6 +218,10 @@ export function getManualRoomLeaderboardSourceValidationError(
 
   if (target.snapshot.goal.type !== source.snapshot.goal.type) {
     return 'Only versions with the same goal type can share a leaderboard.';
+  }
+
+  if (normalizePlayerHearts(target.snapshot.playerHearts) !== normalizePlayerHearts(source.snapshot.playerHearts)) {
+    return 'Only versions with the same player heart count can share a leaderboard.';
   }
 
   if (getLeaderboardRankingMode(target.snapshot.goal) !== getLeaderboardRankingMode(source.snapshot.goal)) {

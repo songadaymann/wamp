@@ -5,6 +5,7 @@ import type { CourseMarkerPoint } from '../../../courses/model';
 import type { RoomGoal, GoalMarkerPoint } from '../../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../../persistence/roomModel';
 import type { TrustTier } from '../../../progression/model';
+import { normalizePlayerHearts } from '../../../player/hearts';
 import type { LeaderboardRankingMode } from '../../../runs/model';
 import { compareLeaderboardEntries, getLeaderboardRankingMode } from '../../../runs/scoring';
 import {
@@ -122,6 +123,7 @@ export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot
   return hashVerificationPayload({
     kind: 'room',
     ...(snapshot.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
+    ...(normalizePlayerHearts(snapshot.playerHearts) > 1 ? { playerHearts: normalizePlayerHearts(snapshot.playerHearts) } : {}),
     id: snapshot.id,
     version: snapshot.version,
     coordinates: snapshot.coordinates,
@@ -156,6 +158,7 @@ export async function computeCourseSnapshotVerificationHash(snapshot: CourseSnap
   return hashVerificationPayload({
     kind: 'course',
     ...(snapshot.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
+    ...(normalizePlayerHearts(snapshot.playerHearts) > 1 ? { playerHearts: normalizePlayerHearts(snapshot.playerHearts) } : {}),
     id: snapshot.id,
     version: snapshot.version,
     goal: snapshot.goal,

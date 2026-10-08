@@ -800,6 +800,9 @@
 
       <div class="sidebar-section hidden" id="course-goal-section" data-mobile-panel="goal" data-sidebar-collapsible="true">
         <div class="section-label">Expanded Room Goal</div>
+        <label for="course-player-hearts">Player hearts</label>
+        <select id="course-player-hearts" aria-describedby="course-hearts-description"><option value="1">1 (default)</option><option value="2">2</option><option value="3">3</option></select>
+        <p id="course-hearts-description" class="goal-context-note">Shared across all cells. Heart pickups heal one; respawning refills them.</p>
         <label class="room-camera-option" title="Falling past the outer bottom edge respawns you. Drops between cells stay open."><input id="course-pits-deadly" type="checkbox" /><span>Deadly pits</span></label>
         <div class="goal-context-note">Falling past the outer bottom edge respawns you. Drops between cells stay open.</div>
         <div id="course-editor-status" class="goal-context-note hidden"></div>
@@ -921,6 +924,9 @@
           <div id="editor-feature-panels" class="editor-feature-panels">
             <div class="editor-feature-panel" id="goal-section" data-mobile-panel="goal">
               <div class="section-label">Goal</div>
+              <label for="room-player-hearts">Player hearts</label>
+              <select id="room-player-hearts" aria-describedby="room-hearts-description"><option value="1">1 (default)</option><option value="2">2</option><option value="3">3</option></select>
+              <p id="room-hearts-description" class="goal-context-note">Heart pickups heal one. Respawning refills your hearts.</p>
               <label class="room-camera-option" title="Falling past the bottom edge respawns you."><input id="room-pits-deadly" type="checkbox" /><span>Deadly pits</span></label>
               <div class="goal-context-note">Falling past the bottom edge respawns you.</div>
               <div id="goal-context-note" class="goal-context-note hidden"></div>
@@ -1740,6 +1746,9 @@
             <div class="about-section">
               <div class="about-section-title">Title</div>
               <input id="course-workbench-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Expanded room title" />
+              <label class="about-section-title" for="course-workbench-player-hearts">Player hearts</label>
+              <select id="course-workbench-player-hearts" class="goal-input" aria-describedby="course-workbench-hearts-description"><option value="1">1 (default)</option><option value="2">2</option><option value="3">3</option></select>
+              <p id="course-workbench-hearts-description" class="history-modal-meta">Shared across all cells. Heart pickups heal one; respawning refills them.</p>
               <label class="room-camera-option" title="Falling past the outer bottom edge respawns you. Drops between cells stay open."><input id="course-workbench-pits-deadly" type="checkbox" /><span>Deadly pits</span></label>
               <div class="goal-context-note">Falling past the outer bottom edge respawns you. Drops between cells stay open.</div>
             </div>

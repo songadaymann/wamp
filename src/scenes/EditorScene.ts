@@ -959,6 +959,7 @@ export class EditorScene extends Phaser.Scene {
       onSetRoomTitle: (title) => this.persistenceController.setRoomTitle(title),
       onSetRoomCameraCentered: (centered) => this.editRuntime.setRoomCameraMode(centered),
       onSetRoomPitsAreDeadly: (enabled) => this.editRuntime.setRoomPitsAreDeadly(enabled),
+      onSetRoomPlayerHearts: (hearts) => this.editRuntime.setRoomPlayerHearts(hearts),
       onSelectTool: (tool) => this.toolController.selectTool(tool),
       onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
       onClearAllTiles: () => this.toolController.clearAllTiles(),

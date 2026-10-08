@@ -4,11 +4,13 @@ import type { EditorUiViewModel } from './uiBridge';
 import type { GoalPlacementMode } from './editRuntime';
 import type { EditorStatusDetails } from './roomSession';
 import type { EditorCourseUiState } from '../../ui/setup/sceneBridge';
+import { normalizePlayerHearts, type PlayerHearts } from '../../player/hearts';
 
 export interface BuildEditorUiViewModelOptions {
   roomTitle: string | null;
   roomCameraCentered?: boolean;
   roomPitsAreDeadly?: boolean;
+  roomPlayerHearts?: PlayerHearts;
   roomCoordinates: RoomCoordinates;
   roomGoal: RoomGoal | null;
   roomGoalIntroText: string | null;
@@ -89,6 +91,7 @@ export function buildEditorUiViewModel(
     roomTitleValue: roomTitle ?? '',
     roomCameraCentered: options.roomCameraCentered === true,
     roomPitsAreDeadly: options.roomPitsAreDeadly === true,
+    roomPlayerHearts: normalizePlayerHearts(options.roomPlayerHearts),
     roomCoordinatesText: `Room (${roomCoordinates.x}, ${roomCoordinates.y})`,
     saveStatusText: saveStatus.text,
     saveStatusAccentText: saveStatus.accentText,
@@ -194,6 +197,7 @@ export function buildEditorUiViewModel(
     },
     course: {
       pitsAreDeadly: courseEditorState.pitsAreDeadly === true,
+      playerHearts: normalizePlayerHearts(courseEditorState.playerHearts),
       pitsDisabled: courseEditorState.pitsDisabled !== false,
       visible: courseEditorState.visible,
       statusHidden: courseEditorState.statusHidden,

@@ -277,6 +277,7 @@ function applyExpandedRoomMemberships(
           expandedRoomId: membership.expandedRoomId,
           title: membership.title,
           goalType: membership.goalType,
+          ...(membership.playerHearts ? { playerHearts: membership.playerHearts } : {}),
           cellCount: membership.cellCount,
           source: membership.source,
           legacyCourseId: membership.legacyCourseId,

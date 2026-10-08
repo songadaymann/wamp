@@ -1,3 +1,24 @@
+## 2026-10-08 — F150 optional player hearts and healing
+
+Original prompt: "Ok let’s move on to th next things on the list!"
+
+Canonical branch: `codex/checkup-player-hearts-2026-10-08`, based on live `d534619c` plus the pushed delivery/F249 checklist notes. Use the owned game-feel worktree and preserve the primary checkout's unrelated edits. F150 is the current item; F249 follows before F155/F144. Prepare a complete local candidate for Jonathan to play before publication.
+
+- [x] Map room/expanded-root settings, damage and pickup lifecycle, resets/transitions and ranked version compatibility; keep one heart as the existing default.
+- [x] Implement bounded health/invulnerability with healing and visible hearts through extracted controllers, plus desktop/phone/expanded authoring controls and safe persistence.
+- [x] Verify damage, lethal falls, healing/collect goals, respawn/Restart/Stop, room transitions and ranked compatibility with focused tests and native desktop/touch play. Run and inspect the installed web-game client's gameplay capture.
+- [x] Complete the required quality checks, provide a local demo, and record the candidate and remaining release work. Keep F150 unticked until delivery.
+
+Evidence directory: `/tmp/wamp-player-hearts-2026-10-08/`. Primary HEAD/status/staged/unstaged snapshots are saved there. Ports 3001, 3040 and 8787 were not listening at the initial probe.
+
+Local candidate verification: **366 files / 2,936 tests** pass, plus lint, typecheck, API/renderer binding checks, build, DOM **934 IDs / 218 required**, Worker safety and strict map asset contract. The catalog remains `authoring-catalog-v1:020c7c1d1777764e`; no catalog/art, migration, renderer or PartyKit change is required. Publication will need the API Worker and Pages together.
+
+Native local cases pass: keyboard damage with repeated-contact protection; all three healing pickups and full-health score/collect credit; an actual server-verified guest clear; default one-hit death; Restart/Stop/respawn cleanup; deadly falls even during active protection; ordinary-room clamping; shared Expanded Room health through cell transitions and Restart; Collect Target; portrait touch movement/jump/healing; Survival only failing at the terminal hit and immediately starting a fresh attempt. Real ordinary and Expanded Room controls save/reload on desktop and the 390px phone handoff. Ordinary publish/history and Expanded Setup save/publish/public metadata preserve the setting. All accepted native reports have no page errors. Phone editor checks enter the real local editor at desktop width, then use the existing phone handoff; a direct narrow Browse entry hit a Daily Room chip interception and remains in diagnostic captures.
+
+The installed web-game client was run unchanged, then with a settings-only preload to select full quality and replay opt-out. The original captured an automatic performance prompt; the final inspected gameplay capture shows the avatar and three hearts correctly. Its only console error is the local presence identity endpoint's 503, also recorded by earlier fixture probes; no presence service is configured for this local demo. Initial fixture/harness diagnostics are retained beside accepted reports, including a root fixture corrected to include the actual published course bridge and Survival assertions corrected for the existing immediate retry behavior.
+
+Local demo: `http://127.0.0.1:3040/r/84/40?welcome=0&avatar=gamejew-red`; Expanded demo: `http://127.0.0.1:3040/r/96/40?welcome=0&avatar=gamejew-red`. Vite 3040 and the local API 8787 remain available. All authored room/account/version/run writes use the isolated local D1 state. Primary HEAD, all-untracked status, staged and unstaged diffs match their starting hashes exactly. **F150 remains unticked at 55/215 delivered** until Jonathan's local play review and production delivery. F249 is next.
+
 ## 2026-10-08 — Ghost race footer release
 
 Original prompt: "ok deploy thte floating label change"

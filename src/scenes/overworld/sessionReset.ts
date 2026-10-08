@@ -21,6 +21,8 @@ interface OverworldSessionResetHost {
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   hasActivePvpMatch(): boolean;
   isPvpDamageActive(): boolean;
+  tryAbsorbPlayerDamage?(): boolean;
+  onPlayerDeath?(): void;
   cancelPlayerAttack(): void;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
   recordGoalRunDeath(): void;
@@ -53,7 +55,7 @@ interface OverworldSessionResetHost {
 export class OverworldSessionResetController {
   constructor(private readonly host: OverworldSessionResetHost) {}
 
-  handlePlayerDeath(reason: string): void {
+  handlePlayerDeath(reason: string, bypassHealth = false): void {
     if (this.host.isPlayerDeathPending?.()) return;
     const activeRun = this.host.getCurrentGoalRun();
     const activeCourseRun = this.host.getActiveCourseRun();
@@ -62,6 +64,9 @@ export class OverworldSessionResetController {
     if (activePvpMatch && !this.host.isPvpDamageActive()) {
       return;
     }
+
+    if (!activePvpMatch && !bypassHealth && this.host.tryAbsorbPlayerDamage?.()) return;
+    this.host.onPlayerDeath?.();
 
     this.host.cancelPlayerAttack();
 

@@ -61,6 +61,7 @@ export class EditorChromeController {
         roomTitle: this.host.getRoomTitle(),
         roomCameraCentered: this.editRuntime.roomCameraMode === 'room',
         roomPitsAreDeadly: this.editRuntime.roomPitsAreDeadly,
+        roomPlayerHearts: this.editRuntime.roomPlayerHearts,
         roomCoordinates: this.host.getRoomCoordinates(),
         roomGoal,
         roomGoalIntroText: this.editRuntime.getGoalIntroText(),

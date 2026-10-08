@@ -1,6 +1,7 @@
 import { OverworldGhostRaceController } from './overworld/ghostRace';
 import { supportsGhostRace } from '../runs/ghostRace';
 import Phaser from 'phaser';
+import { getPlayableMaximumHearts } from '../player/hearts';
 import { PLAYER_BASE_HEIGHT } from '../player/geometry';
 import { createDailyRepository } from '../daily/repository';
 import { dailyEntryReady } from '../daily/entry';
@@ -209,6 +210,7 @@ import {
 import { OverworldPhysicsCadence, type OverworldMovementInput } from './overworld/physicsCadence';
 import { OverworldGameFeelController } from './overworld/gameFeel';
 import { OverworldPlayerDeathPresentation } from './overworld/playerDeathPresentation';
+import { OverworldPlayerHealthController } from './overworld/playerHealth';
 import { OverworldQuicksandController } from './overworld/quicksandController';
 import {
   OverworldPlayerPresentationController,
@@ -556,6 +558,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private physicsCadence: OverworldPhysicsCadence | null = null;
   private readonly gameFeelController: OverworldGameFeelController;
   private readonly playerDeathPresentation: OverworldPlayerDeathPresentation;
+  private readonly playerHealthController: OverworldPlayerHealthController;
   private readonly quicksandController: OverworldQuicksandController;
   private readonly combatPresentationController: OverworldCombatPresentationController;
   private readonly combatController: OverworldCombatController;
@@ -654,6 +657,27 @@ export class OverworldPlayScene extends Phaser.Scene {
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
       onRaceInfoChanged: info => this.hudBridge?.setGhostRaceInfo(info),
       showStatus: message => this.showTransientStatus(message),
+    });
+    this.playerHealthController = new OverworldPlayerHealthController({
+      scene: this,
+      getMaximumHearts: () => getPlayableMaximumHearts({
+        course: this.activeCourseSnapshot,
+        expandedRoom: this.roomSummariesById.get(roomIdFromCoordinates(this.currentRoomCoordinates))?.expandedRoom ?? null,
+        room: this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates),
+      }),
+      isActive: () => this.mode === 'play' && !this.activeRoomRushRun && !this.isPvpArenaActive(),
+      isPvpActive: () => this.isPvpArenaActive(),
+      isDeathPending: () => this.gameFeelController.isDeathPending(),
+      getCurrentTime: () => this.time.now,
+      getPlayerBody: () => this.playerBody,
+      getPlayerSprite: () => this.playerSprite,
+      onHurt: () => {
+        this.combatController.clearAttackAnimation();
+        this.movementController.applyHurtKnockback(this.playerFacing as -1 | 1);
+        playSfx('player-hurt');
+        this.showTransientStatus('You lost a heart.');
+      },
+      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
     const guestRuns = this.guestRunPlaybackController = new GuestRunPlaybackController({
       getCurrentRun: kind => kind === 'room' ? this.goalRunController?.getCurrentRun() ?? null : this.activeCourseRun,
@@ -782,6 +806,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       onKeyCollected: () => {
         this.heldKeyCount += 1;
       },
+      onHealingCollected: () => this.playerHealthController.heal(),
       onRespawnCheckpointTouched: checkpoint => { this.respawnCheckpointController.activate(checkpoint); },
       isRespawnCheckpointReached: (roomId, instanceId) => this.respawnCheckpointController.isObjectReached(roomId, instanceId),
       tryConsumeHeldKey: () => {
@@ -1576,6 +1601,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       presentRespawn: () => {
         this.cameraController.resetFollowAnchor();
         this.playerPresentationController.handleRespawned();
+        this.playerHealthController.refillForSpawn();
         this.gameFeelController.playerAvailable();
       },
       recordRespawn: reference => {
@@ -1757,6 +1783,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveRoomRushRun: () => this.activeRoomRushRun,
       hasActivePvpMatch: () => this.isPvpMatchActive(),
       isPvpDamageActive: () => this.isPvpDamageActive(),
+      tryAbsorbPlayerDamage: () => this.playerHealthController.absorbDamage(),
+      onPlayerDeath: () => this.playerHealthController.die(),
       cancelPlayerAttack: () => this.combatController.clearAttackAnimation(),
       setActiveCourseRun: (runState) => {
         this.setActiveCourseRun(runState);
@@ -1985,7 +2013,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveCourseRun: () => this.activeCourseRun,
       getActiveCourseSnapshot: () => this.activeCourseSnapshot,
       getExpandedRoomMembershipAt: (coordinates) => this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.expandedRoom ?? null,
-      handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
+      handlePlayerDeath: (reason, bypassHealth) => this.sessionResetController.handlePlayerDeath(reason, bypassHealth),
       getActiveRoomRushRun: () => this.activeRoomRushRun,
       recordRoomRushVisit: (room) => this.recordRoomRushVisit(room),
       syncGoalRunForRoom: (room, entryContext) => {
@@ -2574,6 +2602,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.syncLocalPresence();
       this.syncPvpInstanceState();
       this.syncPvpLocalHeartLabel();
+      this.playerHealthController.sync();
       if (presenceStartedAt !== undefined) profiler?.endSegment('controller.presencePvp', presenceStartedAt);
       const environmentStartedAt = controllerProfileSlot === 13 ? profiler?.beginSegment() : undefined;
       this.updateRoomLighting();
@@ -2880,6 +2909,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (this.player) ignoredObjects.push(this.player);
     if (this.playerSprite) ignoredObjects.push(this.playerSprite);
     ignoredObjects.push(...this.pvpLocalPresentationController.getBackdropIgnoredObjects());
+    ignoredObjects.push(...this.playerHealthController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.combatPresentationController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.combatController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.pvpInstanceRenderer.getBackdropIgnoredObjects());
@@ -4108,6 +4138,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private destroyPlayer(): void {
+    this.playerHealthController.reset();
     this.playerDeathPresentation.detach();
     this.physicsCadence?.reset();
     this.combatController.destroyProjectiles();
@@ -4569,6 +4600,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.movementController.handlePlayerCreated();
     this.combatController.clearAttackAnimation();
     this.playerPresentationController.handlePlayerCreated();
+    this.playerHealthController.refillForSpawn();
     this.maybeApplyPvpStartingPosition();
     this.respawnController.handlePlayerCreated();
     this.gameFeelController.playerAvailable();
@@ -4698,7 +4730,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    this.sessionResetController.handlePlayerDeath('You fell.');
+    this.sessionResetController.handlePlayerDeath('You fell.', true);
   }
 
   private respawnPlayerToCurrentRoom(): void {
@@ -5034,6 +5066,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private resetTransientPlayState(): void {
+    this.playerHealthController.reset();
     this.gameFeelController.reset();
     this.collectedObjectKeys.clear();
     this.heldKeyCount = 0;
@@ -6263,6 +6296,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleShutdown = (): void => {
+    this.playerHealthController.destroy();
     this.ghostRaceController.clear();
     this.gameFeelController.reset();
     this.runtimeContext.setLifecycle('shutting-down');
@@ -6730,6 +6764,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           }
         : null,
       ghostRace: this.ghostRaceController.getDebugSnapshot(),
+      playerHealth: this.playerHealthController.describe(),
       leaderboards: goalRunSnapshot.leaderboards,
       collectibles: this.countLiveObjectsByCategory('collectible'),
       crumblingTiles: this.specialTilesController.describeCrumblingTiles(),

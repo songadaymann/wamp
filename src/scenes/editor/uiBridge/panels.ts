@@ -13,6 +13,10 @@ export function renderEditorUiViewModel(
   viewModel: EditorUiViewModel,
 ): void {
   setValue(elements.roomTitleInput, viewModel.roomTitleValue);
+  setValue(elements.roomPlayerHeartsSelect, String(viewModel.roomPlayerHearts ?? 1));
+  setDisabled(elements.roomPlayerHeartsSelect, viewModel.saveDisabled);
+  setValue(elements.coursePlayerHeartsSelect, String(viewModel.course.playerHearts ?? 1));
+  setDisabled(elements.coursePlayerHeartsSelect, viewModel.course.pitsDisabled !== false);
   if (elements.roomCameraCenteredInput) {
     elements.roomCameraCenteredInput.checked = viewModel.roomCameraCentered === true;
     elements.roomCameraCenteredInput.disabled = viewModel.saveDisabled;

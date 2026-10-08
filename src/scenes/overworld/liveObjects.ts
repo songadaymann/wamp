@@ -175,6 +175,7 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   grantPlayerAirJump?: () => boolean;
   showTransientStatus: (message: string) => void;
   handlePlayerDeath: (reason: string) => void;
+  onHealingCollected?: () => boolean;
   onEnemyDefeated: (event: {
     roomId: string;
     roomCoordinates: RoomCoordinates;
@@ -2464,6 +2465,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       markCollectedObjectKey: this.options.markCollectedObjectKey,
       addScore: this.options.addScore,
       onKeyCollected: this.options.onKeyCollected,
+      onHealingCollected: this.options.onHealingCollected,
       playRoomSfx: this.options.playRoomSfx,
       playCollectFx: this.options.playCollectFx,
       showTransientStatus: this.options.showTransientStatus,
