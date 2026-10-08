@@ -31,6 +31,10 @@ import { clampSprayBrushSize, createCircleBrushMask, getSprayTilesPerSecond, lis
 import { forEachDraggedTileCell, resolvePencilStampOrigin } from './stampDrag';
 import { iterateShapeTiles, resolveShapeEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
 import {
+  getScreenAnchorWorldPoint,
+  getScrollForScreenAnchor,
+} from '../overworld/camera';
+import {
   clearMusicWorkbenchFrame,
   MUSIC_ROOM_LABEL_GUTTER,
   MUSIC_ROOM_NEIGHBOR_PEEK,
@@ -315,6 +319,8 @@ export class EditorInteractionController {
       ROOM_PX_HEIGHT + previewSpanY * 2 + margin * 2,
     );
     cam.transparent = true;
+    // Round pixels floor scroll every frame, so a cursor-anchored zoom walks away from the pointer.
+    cam.setRoundPixels(false);
     this.fitToScreen({ markManualAdjustment: false });
   }
 
@@ -331,17 +337,14 @@ export class EditorInteractionController {
       return;
     }
 
-    if (!this.hasUserAdjustedCamera) {
-      this.fitToScreen({ markManualAdjustment: false });
-      return;
-    }
-
-    if (this.shouldUsePhonePortraitFit()) {
-      this.constrainEditorCamera();
-      return;
-    }
-
-    this.centerCameraOnRoom();
+    // Palette and dock changes resize the canvas. Keep the current zoom and the same world point
+    // in the middle of the view instead of jumping back to the room center.
+    const cam = this.scene.cameras.main;
+    const centerX = cam.midPoint.x;
+    const centerY = cam.midPoint.y;
+    cam.centerOn(centerX, centerY);
+    this.constrainEditorCamera();
+    this.host.updateBackgroundPreview();
   }
 
   syncMusicRoomCamera(): void {
@@ -428,11 +431,13 @@ export class EditorInteractionController {
   }
 
   zoomIn(): void {
-    this.handleZoom(1.15);
+    const anchor = this.getManualZoomAnchor();
+    this.handleZoom(1.15, anchor.x, anchor.y);
   }
 
   zoomOut(): void {
-    this.handleZoom(1 / 1.15);
+    const anchor = this.getManualZoomAnchor();
+    this.handleZoom(1 / 1.15, anchor.x, anchor.y);
   }
 
   updateCursorHighlight(): void {
@@ -872,13 +877,13 @@ export class EditorInteractionController {
     this.scene.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => {
       this.handleTouchPointerUp(pointer);
     });
-    this.scene.input.on('wheel', (_pointer: Phaser.Input.Pointer, _gameObjects: unknown[], _deltaX: number, deltaY: number) => {
+    this.scene.input.on('wheel', (pointer: Phaser.Input.Pointer, _gameObjects: unknown[], _deltaX: number, deltaY: number) => {
       if (editorState.isPlaying || this.host.isMusicModeActive()) {
         return;
       }
 
       const zoomFactor = Phaser.Math.Clamp(Math.exp(-deltaY * 0.00055), 0.92, 1.08);
-      this.handleZoom(zoomFactor);
+      this.handleZoom(zoomFactor, pointer.x, pointer.y);
     });
 
     this.scene.game.canvas.addEventListener('contextmenu', handleCanvasContextMenu);
@@ -918,21 +923,42 @@ export class EditorInteractionController {
         : Phaser.Math.Clamp(cam.scrollY, minScrollY, maxScrollY);
   }
 
-  private handleZoom(zoomFactor: number): void {
+  private handleZoom(zoomFactor: number, screenX: number, screenY: number): void {
     if (this.host.isMusicModeActive()) {
       return;
     }
 
+    const camera = this.scene.cameras.main;
     const nextZoom = Phaser.Math.Clamp(editorState.zoom * zoomFactor, 0.25, 6);
     if (Math.abs(nextZoom - editorState.zoom) < 0.0001) {
       return;
     }
 
-    editorState.zoom = Number(nextZoom.toFixed(2));
+    const anchor = getScreenAnchorWorldPoint(screenX, screenY, camera);
+    editorState.zoom = nextZoom;
+    camera.setZoom(nextZoom);
+    const nextScroll = getScrollForScreenAnchor(anchor.x, anchor.y, screenX, screenY, camera);
+    camera.setScroll(nextScroll.x, nextScroll.y);
+    this.constrainEditorCamera();
     this.hasUserAdjustedCamera = true;
-    this.centerCameraOnRoom();
     this.host.updateBackgroundPreview();
     this.host.updateZoomUI();
+  }
+
+  private getManualZoomAnchor(): { x: number; y: number } {
+    const camera = this.scene.cameras.main;
+    const pointer = this.scene.input.activePointer;
+    if (
+      pointer &&
+      pointer.x >= 0 &&
+      pointer.y >= 0 &&
+      pointer.x <= camera.width &&
+      pointer.y <= camera.height
+    ) {
+      return { x: pointer.x, y: pointer.y };
+    }
+
+    return { x: camera.width * 0.5, y: camera.height * 0.5 };
   }
 
   private drawRectPreview(x1: number, y1: number, x2: number, y2: number): void {
@@ -1473,7 +1499,7 @@ export class EditorInteractionController {
     if (Math.abs(zoomFactor - 1) > 0.02) {
       const nextZoom = Phaser.Math.Clamp(editorState.zoom * zoomFactor, 0.25, 6);
       if (Math.abs(nextZoom - editorState.zoom) >= 0.0001) {
-        editorState.zoom = Number(nextZoom.toFixed(2));
+        editorState.zoom = nextZoom;
         this.scene.cameras.main.setZoom(editorState.zoom);
         this.host.updateZoomUI();
       }

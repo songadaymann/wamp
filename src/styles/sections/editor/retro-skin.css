@@ -654,6 +654,27 @@ body[data-app-mode='editor'] #sidebar .layer-btn {
   color: var(--editor-retro-ink) !important;
 }
 
+body[data-app-mode='editor'] #sidebar .layer-btn.active[data-layer='foreground'] {
+  background: #ff6f3c !important;
+  background-color: #ff6f3c !important;
+  color: #1a120c !important;
+  box-shadow: inset 0 0 0 999px #ff6f3c, 2px 2px 0 var(--editor-retro-shadow) !important;
+}
+
+body[data-app-mode='editor'] #sidebar .layer-btn.active[data-layer='terrain'] {
+  background: #347433 !important;
+  background-color: #347433 !important;
+  color: var(--editor-retro-cream) !important;
+  box-shadow: inset 0 0 0 999px #347433, 2px 2px 0 var(--editor-retro-shadow) !important;
+}
+
+body[data-app-mode='editor'] #sidebar .layer-btn.active[data-layer='background'] {
+  background: #2f6b7f !important;
+  background-color: #2f6b7f !important;
+  color: var(--editor-retro-cream) !important;
+  box-shadow: inset 0 0 0 999px #2f6b7f, 2px 2px 0 var(--editor-retro-shadow) !important;
+}
+
 body[data-app-mode='editor'] #sidebar .layer-btn-summary {
   color: inherit;
   font-family: var(--editor-ui-font);
@@ -672,6 +693,29 @@ body[data-app-mode='editor'] #sidebar .layer-info-button {
   box-shadow: inset 0 0 0 999px var(--editor-retro-blue), 2px 2px 0 var(--editor-retro-shadow) !important;
   color: #000 !important;
   font-family: var(--editor-ui-font);
+}
+
+body[data-app-mode='editor'] #sidebar .layer-visibility-button {
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif !important;
+  font-size: 18px;
+}
+
+body[data-app-mode='editor'] #sidebar .layer-visibility-button[data-layer-visibility='foreground'] {
+  background: #ff6f3c !important;
+  background-color: #ff6f3c !important;
+  box-shadow: inset 0 0 0 999px #ff6f3c, 2px 2px 0 var(--editor-retro-shadow) !important;
+}
+
+body[data-app-mode='editor'] #sidebar .layer-visibility-button[data-layer-visibility='terrain'] {
+  background: #347433 !important;
+  background-color: #347433 !important;
+  box-shadow: inset 0 0 0 999px #347433, 2px 2px 0 var(--editor-retro-shadow) !important;
+}
+
+body[data-app-mode='editor'] #sidebar .layer-visibility-button[data-layer-visibility='background'] {
+  background: #2f6b7f !important;
+  background-color: #2f6b7f !important;
+  box-shadow: inset 0 0 0 999px #2f6b7f, 2px 2px 0 var(--editor-retro-shadow) !important;
 }
 
 body[data-app-mode='editor'] #sidebar .layer-info-tooltip,

@@ -2,6 +2,7 @@ import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { getActiveCourseDraftSessionPublished } from '../courses/draftSession';
 import Phaser from 'phaser';
 import { EditorDraftLifecycle } from './editor/draftLifecycle';
+import { applyEditorLayerVisibility } from './editor/layerVisibility';
 import { getAuthDebugState } from '../auth/client';
 import {
   TILE_SIZE,
@@ -12,6 +13,7 @@ import {
   LAYER_NAMES,
   TILESETS,
   editorState,
+  resetEditorLayerVisibility,
 } from '../config';
 import { globalRoomMusicController } from '../music/controller';
 import {
@@ -904,6 +906,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   create(data?: EditorSceneData): void {
+    resetEditorLayerVisibility();
     const builderSettings = getGameSettings();
     editorState.smartTheme = builderSettings.lastSmartTheme;
     if (builderSettings.builderMode !== 'advanced' && editorState.paletteMode === 'tiles') {
@@ -1074,6 +1077,7 @@ export class EditorScene extends Phaser.Scene {
     this.updateWeatherPreview();
     this.interactionController.tickSpray(delta);
     this.updateCursorHighlight();
+    applyEditorLayerVisibility(this.layers, this.objectSprites);
     this.overlayController.updateLayerGuideOverlay();
     this.overlayController.updatePressurePlateOverlay((graphics) => {
       this.inspectorController.updatePressurePlateOverlay(graphics);

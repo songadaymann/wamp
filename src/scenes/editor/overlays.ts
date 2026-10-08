@@ -118,16 +118,11 @@ export class EditorOverlayController {
         continue;
       }
 
-      this.layerGuideGraphics.fillStyle(this.getLayerGuideColor(layerName), 0.72);
       for (const key of occupiedCells) {
         const [xText, yText] = key.split(':');
         const tileX = Number.parseInt(xText, 10);
         const tileY = Number.parseInt(yText, 10);
-        this.layerGuideGraphics.fillCircle(
-          tileX * TILE_SIZE + TILE_SIZE * 0.5,
-          tileY * TILE_SIZE + TILE_SIZE * 0.5,
-          2.5,
-        );
+        this.drawLayerGuideCorner(layerName, tileX, tileY);
       }
     }
   }
@@ -292,6 +287,48 @@ export class EditorOverlayController {
     }
 
     return occupiedCells;
+  }
+
+  private drawLayerGuideCorner(layerName: LayerName, tileX: number, tileY: number): void {
+    const graphics = this.layerGuideGraphics;
+    if (!graphics) {
+      return;
+    }
+    const size = TILE_SIZE / 2;
+    const edge = 0.5;
+    const left = tileX * TILE_SIZE;
+    const top = tileY * TILE_SIZE;
+    const right = left + TILE_SIZE;
+    const bottom = top + TILE_SIZE;
+    const color = this.getLayerGuideColor(layerName);
+    const outer = this.layerGuideCornerPoints(layerName, left, top, right, bottom, size, 0);
+    const inner = this.layerGuideCornerPoints(layerName, left, top, right, bottom, size, edge);
+    graphics.fillStyle(color, 0.92);
+    graphics.fillTriangle(outer[0], outer[1], outer[2], outer[3], outer[4], outer[5]);
+    graphics.fillStyle(0x000000, 0.75);
+    graphics.fillTriangle(outer[0], outer[1], outer[2], outer[3], outer[4], outer[5]);
+    graphics.fillStyle(color, 1);
+    graphics.fillTriangle(inner[0], inner[1], inner[2], inner[3], inner[4], inner[5]);
+  }
+
+  private layerGuideCornerPoints(
+    layerName: LayerName,
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+    size: number,
+    edge: number,
+  ): [number, number, number, number, number, number] {
+    // A 45° edge needs √2 as much inset along x+y to stay the same thickness.
+    const along = size - edge * (1 + Math.SQRT2);
+    if (layerName === 'foreground') {
+      return [left + edge, top + edge, left + along, top + edge, left + edge, top + along];
+    }
+    if (layerName === 'terrain') {
+      return [right - edge, top + edge, right - along, top + edge, right - edge, top + along];
+    }
+    return [right - edge, bottom - edge, right - along, bottom - edge, right - edge, bottom - along];
   }
 
   private getLayerGuideCellKey(x: number, y: number): string {

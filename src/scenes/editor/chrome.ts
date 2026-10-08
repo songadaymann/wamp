@@ -76,7 +76,7 @@ export class EditorChromeController {
         publishedVersion: this.host.getPublishedVersion(),
         roomVersionHistory: this.host.getRoomVersionHistory(),
         entrySource: this.host.getEntrySource(),
-        zoomText: `Zoom: ${editorState.zoom}x`,
+        zoomText: `Zoom: ${Number(editorState.zoom.toFixed(2))}x`,
         saveStatus: this.getSaveStatus(),
         publishNudgeVisible: this.flowController.shouldShowPublishNudge(),
         publishNudgeText: authenticated

@@ -162,7 +162,7 @@ const PANEL_TITLES: Readonly<Record<EditorDockPanelId, string>> = {
   hazards: 'Hazards',
   deco: 'Deco',
   goal: 'Goal',
-  room: 'Room',
+  room: 'Room Setup',
 };
 
 const GOAL_INSTRUCTIONS: Readonly<Record<string, string>> = {
@@ -320,13 +320,6 @@ export class EditorDockShellController {
             this.getCollectActionTarget()?.click();
             this.dispatch({ type: 'close-popovers' });
             break;
-          case 'insights':
-            this.dispatch({ type: 'close-popovers' });
-            break;
-          case 'history':
-            this.clickExistingButton('btn-room-history');
-            this.dispatch({ type: 'close-popovers' });
-            break;
         }
       });
     }
@@ -336,6 +329,11 @@ export class EditorDockShellController {
     this.doc.getElementById('btn-editor-markers-close')?.addEventListener('click', () => {
       this.dispatch({ type: 'close-popovers' });
       this.lastPopoverTrigger?.focus({ preventScroll: true });
+    });
+
+    this.doc.querySelector<HTMLButtonElement>('[data-editor-room-action="history"]')?.addEventListener('click', () => {
+      if (!this.active) return;
+      this.clickExistingButton('btn-room-history');
     });
 
     for (const button of this.doc.querySelectorAll<HTMLButtonElement>('[data-editor-room-section]')) {
