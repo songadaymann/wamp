@@ -1,6 +1,6 @@
 # WAMP Checkup (October 2026): item details
 
-Full write-ups for every item in [wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), the checklist that tracks what is done. Evidence line numbers are from commit `7371df9a`; re-check the current code before acting.
+Full write-ups for every item in [wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), the checklist that tracks what is done. Original review evidence line numbers are from commit `7371df9a`; later additions identify their own baseline. Re-check the current code before acting.
 
 Each item lists the plain-language summary, the technical detail, the evidence the reviewer cited, and what the independent fact-checkers corrected. Where they disagree, **the fact-check correction overrides the original detail**.
 
@@ -1597,6 +1597,38 @@ Order the fixes by value-to-effort:
 - (b) Capture frames with createImageBitmap/toBlob outside POST_RENDER, or skip capture on low-performance or mobile profiles. Small.
 - (c) Add hourly deletes for expired sessions and magic_link_tokens, plus 'dispatched' outbox rows older than N days. Small.
 - (d) Move frames to an R2 bucket with a 7-day lifecycle rule. Medium: needs a new binding, a write path and an admin read path.
+
+### F249: In-game Report a bug with a recent replay and diagnostic context
+
+- **Area:** Backend performance, cost & reliability
+- **Type:** idea · **impact:** medium · **effort:** medium
+- **Added:** 2026-10-08, at Jonathan's request; not part of the original October 3 review
+- **Status:** planned; after F150 and before the larger F155/F144 gameplay additions
+- **Reference:** [gsimone's in-game bug-report demonstration](https://x.com/ggsimm/status/2108245377899966491)
+
+**Summary.** Let a player or builder report a problem while it is happening, with a short description and the previous 10–20 seconds of gameplay attached. Automatically include the exact room and version, application build, browser/device details and relevant errors. Jonathan can review the report and replay together in a private admin inbox. This would make intermittent camera, avatar and rendering hiccups easier to investigate.
+
+**First delivery scope and acceptance.**
+
+- A small Report a bug action is reachable on desktop and phones during play and building, for guests and signed-in users. The dialog contains notes and a preview of the evidence being attached.
+- Keep a bounded local buffer of recent gameplay and attach its 10–20-second replay when the user submits. Include a current screenshot and a clear indication when recent replay evidence is unavailable; allow the written report to be saved in that case.
+- Attach room coordinates/ID, the published version or explicit draft context, the application build, viewport, browser/device details and a bounded set of relevant errors. Copy only supported diagnostic fields; exclude credentials, form values and chat contents.
+- Save reports in a private admin inbox with notes, replay playback, room link, timestamp and open/resolved status. Show confirmation only after a report is actually stored; preserve notes and allow retry after an upload failure.
+- Keep capture within explicit runtime, memory and storage budgets. Verify desktop and phone gameplay with reporting enabled, including camera smoothness. Reuse F001's recorder improvements and F038's bounded storage design rather than adding another synchronous screenshot encoder to the play loop.
+- Respect existing recording preferences. If capture is disabled, explain the available evidence and still permit a text report. Reconstructing or resuming the exact simulation can be considered later; it is not provided by today's screenshot replay system.
+
+**Current groundwork, checked against `d534619c` on 2026-10-08.**
+
+Guest session recording and private replay viewing already exist, but they do not provide a player-submitted bug report. The recorder stops after sign-in and its samples contain screenshots, coarse position and selected actions rather than a complete simulation/input trace. Extending this needs an explicit report flow and a capture path that also supports signed-in players.
+
+**Evidence.**
+
+- src/analytics/replay/recorder.ts:24-28 — recording preferences and the remote-API development skip
+- src/analytics/replay/recorder.ts:75-96 — guest samples include mode, room, position, selected actions and an image
+- src/analytics/replay/recorder.ts:116-123 — recording stops when the visitor becomes authenticated
+- src/analytics/replay/model.ts — bounded screenshot sample/session models; no report notes or complete simulation trace
+- src/admin/replays.ts:68-75 — existing private replay loading and scrubbing to build on
+- F001 and F038 — related capture performance and replay storage work; these remain separate open items
 
 ### F040: API trusts wamp.pages.dev (a domain WAMP does not own), enabling cross-site account takeover
 
