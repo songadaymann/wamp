@@ -1,3 +1,16 @@
+## 2026-10-08 — Ghost race footer release
+
+Original prompt: "ok deploy thte floating label change"
+
+Jonathan approves publication of the tested local candidate `ec5a83bb`. Fresh origin/main is `d1210e01`; the accepted application is unchanged. This is a Pages-only UI release. Reuse the owned clean release clone at `/tmp/wamp-camera-release-2026-10-06`; preserve the primary checkout, both local previews, and the existing API/renderer/catalog.
+
+- [x] Confirm accepted source, fresh main, clean owned release clone, frontend-only scope, and primary preservation snapshot.
+- [ ] Complete source checks, push/create/attach PR, and merge after exact-source checks pass.
+- [ ] Fast-forward clean literal main, verify merge checks and guarded Pages-only publication.
+- [ ] Compare custom-domain and immutable assets, inspect native desktop/phone ghost footer gameplay, and record delivery/preservation.
+
+Evidence: `/tmp/wamp-ghost-footer-release-2026-10-08/`. F150 remains the next checkup feature; this release does not advance the 55/214 count.
+
 ## 2026-10-07 — Ghost race name/time in the bottom bar
 
 Original prompt: "Idea for racing ghosts: the label on the ghost is distracting. can we put the person's name and their time at the bottom, the very bottom, where settings etc is."

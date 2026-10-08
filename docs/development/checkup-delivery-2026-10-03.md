@@ -1,5 +1,11 @@
 # WAMP checkup delivery: F014, F032, F027, then F057
 
+## 2026-10-08 — Ghost race footer publication authorized
+
+Jonathan approves the tested local application `ec5a83bb` with "ok deploy thte floating label change". Race ghost name and best time move into the very bottom bar beside Settings, with portrait-phone metadata below the touch controls; the presentation-only sprite has no following text. Existing ghost playback, camera, physics, account/Stop cleanup and solo selection are preserved. The accepted UI candidate passes 31 focused tests, lint/type/build/DOM, inspected official-client gameplay and four native desktop/phone movement, Jump, Restart, Stop and solo cases with zero browser errors.
+
+Fresh main is `d1210e01`; this is a Pages-only release using the owned clean literal-main clone, current catalog/renderer and existing local previews. Complete source and merge checks, guarded publication, served-asset comparison and native live footer verification before marking delivery. Keep the primary's 25 unrelated dirty entries intact. Master remains **55/214**; next feature is **F150 optional hearts/healing**. Evidence: `/tmp/wamp-ghost-footer-release-2026-10-08/`.
+
 
 ## 2026-10-07 — F143 traversal pack delivered
 
