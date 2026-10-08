@@ -136,7 +136,6 @@ export class EditorInteractionController {
   private pinchDistance = 0;
   private pinchAnchor = { x: 0, y: 0 };
   private pinchAnchorWorld = { x: 0, y: 0 };
-  private hasUserAdjustedCamera = false;
   private readonly handleTouchBlur = (): void => {
     if (this.touchAction) this.cancelTouchEdit();
   };
@@ -304,7 +303,6 @@ export class EditorInteractionController {
     this.pinchDistance = 0;
     this.pinchAnchor = { x: 0, y: 0 };
     this.pinchAnchorWorld = { x: 0, y: 0 };
-    this.hasUserAdjustedCamera = false;
   }
 
   setupCamera(): void {
@@ -321,7 +319,7 @@ export class EditorInteractionController {
     cam.transparent = true;
     // Round pixels floor scroll every frame, so a cursor-anchored zoom walks away from the pointer.
     cam.setRoundPixels(false);
-    this.fitToScreen({ markManualAdjustment: false });
+    this.fitToScreen();
   }
 
   centerCameraOnRoom(): void {
@@ -354,7 +352,7 @@ export class EditorInteractionController {
       () => {
         clearMusicWorkbenchFrame();
         if (!this.host.isMusicModeActive()) {
-          this.fitToScreen({ markManualAdjustment: false });
+          this.fitToScreen();
         }
       },
     );
@@ -401,7 +399,7 @@ export class EditorInteractionController {
     }
   }
 
-  fitToScreen(options: { markManualAdjustment?: boolean } = {}): void {
+  fitToScreen(): void {
     if (this.host.isMusicModeActive()) {
       this.applyMusicRoomFit();
       return;
@@ -424,10 +422,6 @@ export class EditorInteractionController {
     this.centerCameraOnRoom();
     this.host.updateBackgroundPreview();
     this.host.updateZoomUI();
-
-    if (options.markManualAdjustment !== false) {
-      this.hasUserAdjustedCamera = false;
-    }
   }
 
   zoomIn(): void {
@@ -760,7 +754,6 @@ export class EditorInteractionController {
         this.scene.cameras.main.scrollY = this.panStartScroll.y + dy;
         this.constrainEditorCamera();
         this.host.updateBackgroundPreview();
-        this.hasUserAdjustedCamera = true;
         return;
       }
 
@@ -940,7 +933,6 @@ export class EditorInteractionController {
     const nextScroll = getScrollForScreenAnchor(anchor.x, anchor.y, screenX, screenY, camera);
     camera.setScroll(nextScroll.x, nextScroll.y);
     this.constrainEditorCamera();
-    this.hasUserAdjustedCamera = true;
     this.host.updateBackgroundPreview();
     this.host.updateZoomUI();
   }
@@ -1509,7 +1501,6 @@ export class EditorInteractionController {
     this.scrollWorldPointToScreen(this.pinchAnchorWorld.x, this.pinchAnchorWorld.y, centerX, centerY);
     this.constrainEditorCamera();
     this.host.updateBackgroundPreview();
-    this.hasUserAdjustedCamera = true;
   }
 
   private screenToWorld(screenX: number, screenY: number): Phaser.Math.Vector2 {
