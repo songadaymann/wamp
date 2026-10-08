@@ -5,11 +5,15 @@ Original prompt: "ok deploy thte floating label change"
 Jonathan approves publication of the tested local candidate `ec5a83bb`. Fresh origin/main is `d1210e01`; the accepted application is unchanged. This is a Pages-only UI release. Reuse the owned clean release clone at `/tmp/wamp-camera-release-2026-10-06`; preserve the primary checkout, both local previews, and the existing API/renderer/catalog.
 
 - [x] Confirm accepted source, fresh main, clean owned release clone, frontend-only scope, and primary preservation snapshot.
-- [ ] Complete source checks, push/create/attach PR, and merge after exact-source checks pass.
-- [ ] Fast-forward clean literal main, verify merge checks and guarded Pages-only publication.
-- [ ] Compare custom-domain and immutable assets, inspect native desktop/phone ghost footer gameplay, and record delivery/preservation.
+- [x] Complete source checks, push/create/attach PR, and merge after exact-source checks pass. PR #80 / `d534619c` preserves the accepted application; all three source checks and local 2,895-test quality/DOM/Worker/map checks pass.
+- [x] Fast-forward clean literal main, verify merge checks and guarded Pages-only publication. All three exact-main checks pass; Pages `7a889cdb` is canonical at `d534619c`, with no pending same-head builds.
+- [x] Compare custom-domain and immutable assets, inspect native desktop/phone ghost footer gameplay, and record delivery/preservation. All 186 served assets and HTML/bootstrap match; four public native cases and inspected headed official gameplay pass with zero browser errors. The primary snapshot still matches exactly.
 
 Evidence: `/tmp/wamp-ghost-footer-release-2026-10-08/`. F150 remains the next checkup feature; this release does not advance the 55/214 count.
+
+Delivery: [PR #80](https://github.com/songadaymann/wamp/pull/80) merges source `a89fec21` / accepted UI `ec5a83bb` as `d534619c`. Guarded Pages-only publication and production smoke pass. Canonical Pages is `7a889cdb-7e06-430d-8f2e-517e02b64e2a` / https://7a889cdb.wampland.pages.dev. All 179 JS/CSS, four traversal PNGs, three death-audio files, HTML references/footer elements and early bootstrap match the clean release build on both the custom domain and immutable origin. Desktop, narrow desktop, portrait and landscape phone play match the real `jonathan · 3.31s` recording and pass movement, Jump, Restart, Stop and solo selection. Screenshots are inspected. The active map remains `production-2026-10-07-traversal-020c7c1d` at 100% with matching `020c7c1d1777764e` catalog; no API Worker, renderer, D1 or PartyKit release is needed.
+
+Capture diagnostics are retained: the unmodified official client reaches the correct ghost state with no errors, but headless timing triggers the ordinary performance advisory. Its full-quality raw WebGL canvas export is black. The final headed viewport adapter keeps the installed client's actions/time-stepping and uses the existing full-quality/replay preferences plus app readiness; only screenshot capture switches to the full viewport. Its inspected image shows actual gameplay, the unlabelled cyan ghost and bottom-bar metadata with zero errors. No application change or hidden-UI patch was made for those capture issues. Wrangler refreshed its existing OAuth session normally before publication. Final read-only checks found local ports 3001/3040 not listening; no release step started or stopped them. Delivery bookkeeping is saved separately on `codex/ghost-race-footer-delivery-2026-10-08`.
 
 ## 2026-10-07 — Ghost race name/time in the bottom bar
 
