@@ -49,6 +49,28 @@
   align-items: center;
 }
 
+.world-ghost-race {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: min(30vw, 280px);
+  color: #70e5ff;
+  font-size: 9px;
+  line-height: 1.4;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-ghost-race-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#world-ghost-race-time {
+  flex-shrink: 0;
+}
+
 #room-save-status {
   min-width: 0;
   text-align: right;

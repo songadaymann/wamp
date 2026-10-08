@@ -74,6 +74,11 @@ body[data-device-class='phone'][data-app-mode='play-world'] .bar-right {
   justify-content: flex-start;
 }
 
+body[data-device-class='phone'] .world-ghost-race {
+  max-width: min(60vw, 280px);
+  font-size: 8px;
+}
+
 body[data-device-class='phone'] #btn-world-zoom-out-footer,
 body[data-device-class='phone'] #btn-world-zoom-in-footer,
 body[data-device-class='phone'] #btn-fit-screen,

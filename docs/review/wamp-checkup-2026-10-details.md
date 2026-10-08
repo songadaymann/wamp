@@ -3916,6 +3916,8 @@ Three changes to the build plan:
 
 Finally, correct the evidence: the game already has bounce tiles, wind, gravity plates, moving platforms, portals and switch blocks. These three would be meaningful additions, not a big expansion.
 
+**Delivered 2026-10-07** (`d1210e01`, PR #79). Crumbling special slot 18 keeps Portal A/B slots 16/17, shakes 400ms, drops for 2s and waits while occupied. Separate spring ids reuse saved facing and protect 180ms of tangent momentum; existing bounce pads now follow gravity. Interactive Jump Feather supplies one nonstacking extra air jump and returns after 3s without changing collectible score or goals. Landing, walls, water/ladders, death and play resets clear it. Full quality passes 363 files / 2,895 tests; native ordinary/expanded authoring and actual death cleanup pass locally. Eight published-frontend keyboard/touch cases use isolated local API fixtures; four actual public camera/ghost regressions and healthy official gameplay pass, with inspected images. Coordinated renderer/API/Pages release verifies all 994 tiles and 974 nonempty object keys, public pixel parity, exact served assets and healthy scheduled direct alerts. Master is 55/214; next F150. Full receipt: `docs/development/checkup-delivery-2026-10-03.md`.
+
 ### F150: Idea: Optional player hearts per room (and make the Heart pickup actually heal)
 
 - **Area:** Gameplay feel & new gameplay ideas

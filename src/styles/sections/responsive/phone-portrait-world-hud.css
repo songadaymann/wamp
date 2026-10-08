@@ -22,6 +22,23 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-p
   display: none;
 }
 
+body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] #bottom-bar:has(#world-ghost-race:not(.hidden)) {
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  z-index: 16;
+  background: var(--mobile-portrait-console-paper);
+  pointer-events: none;
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] #bottom-bar :is(.bar-right, .bar-center > :not(#world-ghost-race)) {
+  display: none;
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] .world-ghost-race {
+  color: var(--mobile-portrait-console-ink);
+}
+
 body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] input,
 body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] textarea,
 body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] [contenteditable=''],

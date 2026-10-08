@@ -652,6 +652,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getUserId: () => getAuthDebugState().authenticated ? getAuthDebugState().user?.id ?? null : null,
       getRoomOrigin: coordinates => this.getRoomOrigin(coordinates),
       onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+      onRaceInfoChanged: info => this.hudBridge?.setGhostRaceInfo(info),
       showStatus: message => this.showTransientStatus(message),
     });
     const guestRuns = this.guestRunPlaybackController = new GuestRunPlaybackController({

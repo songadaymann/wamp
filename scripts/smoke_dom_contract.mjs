@@ -127,6 +127,9 @@ const requiredIdsByController = {
     'leaderboard-global-list',
   ],
   'OverworldHudBridge': [
+    'world-ghost-race',
+    'world-ghost-race-name',
+    'world-ghost-race-time',
     'world-hud',
     'world-selected-title',
     'world-selected-subtitle',

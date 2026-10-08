@@ -1,15 +1,49 @@
-## 2026-10-07 — F143 accepted; production release authorized
+## 2026-10-08 — Ghost race footer release
 
-Jonathan: "that is coooool! let's deploy! what is next?" The tested local source `77782065652b754659f73e607af4c71d90a41dda` is accepted. Complete push/PR/merge, matching immutable map imagery, guarded coordinated API/renderer/Pages publication and targeted live acceptance. Preserve the primary checkout and delivered camera/ghost behavior. Do not start F150 implementation in this release.
+Original prompt: "ok deploy thte floating label change"
 
-- [x] Confirm the accepted clean candidate, unchanged current application main `2d808784`, existing release clone and primary preservation snapshot.
-- [ ] Push the accepted candidate and authorization notes; pass exact-source quality and preview checks.
-- [ ] Prepare an immutable asset origin, renderer and complete published leaf/ancestor rebuild; verify object and pixel parity.
-- [ ] Merge, validate clean literal main matching origin/main and complete the guarded coordinated release.
-- [ ] Verify custom-domain runtime/art/catalog/map alerts and desktop/touch traversal; check F143 only after successful live acceptance.
-- [ ] Save final delivery and next item: F150 optional hearts/healing, then F155 boss mode and F144 Lost Song hunt.
+Jonathan approves publication of the tested local candidate `ec5a83bb`. Fresh origin/main is `d1210e01`; the accepted application is unchanged. This is a Pages-only UI release. Reuse the owned clean release clone at `/tmp/wamp-camera-release-2026-10-06`; preserve the primary checkout, both local previews, and the existing API/renderer/catalog.
 
-Release evidence: `/tmp/wamp-f143-release-2026-10-07/`. New map asset contract is `authoring-catalog-v1:020c7c1d1777764e`; the previous active map must remain usable while its successor is building. No D1 schema migration or PartyKit change is needed.
+- [x] Confirm accepted source, fresh main, clean owned release clone, frontend-only scope, and primary preservation snapshot.
+- [ ] Complete source checks, push/create/attach PR, and merge after exact-source checks pass.
+- [ ] Fast-forward clean literal main, verify merge checks and guarded Pages-only publication.
+- [ ] Compare custom-domain and immutable assets, inspect native desktop/phone ghost footer gameplay, and record delivery/preservation.
+
+Evidence: `/tmp/wamp-ghost-footer-release-2026-10-08/`. F150 remains the next checkup feature; this release does not advance the 55/214 count.
+
+## 2026-10-07 — Ghost race name/time in the bottom bar
+
+Original prompt: "Idea for racing ghosts: the label on the ghost is distracting. can we put the person's name and their time at the bottom, the very bottom, where settings etc is."
+
+Canonical local branch: `codex/ghost-race-footer-2026-10-07`, based on delivered `d1210e01` plus F143 delivery notes. Keep the primary checkout's 25 unrelated dirty entries untouched. This narrow UI change is for local review; the prior F143 publication is complete.
+
+- [x] Remove the race ghost's Phaser text and publish metadata changes through the existing HUD bridge. Scene orchestration changes by one callback only; playback and physics stay owned by the existing controller.
+- [x] Place name/time immediately beside Settings in the bottom bar; keep the time visible when long names truncate. Place the same footer at the very bottom of the portrait phone control panel.
+- [x] Verify ghost lifecycle and UI contracts, lint/type/build, native desktop/phone movement, Restart/Stop/solo, and inspected official-client screenshots.
+- [x] Record the reviewable local result and preservation proof. F150 remains next on the larger checkup list.
+
+Evidence: `/tmp/wamp-ghost-footer-2026-10-07/`. Existing Vite 3001 uses the remote API and 3040 remains the local traversal demo; preserve both.
+
+Validation: four focused files / 31 tests pass, including replacement best metadata, Stop/account cleanup, missing recordings, and no Phaser text creation. Full ESLint, TypeScript, production build, 928-ID / 215-required-ID DOM contract, and whitespace checks pass. The unmodified installed web-game client reaches actual racing gameplay; its screenshot/state are inspected with no browser errors. Native desktop 1280x800, narrow desktop 820x650, portrait phone 390x844, and landscape phone 844x390 all compare footer name/time against the actual remote API recording, verify bottom placement, move and jump through native inputs, Restart, Stop, and choose solo. All four pass with zero errors and healthy graphics. Inspected full screenshots show the unlabelled race sprite, the footer beside Settings, the portrait footer below the touch controls, and cleared metadata after Stop.
+
+Native probe notes: the first jump probe sent a zero-duration key press between headless frames; a subsequent readiness probe referenced a nonexistent `player.grounded` debug property. The runner now waits for the existing coyote-time signal and holds the real input until a rendered frame consumes it. No gameplay code changed to accommodate those harness failures. The primary HEAD/status/staged/unstaged bytes match the preservation snapshot. This UI candidate remains local; production is still the delivered F143 release.
+
+## 2026-10-07 — F143 traversal pack delivered
+
+Jonathan accepted app `77782065` and authorized publication. [PR #79](https://github.com/songadaymann/wamp/pull/79) merges authorization `18a6f414` as `d1210e01`, preserving the accepted application and existing camera/ghost behavior.
+
+- [x] Confirm the accepted candidate, current application main, owned release clone and primary preservation snapshot.
+- [x] Push/PR/merge and pass all three exact-source and all three exact-main hosted checks.
+- [x] Prepare immutable artwork/renderer; verify all leaf/ancestor/object readiness and public pixel parity.
+- [x] Validate clean literal main matching origin/main and complete guarded coordinated API/map/Pages publication.
+- [x] Verify custom-domain runtime/art/alerts, eight desktop/touch traversal cases, four real public camera/ghost cases and healthy official-client gameplay.
+- [x] Save final delivery; check F143 at 55/214 and retain F150 as the next feature.
+
+All 363 files / 2,895 tests and quality checks pass. API `30732882` serves 100%; canonical Pages is [37ca7e04](https://37ca7e04.wampland.pages.dev). All 179 JS/CSS files, four traversal PNGs, three death-audio files and HTML/bootstrap match the tested custom-domain/immutable bytes. New active map `production-2026-10-07-traversal-020c7c1d` has matching catalog `020c7c1d1777764e`, all 994 tiles ready, 681/681 current leaves and 974 valid nonempty object keys, with zero pending work. Public pixel parity passes, and scheduled direct alerts are enabled/configured/healthy with zero pending emails.
+
+Feature fixtures stay local-only; the four camera/ghost regressions use actual public rooms. Inspected desktop/phone/official gameplay images are healthy. The guard-blocked automatic main builds, propagation 404s and earlier harness/capture failures remain retained diagnostics, with no gate bypass or app change. Primary HEAD/status/staged/unstaged bytes preserve all 25 unrelated entries. Delivery notes use `codex/checkup-traversal-pack-delivery-2026-10-07` to avoid another automatic production upload solely for bookkeeping. No migration or PartyKit delivery is needed.
+
+**Next: F150 optional 1–3 hearts and healing pickups**, then F155 boss modes and F144 Lost Song hunt. Full receipt: `docs/development/checkup-delivery-2026-10-03.md`; evidence: `/tmp/wamp-f143-release-2026-10-07/`.
 
 ## 2026-10-07 — F143 traversal pack, complete locally
 
