@@ -33,7 +33,7 @@ describe('periodic mono music rendering', () => {
     const p = createDefaultRoomPatternMusic(); p.tabs[instrument].steps[31] = 4;
     const [loop, reference] = await Promise.all([renderRoomPatternLoopBuffer(context, p), renderRoomPatternLoopBuffer(context, longer(p))]);
     expect(loop.length).toBe(32000); expect(reference.length).toBe(64000);
-    for (let c = 0; c < 2; c++) {
+    for (let c = 0; c < loop.numberOfChannels; c++) {
       const data = loop.getChannelData(c); const ref = reference.getChannelData(c);
       expect(data.slice(0, 80).some(v => v !== 0)).toBe(true);
       expect(maximumDifference(data, ref, loop.length, 400)).toBeLessThan(0.000001);
@@ -97,9 +97,28 @@ describe('periodic mono music rendering', () => {
     expect(result.getChannelData(1).every(v => v === 0)).toBe(true);
   });
 
-  it('returns finite stereo silence of the original duration for an empty pattern', async () => {
+  it('returns finite mono silence of the original duration for a centered empty pattern', async () => {
     const result = await renderRoomPatternLoopBuffer(context, createDefaultRoomPatternMusic());
-    expect(result.length).toBe(32000); expect(result.numberOfChannels).toBe(2);
+    expect(result.length).toBe(32000); expect(result.numberOfChannels).toBe(1);
     expect(result.getChannelData(0).every(v => v === 0)).toBe(true);
+  });
+
+  it('stores centered content in one channel with the exact previous stereo waveform', async () => {
+    samples.set('crash', Float32Array.from({ length: 16000 }, (_, i) => Math.sin(i * 0.1) * Math.exp(-i / 4000)));
+    const p = createDefaultRoomPatternMusic(); p.tabs.triangle.steps[31] = 4; p.tabs.drums.crash = [31];
+    const stereo = structuredClone(p); stereo.mix.square.pan = 0.5; // silent track forces the previous stereo mix path
+    const [mono, two] = await Promise.all([renderRoomPatternLoopBuffer(context, p), renderRoomPatternLoopBuffer(context, stereo)]);
+    expect(mono.numberOfChannels).toBe(1); expect(two.numberOfChannels).toBe(2);
+    expect(mono.length).toBe(two.length);
+    expect(mono.getChannelData(0)).toEqual(two.getChannelData(0));
+    expect(maximumDifference(mono.getChannelData(0), two.getChannelData(1), 0, mono.length)).toBeLessThan(0.000001);
+  });
+
+  it('retains stereo and unequal channel levels when an audible track is panned', async () => {
+    const p = createDefaultRoomPatternMusic(); p.tabs.saw.steps[0] = 4; p.mix.saw.pan = 0.5;
+    const result = await renderRoomPatternLoopBuffer(context, p);
+    expect(result.numberOfChannels).toBe(2);
+    const peak = (c: number) => result.getChannelData(c).reduce((n, v) => Math.max(n, Math.abs(v)), 0);
+    expect(peak(1)).toBeGreaterThan(peak(0)); expect(peak(0)).toBeGreaterThan(0);
   });
 });

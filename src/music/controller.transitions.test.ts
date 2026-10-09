@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoomMusicController } from './controller';
+import { loadMusicPhrasesById } from './libraryClient';
+import { getPatternDrumSamples } from './patternKit';
+import type { RoomPatternDrumRowId } from './pattern';
 import { createDefaultRoomMusic, createDefaultRoomPatternMusic, createDefaultRoomPhraseArrangementMusic, type RoomMusic } from './model';
 
 const render = vi.hoisted(() => vi.fn());
@@ -20,17 +23,18 @@ function harness(hold = true) {
     return { buffer: null, start: vi.fn(), stop: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), addEventListener: vi.fn() };
   }
   function gain() {
-    return { gain: { value: 1, setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), cancelScheduledValues: vi.fn(),
+    return { gain: { value: 1, setValueAtTime: vi.fn(), setTargetAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), cancelScheduledValues: vi.fn(),
       ...(hold ? { cancelAndHoldAtTime: vi.fn() } : {}) }, connect: vi.fn(), disconnect: vi.fn() };
   }
   const context = { currentTime: 1, sampleRate: 1000, state: 'running', destination: {}, addEventListener: vi.fn(),
     createBuffer: vi.fn(buffer), decodeAudioData: vi.fn(async () => buffer()),
     createBufferSource: () => { const s = source(); sources.push(s); return s; },
     createGain: () => { const g = gain(); gains.push(g); return g; } };
-  vi.stubGlobal('window', { AudioContext: function () { return context; }, addEventListener: vi.fn(), location: { href: 'http://localhost/', origin: 'http://localhost' }, document: { addEventListener: vi.fn() } });
+  const contextConstructor = vi.fn(function () { return context; });
+  vi.stubGlobal('window', { AudioContext: contextConstructor, addEventListener: vi.fn(), location: { href: 'http://localhost/', origin: 'http://localhost' }, document: { addEventListener: vi.fn() } });
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) })));
   render.mockResolvedValue(buffer());
-  return { context, sources, gains, controller: new RoomMusicController() };
+  return { context, contextConstructor, sources, gains, controller: new RoomMusicController() };
 }
 
 function music(kind: 'pattern' | 'phraseArrangement' | 'stemArrangement'): RoomMusic {
@@ -128,5 +132,87 @@ describe('public room music playback scheduling', () => {
     await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
     h.controller.stopArrangement({ transition: 'immediate', mode: 'idle' }); resolve(buffer()); await pending;
     expect(h.sources).toHaveLength(0); expect(h.controller.getDebugState().activePattern).toBeNull();
+  });
+});
+
+describe('muted room music ownership', () => {
+  it.each(['pattern', 'phraseArrangement', 'stemArrangement'] as const)('skips all %s loading, rendering and context creation at volume zero', async kind => {
+    const h = harness(); h.controller.setVolume(0);
+    await h.controller.playArrangement(music(kind), { mode: 'world-play', transition: 'room' });
+    expect(render).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
+    expect(loadMusicPhrasesById).not.toHaveBeenCalled(); expect(h.contextConstructor).not.toHaveBeenCalled();
+    expect((h.controller.getDebugState().lastPlaybackRequest as { status: string }).status).toBe('muted');
+  });
+
+  it('resumes only the latest cloned room target when music returns', async () => {
+    const h = harness(); h.controller.setVolume(0);
+    const first = music('pattern'); const latest = music('pattern');
+    if (latest.kind !== 'pattern') throw new Error('pattern'); latest.bpm = 60;
+    await h.controller.playArrangement(first, { mode: 'world-play', transition: 'room' });
+    await h.controller.playArrangement(latest, { mode: 'world-play', transition: 'room' });
+    latest.bpm = 90;
+    h.controller.setVolume(0.5);
+    await vi.waitFor(() => expect(h.sources).toHaveLength(1));
+    expect(render).toHaveBeenCalledOnce(); expect(render.mock.calls[0][1].bpm).toBe(60);
+    expect(h.sources[0].start).toHaveBeenCalledWith(1.02, 0);
+  });
+
+  it.each(['stop', 'silent'] as const)('%s while muted cancels automatic resumption', async action => {
+    const h = harness(); h.controller.setVolume(0);
+    await h.controller.playArrangement(music('pattern'), { mode: 'editor-preview', transition: 'immediate' });
+    if (action === 'stop') h.controller.stopArrangement({ mode: 'idle', transition: 'immediate', resetTransport: true });
+    else await h.controller.playArrangement(null, { mode: 'world-play', transition: 'room' });
+    h.controller.setVolume(1); await Promise.resolve();
+    expect(render).not.toHaveBeenCalled(); expect(h.sources).toHaveLength(0);
+  });
+
+  it('stops owned audio on mute and restarts the current target from its downbeat', async () => {
+    const h = harness(); await h.controller.playArrangement(music('pattern'), { mode: 'world-play', transition: 'room' });
+    h.context.currentTime = 1.5; h.controller.setVolume(0);
+    expect(h.sources[0].stop.mock.calls.at(-1)?.[0]).toBeCloseTo(1.63);
+    expect(h.controller.getDebugState().activePattern).toBeNull();
+    h.context.currentTime = 2; h.controller.setVolume(1);
+    await vi.waitFor(() => expect(h.sources).toHaveLength(2));
+    expect(h.sources[1].start).toHaveBeenCalledWith(2.02, 0);
+  });
+
+  it('invalidates in-flight rendering on mute without allowing an old target to start', async () => {
+    const h = harness(); let resolve!: (b: AudioBuffer) => void;
+    render.mockImplementationOnce(() => new Promise<AudioBuffer>(r => { resolve = r; }));
+    const pending = h.controller.playArrangement(music('pattern'), { mode: 'world-play', transition: 'room' });
+    await vi.waitFor(() => expect(resolve).toBeTypeOf('function')); h.controller.setVolume(0);
+    const latest = music('pattern'); if (latest.kind !== 'pattern') throw new Error('pattern'); latest.bpm = 60;
+    await h.controller.playArrangement(latest, { mode: 'world-play', transition: 'room' });
+    resolve(buffer()); await pending; expect(h.sources).toHaveLength(0);
+    h.controller.setVolume(1); await vi.waitFor(() => expect(h.sources).toHaveLength(1));
+    expect(render.mock.calls.at(-1)?.[1].bpm).toBe(60);
+  });
+
+  it('does no muted clip or note preview loading', async () => {
+    const h = harness(); h.controller.setVolume(0);
+    const p = createDefaultRoomPatternMusic();
+    await h.controller.previewClip('wamp-v1', 'drums-1');
+    h.controller.previewPatternCell(p, 'triangle', 4); h.controller.previewPatternCell(p, 'drums', 0);
+    expect(fetch).not.toHaveBeenCalled(); expect(getPatternDrumSamples).not.toHaveBeenCalled();
+    expect(h.contextConstructor).not.toHaveBeenCalled(); expect(h.sources).toHaveLength(0);
+  });
+
+  it('a pending clip cannot revive after mute then unmute', async () => {
+    const h = harness(); let finish!: (value: ArrayBuffer) => void;
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, arrayBuffer: () => new Promise<ArrayBuffer>(r => { finish = r; }) } as Response);
+    const pending = h.controller.previewClip('wamp-v1', 'drums-1');
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    h.controller.setVolume(0); h.controller.setVolume(1); finish(new ArrayBuffer(1)); await pending;
+    expect(h.sources).toHaveLength(0);
+  });
+
+  it('a pending drum preview cannot revive after mute then unmute', async () => {
+    const h = harness(); let finish!: (value: Map<RoomPatternDrumRowId, Float32Array>) => void;
+    vi.mocked(getPatternDrumSamples).mockImplementationOnce(() => new Promise(r => { finish = r; }));
+    h.controller.previewPatternCell(createDefaultRoomPatternMusic(), 'drums', 6);
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    h.controller.setVolume(0); h.controller.setVolume(1); finish(new Map([['crash', new Float32Array(80)], ['fx-click', new Float32Array(80)]]));
+    await Promise.resolve(); await Promise.resolve();
+    expect(h.sources).toHaveLength(0); expect(h.context.createBuffer).not.toHaveBeenCalled();
   });
 });

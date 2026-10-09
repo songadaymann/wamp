@@ -1,3 +1,16 @@
+## 2026-10-09 — Overnight checklist goal / F225 mono and muted music
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-mono-mute-2026-10-09` stacks on F221 `f587f8db` / draft #95. Preserve primary and production. Evidence: `/tmp/wamp-music-mono-mute-2026-10-09/`.
+
+- [x] Store centered pattern/phrase loops as mono while preserving their previous channel waveform and panned stereo output.
+- [x] Skip new room-music loads/renders while muted, stop owned sources, and resume only the latest requested song after unmuting; explicit Stop cancels resumption.
+- [x] Verify asynchronous cancellation, previews, real mono buffers and native Settings/editor behavior; inspect responsive/gameplay screenshots and run quality/preservation checks.
+- [x] Save/push/attach tested stacked draft and receipt, keep master unticked and continue until the deadline. No release.
+
+F220 already bounds retained caches. This slice does not cancel CPU work already dispatched or change SFX/tab lifecycle.
+
+Verification: 403 files / 3,198 tests, quality gates, four accepted native cases and inspected captures pass. Primary and published fixtures preserved. See `docs/review/wamp-music-mono-mute-2026-10-09.md`. Continue F226 label/playhead overhead.
+
 ## 2026-10-09 — Overnight checklist goal / F221 periodic music tails and hat choke
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-loop-tails-2026-10-09` stacks on F224 `42714ad6` / draft #94. Preserve primary and production. Evidence: `/tmp/wamp-music-loop-tails-2026-10-09/`.

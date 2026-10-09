@@ -84,6 +84,7 @@ type PlaybackRequestStatus =
   | 'stopped'
   | 'stale'
   | 'empty'
+  | 'muted'
   | 'error';
 
 type PlaybackRequestDebugEntry = {
@@ -117,9 +118,15 @@ export class RoomMusicController {
   private activePattern: ActiveLoopPlayback | null = null;
   private readonly retiringPlaybacks = new Set<ActiveLoopPlayback>();
   private previewClipPlayback: PreviewClipPlayback | null = null;
+  private previewClipRequestSerial = 0;
+  private oneShotRequestSerial = 0;
   private readonly oneShotPlaybacks = new Set<OneShotPlayback>();
   private readonly bufferCache = new RoomMusicBufferCache();
   private currentArrangement: RoomMusic | null = null;
+  private desiredPlayback: {
+    music: RoomMusic;
+    options: { mode: PlaybackMode; transition?: TransitionMode; fadeDurationSec?: number };
+  } | null = null;
   private mode: PlaybackMode = 'idle';
   private playbackRequestSerial = 0;
   private lastPlaybackRequest: PlaybackRequestDebugEntry | null = null;
@@ -190,6 +197,15 @@ export class RoomMusicController {
       return;
     }
 
+    this.desiredPlayback = { music: nextArrangement, options: { ...options } };
+    if (this.volume === 0) {
+      const desired = this.desiredPlayback;
+      this.stopArrangement({ transition: 'immediate', mode: options.mode, fadeDurationSec: 0.08 });
+      this.desiredPlayback = desired;
+      this.recordPlaybackRequestStatus(this.playbackRequestSerial, options.mode, getRoomMusicKey(nextArrangement), 'muted');
+      return;
+    }
+
     try {
       if (isPatternRoomMusic(nextArrangement)) {
         await this.playPatternArrangement(nextArrangement, options, requestId);
@@ -219,6 +235,7 @@ export class RoomMusicController {
     fadeDurationSec?: number;
     resetTransport?: boolean;
   }): void {
+    this.desiredPlayback = null;
     const requestId = this.invalidatePlaybackRequests();
     const nextMode = options?.mode ?? 'idle';
     this.recordPlaybackRequestStatus(requestId, nextMode, null, 'stopped');
@@ -265,6 +282,8 @@ export class RoomMusicController {
 
   async previewClip(packId: string, clipId: string): Promise<void> {
     this.init();
+    if (this.volume === 0) return;
+    const requestId = ++this.previewClipRequestSerial;
     const pack = getRoomMusicPack(packId);
     const clip = pack ? getRoomMusicClip(pack, clipId) : null;
     if (!pack || !clip) {
@@ -273,6 +292,7 @@ export class RoomMusicController {
     }
 
     const buffer = await this.loadBuffer(packId, clipId);
+    if (this.volume === 0 || requestId !== this.previewClipRequestSerial) return;
     const audioContext = this.getAudioContext();
     const masterGain = this.ensureMasterGain(audioContext);
     if (!audioContext || !masterGain) {
@@ -301,6 +321,7 @@ export class RoomMusicController {
   }
 
   stopPreviewClip(): void {
+    this.previewClipRequestSerial += 1;
     if (!this.previewClipPlayback) {
       return;
     }
@@ -329,6 +350,7 @@ export class RoomMusicController {
       return;
     }
 
+    const wasMuted = this.volume === 0;
     this.volume = nextVolume;
     if (this.masterGain && this.audioContext) {
       this.masterGain.gain.setTargetAtTime(
@@ -336,6 +358,17 @@ export class RoomMusicController {
         this.audioContext.currentTime,
         0.02,
       );
+    }
+    if (nextVolume === 0) {
+      const desired = this.desiredPlayback;
+      this.stopArrangement({ transition: 'immediate', mode: this.mode, fadeDurationSec: 0.08 });
+      this.desiredPlayback = desired;
+      this.stopPreviewClip();
+      this.oneShotRequestSerial += 1;
+      for (const playback of this.oneShotPlaybacks) playback.stop();
+    } else if (wasMuted && this.desiredPlayback) {
+      const desired = this.desiredPlayback;
+      void this.playArrangement(desired.music, desired.options);
     }
   }
 
@@ -345,6 +378,7 @@ export class RoomMusicController {
     row: number,
   ): void {
     this.init();
+    if (this.volume === 0) return;
     const audioContext = this.getAudioContext();
     const masterGain = this.ensureMasterGain(audioContext);
     if (!audioContext || !masterGain) {
@@ -461,8 +495,9 @@ export class RoomMusicController {
     rowId: RoomPatternDrumRowId,
     defaultGain: number,
   ): Promise<void> {
+    const requestId = this.oneShotRequestSerial;
     const sample = (await getPatternDrumSamples(audioContext)).get(rowId);
-    if (!sample) {
+    if (!sample || this.volume === 0 || requestId !== this.oneShotRequestSerial) {
       return;
     }
 

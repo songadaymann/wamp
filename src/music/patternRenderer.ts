@@ -261,7 +261,7 @@ function getPanGains(pan: number): { left: number; right: number } {
 function mixMonoTrackIntoStereo(
   mono: Float32Array,
   left: Float32Array,
-  right: Float32Array,
+  right: Float32Array | null,
   volume: number,
   pan: number,
   busGain: number,
@@ -271,7 +271,7 @@ function mixMonoTrackIntoStereo(
   for (let index = 0; index < mono.length; index += 1) {
     const sample = mono[index] * gain;
     left[index] += sample * leftGain;
-    right[index] += sample * rightGain;
+    if (right) right[index] += sample * rightGain;
   }
 }
 
@@ -284,7 +284,9 @@ export async function renderRoomPatternLoopBuffer(
   const totalSamples = Math.max(1, Math.round(loopDurationSec * sampleRate));
   const { startTimesSec } = getStepTimingSec(pattern);
   const leftMixdown = new Float32Array(totalSamples);
-  const rightMixdown = new Float32Array(totalSamples);
+  const centered = [pattern.mix.drums, ...ROOM_PATTERN_TONAL_INSTRUMENT_IDS.map(id => pattern.mix[id])]
+    .every(mix => mix.pan === 0);
+  const rightMixdown = centered ? null : new Float32Array(totalSamples);
 
   for (const instrumentId of ROOM_PATTERN_TONAL_INSTRUMENT_IDS) {
     const instrumentMixdown = new Float32Array(totalSamples);
@@ -324,10 +326,10 @@ export async function renderRoomPatternLoopBuffer(
   );
 
   finalizeBuffer(leftMixdown);
-  finalizeBuffer(rightMixdown);
+  if (rightMixdown) finalizeBuffer(rightMixdown);
 
-  const buffer = audioContext.createBuffer(2, totalSamples, sampleRate);
+  const buffer = audioContext.createBuffer(rightMixdown ? 2 : 1, totalSamples, sampleRate);
   buffer.getChannelData(0).set(leftMixdown);
-  buffer.getChannelData(1).set(rightMixdown);
+  if (rightMixdown) buffer.getChannelData(1).set(rightMixdown);
   return buffer;
 }
