@@ -4152,6 +4152,8 @@ Small fix-plan detail: canUndo/canRedo are not in the editor view model yet. The
 
 ### F156: Rooms that can't be beaten (or are beaten instantly) can be published
 
+[Draft PR #87](https://github.com/songadaymann/wamp/pull/87), source `7ad04621`, is pushed and attached, stacked on draft #86.
+
 **2026-10-09 overnight candidate (not deployed).** Shared editor/Worker/agent publish checks reject missing exits, missing sprint finishes and empty Defeat All rooms. Draft saving remains available. Missing marker buttons have a brief reduced-motion-aware outline reminder; placement stays explicit to avoid accidental mobile taps. Finish-only standalone sprints remain valid. Expanded Room publication requires a real enemy in the exact published cell versions, and its editor keeps area Publish disabled until the enemy's cell is published. The existing room-version reads supply server counts without extra queries.
 
 The suspicious admin console has a separate authenticated, read-only “Room setup issues” panel with counts, bounded keyset pages and safe room links/title rendering. It excludes Expanded Room cells and treats setup problems separately from cheating evidence. Clearing the admin key aborts an in-flight review and removes private rows. A grid minimum-width adjustment keeps the panel within a phone viewport. Current public API audit: 682 published rooms in the central radius-32 sample, 122 relevant standalone goals, one missing exit (7,-1 “Death”, v9), one missing finish (3,4, v1212) and zero empty Defeat All goals. No sample reads fail; no production room or reward changes occur. Remote D1 authentication fails before SQL execution, so the audit uses read-only public snapshots and is not a global count.

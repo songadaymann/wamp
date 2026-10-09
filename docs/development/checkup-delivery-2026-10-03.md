@@ -925,6 +925,8 @@ F155 stays unticked at **55/215 delivered** pending morning review and productio
 
 ## 2026-10-09 — F156 local publish-validation candidate
 
+[Draft PR #87](https://github.com/songadaymann/wamp/pull/87), source `7ad04621`, is pushed and attached.
+
 The candidate on `codex/checkup-publish-validation-2026-10-08` stacks on F152 `6e268a23` / draft PR #86. Standalone editor, Worker and agent publication reject Reach Exit without an exit, Checkpoint Sprint without a finish and Defeat All without an enemy. Incomplete drafts stay saveable, finish-only standalone sprints stay valid, and missing marker buttons receive a brief outline reminder with reduced-motion support. Marker placement remains explicit on phone.
 
 Expanded Room publication checks enemies in the exact cell versions already resolved for publication, avoiding additional room reads. Its editor counts published enemies and guides the builder to publish the cell first. The suspicious admin console's separate, read-only Room setup issues panel has admin-key authentication, uncached thin rows, full counts and keyset pages capped at 100. It excludes current area cells, safely displays literal titles and discards an in-flight response when the key is cleared. The admin grid minimum is adjusted to fit the new panel on phone.
