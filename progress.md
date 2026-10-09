@@ -18,6 +18,8 @@ Prime supports live helpers; other Worlds, Room Rush and active PvP suppress the
 
 Retained diagnostics include fixture link/overlap corrections, hidden legacy publish controls, the ordinary finish API's 204 response, and an incomplete finalization mock amended to include a valid empty object list. The first cell-publish assertion was insufficient; the final proof requires new versions and the real area publish request. Editor captures retain four 404 responses from the unchanged published-room construction-preview endpoint; they are outside this change, with no page errors. Accepted evidence: `native-b`'s eight completed scenarios, `solo-final`, `api.json`, `editor-c` controls/saves, `publish-final`, `info`, `official`, and final gates.
 
+Saved source `55581963` in [draft PR #86](https://github.com/songadaymann/wamp/pull/86), stacked on draft #85; pushed and attached. Production and master ticks remain unchanged. Continue the active goal with F156 publish validation.
+
 ## 2026-10-08 — Overnight checklist goal / F151 weekly Room Rush
 
 Original prompt: "ok i am ging to bed can you set a goal to make your way through the list until 5am"
