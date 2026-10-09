@@ -34,6 +34,7 @@ import {
   type RoomPatternDrumRowId,
   type RoomPatternInstrumentId,
   type RoomPatternMusic,
+  type RoomPatternPlaybackSequence,
   type RoomPatternTonalInstrumentId,
 } from './pattern';
 
@@ -44,6 +45,10 @@ export type RoomMusicPlayheadInfo = {
   patternStartTime: number | null;
   loopDurationSec: number | null;
   kind: RoomMusic['kind'] | null;
+  swingPercent: number | null;
+  /** Active Arrange slots in the playing phrase loop; null for other music. */
+  segmentCount: number | null;
+  outputLatencySec: number;
 };
 type PlaybackMode = 'idle' | 'editor-preview' | 'world-play';
 
@@ -64,6 +69,8 @@ type PreviewClipPlayback = {
   source: AudioBufferSourceNode;
   gain: GainNode;
 };
+
+const MAX_PLAYHEAD_OUTPUT_LATENCY_SEC = 0.5;
 
 type OneShotPlayback = {
   stop: () => void;
@@ -331,6 +338,53 @@ export class RoomMusicController {
     void this.resumeAudioContext('preview-clip');
   }
 
+  /**
+   * Loops a rendered sequence (a library phrase audition) through the preview
+   * voice without touching room playback. Resolves false when it was superseded.
+   */
+  async previewSequence(previewId: string, sequence: RoomPatternPlaybackSequence): Promise<boolean> {
+    this.init();
+    if (this.volume === 0) return false;
+    const requestId = ++this.previewClipRequestSerial;
+    const audioContext = this.getAudioContext();
+    const masterGain = this.ensureMasterGain(audioContext);
+    if (!audioContext || !masterGain) {
+      return false;
+    }
+
+    const cacheKey = `audition:${previewId}`;
+    let bufferPromise = this.bufferCache.get(cacheKey);
+    if (!bufferPromise) {
+      bufferPromise = renderRoomPatternLoopBuffer(audioContext, sequence);
+      this.bufferCache.set(cacheKey, 'clip', bufferPromise);
+    }
+    const buffer = await bufferPromise;
+    if (this.volume === 0 || requestId !== this.previewClipRequestSerial) return false;
+
+    this.stopPreviewClip();
+    const gain = audioContext.createGain();
+    const startAt = audioContext.currentTime + 0.02;
+    gain.gain.setValueAtTime(0, startAt);
+    gain.gain.linearRampToValueAtTime(0.92, startAt + 0.01);
+    gain.connect(masterGain);
+
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.loopStart = 0;
+    source.loopEnd = buffer.duration;
+    source.connect(gain);
+    source.start(startAt, 0);
+
+    this.previewClipPlayback = {
+      clipId: previewId,
+      source,
+      gain,
+    };
+    void this.resumeAudioContext('preview-sequence');
+    return true;
+  }
+
   stopPreviewClip(): void {
     this.previewClipRequestSerial += 1;
     if (!this.previewClipPlayback) {
@@ -556,13 +610,31 @@ export class RoomMusicController {
   }
 
   getPlayheadInfo(): RoomMusicPlayheadInfo {
+    const arrangement = this.currentArrangement;
+    const loopDurationSec = this.activePattern?.loopDurationSec ?? null;
+    const outputLatency = this.audioContext?.outputLatency;
+    // Per-frame read: derive the slot count from scalars rather than walking slots.
+    const segmentDurationSec = isPhraseArrangementRoomMusic(arrangement)
+      ? getRoomMusicBarDurationSec(arrangement) * arrangement.segmentBarCount
+      : 0;
     return {
       audioCurrentTime: this.audioContext?.currentTime ?? null,
       transportStartTime: this.transportStartTime,
       patternStartTime: this.activePattern?.startTime ?? null,
-      loopDurationSec: this.activePattern?.loopDurationSec ?? null,
-      kind: this.currentArrangement?.kind ?? null,
+      loopDurationSec,
+      kind: arrangement?.kind ?? null,
+      swingPercent: arrangement && arrangement.kind !== 'stemArrangement' ? arrangement.swingPercent : null,
+      segmentCount: segmentDurationSec > 0 && loopDurationSec !== null
+        ? Math.max(1, Math.round(loopDurationSec / segmentDurationSec))
+        : null,
+      outputLatencySec: typeof outputLatency === 'number' && Number.isFinite(outputLatency)
+        ? Math.max(0, Math.min(MAX_PLAYHEAD_OUTPUT_LATENCY_SEC, outputLatency))
+        : 0,
     };
+  }
+
+  getPreviewClipId(): string | null {
+    return this.previewClipPlayback?.clipId ?? null;
   }
 
   getDebugState(): Record<string, unknown> {

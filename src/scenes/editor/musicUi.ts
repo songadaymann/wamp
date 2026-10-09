@@ -51,6 +51,7 @@ export function renderMusicArrangementPanel(options: {
   getArrangement: () => RoomPhraseArrangementMusic;
   getSelection: () => EditorMusicArrangementSelection;
   getArrangementSlotLabel: (phraseId: string | null) => string;
+  playingSlotIndex: number | null;
 }): void {
   const panel = document.getElementById('editor-music-arrangement-panel');
   const grid = document.getElementById('editor-music-arrangement-grid');
@@ -130,6 +131,9 @@ export function renderMusicArrangementPanel(options: {
         if (phraseId) {
           button.classList.add('filled');
         }
+        if (slotIndex === options.playingSlotIndex) {
+          button.classList.add('is-playing');
+        }
         button.dataset.roomMusicArrangementInstrument = instrumentId;
         button.dataset.roomMusicArrangementSlot = String(slotIndex);
         button.disabled = options.legacyLocked;
@@ -168,6 +172,19 @@ export function renderMusicArrangementPanel(options: {
   }
 }
 
+/** Moves the Arrange playhead without rebuilding the slot grid. */
+export function syncMusicArrangementPlayhead(slotIndex: number | null): void {
+  const grid = document.getElementById('editor-music-arrangement-grid');
+  if (!grid) {
+    return;
+  }
+
+  const playingSlot = slotIndex === null ? null : String(slotIndex);
+  for (const slot of grid.querySelectorAll<HTMLElement>('[data-room-music-arrangement-slot]')) {
+    slot.classList.toggle('is-playing', slot.dataset.roomMusicArrangementSlot === playingSlot);
+  }
+}
+
 export function renderMusicLibraryPanel(options: {
   legacyLocked: boolean;
   composerMode: EditorMusicComposerMode;
@@ -177,6 +194,9 @@ export function renderMusicLibraryPanel(options: {
   loading: boolean;
   loadingMore: boolean;
   error: string | null;
+  auditionPhraseId: string | null;
+  auditionPending: boolean;
+  auditionNotice: string | null;
   getMusicPhraseSampleName: (phrase: MusicPhraseRecord) => string;
   getMusicPhraseKeyLabel: (phrase: MusicPhraseRecord) => string;
   getMusicPhraseRoomLabel: (phrase: MusicPhraseRecord) => string;
@@ -194,6 +214,8 @@ export function renderMusicLibraryPanel(options: {
       status.textContent = `Loading ${getPatternInstrumentLabel(options.activeInstrumentId)} phrases...`;
     } else if (options.error) {
       status.textContent = options.error;
+    } else if (options.auditionNotice) {
+      status.textContent = options.auditionNotice;
     } else if (options.items.length === 0) {
       status.textContent = `No published ${getPatternInstrumentLabel(options.activeInstrumentId).toLowerCase()} phrases yet.`;
     } else {
@@ -215,6 +237,11 @@ export function renderMusicLibraryPanel(options: {
   } else {
     listRoot.replaceChildren(
       ...options.items.map((phrase) => {
+        const entry = document.createElement('div');
+        entry.className = 'editor-music-library-entry';
+        entry.style.setProperty('--editor-music-instrument-accent', getPatternInstrumentColorCss(phrase.instrumentId));
+        entry.style.setProperty('--editor-music-instrument-rgb', getPatternInstrumentColorRgbCss(phrase.instrumentId));
+
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'editor-music-library-item';
@@ -250,7 +277,22 @@ export function renderMusicLibraryPanel(options: {
         meta.textContent = `${phrase.creatorDisplayName} · ${options.getMusicPhraseRoomLabel(phrase)}`;
         button.append(meta);
 
-        return button;
+        const auditioning = options.auditionPhraseId === phrase.id;
+        const sampleName = options.getMusicPhraseSampleName(phrase);
+        const audition = document.createElement('button');
+        audition.type = 'button';
+        audition.className = 'editor-music-library-audition';
+        audition.classList.toggle('active', auditioning);
+        audition.classList.toggle('is-loading', auditioning && options.auditionPending);
+        audition.dataset.roomMusicPhraseAudition = phrase.id;
+        audition.disabled = options.legacyLocked;
+        audition.setAttribute('aria-pressed', auditioning ? 'true' : 'false');
+        audition.ariaLabel = auditioning ? `Stop previewing ${sampleName}` : `Preview ${sampleName}`;
+        audition.title = audition.ariaLabel;
+        audition.textContent = auditioning ? '⏹' : '▶';
+
+        entry.append(button, audition);
+        return entry;
       }),
     );
   }

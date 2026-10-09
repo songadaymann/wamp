@@ -201,9 +201,16 @@ export function syncMusicWorkbenchFrame(
   }
   const panelWidth = panelRight - panelLeft;
   const root = canvas.ownerDocument.body;
+  // Arrange mode lays the phrase library out as a tray between the shell and the
+  // bottom of the music overlay (the canvas can be letterboxed shorter than it).
+  const doc = canvas.ownerDocument;
+  const shellBottom = doc.querySelector<HTMLElement>('.editor-music-shell')?.getBoundingClientRect().bottom ?? rect.top;
+  const stageBottom = doc.getElementById('editor-music-overlay')?.getBoundingClientRect().bottom || rect.bottom;
   setFrameProperty(root, '--editor-music-room-top', `${Math.round(roomTop)}px`);
   setFrameProperty(root, '--editor-music-room-height', `${Math.round(Math.max(1, roomHeight))}px`);
   setFrameProperty(root, '--editor-music-workbench-width', `${Math.round(panelWidth)}px`);
+  setFrameProperty(root, '--editor-music-shell-bottom', `${Math.round(shellBottom)}px`);
+  setFrameProperty(root, '--editor-music-stage-bottom', `${Math.round(stageBottom)}px`);
 }
 
 function setFrameProperty(root: HTMLElement, name: string, value: string): void {
@@ -216,6 +223,8 @@ export function clearMusicWorkbenchFrame(doc: Document = document): void {
   doc.body.style.removeProperty('--editor-music-room-top');
   doc.body.style.removeProperty('--editor-music-room-height');
   doc.body.style.removeProperty('--editor-music-workbench-width');
+  doc.body.style.removeProperty('--editor-music-shell-bottom');
+  doc.body.style.removeProperty('--editor-music-stage-bottom');
 }
 
 function visibleAxisBox(element: HTMLElement | null): AxisBox | null {

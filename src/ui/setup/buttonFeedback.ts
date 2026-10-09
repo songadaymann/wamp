@@ -11,6 +11,7 @@ const PRESSABLE_SELECTOR = [
   '.object-item',
   '.editor-music-arrangement-slot',
   '.editor-music-library-item',
+  '.editor-music-library-audition',
   '#menu-toggle',
   '.mobile-action-btn',
 ].join(', ');

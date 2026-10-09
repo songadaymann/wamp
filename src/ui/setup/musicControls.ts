@@ -521,6 +521,17 @@ export function setupRoomMusicControls(
       return;
     }
 
+    const auditionButton = target.closest<HTMLElement>('[data-room-music-phrase-audition]');
+    if (auditionButton) {
+      const phraseId = auditionButton.dataset.roomMusicPhraseAudition;
+      if (phraseId) {
+        withActiveEditorScene(game, (scene) => {
+          void scene.toggleMusicPhraseAudition?.(phraseId);
+        });
+      }
+      return;
+    }
+
     const phraseButton = target.closest<HTMLElement>('[data-room-music-phrase-id]');
     if (phraseButton) {
       const phraseId = phraseButton.dataset.roomMusicPhraseId;

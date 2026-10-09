@@ -42,11 +42,14 @@ import {
   type RoomPhraseArrangementMusic,
 } from '../../music/model';
 import type { RoomRecord, RoomSnapshot } from '../../persistence/roomRepository';
+import { buildMusicPhraseAudition } from '../../music/phraseAudition';
 import { EditorMusicPatternController } from './musicPatternEditor';
+import { resolveMusicPlayheadSegment } from './musicPlayhead';
 import {
   renderMusicArrangementPanel,
   renderMusicLibraryPanel,
   renderMusicWorkbenchModeButtons,
+  syncMusicArrangementPlayhead,
   type EditorMusicArrangementSelection,
   type EditorMusicComposerMode,
 } from './musicUi';
@@ -108,6 +111,13 @@ export class EditorMusicWorkflowCoordinator {
   );
   private preferredPhraseArrangementSlotCount = ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT;
   private readonly musicPhraseOrchestrator = new EditorMusicPhraseOrchestrator();
+  // Library phrase being auditioned (pending or playing) and the controller
+  // preview id once it is audible, so an external stop can be noticed.
+  private auditionPhraseId: string | null = null;
+  private auditionPreviewId: string | null = null;
+  private auditionRequestSerial = 0;
+  private auditionNotice: string | null = null;
+  private arrangementPlayheadSlot: number | null = null;
 
   constructor(private readonly host: EditorMusicWorkflowHost) {}
 
@@ -132,6 +142,7 @@ export class EditorMusicWorkflowCoordinator {
   }
 
   resetForSceneOpen(): void {
+    this.stopMusicPhraseAudition({ render: false });
     this.touchEditor.destroy();
     this.musicModeActive = false;
     this.musicComposerMode = 'sequencer';
@@ -141,6 +152,7 @@ export class EditorMusicWorkflowCoordinator {
   }
 
   resetForRuntimeClear(): void {
+    this.stopMusicPhraseAudition({ render: false });
     this.touchEditor.destroy();
     this.musicModeActive = false;
     this.musicComposerMode = 'sequencer';
@@ -150,6 +162,7 @@ export class EditorMusicWorkflowCoordinator {
   }
 
   resetForShutdown(options: { stopMode: 'idle' | 'editor-preview'; render: boolean }): void {
+    this.stopMusicPhraseAudition({ render: false });
     this.touchEditor.destroy();
     this.musicModeActive = false;
     this.musicPreviewState = 'stopped';
@@ -399,6 +412,7 @@ export class EditorMusicWorkflowCoordinator {
       this.ensureActivePatternPhraseCache();
     }
     if (!active) {
+      this.stopMusicPhraseAudition({ render: false });
       this.musicPhraseOrchestrator.setMetadataEditing(false);
       this.requirePatternController().cancelPastePreview();
       if (this.musicPreviewState !== 'stopped') {
@@ -419,6 +433,7 @@ export class EditorMusicWorkflowCoordinator {
     }
 
     this.musicComposerMode = mode;
+    this.stopMusicPhraseAudition({ render: false });
     this.musicPhraseOrchestrator.resetSavePrompt();
     if (mode === 'arrangement') {
       this.musicPhraseOrchestrator.setMetadataEditing(false);
@@ -429,6 +444,7 @@ export class EditorMusicWorkflowCoordinator {
   }
 
   setMusicPatternInstrumentTab(instrumentId: RoomPatternInstrumentId): void {
+    this.stopAuditionForInstrumentChange(instrumentId);
     this.requirePatternController().setActiveInstrumentTab(instrumentId);
     this.musicPhraseOrchestrator.resetSavePrompt();
     if (this.musicComposerMode === 'arrangement') {
@@ -624,6 +640,7 @@ export class EditorMusicWorkflowCoordinator {
   }
 
   async useMusicPhrase(phraseId: string): Promise<void> {
+    this.stopMusicPhraseAudition({ render: false });
     try {
       const phrase = await this.musicPhraseOrchestrator.loadPhrase(phraseId);
       if (this.musicComposerMode === 'arrangement') {
@@ -650,10 +667,102 @@ export class EditorMusicWorkflowCoordinator {
       return;
     }
 
+    this.stopAuditionForInstrumentChange(instrumentId);
     this.musicPhraseOrchestrator.setArrangementSelection({ instrumentId, slotIndex });
     this.requirePatternController().setActiveInstrumentTab(instrumentId);
     this.ensureMusicPhraseLibraryLoaded();
     this.requestRender();
+  }
+
+  getAuditionPhraseId(): string | null {
+    return this.auditionPhraseId;
+  }
+
+  /** Loops a library phrase as it would sound once placed, without changing the room. */
+  async toggleMusicPhraseAudition(phraseId: string): Promise<void> {
+    if (this.auditionPhraseId === phraseId) {
+      this.stopMusicPhraseAudition();
+      return;
+    }
+
+    const requestId = ++this.auditionRequestSerial;
+    this.auditionPhraseId = phraseId;
+    this.auditionPreviewId = null;
+    this.auditionNotice = null;
+    if (this.musicPreviewState === 'playing') {
+      this.musicPreviewState = 'stopped';
+      this.stopPreviewPlayback('editor-preview');
+    }
+    this.requestRender();
+
+    try {
+      const phrase =
+        this.musicPhraseOrchestrator.getViewState().libraryItems.find((item) => item.id === phraseId)
+        ?? this.musicPhraseOrchestrator.getCachedPhrase(phraseId)
+        ?? await this.musicPhraseOrchestrator.loadPhrase(phraseId);
+      if (requestId !== this.auditionRequestSerial) {
+        return;
+      }
+
+      const audition = this.buildPhraseAudition(phrase);
+      const started = await globalRoomMusicController.previewSequence(audition.key, audition.sequence);
+      if (requestId !== this.auditionRequestSerial) {
+        return;
+      }
+
+      if (started) {
+        this.auditionPreviewId = audition.key;
+      } else {
+        // Not superseded, so music is muted or Web Audio is unavailable.
+        this.auditionPhraseId = null;
+        this.auditionNotice = 'Music volume is off. Turn up Music in Settings to preview phrases.';
+      }
+    } catch (error) {
+      if (requestId !== this.auditionRequestSerial) {
+        return;
+      }
+
+      this.auditionPhraseId = null;
+      this.musicPhraseOrchestrator.setLibraryError(
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : 'Failed to preview music phrase.',
+      );
+    }
+    this.requestRender();
+  }
+
+  stopMusicPhraseAudition(options?: { render?: boolean }): void {
+    if (this.auditionPhraseId === null) {
+      return;
+    }
+
+    this.auditionRequestSerial += 1;
+    this.auditionPhraseId = null;
+    this.auditionPreviewId = null;
+    globalRoomMusicController.stopPreviewClip();
+    if (options?.render ?? true) {
+      this.requestRender();
+    }
+  }
+
+  /** Per-frame: highlight the playing Arrange slot and notice auditions stopped elsewhere (mute). */
+  updatePlaybackIndicators(): void {
+    if (
+      this.auditionPreviewId !== null
+      && globalRoomMusicController.getPreviewClipId() !== this.auditionPreviewId
+    ) {
+      this.auditionRequestSerial += 1;
+      this.auditionPhraseId = null;
+      this.auditionPreviewId = null;
+      this.requestRender();
+    }
+
+    const slotIndex = this.resolveArrangementPlayheadSlot();
+    if (slotIndex !== this.arrangementPlayheadSlot) {
+      this.arrangementPlayheadSlot = slotIndex;
+      syncMusicArrangementPlayhead(slotIndex);
+    }
   }
 
   clearSelectedArrangementSlot(): void {
@@ -834,6 +943,7 @@ export class EditorMusicWorkflowCoordinator {
     const body = document.body;
     body.dataset.editorMusicMode = this.musicModeActive ? 'true' : 'false';
     body.dataset.editorMusicUiLocked = this.musicModeActive ? 'true' : 'false';
+    body.dataset.editorMusicComposer = this.musicComposerMode;
     if (this.musicModeActive) {
       this.ensureMusicPhraseLibraryLoaded();
       this.ensureArrangementPhraseCache();
@@ -1478,7 +1588,45 @@ export class EditorMusicWorkflowCoordinator {
     this.commitRoomMusic(arrangement);
   }
 
+  private stopAuditionForInstrumentChange(instrumentId: RoomPatternInstrumentId): void {
+    if (instrumentId !== this.requirePatternController().getActiveInstrumentTab()) {
+      this.stopMusicPhraseAudition({ render: false });
+    }
+  }
+
+  private buildPhraseAudition(phrase: MusicPhraseRecord) {
+    if (this.musicComposerMode === 'arrangement') {
+      const arrangement = this.getDisplayPhraseArrangement();
+      const arrangementEmpty = ROOM_PATTERN_INSTRUMENT_IDS.every((instrumentId) =>
+        arrangement.slots[instrumentId].every((slotPhraseId) => slotPhraseId === null),
+      );
+      return buildMusicPhraseAudition(phrase, arrangement, {
+        adoptPhraseTiming: arrangementEmpty,
+        adoptPhraseKey: arrangementEmpty,
+      });
+    }
+
+    return buildMusicPhraseAudition(phrase, this.getDisplayPatternMusic(), {
+      adoptPhraseTiming: this.requirePatternController().isPatternWorkspaceEmpty(),
+      adoptPhraseKey: false,
+    });
+  }
+
+  private resolveArrangementPlayheadSlot(): number | null {
+    if (!this.musicModeActive || this.musicComposerMode !== 'arrangement' || this.musicPreviewState !== 'playing') {
+      return null;
+    }
+
+    const playback = globalRoomMusicController.getPlayheadInfo();
+    if (playback.kind !== 'phraseArrangement' || playback.segmentCount === null) {
+      return null;
+    }
+
+    return resolveMusicPlayheadSegment({ ...playback, segmentCount: playback.segmentCount });
+  }
+
   private playRoomMusicPreview(): void {
+    this.stopMusicPhraseAudition({ render: false });
     this.musicPreviewState = 'playing';
     this.syncRoomMusicPreviewPlayback();
     this.renderUi();
@@ -1508,6 +1656,7 @@ export class EditorMusicWorkflowCoordinator {
       getArrangement: () => this.getDisplayPhraseArrangement(),
       getSelection: () => this.getArrangementSelection(),
       getArrangementSlotLabel: (phraseId) => this.getArrangementSlotLabel(phraseId),
+      playingSlotIndex: this.arrangementPlayheadSlot,
     });
   }
 
@@ -1522,6 +1671,9 @@ export class EditorMusicWorkflowCoordinator {
       loading: phraseState.libraryLoading,
       loadingMore: phraseState.libraryLoadingMore,
       error: phraseState.libraryError,
+      auditionPhraseId: this.auditionPhraseId,
+      auditionNotice: this.auditionNotice,
+      auditionPending: this.auditionPhraseId !== null && this.auditionPreviewId === null,
       getMusicPhraseSampleName: (phrase) => this.getMusicPhraseSampleName(phrase),
       getMusicPhraseKeyLabel: (phrase) => this.getMusicPhraseKeyLabel(phrase),
       getMusicPhraseRoomLabel: (phrase) => this.getMusicPhraseRoomLabel(phrase),
