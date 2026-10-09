@@ -147,6 +147,9 @@ export class EditorMusicPatternController {
   private clipboard: EditorMusicPatternClipboardState | null = null;
   private pastePreviewOrigin: { step: number; row: number } | null = null;
   private labelResolution = 0;
+  private batchingCellGesture = false;
+  private gesturePattern: RoomPatternMusic | null = null;
+  private gesturePreview: { pattern: RoomPatternMusic; row: number } | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -252,6 +255,7 @@ export class EditorMusicPatternController {
   }
 
   getDisplayPattern(): RoomPatternMusic {
+    if (this.gesturePattern) return this.gesturePattern;
     const roomMusic = this.host.getRoomMusic();
     return isPatternRoomMusic(roomMusic) ? roomMusic : createDefaultRoomPatternMusic();
   }
@@ -508,9 +512,46 @@ export class EditorMusicPatternController {
     }
 
     const isRightButton = pointer.rightButtonDown();
-    const tool = isRightButton ? 'eraser' : resolveSequencerTool();
+    this.beginCellEdit(cell, isRightButton ? 'eraser' : resolveSequencerTool(), !isRightButton);
+  }
 
-    if (this.pastePreviewOrigin && !isRightButton) {
+  /** Touch authoring shares the canvas operations, with one history entry on release. */
+  commitCellGesture(cells: readonly { step: number; row: number }[], tool: 'pencil' | 'eraser' | 'copy'): void {
+    const playable = cells.filter((cell) => this.isPlayableCell(cell.step, cell.row));
+    if (!playable.length || this.getLegacyStemNoticeVisible()) return;
+    this.batchingCellGesture = true;
+    this.gesturePattern = null;
+    this.gesturePreview = null;
+    let pattern: RoomPatternMusic | null;
+    let preview: { pattern: RoomPatternMusic; row: number } | null;
+    try {
+      this.beginCellEdit(playable[0], tool, tool !== 'eraser');
+      for (const cell of playable.slice(1)) this.moveCellEdit(cell);
+      this.endCellEdit(playable.at(-1)!);
+      pattern = this.gesturePattern;
+      preview = this.gesturePreview as { pattern: RoomPatternMusic; row: number } | null;
+    } finally {
+      this.batchingCellGesture = false;
+      this.gesturePattern = null;
+      this.gesturePreview = null;
+      this.clearDrag();
+    }
+    if (pattern) this.host.commitRoomMusic(pattern);
+    if (preview) this.host.previewPatternCell(preview.pattern, this.activeInstrumentTab, preview.row);
+  }
+
+  getCellState(step: number, row: number): { active: boolean; tied: boolean } {
+    const pattern = this.getDisplayPattern();
+    const active = this.isCellActive(pattern, step, row);
+    return {
+      active,
+      tied: active && this.activeInstrumentTab !== 'drums' && pattern.tabs[this.activeInstrumentTab].ties[step] === true,
+    };
+  }
+
+  private beginCellEdit(cell: { step: number; row: number }, tool: 'pencil' | 'eraser' | 'copy', allowPaste: boolean): void {
+
+    if (this.pastePreviewOrigin && allowPaste) {
       this.applyPaste(cell.step, cell.row);
       return;
     }
@@ -552,6 +593,10 @@ export class EditorMusicPatternController {
     }
 
     const cell = this.getCellFromPointer(pointer);
+    this.moveCellEdit(cell);
+  }
+
+  private moveCellEdit(cell: { step: number; row: number } | null): void {
     if (this.pastePreviewOrigin) {
       this.pastePreviewOrigin = cell
         ? { step: cell.step, row: cell.row }
@@ -589,6 +634,10 @@ export class EditorMusicPatternController {
       return;
     }
 
+    this.endCellEdit(this.getCellFromPointer(pointer));
+  }
+
+  private endCellEdit(cell: { step: number; row: number } | null): void {
     if (this.dragMode === 'copy' && this.dragStartCell && this.dragCurrentCell) {
       this.captureSelection({
         x1: this.dragStartCell.step,
@@ -599,7 +648,6 @@ export class EditorMusicPatternController {
     }
 
     if (this.pastePreviewOrigin) {
-      const cell = this.getCellFromPointer(pointer);
       if (cell) {
         this.pastePreviewOrigin = { step: cell.step, row: cell.row };
       }
@@ -1270,6 +1318,7 @@ export class EditorMusicPatternController {
   }
 
   private getEditablePattern(): RoomPatternMusic | null {
+    if (this.gesturePattern) return cloneRoomMusic(this.gesturePattern) as RoomPatternMusic;
     const roomMusic = this.host.getRoomMusic();
     if (isStemArrangementRoomMusic(roomMusic)) {
       return null;
@@ -1313,7 +1362,13 @@ export class EditorMusicPatternController {
   }
 
   private commitPattern(pattern: RoomPatternMusic): void {
-    this.host.commitRoomMusic(pattern);
+    if (this.batchingCellGesture) this.gesturePattern = pattern;
+    else this.host.commitRoomMusic(pattern);
+  }
+
+  private previewCell(pattern: RoomPatternMusic, row: number): void {
+    if (this.batchingCellGesture) this.gesturePreview = { pattern, row };
+    else this.host.previewPatternCell(pattern, this.activeInstrumentTab, row);
   }
 
   private applyToolToCell(tool: 'pencil' | 'eraser', step: number, row: number): void {
@@ -1350,7 +1405,7 @@ export class EditorMusicPatternController {
 
       pattern.tabs.drums[drumRow.id] = steps;
       this.commitPattern(pattern);
-      this.host.previewPatternCell(pattern, this.activeInstrumentTab, row);
+      this.previewCell(pattern, row);
       this.lastAppliedCell = { step, row };
       return;
     }
@@ -1401,7 +1456,7 @@ export class EditorMusicPatternController {
     track.ties[step] = shouldTieFromPrevious;
     this.normalizeTonalTrackTies(track);
     this.commitPattern(pattern);
-    this.host.previewPatternCell(pattern, this.activeInstrumentTab, row);
+    this.previewCell(pattern, row);
     this.lastAppliedCell = { step, row };
   }
 

@@ -3,6 +3,7 @@ import { playSfx } from '../../audio/sfx';
 import { editorState } from '../../config';
 import { globalRoomMusicController } from '../../music/controller';
 import { EditorPreviewRefresh } from './previewRefresh';
+import { TouchMusicEditor } from './touchMusicEditor';
 import {
   extractMusicPhrasePayloadFromPattern,
   type MusicPhraseRecord,
@@ -101,6 +102,10 @@ export class EditorMusicWorkflowCoordinator {
   private musicComposerMode: EditorMusicComposerMode = 'sequencer';
   private musicPreviewState: EditorMusicPreviewState = 'stopped';
   private readonly previewRefresh = new EditorPreviewRefresh(() => this.syncRoomMusicPreviewPlayback());
+  private readonly touchEditor = new TouchMusicEditor(
+    () => this.previewRefresh.flush(),
+    () => globalRoomMusicController.getPlayheadInfo(),
+  );
   private preferredPhraseArrangementSlotCount = ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT;
   private readonly musicPhraseOrchestrator = new EditorMusicPhraseOrchestrator();
 
@@ -127,6 +132,7 @@ export class EditorMusicWorkflowCoordinator {
   }
 
   resetForSceneOpen(): void {
+    this.touchEditor.destroy();
     this.musicModeActive = false;
     this.musicComposerMode = 'sequencer';
     this.musicPreviewState = 'stopped';
@@ -135,6 +141,7 @@ export class EditorMusicWorkflowCoordinator {
   }
 
   resetForRuntimeClear(): void {
+    this.touchEditor.destroy();
     this.musicModeActive = false;
     this.musicComposerMode = 'sequencer';
     this.musicPreviewState = 'stopped';
@@ -143,6 +150,7 @@ export class EditorMusicWorkflowCoordinator {
   }
 
   resetForShutdown(options: { stopMode: 'idle' | 'editor-preview'; render: boolean }): void {
+    this.touchEditor.destroy();
     this.musicModeActive = false;
     this.musicPreviewState = 'stopped';
     this.musicPhraseOrchestrator.resetSavePrompt();
@@ -1135,6 +1143,12 @@ export class EditorMusicWorkflowCoordinator {
     this.renderMusicWorkbenchModeButtons(legacyLocked);
     this.renderMusicArrangementPanel(legacyLocked);
     this.renderMusicLibraryPanel(legacyLocked);
+    this.touchEditor.sync({
+      active: this.musicModeActive,
+      sequencer: this.musicComposerMode === 'sequencer',
+      context: `${scope.kind}:${scope.kind === 'cell' ? scope.label : ''}:${this.host.getRoomVersion()}`,
+      controller: this.requirePatternController(),
+    });
     this.host.onMusicUiRendered?.();
   }
 

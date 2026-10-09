@@ -1574,6 +1574,7 @@
         <div class="editor-music-shell">
           <div class="editor-workbench-heading">
             <div class="editor-workbench-heading-title">Music Editor</div>
+            <button id="btn-editor-music-touch-tools" class="bar-btn bar-btn-small hidden" type="button" aria-expanded="false" aria-controls="editor-music-workbench">Tools</button>
             <button id="btn-editor-music-close" class="bar-btn bar-btn-small editor-workbench-close-button" type="button" aria-label="Back to Room settings" title="Back to Room settings">&#10005;</button>
           </div>
           <div class="editor-music-strip">
@@ -1614,6 +1615,34 @@
             <button id="btn-editor-music-replace-legacy" class="bar-btn bar-btn-small" type="button">
               Replace With Sequencer
             </button>
+          </div>
+          <div id="editor-music-touch" class="editor-music-touch hidden">
+            <div class="editor-music-touch-navigation">
+              <button class="bar-btn bar-btn-small" type="button" data-music-touch-page="-1" aria-label="Previous steps">&#9664;</button>
+              <output id="editor-music-touch-steps" aria-live="polite">1–7 / 32</output>
+              <button class="bar-btn bar-btn-small" type="button" data-music-touch-page="1" aria-label="Next steps">&#9654;</button>
+              <button class="bar-btn bar-btn-small" type="button" data-music-touch-zoom="out" aria-label="Smaller music cells">−</button>
+              <button class="bar-btn bar-btn-small" type="button" data-music-touch-zoom="in" aria-label="Larger music cells">+</button>
+            </div>
+            <div class="editor-music-touch-actions">
+              <select id="editor-music-touch-tool" class="goal-input" aria-label="Touch music tool">
+                <option value="tap">Tap / Pan</option>
+                <option value="draw">Draw / Tie</option>
+                <option value="erase">Erase</option>
+                <option value="copy">Copy</option>
+              </select>
+              <button id="btn-editor-music-touch-paste" class="bar-btn bar-btn-small" type="button" aria-pressed="false">Paste</button>
+              <button class="bar-btn bar-btn-small" type="button" data-editor-history="undo" data-editor-music-history aria-label="Undo music edit">↶</button>
+              <button class="bar-btn bar-btn-small" type="button" data-editor-history="redo" data-editor-music-history aria-label="Redo music edit">↷</button>
+            </div>
+            <div id="editor-music-touch-viewport" class="editor-music-touch-viewport" role="group" aria-label="Music sequencer. Tap to edit; drag to pan; pinch to zoom.">
+              <div id="editor-music-touch-grid" class="editor-music-touch-grid"></div>
+            </div>
+            <div id="editor-music-touch-hint" class="editor-music-status-note">Tap to edit · Drag to pan · Pinch to zoom</div>
+          </div>
+          <div id="editor-music-touch-mix" class="editor-music-touch-mix hidden">
+            <label>Volume <input id="editor-music-touch-volume" type="range" min="0" max="100" step="2" /></label>
+            <label>Pan <input id="editor-music-touch-pan" type="range" min="-100" max="100" step="2" /></label>
           </div>
           <div id="editor-music-workbench" class="editor-music-workbench hidden">
             <div class="editor-music-workbench-card editor-music-phrase-card">

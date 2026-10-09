@@ -38,25 +38,25 @@ export class EditorHistoryControls {
     }
   }
 
-  private isLocked(): boolean {
+  private isLocked(button?: HTMLButtonElement): boolean {
     const state = this.doc.body.dataset;
-    return !this.isActive() || state.appMode !== 'editor' || state.editorMusicMode === 'true'
-      || state.editorMusicUiLocked === 'true' || state.editorSpriteUiLocked === 'true';
+    const musicHistory = button?.dataset.editorMusicHistory !== undefined && state.editorMusicMode === 'true';
+    return !this.isActive() || state.appMode !== 'editor' || state.editorSpriteUiLocked === 'true'
+      || (!musicHistory && (state.editorMusicMode === 'true' || state.editorMusicUiLocked === 'true'));
   }
 
   private sync(): void {
     if (EditorHistoryControls.owners.get(this.doc) !== this) return;
-    const locked = this.isLocked();
     for (const button of this.buttons) {
       const available = button.dataset.editorHistory === 'undo' ? this.canUndo : this.canRedo;
-      button.disabled = locked || !available;
+      button.disabled = this.isLocked(button) || !available;
     }
   }
 
   private readonly handleClick = (event: Event): void => {
     const button = event.currentTarget as HTMLButtonElement;
     if (EditorHistoryControls.owners.get(this.doc) !== this) return;
-    if (this.isLocked() || button.disabled) return;
+    if (this.isLocked(button) || button.disabled) return;
     if (button.dataset.editorHistory === 'undo' && this.canUndo) this.undo();
     if (button.dataset.editorHistory === 'redo' && this.canRedo) this.redo();
   };

@@ -4780,6 +4780,8 @@ The grid is a 32x22 cell grid of 16 px tiles (config/room.ts:2-4). The camera fi
 5. **Paged view still falls short.** A one-bar (16-step) paged view frames about 16×16 + 72 = 328 world px across a 370-px viewport. That gives zoom of about 1.13, so cells of about 18 px. This roughly matches the "2.5-3x larger" claim but is still well under a 44-px tap target. Reaching 44 px would need fewer steps per page (about 8) or dropping the label gutter on phones.
 6. **Easy wins.** Making ties opt-in on touch (tap places a note; long-press then drag makes a tie) is valid. It targets shouldTieFromPrevious in musicPatternEditor.ts:1413-1417. That change plus enabling pinch-zoom are small. The full paged view is medium effort.
 
+**2026-10-09 local candidate.** F227 now has a shared phone/coarse-tablet touch workspace in both ordinary and Expanded music editors: 44–88px cells, pinned pitch/drum labels, all 32 steps reachable through page navigation/pan, anchored pinch zoom and a compact Tools panel. Tap toggles on release; Draw/Tie and Copy are explicit; canceled/multi-contact gestures do not edit the draft. A touch stroke is one Undo operation. Full 408 files / 3,239 tests and native responsive, audio, save/reload, copy/paste, desktop and selected-cell isolation acceptance pass. Production checkbox remains open pending delivery. Receipt and limits: `wamp-phone-music-editor-2026-10-09.md`.
+
 ### F231: No way to audition a library phrase before placing it, and no playhead in Arrange mode
 
 - **Area:** Room music system (composer, playback, audio engine)
