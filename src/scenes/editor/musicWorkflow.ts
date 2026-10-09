@@ -20,6 +20,8 @@ import {
   createDefaultRoomPatternMusic,
   createDefaultRoomPhraseArrangementMusic,
   detectRoomPatternTrackKey,
+  getRoomMusicContentKey,
+  getRoomMusicKey,
   getPatternInstrumentColorCss,
   getPatternInstrumentColorRgbCss,
   getPatternInstrumentIcon,
@@ -885,9 +887,13 @@ export class EditorMusicWorkflowCoordinator {
     if (isPhraseArrangementRoomMusic(nextMusic)) {
       this.preferredPhraseArrangementSlotCount = normalizeRoomPhraseArrangementSlotCount(nextMusic.slotCount);
     }
+    const previous = this.host.getRoomMusic();
     const committed = this.host.commitRoomMusic(nextMusic);
     if (this.musicPreviewState === 'playing') {
-      if (committed) {
+      if (committed && this.isLiveMixChange(previous, committed)) {
+        // Pattern stems mix live, so volume/pan reach the playing loop without a render.
+        this.syncRoomMusicPreviewPlayback();
+      } else if (committed) {
         this.previewRefresh.schedule();
       } else {
         this.syncRoomMusicPreviewPlayback();
@@ -1586,6 +1592,14 @@ export class EditorMusicWorkflowCoordinator {
       slotIndex: Math.min(arrangement.slotCount - 1, selection.slotIndex + 1),
     });
     this.commitRoomMusic(arrangement);
+  }
+
+  private isLiveMixChange(previous: RoomMusic | null, next: RoomMusic): boolean {
+    return !this.previewRefresh.isPending()
+      && isPatternRoomMusic(previous)
+      && isPatternRoomMusic(next)
+      && getRoomMusicContentKey(previous) === getRoomMusicContentKey(next)
+      && getRoomMusicKey(previous) !== getRoomMusicKey(next);
   }
 
   private stopAuditionForInstrumentChange(instrumentId: RoomPatternInstrumentId): void {

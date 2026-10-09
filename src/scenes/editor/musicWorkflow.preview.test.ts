@@ -29,6 +29,24 @@ describe('actual music workflow preview lifecycle', () => {
     vi.advanceTimersByTime(200); expect(globalRoomMusicController.playArrangement).toHaveBeenCalledTimes(2);
     expect(globalRoomMusicController.playArrangement).toHaveBeenLastCalledWith(get(), { mode: 'editor-preview', transition: 'immediate' });
   });
+  it('sends volume/pan-only edits to the playing loop at once, but never jumps a queued note edit', () => {
+    const { workflow, get } = harness();
+    const mixed = (volume: number) => { const p = createDefaultRoomPatternMusic(); p.mix.saw.volume = volume; return p; };
+    for (const volume of [0.9, 0.8, 0.7]) {
+      workflow.commitRoomMusic(mixed(volume));
+      expect(globalRoomMusicController.playArrangement).toHaveBeenLastCalledWith(get(), { mode: 'editor-preview', transition: 'immediate' });
+    }
+    expect(globalRoomMusicController.playArrangement).toHaveBeenCalledTimes(3);
+
+    const noted = mixed(0.7); noted.tabs.saw.steps[2] = 4;
+    workflow.commitRoomMusic(noted);
+    const remixed = structuredClone(noted); remixed.mix.saw.volume = 0.2;
+    workflow.commitRoomMusic(remixed);
+    expect(globalRoomMusicController.playArrangement).toHaveBeenCalledTimes(3);
+    vi.advanceTimersByTime(150);
+    expect(globalRoomMusicController.playArrangement).toHaveBeenCalledTimes(4);
+    expect(globalRoomMusicController.playArrangement).toHaveBeenLastCalledWith(remixed, { mode: 'editor-preview', transition: 'immediate' });
+  });
   it('stop, clear, scene reset and shutdown cannot restart queued playback', () => {
     for (const action of ['stop', 'clear', 'open', 'reset', 'shutdown']) {
       const { workflow } = harness(); workflow.commitRoomMusic(createDefaultRoomPatternMusic());

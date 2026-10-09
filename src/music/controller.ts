@@ -9,6 +9,7 @@ import {
   ROOM_MUSIC_LANE_IDS,
   cloneRoomMusic,
   getRoomMusicBarDurationSec,
+  getRoomMusicContentKey,
   getRoomMusicKey,
   getRoomMusicLoopDurationSec,
   isPatternRoomMusic,
@@ -22,17 +23,36 @@ import {
   type StemArrangementRoomMusic,
 } from './model';
 import { loadMusicPhrasesById } from './libraryClient';
-import { renderRoomPatternLoopBuffer } from './patternRenderer';
 import {
-  buildPlaybackSequenceFromPhraseArrangement,
+  ROOM_PATTERN_LANE_DRIVE,
+  ROOM_PATTERN_OUTPUT_DRIVE,
+  getRoomPatternHatTiming,
+  getRoomPatternLaneGain,
+  getRoomPatternStemLanes,
+  renderRoomPatternLaneSegment,
+  renderRoomPatternLoopBuffer,
+  renderRoomPatternOpenHatVoice,
+  renderRoomPatternStemBuffer,
+} from './patternRenderer';
+import {
   collectRoomPhraseArrangementPhraseIds,
+  getRoomPhraseArrangementActiveSlotCount,
 } from './phraseArrangement';
+import { buildMusicPhraseAudition } from './phraseAudition';
+import {
+  PhraseArrangementScheduler,
+  type ArrangementLaneSegment,
+  type ArrangementTimeline,
+} from './phraseArrangementPlayback';
+import type { MusicPhraseRecord } from './library';
 import { getPatternDrumSamples } from './patternKit';
 import {
+  ROOM_PATTERN_INSTRUMENT_IDS,
   getPatternDrumRowForGridRow,
   getPatternRowNote,
   type RoomPatternDrumRowId,
   type RoomPatternInstrumentId,
+  type RoomPatternInstrumentMix,
   type RoomPatternMusic,
   type RoomPatternPlaybackSequence,
   type RoomPatternTonalInstrumentId,
@@ -52,10 +72,23 @@ export type RoomMusicPlayheadInfo = {
 };
 type PlaybackMode = 'idle' | 'editor-preview' | 'world-play';
 
+/** Live per-lane mixer: optional lane drive, lane gain and pan, then the shared soft clip. */
+type StemMix = {
+  lanes: Map<RoomPatternInstrumentId, { gain: GainNode; panner: StereoPannerNode | null; scale: number }>;
+  /** Where each lane's audio enters the mixer. */
+  inputs: Map<RoomPatternInstrumentId, AudioNode>;
+  nodes: AudioNode[];
+};
+
 type ActiveLoopPlayback = {
   playbackId: string;
-  source: AudioBufferSourceNode;
+  /** A looping buffer, or for Arrange a scheduler playing per-slot segments. */
+  source: AudioBufferSourceNode | null;
+  scheduler: PhraseArrangementScheduler | null;
+  /** Arrange segments by render key, reused when an edit keeps them. */
+  segments: Map<string, ArrangementLaneSegment> | null;
   gain: GainNode;
+  stemMix: StemMix | null;
   startTime: number;
   stopTime: number | null;
   baseGain: number;
@@ -71,6 +104,13 @@ type PreviewClipPlayback = {
 };
 
 const MAX_PLAYHEAD_OUTPUT_LATENCY_SEC = 0.5;
+// The stem bus is scaled into the WaveShaper's [-1, 1] input range; sums up to
+// this level map exactly onto tanh(sum * ROOM_PATTERN_OUTPUT_DRIVE).
+const STEM_BUS_HEADROOM = 4;
+const STEM_CURVE_POINTS = 16385;
+const STEM_MIX_TIME_CONSTANT_SEC = 0.015;
+// Raw Arrange lanes can sum past 1 before their drive; scale them into the curve's range.
+const LANE_DRIVE_HEADROOM = 8;
 
 type OneShotPlayback = {
   stop: () => void;
@@ -137,6 +177,10 @@ export class RoomMusicController {
   private oneShotRequestSerial = 0;
   private readonly oneShotPlaybacks = new Set<OneShotPlayback>();
   private readonly bufferCache = new RoomMusicBufferCache();
+  private readonly stemLanes = new WeakMap<AudioBuffer, RoomPatternInstrumentId[]>();
+  private stemOutputCurve: Float32Array<ArrayBuffer> | null = null;
+  private readonly laneDriveCurves = new Map<RoomPatternInstrumentId, Float32Array<ArrayBuffer>>();
+  private openHatVoice: Promise<AudioBuffer | null> | null = null;
   private currentArrangement: RoomMusic | null = null;
   private desiredPlayback: {
     music: RoomMusic;
@@ -783,19 +827,21 @@ export class RoomMusicController {
       return;
     }
 
-    const nextPatternKey = getRoomMusicKey(nextArrangement) ?? 'pattern';
+    // Stems are mixed live, so music that differs only in volume/pan keeps playing.
+    const nextPatternKey = getRoomMusicContentKey(nextArrangement) ?? 'pattern';
     if (
       this.activePattern &&
       this.activePattern.playbackId === nextPatternKey &&
       (this.activePattern.stopTime === null || this.activePattern.stopTime > audioContext.currentTime)
     ) {
+      this.applyStemMix(this.activePattern, nextArrangement.mix);
       this.currentArrangement = cloneRoomMusic(nextArrangement);
       this.recordPlaybackRequestStatus(requestId, options.mode, nextPatternKey, 'already-playing');
       return;
     }
 
     const loopDurationSec = getRoomMusicLoopDurationSec(nextArrangement);
-    const buffer = await this.loadPatternLoopBuffer(nextArrangement);
+    const buffer = await this.loadPatternStemBuffer(nextArrangement, nextPatternKey);
     if (!this.isCurrentPlaybackRequest(requestId)) {
       this.recordPlaybackRequestStatus(requestId, options.mode, nextPatternKey, 'stale');
       return;
@@ -827,6 +873,7 @@ export class RoomMusicController {
       fadeInDuration: hasPriorPlayback ? fadeDuration : 0.08,
       startSilent: hasPriorPlayback,
       baseGain: 1,
+      stems: { lanes: this.stemLanes.get(buffer) ?? [], mix: nextArrangement.mix },
     });
     this.currentArrangement = nextArrangement;
     this.recordPlaybackRequestStatus(requestId, options.mode, nextPatternKey, 'started');
@@ -846,19 +893,21 @@ export class RoomMusicController {
       return;
     }
 
-    const nextArrangementKey = getRoomMusicKey(nextArrangement) ?? 'phraseArrangement';
+    const nextArrangementKey = getRoomMusicContentKey(nextArrangement) ?? 'phraseArrangement';
     if (
       this.activePattern &&
       this.activePattern.playbackId === nextArrangementKey &&
       (this.activePattern.stopTime === null || this.activePattern.stopTime > audioContext.currentTime)
     ) {
+      this.applyStemMix(this.activePattern, nextArrangement.mix);
       this.currentArrangement = cloneRoomMusic(nextArrangement);
       this.recordPlaybackRequestStatus(requestId, options.mode, nextArrangementKey, 'already-playing');
       return;
     }
 
     const loopDurationSec = getRoomMusicLoopDurationSec(nextArrangement);
-    const buffer = await this.loadPhraseArrangementLoopBuffer(nextArrangement);
+    const { timeline, segments } = await this.loadArrangementTimeline(audioContext, nextArrangement);
+    const openHatVoice = timeline.lanes.has('drums') ? await this.loadOpenHatVoice(audioContext) : null;
     if (!this.isCurrentPlaybackRequest(requestId)) {
       this.recordPlaybackRequestStatus(requestId, options.mode, nextArrangementKey, 'stale');
       return;
@@ -883,13 +932,14 @@ export class RoomMusicController {
       this.activePattern = null;
     }
 
-    this.activePattern = this.startLoopPlayback(nextArrangementKey, buffer, {
+    this.activePattern = this.startArrangementPlayback(nextArrangementKey, timeline, segments, openHatVoice, {
       loopDurationSec,
       startAt,
       offsetSec: loopOffset,
       fadeInDuration: hasPriorPlayback ? fadeDuration : 0.08,
       startSilent: hasPriorPlayback,
       baseGain: 1,
+      mix: nextArrangement.mix,
     });
     this.currentArrangement = nextArrangement;
     this.recordPlaybackRequestStatus(requestId, options.mode, nextArrangementKey, 'started');
@@ -1141,33 +1191,11 @@ export class RoomMusicController {
     return laneBufferPromise;
   }
 
-  private async loadPatternLoopBuffer(
+  private async loadPatternStemBuffer(
     pattern: Extract<RoomMusic, { kind: 'pattern' }>,
+    contentKey: string,
   ): Promise<AudioBuffer> {
-    const cacheKey = getRoomMusicKey(pattern) ?? 'pattern';
-    const cached = this.bufferCache.get(`pattern:${cacheKey}`);
-    if (cached) {
-      return cached;
-    }
-
-    const bufferPromise = Promise.resolve().then(() => {
-      const audioContext = this.getAudioContext();
-      if (!audioContext) {
-        throw new Error('Web Audio is unavailable.');
-      }
-
-      return renderRoomPatternLoopBuffer(audioContext, pattern);
-    });
-
-    this.bufferCache.set(`pattern:${cacheKey}`, 'loop', bufferPromise);
-    return bufferPromise;
-  }
-
-  private async loadPhraseArrangementLoopBuffer(
-    arrangement: RoomPhraseArrangementMusic,
-  ): Promise<AudioBuffer> {
-    const cacheKey = `phrase:${getRoomMusicKey(arrangement) ?? 'phraseArrangement'}`;
-    const cached = this.bufferCache.get(`pattern:${cacheKey}`);
+    const cached = this.bufferCache.get(`pattern-stems:${contentKey}`);
     if (cached) {
       return cached;
     }
@@ -1178,14 +1206,157 @@ export class RoomMusicController {
         throw new Error('Web Audio is unavailable.');
       }
 
-      const phraseIds = collectRoomPhraseArrangementPhraseIds(arrangement);
-      const phraseById = await loadMusicPhrasesById(phraseIds);
-      const sequence = buildPlaybackSequenceFromPhraseArrangement(arrangement, phraseById);
-      return renderRoomPatternLoopBuffer(audioContext, sequence);
+      const buffer = await renderRoomPatternStemBuffer(audioContext, pattern);
+      this.stemLanes.set(buffer, getRoomPatternStemLanes(pattern));
+      return buffer;
     });
 
-    this.bufferCache.set(`pattern:${cacheKey}`, 'loop', bufferPromise);
+    this.bufferCache.set(`pattern-stems:${contentKey}`, 'loop', bufferPromise);
     return bufferPromise;
+  }
+
+  /** Each filled slot's lane segment, rendering only phrases not already playing or cached. */
+  private async loadArrangementTimeline(
+    audioContext: AudioContext,
+    arrangement: RoomPhraseArrangementMusic,
+  ): Promise<{ timeline: ArrangementTimeline; segments: Map<string, ArrangementLaneSegment> }> {
+    const phraseById = await loadMusicPhrasesById(collectRoomPhraseArrangementPhraseIds(arrangement));
+    const slotCount = getRoomPhraseArrangementActiveSlotCount(arrangement);
+    const slotDurationSec = getRoomMusicBarDurationSec(arrangement) * arrangement.segmentBarCount;
+    const playing = this.activePattern?.segments ?? null;
+    const segments = new Map<string, ArrangementLaneSegment>();
+    const lanes = new Map<RoomPatternInstrumentId, (ArrangementLaneSegment | null)[]>();
+    const pending: Promise<void>[] = [];
+    for (const instrumentId of ROOM_PATTERN_INSTRUMENT_IDS) {
+      const laneSegments: (ArrangementLaneSegment | null)[] = Array.from({ length: slotCount }, () => null);
+      for (let slot = 0; slot < slotCount; slot += 1) {
+        const phraseId = arrangement.slots[instrumentId][slot];
+        const phrase = phraseId ? phraseById.get(phraseId) : undefined;
+        if (!phrase || phrase.instrumentId !== instrumentId) {
+          continue;
+        }
+        pending.push(this.loadArrangementSegment(audioContext, arrangement, phrase, playing).then(({ key, segment }) => {
+          laneSegments[slot] = segment;
+          segments.set(key, segment);
+        }));
+      }
+      if (arrangement.slots[instrumentId].slice(0, slotCount).some((phraseId) => phraseId && phraseById.has(phraseId))) {
+        lanes.set(instrumentId, laneSegments);
+      }
+    }
+    await Promise.all(pending);
+    for (const [instrumentId, laneSegments] of lanes) {
+      if (laneSegments.every((segment) => segment === null)) lanes.delete(instrumentId);
+    }
+    return {
+      timeline: {
+        sampleRate: audioContext.sampleRate,
+        slotDurationSec,
+        slotCount,
+        lanes,
+      },
+      segments,
+    };
+  }
+
+  private async loadArrangementSegment(
+    audioContext: AudioContext,
+    arrangement: RoomPhraseArrangementMusic,
+    phrase: MusicPhraseRecord,
+    playing: Map<string, ArrangementLaneSegment> | null,
+  ): Promise<{ key: string; segment: ArrangementLaneSegment }> {
+    // A phrase rendered alone in the arrangement's tempo, key and octave is its slot,
+    // shared by every slot that uses it.
+    const { key, sequence } = buildMusicPhraseAudition(phrase, arrangement, { adoptPhraseTiming: false, adoptPhraseKey: false });
+    const reused = playing?.get(key);
+    if (reused) {
+      return { key, segment: reused };
+    }
+
+    const cacheKey = `arrange-segment:${audioContext.sampleRate}:${key}`;
+    let bufferPromise = this.bufferCache.get(cacheKey);
+    if (!bufferPromise) {
+      bufferPromise = renderRoomPatternLaneSegment(audioContext, sequence, phrase.instrumentId);
+      this.bufferCache.set(cacheKey, 'segment', bufferPromise);
+    }
+    const buffer = await bufferPromise;
+    const hats = phrase.instrumentId === 'drums'
+      ? getRoomPatternHatTiming(sequence, audioContext.sampleRate)
+      : { hatTimesSec: [], trailingOpenHatSec: null };
+    return { key, segment: { buffer, ...hats } };
+  }
+
+  private loadOpenHatVoice(audioContext: AudioContext): Promise<AudioBuffer | null> {
+    this.openHatVoice ??= renderRoomPatternOpenHatVoice(audioContext).catch(() => {
+      this.openHatVoice = null;
+      return null;
+    });
+    return this.openHatVoice;
+  }
+
+  private startArrangementPlayback(
+    playbackId: string,
+    timeline: ArrangementTimeline,
+    segments: Map<string, ArrangementLaneSegment>,
+    openHatVoice: AudioBuffer | null,
+    options: {
+      loopDurationSec: number;
+      startAt: number;
+      offsetSec: number;
+      fadeInDuration: number;
+      startSilent: boolean;
+      baseGain: number;
+      mix: RoomPatternInstrumentMix;
+    },
+  ): ActiveLoopPlayback {
+    const audioContext = this.getAudioContext();
+    const masterGain = this.ensureMasterGain(audioContext);
+    if (!audioContext || !masterGain) {
+      throw new Error('Web Audio is unavailable.');
+    }
+
+    const gain = this.createPlaybackGain(audioContext, options);
+    const stemMix = this.connectStemMix(audioContext, gain, { lanes: [...timeline.lanes.keys()], mix: options.mix, drive: true });
+    gain.connect(masterGain);
+    const scheduler = new PhraseArrangementScheduler(
+      audioContext,
+      timeline,
+      stemMix.inputs,
+      openHatVoice,
+      options.startAt - options.offsetSec,
+      options.startAt,
+    );
+    scheduler.start();
+    void this.resumeAudioContext('start-arrangement-playback');
+
+    return {
+      playbackId,
+      source: null,
+      scheduler,
+      segments,
+      gain,
+      stemMix,
+      startTime: options.startAt,
+      stopTime: null,
+      baseGain: options.baseGain,
+      loopDurationSec: options.loopDurationSec,
+      fadeInDuration: options.fadeInDuration,
+      fadeOut: null,
+    };
+  }
+
+  private createPlaybackGain(
+    audioContext: AudioContext,
+    options: { startAt: number; fadeInDuration: number; startSilent: boolean; baseGain: number },
+  ): GainNode {
+    const gain = audioContext.createGain();
+    const initialGain = options.startSilent || options.fadeInDuration > 0 ? 0 : options.baseGain;
+    gain.gain.setValueAtTime(initialGain, Math.max(audioContext.currentTime, options.startAt - 0.02));
+    if (options.fadeInDuration > 0) {
+      gain.gain.setValueAtTime(0, options.startAt);
+      gain.gain.linearRampToValueAtTime(options.baseGain, options.startAt + options.fadeInDuration);
+    }
+    return gain;
   }
 
   private startLoopPlayback(
@@ -1198,6 +1369,7 @@ export class RoomMusicController {
       fadeInDuration: number;
       startSilent: boolean;
       baseGain: number;
+      stems?: { lanes: readonly RoomPatternInstrumentId[]; mix: RoomPatternInstrumentMix };
     },
   ): ActiveLoopPlayback {
     const audioContext = this.getAudioContext();
@@ -1212,15 +1384,20 @@ export class RoomMusicController {
     source.loopStart = 0;
     source.loopEnd = Math.min(options.loopDurationSec, buffer.duration);
 
-    const gain = audioContext.createGain();
-    const initialGain = options.startSilent || options.fadeInDuration > 0 ? 0 : options.baseGain;
-    gain.gain.setValueAtTime(initialGain, Math.max(audioContext.currentTime, options.startAt - 0.02));
-    if (options.fadeInDuration > 0) {
-      gain.gain.setValueAtTime(0, options.startAt);
-      gain.gain.linearRampToValueAtTime(options.baseGain, options.startAt + options.fadeInDuration);
+    const gain = this.createPlaybackGain(audioContext, options);
+    let stemMix: StemMix | null = null;
+    if (options.stems) {
+      stemMix = this.connectStemMix(audioContext, gain, { ...options.stems, drive: false });
+      const splitter = audioContext.createChannelSplitter(Math.max(1, options.stems.lanes.length));
+      source.connect(splitter);
+      options.stems.lanes.forEach((instrumentId, channel) => {
+        const input = stemMix?.inputs.get(instrumentId);
+        if (input) splitter.connect(input, channel);
+      });
+      stemMix.nodes.push(splitter);
+    } else {
+      source.connect(gain);
     }
-
-    source.connect(gain);
     gain.connect(masterGain);
     source.start(options.startAt, options.offsetSec);
     void this.resumeAudioContext('start-loop-playback');
@@ -1228,7 +1405,10 @@ export class RoomMusicController {
     return {
       playbackId,
       source,
+      scheduler: null,
+      segments: null,
       gain,
+      stemMix,
       startTime: options.startAt,
       stopTime: null,
       baseGain: options.baseGain,
@@ -1236,6 +1416,106 @@ export class RoomMusicController {
       fadeInDuration: options.fadeInDuration,
       fadeOut: null,
     };
+  }
+
+  /**
+   * Per lane: [drive] → lane gain → pan, summed into a bus → tanh soft clip → the
+   * playback's fade gain. Pattern stems already carry their drive; raw Arrange
+   * segments get it here (`drive`) because tails of neighboring slots must sum first.
+   */
+  private connectStemMix(
+    audioContext: AudioContext,
+    output: GainNode,
+    stems: { lanes: readonly RoomPatternInstrumentId[]; mix: RoomPatternInstrumentMix; drive: boolean },
+  ): StemMix {
+    const bus = audioContext.createGain();
+    bus.gain.value = 1 / STEM_BUS_HEADROOM;
+    const shaper = audioContext.createWaveShaper();
+    shaper.curve = this.getStemOutputCurve();
+    bus.connect(shaper);
+    shaper.connect(output);
+
+    const stemMix: StemMix = { lanes: new Map(), inputs: new Map(), nodes: [bus, shaper] };
+    stems.lanes.forEach((instrumentId) => {
+      const gain = audioContext.createGain();
+      const laneDrive = stems.drive ? ROOM_PATTERN_LANE_DRIVE[instrumentId] : undefined;
+      if (laneDrive) {
+        const headroom = audioContext.createGain();
+        headroom.gain.value = 1 / LANE_DRIVE_HEADROOM;
+        const drive = audioContext.createWaveShaper();
+        drive.curve = this.getLaneDriveCurve(instrumentId, laneDrive);
+        headroom.connect(drive);
+        drive.connect(gain);
+        stemMix.inputs.set(instrumentId, headroom);
+        stemMix.nodes.push(headroom, drive);
+      } else {
+        stemMix.inputs.set(instrumentId, gain);
+      }
+      let panner: StereoPannerNode | null = null;
+      if (typeof audioContext.createStereoPanner === 'function') {
+        panner = audioContext.createStereoPanner();
+        gain.connect(panner);
+        panner.connect(bus);
+        stemMix.nodes.push(gain, panner);
+      } else {
+        gain.connect(bus);
+        stemMix.nodes.push(gain);
+      }
+      // Without a panner the lane plays centered at the equal-power center level.
+      const scale = panner ? 1 : Math.SQRT1_2;
+      gain.gain.value = getRoomPatternLaneGain(instrumentId, stems.mix[instrumentId].volume) * scale;
+      if (panner) {
+        panner.pan.value = Math.max(-1, Math.min(1, stems.mix[instrumentId].pan));
+      }
+      stemMix.lanes.set(instrumentId, { gain, panner, scale });
+    });
+    return stemMix;
+  }
+
+  private applyStemMix(playback: ActiveLoopPlayback, mix: RoomPatternInstrumentMix): void {
+    const audioContext = this.audioContext;
+    if (!audioContext || !playback.stemMix) {
+      return;
+    }
+
+    const now = audioContext.currentTime;
+    for (const [instrumentId, lane] of playback.stemMix.lanes) {
+      lane.gain.gain.setTargetAtTime(
+        getRoomPatternLaneGain(instrumentId, mix[instrumentId].volume) * lane.scale,
+        now,
+        STEM_MIX_TIME_CONSTANT_SEC,
+      );
+      lane.panner?.pan.setTargetAtTime(Math.max(-1, Math.min(1, mix[instrumentId].pan)), now, STEM_MIX_TIME_CONSTANT_SEC);
+    }
+  }
+
+  private getLaneDriveCurve(
+    instrumentId: RoomPatternInstrumentId,
+    laneDrive: { drive: number; outputGain: number },
+  ): Float32Array<ArrayBuffer> {
+    let curve = this.laneDriveCurves.get(instrumentId);
+    if (!curve) {
+      curve = new Float32Array(STEM_CURVE_POINTS);
+      const normalizer = Math.tanh(laneDrive.drive);
+      for (let index = 0; index < STEM_CURVE_POINTS; index += 1) {
+        const input = ((index / (STEM_CURVE_POINTS - 1)) * 2 - 1) * LANE_DRIVE_HEADROOM;
+        curve[index] = (Math.tanh(input * laneDrive.drive) / normalizer) * laneDrive.outputGain;
+      }
+      this.laneDriveCurves.set(instrumentId, curve);
+    }
+    return curve;
+  }
+
+  private getStemOutputCurve(): Float32Array<ArrayBuffer> {
+    if (!this.stemOutputCurve) {
+      const curve = new Float32Array(STEM_CURVE_POINTS);
+      for (let index = 0; index < STEM_CURVE_POINTS; index += 1) {
+        const input = (index / (STEM_CURVE_POINTS - 1)) * 2 - 1;
+        curve[index] = Math.tanh(input * STEM_BUS_HEADROOM * ROOM_PATTERN_OUTPUT_DRIVE);
+      }
+      this.stemOutputCurve = curve;
+    }
+    return this.stemOutputCurve;
   }
 
   private getPlaybackGainAtTime(playback: ActiveLoopPlayback, time: number): number {
@@ -1271,7 +1551,8 @@ export class RoomMusicController {
         // A superseded queued room must never become audible at its future start.
         param.cancelScheduledValues(audioContext.currentTime);
         param.setValueAtTime(0, audioContext.currentTime);
-        playback.source.stop(audioContext.currentTime);
+        playback.source?.stop(audioContext.currentTime);
+        playback.scheduler?.stop(audioContext.currentTime);
         playback.stopTime = audioContext.currentTime;
         playback.fadeOut = null;
       } else {
@@ -1283,18 +1564,18 @@ export class RoomMusicController {
           param.setValueAtTime(startGain, fadeStart);
         }
         param.linearRampToValueAtTime(0, fadeEnd);
-        playback.source.stop(fadeEnd + 0.05);
+        playback.source?.stop(fadeEnd + 0.05);
+        playback.scheduler?.stop(fadeEnd + 0.05);
         playback.stopTime = fadeEnd + 0.05;
         playback.fadeOut = { start: fadeStart, end: fadeEnd, startGain };
       }
       this.retiringPlaybacks.add(playback);
       if (alreadyRetiring) return;
-      playback.source.addEventListener(
-        'ended',
-        () => {
+      const onEnded = () => {
           this.retiringPlaybacks.delete(playback);
+          playback.scheduler?.dispose();
           try {
-            playback.source.disconnect();
+            playback.source?.disconnect();
           } catch {
             void 0;
           }
@@ -1303,9 +1584,19 @@ export class RoomMusicController {
           } catch {
             void 0;
           }
-        },
-        { once: true },
-      );
+          for (const node of playback.stemMix?.nodes ?? []) {
+            try {
+              node.disconnect();
+            } catch {
+              void 0;
+            }
+          }
+      };
+      if (playback.source) {
+        playback.source.addEventListener('ended', onEnded, { once: true });
+      } else {
+        playback.scheduler?.onEnded(onEnded);
+      }
     } catch {
       void 0;
     }
