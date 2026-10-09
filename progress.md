@@ -11,6 +11,8 @@ PolyBLEP and general monophonic drum rows remain optional separate sound changes
 
 Verification: 403 files / 3,185 tests and quality gates; three native/real-audio cases; exact 48 kHz uncut references, actual two-loop WAV and inspected screenshots. Primary and authored publication content preserved, with raw-fixture MIDI canonicalization recorded. See `docs/review/wamp-music-loop-tails-2026-10-09.md`. Continue the small F225 mono/mute slice; F223 Worker/prefetch remains larger pending work.
 
+Saved source `a72deb67` in [draft PR #95](https://github.com/songadaymann/wamp/pull/95), pushed and attached. Continue F225 mono/mute.
+
 ## 2026-10-09 — Overnight checklist goal / F224 room music transitions
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-transitions-2026-10-09` stacks on F220 `c2ba1572` / draft #93. Preserve primary and production. Evidence: `/tmp/wamp-music-transitions-2026-10-09/`.
