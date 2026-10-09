@@ -888,6 +888,7 @@ export class CourseEditorScene extends Phaser.Scene {
     this.objectInspectorController.updatePressurePlateOverlay(this.pressurePlateGraphics);
     this.objectInspectorController.updateContainerOverlay(this.containerGraphics);
     this.musicPatternController.updateOverlay(this.musicModeActive && this.musicComposerMode === 'sequencer');
+    this.musicWorkflow.updatePlaybackIndicators();
   }
 
   getCourseEditorState(): EditorCourseUiState {
@@ -1665,6 +1666,10 @@ export class CourseEditorScene extends Phaser.Scene {
 
   async useMusicPhrase(phraseId: string): Promise<void> {
     await this.musicWorkflow.useMusicPhrase(phraseId);
+  }
+
+  async toggleMusicPhraseAudition(phraseId: string): Promise<void> {
+    await this.musicWorkflow.toggleMusicPhraseAudition(phraseId);
   }
 
   selectArrangementSlot(instrumentId: RoomPatternInstrumentId, slotIndex: number): void {

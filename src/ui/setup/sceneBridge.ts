@@ -153,6 +153,7 @@ export interface EditorSceneBridge {
   refreshMusicPhraseLibrary?: () => void;
   loadMoreMusicPhrases?: () => void;
   useMusicPhrase?: (phraseId: string) => Promise<void> | void;
+  toggleMusicPhraseAudition?: (phraseId: string) => Promise<void> | void;
   assignMusicPhraseToArrangementSlot?: (
     phraseId: string,
     instrumentId: RoomPatternInstrumentId,

@@ -228,7 +228,7 @@ describe('muted room music ownership', () => {
 describe('lightweight music playhead info', () => {
   it('returns idle fields without creating an audio context', () => {
     const h = harness();
-    expect(h.controller.getPlayheadInfo()).toEqual({ audioCurrentTime: null, transportStartTime: 0, patternStartTime: null, loopDurationSec: null, kind: null });
+    expect(h.controller.getPlayheadInfo()).toEqual({ audioCurrentTime: null, transportStartTime: 0, patternStartTime: null, loopDurationSec: null, kind: null, swingPercent: null, segmentCount: null, outputLatencySec: 0 });
     expect(h.contextConstructor).not.toHaveBeenCalled();
   });
 
@@ -238,13 +238,65 @@ describe('lightweight music playhead info', () => {
     const owner = h.controller as unknown as { currentArrangement: RoomMusic };
     Object.defineProperty(owner.currentArrangement, 'tabs', { get() { throw new Error('deep song access'); } });
     vi.spyOn(h.controller, 'getDebugState').mockImplementation(() => { throw new Error('diagnostic snapshot'); });
-    expect(h.controller.getPlayheadInfo()).toEqual({ audioCurrentTime: 1.234567, transportStartTime: 1.02, patternStartTime: 1.02, loopDurationSec: 4, kind: 'pattern' });
+    expect(h.controller.getPlayheadInfo()).toEqual({ audioCurrentTime: 1.234567, transportStartTime: 1.02, patternStartTime: 1.02, loopDurationSec: 4, kind: 'pattern', swingPercent: 50, segmentCount: null, outputLatencySec: 0 });
+  });
+
+  it('reports the playing Arrange slot count and clamped output latency without walking slots', async () => {
+    const h = harness(); const arrangement = music('phraseArrangement');
+    if (arrangement.kind !== 'phraseArrangement') throw new Error('phraseArrangement');
+    arrangement.slots.saw[2] = 'phrase-bass'; arrangement.swingPercent = 62;
+    await h.controller.playArrangement(arrangement, { mode: 'editor-preview', transition: 'immediate' });
+    const owner = h.controller as unknown as { currentArrangement: RoomMusic };
+    Object.defineProperty(owner.currentArrangement, 'slots', { get() { throw new Error('deep song access'); } });
+    Object.assign(h.context, { outputLatency: 0.18 });
+    expect(h.controller.getPlayheadInfo()).toMatchObject({ kind: 'phraseArrangement', loopDurationSec: 12, segmentCount: 3, swingPercent: 62, outputLatencySec: 0.18 });
+    Object.assign(h.context, { outputLatency: 4 });
+    expect(h.controller.getPlayheadInfo().outputLatencySec).toBe(0.5);
+    Object.assign(h.context, { outputLatency: Number.NaN });
+    expect(h.controller.getPlayheadInfo().outputLatencySec).toBe(0);
   });
 
   it('clears owned playback timing after Stop', async () => {
     const h = harness(); await h.controller.playArrangement(music('pattern'), { mode: 'editor-preview' });
     h.controller.stopArrangement({ mode: 'idle', transition: 'immediate', resetTransport: true });
-    expect(h.controller.getPlayheadInfo()).toEqual({ audioCurrentTime: 1, transportStartTime: 0, patternStartTime: null, loopDurationSec: null, kind: null });
+    expect(h.controller.getPlayheadInfo()).toEqual({ audioCurrentTime: 1, transportStartTime: 0, patternStartTime: null, loopDurationSec: null, kind: null, swingPercent: null, segmentCount: null, outputLatencySec: 0 });
+  });
+});
+
+describe('library phrase audition voice', () => {
+  const sequence = { bpm: 120, stepCount: 32 } as never;
+
+  it('loops a rendered phrase without touching room playback, and reuses the render', async () => {
+    const h = harness();
+    await h.controller.playArrangement(music('pattern'), { mode: 'editor-preview', transition: 'immediate' });
+    const roomSource = h.sources[0]; render.mockClear();
+    await expect(h.controller.previewSequence('phrase-a|120', sequence)).resolves.toBe(true);
+    const audition = h.sources[1];
+    expect(render).toHaveBeenCalledExactlyOnceWith(h.context, sequence);
+    expect(audition).toMatchObject({ loop: true, loopStart: 0, loopEnd: 8 });
+    expect(audition.start).toHaveBeenCalledWith(1.02, 0);
+    expect(h.controller.getPreviewClipId()).toBe('phrase-a|120');
+    expect(roomSource.stop).not.toHaveBeenCalled();
+    expect(h.controller.getPlayheadInfo().kind).toBe('pattern');
+
+    h.controller.stopPreviewClip();
+    expect(audition.stop).toHaveBeenCalled(); expect(h.controller.getPreviewClipId()).toBeNull();
+    await h.controller.previewSequence('phrase-a|120', sequence);
+    expect(render).toHaveBeenCalledOnce();
+    expect(roomSource.stop).not.toHaveBeenCalled();
+  });
+
+  it('lets only the newest audition start and stays silent while music is muted', async () => {
+    const h = harness();
+    const first = h.controller.previewSequence('phrase-a', sequence);
+    const second = h.controller.previewSequence('phrase-b', sequence);
+    await expect(first).resolves.toBe(false); await expect(second).resolves.toBe(true);
+    expect(h.sources).toHaveLength(1); expect(h.controller.getPreviewClipId()).toBe('phrase-b');
+
+    h.controller.setVolume(0);
+    expect(h.sources[0].stop).toHaveBeenCalled(); expect(h.controller.getPreviewClipId()).toBeNull();
+    await expect(h.controller.previewSequence('phrase-c', sequence)).resolves.toBe(false);
+    expect(h.sources).toHaveLength(1);
   });
 });
 

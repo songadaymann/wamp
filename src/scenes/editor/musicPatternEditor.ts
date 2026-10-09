@@ -1075,6 +1075,8 @@ export class EditorMusicPatternController {
       transportStartTime: playback.transportStartTime,
       patternStartTime: playback.patternStartTime,
       loopDurationSec: playback.loopDurationSec,
+      outputLatencySec: playback.outputLatencySec,
+      swingPercent: playback.swingPercent,
       stepCount: ROOM_PATTERN_ACTIVE_STEP_COLUMNS,
     });
   }
