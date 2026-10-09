@@ -4754,6 +4754,8 @@ There is one small overstatement. The song copy and key-string building in getDe
 
 Also, a dirty flag on the Graphics redraws (backdrop, grid, cells, mix) saves less. Phaser's WebGL Graphics re-submits its command buffer every frame anyway, so the saving is only the JS-side command rebuilding. The biggest win is caching each label's color, text and alpha so setColor runs only when the color actually changes. Next is a cheap getPlayheadInfo() that avoids cloneRoomMusic and getRoomMusicKey.
 
+**2026-10-09 completed.** PR #105 / `27095ce6` adds the remaining Graphics caching. Each overlay layer keeps a key of what it draws from (workspace origin, tileset theme, lane; the lane's steps/MIDI/ties and pitch mode/key/octave for cells; the playing step; volume/pan/legacy for the mix panel; pitch settings for row labels) and is rebuilt only when that key changes. Hiding the overlay or recreating its graphics resets the keys. In headless Chromium, after octave, mix, lane and note edits in both editors, every layer's command buffer and every row/mix label (text, color, alpha, position, visibility) equals a forced fresh redraw; per-frame `updateOverlay` cost falls from ~147 µs to ~59 µs. Receipt: `wamp-music-overlay-cache-2026-10-09.md`.
+
 ### F227: Phone sequencer cells are about 8-13 px, far too small to tap accurately
 
 - **Area:** Room music system (composer, playback, audio engine)

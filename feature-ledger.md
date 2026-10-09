@@ -1,3 +1,7 @@
+## 2026-10-09 — F226 music grid draw caching delivered
+
+PR #105 / `27095ce6` is merged and live on https://wamp.land (Pages auto-build). The sequencer overlay rebuilds a layer only when its inputs change; cached output equals a fresh redraw and per-frame cost drops ~147 → ~59 µs. Master **72/215**. Receipt: [music grid](docs/review/wamp-music-overlay-cache-2026-10-09.md).
+
 ## 2026-10-09 — F220 live music mixing and slot-by-slot Arrange delivered
 
 PR #104 / `bdd4720e` is merged and live on https://wamp.land (Pages auto-build). Per-lane stems mix volume/pan live; Arrange renders each phrase once and schedules slots, so edits cost 4–7 ms instead of re-rendering the song; desktop music Close is clear of the menu. Output matches the previous engine within 1e-6 in real Chromium at whole-sample tempos. 3,273 tests and headless editor/Expanded acceptance pass. Master **71/215**. Receipt: [music stems](docs/review/wamp-music-stems-2026-10-09.md).
