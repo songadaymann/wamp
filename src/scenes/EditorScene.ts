@@ -97,6 +97,7 @@ import {
 } from '../lighting/emissiveSources';
 import {
   cloneRoomLightingSettings,
+  roomLightingUsesDynamicOverlay,
   type RoomLightingEmitter,
   type RoomLightingSettings,
 } from '../lighting/model';
@@ -106,7 +107,8 @@ import {
   cloneRoomWeatherSettings,
   type RoomWeatherSettings,
 } from '../weather/model';
-import { buildRoomWeatherSurfaceSegments } from '../weather/surfaces';
+import { buildRoomWeatherSurfaceSegments, type RoomWeatherSurfaceSegment } from '../weather/surfaces';
+import { EditorDocumentCache } from './editor/documentCache';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 import type { EditorShapeKind } from './editor/shapeTiles';
 import {
@@ -189,7 +191,8 @@ export class EditorScene extends Phaser.Scene {
     objectCount: 0,
     tileCount: 0,
   };
-  private lightingPreviewCacheKey = '';
+  private readonly lightingPreviewCache = new EditorDocumentCache<RoomStaticLightingEmitters>();
+  private readonly weatherPreviewCache = new EditorDocumentCache<RoomWeatherSurfaceSegment[]>();
   private entrySource: 'world' | 'direct' = 'direct';
   private testFromHerePlacement = false;
   private initialRoomSnapshot: RoomSnapshot | null = null;
@@ -1146,7 +1149,8 @@ export class EditorScene extends Phaser.Scene {
       objectCount: 0,
       tileCount: 0,
     };
-    this.lightingPreviewCacheKey = '';
+    this.lightingPreviewCache.reset();
+    this.weatherPreviewCache.reset();
     this.backgroundController.reset();
     this.interactionController.reset();
     this.overlayController.reset();
@@ -1337,7 +1341,10 @@ export class EditorScene extends Phaser.Scene {
 
   private updateWeatherPreview(): void {
     const weather = this.getSelectedWeatherSettings();
-    const weatherRoom = weather.mode === 'rain' ? this.editRuntime.exportRoomSnapshot() : null;
+    const surfaces = this.weatherPreviewCache.get(
+      this.editRuntime.documentRevision, weather.mode === 'rain',
+      () => buildRoomWeatherSurfaceSegments(this.editRuntime.exportRoomSnapshot()),
+    );
     const structureChanged = this.weatherController.sync({
       roomId: this.roomId,
       bounds: {
@@ -1347,7 +1354,7 @@ export class EditorScene extends Phaser.Scene {
         height: ROOM_PX_HEIGHT,
       },
       weather,
-      surfaces: weatherRoom ? buildRoomWeatherSurfaceSegments(weatherRoom) : [],
+      surfaces: surfaces ?? [],
     });
 
     if (structureChanged) {
@@ -1360,18 +1367,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private getLightingPreviewStaticEmitters(): RoomStaticLightingEmitters {
-    const cacheKey = [
-      this.roomId,
-      this.roomVersion,
-      this.roomUpdatedAt,
-      this.lastDirtyAt,
-    ].join(':');
-    if (cacheKey === this.lightingPreviewCacheKey) {
-      return this.lightingPreviewStaticEmitters;
-    }
-
-    this.lightingPreviewStaticEmitters = extractRoomStaticLightingEmitters(this.exportRoomSnapshot());
-    this.lightingPreviewCacheKey = cacheKey;
+    this.lightingPreviewStaticEmitters = this.lightingPreviewCache.get(
+      this.editRuntime.documentRevision,
+      roomLightingUsesDynamicOverlay(this.getSelectedLightingSettings()),
+      () => extractRoomStaticLightingEmitters(this.exportRoomSnapshot()),
+    ) ?? { emitters: [], objectCount: 0, tileCount: 0 };
     return this.lightingPreviewStaticEmitters;
   }
 
@@ -1441,7 +1441,8 @@ export class EditorScene extends Phaser.Scene {
       objectCount: 0,
       tileCount: 0,
     };
-    this.lightingPreviewCacheKey = '';
+    this.lightingPreviewCache.reset();
+    this.weatherPreviewCache.reset();
     this.inspectorController.reset();
     this.inspectorController.handleObjectSpritesRebuilt();
     this.toolController.reset();

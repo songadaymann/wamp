@@ -120,6 +120,7 @@ import {
   type NpcMode,
 } from '../../npcs/model';
 import { EditorHistory } from './history';
+import { sameSmartMetadata } from './smartHistory';
 import { iterateShapeTiles, type EditorShapeKind, type TilePoint } from './shapeTiles';
 import {
   clampRandomizeBrushSize,
@@ -177,6 +178,7 @@ import {
   smartCellKey,
   smartDecorationSlotKey,
   smartSemanticCellKey,
+  smartOwnedOutputKey,
   type RoomSmartTerrainState,
 } from '../../autotiling/model';
 import {
@@ -285,6 +287,7 @@ export class EditorEditRuntime {
   private roomMusic: RoomMusic | null = null;
   private roomDirty = false;
   private lastDirtyAt = 0;
+  private revision = 0;
   private goalPlacementMode: GoalPlacementMode = null;
   private readonly history = new EditorHistory<UndoAction>((action) => recordReplayEditorAction(`${action.kind}_changed`));
   private currentBatch: TileAction[] = [];
@@ -360,8 +363,12 @@ export class EditorEditRuntime {
     return this.lastDirtyAt;
   }
 
+  get documentRevision(): number { return this.revision; }
+
   set currentLastDirtyAt(value: number) {
     this.lastDirtyAt = value;
+    // Room settings/title edits are marked by the persistence host, not a stroke.
+    this.revision += 1;
   }
 
   get currentGoalPlacementMode(): GoalPlacementMode {
@@ -418,6 +425,7 @@ export class EditorEditRuntime {
   }
 
   reset(): void {
+    this.revision += 1;
     this.documentPresentation.reset();
 
     this.roomGoal = null;
@@ -446,6 +454,7 @@ export class EditorEditRuntime {
   }
 
   applyRoomSnapshot(room: RoomSnapshot, resetHistory = true): void {
+    this.revision += 1;
     const tileData = room.tileData;
     this.customRoomTiles = normalizeCustomRoomTileDefinitions(room.customTiles);
     this.smartTerrain = normalizeRoomSmartTerrainState(room.smartTerrain);
@@ -757,7 +766,7 @@ export class EditorEditRuntime {
     }
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
-    this.currentBatchSmartBefore = cloneRoomSmartTerrainState(this.smartTerrain);
+    this.currentBatchSmartBefore = null;
     this.currentSmartGestureAnchor = null;
   }
 
@@ -814,7 +823,7 @@ export class EditorEditRuntime {
   commitTileBatch(): void {
     const actions = this.currentBatch.filter((action) => action.oldGid !== action.newGid);
     const smartChanged = this.currentBatchSmartBefore !== null
-      && JSON.stringify(this.currentBatchSmartBefore) !== JSON.stringify(this.smartTerrain);
+      && !sameSmartMetadata(this.currentBatchSmartBefore, this.smartTerrain);
     if (actions.length === 0 && !smartChanged) {
       this.currentBatch = [];
       this.currentBatchActionIndex.clear();
@@ -827,10 +836,8 @@ export class EditorEditRuntime {
     this.history.record({
       kind: 'tiles',
       actions,
-      smartBefore: this.currentBatchSmartBefore
-        ? cloneRoomSmartTerrainState(this.currentBatchSmartBefore)
-        : undefined,
-      smartAfter: cloneRoomSmartTerrainState(this.smartTerrain),
+      smartBefore: smartChanged ? this.currentBatchSmartBefore! : undefined,
+      smartAfter: smartChanged ? cloneRoomSmartTerrainState(this.smartTerrain) : undefined,
     });
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
@@ -890,8 +897,16 @@ export class EditorEditRuntime {
   }
 
   private recordManualSmartEdit(layer: LayerName, x: number, y: number, value: number): void {
-    this.smartTerrain = applyManualSmartOutputEdit(this.smartTerrain, layer, x, y, value);
     const key = smartCellKey(x, y);
+    // A plain tile outside engine-owned metadata cannot change Smart state.
+    if (!this.smartTerrain.semanticCells[smartSemanticCellKey(layer, x, y)]
+      && !this.smartTerrain.ownedOutputs[smartOwnedOutputKey(layer, x, y)]
+      && !(layer === 'terrain' && this.smartTerrain.cells[key])
+      && !(layer === 'background' && this.smartTerrain.backdropCells[key])
+      && this.smartTerrain.generatedDecorations[key]?.layer !== layer
+      && this.smartTerrain.generatedBackgroundDecorations[key]?.layer !== layer) return;
+    this.captureSmartBatchBefore();
+    this.smartTerrain = applyManualSmartOutputEdit(this.smartTerrain, layer, x, y, value);
     const legacy = layer === 'terrain'
       ? this.smartTerrain.cells[key]
       : layer === 'background'
@@ -913,6 +928,7 @@ export class EditorEditRuntime {
       );
       return;
     }
+    this.captureSmartBatchBefore();
     const previous = this.serializeTileData();
     for (const layerName of LAYER_NAMES) {
       const layer = this.host.getLayers().get(layerName);
@@ -937,6 +953,10 @@ export class EditorEditRuntime {
       }
     }
     this.smartTerrain = cloneRoomSmartTerrainState(next.smartTerrain);
+  }
+
+  private captureSmartBatchBefore(): void {
+    this.currentBatchSmartBefore ??= cloneRoomSmartTerrainState(this.smartTerrain);
   }
 
   setSmartDetailsEnabled(enabled: boolean): void {
@@ -3292,6 +3312,7 @@ export class EditorEditRuntime {
   }
 
   private markRoomDirty(): void {
+    this.revision += 1;
     this.roomDirty = true;
     this.lastDirtyAt = performance.now();
     this.host.updatePersistenceStatus(

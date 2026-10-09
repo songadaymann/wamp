@@ -1,3 +1,15 @@
+## 2026-10-09 — Overnight checklist goal / F165 editor history and previews
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-editor-history-2026-10-09` stacks on F162 `f546b106` / draft #90. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-editor-history-2026-10-09/`.
+
+- [x] Bound room history to the latest 150 edits, preserving ordinary Undo/Redo and clearing Redo only on a new committed edit.
+- [x] Capture Smart metadata lazily only for Smart-affecting operations, reuse its before snapshot on commit and skip retained metadata for unchanged/plain manual strokes. Preserve manual locks, erasure, cancellation and semantic-only edits.
+- [x] Cache rain surfaces by a monotonic document revision and skip static lighting exports with lighting off; refresh correctly after edits, Undo/Redo and load.
+- [x] Verify meaningful tests, native desktop/phone/Expanded history and rain/lighting checks, quality gates and inspected unchanged installed-client capture.
+- [x] Save/push/attach tested stacked draft and receipt, leave master unticked and continue the checklist. No production release.
+
+Verification: 394 files / 3,125 tests and quality gates, DOM 992/242, Worker safety and diff pass. Three completed native cases prove a 170-stroke capped desktop session with absent plain-tile Smart copies, stable rain/off-lighting exports and toggle refresh, native phone Undo/Redo, and Expanded Smart metadata history/neighbor preservation/selected-cell publication. Screenshots and official healthy gameplay inspected. Primary hashes match F162; production preserved. Synthetic legacy-course preferred run-start FK/fallback limitation is documented in `docs/review/wamp-editor-history-2026-10-09.md`.
+
 ## 2026-10-09 — Overnight checklist goal / F162 object drag-to-move first slice
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-object-move-2026-10-09` stacks on F159 `156df31a` / draft PR #89. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-object-move-2026-10-09/`.

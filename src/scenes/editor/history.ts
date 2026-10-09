@@ -1,3 +1,5 @@
+export const EDITOR_HISTORY_LIMIT = 150;
+
 export class EditorHistory<TAction> {
   private undoStack: TAction[] = [];
   private redoStack: TAction[] = [];
@@ -10,7 +12,7 @@ export class EditorHistory<TAction> {
   }
 
   record(action: TAction): void {
-    this.undoStack.push(action);
+    this.pushUndo(action);
     this.redoStack = [];
     this.onRecord?.(action);
   }
@@ -25,10 +27,16 @@ export class EditorHistory<TAction> {
 
   pushUndo(action: TAction): void {
     this.undoStack.push(action);
+    this.trim(this.undoStack);
   }
 
   pushRedo(action: TAction): void {
     this.redoStack.push(action);
+    this.trim(this.redoStack);
+  }
+
+  private trim(stack: TAction[]): void {
+    if (stack.length > EDITOR_HISTORY_LIMIT) stack.splice(0, stack.length - EDITOR_HISTORY_LIMIT);
   }
 
   canUndo(): boolean {

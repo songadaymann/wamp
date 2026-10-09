@@ -17,6 +17,8 @@ import { updateGameSettings } from '../../settings/userSettings';
 import { EditorEditRuntime } from './editRuntime';
 import { EditorInteractionController } from './interaction';
 import { buildRoomTemplate } from '../../templates/roomTemplates';
+import { EditorHistory } from './history';
+import * as smartModel from '../../autotiling/model';
 
 vi.mock('phaser', () => ({
   default: {
@@ -42,6 +44,68 @@ vi.mock('./documentPresentationController', () => ({
 }));
 
 describe('editor edit runtime document contracts', () => {
+  it('plain tile strokes retain no Smart snapshots while manual edits still restore owned metadata', () => {
+    const { runtime } = createHarness(createRoom());
+    const history = (runtime as unknown as { history: EditorHistory<{ smartBefore?: unknown; smartAfter?: unknown }> }).history;
+    const record = vi.spyOn(history, 'record'), clone = vi.spyOn(smartModel, 'cloneRoomSmartTerrainState');
+    runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
+    expect(clone).not.toHaveBeenCalled();
+    expect(record.mock.calls.at(-1)?.[0].smartBefore).toBeUndefined();
+    expect(record.mock.calls.at(-1)?.[0].smartAfter).toBeUndefined(); clone.mockRestore();
+    editorState.paletteMode = 'smart';
+    runtime.beginTileBatch(); runtime.placeTileAt(96, 96); runtime.commitTileBatch();
+    const smart = runtime.exportRoomSnapshot();
+    editorState.paletteMode = 'tiles'; editorState.selectedTileGid = 5;
+    runtime.beginTileBatch(); runtime.placeTileAt(96, 96); runtime.commitTileBatch();
+    const manual = runtime.exportRoomSnapshot();
+    expect(manual.smartTerrain).not.toEqual(smart.smartTerrain);
+    expect(record.mock.calls.at(-1)?.[0].smartBefore).toBeTruthy();
+    runtime.undo(); expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(smart.smartTerrain);
+    runtime.redo(); expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(manual.smartTerrain);
+    runtime.beginTileBatch(); runtime.eraseTileAt(96, 96); runtime.cancelTileBatch();
+    expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(manual.smartTerrain); record.mockRestore();
+  });
+  it('does not record a repeated Smart stroke or empty manual stroke and preserves Redo', () => {
+    const { runtime } = createHarness(createRoom()); editorState.paletteMode = 'smart';
+    runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
+    const history = (runtime as unknown as { history: EditorHistory<unknown> }).history;
+    runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
+    expect(history.getDebugSnapshot().undoCount).toBe(1);
+    runtime.undo(); const revision = runtime.documentRevision;
+    editorState.paletteMode = 'tiles'; runtime.beginTileBatch(); runtime.eraseTileAt(160, 160); runtime.commitTileBatch();
+    expect(runtime.documentRevision).toBe(revision); expect(runtime.hasRedoHistory()).toBe(true);
+  });
+  it('records a semantic-only Smart setting and restores it through Undo/Redo without tile changes', () => {
+    const { runtime } = createHarness(createRoom());
+    const before = runtime.exportRoomSnapshot();
+    runtime.setSmartDetailsEnabled(false); const next = runtime.exportRoomSnapshot();
+    expect(next.tileData).toEqual(before.tileData); expect(next.smartTerrain?.detailsEnabled).toBe(false);
+    expect(runtime.hasUndoHistory()).toBe(true);
+    runtime.undo(); expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(before.smartTerrain);
+    runtime.redo(); expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(next.smartTerrain);
+  });
+  it('bounds actual runtime history and advances revision for edits, Undo/Redo and loads, not cancellation', () => {
+    const { runtime } = createHarness(createRoom()); let revision = runtime.documentRevision;
+    let oldestRetainedBefore = -1;
+    for (let i = 0; i < 170; i++) {
+      editorState.selectedTileGid = i % 2 ? 2 : 1;
+      editorState.selection.startCol = i % 2;
+      runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
+      if (i === 19) oldestRetainedBefore = runtime.exportRoomSnapshot().tileData.terrain[5][5];
+      expect(runtime.documentRevision).toBeGreaterThan(revision); revision = runtime.documentRevision;
+    }
+    for (let i = 0; i < 150; i++) runtime.undo();
+    expect(runtime.hasUndoHistory()).toBe(false); expect(runtime.hasRedoHistory()).toBe(true);
+    expect(runtime.exportRoomSnapshot().tileData.terrain[5][5]).toBe(oldestRetainedBefore);
+    expect(runtime.documentRevision).toBeGreaterThan(revision); revision = runtime.documentRevision;
+    runtime.redo(); expect(runtime.documentRevision).toBeGreaterThan(revision); revision = runtime.documentRevision;
+    runtime.beginTileBatch(); runtime.placeTileAt(160, 160); runtime.cancelTileBatch();
+    expect(runtime.documentRevision).toBe(revision);
+    runtime.applyRoomSnapshot(createRoom()); expect(runtime.documentRevision).toBeGreaterThan(revision);
+    revision = runtime.documentRevision; runtime.currentLastDirtyAt = 10;
+    expect(runtime.documentRevision).toBeGreaterThan(revision); revision = runtime.documentRevision;
+    runtime.currentLastDirtyAt = 10; expect(runtime.documentRevision).toBeGreaterThan(revision);
+  });
   it('moves linked objects as one Undo action, preserving configuration and guarding read-only and occupied targets', () => {
     const room = createRoom();
     room.placedObjects = [
