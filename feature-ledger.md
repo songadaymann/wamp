@@ -1,3 +1,7 @@
+## 2026-10-09 — F220 live music mixing and slot-by-slot Arrange delivered
+
+PR #104 / `bdd4720e` is merged and live on https://wamp.land (Pages auto-build). Per-lane stems mix volume/pan live; Arrange renders each phrase once and schedules slots, so edits cost 4–7 ms instead of re-rendering the song; desktop music Close is clear of the menu. Output matches the previous engine within 1e-6 in real Chromium at whole-sample tempos. 3,273 tests and headless editor/Expanded acceptance pass. Master **71/215**. Receipt: [music stems](docs/review/wamp-music-stems-2026-10-09.md).
+
 ## 2026-10-09 — F231 phrase audition and Arrange playhead delivered
 
 PR #103 / `bcb7af6a` is merged and live on https://wamp.land (Pages auto-build). Library phrases audition in place without committing; Arrange highlights the playing slot; the sequencer playhead follows swing and output latency; the desktop Arrange library is a usable tray again. 3,258 tests and headless desktop/phone/tablet/Expanded acceptance on the safety API pass. Master **70/215**; next **F220 remainder** (live per-instrument mixing, per-slot Arrange playback, desktop Close overlap). Receipt: [phrase audition](docs/review/wamp-phrase-audition-2026-10-09.md).

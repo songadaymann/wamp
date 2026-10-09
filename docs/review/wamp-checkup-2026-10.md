@@ -4,13 +4,13 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 70 of 215 done.**
+**Progress: 71 of 215 done.**
 
 **October 9 release:** [All 18 overnight slices and both morning fixes are live](wamp-overnight-release-2026-10-09.md), preserving partner PR #99 and ghost archive PR #100. Five partial items remain unticked; native background-tab audio still needs a physical check.
 
 **October 9 phone music editor:** [F227 is live](wamp-phone-music-editor-2026-10-09.md), with larger note cells, safe touch pan/pinch and compact Tools.
 
-**October 9 phrase audition:** [F231 is live](wamp-phrase-audition-2026-10-09.md): library phrases can be heard before placing, Arrange shows the playing slot, and the Arrange library is usable on desktop again. Next is finishing F220 (live per-instrument mixing and per-slot Arrange playback).
+**October 9 phrase audition:** [F231 is live](wamp-phrase-audition-2026-10-09.md): library phrases can be heard before placing, Arrange shows the playing slot, and the Arrange library is usable on desktop again. **October 9 music engine:** [F220 is complete](wamp-music-stems-2026-10-09.md): instruments mix live, Arrange renders each phrase once and plays slot by slot, and the desktop music Close button is clear of the menu. Next are the remaining partial items (F226, F229, F162, F166).
 
 ## How to use this file
 
@@ -286,7 +286,7 @@ The desktop editor is fast and polished. The gaps are safety nets (Undo buttons,
 
 The music system has a lovely, builder-friendly design. Playback and the editor need performance and polish fixes, especially on phones, and there are fun ideas for making music part of each room's identity.
 
-- [ ] **F220** Music editor re-renders the whole song on every note edit and keeps every version in memory · high impact · small effort — **partial delivery 2026-10-09** (`38ca52e5`, [PR #101](https://github.com/songadaymann/wamp/pull/101)). Coalesced music preview changes and shared 16-clip/four-loop/50 MiB retention. Stems, Arrange slot playback and music layout fixes remain. Combined 3,225 tests, native integration and coordinated live release pass.
+- [x] **F220** Music editor re-renders the whole song on every note edit and keeps every version in memory · high impact · small effort — **done 2026-10-09** (`bdd4720e`, [PR #104](https://github.com/songadaymann/wamp/pull/104); first slice `38ca52e5`, [PR #101](https://github.com/songadaymann/wamp/pull/101)). Debounced previews and the shared 50 MiB cache, then per-lane stems mixed live (volume/pan without re-rendering), slot-by-slot Arrange playback that renders only edited phrases (4–7 ms vs 290 ms+ per edit), and the desktop Close/menu overlap fix. OfflineAudioContext output matches the previous mixdown within 1e-6 at whole-sample tempos. Fully unique 16-slot arrangements hold more segment memory (≈64 MB vs 14 MB); listening and physical phones unverified.
 - [x] **F224** Room-to-room music transitions: mid-note starts, slow cross-tempo blends, and a 'ghost' room on fast crossings · medium impact · small effort — **done 2026-10-09** (`38ca52e5`, [PR #101](https://github.com/songadaymann/wamp/pull/101)). Downbeat/compatible-bar music transitions, 400 ms crossing stability, queued-source cancellation and tracked outgoing tails. Combined 3,225 tests, native integration and coordinated live release pass.
 - [x] **F221** Most room loops click at the seam, and open hi-hats pile up into hiss · medium impact · small effort — **done 2026-10-09** (`38ca52e5`, [PR #101](https://github.com/songadaymann/wamp/pull/101)). Periodic tonal/drum tails and cyclic 10 ms hi-hat choke; exact 48 kHz seam reference checks pass. Combined 3,225 tests, native integration and coordinated live release pass.
 - [ ] **F223** Entering a room builds its music on the main thread, causing a frame hitch at the doorway · medium impact · medium effort
