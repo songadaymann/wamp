@@ -40,6 +40,20 @@ describe('death and fresh-session checkpoint boundaries', () => {
     expect(h.host.resetGoalRunController).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['expanded', 'goal-less', 'single'] as const)('recreates cached bosses before clearing %s overrides', kind => {
+    const h = harness();
+    const resetBossChallenges = vi.fn();
+    Object.assign(h.host, {
+      resetBossChallenges,
+      getCurrentGoalRun: () => kind === 'single' ? h.run : null,
+      getActiveCourseRun: () => kind === 'expanded' ? { result: 'completed' } : null,
+    });
+    h.controller.resetPlaySession();
+    expect(resetBossChallenges).toHaveBeenCalledWith(kind === 'single' ? h.run.roomId : null);
+    expect(resetBossChallenges.mock.invocationCallOrder[0])
+      .toBeLessThan(h.host.clearActiveCourseRoomOverrides.mock.invocationCallOrder[0]);
+  });
+
   it('counts a death once immediately and delays only the respawn, retaining elapsed time', () => {
     const h = harness();
     let pending = false;
@@ -77,5 +91,24 @@ describe('death and fresh-session checkpoint boundaries', () => {
     expect(h.host.cancelPlayerAttack).not.toHaveBeenCalled();
     expect(h.run.deaths).toBe(0);
     expect(h.host.respawnPlayerToCurrentRoom).not.toHaveBeenCalled();
+  });
+
+  it('a nonfatal hit or protected contact does not count a death or restart survival', () => {
+    const h = harness('qualified', true);
+    Object.assign(h.host, { tryAbsorbPlayerDamage: () => true });
+    h.controller.handlePlayerDeath('Hazard hit you.');
+    expect(h.run.deaths).toBe(0);
+    expect(h.host.failGoalRun).not.toHaveBeenCalled();
+    expect(h.host.recordRunDeathLocation).not.toHaveBeenCalled();
+    expect(h.host.respawnPlayerToCurrentRoom).not.toHaveBeenCalled();
+  });
+
+  it('lethal falls bypass health and protection and retain ordinary run death accounting', () => {
+    const h = harness(); const absorb = vi.fn(() => true);
+    Object.assign(h.host, { tryAbsorbPlayerDamage: absorb });
+    h.controller.handlePlayerDeath('You fell.', true);
+    expect(absorb).not.toHaveBeenCalled();
+    expect(h.run.deaths).toBe(1);
+    expect(h.host.respawnPlayerToCurrentRoom).toHaveBeenCalledTimes(1);
   });
 });

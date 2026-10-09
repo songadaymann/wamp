@@ -103,6 +103,7 @@ function createHarness(options: {
   summaries?: WorldRoomSummary[];
   expandedRoomIdAt?: string | null;
   courseStartRoomId?: string | null;
+  now?: () => number;
 } = {}) {
   const roomsById = new Map((options.rooms ?? []).map((room) => [room.id, room]));
   const summaries = options.summaries ?? [];
@@ -133,6 +134,7 @@ function createHarness(options: {
       playArrangement,
       stopArrangement,
     },
+    options.now,
   );
 
   return {
@@ -153,7 +155,7 @@ function createHarness(options: {
 }
 
 describe('OverworldRoomMusicPlaybackController', () => {
-  it('plays ordinary room music with the existing bar transition and deduplicates its signature', () => {
+  it('plays ordinary room music with the room-aware transition and deduplicates its signature', () => {
     const music = createMusic('drums-1');
     const room = createRoom({ x: 2, y: -1 }, music);
     const { controller, playArrangement, stopArrangement } = createHarness({ rooms: [room] });
@@ -169,12 +171,12 @@ describe('OverworldRoomMusicPlaybackController', () => {
     expect(playArrangement).toHaveBeenCalledOnce();
     expect(playArrangement).toHaveBeenCalledWith(music, {
       mode: 'world-play',
-      transition: 'bar',
+      transition: 'room',
     });
     expect(stopArrangement).not.toHaveBeenCalled();
   });
 
-  it('stops an empty room on the existing bar transition and deduplicates the stop', () => {
+  it('stops an empty room on the room-aware transition and deduplicates the stop', () => {
     const room = createRoom({ x: 0, y: 0 }, null);
     const { controller, playArrangement, stopArrangement } = createHarness({ rooms: [room] });
     const input = {
@@ -189,8 +191,8 @@ describe('OverworldRoomMusicPlaybackController', () => {
     expect(playArrangement).not.toHaveBeenCalled();
     expect(stopArrangement).toHaveBeenCalledOnce();
     expect(stopArrangement).toHaveBeenCalledWith({
-      transition: 'bar',
-      fadeDurationSec: 0.18,
+      transition: 'immediate',
+      fadeDurationSec: 0.3,
       mode: 'world-play',
     });
   });
@@ -272,7 +274,7 @@ describe('OverworldRoomMusicPlaybackController', () => {
     expect(getCourseStartRoomRef).toHaveBeenCalledWith(course, startRoom.id);
     expect(playArrangement).toHaveBeenCalledWith(startRoomMusic, {
       mode: 'world-play',
-      transition: 'bar',
+      transition: 'room',
     });
 
     controller.sync({
@@ -309,7 +311,7 @@ describe('OverworldRoomMusicPlaybackController', () => {
 
     expect(playArrangement).toHaveBeenCalledWith(fallbackMusic, {
       mode: 'world-play',
-      transition: 'bar',
+      transition: 'room',
     });
   });
 
@@ -329,8 +331,8 @@ describe('OverworldRoomMusicPlaybackController', () => {
     });
 
     expect(stopArrangement).toHaveBeenCalledWith({
-      transition: 'bar',
-      fadeDurationSec: 0.18,
+      transition: 'immediate',
+      fadeDurationSec: 0.3,
       mode: 'world-play',
     });
   });
@@ -357,7 +359,7 @@ describe('OverworldRoomMusicPlaybackController', () => {
 
     expect(playArrangement).toHaveBeenCalledWith(firstMusic, {
       mode: 'world-play',
-      transition: 'bar',
+      transition: 'room',
     });
   });
 
@@ -388,7 +390,7 @@ describe('OverworldRoomMusicPlaybackController', () => {
     expect(playArrangement).toHaveBeenCalledOnce();
     expect(playArrangement).toHaveBeenCalledWith(sourceMusic, {
       mode: 'world-play',
-      transition: 'bar',
+      transition: 'room',
     });
   });
 
@@ -412,7 +414,7 @@ describe('OverworldRoomMusicPlaybackController', () => {
 
     expect(playArrangement).toHaveBeenCalledWith(currentMusic, {
       mode: 'world-play',
-      transition: 'bar',
+      transition: 'room',
     });
   });
 });
@@ -449,7 +451,7 @@ describe('room music selection caching', () => {
     harness.roomsById.set(earlier.id, earlier);
     harness.controller.sync(input);
     expect(harness.playArrangement).toHaveBeenCalledTimes(2);
-    expect(harness.playArrangement).toHaveBeenLastCalledWith(earlier.music, { mode: 'world-play', transition: 'bar' });
+    expect(harness.playArrangement).toHaveBeenLastCalledWith(earlier.music, { mode: 'world-play', transition: 'room' });
     expect(harness.getRoomSummaries).toHaveBeenCalledOnce();
   });
 
@@ -464,11 +466,11 @@ describe('room music selection caching', () => {
     harness.controller.sync(input);
     harness.changeSummaries([earlier, current].map((room) => createSummary(room, 'expanded', 2)));
     harness.controller.sync(input);
-    expect(harness.playArrangement).toHaveBeenLastCalledWith(earlier.music, { mode: 'world-play', transition: 'bar' });
+    expect(harness.playArrangement).toHaveBeenLastCalledWith(earlier.music, { mode: 'world-play', transition: 'room' });
     harness.roomsById.set(earlier.id, { ...earlier, music: null });
     harness.roomsById.set(current.id, { ...current, music: null });
     harness.controller.sync(input);
-    expect(harness.stopArrangement).toHaveBeenLastCalledWith({ transition: 'bar', fadeDurationSec: 0.18, mode: 'world-play' });
+    expect(harness.stopArrangement).toHaveBeenLastCalledWith({ transition: 'immediate', fadeDurationSec: 0.3, mode: 'world-play' });
     expect(harness.getRoomSummaries).toHaveBeenCalledTimes(2);
   });
 
@@ -488,5 +490,63 @@ describe('room music selection caching', () => {
     harness.controller.sync({ ...input, mode: 'browse' });
     harness.controller.sync(input);
     expect(harness.playArrangement).toHaveBeenCalledTimes(4);
+  });
+});
+
+
+describe('music-only room crossing stability', () => {
+  function crossing(silent = false) {
+    let time = 0;
+    const a = createRoom({ x: 0, y: 0 }, createMusic('drums-1'));
+    const b = createRoom({ x: 1, y: 0 }, silent ? null : createMusic('drums-2'));
+    const c = createRoom({ x: 2, y: 0 }, createMusic('drums-3'));
+    const h = createHarness({ rooms: [a, b, c], now: () => time });
+    const sync = (room: RoomSnapshot, elapsed: number, mode: 'play' | 'browse' = 'play') => {
+      time = elapsed;
+      h.controller.sync({ mode, currentRoomCoordinates: room.coordinates, activeCourseRun: null });
+    };
+    return { ...h, a, b, c, sync };
+  }
+
+  it('starts entry immediately but waits for 400 ms of stable residency on a crossing', () => {
+    const h = crossing();
+    h.sync(h.a, 0); h.sync(h.b, 100); h.sync(h.b, 499);
+    expect(h.playArrangement).toHaveBeenCalledOnce();
+    h.sync(h.b, 500); h.sync(h.b, 900);
+    expect(h.playArrangement).toHaveBeenCalledTimes(2);
+    expect(h.playArrangement).toHaveBeenLastCalledWith(h.b.music, { mode: 'world-play', transition: 'room' });
+  });
+
+  it('drops a quickly crossed room and debounces the newest target independently', () => {
+    const h = crossing();
+    h.sync(h.a, 0); h.sync(h.b, 100); h.sync(h.c, 300); h.sync(h.c, 699);
+    expect(h.playArrangement).toHaveBeenCalledOnce();
+    h.sync(h.c, 700);
+    expect(h.playArrangement).toHaveBeenCalledTimes(2);
+    expect(h.playArrangement).toHaveBeenLastCalledWith(h.c.music, { mode: 'world-play', transition: 'room' });
+  });
+
+  it('returning to the playing room cancels the pending target without restarting it', () => {
+    const h = crossing();
+    h.sync(h.a, 0); h.sync(h.b, 100); h.sync(h.a, 200); h.sync(h.a, 1000);
+    expect(h.playArrangement).toHaveBeenCalledOnce();
+    expect(h.stopArrangement).not.toHaveBeenCalled();
+  });
+
+  it('crossing a silent room briefly avoids a duplicate restart; stable silence fades immediately', () => {
+    const h = crossing(true);
+    h.sync(h.a, 0); h.sync(h.b, 100); h.sync(h.a, 300);
+    expect(h.playArrangement).toHaveBeenCalledOnce(); expect(h.stopArrangement).not.toHaveBeenCalled();
+    h.sync(h.b, 500); h.sync(h.b, 900);
+    expect(h.stopArrangement).toHaveBeenLastCalledWith({ transition: 'immediate', fadeDurationSec: 0.3, mode: 'world-play' });
+  });
+
+  it('mode exit and reset cancel queued ownership; re-entry can start immediately', () => {
+    const h = crossing();
+    h.sync(h.a, 0); h.sync(h.b, 100); h.sync(h.b, 200, 'browse');
+    h.sync(h.c, 201); expect(h.playArrangement).toHaveBeenCalledTimes(2);
+    h.sync(h.b, 300); h.controller.reset(); h.sync(h.b, 301);
+    expect(h.playArrangement).toHaveBeenCalledTimes(3);
+    expect(h.stopArrangement).toHaveBeenCalledTimes(2);
   });
 });

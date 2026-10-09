@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
 import { ensureSceneAvatarPackLoaded } from '../../player/avatar/dynamic';
 import type { ResolvedPlayerAvatarPack } from '../../player/avatar/model';
 import { GhostRacePlayback, buildRunGhost, supportsGhostRace, type GhostRaceChoice, type RunGhost } from '../../runs/ghostRace';
@@ -40,9 +41,10 @@ export class OverworldGhostRaceController {
   private refreshRequest: AbortController | null = null;
   constructor(private readonly options: GhostRaceOptions) {}
 
-  select(ghost: RunGhost | null, choice: GhostRaceChoice, room: Pick<RoomSnapshot, 'id' | 'version' | 'goal' | 'coordinates'>): void {
+  select(ghost: RunGhost | null, choice: GhostRaceChoice, room: Pick<RoomSnapshot, 'id' | 'version' | 'goal' | 'coordinates'> & Partial<Pick<RoomSnapshot, 'placedObjects'>>): void {
     this.clear();
-    if (choice === 'off' || (ghost && ghost.roomId !== room.id) || !supportsGhostRace(room.goal)) return;
+    if (choice === 'off' || (ghost && ghost.roomId !== room.id) || !supportsGhostRace(room.goal)
+      || hasCoopPressurePlates(room.placedObjects ?? [])) return;
     this.choice = choice; this.targetVersion = room.version; this.targetRoom = room;
     this.identity = this.options.getUserId();
     this.unsubscribe = subscribeGhostBestUpdates(room.id, () => {
@@ -71,6 +73,7 @@ export class OverworldGhostRaceController {
   }
   update(): void {
     const run = this.options.getRun(), ghost = this.playback?.ghost;
+    if (run?.cooperative) { this.clear(); return; }
     if (this.options.getMode() !== 'play' || this.identity !== this.options.getUserId()) { this.clear(); return; }
     const visible = Boolean(run && ghost && run.roomId === ghost.roomId && run.roomVersion === this.targetVersion
       && run.qualificationState === 'qualified');
@@ -98,7 +101,7 @@ export class OverworldGhostRaceController {
     } : null);
   }
   captureGuest(run: GoalRunState | null, trace: RankedRunVerificationTrace, avatarId: string): void {
-    if (!run || this.options.getUserId() || !supportsGhostRace(run.goal)) return;
+    if (!run || run.cooperative || this.options.getUserId() || !supportsGhostRace(run.goal)) return;
     const ghost = buildRunGhost({ attemptId: run.attemptId ?? 'guest', roomId: run.roomId,
       roomVersion: run.roomVersion, displayName: 'Your best', avatarId, elapsedMs: Math.round(run.elapsedMs) }, trace);
     if (ghost) this.guestCandidates.set(run, ghost);

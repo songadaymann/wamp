@@ -621,6 +621,7 @@ export class ExploreModalController {
     title.textContent = draft.title?.trim() || 'Guest Room';
     titleRow.appendChild(title);
 
+
     const badge = this.doc.createElement('div');
     badge.className = 'explore-room-featured-badge explore-guest-room-badge';
     badge.textContent = 'Guest';
@@ -686,6 +687,14 @@ export class ExploreModalController {
     title.className = 'explore-room-title';
     title.textContent = this.getRoomDisplayTitle(entry);
     titleRow.appendChild(title);
+
+    if (entry.cooperative) {
+      const badge = this.doc.createElement('div');
+      badge.className = 'explore-room-area-badge';
+      badge.textContent = 'Co-op plates';
+      badge.title = 'Live players can hold plates. Clears here stay practice; crates and enemies still work.';
+      titleRow.appendChild(badge);
+    }
 
     if (entry.featured) {
       const badge = this.doc.createElement('div');

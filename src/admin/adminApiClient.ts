@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '../api/baseUrl';
+import { readApiErrorMessage } from '../api/readApiErrorMessage';
 
 export interface AdminApiClient {
   request<T>(path: string, init?: RequestInit): Promise<T>;
@@ -35,9 +36,8 @@ export function createAdminApiClient(getAdminKey: () => string): AdminApiClient 
       });
 
       if (!response.ok) {
-        const text = (await response.text()).trim();
         if (response.status === 403) throw new Error('Invalid admin key.');
-        throw new Error(text || `Request failed with status ${response.status}.`);
+        throw new Error(await readApiErrorMessage(response, `Request failed with status ${response.status}.`));
       }
 
       return response.json() as Promise<T>;

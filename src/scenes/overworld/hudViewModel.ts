@@ -4,6 +4,7 @@ import type {
   CourseSnapshot,
 } from '../../courses/model';
 import type { RoomGoal } from '../../goals/roomGoals';
+import { hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
 import {
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -57,6 +58,7 @@ interface SelectedSummaryViewData {
 }
 
 export interface BuildOverworldHudViewModelOptions {
+  editorPlaytest?: boolean;
   selectedState: SelectedCellState;
   selectedCoordinates: RoomCoordinates;
   selectedSummary: SelectedSummaryViewData | null;
@@ -318,6 +320,7 @@ export function buildOverworldHudViewModel(
   let selectedMetaTone: OverworldHudViewModel['selectedMetaTone'] = 'default';
   if (selectedState === 'published') {
     const metaParts: string[] = [];
+    if (hasCoopPressurePlates(selectedPublishedRoom?.placedObjects ?? [])) metaParts.push('Co-op plates · Practice clears');
     if (selectedExpandedRoomCellCount !== null && selectedExpandedRoomCellCount > 1) {
       metaParts.push(`${selectedExpandedRoomCellCount}-cell expanded room`);
     }
@@ -470,7 +473,7 @@ export function buildOverworldHudViewModel(
     rateRoomButtonText: 'Rate Room',
     rateRoomButtonDisabled: false,
     zoomLabelText: `${zoom.toFixed(2)}x`,
-    playButtonText: activeCourseRun
+    playButtonText: options.editorPlaytest && mode === 'play' ? 'Back to Editor' : activeCourseRun
       ? 'Stop Expanded Room'
       : activeRoomRushRun
         ? 'Play Room'

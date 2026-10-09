@@ -48,6 +48,15 @@ const BADGE_DEFINITIONS: Record<
     label: 'First Clear',
     description: 'Completed a published room or course challenge.',
   },
+  player_first_lost_song: {
+    category: 'player', label: 'First Lost Song', description: 'Found a hidden Lost Song in another builder’s room.',
+  },
+  player_10_lost_songs: {
+    category: 'player', label: '10 Lost Songs', description: 'Found Lost Songs in ten different room cells.',
+  },
+  player_100_lost_songs: {
+    category: 'player', label: '100 Lost Songs', description: 'Found Lost Songs in one hundred different room cells.',
+  },
   player_10_clears: {
     category: 'player',
     label: '10 Clears',

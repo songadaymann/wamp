@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { bossGroundChaseSpeed, bossTimingMs } from '../../../enemies/boss';
 import {
   getObjectRuntimeBodyOffset,
   isSolidRuntimeObjectConfig,
@@ -213,6 +214,12 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       return;
     }
 
+    if (liveObject.runtime.boss && now < liveObject.runtime.boss.hurtUntil) {
+      if (liveObject.runtime.aiActiveTraversalEdgeId) this.resetSwordsmanTraversalMemory(liveObject);
+      this.clearSwordsmanObjectiveTraversalState(liveObject, 'boss-hurt', body);
+      this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'hurt'));
+      return;
+    }
     this.syncSwordsmanLadderGravity(liveObject, body);
     this.updateSwordsmanTraversalMemory(room, liveObject, body, now);
     if (isPoliceEnemyObjectId(liveObject.config.id)) {
@@ -522,7 +529,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
     for (const candidate of loadedRoom.liveObjects) {
       if (
-        candidate.config.category !== 'collectible' ||
+        candidate.config.category !== 'collectible' || candidate.config.countsTowardGoals === false ||
         !candidate.sprite.active ||
         !candidate.sprite.body ||
         this.options.isCollectedObjectKey(candidate.key)
@@ -913,7 +920,9 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       return;
     }
 
-    this.moveSwordsmanAlongGround(loadedRoom, liveObject, body, SWORDSMAN_AI_SPEED, {
+    const groundSpeed = bossGroundChaseSpeed(liveObject.runtime.boss, SWORDSMAN_AI_SPEED,
+      Boolean(traversalDecision?.traversalEdgeId || liveObject.runtime.aiActiveTraversalEdgeId));
+    this.moveSwordsmanAlongGround(loadedRoom, liveObject, body, groundSpeed, {
       allowEdgeDrop: traversalDecision?.allowEdgeDrop ?? false,
       decision: traversalDecision,
     });
@@ -2389,11 +2398,11 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
   private startSwordsmanWindup(liveObject: LoadedRoomObject): void {
     const now = this.options.getCurrentTime();
-    this.runtimeState.beginWindup(liveObject.runtime, now, (
+    this.runtimeState.beginWindup(liveObject.runtime, now, bossTimingMs(liveObject.runtime.boss, (
       isPoliceEnemyObjectId(liveObject.config.id)
         ? POLICE_AI_WINDUP_MS
         : SWORDSMAN_AI_WINDUP_MS
-    ));
+    )));
     this.applySwordsmanFacing(liveObject, null, liveObject.runtime.directionX, { force: true });
     this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
   }
@@ -2405,7 +2414,8 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     const now = this.options.getCurrentTime();
     const isPolice = isPoliceEnemyObjectId(liveObject.config.id);
     const attackMs = isPolice ? POLICE_AI_ATTACK_MS : SWORDSMAN_AI_ATTACK_MS;
-    const cooldownMs = isPolice ? POLICE_AI_COOLDOWN_MS : SWORDSMAN_AI_COOLDOWN_MS;
+    const cooldownMs = bossTimingMs(liveObject.runtime.boss,
+      isPolice ? POLICE_AI_COOLDOWN_MS : SWORDSMAN_AI_COOLDOWN_MS);
     this.runtimeState.beginAttack(liveObject.runtime, now, {
       attackMs,
       cooldownMs,

@@ -9,6 +9,7 @@ type CourseEditorPanelElements = {
   shell: HTMLElement | null;
   titleInput: HTMLInputElement | null;
   pitsInput: HTMLInputElement | null;
+  heartsSelect: HTMLSelectElement | null;
   status: HTMLElement | null;
   selectedRoomSummary: HTMLElement | null;
   selectedRoomStatus: HTMLElement | null;
@@ -54,6 +55,7 @@ export class CourseComposerPanelController {
       shell: this.doc.getElementById('course-editor-shell'),
       titleInput: this.doc.getElementById('course-workbench-title-input') as HTMLInputElement | null,
       pitsInput: this.doc.getElementById('course-workbench-pits-deadly') as HTMLInputElement | null,
+      heartsSelect: this.doc.getElementById('course-workbench-player-hearts') as HTMLSelectElement | null,
       status: this.doc.getElementById('course-workbench-status'),
       selectedRoomSummary: this.doc.getElementById('course-workbench-selected-room-summary'),
       selectedRoomStatus: this.doc.getElementById('course-workbench-selected-room-status'),
@@ -92,6 +94,9 @@ export class CourseComposerPanelController {
     });
     this.elements.titleInput?.addEventListener('input', () => {
       getActiveCourseComposerScene(this.game)?.setCourseTitle?.(this.elements.titleInput?.value ?? null);
+    });
+    this.elements.heartsSelect?.addEventListener('change', () => {
+      getActiveCourseComposerScene(this.game)?.setCoursePlayerHearts?.(Number(this.elements.heartsSelect?.value));
     });
     this.elements.toggleSelectedRoomButton?.addEventListener('click', () => {
       getActiveCourseComposerScene(this.game)?.toggleSelectedRoomMembership?.();
@@ -179,6 +184,10 @@ export class CourseComposerPanelController {
     }
 
     this.setValue(this.elements.titleInput, state.title);
+    if (this.elements.heartsSelect) {
+      this.elements.heartsSelect.value = String(state.playerHearts ?? 1);
+      this.elements.heartsSelect.disabled = !state.canEdit;
+    }
     if (this.elements.pitsInput) {
       this.elements.pitsInput.checked = state.pitsAreDeadly === true;
       this.elements.pitsInput.disabled = !state.canEdit;

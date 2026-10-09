@@ -103,7 +103,9 @@ export function formatRoomRushDifficulty(run: ActiveRoomRushRunState): string {
 }
 
 export function formatRoomRushStartRule(run: ActiveRoomRushRunState): string {
-  return run.startRule === 'origin' ? 'Origin start' : 'Free start';
+  const week = /^UTC-(\d{4})-(\d{2})$/.exec(run.eventWeek ?? '');
+  return run.startRule === 'weekly' ? week ? `Week ${Number(week[2])}, ${week[1]} · 5 min` : 'Weekly · 5 min'
+    : run.startRule === 'origin' ? 'Origin start' : 'Free start';
 }
 
 function drawRoomRushCard(
@@ -267,24 +269,26 @@ function drawOverworldTitlePanel(
   run: ActiveRoomRushRunState,
 ): void {
   drawPanel(context, 426, 44, 724, 94, PALETTE.cream, PALETTE.ink, 5);
-  drawText(context, buildRoomRushPlayerTagline(run).toUpperCase(), 452, 66, {
-    size: 16,
+  drawText(context, buildRoomRushPlayerTagline(run).toUpperCase(), 452, 64, {
+    size: 14,
     family: "'HomeVideo', monospace",
     color: PALETTE.blue,
     maxWidth: 656,
-    minSize: 13,
+    minSize: 11,
   });
-  drawText(context, `${ROOM_RUSH_NAME.toUpperCase()} COMPLETE`, 452, 88, {
-    size: 34,
+  drawText(context, `${ROOM_RUSH_NAME.toUpperCase()} ${run.result === 'failed' ? 'ENDED' : 'COMPLETE'}`, 452, 96, {
+    size: 28,
     family: "'Super Mario Bros. NES', monospace",
     color: PALETTE.ink,
+    maxWidth: 656,
+    minSize: 20,
   });
-  drawText(context, buildRoomRushSummaryLine(run), 452, 120, {
-    size: 25,
+  drawText(context, buildRoomRushSummaryLine(run), 452, 125, {
+    size: 20,
     family: "'HomeVideo', monospace",
     color: PALETTE.ink,
     maxWidth: 656,
-    minSize: 18,
+    minSize: 14,
   });
 }
 
@@ -327,7 +331,7 @@ function drawOverworldStatsPanel(
   }
 
   const statRows = [
-    ['Mode', `${formatRoomRushDifficulty(run)} - ${formatRoomRushStartRule(run)}`],
+    ['Mode', `${formatRoomRushDifficulty(run)} - ${run.startRule === 'weekly' ? 'Weekly' : formatRoomRushStartRule(run)}`],
     ['Start', roomIdFromCoordinates(run.startCoordinates)],
     ['Finish', roomIdFromCoordinates(run.currentCoordinates)],
     ['Time', formatRoomRushDuration(run.elapsedMs)],
@@ -438,7 +442,7 @@ function drawStatsPanel(context: CanvasRenderingContext2D, run: ActiveRoomRushRu
 
   const statRows = [
     ['Player', getRoomRushPlayerDisplayName(run) ?? 'Unknown player'],
-    ['Mode', `${formatRoomRushDifficulty(run)} - ${formatRoomRushStartRule(run)}`],
+    ['Mode', `${formatRoomRushDifficulty(run)} - ${run.startRule === 'weekly' ? 'Weekly' : formatRoomRushStartRule(run)}`],
     ['Start', roomIdFromCoordinates(run.startCoordinates)],
     ['Finish', roomIdFromCoordinates(run.currentCoordinates)],
     ['Time', formatRoomRushDuration(run.elapsedMs)],

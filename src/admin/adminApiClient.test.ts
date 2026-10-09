@@ -49,4 +49,8 @@ describe('admin API client', () => {
       headers: { 'x-admin-key': 'fixture-key' },
     });
   });
+  it('shows structured server validation in plain text', async () => {
+    vi.stubGlobal('fetch',vi.fn(async()=>Response.json({error:'Choose a published standalone room.'},{status:400})));
+    await expect(createAdminApiClient(()=>'key').request('/api/admin/room-rush/weekly')).rejects.toThrow('Choose a published standalone room.');
+  });
 });

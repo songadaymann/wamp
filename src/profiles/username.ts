@@ -20,6 +20,7 @@ const RESERVED_PROFILE_USERNAMES = new Set([
   'favicon',
   'help',
   'guest-replays',
+  'bug-reports',
   'index',
   'launch-admin',
   'leaderboard',

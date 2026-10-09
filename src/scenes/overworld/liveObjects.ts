@@ -1,4 +1,7 @@
 import Phaser from 'phaser';
+import { isCoopPressurePlate, type CoopPlateActor } from '../../placedObjects/coopPressurePlates';
+import { createBossPresentation, syncBossPresentation } from './liveObjects/bossPresentation';
+import { getPlacedBossHitPoints } from '../../enemies/boss';
 import type { SfxCue } from '../../audio/sfx';
 import {
   canObjectBeStoredInContainer,
@@ -146,6 +149,7 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   getPlayer: () => Phaser.GameObjects.GameObject | null;
   getPlayerPickupSensor: () => Phaser.GameObjects.GameObject | null;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
+  getCoopPlateActors?: () => readonly CoopPlateActor[];
   getEnemyStompBounceVelocity?: () => number;
   playEnemyStompImpact?: () => void;
   getConveyorDirectionForBody: (
@@ -175,6 +179,9 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   grantPlayerAirJump?: () => boolean;
   showTransientStatus: (message: string) => void;
   handlePlayerDeath: (reason: string) => void;
+  onHealingCollected?: () => boolean;
+  onLostSongCollected?: (roomId: string) => void;
+  isLostSongGhosted?: (roomId: string) => boolean;
   onEnemyDefeated: (event: {
     roomId: string;
     roomCoordinates: RoomCoordinates;
@@ -277,6 +284,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.triggerController = new LiveObjectTriggerController({
       getLoadedFullRooms: this.options.getLoadedFullRooms,
       getPlayerBody: this.options.getPlayerBody,
+      getCoopPlateActors: this.options.getCoopPlateActors,
       getCurrentTime: this.options.getCurrentTime,
       getRoomOrigin: this.options.getRoomOrigin,
       playRoomSfx: this.options.playRoomSfx,
@@ -466,6 +474,15 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.triggerController.resetSwitchStates();
   }
 
+  resetBossChallenges(resetRoom: (room: RoomSnapshot) => void, alreadyResetRoomId: string | null): void {
+    for (const loadedRoom of this.options.getLoadedFullRooms()) {
+      if (loadedRoom.room.id !== alreadyResetRoomId
+        && loadedRoom.room.placedObjects.some(placed => getPlacedBossHitPoints(placed) !== null)) {
+        resetRoom(loadedRoom.room);
+      }
+    }
+  }
+
   resetSwitchStateForRoom(roomId: string): void {
     this.triggerController.resetSwitchStateForRoom(roomId);
   }
@@ -639,6 +656,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       layer,
       baseTimeSeed = 0,
       placedInstanceId,
+      coopPlate = null,
       linkedTargetRoomId,
       linkedTargetInstanceId,
       linkedTargetInstanceIds = linkedTargetInstanceId ? [linkedTargetInstanceId] : [],
@@ -648,6 +666,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       signText,
       objectiveMode = null,
       defeatMode = null,
+      bossHitPoints = null,
       policeBehaviorMode = null,
       policePatrolShoots = null,
       npcMode = null,
@@ -745,6 +764,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const liveObject: LoadedRoomObject = {
       key,
       placedInstanceId,
+      coopPlate: isCoopPressurePlate({ id: config.id, layer: normalizedLayer, coopPlate }),
       linkedTargetRoomId,
       linkedTargetInstanceId,
       linkedTargetInstanceIds,
@@ -769,6 +789,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         getCurrentTime: this.options.getCurrentTime,
         objectiveMode,
         defeatMode,
+        bossHitPoints: normalizedLayer === 'terrain' ? bossHitPoints : null,
         policeBehaviorMode,
         policePatrolShoots,
         npcMode,
@@ -816,6 +837,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
+    createBossPresentation(this.options.scene, liveObject);
     this.triggerController.initializePressureControlledObjectState(liveObject);
     this.checkpointController.syncObject(loadedRoom, liveObject);
 
@@ -857,6 +879,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           if (!liveObject.sprite.active) {
             continue;
           }
+          syncBossPresentation(liveObject, this.options.getCurrentTime());
 
           const dynamicBody = this.getDynamicBody(liveObject.sprite);
           const behavior = getLiveObjectBehavior(liveObject.config.id);
@@ -2464,6 +2487,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       markCollectedObjectKey: this.options.markCollectedObjectKey,
       addScore: this.options.addScore,
       onKeyCollected: this.options.onKeyCollected,
+      onHealingCollected: this.options.onHealingCollected,
+      onLostSongCollected: this.options.onLostSongCollected,
       playRoomSfx: this.options.playRoomSfx,
       playCollectFx: this.options.playCollectFx,
       showTransientStatus: this.options.showTransientStatus,
@@ -2474,6 +2499,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       destroyLiveObjectInteractions: (target) =>
         this.lifecycleController.destroyInteractions(target),
     }, options);
+  }
+
+  syncLostSongPresentation(): void {
+    for (const room of this.options.getLoadedFullRooms()) {
+      const ghosted = this.options.isLostSongGhosted?.(room.room.id) ?? false;
+      for (const object of room.liveObjects) {
+        if (object.config.id !== 'lost_song') continue;
+        object.sprite.setAlpha(ghosted ? 0.25 : 1);
+        const body = object.sprite.body as ArcadeObjectBody | null;
+        if (body && object.sprite.getData('wampPreparedDormant') !== true) body.enable = !ghosted;
+      }
+    }
   }
 
   private emitLiveObjectRemovedForObject(

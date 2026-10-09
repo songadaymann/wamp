@@ -1,4 +1,5 @@
 import type { ToolName } from '../../../config';
+import type { PlayerHearts } from '../../../player/hearts';
 import type { CourseGoalType } from '../../../courses/model';
 import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../../../enemies/swordsmanObjectives';
 import type { PoliceBehaviorMode } from '../../../enemies/policeEnemy';
@@ -10,6 +11,7 @@ import type { NpcMode } from '../../../npcs/model';
 import type { EditorMarkerPlacementMode } from '../../../ui/setup/sceneBridge';
 import type { SmartBrushId, SmartStyleId } from '../../../autotiling/model';
 import type { SmartThemeId } from '../../../autotiling/registry';
+import type { ReadyToPublishChecklist } from '../clearCheck';
 
 export interface EditorGoalUiViewModel {
   goalTypeValue: string;
@@ -38,10 +40,12 @@ export interface EditorGoalUiViewModel {
   placeStartActive: boolean;
   placeExitHidden: boolean;
   placeExitActive: boolean;
+  placeExitNeeded: boolean;
   addCheckpointHidden: boolean;
   addCheckpointActive: boolean;
   placeFinishHidden: boolean;
   placeFinishActive: boolean;
+  placeFinishNeeded: boolean;
   linkNpcHidden: boolean;
   linkNpcActive: boolean;
   placeNpcDestinationHidden: boolean;
@@ -50,6 +54,7 @@ export interface EditorGoalUiViewModel {
 
 export interface EditorCourseUiViewModel {
   pitsAreDeadly?: boolean;
+  playerHearts?: PlayerHearts;
   pitsDisabled?: boolean;
   visible: boolean;
   statusHidden: boolean;
@@ -88,6 +93,8 @@ export interface EditorInspectorState {
   selectionId: string | null;
   pressureVisible: boolean;
   pressureStatusText: string;
+  pressureCoopVisible: boolean;
+  pressureCoopChecked: boolean;
   pressureConnectHidden: boolean;
   pressureConnectDisabled: boolean;
   pressureConnectTitle: string;
@@ -110,6 +117,9 @@ export interface EditorInspectorState {
   policeBehaviorModeDisabled: boolean;
   policePatrolShootsChecked: boolean;
   policePatrolShootsHidden: boolean;
+  bossVisible: boolean;
+  bossChecked: boolean;
+  bossHitPointsValue: number;
   npcVisible: boolean;
   npcStatusText: string;
   npcModeValue: NpcMode;
@@ -126,9 +136,11 @@ export interface EditorInspectorState {
 }
 
 export interface EditorUiViewModel {
+  clearCheck?: ReadyToPublishChecklist;
   roomTitleValue: string;
   roomCameraCentered?: boolean;
   roomPitsAreDeadly?: boolean;
+  roomPlayerHearts?: PlayerHearts;
   roomCoordinatesText: string;
   saveStatusText: string;
   saveStatusAccentText: string;
@@ -190,6 +202,9 @@ export interface EditorUiBridgeActions {
   onUndo: () => void;
   onRedo: () => void;
   onRequestRender: () => void;
+  onTestFromHere?: () => void;
+  onOpenRoomTemplates?: () => void;
+  isRoomLayoutEmpty?: () => boolean;
   onDocumentKeyDown: (event: KeyboardEvent) => void;
   onAuthStateChanged: () => void;
   onBack: () => void | Promise<void>;
@@ -206,6 +221,8 @@ export interface EditorUiBridgeActions {
   onSetRoomCameraCentered: (centered: boolean) => void;
   onSetRoomPitsAreDeadly?: (enabled: boolean) => void;
   onSetCoursePitsAreDeadly?: (enabled: boolean) => void;
+  onSetRoomPlayerHearts?: (hearts: number) => void;
+  onSetCoursePlayerHearts?: (hearts: number) => void;
   onSelectTool: (tool: ToolName) => void;
   onClearCurrentLayer: () => void;
   onClearAllTiles: () => void;
@@ -238,10 +255,12 @@ export interface EditorUiBridgeActions {
   onClearPinnedInspector: () => void;
   onBeginPressurePlateConnection: () => void;
   onClearPressurePlateConnection: () => void;
+  onSetFocusedCoopPlate: (enabled: boolean) => void;
   onCancelPressurePlateConnection: () => void;
   onClearContainerContents: () => void;
   onSetFocusedSwordsmanObjectiveMode: (objectiveMode: SwordsmanObjectiveMode) => void;
   onSetFocusedSwordsmanDefeatMode: (defeatMode: SwordsmanDefeatMode) => void;
+  onSetFocusedBossHitPoints: (value: number | null) => void;
   onSetFocusedPoliceBehaviorMode: (mode: PoliceBehaviorMode) => void;
   onSetFocusedPolicePatrolShoots: (patrolShoots: boolean) => void;
   onSetFocusedNpcMode: (mode: NpcMode) => void;

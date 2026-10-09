@@ -3,6 +3,9 @@ import type { PagesWorkerEnv } from './model';
 import { handleStaticAssetRequest } from './staticAssets';
 
 const STANDALONE_ALIASES = [
+  ['/bug-reports', '/__standalone/bug-reports.asset'],
+  ['/bug-reports/', '/__standalone/bug-reports.asset'],
+  ['/bug-reports.html', '/__standalone/bug-reports.asset'],
   ['/guest-replays', '/__standalone/guest-replays.asset'],
   ['/guest-replays/', '/__standalone/guest-replays.asset'],
   ['/guest-replays.html', '/__standalone/guest-replays.asset'],

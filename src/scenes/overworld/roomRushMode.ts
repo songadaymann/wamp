@@ -8,6 +8,9 @@ import {
 } from '../../persistence/roomModel';
 import type { RoomRushRunStartResponse } from '../../runs/model';
 import { createRunRepository } from '../../runs/runRepository';
+import { loadWeeklyRoomRush } from '../../runs/weeklyRoomRushRepository';
+import { WEEKLY_ROOM_RUSH_LIMIT_MS, type WeeklyRoomRushResponse } from '../../runs/weeklyRoomRush';
+import { getActiveWorldId } from '../../worlds/clientContext';
 import type { RoomRushOverworldCapture } from '../../social/roomRushShare';
 import type { OverworldMode } from '../sceneData';
 import type { CameraMode } from './camera';
@@ -64,6 +67,7 @@ interface OverworldRoomRushModeHost {
   clearCurrentGoalRun(): void;
   clearRoomGoalIntroState(): void;
   syncScenePauseState(): void;
+  syncModeRuntime(): void;
   syncAppMode(): void;
   showTransientStatus(message: string): void;
   renderHud(): void;
@@ -103,9 +107,11 @@ export class OverworldRoomRushModeController {
   }
 
   tick(delta: number): void {
-    this.setMutationStatus(this.runController.tick(delta), {
+    const result = this.runController.tick(delta);
+    this.setMutationStatus(result, {
       renderHud: false,
     });
+    if (result.terminalResult === 'completed') this.showResult(result.transientStatus);
   }
 
   recordVisit(room: RoomSnapshot | null): void {
@@ -133,6 +139,8 @@ export class OverworldRoomRushModeController {
       this.host.showTransientStatus(`${ROOM_RUSH_NAME} starts from the overworld.`);
       return false;
     }
+
+    if (options.startRule === 'weekly') return this.startWeekly();
 
     const startCoordinates =
       options.startRule === 'origin'
@@ -173,6 +181,8 @@ export class OverworldRoomRushModeController {
       return false;
     }
 
+    if (runState.startRule === 'weekly') return this.startWeekly(runState.returnCoordinates);
+
     const startCoordinates = { ...runState.startCoordinates };
     const returnCoordinates = { ...runState.returnCoordinates };
     if (!this.host.isWithinLoadedRoomBounds(startCoordinates)) {
@@ -211,6 +221,27 @@ export class OverworldRoomRushModeController {
     return Boolean(this.getCurrentRun());
   }
 
+  private async startWeekly(returnCoordinates = this.host.getSelectedCoordinates()): Promise<boolean> {
+    if (getActiveWorldId()) { this.host.showTransientStatus('Weekly Room Rush takes place in Prime.'); return false; }
+    try {
+      const weekly = await loadWeeklyRoomRush();
+      if (!weekly.pick?.available) { this.host.showTransientStatus(weekly.pick?.unavailableReason ?? 'This week’s Rush room has not been chosen yet.'); return false; }
+      const startCoordinates = weekly.pick.coordinates;
+      const refreshed = await this.host.refreshAround(startCoordinates, { forceChunkReload: true });
+      if (refreshed === 'error') { this.host.showTransientStatus('Could not load the weekly start room. Please retry.'); return false; }
+      return await this.startFromPreparedRoom({ difficulty: 'hard', startRule: 'weekly', startCoordinates,
+        returnCoordinates, weekly, unavailableMessage: 'The weekly start room is unavailable.',
+        afterStart: () => {
+          this.host.setBrowseInspectZoom(this.host.getInspectZoom());
+          this.host.renderHud();
+        },
+      });
+    } catch (error) {
+      this.host.showTransientStatus(error instanceof Error ? error.message : 'Weekly Room Rush could not load. Please retry.');
+      return false;
+    }
+  }
+
   private async startFromPreparedRoom(options: {
     difficulty: RoomRushDifficulty;
     startRule: RoomRushStartRule;
@@ -218,6 +249,7 @@ export class OverworldRoomRushModeController {
     returnCoordinates: RoomCoordinates;
     unavailableMessage: string;
     afterStart(): void | Promise<void>;
+    weekly?: WeeklyRoomRushResponse;
   }): Promise<boolean> {
     const startRoom = this.host.getRoomSnapshotForCoordinates(options.startCoordinates);
     if (!startRoom || startRoom.status !== 'published') {
@@ -229,23 +261,30 @@ export class OverworldRoomRushModeController {
       return false;
     }
 
+    const requestStartedAt = performance.now();
+    const serverStart = await this.startOnServer(options.difficulty, options.startRule, options.startCoordinates,
+      options.weekly?.period.weekKey, options.weekly?.pick?.roomVersion);
+    if (options.startRule === 'weekly' && getAuthDebugState().authenticated && !serverStart) return false;
+    if (options.weekly?.pick && startRoom.version !== options.weekly.pick.roomVersion) {
+      this.host.showTransientStatus('The weekly start room changed. Reload this week’s Rush.');
+      return false;
+    }
+
     this.host.resetPlaySession();
     this.host.clearTouchGestureState();
     this.host.clearCurrentGoalRun();
     this.host.clearRoomGoalIntroState();
     this.host.syncScenePauseState();
 
-    const serverStart = await this.startOnServer(
-      options.difficulty,
-      options.startRule,
-      options.startCoordinates,
-    );
     this.setMutationStatus(
       this.runController.startRun({
         runId: serverStart?.clientRunId ?? null,
         serverStartId: serverStart?.startId ?? null,
         serverStartedAt: serverStart?.startedAt ?? null,
         serverExpiresAt: serverStart?.expiresAt ?? null,
+        eventWeek: serverStart?.eventWeek ?? options.weekly?.period.weekKey ?? null,
+        timeLimitMs: options.weekly ? WEEKLY_ROOM_RUSH_LIMIT_MS : null,
+        elapsedBeforePlayMs: options.weekly ? performance.now() - requestStartedAt : 0,
         difficulty: options.difficulty,
         startRule: options.startRule,
         startCoordinates: options.startCoordinates,
@@ -256,6 +295,7 @@ export class OverworldRoomRushModeController {
     );
 
     this.enterPlayModeAt(options.startCoordinates);
+    if (options.weekly) this.host.syncModeRuntime();
     await options.afterStart();
     return true;
   }
@@ -276,6 +316,8 @@ export class OverworldRoomRushModeController {
     difficulty: RoomRushDifficulty,
     startRule: RoomRushStartRule,
     startCoordinates: RoomCoordinates,
+    eventWeek?: string,
+    startRoomVersion?: number,
   ): Promise<RoomRushRunStartResponse | null> {
     if (!getAuthDebugState().authenticated) {
       return null;
@@ -286,10 +328,13 @@ export class OverworldRoomRushModeController {
         difficulty,
         startRule,
         startCoordinates: { ...startCoordinates },
+        ...(startRule === 'weekly' ? { eventWeek, startRoomVersion } : {}),
       });
     } catch (error) {
       console.warn('Failed to start server-backed Room Rush run.', error);
-      this.host.showTransientStatus(`${ROOM_RUSH_NAME} leaderboard save unavailable; starting local run.`);
+      this.host.showTransientStatus(startRule === 'weekly'
+        ? error instanceof Error ? error.message : 'Weekly Rush could not start. Please retry.'
+        : `${ROOM_RUSH_NAME} leaderboard save unavailable; starting local run.`);
       return null;
     }
   }

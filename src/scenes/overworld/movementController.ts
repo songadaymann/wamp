@@ -233,6 +233,8 @@ export class OverworldMovementController {
   private readonly wallState = new OverworldWallMovementStateController();
   private readonly cornerCorrection: OverworldJumpCornerCorrection;
   private readonly traversalState = new OverworldTraversalMovementState();
+  private hurtKnockbackUntil = 0;
+  private hurtKnockbackTangent = 0;
   private readonly presentationState: Readonly<OverworldMovementPresentationState>;
 
   constructor(
@@ -427,6 +429,20 @@ export class OverworldMovementController {
     playerBody.setVelocityX(velocityX);
   }
 
+  applyHurtKnockback(facing: -1 | 1): void {
+    const body = this.host.getPlayerBody();
+    if (!body) return;
+    const direction = this.host.getSpecialTileEnvironment().gravityDirection;
+    this.clearButtStompState();
+    this.clearCrateInteractionState();
+    this.setPlayerLadderState(null);
+    this.resetJumpForgiveness();
+    this.hurtKnockbackTangent = -facing * 100;
+    this.hurtKnockbackUntil = this.host.getCurrentTime() + 200;
+    setBodyVelocityAlongVector(body, getGravityRightVector(direction), this.hurtKnockbackTangent);
+    setBodyVelocityAlongVector(body, getGravityVector(direction), -120);
+  }
+
   handleButtStompImpact(bounceVelocity: number): void {
     const playerBody = this.host.getPlayerBody();
     this.clearButtStompState();
@@ -488,6 +504,8 @@ export class OverworldMovementController {
   }
 
   private resetJumpForgiveness(): void {
+    this.hurtKnockbackUntil = 0;
+    this.hurtKnockbackTangent = 0;
     this.clearPendingJump();
     this.state.coyoteTime = 0;
     this.state.protectedJumpTime = 0;
@@ -648,6 +666,8 @@ export class OverworldMovementController {
     } else {
       if (buttStompInFlipPause) {
         playerBody.setVelocityX(0);
+      } else if (this.host.getCurrentTime() < this.hurtKnockbackUntil) {
+        playerBody.setVelocityX(this.hurtKnockbackTangent);
       } else if (this.host.getCurrentTime() < this.state.weaponKnockbackUntil) {
         playerBody.setVelocityX(this.state.weaponKnockbackVelocityX);
       } else if (springTangent !== null) {
@@ -863,7 +883,9 @@ export class OverworldMovementController {
         crateInteraction.mode === 'push' ? this.options.cratePushSpeed : this.options.cratePullSpeed;
       this.applyCrateInteraction(playerBody, crateInteraction, moveSpeed, delta);
     } else {
-      if (springTangent !== null) {
+      if (this.host.getCurrentTime() < this.hurtKnockbackUntil) {
+        setBodyVelocityAlongVector(playerBody, rightVector, this.hurtKnockbackTangent);
+      } else if (springTangent !== null) {
         setBodyVelocityAlongVector(playerBody, rightVector, springTangent);
       } else if (
         this.host.getCurrentTime() < this.wallState.getJumpLockUntil() &&

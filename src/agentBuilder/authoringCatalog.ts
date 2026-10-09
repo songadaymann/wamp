@@ -26,6 +26,7 @@ import {
   SWORDSMAN_OBJECTIVE_MODES,
 } from '../enemies/swordsmanObjectives';
 import { SWORDSMAN_AI_OBJECT_ID } from '../enemies/swordsmanAi';
+import { BOSS_MIN_HITS, BOSS_MAX_HITS, DEFAULT_BOSS_HITS, isBossEnemyObjectId } from '../enemies/boss';
 import {
   DEFAULT_POLICE_BEHAVIOR_MODE,
   DEFAULT_POLICE_PATROL_SHOOTS,
@@ -105,6 +106,7 @@ export interface AuthoringObjectCapabilities {
       patrolShoots: boolean;
     };
   } | null;
+  boss: { minimumHits: number; maximumHits: number; defaultHits: number } | null;
   npc: {
     modes: readonly string[];
     defeatModes: readonly string[];
@@ -125,6 +127,8 @@ export interface AuthoringObjectCatalogEntry {
   bodyWidth: number;
   bodyHeight: number;
   behavior: string;
+  maximumPerRoom: number | null;
+  countsTowardGoals: boolean;
   capabilities: AuthoringObjectCapabilities;
 }
 
@@ -252,9 +256,11 @@ function buildObjectCatalogEntry(config: GameObjectConfig): AuthoringObjectCatal
     bodyWidth: config.bodyWidth,
     bodyHeight: config.bodyHeight,
     behavior: config.behavior,
+    maximumPerRoom: config.id === 'lost_song' ? 1 : null,
+    countsTowardGoals: config.countsTowardGoals !== false,
     capabilities: {
       placeable: config.id !== 'spawn_point',
-      layers: LAYER_NAMES,
+      layers: config.id === 'lost_song' ? ['terrain'] : LAYER_NAMES,
       facing: {
         supported: Boolean(config.facingDirection),
         default: config.facingDirection ?? null,
@@ -291,6 +297,9 @@ function buildObjectCatalogEntry(config: GameObjectConfig): AuthoringObjectCatal
               patrolShoots: DEFAULT_POLICE_PATROL_SHOOTS,
             },
           }
+        : null,
+      boss: isBossEnemyObjectId(config.id)
+        ? { minimumHits: BOSS_MIN_HITS, maximumHits: BOSS_MAX_HITS, defaultHits: DEFAULT_BOSS_HITS }
         : null,
       npc: isNpcObjectId(config.id)
         ? {
@@ -414,8 +423,11 @@ export function renderAgentRoomAuthoringMarkdown(): string {
     '- Text: `signText` (use `null` to clear). Signs and NPCs support text.',
     '- Sword Hunter: `swordsmanObjectiveMode`, `swordsmanDefeatMode`.',
     '- Police enemies: `policeBehaviorMode` (`hunter` or `patrol`), `policePatrolShoots`.',
+    '- Gameplay-layer pressure plates (`floor_trigger`): `coopPlate` enables other live players in Prime to hold the plate. Supported by place_object and configure_object. Co-op room/Expanded Room clears are practice and do not submit solo rankings. Links still use any linked plate; crates and enemies remain a solo fallback.',
+    '- Sword Hunter and police bosses: `bossHitPoints` (integer 3–10; `null` turns boss mode off). Supported by place_object and configure_object. Enabling a boss makes an existing invincible Sword Hunter defeatable; explicitly combining boss mode and invincible is rejected.',
     '- NPC: `npcMode`, `npcPushable`, `npcCanJumpFall`, `npcPlayerCollision`, `npcFriendlyFire`, `npcName`, `npcDefeatMode`.',
     '- Unsupported fields are rejected; they are never silently discarded.',
+    '- Lost Song: at most one `lost_song` per room cell, including each Expanded Room cell. Place it directly, never in containers. It does not contribute to collect goals or room score; explorers find it once per room across versions. Own-room finds do not count.',
     '',
     '## Backgrounds',
     '',

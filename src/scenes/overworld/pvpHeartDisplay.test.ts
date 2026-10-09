@@ -15,6 +15,7 @@ describe('PvpHeartDisplay', () => {
     const icons: Array<{
       setOrigin: ReturnType<typeof vi.fn>;
       setPosition: ReturnType<typeof vi.fn>;
+      setAlpha: ReturnType<typeof vi.fn>;
       destroy: ReturnType<typeof vi.fn>;
       texture: { setFilter: ReturnType<typeof vi.fn> };
     }> = [];
@@ -32,6 +33,7 @@ describe('PvpHeartDisplay', () => {
           const icon = {
             setOrigin: vi.fn(),
             setPosition: vi.fn(),
+            setAlpha: vi.fn(),
             destroy: vi.fn(),
             texture: { setFilter: vi.fn() },
           };
@@ -48,5 +50,10 @@ describe('PvpHeartDisplay', () => {
 
     expect(scene.add.image).toHaveBeenCalledTimes(3);
     expect(icons.map((icon) => icon.setPosition.mock.calls.length)).toEqual(positionCalls);
+    display.setHearts(2, 3);
+    expect(scene.add.image).toHaveBeenCalledTimes(3);
+    expect(icons[2].setAlpha).toHaveBeenLastCalledWith(0.25);
+    display.setHearts(3, 3);
+    expect(icons[2].setAlpha).toHaveBeenLastCalledWith(1);
   });
 });

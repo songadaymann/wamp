@@ -1,7 +1,10 @@
 import { OverworldGhostRaceController } from './overworld/ghostRace';
+import { OverworldLostSongController, type LostSongPlayContext } from './overworld/lostSongs';
+import { getLostSongService } from '../lostSongs/service';
 import { supportsGhostRace } from '../runs/ghostRace';
 import Phaser from 'phaser';
-import { PLAYER_BASE_HEIGHT } from '../player/geometry';
+import { getPlayableMaximumHearts } from '../player/hearts';
+import { PLAYER_BASE_HEIGHT, PLAYER_STANDING_HEIGHT, PLAYER_BODY_WIDTH } from '../player/geometry';
 import { createDailyRepository } from '../daily/repository';
 import { dailyEntryReady } from '../daily/entry';
 import { playSfx } from '../audio/sfx';
@@ -209,6 +212,7 @@ import {
 import { OverworldPhysicsCadence, type OverworldMovementInput } from './overworld/physicsCadence';
 import { OverworldGameFeelController } from './overworld/gameFeel';
 import { OverworldPlayerDeathPresentation } from './overworld/playerDeathPresentation';
+import { OverworldPlayerHealthController } from './overworld/playerHealth';
 import { OverworldQuicksandController } from './overworld/quicksandController';
 import {
   OverworldPlayerPresentationController,
@@ -362,9 +366,9 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly PLAYER_SPEED = 150;
   private readonly JUMP_VELOCITY = -280;
   private readonly GRAVITY = 700;
-  private readonly PLAYER_WIDTH = 10;
+  private readonly PLAYER_WIDTH = PLAYER_BODY_WIDTH;
   private readonly PLAYER_HEIGHT = PLAYER_BASE_HEIGHT;
-  private readonly PLAYER_STANDING_HEIGHT = 26;
+  private readonly PLAYER_STANDING_HEIGHT = PLAYER_STANDING_HEIGHT;
   private readonly PLAYER_CROUCH_HEIGHT = 14;
   private readonly PLAYER_PUSH_HEIGHT = 22;
   private readonly PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT = 15;
@@ -556,6 +560,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private physicsCadence: OverworldPhysicsCadence | null = null;
   private readonly gameFeelController: OverworldGameFeelController;
   private readonly playerDeathPresentation: OverworldPlayerDeathPresentation;
+  private readonly playerHealthController: OverworldPlayerHealthController;
   private readonly quicksandController: OverworldQuicksandController;
   private readonly combatPresentationController: OverworldCombatPresentationController;
   private readonly combatController: OverworldCombatController;
@@ -567,6 +572,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
   private readonly liveObjectController: OverworldLiveObjectController<RoomEdgeWall>;
+  private readonly lostSongController: OverworldLostSongController;
   private readonly signController: OverworldSignController<RoomEdgeWall>;
   private readonly portalObjectController: OverworldPortalObjectController<RoomEdgeWall>;
   private readonly specialTilesController: OverworldSpecialTilesController<LoadedRoomObject, RoomEdgeWall>;
@@ -655,6 +661,27 @@ export class OverworldPlayScene extends Phaser.Scene {
       onRaceInfoChanged: info => this.hudBridge?.setGhostRaceInfo(info),
       showStatus: message => this.showTransientStatus(message),
     });
+    this.playerHealthController = new OverworldPlayerHealthController({
+      scene: this,
+      getMaximumHearts: () => getPlayableMaximumHearts({
+        course: this.activeCourseSnapshot,
+        expandedRoom: this.roomSummariesById.get(roomIdFromCoordinates(this.currentRoomCoordinates))?.expandedRoom ?? null,
+        room: this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates),
+      }),
+      isActive: () => this.mode === 'play' && !this.activeRoomRushRun && !this.isPvpArenaActive(),
+      isPvpActive: () => this.isPvpArenaActive(),
+      isDeathPending: () => this.gameFeelController.isDeathPending(),
+      getCurrentTime: () => this.time.now,
+      getPlayerBody: () => this.playerBody,
+      getPlayerSprite: () => this.playerSprite,
+      onHurt: () => {
+        this.combatController.clearAttackAnimation();
+        this.movementController.applyHurtKnockback(this.playerFacing as -1 | 1);
+        playSfx('player-hurt');
+        this.showTransientStatus('You lost a heart.');
+      },
+      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
+    });
     const guestRuns = this.guestRunPlaybackController = new GuestRunPlaybackController({
       getCurrentRun: kind => kind === 'room' ? this.goalRunController?.getCurrentRun() ?? null : this.activeCourseRun,
       startTrace: (kind, binding) => this.startRankedRunTrace(kind, binding),
@@ -682,6 +709,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       clearVerificationTrace: () => {
         this.clearRankedRunTrace();
       },
+      onDraftGoalCompleted: run => { recordEditorDraftClear(this.editorPlaytestReturnTarget?.clearCheck, run); },
     });
     this.roomAudioController = new OverworldRoomAudioController({
       scene: this,
@@ -716,6 +744,14 @@ export class OverworldPlayScene extends Phaser.Scene {
       onChanged: () => {
         this.liveObjectController?.syncRespawnCheckpointPresentation();
         this.syncBackdropCameraIgnores();
+      },
+    });
+    this.lostSongController = new OverworldLostSongController({
+      getContext: roomId => this.getLostSongPlayContext(roomId),
+      showStatus: message => this.showTransientStatus(message),
+      onFoundChanged: () => {
+        this.liveObjectController?.syncLostSongPresentation();
+        this.roomCellController?.redraw();
       },
     });
     this.liveObjectController = new OverworldLiveObjectController({
@@ -758,6 +794,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPlayer: () => this.gameFeelController.isDeathPending() ? null : this.player,
       getPlayerPickupSensor: () => this.gameFeelController.isDeathPending() ? null : this.playerPickupSensor,
       getPlayerBody: () => this.gameFeelController.isDeathPending() ? null : this.playerBody,
+      getCoopPlateActors: () => Boolean(getActiveWorldId()) || this.roomRushModeController.isActive()
+        || (this.activePvpMatch && this.activePvpMatch.status !== 'complete') ? []
+        : this.presenceController.getCoopPlatePlayers().map(ghost => ({
+          roomId: ghost.roomId, x: ghost.x, feetY: ghost.y - DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+        })),
       getEnemyStompBounceVelocity: () => {
         const jumpHeld = this.cursors.up.isDown || this.cursors.space.isDown
           || this.wasd.W.isDown || getTouchInputState().jumpHeld;
@@ -782,6 +823,9 @@ export class OverworldPlayScene extends Phaser.Scene {
       onKeyCollected: () => {
         this.heldKeyCount += 1;
       },
+      onHealingCollected: () => this.playerHealthController.heal(),
+      onLostSongCollected: roomId => this.lostSongController.collect(roomId),
+      isLostSongGhosted: roomId => this.lostSongController.isGhosted(roomId),
       onRespawnCheckpointTouched: checkpoint => { this.respawnCheckpointController.activate(checkpoint); },
       isRespawnCheckpointReached: (roomId, instanceId) => this.respawnCheckpointController.isObjectReached(roomId, instanceId),
       tryConsumeHeldKey: () => {
@@ -1063,6 +1107,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       clearRoomGoalIntroState: () => this.clearRoomGoalIntroState(),
       syncScenePauseState: () => this.syncScenePauseState(),
+      syncModeRuntime: () => this.runtimeController.syncModeRuntime(),
       syncAppMode: () => this.syncAppMode(),
       showTransientStatus: (message) => this.showTransientStatus(message),
       renderHud: () => this.renderHud(),
@@ -1292,7 +1337,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       setEditorPlaytestReturnTarget: (target) => {
         this.editorPlaytestReturnTarget = target
-          ? { roomCoordinates: { ...target.roomCoordinates } }
+          ? { ...target, roomCoordinates: { ...target.roomCoordinates }, clearCheck: target.clearCheck ? { ...target.clearCheck } : undefined }
           : null;
       },
       activateDraftCoursePreview: (snapshot, draftRoom) =>
@@ -1392,6 +1437,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getMode: () => this.mode,
       isRoomInActiveCourse: (coordinates) => this.isRoomInActiveCourse(coordinates),
       getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
+      hasFoundLostSong: coordinates => !getActiveWorldId() && getLostSongService().hasFound(roomIdFromCoordinates(coordinates)),
     });
     this.goalMarkerController = new OverworldGoalMarkerController({
       scene: this,
@@ -1576,6 +1622,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       presentRespawn: () => {
         this.cameraController.resetFollowAnchor();
         this.playerPresentationController.handleRespawned();
+        this.playerHealthController.refillForSpawn();
         this.gameFeelController.playerAvailable();
       },
       recordRespawn: reference => {
@@ -1757,6 +1804,8 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveRoomRushRun: () => this.activeRoomRushRun,
       hasActivePvpMatch: () => this.isPvpMatchActive(),
       isPvpDamageActive: () => this.isPvpDamageActive(),
+      tryAbsorbPlayerDamage: () => this.playerHealthController.absorbDamage(),
+      onPlayerDeath: () => this.playerHealthController.die(),
       cancelPlayerAttack: () => this.combatController.clearAttackAnimation(),
       setActiveCourseRun: (runState) => {
         this.setActiveCourseRun(runState);
@@ -1811,6 +1860,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.coursePlaybackController.clearActiveCourseRoomOverrides();
       },
       resetRoomChallengeState: (room) => this.resetRoomChallengeState(room),
+      resetBossChallenges: alreadyResetRoomId => this.liveObjectController.resetBossChallenges(
+        room => this.resetRoomChallengeState(room), alreadyResetRoomId,
+      ),
       resetTransientPlayState: () => this.resetTransientPlayState(),
       resetGoalRunController: () => {
         this.goalRunController.reset();
@@ -1821,6 +1873,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       redrawGoalMarkers: () => this.redrawGoalMarkers(),
     });
     this.hudStateController = new OverworldHudStateController({
+      isEditorPlaytest: () => Boolean(this.editorPlaytestReturnTarget?.clearCheck),
       getMode: () => this.mode,
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
@@ -1985,7 +2038,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getActiveCourseRun: () => this.activeCourseRun,
       getActiveCourseSnapshot: () => this.activeCourseSnapshot,
       getExpandedRoomMembershipAt: (coordinates) => this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.expandedRoom ?? null,
-      handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
+      handlePlayerDeath: (reason, bypassHealth) => this.sessionResetController.handlePlayerDeath(reason, bypassHealth),
       getActiveRoomRushRun: () => this.activeRoomRushRun,
       recordRoomRushVisit: (room) => this.recordRoomRushVisit(room),
       syncGoalRunForRoom: (room, entryContext) => {
@@ -2055,11 +2108,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       getEditorPlaytestReturnTarget: () =>
         this.editorPlaytestReturnTarget
-          ? { roomCoordinates: { ...this.editorPlaytestReturnTarget.roomCoordinates } }
+          ? { ...this.editorPlaytestReturnTarget, roomCoordinates: { ...this.editorPlaytestReturnTarget.roomCoordinates }, clearCheck: this.editorPlaytestReturnTarget.clearCheck ? { ...this.editorPlaytestReturnTarget.clearCheck } : undefined }
           : null,
       setEditorPlaytestReturnTarget: (target) => {
         this.editorPlaytestReturnTarget = target
-          ? { roomCoordinates: { ...target.roomCoordinates } }
+          ? { ...target, roomCoordinates: { ...target.roomCoordinates }, clearCheck: target.clearCheck ? { ...target.clearCheck } : undefined }
           : null;
       },
       getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
@@ -2298,6 +2351,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.gridOverlayController.create();
     this.roomCellController.create();
+    this.lostSongController.start();
     this.browseOverlayController.create();
     this.loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Loading world...', {
       fontFamily: 'Courier New',
@@ -2574,6 +2628,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       this.syncLocalPresence();
       this.syncPvpInstanceState();
       this.syncPvpLocalHeartLabel();
+      this.playerHealthController.sync();
       if (presenceStartedAt !== undefined) profiler?.endSegment('controller.presencePvp', presenceStartedAt);
       const environmentStartedAt = controllerProfileSlot === 13 ? profiler?.beginSegment() : undefined;
       this.updateRoomLighting();
@@ -2598,6 +2653,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         worldTileSharedBudgetConsumedMs,
       );
     } finally {
+      if (this.lostSongController.update()) this.liveObjectController.syncLostSongPresentation();
       this.ghostRaceController.update();
       this.recordPerformanceAdvisorFrame(
         criticalUpdateMs ?? Math.max(
@@ -2608,6 +2664,27 @@ export class OverworldPlayScene extends Phaser.Scene {
       );
       profiler?.endFrame(this.buildMobilePerformanceContext());
     }
+  }
+
+  private getLostSongPlayContext(roomId = roomIdFromCoordinates(this.currentRoomCoordinates)): LostSongPlayContext | null {
+    if (this.mode !== 'play' || !this.playerBody || this.gameFeelController.isDeathPending()) return null;
+    const coordinates = parseRoomId(roomId);
+    if (!coordinates) return null;
+    const room = this.getRoomSnapshotViewForCoordinates(coordinates);
+    if (!room?.placedObjects.some(object => object.id === 'lost_song')) return null;
+    const origin = this.getRoomOrigin(coordinates), course = this.activeCourseRun;
+    const summary = this.roomSummariesById.get(roomId);
+    const userId = getAuthDebugState().user?.id ?? null;
+    return {
+      target: { roomId, roomVersion: room.version,
+        ...(course?.expandedRoomId && course.expandedRoomVersion ? {
+          expandedRoomId: course.expandedRoomId, expandedRoomVersion: course.expandedRoomVersion,
+        } : {}) },
+      practice: Boolean(getActiveWorldId()) || room.status !== 'published'
+        || Boolean(course && course.course.status !== 'published')
+        || Boolean(userId && summary?.creatorUserId === userId),
+      position: { x: this.playerBody.center.x - origin.x, y: this.playerBody.center.y - origin.y },
+    };
   }
 
   private updateRoomLighting(): void {
@@ -2880,6 +2957,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     if (this.player) ignoredObjects.push(this.player);
     if (this.playerSprite) ignoredObjects.push(this.playerSprite);
     ignoredObjects.push(...this.pvpLocalPresentationController.getBackdropIgnoredObjects());
+    ignoredObjects.push(...this.playerHealthController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.combatPresentationController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.combatController.getBackdropIgnoredObjects());
     ignoredObjects.push(...this.pvpInstanceRenderer.getBackdropIgnoredObjects());
@@ -4108,6 +4186,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private destroyPlayer(): void {
+    this.playerHealthController.reset();
     this.playerDeathPresentation.detach();
     this.physicsCadence?.reset();
     this.combatController.destroyProjectiles();
@@ -4569,6 +4648,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.movementController.handlePlayerCreated();
     this.combatController.clearAttackAnimation();
     this.playerPresentationController.handlePlayerCreated();
+    this.playerHealthController.refillForSpawn();
     this.maybeApplyPvpStartingPosition();
     this.respawnController.handlePlayerCreated();
     this.gameFeelController.playerAvailable();
@@ -4698,7 +4778,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       return;
     }
 
-    this.sessionResetController.handlePlayerDeath('You fell.');
+    this.sessionResetController.handlePlayerDeath('You fell.', true);
   }
 
   private respawnPlayerToCurrentRoom(): void {
@@ -5034,6 +5114,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private resetTransientPlayState(): void {
+    this.playerHealthController.reset();
     this.gameFeelController.reset();
     this.collectedObjectKeys.clear();
     this.heldKeyCount = 0;
@@ -6263,6 +6344,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private handleShutdown = (): void => {
+    this.playerHealthController.destroy();
     this.ghostRaceController.clear();
     this.gameFeelController.reset();
     this.runtimeContext.setLifecycle('shutting-down');
@@ -6336,6 +6418,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.gridOverlayController.destroy();
     this.browseOverlayController.destroy();
     this.roomCellController.destroy();
+    this.lostSongController.destroy();
     this.presenceOverlayController.destroy();
   };
 
@@ -6493,6 +6576,22 @@ export class OverworldPlayScene extends Phaser.Scene {
     };
   }
 
+  canCaptureBugReportImages(): boolean {
+    return !this.roomChatController.hasRenderedChatBubbles();
+  }
+
+  getBugReportContext(): Record<string, unknown> {
+    const coordinates = this.mode === 'play' ? this.currentRoomCoordinates : this.selectedCoordinates;
+    const room = this.getRoomSnapshotViewForCoordinates(coordinates);
+    const course = this.activeCourseRun;
+    return { scene: 'overworld-play', mode: this.mode, coordinates, roomVersion: room?.version,
+      publishedVersion: room?.status === 'published' ? room.version : null,
+      source: room?.status === 'draft' || course?.course.status === 'draft' ? 'draft' : room ? 'published' : 'unknown',
+      courseId: course?.course.id, courseVersion: course?.expandedRoomVersion ?? course?.course.version,
+      expandedRoomId: course?.expandedRoomId, player: this.player ? { x: this.player.x, y: this.player.y } : null,
+      camera: { x: this.cameras.main.scrollX, y: this.cameras.main.scrollY, zoom: this.cameras.main.zoom } };
+  }
+
   describeState(): Record<string, unknown> {
     const camera = this.cameras.main;
     const cameraBounds = camera.getBounds();
@@ -6534,10 +6633,20 @@ export class OverworldPlayScene extends Phaser.Scene {
             bodyCenterX: body ? Number(body.center.x.toFixed(2)) : null,
             alpha: Number(liveObject.sprite.alpha.toFixed(2)),
             bodyEnabled: body ? body.enable : null,
+            coopPlate: liveObject.coopPlate ?? false,
+            pressureActive: liveObject.runtime.pressureActive,
             directionX: liveObject.runtime.directionX,
             aiState: liveObject.runtime.aiState,
             aiObjectiveMode: liveObject.runtime.aiObjectiveMode,
             aiDefeatMode: liveObject.runtime.aiDefeatMode,
+            boss: liveObject.runtime.boss ? {
+              health: liveObject.runtime.boss.health,
+              maximum: liveObject.runtime.boss.maximum,
+              phase: liveObject.runtime.boss.health <= liveObject.runtime.boss.maximum / 2 ? 2 : 1,
+              invulnerableMs: Math.max(0, Math.round(liveObject.runtime.boss.protectedUntil - this.time.now)),
+              hurtMs: Math.max(0, Math.round(liveObject.runtime.boss.hurtUntil - this.time.now)),
+              healthBarVisible: liveObject.bossHealthBar?.visible ?? false,
+            } : null,
             aiIntent: liveObject.runtime.aiIntent,
             aiTargetX: liveObject.runtime.aiTargetX === null
               ? null
@@ -6730,6 +6839,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           }
         : null,
       ghostRace: this.ghostRaceController.getDebugSnapshot(),
+      playerHealth: this.playerHealthController.describe(),
       leaderboards: goalRunSnapshot.leaderboards,
       collectibles: this.countLiveObjectsByCategory('collectible'),
       crumblingTiles: this.specialTilesController.describeCrumblingTiles(),
@@ -6859,3 +6969,4 @@ export class OverworldPlayScene extends Phaser.Scene {
     };
   }
 }
+import { recordEditorDraftClear } from './editor/clearCheck';

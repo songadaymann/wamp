@@ -10,6 +10,7 @@ export class PvpHeartDisplay {
   private readonly container: Phaser.GameObjects.Container;
   private readonly icons: Phaser.GameObjects.Image[] = [];
   private heartCount = -1;
+  private slotCount = -1;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -20,13 +21,15 @@ export class PvpHeartDisplay {
     this.container.setVisible(false);
   }
 
-  setHearts(hearts: number): void {
+  setHearts(hearts: number, maximum = hearts): void {
     const nextCount = Math.max(0, Math.floor(hearts));
-    if (nextCount === this.heartCount) {
+    const nextSlots = Math.max(nextCount, Math.floor(maximum));
+    if (nextCount === this.heartCount && nextSlots === this.slotCount) {
       return;
     }
     this.heartCount = nextCount;
-    while (this.icons.length < nextCount) {
+    this.slotCount = nextSlots;
+    while (this.icons.length < nextSlots) {
       const icon = this.scene.add.image(0, 0, PVP_HEART_TEXTURE_KEY);
       icon.setOrigin(0.5);
       icon.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
@@ -34,13 +37,14 @@ export class PvpHeartDisplay {
       this.icons.push(icon);
     }
 
-    while (this.icons.length > nextCount) {
+    while (this.icons.length > nextSlots) {
       this.icons.pop()?.destroy();
     }
 
     const totalWidth = Math.max(0, (this.icons.length - 1) * HEART_SPACING_PX);
     this.icons.forEach((icon, index) => {
       icon.setPosition(index * HEART_SPACING_PX - totalWidth * 0.5, 0);
+      icon.setAlpha(index < nextCount ? 1 : 0.25);
     });
   }
 

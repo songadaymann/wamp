@@ -1,3 +1,5 @@
+import { getLostSongPlacementError } from '../lostSongs/model';
+import { isCoopPressurePlate } from '../placedObjects/coopPressurePlates';
 import {
   LAYER_NAMES,
   ROOM_HEIGHT,
@@ -16,6 +18,8 @@ import {
   type PlacedObject,
 } from '../config';
 import { DEFAULT_ROOM_BACKGROUND, normalizeRoomBackground } from '../backgrounds/model';
+import { normalizePlayerHearts, type PlayerHearts } from '../player/hearts';
+import { getPlacedBossHitPoints } from '../enemies/boss';
 import {
   getRoomGoalPublishValidationError,
   normalizeRoomGoalIntroText,
@@ -123,6 +127,8 @@ export interface RoomSnapshot {
   cameraMode?: 'follow' | 'room';
   /** Opt-in death at the bottom boundary; absent in older snapshots means off. */
   pitsAreDeadly?: boolean;
+  /** Maximum player health; absent in older snapshots means one heart. */
+  playerHearts?: PlayerHearts;
   background: string;
   lighting: RoomLightingSettings;
   weather: RoomWeatherSettings;
@@ -425,6 +431,7 @@ export function createDefaultRoomSnapshot(
     goalIntroText: null,
     cameraMode: 'follow',
     pitsAreDeadly: false,
+    playerHearts: 1,
     background: DEFAULT_ROOM_BACKGROUND,
     lighting: cloneRoomLightingSettings(null),
     weather: cloneRoomWeatherSettings(null),
@@ -535,6 +542,8 @@ function normalizePlacedObject(
     policeBehaviorMode: isPoliceEnemyObjectId(placed.id)
       ? getPlacedPoliceBehaviorMode(placed)
       : null,
+    bossHitPoints: getPlacedBossHitPoints(placed),
+    coopPlate: isCoopPressurePlate(placed) ? true : null,
     policePatrolShoots: isPoliceEnemyObjectId(placed.id)
       ? getPlacedPolicePatrolShoots(placed)
       : null,
@@ -644,6 +653,8 @@ function clonePlacedObjects(
       policeBehaviorMode: isPoliceEnemyObjectId(placed.id)
         ? getPlacedPoliceBehaviorMode(placed)
         : null,
+      bossHitPoints: getPlacedBossHitPoints(placed),
+      coopPlate: isCoopPressurePlate(placed) ? true : null,
       policePatrolShoots: isPoliceEnemyObjectId(placed.id)
         ? getPlacedPolicePatrolShoots(placed)
         : null,
@@ -749,6 +760,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot | RoomSnapshotView): RoomSn
     goalIntroText: normalizeRoomGoalIntroText(room.goalIntroText),
     cameraMode: room.cameraMode === 'room' ? 'room' : 'follow',
     pitsAreDeadly: room.pitsAreDeadly === true,
+    playerHearts: normalizePlayerHearts(room.playerHearts),
     background: normalizeRoomBackground(room.background),
     lighting: normalizeRoomLightingSettings(room.lighting),
     weather: normalizeRoomWeatherSettings(room.weather),
@@ -875,6 +887,7 @@ function normalizeRoomVersionRecord(value: unknown): RoomVersionRecord | null {
 }
 
 export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
+  if (normalizePlayerHearts(room.playerHearts) > 1) return false;
   if (room.pitsAreDeadly === true) return false;
   if (room.cameraMode === 'room') return false;
   if (room.title) {
@@ -942,8 +955,9 @@ export function countRoomPlacedObjectsByCategory(
 export function getRoomPublishValidationError(
   room: Pick<RoomSnapshot, 'goal' | 'placedObjects'>,
 ): string | null {
-  return getRoomGoalPublishValidationError(room.goal, {
+  return getLostSongPlacementError(room.placedObjects) ?? getRoomGoalPublishValidationError(room.goal, {
     collectiblesPlaced: countRoomPlacedObjectsByCategory(room.placedObjects, 'collectible'),
+    enemyCount: countRoomPlacedObjectsByCategory(room.placedObjects, 'enemy'),
     collectModeEnemyCount: room.placedObjects.filter(
       (placed) =>
         placed.id === SWORDSMAN_AI_OBJECT_ID &&

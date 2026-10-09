@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { playSfx } from '../../audio/sfx';
 import { editorState } from '../../config';
 import { globalRoomMusicController } from '../../music/controller';
+import { EditorPreviewRefresh } from './previewRefresh';
 import {
   extractMusicPhrasePayloadFromPattern,
   type MusicPhraseRecord,
@@ -99,6 +100,7 @@ export class EditorMusicWorkflowCoordinator {
   private musicModeActive = false;
   private musicComposerMode: EditorMusicComposerMode = 'sequencer';
   private musicPreviewState: EditorMusicPreviewState = 'stopped';
+  private readonly previewRefresh = new EditorPreviewRefresh(() => this.syncRoomMusicPreviewPlayback());
   private preferredPhraseArrangementSlotCount = ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT;
   private readonly musicPhraseOrchestrator = new EditorMusicPhraseOrchestrator();
 
@@ -743,6 +745,7 @@ export class EditorMusicWorkflowCoordinator {
   }
 
   syncRoomMusicPreviewPlayback(): void {
+    this.previewRefresh.cancel();
     if (this.musicPreviewState !== 'playing') {
       this.stopPreviewPlayback('editor-preview');
       return;
@@ -767,7 +770,11 @@ export class EditorMusicWorkflowCoordinator {
     }
     const committed = this.host.commitRoomMusic(nextMusic);
     if (this.musicPreviewState === 'playing') {
-      this.syncRoomMusicPreviewPlayback();
+      if (committed) {
+        this.previewRefresh.schedule();
+      } else {
+        this.syncRoomMusicPreviewPlayback();
+      }
     }
     this.requestRender();
     return committed;
@@ -776,7 +783,11 @@ export class EditorMusicWorkflowCoordinator {
   commitLegacyRoomMusicPatternReplacement(): RoomMusic | null {
     const committed = this.host.replaceLegacyRoomMusicWithPattern();
     if (this.musicPreviewState === 'playing') {
-      this.syncRoomMusicPreviewPlayback();
+      if (committed) {
+        this.previewRefresh.schedule();
+      } else {
+        this.syncRoomMusicPreviewPlayback();
+      }
     }
     this.requestRender();
     return committed;
@@ -801,6 +812,7 @@ export class EditorMusicWorkflowCoordinator {
       return;
     }
     this.requirePatternController().handlePointerUp(pointer);
+    this.previewRefresh.flush();
   }
 
   updateMusicCursorHighlight(graphics: Phaser.GameObjects.Graphics | null): boolean {
@@ -1459,6 +1471,7 @@ export class EditorMusicWorkflowCoordinator {
   }
 
   private stopPreviewPlayback(mode: 'idle' | 'editor-preview'): void {
+    this.previewRefresh.cancel();
     globalRoomMusicController.stopArrangement({
       transition: 'immediate',
       fadeDurationSec: 0.08,

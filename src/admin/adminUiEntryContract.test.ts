@@ -105,6 +105,7 @@ describe('admin UI executable entry contract', () => {
       '#builders',
       '#game-jams',
       '#daily-challenge',
+      '#weekly-rush',
       '#build-prompts',
       '#infrastructure',
     ]);

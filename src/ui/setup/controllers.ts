@@ -50,6 +50,7 @@ import { FirstStepsSummaryController } from './firstStepsSummary';
 import { configureEditorUiBridgeRuntime } from '../../scenes/editor/uiBridge';
 import { CUSTOM_SPRITES_CHANGED_EVENT } from '../../customSprites/registry';
 import { WorldsController } from '../worlds/controller';
+import { setupLostSongProgress } from './lostSongs';
 
 interface UiControllers {
   firstPublishModal: FirstPublishModalController;
@@ -90,6 +91,7 @@ interface UiControllers {
 }
 
 export function setupUiControllers(game: Phaser.Game): void {
+  game.events.once('destroy', setupLostSongProgress());
   const controllers = createUiControllers(game);
   const dailyRoom = new DailyRoomController(); dailyRoom.init();
   game.events.once('destroy',()=>dailyRoom.destroy());

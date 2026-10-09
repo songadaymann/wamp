@@ -14,6 +14,7 @@ import { isTextInputFocused } from '../../ui/keyboardFocus';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { EditorClipboardState, GoalPlacementMode } from './editRuntime';
+import type { EditorObjectMoveController } from './objectMoveController';
 import {
   canRepeatSelectedEditorObject,
   getEditorStampKind,
@@ -62,6 +63,10 @@ function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
 }
 
 interface EditorInteractionHost {
+  objectMove?: EditorObjectMoveController;
+  isPracticeTestPlacementActive?: () => boolean;
+  tryStartPracticeTestAt?: (tileX: number, tileY: number) => boolean;
+  cancelPracticeTestPlacement?: () => boolean;
   getNeighborRadius(): number;
   getGoalPlacementMode(): GoalPlacementMode;
   isMusicModeActive(): boolean;
@@ -168,6 +173,7 @@ export class EditorInteractionController {
   get hasPendingTouchEdit(): boolean { return this.touchAction !== null; }
 
   validateTouchEdit(): void {
+    this.host.objectMove?.validate();
     if (this.touchAction && (this.touchToolKey !== editorTouchToolKey()
       || this.scene.game.canvas.ownerDocument.body.dataset.editorSpriteUiLocked === 'true'
       || this.host.isMusicModeActive() || editorState.isPlaying)) this.cancelTouchEdit();
@@ -435,6 +441,11 @@ export class EditorInteractionController {
   }
 
   updateCursorHighlight(): void {
+    if (editorState.activeTool === 'move') {
+      this.cursorGraphics?.clear();
+      this.host.objectMove?.hover(this.scene.input.activePointer);
+      return;
+    }
     this.cursorGraphics?.clear();
     if (!this.cursorGraphics || editorState.isPlaying) {
       return;
@@ -454,7 +465,7 @@ export class EditorInteractionController {
     }
 
     const goalPlacementMode = this.host.getGoalPlacementMode();
-    if (goalPlacementMode) {
+    if (goalPlacementMode || this.host.isPracticeTestPlacementActive?.()) {
       this.cursorGraphics.fillStyle(RETRO_COLORS.frontier, 0.16);
       this.cursorGraphics.fillRect(tileX * TILE_SIZE, tileY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       this.cursorGraphics.lineStyle(2, RETRO_COLORS.frontier, 0.9);
@@ -622,6 +633,8 @@ export class EditorInteractionController {
     this.scene.game.events.on('blur', this.handleTouchBlur);
     this.scene.events.on('sleep', this.handleTouchBlur);
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.cancel();
+      else if (this.host.objectMove?.down(pointer)) return;
       if (this.handleTouchPointerDown(pointer)) {
         return;
       }
@@ -650,6 +663,7 @@ export class EditorInteractionController {
       }
 
       if (pointer.rightButtonDown()) {
+        if (this.host.cancelPracticeTestPlacement?.()) return;
         const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
         if (this.host.removeGoalMarkerAt(worldPoint.x, worldPoint.y)) {
           return;
@@ -694,6 +708,7 @@ export class EditorInteractionController {
       }
 
       const goalPlacementMode = this.host.getGoalPlacementMode();
+      if (this.host.tryStartPracticeTestAt?.(tileX, tileY)) return;
       if (goalPlacementMode) {
         this.host.placeGoalMarker(tileX, tileY);
         return;
@@ -734,6 +749,7 @@ export class EditorInteractionController {
     });
 
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.host.objectMove?.move(pointer)) return;
       if (this.handleTouchPointerMove(pointer)) {
         return;
       }
@@ -806,6 +822,7 @@ export class EditorInteractionController {
     });
 
     this.scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (this.host.objectMove?.up(pointer)) return;
       if (this.handleTouchPointerUp(pointer)) {
         return;
       }
@@ -868,6 +885,7 @@ export class EditorInteractionController {
     });
 
     this.scene.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => {
+      if (this.host.objectMove?.up(pointer, true)) return;
       this.handleTouchPointerUp(pointer);
     });
     this.scene.input.on('wheel', (pointer: Phaser.Input.Pointer, _gameObjects: unknown[], _deltaX: number, deltaY: number) => {
@@ -1152,7 +1170,7 @@ export class EditorInteractionController {
     if (this.pathBend) {
       this.touchAction = 'bend';
       this.updatePathBendPreview(pointer);
-    } else if (this.host.getGoalPlacementMode() || this.host.isClipboardPastePreviewActive()
+    } else if (this.host.getGoalPlacementMode() || this.host.isPracticeTestPlacementActive?.() || this.host.isClipboardPastePreviewActive()
       || editorState.activeTool === 'fill') {
       this.touchAction = 'tap';
     } else if (editorState.paletteMode === 'objects') {
@@ -1272,6 +1290,7 @@ export class EditorInteractionController {
     const tileX = Math.floor(world.x / TILE_SIZE);
     const tileY = Math.floor(world.y / TILE_SIZE);
     if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return;
+    if (this.host.tryStartPracticeTestAt?.(tileX, tileY)) return;
     if (this.host.getGoalPlacementMode()) {
       this.host.placeGoalMarker(tileX, tileY);
     } else if (editorState.activeTool === 'eraser' && this.host.removeGoalMarkerAt(world.x, world.y)) {

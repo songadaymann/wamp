@@ -162,6 +162,7 @@ class MockD1Database {
         consumed_attempt_id: null,
         consumed_at: null,
         created_at: values[10],
+        event_week: values[11] ?? null,
       });
       return;
     }
@@ -175,7 +176,10 @@ class MockD1Database {
       return;
     }
 
-    if (query.includes('INSERT INTO room_rush_runs')) {
+    if (/INSERT(?: OR IGNORE)? INTO room_rush_runs/.test(query)) {
+      const start = this.starts.get(String(values[20]));
+      if (!start || start.user_id !== values[21] || start.consumed_attempt_id !== values[22]
+        || this.runs.some(run => run.user_id === values[2] && run.client_run_id === values[1])) return;
       this.runs.push({
         attempt_id: values[0],
         client_run_id: values[1],

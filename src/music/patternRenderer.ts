@@ -128,7 +128,7 @@ function renderTonalTrack(
       ? stepStartTimesSec[endStepIndex]
       : loopDurationSec;
     const noteSamples = Math.max(1, Math.round((noteEndTimeSec - stepStartTimesSec[stepIndex]) * sampleRate));
-    const totalSamples = Math.min(target.length - startSample, noteSamples + releaseSamples);
+    const totalSamples = noteSamples + releaseSamples;
     if (totalSamples <= 0) {
       break;
     }
@@ -143,7 +143,8 @@ function renderTonalTrack(
 
       phase += phaseStep;
       const voice = waveformSample(settings.waveform, phase) * settings.amplitude * envelope;
-      target[startSample + sampleIndex] += voice;
+      // Fold release tails before drive/mixing, preserving the periodic voice.
+      target[(startSample + sampleIndex) % target.length] += voice;
     }
 
     stepIndex = endStepIndex;
@@ -174,6 +175,14 @@ async function renderDrumTrack(
 ): Promise<void> {
   const sampleRate = audioContext.sampleRate;
   const drumSamples = await getPatternDrumSamples(audioContext);
+  const hatStarts = [...new Set([
+    ...pattern.tabs.drums['open-hat'], ...pattern.tabs.drums['closed-hat'],
+  ].map(step => Math.round(stepStartTimesSec[step] * sampleRate)))].sort((a, b) => a - b);
+  const nextHatStart = new Map(hatStarts.map((start, index) => [
+    start, hatStarts[index + 1] ?? hatStarts[0] + target.length,
+  ]));
+  const closedHatStarts = new Set(pattern.tabs.drums['closed-hat'].map(step => Math.round(stepStartTimesSec[step] * sampleRate)));
+  const chokeFadeSamples = Math.max(1, Math.round(0.01 * sampleRate));
   for (const row of ROOM_PATTERN_DRUM_ROWS) {
     const sample = drumSamples.get(row.id);
     if (!sample) {
@@ -182,9 +191,18 @@ async function renderDrumTrack(
 
     for (const stepIndex of pattern.tabs.drums[row.id]) {
       const startSample = Math.max(0, Math.round(stepStartTimesSec[stepIndex] * sampleRate));
-      const copyLength = Math.min(sample.length, target.length - startSample);
+      // A closed hat on the same step wins; otherwise the next hat chokes the
+      // open voice, including a hit in the following repetition of the loop.
+      if (row.id === 'open-hat' && closedHatStarts.has(startSample)) continue;
+      const chokeAt = row.id === 'open-hat'
+        ? (nextHatStart.get(startSample) ?? startSample + target.length) - startSample
+        : sample.length;
+      const copyLength = row.id === 'open-hat'
+        ? Math.min(sample.length, chokeAt + chokeFadeSamples)
+        : sample.length;
       for (let sampleIndex = 0; sampleIndex < copyLength; sampleIndex += 1) {
-        target[startSample + sampleIndex] += sample[sampleIndex] * row.defaultGain;
+        const chokeGain = sampleIndex < chokeAt ? 1 : Math.max(0, 1 - (sampleIndex - chokeAt) / chokeFadeSamples);
+        target[(startSample + sampleIndex) % target.length] += sample[sampleIndex] * row.defaultGain * chokeGain;
       }
     }
   }
@@ -243,7 +261,7 @@ function getPanGains(pan: number): { left: number; right: number } {
 function mixMonoTrackIntoStereo(
   mono: Float32Array,
   left: Float32Array,
-  right: Float32Array,
+  right: Float32Array | null,
   volume: number,
   pan: number,
   busGain: number,
@@ -253,7 +271,7 @@ function mixMonoTrackIntoStereo(
   for (let index = 0; index < mono.length; index += 1) {
     const sample = mono[index] * gain;
     left[index] += sample * leftGain;
-    right[index] += sample * rightGain;
+    if (right) right[index] += sample * rightGain;
   }
 }
 
@@ -266,7 +284,9 @@ export async function renderRoomPatternLoopBuffer(
   const totalSamples = Math.max(1, Math.round(loopDurationSec * sampleRate));
   const { startTimesSec } = getStepTimingSec(pattern);
   const leftMixdown = new Float32Array(totalSamples);
-  const rightMixdown = new Float32Array(totalSamples);
+  const centered = [pattern.mix.drums, ...ROOM_PATTERN_TONAL_INSTRUMENT_IDS.map(id => pattern.mix[id])]
+    .every(mix => mix.pan === 0);
+  const rightMixdown = centered ? null : new Float32Array(totalSamples);
 
   for (const instrumentId of ROOM_PATTERN_TONAL_INSTRUMENT_IDS) {
     const instrumentMixdown = new Float32Array(totalSamples);
@@ -306,10 +326,10 @@ export async function renderRoomPatternLoopBuffer(
   );
 
   finalizeBuffer(leftMixdown);
-  finalizeBuffer(rightMixdown);
+  if (rightMixdown) finalizeBuffer(rightMixdown);
 
-  const buffer = audioContext.createBuffer(2, totalSamples, sampleRate);
+  const buffer = audioContext.createBuffer(rightMixdown ? 2 : 1, totalSamples, sampleRate);
   buffer.getChannelData(0).set(leftMixdown);
-  buffer.getChannelData(1).set(rightMixdown);
+  if (rightMixdown) buffer.getChannelData(1).set(rightMixdown);
   return buffer;
 }

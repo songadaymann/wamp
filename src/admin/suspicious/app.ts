@@ -9,6 +9,7 @@ import type {
   SuspiciousUsersResponse,
 } from '../model';
 import { createAdminApiClient } from '../adminApiClient';
+import { createPublishedGoalsPanel } from './publishedGoalsPanel';
 import {
   countSuspiciousQueueTabs,
   filterSuspiciousUsers,
@@ -111,6 +112,7 @@ const state: ViewState = {
   lastError: null,
 };
 const apiClient = createAdminApiClient(() => state.adminKey);
+const publishedGoalsPanel = createPublishedGoalsPanel(() => state.adminKey);
 
 if (adminKeyInput) {
   adminKeyInput.value = state.adminKey;
@@ -128,6 +130,7 @@ if (signalSelect) {
 saveKeyButton?.addEventListener('click', () => {
   const nextKey = adminKeyInput?.value.trim() ?? '';
   state.adminKey = nextKey;
+  publishedGoalsPanel.reset();
   if (nextKey) {
     window.sessionStorage.setItem(ADMIN_KEY_STORAGE_KEY, nextKey);
   } else {
@@ -143,6 +146,7 @@ refreshButton?.addEventListener('click', () => {
 
 clearKeyButton?.addEventListener('click', () => {
   state.adminKey = '';
+  publishedGoalsPanel.reset();
   state.lastError = null;
   state.summary = null;
   state.usersScope = 'review_window';

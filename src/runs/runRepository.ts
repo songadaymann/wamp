@@ -177,6 +177,7 @@ class ApiRunRepository implements RunRepository {
     }
 
     const path = `/api/leaderboards/room-rush?${params.toString()}`;
+    if (modeKey === 'hard:weekly') return this.request<RoomRushLeaderboardsResponse>(path, { cache: 'no-store' });
     return loadWithStaleWhileRevalidate(
       this.leaderboardCacheKey(path),
       () => this.request<RoomRushLeaderboardsResponse>(path),

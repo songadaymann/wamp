@@ -75,6 +75,7 @@ export function buildCourseEditorUiState(
     visible: true,
     title: draft?.title ?? '',
     pitsAreDeadly: draft?.pitsAreDeadly === true,
+    playerHearts: draft?.playerHearts ?? 1,
     canEdit: Boolean(permissions?.canSaveDraft),
     zoomText,
     tool,

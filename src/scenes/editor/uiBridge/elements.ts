@@ -3,6 +3,8 @@ export interface EditorUiElements {
   roomCameraCenteredInput: HTMLInputElement | null;
   roomPitsDeadlyInput: HTMLInputElement | null;
   coursePitsDeadlyInput: HTMLInputElement | null;
+  roomPlayerHeartsSelect: HTMLSelectElement | null;
+  coursePlayerHeartsSelect: HTMLSelectElement | null;
   roomCoordsEls: HTMLElement[];
   separatorEl: HTMLElement | null;
   saveStatusEls: HTMLElement[];
@@ -145,6 +147,8 @@ export interface EditorUiElements {
   inspectorRoot: HTMLElement | null;
   pressurePanel: HTMLElement | null;
   pressureStatus: HTMLElement | null;
+  pressureCoopRow: HTMLElement | null;
+  pressureCoopCheckbox: HTMLInputElement | null;
   pressureConnectBtn: HTMLButtonElement | null;
   pressureClearBtn: HTMLButtonElement | null;
   pressureDoneLaterBtn: HTMLButtonElement | null;
@@ -160,6 +164,11 @@ export interface EditorUiElements {
   policeBehaviorModeSelect: HTMLSelectElement | null;
   policePatrolShootsRow: HTMLElement | null;
   policePatrolShootsCheckbox: HTMLInputElement | null;
+  bossPanel: HTMLElement | null;
+  bossCheckbox: HTMLInputElement | null;
+  bossHitsRow: HTMLElement | null;
+  bossHitsInput: HTMLInputElement | null;
+  bossHitsOutput: HTMLOutputElement | null;
   npcPanel: HTMLElement | null;
   npcStatus: HTMLElement | null;
   npcModeSelect: HTMLSelectElement | null;
@@ -192,6 +201,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     roomCameraCenteredInput: byId<HTMLInputElement>(doc, 'room-camera-centered'),
     roomPitsDeadlyInput: byId<HTMLInputElement>(doc, 'room-pits-deadly'),
     coursePitsDeadlyInput: byId<HTMLInputElement>(doc, 'course-pits-deadly'),
+    roomPlayerHeartsSelect: byId<HTMLSelectElement>(doc, 'room-player-hearts'),
+    coursePlayerHeartsSelect: byId<HTMLSelectElement>(doc, 'course-player-hearts'),
     roomCoordsEls: existing([
       byId<HTMLElement>(doc, 'room-coords'),
       byId<HTMLElement>(doc, 'mobile-editor-room-coords'),
@@ -350,6 +361,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     inspectorRoot: byId<HTMLElement>(doc, 'editor-inspector'),
     pressurePanel: byId<HTMLElement>(doc, 'pressure-plate-panel'),
     pressureStatus: byId<HTMLElement>(doc, 'pressure-plate-status'),
+    pressureCoopRow: byId<HTMLElement>(doc, 'pressure-plate-coop-row'),
+    pressureCoopCheckbox: byId<HTMLInputElement>(doc, 'pressure-plate-coop-checkbox'),
     pressureConnectBtn: byId<HTMLButtonElement>(doc, 'btn-pressure-plate-connect'),
     pressureClearBtn: byId<HTMLButtonElement>(doc, 'btn-pressure-plate-clear'),
     pressureDoneLaterBtn: byId<HTMLButtonElement>(doc, 'btn-pressure-plate-done-later'),
@@ -368,6 +381,11 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     policeBehaviorModeSelect: byId<HTMLSelectElement>(doc, 'police-behavior-mode-select'),
     policePatrolShootsRow: byId<HTMLElement>(doc, 'police-patrol-shoots-row'),
     policePatrolShootsCheckbox: byId<HTMLInputElement>(doc, 'police-patrol-shoots-checkbox'),
+    bossPanel: byId<HTMLElement>(doc, 'enemy-boss-panel'),
+    bossCheckbox: byId<HTMLInputElement>(doc, 'enemy-boss-checkbox'),
+    bossHitsRow: byId<HTMLElement>(doc, 'enemy-boss-hits-row'),
+    bossHitsInput: byId<HTMLInputElement>(doc, 'enemy-boss-hits-input'),
+    bossHitsOutput: byId<HTMLOutputElement>(doc, 'enemy-boss-hits-output'),
     npcPanel: byId<HTMLElement>(doc, 'npc-objective-panel'),
     npcStatus: byId<HTMLElement>(doc, 'npc-objective-status'),
     npcModeSelect: byId<HTMLSelectElement>(doc, 'npc-mode-select'),

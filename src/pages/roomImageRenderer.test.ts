@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { ROOM_HEIGHT, ROOM_WIDTH, TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG } from '../config';
 import type { PagesWorkerEnv } from './model';
 import { decodePng } from './roomImagePrimitives';
@@ -141,6 +142,19 @@ describe('room image renderer orchestration', () => {
     expect(image.height).toBe(630);
     expect(pixelAt(image, 0, 0)).toEqual([0x12, 0x34, 0x56, 255]);
     expect(fetchAsset).not.toHaveBeenCalled();
+  });
+
+  it('decodes and draws the actual golden cassette through the Pages PNG asset path', async () => {
+    const snapshot: PublishedRoomSnapshot = {
+      id: '11,-12', background: 'solid:#000000',
+      tileData: { background: emptyLayer(), terrain: emptyLayer(), foreground: emptyLayer() },
+      placedObjects: [{ id: 'lost_song', x: 8, y: 8, layer: 'terrain' }],
+    };
+    const fetchAsset = vi.fn(async () => new Response(new Uint8Array(readFileSync('public/assets/objects/lost_song.png'))));
+    const png = await renderRoomSharePreviewPng(new Request(PAGE_URL), createEnv(fetchAsset), PAGE_URL, snapshot);
+    const image = await decodePng(png);
+    expect(fetchAsset).toHaveBeenCalled();
+    expect(Array.from(image.pixels).filter((_, i) => i % 4 === 0).some((red, i) => red === 252 && image.pixels[i*4+1] === 234)).toBe(true);
   });
 
   it('draws an eligible custom sprite in its configured object layer', async () => {

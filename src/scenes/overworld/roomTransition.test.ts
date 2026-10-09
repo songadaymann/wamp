@@ -429,7 +429,7 @@ describe('opt-in bottom falls before navigation', () => {
     host.preparePlayableRoomForTransition.mockReturnValue(ready);
     player.y = 353; body.velocity.y = 400;
     controller.maybeAdvancePlayerRoom();
-    expect(host.handlePlayerDeath).toHaveBeenCalledExactlyOnceWith('You fell.');
+    expect(host.handlePlayerDeath).toHaveBeenCalledExactlyOnceWith('You fell.', true);
     expect(host.resetChallengeStateForRoomExit).not.toHaveBeenCalled();
     expect(host.preparePlayableRoomForTransition).not.toHaveBeenCalled();
     expect(host.setCurrentRoomCoordinates).not.toHaveBeenCalled();
@@ -439,7 +439,7 @@ describe('opt-in bottom falls before navigation', () => {
     host.getRoomSnapshotForCoordinates.mockReturnValue({ ...createDefaultRoomSnapshot(), pitsAreDeadly: true });
     player.y = 334; body.bottomOffsetY = 6; body.velocity.y = 0;
     controller.maybeAdvancePlayerRoom();
-    expect(host.handlePlayerDeath).toHaveBeenCalledExactlyOnceWith('You fell.');
+    expect(host.handlePlayerDeath).toHaveBeenCalledExactlyOnceWith('You fell.', true);
     expect(host.resetChallengeStateForRoomExit).not.toHaveBeenCalled();
   });
   it('preserves ordinary downward navigation with pits disabled', () => {

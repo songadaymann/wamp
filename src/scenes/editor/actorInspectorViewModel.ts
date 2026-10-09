@@ -5,6 +5,7 @@ import { DEFAULT_SWORDSMAN_OBJECTIVE_MODE, DEFAULT_SWORDSMAN_DEFEAT_MODE, SWORDS
 import { NPC_MODE_LABELS, getPlacedNpcMode, isNpcObjectId, normalizeNpcPushable, normalizeNpcCanJumpFall, normalizeNpcPlayerCollision, normalizeNpcFriendlyFire, normalizeNpcName, normalizeNpcDefeatMode } from '../../npcs/model';
 import { getPlacedObjectSignText } from '../../signs/model';
 import { createEmptyEditorInspectorState } from './inspectorViewModel';
+import { DEFAULT_BOSS_HITS, getPlacedBossHitPoints } from '../../enemies/boss';
 import type { EditorInspectorState } from './uiBridge/model';
 
 export function isInspectorActor(placed: PlacedObject): boolean {
@@ -14,6 +15,12 @@ export function isInspectorActor(placed: PlacedObject): boolean {
 /** Actor settings shared by ordinary and expanded rooms. */
 export function buildActorInspectorState(placed: PlacedObject, statusText: string | null = null): EditorInspectorState | null {
   const hiddenState = createEmptyEditorInspectorState();
+  const bossHitPoints = getPlacedBossHitPoints(placed);
+  const bossFields = {
+    bossVisible: true,
+    bossChecked: bossHitPoints !== null,
+    bossHitPointsValue: bossHitPoints ?? DEFAULT_BOSS_HITS,
+  };
   const focusedSwordsman = placed.id === SWORDSMAN_AI_OBJECT_ID ? placed : null;
   if (focusedSwordsman) {
     const objectiveMode =
@@ -26,6 +33,7 @@ export function buildActorInspectorState(placed: PlacedObject, statusText: strin
       ...hiddenState,
       visible: true,
       swordsmanVisible: true,
+      ...bossFields,
       swordsmanStatusText:
         statusText
         ?? `This Sword Hunter is set to ${SWORDSMAN_OBJECTIVE_MODE_LABELS[objectiveMode]} / ${SWORDSMAN_DEFEAT_MODE_LABELS[defeatMode]}.`,
@@ -45,6 +53,7 @@ export function buildActorInspectorState(placed: PlacedObject, statusText: strin
       ...hiddenState,
       visible: true,
       policeVisible: true,
+      ...bossFields,
       policeStatusText:
         statusText
         ?? (mode === 'hunter'

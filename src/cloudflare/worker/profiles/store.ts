@@ -32,6 +32,7 @@ const EMPTY_PROFILE_STATS: ProfileStatsSummary = {
   totalScore: 0,
   totalDeaths: 0,
   totalCollectibles: 0,
+  lostSongsFound: 0,
   totalEnemiesDefeated: 0,
   totalCheckpoints: 0,
   totalRoomsPublished: 0,
@@ -87,16 +88,18 @@ export async function loadUserProfile(
     return null;
   }
 
-  const [statsRow, rankedStatsRow, publishedRoomRows, publishedCourseCount, playlists] = await Promise.all([
+  const [statsRow, rankedStatsRow, publishedRoomRows, publishedCourseCount, playlists, lostSongsFound] = await Promise.all([
     measure(timing, 'profile_stats', () => loadUserStatsRow(env, targetUserId)),
     measure(timing, 'profile_rank', () => loadViewerRankedGlobalLeaderboardRow(env, targetUserId)),
     measure(timing, 'profile_room_rows', () => loadPublishedRoomsByCreator(env, targetUserId)),
     measure(timing, 'profile_course_count', () => loadPublicUserProfileCourseCount(env, targetUserId)),
     measure(timing, 'profile_playlists', () => loadPublicPlaylistSummariesForUser(env, targetUserId)),
+    measure(timing, 'profile_lost_songs', () => loadLostSongCount(env, targetUserId)),
   ]);
 
   const publishedRooms = await measure(timing, 'profile_rooms', () => buildPublishedRooms(env, publishedRoomRows));
   const stats = buildProfileStats(statsRow, rankedStatsRow, publishedRooms.length);
+  stats.lostSongsFound = lostSongsFound;
   const isSelf = viewerUserId === targetUserId;
   const [progression, entitledAvatarIds] = await Promise.all([
     measure(timing, 'profile_progression', () => loadPublicProgressionSummary(env, targetUserId)),
@@ -138,7 +141,7 @@ export async function loadUserProfileSummary(
   const user = await measure(timing, 'profile_user', () => findUserById(env, targetUserId));
   if (!user) return null;
 
-  const [statsRow, rankedStatsRow, publishedRoomCount, publishedCourseCount, progression, entitledAvatarIds] = await Promise.all([
+  const [statsRow, rankedStatsRow, publishedRoomCount, publishedCourseCount, progression, entitledAvatarIds, lostSongsFound] = await Promise.all([
     measure(timing, 'profile_stats', () => loadUserStatsRow(env, targetUserId)),
     measure(timing, 'profile_rank', () => loadViewerRankedGlobalLeaderboardRow(env, targetUserId)),
     measure(timing, 'profile_room_count', () => loadPublishedPlayableCountForBuilder(env, targetUserId)),
@@ -147,6 +150,7 @@ export async function loadUserProfileSummary(
     viewerUserId === targetUserId
       ? measure(timing, 'profile_avatar_entitlements', () => loadUserAvatarEntitlementIds(env, targetUserId))
       : Promise.resolve(new Set<string>()),
+    measure(timing, 'profile_lost_songs', () => loadLostSongCount(env, targetUserId)),
   ]);
   const isSelf = viewerUserId === targetUserId;
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
@@ -165,7 +169,7 @@ export async function loadUserProfileSummary(
     ),
     isSelf,
     canEdit: isSelf,
-    stats: buildProfileStats(statsRow, rankedStatsRow, publishedRoomCount),
+    stats: { ...buildProfileStats(statsRow, rankedStatsRow, publishedRoomCount), lostSongsFound },
     progression,
     publishedCourseCount,
   };
@@ -747,4 +751,10 @@ function parseRatingRowNumber(value: number | string | null | undefined): number
 
 function parseRatingRowFloat(value: number | string | null | undefined): number {
   return parseRatingRowNumber(value);
+}
+
+async function loadLostSongCount(env: Env, userId: string): Promise<number> {
+  const row = await env.DB.prepare('SELECT COUNT(*) AS total FROM user_lost_songs WHERE user_id = ?')
+    .bind(userId).first<{ total: number }>();
+  return Number(row?.total ?? 0);
 }

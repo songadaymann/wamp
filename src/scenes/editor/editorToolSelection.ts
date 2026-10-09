@@ -256,6 +256,8 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
       return 'Fill';
     case 'copy':
       return pastePreviewActive ? 'Paste' : 'Copy';
+    case 'move':
+      return 'Move objects';
     case 'pencil':
       if (isPencilSprayPlacement()) {
         return `Spray ${editorState.pencilSprayBrushSize}x${editorState.pencilSprayBrushSize}`;

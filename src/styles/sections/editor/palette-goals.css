@@ -272,6 +272,20 @@ body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature=
   width: 100%;
 }
 
+.goal-marker-controls .goal-marker-required {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+  animation: goal-marker-reminder 1.2s ease-in-out 2;
+}
+
+@keyframes goal-marker-reminder {
+  50% { outline-color: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goal-marker-controls .goal-marker-required { animation: none; }
+}
+
 .goal-placement-hint,
 .goal-summary {
   margin-top: 8px;

@@ -13,6 +13,10 @@ export function renderEditorUiViewModel(
   viewModel: EditorUiViewModel,
 ): void {
   setValue(elements.roomTitleInput, viewModel.roomTitleValue);
+  setValue(elements.roomPlayerHeartsSelect, String(viewModel.roomPlayerHearts ?? 1));
+  setDisabled(elements.roomPlayerHeartsSelect, viewModel.saveDisabled);
+  setValue(elements.coursePlayerHeartsSelect, String(viewModel.course.playerHearts ?? 1));
+  setDisabled(elements.coursePlayerHeartsSelect, viewModel.course.pitsDisabled !== false);
   if (elements.roomCameraCenteredInput) {
     elements.roomCameraCenteredInput.checked = viewModel.roomCameraCentered === true;
     elements.roomCameraCenteredInput.disabled = viewModel.saveDisabled;
@@ -73,6 +77,11 @@ export function renderInspectorPanel(
   setHidden(elements.inspectorRoot, !state.visible);
   setHidden(elements.pressurePanel, !state.pressureVisible);
   setText(elements.pressureStatus, state.pressureStatusText);
+  setHidden(elements.pressureCoopRow, !state.pressureCoopVisible);
+  if (elements.pressureCoopCheckbox) {
+    elements.pressureCoopCheckbox.checked = state.pressureCoopChecked;
+    elements.pressureCoopCheckbox.disabled = !state.pressureCoopVisible;
+  }
   setHidden(elements.pressureConnectBtn, state.pressureConnectHidden);
   setDisabled(elements.pressureConnectBtn, state.pressureConnectDisabled);
   if (elements.pressureConnectBtn) {
@@ -103,6 +112,15 @@ export function renderInspectorPanel(
     elements.policePatrolShootsCheckbox.disabled = !state.policeVisible;
   }
   setHidden(elements.npcPanel, !state.npcVisible);
+  setHidden(elements.bossPanel, !state.bossVisible);
+  setHidden(elements.bossHitsRow, !state.bossChecked);
+  if (elements.bossCheckbox) {
+    elements.bossCheckbox.checked = state.bossChecked;
+    elements.bossCheckbox.disabled = !state.bossVisible;
+  }
+  setValue(elements.bossHitsInput, String(state.bossHitPointsValue));
+  setDisabled(elements.bossHitsInput, !state.bossVisible || !state.bossChecked);
+  setText(elements.bossHitsOutput, String(state.bossHitPointsValue));
   setText(elements.npcStatus, state.npcStatusText);
   setValue(elements.npcModeSelect, state.npcModeValue);
   setDisabled(elements.npcModeSelect, !state.npcVisible);
@@ -156,10 +174,12 @@ function renderGoalPanel(elements: EditorUiElements, viewModel: EditorUiViewMode
   setActive(elements.placeStartBtn, viewModel.goal.placeStartActive);
   setHidden(elements.placeExitBtn, viewModel.goal.placeExitHidden);
   setActive(elements.placeExitBtn, viewModel.goal.placeExitActive);
+  elements.placeExitBtn?.classList.toggle('goal-marker-required', viewModel.goal.placeExitNeeded);
   setHidden(elements.addCheckpointBtn, viewModel.goal.addCheckpointHidden);
   setActive(elements.addCheckpointBtn, viewModel.goal.addCheckpointActive);
   setHidden(elements.placeFinishBtn, viewModel.goal.placeFinishHidden);
   setActive(elements.placeFinishBtn, viewModel.goal.placeFinishActive);
+  elements.placeFinishBtn?.classList.toggle('goal-marker-required', viewModel.goal.placeFinishNeeded);
   setHidden(elements.linkNpcBtn, viewModel.goal.linkNpcHidden);
   setActive(elements.linkNpcBtn, viewModel.goal.linkNpcActive);
   setHidden(elements.placeNpcDestinationBtn, viewModel.goal.placeNpcDestinationHidden);

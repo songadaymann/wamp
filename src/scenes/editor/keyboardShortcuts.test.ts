@@ -13,9 +13,11 @@ describe('editor tool shortcuts', () => {
       L: 'line',
       G: 'fill',
       V: 'randomize',
+      M: 'move',
     });
     expect(getEditorToolForShortcutKey('c')).toBe('copy');
     expect(getEditorToolForShortcutKey('v')).toBe('randomize');
+    expect(getEditorToolForShortcutKey('m')).toBe('move');
     expect(getEditorToolForShortcutKey('x')).toBeNull();
   });
 });

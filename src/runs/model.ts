@@ -30,7 +30,7 @@ export const BUILDER_DISCOVERY_SORTS = ['alphabet', 'rooms', 'recent'] as const;
 export type BuilderDiscoverySort = typeof BUILDER_DISCOVERY_SORTS[number];
 export const ROOM_RUSH_DIFFICULTIES = ['easy', 'hard'] as const;
 export type RoomRushDifficulty = typeof ROOM_RUSH_DIFFICULTIES[number];
-export const ROOM_RUSH_START_RULES = ['selected', 'origin'] as const;
+export const ROOM_RUSH_START_RULES = ['selected', 'origin', 'weekly'] as const;
 export type RoomRushStartRule = typeof ROOM_RUSH_START_RULES[number];
 export type RoomRushLeaderboardModeKey =
   `${RoomRushDifficulty}:${RoomRushStartRule}`;
@@ -171,6 +171,7 @@ export interface RoomDifficultyVoteRequestBody {
 
 export interface RoomDiscoveryEntry {
   insights?: RoomInsightSummary;
+  cooperative?: boolean;
   roomId: string;
   roomCoordinates: RoomCoordinates;
   roomTitle: string | null;
@@ -290,6 +291,8 @@ export interface RoomRushRunStartRequestBody {
   difficulty: RoomRushDifficulty;
   startRule: RoomRushStartRule;
   startCoordinates: RoomCoordinates;
+  eventWeek?: string | null;
+  startRoomVersion?: number | null;
 }
 
 export interface RoomRushRunStartResponse {
@@ -300,6 +303,9 @@ export interface RoomRushRunStartResponse {
   startCoordinates: RoomCoordinates;
   startedAt: string;
   expiresAt: string;
+  eventWeek?: string | null;
+  timeLimitMs?: number | null;
+  serverTime?: string;
 }
 
 export interface RoomRushRunSubmissionRequestBody {
@@ -347,10 +353,12 @@ export interface RoomRushLeaderboardResponse {
   entries: RoomRushLeaderboardEntry[];
   viewerBest: RoomRushLeaderboardEntry | null;
   viewerRank: number | null;
+  eventWeek?: string | null;
 }
 
 export interface RoomRushLeaderboardsResponse {
   modes: RoomRushLeaderboardResponse[];
+  weekly?: import('./weeklyRoomRush').WeeklyRoomRushResponse;
 }
 
 export interface UserStatsRecord {

@@ -1,5 +1,7 @@
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../buildPrompts/publishing';
 import { expandedRoomIdFromLegacyCourseId } from '../expandedRooms/model';
+import { getCourseEnemyGoalPublishValidationError } from '../courses/publishValidation';
+import { countRoomPlacedObjectsByCategory } from '../persistence/roomModel';
 import { drawDeathMap } from './editor/deathMapOverlay';
 import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draftBackupController';
@@ -113,6 +115,7 @@ import {
   isPencilStampPlacement,
 } from './editor/editorToolSelection';
 import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
+import { EditorObjectMoveController } from './editor/objectMoveController';
 import {
   EDITOR_SHELL_ESCAPE_REQUESTED_EVENT,
   type EditorShellEscapeRequestedDetail,
@@ -201,6 +204,7 @@ interface CourseRoomSlice {
   permissions: RoomPermissions;
   roomVersionHistory: RoomVersionRecord[];
   publishedVersion: number;
+  publishedEnemyCount: number;
   currentVersion: number;
   createdAt: string;
   updatedAt: string;
@@ -252,9 +256,11 @@ export class CourseEditorScene extends Phaser.Scene {
   private panStartScroll = { x: 0, y: 0 };
   private tileDragMode: TileDragMode = null;
   private readonly touchControls: CourseTouchController;
+  private readonly objectMoveController: EditorObjectMoveController;
   private readonly touchTileRooms = new Set<string>();
   private readonly touchObjectRooms = new Set<string>();
   private readonly handleTouchBlur = (): void => {
+    this.objectMoveController.cancel();
     if (this.touchControls.isEditing) this.touchControls.cancel();
   };
   private activeTileDragRoomId: string | null = null;
@@ -375,6 +381,7 @@ export class CourseEditorScene extends Phaser.Scene {
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
+      if (this.objectMoveController.cancel()) return;
       if (document.body.dataset.editorSpriteMode === 'true') {
         document.getElementById('btn-editor-sprite-close')?.click();
         return;
@@ -519,6 +526,18 @@ export class CourseEditorScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'CourseEditorScene' });
+    this.objectMoveController = new EditorObjectMoveController(this, {
+      isEnabled: () => this.scene.isActive() && !this.musicModeActive && !editorState.isPlaying && document.body.dataset.editorSpriteUiLocked !== 'true',
+      getRuntimeAt: (x, y) => { const slice = this.getSliceAtWorldPoint(x, y); return slice?.permissions.canSaveDraft ? slice.runtime : null; },
+      prepare: runtime => {
+        const slice = [...this.roomSlices.values()].find(item => item.runtime === runtime);
+        if (slice) this.selectRoomById(slice.roomId);
+        runtime.cancelGoalMarkerPlacement(); this.courseGoalPlacementMode = null;
+        this.cancelClipboardPastePreview(); this.hideObjectInspectorUi();
+      },
+      showStatus: text => { this.statusText = text; this.renderUi(); },
+      onChanged: () => this.renderUi(),
+    });
     this.musicWorkflow = new EditorMusicWorkflowCoordinator({
       canActivateMusicMode: () => this.getSelectedSlice() !== null,
       commitRoomMusic: (nextMusic) => {
@@ -570,7 +589,7 @@ export class CourseEditorScene extends Phaser.Scene {
       replaceLegacyRoomMusicWithPattern: () => this.musicWorkflow.commitLegacyRoomMusicPatternReplacement(),
       getWorkspaceOrigin: () => this.getSelectedSlice()?.origin ?? { x: 0, y: 0 },
       renderUi: () => this.renderUi(),
-      getMusicPlaybackDebugState: () => globalRoomMusicController.getDebugState(),
+      getMusicPlayheadInfo: () => globalRoomMusicController.getPlayheadInfo(),
       getMusicPreviewState: () => this.musicWorkflow.getPreviewState(),
       previewPatternCell: (pattern, instrumentId, row) =>
         globalRoomMusicController.previewPatternCell(pattern, instrumentId, row),
@@ -649,6 +668,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
   create(data?: CourseEditorSceneData): void {
     resetEditorLayerVisibility();
+    this.objectMoveController.activate();
     this.roomDeathMap = null;
     this.draftLifecycle = new EditorDraftLifecycle({
       isActive: () => !this.isShuttingDown && this.scene.isActive(),
@@ -666,6 +686,8 @@ export class CourseEditorScene extends Phaser.Scene {
       onUndo: () => this.undoAction(),
       onRedo: () => this.redoAction(),
       onRequestRender: () => this.renderUi(),
+      isRoomLayoutEmpty: () => !(this.getSelectedSlice()?.runtime.hasRoomLayoutContent() ?? true),
+      onOpenRoomTemplates: () => { void openRoomTemplatePicker({ getRuntime: () => this.getSelectedSlice()?.runtime ?? null, isActive: () => this.scene.isActive(), expandedCell: true, onApplied: () => { this.hideObjectInspectorUi(); this.renderUi(); } }); },
       onDocumentKeyDown: this.handleDocumentKeyDown,
       onAuthStateChanged: () => this.renderUi(),
       onBack: () => this.returnToCourseBuilder(),
@@ -689,6 +711,7 @@ export class CourseEditorScene extends Phaser.Scene {
       onSetRoomTitle: (title) => this.setRoomTitle(title),
       onSetRoomCameraCentered: (centered) => this.getSelectedSlice()?.runtime.setRoomCameraMode(centered),
       onSetCoursePitsAreDeadly: (enabled) => this.setCoursePitsAreDeadly(enabled),
+      onSetCoursePlayerHearts: (hearts) => this.setCoursePlayerHearts(hearts),
       onSelectTool: (tool) => {
         applyEditorToolSelection(tool);
         this.updateToolUi();
@@ -807,10 +830,12 @@ export class CourseEditorScene extends Phaser.Scene {
       onClearPinnedInspector: () => this.objectInspectorController.clearPinnedInspector(),
       onBeginPressurePlateConnection: () => this.objectInspectorController.beginFocusedPressurePlateConnection(),
       onClearPressurePlateConnection: () => this.objectInspectorController.clearFocusedPressurePlateConnection(),
+      onSetFocusedCoopPlate: (enabled) => this.objectInspectorController.setFocusedCoopPlate(enabled),
       onCancelPressurePlateConnection: () => this.objectInspectorController.cancelPressurePlateConnection(),
       onClearContainerContents: () => this.objectInspectorController.clearFocusedContainerContents(),
       onSetFocusedSwordsmanObjectiveMode: (objectiveMode) => this.objectInspectorController.setFocusedSwordsmanObjectiveMode(objectiveMode),
       onSetFocusedSwordsmanDefeatMode: (defeatMode) => this.objectInspectorController.setFocusedSwordsmanDefeatMode(defeatMode),
+      onSetFocusedBossHitPoints: (value) => this.objectInspectorController.setFocusedBossHitPoints(value),
       onSetFocusedPoliceBehaviorMode: (mode) => this.objectInspectorController.setFocusedPoliceBehaviorMode(mode),
       onSetFocusedPolicePatrolShoots: (shoots) => this.objectInspectorController.setFocusedPolicePatrolShoots(shoots),
       onSetFocusedNpcMode: (mode) => this.objectInspectorController.setFocusedNpcMode(mode),
@@ -883,6 +908,7 @@ export class CourseEditorScene extends Phaser.Scene {
         : '',
       canReturnToCourseBuilder: true,
       pitsAreDeadly: draft?.pitsAreDeadly === true,
+      playerHearts: draft?.playerHearts ?? 1,
       pitsDisabled: this.loading || !this.courseRecord?.permissions.canSaveDraft,
       goalTypeValue: goal?.type ?? '',
       goalTypeDisabled: false,
@@ -987,6 +1013,14 @@ export class CourseEditorScene extends Phaser.Scene {
     const draft = this.getActiveCourseDraft();
     if (this.loading || !this.courseRecord?.permissions.canSaveDraft || !draft || draft.pitsAreDeadly === enabled) return;
     this.setActiveCourseDraft({ ...cloneCourseSnapshot(draft), pitsAreDeadly: enabled });
+    this.backupDebouncer.schedule();
+  }
+
+  setCoursePlayerHearts(value: number): void {
+    const draft = this.getActiveCourseDraft();
+    const hearts = value === 2 || value === 3 ? value : 1;
+    if (this.loading || !this.courseRecord?.permissions.canSaveDraft || !draft || draft.playerHearts === hearts) return;
+    this.setActiveCourseDraft({ ...cloneCourseSnapshot(draft), playerHearts: hearts });
     this.backupDebouncer.schedule();
   }
 
@@ -1168,6 +1202,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   updateToolUi(): void {
+    this.objectMoveController.validate();
     if (this.clipboardPastePreviewActive && editorState.activeTool !== 'copy') {
       this.cancelClipboardPastePreview();
     }
@@ -1489,6 +1524,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   undoAction(): void {
+    this.objectMoveController.cancel();
     const slice = this.getSelectedSlice();
     if (!slice) {
       return;
@@ -1499,6 +1535,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   redoAction(): void {
+    this.objectMoveController.cancel();
     const slice = this.getSelectedSlice();
     if (!slice) {
       return;
@@ -1695,6 +1732,15 @@ export class CourseEditorScene extends Phaser.Scene {
     this.roomDeathMap?.clear();
   }
 
+  getBugReportContext(): Record<string, unknown> {
+    const slice = this.getSelectedSlice();
+    return { scene: 'course-editor', mode: 'edit', source: 'draft', coordinates: slice?.coordinates,
+      roomVersion: slice?.currentVersion, publishedVersion: slice?.publishedVersion,
+      dirty: this.getDirtySlices().length > 0, courseId: this.courseRecord?.draft.id,
+      courseVersion: this.courseRecord?.draft.version,
+      camera: { x: this.cameras.main.scrollX, y: this.cameras.main.scrollY, zoom: this.cameras.main.zoom } };
+  }
+
   describeState(): Record<string, unknown> {
     const camera = this.cameras.main;
     return {
@@ -1888,6 +1934,7 @@ export class CourseEditorScene extends Phaser.Scene {
       },
       roomVersionHistory: [],
       publishedVersion: 0,
+      publishedEnemyCount: 0,
       currentVersion: roomRef.roomVersion,
       createdAt: '',
       updatedAt: '',
@@ -2053,6 +2100,7 @@ export class CourseEditorScene extends Phaser.Scene {
     slice.permissions = record.permissions;
     slice.roomVersionHistory = record.versions;
     slice.publishedVersion = record.published?.version ?? 0;
+    slice.publishedEnemyCount = countRoomPlacedObjectsByCategory(record.published?.placedObjects ?? [], 'enemy');
     slice.currentVersion = snapshot.version;
     slice.roomTitle = snapshot.title ?? null;
     slice.createdAt = snapshot.createdAt;
@@ -2127,6 +2175,7 @@ export class CourseEditorScene extends Phaser.Scene {
       slice.updatedAt = record.draft.updatedAt;
       slice.currentVersion = record.draft.version;
       slice.publishedVersion = record.published?.version ?? slice.publishedVersion;
+      slice.publishedEnemyCount = countRoomPlacedObjectsByCategory(record.published?.placedObjects ?? [], 'enemy');
       slice.publishedAt = record.published?.publishedAt ?? slice.publishedAt;
       slice.permissions = record.permissions;
       slice.roomVersionHistory = record.versions;
@@ -2211,6 +2260,7 @@ export class CourseEditorScene extends Phaser.Scene {
     updateActiveCourseDraftSession((draft) => {
       draft.title = normalized.title;
       draft.pitsAreDeadly = normalized.pitsAreDeadly;
+      draft.playerHearts = normalized.playerHearts;
       draft.roomRefs = normalized.roomRefs;
       draft.objectLinks = normalized.objectLinks;
       draft.pressurePlateLinks = normalized.pressurePlateLinks;
@@ -2241,9 +2291,12 @@ export class CourseEditorScene extends Phaser.Scene {
       return 'No expanded room loaded.';
     }
 
-    return this.courseRecord.permissions.canPublish
-      ? getCurrentCourseDraftPublishDisabledReason(this.courseRecord)
-      : 'This expanded room is read-only for your account.';
+    if (!this.courseRecord.permissions.canPublish) {
+      return 'This expanded room is read-only for your account.';
+    }
+    return getCurrentCourseDraftPublishDisabledReason(this.courseRecord)
+      ?? getCourseEnemyGoalPublishValidationError(this.courseRecord.draft.goal,
+        Array.from(this.roomSlices.values()).reduce((count, slice) => count + slice.publishedEnemyCount, 0));
   }
 
   private getChangedSlicesForPublish(): CourseRoomSlice[] {
@@ -2280,6 +2333,7 @@ export class CourseEditorScene extends Phaser.Scene {
     const fallback = this.courseRecord?.draft.roomRefs[0]?.roomId ?? null;
     const nextRoomId = roomId && this.roomSlices.has(roomId) ? roomId : fallback;
     const roomChanged = nextRoomId !== this.selectedRoomId;
+    if (roomChanged) this.objectMoveController.cancel();
     this.selectedRoomId = nextRoomId;
     if (roomChanged) {
       this.objectInspectorController.clearTransientState();
@@ -2456,6 +2510,9 @@ export class CourseEditorScene extends Phaser.Scene {
     this.game.events.on('blur', this.handleTouchBlur);
     this.events.on('sleep', this.handleTouchBlur);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (editorState.activeTool === 'move' && !this.musicModeActive && pointer.rightButtonDown()) { this.objectMoveController.cancel(); return; }
+      if (this.pointerRequestsPan(pointer)) this.objectMoveController.cancel();
+      else if (this.objectMoveController.down(pointer)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.down(pointer); return; }
       if (this.musicModeActive && this.pointerRequestsPan(pointer)) {
         return;
@@ -2485,6 +2542,7 @@ export class CourseEditorScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.objectMoveController.move(pointer)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.move(pointer); return; }
       if (this.pendingRightClickPanPointerId === pointer.id) {
         const distance = Phaser.Math.Distance.Between(
@@ -2517,9 +2575,11 @@ export class CourseEditorScene extends Phaser.Scene {
     });
 
     this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => {
+      if (this.objectMoveController.up(pointer, true)) return;
       if (pointer.wasTouch && !this.musicModeActive) this.touchControls.up(pointer);
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (this.objectMoveController.up(pointer)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.up(pointer); return; }
       if (this.pendingRightClickPanPointerId === pointer.id) {
         this.pendingRightClickPanPointerId = null;
@@ -3354,6 +3414,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private updateCursorHighlight(pointer: Phaser.Input.Pointer): void {
     this.cursorGraphics?.clear();
+    if (editorState.activeTool === 'move') { this.objectMoveController.hover(pointer); return; }
     if (!this.cursorGraphics) {
       return;
     }
@@ -3482,6 +3543,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private renderUi(): void {
+    this.objectMoveController.validate();
     this.renderMusicUi();
     if (this.isShuttingDown || !this.uiBridge) {
       return;
@@ -3664,3 +3726,4 @@ export class CourseEditorScene extends Phaser.Scene {
     delete document.body.dataset.editorCourseMode;
   };
 }
+import { openRoomTemplatePicker } from './editor/roomTemplatePicker';

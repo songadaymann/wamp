@@ -6,11 +6,12 @@ import {
   type RoomCoordinates,
   type RoomSnapshot,
 } from '../../persistence/roomModel';
+import { WEEKLY_ROOM_RUSH_LIMIT_MS } from '../../runs/weeklyRoomRush';
+import type { RoomRushDifficulty, RoomRushStartRule } from '../../runs/model';
+export type { RoomRushDifficulty, RoomRushStartRule } from '../../runs/model';
 
 export const ROOM_RUSH_NAME = 'Room Rush';
 
-export type RoomRushDifficulty = 'easy' | 'hard';
-export type RoomRushStartRule = 'selected' | 'origin';
 export type RoomRushResult = 'active' | 'completed' | 'failed' | 'abandoned';
 
 export interface RoomRushRouteStep {
@@ -27,6 +28,8 @@ export interface ActiveRoomRushRunState {
   serverStartId: string | null;
   serverStartedAt: string | null;
   serverExpiresAt: string | null;
+  eventWeek?: string | null;
+  timeLimitMs?: number | null;
   playerDisplayName?: string | null;
   difficulty: RoomRushDifficulty;
   startRule: RoomRushStartRule;
@@ -46,6 +49,9 @@ export interface StartRoomRushRunOptions {
   serverStartId?: string | null;
   serverStartedAt?: string | null;
   serverExpiresAt?: string | null;
+  eventWeek?: string | null;
+  timeLimitMs?: number | null;
+  elapsedBeforePlayMs?: number;
   difficulty: RoomRushDifficulty;
   startRule: RoomRushStartRule;
   startCoordinates: RoomCoordinates;
@@ -69,6 +75,9 @@ const NOOP_MUTATION_RESULT: RoomRushMutationResult = {
 export class OverworldRoomRushRunController {
   private currentRun: ActiveRoomRushRunState | null = null;
   private nextRunNumber = 1;
+  private weeklyStartedAt = 0;
+
+  constructor(private readonly clock: () => number = () => performance.now()) {}
 
   reset(): void {
     this.currentRun = null;
@@ -79,6 +88,7 @@ export class OverworldRoomRushRunController {
   }
 
   startRun(options: StartRoomRushRunOptions): RoomRushMutationResult {
+    this.weeklyStartedAt = this.clock() - Math.max(0, options.elapsedBeforePlayMs ?? 0);
     this.currentRun = {
       runId:
         options.runId?.trim()
@@ -86,6 +96,9 @@ export class OverworldRoomRushRunController {
       serverStartId: options.serverStartId?.trim() || null,
       serverStartedAt: options.serverStartedAt?.trim() || null,
       serverExpiresAt: options.serverExpiresAt?.trim() || null,
+      eventWeek: options.eventWeek ?? null,
+      timeLimitMs: options.startRule === 'weekly'
+        ? Math.min(WEEKLY_ROOM_RUSH_LIMIT_MS, Math.max(1, options.timeLimitMs ?? WEEKLY_ROOM_RUSH_LIMIT_MS)) : null,
       difficulty: options.difficulty,
       startRule: options.startRule,
       startCoordinates: { ...options.startCoordinates },
@@ -113,7 +126,11 @@ export class OverworldRoomRushRunController {
       return NOOP_MUTATION_RESULT;
     }
 
-    this.currentRun.elapsedMs += delta;
+    if (this.currentRun.startRule === 'weekly') {
+      const limit = this.currentRun.timeLimitMs ?? WEEKLY_ROOM_RUSH_LIMIT_MS;
+      this.currentRun.elapsedMs = Math.min(limit, Math.max(this.currentRun.elapsedMs, this.clock() - this.weeklyStartedAt));
+      if (this.currentRun.elapsedMs >= limit) return this.completeActiveRun('Weekly Rush complete. Five minutes are up!');
+    } else this.currentRun.elapsedMs += delta;
     return {
       changed: true,
       transientStatus: null,
@@ -256,7 +273,7 @@ export class OverworldRoomRushRunController {
     const startText =
       runState.startRule === 'origin'
         ? `Origin start ${roomIdFromCoordinates(runState.startCoordinates)}`
-        : `Start ${roomIdFromCoordinates(runState.startCoordinates)}`;
+        : `${runState.startRule === 'weekly' ? 'Weekly start' : 'Start'} ${roomIdFromCoordinates(runState.startCoordinates)}`;
     const difficultyText = runState.difficulty === 'hard' ? 'Hard' : 'Easy';
     return `${ROOM_RUSH_NAME} started. ${difficultyText} · ${startText}.`;
   }
@@ -264,7 +281,7 @@ export class OverworldRoomRushRunController {
 
 export function getRoomRushGoalBadgeText(runState: ActiveRoomRushRunState): string {
   const difficultyText = runState.difficulty === 'hard' ? 'Hard' : 'Easy';
-  const startText = runState.startRule === 'origin' ? 'Origin' : 'Free start';
+  const startText = runState.startRule === 'weekly' ? 'Weekly · 5 min' : runState.startRule === 'origin' ? 'Origin' : 'Free start';
   return `${difficultyText} · ${startText}`;
 }
 

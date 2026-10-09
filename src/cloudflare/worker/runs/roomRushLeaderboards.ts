@@ -27,6 +27,9 @@ import {
 import { loadPublishedExpandedRoomMembershipsInBounds } from '../expandedRooms/store';
 import { loadPublishedRoom, loadPublishedRoomsInBounds } from '../rooms/store';
 import { parseRoomRushRunStartBody, parseRoomRushRunSubmissionBody } from './requestBodies';
+import { WEEKLY_ROOM_RUSH_LIMIT_MS, type WeeklyRoomRushResponse } from '../../../runs/weeklyRoomRush';
+import { loadWeeklyRoomRushPick, weeklyRoomRushPeriod } from './weeklyRoomRushStore';
+import { getClientIp, hashRateLimitKey, networkKeyForIp, takeRateLimitSlots } from '../core/rateLimit';
 
 const ROOM_RUSH_MODE_ORDER: Array<{
   difficulty: RoomRushDifficulty;
@@ -36,6 +39,7 @@ const ROOM_RUSH_MODE_ORDER: Array<{
   { difficulty: 'hard', startRule: 'selected' },
   { difficulty: 'easy', startRule: 'origin' },
   { difficulty: 'hard', startRule: 'origin' },
+  { difficulty: 'hard', startRule: 'weekly' },
 ];
 
 const ROOM_RUSH_LEADERBOARD_ORDER =
@@ -53,87 +57,64 @@ interface ScoredRoomRushRoute {
   route: RoomRushRouteStepRecord[];
 }
 
-export async function handleRoomRushRunStart(
-  request: Request,
-  env: Env
-): Promise<Response> {
-  const auth = await requireAuthenticatedRequestAuth(
-    env,
-    request,
-    'start Room Rush runs',
-    'runs:write'
-  );
+export async function handleRoomRushRunStart(request: Request, env: Env): Promise<Response> {
+  env = { ...env, DB: env.DB.withSession?.('first-primary') ?? env.DB };
+  const auth = await requireAuthenticatedRequestAuth(env, request, 'start Room Rush runs', 'runs:write');
   await assertWampLeaderboardWriteAllowed(env, auth, 'play Room Rush');
   const body = await parseRoomRushRunStartBody(request);
-
-  if (
-    body.startRule === 'origin' &&
-    !areRoomCoordinatesEqual(body.startCoordinates, DEFAULT_ROOM_COORDINATES)
-  ) {
+  if (body.startRule === 'origin' && !areRoomCoordinatesEqual(body.startCoordinates, DEFAULT_ROOM_COORDINATES)) {
     throw new HttpError(400, 'Origin Room Rush runs must start at the world origin.');
   }
-
   const startRoomId = roomIdFromCoordinates(body.startCoordinates);
   const startRoom = await loadPublishedRoom(env, startRoomId, body.startCoordinates);
-  if (!startRoom) {
-    throw new HttpError(400, 'Room Rush runs must start on a published room.');
+  if (!startRoom) throw new HttpError(400, 'Room Rush runs must start on a published room.');
+  const startedAtDate = new Date(), startedAt = startedAtDate.toISOString();
+  const weekly = body.startRule === 'weekly' ? await loadWeeklyRoomRushPick(env, startedAtDate) : null;
+  if (weekly) {
+    if (!weekly.pick?.available || !weekly.row) throw new HttpError(409, weekly.pick?.unavailableReason ?? 'This week’s Rush room has not been chosen yet.');
+    if (body.difficulty !== 'hard' || body.eventWeek !== weekly.period.weekKey
+      || startRoomId !== weekly.pick.roomId || body.startRoomVersion !== weekly.pick.roomVersion
+      || startRoom.version !== weekly.pick.roomVersion) {
+      throw new HttpError(409, 'Reload this week’s Rush. Everyone uses its chosen room, version and Hard mode.');
+    }
+    const checks = [{ rule: { bucket: 'weekly_rush_starts', limit: 12, windowMs: 60000 }, keyHash: await hashRateLimitKey(env, auth.user.id) }];
+    const ip = getClientIp(request);
+    if (ip) checks.push({ rule: { bucket: 'weekly_rush_starts_network', limit: 120, windowMs: 60000 }, keyHash: await hashRateLimitKey(env, networkKeyForIp(ip)) });
+    if ((await takeRateLimitSlots(env, checks)).limitedBy) throw new HttpError(429, 'Please wait before restarting the weekly Rush.');
   }
-
-  const startId = crypto.randomUUID();
-  const clientRunId = `room-rush-${startId}`;
-  const startedAtDate = new Date();
-  const startedAt = startedAtDate.toISOString();
-  const expiresAt = new Date(startedAtDate.getTime() + ROOM_RUSH_START_TTL_MS).toISOString();
-
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT INTO room_rush_run_starts (
-          start_id,
-          client_run_id,
-          user_id,
-          difficulty,
-          start_rule,
-          start_room_id,
-          start_x,
-          start_y,
-          started_at,
-          expires_at,
-          created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
-    ).bind(
-      startId,
-      clientRunId,
-      auth.user.id,
-      body.difficulty,
-      body.startRule,
-      startRoomId,
-      body.startCoordinates.x,
-      body.startCoordinates.y,
-      startedAt,
-      expiresAt,
-      startedAt
-    ),
-  ]);
-
+  const startId = crypto.randomUUID(), clientRunId = `room-rush-${startId}`;
+  const expiresAt = new Date(startedAtDate.getTime() + (weekly ? WEEKLY_ROOM_RUSH_LIMIT_MS : ROOM_RUSH_START_TTL_MS)).toISOString();
+  const statements = [];
+  if (weekly) statements.push(env.DB.prepare(`UPDATE room_rush_weeks SET locked_at = COALESCE(locked_at, ?)
+    WHERE week_key = ? AND start_room_id = ? AND room_version = ? AND starts_at <= ? AND ends_at >= ?
+      AND EXISTS (SELECT 1 FROM rooms r WHERE r.id = room_rush_weeks.start_room_id
+        AND json_extract(r.published_json, '$.version') = room_rush_weeks.room_version)`)
+    .bind(startedAt, weekly.period.weekKey, startRoomId, startRoom.version, startedAt, expiresAt));
+  statements.push(env.DB.prepare(`INSERT INTO room_rush_run_starts
+    (start_id,client_run_id,user_id,difficulty,start_rule,start_room_id,start_x,start_y,started_at,expires_at,created_at,event_week)
+    SELECT ?,?,?,?,?,?,?,?,?,?,?,?
+    ${weekly ? `WHERE EXISTS (SELECT 1 FROM room_rush_weeks WHERE week_key = ? AND start_room_id = ?
+      AND room_version = ? AND locked_at IS NOT NULL AND starts_at <= ? AND ends_at >= ?
+      AND EXISTS (SELECT 1 FROM rooms r WHERE r.id = room_rush_weeks.start_room_id
+        AND json_extract(r.published_json, '$.version') = room_rush_weeks.room_version))` : ''}`)
+    .bind(startId, clientRunId, auth.user.id, body.difficulty, body.startRule, startRoomId,
+      body.startCoordinates.x, body.startCoordinates.y, startedAt, expiresAt, startedAt, weekly?.period.weekKey ?? null,
+      ...(weekly ? [weekly.period.weekKey, startRoomId, startRoom.version, startedAt, expiresAt] : [])));
+  await env.DB.batch(statements);
+  if (weekly && !await loadRoomRushRunStart(env, auth.user.id, startId)) throw new HttpError(409, 'The weekly room choice changed. Reload this week’s Rush.');
   const response: RoomRushRunStartResponse = {
-    startId,
-    clientRunId,
-    difficulty: body.difficulty,
-    startRule: body.startRule,
-    startCoordinates: { ...body.startCoordinates },
-    startedAt,
-    expiresAt,
+    startId, clientRunId, difficulty: body.difficulty, startRule: body.startRule,
+    startCoordinates: { ...body.startCoordinates }, startedAt, expiresAt,
+    ...(weekly ? { eventWeek: weekly.period.weekKey, timeLimitMs: WEEKLY_ROOM_RUSH_LIMIT_MS, serverTime: startedAt } : {}),
   };
-  return jsonResponse(request, response, { status: 201 });
+  return jsonResponse(request, response, { status: 201, headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function handleRoomRushRunSubmit(
   request: Request,
   env: Env
 ): Promise<Response> {
+  env = { ...env, DB: env.DB.withSession?.('first-primary') ?? env.DB };
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
@@ -174,6 +155,11 @@ export async function handleRoomRushRunSubmit(
 
   const finishedAtDate = new Date();
   assertRoomRushTimingIsPlausible(start, body, finishedAtDate);
+  if (start.start_rule === 'weekly' && (start.difficulty !== 'hard' || !start.event_week
+    || body.elapsedMs > WEEKLY_ROOM_RUSH_LIMIT_MS
+    || body.deaths !== (body.result === 'failed' ? 1 : 0))) {
+    throw new HttpError(400, 'Weekly Rush uses Hard mode, one terminal death and a five-minute limit.');
+  }
   assertRoomRushRouteIsPlausible(body);
   const scoredRoute = await scoreRoomRushRouteByExpandedRoom(env, body.route);
   const uniqueRooms = scoredRoute.uniqueRooms;
@@ -203,7 +189,7 @@ export async function handleRoomRushRunSubmit(
     ).bind(attemptId, finishedAt, start.start_id, auth.user.id),
     env.DB.prepare(
       `
-        INSERT INTO room_rush_runs (
+        INSERT OR IGNORE INTO room_rush_runs (
           attempt_id,
           client_run_id,
           user_id,
@@ -223,8 +209,10 @@ export async function handleRoomRushRunSubmit(
           route_json,
           finished_at,
           created_at
+          ,event_week
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        WHERE EXISTS (SELECT 1 FROM room_rush_run_starts WHERE start_id = ? AND user_id = ? AND consumed_attempt_id = ?)
       `
     ).bind(
       attemptId,
@@ -235,7 +223,9 @@ export async function handleRoomRushRunSubmit(
       body.startRule,
       body.result,
       uniqueRooms,
-      body.elapsedMs,
+      start.start_rule === 'weekly'
+        ? Math.min(WEEKLY_ROOM_RUSH_LIMIT_MS, Math.max(body.elapsedMs, finishedAtDate.getTime() - Date.parse(start.started_at) - ROOM_RUSH_FINALIZE_CLOCK_GRACE_MS))
+        : body.elapsedMs,
       body.deaths,
       startRoomId,
       body.startCoordinates.x,
@@ -245,11 +235,20 @@ export async function handleRoomRushRunSubmit(
       body.finishCoordinates.y,
       JSON.stringify(scoredRoute.route),
       finishedAt,
-      finishedAt
+      finishedAt,
+      start.event_week ?? null,
+      start.start_id,
+      auth.user.id,
+      attemptId
     ),
   ]);
 
-  return jsonResponse(request, response, { status: 201 });
+  const saved = await env.DB.prepare('SELECT attempt_id FROM room_rush_runs WHERE user_id = ? AND client_run_id = ?')
+    .bind(auth.user.id, body.clientRunId).first<{ attempt_id: string }>();
+  if (!saved) throw new HttpError(409, 'This Rush could not be finalized. Please retry.');
+  response.saved = saved.attempt_id === attemptId;
+  response.attemptId = saved.attempt_id;
+  return jsonResponse(request, response, { status: response.saved ? 201 : 200 });
 }
 
 async function scoreRoomRushRouteByExpandedRoom(
@@ -324,6 +323,7 @@ async function loadRoomRushRunStart(
         user_id,
         difficulty,
         start_rule,
+        event_week,
         start_room_id,
         start_x,
         start_y,
@@ -381,7 +381,7 @@ function assertRoomRushTimingIsPlausible(
     throw new HttpError(400, 'Room Rush run start is in the future.');
   }
 
-  if (expiresAtMs <= finishedAtMs) {
+  if (expiresAtMs + (start.start_rule === 'weekly' ? ROOM_RUSH_FINALIZE_CLOCK_GRACE_MS : 0) <= finishedAtMs) {
     throw new HttpError(400, 'Room Rush run start has expired.');
   }
 
@@ -470,11 +470,15 @@ export async function handleRoomRushLeaderboards(
   url: URL,
   env: Env
 ): Promise<Response> {
+  env = { ...env, DB: env.DB.withSession?.('first-primary') ?? env.DB };
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read Room Rush leaderboards');
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 25, 1, 50);
   const requestedMode = parseRoomRushLeaderboardModeQuery(url.searchParams.get('mode'));
+  const now = new Date();
+  const weekly = !requestedMode || requestedMode.startRule === 'weekly'
+    ? await loadWeeklyRoomRushResponse(env, now) : undefined;
   const modeOrder = requestedMode ? [requestedMode] : ROOM_RUSH_MODE_ORDER;
   const modes = await timing.measure('leaderboard', () => Promise.all(
     modeOrder.map((mode) =>
@@ -483,16 +487,17 @@ export async function handleRoomRushLeaderboards(
         mode.difficulty,
         mode.startRule,
         limit,
-        auth?.user.id ?? null
+        auth?.user.id ?? null,
+        mode.startRule === 'weekly' ? weekly!.period.weekKey : null
       )
     )
   ));
-  const response: RoomRushLeaderboardsResponse = { modes };
+  const response: RoomRushLeaderboardsResponse = { modes, ...(weekly ? { weekly } : {}) };
   const authenticated = auth !== null;
   timing.setDiagnostic('cache', authenticated ? 'private-20' : 'public-20-swr-40');
   return timedJsonResponse(request, response, timing, {
     headers: {
-      'Cache-Control': authenticated
+      'Cache-Control': weekly ? 'private, no-store' : authenticated
         ? 'private, max-age=20'
         : 'public, max-age=20, stale-while-revalidate=40',
     },
@@ -517,14 +522,15 @@ function parseRoomRushLeaderboardModeQuery(value: string | null): {
   return match;
 }
 
-async function buildRoomRushLeaderboardResponse(
+export async function buildRoomRushLeaderboardResponse(
   env: Env,
   difficulty: RoomRushDifficulty,
   startRule: RoomRushStartRule,
   limit: number,
-  viewerUserId: string | null
+  viewerUserId: string | null,
+  eventWeek: string | null = null
 ): Promise<RoomRushLeaderboardResponse> {
-  const entries = (await loadRankedRoomRushRows(env, difficulty, startRule, limit)).map(
+  const entries = (await loadRankedRoomRushRows(env, difficulty, startRule, limit, eventWeek)).map(
     mapRoomRushLeaderboardEntry
   );
   let viewerBest: RoomRushLeaderboardEntry | null = null;
@@ -536,7 +542,8 @@ async function buildRoomRushLeaderboardResponse(
         env,
         difficulty,
         startRule,
-        viewerUserId
+        viewerUserId,
+        eventWeek
       );
       viewerBest = viewerRow ? mapRoomRushLeaderboardEntry(viewerRow) : null;
     }
@@ -549,6 +556,7 @@ async function buildRoomRushLeaderboardResponse(
     entries,
     viewerBest,
     viewerRank: viewerBest?.rank ?? null,
+    ...(startRule === 'weekly' ? { eventWeek } : {}),
   };
 }
 
@@ -556,7 +564,8 @@ async function loadRankedRoomRushRows(
   env: Env,
   difficulty: RoomRushDifficulty,
   startRule: RoomRushStartRule,
-  limit: number
+  limit: number,
+  eventWeek: string | null
 ): Promise<RankedRoomRushRunRow[]> {
   const result = await env.DB.prepare(
     `
@@ -567,7 +576,7 @@ async function loadRankedRoomRushRows(
       LIMIT ?
     `
   )
-    .bind(difficulty, startRule, limit)
+    .bind(difficulty, startRule, eventWeek, limit)
     .all<RankedRoomRushRunRow>();
 
   return result.results;
@@ -577,7 +586,8 @@ async function loadViewerRankedRoomRushRow(
   env: Env,
   difficulty: RoomRushDifficulty,
   startRule: RoomRushStartRule,
-  viewerUserId: string
+  viewerUserId: string,
+  eventWeek: string | null
 ): Promise<RankedRoomRushRunRow | null> {
   const row = await env.DB.prepare(
     `
@@ -588,7 +598,7 @@ async function loadViewerRankedRoomRushRow(
       LIMIT 1
     `
   )
-    .bind(difficulty, startRule, viewerUserId)
+    .bind(difficulty, startRule, eventWeek, viewerUserId)
     .first<RankedRoomRushRunRow>();
 
   return row ?? null;
@@ -624,6 +634,7 @@ function buildRankedRoomRushCte(): string {
       FROM room_rush_runs
       WHERE difficulty = ?
         AND start_rule = ?
+        AND event_week IS ?
         AND result IN ('completed', 'failed')
         AND unique_rooms > 0
         AND elapsed_ms >= 0
@@ -686,7 +697,7 @@ function mapRoomRushLeaderboardEntry(
   row: RankedRoomRushRunRow
 ): RoomRushLeaderboardEntry {
   const difficulty = row.difficulty === 'hard' ? 'hard' : 'easy';
-  const startRule = row.start_rule === 'origin' ? 'origin' : 'selected';
+  const startRule = row.start_rule === 'weekly' ? 'weekly' : row.start_rule === 'origin' ? 'origin' : 'selected';
 
   return {
     rank: Number(row.overall_rank),
@@ -718,4 +729,12 @@ function getRoomRushModeKey(
   startRule: RoomRushStartRule
 ): RoomRushLeaderboardModeKey {
   return `${difficulty}:${startRule}` as RoomRushLeaderboardModeKey;
+}
+
+export async function loadWeeklyRoomRushResponse(env: Env, now = new Date()): Promise<WeeklyRoomRushResponse> {
+  const { period, pick } = await loadWeeklyRoomRushPick(env, now);
+  const previousWeek = weeklyRoomRushPeriod(new Date(Date.parse(period.startsAt) - 1));
+  const previous = await buildRoomRushLeaderboardResponse(env, 'hard', 'weekly', 3, null, previousWeek.weekKey);
+  return { period, pick, previousWeek, previousWinners: previous.entries,
+    difficulty: 'hard', timeLimitMs: WEEKLY_ROOM_RUSH_LIMIT_MS, serverTime: now.toISOString() };
 }

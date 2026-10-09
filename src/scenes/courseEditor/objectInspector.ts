@@ -3,6 +3,7 @@ import type { NpcMode } from '../../npcs/model';
 import type { PoliceBehaviorMode } from '../../enemies/policeEnemy';
 import type { SwordsmanDefeatMode, SwordsmanObjectiveMode } from '../../enemies/swordsmanObjectives';
 import Phaser from 'phaser';
+import { canConfigureCoopPlate, isCoopPressurePlate } from '../../placedObjects/coopPressurePlates';
 import {
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
@@ -74,6 +75,16 @@ export class CourseEditorObjectInspectorController {
 
   isConnectingPressurePlate(): boolean {
     return this.connectingPressurePlateInstanceId !== null;
+  }
+
+  setFocusedCoopPlate(enabled: boolean): void {
+    const ref = this.getFocusedPressurePlateRef();
+    if (ref && ref.slice.runtime.setCoopPlate(ref.placed.instanceId, enabled)) {
+      this.pressurePlateStatusText = enabled
+        ? 'Co-op plate: other live players can hold it. Expanded Room clears stay practice.'
+        : 'Solo plate: your character, crates and enemies can press it.';
+    }
+    this.renderInspectorUi();
   }
 
   hasPinnedInspector(): boolean {
@@ -190,6 +201,10 @@ export class CourseEditorObjectInspectorController {
 
   setFocusedSwordsmanDefeatMode(defeatMode: SwordsmanDefeatMode): void {
     this.editFocusedActor((runtime, id) => runtime.setSwordsmanDefeatMode(id, defeatMode));
+  }
+
+  setFocusedBossHitPoints(value: number | null): void {
+    this.editFocusedActor((runtime, id) => runtime.setBossHitPoints(id, value));
   }
 
   setFocusedPoliceBehaviorMode(mode: PoliceBehaviorMode): void {
@@ -1103,6 +1118,8 @@ export class CourseEditorObjectInspectorController {
           eligibleTargetCount,
           connectTitle: this.getObjectLinkNoTargetsTitle(source.placed),
           allowReconnectWithTarget: canPlacedObjectUseObjectPath(source.placed),
+          coopAvailable: canConfigureCoopPlate(source.placed),
+          coopPlate: isCoopPressurePlate(source.placed),
         }),
       );
       return;
