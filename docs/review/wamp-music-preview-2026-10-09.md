@@ -15,7 +15,7 @@ One shared LRU covers decoded clips and lane/pattern/phrase loops in editor and 
 - Three accepted native cases: desktop continuous notes produce zero refreshes while held and one final refresh on release, exact Undo/Redo, 20 real Web Audio loop variants, Stop before pending tempo refresh, draft saving and actual world handoff; phone portrait Play/tempo/Save/Close with exact keyboard Undo/Redo; Expanded selected-cell edits, exact Undo/Redo, save isolation and Escape exit.
 - Real AudioBuffers contain nonzero samples; retained loop count remains four and combined bytes remain below 50 MiB. This is scheduling/buffer evidence, not a subjective listening or iPad performance benchmark.
 - Read-only local D1 confirms music drafts in 200/42, 201/42 and selected Expanded cell 202/42; 203/42 remains silent. All four published snapshots remain silent v1.
-- Desktop, phone, Expanded and unchanged installed-client ordinary gameplay screenshots inspected; accepted cases have zero page errors. Primary preservation hashes match F166.
+- Desktop, phone, Expanded and unchanged installed-client captures inspected; accepted native cases have zero page errors. The installed client has loaded collision/gameplay state with no error artifact, but captures the intro and later the existing performance-pressure prompt; no clean installed-client performance benchmark is claimed. Primary preservation hashes match F166.
 
 Evidence: `/tmp/wamp-music-preview-2026-10-09/`, including `accepted-report.json`, real-buffer proof, saved DB proof and source/primary fingerprints. Only the completed desktop case from `native-d` and complete `native-e` suite are counted.
 

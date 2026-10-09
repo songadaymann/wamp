@@ -12,6 +12,8 @@ First slice addresses queued preview work and shared cache growth. Per-instrumen
 
 Verification: 400 files / 3,153 tests and quality gates, DOM 992/242, Worker safety and diff pass. Three accepted native cases and inspected screenshots prove final preview, cancellation, exact history, selected-cell save and bounded real buffers. Existing portrait grid obstruction and desktop Close overlap remain recorded; no touch-grid pass is claimed. See `docs/review/wamp-music-preview-2026-10-09.md`. Continue F224 before the deadline.
 
+Saved source `b144756a` in [draft PR #93](https://github.com/songadaymann/wamp/pull/93), pushed and attached. Continue F224 room music transitions.
+
 ## 2026-10-09 — Overnight checklist goal / F166 neighbor edge guides
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-neighbor-guides-2026-10-09` stacks on F165 `209e601a` / draft #91. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-neighbor-guides-2026-10-09/`.
