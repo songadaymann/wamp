@@ -2966,6 +2966,7 @@ export class EditorEditRuntime {
   getPublishValidationError(): string | null {
     return getRoomGoalPublishValidationError(this.roomGoal, {
       collectiblesPlaced: this.countPlacedObjectsByCategory('collectible'),
+      enemyCount: this.countPlacedObjectsByCategory('enemy'),
       collectModeEnemyCount: this.countCollectModeSwordsmen(),
       npcInstanceIds: this.host.getPlacedObjects()
         .filter((placed) => getEditorObjectConfigById(placed.id)?.category === 'npc')

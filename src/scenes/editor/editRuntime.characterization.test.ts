@@ -81,6 +81,27 @@ describe('editor edit runtime document contracts', () => {
     expect(host.getPlacedObjects()).toHaveLength(0);
   });
 
+  it('keeps missing-marker goals saveable, places explicitly, and restores publish checks through Undo', () => {
+    const { runtime, setEditable } = createHarness(createRoom());
+    runtime.setGoalType('reach_exit');
+    expect(runtime.currentGoalPlacementMode).toBeNull();
+    expect(runtime.exportRoomSnapshot().goal?.type).toBe('reach_exit');
+    expect(runtime.getPublishValidationError()).toMatch(/Set Exit/);
+    runtime.startGoalMarkerPlacement('exit');
+    runtime.placeGoalMarker(10, 10);
+    expect(runtime.currentGoalPlacementMode).toBeNull();
+    expect(runtime.getPublishValidationError()).toBeNull();
+    runtime.undo();
+    expect(runtime.getPublishValidationError()).toMatch(/Set Exit/);
+    runtime.redo();
+    expect(runtime.getPublishValidationError()).toBeNull();
+    setEditable(false);
+    runtime.clearGoalMarkers();
+    expect(runtime.getPublishValidationError()).toBeNull();
+    runtime.setGoalType('checkpoint_sprint');
+    expect(runtime.currentRoomGoal?.type).toBe('reach_exit');
+  });
+
   it('persists opted-in pits, blocks read-only changes, and resets them off', () => {
     const { runtime, setEditable } = createHarness(createRoom());
     runtime.setRoomPitsAreDeadly(false);

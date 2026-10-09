@@ -185,10 +185,12 @@ export function buildEditorUiViewModel(
       placeStartActive: false,
       placeExitHidden: roomGoal?.type !== 'reach_exit',
       placeExitActive: roomPlacementMode === 'exit',
+      placeExitNeeded: roomGoal?.type === 'reach_exit' && !roomGoal.exit,
       addCheckpointHidden: roomGoal?.type !== 'checkpoint_sprint',
       addCheckpointActive: roomPlacementMode === 'checkpoint',
       placeFinishHidden: roomGoal?.type !== 'checkpoint_sprint',
       placeFinishActive: roomPlacementMode === 'finish',
+      placeFinishNeeded: roomGoal?.type === 'checkpoint_sprint' && !roomGoal.finish,
       linkNpcHidden: roomGoal?.type !== 'npc_quest',
       linkNpcActive: roomPlacementMode === 'npc',
       placeNpcDestinationHidden:

@@ -1,5 +1,7 @@
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../buildPrompts/publishing';
 import { expandedRoomIdFromLegacyCourseId } from '../expandedRooms/model';
+import { getCourseEnemyGoalPublishValidationError } from '../courses/publishValidation';
+import { countRoomPlacedObjectsByCategory } from '../persistence/roomModel';
 import { drawDeathMap } from './editor/deathMapOverlay';
 import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draftBackupController';
@@ -199,6 +201,7 @@ interface CourseRoomSlice {
   permissions: RoomPermissions;
   roomVersionHistory: RoomVersionRecord[];
   publishedVersion: number;
+  publishedEnemyCount: number;
   currentVersion: number;
   createdAt: string;
   updatedAt: string;
@@ -1903,6 +1906,7 @@ export class CourseEditorScene extends Phaser.Scene {
       },
       roomVersionHistory: [],
       publishedVersion: 0,
+      publishedEnemyCount: 0,
       currentVersion: roomRef.roomVersion,
       createdAt: '',
       updatedAt: '',
@@ -2068,6 +2072,7 @@ export class CourseEditorScene extends Phaser.Scene {
     slice.permissions = record.permissions;
     slice.roomVersionHistory = record.versions;
     slice.publishedVersion = record.published?.version ?? 0;
+    slice.publishedEnemyCount = countRoomPlacedObjectsByCategory(record.published?.placedObjects ?? [], 'enemy');
     slice.currentVersion = snapshot.version;
     slice.roomTitle = snapshot.title ?? null;
     slice.createdAt = snapshot.createdAt;
@@ -2142,6 +2147,7 @@ export class CourseEditorScene extends Phaser.Scene {
       slice.updatedAt = record.draft.updatedAt;
       slice.currentVersion = record.draft.version;
       slice.publishedVersion = record.published?.version ?? slice.publishedVersion;
+      slice.publishedEnemyCount = countRoomPlacedObjectsByCategory(record.published?.placedObjects ?? [], 'enemy');
       slice.publishedAt = record.published?.publishedAt ?? slice.publishedAt;
       slice.permissions = record.permissions;
       slice.roomVersionHistory = record.versions;
@@ -2257,9 +2263,12 @@ export class CourseEditorScene extends Phaser.Scene {
       return 'No expanded room loaded.';
     }
 
-    return this.courseRecord.permissions.canPublish
-      ? getCurrentCourseDraftPublishDisabledReason(this.courseRecord)
-      : 'This expanded room is read-only for your account.';
+    if (!this.courseRecord.permissions.canPublish) {
+      return 'This expanded room is read-only for your account.';
+    }
+    return getCurrentCourseDraftPublishDisabledReason(this.courseRecord)
+      ?? getCourseEnemyGoalPublishValidationError(this.courseRecord.draft.goal,
+        Array.from(this.roomSlices.values()).reduce((count, slice) => count + slice.publishedEnemyCount, 0));
   }
 
   private getChangedSlicesForPublish(): CourseRoomSlice[] {

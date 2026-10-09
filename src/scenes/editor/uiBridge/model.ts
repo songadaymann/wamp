@@ -39,10 +39,12 @@ export interface EditorGoalUiViewModel {
   placeStartActive: boolean;
   placeExitHidden: boolean;
   placeExitActive: boolean;
+  placeExitNeeded: boolean;
   addCheckpointHidden: boolean;
   addCheckpointActive: boolean;
   placeFinishHidden: boolean;
   placeFinishActive: boolean;
+  placeFinishNeeded: boolean;
   linkNpcHidden: boolean;
   linkNpcActive: boolean;
   placeNpcDestinationHidden: boolean;

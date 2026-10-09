@@ -42,6 +42,7 @@ import { handleAdminWorldTileRequest } from '../worldTiles/routes';
 import { handleAdminCustomSpriteRequest } from '../customSprites/adminRoutes';
 import { handleAdminWorldsRequest } from '../worlds/adminRoutes';
 import { handleAdminDaily } from '../daily/routes';
+import { handleAdminPublishedGoalIssues } from './publishedGoalIssues';
 
 export async function handleAdminRequest(
   request: Request,
@@ -89,6 +90,10 @@ export async function handleAdminRequest(
 
   if (url.pathname === '/api/admin/expanded-rooms/migration-report' && request.method === 'GET') {
     return handleAdminExpandedRoomsMigrationReport(request, env);
+  }
+
+  if (url.pathname === '/api/admin/suspicious/published-goals' && request.method === 'GET') {
+    return handleAdminPublishedGoalIssues(request, url, env);
   }
 
   if (url.pathname === '/api/admin/suspicious/summary' && request.method === 'GET') {

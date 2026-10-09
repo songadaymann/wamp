@@ -51,7 +51,14 @@
         margin: 0 auto;
         padding: 24px 20px 48px;
         display: grid;
+        grid-template-columns: minmax(0, 1fr);
         gap: 16px;
+      }
+
+      .room-setup-item {
+        padding: 8px 0;
+        border-bottom: 1px solid var(--panel-strong);
+        overflow-wrap: anywhere;
       }
 
       .masthead {
@@ -76,6 +83,7 @@
       }
 
       .panel {
+        min-width: 0;
         background: var(--panel);
         border: 1px solid var(--panel-border);
         border-radius: 16px;
@@ -360,6 +368,17 @@
           <button id="clear-key-button" type="button" class="secondary">Clear Key</button>
         </div>
         <div id="auth-status" class="status">Paste the admin key to start reviewing suspicious activity.</div>
+      </section>
+
+      <section class="panel stack" aria-labelledby="room-setup-heading">
+        <h2 id="room-setup-heading">Room setup issues</h2>
+        <p>Read-only review of published standalone goals. Expanded Room cells use their area goal. A setup issue is not evidence of cheating.</p>
+        <div class="controls">
+          <button id="room-setup-review" type="button" class="secondary">Review published goals</button>
+          <button id="room-setup-next" type="button" class="secondary" hidden>Next page</button>
+        </div>
+        <div id="room-setup-status" class="status" role="status">Use an admin key, then review published room goals.</div>
+        <div id="room-setup-list"></div>
       </section>
 
       <section class="panel stack">

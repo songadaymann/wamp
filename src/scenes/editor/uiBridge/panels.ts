@@ -169,10 +169,12 @@ function renderGoalPanel(elements: EditorUiElements, viewModel: EditorUiViewMode
   setActive(elements.placeStartBtn, viewModel.goal.placeStartActive);
   setHidden(elements.placeExitBtn, viewModel.goal.placeExitHidden);
   setActive(elements.placeExitBtn, viewModel.goal.placeExitActive);
+  elements.placeExitBtn?.classList.toggle('goal-marker-required', viewModel.goal.placeExitNeeded);
   setHidden(elements.addCheckpointBtn, viewModel.goal.addCheckpointHidden);
   setActive(elements.addCheckpointBtn, viewModel.goal.addCheckpointActive);
   setHidden(elements.placeFinishBtn, viewModel.goal.placeFinishHidden);
   setActive(elements.placeFinishBtn, viewModel.goal.placeFinishActive);
+  elements.placeFinishBtn?.classList.toggle('goal-marker-required', viewModel.goal.placeFinishNeeded);
   setHidden(elements.linkNpcBtn, viewModel.goal.linkNpcHidden);
   setActive(elements.linkNpcBtn, viewModel.goal.linkNpcActive);
   setHidden(elements.placeNpcDestinationBtn, viewModel.goal.placeNpcDestinationHidden);

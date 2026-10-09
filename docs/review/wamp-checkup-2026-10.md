@@ -267,7 +267,7 @@ The desktop editor is fast and polished. The gaps are safety nets (Undo buttons,
 
 - [x] **F157** No on-screen Undo/Redo in the desktop/tablet editor; iPad builders have no Undo at all · high impact · small effort
   Delivered in PR #39; desktop/tablet controls and pinned phone Undo/Redo pass local native touch checks in both editors and the live guest Build flow. Physical hardware testing is separate from these controlled browser checks.
-- [ ] **F156** Rooms that can't be beaten (or are beaten instantly) can be published · medium impact · small effort
+- [ ] **F156** Rooms that can't be beaten (or are beaten instantly) can be published · medium impact · small effort — **local candidate 2026-10-09**: shared missing-marker/empty-enemy publish checks, explicit marker guidance and private read-only setup review pass 3,048 tests and native desktop/phone/API checks. Expanded Rooms count published cell enemies; finish-only standalone sprints stay valid. API Worker/Pages delivery and morning review remain pending.
 - [ ] **F163** Starter room templates (backlog G-001): build them as command scripts (also covers F106) · high impact · medium effort
 - [ ] **F159** Add a "Clear Check" plus a Ready-to-Publish checklist (Mario Maker style) · high impact · medium effort
 - [ ] **F162** No way to move things: add a Select/Move tool, a clipboard that works across rooms, and saved stamps · high impact · large effort

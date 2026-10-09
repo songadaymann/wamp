@@ -957,6 +957,7 @@ export function getRoomPublishValidationError(
 ): string | null {
   return getLostSongPlacementError(room.placedObjects) ?? getRoomGoalPublishValidationError(room.goal, {
     collectiblesPlaced: countRoomPlacedObjectsByCategory(room.placedObjects, 'collectible'),
+    enemyCount: countRoomPlacedObjectsByCategory(room.placedObjects, 'enemy'),
     collectModeEnemyCount: room.placedObjects.filter(
       (placed) =>
         placed.id === SWORDSMAN_AI_OBJECT_ID &&
