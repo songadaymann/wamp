@@ -136,6 +136,8 @@ export async function parseRoomRushRunStartBody(
     difficulty: normalizeRoomRushDifficulty(body.difficulty),
     startRule: normalizeRoomRushStartRule(body.startRule),
     startCoordinates: normalizeRoomCoordinates(body.startCoordinates),
+    eventWeek: body.eventWeek === undefined || body.eventWeek === null ? null : normalizeNonEmptyString(body.eventWeek, 'eventWeek', 20),
+    startRoomVersion: body.startRoomVersion === undefined || body.startRoomVersion === null ? null : normalizePositiveInteger(body.startRoomVersion, 'startRoomVersion'),
   };
 }
 
@@ -182,7 +184,7 @@ function normalizeRoomRushStartRule(value: unknown): RoomRushStartRule {
     return value as RoomRushStartRule;
   }
 
-  throw new HttpError(400, 'startRule must be selected or origin.');
+  throw new HttpError(400, 'startRule must be selected, origin or weekly.');
 }
 
 function normalizeRoomRushResult(

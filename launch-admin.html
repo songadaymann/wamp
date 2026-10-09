@@ -1241,6 +1241,7 @@
           <a href="#builders"><span class="nav-icon" aria-hidden="true">▲</span><span class="nav-label">Builders</span></a>
           <a href="#game-jams"><span class="nav-icon" aria-hidden="true">★</span><span class="nav-label">Game Jams</span></a>
           <a href="#daily-challenge"><span class="nav-icon" aria-hidden="true">☀</span><span class="nav-label">Room of the Day</span></a>
+          <a href="#weekly-rush"><span class="nav-icon" aria-hidden="true">▶</span><span class="nav-label">Weekly Rush</span></a>
           <a href="#build-prompts"><span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Build Prompts</span></a>
           <a href="#infrastructure"><span class="nav-icon" aria-hidden="true">⌁</span><span class="nav-label">Infrastructure</span></a>
           <div class="nav-rule"></div>
@@ -1259,6 +1260,18 @@
               </form>
               <p class="meta">Choose a published goal level with a verified clear. Today’s pick locks when a run starts or its builder is notified. Resets at midnight UTC.</p>
               <a href="/today" target="_blank" rel="noopener">Open today’s challenge</a>
+            </div>
+          </section>
+          <section id="weekly-rush" class="admin-section">
+            <header class="section-heading"><h2>Weekly Room Rush</h2></header>
+            <div class="panel stack">
+              <p id="weekly-rush-admin-status" role="status">Use your admin key to choose a weekly Rush room.</p>
+              <form id="weekly-rush-admin-form" class="stack">
+                <label class="field"><span class="label">Opening Monday (00:00 UTC)</span><select id="weekly-rush-admin-week" disabled></select></label>
+                <label class="field"><span class="label">Room coordinates</span><input id="weekly-rush-admin-coordinates" placeholder="x,y" maxlength="40" required disabled /></label>
+                <div class="auth-actions"><button id="weekly-rush-admin-save" type="submit" disabled>Choose Weekly Room</button><button id="weekly-rush-admin-delete" type="button" class="secondary" disabled>Remove Unplayed Week</button></div>
+              </form>
+              <p class="meta">Published standalone rooms only. Hard mode, five minutes. The room and version lock once a ranked Rush starts. A changed or unavailable start room pauses new starts. Choose this week or up to four weeks ahead; unchosen weeks stay inactive.</p>
             </div>
           </section>
           <section id="build-prompts" class="admin-section">

@@ -258,7 +258,7 @@ The movement has a great base. These items make it fair on every screen, make de
 - [ ] **F150** Idea: Optional player hearts per room (and make the Heart pickup actually heal) · medium impact · medium effort
 - [ ] **F155** Idea: Boss mode for the Sword Hunter and police: health bar, multiple hits, phase change · medium impact · medium effort
 - [ ] **F144** Idea: World collectathon: one hidden 'Lost Song' per room, tracked across the whole world · medium impact · medium effort
-- [ ] **F151** Idea: Weekly seeded Room Rush: everyone starts from the same room for 7 days · medium impact · medium effort
+- [ ] **F151** Idea: Weekly seeded Room Rush: everyone starts from the same room for 7 days · medium impact · medium effort — **local candidate 2026-10-08**, stacked on F144: manually chosen standalone room/version, Hard mode, five-minute clock, isolated weekly bests and previous winners. 3,023 tests and native desktop/phone/admin/full-timer checks pass. Migration 0062 and coordinated API/Pages delivery remain pending; no production event is chosen.
 - [ ] **F152** Idea: Co-op pressure plates that count other live players · medium impact · medium effort
 
 ### Level editor

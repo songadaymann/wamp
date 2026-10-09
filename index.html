@@ -191,6 +191,7 @@
           <button id="btn-auth-rate-clears" class="bar-btn auth-menu-action-btn hidden" type="button">Rate rooms</button>
           <button id="btn-auth-build-prompt" class="bar-btn auth-menu-action-btn hidden" type="button">Build Prompt</button>
           <button id="btn-auth-leaderboard" class="bar-btn auth-menu-action-btn" type="button">Leaderboard</button>
+          <button id="btn-menu-room-rush" class="bar-btn auth-menu-action-btn" type="button">Room Rush</button>
           <button id="btn-auth-daily" class="bar-btn auth-menu-action-btn hidden" type="button">Room of the Day</button>
           <button id="btn-auth-guest-progress" class="bar-btn auth-menu-action-btn" type="button">Guest Clears</button>
           <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button">Guest Drafts</button>
@@ -2372,12 +2373,14 @@
       </div>
       <div id="leaderboard-room-rush-panel" class="leaderboard-panel hidden">
         <div id="leaderboard-room-rush-modes" class="leaderboard-difficulty-actions leaderboard-room-rush-modes">
+          <button class="bar-btn bar-btn-small" type="button" data-room-rush-leaderboard-mode="hard:weekly">This Week · 5 minutes</button>
           <button class="bar-btn bar-btn-small active" type="button" data-room-rush-leaderboard-mode="easy:selected">Start Anywhere / Deaths Allowed</button>
           <button class="bar-btn bar-btn-small" type="button" data-room-rush-leaderboard-mode="hard:selected">Start Anywhere / Death Ends Run</button>
           <button class="bar-btn bar-btn-small" type="button" data-room-rush-leaderboard-mode="easy:origin">Start From 0,0 / Deaths Allowed</button>
           <button class="bar-btn bar-btn-small" type="button" data-room-rush-leaderboard-mode="hard:origin">Start From 0,0 / Death Ends Run</button>
         </div>
         <div id="leaderboard-room-rush-summary" class="history-modal-meta">No Room Rush leaderboard selected.</div>
+        <div id="leaderboard-room-rush-winners" class="history-modal-meta hidden"></div>
         <div id="leaderboard-room-rush-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-room-rush-list" class="history-version-list"></div>
       </div>
@@ -2480,11 +2483,13 @@
         <div class="history-modal-title-group">
           <div class="history-modal-kicker">World Run</div>
           <h2 id="room-rush-title" class="history-modal-title">Room Rush</h2>
-          <div class="history-modal-meta">How many unique rooms can you traverse in a single run? There are four modes:</div>
+          <div class="history-modal-meta">How many unique rooms can you traverse in a single run?</div>
         </div>
         <button id="btn-room-rush-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div id="room-rush-status" class="history-modal-error hidden"></div>
+      <button id="btn-room-rush-weekly" class="bar-btn" type="button" data-room-rush-difficulty="hard" data-room-rush-start-rule="weekly" disabled>This Week’s Rush · 5 minutes</button>
+      <div id="room-rush-weekly-summary" class="history-modal-meta" role="status">Loading this week’s Rush…</div>
       <div id="room-rush-controls" class="play-intro-controls" aria-label="Play controls"></div>
       <div class="room-rush-grid">
         <button class="room-rush-mode-card" type="button" data-room-rush-difficulty="easy" data-room-rush-start-rule="selected">
@@ -2521,6 +2526,8 @@
         <canvas id="room-rush-result-map" class="room-rush-result-map" width="1200" height="630" aria-label="Room Rush route map"></canvas>
         <div class="room-rush-result-copy">
           <div id="room-rush-result-message" class="room-rush-result-message"></div>
+          <div id="room-rush-result-save-status" class="history-modal-meta" role="status"></div>
+          <button id="btn-room-rush-result-retry-save" class="bar-btn bar-btn-small hidden" type="button">Retry leaderboard save</button>
           <div id="room-rush-result-status" class="history-modal-meta room-rush-result-status hidden"></div>
           <div class="room-rush-result-actions">
             <button id="btn-room-rush-result-share" class="bar-btn room-rush-result-x-button" type="button" aria-label="Share Room Rush route">

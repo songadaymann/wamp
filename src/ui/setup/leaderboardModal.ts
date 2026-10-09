@@ -42,6 +42,7 @@ const ROOM_RUSH_MODE_ORDER: RoomRushLeaderboardModeKey[] = [
   'hard:selected',
   'easy:origin',
   'hard:origin',
+  'hard:weekly',
 ];
 
 type LeaderboardModalElements = {
@@ -71,6 +72,7 @@ type LeaderboardModalElements = {
   courseList: HTMLElement | null;
   roomRushModeButtons: HTMLButtonElement[];
   roomRushSummary: HTMLElement | null;
+  roomRushWinners: HTMLElement | null;
   roomRushViewer: HTMLElement | null;
   roomRushList: HTMLElement | null;
 };
@@ -204,6 +206,7 @@ export class LeaderboardModalController {
         this.doc.querySelectorAll<HTMLButtonElement>('#leaderboard-room-rush-modes [data-room-rush-leaderboard-mode]')
       ),
       roomRushSummary: this.doc.getElementById('leaderboard-room-rush-summary'),
+      roomRushWinners: this.doc.getElementById('leaderboard-room-rush-winners'),
       roomRushViewer: this.doc.getElementById('leaderboard-room-rush-viewer'),
       roomRushList: this.doc.getElementById('leaderboard-room-rush-list'),
     };
@@ -258,7 +261,7 @@ export class LeaderboardModalController {
     for (const button of this.elements.roomRushModeButtons) {
       button.addEventListener('click', () => {
         const mode = this.parseRoomRushModeButtonValue(button.dataset.roomRushLeaderboardMode);
-        if (!mode || mode === this.selectedRoomRushMode) {
+        if (!mode || (mode === this.selectedRoomRushMode && mode !== 'hard:weekly')) {
           return;
         }
 
@@ -454,7 +457,7 @@ export class LeaderboardModalController {
   }
 
   private async ensureRoomRushModeLoaded(modeKey: RoomRushLeaderboardModeKey): Promise<void> {
-    if (this.roomRushLoadedModes.has(modeKey) || this.roomRushLoading) {
+    if ((modeKey !== 'hard:weekly' && this.roomRushLoadedModes.has(modeKey)) || this.roomRushLoading) {
       return;
     }
 
@@ -495,6 +498,7 @@ export class LeaderboardModalController {
     }
 
     this.roomRushLeaderboards = {
+      weekly: response.weekly ?? this.roomRushLeaderboards?.weekly,
       modes: ROOM_RUSH_MODE_ORDER.flatMap((modeKey) => {
         const mode = byMode.get(modeKey);
         return mode ? [mode] : [];
@@ -853,6 +857,7 @@ export class LeaderboardModalController {
       this.roomRushLoading ||
       (this.activeTab === 'roomRush' && !selectedModeSettled);
     const selected = this.getSelectedRoomRushLeaderboard();
+    const weekly = this.selectedRoomRushMode === 'hard:weekly' ? this.roomRushLeaderboards?.weekly : null;
     this.elements.roomRushList.replaceChildren();
 
     for (const button of this.elements.roomRushModeButtons) {
@@ -864,8 +869,15 @@ export class LeaderboardModalController {
     this.elements.roomRushSummary.textContent = roomRushPending
       ? 'Loading Room Rush leaderboards...'
       : selected
-        ? `${this.formatRoomRushModeLabel(selected)} · ${selected.entries.length} ranked rush${selected.entries.length === 1 ? '' : 'es'} · rooms, then time, then deaths`
+        ? weekly ? `Week of ${new Date(weekly.period.startsAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })} · ${weekly.pick?.title ?? 'Room not chosen yet'} · 5 minutes · death ends run · rooms, then time, then deaths`
+          : `${this.formatRoomRushModeLabel(selected)} · ${selected.entries.length} ranked rush${selected.entries.length === 1 ? '' : 'es'} · rooms, then time, then deaths`
         : 'Room Rush leaderboard unavailable.';
+    if (this.elements.roomRushWinners) {
+      this.elements.roomRushWinners.classList.toggle('hidden', !weekly || roomRushPending);
+      this.elements.roomRushWinners.textContent = weekly
+        ? weekly.previousWinners.length ? `Last week’s winners: ${weekly.previousWinners.map(entry => `#${entry.rank} ${entry.userDisplayName} · ${this.formatRoomRushRooms(entry.uniqueRooms)}`).join(' / ')}`
+          : 'No winners from last week yet.' : '';
+    }
 
     const viewer = selected?.viewerBest ?? null;
     this.elements.roomRushViewer.classList.toggle('hidden', roomRushPending || viewer === null);
@@ -1121,7 +1133,8 @@ export class LeaderboardModalController {
       value === 'easy:selected' ||
       value === 'hard:selected' ||
       value === 'easy:origin' ||
-      value === 'hard:origin'
+      value === 'hard:origin' ||
+      value === 'hard:weekly'
     ) {
       return value;
     }
@@ -1139,7 +1152,7 @@ export class LeaderboardModalController {
     difficulty: RoomRushDifficulty;
     startRule: RoomRushStartRule;
   }): string {
-    const startLabel = mode.startRule === 'origin' ? 'Start from 0,0' : 'Start anywhere';
+    const startLabel = mode.startRule === 'weekly' ? 'This week · 5 minutes' : mode.startRule === 'origin' ? 'Start from 0,0' : 'Start anywhere';
     const difficultyLabel = mode.difficulty === 'hard' ? 'Death ends run' : 'Deaths allowed';
     return `${startLabel} · ${difficultyLabel}`;
   }

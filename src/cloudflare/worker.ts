@@ -106,6 +106,7 @@ import {
   handleRoomRushRunStart,
   handleRoomRushRunSubmit,
 } from './worker/runs/roomRushLeaderboards';
+import { handleWeeklyRoomRush, handleAdminWeeklyRoomRush } from './worker/runs/weeklyRoomRushRoutes';
 import {
   handleUserSettingsGet,
   handleUserSettingsPut,
@@ -222,6 +223,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     pattern: { prefix: '/api/admin/bug-reports' },
     auth: 'admin',
     handler: ({ request, url, env }) => handleBugReports(request, url, env),
+  },
+  {
+    methods: ['GET', 'PUT', 'DELETE'],
+    pattern: '/api/admin/room-rush/weekly',
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleAdminWeeklyRoomRush(request, url, env),
   },
   {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
@@ -847,6 +854,10 @@ export default {
 
       if (url.pathname === '/api/leaderboards/room-rush' && request.method === 'GET') {
         return await handleRoomRushLeaderboards(request, url, env);
+      }
+
+      if (url.pathname === '/api/room-rush/weekly' && request.method === 'GET') {
+        return await handleWeeklyRoomRush(request, env);
       }
 
       if (url.pathname === '/api/room-rush/runs/start' && request.method === 'POST') {

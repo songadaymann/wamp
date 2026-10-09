@@ -1101,6 +1101,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       clearRoomGoalIntroState: () => this.clearRoomGoalIntroState(),
       syncScenePauseState: () => this.syncScenePauseState(),
+      syncModeRuntime: () => this.runtimeController.syncModeRuntime(),
       syncAppMode: () => this.syncAppMode(),
       showTransientStatus: (message) => this.showTransientStatus(message),
       renderHud: () => this.renderHud(),

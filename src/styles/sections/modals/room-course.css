@@ -89,6 +89,7 @@
 #room-history-modal .history-modal-header-actions .bar-btn,
 #room-history-modal .history-version-actions .bar-btn,
 #room-rush-modal .history-modal-header .bar-btn,
+#btn-room-rush-weekly,
 #room-rush-result-modal .bar-btn {
   min-height: 34px;
   padding: 8px 12px 7px;
@@ -109,6 +110,21 @@
 #room-rush-modal .history-modal-header .bar-btn:hover,
 #room-rush-result-modal .bar-btn:hover {
   filter: brightness(1.06);
+}
+
+#btn-room-rush-weekly {
+  min-height: 44px;
+  width: 100%;
+}
+
+#btn-room-rush-weekly:disabled {
+  opacity: 0.55;
+  cursor: default;
+  box-shadow: none;
+}
+
+body:not([data-app-mode='world']) #btn-menu-room-rush {
+  display: none;
 }
 
 #btn-room-history-restore-canonical {

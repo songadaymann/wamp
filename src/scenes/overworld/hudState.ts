@@ -496,7 +496,8 @@ export class OverworldHudStateController {
   }
 
   private getRoomRushTimerText(runState: ActiveRoomRushRunState): string {
-    return this.formatOverlayTimer(runState.elapsedMs);
+    return this.formatOverlayTimer(runState.startRule === 'weekly' && runState.result === 'active'
+      ? Math.max(0, (runState.timeLimitMs ?? 300000) - runState.elapsedMs) : runState.elapsedMs);
   }
 
   private getRoomRushProgressText(runState: ActiveRoomRushRunState): string {

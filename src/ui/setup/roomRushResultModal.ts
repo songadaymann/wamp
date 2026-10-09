@@ -34,6 +34,8 @@ type RoomRushResultModalElements = {
   mapCanvas: HTMLCanvasElement | null;
   message: HTMLElement | null;
   status: HTMLElement | null;
+  saveStatus: HTMLElement | null;
+  retrySaveButton: HTMLButtonElement | null;
   shareButton: HTMLButtonElement | null;
   copyButton: HTMLButtonElement | null;
   downloadButton: HTMLButtonElement | null;
@@ -49,6 +51,14 @@ export class RoomRushResultModalController {
   private shareImage: RunShareImage | null = null;
   private shareStatusText: string | null = null;
   private shareStatusTone: 'default' | 'error' = 'default';
+  private leaderboardSaveStatus: string | null = null;
+  private leaderboardSaveFailed = false;
+  private leaderboardSaveBusy = false;
+  private pendingLeaderboardBody: RoomRushRunSubmissionRequestBody | null = null;
+  private cancelShareCapture: (() => void) | null = null;
+  private readonly handleRetrySave = (): void => {
+    if (this.activeRun && !this.leaderboardSaveBusy) void this.submitLeaderboardRun(this.activeRun);
+  };
 
   private readonly handleCloseClick = (): void => {
     this.close();
@@ -111,6 +121,8 @@ export class RoomRushResultModalController {
       mapCanvas: this.doc.getElementById('room-rush-result-map') as HTMLCanvasElement | null,
       message: this.doc.getElementById('room-rush-result-message'),
       status: this.doc.getElementById('room-rush-result-status'),
+      saveStatus: this.doc.getElementById('room-rush-result-save-status'),
+      retrySaveButton: this.doc.getElementById('btn-room-rush-result-retry-save') as HTMLButtonElement | null,
       shareButton: this.doc.getElementById('btn-room-rush-result-share') as HTMLButtonElement | null,
       copyButton: this.doc.getElementById('btn-room-rush-result-copy') as HTMLButtonElement | null,
       downloadButton: this.doc.getElementById('btn-room-rush-result-download') as HTMLButtonElement | null,
@@ -118,6 +130,7 @@ export class RoomRushResultModalController {
   }
 
   init(): void {
+    this.elements.retrySaveButton?.addEventListener('click', this.handleRetrySave);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.shareButton?.addEventListener('click', this.handleShareClick);
     this.elements.copyButton?.addEventListener('click', this.handleCopyClick);
@@ -131,6 +144,7 @@ export class RoomRushResultModalController {
   }
 
   destroy(): void {
+    this.elements.retrySaveButton?.removeEventListener('click', this.handleRetrySave);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.shareButton?.removeEventListener('click', this.handleShareClick);
     this.elements.copyButton?.removeEventListener('click', this.handleCopyClick);
@@ -149,7 +163,12 @@ export class RoomRushResultModalController {
       return;
     }
 
+    this.cancelShareCapture?.();
     this.activeRun = cloneRoomRushRun(run, getAuthDebugState().user?.displayName ?? null);
+    this.pendingLeaderboardBody = run.serverStartId ? buildRoomRushSubmissionBody(run) : null;
+    this.leaderboardSaveStatus = null;
+    this.leaderboardSaveFailed = false;
+    this.leaderboardSaveBusy = false;
     this.shareImage = null;
     this.shareStatusText = null;
     this.shareStatusTone = 'default';
@@ -163,6 +182,7 @@ export class RoomRushResultModalController {
   }
 
   close(): void {
+    this.cancelShareCapture?.();
     if (!this.elements.modal) {
       return;
     }
@@ -170,22 +190,44 @@ export class RoomRushResultModalController {
     this.elements.modal.classList.add('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'true');
     this.activeRun = null;
+    this.pendingLeaderboardBody = null;
     this.shareImage = null;
     this.shareStatusText = null;
     this.shareStatusTone = 'default';
   }
 
   private async renderShareImageAfterFrame(): Promise<void> {
+    const run = this.activeRun;
     await new Promise<void>((resolve) => {
       this.windowObj.requestAnimationFrame(() => {
         this.windowObj.requestAnimationFrame(() => resolve());
       });
     });
 
-    this.renderShareImage();
+    if (!run || this.activeRun !== run) return;
+
+    await new Promise<void>((resolve) => {
+      const cleanup = (): void => {
+        this.game.events.off(Phaser.Core.Events.POST_RENDER, capture);
+        this.windowObj.clearTimeout(timeout);
+        this.cancelShareCapture = null;
+        resolve();
+      };
+      const capture = (): void => {
+        cleanup();
+        // WebGL clears its drawing buffer between frames, so copy it while pixels exist.
+        if (this.activeRun === run) this.renderShareImage();
+      };
+      const timeout = this.windowObj.setTimeout(() => {
+        cleanup();
+        if (this.activeRun === run) this.renderShareImage(false);
+      }, 1_000);
+      this.cancelShareCapture = cleanup;
+      this.game.events.once(Phaser.Core.Events.POST_RENDER, capture);
+    });
   }
 
-  private renderShareImage(): void {
+  private renderShareImage(useOverworldCapture = true): void {
     const run = this.activeRun;
     const canvas = this.elements.mapCanvas;
     if (!run || !canvas) {
@@ -194,7 +236,7 @@ export class RoomRushResultModalController {
 
     try {
       this.shareImage = renderRoomRushShareImage(canvas, run, {
-        overworldCapture: this.getOverworldCapture(run),
+        overworldCapture: useOverworldCapture ? this.getOverworldCapture(run) : null,
       });
       this.shareStatusText = null;
       this.shareStatusTone = 'default';
@@ -225,7 +267,8 @@ export class RoomRushResultModalController {
     const score = run.visitedRoomIds.length;
     if (this.elements.title) {
       this.elements.title.textContent =
-        run.result === 'failed' ? 'Hard Rush Ended' : 'Room Rush Complete';
+        run.startRule === 'weekly' ? run.result === 'failed' ? 'Weekly Rush Ended' : 'Weekly Rush Complete'
+          : run.result === 'failed' ? 'Hard Rush Ended' : 'Room Rush Complete';
     }
     if (this.elements.meta) {
       this.elements.meta.textContent = [
@@ -242,6 +285,11 @@ export class RoomRushResultModalController {
       this.elements.status.textContent = this.shareStatusText ?? '';
       this.elements.status.classList.toggle('hidden', !this.shareStatusText);
       this.elements.status.setAttribute('data-room-rush-share-tone', this.shareStatusTone);
+    }
+    if (this.elements.saveStatus) this.elements.saveStatus.textContent = this.leaderboardSaveStatus ?? '';
+    if (this.elements.retrySaveButton) {
+      this.elements.retrySaveButton.classList.toggle('hidden', !this.leaderboardSaveFailed);
+      this.elements.retrySaveButton.disabled = this.leaderboardSaveBusy;
     }
     if (this.elements.shareButton) {
       this.elements.shareButton.disabled = false;
@@ -325,13 +373,30 @@ export class RoomRushResultModalController {
     }
 
     if (!getAuthDebugState().authenticated || !run.serverStartId) {
+      if (this.activeRun?.runId === run.runId) {
+        this.leaderboardSaveStatus = 'Practice result. Sign in before starting a Rush to join its leaderboard.';
+        this.render();
+      }
       return;
     }
 
+    const body = this.pendingLeaderboardBody ?? buildRoomRushSubmissionBody(run);
+    this.leaderboardSaveBusy = true;
+    this.leaderboardSaveFailed = false;
+    this.leaderboardSaveStatus = 'Saving leaderboard result…';
+    this.render();
     try {
-      await this.runRepository.submitRoomRushRun(buildRoomRushSubmissionBody(run));
+      await this.runRepository.submitRoomRushRun(body);
+      if (this.activeRun?.runId === run.runId) this.leaderboardSaveStatus = run.startRule === 'weekly'
+        ? 'Saved to this week’s leaderboard. Your best run determines your rank.' : 'Saved to the Room Rush leaderboard.';
     } catch (error) {
       console.warn('Failed to save Room Rush leaderboard run.', error);
+      if (this.activeRun?.runId === run.runId) {
+        this.leaderboardSaveStatus = `Result has not been confirmed saved. ${error instanceof Error ? error.message : 'Please retry.'}`;
+        this.leaderboardSaveFailed = true;
+      }
+    } finally {
+      if (this.activeRun?.runId === run.runId) { this.leaderboardSaveBusy = false; this.render(); }
     }
   }
 }

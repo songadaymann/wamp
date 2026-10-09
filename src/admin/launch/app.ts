@@ -1,6 +1,7 @@
 import { setupBuildPromptsAdmin } from './buildPrompts';
 import { setupLaunchReplayModal } from './replayModal';
 import { setupDailyAdmin } from './dailyRoom';
+import { setupWeeklyRoomRushAdmin } from './weeklyRoomRush';
 import type {
   AdminGameJamParticipant,
   AdminGameJamsResponse,
@@ -126,6 +127,7 @@ const customSpriteAdminController = setupCustomSpriteAdminController({
 });
 const adminResponseClient = createAdminResponseClient(() => adminKey);
 const dailyAdmin = setupDailyAdmin(() => adminKey);
+const weeklyRoomRushAdmin = setupWeeklyRoomRushAdmin(() => adminKey);
 const buildPromptsAdmin = setupBuildPromptsAdmin(() => adminKey);
 const pollingController = createPollingController(POLL_INTERVAL_MS, () => {
   void refreshSnapshot();
@@ -145,6 +147,7 @@ saveKeyButton?.addEventListener('click', () => {
     void refreshSnapshot();
     void refreshGameJams();
     void dailyAdmin.refresh();
+    void weeklyRoomRushAdmin.refresh();
   void buildPromptsAdmin.refresh();
     backgroundAdminController.handleAdminKeyChange();
     customSpriteAdminController.handleAdminKeyChange();
@@ -159,6 +162,7 @@ refreshButton?.addEventListener('click', () => {
   void refreshSnapshot(true);
   void refreshGameJams();
   void dailyAdmin.refresh();
+  void weeklyRoomRushAdmin.refresh();
   void buildPromptsAdmin.refresh();
   void refreshRoomComments();
   void backgroundAdminController.refresh();
@@ -171,6 +175,7 @@ clearKeyButton?.addEventListener('click', () => {
   gameJamsSnapshot = null;
   gameJamsError = null;
   void dailyAdmin.refresh();
+  void weeklyRoomRushAdmin.refresh();
   void buildPromptsAdmin.refresh();
   window.sessionStorage.removeItem(ADMIN_KEY_STORAGE_KEY);
   if (adminKeyInput) {

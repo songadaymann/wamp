@@ -15,6 +15,8 @@ for (const match of html.matchAll(/\bid\s*=\s*["']([^"']+)["']/g)) {
 }
 
 const requiredIdsByController = {
+  'WeeklyRoomRush': ['btn-menu-room-rush', 'btn-room-rush-weekly', 'room-rush-weekly-summary', 'leaderboard-room-rush-winners',
+    'room-rush-result-save-status', 'btn-room-rush-result-retry-save'],
   bugReporter: ['bug-report-modal', 'bug-report-form', 'bug-report-notes', 'bug-report-status', 'btn-bug-report-send',
     'btn-bug-report-close', 'bug-report-attach', 'bug-recording-enabled', 'bug-report-context', 'bug-report-evidence-summary',
     'bug-report-frame', 'bug-report-empty', 'bug-report-play', 'bug-report-scrub', 'bug-report-time', 'bug-report-screenshot'],
