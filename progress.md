@@ -14,6 +14,8 @@ Verification: 397 files / 3,143 tests and quality gates, DOM 992/242, Worker saf
 
 F167 remains pending: no model binding/provider or generation quota currently exists. Avoid adding an unconfigured public generation path. Continue F220’s verified small debounce/global-cache slice before the deadline; stems and slot scheduling remain larger work.
 
+Saved source `66c2b33a` in [draft PR #92](https://github.com/songadaymann/wamp/pull/92), pushed and attached. Continue F220 music preview/cache first slice.
+
 ## 2026-10-09 — Overnight checklist goal / F165 editor history and previews
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-editor-history-2026-10-09` stacks on F162 `f546b106` / draft #90. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-editor-history-2026-10-09/`.
