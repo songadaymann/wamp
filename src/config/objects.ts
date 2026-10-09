@@ -1,4 +1,5 @@
 import type { LightEmissionConfig } from '../lighting/model';
+import { LOST_SONG_OBJECT_ID } from '../lostSongs/model';
 import {
   getCustomSpriteCategory,
   isCustomSpriteObjectId,
@@ -112,6 +113,8 @@ export interface GameObjectConfig {
   placeUsingPreviewBounds?: boolean;
   /** behavior hint for runtime object logic */
   behavior: 'static' | 'patrol' | 'fly' | 'bounce' | 'animated' | 'shooter';
+  /** Personal exploration pickups can be excluded from room objective counts. */
+  countsTowardGoals?: boolean;
   /** optional runtime interaction capability shared across object categories */
   interaction?: ObjectInteraction;
   /** allows the player to climb this object like a ladder */
@@ -251,6 +254,7 @@ export type SwitchBlockObjectId = (typeof SWITCH_BLOCK_OBJECT_IDS)[number];
 
 export const GAME_OBJECTS: GameObjectConfig[] = [
   // ── Collectibles ──
+  { id: LOST_SONG_OBJECT_ID, name: 'Lost Song', category: 'collectible', path: 'assets/objects/lost_song.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 14, bodyHeight: 10, countsTowardGoals: false, behavior: 'static', description: 'Hide one golden cassette per room cell for explorers. Found once per player, across the world. Excluded from room goals and score; your own rooms do not count.' },
   { id: 'coin_gold',   name: 'Gold Coin',   category: 'collectible', path: 'assets/objects/coin_gold.png',   frameWidth: 16, frameHeight: 16, frameCount: 8,  fps: 10, bodyWidth: 12, bodyHeight: 12, behavior: 'animated', description: 'Collect for points. Disappears on contact.' },
   { id: 'coin_silver', name: 'Silver Coin', category: 'collectible', path: 'assets/objects/coin_silver.png', frameWidth: 16, frameHeight: 16, frameCount: 8,  fps: 10, bodyWidth: 12, bodyHeight: 12, behavior: 'animated', description: 'Collect for points. Worth less than gold.' },
   { id: 'gem',         name: 'Gem',         category: 'collectible', path: 'assets/objects/gem.png',         frameWidth: 16, frameHeight: 16, frameCount: 5,  fps: 8,  bodyWidth: 12, bodyHeight: 12, behavior: 'animated', description: 'Premium collectible. High point value.' },
@@ -681,11 +685,13 @@ export interface PlacedObject {
   facing?: 'left' | 'right';
   layer?: LayerName;
   triggerTargetInstanceId?: string | null;
+  coopPlate?: boolean | null;
   linkedTargetInstanceIds?: string[] | null;
   containedObjectId?: string | null;
   signText?: string | null;
   swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;
   swordsmanDefeatMode?: SwordsmanDefeatMode | null;
+  bossHitPoints?: number | null;
   policeBehaviorMode?: PoliceBehaviorMode | null;
   policePatrolShoots?: boolean | null;
   npcMode?: NpcMode | null;
@@ -850,6 +856,8 @@ export function canObjectBeStoredInContainer(
     return false;
   }
 
+  if (objectConfig.id === LOST_SONG_OBJECT_ID) return false;
+
   if (containerId === 'cage') {
     return objectConfig.category === 'enemy' || isPushableObjectConfig(objectConfig);
   }
@@ -866,7 +874,7 @@ export function placedObjectContributesToCategory(
 ): boolean {
   const directConfig = getObjectById(placed.id);
   if (directConfig?.category === category) {
-    return true;
+    return category !== 'collectible' || directConfig.countsTowardGoals !== false;
   }
   if (
     isCustomSpriteObjectId(placed.id) &&

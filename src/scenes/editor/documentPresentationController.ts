@@ -24,6 +24,7 @@ export interface EditorDocumentPresentationState {
 
 export class EditorDocumentPresentationController {
   private objectSprites: Phaser.GameObjects.Sprite[] = [];
+  private objectSpritesByInstanceId = new Map<string, Phaser.GameObjects.Sprite>();
   private spawnMarkerSprite: Phaser.GameObjects.Sprite | null = null;
   private goalMarkerSprites: Phaser.GameObjects.Sprite[] = [];
   private goalMarkerLabels: Phaser.GameObjects.Text[] = [];
@@ -35,6 +36,10 @@ export class EditorDocumentPresentationController {
 
   get placedObjectSprites(): Phaser.GameObjects.Sprite[] {
     return this.objectSprites;
+  }
+
+  getPlacedObjectSprite(instanceId: string): Phaser.GameObjects.Sprite | null {
+    return this.objectSpritesByInstanceId.get(instanceId) ?? null;
   }
 
   get currentSpawnMarkerSprite(): Phaser.GameObjects.Sprite | null {
@@ -95,6 +100,7 @@ export class EditorDocumentPresentationController {
       applyPlacedObjectFacing(sprite, objectConfig, placed);
       tagEditorObjectSprite(sprite, getPlacedObjectLayer(placed));
       this.objectSprites.push(sprite);
+      this.objectSpritesByInstanceId.set(placed.instanceId, sprite);
     }
 
     this.spawnMarkerSprite?.destroy();
@@ -119,6 +125,7 @@ export class EditorDocumentPresentationController {
       sprite.destroy();
     }
     this.objectSprites = [];
+    this.objectSpritesByInstanceId.clear();
   }
 
   private destroyGoalMarkers(): void {

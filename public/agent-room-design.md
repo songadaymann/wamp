@@ -16,6 +16,22 @@ Summarize:
 
 Use that summary to fit the neighborhood without copying it.
 
+## Starter Layout Examples
+
+The editor offers Flat Run, Stairs Up, Vertical Climb, Arena, Platform Chain and Blank from Terrain in an empty room, or Room → Templates. The five playable starters include ground, a start and an exit. Blank has no markers. An Expanded Room template changes only its selected cell; the area start and goal stay in Markers.
+
+These are useful starting proportions on the 40 × 22 tile grid:
+
+| Layout | Starting geometry |
+| --- | --- |
+| Flat Run | Full-width floor at rows 20–21; start at column 3 and exit at column 36. |
+| Stairs Up | Six steps, each four tiles wide and two tiles higher, starting at column 10 / row 18. |
+| Vertical Climb | Alternate seven-tile ledges at columns 8 and 16, rising two rows at a time. |
+| Arena | Flat floor with two slimes, leaving space near the start. |
+| Platform Chain | Five-tile ledges separated by two-tile gaps, with a catching floor below. |
+
+Keep the jumps within the normal player's reach, then add your own obstacles and visual rhythm. Editor templates retain Smart terrain ownership, so the matching default ground brush can extend them. Agent `platform`, `fill_rect` and `set_tiles` commands place literal tile IDs; select those from the current authoring catalog and check their collision before treating them as ground.
+
 ## Anti-Copy Rules
 
 Do not:

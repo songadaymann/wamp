@@ -1,6 +1,7 @@
 import { parseGlobalLeaderboardWindow } from './globalLeaderboards';
 import { buildVerifiedRoomGhost, saveBuiltPersonalBestGhost } from './ghosts';
 import { prepareRunGhostArchive, scheduleRunGhostArchive } from './ghostArchive';
+import { assertSoloRoomRun } from './coopPolicy';
 import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
@@ -95,6 +96,7 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
   const exactVersion = await loadExactRoomVersion(env, body.roomId, body.roomVersion);
   if (!exactVersion) throw new HttpError(404, `Room version ${body.roomVersion} was not found.`);
   const snapshot = cloneRoomSnapshot(exactVersion.snapshot);
+  assertSoloRoomRun(snapshot);
 
   if (!snapshot.goal) {
     throw new HttpError(400, 'This room version does not have an active goal.');
@@ -211,6 +213,7 @@ export async function handleRunFinish(
     auth.user.walletAddress ?? null
   );
   const snapshot = resolveRoomSnapshotForVersion(roomRecord, existing.roomVersion);
+  assertSoloRoomRun(snapshot);
   if (!snapshot.goal) {
     throw new HttpError(409, 'This room version no longer has a leaderboard goal.');
   }

@@ -425,6 +425,7 @@ export class EditorDockShellController {
         'data-app-mode',
         'data-device-class',
         'data-editor-course-mode',
+        'data-editor-draft-cleared',
         'data-editor-music-mode',
         'data-editor-music-ui-locked',
         'data-editor-sprite-mode',
@@ -572,7 +573,7 @@ export class EditorDockShellController {
     if (backLabel) backLabel.textContent = courseMode ? 'Back to Setup' : 'Back to World';
     const publish = this.doc.querySelector<HTMLButtonElement>('[data-editor-shell-action="publish"]');
     const publishLabel = publish?.querySelector('span:last-child');
-    if (publishLabel) publishLabel.textContent = courseMode ? 'Publish Cells' : 'Publish';
+    if (publishLabel) publishLabel.textContent = courseMode ? 'Publish Cells' : this.doc.body.dataset.editorDraftCleared === 'true' ? 'Publish ✓' : 'Publish';
 
     for (const button of this.doc.querySelectorAll<HTMLButtonElement>('[data-editor-dock]')) {
       const dock = button.dataset.editorDock as EditorDockId;

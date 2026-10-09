@@ -18,6 +18,8 @@ import {
   ROOM_PATTERN_ACTIVE_STEP_COLUMNS,
 } from '../../music/pattern';
 import { resolveMusicPlayheadStep } from './musicPlayhead';
+import { syncMusicLabelStyle } from './musicLabelStyle';
+import type { RoomMusicPlayheadInfo } from '../../music/controller';
 import {
   ROOM_PATTERN_DRUM_GRID_START_ROW,
   ROOM_PATTERN_DRUM_ROWS,
@@ -59,7 +61,7 @@ interface EditorMusicPatternHost {
   replaceLegacyRoomMusicWithPattern(): RoomMusic | null;
   getWorkspaceOrigin?: () => { x: number; y: number };
   renderUi(): void;
-  getMusicPlaybackDebugState(): Record<string, unknown>;
+  getMusicPlayheadInfo(): RoomMusicPlayheadInfo;
   getMusicPreviewState(): EditorMusicPreviewState;
   previewPatternCell(pattern: RoomPatternMusic, instrumentId: RoomPatternInstrumentId, row: number): void;
 }
@@ -1018,45 +1020,13 @@ export class EditorMusicPatternController {
   }
 
   private resolvePlayheadStep(): number | null {
-    const playback = this.host.getMusicPlaybackDebugState();
-    const audioCurrentTime =
-      typeof playback.audioCurrentTime === 'number' ? playback.audioCurrentTime : null;
-    const activePattern =
-      playback.activePattern && typeof playback.activePattern === 'object'
-        ? (playback.activePattern as Record<string, unknown>)
-        : null;
-    const currentArrangement =
-      playback.currentArrangement && typeof playback.currentArrangement === 'object'
-        ? (playback.currentArrangement as Record<string, unknown>)
-        : null;
-
-    if (
-      audioCurrentTime === null ||
-      !activePattern ||
-      typeof activePattern.startTime !== 'number' ||
-      typeof activePattern.loopDurationSec !== 'number' ||
-      !currentArrangement ||
-      currentArrangement.kind !== 'pattern'
-    ) {
-      return null;
-    }
-
-    const loopDurationSec = activePattern.loopDurationSec;
-    if (typeof loopDurationSec !== 'number') {
-      return null;
-    }
-
-    const transportStartTime = typeof playback.transportStartTime === 'number'
-      ? playback.transportStartTime
-      : null;
-    const patternStartTime = typeof activePattern.startTime === 'number'
-      ? activePattern.startTime
-      : null;
+    const playback = this.host.getMusicPlayheadInfo();
+    if (playback.kind !== 'pattern') return null;
     return resolveMusicPlayheadStep({
-      audioCurrentTime,
-      transportStartTime,
-      patternStartTime,
-      loopDurationSec,
+      audioCurrentTime: playback.audioCurrentTime,
+      transportStartTime: playback.transportStartTime,
+      patternStartTime: playback.patternStartTime,
+      loopDurationSec: playback.loopDurationSec,
       stepCount: ROOM_PATTERN_ACTIVE_STEP_COLUMNS,
     });
   }
@@ -1084,8 +1054,8 @@ export class EditorMusicPatternController {
       const label = this.rowLabels[rowIndex];
       label.setVisible(this.overlayBackdrop?.visible ?? false);
       label.setPosition(origin.x - 8, origin.y + rowIndex * TILE_SIZE + TILE_SIZE * 0.5);
-      label.setText(
-        getPatternRowLabel(
+      syncMusicLabelStyle(label, {
+        text: getPatternRowLabel(
           this.activeInstrumentTab,
           rowIndex,
           pattern.pitchMode,
@@ -1095,17 +1065,13 @@ export class EditorMusicPatternController {
           pattern.keyTonic,
           pattern.keyMode,
         ),
-      );
-      label.setAlpha(
-        this.activeInstrumentTab === 'drums' && rowIndex < ROOM_PATTERN_DRUM_GRID_START_ROW
+        alpha: this.activeInstrumentTab === 'drums' && rowIndex < ROOM_PATTERN_DRUM_GRID_START_ROW
           ? 0.2
           : 0.92,
-      );
-      label.setColor(
-        this.activeInstrumentTab === 'drums' && rowIndex < ROOM_PATTERN_DRUM_GRID_START_ROW
+        color: this.activeInstrumentTab === 'drums' && rowIndex < ROOM_PATTERN_DRUM_GRID_START_ROW
           ? colorNumberToCssHex(theme.accentAlt)
           : colorNumberToCssHex(this.getInstrumentColor())
-      );
+      });
     }
   }
 
@@ -1122,14 +1088,18 @@ export class EditorMusicPatternController {
     const disabled = this.getLegacyStemNoticeVisible();
 
     this.mixTitleLabel?.setPosition(layout.centerX, layout.panelY + (MIX_TITLE_Y - 8));
-    this.mixTitleLabel?.setText(getPatternInstrumentLabel(this.activeInstrumentTab));
-    this.mixTitleLabel?.setAlpha(disabled ? 0.4 : 0.92);
-    this.mixTitleLabel?.setColor(colorNumberToCssHex(this.getInstrumentColor()));
+    syncMusicLabelStyle(this.mixTitleLabel, {
+      text: getPatternInstrumentLabel(this.activeInstrumentTab),
+      alpha: disabled ? 0.4 : 0.92,
+      color: colorNumberToCssHex(this.getInstrumentColor()),
+    });
 
     this.mixReadoutLabel?.setPosition(layout.centerX, layout.panelY + (MIX_READOUT_Y - 8));
-    this.mixReadoutLabel?.setText(`PAN ${panLabel} · VOL ${Math.round(mix.volume * 100)}%`);
-    this.mixReadoutLabel?.setAlpha(disabled ? 0.34 : 0.78);
-    this.mixReadoutLabel?.setColor(colorNumberToCssHex(theme.accentWarm));
+    syncMusicLabelStyle(this.mixReadoutLabel, {
+      text: `PAN ${panLabel} · VOL ${Math.round(mix.volume * 100)}%`,
+      alpha: disabled ? 0.34 : 0.78,
+      color: colorNumberToCssHex(theme.accentWarm),
+    });
   }
 
   private drawSelectionRect(graphics: Phaser.GameObjects.Graphics, rect: MusicRect): void {

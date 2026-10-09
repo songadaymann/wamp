@@ -9,6 +9,8 @@ import { handleMyActivity } from './worker/activity/routes';
 import { handleActivityUnsubscribe } from './worker/activity/unsubscribe';
 import { runActivityEmails } from './worker/activity/emails';
 import { handleGuestReplay, purgeGuestReplays } from './worker/guestReplay/routes';
+import { handleBugReports, purgeBugReports } from './worker/bugReports/routes';
+import { handleLostSongs, purgeLostSongSessions } from './worker/lostSongs/routes';
 import { pruneRateLimitEvents } from './worker/core/rateLimit';
 import { handleAdminRequest } from './worker/admin/routes';
 import { handleAuthRequest } from './worker/auth/routes';
@@ -106,6 +108,7 @@ import {
   handleRoomRushRunStart,
   handleRoomRushRunSubmit,
 } from './worker/runs/roomRushLeaderboards';
+import { handleWeeklyRoomRush, handleAdminWeeklyRoomRush } from './worker/runs/weeklyRoomRushRoutes';
 import {
   handleUserSettingsGet,
   handleUserSettingsPut,
@@ -219,6 +222,18 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
 
   {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    pattern: { prefix: '/api/admin/bug-reports' },
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleBugReports(request, url, env),
+  },
+  {
+    methods: ['GET', 'PUT', 'DELETE'],
+    pattern: '/api/admin/room-rush/weekly',
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleAdminWeeklyRoomRush(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     pattern: { prefix: '/api/admin/' },
     auth: 'admin',
     handler: ({ request, url, env, executionContext }) =>
@@ -265,6 +280,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
   },
   {
     methods: ['POST'],
+    pattern: '/api/bug-reports',
+    auth: 'optional',
+    handler: ({ request, url, env }) => handleBugReports(request, url, env),
+  },
+  {
+    methods: ['POST'],
     pattern: { prefix: '/api/guest-replays/' },
     auth: 'public',
     handler: ({ request, url, env }) => handleGuestReplay(request, url, env),
@@ -284,6 +305,10 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
   {
     methods: ['GET', 'POST'], pattern: { prefix: '/api/guest-runs/' }, auth: 'public',
     handler: ({ request, url, env, executionContext }) => handleGuestRunRequest(request, url, env, executionContext),
+  },
+  {
+    methods: ['GET', 'POST'], pattern: { prefix: '/api/lost-songs/' }, auth: 'optional',
+    handler: ({ request, url, env }) => handleLostSongs(request, url, env),
   },
   {
     methods: ['POST'], pattern: '/api/me/claim-guest', auth: 'authenticated',
@@ -321,6 +346,8 @@ export default {
         console.error(JSON.stringify({ event: 'run-ghost-cost-alert-failed' }));
       }
       await purgeGuestReplays(env);
+      await purgeBugReports(env);
+      await purgeLostSongSessions(env);
       await pruneGuestRuns(env);
       await pruneRateLimitEvents(env);
     }
@@ -836,6 +863,10 @@ export default {
 
       if (url.pathname === '/api/leaderboards/room-rush' && request.method === 'GET') {
         return await handleRoomRushLeaderboards(request, url, env);
+      }
+
+      if (url.pathname === '/api/room-rush/weekly' && request.method === 'GET') {
+        return await handleWeeklyRoomRush(request, env);
       }
 
       if (url.pathname === '/api/room-rush/runs/start' && request.method === 'POST') {

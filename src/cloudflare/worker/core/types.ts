@@ -465,6 +465,7 @@ export interface RoomRushRunRow {
   user_display_name: string;
   difficulty: string;
   start_rule: string;
+  event_week: string | null;
   result: RunResult;
   unique_rooms: number;
   elapsed_ms: number;
@@ -486,6 +487,7 @@ export interface RoomRushRunStartRow {
   user_id: string;
   difficulty: string;
   start_rule: string;
+  event_week: string | null;
   start_room_id: string;
   start_x: number;
   start_y: number;

@@ -37,6 +37,7 @@ export interface CourseEditorUiState {
   visible: boolean;
   title: string;
   pitsAreDeadly?: boolean;
+  playerHearts?: 1 | 2 | 3;
   canEdit: boolean;
   zoomText: string;
   tool: CourseEditorTool;

@@ -271,6 +271,10 @@ export class OverworldRoomChatController {
     return this.composerOpen;
   }
 
+  hasRenderedChatBubbles(): boolean {
+    return this.renderedBubblesByUserId.size > 0;
+  }
+
   handleEscapeKey(): boolean {
     if (!this.composerOpen) {
       return false;

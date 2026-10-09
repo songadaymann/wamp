@@ -1,5 +1,8 @@
 import type { AuthUser } from '../../../auth/model';
+import { normalizePlayerHearts, type PlayerHearts } from '../../../player/hearts';
 import type { RequestAuthSource } from '../../../agents/model';
+import { cloneRoomSnapshot, countRoomPlacedObjectsByCategory, type RoomSnapshot } from '../../../persistence/roomModel';
+import { getCourseEnemyGoalPublishValidationError } from '../../../courses/publishValidation';
 import {
   cloneCourseRecord,
   cloneCourseSnapshot,
@@ -157,6 +160,7 @@ export async function loadPublishedCourseMembershipsInBounds(
     goalType: CourseGoalType | null;
     roomCount: number;
     pitsAreDeadly?: boolean;
+    playerHearts?: PlayerHearts;
   }>
 > {
   const result = await env.DB.prepare(
@@ -203,6 +207,7 @@ export async function loadPublishedCourseMembershipsInBounds(
     return {
       goalType: snapshot?.goal?.type ?? null,
       ...(snapshot?.pitsAreDeadly === true ? { pitsAreDeadly: true } : {}),
+      ...(normalizePlayerHearts(snapshot?.playerHearts) > 1 ? { playerHearts: normalizePlayerHearts(snapshot?.playerHearts) } : {}),
       roomId: row.room_id,
       courseId: row.course_id,
       courseTitle: row.published_title,
@@ -557,12 +562,17 @@ async function resolveValidatedCourseDraft(
     throw new HttpError(400, 'Expanded room cells must stay in one connected cluster.');
   }
 
+  let enemyCount = 0;
   const resolvedRefs = await resolveCourseRoomRefsForActor(
     roomRefs,
     actor.id,
     options.roomVersionPolicy,
     async (roomId, requestedVersion) => {
       const roomVersion = await loadPublishedRoomVersionForCourse(env, roomId, requestedVersion);
+      if (options.requirePublishedGoal && draft.goal?.type === 'defeat_all') {
+        const snapshot = cloneRoomSnapshot(JSON.parse(roomVersion.snapshot_json) as RoomSnapshot);
+        enemyCount += countRoomPlacedObjectsByCategory(snapshot.placedObjects, 'enemy');
+      }
       return {
         version: roomVersion.version,
         title: roomVersion.title,
@@ -581,7 +591,8 @@ async function resolveValidatedCourseDraft(
         roomRefs: resolvedRefs,
         goal: nextGoal,
       },
-      resolvedRefs
+      resolvedRefs,
+      enemyCount,
     );
   }
 
@@ -690,7 +701,8 @@ function validateCourseGoalMarkers(goal: CourseSnapshot['goal'], roomRefs: Cours
 
 function validatePublishableCourseDraft(
   draft: CourseSnapshot,
-  roomRefs: CourseRoomRef[]
+  roomRefs: CourseRoomRef[],
+  enemyCount: number,
 ): void {
   if (!draft.title?.trim()) {
     throw new HttpError(400, 'Published expanded rooms need a title.');
@@ -729,9 +741,13 @@ function validatePublishableCourseDraft(
       }
       return;
     case 'collect_target':
-    case 'defeat_all':
     case 'survival':
       return;
+    case 'defeat_all': {
+      const error = getCourseEnemyGoalPublishValidationError(draft.goal, enemyCount);
+      if (error) throw new HttpError(400, error);
+      return;
+    }
   }
 }
 

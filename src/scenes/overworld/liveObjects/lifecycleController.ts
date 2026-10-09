@@ -94,6 +94,7 @@ export class LiveObjectLifecycleController<TEdgeWall = unknown> {
         layer: placedObject.layer,
         baseTimeSeed: placedObject.x + placedObject.y,
         placedInstanceId: placedObject.instanceId,
+        coopPlate: placedObject.coopPlate === true,
         linkedTargetRoomId: linkedTargetInstanceIds.length > 0 ? loadedRoom.room.id : null,
         linkedTargetInstanceId: linkedTargetInstanceIds[0] ?? null,
         linkedTargetInstanceIds,
@@ -102,6 +103,7 @@ export class LiveObjectLifecycleController<TEdgeWall = unknown> {
         containedObjectId: placedObject.containedObjectId ?? null,
         signText: placedObject.signText ?? null,
         objectiveMode: placedObject.swordsmanObjectiveMode ?? null,
+        bossHitPoints: placedObject.bossHitPoints ?? null,
         defeatMode: placedObject.swordsmanDefeatMode ?? null,
         policeBehaviorMode: getPlacedPoliceBehaviorMode(placedObject),
         policePatrolShoots: getPlacedPolicePatrolShoots(placedObject),
@@ -118,7 +120,7 @@ export class LiveObjectLifecycleController<TEdgeWall = unknown> {
         npcFriendlyFire: normalizeNpcFriendlyFire(placedObject.npcFriendlyFire),
         npcName: getPlacedNpcName(placedObject, config.name),
         npcDefeatMode: getPlacedNpcDefeatMode(placedObject),
-        countsTowardGoals: true,
+        countsTowardGoals: config.countsTowardGoals !== false,
       });
       if (liveObject) {
         loadedRoom.liveObjects.push(liveObject);

@@ -866,3 +866,27 @@ describe('traversal jumps and springs through the movement owner', () => {
     pressJump(h); expect(h.controller.isButtStomping()).toBe(false); expect(h.body.velocity.y).toBe(-220);
   });
 });
+
+
+describe('nonfatal hurt movement', () => {
+  it.each(['down', 'up', 'left', 'right'] as const)('pushes away from facing against %s gravity, then restores steering', gravity => {
+    const h = createHarness({ inWater: false, onIce: false, onSticky: false, conveyorX: 0, windX: 0,
+      gravityDirection: gravity, onBounce: false, onDamage: false });
+    // Establish this gravity before damage so the next frame is a normal step.
+    h.controller.updateMovement(16, false);
+    h.controller.applyHurtKnockback(1);
+    expect(getBodyVelocityAlongVector(h.body as never, getGravityRightVector(gravity))).toBeCloseTo(-100);
+    expect(getBodyVelocityAlongVector(h.body as never, getGravityVector(gravity))).toBeCloseTo(-120);
+    h.controller.updateMovement(16, false);
+    expect(getBodyVelocityAlongVector(h.body as never, getGravityRightVector(gravity))).toBeCloseTo(-100);
+    h.setNow(1200); h.controller.updateMovement(16, false);
+    expect(getBodyVelocityAlongVector(h.body as never, getGravityRightVector(gravity))).toBeCloseTo(0);
+  });
+
+  it.each(['reset', 'handleNoPlayerRuntime', 'handlePlayerCreated', 'handlePlayerDestroyed',
+    'handleRespawnReset', 'resetTransientPlayState'] as const)('%s cancels damage recoil before the next life', method => {
+    const h = createHarness(); h.controller.applyHurtKnockback(-1);
+    h.controller[method](); h.controller.updateMovement(16, false);
+    expect(h.body.velocity.x).toBeCloseTo(0);
+  });
+});

@@ -1,4 +1,5 @@
 import { buildActorInspectorState } from './actorInspectorViewModel';
+import { canConfigureCoopPlate, isCoopPressurePlate } from '../../placedObjects/coopPressurePlates';
 import Phaser from 'phaser';
 import {
   canObjectBeStoredInContainer,
@@ -74,6 +75,16 @@ export class EditorInspectorController {
 
   isConnectingPressurePlate(): boolean {
     return this.connectingPressurePlateInstanceId !== null;
+  }
+
+  setFocusedCoopPlate(enabled: boolean): void {
+    const placed = this.getFocusedPressurePlate();
+    if (placed && this.editRuntime.setCoopPlate(placed.instanceId, enabled)) {
+      this.pressurePlateStatusText = enabled
+        ? 'Co-op plate: other live players can hold it. Room clears stay practice.'
+        : 'Solo plate: your character, crates and enemies can press it.';
+    }
+    this.renderInspectorUi();
   }
 
   hasPinnedInspector(): boolean {
@@ -679,6 +690,15 @@ export class EditorInspectorController {
     }
   }
 
+  setFocusedBossHitPoints(value: number | null): void {
+    const focused = this.getFocusedSwordsman() ?? this.getFocusedPolice();
+    if (!focused || !this.editRuntime.setBossHitPoints(focused.instanceId, value)) return;
+    this.pinInspector(focused.id === SWORDSMAN_AI_OBJECT_ID ? 'swordsman' : 'police', focused.instanceId);
+    this.swordsmanStatusText = null;
+    this.policeStatusText = null;
+    this.renderInspectorUi();
+  }
+
   setFocusedPoliceBehaviorMode(mode: PoliceBehaviorMode): void {
     const focused = this.getFocusedPolice();
     if (!focused) {
@@ -870,6 +890,8 @@ export class EditorInspectorController {
         eligibleTargetCount,
         connectTitle: this.getObjectLinkNoTargetsTitle(source),
         allowReconnectWithTarget: true,
+        coopAvailable: canConfigureCoopPlate(source),
+        coopPlate: isCoopPressurePlate(source),
       }));
       return;
     }

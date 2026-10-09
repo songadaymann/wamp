@@ -11,6 +11,7 @@ import {
   type ResolvedExpandedRoomTarget,
 } from '../../../expandedRooms/model';
 import { type CourseGoalType, type CourseSnapshot } from '../../../courses/model';
+import { normalizePlayerHearts, type PlayerHearts } from '../../../player/hearts';
 import {
   isRoomMinted,
   parseRoomId,
@@ -446,12 +447,13 @@ async function loadNativeExpandedRoomTarget(
     const source = normalizeExpandedRoomSource(row.source_type, cells.length);
     const legacyCourseId =
       row.legacy_course_id ?? (source === 'legacy_course' ? getLegacyCourseIdFromExpandedRoomId(row.id) : null);
-    const { goalType, pitsAreDeadly } = getPublishedGameplaySettings(row.published_json);
+    const { goalType, pitsAreDeadly, playerHearts } = getPublishedGameplaySettings(row.published_json);
     return {
       expandedRoomId: row.id,
       title: row.published_title,
       goalType,
       ...(pitsAreDeadly ? { pitsAreDeadly: true } : {}),
+      ...(playerHearts > 1 ? { playerHearts } : {}),
       cellCount: cells.length,
       source,
       legacyCourseId,
@@ -535,6 +537,7 @@ function normalizeNativeMembershipRows(
       title: row.published_title,
       goalType: settings.goalType,
       ...(settings.pitsAreDeadly ? { pitsAreDeadly: true } : {}),
+      ...(settings.playerHearts > 1 ? { playerHearts: settings.playerHearts } : {}),
       cellCount,
       source,
       legacyCourseId,
@@ -642,6 +645,7 @@ async function loadLegacyCourseMembershipsAsExpandedRoomsForRoomIds(
           courseTitle: row.published_title,
           goalType,
           pitsAreDeadly: settings.pitsAreDeadly,
+          playerHearts: settings.playerHearts,
           roomCount: Number(row.room_count ?? 0),
         }),
         roomId: row.room_id,
@@ -708,6 +712,7 @@ async function loadLegacyCourseExpandedRoomTarget(
       courseTitle: snapshot.title,
       goalType: snapshot.goal?.type ?? null,
       pitsAreDeadly: snapshot.pitsAreDeadly,
+      playerHearts: snapshot.playerHearts,
       roomCount: cells.length,
     }),
     ownerUserId: record.ownerUserId,
@@ -829,6 +834,7 @@ async function loadStandaloneRoomExpandedRoomTarget(
       roomTitle: snapshot.title,
       goalType: snapshot.goal?.type ?? null,
       pitsAreDeadly: snapshot.pitsAreDeadly,
+      playerHearts: snapshot.playerHearts,
     }),
     ownerUserId: row.claimer_user_id ?? row.last_published_by_user_id,
     ownerDisplayName: row.claimer_display_name ?? row.last_published_by_display_name,
@@ -896,15 +902,17 @@ function normalizeExpandedRoomSource(value: string | null, cellCount: number): E
 function getPublishedGameplaySettings(raw: string | null): {
   goalType: ExpandedRoomGoalType | null;
   pitsAreDeadly: boolean;
+  playerHearts: PlayerHearts;
 } {
-  if (!raw) return { goalType: null, pitsAreDeadly: false };
+  if (!raw) return { goalType: null, pitsAreDeadly: false, playerHearts: 1 };
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') throw new Error('Invalid snapshot');
     const goal = 'goal' in parsed ? parsed.goal : null;
     const goalType = goal && typeof goal === 'object' && 'type' in goal && isExpandedRoomGoalType(goal.type)
       ? goal.type : null;
-    return { goalType, pitsAreDeadly: 'pitsAreDeadly' in parsed && parsed.pitsAreDeadly === true };
+    return { goalType, pitsAreDeadly: 'pitsAreDeadly' in parsed && parsed.pitsAreDeadly === true,
+      playerHearts: normalizePlayerHearts('playerHearts' in parsed ? parsed.playerHearts : undefined) };
   } catch {
     throw new HttpError(500, 'Stored expanded room data is invalid.');
   }

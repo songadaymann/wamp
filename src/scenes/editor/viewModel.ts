@@ -4,11 +4,15 @@ import type { EditorUiViewModel } from './uiBridge';
 import type { GoalPlacementMode } from './editRuntime';
 import type { EditorStatusDetails } from './roomSession';
 import type { EditorCourseUiState } from '../../ui/setup/sceneBridge';
+import { normalizePlayerHearts, type PlayerHearts } from '../../player/hearts';
+import type { ReadyToPublishChecklist } from './clearCheck';
 
 export interface BuildEditorUiViewModelOptions {
+  clearCheck?: ReadyToPublishChecklist;
   roomTitle: string | null;
   roomCameraCentered?: boolean;
   roomPitsAreDeadly?: boolean;
+  roomPlayerHearts?: PlayerHearts;
   roomCoordinates: RoomCoordinates;
   roomGoal: RoomGoal | null;
   roomGoalIntroText: string | null;
@@ -89,6 +93,7 @@ export function buildEditorUiViewModel(
     roomTitleValue: roomTitle ?? '',
     roomCameraCentered: options.roomCameraCentered === true,
     roomPitsAreDeadly: options.roomPitsAreDeadly === true,
+    roomPlayerHearts: normalizePlayerHearts(options.roomPlayerHearts),
     roomCoordinatesText: `Room (${roomCoordinates.x}, ${roomCoordinates.y})`,
     saveStatusText: saveStatus.text,
     saveStatusAccentText: saveStatus.accentText,
@@ -109,7 +114,8 @@ export function buildEditorUiViewModel(
     saveButtonTitle: 'Save Room Draft (Cmd/Ctrl+S)',
     saveDisabled: !roomPermissions.canSaveDraft,
     publishHidden: false,
-    publishButtonText: 'Publish Room',
+    clearCheck: options.clearCheck,
+    publishButtonText: options.clearCheck?.cleared ? 'Publish Room ✓' : 'Publish Room',
     publishButtonTitle: !roomPermissions.canPublish
       ? 'You cannot publish this room.'
       : publishValidationError ?? 'Publish Room (Cmd/Ctrl+Shift+P)',
@@ -182,10 +188,12 @@ export function buildEditorUiViewModel(
       placeStartActive: false,
       placeExitHidden: roomGoal?.type !== 'reach_exit',
       placeExitActive: roomPlacementMode === 'exit',
+      placeExitNeeded: roomGoal?.type === 'reach_exit' && !roomGoal.exit,
       addCheckpointHidden: roomGoal?.type !== 'checkpoint_sprint',
       addCheckpointActive: roomPlacementMode === 'checkpoint',
       placeFinishHidden: roomGoal?.type !== 'checkpoint_sprint',
       placeFinishActive: roomPlacementMode === 'finish',
+      placeFinishNeeded: roomGoal?.type === 'checkpoint_sprint' && !roomGoal.finish,
       linkNpcHidden: roomGoal?.type !== 'npc_quest',
       linkNpcActive: roomPlacementMode === 'npc',
       placeNpcDestinationHidden:
@@ -194,6 +202,7 @@ export function buildEditorUiViewModel(
     },
     course: {
       pitsAreDeadly: courseEditorState.pitsAreDeadly === true,
+      playerHearts: normalizePlayerHearts(courseEditorState.playerHearts),
       pitsDisabled: courseEditorState.pitsDisabled !== false,
       visible: courseEditorState.visible,
       statusHidden: courseEditorState.statusHidden,

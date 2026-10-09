@@ -20,6 +20,7 @@ import {
 } from '../../backgrounds/runtime';
 import type { RoomCoordinates } from '../../persistence/roomRepository';
 import type { WorldRepository } from '../../persistence/worldRepository';
+import type { RoomSnapshot } from '../../persistence/roomModel';
 import {
   RETRO_COLORS,
   createStarfieldTileSprite,
@@ -50,6 +51,13 @@ export class EditorBackgroundController {
   private surroundingRoomTextureKeys = new Set<string>();
   private surroundingPreviewToken = 0;
   private backgroundLoadToken = 0;
+  private neighborSnapshots: RoomSnapshot[] = [];
+  private neighborRevision = 0;
+  private neighborStatus: 'loading' | 'ready' | 'error' = 'loading';
+
+  get publishedNeighborSnapshots(): readonly RoomSnapshot[] { return this.neighborSnapshots; }
+  get publishedNeighborRevision(): number { return this.neighborRevision; }
+  get publishedNeighborStatus(): 'loading' | 'ready' | 'error' { return this.neighborStatus; }
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -237,6 +245,9 @@ export class EditorBackgroundController {
   }
 
   clearSurroundingRoomPreviews(): void {
+    this.neighborSnapshots = [];
+    this.neighborStatus = 'loading';
+    this.neighborRevision += 1;
     for (const image of this.surroundingRoomImages) {
       image.destroy();
     }
@@ -257,6 +268,7 @@ export class EditorBackgroundController {
 
   async refreshSurroundingRoomPreviews(radius: number): Promise<void> {
     const token = ++this.surroundingPreviewToken;
+    this.neighborStatus = 'loading'; this.neighborRevision += 1;
 
     try {
       const worldWindow = await this.worldRepository.loadWorldWindow(
@@ -280,6 +292,8 @@ export class EditorBackgroundController {
       }
 
       this.clearSurroundingRoomPreviews();
+      this.neighborSnapshots = loadedNeighbors.flatMap(item => item ? [item.snapshot] : []);
+      this.neighborStatus = loadedNeighbors.some(item => !item) ? 'error' : 'ready'; this.neighborRevision += 1;
       this.surroundingRoomBorders = this.scene.add.graphics();
       this.surroundingRoomBorders.setDepth(0);
       this.surroundingRoomBorders.lineStyle(2, RETRO_COLORS.published, 0.24);
@@ -319,6 +333,7 @@ export class EditorBackgroundController {
 
       console.error('Failed to load surrounding room previews', error);
       this.clearSurroundingRoomPreviews();
+      this.neighborStatus = 'error'; this.neighborRevision += 1;
     }
   }
 }

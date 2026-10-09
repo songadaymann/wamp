@@ -434,6 +434,52 @@
   border-left: 6px solid var(--editor-retro-green, #277b30);
 }
 
+#enemy-boss-hits-input {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--editor-retro-green, #277b30);
+}
+
+#enemy-boss-panel {
+  padding: 10px;
+  border: 0;
+  border-top: 2px solid var(--editor-retro-blue-deep, #2c5071);
+  border-radius: 0;
+  background: var(--editor-retro-cream, #fff3db);
+  color: var(--editor-retro-ink, #18161c);
+  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  font-size: 11px;
+}
+
+#enemy-boss-hits-output {
+  color: var(--editor-retro-blue-deep, #2c5071);
+  font: inherit;
+}
+
+#enemy-boss-panel .npc-checkbox-row,
+#pressure-plate-coop-row .npc-checkbox-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+#enemy-boss-hits-row:not(.hidden) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+#enemy-boss-hits-row .goal-control-label {
+  grid-column: 1 / -1;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector #enemy-boss-panel:not(.hidden) {
+  flex: 0 0 auto;
+  overflow: visible;
+  padding: 8px;
+}
+
 #editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-control-row:last-child {
   border-left-color: var(--editor-retro-yellow, #fcea7c);
 }

@@ -21,6 +21,8 @@ interface OverworldSessionResetHost {
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   hasActivePvpMatch(): boolean;
   isPvpDamageActive(): boolean;
+  tryAbsorbPlayerDamage?(): boolean;
+  onPlayerDeath?(): void;
   cancelPlayerAttack(): void;
   setActiveCourseRun(runState: ActiveCourseRunState | null): void;
   recordGoalRunDeath(): void;
@@ -44,6 +46,7 @@ interface OverworldSessionResetHost {
   finalizeActiveCourseRun(result: 'failed' | 'abandoned'): void;
   clearActiveCourseRoomOverrides(): void;
   resetRoomChallengeState(room: RoomSnapshot): void;
+  resetBossChallenges?(alreadyResetRoomId: string | null): void;
   resetTransientPlayState(): void;
   resetGoalRunController(): void;
   resetRoomRushController(): void;
@@ -53,7 +56,7 @@ interface OverworldSessionResetHost {
 export class OverworldSessionResetController {
   constructor(private readonly host: OverworldSessionResetHost) {}
 
-  handlePlayerDeath(reason: string): void {
+  handlePlayerDeath(reason: string, bypassHealth = false): void {
     if (this.host.isPlayerDeathPending?.()) return;
     const activeRun = this.host.getCurrentGoalRun();
     const activeCourseRun = this.host.getActiveCourseRun();
@@ -62,6 +65,9 @@ export class OverworldSessionResetController {
     if (activePvpMatch && !this.host.isPvpDamageActive()) {
       return;
     }
+
+    if (!activePvpMatch && !bypassHealth && this.host.tryAbsorbPlayerDamage?.()) return;
+    this.host.onPlayerDeath?.();
 
     this.host.cancelPlayerAttack();
 
@@ -140,9 +146,13 @@ export class OverworldSessionResetController {
       this.host.finalizeActiveCourseRun('abandoned');
     }
 
-    if (singleRoomRunToReset && this.shouldResetChallengeStateForRun(singleRoomRunToReset)) {
+    const singleRoomWasReset = singleRoomRunToReset && this.shouldResetChallengeStateForRun(singleRoomRunToReset);
+    if (singleRoomWasReset) {
       this.resetChallengeStateForRun(singleRoomRunToReset);
     }
+
+    // Cached cells can outlive an expanded run, Room Rush or goal-less play.
+    this.host.resetBossChallenges?.(singleRoomWasReset ? singleRoomRunToReset.roomId : null);
 
     this.host.setActiveCourseRun(null);
     this.host.clearActiveCourseRoomOverrides();

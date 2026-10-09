@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getFreshCoopPlatePlayers } from '../../presence/coopPlateActors';
 import {
   type DefaultPlayerAnimationState,
 } from '../../player/defaultPlayer';
@@ -314,6 +315,14 @@ export class OverworldPresenceController {
 
   getRenderedGhostsByConnectionId(): Map<string, RenderedGhost> {
     return this.renderedGhostsByConnectionId;
+  }
+
+  getCoopPlatePlayers(now = Date.now()): WorldGhostPresence[] {
+    if (!this.snapshot?.enabled || this.options.getMode() !== 'play') return [];
+    return getFreshCoopPlatePlayers(this.snapshot.ghosts, {
+      now, localUserId: this.identity?.userId ?? null,
+      instanceOpponentUserId: this.pvpInstanceOpponentUserId,
+    });
   }
 
   setPvpMatchSnapshot(snapshot: PvpMatchSnapshot | null, localUserId: string | null): void {

@@ -1,4 +1,5 @@
 import { deathLocationsJson } from '../insights/deathLocations';
+import { assertSoloCourseRun } from '../runs/coopPolicy';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from '../runs/finalizationVerification';
 import {
@@ -146,6 +147,7 @@ export async function handleExpandedRoomRunStart(
     body.expandedRoomVersion,
   );
   const { snapshot } = context;
+  await assertSoloCourseRun(env, snapshot);
   if (!snapshot.goal) {
     throw new HttpError(400, 'This expanded room version does not have an active goal.');
   }
@@ -292,6 +294,7 @@ export async function handleExpandedRoomRunFinish(
     existing.expandedRoomVersion,
   );
   const { snapshot } = context;
+  await assertSoloCourseRun(env, snapshot);
   if (!snapshot.goal) {
     throw new HttpError(409, 'This expanded room version no longer has a leaderboard goal.');
   }

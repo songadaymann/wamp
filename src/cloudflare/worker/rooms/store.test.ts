@@ -9,9 +9,17 @@ import {
   loadRoomSummary,
   loadRoomSnapshotsByReferences,
   snapshotReferenceKey,
+  saveDraft,
 } from './store';
 
 describe('compact room reads', () => {
+  it('rejects duplicate or decorative Lost Songs before issuing any room write', async () => {
+    const room = createDefaultRoomSnapshot('0,0', { x: 0, y: 0 });
+    room.placedObjects = [0,1].map(n => ({ id: 'lost_song', instanceId: 'song-'+n, x: 16*n, y: 16, layer: 'terrain' }));
+    await expect(saveDraft({} as never, room, {} as never)).rejects.toMatchObject({ status: 400 });
+    room.placedObjects = [{ ...room.placedObjects[0], layer: 'background' }];
+    await expect(saveDraft({} as never, room, {} as never)).rejects.toMatchObject({ status: 400 });
+  });
   it('uses stable opaque room-version cursors', () => {
     const cursor = encodeRoomVersionCursor(176);
     expect(cursor).not.toContain('176');

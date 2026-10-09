@@ -1,3 +1,347 @@
+## 2026-10-09 — Authorized overnight integration release
+
+Original request: "deploy all the other stuff you made last night as well" while accounting for the partner's overlapping changes. This authorization supersedes the overnight draft-only delivery boundary below.
+
+The complete stack through `997c5251` is integrated on fresh production `39189b93`, including partner PR #99 and live ghost archive PR #100. Seven conflict files preserve camera/layer behavior, Move and Templates, navigation and both sets of API routes. Combined verification passes 406 files / 3,225 tests, lint/types/bindings/build, DOM and Worker safety. Separate local fixtures supply integration proof; no primary or original preview edits are changed. Coordinated map/API/Pages release remains pending. Track the current release in `docs/review/wamp-overnight-release-2026-10-09.md`.
+
+## 2026-10-09 — Repeating browser-only Guest clears popup
+
+Original prompt: "Also - i think everyone is getting this alert over and over, even if we go in and do the room while signed in. It keeps showing up regarldess. do you see why that might be?"
+
+Follow-up on boss-bar candidate `0aab3564`, branch `codex/fix-repeating-guest-clear-prompt-2026-10-09`. The Guest clears controller used the browser-only history list as an automatic-popup trigger, with an in-memory `legacySeen` map reset on reload. A signed-in replay does not remove that browser record. Older history now opens only when requested from Guest clears; automatic presentation requires a new, non-empty verified account claim receipt. Claim retry/receipt deduplication, replay links, stored history and XP handling are preserved.
+
+The regression fails on the previous source and passes with the fix. Focused validation passes 51 tests across the modal, reminder, claim service and browser history, plus lint/TypeScript. Real local signed-in desktop and phone browser flows retain the old clear, open/close history from the menu, and stay quiet through focus/online/session refresh and page reload with no page errors. Captures were inspected. The initial headed probe completed desktop before its browser closed during phone startup; the completed headless rerun covers both. The unchanged official client boots to the existing Welcome overlay; the native flows supply modal proof. Evidence: `/tmp/wamp-guest-clear-reminder-2026-10-09/`.
+
+The same `http://127.0.0.1:3040` preview serves this change and remains on the remote safety API. No remote data changes or deployment. Keep the boss-bar follow-up and overnight stack for review/release; primary edits and master count remain unchanged.
+
+## 2026-10-09 — Boss health bars above heads
+
+Original prompt: "can you make it so the health bar of bosses is above them instead of on top of them"
+
+Small local follow-up on the overnight stack (`4cc8eaab`), branch `codex/fix-boss-health-bar-position-2026-10-09`. The health-bar anchor uses the minimum transparent top padding across the actual Sword Hunter/Police Patrolman/Policewoman animation sheets, with an eight-pixel gap below the six-pixel bar. Object preview crops previously let the bar overlap the Sword Hunter and jumping patrolman. Shared runtime placement covers room play and editor tests.
+
+Validation: targeted lint and TypeScript pass; three existing boss tests pass. Native desktop play for all three enemies and portrait phone play pass with no page errors. Controlled sprite-pose checks cover 152 distinct boss animation frames, plus the Sword Hunter's 57 frames on phone, with minimum clearances of 7.5–8 pixels after rounding. Gameplay and phone captures were inspected. Evidence: `/tmp/wamp-boss-bars-2026-10-09/`. The unchanged official client reaches collision-ready play; its capture has the existing performance-advisor modal, so the native captures supply visual proof.
+
+The running preview at `http://127.0.0.1:3040` serves this fix and continues to target the remote safety API. A separate local-fixture preview supplied verification; no remote room writes or deployment. Morning stack review/release remains pending; the old candidates and dirty primary checkout are preserved.
+
+## 2026-10-09 — 05:00 morning handoff
+
+The authorized overnight window ends at 05:00 New York / 09:00 UTC. Eighteen draft PRs #81–#98 are pushed/attached; no merge or release. Latest quality gate: 405 files / 3,212 tests. Primary and remote main preserved. Review index, partial scopes and release prerequisites: `docs/review/wamp-overnight-2026-10-09.md`. Manual actual background-tab verification remains before releasing F229. Stop goal work at the deadline.
+
+## 2026-10-09 — Overnight checklist goal / F229 hidden-tab audio first slice
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-hidden-tab-audio-2026-10-09` stacks on F226 / draft #97. Preserve primary and production. Evidence: `/tmp/wamp-hidden-tab-audio-2026-10-09/`.
+
+- [x] Disable the unused Phaser audio context; suspend owned music/routed-SFX contexts while hidden and resume on return after interaction.
+- [x] Stop active SFX/media and suppress new hidden cues without replaying stale effects; guard pending play ownership.
+- [x] Verify asynchronous hidden/resume races, controlled visibility with real audio/music timing and SFX cleanup, inspected screenshots and quality/preservation gates.
+- [x] Save/push/attach tested stacked draft/receipt; keep master unticked. No release.
+
+Shared buses, Safari audioSession and automatic visible interruption recovery remain separate optional work; no battery/unlock benchmark claim.
+
+Verification: 405 files / 3,212 tests, gates, two controlled-visibility/real-audio browser cases and native preview/Stop pass. Ordinary background-tab/window switching remains a manual pre-release check due automation focus emulation. See `docs/review/wamp-hidden-tab-audio-2026-10-09.md`. Save the draft and morning handoff; stop at 05:00.
+
+Saved source `be355ca3` in [draft PR #98](https://github.com/songadaymann/wamp/pull/98), pushed and attached. Morning handoff; stop at the deadline.
+
+## 2026-10-09 — Overnight checklist goal / F226 music labels and playhead
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-label-playhead-2026-10-09` stacks on F225 / draft #96. Preserve primary and production. Evidence: `/tmp/wamp-music-label-playhead-2026-10-09/`.
+
+- [x] Update music label text/color/alpha only when their displayed values change.
+- [x] Read a lightweight playhead snapshot without cloning/serializing the arrangement in both editor hosts.
+- [x] Verify stable-frame counters, native tab/edit/history/resizing and Expanded editor behavior; inspect screenshots and run quality/preservation checks.
+- [x] Save/push/attach tested stacked draft/receipt, keep master unticked and continue until the deadline. No release.
+
+Graphics command caching remains optional separate work; this slice addresses label texture rebuilds and preview clone overhead.
+
+Verification: 404 files / 3,204 tests, gates and three native counter/history/responsive cases pass. All screenshots inspected; publications/primary preserved. See `docs/review/wamp-music-label-playhead-2026-10-09.md`. Continue F229 before the deadline.
+
+Saved source `c8461bc7` in [draft PR #97](https://github.com/songadaymann/wamp/pull/97), pushed and attached. Continue F229.
+
+## 2026-10-09 — Overnight checklist goal / F225 mono and muted music
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-mono-mute-2026-10-09` stacks on F221 `f587f8db` / draft #95. Preserve primary and production. Evidence: `/tmp/wamp-music-mono-mute-2026-10-09/`.
+
+- [x] Store centered pattern/phrase loops as mono while preserving their previous channel waveform and panned stereo output.
+- [x] Skip new room-music loads/renders while muted, stop owned sources, and resume only the latest requested song after unmuting; explicit Stop cancels resumption.
+- [x] Verify asynchronous cancellation, previews, real mono buffers and native Settings/editor behavior; inspect responsive/gameplay screenshots and run quality/preservation checks.
+- [x] Save/push/attach tested stacked draft and receipt, keep master unticked and continue until the deadline. No release.
+
+F220 already bounds retained caches. This slice does not cancel CPU work already dispatched or change SFX/tab lifecycle.
+
+Verification: 403 files / 3,198 tests, quality gates, four accepted native cases and inspected captures pass. Primary and published fixtures preserved. See `docs/review/wamp-music-mono-mute-2026-10-09.md`. Continue F226 label/playhead overhead.
+
+Saved source `f86698d1` in [draft PR #96](https://github.com/songadaymann/wamp/pull/96), pushed and attached. Continue F226.
+
+## 2026-10-09 — Overnight checklist goal / F221 periodic music tails and hat choke
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-loop-tails-2026-10-09` stacks on F224 `42714ad6` / draft #94. Preserve primary and production. Evidence: `/tmp/wamp-music-loop-tails-2026-10-09/`.
+
+- [x] Fold tonal release and drum tails into the beginning of their mono loop before nonlinear mixing; keep loop duration and array retention bounded.
+- [x] Choke open hats over 10 ms when the next open/closed hat starts, including the cyclic seam and simultaneous closed-hat priority.
+- [x] Verify actual renderer samples against longer uncut reference phrases, choke/swing/seam cases and real Web Audio preview/world handoff; inspect screenshots and finish quality/preservation checks.
+- [x] Save/push/attach tested stacked draft and receipt; keep master unticked and continue until the deadline. No release.
+
+PolyBLEP and general monophonic drum rows remain optional separate sound changes. Folded previous-loop tails at first entry are covered by F224's fade-in; no claim about production incidence or subjective hiss reduction.
+
+Verification: 403 files / 3,185 tests and quality gates; three native/real-audio cases; exact 48 kHz uncut references, actual two-loop WAV and inspected screenshots. Primary and authored publication content preserved, with raw-fixture MIDI canonicalization recorded. See `docs/review/wamp-music-loop-tails-2026-10-09.md`. Continue the small F225 mono/mute slice; F223 Worker/prefetch remains larger pending work.
+
+Saved source `a72deb67` in [draft PR #95](https://github.com/songadaymann/wamp/pull/95), pushed and attached. Continue F225 mono/mute.
+
+## 2026-10-09 — Overnight checklist goal / F224 room music transitions
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-transitions-2026-10-09` stacks on F220 `c2ba1572` / draft #93. Preserve primary and production. Evidence: `/tmp/wamp-music-transitions-2026-10-09/`.
+
+- [x] Use one transition plan for pattern, phrase and stem playback: fresh downbeat/fade-in, compatible phase-lock and short incompatible crossfade.
+- [x] Stop queued sources silently before they start, preserve fade envelopes, and avoid bar-delayed silent-room tails.
+- [x] Debounce music target changes across room crossings for 400 ms without changing gameplay room/camera/collision transitions; cancel on return, reset and mode exit.
+- [x] Verify meaningful scheduling/selection tests, real Web Audio with native room crossings and responsive/gameplay screenshots, quality gates and preservation evidence.
+- [x] Save/push/attach tested stacked draft and receipt, keep master unticked and continue until the deadline. No release.
+
+Verification: 402 files / 3,174 tests and quality gates, DOM 992/242, Worker safety and diff pass. Eight real-audio native cases, all inspected screenshots and unchanged fixture/primary proofs pass. See `docs/review/wamp-music-transitions-2026-10-09.md`. Continue F221 loop tails/hi-hat choking before the deadline.
+
+Saved source `02192a40` in [draft PR #94](https://github.com/songadaymann/wamp/pull/94), pushed and attached. Continue F221 loop tails and hi-hat choking.
+
+## 2026-10-09 — Overnight checklist goal / F220 music preview and cache first slice
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-preview-2026-10-09` stacks on F166 `f24986bf` / draft #92. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-music-preview-2026-10-09/`.
+
+- [x] Coalesce pending editor preview refreshes at 150 ms, flush canvas gesture completion and cancel on immediate sync/stop/reset/shutdown; keep authored edits immediate.
+- [x] Bound all shared RoomMusicController clip/lane/pattern/phrase buffers with LRU group limits and a combined byte budget. Preserve active callers, deduplication, retry after rejection and late-resolution ownership.
+- [x] Verify meaningful debounce/cache/workflow tests and native desktop/phone/Expanded music editing, final preview correctness, stop/room transitions and buffer limits under real Web Audio.
+- [x] Finish quality gates, inspected responsive/ordinary gameplay capture and primary/source preservation evidence.
+- [x] Save/push/attach a tested stacked draft and receipt; keep full F220/master unticked and continue until the deadline. No production release.
+
+First slice addresses queued preview work and shared cache growth. Per-instrument stems, live gain/pan mixing and slot-by-slot arrangement playback remain larger slices. Dispatched asynchronous audio renders retain their existing playback-request stale guard; cancellation here prevents superseded queued edits from being dispatched.
+
+Verification: 400 files / 3,153 tests and quality gates, DOM 992/242, Worker safety and diff pass. Three accepted native cases and inspected screenshots prove final preview, cancellation, exact history, selected-cell save and bounded real buffers. Existing portrait grid obstruction and desktop Close overlap remain recorded; no touch-grid pass is claimed. See `docs/review/wamp-music-preview-2026-10-09.md`. Continue F224 before the deadline.
+
+Saved source `b144756a` in [draft PR #93](https://github.com/songadaymann/wamp/pull/93), pushed and attached. Continue F224 room music transitions.
+
+## 2026-10-09 — Overnight checklist goal / F166 neighbor edge guides
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-neighbor-guides-2026-10-09` stacks on F165 `209e601a` / draft #91. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-neighbor-guides-2026-10-09/`.
+
+- [x] Derive conservative standing-player edge openings from gameplay collision profiles, one-way/platform semantics and static solid objects; show matched, blocked and empty-space states.
+- [x] Reuse already-loaded published neighbor snapshots, cache by neighbor identity and monotonic document revision, and recompute only after commits/loads. Loading failures must stay unknown.
+- [x] Draw visible edge guides in standalone editing and show advisory connection information; keep sealed rooms publishable and Expanded internal seams clear.
+- [x] Verify collision/clearance/version/cache tests, native desktop/phone matching/blocking/Undo/Redo/publication and Expanded seam isolation; quality gates and inspected unchanged installed-client capture.
+- [x] Save/push/attach tested stacked draft and receipt, leave master unticked and continue until the deadline. No production release.
+
+First slice targets standalone room edges. Expanded external-perimeter guides are deferred; internal seams are deliberately untouched. Hints describe static geometric clearance, not reachability through triggers or moving hazards.
+
+Verification: 397 files / 3,143 tests and quality gates, DOM 992/242, Worker safety and diff pass. Four completed native cases cover desktop/phone edge edits and exact Undo/Redo, local publication, sealed-room advisory publication and Expanded seam isolation; unchanged-frame guide exports stay zero. All responsive/gameplay screenshots inspected. Primary preserved and neighbor 197/42 remains its exact v1 snapshot. See `docs/review/wamp-neighbor-guides-2026-10-09.md` for first-slice and synthetic-course diagnostic limits.
+
+F167 remains pending: no model binding/provider or generation quota currently exists. Avoid adding an unconfigured public generation path. Continue F220’s verified small debounce/global-cache slice before the deadline; stems and slot scheduling remain larger work.
+
+Saved source `66c2b33a` in [draft PR #92](https://github.com/songadaymann/wamp/pull/92), pushed and attached. Continue F220 music preview/cache first slice.
+
+## 2026-10-09 — Overnight checklist goal / F165 editor history and previews
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-editor-history-2026-10-09` stacks on F162 `f546b106` / draft #90. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-editor-history-2026-10-09/`.
+
+- [x] Bound room history to the latest 150 edits, preserving ordinary Undo/Redo and clearing Redo only on a new committed edit.
+- [x] Capture Smart metadata lazily only for Smart-affecting operations, reuse its before snapshot on commit and skip retained metadata for unchanged/plain manual strokes. Preserve manual locks, erasure, cancellation and semantic-only edits.
+- [x] Cache rain surfaces by a monotonic document revision and skip static lighting exports with lighting off; refresh correctly after edits, Undo/Redo and load.
+- [x] Verify meaningful tests, native desktop/phone/Expanded history and rain/lighting checks, quality gates and inspected unchanged installed-client capture.
+- [x] Save/push/attach tested stacked draft and receipt, leave master unticked and continue the checklist. No production release.
+
+Verification: 394 files / 3,125 tests and quality gates, DOM 992/242, Worker safety and diff pass. Three completed native cases prove a 170-stroke capped desktop session with absent plain-tile Smart copies, stable rain/off-lighting exports and toggle refresh, native phone Undo/Redo, and Expanded Smart metadata history/neighbor preservation/selected-cell publication. Screenshots and official healthy gameplay inspected. Primary hashes match F162; production preserved. Synthetic legacy-course preferred run-start FK/fallback limitation is documented in `docs/review/wamp-editor-history-2026-10-09.md`.
+
+Saved source `1dd1c031` in [draft PR #91](https://github.com/songadaymann/wamp/pull/91), pushed and attached. Continue F166 neighbor edge guides.
+
+## 2026-10-09 — Overnight checklist goal / F162 object drag-to-move first slice
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-object-move-2026-10-09` stacks on F159 `156df31a` / draft PR #89. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-object-move-2026-10-09/`.
+
+- [x] Add an explicit Move tool / M shortcut, native desktop and phone object dragging, snapping by whole tile offsets and a visible preview.
+- [x] Preserve exact object identities, layers, contents, NPC dialogue/settings and incoming/outgoing links; record one Undo/Redo action only on a committed move.
+- [x] Reject occupied/out-of-cell destinations and read-only changes; cancel safely on Escape, tool change, touch cancellation, second touch, blur, sleep and pointer release outside the canvas.
+- [x] Support standalone and Expanded Room cells with shared movement logic; keep other cells, markers, Smart terrain and ordinary painting/inspection intact.
+- [x] Verify meaningful movement/history/cancellation tests and native desktop/phone/area save/reload/publication, quality gates and inspected unchanged installed-client capture.
+- [x] Save/push/attach a tested stacked draft and receipt, leave full F162/master unticked, and continue the checklist. No production release.
+
+Scope follows the fact-check: object drag-to-move first. Multi-layer marquee selection, cross-room clipboard and saved stamps remain later slices. Cross-cell moves are excluded to preserve existing local links and ownership.
+
+Verification: 392 files / 3,114 tests and quality gates pass, including final CSS build, DOM 992/242 and Worker safety. Twelve accepted native cases and actual local room/area publication pass; screenshots and official healthy gameplay are inspected. Exact configurations/links, one-action history, Clear Check recovery, private read-only policy and lifecycle cancellation are proven. Primary fingerprints match F159; production unchanged. See `docs/review/wamp-object-move-2026-10-09.md` and `/tmp/wamp-object-move-2026-10-09/accepted-report.json` for honest diagnostic boundaries.
+
+Saved source `8df6d59a` in [draft PR #90](https://github.com/songadaymann/wamp/pull/90), pushed and attached. Continue F165 editor history/performance.
+
+## 2026-10-09 — Overnight checklist goal / F159 advisory Clear Check
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-clear-check-2026-10-09` stacks on F163 `48d2dda8` / draft PR #88. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-clear-check-2026-10-09/`.
+
+- [x] Build a bounded session-only current-draft clear receipt and advisory checklist for standalone rooms; respect automatic starts and goal-free exploration. Never use the client flag to gate XP, rewards or leaderboards.
+- [x] Record only complete editor tests from the authored start, scope to the exact tested snapshot and room, invalidate on edits, recover on editor wake/reload and exclude cursor-start practice/other rooms/courses.
+- [x] Show compact Markers checks and an explicit pre-publish review, retain existing hard publish guards, improve Back to Editor/Test controls and add explicit cursor-start practice on desktop/phone.
+- [x] Verify meaningful receipt/safety/flow tests, native full-test return/edit/Undo/reload, failed/cursor tests, optional goals/starts and actual publish paths; finish quality gates and inspected unchanged installed-client capture.
+- [x] Save/push/attach a tested stacked draft and receipt, leave master unticked and continue the checklist. No production release; inherited stack delivery requirements apply.
+
+Fact-check scope: first version is standalone, advisory and local to this browser tab. The proposed reward deferral must use server-verified published clears and is excluded from this UI flag. Terrain-marker warnings are advisory because an exit within goal proximity can still be reached from beside a small solid tile; existing missing-marker/count blockers remain shared and authoritative. Guest signup timing will be evaluated against current claim recovery before changing it.
+
+Verification: 390 files / 3,094 tests, lint, types, bindings and build pass. DOM 992/242, Worker safety and diff checks pass. Thirteen accepted native cases cover desktop clear/return/edit/Undo/save/reload/publication, failed timer, phone cursor practice, optional goal/automatic-start room publication through the existing suggested-name step, hard missing-exit guards, advisory hazard/terrain warnings, narrow/landscape review, Expanded isolation, phone joystick clear, Shift+Enter practice and Escape. All successful editor tests remain draft/local-only with no ranked request or attempt id. Screenshots and the unchanged installed-client capture are inspected; primary hashes match F163.
+
+Native testing exposed a published-refresh race: forceRefreshAround reset the injected unchanged draft. Standalone tests now preserve the exact draft; course published refresh stays intact, with regression assertions. The initial diagnostic is retained. Two optional-room runners stopped at the pre-existing name dialog; the corrected native runner accepts its suggested name and publishes. Preview-token 404s are existing; no page errors. Automatic guest claim popups are already suppressed by the current controller, so this candidate preserves deliberate sign-in and introduces no popup after a clear. The flag is advisory UI only and never gates server XP/rewards/ranks. No production change.
+
+Saved source `e1b73df1` in [draft PR #89](https://github.com/songadaymann/wamp/pull/89), pushed and attached. Continue F162 object drag-to-move first.
+
+## 2026-10-09 — Overnight checklist goal / F163 starter room templates
+
+Continue the authorized checklist goal until **05:00 America/New_York / 09:00 UTC**. Canonical branch `codex/checkup-room-templates-2026-10-09` stacks on F156 `3231ab4c` / draft PR #87. Preserve the dirty primary, saved candidates and production. Evidence: `/tmp/wamp-room-templates-2026-10-09/`.
+
+- [x] Build Flat Run, Stairs Up, Vertical Climb, Arena, Platform Chain and Blank layouts with extendable registered Smart terrain, safe spawn/exit positions and bounded neighboring theme selection. Lazy-load the builder/catalog when opening the picker.
+- [x] Add an empty-Terrain entry and a Room-panel template picker with previews and explicit layout replacement; apply all layout changes as one Undo/Redo action, respecting read-only rooms and preserving other room settings.
+- [x] Support desktop, phone and selected Expanded Room cells; preserve Smart ownership, object settings/links and authored data through replacement/Undo, save/reload and actual publication.
+- [x] Verify all starter paths with native play, default Smart brush extension, meaningful layout/history tests, full quality gates and inspected unchanged installed-client captures.
+- [x] Save/push/attach a tested stacked draft and receipt, leave master unticked and continue to F159 Clear Check. No production release; inherited stack release requirements apply.
+
+Source verification: **388 files / 3,087 tests**, lint, TypeScript, bindings and build pass. DOM **980/242**, Worker safety and diff checks pass. The 39 new tests cover every supported style/layout, supported clear markers, Smart extension, preserved metadata and one-action layout Undo/Redo with linked objects, previous history and read-only guards. Desktop/phone/native selected area flows actually save, reload and publish; narrow phone and landscape picker actions remain reachable. All five playable layouts clear through native keyboard movement with **zero deaths**, new published version 2 and actual local D1 run/audit status `passed`. Arena uses adaptive normal jumps after the fixed timing harness collided with its moving red slime; no pose injection or layout weakening. Blank remains deliberately empty.
+
+The desktop empty-entry case completed before a wrong Room selector stopped the first combined runner. Phone Room lives under More; the corrected runner passes eight remaining cases (`native-c.mjs`, output `native-b/report.json`). Failed selector logs, an initial play/version race, a wrong run-field/status assertion and the fixed Arena timing diagnostic remain retained. Editor captures contain the existing construction-preview 404s and one known navigation-cancelled chat poll; final native and play captures have zero page errors. The unchanged installed client capture has healthy visible player/terrain/collision and no error artifact, and is inspected along with the desktop, phone, narrow and Expanded screenshots. Primary hashes match F156. No asset/catalog, migration, renderer or PartyKit change is introduced; frontend plus the additive replay-event validator must ship together in the eventual API/Pages stack release. No production write occurred.
+
+Additional native phone joystick play clears the new Flat Run in 3.831s with zero deaths, zero page/console errors and an actual saved local run. Its verification status is `not_required` with no sampled audit; the five desktop clears independently have `passed` run/audit evidence. No phone audit is claimed. The actual narrow-phone picker action, Expanded publication and phone clear screenshots are inspected.
+
+Saved source `8a4fd12a` in [draft PR #88](https://github.com/songadaymann/wamp/pull/88), pushed and attached on F156. Continue F159.
+
+## 2026-10-09 — Overnight checklist goal / F156 publish validation
+
+Continue the authorized checklist goal until **05:00 America/New_York / 09:00 UTC**. Canonical branch `codex/checkup-publish-validation-2026-10-08` stacks on F152 `6e268a23` / draft PR #86. Preserve the dirty primary, earlier candidates and production. Evidence: `/tmp/wamp-publish-validation-2026-10-08/`.
+
+- [x] Reject missing exits, missing sprint finishes and zero-enemy Defeat All goals in shared standalone/agent publish validation; cover Expanded Room enemy counts from exact published cell versions.
+- [x] Highlight the existing Set Exit / Set Finish actions while a required marker is missing. Keep placement explicit on phone and retain working finish-only standalone sprints.
+- [x] Add a bounded private read-only room-setup panel to the suspicious admin console and audit current published setup problems without changing rooms or player rewards.
+- [x] Verify meaningful server/authoring tests, native desktop/phone blocked-then-fixed publishes, actual Expanded Room publication and admin authentication/pagination; inspect the unchanged installed-client gameplay capture and complete all gates.
+- [x] Save/push/attach a tested stacked draft, record the release receipt and continue to F163 starter templates. Master remains 55/215 until delivery; inherited F144 map/catalog release gate applies.
+
+Verification: **387 files / 3,048 tests**, lint, final TypeScript, API/renderer bindings, build, DOM **967/242** and Worker safety pass. Five native editor/publication cases plus final desktop/phone area reloads and four native admin cases pass. Eight actual API checks cover the three standalone guards, an agent-authored draft, both area publish routes, private paging and authentication. SQL uses the same direct/contained enemy categories, with real SQLite coverage. Screenshots and the unchanged installed-client play capture are inspected; primary hashes match F152. Incomplete drafts remain saveable; ordinary/agent publish checks are shared. Expanded validation counts the exact versions already loaded for publish, with no additional room reads; client controls count published cell enemies.
+
+Current read-only public sample: **682 published rooms** in the central radius-32 window, **122 relevant standalone goals**, one missing exit (7,-1 “Death”, v9), one missing finish (3,4, v1212), zero empty Defeat All goals and no failed reads. These are sampled counts, not global totals. D1 authentication failed before SQL execution; the public world/current API supplied the audit. No production room or reward mutation occurred. The private panel can review global current standalone setup issues after release, capped at 100 rows per page and excluding area cells.
+
+Retained diagnostics cover an unknown enemy fixture ID corrected to `slime_blue`, dismissal of the existing validation dialog, the native Characters dock, an encoded colon in the actual area POST, a test-only SQLite row type, and an admin grid minimum-width fix verified on phone. `native-c/receipt-final.json` validates the actual successful encoded area POST plus published area v2/root cell v2 after correcting the runner path assertion. Existing construction-preview 404s remain in editor captures; final area reload and installed-client play have no page or console errors. Admin's deliberate bad-key requests/aborted review account for its four console errors, with zero page errors. No new migration/catalog/renderer/PartyKit change; API Worker and Pages delivery are needed, with inherited stack release requirements still pending.
+
+Saved source `7ad04621` in [draft PR #87](https://github.com/songadaymann/wamp/pull/87), stacked on draft #86; pushed and attached. Continue the active overnight goal with F163 starter templates. Production and master ticks remain unchanged.
+
+## 2026-10-08 — Overnight checklist goal / F152 co-op pressure plates
+
+Original prompt: "ok i am ging to bed can you set a goal to make your way through the list until 5am"
+
+Continue the active goal until **2026-10-09 05:00 America/New_York / 09:00 UTC**. Canonical lane `codex/checkup-coop-plates-2026-10-08` stacks on F151 `9f493040` / draft PR #85. Preserve the dirty primary and all earlier candidates. Prepare a tested draft for morning review; production remains unchanged. No agents are authorized.
+
+- [x] Audit plate links, live presence coordinates/lifetime, both editor inspectors and ranked-run/discovery paths; keep existing OR links and solo crate/enemy activation.
+- [x] Add a normalized opt-in co-op plate flag with desktop/phone/Expanded Room controls, persistence/Undo and agent authoring support.
+- [x] Count fresh live players in the same physical room independently of avatar visibility; exclude replay ghosts, edit/browse, stale and PvP-instance players. Release doors when a holder leaves/disconnects.
+- [x] Show truthful co-op room information and keep assisted rooms out of solo ranked clears; preserve ordinary plates and solo Room Rush fairness.
+- [x] Verify native two-client keyboard/touch play, real saves and solo/ranked boundaries, plus meaningful tests/full gates and inspected installed-client play; save/push/attach a stacked draft and advance the goal.
+
+Evidence: `/tmp/wamp-coop-plates-2026-10-08/`. A plate flag supports one person holding a door for another. Requiring all linked plates is a separate follow-up. No production release; inherited F144 map/catalog gate applies.
+
+Verification: full lint, **384 files / 3,039 tests**, TypeScript, API/renderer bindings and build pass; final CSS build, DOM **967/242** and Worker safety pass. Eight native co-op/solo-boundary cases plus a corrected ordinary solo clear pass with no page or console errors; SQLite confirms the solo clear's `passed` receipt. Six actual API start attempts (signed and guest; room, course and Expanded Room) reject co-op content. Four editor cases cover actual desktop/phone selection, checkbox, Undo/Redo, save and reload. Separate native publish checks store off/on in two new Expanded Room cell versions and actually publish the area; Explore and room-info badges match the new pinned versions. Final desktop/phone, gameplay, Explore and unchanged installed-client captures are visually inspected. Primary hashes match F151.
+
+Prime supports live helpers; other Worlds, Room Rush and active PvP suppress them. Co-op clears remain practice even when a crate permits solo completion. Door links remain OR, and separate AND puzzle support is still a follow-up. Presence is eventually consistent with a 15-second stale cutoff. No migration or PartyKit server change is introduced; API Worker and Pages need delivery after review, with the inherited F144 renderer/catalog gate still blocking release. Master remains 55/215 and F152 remains unticked.
+
+Retained diagnostics include fixture link/overlap corrections, hidden legacy publish controls, the ordinary finish API's 204 response, and an incomplete finalization mock amended to include a valid empty object list. The first cell-publish assertion was insufficient; the final proof requires new versions and the real area publish request. Editor captures retain four 404 responses from the unchanged published-room construction-preview endpoint; they are outside this change, with no page errors. Accepted evidence: `native-b`'s eight completed scenarios, `solo-final`, `api.json`, `editor-c` controls/saves, `publish-final`, `info`, `official`, and final gates.
+
+Saved source `55581963` in [draft PR #86](https://github.com/songadaymann/wamp/pull/86), stacked on draft #85; pushed and attached. Production and master ticks remain unchanged. Continue the active goal with F156 publish validation.
+
+## 2026-10-08 — Overnight checklist goal / F151 weekly Room Rush
+
+Original prompt: "ok i am ging to bed can you set a goal to make your way through the list until 5am"
+
+Continue the active goal until **2026-10-09 05:00 America/New_York / 09:00 UTC**. Canonical lane `codex/checkup-weekly-room-rush-2026-10-08` stacks on F144 `8ebdf902` / draft PR #84. Preserve all previous candidates and the dirty primary. Prepare a tested draft for morning review; production remains unchanged. No agents are authorized.
+
+- [x] Audit existing Room Rush starts/results, weekly identity and admin/leaderboard/share paths; define a manual published standalone pick, Hard mode and five-minute window with inactive default.
+- [x] Implement bounded, authenticated admin selection, immutable weekly identity and server-enforced run window and isolated best-per-player weekly rankings, including previous-week winners.
+- [x] Add the weekly play entry, countdown/result and weekly share copy to existing desktop/phone UI, keeping guests on clearly labelled practice and regular Room Rush behavior intact.
+- [x] Verify admin/version/expiry/rollover/idempotency and real desktop/touch play, results and rankings; run quality gates and inspect the unchanged installed-client capture.
+- [x] Save/push/attach a tested stacked draft and release receipt, keep master ticks tied to delivery, and advance the overnight goal to F152 co-op pressure plates.
+
+Evidence: `/tmp/wamp-weekly-room-rush-2026-10-08/`. Weekly choices stay manual; do not launch a production event or add a cron picker overnight. Migration/API/Pages delivery will require review. Existing F144 catalog release block remains in this stack.
+
+Verification complete: 381 files / 3,023 tests, lint, TypeScript, generated bindings, build, DOM 965/240 and Worker safety pass. Four native admin and six native play/timer cases pass with zero page errors; the real five-minute clock runs through Settings, auto-completes at 300000ms and has one saved receipt. Uncertain-reply retry, phone touch death, Restart and best-per-account standings pass. Share capture runs inside POST_RENDER, shows actual imagery and uses a fitting weekly label. Installed client is unchanged and its healthy play capture is inspected; only expected local presence 503 remains. Primary hashes match F144.
+
+Saved source `b95813d2` in [draft PR #85](https://github.com/songadaymann/wamp/pull/85), based on `codex/checkup-lost-song-2026-10-08`; pushed and attached. Production and master ticks remain unchanged. Continue the active overnight goal with F152.
+
+## 2026-10-08 — Overnight checklist goal / F144 Lost Song hunt
+
+Original prompt: "ok i am ging to bed can you set a goal to make your way through the list until 5am"
+
+Continue the active goal until **2026-10-09 05:00 America/New_York / 09:00 UTC**. Canonical lane `codex/checkup-lost-song-2026-10-08` stacks on F155 `d657c3a6` / draft PR #83; preserve the F150/F249/F155 candidates and the dirty primary. Production remains unchanged pending morning review. No agents are authorized.
+
+- [x] Establish the one-per-cell authoring rule, published play proof, guest claiming and idempotent capped server rewards against F144. Expanded Room cells count separately; draft playtests and owned rooms do not award a find.
+- [x] Add the golden cassette, shared editor/Worker/agent limits and goal-neutral personal pickup behavior. Cache found rooms once per authenticated session; show ghosted found songs, browse/profile count and found-cell map marking.
+- [x] Implement bounded server-issued sessions, guest-local recovery and sign-in claim; award five player XP for at most ten new finds per UTC day and first/ten/hundred-find badges. Preserve existing collect goals, scores and ranked traces.
+- [x] Verify retries, guest/account handoff, ownership/version/privacy/limits and ordinary/Expanded Room desktop/touch play and authoring; run quality, native and inspected installed-client checks.
+- [x] Save/push/attach a tested stacked draft with a release receipt, leaving master ticks/count tied to delivery, then advance to the next checklist item. Saved source `5d167d72` / [draft PR #84](https://github.com/songadaymann/wamp/pull/84) is pushed and attached.
+
+Evidence: `/tmp/wamp-lost-song-2026-10-08/`. A new catalog sprite means coordinated map-renderer delivery will be required after review; migration and API/Pages also need a release receipt. Give existing builders a clear placement nudge; do not seed production rooms overnight.
+
+Full 379 files / 3,006 tests, lint, TypeScript, API/renderer bindings, build, DOM 959/234 and Worker safety pass. Eight native play cases, four desktop/phone builder cases and two profile cases pass with no page errors, including uncertain-reply retry, sign-in claim, own-room practice and actual ordinary/Expanded Room verified clears. The local account has exactly two receipts / ten song XP. The installed client is unchanged, its healthy screenshot is inspected and its only console error is the expected local presence 503. The strict browser leaf renderer and actual Pages PNG decoding include the cassette; the release gate correctly blocks the new `authoring-catalog-v1:843f81f7cad2c688` until matching imagery is prepared. Primary hashes match.
+
+V1 awards finds in Prime published rooms; other Worlds and draft playtests stay practice. Guest receipts expire after 30 days, account finds persist across room versions, proof sessions expire after 30 minutes, and identity/network/storage limits are bounded. Proof checks identity, published version, elapsed time and a plausible pickup segment; it is not full simulation verification. Guest storage failure gets truthful visit-only copy, claiming retries retain receipts, and account switches discard stale cache responses. Migration **0061**, API Worker, matching renderer/catalog imagery and Pages require coordinated review/release; no production write or seeding occurred. Retained diagnostics cover the corrected fixture goal type, native selector/origin/phone handoff and renderer test colour. Next F151 weekly Room Rush.
+
+## 2026-10-08 — Overnight checklist goal / F155 boss mode
+
+Original prompt: "ok i am ging to bed can you set a goal to make your way through the list until 5am"
+
+The active goal starts at 2026-10-08 20:33 America/New_York and runs until **2026-10-09 05:00 America/New_York / 09:00 UTC**. Continue through the checklist without per-item review pauses, preparing complete, tested draft candidates for morning review. Production publication remains a separate release boundary. Preserve the dirty primary checkout and the F150/F249 candidate branches/PRs.
+
+Current canonical lane: `codex/checkup-boss-mode-2026-10-08`, stacked on F249 `a43e1da7` / draft PR #82. Next F155, then F144; keep master ticks/count tied to delivery.
+
+- [x] Audit actor damage, sword plumbing, traversal timing, persistence/authoring and ranked verification; define boss behavior against the F155 requirements.
+- [x] Implement optional 3–10-hit bosses in both editor paths, actual per-instance health/hurt/recoil/protection and a visible health bar; accelerate phase-two windup/cooldown and plain ground chase without changing traversal jump/air physics.
+- [x] Verify attacks/contact, score and Defeat All only at terminal defeat, phase change, respawn/Restart/transitions, persistence and desktop/touch presentation; complete quality and inspected installed-client checks.
+- [x] Save/push/attach the stacked draft PR and candidate receipt, then advance the overnight goal to F144. F155 remains unticked until production delivery.
+
+Full 374 files / 2,985 tests, lint, TypeScript, bindings/build, DOM 958/234, Worker safety and strict asset gates pass. Eighteen native cases and three actual server-verified finishes pass, including expanded and goal-less Restart, terminal-only rewards, phase-two timing/chase and real desktop/phone save/reload. Screenshots and unchanged installed-client play are inspected. Retained diagnostics distinguish runner/fixture corrections from the repaired cached-boss Restart defect. Primary hashes match; no production publication.
+
+Saved boss implementation `143d04ae` / [draft PR #83](https://github.com/songadaymann/wamp/pull/83) is pushed and attached.
+
+Evidence directory: `/tmp/wamp-boss-mode-2026-10-08/`. No sub-agents are authorized for this run. Existing F249 and F150 implementation remains available in the stack; no candidate is silently replaced or released.
+
+## 2026-10-08 — F249 in-game bug reporter
+
+Original prompt: "Ok let’s move on to bug reporter"
+
+Canonical branch: `codex/checkup-bug-reporter-2026-10-08`, stacked on the saved F150 candidate `9b68b756` / draft PR #81. Preserve F150 and the dirty primary checkout; keep Vite 3040/local D1 8787 for review. No production publication is requested.
+
+- [x] Map diagnostics, replay capture, authoring context and private admin/storage paths; establish bounded capture and retention.
+- [x] Build the guest/signed-in report flow with notes, preview, explicit unavailable evidence and retry, plus the private admin inbox/playback/status controls.
+- [x] Verify persistence/auth/abuse limits, desktop/phone play and building, capture performance and the installed web-game client with inspected screenshots.
+- [x] Complete quality checks, save a reviewable candidate and local demo, and record release requirements. Keep F249 unticked until delivered.
+
+Evidence directory: `/tmp/wamp-bug-reporter-2026-10-08/`. The report buffer stays in RAM until explicit submission, honors existing opt-out/DNT/GPC and supports signed-in players. Shared bitmap/toBlob capture replaces synchronous JPEG encoding in the existing guest recorder. Context reads use the capture cadence and immutable room views; canvas images containing room-chat bubbles are omitted. The existing guest recorder retains its separate upload lifecycle and shares the recording preference, including blocked storage and changes from another tab.
+
+Local candidate: Report a bug is available beside Settings, in the menu and in Settings during play/building. Notes, recent screenshot replay and current screenshot are previewed before submission. Published/draft room and course versions, build, coarse device/viewport, position/camera and bounded diagnostic kinds/locations are copied through explicit allowlists; raw error messages, form values and chat contents are excluded. Written reports work with recording disabled or unreadable graphics. A stored-but-lost reply retry preserves the exact identity/body and creates one report. The admin-key-protected inbox provides playback/scrubbing, room links, device/context details, open/resolved filters, Reopen and Delete.
+
+Full **371 files / 2,967 tests**, lint, TypeScript/build, API/renderer bindings, DOM **953 IDs / 234 required**, Worker safety and strict map asset contract pass. Native guest/signed-in play, pause/resume, retry, phone submission, ordinary/Expanded Room drafts, portrait touch movement, disabled recording and private inbox/status cases pass with no page errors. Screenshots are inspected, including notes contrast and mobile confirmation. Phone builder checks enter the existing editor at desktop width and use its phone handoff, then More → Account & menu → Report a bug. The installed client runs unchanged with only a preferences preload; its inspected screenshot shows healthy gameplay/capture. Its sole console failure is the documented local presence identity 503 because no PartyKit service is configured.
+
+An ordinary five-second Chromium movement comparison records median **8.3ms**, p95 **9.9ms**, zero frames over 50ms, and max **10.4ms** with recording both off and on. Enabled capture holds 47 frames / 359,831 JSON characters and max 28ms total asynchronous capture latency. This is local Chromium evidence; physical-device and high-refresh certification remain separate. Capture starts at 8fps desktop / 4fps phone and adapts down to 1fps for costly snapshots; the bounded visual replay is not a complete simulation trace.
+
+Migration **0060** and API Worker + Pages publication will be required together after local review. Notes expire after 30 days, images after seven; one atomic D1 batch enforces identity/network/daily/storage budgets and confirms stored receipts. No new binding or catalog/renderer/PartyKit delivery is introduced. The catalog remains `authoring-catalog-v1:020c7c1d1777764e`. Primary HEAD, all-untracked status and both diffs match their starting hashes. F249 and F150 remain unticked at **55/215 delivered**. Local demo: `http://127.0.0.1:3040/r/84/40?welcome=0&avatar=gamejew-red`; inbox: `http://127.0.0.1:3040/bug-reports.html` (local-only key `local-bug-report-review`).
+
+Retained diagnostics include the corrected fetch receiver, guest-notice stacking, missing standalone Knip entry, temporary-runner selector/actionability races and tablet/phone menu handoff setup. Accepted reports follow their fixes; no production state was written. Candidate review and delivery precede F155 boss modes, then F144 Lost Song hunt.
+
+## 2026-10-08 — F150 optional player hearts and healing
+
+Original prompt: "Ok let’s move on to th next things on the list!"
+
+Canonical branch: `codex/checkup-player-hearts-2026-10-08`, based on live `d534619c` plus the pushed delivery/F249 checklist notes. Use the owned game-feel worktree and preserve the primary checkout's unrelated edits. F150 is the current item; F249 follows before F155/F144. Prepare a complete local candidate for Jonathan to play before publication.
+
+- [x] Map room/expanded-root settings, damage and pickup lifecycle, resets/transitions and ranked version compatibility; keep one heart as the existing default.
+- [x] Implement bounded health/invulnerability with healing and visible hearts through extracted controllers, plus desktop/phone/expanded authoring controls and safe persistence.
+- [x] Verify damage, lethal falls, healing/collect goals, respawn/Restart/Stop, room transitions and ranked compatibility with focused tests and native desktop/touch play. Run and inspect the installed web-game client's gameplay capture.
+- [x] Complete the required quality checks, provide a local demo, and record the candidate and remaining release work. Keep F150 unticked until delivery.
+
+Evidence directory: `/tmp/wamp-player-hearts-2026-10-08/`. Primary HEAD/status/staged/unstaged snapshots are saved there. Ports 3001, 3040 and 8787 were not listening at the initial probe.
+
+Local candidate verification: **366 files / 2,936 tests** pass, plus lint, typecheck, API/renderer binding checks, build, DOM **934 IDs / 218 required**, Worker safety and strict map asset contract. The catalog remains `authoring-catalog-v1:020c7c1d1777764e`; no catalog/art, migration, renderer or PartyKit change is required. Publication will need the API Worker and Pages together.
+
+Native local cases pass: keyboard damage with repeated-contact protection; all three healing pickups and full-health score/collect credit; an actual server-verified guest clear; default one-hit death; Restart/Stop/respawn cleanup; deadly falls even during active protection; ordinary-room clamping; shared Expanded Room health through cell transitions and Restart; Collect Target; portrait touch movement/jump/healing; Survival only failing at the terminal hit and immediately starting a fresh attempt. Real ordinary and Expanded Room controls save/reload on desktop and the 390px phone handoff. Ordinary publish/history and Expanded Setup save/publish/public metadata preserve the setting. All accepted native reports have no page errors. Phone editor checks enter the real local editor at desktop width, then use the existing phone handoff; a direct narrow Browse entry hit a Daily Room chip interception and remains in diagnostic captures.
+
+The installed web-game client was run unchanged, then with a settings-only preload to select full quality and replay opt-out. The original captured an automatic performance prompt; the final inspected gameplay capture shows the avatar and three hearts correctly. Its only console error is the local presence identity endpoint's 503, also recorded by earlier fixture probes; no presence service is configured for this local demo. Initial fixture/harness diagnostics are retained beside accepted reports, including a root fixture corrected to include the actual published course bridge and Survival assertions corrected for the existing immediate retry behavior.
+
+Local demo: `http://127.0.0.1:3040/r/84/40?welcome=0&avatar=gamejew-red`; Expanded demo: `http://127.0.0.1:3040/r/96/40?welcome=0&avatar=gamejew-red`. Vite 3040 and the local API 8787 remain available. All authored room/account/version/run writes use the isolated local D1 state. Primary HEAD, all-untracked status, staged and unstaged diffs match their starting hashes exactly. **F150 remains unticked at 55/215 delivered** until Jonathan's local play review and production delivery. F249 is next.
+
 ## 2026-10-08 — Ghost race footer release
 
 Original prompt: "ok deploy thte floating label change"
@@ -5,11 +349,15 @@ Original prompt: "ok deploy thte floating label change"
 Jonathan approves publication of the tested local candidate `ec5a83bb`. Fresh origin/main is `d1210e01`; the accepted application is unchanged. This is a Pages-only UI release. Reuse the owned clean release clone at `/tmp/wamp-camera-release-2026-10-06`; preserve the primary checkout, both local previews, and the existing API/renderer/catalog.
 
 - [x] Confirm accepted source, fresh main, clean owned release clone, frontend-only scope, and primary preservation snapshot.
-- [ ] Complete source checks, push/create/attach PR, and merge after exact-source checks pass.
-- [ ] Fast-forward clean literal main, verify merge checks and guarded Pages-only publication.
-- [ ] Compare custom-domain and immutable assets, inspect native desktop/phone ghost footer gameplay, and record delivery/preservation.
+- [x] Complete source checks, push/create/attach PR, and merge after exact-source checks pass. PR #80 / `d534619c` preserves the accepted application; all three source checks and local 2,895-test quality/DOM/Worker/map checks pass.
+- [x] Fast-forward clean literal main, verify merge checks and guarded Pages-only publication. All three exact-main checks pass; Pages `7a889cdb` is canonical at `d534619c`, with no pending same-head builds.
+- [x] Compare custom-domain and immutable assets, inspect native desktop/phone ghost footer gameplay, and record delivery/preservation. All 186 served assets and HTML/bootstrap match; four public native cases and inspected headed official gameplay pass with zero browser errors. The primary snapshot still matches exactly.
 
 Evidence: `/tmp/wamp-ghost-footer-release-2026-10-08/`. F150 remains the next checkup feature; this release does not advance the 55/214 count.
+
+Delivery: [PR #80](https://github.com/songadaymann/wamp/pull/80) merges source `a89fec21` / accepted UI `ec5a83bb` as `d534619c`. Guarded Pages-only publication and production smoke pass. Canonical Pages is `7a889cdb-7e06-430d-8f2e-517e02b64e2a` / https://7a889cdb.wampland.pages.dev. All 179 JS/CSS, four traversal PNGs, three death-audio files, HTML references/footer elements and early bootstrap match the clean release build on both the custom domain and immutable origin. Desktop, narrow desktop, portrait and landscape phone play match the real `jonathan · 3.31s` recording and pass movement, Jump, Restart, Stop and solo selection. Screenshots are inspected. The active map remains `production-2026-10-07-traversal-020c7c1d` at 100% with matching `020c7c1d1777764e` catalog; no API Worker, renderer, D1 or PartyKit release is needed.
+
+Capture diagnostics are retained: the unmodified official client reaches the correct ghost state with no errors, but headless timing triggers the ordinary performance advisory. Its full-quality raw WebGL canvas export is black. The final headed viewport adapter keeps the installed client's actions/time-stepping and uses the existing full-quality/replay preferences plus app readiness; only screenshot capture switches to the full viewport. Its inspected image shows actual gameplay, the unlabelled cyan ghost and bottom-bar metadata with zero errors. No application change or hidden-UI patch was made for those capture issues. Wrangler refreshed its existing OAuth session normally before publication. Final read-only checks found local ports 3001/3040 not listening; no release step started or stopped them. Delivery bookkeeping is saved separately on `codex/ghost-race-footer-delivery-2026-10-08`.
 
 ## 2026-10-07 — Ghost race name/time in the bottom bar
 
@@ -1181,10 +1529,18 @@ Canonical branch `codex/archive-all-completed-ghosts-2026-10-09` starts from cur
 - [x] Implement private archive/index/outbox, ordinary account and guest finalization, and scheduled retries.
 - [x] Verify real schema, slower/faster finishes, retries/failures, guest retention and existing racing behavior.
 - [x] Configure and locally verify the $10 monthly ghost-storage warning; verify the actual production binding and recipient after release.
-- [ ] Commit and record the reviewable result and production delivery status.
+- [x] Commit and record the reviewable result and production delivery status.
 
 Cloudflare already has an account-wide $10 budget warning. Current billing is $67.73 this cycle, primarily Durable Objects row reads. Proceeding with the stated optional-question default of an extra ghost-specific warning: a conservative R2 estimate, before shared free allowances, checked hourly and emailed once per billing cycle to the existing admin/map-alert recipient. The observed billing cycle starts on the fifth. Existing native account alerts remain configured.
 
 Source acceptance: full quality passes 364 files / 2,906 tests, lint, TypeScript, both generated-binding checks and build. DOM contract passes 928 IDs / 215 required; Worker safety and immutable-map compatibility pass. Eleven real migrated-SQLite cases exercise ordinary account/guest finalization, slower/faster runs, invalid runs, atomic rollback, R2 outage/lost-ack recovery, legacy best backfill, guest expiry, email threshold/retry/deduplication/billing rollover and admin protection. Private production/safety R2 buckets are created. Migration 0063 is additive; 0060–0062 remain reserved for the separate overnight preview.
 
 Local native acceptance passes all three cases: signed desktop completion, slower Restart completion retaining the first recording as rival, and actual phone-touch guest completion. All upload queues drain; archived ghost playback remains noncolliding. Screenshots are inspected and there are zero unexpected browser errors. The isolated API's intentionally unconfigured presence signer returns tracked 503s. Two earlier harness diagnostics used the wrong submission-state value and Escape before Restart; they remain retained and are not accepted checks. The unchanged installed game client ran, but its artificial timing triggered the existing performance suggestion. The same client with only native frame waits and normal full-quality/seen/opt-out preferences produces a healthy inspected movement/jump/ghost capture. No application timing or UI change is shipped. Evidence: `/tmp/wamp-ghost-archive-2026-10-09/` including `quality-final.log`, `worker-safety.log`, `native-accepted/report.json`, `official-native-accepted/` and prior diagnostic captures.
+
+Production acceptance: [PR #100](https://github.com/songadaymann/wamp/pull/100), source `e745aa58`, merged as `39189b936a33ca11ea88bed4e941f32c3abbf7de`. All three exact-source and all three merged-main checks pass, including Quality `37959617454` / `37960239100`. Migration 0063 applied before dependent runtime (10 commands / 3.25ms), preserving 49 best recordings / 207,090 bytes. Clean literal-main release validation and guarded `--worker-only` deployment pass with strict custom-domain/API/map smoke. API Worker version `6a9f6c87-45fe-4d38-8cba-d17cbf315479`; renderer/catalog remain `production-2026-10-07-traversal-020c7c1d` / `020c7c1d1777764e`. The scheduled Worker retains hourly and quarter-hour triggers; hourly cost checks are enabled.
+
+Protected live status/flush/check routes pass four unauthorized/foreign-origin guards. Backfill uploads 25 + 24 with zero failures. Actual R2 reads verify both an older 3,928-byte recording and a new 1,680-byte guest recording, with movement-only payloads and released temporary D1 bodies. A real public tutorial clear at `-11,-6`, version 11, attempt `7286b9dc-08ff-4e89-8ff7-ff0375e98754`, finishes in 3,467ms and is server-verified/saved with zero browser errors. Its screenshots are inspected. The public room-record attempt/time remain unchanged at 3,313ms and playback remains noncolliding. Final live index has 50 recordings / 208,770 bytes, all uploaded, zero pending. Alerts are enabled/configured for `jonathan@jonathanmann.net`, cycle start October 5, threshold $10. The real cost check returns below-threshold; no test or cost email was sent to a real recipient. The conservative R2 estimate is $4.515 before shared free allowances, not the actual account bill.
+
+The automatically published main Pages deployment is `255be3f2`. Its entry `main-CKa-B27b.js` and CSS `main-DXL6TowJ.css` match the actual custom-domain bytes; CSS also matches the release build. The local Worker-only build has different JS references from the automatic Pages build, so an initial local-reference asset check returned 404 and is not accepted as local JS parity. No manual Pages release was performed. Actual public gameplay and API/R2 proofs certify this backend change. Evidence includes `migration-prod.log`, `migration-proof.json`, `deploy-prod.log`, `live-*.json`, `production-guest/`, `production-backfill-ghost.json`, `public-ghost-before/after.json` and `live-entry-parity.json` under the same temporary evidence directory.
+
+Release bookkeeping is on `codex/archive-completed-ghosts-delivery-2026-10-09` from the released merge, avoiding a new production build for documentation only. The primary checkout retains exactly 25 unrelated dirty entries; tracked-diff SHA-256 is still `38d3e60660bff00f7db98b65a7342c1945ef3a8b7820621b3e7b299c7d21839b`. The overnight preview remains clean at `997c5251`; the release clone remains clean on main matching origin/main. Course/Expanded Room ghost recording and any recording-history UI remain separate work.

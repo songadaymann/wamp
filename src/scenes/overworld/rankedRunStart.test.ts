@@ -48,6 +48,44 @@ async function settle() { for (let i = 0; i < 12; i++) await Promise.resolve(); 
 afterEach(() => vi.clearAllMocks());
 
 describe('ranked trace capture while the start request is pending', () => {
+  it.each([true, false])('keeps a co-op room practice for authenticated=%s without a ranked or guest receipt', async authenticated => {
+    const startRun = vi.fn(), finishRun = vi.fn(), begin = vi.fn();
+    const goals = new OverworldGoalRunController({ playerHeight: 14,
+      runRepository: { startRun, finishRun, loadRoomLeaderboard: vi.fn().mockResolvedValue(null),
+        loadGlobalLeaderboard: vi.fn().mockResolvedValue(null) } as unknown as RunRepository,
+      getScore: () => 0, getAuthenticated: () => authenticated, getAuthSource: () => 'session', getAuthDisplayName: () => 'Builder',
+      countRoomObjectsByCategory: () => 0, guestRuns: { begin, has: () => false } as never,
+    });
+    const room = { ...createDefaultRoomSnapshot(), status: 'published' as const, spawnPoint: { x: 64, y: 256 },
+      goal: { type: 'reach_exit' as const, exit: { x: 96, y: 256 }, timeLimitMs: null },
+      placedObjects: [{ id: 'floor_trigger', x: 88, y: 248, instanceId: 'plate', coopPlate: true }] };
+    goals.syncRunForRoom(room, 'spawn'); await settle();
+    expect(goals.getCurrentRun()).toMatchObject({ cooperative: true, leaderboardEligible: false, submissionState: 'local-only' });
+    expect(goals.getCurrentRun()?.submissionMessage).toMatch(/Co-op practice/);
+    goals.getCurrentRun()!.elapsedMs = 1000; goals.markCompleted('Done'); await settle();
+    expect(startRun).not.toHaveBeenCalled(); expect(finishRun).not.toHaveBeenCalled(); expect(begin).not.toHaveBeenCalled();
+  });
+
+  it('keeps the entire Expanded Room practice when a different pinned cell has a co-op plate', () => {
+    const course = { ...createDefaultCourseSnapshot('coop'), version: 1, status: 'published' as const,
+      startPoint: { roomId: '0,0', x: 64, y: 256 },
+      roomRefs: [0, 1].map(x => ({ roomId: `${x},0`, coordinates: { x, y: 0 }, roomVersion: 1, roomTitle: null })),
+      goal: { type: 'reach_exit' as const, exit: { roomId: '1,0', x: 500, y: 256 }, timeLimitMs: null } };
+    const controller: OverworldCoursePlaybackController = new OverworldCoursePlaybackController({
+      getActiveCourseRun: () => run, getSelectedCoordinates: () => ({ x: 0, y: 0 }),
+      getRoomSnapshotForCoordinates: coordinates => ({ ...createDefaultRoomSnapshot(), placedObjects: coordinates.x === 1
+        ? [{ id: 'floor_trigger', instanceId: 'plate', x: 88, y: 248, coopPlate: true }] : [] }),
+      countRoomObjectsByCategory: () => 0, setActiveCourseRun: vi.fn(), clearTransientRoomOverride: vi.fn(),
+      clearTransientRoomOverrides: vi.fn(), setTransientRoomOverride: vi.fn(), setTransientRoomOverrides: vi.fn(),
+      showTransientStatus: vi.fn(), renderHud: vi.fn(),
+    });
+    const run = controller.createCourseRunState(course);
+    controller.startRunAfterSpawn();
+    expect(run).toMatchObject({ cooperative: true, leaderboardEligible: false, submissionState: 'local-only' });
+    expect(run.submissionMessage).toMatch(/Co-op practice/);
+    expect(courseStart).not.toHaveBeenCalled(); expect(expandedStart).not.toHaveBeenCalled();
+  });
+
   it('submits a clear immediately and refreshes ghost choices even while the prior leaderboard read is slow', async () => {
     let resolveBoard!: (value: null) => void;
     const slowBoard = new Promise<null>(resolve => { resolveBoard = resolve; });

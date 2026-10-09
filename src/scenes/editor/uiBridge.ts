@@ -1,5 +1,8 @@
 import { EditorPhoneInspector } from './phoneInspector';
+import { bindBossInspector } from './uiBridge/bossInspector';
 import { EditorHistoryControls } from './historyControls';
+import { closeRoomTemplatePicker } from './roomTemplatePicker';
+import { closePublishChecklist, renderEditorClearCheck } from './clearCheckUi';
 import {
   ERASER_BRUSH_SIZES,
   RANDOMIZE_BRUSH_SIZES,
@@ -566,7 +569,14 @@ export class EditorUiBridge {
     }
 
     this.lastViewModel = viewModel;
+    this.doc.body.dataset.editorDraftCleared = String(viewModel.clearCheck?.cleared ?? false);
+    renderEditorClearCheck(this.doc, viewModel.clearCheck);
     this.historyControls.render(viewModel.canUndo, viewModel.canRedo);
+    this.doc.getElementById('room-template-empty-hint')?.classList.toggle('hidden', !this.actions.isRoomLayoutEmpty?.());
+    for (const id of ['btn-room-template-empty', 'btn-room-template-replace']) {
+      const button = this.doc.getElementById(id) as HTMLButtonElement | null;
+      if (button) button.disabled = viewModel.saveDisabled || !this.actions.onOpenRoomTemplates;
+    }
     renderEditorUiViewModel(this.elements, this.doc, viewModel);
     this.syncEditorChromeState();
   }
@@ -585,6 +595,8 @@ export class EditorUiBridge {
   }
 
   destroy(): void {
+    closePublishChecklist();
+    closeRoomTemplatePicker();
     setHidden(this.elements.inspectorRoot, true);
     setHidden(this.elements.pressurePanel, true);
     setHidden(this.elements.containerPanel, true);
@@ -598,6 +610,17 @@ export class EditorUiBridge {
   }
 
   private bindListeners(): void {
+    for (const [id, action] of [['btn-clear-check-test', this.actions.onStartPlayMode], ['btn-clear-check-test-here', this.actions.onTestFromHere]] as const) {
+      const button = this.doc.getElementById(id);
+      const onClick = () => { if (this.actions.isActive()) { runtimeConfig.closePanels(); void action?.(); } };
+      button?.addEventListener('click', onClick); this.cleanupCallbacks.push(() => button?.removeEventListener('click', onClick));
+    }
+    for (const id of ['btn-room-template-empty', 'btn-room-template-replace']) {
+      const button = this.doc.getElementById(id);
+      const onClick = () => { if (this.actions.isActive()) this.actions.onOpenRoomTemplates?.(); };
+      button?.addEventListener('click', onClick);
+      this.cleanupCallbacks.push(() => button?.removeEventListener('click', onClick));
+    }
     bindDomEvent(this.cleanupCallbacks, this.doc, 'keydown', (event) => {
       this.actions.onDocumentKeyDown(event as KeyboardEvent);
     });
@@ -626,6 +649,15 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => input.removeEventListener('change', onChange));
     }
     const cameraInput = this.elements.roomCameraCenteredInput;
+    for (const [select, setHearts] of [
+      [this.elements.roomPlayerHeartsSelect, this.actions.onSetRoomPlayerHearts],
+      [this.elements.coursePlayerHeartsSelect, this.actions.onSetCoursePlayerHearts],
+    ] as const) {
+      if (!select || !setHearts) continue;
+      const onChange = () => setHearts(Number(select.value));
+      select.addEventListener('change', onChange);
+      this.cleanupCallbacks.push(() => select.removeEventListener('change', onChange));
+    }
     if (cameraInput) {
       const onCameraChange = () => this.actions.onSetRoomCameraCentered(cameraInput.checked);
       cameraInput.addEventListener('change', onCameraChange);
@@ -1265,6 +1297,11 @@ export class EditorUiBridge {
     bindButton(this.cleanupCallbacks, this.elements.pressureClearBtn, () => {
       this.actions.onClearPressurePlateConnection();
     });
+    const handleCoopPlateChange = () => {
+      this.actions.onSetFocusedCoopPlate(this.elements.pressureCoopCheckbox?.checked === true);
+    };
+    this.elements.pressureCoopCheckbox?.addEventListener('change', handleCoopPlateChange);
+    this.cleanupCallbacks.push(() => this.elements.pressureCoopCheckbox?.removeEventListener('change', handleCoopPlateChange));
     bindButton(this.cleanupCallbacks, this.elements.pressureDoneLaterBtn, () => {
       this.actions.onCancelPressurePlateConnection();
     });
@@ -1286,6 +1323,7 @@ export class EditorUiBridge {
         )
       );
     }
+    this.cleanupCallbacks.push(bindBossInspector(this.elements, this.actions));
     const handleSwordsmanDefeatModeChange = () => {
       const value = this.elements.swordsmanDefeatModeSelect?.value;
       if (value === 'defeatable' || value === 'invincible' || value === 'respawn') {

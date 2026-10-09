@@ -2,6 +2,7 @@ import { normalizeCourseSnapshot, type CourseSnapshot } from '../../../courses/m
 import type { GuestRunStartBody } from '../../../guestRooms/runModel';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import { HttpError } from '../core/http';
+import { assertSoloRoomRun } from '../runs/coopPolicy';
 import type { Env } from '../core/types';
 import { loadExpandedRoomTarget } from '../expandedRooms/store';
 import { loadExactRoomVersion, loadRoomSnapshotsByReferences } from '../rooms/store';
@@ -31,6 +32,7 @@ export async function loadGuestRunSnapshot(env: Env, body: GuestRunStartBody): P
     const version = await loadExactRoomVersion(env, roomId, body.version);
     const room = version?.snapshot;
     if (!room || room.status !== 'published' || !room.goal) throw new HttpError(404, 'Published room goal not found.');
+    assertSoloRoomRun(room);
     return { snapshot: { kind: 'room', room }, snapshotHash: await computeRoomSnapshotVerificationHash(room),
       title: room.title, progressSourceType: 'room', progressSourceId: room.id };
   }
@@ -46,6 +48,7 @@ export async function loadGuestRunSnapshot(env: Env, body: GuestRunStartBody): P
     ? { kind: 'current_preview' as const, roomId: ref.roomId, state: 'published' as const, coordinates: ref.coordinates }
     : { kind: 'version' as const, roomId: ref.roomId, version: ref.roomVersion }));
   if (rooms.missing.length > 0) throw new HttpError(409, 'Some published course cells are unavailable.');
+  for (const entry of rooms.snapshots) assertSoloRoomRun(entry.snapshot);
   return { snapshot: { kind: 'course', course, rooms: rooms.snapshots.map(entry => entry.snapshot) },
     snapshotHash: await computeCourseSnapshotVerificationHash(course), title: course.title,
     progressSourceType: 'course', progressSourceId: courseId };

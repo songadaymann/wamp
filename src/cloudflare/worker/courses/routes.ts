@@ -68,6 +68,7 @@ import {
   unpublishCourse,
 } from './store';
 import { loadRoomSnapshotsByReferences } from '../rooms/store';
+import { assertSoloCourseRun } from '../runs/coopPolicy';
 import {
   computeCourseSnapshotVerificationHash,
   createCourseVerificationTrigger,
@@ -287,6 +288,7 @@ export async function handleCourseRunStart(
   await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseCourseRunStartBody(request, courseId);
   const snapshot = await resolvePublishedCourseVersion(env, body.courseId, body.courseVersion);
+  await assertSoloCourseRun(env, snapshot);
   if (!snapshot.goal) {
     throw new HttpError(400, 'This course version does not have an active goal.');
   }
@@ -386,6 +388,7 @@ export async function handleCourseRunFinish(
   }
 
   const snapshot = await resolvePublishedCourseVersion(env, existing.courseId, existing.courseVersion);
+  await assertSoloCourseRun(env, snapshot);
   if (!snapshot.goal) {
     throw new HttpError(409, 'This course version no longer has a leaderboard goal.');
   }

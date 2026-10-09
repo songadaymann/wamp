@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bug reports · WAMP</title></head>
+<body><main>
+  <header><h1>Bug reports</h1><a href="/launch-admin.html">Launch admin</a></header>
+  <form id="bug-admin-auth"><label>Admin key <input id="bug-admin-key" type="password" autocomplete="off" required></label><button>Load reports</button></form>
+  <p id="bug-admin-status" role="status">Private inbox · notes retained 30 days · game images retained seven days</p>
+  <div id="bug-admin-workspace" hidden>
+    <label>Show <select id="bug-admin-filter"><option value="open">Open</option><option value="resolved">Resolved</option><option value="all">All</option></select></label>
+    <button id="bug-admin-refresh" type="button">Refresh</button>
+    <div class="workspace">
+      <section aria-label="Reports"><div id="bug-admin-list"></div></section>
+      <section id="bug-admin-detail" aria-label="Report details" hidden>
+        <h2 id="bug-admin-title"></h2><p id="bug-admin-notes"></p>
+        <a id="bug-admin-room" target="_blank" rel="noreferrer">Open room</a>
+        <p id="bug-admin-context"></p><p id="bug-admin-evidence-status"></p>
+        <div class="screen"><img id="bug-admin-frame" alt="Reported gameplay or building" hidden><p id="bug-admin-empty">No replay attached.</p></div>
+        <div class="controls"><button id="bug-admin-play" disabled>Play replay</button><output id="bug-admin-time">0.0s</output></div>
+        <input id="bug-admin-scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Replay position" disabled>
+        <details><summary>Latest screenshot</summary><img id="bug-admin-screenshot" alt="Reported game screenshot" hidden></details>
+        <details><summary>Device and diagnostic details</summary><pre id="bug-admin-diagnostics"></pre></details>
+        <div class="controls"><button id="bug-admin-resolve">Mark resolved</button><button id="bug-admin-delete">Delete report</button></div>
+      </section>
+    </div>
+  </div>
+</main><script type="module" src="/src/admin/bugReports.ts"></script></body></html>

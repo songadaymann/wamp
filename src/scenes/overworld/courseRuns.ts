@@ -33,6 +33,7 @@ export interface ActiveCourseRunState {
   pendingResult: 'completed' | 'failed' | 'abandoned' | null;
   submittedScore: number | null;
   leaderboardEligible: boolean;
+  cooperative?: boolean;
   hadPreviousCompletion: boolean;
   previousViewerRank: number | null;
   verificationSchemaVersion: number | null;
@@ -48,6 +49,7 @@ export interface CreateActiveCourseRunStateOptions {
   returnCoordinates: RoomCoordinates;
   startRoomId?: string | null;
   leaderboardEligible: boolean;
+  cooperative?: boolean;
   hadPreviousCompletion?: boolean;
   previousViewerRank?: number | null;
   enemyTarget: number | null;
@@ -97,6 +99,7 @@ export function createActiveCourseRunState(
     returnCoordinates,
     startRoomId = null,
     leaderboardEligible,
+    cooperative = false,
     hadPreviousCompletion = false,
     previousViewerRank = null,
     enemyTarget,
@@ -129,6 +132,7 @@ export function createActiveCourseRunState(
     pendingResult: null,
     submittedScore: null,
     leaderboardEligible,
+    cooperative,
     hadPreviousCompletion,
     previousViewerRank,
     verificationSchemaVersion: null,

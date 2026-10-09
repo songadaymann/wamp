@@ -1,3 +1,5 @@
+import { getMusicTransitionPlan, type MusicTransitionMode } from './transitionPlan';
+import { RoomMusicBufferCache } from './bufferCache';
 import {
   getRoomMusicClip,
   getRoomMusicLane,
@@ -35,7 +37,14 @@ import {
   type RoomPatternTonalInstrumentId,
 } from './pattern';
 
-type TransitionMode = 'immediate' | 'bar';
+type TransitionMode = MusicTransitionMode;
+export type RoomMusicPlayheadInfo = {
+  audioCurrentTime: number | null;
+  transportStartTime: number;
+  patternStartTime: number | null;
+  loopDurationSec: number | null;
+  kind: RoomMusic['kind'] | null;
+};
 type PlaybackMode = 'idle' | 'editor-preview' | 'world-play';
 
 type ActiveLoopPlayback = {
@@ -46,6 +55,8 @@ type ActiveLoopPlayback = {
   stopTime: number | null;
   baseGain: number;
   loopDurationSec: number;
+  fadeInDuration: number;
+  fadeOut: { start: number; end: number; startGain: number } | null;
 };
 
 type PreviewClipPlayback = {
@@ -80,6 +91,7 @@ type PlaybackRequestStatus =
   | 'stopped'
   | 'stale'
   | 'empty'
+  | 'muted'
   | 'error';
 
 type PlaybackRequestDebugEntry = {
@@ -105,18 +117,24 @@ function resolveAssetUrl(path: string): string {
 export class RoomMusicController {
   private initialized = false;
   private userInteracted = false;
+  private lifecycleDocument: Pick<Document, 'hidden'> | null = null;
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private volume = 1;
   private transportStartTime = 0;
   private activeLanes = new Map<RoomMusicLaneId, ActiveLoopPlayback>();
   private activePattern: ActiveLoopPlayback | null = null;
+  private readonly retiringPlaybacks = new Set<ActiveLoopPlayback>();
   private previewClipPlayback: PreviewClipPlayback | null = null;
+  private previewClipRequestSerial = 0;
+  private oneShotRequestSerial = 0;
   private readonly oneShotPlaybacks = new Set<OneShotPlayback>();
-  private readonly bufferPromises = new Map<string, Promise<AudioBuffer>>();
-  private readonly laneLoopBufferPromises = new Map<string, Promise<AudioBuffer>>();
-  private readonly patternLoopBufferPromises = new Map<string, Promise<AudioBuffer>>();
+  private readonly bufferCache = new RoomMusicBufferCache();
   private currentArrangement: RoomMusic | null = null;
+  private desiredPlayback: {
+    music: RoomMusic;
+    options: { mode: PlaybackMode; transition?: TransitionMode; fadeDurationSec?: number };
+  } | null = null;
   private mode: PlaybackMode = 'idle';
   private playbackRequestSerial = 0;
   private lastPlaybackRequest: PlaybackRequestDebugEntry | null = null;
@@ -130,6 +148,7 @@ export class RoomMusicController {
     }
 
     this.initialized = true;
+    this.lifecycleDocument = windowObj.document;
     const markInteracted = () => {
       this.userInteracted = true;
       void this.resumeAudioContext('user-gesture');
@@ -148,7 +167,9 @@ export class RoomMusicController {
     windowObj.addEventListener('focus', () => resumeAfterLifecycleEvent('window-focus'), { passive: true });
     windowObj.addEventListener('pageshow', () => resumeAfterLifecycleEvent('pageshow'), { passive: true });
     windowObj.document.addEventListener('visibilitychange', () => {
-      if (!windowObj.document.hidden) {
+      if (windowObj.document.hidden) {
+        this.suspendAudioContext();
+      } else {
         resumeAfterLifecycleEvent('visibilitychange-visible');
       }
     });
@@ -187,6 +208,15 @@ export class RoomMusicController {
       return;
     }
 
+    this.desiredPlayback = { music: nextArrangement, options: { ...options } };
+    if (this.volume === 0) {
+      const desired = this.desiredPlayback;
+      this.stopArrangement({ transition: 'immediate', mode: options.mode, fadeDurationSec: 0.08 });
+      this.desiredPlayback = desired;
+      this.recordPlaybackRequestStatus(this.playbackRequestSerial, options.mode, getRoomMusicKey(nextArrangement), 'muted');
+      return;
+    }
+
     try {
       if (isPatternRoomMusic(nextArrangement)) {
         await this.playPatternArrangement(nextArrangement, options, requestId);
@@ -216,6 +246,7 @@ export class RoomMusicController {
     fadeDurationSec?: number;
     resetTransport?: boolean;
   }): void {
+    this.desiredPlayback = null;
     const requestId = this.invalidatePlaybackRequests();
     const nextMode = options?.mode ?? 'idle';
     this.recordPlaybackRequestStatus(requestId, nextMode, null, 'stopped');
@@ -240,6 +271,9 @@ export class RoomMusicController {
       options?.fadeDurationSec
       ?? (quantizeToBar ? activeBarDuration : IMMEDIATE_FADE_DURATION_SEC);
 
+    for (const playback of [...this.retiringPlaybacks]) {
+      this.scheduleStopPlayback(playback, { stopAt: now, fadeDuration: options?.fadeDurationSec ?? IMMEDIATE_FADE_DURATION_SEC });
+    }
     for (const playback of this.activeLanes.values()) {
       this.scheduleStopPlayback(playback, { stopAt, fadeDuration });
     }
@@ -259,6 +293,8 @@ export class RoomMusicController {
 
   async previewClip(packId: string, clipId: string): Promise<void> {
     this.init();
+    if (this.volume === 0) return;
+    const requestId = ++this.previewClipRequestSerial;
     const pack = getRoomMusicPack(packId);
     const clip = pack ? getRoomMusicClip(pack, clipId) : null;
     if (!pack || !clip) {
@@ -267,6 +303,7 @@ export class RoomMusicController {
     }
 
     const buffer = await this.loadBuffer(packId, clipId);
+    if (this.volume === 0 || requestId !== this.previewClipRequestSerial) return;
     const audioContext = this.getAudioContext();
     const masterGain = this.ensureMasterGain(audioContext);
     if (!audioContext || !masterGain) {
@@ -295,6 +332,7 @@ export class RoomMusicController {
   }
 
   stopPreviewClip(): void {
+    this.previewClipRequestSerial += 1;
     if (!this.previewClipPlayback) {
       return;
     }
@@ -323,6 +361,7 @@ export class RoomMusicController {
       return;
     }
 
+    const wasMuted = this.volume === 0;
     this.volume = nextVolume;
     if (this.masterGain && this.audioContext) {
       this.masterGain.gain.setTargetAtTime(
@@ -330,6 +369,17 @@ export class RoomMusicController {
         this.audioContext.currentTime,
         0.02,
       );
+    }
+    if (nextVolume === 0) {
+      const desired = this.desiredPlayback;
+      this.stopArrangement({ transition: 'immediate', mode: this.mode, fadeDurationSec: 0.08 });
+      this.desiredPlayback = desired;
+      this.stopPreviewClip();
+      this.oneShotRequestSerial += 1;
+      for (const playback of this.oneShotPlaybacks) playback.stop();
+    } else if (wasMuted && this.desiredPlayback) {
+      const desired = this.desiredPlayback;
+      void this.playArrangement(desired.music, desired.options);
     }
   }
 
@@ -339,6 +389,7 @@ export class RoomMusicController {
     row: number,
   ): void {
     this.init();
+    if (this.volume === 0) return;
     const audioContext = this.getAudioContext();
     const masterGain = this.ensureMasterGain(audioContext);
     if (!audioContext || !masterGain) {
@@ -455,8 +506,9 @@ export class RoomMusicController {
     rowId: RoomPatternDrumRowId,
     defaultGain: number,
   ): Promise<void> {
+    const requestId = this.oneShotRequestSerial;
     const sample = (await getPatternDrumSamples(audioContext)).get(rowId);
-    if (!sample) {
+    if (!sample || this.volume === 0 || requestId !== this.oneShotRequestSerial) {
       return;
     }
 
@@ -503,10 +555,22 @@ export class RoomMusicController {
     void this.resumeAudioContext('preview-drum-cell');
   }
 
+  getPlayheadInfo(): RoomMusicPlayheadInfo {
+    return {
+      audioCurrentTime: this.audioContext?.currentTime ?? null,
+      transportStartTime: this.transportStartTime,
+      patternStartTime: this.activePattern?.startTime ?? null,
+      loopDurationSec: this.activePattern?.loopDurationSec ?? null,
+      kind: this.currentArrangement?.kind ?? null,
+    };
+  }
+
   getDebugState(): Record<string, unknown> {
     const currentTime = this.audioContext?.currentTime ?? 0;
     return {
       initialized: this.initialized,
+      bufferCache: this.bufferCache.getDebugSnapshot(),
+      retiringLoopCount: this.retiringPlaybacks.size,
       userInteracted: this.userInteracted,
       mode: this.mode,
       volume: this.volume,
@@ -523,6 +587,7 @@ export class RoomMusicController {
         playbackId: playback.playbackId,
         startTime: Number(playback.startTime.toFixed(3)),
         stopTime: playback.stopTime === null ? null : Number(playback.stopTime.toFixed(3)),
+        fadeInDuration: Number(playback.fadeInDuration.toFixed(3)),
         baseGain: Number(playback.baseGain.toFixed(3)),
       })),
       activePattern: this.activePattern
@@ -530,6 +595,7 @@ export class RoomMusicController {
             playbackId: this.activePattern.playbackId,
             startTime: Number(this.activePattern.startTime.toFixed(3)),
             stopTime: this.activePattern.stopTime === null ? null : Number(this.activePattern.stopTime.toFixed(3)),
+            fadeInDuration: Number(this.activePattern.fadeInDuration.toFixed(3)),
             baseGain: Number(this.activePattern.baseGain.toFixed(3)),
             loopDurationSec: Number(this.activePattern.loopDurationSec.toFixed(3)),
           }
@@ -564,28 +630,25 @@ export class RoomMusicController {
       return;
     }
 
-    const clipIds = this.collectStemArrangementClipIds(nextArrangement);
-    await Promise.all([...clipIds].map((clipId) => this.loadBuffer(nextArrangement.packId, clipId)));
+    const laneBuffers = new Map<RoomMusicLaneId, AudioBuffer>();
+    await Promise.all(ROOM_MUSIC_LANE_IDS.map(async (laneId) => {
+      const assignments = nextArrangement.arrangement.laneAssignments[laneId];
+      if (!this.isLaneAssignmentsEmpty(assignments)) {
+        laneBuffers.set(laneId, await this.loadLaneLoopBuffer(nextArrangement.packId, laneId, assignments));
+      }
+    }));
     if (!this.isCurrentPlaybackRequest(requestId)) {
       this.recordPlaybackRequestStatus(requestId, options.mode, getRoomMusicKey(nextArrangement), 'stale');
       return;
     }
 
     const now = audioContext.currentTime;
-    const transportAlreadyRunning = this.transportStartTime > 0;
-    const transition = options.transition ?? 'bar';
-    const quantizeToBar = transition === 'bar' && this.hasActivePlaybacks();
-    const startAt = quantizeToBar ? this.getNextBarBoundary(this.getBarDuration(pack), now) : now + 0.02;
-    this.ensureTransport(transportAlreadyRunning ? now : startAt);
-    const fadeDuration =
-      options.fadeDurationSec
-      ?? (quantizeToBar ? this.getBarDuration(pack) : IMMEDIATE_FADE_DURATION_SEC);
-    const loopOffset = transportAlreadyRunning ? this.getLoopOffsetAtTime(pack.loopDurationSec, startAt) : 0;
-    const hasPriorPlayback = this.hasActivePlaybacks();
+    const { startAt, stopAt, quantizeToBar, fadeDuration, loopOffset, hasPriorPlayback } =
+      this.prepareTransition(nextArrangement, options, now);
 
     if (this.activePattern) {
       this.scheduleStopPlayback(this.activePattern, {
-        stopAt: quantizeToBar ? startAt : now,
+        stopAt,
         fadeDuration,
       });
       this.activePattern = null;
@@ -597,6 +660,7 @@ export class RoomMusicController {
       const currentPlayback = this.activeLanes.get(laneId) ?? null;
       if (
         currentPlayback &&
+        (options.transition !== 'room' || quantizeToBar) &&
         currentPlayback.playbackId === nextPatternKey &&
         (currentPlayback.stopTime === null || currentPlayback.stopTime > now)
       ) {
@@ -605,7 +669,7 @@ export class RoomMusicController {
 
       if (currentPlayback) {
         this.scheduleStopPlayback(currentPlayback, {
-          stopAt: quantizeToBar ? startAt : now,
+          stopAt,
           fadeDuration,
         });
         this.activeLanes.delete(laneId);
@@ -615,11 +679,8 @@ export class RoomMusicController {
         continue;
       }
 
-      const buffer = await this.loadLaneLoopBuffer(nextArrangement.packId, laneId, nextBarClipIds);
-      if (!this.isCurrentPlaybackRequest(requestId)) {
-        this.recordPlaybackRequestStatus(requestId, options.mode, getRoomMusicKey(nextArrangement), 'stale');
-        return;
-      }
+      const buffer = laneBuffers.get(laneId);
+      if (!buffer) continue;
       const lane = getRoomMusicLane(pack, laneId);
       const playback = this.startLoopPlayback(nextPatternKey, buffer, {
         loopDurationSec: pack.loopDurationSec,
@@ -662,27 +723,18 @@ export class RoomMusicController {
     }
 
     const loopDurationSec = getRoomMusicLoopDurationSec(nextArrangement);
-    const barDurationSec = getRoomMusicBarDurationSec(nextArrangement);
     const buffer = await this.loadPatternLoopBuffer(nextArrangement);
     if (!this.isCurrentPlaybackRequest(requestId)) {
       this.recordPlaybackRequestStatus(requestId, options.mode, nextPatternKey, 'stale');
       return;
     }
     const now = audioContext.currentTime;
-    const transportAlreadyRunning = this.transportStartTime > 0;
-    const transition = options.transition ?? 'bar';
-    const quantizeToBar = transition === 'bar' && this.hasActivePlaybacks();
-    const startAt = quantizeToBar ? this.getNextBarBoundary(barDurationSec, now) : now + 0.02;
-    this.ensureTransport(transportAlreadyRunning ? now : startAt);
-    const fadeDuration =
-      options.fadeDurationSec
-      ?? (quantizeToBar ? barDurationSec : IMMEDIATE_FADE_DURATION_SEC);
-    const loopOffset = transportAlreadyRunning ? this.getLoopOffsetAtTime(loopDurationSec, startAt) : 0;
-    const hasPriorPlayback = this.hasActivePlaybacks();
+    const { startAt, stopAt, fadeDuration, loopOffset, hasPriorPlayback } =
+      this.prepareTransition(nextArrangement, options, now);
 
     for (const playback of this.activeLanes.values()) {
       this.scheduleStopPlayback(playback, {
-        stopAt: quantizeToBar ? startAt : now,
+        stopAt,
         fadeDuration,
       });
     }
@@ -690,7 +742,7 @@ export class RoomMusicController {
 
     if (this.activePattern) {
       this.scheduleStopPlayback(this.activePattern, {
-        stopAt: quantizeToBar ? startAt : now,
+        stopAt,
         fadeDuration,
       });
       this.activePattern = null;
@@ -734,27 +786,18 @@ export class RoomMusicController {
     }
 
     const loopDurationSec = getRoomMusicLoopDurationSec(nextArrangement);
-    const barDurationSec = getRoomMusicBarDurationSec(nextArrangement);
     const buffer = await this.loadPhraseArrangementLoopBuffer(nextArrangement);
     if (!this.isCurrentPlaybackRequest(requestId)) {
       this.recordPlaybackRequestStatus(requestId, options.mode, nextArrangementKey, 'stale');
       return;
     }
     const now = audioContext.currentTime;
-    const transportAlreadyRunning = this.transportStartTime > 0;
-    const transition = options.transition ?? 'bar';
-    const quantizeToBar = transition === 'bar' && this.hasActivePlaybacks();
-    const startAt = quantizeToBar ? this.getNextBarBoundary(barDurationSec, now) : now + 0.02;
-    this.ensureTransport(transportAlreadyRunning ? now : startAt);
-    const fadeDuration =
-      options.fadeDurationSec
-      ?? (quantizeToBar ? barDurationSec : IMMEDIATE_FADE_DURATION_SEC);
-    const loopOffset = transportAlreadyRunning ? this.getLoopOffsetAtTime(loopDurationSec, startAt) : 0;
-    const hasPriorPlayback = this.hasActivePlaybacks();
+    const { startAt, stopAt, fadeDuration, loopOffset, hasPriorPlayback } =
+      this.prepareTransition(nextArrangement, options, now);
 
     for (const playback of this.activeLanes.values()) {
       this.scheduleStopPlayback(playback, {
-        stopAt: quantizeToBar ? startAt : now,
+        stopAt,
         fadeDuration,
       });
     }
@@ -762,7 +805,7 @@ export class RoomMusicController {
 
     if (this.activePattern) {
       this.scheduleStopPlayback(this.activePattern, {
-        stopAt: quantizeToBar ? startAt : now,
+        stopAt,
         fadeDuration,
       });
       this.activePattern = null;
@@ -778,6 +821,34 @@ export class RoomMusicController {
     });
     this.currentArrangement = nextArrangement;
     this.recordPlaybackRequestStatus(requestId, options.mode, nextArrangementKey, 'started');
+  }
+
+  private prepareTransition(
+    next: RoomMusic,
+    options: { transition?: TransitionMode; fadeDurationSec?: number },
+    now: number,
+  ) {
+    const playbacks = [...this.activeLanes.values(), ...(this.activePattern ? [this.activePattern] : [])];
+    const plan = getMusicTransitionPlan({
+      prior: this.currentArrangement,
+      next,
+      now,
+      transportStartTime: this.transportStartTime,
+      hasPriorPlayback: playbacks.length > 0,
+      hasAudiblePlayback: playbacks.some(playback => playback.startTime <= now && (playback.stopTime === null || playback.stopTime > now)),
+      transition: options.transition ?? 'bar',
+      fadeDurationSec: options.fadeDurationSec,
+    });
+    // A newer target also owns tails from earlier transitions. Shorten those
+    // already-retiring sources rather than leaving a discarded bar-long stop.
+    for (const playback of [...this.retiringPlaybacks]) {
+      this.scheduleStopPlayback(playback, {
+        stopAt: now,
+        fadeDuration: options.transition === 'room' ? 0.3 : IMMEDIATE_FADE_DURATION_SEC,
+      });
+    }
+    this.transportStartTime = plan.transportStartTime;
+    return plan;
   }
 
   private hasActivePlaybacks(): boolean {
@@ -829,18 +900,6 @@ export class RoomMusicController {
     this.lastPlaybackRequest = entry;
   }
 
-  private collectStemArrangementClipIds(arrangement: StemArrangementRoomMusic): Set<string> {
-    const clipIds = new Set<string>();
-    for (const laneId of ROOM_MUSIC_LANE_IDS) {
-      for (const clipId of arrangement.arrangement.laneAssignments[laneId]) {
-        if (clipId) {
-          clipIds.add(clipId);
-        }
-      }
-    }
-    return clipIds;
-  }
-
   private getLanePatternKey(
     packId: string,
     laneId: RoomMusicLaneId,
@@ -876,6 +935,7 @@ export class RoomMusicController {
         state: this.audioContext?.state ?? 'unknown',
       };
     });
+    if (this.lifecycleDocument?.hidden) this.suspendAudioContext();
     return this.audioContext;
   }
 
@@ -898,17 +958,9 @@ export class RoomMusicController {
     return 0.82 * GLOBAL_MUSIC_VOLUME_MULTIPLIER * this.volume;
   }
 
-  private ensureTransport(currentTime: number): void {
-    if (this.transportStartTime > 0) {
-      return;
-    }
-
-    this.transportStartTime = currentTime;
-  }
-
   private async loadBuffer(packId: string, clipId: string): Promise<AudioBuffer> {
     const cacheKey = `${packId}:${clipId}`;
-    const cached = this.bufferPromises.get(cacheKey);
+    const cached = this.bufferCache.get(`clip:${cacheKey}`);
     if (cached) {
       return cached;
     }
@@ -934,7 +986,7 @@ export class RoomMusicController {
         return audioContext.decodeAudioData(arrayBuffer.slice(0));
       });
 
-    this.bufferPromises.set(cacheKey, bufferPromise);
+    this.bufferCache.set(`clip:${cacheKey}`, 'clip', bufferPromise);
     return bufferPromise;
   }
 
@@ -944,7 +996,7 @@ export class RoomMusicController {
     assignments: RoomMusicLaneBarAssignments,
   ): Promise<AudioBuffer> {
     const cacheKey = this.getLanePatternKey(packId, laneId, assignments);
-    const cached = this.laneLoopBufferPromises.get(cacheKey);
+    const cached = this.bufferCache.get(`lane:${cacheKey}`);
     if (cached) {
       return cached;
     }
@@ -1013,7 +1065,7 @@ export class RoomMusicController {
       return laneBuffer;
     })();
 
-    this.laneLoopBufferPromises.set(cacheKey, laneBufferPromise);
+    this.bufferCache.set(`lane:${cacheKey}`, 'loop', laneBufferPromise);
     return laneBufferPromise;
   }
 
@@ -1021,7 +1073,7 @@ export class RoomMusicController {
     pattern: Extract<RoomMusic, { kind: 'pattern' }>,
   ): Promise<AudioBuffer> {
     const cacheKey = getRoomMusicKey(pattern) ?? 'pattern';
-    const cached = this.patternLoopBufferPromises.get(cacheKey);
+    const cached = this.bufferCache.get(`pattern:${cacheKey}`);
     if (cached) {
       return cached;
     }
@@ -1035,7 +1087,7 @@ export class RoomMusicController {
       return renderRoomPatternLoopBuffer(audioContext, pattern);
     });
 
-    this.patternLoopBufferPromises.set(cacheKey, bufferPromise);
+    this.bufferCache.set(`pattern:${cacheKey}`, 'loop', bufferPromise);
     return bufferPromise;
   }
 
@@ -1043,7 +1095,7 @@ export class RoomMusicController {
     arrangement: RoomPhraseArrangementMusic,
   ): Promise<AudioBuffer> {
     const cacheKey = `phrase:${getRoomMusicKey(arrangement) ?? 'phraseArrangement'}`;
-    const cached = this.patternLoopBufferPromises.get(cacheKey);
+    const cached = this.bufferCache.get(`pattern:${cacheKey}`);
     if (cached) {
       return cached;
     }
@@ -1060,7 +1112,7 @@ export class RoomMusicController {
       return renderRoomPatternLoopBuffer(audioContext, sequence);
     });
 
-    this.patternLoopBufferPromises.set(cacheKey, bufferPromise);
+    this.bufferCache.set(`pattern:${cacheKey}`, 'loop', bufferPromise);
     return bufferPromise;
   }
 
@@ -1089,9 +1141,9 @@ export class RoomMusicController {
     source.loopEnd = Math.min(options.loopDurationSec, buffer.duration);
 
     const gain = audioContext.createGain();
-    const initialGain = options.startSilent ? 0 : options.baseGain;
+    const initialGain = options.startSilent || options.fadeInDuration > 0 ? 0 : options.baseGain;
     gain.gain.setValueAtTime(initialGain, Math.max(audioContext.currentTime, options.startAt - 0.02));
-    if (options.startSilent && options.fadeInDuration > 0) {
+    if (options.fadeInDuration > 0) {
       gain.gain.setValueAtTime(0, options.startAt);
       gain.gain.linearRampToValueAtTime(options.baseGain, options.startAt + options.fadeInDuration);
     }
@@ -1109,7 +1161,20 @@ export class RoomMusicController {
       stopTime: null,
       baseGain: options.baseGain,
       loopDurationSec: options.loopDurationSec,
+      fadeInDuration: options.fadeInDuration,
+      fadeOut: null,
     };
+  }
+
+  private getPlaybackGainAtTime(playback: ActiveLoopPlayback, time: number): number {
+    if (playback.fadeOut && time >= playback.fadeOut.start) {
+      const progress = Math.min(1, (time - playback.fadeOut.start) / (playback.fadeOut.end - playback.fadeOut.start));
+      return playback.fadeOut.startGain * (1 - progress);
+    }
+    const progress = playback.fadeInDuration > 0
+      ? Math.min(1, Math.max(0, (time - playback.startTime) / playback.fadeInDuration))
+      : 1;
+    return playback.baseGain * progress;
   }
 
   private scheduleStopPlayback(
@@ -1128,14 +1193,34 @@ export class RoomMusicController {
     const fadeEnd = fadeStart + Math.max(0.02, options.fadeDuration);
 
     try {
-      playback.gain.gain.cancelScheduledValues(audioContext.currentTime);
-      playback.gain.gain.setValueAtTime(playback.gain.gain.value, fadeStart);
-      playback.gain.gain.linearRampToValueAtTime(0, fadeEnd);
-      playback.source.stop(fadeEnd + 0.05);
-      playback.stopTime = fadeEnd + 0.05;
+      const alreadyRetiring = this.retiringPlaybacks.has(playback);
+      const param = playback.gain.gain;
+      if (playback.startTime > audioContext.currentTime) {
+        // A superseded queued room must never become audible at its future start.
+        param.cancelScheduledValues(audioContext.currentTime);
+        param.setValueAtTime(0, audioContext.currentTime);
+        playback.source.stop(audioContext.currentTime);
+        playback.stopTime = audioContext.currentTime;
+        playback.fadeOut = null;
+      } else {
+        const startGain = this.getPlaybackGainAtTime(playback, fadeStart);
+        if (typeof param.cancelAndHoldAtTime === 'function') {
+          param.cancelAndHoldAtTime(fadeStart);
+        } else {
+          param.cancelScheduledValues(audioContext.currentTime);
+          param.setValueAtTime(startGain, fadeStart);
+        }
+        param.linearRampToValueAtTime(0, fadeEnd);
+        playback.source.stop(fadeEnd + 0.05);
+        playback.stopTime = fadeEnd + 0.05;
+        playback.fadeOut = { start: fadeStart, end: fadeEnd, startGain };
+      }
+      this.retiringPlaybacks.add(playback);
+      if (alreadyRetiring) return;
       playback.source.addEventListener(
         'ended',
         () => {
+          this.retiringPlaybacks.delete(playback);
           try {
             playback.source.disconnect();
           } catch {
@@ -1168,16 +1253,17 @@ export class RoomMusicController {
     return this.transportStartTime + nextBarIndex * barDurationSec;
   }
 
-  private getLoopOffsetAtTime(loopDurationSec: number, atTime: number): number {
-    if (loopDurationSec <= 0) {
-      return 0;
+  private suspendAudioContext(): void {
+    if (this.audioContext?.state === 'running') {
+      void this.audioContext.suspend().catch(() => void 0);
     }
-
-    const elapsed = Math.max(0, atTime - this.transportStartTime);
-    return elapsed % loopDurationSec;
   }
 
   private async resumeAudioContext(trigger: string): Promise<void> {
+    if (this.lifecycleDocument?.hidden) {
+      this.suspendAudioContext();
+      return;
+    }
     const stateBefore = this.audioContext?.state ?? null;
     if (!this.audioContext) {
       this.lastResumeAttempt = {
@@ -1203,6 +1289,10 @@ export class RoomMusicController {
 
     try {
       await this.audioContext.resume();
+      if (this.lifecycleDocument?.hidden) {
+        await this.audioContext.suspend();
+        return;
+      }
       const stateAfter: string = this.audioContext.state;
       this.lastResumeAttempt = {
         at: Date.now(),

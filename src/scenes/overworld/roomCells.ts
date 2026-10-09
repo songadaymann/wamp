@@ -20,6 +20,7 @@ interface OverworldRoomCellControllerHost {
   getMode(): OverworldMode;
   isRoomInActiveCourse(coordinates: RoomCoordinates): boolean;
   getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null;
+  hasFoundLostSong?(coordinates: RoomCoordinates): boolean;
 }
 
 export class OverworldRoomCellController {
@@ -108,6 +109,9 @@ export class OverworldRoomCellController {
         this.roomFillGraphics.fillStyle(cellFill.color, cellFill.alpha);
         this.roomFillGraphics.fillRect(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
         this.drawCellFrame(coordinates, cellState, origin.x, origin.y);
+        if (cellState === 'published' && this.host.getMode() === 'browse' && this.host.hasFoundLostSong?.(coordinates)) {
+          this.drawInsetFrame(this.roomFrameGraphics, origin.x, origin.y, 18, 2, 0xf4cc55, 0.9);
+        }
         if (cellState === 'frontier') {
           this.syncFrontierLabel(coordinates, origin.x, origin.y);
           visibleFrontierLabelKeys.add(this.getFrontierLabelKey(coordinates));

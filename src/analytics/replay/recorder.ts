@@ -5,8 +5,10 @@ import { getAuthDebugState, AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
 import { REPLAY_ACTIONS, REPLAY_IMAGE_LIMIT, REPLAY_SECONDS, replayPosition, type ReplayAction, type ReplaySample } from './model';
 import type { GuestActivitySnapshot } from '../guestActivity';
 import './notice.css';
+import { captureReplayCanvas } from './canvasCapture';
+import { BUG_RECORDING_CHANGED } from '../../bugReports/model';
+import { bugRecordingAllowed, setBugRecordingAllowed } from '../../bugReports/recordingPreference';
 
-const OPT_OUT = 'wamp_replay_opt_out';
 const VISITOR = 'wamp_replay_visitor';
 const ACTIONS: Record<string, ReplayAction> = {
   'btn-welcome-explore': 'welcome_explore',
@@ -20,12 +22,12 @@ interface Host {
   onFrame(callback: () => void): () => void;
   snapshot(): GuestActivitySnapshot;
   state(): Record<string, unknown>;
+  latestImage?(): string | null;
 }
 export function initializeGuestReplay(host: Host): () => void {
   const api = getApiBaseUrl();
   if (import.meta.env.DEV && api.startsWith('https://')) return () => {};
-  try { if (localStorage.getItem(OPT_OUT) === '1') return () => {}; } catch { /* volatile recording */ }
-  if (navigator.doNotTrack === '1' || (navigator as Navigator & {globalPrivacyControl?: boolean}).globalPrivacyControl) return () => {};
+  if (!bugRecordingAllowed()) return () => {};
   let stopped = false;
   let credentials: { id: string; token: string } | null = null;
   let starting = false;
@@ -38,8 +40,6 @@ export function initializeGuestReplay(host: Host): () => void {
   const actions: ReplayAction[] = [];
   let lastTool = '';
   let lastGoal = { room: '', deaths: 0, result: '' };
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
   const notice = document.createElement('div');
   notice.className = 'guest-replay-notice';
   notice.setAttribute('role', 'status');
@@ -98,20 +98,11 @@ export function initializeGuestReplay(host: Host): () => void {
   const removeFrame = host.onFrame(() => {
     if (!due || stopped) return;
     due = false;
-    let image: string | null = null;
-    // Capture only the game canvas, never DOM, form values, chat, or auth data.
-    if (host.snapshot().mode !== 'browse' && context && host.canvas.width && host.canvas.height) {
-      try {
-        const scale = Math.min(640 / host.canvas.width, 480 / host.canvas.height);
-        canvas.width = Math.max(1, Math.round(host.canvas.width * scale));
-        canvas.height = Math.max(1, Math.round(host.canvas.height * scale));
-        context.drawImage(host.canvas,0,0,canvas.width,canvas.height);
-        image = canvas.toDataURL('image/jpeg',0.35);
-        if (image.length > REPLAY_IMAGE_LIMIT) image = canvas.toDataURL('image/jpeg',0.12);
-        if (image.length > REPLAY_IMAGE_LIMIT) image = null;
-      } catch { /* An unreadable canvas must not interrupt gameplay. */ }
-    }
-    sample(image);
+    if (host.snapshot().mode === 'browse') { sample(null); return; }
+    // Share the already encoded local replay frame in the application. Standalone hosts
+    // still use asynchronous bitmap/toBlob capture, never synchronous JPEG encoding.
+    if (host.latestImage) sample(host.latestImage());
+    else void captureReplayCanvas(host.canvas, { width: 640, height: 480, limit: REPLAY_IMAGE_LIMIT }).then(sample);
   });
   async function tick(): Promise<void> {
     if (stopped) return;
@@ -175,19 +166,25 @@ export function initializeGuestReplay(host: Host): () => void {
     document.removeEventListener('visibilitychange',visibility);
     window.removeEventListener('pagehide',pagehide);
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT,tick);
+    window.removeEventListener(BUG_RECORDING_CHANGED, preferenceChanged);
+    window.removeEventListener('storage', preferenceChanged);
     void flush(true);
   }
   optOut.addEventListener('click', () => {
-    try { localStorage.setItem(OPT_OUT,'1'); } catch { /* still stop this visit */ }
-    pending = [];
-    stop();
-    if (credentials) void post('discard',credentials,true).catch(() => {});
+    setBugRecordingAllowed(false);
   });
+  function preferenceChanged(event: Event): void {
+    if ((event as CustomEvent<boolean>).detail !== false && bugRecordingAllowed()) return;
+    pending = []; stop();
+    if (credentials) void post('discard',credentials,true).catch(() => {});
+  }
   window.addEventListener(REPLAY_EDITOR_EVENT, editorAction);
   document.addEventListener('click', click);
   document.addEventListener('visibilitychange',visibility);
   window.addEventListener('pagehide',pagehide);
   window.addEventListener(AUTH_STATE_CHANGED_EVENT,tick);
+  window.addEventListener(BUG_RECORDING_CHANGED, preferenceChanged);
+  window.addEventListener('storage', preferenceChanged);
   const timer = window.setInterval(() => { void tick(); },1000);
   void tick();
   return stop;

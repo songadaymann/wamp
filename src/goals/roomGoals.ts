@@ -66,6 +66,7 @@ export interface NpcQuestGoal {
 
 export interface RoomGoalPublishValidationContext {
   collectiblesPlaced: number;
+  enemyCount: number;
   collectModeEnemyCount: number;
   npcInstanceIds?: string[];
 }
@@ -417,6 +418,16 @@ export function getRoomGoalPublishValidationError(
 ): string | null {
   if (!goal) {
     return null;
+  }
+
+  if (goal.type === 'reach_exit' && !goal.exit) {
+    return 'Reach Exit needs an exit marker. Choose Set Exit and place it in the room.';
+  }
+  if (goal.type === 'checkpoint_sprint' && !goal.finish) {
+    return 'Checkpoint Sprint needs a finish marker. Choose Set Finish and place it in the room.';
+  }
+  if (goal.type === 'defeat_all' && context.enemyCount <= 0) {
+    return 'Defeat All needs at least one enemy in the room.';
   }
 
   if (goal.type === 'collect_target' && context.collectiblesPlaced < goal.requiredCount) {

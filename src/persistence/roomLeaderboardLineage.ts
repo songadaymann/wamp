@@ -5,6 +5,9 @@ import {
   type RoomVersionLineage,
 } from './roomVersionLineage';
 import { getLeaderboardRankingMode } from '../runs/scoring';
+import { normalizePlayerHearts } from '../player/hearts';
+import { getBossChallengeSignature } from '../enemies/boss';
+import { hasCoopPressurePlates } from '../placedObjects/coopPressurePlates';
 
 export interface RoomLeaderboardFamily {
   representativeVersion: number;
@@ -211,12 +214,23 @@ export function getManualRoomLeaderboardSourceValidationError(
     return 'Pick an older published version as the leaderboard source.';
   }
 
+  if (hasCoopPressurePlates(target.snapshot.placedObjects) || hasCoopPressurePlates(source.snapshot.placedObjects)) {
+    return 'Co-op practice versions cannot share solo leaderboards.';
+  }
+
   if (!target.snapshot.goal || !source.snapshot.goal) {
     return 'Only published challenge versions can share a leaderboard.';
   }
 
   if (target.snapshot.goal.type !== source.snapshot.goal.type) {
     return 'Only versions with the same goal type can share a leaderboard.';
+  }
+
+  if (normalizePlayerHearts(target.snapshot.playerHearts) !== normalizePlayerHearts(source.snapshot.playerHearts)) {
+    return 'Only versions with the same player heart count can share a leaderboard.';
+  }
+  if (getBossChallengeSignature(target.snapshot.placedObjects) !== getBossChallengeSignature(source.snapshot.placedObjects)) {
+    return 'Only versions with the same boss configuration can share a leaderboard.';
   }
 
   if (getLeaderboardRankingMode(target.snapshot.goal) !== getLeaderboardRankingMode(source.snapshot.goal)) {

@@ -11,11 +11,14 @@ import {
   type PlacedObject,
 } from '../../config';
 import { createDefaultRoomMusic, createDefaultRoomPatternMusic } from '../../music/model';
-import { createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
+import { cloneRoomSnapshot, createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
 import type { SmartBrushId } from '../../autotiling/model';
 import { updateGameSettings } from '../../settings/userSettings';
 import { EditorEditRuntime } from './editRuntime';
 import { EditorInteractionController } from './interaction';
+import { buildRoomTemplate } from '../../templates/roomTemplates';
+import { EditorHistory } from './history';
+import * as smartModel from '../../autotiling/model';
 
 vi.mock('phaser', () => ({
   default: {
@@ -41,6 +44,113 @@ vi.mock('./documentPresentationController', () => ({
 }));
 
 describe('editor edit runtime document contracts', () => {
+  it('plain tile strokes retain no Smart snapshots while manual edits still restore owned metadata', () => {
+    const { runtime } = createHarness(createRoom());
+    const history = (runtime as unknown as { history: EditorHistory<{ smartBefore?: unknown; smartAfter?: unknown }> }).history;
+    const record = vi.spyOn(history, 'record'), clone = vi.spyOn(smartModel, 'cloneRoomSmartTerrainState');
+    runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
+    expect(clone).not.toHaveBeenCalled();
+    expect(record.mock.calls.at(-1)?.[0].smartBefore).toBeUndefined();
+    expect(record.mock.calls.at(-1)?.[0].smartAfter).toBeUndefined(); clone.mockRestore();
+    editorState.paletteMode = 'smart';
+    runtime.beginTileBatch(); runtime.placeTileAt(96, 96); runtime.commitTileBatch();
+    const smart = runtime.exportRoomSnapshot();
+    editorState.paletteMode = 'tiles'; editorState.selectedTileGid = 5;
+    runtime.beginTileBatch(); runtime.placeTileAt(96, 96); runtime.commitTileBatch();
+    const manual = runtime.exportRoomSnapshot();
+    expect(manual.smartTerrain).not.toEqual(smart.smartTerrain);
+    expect(record.mock.calls.at(-1)?.[0].smartBefore).toBeTruthy();
+    runtime.undo(); expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(smart.smartTerrain);
+    runtime.redo(); expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(manual.smartTerrain);
+    runtime.beginTileBatch(); runtime.eraseTileAt(96, 96); runtime.cancelTileBatch();
+    expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(manual.smartTerrain); record.mockRestore();
+  });
+  it('does not record a repeated Smart stroke or empty manual stroke and preserves Redo', () => {
+    const { runtime } = createHarness(createRoom()); editorState.paletteMode = 'smart';
+    runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
+    const history = (runtime as unknown as { history: EditorHistory<unknown> }).history;
+    runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
+    expect(history.getDebugSnapshot().undoCount).toBe(1);
+    runtime.undo(); const revision = runtime.documentRevision;
+    editorState.paletteMode = 'tiles'; runtime.beginTileBatch(); runtime.eraseTileAt(160, 160); runtime.commitTileBatch();
+    expect(runtime.documentRevision).toBe(revision); expect(runtime.hasRedoHistory()).toBe(true);
+  });
+  it('records a semantic-only Smart setting and restores it through Undo/Redo without tile changes', () => {
+    const { runtime } = createHarness(createRoom());
+    const before = runtime.exportRoomSnapshot();
+    runtime.setSmartDetailsEnabled(false); const next = runtime.exportRoomSnapshot();
+    expect(next.tileData).toEqual(before.tileData); expect(next.smartTerrain?.detailsEnabled).toBe(false);
+    expect(runtime.hasUndoHistory()).toBe(true);
+    runtime.undo(); expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(before.smartTerrain);
+    runtime.redo(); expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(next.smartTerrain);
+  });
+  it('bounds actual runtime history and advances revision for edits, Undo/Redo and loads, not cancellation', () => {
+    const { runtime } = createHarness(createRoom()); let revision = runtime.documentRevision;
+    let oldestRetainedBefore = -1;
+    for (let i = 0; i < 170; i++) {
+      editorState.selectedTileGid = i % 2 ? 2 : 1;
+      editorState.selection.startCol = i % 2;
+      runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
+      if (i === 19) oldestRetainedBefore = runtime.exportRoomSnapshot().tileData.terrain[5][5];
+      expect(runtime.documentRevision).toBeGreaterThan(revision); revision = runtime.documentRevision;
+    }
+    for (let i = 0; i < 150; i++) runtime.undo();
+    expect(runtime.hasUndoHistory()).toBe(false); expect(runtime.hasRedoHistory()).toBe(true);
+    expect(runtime.exportRoomSnapshot().tileData.terrain[5][5]).toBe(oldestRetainedBefore);
+    expect(runtime.documentRevision).toBeGreaterThan(revision); revision = runtime.documentRevision;
+    runtime.redo(); expect(runtime.documentRevision).toBeGreaterThan(revision); revision = runtime.documentRevision;
+    runtime.beginTileBatch(); runtime.placeTileAt(160, 160); runtime.cancelTileBatch();
+    expect(runtime.documentRevision).toBe(revision);
+    runtime.applyRoomSnapshot(createRoom()); expect(runtime.documentRevision).toBeGreaterThan(revision);
+    revision = runtime.documentRevision; runtime.currentLastDirtyAt = 10;
+    expect(runtime.documentRevision).toBeGreaterThan(revision); revision = runtime.documentRevision;
+    runtime.currentLastDirtyAt = 10; expect(runtime.documentRevision).toBeGreaterThan(revision);
+  });
+  it('moves linked objects as one Undo action, preserving configuration and guarding read-only and occupied targets', () => {
+    const room = createRoom();
+    room.placedObjects = [
+      { id: 'floor_trigger', instanceId: 'plate', x: 40, y: 312, triggerTargetInstanceId: 'door', coopPlate: true },
+      { id: 'door_metal_narrow', instanceId: 'door', x: 200, y: 296 },
+      { id: 'treasure_chest', instanceId: 'chest', x: 320, y: 304, containedObjectId: 'coin_gold', layer: 'foreground' },
+    ];
+    const { runtime, setEditable, host } = createHarness(cloneRoomSnapshot(room));
+    runtime.setGoalType('survival'); runtime.setRoomPlayerHearts(3);
+    const original = runtime.exportRoomSnapshot();
+    expect(runtime.movePlacedObject('door', { x: 232, y: 280 })).toBe(true);
+    const moved = runtime.exportRoomSnapshot();
+    expect(moved.placedObjects).toEqual(original.placedObjects.map(object => object.instanceId === 'door' ? { ...object, x: 232, y: 280 } : object));
+    expect(host.recordBuildPlacement).not.toHaveBeenCalled();
+    runtime.undo(); expect(runtime.exportRoomSnapshot().placedObjects).toEqual(original.placedObjects); expect(runtime.exportRoomSnapshot().playerHearts).toBe(3);
+    runtime.redo(); expect(runtime.exportRoomSnapshot().placedObjects).toEqual(moved.placedObjects);
+    runtime.undo(); runtime.undo(); expect(runtime.exportRoomSnapshot().goal).toBeNull(); expect(runtime.exportRoomSnapshot().playerHearts).toBe(3);
+    expect(runtime.movePlacedObject('plate', { x: 200, y: 312 })).toBe(false);
+    expect(runtime.exportRoomSnapshot().placedObjects).toEqual(original.placedObjects);
+    setEditable(false); expect(runtime.movePlacedObject('door', { x: 232, y: 280 })).toBe(false);
+    expect(runtime.exportRoomSnapshot().placedObjects).toEqual(original.placedObjects);
+  });
+  it('replaces a complete layout in one history action without losing earlier history or later settings', () => {
+    const room = createRoom();
+    room.placedObjects = [{ id: 'floor_trigger', instanceId: 'p', x: 40, y: 40, triggerTargetInstanceId: 'd', coopPlate: true }, { id: 'door_metal_narrow', instanceId: 'd', x: 72, y: 40 }];
+    room.tileData.foreground[2][2] = encodeTileDataValue(5, true, false);
+    const { runtime, setEditable } = createHarness(cloneRoomSnapshot(room));
+    runtime.setGoalType('reach_exit'); runtime.startGoalMarkerPlacement('exit'); runtime.placeGoalMarker(10, 10);
+    const previous = runtime.exportRoomSnapshot();
+    expect(runtime.replaceRoomLayout(buildRoomTemplate(previous, 'arena', 'cave'))).toBe(true);
+    const next = runtime.exportRoomSnapshot();
+    expect(next.placedObjects).toHaveLength(2); expect(next.tileData.foreground[2][2]).toBe(-1);
+    runtime.setRoomPlayerHearts(3); runtime.setRoomPitsAreDeadly(true);
+    runtime.undo();
+    const restored = runtime.exportRoomSnapshot();
+    expect(restored.tileData).toEqual(previous.tileData); expect(restored.placedObjects).toEqual(previous.placedObjects);
+    expect(restored.goal).toEqual(previous.goal); expect(restored.smartTerrain).toEqual(previous.smartTerrain);
+    expect(restored.playerHearts).toBe(3); expect(restored.pitsAreDeadly).toBe(true);
+    runtime.redo(); expect(runtime.exportRoomSnapshot().tileData).toEqual(next.tileData);
+    runtime.undo(); runtime.undo(); expect(runtime.getPublishValidationError()).toMatch(/Set Exit/);
+    runtime.redo(); expect(runtime.exportRoomSnapshot().goal).toEqual(previous.goal);
+    setEditable(false);
+    expect(runtime.replaceRoomLayout(next)).toBe(false); expect(runtime.exportRoomSnapshot().tileData).toEqual(previous.tileData);
+  });
+
   beforeEach(() => {
     updateGameSettings({ builderMode: 'beginner' });
     editorState.activeLayer = 'terrain';
@@ -60,6 +170,46 @@ describe('editor edit runtime document contracts', () => {
     editorState.tileFlipXMode = 'off';
     editorState.tileFlipYMode = 'off';
     editorState.selectedObjectId = null;
+  });
+
+  it('limits Lost Song to one main-layer object during a live batch, with Undo and read-only parity', () => {
+    const { runtime, host, setEditable } = createHarness(createRoom());
+    editorState.selectedObjectId = 'lost_song';
+    editorState.activeLayer = 'background';
+    expect(runtime.handleObjectPlace(64, 64, 4, 4)).toBeNull();
+    editorState.activeLayer = 'terrain';
+    runtime.beginObjectBatch(true);
+    expect(runtime.handleObjectPlace(64, 64, 4, 4)?.id).toBe('lost_song');
+    runtime.handleObjectPlace(64, 64, 4, 4);
+    runtime.handleObjectPlace(80, 64, 5, 4);
+    runtime.commitObjectBatch();
+    expect(host.getPlacedObjects()).toHaveLength(1);
+    runtime.undo(); expect(host.getPlacedObjects()).toHaveLength(0);
+    runtime.redo(); expect(host.getPlacedObjects()).toHaveLength(1);
+    runtime.undo(); setEditable(false);
+    expect(runtime.handleObjectPlace(80, 64, 5, 4)).toBeNull();
+    expect(host.getPlacedObjects()).toHaveLength(0);
+  });
+
+  it('keeps missing-marker goals saveable, places explicitly, and restores publish checks through Undo', () => {
+    const { runtime, setEditable } = createHarness(createRoom());
+    runtime.setGoalType('reach_exit');
+    expect(runtime.currentGoalPlacementMode).toBeNull();
+    expect(runtime.exportRoomSnapshot().goal?.type).toBe('reach_exit');
+    expect(runtime.getPublishValidationError()).toMatch(/Set Exit/);
+    runtime.startGoalMarkerPlacement('exit');
+    runtime.placeGoalMarker(10, 10);
+    expect(runtime.currentGoalPlacementMode).toBeNull();
+    expect(runtime.getPublishValidationError()).toBeNull();
+    runtime.undo();
+    expect(runtime.getPublishValidationError()).toMatch(/Set Exit/);
+    runtime.redo();
+    expect(runtime.getPublishValidationError()).toBeNull();
+    setEditable(false);
+    runtime.clearGoalMarkers();
+    expect(runtime.getPublishValidationError()).toBeNull();
+    runtime.setGoalType('checkpoint_sprint');
+    expect(runtime.currentRoomGoal?.type).toBe('reach_exit');
   });
 
   it('persists opted-in pits, blocks read-only changes, and resets them off', () => {
@@ -85,6 +235,42 @@ describe('editor edit runtime document contracts', () => {
     expect(runtime.roomCameraMode).toBe('room');
     runtime.reset();
     expect(runtime.roomCameraMode).toBe('follow');
+  });
+
+  it('saves co-op opt-in with Undo/Redo and blocks decorative, unrelated and read-only objects', () => {
+    const room = createRoom();
+    room.placedObjects = [
+      { id: 'floor_trigger', instanceId: 'plate', x: 88, y: 296 },
+      { id: 'floor_trigger', instanceId: 'background-plate', x: 104, y: 296, layer: 'background' },
+      object('coin'),
+    ];
+    const { runtime, setEditable } = createHarness(room);
+    expect(runtime.setCoopPlate('plate', true)).toBe(true);
+    expect(runtime.isRoomDirty).toBe(true);
+    expect(runtime.exportRoomSnapshot().placedObjects[0].coopPlate).toBe(true);
+    runtime.undo(); expect(runtime.exportRoomSnapshot().placedObjects[0].coopPlate ?? null).toBeNull();
+    runtime.redo(); expect(runtime.exportRoomSnapshot().placedObjects[0].coopPlate).toBe(true);
+    expect(createHarness(runtime.exportRoomSnapshot()).runtime.exportRoomSnapshot().placedObjects[0].coopPlate).toBe(true);
+    expect(runtime.setCoopPlate('background-plate', true)).toBe(false);
+    expect(runtime.setCoopPlate('coin', true)).toBe(false);
+    setEditable(false); expect(runtime.setCoopPlate('plate', false)).toBe(false);
+    expect(runtime.exportRoomSnapshot().placedObjects[0].coopPlate).toBe(true);
+  });
+
+  it('saves boss configuration with undo/redo and respects read-only rooms', () => {
+    const room = createRoom();
+    room.placedObjects = [{ id: 'swordsman_ai', x: 80, y: 256, instanceId: 'boss', swordsmanDefeatMode: 'invincible' }];
+    const { runtime, setEditable } = createHarness(room);
+    expect(runtime.setBossHitPoints('boss', 7)).toBe(true);
+    expect(runtime.exportRoomSnapshot().placedObjects[0]).toMatchObject({ bossHitPoints: 7, swordsmanDefeatMode: 'defeatable' });
+    runtime.undo();
+    expect(runtime.exportRoomSnapshot().placedObjects[0].bossHitPoints ?? null).toBeNull();
+    expect(runtime.exportRoomSnapshot().placedObjects[0].swordsmanDefeatMode).toBe('invincible');
+    runtime.redo();
+    expect(runtime.exportRoomSnapshot().placedObjects[0].bossHitPoints).toBe(7);
+    setEditable(false);
+    expect(runtime.setBossHitPoints('boss', 3)).toBe(false);
+    expect(runtime.exportRoomSnapshot().placedObjects[0].bossHitPoints).toBe(7);
   });
 
   it('round-trips tile, object, spawn, goal, music, and metadata document state', () => {

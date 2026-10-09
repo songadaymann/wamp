@@ -113,6 +113,55 @@ describe('room draft command tiles', () => {
 });
 
 describe('room draft command objects and goals', () => {
+  it('authors and removes co-op plate opt-ins with strict gameplay-only validation', () => {
+    const place = { type: 'place_object', ref: 'plate', objectId: 'floor_trigger', tileX: 4, tileY: 18, coopPlate: true };
+    const room = applyRoomDraftCommands(blankRoom(), normalize([place]).commands).snapshot;
+    expect(room.placedObjects[0].coopPlate).toBe(true);
+    const configured = normalize([place, { type: 'configure_object', target: { ref: 'plate' }, coopPlate: null }]);
+    expect(applyRoomDraftCommands(blankRoom(), configured.commands).snapshot.placedObjects[0].coopPlate).toBeNull();
+    for (const coopPlate of [1, 'true', null]) expect(() => normalize([{ ...place, coopPlate }])).toThrow();
+    expect(() => normalize([{ ...place, objectId: 'coin_gold' }])).toThrow(/only applies/);
+    expect(() => normalize([{ ...place, layer: 'background' }])).toThrow(/Gameplay layer/);
+    expect(() => applyRoomDraftCommands(blankRoom(), normalize([
+      { ...place, objectId: 'coin_gold', coopPlate: undefined },
+      { type: 'configure_object', target: { ref: 'plate' }, coopPlate: true },
+    ]).commands)).toThrow(/only applies/);
+    expect(() => applyRoomDraftCommands(blankRoom(), normalize([
+      { ...place, layer: 'foreground', coopPlate: false },
+      { type: 'configure_object', target: { ref: 'plate' }, coopPlate: true },
+    ]).commands)).toThrow(/Gameplay layer/);
+  });
+
+  it('enforces one direct main-layer Lost Song per cell in agent commands', () => {
+    const place = { type: 'place_object', objectId: 'lost_song', tileX: 1, tileY: 1 };
+    expect(applyRoomDraftCommands(blankRoom(), normalize([place]).commands).snapshot.placedObjects[0].id).toBe('lost_song');
+    expect(() => applyRoomDraftCommands(blankRoom(), normalize([place, { ...place, tileX: 2 }]).commands)).toThrow(/Only one Lost Song/);
+    expect(() => applyRoomDraftCommands(blankRoom(), normalize([{ ...place, layer: 'background' }]).commands)).toThrow(/main solid layer/);
+    expect(() => applyRoomDraftCommands(blankRoom(), normalize([
+      { type: 'place_object', objectId: 'crate', tileX: 1, tileY: 1, containedObjectId: 'lost_song' },
+    ]).commands)).toThrow();
+  });
+
+  it('supports bounded bosses for both enemy families and explicit removal', () => {
+    const commands = normalize([
+      { type: 'place_object', ref: 'boss', objectId: 'swordsman_ai', tileX: 1, tileY: 10, bossHitPoints: 3 },
+      { type: 'place_object', ref: 'police', objectId: 'policewoman', tileX: 5, tileY: 10, bossHitPoints: 10 },
+      { type: 'configure_object', target: { ref: 'boss' }, swordsmanDefeatMode: 'invincible' },
+      { type: 'configure_object', target: { ref: 'boss' }, bossHitPoints: 7 },
+      { type: 'configure_object', target: { ref: 'police' }, bossHitPoints: null },
+    ]);
+    const result = applyRoomDraftCommands(blankRoom(), commands.commands);
+    expect(result.snapshot.placedObjects[0]).toMatchObject({ bossHitPoints: 7, swordsmanDefeatMode: 'defeatable' });
+    expect(result.snapshot.placedObjects[1].bossHitPoints).toBeNull();
+    for (const bossHitPoints of [2, 11, '5', 3.5, true]) {
+      expect(() => normalize([{ type: 'place_object', objectId: 'police_patrolman', tileX: 1, tileY: 10, bossHitPoints }])).toThrow(/integer from 3 to 10/);
+    }
+    expect(() => normalize([{ type: 'place_object', objectId: 'coin_gold', tileX: 1, tileY: 1, bossHitPoints: 5 }])).toThrow(/only applies/);
+    expect(() => normalize([{ type: 'place_object', objectId: 'swordsman_ai', tileX: 1, tileY: 1, bossHitPoints: 5, swordsmanDefeatMode: 'invincible' }])).toThrow(/cannot also be invincible/);
+    const bad = normalize([{ type: 'place_object', ref: 'coin', objectId: 'coin_gold', tileX: 1, tileY: 1 }, { type: 'configure_object', target: { ref: 'coin' }, bossHitPoints: 5 }]);
+    expect(() => applyRoomDraftCommands(blankRoom(), bad.commands)).toThrow(/only applies/);
+  });
+
   it('resolves refs for links, ordered paths, containers, signs, NPCs, Sword Hunters, and NPC quests', () => {
     const body = normalize([
       { type: 'place_object', ref: 'door', objectId: 'door_locked', tileX: 10, tileY: 10 },

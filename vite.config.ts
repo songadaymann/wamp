@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { defineConfig, loadEnv, transformWithEsbuild, type PluginOption } from 'vite';
 import {
@@ -25,6 +26,9 @@ export default defineConfig(({ mode }) => {
   const partykitHost = env.VITE_PARTYKIT_HOST ?? '';
   const partykitParty = env.VITE_PARTYKIT_PARTY ?? '';
   const cloudflareWebAnalyticsToken = env.VITE_CLOUDFLARE_WEB_ANALYTICS_TOKEN?.trim() ?? '';
+  const revision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=normal'], { encoding: 'utf8' }).trim().length > 0;
+  const buildId = revision + (dirty ? '-dirty' : '') + (mode === 'development' ? '-dev' : '');
 
   return {
     base: './',
@@ -34,6 +38,7 @@ export default defineConfig(({ mode }) => {
       authoringDocumentsPlugin(),
     ],
     define: {
+      'import.meta.env.VITE_APP_BUILD_ID': JSON.stringify(buildId),
       'import.meta.env.VITE_ROOM_API_BASE_URL': JSON.stringify(roomApiBaseUrl),
       'import.meta.env.VITE_ROOM_STORAGE_BACKEND': JSON.stringify(roomStorageBackend),
       'import.meta.env.VITE_REOWN_PROJECT_ID': JSON.stringify(reownProjectId),
@@ -52,6 +57,7 @@ export default defineConfig(({ mode }) => {
           dashboard: resolve(process.cwd(), 'dashboard.html'),
           launchAdmin: resolve(process.cwd(), 'launch-admin.html'),
           guestReplays: resolve(process.cwd(), 'guest-replays.html'),
+          bugReports: resolve(process.cwd(), 'bug-reports.html'),
           backgroundAdmin: resolve(process.cwd(), 'background-admin.html'),
           schoolAdmin: resolve(process.cwd(), 'school-admin.html'),
           schoolLogin: resolve(process.cwd(), 'school-login.html'),

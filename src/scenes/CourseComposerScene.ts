@@ -193,6 +193,12 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     return this.uiState;
   }
 
+  getBugReportContext(): Record<string, unknown> {
+    return { scene: 'course-composer', mode: 'edit', source: 'draft', coordinates: this.selectedCoordinates,
+      courseId: this.record?.draft.id, courseVersion: this.record?.draft.version,
+      camera: { x: this.cameras.main.scrollX, y: this.cameras.main.scrollY, zoom: this.cameras.main.zoom } };
+  }
+
   describeState(): Record<string, unknown> {
     return {
       scene: 'course-composer',
@@ -227,6 +233,12 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   setCoursePitsAreDeadly(enabled: boolean): void {
     if (this.record?.draft.pitsAreDeadly === enabled) return;
     this.mutateDraft(draft => { draft.pitsAreDeadly = enabled; });
+  }
+
+  setCoursePlayerHearts(value: number): void {
+    const hearts = value === 2 || value === 3 ? value : 1;
+    if (this.record?.draft.playerHearts === hearts) return;
+    this.mutateDraft(draft => { draft.playerHearts = hearts; });
   }
 
   setCourseTitle(title: string | null): void {

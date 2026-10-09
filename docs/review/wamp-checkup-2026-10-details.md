@@ -1,6 +1,6 @@
 # WAMP Checkup (October 2026): item details
 
-Full write-ups for every item in [wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), the checklist that tracks what is done. Evidence line numbers are from commit `7371df9a`; re-check the current code before acting.
+Full write-ups for every item in [wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), the checklist that tracks what is done. Original review evidence line numbers are from commit `7371df9a`; later additions identify their own baseline. Re-check the current code before acting.
 
 Each item lists the plain-language summary, the technical detail, the evidence the reviewer cited, and what the independent fact-checkers corrected. Where they disagree, **the fact-check correction overrides the original detail**.
 
@@ -1597,6 +1597,42 @@ Order the fixes by value-to-effort:
 - (b) Capture frames with createImageBitmap/toBlob outside POST_RENDER, or skip capture on low-performance or mobile profiles. Small.
 - (c) Add hourly deletes for expired sessions and magic_link_tokens, plus 'dispatched' outbox rows older than N days. Small.
 - (d) Move frames to an R2 bucket with a 7-day lifecycle rule. Medium: needs a new binding, a write path and an admin read path.
+
+### F249: In-game Report a bug with a recent replay and diagnostic context
+
+- **Area:** Backend performance, cost & reliability
+- **Type:** idea · **impact:** medium · **effort:** medium
+- **Added:** 2026-10-08, at Jonathan's request; not part of the original October 3 review
+- **Status:** local candidate ready on 2026-10-08, stacked on F150; review and coordinated delivery pending before F155/F144
+- **Reference:** [gsimone's in-game bug-report demonstration](https://x.com/ggsimm/status/2108245377899966491)
+
+**Summary.** Let a player or builder report a problem while it is happening, with a short description and the previous 10–20 seconds of gameplay attached. Automatically include the exact room and version, application build, browser/device details and relevant errors. Jonathan can review the report and replay together in a private admin inbox. This would make intermittent camera, avatar and rendering hiccups easier to investigate.
+
+**First delivery scope and acceptance.**
+
+- A small Report a bug action is reachable on desktop and phones during play and building, for guests and signed-in users. The dialog contains notes and a preview of the evidence being attached.
+- Keep a bounded local buffer of recent gameplay and attach its 10–20-second replay when the user submits. Include a current screenshot and a clear indication when recent replay evidence is unavailable; allow the written report to be saved in that case.
+- Attach room coordinates/ID, the published version or explicit draft context, the application build, viewport, browser/device details and a bounded set of relevant errors. Copy only supported diagnostic fields; exclude credentials, form values and chat contents.
+- Save reports in a private admin inbox with notes, replay playback, room link, timestamp and open/resolved status. Show confirmation only after a report is actually stored; preserve notes and allow retry after an upload failure.
+- Keep capture within explicit runtime, memory and storage budgets. Verify desktop and phone gameplay with reporting enabled, including camera smoothness. Reuse F001's recorder improvements and F038's bounded storage design rather than adding another synchronous screenshot encoder to the play loop.
+- Respect existing recording preferences. If capture is disabled, explain the available evidence and still permit a text report. Reconstructing or resuming the exact simulation can be considered later; it is not provided by today's screenshot replay system.
+
+**2026-10-08 implementation candidate.** `codex/checkup-bug-reporter-2026-10-08` adds the report dialog, a bounded approximately 15-second visual replay/current screenshot, allowlisted room/draft/course/build/device/error context, written-only fallback, stored-receipt confirmation and stable retries. Capture uses bitmap/toBlob asynchronously, reads context only at the capture cadence and omits canvas frames containing room-chat bubbles. Shared opt-out works with DNT/GPC, blocked storage and changes from another tab. A private admin inbox provides playback/scrubbing, room links, details, open/resolved status, Reopen and Delete. Atomic D1 gates bound reports and evidence; notes last 30 days and images seven.
+
+Full **371 files / 2,967 tests**, quality gates, native desktop/phone/play/build/Expanded Room/touch/persistence and inspected installed-client screenshots pass. Local Chromium movement p95 is **9.9ms** with capture off/on, with no frames over 50ms in either five-second sample. This first delivery uses screenshot replay rather than a full simulation trace. [Local demo](http://127.0.0.1:3040/r/84/40?welcome=0&avatar=gamejew-red). The checklist remains unticked pending local review, migration 0060 and API Worker + Pages publication. See [candidate receipt](../development/checkup-delivery-2026-10-03.md); evidence `/tmp/wamp-bug-reporter-2026-10-08/`. F001/F038 and physical-device performance certification remain separate.
+
+**Original groundwork, checked against `d534619c` on 2026-10-08.**
+
+Guest session recording and private replay viewing already exist, but they do not provide a player-submitted bug report. The recorder stops after sign-in and its samples contain screenshots, coarse position and selected actions rather than a complete simulation/input trace. Extending this needs an explicit report flow and a capture path that also supports signed-in players.
+
+**Evidence.**
+
+- src/analytics/replay/recorder.ts:24-28 — recording preferences and the remote-API development skip
+- src/analytics/replay/recorder.ts:75-96 — guest samples include mode, room, position, selected actions and an image
+- src/analytics/replay/recorder.ts:116-123 — recording stops when the visitor becomes authenticated
+- src/analytics/replay/model.ts — bounded screenshot sample/session models; no report notes or complete simulation trace
+- src/admin/replays.ts:68-75 — existing private replay loading and scrubbing to build on
+- F001 and F038 — related capture performance and replay storage work; these remain separate open items
 
 ### F040: API trusts wamp.pages.dev (a domain WAMP does not own), enabling cross-site account takeover
 
@@ -3920,6 +3956,10 @@ Finally, correct the evidence: the game already has bounce tiles, wind, gravity 
 
 ### F150: Idea: Optional player hearts per room (and make the Heart pickup actually heal)
 
+**2026-10-08 implementation candidate.** Ready for local play review on `codex/checkup-player-hearts-2026-10-08`. Ordinary rooms and shared course/Expanded Room roots expose 1–3 hearts through desktop and phone controls, defaulting to one. Nonfatal hits give bounded recoil and 1,000ms blink protection; all three healing pickups restore one while retaining score and collect-goal credit. Hearts clamp on transitions and refill on spawn/Restart. Deadly outer falls bypass health and protection; Room Rush stays at one and PvP retains its server health. Nondefault counts enter version fingerprints and ranked verification hashes; manual leaderboard carry-over across counts is blocked. Legacy one-heart hashes remain unchanged.
+
+Full **366 files / 2,936 tests**, lint, types, bindings, build, DOM contract, Worker safety and strict map asset checks pass. Native local desktop/touch and real save/publish/history/Expanded Room checks pass; a guest clear is server-verified and screenshots are inspected. [Local demo](http://127.0.0.1:3040/r/84/40?welcome=0&avatar=gamejew-red). The checklist remains unticked pending Jonathan's play review and coordinated API Worker/Pages delivery. See [candidate receipt](../development/checkup-delivery-2026-10-03.md); evidence `/tmp/wamp-player-hearts-2026-10-08/`. F249 follows.
+
 - **Area:** Gameplay feel & new gameplay ideas
 - **Type:** idea · **impact:** medium · **effort:** medium
 
@@ -3989,6 +4029,8 @@ The timing constants (lines 105-114) are also module-level, so they need per-liv
 
 ### F144: Idea: World collectathon: one hidden 'Lost Song' per room, tracked across the whole world
 
+- **Status:** local candidate ready 2026-10-08 in draft PR #84 / `5d167d72`, stacked on F155; morning review and coordinated migration/API/map/Pages release pending. Master remains unticked.
+
 - **Area:** Gameplay feel & new gameplay ideas
 - **Type:** idea · **impact:** medium · **effort:** medium
 
@@ -4039,7 +4081,17 @@ Room Rush already has server-issued start ids and expiry, easy/hard difficulty (
 
 Describe this as adding weekly rotation and a weekly leaderboard reset to the existing "Start From 0,0" mode, not as a new shared-start feature. Make the weekly mode hard-only, or give it a fixed time limit (for example 3 to 5 minutes, enforced through the run start's expiresAt). Without that, scoring by unique rooms with a 2-hour cap rewards grinding over skill. Skip the scoring algorithm at first and let Jonathan pick the weekly room by hand: store {weekKey, startCoordinates} in a small D1 table, written through an admin route modeled on the existing featured-rooms admin (src/admin/featuredRoomsClient.ts). That gives better choices and is cheaper to build. Reuse getUtcWeekKey from progression/ratings.ts. The picked room must be published and standalone. Add an event_week column to room_rush_run_starts and room_rush_runs, plus a 'weekly' start rule (or an extra filter) in the leaderboard query. A cron job is optional.
 
+**Local candidate (2026-10-08; not production delivered).** [Draft PR #85](https://github.com/songadaymann/wamp/pull/85), source `b95813d2`, stacks on F144. F151 uses a manual Launch Admin pick for this UTC week or the next four weeks. A published standalone room and version, Hard mode and a five-minute wall clock define the event. It is inactive until chosen. The choice locks atomically at the first ranked start; republishing or removing the start room pauses new starts rather than silently substituting a new version. The final five minutes of the week accept no new starts. Weekly standings keep one best per account using existing unique-area scoring, then time/death tie-breaks; the previous week's top three remain visible. Guests get explicitly labelled practice. Prime is the supported surface.
+
+A signed receipt, fixed start/week/version, bounded start rate and five-minute expiry plus ten seconds of delivery grace are enforced on the server. Finalization and uncertain-reply retries yield one stored attempt. This reuses the existing route/identity/time plausibility checks; it is not full simulation anti-cheat and does not freeze the rest of the world. The result dialog now shows saving/saved/unconfirmed status and an exact-body retry; retry does not survive reload. Sharing includes the week and duration; the game image is copied during POST_RENDER, and the narrow mode label fits.
+
+Validation passes 381 files / 3,023 tests, lint, types, generated bindings, build, DOM 965/240 and Worker safety. Four native admin and six native play/timer cases cover published/Expanded-room choices, scheduling, inactive default, guest practice, cross-room movement, lost save reply/retry, fresh Restart, one best per account and phone touch Hard death. A real five-minute attempt continues through Settings, completes at exactly 300000ms and saves once. Screenshots and the unchanged installed-client gameplay capture are inspected; native page errors are zero and the client retains the expected local presence 503. Evidence: `/tmp/wamp-weekly-room-rush-2026-10-08/`. Migration 0062, API Worker and Pages are needed for release. The inherited F144 matching map/catalog release gate still applies. No production event or release occurred; F151 remains unticked at 55/215 delivered. Co-op plates F152 follows under the overnight goal.
+
 ### F152: Idea: Co-op pressure plates that count other live players
+
+**2026-10-08 overnight candidate (not deployed).** [Draft PR #86](https://github.com/songadaymann/wamp/pull/86), source `55581963`, stacks on draft #85. Optional `coopPlate: true` on Gameplay pressure plates works with fresh same-cell live presence before an avatar loads. Both editors, the phone settings sheet, Undo/Redo, persistence and agent commands support it. Marked rooms and Expanded Rooms show truthful “Co-op plates” information and stay practice on client, signed/guest start and finish paths; manual solo-lineage adoption is blocked and flagged versions change their fingerprints. Room Rush, PvP and non-Prime Worlds ignore remote helpers. Normal plates, crate/enemy presses and existing OR links remain; the separate AND option below is still future work.
+
+Validation: **384 files / 3,039 tests**, all quality/binding/build gates, DOM **967/242**, Worker safety; eight native two-client/boundary cases plus an actually verified solo clear; six real local API guards; four desktop/phone editor save/Undo workflows, two new off/on Expanded Room cell versions and an actual area publish; correct ordinary/area Explore badges and visually inspected unchanged installed-client play. Early fixture/selector/204-response diagnostics are retained. Four editor construction-preview 404s come from the unchanged endpoint rejecting already-published rooms; no new page errors. No migration or PartyKit server code change. API/Pages release remains pending morning review and inherits F144's map/catalog delivery block. Evidence: `/tmp/wamp-coop-plates-2026-10-08/`. Primary checkout hashes are unchanged; F152 remains unticked.
 
 - **Area:** Gameplay feel & new gameplay ideas
 - **Type:** idea · **impact:** medium · **effort:** medium
@@ -4099,6 +4151,14 @@ A small wording fix: iPads with a hardware keyboard can undo and redo with Cmd+Z
 Small fix-plan detail: canUndo/canRedo are not in the editor view model yet. They show up only in EditorScene's debug/state snapshot (EditorScene.ts:2103-2104). The implementer needs to add them to viewModel.ts (or have the buttons read editRuntime.hasUndoHistory()/hasRedoHistory() on the UI-state update) so the buttons can be disabled. The new buttons should call scene.undoAction()/redoAction(), the same path the phone button uses (controller.ts:175-179), because those methods also refresh the bar (EditorScene.ts:1940-1948). Also mirror the music-mode and sprite-mode locks that already disable the phone Undo button (music.css:412, sprite.css:35, controller.ts:476-478). An iPad with a hardware keyboard can already use Cmd+Z through the document-level handler, so only keyboard-less tablets are completely stuck. Mouse-only desktop builders do have a keyboard, but nothing tells them Cmd+Z exists.
 
 ### F156: Rooms that can't be beaten (or are beaten instantly) can be published
+
+[Draft PR #87](https://github.com/songadaymann/wamp/pull/87), source `7ad04621`, is pushed and attached, stacked on draft #86.
+
+**2026-10-09 overnight candidate (not deployed).** Shared editor/Worker/agent publish checks reject missing exits, missing sprint finishes and empty Defeat All rooms. Draft saving remains available. Missing marker buttons have a brief reduced-motion-aware outline reminder; placement stays explicit to avoid accidental mobile taps. Finish-only standalone sprints remain valid. Expanded Room publication requires a real enemy in the exact published cell versions, and its editor keeps area Publish disabled until the enemy's cell is published. The existing room-version reads supply server counts without extra queries.
+
+The suspicious admin console has a separate authenticated, read-only “Room setup issues” panel with counts, bounded keyset pages and safe room links/title rendering. It excludes Expanded Room cells and treats setup problems separately from cheating evidence. Clearing the admin key aborts an in-flight review and removes private rows. A grid minimum-width adjustment keeps the panel within a phone viewport. Current public API audit: 682 published rooms in the central radius-32 sample, 122 relevant standalone goals, one missing exit (7,-1 “Death”, v9), one missing finish (3,4, v1212) and zero empty Defeat All goals. No sample reads fail; no production room or reward changes occur. Remote D1 authentication fails before SQL execution, so the audit uses read-only public snapshots and is not a global count.
+
+Validation: **387 files / 3,048 tests**, lint, TypeScript, bindings/build, DOM 967/242 and Worker safety pass. Real SQLite tests cover category parity, area exclusion and cursor behavior. Eight actual API checks, five native editor/publication cases, final area reloads and four native admin cases pass; screenshots and the unchanged installed-client gameplay capture are inspected. Published area v2 pins the newly published enemy cell v2. Primary hashes match. Existing editor construction-preview 404s and deliberate admin bad-key/abort console responses are retained; final area reload and installed-client play have no new errors. Evidence: `/tmp/wamp-publish-validation-2026-10-08/`. API Worker + Pages delivery is needed, with the inherited F144 catalog/map gate still pending; master remains unticked at 55/215. F163 starter templates follows under the overnight goal.
 
 - **Area:** Level building / editor UX
 - **Type:** defect · **impact:** medium · **effort:** small

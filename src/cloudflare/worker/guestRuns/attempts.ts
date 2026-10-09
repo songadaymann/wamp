@@ -13,6 +13,7 @@ import { normalizeFinalizedRunBody, normalizeRunFinishRequestBody } from '../run
 import { createRunVerificationNonce, verifyCourseRunTrace, verifyRoomRunTrace } from '../runs/verification';
 import { hashGuestRunValue, type GuestRunIdentity } from './identity';
 import { loadGuestRunSnapshot, type GuestRunSnapshot } from './snapshots';
+import { assertSoloRoomRun } from '../runs/coopPolicy';
 
 export const GUEST_RUN_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 const MAX_RUN_MS = 30 * 60 * 1000;
@@ -130,6 +131,7 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
       .bind(attemptId).all<{ snapshot_json: string }>();
     snapshot.rooms = cells.results.map(cell => JSON.parse(cell.snapshot_json) as RoomSnapshot);
   }
+  for (const room of snapshot.kind === 'room' ? [snapshot.room] : snapshot.rooms) assertSoloRoomRun(room);
   // Guest clears can arrive after a lost reply or offline queue replay. Network wait is
   // not simulated play time. Use the captured duration with the same strict physics
   // verifier, bounded by the original server start and the 30-minute trace ceiling.

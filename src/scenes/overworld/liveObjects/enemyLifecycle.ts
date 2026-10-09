@@ -18,6 +18,10 @@ import type {
 } from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
 import { isAnimationSafelyPlayable } from './animationReadiness';
+import { damageBoss } from '../../../enemies/boss';
+import { getPoliceAnimationKey, isPoliceEnemyObjectId } from '../../../enemies/policeEnemy';
+import { SWORDSMAN_AI_ANIMATION_KEYS } from '../../../enemies/swordsmanAi';
+import { applyBossHitRecoil, syncBossPresentation } from './bossPresentation';
 import {
   getArcadeBodyBounds,
 } from './bodies';
@@ -246,6 +250,15 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     const x = liveObject.sprite.x;
     const y = liveObject.sprite.y;
     const enemyName = isNpc ? liveObject.npcName ?? liveObject.config.name : liveObject.config.name;
+    if (liveObject.runtime.boss) {
+      const damage = damageBoss(liveObject.runtime.boss, this.options.scene.time.now);
+      if (damage === 'protected') return null;
+      if (damage === 'hurt') {
+        applyBossHitRecoil(liveObject, this.options.getPlayerBody(), this.options.scene.time.now);
+        syncBossPresentation(liveObject, this.options.scene.time.now);
+        return { roomId: loadedRoom.room.id, enemyName, x, y };
+      }
+    }
     const roomOrigin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
     const respawnOptions =
       (
@@ -311,12 +324,16 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       this.scheduleLiveObjectRespawn(loadedRoom, respawnOptions);
     }
 
-    if (
-      isNpc
-      && isAnimationSafelyPlayable(this.options.scene.anims, JIMOTHY_ANIMATION_KEYS.death)
-    ) {
-      liveObject.sprite.play(JIMOTHY_ANIMATION_KEYS.death);
-      this.options.scene.time.delayedCall(350, () => liveObject.sprite.destroy());
+    const deathAnimation = isNpc ? JIMOTHY_ANIMATION_KEYS.death
+      : liveObject.runtime.boss
+        ? isPoliceEnemyObjectId(liveObject.config.id)
+          ? getPoliceAnimationKey(liveObject.config.id, 'death')
+          : SWORDSMAN_AI_ANIMATION_KEYS.death
+        : null;
+    if (deathAnimation && isAnimationSafelyPlayable(this.options.scene.anims, deathAnimation)) {
+      liveObject.sprite.clearTint();
+      liveObject.sprite.play(deathAnimation);
+      this.options.scene.time.delayedCall(isNpc ? 350 : 500, () => liveObject.sprite.destroy());
     } else {
       liveObject.sprite.destroy();
     }
@@ -353,6 +370,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       signText: liveObject.signText,
       objectiveMode: liveObject.runtime.aiObjectiveMode,
       defeatMode: liveObject.runtime.aiDefeatMode,
+      bossHitPoints: liveObject.runtime.boss?.maximum ?? null,
       policeBehaviorMode: liveObject.runtime.policeBehaviorMode,
       policePatrolShoots: liveObject.runtime.policePatrolShoots,
       npcMode: liveObject.runtime.npcMode,

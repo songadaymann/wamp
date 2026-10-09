@@ -1,4 +1,7 @@
 import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
+import { LOST_SONG_OBJECT_ID } from '../../lostSongs/model';
+import { canConfigureCoopPlate, isCoopPressurePlate } from '../../placedObjects/coopPressurePlates';
+import { normalizePlayerHearts, type PlayerHearts } from '../../player/hearts';
 import Phaser from 'phaser';
 import {
   getSolidColorFromBackgroundValue,
@@ -29,6 +32,7 @@ import {
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
+import { isBossEnemyObjectId, withPlacedBossHitPoints } from '../../enemies/boss';
 import {
   DEFAULT_POLICE_BEHAVIOR_MODE,
   DEFAULT_POLICE_PATROL_SHOOTS,
@@ -98,6 +102,7 @@ import {
   type RoomMusic,
 } from '../../music/model';
 import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
+import { cloneRoomSnapshot } from '../../persistence/roomModel';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../../signs/model';
 import { EDITOR_SPAWN_PLACED_EVENT } from './uiEvents';
 import { canRepeatSelectedEditorObject, resolveEditorLineEnd } from './editorToolSelection';
@@ -115,6 +120,7 @@ import {
   type NpcMode,
 } from '../../npcs/model';
 import { EditorHistory } from './history';
+import { sameSmartMetadata } from './smartHistory';
 import { iterateShapeTiles, type EditorShapeKind, type TilePoint } from './shapeTiles';
 import {
   clampRandomizeBrushSize,
@@ -150,6 +156,7 @@ import {
   clonePlacedObjectDocument,
   removePlacedObjectFromDocument,
 } from './placedObjectDocument';
+import { buildMovedObjectDocument } from './objectMovement';
 import {
   clearRoomGoalMarkers,
   getRoomGoalSummaryText,
@@ -171,6 +178,7 @@ import {
   smartCellKey,
   smartDecorationSlotKey,
   smartSemanticCellKey,
+  smartOwnedOutputKey,
   type RoomSmartTerrainState,
 } from '../../autotiling/model';
 import {
@@ -225,6 +233,7 @@ type UndoAction =
       smartAfter?: RoomSmartTerrainState;
     }
   | { kind: 'objects'; action: ObjectsAction }
+  | { kind: 'layout'; action: { previous: RoomSnapshot; next: RoomSnapshot } }
   | { kind: 'spawn'; action: SpawnAction }
   | { kind: 'goal'; action: GoalAction }
   | { kind: 'music'; action: MusicAction };
@@ -273,10 +282,12 @@ export class EditorEditRuntime {
   private roomGoalIntroText: string | null = null;
   roomCameraMode: 'follow' | 'room' = 'follow';
   roomPitsAreDeadly = false;
+  roomPlayerHearts: PlayerHearts = 1;
   private roomSpawnPoint: RoomSpawnPoint | null = null;
   private roomMusic: RoomMusic | null = null;
   private roomDirty = false;
   private lastDirtyAt = 0;
+  private revision = 0;
   private goalPlacementMode: GoalPlacementMode = null;
   private readonly history = new EditorHistory<UndoAction>((action) => recordReplayEditorAction(`${action.kind}_changed`));
   private currentBatch: TileAction[] = [];
@@ -352,8 +363,12 @@ export class EditorEditRuntime {
     return this.lastDirtyAt;
   }
 
+  get documentRevision(): number { return this.revision; }
+
   set currentLastDirtyAt(value: number) {
     this.lastDirtyAt = value;
+    // Room settings/title edits are marked by the persistence host, not a stroke.
+    this.revision += 1;
   }
 
   get currentGoalPlacementMode(): GoalPlacementMode {
@@ -376,7 +391,7 @@ export class EditorEditRuntime {
     // Goal markers are sprite-backed; no persistent graphics overlay needed.
   }
 
-  private getRoomOrigin(): { x: number; y: number } {
+  getRoomOrigin(): { x: number; y: number } {
     return this.host.getRoomOrigin();
   }
 
@@ -410,12 +425,14 @@ export class EditorEditRuntime {
   }
 
   reset(): void {
+    this.revision += 1;
     this.documentPresentation.reset();
 
     this.roomGoal = null;
     this.roomGoalIntroText = null;
     this.roomCameraMode = 'follow';
     this.roomPitsAreDeadly = false;
+    this.roomPlayerHearts = 1;
     this.roomSpawnPoint = null;
     this.roomMusic = null;
     this.roomDirty = false;
@@ -436,7 +453,8 @@ export class EditorEditRuntime {
     this.customRoomTiles = [];
   }
 
-  applyRoomSnapshot(room: RoomSnapshot): void {
+  applyRoomSnapshot(room: RoomSnapshot, resetHistory = true): void {
+    this.revision += 1;
     const tileData = room.tileData;
     this.customRoomTiles = normalizeCustomRoomTileDefinitions(room.customTiles);
     this.smartTerrain = normalizeRoomSmartTerrainState(room.smartTerrain);
@@ -483,19 +501,55 @@ export class EditorEditRuntime {
     this.roomGoalIntroText = normalizeRoomGoalIntroText(room.goalIntroText);
     this.roomCameraMode = room.cameraMode === 'room' ? 'room' : 'follow';
     this.roomPitsAreDeadly = room.pitsAreDeadly === true;
+    this.roomPlayerHearts = normalizePlayerHearts(room.playerHearts);
     this.roomSpawnPoint = room.spawnPoint ? { ...room.spawnPoint } : null;
     this.roomMusic = cloneRoomMusic(room.music);
     this.host.setPlacedObjects(room.placedObjects.map((placed) => ({ ...placed })));
     this.rebuildObjectSprites();
     this.host.updateGoalUi();
 
-    this.history.reset();
+    if (resetHistory) this.history.reset();
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
     this.currentBatchSmartBefore = null;
     this.currentSmartGestureAnchor = null;
     this.roomDirty = false;
     this.lastDirtyAt = 0;
+  }
+
+  canReplaceRoomLayout(): boolean { return this.canEditRoom(); }
+
+  hasRoomLayoutContent(): boolean {
+    if (this.roomGoal || this.roomSpawnPoint || this.host.getPlacedObjects().length) return true;
+    for (const layer of this.host.getLayers().values()) {
+      for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+        for (let x = 0; x < ROOM_WIDTH; x += 1) {
+          if ((layer.getTileAt(x, y)?.index ?? -1) > 0) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  replaceRoomLayout(room: RoomSnapshot): boolean {
+    if (!this.guardEditable()) return false;
+    const previous = this.exportRoomSnapshot();
+    if (room.id !== previous.id || room.coordinates.x !== previous.coordinates.x || room.coordinates.y !== previous.coordinates.y) return false;
+    const next = cloneRoomSnapshot(room);
+    this.applyRoomLayout(next);
+    this.history.record({ kind: 'layout', action: { previous, next } });
+    this.markRoomDirty();
+    this.host.updateGoalUi();
+    return true;
+  }
+
+  private applyRoomLayout(room: RoomSnapshot): void {
+    const current = this.exportRoomSnapshot();
+    const layout = cloneRoomSnapshot(room);
+    this.goalPlacementMode = null;
+    this.applyRoomSnapshot({ ...current, tileData: layout.tileData, smartTerrain: layout.smartTerrain,
+      placedObjects: layout.placedObjects, spawnPoint: layout.spawnPoint, goal: layout.goal,
+      goalIntroText: layout.goalIntroText }, false);
   }
 
   hasClipboardTiles(): boolean {
@@ -625,6 +679,7 @@ export class EditorEditRuntime {
       title: metadata.title,
       cameraMode: this.roomCameraMode,
       pitsAreDeadly: this.roomPitsAreDeadly,
+      playerHearts: this.roomPlayerHearts,
       goalIntroText: this.roomGoal ? normalizeRoomGoalIntroText(this.roomGoalIntroText) : null,
       background: normalizeRoomBackground(this.host.getSelectedBackground()),
       lighting: cloneRoomLightingSettings(this.host.getSelectedLightingSettings()),
@@ -711,7 +766,7 @@ export class EditorEditRuntime {
     }
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
-    this.currentBatchSmartBefore = cloneRoomSmartTerrainState(this.smartTerrain);
+    this.currentBatchSmartBefore = null;
     this.currentSmartGestureAnchor = null;
   }
 
@@ -768,7 +823,7 @@ export class EditorEditRuntime {
   commitTileBatch(): void {
     const actions = this.currentBatch.filter((action) => action.oldGid !== action.newGid);
     const smartChanged = this.currentBatchSmartBefore !== null
-      && JSON.stringify(this.currentBatchSmartBefore) !== JSON.stringify(this.smartTerrain);
+      && !sameSmartMetadata(this.currentBatchSmartBefore, this.smartTerrain);
     if (actions.length === 0 && !smartChanged) {
       this.currentBatch = [];
       this.currentBatchActionIndex.clear();
@@ -781,10 +836,8 @@ export class EditorEditRuntime {
     this.history.record({
       kind: 'tiles',
       actions,
-      smartBefore: this.currentBatchSmartBefore
-        ? cloneRoomSmartTerrainState(this.currentBatchSmartBefore)
-        : undefined,
-      smartAfter: cloneRoomSmartTerrainState(this.smartTerrain),
+      smartBefore: smartChanged ? this.currentBatchSmartBefore! : undefined,
+      smartAfter: smartChanged ? cloneRoomSmartTerrainState(this.smartTerrain) : undefined,
     });
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
@@ -844,8 +897,16 @@ export class EditorEditRuntime {
   }
 
   private recordManualSmartEdit(layer: LayerName, x: number, y: number, value: number): void {
-    this.smartTerrain = applyManualSmartOutputEdit(this.smartTerrain, layer, x, y, value);
     const key = smartCellKey(x, y);
+    // A plain tile outside engine-owned metadata cannot change Smart state.
+    if (!this.smartTerrain.semanticCells[smartSemanticCellKey(layer, x, y)]
+      && !this.smartTerrain.ownedOutputs[smartOwnedOutputKey(layer, x, y)]
+      && !(layer === 'terrain' && this.smartTerrain.cells[key])
+      && !(layer === 'background' && this.smartTerrain.backdropCells[key])
+      && this.smartTerrain.generatedDecorations[key]?.layer !== layer
+      && this.smartTerrain.generatedBackgroundDecorations[key]?.layer !== layer) return;
+    this.captureSmartBatchBefore();
+    this.smartTerrain = applyManualSmartOutputEdit(this.smartTerrain, layer, x, y, value);
     const legacy = layer === 'terrain'
       ? this.smartTerrain.cells[key]
       : layer === 'background'
@@ -867,6 +928,7 @@ export class EditorEditRuntime {
       );
       return;
     }
+    this.captureSmartBatchBefore();
     const previous = this.serializeTileData();
     for (const layerName of LAYER_NAMES) {
       const layer = this.host.getLayers().get(layerName);
@@ -891,6 +953,10 @@ export class EditorEditRuntime {
       }
     }
     this.smartTerrain = cloneRoomSmartTerrainState(next.smartTerrain);
+  }
+
+  private captureSmartBatchBefore(): void {
+    this.currentBatchSmartBefore ??= cloneRoomSmartTerrainState(this.smartTerrain);
   }
 
   setSmartDetailsEnabled(enabled: boolean): void {
@@ -1999,6 +2065,10 @@ export class EditorEditRuntime {
     };
 
     const previous = this.objectBatchNext ?? this.clonePlacedObjects();
+    if (objectConfig.id === LOST_SONG_OBJECT_ID && editorState.activeLayer !== 'terrain') {
+      this.host.updatePersistenceStatus('Lost Song uses the main solid layer so explorers can pick it up.');
+      return null;
+    }
     const targetCell = createPlacedObjectAnchorCell(tileX, tileY, editorState.activeLayer);
     const conflict = findConflictingPlacedObjectAtAnchorCell(previous, targetCell, placed);
     if (
@@ -2007,6 +2077,11 @@ export class EditorEditRuntime {
       conflict.placed.facing === placed.facing
     ) {
       return conflict.placed;
+    }
+
+    if (objectConfig.id === LOST_SONG_OBJECT_ID && previous.some(object => object.id === LOST_SONG_OBJECT_ID)) {
+      this.host.updatePersistenceStatus('Only one Lost Song can be hidden in each room cell.');
+      return null;
     }
 
     const next = conflict
@@ -2120,6 +2195,25 @@ export class EditorEditRuntime {
     }
 
     return this.host.getPlacedObjects().find((placed) => placed.instanceId === instanceId) ?? null;
+  }
+
+  getPlacedObjectSprite(instanceId: string): Phaser.GameObjects.Sprite | null {
+    return this.documentPresentation.getPlacedObjectSprite(instanceId);
+  }
+
+  movePlacedObject(instanceId: string, point: { x: number; y: number }, expected?: { x: number; y: number }): boolean {
+    if (!this.guardEditable() || this.objectBatchBefore) return false;
+    const previous = this.clonePlacedObjects();
+    const move = buildMovedObjectDocument(previous, instanceId, point, expected);
+    if (!move.objects) {
+      if (move.error) this.host.updatePersistenceStatus(move.error);
+      return false;
+    }
+    this.host.setPlacedObjects(move.objects);
+    this.history.record({ kind: 'objects', action: { previous, next: this.clonePlacedObjects(move.objects) } });
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
+    return true;
   }
 
   hasPlacedObjectInstanceId(instanceId: string | null | undefined): boolean {
@@ -2337,6 +2431,7 @@ export class EditorEditRuntime {
         ? {
             ...placed,
             swordsmanDefeatMode: normalizedMode,
+            bossHitPoints: normalizedMode === 'invincible' ? null : placed.bossHitPoints,
           }
         : placed
     );
@@ -2345,6 +2440,21 @@ export class EditorEditRuntime {
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
+    this.markRoomDirty();
+    return true;
+  }
+
+  setBossHitPoints(instanceId: string, value: number | null): boolean {
+    if (!this.guardEditable()) return false;
+    const placedObjects = this.host.getPlacedObjects();
+    const index = placedObjects.findIndex((placed) => placed.instanceId === instanceId);
+    if (index < 0 || !isBossEnemyObjectId(placedObjects[index].id)) return false;
+    const previous = this.clonePlacedObjects();
+    const updated = withPlacedBossHitPoints(previous[index], value);
+    if (JSON.stringify(previous[index]) === JSON.stringify(updated)) return true;
+    const next = previous.map((placed, i) => i === index ? updated : placed);
+    this.host.setPlacedObjects(next);
+    this.history.record({ kind: 'objects', action: { previous, next: this.clonePlacedObjects(next) } });
     this.markRoomDirty();
     return true;
   }
@@ -2483,6 +2593,20 @@ export class EditorEditRuntime {
     targetInstanceId: string | null,
   ): boolean {
     return this.setObjectLinkTarget(triggerInstanceId, targetInstanceId);
+  }
+
+  setCoopPlate(instanceId: string, enabled: boolean): boolean {
+    if (!this.guardEditable()) return false;
+    const placedObjects = this.host.getPlacedObjects();
+    const index = placedObjects.findIndex(placed => placed.instanceId === instanceId);
+    if (index < 0 || !canConfigureCoopPlate(placedObjects[index])) return false;
+    if (isCoopPressurePlate(placedObjects[index]) === enabled) return true;
+    const previous = this.clonePlacedObjects();
+    const next = previous.map((placed, i) => i === index ? { ...placed, coopPlate: enabled ? true : null } : placed);
+    this.host.setPlacedObjects(next);
+    this.history.record({ kind: 'objects', action: { previous, next: this.clonePlacedObjects(next) } });
+    this.markRoomDirty();
+    return true;
   }
 
   setObjectLinkTarget(
@@ -2757,6 +2881,14 @@ export class EditorEditRuntime {
     this.host.updateGoalUi();
   }
 
+  setRoomPlayerHearts(value: number): void {
+    const hearts = normalizePlayerHearts(value);
+    if (!this.guardEditable() || this.roomPlayerHearts === hearts) return;
+    this.roomPlayerHearts = hearts;
+    this.markRoomDirty();
+    this.host.updateGoalUi();
+  }
+
   setRoomCameraMode(centered: boolean): void {
     if (!this.guardEditable()) return;
     const mode = centered ? 'room' : 'follow';
@@ -2795,6 +2927,11 @@ export class EditorEditRuntime {
     }
 
     this.goalPlacementMode = this.goalPlacementMode === mode ? null : mode;
+    this.host.updateGoalUi();
+  }
+
+  cancelGoalMarkerPlacement(): void {
+    this.goalPlacementMode = null;
     this.host.updateGoalUi();
   }
 
@@ -2911,6 +3048,7 @@ export class EditorEditRuntime {
   getPublishValidationError(): string | null {
     return getRoomGoalPublishValidationError(this.roomGoal, {
       collectiblesPlaced: this.countPlacedObjectsByCategory('collectible'),
+      enemyCount: this.countPlacedObjectsByCategory('enemy'),
       collectModeEnemyCount: this.countCollectModeSwordsmen(),
       npcInstanceIds: this.host.getPlacedObjects()
         .filter((placed) => getEditorObjectConfigById(placed.id)?.category === 'npc')
@@ -2944,6 +3082,14 @@ export class EditorEditRuntime {
       return;
     }
     recordReplayEditorAction('undo');
+
+    if (action.kind === 'layout') {
+      this.applyRoomLayout(action.action.previous);
+      this.history.pushRedo({ kind: 'layout', action: { previous: action.action.next, next: action.action.previous } });
+      this.markRoomDirty();
+      this.host.updateGoalUi();
+      return;
+    }
 
     if (action.kind === 'tiles') {
       const reverseActions: TileAction[] = [];
@@ -3045,6 +3191,14 @@ export class EditorEditRuntime {
       return;
     }
     recordReplayEditorAction('redo');
+
+    if (action.kind === 'layout') {
+      this.applyRoomLayout(action.action.previous);
+      this.history.pushUndo({ kind: 'layout', action: { previous: action.action.next, next: action.action.previous } });
+      this.markRoomDirty();
+      this.host.updateGoalUi();
+      return;
+    }
 
     if (action.kind === 'tiles') {
       const reverseActions: TileAction[] = [];
@@ -3158,6 +3312,7 @@ export class EditorEditRuntime {
   }
 
   private markRoomDirty(): void {
+    this.revision += 1;
     this.roomDirty = true;
     this.lastDirtyAt = performance.now();
     this.host.updatePersistenceStatus(

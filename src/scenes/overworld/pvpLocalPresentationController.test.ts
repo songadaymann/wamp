@@ -62,6 +62,7 @@ function createFixture() {
   const icons: Array<{
     setOrigin: ReturnType<typeof vi.fn>;
     setPosition: ReturnType<typeof vi.fn>;
+    setAlpha: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
     texture: { setFilter: ReturnType<typeof vi.fn> };
   }> = [];
@@ -96,6 +97,7 @@ function createFixture() {
         const icon = {
           setOrigin: vi.fn(),
           setPosition: vi.fn(),
+          setAlpha: vi.fn(),
           destroy: vi.fn(),
           texture: { setFilter: vi.fn() },
         };

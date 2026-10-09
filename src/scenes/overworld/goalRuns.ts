@@ -1,4 +1,5 @@
 import { getObjectById, type GameObjectConfig } from '../../config';
+import { COOP_ROOM_PRACTICE_MESSAGE, hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
 import { cloneRoomGoal, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import {
@@ -69,6 +70,7 @@ export interface GoalRunState {
   pendingResult: Exclude<RunResult, 'active'> | null;
   submittedScore: number | null;
   leaderboardEligible: boolean;
+  cooperative?: boolean;
   verificationSchemaVersion: number | null;
   verificationNonce: string | null;
   snapshotHash: string | null;
@@ -119,6 +121,7 @@ interface OverworldGoalRunControllerOptions {
     result: Exclude<RunResult, 'active'>
   ) => RankedRunVerificationTrace | null;
   clearVerificationTrace?: () => void;
+  onDraftGoalCompleted?: (run: GoalRunState) => void;
 }
 
 const NOOP_MUTATION_RESULT: GoalRunMutationResult = {
@@ -193,7 +196,9 @@ export class OverworldGoalRunController {
     }
 
     this.clearRunForRoomExit();
+    const cooperative = hasCoopPressurePlates(room.placedObjects);
     const leaderboardEligible =
+      !cooperative &&
       room.status === 'published' &&
       isWampLeaderboardEligibleAuth(
         this.options.getAuthenticated(),
@@ -251,12 +256,13 @@ export class OverworldGoalRunController {
             ? 'starting'
             : 'local-only',
       submissionMessage:
-        qualificationState === 'practice'
+        cooperative ? COOP_ROOM_PRACTICE_MESSAGE : qualificationState === 'practice'
           ? this.getPracticeStatusMessage(room.status, leaderboardEligible)
           : this.getQualifiedSubmissionMessage(room.status, leaderboardEligible),
       pendingResult: null,
       submittedScore: null,
       leaderboardEligible,
+      cooperative,
       verificationSchemaVersion: null,
       verificationNonce: null,
       snapshotHash: null,
@@ -554,6 +560,7 @@ export class OverworldGoalRunController {
     runState.result = 'completed';
     runState.completionMessage = message;
     runState.pendingResult = 'completed';
+    if (runState.roomStatus === 'draft') this.options.onDraftGoalCompleted?.(runState);
     this.maybeSubmitGoalRunResult(runState);
     this.maybePromptGuestClaimForLocalClear(runState);
     return {
@@ -818,6 +825,7 @@ export class OverworldGoalRunController {
             pendingResult: this.currentGoalRun.pendingResult,
             submittedScore: this.currentGoalRun.submittedScore,
             leaderboardEligible: this.currentGoalRun.leaderboardEligible,
+            cooperative: this.currentGoalRun.cooperative ?? false,
             verificationSchemaVersion: this.currentGoalRun.verificationSchemaVersion,
             verificationNonce: this.currentGoalRun.verificationNonce,
             snapshotHash: this.currentGoalRun.snapshotHash,
@@ -1045,6 +1053,7 @@ export class OverworldGoalRunController {
   }
 
   private shouldPromptGuestClaimForLocalClear(runState: GoalRunState): boolean {
+    if (runState.cooperative) return false;
     return (
       runState.result === 'completed' &&
       runState.roomStatus === 'published' &&
@@ -1063,12 +1072,13 @@ export class OverworldGoalRunController {
     runState.submissionState = runState.leaderboardEligible ? 'starting' : 'local-only';
     runState.submissionMessage = this.getQualifiedSubmissionMessage(
       runState.roomStatus,
-      runState.leaderboardEligible
+      runState.leaderboardEligible,
+      runState.cooperative,
     );
 
     if (runState.leaderboardEligible) {
       void this.startRemoteGoalRun(runState);
-    } else if (runState.roomStatus === 'published' && !this.options.getAuthenticated()) {
+    } else if (!runState.cooperative && runState.roomStatus === 'published' && !this.options.getAuthenticated()) {
       this.options.guestRuns?.begin(runState, 'room', {
         contentType: 'room', contentId: runState.roomId, version: runState.roomVersion,
       });
@@ -1294,8 +1304,10 @@ export class OverworldGoalRunController {
 
   private getQualifiedSubmissionMessage(
     roomStatus: RoomSnapshot['status'],
-    leaderboardEligible: boolean
+    leaderboardEligible: boolean,
+    cooperative = false,
   ): string {
+    if (cooperative) return COOP_ROOM_PRACTICE_MESSAGE;
     if (leaderboardEligible) {
       return 'Starting ranked run...';
     }
