@@ -1,3 +1,13 @@
+## 2026-10-09 — Boss health bars above heads
+
+Original prompt: "can you make it so the health bar of bosses is above them instead of on top of them"
+
+Small local follow-up on the overnight stack (`4cc8eaab`), branch `codex/fix-boss-health-bar-position-2026-10-09`. The health-bar anchor uses the minimum transparent top padding across the actual Sword Hunter/Police Patrolman/Policewoman animation sheets, with an eight-pixel gap below the six-pixel bar. Object preview crops previously let the bar overlap the Sword Hunter and jumping patrolman. Shared runtime placement covers room play and editor tests.
+
+Validation: targeted lint and TypeScript pass; three existing boss tests pass. Native desktop play for all three enemies and portrait phone play pass with no page errors. Controlled sprite-pose checks cover 152 distinct boss animation frames, plus the Sword Hunter's 57 frames on phone, with minimum clearances of 7.5–8 pixels after rounding. Gameplay and phone captures were inspected. Evidence: `/tmp/wamp-boss-bars-2026-10-09/`. The unchanged official client reaches collision-ready play; its capture has the existing performance-advisor modal, so the native captures supply visual proof.
+
+The running preview at `http://127.0.0.1:3040` serves this fix and continues to target the remote safety API. A separate local-fixture preview supplied verification; no remote room writes or deployment. Morning stack review/release remains pending; the old candidates and dirty primary checkout are preserved.
+
 ## 2026-10-09 — 05:00 morning handoff
 
 The authorized overnight window ends at 05:00 New York / 09:00 UTC. Eighteen draft PRs #81–#98 are pushed/attached; no merge or release. Latest quality gate: 405 files / 3,212 tests. Primary and remote main preserved. Review index, partial scopes and release prerequisites: `docs/review/wamp-overnight-2026-10-09.md`. Manual actual background-tab verification remains before releasing F229. Stop goal work at the deadline.
