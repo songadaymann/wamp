@@ -1,3 +1,13 @@
+## 2026-10-09 — Repeating browser-only Guest clears popup
+
+Original prompt: "Also - i think everyone is getting this alert over and over, even if we go in and do the room while signed in. It keeps showing up regarldess. do you see why that might be?"
+
+Follow-up on boss-bar candidate `0aab3564`, branch `codex/fix-repeating-guest-clear-prompt-2026-10-09`. The Guest clears controller used the browser-only history list as an automatic-popup trigger, with an in-memory `legacySeen` map reset on reload. A signed-in replay does not remove that browser record. Older history now opens only when requested from Guest clears; automatic presentation requires a new, non-empty verified account claim receipt. Claim retry/receipt deduplication, replay links, stored history and XP handling are preserved.
+
+The regression fails on the previous source and passes with the fix. Focused validation passes 51 tests across the modal, reminder, claim service and browser history, plus lint/TypeScript. Real local signed-in desktop and phone browser flows retain the old clear, open/close history from the menu, and stay quiet through focus/online/session refresh and page reload with no page errors. Captures were inspected. The initial headed probe completed desktop before its browser closed during phone startup; the completed headless rerun covers both. The unchanged official client boots to the existing Welcome overlay; the native flows supply modal proof. Evidence: `/tmp/wamp-guest-clear-reminder-2026-10-09/`.
+
+The same `http://127.0.0.1:3040` preview serves this change and remains on the remote safety API. No remote data changes or deployment. Keep the boss-bar follow-up and overnight stack for review/release; primary edits and master count remain unchanged.
+
 ## 2026-10-09 — Boss health bars above heads
 
 Original prompt: "can you make it so the health bar of bosses is above them instead of on top of them"

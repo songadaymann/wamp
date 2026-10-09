@@ -37,7 +37,6 @@ export class GuestProgressClaimModalController {
   private readonly lifecycle;
   private readonly invalidated = new Set<string>();
   private readonly queuedRuns = new Set<string>();
-  private readonly legacySeen = new Map<string, string>();
   private syncTimer: number | null = null;
   private presentTimer: number | null = null;
   private syncing = false;
@@ -182,19 +181,18 @@ export class GuestProgressClaimModalController {
     const account = this.account();
     if (!account) return;
     const receipt = this.service.receipts().find(value => value.clearsSaved > 0);
-    const legacy = this.local().filter(record => !record.guestProgress || record.guestProgress.status === 'unverified');
-    const legacyKey = legacy.map(record => record.id).join('|');
-    if (!receipt && (!legacy.length || this.legacySeen.get(account) === legacyKey)) return;
+    // Browser-only records are history, not new account progress. Keep them
+    // available from Guest clears without reopening a replay reminder on boot.
+    if (!receipt) return;
     if (!this.canPresent()) {
       this.presentTimer = this.win.setTimeout(() => { this.presentTimer = null; this.tryPresent(); }, 300);
       return;
     }
-    if (!receipt) { this.legacySeen.set(account, legacyKey); this.open(null); return; }
     this.presenting = true;
     const present = () => {
       if (!this.canPresent() || this.lifecycle.isOpen() || this.account() !== receipt.userId) return;
       if (this.service.markPresented(receipt)) {
-        this.legacySeen.set(account, legacyKey); this.open(receipt);
+        this.open(receipt);
       }
     };
     // Prevent two browser tabs from showing the same receipt at the same time.

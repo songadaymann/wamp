@@ -119,10 +119,34 @@ describe('guest account claim lifecycle', () => {
 
   it('preserves legacy history with replay links and never displays browser-authored XP as an award', async () => {
     const f = fixture(); f.account(); f.records([legacy]); await vi.advanceTimersByTimeAsync(200);
+    expect(f.visible()).toBe(false); f.controller.openFromReminder(); await vi.advanceTimersByTimeAsync(0);
     expect(f.visible()).toBe(true); expect(f.elements.get('guest-progress-list')!.textContent).toContain('Browser-only clear — replay signed in to earn XP');
     expect(f.elements.get('guest-progress-list')!.textContent).toContain('Replay');
     expect(f.elements.get('guest-progress-list')!.textContent).not.toContain('999999'); expect(f.service.markPresented).not.toHaveBeenCalled();
     f.controller.close(); f.event('session-refreshed'); await vi.advanceTimersByTimeAsync(500); expect(f.visible()).toBe(false); f.controller.destroy();
+  });
+
+  it('keeps browser-only history quiet across reloads, focus and account changes while preserving manual access', async () => {
+    for (const account of ['account', 'account', 'other']) {
+      const f = fixture(); f.account(account); f.records([legacy]);
+      await vi.advanceTimersByTimeAsync(300); expect(f.visible()).toBe(false);
+      for (const event of ['focus', 'online', 'auth-changed', 'session-refreshed']) {
+        f.event(event); await vi.advanceTimersByTimeAsync(300); expect(f.visible()).toBe(false);
+      }
+      f.elements.get('btn-auth-guest-progress')!.dispatchEvent(new Event('click'));
+      await vi.advanceTimersByTimeAsync(0); expect(f.visible()).toBe(true);
+      expect(f.elements.get('guest-progress-list')!.textContent).toContain('Old clear');
+      f.controller.close(); f.controller.destroy();
+    }
+  });
+
+  it('still announces a new verified account receipt when browser-only history is present', async () => {
+    const f = fixture(); f.account(); f.records([legacy]);
+    await vi.advanceTimersByTimeAsync(300); expect(f.visible()).toBe(false);
+    f.receipts([receipt()]); f.event('receipt'); await vi.advanceTimersByTimeAsync(0);
+    expect(f.visible()).toBe(true); expect(f.elements.get('guest-progress-title')!.textContent).toBe('We saved 1 clear (+20 XP)');
+    f.controller.close(); f.event('session-refreshed'); await vi.advanceTimersByTimeAsync(500);
+    expect(f.visible()).toBe(false); f.controller.destroy();
   });
 
   it('closes on account change and rejects late history/replay rendering for the previous account', async () => {
