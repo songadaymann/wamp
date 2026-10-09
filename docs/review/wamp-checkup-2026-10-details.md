@@ -1600,6 +1600,8 @@ Order the fixes by value-to-effort:
 
 ### F249: In-game Report a bug with a recent replay and diagnostic context
 
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Recent game replay/screenshot, notes and exact context, retry-safe private reports and an admin inbox. Images stay bounded; unavailable frames fall back to written reports. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 - **Area:** Backend performance, cost & reliability
 - **Type:** idea · **impact:** medium · **effort:** medium
 - **Added:** 2026-10-08, at Jonathan's request; not part of the original October 3 review
@@ -3956,6 +3958,8 @@ Finally, correct the evidence: the game already has bounce tiles, wind, gravity 
 
 ### F150: Idea: Optional player hearts per room (and make the Heart pickup actually heal)
 
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Optional 1–3 hearts, healing and hurt protection, with lethal falls and ordinary/Expanded resets covered. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 **2026-10-08 implementation candidate.** Ready for local play review on `codex/checkup-player-hearts-2026-10-08`. Ordinary rooms and shared course/Expanded Room roots expose 1–3 hearts through desktop and phone controls, defaulting to one. Nonfatal hits give bounded recoil and 1,000ms blink protection; all three healing pickups restore one while retaining score and collect-goal credit. Hearts clamp on transitions and refill on spawn/Restart. Deadly outer falls bypass health and protection; Room Rush stays at one and PvP retains its server health. Nondefault counts enter version fingerprints and ranked verification hashes; manual leaderboard carry-over across counts is blocked. Legacy one-heart hashes remain unchanged.
 
 Full **366 files / 2,936 tests**, lint, types, bindings, build, DOM contract, Worker safety and strict map asset checks pass. Native local desktop/touch and real save/publish/history/Expanded Room checks pass; a guest clear is server-verified and screenshots are inspected. [Local demo](http://127.0.0.1:3040/r/84/40?welcome=0&avatar=gamejew-red). The checklist remains unticked pending Jonathan's play review and coordinated API Worker/Pages delivery. See [candidate receipt](../development/checkup-delivery-2026-10-03.md); evidence `/tmp/wamp-player-hearts-2026-10-08/`. F249 follows.
@@ -3988,6 +3992,8 @@ Remove the line "Leaderboards are already per room version, so no fairness issue
 Effort is closer to medium than small. A version limited to single rooms, with courses and Room Rush fixed at 1 heart, would be small.
 
 ### F155: Idea: Boss mode for the Sword Hunter and police: health bar, multiple hits, phase change
+
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. 3–10-hit Sword Hunter/police bosses, phases and health bars with an eight-pixel gap above their artwork. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
 
 - **Area:** Gameplay feel & new gameplay ideas
 - **Type:** idea · **impact:** medium · **effort:** medium
@@ -4029,6 +4035,8 @@ The timing constants (lines 105-114) are also module-level, so they need per-liv
 
 ### F144: Idea: World collectathon: one hidden 'Lost Song' per room, tracked across the whole world
 
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. One Lost Song cassette per cell, personal goal-neutral finds, recoverable guest claims, account XP/badges, map and profile progress. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 - **Status:** local candidate ready 2026-10-08 in draft PR #84 / `5d167d72`, stacked on F155; morning review and coordinated migration/API/map/Pages release pending. Master remains unticked.
 
 - **Area:** Gameplay feel & new gameplay ideas
@@ -4060,6 +4068,8 @@ Use these hooks instead of the ones in the claim:
 
 ### F151: Idea: Weekly seeded Room Rush: everyone starts from the same room for 7 days
 
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Manually chosen weekly exact-version Room Rush with Hard mode, a five-minute clock and separate bests/winners. Feature is live; the first event is unchosen. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 - **Area:** Gameplay feel & new gameplay ideas
 - **Type:** idea · **impact:** medium · **effort:** medium
 - **Flagged before:** docs/product/ideas-inbox.md:47 mentions 'seasons' or events with objectives; the XP PRD prefers weekly cadence
@@ -4088,6 +4098,8 @@ A signed receipt, fixed start/week/version, bounded start rate and five-minute e
 Validation passes 381 files / 3,023 tests, lint, types, generated bindings, build, DOM 965/240 and Worker safety. Four native admin and six native play/timer cases cover published/Expanded-room choices, scheduling, inactive default, guest practice, cross-room movement, lost save reply/retry, fresh Restart, one best per account and phone touch Hard death. A real five-minute attempt continues through Settings, completes at exactly 300000ms and saves once. Screenshots and the unchanged installed-client gameplay capture are inspected; native page errors are zero and the client retains the expected local presence 503. Evidence: `/tmp/wamp-weekly-room-rush-2026-10-08/`. Migration 0062, API Worker and Pages are needed for release. The inherited F144 matching map/catalog release gate still applies. No production event or release occurred; F151 remains unticked at 55/215 delivered. Co-op plates F152 follows under the overnight goal.
 
 ### F152: Idea: Co-op pressure plates that count other live players
+
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Prime live helpers can hold marked co-op plates; exact-version co-op practice is excluded from solo ranking. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
 
 **2026-10-08 overnight candidate (not deployed).** [Draft PR #86](https://github.com/songadaymann/wamp/pull/86), source `55581963`, stacks on draft #85. Optional `coopPlate: true` on Gameplay pressure plates works with fresh same-cell live presence before an avatar loads. Both editors, the phone settings sheet, Undo/Redo, persistence and agent commands support it. Marked rooms and Expanded Rooms show truthful “Co-op plates” information and stay practice on client, signed/guest start and finish paths; manual solo-lineage adoption is blocked and flagged versions change their fingerprints. Room Rush, PvP and non-Prime Worlds ignore remote helpers. Normal plates, crate/enemy presses and existing OR links remain; the separate AND option below is still future work.
 
@@ -4152,6 +4164,8 @@ Small fix-plan detail: canUndo/canRedo are not in the editor view model yet. The
 
 ### F156: Rooms that can't be beaten (or are beaten instantly) can be published
 
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Missing exit/finish and empty Defeat All setups are blocked at publication; area-cell enemy counts and private setup review are included. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 [Draft PR #87](https://github.com/songadaymann/wamp/pull/87), source `7ad04621`, is pushed and attached, stacked on draft #86.
 
 **2026-10-09 overnight candidate (not deployed).** Shared editor/Worker/agent publish checks reject missing exits, missing sprint finishes and empty Defeat All rooms. Draft saving remains available. Missing marker buttons have a brief reduced-motion-aware outline reminder; placement stays explicit to avoid accidental mobile taps. Finish-only standalone sprints remain valid. Expanded Room publication requires a real enemy in the exact published cell versions, and its editor keeps area Publish disabled until the enemy's cell is published. The existing room-version reads supply server counts without extra queries.
@@ -4200,6 +4214,8 @@ Fix notes:
 
 ### F163: Starter room templates (backlog G-001): build them as command scripts
 
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Six previewed Smart terrain layouts, neighboring styles and one-action Undo/Redo for ordinary and Expanded authoring. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 - **Area:** Level building / editor UX
 - **Type:** idea · **impact:** high · **effort:** medium
 - **Flagged before:** Backlog G-001 (Codex Ready, High) — still not built.
@@ -4236,6 +4252,8 @@ The plan to build template terrain with the agent command API and "parameterize 
 - Choosing the neighbours' most common tileset is new work. buildRoomTilesetHint (tilesetCatalog.ts:191) works per room and could be run on adjacent loaded rooms.
 
 ### F159: Add a "Clear Check" plus a Ready-to-Publish checklist (Mario Maker style)
+
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Advisory exact-draft Clear Check receipts and a Ready-to-Publish checklist; cursor practice stays uncredited. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
 
 - **Area:** Level building / editor UX
 - **Type:** idea · **impact:** high · **effort:** medium
@@ -4279,6 +4297,8 @@ Smaller fixes:
 - Under anyone-can-edit, 'creator' means whoever published this version.
 
 ### F162: No way to move things: add a Select/Move tool, a clipboard that works across rooms, and saved stamps
+
+**Release update 2026-10-09.** First slice delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Single-object Move preserves settings and links, with one-action Undo/Redo and safe cancellation in both editors. Marquee, cross-room clipboard and stamps remain. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
 
 - **Area:** Level building / editor UX
 - **Type:** improvement · **impact:** high · **effort:** large
@@ -4343,6 +4363,8 @@ Fix approach: the minimal version is small. Add focus tracking for NPC, police a
 
 ### F165: Undo history grows without limit and copies the whole terrain twice per stroke
 
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Latest 150 edits, lazy/selective Smart history and cached rain/off-lighting preview work. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 - **Area:** Level building / editor UX
 - **Type:** defect · **impact:** medium · **effort:** small
 
@@ -4376,6 +4398,8 @@ Add to the fix: cache the per-frame weather export at EditorScene.ts:1239 (expor
 For the "skip unchanged smart state" fix: storing undefined is safe because undo/redo only restore when action.smartBefore is truthy (editRuntime.ts:2918, 3019). Manual tile strokes can change smart state through recordManualSmartEdit (editRuntime.ts:799-812), so any dirty flag must be set there as well as in the smart-tool paths.
 
 ### F166: Show neighbor openings at the room edges so the world actually connects
+
+**Release update 2026-10-09.** First slice delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Cached standalone matched/blocked/empty-space neighbor guides and advisory counts. Expanded external-perimeter guides remain. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
 
 - **Area:** Level building / editor UX
 - **Type:** idea · **impact:** medium · **effort:** small
@@ -4426,6 +4450,8 @@ Implementation details the claim glosses over:
 
 ### F220: Music editor re-renders the whole song on every note edit and keeps every version in memory
 
+**Release update 2026-10-09.** First slice delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Coalesced music preview changes and shared 16-clip/four-loop/50 MiB retention. Stems, Arrange slot playback and music layout fixes remain. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 - **Area:** Room music system (composer, playback, audio engine)
 - **Type:** defect · **impact:** high · **effort:** small
 
@@ -4473,6 +4499,8 @@ The crash risk on iOS is plausible but needs a long session with the preview on.
 
 ### F224: Room-to-room music transitions: mid-note starts, slow cross-tempo blends, and a 'ghost' room on fast crossings
 
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Downbeat/compatible-bar music transitions, 400 ms crossing stability, queued-source cancellation and tracked outgoing tails. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 - **Area:** Room music system (composer, playback, audio engine)
 - **Type:** defect · **impact:** medium · **effort:** small
 
@@ -4513,6 +4541,8 @@ The core claims are accurate. Additions and refinements:
 (f) Impact is closer to medium: frequent but cosmetic audio polish.
 
 ### F221: Most room loops click at the seam, and open hi-hats pile up into hiss
+
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Periodic tonal/drum tails and cyclic 10 ms hi-hat choke; exact 48 kHz seam reference checks pass. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
 
 - **Area:** Room music system (composer, playback, audio engine)
 - **Type:** defect · **impact:** medium · **effort:** small
@@ -4602,6 +4632,8 @@ Hoisting the envelope constants (patternRenderer.ts:75-76) is a minor micro-opti
 
 ### F225: Played room music is never freed; it is always stereo and still rendered when music volume is 0
 
+**Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Bounded retention, centered mono buffers, muted load/render skipping and latest-target unmute. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 - **Area:** Room music system (composer, playback, audio engine)
 - **Type:** defect · **impact:** medium · **effort:** small
 
@@ -4668,6 +4700,8 @@ Recommended order: first ship the small fixes (allSettled, evicting failed promi
 
 ### F229: Three audio engines run at once; music never pauses when the tab is hidden
 
+**Release update 2026-10-09.** First slice delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Unused Phaser audio context removed; hidden-signal music/SFX suspension, stale ownership guards and controlled real-audio tests pass. Actual native tab switching is unverified because the Mac is locked; shared buses, Safari/interruption policy remain. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
+
 - **Area:** Room music system (composer, playback, audio engine)
 - **Type:** improvement · **impact:** medium · **effort:** small
 
@@ -4691,6 +4725,8 @@ Recommended order: first ship the small fixes (allSettled, evicting failed promi
 The music and SFX AudioContexts are created lazily, not at boot. Music creates its context on first playback or clip preview (controller.ts:856-868). SFX creates its context only the first time a routed cue plays, mainly the muffled sound from adjacent rooms (roomAudio.ts:20-49 → sfx.ts:517/541 → 834). Most SFX are plain HTMLAudio playback. Only Phaser's unused context always exists from boot. Two or three contexts can exist at once, but not from page load. The most valuable fix is the hidden-tab suspend/pause, plus `audio: { noAudio: true }`. Merging into one shared engine with buses is a nice-to-have, mostly useful for future ducking; it has no proven unlock or battery benefit.
 
 ### F226: Sequencer overlay redraws 24 text labels and deep-clones the song every frame
+
+**Release update 2026-10-09.** First slice delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Unchanged label setters and cheap playhead timing in both editors. Graphics command caching remains. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
 
 - **Area:** Room music system (composer, playback, audio engine)
 - **Type:** defect · **impact:** medium · **effort:** small
@@ -4743,6 +4779,8 @@ The grid is a 32x22 cell grid of 16 px tiles (config/room.ts:2-4). The camera fi
 4. **Zoom is blocked.** The finding misses that pinch and wheel zoom are deliberately blocked in music mode (interaction.ts:847, 893-895, 1095-1100). That makes the problem worse. It also points to a quick partial fix: on touch devices, allow two-finger pinch-zoom and pan in music mode while one finger keeps painting notes.
 5. **Paged view still falls short.** A one-bar (16-step) paged view frames about 16×16 + 72 = 328 world px across a 370-px viewport. That gives zoom of about 1.13, so cells of about 18 px. This roughly matches the "2.5-3x larger" claim but is still well under a 44-px tap target. Reaching 44 px would need fewer steps per page (about 8) or dropping the label gutter on phones.
 6. **Easy wins.** Making ties opt-in on touch (tap places a note; long-press then drag makes a tie) is valid. It targets shouldTieFromPrevious in musicPatternEditor.ts:1413-1417. That change plus enabling pinch-zoom are small. The full paged view is medium effort.
+
+**2026-10-09 local candidate.** F227 now has a shared phone/coarse-tablet touch workspace in both ordinary and Expanded music editors: 44–88px cells, pinned pitch/drum labels, all 32 steps reachable through page navigation/pan, anchored pinch zoom and a compact Tools panel. Tap toggles on release; Draw/Tie and Copy are explicit; canceled/multi-contact gestures do not edit the draft. A touch stroke is one Undo operation. Full 408 files / 3,239 tests and native responsive, audio, save/reload, copy/paste, desktop and selected-cell isolation acceptance pass. Production checkbox remains open pending delivery. Receipt and limits: `wamp-phone-music-editor-2026-10-09.md`.
 
 ### F231: No way to audition a library phrase before placing it, and no playhead in Arrange mode
 

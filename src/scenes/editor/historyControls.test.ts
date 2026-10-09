@@ -4,7 +4,7 @@ import { EditorHistoryControls } from './historyControls';
 class Button {
   disabled = true;
   private listeners = new Set<EventListener>();
-  constructor(readonly dataset: { editorHistory: string }) {}
+  constructor(readonly dataset: { editorHistory: string; editorMusicHistory?: string }) {}
   addEventListener(_type: string, callback: EventListener): void { this.listeners.add(callback); }
   removeEventListener(_type: string, callback: EventListener): void { this.listeners.delete(callback); }
   click(): void {
@@ -32,6 +32,22 @@ function fixture() {
 }
 
 describe('history control ownership', () => {
+  it('allows dedicated music Undo/Redo while terrain history and sprite editing stay locked', () => {
+    const f = fixture();
+    f.undo.dataset.editorMusicHistory = '';
+    f.controls.render(true, true);
+    f.doc.body.dataset.editorMusicMode = 'true';
+    f.doc.body.dataset.editorMusicUiLocked = 'true';
+    observers.forEach(callback => callback());
+    expect(f.undo.disabled).toBe(false);
+    expect(f.redo.disabled).toBe(true);
+    f.undo.click();
+    expect(f.actions.undo).toHaveBeenCalledOnce();
+    f.doc.body.dataset.editorSpriteUiLocked = 'true';
+    f.undo.click();
+    expect(f.actions.undo).toHaveBeenCalledOnce();
+    f.controls.destroy();
+  });
   it('prevents a sleeping editor from changing or receiving the active editor history', () => {
     const f = fixture();
     f.controls.render(true, false);
