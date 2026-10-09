@@ -121,6 +121,10 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
   display: none;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] .editor-shell-tool-gap {
+  display: none;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-tools .editor-shell-tools {
   display: flex;
   gap: 4px;
@@ -170,6 +174,10 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
   padding: 4px;
   font-size: 10px;
   box-shadow: none;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-shell-action='room'] {
+  flex-basis: 108px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] .editor-shell-dock-grid .editor-game-icon {

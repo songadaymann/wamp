@@ -7,6 +7,7 @@ import { draftBackupRevision } from '../courses/localDraftBackup';
 import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecycle';
 import Phaser from 'phaser';
 import { CourseTouchController } from './editor/courseTouch';
+import { applyEditorLayerVisibility } from './editor/layerVisibility';
 import { editorTouchToolKey } from './editor/touchGesture';
 import { getAuthDebugState, promptForSignIn, refreshAuthSession } from '../auth/client';
 import { announceFirstPublishedExpandedRoom } from '../publishing/events';
@@ -32,6 +33,7 @@ import {
   TILESETS,
   TILE_SIZE,
   editorState,
+  resetEditorLayerVisibility,
   type PlacedObject,
 } from '../config';
 import { createExpandedRoomEditorRepository } from '../expandedRooms/editorRepository';
@@ -646,6 +648,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   create(data?: CourseEditorSceneData): void {
+    resetEditorLayerVisibility();
     this.roomDeathMap = null;
     this.draftLifecycle = new EditorDraftLifecycle({
       isActive: () => !this.isShuttingDown && this.scene.isActive(),
@@ -852,6 +855,9 @@ export class CourseEditorScene extends Phaser.Scene {
       this.lastBackupChange = change;
       for (const slice of this.getDirtySlices()) setActiveCourseDraftSessionRoomUnsaved(slice.roomId, true);
       this.backupDebouncer.schedule();
+    }
+    for (const slice of this.roomSlices.values()) {
+      applyEditorLayerVisibility(slice.layers, slice.runtime.placedObjectSprites);
     }
     this.syncRoomSliceBackgrounds();
     this.objectInspectorController.updatePressurePlateOverlay(this.pressurePlateGraphics);

@@ -240,6 +240,8 @@
         <button class="editor-drawer-tab" type="button" data-editor-room-section="music">Music</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="sprite">Sprite Editor</button>
         <button class="editor-drawer-tab" type="button" data-room-insights-open>Insights</button>
+        <button class="editor-drawer-tab" type="button" data-editor-room-action="history">Version History</button>
+        <button class="editor-drawer-tab" type="button" data-editor-share-action="collect"><span data-editor-share-label>Collect Room</span></button>
       </div>
       <!-- Tools -->
       <div class="sidebar-section" id="tools-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
@@ -426,39 +428,33 @@
             <div class="layer-row">
               <button class="layer-btn" data-layer="foreground">
                 <span class="layer-btn-summary">In front of player</span>
-              </button>
-              <div class="layer-info-wrap">
-                <button class="layer-info-button" type="button" aria-label="About the front layer">&#9432;</button>
-                <div class="layer-info-tooltip">
+                <span class="layer-info-tooltip" role="tooltip">
                   Places tiles and objects in front of the player. Use it for trees, arches, and anything the player should pass behind. This layer does not collide.
-                </div>
-              </div>
+                </span>
+              </button>
+              <button class="layer-info-button layer-visibility-button" type="button" data-layer-visibility="foreground" aria-pressed="true" aria-label="Hide front layer">&#128065;</button>
             </div>
             <div class="layer-row">
               <button class="layer-btn active" data-layer="terrain">
                 <span class="layer-btn-summary">Main solid layer</span>
-              </button>
-              <div class="layer-info-wrap">
-                <button class="layer-info-button" type="button" aria-label="About the gameplay layer">&#9432;</button>
-                <div class="layer-info-tooltip">
+                <span class="layer-info-tooltip" role="tooltip">
                   Places tiles and objects on the player's main gameplay plane. Use it for floors, walls, and most walkable terrain. This layer has collision.
-                </div>
-              </div>
+                </span>
+              </button>
+              <button class="layer-info-button layer-visibility-button" type="button" data-layer-visibility="terrain" aria-pressed="true" aria-label="Hide gameplay layer">&#128065;</button>
             </div>
             <div class="layer-row">
               <button class="layer-btn" data-layer="background">
                 <span class="layer-btn-summary">Behind player</span>
-              </button>
-              <div class="layer-info-wrap">
-                <button class="layer-info-button" type="button" aria-label="About the back layer">&#9432;</button>
-                <div class="layer-info-tooltip">
+                <span class="layer-info-tooltip" role="tooltip">
                   Places tiles and objects behind the player. Use it for scenery and distant decoration. This layer does not collide.
-                </div>
-              </div>
+                </span>
+              </button>
+              <button class="layer-info-button layer-visibility-button" type="button" data-layer-visibility="background" aria-pressed="true" aria-label="Hide back layer">&#128065;</button>
             </div>
           </div>
           <div class="layer-controls-row">
-            <button id="btn-editor-layer-guides" class="bar-btn bar-btn-small" type="button">See Layers</button>
+            <button id="btn-editor-layer-guides" class="bar-btn bar-btn-small" type="button" aria-pressed="false">Indicate Layers</button>
           </div>
         </div>
       </div>
@@ -1268,16 +1264,18 @@
         <button id="btn-editor-phone-account" class="editor-shell-chunky-button" type="button">Account &amp; menu</button>
       </div>
       <div class="editor-shell-tools" aria-label="Drawing tools">
-        <button class="editor-shell-chunky-button" data-editor-history="undo" type="button" title="Undo (Cmd/Ctrl+Z)" disabled><span aria-hidden="true">&#8630;</span><span>Undo</span></button>
-        <button class="editor-shell-chunky-button" data-editor-history="redo" type="button" title="Redo (Cmd/Ctrl+Shift+Z or Ctrl+Y)" disabled><span aria-hidden="true">&#8631;</span><span>Redo</span></button>
         <button class="tool-btn editor-shell-chunky-button active" data-tool="pencil" type="button" title="Draw (B or 1)" aria-controls="editor-shell-pencil-picker" aria-expanded="false"><span class="tool-icon">&#9998;</span><span class="tool-label">Draw</span></button>
         <button id="btn-editor-shell-eraser" class="tool-btn editor-shell-chunky-button" data-tool="eraser" type="button" title="Erase (E or 2)" aria-controls="editor-shell-eraser-size-picker" aria-expanded="false"><span class="tool-icon">&#9003;</span><span class="tool-label">Erase</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="copy" type="button" title="Copy (C or 3)"><span class="tool-icon">&#10697;</span><span class="tool-label">Copy</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="fill" type="button" title="Fill (F or G)"><span class="tool-icon">&#9687;</span><span class="tool-label">Fill</span></button>
+        <span class="editor-shell-tool-gap" aria-hidden="true"></span>
+        <button class="editor-shell-chunky-button" data-editor-history="undo" type="button" title="Undo (Cmd/Ctrl+Z)" disabled><span aria-hidden="true">&#8630;</span><span>Undo</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="randomize" type="button" title="Scramble (V)" aria-controls="editor-shell-randomize-picker" aria-expanded="false"><span class="tool-icon tool-icon-mosaic" aria-hidden="true"><span></span><span></span><span></span><span></span></span><span class="tool-label"><span class="tool-mode-label">Scramble</span></span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="rect" type="button" title="Rectangle (R); select again to switch Filled / Outlined"><span class="tool-icon">&#9632;</span><span class="tool-label">Rectangle</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="ellipse" type="button" title="Circle (O); select again to switch Filled / Outlined"><span class="tool-icon">&#9679;</span><span class="tool-label">Circle</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="line" type="button" title="Line (L); select again to switch to Curve. Hold Shift to snap"><span class="tool-icon">&#9585;</span><span class="tool-label">Line</span></button>
+        <span class="editor-shell-tool-gap" aria-hidden="true"></span>
+        <button class="editor-shell-chunky-button" data-editor-history="redo" type="button" title="Redo (Cmd/Ctrl+Shift+Z or Ctrl+Y)" disabled><span aria-hidden="true">&#8631;</span><span>Redo</span></button>
         <div id="editor-shell-pencil-picker" class="editor-shell-eraser-size-picker editor-pencil-controls hidden" role="group" aria-label="Draw options">
           <div class="editor-shell-eraser-size-actions editor-tile-erase-control editor-pencil-size-row" role="group" aria-label="Draw brush size">
             <span class="editor-shell-eraser-size-label">Size</span>
@@ -1360,7 +1358,6 @@
       <div class="editor-shell-actions" aria-label="Room actions">
         <div class="editor-shell-action-grid">
           <button class="editor-shell-chunky-button editor-shell-back-button" type="button" data-editor-shell-action="back"><span aria-hidden="true">&#8592;</span><span>Back to World</span></button>
-          <button class="editor-shell-chunky-button" type="button" data-editor-shell-action="room" aria-controls="sidebar" aria-expanded="false"><span aria-hidden="true">&#9881;</span><span>Room</span></button>
           <button class="editor-shell-chunky-button" type="button" data-editor-shell-action="share" aria-controls="editor-share-popover" aria-expanded="false"><span aria-hidden="true">&#8593;</span><span>Share</span></button>
           <button class="editor-shell-chunky-button editor-shell-save-button" type="button" data-editor-shell-action="save" title="Save changed expanded room cells"><span aria-hidden="true">&#128190;</span><span>Save Cells</span></button>
           <button class="editor-shell-chunky-button editor-shell-test-button" type="button" data-editor-shell-action="test"><span aria-hidden="true">&#9654;</span><span>Test</span></button>
@@ -1369,9 +1366,6 @@
         <div id="editor-share-popover" class="editor-shell-popover editor-share-popover hidden" role="dialog" aria-label="Share room" aria-hidden="true">
           <button type="button" data-editor-share-action="wampogram"><span class="editor-share-icon" aria-hidden="true">&#9829;</span><span data-editor-share-label>Wamp-O-Gram</span></button>
           <button type="button" data-editor-share-action="copy"><span class="editor-share-icon" aria-hidden="true">&#128279;</span><span data-editor-share-label>Copy Room Link</span></button>
-          <button type="button" data-editor-share-action="collect"><span class="editor-share-icon" aria-hidden="true">&#9670;</span><span data-editor-share-label>Collect Room</span></button>
-          <button type="button" data-room-insights-open data-editor-share-action="insights"><span class="editor-share-icon" aria-hidden="true">&#9638;</span><span>Insights</span></button>
-          <button type="button" data-editor-share-action="history"><span class="editor-share-icon" aria-hidden="true">&#8634;</span><span data-editor-share-label>Version History</span></button>
           <div id="editor-share-status" class="editor-shell-popover-status" aria-live="polite"></div>
         </div>
         <div id="editor-shell-status-slot" class="editor-shell-status-slot"></div>
@@ -1386,6 +1380,7 @@
         <button type="button" data-editor-dock="hazards" aria-controls="sidebar" aria-expanded="false"><span class="editor-game-icon editor-game-icon-spikes" aria-hidden="true"></span><span>Hazards</span></button>
         <button type="button" data-editor-dock="deco" aria-controls="sidebar" aria-expanded="false"><span class="editor-game-icon editor-game-icon-sign" aria-hidden="true"></span><span>Deco</span></button>
         <button type="button" data-editor-dock="markers" aria-controls="editor-markers-popover" aria-expanded="false"><span class="editor-game-icon editor-game-icon-flag-green" aria-hidden="true"></span><span>Markers</span></button>
+        <button type="button" data-editor-shell-action="room" aria-controls="sidebar" aria-expanded="false" aria-pressed="false"><span class="editor-game-icon editor-game-icon-room" aria-hidden="true">&#9881;</span><span>Room Setup</span></button>
       </div>
       <div id="editor-markers-popover" class="editor-shell-popover editor-markers-popover hidden" role="dialog" aria-label="Markers" aria-hidden="true">
         <div class="editor-shell-popover-heading">
@@ -1416,7 +1411,7 @@
         <button id="btn-post-run-reminder-dismiss" class="bar-btn" type="button" aria-label="Hide progress reminder" title="Hide reminder">×</button>
       </div>
       <div id="room-title-section" class="editor-room-title-overlay" data-mobile-panel="goal">
-        <label class="editor-room-title-label" for="room-title-input">Room</label>
+        <label class="editor-room-title-label" for="room-title-input">Room Name</label>
         <input id="room-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Name this room" />
       </div>
       <div id="editor-death-map-key" class="hidden"><span>Death map · orange = busiest tiles</span><button id="btn-editor-death-map-clear" class="bar-btn bar-btn-small" type="button">Hide Map</button></div>

@@ -46,6 +46,7 @@ export interface EditorUiElements {
   clearAllButtons: HTMLButtonElement[];
   clearObjectButtons: HTMLButtonElement[];
   layerButtons: HTMLElement[];
+  layerVisibilityButtons: HTMLButtonElement[];
   layerMiniButtons: HTMLElement[];
   layerChip: HTMLElement | null;
   layerGuideButton: HTMLButtonElement | null;
@@ -247,6 +248,7 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     clearAllButtons: all<HTMLButtonElement>(doc, '.editor-clear-all-btn'),
     clearObjectButtons: all<HTMLButtonElement>(doc, '.editor-clear-objects-btn'),
     layerButtons: all<HTMLElement>(doc, '.layer-btn'),
+    layerVisibilityButtons: all<HTMLButtonElement>(doc, '.layer-visibility-button'),
     layerMiniButtons: all<HTMLElement>(doc, '.layer-stack-mini-btn'),
     layerChip: byId<HTMLElement>(doc, 'editor-layer-chip'),
     layerGuideButton: byId<HTMLButtonElement>(doc, 'btn-editor-layer-guides'),

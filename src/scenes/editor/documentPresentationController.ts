@@ -13,6 +13,7 @@ import { createGoalMarkerFlagSprite } from '../../goals/markerFlags';
 import type { RoomGoal } from '../../goals/roomGoals';
 import type { RoomSpawnPoint } from '../../persistence/roomRepository';
 import { buildRoomGoalMarkerDescriptors } from './goalDocument';
+import { tagEditorObjectSprite } from './layerVisibility';
 
 export interface EditorDocumentPresentationState {
   origin: { x: number; y: number };
@@ -92,6 +93,7 @@ export class EditorDocumentPresentationController {
         sprite.setTint(0xb8c4d8);
       }
       applyPlacedObjectFacing(sprite, objectConfig, placed);
+      tagEditorObjectSprite(sprite, getPlacedObjectLayer(placed));
       this.objectSprites.push(sprite);
     }
 

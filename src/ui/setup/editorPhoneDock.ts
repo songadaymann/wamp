@@ -97,7 +97,7 @@ export class EditorPhoneDock {
     this.doc.getElementById('btn-mobile-editor-toggle')?.classList.add('editor-shell-chunky-button');
     const menu = this.doc.getElementById('editor-phone-menu');
     this.move(this.doc.getElementById('room-title-section'), menu);
-    for (const action of ['room', 'share', 'save', 'back']) this.move(this.doc.querySelector(`[data-editor-shell-action="${action}"]`), menu);
+    for (const action of ['share', 'save', 'back']) this.move(this.doc.querySelector(`[data-editor-shell-action="${action}"]`), menu);
     this.move(this.doc.querySelector('.editor-shell-tools'), this.doc.getElementById('editor-phone-tools'));
     for (const id of ['editor-shell-pencil-picker', 'editor-shell-eraser-size-picker', 'editor-shell-randomize-picker']) {
       this.move(this.doc.getElementById(id), this.doc.getElementById('editor-phone-tools'));

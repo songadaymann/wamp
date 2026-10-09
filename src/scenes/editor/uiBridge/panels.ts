@@ -55,6 +55,11 @@ export function renderEditorUiViewModel(
   setButtonText(elements.refreshMetadataBtn, viewModel.refreshMetadataButtonText);
   setHidden(elements.historyBtn, viewModel.historyHidden);
   setDisabled(elements.historyBtn, viewModel.historyDisabled);
+  const historyTab = doc.querySelector<HTMLButtonElement>('[data-editor-room-action="history"]');
+  if (historyTab) {
+    historyTab.disabled = viewModel.historyDisabled;
+    historyTab.classList.toggle('hidden', viewModel.historyHidden);
+  }
   setHidden(elements.fitBtns, viewModel.fitHidden);
 
   renderGoalPanel(elements, viewModel);

@@ -8,6 +8,7 @@ import {
   cycleTileFlipMode,
   editorState,
   getTilesetByKey,
+  isEditorLayerVisible,
   type EraserBrushSize,
   type LayerName,
   type PaletteMode,
@@ -860,6 +861,19 @@ export class EditorUiBridge {
     };
     for (const button of [...this.elements.layerButtons, ...this.elements.layerMiniButtons]) {
       const handler = () => handleLayerClick(button);
+      button.addEventListener('click', handler);
+      this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
+    }
+
+    for (const button of this.elements.layerVisibilityButtons) {
+      const handler = () => {
+        const layer = button.dataset.layerVisibility as LayerName | undefined;
+        if (!layer) {
+          return;
+        }
+        editorState.layerVisibility[layer] = !isEditorLayerVisible(layer);
+        this.syncEditorChromeState();
+      };
       button.addEventListener('click', handler);
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
@@ -2162,6 +2176,17 @@ export class EditorUiBridge {
       }
       layerButton.classList.toggle('active', !unsupported && layer === editorState.activeLayer);
     }
+    for (const button of this.elements.layerVisibilityButtons) {
+      const layer = button.dataset.layerVisibility as LayerName | undefined;
+      if (!layer) {
+        continue;
+      }
+      const visible = isEditorLayerVisible(layer);
+      const label = getLayerUiLabel(layer);
+      button.classList.toggle('is-off', !visible);
+      button.setAttribute('aria-pressed', visible ? 'true' : 'false');
+      button.setAttribute('aria-label', visible ? `Hide ${label.toLowerCase()} layer` : `Show ${label.toLowerCase()} layer`);
+    }
     if (this.elements.layerChip) {
       this.elements.layerChip.textContent = `Placing on ${getLayerUiLabel(editorState.activeLayer)}`;
       this.elements.layerChip.setAttribute('data-layer-tone', editorState.activeLayer);
@@ -2172,9 +2197,7 @@ export class EditorUiBridge {
         'aria-pressed',
         editorState.showLayerGuides ? 'true' : 'false'
       );
-      this.elements.layerGuideButton.textContent = editorState.showLayerGuides
-        ? 'Hide Layers'
-        : 'See Layers';
+      this.elements.layerGuideButton.textContent = 'Indicate Layers';
     }
 
     setValue(this.elements.tilesetSelect, editorState.selectedTilesetKey);

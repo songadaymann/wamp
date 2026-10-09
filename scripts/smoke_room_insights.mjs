@@ -149,7 +149,8 @@ try {
    if(isolated)await click(page,'[data-editor-shell-action="room"]',touch);
    if(!isolated){const cleared=await page.evaluate(key=>{const s=window.__EVERYBODYS_PLATFORMER_GAME__.scene.keys[key];return (key==='EditorScene'?s.overlayController.deathMapGraphics:s.roomDeathMap).commandBuffer.length;},key);assert.equal(cleared,0);}
    if(!expanded) {
-    await click(page,'[data-editor-shell-action="share"]',touch);await click(page,'#editor-share-popover [data-room-insights-open]',touch);await page.locator('#room-insights-metrics dd').first().waitFor();await page.keyboard.press('Escape');assert.equal(await page.locator('#room-insights-modal').isVisible(),false);
+    if ((await page.evaluate(() => document.body.dataset.editorShellPanel)) !== 'room') await click(page,'[data-editor-shell-action="room"]',touch);
+    await click(page,'#editor-drawer-room-tabs [data-room-insights-open]',touch);await page.locator('#room-insights-metrics dd').first().waitFor();await page.keyboard.press('Escape');assert.equal(await page.locator('#room-insights-modal').isVisible(),false);
    }
    console.log(name+' '+(expanded?'expanded':'room')+': metrics and editor map pass.');
    report.scenarios.push({name,expanded,checks:['real versioned API metrics','viewport fit','native Room Insights','keyboard isolation and focus','native keyboard map toggle','drawn map','Hide Map','Close',...(!expanded?['Share Insights','Escape']:[])]});

@@ -134,11 +134,8 @@ try {
       if (expanded) await page.locator('#course-editor-goal-type-select').selectOption('reach_exit');
       passed.push('Markers opens Goal');
 
-      await tap('#btn-editor-phone-menu');
-      await bounds('#editor-phone-menu');
       await tap('[data-editor-shell-action="room"]');
       assert.equal(await page.evaluate(() => document.body.dataset.editorShellPanel), 'room');
-      assert.equal(await page.locator('#editor-phone-menu').isVisible(), false);
       for (const section of ['background', 'environment']) {
         await tap(`button[data-editor-room-section="${section}"]`);
         await bounds('#sidebar');

@@ -47,6 +47,7 @@ export interface EditorState {
   tileFlipXMode: TileFlipMode;
   tileFlipYMode: TileFlipMode;
   showLayerGuides: boolean;
+  layerVisibility: Record<LayerName, boolean>;
   selection: TileSelection;
   zoom: number;
   isPlaying: boolean;
@@ -112,6 +113,7 @@ export const editorState: EditorState = {
   tileFlipXMode: 'off',
   tileFlipYMode: 'off',
   showLayerGuides: false,
+  layerVisibility: createDefaultEditorLayerVisibility(),
   selection: createDefaultEditorTileSelection(),
   zoom: 2,
   isPlaying: false,
@@ -131,6 +133,22 @@ export const editorState: EditorState = {
   selectedWeatherIntensity: DEFAULT_ROOM_WEATHER_INTENSITY,
   placedObjects: [],
 };
+
+export function createDefaultEditorLayerVisibility(): Record<LayerName, boolean> {
+  return {
+    background: true,
+    terrain: true,
+    foreground: true,
+  };
+}
+
+export function isEditorLayerVisible(layerName: LayerName): boolean {
+  return editorState.layerVisibility[layerName] !== false;
+}
+
+export function resetEditorLayerVisibility(): void {
+  editorState.layerVisibility = createDefaultEditorLayerVisibility();
+}
 
 export function resetEditorPaletteSelection(): void {
   editorState.selectedTilesetKey = DEFAULT_EDITOR_TILESET_KEY;

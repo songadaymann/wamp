@@ -12,7 +12,7 @@
 
 body[data-editor-dock-shell='true'] {
   --editor-shell-top-height: 132px;
-  --editor-shell-dock-height: 92px;
+  --editor-shell-dock-height: 120px;
   --editor-shell-bottom-height: 36px;
 }
 
@@ -93,7 +93,7 @@ body[data-editor-dock-shell='true'] .editor-shell-top {
   grid-row: 1;
   z-index: 14;
   display: grid;
-  grid-template-columns: minmax(292px, 1fr) minmax(250px, 430px) minmax(340px, 1fr);
+  grid-template-columns: minmax(320px, 1fr) minmax(250px, 430px) minmax(280px, 1fr);
   align-items: center;
   gap: 18px;
   min-width: 0;
@@ -107,10 +107,15 @@ body[data-editor-dock-shell='true'] .editor-shell-top {
 body[data-editor-dock-shell='true'] .editor-shell-tools {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(5, minmax(52px, 78px));
+  grid-template-columns: repeat(4, minmax(48px, 72px)) 14px minmax(48px, 72px);
   gap: 7px;
   align-content: center;
   justify-content: start;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-tool-gap {
+  display: block;
+  width: 14px;
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-actions {
@@ -120,7 +125,7 @@ body[data-editor-dock-shell='true'] .editor-shell-actions {
 
 body[data-editor-dock-shell='true'] .editor-shell-action-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(60px, 1fr));
+  grid-template-columns: repeat(4, minmax(60px, 1fr));
   gap: 7px;
 }
 
@@ -187,6 +192,12 @@ body[data-editor-dock-shell='true'] .goal-type-button-grid button:hover,
 body[data-editor-dock-shell='true'] .environment-choice-grid button:hover,
 body[data-editor-dock-shell='true'] .editor-shell-square-button:hover {
   filter: brightness(1.05);
+}
+
+body[data-editor-dock-shell='true'] .editor-drawer-tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+  filter: none;
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-chunky-button:active,
@@ -295,23 +306,34 @@ body[data-editor-dock-shell='true'] #editor-room-feedback .editor-publish-nudge-
 
 body[data-editor-dock-shell='true'] .editor-shell-dock {
   position: relative;
-  grid-column: 2;
+  grid-column: 1 / -1;
   grid-row: 3;
   z-index: 15;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: center;
+  gap: 12px;
   min-width: 0;
-  padding: 10px 16px;
+  box-sizing: border-box;
+  padding: 8px 12px 20px;
   border-top: 2px solid var(--editor-retro-cream);
   background: #0b0b0b;
 }
 
+body[data-editor-dock-shell='true']:not([data-device-class='phone']) .editor-shell-dock::after {
+  content: '';
+  width: 116px;
+  justify-self: end;
+}
+
 body[data-editor-dock-shell='true'] .editor-shell-dock-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(58px, 94px));
+  grid-column: 1;
+  justify-self: center;
+  grid-template-columns: repeat(7, minmax(54px, 86px));
   gap: 9px;
-  width: min(660px, 100%);
+  width: max-content;
+  max-width: 100%;
   padding: 7px;
   border: 3px solid var(--editor-retro-cream);
   background: var(--editor-retro-green);
@@ -483,6 +505,16 @@ body[data-editor-dock-shell='true'] .editor-game-icon-flag-checkered {
   background-size: 288px 32px;
 }
 
+body[data-editor-dock-shell='true'] .editor-game-icon-room {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-image: none;
+  color: var(--editor-retro-ink);
+  font-size: 22px;
+  line-height: 1;
+}
+
 body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='terrain'] {
   background: var(--editor-retro-green);
   color: var(--editor-retro-cream);
@@ -505,7 +537,8 @@ body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor
   background: var(--editor-retro-pink);
 }
 
-body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='markers'] {
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='markers'],
+body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-shell-action='room'] {
   background: var(--editor-retro-paper);
 }
 
@@ -565,11 +598,6 @@ body[data-editor-dock-shell='true'] .editor-share-popover button[data-editor-sha
 
 body[data-editor-dock-shell='true'] .editor-share-popover button[data-editor-share-action='collect'] {
   background: var(--editor-retro-yellow);
-}
-
-body[data-editor-dock-shell='true'] .editor-share-popover button[data-editor-share-action='history'] {
-  background: var(--editor-retro-green);
-  color: var(--editor-retro-cream);
 }
 
 body[data-editor-dock-shell='true'] .editor-share-icon {
@@ -646,7 +674,7 @@ body[data-editor-dock-shell='true'] .editor-markers-actions button[data-editor-m
 body[data-editor-dock-shell='true'] #sidebar {
   container-type: inline-size;
   grid-column: 1;
-  grid-row: 1 / 4;
+  grid-row: 1 / 3;
   display: none;
   width: var(--app-sidebar-width);
   height: auto;
@@ -846,6 +874,12 @@ body[data-editor-dock-shell='true'] #layers-section > .sidebar-section-body {
   min-width: 0;
 }
 
+body[data-editor-dock-shell='true'] #layers-section,
+body[data-editor-dock-shell='true'] #layers-section > .sidebar-section-body,
+body[data-editor-dock-shell='true'] #layers-section #layers {
+  overflow: visible;
+}
+
 body[data-editor-dock-shell='true'] #layers-section #layers {
   width: 100%;
   gap: 8px;
@@ -864,6 +898,8 @@ body[data-editor-dock-shell='true'] #layers-section .layer-info-button {
 body[data-editor-dock-shell='true'] #layers-section .layer-info-button {
   width: 40px;
   min-width: 40px;
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif !important;
+  font-size: 18px;
 }
 
 body[data-editor-dock-shell='true'] #layers-section .layer-btn-summary,
@@ -1290,7 +1326,7 @@ body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-contai
   }
 
   body[data-editor-dock-shell='true'] .editor-shell-action-grid {
-    grid-template-columns: repeat(3, minmax(58px, 1fr));
+    grid-template-columns: repeat(4, minmax(58px, 1fr));
   }
 
   body[data-editor-dock-shell='true'] .editor-music-strip {
@@ -1311,7 +1347,7 @@ body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-contai
 
 @media (max-width: 930px) {
   body[data-editor-dock-shell='true'] .editor-shell-tools {
-    grid-template-columns: repeat(5, minmax(38px, 1fr));
+    grid-template-columns: repeat(4, minmax(34px, 1fr)) 10px minmax(34px, 1fr);
   }
 
   body[data-editor-dock-shell='true'] .editor-shell-top {

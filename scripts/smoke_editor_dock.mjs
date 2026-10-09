@@ -806,12 +806,12 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
   assert.deepEqual(
     await page.locator('#editor-share-popover [data-editor-share-label]').allTextContents(),
-    ['Wamp-O-Gram', 'Copy Room Link', 'Collect Room', 'Version History'],
+    ['Wamp-O-Gram', 'Copy Room Link'],
   );
-  assert.equal(await page.locator('#editor-share-popover .editor-share-icon').count(), 4);
+  assert.equal(await page.locator('#editor-share-popover .editor-share-icon').count(), 2);
   const shareColors = await page.locator('#editor-share-popover [data-editor-share-action]')
     .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).backgroundColor));
-  assert.equal(new Set(shareColors).size, 4);
+  assert.equal(new Set(shareColors).size, 2);
   await page.screenshot({ path: path.join(viewportOutputDir, 'share-popover.png') });
   await page.evaluate(() => {
     document.getElementById('btn-mint-room')?.classList.add('hidden');
@@ -821,7 +821,6 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
     document.querySelector('[data-editor-share-action="collect"] [data-editor-share-label]')?.textContent?.trim()
       === 'Refresh Room Metadata'
   ));
-  assert.equal(await page.locator('[data-editor-share-action="collect"] .editor-share-icon').count(), 1);
   assert.equal(
     await page.locator('[data-editor-share-action="collect"]').isDisabled(),
     await page.locator('#btn-refresh-room-metadata').isDisabled(),
@@ -889,7 +888,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.ok(Math.abs(layerLayout.labelTop - layerLayout.rowTop) <= 12, 'Layers label should align with the layer controls');
   assert.ok(Math.abs(layerLayout.bodyWidth - layerLayout.rowWidth) <= 1, 'Layer rows should fill their control column');
   assert.ok(layerLayout.buttonHeight >= 44 && layerLayout.infoHeight >= 44, 'Layer controls should remain chunky');
-  assert.ok(Math.abs(layerLayout.bodyWidth - layerLayout.guidesWidth) <= 1, 'See Layers should fill the control column');
+  assert.ok(Math.abs(layerLayout.bodyWidth - layerLayout.guidesWidth) <= 1, 'Indicate Layers should fill the control column');
   assert.match(layerLayout.labelFont, /IBM Plex Mono/i);
   assert.match(layerLayout.summaryFont, /IBM Plex Mono/i);
 
