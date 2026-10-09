@@ -8,7 +8,7 @@ Continue the active goal until **2026-10-09 05:00 America/New_York / 09:00 UTC**
 - [x] Add the golden cassette, shared editor/Worker/agent limits and goal-neutral personal pickup behavior. Cache found rooms once per authenticated session; show ghosted found songs, browse/profile count and found-cell map marking.
 - [x] Implement bounded server-issued sessions, guest-local recovery and sign-in claim; award five player XP for at most ten new finds per UTC day and first/ten/hundred-find badges. Preserve existing collect goals, scores and ranked traces.
 - [x] Verify retries, guest/account handoff, ownership/version/privacy/limits and ordinary/Expanded Room desktop/touch play and authoring; run quality, native and inspected installed-client checks.
-- [ ] Save/push/attach a tested stacked draft with a release receipt, leaving master ticks/count tied to delivery, then advance to the next checklist item.
+- [x] Save/push/attach a tested stacked draft with a release receipt, leaving master ticks/count tied to delivery, then advance to the next checklist item. Saved source `5d167d72` / [draft PR #84](https://github.com/songadaymann/wamp/pull/84) is pushed and attached.
 
 Evidence: `/tmp/wamp-lost-song-2026-10-08/`. A new catalog sprite means coordinated map-renderer delivery will be required after review; migration and API/Pages also need a release receipt. Give existing builders a clear placement nudge; do not seed production rooms overnight.
 
