@@ -37,6 +37,7 @@ export interface ProfileStatsSummary {
   totalScore: number;
   totalDeaths: number;
   totalCollectibles: number;
+  lostSongsFound?: number;
   totalEnemiesDefeated: number;
   totalCheckpoints: number;
   totalRoomsPublished: number;

@@ -62,6 +62,25 @@ describe('editor edit runtime document contracts', () => {
     editorState.selectedObjectId = null;
   });
 
+  it('limits Lost Song to one main-layer object during a live batch, with Undo and read-only parity', () => {
+    const { runtime, host, setEditable } = createHarness(createRoom());
+    editorState.selectedObjectId = 'lost_song';
+    editorState.activeLayer = 'background';
+    expect(runtime.handleObjectPlace(64, 64, 4, 4)).toBeNull();
+    editorState.activeLayer = 'terrain';
+    runtime.beginObjectBatch(true);
+    expect(runtime.handleObjectPlace(64, 64, 4, 4)?.id).toBe('lost_song');
+    runtime.handleObjectPlace(64, 64, 4, 4);
+    runtime.handleObjectPlace(80, 64, 5, 4);
+    runtime.commitObjectBatch();
+    expect(host.getPlacedObjects()).toHaveLength(1);
+    runtime.undo(); expect(host.getPlacedObjects()).toHaveLength(0);
+    runtime.redo(); expect(host.getPlacedObjects()).toHaveLength(1);
+    runtime.undo(); setEditable(false);
+    expect(runtime.handleObjectPlace(80, 64, 5, 4)).toBeNull();
+    expect(host.getPlacedObjects()).toHaveLength(0);
+  });
+
   it('persists opted-in pits, blocks read-only changes, and resets them off', () => {
     const { runtime, setEditable } = createHarness(createRoom());
     runtime.setRoomPitsAreDeadly(false);

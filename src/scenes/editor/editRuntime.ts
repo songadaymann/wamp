@@ -1,4 +1,5 @@
 import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
+import { LOST_SONG_OBJECT_ID } from '../../lostSongs/model';
 import { normalizePlayerHearts, type PlayerHearts } from '../../player/hearts';
 import Phaser from 'phaser';
 import {
@@ -2005,6 +2006,10 @@ export class EditorEditRuntime {
     };
 
     const previous = this.objectBatchNext ?? this.clonePlacedObjects();
+    if (objectConfig.id === LOST_SONG_OBJECT_ID && editorState.activeLayer !== 'terrain') {
+      this.host.updatePersistenceStatus('Lost Song uses the main solid layer so explorers can pick it up.');
+      return null;
+    }
     const targetCell = createPlacedObjectAnchorCell(tileX, tileY, editorState.activeLayer);
     const conflict = findConflictingPlacedObjectAtAnchorCell(previous, targetCell, placed);
     if (
@@ -2013,6 +2018,11 @@ export class EditorEditRuntime {
       conflict.placed.facing === placed.facing
     ) {
       return conflict.placed;
+    }
+
+    if (objectConfig.id === LOST_SONG_OBJECT_ID && previous.some(object => object.id === LOST_SONG_OBJECT_ID)) {
+      this.host.updatePersistenceStatus('Only one Lost Song can be hidden in each room cell.');
+      return null;
     }
 
     const next = conflict

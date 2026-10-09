@@ -4029,6 +4029,8 @@ The timing constants (lines 105-114) are also module-level, so they need per-liv
 
 ### F144: Idea: World collectathon: one hidden 'Lost Song' per room, tracked across the whole world
 
+- **Status:** local candidate ready 2026-10-08, stacked on F155; morning review and coordinated migration/API/map/Pages release pending. Master remains unticked.
+
 - **Area:** Gameplay feel & new gameplay ideas
 - **Type:** idea · **impact:** medium · **effort:** medium
 

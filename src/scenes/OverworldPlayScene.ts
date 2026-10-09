@@ -1,4 +1,6 @@
 import { OverworldGhostRaceController } from './overworld/ghostRace';
+import { OverworldLostSongController, type LostSongPlayContext } from './overworld/lostSongs';
+import { getLostSongService } from '../lostSongs/service';
 import { supportsGhostRace } from '../runs/ghostRace';
 import Phaser from 'phaser';
 import { getPlayableMaximumHearts } from '../player/hearts';
@@ -570,6 +572,7 @@ export class OverworldPlayScene extends Phaser.Scene {
   private readonly selectionController: OverworldSelectionController;
   private readonly hudStateController: OverworldHudStateController;
   private readonly liveObjectController: OverworldLiveObjectController<RoomEdgeWall>;
+  private readonly lostSongController: OverworldLostSongController;
   private readonly signController: OverworldSignController<RoomEdgeWall>;
   private readonly portalObjectController: OverworldPortalObjectController<RoomEdgeWall>;
   private readonly specialTilesController: OverworldSpecialTilesController<LoadedRoomObject, RoomEdgeWall>;
@@ -742,6 +745,14 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.syncBackdropCameraIgnores();
       },
     });
+    this.lostSongController = new OverworldLostSongController({
+      getContext: roomId => this.getLostSongPlayContext(roomId),
+      showStatus: message => this.showTransientStatus(message),
+      onFoundChanged: () => {
+        this.liveObjectController?.syncLostSongPresentation();
+        this.roomCellController?.redraw();
+      },
+    });
     this.liveObjectController = new OverworldLiveObjectController({
       scene: this,
       settings: {
@@ -807,6 +818,8 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.heldKeyCount += 1;
       },
       onHealingCollected: () => this.playerHealthController.heal(),
+      onLostSongCollected: roomId => this.lostSongController.collect(roomId),
+      isLostSongGhosted: roomId => this.lostSongController.isGhosted(roomId),
       onRespawnCheckpointTouched: checkpoint => { this.respawnCheckpointController.activate(checkpoint); },
       isRespawnCheckpointReached: (roomId, instanceId) => this.respawnCheckpointController.isObjectReached(roomId, instanceId),
       tryConsumeHeldKey: () => {
@@ -1417,6 +1430,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getMode: () => this.mode,
       isRoomInActiveCourse: (coordinates) => this.isRoomInActiveCourse(coordinates),
       getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
+      hasFoundLostSong: coordinates => !getActiveWorldId() && getLostSongService().hasFound(roomIdFromCoordinates(coordinates)),
     });
     this.goalMarkerController = new OverworldGoalMarkerController({
       scene: this,
@@ -2329,6 +2343,7 @@ export class OverworldPlayScene extends Phaser.Scene {
 
     this.gridOverlayController.create();
     this.roomCellController.create();
+    this.lostSongController.start();
     this.browseOverlayController.create();
     this.loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Loading world...', {
       fontFamily: 'Courier New',
@@ -2630,6 +2645,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         worldTileSharedBudgetConsumedMs,
       );
     } finally {
+      if (this.lostSongController.update()) this.liveObjectController.syncLostSongPresentation();
       this.ghostRaceController.update();
       this.recordPerformanceAdvisorFrame(
         criticalUpdateMs ?? Math.max(
@@ -2640,6 +2656,27 @@ export class OverworldPlayScene extends Phaser.Scene {
       );
       profiler?.endFrame(this.buildMobilePerformanceContext());
     }
+  }
+
+  private getLostSongPlayContext(roomId = roomIdFromCoordinates(this.currentRoomCoordinates)): LostSongPlayContext | null {
+    if (this.mode !== 'play' || !this.playerBody || this.gameFeelController.isDeathPending()) return null;
+    const coordinates = parseRoomId(roomId);
+    if (!coordinates) return null;
+    const room = this.getRoomSnapshotViewForCoordinates(coordinates);
+    if (!room?.placedObjects.some(object => object.id === 'lost_song')) return null;
+    const origin = this.getRoomOrigin(coordinates), course = this.activeCourseRun;
+    const summary = this.roomSummariesById.get(roomId);
+    const userId = getAuthDebugState().user?.id ?? null;
+    return {
+      target: { roomId, roomVersion: room.version,
+        ...(course?.expandedRoomId && course.expandedRoomVersion ? {
+          expandedRoomId: course.expandedRoomId, expandedRoomVersion: course.expandedRoomVersion,
+        } : {}) },
+      practice: Boolean(getActiveWorldId()) || room.status !== 'published'
+        || Boolean(course && course.course.status !== 'published')
+        || Boolean(userId && summary?.creatorUserId === userId),
+      position: { x: this.playerBody.center.x - origin.x, y: this.playerBody.center.y - origin.y },
+    };
   }
 
   private updateRoomLighting(): void {
@@ -6373,6 +6410,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.gridOverlayController.destroy();
     this.browseOverlayController.destroy();
     this.roomCellController.destroy();
+    this.lostSongController.destroy();
     this.presenceOverlayController.destroy();
   };
 

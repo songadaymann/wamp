@@ -1,4 +1,5 @@
 import type { AuthUser } from '../../../auth/model';
+import { getLostSongPlacementError } from '../../../lostSongs/model';
 import type { PrincipalKind, RequestAuthSource } from '../../../agents/model';
 import {
   cloneRoomSnapshot,
@@ -887,6 +888,8 @@ export async function saveDraft(
   options: RoomMutationOptions = {},
 ): Promise<RoomRecord> {
   const viewerUserId = actor.ownerUser?.id ?? null;
+  const lostSongError = getLostSongPlacementError(incomingRoom.placedObjects);
+  if (lostSongError) throw new HttpError(400, lostSongError);
   const viewerWalletAddress = actor.ownerUser?.walletAddress ?? null;
   const existing = await loadRoomRecordForMutation(
     env,

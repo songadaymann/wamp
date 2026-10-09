@@ -6,6 +6,8 @@ export function isHealingCollectible(objectId: string): boolean {
 
 export function getCollectibleScoreValue(objectId: string): number {
   switch (objectId) {
+    case 'lost_song':
+      return 0;
     case 'gem':
     case 'blue_gem':
     case 'orange_gem':

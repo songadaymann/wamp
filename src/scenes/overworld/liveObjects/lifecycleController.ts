@@ -119,7 +119,7 @@ export class LiveObjectLifecycleController<TEdgeWall = unknown> {
         npcFriendlyFire: normalizeNpcFriendlyFire(placedObject.npcFriendlyFire),
         npcName: getPlacedNpcName(placedObject, config.name),
         npcDefeatMode: getPlacedNpcDefeatMode(placedObject),
-        countsTowardGoals: true,
+        countsTowardGoals: config.countsTowardGoals !== false,
       });
       if (liveObject) {
         loadedRoom.liveObjects.push(liveObject);

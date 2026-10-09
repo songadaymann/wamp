@@ -113,6 +113,16 @@ describe('room draft command tiles', () => {
 });
 
 describe('room draft command objects and goals', () => {
+  it('enforces one direct main-layer Lost Song per cell in agent commands', () => {
+    const place = { type: 'place_object', objectId: 'lost_song', tileX: 1, tileY: 1 };
+    expect(applyRoomDraftCommands(blankRoom(), normalize([place]).commands).snapshot.placedObjects[0].id).toBe('lost_song');
+    expect(() => applyRoomDraftCommands(blankRoom(), normalize([place, { ...place, tileX: 2 }]).commands)).toThrow(/Only one Lost Song/);
+    expect(() => applyRoomDraftCommands(blankRoom(), normalize([{ ...place, layer: 'background' }]).commands)).toThrow(/main solid layer/);
+    expect(() => applyRoomDraftCommands(blankRoom(), normalize([
+      { type: 'place_object', objectId: 'crate', tileX: 1, tileY: 1, containedObjectId: 'lost_song' },
+    ]).commands)).toThrow();
+  });
+
   it('supports bounded bosses for both enemy families and explicit removal', () => {
     const commands = normalize([
       { type: 'place_object', ref: 'boss', objectId: 'swordsman_ai', tileX: 1, tileY: 10, bossHitPoints: 3 },

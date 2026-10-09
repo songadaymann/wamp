@@ -156,6 +156,11 @@ export function renderProfileStats(
           iconSrc: '/assets/objects/coin_small_gold.png',
         },
         {
+          label: 'Lost Songs found',
+          value: String(stats.lostSongsFound ?? 0),
+          iconSrc: '/assets/objects/lost_song.png',
+        },
+        {
           label: 'Enemies',
           value: String(stats.totalEnemiesDefeated),
           iconSrc: '/assets/enemies/slime_red.png',

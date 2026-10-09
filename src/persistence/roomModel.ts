@@ -1,3 +1,4 @@
+import { getLostSongPlacementError } from '../lostSongs/model';
 import {
   LAYER_NAMES,
   ROOM_HEIGHT,
@@ -951,7 +952,7 @@ export function countRoomPlacedObjectsByCategory(
 export function getRoomPublishValidationError(
   room: Pick<RoomSnapshot, 'goal' | 'placedObjects'>,
 ): string | null {
-  return getRoomGoalPublishValidationError(room.goal, {
+  return getLostSongPlacementError(room.placedObjects) ?? getRoomGoalPublishValidationError(room.goal, {
     collectiblesPlaced: countRoomPlacedObjectsByCategory(room.placedObjects, 'collectible'),
     collectModeEnemyCount: room.placedObjects.filter(
       (placed) =>

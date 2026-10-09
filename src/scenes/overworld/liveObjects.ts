@@ -178,6 +178,8 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   showTransientStatus: (message: string) => void;
   handlePlayerDeath: (reason: string) => void;
   onHealingCollected?: () => boolean;
+  onLostSongCollected?: (roomId: string) => void;
+  isLostSongGhosted?: (roomId: string) => boolean;
   onEnemyDefeated: (event: {
     roomId: string;
     roomCoordinates: RoomCoordinates;
@@ -2481,6 +2483,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       addScore: this.options.addScore,
       onKeyCollected: this.options.onKeyCollected,
       onHealingCollected: this.options.onHealingCollected,
+      onLostSongCollected: this.options.onLostSongCollected,
       playRoomSfx: this.options.playRoomSfx,
       playCollectFx: this.options.playCollectFx,
       showTransientStatus: this.options.showTransientStatus,
@@ -2491,6 +2494,18 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       destroyLiveObjectInteractions: (target) =>
         this.lifecycleController.destroyInteractions(target),
     }, options);
+  }
+
+  syncLostSongPresentation(): void {
+    for (const room of this.options.getLoadedFullRooms()) {
+      const ghosted = this.options.isLostSongGhosted?.(room.room.id) ?? false;
+      for (const object of room.liveObjects) {
+        if (object.config.id !== 'lost_song') continue;
+        object.sprite.setAlpha(ghosted ? 0.25 : 1);
+        const body = object.sprite.body as ArcadeObjectBody | null;
+        if (body && object.sprite.getData('wampPreparedDormant') !== true) body.enable = !ghosted;
+      }
+    }
   }
 
   private emitLiveObjectRemovedForObject(

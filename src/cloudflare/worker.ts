@@ -10,6 +10,7 @@ import { handleActivityUnsubscribe } from './worker/activity/unsubscribe';
 import { runActivityEmails } from './worker/activity/emails';
 import { handleGuestReplay, purgeGuestReplays } from './worker/guestReplay/routes';
 import { handleBugReports, purgeBugReports } from './worker/bugReports/routes';
+import { handleLostSongs, purgeLostSongSessions } from './worker/lostSongs/routes';
 import { pruneRateLimitEvents } from './worker/core/rateLimit';
 import { handleAdminRequest } from './worker/admin/routes';
 import { handleAuthRequest } from './worker/auth/routes';
@@ -297,6 +298,10 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     handler: ({ request, url, env }) => handleGuestRunRequest(request, url, env),
   },
   {
+    methods: ['GET', 'POST'], pattern: { prefix: '/api/lost-songs/' }, auth: 'optional',
+    handler: ({ request, url, env }) => handleLostSongs(request, url, env),
+  },
+  {
     methods: ['POST'], pattern: '/api/me/claim-guest', auth: 'authenticated',
     handler: ({ request, env, executionContext }) => handleClaimGuestRequest(request, env, executionContext),
   },
@@ -326,6 +331,7 @@ export default {
     } else {
       await purgeGuestReplays(env);
       await purgeBugReports(env);
+      await purgeLostSongSessions(env);
       await pruneGuestRuns(env);
       await pruneRateLimitEvents(env);
     }

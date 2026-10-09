@@ -27,6 +27,7 @@ interface LiveObjectCollectionHost {
   addScore: (delta: number) => void;
   onKeyCollected: () => void;
   onHealingCollected?: () => boolean;
+  onLostSongCollected?: (roomId: string) => void;
   playRoomSfx: (cue: SfxCue, roomCoordinates: RoomCoordinates) => void;
   playCollectFx: (
     x: number,
@@ -57,6 +58,10 @@ export function collectLiveObject<TEdgeWall>(
 
   const collector = options.collector ?? 'player';
   if (collector === 'player' && host.canPlayerCollect?.() === false) return;
+  if (liveObject.config.id === 'lost_song') {
+    if (collector === 'player') host.onLostSongCollected?.(loadedRoom.room.id);
+    return;
+  }
   host.markCollectedObjectKey(liveObject.key);
   const scoreDelta = getCollectibleScoreValue(liveObject.config.id);
   if (collector === 'player') {

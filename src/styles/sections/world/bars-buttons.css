@@ -67,6 +67,13 @@
   text-overflow: ellipsis;
 }
 
+.world-lost-songs {
+  color: #f4cc55;
+  font-size: 9px;
+  white-space: nowrap;
+}
+body:not([data-app-mode='world']) #world-lost-songs { display: none; }
+
 #world-ghost-race-time {
   flex-shrink: 0;
 }

@@ -1,3 +1,21 @@
+## 2026-10-08 — Overnight checklist goal / F144 Lost Song hunt
+
+Original prompt: "ok i am ging to bed can you set a goal to make your way through the list until 5am"
+
+Continue the active goal until **2026-10-09 05:00 America/New_York / 09:00 UTC**. Canonical lane `codex/checkup-lost-song-2026-10-08` stacks on F155 `d657c3a6` / draft PR #83; preserve the F150/F249/F155 candidates and the dirty primary. Production remains unchanged pending morning review. No agents are authorized.
+
+- [x] Establish the one-per-cell authoring rule, published play proof, guest claiming and idempotent capped server rewards against F144. Expanded Room cells count separately; draft playtests and owned rooms do not award a find.
+- [x] Add the golden cassette, shared editor/Worker/agent limits and goal-neutral personal pickup behavior. Cache found rooms once per authenticated session; show ghosted found songs, browse/profile count and found-cell map marking.
+- [x] Implement bounded server-issued sessions, guest-local recovery and sign-in claim; award five player XP for at most ten new finds per UTC day and first/ten/hundred-find badges. Preserve existing collect goals, scores and ranked traces.
+- [x] Verify retries, guest/account handoff, ownership/version/privacy/limits and ordinary/Expanded Room desktop/touch play and authoring; run quality, native and inspected installed-client checks.
+- [ ] Save/push/attach a tested stacked draft with a release receipt, leaving master ticks/count tied to delivery, then advance to the next checklist item.
+
+Evidence: `/tmp/wamp-lost-song-2026-10-08/`. A new catalog sprite means coordinated map-renderer delivery will be required after review; migration and API/Pages also need a release receipt. Give existing builders a clear placement nudge; do not seed production rooms overnight.
+
+Full 379 files / 3,006 tests, lint, TypeScript, API/renderer bindings, build, DOM 959/234 and Worker safety pass. Eight native play cases, four desktop/phone builder cases and two profile cases pass with no page errors, including uncertain-reply retry, sign-in claim, own-room practice and actual ordinary/Expanded Room verified clears. The local account has exactly two receipts / ten song XP. The installed client is unchanged, its healthy screenshot is inspected and its only console error is the expected local presence 503. The strict browser leaf renderer and actual Pages PNG decoding include the cassette; the release gate correctly blocks the new `authoring-catalog-v1:843f81f7cad2c688` until matching imagery is prepared. Primary hashes match.
+
+V1 awards finds in Prime published rooms; other Worlds and draft playtests stay practice. Guest receipts expire after 30 days, account finds persist across room versions, proof sessions expire after 30 minutes, and identity/network/storage limits are bounded. Proof checks identity, published version, elapsed time and a plausible pickup segment; it is not full simulation verification. Guest storage failure gets truthful visit-only copy, claiming retries retain receipts, and account switches discard stale cache responses. Migration **0061**, API Worker, matching renderer/catalog imagery and Pages require coordinated review/release; no production write or seeding occurred. Retained diagnostics cover the corrected fixture goal type, native selector/origin/phone handoff and renderer test colour. Next F151 weekly Room Rush.
+
 ## 2026-10-08 — Overnight checklist goal / F155 boss mode
 
 Original prompt: "ok i am ging to bed can you set a goal to make your way through the list until 5am"

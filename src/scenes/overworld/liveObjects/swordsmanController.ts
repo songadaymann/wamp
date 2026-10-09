@@ -529,7 +529,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
     for (const candidate of loadedRoom.liveObjects) {
       if (
-        candidate.config.category !== 'collectible' ||
+        candidate.config.category !== 'collectible' || candidate.config.countsTowardGoals === false ||
         !candidate.sprite.active ||
         !candidate.sprite.body ||
         this.options.isCollectedObjectKey(candidate.key)

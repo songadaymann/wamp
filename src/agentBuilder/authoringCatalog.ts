@@ -127,6 +127,8 @@ export interface AuthoringObjectCatalogEntry {
   bodyWidth: number;
   bodyHeight: number;
   behavior: string;
+  maximumPerRoom: number | null;
+  countsTowardGoals: boolean;
   capabilities: AuthoringObjectCapabilities;
 }
 
@@ -254,9 +256,11 @@ function buildObjectCatalogEntry(config: GameObjectConfig): AuthoringObjectCatal
     bodyWidth: config.bodyWidth,
     bodyHeight: config.bodyHeight,
     behavior: config.behavior,
+    maximumPerRoom: config.id === 'lost_song' ? 1 : null,
+    countsTowardGoals: config.countsTowardGoals !== false,
     capabilities: {
       placeable: config.id !== 'spawn_point',
-      layers: LAYER_NAMES,
+      layers: config.id === 'lost_song' ? ['terrain'] : LAYER_NAMES,
       facing: {
         supported: Boolean(config.facingDirection),
         default: config.facingDirection ?? null,
@@ -422,6 +426,7 @@ export function renderAgentRoomAuthoringMarkdown(): string {
     '- Sword Hunter and police bosses: `bossHitPoints` (integer 3–10; `null` turns boss mode off). Supported by place_object and configure_object. Enabling a boss makes an existing invincible Sword Hunter defeatable; explicitly combining boss mode and invincible is rejected.',
     '- NPC: `npcMode`, `npcPushable`, `npcCanJumpFall`, `npcPlayerCollision`, `npcFriendlyFire`, `npcName`, `npcDefeatMode`.',
     '- Unsupported fields are rejected; they are never silently discarded.',
+    '- Lost Song: at most one `lost_song` per room cell, including each Expanded Room cell. Place it directly, never in containers. It does not contribute to collect goals or room score; explorers find it once per room across versions. Own-room finds do not count.',
     '',
     '## Backgrounds',
     '',

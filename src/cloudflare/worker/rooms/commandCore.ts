@@ -24,6 +24,7 @@ import {
   normalizeRoomBackground,
 } from '../../../backgrounds/model';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
+import { getLostSongPlacementError } from '../../../lostSongs/model';
 import { isBossEnemyObjectId, normalizeBossHitPoints, withPlacedBossHitPoints } from '../../../enemies/boss';
 import {
   DEFAULT_POLICE_BEHAVIOR_MODE,
@@ -1033,6 +1034,8 @@ export function applyRoomDraftCommands(baseSnapshot: RoomSnapshot, commands: rea
     }
   }
   const persistedIds = new Set(room.placedObjects.map((placed) => placed.instanceId));
+  const lostSongError = getLostSongPlacementError(room.placedObjects);
+  if (lostSongError) throw new HttpError(400, lostSongError);
   return {
     snapshot: room,
     commandRefs: Object.fromEntries(Array.from(refs).filter(([, instanceId]) => persistedIds.has(instanceId))),

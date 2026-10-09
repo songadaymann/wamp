@@ -52,4 +52,20 @@ describe('collections during a death beat', () => {
     expect(f.host.onHealingCollected).not.toHaveBeenCalled();
     expect(f.host.onEnemyCollectibleCollected).toHaveBeenCalledTimes(1);
   });
+
+  it('routes Lost Song to personal progress without goal, score, shared removal or destruction; enemies cannot take it', () => {
+    const f = fixture('lost_song'); f.revive();
+    const onLostSongCollected = vi.fn();
+    Object.assign(f.host, { onLostSongCollected });
+    f.collect('enemy');
+    expect(onLostSongCollected).not.toHaveBeenCalled();
+    f.collect();
+    expect(onLostSongCollected).toHaveBeenCalledExactlyOnceWith('0,0');
+    expect(f.room.liveObjects).toHaveLength(1);
+    expect(f.host.addScore).not.toHaveBeenCalled();
+    expect(f.host.markCollectedObjectKey).not.toHaveBeenCalled();
+    expect(f.host.onCollectibleCollected).not.toHaveBeenCalled();
+    expect(f.host.onLiveObjectRemoved).not.toHaveBeenCalled();
+    expect(f.host.scene.tweens.add).not.toHaveBeenCalled();
+  });
 });
