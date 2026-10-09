@@ -1,3 +1,7 @@
+## 2026-10-09 — F231 phrase audition and Arrange playhead delivered
+
+PR #103 / `bcb7af6a` is merged and live on https://wamp.land (Pages auto-build). Library phrases audition in place without committing; Arrange highlights the playing slot; the sequencer playhead follows swing and output latency; the desktop Arrange library is a usable tray again. 3,258 tests and headless desktop/phone/tablet/Expanded acceptance on the safety API pass. Master **70/215**; next **F220 remainder** (live per-instrument mixing, per-slot Arrange playback, desktop Close overlap). Receipt: [phrase audition](docs/review/wamp-phrase-audition-2026-10-09.md).
+
 ## 2026-10-09 — F227 phone music editor delivered
 
 PR #102 / `2215edb5` is merged and live on https://wamp.land via Pages `a243c20a`. Shared ordinary/Expanded 44–88px touch grid, pinned labels, compact Tools, safe pan/pinch, explicit ties/copy and one-stroke Undo. All 3,239 tests, exact-source/main hosted checks, guarded Pages-only smoke, 184 JS/CSS byte matches and five actual published phone/tablet/desktop cases pass. API/map services and both existing previews are preserved. Master **69/215**; next **F231 phrase audition and Arrange playhead**. Physical phone acceptance remains separate. Receipt: [phone music release](docs/review/wamp-phone-music-editor-2026-10-09.md); branch `codex/checkup-phone-music-delivery-2026-10-09`.
