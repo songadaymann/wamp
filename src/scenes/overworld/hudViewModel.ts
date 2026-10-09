@@ -58,6 +58,7 @@ interface SelectedSummaryViewData {
 }
 
 export interface BuildOverworldHudViewModelOptions {
+  editorPlaytest?: boolean;
   selectedState: SelectedCellState;
   selectedCoordinates: RoomCoordinates;
   selectedSummary: SelectedSummaryViewData | null;
@@ -472,7 +473,7 @@ export function buildOverworldHudViewModel(
     rateRoomButtonText: 'Rate Room',
     rateRoomButtonDisabled: false,
     zoomLabelText: `${zoom.toFixed(2)}x`,
-    playButtonText: activeCourseRun
+    playButtonText: options.editorPlaytest && mode === 'play' ? 'Back to Editor' : activeCourseRun
       ? 'Stop Expanded Room'
       : activeRoomRushRun
         ? 'Play Room'

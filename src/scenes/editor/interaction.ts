@@ -58,6 +58,9 @@ function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
 }
 
 interface EditorInteractionHost {
+  isPracticeTestPlacementActive?: () => boolean;
+  tryStartPracticeTestAt?: (tileX: number, tileY: number) => boolean;
+  cancelPracticeTestPlacement?: () => boolean;
   getNeighborRadius(): number;
   getGoalPlacementMode(): GoalPlacementMode;
   isMusicModeActive(): boolean;
@@ -455,7 +458,7 @@ export class EditorInteractionController {
     }
 
     const goalPlacementMode = this.host.getGoalPlacementMode();
-    if (goalPlacementMode) {
+    if (goalPlacementMode || this.host.isPracticeTestPlacementActive?.()) {
       this.cursorGraphics.fillStyle(RETRO_COLORS.frontier, 0.16);
       this.cursorGraphics.fillRect(tileX * TILE_SIZE, tileY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       this.cursorGraphics.lineStyle(2, RETRO_COLORS.frontier, 0.9);
@@ -651,6 +654,7 @@ export class EditorInteractionController {
       }
 
       if (pointer.rightButtonDown()) {
+        if (this.host.cancelPracticeTestPlacement?.()) return;
         const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
         if (this.host.removeGoalMarkerAt(worldPoint.x, worldPoint.y)) {
           return;
@@ -695,6 +699,7 @@ export class EditorInteractionController {
       }
 
       const goalPlacementMode = this.host.getGoalPlacementMode();
+      if (this.host.tryStartPracticeTestAt?.(tileX, tileY)) return;
       if (goalPlacementMode) {
         this.host.placeGoalMarker(tileX, tileY);
         return;
@@ -1134,7 +1139,7 @@ export class EditorInteractionController {
     if (this.pathBend) {
       this.touchAction = 'bend';
       this.updatePathBendPreview(pointer);
-    } else if (this.host.getGoalPlacementMode() || this.host.isClipboardPastePreviewActive()
+    } else if (this.host.getGoalPlacementMode() || this.host.isPracticeTestPlacementActive?.() || this.host.isClipboardPastePreviewActive()
       || editorState.activeTool === 'fill') {
       this.touchAction = 'tap';
     } else if (editorState.paletteMode === 'objects') {
@@ -1254,6 +1259,7 @@ export class EditorInteractionController {
     const tileX = Math.floor(world.x / TILE_SIZE);
     const tileY = Math.floor(world.y / TILE_SIZE);
     if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return;
+    if (this.host.tryStartPracticeTestAt?.(tileX, tileY)) return;
     if (this.host.getGoalPlacementMode()) {
       this.host.placeGoalMarker(tileX, tileY);
     } else if (editorState.activeTool === 'eraser' && this.host.removeGoalMarkerAt(world.x, world.y)) {

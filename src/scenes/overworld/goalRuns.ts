@@ -121,6 +121,7 @@ interface OverworldGoalRunControllerOptions {
     result: Exclude<RunResult, 'active'>
   ) => RankedRunVerificationTrace | null;
   clearVerificationTrace?: () => void;
+  onDraftGoalCompleted?: (run: GoalRunState) => void;
 }
 
 const NOOP_MUTATION_RESULT: GoalRunMutationResult = {
@@ -559,6 +560,7 @@ export class OverworldGoalRunController {
     runState.result = 'completed';
     runState.completionMessage = message;
     runState.pendingResult = 'completed';
+    if (runState.roomStatus === 'draft') this.options.onDraftGoalCompleted?.(runState);
     this.maybeSubmitGoalRunResult(runState);
     this.maybePromptGuestClaimForLocalClear(runState);
     return {

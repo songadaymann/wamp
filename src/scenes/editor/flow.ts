@@ -67,7 +67,7 @@ export class EditorSceneFlowController {
     this.publishNudgeTriggered = false;
   }
 
-  async startPlayMode(): Promise<void> {
+  async startPlayMode(practiceStart?: { x: number; y: number }): Promise<void> {
     this.host.cancelClipboardPastePreview();
     const coursePreview = this.host.getSelectedCoursePreviewForPlay();
     if (this.host.getRoomPermissions().canSaveDraft) {
@@ -87,6 +87,7 @@ export class EditorSceneFlowController {
       usePublishedCourseRoomVersion,
       coursePreview,
       courseEditedRoom: this.host.buildCourseEditedRoomData(),
+      practiceStart,
     });
 
     this.host.hideObjectInspectorUi();

@@ -2,6 +2,7 @@ import { EditorPhoneInspector } from './phoneInspector';
 import { bindBossInspector } from './uiBridge/bossInspector';
 import { EditorHistoryControls } from './historyControls';
 import { closeRoomTemplatePicker } from './roomTemplatePicker';
+import { closePublishChecklist, renderEditorClearCheck } from './clearCheckUi';
 import {
   ERASER_BRUSH_SIZES,
   RANDOMIZE_BRUSH_SIZES,
@@ -567,6 +568,8 @@ export class EditorUiBridge {
     }
 
     this.lastViewModel = viewModel;
+    this.doc.body.dataset.editorDraftCleared = String(viewModel.clearCheck?.cleared ?? false);
+    renderEditorClearCheck(this.doc, viewModel.clearCheck);
     this.historyControls.render(viewModel.canUndo, viewModel.canRedo);
     this.doc.getElementById('room-template-empty-hint')?.classList.toggle('hidden', !this.actions.isRoomLayoutEmpty?.());
     for (const id of ['btn-room-template-empty', 'btn-room-template-replace']) {
@@ -591,6 +594,7 @@ export class EditorUiBridge {
   }
 
   destroy(): void {
+    closePublishChecklist();
     closeRoomTemplatePicker();
     setHidden(this.elements.inspectorRoot, true);
     setHidden(this.elements.pressurePanel, true);
@@ -605,6 +609,11 @@ export class EditorUiBridge {
   }
 
   private bindListeners(): void {
+    for (const [id, action] of [['btn-clear-check-test', this.actions.onStartPlayMode], ['btn-clear-check-test-here', this.actions.onTestFromHere]] as const) {
+      const button = this.doc.getElementById(id);
+      const onClick = () => { if (this.actions.isActive()) { runtimeConfig.closePanels(); void action?.(); } };
+      button?.addEventListener('click', onClick); this.cleanupCallbacks.push(() => button?.removeEventListener('click', onClick));
+    }
     for (const id of ['btn-room-template-empty', 'btn-room-template-replace']) {
       const button = this.doc.getElementById(id);
       const onClick = () => { if (this.actions.isActive()) this.actions.onOpenRoomTemplates?.(); };

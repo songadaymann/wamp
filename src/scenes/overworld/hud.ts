@@ -622,6 +622,7 @@ export class OverworldHudBridge {
     this.setSaveStatusTone(viewModel.saveStatusTone);
     this.setText(this.bottomBarZoomEl, viewModel.bottomBarZoomText);
     this.setButton(this.playButton, viewModel.playButtonText, viewModel.playButtonDisabled);
+    this.setText(this.doc.getElementById('btn-mobile-world-stop'), viewModel.playButtonText === 'Back to Editor' ? 'Back to Editor' : 'Stop');
     this.setActive(this.playButton, viewModel.playButtonActive);
     this.setButton(this.shareButton, 'Share', viewModel.shareButtonDisabled);
     this.setActive(this.shareButton, viewModel.playButtonActive);

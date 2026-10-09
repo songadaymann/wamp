@@ -2890,6 +2890,11 @@ export class EditorEditRuntime {
     this.host.updateGoalUi();
   }
 
+  cancelGoalMarkerPlacement(): void {
+    this.goalPlacementMode = null;
+    this.host.updateGoalUi();
+  }
+
   clearGoalMarkers(): void {
     if (!this.guardEditable()) {
       return;

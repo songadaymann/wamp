@@ -14,6 +14,7 @@
 
 @import './modals/room-insights.css';
 @import './modals/room-templates.css';
+@import './modals/clear-check.css';
 @import './modals/first-publish.css';
 
 @import './modals/build-prompts.css';

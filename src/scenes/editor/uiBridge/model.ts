@@ -11,6 +11,7 @@ import type { NpcMode } from '../../../npcs/model';
 import type { EditorMarkerPlacementMode } from '../../../ui/setup/sceneBridge';
 import type { SmartBrushId, SmartStyleId } from '../../../autotiling/model';
 import type { SmartThemeId } from '../../../autotiling/registry';
+import type { ReadyToPublishChecklist } from '../clearCheck';
 
 export interface EditorGoalUiViewModel {
   goalTypeValue: string;
@@ -135,6 +136,7 @@ export interface EditorInspectorState {
 }
 
 export interface EditorUiViewModel {
+  clearCheck?: ReadyToPublishChecklist;
   roomTitleValue: string;
   roomCameraCentered?: boolean;
   roomPitsAreDeadly?: boolean;
@@ -200,6 +202,7 @@ export interface EditorUiBridgeActions {
   onUndo: () => void;
   onRedo: () => void;
   onRequestRender: () => void;
+  onTestFromHere?: () => void;
   onOpenRoomTemplates?: () => void;
   isRoomLayoutEmpty?: () => boolean;
   onDocumentKeyDown: (event: KeyboardEvent) => void;

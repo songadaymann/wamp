@@ -37,6 +37,8 @@ import {
 } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
 import { openRoomTemplatePicker } from './editor/roomTemplatePicker';
+import { buildReadyToPublishChecklist } from './editor/clearCheck';
+import { openPublishChecklist } from './editor/clearCheckUi';
 import { getGameSettings } from '../settings/userSettings';
 import { getSolidColorFromBackgroundValue } from '../backgrounds/model';
 import {
@@ -187,9 +189,11 @@ export class EditorScene extends Phaser.Scene {
   };
   private lightingPreviewCacheKey = '';
   private entrySource: 'world' | 'direct' = 'direct';
+  private testFromHerePlacement = false;
   private initialRoomSnapshot: RoomSnapshot | null = null;
   private forceInitialRoomSnapshot = false;
   private readonly handleWake = (): void => {
+    this.testFromHerePlacement = false;
     setAppMode('editor');
     delete document.body.dataset.editorCourseMode;
     editorState.isPlaying = false;
@@ -268,6 +272,7 @@ export class EditorScene extends Phaser.Scene {
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
+      if (this.cancelPracticeTestPlacement()) return;
       if (document.body.dataset.editorSpriteMode === 'true') {
         document.getElementById('btn-editor-sprite-close')?.click();
         return;
@@ -391,6 +396,13 @@ export class EditorScene extends Phaser.Scene {
     if (event.key === 'Enter') {
       event.preventDefault();
       event.stopPropagation();
+      if (event.shiftKey && !this.courseController.hasActiveCourseEdit()) {
+        const pointer = this.input.activePointer;
+        const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        this.testFromHerePlacement = true;
+        if (!this.tryStartPracticeTestAt(Math.floor(point.x / TILE_SIZE), Math.floor(point.y / TILE_SIZE))) this.cancelPracticeTestPlacement();
+        return;
+      }
       void this.startPlayMode();
       return;
     }
@@ -638,6 +650,9 @@ export class EditorScene extends Phaser.Scene {
     this.interactionController = new EditorInteractionController(this, {
       getNeighborRadius: () => EDITOR_NEIGHBOR_RADIUS,
       getGoalPlacementMode: () => this.goalPlacementMode as GoalPlacementMode,
+      isPracticeTestPlacementActive: () => this.testFromHerePlacement,
+      tryStartPracticeTestAt: (x, y) => this.tryStartPracticeTestAt(x, y),
+      cancelPracticeTestPlacement: () => this.cancelPracticeTestPlacement(),
       isMusicModeActive: () => this.musicModeActive,
       handleMusicPointerDown: (pointer) => this.handleMusicPointerDown(pointer),
       handleMusicPointerMove: (pointer) => this.handleMusicPointerMove(pointer),
@@ -934,8 +949,16 @@ export class EditorScene extends Phaser.Scene {
       onUndo: () => this.undoAction(),
       onRedo: () => this.redoAction(),
       onRequestRender: () => this.renderEditorUi(),
+      onTestFromHere: () => {
+        if (this.testFromHerePlacement) { this.cancelPracticeTestPlacement(); return; }
+        this.testFromHerePlacement = true;
+        this.editRuntime.cancelGoalMarkerPlacement();
+        this.hideObjectInspectorUi();
+        this.updatePersistenceStatus('Choose a practice start in the room. Escape cancels. This test does not count as a Clear Check.');
+        this.renderEditorUi();
+      },
       isRoomLayoutEmpty: () => !this.editRuntime.hasRoomLayoutContent(),
-      onOpenRoomTemplates: () => { void openRoomTemplatePicker({ getRuntime: () => this.editRuntime, isActive: () => this.scene.isActive(), onApplied: () => { this.hideObjectInspectorUi(); this.renderEditorUi(); } }); },
+      onOpenRoomTemplates: () => { this.cancelPracticeTestPlacement(); void openRoomTemplatePicker({ getRuntime: () => this.editRuntime, isActive: () => this.scene.isActive(), onApplied: () => { this.hideObjectInspectorUi(); this.renderEditorUi(); } }); },
       onDocumentKeyDown: this.handleDocumentKeyDown,
       onAuthStateChanged: () => {
         this.presenceController.refreshIdentity();
@@ -963,7 +986,7 @@ export class EditorScene extends Phaser.Scene {
       onSetRoomCameraCentered: (centered) => this.editRuntime.setRoomCameraMode(centered),
       onSetRoomPitsAreDeadly: (enabled) => this.editRuntime.setRoomPitsAreDeadly(enabled),
       onSetRoomPlayerHearts: (hearts) => this.editRuntime.setRoomPlayerHearts(hearts),
-      onSelectTool: (tool) => this.toolController.selectTool(tool),
+      onSelectTool: (tool) => { this.testFromHerePlacement = false; this.toolController.selectTool(tool); },
       onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
       onClearAllTiles: () => this.toolController.clearAllTiles(),
       onClearAllObjects: () => this.toolController.clearAllObjects(),
@@ -1100,6 +1123,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private resetRuntimeState(): void {
+    this.testFromHerePlacement = false;
     this.lightingController.reset();
     this.weatherController.reset();
     this.lightingPreviewStaticEmitters = {
@@ -1598,6 +1622,11 @@ export class EditorScene extends Phaser.Scene {
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
+    if (!this.courseController.hasActiveCourseEdit() && this.roomPermissions.canPublish) {
+      const choice = await openPublishChecklist(buildReadyToPublishChecklist(this.exportRoomSnapshot()));
+      if (choice === 'test') { await this.startPlayMode(); return null; }
+      if (choice !== 'publish' || !this.scene.isActive()) return null;
+    }
     const record = await this.persistenceController.publishRoom(successText);
     if (record?.published) {
       await this.musicWorkflow.handleRoomPublished();
@@ -1882,11 +1911,28 @@ export class EditorScene extends Phaser.Scene {
   // PLAY MODE
   // ══════════════════════════════════════
 
-  async startPlayMode(): Promise<void> {
+  private cancelPracticeTestPlacement(): boolean {
+    if (!this.testFromHerePlacement) return false;
+    this.testFromHerePlacement = false;
+    this.updatePersistenceStatus('Practice start cancelled.');
+    this.renderEditorUi();
+    return true;
+  }
+
+  private tryStartPracticeTestAt(tileX: number, tileY: number): boolean {
+    if (!this.testFromHerePlacement) return false;
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return false;
+    this.testFromHerePlacement = false;
+    void this.startPlayMode({ x: tileX * TILE_SIZE + TILE_SIZE / 2, y: tileY * TILE_SIZE + TILE_SIZE });
+    return true;
+  }
+
+  async startPlayMode(practiceStart?: { x: number; y: number }): Promise<void> {
+    this.testFromHerePlacement = false;
     if (this.musicPreviewState !== 'stopped') {
       this.stopRoomMusicPreview();
     }
-    await this.flowController.startPlayMode();
+    await this.flowController.startPlayMode(practiceStart);
   }
 
   async handlePublishNudgeAction(): Promise<void> {
@@ -1903,6 +1949,8 @@ export class EditorScene extends Phaser.Scene {
 
   private renderEditorUi(): void {
     this.chromeController.render();
+    const practice = document.getElementById('btn-clear-check-test-here');
+    if (practice) { practice.textContent = this.testFromHerePlacement ? 'Cancel practice start' : 'Test from Here'; practice.setAttribute('aria-pressed', String(this.testFromHerePlacement)); }
     this.renderMusicUi();
   }
 

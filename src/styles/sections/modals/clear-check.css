@@ -1,0 +1,14 @@
+.editor-clear-check { padding: 10px; margin: 8px 0 14px; border: 2px solid #6d6550; background: #fff3d9; color: #181818; }
+.clear-check-rows { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 9px; }
+.clear-check-rows li { display: flex; flex-direction: column; gap: 3px; }
+.clear-check-rows span, .editor-clear-check p { font-size: 12px; line-height: 1.4; margin: 0; }
+.clear-check-rows [data-state="ready"] strong { color: #367943; }
+.clear-check-rows [data-state="warning"] strong { color: #a7442e; }
+.clear-check-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.clear-check-actions button { min-height: 44px; }
+.publish-checklist-panel { border-radius: 0; background: #fff3d9; color: #181818; box-shadow: none; max-height: calc(100dvh - 24px); }
+.publish-checklist-panel .history-modal-header { flex-shrink: 0; }
+.publish-checklist-body { overflow-y: auto; min-height: 0; }
+.publish-checklist-panel .history-modal-title { color: #181818; }
+.publish-checklist-panel .bar-btn { min-height: 44px; }
+@media (max-width: 600px) { .publish-checklist-panel { width: calc(100vw - 20px); padding: 10px; } }

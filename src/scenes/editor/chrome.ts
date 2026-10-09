@@ -18,6 +18,7 @@ import {
 } from './viewModel';
 import type { EditorCourseController } from './courseController';
 import type { EditorStatusDetails } from './roomSession';
+import { buildReadyToPublishChecklist } from './clearCheck';
 
 interface EditorChromeControllerHost {
   getUiBridge(): EditorUiBridge | null;
@@ -56,6 +57,7 @@ export class EditorChromeController {
 
     uiBridge.render(
       buildEditorUiViewModel({
+        clearCheck: this.courseController.hasActiveCourseEdit() ? undefined : buildReadyToPublishChecklist(this.editRuntime.exportRoomSnapshot()),
         canUndo: this.host.getRoomPermissions().canSaveDraft && this.editRuntime.hasUndoHistory(),
         canRedo: this.host.getRoomPermissions().canSaveDraft && this.editRuntime.hasRedoHistory(),
         roomTitle: this.host.getRoomTitle(),

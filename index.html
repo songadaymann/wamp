@@ -932,6 +932,12 @@
           <div id="editor-feature-panels" class="editor-feature-panels">
             <div class="editor-feature-panel" id="goal-section" data-mobile-panel="goal">
               <div class="section-label">Goal</div>
+              <div id="editor-clear-check" class="editor-clear-check hidden">
+                <strong id="editor-clear-check-title">Ready to Publish</strong>
+                <ul id="editor-clear-check-rows" class="clear-check-rows"></ul>
+                <div class="clear-check-actions"><button id="btn-clear-check-test" class="bar-btn" type="button" title="Test Play (Enter / P)">Test from Start</button><button id="btn-clear-check-test-here" class="bar-btn" type="button">Test from Here</button></div>
+                <p>Checks are advisory. Your Clear Check is saved in this browser tab.</p>
+              </div>
               <label for="room-player-hearts">Player hearts</label>
               <select id="room-player-hearts" aria-describedby="room-hearts-description"><option value="1">1 (default)</option><option value="2">2</option><option value="3">3</option></select>
               <p id="room-hearts-description" class="goal-context-note">Heart pickups heal one. Respawning refills your hearts.</p>
@@ -1377,7 +1383,7 @@
           <button class="editor-shell-chunky-button" type="button" data-editor-shell-action="room" aria-controls="sidebar" aria-expanded="false"><span aria-hidden="true">&#9881;</span><span>Room</span></button>
           <button class="editor-shell-chunky-button" type="button" data-editor-shell-action="share" aria-controls="editor-share-popover" aria-expanded="false"><span aria-hidden="true">&#8593;</span><span>Share</span></button>
           <button class="editor-shell-chunky-button editor-shell-save-button" type="button" data-editor-shell-action="save" title="Save changed expanded room cells"><span aria-hidden="true">&#128190;</span><span>Save Cells</span></button>
-          <button class="editor-shell-chunky-button editor-shell-test-button" type="button" data-editor-shell-action="test"><span aria-hidden="true">&#9654;</span><span>Test</span></button>
+          <button class="editor-shell-chunky-button editor-shell-test-button" type="button" data-editor-shell-action="test" title="Test Play (Enter / P)"><span aria-hidden="true">&#9654;</span><span>Test</span></button>
           <button class="editor-shell-chunky-button editor-shell-publish-button" type="button" data-editor-shell-action="publish"><span aria-hidden="true">&#128640;</span><span>Publish</span></button>
         </div>
         <div id="editor-share-popover" class="editor-shell-popover editor-share-popover hidden" role="dialog" aria-label="Share room" aria-hidden="true">
@@ -2188,6 +2194,13 @@
         <input id="mobile-world-jump-input" class="goal-input" type="text" spellcheck="false" />
         <button id="btn-mobile-world-jump-go" class="bar-btn" type="button">Warp</button>
       </div>
+    </div>
+  </div>
+
+  <div id="publish-checklist-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel publish-checklist-panel" role="dialog" aria-modal="true" aria-labelledby="publish-checklist-title">
+      <div class="history-modal-header"><h2 id="publish-checklist-title" class="history-modal-title">Ready to Publish?</h2><button id="btn-publish-checklist-close" class="bar-btn" type="button">Close</button></div>
+      <div class="publish-checklist-body"><ul id="publish-checklist-rows" class="clear-check-rows"></ul><p id="publish-checklist-status" role="status"></p><div class="clear-check-actions"><button id="btn-publish-checklist-test" class="bar-btn" type="button">Test from Start</button><button id="btn-publish-checklist-confirm" class="bar-btn" type="button">Publish anyway</button></div></div>
     </div>
   </div>
 

@@ -6,6 +6,7 @@ import {
 } from '../../courses/model';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomRepository';
 import type { CourseEditedRoomData, OverworldPlaySceneData } from '../sceneData';
+import { getEditorDraftFingerprint } from './clearCheck';
 
 export function getSelectedCoursePreviewForPlay(
   draft: CourseSnapshot | null,
@@ -43,6 +44,7 @@ export interface BuildEditorPlayModeDataOptions {
   usePublishedCourseRoomVersion: boolean;
   coursePreview: CourseSnapshot | null;
   courseEditedRoom: CourseEditedRoomData | null;
+  practiceStart?: { x: number; y: number };
 }
 
 export function buildEditorPlayModeData(
@@ -56,18 +58,22 @@ export function buildEditorPlayModeData(
     courseEditedRoom,
   } = options;
   const startRoomRef = getCoursePreviewStartRoomRef(coursePreview, roomSnapshot);
+  const standalone = !coursePreview && !courseEditedRoom;
+  const usePublished = usePublishedCourseRoomVersion && !standalone;
+  const testedRoom = options.practiceStart && standalone ? { ...roomSnapshot, spawnPoint: { ...options.practiceStart } } : roomSnapshot;
   const playCoordinates = startRoomRef?.coordinates ?? roomCoordinates;
   return {
     centerCoordinates: { ...playCoordinates },
     roomCoordinates: { ...playCoordinates },
-    draftRoom: usePublishedCourseRoomVersion ? null : roomSnapshot,
-    publishedRoom: usePublishedCourseRoomVersion ? roomSnapshot : null,
+    draftRoom: usePublished ? null : testedRoom,
+    publishedRoom: usePublished ? roomSnapshot : null,
     invalidateRoomId: roomSnapshot.id,
-    forceRefreshAround: usePublishedCourseRoomVersion,
+    forceRefreshAround: usePublished,
     courseDraftPreviewId: coursePreview?.id ?? null,
     courseEditedRoom,
     editorPlaytestReturnTarget: {
       roomCoordinates: { ...roomCoordinates },
+      ...(standalone ? { clearCheck: { roomId: roomSnapshot.id, fingerprint: getEditorDraftFingerprint(roomSnapshot), eligible: !options.practiceStart } } : {}),
     },
     statusMessage: coursePreview ? 'Testing draft course.' : null,
     mode: 'play',

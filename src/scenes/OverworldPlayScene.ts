@@ -709,6 +709,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       clearVerificationTrace: () => {
         this.clearRankedRunTrace();
       },
+      onDraftGoalCompleted: run => { recordEditorDraftClear(this.editorPlaytestReturnTarget?.clearCheck, run); },
     });
     this.roomAudioController = new OverworldRoomAudioController({
       scene: this,
@@ -1336,7 +1337,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       setEditorPlaytestReturnTarget: (target) => {
         this.editorPlaytestReturnTarget = target
-          ? { roomCoordinates: { ...target.roomCoordinates } }
+          ? { ...target, roomCoordinates: { ...target.roomCoordinates }, clearCheck: target.clearCheck ? { ...target.clearCheck } : undefined }
           : null;
       },
       activateDraftCoursePreview: (snapshot, draftRoom) =>
@@ -1872,6 +1873,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       redrawGoalMarkers: () => this.redrawGoalMarkers(),
     });
     this.hudStateController = new OverworldHudStateController({
+      isEditorPlaytest: () => Boolean(this.editorPlaytestReturnTarget?.clearCheck),
       getMode: () => this.mode,
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
@@ -2106,11 +2108,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       },
       getEditorPlaytestReturnTarget: () =>
         this.editorPlaytestReturnTarget
-          ? { roomCoordinates: { ...this.editorPlaytestReturnTarget.roomCoordinates } }
+          ? { ...this.editorPlaytestReturnTarget, roomCoordinates: { ...this.editorPlaytestReturnTarget.roomCoordinates }, clearCheck: this.editorPlaytestReturnTarget.clearCheck ? { ...this.editorPlaytestReturnTarget.clearCheck } : undefined }
           : null,
       setEditorPlaytestReturnTarget: (target) => {
         this.editorPlaytestReturnTarget = target
-          ? { roomCoordinates: { ...target.roomCoordinates } }
+          ? { ...target, roomCoordinates: { ...target.roomCoordinates }, clearCheck: target.clearCheck ? { ...target.clearCheck } : undefined }
           : null;
       },
       getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
@@ -6967,3 +6969,4 @@ export class OverworldPlayScene extends Phaser.Scene {
     };
   }
 }
+import { recordEditorDraftClear } from './editor/clearCheck';

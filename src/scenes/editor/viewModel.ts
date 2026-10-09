@@ -5,8 +5,10 @@ import type { GoalPlacementMode } from './editRuntime';
 import type { EditorStatusDetails } from './roomSession';
 import type { EditorCourseUiState } from '../../ui/setup/sceneBridge';
 import { normalizePlayerHearts, type PlayerHearts } from '../../player/hearts';
+import type { ReadyToPublishChecklist } from './clearCheck';
 
 export interface BuildEditorUiViewModelOptions {
+  clearCheck?: ReadyToPublishChecklist;
   roomTitle: string | null;
   roomCameraCentered?: boolean;
   roomPitsAreDeadly?: boolean;
@@ -112,7 +114,8 @@ export function buildEditorUiViewModel(
     saveButtonTitle: 'Save Room Draft (Cmd/Ctrl+S)',
     saveDisabled: !roomPermissions.canSaveDraft,
     publishHidden: false,
-    publishButtonText: 'Publish Room',
+    clearCheck: options.clearCheck,
+    publishButtonText: options.clearCheck?.cleared ? 'Publish Room ✓' : 'Publish Room',
     publishButtonTitle: !roomPermissions.canPublish
       ? 'You cannot publish this room.'
       : publishValidationError ?? 'Publish Room (Cmd/Ctrl+Shift+P)',

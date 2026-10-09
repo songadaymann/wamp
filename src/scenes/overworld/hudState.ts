@@ -56,6 +56,7 @@ export interface SelectedRoomContext {
 }
 
 interface OverworldHudStateControllerHost {
+  isEditorPlaytest?: () => boolean;
   getMode(): OverworldMode;
   getSelectedCoordinates(): RoomCoordinates;
   getCellStateAt(coordinates: RoomCoordinates): SelectedCellState;
@@ -208,6 +209,7 @@ export class OverworldHudStateController {
 
     this.host.renderHudViewModel(
       buildOverworldHudViewModel({
+        editorPlaytest: this.host.isEditorPlaytest?.(),
         selectedState,
         selectedCoordinates,
         selectedSummary: this.selectedSummary

@@ -19,6 +19,7 @@ export interface CourseComposerReturnTarget {
 
 export interface EditorPlaytestReturnTarget {
   roomCoordinates: RoomCoordinates;
+  clearCheck?: { roomId: string; fingerprint: string; eligible: boolean };
 }
 
 export interface EditorSceneData {
