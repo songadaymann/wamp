@@ -4,9 +4,11 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 68 of 215 done.**
+**Progress: 69 of 215 done.**
 
 **October 9 release:** [All 18 overnight slices and both morning fixes are live](wamp-overnight-release-2026-10-09.md), preserving partner PR #99 and ghost archive PR #100. Five partial items remain unticked; native background-tab audio still needs a physical check.
+
+**October 9 phone music editor:** [F227 is live](wamp-phone-music-editor-2026-10-09.md), with larger note cells, safe touch pan/pinch and compact Tools. Next is F231 phrase audition and an Arrange playhead.
 
 ## How to use this file
 
@@ -290,7 +292,7 @@ The music system has a lovely, builder-friendly design. Playback and the editor 
 - [ ] **F222** Arranged rooms depend on other people's phrases by live ID: deletes and edits break or change them, and loading takes 26-28 API calls · medium impact · medium effort
 - [ ] **F229** Three audio engines run at once; music never pauses when the tab is hidden · medium impact · small effort — **partial delivery 2026-10-09** (`38ca52e5`, [PR #101](https://github.com/songadaymann/wamp/pull/101)). Unused Phaser audio context removed; hidden-signal music/SFX suspension, stale ownership guards and controlled real-audio tests pass. Actual native tab switching is unverified because the Mac is locked; shared buses, Safari/interruption policy remain. Combined 3,225 tests, native integration and coordinated live release pass.
 - [ ] **F226** Sequencer overlay redraws 24 text labels and deep-clones the song every frame · medium impact · small effort — **partial delivery 2026-10-09** (`38ca52e5`, [PR #101](https://github.com/songadaymann/wamp/pull/101)). Unchanged label setters and cheap playhead timing in both editors. Graphics command caching remains. Combined 3,225 tests, native integration and coordinated live release pass.
-- [ ] **F227** Phone sequencer cells are about 8-13 px, far too small to tap accurately · medium impact · medium effort
+- [x] **F227** Phone sequencer cells are about 8-13 px, far too small to tap accurately · medium impact · medium effort — **done 2026-10-09** (`2215edb5`, PR #102); shared ordinary/Expanded 44–88px touch grid, pinned labels, safe pan/pinch, compact Tools and one-stroke Undo. Live phone/tablet and desktop checks pass; physical hardware acceptance remains separate.
 - [ ] **F231** No way to audition a library phrase before placing it, and no playhead in Arrange mode · medium impact · small effort
 - [ ] **F228** Make neighboring rooms sound like one world: 'Match neighbors' plus muffled music bleed (G-007) · medium impact · medium effort
 - [ ] **F232** Keep the four instruments as separate layers at playback: instant mixing and music that reacts to gameplay · medium impact · medium effort
