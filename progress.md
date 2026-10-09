@@ -11,6 +11,8 @@ F220 already bounds retained caches. This slice does not cancel CPU work already
 
 Verification: 403 files / 3,198 tests, quality gates, four accepted native cases and inspected captures pass. Primary and published fixtures preserved. See `docs/review/wamp-music-mono-mute-2026-10-09.md`. Continue F226 label/playhead overhead.
 
+Saved source `f86698d1` in [draft PR #96](https://github.com/songadaymann/wamp/pull/96), pushed and attached. Continue F226.
+
 ## 2026-10-09 — Overnight checklist goal / F221 periodic music tails and hat choke
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-loop-tails-2026-10-09` stacks on F224 `42714ad6` / draft #94. Preserve primary and production. Evidence: `/tmp/wamp-music-loop-tails-2026-10-09/`.
