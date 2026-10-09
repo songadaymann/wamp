@@ -6,13 +6,15 @@ Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-cle
 - [x] Record only complete editor tests from the authored start, scope to the exact tested snapshot and room, invalidate on edits, recover on editor wake/reload and exclude cursor-start practice/other rooms/courses.
 - [x] Show compact Markers checks and an explicit pre-publish review, retain existing hard publish guards, improve Back to Editor/Test controls and add explicit cursor-start practice on desktop/phone.
 - [x] Verify meaningful receipt/safety/flow tests, native full-test return/edit/Undo/reload, failed/cursor tests, optional goals/starts and actual publish paths; finish quality gates and inspected unchanged installed-client capture.
-- [ ] Save/push/attach a tested stacked draft and receipt, leave master unticked and continue the checklist. No production release; inherited stack delivery requirements apply.
+- [x] Save/push/attach a tested stacked draft and receipt, leave master unticked and continue the checklist. No production release; inherited stack delivery requirements apply.
 
 Fact-check scope: first version is standalone, advisory and local to this browser tab. The proposed reward deferral must use server-verified published clears and is excluded from this UI flag. Terrain-marker warnings are advisory because an exit within goal proximity can still be reached from beside a small solid tile; existing missing-marker/count blockers remain shared and authoritative. Guest signup timing will be evaluated against current claim recovery before changing it.
 
 Verification: 390 files / 3,094 tests, lint, types, bindings and build pass. DOM 992/242, Worker safety and diff checks pass. Thirteen accepted native cases cover desktop clear/return/edit/Undo/save/reload/publication, failed timer, phone cursor practice, optional goal/automatic-start room publication through the existing suggested-name step, hard missing-exit guards, advisory hazard/terrain warnings, narrow/landscape review, Expanded isolation, phone joystick clear, Shift+Enter practice and Escape. All successful editor tests remain draft/local-only with no ranked request or attempt id. Screenshots and the unchanged installed-client capture are inspected; primary hashes match F163.
 
 Native testing exposed a published-refresh race: forceRefreshAround reset the injected unchanged draft. Standalone tests now preserve the exact draft; course published refresh stays intact, with regression assertions. The initial diagnostic is retained. Two optional-room runners stopped at the pre-existing name dialog; the corrected native runner accepts its suggested name and publishes. Preview-token 404s are existing; no page errors. Automatic guest claim popups are already suppressed by the current controller, so this candidate preserves deliberate sign-in and introduces no popup after a clear. The flag is advisory UI only and never gates server XP/rewards/ranks. No production change.
+
+Saved source `e1b73df1` in [draft PR #89](https://github.com/songadaymann/wamp/pull/89), pushed and attached. Continue F162 object drag-to-move first.
 
 ## 2026-10-09 — Overnight checklist goal / F163 starter room templates
 
