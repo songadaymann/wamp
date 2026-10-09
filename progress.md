@@ -1,3 +1,7 @@
+## 2026-10-09 — 05:00 morning handoff
+
+The authorized overnight window ends at 05:00 New York / 09:00 UTC. Eighteen draft PRs #81–#98 are pushed/attached; no merge or release. Latest quality gate: 405 files / 3,212 tests. Primary and remote main preserved. Review index, partial scopes and release prerequisites: `docs/review/wamp-overnight-2026-10-09.md`. Manual actual background-tab verification remains before releasing F229. Stop goal work at the deadline.
+
 ## 2026-10-09 — Overnight checklist goal / F229 hidden-tab audio first slice
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-hidden-tab-audio-2026-10-09` stacks on F226 / draft #97. Preserve primary and production. Evidence: `/tmp/wamp-hidden-tab-audio-2026-10-09/`.
@@ -10,6 +14,8 @@ Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-hid
 Shared buses, Safari audioSession and automatic visible interruption recovery remain separate optional work; no battery/unlock benchmark claim.
 
 Verification: 405 files / 3,212 tests, gates, two controlled-visibility/real-audio browser cases and native preview/Stop pass. Ordinary background-tab/window switching remains a manual pre-release check due automation focus emulation. See `docs/review/wamp-hidden-tab-audio-2026-10-09.md`. Save the draft and morning handoff; stop at 05:00.
+
+Saved source `be355ca3` in [draft PR #98](https://github.com/songadaymann/wamp/pull/98), pushed and attached. Morning handoff; stop at the deadline.
 
 ## 2026-10-09 — Overnight checklist goal / F226 music labels and playhead
 
