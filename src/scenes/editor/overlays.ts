@@ -20,6 +20,8 @@ import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import { getEditorToolHudLabel } from './editorToolSelection';
 import { drawDeadlyPitBoundary, drawEditorGrid } from './grid';
+import { drawRoomEdgeGuides } from './edgeGuideDrawing';
+import type { RoomEdgeGuide } from './edgeGuides';
 
 interface EditorOverlayHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
@@ -30,6 +32,13 @@ interface EditorOverlayHost {
 
 export class EditorOverlayController {
   private deathMapGraphics: Phaser.GameObjects.Graphics | null = null;
+  private edgeGuideGraphics: Phaser.GameObjects.Graphics | null = null;
+  get edgeGuideOverlay(): Phaser.GameObjects.Graphics | null { return this.edgeGuideGraphics; }
+
+  updateRoomEdgeGuides(guides: readonly RoomEdgeGuide[], zoom: number): void {
+    this.edgeGuideGraphics ??= this.scene.add.graphics().setDepth(103);
+    drawRoomEdgeGuides(this.edgeGuideGraphics, guides, zoom);
+  }
   private gridGraphics: Phaser.GameObjects.Graphics | null = null;
   private borderGraphics: Phaser.GameObjects.Graphics | null = null;
   private layerGuideGraphics: Phaser.GameObjects.Graphics | null = null;
@@ -74,6 +83,7 @@ export class EditorOverlayController {
   }
 
   reset(): void {
+    this.edgeGuideGraphics?.destroy(); this.edgeGuideGraphics = null;
     this.deathMapGraphics?.destroy(); this.deathMapGraphics = null;
     this.layerIndicatorText?.destroy();
     this.layerIndicatorText = null;

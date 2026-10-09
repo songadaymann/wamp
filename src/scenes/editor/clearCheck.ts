@@ -2,12 +2,13 @@ import { ROOM_HEIGHT, ROOM_WIDTH, TILE_SIZE, decodeTileDataValue, getSpecialTile
 import { cloneRoomSnapshot, getRoomPublishValidationError, type RoomSnapshot } from '../../persistence/roomModel';
 import { resolveGoalRunStartPoint } from '../overworld/goalRunStartGate';
 import { getTerrainTileCollisionProfile } from '../overworld/terrainCollision';
+import type { RoomEdgeSummary } from './edgeGuides';
 
 const STORAGE_KEY = 'wamp.editorClearChecks.v1';
 const MAX_RECEIPTS = 20;
 export interface EditorClearCheckBinding { roomId: string; fingerprint: string; eligible: boolean }
 interface ClearCheckReceipt { roomId: string; fingerprint: string }
-export interface ClearCheckRow { id: 'title' | 'start' | 'goal' | 'clear'; label: string; detail: string; state: 'ready' | 'optional' | 'pending' | 'warning' }
+export interface ClearCheckRow { id: 'title' | 'start' | 'goal' | 'clear' | 'connections'; label: string; detail: string; state: 'ready' | 'optional' | 'pending' | 'warning' }
 export interface ReadyToPublishChecklist { roomId: string; rows: ClearCheckRow[]; cleared: boolean; ready: boolean; publishError: string | null }
 export interface ClearCheckStorage { getItem(key: string): string | null; setItem(key: string, value: string): void }
 const fallbackReceipts: ClearCheckReceipt[] = [];
@@ -84,7 +85,7 @@ function startIsSafe(room: RoomSnapshot): boolean {
   return false;
 }
 
-export function buildReadyToPublishChecklist(room: RoomSnapshot, storage: ClearCheckStorage | undefined = getStorage()): ReadyToPublishChecklist {
+export function buildReadyToPublishChecklist(room: RoomSnapshot, storage: ClearCheckStorage | undefined = getStorage(), edges?: RoomEdgeSummary): ReadyToPublishChecklist {
   const publishError = getRoomPublishValidationError(room);
   const safeStart = startIsSafe(room); const cleared = hasEditorDraftClear(room, storage);
   const markers = room.goal?.type === 'reach_exit' ? [room.goal.exit]
@@ -97,5 +98,9 @@ export function buildReadyToPublishChecklist(room: RoomSnapshot, storage: ClearC
     { id: 'goal', label: 'Goal setup', detail: publishError ?? (blockedMarker ? 'A goal marker is inside terrain. Move it or test its reach.' : room.goal ? 'Goal markers and required objects are set.' : 'No goal: players can explore freely.'), state: publishError || blockedMarker ? 'warning' : room.goal ? 'ready' : 'optional' },
     { id: 'clear', label: 'Clear Check', detail: !room.goal ? 'Optional for a room without a goal.' : cleared ? 'You cleared this exact draft from its start.' : 'Test from the start and complete the goal.', state: !room.goal ? 'optional' : cleared ? 'ready' : 'pending' },
   ];
+  if (edges) rows.push({ id: 'connections', label: 'Room edges', state: 'optional', detail: edges.status === 'loading'
+    ? 'Checking neighboring openings…'
+    : edges.status === 'error' ? 'Neighbor previews are unavailable. Edge hints will return when previews load.'
+      : `${edges.connectedNeighbors} connected ${edges.connectedNeighbors === 1 ? 'neighbor' : 'neighbors'}. ${edges.openSides === 0 ? 'Edges are sealed; you can leave an opening or keep this room sealed. ' : ''}Green: matched opening. X: blocked. Blue: empty space. These are hints; test the route.` });
   return { roomId: room.id, rows, cleared, ready: rows.every(row => row.state === 'ready' || row.state === 'optional'), publishError };
 }

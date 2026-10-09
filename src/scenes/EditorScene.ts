@@ -109,6 +109,7 @@ import {
 } from '../weather/model';
 import { buildRoomWeatherSurfaceSegments, type RoomWeatherSurfaceSegment } from '../weather/surfaces';
 import { EditorDocumentCache } from './editor/documentCache';
+import { EditorEdgeGuideCache } from './editor/edgeGuides';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 import type { EditorShapeKind } from './editor/shapeTiles';
 import {
@@ -193,6 +194,8 @@ export class EditorScene extends Phaser.Scene {
   };
   private readonly lightingPreviewCache = new EditorDocumentCache<RoomStaticLightingEmitters>();
   private readonly weatherPreviewCache = new EditorDocumentCache<RoomWeatherSurfaceSegment[]>();
+  private readonly edgeGuides = new EditorEdgeGuideCache();
+  private edgeGuideZoom = -1;
   private entrySource: 'world' | 'direct' = 'direct';
   private testFromHerePlacement = false;
   private initialRoomSnapshot: RoomSnapshot | null = null;
@@ -643,6 +646,7 @@ export class EditorScene extends Phaser.Scene {
         getEntrySource: () => this.entrySource,
         getCourseEditorState: () => this.courseController.getCourseEditorState(),
         getSaveInFlight: () => this.saveInFlight,
+        getRoomEdgeSummary: () => this.edgeGuides.summary,
       },
     );
     this.presenceController = new EditorPresenceController({
@@ -750,6 +754,7 @@ export class EditorScene extends Phaser.Scene {
           this.interactionController.rectPreviewOverlay,
           this.objectMoveController.cursorOverlay,
           this.overlayController.borderOverlay,
+          this.overlayController.edgeGuideOverlay,
         ];
         for (const overlay of overlays) {
           if (overlay) {
@@ -1119,6 +1124,7 @@ export class EditorScene extends Phaser.Scene {
     this.updateLightingPreview();
     this.updateWeatherPreview();
     this.interactionController.tickSpray(delta);
+    this.updateRoomEdgeGuides();
     this.updateCursorHighlight();
     this.overlayController.updateLayerGuideOverlay();
     this.overlayController.updatePressurePlateOverlay((graphics) => {
@@ -1140,6 +1146,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private resetRuntimeState(): void {
+    this.edgeGuides.reset(); this.edgeGuideZoom = -1;
     this.objectMoveController.cancel();
     this.testFromHerePlacement = false;
     this.lightingController.reset();
@@ -1364,6 +1371,21 @@ export class EditorScene extends Phaser.Scene {
 
   private async refreshSurroundingRoomPreviews(): Promise<void> {
     await this.backgroundController.refreshSurroundingRoomPreviews(EDITOR_NEIGHBOR_RADIUS);
+  }
+
+  private updateRoomEdgeGuides(): void {
+    const changed = this.edgeGuides.sync(
+      !editorState.isPlaying && !this.musicModeActive && !this.courseController.hasActiveCourseEdit(),
+      this.editRuntime.documentRevision, this.backgroundController.publishedNeighborRevision,
+      this.backgroundController.publishedNeighborStatus,
+      () => this.exportRoomSnapshot(), this.backgroundController.publishedNeighborSnapshots,
+    );
+    if (changed || this.edgeGuideZoom !== this.cameras.main.zoom) {
+      this.edgeGuideZoom = this.cameras.main.zoom;
+      this.overlayController.updateRoomEdgeGuides(this.edgeGuides.guides, this.edgeGuideZoom);
+      this.syncBackgroundCameraIgnores();
+      if (changed) this.renderEditorUi();
+    }
   }
 
   private getLightingPreviewStaticEmitters(): RoomStaticLightingEmitters {
@@ -1639,7 +1661,8 @@ export class EditorScene extends Phaser.Scene {
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
     if (!this.courseController.hasActiveCourseEdit() && this.roomPermissions.canPublish) {
-      const choice = await openPublishChecklist(buildReadyToPublishChecklist(this.exportRoomSnapshot()));
+      this.updateRoomEdgeGuides();
+      const choice = await openPublishChecklist(buildReadyToPublishChecklist(this.exportRoomSnapshot(), undefined, this.edgeGuides.summary));
       if (choice === 'test') { await this.startPlayMode(); return null; }
       if (choice !== 'publish' || !this.scene.isActive()) return null;
     }
@@ -2203,6 +2226,7 @@ export class EditorScene extends Phaser.Scene {
   describeState(): Record<string, unknown> {
     return {
       scene: 'editor',
+      edgeGuides: { ...this.edgeGuides.summary, guides: this.edgeGuides.guides },
       roomId: this.roomId,
       coordinates: { ...this.roomCoordinates },
       source: this.entrySource,

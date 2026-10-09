@@ -19,6 +19,7 @@ import {
 import type { EditorCourseController } from './courseController';
 import type { EditorStatusDetails } from './roomSession';
 import { buildReadyToPublishChecklist } from './clearCheck';
+import type { RoomEdgeSummary } from './edgeGuides';
 
 interface EditorChromeControllerHost {
   getUiBridge(): EditorUiBridge | null;
@@ -32,6 +33,7 @@ interface EditorChromeControllerHost {
   getEntrySource(): 'world' | 'direct';
   getCourseEditorState(): EditorCourseUiState;
   getSaveInFlight(): boolean;
+  getRoomEdgeSummary?(): RoomEdgeSummary;
 }
 
 export class EditorChromeController {
@@ -57,7 +59,7 @@ export class EditorChromeController {
 
     uiBridge.render(
       buildEditorUiViewModel({
-        clearCheck: this.courseController.hasActiveCourseEdit() ? undefined : buildReadyToPublishChecklist(this.editRuntime.exportRoomSnapshot()),
+        clearCheck: this.courseController.hasActiveCourseEdit() ? undefined : buildReadyToPublishChecklist(this.editRuntime.exportRoomSnapshot(), undefined, this.host.getRoomEdgeSummary?.()),
         canUndo: this.host.getRoomPermissions().canSaveDraft && this.editRuntime.hasUndoHistory(),
         canRedo: this.host.getRoomPermissions().canSaveDraft && this.editRuntime.hasRedoHistory(),
         roomTitle: this.host.getRoomTitle(),

@@ -1,3 +1,19 @@
+## 2026-10-09 — Overnight checklist goal / F166 neighbor edge guides
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-neighbor-guides-2026-10-09` stacks on F165 `209e601a` / draft #91. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-neighbor-guides-2026-10-09/`.
+
+- [x] Derive conservative standing-player edge openings from gameplay collision profiles, one-way/platform semantics and static solid objects; show matched, blocked and empty-space states.
+- [x] Reuse already-loaded published neighbor snapshots, cache by neighbor identity and monotonic document revision, and recompute only after commits/loads. Loading failures must stay unknown.
+- [x] Draw visible edge guides in standalone editing and show advisory connection information; keep sealed rooms publishable and Expanded internal seams clear.
+- [x] Verify collision/clearance/version/cache tests, native desktop/phone matching/blocking/Undo/Redo/publication and Expanded seam isolation; quality gates and inspected unchanged installed-client capture.
+- [x] Save/push/attach tested stacked draft and receipt, leave master unticked and continue until the deadline. No production release.
+
+First slice targets standalone room edges. Expanded external-perimeter guides are deferred; internal seams are deliberately untouched. Hints describe static geometric clearance, not reachability through triggers or moving hazards.
+
+Verification: 397 files / 3,143 tests and quality gates, DOM 992/242, Worker safety and diff pass. Four completed native cases cover desktop/phone edge edits and exact Undo/Redo, local publication, sealed-room advisory publication and Expanded seam isolation; unchanged-frame guide exports stay zero. All responsive/gameplay screenshots inspected. Primary preserved and neighbor 197/42 remains its exact v1 snapshot. See `docs/review/wamp-neighbor-guides-2026-10-09.md` for first-slice and synthetic-course diagnostic limits.
+
+F167 remains pending: no model binding/provider or generation quota currently exists. Avoid adding an unconfigured public generation path. Continue F220’s verified small debounce/global-cache slice before the deadline; stems and slot scheduling remain larger work.
+
 ## 2026-10-09 — Overnight checklist goal / F165 editor history and previews
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-editor-history-2026-10-09` stacks on F162 `f546b106` / draft #90. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-editor-history-2026-10-09/`.

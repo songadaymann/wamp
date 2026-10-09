@@ -12,6 +12,16 @@ function storage(): ClearCheckStorage & { values: Map<string, string> } {
 const complete = { roomId: '6,9', roomStatus: 'draft', result: 'completed', qualificationState: 'qualified' };
 
 describe('advisory editor Clear Check', () => {
+  it('keeps sealed-room and unavailable-neighbor guidance advisory without changing publish eligibility', () => {
+    const snapshot = room(), store = storage(), base = buildReadyToPublishChecklist(snapshot, store);
+    for (const status of ['ready', 'loading', 'error'] as const) {
+      const check = buildReadyToPublishChecklist(snapshot, store, { connectedNeighbors: 0, openSides: 0, status });
+      expect(check.ready).toBe(base.ready); expect(check.publishError).toBe(base.publishError);
+      expect(check.rows.find(r => r.id === 'connections')?.state).toBe('optional');
+    }
+    expect(buildReadyToPublishChecklist(snapshot, store, { connectedNeighbors: 0, openSides: 0, status: 'ready' }).rows.at(-1)?.detail).toMatch(/keep this room sealed/);
+    expect(buildReadyToPublishChecklist(snapshot, store, { connectedNeighbors: 2, openSides: 2, status: 'ready' }).rows.at(-1)?.detail).toMatch(/2 connected neighbors/);
+  });
   it('records an authored-start editor clear and recovers only for its exact snapshot', () => {
     const snapshot = room(); const store = storage();
     const data = buildEditorPlayModeData({ roomCoordinates: snapshot.coordinates, roomSnapshot: snapshot, usePublishedCourseRoomVersion: true, coursePreview: null, courseEditedRoom: null });
