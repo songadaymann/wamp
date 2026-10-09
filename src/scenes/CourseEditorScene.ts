@@ -169,6 +169,8 @@ import {
   createEmptyCourseInspectorState,
 } from './courseEditor/inspectorUi';
 import { CourseEditorObjectInspectorController } from './courseEditor/objectInspector';
+import { ExpandedEdgeGuideController } from './courseEditor/expandedEdgeGuides';
+import { createWorldRepository } from '../persistence/worldRepository';
 import { selectCustomSpriteTileForCourseRoom } from './courseEditor/customSpriteTiles';
 import type { CustomSpriteDefinition } from '../customSprites/model';
 import { roomSnapshotUsesCustomSprite } from '../customSprites/usage';
@@ -234,6 +236,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private coursePublishing = false;
   private workspaceBounds: CourseWorkspaceBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   private roomSlices = new Map<string, CourseRoomSlice>();
+  private readonly edgeGuides = new ExpandedEdgeGuideController(this, createWorldRepository());
   private courseMarkerSprites: Phaser.GameObjects.Sprite[] = [];
   private courseMarkerLabels: Phaser.GameObjects.Text[] = [];
   private selectionGraphics: Phaser.GameObjects.Graphics | null = null;
@@ -889,6 +892,7 @@ export class CourseEditorScene extends Phaser.Scene {
     this.objectInspectorController.updateContainerOverlay(this.containerGraphics);
     this.musicPatternController.updateOverlay(this.musicModeActive && this.musicComposerMode === 'sequencer');
     this.musicWorkflow.updatePlaybackIndicators();
+    this.edgeGuides.sync(!this.loading && !editorState.isPlaying && !this.musicModeActive, this.roomSlices.values(), this.cameras.main.zoom);
   }
 
   getCourseEditorState(): EditorCourseUiState {
@@ -1853,6 +1857,7 @@ export class CourseEditorScene extends Phaser.Scene {
       this.createRoomSlice(roomRef);
     }
     this.syncCameraBounds();
+    void this.edgeGuides.load(record.draft.roomRefs.map((roomRef) => roomRef.coordinates));
   }
 
   private destroyWorkspace(): void {
@@ -1867,6 +1872,7 @@ export class CourseEditorScene extends Phaser.Scene {
       slice.label.destroy();
     }
     this.roomSlices.clear();
+    this.edgeGuides.reset();
     this.selectionGraphics?.clear();
     this.cursorGraphics?.clear();
     this.pressurePlateGraphics?.clear();
@@ -3725,6 +3731,7 @@ export class CourseEditorScene extends Phaser.Scene {
     this.pressurePlateGraphics = null;
     this.containerGraphics?.destroy();
     this.containerGraphics = null;
+    this.edgeGuides.destroy();
     this.uiBridge?.destroy();
     this.uiBridge = null;
     this.destroyWorkspace();

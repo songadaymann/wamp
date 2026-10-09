@@ -8,9 +8,11 @@ export type EdgeGuideState = 'connected' | 'blocked' | 'open-space';
 export interface RoomEdgeGuide { side: RoomEdgeSide; start: number; end: number; state: EdgeGuideState }
 export interface RoomEdgeSummary { connectedNeighbors: number; openSides: number; status: 'loading' | 'ready' | 'error' }
 type EdgeOpenings = Record<RoomEdgeSide, Uint8Array>;
-const SIDES: RoomEdgeSide[] = ['left', 'right', 'top', 'bottom'];
+export const ROOM_EDGE_SIDES: readonly RoomEdgeSide[] = ['left', 'right', 'top', 'bottom'];
+const SIDES = ROOM_EDGE_SIDES;
 const OPPOSITE: Record<RoomEdgeSide, RoomEdgeSide> = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' };
-const OFFSET = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
+export const ROOM_EDGE_OFFSET: Record<RoomEdgeSide, readonly [number, number]> = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
+const OFFSET = ROOM_EDGE_OFFSET;
 // Standing gameplay body. A narrow crouch-only route is intentionally not a green hint.
 
 export function getStandingEdgeOpenings(room: RoomSnapshot, side: RoomEdgeSide): Uint8Array {
@@ -64,7 +66,8 @@ export class EditorEdgeGuideCache {
   private ownEdges: EdgeOpenings | null = null;
   private neighbors = new WeakMap<RoomSnapshot, { version: number; updatedAt: string; edges: EdgeOpenings }>();
 
-  sync(enabled: boolean, ownRevision: number, neighborRevision: number, status: RoomEdgeSummary['status'], exportOwn: () => RoomSnapshot, neighbors: readonly RoomSnapshot[]): boolean {
+  /** `sides` limits guides to edges that face other rooms (an Expanded Room's outer perimeter). */
+  sync(enabled: boolean, ownRevision: number, neighborRevision: number, status: RoomEdgeSummary['status'], exportOwn: () => RoomSnapshot, neighbors: readonly RoomSnapshot[], sides: readonly RoomEdgeSide[] = SIDES): boolean {
     if (!enabled && !this.enabled) return false;
     if (enabled === this.enabled && ownRevision === this.ownRevision && neighborRevision === this.neighborRevision && status === this.summary.status) return false;
     const ownChanged = ownRevision !== this.ownRevision || !this.own;
@@ -73,7 +76,7 @@ export class EditorEdgeGuideCache {
     if (ownChanged) { this.own = exportOwn(); this.ownEdges = getEdges(this.own); this.ownRevision = ownRevision; }
     const own = this.own!, ownEdges = this.ownEdges!;
     this.guides = []; let connectedNeighbors = 0, openSides = 0;
-    for (const side of SIDES) {
+    for (const side of sides) {
       const mine = ownEdges[side]; if (mine.some(Boolean)) openSides++;
       if (status !== 'ready') continue;
       const [dx, dy] = OFFSET[side];
