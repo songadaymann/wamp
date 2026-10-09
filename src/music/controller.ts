@@ -38,6 +38,13 @@ import {
 } from './pattern';
 
 type TransitionMode = MusicTransitionMode;
+export type RoomMusicPlayheadInfo = {
+  audioCurrentTime: number | null;
+  transportStartTime: number;
+  patternStartTime: number | null;
+  loopDurationSec: number | null;
+  kind: RoomMusic['kind'] | null;
+};
 type PlaybackMode = 'idle' | 'editor-preview' | 'world-play';
 
 type ActiveLoopPlayback = {
@@ -542,6 +549,16 @@ export class RoomMusicController {
       { once: true },
     );
     void this.resumeAudioContext('preview-drum-cell');
+  }
+
+  getPlayheadInfo(): RoomMusicPlayheadInfo {
+    return {
+      audioCurrentTime: this.audioContext?.currentTime ?? null,
+      transportStartTime: this.transportStartTime,
+      patternStartTime: this.activePattern?.startTime ?? null,
+      loopDurationSec: this.activePattern?.loopDurationSec ?? null,
+      kind: this.currentArrangement?.kind ?? null,
+    };
   }
 
   getDebugState(): Record<string, unknown> {

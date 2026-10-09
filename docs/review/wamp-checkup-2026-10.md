@@ -287,7 +287,7 @@ The music system has a lovely, builder-friendly design. Playback and the editor 
 - [ ] **F225** Played room music is never freed; it is always stereo and still rendered when music volume is 0 · medium impact · small effort — **local candidate 2026-10-09**: F220 retention bounds plus centered mono buffers and muted load/render skipping with latest-target resumption. 3,198 tests and four accepted native cases pass; exact real upmix/primary/publication proof. Review/release pending.
 - [ ] **F222** Arranged rooms depend on other people's phrases by live ID: deletes and edits break or change them, and loading takes 26-28 API calls · medium impact · medium effort
 - [ ] **F229** Three audio engines run at once; music never pauses when the tab is hidden · medium impact · small effort
-- [ ] **F226** Sequencer overlay redraws 24 text labels and deep-clones the song every frame · medium impact · small effort
+- [ ] **F226** Sequencer overlay redraws 24 text labels and deep-clones the song every frame · medium impact · small effort — **local candidate 2026-10-09**: unchanged-label setter guards and cheap playhead timing in both editors. 3,204 tests and three native cases pass; stable playing frames make zero label mutations/full diagnostic snapshots. Graphics caching, review/release pending.
 - [ ] **F227** Phone sequencer cells are about 8-13 px, far too small to tap accurately · medium impact · medium effort
 - [ ] **F231** No way to audition a library phrase before placing it, and no playhead in Arrange mode · medium impact · small effort
 - [ ] **F228** Make neighboring rooms sound like one world: 'Match neighbors' plus muffled music bleed (G-007) · medium impact · medium effort

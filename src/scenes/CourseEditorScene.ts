@@ -587,7 +587,7 @@ export class CourseEditorScene extends Phaser.Scene {
       replaceLegacyRoomMusicWithPattern: () => this.musicWorkflow.commitLegacyRoomMusicPatternReplacement(),
       getWorkspaceOrigin: () => this.getSelectedSlice()?.origin ?? { x: 0, y: 0 },
       renderUi: () => this.renderUi(),
-      getMusicPlaybackDebugState: () => globalRoomMusicController.getDebugState(),
+      getMusicPlayheadInfo: () => globalRoomMusicController.getPlayheadInfo(),
       getMusicPreviewState: () => this.musicWorkflow.getPreviewState(),
       previewPatternCell: (pattern, instrumentId, row) =>
         globalRoomMusicController.previewPatternCell(pattern, instrumentId, row),

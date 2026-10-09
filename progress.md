@@ -1,3 +1,16 @@
+## 2026-10-09 — Overnight checklist goal / F226 music labels and playhead
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-label-playhead-2026-10-09` stacks on F225 / draft #96. Preserve primary and production. Evidence: `/tmp/wamp-music-label-playhead-2026-10-09/`.
+
+- [x] Update music label text/color/alpha only when their displayed values change.
+- [x] Read a lightweight playhead snapshot without cloning/serializing the arrangement in both editor hosts.
+- [x] Verify stable-frame counters, native tab/edit/history/resizing and Expanded editor behavior; inspect screenshots and run quality/preservation checks.
+- [x] Save/push/attach tested stacked draft/receipt, keep master unticked and continue until the deadline. No release.
+
+Graphics command caching remains optional separate work; this slice addresses label texture rebuilds and preview clone overhead.
+
+Verification: 404 files / 3,204 tests, gates and three native counter/history/responsive cases pass. All screenshots inspected; publications/primary preserved. See `docs/review/wamp-music-label-playhead-2026-10-09.md`. Continue F229 before the deadline.
+
 ## 2026-10-09 — Overnight checklist goal / F225 mono and muted music
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-mono-mute-2026-10-09` stacks on F221 `f587f8db` / draft #95. Preserve primary and production. Evidence: `/tmp/wamp-music-mono-mute-2026-10-09/`.

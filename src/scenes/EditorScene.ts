@@ -715,7 +715,7 @@ export class EditorScene extends Phaser.Scene {
       commitRoomMusic: (nextMusic) => this.musicWorkflow.commitRoomMusic(nextMusic),
       replaceLegacyRoomMusicWithPattern: () => this.musicWorkflow.commitLegacyRoomMusicPatternReplacement(),
       renderUi: () => this.renderEditorUi(),
-      getMusicPlaybackDebugState: () => globalRoomMusicController.getDebugState(),
+      getMusicPlayheadInfo: () => globalRoomMusicController.getPlayheadInfo(),
       getMusicPreviewState: () => this.musicWorkflow.getPreviewState(),
       previewPatternCell: (pattern, instrumentId, row) =>
         globalRoomMusicController.previewPatternCell(pattern, instrumentId, row),

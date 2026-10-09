@@ -216,3 +216,26 @@ describe('muted room music ownership', () => {
     expect(h.sources).toHaveLength(0); expect(h.context.createBuffer).not.toHaveBeenCalled();
   });
 });
+
+describe('lightweight music playhead info', () => {
+  it('returns idle fields without creating an audio context', () => {
+    const h = harness();
+    expect(h.controller.getPlayheadInfo()).toEqual({ audioCurrentTime: null, transportStartTime: 0, patternStartTime: null, loopDurationSec: null, kind: null });
+    expect(h.contextConstructor).not.toHaveBeenCalled();
+  });
+
+  it('reads exact timing without traversing the song or calling the diagnostic snapshot', async () => {
+    const h = harness(); await h.controller.playArrangement(music('pattern'), { mode: 'editor-preview', transition: 'immediate' });
+    h.context.currentTime = 1.234567;
+    const owner = h.controller as unknown as { currentArrangement: RoomMusic };
+    Object.defineProperty(owner.currentArrangement, 'tabs', { get() { throw new Error('deep song access'); } });
+    vi.spyOn(h.controller, 'getDebugState').mockImplementation(() => { throw new Error('diagnostic snapshot'); });
+    expect(h.controller.getPlayheadInfo()).toEqual({ audioCurrentTime: 1.234567, transportStartTime: 1.02, patternStartTime: 1.02, loopDurationSec: 4, kind: 'pattern' });
+  });
+
+  it('clears owned playback timing after Stop', async () => {
+    const h = harness(); await h.controller.playArrangement(music('pattern'), { mode: 'editor-preview' });
+    h.controller.stopArrangement({ mode: 'idle', transition: 'immediate', resetTransport: true });
+    expect(h.controller.getPlayheadInfo()).toEqual({ audioCurrentTime: 1, transportStartTime: 0, patternStartTime: null, loopDurationSec: null, kind: null });
+  });
+});
