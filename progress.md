@@ -1,3 +1,15 @@
+## 2026-10-09 — Overnight checklist goal / F224 room music transitions
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-transitions-2026-10-09` stacks on F220 `c2ba1572` / draft #93. Preserve primary and production. Evidence: `/tmp/wamp-music-transitions-2026-10-09/`.
+
+- [x] Use one transition plan for pattern, phrase and stem playback: fresh downbeat/fade-in, compatible phase-lock and short incompatible crossfade.
+- [x] Stop queued sources silently before they start, preserve fade envelopes, and avoid bar-delayed silent-room tails.
+- [x] Debounce music target changes across room crossings for 400 ms without changing gameplay room/camera/collision transitions; cancel on return, reset and mode exit.
+- [x] Verify meaningful scheduling/selection tests, real Web Audio with native room crossings and responsive/gameplay screenshots, quality gates and preservation evidence.
+- [x] Save/push/attach tested stacked draft and receipt, keep master unticked and continue until the deadline. No release.
+
+Verification: 402 files / 3,174 tests and quality gates, DOM 992/242, Worker safety and diff pass. Eight real-audio native cases, all inspected screenshots and unchanged fixture/primary proofs pass. See `docs/review/wamp-music-transitions-2026-10-09.md`. Continue F221 loop tails/hi-hat choking before the deadline.
+
 ## 2026-10-09 — Overnight checklist goal / F220 music preview and cache first slice
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-preview-2026-10-09` stacks on F166 `f24986bf` / draft #92. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-music-preview-2026-10-09/`.

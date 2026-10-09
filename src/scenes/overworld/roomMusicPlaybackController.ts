@@ -48,7 +48,7 @@ export interface RoomMusicPlaybackPort {
     music: RoomMusic,
     options: {
       mode: 'world-play';
-      transition: 'bar';
+      transition: 'room';
     },
   ): Promise<void> | void;
   stopArrangement(options: {
@@ -67,6 +67,8 @@ export interface OverworldRoomMusicPlaybackSyncInput {
 
 export class OverworldRoomMusicPlaybackController {
   private lastMode: OverworldMode | null = null;
+  private lastCoordinates: RoomCoordinates | null = null;
+  private pendingPlayback: { identity: string; sourceRoomId: string; musicKey: string | null; since: number } | null = null;
   private lastPlayback: { identity: string; sourceRoomId: string; musicKey: string | null } | null = null;
   private musicMetadata = new WeakMap<NonNullable<RoomSnapshotView['music']>, RoomMusicMetadata>();
   private expandedCandidates: {
@@ -78,6 +80,7 @@ export class OverworldRoomMusicPlaybackController {
   constructor(
     private readonly host: OverworldRoomMusicPlaybackHost,
     private readonly playback: RoomMusicPlaybackPort,
+    private readonly now: () => number = () => performance.now(),
   ) {}
 
   sync(input: OverworldRoomMusicPlaybackSyncInput): void {
@@ -88,6 +91,8 @@ export class OverworldRoomMusicPlaybackController {
 
       this.lastMode = input.mode;
       this.lastPlayback = null;
+      this.lastCoordinates = null;
+      this.pendingPlayback = null;
       this.stopImmediately();
       return;
     }
@@ -99,6 +104,10 @@ export class OverworldRoomMusicPlaybackController {
       return;
     }
 
+    const crossedRoom = this.lastCoordinates !== null && (
+      this.lastCoordinates.x !== input.currentRoomCoordinates.x || this.lastCoordinates.y !== input.currentRoomCoordinates.y
+    );
+    this.lastCoordinates = { ...input.currentRoomCoordinates };
     const playbackTarget = this.resolvePlaybackTarget(currentRoom, input.activeCourseRun);
     const metadata = this.getMusicMetadata(playbackTarget.music, playbackTarget.sourceRevision);
     if (
@@ -107,9 +116,28 @@ export class OverworldRoomMusicPlaybackController {
       && this.lastPlayback.sourceRoomId === playbackTarget.sourceRoomId
       && this.lastPlayback.musicKey === metadata.key
     ) {
+      this.pendingPlayback = null;
       return;
     }
 
+    if (this.lastMode === 'play' && this.lastPlayback && (crossedRoom || this.pendingPlayback)) {
+      const time = this.now();
+      if (
+        this.pendingPlayback?.identity !== playbackTarget.identity
+        || this.pendingPlayback.sourceRoomId !== playbackTarget.sourceRoomId
+        || this.pendingPlayback.musicKey !== metadata.key
+      ) {
+        this.pendingPlayback = {
+          identity: playbackTarget.identity,
+          sourceRoomId: playbackTarget.sourceRoomId,
+          musicKey: metadata.key,
+          since: time,
+        };
+      }
+      // Debounce only audio. Room collision, camera, goals and traversal still change immediately.
+      if (time - this.pendingPlayback.since < 400) return;
+    }
+    this.pendingPlayback = null;
     this.lastMode = 'play';
     this.lastPlayback = {
       identity: playbackTarget.identity,
@@ -118,8 +146,8 @@ export class OverworldRoomMusicPlaybackController {
     };
     if (metadata.empty) {
       this.playback.stopArrangement({
-        transition: 'bar',
-        fadeDurationSec: 0.18,
+        transition: 'immediate',
+        fadeDurationSec: 0.3,
         mode: 'world-play',
       });
       return;
@@ -127,13 +155,15 @@ export class OverworldRoomMusicPlaybackController {
 
     void this.playback.playArrangement(playbackTarget.music as RoomMusic, {
       mode: 'world-play',
-      transition: 'bar',
+      transition: 'room',
     });
   }
 
   reset(): void {
     this.lastMode = null;
     this.lastPlayback = null;
+    this.lastCoordinates = null;
+    this.pendingPlayback = null;
     this.musicMetadata = new WeakMap();
     this.expandedCandidates = null;
     this.stopImmediately();

@@ -281,7 +281,7 @@ The desktop editor is fast and polished. The gaps are safety nets (Undo buttons,
 The music system has a lovely, builder-friendly design. Playback and the editor need performance and polish fixes, especially on phones, and there are fun ideas for making music part of each room's identity.
 
 - [ ] **F220** Music editor re-renders the whole song on every note edit and keeps every version in memory · high impact · small effort — **partial local candidate 2026-10-09**: coalesced preview changes and a shared 16-clip/four-loop/50 MiB cache. 3,153 tests and three accepted native desktop/phone-controls/Expanded cases pass. Stems, Arrange slot playback and music layout fixes remain; review/release pending.
-- [ ] **F224** Room-to-room music transitions: mid-note starts, slow cross-tempo blends, and a 'ghost' room on fast crossings · medium impact · small effort
+- [ ] **F224** Room-to-room music transitions: mid-note starts, slow cross-tempo blends, and a 'ghost' room on fast crossings · medium impact · small effort — **local candidate 2026-10-09**: shared downbeat/compatible-bar transition, 400 ms music-only room stability, silent queued-source cancellation and tracked outgoing tails. 3,174 tests and eight real-audio/native cases pass; review/release pending.
 - [ ] **F221** Most room loops click at the seam, and open hi-hats pile up into hiss · medium impact · small effort
 - [ ] **F223** Entering a room builds its music on the main thread, causing a frame hitch at the doorway · medium impact · medium effort
 - [ ] **F225** Played room music is never freed; it is always stereo and still rendered when music volume is 0 · medium impact · small effort
