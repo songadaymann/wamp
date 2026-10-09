@@ -11,6 +11,8 @@ Graphics command caching remains optional separate work; this slice addresses la
 
 Verification: 404 files / 3,204 tests, gates and three native counter/history/responsive cases pass. All screenshots inspected; publications/primary preserved. See `docs/review/wamp-music-label-playhead-2026-10-09.md`. Continue F229 before the deadline.
 
+Saved source `c8461bc7` in [draft PR #97](https://github.com/songadaymann/wamp/pull/97), pushed and attached. Continue F229.
+
 ## 2026-10-09 — Overnight checklist goal / F225 mono and muted music
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-mono-mute-2026-10-09` stacks on F221 `f587f8db` / draft #95. Preserve primary and production. Evidence: `/tmp/wamp-music-mono-mute-2026-10-09/`.
