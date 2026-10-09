@@ -34,7 +34,7 @@ const trigger: RunVerificationTriggerResult = {
   previousBestElapsedMs: null, previousBestScore: null, pointAwardPotential: true,
 };
 const goal = { type: 'reach_exit', timeLimitMs: null, exit: null };
-const snapshot = { id: 'room', version: 1, goal, roomRefs: [] };
+const snapshot = { id: 'room', version: 1, goal, roomRefs: [], placedObjects: [] };
 const body = { result: 'completed', elapsedMs: 1000, deaths: 2, collectiblesCollected: 8, enemyCollectiblesCollected: 1, enemiesDefeated: 7, checkpointsReached: 6, verificationTrace: { fixture: true } };
 const derivedMetrics = { collectiblesCollected: 3, enemyCollectiblesCollected: 2, enemiesDefeated: 4, checkpointsReached: 5 };
 

@@ -15,6 +15,7 @@ for (const match of html.matchAll(/\bid\s*=\s*["']([^"']+)["']/g)) {
 }
 
 const requiredIdsByController = {
+  'CoopPressurePlates': ['pressure-plate-coop-row', 'pressure-plate-coop-checkbox'],
   'WeeklyRoomRush': ['btn-menu-room-rush', 'btn-room-rush-weekly', 'room-rush-weekly-summary', 'leaderboard-room-rush-winners',
     'room-rush-result-save-status', 'btn-room-rush-result-retry-save'],
   bugReporter: ['bug-report-modal', 'bug-report-form', 'bug-report-notes', 'bug-report-status', 'btn-bug-report-send',

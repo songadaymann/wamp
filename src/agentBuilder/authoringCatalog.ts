@@ -423,6 +423,7 @@ export function renderAgentRoomAuthoringMarkdown(): string {
     '- Text: `signText` (use `null` to clear). Signs and NPCs support text.',
     '- Sword Hunter: `swordsmanObjectiveMode`, `swordsmanDefeatMode`.',
     '- Police enemies: `policeBehaviorMode` (`hunter` or `patrol`), `policePatrolShoots`.',
+    '- Gameplay-layer pressure plates (`floor_trigger`): `coopPlate` enables other live players in Prime to hold the plate. Supported by place_object and configure_object. Co-op room/Expanded Room clears are practice and do not submit solo rankings. Links still use any linked plate; crates and enemies remain a solo fallback.',
     '- Sword Hunter and police bosses: `bossHitPoints` (integer 3–10; `null` turns boss mode off). Supported by place_object and configure_object. Enabling a boss makes an existing invincible Sword Hunter defeatable; explicitly combining boss mode and invincible is rejected.',
     '- NPC: `npcMode`, `npcPushable`, `npcCanJumpFall`, `npcPlayerCollision`, `npcFriendlyFire`, `npcName`, `npcDefeatMode`.',
     '- Unsupported fields are rejected; they are never silently discarded.',

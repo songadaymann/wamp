@@ -4,6 +4,7 @@ import type {
   CourseSnapshot,
 } from '../../courses/model';
 import type { RoomGoal } from '../../goals/roomGoals';
+import { hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
 import {
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -318,6 +319,7 @@ export function buildOverworldHudViewModel(
   let selectedMetaTone: OverworldHudViewModel['selectedMetaTone'] = 'default';
   if (selectedState === 'published') {
     const metaParts: string[] = [];
+    if (hasCoopPressurePlates(selectedPublishedRoom?.placedObjects ?? [])) metaParts.push('Co-op plates · Practice clears');
     if (selectedExpandedRoomCellCount !== null && selectedExpandedRoomCellCount > 1) {
       metaParts.push(`${selectedExpandedRoomCellCount}-cell expanded room`);
     }

@@ -1,3 +1,4 @@
+import { isCoopPressurePlate } from '../placedObjects/coopPressurePlates';
 import {
   LAYER_NAMES,
   getPlacedObjectInstanceId,
@@ -79,6 +80,7 @@ type CanonicalPlacedObjectPayload = {
   swordsmanObjectiveMode: string | null;
   swordsmanDefeatMode: string | null;
   bossHitPoints?: number;
+  coopPlate?: boolean;
   policeBehaviorMode: string | null;
   policePatrolShoots: boolean | null;
   signText: string | null;
@@ -361,6 +363,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
       swordsmanDefeatMode: normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode),
       bossHitPoints: getPlacedBossHitPoints(placed) ?? undefined,
+      coopPlate: isCoopPressurePlate(placed) ? true : undefined,
       policeBehaviorMode: getPlacedPoliceBehaviorMode(placed),
       policePatrolShoots: getPlacedPoliceBehaviorMode(placed) === null
         ? null
@@ -397,6 +400,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       swordsmanObjectiveMode: placed.swordsmanObjectiveMode,
       swordsmanDefeatMode: placed.swordsmanDefeatMode,
       ...(placed.bossHitPoints ? { bossHitPoints: placed.bossHitPoints } : {}),
+      ...(placed.coopPlate ? { coopPlate: true } : {}),
       policeBehaviorMode: placed.policeBehaviorMode,
       policePatrolShoots: placed.policePatrolShoots,
       signText: placed.signText,
@@ -434,6 +438,7 @@ function buildPlacedObjectSignature(placed: PlacedObject): string {
     swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
     swordsmanDefeatMode: normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode),
     ...(getPlacedBossHitPoints(placed) ? { bossHitPoints: getPlacedBossHitPoints(placed)! } : {}),
+    ...(isCoopPressurePlate(placed) ? { coopPlate: true } : {}),
     policeBehaviorMode: getPlacedPoliceBehaviorMode(placed),
     policePatrolShoots: getPlacedPoliceBehaviorMode(placed) === null
       ? null
@@ -476,6 +481,7 @@ function compareCanonicalPlacedObjects(
     (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
     (left.swordsmanDefeatMode ?? '').localeCompare(right.swordsmanDefeatMode ?? '') ||
     (left.bossHitPoints ?? 1) - (right.bossHitPoints ?? 1) ||
+    Number(left.coopPlate ?? false) - Number(right.coopPlate ?? false) ||
     (left.policeBehaviorMode ?? '').localeCompare(right.policeBehaviorMode ?? '') ||
     Number(left.policePatrolShoots ?? false) - Number(right.policePatrolShoots ?? false) ||
     (left.signText ?? '').localeCompare(right.signText ?? '') ||
@@ -497,6 +503,7 @@ function compareNormalizedPlacedObjects(
     swordsmanObjectiveMode: string | null;
     swordsmanDefeatMode: string | null;
     bossHitPoints?: number;
+  coopPlate?: boolean;
     policeBehaviorMode: string | null;
     policePatrolShoots: boolean | null;
     signText: string | null;
@@ -512,6 +519,7 @@ function compareNormalizedPlacedObjects(
     swordsmanObjectiveMode: string | null;
     swordsmanDefeatMode: string | null;
     bossHitPoints?: number;
+  coopPlate?: boolean;
     policeBehaviorMode: string | null;
     policePatrolShoots: boolean | null;
     signText: string | null;
@@ -529,6 +537,7 @@ function compareNormalizedPlacedObjects(
     (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
     (left.swordsmanDefeatMode ?? '').localeCompare(right.swordsmanDefeatMode ?? '') ||
     (left.bossHitPoints ?? 1) - (right.bossHitPoints ?? 1) ||
+    Number(left.coopPlate ?? false) - Number(right.coopPlate ?? false) ||
     (left.policeBehaviorMode ?? '').localeCompare(right.policeBehaviorMode ?? '') ||
     Number(left.policePatrolShoots ?? false) - Number(right.policePatrolShoots ?? false) ||
     (left.signText ?? '').localeCompare(right.signText ?? '')

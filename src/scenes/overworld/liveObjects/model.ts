@@ -104,6 +104,7 @@ export interface LoadedRoomObjectRuntimeState {
 export interface LoadedRoomObject {
   key: string;
   placedInstanceId: string | null;
+  coopPlate?: boolean;
   linkedTargetRoomId: string | null;
   linkedTargetInstanceId: string | null;
   linkedTargetInstanceIds: string[];
@@ -133,6 +134,7 @@ export interface CreateLiveObjectEntryOptions {
   layer?: LayerName;
   baseTimeSeed?: number;
   placedInstanceId: string | null;
+  coopPlate?: boolean | null;
   linkedTargetRoomId: string | null;
   linkedTargetInstanceId: string | null;
   linkedTargetInstanceIds?: string[];

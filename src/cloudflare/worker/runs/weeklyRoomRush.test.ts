@@ -45,6 +45,15 @@ function ranked(id: string, user: string, week: string | null, rooms: number, el
 }
 
 describe('manual weekly Room Rush configuration', () => {
+  it('rejects a co-op weekly pick and pauses new starts when the picked room republishes with one', async () => {
+    await pick();
+    const snapshot = { ...f.record.published!, placedObjects: [{ id: 'floor_trigger', instanceId: 'coop', x: 88, y: 296, coopPlate: true }] };
+    f.sqlite.prepare('UPDATE rooms SET published_json=? WHERE id=\'0,0\'').run(JSON.stringify(snapshot));
+    expect(await loadWeeklyRoomRushResponse(f.env)).toMatchObject({ pick: { available: false } });
+    await expect(start()).rejects.toMatchObject({ status: 409 });
+    await expect(saveWeeklyRoomRushPick(f.env, { openingMonday: '2026-10-12', roomId: '0,0' })).rejects.toMatchObject({ status: 400 });
+  });
+
   it('dispatches the real admin endpoint before the general admin handler and exposes the fresh public event', async () => {
     const url=new URL('https://api.wamp.land/api/admin/room-rush/weekly');
     const response=await worker.fetch(new Request(url,{method:'PUT',headers:{...headers,'x-admin-key':'test-weekly-admin'},body:JSON.stringify({openingMonday:'2026-10-05',roomId:'0,0'})}),f.env);

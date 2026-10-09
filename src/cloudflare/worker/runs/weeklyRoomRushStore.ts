@@ -1,4 +1,5 @@
 import { parseRoomId } from '../../../persistence/roomModel';
+import { hasCoopPressurePlates } from '../../../placedObjects/coopPressurePlates';
 import { globalLeaderboardWeek } from '../../../runs/globalLeaderboardWindow';
 import {
   WEEKLY_ROOM_RUSH_LIMIT_MS,
@@ -33,6 +34,7 @@ async function standalonePublishedRoom(env: Env, roomId: string) {
   }
   const room = await loadPublishedRoom(env, roomId, coordinates);
   if (!room || room.status !== 'published') throw new HttpError(400, 'Choose a published standalone room.');
+  if (hasCoopPressurePlates(room.placedObjects)) throw new HttpError(400, 'Choose a solo room without co-op pressure plates for the weekly Rush.');
   const memberships = await loadPublishedExpandedRoomMembershipsInBounds(env, coordinates.x, coordinates.x, coordinates.y, coordinates.y);
   if (memberships.some(entry => entry.roomId === roomId)) throw new HttpError(400, 'Choose a standalone room outside an Expanded Room.');
   return room;

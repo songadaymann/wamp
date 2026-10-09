@@ -7,6 +7,7 @@ import type { RoomCoordinates, RoomSnapshot } from '../../../persistence/roomMod
 import type { TrustTier } from '../../../progression/model';
 import { normalizePlayerHearts } from '../../../player/hearts';
 import { getPlacedBossHitPoints } from '../../../enemies/boss';
+import { isCoopPressurePlate } from '../../../placedObjects/coopPressurePlates';
 import type { BossHitPoints } from '../../../enemies/boss';
 import { isPlausibleBossDefeat } from './bossVerification';
 import type { LeaderboardRankingMode } from '../../../runs/model';
@@ -144,6 +145,7 @@ export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot
       swordsmanObjectiveMode: placed.swordsmanObjectiveMode ?? null,
       swordsmanDefeatMode: placed.swordsmanDefeatMode ?? null,
       ...(getPlacedBossHitPoints(placed) ? { bossHitPoints: getPlacedBossHitPoints(placed) } : {}),
+      ...(isCoopPressurePlate(placed) ? { coopPlate: true } : {}),
       policeBehaviorMode: placed.policeBehaviorMode ?? null,
       policePatrolShoots: placed.policePatrolShoots ?? null,
       npcMode: placed.npcMode ?? null,

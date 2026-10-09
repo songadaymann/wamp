@@ -1,6 +1,7 @@
 import { attachRoomInsights } from '../insights/store';
 import { loadIndexedDiscoveryRows, type IndexedDiscoveryRow } from '../playableContentIndex/discovery';
 import { loadDiscoveryRunMetrics, resolveDiscoveryDifficulty } from '../playableContentIndex/runMetrics';
+import { attachCoopDiscoveryFlags } from './coopPolicy';
 import { loadExpandedDiscoveryTrophies, expandedTrophyKey } from '../playableContentIndex/trophies';
 import type {
   RoomCoordinates,
@@ -1883,5 +1884,6 @@ export async function loadRoomDiscoveryResponse(
   includeGoalLessRooms = false, viewerUserId: string | null = null, timing: ServerTiming | null = null, cursorOffset = 0,
 ): Promise<RoomDiscoveryResponse> {
   const result = await loadRoomDiscoveryResponseWithoutInsights(env, difficultyFilter, limit, sort, includeGoalLessRooms, viewerUserId, timing, cursorOffset);
-  return { ...result, results: await attachRoomInsights(env, result.results) };
+  const entries = await attachRoomInsights(env, result.results);
+  return { ...result, results: await attachCoopDiscoveryFlags(env, entries) };
 }

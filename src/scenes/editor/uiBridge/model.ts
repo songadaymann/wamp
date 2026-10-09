@@ -90,6 +90,8 @@ export interface EditorInspectorState {
   selectionId: string | null;
   pressureVisible: boolean;
   pressureStatusText: string;
+  pressureCoopVisible: boolean;
+  pressureCoopChecked: boolean;
   pressureConnectHidden: boolean;
   pressureConnectDisabled: boolean;
   pressureConnectTitle: string;
@@ -246,6 +248,7 @@ export interface EditorUiBridgeActions {
   onClearPinnedInspector: () => void;
   onBeginPressurePlateConnection: () => void;
   onClearPressurePlateConnection: () => void;
+  onSetFocusedCoopPlate: (enabled: boolean) => void;
   onCancelPressurePlateConnection: () => void;
   onClearContainerContents: () => void;
   onSetFocusedSwordsmanObjectiveMode: (objectiveMode: SwordsmanObjectiveMode) => void;

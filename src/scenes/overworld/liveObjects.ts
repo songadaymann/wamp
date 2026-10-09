@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isCoopPressurePlate, type CoopPlateActor } from '../../placedObjects/coopPressurePlates';
 import { createBossPresentation, syncBossPresentation } from './liveObjects/bossPresentation';
 import { getPlacedBossHitPoints } from '../../enemies/boss';
 import type { SfxCue } from '../../audio/sfx';
@@ -148,6 +149,7 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   getPlayer: () => Phaser.GameObjects.GameObject | null;
   getPlayerPickupSensor: () => Phaser.GameObjects.GameObject | null;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
+  getCoopPlateActors?: () => readonly CoopPlateActor[];
   getEnemyStompBounceVelocity?: () => number;
   playEnemyStompImpact?: () => void;
   getConveyorDirectionForBody: (
@@ -282,6 +284,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.triggerController = new LiveObjectTriggerController({
       getLoadedFullRooms: this.options.getLoadedFullRooms,
       getPlayerBody: this.options.getPlayerBody,
+      getCoopPlateActors: this.options.getCoopPlateActors,
       getCurrentTime: this.options.getCurrentTime,
       getRoomOrigin: this.options.getRoomOrigin,
       playRoomSfx: this.options.playRoomSfx,
@@ -653,6 +656,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       layer,
       baseTimeSeed = 0,
       placedInstanceId,
+      coopPlate = null,
       linkedTargetRoomId,
       linkedTargetInstanceId,
       linkedTargetInstanceIds = linkedTargetInstanceId ? [linkedTargetInstanceId] : [],
@@ -760,6 +764,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const liveObject: LoadedRoomObject = {
       key,
       placedInstanceId,
+      coopPlate: isCoopPressurePlate({ id: config.id, layer: normalizedLayer, coopPlate }),
       linkedTargetRoomId,
       linkedTargetInstanceId,
       linkedTargetInstanceIds,

@@ -1,5 +1,6 @@
 import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
 import { LOST_SONG_OBJECT_ID } from '../../lostSongs/model';
+import { canConfigureCoopPlate, isCoopPressurePlate } from '../../placedObjects/coopPressurePlates';
 import { normalizePlayerHearts, type PlayerHearts } from '../../player/hearts';
 import Phaser from 'phaser';
 import {
@@ -2515,6 +2516,20 @@ export class EditorEditRuntime {
     targetInstanceId: string | null,
   ): boolean {
     return this.setObjectLinkTarget(triggerInstanceId, targetInstanceId);
+  }
+
+  setCoopPlate(instanceId: string, enabled: boolean): boolean {
+    if (!this.guardEditable()) return false;
+    const placedObjects = this.host.getPlacedObjects();
+    const index = placedObjects.findIndex(placed => placed.instanceId === instanceId);
+    if (index < 0 || !canConfigureCoopPlate(placedObjects[index])) return false;
+    if (isCoopPressurePlate(placedObjects[index]) === enabled) return true;
+    const previous = this.clonePlacedObjects();
+    const next = previous.map((placed, i) => i === index ? { ...placed, coopPlate: enabled ? true : null } : placed);
+    this.host.setPlacedObjects(next);
+    this.history.record({ kind: 'objects', action: { previous, next: this.clonePlacedObjects(next) } });
+    this.markRoomDirty();
+    return true;
   }
 
   setObjectLinkTarget(

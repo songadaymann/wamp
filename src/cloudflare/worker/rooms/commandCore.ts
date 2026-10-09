@@ -214,6 +214,7 @@ interface PlaceObjectCommand {
   swordsmanObjectiveMode?: SwordsmanObjectiveMode;
   swordsmanDefeatMode?: SwordsmanDefeatMode;
   bossHitPoints?: number | null;
+  coopPlate?: boolean;
   policeBehaviorMode?: PoliceBehaviorMode;
   policePatrolShoots?: boolean;
 }
@@ -227,6 +228,7 @@ interface ObjectConfiguration {
   swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;
   swordsmanDefeatMode?: SwordsmanDefeatMode | null;
   bossHitPoints?: number | null;
+  coopPlate?: boolean | null;
   policeBehaviorMode?: PoliceBehaviorMode | null;
   policePatrolShoots?: boolean | null;
   npcMode?: NpcMode | null;
@@ -576,6 +578,9 @@ function normalizeConfiguration(command: Record<string, unknown>, index: number,
     }
     configuration.bossHitPoints = command.bossHitPoints as number | null;
   }
+  if (hasOwn(command, 'coopPlate')) {
+    configuration.coopPlate = normalizeNullableBoolean(command.coopPlate, `commands[${index}].coopPlate`);
+  }
   if (hasOwn(command, 'policeBehaviorMode')) {
     if (command.policeBehaviorMode !== null && !normalizePoliceBehaviorMode(command.policeBehaviorMode)) {
       throw new HttpError(400, `commands[${index}].policeBehaviorMode must be hunter, patrol, or null.`);
@@ -698,11 +703,16 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
       addTileWrites(state, MAX_SET_TILES_PER_COMMAND);
       return { type: 'clear_layer', layer: normalizeLayer(command.layer, `commands[${index}].layer`) };
     case 'place_object': {
-      assertAllowedKeys(command, ['type', 'ref', 'objectId', 'tileX', 'tileY', 'facing', 'layer', 'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'bossHitPoints', 'policeBehaviorMode', 'policePatrolShoots'], `commands[${index}]`);
+      assertAllowedKeys(command, ['type', 'ref', 'objectId', 'tileX', 'tileY', 'facing', 'layer', 'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'bossHitPoints', 'coopPlate', 'policeBehaviorMode', 'policePatrolShoots'], `commands[${index}]`);
       if (typeof command.objectId !== 'string') throw new HttpError(400, `commands[${index}].objectId must be a string.`);
       const objectConfig = getObjectById(command.objectId);
       if (!objectConfig) throw new HttpError(400, `Unknown objectId "${command.objectId}".`);
       if (command.objectId === 'spawn_point') throw new HttpError(400, 'Use set_spawn instead of place_object for spawn points.');
+      if (command.coopPlate !== undefined) {
+        if (command.objectId !== 'floor_trigger') throw new HttpError(400, 'coopPlate only applies to pressure plates.');
+        if (typeof command.coopPlate !== 'boolean') throw new HttpError(400, 'coopPlate must be a boolean.');
+        if (command.coopPlate && command.layer !== undefined && command.layer !== 'terrain') throw new HttpError(400, 'Co-op plates use the Gameplay layer.');
+      }
       if (command.facing !== undefined && command.facing !== 'left' && command.facing !== 'right') throw new HttpError(400, `commands[${index}].facing must be left or right.`);
       if (command.facing !== undefined && !objectConfig.facingDirection) throw new HttpError(400, `commands[${index}].facing is not supported by ${command.objectId}.`);
       if (command.swordsmanObjectiveMode !== undefined && command.objectId !== SWORDSMAN_AI_OBJECT_ID) throw new HttpError(400, `commands[${index}].swordsmanObjectiveMode only applies to swordsman_ai.`);
@@ -746,6 +756,7 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
         swordsmanObjectiveMode: objectiveMode,
         swordsmanDefeatMode: defeatMode,
         bossHitPoints: command.bossHitPoints as number | null | undefined,
+        coopPlate: command.coopPlate as boolean | undefined,
         policeBehaviorMode,
         policePatrolShoots,
       };
@@ -753,7 +764,7 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
     case 'configure_object': {
       const configurationKeys = [
         'layer', 'facing', 'linkedTargets', 'containedObjectId', 'signText',
-        'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'bossHitPoints', 'npcMode', 'npcPushable',
+        'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'bossHitPoints', 'coopPlate', 'npcMode', 'npcPushable',
         'policeBehaviorMode', 'policePatrolShoots',
         'npcCanJumpFall', 'npcPlayerCollision', 'npcFriendlyFire', 'npcName', 'npcDefeatMode',
       ] as const;
@@ -842,6 +853,7 @@ function placeObjectAtTile(command: PlaceObjectCommand): PlacedObject {
       ? command.swordsmanDefeatMode ?? DEFAULT_SWORDSMAN_DEFEAT_MODE
       : null,
     bossHitPoints: normalizeBossHitPoints(command.bossHitPoints),
+    coopPlate: command.objectId === 'floor_trigger' && command.coopPlate === true ? true : null,
     policeBehaviorMode: isPoliceEnemyObjectId(command.objectId)
       ? command.policeBehaviorMode ?? DEFAULT_POLICE_BEHAVIOR_MODE
       : null,
@@ -900,6 +912,11 @@ function applyObjectConfiguration(room: RoomSnapshot, placed: PlacedObject, comm
   if (hasSwordsmanConfiguration && placed.id !== SWORDSMAN_AI_OBJECT_ID) throw new HttpError(400, 'Sword Hunter settings only apply to swordsman_ai.');
   if (command.swordsmanObjectiveMode !== undefined) placed.swordsmanObjectiveMode = command.swordsmanObjectiveMode ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE;
   if (command.swordsmanDefeatMode !== undefined) placed.swordsmanDefeatMode = command.swordsmanDefeatMode ?? DEFAULT_SWORDSMAN_DEFEAT_MODE;
+  if (command.coopPlate !== undefined) {
+    if (placed.id !== 'floor_trigger') throw new HttpError(400, 'coopPlate only applies to pressure plates.');
+    if (command.coopPlate && placed.layer !== undefined && placed.layer !== 'terrain') throw new HttpError(400, 'Co-op plates use the Gameplay layer.');
+    placed.coopPlate = command.coopPlate === true ? true : null;
+  }
   if (command.bossHitPoints !== undefined) {
     if (!isBossEnemyObjectId(placed.id)) throw new HttpError(400, 'bossHitPoints only applies to Sword Hunter and police enemies.');
     if (command.bossHitPoints !== null && command.swordsmanDefeatMode === 'invincible') throw new HttpError(400, 'A boss cannot also be invincible.');

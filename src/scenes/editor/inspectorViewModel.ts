@@ -8,6 +8,8 @@ export interface PressurePlateInspectorOptions {
   eligibleTargetCount: number;
   connectTitle?: string;
   allowReconnectWithTarget?: boolean;
+  coopAvailable?: boolean;
+  coopPlate?: boolean;
 }
 
 export interface ContainerInspectorOptions {
@@ -28,6 +30,8 @@ export function createEmptyEditorInspectorState(): EditorInspectorState {
     selectionId: null,
     pressureVisible: false,
     pressureStatusText: '',
+    pressureCoopVisible: false,
+    pressureCoopChecked: false,
     pressureConnectHidden: true,
     pressureConnectDisabled: true,
     pressureConnectTitle: '',
@@ -79,6 +83,8 @@ export function buildPressurePlateInspectorState(
     ...createEmptyEditorInspectorState(),
     visible: true,
     pressureVisible: true,
+    pressureCoopVisible: options.coopAvailable === true,
+    pressureCoopChecked: options.coopPlate === true,
     pressureStatusText:
       options.statusText ??
       (options.connectMode

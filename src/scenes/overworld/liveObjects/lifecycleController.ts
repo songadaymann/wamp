@@ -94,6 +94,7 @@ export class LiveObjectLifecycleController<TEdgeWall = unknown> {
         layer: placedObject.layer,
         baseTimeSeed: placedObject.x + placedObject.y,
         placedInstanceId: placedObject.instanceId,
+        coopPlate: placedObject.coopPlate === true,
         linkedTargetRoomId: linkedTargetInstanceIds.length > 0 ? loadedRoom.room.id : null,
         linkedTargetInstanceId: linkedTargetInstanceIds[0] ?? null,
         linkedTargetInstanceIds,

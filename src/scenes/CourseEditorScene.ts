@@ -805,6 +805,7 @@ export class CourseEditorScene extends Phaser.Scene {
       onClearPinnedInspector: () => this.objectInspectorController.clearPinnedInspector(),
       onBeginPressurePlateConnection: () => this.objectInspectorController.beginFocusedPressurePlateConnection(),
       onClearPressurePlateConnection: () => this.objectInspectorController.clearFocusedPressurePlateConnection(),
+      onSetFocusedCoopPlate: (enabled) => this.objectInspectorController.setFocusedCoopPlate(enabled),
       onCancelPressurePlateConnection: () => this.objectInspectorController.cancelPressurePlateConnection(),
       onClearContainerContents: () => this.objectInspectorController.clearFocusedContainerContents(),
       onSetFocusedSwordsmanObjectiveMode: (objectiveMode) => this.objectInspectorController.setFocusedSwordsmanObjectiveMode(objectiveMode),

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { coopPlateActorTouches, type CoopPlateActor } from '../../../placedObjects/coopPressurePlates';
 import {
   getBlockSwitchRuntimeTextureKey,
   getObjectById,
@@ -40,6 +41,7 @@ interface PressureTargetState {
 interface LiveObjectTriggerControllerOptions<TEdgeWall> {
   getLoadedFullRooms: () => Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>;
   getPlayerBody: () => Phaser.Physics.Arcade.Body | null;
+  getCoopPlateActors?: () => readonly CoopPlateActor[];
   getCurrentTime: () => number;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   playRoomSfx: (cue: SfxCue, roomCoordinates: RoomCoordinates) => void;
@@ -213,6 +215,8 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
 
     const linkedTargetKeys = new Set<string>();
     const activeTargetKeys = new Set<string>();
+    const coopActors = pressureIndex.triggers.some(({ liveObject }) => liveObject.coopPlate)
+      ? this.options.getCoopPlateActors?.() ?? [] : [];
 
     for (const { loadedRoom, liveObject } of pressureIndex.triggers) {
       if (liveObject.config.id !== 'floor_trigger' || !liveObject.sprite.active) {
@@ -237,7 +241,10 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
       }
 
       const wasPressed = liveObject.runtime.pressureActive;
-      const pressed = this.isPressurePlatePressed(liveObject, pressureIndex.pressCandidates);
+      const coopBounds = liveObject.coopPlate === true ? getPressurePlateBounds(liveObject) : null;
+      const pressed = this.isPressurePlatePressed(liveObject, pressureIndex.pressCandidates)
+        || (coopBounds !== null && coopActors.some(actor =>
+          coopPlateActorTouches(actor, loadedRoom.room.id, coopBounds)));
       liveObject.runtime.pressureActive = pressed;
       if (liveObject.config.frameCount > 1) {
         liveObject.sprite.setFrame(pressed ? 1 : 0);

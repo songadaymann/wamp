@@ -1,4 +1,5 @@
 import { getLostSongPlacementError } from '../lostSongs/model';
+import { isCoopPressurePlate } from '../placedObjects/coopPressurePlates';
 import {
   LAYER_NAMES,
   ROOM_HEIGHT,
@@ -542,6 +543,7 @@ function normalizePlacedObject(
       ? getPlacedPoliceBehaviorMode(placed)
       : null,
     bossHitPoints: getPlacedBossHitPoints(placed),
+    coopPlate: isCoopPressurePlate(placed) ? true : null,
     policePatrolShoots: isPoliceEnemyObjectId(placed.id)
       ? getPlacedPolicePatrolShoots(placed)
       : null,
@@ -652,6 +654,7 @@ function clonePlacedObjects(
         ? getPlacedPoliceBehaviorMode(placed)
         : null,
       bossHitPoints: getPlacedBossHitPoints(placed),
+      coopPlate: isCoopPressurePlate(placed) ? true : null,
       policePatrolShoots: isPoliceEnemyObjectId(placed.id)
         ? getPlacedPolicePatrolShoots(placed)
         : null,

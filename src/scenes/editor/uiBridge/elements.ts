@@ -146,6 +146,8 @@ export interface EditorUiElements {
   inspectorRoot: HTMLElement | null;
   pressurePanel: HTMLElement | null;
   pressureStatus: HTMLElement | null;
+  pressureCoopRow: HTMLElement | null;
+  pressureCoopCheckbox: HTMLInputElement | null;
   pressureConnectBtn: HTMLButtonElement | null;
   pressureClearBtn: HTMLButtonElement | null;
   pressureDoneLaterBtn: HTMLButtonElement | null;
@@ -357,6 +359,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     inspectorRoot: byId<HTMLElement>(doc, 'editor-inspector'),
     pressurePanel: byId<HTMLElement>(doc, 'pressure-plate-panel'),
     pressureStatus: byId<HTMLElement>(doc, 'pressure-plate-status'),
+    pressureCoopRow: byId<HTMLElement>(doc, 'pressure-plate-coop-row'),
+    pressureCoopCheckbox: byId<HTMLInputElement>(doc, 'pressure-plate-coop-checkbox'),
     pressureConnectBtn: byId<HTMLButtonElement>(doc, 'btn-pressure-plate-connect'),
     pressureClearBtn: byId<HTMLButtonElement>(doc, 'btn-pressure-plate-clear'),
     pressureDoneLaterBtn: byId<HTMLButtonElement>(doc, 'btn-pressure-plate-done-later'),

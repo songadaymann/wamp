@@ -793,6 +793,11 @@ export class OverworldPlayScene extends Phaser.Scene {
       getPlayer: () => this.gameFeelController.isDeathPending() ? null : this.player,
       getPlayerPickupSensor: () => this.gameFeelController.isDeathPending() ? null : this.playerPickupSensor,
       getPlayerBody: () => this.gameFeelController.isDeathPending() ? null : this.playerBody,
+      getCoopPlateActors: () => Boolean(getActiveWorldId()) || this.roomRushModeController.isActive()
+        || (this.activePvpMatch && this.activePvpMatch.status !== 'complete') ? []
+        : this.presenceController.getCoopPlatePlayers().map(ghost => ({
+          roomId: ghost.roomId, x: ghost.x, feetY: ghost.y - DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+        })),
       getEnemyStompBounceVelocity: () => {
         const jumpHeld = this.cursors.up.isDown || this.cursors.space.isDown
           || this.wasd.W.isDown || getTouchInputState().jumpHeld;
@@ -6626,6 +6631,8 @@ export class OverworldPlayScene extends Phaser.Scene {
             bodyCenterX: body ? Number(body.center.x.toFixed(2)) : null,
             alpha: Number(liveObject.sprite.alpha.toFixed(2)),
             bodyEnabled: body ? body.enable : null,
+            coopPlate: liveObject.coopPlate ?? false,
+            pressureActive: liveObject.runtime.pressureActive,
             directionX: liveObject.runtime.directionX,
             aiState: liveObject.runtime.aiState,
             aiObjectiveMode: liveObject.runtime.aiObjectiveMode,

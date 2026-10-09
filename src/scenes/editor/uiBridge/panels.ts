@@ -72,6 +72,11 @@ export function renderInspectorPanel(
   setHidden(elements.inspectorRoot, !state.visible);
   setHidden(elements.pressurePanel, !state.pressureVisible);
   setText(elements.pressureStatus, state.pressureStatusText);
+  setHidden(elements.pressureCoopRow, !state.pressureCoopVisible);
+  if (elements.pressureCoopCheckbox) {
+    elements.pressureCoopCheckbox.checked = state.pressureCoopChecked;
+    elements.pressureCoopCheckbox.disabled = !state.pressureCoopVisible;
+  }
   setHidden(elements.pressureConnectBtn, state.pressureConnectHidden);
   setDisabled(elements.pressureConnectBtn, state.pressureConnectDisabled);
   if (elements.pressureConnectBtn) {

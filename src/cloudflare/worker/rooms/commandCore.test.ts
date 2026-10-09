@@ -113,6 +113,25 @@ describe('room draft command tiles', () => {
 });
 
 describe('room draft command objects and goals', () => {
+  it('authors and removes co-op plate opt-ins with strict gameplay-only validation', () => {
+    const place = { type: 'place_object', ref: 'plate', objectId: 'floor_trigger', tileX: 4, tileY: 18, coopPlate: true };
+    const room = applyRoomDraftCommands(blankRoom(), normalize([place]).commands).snapshot;
+    expect(room.placedObjects[0].coopPlate).toBe(true);
+    const configured = normalize([place, { type: 'configure_object', target: { ref: 'plate' }, coopPlate: null }]);
+    expect(applyRoomDraftCommands(blankRoom(), configured.commands).snapshot.placedObjects[0].coopPlate).toBeNull();
+    for (const coopPlate of [1, 'true', null]) expect(() => normalize([{ ...place, coopPlate }])).toThrow();
+    expect(() => normalize([{ ...place, objectId: 'coin_gold' }])).toThrow(/only applies/);
+    expect(() => normalize([{ ...place, layer: 'background' }])).toThrow(/Gameplay layer/);
+    expect(() => applyRoomDraftCommands(blankRoom(), normalize([
+      { ...place, objectId: 'coin_gold', coopPlate: undefined },
+      { type: 'configure_object', target: { ref: 'plate' }, coopPlate: true },
+    ]).commands)).toThrow(/only applies/);
+    expect(() => applyRoomDraftCommands(blankRoom(), normalize([
+      { ...place, layer: 'foreground', coopPlate: false },
+      { type: 'configure_object', target: { ref: 'plate' }, coopPlate: true },
+    ]).commands)).toThrow(/Gameplay layer/);
+  });
+
   it('enforces one direct main-layer Lost Song per cell in agent commands', () => {
     const place = { type: 'place_object', objectId: 'lost_song', tileX: 1, tileY: 1 };
     expect(applyRoomDraftCommands(blankRoom(), normalize([place]).commands).snapshot.placedObjects[0].id).toBe('lost_song');

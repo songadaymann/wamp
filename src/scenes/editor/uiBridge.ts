@@ -1261,6 +1261,11 @@ export class EditorUiBridge {
     bindButton(this.cleanupCallbacks, this.elements.pressureClearBtn, () => {
       this.actions.onClearPressurePlateConnection();
     });
+    const handleCoopPlateChange = () => {
+      this.actions.onSetFocusedCoopPlate(this.elements.pressureCoopCheckbox?.checked === true);
+    };
+    this.elements.pressureCoopCheckbox?.addEventListener('change', handleCoopPlateChange);
+    this.cleanupCallbacks.push(() => this.elements.pressureCoopCheckbox?.removeEventListener('change', handleCoopPlateChange));
     bindButton(this.cleanupCallbacks, this.elements.pressureDoneLaterBtn, () => {
       this.actions.onCancelPressurePlateConnection();
     });

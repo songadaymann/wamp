@@ -992,6 +992,7 @@ export class EditorScene extends Phaser.Scene {
       onClearPinnedInspector: () => this.inspectorController.clearPinnedSelection(),
       onBeginPressurePlateConnection: () => this.beginFocusedPressurePlateConnection(),
       onClearPressurePlateConnection: () => this.clearFocusedPressurePlateConnection(),
+      onSetFocusedCoopPlate: (enabled) => this.inspectorController.setFocusedCoopPlate(enabled),
       onCancelPressurePlateConnection: () => this.cancelPressurePlateConnection(),
       onClearContainerContents: () => this.clearFocusedContainerContents(),
       onSetFocusedSwordsmanObjectiveMode: (objectiveMode) =>

@@ -7,6 +7,7 @@ import {
 import { getLeaderboardRankingMode } from '../runs/scoring';
 import { normalizePlayerHearts } from '../player/hearts';
 import { getBossChallengeSignature } from '../enemies/boss';
+import { hasCoopPressurePlates } from '../placedObjects/coopPressurePlates';
 
 export interface RoomLeaderboardFamily {
   representativeVersion: number;
@@ -211,6 +212,10 @@ export function getManualRoomLeaderboardSourceValidationError(
 
   if (source.version === target.version || source.version > target.version) {
     return 'Pick an older published version as the leaderboard source.';
+  }
+
+  if (hasCoopPressurePlates(target.snapshot.placedObjects) || hasCoopPressurePlates(source.snapshot.placedObjects)) {
+    return 'Co-op practice versions cannot share solo leaderboards.';
   }
 
   if (!target.snapshot.goal || !source.snapshot.goal) {

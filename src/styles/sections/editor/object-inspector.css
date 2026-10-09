@@ -456,7 +456,8 @@
   font: inherit;
 }
 
-#enemy-boss-panel .npc-checkbox-row {
+#enemy-boss-panel .npc-checkbox-row,
+#pressure-plate-coop-row .npc-checkbox-row {
   flex-direction: row;
   align-items: center;
   gap: 8px;

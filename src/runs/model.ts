@@ -171,6 +171,7 @@ export interface RoomDifficultyVoteRequestBody {
 
 export interface RoomDiscoveryEntry {
   insights?: RoomInsightSummary;
+  cooperative?: boolean;
   roomId: string;
   roomCoordinates: RoomCoordinates;
   roomTitle: string | null;

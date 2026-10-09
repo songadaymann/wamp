@@ -106,6 +106,26 @@ describe('editor edit runtime document contracts', () => {
     expect(runtime.roomCameraMode).toBe('follow');
   });
 
+  it('saves co-op opt-in with Undo/Redo and blocks decorative, unrelated and read-only objects', () => {
+    const room = createRoom();
+    room.placedObjects = [
+      { id: 'floor_trigger', instanceId: 'plate', x: 88, y: 296 },
+      { id: 'floor_trigger', instanceId: 'background-plate', x: 104, y: 296, layer: 'background' },
+      object('coin'),
+    ];
+    const { runtime, setEditable } = createHarness(room);
+    expect(runtime.setCoopPlate('plate', true)).toBe(true);
+    expect(runtime.isRoomDirty).toBe(true);
+    expect(runtime.exportRoomSnapshot().placedObjects[0].coopPlate).toBe(true);
+    runtime.undo(); expect(runtime.exportRoomSnapshot().placedObjects[0].coopPlate ?? null).toBeNull();
+    runtime.redo(); expect(runtime.exportRoomSnapshot().placedObjects[0].coopPlate).toBe(true);
+    expect(createHarness(runtime.exportRoomSnapshot()).runtime.exportRoomSnapshot().placedObjects[0].coopPlate).toBe(true);
+    expect(runtime.setCoopPlate('background-plate', true)).toBe(false);
+    expect(runtime.setCoopPlate('coin', true)).toBe(false);
+    setEditable(false); expect(runtime.setCoopPlate('plate', false)).toBe(false);
+    expect(runtime.exportRoomSnapshot().placedObjects[0].coopPlate).toBe(true);
+  });
+
   it('saves boss configuration with undo/redo and respects read-only rooms', () => {
     const room = createRoom();
     room.placedObjects = [{ id: 'swordsman_ai', x: 80, y: 256, instanceId: 'boss', swordsmanDefeatMode: 'invincible' }];

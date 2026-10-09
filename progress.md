@@ -1,3 +1,23 @@
+## 2026-10-08 — Overnight checklist goal / F152 co-op pressure plates
+
+Original prompt: "ok i am ging to bed can you set a goal to make your way through the list until 5am"
+
+Continue the active goal until **2026-10-09 05:00 America/New_York / 09:00 UTC**. Canonical lane `codex/checkup-coop-plates-2026-10-08` stacks on F151 `9f493040` / draft PR #85. Preserve the dirty primary and all earlier candidates. Prepare a tested draft for morning review; production remains unchanged. No agents are authorized.
+
+- [x] Audit plate links, live presence coordinates/lifetime, both editor inspectors and ranked-run/discovery paths; keep existing OR links and solo crate/enemy activation.
+- [x] Add a normalized opt-in co-op plate flag with desktop/phone/Expanded Room controls, persistence/Undo and agent authoring support.
+- [x] Count fresh live players in the same physical room independently of avatar visibility; exclude replay ghosts, edit/browse, stale and PvP-instance players. Release doors when a holder leaves/disconnects.
+- [x] Show truthful co-op room information and keep assisted rooms out of solo ranked clears; preserve ordinary plates and solo Room Rush fairness.
+- [x] Verify native two-client keyboard/touch play, real saves and solo/ranked boundaries, plus meaningful tests/full gates and inspected installed-client play; save/push/attach a stacked draft and advance the goal.
+
+Evidence: `/tmp/wamp-coop-plates-2026-10-08/`. A plate flag supports one person holding a door for another. Requiring all linked plates is a separate follow-up. No production release; inherited F144 map/catalog gate applies.
+
+Verification: full lint, **384 files / 3,039 tests**, TypeScript, API/renderer bindings and build pass; final CSS build, DOM **967/242** and Worker safety pass. Eight native co-op/solo-boundary cases plus a corrected ordinary solo clear pass with no page or console errors; SQLite confirms the solo clear's `passed` receipt. Six actual API start attempts (signed and guest; room, course and Expanded Room) reject co-op content. Four editor cases cover actual desktop/phone selection, checkbox, Undo/Redo, save and reload. Separate native publish checks store off/on in two new Expanded Room cell versions and actually publish the area; Explore and room-info badges match the new pinned versions. Final desktop/phone, gameplay, Explore and unchanged installed-client captures are visually inspected. Primary hashes match F151.
+
+Prime supports live helpers; other Worlds, Room Rush and active PvP suppress them. Co-op clears remain practice even when a crate permits solo completion. Door links remain OR, and separate AND puzzle support is still a follow-up. Presence is eventually consistent with a 15-second stale cutoff. No migration or PartyKit server change is introduced; API Worker and Pages need delivery after review, with the inherited F144 renderer/catalog gate still blocking release. Master remains 55/215 and F152 remains unticked.
+
+Retained diagnostics include fixture link/overlap corrections, hidden legacy publish controls, the ordinary finish API's 204 response, and an incomplete finalization mock amended to include a valid empty object list. The first cell-publish assertion was insufficient; the final proof requires new versions and the real area publish request. Editor captures retain four 404 responses from the unchanged published-room construction-preview endpoint; they are outside this change, with no page errors. Accepted evidence: `native-b`'s eight completed scenarios, `solo-final`, `api.json`, `editor-c` controls/saves, `publish-final`, `info`, `official`, and final gates.
+
 ## 2026-10-08 — Overnight checklist goal / F151 weekly Room Rush
 
 Original prompt: "ok i am ging to bed can you set a goal to make your way through the list until 5am"
