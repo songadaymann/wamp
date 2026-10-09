@@ -8,11 +8,13 @@ Continue the active goal until **2026-10-09 05:00 America/New_York / 09:00 UTC**
 - [x] Implement bounded, authenticated admin selection, immutable weekly identity and server-enforced run window and isolated best-per-player weekly rankings, including previous-week winners.
 - [x] Add the weekly play entry, countdown/result and weekly share copy to existing desktop/phone UI, keeping guests on clearly labelled practice and regular Room Rush behavior intact.
 - [x] Verify admin/version/expiry/rollover/idempotency and real desktop/touch play, results and rankings; run quality gates and inspect the unchanged installed-client capture.
-- [ ] Save/push/attach a tested stacked draft and release receipt, keep master ticks tied to delivery, and advance the overnight goal to F152 co-op pressure plates.
+- [x] Save/push/attach a tested stacked draft and release receipt, keep master ticks tied to delivery, and advance the overnight goal to F152 co-op pressure plates.
 
 Evidence: `/tmp/wamp-weekly-room-rush-2026-10-08/`. Weekly choices stay manual; do not launch a production event or add a cron picker overnight. Migration/API/Pages delivery will require review. Existing F144 catalog release block remains in this stack.
 
 Verification complete: 381 files / 3,023 tests, lint, TypeScript, generated bindings, build, DOM 965/240 and Worker safety pass. Four native admin and six native play/timer cases pass with zero page errors; the real five-minute clock runs through Settings, auto-completes at 300000ms and has one saved receipt. Uncertain-reply retry, phone touch death, Restart and best-per-account standings pass. Share capture runs inside POST_RENDER, shows actual imagery and uses a fitting weekly label. Installed client is unchanged and its healthy play capture is inspected; only expected local presence 503 remains. Primary hashes match F144.
+
+Saved source `b95813d2` in [draft PR #85](https://github.com/songadaymann/wamp/pull/85), based on `codex/checkup-lost-song-2026-10-08`; pushed and attached. Production and master ticks remain unchanged. Continue the active overnight goal with F152.
 
 ## 2026-10-08 — Overnight checklist goal / F144 Lost Song hunt
 
