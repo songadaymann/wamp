@@ -242,6 +242,7 @@
         <button class="editor-drawer-tab" type="button" data-editor-room-section="music">Music</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="sprite">Sprite Editor</button>
         <button class="editor-drawer-tab" type="button" data-room-insights-open>Insights</button>
+        <button id="btn-room-template-replace" class="editor-drawer-tab" type="button">Templates</button>
       </div>
       <!-- Tools -->
       <div class="sidebar-section" id="tools-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
@@ -659,6 +660,10 @@
 
       <div class="sidebar-section palette-section" id="smart-palette-section" data-mobile-panel="palette" data-sidebar-collapsible="true">
         <div class="section-label">Smart Terrain</div>
+        <div id="room-template-empty-hint" class="hidden room-template-empty-hint">
+          <p>Start with a layout, then make it yours.</p>
+          <button id="btn-room-template-empty" class="bar-btn" type="button">Choose a template</button>
+        </div>
         <div id="smart-visual-picker" class="smart-visual-picker">
           <h3>Terrain</h3>
           <div id="smart-theme-button-grid" class="smart-theme-button-grid" aria-label="Terrain styles"></div>
@@ -2182,6 +2187,20 @@
       <div class="mobile-jump-sheet-form">
         <input id="mobile-world-jump-input" class="goal-input" type="text" spellcheck="false" />
         <button id="btn-mobile-world-jump-go" class="bar-btn" type="button">Warp</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="room-template-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel room-template-panel" role="dialog" aria-modal="true" aria-labelledby="room-template-title">
+      <div class="history-modal-header"><h2 id="room-template-title" class="history-modal-title">Room Templates</h2><button id="btn-room-template-close" class="bar-btn" type="button">Close</button></div>
+      <div class="room-template-body">
+        <p id="room-template-scope" class="history-modal-meta"></p>
+        <div id="room-template-grid" class="room-template-grid" aria-label="Layouts"></div>
+        <label class="room-template-style-row" for="room-template-style">Terrain style <select id="room-template-style"></select></label>
+        <p id="room-template-status" class="history-modal-meta" role="status"></p>
+        <label id="room-template-confirm-row" class="room-template-confirm-row"><input id="room-template-confirm" type="checkbox"> Replace my current layout. Other room settings stay as they are.</label>
+        <button id="btn-room-template-apply" class="bar-btn" type="button" disabled>Use layout</button>
       </div>
     </div>
   </div>

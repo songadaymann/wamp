@@ -1,6 +1,7 @@
 import { EditorPhoneInspector } from './phoneInspector';
 import { bindBossInspector } from './uiBridge/bossInspector';
 import { EditorHistoryControls } from './historyControls';
+import { closeRoomTemplatePicker } from './roomTemplatePicker';
 import {
   ERASER_BRUSH_SIZES,
   RANDOMIZE_BRUSH_SIZES,
@@ -567,6 +568,11 @@ export class EditorUiBridge {
 
     this.lastViewModel = viewModel;
     this.historyControls.render(viewModel.canUndo, viewModel.canRedo);
+    this.doc.getElementById('room-template-empty-hint')?.classList.toggle('hidden', !this.actions.isRoomLayoutEmpty?.());
+    for (const id of ['btn-room-template-empty', 'btn-room-template-replace']) {
+      const button = this.doc.getElementById(id) as HTMLButtonElement | null;
+      if (button) button.disabled = viewModel.saveDisabled || !this.actions.onOpenRoomTemplates;
+    }
     renderEditorUiViewModel(this.elements, this.doc, viewModel);
     this.syncEditorChromeState();
   }
@@ -585,6 +591,7 @@ export class EditorUiBridge {
   }
 
   destroy(): void {
+    closeRoomTemplatePicker();
     setHidden(this.elements.inspectorRoot, true);
     setHidden(this.elements.pressurePanel, true);
     setHidden(this.elements.containerPanel, true);
@@ -598,6 +605,12 @@ export class EditorUiBridge {
   }
 
   private bindListeners(): void {
+    for (const id of ['btn-room-template-empty', 'btn-room-template-replace']) {
+      const button = this.doc.getElementById(id);
+      const onClick = () => { if (this.actions.isActive()) this.actions.onOpenRoomTemplates?.(); };
+      button?.addEventListener('click', onClick);
+      this.cleanupCallbacks.push(() => button?.removeEventListener('click', onClick));
+    }
     bindDomEvent(this.cleanupCallbacks, this.doc, 'keydown', (event) => {
       this.actions.onDocumentKeyDown(event as KeyboardEvent);
     });

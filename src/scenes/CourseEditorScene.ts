@@ -666,6 +666,8 @@ export class CourseEditorScene extends Phaser.Scene {
       onUndo: () => this.undoAction(),
       onRedo: () => this.redoAction(),
       onRequestRender: () => this.renderUi(),
+      isRoomLayoutEmpty: () => !(this.getSelectedSlice()?.runtime.hasRoomLayoutContent() ?? true),
+      onOpenRoomTemplates: () => { void openRoomTemplatePicker({ getRuntime: () => this.getSelectedSlice()?.runtime ?? null, isActive: () => this.scene.isActive(), expandedCell: true, onApplied: () => { this.hideObjectInspectorUi(); this.renderUi(); } }); },
       onDocumentKeyDown: this.handleDocumentKeyDown,
       onAuthStateChanged: () => this.renderUi(),
       onBack: () => this.returnToCourseBuilder(),
@@ -3689,3 +3691,4 @@ export class CourseEditorScene extends Phaser.Scene {
     delete document.body.dataset.editorCourseMode;
   };
 }
+import { openRoomTemplatePicker } from './editor/roomTemplatePicker';

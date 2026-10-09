@@ -102,6 +102,7 @@ import {
   type RoomMusic,
 } from '../../music/model';
 import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
+import { cloneRoomSnapshot } from '../../persistence/roomModel';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../../signs/model';
 import { EDITOR_SPAWN_PLACED_EVENT } from './uiEvents';
 import { canRepeatSelectedEditorObject, resolveEditorLineEnd } from './editorToolSelection';
@@ -229,6 +230,7 @@ type UndoAction =
       smartAfter?: RoomSmartTerrainState;
     }
   | { kind: 'objects'; action: ObjectsAction }
+  | { kind: 'layout'; action: { previous: RoomSnapshot; next: RoomSnapshot } }
   | { kind: 'spawn'; action: SpawnAction }
   | { kind: 'goal'; action: GoalAction }
   | { kind: 'music'; action: MusicAction };
@@ -442,7 +444,7 @@ export class EditorEditRuntime {
     this.customRoomTiles = [];
   }
 
-  applyRoomSnapshot(room: RoomSnapshot): void {
+  applyRoomSnapshot(room: RoomSnapshot, resetHistory = true): void {
     const tileData = room.tileData;
     this.customRoomTiles = normalizeCustomRoomTileDefinitions(room.customTiles);
     this.smartTerrain = normalizeRoomSmartTerrainState(room.smartTerrain);
@@ -496,13 +498,48 @@ export class EditorEditRuntime {
     this.rebuildObjectSprites();
     this.host.updateGoalUi();
 
-    this.history.reset();
+    if (resetHistory) this.history.reset();
     this.currentBatch = [];
     this.currentBatchActionIndex.clear();
     this.currentBatchSmartBefore = null;
     this.currentSmartGestureAnchor = null;
     this.roomDirty = false;
     this.lastDirtyAt = 0;
+  }
+
+  canReplaceRoomLayout(): boolean { return this.canEditRoom(); }
+
+  hasRoomLayoutContent(): boolean {
+    if (this.roomGoal || this.roomSpawnPoint || this.host.getPlacedObjects().length) return true;
+    for (const layer of this.host.getLayers().values()) {
+      for (let y = 0; y < ROOM_HEIGHT; y += 1) {
+        for (let x = 0; x < ROOM_WIDTH; x += 1) {
+          if ((layer.getTileAt(x, y)?.index ?? -1) > 0) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  replaceRoomLayout(room: RoomSnapshot): boolean {
+    if (!this.guardEditable()) return false;
+    const previous = this.exportRoomSnapshot();
+    if (room.id !== previous.id || room.coordinates.x !== previous.coordinates.x || room.coordinates.y !== previous.coordinates.y) return false;
+    const next = cloneRoomSnapshot(room);
+    this.applyRoomLayout(next);
+    this.history.record({ kind: 'layout', action: { previous, next } });
+    this.markRoomDirty();
+    this.host.updateGoalUi();
+    return true;
+  }
+
+  private applyRoomLayout(room: RoomSnapshot): void {
+    const current = this.exportRoomSnapshot();
+    const layout = cloneRoomSnapshot(room);
+    this.goalPlacementMode = null;
+    this.applyRoomSnapshot({ ...current, tileData: layout.tileData, smartTerrain: layout.smartTerrain,
+      placedObjects: layout.placedObjects, spawnPoint: layout.spawnPoint, goal: layout.goal,
+      goalIntroText: layout.goalIntroText }, false);
   }
 
   hasClipboardTiles(): boolean {
@@ -3001,6 +3038,14 @@ export class EditorEditRuntime {
     }
     recordReplayEditorAction('undo');
 
+    if (action.kind === 'layout') {
+      this.applyRoomLayout(action.action.previous);
+      this.history.pushRedo({ kind: 'layout', action: { previous: action.action.next, next: action.action.previous } });
+      this.markRoomDirty();
+      this.host.updateGoalUi();
+      return;
+    }
+
     if (action.kind === 'tiles') {
       const reverseActions: TileAction[] = [];
       for (const a of action.actions) {
@@ -3101,6 +3146,14 @@ export class EditorEditRuntime {
       return;
     }
     recordReplayEditorAction('redo');
+
+    if (action.kind === 'layout') {
+      this.applyRoomLayout(action.action.previous);
+      this.history.pushUndo({ kind: 'layout', action: { previous: action.action.next, next: action.action.previous } });
+      this.markRoomDirty();
+      this.host.updateGoalUi();
+      return;
+    }
 
     if (action.kind === 'tiles') {
       const reverseActions: TileAction[] = [];

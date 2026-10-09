@@ -36,6 +36,7 @@ import {
   type RoomVersionRecord,
 } from '../persistence/roomRepository';
 import { createWorldRepository } from '../persistence/worldRepository';
+import { openRoomTemplatePicker } from './editor/roomTemplatePicker';
 import { getGameSettings } from '../settings/userSettings';
 import { getSolidColorFromBackgroundValue } from '../backgrounds/model';
 import {
@@ -933,6 +934,8 @@ export class EditorScene extends Phaser.Scene {
       onUndo: () => this.undoAction(),
       onRedo: () => this.redoAction(),
       onRequestRender: () => this.renderEditorUi(),
+      isRoomLayoutEmpty: () => !this.editRuntime.hasRoomLayoutContent(),
+      onOpenRoomTemplates: () => { void openRoomTemplatePicker({ getRuntime: () => this.editRuntime, isActive: () => this.scene.isActive(), onApplied: () => { this.hideObjectInspectorUi(); this.renderEditorUi(); } }); },
       onDocumentKeyDown: this.handleDocumentKeyDown,
       onAuthStateChanged: () => {
         this.presenceController.refreshIdentity();

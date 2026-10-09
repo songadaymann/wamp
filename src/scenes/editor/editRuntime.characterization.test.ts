@@ -11,11 +11,12 @@ import {
   type PlacedObject,
 } from '../../config';
 import { createDefaultRoomMusic, createDefaultRoomPatternMusic } from '../../music/model';
-import { createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
+import { cloneRoomSnapshot, createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
 import type { SmartBrushId } from '../../autotiling/model';
 import { updateGameSettings } from '../../settings/userSettings';
 import { EditorEditRuntime } from './editRuntime';
 import { EditorInteractionController } from './interaction';
+import { buildRoomTemplate } from '../../templates/roomTemplates';
 
 vi.mock('phaser', () => ({
   default: {
@@ -41,6 +42,29 @@ vi.mock('./documentPresentationController', () => ({
 }));
 
 describe('editor edit runtime document contracts', () => {
+  it('replaces a complete layout in one history action without losing earlier history or later settings', () => {
+    const room = createRoom();
+    room.placedObjects = [{ id: 'floor_trigger', instanceId: 'p', x: 40, y: 40, triggerTargetInstanceId: 'd', coopPlate: true }, { id: 'door_metal_narrow', instanceId: 'd', x: 72, y: 40 }];
+    room.tileData.foreground[2][2] = encodeTileDataValue(5, true, false);
+    const { runtime, setEditable } = createHarness(cloneRoomSnapshot(room));
+    runtime.setGoalType('reach_exit'); runtime.startGoalMarkerPlacement('exit'); runtime.placeGoalMarker(10, 10);
+    const previous = runtime.exportRoomSnapshot();
+    expect(runtime.replaceRoomLayout(buildRoomTemplate(previous, 'arena', 'cave'))).toBe(true);
+    const next = runtime.exportRoomSnapshot();
+    expect(next.placedObjects).toHaveLength(2); expect(next.tileData.foreground[2][2]).toBe(-1);
+    runtime.setRoomPlayerHearts(3); runtime.setRoomPitsAreDeadly(true);
+    runtime.undo();
+    const restored = runtime.exportRoomSnapshot();
+    expect(restored.tileData).toEqual(previous.tileData); expect(restored.placedObjects).toEqual(previous.placedObjects);
+    expect(restored.goal).toEqual(previous.goal); expect(restored.smartTerrain).toEqual(previous.smartTerrain);
+    expect(restored.playerHearts).toBe(3); expect(restored.pitsAreDeadly).toBe(true);
+    runtime.redo(); expect(runtime.exportRoomSnapshot().tileData).toEqual(next.tileData);
+    runtime.undo(); runtime.undo(); expect(runtime.getPublishValidationError()).toMatch(/Set Exit/);
+    runtime.redo(); expect(runtime.exportRoomSnapshot().goal).toEqual(previous.goal);
+    setEditable(false);
+    expect(runtime.replaceRoomLayout(next)).toBe(false); expect(runtime.exportRoomSnapshot().tileData).toEqual(previous.tileData);
+  });
+
   beforeEach(() => {
     updateGameSettings({ builderMode: 'beginner' });
     editorState.activeLayer = 'terrain';

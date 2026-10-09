@@ -200,6 +200,8 @@ export interface EditorUiBridgeActions {
   onUndo: () => void;
   onRedo: () => void;
   onRequestRender: () => void;
+  onOpenRoomTemplates?: () => void;
+  isRoomLayoutEmpty?: () => boolean;
   onDocumentKeyDown: (event: KeyboardEvent) => void;
   onAuthStateChanged: () => void;
   onBack: () => void | Promise<void>;

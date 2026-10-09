@@ -1,7 +1,7 @@
 export const REPLAY_SECONDS = 300;
 export const REPLAY_IMAGE_LIMIT = 16_000;
 export const REPLAY_ACTIONS = [
-  'tiles_changed', 'objects_changed', 'spawn_changed', 'goal_changed', 'music_changed', 'undo', 'redo', 'save_attempt', 'draft_saved', 'publish_attempt', 'object_selected',
+  'tiles_changed', 'objects_changed', 'spawn_changed', 'goal_changed', 'music_changed', 'layout_changed', 'undo', 'redo', 'save_attempt', 'draft_saved', 'publish_attempt', 'object_selected',
   'tool_pencil', 'tool_eraser', 'tool_copy', 'tool_fill', 'tool_rect', 'tool_ellipse', 'tool_line',
   'play_toggle', 'room_start', 'welcome_play', 'welcome_build', 'welcome_explore', 'menu', 'email_submit', 'wallet_open',
   'death', 'completed', 'failed', 'signup_open', 'test', 'stop', 'restart', 'signed_in', 'hidden', 'visible',
