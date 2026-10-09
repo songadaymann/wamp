@@ -117,6 +117,7 @@ function resolveAssetUrl(path: string): string {
 export class RoomMusicController {
   private initialized = false;
   private userInteracted = false;
+  private lifecycleDocument: Pick<Document, 'hidden'> | null = null;
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private volume = 1;
@@ -147,6 +148,7 @@ export class RoomMusicController {
     }
 
     this.initialized = true;
+    this.lifecycleDocument = windowObj.document;
     const markInteracted = () => {
       this.userInteracted = true;
       void this.resumeAudioContext('user-gesture');
@@ -165,7 +167,9 @@ export class RoomMusicController {
     windowObj.addEventListener('focus', () => resumeAfterLifecycleEvent('window-focus'), { passive: true });
     windowObj.addEventListener('pageshow', () => resumeAfterLifecycleEvent('pageshow'), { passive: true });
     windowObj.document.addEventListener('visibilitychange', () => {
-      if (!windowObj.document.hidden) {
+      if (windowObj.document.hidden) {
+        this.suspendAudioContext();
+      } else {
         resumeAfterLifecycleEvent('visibilitychange-visible');
       }
     });
@@ -931,6 +935,7 @@ export class RoomMusicController {
         state: this.audioContext?.state ?? 'unknown',
       };
     });
+    if (this.lifecycleDocument?.hidden) this.suspendAudioContext();
     return this.audioContext;
   }
 
@@ -1248,7 +1253,17 @@ export class RoomMusicController {
     return this.transportStartTime + nextBarIndex * barDurationSec;
   }
 
+  private suspendAudioContext(): void {
+    if (this.audioContext?.state === 'running') {
+      void this.audioContext.suspend().catch(() => void 0);
+    }
+  }
+
   private async resumeAudioContext(trigger: string): Promise<void> {
+    if (this.lifecycleDocument?.hidden) {
+      this.suspendAudioContext();
+      return;
+    }
     const stateBefore = this.audioContext?.state ?? null;
     if (!this.audioContext) {
       this.lastResumeAttempt = {
@@ -1274,6 +1289,10 @@ export class RoomMusicController {
 
     try {
       await this.audioContext.resume();
+      if (this.lifecycleDocument?.hidden) {
+        await this.audioContext.suspend();
+        return;
+      }
       const stateAfter: string = this.audioContext.state;
       this.lastResumeAttempt = {
         at: Date.now(),

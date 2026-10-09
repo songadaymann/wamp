@@ -17,6 +17,9 @@ function buffer(channels = 2, length = 8000, sampleRate = 1000): AudioBuffer {
 }
 
 function harness(hold = true) {
+  const windowEvents = new Map<string, () => void>();
+  const documentEvents = new Map<string, () => void>();
+  const doc = { hidden: false, addEventListener: (name: string, listener: () => void) => documentEvents.set(name, listener) };
   const sources: Array<ReturnType<typeof source>> = [];
   const gains: Array<ReturnType<typeof gain>> = [];
   function source() {
@@ -27,14 +30,19 @@ function harness(hold = true) {
       ...(hold ? { cancelAndHoldAtTime: vi.fn() } : {}) }, connect: vi.fn(), disconnect: vi.fn() };
   }
   const context = { currentTime: 1, sampleRate: 1000, state: 'running', destination: {}, addEventListener: vi.fn(),
+    suspend: vi.fn(async (): Promise<void> => {}), resume: vi.fn(async (): Promise<void> => {}),
     createBuffer: vi.fn(buffer), decodeAudioData: vi.fn(async () => buffer()),
     createBufferSource: () => { const s = source(); sources.push(s); return s; },
     createGain: () => { const g = gain(); gains.push(g); return g; } };
+  context.suspend.mockImplementation(async () => { context.state = 'suspended'; });
+  context.resume.mockImplementation(async () => { context.state = 'running'; });
   const contextConstructor = vi.fn(function () { return context; });
-  vi.stubGlobal('window', { AudioContext: contextConstructor, addEventListener: vi.fn(), location: { href: 'http://localhost/', origin: 'http://localhost' }, document: { addEventListener: vi.fn() } });
+  vi.stubGlobal('window', { AudioContext: contextConstructor, addEventListener: (name: string, listener: () => void) => windowEvents.set(name, listener), location: { href: 'http://localhost/', origin: 'http://localhost' }, document: doc });
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) })));
   render.mockResolvedValue(buffer());
-  return { context, contextConstructor, sources, gains, controller: new RoomMusicController() };
+  return { context, contextConstructor, sources, gains, doc, windowEvents,
+    visibility(hidden: boolean) { doc.hidden = hidden; documentEvents.get('visibilitychange')?.(); },
+    controller: new RoomMusicController() };
 }
 
 function music(kind: 'pattern' | 'phraseArrangement' | 'stemArrangement'): RoomMusic {
@@ -237,5 +245,38 @@ describe('lightweight music playhead info', () => {
     const h = harness(); await h.controller.playArrangement(music('pattern'), { mode: 'editor-preview' });
     h.controller.stopArrangement({ mode: 'idle', transition: 'immediate', resetTransport: true });
     expect(h.controller.getPlayheadInfo()).toEqual({ audioCurrentTime: 1, transportStartTime: 0, patternStartTime: null, loopDurationSec: null, kind: null });
+  });
+});
+
+describe('music visibility lifecycle', () => {
+  it('suspends and resumes the same owned loop without scheduling another source', async () => {
+    const h = harness(); h.controller.init(); h.windowEvents.get('keydown')?.();
+    await h.controller.playArrangement(music('pattern'), { mode: 'world-play', transition: 'room' });
+    const before = h.controller.getPlayheadInfo(); h.visibility(true);
+    expect(h.context.suspend).toHaveBeenCalledOnce(); expect(h.context.state).toBe('suspended');
+    expect(h.controller.getPlayheadInfo()).toEqual(before);
+    h.visibility(false); await Promise.resolve();
+    expect(h.context.resume).toHaveBeenCalledOnce(); expect(h.context.state).toBe('running');
+    expect(h.sources).toHaveLength(1); expect(h.sources[0].stop).not.toHaveBeenCalled();
+  });
+
+  it('cannot resume from focus or gesture events while hidden', async () => {
+    const h = harness(); await h.controller.playArrangement(music('pattern'), { mode: 'world-play' });
+    h.visibility(true); h.windowEvents.get('focus')?.(); h.windowEvents.get('keydown')?.();
+    expect(h.context.resume).not.toHaveBeenCalled(); expect(h.context.state).toBe('suspended');
+  });
+
+  it('does not create a context for hidden/visible lifecycle events alone', () => {
+    const h = harness(); h.controller.init(); h.windowEvents.get('keydown')?.(); h.visibility(true); h.visibility(false);
+    expect(h.contextConstructor).not.toHaveBeenCalled();
+  });
+
+  it('re-suspends when a pending resume finishes after the page becomes hidden', async () => {
+    const h = harness(); h.context.state = 'suspended'; let finish!: () => void;
+    h.context.resume.mockImplementationOnce(() => new Promise<void>(resolve => { finish = () => { h.context.state = 'running'; resolve(); }; }));
+    await h.controller.playArrangement(music('pattern'), { mode: 'world-play' });
+    expect(finish).toBeTypeOf('function'); h.visibility(true); finish();
+    await vi.waitFor(() => expect(h.context.state).toBe('suspended'));
+    expect(h.context.suspend).toHaveBeenCalledOnce();
   });
 });

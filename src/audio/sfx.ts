@@ -368,6 +368,7 @@ export class SfxController {
   private muted = false;
   private initialized = false;
   private userInteracted = false;
+  private lifecycleDocument: Pick<Document, 'hidden'> | null = null;
   private audioContext: AudioContext | null = null;
   private readonly assetUrlByPath = new Map<string, string>();
   private readonly idleAudioByPoolKey = new Map<string, SfxAudioPlayer[]>();
@@ -390,6 +391,7 @@ export class SfxController {
     }
 
     this.initialized = true;
+    this.lifecycleDocument = windowObj.document;
 
     const markInteracted = () => {
       this.userInteracted = true;
@@ -409,7 +411,10 @@ export class SfxController {
     windowObj.addEventListener('focus', () => resumeAfterLifecycleEvent('window-focus'), { passive: true });
     windowObj.addEventListener('pageshow', () => resumeAfterLifecycleEvent('pageshow'), { passive: true });
     windowObj.document.addEventListener('visibilitychange', () => {
-      if (!windowObj.document.hidden) {
+      if (windowObj.document.hidden) {
+        for (const cue of [...this.activeAudioByCue.keys()]) this.stop(cue);
+        this.suspendAudioContext();
+      } else {
         resumeAfterLifecycleEvent('visibilitychange-visible');
       }
     });
@@ -484,6 +489,11 @@ export class SfxController {
     const config = SFX_CUES[cue];
     if (!config) {
       this.record(cue, 'missing');
+      return;
+    }
+
+    if (this.lifecycleDocument?.hidden) {
+      this.record(cue, 'blocked');
       return;
     }
 
@@ -642,9 +652,11 @@ export class SfxController {
     if (playPromise) {
       void playPromise
         .then(() => {
+          if (cleanedUp) return;
           this.record(cue, 'played');
         })
         .catch((error: unknown) => {
+          if (cleanedUp) return;
           player.pause();
           cleanup();
           this.lastPlayError = {
@@ -842,10 +854,21 @@ export class SfxController {
         state: this.audioContext?.state ?? 'unknown',
       };
     });
+    if (this.lifecycleDocument?.hidden) this.suspendAudioContext();
     return this.audioContext;
   }
 
+  private suspendAudioContext(): void {
+    if (this.audioContext?.state === 'running') {
+      void this.audioContext.suspend().catch(() => void 0);
+    }
+  }
+
   private async resumeAudioContext(trigger: string): Promise<void> {
+    if (this.lifecycleDocument?.hidden) {
+      this.suspendAudioContext();
+      return;
+    }
     const stateBefore = this.audioContext?.state ?? null;
     if (!this.audioContext) {
       this.lastResumeAttempt = {
@@ -871,6 +894,10 @@ export class SfxController {
 
     try {
       await this.audioContext.resume();
+      if (this.lifecycleDocument?.hidden) {
+        await this.audioContext.suspend();
+        return;
+      }
       const stateAfter: string = this.audioContext.state;
       this.lastResumeAttempt = {
         at: Date.now(),

@@ -1,3 +1,16 @@
+## 2026-10-09 — Overnight checklist goal / F229 hidden-tab audio first slice
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-hidden-tab-audio-2026-10-09` stacks on F226 / draft #97. Preserve primary and production. Evidence: `/tmp/wamp-hidden-tab-audio-2026-10-09/`.
+
+- [x] Disable the unused Phaser audio context; suspend owned music/routed-SFX contexts while hidden and resume on return after interaction.
+- [x] Stop active SFX/media and suppress new hidden cues without replaying stale effects; guard pending play ownership.
+- [x] Verify asynchronous hidden/resume races, controlled visibility with real audio/music timing and SFX cleanup, inspected screenshots and quality/preservation gates.
+- [x] Save/push/attach tested stacked draft/receipt; keep master unticked. No release.
+
+Shared buses, Safari audioSession and automatic visible interruption recovery remain separate optional work; no battery/unlock benchmark claim.
+
+Verification: 405 files / 3,212 tests, gates, two controlled-visibility/real-audio browser cases and native preview/Stop pass. Ordinary background-tab/window switching remains a manual pre-release check due automation focus emulation. See `docs/review/wamp-hidden-tab-audio-2026-10-09.md`. Save the draft and morning handoff; stop at 05:00.
+
 ## 2026-10-09 — Overnight checklist goal / F226 music labels and playhead
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-label-playhead-2026-10-09` stacks on F225 / draft #96. Preserve primary and production. Evidence: `/tmp/wamp-music-label-playhead-2026-10-09/`.
