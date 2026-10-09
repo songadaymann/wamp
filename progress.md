@@ -10,6 +10,8 @@ Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-mus
 
 Verification: 402 files / 3,174 tests and quality gates, DOM 992/242, Worker safety and diff pass. Eight real-audio native cases, all inspected screenshots and unchanged fixture/primary proofs pass. See `docs/review/wamp-music-transitions-2026-10-09.md`. Continue F221 loop tails/hi-hat choking before the deadline.
 
+Saved source `02192a40` in [draft PR #94](https://github.com/songadaymann/wamp/pull/94), pushed and attached. Continue F221 loop tails and hi-hat choking.
+
 ## 2026-10-09 — Overnight checklist goal / F220 music preview and cache first slice
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-preview-2026-10-09` stacks on F166 `f24986bf` / draft #92. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-music-preview-2026-10-09/`.
