@@ -25,6 +25,8 @@
   },
   "vars": {
     "WORLD_MAP_HEALTH_ALERTS_ENABLED": "1",
+    "RUN_GHOST_COST_ALERTS_ENABLED": "1",
+    "RUN_GHOST_BILLING_CYCLE_DAY": "5",
     "JAM_SUBMISSIONS_OPEN_AT": "2026-07-20T04:00:00.000Z",
     "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-28T12:00:00.000Z",
     "PARTYKIT_HOST": "everybodys-platformer-presence.songadaymann.partykit.dev",
@@ -39,6 +41,10 @@
     "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles.wamp.land"
   },
   "r2_buckets": [
+    {
+      "binding": "RUN_GHOST_BUCKET",
+      "bucket_name": "everybodys-platformer-run-ghosts"
+    },
     {
       "binding": "WORLD_TILE_BUCKET",
       "bucket_name": "everybodys-platformer-world-tiles"
@@ -72,6 +78,8 @@
       "preview_urls": true,
       "vars": {
         "ENABLE_TEST_RESET": "0",
+        "RUN_GHOST_COST_ALERTS_ENABLED": "0",
+        "RUN_GHOST_BILLING_CYCLE_DAY": "5",
         "ENABLE_SNAPSHOT_ADMIN": "1",
         "JAM_SUBMISSIONS_OPEN_AT": "2026-07-20T04:00:00.000Z",
         "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-28T12:00:00.000Z",
@@ -88,6 +96,10 @@
         "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles-safety.wamp.land"
       },
       "r2_buckets": [
+        {
+          "binding": "RUN_GHOST_BUCKET",
+          "bucket_name": "everybodys-platformer-safety-run-ghosts"
+        },
         {
           "binding": "WORLD_TILE_BUCKET",
           "bucket_name": "everybodys-platformer-safety-world-tiles"

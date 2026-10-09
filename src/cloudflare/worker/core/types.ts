@@ -57,6 +57,11 @@ export interface R2BucketBinding {
   delete(keys: string | string[]): Promise<void>;
 }
 
+export interface RunGhostBucketBinding {
+  put(key: string, payload: string, options?: { httpMetadata: { contentType: string } }): Promise<unknown>;
+  get(key: string): Promise<{ size: number; text(): Promise<string> } | null>;
+}
+
 export interface Env {
   ASSETS: AssetsBinding;
   DB: D1Database;
@@ -93,6 +98,10 @@ export interface Env {
   WORLDS_ENABLED?: string;
   WORLD_TILE_QUEUE?: QueueBinding<import('../worldTiles/service').WorldTileGenerationJob>;
   WORLD_TILE_BUCKET?: R2BucketBinding;
+  RUN_GHOST_BUCKET?: RunGhostBucketBinding;
+  RUN_GHOST_ALERT_EMAIL?: string;
+  RUN_GHOST_COST_ALERTS_ENABLED?: string;
+  RUN_GHOST_BILLING_CYCLE_DAY?: string;
   ROOM_MINT_CHAIN_ID?: string;
   ROOM_MINT_CHAIN_NAME?: string;
   ROOM_MINT_DISABLED?: string;

@@ -8,7 +8,8 @@ import { claimGuestRuns } from './claims';
 import { guestRunIdentity, limitGuestRunRequest } from './identity';
 import { listClaimedGuestClears, listPendingGuestClears } from './history';
 
-export async function handleGuestRunRequest(request: Request, url: URL, originalEnv: Env): Promise<Response> {
+export async function handleGuestRunRequest(request: Request, url: URL, originalEnv: Env,
+  context?: WorkerExecutionContextLike): Promise<Response> {
   requireTrustedOriginForMutation(request);
   const env = { ...originalEnv, DB: originalEnv.DB.withSession?.('first-primary') ?? originalEnv.DB };
   const identity = await guestRunIdentity(request);
@@ -27,7 +28,7 @@ export async function handleGuestRunRequest(request: Request, url: URL, original
   const finish = /^\/api\/guest-runs\/([a-f0-9-]{36})\/finish$/i.exec(url.pathname);
   if (finish && validGuestRequestId(finish[1]) && request.method === 'POST') {
     await limitGuestRunRequest(env, request, identity, 'finish');
-    return jsonResponse(request, await finishGuestRun(env, identity, finish[1], request));
+    return jsonResponse(request, await finishGuestRun(env, identity, finish[1], request, context));
   }
   throw new HttpError(404, 'Guest run route not found.');
 }

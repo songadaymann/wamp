@@ -3,8 +3,10 @@ import type { GuestRunFinishResponse, GuestRunStartBody, GuestRunStartResponse }
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { RunFinishRequestBody } from '../../../runs/model';
 import { RANKED_RUN_TRACE_SCHEMA_VERSION } from '../../../runs/verificationTrace';
+import { buildRunGhost, supportsGhostRace } from '../../../runs/ghostRace';
+import { prepareRunGhostArchive, scheduleRunGhostArchive } from '../runs/ghostArchive';
 import { HttpError, normalizePositiveInteger, parseJsonBody } from '../core/http';
-import type { Env } from '../core/types';
+import type { Env, WorkerExecutionContextLike } from '../core/types';
 import { normalizeFinalizedCourseRunBody } from '../courses/requestBodies';
 import { getRunMetricCapsForSnapshot } from '../runs/points';
 import { normalizeFinalizedRunBody, normalizeRunFinishRequestBody } from '../runs/requestBodies';
@@ -102,7 +104,8 @@ function finishResponse(row: GuestRunRow): GuestRunFinishResponse {
   return { attemptId: row.attempt_id, result: row.result, verificationStatus: row.verification_status,
     verificationReason: row.verification_reason, saved: row.result === 'completed' && row.verification_status === 'passed' };
 }
-export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attemptId: string, request: Request): Promise<GuestRunFinishResponse> {
+export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attemptId: string, request: Request,
+  context?: WorkerExecutionContextLike): Promise<GuestRunFinishResponse> {
   const raw = await parseJsonBody<Partial<RunFinishRequestBody>>(request, { maxBytes: 1536 * 1024 });
   const body = normalizeRunFinishRequestBody(raw);
   const requestHash = await hashGuestRunValue(JSON.stringify(body));
@@ -113,6 +116,7 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
   if (!row) throw new HttpError(404, 'Guest run not found.');
   if (row.result !== 'active') {
     if (row.finish_request_hash !== requestHash) throw new HttpError(409, 'This guest run has already finished with a different result.');
+    await scheduleRunGhostArchive(env, context, attemptId);
     return finishResponse(row);
   }
   const now = new Date().toISOString();
@@ -159,6 +163,10 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
       }
     }
   }
+  const ghost = body.result === 'completed' && verificationStatus === 'passed'
+    && snapshot.kind === 'room' && supportsGhostRace(snapshot.room.goal) && body.verificationTrace
+    ? buildRunGhost({ attemptId, roomId: snapshot.room.id, roomVersion: row.content_version,
+      displayName: 'Guest', avatarId: 'default-player', elapsedMs }, body.verificationTrace) : null;
   await env.DB.batch([
     env.DB.prepare(`UPDATE guest_run_attempts SET result = ?, verification_status = ?, verification_reason = ?,
       finish_request_hash = ?, finished_at = ?, expires_at = ?, metrics_json = ?, insight_deaths_json = ?, snapshot_json = NULL
@@ -166,10 +174,14 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
       .bind(body.result, verificationStatus, reason, requestHash, now,
         new Date(Date.parse(now) + GUEST_RUN_RETENTION_MS).toISOString(), JSON.stringify(metrics), deathLocationsJson(body.verificationTrace, { verificationNonce: row.verification_nonce, snapshotHash: row.snapshot_hash },
           snapshot.kind === 'room' ? [snapshot.room.coordinates] : snapshot.course.roomRefs.map(ref => ref.coordinates), elapsedMs, metrics.deaths), attemptId),
+    ...(ghost ? [prepareRunGhostArchive(env, ghost, {
+      source: 'guest_room', userId: null, deaths: metrics.deaths, createdAt: now,
+    })] : []),
     env.DB.prepare('DELETE FROM guest_run_snapshot_rooms WHERE attempt_id = ?').bind(attemptId),
   ]);
   const final = await load();
   if (!final || final.finish_request_hash !== requestHash) throw new HttpError(409, 'Another request already finished this guest run.');
+  if (ghost) await scheduleRunGhostArchive(env, context, attemptId);
   return finishResponse(final);
 }
 export async function pruneGuestRuns(env: Env): Promise<void> {
