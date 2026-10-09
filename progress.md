@@ -1,8 +1,12 @@
-## 2026-10-09 — Authorized overnight integration release
+## 2026-10-09 — Authorized overnight integration delivered
 
-Original request: "deploy all the other stuff you made last night as well" while accounting for the partner's overlapping changes. This authorization supersedes the overnight draft-only delivery boundary below.
+Jonathan authorized deployment of all overnight work while preserving the partner's changes. PR #101 / `38ca52e5` is merged to main and live, including all 18 source heads from #81–#98, both morning fixes, partner #99 and the already-live ghost archive #100. Seven explicit conflict resolutions and native editor checks retain camera/cursor zoom, layer visibility, dock/navigation and Move/Templates. The primary checkout's 25 unrelated changes and original remote-safety preview remain intact.
 
-The complete stack through `997c5251` is integrated on fresh production `39189b93`, including partner PR #99 and live ghost archive PR #100. Seven conflict files preserve camera/layer behavior, Move and Templates, navigation and both sets of API routes. Combined verification passes 406 files / 3,225 tests, lint/types/bindings/build, DOM and Worker safety. Separate local fixtures supply integration proof; no primary or original preview edits are changed. Coordinated map/API/Pages release remains pending. Track the current release in `docs/review/wamp-overnight-release-2026-10-09.md`.
+All 406 files / 3,225 tests, lint, types, bindings, build, DOM and Worker safety pass, followed by all three exact-source and exact-main hosted checks. Production migrations 0060–0062, API `f9b9cf37`, renderer `6b5fc87f` and Pages `bdc8818a` are delivered. Compatible map catalog `843f81f7cad2c688` is active at 100%, with 995/995 ready, 975 verified nonempty images and independent live pixel parity. All 184 JS/CSS assets, four traversal PNGs and three death-audio formats match local dist, actual wamp.land and the immutable release. A real 3,976 ms guest clear saves a 1,794-byte R2 recording; archive has 51 runs, zero pending and the configured $10 warning. Map alert health is healthy.
+
+Superseded stacked drafts #82–#98 are closed after exact-source ancestry checks; #81 and #101 are merged. Branches and diagnostic evidence are retained. The master is 68/215; F162/F166/F220/F226/F229 retain their unfinished follow-ups. Build Prompt and Room Rush remain unlaunched. Controlled real-audio visibility checks pass, while native physical tab switching is unverified because the Mac is locked; the unlock question remains unanswered. This is a follow-up limitation, not a claim that manual acceptance passed. Full receipt: `docs/review/wamp-overnight-release-2026-10-09.md`; evidence: `/tmp/wamp-overnight-release-2026-10-09/`.
+
+The older candidate/handoff entries below record their original draft-only boundaries; this authorized release supersedes those delivery stops.
 
 ## 2026-10-09 — Repeating browser-only Guest clears popup
 
