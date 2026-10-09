@@ -150,6 +150,16 @@ export class EditorMusicPatternController {
   private batchingCellGesture = false;
   private gesturePattern: RoomPatternMusic | null = null;
   private gesturePreview: { pattern: RoomPatternMusic; row: number } | null = null;
+  /** What each overlay layer was last drawn from; a layer redraws only when its key changes. */
+  private overlayDrawKeys: Record<'backdrop' | 'grid' | 'cells' | 'playhead' | 'mix' | 'rowLabels' | 'mixLabels', string | null> = {
+    backdrop: null,
+    grid: null,
+    cells: null,
+    playhead: null,
+    mix: null,
+    rowLabels: null,
+    mixLabels: null,
+  };
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -749,17 +759,65 @@ export class EditorMusicPatternController {
     }
 
     this.setOverlayVisible(true);
-    this.drawBackdrop();
-    this.drawGrid();
-    this.drawCells();
-    this.drawPlayhead();
-    this.drawMixControls();
+    // Called every frame: rebuild a layer's draw commands only when its inputs change.
+    const origin = this.getWorkspaceOrigin();
+    const frameKey = `${origin.x},${origin.y}|${editorState.selectedTilesetKey}|${this.activeInstrumentTab}`;
+    this.redrawLayer('backdrop', frameKey, () => this.drawBackdrop());
+    this.redrawLayer('grid', frameKey, () => this.drawGrid());
+    this.redrawLayer('cells', `${frameKey}|${this.getCellsDrawKey()}`, () => this.drawCells());
+    this.redrawLayer('playhead', `${frameKey}|${this.getPlayheadDrawStep() ?? '-'}`, () => this.drawPlayhead());
+    const mix = this.getActiveInstrumentMix();
+    const mixKey = `${frameKey}|${mix.volume}|${mix.pan}|${this.getLegacyStemNoticeVisible()}`;
+    this.redrawLayer('mix', mixKey, () => this.drawMixControls());
     this.syncMusicLabelResolution();
-    this.updateRowLabels();
-    this.updateMixLabels();
+    const pattern = this.getDisplayPattern();
+    const octave = this.activeInstrumentTab === 'drums' ? 0 : pattern.octaveShift[this.activeInstrumentTab as RoomPatternTonalInstrumentId];
+    this.redrawLayer('rowLabels', `${frameKey}|${pattern.pitchMode}|${octave}|${pattern.keyTonic}|${pattern.keyMode}`, () => this.updateRowLabels());
+    this.redrawLayer('mixLabels', mixKey, () => this.updateMixLabels());
+  }
+
+  private redrawLayer(layer: keyof EditorMusicPatternController['overlayDrawKeys'], key: string, draw: () => void): void {
+    if (this.overlayDrawKeys[layer] === key) {
+      return;
+    }
+    this.overlayDrawKeys[layer] = key;
+    draw();
+  }
+
+  private resetOverlayDrawKeys(): void {
+    for (const layer of Object.keys(this.overlayDrawKeys) as Array<keyof EditorMusicPatternController['overlayDrawKeys']>) {
+      this.overlayDrawKeys[layer] = null;
+    }
+  }
+
+  /** Everything drawCells reads for the active lane. */
+  private getCellsDrawKey(): string {
+    if (this.getLegacyStemNoticeVisible()) {
+      return 'legacy';
+    }
+    const pattern = this.getDisplayPattern();
+    if (this.activeInstrumentTab === 'drums') {
+      return ROOM_PATTERN_DRUM_ROWS.map((row) => pattern.tabs.drums[row.id].join(',')).join(';');
+    }
+    const instrumentId = this.activeInstrumentTab as RoomPatternTonalInstrumentId;
+    const track = pattern.tabs[instrumentId];
+    return [
+      pattern.pitchMode,
+      pattern.keyTonic,
+      pattern.keyMode,
+      pattern.octaveShift[instrumentId],
+      track.steps.join(','),
+      (track.midis ?? []).join(','),
+      track.ties.map((tie) => (tie ? 1 : 0)).join(''),
+    ].join('|');
+  }
+
+  private getPlayheadDrawStep(): number | null {
+    return this.host.getMusicPreviewState() === 'playing' ? this.resolvePlayheadStep() : null;
   }
 
   private destroyGraphics(): void {
+    this.resetOverlayDrawKeys();
     this.overlayBackdrop?.destroy();
     this.overlayBackdrop = null;
     this.overlayGrid?.destroy();
@@ -793,6 +851,7 @@ export class EditorMusicPatternController {
     this.mixReadoutLabel?.setVisible(visible);
 
     if (!visible) {
+      this.resetOverlayDrawKeys();
       this.overlayBackdrop?.clear();
       this.overlayGrid?.clear();
       this.overlayCells?.clear();
@@ -957,11 +1016,7 @@ export class EditorMusicPatternController {
     }
 
     this.overlayPlayhead.clear();
-    if (this.host.getMusicPreviewState() !== 'playing') {
-      return;
-    }
-
-    const playheadStep = this.resolvePlayheadStep();
+    const playheadStep = this.getPlayheadDrawStep();
     if (playheadStep === null) {
       return;
     }
