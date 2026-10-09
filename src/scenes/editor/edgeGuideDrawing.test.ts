@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { drawRoomEdgeGuides } from './edgeGuideDrawing';
+import { drawRoomEdgeGuideMarks, drawRoomEdgeGuides } from './edgeGuideDrawing';
 
 describe('room edge guide drawing', () => {
   it('draws bounded chevrons and distinct X marks inside the room at desktop/phone zooms', () => {
@@ -18,5 +18,17 @@ describe('room edge guide drawing', () => {
   it('clears prior guides when a seam is excluded or the scene resets', () => {
     const graphics = { clear: vi.fn(), lineStyle: vi.fn(), lineBetween: vi.fn() };
     drawRoomEdgeGuides(graphics as never, [], 1); expect(graphics.clear).toHaveBeenCalledOnce(); expect(graphics.lineBetween).not.toHaveBeenCalled();
+  });
+  it('places markers at fixed edge positions, and an Expanded cell draws the same marks at its origin', () => {
+    const record = () => { const lines: number[][] = []; return { lines, graphics: { clear: vi.fn(), lineStyle: vi.fn(), lineBetween: (...v: number[]) => lines.push(v) } }; };
+    const guides = [{ side: 'left' as const, start: 100, end: 140, state: 'connected' as const }, { side: 'bottom' as const, start: 300, end: 340, state: 'blocked' as const }];
+    const room = record(); drawRoomEdgeGuides(room.graphics as never, guides, 1);
+    // Left chevron at x = size + 2 (size 4 at zoom 1), centered on its span.
+    expect(room.lines[0]).toEqual([6 + 4, 120 - 4, 6 - 4, 120]);
+    // Bottom X centered at y = 352 - size - 2.
+    expect(room.lines[2]).toEqual([320 - 4, 346 - 4, 320 + 4, 346 + 4]);
+    const cell = record(); drawRoomEdgeGuideMarks(cell.graphics as never, guides, 1, { x: 640, y: 352 });
+    expect(cell.graphics.clear).not.toHaveBeenCalled();
+    expect(cell.lines).toEqual(room.lines.map(([x1, y1, x2, y2]) => [x1 + 640, y1 + 352, x2 + 640, y2 + 352]));
   });
 });
