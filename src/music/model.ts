@@ -1,5 +1,6 @@
 import { getRoomMusicPack } from './catalog';
 import {
+  DEFAULT_ROOM_PATTERN_INSTRUMENT_MIX,
   cloneRoomPatternMusic,
   getRoomPatternBarDurationSec,
   getRoomPatternKey,
@@ -462,4 +463,13 @@ export function getRoomMusicKey(music: RoomMusic | null | undefined): string | n
     music.packId,
     ...ROOM_MUSIC_LANE_IDS.map((laneId) => music.arrangement.laneAssignments[laneId].map((clipId) => clipId ?? '-').join(',')),
   ].join('|');
+}
+
+/** Like getRoomMusicKey, but equal for music that differs only in lane volume and pan. */
+export function getRoomMusicContentKey(music: RoomMusic | null | undefined): string | null {
+  if (!music || music.kind === 'stemArrangement') {
+    return getRoomMusicKey(music);
+  }
+
+  return getRoomMusicKey({ ...music, mix: DEFAULT_ROOM_PATTERN_INSTRUMENT_MIX });
 }

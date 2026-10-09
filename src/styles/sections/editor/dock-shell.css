@@ -1351,7 +1351,11 @@ body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-contai
     margin-top: 0;
     padding-top: 0;
   }
+}
 
+/* Music and sprite shells reach under the fixed menu button until the
+   viewport leaves 56px beside the 1328px shell, so keep Close clear of it. */
+@media (max-width: 1439px) {
   body[data-editor-dock-shell='true'] .editor-workbench-heading {
     box-sizing: border-box;
     padding-right: 50px;

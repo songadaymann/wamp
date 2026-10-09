@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderRoomPatternLoopBuffer } from './patternRenderer';
+import {
+  ROOM_PATTERN_OUTPUT_DRIVE,
+  getRoomPatternLaneGain,
+  getRoomPatternStemLanes,
+  renderRoomPatternLoopBuffer,
+  renderRoomPatternStemBuffer,
+} from './patternRenderer';
 import { createDefaultRoomPatternMusic, type RoomPatternDrumRowId, type RoomPatternPlaybackSequence, type RoomPatternTonalInstrumentId } from './pattern';
 
 const samples = vi.hoisted(() => new Map<RoomPatternDrumRowId, Float32Array>());
@@ -122,3 +128,45 @@ describe('periodic mono music rendering', () => {
     expect(peak(1)).toBeGreaterThan(peak(0)); expect(peak(0)).toBeGreaterThan(0);
   });
 });
+
+describe('per-lane stems for live mixing', () => {
+  /** What the playback graph computes: lane gain, equal-power pan, sum, tanh. */
+  function mixStems(stems: AudioBuffer, p: RoomPatternPlaybackSequence, channel: 0 | 1): Float32Array {
+    const lanes = getRoomPatternStemLanes(p);
+    const out = new Float32Array(stems.length);
+    lanes.forEach((id, index) => {
+      const angle = (Math.max(-1, Math.min(1, p.mix[id].pan)) + 1) * Math.PI * 0.25;
+      const gain = getRoomPatternLaneGain(id, p.mix[id].volume) * (channel === 0 ? Math.cos(angle) : Math.sin(angle));
+      const data = stems.getChannelData(index);
+      for (let i = 0; i < out.length; i++) out[i] += data[i] * gain;
+    });
+    return out.map(v => Math.tanh(v * ROOM_PATTERN_OUTPUT_DRIVE));
+  }
+
+  it('renders one channel per sounding lane, skipping silent lanes', async () => {
+    const p = createDefaultRoomPatternMusic(); p.tabs.saw.steps[0] = 4; p.tabs.drums.snare = [8];
+    expect(getRoomPatternStemLanes(p)).toEqual(['drums', 'saw']);
+    const stems = await renderRoomPatternStemBuffer(context, p);
+    expect(stems.numberOfChannels).toBe(2); expect(stems.length).toBe(32000);
+    const empty = await renderRoomPatternStemBuffer(context, createDefaultRoomPatternMusic());
+    expect(empty.numberOfChannels).toBe(1); expect(empty.getChannelData(0).every(v => v === 0)).toBe(true);
+  });
+
+  it('mixes back to the exact mixdown for centered and panned rooms at any volume', async () => {
+    samples.set('crash', Float32Array.from({ length: 16000 }, (_, i) => Math.sin(i * 0.1) * Math.exp(-i / 4000)));
+    samples.set('kick-1', Float32Array.from({ length: 3000 }, (_, i) => Math.sin(i * 0.05) * Math.exp(-i / 600)));
+    const p = createDefaultRoomPatternMusic();
+    p.tabs.triangle.steps[0] = 3; p.tabs.triangle.steps[30] = 6; p.tabs.saw.steps[4] = 5; p.tabs.square.steps[12] = 2;
+    p.tabs.drums.crash = [31]; p.tabs.drums['kick-1'] = [0, 16];
+    const panned = structuredClone(p); panned.mix.saw.pan = -0.6; panned.mix.drums.pan = 0.4; panned.mix.triangle.volume = 0.42; panned.mix.square.volume = 0;
+    for (const room of [p, panned]) {
+      const [mixdown, stems] = await Promise.all([renderRoomPatternLoopBuffer(context, room), renderRoomPatternStemBuffer(context, room)]);
+      expect(stems.numberOfChannels).toBe(4);
+      const left = mixStems(stems, room, 0); const right = mixStems(stems, room, 1);
+      expect(maximumDifference(left, mixdown.getChannelData(0), 0, left.length)).toBeLessThan(0.000001);
+      expect(maximumDifference(right, mixdown.getChannelData(mixdown.numberOfChannels - 1), 0, right.length)).toBeLessThan(0.000001);
+      expect(left.some(v => v !== 0)).toBe(true);
+    }
+  });
+});
+

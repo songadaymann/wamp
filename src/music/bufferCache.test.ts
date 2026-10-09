@@ -13,6 +13,14 @@ describe('shared room music buffer retention', () => {
     await settle(); expect(cache.get('clip:0')).toBeUndefined();
     expect(cache.getDebugSnapshot()).toMatchObject({ clipEntries: 16, loopEntries: 4, pendingEntries: 0 });
   });
+  it('keeps up to 64 Arrange segments without evicting room loops', async () => {
+    const cache = new RoomMusicBufferCache();
+    cache.set('pattern:a', 'loop', Promise.resolve(buffer()));
+    for (let i = 0; i < 65; i++) cache.set(`segment:${i}`, 'segment', Promise.resolve(buffer()));
+    await settle();
+    expect(cache.get('segment:0')).toBeUndefined(); expect(cache.get('segment:64')).toBeTruthy(); expect(cache.get('pattern:a')).toBeTruthy();
+    expect(cache.getDebugSnapshot()).toMatchObject({ segmentEntries: 64, loopEntries: 1, clipEntries: 0 });
+  });
   it('uses one byte budget across decoded clips and rendered loops', async () => {
     const cache = new RoomMusicBufferCache();
     cache.set('clip', 'clip', Promise.resolve(buffer(30 * 1024 * 1024)));
