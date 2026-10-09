@@ -93,9 +93,9 @@ body[data-editor-dock-shell='true'] .editor-shell-top {
   grid-row: 1;
   z-index: 14;
   display: grid;
-  grid-template-columns: minmax(292px, 1fr) minmax(250px, 430px) minmax(340px, 1fr);
+  grid-template-columns: minmax(337px, 1fr) minmax(250px, 430px) minmax(340px, 1fr);
   align-items: center;
-  gap: 18px;
+  gap: 9px;
   min-width: 0;
   padding: 10px 78px 10px 16px;
   border-bottom: 2px solid var(--editor-retro-cream);
@@ -107,8 +107,8 @@ body[data-editor-dock-shell='true'] .editor-shell-top {
 body[data-editor-dock-shell='true'] .editor-shell-tools {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(5, minmax(52px, 78px));
-  gap: 7px;
+  grid-template-columns: repeat(6, minmax(52px, 78px));
+  gap: 5px;
   align-content: center;
   justify-content: start;
 }

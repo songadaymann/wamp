@@ -42,6 +42,28 @@ vi.mock('./documentPresentationController', () => ({
 }));
 
 describe('editor edit runtime document contracts', () => {
+  it('moves linked objects as one Undo action, preserving configuration and guarding read-only and occupied targets', () => {
+    const room = createRoom();
+    room.placedObjects = [
+      { id: 'floor_trigger', instanceId: 'plate', x: 40, y: 312, triggerTargetInstanceId: 'door', coopPlate: true },
+      { id: 'door_metal_narrow', instanceId: 'door', x: 200, y: 296 },
+      { id: 'treasure_chest', instanceId: 'chest', x: 320, y: 304, containedObjectId: 'coin_gold', layer: 'foreground' },
+    ];
+    const { runtime, setEditable, host } = createHarness(cloneRoomSnapshot(room));
+    runtime.setGoalType('survival'); runtime.setRoomPlayerHearts(3);
+    const original = runtime.exportRoomSnapshot();
+    expect(runtime.movePlacedObject('door', { x: 232, y: 280 })).toBe(true);
+    const moved = runtime.exportRoomSnapshot();
+    expect(moved.placedObjects).toEqual(original.placedObjects.map(object => object.instanceId === 'door' ? { ...object, x: 232, y: 280 } : object));
+    expect(host.recordBuildPlacement).not.toHaveBeenCalled();
+    runtime.undo(); expect(runtime.exportRoomSnapshot().placedObjects).toEqual(original.placedObjects); expect(runtime.exportRoomSnapshot().playerHearts).toBe(3);
+    runtime.redo(); expect(runtime.exportRoomSnapshot().placedObjects).toEqual(moved.placedObjects);
+    runtime.undo(); runtime.undo(); expect(runtime.exportRoomSnapshot().goal).toBeNull(); expect(runtime.exportRoomSnapshot().playerHearts).toBe(3);
+    expect(runtime.movePlacedObject('plate', { x: 200, y: 312 })).toBe(false);
+    expect(runtime.exportRoomSnapshot().placedObjects).toEqual(original.placedObjects);
+    setEditable(false); expect(runtime.movePlacedObject('door', { x: 232, y: 280 })).toBe(false);
+    expect(runtime.exportRoomSnapshot().placedObjects).toEqual(original.placedObjects);
+  });
   it('replaces a complete layout in one history action without losing earlier history or later settings', () => {
     const room = createRoom();
     room.placedObjects = [{ id: 'floor_trigger', instanceId: 'p', x: 40, y: 40, triggerTargetInstanceId: 'd', coopPlate: true }, { id: 'door_metal_narrow', instanceId: 'd', x: 72, y: 40 }];

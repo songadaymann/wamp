@@ -14,6 +14,7 @@ import { isTextInputFocused } from '../../ui/keyboardFocus';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { EditorClipboardState, GoalPlacementMode } from './editRuntime';
+import type { EditorObjectMoveController } from './objectMoveController';
 import {
   canRepeatSelectedEditorObject,
   getEditorStampKind,
@@ -58,6 +59,7 @@ function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
 }
 
 interface EditorInteractionHost {
+  objectMove?: EditorObjectMoveController;
   isPracticeTestPlacementActive?: () => boolean;
   tryStartPracticeTestAt?: (tileX: number, tileY: number) => boolean;
   cancelPracticeTestPlacement?: () => boolean;
@@ -168,6 +170,7 @@ export class EditorInteractionController {
   get hasPendingTouchEdit(): boolean { return this.touchAction !== null; }
 
   validateTouchEdit(): void {
+    this.host.objectMove?.validate();
     if (this.touchAction && (this.touchToolKey !== editorTouchToolKey()
       || this.scene.game.canvas.ownerDocument.body.dataset.editorSpriteUiLocked === 'true'
       || this.host.isMusicModeActive() || editorState.isPlaying)) this.cancelTouchEdit();
@@ -439,6 +442,11 @@ export class EditorInteractionController {
   }
 
   updateCursorHighlight(): void {
+    if (editorState.activeTool === 'move') {
+      this.cursorGraphics?.clear();
+      this.host.objectMove?.hover(this.scene.input.activePointer);
+      return;
+    }
     this.cursorGraphics?.clear();
     if (!this.cursorGraphics || editorState.isPlaying) {
       return;
@@ -626,6 +634,8 @@ export class EditorInteractionController {
     this.scene.game.events.on('blur', this.handleTouchBlur);
     this.scene.events.on('sleep', this.handleTouchBlur);
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.cancel();
+      else if (this.host.objectMove?.down(pointer)) return;
       if (this.handleTouchPointerDown(pointer)) {
         return;
       }
@@ -740,6 +750,7 @@ export class EditorInteractionController {
     });
 
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.host.objectMove?.move(pointer)) return;
       if (this.handleTouchPointerMove(pointer)) {
         return;
       }
@@ -813,6 +824,7 @@ export class EditorInteractionController {
     });
 
     this.scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (this.host.objectMove?.up(pointer)) return;
       if (this.handleTouchPointerUp(pointer)) {
         return;
       }
@@ -875,6 +887,7 @@ export class EditorInteractionController {
     });
 
     this.scene.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => {
+      if (this.host.objectMove?.up(pointer, true)) return;
       this.handleTouchPointerUp(pointer);
     });
     this.scene.input.on('wheel', (_pointer: Phaser.Input.Pointer, _gameObjects: unknown[], _deltaX: number, deltaY: number) => {

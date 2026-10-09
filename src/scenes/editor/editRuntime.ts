@@ -155,6 +155,7 @@ import {
   clonePlacedObjectDocument,
   removePlacedObjectFromDocument,
 } from './placedObjectDocument';
+import { buildMovedObjectDocument } from './objectMovement';
 import {
   clearRoomGoalMarkers,
   getRoomGoalSummaryText,
@@ -383,7 +384,7 @@ export class EditorEditRuntime {
     // Goal markers are sprite-backed; no persistent graphics overlay needed.
   }
 
-  private getRoomOrigin(): { x: number; y: number } {
+  getRoomOrigin(): { x: number; y: number } {
     return this.host.getRoomOrigin();
   }
 
@@ -2174,6 +2175,25 @@ export class EditorEditRuntime {
     }
 
     return this.host.getPlacedObjects().find((placed) => placed.instanceId === instanceId) ?? null;
+  }
+
+  getPlacedObjectSprite(instanceId: string): Phaser.GameObjects.Sprite | null {
+    return this.documentPresentation.getPlacedObjectSprite(instanceId);
+  }
+
+  movePlacedObject(instanceId: string, point: { x: number; y: number }, expected?: { x: number; y: number }): boolean {
+    if (!this.guardEditable() || this.objectBatchBefore) return false;
+    const previous = this.clonePlacedObjects();
+    const move = buildMovedObjectDocument(previous, instanceId, point, expected);
+    if (!move.objects) {
+      if (move.error) this.host.updatePersistenceStatus(move.error);
+      return false;
+    }
+    this.host.setPlacedObjects(move.objects);
+    this.history.record({ kind: 'objects', action: { previous, next: this.clonePlacedObjects(move.objects) } });
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
+    return true;
   }
 
   hasPlacedObjectInstanceId(instanceId: string | null | undefined): boolean {

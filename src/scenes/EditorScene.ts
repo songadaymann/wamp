@@ -39,6 +39,7 @@ import { createWorldRepository } from '../persistence/worldRepository';
 import { openRoomTemplatePicker } from './editor/roomTemplatePicker';
 import { buildReadyToPublishChecklist } from './editor/clearCheck';
 import { openPublishChecklist } from './editor/clearCheckUi';
+import { EditorObjectMoveController } from './editor/objectMoveController';
 import { getGameSettings } from '../settings/userSettings';
 import { getSolidColorFromBackgroundValue } from '../backgrounds/model';
 import {
@@ -174,6 +175,7 @@ export class EditorScene extends Phaser.Scene {
   private readonly flowController: EditorSceneFlowController;
   private readonly inspectorController: EditorInspectorController;
   private readonly interactionController: EditorInteractionController;
+  private readonly objectMoveController: EditorObjectMoveController;
   private readonly musicPatternController: EditorMusicPatternController;
   private readonly overlayController: EditorOverlayController;
   private readonly presenceController: EditorPresenceController;
@@ -272,6 +274,7 @@ export class EditorScene extends Phaser.Scene {
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
+      if (this.objectMoveController.cancel()) return;
       if (this.cancelPracticeTestPlacement()) return;
       if (document.body.dataset.editorSpriteMode === 'true') {
         document.getElementById('btn-editor-sprite-close')?.click();
@@ -647,7 +650,16 @@ export class EditorScene extends Phaser.Scene {
       isPlaying: () => editorState.isPlaying,
       isSceneActive: () => this.scene.isActive(this.scene.key),
     });
+    this.objectMoveController = new EditorObjectMoveController(this, {
+      isEnabled: () => this.scene.isActive() && !this.musicModeActive && !editorState.isPlaying && document.body.dataset.editorSpriteUiLocked !== 'true',
+      getRuntimeAt: (x, y) => this.roomPermissions.canSaveDraft && x >= 0 && x < ROOM_WIDTH * TILE_SIZE && y >= 0 && y < ROOM_HEIGHT * TILE_SIZE ? this.editRuntime : null,
+      prepare: () => { this.editRuntime.cancelGoalMarkerPlacement(); this.toolController.cancelClipboardPastePreview(); this.hideObjectInspectorUi(); },
+      showStatus: text => this.updatePersistenceStatus(text),
+      onChanged: () => this.renderEditorUi(),
+      onOverlayCreated: () => this.syncBackgroundCameraIgnores(),
+    });
     this.interactionController = new EditorInteractionController(this, {
+      objectMove: this.objectMoveController,
       getNeighborRadius: () => EDITOR_NEIGHBOR_RADIUS,
       getGoalPlacementMode: () => this.goalPlacementMode as GoalPlacementMode,
       isPracticeTestPlacementActive: () => this.testFromHerePlacement,
@@ -733,6 +745,7 @@ export class EditorScene extends Phaser.Scene {
           this.overlayController.layerGuideOverlay,
           this.interactionController.cursorOverlay,
           this.interactionController.rectPreviewOverlay,
+          this.objectMoveController.cursorOverlay,
           this.overlayController.borderOverlay,
         ];
         for (const overlay of overlays) {
@@ -920,6 +933,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   create(data?: EditorSceneData): void {
+    this.objectMoveController.activate();
     const builderSettings = getGameSettings();
     editorState.smartTheme = builderSettings.lastSmartTheme;
     if (builderSettings.builderMode !== 'advanced' && editorState.paletteMode === 'tiles') {
@@ -1123,6 +1137,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private resetRuntimeState(): void {
+    this.objectMoveController.cancel();
     this.testFromHerePlacement = false;
     this.lightingController.reset();
     this.weatherController.reset();
@@ -1948,6 +1963,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private renderEditorUi(): void {
+    this.objectMoveController.validate();
     this.chromeController.render();
     const practice = document.getElementById('btn-clear-check-test-here');
     if (practice) { practice.textContent = this.testFromHerePlacement ? 'Cancel practice start' : 'Test from Here'; practice.setAttribute('aria-pressed', String(this.testFromHerePlacement)); }
@@ -2050,11 +2066,13 @@ export class EditorScene extends Phaser.Scene {
   }
 
   undoAction(): void {
+    this.objectMoveController.cancel();
     this.toolController.undo();
     this.updateBottomBar();
   }
 
   redoAction(): void {
+    this.objectMoveController.cancel();
     this.toolController.redo();
     this.updateBottomBar();
   }

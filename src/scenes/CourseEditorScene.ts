@@ -113,6 +113,7 @@ import {
   isPencilStampPlacement,
 } from './editor/editorToolSelection';
 import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
+import { EditorObjectMoveController } from './editor/objectMoveController';
 import {
   EDITOR_SHELL_ESCAPE_REQUESTED_EVENT,
   type EditorShellEscapeRequestedDetail,
@@ -253,9 +254,11 @@ export class CourseEditorScene extends Phaser.Scene {
   private panStartScroll = { x: 0, y: 0 };
   private tileDragMode: TileDragMode = null;
   private readonly touchControls: CourseTouchController;
+  private readonly objectMoveController: EditorObjectMoveController;
   private readonly touchTileRooms = new Set<string>();
   private readonly touchObjectRooms = new Set<string>();
   private readonly handleTouchBlur = (): void => {
+    this.objectMoveController.cancel();
     if (this.touchControls.isEditing) this.touchControls.cancel();
   };
   private activeTileDragRoomId: string | null = null;
@@ -376,6 +379,7 @@ export class CourseEditorScene extends Phaser.Scene {
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
+      if (this.objectMoveController.cancel()) return;
       if (document.body.dataset.editorSpriteMode === 'true') {
         document.getElementById('btn-editor-sprite-close')?.click();
         return;
@@ -520,6 +524,18 @@ export class CourseEditorScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'CourseEditorScene' });
+    this.objectMoveController = new EditorObjectMoveController(this, {
+      isEnabled: () => this.scene.isActive() && !this.musicModeActive && !editorState.isPlaying && document.body.dataset.editorSpriteUiLocked !== 'true',
+      getRuntimeAt: (x, y) => { const slice = this.getSliceAtWorldPoint(x, y); return slice?.permissions.canSaveDraft ? slice.runtime : null; },
+      prepare: runtime => {
+        const slice = [...this.roomSlices.values()].find(item => item.runtime === runtime);
+        if (slice) this.selectRoomById(slice.roomId);
+        runtime.cancelGoalMarkerPlacement(); this.courseGoalPlacementMode = null;
+        this.cancelClipboardPastePreview(); this.hideObjectInspectorUi();
+      },
+      showStatus: text => { this.statusText = text; this.renderUi(); },
+      onChanged: () => this.renderUi(),
+    });
     this.musicWorkflow = new EditorMusicWorkflowCoordinator({
       canActivateMusicMode: () => this.getSelectedSlice() !== null,
       commitRoomMusic: (nextMusic) => {
@@ -649,6 +665,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   create(data?: CourseEditorSceneData): void {
+    this.objectMoveController.activate();
     this.roomDeathMap = null;
     this.draftLifecycle = new EditorDraftLifecycle({
       isActive: () => !this.isShuttingDown && this.scene.isActive(),
@@ -1179,6 +1196,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   updateToolUi(): void {
+    this.objectMoveController.validate();
     if (this.clipboardPastePreviewActive && editorState.activeTool !== 'copy') {
       this.cancelClipboardPastePreview();
     }
@@ -1500,6 +1518,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   undoAction(): void {
+    this.objectMoveController.cancel();
     const slice = this.getSelectedSlice();
     if (!slice) {
       return;
@@ -1510,6 +1529,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   redoAction(): void {
+    this.objectMoveController.cancel();
     const slice = this.getSelectedSlice();
     if (!slice) {
       return;
@@ -2307,6 +2327,7 @@ export class CourseEditorScene extends Phaser.Scene {
     const fallback = this.courseRecord?.draft.roomRefs[0]?.roomId ?? null;
     const nextRoomId = roomId && this.roomSlices.has(roomId) ? roomId : fallback;
     const roomChanged = nextRoomId !== this.selectedRoomId;
+    if (roomChanged) this.objectMoveController.cancel();
     this.selectedRoomId = nextRoomId;
     if (roomChanged) {
       this.objectInspectorController.clearTransientState();
@@ -2483,6 +2504,9 @@ export class CourseEditorScene extends Phaser.Scene {
     this.game.events.on('blur', this.handleTouchBlur);
     this.events.on('sleep', this.handleTouchBlur);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (editorState.activeTool === 'move' && !this.musicModeActive && pointer.rightButtonDown()) { this.objectMoveController.cancel(); return; }
+      if (this.pointerRequestsPan(pointer)) this.objectMoveController.cancel();
+      else if (this.objectMoveController.down(pointer)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.down(pointer); return; }
       if (this.musicModeActive && this.pointerRequestsPan(pointer)) {
         return;
@@ -2512,6 +2536,7 @@ export class CourseEditorScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.objectMoveController.move(pointer)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.move(pointer); return; }
       if (this.pendingRightClickPanPointerId === pointer.id) {
         const distance = Phaser.Math.Distance.Between(
@@ -2544,9 +2569,11 @@ export class CourseEditorScene extends Phaser.Scene {
     });
 
     this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => {
+      if (this.objectMoveController.up(pointer, true)) return;
       if (pointer.wasTouch && !this.musicModeActive) this.touchControls.up(pointer);
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (this.objectMoveController.up(pointer)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.up(pointer); return; }
       if (this.pendingRightClickPanPointerId === pointer.id) {
         this.pendingRightClickPanPointerId = null;
@@ -3381,6 +3408,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private updateCursorHighlight(pointer: Phaser.Input.Pointer): void {
     this.cursorGraphics?.clear();
+    if (editorState.activeTool === 'move') { this.objectMoveController.hover(pointer); return; }
     if (!this.cursorGraphics) {
       return;
     }
@@ -3509,6 +3537,7 @@ export class CourseEditorScene extends Phaser.Scene {
   }
 
   private renderUi(): void {
+    this.objectMoveController.validate();
     this.renderMusicUi();
     if (this.isShuttingDown || !this.uiBridge) {
       return;

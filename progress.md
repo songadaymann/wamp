@@ -1,3 +1,18 @@
+## 2026-10-09 — Overnight checklist goal / F162 object drag-to-move first slice
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-object-move-2026-10-09` stacks on F159 `156df31a` / draft PR #89. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-object-move-2026-10-09/`.
+
+- [x] Add an explicit Move tool / M shortcut, native desktop and phone object dragging, snapping by whole tile offsets and a visible preview.
+- [x] Preserve exact object identities, layers, contents, NPC dialogue/settings and incoming/outgoing links; record one Undo/Redo action only on a committed move.
+- [x] Reject occupied/out-of-cell destinations and read-only changes; cancel safely on Escape, tool change, touch cancellation, second touch, blur, sleep and pointer release outside the canvas.
+- [x] Support standalone and Expanded Room cells with shared movement logic; keep other cells, markers, Smart terrain and ordinary painting/inspection intact.
+- [x] Verify meaningful movement/history/cancellation tests and native desktop/phone/area save/reload/publication, quality gates and inspected unchanged installed-client capture.
+- [x] Save/push/attach a tested stacked draft and receipt, leave full F162/master unticked, and continue the checklist. No production release.
+
+Scope follows the fact-check: object drag-to-move first. Multi-layer marquee selection, cross-room clipboard and saved stamps remain later slices. Cross-cell moves are excluded to preserve existing local links and ownership.
+
+Verification: 392 files / 3,114 tests and quality gates pass, including final CSS build, DOM 992/242 and Worker safety. Twelve accepted native cases and actual local room/area publication pass; screenshots and official healthy gameplay are inspected. Exact configurations/links, one-action history, Clear Check recovery, private read-only policy and lifecycle cancellation are proven. Primary fingerprints match F159; production unchanged. See `docs/review/wamp-object-move-2026-10-09.md` and `/tmp/wamp-object-move-2026-10-09/accepted-report.json` for honest diagnostic boundaries.
+
 ## 2026-10-09 — Overnight checklist goal / F159 advisory Clear Check
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-clear-check-2026-10-09` stacks on F163 `48d2dda8` / draft PR #88. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-clear-check-2026-10-09/`.
