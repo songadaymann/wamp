@@ -10,6 +10,8 @@ Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-edi
 
 Verification: 394 files / 3,125 tests and quality gates, DOM 992/242, Worker safety and diff pass. Three completed native cases prove a 170-stroke capped desktop session with absent plain-tile Smart copies, stable rain/off-lighting exports and toggle refresh, native phone Undo/Redo, and Expanded Smart metadata history/neighbor preservation/selected-cell publication. Screenshots and official healthy gameplay inspected. Primary hashes match F162; production preserved. Synthetic legacy-course preferred run-start FK/fallback limitation is documented in `docs/review/wamp-editor-history-2026-10-09.md`.
 
+Saved source `1dd1c031` in [draft PR #91](https://github.com/songadaymann/wamp/pull/91), pushed and attached. Continue F166 neighbor edge guides.
+
 ## 2026-10-09 — Overnight checklist goal / F162 object drag-to-move first slice
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-object-move-2026-10-09` stacks on F159 `156df31a` / draft PR #89. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-object-move-2026-10-09/`.
