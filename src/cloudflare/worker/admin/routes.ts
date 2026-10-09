@@ -42,6 +42,7 @@ import { handleAdminWorldTileRequest } from '../worldTiles/routes';
 import { handleAdminCustomSpriteRequest } from '../customSprites/adminRoutes';
 import { handleAdminWorldsRequest } from '../worlds/adminRoutes';
 import { handleAdminDaily } from '../daily/routes';
+import { handleAdminGhostArchive } from '../runs/ghostArchiveAdmin';
 
 export async function handleAdminRequest(
   request: Request,
@@ -49,6 +50,9 @@ export async function handleAdminRequest(
   env: Env,
   context?: WorkerExecutionContextLike,
 ): Promise<Response> {
+  if (url.pathname.startsWith('/api/admin/run-ghost-archive/')) {
+    return handleAdminGhostArchive(request, url, env);
+  }
   if (url.pathname === '/api/admin/build-prompts') {
     return handleAdminBuildPrompts(request,url,env);
   }

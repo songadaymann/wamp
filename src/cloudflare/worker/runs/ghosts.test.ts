@@ -52,9 +52,10 @@ describe('ghost lookup boundaries', () => {
     const result = await loadGhostOption(db.env, '1,2', [1], entry);
     expect(result.ghost?.points).toHaveLength(2);
     expect(JSON.stringify(result)).not.toMatch(/secret|nonce|snapshot|inputEvents/);
-    expect(db.writes[1].sql).toContain("status = 'passed'");
-    expect(db.writes[1].sql).toContain("run_kind = 'room'");
-    expect(db.writes[1].sql).not.toContain('guest_replay');
+    const auditRead = db.writes.find(write => write.sql.includes('run_verification_audit'))!;
+    expect(auditRead.sql).toContain("status = 'passed'");
+    expect(auditRead.sql).toContain("run_kind = 'room'");
+    expect(auditRead.sql).not.toContain('guest_replay');
   });
   it('returns clear unavailable reasons for missing and malformed records', async () => {
     const db = database({ payload_json: '{broken' }, { trace_json: '{broken' });

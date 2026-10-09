@@ -1,5 +1,5 @@
 import { buildRunGhost, MAX_GHOST_BYTES, normalizeRunGhost, supportsGhostRace,
-  type GhostOption, type RoomGhostResponse } from '../../../runs/ghostRace';
+  type GhostOption, type RoomGhostResponse, type RunGhost } from '../../../runs/ghostRace';
 import { normalizeRankedRunVerificationTrace } from '../../../runs/verificationTrace';
 import type { RoomRunRecord, RunFinishRequestBody } from '../../../runs/model';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
@@ -10,23 +10,35 @@ import { loadRoomRecord } from '../rooms/store';
 import { resolveAggregatedRoomLeaderboardSelection } from './roomLeaderboardAggregation';
 import { loadRankedRoomLeaderboardRows, loadViewerRankedRoomLeaderboardRow } from './leaderboards';
 import { verifyRoomRunTrace } from './verification';
+import { loadArchivedRunGhost } from './ghostArchive';
 
 export async function savePersonalBestGhost(
   env: Env, run: RoomRunRecord, room: RoomSnapshot, body: RunFinishRequestBody,
   avatarId: string, alreadyVerified: boolean, reportedElapsedMs: number,
 ): Promise<void> {
-  if (!supportsGhostRace(room.goal) || !body.verificationTrace || run.elapsedMs === null) return;
-  const trace = body.verificationTrace;
+  const ghost = await buildVerifiedRoomGhost(run, room, body, avatarId, alreadyVerified, reportedElapsedMs);
+  if (ghost) await saveBuiltPersonalBestGhost(env, run, ghost);
+}
+
+export async function buildVerifiedRoomGhost(
+  run: RoomRunRecord, room: RoomSnapshot, body: RunFinishRequestBody,
+  avatarId: string, alreadyVerified: boolean, reportedElapsedMs: number,
+): Promise<RunGhost | null> {
+  if (!supportsGhostRace(room.goal) || !body.verificationTrace || run.elapsedMs === null) return null;
+  const trace = normalizeRankedRunVerificationTrace(body.verificationTrace);
+  if (!trace) return null;
   if (!alreadyVerified) {
     // The leaderboard keeps its server-time floor; the recording follows the
     // client's reported simulation clock, as it did before finalization.
     const result = await verifyRoomRunTrace({ trace, room, elapsedMs: reportedElapsedMs, deaths: run.deaths,
       binding: { verificationNonce: run.verificationNonce ?? null, verificationSnapshotHash: run.verificationSnapshotHash ?? null } });
-    if (result.status !== 'passed') return;
+    if (result.status !== 'passed') return null;
   }
-  const ghost = buildRunGhost({ attemptId: run.attemptId, roomId: run.roomId, roomVersion: run.roomVersion,
+  return buildRunGhost({ attemptId: run.attemptId, roomId: run.roomId, roomVersion: run.roomVersion,
     displayName: run.userDisplayName, avatarId, elapsedMs: run.elapsedMs }, trace);
-  if (!ghost) return;
+}
+
+export async function saveBuiltPersonalBestGhost(env: Env, run: RoomRunRecord, ghost: RunGhost): Promise<void> {
   await env.DB.batch([env.DB.prepare(`
     INSERT INTO run_ghosts (room_id, room_version, user_id, attempt_id, elapsed_ms, deaths, payload_json, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -47,6 +59,9 @@ export async function loadGhostOption(env: Env, roomId: string, equivalents: num
     .bind(entry.attempt_id, MAX_GHOST_BYTES).first<{ payload_json: string }>();
   let ghost = null;
   try { ghost = row ? normalizeRunGhost(JSON.parse(row.payload_json)) : null; } catch { /* Unavailable, never break Play. */ }
+  if (!ghost) {
+    try { ghost = await loadArchivedRunGhost(env, entry.attempt_id); } catch { /* Preserve historical fallback during storage outages. */ }
+  }
   if (!ghost) {
     // Read only verified ranked breadcrumbs, never the private guest analytics replay table.
     const audit = await env.DB.prepare(`SELECT trace_json FROM run_verification_audit

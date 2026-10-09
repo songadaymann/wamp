@@ -27,6 +27,8 @@ import { handleGuestActivityHeartbeat } from './worker/guestActivity/routes';
 import { handleGuestRoomDraftRequest } from './worker/guestRoomDrafts/routes';
 import { handleClaimGuestRequest, handleGuestProgressHistoryRequest, handleGuestRunRequest } from './worker/guestRuns/routes';
 import { pruneGuestRuns } from './worker/guestRuns/attempts';
+import { scheduleRunGhostArchive } from './worker/runs/ghostArchive';
+import { checkGhostArchiveCost } from './worker/runs/ghostArchiveCosts';
 import { handleGuestbookRequest } from './worker/guestbook/routes';
 import { handleJamRequest } from './worker/jam/routes';
 import {
@@ -281,7 +283,7 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
   },
   {
     methods: ['GET', 'POST'], pattern: { prefix: '/api/guest-runs/' }, auth: 'public',
-    handler: ({ request, url, env }) => handleGuestRunRequest(request, url, env),
+    handler: ({ request, url, env, executionContext }) => handleGuestRunRequest(request, url, env, executionContext),
   },
   {
     methods: ['POST'], pattern: '/api/me/claim-guest', auth: 'authenticated',
@@ -307,10 +309,17 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
 
 export default {
   async scheduled(event: ScheduledController, env: Env): Promise<void> {
+    await scheduleRunGhostArchive(env);
     if (event.cron === WORLD_MAP_HEALTH_CRON) {
       const result = await checkAndAlertWorldMap(env);
       console.log(JSON.stringify({ event: 'world-map-health', ...result }));
     } else {
+      try {
+        const ghostCost = await checkGhostArchiveCost(env, new Date(event.scheduledTime));
+        console.log(JSON.stringify({ event: 'run-ghost-archive-cost', ...ghostCost }));
+      } catch {
+        console.error(JSON.stringify({ event: 'run-ghost-cost-alert-failed' }));
+      }
       await purgeGuestReplays(env);
       await pruneGuestRuns(env);
       await pruneRateLimitEvents(env);

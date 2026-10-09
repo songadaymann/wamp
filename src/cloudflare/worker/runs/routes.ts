@@ -1,5 +1,6 @@
 import { parseGlobalLeaderboardWindow } from './globalLeaderboards';
-import { savePersonalBestGhost } from './ghosts';
+import { buildVerifiedRoomGhost, saveBuiltPersonalBestGhost } from './ghosts';
+import { prepareRunGhostArchive, scheduleRunGhostArchive } from './ghostArchive';
 import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
@@ -387,6 +388,13 @@ export async function handleRunFinish(
     finalScore = computeRunScore(snapshot.goal, finalBody);
   }
 
+  const completedGhost = finalBody.result === 'completed'
+    && (verificationStatus === 'passed' || verificationStatus === 'not_required')
+    ? await buildVerifiedRoomGhost({ ...existing,
+      elapsedMs: finalBody.elapsedMs, deaths: finalBody.deaths, finishedAt },
+    snapshot, finalBody, auth.user.selectedAvatarId ?? 'default-player', verificationStatus === 'passed', reportedElapsedMs)
+    : null;
+
   await env.DB.batch([
     env.DB.prepare(
       `
@@ -421,6 +429,9 @@ export async function handleRunFinish(
       Math.min(30 * 60 * 1000, reportedElapsedMs),
       attemptId
     ),
+    ...(completedGhost ? [prepareRunGhostArchive(env, completedGhost, {
+      source: 'room', userId: auth.user.id, deaths: finalBody.deaths, createdAt: finishedAt,
+    })] : []),
   ]);
 
   if (verification.audit) {
@@ -474,14 +485,14 @@ export async function handleRunFinish(
         finalizedRun.attemptId;
   }
 
-  if (isNewPersonalBest) {
+  if (isNewPersonalBest && completedGhost) {
     try {
-      await savePersonalBestGhost(env, finalizedRun, snapshot, finalBody,
-        auth.user.selectedAvatarId ?? 'default-player', verificationStatus === 'passed', reportedElapsedMs);
+      await saveBuiltPersonalBestGhost(env, finalizedRun, completedGhost);
     } catch {
       console.error(JSON.stringify({ event: 'run-ghost-save-failed', attemptId }));
     }
   }
+  if (completedGhost) await scheduleRunGhostArchive(env, executionContext, attemptId);
   await awardRunFinalizePoints(env, finalizedRun, {
     isFirstCompletion,
     isNewPersonalBest,
