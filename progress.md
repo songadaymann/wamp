@@ -1,3 +1,17 @@
+## 2026-10-09 — Overnight checklist goal / F220 music preview and cache first slice
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-preview-2026-10-09` stacks on F166 `f24986bf` / draft #92. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-music-preview-2026-10-09/`.
+
+- [x] Coalesce pending editor preview refreshes at 150 ms, flush canvas gesture completion and cancel on immediate sync/stop/reset/shutdown; keep authored edits immediate.
+- [x] Bound all shared RoomMusicController clip/lane/pattern/phrase buffers with LRU group limits and a combined byte budget. Preserve active callers, deduplication, retry after rejection and late-resolution ownership.
+- [x] Verify meaningful debounce/cache/workflow tests and native desktop/phone/Expanded music editing, final preview correctness, stop/room transitions and buffer limits under real Web Audio.
+- [x] Finish quality gates, inspected responsive/ordinary gameplay capture and primary/source preservation evidence.
+- [x] Save/push/attach a tested stacked draft and receipt; keep full F220/master unticked and continue until the deadline. No production release.
+
+First slice addresses queued preview work and shared cache growth. Per-instrument stems, live gain/pan mixing and slot-by-slot arrangement playback remain larger slices. Dispatched asynchronous audio renders retain their existing playback-request stale guard; cancellation here prevents superseded queued edits from being dispatched.
+
+Verification: 400 files / 3,153 tests and quality gates, DOM 992/242, Worker safety and diff pass. Three accepted native cases and inspected screenshots prove final preview, cancellation, exact history, selected-cell save and bounded real buffers. Existing portrait grid obstruction and desktop Close overlap remain recorded; no touch-grid pass is claimed. See `docs/review/wamp-music-preview-2026-10-09.md`. Continue F224 before the deadline.
+
 ## 2026-10-09 — Overnight checklist goal / F166 neighbor edge guides
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-neighbor-guides-2026-10-09` stacks on F165 `209e601a` / draft #91. Preserve primary, saved candidates and production. Evidence: `/tmp/wamp-neighbor-guides-2026-10-09/`.

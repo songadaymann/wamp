@@ -1,3 +1,4 @@
+import { RoomMusicBufferCache } from './bufferCache';
 import {
   getRoomMusicClip,
   getRoomMusicLane,
@@ -113,9 +114,7 @@ export class RoomMusicController {
   private activePattern: ActiveLoopPlayback | null = null;
   private previewClipPlayback: PreviewClipPlayback | null = null;
   private readonly oneShotPlaybacks = new Set<OneShotPlayback>();
-  private readonly bufferPromises = new Map<string, Promise<AudioBuffer>>();
-  private readonly laneLoopBufferPromises = new Map<string, Promise<AudioBuffer>>();
-  private readonly patternLoopBufferPromises = new Map<string, Promise<AudioBuffer>>();
+  private readonly bufferCache = new RoomMusicBufferCache();
   private currentArrangement: RoomMusic | null = null;
   private mode: PlaybackMode = 'idle';
   private playbackRequestSerial = 0;
@@ -507,6 +506,7 @@ export class RoomMusicController {
     const currentTime = this.audioContext?.currentTime ?? 0;
     return {
       initialized: this.initialized,
+      bufferCache: this.bufferCache.getDebugSnapshot(),
       userInteracted: this.userInteracted,
       mode: this.mode,
       volume: this.volume,
@@ -908,7 +908,7 @@ export class RoomMusicController {
 
   private async loadBuffer(packId: string, clipId: string): Promise<AudioBuffer> {
     const cacheKey = `${packId}:${clipId}`;
-    const cached = this.bufferPromises.get(cacheKey);
+    const cached = this.bufferCache.get(`clip:${cacheKey}`);
     if (cached) {
       return cached;
     }
@@ -934,7 +934,7 @@ export class RoomMusicController {
         return audioContext.decodeAudioData(arrayBuffer.slice(0));
       });
 
-    this.bufferPromises.set(cacheKey, bufferPromise);
+    this.bufferCache.set(`clip:${cacheKey}`, 'clip', bufferPromise);
     return bufferPromise;
   }
 
@@ -944,7 +944,7 @@ export class RoomMusicController {
     assignments: RoomMusicLaneBarAssignments,
   ): Promise<AudioBuffer> {
     const cacheKey = this.getLanePatternKey(packId, laneId, assignments);
-    const cached = this.laneLoopBufferPromises.get(cacheKey);
+    const cached = this.bufferCache.get(`lane:${cacheKey}`);
     if (cached) {
       return cached;
     }
@@ -1013,7 +1013,7 @@ export class RoomMusicController {
       return laneBuffer;
     })();
 
-    this.laneLoopBufferPromises.set(cacheKey, laneBufferPromise);
+    this.bufferCache.set(`lane:${cacheKey}`, 'loop', laneBufferPromise);
     return laneBufferPromise;
   }
 
@@ -1021,7 +1021,7 @@ export class RoomMusicController {
     pattern: Extract<RoomMusic, { kind: 'pattern' }>,
   ): Promise<AudioBuffer> {
     const cacheKey = getRoomMusicKey(pattern) ?? 'pattern';
-    const cached = this.patternLoopBufferPromises.get(cacheKey);
+    const cached = this.bufferCache.get(`pattern:${cacheKey}`);
     if (cached) {
       return cached;
     }
@@ -1035,7 +1035,7 @@ export class RoomMusicController {
       return renderRoomPatternLoopBuffer(audioContext, pattern);
     });
 
-    this.patternLoopBufferPromises.set(cacheKey, bufferPromise);
+    this.bufferCache.set(`pattern:${cacheKey}`, 'loop', bufferPromise);
     return bufferPromise;
   }
 
@@ -1043,7 +1043,7 @@ export class RoomMusicController {
     arrangement: RoomPhraseArrangementMusic,
   ): Promise<AudioBuffer> {
     const cacheKey = `phrase:${getRoomMusicKey(arrangement) ?? 'phraseArrangement'}`;
-    const cached = this.patternLoopBufferPromises.get(cacheKey);
+    const cached = this.bufferCache.get(`pattern:${cacheKey}`);
     if (cached) {
       return cached;
     }
@@ -1060,7 +1060,7 @@ export class RoomMusicController {
       return renderRoomPatternLoopBuffer(audioContext, sequence);
     });
 
-    this.patternLoopBufferPromises.set(cacheKey, bufferPromise);
+    this.bufferCache.set(`pattern:${cacheKey}`, 'loop', bufferPromise);
     return bufferPromise;
   }
 
