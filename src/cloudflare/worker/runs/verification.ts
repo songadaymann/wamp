@@ -6,6 +6,9 @@ import type { RoomGoal, GoalMarkerPoint } from '../../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../../persistence/roomModel';
 import type { TrustTier } from '../../../progression/model';
 import { normalizePlayerHearts } from '../../../player/hearts';
+import { getPlacedBossHitPoints } from '../../../enemies/boss';
+import type { BossHitPoints } from '../../../enemies/boss';
+import { isPlausibleBossDefeat } from './bossVerification';
 import type { LeaderboardRankingMode } from '../../../runs/model';
 import { compareLeaderboardEntries, getLeaderboardRankingMode } from '../../../runs/scoring';
 import {
@@ -105,6 +108,7 @@ interface VerificationComparableEntry {
 interface TraceObjectBinding {
   x: number;
   y: number;
+  bossHitPoints?: BossHitPoints | null;
 }
 export interface RunVerificationTriggerResult {
   required: boolean;
@@ -139,6 +143,7 @@ export async function computeRoomSnapshotVerificationHash(snapshot: RoomSnapshot
       layer: placed.layer ?? null,
       swordsmanObjectiveMode: placed.swordsmanObjectiveMode ?? null,
       swordsmanDefeatMode: placed.swordsmanDefeatMode ?? null,
+      ...(getPlacedBossHitPoints(placed) ? { bossHitPoints: getPlacedBossHitPoints(placed) } : {}),
       policeBehaviorMode: placed.policeBehaviorMode ?? null,
       policePatrolShoots: placed.policePatrolShoots ?? null,
       npcMode: placed.npcMode ?? null,
@@ -643,6 +648,7 @@ function deriveRoomMetricsFromTrace(
       enemyBindings.set(placed.instanceId, {
         x: placed.x,
         y: placed.y,
+        bossHitPoints: getPlacedBossHitPoints(placed),
       });
     }
   }
@@ -724,6 +730,7 @@ function deriveCourseMetricsFromTrace(
             {
               x: placed.x,
               y: placed.y,
+              bossHitPoints: getPlacedBossHitPoints(placed),
             } satisfies TraceObjectBinding,
           ])
       )
@@ -1006,6 +1013,7 @@ function isEventNearBoundObject(
   event: RankedRunTraceGoalEvent,
   binding: TraceObjectBinding,
 ): boolean {
+  if (binding.bossHitPoints) return isPlausibleBossDefeat(event, { ...binding, bossHitPoints: binding.bossHitPoints });
   return (
     Math.abs(event.x - binding.x) <= GOAL_EVENT_OBJECT_RADIUS_PX &&
     Math.abs(event.y - binding.y) <= GOAL_EVENT_OBJECT_RADIUS_PX

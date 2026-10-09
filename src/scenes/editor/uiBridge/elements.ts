@@ -161,6 +161,11 @@ export interface EditorUiElements {
   policeBehaviorModeSelect: HTMLSelectElement | null;
   policePatrolShootsRow: HTMLElement | null;
   policePatrolShootsCheckbox: HTMLInputElement | null;
+  bossPanel: HTMLElement | null;
+  bossCheckbox: HTMLInputElement | null;
+  bossHitsRow: HTMLElement | null;
+  bossHitsInput: HTMLInputElement | null;
+  bossHitsOutput: HTMLOutputElement | null;
   npcPanel: HTMLElement | null;
   npcStatus: HTMLElement | null;
   npcModeSelect: HTMLSelectElement | null;
@@ -370,6 +375,11 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     policeBehaviorModeSelect: byId<HTMLSelectElement>(doc, 'police-behavior-mode-select'),
     policePatrolShootsRow: byId<HTMLElement>(doc, 'police-patrol-shoots-row'),
     policePatrolShootsCheckbox: byId<HTMLInputElement>(doc, 'police-patrol-shoots-checkbox'),
+    bossPanel: byId<HTMLElement>(doc, 'enemy-boss-panel'),
+    bossCheckbox: byId<HTMLInputElement>(doc, 'enemy-boss-checkbox'),
+    bossHitsRow: byId<HTMLElement>(doc, 'enemy-boss-hits-row'),
+    bossHitsInput: byId<HTMLInputElement>(doc, 'enemy-boss-hits-input'),
+    bossHitsOutput: byId<HTMLOutputElement>(doc, 'enemy-boss-hits-output'),
     npcPanel: byId<HTMLElement>(doc, 'npc-objective-panel'),
     npcStatus: byId<HTMLElement>(doc, 'npc-objective-status'),
     npcModeSelect: byId<HTMLSelectElement>(doc, 'npc-mode-select'),

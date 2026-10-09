@@ -17,6 +17,7 @@ import {
 } from '../config';
 import { DEFAULT_ROOM_BACKGROUND, normalizeRoomBackground } from '../backgrounds/model';
 import { normalizePlayerHearts, type PlayerHearts } from '../player/hearts';
+import { getPlacedBossHitPoints } from '../enemies/boss';
 import {
   getRoomGoalPublishValidationError,
   normalizeRoomGoalIntroText,
@@ -539,6 +540,7 @@ function normalizePlacedObject(
     policeBehaviorMode: isPoliceEnemyObjectId(placed.id)
       ? getPlacedPoliceBehaviorMode(placed)
       : null,
+    bossHitPoints: getPlacedBossHitPoints(placed),
     policePatrolShoots: isPoliceEnemyObjectId(placed.id)
       ? getPlacedPolicePatrolShoots(placed)
       : null,
@@ -648,6 +650,7 @@ function clonePlacedObjects(
       policeBehaviorMode: isPoliceEnemyObjectId(placed.id)
         ? getPlacedPoliceBehaviorMode(placed)
         : null,
+      bossHitPoints: getPlacedBossHitPoints(placed),
       policePatrolShoots: isPoliceEnemyObjectId(placed.id)
         ? getPlacedPolicePatrolShoots(placed)
         : null,

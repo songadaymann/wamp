@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { createBossPresentation, syncBossPresentation } from './liveObjects/bossPresentation';
+import { getPlacedBossHitPoints } from '../../enemies/boss';
 import type { SfxCue } from '../../audio/sfx';
 import {
   canObjectBeStoredInContainer,
@@ -467,6 +469,15 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.triggerController.resetSwitchStates();
   }
 
+  resetBossChallenges(resetRoom: (room: RoomSnapshot) => void, alreadyResetRoomId: string | null): void {
+    for (const loadedRoom of this.options.getLoadedFullRooms()) {
+      if (loadedRoom.room.id !== alreadyResetRoomId
+        && loadedRoom.room.placedObjects.some(placed => getPlacedBossHitPoints(placed) !== null)) {
+        resetRoom(loadedRoom.room);
+      }
+    }
+  }
+
   resetSwitchStateForRoom(roomId: string): void {
     this.triggerController.resetSwitchStateForRoom(roomId);
   }
@@ -649,6 +660,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       signText,
       objectiveMode = null,
       defeatMode = null,
+      bossHitPoints = null,
       policeBehaviorMode = null,
       policePatrolShoots = null,
       npcMode = null,
@@ -770,6 +782,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         getCurrentTime: this.options.getCurrentTime,
         objectiveMode,
         defeatMode,
+        bossHitPoints: normalizedLayer === 'terrain' ? bossHitPoints : null,
         policeBehaviorMode,
         policePatrolShoots,
         npcMode,
@@ -817,6 +830,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
+    createBossPresentation(this.options.scene, liveObject);
     this.triggerController.initializePressureControlledObjectState(liveObject);
     this.checkpointController.syncObject(loadedRoom, liveObject);
 
@@ -858,6 +872,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           if (!liveObject.sprite.active) {
             continue;
           }
+          syncBossPresentation(liveObject, this.options.getCurrentTime());
 
           const dynamicBody = this.getDynamicBody(liveObject.sprite);
           const behavior = getLiveObjectBehavior(liveObject.config.id);

@@ -1,4 +1,5 @@
 import { EditorPhoneInspector } from './phoneInspector';
+import { bindBossInspector } from './uiBridge/bossInspector';
 import { EditorHistoryControls } from './historyControls';
 import {
   ERASER_BRUSH_SIZES,
@@ -1281,6 +1282,7 @@ export class EditorUiBridge {
         )
       );
     }
+    this.cleanupCallbacks.push(bindBossInspector(this.elements, this.actions));
     const handleSwordsmanDefeatModeChange = () => {
       const value = this.elements.swordsmanDefeatModeSelect?.value;
       if (value === 'defeatable' || value === 'invincible' || value === 'respawn') {

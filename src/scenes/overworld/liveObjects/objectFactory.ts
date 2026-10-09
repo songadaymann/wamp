@@ -26,6 +26,7 @@ import {
   type NpcMode,
 } from '../../../npcs/model';
 import type { LoadedRoomObjectRuntimeState } from './model';
+import { createBossHealthState, isBossEnemyObjectId } from '../../../enemies/boss';
 
 export function getInitialDirectionX(
   facing: 'left' | 'right' | undefined,
@@ -48,6 +49,7 @@ export function createLiveObjectRuntimeState(options: {
   getCurrentTime: () => number;
   objectiveMode: SwordsmanObjectiveMode | null;
   defeatMode: SwordsmanDefeatMode | null;
+  bossHitPoints?: number | null;
   policeBehaviorMode: PoliceBehaviorMode | null;
   policePatrolShoots: boolean | null;
   npcMode: NpcMode | null;
@@ -85,6 +87,8 @@ export function createLiveObjectRuntimeState(options: {
     : null;
 
   return {
+    boss: isBossEnemyObjectId(config.id) && defeatMode !== 'invincible'
+      ? createBossHealthState(options.bossHitPoints) : null,
     baseX: sprite.x,
     baseY: sprite.y,
     previousX: sprite.x,

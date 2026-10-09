@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import type { GameObjectConfig, LayerName } from '../../../config';
 import type { SwordsmanAiState } from '../../../enemies/swordsmanAi';
 import type { PoliceBehaviorMode } from '../../../enemies/policeEnemy';
+import type { BossHealthState } from '../../../enemies/boss';
 import type {
   SwordsmanDefeatMode,
   SwordsmanObjectiveMode,
@@ -20,6 +21,7 @@ interface SwordsmanTraversalBlockState {
 type SwordsmanCollectState = 'sweep' | 'route' | 'jump';
 
 export interface LoadedRoomObjectRuntimeState {
+  boss?: BossHealthState | null;
   baseX: number;
   baseY: number;
   previousX: number;
@@ -111,6 +113,7 @@ export interface LoadedRoomObject {
   signText: string | null;
   npcName: string | null;
   npcNameLabel: Phaser.GameObjects.Text | null;
+  bossHealthBar?: Phaser.GameObjects.Graphics | null;
   layer: LayerName;
   countsTowardGoals: boolean;
   config: GameObjectConfig;
@@ -139,6 +142,7 @@ export interface CreateLiveObjectEntryOptions {
   signText: string | null;
   objectiveMode?: SwordsmanObjectiveMode | null;
   defeatMode?: SwordsmanDefeatMode | null;
+  bossHitPoints?: number | null;
   policeBehaviorMode?: PoliceBehaviorMode | null;
   policePatrolShoots?: boolean | null;
   npcMode?: NpcMode | null;

@@ -679,6 +679,15 @@ export class EditorInspectorController {
     }
   }
 
+  setFocusedBossHitPoints(value: number | null): void {
+    const focused = this.getFocusedSwordsman() ?? this.getFocusedPolice();
+    if (!focused || !this.editRuntime.setBossHitPoints(focused.instanceId, value)) return;
+    this.pinInspector(focused.id === SWORDSMAN_AI_OBJECT_ID ? 'swordsman' : 'police', focused.instanceId);
+    this.swordsmanStatusText = null;
+    this.policeStatusText = null;
+    this.renderInspectorUi();
+  }
+
   setFocusedPoliceBehaviorMode(mode: PoliceBehaviorMode): void {
     const focused = this.getFocusedPolice();
     if (!focused) {

@@ -24,6 +24,7 @@ import {
   normalizeRoomBackground,
 } from '../../../backgrounds/model';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
+import { isBossEnemyObjectId, normalizeBossHitPoints, withPlacedBossHitPoints } from '../../../enemies/boss';
 import {
   DEFAULT_POLICE_BEHAVIOR_MODE,
   DEFAULT_POLICE_PATROL_SHOOTS,
@@ -211,6 +212,7 @@ interface PlaceObjectCommand {
   layer?: LayerName;
   swordsmanObjectiveMode?: SwordsmanObjectiveMode;
   swordsmanDefeatMode?: SwordsmanDefeatMode;
+  bossHitPoints?: number | null;
   policeBehaviorMode?: PoliceBehaviorMode;
   policePatrolShoots?: boolean;
 }
@@ -223,6 +225,7 @@ interface ObjectConfiguration {
   signText?: string | null;
   swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;
   swordsmanDefeatMode?: SwordsmanDefeatMode | null;
+  bossHitPoints?: number | null;
   policeBehaviorMode?: PoliceBehaviorMode | null;
   policePatrolShoots?: boolean | null;
   npcMode?: NpcMode | null;
@@ -566,6 +569,12 @@ function normalizeConfiguration(command: Record<string, unknown>, index: number,
     }
     configuration.swordsmanDefeatMode = command.swordsmanDefeatMode as SwordsmanDefeatMode | null;
   }
+  if (hasOwn(command, 'bossHitPoints')) {
+    if (command.bossHitPoints !== null && normalizeBossHitPoints(command.bossHitPoints) === null) {
+      throw new HttpError(400, `commands[${index}].bossHitPoints must be an integer from 3 to 10 or null.`);
+    }
+    configuration.bossHitPoints = command.bossHitPoints as number | null;
+  }
   if (hasOwn(command, 'policeBehaviorMode')) {
     if (command.policeBehaviorMode !== null && !normalizePoliceBehaviorMode(command.policeBehaviorMode)) {
       throw new HttpError(400, `commands[${index}].policeBehaviorMode must be hunter, patrol, or null.`);
@@ -688,7 +697,7 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
       addTileWrites(state, MAX_SET_TILES_PER_COMMAND);
       return { type: 'clear_layer', layer: normalizeLayer(command.layer, `commands[${index}].layer`) };
     case 'place_object': {
-      assertAllowedKeys(command, ['type', 'ref', 'objectId', 'tileX', 'tileY', 'facing', 'layer', 'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'policeBehaviorMode', 'policePatrolShoots'], `commands[${index}]`);
+      assertAllowedKeys(command, ['type', 'ref', 'objectId', 'tileX', 'tileY', 'facing', 'layer', 'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'bossHitPoints', 'policeBehaviorMode', 'policePatrolShoots'], `commands[${index}]`);
       if (typeof command.objectId !== 'string') throw new HttpError(400, `commands[${index}].objectId must be a string.`);
       const objectConfig = getObjectById(command.objectId);
       if (!objectConfig) throw new HttpError(400, `Unknown objectId "${command.objectId}".`);
@@ -697,6 +706,11 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
       if (command.facing !== undefined && !objectConfig.facingDirection) throw new HttpError(400, `commands[${index}].facing is not supported by ${command.objectId}.`);
       if (command.swordsmanObjectiveMode !== undefined && command.objectId !== SWORDSMAN_AI_OBJECT_ID) throw new HttpError(400, `commands[${index}].swordsmanObjectiveMode only applies to swordsman_ai.`);
       if (command.swordsmanDefeatMode !== undefined && command.objectId !== SWORDSMAN_AI_OBJECT_ID) throw new HttpError(400, `commands[${index}].swordsmanDefeatMode only applies to swordsman_ai.`);
+      if (hasOwn(command, 'bossHitPoints')) {
+        if (!isBossEnemyObjectId(command.objectId)) throw new HttpError(400, 'bossHitPoints only applies to Sword Hunter and police enemies.');
+        if (command.bossHitPoints !== null && normalizeBossHitPoints(command.bossHitPoints) === null) throw new HttpError(400, 'bossHitPoints must be an integer from 3 to 10 or null.');
+        if (command.bossHitPoints !== null && command.swordsmanDefeatMode === 'invincible') throw new HttpError(400, 'A boss cannot also be invincible.');
+      }
       if (command.policeBehaviorMode !== undefined && !isPoliceEnemyObjectId(command.objectId)) throw new HttpError(400, `commands[${index}].policeBehaviorMode only applies to police enemies.`);
       if (command.policePatrolShoots !== undefined && !isPoliceEnemyObjectId(command.objectId)) throw new HttpError(400, `commands[${index}].policePatrolShoots only applies to police enemies.`);
       const objectiveMode = command.objectId === SWORDSMAN_AI_OBJECT_ID
@@ -730,6 +744,7 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
         layer: normalizeOptionalLayer(command.layer, `commands[${index}].layer`),
         swordsmanObjectiveMode: objectiveMode,
         swordsmanDefeatMode: defeatMode,
+        bossHitPoints: command.bossHitPoints as number | null | undefined,
         policeBehaviorMode,
         policePatrolShoots,
       };
@@ -737,7 +752,7 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
     case 'configure_object': {
       const configurationKeys = [
         'layer', 'facing', 'linkedTargets', 'containedObjectId', 'signText',
-        'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'npcMode', 'npcPushable',
+        'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'bossHitPoints', 'npcMode', 'npcPushable',
         'policeBehaviorMode', 'policePatrolShoots',
         'npcCanJumpFall', 'npcPlayerCollision', 'npcFriendlyFire', 'npcName', 'npcDefeatMode',
       ] as const;
@@ -825,6 +840,7 @@ function placeObjectAtTile(command: PlaceObjectCommand): PlacedObject {
     swordsmanDefeatMode: command.objectId === SWORDSMAN_AI_OBJECT_ID
       ? command.swordsmanDefeatMode ?? DEFAULT_SWORDSMAN_DEFEAT_MODE
       : null,
+    bossHitPoints: normalizeBossHitPoints(command.bossHitPoints),
     policeBehaviorMode: isPoliceEnemyObjectId(command.objectId)
       ? command.policeBehaviorMode ?? DEFAULT_POLICE_BEHAVIOR_MODE
       : null,
@@ -883,6 +899,13 @@ function applyObjectConfiguration(room: RoomSnapshot, placed: PlacedObject, comm
   if (hasSwordsmanConfiguration && placed.id !== SWORDSMAN_AI_OBJECT_ID) throw new HttpError(400, 'Sword Hunter settings only apply to swordsman_ai.');
   if (command.swordsmanObjectiveMode !== undefined) placed.swordsmanObjectiveMode = command.swordsmanObjectiveMode ?? DEFAULT_SWORDSMAN_OBJECTIVE_MODE;
   if (command.swordsmanDefeatMode !== undefined) placed.swordsmanDefeatMode = command.swordsmanDefeatMode ?? DEFAULT_SWORDSMAN_DEFEAT_MODE;
+  if (command.bossHitPoints !== undefined) {
+    if (!isBossEnemyObjectId(placed.id)) throw new HttpError(400, 'bossHitPoints only applies to Sword Hunter and police enemies.');
+    if (command.bossHitPoints !== null && command.swordsmanDefeatMode === 'invincible') throw new HttpError(400, 'A boss cannot also be invincible.');
+    Object.assign(placed, withPlacedBossHitPoints(placed, command.bossHitPoints));
+  } else if (placed.swordsmanDefeatMode === 'invincible') {
+    placed.bossHitPoints = null;
+  }
   const hasPoliceConfiguration = command.policeBehaviorMode !== undefined || command.policePatrolShoots !== undefined;
   if (hasPoliceConfiguration && !isPoliceEnemyObjectId(placed.id)) throw new HttpError(400, 'Police settings only apply to police enemies.');
   if (command.policeBehaviorMode !== undefined) placed.policeBehaviorMode = command.policeBehaviorMode ?? DEFAULT_POLICE_BEHAVIOR_MODE;

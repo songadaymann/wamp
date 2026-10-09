@@ -192,6 +192,10 @@ export class CourseEditorObjectInspectorController {
     this.editFocusedActor((runtime, id) => runtime.setSwordsmanDefeatMode(id, defeatMode));
   }
 
+  setFocusedBossHitPoints(value: number | null): void {
+    this.editFocusedActor((runtime, id) => runtime.setBossHitPoints(id, value));
+  }
+
   setFocusedPoliceBehaviorMode(mode: PoliceBehaviorMode): void {
     this.editFocusedActor((runtime, id) => runtime.setPoliceBehaviorMode(id, mode));
   }

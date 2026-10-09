@@ -1,3 +1,20 @@
+## 2026-10-08 — Overnight checklist goal / F155 boss mode
+
+Original prompt: "ok i am ging to bed can you set a goal to make your way through the list until 5am"
+
+The active goal starts at 2026-10-08 20:33 America/New_York and runs until **2026-10-09 05:00 America/New_York / 09:00 UTC**. Continue through the checklist without per-item review pauses, preparing complete, tested draft candidates for morning review. Production publication remains a separate release boundary. Preserve the dirty primary checkout and the F150/F249 candidate branches/PRs.
+
+Current canonical lane: `codex/checkup-boss-mode-2026-10-08`, stacked on F249 `a43e1da7` / draft PR #82. Next F155, then F144; keep master ticks/count tied to delivery.
+
+- [x] Audit actor damage, sword plumbing, traversal timing, persistence/authoring and ranked verification; define boss behavior against the F155 requirements.
+- [x] Implement optional 3–10-hit bosses in both editor paths, actual per-instance health/hurt/recoil/protection and a visible health bar; accelerate phase-two windup/cooldown and plain ground chase without changing traversal jump/air physics.
+- [x] Verify attacks/contact, score and Defeat All only at terminal defeat, phase change, respawn/Restart/transitions, persistence and desktop/touch presentation; complete quality and inspected installed-client checks.
+- [ ] Save/push/attach the stacked draft PR and candidate receipt, then advance the overnight goal to F144. F155 remains unticked until production delivery.
+
+Full 374 files / 2,985 tests, lint, TypeScript, bindings/build, DOM 958/234, Worker safety and strict asset gates pass. Eighteen native cases and three actual server-verified finishes pass, including expanded and goal-less Restart, terminal-only rewards, phase-two timing/chase and real desktop/phone save/reload. Screenshots and unchanged installed-client play are inspected. Retained diagnostics distinguish runner/fixture corrections from the repaired cached-boss Restart defect. Primary hashes match; no production publication.
+
+Evidence directory: `/tmp/wamp-boss-mode-2026-10-08/`. No sub-agents are authorized for this run. Existing F249 and F150 implementation remains available in the stack; no candidate is silently replaced or released.
+
 ## 2026-10-08 — F249 in-game bug reporter
 
 Original prompt: "Ok let’s move on to bug reporter"

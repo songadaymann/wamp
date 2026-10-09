@@ -1839,6 +1839,9 @@ export class OverworldPlayScene extends Phaser.Scene {
         this.coursePlaybackController.clearActiveCourseRoomOverrides();
       },
       resetRoomChallengeState: (room) => this.resetRoomChallengeState(room),
+      resetBossChallenges: alreadyResetRoomId => this.liveObjectController.resetBossChallenges(
+        room => this.resetRoomChallengeState(room), alreadyResetRoomId,
+      ),
       resetTransientPlayState: () => this.resetTransientPlayState(),
       resetGoalRunController: () => {
         this.goalRunController.reset();
@@ -6588,6 +6591,14 @@ export class OverworldPlayScene extends Phaser.Scene {
             aiState: liveObject.runtime.aiState,
             aiObjectiveMode: liveObject.runtime.aiObjectiveMode,
             aiDefeatMode: liveObject.runtime.aiDefeatMode,
+            boss: liveObject.runtime.boss ? {
+              health: liveObject.runtime.boss.health,
+              maximum: liveObject.runtime.boss.maximum,
+              phase: liveObject.runtime.boss.health <= liveObject.runtime.boss.maximum / 2 ? 2 : 1,
+              invulnerableMs: Math.max(0, Math.round(liveObject.runtime.boss.protectedUntil - this.time.now)),
+              hurtMs: Math.max(0, Math.round(liveObject.runtime.boss.hurtUntil - this.time.now)),
+              healthBarVisible: liveObject.bossHealthBar?.visible ?? false,
+            } : null,
             aiIntent: liveObject.runtime.aiIntent,
             aiTargetX: liveObject.runtime.aiTargetX === null
               ? null

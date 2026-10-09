@@ -26,6 +26,7 @@ import {
   SWORDSMAN_OBJECTIVE_MODES,
 } from '../enemies/swordsmanObjectives';
 import { SWORDSMAN_AI_OBJECT_ID } from '../enemies/swordsmanAi';
+import { BOSS_MIN_HITS, BOSS_MAX_HITS, DEFAULT_BOSS_HITS, isBossEnemyObjectId } from '../enemies/boss';
 import {
   DEFAULT_POLICE_BEHAVIOR_MODE,
   DEFAULT_POLICE_PATROL_SHOOTS,
@@ -105,6 +106,7 @@ export interface AuthoringObjectCapabilities {
       patrolShoots: boolean;
     };
   } | null;
+  boss: { minimumHits: number; maximumHits: number; defaultHits: number } | null;
   npc: {
     modes: readonly string[];
     defeatModes: readonly string[];
@@ -292,6 +294,9 @@ function buildObjectCatalogEntry(config: GameObjectConfig): AuthoringObjectCatal
             },
           }
         : null,
+      boss: isBossEnemyObjectId(config.id)
+        ? { minimumHits: BOSS_MIN_HITS, maximumHits: BOSS_MAX_HITS, defaultHits: DEFAULT_BOSS_HITS }
+        : null,
       npc: isNpcObjectId(config.id)
         ? {
             modes: NPC_MODES,
@@ -414,6 +419,7 @@ export function renderAgentRoomAuthoringMarkdown(): string {
     '- Text: `signText` (use `null` to clear). Signs and NPCs support text.',
     '- Sword Hunter: `swordsmanObjectiveMode`, `swordsmanDefeatMode`.',
     '- Police enemies: `policeBehaviorMode` (`hunter` or `patrol`), `policePatrolShoots`.',
+    '- Sword Hunter and police bosses: `bossHitPoints` (integer 3–10; `null` turns boss mode off). Supported by place_object and configure_object. Enabling a boss makes an existing invincible Sword Hunter defeatable; explicitly combining boss mode and invincible is rejected.',
     '- NPC: `npcMode`, `npcPushable`, `npcCanJumpFall`, `npcPlayerCollision`, `npcFriendlyFire`, `npcName`, `npcDefeatMode`.',
     '- Unsupported fields are rejected; they are never silently discarded.',
     '',

@@ -102,6 +102,7 @@ export class LiveObjectLifecycleController<TEdgeWall = unknown> {
         containedObjectId: placedObject.containedObjectId ?? null,
         signText: placedObject.signText ?? null,
         objectiveMode: placedObject.swordsmanObjectiveMode ?? null,
+        bossHitPoints: placedObject.bossHitPoints ?? null,
         defeatMode: placedObject.swordsmanDefeatMode ?? null,
         policeBehaviorMode: getPlacedPoliceBehaviorMode(placedObject),
         policePatrolShoots: getPlacedPolicePatrolShoots(placedObject),

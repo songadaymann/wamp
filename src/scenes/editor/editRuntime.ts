@@ -30,6 +30,7 @@ import {
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
+import { isBossEnemyObjectId, withPlacedBossHitPoints } from '../../enemies/boss';
 import {
   DEFAULT_POLICE_BEHAVIOR_MODE,
   DEFAULT_POLICE_PATROL_SHOOTS,
@@ -2342,6 +2343,7 @@ export class EditorEditRuntime {
         ? {
             ...placed,
             swordsmanDefeatMode: normalizedMode,
+            bossHitPoints: normalizedMode === 'invincible' ? null : placed.bossHitPoints,
           }
         : placed
     );
@@ -2350,6 +2352,21 @@ export class EditorEditRuntime {
       kind: 'objects',
       action: { previous, next: this.clonePlacedObjects(next) },
     });
+    this.markRoomDirty();
+    return true;
+  }
+
+  setBossHitPoints(instanceId: string, value: number | null): boolean {
+    if (!this.guardEditable()) return false;
+    const placedObjects = this.host.getPlacedObjects();
+    const index = placedObjects.findIndex((placed) => placed.instanceId === instanceId);
+    if (index < 0 || !isBossEnemyObjectId(placedObjects[index].id)) return false;
+    const previous = this.clonePlacedObjects();
+    const updated = withPlacedBossHitPoints(previous[index], value);
+    if (JSON.stringify(previous[index]) === JSON.stringify(updated)) return true;
+    const next = previous.map((placed, i) => i === index ? updated : placed);
+    this.host.setPlacedObjects(next);
+    this.history.record({ kind: 'objects', action: { previous, next: this.clonePlacedObjects(next) } });
     this.markRoomDirty();
     return true;
   }

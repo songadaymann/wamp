@@ -686,6 +686,7 @@ export interface PlacedObject {
   signText?: string | null;
   swordsmanObjectiveMode?: SwordsmanObjectiveMode | null;
   swordsmanDefeatMode?: SwordsmanDefeatMode | null;
+  bossHitPoints?: number | null;
   policeBehaviorMode?: PoliceBehaviorMode | null;
   policePatrolShoots?: boolean | null;
   npcMode?: NpcMode | null;

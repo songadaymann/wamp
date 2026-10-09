@@ -112,6 +112,9 @@ export interface EditorInspectorState {
   policeBehaviorModeDisabled: boolean;
   policePatrolShootsChecked: boolean;
   policePatrolShootsHidden: boolean;
+  bossVisible: boolean;
+  bossChecked: boolean;
+  bossHitPointsValue: number;
   npcVisible: boolean;
   npcStatusText: string;
   npcModeValue: NpcMode;
@@ -247,6 +250,7 @@ export interface EditorUiBridgeActions {
   onClearContainerContents: () => void;
   onSetFocusedSwordsmanObjectiveMode: (objectiveMode: SwordsmanObjectiveMode) => void;
   onSetFocusedSwordsmanDefeatMode: (defeatMode: SwordsmanDefeatMode) => void;
+  onSetFocusedBossHitPoints: (value: number | null) => void;
   onSetFocusedPoliceBehaviorMode: (mode: PoliceBehaviorMode) => void;
   onSetFocusedPolicePatrolShoots: (patrolShoots: boolean) => void;
   onSetFocusedNpcMode: (mode: NpcMode) => void;

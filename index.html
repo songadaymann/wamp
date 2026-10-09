@@ -1494,6 +1494,17 @@
             <span>Shoot While Patrolling</span>
           </label>
         </div>
+        <div id="enemy-boss-panel" class="pressure-plate-panel hidden">
+          <label class="goal-control-row npc-checkbox-row">
+            <input id="enemy-boss-checkbox" type="checkbox" />
+            <span>Boss</span>
+          </label>
+          <div id="enemy-boss-hits-row" class="goal-control-row hidden">
+            <label class="goal-control-label" for="enemy-boss-hits-input">Hits to defeat</label>
+            <input id="enemy-boss-hits-input" type="range" min="3" max="10" step="1" value="5" />
+            <output id="enemy-boss-hits-output" for="enemy-boss-hits-input">5</output>
+          </div>
+        </div>
         <div id="npc-objective-panel" class="pressure-plate-panel npc-objective-panel hidden">
           <div class="section-label">NPC</div>
           <div id="npc-objective-status" class="goal-context-note">Hover or click an NPC to edit it.</div>

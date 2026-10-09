@@ -40,6 +40,20 @@ describe('death and fresh-session checkpoint boundaries', () => {
     expect(h.host.resetGoalRunController).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['expanded', 'goal-less', 'single'] as const)('recreates cached bosses before clearing %s overrides', kind => {
+    const h = harness();
+    const resetBossChallenges = vi.fn();
+    Object.assign(h.host, {
+      resetBossChallenges,
+      getCurrentGoalRun: () => kind === 'single' ? h.run : null,
+      getActiveCourseRun: () => kind === 'expanded' ? { result: 'completed' } : null,
+    });
+    h.controller.resetPlaySession();
+    expect(resetBossChallenges).toHaveBeenCalledWith(kind === 'single' ? h.run.roomId : null);
+    expect(resetBossChallenges.mock.invocationCallOrder[0])
+      .toBeLessThan(h.host.clearActiveCourseRoomOverrides.mock.invocationCallOrder[0]);
+  });
+
   it('counts a death once immediately and delays only the respawn, retaining elapsed time', () => {
     const h = harness();
     let pending = false;

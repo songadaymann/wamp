@@ -46,6 +46,7 @@ interface OverworldSessionResetHost {
   finalizeActiveCourseRun(result: 'failed' | 'abandoned'): void;
   clearActiveCourseRoomOverrides(): void;
   resetRoomChallengeState(room: RoomSnapshot): void;
+  resetBossChallenges?(alreadyResetRoomId: string | null): void;
   resetTransientPlayState(): void;
   resetGoalRunController(): void;
   resetRoomRushController(): void;
@@ -145,9 +146,13 @@ export class OverworldSessionResetController {
       this.host.finalizeActiveCourseRun('abandoned');
     }
 
-    if (singleRoomRunToReset && this.shouldResetChallengeStateForRun(singleRoomRunToReset)) {
+    const singleRoomWasReset = singleRoomRunToReset && this.shouldResetChallengeStateForRun(singleRoomRunToReset);
+    if (singleRoomWasReset) {
       this.resetChallengeStateForRun(singleRoomRunToReset);
     }
+
+    // Cached cells can outlive an expanded run, Room Rush or goal-less play.
+    this.host.resetBossChallenges?.(singleRoomWasReset ? singleRoomRunToReset.roomId : null);
 
     this.host.setActiveCourseRun(null);
     this.host.clearActiveCourseRoomOverrides();

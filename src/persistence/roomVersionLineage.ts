@@ -6,6 +6,7 @@ import {
   type PlacedObject,
 } from '../config';
 import { normalizePlayerHearts, type PlayerHearts } from '../player/hearts';
+import { getPlacedBossHitPoints } from '../enemies/boss';
 import {
   normalizeSwordsmanDefeatMode,
   normalizeSwordsmanObjectiveMode,
@@ -77,6 +78,7 @@ type CanonicalPlacedObjectPayload = {
   containedObjectId: string | null;
   swordsmanObjectiveMode: string | null;
   swordsmanDefeatMode: string | null;
+  bossHitPoints?: number;
   policeBehaviorMode: string | null;
   policePatrolShoots: boolean | null;
   signText: string | null;
@@ -358,6 +360,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       npcDefeatMode: placed.id === 'jimothy' ? getPlacedNpcDefeatMode(placed) : null,
       swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
       swordsmanDefeatMode: normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode),
+      bossHitPoints: getPlacedBossHitPoints(placed) ?? undefined,
       policeBehaviorMode: getPlacedPoliceBehaviorMode(placed),
       policePatrolShoots: getPlacedPoliceBehaviorMode(placed) === null
         ? null
@@ -393,6 +396,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       containedObjectId: placed.containedObjectId,
       swordsmanObjectiveMode: placed.swordsmanObjectiveMode,
       swordsmanDefeatMode: placed.swordsmanDefeatMode,
+      ...(placed.bossHitPoints ? { bossHitPoints: placed.bossHitPoints } : {}),
       policeBehaviorMode: placed.policeBehaviorMode,
       policePatrolShoots: placed.policePatrolShoots,
       signText: placed.signText,
@@ -429,6 +433,7 @@ function buildPlacedObjectSignature(placed: PlacedObject): string {
         : null,
     swordsmanObjectiveMode: normalizeSwordsmanObjectiveMode(placed.swordsmanObjectiveMode),
     swordsmanDefeatMode: normalizeSwordsmanDefeatMode(placed.swordsmanDefeatMode),
+    ...(getPlacedBossHitPoints(placed) ? { bossHitPoints: getPlacedBossHitPoints(placed)! } : {}),
     policeBehaviorMode: getPlacedPoliceBehaviorMode(placed),
     policePatrolShoots: getPlacedPoliceBehaviorMode(placed) === null
       ? null
@@ -470,6 +475,7 @@ function compareCanonicalPlacedObjects(
     (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
     (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
     (left.swordsmanDefeatMode ?? '').localeCompare(right.swordsmanDefeatMode ?? '') ||
+    (left.bossHitPoints ?? 1) - (right.bossHitPoints ?? 1) ||
     (left.policeBehaviorMode ?? '').localeCompare(right.policeBehaviorMode ?? '') ||
     Number(left.policePatrolShoots ?? false) - Number(right.policePatrolShoots ?? false) ||
     (left.signText ?? '').localeCompare(right.signText ?? '') ||
@@ -490,6 +496,7 @@ function compareNormalizedPlacedObjects(
     containedObjectId: string | null;
     swordsmanObjectiveMode: string | null;
     swordsmanDefeatMode: string | null;
+    bossHitPoints?: number;
     policeBehaviorMode: string | null;
     policePatrolShoots: boolean | null;
     signText: string | null;
@@ -504,6 +511,7 @@ function compareNormalizedPlacedObjects(
     containedObjectId: string | null;
     swordsmanObjectiveMode: string | null;
     swordsmanDefeatMode: string | null;
+    bossHitPoints?: number;
     policeBehaviorMode: string | null;
     policePatrolShoots: boolean | null;
     signText: string | null;
@@ -520,6 +528,7 @@ function compareNormalizedPlacedObjects(
     (left.containedObjectId ?? '').localeCompare(right.containedObjectId ?? '') ||
     (left.swordsmanObjectiveMode ?? '').localeCompare(right.swordsmanObjectiveMode ?? '') ||
     (left.swordsmanDefeatMode ?? '').localeCompare(right.swordsmanDefeatMode ?? '') ||
+    (left.bossHitPoints ?? 1) - (right.bossHitPoints ?? 1) ||
     (left.policeBehaviorMode ?? '').localeCompare(right.policeBehaviorMode ?? '') ||
     Number(left.policePatrolShoots ?? false) - Number(right.policePatrolShoots ?? false) ||
     (left.signText ?? '').localeCompare(right.signText ?? '')

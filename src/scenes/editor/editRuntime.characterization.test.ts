@@ -87,6 +87,22 @@ describe('editor edit runtime document contracts', () => {
     expect(runtime.roomCameraMode).toBe('follow');
   });
 
+  it('saves boss configuration with undo/redo and respects read-only rooms', () => {
+    const room = createRoom();
+    room.placedObjects = [{ id: 'swordsman_ai', x: 80, y: 256, instanceId: 'boss', swordsmanDefeatMode: 'invincible' }];
+    const { runtime, setEditable } = createHarness(room);
+    expect(runtime.setBossHitPoints('boss', 7)).toBe(true);
+    expect(runtime.exportRoomSnapshot().placedObjects[0]).toMatchObject({ bossHitPoints: 7, swordsmanDefeatMode: 'defeatable' });
+    runtime.undo();
+    expect(runtime.exportRoomSnapshot().placedObjects[0].bossHitPoints ?? null).toBeNull();
+    expect(runtime.exportRoomSnapshot().placedObjects[0].swordsmanDefeatMode).toBe('invincible');
+    runtime.redo();
+    expect(runtime.exportRoomSnapshot().placedObjects[0].bossHitPoints).toBe(7);
+    setEditable(false);
+    expect(runtime.setBossHitPoints('boss', 3)).toBe(false);
+    expect(runtime.exportRoomSnapshot().placedObjects[0].bossHitPoints).toBe(7);
+  });
+
   it('round-trips tile, object, spawn, goal, music, and metadata document state', () => {
     const room = createRoom();
     room.title = 'Characterization Room';

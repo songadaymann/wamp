@@ -102,6 +102,15 @@ export function renderInspectorPanel(
     elements.policePatrolShootsCheckbox.disabled = !state.policeVisible;
   }
   setHidden(elements.npcPanel, !state.npcVisible);
+  setHidden(elements.bossPanel, !state.bossVisible);
+  setHidden(elements.bossHitsRow, !state.bossChecked);
+  if (elements.bossCheckbox) {
+    elements.bossCheckbox.checked = state.bossChecked;
+    elements.bossCheckbox.disabled = !state.bossVisible;
+  }
+  setValue(elements.bossHitsInput, String(state.bossHitPointsValue));
+  setDisabled(elements.bossHitsInput, !state.bossVisible || !state.bossChecked);
+  setText(elements.bossHitsOutput, String(state.bossHitPointsValue));
   setText(elements.npcStatus, state.npcStatusText);
   setValue(elements.npcModeSelect, state.npcModeValue);
   setDisabled(elements.npcModeSelect, !state.npcVisible);

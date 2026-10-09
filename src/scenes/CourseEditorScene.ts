@@ -809,6 +809,7 @@ export class CourseEditorScene extends Phaser.Scene {
       onClearContainerContents: () => this.objectInspectorController.clearFocusedContainerContents(),
       onSetFocusedSwordsmanObjectiveMode: (objectiveMode) => this.objectInspectorController.setFocusedSwordsmanObjectiveMode(objectiveMode),
       onSetFocusedSwordsmanDefeatMode: (defeatMode) => this.objectInspectorController.setFocusedSwordsmanDefeatMode(defeatMode),
+      onSetFocusedBossHitPoints: (value) => this.objectInspectorController.setFocusedBossHitPoints(value),
       onSetFocusedPoliceBehaviorMode: (mode) => this.objectInspectorController.setFocusedPoliceBehaviorMode(mode),
       onSetFocusedPolicePatrolShoots: (shoots) => this.objectInspectorController.setFocusedPolicePatrolShoots(shoots),
       onSetFocusedNpcMode: (mode) => this.objectInspectorController.setFocusedNpcMode(mode),
