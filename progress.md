@@ -1,3 +1,16 @@
+## 2026-10-09 — Overnight checklist goal / F221 periodic music tails and hat choke
+
+Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-loop-tails-2026-10-09` stacks on F224 `42714ad6` / draft #94. Preserve primary and production. Evidence: `/tmp/wamp-music-loop-tails-2026-10-09/`.
+
+- [x] Fold tonal release and drum tails into the beginning of their mono loop before nonlinear mixing; keep loop duration and array retention bounded.
+- [x] Choke open hats over 10 ms when the next open/closed hat starts, including the cyclic seam and simultaneous closed-hat priority.
+- [x] Verify actual renderer samples against longer uncut reference phrases, choke/swing/seam cases and real Web Audio preview/world handoff; inspect screenshots and finish quality/preservation checks.
+- [x] Save/push/attach tested stacked draft and receipt; keep master unticked and continue until the deadline. No release.
+
+PolyBLEP and general monophonic drum rows remain optional separate sound changes. Folded previous-loop tails at first entry are covered by F224's fade-in; no claim about production incidence or subjective hiss reduction.
+
+Verification: 403 files / 3,185 tests and quality gates; three native/real-audio cases; exact 48 kHz uncut references, actual two-loop WAV and inspected screenshots. Primary and authored publication content preserved, with raw-fixture MIDI canonicalization recorded. See `docs/review/wamp-music-loop-tails-2026-10-09.md`. Continue the small F225 mono/mute slice; F223 Worker/prefetch remains larger pending work.
+
 ## 2026-10-09 — Overnight checklist goal / F224 room music transitions
 
 Continue until **05:00 America/New_York / 09:00 UTC**. Branch `codex/checkup-music-transitions-2026-10-09` stacks on F220 `c2ba1572` / draft #93. Preserve primary and production. Evidence: `/tmp/wamp-music-transitions-2026-10-09/`.
