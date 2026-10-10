@@ -1,6 +1,7 @@
 import { EditorPhoneInspector } from './phoneInspector';
 import { bindBossInspector } from './uiBridge/bossInspector';
 import { EditorHistoryControls } from './historyControls';
+import { EditorClipboardControls } from './clipboardControls';
 import { closeRoomTemplatePicker } from './roomTemplatePicker';
 import { closePublishChecklist, renderEditorClearCheck } from './clearCheckUi';
 import {
@@ -349,6 +350,7 @@ export class EditorUiBridge {
   private activeFeatureLauncher: EditorFeatureLauncher | null = null;
   private currentObjectCategory = 'all';
   private readonly historyControls: EditorHistoryControls;
+  private readonly clipboardControls: EditorClipboardControls;
   private readonly phoneInspector: EditorPhoneInspector;
   private lastViewModel: EditorUiViewModel | null = null;
   private backgroundImages: BackgroundImageSummary[] = [];
@@ -367,6 +369,13 @@ export class EditorUiBridge {
     this.phoneInspector = new EditorPhoneInspector(this.doc, this.actions.isActive,
       this.actions.onClearPinnedInspector, this.actions.onCancelPressurePlateConnection);
     this.historyControls = new EditorHistoryControls(this.doc, this.actions.onUndo, this.actions.onRedo, this.actions.isActive);
+    this.clipboardControls = new EditorClipboardControls(this.doc, {
+      isActive: this.actions.isActive,
+      getClipboard: () => this.actions.getClipboard?.() ?? null,
+      paste: () => this.actions.onPasteClipboard?.(),
+      useClipboard: (clipboard) => this.actions.onUseClipboard?.(clipboard),
+      showStatus: (message) => this.actions.onClipboardStatus?.(message),
+    });
     for (const button of this.elements.toolButtons) {
       this.toolButtonDefaultTitles.set(button, button.title);
     }
@@ -572,6 +581,7 @@ export class EditorUiBridge {
     this.doc.body.dataset.editorDraftCleared = String(viewModel.clearCheck?.cleared ?? false);
     renderEditorClearCheck(this.doc, viewModel.clearCheck);
     this.historyControls.render(viewModel.canUndo, viewModel.canRedo);
+    this.clipboardControls.render();
     this.doc.getElementById('room-template-empty-hint')?.classList.toggle('hidden', !this.actions.isRoomLayoutEmpty?.());
     for (const id of ['btn-room-template-empty', 'btn-room-template-replace']) {
       const button = this.doc.getElementById(id) as HTMLButtonElement | null;
@@ -602,6 +612,7 @@ export class EditorUiBridge {
     setHidden(this.elements.containerPanel, true);
     this.destroyed = true;
     this.historyControls.destroy();
+    this.clipboardControls.destroy();
     this.phoneInspector.destroy();
     for (const cleanup of this.cleanupCallbacks) {
       cleanup();
@@ -2160,6 +2171,11 @@ export class EditorUiBridge {
     }
     for (const input of this.elements.pencilSprayRateInputs) {
       input.value = String(editorState.pencilSprayRate);
+    }
+
+    const showCopyControls = editorState.activeTool === 'copy' && paletteModeIsTiles;
+    for (const controls of this.doc.querySelectorAll<HTMLElement>('.editor-copy-controls')) {
+      controls.classList.toggle('hidden', !showCopyControls);
     }
 
     const showFillControls = editorState.activeTool === 'fill' && paletteModeIsTiles;

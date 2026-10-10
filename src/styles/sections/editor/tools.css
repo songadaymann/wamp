@@ -257,3 +257,69 @@
 .tool-mode-pips span.is-active {
   background: #18161c;
 }
+
+/* Copy tool: clipboard actions and saved stamps (room and Expanded editors). */
+.editor-copy-actions {
+  flex-wrap: wrap;
+}
+
+.editor-copy-stamps {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.editor-copy-stamp {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+}
+
+.editor-copy-stamp-use {
+  min-width: 0;
+  min-height: 32px;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-copy-stamp-delete {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.editor-copy-stamps-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker.editor-copy-controls {
+  width: min(320px, calc(100vw - 32px));
+}
+
+body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker.editor-copy-controls button {
+  width: auto;
+  padding: 0 10px;
+}
+
+body[data-editor-dock-shell='true'] .editor-copy-controls .editor-copy-stamp-use {
+  width: 100%;
+}
+
+body[data-editor-dock-shell='true'] .editor-copy-controls .editor-copy-stamps-empty {
+  color: var(--editor-retro-ink, #18161c);
+}
+
+body[data-coarse-pointer='true'] .editor-copy-stamp-use,
+body[data-coarse-pointer='true'] .editor-copy-stamp-delete {
+  min-height: 44px;
+}
+
+body[data-coarse-pointer='true'] .editor-copy-stamp-delete {
+  min-width: 44px;
+}

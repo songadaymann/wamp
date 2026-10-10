@@ -112,6 +112,7 @@ import {
 import { buildRoomWeatherSurfaceSegments, type RoomWeatherSurfaceSegment } from '../weather/surfaces';
 import { EditorDocumentCache } from './editor/documentCache';
 import { EditorEdgeGuideCache } from './editor/edgeGuides';
+import { saveEditorClipboard } from './editor/clipboardStorage';
 import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
 import type { EditorShapeKind } from './editor/shapeTiles';
 import {
@@ -973,6 +974,14 @@ export class EditorScene extends Phaser.Scene {
       isActive: () => this.scene.isActive(),
       onUndo: () => this.undoAction(),
       onRedo: () => this.redoAction(),
+      getClipboard: () => this.editRuntime.currentClipboardState,
+      onPasteClipboard: () => this.toolController.beginClipboardPastePreview(),
+      onUseClipboard: (clipboard) => {
+        this.editRuntime.setClipboardState(clipboard);
+        saveEditorClipboard(clipboard);
+        this.toolController.beginClipboardPastePreview();
+      },
+      onClipboardStatus: (message) => this.persistenceController.setStatusText(message),
       onRequestRender: () => this.renderEditorUi(),
       onTestFromHere: () => {
         if (this.testFromHerePlacement) { this.cancelPracticeTestPlacement(); return; }

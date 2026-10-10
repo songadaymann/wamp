@@ -1,3 +1,4 @@
+import type { EditorClipboardState } from '../clipboard';
 import type { ToolName } from '../../../config';
 import type { PlayerHearts } from '../../../player/hearts';
 import type { CourseGoalType } from '../../../courses/model';
@@ -201,6 +202,11 @@ export interface EditorUiBridgeActions {
   isActive: () => boolean;
   onUndo: () => void;
   onRedo: () => void;
+  /** Copy-tool panel: the clipboard, starting a paste, loading a stamp and reporting the result. */
+  getClipboard?: () => EditorClipboardState | null;
+  onPasteClipboard?: () => void;
+  onUseClipboard?: (clipboard: EditorClipboardState) => void;
+  onClipboardStatus?: (message: string) => void;
   onRequestRender: () => void;
   onTestFromHere?: () => void;
   onOpenRoomTemplates?: () => void;
