@@ -14,3 +14,7 @@ Delivered 2026-10-10 in [PR #110](https://github.com/songadaymann/wamp/pull/110)
 - `npm run check` on Node 22: 417 files, 3,313 tests.
 - `traceCoverage.test.ts` drives the real recorder into the real verifier: portal pairs in both directions; a same-room teleport passes and the same jump fails without portals or with portals that cannot explain it; a course-linked portal between non-adjacent rooms passes and fails without the link; a 12-minute run with 300 deaths and about 6 input changes a second passes, including through the request normalizer; an oversized trace is audited as summary only. Five of these seven fail against the previous verifier.
 - Deployment shipped only this change: no other Worker source changed since the previous production deploy, and the one changed shared module in the bundle only adds an unused function.
+
+## Follow-up: PR #113
+
+Merged as `84de79ec` and deployed (API Worker `8c06f631`). While calibrating F199, the stored-trace replay showed two older rules rejecting likely-honest runs: Expanded Room and course runs compared the trace with server time including network latency (0.7-3.5 s vs a 0.6 s tolerance; 20 of 54 rejections since May), and enemy defeats had to be within 64 px of the placed enemy although enemies patrol, fly and chase (11 of 54). Those routes now verify against the reported play time like rooms and guests, and a non-boss enemy defeat must be inside its room and within 400 px of the player. Replay: 11 of the 12 enemy rejections pass; no previously passing run changes.

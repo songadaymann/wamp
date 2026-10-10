@@ -1,3 +1,7 @@
+## 2026-10-10 — Honest ranked runs: latency and roaming enemies
+
+PR #113 / `84de79ec` is merged and the API Worker is deployed (`8c06f631`). Follow-up to F198/F199: Expanded Room and course verification uses the reported play time instead of latency-inflated server time, and enemy defeats may be anywhere in the enemy's room near the player. Replaying stored real runs: 11 of 12 enemy rejections now pass; no passing run changes. Master stays **78/215**.
+
 ## 2026-10-10 — F199 ranked traces anchored and continuous
 
 PR #112 / `3e6d82f8` is merged and the API Worker is deployed (`222ae49e`). A ranked trace must start near the room or course start at the start of the recording, stay continuous, and put enemy defeats near the player; calibrated on stored real traces with no change to any replayed outcome. Master **78/215**. Receipt: [trace anchoring](docs/review/wamp-trace-anchoring-2026-10-10.md).
