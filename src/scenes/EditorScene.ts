@@ -1161,7 +1161,7 @@ export class EditorScene extends Phaser.Scene {
 
   private resetRuntimeState(): void {
     this.edgeGuides.reset(); this.edgeGuideZoom = -1;
-    this.objectMoveController.cancel();
+    this.objectMoveController.reset();
     this.testFromHerePlacement = false;
     this.lightingController.reset();
     this.weatherController.reset();

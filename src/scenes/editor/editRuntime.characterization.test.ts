@@ -7,6 +7,7 @@ import {
   editorState,
   getSelectionTileValue,
   encodeTileDataValue,
+  getObjectById,
   type LayerName,
   type PlacedObject,
 } from '../../config';
@@ -825,6 +826,93 @@ describe('editor edit runtime document contracts', () => {
     expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toHaveLength(6);
   });
 
+  it('moves every layer and the objects in an area as one Undo step, keeping links', () => {
+    const { runtime, layers, host } = createHarness(createRoom());
+    runtime.applyRoomSnapshot({ ...createRoom(), placedObjects: [
+      anchored('floor_trigger', 'plate', 3, 12, { triggerTargetInstanceId: 'door' }),
+      anchored('door_metal', 'door', 5, 12),
+      anchored('coin_gold', 'outside', 20, 12),
+    ] });
+    for (const layer of ['background', 'terrain', 'foreground'] as const) {
+      editorState.activeLayer = layer;
+      runtime.beginTileBatch(); runtime.placeTileAt(4 * TILE_SIZE, 13 * TILE_SIZE); runtime.commitTileBatch();
+    }
+    editorState.activeLayer = 'terrain';
+
+    expect(runtime.moveArea(2, 11, 6, 13, 10, -3)).toBe(true);
+    for (const layer of ['background', 'terrain', 'foreground'] as const) {
+      expect(layers.get(layer)!.getTileAt(4, 13)).toBeNull();
+      expect(layers.get(layer)!.getTileAt(14, 10)).not.toBeNull();
+    }
+    const objects = host.getPlacedObjects();
+    expect(objects.find((placed) => placed.instanceId === 'plate')?.triggerTargetInstanceId).toBe('door');
+    expect(objects.find((placed) => placed.instanceId === 'door')!.x).toBe(anchored('door_metal', 'door', 15, 9).x);
+    expect(objects.find((placed) => placed.instanceId === 'outside')!.x).toBe(anchored('coin_gold', 'outside', 20, 12).x);
+    expect(editorState.activeLayer).toBe('terrain');
+
+    runtime.undo();
+    expect(layers.get('foreground')!.getTileAt(4, 13)).not.toBeNull();
+    expect(layers.get('terrain')!.getTileAt(14, 10)).toBeNull();
+    expect(host.getPlacedObjects().find((placed) => placed.instanceId === 'door')!.x).toBe(anchored('door_metal', 'door', 5, 12).x);
+    runtime.redo();
+    expect(layers.get('background')!.getTileAt(14, 10)).not.toBeNull();
+  });
+
+  it('re-creates smart terrain at the destination and re-solves the source', () => {
+    const { runtime } = createHarness(createRoom());
+    editorState.paletteMode = 'smart';
+    runtime.beginTileBatch();
+    for (const x of [2, 3, 4]) for (const y of [10, 11]) placeSmartCell(runtime, x, y);
+    runtime.commitTileBatch();
+    editorState.paletteMode = 'tiles';
+    const before = getSmartSourceKeys(runtime, 'forest.ground');
+    expect(before).toHaveLength(6);
+
+    expect(runtime.moveArea(2, 10, 4, 11, 10, 2)).toBe(true);
+    expect(getSmartSourceKeys(runtime, 'forest.ground')).toEqual([
+      'terrain:12,12', 'terrain:12,13', 'terrain:13,12', 'terrain:13,13', 'terrain:14,12', 'terrain:14,13',
+    ]);
+    const tiles = runtime.exportRoomSnapshot().tileData.terrain;
+    expect(tiles[10].slice(2, 5).every((value) => value === -1)).toBe(true);
+    expect(tiles[12].slice(12, 15).every((value) => value >= 0)).toBe(true);
+    runtime.undo();
+    expect(getSmartSourceKeys(runtime, 'forest.ground')).toEqual(before);
+  });
+
+  it('refuses to split a smart structure, leave the room or land on another object', () => {
+    selectCyberBrush('cyber.concrete');
+    const { runtime, host } = createHarness(createRoom());
+    runtime.beginTileBatch(); runtime.stampShape('rect', 4, 5, 6, 5, { outline: false, erase: false }); runtime.commitTileBatch();
+    editorState.paletteMode = 'tiles';
+    expect(runtime.moveArea(4, 5, 6, 5, 0, 3)).toBe(true);
+    expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual(['terrain:4,8', 'terrain:5,8', 'terrain:6,8']);
+
+    // A WampOS Start Bar is one multi-cell recipe: half of it cannot move, all of it can.
+    editorState.paletteMode = 'smart';
+    editorState.smartTheme = 'wampos95';
+    editorState.smartMaterial = 'wampos95.start-bar';
+    editorState.smartStyle = 'wampos95';
+    runtime.beginTileBatch(); runtime.stampShape('line', 2, 20, 12, 20); runtime.commitTileBatch();
+    editorState.paletteMode = 'tiles';
+    expect(Object.values(runtime.exportRoomSnapshot().smartTerrain!.recipes)).toHaveLength(1);
+    const beforeSplit = runtime.exportRoomSnapshot();
+    expect(runtime.moveArea(2, 20, 6, 20, 0, -5)).toBe(false);
+    expect(host.updatePersistenceStatus).toHaveBeenLastCalledWith(expect.stringMatching(/Smart structure/));
+    expect(runtime.exportRoomSnapshot()).toEqual(beforeSplit);
+    expect(runtime.moveArea(2, 20, 12, 20, 0, -5)).toBe(true);
+    const [recipe] = Object.values(runtime.exportRoomSnapshot().smartTerrain!.recipes);
+    expect(recipe.sourceCells.every((cell) => cell.y === 15)).toBe(true);
+    expect(runtime.exportRoomSnapshot().tileData.terrain[15].slice(2, 5)).toEqual(beforeSplit.tileData.terrain[20].slice(2, 5));
+    expect(runtime.exportRoomSnapshot().tileData.terrain[20].slice(2, 13).every((value) => value === -1)).toBe(true);
+
+    expect(runtime.moveArea(30, 0, 39, 2, 1, 0)).toBe(false);
+    expect(host.updatePersistenceStatus).toHaveBeenLastCalledWith('Keep the selection inside the room.');
+    runtime.applyRoomSnapshot({ ...runtime.exportRoomSnapshot(), placedObjects: [anchored('coin_gold', 'a', 1, 1), anchored('coin_gold', 'b', 3, 1)] });
+    expect(runtime.moveArea(0, 0, 1, 1, 2, 0)).toBe(false);
+    expect(host.updatePersistenceStatus).toHaveBeenLastCalledWith('Another object is in the way there.');
+    expect(runtime.moveArea(0, 0, 1, 1, 0, 0)).toBe(false);
+  });
+
   it('submits a skipped pointer segment once in Bresenham order', () => {
     editorState.paletteMode = 'smart';
     const host = { placeTileAt: vi.fn(), placeTileStroke: vi.fn() };
@@ -1042,6 +1130,12 @@ function createHarness(room: RoomSnapshot) {
 
 function createRoom(): RoomSnapshot {
   return createDefaultRoomSnapshot('4,2', { x: 4, y: 2 });
+}
+
+/** A placed object whose anchor cell is (tileX, tileY). */
+function anchored(id: string, instanceId: string, tileX: number, tileY: number, extra: Partial<PlacedObject> = {}): PlacedObject {
+  const config = getObjectById(id)!;
+  return { id, instanceId, x: tileX * TILE_SIZE + config.frameWidth / 2, y: tileY * TILE_SIZE + TILE_SIZE - config.frameHeight / 2, ...extra };
 }
 
 function object(instanceId: string): PlacedObject {
