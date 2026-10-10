@@ -43,6 +43,7 @@ import {
 import {
   assertWampLeaderboardWriteAllowed,
 } from '../generatedUsers/leaderboardIsolation';
+import { resolveCourseClearRewardScope, scopeClearRewardFlags } from '../progression/clearRewardScope';
 import {
   awardCoursePublishPoints,
   awardCourseCreatorCompletionPoints,
@@ -396,6 +397,10 @@ export async function handleCourseRunFinish(
   if (!courseRecord) {
     throw new HttpError(404, 'Course record not found.');
   }
+  const courseOwnerUserId = await resolvePublishedCourseOwnerUserId(env, existing.courseId);
+  const rewardScope = resolveCourseClearRewardScope(
+    courseRecord, existing.courseId, existing.courseVersion, auth.user.id, courseOwnerUserId,
+  );
 
   const finishedAt = new Date().toISOString();
   const reportedElapsedMs = body.elapsedMs;
@@ -418,8 +423,9 @@ export async function handleCourseRunFinish(
           env,
           auth.user.id,
           existing.courseId,
-          existing.courseVersion,
+          rewardScope.versions,
           null,
+          existing.courseVersion,
         )
       : null;
   const provisionalIsFirstCompletion =
@@ -454,10 +460,10 @@ export async function handleCourseRunFinish(
       )[0]?.attemptId === provisionalCandidateRun.attemptId);
   const provisionalPointAward =
     provisionalCandidateRun !== null
-      ? previewRunFinalizePoints(provisionalCandidateRun, {
+      ? previewRunFinalizePoints(provisionalCandidateRun, scopeClearRewardFlags(rewardScope, {
           isFirstCompletion: provisionalIsFirstCompletion,
           isNewPersonalBest: provisionalIsNewPersonalBest,
-        })
+        }))
       : null;
   const currentTopRows =
     clampedBody.result === 'completed'
@@ -617,35 +623,35 @@ export async function handleCourseRunFinish(
     { ...finalBody, finishedAt },
   ));
 
-  let isFirstCompletion = false;
-  let isNewPersonalBest = false;
+  let rewardFlags = { isFirstCompletion: false, isNewPersonalBest: false };
   if (finalizedRun.result === 'completed') {
     const previousBest = await loadBestCompletedCourseRunForUserAndVersion(
       env,
       auth.user.id,
       finalizedRun.courseId,
+      rewardScope.versions,
+      attemptId,
       finalizedRun.courseVersion,
-      attemptId
     );
-    isFirstCompletion = previousBest === null;
-    isNewPersonalBest =
-      previousBest === null ||
-      sortCompletedCourseRunsForLeaderboard([finalizedRun, previousBest], snapshot.goal)[0]?.attemptId ===
-        finalizedRun.attemptId;
+    rewardFlags = scopeClearRewardFlags(rewardScope, {
+      isFirstCompletion: previousBest === null,
+      isNewPersonalBest:
+        previousBest === null ||
+        sortCompletedCourseRunsForLeaderboard([finalizedRun, previousBest], snapshot.goal)[0]?.attemptId ===
+          finalizedRun.attemptId,
+    });
   }
 
-  await awardRunFinalizePoints(env, finalizedRun, {
-    isFirstCompletion,
-    isNewPersonalBest,
-  });
+  await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
   const creatorPointEvent =
     finalizedRun.result === 'completed'
       ? await awardCourseCreatorCompletionPoints(env, {
-          creatorUserId: await resolvePublishedCourseOwnerUserId(env, finalizedRun.courseId),
+          creatorUserId: courseOwnerUserId,
           courseId: finalizedRun.courseId,
           courseVersion: finalizedRun.courseVersion,
           finisherUserId: finalizedRun.userId,
           attemptId: finalizedRun.attemptId,
+          rewardVersions: rewardScope.versions,
         })
       : null;
 
@@ -656,11 +662,12 @@ export async function handleCourseRunFinish(
   await awardCourseRunProgression(env, {
     run: finalizedRun,
     goal: snapshot.goal,
-    isFirstCompletion,
-    isNewPersonalBest,
-    creatorUserId: await resolvePublishedCourseOwnerUserId(env, finalizedRun.courseId),
+    ...rewardFlags,
+    creatorUserId: courseOwnerUserId,
     courseRecord,
     completedAt: finishedAt,
+    ownContent: rewardScope.ownContent,
+    rankVersions: rewardScope.versions,
   });
   scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
   await upsertUserStats(env, auth.user.id);
@@ -902,8 +909,9 @@ async function loadBestCompletedCourseRunForUserAndVersion(
   env: Env,
   userId: string,
   courseId: string,
-  courseVersion: number,
-  excludeAttemptId: string | null
+  courseVersions: readonly number[],
+  excludeAttemptId: string | null,
+  goalVersion: number,
 ): Promise<CourseRunRecord | null> {
   const result = await env.DB.prepare(
     `
@@ -927,13 +935,13 @@ async function loadBestCompletedCourseRunForUserAndVersion(
       FROM course_runs
       WHERE user_id = ?
         AND course_id = ?
-        AND course_version = ?
+        AND course_version IN (SELECT value FROM json_each(?))
         AND result = 'completed'
         AND ${sqlIsVerificationAccepted('course_runs')}
         AND (? IS NULL OR attempt_id != ?)
     `
   )
-    .bind(userId, courseId, courseVersion, excludeAttemptId, excludeAttemptId)
+    .bind(userId, courseId, JSON.stringify(courseVersions), excludeAttemptId, excludeAttemptId)
     .all<CourseRunRow>();
 
   const runs = result.results
@@ -947,7 +955,7 @@ async function loadBestCompletedCourseRunForUserAndVersion(
     return null;
   }
 
-  const course = await resolvePublishedCourseVersion(env, courseId, courseVersion);
+  const course = await resolvePublishedCourseVersion(env, courseId, goalVersion);
   if (!course.goal) {
     return null;
   }
