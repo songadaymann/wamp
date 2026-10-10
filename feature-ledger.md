@@ -1,3 +1,7 @@
+## 2026-10-10 — F201 republish reward reset closed
+
+PR #111 / `3e397575` is merged and the API Worker is deployed (`0d53f953`). Clear rewards follow the significant-change window, so republishing no longer resets first clears, personal bests, creator points, Expanded Room rank XP or clear badges, and builders earn no clear rewards from their own rooms. Master **77/215**. Receipt: [republish rewards](docs/review/wamp-republish-rewards-2026-10-10.md).
+
 ## 2026-10-10 — F198 honest ranked runs accepted
 
 PR #110 / `b999fb4f` is merged and the API Worker is deployed to https://api.wamp.land. Ranked verification accepts portal teleports (checked against the published portal pairs), runs up to the full 30-minute limit and up to 1,024 respawns; death respawns were already handled by respawn checkpoints. Master **76/215**. Receipt: [ranked trace coverage](docs/review/wamp-ranked-trace-coverage-2026-10-10.md).

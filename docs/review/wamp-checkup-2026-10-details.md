@@ -5366,9 +5366,26 @@ DEFAULT_ROOM_MINT_CHAIN_ID = 84532 with name 'Base Sepolia' (mint/roomOwnership.
 
 **2026-10-09/10 completed.** Death respawns were fixed first by the respawn-checkpoint work (`4ea126e7`): the trace records each respawn, and the server accepts it only at the latest touched checkpoint or the authored start. PR #110 / `b999fb4f` finishes the item on the server, with no trace format change. `src/runs/portalHops.ts` lists every teleport the published room or course allows using play's pairing rules (a linked portal goes to its opposite-type target, a course link taking precedence; an unlinked portal returns to a portal linked to it), and a breadcrumb gap or room change is accepted only when reaching the entrance plus leaving the exit fits the normal limits, so a portal grants no extra reach. Trace limits now cover the full 30-minute run (breadcrumbs for the duration plus one per respawn, 16,384 input events, 1,024 respawns, 2,048 room changes), calibrated on stored traces (honest play about 2-6 input changes a second, 30-40 KB a minute). An audit row keeps only the summary for a trace over 1.5 MB. Production verification failures were measured before the change: none since 2026-09-23. Receipt: `wamp-ranked-trace-coverage-2026-10-10.md`.
 
-### F201: details withheld
+### F201: Republishing your own room resets first-clear points, XP and clear rewards, with no limit
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Leaderboard, XP and anti-cheat integrity
+- **Type:** defect · **impact:** high · **effort:** small
+
+**Summary.** Every publish, even an unchanged one, creates a new room version, and player rewards restarted for each version: first-clear points and XP, personal-best points, the creator's '50 points per new player', and clear-count badges. A builder could republish a walk-right room and clear it again, over and over, or have a second account clear it to re-pay the creator each time.
+
+**Technical detail.** publishRoom always appends lastPublishedVersion+1 (rooms/store.ts). First-completion points (loadBestCompletedRunForUserAndRoomVersion), room_clear_first PXP, creator completion points (sourceKey room:version:finisher) and the badge clear count (DISTINCT room_id, room_version, including your own rooms) were all keyed on the raw version. The significant-change window that groups versions under 10% weighted change (buildRoomRatingWindow, ratings.ts) already existed and was used for builder XP.
+
+**Evidence (review baseline `7371df9a`).**
+
+- src/cloudflare/worker/rooms/store.ts:1040-1041 — every publish becomes lastPublishedVersion+1
+- src/cloudflare/worker/runs/points.ts:205, 257-296 — creator sourceKey and first-completion check per raw version
+- src/cloudflare/worker/progression/awards.ts:359-371 — room_clear_first keyed on the raw version
+- src/cloudflare/worker/progression/progressRows.ts:179-194 — clear count over DISTINCT room_id, room_version, own rooms included
+- src/cloudflare/worker/progression/ratings.ts:283-313 — the significant-change window already used for builder XP
+
+**Fact-check (confirmed, confirmed, partially confirmed).** The public room leaderboard does not reset on an unchanged republish, because identical versions share a leaderboard family, and room top-10/#1 XP was later moved onto that family too; a republish with any content change still starts a fresh board. Skipping the daily publish limit on republish is by design. Burst signals flag very fast loops for admins after the fact, but nothing prevented them. Ordinary builders trigger the same resets without cheating, because Publish stays enabled for unchanged rooms. Expanded Rooms had the same per-version pattern, including their rank XP pool.
+
+**2026-10-10 completed.** PR #111 / `3e397575`, API Worker `0d53f953`. `progression/clearRewardScope.ts` resolves, for rooms, courses and Expanded Rooms, the versions that count as the same content (the significant-change window) and whether the finisher made it (room claimer, version publisher, or Expanded Room owner). First-clear and personal-best rewards look for an earlier accepted clear in the window; creator completion points pay once per player across the window, atomically, keeping the existing source-key format so past awards count; Expanded Room rank XP ranks the window together. Owners earn no clear points, first-clear or personal-best XP, or rank XP from their own content; their runs still appear on leaderboards and personal-best ghosts still save. Clear badges count each room once, accepted runs only, never your own; earned badges are kept. Not done: clawing back past rewards, and throttling or de-duplicating unchanged republishes. Receipt: `wamp-republish-rewards-2026-10-10.md`.
 
 ### F199: details withheld
 
