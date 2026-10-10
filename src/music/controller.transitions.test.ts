@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoomMusicController } from './controller';
+import { AudioEngine } from '../audio/engine';
 import { loadMusicPhrasesById } from './libraryClient';
 import { extractMusicPhrasePayloadFromPattern, type MusicPhraseRecord } from './library';
 import { getPatternDrumSamples } from './patternKit';
@@ -53,11 +54,12 @@ function harness(hold = true) {
   vi.stubGlobal('window', { AudioContext: contextConstructor, addEventListener: (name: string, listener: () => void) => windowEvents.set(name, listener), location: { href: 'http://localhost/', origin: 'http://localhost' }, document: doc });
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) })));
   render.mockResolvedValue(buffer());
-  return { context, contextConstructor, sources, gains, splitters, shapers, panners, doc, windowEvents,
-    /** Each playback's fade gain, in start order: the gains feeding the master gain. */
-    fade(index: number) { return gains.filter(g => g.connect.mock.calls.some(([target]) => target === gains[0]))[index]; },
+  const engine = new AudioEngine();
+  return { context, engine, contextConstructor, sources, gains, splitters, shapers, panners, doc, windowEvents,
+    /** Each playback's fade gain, in start order: the gains feeding the music bus. */
+    fade(index: number) { return gains.filter(g => g.connect.mock.calls.some(([target]) => target === engine.peekMusicBus()))[index]; },
     visibility(hidden: boolean) { doc.hidden = hidden; documentEvents.get('visibilitychange')?.(); },
-    controller: new RoomMusicController() };
+    controller: new RoomMusicController(engine) };
 }
 
 /** A one-hit drum phrase for Arrange slots. */

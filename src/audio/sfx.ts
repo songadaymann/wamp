@@ -1,4 +1,5 @@
 import { resolveSfxAssetUrl } from './assetUrl';
+import { normalizeAudioError, sharedAudioEngine, type AudioEngine } from './engine';
 
 type CueConfig = {
   path: string;
@@ -67,21 +68,6 @@ type SfxHistoryEntry = {
   cue: SfxCue;
   at: number;
   status: 'played' | 'blocked' | 'missing' | 'cooldown' | 'capped' | 'error';
-};
-
-type AudioResumeDebugEntry = {
-  at: number;
-  trigger: string;
-  status: 'no-context' | 'already-running' | 'resumed' | 'failed';
-  stateBefore: string | null;
-  stateAfter: string | null;
-  errorName?: string;
-  errorMessage?: string;
-};
-
-type AudioContextStateDebugEntry = {
-  at: number;
-  state: string;
 };
 
 type SfxPlayErrorDebugEntry = {
@@ -367,9 +353,6 @@ function resolveCompressedSfxExtension(): '.ogg' | '.m4a' {
 export class SfxController {
   private muted = false;
   private initialized = false;
-  private userInteracted = false;
-  private lifecycleDocument: Pick<Document, 'hidden'> | null = null;
-  private audioContext: AudioContext | null = null;
   private readonly assetUrlByPath = new Map<string, string>();
   private readonly idleAudioByPoolKey = new Map<string, SfxAudioPlayer[]>();
   private readonly audioPlayerByElement = new Map<HTMLAudioElement, SfxAudioPlayer>();
@@ -380,10 +363,10 @@ export class SfxController {
   private readonly activeCueCounts = new Map<SfxCue, number>();
   private readonly lastPlayedAt = new Map<SfxCue, number>();
   private readonly history: SfxHistoryEntry[] = [];
-  private lastResumeAttempt: AudioResumeDebugEntry | null = null;
-  private lastAudioContextStateChange: AudioContextStateDebugEntry | null = null;
   private lastPlayError: SfxPlayErrorDebugEntry | null = null;
   private volume = 1;
+
+  constructor(private readonly engine: AudioEngine = sharedAudioEngine) {}
 
   init(windowObj: Window = window): void {
     if (this.initialized) {
@@ -391,32 +374,10 @@ export class SfxController {
     }
 
     this.initialized = true;
-    this.lifecycleDocument = windowObj.document;
-
-    const markInteracted = () => {
-      this.userInteracted = true;
-      void this.resumeAudioContext('user-gesture');
-    };
-
-    const resumeAfterLifecycleEvent = (trigger: string) => {
-      if (!this.userInteracted) {
-        return;
-      }
-      void this.resumeAudioContext(trigger);
-    };
-
-    windowObj.addEventListener('pointerdown', markInteracted, { passive: true });
-    windowObj.addEventListener('keydown', markInteracted, { passive: true });
-    windowObj.addEventListener('touchstart', markInteracted, { passive: true });
-    windowObj.addEventListener('focus', () => resumeAfterLifecycleEvent('window-focus'), { passive: true });
-    windowObj.addEventListener('pageshow', () => resumeAfterLifecycleEvent('pageshow'), { passive: true });
-    windowObj.document.addEventListener('visibilitychange', () => {
-      if (windowObj.document.hidden) {
-        for (const cue of [...this.activeAudioByCue.keys()]) this.stop(cue);
-        this.suspendAudioContext();
-      } else {
-        resumeAfterLifecycleEvent('visibilitychange-visible');
-      }
+    this.engine.init(windowObj);
+    // Hidden pages drop their effects rather than replaying them on return.
+    this.engine.onHidden(() => {
+      for (const cue of [...this.activeAudioByCue.keys()]) this.stop(cue);
     });
 
     for (const config of Object.values(SFX_CUES)) {
@@ -459,10 +420,7 @@ export class SfxController {
       initialized: this.initialized,
       muted: this.muted,
       volume: this.volume,
-      userInteracted: this.userInteracted,
-      audioContextState: this.audioContext?.state ?? null,
-      lastAudioContextStateChange: this.lastAudioContextStateChange,
-      lastResumeAttempt: this.lastResumeAttempt,
+      ...this.engine.getDebugState(),
       lastPlayError: this.lastPlayError,
       mediaPlayerPool: {
         cap: MAX_SFX_MEDIA_PLAYERS,
@@ -492,7 +450,7 @@ export class SfxController {
       return;
     }
 
-    if (this.lifecycleDocument?.hidden) {
+    if (this.engine.hidden) {
       this.record(cue, 'blocked');
       return;
     }
@@ -557,8 +515,8 @@ export class SfxController {
       this.lastPlayError = {
         at: Date.now(),
         cue,
-        userInteracted: this.userInteracted,
-        audioContextState: this.audioContext?.state ?? null,
+        userInteracted: this.engine.userInteracted,
+        audioContextState: this.engine.peekContext()?.state ?? null,
         ...normalizeAudioError(error),
       };
       this.record(cue, 'error');
@@ -642,11 +600,11 @@ export class SfxController {
       this.lastPlayError = {
         at: Date.now(),
         cue,
-        userInteracted: this.userInteracted,
-        audioContextState: this.audioContext?.state ?? null,
+        userInteracted: this.engine.userInteracted,
+        audioContextState: this.engine.peekContext()?.state ?? null,
         ...normalizeAudioError(error),
       };
-      this.record(cue, this.userInteracted ? 'error' : 'blocked');
+      this.record(cue, this.engine.userInteracted ? 'error' : 'blocked');
       return;
     }
     if (playPromise) {
@@ -662,11 +620,11 @@ export class SfxController {
           this.lastPlayError = {
             at: Date.now(),
             cue,
-            userInteracted: this.userInteracted,
-            audioContextState: this.audioContext?.state ?? null,
+            userInteracted: this.engine.userInteracted,
+            audioContextState: this.engine.peekContext()?.state ?? null,
             ...normalizeAudioError(error),
           };
-          this.record(cue, this.userInteracted ? 'error' : 'blocked');
+          this.record(cue, this.engine.userInteracted ? 'error' : 'blocked');
         });
       return;
     }
@@ -792,9 +750,10 @@ export class SfxController {
       audioPlayer.mediaSourceNode = audioContext.createMediaElementSource(audioPlayer.audio);
     }
 
+    const sfxBus = this.engine.getSfxBus() ?? audioContext.destination;
     if (route === 'direct') {
-      audioPlayer.mediaSourceNode.connect(audioContext.destination);
-      void this.resumeAudioContext('direct-routed-sfx');
+      audioPlayer.mediaSourceNode.connect(sfxBus);
+      void this.engine.resume('direct-routed-sfx');
       return;
     }
 
@@ -806,8 +765,8 @@ export class SfxController {
     audioPlayer.filterNode.frequency.value = Math.max(20, playbackOptions?.lowPassFrequencyHz ?? 1000);
     audioPlayer.filterNode.Q.value = Math.max(0.0001, playbackOptions?.lowPassQ ?? 0.9);
     audioPlayer.mediaSourceNode.connect(audioPlayer.filterNode);
-    audioPlayer.filterNode.connect(audioContext.destination);
-    void this.resumeAudioContext('lowpass-sfx');
+    audioPlayer.filterNode.connect(sfxBus);
+    void this.engine.resume('lowpass-sfx');
   }
 
   private disconnectRoutedAudioPlayer(audioPlayer: SfxAudioPlayer): void {
@@ -832,90 +791,7 @@ export class SfxController {
   }
 
   private getAudioContext(): AudioContext | null {
-    if (this.audioContext) {
-      return this.audioContext;
-    }
-
-    const AudioContextCtor =
-      window.AudioContext ??
-      ((window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ?? null);
-    if (!AudioContextCtor) {
-      return null;
-    }
-
-    this.audioContext = new AudioContextCtor();
-    this.lastAudioContextStateChange = {
-      at: Date.now(),
-      state: this.audioContext.state,
-    };
-    this.audioContext.addEventListener('statechange', () => {
-      this.lastAudioContextStateChange = {
-        at: Date.now(),
-        state: this.audioContext?.state ?? 'unknown',
-      };
-    });
-    if (this.lifecycleDocument?.hidden) this.suspendAudioContext();
-    return this.audioContext;
-  }
-
-  private suspendAudioContext(): void {
-    if (this.audioContext?.state === 'running') {
-      void this.audioContext.suspend().catch(() => void 0);
-    }
-  }
-
-  private async resumeAudioContext(trigger: string): Promise<void> {
-    if (this.lifecycleDocument?.hidden) {
-      this.suspendAudioContext();
-      return;
-    }
-    const stateBefore = this.audioContext?.state ?? null;
-    if (!this.audioContext) {
-      this.lastResumeAttempt = {
-        at: Date.now(),
-        trigger,
-        status: 'no-context',
-        stateBefore,
-        stateAfter: null,
-      };
-      return;
-    }
-
-    if (this.audioContext.state === 'running') {
-      this.lastResumeAttempt = {
-        at: Date.now(),
-        trigger,
-        status: 'already-running',
-        stateBefore,
-        stateAfter: this.audioContext.state,
-      };
-      return;
-    }
-
-    try {
-      await this.audioContext.resume();
-      if (this.lifecycleDocument?.hidden) {
-        await this.audioContext.suspend();
-        return;
-      }
-      const stateAfter: string = this.audioContext.state;
-      this.lastResumeAttempt = {
-        at: Date.now(),
-        trigger,
-        status: stateAfter === 'running' ? 'resumed' : 'failed',
-        stateBefore,
-        stateAfter,
-      };
-    } catch (error) {
-      this.lastResumeAttempt = {
-        at: Date.now(),
-        trigger,
-        status: 'failed',
-        stateBefore,
-        stateAfter: this.audioContext.state,
-        ...normalizeAudioError(error),
-      };
-    }
+    return this.engine.getContext();
   }
 }
 
@@ -933,28 +809,6 @@ function resetAudioPlayerCurrentTime(player: HTMLAudioElement): void {
 
 function PhaserClamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function normalizeAudioError(error: unknown): { errorName: string; errorMessage: string } {
-  if (error instanceof Error) {
-    return {
-      errorName: error.name || 'Error',
-      errorMessage: error.message || '',
-    };
-  }
-
-  if (typeof error === 'object' && error !== null) {
-    const value = error as { name?: unknown; message?: unknown };
-    return {
-      errorName: typeof value.name === 'string' ? value.name : 'UnknownError',
-      errorMessage: typeof value.message === 'string' ? value.message : '',
-    };
-  }
-
-  return {
-    errorName: 'UnknownError',
-    errorMessage: typeof error === 'string' ? error : '',
-  };
 }
 
 export const globalSfxController = new SfxController();
