@@ -1,3 +1,7 @@
+## 2026-10-09 — F229 shared audio engine delivered
+
+PR #109 / `60d19b4f` is merged and live on https://wamp.land. Music and effects share one AudioContext with separate buses, pause while hidden, recover from interruptions, and follow the iPhone silent switch together. Master **75/215**. Receipt: [shared audio engine](docs/review/wamp-shared-audio-engine-2026-10-09.md).
+
 ## 2026-10-09 — F162 move tools, cross-room clipboard and stamps delivered
 
 PR #107 / `856606ef` and PR #108 / `30432e60` are merged and live on https://wamp.land. Copy carries objects, links and custom tiles across rooms; My Stamps saves up to 24 selections; the Move tool box-selects an area and drags every layer and its objects as one Undo. Master **74/215**. Receipt: [move tools](docs/review/wamp-editor-move-clipboard-2026-10-09.md).
