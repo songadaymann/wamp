@@ -966,7 +966,7 @@ function deriveMetricsForGoal(input: {
           const binding = input.enemyBindingsByRoomId.get(event.roomId)?.get(event.instanceId);
           if (
             !binding ||
-            !isEventNearBoundObject(event, binding)
+            !isEnemyEventPlausible(event, binding)
           ) {
             return createFailedVerification('failed', 'trace_goal', {
               issue: 'enemy_position_mismatch',
@@ -1110,6 +1110,17 @@ function isEventNearBoundObject(
     Math.abs(event.x - binding.x) <= GOAL_EVENT_OBJECT_RADIUS_PX &&
     Math.abs(event.y - binding.y) <= GOAL_EVENT_OBJECT_RADIUS_PX
   );
+}
+
+/**
+ * Enemies patrol, fly and chase, so a defeat can be far from where the enemy was
+ * placed (stored real runs: up to ~400px). The defeat must be inside the enemy's own
+ * room; nearness to the player is checked separately. Bosses keep their own check.
+ */
+function isEnemyEventPlausible(event: RankedRunTraceGoalEvent, binding: TraceObjectBinding): boolean {
+  if (binding.bossHitPoints) return isEventNearBoundObject(event, binding);
+  return event.x >= -GOAL_EVENT_OBJECT_RADIUS_PX && event.x <= ROOM_PX_WIDTH + GOAL_EVENT_OBJECT_RADIUS_PX
+    && event.y >= -GOAL_EVENT_OBJECT_RADIUS_PX && event.y <= ROOM_PX_HEIGHT + GOAL_EVENT_OBJECT_RADIUS_PX;
 }
 
 function getGoalEventPathDistance(

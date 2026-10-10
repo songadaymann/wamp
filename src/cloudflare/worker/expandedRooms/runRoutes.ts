@@ -450,7 +450,9 @@ export async function handleExpandedRoomRunFinish(
         auth.user.id,
         auth.user.walletAddress ?? null,
       ),
-      elapsedMs: clampedBody.elapsedMs,
+      // The trace follows the simulation clock. Network/finish latency stays
+      // in the ranked server-time floor, rather than invalidating its movement.
+      elapsedMs: reportedElapsedMs,
       deaths: clampedBody.deaths,
     }),
     existing.expandedRoomId,

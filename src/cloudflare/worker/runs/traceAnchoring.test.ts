@@ -109,4 +109,21 @@ describe('ranked traces must cover the whole run', () => {
     const fake = await verifyCourseRunTrace({ trace: recorder.buildTrace(300)!, binding, course, roomsById, elapsedMs: 300, deaths: 0 });
     expect(fake.status).toBe('failed'); expect(fake.summary).toMatchObject({ issue: 'start_anchor' });
   });
+
+  it('accepts a patrolling enemy defeated far from where it was placed, but not outside its room', async () => {
+    const room = { ...createDefaultRoomSnapshot(), spawnPoint: { x: 64, y: 256 } };
+    room.goal = { type: 'defeat_all', timeLimitMs: null };
+    room.placedObjects = [{ id: 'slime_blue', instanceId: 'slime', x: 560, y: 256 }];
+    const play = (defeatX: number) => {
+      const recorder = new RankedRunTraceRecorder(); recorder.start('room', clientBinding, frame(64));
+      const elapsedMs = walk(recorder, 64, Math.min(defeatX, 620), 1_200);
+      recorder.recordGoalEvent(event('enemy', defeatX, 'slime'));
+      return { trace: recorder.buildTrace(elapsedMs)!, binding, room, elapsedMs, deaths: 0 };
+    };
+    // It patrolled 300px left before the player reached it.
+    const patrolled = await verifyRoomRunTrace(play(260));
+    expect(patrolled.status, JSON.stringify(patrolled.summary)).toBe('passed');
+    const outside = await verifyRoomRunTrace(play(760));
+    expect(outside.status).toBe('failed'); expect(outside.summary).toMatchObject({ issue: 'enemy_position_mismatch' });
+  });
 });
