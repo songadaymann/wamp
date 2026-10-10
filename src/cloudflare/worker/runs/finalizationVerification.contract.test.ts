@@ -11,7 +11,7 @@ vi.mock('../generatedUsers/leaderboardIsolation', async (original) => ({ ...awai
 vi.mock('../progression/store', async (original) => ({ ...await original<typeof import('../progression/store')>(), loadEffectiveTrustTier: mocks.tier }));
 vi.mock('./verification', async (original) => ({ ...await original<typeof import('./verification')>(), verifyRoomRunTrace: mocks.verify, verifyCourseRunTrace: mocks.verify, createRoomVerificationTrigger: mocks.trigger, createCourseVerificationTrigger: mocks.trigger, recordRunVerificationAudit: mocks.audit }));
 vi.mock('../rooms/store', async (original) => ({ ...await original<typeof import('../rooms/store')>(), loadRoomRecord: mocks.room, loadRoomSnapshotsByReferences: mocks.rooms }));
-vi.mock('../courses/store', async (original) => ({ ...await original<typeof import('../courses/store')>(), loadPublishedCourse: mocks.course, loadCourseRecord: vi.fn(async () => ({})) }));
+vi.mock('../courses/store', async (original) => ({ ...await original<typeof import('../courses/store')>(), loadPublishedCourse: mocks.course, loadCourseRecord: vi.fn(async () => ({ versions: [] })) }));
 vi.mock('../expandedRooms/store', async (original) => ({ ...await original<typeof import('../expandedRooms/store')>(), loadExpandedRoomTarget: vi.fn(async () => ({ legacyCourseId: 'course', expandedRoomId: 'expanded' })) }));
 vi.mock('../../../persistence/roomModel', async (original) => ({ ...await original<typeof import('../../../persistence/roomModel')>(), cloneRoomSnapshot: (value: unknown) => value }));
 vi.mock('../../../courses/model', async (original) => ({ ...await original<typeof import('../../../courses/model')>(), cloneCourseSnapshot: (value: unknown) => value }));
@@ -46,7 +46,7 @@ beforeEach(() => {
   mocks.tier.mockResolvedValue('T0');
   mocks.trigger.mockReturnValue(trigger);
   mocks.body.mockResolvedValue({ ...body });
-  mocks.room.mockResolvedValue({ published: snapshot });
+  mocks.room.mockResolvedValue({ published: snapshot, versions: [], claimerUserId: null });
   mocks.course.mockResolvedValue(snapshot);
   mocks.rooms.mockResolvedValue({ snapshots: [] });
   mocks.verify.mockResolvedValue({ status: 'passed', reason: null, derivedMetrics, summary: { checked: true } });
@@ -143,7 +143,7 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
 
     it('retains the room-only normalization after verified metric application', async () => {
       const targetGoal = { type: 'collect_target', requiredCount: 5, timeLimitMs: null };
-      mocks.room.mockResolvedValue({ published: { ...snapshot, goal: targetGoal } });
+      mocks.room.mockResolvedValue({ published: { ...snapshot, goal: targetGoal }, versions: [], claimerUserId: null });
       mocks.course.mockResolvedValue({ ...snapshot, goal: targetGoal });
       const { writes, error } = await finish();
       if (kind === 'room') {
