@@ -25,7 +25,12 @@ import {
 } from '../../../runs/verificationTrace';
 import { HttpError } from '../core/http';
 import type { Env } from '../core/types';
-import { buildTracePhysicalSamples, validateTraceRespawns, type RankedRunPhysicalSample } from './respawnVerification';
+import {
+  buildTracePhysicalSamples,
+  getStartCheckpoint,
+  validateTraceRespawns,
+  type RankedRunPhysicalSample,
+} from './respawnVerification';
 
 const VERIFICATION_TIMEOUT_MS = 2_000;
 const MAX_TRACE_DURATION_MS = 30 * 60 * 1000;
@@ -51,6 +56,15 @@ const GOAL_EVENT_BURST_MIN_COUNT = 128;
 const GOAL_EVENT_BURST_MIN_RATIO = 0.9;
 const GOAL_EVENT_BURST_STATIONARY_LOOKBACK_MS = 4_000;
 const GOAL_EVENT_BURST_STATIONARY_MAX_TRAVEL_PX = 48;
+// The recorder writes its first breadcrumb when the run starts and then every 250ms.
+// Stored honest traces (May-October 2026): first breadcrumb always at 0ms, at most
+// 287ms between breadcrumbs, goal events at most 241ms after the last breadcrumb,
+// first breadcrumb at most 310px from the start point (a run can qualify while
+// moving), and enemy defeats at most 251px from the player.
+const TRACE_FIRST_BREADCRUMB_MAX_MS = 50;
+const MAX_BREADCRUMB_GAP_MS = 1_000;
+const TRACE_START_RADIUS_PX = 400;
+const ENEMY_EVENT_PLAYER_RADIUS_PX = 400;
 
 export type RunVerificationStatus = 'not_required' | 'passed' | 'failed' | 'timeout';
 export type RunVerificationAuditStatus = Exclude<RunVerificationStatus, 'not_required'> | 'skipped';
@@ -274,6 +288,8 @@ export async function verifyRoomRunTrace(input: {
   if ('reason' in respawnCheck) return createFailedVerification(
     respawnCheck.reason === 'trace_timeout' ? 'timeout' : 'failed', respawnCheck.reason, respawnCheck.summary,
   );
+  const startCheck = verifyTraceStart(trace.breadcrumbs[0], getStartCheckpoint(input.room, undefined, new Map(), trace.breadcrumbs[0]));
+  if (startCheck) return startCheck;
   const pathCheck = verifyPath(trace.breadcrumbs, trace.roomTransitions, deadline, respawnCheck.respawns,
     listPortalHops([input.room]));
   if (pathCheck) {
@@ -327,6 +343,9 @@ export async function verifyCourseRunTrace(input: {
     respawnCheck.reason === 'trace_timeout' ? 'timeout' : 'failed', respawnCheck.reason, respawnCheck.summary,
   );
   const courseRooms = input.course.roomRefs.flatMap((ref) => input.roomsById.get(ref.roomId) ?? []);
+  const startCheck = verifyTraceStart(trace.breadcrumbs[0], getStartCheckpoint(undefined, input.course,
+    new Map(courseRooms.map((room) => [room.id, room])), trace.breadcrumbs[0]));
+  if (startCheck) return startCheck;
   const pathCheck = verifyPath(trace.breadcrumbs, trace.roomTransitions, deadline, respawnCheck.respawns,
     listPortalHops(courseRooms, input.course));
   if (pathCheck) {
@@ -547,6 +566,20 @@ function validateTraceEnvelope(
   if (!isMonotonic(trace.goalEvents.map((entry) => entry.atMs), trace.traceDurationMs)) {
     return createFailedVerification('failed', 'trace_time', { field: 'goalEvents' });
   }
+  const firstBreadcrumb = trace.breadcrumbs[0];
+  if (!firstBreadcrumb) {
+    return createFailedVerification('failed', 'trace_path', { issue: 'no_breadcrumbs' });
+  }
+  if (firstBreadcrumb.atMs > TRACE_FIRST_BREADCRUMB_MAX_MS) {
+    return createFailedVerification('failed', 'trace_time', { issue: 'late_first_breadcrumb', atMs: firstBreadcrumb.atMs });
+  }
+  const lastBreadcrumbAtMs = trace.breadcrumbs[trace.breadcrumbs.length - 1].atMs;
+  const lateEvent = trace.goalEvents.find((event) => event.atMs > lastBreadcrumbAtMs + MAX_BREADCRUMB_GAP_MS);
+  if (lateEvent) {
+    return createFailedVerification('failed', 'trace_goal', {
+      issue: 'goal_event_after_trace', atMs: lateEvent.atMs, lastBreadcrumbAtMs,
+    });
+  }
 
   return {
     status: 'passed',
@@ -584,6 +617,13 @@ function verifyPath(
       return createFailedVerification('failed', 'trace_time', {
         field: 'breadcrumbs',
         atIndex: index,
+      });
+    }
+    if (deltaMs > MAX_BREADCRUMB_GAP_MS) {
+      return createFailedVerification('failed', 'trace_path', {
+        issue: 'breadcrumb_gap',
+        atIndex: index,
+        deltaMs,
       });
     }
 
@@ -856,9 +896,11 @@ function deriveMetricsForGoal(input: {
       }
     }
 
-    if (event.type !== 'enemy' && !(event.type === 'collectible' && event.actor === 'enemy')) {
+    if (!(event.type === 'collectible' && event.actor === 'enemy')) {
       const segment = [...input.respawns.values()].filter(respawn => respawn.goalEventCount <= eventIndex).length;
-      const pathDistance = getGoalEventPathDistance(event, physicalSamples, segment);
+      const pathDistance = event.type === 'enemy'
+        ? getEnemyEventPlayerDistance(event, physicalSamples, segment)
+        : getGoalEventPathDistance(event, physicalSamples, segment);
       if (pathDistance === null || pathDistance.distancePx > pathDistance.maxDistancePx) {
         return createFailedVerification('failed', 'trace_goal', {
           issue: 'goal_event_path_mismatch',
@@ -1114,10 +1156,63 @@ function getGoalEventPathDistance(
     }
   }
 
+  // A breadcrumb far away in time says nothing about where the player was.
+  if (nearestTimeDelta > MAX_BREADCRUMB_GAP_MS) {
+    return null;
+  }
   return {
     distancePx: Math.hypot(event.x - nearest.x, event.y - nearest.y),
     maxDistancePx: GOAL_EVENT_NEAREST_PATH_RADIUS_PX,
   };
+}
+
+/**
+ * Where the player was when an enemy was defeated, in world space: the enemy may have
+ * patrolled away from its spot, been hit from a little way off, or stood across a
+ * room edge, so this uses one wider radius than other goal events.
+ */
+function getEnemyEventPlayerDistance(
+  event: RankedRunTraceGoalEvent,
+  samples: RankedRunPhysicalSample[],
+  segment: number,
+): { distancePx: number; maxDistancePx: number } | null {
+  const worldX = (sample: { roomX: number; x: number }) => sample.roomX * ROOM_PX_WIDTH + sample.x;
+  const worldY = (sample: { roomY: number; y: number }) => sample.roomY * ROOM_PX_HEIGHT + sample.y;
+  let previous: RankedRunPhysicalSample | null = null;
+  let next: RankedRunPhysicalSample | null = null;
+  for (const sample of samples) {
+    if (sample.segment !== segment) continue;
+    if (sample.atMs <= event.atMs) previous = sample;
+    else { next = sample; break; }
+  }
+  let x: number;
+  let y: number;
+  if (previous && next && next.atMs > previous.atMs) {
+    const progress = (event.atMs - previous.atMs) / (next.atMs - previous.atMs);
+    x = worldX(previous) + (worldX(next) - worldX(previous)) * progress;
+    y = worldY(previous) + (worldY(next) - worldY(previous)) * progress;
+  } else {
+    const nearest = previous ?? next;
+    if (!nearest || Math.abs(nearest.atMs - event.atMs) > MAX_BREADCRUMB_GAP_MS) return null;
+    x = worldX(nearest);
+    y = worldY(nearest);
+  }
+  return { distancePx: Math.hypot(worldX(event) - x, worldY(event) - y), maxDistancePx: ENEMY_EVENT_PLAYER_RADIUS_PX };
+}
+
+/** The run starts where the room or course says it does: the first breadcrumb is near it. */
+function verifyTraceStart(
+  first: RankedRunTraceBreadcrumb,
+  start: { roomX: number; roomY: number; x: number; y: number } | null,
+): RunVerificationResult | null {
+  if (!start) return null;
+  const distancePx = Math.hypot(
+    (first.roomX - start.roomX) * ROOM_PX_WIDTH + first.x - start.x,
+    (first.roomY - start.roomY) * ROOM_PX_HEIGHT + first.y - start.y,
+  );
+  return distancePx > TRACE_START_RADIUS_PX
+    ? createFailedVerification('failed', 'trace_path', { issue: 'start_anchor', distancePx: Math.round(distancePx) })
+    : null;
 }
 
 function verifyGoalEventBurstPattern(

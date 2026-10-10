@@ -124,7 +124,7 @@ export function validateTraceRespawns(input: {
   return failure ?? { respawns };
 }
 
-function getStartCheckpoint(room: RoomSnapshot | undefined, course: CourseSnapshot | undefined,
+export function getStartCheckpoint(room: RoomSnapshot | undefined, course: CourseSnapshot | undefined,
   rooms: Map<string, RoomSnapshot>, first: RankedRunTraceBreadcrumb | undefined): BoundCheckpoint | null {
   if (course) {
     const ref = resolveCourseStartRoomRef(course, { selectedRoomId: first ? `${first.roomX},${first.roomY}` : null,

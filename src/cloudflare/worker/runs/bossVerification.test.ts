@@ -12,7 +12,8 @@ function run(hits: number | null, elapsedMs = 2200, defeatX = 128) {
   room.spawnPoint = { x: 88, y: 288 }; room.goal = { type: 'defeat_all', timeLimitMs: null };
   room.placedObjects = [{ id: 'swordsman_ai', instanceId: 'boss', x: 250, y: 288, bossHitPoints: hits }];
   const recorder = new RankedRunTraceRecorder(); recorder.start('room', clientBinding, frame);
-  recorder.recordFrame(elapsedMs, frame);
+  // Play is recorded frame by frame at 60fps.
+  for (let at = 0; at < elapsedMs; at += 1000 / 60) recorder.recordFrame(Math.min(1000 / 60, elapsedMs - at), frame);
   recorder.recordGoalEvent({ type: 'enemy', actor: 'player', roomId: room.id, roomX: 0, roomY: 0, instanceId: 'boss', x: defeatX, y: 288, checkpointIndex: null });
   return { binding, room, elapsedMs, deaths: 0, trace: recorder.buildTrace(elapsedMs)! };
 }

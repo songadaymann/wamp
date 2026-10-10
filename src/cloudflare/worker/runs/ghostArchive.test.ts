@@ -47,7 +47,9 @@ function finishBody(start: Pick<RunStartResponse, 'verificationNonce' | 'snapsho
     enemiesDefeated: 0, checkpointsReached: 0,
     verificationTrace: { schemaVersion: 1, verificationNonce: start.verificationNonce,
       snapshotHash: start.snapshotHash, traceDurationMs: elapsedMs, inputEvents: [], roomTransitions: [],
-      breadcrumbs: [0, elapsedMs].map(atMs => ({ atMs, roomX: 0, roomY: 0, x: 64, y: 64, vx: 0, vy: 0, grounded: true })),
+      // The recorder writes a breadcrumb every 250ms.
+      breadcrumbs: [...Array.from({ length: Math.ceil(elapsedMs / 250) }, (_, index) => index * 250), elapsedMs]
+        .map(atMs => ({ atMs, roomX: 0, roomY: 0, x: 64, y: 64, vx: 0, vy: 0, grounded: true })),
       goalEvents: [{ atMs: elapsedMs, type: 'reach_exit', actor: 'player', roomId: '0,0', roomX: 0, roomY: 0,
         x: 64, y: 64, instanceId: null, checkpointIndex: null }] } };
 }
