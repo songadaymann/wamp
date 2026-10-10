@@ -3,6 +3,7 @@ import type { RoomCoordinates } from '../../persistence/roomModel';
 import type { RespawnCheckpointReference } from '../../goals/respawnCheckpoints';
 import {
   MAX_RUN_DEATH_LOCATIONS,
+  RANKED_RUN_BREADCRUMB_INTERVAL_MS,
   type RankedRunTraceDeathEvent,
   type RankedRunTraceRespawnEvent,
   RANKED_RUN_TRACE_SCHEMA_VERSION,
@@ -13,7 +14,6 @@ import {
   type RankedRunVerificationTrace,
 } from '../../runs/verificationTrace';
 
-const BREADCRUMB_INTERVAL_MS = 250;
 
 export interface RankedRunTraceBinding {
   verificationSchemaVersion: number;
@@ -140,7 +140,7 @@ export class RankedRunTraceRecorder {
 
     if (
       this.active.breadcrumbs.length === 0 ||
-      this.active.elapsedMs - this.active.lastBreadcrumbAtMs >= BREADCRUMB_INTERVAL_MS
+      this.active.elapsedMs - this.active.lastBreadcrumbAtMs >= RANKED_RUN_BREADCRUMB_INTERVAL_MS
     ) {
       this.active.breadcrumbs.push({
         atMs: Math.round(this.active.elapsedMs),
