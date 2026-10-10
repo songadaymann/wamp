@@ -1,3 +1,7 @@
+## 2026-10-10 — F198 honest ranked runs accepted
+
+PR #110 / `b999fb4f` is merged and the API Worker is deployed to https://api.wamp.land. Ranked verification accepts portal teleports (checked against the published portal pairs), runs up to the full 30-minute limit and up to 1,024 respawns; death respawns were already handled by respawn checkpoints. Master **76/215**. Receipt: [ranked trace coverage](docs/review/wamp-ranked-trace-coverage-2026-10-10.md).
+
 ## 2026-10-09 — F229 shared audio engine delivered
 
 PR #109 / `60d19b4f` is merged and live on https://wamp.land. Music and effects share one AudioContext with separate buses, pause while hidden, recover from interruptions, and follow the iPhone silent switch together. Master **75/215**. Receipt: [shared audio engine](docs/review/wamp-shared-audio-engine-2026-10-09.md).

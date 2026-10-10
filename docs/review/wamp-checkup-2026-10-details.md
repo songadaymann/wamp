@@ -5346,9 +5346,25 @@ DEFAULT_ROOM_MINT_CHAIN_ID = 84532 with name 'Base Sepolia' (mint/roomOwnership.
 
 5. product-requirements.md:124 ("content permanence ... later decision") is arguably still accurate. The clearly stale lines are :36, :83, :520 and :856.
 
-### F198: details withheld
+### F198: Anti-cheat rejects honest runs that include a death respawn, a portal jump, or more than about 8.5 minutes of play
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Leaderboard, XP and anti-cheat integrity
+- **Type:** defect · **impact:** high · **effort:** medium
+
+**Summary.** When you die, the game instantly puts you back at the spawn point (or a course's start room), and portals teleport you too. The run checker read that jump as an impossible speed and rejected the run with "Ranked run could not be verified": no XP, no points and no leaderboard spot, often on exactly the first clears that are supposed to hook a new player. Long runs were also rejected because the trace limits covered only about 8.5 minutes of a 30-minute allowance.
+
+**Technical detail.** The trace recorder samples breadcrumbs every 250ms (rankedRunTraceRecorder.ts) and, at review time, had no event for a respawn or a portal. Respawning is an immediate body reset to the room spawn or the course start room; portals call teleportPlayerTo, which can cross rooms (portalObjects.ts). verifyPath allows about 900px/s·dt + 80px horizontally between breadcrumbs and fails any step that skips more than one room (verification.ts), so a death far from spawn, a long portal hop, or a course portal between non-adjacent rooms failed. MAX_BREADCRUMBS and MAX_INPUT_EVENTS were 2,048 (about 8.5 minutes at 250ms) while MAX_TRACE_DURATION_MS is 30 minutes, MAX_RUN_RESPAWN_EVENTS was 256, and MAX_ROOM_TRANSITIONS 256. A failed verification throws 409 before anything is awarded.
+
+**Evidence (review baseline `7371df9a`).**
+
+- src/scenes/overworld/playerLifecycle.ts:136-144 — respawn is an instant body reset to the spawn
+- src/scenes/overworld/portalObjects.ts:172-176 — portals call authorizeRoomTransition plus teleportPlayerTo
+- src/scenes/overworld/rankedRunTraceRecorder.ts:11 — 250ms breadcrumbs; no respawn or portal event at the time
+- src/cloudflare/worker/runs/verification.ts:21-25, 543, 569, 589 — 2,048 trace caps against a 30-minute limit; movement and room-adjacency checks
+
+**Fact-check (confirmed, confirmed, confirmed).** The threshold is distance from the spawn rather than "the right half": a respawn pair fails beyond about 305-320px horizontally or 455px vertically, so rooms with an edge spawn fail for deaths in roughly the far half (about 60% of sampled goal rooms). In courses, a death in any non-start room almost always fails. Cross-room portals during a single-room run end the run rather than failing it; portals fail for same-room hops beyond about 305px or for non-adjacent course hops, and were rare in sampled rooms. MAX_INPUT_EVENTS can bind as early as the breadcrumb cap for very active input. Reviewers suggested a server-only allowance using positions the snapshot already has, to avoid a trace schema bump that would make cached clients fail with trace_client_outdated.
+
+**2026-10-09/10 completed.** Death respawns were fixed first by the respawn-checkpoint work (`4ea126e7`): the trace records each respawn, and the server accepts it only at the latest touched checkpoint or the authored start. PR #110 / `b999fb4f` finishes the item on the server, with no trace format change. `src/runs/portalHops.ts` lists every teleport the published room or course allows using play's pairing rules (a linked portal goes to its opposite-type target, a course link taking precedence; an unlinked portal returns to a portal linked to it), and a breadcrumb gap or room change is accepted only when reaching the entrance plus leaving the exit fits the normal limits, so a portal grants no extra reach. Trace limits now cover the full 30-minute run (breadcrumbs for the duration plus one per respawn, 16,384 input events, 1,024 respawns, 2,048 room changes), calibrated on stored traces (honest play about 2-6 input changes a second, 30-40 KB a minute). An audit row keeps only the summary for a trace over 1.5 MB. Production verification failures were measured before the change: none since 2026-09-23. Receipt: `wamp-ranked-trace-coverage-2026-10-10.md`.
 
 ### F201: details withheld
 
