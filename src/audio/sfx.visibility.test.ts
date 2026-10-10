@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AudioEngine } from './engine';
 import { SfxController } from './sfx';
 
 function harness() {
@@ -12,14 +13,15 @@ function harness() {
     play = vi.fn(() => { this.paused = false; return playPromise; });
     constructor(src: string) { this.src = src; players.push(this); }
   }
-  const node = () => ({ connect: vi.fn(), disconnect: vi.fn(), frequency: { value: 0 }, Q: { value: 0 }, type: '' });
-  const context = { state: 'running', destination: {}, addEventListener: vi.fn(), createMediaElementSource: vi.fn(node), createBiquadFilter: vi.fn(node), resume: vi.fn(async (): Promise<void> => {}), suspend: vi.fn(async (): Promise<void> => {}) };
+  const node = () => ({ connect: vi.fn(), disconnect: vi.fn(), frequency: { value: 0 }, Q: { value: 0 }, type: '', gain: { value: 1 } });
+  const context = { state: 'running', destination: {}, addEventListener: vi.fn(), createMediaElementSource: vi.fn(node), createBiquadFilter: vi.fn(node), createGain: vi.fn(node), resume: vi.fn(async (): Promise<void> => {}), suspend: vi.fn(async (): Promise<void> => {}) };
   context.resume.mockImplementation(async () => { context.state = 'running'; }); context.suspend.mockImplementation(async () => { context.state = 'suspended'; });
   const constructor = vi.fn(function () { return context; });
   vi.stubGlobal('window', { document: doc, location: { href: 'http://localhost/' }, AudioContext: constructor, addEventListener: (name: string, fn: () => void) => events.set(name, fn), setTimeout: vi.fn(() => 1), clearTimeout: vi.fn(), setInterval: vi.fn(() => 1), clearInterval: vi.fn() });
   vi.stubGlobal('document', doc); vi.stubGlobal('Audio', FakeAudio);
-  const controller = new SfxController(); controller.init(); events.get('keydown')?.();
-  return { controller, doc, players, context, constructor, events,
+  const engine = new AudioEngine();
+  const controller = new SfxController(engine); controller.init(); events.get('keydown')?.();
+  return { controller, engine, doc, players, context, constructor, events,
     visibility(hidden: boolean) { doc.hidden = hidden; docEvents.get('visibilitychange')?.(); },
     pending(promise: Promise<void>) { playPromise = promise; } };
 }

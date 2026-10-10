@@ -1,4 +1,5 @@
 import { getMusicTransitionPlan, type MusicTransitionMode } from './transitionPlan';
+import { normalizeAudioError, sharedAudioEngine, type AudioEngine } from '../audio/engine';
 import { RoomMusicBufferCache } from './bufferCache';
 import {
   getRoomMusicClip,
@@ -116,21 +117,6 @@ type OneShotPlayback = {
   stop: () => void;
 };
 
-type AudioResumeDebugEntry = {
-  at: number;
-  trigger: string;
-  status: 'no-context' | 'already-running' | 'resumed' | 'failed';
-  stateBefore: string | null;
-  stateAfter: string | null;
-  errorName?: string;
-  errorMessage?: string;
-};
-
-type AudioContextStateDebugEntry = {
-  at: number;
-  state: string;
-};
-
 type PlaybackRequestStatus =
   | 'pending'
   | 'already-playing'
@@ -163,9 +149,6 @@ function resolveAssetUrl(path: string): string {
 
 export class RoomMusicController {
   private initialized = false;
-  private userInteracted = false;
-  private lifecycleDocument: Pick<Document, 'hidden'> | null = null;
-  private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private volume = 1;
   private transportStartTime = 0;
@@ -190,8 +173,8 @@ export class RoomMusicController {
   private playbackRequestSerial = 0;
   private lastPlaybackRequest: PlaybackRequestDebugEntry | null = null;
   private lastStalePlaybackRequest: PlaybackRequestDebugEntry | null = null;
-  private lastResumeAttempt: AudioResumeDebugEntry | null = null;
-  private lastAudioContextStateChange: AudioContextStateDebugEntry | null = null;
+
+  constructor(private readonly engine: AudioEngine = sharedAudioEngine) {}
 
   init(windowObj: Window = window): void {
     if (this.initialized) {
@@ -199,31 +182,11 @@ export class RoomMusicController {
     }
 
     this.initialized = true;
-    this.lifecycleDocument = windowObj.document;
-    const markInteracted = () => {
-      this.userInteracted = true;
-      void this.resumeAudioContext('user-gesture');
-    };
+    this.engine.init(windowObj);
+  }
 
-    const resumeAfterLifecycleEvent = (trigger: string) => {
-      if (!this.userInteracted) {
-        return;
-      }
-      void this.resumeAudioContext(trigger);
-    };
-
-    windowObj.addEventListener('pointerdown', markInteracted, { passive: true });
-    windowObj.addEventListener('keydown', markInteracted, { passive: true });
-    windowObj.addEventListener('touchstart', markInteracted, { passive: true });
-    windowObj.addEventListener('focus', () => resumeAfterLifecycleEvent('window-focus'), { passive: true });
-    windowObj.addEventListener('pageshow', () => resumeAfterLifecycleEvent('pageshow'), { passive: true });
-    windowObj.document.addEventListener('visibilitychange', () => {
-      if (windowObj.document.hidden) {
-        this.suspendAudioContext();
-      } else {
-        resumeAfterLifecycleEvent('visibilitychange-visible');
-      }
-    });
+  private get audioContext(): AudioContext | null {
+    return this.engine.peekContext();
   }
 
   async playArrangement(
@@ -379,7 +342,7 @@ export class RoomMusicController {
       source,
       gain,
     };
-    void this.resumeAudioContext('preview-clip');
+    void this.engine.resume('preview-clip');
   }
 
   /**
@@ -425,7 +388,7 @@ export class RoomMusicController {
       source,
       gain,
     };
-    void this.resumeAudioContext('preview-sequence');
+    void this.engine.resume('preview-sequence');
     return true;
   }
 
@@ -594,7 +557,7 @@ export class RoomMusicController {
       },
       { once: true },
     );
-    void this.resumeAudioContext('preview-pattern-cell');
+    void this.engine.resume('preview-pattern-cell');
   }
 
   private async previewDrumPatternCell(
@@ -650,7 +613,7 @@ export class RoomMusicController {
       },
       { once: true },
     );
-    void this.resumeAudioContext('preview-drum-cell');
+    void this.engine.resume('preview-drum-cell');
   }
 
   getPlayheadInfo(): RoomMusicPlayheadInfo {
@@ -687,12 +650,9 @@ export class RoomMusicController {
       initialized: this.initialized,
       bufferCache: this.bufferCache.getDebugSnapshot(),
       retiringLoopCount: this.retiringPlaybacks.size,
-      userInteracted: this.userInteracted,
       mode: this.mode,
       volume: this.volume,
-      audioContextState: this.audioContext?.state ?? null,
-      lastAudioContextStateChange: this.lastAudioContextStateChange,
-      lastResumeAttempt: this.lastResumeAttempt,
+      ...this.engine.getDebugState(),
       lastPlaybackRequest: this.lastPlaybackRequest,
       lastStalePlaybackRequest: this.lastStalePlaybackRequest,
       transportStartTime: this.transportStartTime,
@@ -1035,32 +995,10 @@ export class RoomMusicController {
   }
 
   private getAudioContext(): AudioContext | null {
-    if (this.audioContext) {
-      return this.audioContext;
-    }
-
-    const AudioContextCtor =
-      window.AudioContext ??
-      ((window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ?? null);
-    if (!AudioContextCtor) {
-      return null;
-    }
-
-    this.audioContext = new AudioContextCtor();
-    this.lastAudioContextStateChange = {
-      at: Date.now(),
-      state: this.audioContext.state,
-    };
-    this.audioContext.addEventListener('statechange', () => {
-      this.lastAudioContextStateChange = {
-        at: Date.now(),
-        state: this.audioContext?.state ?? 'unknown',
-      };
-    });
-    if (this.lifecycleDocument?.hidden) this.suspendAudioContext();
-    return this.audioContext;
+    return this.engine.getContext();
   }
 
+  /** Music volume is the shared engine's music bus. */
   private ensureMasterGain(audioContext: AudioContext | null): GainNode | null {
     if (!audioContext) {
       return null;
@@ -1070,9 +1008,8 @@ export class RoomMusicController {
       return this.masterGain;
     }
 
-    this.masterGain = audioContext.createGain();
-    this.masterGain.gain.setValueAtTime(this.getMasterGainValue(), audioContext.currentTime);
-    this.masterGain.connect(audioContext.destination);
+    this.masterGain = this.engine.getMusicBus();
+    this.masterGain?.gain.setValueAtTime(this.getMasterGainValue(), audioContext.currentTime);
     return this.masterGain;
   }
 
@@ -1327,7 +1264,7 @@ export class RoomMusicController {
       options.startAt,
     );
     scheduler.start();
-    void this.resumeAudioContext('start-arrangement-playback');
+    void this.engine.resume('start-arrangement-playback');
 
     return {
       playbackId,
@@ -1400,7 +1337,7 @@ export class RoomMusicController {
     }
     gain.connect(masterGain);
     source.start(options.startAt, options.offsetSec);
-    void this.resumeAudioContext('start-loop-playback');
+    void this.engine.resume('start-loop-playback');
 
     return {
       playbackId,
@@ -1616,87 +1553,6 @@ export class RoomMusicController {
     return this.transportStartTime + nextBarIndex * barDurationSec;
   }
 
-  private suspendAudioContext(): void {
-    if (this.audioContext?.state === 'running') {
-      void this.audioContext.suspend().catch(() => void 0);
-    }
-  }
-
-  private async resumeAudioContext(trigger: string): Promise<void> {
-    if (this.lifecycleDocument?.hidden) {
-      this.suspendAudioContext();
-      return;
-    }
-    const stateBefore = this.audioContext?.state ?? null;
-    if (!this.audioContext) {
-      this.lastResumeAttempt = {
-        at: Date.now(),
-        trigger,
-        status: 'no-context',
-        stateBefore,
-        stateAfter: null,
-      };
-      return;
-    }
-
-    if (this.audioContext.state === 'running') {
-      this.lastResumeAttempt = {
-        at: Date.now(),
-        trigger,
-        status: 'already-running',
-        stateBefore,
-        stateAfter: this.audioContext.state,
-      };
-      return;
-    }
-
-    try {
-      await this.audioContext.resume();
-      if (this.lifecycleDocument?.hidden) {
-        await this.audioContext.suspend();
-        return;
-      }
-      const stateAfter: string = this.audioContext.state;
-      this.lastResumeAttempt = {
-        at: Date.now(),
-        trigger,
-        status: stateAfter === 'running' ? 'resumed' : 'failed',
-        stateBefore,
-        stateAfter,
-      };
-    } catch (error) {
-      this.lastResumeAttempt = {
-        at: Date.now(),
-        trigger,
-        status: 'failed',
-        stateBefore,
-        stateAfter: this.audioContext.state,
-        ...normalizeAudioError(error),
-      };
-    }
-  }
-}
-
-function normalizeAudioError(error: unknown): { errorName: string; errorMessage: string } {
-  if (error instanceof Error) {
-    return {
-      errorName: error.name || 'Error',
-      errorMessage: error.message || '',
-    };
-  }
-
-  if (typeof error === 'object' && error !== null) {
-    const value = error as { name?: unknown; message?: unknown };
-    return {
-      errorName: typeof value.name === 'string' ? value.name : 'UnknownError',
-      errorMessage: typeof value.message === 'string' ? value.message : '',
-    };
-  }
-
-  return {
-    errorName: 'UnknownError',
-    errorMessage: typeof error === 'string' ? error : '',
-  };
 }
 
 function clampUnit(value: number): number {
