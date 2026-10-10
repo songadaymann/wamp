@@ -12,7 +12,10 @@ import type { BossHitPoints } from '../../../enemies/boss';
 import { isPlausibleBossDefeat } from './bossVerification';
 import type { LeaderboardRankingMode } from '../../../runs/model';
 import { compareLeaderboardEntries, getLeaderboardRankingMode } from '../../../runs/scoring';
+import { listPortalHops, type PortalHop, type PortalHopPoint } from '../../../runs/portalHops';
 import {
+  MAX_RUN_RESPAWN_EVENTS,
+  RANKED_RUN_BREADCRUMB_INTERVAL_MS,
   RANKED_RUN_TRACE_SCHEMA_VERSION,
   type RankedRunTraceBreadcrumb,
   type RankedRunTraceGoalEvent,
@@ -25,11 +28,16 @@ import type { Env } from '../core/types';
 import { buildTracePhysicalSamples, validateTraceRespawns, type RankedRunPhysicalSample } from './respawnVerification';
 
 const VERIFICATION_TIMEOUT_MS = 2_000;
-const MAX_INPUT_EVENTS = 2_048;
-const MAX_BREADCRUMBS = 2_048;
-const MAX_ROOM_TRANSITIONS = 256;
-const MAX_GOAL_EVENTS = 2_048;
 const MAX_TRACE_DURATION_MS = 30 * 60 * 1000;
+// Trace limits cover a full-length run. Honest play records about 2-6 input changes
+// a second; the recorder writes one breadcrumb per interval plus one per respawn.
+const MAX_INPUT_EVENTS = 16_384;
+const MAX_BREADCRUMBS =
+  Math.ceil(MAX_TRACE_DURATION_MS / RANKED_RUN_BREADCRUMB_INTERVAL_MS) + MAX_RUN_RESPAWN_EVENTS + 1;
+const MAX_ROOM_TRANSITIONS = 2_048;
+const MAX_GOAL_EVENTS = 2_048;
+/** Keeps the audit row well inside D1's 2 MB row limit; larger traces keep only their summary. */
+const MAX_AUDIT_TRACE_JSON_CHARS = 1_500_000;
 const TRACE_ELAPSED_TOLERANCE_MS = 600;
 const GOAL_EVENT_RADIUS_PX = 32;
 const MAX_HORIZONTAL_SPEED_PX_PER_SEC = 900;
@@ -266,7 +274,8 @@ export async function verifyRoomRunTrace(input: {
   if ('reason' in respawnCheck) return createFailedVerification(
     respawnCheck.reason === 'trace_timeout' ? 'timeout' : 'failed', respawnCheck.reason, respawnCheck.summary,
   );
-  const pathCheck = verifyPath(trace.breadcrumbs, trace.roomTransitions, deadline, respawnCheck.respawns);
+  const pathCheck = verifyPath(trace.breadcrumbs, trace.roomTransitions, deadline, respawnCheck.respawns,
+    listPortalHops([input.room]));
   if (pathCheck) {
     return pathCheck;
   }
@@ -317,7 +326,9 @@ export async function verifyCourseRunTrace(input: {
   if ('reason' in respawnCheck) return createFailedVerification(
     respawnCheck.reason === 'trace_timeout' ? 'timeout' : 'failed', respawnCheck.reason, respawnCheck.summary,
   );
-  const pathCheck = verifyPath(trace.breadcrumbs, trace.roomTransitions, deadline, respawnCheck.respawns);
+  const courseRooms = input.course.roomRefs.flatMap((ref) => input.roomsById.get(ref.roomId) ?? []);
+  const pathCheck = verifyPath(trace.breadcrumbs, trace.roomTransitions, deadline, respawnCheck.respawns,
+    listPortalHops(courseRooms, input.course));
   if (pathCheck) {
     return pathCheck;
   }
@@ -354,6 +365,12 @@ export async function recordRunVerificationAudit(
   env: Env,
   input: RunVerificationAuditInput
 ): Promise<void> {
+  let traceJson = input.trace ? JSON.stringify(input.trace) : null;
+  let summary = input.summary;
+  if (traceJson && traceJson.length > MAX_AUDIT_TRACE_JSON_CHARS) {
+    summary = { ...summary, traceOmitted: { chars: traceJson.length } };
+    traceJson = null;
+  }
   await env.DB.batch([
     env.DB.prepare(
       `
@@ -375,8 +392,8 @@ export async function recordRunVerificationAudit(
       input.status,
       input.triggerReason,
       input.verificationReason,
-      JSON.stringify(input.summary),
-      input.trace ? JSON.stringify(input.trace) : null,
+      JSON.stringify(summary),
+      traceJson,
       input.createdAt
     ),
   ]);
@@ -549,6 +566,7 @@ function verifyPath(
   roomTransitions: RankedRunTraceRoomTransition[],
   deadline: number,
   respawns?: ReadonlyMap<number, RankedRunTraceRespawnEvent>,
+  portalHops: readonly PortalHop[] = [],
 ): RunVerificationResult | null {
   for (let index = 1; index < breadcrumbs.length; index += 1) {
     if (Date.now() > deadline) {
@@ -569,41 +587,11 @@ function verifyPath(
       });
     }
 
-    const worldDelta = getWorldDelta(previous, current);
-    const seconds = deltaMs / 1000;
-    if (Math.abs(worldDelta.dx) > MAX_HORIZONTAL_SPEED_PX_PER_SEC * seconds + POSITION_SLACK_PX) {
-      return createFailedVerification('failed', 'trace_path', {
-        axis: 'x',
-        deltaPx: worldDelta.dx,
-        deltaMs,
-      });
-    }
-    if (Math.abs(worldDelta.dy) > MAX_VERTICAL_SPEED_PX_PER_SEC * seconds + POSITION_SLACK_PX) {
-      return createFailedVerification('failed', 'trace_path', {
-        axis: 'y',
-        deltaPx: worldDelta.dy,
-        deltaMs,
-      });
-    }
-
-    const distance = Math.hypot(worldDelta.dx, worldDelta.dy);
-    if (distance > MAX_TOTAL_SPEED_PX_PER_SEC * seconds + POSITION_SLACK_PX) {
-      return createFailedVerification('failed', 'trace_path', {
-        axis: 'distance',
-        deltaPx: distance,
-        deltaMs,
-      });
-    }
-
-    const roomDistance =
-      Math.abs(current.roomX - previous.roomX) + Math.abs(current.roomY - previous.roomY);
-    if (roomDistance > 1) {
-      return createFailedVerification('failed', 'trace_transition', {
-        fromRoomX: previous.roomX,
-        fromRoomY: previous.roomY,
-        toRoomX: current.roomX,
-        toRoomY: current.roomY,
-      });
+    const failure = checkPathStep(previous, current, deltaMs);
+    // A portal teleports with no trace event; the same movement limits apply to
+    // reaching its entrance plus leaving its exit, so it grants no extra reach.
+    if (failure && (respawn || !portalHops.some((hop) => checkPathStep(previous, current, deltaMs, hop) === null))) {
+      return failure;
     }
   }
 
@@ -617,12 +605,72 @@ function verifyPath(
     const roomDistance =
       Math.abs(transition.toRoomX - transition.fromRoomX) +
       Math.abs(transition.toRoomY - transition.fromRoomY);
-    if (roomDistance !== 1) {
+    if (roomDistance !== 1 && !portalHops.some((hop) => explainsPortalTransition(hop, transition))) {
       return createFailedVerification('failed', 'trace_transition', { ...transition });
     }
   }
 
   return null;
+}
+
+/** Movement between two breadcrumbs, either direct or through one portal hop. */
+function checkPathStep(
+  previous: PortalHopPoint,
+  current: PortalHopPoint,
+  deltaMs: number,
+  hop?: PortalHop,
+): RunVerificationResult | null {
+  const legs: Array<[PortalHopPoint, PortalHopPoint]> = hop ? [[previous, hop.from], [hop.to, current]] : [[previous, current]];
+  let dx = 0;
+  let dy = 0;
+  let distance = 0;
+  let skippedRoom: [PortalHopPoint, PortalHopPoint] | null = null;
+  for (const [from, to] of legs) {
+    const delta = getWorldDelta(from, to);
+    dx += Math.abs(delta.dx);
+    dy += Math.abs(delta.dy);
+    distance += Math.hypot(delta.dx, delta.dy);
+    if (!skippedRoom && Math.abs(to.roomX - from.roomX) + Math.abs(to.roomY - from.roomY) > 1) skippedRoom = [from, to];
+  }
+
+  const seconds = deltaMs / 1000;
+  if (dx > MAX_HORIZONTAL_SPEED_PX_PER_SEC * seconds + POSITION_SLACK_PX) {
+    return createFailedVerification('failed', 'trace_path', {
+      axis: 'x',
+      deltaPx: dx,
+      deltaMs,
+    });
+  }
+  if (dy > MAX_VERTICAL_SPEED_PX_PER_SEC * seconds + POSITION_SLACK_PX) {
+    return createFailedVerification('failed', 'trace_path', {
+      axis: 'y',
+      deltaPx: dy,
+      deltaMs,
+    });
+  }
+  if (distance > MAX_TOTAL_SPEED_PX_PER_SEC * seconds + POSITION_SLACK_PX) {
+    return createFailedVerification('failed', 'trace_path', {
+      axis: 'distance',
+      deltaPx: distance,
+      deltaMs,
+    });
+  }
+  if (skippedRoom) {
+    return createFailedVerification('failed', 'trace_transition', {
+      fromRoomX: skippedRoom[0].roomX,
+      fromRoomY: skippedRoom[0].roomY,
+      toRoomX: skippedRoom[1].roomX,
+      toRoomY: skippedRoom[1].roomY,
+    });
+  }
+  return null;
+}
+
+/** A room change that only a portal between those rooms can make, arriving at its exit. */
+function explainsPortalTransition(hop: PortalHop, transition: RankedRunTraceRoomTransition): boolean {
+  return hop.from.roomX === transition.fromRoomX && hop.from.roomY === transition.fromRoomY
+    && hop.to.roomX === transition.toRoomX && hop.to.roomY === transition.toRoomY
+    && Math.hypot(transition.x - hop.to.x, transition.y - hop.to.y) <= POSITION_SLACK_PX;
 }
 
 function deriveRoomMetricsFromTrace(
@@ -1140,8 +1188,8 @@ function totalCountFromMap(map: Map<string, Set<string>>): number {
 }
 
 function getWorldDelta(
-  previous: RankedRunTraceBreadcrumb,
-  current: RankedRunTraceBreadcrumb
+  previous: PortalHopPoint,
+  current: PortalHopPoint
 ): { dx: number; dy: number } {
   const previousWorldX = previous.roomX * ROOM_PX_WIDTH + previous.x;
   const previousWorldY = previous.roomY * ROOM_PX_HEIGHT + previous.y;

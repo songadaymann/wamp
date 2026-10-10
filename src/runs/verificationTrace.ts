@@ -1,7 +1,10 @@
 import type { RespawnCheckpointReference } from '../goals/respawnCheckpoints';
 
 export const RANKED_RUN_TRACE_SCHEMA_VERSION = 1;
-export const MAX_RUN_RESPAWN_EVENTS = 256;
+/** A long, hard run can respawn often; well beyond one death every two seconds for 30 minutes. */
+export const MAX_RUN_RESPAWN_EVENTS = 1_024;
+/** The recorder writes at most one ordinary breadcrumb per interval. */
+export const RANKED_RUN_BREADCRUMB_INTERVAL_MS = 250;
 
 export type RankedRunTraceControl = 'moveX' | 'moveY' | 'jump';
 
