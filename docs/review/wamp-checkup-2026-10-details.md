@@ -5387,9 +5387,24 @@ DEFAULT_ROOM_MINT_CHAIN_ID = 84532 with name 'Base Sepolia' (mint/roomOwnership.
 
 **2026-10-10 completed.** PR #111 / `3e397575`, API Worker `0d53f953`. `progression/clearRewardScope.ts` resolves, for rooms, courses and Expanded Rooms, the versions that count as the same content (the significant-change window) and whether the finisher made it (room claimer, version publisher, or Expanded Room owner). First-clear and personal-best rewards look for an earlier accepted clear in the window; creator completion points pay once per player across the window, atomically, keeping the existing source-key format so past awards count; Expanded Room rank XP ranks the window together. Owners earn no clear points, first-clear or personal-best XP, or rank XP from their own content; their runs still appear on leaderboards and personal-best ghosts still save. Clear badges count each room once, accepted runs only, never your own; earned badges are kept. Not done: clawing back past rewards, and throttling or de-duplicating unchanged republishes. Receipt: `wamp-republish-rewards-2026-10-10.md`.
 
-### F199: details withheld
+### F199: Ranked verification passes a fake trace: a single breadcrumb at the exit is enough
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Leaderboard, XP and anti-cheat integrity
+- **Type:** defect · **impact:** high · **effort:** medium
+
+**Summary.** The server checked that a run's recording looked plausible from one breadcrumb to the next, but never that it started at the start point or had no gaps. A scripted client could send one breadcrumb at the exit and pass; enemy defeats skipped the path check entirely.
+
+**Technical detail.** verifyPath only compared consecutive breadcrumbs, so a trace with zero or one breadcrumb passed it. Nothing anchored the first breadcrumb near the spawn or course start, nothing limited the gap between breadcrumbs, and the nearest-breadcrumb fallback for goal events had no time bound. A reach_exit run passed with one breadcrumb plus one reach_exit event at the exit marker, which is public in the room snapshot; enemy events only had to be within 64px of the enemy's placed position.
+
+**Evidence (review baseline `7371df9a`).**
+
+- src/cloudflare/worker/runs/verification.ts:519-524 — verifyPath starts at index 1 and compares consecutive breadcrumbs only
+- src/cloudflare/worker/runs/verification.ts:772 — enemy events skip the path check
+- src/cloudflare/worker/runs/verification.ts:981-1027 — goal events match the nearest breadcrumb with no time bound
+
+**Fact-check (partially confirmed, partially confirmed, partially confirmed).** For reach_exit, zero breadcrumbs fails (no breadcrumb in the event's room), so one breadcrumb is the true minimum. collect_race and survival completion is enforced on the trace-derived metrics and both are ranked by score, so the near-instant-record point applies to the time-ranked goals. Reviewers asked that gap limits account for respawns and portals (since handled, F198) and that any anchoring be calibrated against stored traces before enforcing, because a run can qualify while the player is already moving.
+
+**2026-10-10 completed.** PR #112 / `3e6d82f8`, API Worker `222ae49e`. A trace must now start at the beginning of the recording (first breadcrumb ≤ 50ms) within 400px of the room's start point or the course start (the start resolution respawn checks already use), have no more than 1s between breadcrumbs except at a death respawn, record goal events while recording (≤ 1s after the last breadcrumb), match the nearest breadcrumb only within 1s, and put each enemy defeat within 400px of the player in world space. Limits come from the 109 stored traces of real play since May (first breadcrumb always at 0ms, gaps ≤ 287ms, events ≤ 241ms after the end, start ≤ 310px away, enemy defeats ≤ 251px); replaying the 108 with snapshots through the old and new verifier changes no outcome. No trace format change. Tighter movement limits and offline input replay are left for later. Receipt: `wamp-trace-anchoring-2026-10-10.md`.
 
 ### F200: details withheld
 

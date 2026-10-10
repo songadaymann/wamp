@@ -1,3 +1,7 @@
+## 2026-10-10 — F199 ranked traces anchored and continuous
+
+PR #112 / `3e6d82f8` is merged and the API Worker is deployed (`222ae49e`). A ranked trace must start near the room or course start at the start of the recording, stay continuous, and put enemy defeats near the player; calibrated on stored real traces with no change to any replayed outcome. Master **78/215**. Receipt: [trace anchoring](docs/review/wamp-trace-anchoring-2026-10-10.md).
+
 ## 2026-10-10 — F201 republish reward reset closed
 
 PR #111 / `3e397575` is merged and the API Worker is deployed (`0d53f953`). Clear rewards follow the significant-change window, so republishing no longer resets first clears, personal bests, creator points, Expanded Room rank XP or clear badges, and builders earn no clear rewards from their own rooms. Master **77/215**. Receipt: [republish rewards](docs/review/wamp-republish-rewards-2026-10-10.md).
