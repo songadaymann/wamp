@@ -262,10 +262,10 @@ async function loadLeaderboardRoomRunsForVersions(
   }));
 }
 
-async function loadCompletedCourseRunsForVersion(
+async function loadCompletedCourseRunsForVersions(
   env: Env,
   courseId: string,
-  courseVersion: number,
+  courseVersions: readonly number[],
 ): Promise<CourseRunRecord[]> {
   const result = await env.DB.prepare(
     `
@@ -288,13 +288,13 @@ async function loadCompletedCourseRunsForVersion(
         checkpoints_reached
       FROM course_runs
       WHERE course_id = ?
-        AND course_version = ?
+        AND course_version IN (SELECT value FROM json_each(?))
         AND result = 'completed'
         AND ${sqlIsVerificationAccepted('course_runs')}
         AND ${sqlUserIdIsNotLegacyGeneratedOnly('course_runs.user_id')}
     `
   )
-    .bind(courseId, courseVersion)
+    .bind(courseId, JSON.stringify(courseVersions))
     .all<CourseRunRow>();
 
   return result.results.map((row) => ({
@@ -365,6 +365,8 @@ export async function awardRoomRunProgression(
     creatorUserId: string | null;
     roomRecord: RoomRecord;
     completedAt: string;
+    /** The finisher made this room: no rank XP (clear flags arrive already withheld). */
+    ownContent?: boolean;
   },
 ): Promise<ProgressionDelta> {
   const delta = createEmptyProgressionDelta();
@@ -418,7 +420,7 @@ export async function awardRoomRunProgression(
   }
 
   const family = resolveAggregatedRoomLeaderboardSelection(params.roomRecord, params.run.roomVersion).leaderboardFamilyVersions;
-  const runs = await loadLeaderboardRoomRunsForVersions(env, params.run.roomId, family, params.goal);
+  const runs = params.ownContent ? [] : await loadLeaderboardRoomRunsForVersions(env, params.run.roomId, family, params.goal);
   const currentRank = computeRoomRankForAttempt(runs, params.goal, params.run.attemptId);
   const previousRank = computeRoomRankForAttempt(
     runs.filter((entry) => entry.attemptId !== params.run.attemptId),
@@ -541,6 +543,10 @@ export async function awardCourseRunProgression(
     creatorUserId: string | null;
     courseRecord: CourseRecord;
     completedAt: string;
+    /** The finisher made this Expanded Room: no rank XP (clear flags arrive already withheld). */
+    ownContent?: boolean;
+    /** Versions ranked together for rank XP, so a republish does not open an empty board. */
+    rankVersions?: readonly number[];
   },
 ): Promise<ProgressionDelta> {
   const delta = createEmptyProgressionDelta();
@@ -591,7 +597,9 @@ export async function awardCourseRunProgression(
     );
   }
 
-  const runs = await loadCompletedCourseRunsForVersion(env, params.run.courseId, params.run.courseVersion);
+  const runs = params.ownContent
+    ? []
+    : await loadCompletedCourseRunsForVersions(env, params.run.courseId, params.rankVersions ?? [params.run.courseVersion]);
   const currentRank = computeCourseRankForAttempt(runs, params.goal, params.run.attemptId);
   const previousRank = computeCourseRankForAttempt(
     runs.filter((entry) => entry.attemptId !== params.run.attemptId),

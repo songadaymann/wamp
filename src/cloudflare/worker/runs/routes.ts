@@ -68,6 +68,7 @@ import {
   loadEffectiveTrustTier,
   submitRoomRating,
 } from '../progression/store';
+import { resolveRoomClearRewardScope, scopeClearRewardFlags } from '../progression/clearRewardScope';
 import {
   computeRoomSnapshotVerificationHash,
   createRoomVerificationTrigger,
@@ -249,6 +250,7 @@ export async function handleRunFinish(
     roomRecord,
     existing.roomVersion,
   );
+  const rewardScope = resolveRoomClearRewardScope(roomRecord, existing.roomVersion, auth.user.id);
   const provisionalScore =
     clampedBody.result === 'completed' ? computeRunScore(snapshot.goal, clampedBody) : 0;
   const provisionalPreviousBest =
@@ -257,7 +259,7 @@ export async function handleRunFinish(
           env,
           auth.user.id,
           existing.roomId,
-          existing.roomVersion,
+          rewardScope.versions,
           snapshot.goal,
         )
       : null;
@@ -294,10 +296,10 @@ export async function handleRunFinish(
       )[0]?.attemptId === provisionalCandidateRun.attemptId);
   const provisionalPointAward =
     provisionalCandidateRun !== null
-      ? previewRunFinalizePoints(provisionalCandidateRun, {
+      ? previewRunFinalizePoints(provisionalCandidateRun, scopeClearRewardFlags(rewardScope, {
           isFirstCompletion: provisionalIsFirstCompletion,
           isNewPersonalBest: provisionalIsNewPersonalBest,
-        })
+        }))
       : null;
   const currentTopRows =
     clampedBody.result === 'completed'
@@ -470,9 +472,13 @@ export async function handleRunFinish(
     env, 'room:' + existing.roomId, existing.roomVersion, auth.user.id, { ...finalBody, finishedAt },
   ));
 
-  let isFirstCompletion = false;
+  // The personal-best ghost follows this exact version; rewards follow the reward scope.
   let isNewPersonalBest = false;
+  let rewardFlags = { isFirstCompletion: false, isNewPersonalBest: false };
   if (finalizedRun.result === 'completed') {
+    const goal = snapshot.goal;
+    const isBetterThan = (best: RoomRunRecord | null) => best === null
+      || sortCompletedRunsForLeaderboard([finalizedRun, best], goal)[0]?.attemptId === finalizedRun.attemptId;
     const previousBest = await loadBestCompletedRunForUserAndRoomVersion(
       env,
       auth.user.id,
@@ -481,11 +487,16 @@ export async function handleRunFinish(
       snapshot.goal,
       finalizedRun.attemptId
     );
-    isFirstCompletion = previousBest === null;
-    isNewPersonalBest =
-      previousBest === null ||
-      sortCompletedRunsForLeaderboard([finalizedRun, previousBest], snapshot.goal)[0]?.attemptId ===
-        finalizedRun.attemptId;
+    isNewPersonalBest = isBetterThan(previousBest);
+    const rewardBest = rewardScope.versions.length === 1 && rewardScope.versions[0] === finalizedRun.roomVersion
+      ? previousBest
+      : await loadBestCompletedRunForUserAndRoomVersion(
+          env, auth.user.id, finalizedRun.roomId, rewardScope.versions, snapshot.goal, finalizedRun.attemptId,
+        );
+    rewardFlags = scopeClearRewardFlags(rewardScope, {
+      isFirstCompletion: rewardBest === null,
+      isNewPersonalBest: isBetterThan(rewardBest),
+    });
   }
 
   if (isNewPersonalBest && completedGhost) {
@@ -496,10 +507,7 @@ export async function handleRunFinish(
     }
   }
   if (completedGhost) await scheduleRunGhostArchive(env, executionContext, attemptId);
-  await awardRunFinalizePoints(env, finalizedRun, {
-    isFirstCompletion,
-    isNewPersonalBest,
-  });
+  await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
   const creatorPointEvent =
     finalizedRun.result === 'completed'
       ? await awardRoomCreatorCompletionPoints(env, {
@@ -508,6 +516,7 @@ export async function handleRunFinish(
           roomVersion: finalizedRun.roomVersion,
           finisherUserId: finalizedRun.userId,
           attemptId: finalizedRun.attemptId,
+          rewardVersions: rewardScope.versions,
         })
       : null;
   if (creatorPointEvent) {
@@ -516,11 +525,11 @@ export async function handleRunFinish(
   await awardRoomRunProgression(env, {
     run: finalizedRun,
     goal: snapshot.goal,
-    isFirstCompletion,
-    isNewPersonalBest,
+    ...rewardFlags,
     creatorUserId: resolveRoomVersionPublisherUserId(roomRecord, finalizedRun.roomVersion),
     roomRecord,
     completedAt: finishedAt,
+    ownContent: rewardScope.ownContent,
   });
   scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
   await upsertUserStats(env, auth.user.id);

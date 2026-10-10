@@ -61,6 +61,7 @@ import {
 import {
   assertWampLeaderboardWriteAllowed,
 } from '../generatedUsers/leaderboardIsolation';
+import { resolveCourseClearRewardScope, scopeClearRewardFlags } from '../progression/clearRewardScope';
 import {
   awardCourseCreatorCompletionPoints,
   awardRunFinalizePoints,
@@ -307,6 +308,10 @@ export async function handleExpandedRoomRunFinish(
   if (!courseRecord) {
     throw new HttpError(404, 'Legacy course record not found for expanded room.');
   }
+  const creatorUserId = await resolvePublishedCourseOwnerUserId(env, context.legacyCourseId);
+  const rewardScope = resolveCourseClearRewardScope(
+    courseRecord, context.legacyCourseId, existing.expandedRoomVersion, auth.user.id, creatorUserId,
+  );
 
   const finishedAt = new Date().toISOString();
   const reportedElapsedMs = body.elapsedMs;
@@ -329,7 +334,7 @@ export async function handleExpandedRoomRunFinish(
           env,
           auth.user.id,
           existing.expandedRoomId,
-          existing.expandedRoomVersion,
+          rewardScope.versions,
           snapshot.goal,
           null,
         )
@@ -364,10 +369,10 @@ export async function handleExpandedRoomRunFinish(
       compareExpandedRoomRunRecords(provisionalCandidateRun, provisionalPreviousBest, snapshot.goal) < 0);
   const provisionalPointAward =
     provisionalCandidateRun !== null
-      ? previewRunFinalizePoints(provisionalCandidateRun, {
+      ? previewRunFinalizePoints(provisionalCandidateRun, scopeClearRewardFlags(rewardScope, {
           isFirstCompletion: provisionalIsFirstCompletion,
           isNewPersonalBest: provisionalIsNewPersonalBest,
-        })
+        }))
       : null;
   const currentTopRows =
     clampedBody.result === 'completed'
@@ -561,28 +566,25 @@ export async function handleExpandedRoomRunFinish(
     { ...finalBody, finishedAt },
   ));
 
-  let isFirstCompletion = false;
-  let isNewPersonalBest = false;
+  let rewardFlags = { isFirstCompletion: false, isNewPersonalBest: false };
   if (finalizedRun.result === 'completed') {
     const previousBest = await loadBestCompletedExpandedRoomRunForUserAndVersion(
       env,
       auth.user.id,
       finalizedRun.expandedRoomId,
-      finalizedRun.expandedRoomVersion,
+      rewardScope.versions,
       snapshot.goal,
       attemptId,
     );
-    isFirstCompletion = previousBest === null;
-    isNewPersonalBest =
-      previousBest === null ||
-      compareExpandedRoomRunRecords(finalizedRun, previousBest, snapshot.goal) < 0;
+    rewardFlags = scopeClearRewardFlags(rewardScope, {
+      isFirstCompletion: previousBest === null,
+      isNewPersonalBest:
+        previousBest === null ||
+        compareExpandedRoomRunRecords(finalizedRun, previousBest, snapshot.goal) < 0,
+    });
   }
 
-  await awardRunFinalizePoints(env, finalizedRun, {
-    isFirstCompletion,
-    isNewPersonalBest,
-  });
-  const creatorUserId = await resolvePublishedCourseOwnerUserId(env, context.legacyCourseId);
+  await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
   const creatorPointEvent =
     finalizedRun.result === 'completed'
       ? await awardCourseCreatorCompletionPoints(env, {
@@ -591,6 +593,7 @@ export async function handleExpandedRoomRunFinish(
           courseVersion: finalizedRun.expandedRoomVersion,
           finisherUserId: finalizedRun.userId,
           attemptId: finalizedRun.attemptId,
+          rewardVersions: rewardScope.versions,
         })
       : null;
 
@@ -601,11 +604,12 @@ export async function handleExpandedRoomRunFinish(
   await awardCourseRunProgression(env, {
     run: mapExpandedRoomRunToCourseRun(finalizedRun, context.legacyCourseId),
     goal: snapshot.goal,
-    isFirstCompletion,
-    isNewPersonalBest,
+    ...rewardFlags,
     creatorUserId,
     courseRecord,
     completedAt: finishedAt,
+    ownContent: rewardScope.ownContent,
+    rankVersions: rewardScope.versions,
   });
   scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
   await upsertUserStats(env, auth.user.id);
@@ -968,7 +972,7 @@ async function loadBestCompletedExpandedRoomRunForUserAndVersion(
   env: Env,
   userId: string,
   expandedRoomId: string,
-  expandedRoomVersion: number,
+  expandedRoomVersions: readonly number[],
   goal: CourseGoal,
   excludeAttemptId: string | null,
 ): Promise<ExpandedRoomRunRecord | null> {
@@ -999,13 +1003,13 @@ async function loadBestCompletedExpandedRoomRunForUserAndVersion(
       FROM expanded_room_runs
       WHERE user_id = ?
         AND expanded_room_id = ?
-        AND expanded_room_version = ?
+        AND expanded_room_version IN (SELECT value FROM json_each(?))
         AND result = 'completed'
         AND ${sqlIsVerificationAccepted('expanded_room_runs')}
         AND (? IS NULL OR attempt_id != ?)
     `
   )
-    .bind(userId, expandedRoomId, expandedRoomVersion, excludeAttemptId, excludeAttemptId)
+    .bind(userId, expandedRoomId, JSON.stringify(expandedRoomVersions), excludeAttemptId, excludeAttemptId)
     .all<ExpandedRoomRunRow>();
 
   const runs = result.results

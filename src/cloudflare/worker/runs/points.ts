@@ -188,6 +188,8 @@ export async function awardRoomCreatorCompletionPoints(
     roomVersion: number;
     finisherUserId: string;
     attemptId: string;
+    /** Versions that count as the same room; a finisher pays the creator once across them. */
+    rewardVersions?: readonly number[];
   }
 ): Promise<PointEventRow | null> {
   if (!input.creatorUserId || input.creatorUserId === input.finisherUserId) {
@@ -207,6 +209,7 @@ export async function awardRoomCreatorCompletionPoints(
     userId: input.creatorUserId,
     eventType: 'room_creator_completion',
     sourceKey,
+    equivalentSourceKeys: (input.rewardVersions ?? []).map((version) => `${input.roomId}:${version}:${input.finisherUserId}`),
     points: ROOM_CREATOR_COMPLETION_POINTS,
     breakdown: {
       roomId: input.roomId,
@@ -225,6 +228,8 @@ export async function awardCourseCreatorCompletionPoints(
     courseVersion: number;
     finisherUserId: string;
     attemptId: string;
+    /** Versions that count as the same Expanded Room; a finisher pays the creator once across them. */
+    rewardVersions?: readonly number[];
   }
 ): Promise<PointEventRow | null> {
   if (!input.creatorUserId || input.creatorUserId === input.finisherUserId) {
@@ -244,6 +249,7 @@ export async function awardCourseCreatorCompletionPoints(
     userId: input.creatorUserId,
     eventType: 'course_creator_completion',
     sourceKey,
+    equivalentSourceKeys: (input.rewardVersions ?? []).map((version) => `${input.courseId}:${version}:${input.finisherUserId}`),
     points: COURSE_CREATOR_COMPLETION_POINTS,
     breakdown: {
       courseId: input.courseId,
@@ -258,7 +264,7 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
   env: Env,
   userId: string,
   roomId: string,
-  roomVersion: number,
+  roomVersion: number | readonly number[],
   goal: RoomGoal,
   excludeAttemptId: string | null = null
 ): Promise<RoomRunRecord | null> {
@@ -286,13 +292,14 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
       FROM room_runs
       WHERE user_id = ?
         AND room_id = ?
-        AND room_version = ?
+        AND room_version IN (SELECT value FROM json_each(?))
         AND result = 'completed'
         AND COALESCE(verification_status, 'not_required') IN ('not_required', 'passed')
         AND (? IS NULL OR attempt_id != ?)
     `
   )
-    .bind(userId, roomId, roomVersion, excludeAttemptId, excludeAttemptId)
+    .bind(userId, roomId, JSON.stringify(typeof roomVersion === 'number' ? [roomVersion] : roomVersion),
+      excludeAttemptId, excludeAttemptId)
     .all<RoomRunRow>();
 
   const runs = result.results
@@ -626,10 +633,10 @@ async function hasMinimumAccountAgeForCreatorReward(env: Env, userId: string): P
   return Date.now() - createdAtMs >= MIN_ACCOUNT_AGE_FOR_CREATOR_REWARD_MS;
 }
 
-async function loadPointEventByTypeAndSource(
+async function loadPointEventByTypeAndSources(
   env: Env,
   eventType: PointEventType,
-  sourceKey: string
+  sourceKeys: readonly string[]
 ): Promise<PointEventRow | null> {
   return env.DB.prepare(
     `
@@ -643,11 +650,11 @@ async function loadPointEventByTypeAndSource(
         created_at
       FROM point_events
       WHERE event_type = ?
-        AND source_key = ?
+        AND source_key IN (SELECT value FROM json_each(?))
       LIMIT 1
     `
   )
-    .bind(eventType, sourceKey)
+    .bind(eventType, JSON.stringify(sourceKeys))
     .first<PointEventRow>();
 }
 
@@ -657,11 +664,14 @@ async function recordCreatorCompletionPointEvent(
     userId: string;
     eventType: 'room_creator_completion' | 'course_creator_completion';
     sourceKey: string;
+    /** Keys of equivalent versions; an existing award for any of them is this award. */
+    equivalentSourceKeys?: readonly string[];
     points: number;
     breakdown: Record<string, unknown>;
   }
 ): Promise<PointEventRow | null> {
-  const existing = await loadPointEventByTypeAndSource(env, input.eventType, input.sourceKey);
+  const sourceKeys = [...new Set([input.sourceKey, ...(input.equivalentSourceKeys ?? [])])];
+  const existing = await loadPointEventByTypeAndSources(env, input.eventType, sourceKeys);
   if (existing) {
     return existing;
   }
@@ -689,6 +699,12 @@ async function recordCreatorCompletionPointEvent(
             AND event_type IN ('room_creator_completion', 'course_creator_completion')
             AND created_at >= ?
         ) < ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM point_events
+            WHERE event_type = ?
+              AND source_key IN (SELECT value FROM json_each(?))
+          )
       `
     ).bind(
       eventId,
@@ -700,7 +716,9 @@ async function recordCreatorCompletionPointEvent(
       createdAt,
       input.userId,
       dayStartIso,
-      DAILY_CREATOR_COMPLETION_POINTS_LIMIT
+      DAILY_CREATOR_COMPLETION_POINTS_LIMIT,
+      input.eventType,
+      JSON.stringify(sourceKeys),
     ),
   ]);
 

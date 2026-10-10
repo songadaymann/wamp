@@ -153,16 +153,25 @@ async function insertUserProgressRowIfAbsent(env: Env, row: UserProgressRow): Pr
   ]);
 }
 
+/** Distinct rooms cleared, once each however often republished, never the player's own. */
 async function countDistinctRoomCompletions(env: Env, userId: string): Promise<number> {
   const row = await env.DB.prepare(
     `
-      SELECT COUNT(*) AS count
-      FROM (
-        SELECT DISTINCT room_id, room_version
-        FROM room_runs
-        WHERE user_id = ?
-          AND result = 'completed'
-      )
+      SELECT COUNT(DISTINCT runs.room_id) AS count
+      FROM room_runs runs
+      WHERE runs.user_id = ?
+        AND runs.result = 'completed'
+        AND COALESCE(runs.verification_status, 'not_required') IN ('not_required', 'passed')
+        AND NOT EXISTS (
+          SELECT 1 FROM rooms owned
+          WHERE owned.id = runs.room_id AND owned.claimer_user_id = runs.user_id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM room_versions published
+          WHERE published.room_id = runs.room_id
+            AND published.version = runs.room_version
+            AND published.published_by_user_id = runs.user_id
+        )
     `
   )
     .bind(userId)
@@ -171,38 +180,48 @@ async function countDistinctRoomCompletions(env: Env, userId: string): Promise<n
   return parseRowNumber(row?.count);
 }
 
+const COURSE_COMPLETIONS_SQL = `
+  SELECT DISTINCT 'course:' || runs.course_id AS content_id
+  FROM course_runs runs
+  WHERE runs.user_id = ?
+    AND runs.result = 'completed'
+    AND COALESCE(runs.verification_status, 'not_required') IN ('not_required', 'passed')
+    AND NOT EXISTS (
+      SELECT 1 FROM courses owned
+      WHERE owned.id = runs.course_id AND owned.owner_user_id = runs.user_id
+    )
+`;
+
+/** Distinct Expanded Rooms and courses cleared, once each, never the player's own. */
 async function countDistinctCourseCompletions(env: Env, userId: string): Promise<number> {
   const row = await expandedRoomAwareCountQuery(
     env,
     `
       SELECT COUNT(*) AS count
       FROM (
-        SELECT DISTINCT expanded_room_id AS content_id, expanded_room_version AS version_key
-        FROM expanded_room_runs
-        WHERE user_id = ?
-          AND result = 'completed'
+        SELECT DISTINCT runs.expanded_room_id AS content_id
+        FROM expanded_room_runs runs
+        WHERE runs.user_id = ?
+          AND runs.result = 'completed'
+          AND COALESCE(runs.verification_status, 'not_required') IN ('not_required', 'passed')
+          AND NOT EXISTS (
+            SELECT 1 FROM expanded_rooms owned
+            WHERE owned.id = runs.expanded_room_id AND owned.owner_user_id = runs.user_id
+          )
         UNION
-        SELECT DISTINCT 'course:' || course_id AS content_id, course_version AS version_key
-        FROM course_runs
-        WHERE user_id = ?
-          AND result = 'completed'
+        ${COURSE_COMPLETIONS_SQL}
           AND NOT EXISTS (
             SELECT 1
             FROM expanded_room_runs expanded
-            WHERE expanded.legacy_course_attempt_id = course_runs.attempt_id
-               OR expanded.attempt_id = course_runs.attempt_id
+            WHERE expanded.legacy_course_attempt_id = runs.attempt_id
+               OR expanded.attempt_id = runs.attempt_id
           )
       )
     `,
     [userId, userId],
     `
       SELECT COUNT(*) AS count
-      FROM (
-        SELECT DISTINCT course_id, course_version
-        FROM course_runs
-        WHERE user_id = ?
-          AND result = 'completed'
-      )
+      FROM (${COURSE_COMPLETIONS_SQL})
     `,
     [userId],
   );
