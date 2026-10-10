@@ -1,3 +1,7 @@
+## 2026-10-09 — F162 move tools, cross-room clipboard and stamps delivered
+
+PR #107 / `856606ef` and PR #108 / `30432e60` are merged and live on https://wamp.land. Copy carries objects, links and custom tiles across rooms; My Stamps saves up to 24 selections; the Move tool box-selects an area and drags every layer and its objects as one Undo. Master **74/215**. Receipt: [move tools](docs/review/wamp-editor-move-clipboard-2026-10-09.md).
+
 ## 2026-10-09 — F166 Expanded Room edge guides delivered
 
 PR #106 / `74b839cc` is merged and live on https://wamp.land. Expanded Rooms show neighbor-opening guides on their outer perimeter, none on internal seams. Master **73/215**. Receipt: [edge guides](docs/review/wamp-expanded-edge-guides-2026-10-09.md).
