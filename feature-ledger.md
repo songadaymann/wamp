@@ -1,3 +1,7 @@
+## 2026-10-09 — F166 Expanded Room edge guides delivered
+
+PR #106 / `74b839cc` is merged and live on https://wamp.land. Expanded Rooms show neighbor-opening guides on their outer perimeter, none on internal seams. Master **73/215**. Receipt: [edge guides](docs/review/wamp-expanded-edge-guides-2026-10-09.md).
+
 ## 2026-10-09 — F226 music grid draw caching delivered
 
 PR #105 / `27095ce6` is merged and live on https://wamp.land (Pages auto-build). The sequencer overlay rebuilds a layer only when its inputs change; cached output equals a fresh redraw and per-frame cost drops ~147 → ~59 µs. Master **72/215**. Receipt: [music grid](docs/review/wamp-music-overlay-cache-2026-10-09.md).

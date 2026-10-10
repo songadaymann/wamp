@@ -4,13 +4,13 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 72 of 215 done.**
+**Progress: 73 of 215 done.**
 
 **October 9 release:** [All 18 overnight slices and both morning fixes are live](wamp-overnight-release-2026-10-09.md), preserving partner PR #99 and ghost archive PR #100. Five partial items remain unticked; native background-tab audio still needs a physical check.
 
 **October 9 phone music editor:** [F227 is live](wamp-phone-music-editor-2026-10-09.md), with larger note cells, safe touch pan/pinch and compact Tools.
 
-**October 9 phrase audition:** [F231 is live](wamp-phrase-audition-2026-10-09.md): library phrases can be heard before placing, Arrange shows the playing slot, and the Arrange library is usable on desktop again. **October 9 music engine:** [F220 is complete](wamp-music-stems-2026-10-09.md): instruments mix live, Arrange renders each phrase once and plays slot by slot, and the desktop music Close button is clear of the menu. **October 9 music grid:** [F226 is complete](wamp-music-overlay-cache-2026-10-09.md): the sequencer overlay redraws a layer only when what it shows changes. Next are F166 (Expanded perimeter guides, in review), F162 and F229.
+**October 9 phrase audition:** [F231 is live](wamp-phrase-audition-2026-10-09.md): library phrases can be heard before placing, Arrange shows the playing slot, and the Arrange library is usable on desktop again. **October 9 music engine:** [F220 is complete](wamp-music-stems-2026-10-09.md): instruments mix live, Arrange renders each phrase once and plays slot by slot, and the desktop music Close button is clear of the menu. **October 9 music grid:** [F226 is complete](wamp-music-overlay-cache-2026-10-09.md): the sequencer overlay redraws a layer only when what it shows changes. **October 9 edge guides:** [F166 is complete](wamp-expanded-edge-guides-2026-10-09.md): Expanded Rooms show neighbor-opening guides on their outer perimeter. Next are F162 (clipboard, stamps, area move) and F229.
 
 ## How to use this file
 
@@ -279,7 +279,7 @@ The desktop editor is fast and polished. The gaps are safety nets (Undo buttons,
 - [ ] **F162** No way to move things: add a Select/Move tool, a clipboard that works across rooms, and saved stamps · high impact · large effort — **partial delivery 2026-10-09** (`38ca52e5`, [PR #101](https://github.com/songadaymann/wamp/pull/101)). Single-object Move preserves settings and links, with one-action Undo/Redo and safe cancellation in both editors. Marquee, cross-room clipboard and stamps remain. Combined 3,225 tests, native integration and coordinated live release pass.
 - [x] **F065** Expanded-room editor cannot configure NPC, police and Sword Hunter settings (duplicated inspector) · medium impact · medium effort — **done 2026-10-04** (`f877ebfd`). Shared actor view model and existing slice runtime setters replace no-op handlers; native field edits, snapshot/reselection, second-cell isolation and Undo/Redo verified. Fact-check excludes goal intro because expanded room goals are intentionally hidden.
 - [x] **F165** Undo history grows without limit and copies the whole terrain twice per stroke · medium impact · small effort — **done 2026-10-09** (`38ca52e5`, [PR #101](https://github.com/songadaymann/wamp/pull/101)). Latest 150 edits, lazy/selective Smart history and cached rain/off-lighting preview work. Combined 3,225 tests, native integration and coordinated live release pass.
-- [ ] **F166** Show neighbor openings at the room edges so the world actually connects · medium impact · small effort — **partial delivery 2026-10-09** (`38ca52e5`, [PR #101](https://github.com/songadaymann/wamp/pull/101)). Cached standalone matched/blocked/empty-space neighbor guides and advisory counts. Expanded external-perimeter guides remain. Combined 3,225 tests, native integration and coordinated live release pass.
+- [x] **F166** Show neighbor openings at the room edges so the world actually connects · medium impact · small effort — **done 2026-10-09** (`74b839cc`, [PR #106](https://github.com/songadaymann/wamp/pull/106); first slice `38ca52e5`, [PR #101](https://github.com/songadaymann/wamp/pull/101)). Standalone matched/blocked/empty-space guides and advisory counts, then the same guides on Expanded Rooms' outer perimeter (none on internal seams), loaded with one world-window request and recomputed per cell revision.
 - [ ] **F167** Use the existing agent API for an in-editor "Sketch my room" AI helper · medium impact · large effort
 
 ### Room music
