@@ -163,6 +163,7 @@ import {
   remapClipboardTileValue,
 } from './clipboardObjects';
 import { loadEditorClipboard, saveEditorClipboard } from './clipboardStorage';
+import { applyRegisteredSmartBrushCells } from '../../autotiling/brushEngine';
 import {
   clonePlacedObjectDocument,
   removePlacedObjectFromDocument,
@@ -191,6 +192,8 @@ import {
   smartSemanticCellKey,
   smartOwnedOutputKey,
   type RoomSmartTerrainState,
+  type SmartBrushId,
+  type SmartStyleId,
 } from '../../autotiling/model';
 import {
   applySmartCells,
@@ -574,25 +577,7 @@ export class EditorEditRuntime {
       return false;
     }
 
-    const tileState = buildEditorClipboardState(
-      editorState.activeLayer,
-      x1,
-      y1,
-      x2,
-      y2,
-      (x, y) => {
-        const existingTile = layer.getTileAt(x, y);
-        return existingTile
-          ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
-          : -1;
-      },
-      editorState.activeLayer === 'terrain'
-        ? (x, y) => this.smartTerrain.cells[smartCellKey(x, y)]
-        : editorState.activeLayer === 'background'
-          ? (x, y) => this.smartTerrain.backdropCells[smartCellKey(x, y)]
-          : undefined,
-      this.smartTerrain,
-    );
+    const tileState = this.buildLayerClipboard(editorState.activeLayer, x1, y1, x2, y2);
     const bounds = getClipboardBounds(x1, y1, x2, y2);
     const objects = collectClipboardObjects(this.host.getPlacedObjects(), editorState.activeLayer, bounds);
     if (!tileState && objects.length === 0) {
@@ -611,6 +596,140 @@ export class EditorEditRuntime {
     };
     saveEditorClipboard(this.clipboardState);
     return true;
+  }
+
+  private buildLayerClipboard(layerName: LayerName, x1: number, y1: number, x2: number, y2: number): EditorClipboardState | null {
+    const layer = this.host.getLayers().get(layerName);
+    if (!layer) return null;
+    return buildEditorClipboardState(
+      layerName,
+      x1,
+      y1,
+      x2,
+      y2,
+      (x, y) => {
+        const existingTile = layer.getTileAt(x, y);
+        return existingTile
+          ? encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY)
+          : -1;
+      },
+      layerName === 'terrain'
+        ? (x, y) => this.smartTerrain.cells[smartCellKey(x, y)]
+        : layerName === 'background'
+          ? (x, y) => this.smartTerrain.backdropCells[smartCellKey(x, y)]
+          : undefined,
+      this.smartTerrain,
+    );
+  }
+
+  /**
+   * Moves every layer's tiles and the objects anchored in an area by whole tiles, as one
+   * Undo step. It is Copy, Erase and Paste per layer done at once: smart sources in the
+   * area are removed (neighbours re-solve) and recreated at the destination.
+   */
+  moveArea(x1: number, y1: number, x2: number, y2: number, dx: number, dy: number): boolean {
+    if (!this.guardEditable() || (dx === 0 && dy === 0)) return false;
+    const bounds = getClipboardBounds(x1, y1, x2, y2);
+    if (bounds.minX + dx < 0 || bounds.maxX + dx >= ROOM_WIDTH || bounds.minY + dy < 0 || bounds.maxY + dy >= ROOM_HEIGHT) {
+      this.host.updatePersistenceStatus('Keep the selection inside the room.');
+      return false;
+    }
+    const inside = (x: number, y: number) => x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
+    const recipes = Object.values(this.smartTerrain.recipes);
+    if (recipes.some((recipe) => recipe.sourceCells.some((cell) => inside(cell.x, cell.y))
+      && !recipe.sourceCells.every((cell) => inside(cell.x, cell.y)))) {
+      this.host.updatePersistenceStatus('Part of a Smart structure is outside the selection. Select all of it to move it.');
+      return false;
+    }
+    const hasSmartSources = recipes.some((recipe) => recipe.sourceCells.some((cell) => inside(cell.x, cell.y)))
+      || Object.keys(this.smartTerrain.semanticCells).some((key) => {
+        const match = /^\w+:(\d+),(\d+)$/.exec(key);
+        return match !== null && inside(Number(match[1]), Number(match[2]));
+      });
+    if (hasSmartSources && this.smartTerrain.editingDisabled) {
+      this.host.updatePersistenceStatus(this.smartTerrain.editingDisabledReason ?? 'Smart Tiles in this room cannot be edited here.');
+      return false;
+    }
+
+    const objects = this.clonePlacedObjects();
+    const isMoving = (placed: PlacedObject) => {
+      const anchor = getPlacedObjectAnchorCell(placed);
+      return anchor !== null && inside(anchor.tileX, anchor.tileY);
+    };
+    const staying = objects.filter((placed) => !isMoving(placed));
+    const moved = objects.filter(isMoving).map((placed) => ({ ...placed, x: placed.x + dx * TILE_SIZE, y: placed.y + dy * TILE_SIZE }));
+    for (const placed of moved) {
+      const anchor = getPlacedObjectAnchorCell(placed);
+      if (!anchor || findConflictingPlacedObjectAtAnchorCell(staying, anchor, placed)) {
+        this.host.updatePersistenceStatus('Another object is in the way there.');
+        return false;
+      }
+    }
+
+    const previous = this.exportRoomSnapshot();
+    const clipboards = LAYER_NAMES.map((layer) => ({ layer, clipboard: this.buildLayerClipboard(layer, bounds.minX, bounds.minY, bounds.maxX, bounds.maxY) }));
+    const activeLayer = editorState.activeLayer;
+    this.beginTileBatch();
+    try {
+      for (const layer of LAYER_NAMES) {
+        editorState.activeLayer = layer;
+        this.eraseArea(layer, bounds, inside);
+      }
+      for (const { layer, clipboard } of clipboards) {
+        if (!clipboard) continue;
+        editorState.activeLayer = layer;
+        this.pasteClipboardTilesAt(clipboard, bounds.minX + dx, bounds.minY + dy);
+      }
+    } finally {
+      editorState.activeLayer = activeLayer;
+    }
+    this.host.setPlacedObjects([...staying, ...moved]);
+    this.rebuildObjectSprites();
+    this.clearTileBatch();
+    const next = this.exportRoomSnapshot();
+    if (JSON.stringify(previous) === JSON.stringify(next)) return false;
+    this.history.record({ kind: 'layout', action: { previous, next } });
+    this.markRoomDirty();
+    this.host.updateGoalUi();
+    return true;
+  }
+
+  /** Clears an area on one layer the way Erase would, removing smart sources per brush first. */
+  private eraseArea(
+    layerName: LayerName,
+    bounds: { minX: number; minY: number; maxX: number; maxY: number },
+    inside: (x: number, y: number) => boolean,
+  ): void {
+    const groups = new Map<string, { brushId: SmartBrushId; styleId: SmartStyleId; cells: { x: number; y: number }[] }>();
+    const add = (brushId: SmartBrushId, styleId: SmartStyleId, x: number, y: number) => {
+      const key = `${brushId}|${styleId}`;
+      const group = groups.get(key) ?? { brushId, styleId, cells: [] };
+      group.cells.push({ x, y });
+      groups.set(key, group);
+    };
+    for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+      for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+        const cell = this.smartTerrain.semanticCells[smartSemanticCellKey(layerName, x, y)];
+        if (cell) add(cell.brushId, cell.styleId, x, y);
+      }
+    }
+    for (const recipe of Object.values(this.smartTerrain.recipes)) {
+      for (const cell of recipe.sourceCells) {
+        if (cell.layer === layerName && inside(cell.x, cell.y)) add(recipe.brushId, recipe.styleId, cell.x, cell.y);
+      }
+    }
+    if (groups.size > 0 && !this.smartTerrain.editingDisabled) {
+      let document = this.getSmartDocument();
+      for (const group of groups.values()) {
+        document = applyRegisteredSmartBrushCells(document, { ...group, mode: 'erase', layer: layerName });
+      }
+      this.applySmartDocument(document);
+    }
+    const layer = this.host.getLayers().get(layerName);
+    if (!layer) return;
+    for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+      for (let x = bounds.minX; x <= bounds.maxX; x += 1) this.eraseLayerCell(layer, x, y);
+    }
   }
 
   pasteClipboardAt(baseTileX: number, baseTileY: number): boolean {

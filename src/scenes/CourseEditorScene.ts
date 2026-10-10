@@ -265,7 +265,7 @@ export class CourseEditorScene extends Phaser.Scene {
   private readonly touchTileRooms = new Set<string>();
   private readonly touchObjectRooms = new Set<string>();
   private readonly handleTouchBlur = (): void => {
-    this.objectMoveController.cancel();
+    this.objectMoveController.stopGesture();
     if (this.touchControls.isEditing) this.touchControls.cancel();
   };
   private activeTileDragRoomId: string | null = null;
@@ -2354,7 +2354,7 @@ export class CourseEditorScene extends Phaser.Scene {
     const fallback = this.courseRecord?.draft.roomRefs[0]?.roomId ?? null;
     const nextRoomId = roomId && this.roomSlices.has(roomId) ? roomId : fallback;
     const roomChanged = nextRoomId !== this.selectedRoomId;
-    if (roomChanged) this.objectMoveController.cancel();
+    if (roomChanged) this.objectMoveController.reset();
     this.selectedRoomId = nextRoomId;
     if (roomChanged) {
       this.objectInspectorController.clearTransientState();
@@ -2532,7 +2532,7 @@ export class CourseEditorScene extends Phaser.Scene {
     this.events.on('sleep', this.handleTouchBlur);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (editorState.activeTool === 'move' && !this.musicModeActive && pointer.rightButtonDown()) { this.objectMoveController.cancel(); return; }
-      if (this.pointerRequestsPan(pointer)) this.objectMoveController.cancel();
+      if (this.pointerRequestsPan(pointer)) this.objectMoveController.stopGesture();
       else if (this.objectMoveController.down(pointer)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.down(pointer); return; }
       if (this.musicModeActive && this.pointerRequestsPan(pointer)) {

@@ -9,12 +9,14 @@ function harness() {
   let objects: PlacedObject[] = [{ id: 'floor_trigger', instanceId: 'plate', x: 56, y: 304, triggerTargetInstanceId: 'door', coopPlate: true }];
   let enabled = true, editable = true;
   const sprite = { active: true, x: origin.x + 56, y: origin.y + 304, setPosition: vi.fn((x: number, y: number) => { sprite.x = x; sprite.y = y; }) };
-  const graphics = { clear: vi.fn(() => graphics), lineStyle: vi.fn(() => graphics), strokeRect: vi.fn(() => graphics), setDepth: vi.fn(() => graphics), destroy: vi.fn() };
+  const graphics = { clear: vi.fn(() => graphics), lineStyle: vi.fn(() => graphics), strokeRect: vi.fn(() => graphics), fillStyle: vi.fn(() => graphics), fillRect: vi.fn(() => graphics), setDepth: vi.fn(() => graphics), destroy: vi.fn() };
   const runtime = {
     getRoomOrigin: () => origin,
     getPlacedObjectSprite: () => sprite,
     getPlacedObjectBounds: () => ({ x: origin.x + 48, y: origin.y + 296, width: 16, height: 16 }),
     findPlacedObjectAt: (x: number, y: number) => Math.hypot(x - origin.x - objects[0].x, y - origin.y - objects[0].y) < 20 ? objects[0] : null,
+    documentRevision: 1,
+    moveArea: vi.fn(() => { runtime.documentRevision += 1; return true; }),
     movePlacedObject: vi.fn((id: string, point: { x: number; y: number }, start: { x: number; y: number }) => {
       if (!editable) return false;
       const move = buildMovedObjectDocument(objects, id, point, start);
@@ -70,7 +72,8 @@ describe('shared editor object move gesture', () => {
   });
 
   it('consumes empty/read-only Move clicks, rejects a drop in another cell, and right click cancels', () => {
-    const h = harness(); expect(h.controller.down(pointer(400, 100))).toBe(true); expect(h.controller.isDragging).toBe(false);
+    const h = harness(); expect(h.controller.down(pointer(400, 100))).toBe(true); h.controller.up(pointer(400, 100));
+    expect(h.controller.isDragging).toBe(false); expect(h.controller.selectedArea).toBeNull();
     h.setEditable(false); expect(h.controller.down(pointer())).toBe(true); expect(h.controller.isDragging).toBe(false); h.setEditable(true);
     h.controller.down(pointer()); h.controller.up(pointer(700, 304)); expect(h.runtime.movePlacedObject).not.toHaveBeenCalled(); expect(h.sprite.x).toBe(696);
     h.controller.down(pointer()); expect(h.controller.down(pointer(88, 272, { right: true }))).toBe(true); expect(h.controller.isDragging).toBe(false);
@@ -81,5 +84,61 @@ describe('shared editor object move gesture', () => {
     if (kind === 'hidden-tab') h.hideDocument(); else h.windowEvents.emit('blur');
     expect(h.controller.isDragging).toBe(false); expect(h.sprite.x).toBe(696); expect(h.runtime.movePlacedObject).not.toHaveBeenCalled();
     h.controller.destroy(); expect(h.documentEvents.listenerCount('visibilitychange')).toBe(0); expect(h.windowEvents.listenerCount('blur')).toBe(0);
+  });
+
+  it('drags across empty space to select an area, then moves every layer by dragging inside it', () => {
+    const h = harness();
+    // Pointer coordinates are local to the room cell in this harness: tiles are 16 px.
+    h.controller.down(pointer(166, 40)); h.controller.move(pointer(230, 90)); h.controller.up(pointer(230, 90));
+    expect(h.controller.selectedArea).toEqual({ minX: 10, minY: 2, maxX: 14, maxY: 5 });
+    expect(h.host.showStatus).toHaveBeenLastCalledWith(expect.stringMatching(/^Selected 5×4/));
+
+    h.controller.down(pointer(200, 60)); h.controller.move(pointer(232, 44));
+    expect(h.runtime.moveArea).not.toHaveBeenCalled();
+    h.controller.up(pointer(232, 44));
+    expect(h.runtime.moveArea).toHaveBeenCalledExactlyOnceWith(10, 2, 14, 5, 2, -1);
+    expect(h.controller.selectedArea).toEqual({ minX: 12, minY: 1, maxX: 16, maxY: 4 });
+    expect(h.host.onChanged).toHaveBeenCalledOnce();
+  });
+
+  it('clears the selection on Escape, a tool change, or any other edit to the room', () => {
+    const select = (h: ReturnType<typeof harness>) => { h.controller.down(pointer(166, 40)); h.controller.move(pointer(230, 90)); h.controller.up(pointer(230, 90)); };
+    const h = harness(); select(h);
+    expect(h.controller.cancel()).toBe(true); expect(h.controller.selectedArea).toBeNull(); expect(h.controller.cancel()).toBe(false);
+    select(h); editorState.activeTool = 'pencil'; h.controller.validate(); expect(h.controller.selectedArea).toBeNull();
+    editorState.activeTool = 'move'; select(h); h.runtime.documentRevision += 1; h.controller.validate(); expect(h.controller.selectedArea).toBeNull();
+  });
+
+  it('cancels an area drag without moving anything, and a second touch stops it', () => {
+    const h = harness();
+    h.controller.down(pointer(166, 40)); h.controller.move(pointer(230, 90)); h.controller.up(pointer(230, 90));
+    h.controller.down(pointer(200, 60, { touch: true })); h.controller.move(pointer(250, 60, { touch: true }));
+    expect(h.controller.cancel()).toBe(true); expect(h.controller.selectedArea).not.toBeNull();
+    h.controller.down(pointer(200, 60, { touch: true })); h.controller.down(pointer(10, 10, { id: 2, touch: true }));
+    expect(h.controller.isDragging).toBe(false);
+    h.controller.down(pointer(200, 60)); h.controller.up(pointer(250, 60), true);
+    expect(h.runtime.moveArea).not.toHaveBeenCalled();
+  });
+
+  it('keeps the selection through blur and resize, and survives a room switch when the drag starts (Expanded editor)', () => {
+    const h = harness();
+    // Expanded editor: prepare selects the room under the pointer, which resets the controller.
+    h.host.prepare.mockImplementation(() => h.controller.reset());
+    h.controller.down(pointer(166, 40)); h.controller.move(pointer(230, 90)); h.controller.up(pointer(230, 90));
+    h.gameEvents.emit('blur'); h.scale.emit('resize'); h.hideDocument();
+    expect(h.controller.selectedArea).toEqual({ minX: 10, minY: 2, maxX: 14, maxY: 5 });
+    h.controller.down(pointer(200, 60)); h.controller.move(pointer(216, 60)); h.controller.up(pointer(216, 60));
+    expect(h.runtime.moveArea).toHaveBeenCalledExactlyOnceWith(10, 2, 14, 5, 1, 0);
+    expect(h.controller.selectedArea).toEqual({ minX: 11, minY: 2, maxX: 15, maxY: 5 });
+  });
+
+  it('a middle-button pan stops a marquee without consuming the click or dropping the selection', () => {
+    const h = harness();
+    h.controller.down(pointer(166, 40)); h.controller.move(pointer(230, 90)); h.controller.up(pointer(230, 90));
+    const middle = { ...(pointer(300, 300) as object), leftButtonDown: () => false, rightButtonDown: () => false } as never;
+    expect(h.controller.down(middle)).toBe(false);
+    expect(h.controller.selectedArea).not.toBeNull();
+    expect(h.controller.down(pointer(300, 300, { right: true }))).toBe(true);
+    expect(h.controller.selectedArea).toBeNull();
   });
 });

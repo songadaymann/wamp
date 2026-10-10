@@ -623,7 +623,7 @@ export class EditorInteractionController {
     this.scene.game.events.on('blur', this.handleTouchBlur);
     this.scene.events.on('sleep', this.handleTouchBlur);
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.cancel();
+      if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.stopGesture();
       else if (this.host.objectMove?.down(pointer)) return;
       if (this.handleTouchPointerDown(pointer)) {
         return;
