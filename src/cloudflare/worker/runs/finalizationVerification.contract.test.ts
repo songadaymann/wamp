@@ -105,7 +105,8 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
         expect(batch.mock.invocationCallOrder[0]).toBeLessThan(mocks.audit.mock.invocationCallOrder[0]);
         const audit = mocks.audit.mock.calls[0][1];
         expect(audit).toMatchObject({ kind: kind === 'room' ? 'room' : 'course', attemptId: 'attempt', status: scenario === 'relaxed' ? 'skipped' : status, triggerReason: 'point_gain', verificationReason: reason });
-        expect(audit.trace).toEqual(scenario === 'relaxed' || scenario === 'missing_trace' ? null : body.verificationTrace);
+        // Relaxed (skipped) runs keep their recording for later review.
+        expect(audit.trace).toEqual(scenario === 'missing_trace' ? null : body.verificationTrace);
         expect(audit.summary).toEqual(scenario === 'relaxed'
           ? { trigger, ...(kind === 'expanded' ? { expandedRoomId: 'expanded' } : {}), policy: 't1_audit_only', trustTier: 'T1', verifier: null }
           : { trigger, verifier: scenario === 'missing_trace' ? { issue: 'missing_trace' } : scenario === 'failed' ? { invalid: true } : scenario === 'timeout' ? { elapsed: true } : { checked: true }, ...(kind === 'expanded' ? { expandedRoomId: 'expanded' } : {}) });
