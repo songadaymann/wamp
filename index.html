@@ -384,6 +384,15 @@
             </div>
           </div>
         </div>
+        <div id="copy-controls" class="erase-controls editor-tool-popover editor-copy-controls hidden">
+          <div class="editor-tool-popover-label">Copy</div>
+          <div class="erase-controls-row editor-copy-actions">
+            <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="paste" title="Paste the clipboard (Cmd/Ctrl+V). It stays available in other rooms.">Paste</button>
+            <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="save-stamp" title="Save the clipboard to My Stamps to reuse later.">Save stamp</button>
+          </div>
+          <div class="editor-tool-popover-label">My Stamps</div>
+          <div class="editor-copy-stamps" role="list" aria-label="My stamps"></div>
+        </div>
         <div id="fill-controls" class="erase-controls editor-tool-popover editor-fill-controls hidden">
           <div class="editor-tool-popover-label">Fill</div>
           <div class="erase-controls-row">
@@ -1224,6 +1233,15 @@
               </div>
             </div>
           </div>
+          <div id="editor-top-copy-controls" class="erase-controls editor-tool-popover editor-copy-controls hidden">
+            <div class="editor-tool-popover-label">Copy</div>
+            <div class="erase-controls-row editor-copy-actions">
+              <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="paste" title="Paste the clipboard (Cmd/Ctrl+V). It stays available in other rooms.">Paste</button>
+              <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="save-stamp" title="Save the clipboard to My Stamps to reuse later.">Save stamp</button>
+            </div>
+            <div class="editor-tool-popover-label">My Stamps</div>
+            <div class="editor-copy-stamps" role="list" aria-label="My stamps"></div>
+          </div>
           <div id="editor-top-fill-controls" class="erase-controls editor-tool-popover editor-fill-controls hidden">
             <div class="editor-tool-popover-label">Fill</div>
             <div class="erase-controls-row">
@@ -1366,6 +1384,14 @@
             <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="4">4x4</button>
             <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="5">5x5</button>
           </div>
+        </div>
+        <div id="editor-shell-copy-picker" class="editor-shell-eraser-size-picker editor-copy-controls hidden" role="group" aria-label="Copy options">
+          <div class="editor-shell-eraser-size-actions">
+            <button type="button" data-editor-clipboard-action="paste" title="Paste the clipboard (Cmd/Ctrl+V). It stays available in other rooms.">Paste</button>
+            <button type="button" data-editor-clipboard-action="save-stamp" title="Save the clipboard to My Stamps to reuse later.">Save stamp</button>
+          </div>
+          <span class="editor-shell-eraser-size-label">My Stamps</span>
+          <div class="editor-copy-stamps" role="list" aria-label="My stamps"></div>
         </div>
         <div id="editor-shell-fill-picker" class="editor-shell-eraser-size-picker editor-fill-controls hidden" role="group" aria-label="Fill options">
           <label

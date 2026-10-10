@@ -171,6 +171,8 @@ import {
 import { CourseEditorObjectInspectorController } from './courseEditor/objectInspector';
 import { ExpandedEdgeGuideController } from './courseEditor/expandedEdgeGuides';
 import { createWorldRepository } from '../persistence/worldRepository';
+import { drawClipboardPastePreview } from './editor/clipboardObjects';
+import { loadEditorClipboard, saveEditorClipboard } from './editor/clipboardStorage';
 import { selectCustomSpriteTileForCourseRoom } from './courseEditor/customSpriteTiles';
 import type { CustomSpriteDefinition } from '../customSprites/model';
 import { roomSnapshotUsesCustomSprite } from '../customSprites/usage';
@@ -445,9 +447,7 @@ export class CourseEditorScene extends Phaser.Scene {
       }
       event.preventDefault();
       event.stopPropagation();
-      this.clipboardPastePreviewActive = true;
-      this.statusText = 'Click an expanded room cell to paste the copied tiles.';
-      this.renderUi();
+      this.beginCourseClipboardPaste();
       return;
     }
 
@@ -688,6 +688,14 @@ export class CourseEditorScene extends Phaser.Scene {
       isActive: () => this.scene.isActive(),
       onUndo: () => this.undoAction(),
       onRedo: () => this.redoAction(),
+      getClipboard: () => this.clipboardState,
+      onPasteClipboard: () => this.beginCourseClipboardPaste(),
+      onUseClipboard: (clipboard) => {
+        this.clipboardState = clipboard;
+        saveEditorClipboard(clipboard);
+        this.beginCourseClipboardPaste();
+      },
+      onClipboardStatus: (message) => { this.statusText = message; this.renderUi(); },
       onRequestRender: () => this.renderUi(),
       isRoomLayoutEmpty: () => !(this.getSelectedSlice()?.runtime.hasRoomLayoutContent() ?? true),
       onOpenRoomTemplates: () => { void openRoomTemplatePicker({ getRuntime: () => this.getSelectedSlice()?.runtime ?? null, isActive: () => this.scene.isActive(), expandedCell: true, onApplied: () => { this.hideObjectInspectorUi(); this.renderUi(); } }); },
@@ -1800,6 +1808,8 @@ export class CourseEditorScene extends Phaser.Scene {
     this.isShuttingDown = false;
     this.musicWorkflow.resetForSceneOpen();
     this.musicPatternController.reset();
+    // Pick up a copy made in the room editor or another Expanded Room.
+    this.clipboardState = loadEditorClipboard() ?? this.clipboardState;
     this.loading = true;
     this.statusText = data?.statusMessage ?? 'Loading expanded room editor...';
     this.renderUi();
@@ -3219,6 +3229,16 @@ export class CourseEditorScene extends Phaser.Scene {
     this.renderUi();
   }
 
+  private beginCourseClipboardPaste(): void {
+    if (!this.clipboardState || editorState.paletteMode !== 'tiles') {
+      return;
+    }
+    this.clipboardPastePreviewActive = true;
+    editorState.activeTool = 'copy';
+    this.statusText = 'Click an expanded room cell to paste the copied tiles.';
+    this.renderUi();
+  }
+
   private cancelClipboardPastePreview(): void {
     this.clipboardPastePreviewActive = false;
     this.clipboardSourceRoomId = null;
@@ -3437,6 +3457,14 @@ export class CourseEditorScene extends Phaser.Scene {
 
     const tile = this.getLocalTileForPointer(pointer, slice);
     if (!tile) {
+      return;
+    }
+
+    if (this.clipboardPastePreviewActive && this.clipboardState && editorState.paletteMode === 'tiles') {
+      drawClipboardPastePreview(this.cursorGraphics, this.clipboardState, {
+        x: slice.origin.x + tile.tileX * TILE_SIZE,
+        y: slice.origin.y + tile.tileY * TILE_SIZE,
+      }, 0x7de5ff);
       return;
     }
 

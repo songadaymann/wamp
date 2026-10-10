@@ -51,6 +51,7 @@ import {
 import {
   getCustomSpriteDefinitionByObjectId,
   getCustomSpriteDefinitionsForPlacedObjects,
+  registerCustomSpritesFromSnapshot,
 } from '../../customSprites/registry';
 import type { CustomSpriteDefinition } from '../../customSprites/model';
 import {
@@ -147,11 +148,21 @@ import {
 } from './sprayTiles';
 import {
   buildEditorClipboardState,
+  buildEmptyClipboardState,
   cloneEditorClipboardState,
+  getClipboardBounds,
   planEditorClipboardPaste,
   planEditorSmartClipboardPaste,
   type EditorClipboardState,
 } from './clipboard';
+import {
+  collectClipboardCustomTiles,
+  collectClipboardObjects,
+  planClipboardCustomTiles,
+  planClipboardObjectPaste,
+  remapClipboardTileValue,
+} from './clipboardObjects';
+import { loadEditorClipboard, saveEditorClipboard } from './clipboardStorage';
 import {
   clonePlacedObjectDocument,
   removePlacedObjectFromDocument,
@@ -449,7 +460,8 @@ export class EditorEditRuntime {
     this.objectBatchLivePreview = false;
     this.objectBatchPlacedCount = 0;
     this.smartTerrain = createRoomSmartTerrainState();
-    this.clipboardState = null;
+    // The copy clipboard carries across rooms (and between the room and Expanded editors).
+    this.clipboardState = loadEditorClipboard();
     this.customRoomTiles = [];
   }
 
@@ -562,7 +574,7 @@ export class EditorEditRuntime {
       return false;
     }
 
-    this.clipboardState = buildEditorClipboardState(
+    const tileState = buildEditorClipboardState(
       editorState.activeLayer,
       x1,
       y1,
@@ -581,7 +593,24 @@ export class EditorEditRuntime {
           : undefined,
       this.smartTerrain,
     );
-    return this.clipboardState !== null;
+    const bounds = getClipboardBounds(x1, y1, x2, y2);
+    const objects = collectClipboardObjects(this.host.getPlacedObjects(), editorState.activeLayer, bounds);
+    if (!tileState && objects.length === 0) {
+      this.clipboardState = null;
+      return false;
+    }
+
+    const state = tileState ?? buildEmptyClipboardState(editorState.activeLayer, bounds);
+    const customTiles = collectClipboardCustomTiles(state.tiles, this.customRoomTiles);
+    const customSprites = getCustomSpriteDefinitionsForPlacedObjects(objects);
+    this.clipboardState = {
+      ...state,
+      ...(objects.length > 0 ? { objects } : {}),
+      ...(customSprites.length > 0 ? { customSprites } : {}),
+      ...(customTiles.length > 0 ? { customTiles } : {}),
+    };
+    saveEditorClipboard(this.clipboardState);
+    return true;
   }
 
   pasteClipboardAt(baseTileX: number, baseTileY: number): boolean {
@@ -592,6 +621,65 @@ export class EditorEditRuntime {
     const layer = this.host.getLayers().get(editorState.activeLayer);
     const clipboard = this.clipboardState;
     if (!layer || !clipboard) {
+      return false;
+    }
+
+    if (!clipboard.objects?.length && !clipboard.customTiles?.length) {
+      return this.pasteClipboardTilesAt(clipboard, baseTileX, baseTileY);
+    }
+
+    // Tiles, custom tiles and objects land as one Undo step.
+    const previous = this.exportRoomSnapshot();
+    let tiles = clipboard;
+    if (clipboard.customTiles?.length) {
+      const { gidMap, additions } = planClipboardCustomTiles(clipboard.customTiles, this.customRoomTiles);
+      if (additions.length > 0) {
+        this.customRoomTiles = [...this.customRoomTiles, ...additions];
+        this.syncCustomRoomTileset();
+      }
+      const remapped = clipboard.tiles.map((row) => row.map((value) => remapClipboardTileValue(value, gidMap)));
+      tiles = {
+        ...clipboard,
+        tiles: remapped,
+        occupiedMask: clipboard.occupiedMask.map((row, y) => row.map((occupied, x) => occupied && remapped[y][x] >= 0)),
+      };
+    }
+    const tilesChanged = this.pasteClipboardTilesAt(tiles, baseTileX, baseTileY);
+    const placedTileCount = this.currentBatch.filter((action) => action.newGid >= 0).length;
+
+    let added = 0;
+    if (clipboard.objects?.length) {
+      registerCustomSpritesFromSnapshot(clipboard);
+      const plan = planClipboardObjectPaste(
+        clipboard.objects, this.host.getPlacedObjects(), baseTileX, baseTileY, createPlacedObjectInstanceId,
+      );
+      added = plan.added.length;
+      if (added > 0) {
+        this.host.setPlacedObjects([...this.clonePlacedObjects(), ...plan.added]);
+        this.rebuildObjectSprites();
+      }
+      if (plan.skipped > 0 || plan.droppedLinks > 0) {
+        this.host.updatePersistenceStatus([
+          plan.skipped > 0 ? `${plan.skipped} object${plan.skipped === 1 ? '' : 's'} did not fit there.` : '',
+          plan.droppedLinks > 0 ? `${plan.droppedLinks} link${plan.droppedLinks === 1 ? '' : 's'} to uncopied objects removed.` : '',
+        ].filter(Boolean).join(' '));
+      }
+    }
+
+    if (!tilesChanged && added === 0) {
+      return false;
+    }
+    this.clearTileBatch();
+    this.history.record({ kind: 'layout', action: { previous, next: this.exportRoomSnapshot() } });
+    this.markRoomDirty();
+    this.host.updateGoalUi();
+    this.host.recordBuildPlacement(placedTileCount + added);
+    return true;
+  }
+
+  private pasteClipboardTilesAt(clipboard: EditorClipboardState, baseTileX: number, baseTileY: number): boolean {
+    const layer = this.host.getLayers().get(editorState.activeLayer);
+    if (!layer) {
       return false;
     }
 

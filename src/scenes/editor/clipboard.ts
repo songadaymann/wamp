@@ -13,6 +13,10 @@ import {
   isRegisteredSmartRecipeBrush,
 } from '../../autotiling/brushEngine';
 import { getSmartBrushDefinition } from '../../autotiling/registry';
+import type { PlacedObject } from '../../config';
+import type { CustomSpriteDefinition } from '../../customSprites/model';
+import type { ClipboardCustomTile } from './clipboardObjects';
+import { clonePlacedObjectDocument } from './placedObjectDocument';
 
 export interface EditorClipboardRecipeState {
   /** The source room's stable instance ID. Paste reuses it when available. */
@@ -40,6 +44,12 @@ export interface EditorClipboardState {
   smartSemanticSuppressions?: Record<string, string[]>;
   /** Only recipes whose complete rendered footprint was selected are included. */
   smartRecipes?: EditorClipboardRecipeState[];
+  /** Objects on the copied layer anchored in the selection, relative to its top-left pixel. */
+  objects?: PlacedObject[];
+  /** Custom sprite art those objects use, so another room or session can show them. */
+  customSprites?: CustomSpriteDefinition[];
+  /** Source-room custom tiles the copied tiles use, so another room can recreate them. */
+  customTiles?: ClipboardCustomTile[];
 }
 
 export interface ClipboardTileWrite {
@@ -117,8 +127,37 @@ export function cloneEditorClipboardState(
             )
           : undefined,
         smartRecipes: state.smartRecipes?.map(cloneClipboardRecipe),
+        objects: state.objects ? clonePlacedObjectDocument(state.objects) : undefined,
+        customSprites: state.customSprites?.map((sprite) => ({ ...sprite })),
+        customTiles: state.customTiles?.map(({ gid, tile }) => ({ gid, tile: { ...tile, pixels: [...tile.pixels] } })),
       }
     : null;
+}
+
+/** Copy bounds clamped to the room, in tiles. */
+export function getClipboardBounds(x1: number, y1: number, x2: number, y2: number) {
+  return {
+    minX: Math.max(0, Math.min(x1, x2)),
+    minY: Math.max(0, Math.min(y1, y2)),
+    maxX: Math.min(ROOM_WIDTH - 1, Math.max(x1, x2)),
+    maxY: Math.min(ROOM_HEIGHT - 1, Math.max(y1, y2)),
+  };
+}
+
+/** A tile-free clipboard frame for a selection that holds only objects. */
+export function buildEmptyClipboardState(
+  sourceLayer: LayerName,
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+): EditorClipboardState {
+  const width = bounds.maxX - bounds.minX + 1;
+  const height = bounds.maxY - bounds.minY + 1;
+  return {
+    sourceLayer,
+    width,
+    height,
+    tiles: Array.from({ length: height }, () => Array.from({ length: width }, () => -1)),
+    occupiedMask: Array.from({ length: height }, () => Array.from({ length: width }, () => false)),
+  };
 }
 
 function parseOwnedOutputCoordinate(key: string): SmartLayerCellCoordinate | null {

@@ -14,6 +14,7 @@ import { isTextInputFocused } from '../../ui/keyboardFocus';
 import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { EditorClipboardState, GoalPlacementMode } from './editRuntime';
+import { drawClipboardPastePreview } from './clipboardObjects';
 import type { EditorObjectMoveController } from './objectMoveController';
 import {
   canRepeatSelectedEditorObject,
@@ -505,19 +506,8 @@ export class EditorInteractionController {
 
     if (editorState.paletteMode === 'tiles' && this.host.isClipboardPastePreviewActive()) {
       const clipboard = this.host.getClipboardPreview();
-      if (clipboard) {
-        const layerAccent = getEditorLayerAccent();
-        this.drawOccupiedCellPreview(
-          tileX,
-          tileY,
-          clipboard.width,
-          clipboard.height,
-          clipboard.occupiedMask,
-          layerAccent.stroke,
-          0.12,
-          0.95,
-          2,
-        );
+      if (clipboard && this.cursorGraphics) {
+        drawClipboardPastePreview(this.cursorGraphics, clipboard, { x: tileX * TILE_SIZE, y: tileY * TILE_SIZE }, getEditorLayerAccent().stroke);
         this.updateCursorCoords(tileX, tileY);
         return;
       }
