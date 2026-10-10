@@ -20,7 +20,10 @@ function run(hits: number | null, elapsedMs = 2200, defeatX = 128) {
 describe('server boss defeat plausibility', () => {
   it('accepts a boss that chases away from its authored starting point', async () => {
     expect((await verifyRoomRunTrace(run(3))).status).toBe('passed');
-    expect((await verifyRoomRunTrace(run(null))).status).toBe('failed');
+    // Ordinary enemies may roam their whole room (stored real runs show Sword Hunters
+    // defeated 240px away); only a defeat outside the room fails.
+    expect((await verifyRoomRunTrace(run(null))).status).toBe('passed');
+    expect((await verifyRoomRunTrace(run(null, 2200, 900))).status).toBe('failed');
   });
   it('rejects too-fast and out-of-room boss defeats', async () => {
     expect((await verifyRoomRunTrace(run(3, 1199, 250))).status).toBe('failed');

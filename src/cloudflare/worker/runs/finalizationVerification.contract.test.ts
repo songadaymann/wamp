@@ -124,6 +124,14 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
       expect(mocks.audit).not.toHaveBeenCalled();
     });
 
+    it('verifies the trace against the reported play time, not request latency', async () => {
+      // The finish request arrives 3s after start, but the run took 1s of play.
+      vi.setSystemTime(new Date('2026-09-08T12:00:03Z'));
+      await finish();
+      expect(mocks.verify).toHaveBeenCalledOnce();
+      expect(mocks.verify.mock.calls[0][0]).toMatchObject({ elapsedMs: 1000 });
+    });
+
     it('retains HttpError classification from verifier or snapshot lookup', async () => {
       mocks.verify.mockRejectedValue(new HttpError(503, 'snapshot unavailable'));
       const { writes, error } = await finish();
