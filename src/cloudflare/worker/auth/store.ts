@@ -18,6 +18,7 @@ import type {
   WalletChallengeRow,
 } from '../core/types';
 import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
+import { mapSchoolAuthContextRow } from '../school/authContext';
 import { ensureFounderIdentityQualification } from '../progression/store';
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -833,13 +834,22 @@ export async function loadSessionFromToken(env: Env, token: string): Promise<Aut
         u.email,
         u.wallet_address,
         u.display_name,
-        NULL AS username,
-        NULL AS avatar_url,
-        NULL AS bio,
-        NULL AS selected_avatar_id,
-        u.created_at AS user_created_at
+        u.username,
+        u.avatar_url,
+        u.bio,
+        u.selected_avatar_id,
+        u.created_at AS user_created_at,
+        ss.id AS student_id,
+        ss.username AS student_username,
+        ss.disabled_at AS student_disabled_at,
+        sc.id AS classroom_id,
+        sc.slug AS classroom_slug,
+        sc.display_name AS classroom_name,
+        sc.disabled_at AS classroom_disabled_at
       FROM sessions s
       JOIN users u ON u.id = s.user_id
+      LEFT JOIN school_students ss ON ss.user_id = u.id
+      LEFT JOIN school_classrooms sc ON sc.id = ss.classroom_id
       WHERE s.token_hash = ?
       LIMIT 1
     `
@@ -856,7 +866,7 @@ export async function loadSessionFromToken(env: Env, token: string): Promise<Aut
     return null;
   }
 
-  const hydratedRow = await withUserProfileFields(env, row, row.user_id);
+  const hydratedRow = row;
   return {
     sessionId: hydratedRow.id,
     userId: hydratedRow.user_id,
@@ -874,6 +884,7 @@ export async function loadSessionFromToken(env: Env, token: string): Promise<Aut
       bio: hydratedRow.bio,
       selectedAvatarId: hydratedRow.selected_avatar_id,
     },
+    school: mapSchoolAuthContextRow(row),
   };
 }
 

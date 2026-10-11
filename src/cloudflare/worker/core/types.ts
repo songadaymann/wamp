@@ -5,6 +5,7 @@ import type { CourseSnapshot } from '../../../courses/model';
 import type { RoomCoordinates, RoomRecord, RoomSnapshot, RoomVersionRecord } from '../../../persistence/roomModel';
 import type { RunResult } from '../../../runs/model';
 import type { SchoolAuthContext } from '../../../school/model';
+import type { LoadedSchoolAuthContext, SchoolAuthContextRow } from '../school/authContext';
 
 export interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
@@ -752,7 +753,7 @@ export interface UserRow {
   updated_at: string;
 }
 
-export interface SessionJoinRow {
+export interface SessionJoinRow extends SchoolAuthContextRow {
   id: string;
   user_id: string;
   expires_at: string;
@@ -847,6 +848,8 @@ export interface AuthSession {
   createdAt: string;
   lastSeenAt: string;
   user: AuthUser;
+  // The user's classroom, read in the same query as the session.
+  school?: LoadedSchoolAuthContext;
 }
 
 export interface RequestAuth {

@@ -3,6 +3,7 @@ import type { SchoolAuthContext } from '../../../school/model';
 import { HttpError, isTrustedRequestOrigin } from '../core/http';
 import type { AuthSession, Env, RequestAuth } from '../core/types';
 import { loadAgentTokenAuth } from '../agents/store';
+import type { LoadedSchoolAuthContext } from '../school/authContext';
 import { loadSchoolAuthContextForUser } from '../school/store';
 import {
   SESSION_MAX_AGE_SECONDS,
@@ -98,6 +99,7 @@ export async function loadOptionalRequestAuth(
     const auth = await attachSchoolContext(
       env,
       createUserRequestAuth('session', session.user, isAdmin, session, null),
+      session.school,
     );
     if (auth) {
       return auth;
@@ -259,8 +261,12 @@ function createUserRequestAuth(
   };
 }
 
-async function attachSchoolContext(env: Env, auth: RequestAuth): Promise<RequestAuth | null> {
-  const school = await loadSchoolAuthContextForUser(env, auth.user.id);
+async function attachSchoolContext(
+  env: Env,
+  auth: RequestAuth,
+  loaded?: LoadedSchoolAuthContext,
+): Promise<RequestAuth | null> {
+  const school = loaded ?? await loadSchoolAuthContextForUser(env, auth.user.id);
   if (school.disabled) {
     return null;
   }
