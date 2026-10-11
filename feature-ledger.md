@@ -1,3 +1,7 @@
+## 2026-10-10 — F031 one-query sign-in lookup; F085 confirmed fixed
+
+PR #124 / `a2501f2a` (API Worker `5d7ff9d7`): every signed-in API request identifies the player, their profile fields and their classroom with one database query instead of three. F085 (the phone double-tap guard swallowing quick button taps) was already fixed by `44da1860`/`5b248366`; a phone-emulated double tap now registers both taps. Master **88/215**. Receipt: [sign-in lookup](docs/review/wamp-auth-lookup-2026-10-10.md).
+
 ## 2026-10-10 — F236 room saves survive a Base RPC outage
 
 PR #122 / `41e455e9` (API Worker `1ef364ee`): when the Base RPC fails, room saves, publishes and reverts use the ownership already stored instead of failing in every room. Minting and the ownership refresh still require the chain. Master **86/215**. Receipt: [chain outage saves](docs/review/wamp-chain-outage-saves-2026-10-10.md).

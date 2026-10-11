@@ -1389,6 +1389,18 @@ loadSessionFromToken selects the session+users join with 'NULL AS username, NULL
 4. **The claim understates the reach.** /api/world, /api/world/chunks and /api/world/chunks/summary (src/cloudflare/worker.ts:351-376) run the full three-query auth only to check scopes. Signed-in explorers pay those trips on every chunk fetch, and on the summary endpoint they also skip the anonymous edge cache.
 5. **Two cheap fixes beyond merging the queries.** For a plain cookie session on these public GETs, auth can be skipped entirely: the scope check only applies to API tokens. The API-token path's awaited UPDATE of last_used_at (store.ts:928-936) can move to ctx.waitUntil.
 
+**2026-10-10 completed.** PR #124 / `a2501f2a`, API Worker `5d7ff9d7`.
+
+`loadSessionFromToken` reads the session, the user (including `username`, `avatar_url`, `bio` and `selected_avatar_id`) and the student's classroom in one statement: `sessions JOIN users LEFT JOIN school_students LEFT JOIN school_classrooms`. `attachSchoolContext` uses the classroom carried on `AuthSession.school` instead of querying again. The row mapping moved to `school/authContext.ts` to avoid an `auth/store` ↔ `school/store` import cycle. A student in a disabled classroom is still signed out and the session deleted; API-token and agent-token requests still query the school context.
+
+Evidence: `src/cloudflare/worker/auth/sessionLookup.test.ts` counts statements: 1 for a signed-in player and 1 for a student, where the previous code ran 3. The deploy's smoke test passes. The per-request gain shows only on signed-in requests, which this review can't make on production.
+
+Not done:
+- Smart Placement, a measured experiment per the fact-check;
+- the other `withUserProfileFields` re-reads (`findUserById` and similar) outside the auth path.
+
+Receipt: `wamp-auth-lookup-2026-10-10.md`.
+
 ### F033: Profiles still use the slow all-in-one endpoint (≈0.5–1.3 s, 80 KB, never cached), including on every signed-in page load
 
 - **Area:** Backend performance, cost & reliability
@@ -2741,6 +2753,12 @@ bindDoubleTapZoomSuppression adds a capture, non-passive touchend listener on do
 **Fact-check (partially confirmed).**
 
 (1) The claim that the guard "only causes harm" and should just be deleted is overstated. As I understand it, Safari's engine resets a touch-action rule from an ancestor at the nearest scrollable box. If so, the single body rule at base.css:399-402 does not reach buttons inside the phone editor sheets, which are scrollable (phone-editor-actions.css:83, phone-editor-tools.css:77 and others), and deleting the handler alone may bring double-tap zoom back on iOS. Safer fix: under body[data-coarse-pointer='true'], add touch-action: manipulation to button, [role=button], a, select, summary and the scrollable sheet containers. Then either delete the guard, or add those interactive selectors to shouldAllowNativeDoubleTap (controller.ts:295-305) so it never cancels touchend on them. If any of it stays, scope it to #game-container. (2) The defect is worse than described. lastTouchEndAt is updated even on cancelled taps (controller.ts:287), so steady taps faster than one per 320ms drop every tap after the first, not just the second. A touchend anywhere (a canvas paint tap, lifting off the joystick) also arms the window for the next button tap. In-game action and move controls use pointer events (portraitPlayControls.ts:79-169) and are not affected.
+
+**2026-10-10 confirmed fixed by earlier work.** `44da1860` (2026-10-04) and `5b248366`: `shouldAllowNativeDoubleTap` exempts `#game-container > canvas`, `button`, `a[href]`, `[data-editor-history]`, `.object-item`, form fields and `contenteditable`, and `body[data-coarse-pointer='true'] button` has `touch-action: manipulation`.
+
+Check (local dev server, Playwright Pixel 7 emulation with touch): two taps 120 ms apart on `#btn-daily-open`, `#btn-daily-dismiss`, `#btn-mobile-world-hud-details` and `#btn-mobile-world-hud-minimize` each deliver 2 clicks.
+
+Still open from the fact-check: taps on non-button tappables keep the 320 ms guard. On a real iPhone, double-tap zoom inside scrollable editor sheets needs a hands-on check.
 
 ### F078: iPhone/iPad: sound-effect volume slider and mixing do nothing (HTMLAudio volume is read-only on iOS)
 
