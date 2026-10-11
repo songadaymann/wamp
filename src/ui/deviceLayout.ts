@@ -161,3 +161,5 @@ export function isCoarsePointerDevice(): boolean {
 export function getPerformanceProfile(): PerformanceProfile {
   return state.performanceProfile;
 }
+
+export { prefersReducedMotion } from './reducedMotion';

@@ -717,3 +717,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Players who ask their system for less motion see reward and XP cards arrive in their final
+   state at once, without the slide, fly or particle burst (F173). */
+@media (prefers-reduced-motion: reduce) {
+  .reward-sting-layer *,
+  .xp-receipt-card--enter,
+  .xp-receipt-card--fly,
+  .xp-receipt-impact--active,
+  .xp-receipt-impact--active .xp-receipt-impact-pixel {
+    animation-duration: 1ms !important;
+    animation-delay: 0s !important;
+  }
+
+  .reward-sting-particle {
+    display: none;
+  }
+}

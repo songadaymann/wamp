@@ -27,6 +27,7 @@ import {
   type BrowseCommentTarget,
 } from './roomCommentsDataController';
 import { RoomCommentsPlayPresentationController } from './roomCommentsPlayPresentationController';
+import { prefersReducedMotion } from '../../ui/reducedMotion';
 
 interface RenderedBrowseCommentMarker extends OverworldBadgePlacement {
   key: string;
@@ -1657,12 +1658,4 @@ function drawBrowseTextPanel(panel: Phaser.GameObjects.Graphics, accentColor: nu
   panel.fillRoundedRect(3, 3, 5, BROWSE_COMMENT_PANEL_HEIGHT - 6, 3);
   panel.fillStyle(BROWSE_COMMENT_PANEL_LIGHT, 0.92);
   panel.fillRoundedRect(10, 20, BROWSE_COMMENT_PANEL_WIDTH - 18, 28, 4);
-}
-
-function prefersReducedMotion(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false;
-  }
-
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }

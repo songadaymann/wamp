@@ -12,6 +12,7 @@ import {
   resolvePlayerAuraDarkAuraDiameter,
 } from './presets';
 import { RETRO_COLORS } from '../visuals/starfield';
+import { prefersReducedMotion } from '../ui/reducedMotion';
 
 const ROOM_LIGHT_AURA_TEXTURE_KEY_PREFIX = '__room_light_aura';
 const ROOM_LIGHT_GLOW_TEXTURE_KEY_PREFIX = '__room_light_glow';
@@ -448,7 +449,8 @@ function resolveEmitterState(
   const baseRevealRadiusPx = Math.max(2, emitter.revealRadiusPx ?? defaultRevealRadiusPx);
   const baseGlowRadiusPx = Math.max(0, emitter.glowRadiusPx ?? 0);
   const baseGlowAlpha = Math.max(0, Math.min(1, emitter.glowAlpha ?? 0));
-  if (!emitter.flicker) {
+  // Flickering lights hold steady for players who ask for less motion (F173).
+  if (!emitter.flicker || prefersReducedMotion()) {
     return {
       revealRadiusPx: baseRevealRadiusPx,
       glowRadiusPx: baseGlowRadiusPx,

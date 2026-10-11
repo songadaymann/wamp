@@ -9,6 +9,7 @@ import {
   syncPvpInvulnerabilityFx,
   syncPvpInvulnerabilitySpriteStyle,
 } from './pvpInvulnerabilityFx';
+import { prefersReducedMotion } from '../../ui/reducedMotion';
 
 interface PvpLocalPlayerBody {
   center: { x: number };
@@ -76,9 +77,13 @@ export class OverworldPvpLocalPresentationController {
     const scene = this.host.scene;
     const lostHearts = Math.max(1, previousHearts - nextHearts);
     playSfx('player-hurt', { ignoreCooldown: true });
-    showPvpDamageFlashOverlay();
-    scene.cameras.main.flash(150, 255, 32, 42, false);
-    scene.cameras.main.shake(110, 0.0045 + lostHearts * 0.0015);
+    // With reduced motion the hit shows on the hearts and the player's tint, without the
+    // full-screen red flash and shake (F173).
+    if (!prefersReducedMotion()) {
+      showPvpDamageFlashOverlay();
+      scene.cameras.main.flash(150, 255, 32, 42, false);
+      scene.cameras.main.shake(110, 0.0045 + lostHearts * 0.0015);
+    }
     const playerSprite = this.host.getPlayerSprite();
     if (playerSprite) {
       playerSprite.setTintFill(0xff4f5f);

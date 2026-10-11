@@ -81,7 +81,7 @@ import {
   type GoalMarkerPoint,
 } from '../goals/roomGoals';
 import { setAppMode } from '../ui/appMode';
-import { getDeviceLayoutState } from '../ui/deviceLayout';
+import { getDeviceLayoutState, prefersReducedMotion } from '../ui/deviceLayout';
 import {
   getDevicePerformanceMode,
   subscribeDevicePerformanceMode,
@@ -807,7 +807,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           || this.wasd.W.isDown || getTouchInputState().jumpHeld;
         return this.JUMP_VELOCITY * (jumpHeld ? 1 : 0.58);
       },
-      playEnemyStompImpact: () => this.cameras.main.shake(50, 0.002),
+      playEnemyStompImpact: () => { if (!prefersReducedMotion()) this.cameras.main.shake(50, 0.002); },
       getConveyorDirectionForBody: (body, gravityDirection) =>
         this.specialTilesController.getConveyorDirectionForBody(body, gravityDirection),
       getBodyRoomId: (body) => this.specialTilesController.getBodyRoomId(body),
@@ -1781,7 +1781,7 @@ export class OverworldPlayScene extends Phaser.Scene {
           this.combatPresentationController.destroyProjectile(projectile),
         playBulletImpactFx: (x, y) => this.fxController?.playBulletImpactFx(x, y),
         playPeerHitFx: (x, y) => this.fxController?.playEnemyKillFx(x, y),
-        shakeCamera: (durationMs, intensity) => this.cameras.main.shake(durationMs, intensity),
+        shakeCamera: (durationMs, intensity) => { if (!prefersReducedMotion()) this.cameras.main.shake(durationMs, intensity); },
         publishCombatAction: (event) => this.publishPvpCombatAction(event),
       },
       {
@@ -5553,7 +5553,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     const hitX = instanceStomped && instanceCenter ? instanceCenter.x : target?.sprite.x ?? this.playerBody.center.x;
     const hitY = instanceStomped && instanceCenter ? instanceCenter.y : target?.sprite.y ?? this.playerBody.center.y;
     this.fxController?.playEnemyKillFx(hitX, hitY - this.PLAYER_HEIGHT * 0.45);
-    this.cameras.main.shake(50, 0.002);
+    if (!prefersReducedMotion()) this.cameras.main.shake(50, 0.002);
     this.reportPvpPeerHit(
       instanceStomped && instanceTargetUserId ? instanceTargetUserId : target?.presence.userId ?? '',
       'stomp',
