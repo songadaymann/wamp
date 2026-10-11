@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 
 const indexPath = resolve(process.cwd(), 'index.html');
 const html = readFileSync(indexPath, 'utf8');
@@ -275,8 +275,55 @@ if (earlyWorldTileMarkerIndex >= 0 && mainModuleIndex >= 0 && earlyWorldTileMark
   earlyWorldTileBootstrapContractErrors.push('early world tile bootstrap must execute before the main module');
 }
 
+// Every element ID the client code looks up by a literal name must exist in a root HTML page or be
+// created by the code itself. Lookups are null-guarded, so a renamed or deleted element otherwise
+// fails silently (F072).
+const pageIds = new Set();
+for (const name of readdirSync(process.cwd()).filter((entry) => entry.endsWith('.html'))) {
+  for (const match of readFileSync(resolve(process.cwd(), name), 'utf8').matchAll(/\bid\s*=\s*["']([^"']+)["']/g)) {
+    pageIds.add(match[1]);
+  }
+}
+const clientFiles = [];
+(function collectClientFiles(dir) {
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory()) {
+      if (entry !== 'cloudflare') collectClientFiles(path);
+    } else if (/\.(ts|tsx|js|mjs)$/.test(entry) && !/\.test\./.test(entry)) {
+      clientFiles.push(path);
+    }
+  }
+})(resolve(process.cwd(), 'src'));
+const lookedUpIds = new Map();
+const codeCreatedIds = new Set();
+for (const file of clientFiles) {
+  const source = readFileSync(file, 'utf8');
+  const lookups = [
+    ...source.matchAll(/getElementById(?:<[^>]*>)?\(\s*['"`]([A-Za-z][\w:-]*)['"`]\s*\)/g),
+    ...source.matchAll(/querySelector(?:All)?(?:<[^>]*>)?\(\s*['"`]#([A-Za-z][\w-]*)/g),
+  ];
+  for (const match of lookups) {
+    const files = lookedUpIds.get(match[1]) ?? new Set();
+    files.add(relative(process.cwd(), file));
+    lookedUpIds.set(match[1], files);
+  }
+  for (const pattern of [
+    /\.id\s*=\s*['"`]([A-Za-z][\w-]*)['"`]/g,
+    /\bid\s*=\s*\\?["']([A-Za-z][\w-]*)\\?["']/g,
+    /setAttribute\(\s*['"]id['"]\s*,\s*['"]([A-Za-z][\w-]*)['"]/g,
+    /\bid:\s*['"]([A-Za-z][\w-]*)['"]/g,
+  ]) {
+    for (const match of source.matchAll(pattern)) codeCreatedIds.add(match[1]);
+  }
+}
+const danglingLookups = [...lookedUpIds]
+  .filter(([id]) => !pageIds.has(id) && !codeCreatedIds.has(id))
+  .map(([id, files]) => `#${id} (${[...files].join(', ')})`);
+
 if (
   duplicateIds.size > 0
+  || danglingLookups.length > 0
   || missing.length > 0
   || stalePresent.length > 0
   || earlyWorldTileBootstrapContractErrors.length > 0
@@ -286,6 +333,12 @@ if (
     console.error('Duplicate DOM IDs:');
     for (const id of [...duplicateIds].sort()) {
       console.error(`  #${id}`);
+    }
+  }
+  if (danglingLookups.length > 0) {
+    console.error('Code looks up element IDs that no page has and no code creates:');
+    for (const item of danglingLookups.sort()) {
+      console.error(`  ${item}`);
     }
   }
   if (missing.length > 0) {
@@ -317,4 +370,4 @@ if (
 
 const requiredCount = Object.values(requiredIdsByController)
   .reduce((total, requiredIds) => total + requiredIds.length, 0);
-console.log(`DOM contract smoke passed: ${ids.size} IDs found, ${requiredCount} required IDs checked.`);
+console.log(`DOM contract smoke passed: ${ids.size} IDs found, ${requiredCount} required IDs checked, ${lookedUpIds.size} looked-up IDs resolved.`);
