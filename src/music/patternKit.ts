@@ -299,14 +299,12 @@ export async function getPatternDrumSamples(
     return cached;
   }
 
-  const samplePromise = Promise.resolve().then(async () => {
-    const samples = new Map<RoomPatternDrumRowId, Float32Array>();
-    for (const row of ROOM_PATTERN_DRUM_ROWS) {
-      const loadedSample = await loadRolandMt32DrumSample(audioContext, row.id);
-      samples.set(row.id, loadedSample ?? renderDrumSample(row.id, audioContext.sampleRate));
-    }
-    return samples;
-  });
+  // Every row's sample downloads at once; one row after another was 16 round trips
+  // before the first loop could render.
+  const samplePromise = Promise.all(ROOM_PATTERN_DRUM_ROWS.map(async (row) => {
+    const loadedSample = await loadRolandMt32DrumSample(audioContext, row.id);
+    return [row.id, loadedSample ?? renderDrumSample(row.id, audioContext.sampleRate)] as const;
+  })).then((entries) => new Map<RoomPatternDrumRowId, Float32Array>(entries));
   drumSampleCache.set(cacheKey, samplePromise);
   return samplePromise;
 }
