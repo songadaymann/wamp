@@ -353,7 +353,7 @@ export function buildCourseRatingWindow(
   };
 }
 
-async function hasCompletedRoomRatingWindow(
+export async function hasCompletedRoomRatingWindow(
   env: Env,
   roomId: string,
   versionFamily: number[],
@@ -374,6 +374,7 @@ async function hasCompletedRoomRatingWindow(
         )
         AND user_id = ?
         AND result = 'completed'
+        AND ${sqlIsVerificationAccepted('room_runs')}
       LIMIT 1
     `
   )
@@ -404,6 +405,7 @@ async function hasCompletedCourseRatingWindow(
         )
         AND user_id = ?
         AND result = 'completed'
+        AND ${sqlIsVerificationAccepted('course_runs')}
       LIMIT 1
     `
   )

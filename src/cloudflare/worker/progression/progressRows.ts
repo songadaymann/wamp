@@ -325,7 +325,7 @@ async function countMeaningfulCoursePublishes(env: Env, userId: string): Promise
   return parseRowNumber(row?.count);
 }
 
-async function countHistoricalCreatorUniqueCompletions(env: Env, userId: string): Promise<number> {
+export async function countHistoricalCreatorUniqueCompletions(env: Env, userId: string): Promise<number> {
   const [roomRow, courseRow] = await Promise.all([
     env.DB.prepare(
       `
@@ -338,6 +338,7 @@ async function countHistoricalCreatorUniqueCompletions(env: Env, userId: string)
            AND v.version = r.room_version
           WHERE v.published_by_user_id = ?
             AND r.result = 'completed'
+            AND COALESCE(r.verification_status, 'not_required') IN ('not_required', 'passed')
             AND r.user_id != ?
         )
       `
@@ -356,6 +357,7 @@ async function countHistoricalCreatorUniqueCompletions(env: Env, userId: string)
            AND v.version = r.expanded_room_version
           WHERE v.published_by_user_id = ?
             AND r.result = 'completed'
+            AND COALESCE(r.verification_status, 'not_required') IN ('not_required', 'passed')
             AND r.user_id != ?
           UNION
           SELECT DISTINCT 'course:' || r.course_id AS content_id, r.user_id
@@ -365,6 +367,7 @@ async function countHistoricalCreatorUniqueCompletions(env: Env, userId: string)
            AND v.version = r.course_version
           WHERE v.published_by_user_id = ?
             AND r.result = 'completed'
+            AND COALESCE(r.verification_status, 'not_required') IN ('not_required', 'passed')
             AND r.user_id != ?
             AND NOT EXISTS (
               SELECT 1
@@ -385,6 +388,7 @@ async function countHistoricalCreatorUniqueCompletions(env: Env, userId: string)
            AND v.version = r.course_version
           WHERE v.published_by_user_id = ?
             AND r.result = 'completed'
+            AND COALESCE(r.verification_status, 'not_required') IN ('not_required', 'passed')
             AND r.user_id != ?
         )
       `,
