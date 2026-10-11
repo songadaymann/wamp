@@ -41,4 +41,33 @@ describe('dark-room lighting passes (F005)', () => {
     expect(names(glow)).toEqual(['beginDraw', ...emitters.map(() => 'batchDrawFrame'), 'endDraw']);
     expect(glow.calls.filter(([name]) => name === 'batchDrawFrame')[0]).toEqual(['batchDrawFrame', '__room_light_glow_48', undefined, 16, 96, 0.5, 0xff8800]);
   });
+
+  it('hides the empty glow texture and skips clearing it in dark rooms without glows (F011)', () => {
+    const textures: ReturnType<typeof fakeRenderTexture>[] = [];
+    const scene = {
+      game: { renderer: { type: 2 } }, time: { now: 0 }, textures: { exists: () => true },
+      add: {
+        renderTexture: (_x: number, _y: number, width: number, height: number) => { const rt = fakeRenderTexture(width, height); textures.push(rt); return rt; },
+        rectangle: () => fakeRenderTexture(0, 0),
+      },
+    };
+    const controller = new RoomLightingController({ scene: scene as never, overlayDepth: 10 });
+    const frame = (glowAlpha: number) => controller.sync({ roomId: '2,1', bounds: { x: 0, y: 0, width: 640, height: 352 },
+      lighting: { mode: 'playerAuraDark', darkness: 80, radius: 50 },
+      emitters: [{ x: 40, y: 120, sourceType: 'object' as const, revealRadiusPx: 30, glowRadiusPx: 24, glowColor: 0xff8800, glowAlpha }] });
+    frame(0.5);
+    const glow = textures[1];
+    const count = (name: string) => glow.calls.filter(([call]) => call === name).length;
+    const lastVisible = () => glow.calls.filter(([call]) => call === 'setVisible').at(-1)?.[1];
+    expect(lastVisible()).toBe(true);
+    frame(0); // the light stops glowing: clear what was drawn, then hide
+    expect(count('clear')).toBe(1);
+    expect(lastVisible()).toBe(false);
+    frame(0);
+    frame(0); // nothing to clear or draw while it stays empty
+    expect(count('clear')).toBe(1);
+    expect(count('beginDraw')).toBe(1);
+    expect(lastVisible()).toBe(false);
+  });
 });
+
