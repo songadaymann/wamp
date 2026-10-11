@@ -1,4 +1,13 @@
 import { getApiBaseUrl } from './baseUrl';
+import { readApiErrorMessage } from './readApiErrorMessage';
+
+/** A non-2xx API response; the message is the server's plain `error` text. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
 
 export interface ApiRequestInit extends RequestInit {
   baseUrl?: string;
@@ -25,13 +34,11 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
 
 async function parseJsonApiResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    throw new Error(await readApiErrorMessage(response));
+    throw new ApiError(
+      await readApiErrorMessage(response, `Request failed with status ${response.status}.`),
+      response.status,
+    );
   }
 
   return (await response.json()) as T;
-}
-
-async function readApiErrorMessage(response: Response): Promise<string> {
-  const text = await response.text();
-  return text || `Request failed with status ${response.status}.`;
 }
