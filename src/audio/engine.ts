@@ -41,6 +41,7 @@ export class AudioEngine {
   private musicBus: GainNode | null = null;
   private sfxBus: GainNode | null = null;
   private readonly hiddenListeners = new Set<() => void>();
+  private readonly firstInteractionListeners = new Set<() => void>();
   private interruptionResumes: number[] = [];
   private lastResumeAttempt: AudioResumeDebugEntry | null = null;
   private lastStateChange: AudioContextStateDebugEntry | null = null;
@@ -54,8 +55,13 @@ export class AudioEngine {
     this.lifecycleDocument = windowObj.document;
     setAudioSessionType(windowObj.navigator as AudioSessionNavigator | undefined);
     const markInteracted = () => {
+      const first = !this.interacted;
       this.interacted = true;
       void this.resume('user-gesture');
+      if (first) {
+        for (const listener of this.firstInteractionListeners) listener();
+        this.firstInteractionListeners.clear();
+      }
     };
     const resumeAfterLifecycleEvent = (trigger: string) => {
       if (this.interacted) {
@@ -87,6 +93,12 @@ export class AudioEngine {
   }
 
   /** Runs when the page is hidden, just before the context suspends. */
+  /** Runs once after the player's first tap, click or key (or now, if that already happened). */
+  onFirstInteraction(listener: () => void): void {
+    if (this.interacted) listener();
+    else this.firstInteractionListeners.add(listener);
+  }
+
   onHidden(listener: () => void): void {
     this.hiddenListeners.add(listener);
   }

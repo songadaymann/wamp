@@ -58,3 +58,33 @@ describe('SFX hidden-tab lifecycle', () => {
     await vi.waitFor(() => expect(h.context.state).toBe('suspended')); expect(h.controller.getDebugState().activeCount).toBe(0);
   });
 });
+
+describe('SFX player pool (F023)', () => {
+  it('gives each cue its own player instead of reloading another cue\'s idle one', () => {
+    const h = harness();
+    h.controller.play('jump', { ignoreCooldown: true });
+    h.visibility(true); h.visibility(false); // stops and returns the jump player to the idle pool
+    h.controller.play('land', { ignoreCooldown: true });
+    expect(h.players).toHaveLength(2);
+    expect(h.players[0].load).not.toHaveBeenCalled();
+    expect(h.players[0].src).toContain('jump');
+    h.visibility(true); h.visibility(false);
+    h.controller.play('jump', { ignoreCooldown: true });
+    h.controller.play('land', { ignoreCooldown: true });
+    expect(h.players).toHaveLength(2);
+    expect(h.players.every((player) => player.load.mock.calls.length === 0)).toBe(true);
+  });
+
+  it('loads the hot gameplay cues right after the first gesture, and the first jump reuses one', () => {
+    const h = harness();
+    const scheduled = vi.mocked(window.setTimeout).mock.calls.map((call) => call[0] as () => void);
+    expect(h.players).toHaveLength(0);
+    scheduled.forEach((callback) => callback());
+    const warmed = h.players.map((player) => player.src);
+    expect(warmed).toHaveLength(5);
+    expect(warmed.some((src) => src.includes('jump'))).toBe(true);
+    h.controller.play('jump', { ignoreCooldown: true });
+    expect(h.players).toHaveLength(5);
+  });
+});
+
