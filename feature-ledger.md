@@ -1,3 +1,7 @@
+## 2026-10-10 — F033 profile summaries; F054/F059 stuck strokes and pans; F082 confirmed
+
+PR #125 / `93740740`: signed-in page loads, publish feedback and rating baselines read the 6 KB profile summary (≈70 ms on the server) instead of the 131 KB full profile (0.6–1 s). PR #126 / `3496d96e`: strokes and pans released over a panel or outside the window are finished, and an Alt-Tab no longer leaves the world map panning on every click. F082 (phone builders can't name rooms) was already fixed by the phone editor dock (`9bff84ed`). Master **92/215**. Receipts: [profile summary](docs/review/wamp-profile-summary-2026-10-10.md), [stuck input](docs/review/wamp-stuck-input-2026-10-10.md).
+
 ## 2026-10-10 — F031 one-query sign-in lookup; F085 confirmed fixed
 
 PR #124 / `a2501f2a` (API Worker `5d7ff9d7`): every signed-in API request identifies the player, their profile fields and their classroom with one database query instead of three. F085 (the phone double-tap guard swallowing quick button taps) was already fixed by `44da1860`/`5b248366`; a phone-emulated double tap now registers both taps. Master **88/215**. Receipt: [sign-in lookup](docs/review/wamp-auth-lookup-2026-10-10.md).

@@ -1437,6 +1437,15 @@ Several details are wrong.
 
 5. profileModal opens on the rooms tab for other players (profileModal.ts:1676). It should fetch /summary and /rooms in parallel and lazy-load /playlists. The index rows zero out per-star counts (mapProfilePlayableContentRow), so check that the room cards don't need them.
 
+**2026-10-10 completed.** PR #125 / `93740740` (frontend, Pages; live in loader `main-U0tOURqL.js`). New `ProfileRepository.loadProfileSummary` (`/api/profiles/:id/summary`, same `profile:` cache prefix) replaces the full profile for:
+- the identity chip;
+- the reward-sting catch-up on every signed-in page load;
+- both publish-feedback reads (still `fresh`);
+- the leaderboard and post-run rating baselines;
+- the room-card builder summary.
+
+The profile modal keeps the full profile because it shows the room and playlist lists. Production, anonymous, the builder with the most rooms: full profile 131 KB, server 623–1,070 ms, TTFB 1.2–1.8 s; `/summary` 6 KB, server 69–86 ms, TTFB 0.16–0.18 s. Not done: building the full profile's room list from the playable-content index, which would change which rooms the modal lists. Receipt: `wamp-profile-summary-2026-10-10.md`.
+
 ### F035: Builders' in-progress room previews are sent in full to every player in the area on every room change
 
 - **Area:** Backend performance, cost & reliability
@@ -2187,6 +2196,14 @@ The fix is unchanged and small. Register the same up handler for 'pointerupoutsi
 
 Desktop mouse only. On touch, the release always targets the canvas (Pointer.js:824/860), so mobile builders are unaffected. Lost work only happens when the off-canvas stroke is the only change since the last save and the builder leaves right after. Any later committed edit or autosave of an already-dirty room saves those tiles, because the full room snapshot is exported. The usual symptom is that Undo skips that stroke, or that a rect/line/shape isn't stamped and its preview lingers. A stuck object drag is not lost: the next tile stroke's pointerup commits it through commitObjectBatch (interaction.ts:803-808). Only that tile stroke's undo entry is lost. Overworld: with the default Alt+drag (or Space), releasing the key clears isPanning (inspectInput.ts:122-130). A pan only stays stuck when it was started with the middle mouse button, or while the key is still held. The skipped syncBrowseWindowToCamera also happens on normal Alt-drags where Alt is let go first. Fix note: clamp the off-canvas end coordinates to the room before stamping shapes from a pointerupoutside release.
 
+**2026-10-10 completed.** PR #126 / `3496d96e` (frontend, Pages; live in `main-U0tOURqL.js`).
+- **Room editor:** the release logic is one `handleMouseUp(pointer, outside)` that both `pointerup` and `pointerupoutside` run, so a stroke released over a panel is committed (Undo entry, dirty, autosave).
+- **Expanded Room editor:** the same.
+- **World map:** `pointerupoutside` ends a pan and re-syncs streaming.
+- **Missed releases:** `mouseButtonsReleased` (a move with `buttons === 0` while Phaser still has the press down) and focus loss (`blur`/`hidden`) finish an active mouse gesture in all three.
+
+Tests: `interaction.release.test.ts` and `inspectInput.test.ts`; all seven behaviour tests fail on the previous code. Browser check (desktop Chromium): a middle-drag released over a HUD button kept panning on the old code; on the new code the map stays put. Receipt: `wamp-stuck-input-2026-10-10.md`.
+
 ### F059: Holding Space or Alt while switching windows leaves editor and map stuck in pan mode
 
 - **Area:** Client bug hunt (gameplay & editor)
@@ -2211,6 +2228,10 @@ The editor tracks spaceDown via keyboard.on('keydown-SPACE'/'keyup-SPACE') (inte
 **Fact-check (partially confirmed).**
 
 The real trigger: on Windows, leaving with Alt-Tab and coming back by mouse click leaves altDown stuck in the overworld controller (inspectInput.ts:121-137, 419-423). Returning with Alt-Tab usually delivers an Alt keyup, and Phaser emits keyup-ALT for that even without a Key object, so the flag clears. Cmd-Tab on Mac does not cause it. The editor Space latch (interaction.ts:860-861) is real but rare, because Space has to be held while focus leaves. Partial resets already exist: mode changes call inspectInput.reset() (flow.ts:149/191/245/270/464, OverworldPlayScene.ts:2629), and editor re-init calls interaction.reset() (EditorScene.ts:1050). Missing from the claim: in play mode with a follow camera, the refocus click switches the camera to 'inspect' (inspectInput.ts:146-149) and detaches it from the player. Fix: in pointerRequestsPan, drop the latched altDown and rely only on (pointer.event as MouseEvent).altKey. Replace the spaceDown booleans with keyboard.addKey('SPACE').isDown, which Phaser resets on BLUR, or reset the flags on game.events BLUR and on document visibilitychange. The CourseEditorScene pattern is at :2197-2198 and :3077-3078.
+
+**2026-10-10 completed with F054.** PR #126 / `3496d96e`. The world map no longer latches `keydown-ALT`; `pointerRequestsPan` reads `altKey` from the click. Focus loss clears Space on the map and in the room editor; the Expanded Room editor already used Phaser Keys, which reset on blur.
+
+Browser check (desktop Chromium): a synthetic Alt keydown, then window blur and focus with no keyup, then a plain drag. On the old code it panned and the selection stayed at −11,−6; on the new code it selects −11,−1 without panning. Receipt: `wamp-stuck-input-2026-10-10.md`.
 
 ### F168: Pressing Escape to close a menu also throws you out of the room you're playing (and ends PvP matches)
 
@@ -2704,6 +2725,14 @@ The only room-title input is #room-title-input inside #room-title-section in #ga
 **Fact-check (confirmed).**
 
 Small refinement, not a contradiction: the `data-mobile-panel="goal"` attribute on #room-title-section has no effect today, because the phone sheet CSS (phone-editor-shell.css:91-97) only matches `#sidebar .sidebar-section[...]`. The fix has to move the element into a #sidebar .sidebar-section (for example, put it in the goal or actions sheet with JS when deviceClass==='phone', mirroring editorDockShell.moveEditorChromeIntoShell) or add a dedicated phone rule that shows it. Only rooms created and published entirely on a phone are left untitled; titles set on desktop/tablet persist.
+
+**2026-10-10 confirmed fixed by earlier work.** `9bff84ed` (*Give phone builders the shared editor dock and persistent actions*): on phones `EditorPhoneDock` moves `#room-title-section` into `#editor-phone-menu`, and `phone-editor-dock.css` shows it there (`display:flex`, 16px input), which outranks the older hide rule.
+
+Check (iPhone 13 emulation, local dev server):
+- hidden as the old overlay (`display:none`);
+- shown in the phone menu (`display:flex`, input 216×28 px, 16px).
+
+The editor needs a signed-in account, so naming and publishing a room on a real phone is a hands-on check.
 
 ### F086: Full-screen phone modals and the menu are sized with 100vh, so iOS Safari's toolbar covers the bottom
 
