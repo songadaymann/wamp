@@ -60,7 +60,7 @@ import { canBuildInActiveWorld, getActiveWorldId } from '../worlds/clientContext
 import { RETRO_COLORS } from '../visuals/starfield';
 import type { RoomRushOverworldCapture } from '../social/roomRushShare';
 import { RoomLightingController } from '../lighting/controller';
-import { type RoomLightingEmitter } from '../lighting/model';
+import { roomLightingUsesDynamicOverlay, type RoomLightingEmitter } from '../lighting/model';
 import { resolvePlayerAuraDarkAuraDiameter } from '../lighting/presets';
 import { RoomWeatherController } from '../weather/controller';
 import { getCachedRoomWeatherSurfaceSegments } from '../weather/surfaces';
@@ -2691,26 +2691,15 @@ export class OverworldPlayScene extends Phaser.Scene {
   }
 
   private updateRoomLighting(): void {
-    if (this.mode !== 'play' || !this.player || !this.playerBody) {
+    const currentRoom = this.mode === 'play' && this.player && this.playerBody
+      ? this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates)
+      : null;
+    // Most rooms have no dynamic lighting: skip building emitters and ambient bounds every frame (F012).
+    if (!currentRoom || !this.playerBody || !roomLightingUsesDynamicOverlay(currentRoom.lighting)) {
       const structureChanged = this.lightingController.sync({
-        roomId: null,
+        roomId: currentRoom?.id ?? null,
         bounds: null,
-        lighting: null,
-        emitters: [],
-        ambientBounds: [],
-      });
-      if (structureChanged) {
-        this.syncBackdropCameraIgnores();
-      }
-      return;
-    }
-
-    const currentRoom = this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates);
-    if (!currentRoom) {
-      const structureChanged = this.lightingController.sync({
-        roomId: null,
-        bounds: null,
-        lighting: null,
+        lighting: currentRoom?.lighting ?? null,
         emitters: [],
         ambientBounds: [],
       });
@@ -4864,7 +4853,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     },
   ): void {
     const run = this.activeCourseRun ?? this.currentGoalRun;
-    if (run && run.result !== 'active') return;
+    if ((run && run.result !== 'active') || !this.rankedRunTraceRecorder.isActive()) return;
     const frame = this.getCurrentRankedRunTraceFrame(movement);
     if (!frame) {
       return;
