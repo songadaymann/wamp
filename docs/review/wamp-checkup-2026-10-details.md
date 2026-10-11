@@ -1030,6 +1030,8 @@ Fill previously_recommended with docs/2026-06-10-repo-improvement-plan.md §1.4 
 
 Open: pre-baking the drums to compressed mono files (a lossy change to the kit's sound, so for review), re-encoding the stems (check loop seams), warming the hot sound effects after the first tap and fixing player retargeting (fact-check point 3), and excluding the unused SFX WAVs from the deploy. Receipt: `wamp-portrait-art-drums-2026-10-10.md`.
 
+**2026-10-11 partly done (SFX pool).** PR #162 / `72b4d761`. `SfxController.acquireAudioPlayer` now creates a cue's own player while under the 64-player cap, and borrows and reloads another cue's idle player only at the cap. Previously it borrowed first, so alternating jump, land and footstep sounds reloaded the same few elements. A second commit adds `AudioEngine.onFirstInteraction()`; just after the first gesture (on a timer, outside it) the controller creates and parks one idle player each for `jump`, `land`, `footstep`, `collect` and `player-hurt`, so the first of those sounds doesn't wait for its file. Tests in `audio/sfx.visibility.test.ts` (the pool test fails on the previous code; the warm-up test fires the scheduled callback). Open: pre-baked drums, stems, WAV hygiene. Receipt: `wamp-flags-phaser-sockets-2026-10-11.md`.
+
 ### F019: Players download the level-editor UI and about 30 menus before the first frame
 
 - **Area:** Load time, bundle size & assets
@@ -1157,6 +1159,16 @@ Most of the ~400 KB gap (about 274 KB) comes from 1,476 duplicate Phaser @licens
 4. Add `audio: { noAudio: true }` to the GameConfig in src/main.ts (around line 75). Phaser's AudioContext stays suspended until the first gesture and suspends again when the tab loses focus, and three contexts is under iOS limits. So this is tidiness and a small battery gain, not a fix for a visible bug.
 
 Combined realistic win: about 30-45 KB brotli on the wire and about 120-400 KB less JavaScript to parse on phones. Impact is low-medium.
+
+**2026-10-11 completed.** PR #160 / `897b01d3` (Pages). `vite.config.ts`: `resolve.alias` maps `phaser` to `phaser/dist/phaser-arcade-physics.js` (no Matter; a grep finds no Matter, `this.sound` or `load.audio` usage), and `esbuild.legalComments: 'eof'` keeps Phaser's licence once per chunk instead of 1,476 times. Phaser's own audio was already disabled by `audio: { noAudio: true }` (`be355ca3`).
+
+| | raw | brotli |
+|---|---|---|
+| Phaser chunk before | 1,482,446 B | 269,520 B |
+| Phaser chunk after | 1,102,841 B | 237,448 B |
+| Startup JS (size check) | 747.3 KB → 716.3 KB brotli | |
+
+Dev-server check: Matter undefined, Arcade present, `NoAudioSoundManager`, editor opens. `scripts/mobile_smoke.mjs` passes every play scenario with 0 page errors (its `phone-portrait-deep-link-bottom-hud` failure is the same on `main`). Receipt: `wamp-flags-phaser-sockets-2026-10-11.md`.
 
 ### F026: Leaderboards and run submissions load every saved version of a room; the spawn room takes 1.2 s
 
@@ -1664,6 +1676,12 @@ Better fixes, cheapest first:
 - Close the sockets after document.hidden has been true for about 30s.
 - Route the identity refresh through the startup gate.
 - Give realtime its own radius cap, smaller than the streaming window, and use a single relay/lobby socket only if needed.
+
+**2026-10-11 partly done.** PR #161 / `976636e4` (Pages). `src/presence/hiddenTabPause.ts` `installHiddenTabPause(pause, resume, 30 s)`: `WorldPresenceClient` and `WorldRoomChatClient` close every shard socket once the tab has been hidden for 30 s. They keep `desiredShardIds`, so panning while paused only updates the subscription, and reopen the subscribed shards on visibility; presence republishes the local player on open. A switch away shorter than 30 s changes nothing.
+
+Evidence (dev server, simulated `document.hidden`, PartyKit sockets): this branch 26 visible → 50 at 10 s hidden → **0** at 35 s → 38 reopening; `main` 31 → 50 → **50** → 50. Test: `presence/hiddenTabPause.test.ts` (timing, both clients with mocked `partysocket`).
+
+Open: one socket per shard for both channels (PartyKit server change), the identity refresh through the startup gate, a smaller realtime radius. Receipt: `wamp-flags-phaser-sockets-2026-10-11.md`.
 
 ### F036: Signed-in players get no edge caching; every leaderboard, room summary and discovery read goes to the database
 
@@ -4967,6 +4985,8 @@ Two related problems should go in the same fix:
 
 Hoisting the envelope constants (patternRenderer.ts:75-76) is a minor micro-optimisation, not the main cost.
 
+**2026-10-11 re-checked (no change).** Two parts of the fact-check are already in place on `main`: the render cache is bounded (`src/music/bufferCache.ts`, an LRU with per-group limits and a 50 MB budget, from the F220/F226 music work), and a muted player doesn't render (`playArrangement` records the request as `muted` and plays it on unmute). Still open, and medium effort: render pattern and phrase audio off the main thread (a module Worker, or chunked idle rendering) and prefetch it on neighbour approach (`roomTransition.ts` `prepareApproachingNeighbors`).
+
 ### F225: Played room music is never freed; it is always stereo and still rendered when music volume is 0
 
 **Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Bounded retention, centered mono buffers, muted load/render skipping and latest-target unmute. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.
@@ -6318,6 +6338,8 @@ markerFlags.ts:37-43 maps checkpoint-pending to flag.png and checkpoint-reached 
 **Fact-check (partially confirmed).**
 
 The checkpoint state change (sprite plus label text colour) is colour-only. Each flag is also labelled with its number ("1", "2", …; goalMarkers.ts:163/233), checkpoints count only in order (objectiveController.ts:285-292), and the HUD shows N/M. So a colour-blind player can already tell which flag is next; they just can't see reached vs pending at a glance. Under deuteranopia the two colours differ by ΔE ≈ 18 in lightness, which is noticeable, so "barely tell apart" overstates it. Under protanopia they are clearly distinct. Mostly dichromats (≈2% of men) are affected, not 1 in 12. The cheapest fix needs no new art: in goalMarkers.ts:163-165 and :233-235, change reached labels to "✓" (or "1✓") and/or dim reached flags with alpha ≈0.5 (the descriptor already supports `alpha`). A furled or checkmarked sprite sheet can come later. Pulsing the next pending flag is a reasonable optional addition.
+
+**2026-10-11 completed.** PR #159 / `82c34488` (Pages). `goalMarkers.ts` gives reached checkpoint markers `alpha: REACHED_CHECKPOINT_ALPHA` (0.55) for room and Expanded Room runs; the marker code already applied `alpha` to the sprite only, so the number label stays bright. This is the fact-check's no-new-art fix. Not done: a checkmarked or furled reached-flag sprite, or pulsing the next pending flag. Receipt: `wamp-flags-phaser-sockets-2026-10-11.md`.
 
 ### F180: Unlabeled form fields, '+'/'−' buttons and div-based palette items
 
