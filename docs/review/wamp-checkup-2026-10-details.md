@@ -711,6 +711,16 @@ Corrected fix, in order:
 3. At finalize, check the real file type from its first bytes (or the Cloudflare image metadata) and reject GIF/animated files or mismatched types. Also check the real size, not just the declared one.
 4. Optionally create a truly small thumbnail variant for LOD chunk previews and the editor picker (uiBridge.ts:1570).
 
+
+**2026-10-11 partly done.** PR #143 / `efbff3e2` (Pages, live in `main-DB6DyBqj.js`), API Worker `0edbab18`. `CustomBackgroundTexturePreparation` (fetch) and `loadCustomBackgroundTexture` (Phaser XHR, per-file `xhrSettings.headers`) send `Accept: image/avif,image/webp,*/*`. `<img>` loads already did. The proxy now sends `Vary: Accept` (merged with `Vary: Origin`). Production, background `59f7f031…`: `*/*` → `image/gif` 8,337,652 bytes; with the new Accept → `image/webp` 2,761,006 bytes. Live `Vary` lists Accept twice in different cases (Cloudflare's plus ours); harmless.
+
+Open:
+- a non-animated, size-capped Cloudflare Images variant (account configuration plus `CLOUDFLARE_IMAGES_BACKGROUND_VARIANT`/`THUMB_VARIANT`, both `public` today);
+- replacing or rejecting background `59f7f031…`;
+- checking the real file type at finalize, which changes the moderation flow.
+
+Receipt: `wamp-keys-editor-fonts-checks-2026-10-11.md`.
+
 ### F017: Game art PNGs are about twice as big as they need to be
 
 - **Area:** Load time, bundle size & assets
@@ -866,6 +876,20 @@ So the right fix is to self-host IBM Plex Mono, not drop it for HomeVideo. Ship 
 Self-hosting has a side benefit. Phaser canvas text drawn before a font finishes loading stays in the fallback font, and self-hosting plus preloading, or awaiting `document.fonts.load` before creating that text, fixes this. The idea already exists in the repo: src/mapScreenshot/stitch.ts:370-383 waits for fonts this way.
 
 A smaller error: there is no `--font-ui` variable. The existing one is `--hud-ui-font` (base.css:65).
+
+
+**2026-10-11 partly done.** PR #142 / `812227e0` (Pages; live CSS `main-CpuxWhyE.css` starts with the font faces). The `@import` is gone from `base.css`. `index.html` preconnects to both Google font hosts and loads the same stylesheet with `media="print" onload="this.media='all'"`.
+
+Measured on production builds served with brotli (Chromium 390×844, API blocked, median of 5):
+
+| | slow (150 ms RTT, 1.6 Mbps): first paint / title font | 4G (70 ms, 9 Mbps) |
+|---|---|---|
+| before | 956 / 1,879 ms | 376 / 601 ms |
+| shipped | 752 / 1,654 ms | 256 / 437 ms |
+| + preload SMB NES and HomeVideo | 976 / 1,446 ms | 296 / 442 ms |
+| + preload SMB NES only | 860 / 1,750 ms | 272 / 418 ms |
+
+The pixel-font preloads take bandwidth from the main stylesheet, so they were left out. Open: self-hosting IBM Plex Mono as woff2 (the fact-check's preferred fix), which needs the font files downloaded from Google Fonts or Fontsource (OFL). Receipt: `wamp-keys-editor-fonts-checks-2026-10-11.md`.
 
 ### F024: Add automatic size and load-time limits so regressions get caught
 
@@ -2190,6 +2214,16 @@ Three small refinements; the core claim stands.
 2. **Edits during publish are worse than described.** Manual publish (the button at EditorScene.ts:902-904, or Ctrl/Cmd+Shift+P at 341-344) shows no overlay, so the editor stays fully interactive, pointer drawing included. The window also covers the extra refreshAuthSession() await (roomSession.ts:566). Edits made in that window get their dirty flag cleared at line 567, so autosave never picks them up. On exit, roomUpdatedAt equals roomPublishedAt, so the not-dirty branch returns the published snapshot with clearDraftRoomId (781-790). Those edits are lost without any warning.
 
 3. **Failed autosave also leaves exit publishing.** If an autosave fails (for example, offline), dirty stays true, so the next exit still auto-publishes.
+
+
+**2026-10-11 partly done.** PR #141 / `52e0b3ed` (Pages; live in `EditorScene-BYzFwvT2.js`).
+- `EditorRoomSession.waitForSaveToSettle()` resolves when the save in progress finishes (20 s cap); `saveInFlight` is an accessor that releases waiters. `buildReturnToWorldWakeData` and the world-seed exit wait for it, then decide as before, so leaving during an autosave no longer shows "Publish failed. Draft save failed.".
+- A dirty room that fails publish validation skips the publish attempt, saves a draft and shows "Not published: <reason> Only you can see this draft." on the world screen, instead of a Cannot Publish dialog that closed as the editor left.
+- Already fixed before this pass: `publishRoom` keeps the room dirty when edits arrive during the request.
+
+Tests: two new `roomSession.test.ts` cases, both failing on the previous code.
+
+Open, needs a decision: the exit policy itself. Auto-publish on exit predates autosave (it is in the first commit). Today it fires only when the last edit is under ~0.6 s old, when leaving straight from test play (autosave pauses during play), or after a failed autosave; otherwise leaving keeps a private draft. Receipt: `wamp-keys-editor-fonts-checks-2026-10-11.md`.
 
 ### F055: Quick restarts can wipe or swap the ranked-run verification trace, so record runs get rejected
 
@@ -5962,6 +5996,18 @@ Mechanism confirmed, both in code and in a headless browser test. Corrections:
 (2) Some keyboard paths still work, which narrows the "can't scroll / can't use menus from the keyboard" claim. Tab, Enter, Escape, and PageUp/PageDown/Home/End are not captured, and Shift+Arrow gets past the capture. What's actually blocked: arrow-key changes to sliders and radio groups, arrow/Space scrolling, and Space on focused buttons and checkboxes.
 (3) Narrow the fix so it doesn't break movement after a mouse click on a HUD button. In syncGameKeyboardFocus, treat focus as UI focus when either (a) document.activeElement is inside an open `.history-modal:not(.hidden)`, or (b) it is an input of type range, radio or checkbox. Also set scene `keyboard.enabled=false` plus resetKeys() while any `.history-modal` is open. Re-run the sync when a modal opens or closes, either by dispatching an event from createModalLifecycle.show/hide and SettingsModal.open/close, or with a MutationObserver on the class attribute of the modals. Don't turn capture off just because a plain HUD or toolbar button has focus. When a modal closes, blur the element that had focus inside it, so focus returns to the body and the game.
 
+
+**2026-10-11 completed.** PR #140 / `57dbffd6` (Pages; live in `main-BG7CxQbp.js`). `isGameKeyboardYielded()` in `src/ui/keyboardFocus.ts`: the game yields its keys (no `preventDefault`, scene keyboards disabled and reset once) while a text field, a range/radio/checkbox, a select or an element with role slider/radio/listbox/spinbutton is focused, or any `.history-modal` dialog is open. `installDialogKeyboardSync()` re-checks when a dialog opens or closes, since a dialog can open without moving focus; focus changes were already re-checked in `main.ts`. A focused HUD button outside a dialog keeps game keys.
+
+Evidence (dev server; `defaultPrevented` on a window ArrowLeft keydown means the game cancelled it):
+
+| | no dialog | Settings open, focus in it | Settings open, focus on page | after closing | HUD button focused | volume slider + ArrowLeft |
+|---|---|---|---|---|---|---|
+| before | cancelled | cancelled | cancelled | cancelled | cancelled | 100 → 100 |
+| after | cancelled | not cancelled | not cancelled | cancelled | cancelled | 100 → 99 |
+
+Receipt: `wamp-keys-editor-fonts-checks-2026-10-11.md`.
+
 ### F175: Modals never move, trap or restore keyboard focus (including the welcome and goal-intro popups)
 
 - **Area:** Accessibility & inclusivity
@@ -6624,6 +6670,9 @@ None of the dead lookups causes a bug players can see; all are leftover code. Th
 
 Part 2, splitting index.html into partials, is medium effort. The smoke's dock-order, marker-popover and bootstrap-order checks run on the raw index.html text and would have to move to the assembled HTML.
 
+
+**2026-10-11 completed.** PR #144 / `10f53337`. `scripts/smoke_dom_contract.mjs` collects every literal `getElementById('…')` and `querySelector('#…')` ID in `src` (not tests or the Worker). It fails when no root `*.html` page has the ID and no code creates it (`.id =`, `id="…"` in templates, `setAttribute('id', …)`, `id: '…'`), naming the file. Today: 909 looked-up IDs resolve. `npm run check` now runs the contract. The three dangling lookups it found are deleted: `profile-modal-title`/`profile-modal-meta` and `music-summary` with its unused `getSummaryText()`. With the old `musicWorkflow.ts` restored the contract fails on `#music-summary`. Not done: splitting `index.html` into partials. Receipt: `wamp-keys-editor-fonts-checks-2026-10-11.md`.
+
 ### F067: Lint has exactly one rule: turn on the cheap ones that catch agent mistakes and add a file-size ratchet
 
 - **Area:** Code health & architecture (AI-agent friendliness)
@@ -6664,6 +6713,14 @@ Fix:
 3. max-lines: 18 files exceed 1,500 non-blank lines, not 16. Three are barely over: autotiling/solver.ts 1503, movementController.ts 1503, roomComments.ts 1507. The override list needs 18 entries.
 4. Knip: the 47 hints are 45 'redundant entry pattern' hints plus 2 'Remove from ignoreBinaries' hints (python3, tsx). The closeout figure is at line 74.
 5. The tsc probe numbers (0 / 0 / 8×TS4114) and the other lint counts are confirmed.
+
+
+**2026-10-11 completed.** PR #145 / `8382b61a`.
+- **`no-misused-promises`** (`checksConditionals: false`). Production async handlers go through `asyncListener()` (`src/ui/asyncListener.ts`), wrapped where they are defined so `removeEventListener` still matches. The recorder uses one sync auth listener, and the `startPlayMode`/`playSelectedRoom` host callbacks `void` their promise. The fact-check's latent issue is fixed: the history dialog clears `metadataRefreshInFlight` in `finally`. Test files are exempt.
+- **`max-lines`**: 1,500 non-blank lines, with the 20 files already over it pinned in `OVERSIZED_FILE_LINES`. One extra line in `autotiling/solver.ts` fails lint.
+- **tsconfig**: `noFallthroughCasesInSwitch`, `noImplicitReturns`, `noImplicitOverride` (8 `override`s added).
+
+Not done: `switch-exhaustiveness-check` (20 of 22 hits already have a default) and Knip hints. Receipt: `wamp-keys-editor-fonts-checks-2026-10-11.md`.
 
 ### F069: Global editorState and string events: 136 writes from 11 files with no change signal, plus orphaned events
 
