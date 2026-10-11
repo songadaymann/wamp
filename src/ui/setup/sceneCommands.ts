@@ -18,6 +18,7 @@ import { REQUEST_BUILDER_MODE_EVENT } from './welcomeModal';
 import { getGameSettings } from '../../settings/userSettings';
 import { configureOverworldHudBridgeRuntime } from '../../scenes/overworld/hud';
 import { RoomSharingController } from './roomSharing';
+import { asyncListener } from '../asyncListener';
 
 export function setupSceneCommands(
   game: Phaser.Game,
@@ -354,7 +355,7 @@ export function setupSceneCommands(
     }
   });
 
-  courseSaveBtn?.addEventListener('click', async () => {
+  courseSaveBtn?.addEventListener('click', asyncListener(async () => {
     controlsModal.close();
     aboutModal.close();
     chatModerationModal.close();
@@ -364,9 +365,9 @@ export function setupSceneCommands(
     if (editorScene?.saveCourseDraft) {
       await editorScene.saveCourseDraft();
     }
-  });
+  }));
 
-  coursePublishBtn?.addEventListener('click', async () => {
+  coursePublishBtn?.addEventListener('click', asyncListener(async () => {
     controlsModal.close();
     aboutModal.close();
     chatModerationModal.close();
@@ -375,5 +376,5 @@ export function setupSceneCommands(
     if (editorScene?.publishCourseDraft) {
       await editorScene.publishCourseDraft();
     }
-  });
+  }));
 }

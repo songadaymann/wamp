@@ -6,6 +6,7 @@ import { APP_MODE_CHANGED_EVENT } from '../appMode';
 import { createModalLifecycle } from './modalLifecycle';
 import { createProfileTriggerElement } from './profileEvents';
 import { ROOM_SEQUENCE_START_EVENT, type RoomSequenceEntry, type RoomSequenceStartDetail } from './roomSequenceEvents';
+import { asyncListener } from '../asyncListener';
 
 export class BuildPromptsController {
   private readonly modal;
@@ -235,7 +236,7 @@ export class BuildPromptsController {
     this.button('btn-build-prompt-entry-retry', false);
     if (!result.error) this.bannerTimer = this.win.setTimeout(() => this.dismissResult(), 10000);
   };
-  private readonly onRetryEntry = async () => { const result = this.result; if (!result || result.userId !== getAuthDebugState().user?.id) return; this.button('btn-build-prompt-entry-retry', true); await result.retry(); };
+  private readonly onRetryEntry = asyncListener(async () => { const result = this.result; if (!result || result.userId !== getAuthDebugState().user?.id) return; this.button('btn-build-prompt-entry-retry', true); await result.retry(); });
   private readonly onDismissResult = () => this.dismissResult();
   private readonly onViewResult = () => { const slug = this.result?.slug; this.dismissResult(); this.open(slug); };
   private dismissResult(): void { if (this.bannerTimer !== null) this.win.clearTimeout(this.bannerTimer); this.bannerTimer = null; this.result = null; this.banner?.classList.add('hidden'); }

@@ -7,6 +7,7 @@ import { guestDailyProgress } from '../../daily/guestProgress';
 import { createDailyRepository, type DailyRepository } from '../../daily/repository';
 import { APP_MODE_CHANGED_EVENT } from '../appMode';
 import { createModalLifecycle } from './modalLifecycle';
+import { asyncListener } from '../asyncListener';
 
 const DISMISSED = 'wamp_daily_dismissed_v1';
 export class DailyRoomController {
@@ -109,13 +110,13 @@ export class DailyRoomController {
     if (!this.response?.pick?.available || this.response.resetsAt <= new Date().toISOString()) { event.preventDefault(); void this.refresh(); }
   };
   private readonly onSave = () => { this.close(); promptForSignIn('Sign in to save your verified daily clear and its completion bonus. Play signed in to join the daily board.'); };
-  private readonly onCopy = async () => {
+  private readonly onCopy = asyncListener(async () => {
     const generation=this.generation;
     try {
       await this.win.navigator.clipboard.writeText('https://wamp.land/today');
       if (!this.destroyed && generation===this.generation) this.message('Link copied.');
     } catch { if (!this.destroyed && generation===this.generation) this.message('Copy the link below, or try Copy Link again.'); }
-  };
+  });
   private readonly onKeydown = (event: KeyboardEvent) => {
     if (!this.lifecycle.isOpen()) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); this.close(); }

@@ -5,6 +5,7 @@ import {
   GUEST_BUILDER_POTENTIAL_BXP,
   type GuestBuilderClaimRequestDetail,
 } from '../../progression/guestBuilderClaimEvents';
+import { asyncListener } from '../asyncListener';
 
 type GuestBuilderClaimElements = {
   modal: HTMLElement | null;
@@ -32,7 +33,7 @@ export class GuestBuilderClaimModalController {
     promptForSignIn('Sign in to save this room to your account and earn Builder XP when you publish.');
   };
 
-  private readonly handleSubmitGuestClick = async (event: Event) => {
+  private readonly handleSubmitGuestClick = asyncListener(async (event: Event) => {
     event.stopPropagation();
     const detail = this.activeDetail;
     if (!detail) {
@@ -55,7 +56,7 @@ export class GuestBuilderClaimModalController {
       );
       this.elements.submitGuestButton?.removeAttribute('disabled');
     }
-  };
+  });
 
   private readonly handleBackdropClick = (event: Event) => {
     if (event.target === this.elements.modal) {

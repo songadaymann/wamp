@@ -1,5 +1,6 @@
 import { createAdminApiClient } from '../adminApiClient';
 import type { DailyResponse } from '../../daily/model';
+import { asyncListener } from '../../ui/asyncListener';
 export function setupDailyAdmin(getAdminKey: () => string, doc: Document = document) {
   const client=createAdminApiClient(getAdminKey);
   const status=doc.getElementById('daily-admin-status'),form=doc.getElementById('daily-admin-form');
@@ -16,7 +17,7 @@ export function setupDailyAdmin(getAdminKey: () => string, doc: Document = docum
     catch(error) { if(current===generation && status)status.textContent=error instanceof Error ? error.message : 'Daily pick could not load.'; }
     finally { if(current===generation && submit)submit.disabled=false; }
   };
-  form?.addEventListener('submit',async event=>{
+  form?.addEventListener('submit',asyncListener(async event=>{
     event.preventDefault();if(busy || !getAdminKey() || !input)return;
     const match=/^\s*(-?\d+)\s*,\s*(-?\d+)\s*$/.exec(input.value);
     if(!match) {if(status)status.textContent='Enter room coordinates as x,y.';return;}
@@ -26,7 +27,7 @@ export function setupDailyAdmin(getAdminKey: () => string, doc: Document = docum
       if(current===generation)render(response);
     } catch(error) {if(current===generation && status)status.textContent=error instanceof Error ? error.message : 'Pick was not saved.';}
     finally {busy=false;if(current===generation && submit)submit.disabled=false;}
-  });
+  }));
   void refresh();
   return {refresh};
 }

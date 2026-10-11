@@ -9,6 +9,7 @@ import { APP_READY_EVENT } from '../appFeedback';
 import { getOverworldScene } from './sceneBridge';
 import { createModalLifecycle } from './modalLifecycle';
 import { requestProfileInvalidation } from './profileEvents';
+import { asyncListener } from '../asyncListener';
 
 export const PENDING_SIGN_IN_DRAFT_KEY = 'ep_guest_room_recovery_pending_signin_draft_v1';
 export const GUEST_DRAFT_SEEN_PREFIX = 'wamp_guest_draft_seen_v1:';
@@ -141,7 +142,7 @@ export class GuestRoomRecoveryModalController {
     this.close(); promptForSignIn('Sign in to save this guest draft to your account.');
   };
   private readonly onGo = () => { void this.resume(); };
-  private readonly onSubmit = async () => {
+  private readonly onSubmit = asyncListener(async () => {
     if (!this.active || this.loading || this.account()) return;
     const item = this.active; const generation = this.generation; this.setLoading(true); this.status('Publishing to Guest Rooms...');
     try {
@@ -150,7 +151,7 @@ export class GuestRoomRecoveryModalController {
       item.draft = response.draft; this.status('Published to Guest Rooms. It is playable there without XP or account benefits.');
     } catch (error) { if (this.generation === generation) this.status(error instanceof Error ? error.message : 'Could not publish to Guest Rooms.', true); }
     finally { this.setLoading(false); this.submitButton?.toggleAttribute('disabled', item.draft.status !== 'active'); }
-  };
+  });
 
   private scheduleSync(delay: number): void {
     if (this.destroyed) return;
