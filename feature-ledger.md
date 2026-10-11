@@ -1,3 +1,11 @@
+## 2026-10-11 — F185 client error reports; F192 health check
+
+PR #139 / `22c237a8` (API Worker `12c631b5`): uncaught browser errors are reported (redacted, at most 10 a page load, 30 an hour per network) to `POST /api/client-errors` and logged in Workers Logs as `client_error`; unexpected API failures are logged as `api_error` with route and request id and reply with a reference code instead of internal text. `/api/health` returns 503 when the database is unreachable or missing a migration the code expects, and the post-deploy smoke test requires it. Master **107/215**. Receipt: [error reporting and health](docs/review/wamp-error-reporting-health-2026-10-11.md).
+
+## 2026-10-10 — F080 portrait canvas; F017 PNG recompression; F023 parallel drums
+
+PR #136 / `3c3b4e58`: the portrait play canvas stops at the controller panel, and fixed room cameras keep the player above it. PR #137 / `afb8338a`: 512 PNGs recompressed losslessly (6.17 → 4.34 MB) with a check that keeps new art small. PR #138 / `7b1010e9`: drum samples load in parallel, each file once (F023 partly done). Receipt: [portrait, art, drums](docs/review/wamp-portrait-art-drums-2026-10-10.md).
+
 ## 2026-10-10 — F005 one-pass dark-room lighting; F116 stacked dialogs; F038 replay flags
 
 PR #132 / `ded5d9cb`: dark rooms cut every light out of the darkness in one GPU pass (38-light room: 90.8 → 50 ms median frame under 4× throttle, same picture). PR #134 / `61269ba6`: with a profile open over the leaderboard, Escape closes only the profile, and stacked dialogs dim the screen once. PR #135 / `d5b8e6ef` (API Worker `2c279cb5`): guest replay uploads set activity flags from the batch instead of re-reading every stored sample. Master **103/215** (F038 partly done). Receipt: [lighting, dialogs, replays](docs/review/wamp-lighting-dialogs-replays-2026-10-10.md).

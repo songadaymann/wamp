@@ -355,6 +355,20 @@ The bigger reason to do this is a likely visible defect the claim missed. Rooms 
 
 Watch out for one side effect. RESIZE will then refit the canvas on every play start and stop, and whenever 36vh changes as Safari's toolbars move. Check that fit zoom, streaming and the overlays tolerate that.
 
+
+**2026-10-10 completed.** PR #136 / `3c3b4e58` (frontend, Pages). With `body[data-mobile-portrait-play='true']`, `#game-container` uses `align-self: start` and `height: calc(var(--visible-vh) - var(--mobile-portrait-console-height) - var(--safe-bottom))`, so Phaser's RESIZE canvas stops at the controller panel. `MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y` moves from 0.34 to 0.53 (the same screen position as a share of the shorter canvas), and saved camera tuning moves to `wamp_mobile_portrait_camera_tuning_v2` because v1 values were measured against the full-height canvas.
+
+Evidence (iPhone 13 emulation, 390×664, controller top at 370 px):
+
+| | canvas height | room on screen | player y |
+|---|---|---|---|
+| follow camera, before | 664 | 1–371 | 341 |
+| follow camera, after | 370 | 3–373 | 343 |
+| fixed room camera, before | 664 | 225–439 | 422 (behind the panel) |
+| fixed room camera, after | 370 | 77–292 | 274 |
+
+Follow zoom is 1.051 in both. `scripts/mobile_smoke.mjs` passes every play scenario; `phone-portrait-deep-link-bottom-hud` fails identically on the previous code. Live in loader `main-BW_UonDA.js` (`camera_tuning_v2`). Not done (F098): dimming or letterboxing neighbouring rooms around a fixed room camera. Receipt: `wamp-portrait-art-drums-2026-10-10.md`.
+
 ### F011: 'Battery Saver' and auto-reduced mode don't turn down any visual effects
 
 - **Area:** Runtime performance (frame rate, GC, memory)
@@ -737,6 +751,13 @@ Fix:
 - **CryptoPunk atlas:** head-preview-atlas.png (1.13 MB) is not loaded at startup. It is fetched lazily, only for players with a CryptoPunk avatar (previews.ts:36-52, profileModal.ts:1185), so treat it as a minor follow-up.
 - **Caching:** public/_headers already caches /assets/* immutably for a year. The win is mostly for first-time visitors. Re-encoding PNGs in place under the same filenames is safe for returning players because the pixels are identical. A WebP switch would need new paths in the config manifests.
 
+
+**2026-10-10 completed.** PR #137 / `afb8338a` (Pages). `scripts/optimize_png_assets.mjs` (`npm run assets:png:optimize`) tries sharp's zlib level 9 without adaptive filtering and a 256-colour palette encode for each PNG, and keeps the smaller one only when it decodes to byte-identical RGBA. The original's colour chunks (`sRGB`, `gAMA`, `cHRM`, `iCCP`) are copied after IHDR, so browsers show the same colours. 16-bit files and the byte-pinned `rr_extras.png` are skipped.
+
+Result over `public/assets`: 512 files, 6,170,951 → 4,343,298 bytes (−29.6%). PIL confirms identical RGBA and colour chunks for every changed file. Filenames are unchanged, so cached copies stay valid. `npm run assets:png:check` (in `npm run check` and `quality.yml`) fails when any committed PNG could shrink by more than 10% losslessly, and `docs/development/asset-intake-rules.md` says to run the optimizer after adding art. Live: `CyberText.png` is 1,226 bytes on wamp.land (1,946 before).
+
+Not done: lossless WebP (about 30% more; needs new manifest paths, best done with the atlas work) and splitting the CryptoPunk head atlas. Receipt: `wamp-portrait-art-drums-2026-10-10.md`.
+
 ### F018: World data isn't requested until every sprite has finished downloading
 
 - **Area:** Load time, bundle size & assets
@@ -964,6 +985,11 @@ The core claim is right, with these refinements.
 (5) Re-encoding the stems is the lowest-value part, saving about 0.4 MB per room. AAC encoder priming can shift the bar-offset slicing at controller.ts:976-990, and older Safari cannot play OGG, so loop seams must be checked after any re-encode.
 
 Fill previously_recommended with docs/2026-06-10-repo-improvement-plan.md §1.4 (the music review).
+
+
+**2026-10-10 partly done (part a, loading).** PR #138 / `7b1010e9` (Pages). `getPatternDrumSamples` loads every drum row with `Promise.all`, and `loadRolandMt32DrumSample` fetches each file's bytes through a per-file promise cache, so the two kick variants share one `bassdrum.wav` download. A fetch stub test (`music/patternKit.drumLoading.test.ts`) shows 15 distinct files requested once each, all in flight together; the previous code made 16 requests one at a time. Live in `main-DxfimASP.js` (loader `main-DJo4pM17.js`).
+
+Open: pre-baking the drums to compressed mono files (a lossy change to the kit's sound, so for review), re-encoding the stems (check loop seams), warming the hot sound effects after the first tap and fixing player retargeting (fact-check point 3), and excluding the unused SFX WAVs from the deploy. Receipt: `wamp-portrait-art-drums-2026-10-10.md`.
 
 ### F019: Players download the level-editor UI and about 30 menus before the first frame
 
@@ -6176,9 +6202,45 @@ Security, safety or anti-cheat item; details withheld from this public repo unti
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F185: details withheld
+### F185: Production errors are invisible: no client error beacon, no request IDs, raw 500 messages
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Trust & safety, moderation, ops & observability
+- **Type:** improvement · **impact:** high · **effort:** small
+
+**Summary.** When the game crashes or a save fails on someone's phone, nobody finds out unless that player tells Jonathan, and then there's no way to match their story to a server log. The game already catches its own errors, but it only prints them to that player's browser console. Sending them home is a small change.
+
+**Technical detail.**
+
+Client: `bootDiagnostics.ts:142-166` and `main.ts:168-175` already hook `error`/`unhandledrejection` and the render-loop recovery monitor, but write only to the console. No Sentry, no beacon (repo-wide grep). Worker: the catch-all at worker.ts:788-799 logs `console.error('API failure', error)` with no route, method, user id or `cf-ray`. It also returns `error.message` to the client even for 500s, so internal D1/SQL text can leak and players see confusing messages. Workers Logs is on at 100% (wrangler.jsonc:14-24), but nothing summarizes or alerts. Fix: (1) add `POST /api/client-errors`. Payload: message, source, line, stack (first 2KB), build hash, route, device-performance mode, WebGL context-lost flag. The client sends up to 10 per session, de-duped by hash. Use `navigator.sendBeacon` and IP rate limiting. The Worker `console.log(JSON.stringify({kind:'client_error',...}))` so entries are searchable in Workers Observability. (2) In the Worker catch, log `{route, method, status, ray: request.headers.get('cf-ray'), userId}`. For 5xx, return `{error:'Something went wrong', requestId: ray}`, and have the client toast show the id ('send this code to Jonathan'). (3) Use the existing hourly cron (worker.ts:261) to email a digest via sendAdminReviewNotificationEmail when the last hour's client_error or 5xx counts pass a threshold. Keep the counters in a small D1 table, or use Workers Analytics Engine.
+
+**Evidence.**
+
+- src/main/bootDiagnostics.ts:142-166 — window error/unhandledrejection captured into a local ring buffer + console only
+- src/main.ts:168-175 — runtime errors only forwarded to renderLoopRecoveryMonitor
+- src/cloudflare/worker.ts:788-799 — 5xx logged without context; raw error.message returned to clients
+- wrangler.jsonc:14-24 — observability logs enabled (sampling 1) but no alerting path in code
+- src/cloudflare/worker.ts:261 — hourly cron exists (only purges guest replays) and can host an alert digest
+
+**Fact-check (partially confirmed).**
+
+1. Server-side correlation is not zero. Workers Logs at 100% sampling already records each invocation's request URL, method, Ray ID and status next to the console.error stack. Admins can filter by route and time in Workers Observability today. The real Worker gaps are:
+   - no userId in the log;
+   - raw internal error.message, including D1/SQLite text, returned to clients on 500s;
+   - no request id the player can see and quote.
+2. The real blind spot is the client. Browser errors, unhandled rejections and render-loop stalls never leave the device. The existing Cloudflare Web Analytics beacon (commit 13fee102) records page views and load speed, not errors.
+3. Effort by part:
+   - (1) the client beacon endpoint with rate limiting: small.
+   - (2) sanitized 5xx responses plus the ray id shown in a toast: small.
+   - (3) the hourly digest email with a D1 counter table or Analytics Engine binding: closer to small-to-medium, and optional. Do (1) and (2) first.
+
+**2026-10-11 completed.** PR #139 / `22c237a8`, API Worker `12c631b5`.
+- **Client** (`src/main/clientErrorReporter.ts`, called from the existing `bootDiagnostics` handlers): uncaught errors and unhandled rejections go to `POST /api/client-errors` with `navigator.sendBeacon` (text body, no CORS preflight), each distinct error once, at most 10 per page load, never in dev. Extension errors, `Script error.` and the ResizeObserver warning are skipped. Reports carry the build id, path, app mode and device class, and no account or visitor id.
+- **Worker** (`src/cloudflare/worker/ops/errors.ts`): bodies over 8 KB get 413 and invalid ones 400. Text is redacted (emails → `[email]`, query strings dropped, 32+ character tokens → `[token]`), capped, rate-limited to 30 an hour per network, and logged as one `{kind:'client_error',…}` line. Nothing is stored.
+- **Errors that escape a route** are logged as `{kind:'api_error', status, method, route, requestId}` with the `cf-ray` id. Deliberate `HttpError` replies keep their message (5xx adds `requestId`); unexpected failures reply "Something went wrong on our side. Reference: <ray>." instead of internal D1/SQL text.
+
+Production check: a test report with an email address and a query string appeared in `wrangler tail` as `{"kind":"client_error",…,"message":"… [email] (ignore)",…,"stack":"at x (https://wamp.land/a.js)"}`, and the endpoint returned 204.
+
+Not done: the hourly alert digest (optional per the fact-check), the user id in error logs, and an admin list of top client errors (F071 part 4). Receipt: `wamp-error-reporting-health-2026-10-11.md`.
 
 ### F190: In-room chat bubbles skip sign-in and chat bans on the server
 
@@ -6222,9 +6284,36 @@ Security, safety or anti-cheat item; details withheld from this public repo unti
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F192: details withheld
+### F192: The health check reports 'OK' without checking anything, and no outside monitor watches it
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Trust & safety, moderation, ops & observability
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** The /api/health page always answers 'ok'. It never checks whether the database, the multiplayer server, or the map tile generator works, and the post-deploy test trusts that answer. If WAMP goes down at 3am, nothing will tell Jonathan until a player does.
+
+**Technical detail.**
+
+/api/health returns a static object, `{ok:true, storage:'d1', auth:{...}}`, built from env vars alone (worker.ts:128-141). `smoke_prod.mjs:73-74` asserts `ok === true` and `storage === 'd1'`, both constants. The safety doc claims it reports 'healthy auth + D1 status' (docs/development/safety-backend-foundation.md:73). Fix: (1) /api/health runs `SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1` and compares it to a build-time constant of the newest file in migrations/. That catches the 'deployed code before running migrations' failure. It also checks `SELECT COUNT(*), MIN(created_at) FROM world_render_tile_outbox WHERE status='pending'`, does a 1s-timeout fetch to the PartyKit host, and returns HTTP 503 with details when anything is off. (2) Point a free external monitor (UptimeRobot or Better Stack) at it every 5 min with email/SMS alerts to Jonathan. Add a second check on `https://wamp.land/` so a broken Pages deploy is caught too.
+
+**Evidence.**
+
+- src/cloudflare/worker.ts:128-141 — health handler never touches D1, PartyKit, R2 or the tile queue
+- scripts/smoke_prod.mjs:73-74 — post-deploy smoke asserts only on those constants
+- docs/development/safety-backend-foundation.md:73 — doc claims health returns D1 status
+
+**Fact-check (confirmed).**
+
+1. The outbox query is wrong as written. The column is `state`, not `status`, and the table has `created_at` (worker/worldTiles/store.ts:815-824, 1013-1015; migrations/0041_world_render_tiles.sql:91). Use `SELECT COUNT(*), MIN(created_at) FROM world_render_tile_outbox WHERE state='pending'`. Better still, reuse the existing loadRendererStatus logic in worldTileRenderer/worker.ts.
+2. The post-deploy smoke test is not limited to health. It also checks that the frontend HTML loads, that the auth session endpoint reports the expected PartyKit host, and that the main bundle loads (smoke_prod.mjs:7-58, 76-87). The gap is that none of these checks touches D1 or the tile queue, and they only run after a deploy, never on a schedule. The suggested second monitor on wamp.land adds continuous coverage; the smoke test already checks it once per deploy.
+3. A partial outbox check already exists in the admin-authenticated `/api/admin/status` on the tile renderer worker. It is pull-only and sends no alerts.
+4. Implementation caution: /api/health is public (auth: 'public'), so the deeper checks should stay tiny (`LIMIT 1`, no large table scans). The result should also be cached for about 30-60s in module scope, or the PartyKit and D1 probes should be skipped unless something like `?deep=1` is passed. Otherwise anyone can turn the endpoint into a cheap D1 and PartyKit load amplifier.
+5. Stopgap: an external monitor could point at `/api/dashboard/stats` today, since it already runs real D1 queries. That gives a check that fails when the database is down without any code change.
+
+**2026-10-11 completed.** PR #139 / `22c237a8`, API Worker `12c631b5`. `/api/health` (`src/cloudflare/worker/ops/health.ts`) reads the newest applied migration from `d1_migrations` and compares it with `LATEST_D1_MIGRATION`; a test keeps that constant equal to the newest file in `migrations/`. It reports the pending world-tile outbox count and age (the corrected `state` column) and returns 503 when the database is unreachable or behind. The probe runs at most once per isolate every 30 s, since the endpoint is public. `scripts/smoke_prod.mjs` now requires `checks.database.ok`.
+
+Production: `{"ok":true,"storage":"d1","checks":{"database":{"ok":true,"latestApplied":"0064_room_version_facts.sql","expected":"0064_room_version_facts.sql"},"worldTileOutbox":{"pending":0,"oldestPendingAt":null}},…}`, and the smoke test passes.
+
+Not done: a PartyKit probe. An outside uptime monitor (UptimeRobot, Better Stack or similar, every 5 minutes on `https://wamp.land/api/health` and `https://wamp.land/`) needs Jonathan's account. Receipt: `wamp-error-reporting-health-2026-10-11.md`.
 
 ### F194: details withheld
 
@@ -6932,9 +7021,45 @@ The core claim is accurate, but the scope is slightly understated.
 3. "Undo after nearly every zoom" is slightly too strong. Nothing is recorded when the first finger lands outside the room bounds (tools.ts:175-177), or when the cell already holds that tile, because commitTileBatch filters out changes where oldGid === newGid (editRuntime.ts:744).
 4. editRuntime has no rollback helper. The cheapest fix is to commit and immediately undo (dropping the redo entry) when the second finger arrives within about 150-250 ms, or to defer the first finger's action.
 
-### F071: details withheld
+### F071: No production error reporting: client crashes on players' phones are invisible
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+_Merged into F185; track it there._
+
+- **Area:** Code health & architecture (AI-agent friendliness)
+- **Type:** improvement · **impact:** medium · **effort:** small
+
+**Summary.** When the game hits an error on someone's phone, the information goes only to that phone's browser console. Neither you nor your AI agents can see it. Sending a small, rate-limited error report to the server would let agents fix real-world bugs from evidence instead of guessing.
+
+**Technical detail.**
+
+src/main/bootDiagnostics.ts:142-165 installs window 'error' and 'unhandledrejection' handlers. They only call logBootPhase → pushEntry (an in-memory ring, lines 35-40) and console. src/main.ts:168-175 forwards errors only to the render-loop recovery monitor. No Worker route ingests client errors (no telemetry or client-error route in src/cloudflare). Meanwhile the client has 214 `catch {` blocks and 126 console.warn/error calls outside the Worker, so many failures are deliberately swallowed.
+
+Fix:
+(1) Add a tiny `reportClientError({message, stack, phase, route, build, deviceClass})` with a per-session cap (e.g. 20), dedupe by message+top-frame hash, and sampling.
+(2) Send it with navigator.sendBeacon to a new `POST /api/client-errors` that writes to Workers Analytics Engine (cheap, no D1 writes) or a capped D1 table.
+(3) Call it from the global handlers and from the existing console.error sites in streaming, auth and save paths.
+(4) Show the top 20 errors in the existing dashboard.html or Launch Admin.
+Strip emails and tokens from messages before sending.
+
+**Evidence.**
+
+- src/main/bootDiagnostics.ts:142-165 — window error / unhandledrejection only call logBootPhase
+- src/main/bootDiagnostics.ts:35-40 — pushEntry keeps an in-memory array; printEntry logs to console
+- src/main.ts:168-175 — window error only notifies renderLoopRecoveryMonitor
+- grep src/cloudflare — no client-error / telemetry ingestion route
+- grep — 214 `catch {` blocks and 126 console.warn/error calls in client code
+
+**Fact-check (confirmed).**
+
+Some details need fixing.
+
+- The counts are a little high. In client code outside src/cloudflare and excluding tests, there are 176 `catch {` blocks (222 across all of src) and 128 console.warn/error calls, not 214 and 126.
+- The global handlers stay active after boot because they pass force:true, so they keep logging for the whole session — but only to an in-memory ring and the console.
+- There's a cheaper place to build this: the existing guest-replay upload pipeline (src/analytics/replay/recorder.ts posting to /api/guest-replays/*, with an admin viewer in src/admin/replays.ts). An agent could add an 'error' action or error samples there, or copy its request pattern (credentials:'omit', keepalive).
+- Because the new POST route would be unauthenticated, it needs a cap per visitor/IP and a payload size limit on the server, not only throttling on the client.
+- If it uses Analytics Engine, showing the results in the dashboard means querying the AE SQL API with an API token, which is a bit more work than a capped D1 table.
+
+Shipped with F185 (PR #139): parts (1) and (2) are done; part (3), reporting from the console.error sites in the save and streaming paths, and part (4), a top-errors view, are not.
 
 ### F073: Modal handling is copy-pasted 18+ times, and Escape closes every open modal at once
 
