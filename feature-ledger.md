@@ -1,3 +1,7 @@
+## 2026-10-10 — F026 leaderboards from stored version facts
+
+PR #115 / `a8297e66` is merged, migration 0064 is applied and the API Worker is deployed (`365e0263`). The spawn room's leaderboard reads per-version facts instead of 176 snapshots: `room_record` ~25 ms after the first fill (was 0.16-3.7 s), TTFB ~0.12 s. Master **80/215**. Receipt: [version facts](docs/review/wamp-version-facts-2026-10-10.md).
+
 ## 2026-10-10 — F200 trust tiers: T1 record checks, slow trust
 
 PR #114 / `21c4586a` is merged and the API Worker is deployed (`37937f8f`). T1 runs are verified when they take or extend the #1 record (T2+ stay unverified), skipped runs keep their traces, and hidden trust is capped per day, once per room, never from your own content, with a 3-day new-account hold. Master **79/215**. Receipt: [trust earning](docs/review/wamp-trust-earning-2026-10-10.md).
