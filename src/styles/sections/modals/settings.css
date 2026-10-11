@@ -63,7 +63,7 @@
 
 #settings-modal .settings-modal-panel {
   width: min(560px, calc(100vw - 40px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
   gap: 14px;
   padding: 18px;
   overflow-y: auto;

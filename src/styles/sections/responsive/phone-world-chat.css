@@ -245,7 +245,7 @@ body[data-device-class='phone'] #auth-identity.mini-profile-card--progress-activ
 body[data-device-class='phone'] #menu-body {
   width: 100%;
   max-width: none;
-  max-height: calc(100vh - 72px - var(--safe-top) - var(--safe-bottom));
+  max-height: calc(var(--visible-vh) - 72px - var(--safe-top) - var(--safe-bottom));
   padding: 10px;
 }
 

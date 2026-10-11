@@ -5,7 +5,7 @@
 
 #wamp-o-gram-modal .wamp-o-gram-modal-panel {
   width: min(1120px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
   gap: 16px;
   padding: 20px 18px 18px;
   overflow-y: auto;

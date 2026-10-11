@@ -76,7 +76,12 @@ function computeState(): DeviceLayoutState {
   const height = Math.max(0, Math.round((viewport?.height ?? window.innerHeight) * fitScale));
   const touchPrimary = window.matchMedia('(pointer: coarse)').matches;
   const coarsePointer = touchPrimary || navigator.maxTouchPoints > 0;
-  const orientationState: OrientationState = width >= height ? 'landscape' : 'portrait';
+  // An open keyboard or pinch zoom shrinks the visual viewport but not the layout
+  // viewport. Orientation follows the layout viewport, so typing in chat on a
+  // portrait phone does not switch it to the landscape layout.
+  const layoutWidth = window.innerWidth || width;
+  const layoutHeight = window.innerHeight || height;
+  const orientationState: OrientationState = layoutWidth >= layoutHeight ? 'landscape' : 'portrait';
   const deviceClass = classifyDeviceClass(width, height, coarsePointer);
   const performanceProfile = resolvePerformanceProfile(deviceClass, coarsePointer);
 
