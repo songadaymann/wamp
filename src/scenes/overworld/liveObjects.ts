@@ -2403,11 +2403,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.lifecycleController.destroyWorldColliders(liveObject);
     this.lifecycleController.destroyHelpers(liveObject);
     liveObject.sprite.destroy();
+    // Only solids have colliders on other objects; a spent bullet or a defeated enemy had only its own (F008).
+    const otherObjectsCollidedWithIt = this.partitionIndex.getRuntimeSolidObjects(loadedRoom).includes(liveObject);
     loadedRoom.liveObjects = loadedRoom.liveObjects.filter((candidate) => candidate !== liveObject);
-    this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
-    if (revealedObject) {
-      this.syncLiveObjectInteractions([loadedRoom]);
-    }
+    if (otherObjectsCollidedWithIt || revealedObject) this.syncWorldObjectColliders(this.options.getLoadedFullRooms());
+    if (revealedObject) this.syncLiveObjectInteractions([loadedRoom]);
   }
 
   private revealContainedObjectFromBrokenContainer(
