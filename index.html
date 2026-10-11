@@ -203,7 +203,7 @@
           <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button">Guest Drafts</button>
         </div>
         <div id="auth-email-row" class="auth-row">
-          <input id="auth-email-input" type="email" placeholder="you@example.com" spellcheck="false" />
+          <input id="auth-email-input" aria-label="Email address" type="email" placeholder="you@example.com" spellcheck="false" />
           <button id="btn-auth-email" class="bar-btn bar-btn-small">Sign In With Email</button>
         </div>
         <div id="auth-email-code" class="auth-email-code hidden">
@@ -219,7 +219,7 @@
           <button id="btn-auth-logout" class="bar-btn hidden">Logout</button>
         </div>
       <div id="auth-display-name-row" class="auth-row hidden">
-        <input id="auth-display-name-input" type="text" placeholder="Display name" maxlength="24" spellcheck="false" />
+        <input id="auth-display-name-input" aria-label="Display name" type="text" placeholder="Display name" maxlength="24" spellcheck="false" />
         <button id="btn-auth-display-name" class="bar-btn bar-btn-small" type="button">Save Name</button>
       </div>
       <div id="auth-display-name-status" class="auth-display-name-status hidden"></div>
@@ -490,7 +490,7 @@
       <!-- Background Selector -->
       <div class="sidebar-section" id="background-section" data-mobile-panel="background" data-sidebar-collapsible="true">
         <div class="section-label">Background</div>
-        <select id="background-select">
+        <select id="background-select" aria-label="Background">
           <option value="none">None</option>
           <option value="solid_color">Solid Color</option>
           <option value="photo">Photo</option>
@@ -793,7 +793,7 @@
         </div>
         <div class="object-search-row">
           <input
-            id="object-search-input"
+            id="object-search-input" aria-label="Search objects"
             class="object-search-input"
             type="search"
             placeholder="Search objects"
@@ -826,7 +826,7 @@
         <label class="room-camera-option" title="Falling past the outer bottom edge respawns you. Drops between cells stay open."><input id="course-pits-deadly" type="checkbox" /><span>Deadly pits</span></label>
         <div class="goal-context-note">Falling past the outer bottom edge respawns you. Drops between cells stay open.</div>
         <div id="course-editor-status" class="goal-context-note hidden"></div>
-        <select id="course-editor-goal-type-select">
+        <select id="course-editor-goal-type-select" aria-label="Expanded room goal">
           <option value="">None</option>
           <option value="reach_exit">Reach Exit</option>
           <option value="collect_target">Collect Target</option>
@@ -968,7 +968,7 @@
                 <button type="button" data-goal-type-value="npc_quest">NPC Quest</button>
               </div>
               <div id="goal-type-instructions" class="goal-type-instructions">Choose how players complete this room.</div>
-              <select id="goal-type-select">
+              <select id="goal-type-select" aria-label="Room goal">
                 <option value="">None</option>
                 <option value="reach_exit">Reach Exit</option>
                 <option value="collect_target">Collect Target</option>
@@ -1039,7 +1039,7 @@
                   <button type="button" data-lighting-mode-value="off">Normal</button>
                   <button type="button" data-lighting-mode-value="playerAuraDark">Dark Aura</button>
                 </div>
-                <select id="lighting-mode-select">
+                <select id="lighting-mode-select" aria-label="Lighting">
                   <option value="off">Normal</option>
                   <option value="playerAuraDark">Dark Aura</option>
                 </select>
@@ -1050,7 +1050,7 @@
                       <span id="lighting-darkness-value" class="lighting-slider-value">80%</span>
                     </div>
                     <input
-                      id="lighting-darkness-range"
+                      id="lighting-darkness-range" aria-label="Darkness"
                       class="lighting-slider-input"
                       type="range"
                       min="0"
@@ -1069,7 +1069,7 @@
                       <span id="lighting-radius-value" class="lighting-slider-value">50%</span>
                     </div>
                     <input
-                      id="lighting-radius-range"
+                      id="lighting-radius-range" aria-label="Spotlight radius"
                       class="lighting-slider-input"
                       type="range"
                       min="0"
@@ -1095,7 +1095,7 @@
                   <button type="button" data-weather-mode-value="snow">Snow</button>
                   <button type="button" data-weather-mode-value="fog">Fog</button>
                 </div>
-                <select id="weather-mode-select">
+                <select id="weather-mode-select" aria-label="Weather">
                   <option value="off">Clear</option>
                   <option value="rain">Rain</option>
                   <option value="snow">Snow</option>
@@ -1108,7 +1108,7 @@
                       <span id="weather-intensity-value" class="lighting-slider-value">50%</span>
                     </div>
                     <input
-                      id="weather-intensity-range"
+                      id="weather-intensity-range" aria-label="Weather intensity"
                       class="lighting-slider-input"
                       type="range"
                       min="0"
@@ -1274,9 +1274,9 @@
             </div>
           </div>
           <div class="mobile-editor-zoom-row">
-            <button id="btn-mobile-editor-zoom-out" class="bar-btn bar-btn-small" type="button">-</button>
+            <button id="btn-mobile-editor-zoom-out" aria-label="Zoom out" class="bar-btn bar-btn-small" type="button">-</button>
             <span id="mobile-editor-zoom-level" class="mobile-editor-zoom-readout">Zoom: 2x</span>
-            <button id="btn-mobile-editor-zoom-in" class="bar-btn bar-btn-small" type="button">+</button>
+            <button id="btn-mobile-editor-zoom-in" aria-label="Zoom in" class="bar-btn bar-btn-small" type="button">+</button>
             <button id="btn-mobile-editor-fit" class="bar-btn bar-btn-small" type="button">Fit</button>
           </div>
         </div>
@@ -1625,19 +1625,19 @@
               <div id="editor-music-pitch-modes" class="editor-music-button-strip"></div>
             </div>
             <div id="editor-music-octave-controls" class="editor-music-control-cluster editor-music-octave-controls">
-              <button id="btn-editor-music-octave-down" class="bar-btn bar-btn-small" type="button">-</button>
+              <button id="btn-editor-music-octave-down" aria-label="Octave down" class="bar-btn bar-btn-small" type="button">-</button>
               <div id="editor-music-octave-label" class="editor-music-octave-label">Octave +0</div>
-              <button id="btn-editor-music-octave-up" class="bar-btn bar-btn-small" type="button">+</button>
+              <button id="btn-editor-music-octave-up" aria-label="Octave up" class="bar-btn bar-btn-small" type="button">+</button>
             </div>
             <div id="editor-music-tempo-controls" class="editor-music-control-cluster editor-music-tempo-controls">
-              <button id="btn-editor-music-tempo-down" class="bar-btn bar-btn-small" type="button">-</button>
+              <button id="btn-editor-music-tempo-down" aria-label="Tempo down" class="bar-btn bar-btn-small" type="button">-</button>
               <div id="editor-music-tempo-label" class="editor-music-tempo-label">Tempo 120</div>
-              <button id="btn-editor-music-tempo-up" class="bar-btn bar-btn-small" type="button">+</button>
+              <button id="btn-editor-music-tempo-up" aria-label="Tempo up" class="bar-btn bar-btn-small" type="button">+</button>
             </div>
             <div id="editor-music-swing-controls" class="editor-music-control-cluster editor-music-swing-controls">
-              <button id="btn-editor-music-swing-down" class="bar-btn bar-btn-small" type="button">-</button>
+              <button id="btn-editor-music-swing-down" aria-label="Less swing" class="bar-btn bar-btn-small" type="button">-</button>
               <div id="editor-music-swing-label" class="editor-music-tempo-label">Swing 50%</div>
-              <button id="btn-editor-music-swing-up" class="bar-btn bar-btn-small" type="button">+</button>
+              <button id="btn-editor-music-swing-up" aria-label="More swing" class="bar-btn bar-btn-small" type="button">+</button>
             </div>
           </div>
           <div id="editor-music-legacy-notice" class="editor-music-legacy-notice hidden">
@@ -1826,9 +1826,9 @@
 
           <div class="course-editor-toolbar">
             <div class="course-editor-zoom-row">
-              <button id="btn-course-workbench-zoom-out" class="bar-btn bar-btn-small" type="button">-</button>
+              <button id="btn-course-workbench-zoom-out" aria-label="Zoom out" class="bar-btn bar-btn-small" type="button">-</button>
               <div id="course-workbench-zoom-text" class="course-editor-zoom-text">Zoom: 0.18x</div>
-              <button id="btn-course-workbench-zoom-in" class="bar-btn bar-btn-small" type="button">+</button>
+              <button id="btn-course-workbench-zoom-in" aria-label="Zoom in" class="bar-btn bar-btn-small" type="button">+</button>
               <button id="btn-course-workbench-fit" class="bar-btn bar-btn-small" type="button">Fit</button>
             </div>
           </div>
@@ -1836,7 +1836,7 @@
           <div class="course-editor-scroll">
             <div class="about-section">
               <div class="about-section-title">Title</div>
-              <input id="course-workbench-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Expanded room title" />
+              <input id="course-workbench-title-input" aria-label="Expanded room title" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Expanded room title" />
               <label class="about-section-title" for="course-workbench-player-hearts">Player hearts</label>
               <select id="course-workbench-player-hearts" class="goal-input" aria-describedby="course-workbench-hearts-description"><option value="1">1 (default)</option><option value="2">2</option><option value="3">3</option></select>
               <p id="course-workbench-hearts-description" class="history-modal-meta">Shared across all cells. Heart pickups heal one; respawning refills them.</p>
@@ -1992,7 +1992,7 @@
         </div>
         <div id="world-selected-meta" class="world-hud-meta">No adjacent published room</div>
         <div id="world-jump-row" class="world-hud-row">
-          <input id="world-jump-input" type="text" value="0,0" spellcheck="false" />
+          <input id="world-jump-input" aria-label="Warp to room (x,y)" type="text" value="0,0" spellcheck="false" />
           <button id="btn-world-jump" class="bar-btn bar-btn-small">Warp</button>
         </div>
         <div id="world-zoom-label" class="world-hud-meta world-zoom-label">Zoom: 1x</div>
@@ -2111,7 +2111,7 @@
           <form id="chat-form" class="chat-form" autocomplete="off">
             <div id="chat-mention-menu" class="chat-mention-menu hidden" role="listbox"></div>
             <input
-              id="chat-input"
+              id="chat-input" aria-label="Chat message"
               class="chat-input"
               type="text"
               maxlength="140"
@@ -2177,8 +2177,8 @@
       </div>
       <div class="bar-right">
         <span id="room-save-status">Draft ready.</span>
-        <button id="btn-world-zoom-out-footer" class="bar-btn bar-btn-small world-btn-zoom world-only-control" type="button">-</button>
-        <button id="btn-world-zoom-in-footer" class="bar-btn bar-btn-small world-btn-zoom world-only-control" type="button">+</button>
+        <button id="btn-world-zoom-out-footer" aria-label="Zoom out" class="bar-btn bar-btn-small world-btn-zoom world-only-control" type="button">-</button>
+        <button id="btn-world-zoom-in-footer" aria-label="Zoom in" class="bar-btn bar-btn-small world-btn-zoom world-only-control" type="button">+</button>
         <button id="btn-fit-screen" class="bar-btn bar-btn-small">Fit</button>
         <span id="zoom-level">Zoom: 2x</span>
       </div>
@@ -2250,7 +2250,7 @@
         <button id="btn-mobile-world-jump-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div class="mobile-jump-sheet-form">
-        <input id="mobile-world-jump-input" class="goal-input" type="text" spellcheck="false" />
+        <input id="mobile-world-jump-input" aria-label="Warp to room (x,y)" class="goal-input" type="text" spellcheck="false" />
         <button id="btn-mobile-world-jump-go" class="bar-btn" type="button">Warp</button>
       </div>
     </div>
@@ -2912,7 +2912,7 @@
             <div id="profile-cryptopunk-unlock-meta" class="profile-cryptopunk-unlock-meta">Unlocks at Player LVL 10</div>
           </div>
           <div class="profile-cryptopunk-input-row">
-            <input id="profile-cryptopunk-input" class="goal-input profile-cryptopunk-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4156" spellcheck="false" />
+            <input id="profile-cryptopunk-input" aria-label="CryptoPunk number" class="goal-input profile-cryptopunk-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4156" spellcheck="false" />
             <button id="btn-profile-cryptopunk-action" class="bar-btn bar-btn-small" type="button">Check</button>
           </div>
           <div id="profile-cryptopunk-status" class="profile-cryptopunk-status"></div>
@@ -2936,7 +2936,7 @@
       <div class="about-copy music-phrase-save-body">
         <div class="about-section music-phrase-save-section">
           <div class="about-section-title music-phrase-save-section-title">Phrase Name</div>
-          <input id="editor-music-phrase-save-name-input" class="goal-input room-title-input" type="text" maxlength="24" placeholder="Phrase name" spellcheck="false" />
+          <input id="editor-music-phrase-save-name-input" aria-label="Phrase name" class="goal-input room-title-input" type="text" maxlength="24" placeholder="Phrase name" spellcheck="false" />
         </div>
         <div class="course-room-actions music-phrase-save-actions">
           <button id="btn-editor-music-phrase-save-cancel" class="bar-btn bar-btn-small" type="button">Cancel</button>
@@ -3451,7 +3451,7 @@
         <div class="history-modal-meta">Add or remove delegated chat admins by display name.</div>
         <form id="chat-moderation-admin-form" class="chat-moderation-form">
           <input
-            id="chat-moderation-admin-input"
+            id="chat-moderation-admin-input" aria-label="Chat admin display name"
             class="chat-moderation-input"
             type="text"
             maxlength="24"

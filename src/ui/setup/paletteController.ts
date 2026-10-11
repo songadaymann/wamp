@@ -683,12 +683,23 @@ export class PaletteController {
       const item = this.doc.createElement('div');
       item.className = 'object-item';
       item.setAttribute('aria-label', objectConfig.name);
-      if (editorState.selectedObjectId === objectConfig.id) {
+      // A div styled as a tile, so give it what a button has: focus, Enter/Space, a pressed state.
+      item.setAttribute('role', 'button');
+      item.tabIndex = 0;
+      const selected = editorState.selectedObjectId === objectConfig.id;
+      item.setAttribute('aria-pressed', String(selected));
+      if (selected) {
         item.classList.add('active');
       }
       item.dataset.objectId = objectConfig.id;
+      item.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        item.click();
+      });
 
       const img = this.doc.createElement('img');
+      img.alt = '';
       img.src = objectConfig.path;
       if (objectConfig.frameCount > 1) {
         const canvas = this.doc.createElement('canvas');
@@ -729,8 +740,12 @@ export class PaletteController {
       item.addEventListener('click', () => {
         editorState.selectedObjectId = objectConfig.id;
         editorState.objectFacing = objectConfig.facingDirection ?? 'right';
-        this.doc.querySelectorAll('.object-item').forEach((element) => element.classList.remove('active'));
+        this.doc.querySelectorAll('.object-item').forEach((element) => {
+          element.classList.remove('active');
+          element.setAttribute('aria-pressed', 'false');
+        });
         item.classList.add('active');
+        item.setAttribute('aria-pressed', 'true');
 
         editorState.activeTool = 'pencil';
         this.renderObjectSelectionDetails();
