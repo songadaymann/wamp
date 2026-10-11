@@ -32,6 +32,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: './',
+    resolve: {
+      // WAMP uses Arcade physics only; Phaser's arcade build leaves out Matter (F020).
+      alias: [{ find: /^phaser$/, replacement: 'phaser/dist/phaser-arcade-physics.js' }],
+    },
+    // Phaser repeats its licence header in every module; keep one copy at the end of each chunk.
+    esbuild: { legalComments: 'eof' },
     plugins: [
       earlyWorldTileBootstrapPlugin(roomApiBaseUrl),
       bootBundleReportPlugin(),
