@@ -205,6 +205,14 @@ export class RoomLightingController {
     );
     this.glowOverlay.clear();
 
+    // Each DynamicTexture erase/drawFrame is its own render-target capture and blit, so
+    // per-emitter calls cost two framebuffer switches each. Every light is drawn into one
+    // capture instead: erasing their combined alpha once leaves (1-a1)(1-a2)…, the same
+    // darkness as erasing them one by one.
+    // Textures are created while resolving emitters; drawing starts after, so no capture
+    // is open while a new light texture uploads.
+    const reveals: Array<{ key: string; x: number; y: number }> = [];
+    const glows: Array<{ key: string; x: number; y: number; alpha: number; tint: number }> = [];
     let glowEmitterCount = 0;
     for (const emitter of input.emitters) {
       const resolved = resolveEmitterState(
@@ -226,7 +234,7 @@ export class RoomLightingController {
       );
       const localRevealX = emitter.x - input.bounds.x - revealDiameter * 0.5;
       const localRevealY = emitter.y - input.bounds.y - revealDiameter * 0.5;
-      this.overlay.erase(auraTextureKey, localRevealX, localRevealY);
+      reveals.push({ key: auraTextureKey, x: localRevealX, y: localRevealY });
 
       if (
         typeof emitter.glowColor === 'number'
@@ -247,16 +255,19 @@ export class RoomLightingController {
         );
         const localGlowX = emitter.x - input.bounds.x - glowDiameter * 0.5;
         const localGlowY = emitter.y - input.bounds.y - glowDiameter * 0.5;
-        this.glowOverlay.drawFrame(
-          glowTextureKey,
-          undefined,
-          localGlowX,
-          localGlowY,
-          resolved.glowAlpha,
-          emitter.glowColor,
-        );
+        glows.push({ key: glowTextureKey, x: localGlowX, y: localGlowY, alpha: resolved.glowAlpha, tint: emitter.glowColor });
         glowEmitterCount += 1;
       }
+    }
+    if (reveals.length > 0) {
+      this.overlay.beginDraw();
+      for (const reveal of reveals) this.overlay.batchDrawFrame(reveal.key, undefined, reveal.x, reveal.y);
+      this.overlay.endDraw(true);
+    }
+    if (glows.length > 0) {
+      this.glowOverlay.beginDraw();
+      for (const glow of glows) this.glowOverlay.batchDrawFrame(glow.key, undefined, glow.x, glow.y, glow.alpha, glow.tint);
+      this.glowOverlay.endDraw();
     }
 
     structureChanged = this.syncAmbientOverlays(ambientBounds, ambientAlpha) || structureChanged;
