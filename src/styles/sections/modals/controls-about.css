@@ -417,3 +417,8 @@
   line-height: 1.2;
   box-shadow: 2px 2px 0 #18161c;
 }
+
+/* Touch players see their own controls first (F119). */
+body[data-coarse-pointer='true'] .controls-section-mobile {
+  order: -1;
+}

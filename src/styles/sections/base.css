@@ -1164,3 +1164,8 @@ body[data-app-mode="play-world"] #global-chat {
   width: 100vw;
   width: min(100dvw, var(--app-viewport-width));
 }
+
+/* Mouse- or keyboard-only instructions inside a hint; hidden on touch screens (F119). */
+body[data-coarse-pointer='true'] .fine-pointer-hint {
+  display: none;
+}
