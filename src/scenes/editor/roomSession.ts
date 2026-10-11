@@ -143,7 +143,8 @@ export class EditorRoomSession {
   private mintedOwnerSyncedAt: string | null = null;
   private mintedMetadataRoomVersion: number | null = null;
   private mintedMetadataUpdatedAt: string | null = null;
-  private saveInFlight = false;
+  private saveInFlightValue = false;
+  private saveSettledWaiters: Array<() => void> = [];
   private autoSaveBackoff: AutoSaveBackoff | null = null;
   // Bumped whenever the editor resets for another room. Network calls capture it before they
   // start and drop their results if it changed, so a slow save or load for the previous room
@@ -248,6 +249,34 @@ export class EditorRoomSession {
 
   get isSaveInFlight(): boolean {
     return this.saveInFlight;
+  }
+
+  private get saveInFlight(): boolean {
+    return this.saveInFlightValue;
+  }
+
+  private set saveInFlight(value: boolean) {
+    this.saveInFlightValue = value;
+    if (!value) {
+      const waiters = this.saveSettledWaiters;
+      this.saveSettledWaiters = [];
+      for (const settle of waiters) settle();
+    }
+  }
+
+  /** Resolves once no save, publish or other room write is running, or after timeoutMs. */
+  waitForSaveToSettle(timeoutMs = 20_000): Promise<void> {
+    if (!this.saveInFlight) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const settle = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(settle, timeoutMs);
+      this.saveSettledWaiters.push(settle);
+    });
   }
 
   get statusText(): string {
@@ -936,6 +965,13 @@ export class EditorRoomSession {
   }
 
   async buildReturnToWorldWakeData(): Promise<OverworldPlaySceneData | null> {
+    // Leaving during an autosave waits for it, so what happens doesn't depend on its timing.
+    const generation = this.sessionGeneration;
+    await this.waitForSaveToSettle();
+    if (this.isStale(generation) || this.editConflictPending) {
+      return null;
+    }
+
     if (!this.host.getRoomDirty()) {
       if (this.shouldShowDraftPreviewInWorld()) {
         return {
@@ -973,8 +1009,10 @@ export class EditorRoomSession {
       };
     }
 
-    const generation = this.sessionGeneration;
-    const publishedRecord = await this.publishRoom('Auto-published on exit.');
+    // A room that can't be published yet (no exit, missing enemies) is kept as a draft, and
+    // the reason goes on the world screen rather than in a dialog that closes as you leave.
+    const publishValidationError = this.host.getPublishValidationError();
+    const publishedRecord = publishValidationError ? null : await this.publishRoom('Auto-published on exit.');
     if (this.isStale(generation) || this.editConflictPending) {
       return null;
     }
@@ -1001,11 +1039,13 @@ export class EditorRoomSession {
       return null;
     }
 
-    this.setStatusText('Publish failed, draft saved instead.');
+    this.setStatusText(publishValidationError ? 'Draft saved. Not published yet.' : 'Publish failed, draft saved instead.');
     return {
       centerCoordinates: { ...this.roomCoordinates },
       roomCoordinates: { ...this.roomCoordinates },
-      statusMessage: this.DRAFT_WORLD_PREVIEW_WARNING,
+      statusMessage: publishValidationError
+        ? `Not published: ${publishValidationError} Only you can see this draft.`
+        : this.DRAFT_WORLD_PREVIEW_WARNING,
       draftRoom: cloneRoomSnapshot(draftRecord.draft),
       clearDraftRoomId: null,
       invalidateRoomId: this.roomId,
