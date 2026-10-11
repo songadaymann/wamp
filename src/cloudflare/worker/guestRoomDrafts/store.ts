@@ -35,6 +35,8 @@ interface UpsertGuestRoomDraftInput {
   recoveryTokenHash: string;
   snapshot: RoomSnapshot;
   nowIso: string;
+  /** Runs only when this save creates a new draft (not when it updates one); may throw to refuse it. */
+  beforeCreate?: () => Promise<void>;
 }
 
 export async function upsertGuestRoomDraft(
@@ -98,6 +100,7 @@ export async function upsertGuestRoomDraft(
       }
     });
   } else {
+    await input.beforeCreate?.();
     await env.DB.batch([
       env.DB.prepare(
         `
