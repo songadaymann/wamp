@@ -107,7 +107,7 @@ export class OverworldRoomMusicPlaybackController {
     const crossedRoom = this.lastCoordinates !== null && (
       this.lastCoordinates.x !== input.currentRoomCoordinates.x || this.lastCoordinates.y !== input.currentRoomCoordinates.y
     );
-    this.lastCoordinates = { ...input.currentRoomCoordinates };
+    if (this.lastCoordinates === null || crossedRoom) this.lastCoordinates = { ...input.currentRoomCoordinates };
     const playbackTarget = this.resolvePlaybackTarget(currentRoom, input.activeCourseRun);
     const metadata = this.getMusicMetadata(playbackTarget.music, playbackTarget.sourceRevision);
     if (

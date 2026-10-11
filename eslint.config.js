@@ -4,12 +4,12 @@ import tseslint from 'typescript-eslint';
 // 2026-10-11 so they can shrink but not grow; lower a number when you split a file (F067).
 const MAX_LINES = 1500;
 const OVERSIZED_FILE_LINES = {
-  'src/scenes/OverworldPlayScene.ts': 6444,
+  'src/scenes/OverworldPlayScene.ts': 6443,
   'src/scenes/overworld/worldStreaming.ts': 5789,
   'src/scenes/CourseEditorScene.ts': 3467,
   'src/scenes/editor/editRuntime.ts': 3292,
   'src/scenes/overworld/liveObjects/swordsmanController.ts': 2608,
-  'src/scenes/overworld/liveObjects.ts': 2354,
+  'src/scenes/overworld/liveObjects.ts': 2345,
   'src/scenes/editor/uiBridge.ts': 2297,
   'src/scenes/EditorScene.ts': 2041,
   'src/scenes/overworld/worldTiles/controller.ts': 1980,

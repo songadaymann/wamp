@@ -71,3 +71,21 @@ describe('fog drawn as pooled images (F004)', () => {
     expect(controller.getBackdropIgnoredObjects()).toEqual([]);
   });
 });
+
+describe('weather off path (F012)', () => {
+  it('skips the work once nothing is drawn for the room, and still starts weather when it changes', () => {
+    const h = fakeScene();
+    const controller = new RoomWeatherController({ scene: h.scene as never, depth: 34 });
+    const off = { mode: 'off', intensity: 50 } as const;
+    expect(controller.sync({ roomId: '3,-2', bounds, weather: off })).toBe(false);
+    const debug = controller.getDebugState();
+    for (let frame = 0; frame < 3; frame += 1) controller.sync({ roomId: '3,-2', bounds, weather: off });
+    expect(controller.getDebugState()).toEqual(debug);
+    expect(h.scene.add.graphics).not.toHaveBeenCalled();
+    // Another room, or weather turning on, takes the full path.
+    controller.sync({ roomId: '4,-2', bounds, weather: off });
+    expect(controller.getDebugState().activeRoomId).toBe('4,-2');
+    expect(controller.sync({ roomId: '4,-2', bounds, weather: { mode: 'fog', intensity: 50 } })).toBe(true);
+    expect(controller.getDebugState().rendererPath).toBe('graphics');
+  });
+});
