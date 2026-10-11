@@ -98,7 +98,7 @@ import {
   COURSE_COMPOSER_STATE_CHANGED_EVENT,
   type MobilePortraitCameraTuningAdjustment,
   type MobilePortraitCameraTuningInput,
-  type MobilePortraitCameraTuningSnapshot,
+  type MobilePortraitCameraTuningSnapshot, type OverworldSceneBridge,
 } from '../ui/setup/sceneBridge';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../auth/client';
 import { createRunRepository } from '../runs/runRepository';
@@ -365,7 +365,7 @@ export interface OverworldRuntimeTransitionProbe {
   } | null;
 }
 
-export class OverworldPlayScene extends Phaser.Scene {
+export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBridge {
   private readonly PLAYER_SPEED = 150;
   private readonly JUMP_VELOCITY = -280;
   private readonly GRAVITY = 700;

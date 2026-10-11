@@ -100,7 +100,7 @@ import { getAppFeedbackDebugState, hideBusyOverlay, showBusyError, showBusyOverl
 import { isNativeTextEditingFocused, isTextInputFocused } from '../ui/keyboardFocus';
 import { requestSignTextEdit } from '../signs/events';
 import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../signs/model';
-import type { EditorCourseUiState, EditorMarkerPlacementMode } from '../ui/setup/sceneBridge';
+import type { EditorCourseUiState, EditorMarkerPlacementMode, EditorSceneBridge } from '../ui/setup/sceneBridge';
 import { EditorUiBridge } from './editor/uiBridge';
 import { drawDeadlyPitBoundary, drawEditorGrid } from './editor/grid';
 import {
@@ -224,7 +224,7 @@ interface CourseRoomSlice {
   runtime: EditorEditRuntime;
 }
 
-export class CourseEditorScene extends Phaser.Scene {
+export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge {
   private readonly draftBackup = new CourseDraftBackupController();
   private readonly backupDebouncer = new DraftBackupDebouncer(() => this.flushDraftBackup());
   private draftLifecycle: EditorDraftLifecycle | null = null;
