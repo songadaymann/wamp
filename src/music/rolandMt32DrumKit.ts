@@ -151,6 +151,22 @@ function applyVariant(
   }
 }
 
+// Rows that share a file (two kick variants) download it once, even when requested together.
+const sampleBytesCache = new Map<string, Promise<ArrayBuffer>>();
+
+function loadSampleBytes(assetPath: string): Promise<ArrayBuffer> {
+  let bytes = sampleBytesCache.get(assetPath);
+  if (!bytes) {
+    bytes = fetch(resolveAssetUrl(assetPath)).then((response) => {
+      if (!response.ok) throw new Error(`Failed to load ${assetPath}: ${response.status}`);
+      return response.arrayBuffer();
+    });
+    bytes.catch(() => sampleBytesCache.delete(assetPath));
+    sampleBytesCache.set(assetPath, bytes);
+  }
+  return bytes;
+}
+
 export async function loadRolandMt32DrumSample(
   audioContext: AudioContext,
   rowId: RoomPatternDrumRowId,
@@ -162,12 +178,8 @@ export async function loadRolandMt32DrumSample(
     return cached;
   }
 
-  const samplePromise = fetch(resolveAssetUrl(config.assetPath))
-    .then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`Failed to load ${config.assetPath}: ${response.status}`);
-      }
-      const audioData = await response.arrayBuffer();
+  const samplePromise = loadSampleBytes(config.assetPath)
+    .then(async (audioData) => {
       const decoded = await audioContext.decodeAudioData(audioData.slice(0));
       const mono = mixAudioBufferToMono(decoded);
       const trimmed = trimSilence(mono);
