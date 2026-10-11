@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { hasBlockingModalOpen } from '../../ui/modalState';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import {
   type BrowseRoomCommentPreview,
@@ -1540,11 +1541,7 @@ export class OverworldRoomCommentsController {
   }
 
   private hasBlockingModalOpen(): boolean {
-    const doc = this.options.document ?? document;
-    return Array.from(doc.querySelectorAll<HTMLElement>('.history-modal')).some((element) =>
-      !element.classList.contains('hidden')
-      && element.getAttribute('aria-hidden') !== 'true'
-    );
+    return hasBlockingModalOpen(this.options.document ?? document);
   }
 
   private syncRenderedComments(room: RoomSnapshot | null): void {

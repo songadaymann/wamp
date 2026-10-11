@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { hasBlockingModalOpen } from '../../ui/modalState';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import { getGameSettings } from '../../settings/userSettings';
 import type { RoomCoordinates } from '../../persistence/roomModel';
@@ -113,7 +114,8 @@ export class OverworldInspectInputController {
   };
 
   private readonly handleReturnToWorldKeydown = (): void => {
-    if (this.host.getMode() === 'play') {
+    // P (and Escape) leave the room only when no dialog is open.
+    if (this.host.getMode() === 'play' && !hasBlockingModalOpen()) {
       this.host.returnToWorld();
     }
   };
