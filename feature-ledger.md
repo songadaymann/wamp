@@ -1,3 +1,7 @@
+## 2026-10-10 — F030 compact world reads survive transient errors
+
+PR #116 / `5ef28c36` is merged (Pages auto-build) and the API Worker is deployed (`8ba8d713`). Only a disabled compact route switches a session to legacy chunks; blips retry compact reads on the next refresh, and the legacy route shares the 20 s anonymous edge cache. Master **81/215**. Receipt: [compact breaker](docs/review/wamp-compact-breaker-2026-10-10.md).
+
 ## 2026-10-10 — F026 leaderboards from stored version facts
 
 PR #115 / `a8297e66` is merged, migration 0064 is applied and the API Worker is deployed (`365e0263`). The spawn room's leaderboard reads per-version facts instead of 176 snapshots: `room_record` ~25 ms after the first fill (was 0.16-3.7 s), TTFB ~0.12 s. Master **80/215**. Receipt: [version facts](docs/review/wamp-version-facts-2026-10-10.md).

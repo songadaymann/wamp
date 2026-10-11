@@ -1169,6 +1169,8 @@ Changes to the suggested fix:
 
 **Fix (3), dashboard stats caching.** Fine, but it is a separate low-impact item: only the standalone dashboard page calls it.
 
+**2026-10-10 completed.** PR #116 / `5ef28c36`, API Worker `8ba8d713`. The client breaker trips only on a 404 (the server returns 404 when compact reads are disabled); a 5xx or network error loads that window once from legacy chunks and the next refresh tries compact reads again, and refreshes now try compact reads whenever they are not disabled, so a session that fell back recovers. Snapshot-query failures no longer touch the breaker. `/api/world/chunks` now uses the same 20 s anonymous edge cache and `Cache-Control` as the compact route (signed-in reads stay private). Browser check with one injected 503: `summary:503`, `legacy:200` for that window, then `summary:200` at 4 s, 19 s and 34 s, world rendered, no page errors. Not done: retiring or capping the legacy route, fallback telemetry, and caching `/api/dashboard/stats`. Receipt: `wamp-compact-breaker-2026-10-10.md`.
+
 ### F029: Finishing a run makes about 30 database round trips in a row before the player sees a result
 
 - **Area:** Backend performance, cost & reliability
