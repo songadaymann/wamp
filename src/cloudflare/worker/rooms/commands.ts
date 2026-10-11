@@ -71,7 +71,7 @@ export async function saveDraftFromCommandRequest(
   base.id = roomId;
   base.coordinates = { ...coordinates };
   const applied = applyRoomDraftCommands(base, requestBody.commands);
-  const record = await saveDraft(env, applied.snapshot, actor, actorIsAdmin, options);
+  const record = await saveDraft(env, applied.snapshot, actor, actorIsAdmin, { ...options, loadedRecord: existing });
   const persistedIds = new Set(record.draft.placedObjects.map((placed) => placed.instanceId));
   return {
     record,
