@@ -343,15 +343,16 @@ async function handleAdminRoomClear(
   ];
 
   if (attemptIds.length > 0) {
-    const placeholders = attemptIds.map(() => '?').join(', ');
+    // One JSON parameter, not one per run: D1 allows 100 bound parameters, so a busy room's
+    // clear used to fail as a whole (F205).
     statements.push(
       env.DB.prepare(
         `
           DELETE FROM point_events
           WHERE event_type = 'run_finalized'
-            AND source_key IN (${placeholders})
+            AND source_key IN (SELECT value FROM json_each(?))
         `
-      ).bind(...attemptIds)
+      ).bind(JSON.stringify(attemptIds))
     );
   }
 
