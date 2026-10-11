@@ -1206,6 +1206,27 @@ handleRunFinish runs these in sequence: auth (3 queries), the leaderboard write 
 
 1) The ~30 count is too low. Including syncUserBadges (twice), the lane-event dedupe SELECT plus INSERT pairs, and persistProgressIncrement, it is roughly 60 to 100 sequential D1 round trips when finishing someone else's room. syncUserBadges is the biggest single cost and should be in the fix: defer it, or make it event-driven. 2) "The client already re-reads the profile for reward stings" is wrong. After finishRun, goalRuns.ts:1100 re-reads the ROOM LEADERBOARD. That still makes the deferral safe, because rank depends only on the room_runs UPDATE, which stays synchronous. 3) "Pass ctx as the course routes do" is only half right. Course publish and unpublish receive ctx (worker.ts:640-648), but /api/course-runs/:id/finish (worker.ts:671) and /api/expanded-room-runs/:id/finish (worker.ts:661-666) don't. Those handlers repeat the same sequential upsertUserStats/award pattern (courses/routes.ts:637-649, expandedRooms/runRoutes.ts:578-581), so the fix should cover all three. 4) The missing index is on room_versions(published_by_user_id). It is a cheap migration to add alongside the change.
 
+**2026-10-10 completed.** PR #123 / `e0cf72fe`, API Worker `fdf05d00`.
+
+`handleRunFinish`, `handleCourseRunFinish` and `handleExpandedRoomRunFinish` reply (204) after:
+- the run row is updated, verified and ranked;
+- the personal-best ghost is saved;
+- the first-clear and personal-best flags are computed.
+
+New `scheduleRunRewards` (`runs/deferredRewards.ts`) runs the rest in `ctx.waitUntil`, in the original order: finalize points, creator points and stats, run progression (XP, rank XP, trust, creator BXP, badges), activity emails, then the player's stats. A failure is logged as `run-rewards-failed` with the attempt id; the finish is already saved. New `awardRunDailyClear` awards and persists the daily-room clear before the reply, because the daily panel re-reads `daily_clear` right after a first clear.
+
+Measured on the real schema, a first clear that takes #1 in someone else's room: 138 sequential D1 round trips before the reply → 36.
+
+Test: `runs/finishDeferral.test.ts` covers the reply before rewards, the daily clear before the reply, all rewards afterwards with `total_pxp` equal to the event sum, and a deferred failure logged with the 204 kept. Both tests fail on the previous code.
+
+Production: deployed at 02:28 UTC. No room, course or Expanded Room run finished between then and 03:25 UTC; finishes come mostly between 12:00 and 22:00 UTC. The first real finishes after deploy are still to be checked.
+
+Not done:
+- cheaper rewards work: `upsertUserStats` as one SQL aggregate, ranks with the ranked CTE instead of loading every completed run, fewer progress and trophy reloads;
+- the `room_versions(published_by_user_id)` index.
+
+Receipt: `wamp-finish-rewards-2026-10-10.md`.
+
 ### F236: Every room save depends on a live Base RPC call, and an RPC hiccup blocks saving in every room
 
 - **Area:** Room ownership, NFT minting and wallet flow

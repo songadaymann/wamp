@@ -1,3 +1,7 @@
+## 2026-10-10 — F029 run finishes reply before computing rewards
+
+PR #123 / `e0cf72fe` (API Worker `fdf05d00`): finishing a room, course or Expanded Room run replies once the run is recorded and ranked; points, XP, creator rewards, stats, badges and emails follow in the background. A first clear that takes #1 went from 138 sequential database round trips before the reply to 36. Master **100/215**. Receipt: [finish rewards](docs/review/wamp-finish-rewards-2026-10-10.md).
+
 ## 2026-10-10 — F101 zero-size embeds, F121 phone labels, F140 touch stomp, F039 outbox check
 
 PR #129 / `7adcc0fc`: the game boots inside an embed that starts hidden or 0×0 instead of hanging on Loading, and the phone More+ labels are centred. PR #130 / `0107ad2b`: on touch, a butt stomp needs a fresh downward push in mid-air, so walking off ledges or dropping through platforms with the stick held no longer stomps (or breaks puzzle crates). PR #131 / `90dc6ee0` (API Worker `1937c469`): the world-tile outbox check runs only after writes that can queue tiles. Master **99/215**. Receipt: [small fixes](docs/review/wamp-small-fixes-2026-10-10.md).
