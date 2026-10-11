@@ -166,6 +166,7 @@ export class EditorSceneFlowController {
   async returnToWorld(): Promise<void> {
     showBusyOverlay('Returning to world...', 'Saving room state...');
     if (isWorldSeedEditorRoom(this.roomSession.currentRoomId)) {
+      await this.roomSession.waitForSaveToSettle();
       const saved = this.host.getRoomDirty() ? await this.host.saveDraft(true) : true;
       if (!saved) {
         showBusyError(this.host.getPersistenceStatusText() || 'Failed to save the World seed draft.', {

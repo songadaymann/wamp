@@ -339,7 +339,7 @@ describe('edits made while a room save or publish is pending', () => {
     vi.unstubAllGlobals();
   });
 
-  async function openedEditor() {
+  async function openedEditor(publishValidationError: string | null = null) {
     const record = createDefaultRoomRecord(roomId, coordinates);
     record.draft.updatedAt = baselineAt;
     record.draft.title = 'Original title';
@@ -359,7 +359,7 @@ describe('edits made while a room save or publish is pending', () => {
     const session: EditorRoomSession = new EditorRoomSession(repository, {
       applyRoomSnapshot: (room) => { snapshot = cloneRoomSnapshot(room); },
       exportRoomSnapshot: () => ({ ...cloneRoomSnapshot(snapshot), title: session.currentRoomTitle }),
-      getPublishValidationError: () => null, getRoomDirty: () => dirty,
+      getPublishValidationError: () => publishValidationError, getRoomDirty: () => dirty,
       setRoomDirty: (value) => { dirty = value; }, getLastDirtyAt: () => lastDirtyAt,
       refreshUi: vi.fn(), refreshSurroundingRoomPreviews: vi.fn(),
     });
@@ -369,7 +369,7 @@ describe('edits made while a room save or publish is pending', () => {
     dirty = true;
     const saved = { ...record, draft: { ...cloneRoomSnapshot(record.draft), updatedAt: responseAt } };
     return {
-      session, response, saved, publish, isDirty: () => dirty,
+      session, response, saved, publish, saveDraft, isDirty: () => dirty,
       editLater: () => {
         session.currentRoomTitle = 'Later title';
         snapshot.tileData.terrain[9][9] = 33;
@@ -401,6 +401,34 @@ describe('edits made while a room save or publish is pending', () => {
     expect(await pending).toBe(saved);
     expect(isDirty()).toBe(true);
     expectLaterBackup(session);
+  });
+
+  it('leaving while an autosave is uploading waits for it instead of reporting a failure (F056)', async () => {
+    const { session, response, saved, publish } = await openedEditor();
+    const autosave = session.saveDraft();
+    const leaving = session.buildReturnToWorldWakeData();
+    await Promise.resolve();
+    expect(publish).not.toHaveBeenCalled();
+    response.resolve(saved);
+    await autosave;
+    const wake = await leaving;
+    expect(wake?.statusMessage).toBe('Only you can see this draft preview. Publish to make it public.');
+    expect(wake?.draftRoom).toBeTruthy();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('leaving a room that cannot be published keeps a draft and says why on the world screen (F056)', async () => {
+    const reason = 'Reach Exit needs an exit marker. Choose Set Exit and place it in the room.';
+    const { session, response, saved, publish, saveDraft } = await openedEditor(reason);
+    vi.mocked(showBusyError).mockClear();
+    const leaving = session.buildReturnToWorldWakeData();
+    await vi.waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
+    response.resolve(saved);
+    const wake = await leaving;
+    expect(publish).not.toHaveBeenCalled();
+    expect(showBusyError).not.toHaveBeenCalled();
+    expect(wake?.statusMessage).toBe(`Not published: ${reason} Only you can see this draft.`);
+    expect(wake?.draftRoom).toBeTruthy();
   });
 
   it('preserves edits made during the auth refresh after publishing', async () => {

@@ -133,6 +133,7 @@ function createHarness(options: {
   };
   const roomSession = {
     currentRoomId: DEFAULT_ROOM_ID,
+    waitForSaveToSettle: vi.fn(async () => {}),
     buildReturnToWorldWakeData: vi.fn(async () => (
       options.returnFailure ? null : { ...wakeData }
     )),
