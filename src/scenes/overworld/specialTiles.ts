@@ -25,6 +25,7 @@ import { buildRoomSnapshotTexture } from '../../visuals/roomSnapshotTexture';
 import type { SfxCue } from '../../audio/sfx';
 import type { OverworldMode } from '../sceneData';
 import { getTerrainTileCollisionProfile } from './terrainCollision';
+import { roomHasSpecialTiles } from './specialTileRooms';
 import type { LoadedFullRoom } from './worldStreaming';
 import { OverworldCrumblingTilesController, type CrumblingTileAddress } from './crumblingTiles';
 
@@ -683,7 +684,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     const coordinates = this.host.getRoomCoordinatesForPoint(worldX, worldY);
     const roomId = roomIdFromCoordinates(coordinates);
     const loadedRoom = this.host.getLoadedFullRoomById(roomId);
-    if (!loadedRoom) {
+    if (!loadedRoom || !roomHasSpecialTiles(loadedRoom.room.tileData)) {
       return [];
     }
 
@@ -705,6 +706,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   }): Array<SpecialTileMatch<TLiveObject, TEdgeWall>> {
     const matches: Array<SpecialTileMatch<TLiveObject, TEdgeWall>> = [];
     for (const loadedRoom of this.host.getLoadedFullRooms()) {
+      if (!roomHasSpecialTiles(loadedRoom.room.tileData)) continue;
       const origin = this.host.getRoomOrigin(loadedRoom.room.coordinates);
       const roomLeft = origin.x;
       const roomTop = origin.y;
