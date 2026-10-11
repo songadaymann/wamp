@@ -67,7 +67,7 @@ export type SfxCue =
 type SfxHistoryEntry = {
   cue: SfxCue;
   at: number;
-  status: 'played' | 'blocked' | 'missing' | 'cooldown' | 'capped' | 'error';
+  status: 'played' | 'blocked' | 'missing' | 'cooldown' | 'capped' | 'late' | 'error';
 };
 
 type SfxPlayErrorDebugEntry = {
@@ -82,18 +82,44 @@ type SfxPlayErrorDebugEntry = {
 // Music already runs through its own master gain, so SFX need a shared trim to
 // stop common gameplay cues from sitting on top of the room mix.
 const GLOBAL_SFX_VOLUME_MULTIPLIER = 0.55;
-const MAX_SFX_MEDIA_PLAYERS = 64;
+/** Effects sounding at once; a cue past this is skipped. */
+const MAX_SFX_VOICES = 48;
 // Played most in the first seconds of a run; loaded right after the first gesture (F023).
 const HOT_GAMEPLAY_CUES: readonly SfxCue[] = ['jump', 'land', 'footstep', 'collect', 'player-hurt'];
+/** The other short effects load in the background after that; the large progression stingers load when first played. */
+const BACKGROUND_WARM_DELAY_MS = 1_500;
+/**
+ * A cue that waits for its sound to load or for the audio context to start plays once ready,
+ * unless it would land too late to match the action. Movement, hit and click feedback must
+ * be on time; a fanfare can arrive a moment late.
+ */
+const FEEDBACK_CUE_MAX_DELAY_MS = 120;
+const DEFAULT_CUE_MAX_DELAY_MS = 1_500;
+const MAX_PENDING_CUES = 16;
+const FEEDBACK_CUES: ReadonlySet<SfxCue> = new Set<SfxCue>([
+  'ui-click', 'ui-hover', 'ui-disabled', 'collect', 'collect-fruit', 'collect-gem', 'collect-key',
+  'enemy-kill', 'enemy-hit', 'player-hurt', 'sword-slash', 'gun-shot', 'bullet-impact', 'bounce',
+  'jump', 'land', 'footstep', 'ladder-climb', 'pressure-plate-down', 'switch-block-toggle',
+  'chat-send', 'music-slot-clear', 'music-slot-clear-all', 'music-phrase-place',
+]);
 
-type SfxAudioRoute = 'direct' | 'low-pass';
+type SfxBuffer = {
+  status: 'loading' | 'ready' | 'failed';
+  buffer: AudioBuffer | null;
+  loaded: Promise<void>;
+};
 
-type SfxAudioPlayer = {
-  audio: HTMLAudioElement;
-  route: SfxAudioRoute;
-  poolKey: string;
-  mediaSourceNode: MediaElementAudioSourceNode | null;
-  filterNode: BiquadFilterNode | null;
+type SfxVoice = {
+  cue: SfxCue;
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+  filter: BiquadFilterNode | null;
+};
+
+type PendingCue = {
+  cue: SfxCue;
+  options: SfxPlaybackOptions | undefined;
+  requestedAt: number;
 };
 
 declare global {
@@ -339,12 +365,20 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
   },
 };
 
-function resolveAssetUrl(path: string): string {
+/**
+ * The files to try for a cue: the compressed format this browser reports first, then the
+ * other one, then the original WAV. A browser can claim a format its audio decoder lacks.
+ */
+function resolveAssetUrls(path: string): string[] {
   const base = import.meta.env.BASE_URL || '/';
-  const compressedPath = path.endsWith('.wav')
-    ? path.replace(/\.wav$/, resolveCompressedSfxExtension())
-    : path;
-  return resolveSfxAssetUrl(compressedPath, base, window.location.href);
+  if (!path.endsWith('.wav')) {
+    return [resolveSfxAssetUrl(path, base, window.location.href)];
+  }
+  const preferred = resolveCompressedSfxExtension();
+  const fallback = preferred === '.ogg' ? '.m4a' : '.ogg';
+  return [preferred, fallback, '.wav'].map((extension) =>
+    resolveSfxAssetUrl(path.replace(/\.wav$/, extension), base, window.location.href)
+  );
 }
 
 function resolveCompressedSfxExtension(): '.ogg' | '.m4a' {
@@ -352,17 +386,23 @@ function resolveCompressedSfxExtension(): '.ogg' | '.m4a' {
   return audio.canPlayType('audio/ogg; codecs="vorbis"') ? '.ogg' : '.m4a';
 }
 
+/**
+ * Effects play from decoded buffers on the shared Web Audio context, not from <audio>
+ * elements. On iPhone a playing <audio> element switches the page to media playback, which
+ * ignores the silent switch for music too (F229), and media elements start noticeably late
+ * (F023). Buffers start within the context's output latency and follow the audio session.
+ */
 export class SfxController {
   private muted = false;
   private initialized = false;
-  private readonly assetUrlByPath = new Map<string, string>();
-  private readonly idleAudioByPoolKey = new Map<string, SfxAudioPlayer[]>();
-  private readonly audioPlayerByElement = new Map<HTMLAudioElement, SfxAudioPlayer>();
-  private readonly activeAudio = new Set<HTMLAudioElement>();
-  private readonly activeAudioByCue = new Map<SfxCue, Set<HTMLAudioElement>>();
-  private readonly cleanupByAudio = new Map<HTMLAudioElement, () => void>();
-  private readonly baseVolumeByAudio = new Map<HTMLAudioElement, number>();
-  private readonly activeCueCounts = new Map<SfxCue, number>();
+  private readonly assetUrlsByPath = new Map<string, string[]>();
+  private readonly buffers = new Map<string, SfxBuffer>();
+  private readonly voices = new Set<SfxVoice>();
+  private readonly voicesByCue = new Map<SfxCue, Set<SfxVoice>>();
+  private pending: PendingCue[] = [];
+  private output: GainNode | null = null;
+  /** Which of a cue's formats last decoded here; later loads try it first. */
+  private formatIndex = 0;
   private readonly lastPlayedAt = new Map<SfxCue, number>();
   private readonly history: SfxHistoryEntry[] = [];
   private lastPlayError: SfxPlayErrorDebugEntry | null = null;
@@ -379,17 +419,22 @@ export class SfxController {
     this.engine.init(windowObj);
     // Hidden pages drop their effects rather than replaying them on return.
     this.engine.onHidden(() => {
-      for (const cue of [...this.activeAudioByCue.keys()]) this.stop(cue);
+      this.pending = [];
+      for (const cue of [...this.voicesByCue.keys()]) this.stop(cue);
+    });
+    this.engine.onStateChange((state) => {
+      if (state === 'running') this.flushPending();
     });
     // Just after the first gesture (not inside it), load the hot gameplay cues so the first
-    // jump or pickup doesn't wait for its file to download.
+    // jump or pickup doesn't wait for its file to download, then the other short effects.
     this.engine.onFirstInteraction(() => {
       windowObj.setTimeout(() => this.warmCues(HOT_GAMEPLAY_CUES), 0);
+      windowObj.setTimeout(() => this.warmRemainingCues(), BACKGROUND_WARM_DELAY_MS);
     });
 
     for (const config of Object.values(SFX_CUES)) {
-      if (!this.assetUrlByPath.has(config.path)) {
-        this.assetUrlByPath.set(config.path, resolveAssetUrl(config.path));
+      if (!this.assetUrlsByPath.has(config.path)) {
+        this.assetUrlsByPath.set(config.path, resolveAssetUrls(config.path));
       }
     }
 
@@ -401,13 +446,19 @@ export class SfxController {
     }
   }
 
-  /** Creates (and starts loading) one idle direct-route player per cue that has none yet. */
   private warmCues(cues: readonly SfxCue[]): void {
     for (const cue of cues) {
       const config = SFX_CUES[cue];
-      if (!config || this.idleAudioByPoolKey.get(getAudioPoolKey(config.path, 'direct'))?.length) continue;
-      const audioPlayer = this.acquireAudioPlayer(config.path, 'direct');
-      if (audioPlayer) this.releaseAudioPlayer(audioPlayer);
+      if (config) this.loadBuffer(config.path);
+    }
+  }
+
+  /** One file at a time, so background loading never competes with a cue that is needed now. */
+  private warmRemainingCues(): void {
+    const paths = new Set(Object.values(SFX_CUES).map((config) => config.path).filter((path) => !path.endsWith('.mp3')));
+    let chain = Promise.resolve();
+    for (const path of paths) {
+      chain = chain.then(() => this.loadBuffer(path)?.loaded);
     }
   }
 
@@ -426,35 +477,27 @@ export class SfxController {
     }
 
     this.volume = nextVolume;
-    for (const player of this.activeAudio) {
-      const baseVolume = this.baseVolumeByAudio.get(player) ?? 0;
-      player.volume = PhaserClamp(baseVolume * this.volume, 0, 1);
+    if (this.output) {
+      this.output.gain.value = this.volume;
     }
   }
 
   getDebugState(): Record<string, unknown> {
+    const bufferCounts = { ready: 0, loading: 0, failed: 0 };
+    for (const entry of this.buffers.values()) bufferCounts[entry.status] += 1;
     return {
       initialized: this.initialized,
       muted: this.muted,
       volume: this.volume,
       ...this.engine.getDebugState(),
       lastPlayError: this.lastPlayError,
-      mediaPlayerPool: {
-        cap: MAX_SFX_MEDIA_PLAYERS,
-        total: this.audioPlayerByElement.size,
-        active: this.activeAudio.size,
-        idle: this.countIdleAudioPlayers(),
-        idlePools: [...this.idleAudioByPoolKey.entries()]
-          .filter(([, players]) => players.length > 0)
-          .map(([poolKey, players]) => ({
-            poolKey,
-            count: players.length,
-          })),
-      },
-      activeCount: this.activeAudio.size,
-      activeCues: [...this.activeAudioByCue.entries()].map(([cue, players]) => ({
+      voices: { cap: MAX_SFX_VOICES, active: this.voices.size },
+      buffers: bufferCounts,
+      pendingCount: this.pending.length,
+      activeCount: this.voices.size,
+      activeCues: [...this.voicesByCue.entries()].map(([cue, voices]) => ({
         cue,
-        count: players.size,
+        count: voices.size,
       })),
       history: [...this.history],
     };
@@ -489,177 +532,226 @@ export class SfxController {
       return;
     }
 
-    if (!this.assetUrlByPath.has(config.path)) {
+    if (!this.assetUrlsByPath.has(config.path)) {
       this.record(cue, 'missing');
       return;
     }
 
-    if (config.allowOverlap === false && (this.activeCueCounts.get(cue) ?? 0) > 0) {
+    if (config.allowOverlap === false && this.isCueActiveOrPending(cue)) {
       this.record(cue, 'cooldown');
       return;
     }
 
-    const route: SfxAudioRoute = (playbackOptions?.lowPassFrequencyHz ?? 0) > 0 ? 'low-pass' : 'direct';
-    const audioPlayer = this.acquireAudioPlayer(config.path, route);
-    if (!audioPlayer) {
+    // Browsers refuse sound before the first gesture; don't start a context for it.
+    const context = this.engine.userInteracted ? this.engine.getContext() : null;
+    if (!context) {
+      this.record(cue, 'blocked');
+      return;
+    }
+
+    const entry = this.loadBuffer(config.path);
+    if (!entry || entry.status === 'failed') {
+      this.record(cue, 'error');
+      return;
+    }
+
+    if (entry.status === 'ready' && entry.buffer && context.state === 'running') {
+      this.startVoice(cue, playbackOptions, entry.buffer, context);
+      return;
+    }
+
+    // Wait for the file or for the context to start, then play if it is still on time.
+    if (context.state !== 'running') {
+      void this.engine.resume('sfx');
+    }
+    if (this.pending.length >= MAX_PENDING_CUES) {
+      this.record(cue, 'capped');
+      return;
+    }
+    this.pending.push({ cue, options: playbackOptions, requestedAt: now });
+  }
+
+  stop(cue: SfxCue): void {
+    this.pending = this.pending.filter((item) => item.cue !== cue);
+    const cueVoices = this.voicesByCue.get(cue);
+    if (!cueVoices) {
+      return;
+    }
+
+    for (const voice of [...cueVoices]) {
+      try {
+        voice.source.stop();
+      } catch {
+        void 0;
+      }
+      this.finishVoice(voice);
+    }
+  }
+
+  private isCueActiveOrPending(cue: SfxCue): boolean {
+    return (this.voicesByCue.get(cue)?.size ?? 0) > 0 || this.pending.some((item) => item.cue === cue);
+  }
+
+  private loadBuffer(path: string): SfxBuffer | null {
+    const existing = this.buffers.get(path);
+    if (existing) {
+      return existing;
+    }
+
+    const urls = this.assetUrlsByPath.get(path);
+    const context = this.engine.getContext();
+    if (!urls || !context) {
+      return null;
+    }
+
+    const entry: SfxBuffer = { status: 'loading', buffer: null, loaded: Promise.resolve() };
+    const formatIndex = Math.min(this.formatIndex, urls.length - 1);
+    const ordered = [urls[formatIndex], ...urls.filter((_, index) => index !== formatIndex)];
+    entry.loaded = fetchAndDecode(context, ordered).then(
+      ({ buffer, url }) => {
+        if (urls.length > 1) this.formatIndex = urls.indexOf(url);
+        entry.status = 'ready';
+        entry.buffer = buffer;
+        this.flushPending();
+      },
+      () => {
+        entry.status = 'failed';
+        this.flushPending();
+      }
+    );
+    this.buffers.set(path, entry);
+    return entry;
+  }
+
+  /** Starts waiting cues that are ready, drops ones that would now be late. */
+  private flushPending(): void {
+    if (this.pending.length === 0) {
+      return;
+    }
+
+    const context = this.engine.peekContext();
+    const now = performance.now();
+    const waiting: PendingCue[] = [];
+    for (const item of this.pending) {
+      const entry = this.buffers.get(SFX_CUES[item.cue].path);
+      const maxDelayMs = FEEDBACK_CUES.has(item.cue) ? FEEDBACK_CUE_MAX_DELAY_MS : DEFAULT_CUE_MAX_DELAY_MS;
+      if (!entry || entry.status === 'failed') {
+        this.record(item.cue, 'error');
+      } else if (now - item.requestedAt > maxDelayMs) {
+        this.record(item.cue, 'late');
+      } else if (entry.status === 'ready' && entry.buffer && context?.state === 'running') {
+        this.startVoice(item.cue, item.options, entry.buffer, context);
+      } else {
+        waiting.push(item);
+      }
+    }
+    this.pending = waiting;
+  }
+
+  private startVoice(
+    cue: SfxCue,
+    playbackOptions: SfxPlaybackOptions | undefined,
+    buffer: AudioBuffer,
+    context: AudioContext
+  ): void {
+    if (this.voices.size >= MAX_SFX_VOICES) {
       this.record(cue, 'capped');
       return;
     }
 
-    const player = audioPlayer.audio;
+    const config = SFX_CUES[cue];
     const baseVolume = PhaserClamp(
       config.volume * GLOBAL_SFX_VOLUME_MULTIPLIER * Math.max(0, playbackOptions?.volumeMultiplier ?? 1),
       0,
       1
     );
-    this.baseVolumeByAudio.set(player, baseVolume);
-    player.volume = PhaserClamp(baseVolume * this.volume, 0, 1);
-    player.playbackRate = PhaserClamp(
-      (config.playbackRate ?? 1) * Math.max(0.05, playbackOptions?.playbackRateMultiplier ?? 1),
-      0.05,
-      4
-    );
-    resetAudioPlayerCurrentTime(player);
-    player.loop = Boolean(config.loop);
-
+    let voice: SfxVoice | null = null;
     try {
-      if (route === 'low-pass' || audioPlayer.mediaSourceNode) {
-        this.connectRoutedPlayback(audioPlayer, playbackOptions, route);
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.loop = Boolean(config.loop);
+      source.playbackRate.value = PhaserClamp(
+        (config.playbackRate ?? 1) * Math.max(0.05, playbackOptions?.playbackRateMultiplier ?? 1),
+        0.05,
+        4
+      );
+      const gain = context.createGain();
+      gain.gain.value = baseVolume;
+      let filter: BiquadFilterNode | null = null;
+      const lowPassFrequencyHz = playbackOptions?.lowPassFrequencyHz ?? 0;
+      if (lowPassFrequencyHz > 0) {
+        filter = context.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = Math.max(20, lowPassFrequencyHz);
+        filter.Q.value = Math.max(0.0001, playbackOptions?.lowPassQ ?? 0.9);
+        source.connect(filter);
+        filter.connect(gain);
+      } else {
+        source.connect(gain);
+      }
+      gain.connect(this.getOutput(context));
+
+      const startedVoice: SfxVoice = { cue, source, gain, filter };
+      voice = startedVoice;
+      source.onended = () => this.finishVoice(startedVoice);
+      this.voices.add(startedVoice);
+      const cueVoices = this.voicesByCue.get(cue) ?? new Set<SfxVoice>();
+      cueVoices.add(startedVoice);
+      this.voicesByCue.set(cue, cueVoices);
+      source.start();
+
+      if ((config.trimAfterMs ?? 0) > 0) {
+        const fadeStart = context.currentTime + (config.trimAfterMs ?? 0) / 1000;
+        const fadeSec = Math.max(0, config.fadeOutMs ?? 0) / 1000;
+        if (fadeSec > 0) {
+          gain.gain.setValueAtTime(baseVolume, fadeStart);
+          gain.gain.linearRampToValueAtTime(0, fadeStart + fadeSec);
+        }
+        source.stop(fadeStart + fadeSec);
       }
     } catch (error) {
-      this.disconnectRoutedAudioPlayer(audioPlayer);
-      this.releaseAudioPlayer(audioPlayer);
+      if (voice) this.finishVoice(voice);
       this.lastPlayError = {
         at: Date.now(),
         cue,
         userInteracted: this.engine.userInteracted,
-        audioContextState: this.engine.peekContext()?.state ?? null,
+        audioContextState: context.state,
         ...normalizeAudioError(error),
       };
       this.record(cue, 'error');
       return;
     }
 
-    this.activeAudio.add(player);
-    const cuePlayers = this.activeAudioByCue.get(cue) ?? new Set<HTMLAudioElement>();
-    cuePlayers.add(player);
-    this.activeAudioByCue.set(cue, cuePlayers);
-    this.activeCueCounts.set(cue, (this.activeCueCounts.get(cue) ?? 0) + 1);
-    let fadeIntervalId: number | null = null;
-    let trimTimeoutId: number | null = null;
-    let cleanedUp = false;
-    const cleanup = () => {
-      if (cleanedUp) {
-        return;
-      }
-      cleanedUp = true;
-      if (trimTimeoutId !== null) {
-        window.clearTimeout(trimTimeoutId);
-        trimTimeoutId = null;
-      }
-      if (fadeIntervalId !== null) {
-        window.clearInterval(fadeIntervalId);
-        fadeIntervalId = null;
-      }
-      this.cleanupByAudio.delete(player);
-      this.baseVolumeByAudio.delete(player);
-      this.activeAudio.delete(player);
-      const activeCuePlayers = this.activeAudioByCue.get(cue);
-      activeCuePlayers?.delete(player);
-      if (activeCuePlayers && activeCuePlayers.size === 0) {
-        this.activeAudioByCue.delete(cue);
-      }
-      const nextCount = Math.max(0, (this.activeCueCounts.get(cue) ?? 1) - 1);
-      if (nextCount === 0) {
-        this.activeCueCounts.delete(cue);
-      } else {
-        this.activeCueCounts.set(cue, nextCount);
-      }
-      player.removeEventListener('ended', cleanup);
-      player.removeEventListener('error', cleanup);
-      this.disconnectRoutedAudioPlayer(audioPlayer);
-      this.releaseAudioPlayer(audioPlayer);
-    };
-    this.cleanupByAudio.set(player, cleanup);
-    player.addEventListener('ended', cleanup);
-    player.addEventListener('error', cleanup);
-
-    if ((config.trimAfterMs ?? 0) > 0) {
-      trimTimeoutId = window.setTimeout(() => {
-        trimTimeoutId = null;
-        const fadeOutMs = Math.max(0, config.fadeOutMs ?? 0);
-        if (fadeOutMs <= 0) {
-          player.pause();
-          cleanup();
-          return;
-        }
-
-        const fadeStartedAt = performance.now();
-        fadeIntervalId = window.setInterval(() => {
-          const elapsed = performance.now() - fadeStartedAt;
-          const progress = PhaserClamp(elapsed / fadeOutMs, 0, 1);
-          const currentBaseVolume = this.baseVolumeByAudio.get(player) ?? baseVolume;
-          player.volume = currentBaseVolume * this.volume * (1 - progress);
-          if (progress >= 1) {
-            player.pause();
-            cleanup();
-          }
-        }, 30);
-      }, config.trimAfterMs);
-    }
-
-    let playPromise: Promise<void> | undefined;
-    try {
-      playPromise = player.play();
-    } catch (error) {
-      player.pause();
-      cleanup();
-      this.lastPlayError = {
-        at: Date.now(),
-        cue,
-        userInteracted: this.engine.userInteracted,
-        audioContextState: this.engine.peekContext()?.state ?? null,
-        ...normalizeAudioError(error),
-      };
-      this.record(cue, this.engine.userInteracted ? 'error' : 'blocked');
-      return;
-    }
-    if (playPromise) {
-      void playPromise
-        .then(() => {
-          if (cleanedUp) return;
-          this.record(cue, 'played');
-        })
-        .catch((error: unknown) => {
-          if (cleanedUp) return;
-          player.pause();
-          cleanup();
-          this.lastPlayError = {
-            at: Date.now(),
-            cue,
-            userInteracted: this.engine.userInteracted,
-            audioContextState: this.engine.peekContext()?.state ?? null,
-            ...normalizeAudioError(error),
-          };
-          this.record(cue, this.engine.userInteracted ? 'error' : 'blocked');
-        });
-      return;
-    }
-
     this.record(cue, 'played');
   }
 
-  stop(cue: SfxCue): void {
-    const activeCuePlayers = this.activeAudioByCue.get(cue);
-    if (!activeCuePlayers || activeCuePlayers.size === 0) {
+  private finishVoice(voice: SfxVoice): void {
+    if (!this.voices.delete(voice)) {
       return;
     }
-
-    for (const player of [...activeCuePlayers]) {
-      player.pause();
-      resetAudioPlayerCurrentTime(player);
-      this.cleanupByAudio.get(player)?.();
+    const cueVoices = this.voicesByCue.get(voice.cue);
+    cueVoices?.delete(voice);
+    if (cueVoices && cueVoices.size === 0) {
+      this.voicesByCue.delete(voice.cue);
     }
+    voice.source.onended = null;
+    for (const node of [voice.source, voice.filter, voice.gain]) {
+      try {
+        node?.disconnect();
+      } catch {
+        void 0;
+      }
+    }
+  }
+
+  /** The effects volume, between every voice and the engine's effects bus. */
+  private getOutput(context: AudioContext): GainNode {
+    if (!this.output || this.output.context !== context) {
+      this.output = context.createGain();
+      this.output.gain.value = this.volume;
+      this.output.connect(this.engine.getSfxBus() ?? context.destination);
+    }
+    return this.output;
   }
 
   private record(cue: SfxCue, status: SfxHistoryEntry['status']): void {
@@ -673,153 +765,34 @@ export class SfxController {
       this.history.splice(0, this.history.length - 40);
     }
   }
+}
 
-  private acquireAudioPlayer(path: string, route: SfxAudioRoute): SfxAudioPlayer | null {
-    const poolKey = getAudioPoolKey(path, route);
-    const idlePlayers = this.idleAudioByPoolKey.get(poolKey);
-    const idlePlayer = idlePlayers?.pop();
-    if (idlePlayer) {
-      return idlePlayer;
-    }
-
-    // Under the cap, give the cue its own player. Borrowing another cue's idle player means
-    // swapping its source and reloading it, so alternating jump, land and footstep sounds kept
-    // reloading the same few elements and played late (F023). Borrow only at the cap.
-    if (this.audioPlayerByElement.size >= MAX_SFX_MEDIA_PLAYERS) {
-      return this.acquireRetargetedIdleAudioPlayer(path, route);
-    }
-
-    const assetUrl = this.assetUrlByPath.get(path);
-    if (!assetUrl) {
-      return null;
-    }
-
-    const audio = new Audio(assetUrl);
-    audio.preload = 'auto';
-    const audioPlayer: SfxAudioPlayer = {
-      audio,
-      route,
-      poolKey,
-      mediaSourceNode: null,
-      filterNode: null,
-    };
-    this.audioPlayerByElement.set(audio, audioPlayer);
-    return audioPlayer;
-  }
-
-  private acquireRetargetedIdleAudioPlayer(path: string, route: SfxAudioRoute): SfxAudioPlayer | null {
-    for (const players of this.idleAudioByPoolKey.values()) {
-      const audioPlayer = players.pop();
-      if (!audioPlayer) {
-        continue;
+/** Tries each file in turn until one downloads and decodes. */
+async function fetchAndDecode(
+  context: BaseAudioContext,
+  urls: readonly string[]
+): Promise<{ buffer: AudioBuffer; url: string }> {
+  let lastError: unknown = new Error('No sound file to load.');
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to load ${url} (${response.status}).`);
       }
-
-      this.retargetAudioPlayer(audioPlayer, path, route);
-      return audioPlayer;
-    }
-
-    return null;
-  }
-
-  private retargetAudioPlayer(audioPlayer: SfxAudioPlayer, path: string, route: SfxAudioRoute): void {
-    const assetUrl = this.assetUrlByPath.get(path);
-    if (!assetUrl) {
-      return;
-    }
-
-    audioPlayer.route = route;
-    audioPlayer.poolKey = getAudioPoolKey(path, route);
-    if (audioPlayer.audio.src !== assetUrl) {
-      audioPlayer.audio.src = assetUrl;
-      audioPlayer.audio.preload = 'auto';
-      audioPlayer.audio.load();
-    }
-    resetAudioPlayerCurrentTime(audioPlayer.audio);
-  }
-
-  private releaseAudioPlayer(audioPlayer: SfxAudioPlayer): void {
-    const player = audioPlayer.audio;
-    player.loop = false;
-    player.volume = 1;
-    player.playbackRate = 1;
-    resetAudioPlayerCurrentTime(player);
-
-    const idlePlayers = this.idleAudioByPoolKey.get(audioPlayer.poolKey) ?? [];
-    if (!idlePlayers.includes(audioPlayer)) {
-      idlePlayers.push(audioPlayer);
-    }
-    this.idleAudioByPoolKey.set(audioPlayer.poolKey, idlePlayers);
-  }
-
-  private connectRoutedPlayback(
-    audioPlayer: SfxAudioPlayer,
-    playbackOptions: SfxPlaybackOptions | undefined,
-    route: SfxAudioRoute
-  ): void {
-    const audioContext = this.getAudioContext();
-    if (!audioContext) {
-      return;
-    }
-
-    if (!audioPlayer.mediaSourceNode) {
-      audioPlayer.mediaSourceNode = audioContext.createMediaElementSource(audioPlayer.audio);
-    }
-
-    const sfxBus = this.engine.getSfxBus() ?? audioContext.destination;
-    if (route === 'direct') {
-      audioPlayer.mediaSourceNode.connect(sfxBus);
-      void this.engine.resume('direct-routed-sfx');
-      return;
-    }
-
-    if (!audioPlayer.filterNode) {
-      audioPlayer.filterNode = audioContext.createBiquadFilter();
-      audioPlayer.filterNode.type = 'lowpass';
-    }
-
-    audioPlayer.filterNode.frequency.value = Math.max(20, playbackOptions?.lowPassFrequencyHz ?? 1000);
-    audioPlayer.filterNode.Q.value = Math.max(0.0001, playbackOptions?.lowPassQ ?? 0.9);
-    audioPlayer.mediaSourceNode.connect(audioPlayer.filterNode);
-    audioPlayer.filterNode.connect(sfxBus);
-    void this.engine.resume('lowpass-sfx');
-  }
-
-  private disconnectRoutedAudioPlayer(audioPlayer: SfxAudioPlayer): void {
-    try {
-      audioPlayer.mediaSourceNode?.disconnect();
-    } catch {
-      void 0;
-    }
-    try {
-      audioPlayer.filterNode?.disconnect();
-    } catch {
-      void 0;
+      return { buffer: await decodeAudio(context, await response.arrayBuffer()), url };
+    } catch (error) {
+      lastError = error;
     }
   }
-
-  private countIdleAudioPlayers(): number {
-    let count = 0;
-    for (const players of this.idleAudioByPoolKey.values()) {
-      count += players.length;
-    }
-    return count;
-  }
-
-  private getAudioContext(): AudioContext | null {
-    return this.engine.getContext();
-  }
+  throw lastError;
 }
 
-function getAudioPoolKey(path: string, route: SfxAudioRoute): string {
-  return `${route}:${path}`;
-}
-
-function resetAudioPlayerCurrentTime(player: HTMLAudioElement): void {
-  try {
-    player.currentTime = 0;
-  } catch {
-    void 0;
-  }
+function decodeAudio(context: BaseAudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
+  return new Promise((resolve, reject) => {
+    // Older Safari only supports the callback form; newer browsers also return a promise.
+    const result = context.decodeAudioData(data, resolve, reject) as Promise<AudioBuffer> | undefined;
+    result?.then?.(resolve, reject);
+  });
 }
 
 function PhaserClamp(value: number, min: number, max: number): number {
