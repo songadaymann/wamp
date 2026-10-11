@@ -28,7 +28,7 @@ export async function handleWampOGramRequest(
   env: Env,
 ): Promise<Response> {
   if (url.pathname === '/api/wamp-o-grams' && request.method === 'POST') {
-    const body = await parseJsonBody<unknown>(request);
+    const body = await parseJsonBody<unknown>(request, { maxBytes: 65_536 });
     const input = parseCreateRequest(body);
     const auth = await requireAuthenticatedRequestAuth(
       env,

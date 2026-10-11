@@ -159,7 +159,7 @@ export async function handleCreateChatMessage(
     throw new HttpError(403, 'You are banned from chat.');
   }
 
-  const body = await parseJsonBody<ChatMessageCreateRequestBody>(request);
+  const body = await parseJsonBody<ChatMessageCreateRequestBody>(request, { maxBytes: 16_384 });
   const text = normalizeChatMessageText(body.text);
   const latestMessage = await loadLatestChatMessageForUser(env, auth.user.id);
   const nowMs = Date.now();

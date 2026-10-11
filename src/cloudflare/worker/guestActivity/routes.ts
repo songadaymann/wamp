@@ -23,7 +23,7 @@ export async function handleGuestActivityHeartbeat(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const body = await parseJsonBody<GuestActivityHeartbeatBody>(request);
+  const body = await parseJsonBody<GuestActivityHeartbeatBody>(request, { maxBytes: 16_384 });
   const sessionId = normalizeSessionId(body.sessionId);
   const guestUserId = normalizeGuestUserId(body.guestUserId);
   const guestDisplayName = normalizeDisplayName(body.guestDisplayName);

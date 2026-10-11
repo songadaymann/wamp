@@ -151,7 +151,7 @@ export async function handleRoomCommentCreate(
   }
 
   const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
-  const body = await parseJsonBody<RoomCommentCreateRequestBody>(request);
+  const body = await parseJsonBody<RoomCommentCreateRequestBody>(request, { maxBytes: 16_384 });
   const roomVersion = normalizePositiveInteger(body.roomVersion, 'roomVersion');
   const target = await loadRoomCommentTarget(env, roomId, coordinates, roomVersion);
   if (!target) {
