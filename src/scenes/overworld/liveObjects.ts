@@ -72,6 +72,7 @@ import {
   type FlyingEnemyBehavior,
 } from './liveObjects/behaviorRegistry';
 import { carryMovingPlatformRiders } from './liveObjects/movingPlatforms';
+import { resolveFlyingEnemyMotion, type FlyingEnemyMotion } from './liveObjects/flyingEnemyMotion';
 import { getContainedLiveObjectKey } from './liveObjects/indexing';
 import {
   JIMOTHY_ANIMATION_KEYS,
@@ -269,6 +270,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly partitionIndex: LiveObjectPartitionIndex<TEdgeWall>;
   private readonly checkpointController: LiveObjectRespawnCheckpointController<TEdgeWall>;
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
+  private readonly frameRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[] = [];
+  private readonly flyingEnemyMotions = new Map<FlyingEnemyBehavior, FlyingEnemyMotion>();
+  private readonly riderCarryOptions = {
+    getDynamicBody: (sprite: Phaser.GameObjects.Sprite) => this.getDynamicBody(sprite),
+    getPlayerBody: () => this.options.getPlayerBody(),
+    onLiveObjectMoved: (liveObject: LoadedRoomObject) => this.partitionIndex.refreshDynamicObject(liveObject),
+  };
   private roomStateEventSuppressionDepth = 0;
 
   constructor(private readonly options: OverworldLiveObjectControllerOptions<TEdgeWall>) {
@@ -867,9 +875,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
     delta: number
   ): void {
-    const rooms = Array.from(loadedRooms).filter(
-      (loadedRoom) => loadedRoom.runtimeSuspended !== true,
-    );
+    // Reused every frame rather than copying the room list (F012); nothing keeps it past the frame.
+    const rooms = this.frameRooms;
+    rooms.length = 0;
+    for (const loadedRoom of loadedRooms) if (loadedRoom.runtimeSuspended !== true) rooms.push(loadedRoom);
     const playerBody = this.options.getPlayerBody();
 
     for (const loadedRoom of rooms) {
@@ -981,38 +990,19 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
-    carryMovingPlatformRiders(rooms, {
-      getDynamicBody: (sprite) => this.getDynamicBody(sprite),
-      getPlayerBody: this.options.getPlayerBody,
-      onLiveObjectMoved: (liveObject) => this.partitionIndex.refreshDynamicObject(liveObject),
-    });
+    carryMovingPlatformRiders(rooms, this.riderCarryOptions);
     this.stabilizePushableStacks(rooms);
     this.triggerController.updatePressurePlates(rooms);
   }
 
-  private getFlyingEnemyMotion(behavior: FlyingEnemyBehavior): {
-    speed: number;
-    waveAmplitude: number;
-    waveSpeed: number;
-  } {
-    const speedBase =
-      behavior.speedSetting === 'bat'
-        ? this.options.settings.batSpeed
-        : this.options.settings.birdSpeed;
-    const waveAmplitudeSetting = behavior.waveAmplitudeSetting ?? behavior.speedSetting;
-    const waveSpeedSetting = behavior.waveSpeedSetting ?? behavior.speedSetting;
-    const waveAmplitudeBase = waveAmplitudeSetting === 'bat'
-      ? this.options.settings.batWaveAmplitude
-      : this.options.settings.birdWaveAmplitude;
-    const waveSpeedBase = waveSpeedSetting === 'bat'
-      ? this.options.settings.batWaveSpeed
-      : this.options.settings.birdWaveSpeed;
-
-    return {
-      speed: speedBase * (behavior.speedMultiplier ?? 1),
-      waveAmplitude: behavior.waveAmplitude ?? waveAmplitudeBase,
-      waveSpeed: behavior.waveSpeed ?? waveSpeedBase,
-    };
+  /** Behaviors and settings are constant, so each flying behavior's motion is worked out once (F012). */
+  private getFlyingEnemyMotion(behavior: FlyingEnemyBehavior): FlyingEnemyMotion {
+    let motion = this.flyingEnemyMotions.get(behavior);
+    if (!motion) {
+      motion = resolveFlyingEnemyMotion(behavior, this.options.settings);
+      this.flyingEnemyMotions.set(behavior, motion);
+    }
+    return motion;
   }
 
   private applyConveyorToLiveObject(liveObject: LoadedRoomObject): void {

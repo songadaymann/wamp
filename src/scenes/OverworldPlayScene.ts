@@ -179,7 +179,7 @@ import {
   OverworldRoomCommentsController,
 } from './overworld/roomComments';
 import { OverworldRoomAudioController } from './overworld/roomAudio';
-import { OverworldRoomMusicPlaybackController } from './overworld/roomMusicPlaybackController';
+import { OverworldRoomMusicPlaybackController, type OverworldRoomMusicPlaybackSyncInput } from './overworld/roomMusicPlaybackController';
 import {
   OverworldCoursePlaybackController,
 } from './overworld/coursePlayback';
@@ -544,6 +544,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private readonly goalRunController: OverworldGoalRunController;
   private readonly roomAudioController: OverworldRoomAudioController;
   private readonly roomMusicPlaybackController: OverworldRoomMusicPlaybackController;
+  private readonly roomMusicSyncInput: OverworldRoomMusicPlaybackSyncInput = { mode: 'browse', currentRoomCoordinates: { x: 0, y: 0 }, activeCourseRun: null };
   private readonly lightingController: RoomLightingController;
   private readonly weatherController: RoomWeatherController;
   private readonly flowController: OverworldSceneFlowController;
@@ -2507,11 +2508,9 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         profiler?.endSegment('controller.presenceOverlay', browsePresenceStartedAt);
       }
       const roomMusicStartedAt = controllerProfileSlot === 10 ? profiler?.beginSegment() : undefined;
-      this.roomMusicPlaybackController.sync({
-        mode: this.mode,
-        currentRoomCoordinates: this.currentRoomCoordinates,
-        activeCourseRun: this.activeCourseRun,
-      });
+      const musicInput = this.roomMusicSyncInput; // reused every frame (F012); sync doesn't keep it
+      musicInput.mode = this.mode; musicInput.currentRoomCoordinates = this.currentRoomCoordinates; musicInput.activeCourseRun = this.activeCourseRun;
+      this.roomMusicPlaybackController.sync(musicInput);
       if (roomMusicStartedAt !== undefined) {
         profiler?.endSegment('controller.roomMusic', roomMusicStartedAt);
       }

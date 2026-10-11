@@ -89,8 +89,20 @@ export class RoomWeatherController {
   }
 
   sync(input: RoomWeatherFrameInput): boolean {
-    const weather = cloneRoomWeatherSettings(input.weather ?? null);
     const activeRoomId = input.roomId ?? null;
+    // Most rooms have no weather: once nothing is drawn for this room, skip the settings
+    // clone and a new debug object every frame (F012).
+    const inputWeather = input.weather ?? null;
+    if (
+      !this.graphics
+      && (inputWeather === null || (inputWeather.mode === 'off' && inputWeather.intensity === this.debugState.intensity))
+      && this.debugState.rendererPath === 'off'
+      && this.debugState.mode === 'off'
+      && this.debugState.activeRoomId === activeRoomId
+    ) {
+      return false;
+    }
+    const weather = cloneRoomWeatherSettings(input.weather ?? null);
 
     if (!activeRoomId || !input.bounds || !roomWeatherUsesOverlay(weather)) {
       const structureChanged = this.destroyGraphics();
