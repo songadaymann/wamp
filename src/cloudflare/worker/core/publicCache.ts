@@ -5,6 +5,14 @@ interface WorkerCacheStorage extends CacheStorage {
   default?: Cache;
 }
 
+/**
+ * The zone's browser-cache TTL rewrites Cache-Control on stored entries (hits came
+ * back as max-age=14400 for responses stored with max-age=20), which let browsers
+ * keep leaderboards and world summaries for hours. The intended value travels in this
+ * private header and is restored on a hit.
+ */
+const STORED_CACHE_CONTROL_HEADER = 'X-WAMP-Stored-Cache-Control';
+
 export async function loadAnonymousPublicCache(
   request: Request,
   context: WorkerExecutionContextLike | undefined,
@@ -28,6 +36,8 @@ export async function loadAnonymousPublicCache(
 
 function stripRequestCors(response: Response): Response {
   const headers = new Headers(response.headers);
+  const cacheControl = headers.get('Cache-Control');
+  if (cacheControl) headers.set(STORED_CACHE_CONTROL_HEADER, cacheControl);
   headers.delete('Access-Control-Allow-Origin');
   headers.delete('Access-Control-Allow-Credentials');
   removeVaryHeaderValue(headers, 'Origin');
@@ -36,6 +46,9 @@ function stripRequestCors(response: Response): Response {
 
 function applyRequestCors(response: Response, request: Request): Response {
   const headers = new Headers(response.headers);
+  const storedCacheControl = headers.get(STORED_CACHE_CONTROL_HEADER);
+  if (storedCacheControl) headers.set('Cache-Control', storedCacheControl);
+  headers.delete(STORED_CACHE_CONTROL_HEADER);
   headers.delete('Access-Control-Allow-Origin');
   headers.delete('Access-Control-Allow-Credentials');
   removeVaryHeaderValue(headers, 'Origin');

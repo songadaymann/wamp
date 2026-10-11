@@ -57,3 +57,33 @@ describe('anonymous public cache CORS', () => {
     expect(second.headers.get('Vary')).toContain('Origin');
   });
 });
+
+describe('anonymous public cache browser lifetime', () => {
+  it('keeps the route\'s own Cache-Control on hits when the zone rewrites the stored copy', async () => {
+    const stored = new Map<string, Response>();
+    vi.stubGlobal('caches', {
+      default: {
+        async match(request: Request) {
+          return stored.get(request.url)?.clone();
+        },
+        async put(request: Request, response: Response) {
+          // Like the zone's browser-cache TTL: the stored copy comes back with max-age=14400.
+          const headers = new Headers(response.headers);
+          headers.set('Cache-Control', 'public, max-age=14400');
+          stored.set(request.url, new Response(await response.text(), { status: response.status, headers }));
+        },
+      },
+    });
+    const waits: Promise<unknown>[] = [];
+    const context: WorkerExecutionContextLike = { waitUntil: (promise) => { waits.push(promise); } };
+    const request = new Request('https://api.example/api/leaderboards/rooms/0,0');
+    await loadAnonymousPublicCache(request, context, async () =>
+      jsonResponse(request, { ok: true }, { headers: { 'Cache-Control': 'public, max-age=20' } }));
+    await Promise.all(waits);
+
+    const hit = await loadAnonymousPublicCache(request, context, async () => jsonResponse(request, { ok: false }));
+    expect(hit.headers.get('X-WAMP-Cache')).toBe('hit');
+    expect(hit.headers.get('Cache-Control')).toBe('public, max-age=20');
+    expect(hit.headers.get('X-WAMP-Stored-Cache-Control')).toBeNull();
+  });
+});
