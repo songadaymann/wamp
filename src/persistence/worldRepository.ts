@@ -15,6 +15,8 @@ import {
   cloneWorldWindow,
   computeWorldChunkWindow,
   computeWorldWindow,
+  containsWorldChunkBounds,
+  getRoomBoundsForChunkBounds,
   type ClaimableFrontierRoomWindow,
   type CompactWorldChunkWindow,
   type ClaimedUnpublishedWorldRoomSource,
@@ -212,7 +214,8 @@ export class ApiWorldRepository implements WorldRepository {
   private compactWorldUnavailable = false;
   constructor(
     private readonly baseUrl: string,
-    private readonly fallback: WorldRepository | null
+    private readonly fallback: WorldRepository | null,
+    private readonly usesArrivalPrefetch = true,
   ) {}
 
   async loadWorldWindow(center: RoomCoordinates, radius: number): Promise<WorldWindow> {
@@ -244,6 +247,8 @@ export class ApiWorldRepository implements WorldRepository {
 
   async loadCompactWorldChunkWindow(chunkBounds: WorldChunkBounds): Promise<CompactWorldChunkWindow | null> {
     if (this.compactWorldUnavailable) return null;
+    const prefetched = this.usesArrivalPrefetch ? await takeArrivalCompactWindow(chunkBounds) : null;
+    if (prefetched) return prefetched;
     const params = new URLSearchParams({
       minChunkX: String(chunkBounds.minChunkX),
       maxChunkX: String(chunkBounds.maxChunkX),
@@ -483,6 +488,45 @@ export function buildWorldTileManifestRequestPath(
     params.set('includeRooms', options.includeRooms ? '1' : '0');
   }
   return `/api/world/tiles/manifest?${params.toString()}`;
+}
+
+/**
+ * The arrival area's compact window, requested before the game boots so it downloads
+ * alongside the art instead of after it (F018). The first compact load it covers uses
+ * it, cropped to the window asked for; anything else (or a failed request) loads
+ * normally.
+ */
+let arrivalCompactWindow: { bounds: WorldChunkBounds; window: Promise<CompactWorldChunkWindow | null> } | null = null;
+
+export function prefetchArrivalCompactWorldWindow(chunkBounds: WorldChunkBounds): void {
+  if (arrivalCompactWindow || getRoomStorageBackend() === 'local') return;
+  const repository = new ApiWorldRepository(getApiBaseUrl(), null, false);
+  arrivalCompactWindow = {
+    bounds: { ...chunkBounds },
+    window: repository.loadCompactWorldChunkWindow(chunkBounds).catch(() => null),
+  };
+}
+
+async function takeArrivalCompactWindow(chunkBounds: WorldChunkBounds): Promise<CompactWorldChunkWindow | null> {
+  const prefetch = arrivalCompactWindow;
+  arrivalCompactWindow = null;
+  if (!prefetch || !containsWorldChunkBounds(prefetch.bounds, chunkBounds)) return null;
+  const window = await prefetch.window;
+  return window ? cropCompactWorldChunkWindow(window, chunkBounds) : null;
+}
+
+export function cropCompactWorldChunkWindow(
+  window: CompactWorldChunkWindow,
+  chunkBounds: WorldChunkBounds,
+): CompactWorldChunkWindow {
+  return {
+    chunkBounds: { ...chunkBounds },
+    roomBounds: getRoomBoundsForChunkBounds(chunkBounds),
+    chunks: window.chunks.filter(({ coordinates }) => (
+      coordinates.x >= chunkBounds.minChunkX && coordinates.x <= chunkBounds.maxChunkX
+      && coordinates.y >= chunkBounds.minChunkY && coordinates.y <= chunkBounds.maxChunkY
+    )),
+  };
 }
 
 export function createWorldRepository(): WorldRepository {
