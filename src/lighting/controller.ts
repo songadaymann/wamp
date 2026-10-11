@@ -68,6 +68,8 @@ interface RoomLightingControllerOptions {
 export class RoomLightingController {
   private overlay: Phaser.GameObjects.RenderTexture | null = null;
   private glowOverlay: Phaser.GameObjects.RenderTexture | null = null;
+  // Whether the glow texture holds anything; an empty one needs no clear and no draw (F011).
+  private glowOverlayHasGlows = false;
   private ambientOverlays: Phaser.GameObjects.Rectangle[] = [];
   private debugState: RoomLightingDebugState = {
     mode: 'off',
@@ -204,7 +206,7 @@ export class RoomLightingController {
       input.bounds.width,
       input.bounds.height,
     );
-    this.glowOverlay.clear();
+    if (this.glowOverlayHasGlows) this.glowOverlay.clear();
 
     // Each DynamicTexture erase/drawFrame is its own render-target capture and blit, so
     // per-emitter calls cost two framebuffer switches each. Every light is drawn into one
@@ -265,11 +267,14 @@ export class RoomLightingController {
       for (const reveal of reveals) this.overlay.batchDrawFrame(reveal.key, undefined, reveal.x, reveal.y);
       this.overlay.endDraw(true);
     }
+    // Dark rooms without glowing lights skip the full-room additive draw of an empty texture.
+    this.glowOverlay.setVisible(glows.length > 0);
     if (glows.length > 0) {
       this.glowOverlay.beginDraw();
       for (const glow of glows) this.glowOverlay.batchDrawFrame(glow.key, undefined, glow.x, glow.y, glow.alpha, glow.tint);
       this.glowOverlay.endDraw();
     }
+    this.glowOverlayHasGlows = glows.length > 0;
 
     structureChanged = this.syncAmbientOverlays(ambientBounds, ambientAlpha) || structureChanged;
 
@@ -339,6 +344,7 @@ export class RoomLightingController {
       this.glowOverlay.setVisible(true);
     } else {
       this.glowOverlay?.destroy();
+      this.glowOverlayHasGlows = false;
       this.glowOverlay = this.options.scene.add.renderTexture(
         bounds.x,
         bounds.y,
