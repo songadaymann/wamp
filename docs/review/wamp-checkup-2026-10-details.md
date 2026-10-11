@@ -313,6 +313,19 @@ The GPU mechanism and the batched-erase fix are correct: each emitter does its o
 (b) Gradient-texture churn is a bounded, one-time warm-up of a few dozen small canvases shared across all rooms, not unbounded memory creep. Keep "use one max-size gradient per profile and scale it" as a minor cleanup, plus dropping the per-frame key strings.
 (c) The GPU cost only hits rooms set to 'playerAuraDark'. The CPU emitter rebuild runs in every room, but that was already recommended earlier (2026-07-13 §2.1; 2026-07-29 'Lighting emitters: Open').
 
+**2026-10-10 completed.** PR #132 / `ded5d9cb` (frontend, Pages; live in loader `main-BDinv_oB.js`). `RoomLightingController.sync` resolves every emitter and its light texture first, then:
+- `overlay.beginDraw()`, `batchDrawFrame` per light, `overlay.endDraw(true)`: one erase;
+- `glowOverlay.beginDraw()`, `batchDrawFrame(key, undefined, x, y, alpha, tint)` per glow, `endDraw()`.
+
+Before, each light was its own capture-and-blit. The output is the same: one erase of the combined light leaves (1−a1)(1−a2)…, and both paths reach the same `pipeline.batchTextureFrame` call. Room lighting is WebGL-only.
+
+Evidence:
+- `src/lighting/controller.test.ts` (fails on the previous code).
+- Dark room 2,1 on the safety API (38 lights, 37 glows; SwiftShader, 4× CPU throttle): median frame 90.8 → 50.0 ms, p90 98.4 → 58.9 ms.
+- Before/after screenshots of the dark room region: mean luminance 11.19 vs 11.14.
+
+Not done: flicker texture churn (a new canvas texture per diameter) and per-frame emitter rebuilding. Receipt: `wamp-lighting-dialogs-replays-2026-10-10.md`.
+
 ### F080: Portrait play draws the whole game behind the opaque controller panel, wasting ~35–40% of rendering
 
 - **Area:** Mobile experience (code review)
@@ -1706,6 +1719,12 @@ Order the fixes by value-to-effort:
 - (b) Capture frames with createImageBitmap/toBlob outside POST_RENDER, or skip capture on low-performance or mobile profiles. Small.
 - (c) Add hourly deletes for expired sessions and magic_link_tokens, plus 'dispatched' outbox rows older than N days. Small.
 - (d) Move frames to an R2 bucket with a 7-day lifecycle rule. Medium: needs a new binding, a write path and an admin read path.
+
+**2026-10-10 partly done (fix a).** PR #135 / `d5b8e6ef`, API Worker `2c279cb5`. Each `samples` POST used to recompute `played`/`moved`/`signup`/`signed_in` with four subqueries over every stored sample, re-parsing every payload and its JPEG. The flags only turn on, so each batch now adds its own evidence. `moved` compares the batch's x values with each other and with the last earlier positioned sample (one primary-key lookup); that is exact, because more than one distinct x means two x values adjacent in sequence differ.
+
+Test: 150 random sessions sent in random batches match a full recomputation using the previous SQL.
+
+Left for review: (c) hourly pruning of expired sessions, magic-link tokens and old dispatched outbox rows (deletes production data), and (d) moving frames to R2. Fix (b) was already done in `a43e1da7`.
 
 ### F249: In-game Report a bug with a recent replay and diagnostic context
 
@@ -3110,6 +3129,19 @@ leaderboardModal.ts:117-123, exploreModal.ts:98-103 and profileModal.ts:162-177 
 5. **Escape on mobile:** Escape closing everything is a desktop/keyboard issue. A mobile backdrop tap closes only the top modal, because the handler checks event.target === modal.
 
 The proposed fix still holds: a module-level stack in modalLifecycle.ts with top-only Escape and backdrop handling, z-index of 40+depth, a transparent backdrop on modals that are not on top, and focus returned to the opener.
+
+**2026-10-10 completed.** PR #134 / `61269ba6` (frontend, Pages; live in `main-BDinv_oB.js`).
+
+`src/ui/modalState.ts`:
+- `openModalsInStackOrder` orders open dialogs by z-index, then page order.
+- The F168 capture-phase guard, with two or more dialogs open, clicks the top dialog's close button and stops the event, so the 25 per-dialog Escape handlers don't all fire. All 36 dialogs have a matching close button.
+- `installModalStackBackdrops` observes the dialogs and marks covered ones `data-modal-covered`, which CSS makes transparent.
+
+Browser check, leaderboard plus a profile opened through `profile-open-request`:
+- Before: two 0.8 backdrops, and one Escape closed both.
+- After: the leaderboard is transparent; the first Escape closes the profile and the second closes the leaderboard.
+
+The F168 escape test still passes. Not done: focus return to the opener and migrating hand-rolled dialogs to `createModalLifecycle`.
 
 ### F118: Show the room name and builder when you run into a new room
 
