@@ -1,5 +1,12 @@
 /* Room history modal */
 
+/* A dialog covered by another one drops its backdrop, so stacked dialogs dim the
+   screen once (installModalStackBackdrops). */
+.history-modal[data-modal-covered='true'] {
+  background: transparent !important;
+  backdrop-filter: none !important;
+}
+
 .history-modal {
   position: fixed;
   inset: 0;
