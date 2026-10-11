@@ -45,6 +45,8 @@ Once an asset type is used by saved or published rooms, its id and layout become
 - Preserve transparency where needed.
 - Avoid JPEG for anything with hard pixel edges or alpha.
 
+Run `npm run assets:png:optimize` after adding or editing PNGs. It recompresses losslessly: a file changes only when the result decodes to identical pixels, and colour chunks (`sRGB`, `gAMA`, `cHRM`, `iCCP`) are kept. `npm run check` and CI run `npm run assets:png:check`, which fails when a committed PNG could shrink by more than 10%.
+
 ### 3. Frame 0 must be a good default pose
 
 Room snapshots and some previews only render the first frame of an object sheet. If frame `0` is blank or transitional, previews will look broken.
