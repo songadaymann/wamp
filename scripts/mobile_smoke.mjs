@@ -563,11 +563,14 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
   await assertHidden(page, '#btn-world-explore', 'portrait focused room Explore by default');
   await assertHidden(page, '#btn-world-leaderboard', 'portrait focused room Leaderboard by default');
   await assertHidden(page, '#btn-world-chat', 'portrait focused room Chat by default');
-  await assertHidden(page, '#btn-world-jump-sheet', 'portrait focused room Warp by default');
+  await assertVisible(page, '#btn-world-jump-sheet', 'portrait focused room Warp on the card');
   await assertHidden(page, '#btn-world-zoom-out-footer', 'phone footer zoom out');
   await assertHidden(page, '#btn-world-zoom-in-footer', 'phone footer zoom in');
   await assertHidden(page, '#btn-fit-screen', 'phone footer Fit button');
   await assertHidden(page, '#zoom-level', 'phone footer zoom readout');
+  for (const selector of ['#btn-world-report-bug', '#btn-guestbook-open', '#btn-world-controls']) {
+    await assertHidden(page, selector, `phone toolbar ${selector} (opens from the menu on phones)`);
+  }
   await assertSelectorsWithinViewport(
     page,
     [
@@ -575,6 +578,7 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
       '#btn-world-play',
       '#btn-world-edit',
       '#btn-world-build',
+      '#btn-world-jump-sheet',
       '#btn-mobile-world-hud-details',
       '#btn-mobile-world-hud-minimize',
       '#bottom-bar',
@@ -600,12 +604,12 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
     layout.buttons.filter((button) => button.visible).every((button) => button.withinHud),
     `visible portrait focused room HUD buttons should stay inside the HUD: ${JSON.stringify(layout.buttons)}`,
   );
+  const visiblePrimaryButtons = layout.primaryButtons.filter((button) => button.visible);
   assertCondition(
-    layout.primaryButtons.filter((button) => button.visible).length === 3
-      && layout.primaryButtons
-        .filter((button) => button.visible)
-        .every((button) => button.rowTop === layout.primaryButtons.find((button) => button.visible)?.rowTop),
-    `portrait focused room should show exactly three primary actions in one row: ${JSON.stringify(layout.primaryButtons)}`,
+    visiblePrimaryButtons.some((button) => button.id === 'btn-world-jump-sheet')
+      && new Set(visiblePrimaryButtons.map((button) => button.rowTop)).size <= 2
+      && visiblePrimaryButtons.every((button) => button.withinHud),
+    `portrait focused room should show its actions, Warp included, in at most two rows inside the card: ${JSON.stringify(layout.primaryButtons)}`,
   );
   assertCondition(
     !layout.leaderboard.visible,
@@ -711,7 +715,7 @@ async function runPhoneLandscapeBrowse(page, scenarioSummary, scenarioDir) {
   await assertVisible(page, '#btn-mobile-world-hud-details', 'mobile More disclosure');
   await assertVisible(page, '#btn-mobile-world-hud-minimize', 'mobile room collapse button');
   await assertHidden(page, '#btn-world-chat', 'mobile global chat shortcut by default');
-  await assertHidden(page, '#btn-world-jump-sheet', 'mobile jump shortcut by default');
+  await assertVisible(page, '#btn-world-jump-sheet', 'mobile Warp on the card by default');
   await assertSelectorsWithinViewport(
     page,
     ['#world-hud', '#btn-mobile-world-hud-details', '#btn-mobile-world-hud-minimize', '#bottom-bar'],
@@ -1505,6 +1509,7 @@ async function readPortraitFocusedWorldHudLayout(page) {
 
     const buttonSelector = [
       '#btn-world-play',
+      '#btn-world-share',
       '#btn-world-edit',
       '#btn-world-build',
       '#btn-world-course-builder',
@@ -1537,8 +1542,10 @@ async function readPortraitFocusedWorldHudLayout(page) {
     const primaryButtonIds = [
       'btn-world-play',
       'btn-world-edit',
+      'btn-world-share',
       'btn-world-build',
       'btn-world-course-builder',
+      'btn-world-jump-sheet',
     ];
     const primaryButtons = buttons
       .filter((button) => primaryButtonIds.includes(button.id))

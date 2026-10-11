@@ -114,9 +114,10 @@ body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-nam
   line-height: 1;
 }
 
+/* Four across, so Warp sits on the card without adding a row (Play, Edit, Build, Warp for a focused room). */
 body[data-device-class='phone'] #world-hud .world-hud-row-primary-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch;
   gap: 5px;
 }

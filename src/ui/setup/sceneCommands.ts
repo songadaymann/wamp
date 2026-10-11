@@ -336,6 +336,18 @@ export function setupSceneCommands(
     aboutModal.open();
   });
 
+  // Phones keep only Online, Settings and Chat in the world toolbar; these open from the menu there.
+  doc.getElementById('btn-menu-guestbook')?.addEventListener('click', () => {
+    closeMenu();
+    closeWorldPanels();
+    void guestbookModal.open();
+  });
+  doc.getElementById('btn-menu-controls')?.addEventListener('click', () => {
+    closeMenu();
+    closeWorldPanels();
+    controlsModal.open();
+  });
+
   chatModerationOpenBtn?.addEventListener('click', () => {
     closeMenu();
     historyModal.close();
