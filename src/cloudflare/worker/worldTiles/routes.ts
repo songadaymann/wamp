@@ -426,6 +426,28 @@ function normalizeR2Etag(value: string): string {
   return value.trim().replace(/^W\//i, '').replace(/^"|"$/g, '');
 }
 
+// Outbox rows come only from published-room and background-image triggers. These are
+// the API areas whose writes can fire them; the renderer's one-minute cron still
+// sweeps anything another path queues.
+const WORLD_TILE_OUTBOX_WRITE_PREFIXES = [
+  '/api/rooms/',
+  '/api/courses',
+  '/api/expanded-rooms',
+  '/api/background-images',
+  '/api/worlds',
+  '/api/guest-room-drafts',
+  '/api/agents',
+  '/api/admin/',
+  '/api/test/reset',
+];
+
+/** Whether a request may have queued world-tile work worth dispatching right away. */
+export function requestMayQueueWorldTiles(method: string, pathname: string): boolean {
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false;
+  if (pathname === '/api/rooms/snapshots/query') return false;
+  return WORLD_TILE_OUTBOX_WRITE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
 export function scheduleWorldTileOutboxDispatch(
   env: Env,
   context?: WorkerExecutionContextLike,
