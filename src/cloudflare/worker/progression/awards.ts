@@ -2,7 +2,8 @@ import type { CourseGoal, CourseRecord, CourseSnapshot } from '../../../courses/
 import { compareCourseLeaderboardEntries } from '../../../courses/scoring';
 import type { CourseRunRecord } from '../../../courses/runModel';
 import type { RoomGoal } from '../../../goals/roomGoals';
-import type { RoomRecord, RoomSnapshot } from '../../../persistence/roomModel';
+import type { RoomSnapshot } from '../../../persistence/roomModel';
+import type { RoomRecordView } from '../../../persistence/roomVersionLineage';
 import type { ProgressionDelta } from '../../../progression/model';
 import type { RoomRunRecord } from '../../../runs/model';
 import { sortCompletedRunsForLeaderboard } from '../../../runs/scoring';
@@ -363,7 +364,7 @@ export async function awardRoomRunProgression(
     isFirstCompletion: boolean;
     isNewPersonalBest: boolean;
     creatorUserId: string | null;
-    roomRecord: RoomRecord;
+    roomRecord: RoomRecordView;
     completedAt: string;
     /** The finisher made this room: no rank XP (clear flags arrive already withheld). */
     ownContent?: boolean;

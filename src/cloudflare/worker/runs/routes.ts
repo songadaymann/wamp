@@ -6,7 +6,8 @@ import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
 import { cloneRoomGoal, normalizeRoomGoal, type RoomGoal } from '../../../goals/roomGoals';
-import { cloneRoomSnapshot, type RoomRecord, type RoomSnapshot } from '../../../persistence/roomModel';
+import { cloneRoomSnapshot, type RoomSnapshot } from '../../../persistence/roomModel';
+import { findRoomVersionSnapshot, type RoomRecordView } from '../../../persistence/roomVersionLineage';
 import { computeRunScore, sortCompletedRunsForLeaderboard } from '../../../runs/scoring';
 import { RANKED_RUN_TRACE_SCHEMA_VERSION } from '../../../runs/verificationTrace';
 import type {
@@ -32,7 +33,7 @@ import {
   schedulePlayableContentIndexRefresh,
 } from '../playableContentIndex/store';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
-import { loadExactRoomVersion, loadRoomRecord } from '../rooms/store';
+import { loadExactRoomVersion } from '../rooms/store';
 import {
   assertWampLeaderboardWriteAllowed,
   sqlUserIdIsNotLegacyGeneratedOnly,
@@ -69,6 +70,7 @@ import {
   submitRoomRating,
 } from '../progression/store';
 import { resolveRoomClearRewardScope, scopeClearRewardFlags } from '../progression/clearRewardScope';
+import { loadRoomRankingRecord } from '../rooms/rankingRecord';
 import {
   computeRoomSnapshotVerificationHash,
   createRoomVerificationTrigger,
@@ -206,13 +208,11 @@ export async function handleRunFinish(
     throw new HttpError(409, 'This run attempt has already been finalized.');
   }
 
-  const roomRecord = await loadRoomRecord(
-    env,
-    existing.roomId,
-    existing.roomCoordinates,
-    auth.user.id,
-    auth.user.walletAddress ?? null
-  );
+  const roomRecord = await loadRoomRankingRecord(env, existing.roomId, existing.roomCoordinates, {
+    viewerUserId: auth.user.id,
+    viewerWalletAddress: auth.user.walletAddress ?? null,
+    snapshotVersions: [existing.roomVersion],
+  });
   const snapshot = resolveRoomSnapshotForVersion(roomRecord, existing.roomVersion);
   assertSoloRoomRun(snapshot);
   if (!snapshot.goal) {
@@ -553,13 +553,11 @@ export async function handleRoomLeaderboard(
     const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
     const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
     const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-    const record = await timing.measure('room_record', () => loadRoomRecord(
-      env,
-      roomId,
-      coordinates,
-      auth?.user.id ?? null,
-      auth?.user.walletAddress ?? null,
-    ));
+    const record = await timing.measure('room_record', () => loadRoomRankingRecord(env, roomId, coordinates, {
+      viewerUserId: auth?.user.id ?? null,
+      viewerWalletAddress: auth?.user.walletAddress ?? null,
+      snapshotVersions: [version],
+    }));
     const selection = timing.measureSync('lineage', () => resolveAggregatedRoomLeaderboardSelection(record, version));
     if (!selection.snapshot.goal) throw new HttpError(404, 'This room version does not have a leaderboard goal.');
     const leaderboard = await timing.measure('leaderboard', () => buildRoomLeaderboardResponse(
@@ -586,14 +584,12 @@ export async function handleRoomDifficultyVote(
     'runs:write'
   );
   const body = await parseRoomDifficultyVoteBody(request);
-  const record = await loadRoomRecord(
-    env,
-    roomId,
-    body.roomCoordinates,
-    auth.user.id,
-    auth.user.walletAddress ?? null,
-    auth.isAdmin
-  );
+  const record = await loadRoomRankingRecord(env, roomId, body.roomCoordinates, {
+    viewerUserId: auth.user.id,
+    viewerWalletAddress: auth.user.walletAddress ?? null,
+    viewerIsAdmin: auth.isAdmin,
+    snapshotVersions: [body.roomVersion],
+  });
   const selection = resolveAggregatedRoomLeaderboardSelection(record, body.roomVersion);
 
   if (!record.published || record.published.version !== selection.roomVersion) {
@@ -634,14 +630,12 @@ export async function handleRoomRatingSubmit(
     'runs:write',
   );
   const body = await parseRoomRatingBody(request);
-  const record = await loadRoomRecord(
-    env,
-    roomId,
-    body.roomCoordinates,
-    auth.user.id,
-    auth.user.walletAddress ?? null,
-    auth.isAdmin,
-  );
+  const record = await loadRoomRankingRecord(env, roomId, body.roomCoordinates, {
+    viewerUserId: auth.user.id,
+    viewerWalletAddress: auth.user.walletAddress ?? null,
+    viewerIsAdmin: auth.isAdmin,
+    snapshotVersions: [body.roomVersion],
+  });
   const responseBody = await submitRoomRating(env, {
     roomRecord: record,
     userId: auth.user.id,
@@ -779,20 +773,15 @@ export async function handleGlobalLeaderboard(
 }
 
 export function resolveRoomSnapshotForVersion(
-  record: RoomRecord,
+  record: RoomRecordView,
   version: number
 ): RoomSnapshot {
-  if (record.published?.version === version) {
-    return cloneRoomSnapshot(record.published);
-  }
-
-  const historicalVersion =
-    record.versions.find((candidate) => candidate.version === version) ?? null;
-  if (!historicalVersion) {
+  const snapshot = findRoomVersionSnapshot(record, version);
+  if (!snapshot) {
     throw new HttpError(404, `Room version ${version} was not found.`);
   }
 
-  return cloneRoomSnapshot(historicalVersion.snapshot);
+  return cloneRoomSnapshot(snapshot);
 }
 
 export async function loadRoomRunByAttemptId(

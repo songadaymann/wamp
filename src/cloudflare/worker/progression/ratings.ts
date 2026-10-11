@@ -1,5 +1,5 @@
 import type { CourseRecord } from '../../../courses/model';
-import type { RoomRecord, RoomVersionRecord } from '../../../persistence/roomModel';
+import { getRoomVersionFacts, type RoomRecordView, type RoomVersionSource } from '../../../persistence/roomVersionLineage';
 import {
   type CourseRatingRequestBody,
   type CourseRatingResponse,
@@ -281,7 +281,7 @@ async function buildCourseRatingSummary(
   };
 }
 
-export function buildRoomRatingWindow(versions: RoomVersionRecord[], targetVersion: number): RatingWindow {
+export function buildRoomRatingWindow(versions: readonly RoomVersionSource[], targetVersion: number): RatingWindow {
   const sorted = [...versions].sort((left, right) => left.version - right.version);
   let currentKey = sorted[0]?.version ?? targetVersion;
   const bucketByVersion = new Map<number, number>();
@@ -291,9 +291,8 @@ export function buildRoomRatingWindow(versions: RoomVersionRecord[], targetVersi
       continue;
     }
 
-    const previous = index > 0 ? sorted[index - 1]?.snapshot ?? null : null;
     const significant =
-      index === 0 || computeRoomWeightedChange(previous, version.snapshot) >= ROOM_SIGNIFICANT_CHANGE_THRESHOLD;
+      index === 0 || getRoomVersionChange(sorted[index - 1], version) >= ROOM_SIGNIFICANT_CHANGE_THRESHOLD;
     if (significant) {
       currentKey = version.version;
     }
@@ -308,9 +307,15 @@ export function buildRoomRatingWindow(versions: RoomVersionRecord[], targetVersi
 
   return {
     versionKey,
-    lineageKey: createLineageKey(sorted[0]?.snapshot.id ?? 'room', versionKey),
+    lineageKey: createLineageKey(sorted[0] ? getRoomVersionFacts(sorted[0]).snapshotId : 'room', versionKey),
     versionFamily,
   };
+}
+
+/** The stored change for a described version, or the change computed from both snapshots. */
+function getRoomVersionChange(previous: RoomVersionSource | undefined, version: RoomVersionSource): number {
+  if ('changeFromPrevious' in version) return version.changeFromPrevious;
+  return computeRoomWeightedChange(previous && 'snapshot' in previous ? previous.snapshot : null, version.snapshot);
 }
 
 export function buildCourseRatingWindow(
@@ -583,7 +588,7 @@ async function markCourseRatingRewarded(
 export async function submitRoomRating(
   env: Env,
   params: {
-    roomRecord: RoomRecord;
+    roomRecord: RoomRecordView;
     userId: string;
     body: RoomRatingRequestBody;
     now?: string;
@@ -903,7 +908,7 @@ export async function submitCourseRating(
 
 export async function loadRoomAggregateRatingSummaryForVersion(
   env: Env,
-  roomRecord: RoomRecord,
+  roomRecord: RoomRecordView,
   roomVersion: number,
   viewerUserId: string | null,
   currentPublishedVersion: number | null,
@@ -921,7 +926,7 @@ export async function loadRoomAggregateRatingSummaryForVersion(
 export async function loadRoomAggregateRatingSummaryFromVersions(
   env: Env,
   roomId: string,
-  versions: RoomVersionRecord[],
+  versions: readonly RoomVersionSource[],
   roomVersion: number,
   viewerUserId: string | null,
   currentPublishedVersion: number | null,
