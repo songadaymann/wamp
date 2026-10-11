@@ -1,3 +1,7 @@
+## 2026-10-11 — F004 fog images, F223 music worker, F078 iPhone effects volume, part of F008, phone map trim; F002, F138, F011 signed off
+
+PR #166 / `1532705e`: the phone map toolbar keeps Online, Settings and Chat (Report a bug, Guestbook and Controls in the ☰ menu) and Warp is on the room card. PR #167 / `b3c23922`: fog blobs are pooled images instead of per-frame Graphics ellipses. PR #168 / `4fca9d77`: effects at zero volume are skipped. PR #169 / `cf13f8a9`: room music renders in a module worker. PR #170 / `01f2b134`: removing a non-solid object (cannon bullets) no longer rebuilds every collider. F002, F138 and F011 passed Jonathan's phone check. Master **124/215**. Receipt: [fog, music, colliders](docs/review/wamp-fog-music-colliders-2026-10-11.md).
+
 ## 2026-10-11 — Phone check follow-ups: F229 silent switch and tab return, F023 effect timing, F080/F076 phone map
 
 PR #164 / `eb28cbb6`: sound effects play from Web Audio buffers instead of `<audio>` elements, so iPhone's silent switch and the `ambient` audio session cover all game audio and effects start on time; the audio engine retries resuming after you return to the tab and unlocks when a tap lifts; `?audiodebug` shows the audio log on screen. PR #165 / `f8831af2`: the phone map toolbar scrolls inside the screen instead of widening the page, and the Room of the Day chip no longer covers the room card. Receipt: [phone follow-ups](docs/review/wamp-phone-followups-2026-10-11.md).

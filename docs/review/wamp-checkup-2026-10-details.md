@@ -99,6 +99,8 @@ Core facts confirmed: no fps cap (main.ts:76-102), Arcade fixed at 60 Hz (World.
 (c) Remove the claim that the frame-work budget doubles total cost; queued streaming work just finishes sooner.
 (d) Add the defect the reviewer missed. Gameplay depends on frame rate: ICE_COAST_FACTOR is applied per frame (movementController.ts:570), and the `Math.max(delta/1000, 1/60)` floors (movementController.ts:573, 676, 712) double ice acceleration, wind push and directional gravity at 120 Hz. The per-frame camera lerp (OverworldPlayScene.ts:312, cameraController.ts:168) moving against 60 Hz body steps makes the player jitter. Capping hides this on about 120 Hz screens. Making those formulas delta-correct (pow(factor, delta/16.67) and plain delta/1000), or running movement on the physics WORLD_STEP, fixes it everywhere, including on uncapped 144 Hz desktops.
 
+**2026-10-11 done.** Delivered by `2adbfb08` (frame cadence gate: render every other frame on screens near 120/240 Hz; Settings frame-rate choice), merged in PR #38. Jonathan's phone check passed. iPhone Safari usually renders at 60 Hz, so the high-rate path is covered by `frameCadence.test.ts`.
+
 ### F001: Guest session recorder stalls the game once a second for new players
 
 - **Area:** Runtime performance (frame rate, GC, memory)
@@ -254,6 +256,8 @@ Change the claim in four ways:
 
 Weather is off by default and set per room (weather/model.ts:12-15), so only rooms that use fog are affected. Impact: medium.
 
+**2026-10-11 done.** PR #167 / `b3c23922`. `layoutFogLobes` (`weather/fogLayout.ts`, Phaser-free, no per-frame allocation) keeps the old placement math; `RoomWeatherController` draws each blob as a pooled image of a 256 px linear-filtered ellipse texture in a container created before the weather Graphics, ignored by the backdrop camera. Tests: blob positions checked against values recorded from the old drawing (fog 50, fog 100, rain 60); no `fillEllipse` calls; images reused. Browser (live vs branch build, Mac GPU, 4× CPU throttle): fog 100 room -2,11 script 659/631 → 429/428 ms/s, main-thread busy 865/830 → 613/618 ms/s; fog 50 room 10,4 446/448 → 376/350 ms/s. The editor rain preview is already cached by `documentRevision`. Not done: rain drops as `fillRect`. Receipt: `wamp-fog-music-colliders-2026-10-11.md`.
+
 ### F005: Dark rooms redraw the darkness with two GPU passes per light, every frame
 
 - **Area:** Runtime performance (frame rate, GC, memory)
@@ -371,6 +375,8 @@ Follow zoom is 1.051 in both. `scripts/mobile_smoke.mjs` passes every play scena
 
 Phone map follow-up, PR #165 / `f8831af2`: the world toolbar (`nowrap`, centred) was 35 px wider than an iPhone 13 and 69 px wider than an iPhone SE, which widened the page, clipped the menu and pushed full-width sheets off screen. It now scrolls inside the screen (spacer pseudo-elements keep it centred when it fits); the online popover opens from `#bottom-bar`; the Room of the Day chip sits above the toolbar on phones instead of over the room card. Receipt: `wamp-phone-followups-2026-10-11.md`.
 
+Phone map trim, PR #166 / `1532705e` (Jonathan's call): on phones in world mode the toolbar keeps Online, Settings and Chat; new phone-only ☰ menu items open Guestbook and Controls (Report a bug was already there); `#btn-world-jump-sheet` moved into the room card's primary row, now four columns on phones. `mobile_smoke.mjs` 12/12 scenarios pass, including `phone-portrait-deep-link-bottom-hud`, which failed on main.
+
 ### F011: 'Battery Saver' and auto-reduced mode don't turn down any visual effects
 
 - **Area:** Runtime performance (frame rate, GC, memory)
@@ -429,6 +435,8 @@ Test: `weather/controller.batterySaver.test.ts` (rain 82 → 41, snow 100 → 50
 
 PR #163 / `c39447e1`: in every dark-aura room, `RoomLightingController` clears the glow `RenderTexture` only when it held glows (`glowOverlayHasGlows`) and hides it while it is empty, so rooms without glowing lights skip a render-target clear and a full-room additive draw each frame. This needs no setting because nothing visible changes. Test: a new case in `lighting/controller.test.ts` (fails on the previous code). Dark room 2,1 with 37 glows renders as before (median 49.4 ms). Open: the editor weather preview. Receipt: `wamp-motion-frames-bridge-2026-10-11.md`.
 
+**2026-10-11 done.** The remaining open point, the editor weather preview, needs no change: `EditorScene.updateWeatherPreview` syncs the same `RoomWeatherController`, whose counts come from `resolveWeatherParticleCount`/`resolveWeatherFogBandCount` and so follow Battery Saver. Jonathan's phone check of Battery Saver passed.
+
 ### F008: Physics collision links grow with every room loaded, and are all rebuilt on room loads, bullet despawns and crate breaks
 
 - **Area:** Runtime performance (frame rate, GC, memory)
@@ -470,6 +478,8 @@ Fix, incrementally:
 **Fact-check (partially confirmed).**
 
 Tablets and other coarse-pointer devices automatically use the reduced profile (1 full room). They only get 9 rooms if the user picks full-quality mode. Desktops with 4 or fewer cores or 4 GB or less of memory are also reduced. Local play pressure (playPressure.ts:76-80) already drops to 1 full room when the 3×3 area has a pressure score of 620 or more, so the densest areas, such as spawn next to the 119-crab room, are already capped. The real exposure is mid-density areas: the Learn2WAMP 2 (1,-1) area scores 586, keeps 9 rooms, and builds an estimated 1,950–2,400 colliders, with cannons in 1,-1 and 1,-2. The ×2 terrain factor only applies to rooms that have inset tiles. Distance sleeping removes far objects from the rebuild, which shrinks C. Because colliders are destroyed before the body.enable check, a sleeping enemy also loses its colliders on every rebuild and gets nothing back when it wakes. The incremental per-object fix should handle this too: re-add colliders when an object wakes, or keep colliders through sleep. Most of the queue cost comes from ProcessQueue.add's pending.indexOf scan. Measured: 1.56 ms at 2k colliders, 3.07 ms at 3k, 10.9 ms at 6k on desktop, before allocating new colliders and closures.
+
+**2026-10-11 partly done.** PR #170 / `01f2b134`. `removeLiveObject` runs the full `syncWorldObjectColliders` only when the removed object was a runtime solid (others hold colliders against those) or breaking it revealed a contained object; a spent bullet, fireball or defeated enemy only had its own colliders, which removal destroys. Test: `liveObjects.removal.test.ts` (fails on the previous code). Browser, room -4,-1 (2 cannons, 32 enemies), dev server of the branch on the production API: 30 projectile removals and 0 full rebuilds in 15 s (was 30); every enemy kept its 4 colliders and stayed in place. Open: room-load rebuilds, adjacent-room scoping, category groups. Receipt: `wamp-fog-music-colliders-2026-10-11.md`.
 
 ### F010: World-map tile code re-scans every tile it has ever seen, every frame, and never forgets any
 
@@ -3056,6 +3066,8 @@ Small corrections and additions.
 
 4. **Cheaper interim fix.** Route every player through createMediaElementSource → per-player GainNode → master GainNode, and set gain instead of element.volume. The AudioBuffer rewrite stays the better long-term option because it also cuts trigger latency. Also skip `play()` when the effective volume is 0 on every platform, or wire the unused `setMuted`, since a slider at 0 currently still uses up pool players everywhere.
 
+**2026-10-11 done.** PR #164 / `eb28cbb6` moved effects to Web Audio buffers through per-voice and effects-volume gain nodes and added `touchend`/`pointerup`/`click` unlocks. PR #168 / `4fca9d77` skips a cue when the effects volume or its multiplier is 0 (test in `audio/sfx.test.ts`, fails on the previous code). Receipt: `wamp-fog-music-colliders-2026-10-11.md`.
+
 ### F148: No gamepad support and no instant-restart key
 
 - **Area:** Gameplay feel & new gameplay ideas
@@ -4031,6 +4043,8 @@ The proposed fix is still right: scale multipliers by `Math.pow(k, deltaMs/16.66
 3. **The fix's "exactly" claim.** The fix keeps 60Hz behaviour approximately, not exactly, because Phaser's smoothed delta wobbles around 16.67ms. Applying the velocity changes once per physics step (scaling by world.stepsLastFrame, or a WORLD_STEP listener) gives an exact match.
 4. **NPCs and conveyors.** The NPC helpers in liveObjects/npcEnvironment.ts (lines 76 and 93-98) use the same per-frame ice coast and the same 1/60-floored dt, so they need the same treatment. The conveyor add at movementController.ts:672-673 is unscaled per frame; on ice it builds up, so it needs the same fix too.
 
+**2026-10-11 done.** Delivered by `3703f6bd` (movement and environment once per physics step; seven-rate equality tests, `smoke_physics_cadence.mjs`), merged in PR #38. Jonathan's phone check passed.
+
 ### F139: Pits never kill: invisible floor under rooms, and falling into the room below abandons your timed run
 
 - **Area:** Gameplay feel & new gameplay ideas
@@ -4994,6 +5008,8 @@ Two related problems should go in the same fix:
 Hoisting the envelope constants (patternRenderer.ts:75-76) is a minor micro-optimisation, not the main cost.
 
 **2026-10-11 re-checked (no change).** Two parts of the fact-check are already in place on `main`: the render cache is bounded (`src/music/bufferCache.ts`, an LRU with per-group limits and a 50 MB budget, from the F220/F226 music work), and a muted player doesn't render (`playArrangement` records the request as `muted` and plays it on unmute). Still open, and medium effort: render pattern and phrase audio off the main thread (a module Worker, or chunked idle rendering) and prefetch it on neighbour approach (`roomTransition.ts` `prepareApproachingNeighbors`).
+
+**2026-10-11 done.** PR #169 / `cf13f8a9`. `music/patternRenderCore.ts` holds the synthesis unchanged (drum tracks take decoded samples and a sample rate instead of an AudioContext); `patternRender.worker.ts` runs it; `patternRenderClient.ts` sends each drum-sample set once, transfers channels back, and falls back to the main thread without `Worker` or when the worker fails. `patternRenderer.ts` keeps its public functions. `vite.config.ts` emits workers into `assets/cache-v2`. Test: loop, stems and each lane segment of a busy swung pattern match fingerprints from the previous renderer bit-for-bit; worker protocol and fallback. Browser (live vs branch build, PartyParty, 4× CPU throttle, 6 s after Start): longest task 336/93/274 → 0/82/84 ms. Not done: pre-render on neighbour approach. Receipt: `wamp-fog-music-colliders-2026-10-11.md`.
 
 ### F225: Played room music is never freed; it is always stereo and still rendered when music volume is 0
 
