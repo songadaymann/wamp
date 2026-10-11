@@ -34,6 +34,7 @@ export default defineConfig(({ mode }) => {
     base: './',
     plugins: [
       earlyWorldTileBootstrapPlugin(roomApiBaseUrl),
+      startupRuntimePreloadPlugin(),
       cloudflareWebAnalyticsPlugin(cloudflareWebAnalyticsToken),
       authoringDocumentsPlugin(),
     ],
@@ -120,6 +121,40 @@ function earlyWorldTileBootstrapPlugin(apiBaseUrl: string): PluginOption {
         EARLY_WORLD_TILE_BOOTSTRAP_MARKER,
         `<script data-wamp-early-world-tiles-bootstrap="v1">${source}</script>`,
       );
+    },
+  };
+}
+
+/**
+ * The game's entry script imports the runtime (main, phaser-vendor and their static
+ * imports, ~3.6 MB) only after the early world-tile check settles, and Vite emits no
+ * preload for dynamic imports. Preloading them at low priority lets the download start
+ * with the page instead of after that round trip; the entry still decides when they run.
+ */
+function startupRuntimePreloadPlugin(): PluginOption {
+  return {
+    name: 'startup-runtime-preload',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, context) {
+        if (!context.bundle || !context.chunk || resolve(context.filename) !== resolve(process.cwd(), 'index.html')) return [];
+        const bundle = context.bundle;
+        const files = new Set<string>();
+        const visit = (fileName: string): void => {
+          const chunk = bundle[fileName];
+          if (!chunk || chunk.type !== 'chunk' || files.has(fileName)) return;
+          files.add(fileName);
+          chunk.imports.forEach(visit);
+        };
+        context.chunk.dynamicImports.forEach(visit);
+        for (const fileName of context.chunk.imports) files.delete(fileName);
+        return [...files].map((fileName) => ({
+          tag: 'link',
+          attrs: { rel: 'modulepreload', crossorigin: true, fetchpriority: 'low', href: `./${fileName}` },
+          injectTo: 'head' as const,
+        }));
+      },
     },
   };
 }
