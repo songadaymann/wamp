@@ -22,8 +22,8 @@ import {
   fetchChatMessages,
   sendChatMessage,
 } from './client';
+import { CHAT_POLL_INTERVAL_MS, isScheduledChatPollDue } from './pollSchedule';
 
-const CHAT_POLL_INTERVAL_MS = 3000;
 const MAX_RENDERED_MESSAGES = 100;
 const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
@@ -65,6 +65,7 @@ export class ChatPanelController {
   private readonly seenMessageIds = new Set<string>();
   private readonly appModeObserver: MutationObserver;
   private pollTimer: number | null = null;
+  private lastPollStartedAtMs: number | null = null;
   private authState: AuthDebugState = getAuthDebugState();
   private messages: ChatMessageRecord[] = [];
   private latestCreatedAt: string | null = null;
@@ -212,7 +213,9 @@ export class ChatPanelController {
     });
 
     this.pollTimer = this.windowObj.setInterval(() => {
-      void this.pollForNewMessages();
+      if (isScheduledChatPollDue(this.open, Date.now(), this.lastPollStartedAtMs)) {
+        void this.pollForNewMessages();
+      }
     }, CHAT_POLL_INTERVAL_MS);
 
     this.windowObj.get_chat_debug_state = () => this.getDebugState();
@@ -326,6 +329,7 @@ export class ChatPanelController {
 
     this.initialLoadInFlight = true;
     this.loading = true;
+    this.lastPollStartedAtMs = Date.now();
     this.render();
 
     try {
@@ -353,6 +357,7 @@ export class ChatPanelController {
     }
 
     this.loading = true;
+    this.lastPollStartedAtMs = Date.now();
 
     try {
       const response = this.latestCreatedAt
@@ -445,7 +450,8 @@ export class ChatPanelController {
     this.open = true;
     this.unreadCount = 0;
     if (isAppReady()) {
-      void this.ensureLoaded();
+      // Closed-panel checks are 30 s apart, so catch up as soon as it opens.
+      void (this.historyLoaded ? this.pollForNewMessages() : this.ensureLoaded());
     }
     this.render();
     this.scrollMessagesToBottom();

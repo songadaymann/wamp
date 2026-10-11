@@ -121,6 +121,11 @@ function isMutatingRequest(request: Request): boolean {
   return MUTATING_METHODS.has(request.method.toUpperCase());
 }
 
+/** Whether the request carries a session cookie at all, valid or not. */
+export function hasSessionCookie(request: Request): boolean {
+  return parseCookie(request.headers.get('Cookie')).has(SESSION_COOKIE_NAME);
+}
+
 export async function loadCurrentSession(env: Env, request: Request): Promise<AuthSession | null> {
   const token = parseCookie(request.headers.get('Cookie')).get(SESSION_COOKIE_NAME);
   if (!token) {
