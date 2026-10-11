@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { defineConfig, loadEnv, transformWithEsbuild, type PluginOption } from 'vite';
@@ -34,6 +34,7 @@ export default defineConfig(({ mode }) => {
     base: './',
     plugins: [
       earlyWorldTileBootstrapPlugin(roomApiBaseUrl),
+      bootBundleReportPlugin(),
       cloudflareWebAnalyticsPlugin(cloudflareWebAnalyticsToken),
       authoringDocumentsPlugin(),
     ],
@@ -120,6 +121,37 @@ function earlyWorldTileBootstrapPlugin(apiBaseUrl: string): PluginOption {
         EARLY_WORLD_TILE_BOOTSTRAP_MARKER,
         `<script data-wamp-early-world-tiles-bootstrap="v1">${source}</script>`,
       );
+    },
+  };
+}
+
+/**
+ * Records the JavaScript a cold game visit runs before its first frame: the
+ * index.html entry, the runtime it imports dynamically, and their static imports.
+ * scripts/check_bundle_budget.mjs sizes these files against the startup budget.
+ */
+function bootBundleReportPlugin(): PluginOption {
+  return {
+    name: 'boot-bundle-report',
+    apply: 'build',
+    // After writing: Vite removes empty HTML facade chunks during generateBundle.
+    writeBundle(_options, bundle) {
+      const indexPath = resolve(process.cwd(), 'index.html');
+      const entry = Object.values(bundle).find((output) => output.type === 'chunk'
+        && output.isEntry && output.facadeModuleId !== null && resolve(output.facadeModuleId) === indexPath);
+      if (!entry || entry.type !== 'chunk') return;
+      const files = new Set<string>();
+      const visit = (fileName: string): void => {
+        const chunk = bundle[fileName];
+        if (!chunk || chunk.type !== 'chunk' || files.has(fileName)) return;
+        files.add(fileName);
+        chunk.imports.forEach(visit);
+      };
+      visit(entry.fileName);
+      entry.dynamicImports.forEach(visit);
+      mkdirSync(resolve(process.cwd(), 'output/build'), { recursive: true });
+      writeFileSync(resolve(process.cwd(), 'output/build/boot-bundle.json'),
+        `${JSON.stringify({ entry: entry.fileName, files: [...files].sort() }, null, 2)}\n`);
     },
   };
 }
