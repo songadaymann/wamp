@@ -1236,6 +1236,27 @@ Also: the production client does not fall back to local storage on a 5xx, becaus
 5. **Fix step (2) needs a different freshness signal.** minted_owner_synced_at is written only when chain state changes (service.ts:158-163), so it cannot serve as a freshness timestamp. A better gate: an unminted room can only become minted with a Worker-signed authorization from handleRoomMintPrepare (mint/routes.ts:52-60, 30-minute deadline). Skip the chain read for unminted rooms unless a prepare was issued in the last 30 minutes, and use a short TTL cache for ownerOf on minted rooms.
 6. **"Fail-closed" is really fail-to-stale.** Enforcing the D1 owner during an outage lets a seller who has just transferred the token keep saving until the next sync. That is acceptable, but it should be described accurately.
 
+**2026-10-10 completed.** PR #122 / `41e455e9`, API Worker `1ef364ee`.
+
+`syncRoomOwnershipFromChain` takes a failure mode:
+- **`'use-stored'`**, the default for room writes (saves, publishes, reverts, command saves and the construction preview). On an RPC error it logs `Room <id> ownership sync skipped …` and keeps D1's ownership: unminted rooms stay editable by their claimer, and minted rooms stay with the last synced token owner. That is fail-to-stale, as the fact-check describes. The tolerant read uses one retry and a 5 s timeout instead of viem's 3 retries and 10 s.
+- **`'throw'`**: the four mint routes and `POST /api/rooms/:id/ownership/refresh` still fail.
+
+Two load reductions:
+- `loadRoomRecordForMutation` reloads the full record only when the sync changed ownership.
+- `saveDraftFromCommandRequest` passes its record to `saveDraft`, so a command save runs one chain read and one mutation load instead of two of each.
+
+Client autosave backoff was already delivered (`cfbcf8d8`).
+
+Evidence: `src/cloudflare/worker/rooms/mutationChainSync.test.ts`, with a fake RPC returning 429 or an unminted `eth_call`. Three of its four tests fail on the previous code; the 'throw' case passes on both. No builder saved between the deploy and this record, so production saves under the new code are not yet observed.
+
+Not done:
+- skipping the chain read for unminted rooms with no recent mint prepare;
+- caching `ownerOf` for minted rooms;
+- loading only the latest version for writes.
+
+Receipt: `wamp-chain-outage-saves-2026-10-10.md`.
+
 ### F027: Missing index on room_versions.published_by_user_id makes 15+ queries scan the whole table
 
 - **Area:** Backend performance, cost & reliability

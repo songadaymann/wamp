@@ -1,3 +1,7 @@
+## 2026-10-10 — F236 room saves survive a Base RPC outage
+
+PR #122 / `41e455e9` (API Worker `1ef364ee`): when the Base RPC fails, room saves, publishes and reverts use the ownership already stored instead of failing in every room. Minting and the ownership refresh still require the chain. Master **86/215**. Receipt: [chain outage saves](docs/review/wamp-chain-outage-saves-2026-10-10.md).
+
 ## 2026-10-10 — F028 chat polling while the panel is closed
 
 PR #121 / `56c712c4` (API Worker `97079932`): with the chat panel closed, a tab checks for new messages every 30 s instead of every 3 s; opening chat catches up at once and polls every 3 s. Anonymous polls are served from a 3 s edge cache. Master **85/215**. Receipt: [chat polling](docs/review/wamp-chat-polling-2026-10-10.md).
