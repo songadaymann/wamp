@@ -131,6 +131,7 @@ import {
 import {
   handleWorldTileConfigRequest,
   handleWorldTileManifestRequest,
+  requestMayQueueWorldTiles,
   scheduleWorldTileOutboxDispatch,
 } from './worker/worldTiles/routes';
 import { handleRoomShareRequest } from './worker/share/routes';
@@ -910,7 +911,7 @@ export default {
         { status }
       );
     } finally {
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
+      if (requestMayQueueWorldTiles(request.method, url.pathname)) {
         scheduleWorldTileOutboxDispatch(env, ctx);
       }
     }
