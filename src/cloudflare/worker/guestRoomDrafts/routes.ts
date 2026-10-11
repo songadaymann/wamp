@@ -103,7 +103,7 @@ export async function handleGuestRoomDraftRequest(
 
   if (draftMatch && request.method === 'PUT') {
     const roomId = decodeURIComponent(draftMatch[1]);
-    const body = await parseJsonBody<GuestRoomDraftSaveRequestBody>(request);
+    const body = await parseJsonBody<GuestRoomDraftSaveRequestBody>(request, { maxBytes: 600_000 });
     const guestUserId = normalizeGuestUserId(body.guestUserId);
     const guestDisplayName = normalizeDisplayName(body.guestDisplayName);
     const recoveryTokenHash = await hashRecoveryToken(normalizeRecoveryToken(body.recoveryToken));

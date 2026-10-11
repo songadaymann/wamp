@@ -72,7 +72,7 @@ async function handleGuestbookList(
 }
 
 async function handleGuestbookCreate(request: Request, env: Env): Promise<Response> {
-  const body = await parseJsonBody<GuestbookCreateRequestBody>(request);
+  const body = await parseJsonBody<GuestbookCreateRequestBody>(request, { maxBytes: 16_384 });
   const displayName = normalizeGuestbookDisplayName(body.displayName);
   const message = normalizeGuestbookMessage(body.body);
   const guestSessionId = normalizeGuestSessionId(body.guestSessionId);

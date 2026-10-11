@@ -134,14 +134,18 @@ interface ParseJsonBodyOptions {
   maxBytes?: number;
 }
 
+/**
+ * Bodies are read with a size cap so a huge JSON payload is refused (413) before it is buffered
+ * and parsed. The default is far above any legitimate body (the largest stored run trace is
+ * about 350 KB); endpoints with small bodies, especially unauthenticated ones, pass a tighter
+ * maxBytes (F051).
+ */
+export const DEFAULT_JSON_BODY_MAX_BYTES = 4 * 1024 * 1024;
+
 export async function parseJsonBody<T>(request: Request, options: ParseJsonBodyOptions = {}): Promise<T> {
   try {
-    if (typeof options.maxBytes === 'number') {
-      const text = await readRequestBodyTextWithLimit(request, options.maxBytes);
-      return JSON.parse(text) as T;
-    }
-
-    return (await request.json()) as T;
+    const text = await readRequestBodyTextWithLimit(request, options.maxBytes ?? DEFAULT_JSON_BODY_MAX_BYTES);
+    return JSON.parse(text) as T;
   } catch (error) {
     if (error instanceof HttpError) {
       throw error;

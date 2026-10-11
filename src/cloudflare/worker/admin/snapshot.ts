@@ -91,7 +91,8 @@ export async function handleAdminSnapshotImport(
     throw new HttpError(400, 'Unsupported snapshot import table.');
   }
 
-  const body = await parseJsonBody<SnapshotImportRequestBody>(request);
+  // Whole-world snapshot imports (safety environment only) can be far larger than any player body.
+  const body = await parseJsonBody<SnapshotImportRequestBody>(request, { maxBytes: 96 * 1024 * 1024 });
   const rows = Array.isArray(body?.rows) ? body.rows : [];
   if (rows.length === 0) {
     return jsonResponse(request, {
