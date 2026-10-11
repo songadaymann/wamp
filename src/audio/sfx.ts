@@ -665,13 +665,11 @@ export class SfxController {
       return idlePlayer;
     }
 
-    const retargetedIdlePlayer = this.acquireRetargetedIdleAudioPlayer(path, route);
-    if (retargetedIdlePlayer) {
-      return retargetedIdlePlayer;
-    }
-
+    // Under the cap, give the cue its own player. Borrowing another cue's idle player means
+    // swapping its source and reloading it, so alternating jump, land and footstep sounds kept
+    // reloading the same few elements and played late (F023). Borrow only at the cap.
     if (this.audioPlayerByElement.size >= MAX_SFX_MEDIA_PLAYERS) {
-      return null;
+      return this.acquireRetargetedIdleAudioPlayer(path, route);
     }
 
     const assetUrl = this.assetUrlByPath.get(path);

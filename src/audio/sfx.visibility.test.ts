@@ -58,3 +58,21 @@ describe('SFX hidden-tab lifecycle', () => {
     await vi.waitFor(() => expect(h.context.state).toBe('suspended')); expect(h.controller.getDebugState().activeCount).toBe(0);
   });
 });
+
+describe('SFX player pool (F023)', () => {
+  it('gives each cue its own player instead of reloading another cue\'s idle one', () => {
+    const h = harness();
+    h.controller.play('jump', { ignoreCooldown: true });
+    h.visibility(true); h.visibility(false); // stops and returns the jump player to the idle pool
+    h.controller.play('land', { ignoreCooldown: true });
+    expect(h.players).toHaveLength(2);
+    expect(h.players[0].load).not.toHaveBeenCalled();
+    expect(h.players[0].src).toContain('jump');
+    h.visibility(true); h.visibility(false);
+    h.controller.play('jump', { ignoreCooldown: true });
+    h.controller.play('land', { ignoreCooldown: true });
+    expect(h.players).toHaveLength(2);
+    expect(h.players.every((player) => player.load.mock.calls.length === 0)).toBe(true);
+  });
+});
+
