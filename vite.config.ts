@@ -86,6 +86,17 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    // Module workers (the music renderer) are hashed into the same asset namespace.
+    worker: {
+      format: 'es',
+      rollupOptions: {
+        output: {
+          entryFileNames: `${BUILD_ASSET_NAMESPACE}/[name]-[hash].js`,
+          chunkFileNames: `${BUILD_ASSET_NAMESPACE}/[name]-[hash].js`,
+          assetFileNames: `${BUILD_ASSET_NAMESPACE}/[name]-[hash][extname]`,
+        },
+      },
+    },
     server: {
       port: 3000,
       strictPort: true,
