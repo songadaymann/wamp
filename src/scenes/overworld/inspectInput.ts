@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { mouseButtonsReleased } from '../pointerRelease';
 import { hasBlockingModalOpen } from '../../ui/modalState';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import { getGameSettings } from '../../settings/userSettings';
@@ -48,7 +49,6 @@ export class OverworldInspectInputController {
     | null = null;
   private touchPinchDistance = 0;
   private touchPinchAnchor: PointerPosition = { x: 0, y: 0 };
-  private altDown = false;
   private spaceDown = false;
 
   constructor(
@@ -62,7 +62,6 @@ export class OverworldInspectInputController {
       keyboard.on('keydown-ZERO', this.handleFitWorldKeydown);
       keyboard.on('keydown-P', this.handleReturnToWorldKeydown);
       keyboard.on('keydown-ESC', this.handleReturnToWorldKeydown);
-      keyboard.on('keydown-ALT', this.handleAltKeydown);
       keyboard.on('keyup-ALT', this.handleAltKeyup);
       keyboard.on('keydown-SPACE', this.handleSpaceKeydown);
       keyboard.on('keyup-SPACE', this.handleSpaceKeyup);
@@ -71,6 +70,9 @@ export class OverworldInspectInputController {
     this.scene.input.on('pointerdown', this.handlePointerDown);
     this.scene.input.on('pointermove', this.handlePointerMove);
     this.scene.input.on('pointerup', this.handlePointerUp);
+    this.scene.input.on('pointerupoutside', this.handlePointerUp);
+    this.scene.game.events.on('blur', this.handleInputBlur);
+    this.scene.game.events.on('hidden', this.handleInputBlur);
   }
 
   destroy(): void {
@@ -79,7 +81,6 @@ export class OverworldInspectInputController {
       keyboard.off('keydown-ZERO', this.handleFitWorldKeydown);
       keyboard.off('keydown-P', this.handleReturnToWorldKeydown);
       keyboard.off('keydown-ESC', this.handleReturnToWorldKeydown);
-      keyboard.off('keydown-ALT', this.handleAltKeydown);
       keyboard.off('keyup-ALT', this.handleAltKeyup);
       keyboard.off('keydown-SPACE', this.handleSpaceKeydown);
       keyboard.off('keyup-SPACE', this.handleSpaceKeyup);
@@ -88,6 +89,9 @@ export class OverworldInspectInputController {
     this.scene.input.off('pointerdown', this.handlePointerDown);
     this.scene.input.off('pointermove', this.handlePointerMove);
     this.scene.input.off('pointerup', this.handlePointerUp);
+    this.scene.input.off('pointerupoutside', this.handlePointerUp);
+    this.scene.game.events.off('blur', this.handleInputBlur);
+    this.scene.game.events.off('hidden', this.handleInputBlur);
     this.reset();
   }
 
@@ -105,7 +109,6 @@ export class OverworldInspectInputController {
     this.touchTapCandidate = null;
     this.touchPinchDistance = 0;
     this.touchPinchAnchor = { x: 0, y: 0 };
-    this.altDown = false;
     this.spaceDown = false;
   }
 
@@ -120,13 +123,16 @@ export class OverworldInspectInputController {
     }
   };
 
-  private readonly handleAltKeydown = (): void => {
-    this.altDown = true;
+  private readonly handleAltKeyup = (): void => {
+    this.isPanning = false;
   };
 
-  private readonly handleAltKeyup = (): void => {
-    this.altDown = false;
-    this.isPanning = false;
+  // Focus leaving the game (Alt-Tab, a text field, a hidden tab) swallows key and
+  // button releases: end any pan and forget a held Space.
+  private readonly handleInputBlur = (): void => {
+    this.spaceDown = false;
+    const pointer = this.scene.input.activePointer;
+    if (this.isPanning && pointer.isDown && !pointer.wasTouch) this.handlePointerUp(pointer);
   };
 
   private readonly handleSpaceKeydown = (): void => {
@@ -173,6 +179,11 @@ export class OverworldInspectInputController {
     }
 
     if (!this.isPanning) {
+      return;
+    }
+
+    if (mouseButtonsReleased(pointer)) {
+      this.handlePointerUp(pointer);
       return;
     }
 
@@ -419,7 +430,8 @@ export class OverworldInspectInputController {
   }
 
   private pointerRequestsPan(pointer: Phaser.Input.Pointer): boolean {
-    const altPressed = this.altDown || Boolean((pointer.event as MouseEvent | undefined)?.altKey);
+    // Read Alt from the click itself: a latched Alt key outlives an Alt-Tab.
+    const altPressed = Boolean((pointer.event as MouseEvent | undefined)?.altKey);
     const optionDragPanEnabled = getGameSettings().panningStyle === 'option-drag';
     return pointer.middleButtonDown() || this.spaceDown || (optionDragPanEnabled && altPressed);
   }

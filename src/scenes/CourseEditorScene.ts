@@ -1,4 +1,5 @@
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../buildPrompts/publishing';
+import { mouseButtonsReleased } from './pointerRelease';
 import { expandedRoomIdFromLegacyCourseId } from '../expandedRooms/model';
 import { getCourseEnemyGoalPublishValidationError } from '../courses/publishValidation';
 import { countRoomPlacedObjectsByCategory } from '../persistence/roomModel';
@@ -264,9 +265,13 @@ export class CourseEditorScene extends Phaser.Scene {
   private readonly objectMoveController: EditorObjectMoveController;
   private readonly touchTileRooms = new Set<string>();
   private readonly touchObjectRooms = new Set<string>();
+  // Focus leaving the game (Alt-Tab, a text field, a hidden tab) swallows button
+  // releases: finish any mouse stroke, shape or pan as if it was released.
   private readonly handleTouchBlur = (): void => {
     this.objectMoveController.stopGesture();
     if (this.touchControls.isEditing) this.touchControls.cancel();
+    const pointer = this.input.activePointer;
+    if (pointer.isDown && !pointer.wasTouch && this.hasMousePointerAction(pointer)) this.handlePointerRelease(pointer, true);
   };
   private activeTileDragRoomId: string | null = null;
   private activeObjectDragRoomId: string | null = null;
@@ -2529,6 +2534,7 @@ export class CourseEditorScene extends Phaser.Scene {
 
   private setupPointerControls(): void {
     this.game.events.on('blur', this.handleTouchBlur);
+    this.game.events.on('hidden', this.handleTouchBlur);
     this.events.on('sleep', this.handleTouchBlur);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (editorState.activeTool === 'move' && !this.musicModeActive && pointer.rightButtonDown()) { this.objectMoveController.cancel(); return; }
@@ -2565,6 +2571,10 @@ export class CourseEditorScene extends Phaser.Scene {
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.objectMoveController.move(pointer)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.move(pointer); return; }
+      if (mouseButtonsReleased(pointer) && this.hasMousePointerAction(pointer)) {
+        this.handlePointerRelease(pointer, true);
+        return;
+      }
       if (this.pendingRightClickPanPointerId === pointer.id) {
         const distance = Phaser.Math.Distance.Between(
           this.panStartPointer.x,
@@ -2595,32 +2605,41 @@ export class CourseEditorScene extends Phaser.Scene {
       this.handlePointerDrag(pointer);
     });
 
-    this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => {
-      if (this.objectMoveController.up(pointer, true)) return;
-      if (pointer.wasTouch && !this.musicModeActive) this.touchControls.up(pointer);
-    });
-    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-      if (this.objectMoveController.up(pointer)) return;
-      if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.up(pointer); return; }
-      if (this.pendingRightClickPanPointerId === pointer.id) {
-        this.pendingRightClickPanPointerId = null;
-        this.handleSecondaryPointerClick(pointer);
-        return;
-      }
+    this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => this.handlePointerRelease(pointer, true));
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.handlePointerRelease(pointer));
+  }
 
-      if (this.isPanning) {
-        this.isPanning = false;
-        return;
-      }
+  private hasMousePointerAction(pointer?: Phaser.Input.Pointer): boolean {
+    return this.isPanning
+      || (pointer !== undefined && this.pendingRightClickPanPointerId === pointer.id)
+      || this.activeObjectDragRoomId !== null
+      || this.tileDragMode !== null
+      || this.rectStart !== null;
+  }
 
-      if (this.musicModeActive) {
-        this.handleMusicPointerUp(pointer);
-        this.updateMusicCursorHighlight();
-        return;
-      }
+  // A release over a panel or outside the window arrives as 'pointerupoutside'; it
+  // finishes the stroke, shape or pan like a release over the canvas.
+  private handlePointerRelease(pointer: Phaser.Input.Pointer, outside = false): void {
+    if (this.objectMoveController.up(pointer, outside)) return;
+    if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.up(pointer); return; }
+    if (this.pendingRightClickPanPointerId === pointer.id) {
+      this.pendingRightClickPanPointerId = null;
+      if (!outside) this.handleSecondaryPointerClick(pointer);
+      return;
+    }
 
-      this.finishPointerAction(pointer);
-    });
+    if (this.isPanning) {
+      this.isPanning = false;
+      return;
+    }
+
+    if (this.musicModeActive) {
+      this.handleMusicPointerUp(pointer);
+      this.updateMusicCursorHighlight();
+      return;
+    }
+
+    this.finishPointerAction(pointer);
   }
 
   private setupKeyboard(): void {
@@ -3733,6 +3752,7 @@ export class CourseEditorScene extends Phaser.Scene {
     // Authored exits flush before stop/sleep; never serialize dead runtimes here.
     this.isShuttingDown = true;
     this.game.events.off('blur', this.handleTouchBlur);
+    this.game.events.off('hidden', this.handleTouchBlur);
     this.events.off('sleep', this.handleTouchBlur);
     this.touchControls.reset();
     this.touchTileRooms.clear();
