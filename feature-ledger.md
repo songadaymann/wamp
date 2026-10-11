@@ -1,3 +1,7 @@
+## 2026-10-10 — F055 quick-restart trace races pinned
+
+Confirmed fixed by the run-instance guards in `65db708d`; PR #117 / `136e27ac` adds regression tests for the survival auto-restart, late start replies and same-Expanded-Room restarts. No production code change. Master **82/215**.
+
 ## 2026-10-10 — F030 compact world reads survive transient errors
 
 PR #116 / `5ef28c36` is merged (Pages auto-build) and the API Worker is deployed (`8ba8d713`). Only a disabled compact route switches a session to legacy chunks; blips retry compact reads on the next refresh, and the legacy route shares the 20 s anonymous edge cache. Master **81/215**. Receipt: [compact breaker](docs/review/wamp-compact-breaker-2026-10-10.md).

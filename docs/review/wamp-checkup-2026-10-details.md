@@ -2092,6 +2092,8 @@ Frequency is understated. The race does not need a start still in flight. An ord
 
 The course sub-claim is mostly moot. Course finishes are attemptId-guarded, and the stale-start overwrite keeps attemptId, nonce and trace consistent, so it does not cause trace_nonce rejections by itself.
 
+**2026-10-10 completed.** The races were fixed by the run-instance guards in `65db708d` (2026-10-04): a room run's late finish clears the trace only if that run is still current, a late start reply binds only if its run is still current, and the Expanded Room start guard compares the run instance rather than `course.id`. PR #117 / `136e27ac` adds `rankedRunRestartRace.test.ts`, driving the real goal and course controllers and recorder through the survival auto-restart (failed run A's finish lands after run B started), a restart before A's start reply, and a restart of the same Expanded Room; B keeps its own nonce and early breadcrumbs in each. Each test fails when its guard is weakened (checked by temporarily removing the room guards and reverting the course guard to a `course.id` comparison).
+
 ### F054: Releasing the mouse over a panel or outside the window leaves strokes uncommitted and pans stuck
 
 - **Area:** Client bug hunt (gameplay & editor)
