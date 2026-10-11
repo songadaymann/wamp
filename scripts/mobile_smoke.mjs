@@ -370,7 +370,7 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
   );
   assertCondition(
     state.activeScene.mobilePortraitCamera?.zoomMultiplier === 2
-      && state.activeScene.mobilePortraitCamera?.targetY === 0.34,
+      && state.activeScene.mobilePortraitCamera?.targetY === 0.53,
     `portrait camera should use the wider, centered mobile defaults: ${JSON.stringify(state.activeScene.mobilePortraitCamera)}`,
   );
   const roomFraming = await page.evaluate(() => {
@@ -661,7 +661,7 @@ async function runPhonePortraitCameraTuner(page, scenarioSummary, scenarioDir) {
 
   const before = await readCameraTunerSnapshot(page);
   assertCondition(
-    before.zoomMultiplier === 2 && before.targetY === 0.34,
+    before.zoomMultiplier === 2 && before.targetY === 0.53,
     `camera tuner should begin from the wider, centered portrait defaults: ${JSON.stringify(before)}`,
   );
   await clickElement(page, '[data-mobile-camera-tuner-action="zoom-in"]');

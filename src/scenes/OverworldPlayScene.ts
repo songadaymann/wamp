@@ -326,13 +326,16 @@ const EDGE_WALL_THICKNESS = 12;
 const RESPAWN_FALL_DISTANCE = ROOM_PX_HEIGHT * 2;
 const FOLLOW_CAMERA_LERP = 0.12;
 const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
-const MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y = 0.34;
+// The canvas ends at the portrait console, so this is a share of the visible play area
+// (0.34 of the old full-height canvas put the player at the same spot).
+const MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y = 0.53;
 const MOBILE_PORTRAIT_PLAY_CAMERA_ZOOM_MULTIPLIER = 2;
 const MOBILE_PORTRAIT_PLAY_CAMERA_MIN_ZOOM_MULTIPLIER = 0.75;
 const MOBILE_PORTRAIT_PLAY_CAMERA_MAX_ZOOM_MULTIPLIER = 3.25;
 const MOBILE_PORTRAIT_PLAY_CAMERA_MIN_TARGET_Y = 0.25;
 const MOBILE_PORTRAIT_PLAY_CAMERA_MAX_TARGET_Y = 0.78;
-const MOBILE_PORTRAIT_CAMERA_TUNING_STORAGE_KEY = 'wamp_mobile_portrait_camera_tuning_v1';
+// v2: tuning saved for the full-height canvas (v1) no longer applies.
+const MOBILE_PORTRAIT_CAMERA_TUNING_STORAGE_KEY = 'wamp_mobile_portrait_camera_tuning_v2';
 
 type RoomEdgeWall = OverworldRoomEdgeWall;
 
