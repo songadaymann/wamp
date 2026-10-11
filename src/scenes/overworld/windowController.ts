@@ -376,9 +376,9 @@ export class OverworldWindowController {
       );
       console.error('[wamp boot] Failed while preparing the overworld', error);
       if (!isAppReady()) {
-        showBootFailure('Loaded world data, but failed to enter the world. Check the console and retry.', retry);
+        showBootFailure('Loaded the world, but couldn\'t open it. Try again, or reload the page if it keeps happening.', retry);
       } else if (isBusyOverlayVisible()) {
-        showBusyError('Failed to prepare the world. Check the console and try again.', {
+        showBusyError('Couldn\'t open the world. Try again, or reload the page if it keeps happening.', {
           retryHandler: retry,
         });
       } else {

@@ -2314,7 +2314,7 @@ export class EditorUiBridge {
         ? smartSelection.brush.description
         : tunnelBackdropSelected && !advancedBuilder
         ? 'Draw non-colliding blue tunnel walls behind the player. Smart chooses rock edges and ties.'
-        : `${smartSelection.brush.description}${layerExplanation}${collisionExplanation}${supportExplanation} Right-click or Erase removes it.`;
+        : `${smartSelection.brush.description}${layerExplanation}${collisionExplanation}${supportExplanation} Erase (or right-click) removes it.`;
       smartHint.dataset.smartSupport = unsupportedTools.length > 0 ? 'limited' : 'full';
       smartHint.dataset.smartInstructions = String(singleShapeTool);
     }
