@@ -2205,6 +2205,14 @@ Keep the mechanism, which is confirmed, but change three things:
 (b) Scope: this is desktop only (phone-chrome.css:67 hides those buttons in play-world on phones). It affects modals that do not pause the scene: Settings, Controls, Guestbook and Leaderboard. The goal intro and performance suggestion modals are safe because scene.pause() switches the keyboard plugin off (KeyboardPlugin.js:240, Systems.js:587).
 (c) Remove or soften the P claim, since P is the intended return-to-world shortcut. Impact should be medium, not high.
 
+**2026-10-10 completed.** PR #120 / `7242388b` (frontend, Pages auto-build; live in loader `main-EsRHLu10.js`). New `src/ui/modalState.ts`:
+- `hasBlockingModalOpen()` reports any visible `.history-modal`.
+- `installDialogEscapeGuard()`, installed once in `main.ts`, adds a document capture-phase keydown listener that calls `preventDefault()` on Escape while such a dialog is open. Phaser's KeyboardManager skips default-prevented events, so the key never reaches `keydown-ESC`.
+
+A guard inside the scene alone was not enough, because the dialog has already closed by the time Phaser processes its queued key. `handleReturnToWorldKeydown` also checks `hasBlockingModalOpen()`, so P with a menu open stays in the room. Room comments share the same check.
+
+Browser check (local dev server, room −2,−6): Escape with Settings open closes Settings and stays in play (before: mode `browse`); P with Settings open stays in play; Escape with no dialog still returns to the world. The ~15 hand-rolled modal handlers still don't call `preventDefault`; the capture guard covers them. Receipt: `wamp-escape-modals-2026-10-10.md`.
+
 ### F063: Players see raw `{"error":"…"}` text: apiRequest never unwraps the server's JSON error
 
 - **Area:** Code health & architecture (AI-agent friendliness)

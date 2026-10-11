@@ -1,3 +1,7 @@
+## 2026-10-10 — F168 Escape closes menus without leaving the room
+
+PR #120 / `7242388b`: Escape (or P) with Settings, Controls or any other dialog open closes the dialog and keeps the player in the room; duels are no longer cancelled by it. Master **84/215**. Receipt: [Escape and dialogs](docs/review/wamp-escape-modals-2026-10-10.md).
+
 ## 2026-10-10 — F063 plain API error messages; edge-cache browser lifetime fix
 
 PR #118 / `f24a383d`: players see the server's error sentence instead of `{"error":...}` (guestbook, room comments, email-code sign-in, School admin). Master **83/215**. PR #119 / `f303f71a` (API Worker `8b6cbf12`): cached anonymous API responses keep their own `max-age=20` on hits instead of the zone's 4-hour browser TTL. Receipt: [API errors](docs/review/wamp-api-errors-2026-10-10.md).
