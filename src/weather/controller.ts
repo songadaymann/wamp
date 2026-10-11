@@ -7,6 +7,7 @@ import {
   type RoomWeatherSettings,
 } from './model';
 import type { RoomWeatherSurfaceSegment } from './surfaces';
+import { getDevicePerformanceMode } from '../performance/devicePerformanceMode';
 
 export interface RoomWeatherBounds {
   x: number;
@@ -171,24 +172,29 @@ export class RoomWeatherController {
   }
 }
 
-function resolveWeatherParticleCount(weather: RoomWeatherSettings): number {
+/** Battery Saver draws half the weather: fewer drops, flakes and fog bands (F011). */
+function weatherDetailScale(): number {
+  return getDevicePerformanceMode() === 'battery-saver' ? 0.5 : 1;
+}
+
+export function resolveWeatherParticleCount(weather: RoomWeatherSettings): number {
   const intensity = weather.intensity / 100;
   if (weather.mode === 'rain') {
-    return Math.round(34 + intensity * 96);
+    return Math.round((34 + intensity * 96) * weatherDetailScale());
   }
   if (weather.mode === 'snow') {
-    return Math.round(18 + intensity * 82);
+    return Math.round((18 + intensity * 82) * weatherDetailScale());
   }
   return 0;
 }
 
-function resolveWeatherFogBandCount(weather: RoomWeatherSettings): number {
+export function resolveWeatherFogBandCount(weather: RoomWeatherSettings): number {
   const intensity = weather.intensity / 100;
   if (weather.mode === 'fog') {
-    return Math.round(8 + intensity * 22);
+    return Math.max(1, Math.round((8 + intensity * 22) * weatherDetailScale()));
   }
   if (weather.mode === 'rain') {
-    return Math.round(1 + intensity * 3);
+    return Math.max(1, Math.round((1 + intensity * 3) * weatherDetailScale()));
   }
   return 0;
 }
