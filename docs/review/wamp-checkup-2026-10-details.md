@@ -2035,9 +2035,39 @@ handleRequestMagicLink rate-limits per email only (hasRecentEmailSignInRequest),
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F051: details withheld
+### F051: Most mutating JSON endpoints parse request bodies with no size limit
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Security & abuse resistance
+- **Type:** improvement · **impact:** low · **effort:** small
+
+**Summary.** Only a handful of endpoints cap how big an incoming JSON body can be; the large majority call the generic parser with no limit, so a client can POST very large payloads that the worker fully buffers and parses before rejecting them — cheap memory/CPU pressure.
+
+**Technical detail.**
+
+parseJsonBody (core/http.ts:137-151) only enforces a limit when options.maxBytes is passed; otherwise it does request.json() with no cap. Across src/cloudflare/worker, ~80 non-test call sites use parseJsonBody< > and only 11 pass maxBytes (room snapshots 2MB via parseRoomSnapshot, guest replay 60KB, guest drafts 512KB, presence token 4KB). Comment creation, chat messages, playlist/profile/world/course mutations, etc. parse unbounded bodies. Cloudflare caps total request size, but a 50-100MB JSON blob still forces full buffering+parse per request and can be fired cross-origin from trusted-origin pages. Fix: give parseJsonBody a sane default maxBytes (e.g. 64KB) and raise it explicitly only where large bodies are legitimate.
+
+**Evidence.**
+
+- src/cloudflare/worker/core/http.ts:142 — without maxBytes the parser calls request.json() with no cap
+- grep: ~80 parseJsonBody call sites in worker, only 11 pass maxBytes
+
+**Fact-check (partially confirmed).**
+
+Correct the counts: 89 non-test call sites, and only 8 pass maxBytes (not ~80 and 11).
+
+Guest drafts do NOT use a 512KB parse limit. guestRoomDrafts/routes.ts:92 parses the body with no cap. MAX_GUEST_ROOM_SNAPSHOT_JSON_BYTES (512_000, line 29) is only checked at line 102, after the full parse, on the re-serialized snapshot. So this unauthenticated endpoint parses an unbounded body first and rejects it afterwards.
+
+The "cross-origin from trusted-origin pages" framing is wrong. The more relevant point is that guestbook create (guestbook/routes.ts:75), the guest activity heartbeat (guestActivity/routes.ts:26) and the guest draft PUT accept unbounded bodies with no auth and no trusted-origin check, so any non-browser client can reach them.
+
+Fix: set a default maxBytes in parseJsonBody, e.g. 64KB. Give the guest draft PUT an explicit limit of about 600KB, and leave the existing explicit room/world snapshot limits as they are.
+
+**2026-10-11 completed.** PR #151 / `ae6444d7`, API Worker `174d2a23`. `parseJsonBody` always reads through `readRequestBodyTextWithLimit` (Content-Length first, then actual bytes; 413 "Request body is too large."). The default is `DEFAULT_JSON_BODY_MAX_BYTES` = 4 MB; the largest run trace stored in production is 350,979 bytes, and room/world snapshots keep their 2 MB caps. Explicit caps:
+- 16 KB: guestbook create, guest activity heartbeat, chat message, room comment;
+- 64 KB: Wamp-O-Gram create;
+- 600 KB: guest draft save;
+- 96 MB: admin snapshot import (safety only).
+
+Tests: `core/http.body.test.ts`. Production: a 20 KB `POST /api/guest-activity/heartbeat` returns `413 {"error":"Request body is too large."}`. Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
 
 ### F050: details withheld
 
@@ -3136,6 +3166,13 @@ About 93 player-visible "Failed/Could not" strings, not 172; the rest are consol
 
 "No ranked clears yet." lives in runRatingModal.ts and goalRuns.ts, not in leaderboardModal.ts. Do not promise "your draft is safe in this browser" for signed-in save failures, because those drafts are not saved locally.
 
+**2026-10-11 partly done.** PR #147 / `be16bc94` (Pages; live `index.html` has the Erase hint and no developer line).
+- **Controls window:** the developer line "Custom control remapping can layer onto this later…" is removed, the settings row in the key table becomes "Option-drag | Pan the map (or two-finger drag: pick in Settings)", and `body[data-coarse-pointer='true'] .controls-section-mobile { order: -1 }` puts Mobile first on touch screens.
+- **World load failures:** no longer say "Check the console".
+- **Editor hints:** "Right-click or Erase" becomes "Erase (or right-click)", and the palette's Control+Click tip is hidden on touch screens (`.fine-pointer-hint`).
+
+Open (product choices): a shared friendly-error helper and call-to-action buttons in the profile Levels/Playlists empty states. Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
+
 ### F115: Four dialogs still use the old dark theme
 
 - **Area:** Visual design, UI polish & information architecture
@@ -3159,6 +3196,8 @@ The base .history-modal-panel (room-course.css:22-33) is still dark: rgba(11,11,
 **Fact-check (confirmed).**
 
 Narrow the effort and impact. Adding the four IDs to the existing cream rules and restyling the textarea, the chat moderation sections and the order of the warp sheet is small. The proposed consolidation (moving cream into the base .history-modal-panel and its title, meta, error and button rules, then deleting about 300 lines of per-ID copies) is a medium job. The base rules and many inner elements, such as .leaderboard-difficulty (leaderboard-base.css:22-30, rgba(12,13,18,.64)) and the var(--text) light text colours, assume a dark background, so changing the default needs a visual check of every modal. Impact is mostly cosmetic consistency. Chat Moderation is admin-only, and Sign Text, Choose Avatar and the phone warp sheet are the dialogs players and builders actually see. Do the targeted fix first and the consolidation second.
+
+**2026-10-11 completed (targeted fix).** PR #148 / `007f3cf1` (Pages; live CSS contains the new rules). `#sign-text-modal`, `#avatar-picker-modal`, `#chat-moderation-modal` and `#mobile-jump-sheet` join every shared skin rule that `#guest-progress-modal` uses: backdrop, panel, kicker, title, meta, error, header buttons. Their other buttons and fields use the cream button and input styles. Their panels redefine `--text`, `--text-muted`, `--text-dim`, `--border`, `--border-strong` and `--field`, so the existing inner styles read on cream. Panel before: `rgba(11,11,11,.96)`, 8px radius, 1px `#3f4b26`. After: `#fff3db`, square corners, 3px `#79ccde`. Before/after screenshots of all four were checked for contrast; the first pass left the CryptoPunk "Check" label dark on dark, which was fixed. Not done: the consolidation into the base `.history-modal-panel` (medium; needs a visual pass over every dialog). Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
 
 ### F116: Stacked popups: one Esc closes everything, and the screen goes nearly black
 
@@ -5717,9 +5756,40 @@ Security, safety or anti-cheat item; details withheld from this public repo unti
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F204: details withheld
+### F204: Runs rejected by verification still count for XP ranks, rating eligibility and badges
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Leaderboard, XP and anti-cheat integrity
+- **Type:** defect · **impact:** low · **effort:** small
+
+**Summary.** A run that fails the cheat check is saved as 'completed', marked failed. Leaderboards hide it, but the XP and badge code still counts it. A cheater's rejected 0.3-second run can sit at #1 behind the scenes, so the honest player shown as #1 doesn't get the '#1 finisher' XP or badge. Rejected runs also let someone rate a room they never legitimately beat.
+
+**Technical detail.**
+
+handleRunFinish runs UPDATE room_runs SET result='completed', verification_status='failed' (routes.ts:383-411) and only then throws the 409 (routes.ts:422). The boards filter with sqlIsVerificationAccepted (leaderboards.ts:83), but these queries don't: (a) awards.ts:199-227 loadCompletedRoomRunsForVersion (and the course equivalent at :250-281) feeds computeRoomRankForAttempt, so a failed run outranks the honest #1 and top1_take / player_top1_finisher are never awarded; (b) ratings.ts:350-378 hasCompletedRoomRatingWindow, which gates star ratings, difficulty votes and the rating XP and creator BXP/trust they pay; (c) progressRows.ts:179-194, the distinct clear count behind the 1/10/100-clear badges. Fix: append AND ${sqlIsVerificationAccepted('room_runs')} (and the course/expanded equivalents) to those queries, or write result='rejected' for failed verifications so every result='completed' query is correct by default.
+
+**Evidence.**
+
+- src/cloudflare/worker/runs/routes.ts:383-411 — the row is updated to result='completed' with verification_status before the failure check
+- src/cloudflare/worker/runs/routes.ts:422-434 — the 409 is thrown only after the update
+- src/cloudflare/worker/progression/awards.ts:199-227 — the XP rank pool query has no verification filter
+- src/cloudflare/worker/progression/ratings.ts:350-378 — rating eligibility only requires result = 'completed'
+- src/cloudflare/worker/progression/progressRows.ts:179-194 — badge clear counts have no verification filter
+- src/cloudflare/worker/runs/verificationSql.ts:1-3 — the accepted-status helper exists but isn't used in progression
+
+**Fact-check (confirmed).**
+
+The core claim is accurate. Clarifications:
+- Rows with verification_status='timeout' leak the same way (routes.ts:433), not only 'failed'.
+- Only T0 accounts are ever verified (T1+ relaxed to not_required). The leak therefore comes from T0 users, including honest ones whose runs fail as trace_client_outdated or as verifier false positives.
+- The clear-count leak reaches badges through syncUserBadges → loadBackfillSeedMetrics (badgesTrophies.ts:345-389), and it also inflates backfilled PXP.
+- If the fix writes result='rejected' instead of adding filters, check every client and admin reader of result first. The schema has no CHECK constraint on result (migrations/0003:27), so the value will be accepted.
+- Impact is closer to low than medium, because only T0 users are affected, T0 ratings are trust-weighted, and the effects are mostly invisible XP and badges.
+
+**2026-10-11 completed.** PR #153 / `5bf9fc14`, API Worker `174d2a23`. Re-checked against current main: the award ranking (`awards.ts`, since the F200 work) and the distinct-clear counts (`progressRows.ts`) already used the accepted-verification filter. Still unfiltered, now fixed:
+- `hasCompletedRoomRatingWindow` and `hasCompletedCourseRatingWindow` (`ratings.ts`), which gate ratings, difficulty votes and their XP/BXP/trust;
+- `countHistoricalCreatorUniqueCompletions` (`progressRows.ts`, four subqueries).
+
+They now require `verification_status` to be `not_required` (or NULL) or `passed`. Test: `progression/rejectedRuns.test.ts` against the real-SQLite fixture (fails on the previous code). Forward-only: no stored XP, BXP or ratings were recomputed. Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
 
 ### F205: details withheld
 
@@ -6032,6 +6102,24 @@ createModalLifecycle.show()/hide() only toggle `.hidden` and aria-hidden (modalL
 
 playlistIntroModal.ts:60 already focuses its Start button after lifecycle.show(), so the claimed list of focusing modals is incomplete. roomGoalIntroModal is inconsistent with its sibling, and the fix is to copy that line. performanceSuggestionModal.ts:441-506 already has the full pattern: save previousFocus, focus the primary button, restore if isConnected. Lift it into modalLifecycle.ts instead of writing it fresh. Keyboard users can already start the goal-intro run with Escape (onClose → finish(true,true)); only Enter/Space don't work. Recommended order: (1) focus #btn-room-goal-intro-start in open() and the first Welcome lane button in welcomeModal open() (small); (2) move the save/restore focus from performanceSuggestionModal into the helper, plus `inert` on the other top-level children of body and a Tab wrap (small); (3) migrate the hand-rolled modals as they're touched (medium).
 
+**2026-10-11 completed.** PR #149 / `9b6eef20` (Pages; live `main-hotgFUPS.js`). `installModalFocusManagement()` in `src/ui/modalState.ts` covers every `.history-modal` centrally:
+- **Open:** remembers the focused element and, on the next frame, focuses `[data-autofocus]` or the `role=dialog` panel.
+- **Tab / Shift+Tab** wrap inside the top dialog (radio groups count as one stop), with a `focusin` backstop.
+- **Close:** focus returns to the remembered element.
+
+`#btn-room-goal-intro-start` is `data-autofocus`. Found while testing:
+- the world chat shortcut cancelled Enter everywhere, so it now skips buttons reached by Tab;
+- the F169 key yield now also covers a button, link or `summary` that matches `:focus-visible`.
+
+Evidence (Settings opened from its footer button by keyboard):
+- Enter: before, cancelled and nothing opened; after, Settings opens.
+- Focus after opening: was the button, now the dialog.
+- Of 40 Tabs, 30 escaped before, 0 after.
+- After Escape: was `<body>`, now the Settings button.
+- Goal intro: was `<body>`, now Start.
+
+Not done: `inert` (dialogs share a container with the HUD). Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
+
 ### F170: There's no pause: menus opened mid-run leave enemies, hazards and the timer running
 
 - **Area:** Accessibility & inclusivity
@@ -6236,6 +6324,19 @@ The code evidence is accurate: 19 unlabeled fields, 14 buttons named only by a s
 (d) Also add: the palette's <img> has no alt text.
 The highest-value fixes are naming the -/+ buttons ("Zoom out", "Zoom in", "Tempo down" and so on), labeling the Warp inputs and the sliders through aria-labelledby, and turning .object-item into a <button type="button"> with aria-pressed.
 
+**2026-10-11 completed.** PR #146 / `b983a6ba` (Pages; live `index.html` has `aria-label="Warp to room (x,y)"` ×2).
+- **Fields:** `aria-label` on the 18 fields an audit of `index.html` found unnamed, including both Warp inputs and the darkness, spotlight and weather sliders.
+- **Buttons:** 12 symbol-only buttons get names: zoom, octave, tempo and swing −/+.
+- **Palette tiles:** `src/ui/setup/objectPaletteTile.ts` makes them `role="button"`, `tabindex=0`, with `aria-pressed` kept in sync and Enter/Space selecting; the image gets `alt=""`. Selecting moves focus to the game canvas, as a mouse pick already did.
+
+The first version grew `paletteController.ts` past its F067 size pin; CI caught it and the tile code moved to its own module.
+
+Evidence (dev server):
+- the audit reports no unnamed fields; the 16/32 size buttons and the coordinates readout remain unnamed, by choice;
+- Enter selects tile 2, Space selects tile 3, and only that tile is pressed.
+
+Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
+
 ### F182: details withheld
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
@@ -6365,9 +6466,40 @@ Not done: a PartyKit probe. An outside uptime monitor (UptimeRobot, Better Stack
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F193: details withheld
+### F193: The deploy script doesn't check migrations or CI, and has no undo step
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Trust & safety, moderation, ops & observability
+- **Type:** improvement · **impact:** medium · **effort:** small
+
+**Summary.** The one-command deploy correctly refuses to ship uncommitted code. But it can ship code that needs a database change nobody has applied yet, or a commit whose automated tests failed. If the after-deploy check fails, it just stops, leaving the broken version live with no instructions for rolling back.
+
+**Technical detail.**
+
+deploy_prod.mjs checks for a clean, synced main (lines 17-20, 55-82), builds, runs `wrangler deploy` (29), then deploys Pages and runs smoke (50). Migrations are a separate manual script, `cf:d1:migrate:remote` (package.json:84). The deploy never checks the GitHub 'Quality' workflow result for HEAD (.github/workflows/quality.yml runs on push but nothing waits for it). When smoke throws, nothing is rolled back, and no rollback runbook exists (docs/development/frontend-redeploy-and-minting.md has none). Fix: (1) preflight `wrangler d1 migrations list DB --remote` (and JAM_DB). Refuse if migrations are pending, unless `--migrate` is passed, in which case apply them before the Worker deploy. (2) Preflight `gh run list --commit <HEAD> --workflow Quality --json conclusion` and require success. (3) Before deploying, capture the current Worker version from `wrangler deployments list --json`. On smoke failure, print and offer `wrangler rollback <id>`, plus the Pages dashboard 'Rollback' path. (4) Add a plain-language 'How to undo a bad deploy' section to the existing deploy doc rather than a new md.
+
+**Evidence.**
+
+- scripts/deploy_prod.mjs:29 — Worker deploy with no pending-migration check
+- scripts/deploy_prod.mjs:50 — smoke runs after both deploys; failure leaves them live
+- package.json:84 — migrations applied by a separate manual script
+- .github/workflows/quality.yml — CI exists but deploy does not consult it
+
+**Fact-check (confirmed).**
+
+These are refinements, not errors:
+- The clean-main and sync checks are at deploy_prod.mjs:53-80, not 55-82.
+- `npm run build` already runs tsc, so type errors do block a deploy. Only lint and tests are unchecked.
+- The practical way to cover the CI gap is to run `npm run check` inside deploy_prod.mjs. Polling `gh run list` is weaker, because deploys usually happen right after the push while the Quality run is still in progress. That forces a wait loop or a gh auth dependency.
+- The migration preflight has the highest value, and it must cover both DB and the JAM database (wamp-solo-room-jam-db). Note that `wrangler d1 migrations list` reports pending migrations in its text output, so the script has to read that output rather than rely on an exit code.
+- The script deploys the Worker (:29) before Pages (:33). A Pages failure therefore leaves the new Worker running with the old frontend. A rollback note should cover that case too.
+- The script doesn't cause bad deploys today, because agents already do the migration preflight and the `npm run check` step by hand (progress.md:140, :242-243, :308). The problem is that nothing enforces those steps.
+
+**2026-10-11 completed.** PR #152 / `06131cbc` (tooling). `scripts/deploy_prod.mjs`:
+- runs `wrangler d1 migrations list <db> --remote` for `everybodys-platformer-db` and `wamp-solo-room-jam-db`, and refuses unless each reports "No migrations to apply" (`--migrate` applies pending ones before the Worker deploy);
+- runs `npm run check` instead of `npm run build` (`--skip-check` builds only);
+- reads the live Worker version (`wrangler deployments list --json`) beforehand, and on a later failure prints `node node_modules/wrangler/bin/wrangler.js rollback <version>`, the Pages rollback path and the migrations note, then rethrows.
+
+`frontend-redeploy-and-minting.md` gains "How to undo a bad deploy". `deploy_prod.test.ts` covers refusing on pending migrations, `--migrate` with `--skip-check`, and the rollback message. The first push failed its check (the mocked test hit the new preflight); this was fixed before merge. The script itself has not yet run a production deploy; tonight's deploys used the manual steps from a detached worktree. Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
 
 ### F196: details withheld
 
@@ -6464,6 +6596,16 @@ Confirmed: goalRuns.ts, the browser auth client and the mint routes/service have
 (b) Server-side auth already has tests (worker/auth/routes.code.test.ts, store.test.ts). Only src/auth/client.ts is untested, and its 42 `let`s are at lines 125-178.
 (c) A bigger integrity gap goes unmentioned: the trace verifier verifyRoomRunTrace/verifyCourseRunTrace in runs/verification.ts (1,146 lines) is only ever tested as a mock (finalizationVerification.contract.test.ts:12). Add a table test of normalizeFinalizedRunBody per goal type and a real trace-verifier test next to the goalRuns tests.
 The auth extraction step is medium effort, not small.
+
+**2026-10-11 partly done.** PR #150 / `53a0f103` (tests only).
+- `goalRuns.goalTypes.test.ts` (13): every goal type, plus practice runs, deaths and abandon.
+- `worker/runs/finalizedRunBody.test.ts` (9): `normalizeFinalizedRunBody` per goal type at the boundaries, the time-limit rule, zeroed counters on failed runs.
+- `worker/mint/routes.confirm.test.ts` (6):
+  - malformed hash 400; no permission 403; non-claimer 403; wrong token owner 403 with nothing persisted;
+  - the happy path, with addresses compared case-insensitively;
+  - an already-minted re-confirm.
+
+The trace verifier gained real tests this week (anchoring, coverage, respawn, boss). Open: extracting `auth/client.ts` state transitions (medium) and widening `coverage.include`. Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
 
 ### F062: Scene↔UI bridge is unchecked: 135 optional methods, an unchecked `as T` cast, and scenes never `implements` it
 
