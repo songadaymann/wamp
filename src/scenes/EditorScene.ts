@@ -113,7 +113,7 @@ import { buildRoomWeatherSurfaceSegments, type RoomWeatherSurfaceSegment } from 
 import { EditorDocumentCache } from './editor/documentCache';
 import { EditorEdgeGuideCache } from './editor/edgeGuides';
 import { saveEditorClipboard } from './editor/clipboardStorage';
-import type { EditorCourseUiState } from '../ui/setup/sceneBridge';
+import type { EditorCourseUiState, EditorSceneBridge } from '../ui/setup/sceneBridge';
 import type { EditorShapeKind } from './editor/shapeTiles';
 import {
   EDITOR_SHELL_ESCAPE_REQUESTED_EVENT,
@@ -159,7 +159,7 @@ export interface EditorPreviewSmokeResult extends Record<string, unknown> {
   captures?: Record<string, RoomSnapshot>;
 }
 
-export class EditorScene extends Phaser.Scene {
+export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
   private draftLifecycle: EditorDraftLifecycle | null = null;
   private uiBridge: EditorUiBridge | null = null;
   private roomEditCount = 0;

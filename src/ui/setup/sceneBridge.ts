@@ -101,8 +101,6 @@ export interface EditorSceneBridge {
   updateToolUi?: () => void;
   useCustomSpriteAsTile?: (sprite: CustomSpriteDefinition) => boolean;
   usesCustomSprite?: (spriteId: string) => boolean;
-  clearCurrentLayer?: () => void;
-  clearAllTiles?: () => void;
   setRoomTitle?: (title: string | null) => void;
   setGoalType?: (nextType: RoomGoalType | null) => void;
   setGoalTimeLimitSeconds?: (seconds: number | null) => void;
