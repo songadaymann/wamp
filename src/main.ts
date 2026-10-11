@@ -22,7 +22,7 @@ import {
   showBootSplash,
 } from './ui/appFeedback';
 import { getDeviceLayoutState } from './ui/deviceLayout';
-import { syncGameKeyboardFocus } from './ui/keyboardFocus';
+import { installDialogKeyboardSync, syncGameKeyboardFocus } from './ui/keyboardFocus';
 import { getTouchInputDebugState } from './ui/mobile/touchControls';
 import { setupUI } from './ui/setup';
 import { getCaptureDebugInfo } from './main/captureDebug';
@@ -215,6 +215,7 @@ setupUI(game);
 logBootPhase('main:ui-ready');
 void setupAuthUi();
 syncGameKeyboardFocus(game);
+installDialogKeyboardSync(game);
 
 const resizeGameToContainer = () => {
   const width = Math.round(gameContainer.clientWidth);
