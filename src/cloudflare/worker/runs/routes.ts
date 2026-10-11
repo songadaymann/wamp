@@ -27,6 +27,7 @@ import {
 import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, RoomRunRow, WorkerExecutionContextLike } from '../core/types';
 import { recordDiscoveryRunPlayer, scheduleDiscoveryMetrics } from '../playableContentIndex/runMetrics';
+import { scheduleRunRewards } from './deferredRewards';
 import { loadAnonymousPublicCache } from '../core/publicCache';
 import {
   refreshPlayableContentIndexForRoom,
@@ -66,6 +67,7 @@ import {
 } from './roomLeaderboardAggregation';
 import {
   awardRoomRunProgression,
+  awardRunDailyClear,
   loadEffectiveTrustTier,
   submitRoomRating,
 } from '../progression/store';
@@ -508,32 +510,37 @@ export async function handleRunFinish(
     }
   }
   if (completedGhost) await scheduleRunGhostArchive(env, executionContext, attemptId);
-  await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
-  const creatorPointEvent =
-    finalizedRun.result === 'completed'
-      ? await awardRoomCreatorCompletionPoints(env, {
-          creatorUserId: resolveRoomVersionPublisherUserId(roomRecord, finalizedRun.roomVersion),
-          roomId: finalizedRun.roomId,
-          roomVersion: finalizedRun.roomVersion,
-          finisherUserId: finalizedRun.userId,
-          attemptId: finalizedRun.attemptId,
-          rewardVersions: rewardScope.versions,
-        })
-      : null;
-  if (creatorPointEvent) {
-    await upsertUserStats(env, creatorPointEvent.user_id);
-  }
-  await awardRoomRunProgression(env, {
-    run: finalizedRun,
-    goal: snapshot.goal,
-    ...rewardFlags,
-    creatorUserId: resolveRoomVersionPublisherUserId(roomRecord, finalizedRun.roomVersion),
-    roomRecord,
-    completedAt: finishedAt,
-    ownContent: rewardScope.ownContent,
+  await awardRunDailyClear(env, finalizedRun,
+    { type: 'room', id: finalizedRun.roomId, version: finalizedRun.roomVersion }, finishedAt);
+  const goal = snapshot.goal;
+  await scheduleRunRewards(executionContext, attemptId, async () => {
+    await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
+    const creatorPointEvent =
+      finalizedRun.result === 'completed'
+        ? await awardRoomCreatorCompletionPoints(env, {
+            creatorUserId: resolveRoomVersionPublisherUserId(roomRecord, finalizedRun.roomVersion),
+            roomId: finalizedRun.roomId,
+            roomVersion: finalizedRun.roomVersion,
+            finisherUserId: finalizedRun.userId,
+            attemptId: finalizedRun.attemptId,
+            rewardVersions: rewardScope.versions,
+          })
+        : null;
+    if (creatorPointEvent) {
+      await upsertUserStats(env, creatorPointEvent.user_id);
+    }
+    await awardRoomRunProgression(env, {
+      run: finalizedRun,
+      goal,
+      ...rewardFlags,
+      creatorUserId: resolveRoomVersionPublisherUserId(roomRecord, finalizedRun.roomVersion),
+      roomRecord,
+      completedAt: finishedAt,
+      ownContent: rewardScope.ownContent,
+    });
+    scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
+    await upsertUserStats(env, auth.user.id);
   });
-  scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
-  await upsertUserStats(env, auth.user.id);
   return noContentResponse(request);
 }
 

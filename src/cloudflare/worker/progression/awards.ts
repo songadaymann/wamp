@@ -356,6 +356,32 @@ function computeCourseRankForAttempt(
   return index >= 0 ? index + 1 : null;
 }
 
+function runEarnsProgression(run: { result: string; verificationStatus?: string }): boolean {
+  return run.result === 'completed'
+    && (run.verificationStatus === undefined || ['not_required', 'passed'].includes(run.verificationStatus));
+}
+
+/**
+ * The finisher's daily-room clear, awarded before the finish responds because the daily
+ * panel re-reads it right after a clear. The deferred progression award then finds the
+ * event already recorded and does not add it again.
+ */
+export async function awardRunDailyClear(
+  env: Env,
+  run: { result: string; verificationStatus?: string; userId: string },
+  target: { type: 'room' | 'course'; id: string; version: number },
+  completedAt: string,
+): Promise<void> {
+  if (!runEarnsProgression(run)) {
+    return;
+  }
+
+  const pxp = await awardDailyClear(env, run.userId, target.type, target.id, target.version, completedAt);
+  if (pxp > 0) {
+    await persistProgressIncrement(env, run.userId, { ...createEmptyProgressionDelta(), pxp }, completedAt);
+  }
+}
+
 export async function awardRoomRunProgression(
   env: Env,
   params: {

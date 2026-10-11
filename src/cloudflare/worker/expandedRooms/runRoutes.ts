@@ -40,6 +40,7 @@ import {
 import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, ExpandedRoomRunRow, WorkerExecutionContextLike } from '../core/types';
 import { recordDiscoveryRunPlayer, scheduleDiscoveryMetrics } from '../playableContentIndex/runMetrics';
+import { scheduleRunRewards } from '../runs/deferredRewards';
 import {
   refreshPlayableContentIndexForExpandedRoom,
   schedulePlayableContentIndexRefresh,
@@ -80,6 +81,7 @@ import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 import { loadRoomSnapshotsByReferences } from '../rooms/store';
 import {
   awardCourseRunProgression,
+  awardRunDailyClear,
   loadEffectiveTrustTier,
   submitCourseRating,
 } from '../progression/store';
@@ -587,35 +589,41 @@ export async function handleExpandedRoomRunFinish(
     });
   }
 
-  await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
-  const creatorPointEvent =
-    finalizedRun.result === 'completed'
-      ? await awardCourseCreatorCompletionPoints(env, {
-          creatorUserId,
-          courseId: context.legacyCourseId,
-          courseVersion: finalizedRun.expandedRoomVersion,
-          finisherUserId: finalizedRun.userId,
-          attemptId: finalizedRun.attemptId,
-          rewardVersions: rewardScope.versions,
-        })
-      : null;
+  const progressionRun = mapExpandedRoomRunToCourseRun(finalizedRun, context.legacyCourseId);
+  await awardRunDailyClear(env, progressionRun,
+    { type: 'course', id: progressionRun.courseId, version: progressionRun.courseVersion }, finishedAt);
+  const goal = snapshot.goal;
+  await scheduleRunRewards(executionContext, attemptId, async () => {
+    await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
+    const creatorPointEvent =
+      finalizedRun.result === 'completed'
+        ? await awardCourseCreatorCompletionPoints(env, {
+            creatorUserId,
+            courseId: context.legacyCourseId,
+            courseVersion: finalizedRun.expandedRoomVersion,
+            finisherUserId: finalizedRun.userId,
+            attemptId: finalizedRun.attemptId,
+            rewardVersions: rewardScope.versions,
+          })
+        : null;
 
-  if (creatorPointEvent) {
-    await upsertUserStats(env, creatorPointEvent.user_id);
-  }
+    if (creatorPointEvent) {
+      await upsertUserStats(env, creatorPointEvent.user_id);
+    }
 
-  await awardCourseRunProgression(env, {
-    run: mapExpandedRoomRunToCourseRun(finalizedRun, context.legacyCourseId),
-    goal: snapshot.goal,
-    ...rewardFlags,
-    creatorUserId,
-    courseRecord,
-    completedAt: finishedAt,
-    ownContent: rewardScope.ownContent,
-    rankVersions: rewardScope.versions,
+    await awardCourseRunProgression(env, {
+      run: progressionRun,
+      goal,
+      ...rewardFlags,
+      creatorUserId,
+      courseRecord,
+      completedAt: finishedAt,
+      ownContent: rewardScope.ownContent,
+      rankVersions: rewardScope.versions,
+    });
+    scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
+    await upsertUserStats(env, auth.user.id);
   });
-  scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
-  await upsertUserStats(env, auth.user.id);
   return noContentResponse(request);
 }
 
