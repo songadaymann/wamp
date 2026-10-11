@@ -13,7 +13,7 @@ import {
 } from '../../auth/client';
 import { playSfx } from '../../audio/sfx';
 import { APP_READY_EVENT, isAppReady } from '../appFeedback';
-import { isTextInputFocused } from '../keyboardFocus';
+import { isKeyboardFocusedControl, isTextInputFocused } from '../keyboardFocus';
 import { createProfileTriggerElement } from '../setup/profileEvents';
 import {
   banChatUser,
@@ -126,7 +126,8 @@ export class ChatPanelController {
       && !event.ctrlKey
       && !event.altKey
     ) {
-      if (isTextInputFocused()) {
+      // Enter on a button the player tabbed to presses that button.
+      if (isTextInputFocused() || isKeyboardFocusedControl(document.activeElement)) {
         return;
       }
 

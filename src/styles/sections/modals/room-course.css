@@ -470,3 +470,8 @@ body:not([data-app-mode='world']) #btn-menu-room-rush {
   align-self: stretch;
   justify-content: flex-start;
 }
+
+/* A dialog takes focus itself when it has no [data-autofocus] control (F175); no ring for that. */
+.history-modal-panel:focus {
+  outline: none;
+}

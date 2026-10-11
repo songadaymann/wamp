@@ -6,7 +6,7 @@ import {
   initializeGuestActivityTracking,
   type GuestActivityMode,
 } from './analytics/guestActivity';
-import { installDialogEscapeGuard, installModalStackBackdrops } from './ui/modalState';
+import { installDialogEscapeGuard, installModalFocusManagement, installModalStackBackdrops } from './ui/modalState';
 import { initSfx, globalSfxController } from './audio/sfx';
 import { runOverworldLodStress } from './debug/overworldLodStress';
 import { globalRoomMusicController, initRoomMusic } from './music/controller';
@@ -216,6 +216,7 @@ logBootPhase('main:ui-ready');
 void setupAuthUi();
 syncGameKeyboardFocus(game);
 installDialogKeyboardSync(game);
+installModalFocusManagement();
 
 const resizeGameToContainer = () => {
   const width = Math.round(gameContainer.clientWidth);
