@@ -7,6 +7,7 @@ import {
   type RoomWeatherSettings,
 } from './model';
 import type { RoomWeatherSurfaceSegment } from './surfaces';
+import { hashString, layoutFogLobes, randomUnit, type FogLobe } from './fogLayout';
 import { getDevicePerformanceMode } from '../performance/devicePerformanceMode';
 
 export interface RoomWeatherBounds {
@@ -43,9 +44,20 @@ const RAIN_BRIGHT_COLOR = 0xf0f6ff;
 const RAIN_SPLASH_COLOR = 0xdff2ff;
 const SNOW_COLOR = 0xf8fbff;
 const FOG_COLOR = 0x82a7b7;
+/**
+ * Fog blobs are images of one pre-drawn ellipse, stretched and tinted per blob. Drawing
+ * them as Graphics ellipses re-cut 270-600 polygons into triangles every frame (F004).
+ */
+const FOG_LOBE_TEXTURE_KEY = 'weather-fog-lobe';
+const FOG_LOBE_TEXTURE_SIZE = 256;
+/** Phaser.Textures.FilterMode.LINEAR, so the stretched ellipse keeps a smooth edge in a pixel-art game. */
+const LINEAR_FILTER = 0 as Phaser.Textures.FilterMode;
 
 export class RoomWeatherController {
   private graphics: Phaser.GameObjects.Graphics | null = null;
+  private fogLayer: Phaser.GameObjects.Container | null = null;
+  private readonly fogImages: Phaser.GameObjects.Image[] = [];
+  private readonly fogLobes: FogLobe[] = [];
   private debugState: RoomWeatherDebugState = {
     mode: 'off',
     intensity: DEFAULT_ROOM_WEATHER_INTENSITY,
@@ -112,9 +124,10 @@ export class RoomWeatherController {
     const fogBandCount = resolveWeatherFogBandCount(weather);
     let splashCount = 0;
     this.graphics.clear();
-    if (fogBandCount > 0) {
-      drawFog(this.graphics, input.bounds, activeRoomId, weather, this.options.scene.time.now, fogBandCount);
-    }
+    const fogLobeCount = fogBandCount > 0
+      ? layoutFogLobes(input.bounds, activeRoomId, weather, this.options.scene.time.now, fogBandCount, this.fogLobes)
+      : 0;
+    this.renderFog(fogLobeCount);
     if (weather.mode === 'rain') {
       splashCount = drawRain(
         this.graphics,
@@ -142,7 +155,10 @@ export class RoomWeatherController {
   }
 
   getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return this.graphics ? [this.graphics] : [];
+    const objects: Phaser.GameObjects.GameObject[] = [];
+    if (this.fogLayer) objects.push(this.fogLayer);
+    if (this.graphics) objects.push(this.graphics);
+    return objects;
   }
 
   getDebugState(): RoomWeatherDebugState {
@@ -153,12 +169,44 @@ export class RoomWeatherController {
     if (this.graphics) {
       this.graphics.setVisible(true);
       this.graphics.setDepth(this.options.depth);
+      this.fogLayer?.setDepth(this.options.depth);
       return false;
     }
 
+    // Added first, so at the same depth the fog stays under the rain and snow.
+    this.fogLayer = this.options.scene.add.container(0, 0);
+    this.fogLayer.setDepth(this.options.depth);
     this.graphics = this.options.scene.add.graphics();
     this.graphics.setDepth(this.options.depth);
     return true;
+  }
+
+  private renderFog(lobeCount: number): void {
+    const layer = this.fogLayer;
+    if (!layer) {
+      return;
+    }
+    if (lobeCount > this.fogImages.length) {
+      const textureKey = ensureFogLobeTexture(this.options.scene);
+      while (this.fogImages.length < lobeCount) {
+        const image = this.options.scene.make.image({ key: textureKey }, false);
+        image.setTint(FOG_COLOR);
+        layer.add(image);
+        this.fogImages.push(image);
+      }
+    }
+    for (let index = 0; index < this.fogImages.length; index += 1) {
+      const image = this.fogImages[index];
+      if (index >= lobeCount) {
+        image.setVisible(false);
+        continue;
+      }
+      const lobe = this.fogLobes[index];
+      image.setVisible(true);
+      image.setPosition(lobe.x, lobe.y);
+      image.setDisplaySize(lobe.width, lobe.height);
+      image.setAlpha(lobe.alpha);
+    }
   }
 
   private destroyGraphics(): boolean {
@@ -166,10 +214,32 @@ export class RoomWeatherController {
       return false;
     }
 
+    this.fogLayer?.destroy();
+    this.fogLayer = null;
+    this.fogImages.length = 0;
     this.graphics.destroy();
     this.graphics = null;
     return true;
   }
+}
+
+function ensureFogLobeTexture(scene: Phaser.Scene): string {
+  if (scene.textures.exists(FOG_LOBE_TEXTURE_KEY)) {
+    return FOG_LOBE_TEXTURE_KEY;
+  }
+  const texture = scene.textures.createCanvas(FOG_LOBE_TEXTURE_KEY, FOG_LOBE_TEXTURE_SIZE, FOG_LOBE_TEXTURE_SIZE);
+  if (!texture) {
+    return FOG_LOBE_TEXTURE_KEY;
+  }
+  const radius = FOG_LOBE_TEXTURE_SIZE / 2;
+  const context = texture.getContext();
+  context.fillStyle = '#ffffff';
+  context.beginPath();
+  context.ellipse(radius, radius, radius, radius, 0, 0, Math.PI * 2);
+  context.fill();
+  texture.refresh();
+  texture.setFilter(LINEAR_FILTER);
+  return FOG_LOBE_TEXTURE_KEY;
 }
 
 /** Battery Saver draws half the weather: fewer drops, flakes and fog bands (F011). */
@@ -318,76 +388,6 @@ function drawRainSplash(
   }
 }
 
-function drawFog(
-  graphics: Phaser.GameObjects.Graphics,
-  bounds: RoomWeatherBounds,
-  roomId: string,
-  weather: RoomWeatherSettings,
-  timeMs: number,
-  bandCount: number,
-): void {
-  const intensity = weather.intensity / 100;
-  const seed = hashString(`${roomId}:${weather.mode}:fog`);
-  const timeSec = timeMs * 0.001;
-  const fogOnly = weather.mode === 'fog';
-  const maxAlpha = fogOnly ? 0.075 + intensity * 0.105 : 0.018 + intensity * 0.02;
-  const minLobeHeight = fogOnly ? 14 + intensity * 8 : 7;
-  const maxLobeHeight = fogOnly ? 34 + intensity * 20 : 14;
-  const minLobeWidth = fogOnly ? 96 + intensity * 34 : 62;
-  const maxLobeWidth = fogOnly ? 230 + intensity * 260 : 136;
-
-  for (let index = 0; index < bandCount; index += 1) {
-    const lobeCount = Math.round(
-      (fogOnly ? 6 + intensity * 8 : 4) + randomUnit(seed, index, 1) * (fogOnly ? 5 + intensity * 7 : 3),
-    );
-    const clusterWidth = Math.min(
-      bounds.width * (fogOnly ? 0.92 : 0.58),
-      (fogOnly ? 230 + intensity * 180 : 112) +
-        randomUnit(seed, index, 2) * (fogOnly ? 300 + intensity * 260 : 160),
-    );
-    const drift = Math.sin(timeSec * (fogOnly ? 0.11 : 0.16) + index * 1.7) * (fogOnly ? 18 : 10);
-    const baseX = clamp(
-      bounds.x + bounds.width * (0.16 + randomUnit(seed, index, 3) * 0.68) + drift,
-      bounds.x + clusterWidth * 0.28,
-      bounds.x + bounds.width - clusterWidth * 0.28,
-    );
-    const baseY = clamp(
-      bounds.y + bounds.height * (0.12 + randomUnit(seed, index, 4) * 0.76) +
-        Math.sin(timeSec * 0.14 + index) * (fogOnly ? 13 : 7),
-      bounds.y + maxLobeHeight * 0.5,
-      bounds.y + bounds.height - maxLobeHeight * 0.5,
-    );
-
-    for (let lobe = 0; lobe < lobeCount; lobe += 1) {
-      const position = lobeCount === 1 ? 0 : lobe / (lobeCount - 1) - 0.5;
-      const lobeWidth = minLobeWidth + randomUnit(seed, index * 19 + lobe, 5) * maxLobeWidth;
-      const lobeHeight = minLobeHeight + randomUnit(seed, index * 19 + lobe, 6) * maxLobeHeight;
-      const jitterX = (randomUnit(seed, index * 19 + lobe, 7) - 0.5) * lobeWidth * 0.42;
-      const jitterY = (randomUnit(seed, index * 19 + lobe, 8) - 0.5) * lobeHeight * 0.78;
-      const x = clamp(
-        baseX + position * clusterWidth + jitterX,
-        bounds.x + lobeWidth * 0.5,
-        bounds.x + bounds.width - lobeWidth * 0.5,
-      );
-      const y = clamp(
-        baseY + jitterY,
-        bounds.y + lobeHeight * 0.5,
-        bounds.y + bounds.height - lobeHeight * 0.5,
-      );
-      const alpha = maxAlpha * (0.22 + randomUnit(seed, index * 19 + lobe, 9) * 0.34);
-
-      graphics.fillStyle(FOG_COLOR, alpha);
-      graphics.fillEllipse(
-        Math.round(x),
-        Math.round(y),
-        Math.round(lobeWidth),
-        Math.round(lobeHeight),
-        18,
-      );
-    }
-  }
-}
-
 function drawSnow(
   graphics: Phaser.GameObjects.Graphics,
   bounds: RoomWeatherBounds,
@@ -426,27 +426,7 @@ function drawSnow(
   }
 }
 
-function hashString(value: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function randomUnit(seed: number, index: number, salt: number): number {
-  let value = (seed + Math.imul(index + 1, 374761393) + Math.imul(salt + 1, 668265263)) >>> 0;
-  value ^= value << 13;
-  value ^= value >>> 17;
-  value ^= value << 5;
-  return (value >>> 0) / 4294967295;
-}
-
 function wrap(value: number, size: number): number {
   return ((value % size) + size) % size;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
