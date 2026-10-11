@@ -28,8 +28,23 @@ import {
 } from './store';
 import { requireAuthenticatedRequestAuth } from '../auth/request';
 import { claimGuestRoomDraft } from './claims';
+import {
+  getClientIp,
+  hashRateLimitKey,
+  networkKeyForIp,
+  takeRateLimitSlots,
+  type RateLimitRule,
+} from '../core/rateLimit';
 
 const MAX_GUEST_ROOM_SNAPSHOT_JSON_BYTES = 512_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * Anyone can save a guest draft without an account, so new drafts are capped: per network
+ * and in all, per day. Real use peaks at 22 new drafts a day in all and one per guest (F188);
+ * saving an existing draft again is not limited.
+ */
+const NEW_GUEST_DRAFTS_PER_NETWORK: RateLimitRule = { bucket: 'guest-draft-create:network', limit: 20, windowMs: DAY_MS };
+const NEW_GUEST_DRAFTS_IN_ALL: RateLimitRule = { bucket: 'guest-draft-create:all', limit: 2000, windowMs: DAY_MS };
 
 interface GuestRecoveryIdentity {
   guestUserId: string;
@@ -123,12 +138,27 @@ export async function handleGuestRoomDraftRequest(
       recoveryTokenHash,
       snapshot,
       nowIso: new Date().toISOString(),
+      beforeCreate: () => takeNewGuestDraftSlot(request, env),
     });
     const responseBody: GuestRoomDraftSaveResponse = { draft };
     return jsonResponse(request, responseBody);
   }
 
   throw new HttpError(404, 'Guest room draft route not found.');
+}
+
+async function takeNewGuestDraftSlot(request: Request, env: Env): Promise<void> {
+  const ip = getClientIp(request);
+  const { limitedBy } = await takeRateLimitSlots(env, [
+    ...(ip ? [{ rule: NEW_GUEST_DRAFTS_PER_NETWORK, keyHash: await hashRateLimitKey(env, networkKeyForIp(ip)) }] : []),
+    { rule: NEW_GUEST_DRAFTS_IN_ALL, keyHash: 'all' },
+  ]);
+  if (limitedBy === NEW_GUEST_DRAFTS_PER_NETWORK) {
+    throw new HttpError(429, 'Too many new guest rooms from this network today. Sign in to keep building.');
+  }
+  if (limitedBy) {
+    throw new HttpError(429, 'Guest building is full for today. Sign in to keep building.');
+  }
 }
 
 async function resolveGuestRecoveryIdentityFromHeaders(request: Request): Promise<GuestRecoveryIdentity> {
