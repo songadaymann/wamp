@@ -88,14 +88,27 @@ export async function getMusicPhrase(id: string): Promise<MusicPhraseRecord> {
     });
 
   phrasePromiseCache.set(trimmedId, promise);
+  // A failed request (offline, deleted phrase) is not remembered, so a later visit tries again (F222).
+  promise.catch(() => {
+    if (phrasePromiseCache.get(trimmedId) === promise) phrasePromiseCache.delete(trimmedId);
+  });
   return promise;
 }
 
+/**
+ * The phrases an arrangement uses. One missing or failed phrase leaves only its own slots
+ * empty instead of silencing the whole arrangement (F222); it fails only if every phrase did.
+ */
 export async function loadMusicPhrasesById(
   ids: readonly string[],
 ): Promise<Map<string, MusicPhraseRecord>> {
   const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
-  const phrases = await Promise.all(uniqueIds.map((id) => getMusicPhrase(id)));
+  const results = await Promise.allSettled(uniqueIds.map((id) => getMusicPhrase(id)));
+  const phrases = results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+  const firstFailure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  if (phrases.length === 0 && firstFailure) {
+    throw firstFailure.reason;
+  }
   return new Map(phrases.map((phrase) => [phrase.id, phrase]));
 }
 
