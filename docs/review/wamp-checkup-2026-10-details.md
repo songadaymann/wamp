@@ -423,7 +423,9 @@ Reframe the finding:
 - `resolveWeatherParticleCount` and `resolveWeatherFogBandCount` scale by 0.5, keeping at least one band;
 - `spawnScorePopup` skips the floating score text.
 
-Test: `weather/controller.batterySaver.test.ts` (rain 82 → 41, snow 100 → 50, fog bands 19 → 10). Open: the lighting glow pass and the editor preview. Receipt: `wamp-motion-frames-bridge-2026-10-11.md`.
+Test: `weather/controller.batterySaver.test.ts` (rain 82 → 41, snow 100 → 50, fog bands 19 → 10).
+
+PR #163 / `c39447e1`: in every dark-aura room, `RoomLightingController` clears the glow `RenderTexture` only when it held glows (`glowOverlayHasGlows`) and hides it while it is empty, so rooms without glowing lights skip a render-target clear and a full-room additive draw each frame. This needs no setting because nothing visible changes. Test: a new case in `lighting/controller.test.ts` (fails on the previous code). Dark room 2,1 with 37 glows renders as before (median 49.4 ms). Open: the editor weather preview. Receipt: `wamp-motion-frames-bridge-2026-10-11.md`.
 
 ### F008: Physics collision links grow with every room loaded, and are all rebuilt on room loads, bullet despawns and crate breaks
 

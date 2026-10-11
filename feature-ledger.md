@@ -1,3 +1,7 @@
+## 2026-10-11 — F011 empty glow texture skipped
+
+PR #163 / `c39447e1`: dark rooms without glowing lights no longer clear and draw an empty full-room glow texture every frame (F011 still partly done).
+
 ## 2026-10-11 — F179 checkpoint flags; F020 slimmer Phaser; parts of F095 hidden-tab sockets, F023 SFX pool
 
 PR #159 / `82c34488`: reached checkpoint flags fade to 55%. PR #160 / `897b01d3`: arcade-only Phaser and one licence comment per chunk (Phaser chunk 1.48 → 1.10 MB; startup JS 747 → 716 KB brotli). PR #161 / `976636e4`: presence and room-chat sockets close after 30 s in a hidden tab and reopen on return (F095 partly done). PR #162 / `72b4d761`: sound effects get their own players before borrowing another cue's, and the hot cues load after the first tap (F023 partly done). Master **118/215**. Receipt: [flags, Phaser, sockets](docs/review/wamp-flags-phaser-sockets-2026-10-11.md).
