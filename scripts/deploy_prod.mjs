@@ -53,7 +53,7 @@ try {
   await deployRelease();
 } catch (error) {
   printRollbackHelp(error);
-  process.exitCode = 1;
+  throw error;
 }
 
 async function deployRelease() {
