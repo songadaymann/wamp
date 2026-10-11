@@ -29,7 +29,8 @@ describe('API CORS preflight caching', () => {
   );
 
   it.each([
-    ['/api/health', 200],
+    // No database is bound here, so the health check itself reports 503.
+    ['/api/health', 503],
     ['/api/not-a-route', 404],
   ])('does not add the preflight lifetime to ordinary API responses at %s', async (path, status) => {
     const request = new Request(`https://api.wamp.land${path}`, {
