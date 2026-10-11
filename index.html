@@ -19,6 +19,12 @@
   <title>WAMP</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preload" as="image" href="/assets/objects/flag-checkered.png">
+  <!-- IBM Plex Mono loads without holding up the first paint (it used to be an @import in base.css).
+       Preloading the pixel fonts was measured too: it takes bandwidth from the main stylesheet and
+       delays the first paint more than it speeds up the title font (F120). -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
   <link rel="manifest" href="./app.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="alternate" type="text/markdown" href="https://api.wamp.land/skill.md">
