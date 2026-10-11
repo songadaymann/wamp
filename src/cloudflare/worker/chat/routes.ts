@@ -15,7 +15,7 @@ import {
   DEFAULT_CHAT_MESSAGE_LIMIT,
   MAX_CHAT_MESSAGE_LIMIT,
 } from '../../../chat/model';
-import { loadCurrentSession, requireAuthenticatedRequestAuth, requireTrustedOriginForMutation } from '../auth/request';
+import { hasSessionCookie, loadCurrentSession, requireAuthenticatedRequestAuth, requireTrustedOriginForMutation } from '../auth/request';
 import { findUserByDisplayName } from '../auth/store';
 import { assertNotSchoolRestricted } from '../school/restrictions';
 import {
@@ -25,6 +25,7 @@ import {
   parseJsonBody,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
+import { loadAnonymousPublicCache } from '../core/publicCache';
 import type { Env } from '../core/types';
 import {
   assertViewerCanModerateTarget,
@@ -56,6 +57,9 @@ import {
 } from './store';
 
 const CHAT_RATE_LIMIT_WINDOW_MS = 1000;
+// Up-to-date readers poll the same `after` URL, so a few seconds at the edge absorbs
+// most anonymous polls; a new message reaches them at most this late.
+const ANONYMOUS_CHAT_CACHE_CONTROL = 'public, max-age=3';
 
 type WorkerExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
@@ -68,7 +72,7 @@ export async function handleChatRequest(
   ctx?: WorkerExecutionContext
 ): Promise<Response> {
   if (url.pathname === '/api/chat/messages' && request.method === 'GET') {
-    return handleListChatMessages(request, url, env);
+    return handleListChatMessages(request, url, env, ctx);
   }
 
   if (url.pathname === '/api/chat/messages' && request.method === 'POST') {
@@ -116,7 +120,8 @@ export async function handleChatRequest(
 export async function handleListChatMessages(
   request: Request,
   url: URL,
-  env: Env
+  env: Env,
+  ctx?: WorkerExecutionContext
 ): Promise<Response> {
   const limit = parsePositiveIntegerQueryParam(
     url.searchParams,
@@ -127,12 +132,19 @@ export async function handleListChatMessages(
   );
   const afterParam = url.searchParams.get('after');
   const after = parseAfterTimestamp(afterParam);
-  const responseBody: ChatMessageListResponse = {
-    messages: await listChatMessages(env, limit, after),
-    viewer: await loadChatViewerFromRequest(env, request),
+  const anonymous = !hasSessionCookie(request);
+  const loadResponse = async (): Promise<Response> => {
+    const [messages, viewer] = await Promise.all([
+      listChatMessages(env, limit, after),
+      anonymous ? NO_CHAT_MODERATION_VIEWER : loadChatViewerFromRequest(env, request),
+    ]);
+    const responseBody: ChatMessageListResponse = { messages, viewer };
+    return jsonResponse(request, responseBody, {
+      headers: { 'Cache-Control': anonymous ? ANONYMOUS_CHAT_CACHE_CONTROL : 'private, no-store' },
+    });
   };
 
-  return jsonResponse(request, responseBody);
+  return loadAnonymousPublicCache(request, anonymous ? ctx : undefined, loadResponse);
 }
 
 export async function handleCreateChatMessage(
