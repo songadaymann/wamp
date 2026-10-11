@@ -13,11 +13,11 @@ const REQUIRED_GENERATED_FILES = [
 ] as const;
 
 export class CryptopunkAvatarQueueContainer extends Container<QueueEnv> {
-  defaultPort = 8080;
-  requiredPorts = [8080];
-  sleepAfter = '30s';
-  enableInternet = false;
-  pingEndpoint = 'localhost/ready';
+  override defaultPort = 8080;
+  override requiredPorts = [8080];
+  override sleepAfter = '30s';
+  override enableInternet = false;
+  override pingEndpoint = 'localhost/ready';
 }
 
 export default {

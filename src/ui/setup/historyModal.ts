@@ -5,6 +5,7 @@ import {
   getManualRoomLeaderboardSourceValidationError,
 } from '../../persistence/roomLeaderboardLineage';
 import { getActiveEditorScene, type EditorHistoryState } from './sceneBridge';
+import { asyncListener } from '../asyncListener';
 
 const HISTORY_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -60,7 +61,7 @@ export class RoomHistoryModalController {
     void this.render();
   };
 
-  private readonly handleRefreshMetadataClick = async () => {
+  private readonly handleRefreshMetadataClick = asyncListener(async () => {
     const editorScene = getActiveEditorScene(this.game);
     if (!editorScene?.refreshMintMetadata) {
       return;
@@ -70,8 +71,12 @@ export class RoomHistoryModalController {
     this.setError(null);
     await this.render();
 
-    const result = await editorScene.refreshMintMetadata();
-    this.metadataRefreshInFlight = false;
+    let result;
+    try {
+      result = await editorScene.refreshMintMetadata();
+    } finally {
+      this.metadataRefreshInFlight = false;
+    }
 
     if (!result) {
       const statusMessage = this.getEditorStatusText() || 'NFT metadata refresh failed.';
@@ -82,9 +87,9 @@ export class RoomHistoryModalController {
 
     this.setError(null);
     await this.render();
-  };
+  });
 
-  private readonly handleRestoreCanonicalClick = async () => {
+  private readonly handleRestoreCanonicalClick = asyncListener(async () => {
     const editorScene = getActiveEditorScene(this.game);
     const canonicalVersion = editorScene?.getHistoryState?.().canonicalVersion ?? null;
     if (!editorScene?.revertToVersion || canonicalVersion === null) {
@@ -92,7 +97,7 @@ export class RoomHistoryModalController {
     }
 
     await this.handleRevert(canonicalVersion);
-  };
+  });
 
   constructor(
     private readonly game: Phaser.Game,

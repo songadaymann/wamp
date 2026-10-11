@@ -1421,7 +1421,7 @@ export class OverworldPlayScene extends Phaser.Scene {
       getRoomEditorCount: (coordinates) => this.getRoomEditorCount(coordinates),
       isWithinLoadedRoomBounds: (coordinates) => this.isWithinLoadedRoomBounds(coordinates),
       canWarpToSelectedRoom: () => this.canWarpToSelectedRoom(),
-      playSelectedRoom: () => this.playSelectedRoom(),
+      playSelectedRoom: () => { void this.playSelectedRoom(); },
       warpToSelectedRoom: () => {
         void this.warpToSelectedRoom();
       },
@@ -2441,7 +2441,7 @@ export class OverworldPlayScene extends Phaser.Scene {
     this.syncPerformanceAdvisorEligibility(performance.now());
   }
 
-  update(_time: number, delta: number): void {
+  override update(_time: number, delta: number): void {
     // Arcade Physics runs on the Scene UPDATE event before Scene.update.
     // PRE_UPDATE captures that work so discretionary streaming sees the real
     // simulation headroom instead of only timing this method's body.

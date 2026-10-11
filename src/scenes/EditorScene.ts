@@ -708,7 +708,7 @@ export class EditorScene extends Phaser.Scene {
       beginTileBatch: () => this.editRuntime.beginTileBatch(),
       commitTileBatch: () => this.editRuntime.commitTileBatch(),
       cancelTileBatch: () => this.editRuntime.cancelTileBatch(),
-      startPlayMode: () => this.startPlayMode(),
+      startPlayMode: () => { void this.startPlayMode(); },
       updateToolUi: () => this.toolController.updateToolUi(),
       updateBackgroundPreview: () => this.updateBackgroundPreview(),
       updateZoomUI: () => this.updateZoomUI(),
@@ -1128,7 +1128,7 @@ export class EditorScene extends Phaser.Scene {
     this.updateGoalUi();
   }
 
-  update(time: number, delta = 16): void {
+  override update(time: number, delta = 16): void {
     this.interactionController.validateTouchEdit();
     this.maybeAutoSave(time);
     this.presenceController.sync();

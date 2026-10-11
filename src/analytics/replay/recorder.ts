@@ -104,6 +104,7 @@ export function initializeGuestReplay(host: Host): () => void {
     if (host.latestImage) sample(host.latestImage());
     else void captureReplayCanvas(host.canvas, { width: 640, height: 480, limit: REPLAY_IMAGE_LIMIT }).then(sample);
   });
+  const onAuthStateChanged = (): void => { void tick(); };
   async function tick(): Promise<void> {
     if (stopped) return;
     const auth = getAuthDebugState();
@@ -165,7 +166,7 @@ export function initializeGuestReplay(host: Host): () => void {
     document.removeEventListener('click', click);
     document.removeEventListener('visibilitychange',visibility);
     window.removeEventListener('pagehide',pagehide);
-    window.removeEventListener(AUTH_STATE_CHANGED_EVENT,tick);
+    window.removeEventListener(AUTH_STATE_CHANGED_EVENT,onAuthStateChanged);
     window.removeEventListener(BUG_RECORDING_CHANGED, preferenceChanged);
     window.removeEventListener('storage', preferenceChanged);
     void flush(true);
@@ -182,7 +183,7 @@ export function initializeGuestReplay(host: Host): () => void {
   document.addEventListener('click', click);
   document.addEventListener('visibilitychange',visibility);
   window.addEventListener('pagehide',pagehide);
-  window.addEventListener(AUTH_STATE_CHANGED_EVENT,tick);
+  window.addEventListener(AUTH_STATE_CHANGED_EVENT,onAuthStateChanged);
   window.addEventListener(BUG_RECORDING_CHANGED, preferenceChanged);
   window.addEventListener('storage', preferenceChanged);
   const timer = window.setInterval(() => { void tick(); },1000);

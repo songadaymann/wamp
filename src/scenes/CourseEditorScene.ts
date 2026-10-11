@@ -889,7 +889,7 @@ export class CourseEditorScene extends Phaser.Scene {
     void this.openFromData(data);
   }
 
-  update(): void {
+  override update(): void {
     this.touchControls.validate();
     const change = `${getActiveCourseDraftSessionRevision()}:${this.getDirtySlices().map((slice) => `${slice.roomId}:${slice.runtime.currentLastDirtyAt}`).join(',')}`;
     if (change !== this.lastBackupChange) {
