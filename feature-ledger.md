@@ -1,3 +1,7 @@
+## 2026-10-10 — F101 zero-size embeds, F121 phone labels, F140 touch stomp, F039 outbox check
+
+PR #129 / `7adcc0fc`: the game boots inside an embed that starts hidden or 0×0 instead of hanging on Loading, and the phone More+ labels are centred. PR #130 / `0107ad2b`: on touch, a butt stomp needs a fresh downward push in mid-air, so walking off ledges or dropping through platforms with the stick held no longer stomps (or breaks puzzle crates). PR #131 / `90dc6ee0` (API Worker `1937c469`): the world-tile outbox check runs only after writes that can queue tiles. Master **99/215**. Receipt: [small fixes](docs/review/wamp-small-fixes-2026-10-10.md).
+
 ## 2026-10-10 — F076/F086 iPhone text fields and full-screen panels; F001 confirmed
 
 PR #127 / `ece9bfe3`: on phones, text fields are 16px so iOS Safari doesn't zoom into them, an open keyboard no longer flips a portrait phone to the landscape layout, and full-screen panels and modals fit the visible screen instead of running under Safari's toolbar. F001 (the guest recorder stalling every second) was already fixed by the asynchronous capture in `a43e1da7`. Master **95/215**. Receipt: [iOS viewport](docs/review/wamp-ios-viewport-2026-10-10.md).

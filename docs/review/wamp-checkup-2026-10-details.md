@@ -1639,6 +1639,12 @@ The fetch handler's finally block calls scheduleWorldTileOutboxDispatch(env, ctx
 
 There are a few things the implementer should know. (a) Sending a dispatch right after a publish is deliberate. docs/overworld-tile-pyramid.md:54-62 describes the queue as a wake-up mechanism and the one-minute renderer cron as a backstop for repairs. Removing the post-publish dispatch would make new rooms take up to about 60 seconds longer to show up as overworld tiles, so the fix has to keep dispatching on paths that can produce outbox rows. The reviewer's fix already does that. (b) Six server modules write rows that the triggers react to: rooms/store.ts, expandedRooms/writeStore.ts, courses/store.ts, backgroundImages/routes.ts, admin/routes.ts and maintenance/routes.ts. Rather than adding calls inside each handler, a simpler and safer version keeps the `finally` hook but adds two gates. First, it only fires for an allowlist of path prefixes: /api/rooms/ except /api/rooms/snapshots/query, plus expanded-rooms, courses, background-images, admin, maintenance and worlds. Second, it skips responses with status ≥ 400. If any path is missed, the cron still picks up its rows within a minute. (c) The `finally` hook also runs on 404 and error responses, such as bot POSTs to unknown routes, so those requests trigger the outbox SELECT too.
 
+**2026-10-10 completed.** PR #131 / `90dc6ee0`, API Worker `1937c469`. Production has `WORLD_TILE_GENERATION_ENABLED=1`, so every non-GET API request was running the outbox SELECT.
+
+The fetch handler's `finally` now uses `requestMayQueueWorldTiles(method, pathname)`, a prefix allowlist of the areas whose writes can fire the outbox triggers: `/api/rooms/` except the snapshot query, `/api/courses`, `/api/expanded-rooms`, `/api/background-images`, `/api/worlds`, `/api/guest-room-drafts`, `/api/agents`, `/api/admin/` and `/api/test/reset`. Publishing still wakes the renderer immediately. Heartbeats, chat, replays, run finishes, presence tokens, bug reports, CORS preflights and unknown routes skip it.
+
+Test: `worldTiles/outboxDispatchGate.test.ts`. Not done: skipping error responses, because `finally` can't see the status. Receipt: `wamp-small-fixes-2026-10-10.md`.
+
 ### F038: Guest replay screenshots are stored in the main database, and nothing else is ever cleaned up
 
 - **Area:** Backend performance, cost & reliability
@@ -2368,6 +2374,14 @@ The background-tab case is a separate, milder issue. The tab has a normal size, 
 
 The 0x0 case does not happen in the normal wamp.land layout. It only happens in hidden or late-laid-out iframes and webviews.
 
+**2026-10-10 completed.** PR #129 / `7adcc0fc` (frontend, Pages; live in loader `main-D9mh5SEX.js`). `src/main.ts` clamps the Phaser config's width and height to at least 1 and sets `scale.min: { width: 1, height: 1 }`, so the RESIZE scale manager never produces a 0×0 framebuffer.
+
+Browser repro: the game in a `width:0;height:0` iframe, resized to 1000×700 after 10 s.
+- Before: never ready in 45 s, with a `window-error`.
+- After: ready; `phaser-game:create-start` reports 1×1.
+
+Not done: assets only advance while a background tab is visible. Receipt: `wamp-small-fixes-2026-10-10.md`.
+
 ### F121: Phone 'More +' view: Room Rush and Expand Room labels sit in the top-left corner
 
 - **Area:** Visual design, UI polish & information architecture
@@ -2387,6 +2401,8 @@ phone-world-chat.css:137-140 sets `display: inline-flex` on #btn-world-course-bu
 **Fact-check (confirmed).**
 
 Minor: the course-builder label is 'Expand Room' only for rooms that aren't expanded yet. When the room is already expanded it reads 'Expanded Room Setup', which wraps and ends up centered left-to-right but still sits at the top of the button. The fix is the same either way.
+
+**2026-10-10 completed.** PR #129 / `7adcc0fc`. The phone details rule for `#btn-world-course-builder` and `#btn-world-room-rush` adds `align-items/justify-content/text-align: center`. iPhone 13 emulation: the "Expand Room" label's centre moved from (−16, −7) px off the button centre to (0, −1). The live CSS carries the rule.
 
 ### F075: Tablets and landscape phones have no way to play: touch controls exist only in phone portrait
 
@@ -2601,6 +2617,15 @@ Small corrections, none of which change the core claim. (1) "Can make a puzzle r
 4. Fix note: tracking prevTouchDown should live in the movement controller state and be reset on respawn and restart. Blocking stomps until the down input has been released at least once after leaving the ground handles ledges, drop-through and ladders in one rule.
 
 The drop-through still completes; it just gains a 190ms mid-air freeze and then a 520px/s slam. Rooms do not become unwinnable: resetRoomChallengeState (OverworldPlayScene.ts:4796-4815) recreates live objects and resets special tiles, so a restart restores broken crates and bricks. The real cost is a lost attempt or worse run time. The claim understates the damage in one way: the stomp breaks entire brick_box stacks (liveObjects.ts:2124-2148) and breakable special-brick tile stacks (specialTiles.ts:765-799), not just crates. Another trigger the claim misses is climbing down off the bottom of a ladder into the air while holding the stick down. Mid-air thumb drift is less likely than claimed, because the same drift on the ground makes the player crouch (and blocks jumping), which they would notice. Directional gravity (movementController.ts:906/915/924) has the same held-instead-of-pressed problem, where a held direction acts as a jump press, and the fix should cover it too.
+
+**2026-10-10 completed.** PR #130 / `0107ad2b` (frontend, Pages; live in `main-D9mh5SEX.js`). `OverworldMovementController` keeps `touchDownHeld` (the stick's down state on the previous physics step) and starts a stomp on touch only for `touchDown && !touchDownHeld` while airborne.
+
+Tests in `movementController.stateOwnership.test.ts`:
+- a stick held from the ground through four airborne steps doesn't stomp (fails on the previous code);
+- release and push again does;
+- keyboard Down still does.
+
+Not done: in up-gravity zones a held stick still counts as a jump press each step. The feel on a real phone is a hands-on check. Receipt: `wamp-small-fixes-2026-10-10.md`.
 
 ### F109: Phone chrome uses 6–7px text and 20–30px tap targets
 
