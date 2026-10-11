@@ -1171,6 +1171,8 @@ Changes to the suggested fix:
 
 **2026-10-10 completed.** PR #116 / `5ef28c36`, API Worker `8ba8d713`. The client breaker trips only on a 404 (the server returns 404 when compact reads are disabled); a 5xx or network error loads that window once from legacy chunks and the next refresh tries compact reads again, and refreshes now try compact reads whenever they are not disabled, so a session that fell back recovers. Snapshot-query failures no longer touch the breaker. `/api/world/chunks` now uses the same 20 s anonymous edge cache and `Cache-Control` as the compact route (signed-in reads stay private). Browser check with one injected 503: `summary:503`, `legacy:200` for that window, then `summary:200` at 4 s, 19 s and 34 s, world rendered, no page errors. Not done: retiring or capping the legacy route, fallback telemetry, and caching `/api/dashboard/stats`. Receipt: `wamp-compact-breaker-2026-10-10.md`.
 
+**2026-10-10 follow-up.** PR #119 / `f303f71a`, API Worker `8b6cbf12`. While verifying F030, every route using the anonymous edge cache was found returning `Cache-Control: public, max-age=14400` on cache hits (the zone's browser-cache TTL rewrites stored entries) instead of the route's `max-age=20`, letting browsers keep leaderboards and world summaries for hours. The route's own `Cache-Control` now travels in a private header on the stored copy and is restored on each hit; production hits now return `max-age=20`.
+
 ### F029: Finishing a run makes about 30 database round trips in a row before the player sees a result
 
 - **Area:** Backend performance, cost & reliability
@@ -2247,6 +2249,8 @@ Small details that are wrong, plus extra reach the claim missed:
 - **More affected screens:** the playlist modal (playlistModal.ts:150 and :329, through playlists/repository.ts → apiRequest) and the Wamp-O-Gram modal (wampOGramModal.ts:216, 235 and 251, through wampOGram/repository.ts → apiRequest).
 - **Clearest player-facing example:** a student who mistypes a password on school login sees `{"error":"Username or password is incorrect."}`. The cause is school-login.ts:115/148 together with worker/school/store.ts:367.
 - **Fix step (1) alone fixes every surface:** call the shared `readApiErrorMessage(response, fallback)` inside request.ts.
+
+**2026-10-10 completed.** PR #118 / `f24a383d` (frontend, Pages auto-build). `apiRequest` uses the shared `readApiErrorMessage` (unwraps `error`, keeps plain-text bodies, falls back to `Request failed with status N.` for empty bodies) and throws `ApiError extends Error { status }`. Room insights checks `ApiError` instead of re-parsing JSON; the three helpers that `JSON.parse` messages already fall back to the plain message. `src/api/request.test.ts` covers JSON, plain-text and empty bodies (both cases fail on the previous helper). Browser check: with the guestbook API returning `503 {"error":"The guestbook is resting. Try again soon."}`, the guestbook shows that sentence. Not done: merging the nine local `getErrorMessage` copies. Receipt: `wamp-api-errors-2026-10-10.md`.
 
 ### F101: Boot breaks if the page starts hidden or zero-sized (embeds, background tabs)
 

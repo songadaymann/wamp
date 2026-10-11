@@ -1,3 +1,7 @@
+## 2026-10-10 — F063 plain API error messages; edge-cache browser lifetime fix
+
+PR #118 / `f24a383d`: players see the server's error sentence instead of `{"error":...}` (guestbook, room comments, email-code sign-in, School admin). Master **83/215**. PR #119 / `f303f71a` (API Worker `8b6cbf12`): cached anonymous API responses keep their own `max-age=20` on hits instead of the zone's 4-hour browser TTL. Receipt: [API errors](docs/review/wamp-api-errors-2026-10-10.md).
+
 ## 2026-10-10 — F055 quick-restart trace races pinned
 
 Confirmed fixed by the run-instance guards in `65db708d`; PR #117 / `136e27ac` adds regression tests for the survival auto-restart, late start replies and same-Expanded-Room restarts. No production code change. Master **82/215**.
