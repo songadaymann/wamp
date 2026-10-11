@@ -865,6 +865,16 @@ These are small precision fixes; the core claim is unchanged.
 - Byte budgets do exist for world-tile network requests (overworld_tile_pyramid_probe_helpers.mjs:598), but none cover startup JS or the boot asset list.
 - The real HTML entry is a 1.3 KB stub. The budget script must follow its boot-time dynamic import of the main runtime chunk; counting only index.html's script tags and modulepreload links would miss nearly all of the weight.
 
+**2026-10-10 completed.** PR #133 / `0f2d95a1` (tooling; takes effect in CI).
+
+- **`bootBundleReportPlugin`** (vite.config.ts, `writeBundle`) writes `output/build/boot-bundle.json`: the index.html entry chunk, the runtime it imports dynamically, and their static imports. This follows the fact-check's note that the HTML entry is a stub.
+- **`scripts/check_bundle_budget.mjs`** (`npm run size:check`) brotli-sizes those files at quality 11 and fails above `WAMP_BOOT_JS_BUDGET_KB` (default 760).
+  - The 2026-10-10 baseline is **745.7 KB across 14 files**: main 404.7, phaser-vendor 263.2, roomModel 37.8, rewardStings 28.5, …; up from the review's 686 KB.
+  - It runs at the end of `npm run check` and after the build in `.github/workflows/quality.yml`; the CI run on the PR printed the same table.
+  - A 700 KB budget makes it exit 1.
+
+Not done: (2) a BootScene art-list budget (~486 boot files) and (3) a throttled cold-start probe. Raise the budget deliberately when new boot code is needed; otherwise lazy-load it.
+
 ### F021: Updated art can stay stale for returning players for up to a year
 
 - **Area:** Load time, bundle size & assets

@@ -1,3 +1,7 @@
+## 2026-10-10 — F024 startup JavaScript budget
+
+PR #133 / `0f2d95a1`: `npm run check` and the quality workflow now fail when the JavaScript a cold game visit runs before its first frame grows past 760 KB brotli (today 745.7 KB across 14 files). Raise `WAMP_BOOT_JS_BUDGET_KB` on purpose, or lazy-load the new code. Master **101/215**.
+
 ## 2026-10-10 — F029 run finishes reply before computing rewards
 
 PR #123 / `e0cf72fe` (API Worker `fdf05d00`): finishing a room, course or Expanded Room run replies once the run is recorded and ranked; points, XP, creator rewards, stats, badges and emails follow in the background. A first clear that takes #1 went from 138 sequential database round trips before the reply to 36. Master **100/215**. Receipt: [finish rewards](docs/review/wamp-finish-rewards-2026-10-10.md).
