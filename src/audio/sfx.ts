@@ -83,6 +83,8 @@ type SfxPlayErrorDebugEntry = {
 // stop common gameplay cues from sitting on top of the room mix.
 const GLOBAL_SFX_VOLUME_MULTIPLIER = 0.55;
 const MAX_SFX_MEDIA_PLAYERS = 64;
+// Played most in the first seconds of a run; loaded right after the first gesture (F023).
+const HOT_GAMEPLAY_CUES: readonly SfxCue[] = ['jump', 'land', 'footstep', 'collect', 'player-hurt'];
 
 type SfxAudioRoute = 'direct' | 'low-pass';
 
@@ -379,6 +381,11 @@ export class SfxController {
     this.engine.onHidden(() => {
       for (const cue of [...this.activeAudioByCue.keys()]) this.stop(cue);
     });
+    // Just after the first gesture (not inside it), load the hot gameplay cues so the first
+    // jump or pickup doesn't wait for its file to download.
+    this.engine.onFirstInteraction(() => {
+      windowObj.setTimeout(() => this.warmCues(HOT_GAMEPLAY_CUES), 0);
+    });
 
     for (const config of Object.values(SFX_CUES)) {
       if (!this.assetUrlByPath.has(config.path)) {
@@ -391,6 +398,16 @@ export class SfxController {
       windowObj.play_sfx_debug = (cue: SfxCue, playbackOptions?: SfxPlaybackOptions) => {
         this.play(cue, playbackOptions);
       };
+    }
+  }
+
+  /** Creates (and starts loading) one idle direct-route player per cue that has none yet. */
+  private warmCues(cues: readonly SfxCue[]): void {
+    for (const cue of cues) {
+      const config = SFX_CUES[cue];
+      if (!config || this.idleAudioByPoolKey.get(getAudioPoolKey(config.path, 'direct'))?.length) continue;
+      const audioPlayer = this.acquireAudioPlayer(config.path, 'direct');
+      if (audioPlayer) this.releaseAudioPlayer(audioPlayer);
     }
   }
 
