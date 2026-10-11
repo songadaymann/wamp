@@ -8,6 +8,7 @@ import {
 } from './analytics/guestActivity';
 import { installDialogEscapeGuard, installModalFocusManagement, installModalStackBackdrops } from './ui/modalState';
 import { initSfx, globalSfxController } from './audio/sfx';
+import { sharedAudioEngine } from './audio/engine';
 import { runOverworldLodStress } from './debug/overworldLodStress';
 import { globalRoomMusicController, initRoomMusic } from './music/controller';
 import { BootScene } from './scenes/BootScene';
@@ -188,6 +189,10 @@ window.addEventListener('error', (event) => {
 });
 initSfx();
 initRoomMusic();
+if (new URLSearchParams(window.location.search).has('audiodebug')) {
+  void import('./audio/debugOverlay').then(({ mountAudioDebugOverlay }) =>
+    mountAudioDebugOverlay(sharedAudioEngine, () => globalSfxController.getDebugState()));
+}
 installDialogEscapeGuard();
 installModalStackBackdrops();
 const applyRuntimeSettings = (settings: GameSettings) => {

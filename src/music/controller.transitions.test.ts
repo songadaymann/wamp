@@ -51,7 +51,8 @@ function harness(hold = true) {
   context.suspend.mockImplementation(async () => { context.state = 'suspended'; });
   context.resume.mockImplementation(async () => { context.state = 'running'; });
   const contextConstructor = vi.fn(function () { return context; });
-  vi.stubGlobal('window', { AudioContext: contextConstructor, addEventListener: (name: string, listener: () => void) => windowEvents.set(name, listener), location: { href: 'http://localhost/', origin: 'http://localhost' }, document: doc });
+  vi.stubGlobal('window', { AudioContext: contextConstructor, addEventListener: (name: string, listener: () => void) => windowEvents.set(name, listener), location: { href: 'http://localhost/', origin: 'http://localhost' }, document: doc,
+    setTimeout: vi.fn(() => 0), clearTimeout: vi.fn() });
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) })));
   render.mockResolvedValue(buffer());
   const engine = new AudioEngine();
