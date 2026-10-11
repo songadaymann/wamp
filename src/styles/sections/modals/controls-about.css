@@ -9,7 +9,7 @@
 
 #controls-modal .controls-modal-panel {
   width: min(760px, calc(100vw - 40px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
   gap: 14px;
   padding: 18px;
   overflow-y: auto;
@@ -71,7 +71,7 @@
 
 #about-modal .about-modal-panel {
   width: min(760px, calc(100vw - 40px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
   gap: 14px;
   padding: 18px;
   overflow-y: auto;

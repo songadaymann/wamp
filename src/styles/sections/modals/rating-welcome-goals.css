@@ -6,7 +6,7 @@
 
 #run-rating-modal .run-rating-modal-panel {
   width: min(760px, calc(100vw - 36px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
   gap: 16px;
   padding: 20px 18px 18px;
   overflow-y: auto;
@@ -351,7 +351,7 @@
 
 #guest-builder-claim-modal .guest-builder-claim-modal-panel {
   width: min(560px, calc(100vw - 36px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
   gap: 16px;
   padding: 20px 18px 18px;
   overflow-y: auto;
@@ -456,7 +456,7 @@
 
 #guest-room-recovery-modal .guest-room-recovery-modal-panel {
   width: min(600px, calc(100vw - 36px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
   gap: 14px;
   padding: 20px 18px 18px;
   overflow-y: auto;

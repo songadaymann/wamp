@@ -147,12 +147,12 @@
 
 #background-photos-modal .background-photo-modal-panel {
   width: min(780px, calc(100vw - 36px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
 }
 
 #background-upload-modal .background-photo-modal-panel {
   width: min(540px, calc(100vw - 36px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
 }
 
 #background-photos-modal .background-photo-modal-kicker,
@@ -313,7 +313,7 @@
   #background-photos-modal .background-photo-modal-panel,
   #background-upload-modal .background-photo-modal-panel {
     width: calc(100vw - 24px);
-    max-height: calc(100vh - 24px);
+    max-height: calc(var(--visible-vh) - 24px);
     padding: 14px;
   }
 

@@ -24,22 +24,22 @@
 
 #leaderboard-modal .leaderboard-modal-panel {
   width: min(760px, calc(100vw - 36px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
 }
 
 #explore-modal .explore-modal-panel {
   width: min(820px, calc(100vw - 36px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
 }
 
 #profile-modal .profile-modal-panel {
   width: min(780px, calc(100vw - 36px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
 }
 
 #editor-music-phrase-save-modal .editor-music-phrase-save-modal-panel {
   width: min(540px, calc(100vw - 36px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--visible-vh) - 32px);
 }
 
 #leaderboard-modal .history-modal-kicker,

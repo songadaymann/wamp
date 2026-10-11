@@ -36,7 +36,7 @@ body[data-device-class='tablet'][data-coarse-pointer='true'] #global-chat.is-ope
 }
 
 body[data-device-class='tablet'][data-coarse-pointer='true'] #global-chat .chat-panel-body {
-  max-height: min(420px, calc(100vh - 104px - var(--safe-top) - var(--safe-bottom)));
+  max-height: min(420px, calc(var(--visible-vh) - 104px - var(--safe-top) - var(--safe-bottom)));
   background: #fff3db;
   backdrop-filter: none;
 }

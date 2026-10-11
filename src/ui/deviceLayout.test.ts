@@ -36,6 +36,15 @@ describe('device layout classification', () => {
     expect(layout).toMatchObject({ deviceClass: 'desktop', coarsePointer: false, touchPrimary: false });
   });
 
+  it('keeps a portrait phone in portrait while the keyboard covers half the screen (F076)', async () => {
+    const layout = await classify({ width: 393, height: 660, coarse: true, touchPoints: 5,
+      visualViewport: { width: 393, height: 330, scale: 1 } });
+    expect(layout).toMatchObject({ deviceClass: 'phone', orientationState: 'portrait', viewport: { width: 393, height: 330 } });
+    const landscape = await classify({ width: 844, height: 390, coarse: true, touchPoints: 5,
+      visualViewport: { width: 844, height: 180, scale: 1 } });
+    expect(landscape.orientationState).toBe('landscape');
+  });
+
   it('returns to the phone layout when a mobile browser fits overflowing tablet content', async () => {
     const layout = await classify({ width: 738, height: 1598, coarse: true, touchPoints: 5,
       visualViewport: { width: 738, height: 1597.1078, scale: 390 / 738 } });
