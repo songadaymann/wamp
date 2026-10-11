@@ -419,6 +419,12 @@ Reframe the finding:
 - Gate the stronger cuts on selectedMode==='battery-saver' so Auto on phones does not lose visual quality silently.
 - Plumb the same getter into EditorScene.ts:1215/1240.
 
+**2026-10-11 partly done.** PR #156 / `788bd765` (Pages). Only when the player chooses Battery Saver (per the fact-check, so Auto doesn't silently lose quality):
+- `resolveWeatherParticleCount` and `resolveWeatherFogBandCount` scale by 0.5, keeping at least one band;
+- `spawnScorePopup` skips the floating score text.
+
+Test: `weather/controller.batterySaver.test.ts` (rain 82 → 41, snow 100 → 50, fog bands 19 → 10). Open: the lighting glow pass and the editor preview. Receipt: `wamp-motion-frames-bridge-2026-10-11.md`.
+
 ### F008: Physics collision links grow with every room loaded, and are all rebuilt on room loads, bullet despawns and crate breaks
 
 - **Area:** Runtime performance (frame rate, GC, memory)
@@ -543,6 +549,13 @@ The lighting item understates the cost, and the biggest allocation source is in 
 - allocates bounds and debugCounts objects.
 All of this is thrown away when lighting is off, because the mode check only happens inside lightingController.sync. updateRoomWeather (:2552-2591) has the same pattern on a smaller scale. The best fix is to return early in updateRoomLighting/updateRoomWeather when `currentRoom.lighting.mode` (or `weather.mode`) is off and the controller is already in its off state. Rooms that have lighting on should reuse a persistent emitters array and update positions in place, as the 07-29 plan says. Minor correction: the carryMovingPlatformRiders options object holds 2 new closures, not 3.
 
+**2026-10-11 partly done.** PR #155 / `134dbbb7` (Pages).
+- `updateRoomLighting` returns early, with a clearing `sync`, unless the room uses the dynamic dark-aura overlay (`roomLightingUsesDynamicOverlay`). It no longer builds ghost emitters, an emitters array, ambient bounds (two closures and 8 cell lookups) and debug counts every frame in unlit rooms. The two duplicate "no room" branches merged, `OverworldPlayScene.ts` is 10 lines shorter, and its pin is 6444.
+- The per-frame ranked trace frame is built only when `rankedRunTraceRecorder.isActive()`.
+- Unlit rooms' lighting debug snapshot now reports 0 emitters.
+
+No GC trace was taken. Open: the `liveObjects.ts` allocations (size-pinned file), music `sync` literal, weather off-path clone. Receipt: `wamp-motion-frames-bridge-2026-10-11.md`.
+
 ### F006: Every moving body re-scans the tile map and allocates ~100 small objects per frame for special-tile checks
 
 - **Area:** Runtime performance (frame rate, GC, memory)
@@ -585,6 +598,8 @@ Fix-approach corrections:
 4. Return a shared frozen constant from decodeTileDataValue for value <= 0. Empty cells are the most common case.
 
 "Most rooms don't contain any special tiles" is plausible but not verified from the code. There is no profiler attribution for this path, so the payoff should be measured with perf:runtime:mobile in an object-heavy room.
+
+**2026-10-11 partly done.** PR #157 / `d1605a85` (Pages). `src/scenes/overworld/specialTileRooms.ts` `roomHasSpecialTiles(tileData)` checks the three layers once per tile-grid object (`WeakMap`). Play never edits a grid in place, and reloaded rooms get a new one. `findSpecialTilesInWorldRect` and `findSpecialTilesAtWorldPoint` skip rooms without special tiles, so most rooms no longer decode three layers per covered cell per body per frame. Test: `specialTiles.roomSkip.test.ts`; all 884 overworld tests pass. Open: the bitmask for rooms with special tiles, the shared empty decode, `conveyorX` reuse, idle NPC skips. Receipt: `wamp-motion-frames-bridge-2026-10-11.md`.
 
 ### F013: Startup downloads all 480 art files in the game before anyone can play
 
@@ -6221,6 +6236,14 @@ The only prefers-reduced-motion checks are roomComments.ts:887/999, which call a
 
 1) The 9 key (OverworldPlayScene.ts:2684, cameraController.ts:111-121) switches between 'follow' and 'inspect' (camera.ts:4). Inspect is a stationary camera that stops tracking the player. It is not the fixed-room camera, which is a per-room setting the builder chooses (cameraController.ts:40-44) and which the toggle cannot change (:112). The Settings choice should therefore be a player preference that turns on the existing syncRoomCamera room-snap behavior (e.g. isRoomCameraFixed() returns true when the preference is set), not a way to expose the inspect toggle. 2) OverworldPlayScene.ts:5212 is the PvP stomp only. Normal enemy stomps don't shake the screen. Shakes happen only when a gun or sword hit connects (combatController.ts:157/167/258, 40-50ms at 0.0015-0.002 intensity, about 1-3 px) and on PvP damage. 3) The full-screen red flash only appears in PvP, which players opt into. 4) jam.css:931 only sets scroll-behavior on the separate jam.html page, not the game. roomComments.ts:887 also turns off the comment-marker jiggle, so reduced motion covers the browse-mode comment ticker and the marker jiggle, not just the ticker. Neither is relevant to play-mode comfort.
 
+**2026-10-11 partly done.** PR #154 / `a887c044` (Pages). `src/ui/reducedMotion.ts` `prefersReducedMotion()` caches one `MediaQueryList`; `roomComments.ts` uses it instead of its own copy. With reduced motion:
+- the combat `shakeCamera` host, the enemy stomp impact and the PvP stomp don't shake;
+- a PvP hit skips the red overlay, the camera flash and the shake;
+- flickering lights hold steady;
+- reward stings and XP receipts finish their animations in 1 ms, and reward particles are hidden.
+
+Evidence (Playwright `reducedMotion` emulation, calling the real hooks): combat shake yes → no; PvP shake/flash/overlay yes → no; reward card animation 0.22s → 0.001s. Open (product choices): a Comfort setting and a remembered camera choice. Receipt: `wamp-motion-frames-bridge-2026-10-11.md`.
+
 ### F172: Add an Assist mode (slower game speed, safe respawn) that plays as practice so leaderboards stay clean
 
 - **Area:** Accessibility & inclusivity
@@ -6669,6 +6692,8 @@ Cheapest effective fix (small):
 (iii) Then add `implements` to catch signature drift.
 
 The capability-interface split and replacing the delegates with a single getMusicWorkflow() accessor are worthwhile, but they are medium effort, not small. Adjusted impact: low to medium (a hazard to future agent edits on the music, history, Wamp-O-Gram and overworld HUD buttons, with no current player-facing breakage).
+
+**2026-10-11 partly done.** PR #158 / `697d3b4e` (no runtime change). `EditorScene` and `CourseEditorScene` `implements EditorSceneBridge`; `OverworldPlayScene` `implements OverworldSceneBridge`. `src/ui/setup/sceneBridge.contract.test.ts` requires, at typecheck, every bridge member each scene implements today (73, 61, 36) through `Required<Pick<Bridge, …>>`. Renaming `EditorScene.shiftRoomMusicTempo` now fails with TS2741 instead of silently disabling the tempo buttons. `clearCurrentLayer` and `clearAllTiles` are removed from the bridge (no scene exposed them). Open: required capability interfaces; one `getMusicWorkflow()` accessor. Receipt: `wamp-motion-frames-bridge-2026-10-11.md`.
 
 ### F068: Backdrop-camera bookkeeping is half migrated: every new sprite still has to be registered by hand
 
