@@ -1326,6 +1326,20 @@ So "~1,600 D1 queries/s at 1,000 players" is a worst case that assumes everyone 
 (c) "Largest single load on the database" is plausible because chat is the most frequent poll, but it is not proven. The chunk refreshes at 8–15 s may cost more per call.
 (d) The closed panel needs some polling to drive the unread badge (chat-unread-badge), so fix (1) must keep a slower background poll rather than stopping it. The suggestion already says this.
 
+**2026-10-10 completed.** PR #121 / `56c712c4`, API Worker `97079932`.
+
+- **Client** (`src/ui/chat/pollSchedule.ts`, `panel.ts`): the 3 s timer polls on every tick only while the panel is open. While it's closed, it polls about every 30 s for the unread badge. Opening the panel polls at once.
+- **Worker**: `GET /api/chat/messages` loads messages and the viewer in parallel. Requests without an `ep_session` cookie go through `loadAnonymousPublicCache` with `Cache-Control: public, max-age=3`; signed-in requests are `private, no-store` and never touch the cache.
+
+Fix (3) from the finding, skipping the viewer lookups on `after` polls, was not done: it would delay ban and role changes until reload.
+
+**Evidence:**
+- Browser (local dev server, 65 s with the panel closed): polls at 3.7 s, 33.7 s and 63.6 s, against about 22 before. Opening the panel polled at once, then every 3 s.
+- Production: anonymous `miss` → `hit` → `hit` with `public, max-age=3`, a `miss` again after 4 s, and a cookie request `bypass` with `private, no-store`.
+- Tests: `src/cloudflare/worker/chat/routes.test.ts` and `src/ui/chat/pollSchedule.test.ts`.
+
+Not done: pushing a `chat:new` event over PartyKit. Receipt: `wamp-chat-polling-2026-10-10.md`.
+
 ### F031: Each signed-in request makes 3 database lookups to identify the player, and the Worker isn't placed near the database
 
 - **Area:** Backend performance, cost & reliability
