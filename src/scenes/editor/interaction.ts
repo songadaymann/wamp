@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { mouseButtonsReleased } from '../pointerRelease';
 import { EditorTouchCandidate, EditorTouchGesture, editorTouchToolKey } from './touchGesture';
 import {
   ROOM_HEIGHT,
@@ -142,8 +143,13 @@ export class EditorInteractionController {
   private pinchDistance = 0;
   private pinchAnchor = { x: 0, y: 0 };
   private pinchAnchorWorld = { x: 0, y: 0 };
-  private readonly handleTouchBlur = (): void => {
+  // Focus leaving the game (Alt-Tab, a text field, a hidden tab) swallows key and
+  // button releases: finish any stroke or pan and forget a held Space.
+  private readonly handleInputBlur = (): void => {
     if (this.touchAction) this.cancelTouchEdit();
+    this.spaceDown = false;
+    const pointer = this.scene.input.activePointer;
+    if ((this.isPanning || this.isDrawing) && pointer.isDown && !pointer.wasTouch) this.handleMouseUp(pointer, true);
   };
   private readonly musicRoomFit = new MusicRoomFitController();
   private musicFitLock = false;
@@ -288,8 +294,9 @@ export class EditorInteractionController {
   }
 
   reset(): void {
-    this.scene.game.events.off('blur', this.handleTouchBlur);
-    this.scene.events.off('sleep', this.handleTouchBlur);
+    this.scene.game.events.off('blur', this.handleInputBlur);
+    this.scene.game.events.off('hidden', this.handleInputBlur);
+    this.scene.events.off('sleep', this.handleInputBlur);
     this.cursorGraphics?.destroy();
     this.rectPreviewGraphics?.destroy();
     this.cursorGraphics = null;
@@ -619,9 +626,75 @@ export class EditorInteractionController {
     this.updateCursorCoords(tileX, tileY);
   }
 
+  // Mouse releases over a panel or outside the window arrive as 'pointerupoutside';
+  // they finish the stroke, shape or pan exactly like a release over the canvas.
+  private readonly handleMouseUp = (pointer: Phaser.Input.Pointer, outside = false): void => {
+    if (this.host.objectMove?.up(pointer, outside)) return;
+    if (this.handleTouchPointerUp(pointer)) {
+      return;
+    }
+
+    if (this.isPanning) {
+      this.isPanning = false;
+      return;
+    }
+
+    if (this.host.isMusicModeActive()) {
+      this.host.handleMusicPointerUp(pointer);
+      return;
+    }
+
+    if (!this.isDrawing) {
+      return;
+    }
+
+    if (this.lastObjectDragCell) {
+      this.host.commitObjectBatch();
+      this.lastObjectDragCell = null;
+      this.isDrawing = false;
+      return;
+    }
+
+    if (
+      (isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy') &&
+      this.rectStart &&
+      (pointer.leftButtonReleased() || (this.shapeEraseActive && pointer.rightButtonReleased()))
+    ) {
+      const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      const end = this.resolvePointerShapeEnd(pointer, worldPoint);
+      if (editorState.activeTool === 'copy') {
+        this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, end.x, end.y);
+      } else if (isPathEditorTool(editorState.activeTool) && isEditorLineCurve()) {
+        this.beginPathBend(this.rectStart, end, this.shapeEraseActive);
+        this.isDrawing = false;
+        this.shapeEraseActive = false;
+        return;
+      } else {
+        const kind = getEditorStampKind(editorState.activeTool);
+        if (kind) {
+          this.host.stampShape(kind, this.rectStart.x, this.rectStart.y, end.x, end.y, {
+            outline: isEditorShapeOutline(editorState.activeTool),
+            erase: this.shapeEraseActive,
+          });
+        }
+      }
+      this.rectStart = null;
+      this.shapeEraseActive = false;
+      this.rectPreviewGraphics?.clear();
+    }
+
+    if (editorState.activeTool !== 'copy') {
+      this.host.commitTileBatch();
+    }
+    this.isDrawing = false;
+    this.clearShapePreview();
+    this.clearTileDrag();
+  };
+
   setupInput(handleCanvasContextMenu: (event: Event) => void): void {
-    this.scene.game.events.on('blur', this.handleTouchBlur);
-    this.scene.events.on('sleep', this.handleTouchBlur);
+    this.scene.game.events.on('blur', this.handleInputBlur);
+    this.scene.game.events.on('hidden', this.handleInputBlur);
+    this.scene.events.on('sleep', this.handleInputBlur);
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.stopGesture();
       else if (this.host.objectMove?.down(pointer)) return;
@@ -744,6 +817,11 @@ export class EditorInteractionController {
         return;
       }
 
+      if ((this.isPanning || this.isDrawing) && mouseButtonsReleased(pointer)) {
+        this.handleMouseUp(pointer, true);
+        return;
+      }
+
       if (editorState.isPlaying) {
         return;
       }
@@ -811,73 +889,8 @@ export class EditorInteractionController {
       }
     });
 
-    this.scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-      if (this.host.objectMove?.up(pointer)) return;
-      if (this.handleTouchPointerUp(pointer)) {
-        return;
-      }
-
-      if (this.isPanning) {
-        this.isPanning = false;
-        return;
-      }
-
-      if (this.host.isMusicModeActive()) {
-        this.host.handleMusicPointerUp(pointer);
-        return;
-      }
-
-      if (!this.isDrawing) {
-        return;
-      }
-
-      if (this.lastObjectDragCell) {
-        this.host.commitObjectBatch();
-        this.lastObjectDragCell = null;
-        this.isDrawing = false;
-        return;
-      }
-
-      if (
-        (isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy') &&
-        this.rectStart &&
-        (pointer.leftButtonReleased() || (this.shapeEraseActive && pointer.rightButtonReleased()))
-      ) {
-        const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        const end = this.resolvePointerShapeEnd(pointer, worldPoint);
-        if (editorState.activeTool === 'copy') {
-          this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, end.x, end.y);
-        } else if (isPathEditorTool(editorState.activeTool) && isEditorLineCurve()) {
-          this.beginPathBend(this.rectStart, end, this.shapeEraseActive);
-          this.isDrawing = false;
-          this.shapeEraseActive = false;
-          return;
-        } else {
-          const kind = getEditorStampKind(editorState.activeTool);
-          if (kind) {
-            this.host.stampShape(kind, this.rectStart.x, this.rectStart.y, end.x, end.y, {
-              outline: isEditorShapeOutline(editorState.activeTool),
-              erase: this.shapeEraseActive,
-            });
-          }
-        }
-        this.rectStart = null;
-        this.shapeEraseActive = false;
-        this.rectPreviewGraphics?.clear();
-      }
-
-      if (editorState.activeTool !== 'copy') {
-        this.host.commitTileBatch();
-      }
-      this.isDrawing = false;
-      this.clearShapePreview();
-      this.clearTileDrag();
-    });
-
-    this.scene.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => {
-      if (this.host.objectMove?.up(pointer, true)) return;
-      this.handleTouchPointerUp(pointer);
-    });
+    this.scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.handleMouseUp(pointer));
+    this.scene.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => this.handleMouseUp(pointer, true));
     this.scene.input.on('wheel', (pointer: Phaser.Input.Pointer, _gameObjects: unknown[], _deltaX: number, deltaY: number) => {
       if (editorState.isPlaying || this.host.isMusicModeActive()) {
         return;
