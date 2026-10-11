@@ -87,11 +87,27 @@ export async function handleGuestReplay(request: Request, url: URL, env: Env): P
   if (!Array.isArray(body.samples) || body.samples.length < 1 || body.samples.length > 3) throw new HttpError(400, 'Invalid batch.');
   const samples = body.samples.map(validateReplaySample);
   await env.DB.batch(samples.map(s => env.DB.prepare('INSERT OR IGNORE INTO guest_replay_samples (session_id,sequence,payload) VALUES (?,?,?)').bind(body.id, s.sequence, JSON.stringify(s))));
+  // Activity flags only ever turn on, so each batch adds its own evidence instead of
+  // re-parsing every stored sample (and its JPEG) in the session. "Moved" means more than
+  // one distinct x, which holds exactly when two x values adjacent in sequence differ:
+  // compare within the batch and against the last earlier sample that has a position.
+  const ordered = [...samples].sort((a, b) => a.sequence - b.sequence);
+  const positioned = ordered.filter((s) => s.player !== null);
+  const previous = positioned.length > 0
+    ? await env.DB.prepare(`SELECT json_extract(payload,'$.player.x') AS x FROM guest_replay_samples
+        WHERE session_id = ? AND sequence < ? AND json_extract(payload,'$.player.x') IS NOT NULL
+        ORDER BY sequence DESC LIMIT 1`).bind(body.id, positioned[0].sequence).first<{ x: number }>()
+    : null;
+  const xs = [...(previous ? [previous.x] : []), ...positioned.map((s) => s.player!.x)];
+  const actions = new Set(samples.flatMap((s) => s.actions));
   await env.DB.batch([env.DB.prepare(`UPDATE guest_replay_sessions SET
-    played = EXISTS(SELECT 1 FROM guest_replay_samples WHERE session_id = ? AND json_extract(payload,'$.mode') = 'play'),
-    moved = (SELECT COUNT(DISTINCT json_extract(payload,'$.player.x')) > 1 FROM guest_replay_samples WHERE session_id = ?),
-    signup = EXISTS(SELECT 1 FROM guest_replay_samples, json_each(payload,'$.actions') WHERE session_id = ? AND value IN ('signup_open','email_submit','wallet_open')),
-    signed_in = EXISTS(SELECT 1 FROM guest_replay_samples, json_each(payload,'$.actions') WHERE session_id = ? AND value = 'signed_in')
-    WHERE id = ?`).bind(body.id,body.id,body.id,body.id,body.id)]);
+    played = played OR ?, moved = moved OR ?, signup = signup OR ?, signed_in = signed_in OR ?
+    WHERE id = ?`).bind(
+    samples.some((s) => s.mode === 'play') ? 1 : 0,
+    new Set(xs).size > 1 ? 1 : 0,
+    ['signup_open', 'email_submit', 'wallet_open'].some((action) => actions.has(action as ReplaySample['actions'][number])) ? 1 : 0,
+    actions.has('signed_in') ? 1 : 0,
+    body.id,
+  )]);
   return reply(request, { ok: true });
 }
