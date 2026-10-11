@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { playSfx, type SfxCue, type SfxPlaybackOptions } from '../audio/sfx';
 import { FX_ANIMATION_KEYS } from './manifest';
+import { getDevicePerformanceMode } from '../performance/devicePerformanceMode';
 
 type GoalFxKind = 'start' | 'checkpoint' | 'success' | 'fail' | 'abandon';
 
@@ -255,6 +256,8 @@ export class SceneFxController {
   }
 
   private spawnScorePopup(text: string, x: number, y: number, color: string): void {
+    // Battery Saver skips the floating score text; the score itself still updates (F011).
+    if (getDevicePerformanceMode() === 'battery-saver') return;
     const label = this.options.scene.add.text(x, y, text, {
       fontFamily: 'Courier New',
       fontSize: '12px',
