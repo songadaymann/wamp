@@ -8,7 +8,7 @@ import { requestProfileInvalidation } from '../ui/setup/profileEvents';
 export async function capturePublishProgression(userId: string | null,
   repository: ProfileRepository = createProfileRepository()): Promise<ProgressionSummary | null> {
   if (!userId) return null;
-  try { return (await repository.loadProfile(userId, { fresh: true })).progression; }
+  try { return (await repository.loadProfileSummary(userId, { fresh: true })).progression; }
   catch { return null; }
 }
 
@@ -20,7 +20,7 @@ export async function reportPublishProgression(options: {
   title: string | null;
 }, repository: ProfileRepository = createProfileRepository()): Promise<void> {
   try {
-    const current = (await repository.loadProfile(options.userId, { fresh: true })).progression;
+    const current = (await repository.loadProfileSummary(options.userId, { fresh: true })).progression;
     const auth = getAuthDebugState();
     if (!auth.authenticated || auth.user?.id !== options.userId) return;
     // A rating or catch-up may already have displayed part of this change while the fetch was pending.

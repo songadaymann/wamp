@@ -1923,7 +1923,7 @@ export class OverworldPlayScene extends Phaser.Scene {
         };
       },
       loadPublicProfileSummary: async (userId) => {
-        const profile = await this.profileRepository.loadProfile(userId);
+        const profile = await this.profileRepository.loadProfileSummary(userId);
         return {
           displayName: profile.displayName,
           playerLevel: profile.progression.player.level,

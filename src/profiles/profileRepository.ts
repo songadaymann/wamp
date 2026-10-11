@@ -7,12 +7,15 @@ import {
 } from '../api/staleWhileRevalidateCache';
 import type {
   UserProfileResponse,
+  UserProfileSummaryResponse,
   UserProfileUpdateRequestBody,
   UserProfileUpdateResponse,
 } from './model';
 
 export interface ProfileRepository {
   loadProfile(userId: string, options?: { fresh?: boolean }): Promise<UserProfileResponse>;
+  /** Everything but the room and playlist lists: identity, stats and progression. */
+  loadProfileSummary(userId: string, options?: { fresh?: boolean }): Promise<UserProfileSummaryResponse>;
   loadProfileByUsername(username: string): Promise<UserProfileResponse>;
   updateMyProfile(body: UserProfileUpdateRequestBody): Promise<UserProfileUpdateResponse>;
 }
@@ -36,6 +39,15 @@ class ApiProfileRepository implements ProfileRepository {
       return this.request<UserProfileResponse>(path, { cache: 'no-store', signal: AbortSignal.timeout(8_000) });
     }
     return loadWithStaleWhileRevalidate(`profile:${this.baseUrl}${path}`, () => this.request<UserProfileResponse>(path));
+  }
+
+  async loadProfileSummary(userId: string, options?: { fresh?: boolean }): Promise<UserProfileSummaryResponse> {
+    const path = `/api/profiles/${encodeURIComponent(userId)}/summary`;
+    if (options?.fresh) {
+      invalidateStaleWhileRevalidateCache('profile:');
+      return this.request<UserProfileSummaryResponse>(path, { cache: 'no-store', signal: AbortSignal.timeout(8_000) });
+    }
+    return loadWithStaleWhileRevalidate(`profile:${this.baseUrl}${path}`, () => this.request<UserProfileSummaryResponse>(path));
   }
 
   async loadProfileByUsername(username: string): Promise<UserProfileResponse> {

@@ -513,7 +513,7 @@ async function ensureAuthIdentityProfileLoaded(force: boolean = false): Promise<
 
   authIdentityProfileLoadingUserId = userId;
   try {
-    const profile = await profileRepository.loadProfile(userId);
+    const profile = await profileRepository.loadProfileSummary(userId);
     if (state.user?.id !== userId) {
       return;
     }

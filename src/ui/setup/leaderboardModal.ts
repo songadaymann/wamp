@@ -626,7 +626,7 @@ export class LeaderboardModalController {
 
   private async loadBaselineProgression(userId: string): Promise<ProgressionSummary | null> {
     try {
-      const profile = await this.profileRepository.loadProfile(userId);
+      const profile = await this.profileRepository.loadProfileSummary(userId);
       return profile.progression;
     } catch {
       return null;
