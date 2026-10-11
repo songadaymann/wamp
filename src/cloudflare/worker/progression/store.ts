@@ -17,6 +17,7 @@ export {
   awardCourseRunProgression,
   awardRoomPublishProgression,
   awardRoomRunProgression,
+  awardRunDailyClear,
 } from './awards';
 export {
   loadPublicProgressionSummary,
