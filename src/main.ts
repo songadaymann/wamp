@@ -58,6 +58,7 @@ import {
 } from './settings/userSettingsSync';
 import { installFrameCadencePacing, getFrameCadenceDebugState } from './main/frameCadence';
 import { resolveWorldLinkBeforeBoot } from './worlds/worldLinkResolver';
+import { startArrivalWorldPrefetch } from './main/arrivalWorldPrefetch';
 
 const gameContainer = document.getElementById('game-container')!;
 const query = new URLSearchParams(window.location.search);
@@ -76,6 +77,7 @@ logBootPhase('main:start', {
 });
 
 void resolveWorldLinkBeforeBoot();
+startArrivalWorldPrefetch();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: resolveRendererType(debug_options.renderer),
