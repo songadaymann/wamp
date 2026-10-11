@@ -1,3 +1,4 @@
+import { reportClientError } from './clientErrorReporter';
 type BootLogLevel = 'info' | 'warn' | 'error';
 
 export interface BootDiagnosticEntry {
@@ -150,6 +151,14 @@ export function installBootDiagnosticsGlobal(): void {
       },
       { level: 'error', force: true }
     );
+    reportClientError({
+      type: 'error',
+      message: event.message,
+      source: event.filename || null,
+      line: event.lineno || null,
+      column: event.colno || null,
+      stack: event.error instanceof Error ? event.error.stack ?? null : null,
+    });
   });
 
   window.addEventListener('unhandledrejection', (event) => {
@@ -162,6 +171,11 @@ export function installBootDiagnosticsGlobal(): void {
       },
       { level: 'error', force: true }
     );
+    reportClientError({
+      type: 'unhandledrejection',
+      message: reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason),
+      stack: reason instanceof Error ? reason.stack ?? null : null,
+    });
   });
 
   logBootPhase('diagnostics-installed', {

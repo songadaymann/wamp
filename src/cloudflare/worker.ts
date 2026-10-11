@@ -140,7 +140,9 @@ import { handleWampOGramRequest } from './worker/wampOGram/routes';
 import { handleCustomSpriteRequest } from './worker/customSprites/routes';
 import { handleWorldGrantRequest, handleWorldsRequest } from './worker/worlds/routes';
 
-import { checkAndAlertWorldMap, WORLD_MAP_HEALTH_CRON, worldMapAlertsConfigured } from './worker/worldTiles/health';
+import { checkAndAlertWorldMap, WORLD_MAP_HEALTH_CRON } from './worker/worldTiles/health';
+import { apiErrorResponse, handleClientErrorReport } from './worker/ops/errors';
+import { handleHealth } from './worker/ops/health';
 import type { ScheduledController } from '@cloudflare/workers-types';
 
 type WorkerExecutionContext = {
@@ -163,16 +165,13 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     methods: ['GET'],
     pattern: '/api/health',
     auth: 'public',
-    handler: ({ request, env }) => jsonResponse(request, {
-      ok: true,
-      storage: 'd1',
-      worldMapAlertsConfigured: worldMapAlertsConfigured(env),
-      auth: {
-        emailConfigured: Boolean(env.RESEND_API_KEY),
-        debugMagicLinks: env.AUTH_DEBUG_MAGIC_LINKS === '1',
-        testResetEnabled: env.ENABLE_TEST_RESET === '1',
-      },
-    }),
+    handler: ({ request, env }) => handleHealth(request, env),
+  },
+  {
+    methods: ['POST'],
+    pattern: '/api/client-errors',
+    auth: 'public',
+    handler: ({ request, env }) => handleClientErrorReport(request, env),
   },
   {
     methods: ['GET', 'POST', 'PUT'], pattern: { prefix: '/api/me/activity' }, auth: 'authenticated',
@@ -896,20 +895,7 @@ export default {
 
       return await handleRoomRequest(request, url, env, ctx);
     } catch (error) {
-      const status = error instanceof HttpError ? error.status : 500;
-      const message = error instanceof Error ? error.message : 'Unexpected server error.';
-
-      if (status >= 500) {
-        console.error('API failure', error);
-      }
-
-      return jsonResponse(
-        request,
-        {
-          error: message,
-        },
-        { status }
-      );
+      return apiErrorResponse(request, url, error);
     } finally {
       if (requestMayQueueWorldTiles(request.method, url.pathname)) {
         scheduleWorldTileOutboxDispatch(env, ctx);

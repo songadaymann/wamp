@@ -76,6 +76,10 @@ const worldTiles = await checkWorldTileAvailability(API_BASE_URL);
 assert(healthJson?.ok === true, 'Health endpoint did not report ok: true.');
 assert(healthJson?.worldMapAlertsConfigured === true, 'Fast-map direct alerts are not configured in production.');
 assert(healthJson?.storage === 'd1', `Expected storage=d1, got ${String(healthJson?.storage)}`);
+assert(
+  healthJson?.checks?.database?.ok === true,
+  `Health database check failed: ${JSON.stringify(healthJson?.checks?.database ?? null)}`,
+);
 
 let mainBundleContainsPartyKitHost = null;
 let mainBundleUrl = null;
