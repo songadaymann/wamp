@@ -60,6 +60,7 @@ import {
   rowMajorOccupiedOrder,
   walkDragCells,
 } from '../../scenes/editor/selectionPattern';
+import { makeObjectPaletteTile, setObjectPaletteTilePressed } from './objectPaletteTile';
 
 const MIN_SELECTION_OPAQUE_PIXELS = 96;
 const CUSTOM_OBJECT_SUBCATEGORIES = ['all', 'decoration', 'collectible', 'sign', 'solid', 'pushable'] as const;
@@ -683,20 +684,8 @@ export class PaletteController {
       const item = this.doc.createElement('div');
       item.className = 'object-item';
       item.setAttribute('aria-label', objectConfig.name);
-      // A div styled as a tile, so give it what a button has: focus, Enter/Space, a pressed state.
-      item.setAttribute('role', 'button');
-      item.tabIndex = 0;
-      const selected = editorState.selectedObjectId === objectConfig.id;
-      item.setAttribute('aria-pressed', String(selected));
-      if (selected) {
-        item.classList.add('active');
-      }
+      makeObjectPaletteTile(item, editorState.selectedObjectId === objectConfig.id);
       item.dataset.objectId = objectConfig.id;
-      item.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        item.click();
-      });
 
       const img = this.doc.createElement('img');
       img.alt = '';
@@ -740,12 +729,8 @@ export class PaletteController {
       item.addEventListener('click', () => {
         editorState.selectedObjectId = objectConfig.id;
         editorState.objectFacing = objectConfig.facingDirection ?? 'right';
-        this.doc.querySelectorAll('.object-item').forEach((element) => {
-          element.classList.remove('active');
-          element.setAttribute('aria-pressed', 'false');
-        });
-        item.classList.add('active');
-        item.setAttribute('aria-pressed', 'true');
+        this.doc.querySelectorAll('.object-item').forEach((element) => setObjectPaletteTilePressed(element, false));
+        setObjectPaletteTilePressed(item, true);
 
         editorState.activeTool = 'pencil';
         this.renderObjectSelectionDetails();
