@@ -7,11 +7,20 @@ CLI shortcuts now available from the repo root:
 - `npm run deploy:prod`
   - requires clean local `main`
   - fetches `origin/main` and refuses to deploy unless `HEAD === origin/main`
-  - builds once, deploys the Worker, deploys the `wampland` Pages frontend, then runs `npm run smoke:prod`
+  - refuses when the production D1 databases (`everybodys-platformer-db`, `wamp-solo-room-jam-db`) have migrations that are not applied; add `--migrate` to apply them before the Worker deploy
+  - runs `npm run check` (lint, tests, typecheck, build; `--skip-check` builds only), deploys the Worker, deploys the `wampland` Pages frontend, then runs `npm run smoke:prod`
+  - records the Worker version it replaces and, if anything after the Worker deploy fails, prints the exact rollback command
 - `npm run pages:deploy:prod`
   - same clean-`main` preflight, but redeploys only the `wampland` Pages frontend
 - `npm run smoke:prod`
   - checks `wamp.land`, verifies the frontend API target, verifies JSON health/session responses from `api.wamp.land`, and fails if the API session payload no longer exposes a wallet project id
+
+How to undo a bad deploy:
+
+- API Worker: `node node_modules/wrangler/bin/wrangler.js rollback <version-id>`. `deploy:prod` prints the previous version id when a step after the Worker deploy fails; otherwise find it with `node node_modules/wrangler/bin/wrangler.js deployments list`. Rollback is instant and keeps the database as it is.
+- Frontend: Cloudflare dashboard > Pages > `wampland` > Deployments > the previous production deployment > Rollback. Pages also rebuilds from GitHub on every push to `main`, so reverting the commit on `main` redeploys too.
+- Database: migrations are not rolled back. If one must be undone, write a new migration that reverses it, and roll the Worker back first if the new code depends on the change.
+- After any rollback, run `npm run smoke:prod` and check `https://api.wamp.land/api/health` (it reports the newest applied migration and whether the code expects a newer one).
 
 Best-guess stable setup for the Pages frontend:
 
