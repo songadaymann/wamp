@@ -178,6 +178,16 @@ The recommended fix stands:
    - Prefer a small capture (about 320x180, one encode) plus a 2–3 s cadence plus a cheap getReplayState() as the core fix. Treat the worker/OffscreenCanvas path as optional; it must snapshot inside POST_RENDER because preserveDrawingBuffer is off.
 6. The render-loop recovery isEligible issue (main.ts:139) is real but low impact: it runs once per input burst, not per frame.
 
+**2026-10-10 confirmed fixed by earlier work.** `a43e1da7` (2026-10-08, *Add in-game bug reporting with private replay inbox*):
+- The guest replay no longer encodes on the render frame. It reuses `bugReporter.latestImage()`, or falls back to `captureReplayCanvas`, which resizes with `createImageBitmap` and encodes with `canvas.toBlob`, both asynchronous.
+- Browse mode records no image.
+
+What remains: `host.snapshot()` twice and `host.state()` once per 1 s tick (each a full `describeState`), and the render-loop recovery's `isEligible` dump after input bursts. Measured with `render_game_to_text`, which includes that dump:
+- desktop: median 0.3 ms (max 2.7);
+- Pixel 7 with 4× CPU throttle: median 1.9 ms (max 12.3).
+
+That is a few milliseconds a second, not a visible stall. Collapsing it to one cheap read per tick is a small follow-up.
+
 ### F004: Fog and rain rebuild hundreds of shapes from scratch every frame
 
 - **Area:** Runtime performance (frame rate, GC, memory)
@@ -2677,6 +2687,16 @@ The suggested fix (compute orientation from innerWidth/innerHeight or `screen.or
    - Optionally, freeze the orientation state while a text input has focus.
 5. The stuck HUD can be collapsed with the visible Minimize button. Still, the controller should remember that the HUD was collapsed before the flip and restore it.
 
+**2026-10-10 completed.** PR #127 / `ece9bfe3` (frontend, Pages; live in loader `main-3dx8K_vq.js`, CSS `main-CxZGqfr2.css`).
+- **(A)** `body[data-coarse-pointer='true']` inputs (except checkbox, radio, range and color), textareas and selects use `font-size: max(16px, 1em) !important`. The ID rules on the chat, jump and sign-in fields need the `!important`.
+- **(B)** `deviceLayout` computes `orientationState` from `innerWidth`/`innerHeight` (the layout viewport), which a keyboard or pinch zoom doesn't shrink. Phone/tablet classification and `--app-viewport-*` are unchanged.
+
+Evidence:
+- New `deviceLayout.test.ts` case: a 393×660 phone whose visual viewport shrinks to 393×330 stays portrait. It fails on the previous code.
+- iPhone 13 emulation: all five text fields compute to 16px; layout stays phone/portrait; the chat panel lays out cleanly.
+
+Not done: a `--keyboard-inset` to pin bottom-anchored composers above the keyboard. Real-iPhone check needed. Receipt: `wamp-ios-viewport-2026-10-10.md`.
+
 ### F098: Phone portrait play shrinks rooms that use the 'fixed room camera' to a 17px-tall hero, and the screen shows the neighboring room
 
 - **Area:** Live play-through (desktop + mobile, browser)
@@ -2760,6 +2780,15 @@ Small fixes to the details. The core claim stands.
 3) This is not only iOS. Android Chrome also computes 100vh against the largest viewport, with the URL bar hidden, and a page that doesn't scroll keeps the URL bar showing.
 4) The fix already exists in the welcome modal (rating-welcome-goals.css:1102-1111). Generalize it: on phones set min-height:0 (or the viewport value) and max-height: min(100dvh, var(--app-viewport-height)) on `.history-modal-panel`/`.mobile-sheet-panel` and on the four ID-scoped panels. Make the panel overflow-y:auto. For alignment, `align-items: flex-start` with `margin: auto` on the panel is safer than `safe center`, because `safe` alignment support in older iOS Safari is not guaranteed.
 5) #menu-body is a dropdown, not a full-screen modal. It is only clipped when the menu is long enough to hit its max-height.
+
+**2026-10-10 completed with F076.** PR #127 / `ece9bfe3`. New `--visible-vh` on `:root`: `100vh`, and `min(100dvh, var(--app-viewport-height))` where `dvh` is supported. It replaces `100vh` in:
+- the phone full-screen panels' `min-height` and `max-height` (the fact-check notes min-height has to change too);
+- the phone menu;
+- 23 other `calc(100vh - …)` max-heights.
+
+Phone `.history-modal` uses `align-items: safe center`. On desktop the value equals 100vh.
+
+Evidence: iPhone 13 emulation resolves `--visible-vh` to `min(100dvh, 664px)`, and a phone modal panel's max-height is 640px within the 664px visible height. Live: the CSS contains 28 `--visible-vh` uses. Toolbar overlap on a real iPhone still needs a hands-on check. Receipt: `wamp-ios-viewport-2026-10-10.md`.
 
 ### F085: Double-tap-zoom blocker swallows any second tap within 320ms (e.g., rapid Undo)
 

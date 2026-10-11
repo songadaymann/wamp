@@ -1,3 +1,7 @@
+## 2026-10-10 — F076/F086 iPhone text fields and full-screen panels; F001 confirmed
+
+PR #127 / `ece9bfe3`: on phones, text fields are 16px so iOS Safari doesn't zoom into them, an open keyboard no longer flips a portrait phone to the landscape layout, and full-screen panels and modals fit the visible screen instead of running under Safari's toolbar. F001 (the guest recorder stalling every second) was already fixed by the asynchronous capture in `a43e1da7`. Master **95/215**. Receipt: [iOS viewport](docs/review/wamp-ios-viewport-2026-10-10.md).
+
 ## 2026-10-10 — F033 profile summaries; F054/F059 stuck strokes and pans; F082 confirmed
 
 PR #125 / `93740740`: signed-in page loads, publish feedback and rating baselines read the 6 KB profile summary (≈70 ms on the server) instead of the 131 KB full profile (0.6–1 s). PR #126 / `3496d96e`: strokes and pans released over a panel or outside the window are finished, and an Alt-Tab no longer leaves the world map panning on every click. F082 (phone builders can't name rooms) was already fixed by the phone editor dock (`9bff84ed`). Master **92/215**. Receipts: [profile summary](docs/review/wamp-profile-summary-2026-10-10.md), [stuck input](docs/review/wamp-stuck-input-2026-10-10.md).
