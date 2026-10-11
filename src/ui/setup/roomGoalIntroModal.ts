@@ -203,7 +203,7 @@ function ensureRoomGoalIntroModalMarkup(doc: Document): void {
           <div id="room-ghost-race-status" role="status"></div>
         </div>
         <div class="room-goal-intro-actions">
-          <button id="btn-room-goal-intro-start" class="bar-btn" type="button">Start</button>
+          <button id="btn-room-goal-intro-start" class="bar-btn" type="button" data-autofocus>Start</button>
         </div>
       </div>
     </div>
