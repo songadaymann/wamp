@@ -12,6 +12,8 @@ import { type RoomCoordinates } from '../../persistence/roomModel';
 import { type ActiveCourseRunState } from './courseRuns';
 import { type GoalRunState } from './goalRuns';
 
+const REACHED_CHECKPOINT_ALPHA = 0.55;
+
 const GOAL_MARKER_SPRITE_DEPTH = 29;
 const GOAL_MARKER_LABEL_DEPTH = 30;
 
@@ -163,6 +165,8 @@ export class OverworldGoalMarkerController {
               label: `${index + 1}`,
               variant: (reached ? 'checkpoint-reached' : 'checkpoint-pending') as GoalMarkerFlagVariant,
               textColor: reached ? '#a9ffd0' : '#ffefef',
+              // Reached flags also fade, so they differ from pending ones by more than red/green (F179).
+              alpha: reached ? REACHED_CHECKPOINT_ALPHA : undefined,
             };
           }),
           ...(runState.goal.finish
@@ -233,6 +237,7 @@ export class OverworldGoalMarkerController {
           label: `${index + 1}`,
           variant: (reached ? 'checkpoint-reached' : 'checkpoint-pending') as GoalMarkerFlagVariant,
           textColor: reached ? '#a9ffd0' : '#ffefef',
+          alpha: reached ? REACHED_CHECKPOINT_ALPHA : undefined,
         });
       }
 
