@@ -12,7 +12,13 @@ import {
   computeRoomWeightedChange,
 } from './changeMetrics';
 import { syncUserBadges } from './badgesTrophies';
-import { awardLaneDelta, persistProgressIncrement } from './laneEvents';
+import { awardCappedTrustDelta, awardLaneDelta, persistProgressIncrement } from './laneEvents';
+
+// Hidden trust grows slowly from real play (xp-badges-ratings PRD): at most this much
+// per UTC day from each source, and never from clearing your own content.
+const CLEAR_TRUST_CAP = { eventTypes: ['room_clear_completed', 'course_clear_completed'], dailyCap: 5 } as const;
+const PUBLISH_TRUST_CAP = { eventTypes: ['room_publish_significant', 'course_publish_significant'], dailyCap: 6 } as const;
+const CREATOR_TRUST_CAP = { eventTypes: ['unique_completion_room', 'unique_completion_course'], dailyCap: 10 } as const;
 import {
   loadOrBackfillUserProgress,
   loadUserIdentityRow,
@@ -135,18 +141,15 @@ export async function awardRoomPublishProgression(
     );
   }
 
-  delta.trust += await awardLaneDelta(
-    env,
-    params.userId,
-    'trust',
-    'room_publish_significant',
-    'room',
-    `${params.roomId}:${params.roomVersion}`,
-    `trust:room_publish_significant:${params.roomId}:${params.roomVersion}`,
-    params.hasPriorGoalPublish ? 3 : 6,
-    params.publishedAt,
-    { percentChange },
-  );
+  delta.trust += await awardCappedTrustDelta(env, params.userId, {
+    eventType: 'room_publish_significant',
+    sourceType: 'room',
+    sourceId: `${params.roomId}:${params.roomVersion}`,
+    dedupeKey: `trust:room_publish_significant:${params.roomId}:${params.roomVersion}`,
+    amount: params.hasPriorGoalPublish ? 3 : 6,
+    createdAt: params.publishedAt,
+    breakdown: { percentChange },
+  }, PUBLISH_TRUST_CAP);
 
   await persistProgressIncrement(env, params.userId, delta, params.publishedAt);
   await syncUserBadges(env, params.userId);
@@ -186,18 +189,15 @@ export async function awardCoursePublishProgression(
       { courseVersion: params.courseVersion },
     );
   }
-  delta.trust += await awardLaneDelta(
-    env,
-    params.userId,
-    'trust',
-    'course_publish_significant',
-    'course',
-    `${params.courseId}:${params.courseVersion}`,
-    `trust:course_publish_significant:${params.courseId}:${params.courseVersion}`,
-    params.isFirstPublish ? 8 : 4,
-    params.publishedAt,
-    { percentChange },
-  );
+  delta.trust += await awardCappedTrustDelta(env, params.userId, {
+    eventType: 'course_publish_significant',
+    sourceType: 'course',
+    sourceId: `${params.courseId}:${params.courseVersion}`,
+    dedupeKey: `trust:course_publish_significant:${params.courseId}:${params.courseVersion}`,
+    amount: params.isFirstPublish ? 8 : 4,
+    createdAt: params.publishedAt,
+    breakdown: { percentChange },
+  }, PUBLISH_TRUST_CAP);
   await persistProgressIncrement(env, params.userId, delta, params.publishedAt);
   await syncUserBadges(env, params.userId);
   return delta;
@@ -475,57 +475,51 @@ export async function awardRoomRunProgression(
     );
   }
 
-  delta.trust += await awardLaneDelta(
-    env,
-    params.run.userId,
-    'trust',
-    'room_clear_completed',
-    'room_attempt',
-    params.run.attemptId,
-    `trust:room_clear_completed:${params.run.attemptId}`,
-    1,
-    params.completedAt,
-  );
+  const ratingWindow = buildRoomRatingWindow(params.roomRecord.versions, params.run.roomVersion);
+  if (!params.ownContent) {
+    delta.trust += await awardCappedTrustDelta(env, params.run.userId, {
+      eventType: 'room_clear_completed',
+      sourceType: 'room_attempt',
+      sourceId: params.run.attemptId,
+      dedupeKey: `trust:room_clear:${params.run.userId}:${params.run.roomId}:${ratingWindow.versionKey}`,
+      amount: 1,
+      createdAt: params.completedAt,
+    }, CLEAR_TRUST_CAP);
+  }
 
   if (params.creatorUserId && params.creatorUserId !== params.run.userId) {
-    const ratingWindow = buildRoomRatingWindow(params.roomRecord.versions, params.run.roomVersion);
     const creatorProgress = await loadOrBackfillUserProgress(env, params.creatorUserId);
     const creatorWeight = builderContributionWeightFromTier(
       await loadEffectiveTrustTier(env, params.creatorUserId, creatorProgress),
     );
     const creatorBxp = Math.max(1, Math.round(LANE_BASE_XP.uniqueRoomCompletion * creatorWeight));
-    delta.bxp += await awardLaneDelta(
-      env,
-      params.creatorUserId,
-      'bxp',
-      'unique_completion_room',
-      'room_completion',
-      `${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-      `bxp:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-      creatorBxp,
-      params.completedAt,
-      { activity: { contentType: 'room', contentId: params.run.roomId, version: params.run.roomVersion, actorUserId: params.run.userId } },
-    );
-    delta.trust += await awardLaneDelta(
-      env,
-      params.creatorUserId,
-      'trust',
-      'unique_completion_room',
-      'room_completion',
-      `${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-      `trust:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-      2,
-      params.completedAt,
-    );
-    await persistProgressIncrement(env, params.creatorUserId, {
+    // The creator's rewards are saved to the creator; the runner's stay in delta.
+    const creatorDelta: ProgressionDelta = {
       pxp: 0,
-      bxp: delta.bxp,
+      bxp: await awardLaneDelta(
+        env,
+        params.creatorUserId,
+        'bxp',
+        'unique_completion_room',
+        'room_completion',
+        `${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
+        `bxp:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
+        creatorBxp,
+        params.completedAt,
+        { activity: { contentType: 'room', contentId: params.run.roomId, version: params.run.roomVersion, actorUserId: params.run.userId } },
+      ),
       cxp: 0,
-      trust: delta.trust,
-    }, params.completedAt);
+      trust: await awardCappedTrustDelta(env, params.creatorUserId, {
+        eventType: 'unique_completion_room',
+        sourceType: 'room_completion',
+        sourceId: `${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
+        dedupeKey: `trust:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
+        amount: 2,
+        createdAt: params.completedAt,
+      }, CREATOR_TRUST_CAP),
+    };
+    await persistProgressIncrement(env, params.creatorUserId, creatorDelta, params.completedAt);
     await syncUserBadges(env, params.creatorUserId);
-    delta.bxp = 0;
-    delta.trust = 0;
   }
 
   await persistProgressIncrement(env, params.run.userId, delta, params.completedAt);
@@ -655,20 +649,19 @@ export async function awardCourseRunProgression(
     );
   }
 
-  delta.trust += await awardLaneDelta(
-    env,
-    params.run.userId,
-    'trust',
-    'course_clear_completed',
-    'course_attempt',
-    params.run.attemptId,
-    `trust:course_clear_completed:${params.run.attemptId}`,
-    1,
-    params.completedAt,
-  );
+  const ratingWindow = buildCourseRatingWindow(params.courseRecord.versions, params.run.courseVersion, params.run.courseId);
+  if (!params.ownContent) {
+    delta.trust += await awardCappedTrustDelta(env, params.run.userId, {
+      eventType: 'course_clear_completed',
+      sourceType: 'course_attempt',
+      sourceId: params.run.attemptId,
+      dedupeKey: `trust:course_clear:${params.run.userId}:${params.run.courseId}:${ratingWindow.versionKey}`,
+      amount: 1,
+      createdAt: params.completedAt,
+    }, CLEAR_TRUST_CAP);
+  }
 
   if (params.creatorUserId && params.creatorUserId !== params.run.userId) {
-    const ratingWindow = buildCourseRatingWindow(params.courseRecord.versions, params.run.courseVersion, params.run.courseId);
     const creatorProgress = await loadOrBackfillUserProgress(env, params.creatorUserId);
     const creatorWeight = builderContributionWeightFromTier(
       await loadEffectiveTrustTier(env, params.creatorUserId, creatorProgress),
@@ -689,17 +682,14 @@ export async function awardCourseRunProgression(
         { activity: { contentType: 'course', contentId: params.run.courseId, version: params.run.courseVersion, actorUserId: params.run.userId } },
       ),
       cxp: 0,
-      trust: await awardLaneDelta(
-        env,
-        params.creatorUserId,
-        'trust',
-        'unique_completion_course',
-        'course_completion',
-        `${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        `trust:course_unique_completion:${params.creatorUserId}:${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        3,
-        params.completedAt,
-      ),
+      trust: await awardCappedTrustDelta(env, params.creatorUserId, {
+        eventType: 'unique_completion_course',
+        sourceType: 'course_completion',
+        sourceId: `${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
+        dedupeKey: `trust:course_unique_completion:${params.creatorUserId}:${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
+        amount: 3,
+        createdAt: params.completedAt,
+      }, CREATOR_TRUST_CAP),
     };
     await persistProgressIncrement(env, params.creatorUserId, creatorDelta, params.completedAt);
     await syncUserBadges(env, params.creatorUserId);

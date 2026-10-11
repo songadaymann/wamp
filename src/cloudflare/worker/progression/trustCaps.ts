@@ -29,7 +29,12 @@ export interface EffectiveTrustState {
   penaltyActive: boolean;
   suspiciousPenaltyActive: boolean;
   chatPenaltyActive: boolean;
+  /** Accounts younger than NEW_ACCOUNT_TRUST_HOLD_MS stay T0 whatever their score. */
+  newAccountHold: boolean;
 }
+
+export const NEW_ACCOUNT_TRUST_HOLD_MS = 3 * 24 * 60 * 60 * 1000;
+const NEW_ACCOUNT_MAX_TRUST_SCORE = 39;
 
 function isPenaltyWindowActive(timestamp: string | null, nowMs: number): boolean {
   if (!timestamp) {
@@ -55,7 +60,7 @@ export async function loadEffectiveTrustState(
   progress?: UserProgressRow,
 ): Promise<EffectiveTrustState> {
   const resolvedProgress = progress ?? await loadOrBackfillUserProgress(env, userId);
-  const [suspiciousRow, chatBanAuditRow, activeChatBanRow] = await Promise.all([
+  const [suspiciousRow, chatBanAuditRow, activeChatBanRow, userRow] = await Promise.all([
     env.DB.prepare(
       `
         SELECT created_at
@@ -88,6 +93,9 @@ export async function loadEffectiveTrustState(
     )
       .bind(userId)
       .first<{ created_at: string | null }>(),
+    env.DB.prepare('SELECT created_at FROM users WHERE id = ? LIMIT 1')
+      .bind(userId)
+      .first<{ created_at: string | null }>(),
   ]);
 
   const nowMs = Date.now();
@@ -100,7 +108,11 @@ export async function loadEffectiveTrustState(
     activeChatBanRow !== null || isPenaltyWindowActive(latestChatBanAt, nowMs);
   const penaltyActive = suspiciousPenaltyActive || chatPenaltyActive;
   const rawScore = resolvedProgress.hidden_trust_score;
-  const effectiveScore = penaltyActive ? 0 : rawScore;
+  const accountCreatedMs = Date.parse(userRow?.created_at ?? '');
+  const newAccountHold = Number.isFinite(accountCreatedMs) && nowMs - accountCreatedMs < NEW_ACCOUNT_TRUST_HOLD_MS;
+  const effectiveScore = penaltyActive
+    ? 0
+    : newAccountHold ? Math.min(rawScore, NEW_ACCOUNT_MAX_TRUST_SCORE) : rawScore;
 
   return {
     rawScore,
@@ -110,6 +122,7 @@ export async function loadEffectiveTrustState(
     penaltyActive,
     suspiciousPenaltyActive,
     chatPenaltyActive,
+    newAccountHold,
   };
 }
 

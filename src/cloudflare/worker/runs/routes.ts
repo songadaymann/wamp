@@ -444,7 +444,8 @@ export async function handleRunFinish(
       attemptId,
       kind: 'room',
       ...verification.audit,
-      trace: verification.audit.status === 'skipped' ? null : finalBody.verificationTrace ?? null,
+      // Unverified (skipped) runs keep their recording so they can be reviewed later.
+      trace: finalBody.verificationTrace ?? null,
       createdAt: finishedAt,
     });
   }

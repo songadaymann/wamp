@@ -257,10 +257,9 @@ export function relaxVerificationTriggerForTrustTier(
   }
 
   if (trustTier === 'T1') {
-    return {
-      ...trigger,
-      required: false,
-    };
+    // T1 is checked only when a run would take the #1 spot or beat it by a wide margin.
+    const takesRecord = trigger.reason === 'take_top_1' || trigger.reason === 'record_gap';
+    return takesRecord ? trigger : { ...trigger, required: false };
   }
 
   return {
