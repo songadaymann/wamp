@@ -21,6 +21,7 @@ import type {
   WorldPresenceIdentity,
   WorldPresencePayload,
 } from './worldPresence';
+import { installHiddenTabPause } from './hiddenTabPause';
 
 const CONTEXT_PUBLISH_INTERVAL_MS = 200;
 
@@ -76,6 +77,8 @@ export class WorldRoomChatClient {
   private readonly messagesByUserId = new Map<string, RoomChatMessageRecord>();
   private readonly identityTokenProvider: PartyKitIdentityTokenProvider;
   private desiredShardIds = new Set<string>();
+  private hiddenTabPaused = false;
+  private readonly removeHiddenTabPause: () => void;
   private localPresence: WorldPresencePayload | null = null;
   private publishedShardId: string | null = null;
   private lastPublishedPayloadJson: string | null = null;
@@ -84,6 +87,26 @@ export class WorldRoomChatClient {
 
   constructor(private readonly options: WorldRoomChatClientOptions) {
     this.identityTokenProvider = new PartyKitIdentityTokenProvider(() => this.options.identity);
+    this.removeHiddenTabPause = installHiddenTabPause(() => this.pauseForHiddenTab(), () => this.resumeAfterHiddenTab());
+    this.emitSnapshot();
+  }
+
+  /** Closes every shard socket while the tab stays hidden; the subscription is kept for resume (F095). */
+  pauseForHiddenTab(): void {
+    if (this.hiddenTabPaused) return;
+    this.hiddenTabPaused = true;
+    for (const shardId of Array.from(this.socketsByShardId.keys())) {
+      this.closeShardSocket(shardId);
+    }
+    this.emitSnapshot();
+  }
+
+  resumeAfterHiddenTab(): void {
+    if (!this.hiddenTabPaused) return;
+    this.hiddenTabPaused = false;
+    for (const shardId of this.desiredShardIds) {
+      this.openShardSocket(shardId);
+    }
     this.emitSnapshot();
   }
 
@@ -215,6 +238,7 @@ export class WorldRoomChatClient {
   }
 
   destroy(): void {
+    this.removeHiddenTabPause();
     this.desiredShardIds.clear();
     this.identityTokenProvider.clear();
     if (this.publishedShardId) {
@@ -238,7 +262,7 @@ export class WorldRoomChatClient {
   }
 
   private openShardSocket(shardId: string): void {
-    if (!this.desiredShardIds.has(shardId) || this.socketsByShardId.has(shardId)) {
+    if (this.hiddenTabPaused || !this.desiredShardIds.has(shardId) || this.socketsByShardId.has(shardId)) {
       return;
     }
 

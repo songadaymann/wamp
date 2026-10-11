@@ -22,6 +22,7 @@ import {
   type WorldChunkCoordinates,
 } from '../persistence/worldModel';
 import { createRandomUuid } from '../utils/randomId';
+import { installHiddenTabPause } from './hiddenTabPause';
 
 export type WorldPresenceMode = 'browse' | 'play' | 'edit';
 export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
@@ -182,6 +183,8 @@ export class WorldPresenceClient {
   private readonly connectedShards = new Set<string>();
   private readonly identityTokenProvider: PartyKitIdentityTokenProvider;
   private desiredShardIds = new Set<string>();
+  private hiddenTabPaused = false;
+  private readonly removeHiddenTabPause: () => void;
   private localPresence: WorldPresencePayload | null = null;
   private localRoomPreview: PresencePreviewPayload | null = null;
   private publishedShardId: string | null = null;
@@ -196,6 +199,26 @@ export class WorldPresenceClient {
 
   constructor(private readonly options: WorldPresenceClientOptions) {
     this.identityTokenProvider = new PartyKitIdentityTokenProvider(() => this.options.identity);
+    this.removeHiddenTabPause = installHiddenTabPause(() => this.pauseForHiddenTab(), () => this.resumeAfterHiddenTab());
+    this.emitSnapshot();
+  }
+
+  /** Closes every shard socket while the tab stays hidden; the subscription is kept for resume (F095). */
+  pauseForHiddenTab(): void {
+    if (this.hiddenTabPaused) return;
+    this.hiddenTabPaused = true;
+    for (const shardId of Array.from(this.socketsByShardId.keys())) {
+      this.closeShardSocket(shardId);
+    }
+    this.emitSnapshot();
+  }
+
+  resumeAfterHiddenTab(): void {
+    if (!this.hiddenTabPaused) return;
+    this.hiddenTabPaused = false;
+    for (const shardId of this.desiredShardIds) {
+      this.openShardSocket(shardId);
+    }
     this.emitSnapshot();
   }
 
@@ -387,6 +410,7 @@ export class WorldPresenceClient {
   }
 
   destroy(): void {
+    this.removeHiddenTabPause();
     this.clearQueuedSnapshotEmit();
     this.desiredShardIds.clear();
     this.identityTokenProvider.clear();
@@ -418,7 +442,7 @@ export class WorldPresenceClient {
   }
 
   private openShardSocket(shardId: string): void {
-    if (!this.desiredShardIds.has(shardId) || this.socketsByShardId.has(shardId)) {
+    if (this.hiddenTabPaused || !this.desiredShardIds.has(shardId) || this.socketsByShardId.has(shardId)) {
       return;
     }
 
