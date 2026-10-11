@@ -6,6 +6,7 @@ import {
   initializeGuestActivityTracking,
   type GuestActivityMode,
 } from './analytics/guestActivity';
+import { installDialogEscapeGuard } from './ui/modalState';
 import { initSfx, globalSfxController } from './audio/sfx';
 import { runOverworldLodStress } from './debug/overworldLodStress';
 import { globalRoomMusicController, initRoomMusic } from './music/controller';
@@ -184,6 +185,7 @@ window.addEventListener('error', (event) => {
 });
 initSfx();
 initRoomMusic();
+installDialogEscapeGuard();
 const applyRuntimeSettings = (settings: GameSettings) => {
   globalSfxController.setVolume(settings.sfxVolume);
   globalRoomMusicController.setVolume(settings.musicVolume);
