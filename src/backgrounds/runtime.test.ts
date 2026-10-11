@@ -188,6 +188,10 @@ describe('CustomBackgroundTexturePreparation', () => {
     );
 
     await preparation.prepare();
+    // Asks for WebP/AVIF so Cloudflare Images doesn't send the original upload (F094).
+    expect(fetchImage).toHaveBeenCalledWith(expect.stringContaining('/api/background-images/heavy%2Fphoto/image'), expect.objectContaining({
+      headers: { Accept: 'image/avif,image/webp,*/*' },
+    }));
 
     expect(scene.textures.addCanvas).not.toHaveBeenCalled();
     expect(preparation.getSnapshot()).toMatchObject({

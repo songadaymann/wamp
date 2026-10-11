@@ -521,6 +521,14 @@ async function proxyCloudflareDeliveryImage(
   for (const [key, value] of Object.entries(corsHeaders(request))) {
     headers.set(key, value);
   }
+  // The delivered format depends on Accept (WebP/AVIF or the original), so caches must key on it.
+  const vary = new Set(
+    [headers.get('Vary'), deliveryResponse.headers.get('Vary'), 'Accept']
+      .flatMap((value) => (value ?? '').split(','))
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  headers.set('Vary', [...vary].join(', '));
 
   return new Response(
     request.method === 'HEAD' || deliveryResponse.status === 304 ? null : deliveryResponse.body,

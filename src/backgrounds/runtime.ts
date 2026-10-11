@@ -2,6 +2,11 @@ import Phaser from 'phaser';
 import { getBackgroundImageUrl } from './client';
 import type { CustomBackgroundFit } from './model';
 
+// Cloudflare Images converts backgrounds to WebP or AVIF when the request accepts them. fetch()
+// and Phaser's loader otherwise send */* and get the original upload (one GIF background is
+// 8.3 MB; its WebP is 2.8 MB). <img> elements already ask for these formats.
+const BACKGROUND_IMAGE_ACCEPT = 'image/avif,image/webp,*/*';
+
 const customBackgroundLoadPromises = new Map<string, Promise<string>>();
 const MAX_TILED_PHOTO_WIDTH = 128;
 const MAX_TILED_PHOTO_HEIGHT = 96;
@@ -237,7 +242,9 @@ export function ensureCustomBackgroundTexture(
 
     scene.load.once(completeEvent, handleComplete);
     scene.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, handleError);
-    scene.load.image(key, getBackgroundImageUrl(id));
+    // Phaser merges only the XHR settings given here, so a partial object keeps the loader defaults.
+    const xhrSettings = { headers: { Accept: BACKGROUND_IMAGE_ACCEPT } } as Phaser.Types.Loader.XHRSettingsObject;
+    scene.load.image({ key, url: getBackgroundImageUrl(id), xhrSettings });
     if (!scene.load.isLoading()) {
       scene.load.start();
     }
@@ -335,6 +342,7 @@ export class CustomBackgroundTexturePreparation {
   private async fetchAndDecode(): Promise<void> {
     const response = await this.fetchImage(getBackgroundImageUrl(this.id), {
       credentials: 'include',
+      headers: { Accept: BACKGROUND_IMAGE_ACCEPT },
       signal: this.abortController.signal,
     });
     if (!response.ok) {
