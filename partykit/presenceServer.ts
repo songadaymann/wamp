@@ -97,6 +97,13 @@ import {
 } from '../src/pvp/model';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
+/**
+ * Joins, leaves and room changes force a heartbeat to the shared metrics room, but each shard
+ * sends at most one this often; a change inside the interval is reported when it ends (F035).
+ */
+const FORCED_HEARTBEAT_MIN_INTERVAL_MS = 3_000;
+/** The metrics room prunes stale shard heartbeats at most this often, not on every heartbeat. */
+const HEARTBEAT_PRUNE_INTERVAL_MS = 60_000;
 const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
 const PRESENCE_UPSERT_FLUSH_MS = 80;
 const POPULATION_BROADCAST_FLUSH_MS = 250;
@@ -138,6 +145,8 @@ export default class PresenceServer implements Party.Server {
 
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private lastHeartbeatAt = 0;
+  private forcedHeartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastHeartbeatPruneAt = 0;
   private readonly previewsByConnectionId = new Map<string, RoomPreviewPayload>();
   private readonly persistedPreviewsByRoomId = new Map<string, SharedRoomPreview>();
   private readonly pendingPresenceUpsertsByConnectionId = new Map<string, WorldGhostPresence>();
@@ -657,13 +666,20 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const heartbeat = this.computeShardHeartbeat();
-    if (!heartbeat) {
+    const now = Date.now();
+    if (!force && now - this.lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) {
+      return;
+    }
+    if (force && now - this.lastHeartbeatAt < FORCED_HEARTBEAT_MIN_INTERVAL_MS) {
+      this.forcedHeartbeatTimer ??= setTimeout(() => {
+        this.forcedHeartbeatTimer = null;
+        void this.maybeSendShardHeartbeat(true);
+      }, this.lastHeartbeatAt + FORCED_HEARTBEAT_MIN_INTERVAL_MS - now);
       return;
     }
 
-    const now = Date.now();
-    if (!force && now - this.lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) {
+    const heartbeat = this.computeShardHeartbeat();
+    if (!heartbeat) {
       return;
     }
 
@@ -732,7 +748,11 @@ export default class PresenceServer implements Party.Server {
       return new Response('Invalid heartbeat payload.', { status: 400 });
     }
 
-    await this.pruneStaleHeartbeats();
+    const now = Date.now();
+    if (now - this.lastHeartbeatPruneAt >= HEARTBEAT_PRUNE_INTERVAL_MS) {
+      this.lastHeartbeatPruneAt = now;
+      await this.pruneStaleHeartbeats();
+    }
     await this.room.storage.put(heartbeatStorageKey(heartbeat.shardId), heartbeat);
 
     return this.json({
