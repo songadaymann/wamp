@@ -70,11 +70,22 @@ export async function handleWorldRequest(
   return jsonResponse(request, worldWindow);
 }
 
+/**
+ * Legacy full-snapshot chunks, used only when compact reads are off. Anonymous reads
+ * share a 20s edge cache like the compact route, so a fallback cannot multiply load.
+ */
 export async function handleWorldChunksRequest(
   request: Request,
   url: URL,
-  env: Env
+  env: Env,
+  context?: WorkerExecutionContextLike,
+  authenticated = false,
 ): Promise<Response> {
+  return loadAnonymousPublicCache(request, authenticated ? undefined : context, () =>
+    loadWorldChunksResponse(request, url, env, authenticated));
+}
+
+async function loadWorldChunksResponse(request: Request, url: URL, env: Env, authenticated: boolean): Promise<Response> {
   const chunkBounds = parseWorldChunkBounds(url.searchParams);
   const roomBounds = getRoomBoundsForChunkBounds(chunkBounds);
   const minX = roomBounds.minX - 1;
@@ -107,7 +118,9 @@ export async function handleWorldChunksRequest(
     chunk.chunkPreviewHash = computeWorldChunkPreviewHash(chunk);
   }
 
-  return jsonResponse(request, chunkWindow);
+  return jsonResponse(request, chunkWindow, {
+    headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' },
+  });
 }
 
 export async function handleWorldChunkSummariesRequest(
