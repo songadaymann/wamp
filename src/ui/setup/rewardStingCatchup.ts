@@ -94,7 +94,7 @@ export class RewardStingCatchupController {
   private async runCheck(userId: string): Promise<void> {
     this.checking = true;
     try {
-      const profile = await this.profileRepository.loadProfile(userId);
+      const profile = await this.profileRepository.loadProfileSummary(userId);
       if (this.activeUserId !== userId) {
         return;
       }

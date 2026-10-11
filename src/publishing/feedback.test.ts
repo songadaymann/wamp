@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProgressionLane, ProgressionSummary } from '../progression/model';
-import type { UserProfileResponse } from '../profiles/model';
+import type { UserProfileSummaryResponse } from '../profiles/model';
 import { createProfileRepository, type ProfileRepository } from '../profiles/profileRepository';
 import { invalidateStaleWhileRevalidateCache } from '../api/staleWhileRevalidateCache';
 import { loadSeenRewardProgression, saveSeenRewardProgression } from '../progression/rewardStingSeenState';
@@ -22,8 +22,8 @@ function progression(bxp: number): ProgressionSummary {
     featuredBadges: [], badgeCount: 0, trophyCount: 0, recentTrophies: [] };
 }
 function repository(bxp: number) {
-  const loadProfile = vi.fn(async () => ({ progression: progression(bxp) } as UserProfileResponse));
-  return { loadProfile, loadProfileByUsername: vi.fn(), updateMyProfile: vi.fn() } satisfies ProfileRepository;
+  const loadProfileSummary = vi.fn(async () => ({ progression: progression(bxp) } as UserProfileSummaryResponse));
+  return { loadProfile: vi.fn(), loadProfileSummary, loadProfileByUsername: vi.fn(), updateMyProfile: vi.fn() } satisfies ProfileRepository;
 }
 const options = () => ({ userId: 'builder', previousProgression: progression(10), contentType: 'room' as const, contentId: '1,2', title: 'Treasure Hunt' });
 
@@ -37,9 +37,9 @@ afterEach(() => { vi.unstubAllGlobals(); invalidateStaleWhileRevalidateCache('pr
 describe('publish progression', () => {
   it('uses fresh profiles and labels only the change around publication, then remembers it for catch-up', async () => {
     const repo = repository(10), previous = await capturePublishProgression('builder', repo);
-    repo.loadProfile.mockResolvedValue({ progression: progression(35) } as UserProfileResponse);
+    repo.loadProfileSummary.mockResolvedValue({ progression: progression(35) } as UserProfileSummaryResponse);
     await reportPublishProgression({ ...options(), previousProgression: previous }, repo);
-    expect(repo.loadProfile).toHaveBeenCalledWith('builder', { fresh: true });
+    expect(repo.loadProfileSummary).toHaveBeenCalledWith('builder', { fresh: true });
     expect(dispatchProgressionFeedback).toHaveBeenCalledWith(expect.objectContaining({ reason: 'Published Treasure Hunt',
       previousProgression: progression(10), currentProgression: progression(35) }));
     expect(loadSeenRewardProgression('builder')).toEqual(progression(35));
@@ -57,7 +57,7 @@ describe('publish progression', () => {
     expect(dispatchProgressionFeedback).not.toHaveBeenCalled(); expect(loadSeenRewardProgression('builder')?.builder.xp).toBe(60);
   });
   it('leaves successful publishing independent of an unavailable before/after profile', async () => {
-    const repo = repository(35); repo.loadProfile.mockRejectedValue(new Error('offline'));
+    const repo = repository(35); repo.loadProfileSummary.mockRejectedValue(new Error('offline'));
     expect(await capturePublishProgression('builder', repo)).toBeNull();
     await expect(reportPublishProgression(options(), repo)).resolves.toBeUndefined();
     await reportPublishProgression({ ...options(), previousProgression: null }, repository(35));
@@ -68,18 +68,19 @@ describe('publish progression', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ progression: progression(35) })));
     vi.stubGlobal('fetch', fetchMock);
     const repo = createProfileRepository();
-    expect((await repo.loadProfile('builder')).progression.builder.xp).toBe(10);
-    expect((await repo.loadProfile('builder', { fresh: true })).progression.builder.xp).toBe(35);
+    expect((await repo.loadProfileSummary('builder')).progression.builder.xp).toBe(10);
+    expect((await repo.loadProfileSummary('builder', { fresh: true })).progression.builder.xp).toBe(35);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.lastCall?.[0])).toMatch(/\/api\/profiles\/builder\/summary$/);
     expect(fetchMock.mock.lastCall?.[1]).toEqual(expect.objectContaining({ cache: 'no-store', signal: expect.any(AbortSignal) }));
   });
   it('a delayed startup catch-up cannot undo already-seen publish XP', async () => {
-    let resolve!: (profile: UserProfileResponse) => void;
-    const repo=repository(10); repo.loadProfile.mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));
+    let resolve!: (profile: UserProfileSummaryResponse) => void;
+    const repo=repository(10); repo.loadProfileSummary.mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));
     const win=new EventTarget(); const controller=new RewardStingCatchupController(repo,win as Window,window.localStorage,
       {load:vi.fn()} as unknown as import('../activity/repository').ActivityRepository);
     controller.init(); win.dispatchEvent(new CustomEvent('session',{detail:{authenticated:true,user:{id:'builder'}}}));
-    saveSeenRewardProgression('builder',progression(35)); resolve({progression:progression(10)} as UserProfileResponse);
+    saveSeenRewardProgression('builder',progression(35)); resolve({progression:progression(10)} as UserProfileSummaryResponse);
     await Promise.resolve(); await Promise.resolve();
     expect(loadSeenRewardProgression('builder')?.builder.xp).toBe(35); expect(dispatchProgressionFeedback).not.toHaveBeenCalled(); controller.destroy();
   });

@@ -1148,7 +1148,7 @@ export class RunRatingModalController {
     }
 
     try {
-      const profile = await this.profileRepository.loadProfile(userId);
+      const profile = await this.profileRepository.loadProfileSummary(userId);
       if (loadToken !== this.loadToken || !this.activeRequest) {
         return;
       }
