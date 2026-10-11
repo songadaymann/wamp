@@ -570,6 +570,8 @@ All of this is thrown away when lighting is off, because the mode check only hap
 
 No GC trace was taken. Open: the `liveObjects.ts` allocations (size-pinned file), music `sync` literal, weather off-path clone. Receipt: `wamp-motion-frames-bridge-2026-10-11.md`.
 
+**2026-10-11 done.** PR #172 / `4db14ba4`. `updateLiveObjects` reuses one room array per frame; flying-enemy motion is cached per behavior (`liveObjects/flyingEnemyMotion.ts`); `carryMovingPlatformRiders` gets one hoisted options object; the scene reuses one `roomMusicPlaybackController.sync` input and the controller copies coordinates only on change; `RoomWeatherController.sync` returns before cloning settings once nothing is drawn for the room and its weather is off. Pins lowered: `liveObjects.ts` 2345, `OverworldPlayScene.ts` 6443. Tests: `flyingEnemyMotion.test.ts`, weather off-path test. Browser (`f012_sanity.mjs`): all moving platforms in 2,9 and all birds/bats in -4,-1 move, no page errors. Receipt: `wamp-frames-prefetch-limits-2026-10-11.md`.
+
 ### F006: Every moving body re-scans the tile map and allocates ~100 small objects per frame for special-tile checks
 
 - **Area:** Runtime performance (frame rate, GC, memory)
@@ -833,6 +835,8 @@ The early-tile manifest is fetched with includeRooms=0 (earlyWorldTileBootstrap.
 3) "Same pattern as installEarlyWorldTileBootstrapHandoff" is the wrong model. That module releases a DOM cover after paint; it does not hand off a promise. The right model is the in-flight dedupe map in previewCache.queryRoomSnapshotBatch (previewCache.ts:304-330), or simply consuming a pre-boot summary promise when containsWorldChunkBounds(prefetched, desired) is true. A superset window should be accepted, not only exact bounds.
 4) Prefetching the snapshot is not small. The reference set comes from getNearestPreviewRoomIds(…, 9) and the detail level, both of which depend on scene state. The batch is deduped by buildRoomSnapshotBatchKey, so a pre-boot POST is reused only if the reference set matches exactly. Treat the summary prefetch as small (under a day) and the snapshot prefetch as a medium follow-up.
 5) Pre-boot bounds also have to replicate the deep-link fit zoom (OverworldPlayScene.ts:2207-2211) and the device performance profile, or request a deliberately padded superset.
+
+**2026-10-11 done.** PR #171 / `6f7f8460`. `src/main/arrivalWorldPrefetch.ts` (called from `main.ts`) requests the arrival window (URL room or default; 3×3 chunks for a coarse-pointer screen under 600 px, else 5×5) through `prefetchArrivalCompactWorldWindow`; `ApiWorldRepository.loadCompactWorldChunkWindow` takes it once if it covers the requested window and crops it (`cropCompactWorldChunkWindow`), otherwise loads normally. Test: `worldRepository.arrivalPrefetch.test.ts`. Browser (production builds served locally, reads forwarded to api.wamp.land): summary request at about 0.6 s instead of 1.3–1.6 s and no second request; app-ready median over 15 runs phone 1354 → 1251 ms, desktop 1567 → 1570 ms; no difference at 12 Mbps/70 ms or 50 Mbps/150 ms. Open: overlap the arrival snapshot query. Receipt: `wamp-frames-prefetch-limits-2026-10-11.md`.
 
 ### F015: Game code doesn't start downloading until a map-preview check returns
 
@@ -1343,6 +1347,8 @@ Not done:
 
 Receipt: `wamp-finish-rewards-2026-10-10.md`.
 
+Production check, 2026-10-11 23:30 UTC (read-only D1): 5 completed runs since the deploy, all repeat clears (2–165 earlier clears of the same room) with no reward due, so no XP event was expected; the reward path is still unexercised in production.
+
 ### F236: Every room save depends on a live Base RPC call, and an RPC hiccup blocks saving in every room
 
 - **Area:** Room ownership, NFT minting and wallet flow
@@ -1403,6 +1409,8 @@ Not done:
 - loading only the latest version for writes.
 
 Receipt: `wamp-chain-outage-saves-2026-10-10.md`.
+
+Production check, 2026-10-11 23:30 UTC (read-only D1): 3 builder draft saves since the deploy, latest 20:43 UTC, all unminted rooms; no minted-room save yet.
 
 ### F027: Missing index on room_versions.published_by_user_id makes 15+ queries scan the whole table
 
@@ -1625,6 +1633,8 @@ flushPopulationBroadcast sends {roomPopulations, roomEditors, roomPreviews: comp
   - On the client, keep the existing snapshot object when the hash or version is unchanged, rather than calling `cloneRoomSnapshot` on every message in `src/presence/worldPresence.ts` `replaceRoomPreviews`. This restores the reference checks in `worldStreaming.ts:2750-2781` and stops the needless `refreshVisibleRoomsFromCache` calls.
   - Optionally send an overview-sized version for rendering at a distance and fetch the full snapshot when a player enters the room.
 - **Fix (3):** add a minimum interval (2–5 s) for forced heartbeats, and cache heartbeats in memory in the metrics room. Both still stand.
+
+**2026-10-11 partly done.** PR #176 / `b69ce731`, presence server redeployed with `partykit deploy`. `maybeSendShardHeartbeat(true)` sends at most once per 3 s per shard and schedules one trailing send (counts computed at send time); the metrics room's `handleHeartbeat` prunes stale heartbeats at most once a minute (`/stats` still prunes on read). Test: `presenceServer.heartbeat.test.ts` (both cases fail on the previous code). Open: preview deltas.
 
 ### F037: Everyone arrives in the same map area, which one multiplayer server handles alone, and each player opens two connections per area
 
@@ -5078,6 +5088,8 @@ Overwrite is limited to the phrase's creator and its origin room, but it is the 
 - the rejection stays cached for the session, since patternLoopBufferPromises is never evicted.
 
 Recommended order: first ship the small fixes (allSettled, evicting failed promises, a delete guard or copy change, Cache-Control on the GET). Then embed payloads at publish time as a medium follow-up.
+
+**2026-10-11 partly done.** PR #175 / `88f34e55`. `loadMusicPhrasesById` uses `Promise.allSettled` and rejects only when no phrase loads; `getMusicPhrase` drops a rejected request from `phrasePromiseCache`. The controller already leaves a slot empty when its phrase is missing. Test: `libraryClient.failures.test.ts`. Open (product decisions): payload embedding at publish, the delete guard and copy, phrase GET caching.
 
 ### F229: Three audio engines run at once; music never pauses when the tab is hidden
 

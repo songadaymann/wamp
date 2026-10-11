@@ -1,3 +1,7 @@
+## 2026-10-11 — F012 frame allocations, F018 arrival prefetch; parts of F188, F205, F222, F035
+
+PR #172 / `4db14ba4`: the play loop's remaining per-frame allocations are reused or skipped. PR #171 / `6f7f8460`: the arrival world window is requested before boot. PR #173 / `6f1d8dac` and PR #174 / `62bdf59b` (API Worker `378e20a6`): new guest drafts are rate-limited; the admin room clear works on busy rooms. PR #175 / `88f34e55`: one failed phrase no longer silences an arranged room. PR #176 / `b69ce731` (presence server): shard heartbeats are throttled. Master **126/215**. Receipt: [frames, prefetch, limits](docs/review/wamp-frames-prefetch-limits-2026-10-11.md).
+
 ## 2026-10-11 — F004 fog images, F223 music worker, F078 iPhone effects volume, part of F008, phone map trim; F002, F138, F011 signed off
 
 PR #166 / `1532705e`: the phone map toolbar keeps Online, Settings and Chat (Report a bug, Guestbook and Controls in the ☰ menu) and Warp is on the room card. PR #167 / `b3c23922`: fog blobs are pooled images instead of per-frame Graphics ellipses. PR #168 / `4fca9d77`: effects at zero volume are skipped. PR #169 / `cf13f8a9`: room music renders in a module worker. PR #170 / `01f2b134`: removing a non-solid object (cannon bullets) no longer rebuilds every collider. F002, F138 and F011 passed Jonathan's phone check. Master **124/215**. Receipt: [fog, music, colliders](docs/review/wamp-fog-music-colliders-2026-10-11.md).
