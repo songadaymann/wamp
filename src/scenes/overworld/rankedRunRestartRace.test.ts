@@ -51,7 +51,7 @@ describe('ranked traces across a quick restart (F055)', () => {
     const starts = { A: deferred<StartReply>(), B: deferred<StartReply>() };
     const finishA = deferred<void>();
     const startRun = vi.fn().mockReturnValueOnce(starts.A.promise).mockReturnValueOnce(starts.B.promise);
-    const finishRun = vi.fn((attemptId: string) => attemptId === 'A' ? finishA.promise : Promise.resolve());
+    const finishRun = vi.fn((attemptId: string, _body?: unknown) => attemptId === 'A' ? finishA.promise : Promise.resolve());
     const goals = new OverworldGoalRunController({ playerHeight: 14,
       runRepository: { startRun, finishRun, loadRoomLeaderboard: vi.fn().mockResolvedValue(null),
         loadGlobalLeaderboard: vi.fn().mockResolvedValue(null) } as unknown as RunRepository,
