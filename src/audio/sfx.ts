@@ -527,7 +527,8 @@ export class SfxController {
       this.lastPlayedAt.set(cue, now);
     }
 
-    if (this.muted) {
+    // Muted or turned all the way down: don't spend a voice, or a download, on silence (F078).
+    if (this.muted || this.volume <= 0 || (playbackOptions?.volumeMultiplier ?? 1) <= 0) {
       this.record(cue, 'blocked');
       return;
     }

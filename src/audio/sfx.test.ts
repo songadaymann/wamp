@@ -92,6 +92,19 @@ describe('SFX on Web Audio buffers (F023, F229)', () => {
     expect(h.history().at(-1)).toEqual(expect.objectContaining({ cue: 'jump', status: 'played' }));
   });
 
+  it('skips cues while the effects volume is at zero, then plays them at the new volume (F078)', async () => {
+    const h = harness();
+    h.controller.setVolume(0);
+    h.controller.play('jump', { ignoreCooldown: true }); h.controller.play('land', { ignoreCooldown: true, volumeMultiplier: 0 }); await h.settle();
+    expect(h.sources).toHaveLength(0); expect(h.fetchMock).not.toHaveBeenCalled();
+    expect(h.history().slice(-2).map((entry) => entry.status)).toEqual(['blocked', 'blocked']);
+    h.controller.setVolume(0.4);
+    h.controller.play('jump', { ignoreCooldown: true }); await h.settle();
+    expect(h.sources).toHaveLength(1);
+    const output = (h.sources[0].connect.mock.calls[0][0] as FakeGain).connect.mock.calls[0][0] as FakeGain;
+    expect(output.gain.value).toBe(0.4);
+  });
+
   it('a second play of a loaded cue starts at once, with no download or decode', async () => {
     const h = harness();
     h.controller.play('land', { ignoreCooldown: true }); await h.settle();
