@@ -60,6 +60,7 @@ import {
   rowMajorOccupiedOrder,
   walkDragCells,
 } from '../../scenes/editor/selectionPattern';
+import { makeObjectPaletteTile, setObjectPaletteTilePressed } from './objectPaletteTile';
 
 const MIN_SELECTION_OPAQUE_PIXELS = 96;
 const CUSTOM_OBJECT_SUBCATEGORIES = ['all', 'decoration', 'collectible', 'sign', 'solid', 'pushable'] as const;
@@ -683,12 +684,11 @@ export class PaletteController {
       const item = this.doc.createElement('div');
       item.className = 'object-item';
       item.setAttribute('aria-label', objectConfig.name);
-      if (editorState.selectedObjectId === objectConfig.id) {
-        item.classList.add('active');
-      }
+      makeObjectPaletteTile(item, editorState.selectedObjectId === objectConfig.id);
       item.dataset.objectId = objectConfig.id;
 
       const img = this.doc.createElement('img');
+      img.alt = '';
       img.src = objectConfig.path;
       if (objectConfig.frameCount > 1) {
         const canvas = this.doc.createElement('canvas');
@@ -729,8 +729,8 @@ export class PaletteController {
       item.addEventListener('click', () => {
         editorState.selectedObjectId = objectConfig.id;
         editorState.objectFacing = objectConfig.facingDirection ?? 'right';
-        this.doc.querySelectorAll('.object-item').forEach((element) => element.classList.remove('active'));
-        item.classList.add('active');
+        this.doc.querySelectorAll('.object-item').forEach((element) => setObjectPaletteTilePressed(element, false));
+        setObjectPaletteTilePressed(item, true);
 
         editorState.activeTool = 'pencil';
         this.renderObjectSelectionDetails();
