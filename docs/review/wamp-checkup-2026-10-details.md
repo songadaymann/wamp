@@ -5408,9 +5408,25 @@ DEFAULT_ROOM_MINT_CHAIN_ID = 84532 with name 'Base Sepolia' (mint/roomOwnership.
 
 **2026-10-10 completed.** PR #112 / `3e6d82f8`, API Worker `222ae49e`. A trace must now start at the beginning of the recording (first breadcrumb ≤ 50ms) within 400px of the room's start point or the course start (the start resolution respawn checks already use), have no more than 1s between breadcrumbs except at a death respawn, record goal events while recording (≤ 1s after the last breadcrumb), match the nearest breadcrumb only within 1s, and put each enemy defeat within 400px of the player in world space. Limits come from the 109 stored traces of real play since May (first breadcrumb always at 0ms, gaps ≤ 287ms, events ≤ 241ms after the end, start ≤ 310px away, enemy defeats ≤ 251px); replaying the 108 with snapshots through the old and new verifier changes no outcome. No trace format change. Tighter movement limits and offline input replay are left for later. Receipt: `wamp-trace-anchoring-2026-10-10.md`.
 
-### F200: details withheld
+### F200: Trust tier T1 turns off ranked verification, and T1 takes about 20 scripted requests to reach
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Leaderboard, XP and anti-cheat integrity
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Once an account reached hidden trust tier T1, its record-setting runs were never checked and the recording wasn't saved for review; T2 and above got no audit at all. Trust was cheap: every completed attempt added a point, including repeat clears of your own room, and a few quick goal-room publishes added more.
+
+**Technical detail.** relaxVerificationTriggerForTrustTier set required=false for T1 and above; T1 wrote a 'skipped' audit with no trace. awardRoomRunProgression added +1 trust per completed attemptId with no own-room, repeat or daily cap, and each significant goal-room publish added +6 (+3 on later versions; courses +8/+4). The relaxed policy itself (T0 strict, T1 lax, T2+ off) was an explicit owner request on 2026-04-07, when about half of all verifications were failing.
+
+**Evidence (review baseline `7371df9a`).**
+
+- src/cloudflare/worker/runs/verification.ts:215-235 — T1 and above skip verification
+- src/cloudflare/worker/runs/finalizationVerification.ts:25-33 and runs/routes.ts:417 — T1 'skipped' audits store no trace
+- src/cloudflare/worker/progression/awards.ts:449-459 — +1 trust per completed attempt, uncapped
+- src/cloudflare/worker/progression/shared.ts:158-172 — T1 at trust 40
+
+**Fact-check (partially confirmed ×3).** New accounts start at 20 trust (one identity at creation), so about 14-20 own-room clears or four quick goal-room publishes reached T1. A second bug: on someone else's room, the runner's +1 was added to the delta saved to the creator, so creators gained uncapped trust from every clear. Blatant fakes remained detectable after the fact through the suspicious-admin page, and invalidations zero effective trust for 30 days.
+
+**2026-10-10 completed.** PR #114 / `21c4586a`, API Worker `37937f8f`. Policy (Jonathan, 2026-10-10): T1 runs are verified when they would take the #1 spot or beat it by a wide margin; other T1 runs and all T2+ runs stay unverified; skipped audits now keep the trace for review. Trust: clear trust once per room and significant-change window, none from your own content, at most 5 per UTC day; publish trust capped at 6 per day; creator completion trust capped at 10 per day; the runner's clear trust is saved to the runner (the creator's mis-credit is fixed); accounts younger than 3 days stay at effective T0. Earlier the same day F198/F199 and PR #113 removed the honest-run rejections that motivated the April relaxation. Past trust is not recomputed. Receipt: `wamp-trust-earning-2026-10-10.md`.
 
 ### F202: details withheld
 

@@ -1,3 +1,7 @@
+## 2026-10-10 — F200 trust tiers: T1 record checks, slow trust
+
+PR #114 / `21c4586a` is merged and the API Worker is deployed (`37937f8f`). T1 runs are verified when they take or extend the #1 record (T2+ stay unverified), skipped runs keep their traces, and hidden trust is capped per day, once per room, never from your own content, with a 3-day new-account hold. Master **79/215**. Receipt: [trust earning](docs/review/wamp-trust-earning-2026-10-10.md).
+
 ## 2026-10-10 — Honest ranked runs: latency and roaming enemies
 
 PR #113 / `84de79ec` is merged and the API Worker is deployed (`8c06f631`). Follow-up to F198/F199: Expanded Room and course verification uses the reported play time instead of latency-inflated server time, and enemy defeats may be anywhere in the enemy's room near the player. Replaying stored real runs: 11 of 12 enemy rejections now pass; no passing run changes. Master stays **78/215**.
