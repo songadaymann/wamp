@@ -1,3 +1,7 @@
+## 2026-10-11 — Phone check follow-ups: F229 silent switch and tab return, F023 effect timing, F080/F076 phone map
+
+PR #164 / `eb28cbb6`: sound effects play from Web Audio buffers instead of `<audio>` elements, so iPhone's silent switch and the `ambient` audio session cover all game audio and effects start on time; the audio engine retries resuming after you return to the tab and unlocks when a tap lifts; `?audiodebug` shows the audio log on screen. PR #165 / `f8831af2`: the phone map toolbar scrolls inside the screen instead of widening the page, and the Room of the Day chip no longer covers the room card. Receipt: [phone follow-ups](docs/review/wamp-phone-followups-2026-10-11.md).
+
 ## 2026-10-11 — F011 empty glow texture skipped
 
 PR #163 / `c39447e1`: dark rooms without glowing lights no longer clear and draw an empty full-room glow texture every frame (F011 still partly done).

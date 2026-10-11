@@ -369,6 +369,8 @@ Evidence (iPhone 13 emulation, 390×664, controller top at 370 px):
 
 Follow zoom is 1.051 in both. `scripts/mobile_smoke.mjs` passes every play scenario; `phone-portrait-deep-link-bottom-hud` fails identically on the previous code. Live in loader `main-BW_UonDA.js` (`camera_tuning_v2`). Not done (F098): dimming or letterboxing neighbouring rooms around a fixed room camera. Receipt: `wamp-portrait-art-drums-2026-10-10.md`.
 
+Phone map follow-up, PR #165 / `f8831af2`: the world toolbar (`nowrap`, centred) was 35 px wider than an iPhone 13 and 69 px wider than an iPhone SE, which widened the page, clipped the menu and pushed full-width sheets off screen. It now scrolls inside the screen (spacer pseudo-elements keep it centred when it fits); the online popover opens from `#bottom-bar`; the Room of the Day chip sits above the toolbar on phones instead of over the room card. Receipt: `wamp-phone-followups-2026-10-11.md`.
+
 ### F011: 'Battery Saver' and auto-reduced mode don't turn down any visual effects
 
 - **Area:** Runtime performance (frame rate, GC, memory)
@@ -1033,6 +1035,8 @@ Fill previously_recommended with docs/2026-06-10-repo-improvement-plan.md §1.4 
 Open: pre-baking the drums to compressed mono files (a lossy change to the kit's sound, so for review), re-encoding the stems (check loop seams), warming the hot sound effects after the first tap and fixing player retargeting (fact-check point 3), and excluding the unused SFX WAVs from the deploy. Receipt: `wamp-portrait-art-drums-2026-10-10.md`.
 
 **2026-10-11 partly done (SFX pool).** PR #162 / `72b4d761`. `SfxController.acquireAudioPlayer` now creates a cue's own player while under the 64-player cap, and borrows and reloads another cue's idle player only at the cap. Previously it borrowed first, so alternating jump, land and footstep sounds reloaded the same few elements. A second commit adds `AudioEngine.onFirstInteraction()`; just after the first gesture (on a timer, outside it) the controller creates and parks one idle player each for `jump`, `land`, `footstep`, `collect` and `player-hurt`, so the first of those sounds doesn't wait for its file. Tests in `audio/sfx.visibility.test.ts` (the pool test fails on the previous code; the warm-up test fires the scheduled callback). Open: pre-baked drums, stems, WAV hygiene. Receipt: `wamp-flags-phaser-sockets-2026-10-11.md`.
+
+PR #164 / `eb28cbb6`: effects play from Web Audio buffers. A cue still loading or waiting for the context plays when ready if still on time (120 ms feedback, 1.5 s fanfares); formats fall back ogg/m4a → the other → WAV, and the one that decoded is tried first. Receipt: `wamp-phone-followups-2026-10-11.md`.
 
 ### F019: Players download the level-editor UI and about 30 menus before the first frame
 
@@ -2896,6 +2900,8 @@ Evidence:
 - iPhone 13 emulation: all five text fields compute to 16px; layout stays phone/portrait; the chat panel lays out cleanly.
 
 Not done: a `--keyboard-inset` to pin bottom-anchored composers above the keyboard. Real-iPhone check needed. Receipt: `wamp-ios-viewport-2026-10-10.md`.
+
+PR #165 / `f8831af2`: with the page no longer wider than the screen, the Warp sheet fits again (right edge 425 → 390 px on an iPhone 13).
 
 ### F098: Phone portrait play shrinks rooms that use the 'fixed room camera' to a 17px-tall hero, and the screen shows the neighboring room
 
@@ -5082,6 +5088,8 @@ Recommended order: first ship the small fixes (allSettled, evicting failed promi
 **Fact-check (partially confirmed).**
 
 The music and SFX AudioContexts are created lazily, not at boot. Music creates its context on first playback or clip preview (controller.ts:856-868). SFX creates its context only the first time a routed cue plays, mainly the muffled sound from adjacent rooms (roomAudio.ts:20-49 → sfx.ts:517/541 → 834). Most SFX are plain HTMLAudio playback. Only Phaser's unused context always exists from boot. Two or three contexts can exist at once, but not from page load. The most valuable fix is the hidden-tab suspend/pause, plus `audio: { noAudio: true }`. Merging into one shared engine with buses is a nice-to-have, mostly useful for future ducking; it has no proven unlock or battery benefit.
+
+Phone follow-up, PR #164 / `eb28cbb6`. On his iPhone, the silent switch didn't silence music, and music came back only after a second tab switch. Effects played from `<audio>` elements, and a playing media element moves an iOS page into media playback, which ignores the silent switch for all audio. `SfxController` now plays decoded `AudioBuffer`s through the engine's SFX bus (no media elements). `AudioEngine` resumes on `touchend`/`pointerup`/`click` too, retries resume 0.3/1/3 s after `visibilitychange` to visible while the context isn't running, logs lifecycle events, and `?audiodebug` shows them on screen. Tests: `audio/sfx.test.ts`, `audio/engine.test.ts`. Receipt: `wamp-phone-followups-2026-10-11.md`.
 
 ### F226: Sequencer overlay redraws 24 text labels and deep-clones the song every frame
 
