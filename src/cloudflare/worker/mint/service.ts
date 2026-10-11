@@ -9,7 +9,7 @@ import {
   ROOM_OWNERSHIP_TOKEN_ABI,
 } from '../../../mint/roomOwnership';
 import { sha256Hex } from '../../../mint/roomMetadata';
-import { type RoomCoordinates, type RoomRecord } from '../../../persistence/roomModel';
+import { isRoomMinted, type RoomCoordinates, type RoomRecord } from '../../../persistence/roomModel';
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
 import type { Env, RoomMintChainState, RoomMintConfig } from '../core/types';
@@ -74,11 +74,27 @@ export function requireRoomMintAuthAccount(env: Env) {
   return privateKeyToAccount(privateKey);
 }
 
-export function createRoomMintPublicClient(config: RoomMintConfig) {
+export function createRoomMintPublicClient(
+  config: RoomMintConfig,
+  transport: { retryCount?: number; timeout?: number } = {}
+) {
   return createPublicClient({
-    transport: http(config.rpcUrl),
+    transport: http(config.rpcUrl, transport),
   });
 }
+
+/**
+ * What a chain-ownership sync does when the Base RPC fails. 'throw' fails the request
+ * (minting and explicit ownership refreshes need the real chain state). 'use-stored'
+ * keeps the ownership D1 last recorded, so an RPC outage or rate limit does not block
+ * saves in every room: unminted rooms stay editable by their claimer, and minted rooms
+ * stay with the last synced token owner until the next successful read.
+ */
+export type RoomChainSyncFailureMode = 'throw' | 'use-stored';
+
+// A tolerant sync gives up sooner: one retry and 5 s per call instead of viem's
+// 3 retries and 10 s, so a hanging RPC delays a save by seconds rather than ~40 s.
+const TOLERANT_CHAIN_READ_TRANSPORT = { retryCount: 1, timeout: 5_000 };
 
 export async function loadRoomMintPriceWei(config: RoomMintConfig): Promise<string> {
   const client = createRoomMintPublicClient(config);
@@ -132,7 +148,8 @@ export async function signRoomMintAuthorization(
 export async function syncRoomOwnershipFromChain(
   env: Env,
   record: RoomRecord,
-  actor: AuthUser | null
+  actor: AuthUser | null,
+  onChainError: RoomChainSyncFailureMode = 'throw'
 ): Promise<RoomRecord> {
   const config = getOptionalRoomMintConfig(env);
   if (!config) {
@@ -141,13 +158,26 @@ export async function syncRoomOwnershipFromChain(
 
   let chainState: RoomMintChainState | null;
   try {
-    chainState = await readRoomMintStateFromChain(config, record.draft.coordinates);
+    chainState = await readRoomMintStateFromChain(
+      config,
+      record.draft.coordinates,
+      onChainError === 'use-stored' ? TOLERANT_CHAIN_READ_TRANSPORT : {}
+    );
   } catch (error) {
-    if (!shouldSkipLocalRoomMintSync(config, error)) {
+    if (shouldSkipLocalRoomMintSync(config, error)) {
+      console.warn('Skipping local room ownership sync because the local mint RPC is unavailable.', error);
+      return record;
+    }
+
+    if (onChainError === 'throw') {
       throw error;
     }
 
-    console.warn('Skipping local room ownership sync because the local mint RPC is unavailable.', error);
+    const reason = error instanceof Error ? error.message.split('\n')[0] : String(error);
+    console.warn(
+      `Room ${record.draft.id} ownership sync skipped: Base RPC read failed; using stored ownership `
+        + `(${isRoomMinted(record) ? `minted, owner ${record.mintedOwnerWalletAddress}` : 'unminted'}). ${reason}`
+    );
     return record;
   }
 
@@ -200,9 +230,10 @@ export async function syncRoomOwnershipFromChain(
 
 export async function readRoomMintStateFromChain(
   config: RoomMintConfig,
-  coordinates: RoomCoordinates
+  coordinates: RoomCoordinates,
+  transport: { retryCount?: number; timeout?: number } = {}
 ): Promise<RoomMintChainState | null> {
-  const client = createRoomMintPublicClient(config);
+  const client = createRoomMintPublicClient(config, transport);
   const tokenId = await client.readContract({
     address: config.contractAddress,
     abi: ROOM_OWNERSHIP_TOKEN_ABI,

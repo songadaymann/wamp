@@ -31,7 +31,7 @@ export async function handleRoomMintPrepare(
 ): Promise<Response> {
   const auth = await requireWalletLinkedRequestAuth(env, request, 'mint rooms', 'rooms:write');
   const config = requireRoomMintConfig(env);
-  const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user);
+  const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user, false, 'throw');
 
   if (!record.published) {
     throw new HttpError(400, 'Publish the room before minting it.');
@@ -112,7 +112,7 @@ export async function handleRoomMintConfirm(
   );
   const config = requireRoomMintConfig(env);
   const body = await parseRoomMintConfirmBody(request);
-  const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user);
+  const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user, false, 'throw');
 
   if (!record.permissions.canMint && !isRoomMinted(record)) {
     throw new HttpError(403, 'You do not have permission to mint this room.');
@@ -154,7 +154,7 @@ export async function handleRoomTokenMetadataPrepare(
   );
   const config = requireRoomMintConfig(env);
   const body = await parseRoomMetadataRefreshPrepareBody(request);
-  const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user);
+  const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user, false, 'throw');
 
   if (!isRoomMinted(record) || !record.mintedTokenId || !record.mintedContractAddress) {
     throw new HttpError(409, 'This room is not minted yet.');
@@ -222,7 +222,7 @@ export async function handleRoomTokenMetadataConfirm(
   );
   const config = requireRoomMintConfig(env);
   const body = await parseRoomMetadataRefreshConfirmBody(request);
-  const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user);
+  const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user, false, 'throw');
 
   if (!isRoomMinted(record) || !record.mintedTokenId) {
     throw new HttpError(409, 'This room is not minted yet.');

@@ -39,7 +39,7 @@ import type {
   RoomRow,
   RoomVersionRow,
 } from '../core/types';
-import { syncRoomOwnershipFromChain } from '../mint/service';
+import { syncRoomOwnershipFromChain, type RoomChainSyncFailureMode } from '../mint/service';
 import { prepareMusicPhrasePublishStatements } from '../music/store';
 import { assertCustomBackgroundApproved } from '../backgroundImages/routes';
 import {
@@ -217,6 +217,9 @@ export interface RoomMutationOptions {
   usageUserId?: string | null;
   transactionStatementsBefore?: D1PreparedStatement[];
   transactionStatementsAfter?: D1PreparedStatement[];
+  // The record this request already loaded for the same room with loadRoomRecordForMutation,
+  // so saveDraft does not sync ownership from Base and load the full history a second time.
+  loadedRecord?: RoomRecord;
 }
 
 interface CompactRoomRow extends RoomRow {
@@ -628,12 +631,19 @@ function roomSummaryFromRecord(
   };
 }
 
+/**
+ * Loads a room for a write after syncing its ownership from Base. Saves, publishes and
+ * reverts keep the stored ownership when the RPC fails ('use-stored'); minting and
+ * explicit ownership refreshes pass 'throw'. The record is reloaded only when the
+ * sync changed something.
+ */
 export async function loadRoomRecordForMutation(
   env: Env,
   roomId: string,
   coordinates: RoomCoordinates,
   actor: AuthUser | null,
-  actorIsAdmin = false
+  actorIsAdmin = false,
+  onChainError: RoomChainSyncFailureMode = 'use-stored'
 ): Promise<RoomRecord> {
   const record = await loadRoomRecord(
     env,
@@ -643,7 +653,11 @@ export async function loadRoomRecordForMutation(
     actor?.walletAddress ?? null,
     actorIsAdmin
   );
-  await syncRoomOwnershipFromChain(env, record, actor);
+  const synced = await syncRoomOwnershipFromChain(env, record, actor, onChainError);
+  if (synced === record) {
+    return record;
+  }
+
   return loadRoomRecord(
     env,
     roomId,
@@ -915,13 +929,15 @@ export async function saveDraft(
   const lostSongError = getLostSongPlacementError(incomingRoom.placedObjects);
   if (lostSongError) throw new HttpError(400, lostSongError);
   const viewerWalletAddress = actor.ownerUser?.walletAddress ?? null;
-  const existing = await loadRoomRecordForMutation(
-    env,
-    incomingRoom.id,
-    incomingRoom.coordinates,
-    actor.ownerUser,
-    actorIsAdmin
-  );
+  const existing = options.loadedRecord?.draft.id === incomingRoom.id
+    ? options.loadedRecord
+    : await loadRoomRecordForMutation(
+      env,
+      incomingRoom.id,
+      incomingRoom.coordinates,
+      actor.ownerUser,
+      actorIsAdmin
+    );
   const world = await resolveWorldMutationAccess(
     env,
     existing,
