@@ -26,7 +26,6 @@ import {
   getPatternInstrumentColorRgbCss,
   getPatternInstrumentIcon,
   getPatternInstrumentLabel,
-  getRoomPhraseArrangementActiveSlotCount,
   isPatternRoomMusic,
   isPhraseArrangementRoomMusic,
   isStemArrangementRoomMusic,
@@ -968,11 +967,6 @@ export class EditorMusicWorkflowCoordinator {
     }
 
     const roomMusic = this.host.getRoomMusic();
-    const summary = document.getElementById('music-summary');
-    if (summary) {
-      summary.textContent = this.getSummaryText(roomMusic);
-    }
-
     const overlay = document.getElementById('editor-music-overlay');
     overlay?.classList.toggle('hidden', !this.musicModeActive);
     const workbench = document.getElementById('editor-music-workbench');
@@ -1692,50 +1686,6 @@ export class EditorMusicWorkflowCoordinator {
       getMusicPhraseKeyLabel: (phrase) => this.getMusicPhraseKeyLabel(phrase),
       getMusicPhraseRoomLabel: (phrase) => this.getMusicPhraseRoomLabel(phrase),
     });
-  }
-
-  private getSummaryText(roomMusic: RoomMusic | null): string {
-    const scope = this.host.getSummaryScope();
-    if (scope.kind === 'cell') {
-      const selectedLabel = scope.label;
-      if (isStemArrangementRoomMusic(roomMusic)) {
-        return `Cell ${selectedLabel} has saved WAMP stem music. Replace it to edit on the sequencer grid.`;
-      }
-      if (isPhraseArrangementRoomMusic(roomMusic)) {
-        const filledSlotCount = ROOM_PATTERN_INSTRUMENT_IDS.reduce(
-          (count, instrumentId) =>
-            count + roomMusic.slots[instrumentId].filter((phraseId: string | null) => phraseId !== null).length,
-          0,
-        );
-        const activeSegmentCount = getRoomPhraseArrangementActiveSlotCount(roomMusic);
-        return `Cell ${selectedLabel}: ${filledSlotCount} phrase slots across ${activeSegmentCount} active segments.`;
-      }
-      if (isPatternRoomMusic(roomMusic)) {
-        return `Cell ${selectedLabel}: ${this.requirePatternController().getActiveCellCount()} notes and hits on ${getPatternInstrumentLabel(this.requirePatternController().getActiveInstrumentTab())}.`;
-      }
-      return this.musicComposerMode === 'arrangement'
-        ? `Cell ${selectedLabel}: no phrase arrangement yet.`
-        : `Cell ${selectedLabel}: click on the grid to start a sequencer loop.`;
-    }
-
-    if (isStemArrangementRoomMusic(roomMusic)) {
-      return 'Legacy WAMP stem music is saved in this room. Replace it to edit on the room grid.';
-    }
-    if (isPhraseArrangementRoomMusic(roomMusic)) {
-      const filledSlotCount = ROOM_PATTERN_INSTRUMENT_IDS.reduce(
-        (count, instrumentId) =>
-          count + roomMusic.slots[instrumentId].filter((phraseId: string | null) => phraseId !== null).length,
-        0,
-      );
-      const activeSegmentCount = getRoomPhraseArrangementActiveSlotCount(roomMusic);
-      return `${filledSlotCount} phrase slots arranged across ${activeSegmentCount} active segments.`;
-    }
-    if (isPatternRoomMusic(roomMusic)) {
-      return `${this.requirePatternController().getActiveCellCount()} notes and hits on ${getPatternInstrumentLabel(this.requirePatternController().getActiveInstrumentTab())}.`;
-    }
-    return this.musicComposerMode === 'arrangement'
-      ? 'No phrase arrangement yet. Pick a slot, then click a phrase from the library.'
-      : 'No room music yet. Click on the room grid to start a sequencer loop.';
   }
 
   private requestRender(): void {

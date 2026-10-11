@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "check": "npm run lint && npm run test && npm run typecheck && npm run world-tiles:types:check && npm run build && npm run size:check && npm run assets:png:check",
+    "check": "npm run lint && npm run test && npm run typecheck && npm run smoke:dom-contract && npm run world-tiles:types:check && npm run build && npm run size:check && npm run assets:png:check",
     "size:check": "node scripts/check_bundle_budget.mjs",
     "assets:png:optimize": "node scripts/optimize_png_assets.mjs",
     "assets:png:check": "node scripts/optimize_png_assets.mjs --check",

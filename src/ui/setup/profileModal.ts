@@ -56,9 +56,7 @@ type ProfileModalElements = {
   modal: HTMLElement | null;
   closeButton: HTMLButtonElement | null;
   shareButton: HTMLButtonElement | null;
-  meta: HTMLElement | null;
   error: HTMLElement | null;
-  title: HTMLElement | null;
   avatarImage: HTMLImageElement | null;
   avatarFallback: HTMLElement | null;
   avatarChangeButton: HTMLButtonElement | null;
@@ -236,9 +234,7 @@ export class ProfileModalController {
       modal: this.doc.getElementById('profile-modal'),
       closeButton: this.doc.getElementById('btn-profile-close') as HTMLButtonElement | null,
       shareButton: this.doc.getElementById('btn-profile-share') as HTMLButtonElement | null,
-      meta: this.doc.getElementById('profile-modal-meta'),
       error: this.doc.getElementById('profile-modal-error'),
-      title: this.doc.getElementById('profile-modal-title'),
       avatarImage: this.doc.getElementById('profile-avatar-image') as HTMLImageElement | null,
       avatarFallback: this.doc.getElementById('profile-avatar-fallback'),
       avatarChangeButton: this.doc.getElementById('btn-profile-avatar-change') as HTMLButtonElement | null,
@@ -577,23 +573,6 @@ export class ProfileModalController {
       !this.authState.authenticated || this.authState.source !== 'session' || profile?.userId !== this.authState.user?.id);
     const avatarOnlyEdit = this.isSchoolAvatarOnlyEdit(profile);
     const canEditProfileText = canEdit && !avatarOnlyEdit;
-    const titleText = this.loading
-      ? 'Loading profile...'
-      : profile
-        ? profile.displayName
-        : 'Profile';
-    if (this.elements.title) {
-      this.elements.title.textContent = titleText;
-    }
-
-    if (this.elements.meta) {
-      this.elements.meta.textContent = this.loading
-        ? 'Loading public profile, rooms, and stats.'
-        : profile
-          ? ''
-          : 'Profile unavailable.';
-    }
-
     if (this.elements.displayName) {
       this.elements.displayName.textContent = profile?.displayName ?? 'Unknown player';
     }
