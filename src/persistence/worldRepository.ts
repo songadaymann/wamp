@@ -253,9 +253,14 @@ export class ApiWorldRepository implements WorldRepository {
     try {
       return await this.requestCompactWorldChunkWindow(`/api/world/chunks/summary?${params.toString()}`);
     } catch (error) {
-      this.compactWorldUnavailable = true;
-      console.warn('Compact world reads unavailable for this session; using legacy chunks.', error);
-      return null;
+      // Only a server that does not offer compact reads switches this session to the
+      // heavy legacy chunks. A blip, timeout or 5xx is retried on the next refresh.
+      if (error instanceof WorldApiError && error.status === 404) {
+        this.compactWorldUnavailable = true;
+        console.warn('Compact world reads are not available; using legacy chunks.', error);
+        return null;
+      }
+      throw error;
     }
   }
 
@@ -296,24 +301,19 @@ export class ApiWorldRepository implements WorldRepository {
     references: RoomSnapshotQueryReference[],
     options: { priority?: 'high' | 'low' | 'auto'; detail?: RoomSnapshotQueryDetail } = {},
   ): Promise<RoomSnapshotQueryResponse> {
-    try {
-      const requestInit: RequestInit & { priority?: 'high' | 'low' | 'auto' } = {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ references, detail: options.detail ?? 'full' }),
-        ...PUBLIC_WORLD_API_FETCH,
-        ...(options.priority ? { priority: options.priority } : {}),
-      };
-      const response = await this.fetchWorldApi('/api/rooms/snapshots/query', requestInit);
-      if (!response.ok) {
-        const details = await response.text();
-        throw new WorldApiError(details || `Snapshot query failed with status ${response.status}.`, response.status);
-      }
-      return (await response.json()) as RoomSnapshotQueryResponse;
-    } catch (error) {
-      this.compactWorldUnavailable = true;
-      throw error;
+    const requestInit: RequestInit & { priority?: 'high' | 'low' | 'auto' } = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ references, detail: options.detail ?? 'full' }),
+      ...PUBLIC_WORLD_API_FETCH,
+      ...(options.priority ? { priority: options.priority } : {}),
+    };
+    const response = await this.fetchWorldApi('/api/rooms/snapshots/query', requestInit);
+    if (!response.ok) {
+      const details = await response.text();
+      throw new WorldApiError(details || `Snapshot query failed with status ${response.status}.`, response.status);
     }
+    return (await response.json()) as RoomSnapshotQueryResponse;
   }
 
   async loadPublishedRoom(

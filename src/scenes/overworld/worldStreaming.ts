@@ -841,7 +841,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         let chunkWindow: WorldChunkWindow;
         let compactWorldActive = false;
         try {
-          const compactWindow = await this.options.worldRepository.loadCompactWorldChunkWindow(desiredChunkBounds);
+          let compactWindow: CompactWorldChunkWindow | null = null;
+          try {
+            compactWindow = await this.options.worldRepository.loadCompactWorldChunkWindow(desiredChunkBounds);
+          } catch (error) {
+            // A transient failure: show this window from legacy chunks once; the next
+            // refresh goes back to compact reads.
+            console.warn('Compact world window failed; loading legacy chunks for this window.', error);
+          }
           if (compactWindow) {
             chunkWindow = compactWorldWindowToLegacyShell(compactWindow);
             compactWorldActive = true;
@@ -1085,9 +1092,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.chunkWindowRequestInFlight = true;
 
     try {
-      const compactWindow = this.compactWorldActive
-        ? await this.options.worldRepository.loadCompactWorldChunkWindow(this.loadedChunkBounds)
-        : null;
+      // Compact reads are tried on every refresh unless the server has none, so a
+      // window that fell back after a transient error returns to compact reads.
+      const compactWindow = await this.options.worldRepository.loadCompactWorldChunkWindow(this.loadedChunkBounds);
       const nextChunkWindow = compactWindow
         ? compactWorldWindowToLegacyShell(compactWindow)
         : await this.options.worldRepository.loadWorldChunkWindow(this.loadedChunkBounds);

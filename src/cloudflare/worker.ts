@@ -471,7 +471,7 @@ export default {
       if (url.pathname === '/api/world/chunks' && request.method === 'GET') {
         const auth = await loadOptionalRequestAuth(env, request);
         requireOptionalScope(auth, 'rooms:read', 'read world room chunks');
-        return handleWorldChunksRequest(request, url, env);
+        return handleWorldChunksRequest(request, url, env, ctx, auth !== null);
       }
 
       if (url.pathname === '/api/world/chunks/summary' && request.method === 'GET') {
