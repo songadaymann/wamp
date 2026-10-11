@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { OverworldMovementInput } from './physicsCadence';
 import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
 import type Phaser from 'phaser';
@@ -281,6 +282,37 @@ function createHarness(environment: SpecialTilePlayerEnvironment = {
     setNow(value: number) { now = value; },
   };
 }
+
+describe('touch butt stomp (F140)', () => {
+  const input = (overrides: Partial<OverworldMovementInput> = {}): OverworldMovementInput => ({
+    left: false, right: false, upKeyHeld: false, downHeld: false, spaceHeld: false,
+    touchLeft: false, touchRight: false, touchUp: false, touchDown: false,
+    upPressed: false, downPressed: false, leftPressed: false, rightPressed: false, spacePressed: false, ...overrides,
+  });
+  const touchDown = input({ touchDown: true, downHeld: true });
+
+  it('needs a fresh downward push while airborne, not a stick held since the ground', () => {
+    const h = createHarness();
+    h.body.blocked.down = true;
+    h.controller.updateMovement(1000 / 60, false, touchDown);
+    expect(h.controller.isButtStomping()).toBe(false);
+    // Walk off a ledge (or drop through a one-way platform) with the stick still down.
+    h.body.blocked.down = false; h.body.touching.down = false;
+    for (let step = 0; step < 4; step += 1) h.controller.updateMovement(1000 / 60, false, touchDown);
+    expect(h.controller.isButtStomping()).toBe(false);
+    // Let go, then push down again in mid-air.
+    h.controller.updateMovement(1000 / 60, false, input());
+    h.controller.updateMovement(1000 / 60, false, touchDown);
+    expect(h.controller.isButtStomping()).toBe(true);
+  });
+
+  it('keeps the keyboard Down press stomp', () => {
+    const h = createHarness();
+    h.body.blocked.down = false;
+    h.controller.updateMovement(1000 / 60, false, input({ downPressed: true, downHeld: true }));
+    expect(h.controller.isButtStomping()).toBe(true);
+  });
+});
 
 describe('OverworldMovementController state ownership', () => {
   beforeEach(() => {

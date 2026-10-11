@@ -97,6 +97,9 @@ interface OverworldMovementControllerState {
   jumpBufferTime: number;
   wallJumpBufferTime: number;
   protectedJumpTime: number;
+  // The touch stick's down state on the previous physics step, so a butt stomp needs
+  // a fresh downward push like the keyboard's Down press, not a held or drifting stick.
+  touchDownHeld: boolean;
 }
 
 interface OverworldMovementControllerHost {
@@ -222,6 +225,7 @@ function createMovementControllerState(): OverworldMovementControllerState {
     jumpBufferTime: 0,
     wallJumpBufferTime: 0,
     protectedJumpTime: 0,
+    touchDownHeld: false,
   };
 }
 
@@ -536,6 +540,8 @@ export class OverworldMovementController {
       touchLeft, touchRight, touchUp, touchDown,
       upPressed, downPressed, leftPressed, rightPressed, spacePressed,
     } = frameInput ?? this.captureInput();
+    const touchDownPressed = touchDown && !this.state.touchDownHeld;
+    this.state.touchDownHeld = touchDown;
     const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
     const overlappingLadder = this.host.findOverlappingLadder();
     const touchClimbUpHeld = overlappingLadder !== null && touchUp;
@@ -623,7 +629,7 @@ export class OverworldMovementController {
     } else if (
       !this.buttStompState.isActive() &&
       !this.ladderState.isClimbing() &&
-      (downPressed || touchDown)
+      (downPressed || touchDownPressed)
     ) {
       this.startButtStomp(playerBody);
     }
