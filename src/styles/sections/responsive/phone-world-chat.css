@@ -137,6 +137,9 @@ body[data-device-class='phone'] #world-hud .world-hud-row-primary-actions .bar-b
 body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud #btn-world-course-builder,
 body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud #btn-world-room-rush {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud .world-hud-row-tertiary-actions {

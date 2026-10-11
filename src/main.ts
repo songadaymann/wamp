@@ -79,8 +79,10 @@ void resolveWorldLinkBeforeBoot();
 const config: Phaser.Types.Core.GameConfig = {
   type: resolveRendererType(debug_options.renderer),
   parent: gameContainer,
-  width: gameContainer.clientWidth,
-  height: gameContainer.clientHeight,
+  // A hidden or not-yet-laid-out embed has a 0x0 container; WebGL cannot create a
+  // 0x0 framebuffer, so boot would throw and never recover once the frame is sized.
+  width: Math.max(1, gameContainer.clientWidth),
+  height: Math.max(1, gameContainer.clientHeight),
   pixelArt: true,
   audio: { noAudio: true },
   roundPixels: true,
@@ -101,6 +103,7 @@ const config: Phaser.Types.Core.GameConfig = {
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    min: { width: 1, height: 1 },
   },
   input: {
     mouse: {
