@@ -15,9 +15,9 @@ vi.mock('../auth/request', async (importOriginal) => ({
   requireAuthenticatedRequestAuth: mocks.requireAuthenticatedRequestAuth,
 }));
 
-vi.mock('../rooms/store', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../rooms/store')>(),
-  loadRoomRecord: mocks.loadRoomRecord,
+vi.mock('../rooms/rankingRecord', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../rooms/rankingRecord')>(),
+  loadRoomRankingRecord: mocks.loadRoomRecord,
 }));
 
 vi.mock('./roomLeaderboardAggregation', async (importOriginal) => ({
@@ -87,9 +87,12 @@ describe('T14 room difficulty vote delegation contract', () => {
       env,
       '11,-12',
       { x: 11, y: -12 },
-      'fixture-user',
-      '0x1111111111111111111111111111111111111111',
-      false,
+      {
+        viewerUserId: 'fixture-user',
+        viewerWalletAddress: '0x1111111111111111111111111111111111111111',
+        viewerIsAdmin: false,
+        snapshotVersions: [7],
+      },
     );
     expect(mocks.resolveAggregatedRoomLeaderboardSelection).toHaveBeenCalledWith(roomRecord, 7);
     expect(mocks.submitRoomRating).toHaveBeenCalledWith(env, {

@@ -1,5 +1,5 @@
 import type { CourseRecord } from '../../../courses/model';
-import type { RoomRecord } from '../../../persistence/roomModel';
+import type { RoomRecordView } from '../../../persistence/roomVersionLineage';
 import { buildCourseRatingWindow, buildRoomRatingWindow } from './ratings';
 
 /**
@@ -15,7 +15,7 @@ export interface ClearRewardScope {
 }
 
 export function resolveRoomClearRewardScope(
-  record: Pick<RoomRecord, 'versions' | 'claimerUserId'>,
+  record: Pick<RoomRecordView, 'versions' | 'claimerUserId'>,
   roomVersion: number,
   userId: string,
 ): ClearRewardScope {

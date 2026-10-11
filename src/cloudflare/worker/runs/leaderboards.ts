@@ -1,5 +1,6 @@
 import type { RoomGoal } from '../../../goals/roomGoals';
-import type { RoomRecord, RoomSnapshot } from '../../../persistence/roomModel';
+import type { RoomSnapshot } from '../../../persistence/roomModel';
+import type { RoomRecordView } from '../../../persistence/roomVersionLineage';
 import { getLeaderboardRankingMode } from '../../../runs/scoring';
 import type {
   RoomLeaderboardEntry,
@@ -196,7 +197,7 @@ function mapRankedRoomLeaderboardEntry(
 
 export async function buildRoomLeaderboardResponse(
   env: Env,
-  record: RoomRecord,
+  record: RoomRecordView,
   selection: AggregatedRoomLeaderboardSelection,
   limit: number,
   viewerUserId: string | null = null

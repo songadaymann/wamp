@@ -3,6 +3,7 @@ import type { Env, WorkerExecutionContextLike } from '../core/types';
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), room: vi.fn(), selection: vi.fn(), board: vi.fn(), cache: vi.fn() }));
 vi.mock('../auth/request', () => ({ loadOptionalRequestAuth: mocks.auth, requireOptionalScope: vi.fn() }));
 vi.mock('../rooms/store', () => ({ loadRoomRecord: mocks.room }));
+vi.mock('../rooms/rankingRecord', () => ({ loadRoomRankingRecord: mocks.room }));
 vi.mock('./roomLeaderboardAggregation', () => ({ resolveAggregatedRoomLeaderboardSelection: mocks.selection }));
 vi.mock('./leaderboards', () => ({ buildRoomLeaderboardResponse: mocks.board }));
 vi.mock('../core/publicCache', () => ({ loadAnonymousPublicCache: mocks.cache }));

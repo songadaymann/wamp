@@ -1,4 +1,5 @@
-import { cloneRoomSnapshot, type RoomRecord, type RoomSnapshot } from '../../../persistence/roomModel';
+import { cloneRoomSnapshot, type RoomSnapshot } from '../../../persistence/roomModel';
+import { findRoomVersionSnapshot, type RoomRecordView } from '../../../persistence/roomVersionLineage';
 import { buildRoomLeaderboardLineage } from '../../../persistence/roomLeaderboardLineage';
 import { HttpError } from '../core/http';
 
@@ -14,7 +15,7 @@ export interface AggregatedRoomLeaderboardSelection {
 }
 
 export function resolveAggregatedRoomLeaderboardSelection(
-  record: RoomRecord,
+  record: RoomRecordView,
   requestedVersion: number | null
 ): AggregatedRoomLeaderboardSelection {
   const currentPublishedVersion = record.published?.version ?? null;
@@ -52,15 +53,11 @@ export function resolveAggregatedRoomLeaderboardSelection(
   };
 }
 
-function resolveSnapshotForVersion(record: RoomRecord, version: number): RoomSnapshot {
-  if (record.published?.version === version) {
-    return cloneRoomSnapshot(record.published);
-  }
-
-  const historicalVersion = record.versions.find((candidate) => candidate.version === version) ?? null;
-  if (!historicalVersion) {
+function resolveSnapshotForVersion(record: RoomRecordView, version: number): RoomSnapshot {
+  const snapshot = findRoomVersionSnapshot(record, version);
+  if (!snapshot) {
     throw new HttpError(404, `Room version ${version} was not found.`);
   }
 
-  return cloneRoomSnapshot(historicalVersion.snapshot);
+  return cloneRoomSnapshot(snapshot);
 }

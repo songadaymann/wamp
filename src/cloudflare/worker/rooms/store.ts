@@ -81,6 +81,30 @@ export async function loadRoomRecord(
   viewerWalletAddress: string | null = null,
   viewerIsAdmin = false
 ): Promise<RoomRecord> {
+  return loadRoomRecordWith(env, roomId, coordinates, viewerUserId, viewerWalletAddress, viewerIsAdmin, {
+    statement: prepareLoadRoomVersionsStatement(env, roomId),
+    isVersionRow: (candidate): candidate is RoomVersionRow => 'snapshot_json' in candidate,
+    map: async (rows, rowId) => rowId === roomId ? mapStoredRoomVersions(rows) : loadRoomVersions(env, rowId),
+  });
+}
+
+/**
+ * Loads the room row with a caller-chosen view of its versions in the same batch:
+ * full snapshots for loadRoomRecord, or compact facts for ranking paths.
+ */
+export async function loadRoomRecordWith<TRow extends object, TVersion>(
+  env: Env,
+  roomId: string,
+  coordinates: RoomCoordinates,
+  viewerUserId: string | null,
+  viewerWalletAddress: string | null,
+  viewerIsAdmin: boolean,
+  versions: {
+    statement: D1PreparedStatement;
+    isVersionRow: (candidate: object) => candidate is TRow;
+    map: (rows: TRow[], rowId: string) => Promise<TVersion[]>;
+  },
+): Promise<Omit<RoomRecord, 'versions'> & { versions: TVersion[] }> {
   const roomStatement = env.DB.prepare(
     `
       SELECT
@@ -115,17 +139,17 @@ export async function loadRoomRecord(
     `
   )
     .bind(roomId, coordinates.x, coordinates.y);
-  const versionsStatement = prepareLoadRoomVersionsStatement(env, roomId);
   const [roomResult, versionsResult] = await env.DB.batch<{
-    results: Array<RoomRow | RoomVersionRow>;
-  }>([roomStatement, versionsStatement]);
-  const rowCandidate = roomResult?.results[0];
-  const row = rowCandidate && 'draft_json' in rowCandidate ? rowCandidate : null;
+    results: Array<RoomRow | TRow>;
+  }>([roomStatement, versions.statement]);
+  const rowCandidate = roomResult?.results[0] as RoomRow | TRow | undefined;
+  const row = rowCandidate && 'draft_json' in (rowCandidate as object) ? rowCandidate as RoomRow : null;
 
   if (!row) {
     const emptyRecord = createDefaultRoomRecord(roomId, coordinates);
     return {
       ...emptyRecord,
+      versions: [],
       permissions: buildRoomPermissions(
         emptyRecord,
         viewerUserId,
@@ -140,16 +164,14 @@ export async function loadRoomRecord(
     ? parseStoredSnapshot(row.published_json, 'published room')
     : null;
   const batchedVersionRows = (versionsResult?.results ?? []).filter(
-    (candidate): candidate is RoomVersionRow => 'snapshot_json' in candidate,
+    (candidate): candidate is TRow => versions.isVersionRow(candidate as object),
   );
-  const versions = row.id === roomId
-    ? mapStoredRoomVersions(batchedVersionRows)
-    : await loadRoomVersions(env, row.id);
+  const loadedVersions = await versions.map(batchedVersionRows, row.id);
 
   const record: RoomRecord = {
     draft,
     published,
-    versions,
+    versions: [],
     canonicalVersion: row.canonical_version,
     claimerUserId: row.claimer_user_id,
     claimerPrincipalKind: row.claimer_principal_type,
@@ -180,9 +202,11 @@ export async function loadRoomRecord(
     ...record,
     permissions: buildRoomPermissions(record, viewerUserId, viewerWalletAddress, viewerIsAdmin),
   };
-  return env.WORLDS_ENABLED === '1'
-    ? applyWorldRoomPermissions(env, row.id, permissionedRecord, viewerUserId, viewerIsAdmin)
+  // Permissions never read versions; attach the caller's view afterwards.
+  const finalRecord = env.WORLDS_ENABLED === '1'
+    ? await applyWorldRoomPermissions(env, row.id, permissionedRecord, viewerUserId, viewerIsAdmin)
     : permissionedRecord;
+  return { ...finalRecord, versions: loadedVersions };
 }
 
 export interface RoomMutationOptions {

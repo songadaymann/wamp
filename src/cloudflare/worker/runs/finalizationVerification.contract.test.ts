@@ -11,6 +11,7 @@ vi.mock('../generatedUsers/leaderboardIsolation', async (original) => ({ ...awai
 vi.mock('../progression/store', async (original) => ({ ...await original<typeof import('../progression/store')>(), loadEffectiveTrustTier: mocks.tier }));
 vi.mock('./verification', async (original) => ({ ...await original<typeof import('./verification')>(), verifyRoomRunTrace: mocks.verify, verifyCourseRunTrace: mocks.verify, createRoomVerificationTrigger: mocks.trigger, createCourseVerificationTrigger: mocks.trigger, recordRunVerificationAudit: mocks.audit }));
 vi.mock('../rooms/store', async (original) => ({ ...await original<typeof import('../rooms/store')>(), loadRoomRecord: mocks.room, loadRoomSnapshotsByReferences: mocks.rooms }));
+vi.mock('../rooms/rankingRecord', async (original) => ({ ...await original<typeof import('../rooms/rankingRecord')>(), loadRoomRankingRecord: mocks.room }));
 vi.mock('../courses/store', async (original) => ({ ...await original<typeof import('../courses/store')>(), loadPublishedCourse: mocks.course, loadCourseRecord: vi.fn(async () => ({ versions: [] })) }));
 vi.mock('../expandedRooms/store', async (original) => ({ ...await original<typeof import('../expandedRooms/store')>(), loadExpandedRoomTarget: vi.fn(async () => ({ legacyCourseId: 'course', expandedRoomId: 'expanded' })) }));
 vi.mock('../../../persistence/roomModel', async (original) => ({ ...await original<typeof import('../../../persistence/roomModel')>(), cloneRoomSnapshot: (value: unknown) => value }));

@@ -1,4 +1,4 @@
-import type { RoomRecord } from '../persistence/roomModel';
+import type { RoomRecordView } from '../persistence/roomVersionLineage';
 import {
   buildRoomLeaderboardLineage,
   type RoomLeaderboardLineage,
@@ -13,7 +13,7 @@ export interface RoomLeaderboardVersionSelectionState {
 }
 
 export function buildRoomLeaderboardVersionSelectionState(
-  record: Pick<RoomRecord, 'versions' | 'published' | 'canonicalVersion'>,
+  record: Pick<RoomRecordView, 'versions' | 'published' | 'canonicalVersion'>,
 ): RoomLeaderboardVersionSelectionState {
   const currentPublishedVersion = record.published?.version ?? null;
   const lineage = buildRoomLeaderboardLineage(

@@ -29,7 +29,95 @@ import {
   normalizeNpcPlayerCollision,
   normalizeNpcPushable,
 } from '../npcs/model';
-import type { RoomSnapshot, RoomVersionRecord } from './roomModel';
+import type { RoomRecord, RoomSnapshot, RoomVersionRecord } from './roomModel';
+import { getLeaderboardRankingMode } from '../runs/scoring';
+import type { LeaderboardRankingMode } from '../runs/model';
+import { hasCoopPressurePlates } from '../placedObjects/coopPressurePlates';
+import { getBossChallengeSignature } from '../enemies/boss';
+
+/**
+ * Everything leaderboard lineage and rating windows need from a published version,
+ * so hot paths can work from these facts instead of loading every snapshot. Bump
+ * ROOM_VERSION_FACTS_VERSION whenever the fingerprint or any fact changes meaning;
+ * stored facts from another version are recomputed.
+ */
+export const ROOM_VERSION_FACTS_VERSION = 1;
+
+export interface RoomVersionFacts {
+  /** Hash of buildRoomVersionFingerprint: equal for gameplay-identical versions. */
+  fingerprint: string;
+  snapshotId: string;
+  hasGoal: boolean;
+  goalType: RoomGoal['type'] | null;
+  rankingMode: LeaderboardRankingMode | null;
+  hasCoopPlates: boolean;
+  playerHearts: number;
+  bossSignature: string;
+}
+
+/** A published version described by its facts, without its snapshot. */
+export type RoomVersionMeta = Omit<RoomVersionRecord, 'snapshot'> & {
+  facts: RoomVersionFacts;
+  /** Weighted change from the previous published version (1 for the first). */
+  changeFromPrevious: number;
+};
+
+export type RoomVersionSource = RoomVersionRecord | RoomVersionMeta;
+
+/**
+ * A room as ranking code reads it: either a full record (versions with snapshots) or a
+ * ranking record (version facts plus a few preloaded snapshots).
+ */
+export type RoomRecordView = Omit<RoomRecord, 'versions'> & {
+  versions: readonly RoomVersionSource[];
+  versionSnapshots?: ReadonlyMap<number, RoomSnapshot>;
+};
+
+/** A version's snapshot if this view holds it. */
+export function findRoomVersionSnapshot(record: RoomRecordView, version: number): RoomSnapshot | null {
+  if (record.published?.version === version) return record.published;
+  const entry = record.versions.find((candidate) => candidate.version === version);
+  if (entry && 'snapshot' in entry) return entry.snapshot;
+  return record.versionSnapshots?.get(version) ?? null;
+}
+
+export function computeRoomVersionFacts(snapshot: RoomSnapshot): RoomVersionFacts {
+  return {
+    fingerprint: hashFingerprint(buildRoomVersionFingerprint(snapshot)),
+    snapshotId: snapshot.id,
+    hasGoal: snapshot.goal !== null,
+    goalType: snapshot.goal?.type ?? null,
+    rankingMode: snapshot.goal ? getLeaderboardRankingMode(snapshot.goal) : null,
+    hasCoopPlates: hasCoopPressurePlates(snapshot.placedObjects),
+    playerHearts: normalizePlayerHearts(snapshot.playerHearts),
+    bossSignature: getBossChallengeSignature(snapshot.placedObjects),
+  };
+}
+
+const factsBySnapshot = new WeakMap<RoomSnapshot, RoomVersionFacts>();
+
+export function getRoomVersionFacts(version: RoomVersionSource): RoomVersionFacts {
+  if ('facts' in version) return version.facts;
+  let facts = factsBySnapshot.get(version.snapshot);
+  if (!facts) {
+    facts = computeRoomVersionFacts(version.snapshot);
+    factsBySnapshot.set(version.snapshot, facts);
+  }
+  return facts;
+}
+
+/** Two independent 32-bit FNV-1a passes: a stable 64-bit key for a fingerprint string. */
+function hashFingerprint(value: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x01000193 ^ value.length;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    a = Math.imul(a ^ code, 0x01000193);
+    b = Math.imul(b ^ code, 0x5bd1e995);
+    b ^= b >>> 15;
+  }
+  return `${(a >>> 0).toString(16).padStart(8, '0')}${(b >>> 0).toString(16).padStart(8, '0')}`;
+}
 
 type CanonicalGoalPayload =
   | {
@@ -169,15 +257,15 @@ export function buildRoomVersionFingerprint(snapshot: RoomSnapshot): string {
 }
 
 export function buildRoomVersionLineage(
-  versions: RoomVersionRecord[],
+  versions: readonly RoomVersionSource[],
   canonicalVersion: number | null,
   currentPublishedVersion: number | null = null
 ): RoomVersionLineage {
   const versionsAscending = [...versions].sort((left, right) => left.version - right.version);
-  const versionsByFingerprint = new Map<string, RoomVersionRecord[]>();
+  const versionsByFingerprint = new Map<string, RoomVersionSource[]>();
 
   for (const version of versionsAscending) {
-    const fingerprint = buildRoomVersionFingerprint(version.snapshot);
+    const fingerprint = getRoomVersionFacts(version).fingerprint;
     const bucket = versionsByFingerprint.get(fingerprint);
     if (bucket) {
       bucket.push(version);
@@ -197,7 +285,7 @@ export function buildRoomVersionLineage(
         representativeVersion,
         versions: sortedVersions,
         latestVersion,
-        hasGoal: representativeRecord?.snapshot.goal !== null,
+        hasGoal: representativeRecord ? getRoomVersionFacts(representativeRecord).hasGoal : false,
       };
     })
     .sort((left, right) => left.representativeVersion - right.representativeVersion);

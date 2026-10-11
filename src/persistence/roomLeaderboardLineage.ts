@@ -1,13 +1,10 @@
-import type { RoomVersionRecord } from './roomModel';
 import {
   buildRoomVersionLineage,
+  getRoomVersionFacts,
   type RoomVersionEquivalenceGroup,
   type RoomVersionLineage,
+  type RoomVersionSource,
 } from './roomVersionLineage';
-import { getLeaderboardRankingMode } from '../runs/scoring';
-import { normalizePlayerHearts } from '../player/hearts';
-import { getBossChallengeSignature } from '../enemies/boss';
-import { hasCoopPressurePlates } from '../placedObjects/coopPressurePlates';
 
 export interface RoomLeaderboardFamily {
   representativeVersion: number;
@@ -43,14 +40,14 @@ export interface RoomLeaderboardLineage {
 }
 
 export function buildRoomLeaderboardLineage(
-  versions: RoomVersionRecord[],
+  versions: readonly RoomVersionSource[],
   canonicalVersion: number | null,
   currentPublishedVersion: number | null = null
 ): RoomLeaderboardLineage {
   const exactLineage = buildRoomVersionLineage(versions, canonicalVersion, currentPublishedVersion);
   const versionsAscending = [...versions].sort((left, right) => left.version - right.version);
   const groupByRepresentative = new Map<number, RoomVersionEquivalenceGroup>();
-  const versionRecordByNumber = new Map<number, RoomVersionRecord>();
+  const versionRecordByNumber = new Map<number, RoomVersionSource>();
 
   for (const version of versionsAscending) {
     versionRecordByNumber.set(version.version, version);
@@ -202,11 +199,13 @@ export function buildRoomLeaderboardLineage(
 }
 
 export function getManualRoomLeaderboardSourceValidationError(
-  target: RoomVersionRecord,
-  source: RoomVersionRecord,
+  target: RoomVersionSource,
+  source: RoomVersionSource,
   exactLineage?: RoomVersionLineage
 ): string | null {
-  if (target.snapshot.id !== source.snapshot.id) {
+  const targetFacts = getRoomVersionFacts(target);
+  const sourceFacts = getRoomVersionFacts(source);
+  if (targetFacts.snapshotId !== sourceFacts.snapshotId) {
     return 'Leaderboard adoption is only available within the same room.';
   }
 
@@ -214,26 +213,26 @@ export function getManualRoomLeaderboardSourceValidationError(
     return 'Pick an older published version as the leaderboard source.';
   }
 
-  if (hasCoopPressurePlates(target.snapshot.placedObjects) || hasCoopPressurePlates(source.snapshot.placedObjects)) {
+  if (targetFacts.hasCoopPlates || sourceFacts.hasCoopPlates) {
     return 'Co-op practice versions cannot share solo leaderboards.';
   }
 
-  if (!target.snapshot.goal || !source.snapshot.goal) {
+  if (!targetFacts.hasGoal || !sourceFacts.hasGoal) {
     return 'Only published challenge versions can share a leaderboard.';
   }
 
-  if (target.snapshot.goal.type !== source.snapshot.goal.type) {
+  if (targetFacts.goalType !== sourceFacts.goalType) {
     return 'Only versions with the same goal type can share a leaderboard.';
   }
 
-  if (normalizePlayerHearts(target.snapshot.playerHearts) !== normalizePlayerHearts(source.snapshot.playerHearts)) {
+  if (targetFacts.playerHearts !== sourceFacts.playerHearts) {
     return 'Only versions with the same player heart count can share a leaderboard.';
   }
-  if (getBossChallengeSignature(target.snapshot.placedObjects) !== getBossChallengeSignature(source.snapshot.placedObjects)) {
+  if (targetFacts.bossSignature !== sourceFacts.bossSignature) {
     return 'Only versions with the same boss configuration can share a leaderboard.';
   }
 
-  if (getLeaderboardRankingMode(target.snapshot.goal) !== getLeaderboardRankingMode(source.snapshot.goal)) {
+  if (targetFacts.rankingMode !== sourceFacts.rankingMode) {
     return 'Only versions with the same ranking mode can share a leaderboard.';
   }
 
@@ -252,8 +251,8 @@ export function getManualRoomLeaderboardSourceValidationError(
 }
 
 export function canVersionAdoptManualLeaderboardSource(
-  target: RoomVersionRecord,
-  source: RoomVersionRecord,
+  target: RoomVersionSource,
+  source: RoomVersionSource,
   exactLineage?: RoomVersionLineage
 ): boolean {
   return getManualRoomLeaderboardSourceValidationError(target, source, exactLineage) === null;
