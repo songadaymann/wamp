@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 104 of 215 done.**
+**Progress: 103 of 215 done.**
 
 **October 9 release:** [All 18 overnight slices and both morning fixes are live](wamp-overnight-release-2026-10-09.md), preserving partner PR #99 and ghost archive PR #100. Five partial items remain unticked; native background-tab audio still needs a physical check.
 
@@ -151,7 +151,7 @@ The server side is well instrumented, but a few hot paths do far more database w
 - [ ] **F036** Signed-in players get no edge caching; every leaderboard, room summary and discovery read goes to the database · low impact · medium effort
 - [x] **F032** No CORS preflight caching, so most game requests make an extra round trip · low impact · small effort — **done 2026-10-03** (8a844ada). Live API OPTIONS responses expose Max-Age 7200; credentialed CORS origin policy remains unchanged.
 - [x] **F039** Every non-GET API request also runs a world-tile queue check · low impact · small effort — **done 2026-10-10** (`90dc6ee0`, [PR #131](https://github.com/songadaymann/wamp/pull/131), API Worker `1937c469`). `requestMayQueueWorldTiles` limits the dispatch to writes under rooms (except the snapshot query), courses, expanded rooms, background images, worlds, guest room drafts, agents, admin and test reset; the renderer cron still sweeps everything else. Not done: skipping error responses.
-- [x] **F038** Guest replay screenshots are stored in the main database, and nothing else is ever cleaned up · low impact · medium effort — **partly done 2026-10-10** (`d5b8e6ef`, [PR #135](https://github.com/songadaymann/wamp/pull/135), API Worker `2c279cb5`): replay activity flags come from each batch instead of re-reading every stored sample. Left for review: hourly pruning of expired sessions/tokens/outbox rows (deletes production data) and moving frames to R2.
+- [ ] **F038** Guest replay screenshots are stored in the main database, and nothing else is ever cleaned up · low impact · medium effort — _Partly done 2026-10-10 (`d5b8e6ef`, [PR #135](https://github.com/songadaymann/wamp/pull/135), API Worker `2c279cb5`): replay activity flags come from each batch instead of re-reading every stored sample. Left for review: hourly pruning of expired sessions/tokens/outbox rows (deletes production data) and moving frames to R2._
 
 ### Security
 

@@ -1,6 +1,6 @@
 ## 2026-10-10 — F005 one-pass dark-room lighting; F116 stacked dialogs; F038 replay flags
 
-PR #132 / `ded5d9cb`: dark rooms cut every light out of the darkness in one GPU pass (38-light room: 90.8 → 50 ms median frame under 4× throttle, same picture). PR #134 / `61269ba6`: with a profile open over the leaderboard, Escape closes only the profile, and stacked dialogs dim the screen once. PR #135 / `d5b8e6ef` (API Worker `2c279cb5`): guest replay uploads set activity flags from the batch instead of re-reading every stored sample. Master **104/215**. Receipt: [lighting, dialogs, replays](docs/review/wamp-lighting-dialogs-replays-2026-10-10.md).
+PR #132 / `ded5d9cb`: dark rooms cut every light out of the darkness in one GPU pass (38-light room: 90.8 → 50 ms median frame under 4× throttle, same picture). PR #134 / `61269ba6`: with a profile open over the leaderboard, Escape closes only the profile, and stacked dialogs dim the screen once. PR #135 / `d5b8e6ef` (API Worker `2c279cb5`): guest replay uploads set activity flags from the batch instead of re-reading every stored sample. Master **103/215** (F038 partly done). Receipt: [lighting, dialogs, replays](docs/review/wamp-lighting-dialogs-replays-2026-10-10.md).
 
 ## 2026-10-10 — F024 startup JavaScript budget
 
