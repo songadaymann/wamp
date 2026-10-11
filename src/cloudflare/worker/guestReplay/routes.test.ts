@@ -94,3 +94,35 @@ describe('guest replay storage', () => {
     }
   });
 });
+
+describe('guest replay activity flags (F038)', () => {
+  // The previous ingest recomputed every flag from all of the session's stored samples.
+  const recomputed = (id: string) => db.prepare(`SELECT
+    EXISTS(SELECT 1 FROM guest_replay_samples WHERE session_id = ? AND json_extract(payload,'$.mode') = 'play') AS played,
+    (SELECT COUNT(DISTINCT json_extract(payload,'$.player.x')) > 1 FROM guest_replay_samples WHERE session_id = ?) AS moved,
+    EXISTS(SELECT 1 FROM guest_replay_samples, json_each(payload,'$.actions') WHERE session_id = ? AND value IN ('signup_open','email_submit','wallet_open')) AS signup,
+    EXISTS(SELECT 1 FROM guest_replay_samples, json_each(payload,'$.actions') WHERE session_id = ? AND value = 'signed_in') AS signed_in`).get(id, id, id, id);
+
+  it('match a full recomputation without re-reading earlier samples', async () => {
+    let seed = 7;
+    const random = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    for (let session = 0; session < 150; session += 1) {
+      db.exec('DELETE FROM guest_replay_sessions');
+      const credentials = await start();
+      const length = 1 + Math.floor(random() * 12);
+      const samples = Array.from({ length }, (_, sequence) => {
+        const mode = random() < 0.4 ? 'browse' : random() < 0.7 ? 'play' : 'edit';
+        const actions = random() < 0.15 ? ['signup_open'] : random() < 0.1 ? ['signed_in'] : [];
+        return { sequence, time: sequence * 1000, mode, screen: 'game', room: '1,2',
+          player: mode === 'play' && random() < 0.85 ? { x: Math.floor(random() * 3), y: 3 } : null, actions, image: null };
+      });
+      for (let index = 0; index < samples.length;) {
+        const size = 1 + Math.floor(random() * 3);
+        await call('/api/guest-replays/samples', { ...credentials, samples: samples.slice(index, index + size) });
+        index += size;
+      }
+      const stored = db.prepare('SELECT played, moved, signup, signed_in FROM guest_replay_sessions WHERE id = ?').get(credentials.id);
+      expect({ ...(stored as object) }, `session ${session}`).toEqual({ ...(recomputed(credentials.id) as object) });
+    }
+  });
+});
