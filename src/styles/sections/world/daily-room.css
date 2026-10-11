@@ -8,6 +8,12 @@
   border: 2px solid #222;
   background: #fff3db;
 }
+/* On phones the room card fills the top of the map, so the chip sits above the toolbar instead of over the card's buttons (F080). */
+body[data-device-class='phone'] #daily-room-chip {
+  top: auto;
+  bottom: 10px;
+  right: calc(10px + var(--safe-right));
+}
 #daily-room-chip.hidden,
 body:has(.history-modal:not(.hidden)) #daily-room-chip,
 body:has(#auth-panel.menu-open) #daily-room-chip {
