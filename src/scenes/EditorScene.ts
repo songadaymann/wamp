@@ -16,6 +16,7 @@ import {
   resetEditorLayerVisibility,
 } from '../config';
 import { globalRoomMusicController } from '../music/controller';
+import { RoomVideoFrameController } from '../roomVideo/frameController';
 import {
   type RoomMusic,
   type RoomMusicKeyMode,
@@ -213,8 +214,32 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     this.updateGoalUi();
   };
 
+  private roomVideoFrame: RoomVideoFrameController | null = null;
+
   private get musicModeActive(): boolean {
     return this.musicWorkflow.isActive();
+  }
+
+  private ensureRoomVideoFrame(): RoomVideoFrameController {
+    this.roomVideoFrame ??= new RoomVideoFrameController(this);
+    return this.roomVideoFrame;
+  }
+
+  private syncRoomVideoFrame(): void {
+    const body = document.body.dataset;
+    this.ensureRoomVideoFrame().sync({
+      video: this.editRuntime.roomVideo,
+      originX: 0,
+      originY: 0,
+      playback: editorState.isPlaying ? 'hidden' : 'edit',
+      interactive: body.editorShellPanel === 'room'
+        && body.editorRoomSection === 'video'
+        && !this.musicModeActive
+        && !editorState.isPlaying,
+      triggerPressed: false,
+      sessionKey: `edit:${this.roomId}`,
+      onChange: (video, commit) => this.editRuntime.setRoomVideo(video, !commit),
+    });
   }
 
   private get musicComposerMode(): EditorMusicComposerMode {
@@ -426,6 +451,8 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     }
   };
   private readonly handleShutdown = (): void => {
+    this.roomVideoFrame?.destroy();
+    this.roomVideoFrame = null;
     this.roomSession.backupDraftForPageExit();
     this.draftLifecycle?.destroy();
     this.draftLifecycle = null;
@@ -676,6 +703,9 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
       tryStartPracticeTestAt: (x, y) => this.tryStartPracticeTestAt(x, y),
       cancelPracticeTestPlacement: () => this.cancelPracticeTestPlacement(),
       isMusicModeActive: () => this.musicModeActive,
+      handleVideoPointerDown: (pointer) => this.ensureRoomVideoFrame().handlePointerDown(pointer),
+      handleVideoPointerMove: (pointer) => this.ensureRoomVideoFrame().handlePointerMove(pointer),
+      handleVideoPointerUp: () => this.ensureRoomVideoFrame().handlePointerUp(),
       handleMusicPointerDown: (pointer) => this.handleMusicPointerDown(pointer),
       handleMusicPointerMove: (pointer) => this.handleMusicPointerMove(pointer),
       handleMusicPointerUp: (pointer) => this.handleMusicPointerUp(pointer),
@@ -1018,6 +1048,17 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
       onZoomOut: () => this.zoomOut(),
       onSetRoomTitle: (title) => this.persistenceController.setRoomTitle(title),
       onSetRoomCameraCentered: (centered) => this.editRuntime.setRoomCameraMode(centered),
+      onSetRoomVideoUrl: (url, commit) => this.editRuntime.setRoomVideoUrl(url, commit),
+      onClearRoomVideo: () => {
+        this.editRuntime.roomVideoError = null;
+        this.editRuntime.setRoomVideo(null);
+      },
+      onSetRoomVideoLoop: (enabled) => this.editRuntime.patchRoomVideo({ loop: enabled }),
+      onSetRoomVideoAutoplay: (enabled) => this.editRuntime.patchRoomVideo({ autoplay: enabled }),
+      onSetRoomVideoTrigger: (enabled) => this.editRuntime.patchRoomVideo({ trigger: enabled }),
+      onSetRoomVideoVolume: (volume) => this.editRuntime.patchRoomVideo({ volume }),
+      onSetRoomVideoMuteMusic: (enabled) => this.editRuntime.patchRoomVideo({ muteMusic: enabled }),
+      onSetRoomVideoSnap: (enabled) => this.editRuntime.patchRoomVideo({ snap: enabled }),
       onSetRoomPitsAreDeadly: (enabled) => this.editRuntime.setRoomPitsAreDeadly(enabled),
       onSetRoomPlayerHearts: (hearts) => this.editRuntime.setRoomPlayerHearts(hearts),
       onSelectTool: (tool) => { this.testFromHerePlacement = false; this.toolController.selectTool(tool); },
@@ -1149,6 +1190,7 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     this.overlayController.updateLayerIndicator();
     this.musicPatternController.updateOverlay(this.musicModeActive && this.musicComposerMode === 'sequencer');
     this.musicWorkflow.updatePlaybackIndicators();
+    this.syncRoomVideoFrame();
   }
 
   // ══════════════════════════════════════

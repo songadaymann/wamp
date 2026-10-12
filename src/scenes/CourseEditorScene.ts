@@ -9,6 +9,7 @@ import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draf
 import { draftBackupRevision } from '../courses/localDraftBackup';
 import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecycle';
 import Phaser from 'phaser';
+import { RoomVideoFrameController } from '../roomVideo/frameController';
 import { CourseTouchController } from './editor/courseTouch';
 import { applyEditorLayerVisibility } from './editor/layerVisibility';
 import { editorTouchToolKey } from './editor/touchGesture';
@@ -235,6 +236,7 @@ export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge
   private readonly localRoomRepository = createLocalRoomRepository();
   private readonly expandedRoomEditorRepository = createExpandedRoomEditorRepository();
   private uiBridge: EditorUiBridge | null = null;
+  private roomVideoFrame: RoomVideoFrameController | null = null;
   private courseRecord: CourseRecord | null = null;
   private coursePublishing = false;
   private workspaceBounds: CourseWorkspaceBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
@@ -310,6 +312,30 @@ export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge
 
   private get musicModeActive(): boolean {
     return this.musicWorkflow.isActive();
+  }
+
+  private ensureRoomVideoFrame(): RoomVideoFrameController {
+    this.roomVideoFrame ??= new RoomVideoFrameController(this);
+    return this.roomVideoFrame;
+  }
+
+  private syncRoomVideoFrame(): void {
+    const slice = this.getSelectedSlice();
+    const body = document.body.dataset;
+    this.ensureRoomVideoFrame().sync({
+      video: slice?.runtime.roomVideo ?? null,
+      originX: slice?.origin.x ?? 0,
+      originY: slice?.origin.y ?? 0,
+      playback: editorState.isPlaying ? 'hidden' : 'edit',
+      interactive: Boolean(slice)
+        && body.editorShellPanel === 'room'
+        && body.editorRoomSection === 'video'
+        && !this.musicModeActive
+        && !editorState.isPlaying,
+      triggerPressed: false,
+      sessionKey: slice ? `course:${slice.roomId}` : 'course:none',
+      onChange: (video, commit) => slice?.runtime.setRoomVideo(video, !commit),
+    });
   }
 
   private get musicComposerMode(): EditorMusicComposerMode {
@@ -726,6 +752,19 @@ export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge
       onZoomOut: () => this.zoomOut(),
       onSetRoomTitle: (title) => this.setRoomTitle(title),
       onSetRoomCameraCentered: (centered) => this.getSelectedSlice()?.runtime.setRoomCameraMode(centered),
+      onSetRoomVideoUrl: (url, commit) => this.getSelectedSlice()?.runtime.setRoomVideoUrl(url, commit),
+      onClearRoomVideo: () => {
+        const runtime = this.getSelectedSlice()?.runtime;
+        if (!runtime) return;
+        runtime.roomVideoError = null;
+        runtime.setRoomVideo(null);
+      },
+      onSetRoomVideoLoop: (enabled) => this.getSelectedSlice()?.runtime.patchRoomVideo({ loop: enabled }),
+      onSetRoomVideoAutoplay: (enabled) => this.getSelectedSlice()?.runtime.patchRoomVideo({ autoplay: enabled }),
+      onSetRoomVideoTrigger: (enabled) => this.getSelectedSlice()?.runtime.patchRoomVideo({ trigger: enabled }),
+      onSetRoomVideoVolume: (volume) => this.getSelectedSlice()?.runtime.patchRoomVideo({ volume }),
+      onSetRoomVideoMuteMusic: (enabled) => this.getSelectedSlice()?.runtime.patchRoomVideo({ muteMusic: enabled }),
+      onSetRoomVideoSnap: (enabled) => this.getSelectedSlice()?.runtime.patchRoomVideo({ snap: enabled }),
       onSetCoursePitsAreDeadly: (enabled) => this.setCoursePitsAreDeadly(enabled),
       onSetCoursePlayerHearts: (hearts) => this.setCoursePlayerHearts(hearts),
       onSelectTool: (tool) => {
@@ -906,6 +945,7 @@ export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge
     this.musicPatternController.updateOverlay(this.musicModeActive && this.musicComposerMode === 'sequencer');
     this.musicWorkflow.updatePlaybackIndicators();
     this.edgeGuides.sync(!this.loading && !editorState.isPlaying && !this.musicModeActive, this.roomSlices.values(), this.cameras.main.zoom);
+    this.syncRoomVideoFrame();
   }
 
   getCourseEditorState(): EditorCourseUiState {
@@ -2537,6 +2577,13 @@ export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge
     this.game.events.on('hidden', this.handleTouchBlur);
     this.events.on('sleep', this.handleTouchBlur);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (
+        pointer.leftButtonDown()
+        && !this.musicModeActive
+        && this.ensureRoomVideoFrame().handlePointerDown(pointer)
+      ) {
+        return;
+      }
       if (editorState.activeTool === 'move' && !this.musicModeActive && pointer.rightButtonDown()) { this.objectMoveController.cancel(); return; }
       if (this.pointerRequestsPan(pointer)) this.objectMoveController.stopGesture();
       else if (this.objectMoveController.down(pointer)) return;
@@ -2569,6 +2616,7 @@ export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.ensureRoomVideoFrame().handlePointerMove(pointer)) return;
       if (this.objectMoveController.move(pointer)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.move(pointer); return; }
       if (mouseButtonsReleased(pointer) && this.hasMousePointerAction(pointer)) {
@@ -2620,6 +2668,7 @@ export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge
   // A release over a panel or outside the window arrives as 'pointerupoutside'; it
   // finishes the stroke, shape or pan like a release over the canvas.
   private handlePointerRelease(pointer: Phaser.Input.Pointer, outside = false): void {
+    if (this.ensureRoomVideoFrame().handlePointerUp()) return;
     if (this.objectMoveController.up(pointer, outside)) return;
     if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.up(pointer); return; }
     if (this.pendingRightClickPanPointerId === pointer.id) {
@@ -3638,6 +3687,15 @@ export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge
         canRedo: !this.loading && selectedPermissions.canSaveDraft && (selectedSlice?.runtime.hasRedoHistory() ?? false),
         roomTitle: selectedSlice?.roomTitle ?? '',
         roomCameraCentered: selectedSlice?.runtime.roomCameraMode === 'room',
+        roomVideoUrl: selectedSlice?.runtime.getRoomVideoUrl() ?? '',
+        roomVideoStatus: selectedSlice?.runtime.getRoomVideoStatus() ?? '',
+        roomVideoLoop: selectedSlice?.runtime.roomVideo?.loop === true,
+        roomVideoAutoplay: selectedSlice?.runtime.roomVideo?.autoplay === true,
+        roomVideoTrigger: selectedSlice?.runtime.roomVideo?.trigger === true,
+        roomVideoVolume: Math.round((selectedSlice?.runtime.roomVideo?.volume ?? 0.8) * 100),
+        roomVideoMuteMusic: selectedSlice?.runtime.roomVideo?.muteMusic === true,
+        roomVideoSnap: selectedSlice?.runtime.roomVideo?.snap === true,
+        roomVideoHasVideo: selectedSlice?.runtime.roomVideo != null,
         roomCoordinates: selectedSlice?.coordinates ?? { x: 0, y: 0 },
         roomGoal: null,
         roomGoalIntroText: null,
@@ -3759,6 +3817,8 @@ export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge
     this.touchObjectRooms.clear();
     this.backupDebouncer.cancel();
     this.draftBackup.flushCourse();
+    this.roomVideoFrame?.destroy();
+    this.roomVideoFrame = null;
     this.draftLifecycle?.destroy();
     this.draftLifecycle = null;
     this.musicRoomFit.stop();

@@ -13,6 +13,15 @@ export interface BuildEditorUiViewModelOptions {
   roomCameraCentered?: boolean;
   roomPitsAreDeadly?: boolean;
   roomPlayerHearts?: PlayerHearts;
+  roomVideoUrl?: string;
+  roomVideoStatus?: string;
+  roomVideoLoop?: boolean;
+  roomVideoAutoplay?: boolean;
+  roomVideoTrigger?: boolean;
+  roomVideoVolume?: number;
+  roomVideoMuteMusic?: boolean;
+  roomVideoSnap?: boolean;
+  roomVideoHasVideo?: boolean;
   roomCoordinates: RoomCoordinates;
   roomGoal: RoomGoal | null;
   roomGoalIntroText: string | null;
@@ -94,6 +103,15 @@ export function buildEditorUiViewModel(
     roomCameraCentered: options.roomCameraCentered === true,
     roomPitsAreDeadly: options.roomPitsAreDeadly === true,
     roomPlayerHearts: normalizePlayerHearts(options.roomPlayerHearts),
+    roomVideoUrl: options.roomVideoUrl ?? '',
+    roomVideoStatus: options.roomVideoStatus ?? '',
+    roomVideoLoop: options.roomVideoLoop === true,
+    roomVideoAutoplay: options.roomVideoAutoplay === true,
+    roomVideoTrigger: options.roomVideoTrigger === true,
+    roomVideoVolume: options.roomVideoVolume ?? 80,
+    roomVideoMuteMusic: options.roomVideoMuteMusic === true,
+    roomVideoSnap: options.roomVideoSnap === true,
+    roomVideoHasVideo: options.roomVideoHasVideo === true,
     roomCoordinatesText: `Room (${roomCoordinates.x}, ${roomCoordinates.y})`,
     saveStatusText: saveStatus.text,
     saveStatusAccentText: saveStatus.accentText,

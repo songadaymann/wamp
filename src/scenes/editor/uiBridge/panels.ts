@@ -21,6 +21,7 @@ export function renderEditorUiViewModel(
     elements.roomCameraCenteredInput.checked = viewModel.roomCameraCentered === true;
     elements.roomCameraCenteredInput.disabled = viewModel.saveDisabled;
   }
+  renderRoomVideo(elements, viewModel);
   if (elements.roomPitsDeadlyInput) {
     elements.roomPitsDeadlyInput.checked = viewModel.roomPitsAreDeadly === true;
     elements.roomPitsDeadlyInput.disabled = viewModel.saveDisabled;
@@ -224,6 +225,38 @@ export function setText(elements: HTMLElement | HTMLElement[] | null, text: stri
       element.textContent = text;
     }
   }
+}
+
+export function renderRoomVideo(elements: EditorUiElements, viewModel: EditorUiViewModel): void {
+  const locked = viewModel.saveDisabled || viewModel.roomVideoHasVideo !== true;
+  setValue(elements.roomVideoUrlInput, viewModel.roomVideoUrl ?? '');
+  if (elements.roomVideoUrlInput) elements.roomVideoUrlInput.disabled = viewModel.saveDisabled;
+  setText(elements.roomVideoStatus, viewModel.roomVideoStatus ?? '');
+  elements.roomVideoOptions?.classList.toggle('hidden', viewModel.roomVideoHasVideo !== true);
+  if (elements.roomVideoLoopInput) {
+    elements.roomVideoLoopInput.checked = viewModel.roomVideoLoop === true;
+    elements.roomVideoLoopInput.disabled = locked;
+  }
+  if (elements.roomVideoAutoplayInput) {
+    elements.roomVideoAutoplayInput.checked = viewModel.roomVideoAutoplay === true;
+    elements.roomVideoAutoplayInput.disabled = locked;
+  }
+  if (elements.roomVideoTriggerInput) {
+    elements.roomVideoTriggerInput.checked = viewModel.roomVideoTrigger === true;
+    elements.roomVideoTriggerInput.disabled = locked;
+  }
+  setValue(elements.roomVideoVolumeInput, String(viewModel.roomVideoVolume ?? 80));
+  if (elements.roomVideoVolumeInput) elements.roomVideoVolumeInput.disabled = locked;
+  setText(elements.roomVideoVolumeReadout, `${viewModel.roomVideoVolume ?? 80}%`);
+  if (elements.roomVideoMuteMusicInput) {
+    elements.roomVideoMuteMusicInput.checked = viewModel.roomVideoMuteMusic === true;
+    elements.roomVideoMuteMusicInput.disabled = locked;
+  }
+  if (elements.roomVideoSnapInput) {
+    elements.roomVideoSnapInput.checked = viewModel.roomVideoSnap === true;
+    elements.roomVideoSnapInput.disabled = locked;
+  }
+  if (elements.roomVideoClearButton) elements.roomVideoClearButton.disabled = locked;
 }
 
 export function setValue(

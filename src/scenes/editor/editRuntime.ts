@@ -12,6 +12,7 @@ import {
   canPlacedObjectBeContainer,
   canPlacedObjectBeLinkedObjectTarget,
   canPlacedObjectBePressurePlateTarget,
+  canPlacedObjectTriggerOtherObjects,
   canPlacedObjectUseObjectLink,
   createPlacedObjectInstanceId,
   decodeTileDataValue,
@@ -104,6 +105,19 @@ import {
 } from '../../music/model';
 import type { RoomCoordinates, RoomSnapshot, RoomSpawnPoint, RoomTileData } from '../../persistence/roomRepository';
 import { cloneRoomSnapshot } from '../../persistence/roomModel';
+import { ROOM_VIDEO_LINK_TARGET_ID } from '../../roomVideo/link';
+import {
+  createDefaultRoomVideo,
+  describeRoomVideo,
+  fetchYouTubeAspectRatio,
+  guessYouTubeAspect,
+  normalizeRoomVideo,
+  parseYouTubeVideoUrl,
+  resizeRoomVideoAspect,
+  roomVideosEqual,
+  youtubeWatchUrl,
+  type RoomVideo,
+} from '../../roomVideo/model';
 import { canPlacedObjectHaveSignText, normalizeSignText } from '../../signs/model';
 import { EDITOR_SPAWN_PLACED_EVENT } from './uiEvents';
 import { canRepeatSelectedEditorObject, resolveEditorLineEnd } from './editorToolSelection';
@@ -297,6 +311,8 @@ export class EditorEditRuntime {
   roomCameraMode: 'follow' | 'room' = 'follow';
   roomPitsAreDeadly = false;
   roomPlayerHearts: PlayerHearts = 1;
+  roomVideo: RoomVideo | null = null;
+  roomVideoError: string | null = null;
   private roomSpawnPoint: RoomSpawnPoint | null = null;
   private roomMusic: RoomMusic | null = null;
   private roomDirty = false;
@@ -447,6 +463,8 @@ export class EditorEditRuntime {
     this.roomCameraMode = 'follow';
     this.roomPitsAreDeadly = false;
     this.roomPlayerHearts = 1;
+    this.roomVideo = null;
+    this.roomVideoError = null;
     this.roomSpawnPoint = null;
     this.roomMusic = null;
     this.roomDirty = false;
@@ -517,6 +535,8 @@ export class EditorEditRuntime {
     this.roomCameraMode = room.cameraMode === 'room' ? 'room' : 'follow';
     this.roomPitsAreDeadly = room.pitsAreDeadly === true;
     this.roomPlayerHearts = normalizePlayerHearts(room.playerHearts);
+    this.roomVideo = normalizeRoomVideo(room.video);
+    this.roomVideoError = null;
     this.roomSpawnPoint = room.spawnPoint ? { ...room.spawnPoint } : null;
     this.roomMusic = cloneRoomMusic(room.music);
     this.host.setPlacedObjects(room.placedObjects.map((placed) => ({ ...placed })));
@@ -892,6 +912,7 @@ export class EditorEditRuntime {
       lighting: cloneRoomLightingSettings(this.host.getSelectedLightingSettings()),
       weather: cloneRoomWeatherSettings(this.host.getSelectedWeatherSettings()),
       music: cloneRoomMusic(this.roomMusic),
+      ...(this.roomVideo ? { video: { ...this.roomVideo } } : {}),
       goal: cloneRoomGoal(this.roomGoal),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       tileData: this.serializeTileData(),
@@ -2802,6 +2823,31 @@ export class EditorEditRuntime {
     return this.setObjectLinkTarget(triggerInstanceId, targetInstanceId);
   }
 
+  linkPressurePlateToRoomVideo(sourceInstanceId: string): boolean {
+    if (!this.roomVideo?.trigger || !this.guardEditable()) return false;
+    const placedObjects = this.host.getPlacedObjects();
+    const sourceIndex = placedObjects.findIndex((placed) => placed.instanceId === sourceInstanceId);
+    if (sourceIndex < 0) return false;
+    const source = placedObjects[sourceIndex];
+    if (!canPlacedObjectTriggerOtherObjects(source)) return false;
+    if (source.triggerTargetInstanceId === ROOM_VIDEO_LINK_TARGET_ID) return true;
+
+    const previous = this.clonePlacedObjects();
+    const next = previous.map((placed, index) =>
+      index === sourceIndex
+        ? { ...placed, triggerTargetInstanceId: ROOM_VIDEO_LINK_TARGET_ID, linkedTargetInstanceIds: null }
+        : placed,
+    );
+    this.host.setPlacedObjects(next);
+    this.history.record({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(next) },
+    });
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
+    return true;
+  }
+
   setCoopPlate(instanceId: string, enabled: boolean): boolean {
     if (!this.guardEditable()) return false;
     const placedObjects = this.host.getPlacedObjects();
@@ -3103,6 +3149,87 @@ export class EditorEditRuntime {
     this.roomCameraMode = mode;
     this.markRoomDirty();
     this.host.updateGoalUi();
+  }
+
+  setRoomVideo(next: RoomVideo | null, quiet = false): void {
+    if (quiet) {
+      if (!this.canEditRoom()) return;
+    } else if (!this.guardEditable()) {
+      return;
+    }
+    const normalized = normalizeRoomVideo(next);
+    if (roomVideosEqual(this.roomVideo, normalized)) {
+      if (!quiet && this.roomDirty) {
+        this.host.updatePersistenceStatus(
+          this.host.canSaveDraft()
+            ? 'Draft changes...'
+            : 'This room is read-only. Changes are local only.',
+        );
+      }
+      return;
+    }
+    this.roomVideo = normalized;
+    this.roomDirty = true;
+    this.lastDirtyAt = performance.now();
+    if (!quiet) {
+      this.host.updatePersistenceStatus(
+        this.host.canSaveDraft()
+          ? 'Draft changes...'
+          : 'This room is read-only. Changes are local only.',
+      );
+      this.host.updateGoalUi();
+    }
+  }
+
+  setRoomVideoUrl(raw: string, commit = true): void {
+    if (!this.guardEditable()) return;
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      this.roomVideoError = null;
+      this.setRoomVideo(null);
+      return;
+    }
+    const parsed = parseYouTubeVideoUrl(trimmed);
+    if (!parsed) {
+      if (!commit) {
+        if (this.roomVideoError) {
+          this.roomVideoError = null;
+          this.host.updateGoalUi();
+        }
+        return;
+      }
+      this.roomVideoError = 'Paste a YouTube link, like https://youtu.be/...';
+      this.host.updateGoalUi();
+      return;
+    }
+    this.roomVideoError = null;
+    const aspect = guessYouTubeAspect(parsed.kind);
+    if (!this.roomVideo) {
+      this.setRoomVideo(createDefaultRoomVideo(parsed.id, aspect));
+    } else if (this.roomVideo.youtubeId !== parsed.id) {
+      this.setRoomVideo(resizeRoomVideoAspect({ ...this.roomVideo, youtubeId: parsed.id }, aspect));
+    } else {
+      this.host.updateGoalUi();
+    }
+    const youtubeId = parsed.id;
+    void fetchYouTubeAspectRatio(parsed).then((nextAspect) => {
+      if (!nextAspect || this.roomVideo?.youtubeId !== youtubeId) return;
+      if (Math.abs(this.roomVideo.aspect - nextAspect) < 0.02) return;
+      this.setRoomVideo(resizeRoomVideoAspect(this.roomVideo, nextAspect));
+    });
+  }
+
+  patchRoomVideo(patch: Partial<Pick<RoomVideo, 'loop' | 'autoplay' | 'trigger' | 'volume' | 'muteMusic' | 'snap'>>): void {
+    if (!this.roomVideo) return;
+    this.setRoomVideo({ ...this.roomVideo, ...patch });
+  }
+
+  getRoomVideoUrl(): string {
+    return this.roomVideo ? youtubeWatchUrl(this.roomVideo.youtubeId) : '';
+  }
+
+  getRoomVideoStatus(): string {
+    return describeRoomVideo(this.roomVideo, this.roomVideoError);
   }
 
   setGoalIntroText(nextText: string | null): void {

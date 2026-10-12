@@ -91,6 +91,7 @@ const config: Phaser.Types.Core.GameConfig = {
   roundPixels: true,
   preserveDrawingBuffer: debug_options.preserveDrawingBuffer,
   backgroundColor: '#050505',
+  transparent: true,
   scene: [BootScene, OverworldPlayScene],
   loader: {
     // Use the desktop/iOS limit on Android too; our assets support HTTP multiplexing.

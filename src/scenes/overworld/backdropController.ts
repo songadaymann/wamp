@@ -102,6 +102,10 @@ export class OverworldBackdropController {
     this.backdropCamera?.setSize(width, height);
   }
 
+  getWorldDisplayLayer(): Phaser.GameObjects.Layer | null {
+    return this.worldDisplayLayer;
+  }
+
   syncIgnores(): void {
     const mainCamera = this.options.scene.cameras.main;
     mainCamera.transparent = true;

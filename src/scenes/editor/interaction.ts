@@ -72,6 +72,9 @@ interface EditorInteractionHost {
   getNeighborRadius(): number;
   getGoalPlacementMode(): GoalPlacementMode;
   isMusicModeActive(): boolean;
+  handleVideoPointerDown(pointer: Phaser.Input.Pointer): boolean;
+  handleVideoPointerMove(pointer: Phaser.Input.Pointer): boolean;
+  handleVideoPointerUp(): boolean;
   handleMusicPointerDown(pointer: Phaser.Input.Pointer): void;
   handleMusicPointerMove(pointer: Phaser.Input.Pointer): void;
   handleMusicPointerUp(pointer: Phaser.Input.Pointer): void;
@@ -629,6 +632,7 @@ export class EditorInteractionController {
   // Mouse releases over a panel or outside the window arrive as 'pointerupoutside';
   // they finish the stroke, shape or pan exactly like a release over the canvas.
   private readonly handleMouseUp = (pointer: Phaser.Input.Pointer, outside = false): void => {
+    if (this.host.handleVideoPointerUp()) return;
     if (this.host.objectMove?.up(pointer, outside)) return;
     if (this.handleTouchPointerUp(pointer)) {
       return;
@@ -696,6 +700,13 @@ export class EditorInteractionController {
     this.scene.game.events.on('hidden', this.handleInputBlur);
     this.scene.events.on('sleep', this.handleInputBlur);
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (
+        pointer.leftButtonDown()
+        && !this.spaceDown
+        && this.host.handleVideoPointerDown(pointer)
+      ) {
+        return;
+      }
       if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.stopGesture();
       else if (this.host.objectMove?.down(pointer)) return;
       if (this.handleTouchPointerDown(pointer)) {
@@ -812,6 +823,9 @@ export class EditorInteractionController {
     });
 
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.host.handleVideoPointerMove(pointer)) {
+        return;
+      }
       if (this.host.objectMove?.move(pointer)) return;
       if (this.handleTouchPointerMove(pointer)) {
         return;

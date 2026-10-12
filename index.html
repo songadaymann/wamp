@@ -245,6 +245,7 @@
       <div id="editor-phone-tools"></div>
       <div id="editor-drawer-room-tabs" class="editor-drawer-room-tabs" aria-label="Room settings">
         <button class="editor-drawer-tab" type="button" data-editor-room-section="background">Background</button>
+        <button class="editor-drawer-tab" type="button" data-editor-room-section="video">Video</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="camera">Camera</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="environment">Environment</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-section="music">Music</button>
@@ -487,6 +488,41 @@
           Center and hold camera
         </label>
         <p id="room-camera-description" class="goal-summary">Fit the whole room on screen and keep the camera still while players are inside. Normal camera movement resumes when they leave.</p>
+      </div>
+
+      <div class="sidebar-section" id="room-video-section" data-mobile-panel="background" data-sidebar-collapsible="true">
+        <div class="section-label">Video</div>
+        <p class="goal-summary">Paste a YouTube link. The frame keeps the video shape and sits between the background image and the back-layer tiles.</p>
+        <input id="room-video-url" class="goal-input" type="url" placeholder="https://youtu.be/..." spellcheck="false" autocomplete="off" aria-label="YouTube link" />
+        <p id="room-video-status" class="goal-summary"></p>
+        <div id="room-video-options">
+          <label class="room-camera-option" for="room-video-loop">
+            <input id="room-video-loop" type="checkbox" />
+            Loop video
+          </label>
+          <label class="room-camera-option" for="room-video-autoplay">
+            <input id="room-video-autoplay" type="checkbox" />
+            Auto-play
+          </label>
+          <label class="room-camera-option" for="room-video-trigger">
+            <input id="room-video-trigger" type="checkbox" />
+            Play with pressure plate
+          </label>
+          <label class="room-camera-option room-video-volume" for="room-video-volume">
+            <span>Volume</span>
+            <input id="room-video-volume" type="range" min="0" max="100" step="1" value="80" aria-label="Video volume" />
+            <span id="room-video-volume-readout">80%</span>
+          </label>
+          <label class="room-camera-option" for="room-video-mute-music">
+            <input id="room-video-mute-music" type="checkbox" />
+            Mute background music during playback
+          </label>
+          <label class="room-camera-option" for="room-video-snap">
+            <input id="room-video-snap" type="checkbox" />
+            Snap edges to the tile grid
+          </label>
+          <button id="room-video-clear" class="bar-btn bar-btn-small" type="button">Remove video</button>
+        </div>
       </div>
 
       <!-- Background Selector -->
