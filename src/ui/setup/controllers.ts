@@ -10,10 +10,7 @@ import { AboutModalController } from './aboutModal';
 import { setupButtonFeedback } from './buttonFeedback';
 import { ChatModerationModalController } from './chatModerationModal';
 import { ControlsModalController } from './controlsModal';
-import { CourseComposerPanelController } from './courseComposerPanel';
-import { setupCustomSpriteEditor } from './customSpriteEditor';
 import { ExploreModalController } from './exploreModal';
-import { setupEditorDockShell } from './editorDockShell';
 import { GuestBuilderClaimModalController } from './guestBuilderClaimModal';
 import { GuestRoomRecoveryModalController } from './guestRoomRecoveryModal';
 import { GuestProgressClaimModalController } from './guestProgressClaimModal';
@@ -21,12 +18,10 @@ import { GuestbookModalController } from './guestbookModal';
 import { RoomHistoryModalController } from './historyModal';
 import { setupKeyboardShortcutPassthrough } from './keyboardPassthrough';
 import { LeaderboardModalController } from './leaderboardModal';
-import { PaletteController } from './paletteController';
 import { PlaylistModalController } from './playlistModal';
 import { PlaylistIntroModalController } from './playlistIntroModal';
 import { PerformanceSuggestionModalController } from './performanceSuggestionModal';
 import { RoomSequenceController } from './roomSequenceController';
-import { setupRoomMusicControls } from './musicControls';
 import { ProfileModalController } from './profileModal';
 import { RewardStingController } from './rewardStings';
 import { RewardStingCatchupController } from './rewardStingCatchup';
@@ -37,18 +32,12 @@ import { RunRatingModalController } from './runRatingModal';
 import { PostRunReminderController } from './postRunReminder';
 import { SettingsModalController } from './settingsModal';
 import { SignTextModalController } from './signTextModal';
-import {
-  EDITOR_SIDEBAR_RESIZED_EVENT,
-  setupCollapsibleSidebarSections,
-  setupEditorSidebarShell,
-} from './sidebarSections';
+import { configureEditorUiHost } from './editorUiLoader';
 import { setupSceneCommands } from './sceneCommands';
 import { WampOGramModalController } from './wampOGramModal';
 import { XpReceiptController } from './xpReceipts';
 import { WelcomeModalController } from './welcomeModal';
 import { FirstStepsSummaryController } from './firstStepsSummary';
-import { configureEditorUiBridgeRuntime } from '../../scenes/editor/uiBridge';
-import { CUSTOM_SPRITES_CHANGED_EVENT } from '../../customSprites/registry';
 import { WorldsController } from '../worlds/controller';
 import { setupLostSongProgress } from './lostSongs';
 
@@ -56,7 +45,6 @@ interface UiControllers {
   firstPublishModal: FirstPublishModalController;
   activityInbox: ActivityInboxController;
   roomInsights: RoomInsightsController;
-  paletteController: PaletteController;
   historyModal: RoomHistoryModalController;
   leaderboardModal: LeaderboardModalController;
   exploreModal: ExploreModalController;
@@ -69,7 +57,6 @@ interface UiControllers {
   controlsModal: ControlsModalController;
   aboutModal: AboutModalController;
   chatModerationModal: ChatModerationModalController;
-  courseComposerPanel: CourseComposerPanelController;
   profileModal: ProfileModalController;
   playlistModal: PlaylistModalController;
   playlistIntroModal: PlaylistIntroModalController;
@@ -97,18 +84,11 @@ export function setupUiControllers(game: Phaser.Game): void {
   game.events.once('destroy',()=>dailyRoom.destroy());
   game.events.once('destroy', () => { controllers.activityInbox.destroy(); controllers.roomInsights.destroy(); controllers.postRunReminder.destroy(); controllers.firstPublishModal.destroy(); });
 
-  controllers.paletteController.init();
   configureEditorBridge(controllers);
-  setupEditorSidebarShell();
-  setupEditorDockShell(controllers.paletteController);
-  setupCollapsibleSidebarSections();
   initUiControllers(controllers);
   setupUiControllerCommands(game, controllers);
-  setupRoomMusicControls(game);
-  setupCustomSpriteEditor(game);
   setupButtonFeedback();
   setupKeyboardShortcutPassthrough();
-  setupPaletteRefreshListeners(controllers.paletteController);
 }
 
 function createUiControllers(game: Phaser.Game): UiControllers {
@@ -132,7 +112,6 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     firstPublishModal: new FirstPublishModalController(),
     activityInbox: new ActivityInboxController(),
     roomInsights: new RoomInsightsController(game),
-    paletteController: new PaletteController(),
     historyModal: new RoomHistoryModalController(game),
     leaderboardModal,
     exploreModal,
@@ -145,7 +124,6 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     controlsModal,
     aboutModal: new AboutModalController(),
     chatModerationModal: new ChatModerationModalController(),
-    courseComposerPanel: new CourseComposerPanelController(game),
     profileModal: new ProfileModalController(game),
     playlistModal: new PlaylistModalController(game),
     playlistIntroModal,
@@ -187,7 +165,6 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.controlsModal.init();
   controllers.aboutModal.init();
   controllers.chatModerationModal.init();
-  controllers.courseComposerPanel.init();
   controllers.profileModal.init();
   controllers.roomGoalIntroModal.init();
   controllers.playlistModal.init();
@@ -208,9 +185,9 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.worlds.init();
 }
 
+/** The builder UI loads with the editor scenes (editorUiLoader); this is what it needs from here. */
 function configureEditorBridge(controllers: UiControllers): void {
-  configureEditorUiBridgeRuntime({
-    paletteController: controllers.paletteController,
+  configureEditorUiHost({
     closePanels: () => {
       controllers.firstPublishModal.close();
       controllers.historyModal.close();
@@ -231,7 +208,7 @@ function configureEditorBridge(controllers: UiControllers): void {
       controllers.wampOGramModal.close();
       controllers.worlds.close();
     },
-    openHistory: () => controllers.historyModal.open(),
+    openHistory: () => { void controllers.historyModal.open(); },
   });
 }
 
@@ -249,28 +226,4 @@ function setupUiControllerCommands(game: Phaser.Game, controllers: UiControllers
     controllers.roomRushModal,
     controllers.roomRushResultModal
   );
-}
-
-function setupPaletteRefreshListeners(paletteController: PaletteController): void {
-  const refreshPaletteSurfaces = () => {
-    paletteController.renderPalette();
-    paletteController.renderObjectGrid();
-    paletteController.renderTilePreview();
-  };
-
-  window.addEventListener(EDITOR_SIDEBAR_RESIZED_EVENT, refreshPaletteSurfaces);
-  window.requestAnimationFrame(refreshPaletteSurfaces);
-
-  window.addEventListener('tileset-changed', () => {
-    paletteController.renderPalette();
-  });
-
-  window.addEventListener('tile-selected', () => {
-    paletteController.renderTilePreview();
-  });
-
-  window.addEventListener(CUSTOM_SPRITES_CHANGED_EVENT, () => {
-    paletteController.renderObjectGrid();
-    paletteController.renderTilePreview();
-  });
 }
