@@ -2,10 +2,10 @@ import Phaser from 'phaser';
 import { AboutModalController } from './aboutModal';
 import { ChatModerationModalController } from './chatModerationModal';
 import { ControlsModalController } from './controlsModal';
-import { ExploreModalController } from './exploreModal';
+import type { ExploreModalController } from './exploreModal';
 import { GuestbookModalController } from './guestbookModal';
-import { RoomHistoryModalController } from './historyModal';
-import { LeaderboardModalController } from './leaderboardModal';
+import type { RoomHistoryModalController } from './historyModal';
+import type { LeaderboardModalController } from './leaderboardModal';
 import { RoomRushModalController } from './roomRushModal';
 import { RoomRushResultModalController } from './roomRushResultModal';
 import { SettingsModalController } from './settingsModal';
@@ -22,9 +22,9 @@ import { asyncListener } from '../asyncListener';
 
 export function setupSceneCommands(
   game: Phaser.Game,
-  historyModal: RoomHistoryModalController,
-  leaderboardModal: LeaderboardModalController,
-  exploreModal: ExploreModalController,
+  historyModal: Pick<RoomHistoryModalController, 'open' | 'close'>,
+  leaderboardModal: Pick<LeaderboardModalController, 'open' | 'close'>,
+  exploreModal: Pick<ExploreModalController, 'open' | 'close'>,
   guestbookModal: GuestbookModalController,
   settingsModal: SettingsModalController,
   controlsModal: ControlsModalController,

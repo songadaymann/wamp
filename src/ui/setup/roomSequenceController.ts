@@ -148,7 +148,7 @@ export class RoomSequenceController {
 
   constructor(
     private readonly game: Phaser.Game,
-    private readonly leaderboardModal: LeaderboardModalController,
+    private readonly leaderboardModal: Pick<LeaderboardModalController, 'open' | 'close'>,
     private readonly playlistIntroModal: PlaylistIntroModalController,
     private readonly welcomeModal: Pick<WelcomeModalController, 'close'>,
     private readonly doc: Document = document,
