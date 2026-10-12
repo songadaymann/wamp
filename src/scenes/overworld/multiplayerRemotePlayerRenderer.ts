@@ -26,7 +26,6 @@ interface MultiplayerRemotePlayerRendererOptions {
   playerHeight: number;
   playerStandingHeight: number;
   presentCombatEvent: (event: MultiplayerInstanceCombatEvent, receivedAt: number) => void;
-  onDisplayObjectsChanged?: () => void;
 }
 
 interface RemoteOpponent {
@@ -250,18 +249,6 @@ export class MultiplayerRemotePlayerRenderer {
       : null;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    const objects: Phaser.GameObjects.GameObject[] = [];
-    if (this.opponent) {
-      objects.push(
-        this.opponent.sprite,
-        this.opponent.heartsDisplay.getGameObject(),
-        this.opponent.invulnerabilityFx,
-      );
-    }
-    return objects;
-  }
-
   getDebugState(): Record<string, unknown> | null {
     if (!this.opponent) {
       return null;
@@ -296,7 +283,6 @@ export class MultiplayerRemotePlayerRenderer {
       this.opponent = null;
     }
     this.lastCombatEventIds.clear();
-    this.options.onDisplayObjectsChanged?.();
   }
 
   destroy(): void {
@@ -348,7 +334,6 @@ export class MultiplayerRemotePlayerRenderer {
       avatarLoadPending: false,
     };
     this.ensureOpponentAvatarLoaded(this.opponent);
-    this.options.onDisplayObjectsChanged?.();
   }
 
   private getOpponentHeartY(opponent: RemoteOpponent): number {

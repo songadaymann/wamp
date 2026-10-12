@@ -22,7 +22,6 @@ interface OverworldPvpLocalPresentationControllerHost {
   playerWidth: number;
   playerStandingHeight: number;
   getPlayerSprite: () => Phaser.GameObjects.Sprite | null;
-  onDisplayObjectsChanged?: () => void;
 }
 
 export class OverworldPvpLocalPresentationController {
@@ -58,7 +57,6 @@ export class OverworldPvpLocalPresentationController {
 
     if (!this.heartDisplay) {
       this.heartDisplay = new PvpHeartDisplay(this.host.scene, 30);
-      this.host.onDisplayObjectsChanged?.();
     }
 
     this.heartDisplay.setHearts(local.hearts);
@@ -93,17 +91,6 @@ export class OverworldPvpLocalPresentationController {
     }
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    const ignored: Phaser.GameObjects.GameObject[] = [];
-    if (this.heartDisplay) {
-      ignored.push(this.heartDisplay.getGameObject());
-    }
-    if (this.invulnerabilityFx) {
-      ignored.push(this.invulnerabilityFx);
-    }
-    return ignored;
-  }
-
   destroy(): void {
     if (!this.heartDisplay) {
       return;
@@ -111,7 +98,6 @@ export class OverworldPvpLocalPresentationController {
     this.heartDisplay.destroy();
     this.heartDisplay = null;
     this.destroyInvulnerabilityFx();
-    this.host.onDisplayObjectsChanged?.();
   }
 
   private syncInvulnerability(
@@ -127,7 +113,6 @@ export class OverworldPvpLocalPresentationController {
       this.invulnerabilityFx = this.host.scene.add.graphics();
       this.invulnerabilityFx.setDepth(PVP_INVULNERABILITY_FX_DEPTH);
       this.invulnerabilityFx.setVisible(false);
-      this.host.onDisplayObjectsChanged?.();
     }
 
     syncPvpInvulnerabilityFx({

@@ -13,7 +13,6 @@ interface PlayerHealthHost {
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
   getPlayerSprite(): Phaser.GameObjects.Sprite | null;
   onHurt(): void;
-  onDisplayObjectsChanged(): void;
 }
 
 /** Owns room health and its presentation; PvP retains its separate server health. */
@@ -71,7 +70,6 @@ export class OverworldPlayerHealthController {
     if (this.health.maximum > 1) {
       if (!this.display) {
         this.display = new PvpHeartDisplay(this.host.scene, 30);
-        this.host.onDisplayObjectsChanged();
       }
       this.display.setHearts(this.health.current, this.health.maximum);
       // Compatible avatar frames include transparent space above their ~40px body.
@@ -93,10 +91,6 @@ export class OverworldPlayerHealthController {
       invulnerableMs: Math.max(0, Math.round(this.health.invulnerableUntil - this.host.getCurrentTime())),
       enabled: this.host.isActive(), visible: this.host.isActive() && this.health.maximum > 1
         && !!this.host.getPlayerBody() && !!this.host.getPlayerSprite() && !this.host.isDeathPending() };
-  }
-
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return this.display ? [this.display.getGameObject()] : [];
   }
 
   reset(): void {

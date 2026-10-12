@@ -49,7 +49,6 @@ interface OverworldCombatPresentationControllerHost {
   scene: Phaser.Scene;
   playSwordSlashFx(x: number, y: number, facing: -1 | 1, downward: boolean): void;
   playMuzzleFlashFx(x: number, y: number, facing: -1 | 1): void;
-  onDisplayObjectsChanged?: () => void;
 }
 
 export class OverworldCombatPresentationController {
@@ -96,13 +95,6 @@ export class OverworldCombatPresentationController {
     }
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return [
-      ...[...this.projectiles.values()].map((projectile) => projectile.rect),
-      ...[...this.swordBlades.values()].map((blade) => blade.container),
-    ];
-  }
-
   getProjectileCount(): number {
     return this.projectiles.size;
   }
@@ -114,7 +106,6 @@ export class OverworldCombatPresentationController {
     if (projectile.rect.active) {
       projectile.rect.destroy();
     }
-    this.host.onDisplayObjectsChanged?.();
   }
 
   destroyProjectiles(owner?: CombatPresentationOwner): void {
@@ -156,7 +147,6 @@ export class OverworldCombatPresentationController {
       container,
     };
     this.swordBlades.set(blade.id, blade);
-    this.host.onDisplayObjectsChanged?.();
 
     scene.tweens.add({
       targets: container,
@@ -225,7 +215,6 @@ export class OverworldCombatPresentationController {
     if (blade.container.active) {
       blade.container.destroy(true);
     }
-    this.host.onDisplayObjectsChanged?.();
   }
 
   private spawnProjectile(
@@ -265,7 +254,6 @@ export class OverworldCombatPresentationController {
       autoUpdate,
     };
     this.projectiles.set(projectile.id, projectile);
-    this.host.onDisplayObjectsChanged?.();
     return projectile;
   }
 }

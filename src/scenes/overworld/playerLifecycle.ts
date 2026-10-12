@@ -40,7 +40,6 @@ interface OverworldPlayerLifecycleHost<TLiveObject> {
   destroyRoomEdgeWalls(
     loadedRoom: LoadedFullRoom<TLiveObject, OverworldRoomEdgeWall>,
   ): void;
-  syncBackdropCameraIgnores(): void;
 }
 
 interface OverworldPlayerLifecycleOptions {
@@ -103,7 +102,6 @@ export class OverworldPlayerLifecycleController<TLiveObject = unknown> {
     playPlayerAnimationIfReady(playerSprite, playerAvatarPack.animationKeys.idle);
     playerSprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
 
-    this.host.syncBackdropCameraIgnores();
     return {
       player,
       playerBody,
@@ -131,7 +129,6 @@ export class OverworldPlayerLifecycleController<TLiveObject = unknown> {
     entities?.playerPickupSensor.destroy();
     entities?.playerSprite.destroy();
     entities?.player.destroy();
-    this.host.syncBackdropCameraIgnores();
   }
 
   respawnPlayerToRoom(

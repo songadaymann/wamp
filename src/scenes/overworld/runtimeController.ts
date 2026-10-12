@@ -87,7 +87,6 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null;
   getExpandedRoomMembershipAt?(coordinates: RoomCoordinates): ExpandedRoomMembershipSummary | null;
   isPlayableRoomCollisionReady(coordinates: RoomCoordinates): boolean;
-  syncBackdropCameraIgnores(): void;
 }
 
 interface OverworldRuntimeControllerOptions {
@@ -258,7 +257,6 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
   }
 
   private syncEdgeWallsForRoomIds(roomIds: ReadonlySet<string> | null): void {
-    let changed = false;
     const loadedRooms = Array.from(this.host.getLoadedFullRooms());
     const roomsById = new Map(loadedRooms.map(loaded => [loaded.room.id, loaded.room]));
     const isDeadly = (coordinates: RoomCoordinates) => !this.host.isRoomTransitionLocked() && hasDeadlyBottomEdge(
@@ -273,7 +271,6 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
       }
 
       this.host.destroyRoomEdgeWalls(loadedRoom);
-      changed = true;
 
       if (!this.host.getPlayerBody() || this.host.getMode() !== 'play') {
         continue;
@@ -292,10 +289,6 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
           loadedRoom.edgeWalls.push(edgeWall);
         }
       }
-    }
-
-    if (changed) {
-      this.host.syncBackdropCameraIgnores();
     }
   }
 

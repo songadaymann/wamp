@@ -16,7 +16,6 @@ interface RenderedRoomComment {
 interface RoomCommentsPlayPresentationControllerOptions {
   scene: Phaser.Scene;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
-  onDisplayObjectsChanged?: () => void;
 }
 
 const COMMENT_PIN_DEPTH = 262;
@@ -35,7 +34,6 @@ export class RoomCommentsPlayPresentationController {
 
   sync(comments: readonly RoomCommentRecord[]): void {
     const nextIds = new Set<string>();
-    let structureChanged = false;
 
     for (const comment of comments) {
       nextIds.add(comment.id);
@@ -45,7 +43,6 @@ export class RoomCommentsPlayPresentationController {
         const rendered = this.createRenderedComment(comment);
         rendered.container.setPosition(position.x, position.y);
         this.renderedCommentsById.set(comment.id, rendered);
-        structureChanged = true;
         continue;
       }
 
@@ -57,10 +54,8 @@ export class RoomCommentsPlayPresentationController {
       if (nextIds.has(commentId)) continue;
       rendered.container.destroy(true);
       this.renderedCommentsById.delete(commentId);
-      structureChanged = true;
     }
 
-    if (structureChanged) this.options.onDisplayObjectsChanged?.();
   }
 
   reset(): void {

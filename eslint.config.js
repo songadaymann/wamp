@@ -4,25 +4,25 @@ import tseslint from 'typescript-eslint';
 // 2026-10-11 so they can shrink but not grow; lower a number when you split a file (F067).
 const MAX_LINES = 1500;
 const OVERSIZED_FILE_LINES = {
-  'src/scenes/OverworldPlayScene.ts': 6443,
-  'src/scenes/overworld/worldStreaming.ts': 5789,
+  'src/scenes/OverworldPlayScene.ts': 6358,
+  'src/scenes/overworld/worldStreaming.ts': 5765,
   'src/scenes/CourseEditorScene.ts': 3467,
   'src/scenes/editor/editRuntime.ts': 3292,
   'src/scenes/overworld/liveObjects/swordsmanController.ts': 2608,
   'src/scenes/overworld/liveObjects.ts': 2345,
   'src/scenes/editor/uiBridge.ts': 2297,
   'src/scenes/EditorScene.ts': 2041,
-  'src/scenes/overworld/worldTiles/controller.ts': 1980,
+  'src/scenes/overworld/worldTiles/controller.ts': 1975,
   'src/cloudflare/worker/rooms/store.ts': 1819,
   'src/admin/launch/app.ts': 1816,
   'src/cloudflare/worker/runs/difficulty.ts': 1762,
   'src/main/earlyWorldTileBootstrap.classic.ts': 1718,
   'src/scenes/overworld/movementController.ts': 1638,
   'src/ui/setup/paletteController.ts': 1623,
-  'src/ui/setup/profileModal.ts': 1576,
+  'src/ui/setup/profileModal.ts': 1557,
   'src/scenes/editor/musicPatternEditor.ts': 1540,
-  'src/scenes/editor/musicWorkflow.ts': 1535,
-  'src/scenes/overworld/roomComments.ts': 1504,
+  'src/scenes/editor/musicWorkflow.ts': 1488,
+  'src/scenes/overworld/roomComments.ts': 1483,
   'src/autotiling/solver.ts': 1503,
 };
 
