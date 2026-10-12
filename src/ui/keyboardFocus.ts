@@ -106,7 +106,9 @@ export function syncGameKeyboardFocus(game: Phaser.Game): void {
   const yielded = isGameKeyboardYielded();
   keyboardManager.preventDefault = !yielded && keyboardManager.captures.length > 0;
 
-  for (const scene of game.scene.getScenes(true)) {
+  // A room intro pauses its scene. Closing the dialog can update focus before
+  // Phaser processes the queued resume, so paused scenes need their keys back too.
+  for (const scene of game.scene.getScenes(false)) {
     const keyboard = scene.input?.keyboard;
     if (!keyboard) {
       continue;

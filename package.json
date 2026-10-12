@@ -39,6 +39,7 @@
     "smoke:wampos-window": "node scripts/smoke_wampos_window.mjs",
     "smoke:first-publish": "node scripts/smoke_first_publish.mjs",
     "smoke:room-camera": "node scripts/smoke_room_camera.mjs",
+    "smoke:room-entry-keyboard": "node scripts/smoke_room_entry_keyboard.mjs",
     "smoke:builder-activity": "node scripts/smoke_builder_activity.mjs",
     "smoke:editor-history": "node scripts/smoke_editor_history.mjs",
     "smoke:editor-phone-inspector": "node scripts/smoke_editor_phone_inspector.mjs",
