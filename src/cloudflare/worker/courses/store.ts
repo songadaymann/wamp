@@ -694,7 +694,10 @@ function validateCourseGoalMarkers(goal: CourseSnapshot['goal'], roomRefs: Cours
       }
       validateCourseMarkerBelongsToCourse(goal.finish, roomRefs, 'Finish');
       return;
-    default:
+    case 'collect_target':
+    case 'defeat_all':
+    case 'survival':
+      // No placed markers to validate.
       return;
   }
 }

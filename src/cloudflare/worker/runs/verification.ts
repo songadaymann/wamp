@@ -1072,6 +1072,15 @@ function deriveMetricsForGoal(input: {
         });
       }
       break;
+    default: {
+      // A goal type without a rule here fails verification instead of passing unchecked, and
+      // adding one to ROOM_GOAL_TYPES is a type error until it has a rule (F070).
+      const unverifiedGoal: never = goal;
+      return createFailedVerification('failed', 'trace_goal', {
+        issue: 'unverified_goal_type',
+        goalType: (unverifiedGoal as { type?: unknown }).type ?? null,
+      });
+    }
   }
 
   return {

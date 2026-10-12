@@ -193,7 +193,11 @@ export class OverworldGoalMarkerController {
               },
             ]
           : markers;
-      default:
+      case 'collect_target':
+      case 'collect_race':
+      case 'defeat_all':
+      case 'survival':
+        // These goals have no flags to show.
         return markers;
     }
   }

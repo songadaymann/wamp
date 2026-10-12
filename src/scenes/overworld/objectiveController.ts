@@ -157,7 +157,11 @@ export class OverworldObjectiveController {
       case 'npc_quest':
         this.updateNpcQuestRun(runState);
         break;
-      default:
+      case 'collect_target':
+      case 'collect_race':
+      case 'defeat_all':
+      case 'survival':
+        // Progress comes from collect and defeat events or the clock, not a per-frame check.
         break;
     }
   }
