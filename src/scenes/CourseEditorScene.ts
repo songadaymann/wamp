@@ -2063,9 +2063,6 @@ export class CourseEditorScene extends Phaser.Scene implements EditorSceneBridge
         updateGoalUi: () => {
           this.renderUi();
         },
-        syncBackgroundCameraIgnores: () => {
-          // Multi-room editor does not use separate background cameras yet.
-        },
         updatePersistenceStatus: (text) => {
           this.statusText = text;
           this.renderUi();

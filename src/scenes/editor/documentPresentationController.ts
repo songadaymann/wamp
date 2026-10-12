@@ -29,10 +29,7 @@ export class EditorDocumentPresentationController {
   private goalMarkerSprites: Phaser.GameObjects.Sprite[] = [];
   private goalMarkerLabels: Phaser.GameObjects.Text[] = [];
 
-  constructor(
-    private readonly scene: Phaser.Scene,
-    private readonly syncBackgroundCameraIgnores: () => void,
-  ) {}
+  constructor(private readonly scene: Phaser.Scene) {}
 
   get placedObjectSprites(): Phaser.GameObjects.Sprite[] {
     return this.objectSprites;
@@ -142,7 +139,6 @@ export class EditorDocumentPresentationController {
   private redrawGoalMarkers(origin: { x: number; y: number }, goal: RoomGoal | null): void {
     this.destroyGoalMarkers();
     if (!goal) {
-      this.syncBackgroundCameraIgnores();
       return;
     }
 
@@ -174,8 +170,6 @@ export class EditorDocumentPresentationController {
         this.goalMarkerLabels.push(label);
       }
     }
-
-    this.syncBackgroundCameraIgnores();
   }
 }
 

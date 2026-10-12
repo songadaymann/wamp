@@ -515,7 +515,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
       },
       updateBackground: () => this.updateBackground(),
       updateGoalUi: () => this.updateGoalUi(),
-      syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
       updatePersistenceStatus: (text) => this.updatePersistenceStatus(text),
       canSaveDraft: () => this.roomPermissions.canSaveDraft,
       recordBuildPlacement: (count) => this.guestBuilderActivityTracker.recordPlacedBuildContent(count),
@@ -580,7 +579,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     );
     this.courseController = new EditorCourseController(this, {
       getRoomId: () => this.roomId,
-      syncBackgroundCameraIgnores: () => this.syncBackgroundCameraIgnores(),
       updateGoalUi: () => this.updateGoalUi(),
       clearRoomGoalPlacementMode: () => {
         this.editRuntime.currentGoalPlacementMode = null;
@@ -666,7 +664,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
       prepare: () => { this.editRuntime.cancelGoalMarkerPlacement(); this.toolController.cancelClipboardPastePreview(); this.hideObjectInspectorUi(); },
       showStatus: text => this.updatePersistenceStatus(text),
       onChanged: () => this.renderEditorUi(),
-      onOverlayCreated: () => this.syncBackgroundCameraIgnores(),
     });
     this.interactionController = new EditorInteractionController(this, {
       objectMove: this.objectMoveController,
@@ -733,44 +730,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     this.backgroundController = new EditorBackgroundController(this, this.worldRepository, {
       getRoomId: () => this.roomId,
       getRoomCoordinates: () => this.roomCoordinates,
-      getIgnoredBackgroundObjects: () => {
-        const ignored: Phaser.GameObjects.GameObject[] = [];
-
-        for (const layerName of LAYER_NAMES) {
-          const tilemapLayer = this.map?.getLayer(layerName);
-          if (tilemapLayer?.tilemapLayer) {
-            ignored.push(tilemapLayer.tilemapLayer);
-          }
-        }
-
-        ignored.push(...this.objectSprites);
-        if (this.spawnMarkerSprite) {
-          ignored.push(this.spawnMarkerSprite);
-        }
-        ignored.push(...this.goalMarkerSprites);
-        ignored.push(...this.goalMarkerLabels);
-
-        const overlays = [
-          this.overlayController.gridOverlay,
-          this.overlayController.layerGuideOverlay,
-          this.interactionController.cursorOverlay,
-          this.interactionController.rectPreviewOverlay,
-          this.objectMoveController.cursorOverlay,
-          this.overlayController.borderOverlay,
-          this.overlayController.edgeGuideOverlay,
-        ];
-        for (const overlay of overlays) {
-          if (overlay) {
-            ignored.push(overlay);
-          }
-        }
-
-        ignored.push(...this.lightingController.getBackdropIgnoredObjects());
-        ignored.push(...this.weatherController.getBackdropIgnoredObjects());
-        ignored.push(...this.musicPatternController.getIgnoredObjects());
-
-        return ignored;
-      },
       isSceneActive: () => this.scene.isActive(this.scene.key),
     });
     this.lightingController = new RoomLightingController({
@@ -785,18 +744,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
 
   private get objectSprites(): Phaser.GameObjects.Sprite[] {
     return this.editRuntime.placedObjectSprites;
-  }
-
-  private get spawnMarkerSprite(): Phaser.GameObjects.Sprite | null {
-    return this.editRuntime.currentSpawnMarkerSprite;
-  }
-
-  private get goalMarkerSprites(): Phaser.GameObjects.Sprite[] {
-    return [...this.editRuntime.currentGoalMarkerSprites, ...this.courseController.getMarkerSprites()];
-  }
-
-  private get goalMarkerLabels(): Phaser.GameObjects.Text[] {
-    return [...this.editRuntime.currentGoalMarkerLabels, ...this.courseController.getMarkerLabels()];
   }
 
   private get roomId(): string {
@@ -1092,7 +1039,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     this.setupKeyboard();
     window.addEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
     this.rebuildObjectSprites();
-    this.syncBackgroundCameraIgnores();
     this.updateBackgroundPreview();
     this.updateLightingPreview();
     this.updateWeatherPreview();
@@ -1309,10 +1255,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     this.renderEditorUi();
   }
 
-  private syncBackgroundCameraIgnores(): void {
-    this.backgroundController.syncBackgroundCameraIgnores();
-  }
-
   private updateBackgroundPreview(): void {
     this.backgroundController.updateBackgroundPreview();
   }
@@ -1338,7 +1280,7 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
       },
       ...this.getLightingPreviewStaticEmitters().emitters,
     ];
-    const structureChanged = this.lightingController.sync({
+    this.lightingController.sync({
       roomId: this.roomId,
       bounds: {
         x: 0,
@@ -1355,9 +1297,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
       },
     });
 
-    if (structureChanged) {
-      this.syncBackgroundCameraIgnores();
-    }
   }
 
   private updateWeatherPreview(): void {
@@ -1366,7 +1305,7 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
       this.editRuntime.documentRevision, weather.mode === 'rain',
       () => buildRoomWeatherSurfaceSegments(this.editRuntime.exportRoomSnapshot()),
     );
-    const structureChanged = this.weatherController.sync({
+    this.weatherController.sync({
       roomId: this.roomId,
       bounds: {
         x: 0,
@@ -1378,9 +1317,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
       surfaces: surfaces ?? [],
     });
 
-    if (structureChanged) {
-      this.syncBackgroundCameraIgnores();
-    }
   }
 
   private async refreshSurroundingRoomPreviews(): Promise<void> {
@@ -1397,7 +1333,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     if (changed || this.edgeGuideZoom !== this.cameras.main.zoom) {
       this.edgeGuideZoom = this.cameras.main.zoom;
       this.overlayController.updateRoomEdgeGuides(this.edgeGuides.guides, this.edgeGuideZoom);
-      this.syncBackgroundCameraIgnores();
       if (changed) this.renderEditorUi();
     }
   }
@@ -2268,7 +2203,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
       courseEdit: this.buildCourseEditedRoomData(),
       spawnPoint: this.roomSpawnPoint ? { ...this.roomSpawnPoint } : null,
       backgroundLayerCount: this.backgroundController.backgroundLayerCount,
-      hasBackgroundCamera: this.backgroundController.hasBackgroundCamera,
       lighting: this.lightingController.getDebugState(),
       weather: this.weatherController.getDebugState(),
       activeTool: editorState.activeTool,

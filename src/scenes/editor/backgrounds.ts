@@ -37,7 +37,6 @@ interface ParallaxSprite {
 interface EditorBackgroundHost {
   getRoomId(): string;
   getRoomCoordinates(): RoomCoordinates;
-  getIgnoredBackgroundObjects(): Phaser.GameObjects.GameObject[];
   isSceneActive(): boolean;
 }
 
@@ -45,7 +44,6 @@ export class EditorBackgroundController {
   private bgSprites: ParallaxSprite[] = [];
   private fallbackBgSprites: Phaser.GameObjects.TileSprite[] = [];
   private bgColorRect: Phaser.GameObjects.Rectangle | null = null;
-  private bgCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private surroundingRoomImages: Phaser.GameObjects.Image[] = [];
   private surroundingRoomBorders: Phaser.GameObjects.Graphics | null = null;
   private surroundingRoomTextureKeys = new Set<string>();
@@ -69,15 +67,8 @@ export class EditorBackgroundController {
     return this.bgSprites.length;
   }
 
-  get hasBackgroundCamera(): boolean {
-    return Boolean(this.bgCamera);
-  }
-
   reset(): void {
     this.backgroundLoadToken += 1;
-    if (this.bgCamera && this.scene.cameras.cameras.includes(this.bgCamera)) {
-      this.scene.cameras.remove(this.bgCamera, true);
-    }
 
     this.surroundingPreviewToken += 1;
     this.clearSurroundingRoomPreviews();
@@ -96,8 +87,6 @@ export class EditorBackgroundController {
       this.bgColorRect.destroy();
       this.bgColorRect = null;
     }
-
-    this.bgCamera = null;
   }
 
   createBackground(selectedBackground: string): void {
@@ -105,6 +94,8 @@ export class EditorBackgroundController {
   }
 
   updateBackground(selectedBackground: string): void {
+    // The editor draws its backgrounds with the main camera, which paints its own background.
+    this.scene.cameras.main.transparent = false;
     const loadToken = ++this.backgroundLoadToken;
     for (const bg of this.bgSprites) {
       bg.sprite.destroy();
@@ -139,7 +130,6 @@ export class EditorBackgroundController {
           alpha: config.alpha,
         });
       });
-      this.syncBackgroundCameraIgnores();
       this.updateBackgroundPreview();
       return;
     }
@@ -149,7 +139,6 @@ export class EditorBackgroundController {
       this.bgColorRect = this.scene.add.rectangle(0, 0, w, h, color);
       this.bgColorRect.setOrigin(0, 0);
       this.bgColorRect.setDepth(-20);
-      this.syncBackgroundCameraIgnores();
       this.updateBackgroundPreview();
       return;
     }
@@ -158,7 +147,6 @@ export class EditorBackgroundController {
       this.bgColorRect = this.scene.add.rectangle(0, 0, w, h, RETRO_COLORS.backgroundNumber);
       this.bgColorRect.setOrigin(0, 0);
       this.bgColorRect.setDepth(-20);
-      this.syncBackgroundCameraIgnores();
       this.updateBackgroundPreview();
 
       void ensureCustomBackgroundTexture(this.scene, resolved.id)
@@ -169,8 +157,7 @@ export class EditorBackgroundController {
           const layer = createCustomBackgroundLayer(this.scene, resolved.id, resolved.fit);
           const sprite = createCustomBackgroundObject(this.scene, layer, 0, 0, w, h, -10);
           this.bgSprites.push({ sprite, layer });
-          this.syncBackgroundCameraIgnores();
-          this.updateBackgroundPreview();
+              this.updateBackgroundPreview();
         })
         .catch(() => {});
       return;
@@ -189,21 +176,7 @@ export class EditorBackgroundController {
       this.bgSprites.push({ sprite, layer });
     }
 
-    this.syncBackgroundCameraIgnores();
     this.updateBackgroundPreview();
-  }
-
-  syncBackgroundCameraIgnores(): void {
-    const mainCam = this.scene.cameras.main;
-    if (!this.bgCamera) {
-      mainCam.transparent = false;
-      return;
-    }
-
-    mainCam.transparent = true;
-    for (const object of this.host.getIgnoredBackgroundObjects()) {
-      this.bgCamera.ignore(object);
-    }
   }
 
   updateBackgroundPreview(): void {

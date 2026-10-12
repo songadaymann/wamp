@@ -1111,7 +1111,6 @@ function createHarness(room: RoomSnapshot) {
     updateWeatherControlsValue: vi.fn(),
     updateBackground: vi.fn(),
     updateGoalUi: vi.fn(),
-    syncBackgroundCameraIgnores: vi.fn(),
     updatePersistenceStatus: vi.fn(),
     canSaveDraft: () => editable,
     recordBuildPlacement: vi.fn(),

@@ -232,19 +232,6 @@ export class EditorMusicPatternController {
     this.destroyGraphics();
   }
 
-  getIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return ([
-      this.overlayBackdrop,
-      this.overlayGrid,
-      this.overlayCells,
-      this.overlayPlayhead,
-      this.overlayMixControls,
-      ...this.rowLabels,
-      this.mixTitleLabel,
-      this.mixReadoutLabel,
-    ].filter(Boolean) as Phaser.GameObjects.GameObject[]);
-  }
-
   getActiveInstrumentTab(): RoomPatternInstrumentId {
     return this.activeInstrumentTab;
   }
