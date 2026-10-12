@@ -211,7 +211,11 @@ export function buildRoomGoalMarkerDescriptors(goal: RoomGoal | null): GoalMarke
       return goal.destination
         ? [{ point: goal.destination, label: 'NPC', variant: 'finish-pending', textColor: '#ffefef' }]
         : [];
-    default:
+    case undefined:
+    case 'collect_target':
+    case 'collect_race':
+    case 'defeat_all':
+    case 'survival':
       return [];
   }
 }

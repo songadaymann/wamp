@@ -205,6 +205,9 @@ export class EditorToolController {
       case 'copy':
         this.host.startRectDrawing(tileX, tileY);
         break;
+      case 'move':
+        // EditorObjectMoveController handles Move's pointer input.
+        break;
     }
   }
 

@@ -152,3 +152,14 @@ describe('ranked respawn trace verification', () => {
     expect(result.status).toBe('failed'); expect(result.summary.issue).toBe('goal_event_path_mismatch');
   });
 });
+
+describe('goal types without a verification rule (F070)', () => {
+  it('fails a run whose goal type verification does not know, instead of passing it unchecked', async () => {
+    const input = courseRun();
+    expect((await verifyCourseRunTrace(input)).status).toBe('passed');
+    input.course.goal = { type: 'king_of_the_hill', timeLimitMs: null } as unknown as typeof input.course.goal;
+    const result = await verifyCourseRunTrace(input);
+    expect(result.status).toBe('failed');
+    expect(result.summary).toMatchObject({ issue: 'unverified_goal_type', goalType: 'king_of_the_hill' });
+  });
+});

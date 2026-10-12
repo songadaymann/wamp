@@ -301,6 +301,8 @@ export class EditorDockShellController {
           case 'publish':
             this.clickExistingButton('btn-publish-room');
             break;
+          default:
+            break;
         }
       });
     }
@@ -319,6 +321,8 @@ export class EditorDockShellController {
           case 'collect':
             this.getCollectActionTarget()?.click();
             this.dispatch({ type: 'close-popovers' });
+            break;
+          default:
             break;
         }
       });

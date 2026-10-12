@@ -59,6 +59,12 @@ export default tseslint.config(
       // An async function passed where a void callback is expected (an event listener, say)
       // drops its rejection. Checking `if (promise)` on purpose is allowed.
       '@typescript-eslint/no-misused-promises': ['error', { checksConditionals: false }],
+      // A switch over a union with no default must list every member, so a new goal type,
+      // tool or object category can't fall through unhandled (F070). A default opts out.
+      '@typescript-eslint/switch-exhaustiveness-check': ['error', {
+        considerDefaultExhaustiveForUnions: true,
+        requireDefaultForNonUnion: false,
+      }],
       'max-lines': ['error', { max: MAX_LINES, skipBlankLines: true }],
     },
   },
