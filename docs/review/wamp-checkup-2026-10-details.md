@@ -6833,6 +6833,8 @@ Fix order:
 (c) Use three registries instead of one: shared data, normalize, validate and scoring in src/goals (safe for the Worker); a client runtime registry for markers, objectives and HUD; and a Worker verification table. Each is typed `Record<RoomGoalType, …>`.
 (d) Decide whether course goals become a filtered view of the room registry.
 
+
+**2026-10-12 partly done.** PR #183 / `6a8c132c`, API Worker `c0184a09` (smoke ok, health 200). `worker/runs/verification.ts`: the goal-type switch gets a `default` that assigns the goal to `never` and fails with `unverified_goal_type` (it fell through to success before). Explicit cases replace `default` in `goalMarkers.ts`, editor `goalDocument.ts`, `objectiveController.ts` and `worker/courses/store.ts` marker validation. ESLint `@typescript-eslint/switch-exhaustiveness-check` is on with `considerDefaultExhaustiveForUnions: true` (three other switches needed a case or default). Simulating a new `RoomGoal` variant fails `tsc` in verification.ts and lint in goalDocument (2), goalMarkers and objectiveController; on main verification.ts stayed silent. Test: unknown goal type fails course verification (`respawnVerification.test.ts`; fails on main). Open: steps (b)–(d), the goal registries. Receipt: `wamp-goal-switches-2026-10-12.md`.
 ### F066: OverworldPlayScene's constructor is 1,392 lines of closure wiring, and the RuntimeContext built to fix it is used by no controller
 
 - **Area:** Code health & architecture (AI-agent friendliness)

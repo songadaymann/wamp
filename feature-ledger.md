@@ -1,3 +1,7 @@
+## 2026-10-12 — part of F070 (goal-type switches)
+
+PR #183 / `6a8c132c` (API Worker `c0184a09`): ranked verification fails goal types it has no rule for instead of passing them; goal-type switches list every type; ESLint switch-exhaustiveness-check is on. Master **127/215**. Receipt: [goal switches](docs/review/wamp-goal-switches-2026-10-12.md).
+
 ## 2026-10-12 — F068 backdrop camera (covers F009)
 
 PR #181 / `1011f78b`: the overworld's starfield camera renders only its own layer, so the world display layer, the per-change world-object collect and its registration plumbing in 20 files are gone. PR #182 / `7db8ea82`: the editor's never-created background camera and its ignore list are removed. Pages-only. Master **127/215**. Receipt: [backdrop camera](docs/review/wamp-backdrop-camera-2026-10-12.md).
