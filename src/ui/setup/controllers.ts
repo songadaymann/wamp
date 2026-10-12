@@ -10,19 +10,21 @@ import { AboutModalController } from './aboutModal';
 import { setupButtonFeedback } from './buttonFeedback';
 import { ChatModerationModalController } from './chatModerationModal';
 import { ControlsModalController } from './controlsModal';
-import { ExploreModalController } from './exploreModal';
+import type { ExploreModalController } from './exploreModal';
 import { GuestBuilderClaimModalController } from './guestBuilderClaimModal';
 import { GuestRoomRecoveryModalController } from './guestRoomRecoveryModal';
 import { GuestProgressClaimModalController } from './guestProgressClaimModal';
 import { GuestbookModalController } from './guestbookModal';
-import { RoomHistoryModalController } from './historyModal';
+import type { RoomHistoryModalController } from './historyModal';
 import { setupKeyboardShortcutPassthrough } from './keyboardPassthrough';
-import { LeaderboardModalController } from './leaderboardModal';
+import type { LeaderboardModalController } from './leaderboardModal';
 import { PlaylistModalController } from './playlistModal';
 import { PlaylistIntroModalController } from './playlistIntroModal';
 import { PerformanceSuggestionModalController } from './performanceSuggestionModal';
 import { RoomSequenceController } from './roomSequenceController';
-import { ProfileModalController } from './profileModal';
+import type { ProfileModalController } from './profileModal';
+import { LazyModal } from './lazyModal';
+import { PROFILE_OPEN_REQUEST_EVENT, type ProfileOpenRequestDetail } from './profileEvents';
 import { RewardStingController } from './rewardStings';
 import { RewardStingCatchupController } from './rewardStingCatchup';
 import { RoomGoalIntroModalController } from './roomGoalIntroModal';
@@ -45,9 +47,9 @@ interface UiControllers {
   firstPublishModal: FirstPublishModalController;
   activityInbox: ActivityInboxController;
   roomInsights: RoomInsightsController;
-  historyModal: RoomHistoryModalController;
-  leaderboardModal: LeaderboardModalController;
-  exploreModal: ExploreModalController;
+  historyModal: LazyModal<RoomHistoryModalController>;
+  leaderboardModal: LazyModal<LeaderboardModalController>;
+  exploreModal: LazyModal<ExploreModalController>;
   roomSequence: RoomSequenceController;
   guestBuilderClaimModal: GuestBuilderClaimModalController;
   guestRoomRecoveryModal: GuestRoomRecoveryModalController;
@@ -57,7 +59,7 @@ interface UiControllers {
   controlsModal: ControlsModalController;
   aboutModal: AboutModalController;
   chatModerationModal: ChatModerationModalController;
-  profileModal: ProfileModalController;
+  profileModal: LazyModal<ProfileModalController>;
   playlistModal: PlaylistModalController;
   playlistIntroModal: PlaylistIntroModalController;
   performanceSuggestionModal: PerformanceSuggestionModalController;
@@ -86,16 +88,18 @@ export function setupUiControllers(game: Phaser.Game): void {
 
   configureEditorBridge(controllers);
   initUiControllers(controllers);
+  setupLazyModalTriggers(controllers);
   setupUiControllerCommands(game, controllers);
   setupButtonFeedback();
   setupKeyboardShortcutPassthrough();
 }
 
 function createUiControllers(game: Phaser.Game): UiControllers {
-  const leaderboardModal = new LeaderboardModalController(game);
+  // Rarely opened pop-ups load on first open (F019).
+  const leaderboardModal = new LazyModal(async () => new (await import('./leaderboardModal')).LeaderboardModalController(game));
   const controlsModal = new ControlsModalController();
   const playlistIntroModal = new PlaylistIntroModalController();
-  const exploreModal = new ExploreModalController(game);
+  const exploreModal = new LazyModal(async () => new (await import('./exploreModal')).ExploreModalController(game));
   const buildPrompts = new BuildPromptsController(() => exploreModal.close()); buildPrompts.init();
   game.events.once('destroy', () => buildPrompts.destroy());
   const runRatingModal = new RunRatingModalController(game);
@@ -112,7 +116,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     firstPublishModal: new FirstPublishModalController(),
     activityInbox: new ActivityInboxController(),
     roomInsights: new RoomInsightsController(game),
-    historyModal: new RoomHistoryModalController(game),
+    historyModal: new LazyModal(async () => new (await import('./historyModal')).RoomHistoryModalController(game)),
     leaderboardModal,
     exploreModal,
     roomSequence: new RoomSequenceController(game, leaderboardModal, playlistIntroModal, welcomeModal, undefined, undefined, firstStepsSummary, runRatingModal),
@@ -124,7 +128,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     controlsModal,
     aboutModal: new AboutModalController(),
     chatModerationModal: new ChatModerationModalController(),
-    profileModal: new ProfileModalController(game),
+    profileModal: new LazyModal(async () => new (await import('./profileModal')).ProfileModalController(game)),
     playlistModal: new PlaylistModalController(game),
     playlistIntroModal,
     performanceSuggestionModal: new PerformanceSuggestionModalController(game),
@@ -153,9 +157,6 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.firstPublishModal.init();
   controllers.activityInbox.init();
   controllers.roomInsights.init();
-  controllers.historyModal.init();
-  controllers.leaderboardModal.init();
-  controllers.exploreModal.init();
   controllers.roomSequence.init();
   controllers.guestBuilderClaimModal.init();
   controllers.guestRoomRecoveryModal.init();
@@ -165,7 +166,6 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.controlsModal.init();
   controllers.aboutModal.init();
   controllers.chatModerationModal.init();
-  controllers.profileModal.init();
   controllers.roomGoalIntroModal.init();
   controllers.playlistModal.init();
   controllers.playlistIntroModal.init();
@@ -226,4 +226,18 @@ function setupUiControllerCommands(game: Phaser.Game, controllers: UiControllers
     controllers.roomRushModal,
     controllers.roomRushResultModal
   );
+}
+
+/** Boot-time triggers for the lazy pop-ups; once one loads, its own listeners take over. */
+function setupLazyModalTriggers(controllers: UiControllers): void {
+  window.addEventListener(PROFILE_OPEN_REQUEST_EVENT, (event) => {
+    if (controllers.profileModal.loaded) return;
+    const userId = (event as CustomEvent<ProfileOpenRequestDetail>).detail?.userId;
+    if (userId) void controllers.profileModal.open(userId);
+  });
+  document.getElementById('btn-auth-leaderboard')?.addEventListener('click', () => {
+    if (controllers.leaderboardModal.loaded) return;
+    document.getElementById('auth-panel')?.classList.remove('menu-open');
+    void controllers.leaderboardModal.open('global');
+  });
 }

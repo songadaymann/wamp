@@ -9,8 +9,9 @@ import { resolve } from 'node:path';
 import { brotliCompressSync, constants } from 'node:zlib';
 
 // 2026-10-10 baseline: 745.7 KB across 14 files. Ratchet down as boot code moves out.
-// 2026-10-11: 658 KB after the builder UI moved out of boot (F019).
-const BUDGET_KB = Number(process.env.WAMP_BOOT_JS_BUDGET_KB ?? 700);
+// 2026-10-11: 658 KB after the builder UI moved out of boot, 638 KB after four rarely
+// opened pop-ups did (F019).
+const BUDGET_KB = Number(process.env.WAMP_BOOT_JS_BUDGET_KB ?? 670);
 const report = JSON.parse(readFileSync(resolve('output/build/boot-bundle.json'), 'utf8'));
 const rows = report.files.map((file) => {
   const bytes = readFileSync(resolve('dist', file));
