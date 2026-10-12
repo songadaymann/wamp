@@ -111,15 +111,13 @@ function createFixture() {
     },
     time: { delayedCall: vi.fn((_delay: number, callback: () => void) => callback()) },
   };
-  const onDisplayObjectsChanged = vi.fn();
   const controller = new OverworldPvpLocalPresentationController({
     scene: scene as never,
     playerWidth: 18,
     playerStandingHeight: 30,
     getPlayerSprite: () => sprite as never,
-    onDisplayObjectsChanged,
   });
-  return { controller, scene, sprite, container, graphics, icons, onDisplayObjectsChanged };
+  return { controller, scene, sprite, container, graphics, icons };
 }
 
 describe('OverworldPvpLocalPresentationController', () => {
@@ -149,7 +147,6 @@ describe('OverworldPvpLocalPresentationController', () => {
     expect(fixture.scene.add.graphics).toHaveBeenCalledTimes(1);
     expect(fixture.container.setPosition).toHaveBeenLastCalledWith(80, 78);
     expect(fixture.graphics.setDepth).toHaveBeenCalledWith(32);
-    expect(fixture.controller.getBackdropIgnoredObjects()).toHaveLength(2);
   });
 
   it('tears down presentation when a match completes or the local participant disappears', () => {
@@ -171,7 +168,6 @@ describe('OverworldPvpLocalPresentationController', () => {
     expect(fixture.container.destroy).toHaveBeenCalledOnce();
     expect(fixture.graphics.destroy).toHaveBeenCalledOnce();
     expect(fixture.sprite.setAlpha).toHaveBeenLastCalledWith(1);
-    expect(fixture.controller.getBackdropIgnoredObjects()).toEqual([]);
   });
 
   it('preserves damage feedback strength, tint duration, and cleanup', () => {

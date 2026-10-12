@@ -73,13 +73,22 @@ function createHarness() {
   const mainCamera = createCamera('main', events);
   const backdropCamera = createCamera('backdrop', events);
   const backdropLayer = createLayer('backdropLayer', events);
-  const worldLayer = createLayer('worldLayer', events);
-  const layers = [backdropLayer, worldLayer];
   const sprites = [createSprite('star0', events), createSprite('star1', events)];
-  const worldObjects = [{ id: 'player' }, { id: 'terrain' }, { id: 'hud' }];
+  const worldObjects = [
+    { id: 'player', willRender: () => true },
+    { id: 'terrain', willRender: () => true },
+    { id: 'hidden', willRender: () => false },
+  ];
+  const defaultGetVisibleChildren = function (
+    children: Array<{ willRender: (camera: unknown) => boolean }>,
+    camera: unknown,
+  ) {
+    return children.filter((child) => child.willRender(camera));
+  };
   const cameras = {
     main: mainCamera,
     cameras: [mainCamera],
+    getVisibleChildren: defaultGetVisibleChildren,
     add: vi.fn(() => {
       events.push('camera.add');
       cameras.cameras.push(backdropCamera);
@@ -91,20 +100,17 @@ function createHarness() {
       if (index >= 0) cameras.cameras.splice(index, 1);
     }),
   };
-  let layerIndex = 0;
   const scene = {
     scale: { width: 640, height: 352 },
     add: {
-      layer: vi.fn(() => layers[layerIndex++]),
+      layer: vi.fn(() => backdropLayer),
     },
     cameras,
   };
-  const collectWorldObjects = vi.fn(() => worldObjects);
   const updateWorldBackgrounds = vi.fn(() => events.push('worldBackgrounds.update'));
   const controller = new OverworldBackdropController(
     {
       scene: scene as never,
-      collectWorldObjects: collectWorldObjects as never,
       updateWorldBackgrounds,
     },
     {
@@ -126,9 +132,8 @@ function createHarness() {
     mainCamera,
     backdropCamera,
     backdropLayer,
-    worldLayer,
     worldObjects,
-    collectWorldObjects,
+    defaultGetVisibleChildren,
     updateWorldBackgrounds,
   };
 }
@@ -139,9 +144,8 @@ describe('OverworldBackdropController', () => {
 
     harness.controller.create();
 
-    expect(harness.events.slice(0, 6)).toEqual([
+    expect(harness.events.slice(0, 5)).toEqual([
       'backdropLayer.depth:-1000',
-      'worldLayer.depth:0',
       'star.create:-80:0.8',
       'star.create:-79:0.25',
       'backdropLayer.add',
@@ -150,7 +154,7 @@ describe('OverworldBackdropController', () => {
     expect(harness.cameras.cameras).toEqual([harness.backdropCamera, harness.mainCamera]);
     expect(harness.backdropCamera.setRoundPixels).toHaveBeenCalledOnce();
     expect(harness.controller.isCameraActive()).toBe(true);
-    expect(harness.controller.getLayerCount()).toBe(2);
+    expect(harness.controller.getLayerCount()).toBe(1);
   });
 
   it('preserves parallax calculations and updates room backgrounds first', () => {
@@ -192,22 +196,33 @@ describe('OverworldBackdropController', () => {
     expect(harness.backdropCamera.setSize).toHaveBeenLastCalledWith(375, 667);
   });
 
-  it('reapplies the complete collected object set on repeated synchronization', () => {
+  it('renders only the backdrop layer with the backdrop camera, so world objects need no registration', () => {
     const harness = createHarness();
     harness.controller.create();
-    harness.worldLayer.add.mockClear();
-    harness.collectWorldObjects.mockClear();
+    const children = [harness.backdropLayer, ...harness.worldObjects] as never[];
 
-    harness.controller.syncIgnores();
-    harness.controller.syncIgnores();
-
+    expect(harness.cameras.getVisibleChildren(children, harness.backdropCamera)).toEqual([harness.backdropLayer]);
+    expect(harness.cameras.getVisibleChildren(children, harness.mainCamera))
+      .toEqual([harness.backdropLayer, harness.worldObjects[0], harness.worldObjects[1]]);
     expect(harness.mainCamera.transparent).toBe(true);
-    expect(harness.collectWorldObjects).toHaveBeenCalledTimes(2);
-    expect(harness.worldLayer.add).toHaveBeenNthCalledWith(1, harness.worldObjects);
-    expect(harness.worldLayer.add).toHaveBeenNthCalledWith(2, harness.worldObjects);
     expect(harness.mainCamera.ignore).toHaveBeenCalledWith(harness.backdropLayer);
-    expect(harness.backdropCamera.ignore).toHaveBeenCalledWith(harness.worldLayer);
-    expect(harness.worldLayer.list).toEqual(harness.worldObjects);
+    expect(harness.backdropCamera.ignore).not.toHaveBeenCalled();
+
+    harness.backdropLayer.willRender.mockReturnValue(false);
+    expect(harness.cameras.getVisibleChildren(children, harness.backdropCamera)).toEqual([]);
+  });
+
+  it('restores the default camera filter on reset and destroy', () => {
+    const resetHarness = createHarness();
+    resetHarness.controller.create();
+    expect(resetHarness.cameras.getVisibleChildren).not.toBe(resetHarness.defaultGetVisibleChildren);
+    resetHarness.controller.reset();
+    expect(resetHarness.cameras.getVisibleChildren).toBe(resetHarness.defaultGetVisibleChildren);
+
+    const destroyHarness = createHarness();
+    destroyHarness.controller.create();
+    destroyHarness.controller.destroy();
+    expect(destroyHarness.cameras.getVisibleChildren).toBe(destroyHarness.defaultGetVisibleChildren);
   });
 
   it('reports the existing display-health contract', () => {
@@ -217,7 +232,6 @@ describe('OverworldBackdropController', () => {
     expect(harness.controller.getDisplayHealth()).toEqual({
       mainCamera: { id: 1, visible: true, alpha: 1 },
       backdropCamera: { id: 2, visible: true, alpha: 1 },
-      worldLayer: expect.objectContaining({ childCount: 3, visibleToCamera: true }),
       backdropLayer: expect.objectContaining({ childCount: 2, visibleToCamera: true }),
     });
   });
@@ -230,7 +244,6 @@ describe('OverworldBackdropController', () => {
     expect(resetHarness.events).toEqual([
       'camera.remove:true',
       'backdropLayer.destroy',
-      'worldLayer.destroy',
     ]);
     expect(resetHarness.controller.isCameraActive()).toBe(false);
     expect(resetHarness.controller.getLayerCount()).toBe(0);
@@ -243,7 +256,6 @@ describe('OverworldBackdropController', () => {
       'star0.destroy',
       'star1.destroy',
       'backdropLayer.destroy',
-      'worldLayer.destroy',
       'camera.remove:true',
     ]);
   });

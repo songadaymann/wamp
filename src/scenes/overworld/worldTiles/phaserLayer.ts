@@ -68,7 +68,6 @@ export class WorldTilePhaserLayer {
   constructor(
     private readonly scene: Phaser.Scene,
     textureByteBudget: number,
-    private readonly onObjectsChanged?: () => void,
   ) {
     this.textureCache = new WeightedPinnedLruCache(textureByteBudget);
   }
@@ -143,12 +142,9 @@ export class WorldTilePhaserLayer {
     )).join('|');
     this.currentDesiredKeys = new Set(displayableKeys);
     this.syncPinnedTextures(displayableKeys);
-    const masksChanged = this.syncStaleMasks(options.staleRoomIds);
-    if (masksChanged) this.onObjectsChanged?.();
+    this.syncStaleMasks(options.staleRoomIds);
     if (signature === this.displaySignature) {
-      if (this.repairStableDisplay(entriesByKey, displayableKeys)) {
-        this.onObjectsChanged?.();
-      }
+      this.repairStableDisplay(entriesByKey, displayableKeys);
       this.syncPinnedTextures(displayableKeys);
       return;
     }
@@ -208,7 +204,6 @@ export class WorldTilePhaserLayer {
             this.imagesByAddressKey.delete(key);
           }
           this.syncPinnedTextures([...this.currentDesiredKeys]);
-          this.onObjectsChanged?.();
         },
       });
     } else {
@@ -219,15 +214,10 @@ export class WorldTilePhaserLayer {
       }
     }
     this.syncPinnedTextures(displayableKeys);
-    this.onObjectsChanged?.();
   }
 
   getImages(): Phaser.GameObjects.Image[] {
     return [...this.imagesByAddressKey.values()];
-  }
-
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return [...this.imagesByAddressKey.values(), ...this.staleMasksByRoomId.values()];
   }
 
   getAttachedAddressKeys(): string[] {
@@ -289,7 +279,6 @@ export class WorldTilePhaserLayer {
       for (const eviction of this.textureCache.unpin(textureKey)) this.destroyInstalledTexture(eviction.value);
     }
     this.pinnedTextureKeys.clear();
-    this.onObjectsChanged?.();
   }
 
   discardGpuTexturesForContextRestore(): void {

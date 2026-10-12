@@ -92,7 +92,6 @@ interface OverworldRoomCommentsControllerOptions {
   selectRoomCoordinates?: (coordinates: RoomCoordinates) => void;
   jumpToRoomCoordinates?: (coordinates: RoomCoordinates) => void | Promise<void>;
   showTransientStatus?: (message: string) => void;
-  onDisplayObjectsChanged?: () => void;
   waitForBrowseDiscoveryReady?: (signal: AbortSignal) => Promise<boolean>;
   document?: Document;
 }
@@ -241,7 +240,6 @@ export class OverworldRoomCommentsController {
     this.playPresentationController = new RoomCommentsPlayPresentationController({
       scene: options.scene,
       getRoomOrigin: options.getRoomOrigin,
-      onDisplayObjectsChanged: options.onDisplayObjectsChanged,
     });
     this.dataController = new RoomCommentsDataController({
       getMode: options.getMode,
@@ -374,13 +372,6 @@ export class OverworldRoomCommentsController {
     this.composerController.refresh();
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return [
-      ...this.playPresentationController.getIgnoredObjects(),
-      ...this.browsePresentationController.getIgnoredObjects(),
-    ];
-  }
-
   getDebugSnapshot(): {
     activeRoomSignature: string | null;
     loadingRoomSignature: string | null;
@@ -481,7 +472,6 @@ export class OverworldRoomCommentsController {
 
     const targetSignatures = new Set<string>();
     const desiredMarkerKeys = new Set<string>();
-    let structureChanged = false;
     this.dataController.queueBrowseSummaryLoad(targets);
     for (const target of targets) {
       targetSignatures.add(target.signature);
@@ -505,7 +495,6 @@ export class OverworldRoomCommentsController {
         marker.zoomedInPosition = markerPosition.zoomedIn;
         marker.zoomedOutPosition = markerPosition.zoomedOut;
         this.browseCommentMarkersByKey.set(target.signature, marker);
-        structureChanged = true;
         continue;
       }
 
@@ -526,7 +515,6 @@ export class OverworldRoomCommentsController {
       }
       this.destroyBrowseCommentMarker(marker);
       this.browseCommentMarkersByKey.delete(key);
-      structureChanged = true;
     }
 
     if (
@@ -543,9 +531,6 @@ export class OverworldRoomCommentsController {
     }
 
     this.syncBrowseCommentMarkerPresentation();
-    if (structureChanged) {
-      this.options.onDisplayObjectsChanged?.();
-    }
   }
 
   private getBrowseCommentTargets(): BrowseCommentTarget[] {
@@ -1141,7 +1126,6 @@ export class OverworldRoomCommentsController {
     this.activeBrowseDanmaku.add(stream);
     this.placeBrowseDanmakuStream(stream, camera, zoom, track);
     stream.container.setAlpha(this.getBrowseDanmakuStreamAlpha(stream, track));
-    this.options.onDisplayObjectsChanged?.();
     return true;
   }
 
@@ -1538,7 +1522,6 @@ export class OverworldRoomCommentsController {
     stream.container.setVisible(false);
     stream.container.setAlpha(0);
     this.idleBrowseDanmaku.push(stream);
-    this.options.onDisplayObjectsChanged?.();
   }
 
   private hasBlockingModalOpen(): boolean {

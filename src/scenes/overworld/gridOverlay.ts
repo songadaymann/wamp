@@ -135,7 +135,4 @@ export class OverworldGridOverlayController {
     this.renderedContentRevision = -1;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return this.roomGridGraphics ? [this.roomGridGraphics] : [];
-  }
 }

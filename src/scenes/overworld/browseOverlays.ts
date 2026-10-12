@@ -235,20 +235,6 @@ export class OverworldBrowseOverlayController {
     this.selectedRoomPlayAffordance = null;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    const ignoredObjects: Phaser.GameObjects.GameObject[] = [];
-    for (const badge of this.roomActivityBadges) {
-      ignoredObjects.push(badge.container);
-    }
-    for (const badge of this.expandedRoomBadges) {
-      ignoredObjects.push(badge.container);
-    }
-    if (this.selectedRoomPlayAffordance) {
-      ignoredObjects.push(this.selectedRoomPlayAffordance.container);
-    }
-    return ignoredObjects;
-  }
-
   redrawBrowseOverlays(): void {
     this.destroyRoomActivityBadges();
     this.destroyExpandedRoomBadges();

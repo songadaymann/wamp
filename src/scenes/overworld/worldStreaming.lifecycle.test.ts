@@ -172,7 +172,6 @@ describe('world streaming loaded-room lifecycle', () => {
     const ensurePlayerTerrainColliders = vi.fn();
     const previewRenderer = { syncPreviewVisibility: vi.fn() };
     const options = {
-      onBackdropObjectsChanged: vi.fn(),
       onFullRoomVisibilityChanged: vi.fn(),
       onFullRoomSetChanged: vi.fn(),
     };
@@ -191,7 +190,6 @@ describe('world streaming loaded-room lifecycle', () => {
 
     expect(ensurePlayerTerrainColliders).toHaveBeenCalledOnce();
     expect(previewRenderer.syncPreviewVisibility).not.toHaveBeenCalled();
-    expect(options.onBackdropObjectsChanged).not.toHaveBeenCalled();
     expect(options.onFullRoomVisibilityChanged).not.toHaveBeenCalled();
     expect(options.onFullRoomSetChanged).not.toHaveBeenCalled();
   });
@@ -251,7 +249,6 @@ describe('world streaming loaded-room lifecycle', () => {
     const syncLiveObjectInteractions = vi.fn();
     const previewRenderer = { syncPreviewVisibility: vi.fn() };
     const options = {
-      onBackdropObjectsChanged: vi.fn(),
       onFullRoomSetChanged: vi.fn(() => {
         expect(destroyFullRoom).not.toHaveBeenCalled();
         expect(loadedFullRoomsById.get(first.id)?.collisionReady).toBe(false);
@@ -311,7 +308,6 @@ describe('world streaming loaded-room lifecycle', () => {
     expect(syncLiveObjectWorldColliders).toHaveBeenCalledOnce();
     expect(syncLiveObjectInteractions).toHaveBeenCalledOnce();
     expect(previewRenderer.syncPreviewVisibility).toHaveBeenCalledOnce();
-    expect(options.onBackdropObjectsChanged).toHaveBeenCalledOnce();
   });
 
   it('suspends old-room rendering and physics even when teardown has no frame headroom', () => {
@@ -354,7 +350,6 @@ describe('world streaming loaded-room lifecycle', () => {
           getPlayer: () => null,
           setLiveObjectsDormant,
           onFullRoomSetChanged: vi.fn(),
-          onBackdropObjectsChanged: vi.fn(),
         },
       },
     );
@@ -390,7 +385,6 @@ describe('world streaming loaded-room lifecycle', () => {
       getCurrentRoomCoordinates: () => ({ x: 4, y: 7 }),
       getPlayer: () => null,
       onFullRoomSetChanged: vi.fn(),
-      onBackdropObjectsChanged: vi.fn(),
       syncLiveObjectInteractions: vi.fn(),
     };
     const harness = Object.assign(
@@ -460,7 +454,6 @@ describe('world streaming loaded-room lifecycle', () => {
           setLiveObjectWorldCollisionTargetDormant,
           syncLiveObjectInteractions,
           onFullRoomSetChanged: vi.fn(),
-          onBackdropObjectsChanged: vi.fn(),
         },
       },
     );
@@ -513,7 +506,6 @@ describe('world streaming loaded-room lifecycle', () => {
           getLiveObjectPhysicsReconciliationGeneration: () => reconciliationGeneration,
           syncLiveObjectInteractions,
           onFullRoomSetChanged: vi.fn(),
-          onBackdropObjectsChanged: vi.fn(),
         },
       },
     );
@@ -649,7 +641,6 @@ describe('world streaming loaded-room lifecycle', () => {
         getCurrentRoomCoordinates: () => currentCoordinates.value,
         getPlayer: () => null,
         onFullRoomSetChanged: vi.fn(),
-        onBackdropObjectsChanged: vi.fn(),
         syncLiveObjectInteractions: vi.fn(),
       };
       const harness = Object.assign(
@@ -708,7 +699,6 @@ describe('world streaming loaded-room lifecycle', () => {
         options: {
           getCurrentRoomCoordinates: () => current.coordinates,
           getPlayer: () => null,
-          onBackdropObjectsChanged: vi.fn(),
           onFullRoomSetChanged: vi.fn(),
         },
       },
@@ -755,7 +745,6 @@ describe('world streaming loaded-room lifecycle', () => {
           getCurrentRoomCoordinates: () => current.coordinates,
           getPlayer: () => null,
           onFullRoomSetChanged: vi.fn(),
-          onBackdropObjectsChanged: vi.fn(),
         },
       },
     );
@@ -1169,7 +1158,6 @@ function createIncrementalTeardownHarness(
           events.push('finalized');
         }),
         onFullRoomSetChanged: vi.fn(),
-        onBackdropObjectsChanged: vi.fn(),
       },
     },
   );

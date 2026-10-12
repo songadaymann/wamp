@@ -122,7 +122,6 @@ interface OverworldPresenceControllerOptions {
   getZoom: () => number;
   onSnapshotUpdated?: () => void;
   onRoomActivityChanged?: () => void;
-  onGhostDisplayObjectsChanged?: () => void;
   onPvpInvite?: (invite: PvpInviteOffer) => void;
   onPvpInviteAccepted?: (message: Extract<PvpPresenceServerMessage, { type: 'pvp:invite:accepted' }>) => void;
   onPvpInviteDeclined?: (message: Extract<PvpPresenceServerMessage, { type: 'pvp:invite:declined' }>) => void;
@@ -546,21 +545,6 @@ export class OverworldPresenceController {
     this.visibleGhostCount = visibleGhostCount;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    const objects: Phaser.GameObjects.GameObject[] = [];
-    for (const renderedGhost of this.renderedGhostsByConnectionId.values()) {
-      objects.push(
-        renderedGhost.halo,
-        renderedGhost.sprite,
-        renderedGhost.label,
-        renderedGhost.actionIndicator,
-        renderedGhost.actionAccent,
-        renderedGhost.actionProjectile,
-      );
-    }
-    return objects;
-  }
-
   getRoomPopulation(coordinates: RoomCoordinates): number {
     return this.roomPopulationsById.get(roomIdFromCoordinates(coordinates)) ?? 0;
   }
@@ -921,21 +905,18 @@ export class OverworldPresenceController {
   private syncGhostRenderers(): void {
     const ghostsToRender = this.getPrioritizedGhostsToRender();
     this.ghostRenderBudget = this.getGhostRenderBudget();
-    let structureChanged = false;
     const nextGhostIds = new Set<string>();
     for (const ghost of ghostsToRender) {
       nextGhostIds.add(ghost.connectionId);
       const existing = this.renderedGhostsByConnectionId.get(ghost.connectionId);
       if (!existing) {
         this.renderedGhostsByConnectionId.set(ghost.connectionId, this.createRenderedGhost(ghost));
-        structureChanged = true;
         continue;
       }
 
       if (existing.presence.avatarId !== ghost.avatarId) {
         this.destroyRenderedGhost(existing);
         this.renderedGhostsByConnectionId.set(ghost.connectionId, this.createRenderedGhost(ghost));
-        structureChanged = true;
         continue;
       }
 
@@ -963,12 +944,8 @@ export class OverworldPresenceController {
 
       this.destroyRenderedGhost(renderedGhost);
       this.renderedGhostsByConnectionId.delete(connectionId);
-      structureChanged = true;
     }
 
-    if (structureChanged) {
-      this.options.onGhostDisplayObjectsChanged?.();
-    }
   }
 
   private syncRenderedGhostLabels(): void {
@@ -1284,7 +1261,6 @@ export class OverworldPresenceController {
       this.destroyRenderedGhost(renderedGhost);
     }
     this.renderedGhostsByConnectionId.clear();
-    this.options.onGhostDisplayObjectsChanged?.();
   }
 
   private destroyRenderedGhost(renderedGhost: RenderedGhost): void {
@@ -1308,7 +1284,6 @@ export class OverworldPresenceController {
           return;
         }
         this.refreshGhostVisibility();
-        this.options.onGhostDisplayObjectsChanged?.();
       })
       .catch((error) => {
         console.warn('Failed to load ghost avatar pack.', avatarId, error);

@@ -94,7 +94,6 @@ interface WorldTileClientControllerOptions {
   getRuntimePerformanceProfile?: () => PerformanceProfile;
   getMemoryPerformanceProfile?: () => PerformanceProfile;
   getSelectedCoordinates: () => RoomCoordinates;
-  onObjectsChanged?: () => void;
   onCoverageChanged?: () => void;
   onCanonicalRoomReady?: (roomId: string) => void;
 }
@@ -287,7 +286,6 @@ export class WorldTileClientController {
     this.layer = new WorldTilePhaserLayer(
       options.scene,
       getGpuWorldTileByteBudget(profile),
-      options.onObjectsChanged,
     );
     this.manifestLoader = new WorldTileManifestLoader(options.repository);
     this.roomManifestPrefetcher = new WorldTileRoomManifestPrefetcher({
@@ -576,10 +574,6 @@ export class WorldTileClientController {
 
   getImages(): Phaser.GameObjects.Image[] {
     return this.layer.getImages();
-  }
-
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return this.layer.getBackdropIgnoredObjects();
   }
 
   trackOptimisticPublishedRoom(roomId: string, version: number): void {

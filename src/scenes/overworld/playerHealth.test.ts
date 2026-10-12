@@ -15,7 +15,7 @@ function fixture() {
   const host = { scene: {} as never, getMaximumHearts: () => state.maximum,
     isActive: () => state.active, isPvpActive: () => state.pvp, isDeathPending: () => state.pending,
     getCurrentTime: () => state.now, getPlayerBody: () => body as never,
-    getPlayerSprite: () => sprite as never, onHurt: vi.fn(), onDisplayObjectsChanged: vi.fn() };
+    getPlayerSprite: () => sprite as never, onHurt: vi.fn() };
   const controller = new OverworldPlayerHealthController(host);
   return { controller, state, sprite, host };
 }

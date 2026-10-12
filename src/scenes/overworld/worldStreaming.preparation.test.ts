@@ -78,7 +78,6 @@ describe('world streaming prepared-room activation', () => {
             expect(loadedRoom.collisionReady).toBe(false);
             activationChecks.push('interactions');
           }),
-          onBackdropObjectsChanged: vi.fn(),
           onFullRoomSetChanged,
         },
         isFullRoomPreparationSnapshotCurrent: vi.fn(() => true),
@@ -188,7 +187,6 @@ describe('world streaming prepared-room activation', () => {
           getRoomOrigin: () => ({ x: 0, y: 0 }),
           finalizeLiveObjectCreation: vi.fn(),
           syncLiveObjectInteractions,
-          onBackdropObjectsChanged: vi.fn(),
           onFullRoomDestroyed,
           onFullRoomSetChanged,
         },
@@ -232,14 +230,12 @@ describe('world streaming prepared-room activation', () => {
     expect(repairedWorldRoomIds.at(-1)).toEqual([survivorRoom.id]);
     expect(repairedInteractionRoomIds.at(-1)).toEqual([survivorRoom.id]);
     expect(harness.previewRenderer.syncPreviewVisibility).toHaveBeenCalledOnce();
-    expect(harness.options.onBackdropObjectsChanged).toHaveBeenCalledOnce();
     expect(harness.retainPreparedTransitionRoom).not.toHaveBeenCalled();
   });
 
   it.each([
     'activation',
     'preview',
-    'backdrop',
     'seam',
     'replacement',
     'retention',
@@ -289,7 +285,6 @@ describe('world streaming prepared-room activation', () => {
       };
       const setLiveObjectsDormant = failOnceAt('activation');
       const syncPreviewVisibility = failOnceAt('preview');
-      const onBackdropObjectsChanged = failOnceAt('backdrop');
       const onFullRoomSetChanged = failOnceAt('seam');
       const onFullRoomReplaced = failOnceAt('replacement');
       const retainPreparedTransitionRoom = failOnceAt('retention');
@@ -306,7 +301,6 @@ describe('world streaming prepared-room activation', () => {
             getRoomOrigin: () => ({ x: 0, y: 0 }),
             setLiveObjectsDormant,
             syncLiveObjectInteractions: vi.fn(),
-            onBackdropObjectsChanged,
             onFullRoomSetChanged,
             onFullRoomReplaced,
           },
@@ -403,7 +397,6 @@ describe('world streaming prepared-room activation', () => {
           getRoomOrigin: () => ({ x: 0, y: 0 }),
           finalizeLiveObjectCreation: vi.fn(),
           syncLiveObjectInteractions: vi.fn(),
-          onBackdropObjectsChanged: vi.fn(),
           onFullRoomSetChanged: vi.fn(),
           onFullRoomReplaced,
           onFullRoomDestroyed,
@@ -484,7 +477,6 @@ describe('world streaming prepared-room activation', () => {
         },
         options: {
           onFullRoomSetChanged: vi.fn(),
-          onBackdropObjectsChanged: vi.fn(),
           onFullRoomDestroyed: vi.fn(),
         },
         cancelPendingFullRoomTeardown: vi.fn(),

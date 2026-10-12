@@ -46,7 +46,6 @@ interface OverworldRoomChatControllerOptions {
   getPlayerAnchor: () => { x: number; y: number } | null;
   getRenderedGhostsByConnectionId: () => Map<string, RenderedGhost>;
   showTransientStatus?: (message: string) => void;
-  onDisplayObjectsChanged?: () => void;
   document?: Document;
 }
 
@@ -284,10 +283,6 @@ export class OverworldRoomChatController {
     return true;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    return Array.from(this.renderedBubblesByUserId.values(), (bubble) => bubble.container);
-  }
-
   getDebugSnapshot(): {
     identity: WorldPresenceIdentity | null;
     snapshot: WorldRoomChatSnapshot | null;
@@ -445,7 +440,6 @@ export class OverworldRoomChatController {
       ? (this.snapshot?.messages ?? []).filter((message) => message.roomId === currentRoomId)
       : [];
     const nextUserIds = new Set<string>();
-    let structureChanged = false;
 
     for (const message of nextMessages) {
       const anchor = this.resolveBubbleAnchor(message);
@@ -459,7 +453,6 @@ export class OverworldRoomChatController {
         const bubble = this.createRenderedBubble(message);
         bubble.container.setPosition(anchor.x, anchor.y);
         this.renderedBubblesByUserId.set(message.userId, bubble);
-        structureChanged = true;
         continue;
       }
 
@@ -480,12 +473,8 @@ export class OverworldRoomChatController {
 
       this.destroyRenderedBubble(bubble);
       this.renderedBubblesByUserId.delete(userId);
-      structureChanged = true;
     }
 
-    if (structureChanged) {
-      this.options.onDisplayObjectsChanged?.();
-    }
   }
 
   private resolveBubbleAnchor(message: RoomChatMessageRecord): { x: number; y: number } | null {
@@ -587,7 +576,6 @@ export class OverworldRoomChatController {
       this.destroyRenderedBubble(bubble);
     }
     this.renderedBubblesByUserId.clear();
-    this.options.onDisplayObjectsChanged?.();
   }
 
   private destroyRenderedBubble(bubble: RenderedRoomChatBubble): void {

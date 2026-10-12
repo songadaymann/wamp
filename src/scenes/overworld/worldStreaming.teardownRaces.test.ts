@@ -1131,7 +1131,6 @@ function createStreamingHarness(
         onFullRoomDestroyed: vi.fn(),
         onFullRoomReplaced: vi.fn(),
         onFullRoomSetChanged: vi.fn(),
-        onBackdropObjectsChanged: vi.fn(),
       },
     },
   );

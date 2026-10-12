@@ -198,7 +198,6 @@ describe('world streaming dormant destination lifecycle', () => {
           scene,
           getRoomOrigin: () => ({ x: 0, y: 0 }),
           syncLiveObjectInteractions: vi.fn(),
-          onBackdropObjectsChanged: vi.fn(),
           onFullRoomSetChanged,
           onFullRoomCollisionReady,
         },
@@ -463,7 +462,6 @@ describe('world streaming dormant destination lifecycle', () => {
           getRoomOrigin: () => ({ x: 0, y: 0 }),
           finalizeLiveObjectCreation: vi.fn(),
           syncLiveObjectInteractions: vi.fn(),
-          onBackdropObjectsChanged: vi.fn(),
           onFullRoomSetChanged: vi.fn(() => {
             observerStates.push({
               published: loadedFullRoomsById.get(room.id) === loadedRoom,

@@ -13,16 +13,13 @@ vi.mock('phaser', () => ({
 describe('RoomCommentsPlayPresentationController', () => {
   it('owns pin creation, position, popover interaction, reconciliation, and teardown', () => {
     const scene = createScene();
-    const onDisplayObjectsChanged = vi.fn();
     const controller = new RoomCommentsPlayPresentationController({
       scene: scene as never,
       getRoomOrigin: ({ x, y }) => ({ x: x * 640, y: y * 352 }),
-      onDisplayObjectsChanged,
     });
 
     controller.sync([comment('comment-a', 2, 3, 18, 42)]);
     expect(controller.getRenderedCount()).toBe(1);
-    expect(onDisplayObjectsChanged).toHaveBeenCalledOnce();
     const container = controller.getIgnoredObjects()[0] as unknown as TestDisplayObject;
     expect(container.position).toEqual({ x: 2 * 640 + 18, y: 3 * 352 + 20 });
     expect(container.depth).toBe(262);
@@ -39,12 +36,10 @@ describe('RoomCommentsPlayPresentationController', () => {
 
     controller.sync([comment('comment-a', 4, 5, 10, 20)]);
     expect(container.position).toEqual({ x: 4 * 640 + 10, y: 5 * 352 - 2 });
-    expect(onDisplayObjectsChanged).toHaveBeenCalledOnce();
 
     controller.sync([]);
     expect(controller.getRenderedCount()).toBe(0);
     expect(container.destroyed).toBe(true);
-    expect(onDisplayObjectsChanged).toHaveBeenCalledTimes(2);
 
     controller.sync([comment('comment-b', 0, 0, 1, 23)]);
     const replacement = controller.getIgnoredObjects()[0] as unknown as TestDisplayObject;

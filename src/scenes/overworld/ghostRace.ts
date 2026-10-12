@@ -20,7 +20,6 @@ interface GhostRaceOptions {
   getMode(): string;
   getUserId(): string | null;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
-  onDisplayObjectsChanged(): void;
   onRaceInfoChanged(info: GhostRaceInfo | null): void;
   showStatus?: (message: string) => void;
 }
@@ -54,12 +53,10 @@ export class OverworldGhostRaceController {
     else void this.refreshRecording();
   }
   private setRecording(ghost: RunGhost | null): void {
-    const changed = Boolean(this.sprite);
     this.generation++; this.sprite?.destroy();
     this.sprite = null; this.pack = null; this.position = null;
     this.updateRaceInfo(null);
     this.playback = ghost ? new GhostRacePlayback(ghost) : null;
-    if (changed) this.options.onDisplayObjectsChanged();
     if (!ghost) return;
     const generation = this.generation;
     void ensureSceneAvatarPackLoaded(this.options.scene, ghost.avatarId).then(pack => {
@@ -68,7 +65,6 @@ export class OverworldGhostRaceController {
       this.sprite = this.options.scene.add.sprite(0, 0, pack.idleTextureKey, pack.idleFrame)
         .setOrigin(0.5, 1).setAlpha(0.42).setTint(0x70e5ff).setDepth(24).setVisible(false);
       this.sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-      this.options.onDisplayObjectsChanged();
     }).catch(() => { if (generation === this.generation) this.clear(); });
   }
   update(): void {
@@ -141,14 +137,12 @@ export class OverworldGhostRaceController {
     }
   }
   clear(): void {
-    const changed = Boolean(this.sprite);
     this.refreshRequest?.abort(); this.refreshRequest = null;
     this.unsubscribe?.(); this.unsubscribe = null; this.targetRoom = null;
     this.generation++; this.sprite?.destroy();
     this.sprite = null; this.pack = null; this.position = null;
     this.updateRaceInfo(null);
     this.playback = null; this.choice = 'off'; this.identity = this.options.getUserId();
-    if (changed) this.options.onDisplayObjectsChanged();
   }
   getDebugSnapshot() {
     return { choice: this.choice, attemptId: this.playback?.ghost.attemptId ?? null,

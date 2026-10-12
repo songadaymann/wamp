@@ -7,7 +7,6 @@ import {
 
 interface OverworldBackdropControllerOptions {
   scene: Phaser.Scene;
-  collectWorldObjects: () => Phaser.GameObjects.GameObject[];
   updateWorldBackgrounds: (camera: Phaser.Cameras.Scene2D.Camera) => void;
 }
 
@@ -27,7 +26,6 @@ export interface OverworldBackdropDisplayHealth {
     visible: boolean;
     alpha: number;
   } | null;
-  worldLayer: Record<string, unknown> | null;
   backdropLayer: Record<string, unknown> | null;
 }
 
@@ -36,12 +34,17 @@ const DEFAULT_DEPENDENCIES: OverworldBackdropControllerDependencies = {
   getStarfieldLayerConfig,
 };
 
+/**
+ * The starfield is drawn by its own unzoomed camera behind the main one. That camera renders
+ * only the backdrop layer, so world objects need no registration to stay off it (F068); the
+ * main camera ignores the backdrop layer.
+ */
 export class OverworldBackdropController {
   private readonly dependencies: OverworldBackdropControllerDependencies;
   private starfieldSprites: Phaser.GameObjects.TileSprite[] = [];
   private backdropCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private backdropDisplayLayer: Phaser.GameObjects.Layer | null = null;
-  private worldDisplayLayer: Phaser.GameObjects.Layer | null = null;
+  private restoreVisibleChildren: (() => void) | null = null;
 
   constructor(
     private readonly options: OverworldBackdropControllerOptions,
@@ -53,7 +56,6 @@ export class OverworldBackdropController {
   create(): void {
     const { scene } = this.options;
     this.backdropDisplayLayer = scene.add.layer().setDepth(-1000);
-    this.worldDisplayLayer = scene.add.layer().setDepth(0);
     this.starfieldSprites = [0, 1].map((index) => {
       const config = this.dependencies.getStarfieldLayerConfig(index);
       return this.dependencies.createStarfieldTileSprite(scene, {
@@ -110,14 +112,6 @@ export class OverworldBackdropController {
       this.backdropDisplayLayer.setActive(true).setVisible(true).setAlpha(1);
       mainCamera.ignore(this.backdropDisplayLayer);
     }
-
-    if (!this.backdropCamera || !this.worldDisplayLayer) {
-      return;
-    }
-
-    this.worldDisplayLayer.setActive(true).setVisible(true).setAlpha(1);
-    this.worldDisplayLayer.add(this.options.collectWorldObjects());
-    this.backdropCamera.ignore(this.worldDisplayLayer);
   }
 
   reset(): void {
@@ -126,6 +120,7 @@ export class OverworldBackdropController {
   }
 
   beginReset(): void {
+    this.uninstallBackdropCameraFilter();
     const { cameras } = this.options.scene;
     if (this.backdropCamera && cameras.cameras.includes(this.backdropCamera)) {
       cameras.remove(this.backdropCamera, true);
@@ -135,9 +130,7 @@ export class OverworldBackdropController {
   finishReset(): void {
     this.starfieldSprites = [];
     this.backdropDisplayLayer?.destroy();
-    this.worldDisplayLayer?.destroy();
     this.backdropDisplayLayer = null;
-    this.worldDisplayLayer = null;
     this.backdropCamera = null;
   }
 
@@ -147,9 +140,8 @@ export class OverworldBackdropController {
     }
     this.starfieldSprites = [];
     this.backdropDisplayLayer?.destroy();
-    this.worldDisplayLayer?.destroy();
     this.backdropDisplayLayer = null;
-    this.worldDisplayLayer = null;
+    this.uninstallBackdropCameraFilter();
 
     const { cameras } = this.options.scene;
     if (this.backdropCamera && cameras.cameras.includes(this.backdropCamera)) {
@@ -163,7 +155,7 @@ export class OverworldBackdropController {
   }
 
   getLayerCount(): number {
-    return Number(Boolean(this.backdropDisplayLayer)) + Number(Boolean(this.worldDisplayLayer));
+    return Number(Boolean(this.backdropDisplayLayer));
   }
 
   getDisplayHealth(): OverworldBackdropDisplayHealth {
@@ -181,7 +173,6 @@ export class OverworldBackdropController {
             alpha: this.backdropCamera.alpha,
           }
         : null,
-      worldLayer: describeDisplayLayer(this.worldDisplayLayer, mainCamera),
       backdropLayer: describeDisplayLayer(this.backdropDisplayLayer, this.backdropCamera),
     };
   }
@@ -198,10 +189,36 @@ export class OverworldBackdropController {
         cameras.cameras.splice(backdropIndex, 1);
         cameras.cameras.unshift(this.backdropCamera);
       }
+      this.installBackdropCameraFilter();
       return;
     }
 
     this.backdropCamera.setSize(scale.width, scale.height);
+  }
+
+  /** The backdrop camera renders the backdrop layer and nothing else. */
+  private installBackdropCameraFilter(): void {
+    if (this.restoreVisibleChildren) return;
+    const { cameras } = this.options.scene;
+    const getVisibleChildren = cameras.getVisibleChildren;
+    const backdropOnly: Phaser.GameObjects.GameObject[] = [];
+    cameras.getVisibleChildren = (children, camera) => {
+      if (camera !== this.backdropCamera) return getVisibleChildren.call(cameras, children, camera);
+      backdropOnly.length = 0;
+      const layer = this.backdropDisplayLayer;
+      if (layer?.displayList && layer.willRender(camera)) {
+        backdropOnly.push(layer as unknown as Phaser.GameObjects.GameObject);
+      }
+      return backdropOnly;
+    };
+    this.restoreVisibleChildren = () => {
+      cameras.getVisibleChildren = getVisibleChildren;
+    };
+  }
+
+  private uninstallBackdropCameraFilter(): void {
+    this.restoreVisibleChildren?.();
+    this.restoreVisibleChildren = null;
   }
 }
 

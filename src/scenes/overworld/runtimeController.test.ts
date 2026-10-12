@@ -108,7 +108,6 @@ describe('overworld runtime room hydration', () => {
       setShouldCenterCamera: vi.fn(),
       applyCameraMode: vi.fn(),
       syncGhostVisibility: vi.fn(),
-      syncBackdropCameraIgnores: vi.fn(),
     };
     return {
       host,
@@ -270,7 +269,6 @@ describe('overworld room seam reconciliation', () => {
       destroyRoomEdgeWalls: vi.fn(),
       getPlayerBody: vi.fn(() => null),
       getMode: vi.fn(() => 'play' as const),
-      syncBackdropCameraIgnores: vi.fn(),
     };
     const controller = new OverworldRuntimeController(
       host as never,
@@ -283,10 +281,9 @@ describe('overworld room seam reconciliation', () => {
     expect(host.destroyRoomEdgeWalls).toHaveBeenCalledWith(loadedRooms[0]);
     expect(host.destroyRoomEdgeWalls).toHaveBeenCalledWith(loadedRooms[1]);
     expect(host.destroyRoomEdgeWalls).not.toHaveBeenCalledWith(loadedRooms[2]);
-    expect(host.syncBackdropCameraIgnores).toHaveBeenCalledTimes(1);
   });
 
-  it('batches backdrop ownership refresh across a full edge-wall rebuild', () => {
+  it('rebuilds every loaded room on a full edge-wall rebuild', () => {
     const loadedRooms = [
       { room: { id: '0,0', coordinates: { x: 0, y: 0 } }, edgeWalls: [] },
       { room: { id: '1,0', coordinates: { x: 1, y: 0 } }, edgeWalls: [] },
@@ -296,7 +293,6 @@ describe('overworld room seam reconciliation', () => {
       destroyRoomEdgeWalls: vi.fn(),
       getPlayerBody: vi.fn(() => null),
       getMode: vi.fn(() => 'play' as const),
-      syncBackdropCameraIgnores: vi.fn(),
     };
     const controller = new OverworldRuntimeController(
       host as never,
@@ -306,7 +302,6 @@ describe('overworld room seam reconciliation', () => {
     controller.syncEdgeWalls();
 
     expect(host.destroyRoomEdgeWalls).toHaveBeenCalledTimes(2);
-    expect(host.syncBackdropCameraIgnores).toHaveBeenCalledTimes(1);
   });
 });
 

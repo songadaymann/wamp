@@ -622,7 +622,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     super({ key: 'OverworldPlayScene' });
     this.backdropController = new OverworldBackdropController({
       scene: this,
-      collectWorldObjects: () => this.collectBackdropIgnoredObjects(),
       updateWorldBackgrounds: (camera) =>
         this.worldStreamingController.updateFullRoomBackgrounds(camera),
     });
@@ -661,7 +660,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       getMode: () => this.mode,
       getUserId: () => getAuthDebugState().authenticated ? getAuthDebugState().user?.id ?? null : null,
       getRoomOrigin: coordinates => this.getRoomOrigin(coordinates),
-      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
       onRaceInfoChanged: info => this.hudBridge?.setGhostRaceInfo(info),
       showStatus: message => this.showTransientStatus(message),
     });
@@ -684,7 +682,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         playSfx('player-hurt');
         this.showTransientStatus('You lost a heart.');
       },
-      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
     const guestRuns = this.guestRunPlaybackController = new GuestRunPlaybackController({
       getCurrentRun: kind => kind === 'room' ? this.goalRunController?.getCurrentRun() ?? null : this.activeCourseRun,
@@ -747,7 +744,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       },
       onChanged: () => {
         this.liveObjectController?.syncRespawnCheckpointPresentation();
-        this.syncBackdropCameraIgnores();
       },
     });
     this.lostSongController = new OverworldLostSongController({
@@ -999,7 +995,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         this.liveObjectController.syncLiveObjectInteractions(loadedRooms),
       getProtectedFullRoomIds: (targetFullRoomIds) =>
         this.getProtectedMovingPlatformSourceRoomIds(targetFullRoomIds),
-      onBackdropObjectsChanged: () => this.syncBackdropCameraIgnores(),
       onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
       onFullRoomSetChanged: (coordinates) => {
         this.syncGhostVisibility();
@@ -1129,7 +1124,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         this.queuePresenceSnapshotSync();
       },
       onRoomActivityChanged: () => this.redrawWorld(),
-      onGhostDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
       onPvpInvite: (invite) => {
         void this.handlePvpInvite(invite);
       },
@@ -1146,7 +1140,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         this.fxController?.playSwordSlashFx(x, y, facing, downward),
       playMuzzleFlashFx: (x, y, facing) =>
         this.fxController?.playMuzzleFlashFx(x, y, facing),
-      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
     this.pvpInstanceRenderer = new MultiplayerRemotePlayerRenderer({
       scene: this,
@@ -1154,14 +1147,12 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       playerHeight: this.PLAYER_HEIGHT,
       playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
       presentCombatEvent: (event, receivedAt) => this.presentRemotePvpCombatEvent(event, receivedAt),
-      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
     this.pvpLocalPresentationController = new OverworldPvpLocalPresentationController({
       scene: this,
       playerWidth: this.PLAYER_WIDTH,
       playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
       getPlayerSprite: () => this.playerSprite,
-      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
     this.pvpArenaController = new OverworldPvpArenaController({
       getIdentity: () => this.presenceController.getIdentity(),
@@ -1218,7 +1209,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
           : null,
       getRenderedGhostsByConnectionId: () => this.presenceController.getRenderedGhostsByConnectionId(),
       showTransientStatus: (message) => this.showTransientStatus(message),
-      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
     this.browseRealtimeStartupGate = new BrowseRealtimeStartupGate({
       getMode: () => this.mode,
@@ -1243,7 +1233,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       selectRoomCoordinates: (coordinates) => this.selectRoomCoordinates(coordinates),
       jumpToRoomCoordinates: (coordinates) => this.jumpToCoordinates(coordinates),
       showTransientStatus: (message) => this.showTransientStatus(message),
-      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
       waitForBrowseDiscoveryReady: (signal) =>
         this.worldStreamingController.waitForBrowseCommentDiscoveryReady(signal),
     });
@@ -1580,7 +1569,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         getExpandedRoomMembershipAt: (coordinates) => this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.expandedRoom ?? null,
         isPlayableRoomCollisionReady: (coordinates) =>
           this.worldStreamingController.isPlayableRoomCollisionReady(coordinates),
-        syncBackdropCameraIgnores: () => this.syncBackdropCameraIgnores(),
       },
       {
         edgeWallThickness: EDGE_WALL_THICKNESS,
@@ -1598,7 +1586,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         clearRoomInteractions: (loadedRoom) =>
           this.liveObjectController.clearRoomInteractions(loadedRoom),
         destroyRoomEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
-        syncBackdropCameraIgnores: () => this.syncBackdropCameraIgnores(),
       },
       {
         playerWidth: this.PLAYER_WIDTH,
@@ -2369,7 +2356,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.hudBridge = new OverworldHudBridge();
     this.fxController = new SceneFxController({
       scene: this,
-      onDisplayObjectsChanged: () => this.syncBackdropCameraIgnores(),
     });
 
     this.setupGameplayKeys();
@@ -2381,7 +2367,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged);
     window.addEventListener(GUEST_RUN_PROGRESS_CHANGED_EVENT, this.handleGuestRunProgressChanged);
     window.addEventListener(PLAYER_AVATAR_CHANGED_EVENT, this.handlePlayerAvatarChanged);
-    this.syncBackdropCameraIgnores();
 
     this.scale.on('resize', this.handleResize, this);
     this.events.on(
@@ -2695,16 +2680,13 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       : null;
     // Most rooms have no dynamic lighting: skip building emitters and ambient bounds every frame (F012).
     if (!currentRoom || !this.playerBody || !roomLightingUsesDynamicOverlay(currentRoom.lighting)) {
-      const structureChanged = this.lightingController.sync({
+      this.lightingController.sync({
         roomId: currentRoom?.id ?? null,
         bounds: null,
         lighting: currentRoom?.lighting ?? null,
         emitters: [],
         ambientBounds: [],
       });
-      if (structureChanged) {
-        this.syncBackdropCameraIgnores();
-      }
       return;
     }
 
@@ -2741,7 +2723,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       ...pvpOpponentEmitters,
       ...(currentLoadedRoom?.staticLighting.emitters ?? []),
     ];
-    const structureChanged = this.lightingController.sync({
+    this.lightingController.sync({
       roomId: currentRoom.id,
       bounds: {
         x: roomOrigin.x,
@@ -2764,40 +2746,30 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         staticTileEmitterCount: currentLoadedRoom?.staticLighting.tileCount ?? 0,
       },
     });
-
-    if (structureChanged) {
-      this.syncBackdropCameraIgnores();
-    }
   }
 
   private updateRoomWeather(): void {
     if (this.mode !== 'play' || !this.player || !this.playerBody) {
-      const structureChanged = this.weatherController.sync({
+      this.weatherController.sync({
         roomId: null,
         bounds: null,
         weather: null,
       });
-      if (structureChanged) {
-        this.syncBackdropCameraIgnores();
-      }
       return;
     }
 
     const currentRoom = this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates);
     if (!currentRoom) {
-      const structureChanged = this.weatherController.sync({
+      this.weatherController.sync({
         roomId: null,
         bounds: null,
         weather: null,
       });
-      if (structureChanged) {
-        this.syncBackdropCameraIgnores();
-      }
       return;
     }
 
     const roomOrigin = this.getRoomOrigin(currentRoom.coordinates);
-    const structureChanged = this.weatherController.sync({
+    this.weatherController.sync({
       roomId: currentRoom.id,
       bounds: {
         x: roomOrigin.x,
@@ -2810,10 +2782,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         ? getCachedRoomWeatherSurfaceSegments(currentRoom, roomOrigin)
         : [],
     });
-
-    if (structureChanged) {
-      this.syncBackdropCameraIgnores();
-    }
   }
 
   private resetRuntimeState(): void {
@@ -2932,61 +2900,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.backdropController.resize();
   }
 
-  private syncBackdropCameraIgnores(): void {
-    this.backdropController.syncIgnores();
-  }
 
-  private collectBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    const ignoredObjects: Phaser.GameObjects.GameObject[] = [];
-
-    ignoredObjects.push(...this.gridOverlayController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.roomCellController.getBackdropIgnoredObjects());
-    if (this.loadingText) ignoredObjects.push(this.loadingText);
-    ignoredObjects.push(...this.viewportController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.goalMarkerController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.browseOverlayController.getBackdropIgnoredObjects());
-    if (this.player) ignoredObjects.push(this.player);
-    if (this.playerSprite) ignoredObjects.push(this.playerSprite);
-    ignoredObjects.push(...this.pvpLocalPresentationController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.playerHealthController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.combatPresentationController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.combatController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.pvpInstanceRenderer.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.lightingController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.weatherController.getBackdropIgnoredObjects());
-
-    for (const image of this.previewImages) {
-      ignoredObjects.push(image);
-    }
-    ignoredObjects.push(...this.worldStreamingController.getWorldTileBackdropIgnoredObjects());
-
-    for (const loadedRoom of this.loadedFullRoomsById.values()) {
-      if (loadedRoom.backgroundColorRect) {
-        ignoredObjects.push(loadedRoom.backgroundColorRect);
-      }
-      for (const backgroundSprite of loadedRoom.backgroundSprites) {
-        ignoredObjects.push(backgroundSprite.sprite);
-      }
-      ignoredObjects.push(loadedRoom.image, loadedRoom.terrainLayer);
-      if (loadedRoom.foregroundImage) {
-        ignoredObjects.push(loadedRoom.foregroundImage);
-      }
-      for (const liveObject of loadedRoom.liveObjects) {
-        ignoredObjects.push(liveObject.sprite);
-        ignoredObjects.push(...liveObject.helpers);
-      }
-      for (const wall of loadedRoom.edgeWalls) {
-        ignoredObjects.push(wall.rect);
-      }
-    }
-
-    ignoredObjects.push(...this.presenceController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.roomChatController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.roomCommentsController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...this.presenceOverlayController.getBackdropIgnoredObjects());
-    ignoredObjects.push(...(this.fxController?.getBackdropIgnoredObjects() ?? []));
-    return ignoredObjects;
-  }
 
   private selectRoomCoordinates(coordinates: RoomCoordinates): void {
     if (
@@ -4115,7 +4029,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private redrawGoalMarkers(): void {
     this.respawnCheckpointController.syncScope();
     this.goalMarkerController.redrawMarkers(this.currentGoalRun, this.activeCourseRun);
-    this.syncBackdropCameraIgnores();
   }
 
   private syncSharedConstructionPreviews(): void {
@@ -4214,7 +4127,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
 
     this.browseOverlayController.redrawBrowseOverlays();
     this.presenceOverlayController.syncOverlays();
-    this.syncBackdropCameraIgnores();
   }
 
   private syncFocusedRoomVisuals(): void {
@@ -4222,7 +4134,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.browseOverlayController.redrawBrowseOverlays();
     this.presenceOverlayController.syncOverlays();
     this.updateBackdrop();
-    this.syncBackdropCameraIgnores();
   }
 
   private updateCameraBounds(): void {
@@ -6130,7 +6041,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   toggleRoomComments(): void {
     const visible = this.roomCommentsController.toggleCommentsVisible();
     this.showTransientStatus(visible ? 'Room comments shown.' : 'Room comments hidden.');
-    this.syncBackdropCameraIgnores();
     this.renderHud();
   }
 
@@ -6278,7 +6188,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.measureMobilePerformance('presence.snapshotSync', () => {
       this.syncSharedConstructionPreviews();
       this.presenceOverlayController.syncOverlays();
-      this.syncBackdropCameraIgnores();
       this.renderHud();
     });
   }
