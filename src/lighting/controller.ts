@@ -295,18 +295,6 @@ export class RoomLightingController {
     return structureChanged;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    const objects: Phaser.GameObjects.GameObject[] = [];
-    if (this.overlay) {
-      objects.push(this.overlay);
-    }
-    if (this.glowOverlay) {
-      objects.push(this.glowOverlay);
-    }
-    objects.push(...this.ambientOverlays);
-    return objects;
-  }
-
   getDebugState(): RoomLightingDebugState {
     return {
       ...this.debugState,

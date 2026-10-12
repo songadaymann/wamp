@@ -166,13 +166,6 @@ export class RoomWeatherController {
     return structureChanged;
   }
 
-  getBackdropIgnoredObjects(): Phaser.GameObjects.GameObject[] {
-    const objects: Phaser.GameObjects.GameObject[] = [];
-    if (this.fogLayer) objects.push(this.fogLayer);
-    if (this.graphics) objects.push(this.graphics);
-    return objects;
-  }
-
   getDebugState(): RoomWeatherDebugState {
     return { ...this.debugState };
   }

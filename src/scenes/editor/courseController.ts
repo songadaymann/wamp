@@ -28,7 +28,6 @@ import { getSelectedCoursePreviewForPlay } from './playMode';
 
 interface EditorCourseControllerHost {
   getRoomId(): string;
-  syncBackgroundCameraIgnores(): void;
   updateGoalUi(): void;
   clearRoomGoalPlacementMode(): void;
 }
@@ -63,14 +62,6 @@ export class EditorCourseController {
     this.activeCourseMarkerEdit = null;
     this.courseGoalPlacementMode = null;
     this.courseEditorStatusText = null;
-  }
-
-  getMarkerSprites(): Phaser.GameObjects.Sprite[] {
-    return [...this.courseMarkerSprites];
-  }
-
-  getMarkerLabels(): Phaser.GameObjects.Text[] {
-    return [...this.courseMarkerLabels];
   }
 
   getGoalPlacementMode(): EditorMarkerPlacementMode | null {
@@ -143,7 +134,6 @@ export class EditorCourseController {
     this.destroyCourseMarkerOverlays();
     const markers = buildCourseMarkerDescriptors(this.getActiveCourseDraft(), this.host.getRoomId());
     if (markers.length === 0) {
-      this.host.syncBackgroundCameraIgnores();
       return;
     }
 
@@ -170,8 +160,6 @@ export class EditorCourseController {
         this.courseMarkerLabels.push(label);
       }
     }
-
-    this.host.syncBackgroundCameraIgnores();
   }
 
   setCourseGoalType(goalType: CourseGoalType | null): void {

@@ -52,7 +52,7 @@ function harness(room: RoomSnapshot) {
     getSelectedWeatherSettings: () => room.weather, setSelectedWeatherSettings: vi.fn(),
     getPlacedObjects: () => placedObjects, setPlacedObjects: (next: PlacedObject[]) => { placedObjects = next; },
     updateBackgroundSelectValue: vi.fn(), updateLightingControlsValue: vi.fn(), updateWeatherControlsValue: vi.fn(),
-    updateBackground: vi.fn(), updateGoalUi: vi.fn(), syncBackgroundCameraIgnores: vi.fn(),
+    updateBackground: vi.fn(), updateGoalUi: vi.fn(),
     updatePersistenceStatus: vi.fn(), canSaveDraft: () => true, recordBuildPlacement: vi.fn(),
   };
   const runtime = new EditorEditRuntime({} as never, host as never);

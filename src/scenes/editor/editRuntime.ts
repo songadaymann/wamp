@@ -283,7 +283,6 @@ interface EditorEditRuntimeHost {
   updateWeatherControlsValue(weather: RoomWeatherSettings): void;
   updateBackground(): void;
   updateGoalUi(): void;
-  syncBackgroundCameraIgnores(): void;
   updatePersistenceStatus(text: string): void;
   canSaveDraft(): boolean;
   recordBuildPlacement(count: number): void;
@@ -316,10 +315,7 @@ export class EditorEditRuntime {
     private readonly scene: Phaser.Scene,
     private readonly host: EditorEditRuntimeHost,
   ) {
-    this.documentPresentation = new EditorDocumentPresentationController(
-      scene,
-      () => this.host.syncBackgroundCameraIgnores(),
-    );
+    this.documentPresentation = new EditorDocumentPresentationController(scene);
     this.smartTiles = new SmartTileController(() => ({
       brushId: editorState.smartMaterial,
       styleId: editorState.smartStyle,
@@ -2393,7 +2389,6 @@ export class EditorEditRuntime {
       goal: this.roomGoal,
     });
     this.host.updateGoalUi();
-    this.host.syncBackgroundCameraIgnores();
   }
 
   getPlacedObjectByInstanceId(instanceId: string | null | undefined): PlacedObject | null {

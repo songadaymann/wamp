@@ -9,7 +9,6 @@ interface ObjectMoveHost {
   prepare(runtime: EditorEditRuntime): void;
   showStatus(message: string): void;
   onChanged(): void;
-  onOverlayCreated?(graphics: Phaser.GameObjects.Graphics): void;
 }
 
 interface DragState {
@@ -303,7 +302,6 @@ export class EditorObjectMoveController {
   private getOverlay(): Phaser.GameObjects.Graphics {
     if (!this.overlay) {
       this.overlay = this.scene.add.graphics().setDepth(210);
-      this.host.onOverlayCreated?.(this.overlay);
     }
     return this.overlay;
   }

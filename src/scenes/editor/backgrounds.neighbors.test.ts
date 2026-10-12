@@ -10,7 +10,7 @@ function harness() {
   const snapshot = createDefaultRoomSnapshot('1,0', { x: 1, y: 0 }); snapshot.status = 'published';
   const repository = { loadWorldWindow: vi.fn().mockResolvedValue({ rooms: [{ id: '1,0', coordinates: { x: 1, y: 0 }, state: 'published' }] }), loadPublishedRoom: vi.fn().mockResolvedValue(snapshot) };
   let active = true;
-  const host = { getRoomId: () => '0,0', getRoomCoordinates: () => ({ x: 0, y: 0 }), getIgnoredBackgroundObjects: () => [], isSceneActive: () => active };
+  const host = { getRoomId: () => '0,0', getRoomCoordinates: () => ({ x: 0, y: 0 }), isSceneActive: () => active };
   const controller = new EditorBackgroundController(scene as never, repository as never, host);
   return { controller, repository, snapshot, image, graphics, setActive: (next: boolean) => { active = next; } };
 }

@@ -58,7 +58,8 @@ describe('fog drawn as pooled images (F004)', () => {
 
     controller.sync({ roomId: '3,-2', bounds, weather: { mode: 'snow', intensity: 50 } });
     expect(h.images.every((image) => !image.visible)).toBe(true);
-    expect(controller.getBackdropIgnoredObjects()).toEqual([h.container, h.graphics]);
+    expect(h.container.destroy).not.toHaveBeenCalled();
+    expect(h.graphics.destroy).not.toHaveBeenCalled();
   });
 
   it('destroys the fog layer with the weather and starts a fresh pool next time', () => {
@@ -68,7 +69,7 @@ describe('fog drawn as pooled images (F004)', () => {
     expect(h.images.length).toBeGreaterThan(0);
     expect(controller.sync({ roomId: null, bounds: null, weather: null })).toBe(true);
     expect(h.container.destroy).toHaveBeenCalledOnce();
-    expect(controller.getBackdropIgnoredObjects()).toEqual([]);
+    expect(h.graphics.destroy).toHaveBeenCalledOnce();
   });
 });
 
