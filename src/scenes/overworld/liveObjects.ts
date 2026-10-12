@@ -468,6 +468,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.shouldCollideWithLadderTopSupport(playerBody, supportBody),
       getRuntimeSolidObjects: (loadedRoom) =>
         this.partitionIndex.getRuntimeSolidObjects(loadedRoom),
+      getRoomWorldBounds: (room) => this.getRoomWorldBounds(room),
       usesDynamicObjectBody: (config) => this.usesDynamicObjectBody(config),
       handleBlockSwitchActorHit: (loadedRoom, switchObject, actor) =>
         this.triggerController.handleBlockSwitchActorHit(loadedRoom, switchObject, actor),
@@ -993,6 +994,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     carryMovingPlatformRiders(rooms, this.riderCarryOptions);
     this.stabilizePushableStacks(rooms);
     this.triggerController.updatePressurePlates(rooms);
+    this.interactionCoordinator.refreshWorldColliderReach();
   }
 
   /** Behaviors and settings are constant, so each flying behavior's motion is worked out once (F012). */
@@ -1483,9 +1485,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     return Boolean(liveObject.sprite.active && body?.enable);
   }
 
-  private syncWorldObjectColliders(
-    loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
-  ): void {
+  private syncWorldObjectColliders(loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {
     this.interactionCoordinator.syncWorldColliders(loadedRooms);
   }
 
