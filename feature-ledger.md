@@ -1,3 +1,7 @@
+## 2026-10-11 — parts of F019 (lazy editor UI and pop-ups), F008 (collider reach), F089 (phone smoke in CI)
+
+PR #177 / `a875f7cd` and PR #178 / `76fd3792`: the editor's panels load with the editor, and the profile, leaderboard, explore and history pop-ups on first open (startup JavaScript 718 → 638 KB brotli). PR #179 / `86f103da`: moving objects get colliders only for nearby loaded rooms (busy area 1,858 → 895 colliders, physics step 1.59 → 1.31 ms). PR #180 / `6712a66c`: every pull request runs the 12 phone and tablet smoke scenarios against a production build with recorded API responses. All Pages-only. Master **126/215**. Receipt: [split, colliders, phone CI](docs/review/wamp-split-colliders-phone-ci-2026-10-11.md).
+
 ## 2026-10-11 — F012 frame allocations, F018 arrival prefetch; parts of F188, F205, F222, F035
 
 PR #172 / `4db14ba4`: the play loop's remaining per-frame allocations are reused or skipped. PR #171 / `6f7f8460`: the arrival world window is requested before boot. PR #173 / `6f1d8dac` and PR #174 / `62bdf59b` (API Worker `378e20a6`): new guest drafts are rate-limited; the admin room clear works on busy rooms. PR #175 / `88f34e55`: one failed phrase no longer silences an arranged room. PR #176 / `b69ce731` (presence server): shard heartbeats are throttled. Master **126/215**. Receipt: [frames, prefetch, limits](docs/review/wamp-frames-prefetch-limits-2026-10-11.md).
