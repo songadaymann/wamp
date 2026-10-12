@@ -22,6 +22,7 @@
     "build": "tsc && vite build && node scripts/build_pages_worker.mjs",
     "preview": "vite preview",
     "smoke:mobile": "node scripts/mobile_smoke.mjs",
+    "smoke:mobile:ci": "node scripts/mobile_smoke_ci.mjs",
     "smoke:guest-claim": "npx --yes --quiet -p playwright node scripts/smoke_guest_claim_modal.mjs",
     "smoke:guest-builder-claim": "node scripts/smoke_guest_builder_claim_modal.mjs",
     "smoke:clear-sharing": "node scripts/smoke_clear_sharing.mjs",

@@ -6,6 +6,24 @@ This pass uses a clean main-based branch:
 feature/mobile-pass-2026-04-13
 ```
 
+## CI Smoke (No Live API)
+
+CI runs the same scenarios on every pull request (`mobile-smoke` job in `.github/workflows/quality.yml`):
+
+```bash
+npm run smoke:mobile:ci
+```
+
+It builds with the preview-smoke hooks (`VITE_ENABLE_TEST_RESET=1`) into `dist-mobile-smoke/`, serves the build, and answers every `/api/` request from `scripts/fixtures/mobile-smoke-api.json.gz`. Writes are answered with an empty success and multiplayer sockets are refused, so nothing reaches production. Add `-- --skip-build` to reuse the last build.
+
+When the app starts asking for something the fixture lacks, the summary lists it under `apiFixtures.misses`. Refresh the fixture from production (GET requests and room snapshot queries only; chat messages and the multiplayer host are scrubbed) with:
+
+```bash
+npm run smoke:mobile:ci -- --record
+```
+
+This is Chromium with a phone user agent and touch emulation. It catches layout and control regressions, not iOS Safari behaviour (input zoom, toolbars, audio unlock), which still needs a real device.
+
 ## Fast Automated Smoke
 
 Start a frontend that can reach a real API, then run the mobile smoke:
