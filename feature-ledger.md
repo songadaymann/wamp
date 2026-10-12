@@ -1,3 +1,7 @@
+## 2026-10-12 — F068 backdrop camera (covers F009)
+
+PR #181 / `1011f78b`: the overworld's starfield camera renders only its own layer, so the world display layer, the per-change world-object collect and its registration plumbing in 20 files are gone. PR #182 / `7db8ea82`: the editor's never-created background camera and its ignore list are removed. Pages-only. Master **127/215**. Receipt: [backdrop camera](docs/review/wamp-backdrop-camera-2026-10-12.md).
+
 ## 2026-10-11 — parts of F019 (lazy editor UI and pop-ups), F008 (collider reach), F089 (phone smoke in CI)
 
 PR #177 / `a875f7cd` and PR #178 / `76fd3792`: the editor's panels load with the editor, and the profile, leaderboard, explore and history pop-ups on first open (startup JavaScript 718 → 638 KB brotli). PR #179 / `86f103da`: moving objects get colliders only for nearby loaded rooms (busy area 1,858 → 895 colliders, physics step 1.59 → 1.31 ms). PR #180 / `6712a66c`: every pull request runs the 12 phone and tablet smoke scenarios against a production build with recorded API responses. All Pages-only. Master **126/215**. Receipt: [split, colliders, phone CI](docs/review/wamp-split-colliders-phone-ci-2026-10-11.md).

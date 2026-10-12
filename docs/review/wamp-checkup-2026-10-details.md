@@ -6793,6 +6793,8 @@ Only small count corrections; the core is right.
 - Note the extra performance cost: Phaser Layer.add dedupes with an indexOf per item, so each sync is O(items × layer size), not just O(world).
 - The 52 onDisplayObjectsChanged-style callback references should also go when the protocol is removed.
 
+
+**2026-10-12 done.** PR #181 / `1011f78b`: `OverworldBackdropController` replaces the scene `CameraManager.getVisibleChildren` with a filter that gives the backdrop camera only the backdrop layer (removed on reset and shutdown); the world display layer, `collectBackdropIgnoredObjects`, the 25 `syncBackdropCameraIgnores()` calls and the `getBackdropIgnoredObjects` / `onDisplayObjectsChanged` / `onBackdropObjectsChanged` / `onGhostDisplayObjectsChanged` / world-tile `onObjectsChanged` plumbing in 20 files are gone. Before, play ran that sync about 9 times a second at about 0.13 ms each with ~570 objects. Draw order: within each room and depth it matches main (only the player's invisible physics box moves); browse screenshot 0 differing pixels, play differs only by animation timing; the filter holds through Stop and a scene restart. PR #182 / `7db8ea82`: the editor's `bgCamera` was never created, so its `syncBackgroundCameraIgnores` / `getIgnoredBackgroundObjects` plumbing (7 files) and the lighting, weather, music-pattern and course-marker getters it fed are removed; the editor sets the main camera opaque once per background update. Desktop editor screenshots (synthetic and police rooms, test-hooks builds) are pixel-identical to main. Receipt: `wamp-backdrop-camera-2026-10-12.md`.
 ### F070: Adding a goal type touches ~30 files: make goal types a typed registry like live objects
 
 - **Area:** Code health & architecture (AI-agent friendliness)
