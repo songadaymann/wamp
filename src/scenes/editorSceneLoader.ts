@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { ensureEditorUiReady } from '../ui/setup/editorUiLoader';
 
 let editorSceneRegistration: Promise<void> | null = null;
 
@@ -10,6 +11,7 @@ export function ensureEditorScenesRegistered(game: Phaser.Game): Promise<void> {
     import('./EditorScene'),
     import('./CourseComposerScene'),
     import('./CourseEditorScene'),
+    ensureEditorUiReady(game),
   ]).then(([editor, composer, courseEditor]) => {
     if (!game.scene.keys.EditorScene) game.scene.add('EditorScene', editor.EditorScene, false);
     if (!game.scene.keys.CourseComposerScene) game.scene.add('CourseComposerScene', composer.CourseComposerScene, false);
