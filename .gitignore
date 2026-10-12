@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-mobile-smoke/
 .wrangler/
 .partykit/
 output/

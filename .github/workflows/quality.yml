@@ -27,3 +27,23 @@ jobs:
         run: npx --yes tsx scripts/world_tile_asset_contract_check.ts
       - run: npm run smoke:dom-contract
       - run: npm run smoke:worker-safety
+
+  mobile-smoke:
+    # Phone and tablet layouts against a production build, with recorded API responses (F089).
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npm run smoke:mobile:ci
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-smoke
+          path: output/web-game/mobile-smoke-ci
+          retention-days: 7

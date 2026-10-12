@@ -50,6 +50,7 @@
     "scripts/install_cryptopunk_avatar_queue_launchd.mjs",
     "scripts/live_construction_play_smoke.ts",
     "scripts/mobile_smoke.mjs",
+    "scripts/mobile_smoke_ci.mjs",
     "scripts/overworld_tile_pyramid_probe.mjs",
     "scripts/overworld_zoom_perf_probe.mjs",
     "scripts/partykit_identity_token_probe.ts",

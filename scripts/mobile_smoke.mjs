@@ -1,12 +1,22 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { createApiFixtures } from './lib/apiFixtures.mjs';
 
 const rawUrl = getStringArg('--url') || process.env.MOBILE_SMOKE_URL?.trim() || 'http://127.0.0.1:3000';
 const targetUrl = withMobileSmokeQuery(rawUrl);
 const outputDir =
   process.env.MOBILE_SMOKE_OUTPUT_DIR?.trim()
   || path.join('output/web-game/mobile-smoke', sanitizePathSegment(new URL(targetUrl).host));
+
+// MOBILE_SMOKE_API_FIXTURES=record saves production API responses; =replay serves them (CI).
+const apiFixtureMode = process.env.MOBILE_SMOKE_API_FIXTURES?.trim() || null;
+const apiFixtures = apiFixtureMode
+  ? createApiFixtures({
+      mode: apiFixtureMode,
+      file: process.env.MOBILE_SMOKE_API_FIXTURE_FILE?.trim() || 'scripts/fixtures/mobile-smoke-api.json.gz',
+    })
+  : null;
 
 const summary = {
   url: targetUrl,
@@ -131,6 +141,8 @@ try {
   }
 
   summary.finishedAt = new Date().toISOString();
+  apiFixtures?.save();
+  summary.apiFixtures = apiFixtures?.report() ?? null;
   summary.ok =
     Object.values(summary.scenarios).every((scenario) => scenario.ok)
     && summary.consoleErrors.length === 0
@@ -160,6 +172,7 @@ console.log(
       ),
       consoleErrors: summary.consoleErrors.length,
       pageErrors: summary.pageErrors.length,
+      apiFixtures: summary.apiFixtures,
     },
     null,
     2,
@@ -188,6 +201,7 @@ async function runScenario(browserInstance, scenario) {
     hasTouch: true,
     userAgent: scenario.profile.userAgent,
   });
+  await apiFixtures?.install(context);
   await context.addInitScript(() => {
     window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
     window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
@@ -654,6 +668,8 @@ async function runPhonePortraitCameraTuner(page, scenarioSummary, scenarioDir) {
       && candidate.activeScene.mobilePortraitCamera?.enabled === true,
     'phone portrait camera tuner play mode',
   );
+  // The room goal intro can open after the first check, as in the deep-link play scenario.
+  await closeBlockingOverlaysUntilClear(page);
 
   await assertVisible(page, '#mobile-camera-tuner', 'portrait camera tuner panel');
   await assertVisible(page, '#mobile-camera-tuner-value', 'portrait camera tuner value');
