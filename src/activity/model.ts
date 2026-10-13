@@ -16,11 +16,13 @@ export interface ActivityPreferences {
   dailyFeatures?: boolean;
   emailAvailable: boolean;
 }
-export interface ActivityResponse {
+export interface ActivityFeedResponse {
   entries: BuilderActivity[];
-  unreadCount: number;
   latestId: number;
   nextBefore: number | null;
+}
+export interface ActivityResponse extends ActivityFeedResponse {
+  unreadCount: number;
   preferences: ActivityPreferences;
 }
 export function activityDescription(entry: BuilderActivity): string {

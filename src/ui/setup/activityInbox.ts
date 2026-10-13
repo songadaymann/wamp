@@ -18,7 +18,12 @@ export class ActivityInboxController {
   private readonly daily;
   private readonly save;
   private readonly preferencesStatus;
+  private readonly myTab;
+  private readonly allTab;
+  private readonly feed;
+  private readonly emailOptions;
   private readonly lifecycle;
+  private scope: 'my' | 'all' = 'my';
   private userId: string | null = null;
   private generation = 0;
   private destroyed = false;
@@ -42,6 +47,8 @@ export class ActivityInboxController {
     this.daily = doc.getElementById('activity-daily-features') as HTMLInputElement | null;
     this.save = doc.getElementById('btn-activity-save') as HTMLButtonElement | null;
     this.preferencesStatus = doc.getElementById('activity-preferences-status');
+    this.myTab = doc.getElementById('activity-tab-my'); this.allTab = doc.getElementById('activity-tab-all');
+    this.feed = doc.getElementById('activity-feed'); this.emailOptions = doc.getElementById('activity-email-options');
     this.lifecycle = createModalLifecycle({ doc, modal: this.modal, onClose: () => this.close() });
   }
   init(): void {
@@ -53,6 +60,8 @@ export class ActivityInboxController {
     this.bell?.addEventListener('click', this.onOpen); this.closeButton?.addEventListener('click', this.onClose);
     this.retry?.addEventListener('click', this.onRetry); this.more?.addEventListener('click', this.onMore);
     this.save?.addEventListener('click', this.onSave); this.catchup?.addEventListener('click', this.onOpen);
+    this.myTab?.addEventListener('click', this.onMyTab); this.allTab?.addEventListener('click', this.onAllTab);
+    this.renderTabs();
     this.doc.addEventListener('keydown', this.onKeydown, true); this.lifecycle.attach(); this.syncAuth(this.auth());
     this.timer = this.win.setInterval(() => this.onWake(), 60000);
   }
@@ -64,27 +73,51 @@ export class ActivityInboxController {
     this.bell?.removeEventListener('click', this.onOpen); this.closeButton?.removeEventListener('click', this.onClose);
     this.retry?.removeEventListener('click', this.onRetry); this.more?.removeEventListener('click', this.onMore);
     this.save?.removeEventListener('click', this.onSave); this.catchup?.removeEventListener('click', this.onOpen);
+    this.myTab?.removeEventListener('click', this.onMyTab); this.allTab?.removeEventListener('click', this.onAllTab);
     this.doc.removeEventListener('keydown', this.onKeydown, true); this.lifecycle.detach();
     if (this.timer !== null) this.win.clearInterval(this.timer);
     this.close(false); this.userId = null; this.renderBadge(0);
   }
   private readonly onAuth = (event: Event) => this.syncAuth(event instanceof CustomEvent ? event.detail as AuthDebugState : this.auth());
   private readonly onWake = () => { if (this.doc.visibilityState !== 'hidden' && !this.lifecycle.isOpen() && Date.now() - this.lastLoaded >= 60000) void this.refresh(); };
-  private readonly onOpen = () => {
+  private readonly onOpen = (event?: Event) => {
     if (!this.userId || this.destroyed) return;
+    if (event?.currentTarget === this.catchup || event?.type === 'activity-open-request') this.scope = 'my';
     this.returnFocus = this.doc.activeElement instanceof HTMLElement ? this.doc.activeElement : this.bell;
     this.generation++; this.busy = false; this.before = null; this.list?.replaceChildren();
+    this.more?.classList.add('hidden'); this.renderTabs();
     this.lifecycle.show(); this.closeButton?.focus(); void this.refresh(true);
   };
   private readonly onClose = () => this.close();
   private readonly onRetry = () => { void this.refresh(true); };
   private readonly onMore = () => { if (this.before !== null) void this.refresh(true, this.before); };
   private readonly onSave = () => { void this.savePreferences(); };
+  private readonly onMyTab = () => this.selectScope('my');
+  private readonly onAllTab = () => this.selectScope('all');
+  private selectScope(scope: 'my' | 'all'): void {
+    if (scope === this.scope || !this.lifecycle.isOpen()) return;
+    this.scope = scope; this.generation++; this.busy = false; this.saving = false; this.before = null;
+    this.list?.replaceChildren(); this.more?.classList.add('hidden'); this.renderTabs();
+    void this.refresh(true);
+  }
+  private renderTabs(): void {
+    for (const [tab, selected] of [[this.myTab, this.scope === 'my'], [this.allTab, this.scope === 'all']] as const) {
+      tab?.classList.toggle('active', selected); tab?.setAttribute('aria-selected', String(selected));
+      tab?.setAttribute('tabindex', selected ? '0' : '-1');
+    }
+    this.feed?.setAttribute('aria-labelledby', this.scope === 'my' ? 'activity-tab-my' : 'activity-tab-all');
+    this.emailOptions?.classList.toggle('hidden', this.scope !== 'my');
+  }
   private readonly onKeydown = (event: KeyboardEvent) => {
     if (!this.lifecycle.isOpen()) return;
+    if ((event.target === this.myTab || event.target === this.allTab) && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      const scope = event.key === 'Home' ? 'my' : event.key === 'End' ? 'all' : this.scope === 'my' ? 'all' : 'my';
+      this.selectScope(scope); (scope === 'my' ? this.myTab : this.allTab)?.focus(); return;
+    }
     if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); this.close(); }
     if (event.key !== 'Tab') return;
-    const elements = Array.from(this.modal?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), a[href]') ?? [])
+    const elements = Array.from(this.modal?.querySelectorAll<HTMLElement>('button:not(:disabled):not([tabindex="-1"]), input:not(:disabled), a[href], summary') ?? [])
       .filter(element => element.getClientRects().length > 0);
     const first = elements[0], last = elements.at(-1);
     if (event.shiftKey && this.doc.activeElement === first) { event.preventDefault(); last?.focus(); }
@@ -94,10 +127,11 @@ export class ActivityInboxController {
     const next = state.authenticated && state.source === 'session' ? state.user?.id ?? null : null;
     if (next !== this.userId) {
       this.close(false); this.userId = next; this.latest = null; this.busy = false; this.saving = false;
+      this.scope = 'my'; this.renderTabs();
       this.lastLoaded = 0; this.list?.replaceChildren(); this.renderBadge(0);
     }
     this.bell?.classList.toggle('hidden', !next); this.catchup?.classList.toggle('hidden', !next);
-    if (next && this.pendingEmailLink) { this.pendingEmailLink = false; this.onOpen(); return; }
+    if (next && this.pendingEmailLink) { this.pendingEmailLink = false; this.scope = 'my'; this.renderTabs(); this.onOpen(); return; }
     if (next && Date.now() - this.lastLoaded >= 60000 && !this.lifecycle.isOpen()) void this.refresh();
   }
   private close(focus = true): void {
@@ -108,19 +142,24 @@ export class ActivityInboxController {
   private async refresh(show = false, before?: number): Promise<void> {
     if (!this.userId || this.busy || this.destroyed) return;
     const userId = this.userId, generation = this.generation;
+    const scope = show ? this.scope : 'my';
     this.busy = true; if (show) this.message('Loading activity…');
+    if (show) this.feed?.setAttribute('aria-busy', 'true');
     if (this.more) this.more.disabled = true;
     try {
-      const response = await this.repository.load(before);
+      const personal = scope === 'my' ? await this.repository.load(before) : null;
+      const response = personal ?? await this.repository.loadAll(before);
       if (!this.valid(userId, generation)) return;
-      this.lastLoaded = Date.now(); this.latest = response; this.renderBadge(response.unreadCount);
+      if (personal) {
+        this.lastLoaded = Date.now(); this.latest = personal; this.renderBadge(personal.unreadCount);
+      }
       if (!show || !this.lifecycle.isOpen()) return;
-      if (!before) { this.list?.replaceChildren(); this.renderPreferences(response); }
+      if (!before) { this.list?.replaceChildren(); if (personal) this.renderPreferences(personal); }
       this.renderEntries(response.entries); this.before = response.nextBefore;
       this.more?.classList.toggle('hidden', this.before === null);
-      this.message(this.list?.children.length ? '' : 'No activity yet. Confirmed clears, ratings and approved comments will appear here.');
+      this.message(this.list?.children.length ? '' : scope === 'all' ? 'No community activity yet.' : 'No activity on your rooms yet.');
       // A read acknowledges this snapshot only; a newer event stays unread.
-      if (!before) {
+      if (!before && scope === 'my') {
         await this.repository.markSeen(response.latestId);
         if (this.valid(userId, generation)) this.renderBadge(0);
       }
@@ -129,7 +168,7 @@ export class ActivityInboxController {
       if (show) this.message('Activity could not load. Try again when you’re online.', true);
       else { this.bell?.setAttribute('title', 'Activity could not refresh. Open to retry.'); }
     } finally {
-      if (this.valid(userId, generation)) { this.busy = false; if (this.more) this.more.disabled = false; }
+      if (this.valid(userId, generation)) { this.busy = false; if (this.more) this.more.disabled = false; this.feed?.setAttribute('aria-busy', 'false'); }
     }
   }
   private message(message: string, error = false): void {
@@ -145,6 +184,7 @@ export class ActivityInboxController {
   private renderEntries(entries: BuilderActivity[]): void {
     for (const entry of entries) {
       const row = this.doc.createElement('li'); row.className = 'activity-row';
+      row.setAttribute('data-kind', entry.kind);
       const link = this.doc.createElement('a'); link.href = entry.contentPath; link.textContent = activityDescription(entry);
       const time = this.doc.createElement('div'); time.className = 'history-modal-meta';
       time.textContent = `v${entry.contentVersion} · ${new Date(entry.createdAt).toLocaleString()}`;

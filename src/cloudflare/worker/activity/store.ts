@@ -1,4 +1,5 @@
-import type { ActivityPreferences, ActivityResponse, BuilderActivity } from '../../../activity/model';
+import type { ActivityFeedResponse, ActivityPreferences, ActivityResponse, BuilderActivity } from '../../../activity/model';
+import { activityGuestName } from '../../../activity/guestName';
 import type { D1DatabaseSession } from '../core/types';
 import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
 
@@ -8,18 +9,18 @@ export interface PreferenceRow {
   daily_features?: number; daily_enabled_at?: string | null;
 }
 interface ActivityRow {
-  id: number; kind: BuilderActivity['kind']; actor_name: string; content_title: string | null;
+  id: number; kind: BuilderActivity['kind']; actor_name: string; actor_user_id: string; source_kind: string; content_title: string | null;
   content_version: number; x: number | null; y: number | null; quality_stars: number | null; created_at: string;
 }
-// Read only the authenticated recipient's projection. Removed awards and moderated
-// comments disappear; unpublished targets cannot leak draft titles through email.
-const VISIBLE = `a.recipient_user_id = ? AND ${sqlUserIdIsNotLegacyGeneratedOnly('a.actor_user_id')}
+// Both feeds exclude removed awards, moderated comments and unpublished targets.
+const PUBLIC_VISIBLE = `${sqlUserIdIsNotLegacyGeneratedOnly('a.actor_user_id')}
   AND (e.id IS NULL OR e.archived_at IS NULL)
   AND (r.published_json IS NOT NULL OR c.published_json IS NOT NULL OR e.published_json IS NOT NULL)
   AND (a.source_kind = 'bxp' AND EXISTS (SELECT 1 FROM bxp_events WHERE id = a.source_id)
     OR a.source_kind = 'pxp' AND EXISTS (SELECT 1 FROM pxp_events WHERE id = a.source_id)
     OR a.source_kind = 'comment' AND EXISTS (SELECT 1 FROM room_comments WHERE id = a.source_id AND status = 'approved')
     OR a.source_kind = 'guest')`;
+const VISIBLE = `a.recipient_user_id = ? AND ${PUBLIC_VISIBLE}`;
 const JOINS = `FROM builder_activity a
   LEFT JOIN users actor ON actor.id = a.actor_user_id
   LEFT JOIN rooms r ON a.content_type = 'room' AND r.id = a.content_id
@@ -30,7 +31,7 @@ const JOINS = `FROM builder_activity a
     (a.content_type = 'expanded_room' AND e.id = a.content_id)
     OR (a.content_type = 'course' AND (e.legacy_course_id = a.content_id OR e.id = 'course:' || a.content_id OR e.id = a.content_id))
   LEFT JOIN expanded_room_versions ev ON ev.expanded_room_id = e.id AND ev.version = a.content_version`;
-const SELECT = `SELECT a.id, a.kind, CASE WHEN a.source_kind = 'guest' THEN 'Guest' ELSE COALESCE(actor.display_name, 'Player') END AS actor_name,
+const SELECT = `SELECT a.id, a.kind, a.actor_user_id, a.source_kind, COALESCE(actor.display_name, 'Player') AS actor_name,
   COALESCE(rv.title, ev.title, cv.title, r.published_title, e.published_title, c.published_title) AS content_title,
   a.content_version, COALESCE(r.x, e.anchor_x, (SELECT room_x FROM course_room_refs WHERE course_id = c.id AND course_version = a.content_version ORDER BY room_order LIMIT 1)) AS x,
   COALESCE(r.y, e.anchor_y, (SELECT room_y FROM course_room_refs WHERE course_id = c.id AND course_version = a.content_version ORDER BY room_order LIMIT 1)) AS y,
@@ -42,8 +43,9 @@ export function emailActivityExistsSql(kind?: 'dethroned'): string {
     ${kind ? "AND a.kind = 'dethroned' AND a.id > COALESCE((SELECT MAX(latest_activity_id) FROM builder_activity_emails WHERE user_id = p.user_id AND kind = 'dethroned'), 0)" : ''})`;
 }
 
-function mapEntry(row: ActivityRow, seenId: number): BuilderActivity {
-  return { id: row.id, kind: row.kind, actorName: row.actor_name, contentTitle: row.content_title?.trim() || 'Untitled Room',
+async function mapEntry(row: ActivityRow, seenId: number): Promise<BuilderActivity> {
+  return { id: row.id, kind: row.kind, actorName: row.source_kind === 'guest' ? await activityGuestName(row.actor_user_id) : row.actor_name,
+    contentTitle: row.content_title?.trim() || 'Untitled Room',
     contentVersion: row.content_version, contentPath: row.x === null || row.y === null ? '/?activity=1' : `/r/${row.x}/${row.y}`,
     qualityStars: row.quality_stars, createdAt: row.created_at, unread: row.id > seenId };
 }
@@ -65,9 +67,21 @@ export async function loadActivity(db: D1DatabaseSession, userId: string, emailA
   // Cap at the response watermark so events arriving during pagination remain unread.
   const rows = await db.prepare(`${SELECT} WHERE ${VISIBLE} AND a.id <= ? AND a.id < ? ORDER BY a.id DESC LIMIT 31`)
     .bind(userId, counts?.latest_id ?? 0, before ?? Number.MAX_SAFE_INTEGER).all<ActivityRow>();
-  const entries = rows.results.slice(0, 30).map(row => mapEntry(row, prefs.seen_id));
+  const entries = await Promise.all(rows.results.slice(0, 30).map(row => mapEntry(row, prefs.seen_id)));
   return { entries, latestId: counts?.latest_id ?? 0, unreadCount: counts?.unread_count ?? 0,
     nextBefore: rows.results.length > 30 ? entries.at(-1)?.id ?? null : null, preferences: publicPreferences(prefs, emailAvailable) };
+}
+/** One public fact per event; a top-1 change also has a private dethrone recipient. */
+export async function loadAllActivity(db: D1DatabaseSession, before?: number): Promise<ActivityFeedResponse> {
+  const rows = await db.prepare(`${SELECT} WHERE ${PUBLIC_VISIBLE} AND a.id < ?
+    AND (a.kind <> 'dethroned' OR NOT EXISTS (
+      SELECT 1 FROM builder_activity duplicate WHERE duplicate.dedupe_key = 'pxp:top1:' || a.source_id
+    )) ORDER BY a.id DESC LIMIT 31`)
+    .bind(before ?? Number.MAX_SAFE_INTEGER).all<ActivityRow>();
+  const entries = await Promise.all(rows.results.slice(0, 30).map(row =>
+    mapEntry({ ...row, kind: row.kind === 'dethroned' ? 'top1' : row.kind }, Number.MAX_SAFE_INTEGER)));
+  return { entries, latestId: entries[0]?.id ?? 0,
+    nextBefore: rows.results.length > 30 ? entries.at(-1)?.id ?? null : null };
 }
 export async function markActivitySeen(db: D1DatabaseSession, userId: string, id: number): Promise<void> {
   await loadActivityPreferences(db, userId);
@@ -107,5 +121,5 @@ export async function loadEmailActivity(db: D1DatabaseSession, userId: string, f
   const rows = await db.prepare(`${SELECT} WHERE ${VISIBLE} AND a.created_at >= ? AND a.created_at < ?
     ${kind ? "AND a.kind = 'dethroned'" : ''} ORDER BY a.id DESC LIMIT 100`)
     .bind(userId, from, until).all<ActivityRow>();
-  return rows.results.map(row => mapEntry(row, 0));
+  return Promise.all(rows.results.map(row => mapEntry(row, 0)));
 }

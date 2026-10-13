@@ -5,7 +5,7 @@ import { handleRoomInsights } from './worker/insights/routes';
 import { handleDaily } from './worker/daily/routes';
 import { ensureDailyPick } from './worker/daily/store';
 import { sendDailyFeatureEmail } from './worker/daily/emails';
-import { handleMyActivity } from './worker/activity/routes';
+import { handleAllActivity, handleMyActivity } from './worker/activity/routes';
 import { handleActivityUnsubscribe } from './worker/activity/unsubscribe';
 import { runActivityEmails } from './worker/activity/emails';
 import { handleGuestReplay } from './worker/guestReplay/routes';
@@ -175,6 +175,10 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
   {
     methods: ['GET', 'POST', 'PUT'], pattern: { prefix: '/api/me/activity' }, auth: 'authenticated',
     handler: ({ request, url, env }) => handleMyActivity(request, url, env),
+  },
+  {
+    methods: ['GET'], pattern: '/api/activity', auth: 'public',
+    handler: ({ request, url, env }) => handleAllActivity(request, url, env),
   },
   {
     methods: ['GET', 'POST'], pattern: '/api/activity/unsubscribe', auth: 'public',

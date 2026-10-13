@@ -1857,3 +1857,17 @@ Final quality gate passed: 459 files / 3,495 tests; startup JavaScript 638.2 KB 
 PR #187 opened. Full mobile recheck: all 12 pass, zero console/page errors and no fixture misses. Unchanged-main comparison passes too; one earlier startup framing sample failed, without weakening any assertion. Computed pixel-font audit: no off-grid sizes in current desktop/phone DOM. Main remains at 127/215 until the PR merges; this branch records 133/215. CI and live delivery pending.
 
 Delivery complete: PR #187 merged as `70a7c98c`; production Pages `05e6c6c2` and wamp.land serve the expected source revision. All 175 game chunks/CSS/local fonts match the immutable release; CSS/fonts match local sources. Live phone movement/jump keeps the fixed room camera still, all font weights load without Google, there are no page errors, and API health is ok. Screenshot inspected. Master 133/215. No follow-up code remains for these six fixes; F013 is the next larger approved project. This final record update is docs only.
+
+## 2026-10-13 — WAMP activity styling, guest names and feeds
+
+Original request: Style activity like WAMP, identify the same guest across rooms, and add My activity / All activity tabs.
+
+Plan:
+- [x] Inspect current inbox, event projection, persistent guest identity and concurrent checkout.
+- [x] Implement WAMP modal styling and isolated feed selection.
+- [x] Derive stable guest names and add bounded community API with existing event visibility rules.
+- [x] Verify guest continuity, private read-state, deduplication, pagination, late replies and desktop/phone UI.
+
+Scope: clean current-main worktree, codex/wamp-activity-tabs. My activity retains the existing builder inbox. All activity includes confirmed clears, ratings, approved comments and leaderboard changes across published rooms. Guest names derive from existing persistent browser identities, including historical entries. Production delivery is not part of this new request yet.
+
+Verified: full quality check passed 469 files / 3,534 tests, lint, typecheck, DOM contract, generated bindings, production build, bundle budget, PNG/audio checks. After the final notification-entry-point fix, 40 focused regressions, targeted lint, typecheck and the final production build passed. The actual application and actual migrated SQLite-backed activity handlers pass at 1280x800, 390x844, 320x568 and 844x390: both tabs, pagination, persistent guest names across builders, read-watermark isolation, email preference writes, retry, keyboard selection, Escape and focus return. No page exceptions or unexpected console errors; intentionally denied fixture multiplayer identity and injected 503 retry errors are recorded separately. Official web-game client capture inspected. Screenshots/report: output/web-game/activity-tabs. No production deployment performed.
