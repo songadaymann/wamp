@@ -19,7 +19,7 @@ const OVERSIZED_FILE_LINES = {
   'src/main/earlyWorldTileBootstrap.classic.ts': 1718,
   'src/scenes/overworld/movementController.ts': 1638,
   'src/ui/setup/paletteController.ts': 1623,
-  'src/ui/setup/profileModal.ts': 1557,
+  'src/ui/setup/profileModal.ts': 1556,
   'src/scenes/editor/musicPatternEditor.ts': 1528,
   'src/scenes/editor/musicWorkflow.ts': 1488,
   'src/scenes/overworld/roomComments.ts': 1483,

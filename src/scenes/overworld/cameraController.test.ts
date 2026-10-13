@@ -32,7 +32,7 @@ function harness() {
     return { remove };
   });
   const controller = new OverworldCameraController({
-    scene: { cameras: { main: camera }, tweens: { add } } as never,
+    scene: { cameras: { main: camera }, tweens: { add }, game: { events: { on: vi.fn() } }, events: { once: vi.fn() } } as never,
     getCurrentRoom: () => room, getWorldWindow: () => null,
     getMode: () => mode, getCameraMode: () => cameraMode,
     setCameraMode: (value) => { cameraMode = value; }, getInspectZoom: () => 2,

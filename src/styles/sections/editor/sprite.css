@@ -117,8 +117,10 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   font-family: var(--editor-pixel-font);
   font-size: 8px;
   line-height: 1;
-  letter-spacing: 0.1em;
+  letter-spacing: 1px;
   text-transform: uppercase;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-sprite-select,
@@ -230,8 +232,10 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   font-family: var(--editor-pixel-font);
   font-size: 8px;
   line-height: 1.2;
-  letter-spacing: 0.08em;
+  letter-spacing: 1px;
   text-transform: uppercase;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-sprite-kind-help-text,
@@ -371,8 +375,10 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   background: transparent;
   color: inherit;
   font-family: var(--editor-pixel-font);
-  font-size: 7px;
+  font-size: 8px;
   line-height: 1;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-sprite-library-delete:hover:not(:disabled),
@@ -441,7 +447,9 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   border-radius: 3px;
   font-family: var(--editor-pixel-font);
   font-size: 8px;
-  letter-spacing: 0.08em;
+  letter-spacing: 1px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-sprite-shell .bar-btn.active {

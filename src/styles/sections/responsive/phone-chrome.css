@@ -79,7 +79,7 @@ body[data-device-class='phone'][data-app-mode='world'] #bottom-bar #world-online
   min-height: 30px;
   padding: 4px 5px;
   border-radius: 0;
-  font-size: 7px;
+  font-size: 8px;
   white-space: nowrap;
 }
 
@@ -140,7 +140,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
 body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count,
 body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-settings,
 body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-controls {
-  font-size: 7px;
+  font-size: 8px;
 }
 
 body[data-device-class='phone'] .world-online-popover {

@@ -43,7 +43,9 @@
   font-family: 'Early GameBoy', monospace;
   font-size: 8px;
   line-height: 1.3;
-  letter-spacing: 0.04em;
+  letter-spacing: 0px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #profile-modal .profile-hero-lane-progress {
@@ -90,6 +92,8 @@
   font-size: 8px;
   line-height: 1.25;
   box-shadow: 2px 2px 0 #18161c;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #profile-modal .profile-hero-summary-chip-player {
@@ -186,8 +190,10 @@
 #profile-modal .profile-info-card-title {
   color: #18161c;
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.2;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #profile-modal .profile-info-card-grid {
@@ -225,6 +231,8 @@
   font-family: 'Early GameBoy', monospace;
   font-size: 8px;
   line-height: 1.3;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #profile-modal .profile-info-item-value {

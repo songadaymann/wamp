@@ -3332,6 +3332,8 @@ roomTransition.ts (701 lines) shows nothing when you cross into a room: no statu
 
 Build it without the star rating; it isn't in WorldRoomSummary and would need payload or API work. Show title (falling back to 'Room x,y') plus 'by creatorDisplayName' and, if set, world.name. Trigger it from roomTransition.ts after setCurrentRoomCoordinates (around line 211), keyed on the expanded-room id or room id rather than raw cell coordinates. Suppress or compact it during course runs, Room Rush and PvP arenas. Note that landscape phones already show the title and creator in the always-open play HUD (phone-world-chat.css:93-115, controller.ts:455-457), so the banner matters most for desktop and portrait phones. Don't feed a 'rooms discovered' counter into Curator XP: the PRD reserves CXP for curation that helps others, and passive visits can be farmed.
 
+**2026-10-13 decision: won't do.** Jonathan declined this on 2026-10-12 and reconfirmed it on 2026-10-13. No room-name banner.
+
 ### F112: Menus are grouped by history, not by what players need next
 
 - **Area:** Visual design, UI polish & information architecture
@@ -6651,6 +6653,8 @@ These are minor factual fixes; the core claim is unchanged.
 (e) "43 controllers" holds if you count the scene's controller/coordinator fields: 43 private fields and about 44 constructions, while only 17 module filenames contain "Controller".
 
 (f) Also remove the stray tracked .cursor/debug-843bc4.log while doing this.
+
+**2026-10-13 decision: won't do.** Jonathan declined this on 2026-10-12 and reconfirmed it on 2026-10-13. No AGENTS.md in the public repository.
 
 ### F064: Core gameplay and money paths have zero unit tests: goal runs, the auth client, and room minting
 

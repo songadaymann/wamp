@@ -100,21 +100,25 @@
   font-family: 'Early GameBoy', monospace;
   font-size: 8px;
   line-height: 1.15;
-  letter-spacing: 0.04em;
+  letter-spacing: 0px;
   text-transform: uppercase;
   box-shadow: 2px 2px 0 #18161c;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .reward-sting-title {
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.16;
   color: var(--reward-accent);
   text-transform: uppercase;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .reward-sting-card--hero .reward-sting-title {
-  font-size: 21px;
+  font-size: 24px;
 }
 
 .reward-sting-subtitle {
@@ -154,9 +158,11 @@
 .reward-sting-detail {
   white-space: pre-line;
   font-family: 'Early GameBoy', monospace;
-  font-size: 9px;
+  font-size: 8px;
   line-height: 1.25;
   color: #2c5071;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .reward-sting-particles {
@@ -419,10 +425,12 @@
 .xp-receipt-amount {
   color: var(--xp-receipt-accent);
   font-family: 'Early GameBoy', monospace;
-  font-size: 11px;
+  font-size: 8px;
   line-height: 1.15;
-  letter-spacing: 0.03em;
+  letter-spacing: 0px;
   text-transform: uppercase;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .xp-receipt-reason {
@@ -443,9 +451,11 @@
 .xp-receipt-level {
   color: #2c5071;
   font-family: 'Early GameBoy', monospace;
-  font-size: 9px;
+  font-size: 8px;
   line-height: 1.15;
   text-transform: uppercase;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .xp-receipt-detail {
@@ -646,7 +656,7 @@
 
   .reward-sting-title,
   .reward-sting-card--hero .reward-sting-title {
-    font-size: 15px;
+    font-size: 16px;
   }
 
   .reward-sting-meter,
@@ -684,7 +694,7 @@
   }
 
   .xp-receipt-amount {
-    font-size: 10px;
+    font-size: 8px;
   }
 
   .xp-receipt-reason {

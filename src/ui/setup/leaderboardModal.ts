@@ -1,3 +1,4 @@
+import { friendlyError, renderFriendlyError } from '../friendlyError';
 import { GlobalLeaderboardPanelController } from './globalLeaderboardPanel';
 import Phaser from 'phaser';
 import { getAuthDebugState } from '../../auth/client';
@@ -373,7 +374,7 @@ export class LeaderboardModalController {
       await this.ensureTabLoaded(this.activeTab);
     } catch (error) {
       console.error('Failed to load leaderboards', error);
-      this.setError(error instanceof Error ? error.message : 'Failed to load leaderboards.');
+      this.setError(friendlyError('load leaderboards', { error }), () => this.load());
     } finally {
       this.loading = false;
       this.render();
@@ -418,7 +419,7 @@ export class LeaderboardModalController {
     } catch (error) {
       console.error('Failed to load room leaderboard', error);
       this.roomLeaderboard = null;
-      this.setError(error instanceof Error ? error.message : 'Failed to load room leaderboard.');
+      this.setError(friendlyError('load room leaderboard', { error }), () => this.loadRoomLeaderboard());
     } finally {
       this.roomLoading = false;
       this.roomLoaded = true;
@@ -448,7 +449,7 @@ export class LeaderboardModalController {
     } catch (error) {
       console.error('Failed to load expanded room leaderboard', error);
       this.courseLeaderboard = null;
-      this.setError(error instanceof Error ? error.message : 'Failed to load expanded room leaderboard.');
+      this.setError(friendlyError('load expanded room leaderboard', { error }), () => this.loadCourseLeaderboard());
     } finally {
       this.courseLoading = false;
       this.courseLoaded = true;
@@ -481,7 +482,7 @@ export class LeaderboardModalController {
     } catch (error) {
       console.error('Failed to load Room Rush leaderboards', error);
       this.roomRushFailedModes.add(modeKey);
-      this.setError(error instanceof Error ? error.message : 'Failed to load Room Rush leaderboards.');
+      this.setError(friendlyError('load Room Rush leaderboards', { error }));
     } finally {
       this.roomRushLoading = false;
       this.render();
@@ -582,7 +583,7 @@ export class LeaderboardModalController {
     } catch (error) {
       console.error('Failed to submit room rating update', error);
       this.setError(
-        error instanceof Error ? error.message : 'Failed to submit room rating update.'
+        friendlyError('submit room rating update', { error })
       );
     } finally {
       this.voteSubmitting = false;
@@ -1205,18 +1206,8 @@ export class LeaderboardModalController {
     return parts.join(' · ');
   }
 
-  private setError(message: string | null): void {
-    if (!this.elements.error) {
-      return;
-    }
-
-    if (!message) {
-      this.elements.error.textContent = '';
-      this.elements.error.classList.add('hidden');
-      return;
-    }
-
-    this.elements.error.textContent = message;
-    this.elements.error.classList.toggle('hidden', this.activeTab === 'global');
+  private setError(message: string | null, retry?: () => void | Promise<void>): void {
+    renderFriendlyError(this.elements.error, message, retry);
+    if (message) this.elements.error?.classList.toggle('hidden', this.activeTab === 'global');
   }
 }

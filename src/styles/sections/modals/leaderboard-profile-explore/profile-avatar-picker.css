@@ -60,11 +60,13 @@
   background: #ff533f;
   color: #fff3db;
   font-family: 'Early GameBoy', monospace;
-  font-size: 7px;
+  font-size: 8px;
   line-height: 1.25;
   text-align: center;
   box-shadow: 2px 2px 0 #18161c;
   cursor: pointer;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #profile-modal .profile-avatar-change-button:hover,
@@ -131,6 +133,8 @@
   line-height: 1.4;
   text-align: center;
   overflow-wrap: anywhere;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .profile-cryptopunk-controls {
@@ -158,9 +162,11 @@
   min-width: 0;
   color: #2c5071;
   font-family: 'Early GameBoy', monospace;
-  font-size: 7px;
+  font-size: 8px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .profile-cryptopunk-input-row {
@@ -249,8 +255,10 @@
   align-items: center;
   justify-content: center;
   font-family: 'Early GameBoy', monospace;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .profile-avatar-option-preview-fallback {
@@ -279,7 +287,9 @@
 .profile-avatar-option-meta {
   color: #2c5071;
   font-family: 'Early GameBoy', monospace;
-  font-size: 7px;
+  font-size: 8px;
   line-height: 1.35;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 

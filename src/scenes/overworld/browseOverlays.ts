@@ -153,7 +153,7 @@ export class OverworldBrowseOverlayController {
 
     const warpLabel = this.host.scene.add.text(0, 0, 'WARP', {
       fontFamily: 'Early GameBoy, monospace',
-      fontSize: '12px',
+      fontSize: '16px',
       color: '#fff3db',
       stroke: '#18161c',
       strokeThickness: 0,

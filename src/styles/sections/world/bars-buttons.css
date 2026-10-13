@@ -270,7 +270,7 @@ body[data-app-mode="play-world"] .world-only-control {
 #world-hud .world-btn-play.active {
   background: var(--hud-trial-red);
   border-color: #18161c;
-  color: #fff;
+  color: #18161c;
 }
 
 #world-hud .world-btn-play.active:hover {
@@ -313,7 +313,7 @@ body[data-app-mode="play-world"] .world-only-control {
 #world-hud .world-btn-build:not(:disabled) {
   background: var(--hud-trial-red);
   border-color: #18161c;
-  color: #fff;
+  color: #18161c;
 }
 
 #world-hud .world-btn-build:not(:disabled):hover {

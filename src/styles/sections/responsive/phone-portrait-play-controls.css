@@ -242,7 +242,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   width: 50%;
   height: calc(36% - 8px);
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
 }
 
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-action-jump {
@@ -279,7 +279,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   border: 2px solid var(--mobile-portrait-console-ink);
   border-radius: 0;
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
   box-shadow: 2px 2px 0 var(--mobile-portrait-console-ink);
   font-family: var(--hud-ui-font);
   font-size: 9px;

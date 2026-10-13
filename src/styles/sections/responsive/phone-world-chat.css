@@ -258,20 +258,20 @@ body[data-device-class='phone'] #menu-body .bar-btn {
 }
 
 body[data-device-class='phone'] .auth-session-summary-value {
-  font-size: 9px;
+  font-size: 8px;
 }
 
 body[data-device-class='phone'] .world-room-title {
-  font-size: 11px;
+  font-size: 8px;
   line-height: 1.05;
 }
 
 body[data-device-class='phone'] .world-room-title[data-title-size='compact'] {
-  font-size: 10px;
+  font-size: 8px;
 }
 
 body[data-device-class='phone'] .world-room-title[data-title-size='tiny'] {
-  font-size: 9px;
+  font-size: 8px;
 }
 
 body[data-device-class='phone'] .world-room-subtitle {
@@ -279,7 +279,7 @@ body[data-device-class='phone'] .world-room-subtitle {
 }
 
 body[data-device-class='phone'] .world-hud-title {
-  font-size: 11px;
+  font-size: 8px;
 }
 
 body[data-device-class='phone'] .world-hud-title-wrap {

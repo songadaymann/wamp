@@ -253,7 +253,7 @@ export class OverworldRoomCellController {
     if (!label) {
       label = this.host.scene.add.text(0, 0, 'BUILD\nHERE', {
         fontFamily: 'Early GameBoy',
-        fontSize: '18px',
+        fontSize: '16px',
         color: '#fff3db',
         align: 'center',
       });

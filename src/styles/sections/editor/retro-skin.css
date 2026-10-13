@@ -185,7 +185,7 @@ body[data-app-mode='editor'] #editor-room-feedback #btn-editor-publish-nudge {
   background: var(--editor-retro-red) !important;
   background-color: var(--editor-retro-red) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: var(--editor-retro-cream) !important;
+  color: #18161c !important;
   font-family: var(--editor-ui-font);
   font-size: 11px;
   letter-spacing: 0;
@@ -365,10 +365,12 @@ body[data-app-mode='editor'] #sidebar .section-label {
 body[data-app-mode='editor'] #sidebar .editor-advanced-block-label {
   color: var(--editor-retro-blue-deep);
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 11px;
+  font-size: 8px;
   letter-spacing: 0;
   line-height: 1.2;
   text-transform: none;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 body[data-app-mode='editor'] #sidebar .sidebar-section-toggle {
@@ -383,9 +385,11 @@ body[data-app-mode='editor'] #sidebar .sidebar-section-toggle {
   color: #000;
   box-shadow: 2px 2px 0 var(--editor-retro-shadow);
   font-family: var(--editor-pixel-font);
-  font-size: 10px;
+  font-size: 8px;
   line-height: 1;
   letter-spacing: 0;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 body[data-app-mode='editor'] #sidebar .sidebar-section-toggle:hover {
@@ -494,7 +498,7 @@ body[data-app-mode='editor'] #sidebar .bar-btn-danger {
   background-image: none !important;
   border-color: var(--editor-retro-shadow) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: var(--editor-retro-cream) !important;
+  color: #18161c !important;
 }
 
 body[data-app-mode='editor'] #sidebar .tool-btn,
@@ -578,7 +582,7 @@ body[data-app-mode='editor'] #sidebar .editor-feature-btn[data-editor-feature='s
   background: var(--editor-retro-red) !important;
   background-color: var(--editor-retro-red) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: var(--editor-retro-cream) !important;
+  color: #18161c !important;
 }
 
 body[data-app-mode='editor'] #sidebar .editor-feature-launcher-status {
@@ -935,7 +939,7 @@ body[data-app-mode='editor'] #sidebar #btn-mint-room {
   background: var(--editor-retro-red) !important;
   background-color: var(--editor-retro-red) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: var(--editor-retro-cream) !important;
+  color: #18161c !important;
 }
 
 body[data-app-mode='editor'] #sidebar #btn-wamp-o-gram {

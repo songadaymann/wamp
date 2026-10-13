@@ -91,7 +91,9 @@
 .room-sequence-title {
   color: #18161c;
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 13px;
+  font-size: 16px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .room-sequence-meta {
@@ -146,7 +148,9 @@ body[data-room-sequence-active='true'] #world-hud .world-hud-row-primary-actions
 #first-steps-summary-modal .history-modal-title {
   color: #18161c;
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 18px;
+  font-size: 16px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #first-steps-summary-modal .history-modal-meta {

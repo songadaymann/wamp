@@ -79,6 +79,8 @@ body[data-editor-dock-shell='true'] button {
 
 body[data-editor-dock-shell='true'] #bottom-bar :is(.world-online-pill, .world-footer-controls-btn) {
   font-family: 'Early GameBoy', monospace !important;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 body[data-editor-dock-shell='true'] #bottom-bar #btn-fit-screen {
@@ -264,7 +266,7 @@ body[data-editor-dock-shell='true'] .editor-shell-test-button {
 
 body[data-editor-dock-shell='true'] .editor-shell-publish-button {
   background: var(--editor-retro-red);
-  color: var(--editor-retro-cream);
+  color: #18161c;
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-title-slot {
@@ -460,7 +462,7 @@ body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker .editor-she
   padding: 0 10px;
   border-color: var(--editor-retro-shadow);
   background: var(--editor-retro-red);
-  color: var(--editor-retro-paper);
+  color: #18161c;
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker button.active {
@@ -543,7 +545,7 @@ body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor
 
 body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='hazards'] {
   background: var(--editor-retro-red);
-  color: var(--editor-retro-cream);
+  color: #18161c;
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='deco'] {
@@ -646,6 +648,8 @@ body[data-editor-dock-shell='true'] .editor-shell-popover-heading {
   gap: 12px;
   font-family: 'Super Mario Bros. NES', monospace;
   font-size: 16px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-square-button {
@@ -717,8 +721,10 @@ body[data-editor-dock-shell='true'] #editor-drawer-header {
 body[data-editor-dock-shell='true'] .editor-drawer-title {
   color: var(--editor-retro-ink);
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.2;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 body[data-editor-dock-shell='true'] #editor-drawer-room-tabs {
@@ -1029,8 +1035,10 @@ body[data-editor-dock-shell='true'] .smart-visual-picker h3 {
   margin: 2px 0 0;
   color: var(--editor-retro-ink);
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.2;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 body[data-editor-dock-shell='true'] .smart-theme-button-grid,
@@ -1073,8 +1081,10 @@ body[data-editor-dock-shell='true'] .editor-workbench-heading {
 body[data-editor-dock-shell='true'] .editor-workbench-heading-title {
   color: var(--editor-retro-cream);
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 body[data-editor-dock-shell='true'] .editor-workbench-close-button {

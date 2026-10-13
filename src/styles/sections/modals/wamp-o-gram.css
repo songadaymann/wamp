@@ -30,8 +30,10 @@
   margin-top: 6px;
   color: #18161c;
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 19px;
+  font-size: 16px;
   line-height: 1.25;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #wamp-o-gram-modal .history-modal-header > .bar-btn,
@@ -191,7 +193,7 @@
   border: 2px solid #18161c;
   border-radius: 0;
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.45;

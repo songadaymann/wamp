@@ -19,12 +19,6 @@
   <title>WAMP</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preload" as="image" href="/assets/objects/flag-checkered.png">
-  <!-- IBM Plex Mono loads without holding up the first paint (it used to be an @import in base.css).
-       Preloading the pixel fonts was measured too: it takes bandwidth from the main stylesheet and
-       delays the first paint more than it speeds up the title font (F120). -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
   <link rel="manifest" href="./app.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="alternate" type="text/markdown" href="https://api.wamp.land/skill.md">
@@ -2828,7 +2822,10 @@
           <button id="btn-profile-tab-stats" class="bar-btn bar-btn-small" type="button" aria-selected="false">Stats</button>
         </div>
         <div id="profile-rooms-panel" class="leaderboard-panel">
-          <div id="profile-rooms-empty" class="leaderboard-empty">No claimed published rooms yet.</div>
+          <div id="profile-rooms-empty" class="leaderboard-empty">
+            <div>No published rooms yet.</div>
+            <button id="btn-profile-empty-build" class="bar-btn hidden" type="button">Find a spot to build</button>
+          </div>
           <div id="profile-rooms-list" class="history-version-list profile-room-grid"></div>
         </div>
         <div id="profile-playlists-panel" class="leaderboard-panel hidden">
@@ -2846,7 +2843,10 @@
             </div>
             <div id="profile-playlist-status" class="history-modal-meta hidden"></div>
           </div>
-          <div id="profile-playlists-empty" class="leaderboard-empty">No public playlists yet.</div>
+          <div id="profile-playlists-empty" class="leaderboard-empty">
+            <div>No public playlists yet.</div>
+            <button id="btn-profile-empty-playlist" class="bar-btn hidden" type="button">Create a playlist</button>
+          </div>
           <div id="profile-playlists-list" class="history-version-list profile-playlist-list"></div>
         </div>
         <div id="profile-progress-panel" class="leaderboard-panel hidden">
