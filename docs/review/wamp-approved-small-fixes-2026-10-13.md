@@ -4,13 +4,13 @@ Jonathan approved the smaller items in the October 13 handoff. The work is isola
 
 | Items | PR | Merge | Delivery |
 |---|---|---|---|
-| F174, F117, F120, F056, F098, F119 | [#187](https://github.com/songadaymann/wamp/pull/187) | Pending | Frontend only; Pages delivery pending |
-| F118, F061 | [#187](https://github.com/songadaymann/wamp/pull/187) | Pending | Recorded as won't do; remain unticked |
+| F174, F117, F120, F056, F098, F119 | [#187](https://github.com/songadaymann/wamp/pull/187) | `70a7c98c` | [wamp.land](https://wamp.land), [immutable release](https://05e6c6c2.wampland.pages.dev) |
+| F118, F061 | [#187](https://github.com/songadaymann/wamp/pull/187) | `70a7c98c` | Recorded as won't do; remain unticked |
 
 ## What changed
 
 - **F174:** the existing signature red keeps its color; controls, badges and error banners use #18161c ink instead of white/cream. This includes Build, active Play, Publish, Mint, editor dangers, phone Stop/Restart and the chat badge. Ink on #ed5f4b has 5.42:1 contrast.
-- **F117:** Mario and Game Boy titles/labels use multiples of eight pixels, including phone overrides, adaptive room titles and the canvas Build/Warp labels. Their spacing is whole pixels where explicitly declared, and the browser does not synthesize bold. HomeVideo's 11–12px body sizes remain the documented readability compromise; camera scaling can still land canvas glyphs between physical pixels.
+- **F117:** Mario and Game Boy titles/labels use multiples of eight pixels, including phone overrides, adaptive room titles and the canvas Build/Warp labels. Their spacing is whole pixels where explicitly declared, and the browser does not synthesize bold. Existing body and large splash scales are retained as part of the approved scope. HomeVideo's 11–12px body sizes remain the documented readability compromise; camera scaling can still land canvas glyphs between physical pixels.
 - **F120:** IBM Plex Mono 400/500/600 Latin WOFF2 files (45,216 bytes total) are served locally. The Google stylesheet/preconnects are removed. Fontsource 5.3.0 supplied the font files; the OFL license is shipped beside them. Pixel-font preloads remain omitted because earlier measurements found they slowed first paint.
 - **F056:** Back/Escape saves only a private draft, including a recent edit, leaving test play and retrying a failed autosave. It waits for a save already in progress. If a save fails, or edits arrive during the exit save, the editor stays open with the explanation and latest edits retained. Publishing remains an explicit action.
 - **F098:** portrait phones shade the view outside a fixed-camera room. The whole room still fits and stays centered above the console; the shading goes away in landscape, follow-camera rooms and Browse. The translucent shade is functional dimming, as explicitly approved.
@@ -30,4 +30,10 @@ Jonathan approved the smaller items in the October 13 handoff. The work is isola
 
 ## Delivery
 
-PR #187 is open. CI, merge, automatic Pages deployment and custom-domain verification remain.
+PR #187 merged as `70a7c98c`. Both GitHub jobs and both Cloudflare previews passed. Production Pages deployment `05e6c6c2-a454-4128-a6ad-762047f1355b` serves that revision.
+
+All 175 game entry/lazy JavaScript, CSS and IBM Plex Mono font assets match byte-for-byte between wamp.land and that immutable release. CSS and font files also match the verified local build. The production runtime contains the new fixed-room dimming, changed-during-save guard and retry wording; the old auto-publish-on-exit wording is absent. JavaScript hashes differ across preview/production because build IDs and API settings differ; verification uses the correct source revision and each release's own assets.
+
+The live iPhone-size Chromium flow reaches the published fixed-camera tutorial room, keeps the camera still during movement/jump input, loads all three local font weights, and has no page errors or Google Fonts requests. The private game object remains unexposed. The screenshot was inspected. API health returns 200 / ok.
+
+No code or delivery remains for these six items. Physical-device iOS Safari testing remains separate from the browser simulations. The following documentation-only record commit leaves the frontend source unchanged.

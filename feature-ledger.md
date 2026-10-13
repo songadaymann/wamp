@@ -1,6 +1,6 @@
 ## 2026-10-13 — Six smaller approved checkup fixes
 
-Canonical branch: `codex/wamp-approved-small-fixes-2026-10-13`. Implemented F174/F117/F120/F056/F098/F119; F118/F061 recorded as won't do. PR [#187](https://github.com/songadaymann/wamp/pull/187), verified candidate; CI and Pages delivery pending. Master checklist on this branch: 133/215. Receipt: [approved small fixes](docs/review/wamp-approved-small-fixes-2026-10-13.md). Primary email-code work and private handoff preserved.
+Canonical branch: `codex/wamp-approved-small-fixes-2026-10-13`. Implemented F174/F117/F120/F056/F098/F119; F118/F061 recorded as won't do. PR [#187](https://github.com/songadaymann/wamp/pull/187), merge `70a7c98c`, shipped on wamp.land via Pages `05e6c6c2`; 175 live assets match the immutable release and local CSS/fonts. Live phone browser checks and API health pass. Master checklist: 133/215. Receipt: [approved small fixes](docs/review/wamp-approved-small-fixes-2026-10-13.md). Primary email-code work and private handoff preserved.
 
 ## 2026-10-13 — Restart keyboard focus
 

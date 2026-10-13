@@ -1583,8 +1583,10 @@ Branch: `codex/wamp-approved-small-fixes-2026-10-13`, fresh origin/main worktree
 - [x] F056 exit saves a private draft and never publishes.
 - [x] F098 portrait fixed-room neighbor dimming, preserving full-room framing.
 - [x] F119 friendly error helper and profile Levels/Playlists actions.
-- [ ] Record F118/F061 won't-do; full quality gate, phone/browser checks, PR and delivery.
+- [x] Record F118/F061 won't-do; full quality gate, phone/browser checks, PR and delivery.
 
 Final quality gate passed: 459 files / 3,495 tests; startup JavaScript 638.2 KB brotli under 670 KB. Native desktop/phone checks and pixel-size audit pass. The final mobile pass caught and corrected the compact phone HUD height after snapping fonts; rechecking the portrait startup framing separately. The primary checkout is preserved.
 
 PR #187 opened. Full mobile recheck: all 12 pass, zero console/page errors and no fixture misses. Unchanged-main comparison passes too; one earlier startup framing sample failed, without weakening any assertion. Computed pixel-font audit: no off-grid sizes in current desktop/phone DOM. Main remains at 127/215 until the PR merges; this branch records 133/215. CI and live delivery pending.
+
+Delivery complete: PR #187 merged as `70a7c98c`; production Pages `05e6c6c2` and wamp.land serve the expected source revision. All 175 game chunks/CSS/local fonts match the immutable release; CSS/fonts match local sources. Live phone movement/jump keeps the fixed room camera still, all font weights load without Google, there are no page errors, and API health is ok. Screenshot inspected. Master 133/215. No follow-up code remains for these six fixes; F013 is the next larger approved project. This final record update is docs only.
