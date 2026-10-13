@@ -60,7 +60,7 @@ export interface RoomVideoFrameSync {
   /** Depth inside stackParent. Play rooms draw the background at 9 and tiles at 10. */
   holeDepth?: number;
   /** Play mode draws the room as one layer, so the hole has to live inside that layer. */
-  stackParent?: Phaser.GameObjects.Container | null;
+  stackParent?: Phaser.GameObjects.Container | Phaser.GameObjects.Layer | null;
 }
 
 interface DragState {
@@ -250,11 +250,12 @@ export class RoomVideoFrameController {
 
   private attachToStack(
     object: Phaser.GameObjects.Graphics,
-    parent: Phaser.GameObjects.Container | null,
+    parent: Phaser.GameObjects.Container | Phaser.GameObjects.Layer | null,
   ): void {
     const stack = parent?.scene ? parent : null;
     if (stack) {
-      if (object.parentContainer !== stack) stack.add(object);
+      const alreadyInStack = object.parentContainer === stack || object.displayList === stack;
+      if (!alreadyInStack) stack.add(object);
       return;
     }
     if (!object.parentContainer) return;
