@@ -663,6 +663,8 @@ Minor fixes and scoping notes:
 - feature-ledger.md:32 still marks the Devkidd tree pack as "Not deployed", but commit 80081eab is in main.
 - BootScene.create() also builds animations from every GAME_OBJECT texture. Lazy-loading should either be limited to static decorations and backgrounds, or move that animation setup into the lazy path.
 
+**Implemented (2026-10-13).** Static decorations/backgrounds load on demand in room play, editor and detailed Browse previews; trees use 11 trimmed family atlases with original frame offsets and content-hashed paths. Shared loads continue while a source scene sleeps. Startup PNG requests 488 → 183; image bytes 1,538,580 → 306,863; decoded footprint 109,342,200 → 34,923,004 bytes. All gameplay/animated objects and tilesets remain boot-ready. Full regression, quality/mobile and native browser checks pass; delivery tracked in [the receipt](wamp-room-art-loading-2026-10-13.md).
+
 ### F014: Android phones download game art only 6 files at a time
 
 - **Area:** Load time, bundle size & assets

@@ -1,0 +1,57 @@
+{
+  "bamboo": {
+    "key": "tree-atlas:bamboo:3c567a85e66f",
+    "texturePath": "assets/objects/trees/atlases/bamboo-3c567a85e66f.png",
+    "atlasPath": "assets/objects/trees/atlases/bamboo-3c567a85e66f.json"
+  },
+  "basic": {
+    "key": "tree-atlas:basic:a71b85bca717",
+    "texturePath": "assets/objects/trees/atlases/basic-a71b85bca717.png",
+    "atlasPath": "assets/objects/trees/atlases/basic-a71b85bca717.json"
+  },
+  "birch": {
+    "key": "tree-atlas:birch:7383d30d8e2e",
+    "texturePath": "assets/objects/trees/atlases/birch-7383d30d8e2e.png",
+    "atlasPath": "assets/objects/trees/atlases/birch-7383d30d8e2e.json"
+  },
+  "bonsai": {
+    "key": "tree-atlas:bonsai:a5e3d22a6ffb",
+    "texturePath": "assets/objects/trees/atlases/bonsai-a5e3d22a6ffb.png",
+    "atlasPath": "assets/objects/trees/atlases/bonsai-a5e3d22a6ffb.json"
+  },
+  "bonsai_sakura": {
+    "key": "tree-atlas:bonsai-sakura:66abcdb4ab5c",
+    "texturePath": "assets/objects/trees/atlases/bonsai-sakura-66abcdb4ab5c.png",
+    "atlasPath": "assets/objects/trees/atlases/bonsai-sakura-66abcdb4ab5c.json"
+  },
+  "coconut": {
+    "key": "tree-atlas:coconut:c16e8cc26fcc",
+    "texturePath": "assets/objects/trees/atlases/coconut-c16e8cc26fcc.png",
+    "atlasPath": "assets/objects/trees/atlases/coconut-c16e8cc26fcc.json"
+  },
+  "oak": {
+    "key": "tree-atlas:oak:e9dbc3474c2e",
+    "texturePath": "assets/objects/trees/atlases/oak-e9dbc3474c2e.png",
+    "atlasPath": "assets/objects/trees/atlases/oak-e9dbc3474c2e.json"
+  },
+  "palm": {
+    "key": "tree-atlas:palm:3f47093e5ae3",
+    "texturePath": "assets/objects/trees/atlases/palm-3f47093e5ae3.png",
+    "atlasPath": "assets/objects/trees/atlases/palm-3f47093e5ae3.json"
+  },
+  "sakura": {
+    "key": "tree-atlas:sakura:4ca456f6f4b0",
+    "texturePath": "assets/objects/trees/atlases/sakura-4ca456f6f4b0.png",
+    "atlasPath": "assets/objects/trees/atlases/sakura-4ca456f6f4b0.json"
+  },
+  "weeping_willow": {
+    "key": "tree-atlas:weeping-willow:2a82d1322f38",
+    "texturePath": "assets/objects/trees/atlases/weeping-willow-2a82d1322f38.png",
+    "atlasPath": "assets/objects/trees/atlases/weeping-willow-2a82d1322f38.json"
+  },
+  "winter": {
+    "key": "tree-atlas:winter:c76a3ae91216",
+    "texturePath": "assets/objects/trees/atlases/winter-c76a3ae91216.png",
+    "atlasPath": "assets/objects/trees/atlases/winter-c76a3ae91216.json"
+  }
+}

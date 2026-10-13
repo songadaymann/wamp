@@ -1,7 +1,8 @@
+import { bindEditorArtSelection } from '../../assets/editorArtSelection';
+import { createSceneObjectSprite } from '../../assets/sceneArt';
 import Phaser from 'phaser';
 import {
   getObjectById,
-  getObjectDefaultFrame,
   getObjectDisplayOffset,
   getObjectDisplayScale,
   getPlacedObjectLayer,
@@ -59,6 +60,7 @@ export class EditorDocumentPresentationController {
   }
 
   rebuild(state: EditorDocumentPresentationState): void {
+    bindEditorArtSelection(this.scene);
     this.destroyObjectSprites();
     for (const placed of state.placedObjects) {
       const objectConfig = getEditorObjectConfigById(placed.id);
@@ -70,11 +72,11 @@ export class EditorDocumentPresentationController {
       const worldY = state.origin.y + placed.y;
       ensureCustomSpriteTexture(this.scene, objectConfig);
       const displayOffset = getObjectDisplayOffset(objectConfig);
-      const sprite = this.scene.add.sprite(
+      const sprite = createSceneObjectSprite(
+        this.scene,
         worldX + displayOffset.x,
         worldY + displayOffset.y,
-        objectConfig.id,
-        0,
+        objectConfig,
       );
       sprite.setDepth(getPlacedObjectEditorDepth(placed));
       sprite.setOrigin(0.5, 0.5);
@@ -84,8 +86,6 @@ export class EditorDocumentPresentationController {
         if (this.scene.anims.exists(animKey)) {
           sprite.play(animKey);
         }
-      } else {
-        sprite.setFrame(getObjectDefaultFrame(objectConfig));
       }
       if (
         placed.id === 'door_metal' ||

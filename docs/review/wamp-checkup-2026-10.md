@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 133 of 215 done.**
+**Progress: 134 of 215 done.**
 
 **October 9 release:** [All 18 overnight slices and both morning fixes are live](wamp-overnight-release-2026-10-09.md), preserving partner PR #99 and ghost archive PR #100. Five partial items remain unticked; native background-tab audio still needs a physical check.
 
@@ -118,7 +118,7 @@ How smoothly the game runs once it's loaded, especially on phones. The foundatio
 
 How long new players wait before they can play, and how much data that costs. The biggest win is not downloading every art file before the first room.
 
-- [ ] **F013** Startup downloads all 480 art files in the game before anyone can play (also covers F102) · high impact · medium effort
+- [x] **F013** Startup downloads all 480 art files in the game before anyone can play (also covers F102) · high impact · medium effort — static decorations/backgrounds load on demand; 221 trees use 11 trimmed family atlases; startup PNGs 488 → 183. [Receipt](wamp-room-art-loading-2026-10-13.md).
 - [x] **F014** Android phones download game art only 6 files at a time · medium impact · small effort — **done 2026-10-03** (8a844ada). Android loader concurrency is 32; desktop/Android production Browse checks and live bundle parity pass.
 - [ ] **F094** Custom backgrounds always download the full original file (one is an 8.3 MB animated GIF) · medium impact · small effort — _Partly done 2026-10-11 (`efbff3e2`, [PR #143](https://github.com/songadaymann/wamp/pull/143), API Worker `0edbab18`): the game asks Cloudflare Images for WebP/AVIF (the 8.3 MB GIF background now downloads as a 2.8 MB WebP) and the API sends `Vary: Accept`. Open: a still, size-capped Cloudflare Images variant (account config), replacing background `59f7f031…`, and checking the real file type at upload._
 - [x] **F017** Game art PNGs are about twice as big as they need to be · medium impact · small effort — **done 2026-10-10** (`afb8338a`, [PR #137](https://github.com/songadaymann/wamp/pull/137)). `npm run assets:png:optimize` recompressed 512 PNGs losslessly (6.17 → 4.34 MB, pixel-identical), and `assets:png:check` in `npm run check` and CI fails when a committed PNG could still shrink by more than 10%. Not done: lossless WebP and splitting the CryptoPunk head atlas.
