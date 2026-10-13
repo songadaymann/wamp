@@ -1,6 +1,6 @@
 ## 2026-10-13 — F023 smaller audio assets
 
-Canonical branch: `codex/wamp-audio-assets-2026-10-13`. Status: verified candidate; 3,521 tests, real Chromium/WebKit audio/phone controls, exact eight-second loops and 240 decoder length/channel checks pass. Listening A/B supplied; release awaits Jonathan's listening acceptance and hosted checks; all 12 local mobile scenarios pass. Receipt: `docs/review/wamp-audio-assets-2026-10-13.md`. Source WAV/MP3 files stay in Git; source-only deploy exclusions must agree with all runtime fallback paths.
+Canonical branch: `codex/wamp-audio-assets-2026-10-13`, draft PR [#191](https://github.com/songadaymann/wamp/pull/191). Status: verified candidate; 3,522 tests, real Chromium/WebKit audio/phone controls, exact eight-second loops and 240 decoder length/channel checks pass. Listening A/B supplied; release awaits Jonathan's listening acceptance and hosted checks; all 12 local mobile scenarios pass. Receipt: `docs/review/wamp-audio-assets-2026-10-13.md`. Source WAV/MP3 files stay in Git; source-only deploy exclusions must agree with all runtime fallback paths.
 
 ## 2026-10-13 — F021 asset cache versioning
 

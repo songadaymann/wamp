@@ -14,7 +14,7 @@ The drums have the same mono average, 0.0025 silence threshold, 48-frame padding
 
 The music pack keeps its IDs, gains, 120 BPM and four two-second bars. It reads 112 kbps `.compact.mp3` files. Existing OGG/AAC SFX remain unchanged; the third fallback is now MP3 rather than WAV, with the existing successful-format preference retained.
 
-Source WAVs and stem MP3s remain in Git. `.assetsignore` excludes them from Pages uploads while retaining every playback file. Accounting for the unused snare, 9,612,510 source bytes leave the deployment and 2,020,054 playback bytes enter it: **7,592,456 fewer bytes**. This is deployment hygiene; excluding SFX WAVs alone does not make normal player downloads faster.
+Source WAVs and stem MP3s remain in Git. `.assetsignore` records the source-only exclusions for Workers asset uploads. Pages' current uploader ignores that file, so a Vite build plugin also removes the 61 source copies from the output before upload, retaining every playback file. A regression fixture checks all excluded sources, every compressed output and unrelated WAV/worker files. Accounting for the unused snare, 9,612,510 source bytes leave the deployment and 2,020,054 playback bytes enter it: **7,592,456 fewer bytes**. This is deployment hygiene; excluding SFX WAVs alone does not make normal player downloads faster.
 
 ## Decoder and loop handling
 
@@ -26,7 +26,7 @@ The original Logic music exports have iTunes gapless metadata. Safari decodes ex
 
 ## Validation
 
-- Full `npm run check`: 467 files / 3,521 tests pass; lint, types, DOM contract, world types, production build and PNG/tree/audio gates pass. Startup JavaScript: 649.0 KB brotli, under 670 KB.
+- Full `npm run check`: 468 files / 3,522 tests pass; lint, types, DOM contract, world types, production build and PNG/tree/audio gates pass. Startup JavaScript: 649.0 KB brotli, under 670 KB.
 - 356 real decoder operations: all 60 new files plus 29 original music files, in Chromium and WebKit at 44.1 and 48 kHz. All succeed. Every new duration is within one resampling frame of its declared duration, with the expected channel count.
 - All drum/stem comparisons have zero measured lag; minimum original/candidate correlation is 0.98375. Stem alignment is checked independently against original Safari PCM. Correlation measures timing/similarity; it does not replace a listening check of lossy encoding or loop seams.
 - Native phone game probes in both browsers: 16 drum rows use 15 compressed downloads; clip preview and mixed-bar lane loop have 384,000 frames at 48 kHz; copied bar samples and the empty bar match exactly. All observed audio URLs carry content hashes and none request WAV. SFX load and play successfully, including WebKit's MP3 fallback, with no page exceptions or audio errors. Real movement and the phone Jump button pass.
