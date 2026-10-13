@@ -21,6 +21,8 @@ const PUBLIC_VISIBLE = `${sqlUserIdIsNotLegacyGeneratedOnly('a.actor_user_id')}
     OR a.source_kind = 'comment' AND EXISTS (SELECT 1 FROM room_comments WHERE id = a.source_id AND status = 'approved')
     OR a.source_kind = 'guest')`;
 const VISIBLE = `a.recipient_user_id = ? AND ${PUBLIC_VISIBLE}`;
+const ROOM_VISIBLE = `${VISIBLE} AND COALESCE(rv.published_by_user_id, ev.published_by_user_id,
+  cv.published_by_user_id, r.last_published_by_user_id, r.claimer_user_id, e.owner_user_id, c.owner_user_id) = a.recipient_user_id`;
 const JOINS = `FROM builder_activity a
   LEFT JOIN users actor ON actor.id = a.actor_user_id
   LEFT JOIN rooms r ON a.content_type = 'room' AND r.id = a.content_id
@@ -59,13 +61,15 @@ export async function loadActivityPreferences(db: D1DatabaseSession, userId: str
 export function publicPreferences(row: PreferenceRow, emailAvailable: boolean): ActivityPreferences {
   return { weeklyDigest: row.weekly_digest === 1, dethroneAlerts: row.dethrone_alerts === 1, dailyFeatures: row.daily_features === 1, emailAvailable };
 }
-export async function loadActivity(db: D1DatabaseSession, userId: string, emailAvailable: boolean, before?: number): Promise<ActivityResponse> {
+export async function loadActivity(db: D1DatabaseSession, userId: string, emailAvailable: boolean, before?: number,
+  scope: 'inbox' | 'rooms' = 'inbox'): Promise<ActivityResponse> {
+  const visible = scope === 'rooms' ? ROOM_VISIBLE : VISIBLE;
   const prefs = await loadActivityPreferences(db, userId);
   const counts = await db.prepare(`SELECT COALESCE(MAX(a.id), 0) AS latest_id,
-    SUM(CASE WHEN a.id > ? THEN 1 ELSE 0 END) AS unread_count ${JOINS} WHERE ${VISIBLE}`)
+    SUM(CASE WHEN a.id > ? THEN 1 ELSE 0 END) AS unread_count ${JOINS} WHERE ${visible}`)
     .bind(prefs.seen_id, userId).first<{ latest_id: number; unread_count: number | null }>();
   // Cap at the response watermark so events arriving during pagination remain unread.
-  const rows = await db.prepare(`${SELECT} WHERE ${VISIBLE} AND a.id <= ? AND a.id < ? ORDER BY a.id DESC LIMIT 31`)
+  const rows = await db.prepare(`${SELECT} WHERE ${visible} AND a.id <= ? AND a.id < ? ORDER BY a.id DESC LIMIT 31`)
     .bind(userId, counts?.latest_id ?? 0, before ?? Number.MAX_SAFE_INTEGER).all<ActivityRow>();
   const entries = await Promise.all(rows.results.slice(0, 30).map(row => mapEntry(row, prefs.seen_id)));
   return { entries, latestId: counts?.latest_id ?? 0, unreadCount: counts?.unread_count ?? 0,

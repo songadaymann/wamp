@@ -21,7 +21,7 @@ export async function handleMyActivity(request: Request, url: URL, env: Env): Pr
   const db = env.DB.withSession?.('first-primary') ?? env.DB;
   const emailAvailable = Boolean(auth.user.email?.trim()) && !auth.school;
   if (request.method === 'GET' && url.pathname === '/api/me/activity') {
-    return jsonResponse(request, await loadActivity(db, auth.user.id, emailAvailable, activityPage(url)), { headers: { 'Cache-Control': 'no-store' } });
+    return jsonResponse(request, await loadActivity(db, auth.user.id, emailAvailable, activityPage(url), 'rooms'), { headers: { 'Cache-Control': 'no-store' } });
   }
   if (url.pathname === '/api/me/activity/seen' && request.method === 'POST') {
     const body = await parseJsonBody<{ latestId?: unknown }>(request, { maxBytes: 1024 });

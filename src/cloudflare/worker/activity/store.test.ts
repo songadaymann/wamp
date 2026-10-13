@@ -11,6 +11,18 @@ const opened: ReturnType<typeof fixture>[] = [];
 function setup(include = true) { const f = fixture(include); opened.push(f); return f; }
 afterEach(() => { for (const f of opened.splice(0)) f.sqlite.close(); });
 describe('private builder activity on the migrated schema', () => {
+  it('scopes My activity and its unread badge to rooms the recipient created', async () => {
+    const f = setup(); award(f, 'clear'); top1(f, 'rank');
+    expect((await loadActivity(f.env.DB, 'p1', true)).entries).toMatchObject([{ kind: 'dethroned' }]);
+    const unrelated = await loadActivity(f.env.DB, 'p1', true, undefined, 'rooms');
+    expect(unrelated.entries).toEqual([]); expect(unrelated.unreadCount).toBe(0); expect(unrelated.latestId).toBe(0);
+    const own = await loadActivity(f.env.DB, 'builder', true, undefined, 'rooms');
+    expect(own.entries.map(entry => entry.kind)).toEqual(['top1', 'completion']);
+    expect(own.unreadCount).toBe(2);
+    // A later claimant doesn't change who authored the published version.
+    f.sqlite.exec("UPDATE rooms SET claimer_user_id='p3'");
+    expect((await loadActivity(f.env.DB, 'builder', true, undefined, 'rooms')).entries).toHaveLength(2);
+  });
   it('backfills safe legacy events and keeps future awards atomic and deduplicated', async () => {
     const f = setup(false); award(f, 'old', 'unique_completion_room', 'p1', NOW, false); f.migrate();
     award(f, 'new', 'unique_rating_room'); award(f, 'new', 'unique_rating_room');
