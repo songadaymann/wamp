@@ -26,7 +26,7 @@ function createLaneClips(
       id: `${laneId}-${clipNumber}`,
       laneId,
       label: `${baseName} ${clipNumber}`,
-      assetPath: `assets/music/wamp-v1/${baseName}${clipNumber}.mp3`,
+      assetPath: `assets/music/wamp-v1/${baseName}${clipNumber}.compact.mp3`,
     };
   });
 }

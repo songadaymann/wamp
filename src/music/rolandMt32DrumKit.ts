@@ -8,53 +8,53 @@ type RolandMt32DrumSampleConfig = {
 
 const ROLAND_MT32_SAMPLE_CONFIG: Record<RoomPatternDrumRowId, RolandMt32DrumSampleConfig> = {
   'fx-click': {
-    assetPath: 'assets/music/roland-mt32/fx-click.wav',
+    assetPath: 'assets/music/roland-mt32/fx-click.mp3',
   },
   tambourine: {
-    assetPath: 'assets/music/roland-mt32/tambourine.wav',
+    assetPath: 'assets/music/roland-mt32/tambourine.mp3',
   },
   shaker: {
-    assetPath: 'assets/music/roland-mt32/shaker.wav',
+    assetPath: 'assets/music/roland-mt32/shaker.mp3',
   },
   cowbell: {
-    assetPath: 'assets/music/roland-mt32/cowbell.wav',
+    assetPath: 'assets/music/roland-mt32/cowbell.mp3',
   },
   crash: {
-    assetPath: 'assets/music/roland-mt32/crash.wav',
+    assetPath: 'assets/music/roland-mt32/crash.mp3',
   },
   ride: {
-    assetPath: 'assets/music/roland-mt32/ride.wav',
+    assetPath: 'assets/music/roland-mt32/ride.mp3',
   },
   'open-hat': {
-    assetPath: 'assets/music/roland-mt32/hat-open.wav',
+    assetPath: 'assets/music/roland-mt32/hat-open.mp3',
   },
   'closed-hat': {
-    assetPath: 'assets/music/roland-mt32/hat-closed.wav',
+    assetPath: 'assets/music/roland-mt32/hat-closed.mp3',
   },
   'high-tom': {
-    assetPath: 'assets/music/roland-mt32/tom-high.wav',
+    assetPath: 'assets/music/roland-mt32/tom-high.mp3',
   },
   'mid-tom': {
-    assetPath: 'assets/music/roland-mt32/tom-mid.wav',
+    assetPath: 'assets/music/roland-mt32/tom-mid.mp3',
   },
   'low-tom': {
-    assetPath: 'assets/music/roland-mt32/tom-low.wav',
+    assetPath: 'assets/music/roland-mt32/tom-low.mp3',
   },
   rim: {
-    assetPath: 'assets/music/roland-mt32/rimshot.wav',
+    assetPath: 'assets/music/roland-mt32/rimshot.mp3',
   },
   clap: {
-    assetPath: 'assets/music/roland-mt32/clap.wav',
+    assetPath: 'assets/music/roland-mt32/clap.mp3',
   },
   snare: {
-    assetPath: 'assets/music/roland-mt32/snare-02.wav',
+    assetPath: 'assets/music/roland-mt32/snare-02.mp3',
   },
   'kick-2': {
-    assetPath: 'assets/music/roland-mt32/bassdrum.wav',
+    assetPath: 'assets/music/roland-mt32/bassdrum.mp3',
     variant: 'tight-kick',
   },
   'kick-1': {
-    assetPath: 'assets/music/roland-mt32/bassdrum.wav',
+    assetPath: 'assets/music/roland-mt32/bassdrum.mp3',
   },
 };
 
@@ -62,61 +62,6 @@ const samplePromiseCache = new Map<string, Promise<Float32Array | null>>();
 
 function resolveAssetUrl(path: string): string {
   return resolveAudioAssetUrl(path, import.meta.env.BASE_URL, window.location.href);
-}
-
-function mixAudioBufferToMono(buffer: AudioBuffer): Float32Array {
-  const channelCount = Math.max(1, buffer.numberOfChannels);
-  const mono = new Float32Array(buffer.length);
-  for (let channel = 0; channel < channelCount; channel += 1) {
-    const channelData = buffer.getChannelData(channel);
-    for (let index = 0; index < buffer.length; index += 1) {
-      mono[index] += channelData[index] / channelCount;
-    }
-  }
-  return mono;
-}
-
-function trimSilence(
-  source: Float32Array,
-  options?: {
-    threshold?: number;
-    paddingSamples?: number;
-  },
-): Float32Array {
-  const threshold = options?.threshold ?? 0.0025;
-  const paddingSamples = Math.max(0, Math.floor(options?.paddingSamples ?? 48));
-
-  let start = 0;
-  while (start < source.length && Math.abs(source[start]) < threshold) {
-    start += 1;
-  }
-
-  let end = source.length - 1;
-  while (end > start && Math.abs(source[end]) < threshold) {
-    end -= 1;
-  }
-
-  const trimmedStart = Math.max(0, start - paddingSamples);
-  const trimmedEnd = Math.min(source.length, end + paddingSamples + 1);
-  return source.slice(trimmedStart, Math.max(trimmedStart + 1, trimmedEnd));
-}
-
-function normalizePeak(source: Float32Array, targetPeak = 0.92): Float32Array {
-  let peak = 0;
-  for (let index = 0; index < source.length; index += 1) {
-    peak = Math.max(peak, Math.abs(source[index]));
-  }
-
-  if (peak <= 0.0001) {
-    return source.slice();
-  }
-
-  const gain = targetPeak / peak;
-  const normalized = new Float32Array(source.length);
-  for (let index = 0; index < source.length; index += 1) {
-    normalized[index] = source[index] * gain;
-  }
-  return normalized;
 }
 
 function resampleLinear(source: Float32Array, playbackRate: number): Float32Array {
@@ -179,10 +124,8 @@ export async function loadRolandMt32DrumSample(
   const samplePromise = loadSampleBytes(config.assetPath)
     .then(async (audioData) => {
       const decoded = await audioContext.decodeAudioData(audioData.slice(0));
-      const mono = mixAudioBufferToMono(decoded);
-      const trimmed = trimSilence(mono);
-      const normalized = normalizePeak(trimmed);
-      return applyVariant(normalized, config.variant);
+      // Mono, silence trim and peak normalization are baked into the MP3.
+      return applyVariant(decoded.getChannelData(0), config.variant);
     })
     .catch(() => null);
 

@@ -23,3 +23,5 @@ Current code-level cue names already wired:
 - `bounce`
 - `jump`
 - `land`
+
+WAV files are retained authoring sources and excluded from Pages. Playback tries OGG/AAC and then the generated MP3 rescue file. Generate/check MP3 files with `npm run assets:audio:build` / `npm run assets:audio:check`; see `docs/review/wamp-audio-assets-2026-10-13.md`.

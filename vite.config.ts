@@ -1,4 +1,5 @@
 import { createPublicAssetHashes } from './src/build/publicAssetHashes';
+import { audioSourceExclusionPlugin } from './src/build/audioSourceExclusion';
 import { publicAssetCssVersions, publicAssetVersionPlugin } from './src/build/publicAssetVersionPlugin';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -45,6 +46,7 @@ export default defineConfig(({ mode }) => {
     // Phaser repeats its licence header in every module; keep one copy at the end of each chunk.
     esbuild: { legalComments: 'eof' },
     plugins: [
+      audioSourceExclusionPlugin(),
       publicAssetVersionPlugin(publicAssetHashes),
       earlyWorldTileBootstrapPlugin(roomApiBaseUrl),
       bootBundleReportPlugin(),

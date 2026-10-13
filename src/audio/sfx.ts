@@ -367,7 +367,7 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
 
 /**
  * The files to try for a cue: the compressed format this browser reports first, then the
- * other one, then the original WAV. A browser can claim a format its audio decoder lacks.
+ * other one, then the compact MP3 fallback. A browser can claim a format its audio decoder lacks.
  */
 function resolveAssetUrls(path: string): string[] {
   const base = import.meta.env.BASE_URL || '/';
@@ -376,7 +376,7 @@ function resolveAssetUrls(path: string): string[] {
   }
   const preferred = resolveCompressedSfxExtension();
   const fallback = preferred === '.ogg' ? '.m4a' : '.ogg';
-  return [preferred, fallback, '.wav'].map((extension) =>
+  return [preferred, fallback, '.mp3'].map((extension) =>
     resolveSfxAssetUrl(path.replace(/\.wav$/, extension), base, window.location.href)
   );
 }
