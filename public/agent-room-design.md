@@ -2,6 +2,8 @@
 
 Use this reference when the user wants an agent to make creative decisions.
 
+Read `/skill.md` for room dimensions, coordinate conventions, permissions, and the standard/Expanded Room workflows. A standard cell is 40 × 22 tiles (640 × 352 logical pixels); an Expanded Room connects multiple cells with one shared challenge.
+
 ## Start With Local Context
 
 Before building, inspect 3-5 nearby published rooms.
@@ -53,9 +55,11 @@ Choose one simple original direction:
 
 - a short `reach_exit` traversal room
 - a collectible route with low hazard density
+- a collectible race against a Sword Hunter, with a fair route for both racers
 - a small enemy-clear room with readable footing
 - a checkpoint sprint with obvious beats
 - a survival room with clear safe and unsafe zones
+- an NPC protect, escort, or give quest with a clear objective
 
 Prefer simplicity over novelty spam.
 
@@ -87,6 +91,19 @@ Prefer simplicity over novelty spam.
 - ensure enemies have standable fighting space
 - avoid stacking too many enemies in cramped terrain
 
+### `collect_race`
+
+- use exactly one Sword Hunter configured to collect, as required by the catalog
+- make collectible placement and the competing routes readable
+- check that the race is winnable from the authored spawn
+
+### `npc_quest`
+
+- make the NPC, dialogue, and protect/escort/give objective easy to identify
+- for escort, test the NPC's actual movement through the route and destination
+- for protect, provide readable threats and room to intervene
+- for give, provide enough reachable collectibles
+
 ### `checkpoint_sprint`
 
 - each checkpoint should correspond to a clear beat
@@ -106,9 +123,13 @@ Prefer simplicity over novelty spam.
 
 ## Publish Standard
 
+For Expanded Rooms, check transitions in both directions, the shared start/goal, and cross-cell object links. A cell that works alone may fail as part of a shared challenge. Co-op pressure-plate clears are practice; design a solo fallback when solo rankings matter. The current Expanded Room shared-goal payload supports the five base goals, not `collect_race` or `npc_quest`.
+
 Do not publish a room unless it is likely:
 
 - traversable
 - readable
 - mechanically coherent
 - distinct from nearby existing rooms
+
+Re-reading a saved draft verifies its data, not its playability. Playtest the critical route in the frontend when possible; report any remaining gameplay checks instead of claiming API validation proves completion.
