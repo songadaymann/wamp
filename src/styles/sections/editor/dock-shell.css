@@ -197,6 +197,13 @@ body[data-editor-dock-shell='true'][data-builder-mode='beginner'] .editor-shell-
   display: flex !important;
 }
 
+body[data-editor-dock-shell='true'] .editor-shell-tools [data-tool='randomize'] .tool-label,
+body[data-editor-dock-shell='true'] .editor-shell-tools [data-tool='rect'] .tool-label {
+  font-size: 7px;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
 body[data-editor-dock-shell='true'] .editor-shell-chunky-button:hover,
 body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button:hover,
 body[data-editor-dock-shell='true'] .editor-shell-popover button:hover,
