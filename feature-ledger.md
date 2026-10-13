@@ -1,6 +1,6 @@
 ## 2026-10-13 — F013 room art loading
 
-Canonical branch: `codex/wamp-room-art-loading-2026-10-13`. Status: verified candidate; 3,502 tests, 12 mobile scenarios and native art/movement checks pass. Startup PNGs 488 → 183; 80.1% fewer image bytes. Receipt: `docs/review/wamp-room-art-loading-2026-10-13.md`. Next: green PR, merge and live Pages verification.
+Canonical branch: `codex/wamp-room-art-loading-2026-10-13`. Status: implemented and merged in PR [#188](https://github.com/songadaymann/wamp/pull/188), source `e946baa0`, merge `950538e8`; all four hosted checks pass. 3,502 tests, 12 mobile scenarios and native art/movement checks pass. Startup PNGs 488 → 183; 80.1% fewer image bytes. Main uses automatic Pages delivery, with the final live postflight reported in the completing chat. Receipt: `docs/review/wamp-room-art-loading-2026-10-13.md`. Next approved work remains F021/F023/F094, separately.
 
 ## 2026-10-13 — Six smaller approved checkup fixes
 
