@@ -1,1 +1,18 @@
 _worker.js
+# F023: keep authoring sources in Git, but deploy only playback formats.
+assets/music/roland-mt32/*.wav
+assets/sfx/**/*.wav
+assets/music/wamp-v1/Arp1.mp3
+assets/music/wamp-v1/Arp2.mp3
+assets/music/wamp-v1/Arp3.mp3
+assets/music/wamp-v1/Bass1.mp3
+assets/music/wamp-v1/Bass2.mp3
+assets/music/wamp-v1/Bass3.mp3
+assets/music/wamp-v1/Drums1.mp3
+assets/music/wamp-v1/Drums2.mp3
+assets/music/wamp-v1/Drums3.mp3
+assets/music/wamp-v1/Hold1.mp3
+assets/music/wamp-v1/Hold2.mp3
+assets/music/wamp-v1/Melody1.mp3
+assets/music/wamp-v1/Melody2.mp3
+assets/music/wamp-v1/Melody3.mp3

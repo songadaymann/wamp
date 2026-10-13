@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "check": "npm run lint && npm run test && npm run typecheck && npm run smoke:dom-contract && npm run world-tiles:types:check && npm run build && npm run size:check && npm run assets:png:check && npm run assets:trees:check",
+    "check": "npm run lint && npm run test && npm run typecheck && npm run smoke:dom-contract && npm run world-tiles:types:check && npm run build && npm run size:check && npm run assets:png:check && npm run assets:trees:check && npm run assets:audio:check",
     "size:check": "node scripts/check_bundle_budget.mjs",
+    "assets:audio:build": "node scripts/build_audio_assets.mjs",
+    "assets:audio:check": "node scripts/build_audio_assets.mjs --check",
     "assets:png:optimize": "node scripts/optimize_png_assets.mjs",
     "assets:trees:build": "node scripts/build_tree_atlases.mjs",
     "assets:trees:check": "node scripts/build_tree_atlases.mjs --check",

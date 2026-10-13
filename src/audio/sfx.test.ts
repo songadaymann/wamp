@@ -147,17 +147,17 @@ describe('SFX on Web Audio buffers (F023, F229)', () => {
   it('falls back through the other formats when one will not decode, and tries the one that worked first next time', async () => {
     const h = harness();
     h.context.decodeAudioData.mockImplementation(async (data: ArrayBuffer & { url?: string }) => {
-      if (!data.url?.endsWith('.wav')) throw new Error('EncodingError');
+      if (!data.url?.endsWith('.mp3')) throw new Error('EncodingError');
       return { duration: 0.2, url: data.url };
     });
     h.controller.play('jump', { ignoreCooldown: true }); await h.settle();
     expect(h.fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      'http://localhost/assets/sfx/movement/jump.ogg', 'http://localhost/assets/sfx/movement/jump.m4a', 'http://localhost/assets/sfx/movement/jump.wav',
+      'http://localhost/assets/sfx/movement/jump.ogg', 'http://localhost/assets/sfx/movement/jump.m4a', 'http://localhost/assets/sfx/movement/jump.mp3',
     ]);
     expect(h.sources).toHaveLength(1);
     h.fetchMock.mockClear();
     h.controller.play('land', { ignoreCooldown: true }); await h.settle();
-    expect(h.fetchMock.mock.calls.map((call) => call[0])).toEqual(['http://localhost/assets/sfx/movement/land.wav']);
+    expect(h.fetchMock.mock.calls.map((call) => call[0])).toEqual(['http://localhost/assets/sfx/movement/land.mp3']);
     expect(h.sources).toHaveLength(2);
   });
 

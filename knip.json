@@ -43,6 +43,7 @@
     "scripts/build-player-combat-actions-atlas.mjs",
     "scripts/build_pages_worker.mjs",
     "scripts/build_tree_atlases.mjs",
+    "scripts/build_audio_assets.mjs",
     "scripts/check_bundle_budget.mjs",
     "scripts/convert_custom_sprite_objects_to_tiles.ts",
     "scripts/deploy_prod.mjs",
