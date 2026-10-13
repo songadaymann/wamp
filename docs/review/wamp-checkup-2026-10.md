@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 134 of 215 done.**
+**Progress: 135 of 215 done.**
 
 **October 9 release:** [All 18 overnight slices and both morning fixes are live](wamp-overnight-release-2026-10-09.md), preserving partner PR #99 and ghost archive PR #100. Five partial items remain unticked; native background-tab audio still needs a physical check.
 
@@ -126,7 +126,7 @@ How long new players wait before they can play, and how much data that costs. Th
 - [ ] **F015** Game code doesn't start downloading until a map-preview check returns · medium impact · small effort
 - [x] **F120** A Google Fonts import delays the first paint, and the title font pops in late · medium impact · small effort — **done 2026-10-13** (`c2e55528`, [PR #187](https://github.com/songadaymann/wamp/pull/187)). IBM Plex Mono 400/500/600 is self-hosted as Latin WOFF2 with its OFL license; Google font requests are removed.
 - [x] **F024** Add automatic size and load-time limits so regressions get caught · medium impact · small effort — **done 2026-10-10** (`0f2d95a1`, [PR #133](https://github.com/songadaymann/wamp/pull/133)). A build plugin records the boot JavaScript (entry, runtime, static imports); `npm run size:check` brotli-sizes it against `WAMP_BOOT_JS_BUDGET_KB` (760 KB; today 745.7 KB across 14 files) at the end of `npm run check` and in the quality workflow. Not done: the BootScene art-list budget and a throttled cold-start probe.
-- [ ] **F021** Updated art can stay stale for returning players for up to a year · medium impact · small effort
+- [x] **F021** Updated art can stay stale for returning players for up to a year · medium impact · small effort — public assets use automatic content versions at load time; only current versions/build hashes cache immutably, with a shorter fallback. Returning-browser cache regression passes. [Receipt](wamp-asset-cache-versioning-2026-10-13.md).
 - [ ] **F023** Music and sound files: smaller formats and faster loading (also covers F230) · medium impact · small effort — _Partly done 2026-10-10 (`7b1010e9`, [PR #138](https://github.com/songadaymann/wamp/pull/138)): the drum kit loads in parallel and each sample file is fetched once (16 one-at-a-time requests → 15 at once); 2026-10-11 (`72b4d761`, [PR #162](https://github.com/songadaymann/wamp/pull/162)): sound effects get their own player up to the cap instead of reloading another cue's, and the five hot gameplay cues load right after the first tap. 2026-10-11 (`eb28cbb6`, [PR #164](https://github.com/songadaymann/wamp/pull/164)): effects play from decoded Web Audio buffers, which start within the output latency instead of an iPhone media element's delay. Open: compressed pre-baked drum samples, stem re-encode, unused SFX WAVs in the deploy._
 - [ ] **F019** Players download the level-editor UI and about 30 menus before the first frame · medium impact · medium effort — _Partly done 2026-10-11 ([PR #177](https://github.com/songadaymann/wamp/pull/177), [PR #178](https://github.com/songadaymann/wamp/pull/178)): the editor's tool panels load with the editor, and the profile, leaderboard, explore and history pop-ups load on first open; startup JavaScript went from 718 to 638 KB brotli. Open: the other rarely opened pop-ups; stable chunk groups so routine deploys invalidate less._
 - [ ] **F025** Styles, hidden menus and fonts make the first paint heavier than needed · low impact · medium effort

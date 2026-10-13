@@ -1,3 +1,4 @@
+import { assetUrl } from '../../assets/assetUrl';
 import { EditorPhoneDock } from './editorPhoneDock';
 import {
   editorState,
@@ -973,7 +974,7 @@ export class EditorDockShellController {
       image.decoding = 'async';
       image.onload = () => resolve(image);
       image.onerror = () => reject(new Error(`Could not load ${path}`));
-      image.src = path;
+      image.src = assetUrl(path);
     });
     this.previewImages.set(path, created);
     return created;

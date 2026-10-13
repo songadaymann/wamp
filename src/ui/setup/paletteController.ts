@@ -1,3 +1,4 @@
+import { assetUrl } from '../../assets/assetUrl';
 import { createObjectPaletteThumbnail } from './objectPaletteThumbnail';
 import {
   DECORATION_PALETTE_GROUPS,
@@ -30,8 +31,7 @@ import {
   getEditorObjectConfigById,
   listEditorObjectConfigs,
 } from '../../customSprites/objectConfig';
-import { parseCustomSpriteObjectId } from '../../customSprites/model';
-import { getCustomSpriteKindLabel } from '../../customSprites/model';
+import { getCustomSpriteKindLabel, parseCustomSpriteObjectId } from '../../customSprites/model';
 import {
   CUSTOM_SPRITE_REMIX_REQUESTED_EVENT,
   CUSTOM_SPRITE_USE_REQUESTED_EVENT,
@@ -553,7 +553,7 @@ export class PaletteController {
       const selectedObject = getEditorObjectConfigById(editorState.selectedObjectId);
       if (selectedObject) {
         const objectImage = new Image();
-        objectImage.src = selectedObject.path;
+        objectImage.src = assetUrl(selectedObject.path);
         objectImage.onload = () => {
           this.tilePreviewCanvas!.width = 64;
           this.tilePreviewCanvas!.height = 64;
@@ -967,7 +967,7 @@ export class PaletteController {
 
     for (const ts of TILESETS) {
       const img = new Image();
-      img.src = ts.path;
+      img.src = assetUrl(ts.path);
       img.onload = () => {
         this.paletteImages.set(ts.key, img);
         this.paletteTileOccupancy.set(ts.key, this.computeTilesetOccupancy(ts, img));

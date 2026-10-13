@@ -1,3 +1,4 @@
+import { installSceneAssetVersions } from '../assets/sceneAssetVersions';
 import { BOOT_GAME_OBJECTS } from '../assets/sceneArt';
 import Phaser from 'phaser';
 import {
@@ -64,6 +65,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    installSceneAssetVersions(this);
     showBootSplash('Loading assets...', 0);
     const bootAvatarIds = getBootAvatarIds();
     const avatarAtlasAssets = listPlayerAvatarAtlasAssets(bootAvatarIds);

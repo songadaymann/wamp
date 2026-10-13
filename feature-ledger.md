@@ -1,3 +1,7 @@
+## 2026-10-13 — F021 asset cache versioning
+
+Canonical branch: `codex/wamp-asset-cache-versioning-2026-10-13`. Status: verified candidate; full 3,518 tests and 12 mobile scenarios pass. Returning-browser cache test gets changed pixels and retains unchanged assets; native desktop/phone art and movement pass. Public files use content versions, with shorter caching for unversioned/obsolete URLs. Receipt: `docs/review/wamp-asset-cache-versioning-2026-10-13.md`. Next: green PR and live Pages postflight.
+
 ## 2026-10-13 — Planted flags and grouped tilesets
 
 Canonical branch: `codex/room-check-tileset-groups-2026-10-13`. Status: verified local candidate. Full quality passes (460 files / 3,498 tests), desktop/phone editor and all 23 menu choices pass. Correct ground-edge marker check and native grouped tileset dropdown; release requested; combined-main validation in progress. Preview: `http://127.0.0.1:3060/?previewSmoke=1&renderer=canvas`. Next: green PR checks, merge and live Pages verification.

@@ -1,3 +1,4 @@
+import { installSceneAssetVersions } from '../../assets/sceneAssetVersions';
 import Phaser from 'phaser';
 import { createAvatarRepository } from '../../avatars/repository';
 import { parseCryptopunkAvatarId } from '../../avatars/model';
@@ -184,6 +185,7 @@ async function ensureSceneAtlasAssetsLoaded(
     return;
   }
 
+  installSceneAssetVersions(scene);
   await new Promise<void>((resolve, reject) => {
     const loader = scene.load;
     const requestedKeys = new Set(missingAssets.map((asset) => asset.key));

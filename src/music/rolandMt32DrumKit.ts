@@ -1,3 +1,4 @@
+import { resolveAudioAssetUrl } from '../audio/assetUrl';
 import type { RoomPatternDrumRowId } from './pattern';
 
 type RolandMt32DrumSampleConfig = {
@@ -60,10 +61,7 @@ const ROLAND_MT32_SAMPLE_CONFIG: Record<RoomPatternDrumRowId, RolandMt32DrumSamp
 const samplePromiseCache = new Map<string, Promise<Float32Array | null>>();
 
 function resolveAssetUrl(path: string): string {
-  const base = import.meta.env.BASE_URL || '/';
-  const normalizedPath = path.replace(/^\/+/, '');
-  const baseUrl = new URL(base, window.location.href);
-  return new URL(normalizedPath, baseUrl).toString();
+  return resolveAudioAssetUrl(path, import.meta.env.BASE_URL, window.location.href);
 }
 
 function mixAudioBufferToMono(buffer: AudioBuffer): Float32Array {

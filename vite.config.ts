@@ -1,3 +1,5 @@
+import { createPublicAssetHashes } from './src/build/publicAssetHashes';
+import { publicAssetCssVersions, publicAssetVersionPlugin } from './src/build/publicAssetVersionPlugin';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -15,6 +17,9 @@ const EARLY_WORLD_TILE_BOOTSTRAP_MARKER = '<!-- wamp-early-world-tiles-bootstrap
 const BUILD_ASSET_NAMESPACE = 'assets/cache-v2';
 
 export default defineConfig(({ mode }) => {
+  const publicAssetHashes = createPublicAssetHashes(resolve(process.cwd(), 'public'));
+  mkdirSync(resolve(process.cwd(), 'output/build'), { recursive: true });
+  writeFileSync(resolve(process.cwd(), 'output/build/public-asset-hashes.json'), JSON.stringify(publicAssetHashes));
   const env = loadMergedEnv(mode);
   const roomApiBaseUrl = env.VITE_ROOM_API_BASE_URL ?? '';
   const roomStorageBackend = env.VITE_ROOM_STORAGE_BACKEND ?? 'remote';
@@ -36,15 +41,18 @@ export default defineConfig(({ mode }) => {
       // WAMP uses Arcade physics only; Phaser's arcade build leaves out Matter (F020).
       alias: [{ find: /^phaser$/, replacement: 'phaser/dist/phaser-arcade-physics.js' }],
     },
+    css: { postcss: { plugins: [publicAssetCssVersions(publicAssetHashes)] } },
     // Phaser repeats its licence header in every module; keep one copy at the end of each chunk.
     esbuild: { legalComments: 'eof' },
     plugins: [
+      publicAssetVersionPlugin(publicAssetHashes),
       earlyWorldTileBootstrapPlugin(roomApiBaseUrl),
       bootBundleReportPlugin(),
       cloudflareWebAnalyticsPlugin(cloudflareWebAnalyticsToken),
       authoringDocumentsPlugin(),
     ],
     define: {
+      __WAMP_PUBLIC_ASSET_HASHES__: JSON.stringify(publicAssetHashes),
       'import.meta.env.VITE_APP_BUILD_ID': JSON.stringify(buildId),
       'import.meta.env.VITE_ROOM_API_BASE_URL': JSON.stringify(roomApiBaseUrl),
       'import.meta.env.VITE_ROOM_STORAGE_BACKEND': JSON.stringify(roomStorageBackend),

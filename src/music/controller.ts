@@ -1,3 +1,4 @@
+import { resolveAudioAssetUrl } from '../audio/assetUrl';
 import { getMusicTransitionPlan, type MusicTransitionMode } from './transitionPlan';
 import { normalizeAudioError, sharedAudioEngine, type AudioEngine } from '../audio/engine';
 import { RoomMusicBufferCache } from './bufferCache';
@@ -141,10 +142,7 @@ const IMMEDIATE_FADE_DURATION_SEC = 0.12;
 const GLOBAL_MUSIC_VOLUME_MULTIPLIER = 0.6;
 
 function resolveAssetUrl(path: string): string {
-  const base = import.meta.env.BASE_URL || '/';
-  const normalizedPath = path.replace(/^\/+/, '');
-  const baseUrl = new URL(base, window.location.href);
-  return new URL(normalizedPath, baseUrl).toString();
+  return resolveAudioAssetUrl(path, import.meta.env.BASE_URL, window.location.href);
 }
 
 export class RoomMusicController {

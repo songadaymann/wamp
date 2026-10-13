@@ -1,3 +1,4 @@
+import { assetUrl } from '../../assets/assetUrl';
 import type { ProfileStatsSummary } from '../../profiles/model';
 import type { ProgressionLaneSummary, ProgressionSummary } from '../../progression/model';
 
@@ -315,7 +316,7 @@ function createHeroLaneRow(
 
   const icon = doc.createElement('img');
   icon.className = 'profile-hero-lane-icon';
-  icon.src = visual.iconSrc;
+  icon.src = assetUrl(visual.iconSrc);
   icon.alt = '';
   icon.setAttribute('aria-hidden', 'true');
 
@@ -359,7 +360,7 @@ function createInfoCard(doc: Document, card: ProfileInfoCard): HTMLElement {
 
   const icon = doc.createElement('img');
   icon.className = 'profile-info-card-header-icon';
-  icon.src = visual.iconSrc;
+  icon.src = assetUrl(visual.iconSrc);
   icon.alt = '';
   icon.setAttribute('aria-hidden', 'true');
 
@@ -379,7 +380,7 @@ function createInfoCard(doc: Document, card: ProfileInfoCard): HTMLElement {
     if (item.iconSrc) {
       const rowIcon = doc.createElement('img');
       rowIcon.className = 'profile-info-item-icon';
-      rowIcon.src = item.iconSrc;
+      rowIcon.src = assetUrl(item.iconSrc);
       rowIcon.alt = '';
       rowIcon.setAttribute('aria-hidden', 'true');
       row.appendChild(rowIcon);

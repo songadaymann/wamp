@@ -37,6 +37,7 @@ execFileSync(esbuildPath, [
   '--platform=neutral',
   '--format=esm',
   '--loader:.ts=ts',
+  `--define:__WAMP_PUBLIC_ASSET_HASHES__=${fs.readFileSync(path.join(repoRoot, 'output/build/public-asset-hashes.json'), 'utf8')}`,
   `--outfile=${workerOutput}`,
 ], {
   cwd: repoRoot,

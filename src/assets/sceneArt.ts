@@ -1,3 +1,4 @@
+import { installSceneAssetVersions } from './sceneAssetVersions';
 import type Phaser from 'phaser';
 import { GAME_OBJECTS, getBackgroundGroup, getObjectById, getObjectDefaultFrame, type GameObjectConfig } from '../config';
 import treeAtlases from './treeAtlasManifest.json';
@@ -76,6 +77,7 @@ function ensureAsset(scene: Phaser.Scene, asset: ArtAsset): Promise<void> {
   if (!pending) { pending = new Map(); pendingByTextures.set(scene.textures, pending); }
   const existing = pending.get(asset.key);
   if (existing) return existing;
+  installSceneAssetVersions(scene);
   const request = new Promise<void>((resolve, reject) => {
     const loader = scene.load;
     const releasePump = retainLoaderPump(scene);
