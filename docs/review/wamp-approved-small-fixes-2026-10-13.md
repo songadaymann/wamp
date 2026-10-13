@@ -4,8 +4,8 @@ Jonathan approved the smaller items in the October 13 handoff. The work is isola
 
 | Items | PR | Merge | Delivery |
 |---|---|---|---|
-| F174, F117, F120, F056, F098, F119 | Pending | Pending | Frontend only; Pages delivery pending |
-| F118, F061 | Same PR | Pending | Recorded as won't do; remain unticked |
+| F174, F117, F120, F056, F098, F119 | [#187](https://github.com/songadaymann/wamp/pull/187) | Pending | Frontend only; Pages delivery pending |
+| F118, F061 | [#187](https://github.com/songadaymann/wamp/pull/187) | Pending | Recorded as won't do; remain unticked |
 
 ## What changed
 
@@ -20,13 +20,14 @@ Jonathan approved the smaller items in the October 13 handoff. The work is isola
 ## Evidence
 
 - Full quality gate passed: 459 test files / 3,495 tests, lint, TypeScript, DOM contract, generated types, build, PNG check and startup budget (638.2 KB brotli; limit 670 KB).
-- Twelve production-build phone/tablet scenarios: pending final completion.
+- All twelve production-build phone/tablet scenarios pass, with zero console/page errors and zero fixture misses. The final compact phone HUD fits the existing height limit.
 - Native desktop and iPhone-size browser checks: profile error retry succeeds; empty actions navigate/focus correctly; visitors get no owner actions; local font weights load; no requests go to Google Fonts; the player moves while the fixed camera stays still; portrait shading clears in landscape and Browse. Screenshots were inspected.
 - The pixel-font audit checks all current DOM nodes, including hidden dialogs; desktop and phone editor text is on an eight-pixel size grid.
 - The unchanged official game client reaches live read-only safety-API gameplay and its screenshot was inspected. Its two HTTP warnings are the safety API's unsupported endpoints; targeted native checks have no page errors.
 - Earlier phone-camera smoke expects an obsolete Background sheet. Current editor behavior is covered by the mobile suite and native probe. Running the mobile fixture against Vite development mode also refuses the development socket; production-build fixture checks avoid that development-only warning.
+- One earlier startup framing sample failed; the focused recheck and subsequent full candidate run pass. An unchanged-main comparison also passes. No smoke assertion was weakened.
 - Evidence stays outside the public repository at `/tmp/wamp-small-fixes-2026-10-13/`. No production database writes, API Worker changes, or PartyKit deployment.
 
 ## Delivery
 
-Pending PR, CI, automatic Pages deployment and custom-domain verification.
+PR #187 is open. CI, merge, automatic Pages deployment and custom-domain verification remain.

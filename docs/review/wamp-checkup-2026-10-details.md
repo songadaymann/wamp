@@ -926,6 +926,8 @@ Measured on production builds served with brotli (Chromium 390×844, API blocked
 
 The pixel-font preloads take bandwidth from the main stylesheet, so they were left out. Open: self-hosting IBM Plex Mono as woff2 (the fact-check's preferred fix), which needs the font files downloaded from Google Fonts or Fontsource (OFL). Receipt: `wamp-keys-editor-fonts-checks-2026-10-11.md`.
 
+**2026-10-13 completed.** PR [#187](https://github.com/songadaymann/wamp/pull/187) / `c2e55528`. IBM Plex Mono 400/500/600 is self-hosted as Latin WOFF2 with its OFL license; Google font requests are removed. Full quality gate: 459 files / 3,495 tests; 12 phone/tablet scenarios and native desktop/phone checks pass. Receipt: [approved small fixes](wamp-approved-small-fixes-2026-10-13.md).
+
 ### F024: Add automatic size and load-time limits so regressions get caught
 
 - **Area:** Load time, bundle size & assets
@@ -2318,6 +2320,8 @@ Tests: two new `roomSession.test.ts` cases, both failing on the previous code.
 
 Open, needs a decision: the exit policy itself. Auto-publish on exit predates autosave (it is in the first commit). Today it fires only when the last edit is under ~0.6 s old, when leaving straight from test play (autosave pauses during play), or after a failed autosave; otherwise leaving keeps a private draft. Receipt: `wamp-keys-editor-fonts-checks-2026-10-11.md`.
 
+**2026-10-13 completed.** PR [#187](https://github.com/songadaymann/wamp/pull/187) / `c2e55528`. Leaving the editor saves only a private draft. Failed exit saves and edits during an exit save keep the editor open; explicit Publish makes changes public. Full quality gate: 459 files / 3,495 tests; 12 phone/tablet scenarios and native desktop/phone checks pass. Receipt: [approved small fixes](wamp-approved-small-fixes-2026-10-13.md).
+
 ### F055: Quick restarts can wipe or swap the ranked-run verification trace, so record runs get rejected
 
 - **Area:** Client bug hunt (gameplay & editor)
@@ -2954,6 +2958,8 @@ The core claim holds. Some clarifications and additions:
 4. Fix (a), follow-cam at fitZoom×2, would show only about 335 of the room's 640px width on a 375px phone. That defeats what the builder chose the option for, and it means updating those tests. Fix (b) keeps the full-width fit but centers the room in the band above #mobile-play-controls, using the same offset logic as getMobilePortraitPlayCameraTargetY, and dims or letterboxes everything outside the active room. (b) is the safer default.
 5. The hero size of about 17px fits a sprite about 29px tall at 0.586 zoom. The physics hitbox is 14px (OverworldPlayScene.ts:355), which would be about 8px on screen.
 
+**2026-10-13 completed.** PR [#187](https://github.com/songadaymann/wamp/pull/187) / `c2e55528`. Portrait fixed-camera rooms retain full-width framing above the controls and dim neighboring rooms; landscape, follow rooms and Browse clear the shade. Full quality gate: 459 files / 3,495 tests; 12 phone/tablet scenarios and native desktop/phone checks pass. Receipt: [approved small fixes](wamp-approved-small-fixes-2026-10-13.md).
+
 ### F082: Phone builders can't name their room — the title box is hidden on phones
 
 - **Area:** Mobile experience (code review)
@@ -3242,6 +3248,8 @@ About 93 player-visible "Failed/Could not" strings, not 172; the rest are consol
 
 Open (product choices): a shared friendly-error helper and call-to-action buttons in the profile Levels/Playlists empty states. Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
 
+**2026-10-13 completed.** PR [#187](https://github.com/songadaymann/wamp/pull/187) / `c2e55528`. Shared friendly errors and load-retry buttons; empty profile Levels and Playlists offer existing building and playlist actions with permission restrictions. Full quality gate: 459 files / 3,495 tests; 12 phone/tablet scenarios and native desktop/phone checks pass. Receipt: [approved small fixes](wamp-approved-small-fixes-2026-10-13.md).
+
 ### F115: Four dialogs still use the old dark theme
 
 - **Area:** Visual design, UI polish & information architecture
@@ -3425,6 +3433,8 @@ Checked the font files with fontTools. Early GameBoy and Super Mario Bros. NES a
 5. Two more causes the claim missed:
    - Three SMB rules ask for a bold weight that SMB does not have, so the browser fakes the bold and smears the pixels. One of them is .world-room-title at hud-goals.css:147. Fix with font-synthesis: none or by removing the weight.
    - Letter-spacing set in em units on pixel fonts (e.g. 0.02em at hud-goals.css:146) pushes each letter off the pixel grid by a fraction of a pixel. Use whole-pixel letter-spacing instead.
+
+**2026-10-13 completed.** PR [#187](https://github.com/songadaymann/wamp/pull/187) / `c2e55528`. Mario/Game Boy text uses pixel-grid sizes and whole-pixel spacing, including phone overrides; HomeVideo body sizes remain the readability compromise. Full quality gate: 459 files / 3,495 tests; 12 phone/tablet scenarios and native desktop/phone checks pass. Receipt: [approved small fixes](wamp-approved-small-fixes-2026-10-13.md).
 
 ### F113: One retro palette, defined five times and hard-coded 1,433 times
 
@@ -6277,6 +6287,8 @@ Computed WCAG ratios: #fff on #ed5f4b = 3.31; #fff3db on #ed5f4b = 3.01. Fixes: 
 Keep the red-button finding: it is real. Light text on #ed5f4b is 3.0-3.3:1 on small 8-11.5px text, which affects Build, active Play, Publish, Publish nudge, Mint, Danger, the chat unread badge, and the .history-modal-error banners in wamp-o-gram, room-course and shared-modal-skin. The preferred fix is #18161c ink text, which keeps the look. If a darker red is wanted, reuse the existing #bd382b (5.58:1 with white) rather than inventing #c2392b.
 
 Drop or downgrade the --success and --danger part. The sidebar-section-toggle is overridden to black on blue or yellow in editor mode and hidden in the dock shell. The background-upload error and the save-status accent both appear on cream (#fff3db or #fffaf0), where they pass at 6.07:1 and 5.17:1. Only the phone-editor save status (mobile-editor-save-status, which has color var(--text)) might still show the green accent on a dark panel; that needs a check in the browser. Also correct the quoted ratios: #5dc16b on #18161c is 7.95:1 and #ff7a5c is 7.0:1.
+
+**2026-10-13 completed.** PR [#187](https://github.com/songadaymann/wamp/pull/187) / `c2e55528`. Dark ink on the existing signature red now passes text contrast for controls, badges and error banners. Full quality gate: 459 files / 3,495 tests; 12 phone/tablet scenarios and native desktop/phone checks pass. Receipt: [approved small fixes](wamp-approved-small-fixes-2026-10-13.md).
 
 ### F173: Reduced-motion is ignored except for scrolling comments; add a Comfort section (reduce motion and flashes, camera style)
 
