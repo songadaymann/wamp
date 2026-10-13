@@ -25,4 +25,4 @@ Evidence: `/tmp/wamp-f021-2026-10-13/`. Frontend, generated Pages asset handler 
 
 ## Delivery
 
-Candidate validated. PR, hosted checks and final Pages custom-domain verification follow the established delivery workflow.
+PR [#190](https://github.com/songadaymann/wamp/pull/190), source `2341b775`, merged as `07f1f8ff`. Quality, mobile smoke and both Cloudflare previews pass. The wampland preview matches 203 game/CSS/font/atlas/sample files to the verified source/static bytes, and its current-version versus unversioned cache headers match the new policy. A real preview phone flow renders art/fonts, moves/jumps and sends only versioned local art requests, with zero page exceptions; capture inspected. Main follows automatic Cloudflare Pages delivery. The final production deployment ID, custom-domain byte/header comparison and live browser postflight are reported in the completing chat. This record changes documentation only.

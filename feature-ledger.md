@@ -1,6 +1,6 @@
 ## 2026-10-13 — F021 asset cache versioning
 
-Canonical branch: `codex/wamp-asset-cache-versioning-2026-10-13`. Status: verified candidate; full 3,518 tests and 12 mobile scenarios pass. Returning-browser cache test gets changed pixels and retains unchanged assets; native desktop/phone art and movement pass. Public files use content versions, with shorter caching for unversioned/obsolete URLs. Receipt: `docs/review/wamp-asset-cache-versioning-2026-10-13.md`. Next: green PR and live Pages postflight.
+Canonical branch: `codex/wamp-asset-cache-versioning-2026-10-13`. Status: implemented and merged in PR [#190](https://github.com/songadaymann/wamp/pull/190), source `2341b775`, merge `07f1f8ff`; all four hosted checks pass. 3,518 tests, 12 mobile scenarios and real cache/game checks pass. Public files use content versions, with shorter caching for unversioned/obsolete URLs. Main follows automatic Pages delivery; the final live postflight is reported in the completing chat. Receipt: `docs/review/wamp-asset-cache-versioning-2026-10-13.md`. Next approved items remain F023/F094, separately.
 
 ## 2026-10-13 — Planted flags and grouped tilesets
 
