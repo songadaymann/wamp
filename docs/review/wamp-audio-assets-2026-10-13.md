@@ -1,6 +1,6 @@
 # F023 smaller audio assets — October 13, 2026
 
-Status: verified candidate on `codex/wamp-audio-assets-2026-10-13`, based on main `d2edb340`. Listening acceptance and production delivery remain pending. F023 stays unticked; master remains 135/215. This finishes the asset work left after PRs #138, #162 and #164, preserving their parallel loading, hot-effect warming and shared Web Audio engine.
+Status: listening comparison approved by Jonathan ("Sounds good—ship it"). PR [#191](https://github.com/songadaymann/wamp/pull/191), source `e62e4eb3`, merged as `d6307f3d` with all four hosted checks green. Master: 136/215. Main follows automatic Pages delivery; final production deployment and custom-domain checks are reported in the completing chat. This finishes the asset work left after PRs #138, #162 and #164, preserving their parallel loading, hot-effect warming and shared Web Audio engine.
 
 ## What changes
 
@@ -31,7 +31,7 @@ The original Logic music exports have iTunes gapless metadata. Safari decodes ex
 - All drum/stem comparisons have zero measured lag; minimum original/candidate correlation is 0.98375. Stem alignment is checked independently against original Safari PCM. Correlation measures timing/similarity; it does not replace a listening check of lossy encoding or loop seams.
 - Native phone game probes in both browsers: 16 drum rows use 15 compressed downloads; clip preview and mixed-bar lane loop have 384,000 frames at 48 kHz; copied bar samples and the empty bar match exactly. All observed audio URLs carry content hashes and none request WAV. SFX load and play successfully, including WebKit's MP3 fallback, with no page exceptions or audio errors. Real movement and the phone Jump button pass.
 - Official game client gameplay capture inspected. Its first boot reported the absent local PartyKit service; the gameplay rerun passes without console errors.
-- All 12 broader mobile CI scenarios pass with zero console/page errors and zero replay fixture misses. Hosted review checks remain pending.
+- All 12 broader mobile CI scenarios pass with zero console/page errors and zero replay fixture misses. Quality, mobile smoke and both hosted Pages checks pass. Preview `e482f8f9` verifies all 60 compressed files byte for byte and decodes them; all 61 source paths return 404.
 
 ## Rebuilding and listening
 
@@ -39,4 +39,4 @@ The original Logic music exports have iTunes gapless metadata. Safari decodes ex
 
 Listening artifacts are in ignored `output/audio-review-2026-10-13/`: `original.wav` and `candidate.wav` each contain 16 seconds of drum hits, one second of silence and two iterations of a mixed four-bar music loop. The originals use Safari's intended gapless timing. Longer separate drum and two-mix music comparisons are alongside them. Local decoder/game proof is in `/tmp/wamp-f023-2026-10-13/`.
 
-Next: Jonathan's listening check, then green hosted checks, merge, Pages delivery and verification of the actual custom-domain playback files and source exclusions. No API, D1, PartyKit or world renderer changes are required.
+Delivery: Jonathan approved the listening check; the PR is merged and main follows automatic Pages delivery. Final production playback, byte/header and source-exclusion verification is reported in the completing chat. No API, D1, PartyKit or world renderer changes are required.

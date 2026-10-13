@@ -1060,7 +1060,7 @@ Open: pre-baking the drums to compressed mono files (a lossy change to the kit's
 
 PR #164 / `eb28cbb6`: effects play from Web Audio buffers. A cue still loading or waiting for the context plays when ready if still on time (120 ms feedback, 1.5 s fanfares); formats fall back ogg/m4a → the other → WAV, and the one that decoded is tried first. Receipt: `wamp-phone-followups-2026-10-11.md`.
 
-**2026-10-13 candidate (remaining asset work).** Baked/compressed kit, 112 kbps gapless stems and an MP3 SFX rescue format permit source-only WAV/MP3 deploy exclusions. The kit is 92.8% smaller and stems 37.8% smaller; browser timing and full quality pass. Listening acceptance and delivery remain pending, so F023 stays unticked. Receipt: `wamp-audio-assets-2026-10-13.md`.
+**2026-10-13 done (remaining asset work).** Baked/compressed kit, 112 kbps gapless stems and an MP3 SFX rescue format permit source-only WAV/MP3 deploy exclusions. The kit is 92.8% smaller and stems 37.8% smaller; browser timing and full quality pass. Jonathan approved the listening comparison; PR #191 / `d6307f3d` is merged with all four hosted checks green. Main follows automatic Pages delivery, with the final live postflight reported in the completing chat. Receipt: `wamp-audio-assets-2026-10-13.md`.
 
 
 ### F019: Players download the level-editor UI and about 30 menus before the first frame
