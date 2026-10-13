@@ -1,8 +1,7 @@
+import { BOOT_GAME_OBJECTS } from '../assets/sceneArt';
 import Phaser from 'phaser';
 import {
   TILESETS,
-  BACKGROUND_GROUPS,
-  GAME_OBJECTS,
   BLOCK_SWITCH_ACTIVE_TEXTURES,
   getObjectAnimationFrames,
 } from '../config';
@@ -70,8 +69,7 @@ export class BootScene extends Phaser.Scene {
     const avatarAtlasAssets = listPlayerAvatarAtlasAssets(bootAvatarIds);
     const assetGroupCount =
       TILESETS.length +
-      BACKGROUND_GROUPS.reduce((total, group) => total + group.layers.length, 0) +
-      GAME_OBJECTS.length +
+      BOOT_GAME_OBJECTS.length +
       BLOCK_SWITCH_ACTIVE_TEXTURES.length +
       SWORDSMAN_AI_EXTRA_SPRITESHEETS.length +
       POLICE_ENEMY_EXTRA_SPRITESHEETS.length +
@@ -138,16 +136,8 @@ export class BootScene extends Phaser.Scene {
       this.load.image(ts.key, ts.path);
     }
 
-    // Load all background parallax layers
-    for (const group of BACKGROUND_GROUPS) {
-      for (const layer of group.layers) {
-        trackAsset('image', layer.key, layer.path);
-        this.load.image(layer.key, layer.path);
-      }
-    }
-
     // Load game object spritesheets
-    for (const obj of GAME_OBJECTS) {
+    for (const obj of BOOT_GAME_OBJECTS) {
       trackAsset('spritesheet', obj.id, obj.path);
       this.load.spritesheet(obj.id, obj.path, {
         frameWidth: obj.frameWidth,
@@ -225,7 +215,7 @@ export class BootScene extends Phaser.Scene {
     this.input.addPointer(4);
 
     // Create animations for game objects with multiple frames
-    for (const obj of GAME_OBJECTS) {
+    for (const obj of BOOT_GAME_OBJECTS) {
       if (obj.frameCount > 1 && obj.fps > 0) {
         const frames = getObjectAnimationFrames(obj).map((frame) => ({
           key: obj.id,

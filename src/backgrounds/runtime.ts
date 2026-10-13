@@ -1,4 +1,6 @@
+import { ensureBackgroundGroupLoaded } from '../assets/sceneArt';
 import Phaser from 'phaser';
+import { BACKGROUND_GROUPS } from '../config/backgrounds';
 import { getBackgroundImageUrl } from './client';
 import type { CustomBackgroundFit } from './model';
 
@@ -130,14 +132,26 @@ export function createBuiltInBackgroundObject(
   height: number,
   depth: number,
 ): BuiltInBackgroundObject {
+  const ready = scene.textures.exists(layer.key);
+  const key = ready ? layer.key : '__DEFAULT';
   const object = layer.repeat === false
-    ? scene.add.image(x, y, layer.key)
-    : scene.add.tileSprite(x, y, width, height, layer.key);
+    ? scene.add.image(x, y, key)
+    : scene.add.tileSprite(x, y, width, height, key);
 
   object.setOrigin(0, 0);
   object.setDepth(depth);
   object.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
   syncBuiltInBackgroundObject(object, layer, x, y, width, height, 0, 0);
+  if (!ready) {
+    object.setAlpha(0);
+    const group = BACKGROUND_GROUPS.find(group => group.layers.some(entry => entry.key === layer.key));
+    void ensureBackgroundGroupLoaded(scene, group?.id ?? 'none').then(() => {
+      if (!object.scene) return;
+      object.setTexture(layer.key);
+      object.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      object.setAlpha(1);
+    }).catch(error => console.warn('Failed to load background art.', layer.key, error));
+  }
   return object;
 }
 

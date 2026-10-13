@@ -1,3 +1,4 @@
+import { ensureRoomArtLoaded } from '../../assets/roomArt';
 import Phaser from 'phaser';
 import {
   ROOM_PX_HEIGHT,
@@ -256,6 +257,8 @@ export class EditorBackgroundController {
       const loadedNeighbors = await Promise.all(
         publishedNeighbors.map(async (room) => {
           const snapshot = await this.worldRepository.loadPublishedRoom(room.id, room.coordinates);
+          if (token !== this.surroundingPreviewToken || !this.host.isSceneActive()) return null;
+          if (snapshot) await ensureRoomArtLoaded(this.scene, snapshot);
           return snapshot ? { room, snapshot } : null;
         }),
       );

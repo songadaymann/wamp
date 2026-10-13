@@ -23,6 +23,7 @@ jobs:
       - run: npm run build
       - run: npm run size:check
       - run: npm run assets:png:check
+      - run: npm run assets:trees:check
       - name: Check immutable world map asset compatibility
         run: npx --yes tsx scripts/world_tile_asset_contract_check.ts
       - run: npm run smoke:dom-contract
