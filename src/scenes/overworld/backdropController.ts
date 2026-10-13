@@ -76,7 +76,7 @@ export class OverworldBackdropController {
   update(): void {
     const motionCamera = this.options.scene.cameras.main;
     this.options.updateWorldBackgrounds(motionCamera);
-    syncRoomVideoBackdrop(this.options.scene, this.worldDisplayLayer);
+    syncRoomVideoBackdrop(this.options.scene, null);
 
     if (this.starfieldSprites.length === 0) {
       return;
@@ -102,10 +102,6 @@ export class OverworldBackdropController {
       sprite.setTileScale(config.tileScale, config.tileScale);
     }
     this.backdropCamera?.setSize(width, height);
-  }
-
-  getWorldDisplayLayer(): Phaser.GameObjects.Layer | null {
-    return this.worldDisplayLayer;
   }
 
   syncIgnores(): void {
