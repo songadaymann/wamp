@@ -1,3 +1,7 @@
+## 2026-10-12 — Room-entry keyboard recovery
+
+Canonical branch: `codex/fix-room-entry-movement`. Status: local fix verified; production delivery pending user authorization. Review: `docs/review/wamp-room-entry-keyboard-2026-10-12.md`. Preview: http://127.0.0.1:3051/r/-11/-6?renderer=canvas. Next action: deliver the committed candidate when requested.
+
 ## 2026-10-12 — part of F070 (goal-type switches)
 
 PR #183 / `6a8c132c` (API Worker `c0184a09`): ranked verification fails goal types it has no rule for instead of passing them; goal-type switches list every type; ESLint switch-exhaustiveness-check is on. Master **127/215**. Receipt: [goal switches](docs/review/wamp-goal-switches-2026-10-12.md).

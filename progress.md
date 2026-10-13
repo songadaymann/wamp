@@ -1,3 +1,9 @@
+## 2026-10-12 — Room-entry keyboard freeze
+
+Original prompt: "there seems to be a new bug that got introduced. Occasionally, when i enter a room, i cannot move at all. refreshing usually helps."
+
+Branch `codex/fix-room-entry-movement`, based on current `origin/main` (`7c777e94`), in the attached clean worktree. The room Start prompt pauses OverworldPlayScene; dialog/focus observers can run before Phaser processes resume. `syncGameKeyboardFocus` only visited active scenes and left the paused scene keyboard disabled. Include paused scenes when restoring keyboard state. Browser baseline reproduced a stationary player after ArrowRight; fixed browser moved 35px. Two lifecycle regression tests and six native mouse/Enter entry scenarios verify movement and jumping, including three consecutive room entries per input. Primary dirty checkout is preserved. Review receipt: `docs/review/wamp-room-entry-keyboard-2026-10-12.md`. Local candidate only; no production release requested.
+
 ## 2026-10-09 — F227 phone music editor live
 
 Jonathan accepted the remote-safety preview and authorized "ok push that". PR #102 (source `23920bb6`) is merged as `2215edb5` and delivered via clean-main guarded Pages-only deployment `a243c20a`. Both source and main hosted Quality/Pages checks pass; merged main passes 408 files / 3,239 tests, lint, types, bindings, build, DOM and Worker safety. Actual wamp.land / API smoke and 184 JS/CSS plus four traversal images and three death-audio byte matches pass. Five live browser cases cover phone portrait, landscape, coarse tablet, safe pan/pinch and the mouse desktop; captures inspected, zero page exceptions or real API failures. Guest background writes are intercepted; this probe does not persist remote drafts.
