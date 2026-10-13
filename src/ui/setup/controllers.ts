@@ -91,7 +91,7 @@ export function setupUiControllers(game: Phaser.Game): void {
   setupLazyModalTriggers(controllers);
   setupUiControllerCommands(game, controllers);
   setupButtonFeedback();
-  setupKeyboardShortcutPassthrough();
+  setupKeyboardShortcutPassthrough(game);
 }
 
 function createUiControllers(game: Phaser.Game): UiControllers {

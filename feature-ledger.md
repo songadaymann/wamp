@@ -1,3 +1,7 @@
+## 2026-10-13 — Restart keyboard focus
+
+Canonical branch: `codex/fix-restart-keyboard-focus`. Status: verified candidate; full checks and 36 native restart/jump cycles across Chromium/WebKit pass, including keyboard activation. Review: `docs/review/wamp-restart-keyboard-focus-2026-10-13.md`. Preview: http://127.0.0.1:3051/r/-11/-6?renderer=canvas. Next action: validate and deliver the related keyboard follow-up.
+
 ## 2026-10-12 — Room-entry keyboard recovery
 
 Canonical branch: `codex/fix-room-entry-movement`. Status: local fix verified; production delivery pending user authorization. Review: `docs/review/wamp-room-entry-keyboard-2026-10-12.md`. Preview: http://127.0.0.1:3051/r/-11/-6?renderer=canvas. Next action: deliver the committed candidate when requested.
