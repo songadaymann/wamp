@@ -1,4 +1,5 @@
 import { getAuthDebugState } from '../../auth/client';
+import { setActiveRoomVideoRuntime } from '../../roomVideo/editing';
 import { editorState } from '../../config';
 import type { RoomGoal } from '../../goals/roomGoals';
 import type {
@@ -53,6 +54,7 @@ export class EditorChromeController {
       return;
     }
 
+    setActiveRoomVideoRuntime(this.editRuntime);
     const roomGoal = this.host.getRoomGoal();
     const historyState = this.persistenceController.getHistoryState();
     const authenticated = getAuthDebugState().authenticated;
@@ -66,15 +68,6 @@ export class EditorChromeController {
         roomCameraCentered: this.editRuntime.roomCameraMode === 'room',
         roomPitsAreDeadly: this.editRuntime.roomPitsAreDeadly,
         roomPlayerHearts: this.editRuntime.roomPlayerHearts,
-        roomVideoUrl: this.editRuntime.getRoomVideoUrl(),
-        roomVideoStatus: this.editRuntime.getRoomVideoStatus(),
-        roomVideoLoop: this.editRuntime.roomVideo?.loop === true,
-        roomVideoAutoplay: this.editRuntime.roomVideo?.autoplay === true,
-        roomVideoTrigger: this.editRuntime.roomVideo?.trigger === true,
-        roomVideoVolume: Math.round((this.editRuntime.roomVideo?.volume ?? 0.8) * 100),
-        roomVideoMuteMusic: this.editRuntime.roomVideo?.muteMusic === true,
-        roomVideoSnap: this.editRuntime.roomVideo?.snap === true,
-        roomVideoHasVideo: this.editRuntime.roomVideo !== null,
         roomCoordinates: this.host.getRoomCoordinates(),
         roomGoal,
         roomGoalIntroText: this.editRuntime.getGoalIntroText(),

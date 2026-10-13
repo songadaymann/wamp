@@ -16,6 +16,7 @@ import {
   type PlacedObject,
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
+import { getRoomVideo, linkPressurePlateToRoomVideo } from '../../roomVideo/editing';
 import { hitsRoomVideoAnchor, isRoomVideoLinkTarget, roomVideoAnchorPoint, roomVideoFrameBounds } from '../../roomVideo/link';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
 import {
@@ -821,7 +822,7 @@ export class EditorInspectorController {
 
   private hitsVideoAnchor(worldX: number, worldY: number): boolean {
     return hitsRoomVideoAnchor(
-      this.editRuntime.roomVideo,
+      getRoomVideo(this.editRuntime),
       worldX,
       worldY,
       this.scene.cameras.main.zoom || 1,
@@ -829,7 +830,7 @@ export class EditorInspectorController {
   }
 
   private drawRoomVideoAnchor(graphics: Phaser.GameObjects.Graphics, worldX: number, worldY: number): void {
-    const video = this.editRuntime.roomVideo;
+    const video = getRoomVideo(this.editRuntime);
     if (!video?.trigger) return;
     const source = this.getFocusedPressurePlate();
     const plate = source && canPlacedObjectTriggerOtherObjects(source) ? source : null;
@@ -935,7 +936,7 @@ export class EditorInspectorController {
     if (source && (editorState.paletteMode === 'objects' || connectMode)) {
       const targets = this.getObjectLinkTargets(source);
       const eligibleTargetCount = this.editRuntime.getObjectLinkEligibleTargets(source.instanceId).length
-        + (canPlacedObjectTriggerOtherObjects(source) && this.editRuntime.roomVideo?.trigger ? 1 : 0);
+        + (canPlacedObjectTriggerOtherObjects(source) && getRoomVideo(this.editRuntime)?.trigger ? 1 : 0);
       const videoLinked = canPlacedObjectTriggerOtherObjects(source)
         && isRoomVideoLinkTarget(source.triggerTargetInstanceId);
       const pressureStatusText =
@@ -1020,7 +1021,7 @@ export class EditorInspectorController {
     }
 
     if (canPlacedObjectTriggerOtherObjects(source) && this.hitsVideoAnchor(worldX, worldY)) {
-      if (this.editRuntime.linkPressurePlateToRoomVideo(source.instanceId)) {
+      if (linkPressurePlateToRoomVideo(this.editRuntime, source.instanceId)) {
         this.connectingPressurePlateInstanceId = null;
         this.focusedPressurePlateInstanceId = source.instanceId;
         this.pinInspector('pressure', source.instanceId);
@@ -1272,7 +1273,7 @@ export class EditorInspectorController {
         : `Click the opposite portal to connect this ${sourceLabel}.`;
     }
 
-    const videoAnchor = this.editRuntime.roomVideo?.trigger ? ', or the video anchor' : '';
+    const videoAnchor = getRoomVideo(this.editRuntime)?.trigger ? ', or the video anchor' : '';
     return autoPlaced
       ? `Pressure plate placed. Click a door, barricade, cage, or chest${videoAnchor} to link it.`
       : `Click a door, barricade, cage, or chest${videoAnchor} to link this pressure plate.`;
@@ -1285,7 +1286,7 @@ export class EditorInspectorController {
     if (isPortalObjectId(source.id)) {
       return 'Pick the opposite portal in this room.';
     }
-    return this.editRuntime.roomVideo?.trigger
+    return getRoomVideo(this.editRuntime)?.trigger
       ? 'Pick a door, cage, chest, or the video anchor.'
       : 'Pick a door, cage, or chest in this room.';
   }
@@ -1297,7 +1298,7 @@ export class EditorInspectorController {
     if (isPortalObjectId(source.id)) {
       return 'No opposite portal is in this room yet. You can link this portal later.';
     }
-    if (this.editRuntime.roomVideo?.trigger) {
+    if (getRoomVideo(this.editRuntime)?.trigger) {
       return 'Click the anchor on the video to link this pressure plate.';
     }
     return 'No door, barricade, cage, or chest is in this room yet. You can link this pressure plate later.';

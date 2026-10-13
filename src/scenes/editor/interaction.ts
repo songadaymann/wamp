@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { roomVideoPointerDown, roomVideoPointerMove, roomVideoPointerUp } from '../../roomVideo/frames';
 import { mouseButtonsReleased } from '../pointerRelease';
 import { EditorTouchCandidate, EditorTouchGesture, editorTouchToolKey } from './touchGesture';
 import {
@@ -72,9 +73,6 @@ interface EditorInteractionHost {
   getNeighborRadius(): number;
   getGoalPlacementMode(): GoalPlacementMode;
   isMusicModeActive(): boolean;
-  handleVideoPointerDown(pointer: Phaser.Input.Pointer): boolean;
-  handleVideoPointerMove(pointer: Phaser.Input.Pointer): boolean;
-  handleVideoPointerUp(): boolean;
   handleMusicPointerDown(pointer: Phaser.Input.Pointer): void;
   handleMusicPointerMove(pointer: Phaser.Input.Pointer): void;
   handleMusicPointerUp(pointer: Phaser.Input.Pointer): void;
@@ -632,7 +630,7 @@ export class EditorInteractionController {
   // Mouse releases over a panel or outside the window arrive as 'pointerupoutside';
   // they finish the stroke, shape or pan exactly like a release over the canvas.
   private readonly handleMouseUp = (pointer: Phaser.Input.Pointer, outside = false): void => {
-    if (this.host.handleVideoPointerUp()) return;
+    if (roomVideoPointerUp(this.scene)) return;
     if (this.host.objectMove?.up(pointer, outside)) return;
     if (this.handleTouchPointerUp(pointer)) {
       return;
@@ -703,7 +701,7 @@ export class EditorInteractionController {
       if (
         pointer.leftButtonDown()
         && !this.spaceDown
-        && this.host.handleVideoPointerDown(pointer)
+        && roomVideoPointerDown(this.scene, pointer)
       ) {
         return;
       }
@@ -823,7 +821,7 @@ export class EditorInteractionController {
     });
 
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (this.host.handleVideoPointerMove(pointer)) {
+      if (roomVideoPointerMove(this.scene, pointer)) {
         return;
       }
       if (this.host.objectMove?.move(pointer)) return;

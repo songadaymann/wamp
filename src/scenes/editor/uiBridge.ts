@@ -620,47 +620,6 @@ export class EditorUiBridge {
     this.cleanupCallbacks.length = 0;
   }
 
-  private bindRoomVideoControls(): void {
-    const urlInput = this.elements.roomVideoUrlInput;
-    if (urlInput) {
-      const commitUrl = (commit: boolean) => this.actions.onSetRoomVideoUrl(urlInput.value, commit);
-      const onChange = () => commitUrl(true);
-      const onInput = () => commitUrl(false);
-      urlInput.addEventListener('change', onChange);
-      urlInput.addEventListener('input', onInput);
-      this.cleanupCallbacks.push(() => {
-        urlInput.removeEventListener('change', onChange);
-        urlInput.removeEventListener('input', onInput);
-      });
-    }
-    const bindCheck = (
-      input: HTMLInputElement | null,
-      apply: (enabled: boolean) => void,
-    ) => {
-      if (!input) return;
-      const onChange = () => apply(input.checked);
-      input.addEventListener('change', onChange);
-      this.cleanupCallbacks.push(() => input.removeEventListener('change', onChange));
-    };
-    bindCheck(this.elements.roomVideoLoopInput, (enabled) => this.actions.onSetRoomVideoLoop(enabled));
-    bindCheck(this.elements.roomVideoAutoplayInput, (enabled) => this.actions.onSetRoomVideoAutoplay(enabled));
-    bindCheck(this.elements.roomVideoTriggerInput, (enabled) => this.actions.onSetRoomVideoTrigger(enabled));
-    bindCheck(this.elements.roomVideoMuteMusicInput, (enabled) => this.actions.onSetRoomVideoMuteMusic(enabled));
-    bindCheck(this.elements.roomVideoSnapInput, (enabled) => this.actions.onSetRoomVideoSnap(enabled));
-    const volumeInput = this.elements.roomVideoVolumeInput;
-    if (volumeInput) {
-      const onVolume = () => this.actions.onSetRoomVideoVolume(Number(volumeInput.value) / 100);
-      volumeInput.addEventListener('input', onVolume);
-      this.cleanupCallbacks.push(() => volumeInput.removeEventListener('input', onVolume));
-    }
-    const clearButton = this.elements.roomVideoClearButton;
-    if (clearButton) {
-      const onClear = () => this.actions.onClearRoomVideo();
-      clearButton.addEventListener('click', onClear);
-      this.cleanupCallbacks.push(() => clearButton.removeEventListener('click', onClear));
-    }
-  }
-
   private bindListeners(): void {
     for (const [id, action] of [['btn-clear-check-test', this.actions.onStartPlayMode], ['btn-clear-check-test-here', this.actions.onTestFromHere]] as const) {
       const button = this.doc.getElementById(id);
@@ -715,7 +674,6 @@ export class EditorUiBridge {
       cameraInput.addEventListener('change', onCameraChange);
       this.cleanupCallbacks.push(() => cameraInput.removeEventListener('change', onCameraChange));
     }
-    this.bindRoomVideoControls();
     const commitRoomTitle = () => {
       this.actions.onSetRoomTitle(this.elements.roomTitleInput?.value ?? null);
     };

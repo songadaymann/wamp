@@ -234,14 +234,6 @@ export interface EditorUiBridgeActions {
   onZoomOut: () => void;
   onSetRoomTitle: (title: string | null) => void;
   onSetRoomCameraCentered: (centered: boolean) => void;
-  onSetRoomVideoUrl: (url: string, commit?: boolean) => void;
-  onClearRoomVideo: () => void;
-  onSetRoomVideoLoop: (enabled: boolean) => void;
-  onSetRoomVideoAutoplay: (enabled: boolean) => void;
-  onSetRoomVideoTrigger: (enabled: boolean) => void;
-  onSetRoomVideoVolume: (volume: number) => void;
-  onSetRoomVideoMuteMusic: (enabled: boolean) => void;
-  onSetRoomVideoSnap: (enabled: boolean) => void;
   onSetRoomPitsAreDeadly?: (enabled: boolean) => void;
   onSetCoursePitsAreDeadly?: (enabled: boolean) => void;
   onSetRoomPlayerHearts?: (hearts: number) => void;

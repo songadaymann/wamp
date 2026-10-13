@@ -10,9 +10,6 @@ import { dailyEntryReady } from '../daily/entry';
 import { playSfx } from '../audio/sfx';
 import { createCourseRepository } from '../courses/courseRepository';
 import { globalRoomMusicController } from '../music/controller';
-import { RoomVideoFrameController } from '../roomVideo/frameController';
-import { normalizeRoomVideo } from '../roomVideo/model';
-import { roomHasPressedPressurePlate } from '../roomVideo/pressure';
 import { getCourseObjectLink } from '../courses/objectLinks';
 import {
   getActiveCourseDraftSessionCourseId,
@@ -2475,7 +2472,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       }
       const backdropStartedAt = controllerProfileSlot === 1 ? profiler?.beginSegment() : undefined;
       this.updateBackdrop();
-      this.syncRoomVideoFrame();
       if (backdropStartedAt !== undefined) profiler?.endSegment('controller.backdrop', backdropStartedAt);
       const gridOverlayStartedAt = controllerProfileSlot === 2 ? profiler?.beginSegment() : undefined;
       this.gridOverlayController.redraw();
@@ -5213,35 +5209,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
 
   private isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean {
     return this.selectionController.isWithinLoadedRoomBounds(coordinates);
-  }
-
-  private roomVideoFrame: RoomVideoFrameController | null = null;
-
-  private ensureRoomVideoFrame(): RoomVideoFrameController {
-    this.roomVideoFrame ??= new RoomVideoFrameController(this);
-    return this.roomVideoFrame;
-  }
-
-  private syncRoomVideoFrame(): void {
-    const playing = this.mode === 'play';
-    const snapshot = playing
-      ? this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates)
-      : null;
-    const video = normalizeRoomVideo(snapshot?.video);
-    const origin = this.getRoomOrigin(this.currentRoomCoordinates);
-    this.ensureRoomVideoFrame().sync({
-      video,
-      originX: origin.x,
-      originY: origin.y,
-      playback: playing && video ? 'play' : 'hidden',
-      interactive: false,
-      triggerPressed: snapshot
-        ? roomHasPressedPressurePlate(this.getCollisionReadyLoadedFullRooms(), snapshot.id)
-        : false,
-      sessionKey: snapshot ? `play:${snapshot.id}` : 'world',
-      holeDepth: 9.4,
-      stackParent: this.backdropController.getWorldDisplayLayer(),
-    });
   }
 
   private getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number } {

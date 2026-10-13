@@ -28,6 +28,7 @@ import {
   setCourseObjectLink,
 } from '../../courses/objectLinks';
 import { canPlacedObjectUseObjectPath } from '../../placedObjects/objectPaths';
+import { getRoomVideo, linkPressurePlateToRoomVideo } from '../../roomVideo/editing';
 import { hitsRoomVideoAnchor, isRoomVideoLinkTarget, roomVideoAnchorPoint, roomVideoFrameBounds } from '../../roomVideo/link';
 import type { EditorEditRuntime } from '../editor/editRuntime';
 import type { EditorInspectorState } from '../editor/uiBridge';
@@ -352,7 +353,7 @@ export class CourseEditorObjectInspectorController {
       && slice.roomId === source.slice.roomId
       && this.hitsSliceVideoAnchor(slice, worldX, worldY)
     ) {
-      if (slice.runtime.linkPressurePlateToRoomVideo(source.placed.instanceId ?? '')) {
+      if (linkPressurePlateToRoomVideo(slice.runtime, source.placed.instanceId ?? '')) {
         this.connectingPressurePlateInstanceId = null;
         this.focusedPressurePlateInstanceId = source.placed.instanceId ?? null;
         this.pinInspector('pressure', source.placed.instanceId ?? '');
@@ -1071,7 +1072,7 @@ export class CourseEditorObjectInspectorController {
   ): boolean {
     if (!slice) return false;
     return hitsRoomVideoAnchor(
-      slice.runtime.roomVideo,
+      getRoomVideo(slice.runtime),
       worldX,
       worldY,
       this.scene.cameras.main.zoom || 1,
@@ -1089,7 +1090,7 @@ export class CourseEditorObjectInspectorController {
     const plate = source && canPlacedObjectTriggerOtherObjects(source.placed) ? source : null;
     const connecting = plate !== null && this.connectingPressurePlateInstanceId === plate.placed.instanceId;
     for (const slice of this.host.getRoomSlices()) {
-      const video = slice.runtime.roomVideo;
+      const video = getRoomVideo(slice.runtime);
       if (!video?.trigger) continue;
       const sameRoom = plate?.slice.roomId === slice.roomId;
       const linked = sameRoom && isRoomVideoLinkTarget(plate?.placed.triggerTargetInstanceId);
@@ -1181,7 +1182,7 @@ export class CourseEditorObjectInspectorController {
       const targets = this.getCourseObjectLinkTargetRefs(source);
       const targetSummary = this.getObjectLinkTargetsSummary(source, targets);
       const eligibleTargetCount = this.getCourseObjectLinkEligibleTargets(source).length
-        + (canPlacedObjectTriggerOtherObjects(source.placed) && source.slice.runtime.roomVideo?.trigger ? 1 : 0);
+        + (canPlacedObjectTriggerOtherObjects(source.placed) && getRoomVideo(source.slice.runtime)?.trigger ? 1 : 0);
       const videoLinked = canPlacedObjectTriggerOtherObjects(source.placed)
         && isRoomVideoLinkTarget(source.placed.triggerTargetInstanceId);
       const linkedSummary = targetSummary
