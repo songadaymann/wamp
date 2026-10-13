@@ -1,3 +1,7 @@
+## 2026-10-13 — Planted flags and grouped tilesets
+
+Canonical branch: `codex/room-check-tileset-groups-2026-10-13`. Status: verified local candidate. Full quality passes (460 files / 3,498 tests), desktop/phone editor and all 23 menu choices pass. Correct ground-edge marker check and native grouped tileset dropdown; no published changes. Preview: `http://127.0.0.1:3060/?previewSmoke=1&renderer=canvas`. Next: review/integrate when requested.
+
 ## 2026-10-13 — Six smaller approved checkup fixes
 
 Canonical branch: `codex/wamp-approved-small-fixes-2026-10-13`. Implemented F174/F117/F120/F056/F098/F119; F118/F061 recorded as won't do. PR [#187](https://github.com/songadaymann/wamp/pull/187), merge `70a7c98c`, shipped on wamp.land via Pages `05e6c6c2`; 175 live assets match the immutable release and local CSS/fonts. Live phone browser checks and API health pass. Master checklist: 133/215. Receipt: [approved small fixes](docs/review/wamp-approved-small-fixes-2026-10-13.md). Primary email-code work and private handoff preserved.

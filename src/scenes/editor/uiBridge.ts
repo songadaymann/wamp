@@ -1,3 +1,4 @@
+import { populateEditorTilesetOptions } from './tilesetOptions';
 import { EditorPhoneInspector } from './phoneInspector';
 import { bindBossInspector } from './uiBridge/bossInspector';
 import { EditorHistoryControls } from './historyControls';
@@ -8,7 +9,6 @@ import {
   ERASER_BRUSH_SIZES,
   RANDOMIZE_BRUSH_SIZES,
   SHAPE_FILL_MODES,
-  TILESETS,
   cycleTileFlipMode,
   editorState,
   getTilesetByKey,
@@ -271,38 +271,6 @@ function getThemeEquivalentLegacyBrush(
   return brushId ? brushes.find((brush) => brush.id === brushId) : undefined;
 }
 
-const PREFERRED_TILESET_OPTION_ORDER = [
-  'essentials',
-  'forest',
-  'forest_2',
-  'desert',
-  'cave',
-  'lava',
-  'snow',
-  'water',
-  'smb_lvl1_3_5',
-  'text white',
-  'text black',
-  'signs and graffiti',
-  'special',
-] as const;
-
-function getEditorTilesets(): typeof TILESETS {
-  const preferredOrder = new Map<string, number>(
-    PREFERRED_TILESET_OPTION_ORDER.map((key, index) => [key, index])
-  );
-
-  return TILESETS.filter((tileset) => !tileset.editorHidden).sort((left, right) => {
-    const leftOrder = preferredOrder.get(left.key);
-    const rightOrder = preferredOrder.get(right.key);
-    if (leftOrder !== undefined || rightOrder !== undefined) {
-      return (leftOrder ?? Number.MAX_SAFE_INTEGER) - (rightOrder ?? Number.MAX_SAFE_INTEGER);
-    }
-
-    return left.name.localeCompare(right.name);
-  });
-}
-
 export function configureEditorUiBridgeRuntime(config: Partial<EditorUiRuntimeConfig>): void {
   if (config.paletteController !== undefined) {
     runtimeConfig.paletteController = config.paletteController;
@@ -393,19 +361,7 @@ export class EditorUiBridge {
       return;
     }
 
-    const editorTilesets = getEditorTilesets();
-    const selectedKey = editorTilesets.find(
-      (tileset) => tileset.key === getTilesetByKey(editorState.selectedTilesetKey)?.key,
-    )?.key ?? editorTilesets[0]?.key ?? '';
-    this.elements.tilesetSelect.replaceChildren(
-      ...editorTilesets.map((tileset) => {
-        const option = this.doc.createElement('option');
-        option.value = tileset.key;
-        option.textContent = tileset.name;
-        return option;
-      })
-    );
-    this.elements.tilesetSelect.value = selectedKey;
+    populateEditorTilesetOptions(this.elements.tilesetSelect, editorState.selectedTilesetKey);
   }
 
   private replaceSelectOptions(

@@ -80,6 +80,21 @@ describe('advisory editor Clear Check', () => {
     expect(blank.rows.find(row => row.id === 'start')?.state).toBe('warning'); expect(blank.publishError).toBeNull();
   });
 
+  it('allows exit, checkpoint and finish flags planted on solid ground, but warns when buried', () => {
+    for (const goalType of ['reach_exit', 'checkpoint_sprint'] as const) {
+      const snapshot = room();
+      const point = { x: 584, y: 320 };
+      snapshot.tileData.terrain[20][36] = 13;
+      snapshot.goal = goalType === 'reach_exit'
+        ? { type: goalType, exit: point, timeLimitMs: null }
+        : { type: goalType, checkpoints: [{ x: 56, y: 320 }], finish: point, timeLimitMs: null };
+      expect(buildReadyToPublishChecklist(snapshot, storage()).rows.find(row => row.id === 'goal')?.state).toBe('ready');
+      snapshot.tileData.terrain[19][36] = 13;
+      expect(buildReadyToPublishChecklist(snapshot, storage()).rows.find(row => row.id === 'goal')?.state).toBe('warning');
+      expect(buildReadyToPublishChecklist(snapshot, storage()).publishError).toBeNull();
+    }
+  });
+
   it('warns about overlapping ground and placed hazards, and permits pass-through terrain markers', () => {
     const snapshot = room(); snapshot.tileData.terrain[19][3] = 13;
     expect(buildReadyToPublishChecklist(snapshot, storage()).rows.find(row => row.id === 'start')?.state).toBe('warning');
