@@ -1,3 +1,9 @@
+## 2026-10-13 — Restart captures Space during speedruns
+
+Original prompt: "you know what is also happening? especially when i'm speed running? it think my keyboard is also kgetting locked in the stop/restart section. becaus i am clicking restart, then pressing space to jump a bunch, and then space seems to get mapped to restart and i can't get it off"
+
+Branch `codex/fix-restart-keyboard-focus` starts at deployed main `41f4acaf` in the attached clean worktree. Plan: reproduce repeated Restart → Space → Restart, return focus to gameplay after transport activation, verify repeated jumps and keyboard activation in Chromium/WebKit, and deliver the related keyboard follow-up through the already authorized release workflow. Baseline reproduced exactly: the first Space makes clicked Restart focus-visible; the next restart sync disables game keyboard; three Space presses create three additional restart clicks. A capture-phase UI helper now blurs only gameplay transport controls before their action and immediately restores keyboard state. Unrelated dialogs, text fields and menu controls retain focus. Browser regression now counts restart activations and checks real jump displacement. Primary dirty checkout preserved.
+
 ## 2026-10-12 — Room-entry keyboard freeze
 
 Original prompt: "there seems to be a new bug that got introduced. Occasionally, when i enter a room, i cannot move at all. refreshing usually helps."
@@ -1564,3 +1570,5 @@ Protected live status/flush/check routes pass four unauthorized/foreign-origin g
 The automatically published main Pages deployment is `255be3f2`. Its entry `main-CKa-B27b.js` and CSS `main-DXL6TowJ.css` match the actual custom-domain bytes; CSS also matches the release build. The local Worker-only build has different JS references from the automatic Pages build, so an initial local-reference asset check returned 404 and is not accepted as local JS parity. No manual Pages release was performed. Actual public gameplay and API/R2 proofs certify this backend change. Evidence includes `migration-prod.log`, `migration-proof.json`, `deploy-prod.log`, `live-*.json`, `production-guest/`, `production-backfill-ghost.json`, `public-ghost-before/after.json` and `live-entry-parity.json` under the same temporary evidence directory.
 
 Release bookkeeping is on `codex/archive-completed-ghosts-delivery-2026-10-09` from the released merge, avoiding a new production build for documentation only. The primary checkout retains exactly 25 unrelated dirty entries; tracked-diff SHA-256 is still `38d3e60660bff00f7db98b65a7342c1945ef3a8b7820621b3e7b299c7d21839b`. The overnight preview remains clean at `997c5251`; the release clone remains clean on main matching origin/main. Course/Expanded Room ghost recording and any recording-history UI remain separate work.
+
+2026-10-13 restart-focus verification: full `npm run check` passes (457 files / 3,482 tests). Readiness-aware browser checks pass six entries and 18 restart/jump cycles in each of Chromium/WebKit, including keyboard activation, zero Space-driven restarts and zero page exceptions. Screenshots inspected. Candidate ready for authorized related follow-up delivery.
