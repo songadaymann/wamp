@@ -91,7 +91,8 @@ export function buildReadyToPublishChecklist(room: RoomSnapshot, storage: ClearC
   const markers = room.goal?.type === 'reach_exit' ? [room.goal.exit]
     : room.goal?.type === 'checkpoint_sprint' ? [...room.goal.checkpoints, room.goal.finish]
       : room.goal?.type === 'npc_quest' && room.goal.questType === 'escort' ? [room.goal.destination] : [];
-  const blockedMarker = markers.some(point => point && pointInsideTerrain(room, point.x, point.y));
+  // A marker is anchored at its foot: touching the ground edge is valid planting.
+  const blockedMarker = markers.some(point => point && pointInsideTerrain(room, point.x, point.y - 1));
   const rows: ClearCheckRow[] = [
     { id: 'title', label: 'Room title', detail: room.title?.trim() ? room.title : 'A suggested name is offered when you publish.', state: room.title?.trim() ? 'ready' : 'optional' },
     { id: 'start', label: 'Start safety', detail: safeStart ? room.spawnPoint ? 'Start has ground and clear headroom.' : 'Automatic start has ground and clear headroom.' : 'Start may fall or touch terrain or a hazard. Test it, or place a start on clear ground.', state: safeStart ? 'ready' : 'warning' },
