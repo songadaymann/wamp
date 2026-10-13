@@ -4,21 +4,22 @@ import { EditorEditRuntime } from '../scenes/editor/editRuntime';
 import { ROOM_VIDEO_LINK_TARGET_ID } from './link';
 import {
   createDefaultRoomVideo,
-  describeRoomVideo,
   fetchYouTubeAspectRatio,
   guessYouTubeAspect,
   normalizeRoomVideo,
   parseYouTubeVideoUrl,
   resizeRoomVideoAspect,
   roomVideosEqual,
-  youtubeWatchUrl,
   type RoomVideo,
 } from './model';
+import {
+  clearRoomVideoState,
+  ensureRoomVideoState,
+  getActiveRoomVideoRuntime,
+  getRoomVideo,
+} from './uiState';
 
-interface VideoState {
-  video: RoomVideo | null;
-  error: string | null;
-}
+export { getActiveRoomVideoRuntime, getRoomVideo, roomVideoUiFields, setActiveRoomVideoRuntime } from './uiState';
 
 interface VideoRuntime {
   guardEditable(): boolean;
@@ -43,60 +44,10 @@ interface VideoRuntime {
   };
 }
 
-const states = new WeakMap<object, VideoState>();
-let activeRuntime: object | null = null;
 let installed = false;
 
 function asRuntime(runtime: object): VideoRuntime {
   return runtime as VideoRuntime;
-}
-
-function stateFor(runtime: object): VideoState {
-  let state = states.get(runtime);
-  if (!state) {
-    state = { video: null, error: null };
-    states.set(runtime, state);
-  }
-  return state;
-}
-
-export function getRoomVideo(runtime: object | null | undefined): RoomVideo | null {
-  if (!runtime) return null;
-  return states.get(runtime)?.video ?? null;
-}
-
-export function setActiveRoomVideoRuntime(runtime: object | null): void {
-  activeRuntime = runtime;
-}
-
-export function getActiveRoomVideoRuntime(): object | null {
-  return activeRuntime;
-}
-
-export function roomVideoUiFields(runtime: object | null | undefined): {
-  roomVideoUrl: string;
-  roomVideoStatus: string;
-  roomVideoLoop: boolean;
-  roomVideoAutoplay: boolean;
-  roomVideoTrigger: boolean;
-  roomVideoVolume: number;
-  roomVideoMuteMusic: boolean;
-  roomVideoSnap: boolean;
-  roomVideoHasVideo: boolean;
-} {
-  const state = runtime ? states.get(runtime) : undefined;
-  const video = state?.video ?? null;
-  return {
-    roomVideoUrl: video ? youtubeWatchUrl(video.youtubeId) : '',
-    roomVideoStatus: describeRoomVideo(video, state?.error ?? null),
-    roomVideoLoop: video?.loop === true,
-    roomVideoAutoplay: video?.autoplay === true,
-    roomVideoTrigger: video?.trigger === true,
-    roomVideoVolume: Math.round((video?.volume ?? 0.8) * 100),
-    roomVideoMuteMusic: video?.muteMusic === true,
-    roomVideoSnap: video?.snap === true,
-    roomVideoHasVideo: video != null,
-  };
 }
 
 export function setRoomVideo(runtime: object, next: RoomVideo | null, quiet = false): void {
@@ -106,7 +57,7 @@ export function setRoomVideo(runtime: object, next: RoomVideo | null, quiet = fa
   } else if (!host.guardEditable()) {
     return;
   }
-  const state = stateFor(runtime);
+  const state = ensureRoomVideoState(runtime);
   const normalized = normalizeRoomVideo(next);
   if (roomVideosEqual(state.video, normalized)) {
     if (!quiet && host.roomDirty) {
@@ -134,7 +85,7 @@ export function setRoomVideo(runtime: object, next: RoomVideo | null, quiet = fa
 export function setRoomVideoUrl(runtime: object, raw: string, commit = true): void {
   const host = asRuntime(runtime);
   if (!host.guardEditable()) return;
-  const state = stateFor(runtime);
+  const state = ensureRoomVideoState(runtime);
   const trimmed = raw.trim();
   if (!trimmed) {
     state.error = null;
@@ -166,7 +117,7 @@ export function setRoomVideoUrl(runtime: object, raw: string, commit = true): vo
   }
   const youtubeId = parsed.id;
   void fetchYouTubeAspectRatio(parsed).then((nextAspect) => {
-    const latest = stateFor(runtime).video;
+    const latest = ensureRoomVideoState(runtime).video;
     if (!nextAspect || latest?.youtubeId !== youtubeId) return;
     if (Math.abs(latest.aspect - nextAspect) < 0.02) return;
     setRoomVideo(runtime, resizeRoomVideoAspect(latest, nextAspect));
@@ -183,8 +134,8 @@ export function patchRoomVideo(
 }
 
 export function clearRoomVideo(runtime: object): void {
-  const state = states.get(runtime);
-  if (state) state.error = null;
+  const state = ensureRoomVideoState(runtime);
+  state.error = null;
   setRoomVideo(runtime, null);
 }
 
@@ -222,7 +173,7 @@ export function installRoomVideoEditing(): void {
   const originalReset = prototype.reset;
   prototype.reset = function resetRoomVideo(this: EditorEditRuntime) {
     originalReset.call(this);
-    states.delete(this);
+    clearRoomVideoState(this);
   };
   const originalApply = prototype.applyRoomSnapshot;
   prototype.applyRoomSnapshot = function applyRoomVideo(
@@ -231,7 +182,7 @@ export function installRoomVideoEditing(): void {
     resetHistory = true,
   ) {
     originalApply.call(this, room, resetHistory);
-    const state = stateFor(this);
+    const state = ensureRoomVideoState(this);
     state.video = normalizeRoomVideo(room.video);
     state.error = null;
   };
@@ -248,7 +199,7 @@ export function bindRoomVideoControls(doc: Document): void {
   if (root.dataset.roomVideoControls === 'true') return;
   root.dataset.roomVideoControls = 'true';
   const withRuntime = (apply: (runtime: object) => void) => {
-    const runtime = activeRuntime;
+    const runtime = getActiveRoomVideoRuntime();
     if (runtime) apply(runtime);
   };
   const urlInput = doc.getElementById('room-video-url');

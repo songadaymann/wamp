@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import { destroyRoomVideoFrame, syncOverworldRoomVideo } from '../../roomVideo/frames';
+import { releaseRoomVideoBackdrop, syncRoomVideoBackdrop } from '../../roomVideo/backdropSync';
 import {
   createStarfieldTileSprite,
   getStarfieldLayerConfig,
@@ -76,7 +76,7 @@ export class OverworldBackdropController {
   update(): void {
     const motionCamera = this.options.scene.cameras.main;
     this.options.updateWorldBackgrounds(motionCamera);
-    syncOverworldRoomVideo(this.options.scene, this.worldDisplayLayer);
+    syncRoomVideoBackdrop(this.options.scene, this.worldDisplayLayer);
 
     if (this.starfieldSprites.length === 0) {
       return;
@@ -139,7 +139,7 @@ export class OverworldBackdropController {
   }
 
   finishReset(): void {
-    destroyRoomVideoFrame(this.options.scene);
+    releaseRoomVideoBackdrop(this.options.scene);
     this.starfieldSprites = [];
     this.backdropDisplayLayer?.destroy();
     this.worldDisplayLayer?.destroy();
@@ -149,7 +149,7 @@ export class OverworldBackdropController {
   }
 
   destroy(): void {
-    destroyRoomVideoFrame(this.options.scene);
+    releaseRoomVideoBackdrop(this.options.scene);
     for (const sprite of this.starfieldSprites) {
       sprite.destroy();
     }

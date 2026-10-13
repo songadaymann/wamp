@@ -1,5 +1,5 @@
 import { getAuthDebugState } from '../../auth/client';
-import { setActiveRoomVideoRuntime } from '../../roomVideo/editing';
+import { setActiveRoomVideoRuntime } from '../../roomVideo/uiState';
 import { editorState } from '../../config';
 import type { RoomGoal } from '../../goals/roomGoals';
 import type {

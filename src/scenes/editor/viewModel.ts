@@ -5,7 +5,7 @@ import type { GoalPlacementMode } from './editRuntime';
 import type { EditorStatusDetails } from './roomSession';
 import type { EditorCourseUiState } from '../../ui/setup/sceneBridge';
 import { normalizePlayerHearts, type PlayerHearts } from '../../player/hearts';
-import { getActiveRoomVideoRuntime, roomVideoUiFields } from '../../roomVideo/editing';
+import { getActiveRoomVideoRuntime, roomVideoUiFields } from '../../roomVideo/uiState';
 import type { ReadyToPublishChecklist } from './clearCheck';
 
 export interface BuildEditorUiViewModelOptions {

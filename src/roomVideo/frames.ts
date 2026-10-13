@@ -10,7 +10,9 @@ let lastDownKey = '';
 let lastDownResult = false;
 let upConsumed = false;
 
-function frameFor(scene: Phaser.Scene): RoomVideoFrameController {
+function frameFor(scene: Phaser.Scene): RoomVideoFrameController | null {
+  const events = scene.events as { once?: unknown } | null;
+  if (!events || typeof events.once !== 'function') return null;
   let frame = frames.get(scene);
   if (!frame) {
     frame = new RoomVideoFrameController(scene);
@@ -20,7 +22,7 @@ function frameFor(scene: Phaser.Scene): RoomVideoFrameController {
 }
 
 export function syncRoomVideoFrame(scene: Phaser.Scene, sync: RoomVideoFrameSync): void {
-  frameFor(scene).sync(sync);
+  frameFor(scene)?.sync(sync);
 }
 
 export function destroyRoomVideoFrame(scene: Phaser.Scene): void {
@@ -35,17 +37,17 @@ export function roomVideoPointerDown(scene: Phaser.Scene, pointer: Phaser.Input.
   if (key === lastDownKey) return lastDownResult;
   upConsumed = false;
   lastDownKey = key;
-  lastDownResult = frameFor(scene).handlePointerDown(pointer);
+  lastDownResult = frameFor(scene)?.handlePointerDown(pointer) ?? false;
   return lastDownResult;
 }
 
 export function roomVideoPointerMove(scene: Phaser.Scene, pointer: Phaser.Input.Pointer): boolean {
-  return frameFor(scene).handlePointerMove(pointer);
+  return frameFor(scene)?.handlePointerMove(pointer) ?? false;
 }
 
 export function roomVideoPointerUp(scene: Phaser.Scene): boolean {
   if (upConsumed) return true;
-  upConsumed = frameFor(scene).handlePointerUp();
+  upConsumed = frameFor(scene)?.handlePointerUp() ?? false;
   return upConsumed;
 }
 
