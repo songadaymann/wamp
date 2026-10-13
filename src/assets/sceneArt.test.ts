@@ -17,6 +17,8 @@ function harness() {
   return { scene: scene as never, sprite, loaded, events, load, gameEvents, sleep: () => { active = false; } };
 }
 
+vi.mock('./sceneAssetVersions', () => ({ installSceneAssetVersions: vi.fn() }));
+
 const tree = getObjectById('tree_pack_oak_01')!;
 
 describe('on-demand room art', () => {

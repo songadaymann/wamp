@@ -1,3 +1,4 @@
+import { assetUrl } from '../../assets/assetUrl';
 import {
   XP_RECEIPTS_EVENT,
   XP_RECEIPTS_IDLE_EVENT,
@@ -144,7 +145,7 @@ export class XpReceiptController {
 
   private render(receipt: XpReceipt): void {
     if (this.elements.icon) {
-      this.elements.icon.src = receipt.iconSrc;
+      this.elements.icon.src = assetUrl(receipt.iconSrc);
       this.elements.icon.alt = receipt.iconAlt;
     }
     if (this.elements.amount) {

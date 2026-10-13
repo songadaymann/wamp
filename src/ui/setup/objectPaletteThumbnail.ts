@@ -1,3 +1,4 @@
+import { assetUrl } from '../../assets/assetUrl';
 import { getObjectDefaultFrame, getObjectFrameSourceRect, type GameObjectConfig } from '../../config';
 
 /** Only visible palette images download; animated objects use their authored default frame. */
@@ -5,7 +6,7 @@ export function createObjectPaletteThumbnail(doc: Document, object: GameObjectCo
   const image = doc.createElement('img');
   image.alt = '';
   image.loading = 'lazy';
-  image.src = object.path;
+  image.src = assetUrl(object.path);
   if (object.frameCount > 1) {
     const canvas = doc.createElement('canvas');
     canvas.width = object.frameWidth; canvas.height = object.frameHeight;
@@ -18,7 +19,7 @@ export function createObjectPaletteThumbnail(doc: Document, object: GameObjectCo
       context.drawImage(source, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, canvas.width, canvas.height);
       image.src = canvas.toDataURL();
     };
-    source.src = object.path;
+    source.src = assetUrl(object.path);
   }
   return image;
 }

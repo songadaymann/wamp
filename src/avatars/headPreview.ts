@@ -1,3 +1,4 @@
+import { assetUrl } from '../assets/assetUrl';
 import {
   MAX_CRYPTOPUNK_ID,
   MIN_CRYPTOPUNK_ID,
@@ -62,7 +63,7 @@ function loadAtlasImage(): Promise<HTMLImageElement> {
     image.decoding = 'async';
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error('Failed to load CryptoPunk head preview atlas.'));
-    image.src = CRYPTOPUNK_HEAD_PREVIEW_ATLAS_PATH;
+    image.src = assetUrl(CRYPTOPUNK_HEAD_PREVIEW_ATLAS_PATH);
   });
 
   return atlasImagePromise;

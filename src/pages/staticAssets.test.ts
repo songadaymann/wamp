@@ -152,7 +152,7 @@ describe('Pages standalone asset routing contract', () => {
 });
 
 describe('Pages hashed asset routing contract', () => {
-  it('passes through a successful non-HTML asset response unchanged', async () => {
+  it('preserves body, status and metadata while applying the unversioned fallback policy', async () => {
     const upstream = new Response('export const ready = true;', {
       status: 206,
       headers: {
@@ -171,11 +171,33 @@ describe('Pages hashed asset routing contract', () => {
       createEnv(fetchAsset),
     ));
 
-    expect(response).toBe(upstream);
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=86400, must-revalidate');
     expect(response.status).toBe(206);
     expect(response.headers.get('ETag')).toBe('fixture-etag');
     expect(await response.text()).toBe('export const ready = true;');
     expect(fetchAsset).toHaveBeenCalledOnce();
+  });
+
+  it('retains conditional 304 responses so the shorter fallback can revalidate', async () => {
+    const fetchAsset = vi.fn(async () => new Response(null, { status: 304, headers: { ETag: 'same-pixels' } }));
+    const response = requireResponse(await handleStaticAssetRequest(new Request('https://preview.wamp.land/assets/art.png', { headers: { 'If-None-Match': 'same-pixels' } }), createEnv(fetchAsset)));
+    expect(response.status).toBe(304); expect(response.headers.get('ETag')).toBe('same-pixels');
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=86400, must-revalidate');
+    expect(await response.text()).toBe('');
+  });
+
+  it.each([
+    ['/assets/cache-v2/main-newhash.js', 'public, max-age=31536000, immutable'],
+    ['/assets/objects/flag.png?v=123456abcdef', 'public, max-age=31536000, immutable'],
+    ['/assets/objects/flag.png?v=old', 'public, max-age=86400, must-revalidate'],
+    ['/assets/objects/flag.png', 'public, max-age=86400, must-revalidate'],
+  ])('applies the current cache policy for %s', async (path, policy) => {
+    vi.stubGlobal('__WAMP_PUBLIC_ASSET_HASHES__', { 'assets/objects/flag.png': '123456abcdef' });
+    try {
+      const fetchAsset = vi.fn(async () => new Response('bytes', { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=31536000, immutable' } }));
+      const response = requireResponse(await handleStaticAssetRequest(new Request(`https://preview.wamp.land${path}`), createEnv(fetchAsset)));
+      expect(response.headers.get('Cache-Control')).toBe(policy); expect(await response.text()).toBe('bytes');
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it.each([

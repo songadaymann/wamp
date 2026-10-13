@@ -1,3 +1,4 @@
+import { assetUrl } from '../../assets/assetUrl';
 import type { PlayerAvatarId } from './model';
 import { loadCryptopunkHeadPreviewUrl } from '../../avatars/headPreview';
 import { parseCryptopunkAvatarId } from '../../avatars/model';
@@ -104,7 +105,7 @@ async function loadPlayerAvatarPreviewDataUrl(avatarId: PlayerAvatarId): Promise
 }
 
 async function fetchAtlas(atlasPath: string): Promise<TextureAtlasJson> {
-  const response = await fetch(toRootRelativeAssetPath(atlasPath));
+  const response = await fetch(assetUrl(toRootRelativeAssetPath(atlasPath)));
   if (!response.ok) {
     throw new Error(`Avatar atlas request failed with ${response.status}.`);
   }
@@ -117,7 +118,7 @@ function loadImage(texturePath: string): Promise<HTMLImageElement> {
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`Avatar texture failed to load: ${texturePath}`));
     image.decoding = 'async';
-    image.src = toRootRelativeAssetPath(texturePath);
+    image.src = assetUrl(toRootRelativeAssetPath(texturePath));
   });
 }
 

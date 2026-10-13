@@ -1,3 +1,4 @@
+import { assetUrl } from '../assets/assetUrl';
 import {
   BACKGROUND_GROUPS,
   GAME_OBJECTS,
@@ -475,7 +476,7 @@ function loadAssetImage(assetPath: string): Promise<HTMLImageElement> {
     image.decoding = 'async';
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`Failed to load asset ${normalizedPath}.`));
-    image.src = normalizedPath;
+    image.src = assetUrl(normalizedPath);
   });
   imageCache.set(normalizedPath, pending);
   return pending;

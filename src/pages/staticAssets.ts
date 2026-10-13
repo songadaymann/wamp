@@ -1,3 +1,4 @@
+import { isContentVersionedAsset } from '../assets/assetUrl';
 import type { PagesWorkerEnv } from './model';
 
 const STANDALONE_PAGE_ALIASES = new Map<string, string>([
@@ -65,7 +66,16 @@ async function fetchHashedAsset(request: Request, env: PagesWorkerEnv): Promise<
 
   const response = await env.ASSETS.fetch(request);
   const contentType = response.headers.get('Content-Type')?.toLowerCase() ?? '';
-  if (response.ok && !contentType.includes('text/html')) return response;
+  if ((response.ok || response.status === 304) && !contentType.includes('text/html')) {
+    const url = new URL(request.url);
+    const immutable = url.pathname.startsWith('/assets/cache-v2/')
+      || isContentVersionedAsset(url.pathname, url.searchParams.get('v'));
+    const headers = new Headers(response.headers);
+    headers.set('Cache-Control', immutable
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=86400, must-revalidate');
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  }
 
   // Pages can briefly route a just-deployed hashed asset to the SPA fallback
   // while the custom-domain deployment pointer propagates. Never let that HTML

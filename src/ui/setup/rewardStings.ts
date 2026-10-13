@@ -1,3 +1,4 @@
+import { assetUrl } from '../../assets/assetUrl';
 import { playSfx } from '../../audio/sfx';
 import { GUEST_RUN_PROGRESS_CHANGED_EVENT, type GuestRunSaveResult } from '../../guestRooms/runService';
 import { guestRunClaimCopy } from '../../progression/guestRunClaimCopy';
@@ -193,7 +194,7 @@ export class RewardStingController {
       }
     }
     if (this.elements.icon) {
-      this.elements.icon.src = reward.iconSrc;
+      this.elements.icon.src = assetUrl(reward.iconSrc);
       this.elements.icon.alt = reward.iconAlt;
     }
   }
