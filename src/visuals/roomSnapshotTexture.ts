@@ -1,3 +1,4 @@
+import { getSceneObjectTexture } from '../assets/sceneArt';
 import Phaser from 'phaser';
 import {
   decodeTileDataValue,
@@ -651,7 +652,8 @@ export function drawRoomObjectRangeForLayerToContext(
     if (options.ensureCustomSpriteTextures !== false) {
       ensureCustomSpriteTexture(scene, objectConfig);
     }
-    const sourceImage = getTextureSource(scene, objectConfig.id);
+    const sceneTexture = getSceneObjectTexture(objectConfig);
+    const sourceImage = getTextureSource(scene, sceneTexture.key);
     if (!sourceImage) continue;
 
     const displayScale = getObjectDisplayScale(objectConfig);
@@ -662,11 +664,21 @@ export function drawRoomObjectRangeForLayerToContext(
     const destY = offsetY + Math.round((placedObject.y + displayOffset.y) * scale - destHeight / 2);
 
     const frame = getObjectDefaultFrame(objectConfig);
-    const { sx, sy, sw, sh } = getObjectFrameSourceRect(
+    const sourceRect = getObjectFrameSourceRect(
       objectConfig,
       frame,
       getCanvasSourceWidth(sourceImage) || objectConfig.frameWidth,
     );
+    const atlasFrame = typeof sceneTexture.frame === 'string'
+      ? scene.textures.get(sceneTexture.key).get(sceneTexture.frame)
+      : null;
+    const { sx, sy, sw, sh } = atlasFrame
+      ? { sx: atlasFrame.cutX, sy: atlasFrame.cutY, sw: atlasFrame.cutWidth, sh: atlasFrame.cutHeight }
+      : sourceRect;
+    const trimX = atlasFrame ? atlasFrame.x * displayScale * scale : 0;
+    const trimY = atlasFrame ? atlasFrame.y * displayScale * scale : 0;
+    const drawWidth = atlasFrame ? sw * displayScale * scale : destWidth;
+    const drawHeight = atlasFrame ? sh * displayScale * scale : destHeight;
     const shouldFlipX =
       Boolean(objectConfig.facingDirection) &&
       Boolean(placedObject.facing) &&
@@ -682,10 +694,10 @@ export function drawRoomObjectRangeForLayerToContext(
         sy,
         sw,
         sh,
-        0,
-        0,
-        destWidth,
-        destHeight,
+        trimX,
+        trimY,
+        drawWidth,
+        drawHeight,
       );
     } else {
       context.drawImage(
@@ -694,10 +706,10 @@ export function drawRoomObjectRangeForLayerToContext(
         sy,
         sw,
         sh,
-        destX,
-        destY,
-        destWidth,
-        destHeight,
+        destX + trimX,
+        destY + trimY,
+        drawWidth,
+        drawHeight,
       );
     }
     context.restore();
@@ -705,6 +717,7 @@ export function drawRoomObjectRangeForLayerToContext(
 }
 
 function getTextureSource(scene: Phaser.Scene, key: string): CanvasImageSource | null {
+  if (!scene.textures.exists(key)) return null;
   const texture = scene.textures.get(key);
   if (!texture) return null;
   return (texture.getSourceImage() as CanvasImageSource | null) ?? null;

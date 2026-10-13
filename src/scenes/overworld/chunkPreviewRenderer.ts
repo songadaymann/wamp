@@ -1,3 +1,5 @@
+import { RoomPreviewArtLoader } from '../../assets/roomArt';
+import { getRoomArtResidency } from '../../assets/sceneArt';
 import Phaser from 'phaser';
 import { resolveRoomBackground } from '../../backgrounds/model';
 import {
@@ -145,8 +147,10 @@ export class OverworldChunkPreviewRenderer {
   private initialImmediateTextureBuildsRemaining = INITIAL_IMMEDIATE_CHUNK_TEXTURE_BUILDS;
   private customBackgroundLoadGeneration = 0;
   private readonly textureNamespace: string;
+  private readonly roomArt: RoomPreviewArtLoader;
 
   constructor(private readonly options: OverworldChunkPreviewRendererOptions) {
+    this.roomArt = new RoomPreviewArtLoader(options.scene, () => this.syncChunkImages());
     this.textureNamespace = sanitizeChunkKey(options.scene.sys.settings.key);
   }
 
@@ -164,6 +168,7 @@ export class OverworldChunkPreviewRenderer {
   }
 
   clear(): void {
+    this.roomArt.reset();
     this.cancelQueuedTextureBuilds();
     for (const image of this.chunkImagesByChunkId.values()) {
       image.destroy();
@@ -416,6 +421,7 @@ export class OverworldChunkPreviewRenderer {
       rooms.map((room) => room.coordinates),
     );
     if (!crop) return;
+    for (const room of rooms) this.roomArt.ensure(room, this.shouldDrawDetailedRoomPreview(room, previewTileSize));
     const contentSignature = this.buildChunkContentSignature(chunkId, rooms);
     const textureKey = this.buildChunkTextureKey(chunkId, contentSignature, previewTileSize);
     const schedulePreviewWork = this.shouldSchedulePreviewWork();
@@ -673,6 +679,7 @@ export class OverworldChunkPreviewRenderer {
           room.version,
           room.updatedAt,
           room.status,
+          `art-resident:${getRoomArtResidency(this.options.scene, room)}`,
           `preview-data:${hasDetailedPreviewTileData(room) ? 'detailed' : 'lightweight'}`,
           `background-resident:${customBackgroundResident}`,
           `sprites-resident:${customSpriteResidency}`,

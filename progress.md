@@ -1,3 +1,9 @@
+## 2026-10-13 — F013 room art loading
+
+Original prompt: "ok let's do the next thing on the list". Next approved handoff item is F013. Branch `codex/wamp-room-art-loading-2026-10-13` starts from current main `57a19656` in the attached clean worktree. Plan: retain gameplay/animated assets at boot; load static decorations and background themes on first use, pack the 221 tree images into trimmed family atlases, preserve sprite positions and snapshot previews, verify first-visit asset counts and room/editor transitions, then deliver through the established PR/Pages workflow. Primary dirty checkout preserved.
+
+Candidate verified: 461 files / 3,502 tests and all 12 mobile scenarios pass; native delayed-load, shared sleeping-scene request, cached-preview redraw, rapid background changes and movement/jump pass on desktop/phone. Inspected captures. Startup PNGs 488 → 183, bytes down 80.1%; tree atlas canvases total 13.18 MB. Receipt: `docs/review/wamp-room-art-loading-2026-10-13.md`. Next: PR green checks, merge, verify newest wampland source revision and actual custom-domain assets/browser.
+
 ## 2026-10-13 — Restart captures Space during speedruns
 
 Original prompt: "you know what is also happening? especially when i'm speed running? it think my keyboard is also kgetting locked in the stop/restart section. becaus i am clicking restart, then pressing space to jump a bunch, and then space seems to get mapped to restart and i can't get it off"

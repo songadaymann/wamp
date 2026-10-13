@@ -1,3 +1,4 @@
+import { createSceneObjectSprite } from '../../assets/sceneArt';
 import Phaser from 'phaser';
 import { isCoopPressurePlate, type CoopPlateActor } from '../../placedObjects/coopPressurePlates';
 import { createBossPresentation, syncBossPresentation } from './liveObjects/bossPresentation';
@@ -7,7 +8,6 @@ import {
   canObjectBeStoredInContainer,
   decodeTileDataValue,
   getObjectById,
-  getObjectDefaultFrame,
   getObjectDisplayOffset,
   getObjectDisplayScale,
   getObjectRuntimeBodyOffset,
@@ -689,11 +689,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     } = options;
     ensureCustomSpriteTexture(this.options.scene, config);
     const displayOffset = getObjectDisplayOffset(config);
-    const sprite = this.options.scene.add.sprite(
+    const sprite = createSceneObjectSprite(
+      this.options.scene,
       roomOrigin.x + x + displayOffset.x,
       roomOrigin.y + y + displayOffset.y,
-      config.id,
-      getObjectDefaultFrame(config)
+      config
     );
     sprite.setOrigin(0.5, 0.5);
     sprite.setScale(getObjectDisplayScale(config));

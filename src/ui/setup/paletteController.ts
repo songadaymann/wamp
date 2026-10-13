@@ -1,3 +1,4 @@
+import { createObjectPaletteThumbnail } from './objectPaletteThumbnail';
 import {
   DECORATION_PALETTE_GROUPS,
   TILESETS,
@@ -687,43 +688,7 @@ export class PaletteController {
       makeObjectPaletteTile(item, editorState.selectedObjectId === objectConfig.id);
       item.dataset.objectId = objectConfig.id;
 
-      const img = this.doc.createElement('img');
-      img.alt = '';
-      img.src = objectConfig.path;
-      if (objectConfig.frameCount > 1) {
-        const canvas = this.doc.createElement('canvas');
-        canvas.width = objectConfig.frameWidth;
-        canvas.height = objectConfig.frameHeight;
-        const srcImg = new Image();
-        srcImg.src = objectConfig.path;
-        srcImg.onload = () => {
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            return;
-          }
-
-          ctx.imageSmoothingEnabled = false;
-          const sourceSize = this.getObjectPreviewSourceSize(objectConfig);
-          const previewScale = Math.min(canvas.width / sourceSize.width, canvas.height / sourceSize.height);
-          const drawWidth = Math.max(1, Math.floor(sourceSize.width * previewScale));
-          const drawHeight = Math.max(1, Math.floor(sourceSize.height * previewScale));
-          const offsetX = Math.floor((canvas.width - drawWidth) / 2);
-          const offsetY = Math.floor((canvas.height - drawHeight) / 2);
-          this.drawObjectFrame(
-            ctx,
-            objectConfig,
-            srcImg,
-            getObjectDefaultFrame(objectConfig),
-            offsetX,
-            offsetY,
-            drawWidth,
-            drawHeight,
-            false,
-          );
-          img.src = canvas.toDataURL();
-        };
-      }
-
+      const img = createObjectPaletteThumbnail(this.doc, objectConfig);
       item.appendChild(img);
 
       item.addEventListener('click', () => {

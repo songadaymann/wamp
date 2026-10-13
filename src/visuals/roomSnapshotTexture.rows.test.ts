@@ -45,6 +45,7 @@ describe('drawRoomTileLayerRowsToContext', () => {
   const source = { width: 256, height: 256 } as CanvasImageSource;
   const scene = {
     textures: {
+      exists: vi.fn(() => true),
       get: vi.fn(() => ({ getSourceImage: () => source })),
     },
   };
@@ -171,6 +172,7 @@ describe('drawRoomTileLayerRowsToContext', () => {
         get: vi.fn(() => ({ getSourceImage: () => customSource })),
       },
     };
+    mocks.ensureCustomSpriteTexture.mockImplementationOnce(() => browseScene.textures.exists.mockReturnValue(true));
     mocks.getEditorObjectConfigById.mockReturnValue({
       id: 'custom_sprite:browse-art',
       frameWidth: 16,
