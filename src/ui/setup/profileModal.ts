@@ -1,3 +1,5 @@
+import { renderProfileEmptyActions, setupProfileEmptyStates } from './profileEmptyStates';
+import { friendlyError, renderFriendlyError, setFeedbackText } from '../friendlyError';
 import Phaser from 'phaser';
 import {
   getEffectiveCryptopunkViewerLevel,
@@ -39,7 +41,7 @@ import {
   deriveProfileUsernameBase,
   parseProfileSharePath,
 } from '../../profiles/username';
-import { getActiveOverworldScene } from './sceneBridge';
+import { getActiveEditorScene, getActiveOverworldScene } from './sceneBridge';
 import {
   PROFILE_INVALIDATED_EVENT,
   PROFILE_OPEN_REQUEST_EVENT,
@@ -294,6 +296,9 @@ export class ProfileModalController {
       if (!this.authState.authenticated || this.currentProfile?.userId !== this.authState.user?.id) return;
       this.close(); this.windowObj.dispatchEvent(new CustomEvent('activity-open-request'));
     });
+    setupProfileEmptyStates(this.doc, { canEdit: () => Boolean(this.currentProfile?.canEdit),
+      canCreatePlaylist: () => Boolean(this.currentProfile?.canEdit && !this.isSchoolAvatarOnlyEdit(this.currentProfile)),
+      findBuildSpot: () => { this.close(); void (getActiveOverworldScene(this.game) ?? getActiveEditorScene(this.game))?.returnToWorld?.(); } });
     this.elements.shareButton?.addEventListener('click', this.handleShareClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.elements.avatarPickerModal?.addEventListener('click', this.handleAvatarPickerBackdropClick);
@@ -396,7 +401,7 @@ export class ProfileModalController {
 
       this.loading = false;
       this.currentProfile = null;
-      this.setError(error instanceof Error ? error.message : 'Failed to load profile.');
+      this.setError(friendlyError('load your profile', { error }), () => this.openByUsername(username));
       this.render();
     }
   }
@@ -449,7 +454,7 @@ export class ProfileModalController {
 
       this.loading = false;
       this.currentProfile = null;
-      this.setError(error instanceof Error ? error.message : 'Failed to load profile.');
+      this.setError(friendlyError('load your profile', { error }), () => this.open(userId));
       this.render();
     }
   }
@@ -523,7 +528,7 @@ export class ProfileModalController {
       this.setSaveStatus('Profile saved.');
     } catch (error) {
       this.setSaveStatus('');
-      this.setError(error instanceof Error ? error.message : 'Failed to save profile.');
+      this.setError(friendlyError('save profile', { error }));
     } finally {
       this.saving = false;
       this.render();
@@ -555,7 +560,7 @@ export class ProfileModalController {
       this.setSaveStatus('Avatar saved.');
     } catch (error) {
       this.setSaveStatus('');
-      this.setError(error instanceof Error ? error.message : 'Failed to save avatar.');
+      this.setError(friendlyError('save avatar', { error }));
     } finally {
       this.saving = false;
       this.render();
@@ -1140,7 +1145,7 @@ export class ProfileModalController {
 
       this.cryptopunkStatus = null;
       this.cryptopunkSelectionStatus =
-        error instanceof Error ? error.message : 'Failed to load CryptoPunk status.';
+        friendlyError('load CryptoPunk status', { error });
       this.cancelCryptopunkPolling();
     } finally {
       if (loadToken === this.cryptopunkLoadToken) {
@@ -1263,7 +1268,7 @@ export class ProfileModalController {
       this.scheduleCryptopunkPoll(1200);
     } catch (error) {
       this.cryptopunkSelectionStatus =
-        error instanceof Error ? error.message : 'Failed to queue CryptoPunk generation.';
+        friendlyError('queue CryptoPunk generation', { error });
     } finally {
       this.cryptopunkActionInFlight = false;
       this.renderCryptopunkPicker();
@@ -1271,6 +1276,8 @@ export class ProfileModalController {
   }
 
   private renderRooms(rooms: ProfilePublishedRoomEntry[]): void {
+    renderProfileEmptyActions(this.doc, Boolean(this.currentProfile?.canEdit),
+      Boolean(this.currentProfile?.canEdit && !this.isSchoolAvatarOnlyEdit(this.currentProfile)));
     this.resetRoomPreviewObserver();
     const playlists = this.currentProfile?.playlists ?? [];
     const selectedPlaylist = this.getSelectedPlaylist();
@@ -1430,7 +1437,7 @@ export class ProfileModalController {
       this.setPlaylistStatus(`Created "${playlist.title}".`);
     } catch (error) {
       this.setPlaylistStatus('');
-      this.setError(error instanceof Error ? error.message : 'Failed to create playlist.');
+      this.setError(friendlyError('create playlist', { error }));
     } finally {
       this.playlistBusy = false;
       this.render();
@@ -1458,7 +1465,7 @@ export class ProfileModalController {
       this.setPlaylistStatus(`Added "${getProfileRoomTitle(room)}" to "${playlist.title}".`);
     } catch (error) {
       this.setPlaylistStatus('');
-      this.setError(error instanceof Error ? error.message : 'Failed to add room to playlist.');
+      this.setError(friendlyError('add room to playlist', { error }));
     } finally {
       this.playlistBusy = false;
       this.render();
@@ -1677,22 +1684,12 @@ export class ProfileModalController {
     }
   }
 
-  private setError(message: string | null): void {
-    if (!this.elements.error) {
-      return;
-    }
-
-    this.elements.error.textContent = message ?? '';
-    this.elements.error.classList.toggle('hidden', !message);
+  private setError(message: string | null, retry?: () => void | Promise<void>): void {
+    renderFriendlyError(this.elements.error, message, retry);
   }
 
   private setSaveStatus(message: string): void {
-    if (!this.elements.saveStatus) {
-      return;
-    }
-
-    this.elements.saveStatus.textContent = message;
-    this.elements.saveStatus.classList.toggle('hidden', !message);
+    setFeedbackText(this.elements.saveStatus, message);
   }
 
   private setPlaylistStatus(message: string): void {

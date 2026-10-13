@@ -171,8 +171,10 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
 .chat-panel-title {
   color: #18161c;
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.2;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .chat-panel-close {
@@ -305,12 +307,14 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
   border: 2px solid #18161c;
   border-radius: 0;
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
   font-family: 'Early GameBoy', monospace;
   font-size: 8px;
   line-height: 1.2;
   text-align: center;
   box-shadow: 2px 2px 0 #18161c;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .chat-message {
@@ -384,7 +388,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
 
 .chat-message-action.bar-btn-danger {
   background: #ed5f4b !important;
-  color: #fff3db !important;
+  color: #18161c !important;
 }
 
 #btn-chat-send {
@@ -407,7 +411,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
   padding: 1px 4px 0;
   border-width: 1px;
   box-shadow: none;
-  font-size: 7px;
+  font-size: 8px;
 }
 
 /* In the desktop/tablet editor a tall chat window used to run up under the editor toolbar and

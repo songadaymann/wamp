@@ -149,6 +149,8 @@
   text-transform: uppercase;
   box-shadow: 2px 2px 0 #18161c;
   white-space: nowrap;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #explore-modal .explore-room-builder {
@@ -201,6 +203,8 @@
   background: #79ccde;
   color: #000;
   font-family: 'Early GameBoy', monospace;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #explore-modal .explore-guest-room-badge {
@@ -212,11 +216,15 @@
   background: #fcea7c;
   color: #000;
   font-family: 'Early GameBoy', monospace;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #explore-modal .explore-room-difficulty,
 #explore-modal .explore-room-trophy {
   font-family: 'Early GameBoy', monospace;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #explore-modal .explore-room-difficulty[data-difficulty='easy'] {
@@ -236,7 +244,7 @@
 
 #explore-modal .explore-room-difficulty[data-difficulty='extreme'] {
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
 }
 
 #explore-modal .explore-room-difficulty[data-difficulty='unrated'] {
@@ -293,5 +301,5 @@
 
 #explore-modal .explore-room-admin-btn[data-featured-active='true'] {
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
 }

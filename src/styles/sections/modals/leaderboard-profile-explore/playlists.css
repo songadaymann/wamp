@@ -61,8 +61,10 @@
 #playlist-intro-modal .history-modal-title {
   margin-top: 6px;
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 19px;
+  font-size: 16px;
   line-height: 1.25;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #playlist-modal .history-modal-meta,
@@ -78,7 +80,7 @@
   border: 2px solid #18161c;
   border-radius: 0;
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.45;
@@ -112,7 +114,9 @@
   margin-top: 2px;
   background: #f2cc4d;
   font-family: 'Early GameBoy', monospace;
-  font-size: 10px;
+  font-size: 8px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #playlist-modal .history-modal-header > .bar-btn:disabled,
@@ -191,6 +195,8 @@
   font-family: 'Early GameBoy', monospace;
   font-size: 8px;
   line-height: 1;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #playlist-intro-modal .playlist-intro-level-copy {

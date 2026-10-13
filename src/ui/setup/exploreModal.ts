@@ -1,3 +1,4 @@
+import { friendlyError, renderFriendlyError } from '../friendlyError';
 import Phaser from 'phaser';
 import { loadExploreDiscovery } from './exploreDiscovery';
 import {
@@ -311,7 +312,7 @@ export class ExploreModalController {
       if (!isCurrent()) return;
       console.error('Failed to load room explorer', error);
       this.roomDiscovery = null;
-      this.setError(error instanceof Error ? error.message : 'Failed to load room explorer.');
+      this.setError(friendlyError('load room explorer', { error }), () => this.loadDiscoveryResults());
     } finally {
       if (isCurrent()) {
         this.loading = false;
@@ -334,7 +335,7 @@ export class ExploreModalController {
     } catch (error) {
       console.error('Failed to load builder explorer', error);
       this.builderDiscovery = null;
-      this.setError(error instanceof Error ? error.message : 'Failed to load builder explorer.');
+      this.setError(friendlyError('load builder explorer', { error }), () => this.loadBuilderDiscoveryResults());
     } finally {
       this.loading = false;
       this.builderLoaded = true;
@@ -353,7 +354,7 @@ export class ExploreModalController {
     } catch (error) {
       console.error('Failed to load Guest Rooms', error);
       this.guestRoomDrafts = [];
-      this.setError(error instanceof Error ? error.message : 'Failed to load Guest Rooms.');
+      this.setError(friendlyError('load Guest Rooms', { error }), () => this.loadGuestRoomResults());
     } finally {
       this.loading = false;
       this.guestRoomsLoaded = true;
@@ -857,7 +858,7 @@ export class ExploreModalController {
       this.setError(null);
       return this.myPlaylists;
     } catch (error) {
-      this.setError(error instanceof Error ? error.message : 'Failed to load your playlists.');
+      this.setError(friendlyError('load your playlists', { error }));
       return [];
     } finally {
       this.render();
@@ -886,7 +887,7 @@ export class ExploreModalController {
       this.setPlaylistFeedback(entry.roomId, `Added to "${playlist.title}".`);
       this.setError(null);
     } catch (error) {
-      this.setError(error instanceof Error ? error.message : 'Failed to add room to playlist.');
+      this.setError(friendlyError('add room to playlist', { error }));
     } finally {
       this.playlistPendingRoomId = null;
       this.render();
@@ -1156,7 +1157,7 @@ export class ExploreModalController {
     } catch (error) {
       console.error('Failed to update featured room state', error);
       this.setError(
-        error instanceof Error ? error.message : 'Failed to update featured room state.',
+        friendlyError('update featured room state', { error }),
       );
     } finally {
       this.featurePendingRoomId = null;
@@ -1270,18 +1271,7 @@ export class ExploreModalController {
     });
   }
 
-  private setError(message: string | null): void {
-    if (!this.elements.error) {
-      return;
-    }
-
-    if (!message) {
-      this.elements.error.textContent = '';
-      this.elements.error.classList.add('hidden');
-      return;
-    }
-
-    this.elements.error.textContent = message;
-    this.elements.error.classList.remove('hidden');
+  private setError(message: string | null, retry?: () => void | Promise<void>): void {
+    renderFriendlyError(this.elements.error, message, retry);
   }
 }

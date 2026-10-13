@@ -172,8 +172,10 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 #course-editor-shell .history-modal-title {
   color: var(--course-editor-shadow);
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 19px;
+  font-size: 16px;
   line-height: 1.2;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #course-editor-shell .history-modal-meta,
@@ -318,7 +320,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 
 #btn-course-workbench-publish {
   background: var(--course-editor-red) !important;
-  color: var(--course-editor-cream) !important;
+  color: #18161c !important;
 }
 
 body[data-device-class='phone'] .course-editor-panel {

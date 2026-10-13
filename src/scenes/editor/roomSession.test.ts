@@ -427,8 +427,53 @@ describe('edits made while a room save or publish is pending', () => {
     const wake = await leaving;
     expect(publish).not.toHaveBeenCalled();
     expect(showBusyError).not.toHaveBeenCalled();
-    expect(wake?.statusMessage).toBe(`Not published: ${reason} Only you can see this draft.`);
+    expect(wake?.statusMessage).toBe('Only you can see this draft preview. Publish to make it public.');
     expect(wake?.draftRoom).toBeTruthy();
+  });
+
+  it('leaving with a recent publishable edit saves a private draft without publishing (F056)', async () => {
+    const { session, response, saved, publish, saveDraft } = await openedEditor();
+    const leaving = session.buildReturnToWorldWakeData();
+    await vi.waitFor(() => expect(saveDraft).toHaveBeenCalledOnce());
+    response.resolve(saved);
+    const wake = await leaving;
+    expect(publish).not.toHaveBeenCalled();
+    expect(wake?.publishedRoom).toBeUndefined();
+    expect(wake?.draftRoom?.tileData.terrain[9][9]).toBe(17);
+    expect(wake?.statusMessage).toContain('Publish to make it public.');
+  });
+
+  it('retries a failed autosave as a draft on exit, without trying to publish (F056)', async () => {
+    const { session, response, saved, publish, saveDraft } = await openedEditor();
+    saveDraft.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    expect(await session.saveDraft()).toBeNull();
+    const leaving = session.buildReturnToWorldWakeData();
+    await vi.waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(2));
+    response.resolve(saved);
+    expect((await leaving)?.draftRoom).toBeTruthy();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('stays in the editor with the save explanation if the exit draft save fails (F056)', async () => {
+    const { session, publish, saveDraft, isDirty } = await openedEditor();
+    saveDraft.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    expect(await session.buildReturnToWorldWakeData()).toBeNull();
+    expect(publish).not.toHaveBeenCalled();
+    expect(isDirty()).toBe(true);
+    expect(session.statusText).toContain('Draft save failed');
+    expect(session.statusText).not.toContain('Publish failed');
+  });
+
+  it('keeps the editor open when new edits arrive during its exit save (F056)', async () => {
+    const { session, response, saved, publish, saveDraft, editLater, isDirty } = await openedEditor();
+    const leaving = session.buildReturnToWorldWakeData();
+    await vi.waitFor(() => expect(saveDraft).toHaveBeenCalledOnce());
+    editLater(); response.resolve(saved);
+    expect(await leaving).toBeNull();
+    expect(isDirty()).toBe(true);
+    expect(session.statusText).toContain('changed while saving');
+    expect(publish).not.toHaveBeenCalled();
+    expectLaterBackup(session);
   });
 
   it('preserves edits made during the auth refresh after publishing', async () => {

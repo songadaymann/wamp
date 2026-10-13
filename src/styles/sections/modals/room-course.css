@@ -68,8 +68,10 @@
   margin-top: 6px;
   color: #18161c;
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 19px;
+  font-size: 16px;
   line-height: 1.25;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #room-history-modal .history-modal-meta,
@@ -154,7 +156,7 @@ body:not([data-app-mode='world']) #btn-menu-room-rush {
   border: 2px solid #18161c;
   border-radius: 0;
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.45;
@@ -272,13 +274,17 @@ body:not([data-app-mode='world']) #btn-menu-room-rush {
   font-size: 8px;
   line-height: 1.35;
   text-transform: uppercase;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .room-rush-card-title {
   color: #18161c;
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.25;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .room-rush-card-meta {
@@ -454,9 +460,11 @@ body:not([data-app-mode='world']) #btn-menu-room-rush {
   color: #000;
   font-family: 'Early GameBoy', monospace;
   font-size: 8px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0px;
   line-height: 1.2;
   box-shadow: 2px 2px 0 #18161c;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #room-history-modal .history-version-meta {

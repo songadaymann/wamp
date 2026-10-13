@@ -22,10 +22,12 @@
 
 .editor-music-select-label {
   font-family: var(--editor-pixel-font);
-  font-size: 9px;
+  font-size: 8px;
   color: var(--accent-warm);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 1px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-music-select {
@@ -163,11 +165,13 @@
   justify-content: flex-start;
   min-height: 58px;
   font-family: var(--editor-pixel-font);
-  font-size: 9px;
+  font-size: 8px;
   color: var(--editor-music-instrument-accent, var(--text-dim));
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 1px;
   line-height: 1.4;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-music-arrangement-cells {
@@ -248,6 +252,8 @@
   color: inherit;
   text-transform: uppercase;
   letter-spacing: 0;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-music-arrangement-slot-glyph {
@@ -372,8 +378,10 @@
   font-size: 8px;
   line-height: 1.2;
   color: #fff3db;
-  letter-spacing: 0.08em;
+  letter-spacing: 1px;
   text-transform: uppercase;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-music-library-item-meta,
@@ -620,7 +628,9 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
   border-radius: 3px;
   font-family: var(--editor-pixel-font);
   font-size: 8px;
-  letter-spacing: 0.08em;
+  letter-spacing: 1px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-music-icon-button {
@@ -647,6 +657,8 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
   font-family: var(--editor-pixel-font);
   font-size: 8px;
   text-align: center;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-music-control-cluster.is-inactive {
@@ -677,7 +689,9 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
   border-radius: 3px;
   font-family: var(--editor-pixel-font);
   font-size: 8px;
-  letter-spacing: 0.08em;
+  letter-spacing: 1px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-music-shell .bar-btn.active,
@@ -691,9 +705,11 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
 .editor-music-shell .section-label,
 .editor-music-workbench-header .section-label {
   font-family: var(--editor-pixel-font);
-  font-size: 9px;
+  font-size: 8px;
   color: #fff3db;
-  letter-spacing: 0.12em;
+  letter-spacing: 1px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .editor-music-shell .editor-music-icon-button {

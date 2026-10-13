@@ -306,7 +306,7 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] .smart-visual-picker h3 {
-  font-size: 12px;
+  font-size: 16px;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #object-palette-section {

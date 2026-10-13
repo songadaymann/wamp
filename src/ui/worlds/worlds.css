@@ -44,6 +44,9 @@
 .worlds-card h3 {
   margin: 0;
   font-family: "Early GameBoy", monospace;
+  font-size: 16px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 .worlds-kicker,
@@ -65,7 +68,7 @@
   background: #fcea7c;
 }
 
-.worlds-status-danger { background: #ed5f4b; color: #fff; }
+.worlds-status-danger { background: #ed5f4b; color: #18161c; }
 .worlds-content { display: grid; gap: 16px; padding: 18px; }
 .worlds-list { display: grid; gap: 12px; }
 

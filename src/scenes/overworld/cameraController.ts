@@ -4,6 +4,7 @@ import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { RoomCoordinates, RoomSnapshotView } from '../../persistence/roomModel';
 import type { WorldWindow } from '../../persistence/worldModel';
 import type { OverworldMode } from '../sceneData';
+import { FixedRoomDimming } from './fixedRoomDimming';
 import { OverworldFollowCameraMotion } from './followCameraMotion';
 import {
   constrainInspectCamera,
@@ -40,6 +41,7 @@ interface OverworldCameraControllerOptions {
 
 export class OverworldCameraController {
   private fixedRoomKey: string | null = null;
+  private readonly fixedRoomDimming: FixedRoomDimming;
   private cameraTransition: Phaser.Tweens.Tween | null = null;
   private readonly followMotion = new OverworldFollowCameraMotion();
   private followedPlayer: Phaser.GameObjects.Rectangle | null = null;
@@ -68,6 +70,7 @@ export class OverworldCameraController {
       return false;
     }
 
+    this.fixedRoomDimming.attach();
     const room = this.host.getCurrentRoom()!;
     const camera = this.host.scene.cameras.main;
     const key = `${room.id}:${room.coordinates.x}:${room.coordinates.y}:${camera.width}:${camera.height}`;
@@ -108,7 +111,10 @@ export class OverworldCameraController {
   constructor(
     private readonly host: OverworldCameraControllerHost,
     private readonly options: OverworldCameraControllerOptions,
-  ) {}
+  ) {
+    this.fixedRoomDimming = new FixedRoomDimming(host.scene, host.getCurrentRoom, () => this.isRoomCameraFixed(),
+      (room) => host.getRoomOrigin(room.coordinates));
+  }
 
   updateCameraBounds(): void {
     const worldWindow = this.host.getWorldWindow();

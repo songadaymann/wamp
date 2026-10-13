@@ -395,7 +395,7 @@
   padding: 8px 10px 7px;
   border-bottom: 3px solid var(--editor-retro-shadow, #18161c);
   background: var(--editor-retro-red, #ed5f4b);
-  color: var(--editor-retro-cream, #fff3db);
+  color: #18161c;
   font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
   font-size: 12px;
   font-weight: 700;

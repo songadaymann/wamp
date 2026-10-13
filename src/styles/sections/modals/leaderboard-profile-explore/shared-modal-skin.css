@@ -79,8 +79,10 @@
   margin-top: 6px;
   color: #18161c;
   font-family: 'Super Mario Bros. NES', monospace;
-  font-size: 19px;
+  font-size: 16px;
   line-height: 1.25;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #leaderboard-modal .history-modal-meta,
@@ -114,7 +116,7 @@
   border: 2px solid #18161c;
   border-radius: 0;
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
   font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.45;
@@ -134,6 +136,8 @@
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn,
 #explore-modal .leaderboard-discover-filters .bar-btn,
 #profile-modal .profile-tabs .bar-btn,
+#profile-modal .leaderboard-empty .bar-btn,
+.history-modal-error .bar-btn,
 #profile-modal .profile-edit-actions .bar-btn,
 #editor-music-phrase-save-modal .music-phrase-save-actions .bar-btn,
 #sign-text-modal .bar-btn,
@@ -279,9 +283,11 @@
   color: #2c5071;
   font-family: 'Early GameBoy', monospace;
   font-size: 8px;
-  letter-spacing: 0.05em;
+  letter-spacing: 0px;
   line-height: 1.35;
   text-transform: uppercase;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #leaderboard-modal select,
@@ -372,6 +378,8 @@
   font-size: 8px;
   line-height: 1.35;
   text-transform: uppercase;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
 }
 
 #leaderboard-modal .leaderboard-difficulty-actions,
@@ -394,7 +402,7 @@
 
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='hard'] {
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
 }
 
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='extreme'] {
@@ -467,7 +475,7 @@
 #explore-modal .leaderboard-discover-filters .bar-btn.active[data-explore-difficulty='extreme'],
 #explore-modal .leaderboard-discover-filters .bar-btn[data-explore-difficulty='extreme'] {
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='featured'] {
@@ -487,7 +495,7 @@
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='unbeaten'] {
   background: #ed5f4b;
-  color: #fff3db;
+  color: #18161c;
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='unvisited'] {

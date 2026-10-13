@@ -1572,3 +1572,19 @@ The automatically published main Pages deployment is `255be3f2`. Its entry `main
 Release bookkeeping is on `codex/archive-completed-ghosts-delivery-2026-10-09` from the released merge, avoiding a new production build for documentation only. The primary checkout retains exactly 25 unrelated dirty entries; tracked-diff SHA-256 is still `38d3e60660bff00f7db98b65a7342c1945ef3a8b7820621b3e7b299c7d21839b`. The overnight preview remains clean at `997c5251`; the release clone remains clean on main matching origin/main. Course/Expanded Room ghost recording and any recording-history UI remain separate work.
 
 2026-10-13 restart-focus verification: full `npm run check` passes (457 files / 3,482 tests). Readiness-aware browser checks pass six entries and 18 restart/jump cycles in each of Chromium/WebKit, including keyboard activation, zero Space-driven restarts and zero page exceptions. Screenshots inspected. Candidate ready for authorized related follow-up delivery.
+
+
+## 2026-10-13 — Smaller approved checkup fixes
+
+Original prompt: "ok cool - let's do the smaller approved fixes then"
+
+Branch: `codex/wamp-approved-small-fixes-2026-10-13`, fresh origin/main worktree. Primary checkout and private handoff stay untouched. Plan:
+- [x] F174 red-button/error contrast; F117 pixel-grid type sizes; F120 local IBM Plex Mono.
+- [x] F056 exit saves a private draft and never publishes.
+- [x] F098 portrait fixed-room neighbor dimming, preserving full-room framing.
+- [x] F119 friendly error helper and profile Levels/Playlists actions.
+- [ ] Record F118/F061 won't-do; full quality gate, phone/browser checks, PR and delivery.
+
+Final quality gate passed: 459 files / 3,495 tests; startup JavaScript 638.2 KB brotli under 670 KB. Native desktop/phone checks and pixel-size audit pass. The final mobile pass caught and corrected the compact phone HUD height after snapping fonts; rechecking the portrait startup framing separately. The primary checkout is preserved.
+
+PR #187 opened. Full mobile recheck: all 12 pass, zero console/page errors and no fixture misses. Unchanged-main comparison passes too; one earlier startup framing sample failed, without weakening any assertion. Computed pixel-font audit: no off-grid sizes in current desktop/phone DOM. Main remains at 127/215 until the PR merges; this branch records 133/215. CI and live delivery pending.

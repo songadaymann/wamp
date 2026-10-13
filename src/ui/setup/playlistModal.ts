@@ -1,3 +1,4 @@
+import { friendlyError, renderFriendlyError } from '../friendlyError';
 import Phaser from 'phaser';
 import {
   getSharedRenderedRoomPreview,
@@ -147,7 +148,7 @@ export class PlaylistModalController {
       }
       this.currentPlaylist = null;
       this.loading = false;
-      this.setError(error instanceof Error ? error.message : 'Failed to load playlist.');
+      this.setError(friendlyError('load this playlist', { error }), () => this.open(slug));
       this.render();
     }
   }
@@ -326,7 +327,7 @@ export class PlaylistModalController {
       this.currentPlaylist = await this.playlistRepository.removePlaylistItem(playlist.id, itemId);
       this.setError(null);
     } catch (error) {
-      this.setError(error instanceof Error ? error.message : 'Failed to remove room.');
+      this.setError(friendlyError('remove room', { error }));
     } finally {
       this.removingItemId = null;
       this.render();
@@ -428,16 +429,7 @@ export class PlaylistModalController {
     return `${goalText} · v${item.roomVersion} · ${item.roomCoordinates.x},${item.roomCoordinates.y} · ${publishedText}`;
   }
 
-  private setError(message: string | null): void {
-    if (!this.elements.error) {
-      return;
-    }
-    if (!message) {
-      this.elements.error.textContent = '';
-      this.elements.error.classList.add('hidden');
-      return;
-    }
-    this.elements.error.textContent = message;
-    this.elements.error.classList.remove('hidden');
+  private setError(message: string | null, retry?: () => void | Promise<void>): void {
+    renderFriendlyError(this.elements.error, message, retry);
   }
 }

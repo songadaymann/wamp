@@ -1009,43 +1009,25 @@ export class EditorRoomSession {
       };
     }
 
-    // A room that can't be published yet (no exit, missing enemies) is kept as a draft, and
-    // the reason goes on the world screen rather than in a dialog that closes as you leave.
-    const publishValidationError = this.host.getPublishValidationError();
-    const publishedRecord = publishValidationError ? null : await this.publishRoom('Auto-published on exit.');
-    if (this.isStale(generation) || this.editConflictPending) {
-      return null;
-    }
-    if (publishedRecord) {
-      return {
-        centerCoordinates: { ...this.roomCoordinates },
-        roomCoordinates: { ...this.roomCoordinates },
-        statusMessage: 'Auto-published on exit.',
-        publishedRoom: publishedRecord.published ? cloneRoomSnapshot(publishedRecord.published) : null,
-        draftRoom: null,
-        clearDraftRoomId: this.roomId,
-        invalidateRoomId: this.roomId,
-        forceRefreshAround: true,
-        mode: 'browse',
-      };
-    }
-
+    // Back/Escape only save a private draft. Publishing is always an explicit action.
     const draftRecord = await this.saveDraft(true);
     if (this.isStale(generation)) {
       return null;
     }
     if (!draftRecord) {
-      this.setStatusText('Publish failed. Draft save failed.');
       return null;
     }
 
-    this.setStatusText(publishValidationError ? 'Draft saved. Not published yet.' : 'Publish failed, draft saved instead.');
+    if (this.host.getRoomDirty()) {
+      this.setStatusText('Your room changed while saving. Please try leaving again to save the latest edits.');
+      return null;
+    }
+
+    this.setStatusText('Draft saved. Not published yet.');
     return {
       centerCoordinates: { ...this.roomCoordinates },
       roomCoordinates: { ...this.roomCoordinates },
-      statusMessage: publishValidationError
-        ? `Not published: ${publishValidationError} Only you can see this draft.`
-        : this.DRAFT_WORLD_PREVIEW_WARNING,
+      statusMessage: this.DRAFT_WORLD_PREVIEW_WARNING,
       draftRoom: cloneRoomSnapshot(draftRecord.draft),
       clearDraftRoomId: null,
       invalidateRoomId: this.roomId,
