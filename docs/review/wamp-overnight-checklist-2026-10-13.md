@@ -40,3 +40,7 @@ At the deadline record the final checklist count, source/merge/release IDs, test
 - F173 complete and live; master 137/215. PR #193 source `08ebdc8b`, main `c949c360`, Pages `f185351c`, API Worker `09f01495` (required by independently merged Room video shared schema). Combined-main 3,545 tests, all hosted checks, guarded releases/health/renderer contract, matching entry assets and native live keyboard/touch/reload checks pass. No room edits.
 - F038: production auth/outbox hourly sweep verified. Both safety schedules are registered and the deployed script advertises `scheduled`, but no scheduled safety invocation has been observed in the tail and the owned expired record remains. Production test recording `130448b5-60ee-4d58-82a7-e3dd27066de6` was deliberately expired; verify session/sample/object removal after 10:17pm NY. Frame key and metadata are in `/tmp/wamp-f038-2026-10-13/production-expiry-storage.json`. F038 remains unticked until R2 cron expiry proof.
 - New mobile finding: recording notice overlays the phone Jump target. Next narrow fix under mobile checks; then continue F019 lazy rare popups and stable chunks.
+
+### Recording notice candidate
+
+Phone play now places the recording notice above the movement/action deck and sizes the opt-out target to 44px. The new CI scenario checks real hit targets and non-overlap; all 13 phone/tablet scenarios pass, with zero errors/missing fixtures. Full quality gates pass. F089 remains partial; publication/live verification is next. Receipt: `wamp-recording-notice-phone-2026-10-13.md`.
