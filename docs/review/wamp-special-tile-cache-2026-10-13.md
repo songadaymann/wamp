@@ -1,0 +1,20 @@
+# F006 — cached special tiles and less repeated work
+
+The player and moving objects now reuse a decoded special-tile index for each immutable room grid. A compact occupancy bitmap skips ordinary cells; layer order and the original tile kinds are retained. Cell matches, bounds/results and contact deduplication are reused rather than reconstructed for every body. Room origins are cached; new tile grids rebuild automatically. Leaving Play, resetting and unloading a room release borrowed scan references. Construction previews and draft/published updates already clone their snapshot grids; runtime crumbling/brick removals keep their authored-grid behavior.
+
+Conveyor riders reuse the contact direction from their existing environment scan. A behavior that moves/resizes/rotates the body invalidates that sample and uses a fresh contact query; cages and other bodies without an environment sample keep the existing fallback. Idle terrain NPCs query hazards without water/wind/surface-motion work, preserving gravity-plate precedence for damage. Empty tile decoding returns one frozen result; occupied decodes remain independent and all values/flip flags are unchanged.
+
+The scene's four special-tile callbacks and conveyor application move into small collaborators. Controller lookup stays deferred until callback use, preserving constructor order. Existing oversized-file limits ratchet down to 6,355 and 2,342 nonblank lines.
+
+## Candidate evidence
+
+- Controlled Chrome/Metal scan comparison, identical dense grid and 64 synthetic bodies: nine rounds of 1,600 calls, median 3.3 → 1.5 ms (about 55% less scan work); candidate cold pass over 64 bodies 1.0 ms. All 64 environment results match the previous implementation exactly. This isolates the scan function; it is not an overall FPS claim.
+- Bitmap word boundaries/last cell, flipped tiles, layer ordering, negative-coordinate room seams, all four gravity contacts, empty/padded cells, warmed-grid read avoidance and replacement-grid invalidation tests pass.
+- Hazard-only results match complete environment scans across mixed gravity/damage layouts while skipping water and wind lookups. Conveyor sample tests cover changed bounds/gravity, neutral results, separate bodies and shared-environment reuse. The live-object integration test proves a cached contact avoids the second lookup and changed bounds force the fallback. Deferred callback lookup and frozen empty decoding are covered.
+- Nine full-scene fixtures at seven render cadences: normal, ice, conveyor, water, wind, three rotated gravities and moving platforms. All 63 comparisons pass; player/NPC platform support is exercised and page errors are zero. The isolated synthetic room requires `VITE_ROOM_STORAGE_BACKEND=local`; the remote replay fixture cannot provide its world window. Gravity and moving-platform screenshots inspected.
+
+Proof: `/tmp/wamp-f006-2026-10-13/` (baseline/candidate JSON, cadence reports/screenshots); ignored probes under `output/f019-lazy-2026-10-13/`. Full quality (482 files / 3,571 tests), lint, TypeScript, DOM/bindings, build and asset checks pass; startup is 641.6 KB brotli (670 KB gate). The final collaborator-inclusive matrix passes all 63 comparisons. All thirteen final phone/tablet cases pass with zero browser errors and fixture misses; publication and live proof remain pending. F006 remains unchecked until delivery; master 138/215.
+
+### Phone test readiness refinement
+
+The first phone HUD run encountered a late room introduction while trying to Stop; zero browser errors were reported. Candidate retry and unchanged-main comparison both pass all thirteen cases. The test now waits for the player and collision-ready snapshot before dismissing introductions, then uses an actual phone tap for Stop. It retains every Browse/HUD assertion. The conveyor sample also keys its middle probe coordinates and snapshots the scalar direction so another environment query cannot overwrite it. Final full quality passes 3,571 tests; final phone run passes all thirteen cases with zero browser errors and fixture misses.

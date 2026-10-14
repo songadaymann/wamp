@@ -1,3 +1,4 @@
+import { SpecialTileBodySamples } from './liveObjects/specialTileSamples';
 import { createSceneObjectSprite } from '../../assets/sceneArt';
 import Phaser from 'phaser';
 import { isCoopPressurePlate, type CoopPlateActor } from '../../placedObjects/coopPressurePlates';
@@ -157,6 +158,7 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body,
     gravityDirection: PlayerGravityDirection,
   ) => -1 | 0 | 1;
+  isBodyOnDamageTile?: (body: Phaser.Physics.Arcade.Body) => boolean;
   getBodyRoomId: (body: Phaser.Physics.Arcade.Body) => string;
   getSpecialTileEnvironmentForBody: (
     body: Phaser.Physics.Arcade.Body,
@@ -259,6 +261,7 @@ const GROUND_ENEMY_EDGE_SAFE_SPECIAL_TILE_KINDS = new Set<SpecialTileKind>([
 ]);
 
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
+  private readonly specialTileBodySamples = new SpecialTileBodySamples();
   private readonly triggerController: LiveObjectTriggerController<TEdgeWall>;
   private readonly hazardController: LiveObjectHazardController<TEdgeWall>;
   private readonly jumpFeatherController: LiveObjectJumpFeatherController;
@@ -1017,18 +1020,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       return;
     }
 
-    const gravityDirection = this.getLiveObjectGravityDirection(liveObject);
-    const gravityVelocity = getBodyVelocityAlongVector(body, getGravityVector(gravityDirection));
-    if (gravityVelocity < -20) {
-      return;
-    }
-
-    const conveyorDirection = this.options.getConveyorDirectionForBody(body, gravityDirection);
-    if (conveyorDirection === 0) {
-      return;
-    }
-
-    body.setVelocityX(body.velocity.x + conveyorDirection * LIVE_OBJECT_CONVEYOR_SPEED);
+    this.specialTileBodySamples.applyConveyor(body, this.getLiveObjectGravityDirection(liveObject),
+      LIVE_OBJECT_CONVEYOR_SPEED, this.options);
   }
 
   private updateLiveObjectSpecialTileState(
@@ -1036,6 +1029,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body,
   ): void {
     if (!this.shouldLiveObjectUseSpecialTilePhysics(liveObject)) {
+      this.specialTileBodySamples.invalidate(body);
       liveObject.runtime.gravityDirection = 'down';
       liveObject.runtime.gravityRoomId = null;
       liveObject.runtime.inWater = false;
@@ -1045,7 +1039,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       liveObject.runtime.specialTileOnBounce = false;
       liveObject.runtime.specialTileOnDamage =
         liveObject.config.category === 'npc' && liveObject.layer === 'terrain'
-          ? this.options.getSpecialTileEnvironmentForBody(body, 'down').onDamage
+          ? this.options.isBodyOnDamageTile?.(body) ?? this.options.getSpecialTileEnvironmentForBody(body, 'down').onDamage
           : false;
       body.setAllowGravity(this.liveObjectUsesGravity(liveObject));
       return;
@@ -1061,6 +1055,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       body,
       liveObject.runtime.gravityDirection,
     );
+    this.specialTileBodySamples.record(body, environment);
     liveObject.runtime.gravityDirection = environment.gravityDirection;
     liveObject.runtime.gravityRoomId = currentRoomId;
     liveObject.runtime.inWater = environment.inWater;
