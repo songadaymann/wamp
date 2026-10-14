@@ -1,4 +1,5 @@
 import type * as Party from 'partykit/server';
+import { RoomPreviewBroadcast } from '../src/partykit/roomPreviewBroadcast';
 import type { PartyKitShardHeartbeat } from '../src/admin/model';
 import {
   ROOM_CHAT_MESSAGE_LIFETIME_MS,
@@ -149,6 +150,7 @@ export default class PresenceServer implements Party.Server {
   private lastHeartbeatPruneAt = 0;
   private readonly previewsByConnectionId = new Map<string, RoomPreviewPayload>();
   private readonly persistedPreviewsByRoomId = new Map<string, SharedRoomPreview>();
+  private readonly previewBroadcast = new RoomPreviewBroadcast();
   private readonly pendingPresenceUpsertsByConnectionId = new Map<string, WorldGhostPresence>();
   private presenceUpsertFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private populationBroadcastFlushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -224,13 +226,21 @@ export default class PresenceServer implements Party.Server {
     }
 
     if (identity.channel === 'presence') {
+      const previews = this.computeRoomPreviews();
+      // Reconcile other viewers before establishing this connection's full baseline.
+      for (const delta of this.previewBroadcast.reconcile(previews)) {
+        this.sendToConnections(delta,
+          (peer) => peer.state?.channel === 'presence' && peer.state.previewDeltas === true,
+          [connection.id]);
+      }
       connection.send(
         JSON.stringify({
           type: 'snapshot',
           peers: this.listPeers(connection),
           roomPopulations: this.computeRoomPopulations(),
           roomEditors: this.computeRoomEditors(),
-          roomPreviews: this.computeRoomPreviews(),
+          roomPreviews: connection.state?.previewDeltas
+            ? this.previewBroadcast.snapshot(previews) : previews,
         })
       );
     }
@@ -470,12 +480,20 @@ export default class PresenceServer implements Party.Server {
   }
 
   private flushPopulationBroadcast(): void {
-    this.sendPresenceMessage({
-      type: 'populations',
-      roomPopulations: this.computeRoomPopulations(),
-      roomEditors: this.computeRoomEditors(),
-      roomPreviews: this.computeRoomPreviews(),
-    });
+    const connections = Array.from(this.room.getConnections<ConnectionPresenceState>());
+    const capable = (connection: Party.Connection<ConnectionPresenceState>) =>
+      connection.state?.channel === 'presence' && connection.state.previewDeltas === true;
+    const previews = this.computeRoomPreviews();
+    const deltas = this.previewBroadcast.reconcile(previews);
+    const populations = { type: 'populations', roomPopulations: this.computeRoomPopulations(),
+      roomEditors: this.computeRoomEditors() };
+    if (connections.some(capable)) {
+      for (const delta of deltas) this.sendToConnections(delta, capable);
+      this.sendToConnections(populations, capable);
+    }
+    const legacy = (connection: Party.Connection<ConnectionPresenceState>) =>
+      connection.state?.channel === 'presence' && !connection.state.previewDeltas;
+    if (connections.some(legacy)) this.sendToConnections({ ...populations, roomPreviews: previews }, legacy);
   }
 
   private toGhostPresence(
@@ -832,6 +850,7 @@ export default class PresenceServer implements Party.Server {
 
     return {
       channel,
+      previewDeltas: url.searchParams.get('previewDeltas') === '1',
       canSendRoomChat: canSendRoomChat(claims),
       canReceiveRoomChat: canReceiveRoomChat(claims),
       school: claims.roomChat === 'school',

@@ -36,3 +36,5 @@ font-hud-preview.html
 scripts/probe_swordsman_chase_helpers.mjs
 public/assets/fonts/AzeretMono-*.ttf
 public/assets/fonts/SpaceMono-*.ttf
+private-assets/
+!.env.example

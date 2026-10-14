@@ -27,7 +27,7 @@ npm run dev:api
 npm run dev:presence
 ```
 
-Local environment files are intentionally not tracked. Use `env.local` for frontend Vite overrides and `.dev.vars` for Worker values, following [docs/development/environment.md](docs/development/environment.md).
+Local environment files are intentionally not tracked. Use `env.local` for frontend Vite overrides and `.dev.vars` for Worker values, following [docs/development/environment.md](docs/development/environment.md). [.env.example](.env.example) lists variable names only; set the values for your environment locally.
 
 ## Repository Map
 
@@ -53,5 +53,11 @@ Start with [docs/README.md](docs/README.md) for the organized documentation inde
 ## Public Repo Hygiene
 
 - Do not commit `.env`, `env.local`, `.dev.vars`, Wrangler secret dumps, generated builds, or smoke-test output.
-- Keep secret-shaped setup examples in docs, not root-level env example files.
+- Keep environment examples names-only; never include credentials or real secret values.
 - Treat `public/agent-room-authoring.md`, `public/agent-room-design.md`, `public/skill.md`, and `public/openapi.json` as public API surfaces.
+
+## License
+
+Project code is [MIT licensed](LICENSE), copyright Jonathan Mann. Jonathan’s own media is CC BY 4.0; third-party media and dependencies retain their own terms. See [ASSETS.md](ASSETS.md) for the asset inventory and provenance status. No license to third-party or NFT artwork is granted by the project’s code license.
+
+Portions © 2025 Reown, Inc. All Rights Reserved. AppKit dependencies retain the [Reown AppKit license](licenses/reown-appkit.md).

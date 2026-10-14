@@ -53,6 +53,8 @@ export interface RoomPreviewPayload {
 
 export interface ConnectionPresenceState {
   channel: RoomChatTransportChannel;
+  /** Negotiated transport capability; old tabs keep full preview maps. */
+  previewDeltas?: boolean;
   /** From the verified identity token: who may send and receive in-room speech bubbles. */
   canSendRoomChat: boolean;
   canReceiveRoomChat: boolean;
@@ -81,6 +83,15 @@ export interface SharedRoomPreview extends Omit<RoomPreviewPayload, 'constructio
   displayName: string;
   shardId: string;
 }
+
+export interface VersionedSharedRoomPreview extends SharedRoomPreview {
+  revision: string;
+}
+
+export type RoomPreviewDeltaMessage =
+  | { type: 'preview:upsert'; preview: VersionedSharedRoomPreview }
+  | { type: 'preview:remove'; roomId: string }
+  | { type: 'preview:refresh'; roomId: string; revision: string; timestamp: number };
 
 export type IncomingMessage =
   | {
