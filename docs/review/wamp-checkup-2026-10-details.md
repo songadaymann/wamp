@@ -1626,6 +1626,8 @@ The profile modal keeps the full profile because it shows the room and playlist 
 
 ### F035: Builders' in-progress room previews are sent in full to every player in the area on every room change
 
+**Completed 2026-10-14:** PR #198 / main `cf78835a`, Pages `b38e81b5` and matching PartyKit server. Negotiated changed-room deltas, counts-only populations and small lease refreshes retain full playable join/reconnect snapshots, legacy tabs and existing authorization/persistence. Client revisions avoid unchanged snapshot clones. Full/mobile checks, three native-browser construction playback cases, live asset hashes and fresh/existing production transport checks pass. The fixture population messages are about 99% smaller; no overall FPS claim. Earlier metrics throttling shipped in PR #176. See [the delivery receipt](wamp-preview-deltas-2026-10-14.md).
+
 - **Area:** Backend performance, cost & reliability
 - **Type:** improvement · **impact:** medium · **effort:** medium
 - **Flagged before:** docs/2026-06-10-repo-improvement-plan.md §2.2 suggested coalescing and 'delta messages'. Coalescing landed; deltas did not, and previews now ride on the same full-map message.

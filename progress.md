@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-14 — F035 complete and live
+
+PR #198 / main `cf78835a`, Pages `b38e81b5`, Worker `e58074b8`, matching PartyKit presence server deployed. Full source/merge hosted checks, clean-main 3,588-test gates, 13 mobile cases, three native construction-playback cases and 22 exact live custom/immutable asset hashes pass. Final production health and fresh/existing room transport checks pass after initial asset/room rollout delays. Unchanged population updates cause zero wire-ingress snapshot clones; fixture population bytes fall about 99% with no overall FPS claim. Master 141/215. Primary dirty work, animation review server/choice and pending decisions preserved. Receipt: `docs/review/wamp-preview-deltas-2026-10-14.md`.
+
 ## 2026-10-14 — F035 preview deltas candidate
 
 Negotiated changed-room deltas and legacy full-map compatibility; full join/reconnect baselines; small unchanged-preview lease refreshes; stable client-owned snapshots across counts and repeated revisions. Focused server/client/restart/expiry/clear/coalescing/byte tests and TypeScript pass. Next: real local WebSocket/browser construction-room playback, full quality/mobile, hosted checks, clean-main client/PartyKit delivery and live proof. Receipt: `docs/review/wamp-preview-deltas-2026-10-14.md`. Master 140/215; unrelated work preserved.
