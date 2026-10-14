@@ -1,3 +1,7 @@
+## 2026-10-14 — F095 shared realtime started
+
+Next authorized checklist item after F035. Plan: shared negotiated presence/chat transport with legacy rollout fallback, startup-gated identity refresh and an independent realtime radius, then real connection/reconnect/permissions measurements and release if all checks pass. No changes to the primary dirty auth lane. Master remains 141/215. Receipt: `docs/review/wamp-shared-realtime-2026-10-14.md`.
+
 ## 2026-10-14 — F035 complete and live
 
 PR #198 / main `cf78835a`, Pages `b38e81b5`, Worker `e58074b8`, matching PartyKit presence server deployed. Full source/merge hosted checks, clean-main 3,588-test gates, 13 mobile cases, three native construction-playback cases and 22 exact live custom/immutable asset hashes pass. Final production health and fresh/existing room transport checks pass after initial asset/room rollout delays. Unchanged population updates cause zero wire-ingress snapshot clones; fixture population bytes fall about 99% with no overall FPS claim. Master 141/215. Primary dirty work, animation review server/choice and pending decisions preserved. Receipt: `docs/review/wamp-preview-deltas-2026-10-14.md`.

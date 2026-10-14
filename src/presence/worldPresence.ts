@@ -1,4 +1,6 @@
 import PartySocket from 'partysocket';
+import { SharedRoomChatTransport } from './sharedRoomChatTransport';
+import type { RoomChatBroadcastMessage } from '../chat/roomChatModel';
 import { ownRoomPreview } from './roomPreviewCache';
 import type { RoomPreviewDeltaMessage } from '../partykit/presenceProtocol';
 import { getAuthDebugState, getResolvedPartykitConfig } from '../auth/client';
@@ -101,6 +103,7 @@ interface PartySocketRecord {
 }
 
 interface PresenceSnapshotMessage {
+  roomChat?: boolean;
   type: 'snapshot';
   peers: WorldGhostPresence[];
   roomPopulations: Record<string, number>;
@@ -136,6 +139,7 @@ type PresenceMessage =
   | PresenceUpsertsMessage
   | PresenceRemoveMessage
   | PresencePopulationsMessage
+  | RoomChatBroadcastMessage
   | RoomPreviewDeltaMessage
   | PvpPresenceServerMessage;
 
@@ -200,6 +204,17 @@ export class WorldPresenceClient {
   private snapshotEmitTimer: ReturnType<typeof setTimeout> | null = null;
   private lastSnapshotEmittedAt = 0;
 
+  readonly roomChatTransport = new SharedRoomChatTransport({
+    getSubscribedShards: () => Array.from(this.desiredShardIds),
+    isConnected: (shardId) => this.connectedShards.has(shardId),
+    send: (shardId, message) => {
+      const socket = this.socketsByShardId.get(shardId)?.socket;
+      if (!socket || socket.readyState !== PartySocket.OPEN) return false;
+      socket.send(message);
+      return true;
+    },
+  });
+
   constructor(private readonly options: WorldPresenceClientOptions) {
     this.identityTokenProvider = new PartyKitIdentityTokenProvider(() => this.options.identity);
     this.removeHiddenTabPause = installHiddenTabPause(() => this.pauseForHiddenTab(), () => this.resumeAfterHiddenTab());
@@ -229,6 +244,14 @@ export class WorldPresenceClient {
     const desired = new Set(chunks.map((chunk) => chunkIdFromCoordinates(chunk)));
     this.desiredShardIds = desired;
 
+    for (const shardId of Array.from(this.socketsByShardId.keys())) {
+      if (desired.has(shardId)) {
+        continue;
+      }
+
+      this.closeShardSocket(shardId);
+    }
+
     for (const chunk of chunks) {
       const shardId = chunkIdFromCoordinates(chunk);
       if (this.socketsByShardId.has(shardId)) {
@@ -236,14 +259,6 @@ export class WorldPresenceClient {
       }
 
       this.openShardSocket(shardId);
-    }
-
-    for (const shardId of Array.from(this.socketsByShardId.keys())) {
-      if (desired.has(shardId)) {
-        continue;
-      }
-
-      this.closeShardSocket(shardId);
     }
 
     this.emitSnapshot();
@@ -479,6 +494,7 @@ export class WorldPresenceClient {
       }
 
       this.connectedShards.delete(shardId);
+      this.roomChatTransport.forget(shardId);
       this.removeGhostsForShard(shardId);
       this.roomPopulationsByShardId.delete(shardId);
       this.roomEditorsByShardId.delete(shardId);
@@ -507,10 +523,11 @@ export class WorldPresenceClient {
     });
   }
 
-  private async getSocketQuery(): Promise<{ identityToken: string; previewDeltas: string }> {
+  private async getSocketQuery(): Promise<{ identityToken: string; previewDeltas: string; roomChat: string }> {
     return {
       identityToken: await this.identityTokenProvider.getToken(),
       previewDeltas: '1',
+      roomChat: '1',
     };
   }
 
@@ -534,6 +551,7 @@ export class WorldPresenceClient {
 
     record.socket.close(1000, 'shard-unsubscribe');
     this.connectedShards.delete(shardId);
+    this.roomChatTransport.forget(shardId);
     this.socketsByShardId.delete(shardId);
     this.removeGhostsForShard(shardId);
     this.roomPreviewsByShardId.delete(shardId);
@@ -580,6 +598,9 @@ export class WorldPresenceClient {
 
     let urgentSnapshot = false;
     switch (message.type) {
+      case 'room-chat:message':
+        this.roomChatTransport?.receive(rawMessage);
+        return;
       case 'pvp:invite:offer':
         this.options.onPvpInvite?.(message.invite);
         return;
@@ -590,6 +611,7 @@ export class WorldPresenceClient {
         this.options.onPvpInviteDeclined?.(message);
         return;
       case 'snapshot':
+        this.roomChatTransport?.negotiate(shardId, message.roomChat === true);
         this.removeGhostsForShard(shardId);
         for (const peer of message.peers) {
           this.storeRemoteGhost(shardId, peer);
@@ -714,6 +736,7 @@ export class WorldPresenceClient {
   }
 
   private emitSnapshot(): void {
+    this.roomChatTransport?.notify();
     this.clearQueuedSnapshotEmit();
     this.lastSnapshotEmittedAt = getNowMs();
     const connectedShards = Array.from(this.connectedShards).sort();

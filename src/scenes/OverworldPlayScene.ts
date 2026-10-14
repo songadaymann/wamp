@@ -4,6 +4,7 @@ import { OverworldLostSongController, type LostSongPlayContext } from './overwor
 import { getLostSongService } from '../lostSongs/service';
 import { supportsGhostRace } from '../runs/ghostRace';
 import Phaser from 'phaser';
+import { realtimeChunkBounds } from './overworld/realtimeChunkBounds';
 import { getPlayableMaximumHearts } from '../player/hearts';
 import { PLAYER_BASE_HEIGHT, PLAYER_STANDING_HEIGHT, PLAYER_BODY_WIDTH } from '../player/geometry';
 import { createDailyRepository } from '../daily/repository';
@@ -1204,6 +1205,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
               y: this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
             }
           : null,
+      getPresenceClient: () => this.presenceController.getClient(),
       getRenderedGhostsByConnectionId: () => this.presenceController.getRenderedGhostsByConnectionId(),
       showTransientStatus: (message) => this.showTransientStatus(message),
     });
@@ -3173,14 +3175,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     const identityChanged = this.presenceController.refreshIdentity();
     const roomChatIdentityChanged = this.roomChatController.refreshIdentity();
     this.roomCommentsController.refreshAuthState();
-    if (this.loadedChunkBounds) {
-      if (identityChanged) {
-        this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
-      }
-      if (roomChatIdentityChanged) {
-        this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
-      }
-    }
+    if (identityChanged || roomChatIdentityChanged) this.syncPresenceSubscriptions();
     if (identityChanged || roomChatIdentityChanged) {
       this.syncLocalPresence(true);
     }
@@ -3191,14 +3186,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     const identityChanged = this.presenceController.refreshIdentity();
     const roomChatIdentityChanged = this.roomChatController.refreshIdentity();
     this.roomCommentsController.refreshAuthState();
-    if (this.loadedChunkBounds) {
-      if (identityChanged) {
-        this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
-      }
-      if (roomChatIdentityChanged) {
-        this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
-      }
-    }
+    if (identityChanged || roomChatIdentityChanged) this.syncPresenceSubscriptions();
     void this.ensureCurrentAvatarPackLoaded();
   };
 
@@ -3392,8 +3380,9 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private applyPresenceSubscriptions(): void {
-    this.presenceController.setSubscribedChunkBounds(this.loadedChunkBounds);
-    this.roomChatController.setSubscribedChunkBounds(this.loadedChunkBounds);
+    const bounds = realtimeChunkBounds(this.loadedChunkBounds, this.mode === 'browse' ? undefined : this.currentRoomCoordinates);
+    this.presenceController.setSubscribedChunkBounds(bounds);
+    this.roomChatController.setSubscribedChunkBounds(bounds);
   }
 
   private syncLocalPresence(force = false): void {

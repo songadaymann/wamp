@@ -1,4 +1,5 @@
 import PartySocket from 'partysocket';
+import type { SharedRoomChatTransport } from './sharedRoomChatTransport';
 import { getAuthDebugState } from '../auth/client';
 import { PartyKitIdentityTokenProvider } from './identityTokenClient';
 import {
@@ -54,6 +55,7 @@ interface WorldRoomChatClientOptions {
   protocol: 'ws' | 'wss';
   party: string;
   identity: WorldPresenceIdentity;
+  sharedTransport?: SharedRoomChatTransport;
   onSnapshot: (snapshot: WorldRoomChatSnapshot) => void;
 }
 
@@ -84,10 +86,18 @@ export class WorldRoomChatClient {
   private lastPublishedPayloadJson: string | null = null;
   private lastPublishedAt = 0;
   private lastSentAt = 0;
+  private readonly removeSharedTransport: (() => void) | undefined;
 
   constructor(private readonly options: WorldRoomChatClientOptions) {
     this.identityTokenProvider = new PartyKitIdentityTokenProvider(() => this.options.identity);
     this.removeHiddenTabPause = installHiddenTabPause(() => this.pauseForHiddenTab(), () => this.resumeAfterHiddenTab());
+    this.removeSharedTransport = options.sharedTransport?.subscribe({
+      onMessage: (message) => this.handleSocketMessage(message),
+      onChanged: () => {
+        this.syncSharedTransport();
+        this.emitSnapshot();
+      },
+    });
     this.emitSnapshot();
   }
 
@@ -161,6 +171,13 @@ export class WorldRoomChatClient {
       this.emitSnapshot();
     }
 
+    if (this.options.sharedTransport?.status(nextShardId) === 'shared') {
+      const changedShard = this.publishedShardId !== nextShardId;
+      this.publishedShardId = nextShardId;
+      if (changedShard) this.emitSnapshot();
+      return;
+    }
+
     const shardSocket = this.socketsByShardId.get(nextShardId)?.socket ?? null;
     if (!shardSocket || shardSocket.readyState !== PartySocket.OPEN) {
       this.publishedShardId = nextShardId;
@@ -215,6 +232,13 @@ export class WorldRoomChatClient {
     }
 
     const shardId = this.resolveLocalShardId();
+    if (shardId && this.options.sharedTransport?.status(shardId) === 'shared') {
+      if (!this.options.sharedTransport.send(shardId, JSON.stringify({ type: 'room-chat:say', text: normalized }))) {
+        return { ok: false, reason: 'connecting' };
+      }
+      this.lastSentAt = now;
+      return { ok: true };
+    }
     const socket = shardId ? this.socketsByShardId.get(shardId)?.socket ?? null : null;
     if (!socket || socket.readyState !== PartySocket.OPEN) {
       return { ok: false, reason: 'connecting' };
@@ -238,6 +262,7 @@ export class WorldRoomChatClient {
   }
 
   destroy(): void {
+    this.removeSharedTransport?.();
     this.removeHiddenTabPause();
     this.desiredShardIds.clear();
     this.identityTokenProvider.clear();
@@ -265,6 +290,8 @@ export class WorldRoomChatClient {
     if (this.hiddenTabPaused || !this.desiredShardIds.has(shardId) || this.socketsByShardId.has(shardId)) {
       return;
     }
+
+    if (this.options.sharedTransport && this.options.sharedTransport.status(shardId) !== 'legacy') return;
 
     const socket = new PartySocket({
       host: this.options.host,
@@ -312,6 +339,13 @@ export class WorldRoomChatClient {
       shardId,
       socket,
     });
+  }
+
+  private syncSharedTransport(): void {
+    for (const shardId of this.desiredShardIds) {
+      if (this.options.sharedTransport?.status(shardId) === 'shared') this.closeShardSocket(shardId);
+      else this.openShardSocket(shardId);
+    }
   }
 
   private async getSocketQuery(): Promise<{ channel: string; identityToken: string }> {
@@ -452,7 +486,10 @@ export class WorldRoomChatClient {
   private emitSnapshot(now = Date.now()): void {
     this.pruneExpiredMessages(now);
 
-    const connectedShards = Array.from(this.connectedShards).sort();
+    const connectedShards = Array.from(new Set([
+      ...this.connectedShards,
+      ...Array.from(this.desiredShardIds).filter((id) => this.options.sharedTransport?.status(id) === 'shared'),
+    ])).sort();
     const subscribedShards = Array.from(this.desiredShardIds).sort();
     const messages = Array.from(this.messagesByUserId.values()).sort(
       (left, right) => left.createdAt - right.createdAt || left.userId.localeCompare(right.userId)

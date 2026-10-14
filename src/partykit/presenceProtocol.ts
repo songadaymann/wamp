@@ -55,6 +55,8 @@ export interface ConnectionPresenceState {
   channel: RoomChatTransportChannel;
   /** Negotiated transport capability; old tabs keep full preview maps. */
   previewDeltas?: boolean;
+  /** Transport capability only; verified token claims still govern chat permissions. */
+  roomChat?: boolean;
   /** From the verified identity token: who may send and receive in-room speech bubbles. */
   canSendRoomChat: boolean;
   canReceiveRoomChat: boolean;
