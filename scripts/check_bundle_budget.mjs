@@ -27,3 +27,19 @@ if (totalKb > BUDGET_KB) {
   console.error(`Boot JavaScript is over budget by ${(totalKb - BUDGET_KB).toFixed(1)} KB. Lazy-load the new code, or raise WAMP_BOOT_JS_BUDGET_KB on purpose.`);
   process.exit(1);
 }
+
+// Preserve the F019 boundary: changing a menu must not put its controller back
+// into boot, and the stable catalogs must not depend on the changing runtime.
+const graph = JSON.parse(readFileSync(resolve('output/build/chunk-graph.json'), 'utf8'));
+const deferredControllers = ['profileModal', 'leaderboardModal', 'exploreModal', 'historyModal',
+  'aboutModal', 'controlsModal', 'guestbookModal', 'playlistModal', 'signTextModal', 'wampOGramModal', 'runRatingModal'];
+const bootModules = new Set(graph.filter(chunk => report.files.includes(chunk.file)).flatMap(chunk => chunk.modules));
+for (const name of deferredControllers) {
+  if (bootModules.has(`src/ui/setup/${name}.ts`)) throw new Error(`${name} has returned to the startup bundle.`);
+}
+const roomData = graph.find(chunk => chunk.file.includes('/room-data-'));
+if (!roomData || roomData.imports.length || roomData.dynamicImports.length
+  || roomData.modules.some(module => /^src\/(ui|scenes)\//.test(module))) {
+  throw new Error('Stable room data must stay independent of UI and scene runtime chunks.');
+}
+console.log(`Deferred menu boundary: ${deferredControllers.length} controllers; stable room data has no runtime chunk imports.`);

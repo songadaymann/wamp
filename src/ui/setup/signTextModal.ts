@@ -111,7 +111,7 @@ export class SignTextModalController {
     );
   }
 
-  private open(detail: SignTextEditRequestDetail): void {
+  open(detail: SignTextEditRequestDetail): void {
     if (!this.elements.modal) {
       return;
     }

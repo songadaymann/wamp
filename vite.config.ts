@@ -91,6 +91,10 @@ export default defineConfig(({ mode }) => {
           assetFileNames: `${BUILD_ASSET_NAMESPACE}/[name]-[hash][extname]`,
           manualChunks(id) {
             if (id.includes('/node_modules/phaser/')) return 'phaser-vendor';
+            // Room rules and catalogs survive ordinary menu/gameplay releases.
+            if (id.includes('/src/config/') || id.endsWith('/src/config.ts')
+              || id.endsWith('/src/persistence/roomModel.ts')
+              || id.endsWith('/src/autotiling/model.ts') || id.endsWith('/src/autotiling/registry.ts')) return 'room-data';
             return undefined;
           },
         },
@@ -177,6 +181,11 @@ function bootBundleReportPlugin(): PluginOption {
       visit(entry.fileName);
       entry.dynamicImports.forEach(visit);
       mkdirSync(resolve(process.cwd(), 'output/build'), { recursive: true });
+      const graph = Object.values(bundle).filter(output => output.type === 'chunk').map(chunk => ({
+        file: chunk.fileName, imports: chunk.imports, dynamicImports: chunk.dynamicImports,
+        modules: Object.keys(chunk.modules).map(id => id.replace(`${process.cwd()}/`, '')),
+      }));
+      writeFileSync(resolve(process.cwd(), 'output/build/chunk-graph.json'), `${JSON.stringify(graph, null, 2)}\n`);
       writeFileSync(resolve(process.cwd(), 'output/build/boot-bundle.json'),
         `${JSON.stringify({ entry: entry.fileName, files: [...files].sort() }, null, 2)}\n`);
     },
