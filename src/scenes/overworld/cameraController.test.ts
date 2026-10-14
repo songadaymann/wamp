@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { updateComfortSettings } from '../../settings/comfortSettings';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import { createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
 import type { OverworldMode } from '../sceneData';
@@ -62,7 +63,36 @@ function expectCentered(camera: ReturnType<typeof harness>['camera'], room: Room
   expect(camera.height / camera.zoom).toBeGreaterThanOrEqual(ROOM_PX_HEIGHT - 0.001);
 }
 
+beforeEach(() => updateComfortSettings({reduceMotion:'system',cameraStyle:'follow'}));
+
 describe('room-centered play camera', () => {
+  it('applies the remembered room preference to ordinary rooms and restores follow without changing authored framing', () => {
+    const h = harness();
+    const ordinary = createDefaultRoomSnapshot('-2,3', {x:-2,y:3});
+    h.setCameraMode('inspect');
+    updateComfortSettings({cameraStyle:'room'});
+    expect(h.controller.syncRoomCamera(false)).toBe(true);
+    expectCentered(h.camera, ordinary);
+    h.player.x += 100;
+    h.controller.syncRoomCamera(false);
+    expectCentered(h.camera, ordinary);
+    updateComfortSettings({cameraStyle:'follow'});
+    expect(h.controller.syncRoomCamera(false)).toBe(false);
+    expect(h.camera.startFollow).toHaveBeenCalled();
+    h.setRoom(fixedRoom());
+    expect(h.controller.syncRoomCamera(false)).toBe(true);
+    expectCentered(h.camera, fixedRoom());
+    h.setRoom(null);
+    updateComfortSettings({cameraStyle:'room'});
+    expect(h.controller.syncRoomCamera(false)).toBe(false);
+  });
+  it('snaps room framing immediately when reduced motion is enabled', () => {
+    const h = harness();
+    updateComfortSettings({cameraStyle:'room',reduceMotion:'on'});
+    h.controller.syncRoomCamera();
+    expect(h.add).not.toHaveBeenCalled();
+    expectCentered(h.camera, createDefaultRoomSnapshot('-2,3', {x:-2,y:3}));
+  });
   it('eases once per physics tick and combines two catch-up ticks without easing duplicate renders', () => {
     const h = harness();
     h.controller.updateFollowPacing(0); expect(h.camera.setLerp).toHaveBeenLastCalledWith(0, 0);

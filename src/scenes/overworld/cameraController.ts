@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { getPlayCameraStyle } from '../../settings/comfortSettings';
+import { prefersReducedMotion } from '../../ui/reducedMotion';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { RoomCoordinates, RoomSnapshotView } from '../../persistence/roomModel';
@@ -40,6 +42,7 @@ interface OverworldCameraControllerOptions {
 }
 
 export class OverworldCameraController {
+  private preferredCameraStyle = getPlayCameraStyle();
   private fixedRoomKey: string | null = null;
   private readonly fixedRoomDimming: FixedRoomDimming;
   private cameraTransition: Phaser.Tweens.Tween | null = null;
@@ -55,13 +58,18 @@ export class OverworldCameraController {
   };
 
   isRoomCameraFixed(): boolean {
-    return this.host.getMode() === 'play'
-      && this.host.getPlayer() !== null
-      && this.host.getCurrentRoom()?.cameraMode === 'room';
+    const room = this.host.getCurrentRoom();
+    return this.host.getMode() === 'play' && this.host.getPlayer() !== null && room !== null
+      && (room.cameraMode === 'room' || getPlayCameraStyle() === 'room');
   }
 
   /** Called after room transitions; reads the shared snapshot without cloning it. */
   syncRoomCamera(animate: boolean = true): boolean {
+    const preference = getPlayCameraStyle();
+    if (preference !== this.preferredCameraStyle) {
+      this.preferredCameraStyle = preference;
+      if (this.host.getMode() === 'play') this.host.setCameraMode('follow');
+    }
     if (!this.isRoomCameraFixed()) {
       if (this.fixedRoomKey !== null) {
         this.reset();
@@ -85,7 +93,7 @@ export class OverworldCameraController {
     const zoom = Math.min(camera.width / ROOM_PX_WIDTH, camera.height / ROOM_PX_HEIGHT);
     const scrollX = origin.x + ROOM_PX_WIDTH / 2 - camera.width * camera.originX;
     const scrollY = origin.y + ROOM_PX_HEIGHT / 2 - camera.height * camera.originY;
-    if (animate) {
+    if (animate && !prefersReducedMotion()) {
       this.cameraTransition = this.host.scene.tweens.add({
         targets: camera,
         scrollX,

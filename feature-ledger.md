@@ -1,3 +1,11 @@
+## 2026-10-13 overnight — F173 Comfort candidate
+
+Device-local System/On/Off motion preference and Follow/Whole room camera choice are implemented on `codex/wamp-comfort-settings-2026-10-13`. Full 3,538-test gates, native desktop/Chromium phone/WebKit phone controls/effects/reload checks, inspected screenshots, installed-client gameplay and authored-room camera smoke pass. Safari menu height and Camera label contrast corrected. Receipt: `docs/review/wamp-comfort-settings-2026-10-13.md`; publication/live proof next. F038's first production sweep removed all expired auth rows and 5,000 old outbox rows; safety replay expiry remains under investigation.
+
+## 2026-10-13 overnight — F038 API delivery
+
+PR #192 / main `1352cb94`, production Worker `5416ed6f`, migration 0065. New replay JPEGs are private R2 objects; protected admin reads preserve legacy recordings. Hourly expiry pruning is bounded and indexed. Full 3,533-test gates, source/merge hosted checks, guarded release/health, real R2 storage, desktop/phone viewer playback and production opt-out deletion pass. The first hourly cleanup is still to be observed at 9:17pm New York; F038 stays unticked until that proof. See `docs/review/wamp-replay-storage-cleanup-2026-10-13.md`. Comfort settings (F173) are next.
+
 ## 2026-10-13 — Overnight checklist
 
 Canonical branch: `codex/wamp-overnight-checklist-2026-10-13`, based on main `f009b55f`. Active until October 14 5am New York time. Selected F094 comparison: 240×135, 32 colors, ordered dithering, full animation, 917,468-byte WebP; exact candidate retained in `docs/review/assets/`. Implementation starts with approved F038 and F173. Receipt: `docs/review/wamp-overnight-checklist-2026-10-13.md`. Pending/security/product decisions remain with Jonathan.

@@ -1,3 +1,4 @@
+import { getComfortSettings, subscribeComfortSettings, updateComfortSettings, type ComfortSettings } from '../../settings/comfortSettings';
 import { getFrameRateMode, setFrameRateMode, subscribeFrameRateMode, type FrameRateMode } from '../../performance/frameRateMode';
 import {
   getGameSettings,
@@ -25,10 +26,13 @@ type SettingsModalElements = {
   performanceModeInputs: HTMLInputElement[];
   frameRateInputs: HTMLInputElement[];
   builderModeInputs: HTMLInputElement[];
+  motionSelect: HTMLSelectElement | null;
+  cameraStyleInputs: HTMLInputElement[];
 };
 
 export class SettingsModalController {
   private readonly elements: SettingsModalElements;
+  private unsubscribeComfort: (() => void) | null = null;
   private unsubscribeSettings: (() => void) | null = null;
   private unsubscribeFrameRate: (() => void) | null = null;
   private unsubscribePerformanceMode: (() => void) | null = null;
@@ -104,11 +108,23 @@ export class SettingsModalController {
     updateGameSettings({ builderMode: target.value === 'advanced' ? 'advanced' : 'beginner' });
   };
 
+  private readonly handleMotionChange = () => {
+    const value = this.elements.motionSelect?.value;
+    updateComfortSettings({ reduceMotion: value === 'on' || value === 'off' ? value : 'system' });
+  };
+  private readonly handleCameraStyleChange = (event: Event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.checked)
+      updateComfortSettings({ cameraStyle: target.value === 'room' ? 'room' : 'follow' });
+  };
+
   constructor(
     private readonly doc: Document = document,
   ) {
     this.elements = {
       modal: this.doc.getElementById('settings-modal'),
+      motionSelect: this.doc.getElementById('settings-reduce-motion') as HTMLSelectElement | null,
+      cameraStyleInputs: Array.from(this.doc.querySelectorAll<HTMLInputElement>('input[name="settings-camera-style"]')),
       closeButton: this.doc.getElementById('btn-settings-close'),
       commentsCheckbox: this.doc.getElementById('settings-comments-visible') as HTMLInputElement | null,
       musicVolumeInput: this.doc.getElementById('settings-music-volume') as HTMLInputElement | null,
@@ -130,6 +146,10 @@ export class SettingsModalController {
 
   init(): void {
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
+    this.elements.motionSelect?.addEventListener('change', this.handleMotionChange);
+    for (const input of this.elements.cameraStyleInputs) input.addEventListener('change', this.handleCameraStyleChange);
+    this.unsubscribeComfort = subscribeComfortSettings(settings => this.renderComfort(settings));
+    this.renderComfort(getComfortSettings());
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.elements.commentsCheckbox?.addEventListener('change', this.handleCommentsChange);
     this.elements.musicVolumeInput?.addEventListener('input', this.handleMusicVolumeInput);
@@ -157,6 +177,9 @@ export class SettingsModalController {
 
   destroy(): void {
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
+    this.elements.motionSelect?.removeEventListener('change', this.handleMotionChange);
+    for (const input of this.elements.cameraStyleInputs) input.removeEventListener('change', this.handleCameraStyleChange);
+    this.unsubscribeComfort?.(); this.unsubscribeComfort = null;
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.elements.commentsCheckbox?.removeEventListener('change', this.handleCommentsChange);
     this.elements.musicVolumeInput?.removeEventListener('input', this.handleMusicVolumeInput);
@@ -188,6 +211,7 @@ export class SettingsModalController {
     this.render(getGameSettings());
     this.renderPerformanceMode(getDevicePerformanceMode());
     this.renderFrameRate(getFrameRateMode());
+    this.renderComfort(getComfortSettings());
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
   }
@@ -224,6 +248,11 @@ export class SettingsModalController {
     for (const input of this.elements.builderModeInputs) {
       input.checked = input.value === (settings.builderMode === 'advanced' ? 'advanced' : 'beginner');
     }
+  }
+
+  private renderComfort(settings: ComfortSettings): void {
+    if (this.elements.motionSelect) this.elements.motionSelect.value = settings.reduceMotion;
+    for (const input of this.elements.cameraStyleInputs) input.checked = input.value === settings.cameraStyle;
   }
 
   private renderFrameRate(mode: FrameRateMode): void {
