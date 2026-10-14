@@ -5,6 +5,7 @@ import type { GoalPlacementMode } from './editRuntime';
 import type { EditorStatusDetails } from './roomSession';
 import type { EditorCourseUiState } from '../../ui/setup/sceneBridge';
 import { normalizePlayerHearts, type PlayerHearts } from '../../player/hearts';
+import { getActiveRoomVideoRuntime, roomVideoUiFields } from '../../roomVideo/uiState';
 import type { ReadyToPublishChecklist } from './clearCheck';
 
 export interface BuildEditorUiViewModelOptions {
@@ -13,6 +14,15 @@ export interface BuildEditorUiViewModelOptions {
   roomCameraCentered?: boolean;
   roomPitsAreDeadly?: boolean;
   roomPlayerHearts?: PlayerHearts;
+  roomVideoUrl?: string;
+  roomVideoStatus?: string;
+  roomVideoLoop?: boolean;
+  roomVideoAutoplay?: boolean;
+  roomVideoTrigger?: boolean;
+  roomVideoVolume?: number;
+  roomVideoMuteMusic?: boolean;
+  roomVideoSnap?: boolean;
+  roomVideoHasVideo?: boolean;
   roomCoordinates: RoomCoordinates;
   roomGoal: RoomGoal | null;
   roomGoalIntroText: string | null;
@@ -88,12 +98,22 @@ export function buildEditorUiViewModel(
     courseEditorState,
   } = options;
   const canReturnToCourseBuilder = courseEditorState.canReturnToCourseBuilder;
+  const activeVideo = roomVideoUiFields(getActiveRoomVideoRuntime());
 
   return {
     roomTitleValue: roomTitle ?? '',
     roomCameraCentered: options.roomCameraCentered === true,
     roomPitsAreDeadly: options.roomPitsAreDeadly === true,
     roomPlayerHearts: normalizePlayerHearts(options.roomPlayerHearts),
+    roomVideoUrl: options.roomVideoUrl ?? activeVideo.roomVideoUrl,
+    roomVideoStatus: options.roomVideoStatus ?? activeVideo.roomVideoStatus,
+    roomVideoLoop: options.roomVideoLoop ?? activeVideo.roomVideoLoop,
+    roomVideoAutoplay: options.roomVideoAutoplay ?? activeVideo.roomVideoAutoplay,
+    roomVideoTrigger: options.roomVideoTrigger ?? activeVideo.roomVideoTrigger,
+    roomVideoVolume: options.roomVideoVolume ?? activeVideo.roomVideoVolume,
+    roomVideoMuteMusic: options.roomVideoMuteMusic ?? activeVideo.roomVideoMuteMusic,
+    roomVideoSnap: options.roomVideoSnap ?? activeVideo.roomVideoSnap,
+    roomVideoHasVideo: options.roomVideoHasVideo ?? activeVideo.roomVideoHasVideo,
     roomCoordinatesText: `Room (${roomCoordinates.x}, ${roomCoordinates.y})`,
     saveStatusText: saveStatus.text,
     saveStatusAccentText: saveStatus.accentText,

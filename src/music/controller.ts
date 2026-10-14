@@ -149,6 +149,7 @@ export class RoomMusicController {
   private initialized = false;
   private masterGain: GainNode | null = null;
   private volume = 1;
+  private playbackDuck = 1;
   private transportStartTime = 0;
   private activeLanes = new Map<RoomMusicLaneId, ActiveLoopPlayback>();
   private activePattern: ActiveLoopPlayback | null = null;
@@ -422,13 +423,7 @@ export class RoomMusicController {
 
     const wasMuted = this.volume === 0;
     this.volume = nextVolume;
-    if (this.masterGain && this.audioContext) {
-      this.masterGain.gain.setTargetAtTime(
-        this.getMasterGainValue(),
-        this.audioContext.currentTime,
-        0.02,
-      );
-    }
+    this.applyMasterGain();
     if (nextVolume === 0) {
       const desired = this.desiredPlayback;
       this.stopArrangement({ transition: 'immediate', mode: this.mode, fadeDurationSec: 0.08 });
@@ -440,6 +435,16 @@ export class RoomMusicController {
       const desired = this.desiredPlayback;
       void this.playArrangement(desired.music, desired.options);
     }
+  }
+
+  /** Temporarily scale room music. 0 mutes it while a room video is playing. */
+  setPlaybackDuck(multiplier: number): void {
+    const nextDuck = clampUnit(Number.isFinite(multiplier) ? multiplier : 1);
+    if (this.playbackDuck === nextDuck) {
+      return;
+    }
+    this.playbackDuck = nextDuck;
+    this.applyMasterGain();
   }
 
   previewPatternCell(
@@ -1011,8 +1016,18 @@ export class RoomMusicController {
     return this.masterGain;
   }
 
+  private applyMasterGain(): void {
+    if (this.masterGain && this.audioContext) {
+      this.masterGain.gain.setTargetAtTime(
+        this.getMasterGainValue(),
+        this.audioContext.currentTime,
+        0.02,
+      );
+    }
+  }
+
   private getMasterGainValue(): number {
-    return 0.82 * GLOBAL_MUSIC_VOLUME_MULTIPLIER * this.volume;
+    return 0.82 * GLOBAL_MUSIC_VOLUME_MULTIPLIER * this.volume * this.playbackDuck;
   }
 
   private async loadBuffer(packId: string, clipId: string): Promise<AudioBuffer> {

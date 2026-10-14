@@ -39,7 +39,7 @@ export const EDITOR_DOCK_PANEL_IDS = [
 
 export type EditorDockPanelId = (typeof EDITOR_DOCK_PANEL_IDS)[number];
 export type EditorDockId = Exclude<EditorDockPanelId, 'goal' | 'room'> | 'markers';
-export type EditorRoomSection = 'background' | 'camera' | 'environment' | 'music' | 'sprite';
+export type EditorRoomSection = 'background' | 'video' | 'camera' | 'environment' | 'music' | 'sprite';
 type EditorObjectPanelScope = Exclude<EditorObjectScope, 'all'>;
 
 export interface EditorDockShellState {

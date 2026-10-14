@@ -1,6 +1,17 @@
 export interface EditorUiElements {
   roomTitleInput: HTMLInputElement | null;
   roomCameraCenteredInput: HTMLInputElement | null;
+  roomVideoUrlInput: HTMLInputElement | null;
+  roomVideoStatus: HTMLElement | null;
+  roomVideoOptions: HTMLElement | null;
+  roomVideoLoopInput: HTMLInputElement | null;
+  roomVideoAutoplayInput: HTMLInputElement | null;
+  roomVideoTriggerInput: HTMLInputElement | null;
+  roomVideoVolumeInput: HTMLInputElement | null;
+  roomVideoVolumeReadout: HTMLElement | null;
+  roomVideoMuteMusicInput: HTMLInputElement | null;
+  roomVideoSnapInput: HTMLInputElement | null;
+  roomVideoClearButton: HTMLButtonElement | null;
   roomPitsDeadlyInput: HTMLInputElement | null;
   coursePitsDeadlyInput: HTMLInputElement | null;
   roomPlayerHeartsSelect: HTMLSelectElement | null;
@@ -199,6 +210,17 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
   return {
     roomTitleInput: byId<HTMLInputElement>(doc, 'room-title-input'),
     roomCameraCenteredInput: byId<HTMLInputElement>(doc, 'room-camera-centered'),
+    roomVideoUrlInput: byId<HTMLInputElement>(doc, 'room-video-url'),
+    roomVideoStatus: byId<HTMLElement>(doc, 'room-video-status'),
+    roomVideoOptions: byId<HTMLElement>(doc, 'room-video-options'),
+    roomVideoLoopInput: byId<HTMLInputElement>(doc, 'room-video-loop'),
+    roomVideoAutoplayInput: byId<HTMLInputElement>(doc, 'room-video-autoplay'),
+    roomVideoTriggerInput: byId<HTMLInputElement>(doc, 'room-video-trigger'),
+    roomVideoVolumeInput: byId<HTMLInputElement>(doc, 'room-video-volume'),
+    roomVideoVolumeReadout: byId<HTMLElement>(doc, 'room-video-volume-readout'),
+    roomVideoMuteMusicInput: byId<HTMLInputElement>(doc, 'room-video-mute-music'),
+    roomVideoSnapInput: byId<HTMLInputElement>(doc, 'room-video-snap'),
+    roomVideoClearButton: byId<HTMLButtonElement>(doc, 'room-video-clear'),
     roomPitsDeadlyInput: byId<HTMLInputElement>(doc, 'room-pits-deadly'),
     coursePitsDeadlyInput: byId<HTMLInputElement>(doc, 'course-pits-deadly'),
     roomPlayerHeartsSelect: byId<HTMLSelectElement>(doc, 'room-player-hearts'),

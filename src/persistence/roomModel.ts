@@ -1,4 +1,4 @@
-import { getLostSongPlacementError } from '../lostSongs/model';
+import { isRoomVideoLinkTarget } from '../roomVideo/link';
 import { isCoopPressurePlate } from '../placedObjects/coopPressurePlates';
 import {
   LAYER_NAMES,
@@ -9,6 +9,7 @@ import {
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
   canPlacedObjectBeLinkedObjectTarget,
+  canPlacedObjectTriggerOtherObjects,
   canPlacedObjectUseObjectLink,
   decodeTileDataValue,
   getPlacedObjectInstanceId,
@@ -20,6 +21,7 @@ import {
 import { DEFAULT_ROOM_BACKGROUND, normalizeRoomBackground } from '../backgrounds/model';
 import { normalizePlayerHearts, type PlayerHearts } from '../player/hearts';
 import { getPlacedBossHitPoints } from '../enemies/boss';
+import { getLostSongPlacementError } from '../lostSongs/model';
 import {
   getRoomGoalPublishValidationError,
   normalizeRoomGoalIntroText,
@@ -41,6 +43,7 @@ import {
   normalizeRoomMusic,
   type RoomMusic,
 } from '../music/model';
+import { normalizeRoomVideo, type RoomVideo } from '../roomVideo/model';
 import { SWORDSMAN_AI_OBJECT_ID } from '../enemies/swordsmanAi';
 import {
   getPlacedPoliceBehaviorMode,
@@ -133,6 +136,8 @@ export interface RoomSnapshot {
   lighting: RoomLightingSettings;
   weather: RoomWeatherSettings;
   music: RoomMusic | null;
+  /** One YouTube frame, drawn between the background image and back-layer tiles. */
+  video?: RoomVideo | null;
   goal: RoomGoal | null;
   spawnPoint: RoomSpawnPoint | null;
   tileData: RoomTileData;
@@ -614,13 +619,16 @@ function clonePlacedObjects(
     );
     const targetPlaced = deduped.find((candidate) => candidate.instanceId === target) ?? null;
     const containedObjectId = placed.containedObjectId;
+    const videoTarget = canPlacedObjectTriggerOtherObjects(placed) && isRoomVideoLinkTarget(target);
     const validTarget =
       canPlacedObjectUseObjectLink(placed) &&
       typeof target === 'string' &&
       target.trim().length > 0 &&
       target !== placed.instanceId &&
-      ids.has(target) &&
-      canPlacedObjectBeLinkedObjectTarget(placed, targetPlaced);
+      (videoTarget || (
+        ids.has(target) &&
+        canPlacedObjectBeLinkedObjectTarget(placed, targetPlaced)
+      ));
     const validContainedObjectId =
       canPlacedObjectBeContainer(placed) &&
       typeof containedObjectId === 'string' &&
@@ -745,6 +753,11 @@ function migrateLegacyBrickBoxesToSpecialTerrain(
   return nextPlacedObjects;
 }
 
+function roomVideoField(value: unknown): { video: RoomVideo } | Record<string, never> {
+  const video = normalizeRoomVideo(value);
+  return video ? { video } : {};
+}
+
 export function cloneRoomSnapshot(room: RoomSnapshot | RoomSnapshotView): RoomSnapshot {
   roomSnapshotCloneCount += 1;
   const tileData = cloneTileData(room.tileData);
@@ -765,6 +778,7 @@ export function cloneRoomSnapshot(room: RoomSnapshot | RoomSnapshotView): RoomSn
     lighting: normalizeRoomLightingSettings(room.lighting),
     weather: normalizeRoomWeatherSettings(room.weather),
     music: normalizeRoomMusic(room.music),
+    ...roomVideoField(room.video),
     goal: normalizeRoomGoal(room.goal),
     spawnPoint: room.spawnPoint ? { ...room.spawnPoint } : null,
     tileData,
@@ -915,6 +929,10 @@ export function isRoomSnapshotBlank(room: RoomSnapshot): boolean {
   }
 
   if (!isRoomMusicEmpty(room.music)) {
+    return false;
+  }
+
+  if (normalizeRoomVideo(room.video)) {
     return false;
   }
 

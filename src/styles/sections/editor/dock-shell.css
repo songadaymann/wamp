@@ -1401,7 +1401,9 @@ body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-contai
 }
 
 body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='camera'] #editor-sidebar-scroll,
-body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='camera'] #room-camera-section {
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='camera'] #room-camera-section,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='video'] #editor-sidebar-scroll,
+body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-room-section='video'] #room-video-section {
   display: flex !important;
 }
 
@@ -1413,9 +1415,25 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='room'][data-editor-
   cursor: pointer;
 }
 
-body[data-editor-dock-shell='true'] #room-camera-section {
+body[data-editor-dock-shell='true'] #room-camera-section,
+body[data-editor-dock-shell='true'] #room-video-section {
   flex-direction: column;
   align-items: stretch;
+  gap: 8px;
+}
+
+#room-video-url {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.room-video-volume input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#room-video-options.hidden {
+  display: none;
 }
 
 body[data-editor-dock-shell='true'] [data-editor-history]:disabled {

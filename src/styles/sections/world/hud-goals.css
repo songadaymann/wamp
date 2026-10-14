@@ -11,6 +11,16 @@
 
 #game-container canvas {
   display: block;
+  position: relative;
+  z-index: 1;
+}
+
+#room-video-host {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 body[data-app-mode="world"] #game-container,

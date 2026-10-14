@@ -9,6 +9,7 @@ import {
   canPlacedObjectBeContainer,
   canPlacedObjectBeLinkedObjectTarget,
   canPlacedObjectBePressurePlateTarget,
+  canPlacedObjectTriggerOtherObjects,
   canPlacedObjectUseObjectLink,
   editorState,
   getObjectById,
@@ -27,6 +28,8 @@ import {
   setCourseObjectLink,
 } from '../../courses/objectLinks';
 import { canPlacedObjectUseObjectPath } from '../../placedObjects/objectPaths';
+import { getRoomVideo, linkPressurePlateToRoomVideo } from '../../roomVideo/editing';
+import { hitsRoomVideoAnchor, isRoomVideoLinkTarget, roomVideoAnchorPoint, roomVideoFrameBounds } from '../../roomVideo/link';
 import type { EditorEditRuntime } from '../editor/editRuntime';
 import type { EditorInspectorState } from '../editor/uiBridge';
 import {
@@ -345,6 +348,21 @@ export class CourseEditorObjectInspectorController {
       return false;
     }
 
+    if (
+      canPlacedObjectTriggerOtherObjects(source.placed)
+      && slice.roomId === source.slice.roomId
+      && this.hitsSliceVideoAnchor(slice, worldX, worldY)
+    ) {
+      if (linkPressurePlateToRoomVideo(slice.runtime, source.placed.instanceId ?? '')) {
+        this.connectingPressurePlateInstanceId = null;
+        this.focusedPressurePlateInstanceId = source.placed.instanceId ?? null;
+        this.pinInspector('pressure', source.placed.instanceId ?? '');
+        this.pressurePlateStatusText = 'Pressure plate linked to the video.';
+        this.renderInspectorUi();
+      }
+      return true;
+    }
+
     const target = slice.runtime.findPlacedObjectAt(
       worldX,
       worldY,
@@ -485,6 +503,7 @@ export class CourseEditorObjectInspectorController {
       }
     }
 
+    this.drawCourseVideoAnchors(graphics, worldPoint.x, worldPoint.y);
     const source = this.getFocusedPressurePlateRef();
     if (!source) {
       this.renderInspectorUi();
@@ -541,7 +560,7 @@ export class CourseEditorObjectInspectorController {
           0x9dff8a,
           0.95,
         );
-      } else {
+      } else if (!this.hitsSliceVideoAnchor(hoveredSlice, worldPoint.x, worldPoint.y)) {
         const previewSource = this.getObjectLinkPreviewSource(source, currentTargets, null);
         graphics.lineStyle(2, 0xffd36b, 0.5);
         graphics.beginPath();
@@ -1046,6 +1065,65 @@ export class CourseEditorObjectInspectorController {
     );
   }
 
+  private hitsSliceVideoAnchor(
+    slice: CourseInspectorRoomSlice | null | undefined,
+    worldX: number,
+    worldY: number,
+  ): boolean {
+    if (!slice) return false;
+    return hitsRoomVideoAnchor(
+      getRoomVideo(slice.runtime),
+      worldX,
+      worldY,
+      this.scene.cameras.main.zoom || 1,
+      slice.origin.x,
+      slice.origin.y,
+    );
+  }
+
+  private drawCourseVideoAnchors(
+    graphics: Phaser.GameObjects.Graphics,
+    worldX: number,
+    worldY: number,
+  ): void {
+    const source = this.getFocusedPressurePlateRef();
+    const plate = source && canPlacedObjectTriggerOtherObjects(source.placed) ? source : null;
+    const connecting = plate !== null && this.connectingPressurePlateInstanceId === plate.placed.instanceId;
+    for (const slice of this.host.getRoomSlices()) {
+      const video = getRoomVideo(slice.runtime);
+      if (!video?.trigger) continue;
+      const sameRoom = plate?.slice.roomId === slice.roomId;
+      const linked = sameRoom && isRoomVideoLinkTarget(plate?.placed.triggerTargetInstanceId);
+      if (!connecting && !linked) continue;
+
+      const bounds = roomVideoFrameBounds(video, slice.origin.x, slice.origin.y);
+      const hovering = this.hitsSliceVideoAnchor(slice, worldX, worldY);
+      const color = hovering && connecting ? 0x9dff8a : connecting ? 0x7ad3ff : 0x6dd5ff;
+      const alpha = hovering && connecting ? 0.95 : connecting ? 0.55 : 0.9;
+      graphics.lineStyle(2, color, alpha);
+      graphics.strokeRoundedRect(bounds.x, bounds.y, bounds.width, bounds.height, 6);
+
+      const anchor = roomVideoAnchorPoint(video, slice.origin.x, slice.origin.y);
+      const fromX = (plate?.slice.origin.x ?? 0) + (plate?.placed.x ?? 0);
+      const fromY = (plate?.slice.origin.y ?? 0) + (plate?.placed.y ?? 0) - 4;
+      if (plate && sameRoom && ((connecting && hovering) || linked)) {
+        const lineColor = connecting && hovering ? 0x9dff8a : 0x6dd5ff;
+        const lineAlpha = connecting && hovering ? 0.95 : 0.9;
+        graphics.lineStyle(2, lineColor, lineAlpha);
+        graphics.beginPath();
+        graphics.moveTo(fromX, fromY);
+        graphics.lineTo(anchor.x, anchor.y);
+        graphics.strokePath();
+        graphics.fillStyle(lineColor, lineAlpha * 0.9);
+        graphics.fillCircle(fromX, fromY, 3);
+        graphics.fillCircle(anchor.x, anchor.y, 3);
+      } else {
+        graphics.fillStyle(color, 0.9);
+        graphics.fillCircle(anchor.x, anchor.y, 3);
+      }
+    }
+  }
+
   private drawObjectLinkPath(
     graphics: Phaser.GameObjects.Graphics,
     source: CoursePlacedObjectRef,
@@ -1103,18 +1181,22 @@ export class CourseEditorObjectInspectorController {
     if (source && (editorState.paletteMode === 'objects' || connectMode)) {
       const targets = this.getCourseObjectLinkTargetRefs(source);
       const targetSummary = this.getObjectLinkTargetsSummary(source, targets);
-      const eligibleTargetCount = this.getCourseObjectLinkEligibleTargets(source).length;
+      const eligibleTargetCount = this.getCourseObjectLinkEligibleTargets(source).length
+        + (canPlacedObjectTriggerOtherObjects(source.placed) && getRoomVideo(source.slice.runtime)?.trigger ? 1 : 0);
+      const videoLinked = canPlacedObjectTriggerOtherObjects(source.placed)
+        && isRoomVideoLinkTarget(source.placed.triggerTargetInstanceId);
+      const linkedSummary = targetSummary
+        ?? (videoLinked ? `${this.getObjectLinkSourceLabel(source.placed)} linked to the video.` : null);
       render(
         buildPressurePlateInspectorState({
           statusText:
             this.pressurePlateStatusText ??
             (connectMode
               ? this.getObjectLinkConnectStatus(source.placed, eligibleTargetCount)
-              : targetSummary
-                ? `${this.getObjectLinkSourceLabel(source.placed)} linked to ${targetSummary}.`
-                : `${this.getObjectLinkSourceLabel(source.placed)} is not linked yet.`),
+              : linkedSummary
+                ?? `${this.getObjectLinkSourceLabel(source.placed)} is not linked yet.`),
           connectMode,
-          targetSummary,
+          targetSummary: linkedSummary,
           eligibleTargetCount,
           connectTitle: this.getObjectLinkNoTargetsTitle(source.placed),
           allowReconnectWithTarget: canPlacedObjectUseObjectPath(source.placed),

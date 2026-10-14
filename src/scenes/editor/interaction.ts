@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { roomVideoPointerDown, roomVideoPointerMove, roomVideoPointerUp } from '../../roomVideo/frames';
 import { mouseButtonsReleased } from '../pointerRelease';
 import { EditorTouchCandidate, EditorTouchGesture, editorTouchToolKey } from './touchGesture';
 import {
@@ -629,6 +630,7 @@ export class EditorInteractionController {
   // Mouse releases over a panel or outside the window arrive as 'pointerupoutside';
   // they finish the stroke, shape or pan exactly like a release over the canvas.
   private readonly handleMouseUp = (pointer: Phaser.Input.Pointer, outside = false): void => {
+    if (roomVideoPointerUp(this.scene)) return;
     if (this.host.objectMove?.up(pointer, outside)) return;
     if (this.handleTouchPointerUp(pointer)) {
       return;
@@ -696,6 +698,13 @@ export class EditorInteractionController {
     this.scene.game.events.on('hidden', this.handleInputBlur);
     this.scene.events.on('sleep', this.handleInputBlur);
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (
+        pointer.leftButtonDown()
+        && !this.spaceDown
+        && roomVideoPointerDown(this.scene, pointer)
+      ) {
+        return;
+      }
       if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.stopGesture();
       else if (this.host.objectMove?.down(pointer)) return;
       if (this.handleTouchPointerDown(pointer)) {
@@ -812,6 +821,9 @@ export class EditorInteractionController {
     });
 
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (roomVideoPointerMove(this.scene, pointer)) {
+        return;
+      }
       if (this.host.objectMove?.move(pointer)) return;
       if (this.handleTouchPointerMove(pointer)) {
         return;

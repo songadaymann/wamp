@@ -1,4 +1,5 @@
 import { getAuthDebugState } from '../../auth/client';
+import { setActiveRoomVideoRuntime } from '../../roomVideo/uiState';
 import { editorState } from '../../config';
 import type { RoomGoal } from '../../goals/roomGoals';
 import type {
@@ -53,6 +54,7 @@ export class EditorChromeController {
       return;
     }
 
+    setActiveRoomVideoRuntime(this.editRuntime);
     const roomGoal = this.host.getRoomGoal();
     const historyState = this.persistenceController.getHistoryState();
     const authenticated = getAuthDebugState().authenticated;

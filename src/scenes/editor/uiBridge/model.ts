@@ -142,6 +142,15 @@ export interface EditorUiViewModel {
   roomCameraCentered?: boolean;
   roomPitsAreDeadly?: boolean;
   roomPlayerHearts?: PlayerHearts;
+  roomVideoUrl?: string;
+  roomVideoStatus?: string;
+  roomVideoLoop?: boolean;
+  roomVideoAutoplay?: boolean;
+  roomVideoTrigger?: boolean;
+  roomVideoVolume?: number;
+  roomVideoMuteMusic?: boolean;
+  roomVideoSnap?: boolean;
+  roomVideoHasVideo?: boolean;
   roomCoordinatesText: string;
   saveStatusText: string;
   saveStatusAccentText: string;
