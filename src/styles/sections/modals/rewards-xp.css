@@ -728,19 +728,25 @@
   }
 }
 
-/* Players who ask their system for less motion see reward and XP cards arrive in their final
-   state at once, without the slide, fly or particle burst (F173). */
+/* Comfort overrides apply to both CSS animation and the gameplay effects (F173). */
+body[data-reduce-motion="on"] .reward-sting-layer *,
+body[data-reduce-motion="on"] .xp-receipt-card--enter,
+body[data-reduce-motion="on"] .xp-receipt-card--fly,
+body[data-reduce-motion="on"] .xp-receipt-impact--active,
+body[data-reduce-motion="on"] .xp-receipt-impact--active .xp-receipt-impact-pixel {
+  animation-duration: 1ms !important;
+  animation-delay: 0s !important;
+}
+body[data-reduce-motion="on"] .reward-sting-particle { display: none; }
+/* Honour the system even before the comfort preference initializes, or on other pages. */
 @media (prefers-reduced-motion: reduce) {
-  .reward-sting-layer *,
-  .xp-receipt-card--enter,
-  .xp-receipt-card--fly,
-  .xp-receipt-impact--active,
-  .xp-receipt-impact--active .xp-receipt-impact-pixel {
+  body:not([data-reduce-motion]) .reward-sting-layer *,
+  body:not([data-reduce-motion]) .xp-receipt-card--enter,
+  body:not([data-reduce-motion]) .xp-receipt-card--fly,
+  body:not([data-reduce-motion]) .xp-receipt-impact--active,
+  body:not([data-reduce-motion]) .xp-receipt-impact--active .xp-receipt-impact-pixel {
     animation-duration: 1ms !important;
     animation-delay: 0s !important;
   }
-
-  .reward-sting-particle {
-    display: none;
-  }
+  body:not([data-reduce-motion]) .reward-sting-particle { display: none; }
 }

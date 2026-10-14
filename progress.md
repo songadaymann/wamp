@@ -1,3 +1,13 @@
+Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
+
+## 2026-10-13 overnight — F173 Comfort candidate
+
+Device-local System/On/Off motion preference and Follow/Whole room camera choice are implemented on `codex/wamp-comfort-settings-2026-10-13`. Full 3,538-test gates, native desktop/Chromium phone/WebKit phone controls/effects/reload checks, inspected screenshots, installed-client gameplay and authored-room camera smoke pass. Safari menu height and Camera label contrast corrected. Receipt: `docs/review/wamp-comfort-settings-2026-10-13.md`; publication/live proof next. F038's first production sweep removed all expired auth rows and 5,000 old outbox rows; safety replay expiry remains under investigation.
+
+## 2026-10-13 overnight — F038 API delivery
+
+PR #192 / main `1352cb94`, production Worker `5416ed6f`, migration 0065. New replay JPEGs are private R2 objects; protected admin reads preserve legacy recordings. Hourly expiry pruning is bounded and indexed. Full 3,533-test gates, source/merge hosted checks, guarded release/health, real R2 storage, desktop/phone viewer playback and production opt-out deletion pass. The first hourly cleanup is still to be observed at 9:17pm New York; F038 stays unticked until that proof. See `docs/review/wamp-replay-storage-cleanup-2026-10-13.md`. Comfort settings (F173) are next.
+
 ## 2026-10-13 — Overnight checklist through 5am
 
 Original prompt: "record [the 240px version] as our choice for now ... work through the checklist overnight until 5am." Active goal runs through October 14 05:00 America/New_York / 09:00 UTC. Plan and selected 240×135 / 32-color ordered-dither animated WebP are recorded in `docs/review/wamp-overnight-checklist-2026-10-13.md`, with the exact asset retained under `docs/review/assets/`. Start F038, then F173, then other actionable items; preserve pending decisions and the primary dirty checkout. Stop new work at the deadline and audit evidence/status.

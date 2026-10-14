@@ -20,5 +20,6 @@
 #first-publish-modal .first-publish-activity { margin: 12px 0 0; }
 @media (max-height: 500px) { #first-publish-preview { --first-publish-preview-height: 120px; } }
 @media (max-width: 400px) { #first-publish-modal .first-publish-panel { padding: 12px; } }
-@media (prefers-reduced-motion: no-preference) { #first-publish-live:not(.hidden) #first-publish-title { animation: publish-arrive 250ms ease-out; } }
+body[data-reduce-motion="off"] #first-publish-live:not(.hidden) #first-publish-title { animation: publish-arrive 250ms ease-out; }
+@media (prefers-reduced-motion: no-preference) { body:not([data-reduce-motion]) #first-publish-live:not(.hidden) #first-publish-title { animation: publish-arrive 250ms ease-out; } }
 @keyframes publish-arrive { from { transform: translateY(6px); } to { transform: translateY(0); } }

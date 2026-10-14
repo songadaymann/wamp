@@ -3182,6 +3182,25 @@
         <button id="btn-settings-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div class="settings-modal-body">
+        <section class="settings-section settings-comfort-section" aria-labelledby="settings-comfort-title">
+          <div id="settings-comfort-title" class="settings-section-title">Comfort</div>
+          <label class="settings-comfort-motion" for="settings-reduce-motion">
+            <span>Reduce motion and flashes</span>
+            <select id="settings-reduce-motion" class="settings-comfort-select">
+              <option value="system">Use system setting</option>
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <fieldset class="settings-comfort-camera">
+            <legend>Camera</legend>
+            <div class="settings-choice-group settings-comfort-choice-group">
+              <label class="settings-choice"><input type="radio" name="settings-camera-style" value="follow" />Follow player</label>
+              <label class="settings-choice"><input type="radio" name="settings-camera-style" value="room" />Whole room</label>
+            </div>
+          </fieldset>
+          <p class="settings-comfort-note">Some rooms use a fixed camera.</p>
+        </section>
         <section class="settings-section">
           <div class="settings-section-title">Performance</div>
           <div class="settings-choice-group settings-performance-choice-group">

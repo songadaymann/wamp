@@ -24,3 +24,13 @@ This records the choice; animated in-game playback and upload conversion remain 
 ## Morning audit
 
 At the deadline record the final checklist count, source/merge/release IDs, test and live proof for each delivered slice, remaining review candidates, blockers and pending decisions. Completion means the selection is recorded and the requested overnight work window has been carried out and audited; it does not mean all 215 checklist items are complete.
+
+### 8:40pm checkpoint
+
+- F038 API delivery: PR #192, merge `1352cb94`, Worker `5416ed6f`, migration 0065. Full 3,533-test gates, clean release checks, source/merge four hosted checks, guarded production smoke and health pass. Real production image hydration plus desktop/phone playback/scrubbing pass. Synthetic production recording removed and its R2 object confirmed absent. The checklist stays unticked until the 9:17pm hourly tick is observed. Safety's owned synthetic recording `de221bb2-1684-4984-b3c8-68f3e500c006` is expired; verify its DB rows and R2 frame are removed after that tick. Read-only production expiry/outbox inventory will prove the bounded sweep.
+- F173 implementation: device-local Comfort preferences like performance settings, System/On/Off reduced motion, Follow player/Whole room camera. Typed preference persistence, system changes, explicit overrides and camera framing tests pass. No account-settings API or auth work is changed. Full gates and real desktop/phone gameplay verification are in progress on `codex/wamp-comfort-settings-2026-10-13`.
+
+### 9:20pm checkpoint
+
+- F038 production's first hourly sweep left zero expired sessions and zero expired magic links. Old dispatched outbox rows fell from 16,772 to 11,772, exactly one 5,000-row batch. A transient Cloudflare D1 7403 affected the immediate pre-tick inventory; the earlier successful baseline and post-tick counts are preserved. The expired owned safety recording remains, so safety schedule diagnostics and real R2 expiry proof are still open. Do not tick F038 until resolved.
+- F173 candidate is complete: full 3,538-test gates; native desktop/Chromium phone/WebKit phone settings, gameplay/effects, system changes and reload persistence pass; authored-room camera smoke and installed-client gameplay pass. Safari menu sizing and Camera label contrast are fixed. See `wamp-comfort-settings-2026-10-13.md`. Publication and custom-domain proof are next; the master remains 136/215 until delivery.

@@ -47,6 +47,7 @@ import {
 } from './main/webglRecovery';
 import { installRenderLoopRecoveryMonitor } from './main/renderLoopRecovery';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
+import { getComfortSettings } from './settings/comfortSettings';
 import {
   getDevicePerformanceMode,
   subscribeDevicePerformanceMode,
@@ -390,6 +391,7 @@ window.render_game_to_text = () =>
     music: globalRoomMusicController.getDebugState(),
     settings: {
       values: getGameSettings(),
+      comfort: getComfortSettings(),
       frameRate: getFrameCadenceDebugState(),
       sync: getGameSettingsSyncDebugState(),
       performance: {

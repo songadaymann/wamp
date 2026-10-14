@@ -1,0 +1,25 @@
+import { afterEach, expect, it, vi } from 'vitest';
+afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
+it('uses one live system query and updates CSS for explicit overrides and system changes', async () => {
+  let change = () => undefined;
+  const query = {matches:false,addEventListener:vi.fn((_event:string,listener:()=>undefined)=>{change=listener;})};
+  const matchMedia = vi.fn(()=>query);
+  vi.stubGlobal('window', {matchMedia,localStorage:{getItem:()=>null,setItem:()=>undefined}});
+  vi.stubGlobal('document', {body:{dataset:{reduceMotion:''}}});
+  const {prefersReducedMotion} = await import('./reducedMotion');
+  const {updateComfortSettings} = await import('../settings/comfortSettings');
+  expect(prefersReducedMotion()).toBe(false);
+  query.matches = true; change();
+  expect(prefersReducedMotion()).toBe(true);
+  expect(document.body.dataset.reduceMotion).toBe('on');
+  updateComfortSettings({reduceMotion:'off'});
+  expect(prefersReducedMotion()).toBe(false);
+  expect(document.body.dataset.reduceMotion).toBe('off');
+  query.matches = false; change();
+  updateComfortSettings({reduceMotion:'on'});
+  expect(prefersReducedMotion()).toBe(true);
+  expect(document.body.dataset.reduceMotion).toBe('on');
+  updateComfortSettings({reduceMotion:'system'});
+  expect(prefersReducedMotion()).toBe(false);
+  expect(matchMedia).toHaveBeenCalledTimes(1);
+});
