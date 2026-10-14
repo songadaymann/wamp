@@ -67,6 +67,12 @@ const scenarios = [
     run: runPhonePortraitDeepLinkPlay,
   },
   {
+    name: 'phone-portrait-recording-notice',
+    profile: profiles.phonePortrait,
+    searchParams: { x: '0', y: '0' },
+    run: runPhoneRecordingNotice,
+  },
+  {
     name: 'phone-portrait-deep-link-bottom-hud',
     profile: profiles.phonePortrait,
     searchParams: { x: '0', y: '0' },
@@ -315,6 +321,29 @@ async function runPhonePortraitBrowseUnblocked(page, scenarioSummary, scenarioDi
   await assertAbsent(page, '.mobile-dpad-btn', 'legacy mobile D-pad buttons in phone portrait browse');
   await assertHidden(page, '#mobile-play-controls', 'mobile play controls while browsing portrait');
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'portrait-browse');
+}
+
+async function runPhoneRecordingNotice(page, scenarioSummary, scenarioDir) {
+  await waitForBodyAppMode(page, 'play-world', 'phone recording notice play mode', 30_000);
+  await closeBlockingOverlaysUntilClear(page);
+  await page.locator('.guest-replay-notice').waitFor({ state: 'visible', timeout: 15_000 });
+  const layout = await page.evaluate(() => {
+    const notice = document.querySelector('.guest-replay-notice');
+    const rect = notice.getBoundingClientRect();
+    const controls = ['btn-mobile-jump', 'btn-mobile-slash', 'btn-mobile-shoot', 'mobile-move-zone', 'btn-mobile-world-stop', 'btn-mobile-world-restart'].map(id => {
+      const element = document.getElementById(id);
+      const box = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      return { id, covered: rect.left < box.right && rect.right > box.left && rect.top < box.bottom && rect.bottom > box.top,
+        centerInteractive: hit === element || element.contains(hit) };
+    });
+    const optOut = notice.querySelector('button').getBoundingClientRect();
+    return { controls, optOut: { width: optOut.width, height: optOut.height } };
+  });
+  assertCondition(layout.controls.every(control => !control.covered && control.centerInteractive), `Recording notice obstructs play controls: ${JSON.stringify(layout)}`);
+  assertCondition(layout.optOut.width >= 43.99 && layout.optOut.height >= 43.99, `Recording opt-out is too small: ${JSON.stringify(layout)}`);
+  scenarioSummary.assertions.push({ label: 'Recording notice leaves play controls interactive and opt-out touch sized', ...layout });
+  await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'recording-notice');
 }
 
 async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) {
