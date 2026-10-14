@@ -1,3 +1,7 @@
+## 2026-10-13 — Overnight checklist through 5am
+
+Original prompt: "record [the 240px version] as our choice for now ... work through the checklist overnight until 5am." Active goal runs through October 14 05:00 America/New_York / 09:00 UTC. Plan and selected 240×135 / 32-color ordered-dither animated WebP are recorded in `docs/review/wamp-overnight-checklist-2026-10-13.md`, with the exact asset retained under `docs/review/assets/`. Start F038, then F173, then other actionable items; preserve pending decisions and the primary dirty checkout. Stop new work at the deadline and audit evidence/status.
+
 ## 2026-10-13 — F023 smaller audio assets
 
 Original prompt: "ok continue!", approving the next item F023. Branch `codex/wamp-audio-assets-2026-10-13` starts at main `d2edb340`. Plan: bake the existing mono/trim/peak drum processing offline, encode smaller browser-compatible samples and stems, verify decoding and loop alignment in Chromium/WebKit, exclude source-only audio from Pages, and prepare an original/candidate listening comparison. The handoff explicitly requests Jonathan's listening check before completing this audible change. Full quality and gameplay/mobile checks follow. Primary dirty checkout preserved. Jonathan subsequently approved the listening comparison and requested delivery.
