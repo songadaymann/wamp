@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-14 overnight — F006 live
+
+Master 139/215. PR #196 / main `51b23461`, Pages `f1e31bd8`, Worker `56a638d4`; all hosted/full 3,571-test gates, 63 physics comparisons, 13 phone cases, guarded full release and 22 exact file hashes pass. Live movement succeeds in the gravity room on desktop/phone Chrome and phone WebKit; installed client has 326 live objects and no errors. Isolated scan roughly halves; no overall FPS claim. Next F008 grouped collisions from current main.
+
 ## 2026-10-13 overnight — F006 complete candidate
 
 Room-cell bitmap and reusable scan results/origins; frozen empty decoding; safe conveyor sample reuse; hazard-only idle NPC checks; deferred scene callbacks and smaller existing file caps. Controlled scan 3.3 → 1.5 ms / 1,600 queries, all 64 body environments identical; 63 full-scene cadence comparisons and full 3,571-test gates pass. Startup 641.6 KB. Phone checks/publication/live proof pending; F006 stays unchecked and master remains 138/215. Receipt `docs/review/wamp-special-tile-cache-2026-10-13.md`.

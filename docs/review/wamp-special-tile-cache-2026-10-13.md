@@ -18,3 +18,11 @@ Proof: `/tmp/wamp-f006-2026-10-13/` (baseline/candidate JSON, cadence reports/sc
 ### Phone test readiness refinement
 
 The first phone HUD run encountered a late room introduction while trying to Stop; zero browser errors were reported. Candidate retry and unchanged-main comparison both pass all thirteen cases. The test now waits for the player and collision-ready snapshot before dismissing introductions, then uses an actual phone tap for Stop. It retains every Browse/HUD assertion. The conveyor sample also keys its middle probe coordinates and snapshots the scalar direction so another environment query cannot overwrite it. Final full quality passes 3,571 tests; final phone run passes all thirteen cases with zero browser errors and fixture misses.
+
+## Production delivery
+
+PR [#196](https://github.com/songadaymann/wamp/pull/196), source `aafc986e`, merge `51b23461`. All four source and merge checks pass. Clean literal-main checkout matches origin/main; full merged 3,571-test quality gates pass, with 641.4 KB startup brotli. Guarded full release delivers Pages [`f1e31bd8`](https://f1e31bd8.wampland.pages.dev) and Worker `56a638d4-ee52-4287-aacb-172a866c878a`; migrations, health, production smoke and unchanged renderer contract pass.
+
+All 15 startup and seven deferred-menu files match the local release on the custom/immutable hosts (22 SHA-256 comparisons per host). Live published room `1,-1` / version 44: desktop Chrome, phone Chrome and phone WebKit have zero application errors; jump displacements are -24, -30 and -17 px, with 78/65/64 visible live objects. Chrome phone uses an actual CDP touch hold; WebKit uses a keyboard hold in its phone viewport. Private game object remains absent. An initial phone probe hit the low ceiling and correctly had zero vertical velocity after rising 34 px; the assertion now allows ceiling contact while requiring upward displacement and unchanged deaths. Final screenshots inspected.
+
+The installed client exercises the busy published room (326 live objects) with zero runtime errors; screenshot inspected. Its software renderer shows the existing performance suggestion, so this remains functional evidence, not an FPS claim. Proof in `live-browser.json`, `release-proof.json`, `official-client/`, final cadence report and deployment/check logs. F006 is complete; master 139/215.

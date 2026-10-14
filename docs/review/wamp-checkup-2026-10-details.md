@@ -576,6 +576,8 @@ No GC trace was taken. Open: the `liveObjects.ts` allocations (size-pinned file)
 
 ### F006: Every moving body re-scans the tile map and allocates ~100 small objects per frame for special-tile checks
 
+**Completed October 14:** [PR #196](https://github.com/songadaymann/wamp/pull/196), merge `51b23461`, Pages `f1e31bd8`, Worker `56a638d4`. Cached special-cell bitmap/decoded layers, reusable results/origins, shared empty decoding, geometry-guarded conveyor reuse and hazard-only idle NPC checks. Full 3,571 tests, 63 complete-scene cadence cases, 13 phone/tablet scenarios, live movement and 22 exact file comparisons pass. [Receipt](wamp-special-tile-cache-2026-10-13.md) separates the 55% isolated scan gain from overall FPS.
+
 - **Area:** Runtime performance (frame rate, GC, memory)
 - **Type:** improvement · **impact:** low · **effort:** small
 - **Flagged before:** 2026-07-13 §2.1 flagged specialTiles copies. The 07-29 'reusable special-tile environments' fixed only the environment object, not the per-scan match allocations or tile decoding.

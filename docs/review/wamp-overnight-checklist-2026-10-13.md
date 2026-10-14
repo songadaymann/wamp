@@ -62,3 +62,7 @@ F019 slice live: PR #195 / main `189a2153`, Pages `c9e761fb`. All source/reporte
 ### 11:42pm F006 candidate
 
 Cached room-cell bitmap, reusable scan results/origins, shared empty decoding, safe conveyor sample reuse and hazard-only idle NPC queries are implemented. Constructor callbacks and conveyor application are extracted; existing size caps shrink. Controlled scan median 3.3 → 1.5 ms for 1,600 queries, 64 environment results identical; cold pass 1 ms. All initial 63 full-scene cadence comparisons pass; local-storage backend corrected the synthetic test setup. Final matrix after the collaborator extraction, full gates, phone smoke and publication are next. F006 stays unchecked and master remains 138/215.
+
+### 12:30am checkpoint
+
+F006 complete/live; master 139/215. PR #196 source `aafc986e`, main `51b23461`, Pages `f1e31bd8`, Worker `56a638d4`. All source/merge hosted checks and clean-main 3,571-test gates pass. Full guarded release/health/renderer checks, 22 custom/immutable file comparisons, native Chrome desktop/phone and phone WebKit movement in published gravity room `1,-1`, and installed-client gameplay (326 live objects) pass. Screenshots inspected. No overall FPS claim; the controlled scan gain is 3.3 → 1.5 ms / 1,600 calls with identical results. Phone Stop smoke now waits for readiness and taps the real control. Next F008 category-group collisions, preserving existing bodies, sleeping state, pair filters and callbacks; baseline/measured improvement must precede delivery.

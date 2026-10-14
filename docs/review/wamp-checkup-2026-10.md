@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 138 of 215 done.**
+**Progress: 139 of 215 done.**
 
 **October 9 release:** [All 18 overnight slices and both morning fixes are live](wamp-overnight-release-2026-10-09.md), preserving partner PR #99 and ghost archive PR #100. Five partial items remain unticked; native background-tab audio still needs a physical check.
 
@@ -112,7 +112,7 @@ How smoothly the game runs once it's loaded, especially on phones. The foundatio
 - [ ] **F008** Physics collision links grow with every room loaded, and are all rebuilt on room loads, bullet despawns and crate breaks · medium impact · medium effort — _Partly done 2026-10-11 (`01f2b134`, [PR #170](https://github.com/songadaymann/wamp/pull/170)): removing an object rebuilds every collider only if it was a solid (platform, NPC, locked door, pushable) or revealed a new object; a cannon room with 32 enemies went from 30 full rebuilds to 0 in 15 s. More on 2026-10-11 (`86f103da`, [PR #179](https://github.com/songadaymann/wamp/pull/179)): a moving object now only gets colliders for the loaded rooms it is near, and picks up more as it travels; a busy 9-room area went from 1,858 to 895 colliders and from 1.59 to 1.31 ms per physics step. Room-load rebuilds were measured at 1 ms or less, so they stay. Open: category-group colliders for same-room pairs._
 - [x] **F010** World-map tile code re-scans every tile it has ever seen, every frame, and never forgets any · medium impact · small effort — **done 2026-10-03** (`57b607c7`). Viewport candidates and retries use direct lookups; coverage/identity caching and bounded metadata eliminate history-wide frame scans while preserving timed transitions.
 - [x] **F012** Leftover per-frame garbage in the play loop · low impact · small effort — **done 2026-10-11** (`134dbbb7`, [PR #155](https://github.com/songadaymann/wamp/pull/155); `4db14ba4`, [PR #172](https://github.com/songadaymann/wamp/pull/172)): unlit rooms skip lighting work, the ranked trace frame is built only while recording, the live-object loop reuses its room list, flying-enemy motion and rider options, room music reuses its sync input, and weather returns early once nothing is drawn. No GC trace taken.
-- [ ] **F006** Every moving body re-scans the tile map and allocates ~100 small objects per frame for special-tile checks · low impact · small effort — _Partly done 2026-10-11 (`d1605a85`, [PR #157](https://github.com/songadaymann/wamp/pull/157)): body scans skip rooms that contain no special tiles (cached per tile grid). Open: a per-room bitmask for rooms that do, and the smaller allocations._
+- [x] **F006** Every moving body re-scans the tile map and allocates ~100 small objects per frame for special-tile checks · low impact · small effort — _Partly done 2026-10-11 (`d1605a85`, [PR #157](https://github.com/songadaymann/wamp/pull/157)): body scans skip rooms that contain no special tiles (cached per tile grid). Completed 2026-10-14 ([PR #196](https://github.com/songadaymann/wamp/pull/196)): cached cell bitmap/decoded kinds and reusable scan buffers; shared empty decoding, conveyor sample reuse and hazard-only idle NPC queries. Controlled scan work roughly halves with identical body results; 3,571 tests, 63 physics comparisons, 13 phone/tablet cases and live checks pass._
 
 ### Load time and downloads
 
