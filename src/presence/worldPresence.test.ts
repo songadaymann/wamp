@@ -52,7 +52,54 @@ describe('WorldPresenceClient room preview ownership', () => {
 
     expect(getRoomSnapshotCloneCount()).toBe(cloneCountBeforeEmits);
   });
+
+  it('keeps snapshot identity for counts, lease refreshes and duplicate revisions, but owns changed data', () => {
+    const harness=createHarness(vi.fn()), incoming={...createPreview(),revision:'epoch:1'};
+    const before=getRoomSnapshotCloneCount();
+    handle(harness,{type:'snapshot',peers:[],roomPopulations:{},roomEditors:{},roomPreviews:{[incoming.roomId]:incoming}});
+    const original=getStoredPreview(harness,incoming.roomId);
+    expect(getRoomSnapshotCloneCount()-before).toBe(1);
+    handle(harness,{type:'populations',roomPopulations:{'5,7':2},roomEditors:{'5,7':1}});
+    handle(harness,{type:'preview:refresh',roomId:incoming.roomId,revision:'epoch:1',timestamp:incoming.timestamp+1000});
+    handle(harness,{type:'preview:upsert',preview:{...incoming,timestamp:incoming.timestamp+2000}});
+    expect(getStoredPreview(harness,incoming.roomId).snapshot).toBe(original.snapshot);
+    expect(getRoomSnapshotCloneCount()-before).toBe(1);
+    handle(harness,{type:'preview:upsert',preview:{...incoming,revision:'epoch:2',snapshot:{...incoming.snapshot,title:'new'}}});
+    const changed=getStoredPreview(harness,incoming.roomId);
+    expect(changed.snapshot).not.toBe(original.snapshot);expect(changed.snapshot.title).toBe('new');
+    expect(getRoomSnapshotCloneCount()-before).toBe(2);
+    handle(harness,{type:'preview:refresh',roomId:incoming.roomId,revision:'epoch:1',timestamp:incoming.timestamp+9000});
+    expect(getStoredPreview(harness,incoming.roomId).timestamp).toBe(changed.timestamp);
+    handle(harness,{type:'preview:remove',roomId:incoming.roomId});
+    expect((harness.roomPreviewsByShardId as Map<string,Map<string,unknown>>).get('0,0')?.size).toBe(0);
+    callEmitSnapshot(harness);
+  });
+
+  it('uses complete snapshot baselines to remove missing rooms and retains old-server populations compatibility', () => {
+    const harness=createHarness(vi.fn()), incoming={...createPreview(),revision:'epoch:1'};
+    callReplaceRoomPreviews(harness,'0,0',{[incoming.roomId]:incoming});
+    handle(harness,{type:'populations',roomPopulations:{},roomEditors:{},roomPreviews:{}});
+    expect((harness.roomPreviewsByShardId as Map<string,Map<string,unknown>>).get('0,0')?.size).toBe(0);
+    handle(harness,{type:'preview:upsert',preview:incoming});
+    const owned=getStoredPreview(harness,incoming.roomId).snapshot;
+    handle(harness,{type:'snapshot',peers:[],roomPopulations:{},roomEditors:{},roomPreviews:{[incoming.roomId]:incoming}});
+    expect(getStoredPreview(harness,incoming.roomId).snapshot).toBe(owned);
+    handle(harness,{type:'snapshot',peers:[],roomPopulations:{},roomEditors:{},roomPreviews:{}});
+    expect((harness.roomPreviewsByShardId as Map<string,Map<string,unknown>>).get('0,0')?.size).toBe(0);
+    callEmitSnapshot(harness);
+  });
+
+  it('negotiates preview deltas alongside the refreshed identity token', async () => {
+    const harness=createHarness(vi.fn());harness.identityTokenProvider={getToken:async()=> 'signed-token'};
+    const prototype=WorldPresenceClient.prototype as unknown as {getSocketQuery:()=>Promise<unknown>};
+    expect(await prototype.getSocketQuery.call(harness)).toEqual({identityToken:'signed-token',previewDeltas:'1'});
+  });
 });
+
+function handle(harness: PresenceHarness,message: unknown): void {
+  const prototype=WorldPresenceClient.prototype as unknown as {handlePresenceMessage:(shardId:string,message:string)=>void};
+  prototype.handlePresenceMessage.call(harness,'0,0',JSON.stringify(message));
+}
 
 function createPreview(): WorldPresenceRoomPreview {
   const snapshot = createDefaultRoomSnapshot('5,7', { x: 5, y: 7 });

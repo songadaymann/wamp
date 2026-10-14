@@ -258,6 +258,7 @@ export class FakePresenceRoom {
 
 export interface ConnectOptions {
   channel?: string;
+  previewDeltas?: boolean;
   identity?: PartyKitIdentity;
   source?: PartyKitIdentityTokenSource;
   roomChat?: RoomChatPermission;
@@ -285,6 +286,7 @@ export class PresenceServerHarness {
     if (options.channel !== undefined) {
       url.searchParams.set('channel', options.channel);
     }
+    if (options.previewDeltas) url.searchParams.set('previewDeltas', '1');
 
     const connection = new FakePresenceConnection(id, url.toString());
     this.room.addConnection(connection);

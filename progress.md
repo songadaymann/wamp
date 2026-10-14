@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-14 — F035 preview deltas candidate
+
+Negotiated changed-room deltas and legacy full-map compatibility; full join/reconnect baselines; small unchanged-preview lease refreshes; stable client-owned snapshots across counts and repeated revisions. Focused server/client/restart/expiry/clear/coalescing/byte tests and TypeScript pass. Next: real local WebSocket/browser construction-room playback, full quality/mobile, hosted checks, clean-main client/PartyKit delivery and live proof. Receipt: `docs/review/wamp-preview-deltas-2026-10-14.md`. Master 140/215; unrelated work preserved.
+
 ## 2026-10-14 — F008 complete and live
 
 PR #197, source `2120472e`, merge `ad2b558a`, Pages `aef294f5`. Full source/merged 3,577-test gates, 13 mobile cases, 84 desktop/phone cadence comparisons, eight actual-engine equivalence cases and hosted checks pass. Fixed disposed membership after testing Phaser's real clear behavior. Interleaved busy-room links 856 → 431; median collision work 0.341 → 0.272 ms, with timing variability and no overall FPS claim. Guarded Pages release/health/renderer checks, 22 exact custom/immutable asset comparisons and native live desktop/phone Chrome + phone WebKit jumps pass; screenshots inspected. No manual blocker found. Master 140/215. Development servers stopped; unrelated work and pending decisions preserved. Receipt: `docs/review/wamp-grouped-collisions-2026-10-14.md`.

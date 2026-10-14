@@ -1,4 +1,6 @@
 import PartySocket from 'partysocket';
+import { ownRoomPreview } from './roomPreviewCache';
+import type { RoomPreviewDeltaMessage } from '../partykit/presenceProtocol';
 import { getAuthDebugState, getResolvedPartykitConfig } from '../auth/client';
 import { PartyKitIdentityTokenProvider } from './identityTokenClient';
 import { resolveActivePlayerAvatarId } from '../player/avatar/runtime';
@@ -33,7 +35,6 @@ const PRESENCE_IDLE_KEEPALIVE_MS = 5_000;
 const REMOTE_PRESENCE_SNAPSHOT_FLUSH_INTERVAL_MS = 140;
 const PRESENCE_GUEST_IDENTITY_STORAGE_KEY = 'ep_presence_guest_identity_v1';
 let volatileGuestIdentity: WorldPresenceIdentity | null = null;
-const ROOM_PREVIEW_TTL_MS = 120_000;
 
 export interface WorldPresenceIdentity {
   userId: string;
@@ -79,6 +80,7 @@ export interface WorldPresenceRoomPreview {
   userId: string;
   displayName: string;
   shardId: string;
+  revision?: string;
 }
 
 export interface WorldPresenceSnapshot {
@@ -125,7 +127,7 @@ interface PresencePopulationsMessage {
   type: 'populations';
   roomPopulations: Record<string, number>;
   roomEditors: Record<string, number>;
-  roomPreviews: Record<string, WorldPresenceRoomPreview>;
+  roomPreviews?: Record<string, WorldPresenceRoomPreview>;
 }
 
 type PresenceMessage =
@@ -134,6 +136,7 @@ type PresenceMessage =
   | PresenceUpsertsMessage
   | PresenceRemoveMessage
   | PresencePopulationsMessage
+  | RoomPreviewDeltaMessage
   | PvpPresenceServerMessage;
 
 interface PresencePublishMessage {
@@ -504,9 +507,10 @@ export class WorldPresenceClient {
     });
   }
 
-  private async getSocketQuery(): Promise<{ identityToken: string }> {
+  private async getSocketQuery(): Promise<{ identityToken: string; previewDeltas: string }> {
     return {
       identityToken: await this.identityTokenProvider.getToken(),
+      previewDeltas: '1',
     };
   }
 
@@ -613,8 +617,29 @@ export class WorldPresenceClient {
       case 'populations':
         this.replaceRoomPopulations(shardId, message.roomPopulations);
         this.replaceRoomEditors(shardId, message.roomEditors);
-        this.replaceRoomPreviews(shardId, message.roomPreviews);
+        if (message.roomPreviews !== undefined) this.replaceRoomPreviews(shardId, message.roomPreviews);
         break;
+      case 'preview:upsert': {
+        const preview = message.preview;
+        if (!preview || typeof preview.roomId !== 'string') return;
+        const previews = this.roomPreviewsByShardId.get(shardId) ?? new Map<string, WorldPresenceRoomPreview>();
+        const owned = ownRoomPreview(shardId, preview.roomId, preview, previews.get(preview.roomId));
+        if (!owned) return;
+        previews.set(preview.roomId, owned);
+        this.roomPreviewsByShardId.set(shardId, previews);
+        break;
+      }
+      case 'preview:remove':
+        this.roomPreviewsByShardId.get(shardId)?.delete(message.roomId);
+        break;
+      case 'preview:refresh': {
+        const previews = this.roomPreviewsByShardId.get(shardId);
+        const preview = previews?.get(message.roomId);
+        if (!preview || preview.revision !== message.revision || !Number.isFinite(message.timestamp)
+          || message.timestamp < preview.timestamp) return;
+        previews!.set(message.roomId, { ...preview, timestamp: message.timestamp });
+        break;
+      }
       default:
         return;
     }
@@ -655,21 +680,10 @@ export class WorldPresenceClient {
     next: Record<string, WorldPresenceRoomPreview> | null | undefined,
   ): void {
     const shardPreviews = new Map<string, WorldPresenceRoomPreview>();
+    const previous = this.roomPreviewsByShardId.get(shardId);
     for (const [roomId, preview] of Object.entries(next ?? {})) {
-      if (!preview || typeof preview !== 'object' || typeof preview.timestamp !== 'number') {
-        continue;
-      }
-      if (isRoomPreviewExpired(preview.timestamp)) {
-        continue;
-      }
-
-      shardPreviews.set(roomId, {
-        ...preview,
-        roomId,
-        shardId,
-        roomCoordinates: { ...preview.roomCoordinates },
-        snapshot: cloneRoomSnapshot(preview.snapshot),
-      });
+      const owned = ownRoomPreview(shardId, roomId, preview, previous?.get(roomId));
+      if (owned) shardPreviews.set(roomId, owned);
     }
 
     this.roomPreviewsByShardId.set(shardId, shardPreviews);
@@ -825,10 +839,6 @@ export class WorldPresenceClient {
 
 function getNowMs(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
-}
-
-function isRoomPreviewExpired(timestamp: number): boolean {
-  return !Number.isFinite(timestamp) || Date.now() - timestamp > ROOM_PREVIEW_TTL_MS;
 }
 
 function getPresencePublishSignature(presence: WorldPresencePayload): string {
