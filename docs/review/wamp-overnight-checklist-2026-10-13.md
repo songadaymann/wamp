@@ -19,7 +19,7 @@ This records the choice; animated in-game playback and upload conversion remain 
 ## Work record
 
 - Setup: inspected current main, preserved unrelated work, recorded the selected asset and the deadline. Previous F023 is verified live, final main `f009b55f`, Pages `26d150cc`, with all hosted checks green.
-- F038: inspecting the hourly cleanup, replay ingestion/admin viewer, bucket bindings and expiry boundaries before implementation.
+- F038 candidate: extracted hourly maintenance; indexed, bounded deletion of expired sessions/magic-link tokens and dispatched outbox rows older than seven days. New replay JPEGs go to private R2; D1 stores only metadata and a frame key. Protected admin detail reads hydrate new images and keep legacy inline images working. Removed request-time purges; expired recordings stay hidden. Retry, conflicting-upload, opt-out race, storage-failure, expiry-boundary and scheduled-handler checks pass. Production read-only inventory: 307 expired sessions, 472 expired magic links, 16,772 old dispatched outbox rows, no expired replays (20:18 New York). Production/safety replay buckets created with seven-day lifecycle rules. Safety database caught up through migration 0065; full quality gates and live safety proof are in progress.
 
 ## Morning audit
 

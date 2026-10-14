@@ -8,10 +8,10 @@ import { sendDailyFeatureEmail } from './worker/daily/emails';
 import { handleMyActivity } from './worker/activity/routes';
 import { handleActivityUnsubscribe } from './worker/activity/unsubscribe';
 import { runActivityEmails } from './worker/activity/emails';
-import { handleGuestReplay, purgeGuestReplays } from './worker/guestReplay/routes';
-import { handleBugReports, purgeBugReports } from './worker/bugReports/routes';
-import { handleLostSongs, purgeLostSongSessions } from './worker/lostSongs/routes';
-import { pruneRateLimitEvents } from './worker/core/rateLimit';
+import { handleGuestReplay } from './worker/guestReplay/routes';
+import { runHourlyMaintenance } from './worker/maintenance/hourly';
+import { handleBugReports } from './worker/bugReports/routes';
+import { handleLostSongs } from './worker/lostSongs/routes';
 import { handleAdminRequest } from './worker/admin/routes';
 import { handleAuthRequest } from './worker/auth/routes';
 import {
@@ -28,7 +28,6 @@ import { handleChatRequest } from './worker/chat/routes';
 import { handleGuestActivityHeartbeat } from './worker/guestActivity/routes';
 import { handleGuestRoomDraftRequest } from './worker/guestRoomDrafts/routes';
 import { handleClaimGuestRequest, handleGuestProgressHistoryRequest, handleGuestRunRequest } from './worker/guestRuns/routes';
-import { pruneGuestRuns } from './worker/guestRuns/attempts';
 import { scheduleRunGhostArchive } from './worker/runs/ghostArchive';
 import { checkGhostArchiveCost } from './worker/runs/ghostArchiveCosts';
 import { handleGuestbookRequest } from './worker/guestbook/routes';
@@ -345,11 +344,7 @@ export default {
       } catch {
         console.error(JSON.stringify({ event: 'run-ghost-cost-alert-failed' }));
       }
-      await purgeGuestReplays(env);
-      await purgeBugReports(env);
-      await purgeLostSongSessions(env);
-      await pruneGuestRuns(env);
-      await pruneRateLimitEvents(env);
+      await runHourlyMaintenance(env, new Date(event.scheduledTime));
     }
     const activity = await runActivityEmails(env, { now: new Date(event.scheduledTime).toISOString() });
     console.log(JSON.stringify({ event: 'activity-email-scheduled', ...activity }));

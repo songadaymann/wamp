@@ -1,0 +1,24 @@
+import { expect, it, vi } from 'vitest';
+import type { Env } from '../core/types';
+import { pruneExpiredRecords } from './pruneExpired';
+import { purgeGuestReplays } from '../guestReplay/frames';
+import { purgeBugReports } from '../bugReports/routes';
+import { purgeLostSongSessions } from '../lostSongs/routes';
+import { pruneGuestRuns } from '../guestRuns/attempts';
+import { pruneRateLimitEvents } from '../core/rateLimit';
+import { runHourlyMaintenance } from './hourly';
+vi.mock('./pruneExpired', () => ({ pruneExpiredRecords: vi.fn() }));
+vi.mock('../guestReplay/frames', () => ({ purgeGuestReplays: vi.fn() }));
+vi.mock('../bugReports/routes', () => ({ purgeBugReports: vi.fn() }));
+vi.mock('../lostSongs/routes', () => ({ purgeLostSongSessions: vi.fn() }));
+vi.mock('../guestRuns/attempts', () => ({ pruneGuestRuns: vi.fn() }));
+vi.mock('../core/rateLimit', () => ({ pruneRateLimitEvents: vi.fn() }));
+it('passes the scheduled timestamp to expiry cleanup and preserves existing maintenance', async () => {
+  const env = {} as Env;
+  const now = new Date('2026-10-14T01:17:00.000Z');
+  await runHourlyMaintenance(env, now);
+  expect(pruneExpiredRecords).toHaveBeenCalledExactlyOnceWith(env, now);
+  expect(purgeGuestReplays).toHaveBeenCalledExactlyOnceWith(env, now.toISOString());
+  for (const cleanup of [purgeBugReports, purgeLostSongSessions, pruneGuestRuns, pruneRateLimitEvents])
+    expect(cleanup).toHaveBeenCalledExactlyOnceWith(env);
+});

@@ -1,4 +1,5 @@
 /// <reference path="../../../../generated-bindings/api-worker-configuration.d.ts" />
+import type { R2Bucket } from '@cloudflare/workers-types';
 import type { ApiTokenRecord, ApiTokenScope, AuthUser } from '../../../auth/model';
 import type { AgentAccount, AgentTokenRecord, RequestAuthSource, RequestPrincipal } from '../../../agents/model';
 import type { CourseSnapshot } from '../../../courses/model';
@@ -100,6 +101,7 @@ export interface Env {
   WORLD_TILE_QUEUE?: QueueBinding<import('../worldTiles/service').WorldTileGenerationJob>;
   WORLD_TILE_BUCKET?: R2BucketBinding;
   RUN_GHOST_BUCKET?: RunGhostBucketBinding;
+  GUEST_REPLAY_BUCKET?: R2Bucket;
   RUN_GHOST_ALERT_EMAIL?: string;
   RUN_GHOST_COST_ALERTS_ENABLED?: string;
   RUN_GHOST_BILLING_CYCLE_DAY?: string;

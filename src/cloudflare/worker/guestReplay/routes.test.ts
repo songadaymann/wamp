@@ -1,10 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleGuestReplay, purgeGuestReplays, validateReplaySample } from './routes';
 import type { D1PreparedStatement, Env } from '../core/types';
 let db: DatabaseSync;
 let env: Env;
+let objects: Map<string, Uint8Array>;
+const image = 'data:image/jpeg;base64,/9j/AAAA';
+const bucket = () => ({
+  put: vi.fn(async (key: string, value: Uint8Array) => { objects.set(key, value); return { key }; }),
+  get: vi.fn(async (key: string) => objects.has(key) ? { arrayBuffer: async () => objects.get(key)!.slice().buffer } : null),
+  list: vi.fn(async (options: { prefix: string; limit: number }) => {
+    const keys = [...objects.keys()].filter(key => key.startsWith(options.prefix));
+    return { objects: keys.slice(0, options.limit).map(key => ({ key })), truncated: keys.length > options.limit };
+  }),
+  delete: vi.fn(async (keys: string[]) => { keys.forEach(key => objects.delete(key)); }),
+});
 const visitor = '00000000-0000-4000-8000-000000000000';
 function statement(sql: string, values: unknown[] = []): D1PreparedStatement {
   return {
@@ -15,14 +26,21 @@ function statement(sql: string, values: unknown[] = []): D1PreparedStatement {
   };
 }
 beforeEach(() => {
+  objects = new Map();
   db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
   db.exec(readFileSync('migrations/0046_guest_replays.sql','utf8'));
   db.exec(readFileSync('migrations/0047_guest_replay_visit_link.sql','utf8'));
-  env = {ADMIN_API_KEY:'test-key', DB:{prepare:statement, async batch(statements: D1PreparedStatement[]) {
-    db.exec('BEGIN');
-    try { const results = []; for (const s of statements) results.push(await s.all()); db.exec('COMMIT'); return results; }
-    catch(error) { db.exec('ROLLBACK'); throw error; }
+  let queued: Promise<unknown> = Promise.resolve();
+  env = {ADMIN_API_KEY:'test-key', DB:{prepare:statement, batch(statements: D1PreparedStatement[]) {
+    // D1 serializes transactions, including simultaneous upload requests.
+    const pending = queued.then(async () => {
+      db.exec('BEGIN');
+      try { const results = []; for (const s of statements) results.push(await s.all()); db.exec('COMMIT'); return results; }
+      catch(error) { db.exec('ROLLBACK'); throw error; }
+    });
+    queued = pending.catch(() => undefined);
+    return pending;
   }}} as unknown as Env;
 });
 afterEach(() => db.close());
@@ -45,6 +63,107 @@ describe('guest replay storage', () => {
     expect(list.sessions[0]).not.toHaveProperty('write_token');
     const detail = await (await call(`/api/admin/guest-replays/${credentials.id}`,undefined,true)).json();
     expect(detail.samples).toHaveLength(2);
+  });
+
+  it('keeps new JPEGs in R2 and hydrates protected reads alongside legacy frames', async () => {
+    const storage = bucket();
+    env.GUEST_REPLAY_BUCKET = storage as unknown as NonNullable<Env['GUEST_REPLAY_BUCKET']>;
+    const credentials = await start();
+    const batch = { ...credentials, samples: [{ ...sample(), image }] };
+    await call('/api/guest-replays/samples', batch);
+    await call('/api/guest-replays/samples', { ...batch, samples: [{ ...sample(), image: image + 'AAAA' }] });
+    expect(storage.put).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse((db.prepare('SELECT payload FROM guest_replay_samples').get() as {payload: string}).payload);
+    expect(payload.image).toBeNull();
+    expect(payload.frameKey).toMatch(new RegExp(`^guest-replays/${credentials.id}/000-`));
+    expect(storage.put.mock.calls[0][1]).toEqual(Uint8Array.from(atob(image.split(',')[1]), char => char.charCodeAt(0)));
+    db.prepare('INSERT INTO guest_replay_samples VALUES (?,?,?)').run(credentials.id, 1, JSON.stringify({ ...sample(1), image }));
+    await expect(call(`/api/admin/guest-replays/${credentials.id}`)).rejects.toMatchObject({ status: 403 });
+    expect(storage.get).not.toHaveBeenCalled();
+    const detail = await (await call(`/api/admin/guest-replays/${credentials.id}`, undefined, true)).json();
+    expect(detail.samples.map((frame: {image: string}) => frame.image)).toEqual([image, image]);
+    expect(detail.samples[0]).not.toHaveProperty('frameKey');
+    expect(storage.get).toHaveBeenCalledTimes(1);
+    await call('/api/guest-replays/discard', credentials);
+    expect(objects.size).toBe(0);
+  });
+  it('leaves D1 untouched when image storage is missing or fails', async () => {
+    const credentials = await start();
+    const batch = { ...credentials, samples: [{ ...sample(), image }] };
+    await expect(call('/api/guest-replays/samples', batch)).rejects.toMatchObject({ status: 503 });
+    const storage = bucket();
+    storage.put.mockRejectedValueOnce(new Error('R2 unavailable'));
+    env.GUEST_REPLAY_BUCKET = storage as unknown as NonNullable<Env['GUEST_REPLAY_BUCKET']>;
+    await expect(call('/api/guest-replays/samples', batch)).rejects.toThrow('R2 unavailable');
+    expect(db.prepare('SELECT COUNT(*) AS n FROM guest_replay_samples').get()).toMatchObject({ n: 0 });
+    expect(db.prepare('SELECT played FROM guest_replay_sessions').get()).toMatchObject({ played: 0 });
+  });
+  it('cleans up an upload that races with opt-out', async () => {
+    const storage = bucket();
+    env.GUEST_REPLAY_BUCKET = storage as unknown as NonNullable<Env['GUEST_REPLAY_BUCKET']>;
+    const credentials = await start();
+    storage.put.mockImplementationOnce(async (key, bytes) => {
+      await call('/api/guest-replays/discard', credentials);
+      objects.set(key, bytes);
+      return { key };
+    });
+    await expect(call('/api/guest-replays/samples', { ...credentials, samples: [{ ...sample(), image }] })).rejects.toThrow();
+    expect(objects.size).toBe(0);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM guest_replay_samples').get()).toMatchObject({ n: 0 });
+  });
+  it('hides expired sessions without page-load deletes, then prunes only their R2 frames', async () => {
+    const storage = bucket();
+    env.GUEST_REPLAY_BUCKET = storage as unknown as NonNullable<Env['GUEST_REPLAY_BUCKET']>;
+    const expired = await start();
+    const active = await start();
+    for (const credentials of [expired, active]) await call('/api/guest-replays/samples', { ...credentials, samples: [{ ...sample(), image }] });
+    db.prepare("UPDATE guest_replay_sessions SET expires_at='2000-01-01' WHERE id=?").run(expired.id);
+    const list = await (await call('/api/admin/guest-replays', undefined, true)).json();
+    expect(list.sessions.map((session: {id: string}) => session.id)).toEqual([active.id]);
+    expect((await (await call(`/api/admin/guest-replays/${expired.id}`, undefined, true)).json()).samples).toEqual([]);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM guest_replay_sessions').get()).toMatchObject({ n: 2 });
+    await purgeGuestReplays(env);
+    expect([...objects.keys()]).toHaveLength(1);
+    expect([...objects.keys()][0]).toContain(active.id);
+    await call(`/api/admin/guest-replays/${active.id}`, undefined, true, 'DELETE');
+    expect(objects.size).toBe(0);
+  });
+  it('retains the session when R2 deletion fails, allowing deletion to be retried', async () => {
+    const storage = bucket();
+    env.GUEST_REPLAY_BUCKET = storage as unknown as NonNullable<Env['GUEST_REPLAY_BUCKET']>;
+    const credentials = await start();
+    await call('/api/guest-replays/samples', { ...credentials, samples: [{ ...sample(), image }] });
+    storage.delete.mockRejectedValueOnce(new Error('R2 unavailable'));
+    await expect(call('/api/guest-replays/discard', credentials)).rejects.toThrow('R2 unavailable');
+    expect(db.prepare('SELECT id FROM guest_replay_sessions').get()).toMatchObject({id:credentials.id});
+    expect(objects.size).toBe(1);
+    const binding = env.GUEST_REPLAY_BUCKET;
+    env.GUEST_REPLAY_BUCKET = undefined;
+    await expect(call('/api/guest-replays/discard', credentials)).rejects.toMatchObject({status:503});
+    expect(db.prepare('SELECT id FROM guest_replay_sessions').get()).toMatchObject({id:credentials.id});
+    env.GUEST_REPLAY_BUCKET = binding;
+    await call('/api/guest-replays/discard', credentials);
+    expect(objects.size).toBe(0);
+  });
+  it('discards the losing objects from concurrent conflicting retries', async () => {
+    const storage = bucket();
+    env.GUEST_REPLAY_BUCKET = storage as unknown as NonNullable<Env['GUEST_REPLAY_BUCKET']>;
+    const credentials = await start();
+    // Both writes reach R2 before either is allowed to insert its D1 metadata.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    storage.put.mockImplementation(async (key, bytes) => {
+      objects.set(key, bytes);
+      if (objects.size === 2) release();
+      await gate;
+      return {key};
+    });
+    await Promise.all([image, image + 'AAAA'].map(frame => call('/api/guest-replays/samples', {
+      ...credentials, samples:[{...sample(), image:frame}],
+    })));
+    expect(objects.size).toBe(1);
+    const payload = JSON.parse((db.prepare('SELECT payload FROM guest_replay_samples').get() as {payload:string}).payload);
+    expect(objects.has(payload.frameKey)).toBe(true);
   });
   it('links a visit and opens only the requested recording', async () => {
     const first = await start('dashboard-visit-123');
