@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-14 — F095 complete and live
+
+PR #199 / source `c2c2af9f`, main `bebc8140`, Pages `10049caa`, Worker `3a61d6e1`, matching PartyKit. Shared presence/chat, legacy fallback, startup-gated identity refresh, nearby realtime coverage and complete close handshakes. Fixture 50 → 9 sockets / 2 → 1 token requests; native signed chat/permissions/pan/return and actual production nine → zero → nine, clean close codes and gameplay pass. Full 3,600-test/mobile/hosted gates, 22 exact live file hashes and final health pass after transient authorization/asset-switch checks. No FPS claim. Master 142/215. Owned tests stopped; primary auth lane, animation choice/server and pending decisions preserved. Receipt: `docs/review/wamp-shared-realtime-2026-10-14.md`.
+
 ## 2026-10-14 — F095 shared realtime started
 
 Next authorized checklist item after F035. Plan: shared negotiated presence/chat transport with legacy rollout fallback, startup-gated identity refresh and an independent realtime radius, then real connection/reconnect/permissions measurements and release if all checks pass. No changes to the primary dirty auth lane. Master remains 141/215. Receipt: `docs/review/wamp-shared-realtime-2026-10-14.md`.

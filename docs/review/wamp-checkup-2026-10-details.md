@@ -1696,6 +1696,8 @@ The core finding stands: there is no server-side interest filter in flushPresenc
 
 ### F095: Each idle visitor holds 50 PartyKit websockets (25 presence + 25 chat), even in a background tab
 
+**Completed 2026-10-14:** PR #199 / main `bebc8140`, Pages `10049caa`, Worker `3a61d6e1`, matching PartyKit. Negotiated shared presence/chat, legacy fallback, startup-gated identity/avatar refresh and nine nearby realtime chunks preserve existing signed permissions, preview/PvP behavior and terrain loading. Pinned-runtime close handshakes now complete. Fixture 50 → 9 sockets and 2 → 1 token requests; native/live closure, hidden visibility/return, UI chat, permissions and gameplay pass, with full 3,600-test/mobile/hosted gates and exact live asset hashes. Far-map/lobby coverage and physical-device OS checks remain separate. [Receipt](wamp-shared-realtime-2026-10-14.md).
+
 - **Area:** Live play-through (desktop + mobile, browser)
 - **Type:** improvement · **impact:** medium · **effort:** medium
 
