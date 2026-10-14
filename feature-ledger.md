@@ -1,3 +1,7 @@
+## 2026-10-14 — F008 complete and live
+
+PR #197, source `2120472e`, merge `ad2b558a`, Pages `aef294f5`. Full source/merged 3,577-test gates, 13 mobile cases, 84 desktop/phone cadence comparisons, eight actual-engine equivalence cases and hosted checks pass. Fixed disposed membership after testing Phaser's real clear behavior. Interleaved busy-room links 856 → 431; median collision work 0.341 → 0.272 ms, with timing variability and no overall FPS claim. Guarded Pages release/health/renderer checks, 22 exact custom/immutable asset comparisons and native live desktop/phone Chrome + phone WebKit jumps pass; screenshots inspected. No manual blocker found. Master 140/215. Development servers stopped; unrelated work and pending decisions preserved. Receipt: `docs/review/wamp-grouped-collisions-2026-10-14.md`.
+
 ## 2026-10-14 — F008 validation resumed
 
 Jonathan authorized completing and shipping the collision candidate if its checks pass. Actual engine comparisons match legacy body trajectories and switch/push callback counts across eight cases; fixed disposed-group membership after matching Phaser's real clear behavior. Desktop 63 and phone 21 full-scene cadence comparisons pass; screenshots inspected, zero page errors. Full 3,577-test quality gates and all 13 mobile cases pass, with zero errors/missing fixtures. Final busy-room measurements, hosted CI and guarded Pages/live proof remain. Receipt: `docs/review/wamp-grouped-collisions-2026-10-14.md`. The overnight goal remains complete; this is the newly authorized continuation.
