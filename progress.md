@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-14 — 5am overnight cutoff audited
+
+The authorized window is closed. Master 139/215, up from 136: F038, F173 and F006 complete; F089 phone recording-notice and F019 lazy-dialog/cache slices delivered. Latest live source is main `51b23461`, Pages `f1e31bd8`, Worker `56a638d4`; cutoff health and exact entry-file hash pass. Midnight auth/outbox expiry counts are all zero. Selected 240×135 / 32-color ordered-dither animation remains 917,468 bytes with its verified hash. F008 grouping is an uncommitted candidate with preliminary measurements and focused tests; full quality/mobile/real-scene verification remains unfinished. Owned Vite/replay test servers stopped, comparison server retained, unrelated work and pending decisions preserved. Final audit: `docs/review/wamp-overnight-checklist-2026-10-13.md`. Cutoff bookkeeping is committed locally without starting another deployment.
+
 ## 2026-10-14 overnight — F006 live
 
 Master 139/215. PR #196 / main `51b23461`, Pages `f1e31bd8`, Worker `56a638d4`; all hosted/full 3,571-test gates, 63 physics comparisons, 13 phone cases, guarded full release and 22 exact file hashes pass. Live movement succeeds in the gravity room on desktop/phone Chrome and phone WebKit; installed client has 326 live objects and no errors. Isolated scan roughly halves; no overall FPS claim. Next F008 grouped collisions from current main.

@@ -4,7 +4,7 @@ Original prompt: "i think the 240px one works pretty good! Let's record that as 
 
 ## Window and plan
 
-Work begins October 13 at 8:07pm America/New_York and ends October 14 at 5:00am (09:00 UTC). Goal is active. A one-shot heartbeat records the 5am cutoff. Preserve the primary dirty checkout and decision-gated/withheld items. Work from main `f009b55f` in the attached clean checkout, branch `codex/wamp-overnight-checklist-2026-10-13`. Start with approved F038 (expired auth/outbox cleanup and new replay frames in R2), then F173 (Comfort settings and remembered room-camera preference), then other actionable checklist items within the remaining time. Make each slice concrete, tested and reviewable; merge and verify deliveries that meet their gates.
+Work begins October 13 at 8:07pm America/New_York and ends October 14 at 5:00am (09:00 UTC). The window is closed; the cutoff audit is below. A one-shot heartbeat records the 5am cutoff. Preserve the primary dirty checkout and decision-gated/withheld items. Work from main `f009b55f` in the attached clean checkout, branch `codex/wamp-overnight-checklist-2026-10-13`. Start with approved F038 (expired auth/outbox cleanup and new replay frames in R2), then F173 (Comfort settings and remembered room-camera preference), then other actionable checklist items within the remaining time. Make each slice concrete, tested and reviewable; merge and verify deliveries that meet their gates.
 
 ## Selected animation
 
@@ -23,7 +23,33 @@ This records the choice; animated in-game playback and upload conversion remain 
 
 ## Morning audit
 
-At the deadline record the final checklist count, source/merge/release IDs, test and live proof for each delivered slice, remaining review candidates, blockers and pending decisions. Completion means the selection is recorded and the requested overnight work window has been carried out and audited; it does not mean all 215 checklist items are complete.
+Cutoff heartbeat received at 05:00:10 America/New_York on October 14; clock verified at 09:00:20 UTC. No new implementation, test campaign or release was started after the cutoff. Final master count is **139 of 215 complete**, verified against the actual checked rows, up from 136 at the start of the overnight window. Three items became complete and two partial items received delivered improvements. The entire checklist is not complete.
+
+| Delivered slice | Source / merge | Delivery and evidence |
+|---|---|---|
+| F038: replay frames in private R2; bounded hourly expiry | `4aa00641` / `1352cb94`, [PR #192](https://github.com/songadaymann/wamp/pull/192) | Worker `5416ed6f` at delivery; migration 0065; 3,533 tests and hosted gates; actual production cron removed expired D1 recording data and its R2 object. [Receipt](wamp-replay-storage-cleanup-2026-10-13.md). |
+| F173: Comfort preferences and remembered camera | `08ebdc8b` / `c949c360`, [PR #193](https://github.com/songadaymann/wamp/pull/193) | Pages `f185351c`, matching Worker `09f01495`; 3,545 combined-main tests; native desktop/phone/WebKit settings, persistence and movement checks. [Receipt](wamp-comfort-settings-2026-10-13.md). |
+| F089, partial: recording notice clears phone controls | `4bdb0dca` / `dd866ceb`, [PR #194](https://github.com/songadaymann/wamp/pull/194) | Pages `b1e7c86d`; 3,545 tests, 13 phone/tablet cases; actual live touch jump with the notice still visible. [Receipt](wamp-recording-notice-phone-2026-10-13.md). |
+| F019, partial: seven more lazy dialogs and stable room-data chunk | `c7211e5f` / `189a2153`, [PR #195](https://github.com/songadaymann/wamp/pull/195) | Pages `c9e761fb`; 3,553 tests, 13 mobile cases; queue/cancellation/shared-playlist checks, stable chunk across a real copy rebuild, 22 custom/immutable asset comparisons. [Receipt](wamp-lazy-dialogs-cache-2026-10-13.md). |
+| F006: cached special-tile scans and fewer repeated queries | `aafc986e` / `51b23461`, [PR #196](https://github.com/songadaymann/wamp/pull/196) | Pages `f1e31bd8`, Worker `56a638d4`; 3,571 tests, 63 full-scene physics comparisons, 13 mobile cases, 22 asset comparisons and live movement. Controlled scan median 3.3 → 1.5 ms per 1,600 calls; no overall FPS claim. [Receipt](wamp-special-tile-cache-2026-10-13.md). |
+
+Authoritative remote main and the working branch both pointed to docs commit `7147bad694c2c48cffd157bf97e124c4729b1e59` at cutoff. PR #196 is merged and all four source checks are successful. The clean release clone has no changes. A fresh cutoff read confirms production health is good, migration 0065 is applied and the render outbox has zero pending work. The deployed entry `main-AJ75RsA7.js` still matches the clean local release byte for byte (SHA-256 `e26c5b7fd086dc2e2f51fff5f171553bf6339fd85a6e2b51e4cc2fe914cffa01`). Audit proof: `/tmp/wamp-cutoff-2026-10-14.json`.
+
+The midnight production expiry query already recorded zero expired sessions, zero expired magic links and zero old dispatched-outbox rows, with no writes by the query. This completes the observed backlog drain; proof is `/tmp/wamp-f038-2026-10-13/after-midnight-outbox.json`.
+
+### Unfinished F008 candidate
+
+Preserved, uncommitted, in the attached worktree on `codex/wamp-category-colliders-2026-10-14`: `interactionCoordinator.ts`, `existingBodyGroup.ts`, `existingBodyGroup.test.ts`, and `interactionCoordinator.groups.test.ts`. No PR, merge or delivery exists for this candidate. The master F008 row remains partial. The six new focused unit tests and existing coordinator tests passed during the session; the last typecheck process result was not retained for the cutoff audit, so it is not claimed here. Full quality gates, mobile smoke, real-scene physics/pushing/switch/transition verification and production proof remain required.
+
+Two pre-cutoff Chrome/Metal busy-room rounds each collected 262 samples across nine rooms with roughly 326 objects. Baseline collider counts 848/873 become 471/453; mean collision work 0.221/0.226 ms becomes 0.179/0.202 ms. These are preliminary measurements, not sufficient release evidence or an overall FPS claim. Files: `/tmp/wamp-f008-2026-10-14/baseline.json`, `candidate.json` and screenshots. The latest implementation-only addition is shutdown cleanup; this was not followed by a full verification campaign. No further implementation was delivered after the 12:30am checkpoint.
+
+### Preserved choice, limitations and cleanup
+
+The selected animated asset remains exactly **240×135, 32 colors, ordered dithering, 917,468 bytes**; cutoff SHA-256 matches the recorded value above. Upload conversion and animated in-game playback remain unimplemented. The comparison remains available on local port 4186 for morning review. A fresh read-only size check still finds 23 other uploads at 1,047–302,376 bytes, median 31,677 bytes, and the current animation download at 2,761,006 bytes.
+
+Safety's registered cron was not observed executing; only its owned expired test recording was cleaned manually. Production cron has direct expiry proof. WebKit's third-party challenge-frame errors reproduced on the previous release; real iOS challenge behavior remains a manual follow-up. F019 still has remaining eager dialogs; F089 still has keyboard/tap-target coverage and physical-device checks outstanding.
+
+Pending product/security/account decisions and the unrelated primary dirty checkout are preserved. The owned candidate/baseline Vite servers on 4188/4190 and replay test server on 4187 were stopped; no associated child processes remain. Another chat's server on 3060 was identified and left running. No new automation was created. The app goal tracker reported `blocked` despite the previously authorized work; completion is recorded only after this cutoff audit and asset verification, and applies to the overnight work window rather than all 215 items. This final bookkeeping is saved locally; it is not pushed at cutoff, avoiding a new automatic deployment.
 
 ### 8:40pm checkpoint
 
