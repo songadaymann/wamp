@@ -1,3 +1,7 @@
+## 2026-10-13 overnight — F173 live
+
+PR #193 / main `c949c360`, Pages `f185351c`, API Worker `09f01495` (keeps independently merged Room video metadata). Master 137/215. Combined-main 3,545 tests/all hosted checks, guarded releases and live desktop/phone settings, keyboard radio, persistence, touch jump and fixed framing pass. Receipt `docs/review/wamp-comfort-settings-2026-10-13.md`. F038 R2 cron expiry is due for the owned production specimen at 10:17pm; safety cron registration is correct but execution remains unobserved. Next: recording-notice overlap on phone, then F019.
+
 ## 2026-10-13 overnight — F173 Comfort candidate
 
 Device-local System/On/Off motion preference and Follow/Whole room camera choice are implemented on `codex/wamp-comfort-settings-2026-10-13`. Full 3,538-test gates, native desktop/Chromium phone/WebKit phone controls/effects/reload checks, inspected screenshots, installed-client gameplay and authored-room camera smoke pass. Safari menu height and Camera label contrast corrected. Receipt: `docs/review/wamp-comfort-settings-2026-10-13.md`; publication/live proof next. F038's first production sweep removed all expired auth rows and 5,000 old outbox rows; safety replay expiry remains under investigation.

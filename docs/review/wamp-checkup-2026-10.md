@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 136 of 215 done.**
+**Progress: 137 of 215 done.**
 
 **October 9 release:** [All 18 overnight slices and both morning fixes are live](wamp-overnight-release-2026-10-09.md), preserving partner PR #99 and ghost archive PR #100. Five partial items remain unticked; native background-tab audio still needs a physical check.
 
@@ -358,7 +358,7 @@ Dialog markup is good. Players who rely on the keyboard, need to pause, read sma
 - [ ] **F170** There's no pause: menus opened mid-run leave enemies, hazards and the timer running · medium impact · medium effort
 - [ ] **F171** Phone UI text is 6–7px pixel font, and there's no readable-font or larger-text option · medium impact · medium effort
 - [x] **F174** The signature red buttons (Build, Publish, Mint, errors, chat badge) fail text contrast at about 3:1 · medium impact · small effort — **done 2026-10-13** (`c2e55528`, [PR #187](https://github.com/songadaymann/wamp/pull/187)). Dark ink on the existing signature red now passes text contrast for controls, badges and error banners.
-- [ ] **F173** Reduced-motion is ignored except for scrolling comments; add a Comfort section (reduce motion and flashes, camera style) · low impact · small effort — _Partly done 2026-10-11 (`a887c044`, [PR #154](https://github.com/songadaymann/wamp/pull/154)): with the system "reduce motion" setting on, combat and stomp hits don't shake the screen, a PvP hit drops the full-screen red flash and shake, flickering lights hold steady, and reward/XP cards land without sliding. Open (product choices): an in-game Comfort setting and a remembered camera style._
+- [x] **F173** Comfort settings and a remembered play camera · low impact · small effort — _Done 2026-10-13: [receipt](wamp-comfort-settings-2026-10-13.md), [PR #193](https://github.com/songadaymann/wamp/pull/193), main `c949c360`, Pages `f185351c`. System/On/Off motion and Follow/Whole room are saved on the device; authored fixed rooms keep their framing. Native desktop/Chromium phone/WebKit phone and live keyboard/touch/reload checks pass._
 - [ ] **F172** Add an Assist mode (slower game speed, safe respawn) that plays as practice so leaderboards stay clean · medium impact · medium effort
 - [ ] **F177** Controls are hard-coded: no remapping, WASD breaks on AZERTY keyboards, and there's no Z/X layout · low impact · medium effort
 - [x] **F179** Checkpoint flags change only red to green, which colour-blind players can barely tell apart · low impact · small effort — **done 2026-10-11** (`82c34488`, [PR #159](https://github.com/songadaymann/wamp/pull/159)). Reached checkpoint flags also fade to 55% opacity (rooms and Expanded Rooms), so reached and pending differ by more than colour; the number stays bright. Not done: a distinct reached-flag sprite.

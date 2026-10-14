@@ -6332,6 +6332,8 @@ The only prefers-reduced-motion checks are roomComments.ts:887/999, which call a
 
 Evidence (Playwright `reducedMotion` emulation, calling the real hooks): combat shake yes → no; PvP shake/flash/overlay yes → no; reward card animation 0.22s → 0.001s. Open (product choices): a Comfort setting and a remembered camera choice. Receipt: `wamp-motion-frames-bridge-2026-10-11.md`.
 
+**2026-10-13 complete.** [PR #193](https://github.com/songadaymann/wamp/pull/193), main `c949c360`, Pages `f185351c`. Settings offers device-local System/On/Off motion and Follow/Whole room camera choices, with CSS/gameplay sharing the effective preference. Authored fixed rooms remain fixed; room transitions snap with reduced motion. Native desktop/Chromium phone/WebKit phone plus live keyboard/touch/persistence checks pass. Receipt: [Comfort settings](wamp-comfort-settings-2026-10-13.md).
+
 ### F172: Add an Assist mode (slower game speed, safe respawn) that plays as practice so leaderboards stay clean
 
 - **Area:** Accessibility & inclusivity
