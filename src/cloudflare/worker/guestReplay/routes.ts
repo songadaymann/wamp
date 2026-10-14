@@ -2,12 +2,11 @@ import { REPLAY_ACTIONS, REPLAY_IMAGE_LIMIT, REPLAY_SECONDS, replayPosition, typ
 import { requireAdminRequest, requireTrustedOriginForMutation } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
+import { deleteReplaySession, loadReplaySamples, saveReplaySamples } from './frames';
+export { purgeGuestReplays } from './frames';
 
 const DAY = 86400000;
 const ID = /^[a-f0-9-]{36}$/;
-export async function purgeGuestReplays(env: Env): Promise<void> {
-  await env.DB.batch([env.DB.prepare('DELETE FROM guest_replay_sessions WHERE expires_at <= ?').bind(new Date().toISOString())]);
-}
 const reply = (request: Request, body: unknown) => jsonResponse(request, body, { headers: { 'Cache-Control': 'no-store' } });
 
 export function validateReplaySample(input: unknown): ReplaySample {
@@ -29,16 +28,14 @@ export async function handleGuestReplay(request: Request, url: URL, env: Env): P
   requireTrustedOriginForMutation(request);
   if (url.pathname.startsWith('/api/admin/guest-replays')) {
     requireAdminRequest(env, request, 'watch guest replays');
-    await purgeGuestReplays(env);
     const id = url.pathname.split('/')[4];
     if (id) {
       if (!ID.test(id)) throw new HttpError(400, 'Invalid session.');
       if (request.method === 'DELETE') {
-        await env.DB.batch([env.DB.prepare('DELETE FROM guest_replay_sessions WHERE id = ?').bind(id)]);
+        await deleteReplaySession(env, id);
         return reply(request, { ok: true });
       }
-      const result = await env.DB.prepare('SELECT payload FROM guest_replay_samples WHERE session_id = ? ORDER BY sequence').bind(id).all<{payload: string}>();
-      return reply(request, { samples: result.results.map(r => JSON.parse(r.payload)) });
+      return reply(request, { samples: await loadReplaySamples(env, id) });
     }
     const selected = url.searchParams.get('session');
     if (selected && !ID.test(selected)) throw new HttpError(400, 'Invalid session.');
@@ -46,13 +43,12 @@ export async function handleGuestReplay(request: Request, url: URL, env: Env): P
       s.played, s.moved, s.signup, s.signed_in,
       EXISTS(SELECT 1 FROM guest_replay_samples b WHERE b.session_id = s.id AND json_extract(b.payload,'$.mode') = 'edit') AS built,
       (SELECT COUNT(*) FROM guest_replay_samples f WHERE f.session_id = s.id) AS samples,
-      (SELECT COUNT(*) FROM guest_replay_sessions v WHERE v.visitor_id = s.visitor_id) AS visits
-      FROM guest_replay_sessions s WHERE (? IS NULL OR s.id = ?) ORDER BY started_at DESC LIMIT 100`).bind(selected, selected).all();
+      (SELECT COUNT(*) FROM guest_replay_sessions v WHERE v.visitor_id = s.visitor_id AND v.expires_at > ?) AS visits
+      FROM guest_replay_sessions s WHERE s.expires_at > ? AND (? IS NULL OR s.id = ?) ORDER BY started_at DESC LIMIT 100`).bind(new Date().toISOString(), new Date().toISOString(), selected, selected).all();
     return reply(request, { sessions: result.results });
   }
   const body = await parseJsonBody<Record<string, unknown>>(request, { maxBytes: 60_000 });
   if (url.pathname === '/api/guest-replays/start') {
-    await purgeGuestReplays(env);
     if (typeof body.visitor !== 'string' || !ID.test(body.visitor)) throw new HttpError(400, 'Invalid visitor.');
     const id = crypto.randomUUID();
     const token = crypto.randomUUID();
@@ -75,18 +71,18 @@ export async function handleGuestReplay(request: Request, url: URL, env: Env): P
     return reply(request, { id, token });
   }
   if (typeof body.id !== 'string' || typeof body.token !== 'string' || !ID.test(body.id) || !ID.test(body.token)) throw new HttpError(403, 'Invalid recording token.');
-  const session = await env.DB.prepare('SELECT started_at FROM guest_replay_sessions WHERE id = ? AND write_token = ? AND expires_at > ?')
-    .bind(body.id, body.token, new Date().toISOString()).first<{started_at: string}>();
+  const session = await env.DB.prepare('SELECT started_at, expires_at FROM guest_replay_sessions WHERE id = ? AND write_token = ? AND expires_at > ?')
+    .bind(body.id, body.token, new Date().toISOString()).first<{started_at: string; expires_at: string}>();
   if (!session) throw new HttpError(403, 'Invalid recording token.');
   if (url.pathname === '/api/guest-replays/discard') {
-    await env.DB.batch([env.DB.prepare('DELETE FROM guest_replay_sessions WHERE id = ?').bind(body.id)]);
+    await deleteReplaySession(env, body.id);
     return reply(request, { ok: true });
   }
   if (url.pathname !== '/api/guest-replays/samples') throw new HttpError(404, 'Route not found.');
   if (Date.now() - Date.parse(session.started_at) > 360000) throw new HttpError(410, 'Recording ended.');
   if (!Array.isArray(body.samples) || body.samples.length < 1 || body.samples.length > 3) throw new HttpError(400, 'Invalid batch.');
   const samples = body.samples.map(validateReplaySample);
-  await env.DB.batch(samples.map(s => env.DB.prepare('INSERT OR IGNORE INTO guest_replay_samples (session_id,sequence,payload) VALUES (?,?,?)').bind(body.id, s.sequence, JSON.stringify(s))));
+  await saveReplaySamples(env, body.id, session.expires_at, samples);
   // Activity flags only ever turn on, so each batch adds its own evidence instead of
   // re-parsing every stored sample (and its JPEG) in the session. "Moved" means more than
   // one distinct x, which holds exactly when two x values adjacent in sequence differ:

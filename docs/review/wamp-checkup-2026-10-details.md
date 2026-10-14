@@ -756,6 +756,9 @@ Open:
 
 Receipt: `wamp-keys-editor-fonts-checks-2026-10-11.md`.
 
+**2026-10-13 updated decision.** Jonathan wants GIF animation preserved and selected the 240×135 / 32-color ordered-dither animated WebP comparison (917,468 bytes) as the current choice. This supersedes the earlier still-image replacement proposal. The exact selected asset and measurements are recorded in `wamp-overnight-checklist-2026-10-13.md`. Upload conversion and animated in-game playback remain open; F094 remains unticked.
+
+
 ### F017: Game art PNGs are about twice as big as they need to be
 
 - **Area:** Load time, bundle size & assets

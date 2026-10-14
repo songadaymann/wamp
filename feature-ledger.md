@@ -1,3 +1,7 @@
+## 2026-10-13 — Overnight checklist
+
+Canonical branch: `codex/wamp-overnight-checklist-2026-10-13`, based on main `f009b55f`. Active until October 14 5am New York time. Selected F094 comparison: 240×135, 32 colors, ordered dithering, full animation, 917,468-byte WebP; exact candidate retained in `docs/review/assets/`. Implementation starts with approved F038 and F173. Receipt: `docs/review/wamp-overnight-checklist-2026-10-13.md`. Pending/security/product decisions remain with Jonathan.
+
 ## 2026-10-13 — F023 smaller audio assets
 
 Canonical branch: `codex/wamp-audio-assets-2026-10-13`. PR [#191](https://github.com/songadaymann/wamp/pull/191), source `e62e4eb3`, merged as `d6307f3d`; all four hosted checks pass. Status: listening accepted and merged, automatic Pages delivery in progress. 3,522 tests, all 12 phone scenarios, both real browser audio/controls flows and hosted audio/exclusion proof pass. Master 136/215. Final production postflight is reported in the completing chat. Receipt: `docs/review/wamp-audio-assets-2026-10-13.md`. Next approved list item is F094, separately.

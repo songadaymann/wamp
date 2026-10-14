@@ -3,4 +3,4 @@
  * deployed before `wrangler d1 migrations apply` reports 503. migrations.test.ts fails
  * when a new migration is added without updating this.
  */
-export const LATEST_D1_MIGRATION = '0064_room_version_facts.sql';
+export const LATEST_D1_MIGRATION = '0065_processed_outbox_expiry.sql';

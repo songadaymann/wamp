@@ -45,6 +45,7 @@
       "binding": "RUN_GHOST_BUCKET",
       "bucket_name": "everybodys-platformer-run-ghosts"
     },
+    { "binding": "GUEST_REPLAY_BUCKET", "bucket_name": "everybodys-platformer-guest-replays" },
     {
       "binding": "WORLD_TILE_BUCKET",
       "bucket_name": "everybodys-platformer-world-tiles"
@@ -100,6 +101,7 @@
           "binding": "RUN_GHOST_BUCKET",
           "bucket_name": "everybodys-platformer-safety-run-ghosts"
         },
+        { "binding": "GUEST_REPLAY_BUCKET", "bucket_name": "everybodys-platformer-safety-guest-replays" },
         {
           "binding": "WORLD_TILE_BUCKET",
           "bucket_name": "everybodys-platformer-safety-world-tiles"
