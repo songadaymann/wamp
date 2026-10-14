@@ -4,7 +4,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 137 of 215 done.**
+**Progress: 138 of 215 done.**
 
 **October 9 release:** [All 18 overnight slices and both morning fixes are live](wamp-overnight-release-2026-10-09.md), preserving partner PR #99 and ghost archive PR #100. Five partial items remain unticked; native background-tab audio still needs a physical check.
 
@@ -151,7 +151,7 @@ The server side is well instrumented, but a few hot paths do far more database w
 - [ ] **F036** Signed-in players get no edge caching; every leaderboard, room summary and discovery read goes to the database · low impact · medium effort
 - [x] **F032** No CORS preflight caching, so most game requests make an extra round trip · low impact · small effort — **done 2026-10-03** (8a844ada). Live API OPTIONS responses expose Max-Age 7200; credentialed CORS origin policy remains unchanged.
 - [x] **F039** Every non-GET API request also runs a world-tile queue check · low impact · small effort — **done 2026-10-10** (`90dc6ee0`, [PR #131](https://github.com/songadaymann/wamp/pull/131), API Worker `1937c469`). `requestMayQueueWorldTiles` limits the dispatch to writes under rooms (except the snapshot query), courses, expanded rooms, background images, worlds, guest room drafts, agents, admin and test reset; the renderer cron still sweeps everything else. Not done: skipping error responses.
-- [ ] **F038** Guest replay screenshots are stored in the main database, and nothing else is ever cleaned up · low impact · medium effort — _Partly done 2026-10-10 (`d5b8e6ef`, [PR #135](https://github.com/songadaymann/wamp/pull/135), API Worker `2c279cb5`): replay activity flags come from each batch instead of re-reading every stored sample. Left for review: hourly pruning of expired sessions/tokens/outbox rows (deletes production data) and moving frames to R2._
+- [x] **F038** Guest replay image storage and hourly retention cleanup · low impact · medium effort — _Done 2026-10-13: [receipt](wamp-replay-storage-cleanup-2026-10-13.md), [PR #192](https://github.com/songadaymann/wamp/pull/192). New JPEGs live in private R2; protected admin reads preserve legacy recordings. Hourly expired auth/old dispatched outbox pruning and real production session/sample/R2-object expiry are verified. Bounded deletes retain active records._
 
 ### Security
 
@@ -204,7 +204,7 @@ Portrait phone play is good, but tablets and sideways phones can't play, and bui
 - [x] **F085** Double-tap-zoom blocker swallows any second tap within 320ms (e.g., rapid Undo) · medium impact · small effort — **confirmed fixed 2026-10-10** by earlier work (`44da1860`, `5b248366`): the guard exempts the canvas, buttons, links, history controls, object items and form fields, and coarse-pointer buttons have `touch-action: manipulation`. A phone-emulated double tap 120 ms apart registers both clicks on four HUD buttons.
 - [x] **F078** iPhone/iPad: sound-effect volume slider and mixing do nothing (HTMLAudio volume is read-only on iOS) · medium impact · medium effort — **done 2026-10-11** (`eb28cbb6`, [PR #164](https://github.com/songadaymann/wamp/pull/164); `4fca9d77`, [PR #168](https://github.com/songadaymann/wamp/pull/168)): effects play through Web Audio gain, so the volume slider, per-cue levels, neighbour-room bleed and fades work on iPhone; a slider at 0 skips effects instead of playing them silently. iPhone re-check is on the phone checklist.
 - [ ] **F148** No gamepad support and no instant-restart key (also covers F088, F178) · medium impact · small effort
-- [ ] **F089** Mobile smoke uses Chrome only, isn't in CI, and enshrines the missing landscape controls · medium impact · medium effort — _Partly done (a2ae8327): landscape/tablet play scenarios now assert the controls work. In CI since 2026-10-11 (`6712a66c`, [PR #180](https://github.com/songadaymann/wamp/pull/180)): every pull request runs all 12 phone and tablet scenarios against a production build with recorded API responses (about 3 minutes). Open: keyboard and tap-target scenarios; iOS Safari behaviour still needs a real device._
+- [ ] **F089** Mobile smoke uses Chrome only, isn't in CI, and enshrines the missing landscape controls · medium impact · medium effort — _Partly done (a2ae8327): landscape/tablet play scenarios now assert the controls work. In CI since 2026-10-11 (`6712a66c`, [PR #180](https://github.com/songadaymann/wamp/pull/180)): every pull request runs phone and tablet scenarios against a production build with recorded API responses (about 3 minutes). 2026-10-13: [recording-notice follow-up](wamp-recording-notice-phone-2026-10-13.md), PR #194, adds the thirteenth CI scenario and keeps the recording notice clear of phone controls with a 44px opt-out target. Open: remaining keyboard and tap-target scenarios; iOS Safari behaviour still needs a real device._
 - [ ] **F090** Haptic feedback on Android for jump, hit, coin and goal · low impact · small effort
 - [ ] **F091** mann.cool plays tracking and virtual-controller listener are missing (and the stock snippet wouldn't work with Phaser) · low impact · small effort
 

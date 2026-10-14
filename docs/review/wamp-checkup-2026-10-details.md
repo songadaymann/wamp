@@ -1851,6 +1851,8 @@ Test: 150 random sessions sent in random batches match a full recomputation usin
 
 Left for review: (c) hourly pruning of expired sessions, magic-link tokens and old dispatched outbox rows (deletes production data), and (d) moving frames to R2. Fix (b) was already done in `a43e1da7`.
 
+**2026-10-13 complete.** [PR #192](https://github.com/songadaymann/wamp/pull/192) adds indexed, bounded hourly expiry cleanup and private R2 storage for new JPEGs, with legacy-compatible protected viewer reads. Production pruning and actual recording/session/sample/object expiry are verified. Analytics and verification history are retained. Receipt: [Replay storage and cleanup](wamp-replay-storage-cleanup-2026-10-13.md).
+
 ### F249: In-game Report a bug with a recent replay and diagnostic context
 
 **Release update 2026-10-09.** Delivered in PR #101 / `38ca52e5`, with 3,225 tests, native integration and coordinated API/map/Pages acceptance. Recent game replay/screenshot, notes and exact context, retry-safe private reports and an admin inbox. Images stay bounded; unavailable frames fall back to written reports. See [release evidence](wamp-overnight-release-2026-10-09.md). Older local-candidate notes below are historical.

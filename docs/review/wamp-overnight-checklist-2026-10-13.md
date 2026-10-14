@@ -44,3 +44,9 @@ At the deadline record the final checklist count, source/merge/release IDs, test
 ### Recording notice candidate
 
 Phone play now places the recording notice above the movement/action deck and sizes the opt-out target to 44px. The new CI scenario checks real hit targets and non-overlap; all 13 phone/tablet scenarios pass, with zero errors/missing fixtures. Full quality gates pass. F089 remains partial; publication/live verification is next. Receipt: `wamp-recording-notice-phone-2026-10-13.md`.
+
+### 10:25pm checkpoint
+
+- F038 complete: master 138/215. At the second real production tick the expired owned specimen disappeared from both D1 tables and R2; no manual production deletion. Production auth/outbox cleanup already verified. Safety schedules/handler are registered but no schedule invocation was observed; only the owned expired safety specimen was cleaned manually. The tail was stopped.
+- Phone notice fix: PR #194 source `4bdb0dca`, main `dd866ceb`, Pages `b1e7c86d`. Full 3,545 tests, 13 mobile scenarios, source/merge hosted checks and guarded release pass. A release fetched just before merge and initially published the preceding docs-only commit; rerun verified `dd866ceb`. Live un-dismissed notice/touch verification and installed-client proof pass. All six controls stay clickable; actual touch jump lifts the player without moving whole-room framing. The outbox backlog is now 6,772 after the second 5,000-row sweep. F089 remains partial.
+- Next: F019 lazy rare modals, preserving first-use triggers and close behavior; then stable model chunks after graph verification.

@@ -1,3 +1,7 @@
+## 2026-10-13 overnight — F038 complete and phone notice live
+
+Master 138/215. Production cron removed the owned expired session, samples and R2 image; auth expiry cleanup and two 5,000-row outbox sweeps verified (6,772 remaining). Only the expired owned safety specimen was cleaned manually after its registered cron stayed unobserved. PR #194 / main `dd866ceb`, Pages `b1e7c86d`: recording notice leaves phone controls clickable with a 44px opt-out; full 3,545-test gates, 13 mobile cases, all hosted checks, guarded release and live touch jump with notice visible pass. Installed-client screenshot inspected. F089 stays partial. Next F019: rare modal loading and stable chunks.
+
 ## 2026-10-13 overnight — F173 live
 
 PR #193 / main `c949c360`, Pages `f185351c`, API Worker `09f01495` (keeps independently merged Room video metadata). Master 137/215. Combined-main 3,545 tests/all hosted checks, guarded releases and live desktop/phone settings, keyboard radio, persistence, touch jump and fixed framing pass. Receipt `docs/review/wamp-comfort-settings-2026-10-13.md`. F038 R2 cron expiry is due for the owned production specimen at 10:17pm; safety cron registration is correct but execution remains unobserved. Next: recording-notice overlap on phone, then F019.
