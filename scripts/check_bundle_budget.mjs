@@ -32,7 +32,9 @@ if (totalKb > BUDGET_KB) {
 // into boot, and the stable catalogs must not depend on the changing runtime.
 const graph = JSON.parse(readFileSync(resolve('output/build/chunk-graph.json'), 'utf8'));
 const deferredControllers = ['profileModal', 'leaderboardModal', 'exploreModal', 'historyModal',
-  'aboutModal', 'controlsModal', 'guestbookModal', 'playlistModal', 'signTextModal', 'wampOGramModal', 'runRatingModal'];
+  'aboutModal', 'controlsModal', 'guestbookModal', 'playlistModal', 'signTextModal', 'wampOGramModal', 'runRatingModal',
+  'chatModerationModal', 'roomRushModal', 'roomRushResultModal', 'firstPublishModal',
+  'guestBuilderClaimModal', 'guestRoomRecoveryModal', 'guestProgressClaimModal'];
 const bootModules = new Set(graph.filter(chunk => report.files.includes(chunk.file)).flatMap(chunk => chunk.modules));
 for (const name of deferredControllers) {
   if (bootModules.has(`src/ui/setup/${name}.ts`)) throw new Error(`${name} has returned to the startup bundle.`);

@@ -3,6 +3,7 @@ export interface ModalController {
   init(): void;
   open(...args: never[]): void | Promise<void>;
   close(): void;
+  destroy?(): void;
 }
 
 /**
@@ -13,6 +14,7 @@ export class LazyModal<T extends ModalController> {
   private instance: T | null = null;
   private loading: Promise<T> | null = null;
   private openGeneration = 0;
+  private destroyed = false;
 
   constructor(private readonly load: () => Promise<T>) {}
 
@@ -22,6 +24,7 @@ export class LazyModal<T extends ModalController> {
   }
 
   async open(...args: Parameters<T['open']>): Promise<void> {
+    if (this.destroyed) return;
     const generation = ++this.openGeneration;
     const modal = await this.ensure();
     if (generation !== this.openGeneration) return;
@@ -33,8 +36,15 @@ export class LazyModal<T extends ModalController> {
     this.instance?.close();
   }
 
+  destroy(): void {
+    this.destroyed = true;
+    this.close();
+    this.instance?.destroy?.();
+  }
+
   ensure(): Promise<T> {
     this.loading ??= this.load().then((modal) => {
+      if (this.destroyed) return modal;
       modal.init();
       this.instance = modal;
       return modal;

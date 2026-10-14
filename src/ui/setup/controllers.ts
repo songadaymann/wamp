@@ -1,19 +1,19 @@
 import { BuildPromptsController } from './buildPrompts';
 import { RoomInsightsController } from './roomInsights';
 import { DailyRoomController } from './dailyRoom';
-import { FirstPublishModalController } from './firstPublishModal';
+import { LazyFirstPublishController } from './lazyFirstPublish';
 import { ActivityInboxController } from './activityInbox';
 import Phaser from 'phaser';
 import { ChatPanelController } from '../chat/panel';
 import { MobileUiController } from '../mobile/controller';
 import type { AboutModalController } from './aboutModal';
 import { setupButtonFeedback } from './buttonFeedback';
-import { ChatModerationModalController } from './chatModerationModal';
+import type { ChatModerationModalController } from './chatModerationModal';
 import type { ControlsModalController } from './controlsModal';
 import type { ExploreModalController } from './exploreModal';
-import { GuestBuilderClaimModalController } from './guestBuilderClaimModal';
-import { GuestRoomRecoveryModalController } from './guestRoomRecoveryModal';
-import { GuestProgressClaimModalController } from './guestProgressClaimModal';
+import type { GuestBuilderClaimModalController } from './guestBuilderClaimModal';
+import type { GuestRoomRecoveryModalController } from './guestRoomRecoveryModal';
+import type { GuestProgressClaimModalController } from './guestProgressClaimModal';
 import type { GuestbookModalController } from './guestbookModal';
 import type { RoomHistoryModalController } from './historyModal';
 import { setupKeyboardShortcutPassthrough } from './keyboardPassthrough';
@@ -24,12 +24,14 @@ import { PerformanceSuggestionModalController } from './performanceSuggestionMod
 import { RoomSequenceController } from './roomSequenceController';
 import type { ProfileModalController } from './profileModal';
 import { LazyModal } from './lazyModal';
+import { LazyRecoveryController } from './lazyRecovery';
+import { setupRemainingModalTriggers } from './remainingModalTriggers';
 import { PROFILE_OPEN_REQUEST_EVENT, type ProfileOpenRequestDetail } from './profileEvents';
 import { RewardStingController } from './rewardStings';
 import { RewardStingCatchupController } from './rewardStingCatchup';
 import { RoomGoalIntroModalController } from './roomGoalIntroModal';
-import { RoomRushModalController } from './roomRushModal';
-import { RoomRushResultModalController } from './roomRushResultModal';
+import type { RoomRushModalController } from './roomRushModal';
+import type { RoomRushResultModalController } from './roomRushResultModal';
 import { LazyRunRatingController } from './lazyRunRating';
 import { PostRunReminderController } from './postRunReminder';
 import { SettingsModalController } from './settingsModal';
@@ -47,21 +49,21 @@ import { parsePlaylistSharePath } from '../../playlists/model';
 import { SIGN_TEXT_EDIT_REQUEST_EVENT, type SignTextEditRequestDetail } from '../../signs/events';
 
 interface UiControllers {
-  firstPublishModal: FirstPublishModalController;
+  firstPublishModal: LazyFirstPublishController;
   activityInbox: ActivityInboxController;
   roomInsights: RoomInsightsController;
   historyModal: LazyModal<RoomHistoryModalController>;
   leaderboardModal: LazyModal<LeaderboardModalController>;
   exploreModal: LazyModal<ExploreModalController>;
   roomSequence: RoomSequenceController;
-  guestBuilderClaimModal: GuestBuilderClaimModalController;
-  guestRoomRecoveryModal: GuestRoomRecoveryModalController;
-  guestProgressClaimModal: GuestProgressClaimModalController;
+  guestBuilderClaimModal: LazyModal<GuestBuilderClaimModalController>;
+  guestRoomRecoveryModal: LazyRecoveryController<GuestRoomRecoveryModalController>;
+  guestProgressClaimModal: LazyRecoveryController<GuestProgressClaimModalController>;
   guestbookModal: LazyModal<GuestbookModalController>;
   settingsModal: SettingsModalController;
   controlsModal: LazyModal<ControlsModalController>;
   aboutModal: LazyModal<AboutModalController>;
-  chatModerationModal: ChatModerationModalController;
+  chatModerationModal: LazyModal<ChatModerationModalController>;
   profileModal: LazyModal<ProfileModalController>;
   playlistModal: LazyModal<PlaylistModalController>;
   playlistIntroModal: PlaylistIntroModalController;
@@ -70,8 +72,8 @@ interface UiControllers {
   xpReceipts: XpReceiptController;
   rewardStingCatchup: RewardStingCatchupController;
   roomGoalIntroModal: RoomGoalIntroModalController;
-  roomRushModal: RoomRushModalController;
-  roomRushResultModal: RoomRushResultModalController;
+  roomRushModal: LazyModal<RoomRushModalController>;
+  roomRushResultModal: LazyModal<RoomRushResultModalController>;
   runRatingModal: LazyRunRatingController;
   postRunReminder: PostRunReminderController;
   signTextModal: LazyModal<SignTextModalController>;
@@ -92,6 +94,13 @@ export function setupUiControllers(game: Phaser.Game): void {
   configureEditorBridge(controllers);
   initUiControllers(controllers);
   setupLazyModalTriggers(controllers);
+  const removeRemainingTriggers = setupRemainingModalTriggers(controllers);
+  game.events.once('destroy', () => {
+    removeRemainingTriggers();
+    controllers.guestRoomRecoveryModal.destroy(); controllers.guestProgressClaimModal.destroy();
+    controllers.chatModerationModal.destroy(); controllers.guestBuilderClaimModal.destroy();
+    controllers.roomRushModal.destroy(); controllers.roomRushResultModal.destroy();
+  });
   const sharedPlaylist = parsePlaylistSharePath(window.location.pathname);
   if (sharedPlaylist) void controllers.playlistModal.open(sharedPlaylist, { autoPlay: true });
   setupUiControllerCommands(game, controllers);
@@ -109,7 +118,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
   game.events.once('destroy', () => buildPrompts.destroy());
   const runRatingModal = new LazyRunRatingController(async () => new (await import('./runRatingModal')).RunRatingModalController(game));
   game.events.once('destroy', () => runRatingModal.destroy());
-  const guestProgressClaimModal = new GuestProgressClaimModalController();
+  const guestProgressClaimModal = new LazyRecoveryController(async () => new (await import('./guestProgressClaimModal')).GuestProgressClaimModalController(), 'btn-auth-guest-progress', 200);
   const openExplore = () => exploreModal.open();
   const welcomeModal = new WelcomeModalController(game, undefined, undefined, undefined, undefined, undefined, { explore: openExplore });
   const firstStepsSummary = new FirstStepsSummaryController({
@@ -119,21 +128,21 @@ function createUiControllers(game: Phaser.Game): UiControllers {
   game.events.once('destroy', () => firstStepsSummary.destroy());
 
   return {
-    firstPublishModal: new FirstPublishModalController(),
+    firstPublishModal: new LazyFirstPublishController(async () => new (await import('./firstPublishModal')).FirstPublishModalController()),
     activityInbox: new ActivityInboxController(),
     roomInsights: new RoomInsightsController(game),
     historyModal: new LazyModal(async () => new (await import('./historyModal')).RoomHistoryModalController(game)),
     leaderboardModal,
     exploreModal,
     roomSequence: new RoomSequenceController(game, leaderboardModal, playlistIntroModal, welcomeModal, undefined, undefined, firstStepsSummary, runRatingModal),
-    guestBuilderClaimModal: new GuestBuilderClaimModalController(),
-    guestRoomRecoveryModal: new GuestRoomRecoveryModalController(game),
+    guestBuilderClaimModal: new LazyModal(async () => new (await import('./guestBuilderClaimModal')).GuestBuilderClaimModalController()),
+    guestRoomRecoveryModal: new LazyRecoveryController(async () => new (await import('./guestRoomRecoveryModal')).GuestRoomRecoveryModalController(game), 'btn-auth-guest-drafts', 200),
     guestProgressClaimModal,
     guestbookModal: new LazyModal(async () => new (await import('./guestbookModal')).GuestbookModalController()),
     settingsModal: new SettingsModalController(),
     controlsModal,
     aboutModal: new LazyModal(async () => new (await import('./aboutModal')).AboutModalController()),
-    chatModerationModal: new ChatModerationModalController(),
+    chatModerationModal: new LazyModal(async () => new (await import('./chatModerationModal')).ChatModerationModalController()),
     profileModal: new LazyModal(async () => new (await import('./profileModal')).ProfileModalController(game)),
     playlistModal: new LazyModal(async () => new (await import('./playlistModal')).PlaylistModalController(game)),
     playlistIntroModal,
@@ -142,12 +151,12 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     xpReceipts: new XpReceiptController(),
     rewardStingCatchup: new RewardStingCatchupController(),
     roomGoalIntroModal: new RoomGoalIntroModalController(),
-    roomRushModal: new RoomRushModalController(game),
-    roomRushResultModal: new RoomRushResultModalController(game),
+    roomRushModal: new LazyModal(async () => new (await import('./roomRushModal')).RoomRushModalController(game)),
+    roomRushResultModal: new LazyModal(async () => new (await import('./roomRushResultModal')).RoomRushResultModalController(game)),
     runRatingModal,
     postRunReminder: new PostRunReminderController({
       openUnrated: () => { void exploreModal.open('unrated'); },
-      openGuestHistory: () => guestProgressClaimModal.openFromReminder(),
+      openGuestHistory: () => { void guestProgressClaimModal.invoke(controller => controller.openFromReminder()); },
       beforeOpen: () => runRatingModal.close(),
     }),
     signTextModal: new LazyModal(async () => new (await import('./signTextModal')).SignTextModalController(game)),
@@ -164,19 +173,15 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.activityInbox.init();
   controllers.roomInsights.init();
   controllers.roomSequence.init();
-  controllers.guestBuilderClaimModal.init();
   controllers.guestRoomRecoveryModal.init();
   controllers.guestProgressClaimModal.init();
   controllers.settingsModal.init();
-  controllers.chatModerationModal.init();
   controllers.roomGoalIntroModal.init();
   controllers.playlistIntroModal.init();
   controllers.performanceSuggestionModal.init();
   controllers.rewardStings.init();
   controllers.xpReceipts.init();
   controllers.rewardStingCatchup.init();
-  controllers.roomRushModal.init();
-  controllers.roomRushResultModal.init();
   controllers.runRatingModal.init();
   controllers.postRunReminder.init();
   controllers.welcomeModal.init();
