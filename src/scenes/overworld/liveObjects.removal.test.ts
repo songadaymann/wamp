@@ -1,3 +1,4 @@
+import { SpecialTileBodySamples } from './liveObjects/specialTileSamples';
 import { describe, expect, it, vi } from 'vitest';
 
 const { MockRectangle } = vi.hoisted(() => ({
@@ -155,4 +156,24 @@ describe('removing a live object (F008)', () => {
     expect(rebuild).toHaveBeenCalledOnce();
     expect(room.liveObjects).toEqual([]);
   });
+});
+
+it('reuses the computed conveyor contact and rechecks it after a behavior changes the body bounds', () => {
+  const body = { left: 0, right: 10, top: 0, bottom: 20, center: { x: 5, y: 10 }, velocity: { x: 0, y: 0 }, setVelocityX: vi.fn() };
+  const samples = new SpecialTileBodySamples();
+  const environment = { gravityDirection: 'down', inWater: false, windX: 0, conveyorX: 1,
+    onIce: false, onSticky: false, onBounce: false, onDamage: false };
+  samples.record(body as never, environment as never);
+  const lookup = vi.fn(() => -1);
+  const controller = Object.assign(Object.create(OverworldLiveObjectController.prototype), {
+    options: { getConveyorDirectionForBody: lookup }, specialTileBodySamples: samples,
+    shouldLiveObjectRideConveyors: () => true, getDynamicBody: () => body, getLiveObjectGravityDirection: () => 'down',
+  }) as { applyConveyorToLiveObject: (object: unknown) => void };
+  controller.applyConveyorToLiveObject({ sprite: {} });
+  expect(lookup).not.toHaveBeenCalled();expect(body.setVelocityX.mock.calls[0][0]).toBeGreaterThan(0);
+  body.left++;
+  controller.applyConveyorToLiveObject({ sprite: {} });
+  expect(lookup).toHaveBeenCalledExactlyOnceWith(body, 'down');expect(body.setVelocityX.mock.calls[1][0]).toBeLessThan(0);
+  samples.record(body as never, { ...environment, conveyorX: 0 } as never);
+  controller.applyConveyorToLiveObject({ sprite: {} });expect(lookup).toHaveBeenCalledOnce();
 });

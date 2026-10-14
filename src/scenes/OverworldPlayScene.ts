@@ -1,3 +1,4 @@
+import { createSpecialTileCallbacks } from './overworld/specialTileCallbacks';
 import { OverworldGhostRaceController } from './overworld/ghostRace';
 import { OverworldLostSongController, type LostSongPlayContext } from './overworld/lostSongs';
 import { getLostSongService } from '../lostSongs/service';
@@ -805,11 +806,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         return this.JUMP_VELOCITY * (jumpHeld ? 1 : 0.58);
       },
       playEnemyStompImpact: () => { if (!prefersReducedMotion()) this.cameras.main.shake(50, 0.002); },
-      getConveyorDirectionForBody: (body, gravityDirection) =>
-        this.specialTilesController.getConveyorDirectionForBody(body, gravityDirection),
-      getBodyRoomId: (body) => this.specialTilesController.getBodyRoomId(body),
-      getSpecialTileEnvironmentForBody: (body, currentGravityDirection) =>
-        this.specialTilesController.getEnvironmentForBody(body, currentGravityDirection),
+      ...createSpecialTileCallbacks(() => this.specialTilesController),
       swordsmanTraversalPlannerMode: this.getSwordsmanTraversalPlannerMode(),
       isPlayerClimbingLadder: () => this.movementController.isClimbingLadder(),
       isLadderDropRequested: () => this.isLadderDropRequested(),

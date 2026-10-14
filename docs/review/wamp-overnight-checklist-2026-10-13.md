@@ -58,3 +58,7 @@ F019 candidate: seven more dialogs load on first use, eleven in total; stable ro
 ### 11:10pm checkpoint
 
 F019 slice live: PR #195 / main `189a2153`, Pages `c9e761fb`. All source/reported merge checks, clean-main 3,553-test gates, guarded delivery/health and 22 exact startup/menu file hashes pass. Live desktop/phone Chrome and WebKit phone download About/Controls/Guestbook only once across repeated opens; no application errors. WebKit challenge-only cross-frame errors also reproduce on the prior release, documented as a separate real-iOS follow-up. Installed client completes Welcome with a verified guest clear; screenshot inspected, software-renderer suggestion is not an FPS claim. F019 stays partial; master 138/215. Next F006: cached special-tile cell map and reusable scan results. Controlled native scan baseline is 3.3 ms per 1,600 scans (64 synthetic bodies); this measures the scan loop, not game FPS.
+
+### 11:42pm F006 candidate
+
+Cached room-cell bitmap, reusable scan results/origins, shared empty decoding, safe conveyor sample reuse and hazard-only idle NPC queries are implemented. Constructor callbacks and conveyor application are extracted; existing size caps shrink. Controlled scan median 3.3 → 1.5 ms for 1,600 queries, 64 environment results identical; cold pass 1 ms. All initial 63 full-scene cadence comparisons pass; local-storage backend corrected the synthetic test setup. Final matrix after the collaborator extraction, full gates, phone smoke and publication are next. F006 stays unchecked and master remains 138/215.

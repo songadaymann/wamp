@@ -570,6 +570,9 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
 
 async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenarioDir) {
   await waitForBodyAppMode(page, 'play-world', 'phone portrait deep-linked play app mode', 30_000);
+  // The intro arrives with the playable snapshot; do not click Stop during hydration.
+  await waitForAppState(page, candidate => candidate?.activeScene?.player
+    && candidate.activeScene.currentCollisionReady, 'phone portrait player and collisions before intro dismissal');
   await closeBlockingOverlaysUntilClear(page);
   await waitForAppState(
     page,
@@ -581,7 +584,7 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
     'phone portrait deep-linked play before stop',
   );
   await assertVisible(page, '#btn-mobile-world-stop', 'portrait mobile stop before bottom HUD check');
-  await clickElement(page, '#btn-mobile-world-stop');
+  await page.locator('#btn-mobile-world-stop').tap();
   await waitForBodyAppMode(page, 'world', 'phone portrait focused room browse app mode', 10_000);
   const state = await waitForAppState(
     page,

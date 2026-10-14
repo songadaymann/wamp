@@ -177,9 +177,11 @@ export function encodeTileDataValue(gid: number, flipX = false, flipY = false): 
   return encoded;
 }
 
-export function decodeTileDataValue(value: number): DecodedTileDataValue {
+const EMPTY_DECODED_TILE: Readonly<DecodedTileDataValue> = Object.freeze({ gid: -1, flipX: false, flipY: false });
+
+export function decodeTileDataValue(value: number): Readonly<DecodedTileDataValue> {
   if (value <= 0) {
-    return { gid: -1, flipX: false, flipY: false };
+    return EMPTY_DECODED_TILE;
   }
 
   const flipX = value >= TILE_FLIP_X_FLAG && Math.floor(value / TILE_FLIP_X_FLAG) % 2 === 1;

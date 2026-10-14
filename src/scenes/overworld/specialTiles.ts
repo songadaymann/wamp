@@ -1,18 +1,13 @@
 import Phaser from 'phaser';
 import {
   decodeTileDataValue,
-  getSpecialTileKindForGid,
   isSpecialBreakableBrickGid,
   isSpecialTileKindGid,
-  LAYER_NAMES,
   ROOM_HEIGHT,
-  ROOM_PX_HEIGHT,
-  ROOM_PX_WIDTH,
   ROOM_WIDTH,
   SPECIAL_TILESET_KEY,
   SPECIAL_TILE_LOCAL_INDICES,
   TILE_SIZE,
-  type LayerName,
   type SpecialTileKind,
 } from '../../config';
 import {
@@ -25,7 +20,7 @@ import { buildRoomSnapshotTexture } from '../../visuals/roomSnapshotTexture';
 import type { SfxCue } from '../../audio/sfx';
 import type { OverworldMode } from '../sceneData';
 import { getTerrainTileCollisionProfile } from './terrainCollision';
-import { roomHasSpecialTiles } from './specialTileRooms';
+import { OverworldSpecialTileScanner, type SpecialTileMatch } from './specialTileScanner';
 import type { LoadedFullRoom } from './worldStreaming';
 import { OverworldCrumblingTilesController, type CrumblingTileAddress } from './crumblingTiles';
 
@@ -95,14 +90,6 @@ interface OverworldSpecialTilesControllerHost<TLiveObject, TEdgeWall> {
     roomCoordinates: RoomCoordinates,
     cue?: SfxCue | null
   ) => void;
-}
-
-interface SpecialTileMatch<TLiveObject, TEdgeWall> {
-  loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>;
-  layerName: LayerName;
-  tileX: number;
-  tileY: number;
-  kind: SpecialTileKind;
 }
 
 export function getGravityVector(direction: PlayerGravityDirection): DirectionVector {
@@ -214,11 +201,13 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   private latchedGravityRoomId: string | null = null;
   private readonly brokenSpecialBrickTileKeysByRoomId = new Map<string, Set<string>>();
   private readonly crumblingTiles: OverworldCrumblingTilesController;
+  private readonly tileScanner: OverworldSpecialTileScanner<TLiveObject, TEdgeWall>;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly host: OverworldSpecialTilesControllerHost<TLiveObject, TEdgeWall>,
   ) {
+    this.tileScanner = new OverworldSpecialTileScanner(host);
     this.crumblingTiles = new OverworldCrumblingTilesController({
       showWarning: tile => this.showCrumblingTileWarning(tile),
       removeTile: tile => this.host.getLoadedFullRoomById(tile.roomId)?.terrainLayer
@@ -234,6 +223,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
 
   update(): void {
     if (this.host.getMode() !== 'play') {
+      this.tileScanner.reset();
       resetEnvironment(this.playerEnvironment, 'down');
       this.resetGravityLatch();
       return;
@@ -325,6 +315,21 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
       this.findSpecialTilesOverlappingBody(body).some((match) => match.kind === 'water');
   }
 
+  /** Idle NPCs need hazards, not water, wind or surface-motion state. */
+  isBodyOnDamageTile(body: Phaser.Physics.Arcade.Body): boolean {
+    if (this.host.getMode() !== 'play') return false;
+    const overlaps = this.tileScanner.overlapping(body);
+    if (overlaps.some(match => match.kind === 'damage')) return true;
+    let direction = this.getGravityDirectionFromMatches(overlaps) ?? 'down';
+    let contacts = this.tileScanner.contact(body, direction);
+    const contactDirection = this.getGravityDirectionFromMatches(contacts);
+    if (contactDirection && contactDirection !== direction) {
+      direction = contactDirection;
+      contacts = this.tileScanner.contact(body, direction);
+    }
+    return contacts.some(match => match.kind === 'damage');
+  }
+
   beginOneWayDropThrough(): void {
     const playerBody = this.host.getPlayerBody();
     if (!playerBody) {
@@ -380,6 +385,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   }
 
   handleFullRoomDestroyed(roomId: string): void {
+    this.tileScanner.reset();
     this.crumblingTiles.destroyRoom(roomId);
     this.brokenSpecialBrickTileKeysByRoomId.delete(roomId);
     if (this.latchedGravityRoomId === roomId) {
@@ -388,6 +394,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   }
 
   resetAll(): void {
+    this.tileScanner.reset();
     for (const loadedRoom of this.host.getLoadedFullRooms()) {
       this.resetForRoom(loadedRoom);
     }
@@ -536,7 +543,7 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
   }
 
   private getGravityDirectionFromMatches(
-    matches: Array<SpecialTileMatch<TLiveObject, TEdgeWall>>,
+    matches: readonly SpecialTileMatch<TLiveObject, TEdgeWall>[],
   ): PlayerGravityDirection | null {
     let gravityDirection: PlayerGravityDirection | null = null;
     for (const match of matches) {
@@ -589,167 +596,16 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     this.host.playBounceFx(playerBody.center.x, playerBody.center.y, roomCoordinates, 'bounce');
   }
 
-  private findSpecialTilesOverlappingBody(
-    body: Phaser.Physics.Arcade.Body,
-  ): Array<SpecialTileMatch<TLiveObject, TEdgeWall>> {
-    const bounds = this.getBodyScanBounds(body, -1);
-    return this.findSpecialTilesInWorldRect(bounds);
+  private findSpecialTilesOverlappingBody(body: Phaser.Physics.Arcade.Body): readonly SpecialTileMatch<TLiveObject, TEdgeWall>[] {
+    return this.tileScanner.overlapping(body);
   }
 
-  private findSpecialTilesNearBody(
-    body: Phaser.Physics.Arcade.Body,
-    padding: number,
-  ): Array<SpecialTileMatch<TLiveObject, TEdgeWall>> {
-    const bounds = this.getBodyScanBounds(body, padding);
-    return this.findSpecialTilesInWorldRect(bounds);
+  private findSpecialTilesNearBody(body: Phaser.Physics.Arcade.Body, padding: number): readonly SpecialTileMatch<TLiveObject, TEdgeWall>[] {
+    return this.tileScanner.near(body, padding);
   }
 
-  private getBodyScanBounds(
-    body: Phaser.Physics.Arcade.Body,
-    padding: number,
-  ): { left: number; right: number; top: number; bottom: number } {
-    return {
-      left: body.left - padding,
-      right: body.right + padding,
-      top: body.top - padding,
-      bottom: body.bottom + padding,
-    };
-  }
-
-  private findSpecialTilesAtGravityContact(
-    body: Phaser.Physics.Arcade.Body,
-    gravityDirection: PlayerGravityDirection,
-  ): Array<SpecialTileMatch<TLiveObject, TEdgeWall>> {
-    const inset = 2;
-    const points: Array<{ x: number; y: number }> = [];
-    switch (gravityDirection) {
-      case 'up': {
-        const y = body.top - 1;
-        points.push(
-          { x: body.left + inset, y },
-          { x: body.center.x, y },
-          { x: body.right - inset, y },
-        );
-        break;
-      }
-      case 'left': {
-        const x = body.left - 1;
-        points.push(
-          { x, y: body.top + inset },
-          { x, y: body.center.y },
-          { x, y: body.bottom - inset },
-        );
-        break;
-      }
-      case 'right': {
-        const x = body.right + 1;
-        points.push(
-          { x, y: body.top + inset },
-          { x, y: body.center.y },
-          { x, y: body.bottom - inset },
-        );
-        break;
-      }
-      case 'down':
-      default: {
-        const y = body.bottom + 1;
-        points.push(
-          { x: body.left + inset, y },
-          { x: body.center.x, y },
-          { x: body.right - inset, y },
-        );
-        break;
-      }
-    }
-
-    const seen = new Set<string>();
-    const matches: Array<SpecialTileMatch<TLiveObject, TEdgeWall>> = [];
-    for (const point of points) {
-      for (const match of this.findSpecialTilesAtWorldPoint(point.x, point.y)) {
-        const key = `${match.loadedRoom.room.id}:${match.layerName}:${match.tileX}:${match.tileY}:${match.kind}`;
-        if (seen.has(key)) {
-          continue;
-        }
-        seen.add(key);
-        matches.push(match);
-      }
-    }
-    return matches;
-  }
-
-  private findSpecialTilesAtWorldPoint(
-    worldX: number,
-    worldY: number,
-  ): Array<SpecialTileMatch<TLiveObject, TEdgeWall>> {
-    const coordinates = this.host.getRoomCoordinatesForPoint(worldX, worldY);
-    const roomId = roomIdFromCoordinates(coordinates);
-    const loadedRoom = this.host.getLoadedFullRoomById(roomId);
-    if (!loadedRoom || !roomHasSpecialTiles(loadedRoom.room.tileData)) {
-      return [];
-    }
-
-    const origin = this.host.getRoomOrigin(coordinates);
-    const tileX = Math.floor((worldX - origin.x) / TILE_SIZE);
-    const tileY = Math.floor((worldY - origin.y) / TILE_SIZE);
-    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
-      return [];
-    }
-
-    return this.findSpecialTilesAtRoomCell(loadedRoom, tileX, tileY);
-  }
-
-  private findSpecialTilesInWorldRect(bounds: {
-    left: number;
-    right: number;
-    top: number;
-    bottom: number;
-  }): Array<SpecialTileMatch<TLiveObject, TEdgeWall>> {
-    const matches: Array<SpecialTileMatch<TLiveObject, TEdgeWall>> = [];
-    for (const loadedRoom of this.host.getLoadedFullRooms()) {
-      if (!roomHasSpecialTiles(loadedRoom.room.tileData)) continue;
-      const origin = this.host.getRoomOrigin(loadedRoom.room.coordinates);
-      const roomLeft = origin.x;
-      const roomTop = origin.y;
-      const roomRight = roomLeft + ROOM_PX_WIDTH;
-      const roomBottom = roomTop + ROOM_PX_HEIGHT;
-      if (
-        bounds.right < roomLeft ||
-        bounds.left > roomRight ||
-        bounds.bottom < roomTop ||
-        bounds.top > roomBottom
-      ) {
-        continue;
-      }
-
-      const minTileX = Phaser.Math.Clamp(Math.floor((bounds.left - origin.x) / TILE_SIZE), 0, ROOM_WIDTH - 1);
-      const maxTileX = Phaser.Math.Clamp(Math.floor((bounds.right - origin.x) / TILE_SIZE), 0, ROOM_WIDTH - 1);
-      const minTileY = Phaser.Math.Clamp(Math.floor((bounds.top - origin.y) / TILE_SIZE), 0, ROOM_HEIGHT - 1);
-      const maxTileY = Phaser.Math.Clamp(Math.floor((bounds.bottom - origin.y) / TILE_SIZE), 0, ROOM_HEIGHT - 1);
-
-      for (let tileY = minTileY; tileY <= maxTileY; tileY += 1) {
-        for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
-          matches.push(...this.findSpecialTilesAtRoomCell(loadedRoom, tileX, tileY));
-        }
-      }
-    }
-    return matches;
-  }
-
-  private findSpecialTilesAtRoomCell(
-    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
-    tileX: number,
-    tileY: number,
-  ): Array<SpecialTileMatch<TLiveObject, TEdgeWall>> {
-    const matches: Array<SpecialTileMatch<TLiveObject, TEdgeWall>> = [];
-    for (const layerName of LAYER_NAMES) {
-      const decoded = decodeTileDataValue(loadedRoom.room.tileData[layerName][tileY][tileX]);
-      const kind = getSpecialTileKindForGid(decoded.gid);
-      if (!kind) {
-        continue;
-      }
-      matches.push({ loadedRoom, layerName, tileX, tileY, kind });
-    }
-    return matches;
+  private findSpecialTilesAtGravityContact(body: Phaser.Physics.Arcade.Body, direction: PlayerGravityDirection): readonly SpecialTileMatch<TLiveObject, TEdgeWall>[] {
+    return this.tileScanner.contact(body, direction);
   }
 
   private maybeBreakSpecialBrickTile(): void {

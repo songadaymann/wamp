@@ -1,3 +1,7 @@
+## 2026-10-13 overnight — F006 complete candidate
+
+Room-cell bitmap and reusable scan results/origins; frozen empty decoding; safe conveyor sample reuse; hazard-only idle NPC checks; deferred scene callbacks and smaller existing file caps. Controlled scan 3.3 → 1.5 ms / 1,600 queries, all 64 body environments identical; 63 full-scene cadence comparisons and full 3,571-test gates pass. Startup 641.6 KB. Phone checks/publication/live proof pending; F006 stays unchecked and master remains 138/215. Receipt `docs/review/wamp-special-tile-cache-2026-10-13.md`.
+
 ## 2026-10-13 overnight — F019 slice live
 
 PR #195 / main `189a2153`, Pages `c9e761fb`; startup 641.1 KB. Full 3,553 tests, all source/reported merge checks, 13 mobile cases, guarded release and 22 custom/immutable file hashes pass. Live menus reuse one download, no application errors; prior/current WebKit challenge-frame errors are documented separately. Installed client verifies a guest Welcome clear. F019 stays partial, master 138/215. Next F006 cached special-tile scans; isolated baseline 3.3 ms / 1,600 scans.
