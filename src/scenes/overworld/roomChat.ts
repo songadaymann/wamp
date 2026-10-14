@@ -20,6 +20,7 @@ import {
   resolveWorldPresenceConfig,
   resolveWorldPresenceIdentity,
   type WorldPresenceIdentity,
+  type WorldPresenceClient,
 } from '../../presence/worldPresence';
 import type { OverworldMode } from '../sceneData';
 import type { LocalPresenceInput, RenderedGhost } from './presence';
@@ -44,6 +45,7 @@ interface OverworldRoomChatControllerOptions {
   getMode: () => OverworldMode;
   getCurrentRoomCoordinates: () => RoomCoordinates;
   getPlayerAnchor: () => { x: number; y: number } | null;
+  getPresenceClient?: () => WorldPresenceClient | null;
   getRenderedGhostsByConnectionId: () => Map<string, RenderedGhost>;
   showTransientStatus?: (message: string) => void;
   document?: Document;
@@ -84,6 +86,7 @@ export class OverworldRoomChatController {
     this.client = new WorldRoomChatClient({
       ...config,
       identity: this.identity,
+      sharedTransport: this.options.getPresenceClient?.()?.roomChatTransport,
       onSnapshot: (snapshot) => {
         const previousLatestId = this.lastLatestMessageId;
         this.snapshot = snapshot;
@@ -107,7 +110,6 @@ export class OverworldRoomChatController {
     const config = resolveWorldPresenceConfig();
     const nextIdentity = config ? resolveWorldPresenceIdentity() : null;
     const currentIdentity = this.identity;
-    const existingBounds = this.subscribedChunkBounds ? { ...this.subscribedChunkBounds } : null;
 
     if (!config) {
       if (!this.client && !currentIdentity) {
@@ -132,10 +134,9 @@ export class OverworldRoomChatController {
     }
 
     this.destroyClientState();
+    this.subscribedChunkBounds = null;
+    this.subscribedBoundsRetainUntil = 0;
     this.initialize();
-    if (existingBounds) {
-      this.setSubscribedChunkBounds(existingBounds);
-    }
     return true;
   }
 

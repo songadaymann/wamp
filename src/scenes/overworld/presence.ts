@@ -201,7 +201,6 @@ export class OverworldPresenceController {
     const config = resolveWorldPresenceConfig();
     const nextIdentity = config ? resolveWorldPresenceIdentity() : null;
     const currentIdentity = this.identity;
-    const existingBounds = this.subscribedChunkBounds ? { ...this.subscribedChunkBounds } : null;
 
     if (!config) {
       if (!this.client && !currentIdentity) {
@@ -239,10 +238,9 @@ export class OverworldPresenceController {
     }
 
     this.destroy();
+    this.subscribedChunkBounds = null;
+    this.subscribedBoundsRetainUntil = 0;
     this.initialize();
-    if (existingBounds) {
-      this.setSubscribedChunkBounds(existingBounds);
-    }
     return true;
   }
 

@@ -236,6 +236,7 @@ export default class PresenceServer implements Party.Server {
       connection.send(
         JSON.stringify({
           type: 'snapshot',
+          roomChat: identity.roomChat === true,
           peers: this.listPeers(connection),
           roomPopulations: this.computeRoomPopulations(),
           roomEditors: this.computeRoomEditors(),
@@ -358,6 +359,8 @@ export default class PresenceServer implements Party.Server {
   }
 
   onClose(connection: Party.Connection<ConnectionPresenceState>): void {
+    // March 2026 compatibility requires a reciprocal Close frame; PartyKit 0.0.115 does not send it.
+    if (connection.readyState === WebSocket.CLOSING) connection.close(1000, 'peer-disconnected');
     if (this.isPvpRoom()) {
       this.handlePvpClose(connection);
       return;
@@ -851,6 +854,7 @@ export default class PresenceServer implements Party.Server {
     return {
       channel,
       previewDeltas: url.searchParams.get('previewDeltas') === '1',
+      roomChat: channel === 'presence' && url.searchParams.get('roomChat') === '1',
       canSendRoomChat: canSendRoomChat(claims),
       canReceiveRoomChat: canReceiveRoomChat(claims),
       school: claims.roomChat === 'school',
@@ -884,7 +888,7 @@ export default class PresenceServer implements Party.Server {
   ): void {
     const state = sender.state;
     // Guests, chat-banned players and classroom accounts cannot send bubbles, whatever the client does.
-    if (!state || state.channel !== 'room-chat' || !state.canSendRoomChat) {
+    if (!state || !(state.channel === 'room-chat' || state.roomChat === true) || !state.canSendRoomChat) {
       return;
     }
 
@@ -916,7 +920,7 @@ export default class PresenceServer implements Party.Server {
     this.sendRoomChatMessage(payload, (connection) => {
       const peerPresence = connection.state?.presence;
       return (
-        connection.state?.channel === 'room-chat' &&
+        (connection.state?.channel === 'room-chat' || connection.state?.roomChat === true) &&
         connection.state.canReceiveRoomChat &&
         peerPresence?.mode === 'play' &&
         this.getRoomId(peerPresence.roomCoordinates) === roomId
