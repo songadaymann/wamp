@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-13 overnight — F019 slice live
+
+PR #195 / main `189a2153`, Pages `c9e761fb`; startup 641.1 KB. Full 3,553 tests, all source/reported merge checks, 13 mobile cases, guarded release and 22 custom/immutable file hashes pass. Live menus reuse one download, no application errors; prior/current WebKit challenge-frame errors are documented separately. Installed client verifies a guest Welcome clear. F019 stays partial, master 138/215. Next F006 cached special-tile scans; isolated baseline 3.3 ms / 1,600 scans.
+
 ## 2026-10-13 overnight — F019 lazy dialogs and stable catalogs candidate
 
 Seven more first-use controllers (eleven total), queued ratings/guest saves and cancellation; 650.8 → 641.0 KB startup. Stable room-data bytes and URL survive a real menu-copy rebuild. Full 3,553 tests, 13 mobile cases, native desktop/phone/WebKit and shared-playlist startup pass. Delivery/live proof pending; F019 stays partial, master 138/215. Receipt `docs/review/wamp-lazy-dialogs-cache-2026-10-13.md`.

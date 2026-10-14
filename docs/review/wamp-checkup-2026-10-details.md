@@ -1068,6 +1068,8 @@ PR #164 / `eb28cbb6`: effects play from Web Audio buffers. A cue still loading o
 
 ### F019: Players download the level-editor UI and about 30 menus before the first frame
 
+**October 13 delivery (still partial):** [PR #195](https://github.com/songadaymann/wamp/pull/195) adds seven first-use dialogs (eleven total), pending-open cancellation and retained run/guest-save queues. Self-contained room-data stays byte-identical through a real menu-copy rebuild. Startup 641.1 KB brotli; 3,553 tests, 13 mobile cases, native/device/shared-link tests and 22 live file hashes pass. [Receipt](wamp-lazy-dialogs-cache-2026-10-13.md) records the old/current WebKit challenge-frame limitation and remaining eager controllers.
+
 - **Area:** Load time, bundle size & assets
 - **Type:** improvement · **impact:** medium · **effort:** medium
 - **Flagged before:** docs/2026-06-10-repo-improvement-plan.md §1.1 (lazy editor code) is only partly done: the Phaser scenes went lazy in b37ec4ea, but the DOM-side editor tooling and autotiling solver still ship in the play bundle.
