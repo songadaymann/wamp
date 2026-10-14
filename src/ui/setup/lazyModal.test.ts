@@ -20,3 +20,7 @@ it('retries a failed download or initialization without caching a rejection', as
   const load=vi.fn().mockRejectedValueOnce(new Error('network failed')).mockResolvedValue(instance);const modal=new LazyModal(load);
   await expect(modal.open()).rejects.toThrow('network failed');await expect(modal.open()).rejects.toThrow('init failed');await modal.open();expect(load).toHaveBeenCalledTimes(3);expect(instance.open).toHaveBeenCalledOnce();
 });
+it('does not initialize or reopen a menu destroyed during its download', async () => {
+  const instance={init:vi.fn(),open:vi.fn(),close:vi.fn(),destroy:vi.fn()};const download=deferred<typeof instance>();const modal=new LazyModal(()=>download.promise);
+  const opening=modal.open();modal.destroy();download.resolve(instance);await opening;expect(instance.init).not.toHaveBeenCalled();expect(instance.open).not.toHaveBeenCalled();
+});

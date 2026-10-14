@@ -104,13 +104,17 @@ export class FirstPublishModalController {
   private readonly onMode = () => { if (this.doc.body.dataset.appMode !== this.openingMode) this.close(); };
   private readonly onName = (event: Event) => {
     const detail = (event as CustomEvent<RoomPublishNameRequest>).detail;
-    if (!this.modal || !this.nameInput || !detail || this.account() !== detail.userId) return;
-    event.preventDefault(); this.close(); this.pending = detail; this.open();
+    if (detail && this.requestName(detail)) event.preventDefault();
+  };
+  requestName(detail: RoomPublishNameRequest): boolean {
+    if (!this.modal || !this.nameInput || this.account() !== detail.userId) return false;
+    this.close(); this.pending = detail; this.open();
     this.text('first-publish-heading', 'Name your room');
     this.form?.classList.remove('hidden'); this.doc.getElementById('first-publish-live')?.classList.add('hidden');
     this.nameInput.value = detail.suggestedTitle.slice(0, 40); this.nameInput.focus(); this.nameInput.select();
     this.closeButton?.setAttribute('aria-label', 'Cancel publishing');
-  };
+    return true;
+  }
   private readonly onSubmit = (event: Event) => {
     event.preventDefault(); if (!this.pending || !this.valid()) return;
     const title = this.nameInput?.value.trim().slice(0, 40) ?? '';
@@ -119,7 +123,10 @@ export class FirstPublishModalController {
   };
   private readonly onPublished = (event: Event) => {
     const detail = (event as CustomEvent<FirstPublishedRoom>).detail;
-    if (!this.modal || !detail || this.account() !== detail.userId) return;
+    if (detail) this.announcePublished(detail);
+  };
+  announcePublished(detail: FirstPublishedRoom): void {
+    if (!this.modal || this.account() !== detail.userId) return;
     this.close(); this.active = detail; this.open();
     // An editor URL may contain a draft, world or QA mode. Shared links always open the public room.
     this.shareUrl = new URL(buildRoomSharePath(detail.coordinates), this.win.location.origin).toString();
@@ -130,7 +137,7 @@ export class FirstPublishModalController {
     this.wampogram?.classList.toggle('hidden', detail.contentType !== 'room');
     this.closeButton?.setAttribute('aria-label', 'Close published room'); this.share?.focus();
     void this.renderPreview(detail);
-  };
+  }
 
   private async renderPreview(detail: FirstPublishedRoom): Promise<void> {
     const container = this.doc.getElementById('first-publish-preview'); if (!container) return;

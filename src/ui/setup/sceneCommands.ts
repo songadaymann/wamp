@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
 import type { LazyModal } from './lazyModal';
 import type { AboutModalController } from './aboutModal';
-import { ChatModerationModalController } from './chatModerationModal';
+import type { ChatModerationModalController } from './chatModerationModal';
 import type { ControlsModalController } from './controlsModal';
 import type { ExploreModalController } from './exploreModal';
 import type { GuestbookModalController } from './guestbookModal';
 import type { RoomHistoryModalController } from './historyModal';
 import type { LeaderboardModalController } from './leaderboardModal';
-import { RoomRushModalController } from './roomRushModal';
-import { RoomRushResultModalController } from './roomRushResultModal';
+import type { RoomRushModalController } from './roomRushModal';
+import type { RoomRushResultModalController } from './roomRushResultModal';
 import { SettingsModalController } from './settingsModal';
 import {
   getActiveEditorScene,
@@ -30,9 +30,9 @@ export function setupSceneCommands(
   settingsModal: SettingsModalController,
   controlsModal: Pick<LazyModal<ControlsModalController>, 'open' | 'close'>,
   aboutModal: Pick<LazyModal<AboutModalController>, 'open' | 'close'>,
-  chatModerationModal: ChatModerationModalController,
-  roomRushModal: RoomRushModalController,
-  roomRushResultModal: RoomRushResultModalController,
+  chatModerationModal: Pick<LazyModal<ChatModerationModalController>, 'open' | 'close'>,
+  roomRushModal: Pick<LazyModal<RoomRushModalController>, 'open' | 'close'>,
+  roomRushResultModal: Pick<LazyModal<RoomRushResultModalController>, 'open' | 'close'>,
   doc: Document = document,
 ): void {
   const authPanel = doc.getElementById('auth-panel');
@@ -229,7 +229,7 @@ export function setupSceneCommands(
         scene.endRoomRushRun?.();
         return;
       }
-      roomRushModal.open();
+      void roomRushModal.open();
     },
     onOpenMultiplayer: () => {
       leaderboardModal.close();

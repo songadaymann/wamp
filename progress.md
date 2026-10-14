@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-14 — F019 remaining controllers started
+
+Plan: defer moderation, Room Rush/results, first-publish and guest builder prompts until requested; start guest clear/draft recovery after app readiness while preserving automatic retries and explicit menu actions. Test pending-download cancellation, publication resolution and service recovery; full quality/mobile, hosted checks, guarded Pages delivery and live proof before recording completion. Branch `codex/wamp-remaining-dialogs-2026-10-14` from `4895555f`; unrelated auth work remains untouched. Candidate implements all seven boundaries and seventeen lifecycle regressions. Native desktop/phone Chrome and phone WebKit publication, moderation, Rush and automatic draft recovery pass with zero exceptions/missing fixtures. Isolated renderer retry passes after an overlapped run timed out; final 3,617-test quality and all thirteen mobile cases pass; installed-client and delivery remain pending.
+
 ## 2026-10-14 — F095 complete and live
 
 PR #199 / source `c2c2af9f`, main `bebc8140`, Pages `10049caa`, Worker `3a61d6e1`, matching PartyKit. Shared presence/chat, legacy fallback, startup-gated identity refresh, nearby realtime coverage and complete close handshakes. Fixture 50 → 9 sockets / 2 → 1 token requests; native signed chat/permissions/pan/return and actual production nine → zero → nine, clean close codes and gameplay pass. Full 3,600-test/mobile/hosted gates, 22 exact live file hashes and final health pass after transient authorization/asset-switch checks. No FPS claim. Master 142/215. Owned tests stopped; primary auth lane, animation choice/server and pending decisions preserved. Receipt: `docs/review/wamp-shared-realtime-2026-10-14.md`.

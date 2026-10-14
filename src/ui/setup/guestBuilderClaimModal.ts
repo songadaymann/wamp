@@ -132,7 +132,8 @@ export class GuestBuilderClaimModalController {
     return Boolean(this.elements.modal && !this.elements.modal.classList.contains('hidden'));
   }
 
-  private open(detail: GuestBuilderClaimRequestDetail): void {
+  open(detail: GuestBuilderClaimRequestDetail): void {
+    if (getAuthDebugState().authenticated || (detail.source !== 'manual-save' && detail.source !== 'publish-attempt')) return;
     if (!this.elements.modal) {
       return;
     }
