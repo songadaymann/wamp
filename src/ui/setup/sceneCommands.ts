@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
-import { AboutModalController } from './aboutModal';
+import type { LazyModal } from './lazyModal';
+import type { AboutModalController } from './aboutModal';
 import { ChatModerationModalController } from './chatModerationModal';
-import { ControlsModalController } from './controlsModal';
+import type { ControlsModalController } from './controlsModal';
 import type { ExploreModalController } from './exploreModal';
-import { GuestbookModalController } from './guestbookModal';
+import type { GuestbookModalController } from './guestbookModal';
 import type { RoomHistoryModalController } from './historyModal';
 import type { LeaderboardModalController } from './leaderboardModal';
 import { RoomRushModalController } from './roomRushModal';
@@ -25,10 +26,10 @@ export function setupSceneCommands(
   historyModal: Pick<RoomHistoryModalController, 'open' | 'close'>,
   leaderboardModal: Pick<LeaderboardModalController, 'open' | 'close'>,
   exploreModal: Pick<ExploreModalController, 'open' | 'close'>,
-  guestbookModal: GuestbookModalController,
+  guestbookModal: Pick<LazyModal<GuestbookModalController>, 'open' | 'close'>,
   settingsModal: SettingsModalController,
-  controlsModal: ControlsModalController,
-  aboutModal: AboutModalController,
+  controlsModal: Pick<LazyModal<ControlsModalController>, 'open' | 'close'>,
+  aboutModal: Pick<LazyModal<AboutModalController>, 'open' | 'close'>,
   chatModerationModal: ChatModerationModalController,
   roomRushModal: RoomRushModalController,
   roomRushResultModal: RoomRushResultModalController,
@@ -305,7 +306,7 @@ export function setupSceneCommands(
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
-      controlsModal.open();
+      void controlsModal.open();
     },
     onFitWorld: () => {
       if (game.scene.isActive('EditorScene')) {
@@ -333,7 +334,7 @@ export function setupSceneCommands(
     roomRushModal.close();
     roomRushResultModal.close();
     chatModerationModal.close();
-    aboutModal.open();
+    void aboutModal.open();
   });
 
   // Phones keep only Online, Settings and Chat in the world toolbar; these open from the menu there.
@@ -345,7 +346,7 @@ export function setupSceneCommands(
   doc.getElementById('btn-menu-controls')?.addEventListener('click', () => {
     closeMenu();
     closeWorldPanels();
-    controlsModal.open();
+    void controlsModal.open();
   });
 
   chatModerationOpenBtn?.addEventListener('click', () => {

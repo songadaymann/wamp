@@ -1,3 +1,7 @@
+## 2026-10-13 overnight — F019 additional lazy dialogs and reusable room data
+
+Seven more first-use controllers (eleven total), queued ratings/guest saves and cancellation; 650.8 → 641.0 KB startup. Stable room-data bytes and URL survive a real menu-copy rebuild. Full 3,553 tests, 13 mobile cases, native desktop/phone/WebKit and shared-playlist startup pass. Delivery/live proof pending; F019 stays partial, master 138/215. Receipt `docs/review/wamp-lazy-dialogs-cache-2026-10-13.md`.
+
 ## 2026-10-13 overnight — F038 complete and phone notice live
 
 Master 138/215. Production cron removed the owned expired session, samples and R2 image; auth expiry cleanup and two 5,000-row outbox sweeps verified (6,772 remaining). Only the expired owned safety specimen was cleaned manually after its registered cron stayed unobserved. PR #194 / main `dd866ceb`, Pages `b1e7c86d`: recording notice leaves phone controls clickable with a 44px opt-out; full 3,545-test gates, 13 mobile cases, all hosted checks, guarded release and live touch jump with notice visible pass. Installed-client screenshot inspected. F089 stays partial. Next F019: rare modal loading and stable chunks.

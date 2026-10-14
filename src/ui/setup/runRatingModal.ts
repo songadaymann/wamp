@@ -209,8 +209,7 @@ export class RunRatingModalController {
       return;
     }
 
-    const mode: RunRatingModalMode = getAuthDebugState().authenticated ? 'rating' : 'guest-claim';
-    this.enqueuePrompt({ mode, detail });
+    this.requestRating(detail);
   };
 
   private readonly handleGuestClaimRequest = (event: Event) => {
@@ -222,15 +221,12 @@ export class RunRatingModalController {
       return;
     }
 
-    this.enqueuePrompt({ mode: 'guest-claim', detail });
+    this.requestRating(detail, true);
   };
 
   private readonly handleGuestSaveChanged = (event: Event) => {
     const result = event instanceof CustomEvent ? event.detail as GuestRunSaveResult | undefined : undefined;
-    if (!result?.clientRunId) return;
-    this.guestSaveResults.set(result.clientRunId, result);
-    if (this.guestSaveResults.size > 50) this.guestSaveResults.delete(this.guestSaveResults.keys().next().value!);
-    if (this.activeRequest?.guestProgress?.clientRunId === result.clientRunId) this.renderGuestClaim();
+    if (result?.clientRunId) this.recordGuestSave(result);
   };
 
   private readonly handleRewardStingsIdle = () => {
@@ -388,6 +384,18 @@ export class RunRatingModalController {
     this.appModeObserver?.disconnect();
     this.appModeObserver = null;
     this.close();
+  }
+
+  requestRating(detail: PostRunRatingRequestDetail, guestOnly = false): void {
+    const authenticated = getAuthDebugState().authenticated;
+    if (guestOnly && authenticated) return;
+    this.enqueuePrompt({ mode: authenticated ? 'rating' : 'guest-claim', detail });
+  }
+
+  recordGuestSave(result: GuestRunSaveResult): void {
+    this.guestSaveResults.set(result.clientRunId, result);
+    if (this.guestSaveResults.size > 50) this.guestSaveResults.delete(this.guestSaveResults.keys().next().value!);
+    if (this.activeRequest?.guestProgress?.clientRunId === result.clientRunId) this.renderGuestClaim();
   }
 
   private enqueuePrompt(prompt: { mode: RunRatingModalMode; detail: PostRunRatingRequestDetail }): void {

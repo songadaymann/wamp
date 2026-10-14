@@ -8,7 +8,6 @@ import { createWorldRepository, type WorldRepository } from '../../persistence/w
 import type { RoomPlaylistItem, RoomPlaylistResponse } from '../../playlists/model';
 import {
   buildPlaylistShareUrl,
-  parsePlaylistSharePath,
 } from '../../playlists/model';
 import { createPlaylistRepository, type PlaylistRepository } from '../../playlists/repository';
 import { getActiveOverworldScene } from './sceneBridge';
@@ -102,7 +101,6 @@ export class PlaylistModalController {
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     this.windowObj.addEventListener(PLAYLIST_OPEN_REQUEST_EVENT, this.handlePlaylistOpenRequest as EventListener);
-    this.openPlaylistFromCurrentPath();
   }
 
   close(): void {
@@ -151,14 +149,6 @@ export class PlaylistModalController {
       this.setError(friendlyError('load this playlist', { error }), () => this.open(slug));
       this.render();
     }
-  }
-
-  private openPlaylistFromCurrentPath(): void {
-    const slug = parsePlaylistSharePath(this.windowObj.location.pathname);
-    if (!slug) {
-      return;
-    }
-    void this.open(slug, { autoPlay: true });
   }
 
   private render(): void {

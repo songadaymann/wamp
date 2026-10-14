@@ -6,19 +6,19 @@ import { ActivityInboxController } from './activityInbox';
 import Phaser from 'phaser';
 import { ChatPanelController } from '../chat/panel';
 import { MobileUiController } from '../mobile/controller';
-import { AboutModalController } from './aboutModal';
+import type { AboutModalController } from './aboutModal';
 import { setupButtonFeedback } from './buttonFeedback';
 import { ChatModerationModalController } from './chatModerationModal';
-import { ControlsModalController } from './controlsModal';
+import type { ControlsModalController } from './controlsModal';
 import type { ExploreModalController } from './exploreModal';
 import { GuestBuilderClaimModalController } from './guestBuilderClaimModal';
 import { GuestRoomRecoveryModalController } from './guestRoomRecoveryModal';
 import { GuestProgressClaimModalController } from './guestProgressClaimModal';
-import { GuestbookModalController } from './guestbookModal';
+import type { GuestbookModalController } from './guestbookModal';
 import type { RoomHistoryModalController } from './historyModal';
 import { setupKeyboardShortcutPassthrough } from './keyboardPassthrough';
 import type { LeaderboardModalController } from './leaderboardModal';
-import { PlaylistModalController } from './playlistModal';
+import type { PlaylistModalController } from './playlistModal';
 import { PlaylistIntroModalController } from './playlistIntroModal';
 import { PerformanceSuggestionModalController } from './performanceSuggestionModal';
 import { RoomSequenceController } from './roomSequenceController';
@@ -30,18 +30,21 @@ import { RewardStingCatchupController } from './rewardStingCatchup';
 import { RoomGoalIntroModalController } from './roomGoalIntroModal';
 import { RoomRushModalController } from './roomRushModal';
 import { RoomRushResultModalController } from './roomRushResultModal';
-import { RunRatingModalController } from './runRatingModal';
+import { LazyRunRatingController } from './lazyRunRating';
 import { PostRunReminderController } from './postRunReminder';
 import { SettingsModalController } from './settingsModal';
-import { SignTextModalController } from './signTextModal';
+import type { SignTextModalController } from './signTextModal';
 import { configureEditorUiHost } from './editorUiLoader';
 import { setupSceneCommands } from './sceneCommands';
-import { WampOGramModalController } from './wampOGramModal';
+import type { WampOGramModalController } from './wampOGramModal';
 import { XpReceiptController } from './xpReceipts';
 import { WelcomeModalController } from './welcomeModal';
 import { FirstStepsSummaryController } from './firstStepsSummary';
 import { WorldsController } from '../worlds/controller';
 import { setupLostSongProgress } from './lostSongs';
+import { PLAYLIST_OPEN_REQUEST_EVENT, type PlaylistOpenRequestDetail } from './playlistEvents';
+import { parsePlaylistSharePath } from '../../playlists/model';
+import { SIGN_TEXT_EDIT_REQUEST_EVENT, type SignTextEditRequestDetail } from '../../signs/events';
 
 interface UiControllers {
   firstPublishModal: FirstPublishModalController;
@@ -54,13 +57,13 @@ interface UiControllers {
   guestBuilderClaimModal: GuestBuilderClaimModalController;
   guestRoomRecoveryModal: GuestRoomRecoveryModalController;
   guestProgressClaimModal: GuestProgressClaimModalController;
-  guestbookModal: GuestbookModalController;
+  guestbookModal: LazyModal<GuestbookModalController>;
   settingsModal: SettingsModalController;
-  controlsModal: ControlsModalController;
-  aboutModal: AboutModalController;
+  controlsModal: LazyModal<ControlsModalController>;
+  aboutModal: LazyModal<AboutModalController>;
   chatModerationModal: ChatModerationModalController;
   profileModal: LazyModal<ProfileModalController>;
-  playlistModal: PlaylistModalController;
+  playlistModal: LazyModal<PlaylistModalController>;
   playlistIntroModal: PlaylistIntroModalController;
   performanceSuggestionModal: PerformanceSuggestionModalController;
   rewardStings: RewardStingController;
@@ -69,10 +72,10 @@ interface UiControllers {
   roomGoalIntroModal: RoomGoalIntroModalController;
   roomRushModal: RoomRushModalController;
   roomRushResultModal: RoomRushResultModalController;
-  runRatingModal: RunRatingModalController;
+  runRatingModal: LazyRunRatingController;
   postRunReminder: PostRunReminderController;
-  signTextModal: SignTextModalController;
-  wampOGramModal: WampOGramModalController;
+  signTextModal: LazyModal<SignTextModalController>;
+  wampOGramModal: LazyModal<WampOGramModalController>;
   welcomeModal: WelcomeModalController;
   chatPanel: ChatPanelController;
   mobileUi: MobileUiController;
@@ -89,6 +92,8 @@ export function setupUiControllers(game: Phaser.Game): void {
   configureEditorBridge(controllers);
   initUiControllers(controllers);
   setupLazyModalTriggers(controllers);
+  const sharedPlaylist = parsePlaylistSharePath(window.location.pathname);
+  if (sharedPlaylist) void controllers.playlistModal.open(sharedPlaylist, { autoPlay: true });
   setupUiControllerCommands(game, controllers);
   setupButtonFeedback();
   setupKeyboardShortcutPassthrough(game);
@@ -97,12 +102,13 @@ export function setupUiControllers(game: Phaser.Game): void {
 function createUiControllers(game: Phaser.Game): UiControllers {
   // Rarely opened pop-ups load on first open (F019).
   const leaderboardModal = new LazyModal(async () => new (await import('./leaderboardModal')).LeaderboardModalController(game));
-  const controlsModal = new ControlsModalController();
+  const controlsModal = new LazyModal(async () => new (await import('./controlsModal')).ControlsModalController());
   const playlistIntroModal = new PlaylistIntroModalController();
   const exploreModal = new LazyModal(async () => new (await import('./exploreModal')).ExploreModalController(game));
   const buildPrompts = new BuildPromptsController(() => exploreModal.close()); buildPrompts.init();
   game.events.once('destroy', () => buildPrompts.destroy());
-  const runRatingModal = new RunRatingModalController(game);
+  const runRatingModal = new LazyRunRatingController(async () => new (await import('./runRatingModal')).RunRatingModalController(game));
+  game.events.once('destroy', () => runRatingModal.destroy());
   const guestProgressClaimModal = new GuestProgressClaimModalController();
   const openExplore = () => exploreModal.open();
   const welcomeModal = new WelcomeModalController(game, undefined, undefined, undefined, undefined, undefined, { explore: openExplore });
@@ -123,13 +129,13 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     guestBuilderClaimModal: new GuestBuilderClaimModalController(),
     guestRoomRecoveryModal: new GuestRoomRecoveryModalController(game),
     guestProgressClaimModal,
-    guestbookModal: new GuestbookModalController(),
+    guestbookModal: new LazyModal(async () => new (await import('./guestbookModal')).GuestbookModalController()),
     settingsModal: new SettingsModalController(),
     controlsModal,
-    aboutModal: new AboutModalController(),
+    aboutModal: new LazyModal(async () => new (await import('./aboutModal')).AboutModalController()),
     chatModerationModal: new ChatModerationModalController(),
     profileModal: new LazyModal(async () => new (await import('./profileModal')).ProfileModalController(game)),
-    playlistModal: new PlaylistModalController(game),
+    playlistModal: new LazyModal(async () => new (await import('./playlistModal')).PlaylistModalController(game)),
     playlistIntroModal,
     performanceSuggestionModal: new PerformanceSuggestionModalController(game),
     rewardStings: new RewardStingController(),
@@ -144,8 +150,8 @@ function createUiControllers(game: Phaser.Game): UiControllers {
       openGuestHistory: () => guestProgressClaimModal.openFromReminder(),
       beforeOpen: () => runRatingModal.close(),
     }),
-    signTextModal: new SignTextModalController(game),
-    wampOGramModal: new WampOGramModalController(game),
+    signTextModal: new LazyModal(async () => new (await import('./signTextModal')).SignTextModalController(game)),
+    wampOGramModal: new LazyModal(async () => new (await import('./wampOGramModal')).WampOGramModalController(game)),
     welcomeModal,
     chatPanel: new ChatPanelController(),
     mobileUi: new MobileUiController(game),
@@ -161,13 +167,9 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.guestBuilderClaimModal.init();
   controllers.guestRoomRecoveryModal.init();
   controllers.guestProgressClaimModal.init();
-  controllers.guestbookModal.init();
   controllers.settingsModal.init();
-  controllers.controlsModal.init();
-  controllers.aboutModal.init();
   controllers.chatModerationModal.init();
   controllers.roomGoalIntroModal.init();
-  controllers.playlistModal.init();
   controllers.playlistIntroModal.init();
   controllers.performanceSuggestionModal.init();
   controllers.rewardStings.init();
@@ -177,8 +179,6 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.roomRushResultModal.init();
   controllers.runRatingModal.init();
   controllers.postRunReminder.init();
-  controllers.signTextModal.init();
-  controllers.wampOGramModal.init();
   controllers.welcomeModal.init();
   controllers.chatPanel.init();
   controllers.mobileUi.init();
@@ -234,6 +234,20 @@ function setupLazyModalTriggers(controllers: UiControllers): void {
     if (controllers.profileModal.loaded) return;
     const userId = (event as CustomEvent<ProfileOpenRequestDetail>).detail?.userId;
     if (userId) void controllers.profileModal.open(userId);
+  });
+  document.getElementById('btn-wamp-o-gram')?.addEventListener('click', () => {
+    if (!controllers.wampOGramModal.loaded) void controllers.wampOGramModal.open();
+  });
+  window.addEventListener(PLAYLIST_OPEN_REQUEST_EVENT, (event) => {
+    const detail = (event as CustomEvent<PlaylistOpenRequestDetail>).detail;
+    if (!controllers.playlistModal.loaded && detail?.slug) void controllers.playlistModal.open(detail.slug);
+  });
+  window.addEventListener(SIGN_TEXT_EDIT_REQUEST_EVENT, (event) => {
+    const detail = (event as CustomEvent<SignTextEditRequestDetail>).detail;
+    if (!controllers.signTextModal.loaded && detail) void controllers.signTextModal.open(detail);
+  });
+  document.getElementById('btn-guestbook-open')?.addEventListener('click', () => {
+    if (!controllers.guestbookModal.loaded) void controllers.guestbookModal.open();
   });
   document.getElementById('btn-auth-leaderboard')?.addEventListener('click', () => {
     if (controllers.leaderboardModal.loaded) return;
