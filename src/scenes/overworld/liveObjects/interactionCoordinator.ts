@@ -1,3 +1,4 @@
+import { createExistingBodyGroup } from './existingBodyGroup';
 import Phaser from 'phaser';
 import {
   canActorTriggerBlockSwitchByContact,
@@ -115,6 +116,12 @@ interface WorldColliderObstacle<TEdgeWall> {
   liveObject: LoadedRoomObject;
 }
 
+interface ObstacleGroups<TEdgeWall> {
+  staticGroup: Phaser.Physics.Arcade.Group;
+  dynamicGroup: Phaser.Physics.Arcade.Group;
+  bySprite: WeakMap<Phaser.GameObjects.GameObject, WorldColliderObstacle<TEdgeWall>>;
+}
+
 /** What the last full collider sync built, so reach can grow between syncs (F008). */
 interface WorldColliderContext<TEdgeWall> {
   rooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[];
@@ -129,6 +136,7 @@ interface WorldColliderContext<TEdgeWall> {
   reach: Map<LoadedRoomObject, Set<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>>;
   /** Actor to the obstacles it already has a collider with. */
   pairs: Map<LoadedRoomObject, Set<LoadedRoomObject>>;
+  groups: ObstacleGroups<TEdgeWall> | null;
 }
 
 export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
@@ -329,6 +337,8 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
   syncWorldColliders(
     loadedRooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>,
   ): void {
+    this.worldColliderContext?.groups?.staticGroup.destroy(false, false);
+    this.worldColliderContext?.groups?.dynamicGroup.destroy(false, false);
     this.reconciliationGeneration += 1;
     const rooms = Array.from(loadedRooms).filter(
       (loadedRoom) => loadedRoom.runtimeSuspended !== true,
@@ -357,7 +367,9 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
       homeRooms: new Map(),
       reach: new Map(),
       pairs: new Map(),
+      groups: null,
     };
+    context.groups = this.createObstacleGroups(solidObstacles);
     for (const { loadedRoom, liveObject } of solidObstacles) {
       context.homeRooms.set(liveObject, loadedRoom);
       context.reach.set(liveObject, this.findReachRooms(context, liveObject));
@@ -378,11 +390,13 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
           context.tracked.push(liveObject);
         }
         for (const collisionRoom of reach) this.addTerrainColliders(liveObject, collisionRoom);
-        for (const obstacle of solidObstacles) {
-          if (!this.shouldPairWithObstacle(context, liveObject, obstacle.liveObject)) continue;
-          const obstacleReach = context.reach.get(obstacle.liveObject);
-          if (obstacleReach && setsIntersect(reach, obstacleReach)) {
-            this.addObstacleCollider(context, liveObject, obstacle);
+        if (context.groups) {
+          this.addGroupedObstacleColliders(context, liveObject);
+        } else {
+          for (const obstacle of solidObstacles) {
+            if (!this.shouldPairWithObstacle(context, liveObject, obstacle.liveObject)) continue;
+            const obstacleReach = context.reach.get(obstacle.liveObject);
+            if (obstacleReach && setsIntersect(reach, obstacleReach)) this.addObstacleCollider(context, liveObject, obstacle);
           }
         }
       }
@@ -431,7 +445,7 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
     const isActor = context.actors.includes(liveObject);
     if (isActor) {
       for (const room of added) this.addTerrainColliders(liveObject, room);
-      for (const obstacle of context.obstacles) {
+      for (const obstacle of context.groups ? [] : context.obstacles) {
         if (!this.canAddGrownPair(context, liveObject, obstacle.liveObject)) continue;
         const obstacleReach = context.reach.get(obstacle.liveObject);
         if (obstacleReach && setsIntersect(added, obstacleReach)) {
@@ -440,6 +454,7 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
       }
     }
 
+    if (context.groups) return;
     const asObstacle = context.obstacles.find((candidate) => candidate.liveObject === liveObject);
     if (!asObstacle) return;
     for (const actor of context.actors) {
@@ -534,6 +549,52 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
           () => this.options.shouldCollideWithLiveObject(liveObject),
         ),
       );
+    }
+  }
+
+  private createObstacleGroups(obstacles: WorldColliderObstacle<TEdgeWall>[]): ObstacleGroups<TEdgeWall> | null {
+    const staticGroup = createExistingBodyGroup(this.options.scene, Phaser.Physics?.Arcade?.STATIC_BODY ?? 1);
+    const dynamicGroup = createExistingBodyGroup(this.options.scene, Phaser.Physics?.Arcade?.DYNAMIC_BODY ?? 0);
+    if (!staticGroup || !dynamicGroup) {
+      staticGroup?.destroy(false, false); dynamicGroup?.destroy(false, false);
+      return null;
+    }
+    const bySprite = new WeakMap<Phaser.GameObjects.GameObject, WorldColliderObstacle<TEdgeWall>>();
+    for (const obstacle of obstacles) {
+      bySprite.set(obstacle.liveObject.sprite, obstacle);
+      const body = obstacle.liveObject.sprite.body as ArcadeObjectBody | null;
+      (body?.physicsType === Phaser.Physics.Arcade.STATIC_BODY ? staticGroup : dynamicGroup).add(obstacle.liveObject.sprite);
+    }
+    return { staticGroup, dynamicGroup, bySprite };
+  }
+
+  private addGroupedObstacleColliders(context: WorldColliderContext<TEdgeWall>, actor: LoadedRoomObject): void {
+    const groups = context.groups!;
+    for (const group of [groups.staticGroup, groups.dynamicGroup]) {
+      if (group.getLength() === 0) continue;
+      actor.worldColliders.push(this.options.scene.physics.add.collider(actor.sprite, group,
+        (_actorSprite, obstacleSprite) => {
+          const obstacle = groups.bySprite.get(obstacleSprite as Phaser.GameObjects.GameObject);
+          if (!obstacle) return;
+          this.handleGroupedContact(actor, obstacle);
+        },
+        (_actorSprite, obstacleSprite) => {
+          const obstacle = groups.bySprite.get(obstacleSprite as Phaser.GameObjects.GameObject)?.liveObject;
+          if (!obstacle || !this.shouldPairWithObstacle(context, actor, obstacle)
+            || !this.shouldCollideLiveObjectPair(actor, obstacle)
+            || context.homeRooms.get(actor)?.runtimeSuspended === true
+            || context.homeRooms.get(obstacle)?.runtimeSuspended === true) return false;
+          const actorReach = context.reach.get(actor), obstacleReach = context.reach.get(obstacle);
+          return Boolean(actorReach && obstacleReach && setsIntersect(actorReach, obstacleReach));
+        }));
+    }
+  }
+
+  private handleGroupedContact(actor: LoadedRoomObject, obstacle: WorldColliderObstacle<TEdgeWall>): void {
+    if (isBlockSwitchObjectId(obstacle.liveObject.config.id) && canActorTriggerBlockSwitchByContact(actor)) {
+      this.options.handleBlockSwitchActorHit(obstacle.loadedRoom, obstacle.liveObject, actor);
+    } else if (isPushableObjectConfig(obstacle.liveObject.config) && this.options.canActorPushPushableByContact(actor)) {
+      this.options.handleActorPushableContact(actor, obstacle.liveObject);
     }
   }
 
