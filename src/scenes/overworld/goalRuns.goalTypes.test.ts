@@ -106,6 +106,18 @@ describe('room goal runs by goal type (F064)', () => {
     expect(goals.tick(1)).toMatchObject({ event: 'complete', transientStatus: 'Survival clear.' });
   });
 
+  it('survival tallies player pickups and defeats silently without counting hunter pickups', () => {
+    const { goals, run } = startRun({ type: 'survival', durationMs: 5000 });
+    expect(goals.recordCollectibleCollected(ROOM_ID)).toMatchObject({ changed: true, transientStatus: null, event: null });
+    expect(goals.recordEnemyDefeated(ROOM_ID, 'Slime')).toMatchObject({ changed: true, transientStatus: null, event: null });
+    expect(goals.recordEnemyCollectibleCollected(ROOM_ID).changed).toBe(false);
+    expect(run()).toMatchObject({ collectiblesCollected: 1, enemiesDefeated: 1, enemyCollectiblesCollected: 0, result: 'active' });
+    goals.tick(5000);
+    expect(goals.recordCollectibleCollected(ROOM_ID).changed).toBe(false);
+    expect(goals.recordEnemyDefeated(ROOM_ID, 'Bat').changed).toBe(false);
+    expect(run()).toMatchObject({ collectiblesCollected: 1, enemiesDefeated: 1, result: 'completed' });
+  });
+
   it('npc_quest protect: completes after the duration, fails if the NPC is defeated', () => {
     const goal = { type: 'npc_quest', questType: 'protect', npcInstanceId: 'npc-1', durationMs: 3000, requiredCount: 0, destination: null, timeLimitMs: null } as const;
     const kept = startRun(goal);

@@ -1,4 +1,5 @@
-import { resolveRoomGoalTick } from '../../goals/goalSchema';
+import { goalCollectiblesExhausted } from '../../goals/goalRunEvents';
+import { roomGoalCountsPlayerCollectibles, resolveRoomGoalPlayerCollect, resolveRoomGoalTick } from '../../goals/goalSchema';
 import { getObjectById, type GameObjectConfig } from '../../config';
 import { COOP_ROOM_PRACTICE_MESSAGE, hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
 import { cloneRoomGoal, ROOM_GOAL_DEFINITIONS, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
@@ -347,8 +348,7 @@ export class OverworldGoalRunController {
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
       this.currentGoalRun.qualificationState !== 'qualified' ||
-      (this.currentGoalRun.goal.type !== 'defeat_all' &&
-        this.currentGoalRun.goal.type !== 'survival') ||
+      !ROOM_GOAL_DEFINITIONS[this.currentGoalRun.goal.type].roomEvents.countsEnemyDefeats ||
       this.currentGoalRun.roomId !== roomId
     ) {
       return NOOP_MUTATION_RESULT;
@@ -366,9 +366,7 @@ export class OverworldGoalRunController {
       changed: true,
       goalMarkersChanged: false,
       resetChallengeState: false,
-      transientStatus: this.currentGoalRun.goal.type === 'defeat_all'
-        ? `${enemyName} defeated.`
-        : null,
+      transientStatus: ROOM_GOAL_DEFINITIONS[this.currentGoalRun.goal.type].roomEvents.enemyDefeatText(enemyName),
       event: null,
     };
   }
@@ -378,50 +376,29 @@ export class OverworldGoalRunController {
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
       this.currentGoalRun.qualificationState !== 'qualified' ||
-      (this.currentGoalRun.goal.type !== 'collect_target' &&
-        this.currentGoalRun.goal.type !== 'collect_race' &&
-        this.currentGoalRun.goal.type !== 'survival' &&
-        !(this.currentGoalRun.goal.type === 'npc_quest' && this.currentGoalRun.goal.questType === 'give')) ||
+      !roomGoalCountsPlayerCollectibles(this.currentGoalRun.goal, ROOM_GOAL_DEFINITIONS) ||
       this.currentGoalRun.roomId !== roomId
     ) {
       return NOOP_MUTATION_RESULT;
     }
 
     this.currentGoalRun.collectiblesCollected += 1;
-    if (
-      this.currentGoalRun.goal.type === 'collect_target' &&
-      this.currentGoalRun.collectiblesCollected >= this.currentGoalRun.goal.requiredCount
-    ) {
-      return this.markCompleted('Collection target reached.');
+    const outcome = resolveRoomGoalPlayerCollect(this.currentGoalRun.goal, ROOM_GOAL_DEFINITIONS, this.currentGoalRun);
+    switch (outcome) {
+      case 'collection_complete':
+        return this.markCompleted('Collection target reached.');
+      case 'race_exhausted':
+        return this.resolveCollectRace('All collectibles claimed.');
+      case 'return_to_npc':
+      case null:
+        return {
+          changed: true,
+          goalMarkersChanged: false,
+          resetChallengeState: false,
+          transientStatus: outcome === 'return_to_npc' ? 'Return to the NPC.' : null,
+          event: null,
+        };
     }
-
-    if (
-      this.currentGoalRun.goal.type === 'npc_quest' &&
-      this.currentGoalRun.goal.questType === 'give'
-    ) {
-      return {
-        changed: true,
-        goalMarkersChanged: false,
-        resetChallengeState: false,
-        transientStatus:
-          this.currentGoalRun.collectiblesCollected >= this.currentGoalRun.goal.requiredCount
-            ? 'Return to the NPC.'
-            : null,
-        event: null,
-      };
-    }
-
-    if (this.currentGoalRun.goal.type === 'collect_race' && this.collectRaceGoalExhausted(this.currentGoalRun)) {
-      return this.resolveCollectRace('All collectibles claimed.');
-    }
-
-    return {
-      changed: true,
-      goalMarkersChanged: false,
-      resetChallengeState: false,
-      transientStatus: null,
-      event: null,
-    };
   }
 
   recordEnemyCollectibleCollected(roomId: string): GoalRunMutationResult {
@@ -429,14 +406,14 @@ export class OverworldGoalRunController {
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
       this.currentGoalRun.qualificationState !== 'qualified' ||
-      this.currentGoalRun.goal.type !== 'collect_race' ||
+      !ROOM_GOAL_DEFINITIONS[this.currentGoalRun.goal.type].roomEvents.countsEnemyCollectibles ||
       this.currentGoalRun.roomId !== roomId
     ) {
       return NOOP_MUTATION_RESULT;
     }
 
     this.currentGoalRun.enemyCollectiblesCollected += 1;
-    if (this.collectRaceGoalExhausted(this.currentGoalRun)) {
+    if (goalCollectiblesExhausted(this.currentGoalRun)) {
       return this.resolveCollectRace('All collectibles claimed.');
     }
 
@@ -1312,16 +1289,6 @@ export class OverworldGoalRunController {
     runState.verificationSchemaVersion = null;
     runState.verificationNonce = null;
     runState.snapshotHash = null;
-  }
-
-  private collectRaceGoalExhausted(runState: GoalRunState): boolean {
-    if (runState.goal.type !== 'collect_race' || runState.collectibleTarget === null) {
-      return false;
-    }
-
-    return (
-      runState.collectiblesCollected + runState.enemyCollectiblesCollected >= runState.collectibleTarget
-    );
   }
 
   private resolveCollectRace(_reason: string): GoalRunMutationResult {

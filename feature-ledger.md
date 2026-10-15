@@ -1,4 +1,12 @@
 
+## 2026-10-15 overnight — F070 room clock policies complete and live
+
+PR #210 / source36cdd2ea / main77fe0fd9; API51f0a5fe at100%, Pages697d2055.3,693-test quality,46 mobile cases,4,896 real old/new controller comparisons and all source/main gates pass. First guard stops before publication on temporaryD1/7403; unchanged read recheck passes with no pending migrations and full guarded retry publishes. Its immediate propagation404 clears on unchanged smoke recheck.59 exact custom/immutable files, canonical health/catalog, actual-domain both-engine timing, WebKit seven-goal save/reload and real guest jump/menu checks pass with zero errors; images inspected. F070/master partial/145; marker and event policies remain separate. Receipt: `docs/review/wamp-room-goal-tick-registry-2026-10-15.md`.
+
+## 2026-10-15 overnight — F070 room event policies started
+
+From211 source20cb4841 on `codex/wamp-room-goal-events-2026-10-15`. Frozen actual-controller4,608 individual and1,344 sequence-event comparisons pass before extraction. Required pure collection/defeat policies preserve guards, raw counters, messages, race/Give priority and controller-owned mutations. Integrate211 main after its separate delivery. F070/master partial/145; receipt: `docs/review/wamp-room-goal-events-2026-10-15.md`.
+
 ## 2026-10-15 overnight — F070 marker display started
 
 From PR210 source36cdd2ea on `codex/wamp-goal-marker-registry-2026-10-15`. Four pre-extraction actual-controller/editor comparison contracts pass. Centralize required typed flag display policies while retaining practice/course start, room-coordinate conversion and sprite ownership; preserve NPC Editor/Play differences and reached opacity. Integrate210 main after its separate delivery. F070/master partial/145. Receipt: `docs/review/wamp-goal-marker-registry-2026-10-15.md`.
