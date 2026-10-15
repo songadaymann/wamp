@@ -1,5 +1,7 @@
+import { buildEditorGoalFlags } from '../../goals/goalSchema';
 import {
   cloneRoomGoal,
+  ROOM_GOAL_DEFINITIONS,
   type GoalMarkerPoint,
   type NpcQuestType,
   type RoomGoal,
@@ -190,34 +192,7 @@ export function removeRoomGoalMarkerAt(
 }
 
 export function buildRoomGoalMarkerDescriptors(goal: RoomGoal | null): GoalMarkerDescriptor[] {
-  switch (goal?.type) {
-    case 'reach_exit':
-      return goal.exit
-        ? [{ point: goal.exit, label: null, variant: 'finish-pending', textColor: '#ffefef' }]
-        : [];
-    case 'checkpoint_sprint':
-      return [
-        ...goal.checkpoints.map((checkpoint, index) => ({
-          point: checkpoint,
-          label: `${index + 1}`,
-          variant: 'checkpoint-pending' as GoalMarkerFlagVariant,
-          textColor: '#ffefef',
-        })),
-        ...(goal.finish
-          ? [{ point: goal.finish, label: null, variant: 'finish-pending' as GoalMarkerFlagVariant, textColor: '#ffefef' }]
-          : []),
-      ];
-    case 'npc_quest':
-      return goal.destination
-        ? [{ point: goal.destination, label: 'NPC', variant: 'finish-pending', textColor: '#ffefef' }]
-        : [];
-    case undefined:
-    case 'collect_target':
-    case 'collect_race':
-    case 'defeat_all':
-    case 'survival':
-      return [];
-  }
+  return goal ? buildEditorGoalFlags(goal, ROOM_GOAL_DEFINITIONS) : [];
 }
 
 export function getRoomGoalSummaryText(

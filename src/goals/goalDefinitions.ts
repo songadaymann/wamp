@@ -1,3 +1,4 @@
+import { editorCheckpointFlags, finishGoalFlag, playCheckpointFlags } from './goalMarkerPresentation';
 import { formatLimitedGoalTimer } from './goalPresentation';
 import { computeCourseGoalBaseScore, computeRoomGoalTimeBonus } from './goalScoring';
 import {
@@ -23,6 +24,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     : [];
   return {
     reach_exit: {
+      markerDisplay: { editor: goal => goal.exit ? [finishGoalFlag(goal.exit, false)] : [], play: (goal, facts) => goal.exit ? [finishGoalFlag(goal.exit, facts.result === 'completed')] : [] },
       label: 'Reach Exit',
       courseSupported: true as const,
       roomTick: (goal, elapsed) => goal.timeLimitMs !== null && elapsed >= goal.timeLimitMs ? 'time_up' : null,
@@ -64,6 +66,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
       validate: goal => goal.exit ? null : 'Reach Exit needs an exit marker. Choose Set Exit and place it in the room.'
     },
     collect_target: {
+      markerDisplay: { editor: () => [], play: () => [] },
       label: 'Collect Target',
       courseSupported: true as const,
       roomTick: (goal, elapsed) => goal.timeLimitMs !== null && elapsed >= goal.timeLimitMs ? 'time_up' : null,
@@ -108,6 +111,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
         ? `You've set the collect goal for ${goal.requiredCount} object${goal.requiredCount === 1 ? '' : 's'}, but you've only placed ${context.collectiblesPlaced}.` : null
     },
     collect_race: {
+      markerDisplay: { editor: () => [], play: () => [] },
       label: 'Collect Race',
       courseSupported: false as const,
       roomTick: (goal, elapsed) => goal.timeLimitMs !== null && elapsed >= goal.timeLimitMs ? 'collect_race_timeout' : null,
@@ -147,6 +151,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
           : context.collectModeEnemyCount > 1 ? 'Collect Race currently supports exactly one Sword Hunter set to Collect Items.' : null
     },
     defeat_all: {
+      markerDisplay: { editor: () => [], play: () => [] },
       label: 'Defeat All',
       courseSupported: true as const,
       roomTick: (goal, elapsed) => goal.timeLimitMs !== null && elapsed >= goal.timeLimitMs ? 'time_up' : null,
@@ -193,6 +198,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
       validate: (_goal, context) => context.enemyCount <= 0 ? 'Defeat All needs at least one enemy in the room.' : null
     },
     checkpoint_sprint: {
+      markerDisplay: { editor: goal => editorCheckpointFlags(goal.checkpoints, goal.finish), play: (goal, facts) => playCheckpointFlags(goal.checkpoints, goal.finish, facts) },
       label: 'Checkpoint Sprint',
       courseSupported: true as const,
       roomTick: (goal, elapsed) => goal.timeLimitMs !== null && elapsed >= goal.timeLimitMs ? 'time_up' : null,
@@ -237,6 +243,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
       validate: goal => goal.finish ? null : 'Checkpoint Sprint needs a finish marker. Choose Set Finish and place it in the room.'
     },
     survival: {
+      markerDisplay: { editor: () => [], play: () => [] },
       label: 'Survival',
       courseSupported: true as const,
       roomTick: (goal, elapsed) => elapsed >= goal.durationMs ? 'survival_clear' : null,
@@ -280,6 +287,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
       validate: () => null
     },
     npc_quest: {
+      markerDisplay: { editor: goal => goal.destination ? [finishGoalFlag(goal.destination, false, 'NPC')] : [], play: (goal, facts) => goal.questType === 'escort' && goal.destination ? [finishGoalFlag(goal.destination, facts.result === 'completed', 'NPC')] : [] },
       label: 'NPC Quest',
       courseSupported: false as const,
       roomTick: (goal, elapsed) => goal.questType === 'protect' && elapsed >= goal.durationMs ? 'npc_protected' : null,

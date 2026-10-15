@@ -1,3 +1,4 @@
+import type { GoalFlagDescriptor, GoalFlagProgressFacts } from './goalMarkerPresentation';
 import type { CourseGoalProgressFacts, GoalPresentation, GoalTimerFormatter, RoomGoalProgressFacts } from './goalPresentation';
 import {
   createRoomGoalScoreContext,
@@ -79,6 +80,10 @@ interface GoalDefinitionBase<P extends GoalMarkerPoint, K extends GoalType> {
   introText: (goal: Goal<P, K>, options: GoalTextOptions) => string;
   validate: (goal: Goal<P, K>, context: GoalPublishValidationContext) => string | null;
   presentation: GoalPresentation<P, K>;
+  markerDisplay: {
+    editor: (goal: Goal<P, K>) => GoalFlagDescriptor<P>[];
+    play: (goal: Goal<P, K>, facts: GoalFlagProgressFacts) => GoalFlagDescriptor<P>[];
+  };
   roomTick: (goal: Goal<P, K>, elapsedMs: number) => RoomGoalTickResolution;
   roomScoring: {
     score: (goal: Goal<P, K>, context: RoomGoalScoreContext) => number;
@@ -187,4 +192,12 @@ export function formatGoalTimerText<P extends GoalMarkerPoint, K extends GoalTyp
 /** Eligibility, time advancement, suspension and side effects stay in the caller. */
 export function resolveRoomGoalTick<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, elapsedMs: number): RoomGoalTickResolution {
   return registry[goal.type].roomTick(goal, elapsedMs);
+}
+
+export function buildEditorGoalFlags<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>): GoalFlagDescriptor<P>[] {
+  return registry[goal.type].markerDisplay.editor(goal);
+}
+
+export function buildPlayGoalFlags<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, facts: GoalFlagProgressFacts): GoalFlagDescriptor<P>[] {
+  return registry[goal.type].markerDisplay.play(goal, facts);
 }
