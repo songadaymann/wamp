@@ -1,5 +1,15 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-15 overnight — phone Goal Prompt complete and live
+
+PR #208 / source `d37c905a` / main `7618e080` / Pages `3fc6cc74`. The320px phone textarea grows from24px to the full258px row in WebKit. Full3,678-test quality,46 mobile cases, seven native orientation/desktop save/reload flows, two strict hosted/live prompt flows, all source/main gates and guarded Pages publication exit0.59 exact custom/immutable files and health pass; API stays8cba0e76 at100%. Images are inspected; no strict errors/allowances. Master145/215; F070 presentation continues separately. Receipt: `docs/review/wamp-phone-goal-prompt-2026-10-15.md`.
+
+
+## 2026-10-15 overnight — F070 goal presentation started
+
+From7618e080 on `codex/wamp-goal-presentation-registry-2026-10-15`. Five pre-extraction HUD contract/differential cases pass against frozen originals. Require typed badge/selection/progress/timer rules, preserving exact text and per-frame work. Phone Prompt208 main/guarded Pages delivery stays separate. F070/master remain partial/145. Receipt: `docs/review/wamp-goal-presentation-registry-2026-10-15.md`.
+
+
 ## 2026-10-15 overnight — F070 scoring and ranking complete and live
 
 PR #207 / source `657128c7` / main `930b681a`; API `8cba0e76` at100%, Pages `8426a3ab`.3,678-test quality,46 accepted mobile cases,81,810 matching old/new scores and137,425 comparator comparisons, native client/completion/editor matrices, all source/main four-check gates and guarded API+Pages publication complete. The immediate post-publish smoke hits propagation404; unchanged recheck passes.59 exact custom/immutable files, canonical API health/catalog, strict live guest API jump/menu return and WebKit seven-goal save/reload pass with no errors/allowances. Preserve the unaccepted diagnostic runs; no ranked/reward/FPS claim. F070 remains partial/master145: client-runtime registry work is open. Receipt: `docs/review/wamp-goal-scoring-registry-2026-10-15.md`.

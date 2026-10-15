@@ -4,7 +4,8 @@ import type {
   CourseMarkerPoint,
   CourseSnapshot,
 } from '../../courses/model';
-import { courseGoalRequiresStartPoint } from '../../courses/model';
+import { COURSE_GOAL_DEFINITIONS, courseGoalRequiresStartPoint } from '../../courses/model';
+import { formatGoalBadgeText, formatCourseGoalProgressText, formatGoalTimerText } from '../../goals/goalSchema';
 import type { GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import type { GuestRunSaveResult } from '../../guestRooms/runService';
@@ -271,22 +272,7 @@ export function recordCourseRunCollectibleCollected(
 }
 
 export function getCourseGoalBadgeText(goal: CourseGoal | null): string {
-  if (!goal) {
-    return 'Course';
-  }
-
-  switch (goal.type) {
-    case 'reach_exit':
-      return 'Reach exit';
-    case 'collect_target':
-      return `Collect ${goal.requiredCount}`;
-    case 'defeat_all':
-      return 'Defeat all enemies';
-    case 'checkpoint_sprint':
-      return `Reach ${goal.checkpoints.length || 0} ${goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`;
-    case 'survival':
-      return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`;
-  }
+  return goal ? formatGoalBadgeText(goal, COURSE_GOAL_DEFINITIONS) : 'Course';
 }
 
 export function getCourseGoalTimerText(
@@ -294,39 +280,13 @@ export function getCourseGoalTimerText(
   formatTimer: (ms: number) => string,
 ): string {
   const goal = runState.course.goal;
-  if (!goal) {
-    return formatTimer(runState.elapsedMs);
-  }
-
-  if (goal.type === 'survival') {
-    return `${formatTimer(Math.max(0, goal.durationMs - runState.elapsedMs))} LEFT`;
-  }
-
-  if ('timeLimitMs' in goal && goal.timeLimitMs !== null) {
-    return `${formatTimer(Math.max(0, goal.timeLimitMs - runState.elapsedMs))} LEFT`;
-  }
-
-  return formatTimer(runState.elapsedMs);
+  return goal ? formatGoalTimerText(goal, COURSE_GOAL_DEFINITIONS, runState.elapsedMs, formatTimer)
+    : formatTimer(runState.elapsedMs);
 }
 
 export function getCourseGoalProgressText(runState: ActiveCourseRunState): string {
   const goal = runState.course.goal;
-  if (!goal) {
-    return '';
-  }
-
-  switch (goal.type) {
-    case 'reach_exit':
-      return runState.result === 'completed' ? 'Exit reached' : 'Reach the exit';
-    case 'collect_target':
-      return `${runState.collectiblesCollected}/${runState.collectibleTarget ?? goal.requiredCount} collected`;
-    case 'defeat_all':
-      return `${runState.enemiesDefeated}/${runState.enemyTarget ?? 0} defeated`;
-    case 'checkpoint_sprint':
-      return `${runState.checkpointsReached}/${runState.checkpointTarget ?? goal.checkpoints.length} checkpoints`;
-    case 'survival':
-      return runState.result === 'completed' ? 'Survived' : 'Stay alive';
-  }
+  return goal ? formatCourseGoalProgressText(goal, COURSE_GOAL_DEFINITIONS, runState) : '';
 }
 
 export type CourseObjectCounter = (

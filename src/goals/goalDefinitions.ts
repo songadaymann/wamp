@@ -1,3 +1,4 @@
+import { formatLimitedGoalTimer } from './goalPresentation';
 import { computeCourseGoalBaseScore, computeRoomGoalTimeBonus } from './goalScoring';
 import {
   NPC_QUEST_TYPES,
@@ -24,6 +25,14 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     reach_exit: {
       label: 'Reach Exit',
       courseSupported: true as const,
+      presentation: {
+        badge: () => 'Reach exit',
+        selectedNeedsEnemyCount: false,
+        selected: () => 'Reach exit',
+        progress: (_goal, facts) => facts.result === 'completed' ? 'Exit reached' : 'Reach the exit',
+        timer: (goal, elapsed, format) => formatLimitedGoalTimer(goal.timeLimitMs, elapsed, format),
+      },
+      courseProgress: (_goal, facts) => facts.result === 'completed' ? 'Exit reached' : 'Reach the exit',
       roomScoring: {
         score: (goal, context) => Math.max(0, 100 + computeRoomGoalTimeBonus(goal.timeLimitMs, context.elapsedMs, 6) - context.deathPenalty),
         ranking: () => 'time',
@@ -56,6 +65,14 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     collect_target: {
       label: 'Collect Target',
       courseSupported: true as const,
+      presentation: {
+        badge: goal => `Collect ${goal.requiredCount}`,
+        selectedNeedsEnemyCount: false,
+        selected: goal => `Collect ${goal.requiredCount}`,
+        progress: (goal, facts) => `${facts.collectiblesCollected}/${goal.requiredCount} collected`,
+        timer: (goal, elapsed, format) => formatLimitedGoalTimer(goal.timeLimitMs, elapsed, format),
+      },
+      courseProgress: (goal, facts) => `${facts.collectiblesCollected}/${facts.collectibleTarget ?? goal.requiredCount} collected`,
       roomScoring: {
         score: (goal, context) => Math.max(0, context.collectiblesCollected * 25 +
           (context.result === 'completed' ? 60 : 0) +
@@ -91,6 +108,14 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     collect_race: {
       label: 'Collect Race',
       courseSupported: false as const,
+      presentation: {
+        badge: () => 'Collect race',
+        selectedNeedsEnemyCount: false,
+        selected: () => 'Collect more than the Sword Hunter',
+        progress: (_goal, facts) => `You ${facts.collectiblesCollected} · Hunter ${facts.enemyCollectiblesCollected}`,
+        timer: (goal, elapsed, format) => formatLimitedGoalTimer(goal.timeLimitMs, elapsed, format),
+      },
+      courseProgress: null,
       roomScoring: {
         score: (goal, context) => Math.max(0, context.collectiblesCollected * 25 +
           (context.result === 'completed' ? 120 : 0) +
@@ -121,6 +146,14 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     defeat_all: {
       label: 'Defeat All',
       courseSupported: true as const,
+      presentation: {
+        badge: () => 'Defeat all enemies',
+        selectedNeedsEnemyCount: true,
+        selected: (_goal, enemyCount) => `Defeat ${enemyCount} ${enemyCount === 1 ? 'enemy' : 'enemies'}`,
+        progress: (_goal, facts) => `${facts.enemiesDefeated}/${facts.enemyTarget ?? 0} defeated`,
+        timer: (goal, elapsed, format) => formatLimitedGoalTimer(goal.timeLimitMs, elapsed, format),
+      },
+      courseProgress: (_goal, facts) => `${facts.enemiesDefeated}/${facts.enemyTarget ?? 0} defeated`,
       roomScoring: {
         score: (goal, context) => Math.max(0, context.enemiesDefeated * 30 +
           (context.result === 'completed' ? 80 : 0) +
@@ -158,6 +191,14 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     checkpoint_sprint: {
       label: 'Checkpoint Sprint',
       courseSupported: true as const,
+      presentation: {
+        badge: goal => `Reach ${goal.checkpoints.length || 0} ${goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`,
+        selectedNeedsEnemyCount: false,
+        selected: goal => `Reach ${goal.checkpoints.length} ${goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`,
+        progress: (_goal, facts) => `${facts.checkpointsReached}/${facts.checkpointTarget ?? 0} checkpoints`,
+        timer: (goal, elapsed, format) => formatLimitedGoalTimer(goal.timeLimitMs, elapsed, format),
+      },
+      courseProgress: (goal, facts) => `${facts.checkpointsReached}/${facts.checkpointTarget ?? goal.checkpoints.length} checkpoints`,
       roomScoring: {
         score: (_goal, context) => Math.max(0, 120 + context.checkpointsReached * 10 - context.deathPenalty),
         ranking: () => 'time',
@@ -193,6 +234,14 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     survival: {
       label: 'Survival',
       courseSupported: true as const,
+      presentation: {
+        badge: goal => `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`,
+        selectedNeedsEnemyCount: false,
+        selected: goal => `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`,
+        progress: (_goal, facts) => facts.result === 'completed' ? 'Survived' : 'Stay alive',
+        timer: (goal, elapsed, format) => `${format(Math.max(0, goal.durationMs - elapsed))} LEFT`,
+      },
+      courseProgress: (_goal, facts) => facts.result === 'completed' ? 'Survived' : 'Stay alive',
       roomScoring: {
         score: (goal, context) => Math.max(0,
           Math.floor(Math.min(context.elapsedMs, Math.max(0, goal.durationMs)) / 1000) * 10 +
@@ -227,6 +276,23 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     npc_quest: {
       label: 'NPC Quest',
       courseSupported: false as const,
+      presentation: {
+        badge: goal => goal.questType === 'protect'
+          ? `Protect NPC ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`
+          : goal.questType === 'escort' ? 'Escort NPC' : `Give NPC ${goal.requiredCount}`,
+        selectedNeedsEnemyCount: false,
+        selected: goal => goal.questType === 'protect'
+          ? `Protect NPC for ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`
+          : goal.questType === 'escort' ? 'Escort NPC to the destination' : `Collect ${goal.requiredCount} and return to NPC`,
+        progress: (goal, facts) => goal.questType === 'protect'
+          ? facts.result === 'completed' ? 'NPC protected' : 'Keep NPC alive'
+          : goal.questType === 'escort' ? facts.result === 'completed' ? 'Escort complete' : 'Move NPC to destination'
+            : facts.collectiblesCollected >= goal.requiredCount ? 'Return to NPC' : `${facts.collectiblesCollected}/${goal.requiredCount} collected`,
+        timer: (goal, elapsed, format) => goal.questType === 'protect'
+          ? `${format(Math.min(elapsed, goal.durationMs))} PROTECTED`
+          : formatLimitedGoalTimer(goal.timeLimitMs, elapsed, format),
+      },
+      courseProgress: null,
       roomScoring: {
         score: (goal, context) => goal.questType === 'protect'
           ? Math.max(0, Math.floor(Math.min(context.elapsedMs, goal.durationMs) / 1000) * 10 - context.deathPenalty)
