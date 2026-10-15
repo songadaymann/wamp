@@ -73,7 +73,7 @@
 
 .guestbook-modal-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 14px;
   min-height: 0;
   overflow: hidden;
