@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyGradualZoom, computeIdealFitZoom } from './zoom';
 import {
   dailyScreenshotFileName,
+  dateKeyFromFileName,
   displayMonthLabel,
   formatEasternDate,
   formatEasternMonth,
@@ -57,6 +58,8 @@ describe('map screenshot naming', () => {
     expect(monthKeyFromFileName('2026_08_12_0.png')).toBe('2026_08');
     expect(monthKeyFromFileName('2026_08_12_3.png')).toBe('2026_08');
     expect(monthKeyFromFileName('bad.png')).toBeNull();
+    expect(dateKeyFromFileName('2026_08_12_3.png')).toBe('2026_08_12');
+    expect(dateKeyFromFileName('bad.png')).toBeNull();
     expect(shiftMonthKey('2026_08', -1)).toBe('2026_07');
     expect(shiftMonthKey('2026_01', -1)).toBe('2025_12');
     expect(shiftMonthKey('2026_12', 1)).toBe('2027_01');

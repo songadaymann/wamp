@@ -33,6 +33,7 @@ const worker = {
         const nextMonth = shiftMonthKey(monthKey, 1);
         return htmlResponse(buildGalleryHtml({
           screenshots: monthShots,
+          allFileNames: all.map((shot) => shot.fileName),
           publicBasePath,
           monthKey,
           hasPrevMonth: true,

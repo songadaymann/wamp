@@ -8,6 +8,7 @@ Daily 4K PNGs of the published WAMP map, stitched from the existing world-tile p
 - Stores files in R2 under `screenshots/yyyy_mm_dd_0.png` (manual tests: `yyyy_mm_dd_1.png` … `_9.png`).
 - Gallery + manual button + ZIP download are served by the Worker itself.
 - Pretty URL: `https://wamp.land/capture` (Pages proxies to this Worker).
+- Gallery can export a 4K H.264 MP4 (MPEG-4) from a date range in-browser (ffmpeg.wasm).
 - Tunables live in `src/mapScreenshot/config.ts`.
 
 ## One-time setup

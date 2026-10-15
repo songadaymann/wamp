@@ -55,6 +55,12 @@ export function monthKeyFromFileName(fileName: string): string | null {
   return match?.[1] ?? null;
 }
 
+/** Eastern calendar day from `yyyy_mm_dd_x.png`, or null if the name is not a screenshot. */
+export function dateKeyFromFileName(fileName: string): string | null {
+  const match = /^(\d{4}_\d{2}_\d{2})_[0-9]\.png$/.exec(fileName);
+  return match?.[1] ?? null;
+}
+
 export function shiftMonthKey(monthKey: string, deltaMonths: number): string {
   const match = /^(\d{4})_(\d{2})$/.exec(monthKey);
   if (!match) throw new RangeError(`Invalid month key: ${monthKey}`);
