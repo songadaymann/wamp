@@ -1,3 +1,4 @@
+import type { CourseGoalProgressFacts, GoalPresentation, GoalTimerFormatter, RoomGoalProgressFacts } from './goalPresentation';
 import {
   createRoomGoalScoreContext,
   type GoalRankingMode,
@@ -75,6 +76,7 @@ interface GoalDefinitionBase<P extends GoalMarkerPoint, K extends GoalType> {
   shortText: (goal: Goal<P, K>, options: GoalTextOptions) => string;
   introText: (goal: Goal<P, K>, options: GoalTextOptions) => string;
   validate: (goal: Goal<P, K>, context: GoalPublishValidationContext) => string | null;
+  presentation: GoalPresentation<P, K>;
   roomScoring: {
     score: (goal: Goal<P, K>, context: RoomGoalScoreContext) => number;
     ranking: (goal: Goal<P, K>) => RoomGoalRankingPolicy;
@@ -84,12 +86,13 @@ interface GoalDefinitionBase<P extends GoalMarkerPoint, K extends GoalType> {
 export type GoalDefinition<P extends GoalMarkerPoint, K extends GoalType> = GoalDefinitionBase<P, K> & (
   | {
     courseSupported: true;
+    courseProgress: (goal: Goal<P, K>, facts: CourseGoalProgressFacts) => string;
     courseScoring: {
       score: (goal: Goal<P, K>, finish: GoalScoreMetrics) => number;
       ranking: (goal: Goal<P, K>) => GoalRankingMode;
     };
   }
-  | { courseSupported: false; courseScoring: null }
+  | { courseSupported: false; courseScoring: null; courseProgress: null }
 );
 
 export type GoalRegistry<P extends GoalMarkerPoint> = {
@@ -153,4 +156,27 @@ export function courseGoalRankingMode<P extends GoalMarkerPoint, K extends GoalT
   if (!policy)
     throw new Error(`Goal ${goal.type} is not supported in courses.`);
   return policy.ranking(goal);
+}
+
+export function formatGoalBadgeText<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>): string {
+  return registry[goal.type].presentation.badge(goal);
+}
+
+export function formatGoalSelectedText<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, enemyCount: number): string {
+  return registry[goal.type].presentation.selected(goal, enemyCount);
+}
+
+export function formatRoomGoalProgressText<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, facts: RoomGoalProgressFacts): string {
+  return registry[goal.type].presentation.progress(goal, facts);
+}
+
+export function formatCourseGoalProgressText<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, facts: CourseGoalProgressFacts): string {
+  const progress = registry[goal.type].courseProgress;
+  if (!progress)
+    throw new Error(`Goal ${goal.type} is not supported in courses.`);
+  return progress(goal, facts);
+}
+
+export function formatGoalTimerText<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, elapsedMs: number, formatTimer: GoalTimerFormatter): string {
+  return registry[goal.type].presentation.timer(goal, elapsedMs, formatTimer);
 }

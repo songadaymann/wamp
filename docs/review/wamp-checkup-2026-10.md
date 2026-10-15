@@ -417,3 +417,5 @@ The codebase is unusually clean for its size. These items make it safer and fast
 - 2026-10-02: Email sign-in code box inline in the sign-in menu (`5a79b35b`).
 - 2026-10-03: Upright-phone camera frames the whole room above the console (`58f352f9`).
 - 2026-10-03: Chat button moved into the bar below the game on desktop and mobile (`6a35722d`).
+
+Phone Goal Prompt follow-up2026-10-15 ([PR #208](https://github.com/songadaymann/wamp/pull/208), main `7618e080`, Pages `3fc6cc74`): the narrow-phone field fills its row, accepts/saves text and survives reload/Music edits. Full3,678-test/46-mobile/source+main gates, seven native and two hosted/live flows, guard/health and59 file hashes pass. No new checkbox/count; see `wamp-phone-goal-prompt-2026-10-15.md`.

@@ -11,7 +11,9 @@ import {
   getCourseGoalTimerText as formatCourseGoalTimerText,
   type ActiveCourseRunState,
 } from './courseRuns';
-import type { RoomGoal } from '../../goals/roomGoals';
+import { ROOM_GOAL_DEFINITIONS, type RoomGoal } from '../../goals/roomGoals';
+import { formatGoalBadgeText, formatGoalSelectedText, formatRoomGoalProgressText, formatGoalTimerText } from '../../goals/goalSchema';
+import { formatGoalOverlayTimer } from '../../goals/goalPresentation';
 import {
   roomIdFromCoordinates,
   type RoomCoordinates,
@@ -379,55 +381,15 @@ export class OverworldHudStateController {
   }
 
   private getGoalBadgeText(goal: RoomGoal): string {
-    switch (goal.type) {
-      case 'reach_exit':
-        return 'Reach exit';
-      case 'collect_target':
-        return `Collect ${goal.requiredCount}`;
-      case 'collect_race':
-        return 'Collect race';
-      case 'defeat_all':
-        return 'Defeat all enemies';
-      case 'checkpoint_sprint':
-        return `Reach ${goal.checkpoints.length || 0} ${goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`;
-      case 'survival':
-        return `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`;
-      case 'npc_quest':
-        return goal.questType === 'protect'
-          ? `Protect NPC ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`
-          : goal.questType === 'escort'
-            ? 'Escort NPC'
-            : `Give NPC ${goal.requiredCount}`;
-    }
+    return formatGoalBadgeText(goal, ROOM_GOAL_DEFINITIONS);
   }
 
   private getSelectedRoomGoalText(room: RoomSnapshot): string {
-    if (!room.goal) {
-      return '';
-    }
-
-    switch (room.goal.type) {
-      case 'reach_exit':
-        return 'Reach exit';
-      case 'collect_target':
-        return `Collect ${room.goal.requiredCount}`;
-      case 'collect_race':
-        return 'Collect more than the Sword Hunter';
-      case 'defeat_all': {
-        const enemyCount = this.host.countRoomEnemies(room);
-        return `Defeat ${enemyCount} ${enemyCount === 1 ? 'enemy' : 'enemies'}`;
-      }
-      case 'checkpoint_sprint':
-        return `Reach ${room.goal.checkpoints.length} ${room.goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`;
-      case 'survival':
-        return `Survive ${Math.max(1, Math.round(room.goal.durationMs / 1000))} seconds`;
-      case 'npc_quest':
-        return room.goal.questType === 'protect'
-          ? `Protect NPC for ${Math.max(1, Math.round(room.goal.durationMs / 1000))} seconds`
-          : room.goal.questType === 'escort'
-            ? 'Escort NPC to the destination'
-            : `Collect ${room.goal.requiredCount} and return to NPC`;
-    }
+    const goal = room.goal;
+    if (!goal) return '';
+    const enemyCount = ROOM_GOAL_DEFINITIONS[goal.type].presentation.selectedNeedsEnemyCount
+      ? this.host.countRoomEnemies(room) : 0;
+    return formatGoalSelectedText(goal, ROOM_GOAL_DEFINITIONS, enemyCount);
   }
 
   private getCourseGoalBadgeText(goal: CourseGoal | null): string {
@@ -435,58 +397,19 @@ export class OverworldHudStateController {
   }
 
   private getPlayGoalTimerText(runState: GoalRunState): string {
-    if (runState.qualificationState === 'practice') {
-      return 'PRACTICE';
-    }
-
-    if (runState.goal.type === 'survival') {
-      return `${this.formatOverlayTimer(Math.max(0, runState.goal.durationMs - runState.elapsedMs))} LEFT`;
-    }
-
-    if (runState.goal.type === 'npc_quest' && runState.goal.questType === 'protect') {
-      return `${this.formatOverlayTimer(Math.min(runState.elapsedMs, runState.goal.durationMs))} PROTECTED`;
-    }
-
-    if (runState.goal.timeLimitMs !== null) {
-      return `${this.formatOverlayTimer(Math.max(0, runState.goal.timeLimitMs - runState.elapsedMs))} LEFT`;
-    }
-
-    return this.formatOverlayTimer(runState.elapsedMs);
+    if (runState.qualificationState === 'practice') return 'PRACTICE';
+    return formatGoalTimerText(runState.goal, ROOM_GOAL_DEFINITIONS, runState.elapsedMs, formatGoalOverlayTimer);
   }
 
   private getCourseGoalTimerText(runState: ActiveCourseRunState): string {
-    return formatCourseGoalTimerText(runState, (ms) => this.formatOverlayTimer(ms));
+    return formatCourseGoalTimerText(runState, formatGoalOverlayTimer);
   }
 
   private getPlayGoalProgressText(runState: GoalRunState): string {
     if (runState.qualificationState === 'practice') {
       return runState.leaderboardEligible ? 'Reach spawn to rank' : 'Reach spawn to start';
     }
-
-    switch (runState.goal.type) {
-      case 'reach_exit':
-        return runState.result === 'completed' ? 'Exit reached' : 'Reach the exit';
-      case 'collect_target':
-        return `${runState.collectiblesCollected}/${runState.goal.requiredCount} collected`;
-      case 'collect_race':
-        return `You ${runState.collectiblesCollected} · Hunter ${runState.enemyCollectiblesCollected}`;
-      case 'defeat_all':
-        return `${runState.enemiesDefeated}/${runState.enemyTarget ?? 0} defeated`;
-      case 'checkpoint_sprint':
-        return `${runState.checkpointsReached}/${runState.checkpointTarget ?? 0} checkpoints`;
-      case 'survival':
-        return runState.result === 'completed' ? 'Survived' : 'Stay alive';
-      case 'npc_quest':
-        if (runState.goal.questType === 'protect') {
-          return runState.result === 'completed' ? 'NPC protected' : 'Keep NPC alive';
-        }
-        if (runState.goal.questType === 'escort') {
-          return runState.result === 'completed' ? 'Escort complete' : 'Move NPC to destination';
-        }
-        return runState.collectiblesCollected >= runState.goal.requiredCount
-          ? 'Return to NPC'
-          : `${runState.collectiblesCollected}/${runState.goal.requiredCount} collected`;
-    }
+    return formatRoomGoalProgressText(runState.goal, ROOM_GOAL_DEFINITIONS, runState);
   }
 
   private getCourseGoalProgressText(runState: ActiveCourseRunState): string {
@@ -507,12 +430,7 @@ export class OverworldHudStateController {
   }
 
   private formatOverlayTimer(ms: number): string {
-    const clampedMs = Math.max(0, Math.round(ms));
-    const totalSeconds = Math.floor(clampedMs / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    const tenths = Math.floor((clampedMs % 1000) / 100);
-    return `${minutes}:${String(seconds).padStart(2, '0')}.${tenths}`;
+    return formatGoalOverlayTimer(ms);
   }
 
   private truncateOverlayText(value: string, maxLength: number): string {
