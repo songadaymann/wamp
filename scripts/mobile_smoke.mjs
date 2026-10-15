@@ -511,7 +511,16 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
     'phone portrait play controls bounds',
   );
 
-  const layout = await readPortraitPlayLayout(page, state);
+  // Sample current camera/player state only after the existing framing barrier.
+  await page.waitForFunction(() => {
+    const scene = JSON.parse(window.render_game_to_text?.() || 'null')?.activeScene;
+    const view = scene?.camera?.worldView, controls = document.getElementById('mobile-play-controls')?.getBoundingClientRect();
+    if (!view || !controls || !scene.currentRoom) return false;
+    const roomTop = scene.currentRoom.y * 352;
+    const top = (roomTop - view.y) * scene.zoom, bottom = (roomTop + 352 - view.y) * scene.zoom;
+    return top >= -2 && bottom <= controls.top + 2 && Math.abs((top + bottom) / 2 - controls.top / 2) <= 6;
+  }, null, { timeout: 5000 });
+  const layout = await readPortraitPlayLayout(page);
   assertCondition(
     layout.mobilePortraitPlay === 'true',
     `body should mark mobile portrait play mode: ${JSON.stringify(layout)}`,
@@ -538,14 +547,6 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
       && state.activeScene.mobilePortraitCamera?.targetY === 0.53,
     `portrait camera should use the wider, centered mobile defaults: ${JSON.stringify(state.activeScene.mobilePortraitCamera)}`,
   );
-  await page.waitForFunction(() => {
-    const scene = JSON.parse(window.render_game_to_text?.() || 'null')?.activeScene;
-    const view = scene?.camera?.worldView, controls = document.getElementById('mobile-play-controls')?.getBoundingClientRect();
-    if (!view || !controls || !scene.currentRoom) return false;
-    const roomTop = scene.currentRoom.y * 352;
-    const top = (roomTop - view.y) * scene.zoom, bottom = (roomTop + 352 - view.y) * scene.zoom;
-    return top >= -2 && bottom <= controls.top + 2 && Math.abs((top + bottom) / 2 - controls.top / 2) <= 6;
-  }, null, { timeout: 5000 });
   const roomFraming = await page.evaluate(() => {
     const scene = JSON.parse(window.render_game_to_text?.() || 'null')?.activeScene;
     const view = scene?.camera?.worldView;
@@ -1563,14 +1564,14 @@ async function readWelcomeModalLayout(page) {
   });
 }
 
-async function readPortraitPlayLayout(page, state) {
-  return page.evaluate((activeState) => {
+async function readPortraitPlayLayout(page) {
+  return page.evaluate(() => {
     const controls = document.getElementById('mobile-play-controls');
     if (!(controls instanceof HTMLElement)) {
       throw new Error('Missing mobile play controls');
     }
 
-    const activeScene = activeState?.activeScene;
+    const activeScene = JSON.parse(window.render_game_to_text?.() || 'null')?.activeScene;
     const zoom = Number(activeScene?.zoom ?? 0);
     const worldView = activeScene?.camera?.worldView;
     const player = activeScene?.player;
@@ -1650,7 +1651,7 @@ async function readPortraitPlayLayout(page, state) {
         height: Math.round(rect.height),
       };
     }
-  }, state);
+  });
 }
 
 async function readMoveStickSnapshot(page) {
@@ -1868,6 +1869,7 @@ async function runSignedRoomControls(page, summary, directory) {
   ]);
   assertCondition((await page.locator('#background-select').inputValue()) === 'forest', 'Decoded background remains selectable');
   assertCondition((await backgroundSaved.json()).draft.background === 'forest', 'Selected background is saved in the draft');
+  const goalPrompt = await checkPhoneGoalPrompt(page, summary, directory);
   const musicTab = page.locator('button[data-editor-room-section="music"]');
   if (!(await musicTab.isVisible())) await page.locator('[data-editor-shell-action="room"]').tap();
   await musicTab.tap();
@@ -1881,10 +1883,46 @@ async function runSignedRoomControls(page, summary, directory) {
   await captureScenarioScreenshot(page, summary, directory, 'signed-portrait-music');
   await hit('#btn-editor-music-close'); await page.locator('#btn-editor-music-close').tap();
   await assertHidden(page, '#editor-music-overlay', 'Music Close stays reachable with signed Activity');
-  await saved;
+  assertCondition((await (await saved).json()).draft.goalIntroText === goalPrompt, 'Music edits preserve the saved Goal Prompt');
   await page.locator('#btn-editor-phone-menu').tap();
   await page.locator('#btn-editor-phone-account').tap();
   await hit('#btn-activity-open');
   await page.locator('#menu-toggle').tap();
   summary.assertions.push({ label: 'signed room controls, notifications, profile menu and natural portrait editor/music touches pass' });
+}
+
+async function checkPhoneGoalPrompt(page, summary, directory) {
+  await page.locator('[data-editor-dock="markers"]').tap();
+  await page.locator('[data-editor-marker-action="goal"]').tap();
+  await Promise.all([
+    page.waitForResponse(response => new URL(response.url()).pathname === '/api/rooms/0%2C0/draft'
+      && response.request().method() === 'PUT' && response.status() === 200
+      && response.request().postDataJSON().goal?.type === 'collect_target', { timeout: 15_000 }),
+    page.locator('#goal-type-button-grid button[data-goal-type-value="collect_target"]').tap(),
+  ]);
+  const field = page.locator('#goal-intro-text');
+  await field.scrollIntoViewIfNeeded();
+  const layout = await field.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    const row = element.closest('.goal-control-row').getBoundingClientRect();
+    const label = element.closest('.goal-control-row').querySelector('label').getBoundingClientRect();
+    return { width: box.width, rowWidth: row.width, labelBottom: label.bottom, top: box.top,
+      fontSize: parseFloat(getComputedStyle(element).fontSize), maxLength: element.maxLength,
+      foreground: document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === element };
+  });
+  assertCondition(layout.width >= layout.rowWidth - 4 && layout.labelBottom <= layout.top + 1,
+    `Goal Prompt must use the full row below its label: ${JSON.stringify(layout)}`);
+  assertCondition(layout.foreground && layout.fontSize >= 16 && layout.maxLength === 140,
+    `Goal Prompt must remain readable and editable: ${JSON.stringify(layout)}`);
+  const prompt = 'Collect the coins, then bring them back to your friend.';
+  const [response] = await Promise.all([
+    page.waitForResponse(response => new URL(response.url()).pathname === '/api/rooms/0%2C0/draft'
+      && response.request().method() === 'PUT' && response.status() === 200
+      && response.request().postDataJSON().goalIntroText === prompt, { timeout: 15_000 }),
+    (async () => { await field.fill(prompt); await field.press('Tab'); })(),
+  ]);
+  assertCondition((await response.json()).draft.goalIntroText === prompt, 'Typed Goal Prompt is saved in the draft');
+  summary.assertions.push({ label: 'full-width phone Goal Prompt accepts and saves text', layout });
+  await captureScenarioScreenshot(page, summary, directory, 'signed-goal-prompt');
+  return prompt;
 }
