@@ -18,7 +18,6 @@ import {
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { RETRO_COLORS } from '../../visuals/starfield';
-import { getEditorToolHudLabel } from './editorToolSelection';
 import { drawDeadlyPitBoundary, drawEditorGrid } from './grid';
 import { drawRoomEdgeGuides } from './edgeGuideDrawing';
 import type { RoomEdgeGuide } from './edgeGuides';
@@ -27,7 +26,6 @@ interface EditorOverlayHost {
   getLayers(): Map<string, Phaser.Tilemaps.TilemapLayer>;
   hasDeadlyPits?(): boolean;
   getPlacedObjects(): PlacedObject[];
-  isClipboardPastePreviewActive(): boolean;
 }
 
 export class EditorOverlayController {
@@ -44,7 +42,6 @@ export class EditorOverlayController {
   private layerGuideGraphics: Phaser.GameObjects.Graphics | null = null;
   private pressurePlateGraphics: Phaser.GameObjects.Graphics | null = null;
   private containerGraphics: Phaser.GameObjects.Graphics | null = null;
-  private layerIndicatorText: Phaser.GameObjects.Text | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -69,7 +66,6 @@ export class EditorOverlayController {
     this.createLayerGuideOverlay();
     this.createPressurePlateOverlay();
     this.createContainerOverlay();
-    this.createLayerIndicator();
   }
 
   setDeathMap(points: DeathMapCell[], coordinates: RoomCoordinates): void {
@@ -85,8 +81,6 @@ export class EditorOverlayController {
   reset(): void {
     this.edgeGuideGraphics?.destroy(); this.edgeGuideGraphics = null;
     this.deathMapGraphics?.destroy(); this.deathMapGraphics = null;
-    this.layerIndicatorText?.destroy();
-    this.layerIndicatorText = null;
     this.layerGuideGraphics?.destroy();
     this.layerGuideGraphics = null;
     this.pressurePlateGraphics?.destroy();
@@ -139,53 +133,6 @@ export class EditorOverlayController {
 
   updateLayerIndicator(): void {
     this.deathMapGraphics?.setVisible(!editorState.isPlaying);
-    if (!this.layerIndicatorText) {
-      return;
-    }
-
-    const layerLabel =
-      editorState.activeLayer === 'terrain'
-        ? 'Gameplay'
-        : editorState.activeLayer === 'background'
-          ? 'Back'
-          : 'Front';
-    const layerColor =
-      editorState.activeLayer === 'terrain'
-        ? '#347433'
-        : editorState.activeLayer === 'background'
-          ? '#2f6b7f'
-          : '#ff6f3c';
-    const modeLabel = editorState.paletteMode === 'objects'
-      ? 'Objects'
-      : editorState.paletteMode === 'smart'
-        ? 'Smart'
-        : 'Tiles';
-    const toolLabel = getEditorToolHudLabel(
-      editorState.activeTool,
-      this.host.isClipboardPastePreviewActive(),
-    );
-    const flipLabels: string[] = [];
-    if (editorState.paletteMode === 'tiles' && editorState.tileFlipXMode === 'on') {
-      flipLabels.push('Flip H');
-    } else if (editorState.paletteMode === 'tiles' && editorState.tileFlipXMode === 'rand') {
-      flipLabels.push('Rand H');
-    }
-    if (editorState.paletteMode === 'tiles' && editorState.tileFlipYMode === 'on') {
-      flipLabels.push('Flip V');
-    } else if (editorState.paletteMode === 'tiles' && editorState.tileFlipYMode === 'rand') {
-      flipLabels.push('Rand V');
-    }
-    const detailParts = [toolLabel, ...flipLabels];
-    const text = `${modeLabel} -> ${layerLabel}\n${detailParts.join('  |  ')}`;
-    if (this.layerIndicatorText.text !== text) {
-      this.layerIndicatorText.setText(text);
-    }
-
-    this.layerIndicatorText.setBackgroundColor(`${layerColor}cc`);
-    this.layerIndicatorText.setPosition(
-      this.scene.scale.width - this.layerIndicatorText.width - 18,
-      18,
-    );
   }
 
   private createRoomBorder(): void {
@@ -226,24 +173,6 @@ export class EditorOverlayController {
     this.containerGraphics?.destroy();
     this.containerGraphics = this.scene.add.graphics();
     this.containerGraphics.setDepth(98);
-  }
-
-  private createLayerIndicator(): void {
-    this.layerIndicatorText?.destroy();
-    this.layerIndicatorText = this.scene.add.text(0, 0, '', {
-      fontFamily: '"IBM Plex Mono", monospace',
-      fontSize: '13px',
-      fontStyle: 'bold',
-      color: '#f6f1de',
-      backgroundColor: '#121109cc',
-      padding: {
-        x: 12,
-        y: 7,
-      },
-    });
-    this.layerIndicatorText.setDepth(130);
-    this.layerIndicatorText.setScrollFactor(0);
-    this.updateLayerIndicator();
   }
 
   private collectLayerGuideCells(layerName: LayerName): Set<string> {
