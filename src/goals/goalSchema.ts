@@ -1,3 +1,4 @@
+import type { RoomGoalRunTargets, RoomGoalTargetContext } from './goalRunTargets';
 import type { GoalCollectionFacts, RoomGoalCollectOutcome } from './goalRunEvents';
 import type { GoalFlagDescriptor, GoalFlagProgressFacts } from './goalMarkerPresentation';
 import type { CourseGoalProgressFacts, GoalPresentation, GoalTimerFormatter, RoomGoalProgressFacts } from './goalPresentation';
@@ -85,6 +86,7 @@ interface GoalDefinitionBase<P extends GoalMarkerPoint, K extends GoalType> {
     editor: (goal: Goal<P, K>) => GoalFlagDescriptor<P>[];
     play: (goal: Goal<P, K>, facts: GoalFlagProgressFacts) => GoalFlagDescriptor<P>[];
   };
+  roomTargets: (goal: Goal<P, K>, context: RoomGoalTargetContext) => RoomGoalRunTargets;
   roomTick: (goal: Goal<P, K>, elapsedMs: number) => RoomGoalTickResolution;
   roomEvents: {
     countsEnemyDefeats: boolean;
@@ -216,4 +218,8 @@ export function roomGoalCountsPlayerCollectibles<P extends GoalMarkerPoint, K ex
 
 export function resolveRoomGoalPlayerCollect<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, facts: GoalCollectionFacts): RoomGoalCollectOutcome {
   return registry[goal.type].roomEvents.playerCollectOutcome(goal, facts);
+}
+
+export function initializeRoomGoalTargets<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, context: RoomGoalTargetContext): RoomGoalRunTargets {
+  return registry[goal.type].roomTargets(goal, context);
 }

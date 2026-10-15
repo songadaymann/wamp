@@ -1,5 +1,5 @@
 import { goalCollectiblesExhausted } from '../../goals/goalRunEvents';
-import { roomGoalCountsPlayerCollectibles, resolveRoomGoalPlayerCollect, resolveRoomGoalTick } from '../../goals/goalSchema';
+import { initializeRoomGoalTargets, roomGoalCountsPlayerCollectibles, resolveRoomGoalPlayerCollect, resolveRoomGoalTick } from '../../goals/goalSchema';
 import { getObjectById, type GameObjectConfig } from '../../config';
 import { COOP_ROOM_PRACTICE_MESSAGE, hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
 import { cloneRoomGoal, ROOM_GOAL_DEFINITIONS, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
@@ -223,30 +223,13 @@ export class OverworldGoalRunController {
       deaths: 0,
       collectiblesCollected: 0,
       enemyCollectiblesCollected: 0,
-      collectibleTarget:
-        room.goal.type === 'collect_target'
-          ? room.goal.requiredCount
-          : room.goal.type === 'collect_race'
-            ? this.options.countRoomObjectsByCategory(room, 'collectible')
-            : room.goal.type === 'npc_quest' && room.goal.questType === 'give'
-              ? room.goal.requiredCount
-              : null,
+      ...initializeRoomGoalTargets(room.goal, ROOM_GOAL_DEFINITIONS, {
+        countCollectibles: () => this.options.countRoomObjectsByCategory(room, 'collectible'),
+        countEnemies: () => this.options.countRoomObjectsByCategory(room, 'enemy'),
+        firstNpcInstanceId: () => room.placedObjects.find(placed => getObjectById(placed.id)?.category === 'npc')?.instanceId ?? null,
+      }),
       enemiesDefeated: 0,
-      enemyTarget:
-        room.goal.type === 'defeat_all'
-          ? this.options.countRoomObjectsByCategory(room, 'enemy')
-          : null,
       checkpointsReached: 0,
-      checkpointTarget:
-        room.goal.type === 'checkpoint_sprint' ? room.goal.checkpoints.length : null,
-      npcTargetInstanceId:
-        room.goal.type === 'npc_quest'
-          ? room.goal.npcInstanceId ??
-            room.placedObjects.find((placed) => getObjectById(placed.id)?.category === 'npc')
-              ?.instanceId ??
-            null
-          : null,
-      npcAlive: room.goal.type === 'npc_quest' ? true : null,
       nextCheckpointIndex: 0,
       result: 'active',
       completionMessage: null,
