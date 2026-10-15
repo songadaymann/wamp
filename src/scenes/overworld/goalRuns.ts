@@ -1,6 +1,7 @@
+import { resolveRoomGoalTick } from '../../goals/goalSchema';
 import { getObjectById, type GameObjectConfig } from '../../config';
 import { COOP_ROOM_PRACTICE_MESSAGE, hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
-import { cloneRoomGoal, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
+import { cloneRoomGoal, ROOM_GOAL_DEFINITIONS, ROOM_GOAL_LABELS, type GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import {
   isWampLeaderboardEligibleAuth,
@@ -293,34 +294,18 @@ export class OverworldGoalRunController {
     this.currentGoalRun.elapsedMs += delta;
     if (options.suspendGoalResolution) return NOOP_MUTATION_RESULT;
 
-    if (
-      this.currentGoalRun.goal.type === 'collect_race' &&
-      this.currentGoalRun.goal.timeLimitMs !== null &&
-      this.currentGoalRun.elapsedMs >= this.currentGoalRun.goal.timeLimitMs
-    ) {
-      return this.resolveCollectRace('Time up.');
+    switch (resolveRoomGoalTick(this.currentGoalRun.goal, ROOM_GOAL_DEFINITIONS, this.currentGoalRun.elapsedMs)) {
+      case 'collect_race_timeout':
+        return this.resolveCollectRace('Time up.');
+      case 'time_up':
+        return this.markFailed('Time up.');
+      case 'survival_clear':
+        return this.markCompleted('Survival clear.');
+      case 'npc_protected':
+        return this.markCompleted('NPC protected.');
+      case null:
+        return NOOP_MUTATION_RESULT;
     }
-
-    if (this.goalTimeLimitReached(this.currentGoalRun)) {
-      return this.markFailed('Time up.');
-    }
-
-    if (
-      this.currentGoalRun.goal.type === 'survival' &&
-      this.currentGoalRun.elapsedMs >= this.currentGoalRun.goal.durationMs
-    ) {
-      return this.markCompleted('Survival clear.');
-    }
-
-    if (
-      this.currentGoalRun.goal.type === 'npc_quest' &&
-      this.currentGoalRun.goal.questType === 'protect' &&
-      this.currentGoalRun.elapsedMs >= this.currentGoalRun.goal.durationMs
-    ) {
-      return this.markCompleted('NPC protected.');
-    }
-
-    return NOOP_MUTATION_RESULT;
   }
 
   recordDeath(): void {
@@ -908,14 +893,6 @@ export class OverworldGoalRunController {
       runState.roomVersion === room.version &&
       JSON.stringify(runState.goal) === JSON.stringify(room.goal)
     );
-  }
-
-  private goalTimeLimitReached(runState: GoalRunState): boolean {
-    if (runState.goal.type === 'survival' || runState.goal.type === 'npc_quest') {
-      return false;
-    }
-
-    return runState.goal.timeLimitMs !== null && runState.elapsedMs >= runState.goal.timeLimitMs;
   }
 
   private async startRemoteGoalRun(runState: GoalRunState): Promise<void> {

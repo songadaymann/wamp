@@ -25,6 +25,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     reach_exit: {
       label: 'Reach Exit',
       courseSupported: true as const,
+      roomTick: (goal, elapsed) => goal.timeLimitMs !== null && elapsed >= goal.timeLimitMs ? 'time_up' : null,
       presentation: {
         badge: () => 'Reach exit',
         selectedNeedsEnemyCount: false,
@@ -65,6 +66,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     collect_target: {
       label: 'Collect Target',
       courseSupported: true as const,
+      roomTick: (goal, elapsed) => goal.timeLimitMs !== null && elapsed >= goal.timeLimitMs ? 'time_up' : null,
       presentation: {
         badge: goal => `Collect ${goal.requiredCount}`,
         selectedNeedsEnemyCount: false,
@@ -108,6 +110,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     collect_race: {
       label: 'Collect Race',
       courseSupported: false as const,
+      roomTick: (goal, elapsed) => goal.timeLimitMs !== null && elapsed >= goal.timeLimitMs ? 'collect_race_timeout' : null,
       presentation: {
         badge: () => 'Collect race',
         selectedNeedsEnemyCount: false,
@@ -146,6 +149,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     defeat_all: {
       label: 'Defeat All',
       courseSupported: true as const,
+      roomTick: (goal, elapsed) => goal.timeLimitMs !== null && elapsed >= goal.timeLimitMs ? 'time_up' : null,
       presentation: {
         badge: () => 'Defeat all enemies',
         selectedNeedsEnemyCount: true,
@@ -191,6 +195,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     checkpoint_sprint: {
       label: 'Checkpoint Sprint',
       courseSupported: true as const,
+      roomTick: (goal, elapsed) => goal.timeLimitMs !== null && elapsed >= goal.timeLimitMs ? 'time_up' : null,
       presentation: {
         badge: goal => `Reach ${goal.checkpoints.length || 0} ${goal.checkpoints.length === 1 ? 'checkpoint' : 'checkpoints'}`,
         selectedNeedsEnemyCount: false,
@@ -234,6 +239,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     survival: {
       label: 'Survival',
       courseSupported: true as const,
+      roomTick: (goal, elapsed) => elapsed >= goal.durationMs ? 'survival_clear' : null,
       presentation: {
         badge: goal => `Survive ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`,
         selectedNeedsEnemyCount: false,
@@ -276,6 +282,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     npc_quest: {
       label: 'NPC Quest',
       courseSupported: false as const,
+      roomTick: (goal, elapsed) => goal.questType === 'protect' && elapsed >= goal.durationMs ? 'npc_protected' : null,
       presentation: {
         badge: goal => goal.questType === 'protect'
           ? `Protect NPC ${Math.max(1, Math.round(goal.durationMs / 1000))} seconds`

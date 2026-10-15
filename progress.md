@@ -1,5 +1,14 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-15 overnight — F070 presentation complete and live
+
+PR #209 / source73a54a1b / mainedd1748e; APIb4084418 at100%, Pagesfca7862a. Full3,683-test quality,46 mobile cases,49,338 exact old/new HUD/course outputs, native checkpoint completion/editor/client matrices and all source/main gates pass. Guard publishes then immediate propagation404; unchanged smoke recheck passes.59 exact custom/immutable files, canonical API health/catalog, strict live WebKit HUD/seven-goal save/reload and real guest API jump/menu return pass with zero errors. Images inspected. F070 remains partial/master145; room clock policies are tested separately. Receipt: `docs/review/wamp-goal-presentation-registry-2026-10-15.md`.
+
+## 2026-10-15 overnight — F070 room clock policies started
+
+Isolated branch `codex/wamp-room-goal-tick-registry-2026-10-15` from209 source73a54a1b while its CI browser-dependency installation runs. Ten pre-extraction controller contracts and4,896 differential comparisons pass. Keep tick guards, raw/suspended time and side-effect order intact; no per-frame action allocations. Integrate209 main before publishing. F070/master stay partial/145; receipt: `docs/review/wamp-room-goal-tick-registry-2026-10-15.md`.
+
+
 ## 2026-10-15 overnight — phone Goal Prompt complete and live
 
 PR #208 / source `d37c905a` / main `7618e080` / Pages `3fc6cc74`. The320px phone textarea grows from24px to the full258px row in WebKit. Full3,678-test quality,46 mobile cases, seven native orientation/desktop save/reload flows, two strict hosted/live prompt flows, all source/main gates and guarded Pages publication exit0.59 exact custom/immutable files and health pass; API stays8cba0e76 at100%. Images are inspected; no strict errors/allowances. Master145/215; F070 presentation continues separately. Receipt: `docs/review/wamp-phone-goal-prompt-2026-10-15.md`.
