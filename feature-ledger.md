@@ -1,4 +1,14 @@
 
+## 2026-10-15 overnight — F070 shared data complete and live
+
+- **F070 shared-data/course-view slice complete and live; F070 remains partial.** PR #205 / source `d3504806` / main `20b3b378`; guarded API `6861bfd0` at100% and Pages `a31313ee`. All3,649-test/46-mobile/source+main four-check gates, native seven-room-goal and five-course-form matrices, three strict hosted/live save/reload flows, actual guest API jump/menu return, live catalog hash and59 exact custom/immutable file hashes pass. Both databases have no pending migrations; renderer unchanged. Shared scoring/client runtime and separate Worker-rule registry remain open; master145/215. Physical iOS, selected animation and private decisions preserved.
+
+
+## 2026-10-15 overnight — F070 Worker verification rules started
+
+From `20b3b378` on `codex/wamp-goal-verification-registry-2026-10-15`.15 pre-extraction canonical trace tests pin current results. Extract only the post-event goal checks to a required typed record with explicit no-op entries and fail-closed unknown-key handling. Shared-data PR205 delivery stays separate; F070/master remain partial/145. Full/type-growth/API delivery evidence pending. Receipt: `docs/review/wamp-goal-verification-registry-2026-10-15.md`.
+
+
 ## 2026-10-15 overnight — background picker complete and live
 
 - **Background picker follow-up complete and live.** PR #204 / source `d2c9700d` / main `ce6b4ff7` / guarded Pages `0ffb8582`. The22 formerly malformed image URLs now load; short-phone section tabs scroll in one row so cards stay reachable. Full3,633-test and46-mobile gates, all source/main four-check gates, six strict hosted and six strict custom-domain picker/music flows pass. No thumbnail error allowance is used.59 exact live/immutable JS/CSS/image hashes and production health pass; live images are inspected. Master145/215 (no extra checkbox). Continue F070 shared data while retaining client/verification registry work as partial.

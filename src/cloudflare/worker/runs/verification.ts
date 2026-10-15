@@ -1,3 +1,4 @@
+import { verifyGoalRule } from './goalVerificationRules';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH, placedObjectContributesToCategory } from '../../../config';
 import type { CourseGoal, CourseSnapshot } from '../../../courses/model';
 import { compareCourseLeaderboardEntries, getCourseLeaderboardRankingMode } from '../../../courses/scoring';
@@ -1011,76 +1012,17 @@ function deriveMetricsForGoal(input: {
     };
   }
 
-  switch (goal.type) {
-    case 'reach_exit':
-      if (!reachedExit || !hasGoalEventNearMarker(input.goalEvents, 'reach_exit', goal.exit ?? null)) {
-        return createFailedVerification('failed', 'trace_goal', {
-          issue: 'missing_exit',
-        });
-      }
-      break;
-    case 'collect_target':
-      if (collectibleIds.size < goal.requiredCount) {
-        return createFailedVerification('failed', 'trace_goal', {
-          issue: 'collect_target_shortfall',
-          requiredCount: goal.requiredCount,
-          collectedCount: collectibleIds.size,
-        });
-      }
-      break;
-    case 'collect_race':
-      break;
-    case 'defeat_all':
-      if (enemyIds.size < totalCountFromMap(input.enemyIdsByRoomId)) {
-        return createFailedVerification('failed', 'trace_goal', {
-          issue: 'defeat_all_shortfall',
-          requiredCount: totalCountFromMap(input.enemyIdsByRoomId),
-          defeatedCount: enemyIds.size,
-        });
-      }
-      break;
-    case 'checkpoint_sprint':
-      if (checkpoints.size < goal.checkpoints.length) {
-        return createFailedVerification('failed', 'trace_goal', {
-          issue: 'checkpoint_shortfall',
-          requiredCount: goal.checkpoints.length,
-          reachedCount: checkpoints.size,
-        });
-      }
-      if (!reachedFinish && !hasGoalEventNearMarker(input.goalEvents, 'finish', goal.finish ?? null)) {
-        return createFailedVerification('failed', 'trace_goal', {
-          issue: 'missing_finish',
-        });
-      }
-      break;
-    case 'survival':
-      break;
-    case 'npc_quest':
-      if (goal.questType === 'give' && collectibleIds.size < goal.requiredCount) {
-        return createFailedVerification('failed', 'trace_goal', {
-          issue: 'npc_give_shortfall',
-          requiredCount: goal.requiredCount,
-          collectedCount: collectibleIds.size,
-        });
-      }
-      if (
-        (goal.questType === 'escort' || goal.questType === 'give') &&
-        !reachedFinish
-      ) {
-        return createFailedVerification('failed', 'trace_goal', {
-          issue: 'npc_quest_missing_completion',
-        });
-      }
-      break;
-    default: {
-      // A goal type without a rule here fails verification instead of passing unchecked, and
-      // adding one to ROOM_GOAL_TYPES is a type error until it has a rule (F070).
-      const unverifiedGoal: never = goal;
-      return createFailedVerification('failed', 'trace_goal', {
-        issue: 'unverified_goal_type',
-        goalType: (unverifiedGoal as { type?: unknown }).type ?? null,
-      });
-    }
+  const goalIssue = verifyGoalRule(goal, {
+    collectedCount: collectibleIds.size,
+    defeatedCount: enemyIds.size,
+    checkpointCount: checkpoints.size,
+    requiredEnemyCount: totalCountFromMap(input.enemyIdsByRoomId),
+    reachedExit,
+    reachedFinish,
+    hasMarkerEvent: (type, point) => hasGoalEventNearMarker(input.goalEvents, type, point),
+  });
+  if (goalIssue) {
+    return createFailedVerification('failed', 'trace_goal', goalIssue);
   }
 
   return {
