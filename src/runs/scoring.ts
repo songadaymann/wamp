@@ -1,110 +1,14 @@
-import type { RoomGoal } from '../goals/roomGoals';
+import { ROOM_GOAL_DEFINITIONS, type RoomGoal } from '../goals/roomGoals';
+import { roomGoalRankingPolicy, scoreRoomGoal } from '../goals/goalSchema';
 import type { LeaderboardRankingMode, RoomLeaderboardEntry, RoomRunRecord, RunFinishRequestBody } from './model';
 
-const REACH_EXIT_CLEAR_SCORE = 100;
-const COLLECT_TARGET_ITEM_SCORE = 25;
-const COLLECT_TARGET_CLEAR_SCORE = 60;
-const COLLECT_RACE_ITEM_SCORE = 25;
-const COLLECT_RACE_WIN_BONUS = 120;
-const DEFEAT_ALL_ENEMY_SCORE = 30;
-const DEFEAT_ALL_CLEAR_SCORE = 80;
-const CHECKPOINT_SPRINT_CLEAR_SCORE = 120;
-const SURVIVAL_SCORE_PER_SECOND = 10;
-const SURVIVAL_CLEAR_BONUS = 100;
-const SURVIVAL_COLLECTIBLE_SCORE = 15;
-const SURVIVAL_ENEMY_SCORE = 30;
-const SURVIVAL_ZERO_DEATH_CLEAR_BONUS = 50;
-const NPC_PROTECT_SCORE_PER_SECOND = 10;
-const DEATH_PENALTY = 20;
-
 export function computeRunScore(goal: RoomGoal, finish: RunFinishRequestBody): number {
-  const elapsedMs = Math.max(0, finish.elapsedMs);
-  const deaths = Math.max(0, finish.deaths);
-  const collectiblesCollected = Math.max(0, finish.collectiblesCollected);
-  const enemiesDefeated = Math.max(0, finish.enemiesDefeated);
-  const checkpointsReached = Math.max(0, finish.checkpointsReached);
-  const deathPenalty = deaths * DEATH_PENALTY;
-
-  switch (goal.type) {
-    case 'reach_exit':
-      return Math.max(
-        0,
-        REACH_EXIT_CLEAR_SCORE + computeTimeBonus(goal.timeLimitMs, elapsedMs, 6) - deathPenalty
-      );
-    case 'collect_target':
-      return Math.max(
-        0,
-        collectiblesCollected * COLLECT_TARGET_ITEM_SCORE +
-          (finish.result === 'completed' ? COLLECT_TARGET_CLEAR_SCORE : 0) +
-          computeTimeBonus(goal.timeLimitMs, elapsedMs, 5) -
-          deathPenalty
-      );
-    case 'collect_race':
-      return Math.max(
-        0,
-        collectiblesCollected * COLLECT_RACE_ITEM_SCORE +
-          (finish.result === 'completed' ? COLLECT_RACE_WIN_BONUS : 0) +
-          computeTimeBonus(goal.timeLimitMs, elapsedMs, 4) -
-          deathPenalty
-      );
-    case 'defeat_all':
-      return Math.max(
-        0,
-        enemiesDefeated * DEFEAT_ALL_ENEMY_SCORE +
-          (finish.result === 'completed' ? DEFEAT_ALL_CLEAR_SCORE : 0) +
-          computeTimeBonus(goal.timeLimitMs, elapsedMs, 5) -
-          deathPenalty
-      );
-    case 'checkpoint_sprint':
-      return Math.max(
-        0,
-        CHECKPOINT_SPRINT_CLEAR_SCORE +
-          checkpointsReached * 10 -
-          deathPenalty
-      );
-    case 'survival': {
-      const survivalElapsedMs = Math.min(elapsedMs, Math.max(0, goal.durationMs));
-      return Math.max(
-        0,
-        Math.floor(survivalElapsedMs / 1000) * SURVIVAL_SCORE_PER_SECOND +
-          collectiblesCollected * SURVIVAL_COLLECTIBLE_SCORE +
-          enemiesDefeated * SURVIVAL_ENEMY_SCORE +
-          (finish.result === 'completed' ? SURVIVAL_CLEAR_BONUS : 0) +
-          (finish.result === 'completed' && deaths === 0 ? SURVIVAL_ZERO_DEATH_CLEAR_BONUS : 0) -
-          deathPenalty
-      );
-    }
-    case 'npc_quest':
-      if (goal.questType === 'protect') {
-        return Math.max(
-          0,
-          Math.floor(Math.min(elapsedMs, goal.durationMs) / 1000) *
-            NPC_PROTECT_SCORE_PER_SECOND -
-            deathPenalty,
-        );
-      }
-      return Math.max(
-        0,
-        100 +
-          collectiblesCollected * (goal.questType === 'give' ? 10 : 0) -
-          deathPenalty,
-      );
-  }
+  return scoreRoomGoal(goal, finish, ROOM_GOAL_DEFINITIONS);
 }
 
 export function getLeaderboardRankingMode(goal: RoomGoal): LeaderboardRankingMode {
-  switch (goal.type) {
-    case 'survival':
-    case 'collect_race':
-      return 'score';
-    case 'npc_quest':
-      return goal.questType === 'protect' ? 'score' : 'time';
-    case 'reach_exit':
-    case 'collect_target':
-    case 'defeat_all':
-    case 'checkpoint_sprint':
-      return 'time';
-  }
+  const policy = roomGoalRankingPolicy(goal, ROOM_GOAL_DEFINITIONS);
+  return policy === 'protect' ? 'score' : policy;
 }
 
 export function sortRoomLeaderboardEntries<T extends Pick<RoomLeaderboardEntry, 'elapsedMs' | 'deaths' | 'score' | 'finishedAt'>>(
@@ -119,11 +23,12 @@ export function sortRoomLeaderboardEntries<T extends Pick<RoomLeaderboardEntry, 
 }
 
 export function sortCompletedRunsForLeaderboard(runs: RoomRunRecord[], goal: RoomGoal): RoomRunRecord[] {
+  const includeFailed = roomGoalRankingPolicy(goal, ROOM_GOAL_DEFINITIONS) === 'protect';
   const rankedRuns = runs.filter(
     (run): run is RoomRunRecord & { elapsedMs: number; finishedAt: string } =>
       (
         run.result === 'completed' ||
-        (goal.type === 'npc_quest' && goal.questType === 'protect' && run.result === 'failed')
+        (includeFailed && run.result === 'failed')
       ) &&
       run.elapsedMs !== null &&
       run.finishedAt !== null
@@ -139,7 +44,8 @@ export function compareLeaderboardEntries<
   right: T,
   goal: RoomGoal
 ): number {
-  if (goal.type === 'npc_quest' && goal.questType === 'protect') {
+  const rankingPolicy = roomGoalRankingPolicy(goal, ROOM_GOAL_DEFINITIONS);
+  if (rankingPolicy === 'protect') {
     return (
       right.elapsedMs - left.elapsedMs ||
       left.deaths - right.deaths ||
@@ -147,8 +53,7 @@ export function compareLeaderboardEntries<
     );
   }
 
-  const rankingMode = getLeaderboardRankingMode(goal);
-  if (rankingMode === 'time') {
+  if (rankingPolicy === 'time') {
     return (
       left.elapsedMs - right.elapsedMs ||
       left.deaths - right.deaths ||
@@ -163,12 +68,4 @@ export function compareLeaderboardEntries<
     left.elapsedMs - right.elapsedMs ||
     left.finishedAt.localeCompare(right.finishedAt)
   );
-}
-
-function computeTimeBonus(timeLimitMs: number | null, elapsedMs: number, pointsPerSecond: number): number {
-  if (timeLimitMs === null) {
-    return Math.max(0, Math.floor((90_000 - elapsedMs) / 1000)) * Math.max(1, pointsPerSecond - 2);
-  }
-
-  return Math.max(0, Math.floor((timeLimitMs - elapsedMs) / 1000)) * pointsPerSecond;
 }

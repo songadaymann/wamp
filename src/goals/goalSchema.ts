@@ -1,3 +1,11 @@
+import {
+  createRoomGoalScoreContext,
+  type GoalRankingMode,
+  type GoalScoreMetrics,
+  type RoomGoalRankingPolicy,
+  type RoomGoalScoreContext,
+} from './goalScoring';
+
 /** Shared goal data; this module is safe for browser and Worker consumers. */
 export interface GoalMarkerPoint {
   x: number;
@@ -57,9 +65,8 @@ export interface GoalPublishValidationContext {
   npcInstanceIds?: string[];
 }
 
-export interface GoalDefinition<P extends GoalMarkerPoint, K extends GoalType> {
+interface GoalDefinitionBase<P extends GoalMarkerPoint, K extends GoalType> {
   label: string;
-  courseSupported: boolean;
   markerKind: 'exit' | 'checkpoints' | 'npc_destination' | 'none';
   supportsTimeLimit: boolean;
   createDefault: () => Goal<P, K>;
@@ -68,7 +75,22 @@ export interface GoalDefinition<P extends GoalMarkerPoint, K extends GoalType> {
   shortText: (goal: Goal<P, K>, options: GoalTextOptions) => string;
   introText: (goal: Goal<P, K>, options: GoalTextOptions) => string;
   validate: (goal: Goal<P, K>, context: GoalPublishValidationContext) => string | null;
+  roomScoring: {
+    score: (goal: Goal<P, K>, context: RoomGoalScoreContext) => number;
+    ranking: (goal: Goal<P, K>) => RoomGoalRankingPolicy;
+  };
 }
+
+export type GoalDefinition<P extends GoalMarkerPoint, K extends GoalType> = GoalDefinitionBase<P, K> & (
+  | {
+    courseSupported: true;
+    courseScoring: {
+      score: (goal: Goal<P, K>, finish: GoalScoreMetrics) => number;
+      ranking: (goal: Goal<P, K>) => GoalRankingMode;
+    };
+  }
+  | { courseSupported: false; courseScoring: null }
+);
 
 export type GoalRegistry<P extends GoalMarkerPoint> = {
   [K in GoalType]: GoalDefinition<P, K>;
@@ -109,4 +131,26 @@ export function formatGoalIntroText<P extends GoalMarkerPoint, K extends GoalTyp
 
 export function validateGoal<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, context: GoalPublishValidationContext): string | null {
   return registry[goal.type].validate(goal, context);
+}
+
+export function scoreRoomGoal<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, finish: GoalScoreMetrics, registry: GoalRegistry<P>): number {
+  return registry[goal.type].roomScoring.score(goal, createRoomGoalScoreContext(finish));
+}
+
+export function roomGoalRankingPolicy<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>): RoomGoalRankingPolicy {
+  return registry[goal.type].roomScoring.ranking(goal);
+}
+
+export function scoreCourseGoal<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, finish: GoalScoreMetrics, registry: GoalRegistry<P>): number {
+  const policy = registry[goal.type].courseScoring;
+  if (!policy)
+    throw new Error(`Goal ${goal.type} is not supported in courses.`);
+  return policy.score(goal, finish);
+}
+
+export function courseGoalRankingMode<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>): GoalRankingMode {
+  const policy = registry[goal.type].courseScoring;
+  if (!policy)
+    throw new Error(`Goal ${goal.type} is not supported in courses.`);
+  return policy.ranking(goal);
 }
