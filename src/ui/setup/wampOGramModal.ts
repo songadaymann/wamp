@@ -20,7 +20,7 @@ import {
   type WampOGramRepository,
 } from '../../wampOGram/repository';
 import { renderWampOGramPostcardToPngDataUrl } from '../../wampOGram/render';
-import { getActiveEditorScene } from './sceneBridge';
+import { getActiveRoomEditorScene } from './sceneBridge';
 
 type WampOGramElements = {
   openButton: HTMLButtonElement | null;
@@ -146,8 +146,8 @@ export class WampOGramModalController {
       return;
     }
 
-    const scene = getActiveEditorScene(this.game);
-    const snapshot = scene?.exportWampOGramRoomSnapshot?.() ?? null;
+    const scene = getActiveRoomEditorScene(this.game);
+    const snapshot = scene?.exportWampOGramRoomSnapshot() ?? null;
     this.activeSnapshot = snapshot;
     this.previewDataUrl = null;
     this.shareUrl = null;

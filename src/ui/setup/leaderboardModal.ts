@@ -368,7 +368,7 @@ export class LeaderboardModalController {
   private async load(): Promise<void> {
     try {
       const scene = getActiveOverworldScene(this.game);
-      this.roomContext = scene?.getSelectedRoomContext?.() ?? null;
+      this.roomContext = scene?.getSelectedRoomContext() ?? null;
       this.activeTab = this.resolveInitialTab();
       this.render();
       await this.ensureTabLoaded(this.activeTab);

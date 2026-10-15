@@ -412,7 +412,7 @@ export class PerformanceSuggestionModalController {
     }
 
     const scene = getActiveOverworldScene(this.game);
-    return scene?.canPresentPerformanceAdvisorSuggestion?.() === true;
+    return scene?.canPresentPerformanceAdvisorSuggestion() === true;
   }
 
   private hasBlockingModal(): boolean {
@@ -463,7 +463,7 @@ export class PerformanceSuggestionModalController {
 
   private dismissAdvisorSuggestion(suggestionId: number): void {
     const scene = getOverworldScene(this.game);
-    if (scene?.dismissPerformanceAdvisorSuggestion?.(suggestionId) === true) {
+    if (scene?.dismissPerformanceAdvisorSuggestion(suggestionId) === true) {
       return;
     }
     this.advisorRuntime.dismissSuggestion(suggestionId);
@@ -477,7 +477,7 @@ export class PerformanceSuggestionModalController {
       const wasRequested = this.scenePauseRequested;
       this.scenePauseRequested = false;
       if (wasRequested) {
-        getOverworldScene(this.game)?.setPerformanceSuggestionPauseRequested?.(false);
+        getOverworldScene(this.game)?.setPerformanceSuggestionPauseRequested(false);
       }
       return true;
     }

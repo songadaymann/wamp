@@ -138,7 +138,7 @@ describe('Welcome destination lifecycle', () => {
   });
 
   it('starts one complete sequence despite a duplicate Play click', async () => {
-    feedback.scene = { jumpToCoordinates: vi.fn(), playSelectedRoom: vi.fn() };
+    feedback.scene = { getSelectedRoomContext: () => ({ coordinates: { x: 0, y: 0 } }), jumpToCoordinates: vi.fn(), playSelectedRoom: vi.fn() };
     const loadRoomCurrent = vi.fn(async (id: string, coordinates: { x: number; y: number }) => ({
       ...current(id, coordinates), published: { ...createStarterRoomSnapshot(id, coordinates), status: 'published', version: 3 },
     }));
@@ -151,7 +151,7 @@ describe('Welcome destination lifecycle', () => {
   });
 
   it('keeps loading failures visible and cancels a closed pending Play', async () => {
-    feedback.scene = { jumpToCoordinates: vi.fn(), playSelectedRoom: vi.fn() };
+    feedback.scene = { getSelectedRoomContext: () => ({ coordinates: { x: 0, y: 0 } }), jumpToCoordinates: vi.fn(), playSelectedRoom: vi.fn() };
     const loadRoomCurrent = vi.fn(async () => current());
     const f = fixture({ loadRoomCurrent } as unknown as RoomRepository); const start = vi.fn();
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -164,7 +164,7 @@ describe('Welcome destination lifecycle', () => {
 
   it('hands off a guest starter without forcing over recovered content', async () => {
     const openGuestDraftRoom = vi.fn(async () => true);
-    feedback.scene = { jumpToCoordinates: vi.fn(async () => {}), openGuestDraftRoom };
+    feedback.scene = { getSelectedRoomContext: () => ({ coordinates: { x: 0, y: 0 } }), jumpToCoordinates: vi.fn(async () => {}), openGuestDraftRoom };
     const localRooms = { loadRoom: vi.fn(async () => createDefaultRoomRecord('24,9', { x: 24, y: 9 })) };
     const saveDraft = vi.fn();
     const f = fixture({ loadRoomCurrent: async () => current(), saveDraft } as unknown as RoomRepository, { localRooms });
@@ -174,7 +174,7 @@ describe('Welcome destination lifecycle', () => {
   });
 
   it('preserves an existing browser draft and a newly claimed frontier', async () => {
-    const openGuestDraftRoom = vi.fn(); feedback.scene = { jumpToCoordinates: vi.fn(), openGuestDraftRoom };
+    const openGuestDraftRoom = vi.fn(); feedback.scene = { getSelectedRoomContext: () => ({ coordinates: { x: 0, y: 0 } }), jumpToCoordinates: vi.fn(), openGuestDraftRoom };
     const record = createDefaultRoomRecord('24,9', { x: 24, y: 9 }); record.draft.title = 'Keep my work';
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const localRooms = { loadRoom: async () => record };
@@ -193,7 +193,7 @@ describe('Welcome destination lifecycle', () => {
     feedback.auth = { authenticated: true, user: { id: 'account' } };
     const saveDraft = vi.fn(async () => createDefaultRoomRecord());
     const openGuestDraftRoom = vi.fn(async () => true);
-    feedback.scene = { jumpToCoordinates: vi.fn(async () => {}), openGuestDraftRoom };
+    feedback.scene = { getSelectedRoomContext: () => ({ coordinates: { x: 0, y: 0 } }), jumpToCoordinates: vi.fn(async () => {}), openGuestDraftRoom };
     const record = current(); const localRooms = { loadRoom: async () => createDefaultRoomRecord() };
     const f = fixture({ loadRoomCurrent: async () => record, saveDraft } as unknown as RoomRepository, { localRooms });
     f.controller.open(); f.buttons.get('btn-welcome-build')!.dispatchEvent(new Event('click')); await flush();
@@ -203,7 +203,7 @@ describe('Welcome destination lifecycle', () => {
 
   it('cannot save or open a starter after Welcome closes during its load', async () => {
     const saveDraft = vi.fn(); const openGuestDraftRoom = vi.fn();
-    feedback.scene = { jumpToCoordinates: vi.fn(), openGuestDraftRoom };
+    feedback.scene = { getSelectedRoomContext: () => ({ coordinates: { x: 0, y: 0 } }), jumpToCoordinates: vi.fn(), openGuestDraftRoom };
     let resolve!: (record: ReturnType<typeof current>) => void;
     const loadRoomCurrent = () => new Promise<ReturnType<typeof current>>(done => { resolve = done; });
     const f = fixture({ loadRoomCurrent, saveDraft } as unknown as RoomRepository, { localRooms: { loadRoom: async () => createDefaultRoomRecord() } });

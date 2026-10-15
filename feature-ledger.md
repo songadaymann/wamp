@@ -1,3 +1,16 @@
+## 2026-10-14 overnight — F062 native proof
+
+## 2026-10-14 overnight — F062 final local acceptance
+
+Full 3,630-test quality and all 42 Chromium/WebKit scenarios pass with zero browser errors/missing fixtures. Six native room/course music flows pass, including a regression-backed arrangement-cell selection fix found during testing. Both editors use one required music coordinator; checked scene capabilities replace optional commands and arbitrary casts. Installed-client real-API loading/control capture is inspected (software-renderer performance prompt; no FPS claim). Source/merge gates and guarded live delivery remain pending; master stays 144. Receipt: `docs/review/wamp-required-scene-capabilities-2026-10-14.md`.
+
+
+Required capability registry and both-editor music accessor are implemented. Six isolated native Chrome/WebKit room/course-editor flows pass with zero page errors or missing fixtures, including preview and slot select/clear; screenshots inspected. Slot-count click delegation consumed cell clicks through their parent; an actual-button selector and failing-before/passing-after regression correct it. Final 3,630-test gates, camera opt-out/real-tap replay, installed client and hosted/delivery proof remain pending.
+
+## 2026-10-14 overnight — F062 required capabilities started
+
+Branch `codex/wamp-required-scene-capabilities-2026-10-14` from `08814c83`, master 144. Replace music wrappers and optional scene bridges with required per-scene capability surfaces and a checked registry. Validation/delivery pending; keep F062 partial until complete. Receipt: `docs/review/wamp-required-scene-capabilities-2026-10-14.md`.
+
 
 ## 2026-10-14 overnight — F109 complete and live
 

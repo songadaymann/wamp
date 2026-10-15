@@ -4,7 +4,7 @@ import {
   buildRoomLeaderboardLineage,
   getManualRoomLeaderboardSourceValidationError,
 } from '../../persistence/roomLeaderboardLineage';
-import { getActiveEditorScene, type EditorHistoryState } from './sceneBridge';
+import { getActiveRoomEditorScene, type EditorHistoryState } from './sceneBridge';
 import { asyncListener } from '../asyncListener';
 
 const HISTORY_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -62,7 +62,7 @@ export class RoomHistoryModalController {
   };
 
   private readonly handleRefreshMetadataClick = asyncListener(async () => {
-    const editorScene = getActiveEditorScene(this.game);
+    const editorScene = getActiveRoomEditorScene(this.game);
     if (!editorScene?.refreshMintMetadata) {
       return;
     }
@@ -90,8 +90,8 @@ export class RoomHistoryModalController {
   });
 
   private readonly handleRestoreCanonicalClick = asyncListener(async () => {
-    const editorScene = getActiveEditorScene(this.game);
-    const canonicalVersion = editorScene?.getHistoryState?.().canonicalVersion ?? null;
+    const editorScene = getActiveRoomEditorScene(this.game);
+    const canonicalVersion = editorScene?.getHistoryState().canonicalVersion ?? null;
     if (!editorScene?.revertToVersion || canonicalVersion === null) {
       return;
     }
@@ -136,7 +136,7 @@ export class RoomHistoryModalController {
   }
 
   async open(): Promise<void> {
-    const editorScene = getActiveEditorScene(this.game);
+    const editorScene = getActiveRoomEditorScene(this.game);
     if (!editorScene?.getHistoryState || !this.elements.modal) {
       return;
     }
@@ -151,7 +151,7 @@ export class RoomHistoryModalController {
     this.metadataRefreshInFlight = false;
     this.setError(null);
     try {
-      await editorScene.loadHistory?.();
+      await editorScene.loadHistory();
     } catch (error) {
       this.setError(error instanceof Error ? error.message : 'Failed to load room history.');
     }
@@ -208,7 +208,7 @@ export class RoomHistoryModalController {
   }
 
   private async handleRevert(targetVersion: number): Promise<void> {
-    const editorScene = getActiveEditorScene(this.game);
+    const editorScene = getActiveRoomEditorScene(this.game);
     if (!editorScene?.revertToVersion) {
       return;
     }
@@ -233,7 +233,7 @@ export class RoomHistoryModalController {
   }
 
   private async handleAdminRestore(targetVersion: number): Promise<void> {
-    const editorScene = getActiveEditorScene(this.game);
+    const editorScene = getActiveRoomEditorScene(this.game);
     if (!editorScene?.adminRestoreToVersion) {
       return;
     }
@@ -257,7 +257,7 @@ export class RoomHistoryModalController {
   }
 
   private async handleSetCanonical(targetVersion: number): Promise<void> {
-    const editorScene = getActiveEditorScene(this.game);
+    const editorScene = getActiveRoomEditorScene(this.game);
     if (!editorScene?.setCanonicalVersion) {
       return;
     }
@@ -285,7 +285,7 @@ export class RoomHistoryModalController {
     targetVersion: number,
     sourceVersion: number | null
   ): Promise<void> {
-    const editorScene = getActiveEditorScene(this.game);
+    const editorScene = getActiveRoomEditorScene(this.game);
     if (!editorScene?.setLeaderboardSourceVersion) {
       return;
     }
@@ -558,7 +558,7 @@ export class RoomHistoryModalController {
       return;
     }
 
-    const editorScene = getActiveEditorScene(this.game);
+    const editorScene = getActiveRoomEditorScene(this.game);
     if (!editorScene?.getHistoryState) {
       this.close();
       return;

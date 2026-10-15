@@ -57,7 +57,7 @@ export class GuestRoomRecoveryModalController {
     private readonly win: Window = window, options: Options = {}) {
     this.service = options.service ?? new GuestDraftRecoveryService(); this.account = options.account ?? guestDraftAccountId;
     this.preview = options.preview ?? renderRoomSnapshotToPngDataUrl;
-    this.openEditor = options.openEditor ?? (snapshot => getOverworldScene(this.game)?.openGuestDraftRoom?.(snapshot) ?? false);
+    this.openEditor = options.openEditor ?? (snapshot => getOverworldScene(this.game)?.openGuestDraftRoom(snapshot) ?? false);
     this.modal = doc.getElementById('guest-room-recovery-modal');
     this.signInButton = doc.getElementById('btn-guest-room-recovery-signin'); this.submitButton = doc.getElementById('btn-guest-room-recovery-submit');
     this.goButton = doc.getElementById('btn-guest-room-recovery-go'); this.closeButton = doc.getElementById('btn-guest-room-recovery-close');

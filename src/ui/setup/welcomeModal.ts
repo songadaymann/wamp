@@ -352,7 +352,7 @@ export class WelcomeModalController {
 
     try {
       const centerCoordinates =
-        overworld.getSelectedRoomContext?.().coordinates ?? { x: 0, y: 0 };
+        overworld.getSelectedRoomContext().coordinates ?? { x: 0, y: 0 };
       const authState = getAuthDebugState();
       const targetRoom = authState.authenticated
         ? await this.pickRandomClaimableFrontierRoom(centerCoordinates)

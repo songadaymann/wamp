@@ -1,14 +1,10 @@
-import Phaser from 'phaser';
+import { getSceneWithCapabilities } from './sceneCapabilityRegistry';
+import type Phaser from 'phaser';
+import type { EditorMusicWorkflowCoordinator } from '../../scenes/editor/musicWorkflow';
 import type { CourseGoalType } from '../../courses/model';
 import type { CourseEditorUiState } from '../../courses/editor/state';
 import type { CustomSpriteDefinition } from '../../customSprites/model';
 import type { RoomGoalType } from '../../goals/roomGoals';
-import type {
-  RoomMusicKeyMode,
-  RoomMusicKeyTonic,
-  RoomPatternInstrumentId,
-  RoomPatternPitchMode,
-} from '../../music/model';
 import type { GoalPlacementMode } from '../../scenes/editor/editRuntime';
 import type {
   RoomRushDifficulty,
@@ -71,99 +67,129 @@ export type EditorCourseUiState = {
   placeFinishActive: boolean;
 };
 
-export interface EditorSceneBridge {
-  getHistoryState?: () => EditorHistoryState;
-  loadHistory?: () => Promise<void>;
-  revertToVersion?: (targetVersion: number) => Promise<RoomRecord | null>;
-  adminRestoreToVersion?: (targetVersion: number) => Promise<RoomRecord | null>;
-  setCanonicalVersion?: (targetVersion: number) => Promise<RoomRecord | null>;
-  setLeaderboardSourceVersion?: (
-    targetVersion: number,
-    sourceVersion: number | null
-  ) => Promise<RoomRecord | null>;
-  startPlayMode?: () => Promise<void> | void;
-  saveDraft?: (
+/** The HTML controls can only issue public editor-music commands. */
+export type EditorMusicCommands = Pick<EditorMusicWorkflowCoordinator,
+  | 'setMusicModeActive'
+  | 'toggleMusicMode'
+  | 'setMusicPatternInstrumentTab'
+  | 'setMusicComposerMode'
+  | 'setRoomMusicPitchMode'
+  | 'setRoomMusicKeyTonic'
+  | 'setRoomMusicKeyMode'
+  | 'shiftRoomMusicOctave'
+  | 'shiftRoomMusicTempo'
+  | 'shiftRoomMusicSwing'
+  | 'startNewRoomMusicPhrase'
+  | 'toggleRoomMusicPhraseMetadataEditor'
+  | 'setRoomMusicPhraseNameSuffix'
+  | 'saveRoomMusicDraftAndPhrases'
+  | 'saveActiveRoomMusicPhrase'
+  | 'saveAsActiveRoomMusicPhrase'
+  | 'closeRoomMusicPhraseSavePrompt'
+  | 'setRoomMusicPhraseSavePromptName'
+  | 'confirmRoomMusicPhraseSavePrompt'
+  | 'deleteActiveRoomMusicPhrase'
+  | 'replaceLegacyRoomMusicWithPattern'
+  | 'toggleRoomMusicPreview'
+  | 'refreshMusicPhraseLibrary'
+  | 'loadMoreMusicPhrases'
+  | 'useMusicPhrase'
+  | 'toggleMusicPhraseAudition'
+  | 'assignMusicPhraseToArrangementSlot'
+  | 'setRoomMusicArrangementSlotCount'
+  | 'selectArrangementSlot'
+  | 'clearSelectedArrangementSlot'
+  | 'clearAllArrangementSlots'
+>;
+
+export interface EditorMusicCapability {
+  getMusicWorkflow(): EditorMusicCommands;
+}
+
+export interface EditorPersistenceCapability {
+  startPlayMode: () => Promise<void> | void;
+  saveDraft: (
     force?: boolean,
     options?: { promptForSignInOnUnauthorized?: boolean }
   ) => Promise<RoomRecord | null>;
-  publishRoom?: () => Promise<RoomRecord | null>;
-  exportWampOGramRoomSnapshot?: () => RoomSnapshot;
-  saveCourseDraft?: () => Promise<void>;
-  publishCourseDraft?: () => Promise<void>;
-  handlePublishNudgeAction?: () => Promise<void>;
-  returnToWorld?: () => Promise<void> | void;
-  returnToCourseBuilder?: () => Promise<void> | void;
-  mintRoom?: () => Promise<RoomRecord | null>;
-  refreshMintMetadata?: () => Promise<RoomRecord | null>;
-  fitToScreen?: () => void;
-  zoomIn?: () => void;
-  zoomOut?: () => void;
-  updateToolUi?: () => void;
-  useCustomSpriteAsTile?: (sprite: CustomSpriteDefinition) => boolean;
-  usesCustomSprite?: (spriteId: string) => boolean;
-  setRoomTitle?: (title: string | null) => void;
-  setGoalType?: (nextType: RoomGoalType | null) => void;
-  setGoalTimeLimitSeconds?: (seconds: number | null) => void;
-  setGoalRequiredCount?: (requiredCount: number) => void;
-  setGoalSurvivalSeconds?: (seconds: number) => void;
-  startGoalMarkerPlacement?: (mode: EditorMarkerPlacementMode) => void;
-  clearGoalMarkers?: () => void;
-  getCourseEditorState?: () => EditorCourseUiState;
-  setCourseGoalType?: (goalType: CourseGoalType | null) => void;
-  setCourseGoalTimeLimitSeconds?: (seconds: number | null) => void;
-  setCourseGoalRequiredCount?: (requiredCount: number) => void;
-  setCourseGoalSurvivalSeconds?: (seconds: number) => void;
-  startCourseGoalMarkerPlacement?: (mode: EditorMarkerPlacementMode) => void;
-  clearCourseGoalMarkers?: () => void;
-  beginFocusedPressurePlateConnection?: () => void;
-  clearFocusedPressurePlateConnection?: () => void;
-  cancelPressurePlateConnection?: () => void;
-  clearFocusedContainerContents?: () => void;
-  setPlacedSignText?: (instanceId: string, text: string | null) => boolean | Promise<boolean>;
-  setMusicModeActive?: (active: boolean) => void;
-  toggleMusicMode?: () => void;
-  setMusicPatternInstrumentTab?: (instrumentId: RoomPatternInstrumentId) => void;
-  setMusicComposerMode?: (mode: 'sequencer' | 'arrangement') => void;
-  setRoomMusicPitchMode?: (mode: RoomPatternPitchMode) => void;
-  setRoomMusicKeyTonic?: (tonic: RoomMusicKeyTonic) => void;
-  setRoomMusicKeyMode?: (mode: RoomMusicKeyMode) => void;
-  shiftRoomMusicOctave?: (delta: number) => void;
-  shiftRoomMusicTempo?: (delta: number) => void;
-  shiftRoomMusicSwing?: (delta: number) => void;
-  startNewRoomMusicPhrase?: () => Promise<void>;
-  toggleRoomMusicPhraseMetadataEditor?: () => void;
-  setRoomMusicPhraseNameSuffix?: (value: string) => void;
-  saveRoomMusicDraftAndPhrases?: (
-    options?: {
-      instrumentId?: RoomPatternInstrumentId | null;
-      saveMode?: 'overwrite' | 'save-as' | null;
-      overwritePhraseId?: string | null;
-    }
-  ) => Promise<RoomRecord | null>;
-  saveActiveRoomMusicPhrase?: () => Promise<RoomRecord | null>;
-  saveAsActiveRoomMusicPhrase?: () => void;
-  closeRoomMusicPhraseSavePrompt?: () => void;
-  setRoomMusicPhraseSavePromptName?: (value: string) => void;
-  confirmRoomMusicPhraseSavePrompt?: () => Promise<void>;
-  deleteActiveRoomMusicPhrase?: () => Promise<void>;
-  replaceLegacyRoomMusicWithPattern?: () => void;
-  toggleRoomMusicPreview?: () => void;
-  refreshMusicPhraseLibrary?: () => void;
-  loadMoreMusicPhrases?: () => void;
-  useMusicPhrase?: (phraseId: string) => Promise<void> | void;
-  toggleMusicPhraseAudition?: (phraseId: string) => Promise<void> | void;
-  assignMusicPhraseToArrangementSlot?: (
-    phraseId: string,
-    instrumentId: RoomPatternInstrumentId,
-    slotIndex: number,
-  ) => Promise<void> | void;
-  setRoomMusicArrangementSlotCount?: (slotCount: number) => void;
-  selectArrangementSlot?: (instrumentId: RoomPatternInstrumentId, slotIndex: number) => void;
-  clearSelectedArrangementSlot?: () => void;
-  clearAllArrangementSlots?: () => void;
-  undoAction?: () => void;
-  redoAction?: () => void;
+  publishRoom: () => Promise<RoomRecord | null>;
+  returnToWorld: () => Promise<void> | void;
+  returnToCourseBuilder: () => Promise<void> | void;
+  setRoomTitle: (title: string | null) => void;
 }
+
+export interface EditorViewportCapability {
+  fitToScreen: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  updateToolUi: () => void;
+}
+
+export interface EditorObjectCapability {
+  useCustomSpriteAsTile: (sprite: CustomSpriteDefinition) => boolean;
+  usesCustomSprite: (spriteId: string) => boolean;
+  setPlacedSignText: (instanceId: string, text: string | null) => boolean | Promise<boolean>;
+  undoAction: () => void;
+  redoAction: () => void;
+}
+
+export interface EditorGoalCapability {
+  setGoalType: (nextType: RoomGoalType | null) => void;
+  setGoalTimeLimitSeconds: (seconds: number | null) => void;
+  setGoalRequiredCount: (requiredCount: number) => void;
+  setGoalSurvivalSeconds: (seconds: number) => void;
+  startGoalMarkerPlacement: (mode: EditorMarkerPlacementMode) => void;
+  clearGoalMarkers: () => void;
+}
+
+export interface EditorCourseGoalCapability {
+  getCourseEditorState: () => EditorCourseUiState;
+  setCourseGoalType: (goalType: CourseGoalType | null) => void;
+  setCourseGoalTimeLimitSeconds: (seconds: number | null) => void;
+  setCourseGoalRequiredCount: (requiredCount: number) => void;
+  setCourseGoalSurvivalSeconds: (seconds: number) => void;
+  startCourseGoalMarkerPlacement: (mode: EditorMarkerPlacementMode) => void;
+  clearCourseGoalMarkers: () => void;
+}
+
+export interface EditorHistoryCapability {
+  getHistoryState: () => EditorHistoryState;
+  loadHistory: () => Promise<void>;
+  revertToVersion: (targetVersion: number) => Promise<RoomRecord | null>;
+  adminRestoreToVersion: (targetVersion: number) => Promise<RoomRecord | null>;
+  setCanonicalVersion: (targetVersion: number) => Promise<RoomRecord | null>;
+  setLeaderboardSourceVersion: (
+    targetVersion: number,
+    sourceVersion: number | null
+  ) => Promise<RoomRecord | null>;
+}
+
+export interface RoomEditorPersistenceCapability {
+  exportWampOGramRoomSnapshot: () => RoomSnapshot;
+  handlePublishNudgeAction: () => Promise<void>;
+  mintRoom: () => Promise<RoomRecord | null>;
+  refreshMintMetadata: () => Promise<RoomRecord | null>;
+}
+
+export interface RoomEditorObjectCapability {
+  beginFocusedPressurePlateConnection: () => void;
+  clearFocusedPressurePlateConnection: () => void;
+  cancelPressurePlateConnection: () => void;
+  clearFocusedContainerContents: () => void;
+}
+
+export interface CourseWorkspacePersistenceCapability {
+  saveCourseDraft: () => Promise<void>;
+  publishCourseDraft: () => Promise<void>;
+}
+
+export interface EditorCommonSceneBridge extends EditorPersistenceCapability, EditorViewportCapability, EditorObjectCapability, EditorGoalCapability, EditorCourseGoalCapability, EditorMusicCapability {}
+
+export interface RoomEditorSceneBridge extends EditorCommonSceneBridge, EditorHistoryCapability, RoomEditorPersistenceCapability, RoomEditorObjectCapability {}
+
+export interface CourseWorkspaceSceneBridge extends EditorCommonSceneBridge, CourseWorkspacePersistenceCapability {}
+
+export type EditorSceneBridge = RoomEditorSceneBridge | CourseWorkspaceSceneBridge;
 
 export type OverworldSelectedRoomContext = {
   roomId: string;
@@ -208,98 +234,91 @@ export type MobilePortraitCameraTuningSnapshot = {
 export const COURSE_COMPOSER_STATE_CHANGED_EVENT = 'course-composer-state-changed';
 
 export interface CourseComposerSceneBridge {
-  getCourseEditorState?: () => CourseEditorUiState | null;
-  returnToWorld?: () => Promise<void> | void;
-  setCourseTitle?: (title: string | null) => void;
-  setCoursePitsAreDeadly?: (enabled: boolean) => void;
-  setCoursePlayerHearts?: (hearts: number) => void;
-  centerSelectedRoom?: () => void;
-  selectRoom?: (roomId: string) => void;
-  toggleSelectedRoomMembership?: () => void;
-  openSelectedRoom?: () => Promise<void> | void;
-  openCourseEditor?: () => Promise<void> | void;
-  moveCheckpoint?: (index: number, direction: -1 | 1) => void;
-  removeCheckpoint?: (index: number) => void;
-  zoomIn?: () => void;
-  zoomOut?: () => void;
-  fitCourseToView?: () => void;
-  saveCourseDraft?: () => Promise<void>;
-  publishCourseDraft?: () => Promise<void>;
-  unpublishCourse?: () => Promise<void>;
-  testDraftCourse?: () => Promise<void> | void;
+  getCourseEditorState: () => CourseEditorUiState | null;
+  returnToWorld: () => Promise<void> | void;
+  setCourseTitle: (title: string | null) => void;
+  setCoursePitsAreDeadly: (enabled: boolean) => void;
+  setCoursePlayerHearts: (hearts: number) => void;
+  centerSelectedRoom: () => void;
+  selectRoom: (roomId: string) => void;
+  toggleSelectedRoomMembership: () => void;
+  openSelectedRoom: () => Promise<void> | void;
+  openCourseEditor: () => Promise<void> | void;
+  moveCheckpoint: (index: number, direction: -1 | 1) => void;
+  removeCheckpoint: (index: number) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  fitCourseToView: () => void;
+  saveCourseDraft: () => Promise<void>;
+  publishCourseDraft: () => Promise<void>;
+  unpublishCourse: () => Promise<void>;
+  testDraftCourse: () => Promise<void> | void;
 }
 
 export type CourseMarkerPlacementMode = 'start' | 'checkpoint' | 'finish';
 
 export interface OverworldSceneBridge {
-  getPerformanceAdvisorSuggestion?: () => PerformanceAdvisorSuggestion | null;
-  canPresentPerformanceAdvisorSuggestion?: () => boolean;
-  dismissPerformanceAdvisorSuggestion?: (suggestionId: number) => boolean;
-  setPerformanceSuggestionPauseRequested?: (requested: boolean) => void;
-  playSelectedRoom?: (options?: { forceGoalIntro?: boolean; expectedCourseVersion?: number; canStart?: () => boolean }) => void | Promise<void>;
-  restartCurrentRun?: () => Promise<void> | void;
-  startRoomRushRun?: (options: {
+  getPerformanceAdvisorSuggestion: () => PerformanceAdvisorSuggestion | null;
+  canPresentPerformanceAdvisorSuggestion: () => boolean;
+  dismissPerformanceAdvisorSuggestion: (suggestionId: number) => boolean;
+  setPerformanceSuggestionPauseRequested: (requested: boolean) => void;
+  playSelectedRoom: (options?: { forceGoalIntro?: boolean; expectedCourseVersion?: number; canStart?: () => boolean }) => void | Promise<void>;
+  restartCurrentRun: () => Promise<void> | void;
+  startRoomRushRun: (options: {
     difficulty: RoomRushDifficulty;
     startRule: RoomRushStartRule;
   }) => Promise<boolean> | boolean;
-  endRoomRushRun?: () => void;
-  isRoomRushRunActive?: () => boolean;
-  invitePvpDuel?: (entry: OverworldOnlineRosterViewEntry) => Promise<void> | void;
-  openMultiplayerLauncher?: () => Promise<boolean> | boolean;
-  inviteMultiplayer?: (
+  endRoomRushRun: () => void;
+  isRoomRushRunActive: () => boolean;
+  invitePvpDuel: (entry: OverworldOnlineRosterViewEntry) => Promise<void> | void;
+  openMultiplayerLauncher: () => Promise<boolean> | boolean;
+  inviteMultiplayer: (
     modeId: MultiplayerModeId,
     entry: OverworldOnlineRosterViewEntry,
   ) => Promise<void> | void;
-  playSelectedCourse?: () => Promise<void> | void;
-  editSelectedRoom?: () => void;
-  buildSelectedRoom?: () => void;
-  openGuestDraftRoom?: (roomSnapshot: RoomSnapshot, canOpen?: () => boolean, forceRoomSnapshot?: boolean) => void | Promise<boolean>;
-  zoomIn?: () => void;
-  zoomOut?: () => void;
-  jumpToCoordinates?: (coordinates: RoomCoordinates) => Promise<void> | void;
-  fitLoadedWorld?: () => void;
-  returnToWorld?: () => void;
-  getSelectedRoomContext?: () => OverworldSelectedRoomContext;
-  openRoomChatComposer?: () => boolean;
-  closeRoomChatComposer?: () => void;
-  isRoomChatComposerOpen?: () => boolean;
-  openRoomCommentComposer?: () => boolean;
-  closeRoomCommentComposer?: () => void;
-  isRoomCommentComposerOpen?: () => boolean;
-  toggleRoomComments?: () => void;
-  openCourseComposer?: () => Promise<void> | void;
-  openCourseEditor?: () => Promise<void> | void;
-  getMobilePortraitCameraTuning?: () => MobilePortraitCameraTuningSnapshot;
-  setMobilePortraitCameraTuning?: (
+  playSelectedCourse: () => Promise<void> | void;
+  editSelectedRoom: () => void;
+  buildSelectedRoom: () => void;
+  openGuestDraftRoom: (roomSnapshot: RoomSnapshot, canOpen?: () => boolean, forceRoomSnapshot?: boolean) => void | Promise<boolean>;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  jumpToCoordinates: (coordinates: RoomCoordinates) => Promise<void> | void;
+  fitLoadedWorld: () => void;
+  returnToWorld: () => void;
+  getSelectedRoomContext: () => OverworldSelectedRoomContext;
+  openRoomChatComposer: () => boolean;
+  closeRoomChatComposer: () => void;
+  isRoomChatComposerOpen: () => boolean;
+  openRoomCommentComposer: () => boolean;
+  closeRoomCommentComposer: () => void;
+  isRoomCommentComposerOpen: () => boolean;
+  toggleRoomComments: () => void;
+  openCourseComposer: () => Promise<void> | void;
+  openCourseEditor: () => Promise<void> | void;
+  getMobilePortraitCameraTuning: () => MobilePortraitCameraTuningSnapshot;
+  setMobilePortraitCameraTuning: (
     input: MobilePortraitCameraTuningInput,
     reason?: string,
   ) => MobilePortraitCameraTuningSnapshot;
-  adjustMobilePortraitCameraTuning?: (
+  adjustMobilePortraitCameraTuning: (
     adjustment: MobilePortraitCameraTuningAdjustment,
     reason?: string,
   ) => MobilePortraitCameraTuningSnapshot;
-  resetMobilePortraitCameraTuning?: () => MobilePortraitCameraTuningSnapshot;
-  logMobilePortraitCameraTuning?: (reason?: string) => MobilePortraitCameraTuningSnapshot;
+  resetMobilePortraitCameraTuning: () => MobilePortraitCameraTuningSnapshot;
+  logMobilePortraitCameraTuning: (reason?: string) => MobilePortraitCameraTuningSnapshot;
 }
 
-function getScene<T>(game: Phaser.Game, key: string): T | null {
-  try {
-    return game.scene.getScene(key) as T;
-  } catch {
-    return null;
-  }
+
+export function getEditorScene(game: Phaser.Game): RoomEditorSceneBridge | null {
+  return getSceneWithCapabilities(game, 'EditorScene');
 }
 
-export function getEditorScene(game: Phaser.Game): EditorSceneBridge | null {
-  return getScene<EditorSceneBridge>(game, 'EditorScene');
-}
-
-export function getCourseWorkspaceScene(game: Phaser.Game): EditorSceneBridge | null {
-  return getScene<EditorSceneBridge>(game, 'CourseEditorScene');
+export function getCourseWorkspaceScene(game: Phaser.Game): CourseWorkspaceSceneBridge | null {
+  return getSceneWithCapabilities(game, 'CourseEditorScene');
 }
 
 export function getOverworldScene(game: Phaser.Game): OverworldSceneBridge | null {
-  return getScene<OverworldSceneBridge>(game, 'OverworldPlayScene');
+  return getSceneWithCapabilities(game, 'OverworldPlayScene');
 }
 
 export function getActiveEditorScene(game: Phaser.Game): EditorSceneBridge | null {
@@ -323,7 +342,7 @@ export function getActiveOverworldScene(game: Phaser.Game): OverworldSceneBridge
 }
 
 export function getCourseComposerScene(game: Phaser.Game): CourseComposerSceneBridge | null {
-  return getScene<CourseComposerSceneBridge>(game, 'CourseComposerScene');
+  return getSceneWithCapabilities(game, 'CourseComposerScene');
 }
 
 export function getActiveCourseComposerScene(game: Phaser.Game): CourseComposerSceneBridge | null {
@@ -368,4 +387,18 @@ export function withActiveCourseComposerScene(
   }
 
   callback(scene);
+}
+
+/** Room-only actions never fall through to the course workspace. */
+export function getActiveRoomEditorScene(game: Phaser.Game): RoomEditorSceneBridge | null {
+  return !game.scene.isActive('CourseEditorScene') && game.scene.isActive('EditorScene') ? getEditorScene(game) : null;
+}
+
+export function withActiveEditorMusic(game: Phaser.Game, callback: (music: EditorMusicCommands) => void): void {
+  const scene = getActiveEditorScene(game);
+  if (scene) callback(scene.getMusicWorkflow());
+}
+
+export function getActiveCourseWorkspaceScene(game: Phaser.Game): CourseWorkspaceSceneBridge | null {
+  return game.scene.isActive('CourseEditorScene') ? getCourseWorkspaceScene(game) : null;
 }

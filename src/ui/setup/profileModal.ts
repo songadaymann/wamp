@@ -298,7 +298,7 @@ export class ProfileModalController {
     });
     setupProfileEmptyStates(this.doc, { canEdit: () => Boolean(this.currentProfile?.canEdit),
       canCreatePlaylist: () => Boolean(this.currentProfile?.canEdit && !this.isSchoolAvatarOnlyEdit(this.currentProfile)),
-      findBuildSpot: () => { this.close(); void (getActiveOverworldScene(this.game) ?? getActiveEditorScene(this.game))?.returnToWorld?.(); } });
+      findBuildSpot: () => { this.close(); void (getActiveOverworldScene(this.game) ?? getActiveEditorScene(this.game))?.returnToWorld(); } });
     this.elements.shareButton?.addEventListener('click', this.handleShareClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.elements.avatarPickerModal?.addEventListener('click', this.handleAvatarPickerBackdropClick);
@@ -1289,7 +1289,7 @@ export class ProfileModalController {
       formatShortDate: (value) => this.formatShortDate(value),
       onOpenRoom: (room) => {
         this.close();
-        void getActiveOverworldScene(this.game)?.jumpToCoordinates?.(room.roomCoordinates);
+        void getActiveOverworldScene(this.game)?.jumpToCoordinates(room.roomCoordinates);
       },
       onAddRoomToPlaylist: (room) => {
         void this.addRoomToSelectedPlaylist(room);

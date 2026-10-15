@@ -1,3 +1,4 @@
+import type { EditorMusicCommands } from '../ui/setup/sceneBridge';
 import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { getActiveCourseDraftSessionPublished } from '../courses/draftSession';
 import Phaser from 'phaser';
@@ -18,10 +19,6 @@ import {
 import { globalRoomMusicController } from '../music/controller';
 import {
   type RoomMusic,
-  type RoomMusicKeyMode,
-  type RoomMusicKeyTonic,
-  type RoomPatternInstrumentId,
-  type RoomPatternPitchMode,
 } from '../music/model';
 import { registerCustomSprites } from '../customSprites/registry';
 import {
@@ -83,7 +80,6 @@ import {
 } from './editor/musicUi';
 import {
   EditorMusicWorkflowCoordinator,
-  type EditorMusicPhraseSaveOptions,
   type EditorMusicPreviewState,
 } from './editor/musicWorkflow';
 import { EditorPresenceController } from './editor/presence';
@@ -113,7 +109,7 @@ import { buildRoomWeatherSurfaceSegments, type RoomWeatherSurfaceSegment } from 
 import { EditorDocumentCache } from './editor/documentCache';
 import { EditorEdgeGuideCache } from './editor/edgeGuides';
 import { saveEditorClipboard } from './editor/clipboardStorage';
-import type { EditorCourseUiState, EditorSceneBridge } from '../ui/setup/sceneBridge';
+import type { EditorCourseUiState, RoomEditorSceneBridge } from '../ui/setup/sceneBridge';
 import type { EditorShapeKind } from './editor/shapeTiles';
 import {
   EDITOR_SHELL_ESCAPE_REQUESTED_EVENT,
@@ -159,7 +155,7 @@ export interface EditorPreviewSmokeResult extends Record<string, unknown> {
   captures?: Record<string, RoomSnapshot>;
 }
 
-export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
+export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   private draftLifecycle: EditorDraftLifecycle | null = null;
   private uiBridge: EditorUiBridge | null = null;
   private roomEditCount = 0;
@@ -296,7 +292,7 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
           return;
         }
 
-        this.setMusicModeActive(false);
+        this.musicWorkflow.setMusicModeActive(false);
         return;
       }
 
@@ -354,7 +350,7 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
       event.preventDefault();
       event.stopPropagation();
       if (this.musicModeActive) {
-        void this.saveRoomMusicDraftAndPhrases();
+        void this.musicWorkflow.saveRoomMusicDraftAndPhrases();
       } else {
         void this.saveDraft(true, { promptForSignInOnUnauthorized: true });
       }
@@ -422,7 +418,7 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     if (this.musicModeActive && event.code === 'Space') {
       event.preventDefault();
       event.stopPropagation();
-      this.toggleRoomMusicPreview();
+      this.musicWorkflow.toggleRoomMusicPreview();
     }
   };
   private readonly handleShutdown = (): void => {
@@ -1572,42 +1568,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     return this.persistenceController.saveDraft(force, options);
   }
 
-  async saveRoomMusicDraftAndPhrases(options?: EditorMusicPhraseSaveOptions): Promise<RoomRecord | null> {
-    return this.musicWorkflow.saveRoomMusicDraftAndPhrases(options);
-  }
-
-  closeRoomMusicPhraseSavePrompt(): void {
-    this.musicWorkflow.closeRoomMusicPhraseSavePrompt();
-  }
-
-  setRoomMusicPhraseSavePromptName(value: string): void {
-    this.musicWorkflow.setRoomMusicPhraseSavePromptName(value);
-  }
-
-  async saveActiveRoomMusicPhrase(): Promise<RoomRecord | null> {
-    return this.musicWorkflow.saveActiveRoomMusicPhrase();
-  }
-
-  saveAsActiveRoomMusicPhrase(): void {
-    this.musicWorkflow.saveAsActiveRoomMusicPhrase();
-  }
-
-  async confirmRoomMusicPhraseSavePrompt(): Promise<void> {
-    await this.musicWorkflow.confirmRoomMusicPhraseSavePrompt();
-  }
-
-  async startNewRoomMusicPhrase(): Promise<void> {
-    await this.musicWorkflow.startNewRoomMusicPhrase();
-  }
-
-  toggleRoomMusicPhraseMetadataEditor(): void {
-    this.musicWorkflow.toggleRoomMusicPhraseMetadataEditor();
-  }
-
-  async deleteActiveRoomMusicPhrase(): Promise<void> {
-    await this.musicWorkflow.deleteActiveRoomMusicPhrase();
-  }
-
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
     if (!this.courseController.hasActiveCourseEdit() && this.roomPermissions.canPublish) {
       this.updateRoomEdgeGuides();
@@ -2050,98 +2010,6 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
     this.updateBottomBar();
   }
 
-  setMusicModeActive(active: boolean): void {
-    this.musicWorkflow.setMusicModeActive(active);
-  }
-
-  toggleMusicMode(): void {
-    this.musicWorkflow.toggleMusicMode();
-  }
-
-  setMusicComposerMode(mode: EditorMusicComposerMode): void {
-    this.musicWorkflow.setMusicComposerMode(mode);
-  }
-
-  setMusicPatternInstrumentTab(instrumentId: RoomPatternInstrumentId): void {
-    this.musicWorkflow.setMusicPatternInstrumentTab(instrumentId);
-  }
-
-  setRoomMusicPitchMode(mode: RoomPatternPitchMode): void {
-    this.musicWorkflow.setRoomMusicPitchMode(mode);
-  }
-
-  setRoomMusicKeyTonic(tonic: RoomMusicKeyTonic): void {
-    this.musicWorkflow.setRoomMusicKeyTonic(tonic);
-  }
-
-  setRoomMusicKeyMode(mode: RoomMusicKeyMode): void {
-    this.musicWorkflow.setRoomMusicKeyMode(mode);
-  }
-
-  shiftRoomMusicOctave(delta: number): void {
-    this.musicWorkflow.shiftRoomMusicOctave(delta);
-  }
-
-  shiftRoomMusicTempo(delta: number): void {
-    this.musicWorkflow.shiftRoomMusicTempo(delta);
-  }
-
-  shiftRoomMusicSwing(delta: number): void {
-    this.musicWorkflow.shiftRoomMusicSwing(delta);
-  }
-
-  setRoomMusicPhraseNameSuffix(value: string): void {
-    this.musicWorkflow.setRoomMusicPhraseNameSuffix(value);
-  }
-
-  replaceLegacyRoomMusicWithPattern(): void {
-    this.musicWorkflow.replaceLegacyRoomMusicWithPattern();
-  }
-
-  refreshMusicPhraseLibrary(): void {
-    this.musicWorkflow.refreshMusicPhraseLibrary();
-  }
-
-  loadMoreMusicPhrases(): void {
-    this.musicWorkflow.loadMoreMusicPhrases();
-  }
-
-  async useMusicPhrase(phraseId: string): Promise<void> {
-    await this.musicWorkflow.useMusicPhrase(phraseId);
-  }
-
-  async toggleMusicPhraseAudition(phraseId: string): Promise<void> {
-    await this.musicWorkflow.toggleMusicPhraseAudition(phraseId);
-  }
-
-  selectArrangementSlot(instrumentId: RoomPatternInstrumentId, slotIndex: number): void {
-    this.musicWorkflow.selectArrangementSlot(instrumentId, slotIndex);
-  }
-
-  clearSelectedArrangementSlot(): void {
-    this.musicWorkflow.clearSelectedArrangementSlot();
-  }
-
-  clearAllArrangementSlots(): void {
-    this.musicWorkflow.clearAllArrangementSlots();
-  }
-
-  async assignMusicPhraseToArrangementSlot(
-    phraseId: string,
-    instrumentId: RoomPatternInstrumentId,
-    slotIndex: number,
-  ): Promise<void> {
-    await this.musicWorkflow.assignMusicPhraseToArrangementSlot(phraseId, instrumentId, slotIndex);
-  }
-
-  setRoomMusicArrangementSlotCount(slotCount: number): void {
-    this.musicWorkflow.setRoomMusicArrangementSlotCount(slotCount);
-  }
-
-  toggleRoomMusicPreview(): void {
-    this.musicWorkflow.toggleRoomMusicPreview();
-  }
-
   private stopRoomMusicPreview(): void {
     this.musicWorkflow.stopRoomMusicPreview();
   }
@@ -2164,6 +2032,10 @@ export class EditorScene extends Phaser.Scene implements EditorSceneBridge {
 
   private updateMusicCursorHighlight(graphics: Phaser.GameObjects.Graphics): boolean {
     return this.musicWorkflow.updateMusicCursorHighlight(graphics);
+  }
+
+  getMusicWorkflow(): EditorMusicCommands {
+    return this.musicWorkflow;
   }
 
   private renderMusicUi(): void {
