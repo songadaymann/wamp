@@ -1,3 +1,13 @@
+
+## 2026-10-15 overnight — background picker complete and live
+
+- **Background picker follow-up complete and live.** PR #204 / source `d2c9700d` / main `ce6b4ff7` / guarded Pages `0ffb8582`. The22 formerly malformed image URLs now load; short-phone section tabs scroll in one row so cards stay reachable. Full3,633-test and46-mobile gates, all source/main four-check gates, six strict hosted and six strict custom-domain picker/music flows pass. No thumbnail error allowance is used.59 exact live/immutable JS/CSS/image hashes and production health pass; live images are inspected. Master145/215 (no extra checkbox). Continue F070 shared data while retaining client/verification registry work as partial.
+
+
+## 2026-10-15 overnight — F070 shared goal data started
+
+Branch `codex/wamp-goal-data-registry-2026-10-15` from `ce6b4ff7`. Preserve goal data and behavior while sharing typed definitions and deriving the course subset.13 pre-refactor compatibility cases and two prototype differential matrices pass; initial source typecheck passes. Client runtime and Worker verification registries remain open, so F070/master stay partial/145. Full/native/hosted/guarded API+Pages delivery pending. Background PR #204 delivery remains separate. Receipt: `docs/review/wamp-goal-data-registry-2026-10-15.md`.
+
 ## 2026-10-14 overnight — signed controls complete and live
 
 - **Signed phone controls and Music Close delivered.** PR #203 / source `127b2b20` / main `332cc064` / Pages `bc5f33a4`. All source/merged-main hosted gates, full3,633-test quality,46 mobile cases, four strict native phone cases, strict desktop music and guarded Pages health pass. Custom-domain four-phone/desktop flows use no analytics stub and report only22 exact known thumbnail404s; real guest API jump/menu/email flow has zero errors. Inspected live images and37 exact custom/immutable JS/CSS file hashes pass. Master145/215; background thumbnail correction is separate and in progress. No new checkbox or animation decision.

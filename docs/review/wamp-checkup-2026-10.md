@@ -1,5 +1,7 @@
 # WAMP Checkup (October 2026)
 
+**October15 follow-ups:** signed phone controls/Music Close ([PR203 receipt](wamp-phone-profile-overlap-2026-10-14.md)) and broken background previews/short-phone picker access ([PR204 receipt](wamp-background-thumbnails-2026-10-14.md)) are delivered and verified live. All22 built-in preview layers now decode without the former404 allowance. These close existing follow-ups; master remains145/215. F070 shared data is in progress and remains partial.
+
 A fact-checked review of the whole game, run on 2026-10-03 against production commit `7371df9a`. Eighteen specialist reviewers proposed 248 suggestions; a separate skeptical reviewer checked each one against the code (three reviewers for high-impact problems). 4 were dropped as wrong and 30 duplicates were merged, leaving **214 original items**. Jonathan added the bug-report tool (F249) on 2026-10-08, bringing the checklist to **215 items**.
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
