@@ -1,3 +1,4 @@
+import type { GoalCollectionFacts, RoomGoalCollectOutcome } from './goalRunEvents';
 import type { GoalFlagDescriptor, GoalFlagProgressFacts } from './goalMarkerPresentation';
 import type { CourseGoalProgressFacts, GoalPresentation, GoalTimerFormatter, RoomGoalProgressFacts } from './goalPresentation';
 import {
@@ -85,6 +86,13 @@ interface GoalDefinitionBase<P extends GoalMarkerPoint, K extends GoalType> {
     play: (goal: Goal<P, K>, facts: GoalFlagProgressFacts) => GoalFlagDescriptor<P>[];
   };
   roomTick: (goal: Goal<P, K>, elapsedMs: number) => RoomGoalTickResolution;
+  roomEvents: {
+    countsEnemyDefeats: boolean;
+    countsPlayerCollectibles: (goal: Goal<P, K>) => boolean;
+    countsEnemyCollectibles: boolean;
+    enemyDefeatText: (enemyName: string) => string | null;
+    playerCollectOutcome: (goal: Goal<P, K>, facts: GoalCollectionFacts) => RoomGoalCollectOutcome;
+  };
   roomScoring: {
     score: (goal: Goal<P, K>, context: RoomGoalScoreContext) => number;
     ranking: (goal: Goal<P, K>) => RoomGoalRankingPolicy;
@@ -200,4 +208,12 @@ export function buildEditorGoalFlags<P extends GoalMarkerPoint, K extends GoalTy
 
 export function buildPlayGoalFlags<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, facts: GoalFlagProgressFacts): GoalFlagDescriptor<P>[] {
   return registry[goal.type].markerDisplay.play(goal, facts);
+}
+
+export function roomGoalCountsPlayerCollectibles<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>): boolean {
+  return registry[goal.type].roomEvents.countsPlayerCollectibles(goal);
+}
+
+export function resolveRoomGoalPlayerCollect<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, facts: GoalCollectionFacts): RoomGoalCollectOutcome {
+  return registry[goal.type].roomEvents.playerCollectOutcome(goal, facts);
 }
