@@ -1,3 +1,8 @@
+
+## 2026-10-14 overnight — F109 complete and live
+
+PR #201 / source `83d4a99f`, main `a0cab3e4`, final Pages `2b4402d4`. Full 3,620-test quality, forty-two Chromium/WebKit cases, source/merge four-check gates, native/hosted/live menu and keyboard/touch flows, actual guest backend play and 34 exact custom/immutable file hashes pass; inspected screenshots and 320px phone bounds pass. Automatic merged-main build overtook the initial upload; final guarded delivery follows completed hosted gates. Final live flows use no analytics stub; the immutable WebKit analytics error reproduces on the previous release. Master 144/215, F089 physical iOS remains manual. Overnight goal stays active through October 15 5am; continue with F062. Primary auth work, selected animation/server and pending decisions preserved. Receipt: `docs/review/wamp-phone-keyboard-targets-2026-10-14.md`.
+
 ## 2026-10-14 overnight — phone source validated
 
 Full 3,620-test quality, forty-two dual-engine mobile cases and three native production-build menu/input/touch flows pass; inspected images show stable canvas and visible fields. Landscape Start is scrollable and covered by an actual tap. Installed-client Canvas playback is ready/error-free; native gameplay is separately verified. Hosted checks and Pages/live delivery remain pending. Branch `codex/wamp-mobile-checks-2026-10-14`; master 143, F089 partial.

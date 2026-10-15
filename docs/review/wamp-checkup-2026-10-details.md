@@ -2897,6 +2897,8 @@ Scope corrections:
 
 Impact should be medium, not high. These are secondary chrome controls; the primary phone actions are 34px at 8px and the portrait play controls are large. The 20px play-world footer rule only applies in landscape, because portrait play hides #bottom-bar (phone-portrait-world-hud.css:21-23). In landscape the fix should hide or collapse that footer into a menu instead of enlarging it to 44px, since that would eat over 11% of a roughly 390px-tall game view. "Smeared" should be "unevenly sized pixels plus very small physical size (about 5px cap height)". 7px was a deliberate choice to fit four nowrap items (commit 019cf3a5), so raising the font requires the item cut. Moving items into the existing #menu-body menu keeps the effort small, and any taller HUD toggles must keep the smoke-test HUD height at or under 150px.
 
+**2026-10-14 complete.** PR #201 / source `83d4a99f` / main `a0cab3e4` / Pages `2b4402d4`. Actual 44px phone control heights and existing 8px HUD/footer type, compact default HUD, expanded action grid, Play-menu Settings/Chat and clear overlay/notice controls. The 320px HUD is 134px with no horizontal overflow and primary targets 40.8×44. Full 3,620-test quality, forty-two dual-engine mobile cases, native and live input, source/merge hosted gates and 34 exact custom/immutable file hashes pass. Receipt: `wamp-phone-keyboard-targets-2026-10-14.md`.
+
 ### F076: Typing on a phone (chat, Say, sign-in email) zooms the page and flips the layout to 'landscape'
 
 - **Area:** Mobile experience (code review)
@@ -2955,6 +2957,8 @@ Evidence:
 Not done: a `--keyboard-inset` to pin bottom-anchored composers above the keyboard. Real-iPhone check needed. Receipt: `wamp-ios-viewport-2026-10-10.md`.
 
 PR #165 / `f8831af2`: with the page no longer wider than the screen, the Warp sheet fits again (right edge 425 → 390 px on an iPhone 13).
+
+**2026-10-14 follow-up.** PR #201 / main `a0cab3e4` accounts for focused-field keyboard occlusion, anchors open World Chat/focused Say to the viewport and keeps the portrait game canvas stable. Email/Chat/Say font, orientation, visibility and return tests pass in both engines. Physical iOS remains manual under F089; this does not change the already-complete F076 count.
 
 ### F098: Phone portrait play shrinks rooms that use the 'fixed room camera' to a 17px-tall hero, and the screen shows the neighboring room
 
@@ -3163,6 +3167,8 @@ scripts/mobile_smoke.mjs:3 imports only `chromium` and fakes an iOS UA (:20-38).
 
 
 **2026-10-11 partly done.** PR #180 / `6712a66c`. `npm run smoke:mobile:ci` (`scripts/mobile_smoke_ci.mjs`) builds with `VITE_ENABLE_TEST_RESET=1` into `dist-mobile-smoke/`, serves it with `vite preview` and runs `mobile_smoke.mjs` with `MOBILE_SMOKE_API_FIXTURES=replay`: `scripts/lib/apiFixtures.mjs` answers `/api/` from `scripts/fixtures/mobile-smoke-api.json.gz` (66 responses, 299 KB), stubs writes, refuses sockets and lists misses. `-- --record` refreshes it from production reads (chat messages and the PartyKit host scrubbed). New `mobile-smoke` job in `quality.yml` (about 3 min; screenshots uploaded on failure). The camera tuner scenario now closes the goal intro a second time (it was flaky). Replays 12/12 twice locally and in CI. Open: keyboard and tap-target scenarios; WebKit adds little (see the fact-check); real-device iOS checks stay manual. Receipt: `wamp-split-colliders-phone-ci-2026-10-11.md`.
+**2026-10-14 automated coverage expanded; physical iOS remains open.** PR #201 / main `a0cab3e4`: twenty-one cases each in Chromium and desktop WebKit, including actual typing into email/World Chat/Say, visual-only keyboard occlusion, 16px field fonts, foreground hit testing, a stable canvas, target audits through menus/editor libraries, notice placement and actual landscape Start taps. Missing fixtures fail CI; synthetic signed sessions refuse sockets and send no messages. All forty-two cases pass in local/source/merge gates. Real-device keyboard, toolbars/safe areas and audio checks remain manual; F089 stays unticked. Receipt: `wamp-phone-keyboard-targets-2026-10-14.md`.
+
 ### F090: Haptic feedback on Android for jump, hit, coin and goal
 
 - **Area:** Mobile experience (code review)

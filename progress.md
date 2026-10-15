@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-14 overnight — F109 complete and live
+
+PR #201 / source `83d4a99f`, main `a0cab3e4`, final Pages `2b4402d4`. Full 3,620-test quality, forty-two Chromium/WebKit cases, source/merge four-check gates, native/hosted/live menu and keyboard/touch flows, actual guest backend play and 34 exact custom/immutable file hashes pass; inspected screenshots and 320px phone bounds pass. Automatic merged-main build overtook the initial upload; final guarded delivery follows completed hosted gates. Final live flows use no analytics stub; the immutable WebKit analytics error reproduces on the previous release. Master 144/215, F089 physical iOS remains manual. Overnight goal stays active through October 15 5am; continue with F062. Primary auth work, selected animation/server and pending decisions preserved. Receipt: `docs/review/wamp-phone-keyboard-targets-2026-10-14.md`.
+
 ## 2026-10-14 overnight — phone candidate validated
 
 Final 3,620-test quality and all forty-two Chromium/WebKit scenarios pass. Native production-build Chrome portrait/landscape and WebKit portrait menu, chat typing/return and touch jumps pass without page errors/missing fixtures; screenshots inspected. Landscape Start now scrolls into view and accepts a tap, with regression coverage. Installed-client Canvas playback is ready/error-free with inspected state/image (software-renderer performance prompt; no FPS claim). Hosted/release proof remain pending. F089 real iOS remains manual, F109/master unchanged until live delivery.
