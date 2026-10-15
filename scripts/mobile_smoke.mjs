@@ -361,8 +361,7 @@ async function runPhoneEmailKeyboard(page, summary, directory) {
   await captureScenarioScreenshot(page, summary, directory, 'email-keyboard-return');
 }
 async function runPhoneChatKeyboard(page, summary, directory) {
-  await waitForReadyOverworld(page, 'chat keyboard'); await closeBlockingOverlaysUntilClear(page);
-  await waitForBodyAppMode(page, 'play-world', 'keyboard play mode', 30000);
+  await startKeyboardFixtureRoom(page, summary, 'chat keyboard');
   await page.locator('#menu-toggle').tap(); await page.locator('#btn-menu-chat').tap();
   await page.waitForFunction(() => !document.getElementById('chat-input').disabled);
   await checkKeyboard(page, '#chat-input', summary, directory);
@@ -371,13 +370,24 @@ async function runPhoneChatKeyboard(page, summary, directory) {
   await captureScenarioScreenshot(page, summary, directory, 'chat-keyboard-return');
 }
 async function runPhoneRoomKeyboard(page, summary, directory) {
-  await waitForReadyOverworld(page, 'room keyboard'); await closeBlockingOverlaysUntilClear(page);
-  await waitForBodyAppMode(page, 'play-world', 'room keyboard play', 30000);
+  await startKeyboardFixtureRoom(page, summary, 'room keyboard');
   // The isolated session enables the composer; fixture sockets remain refused and nothing is sent.
   await page.keyboard.press('t'); await page.locator('#room-chat-input').waitFor({ state: 'visible', timeout: 5000 });
   await checkKeyboard(page, '#room-chat-input', summary, directory);
   assertCondition((await readState(page))?.activeScene?.mode === 'play', 'Room typing must preserve Play');
   await captureScenarioScreenshot(page, summary, directory, 'room-keyboard-return');
+}
+async function startKeyboardFixtureRoom(page, summary, label) {
+  await waitForReadyOverworld(page, label);
+  await waitForBodyAppMode(page, 'play-world', `${label} play mode`, 30000);
+  // These scenarios open the recorded room at 0,0 in a fresh context. Its intro
+  // arrives after play mode, so an earlier "no overlays" check is not a start barrier.
+  const start = page.locator('#btn-room-goal-intro-start');
+  await start.waitFor({ state: 'visible', timeout: 30000 });
+  await start.tap();
+  await page.locator('#room-goal-intro-modal').waitFor({ state: 'hidden' });
+  await waitForAppState(page, state => state?.activeScene?.goalRun?.elapsedMs > 0, `${label} running room`);
+  summary.assertions.push({ label: `${label}: real Start tap starts the room before typing` });
 }
 async function runPhoneLandscapeRoomStart(page, summary, directory) {
   await waitForReadyOverworld(page, 'landscape room start');

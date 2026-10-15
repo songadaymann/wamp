@@ -1,4 +1,14 @@
 
+## 2026-10-15 overnight — F070 Worker verification rules complete and live
+
+PR #206 / source `42fe04b7` / main `203e19e0`; API `a60abcfa` at100%, Pages `4fbee8a6`. All source/main four-check gates,3,669-test quality,20 canonical trace contracts and required-type rejection pass. The initial post-publish smoke/immutable fetch hit propagation404; unchanged rechecks pass, including59 exact file hashes, canonical API health/catalog, strict live WebKit seven-goal save/reload and actual guest API jump/menu return. No baseline allowances or custom-domain analytics stub. F070 remains partial/master145: scoring is in progress and client runtime is open. Receipt: `docs/review/wamp-goal-verification-registry-2026-10-15.md`.
+
+
+## 2026-10-15 overnight — F070 scoring policies started
+
+From merged `203e19e0` on `codex/wamp-goal-scoring-registry-2026-10-15`. Seven original scoring/ranking compatibility cases pass before extraction. Move required per-goal policies into shared definitions while preserving scope-specific scores and ties. F070 remains partial/master145; Worker PR206 is merged and independently waiting for main gates/guarded delivery. Receipt: `docs/review/wamp-goal-scoring-registry-2026-10-15.md`.
+
+
 ## 2026-10-15 overnight — F070 shared data complete and live
 
 - **F070 shared-data/course-view slice complete and live; F070 remains partial.** PR #205 / source `d3504806` / main `20b3b378`; guarded API `6861bfd0` at100% and Pages `a31313ee`. All3,649-test/46-mobile/source+main four-check gates, native seven-room-goal and five-course-form matrices, three strict hosted/live save/reload flows, actual guest API jump/menu return, live catalog hash and59 exact custom/immutable file hashes pass. Both databases have no pending migrations; renderer unchanged. Shared scoring/client runtime and separate Worker-rule registry remain open; master145/215. Physical iOS, selected animation and private decisions preserved.

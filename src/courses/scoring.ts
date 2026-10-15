@@ -1,5 +1,6 @@
 import type { LeaderboardRankingMode } from '../runs/model';
-import type { CourseGoal } from './model';
+import { COURSE_GOAL_DEFINITIONS, type CourseGoal } from './model';
+import { courseGoalRankingMode, scoreCourseGoal } from '../goals/goalSchema';
 import type {
   CourseLeaderboardEntry,
   CourseRunFinishRequestBody,
@@ -10,38 +11,11 @@ export function computeCourseRunScore(
   goal: CourseGoal,
   finish: CourseRunFinishRequestBody
 ): number {
-  const collectiblePoints = Math.max(0, finish.collectiblesCollected) * 10;
-  const enemyPoints = Math.max(0, finish.enemiesDefeated) * 25;
-  const checkpointPoints = Math.max(0, finish.checkpointsReached) * 50;
-  const clearBonus = finish.result === 'completed' ? 250 : 0;
-  const zeroDeathBonus = finish.result === 'completed' && finish.deaths === 0 ? 100 : 0;
-  const survivalBonus =
-    goal.type === 'survival' && finish.result === 'completed'
-      ? Math.max(0, Math.round(finish.elapsedMs / 1000)) * 5
-      : 0;
-
-  return (
-    collectiblePoints +
-    enemyPoints +
-    checkpointPoints +
-    clearBonus +
-    zeroDeathBonus +
-    survivalBonus
-  );
+  return scoreCourseGoal(goal, finish, COURSE_GOAL_DEFINITIONS);
 }
 
 export function getCourseLeaderboardRankingMode(goal: CourseGoal): LeaderboardRankingMode {
-  switch (goal.type) {
-    case 'reach_exit':
-      return goal.timeLimitMs ? 'time' : 'score';
-    case 'checkpoint_sprint':
-      return 'time';
-    case 'collect_target':
-    case 'defeat_all':
-    case 'survival':
-    default:
-      return 'score';
-  }
+  return courseGoalRankingMode(goal, COURSE_GOAL_DEFINITIONS);
 }
 
 export function compareCourseLeaderboardEntries(

@@ -1,3 +1,4 @@
+import { computeCourseGoalBaseScore, computeRoomGoalTimeBonus } from './goalScoring';
 import {
   NPC_QUEST_TYPES,
   normalizeGoalPositiveInteger as positiveInteger,
@@ -23,6 +24,14 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     reach_exit: {
       label: 'Reach Exit',
       courseSupported: true as const,
+      roomScoring: {
+        score: (goal, context) => Math.max(0, 100 + computeRoomGoalTimeBonus(goal.timeLimitMs, context.elapsedMs, 6) - context.deathPenalty),
+        ranking: () => 'time',
+      },
+      courseScoring: {
+        score: (_goal, finish) => computeCourseGoalBaseScore(finish),
+        ranking: goal => goal.timeLimitMs ? 'time' : 'score',
+      },
       markerKind: 'exit',
       supportsTimeLimit: true,
       createDefault: () => ({
@@ -47,6 +56,16 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     collect_target: {
       label: 'Collect Target',
       courseSupported: true as const,
+      roomScoring: {
+        score: (goal, context) => Math.max(0, context.collectiblesCollected * 25 +
+          (context.result === 'completed' ? 60 : 0) +
+          computeRoomGoalTimeBonus(goal.timeLimitMs, context.elapsedMs, 5) - context.deathPenalty),
+        ranking: () => 'time',
+      },
+      courseScoring: {
+        score: (_goal, finish) => computeCourseGoalBaseScore(finish),
+        ranking: () => 'score',
+      },
       markerKind: 'none',
       supportsTimeLimit: true,
       createDefault: () => ({
@@ -72,6 +91,13 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     collect_race: {
       label: 'Collect Race',
       courseSupported: false as const,
+      roomScoring: {
+        score: (goal, context) => Math.max(0, context.collectiblesCollected * 25 +
+          (context.result === 'completed' ? 120 : 0) +
+          computeRoomGoalTimeBonus(goal.timeLimitMs, context.elapsedMs, 4) - context.deathPenalty),
+        ranking: () => 'score',
+      },
+      courseScoring: null,
       markerKind: 'none',
       supportsTimeLimit: true,
       createDefault: () => ({
@@ -95,6 +121,16 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     defeat_all: {
       label: 'Defeat All',
       courseSupported: true as const,
+      roomScoring: {
+        score: (goal, context) => Math.max(0, context.enemiesDefeated * 30 +
+          (context.result === 'completed' ? 80 : 0) +
+          computeRoomGoalTimeBonus(goal.timeLimitMs, context.elapsedMs, 5) - context.deathPenalty),
+        ranking: () => 'time',
+      },
+      courseScoring: {
+        score: (_goal, finish) => computeCourseGoalBaseScore(finish),
+        ranking: () => 'score',
+      },
       markerKind: 'none',
       supportsTimeLimit: true,
       createDefault: () => ({
@@ -122,6 +158,14 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     checkpoint_sprint: {
       label: 'Checkpoint Sprint',
       courseSupported: true as const,
+      roomScoring: {
+        score: (_goal, context) => Math.max(0, 120 + context.checkpointsReached * 10 - context.deathPenalty),
+        ranking: () => 'time',
+      },
+      courseScoring: {
+        score: (_goal, finish) => computeCourseGoalBaseScore(finish),
+        ranking: () => 'time',
+      },
       markerKind: 'checkpoints',
       supportsTimeLimit: true,
       createDefault: () => ({
@@ -149,6 +193,19 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     survival: {
       label: 'Survival',
       courseSupported: true as const,
+      roomScoring: {
+        score: (goal, context) => Math.max(0,
+          Math.floor(Math.min(context.elapsedMs, Math.max(0, goal.durationMs)) / 1000) * 10 +
+          context.collectiblesCollected * 15 + context.enemiesDefeated * 30 +
+          (context.result === 'completed' ? 100 : 0) +
+          (context.result === 'completed' && context.deaths === 0 ? 50 : 0) - context.deathPenalty),
+        ranking: () => 'score',
+      },
+      courseScoring: {
+        score: (_goal, finish) => computeCourseGoalBaseScore(finish) +
+          (finish.result === 'completed' ? Math.max(0, Math.round(finish.elapsedMs / 1000)) * 5 : 0),
+        ranking: () => 'score',
+      },
       markerKind: 'none',
       supportsTimeLimit: false,
       createDefault: () => ({
@@ -170,6 +227,13 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     npc_quest: {
       label: 'NPC Quest',
       courseSupported: false as const,
+      roomScoring: {
+        score: (goal, context) => goal.questType === 'protect'
+          ? Math.max(0, Math.floor(Math.min(context.elapsedMs, goal.durationMs) / 1000) * 10 - context.deathPenalty)
+          : Math.max(0, 100 + context.collectiblesCollected * (goal.questType === 'give' ? 10 : 0) - context.deathPenalty),
+        ranking: goal => goal.questType === 'protect' ? 'protect' : 'time',
+      },
+      courseScoring: null,
       markerKind: 'npc_destination',
       supportsTimeLimit: false,
       createDefault: () => ({
