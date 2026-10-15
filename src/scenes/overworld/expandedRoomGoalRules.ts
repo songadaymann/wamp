@@ -73,4 +73,3 @@ export function tickExpandedRoomGoal<K extends CourseGoalType>(goal: Goal<Course
 export function expandedRoomGoalMarkersReady<K extends CourseGoalType>(goal: Goal<CourseMarkerPoint, K>): boolean {
   return EXPANDED_ROOM_GOAL_RULES[goal.type].markersReady(goal);
 }
-
