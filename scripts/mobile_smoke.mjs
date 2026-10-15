@@ -1,9 +1,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import { createApiFixtures } from './lib/apiFixtures.mjs';
+import { readPhoneTapTargets, setKeyboardViewport, restoreKeyboardViewport } from './lib/mobileInputAudits.mjs';
+import { installMobileSignedFixture } from './lib/mobileSignedFixture.mjs';
 
 const rawUrl = getStringArg('--url') || process.env.MOBILE_SMOKE_URL?.trim() || 'http://127.0.0.1:3000';
+const engineName = getStringArg('--engine') || process.env.MOBILE_SMOKE_BROWSER || 'chromium';
+if (!['chromium', 'webkit'].includes(engineName)) throw new Error('Choose chromium or webkit');
 const targetUrl = withMobileSmokeQuery(rawUrl);
 const outputDir =
   process.env.MOBILE_SMOKE_OUTPUT_DIR?.trim()
@@ -20,6 +24,7 @@ const apiFixtures = apiFixtureMode
 
 const summary = {
   url: targetUrl,
+  engine: engineName,
   outputDir,
   startedAt: new Date().toISOString(),
   scenarios: {},
@@ -128,13 +133,21 @@ const scenarios = [
     run: (page, scenarioSummary, scenarioDir) =>
       runTouchOverlayPlay(page, scenarioSummary, scenarioDir, { deviceClass: 'tablet', orientationState: 'portrait' }),
   },
+  { name: 'phone-landscape-recording-notice', profile: profiles.phoneLandscape, searchParams: { x: '0', y: '0' }, run: runPhoneRecordingNotice },
+  { name: 'phone-narrow-landscape-recording-notice', profile: { ...profiles.phoneLandscape, viewport: { width: 568, height: 320 } }, searchParams: { x: '0', y: '0' }, run: runPhoneRecordingNotice },
+  { name: 'phone-keyboard-email', profile: profiles.phonePortrait, run: runPhoneEmailKeyboard },
+  { name: 'phone-keyboard-chat', profile: profiles.phonePortrait, signedFixture: true, searchParams: { x: '0', y: '0' }, run: runPhoneChatKeyboard },
+  { name: 'phone-keyboard-room-say', profile: profiles.phonePortrait, signedFixture: true, roomChatFixture: true, searchParams: { x: '0', y: '0' }, run: runPhoneRoomKeyboard },
+  { name: 'phone-landscape-room-start', profile: profiles.phoneLandscape, searchParams: { x: '0', y: '0' }, run: runPhoneLandscapeRoomStart },
+  { name: 'phone-portrait-tap-targets', profile: profiles.phonePortrait, run: runPhoneTapTargets },
+  { name: 'phone-landscape-tap-targets', profile: profiles.phoneLandscape, run: runPhoneTapTargets },
 ];
 
 mkdirSync(outputDir, { recursive: true });
 
-const browser = await chromium.launch({
+const browser = await (engineName === 'webkit' ? webkit : chromium).launch({
   headless: true,
-  args: ['--use-gl=angle', '--use-angle=swiftshader'],
+  ...(engineName === 'chromium' ? { args: ['--use-gl=angle', '--use-angle=swiftshader'] } : {}),
 });
 
 try {
@@ -152,7 +165,8 @@ try {
   summary.ok =
     Object.values(summary.scenarios).every((scenario) => scenario.ok)
     && summary.consoleErrors.length === 0
-    && summary.pageErrors.length === 0;
+    && summary.pageErrors.length === 0
+    && Object.keys(summary.apiFixtures?.misses ?? {}).length === 0;
 } finally {
   await browser.close();
   writeSummary();
@@ -208,6 +222,10 @@ async function runScenario(browserInstance, scenario) {
     userAgent: scenario.profile.userAgent,
   });
   await apiFixtures?.install(context);
+  if (scenario.signedFixture) {
+    if (!apiFixtures) throw new Error('Signed input checks require isolated API fixtures');
+    await installMobileSignedFixture(context, { roomChat: scenario.roomChatFixture });
+  }
   await context.addInitScript(() => {
     window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
     window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
@@ -299,6 +317,96 @@ async function gotoMobileSmokePage(page, searchParams = undefined) {
   await page.evaluate(() => {
     window.dispatchEvent(new Event('resize'));
   });
+}
+
+async function assertPhoneTapTargets(page, summary, label) {
+  const targets = await readPhoneTapTargets(page);
+  const failures = targets.filter(target => target.width < 40 || target.height < 40);
+  assertCondition(targets.length > 0, `${label}: no visible targets audited`);
+  assertCondition(failures.length === 0, `${label}: undersized phone targets: ${JSON.stringify(failures)}`);
+  summary.assertions.push({ label: `${label}: every foreground button is at least 40×40`, targets });
+}
+async function checkKeyboard(page, selector, summary, directory) {
+  await page.locator(selector).focus();
+  await page.locator(selector).fill('');
+  await page.locator(selector).pressSequentially('Keyboard check', { delay: 10 });
+  await setKeyboardViewport(page, 360);
+  const state = await waitForAppState(page, value => value?.device?.viewport?.height === 360, 'keyboard visual viewport');
+  assertCondition(state.device.orientationState === 'portrait', 'Keyboard must preserve portrait orientation');
+  const fields = await page.evaluate(() => Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea')).filter(el => el.getClientRects().length).map(el => ({ id: el.id, font: parseFloat(getComputedStyle(el).fontSize) })));
+  assertCondition(fields.every(field => field.font >= 16), `Small phone input text: ${JSON.stringify(fields)}`);
+  await page.waitForFunction(id => { const box = document.querySelector(id)?.getBoundingClientRect(); return box && box.top >= 0 && box.bottom <= 360; }, selector, { timeout: 5000 });
+  const fieldBounds = await page.locator(selector).boundingBox();
+  assertCondition(fieldBounds && fieldBounds.y >= 0 && fieldBounds.y + fieldBounds.height <= 360, `Focused field covered by keyboard: ${JSON.stringify(fieldBounds)}`);
+  const foreground = await page.locator(selector).evaluate(element => {
+    const box = element.getBoundingClientRect();
+    return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === element;
+  });
+  assertCondition(foreground, 'Focused field must remain visible through its panel, not clipped');
+  if (state.activeScene?.mode === 'play') {
+    const canvas = await page.locator('#game-container').boundingBox();
+    assertCondition(canvas && canvas.height > 400, `Portrait canvas collapsed behind keyboard: ${JSON.stringify(canvas)}`);
+  }
+  assertCondition(await page.locator(selector).inputValue() === 'Keyboard check', 'Keyboard resize discarded entered text');
+  summary.assertions.push({ label: 'Keyboard preserves portrait layout, visible field, text and 16px input fonts', fields, fieldBounds });
+  await captureScenarioScreenshot(page, summary, directory, 'keyboard-open');
+  await restoreKeyboardViewport(page);
+  await waitForAppState(page, value => value?.device?.viewport?.height === 844, 'restored keyboard viewport');
+}
+async function runPhoneEmailKeyboard(page, summary, directory) {
+  await waitForReadyOverworld(page, 'email keyboard'); await closeBlockingOverlaysUntilClear(page);
+  await page.locator('#menu-toggle').tap(); await checkKeyboard(page, '#auth-email-input', summary, directory);
+  await captureScenarioScreenshot(page, summary, directory, 'email-keyboard-return');
+}
+async function runPhoneChatKeyboard(page, summary, directory) {
+  await waitForReadyOverworld(page, 'chat keyboard'); await closeBlockingOverlaysUntilClear(page);
+  await waitForBodyAppMode(page, 'play-world', 'keyboard play mode', 30000);
+  await page.locator('#menu-toggle').tap(); await page.locator('#btn-menu-chat').tap();
+  await page.waitForFunction(() => !document.getElementById('chat-input').disabled);
+  await checkKeyboard(page, '#chat-input', summary, directory);
+  assertCondition((await readState(page))?.activeScene?.mode === 'play', 'Typing must not leave the room');
+  await assertVisible(page, '#mobile-play-controls', 'Portrait controls persist through keyboard return');
+  await captureScenarioScreenshot(page, summary, directory, 'chat-keyboard-return');
+}
+async function runPhoneRoomKeyboard(page, summary, directory) {
+  await waitForReadyOverworld(page, 'room keyboard'); await closeBlockingOverlaysUntilClear(page);
+  await waitForBodyAppMode(page, 'play-world', 'room keyboard play', 30000);
+  // The isolated session enables the composer; fixture sockets remain refused and nothing is sent.
+  await page.keyboard.press('t'); await page.locator('#room-chat-input').waitFor({ state: 'visible', timeout: 5000 });
+  await checkKeyboard(page, '#room-chat-input', summary, directory);
+  assertCondition((await readState(page))?.activeScene?.mode === 'play', 'Room typing must preserve Play');
+  await captureScenarioScreenshot(page, summary, directory, 'room-keyboard-return');
+}
+async function runPhoneLandscapeRoomStart(page, summary, directory) {
+  await waitForReadyOverworld(page, 'landscape room start');
+  const start = page.locator('#btn-room-goal-intro-start');
+  await start.waitFor({ state: 'visible', timeout: 10000 });
+  await start.scrollIntoViewIfNeeded();
+  const box = await start.boundingBox();
+  assertCondition(box && box.y >= 0 && box.y + box.height <= 390 && box.width >= 40 && box.height >= 40, `Landscape Start must be reachable: ${JSON.stringify(box)}`);
+  await captureScenarioScreenshot(page, summary, directory, 'start-reachable');
+  await start.tap();
+  await page.locator('#room-goal-intro-modal').waitFor({ state: 'hidden' });
+  await waitForBodyAppMode(page, 'play-world', 'landscape started play');
+  summary.assertions.push({ label: 'Landscape room Start scrolls into view and accepts a real tap', box });
+  await captureScenarioScreenshot(page, summary, directory, 'room-started');
+}
+async function runPhoneTapTargets(page, summary, directory) {
+  await waitForReadyOverworld(page, 'phone target audit'); await closeBlockingOverlaysUntilClear(page);
+  await assertPhoneTapTargets(page, summary, 'Browse');
+  await page.locator('#btn-mobile-world-hud-details').tap(); await assertPhoneTapTargets(page, summary, 'Room details'); await page.locator('#btn-mobile-world-hud-details').tap();
+  await page.locator('#menu-toggle').tap(); await assertPhoneTapTargets(page, summary, 'Menu');
+  await page.locator('#menu-body').evaluate(element => { element.scrollTop = element.scrollHeight; }); await assertPhoneTapTargets(page, summary, 'Menu bottom');
+  await page.locator('#menu-toggle').tap();
+  await page.locator('#btn-world-settings').tap(); await assertPhoneTapTargets(page, summary, 'Settings'); await page.locator('#btn-settings-close').tap();
+  await page.locator('#btn-chat-toggle').tap(); await assertPhoneTapTargets(page, summary, 'Chat'); await page.locator('#btn-chat-close').tap();
+  await captureScenarioScreenshot(page, summary, directory, 'browse-targets');
+  await selectEditableRoom(page); await runPreviewSmokeAction(page, 'playSelectedRoom'); await closeBlockingOverlaysUntilClear(page);
+  await assertPhoneTapTargets(page, summary, 'Play');
+  await page.locator('#menu-toggle').tap(); await assertPhoneTapTargets(page, summary, 'Play menu');
+  await page.locator('#btn-menu-settings').tap(); await assertVisible(page, '#settings-modal', 'Settings reachable during landscape play'); await page.locator('#btn-settings-close').tap();
+  await page.locator('#menu-toggle').tap(); await page.locator('#btn-menu-chat').tap(); await assertVisible(page, '#global-chat-body', 'Chat reachable during landscape play'); await page.locator('#btn-chat-close').tap();
+  await captureScenarioScreenshot(page, summary, directory, 'play-targets');
 }
 
 async function runPhonePortraitBrowseUnblocked(page, scenarioSummary, scenarioDir) {
@@ -416,6 +524,14 @@ async function runPhonePortraitDeepLinkPlay(page, scenarioSummary, scenarioDir) 
       && state.activeScene.mobilePortraitCamera?.targetY === 0.53,
     `portrait camera should use the wider, centered mobile defaults: ${JSON.stringify(state.activeScene.mobilePortraitCamera)}`,
   );
+  await page.waitForFunction(() => {
+    const scene = JSON.parse(window.render_game_to_text?.() || 'null')?.activeScene;
+    const view = scene?.camera?.worldView, controls = document.getElementById('mobile-play-controls')?.getBoundingClientRect();
+    if (!view || !controls || !scene.currentRoom) return false;
+    const roomTop = scene.currentRoom.y * 352;
+    const top = (roomTop - view.y) * scene.zoom, bottom = (roomTop + 352 - view.y) * scene.zoom;
+    return top >= -2 && bottom <= controls.top + 2 && Math.abs((top + bottom) / 2 - controls.top / 2) <= 6;
+  }, null, { timeout: 5000 });
   const roomFraming = await page.evaluate(() => {
     const scene = JSON.parse(window.render_game_to_text?.() || 'null')?.activeScene;
     const view = scene?.camera?.worldView;
@@ -946,8 +1062,10 @@ async function runPhoneLandscapeEditorSheets(page, scenarioSummary, scenarioDir)
     await clickElement(page, `[data-editor-dock="${panel}"]`);
     await page.waitForFunction(expected => document.body.dataset.editorShellPanel === expected, panel);
     await assertVisible(page, '#sidebar', `${panel} library`);
+    await assertPhoneTapTargets(page, scenarioSummary, `editor library ${panel}`);
     scenarioSummary.assertions.push({ label: `phone library selectable: ${panel}` });
   }
+  await assertPhoneTapTargets(page, scenarioSummary, 'editor dock');
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'editor-dock');
   await clickElement(page, '#btn-mobile-editor-toggle');
   await page.waitForFunction(() => document.body.dataset.mobileEditorCollapsed === 'true');
@@ -1360,6 +1478,7 @@ function sanitizePathSegment(value) {
 function withMobileSmokeQuery(value) {
   const url = new URL(value);
   url.searchParams.set('previewSmoke', '1');
+  if (engineName === 'webkit') url.searchParams.set('renderer', 'canvas');
   return url.toString();
 }
 
@@ -1464,7 +1583,7 @@ async function readPortraitPlayLayout(page, state) {
 
       const style = window.getComputedStyle(element);
       return {
-        userSelect: style.userSelect,
+        userSelect: style.getPropertyValue('user-select') || style.getPropertyValue('-webkit-user-select'),
         webkitUserSelect: style.getPropertyValue('-webkit-user-select'),
         backgroundColor: style.backgroundColor,
       };

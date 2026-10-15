@@ -10,7 +10,8 @@ async function classify(options: { width: number; height: number; coarse: boolea
     addEventListener: () => {},
   });
   vi.stubGlobal('navigator', { maxTouchPoints: options.touchPoints, hardwareConcurrency: 8 });
-  vi.stubGlobal('document', { body: { dataset: {} }, documentElement: { style: { setProperty: () => {} } } });
+  vi.stubGlobal('HTMLElement', class {});
+  vi.stubGlobal('document', { activeElement: null, addEventListener: () => {}, body: { dataset: {} }, documentElement: { style: { setProperty: () => {} } } });
   const { initializeDeviceLayout } = await import('./deviceLayout');
   return initializeDeviceLayout();
 }

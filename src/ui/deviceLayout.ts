@@ -1,3 +1,4 @@
+import { keyboardViewportInset } from './keyboardViewport';
 export type DeviceClass = 'desktop' | 'tablet' | 'phone';
 export type OrientationState = 'landscape' | 'portrait';
 export type PerformanceProfile = 'default' | 'reduced';
@@ -98,7 +99,22 @@ function computeState(): DeviceLayoutState {
   };
 }
 
+function updateKeyboardInset(): void {
+  const element = document.activeElement;
+  const editing = element instanceof HTMLElement && (element.isContentEditable || element.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea'));
+  document.documentElement.style.setProperty('--keyboard-inset', `${editing ? keyboardViewportInset(window.innerHeight, window.visualViewport) : 0}px`);
+  if (editing && window.visualViewport && keyboardViewportInset(window.innerHeight, window.visualViewport) > 0) {
+    requestAnimationFrame(() => {
+      if (document.activeElement !== element) return;
+      const viewport = window.visualViewport; if (!viewport) return;
+      const bounds = element.getBoundingClientRect();
+      if (bounds.top < viewport.offsetTop || bounds.bottom > viewport.offsetTop + viewport.height) element.scrollIntoView({ block: 'nearest' });
+    });
+  }
+}
+
 function applyStateToDom(nextState: DeviceLayoutState): void {
+  updateKeyboardInset();
   document.body.dataset.deviceClass = nextState.deviceClass;
   document.body.dataset.orientationState = nextState.orientationState;
   document.body.dataset.coarsePointer = nextState.coarsePointer ? 'true' : 'false';
@@ -120,6 +136,7 @@ function statesEqual(a: DeviceLayoutState, b: DeviceLayoutState): boolean {
 }
 
 function refreshState(): void {
+  updateKeyboardInset();
   const nextState = computeState();
   if (statesEqual(state, nextState)) {
     return;
@@ -139,6 +156,8 @@ export function initializeDeviceLayout(): DeviceLayoutState {
     initialized = true;
     state = computeState();
     applyStateToDom(state);
+    document.addEventListener('focusin', () => queueMicrotask(refreshState));
+    document.addEventListener('focusout', () => queueMicrotask(refreshState));
     window.addEventListener('resize', refreshState);
     window.addEventListener('orientationchange', refreshState);
     window.visualViewport?.addEventListener('resize', refreshState);

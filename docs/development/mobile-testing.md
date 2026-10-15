@@ -8,13 +8,13 @@ feature/mobile-pass-2026-04-13
 
 ## CI Smoke (No Live API)
 
-CI runs the same scenarios on every pull request (`mobile-smoke` job in `.github/workflows/quality.yml`):
+CI runs twenty-one scenarios in both Chromium and desktop WebKit on every pull request (`mobile-smoke` job in `.github/workflows/quality.yml`):
 
 ```bash
 npm run smoke:mobile:ci
 ```
 
-It builds with the preview-smoke hooks (`VITE_ENABLE_TEST_RESET=1`) into `dist-mobile-smoke/`, serves the build, and answers every `/api/` request from `scripts/fixtures/mobile-smoke-api.json.gz`. Writes are answered with an empty success and multiplayer sockets are refused, so nothing reaches production. Add `-- --skip-build` to reuse the last build.
+It builds with the preview-smoke hooks (`VITE_ENABLE_TEST_RESET=1`) into `dist-mobile-smoke/`, serves the build, and answers every `/api/` request from `scripts/fixtures/mobile-smoke-api.json.gz`. Writes are answered with an empty success and multiplayer sockets are refused, so nothing reaches production. Add `-- --skip-build` to reuse the last build, or `-- --engine chromium` / `-- --engine webkit` to select one engine. Each engine writes into its own subdirectory. Missing fixture responses fail the run.
 
 When the app starts asking for something the fixture lacks, the summary lists it under `apiFixtures.misses`. Refresh the fixture from production (GET requests and room snapshot queries only; chat messages and the multiplayer host are scrubbed) with:
 
@@ -22,7 +22,7 @@ When the app starts asking for something the fixture lacks, the summary lists it
 npm run smoke:mobile:ci -- --record
 ```
 
-This is Chromium with a phone user agent and touch emulation. It catches layout and control regressions, not iOS Safari behaviour (input zoom, toolbars, audio unlock), which still needs a real device.
+Both engines use phone/tablet viewports and touch emulation; WebKit uses Canvas. This catches engine, layout and control differences. It does not reproduce physical iOS input zoom, collapsing toolbars, safe areas or audio unlock; those still need a real device. Keyboard cases shrink only visualViewport while keeping the layout viewport in portrait, type actual key events, check 16px field text and visibility, then restore the viewport. Chat/Say use synthetic signed API responses, refuse sockets and send no messages.
 
 ## Fast Automated Smoke
 
@@ -53,7 +53,11 @@ It covers:
 - phone landscape first-visit welcome modal
 - phone landscape play staying unblocked without the old D-pad controls
 - phone portrait and landscape shared editor dock, persistent actions and library collapse behavior
-- tablet landscape browse layout
+- tablet portrait and landscape browse/play layouts
+- email, World Chat during Play and room Say keyboard visibility/return
+- foreground phone button targets in Browse, expanded details, menu/top/bottom, Settings, Chat, Play and each editor library
+- landscape room intro Start scrolls into view and accepts a real tap
+- portrait, landscape and narrow-landscape recording notice leaving movement/actions/Stop/Restart interactive
 
 ## Local Phone On LAN
 
