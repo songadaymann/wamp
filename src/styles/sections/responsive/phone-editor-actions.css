@@ -10,6 +10,16 @@ body[data-device-class='phone'][data-app-mode='editor'] #goal-section .goal-inli
   min-width: 0;
 }
 
+body[data-device-class='phone'][data-app-mode='editor'] #goal-section #goal-intro-text-row {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 4px;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'] #goal-section #goal-intro-text {
+  min-width: 0;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'] #goal-marker-controls {
   margin-top: 0;
 }

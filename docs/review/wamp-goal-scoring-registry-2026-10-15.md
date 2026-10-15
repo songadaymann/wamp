@@ -21,3 +21,21 @@ The independently built unchanged203e19e0 hook preview is now frozen at43920; or
 After valid neighbor fixtures, both frozen-main and candidate browser-completion matrices pass native Chrome desktop and WebKit phone with zero strict console/page/baseline errors or fixture misses. Each real Start is followed by test-hook movement through four checkpoint events and the finish; the client reaches completed, deaths0, checkpoints4 and computed submittedScore160. This is local client completion/calculation proof, not ranked acceptance or XP/rewards. The inspected baseline clear card shows its existing raw pickup score0 separately from the computed run score; no claim that160 is displayed there. All API writes remain intercepted. The original neighbor-error diagnostic is retained.
 
 The candidate public-entry native room editor matrix is running (desktop already passes all seven defaults,11 edits/saves and reload). Expanded-room five-goal form checks and hosted installed-client/release checks remain pending at source publication.
+
+## Source accepted and merged
+
+PR #207 / source `657128c7d93f0f4c5fdb3bc50d4f9dbf03358241` / main `930b681ab94780e30f1e19ae8ffea77e76995271`. All four exact source hosted checks pass; quality4m12s and phone7m3s. Immutable `e52dbcc0` WebKit seven-goal/default/edit/save/reload passes with zero strict errors/misses; only immutable RUM requests are isolated, and images are inspected. Native room and expanded-room form matrices pass all three profiles each, with zero strict errors/misses.
+
+The installed gameplay client on the clean657128c7 production-API-configured build exits0, has no error file and reaches Playx1144/y−29. Its inspected existing software-renderer pressure prompt remains; no FPS claim. That configuration build passes types/build and632.0KB startup budget, stable data zero runtime imports. Initial default-environment full quality remains3,678 tests/631.8KB.
+
+Accepted OSS scan runs with the script's required zsh interpreter and reports0 blockers/0 warnings (`/tmp/wamp-f070-scoring-oss-push-accepted.log`); the earlier bash invocation was invalid and is not acceptance. Clean-main clone is fast-forwarded to930b681a. All four merged-main hosted checks and full guarded API+Pages delivery are pending, so this section does not claim production delivery yet.
+
+## API and Pages publication, final live interactions pending
+
+All four930b681a main gates pass. The clean-main full guard passes preflight, renderer contract, migrations check and3,678-test quality, then publishes API version `8cba0e76-ca68-4d0e-ac7b-7c0a9085fe43` and Pages `8426a3ab`. Like206, its immediate post-publish smoke exits1 on a propagating main-bundle404. The unchanged standalone smoke then exits0; do not call the initial invocation a clean exit or redeploy merely for propagation. All59 local/custom/immutable boot/menu/editor/CSS/background hashes match. Canonical API health and the unchanged seven-goal catalog hash pass; deployment `7e6d6f88-cb44-4800-b486-f4c265f8309a` confirms8cba0e76 at100%, created05:51:23UTC. No migration/renderer change. Final actual guest and WebKit save/reload flows are queued after the current phone suite; production verification is not recorded complete until they pass.
+
+## Delivery complete
+
+Final actual custom-domain interactions pass with no analytics stub: the real guest API flow has zero console/page/baseline errors, jumpy291→279 and settings/chat/email-field return; the isolated-save WebKit public-entry flow passes all seven defaults,11 edits/saves and NPC Give count4 after reload, zero strict errors/misses. Live images are inspected. The gameplay guest probe uses Canvas rendering; this is functional API/control proof, not an FPS measurement or ranked/reward acceptance test.
+
+Delivery evidence: `output/f070-scoring-registry-2026-10-15/{live-guest-final.json,live-room-final,live-api-proof.json,release-proof.json}`; `/tmp/wamp-f070-scoring-{source-checks,main-checks,deploy,postdeploy-recheck,release-proof,live-api-proof-final}.log`; `/tmp/wamp-f070-scoring-live-worker-deployments.json`; live interaction logs are `/tmp/wamp-phone-goal-prompt-scoring-live-{guest,room}.log` because they share the serialized browser queue. No new checkbox: F070 remains partial/master145/215 with client-runtime work open.

@@ -1,5 +1,15 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-15 overnight — F070 scoring and ranking complete and live
+
+PR #207 / source `657128c7` / main `930b681a`; API `8cba0e76` at100%, Pages `8426a3ab`.3,678-test quality,46 accepted mobile cases,81,810 matching old/new scores and137,425 comparator comparisons, native client/completion/editor matrices, all source/main four-check gates and guarded API+Pages publication complete. The immediate post-publish smoke hits propagation404; unchanged recheck passes.59 exact custom/immutable files, canonical API health/catalog, strict live guest API jump/menu return and WebKit seven-goal save/reload pass with no errors/allowances. Preserve the unaccepted diagnostic runs; no ranked/reward/FPS claim. F070 remains partial/master145: client-runtime registry work is open. Receipt: `docs/review/wamp-goal-scoring-registry-2026-10-15.md`.
+
+
+## 2026-10-15 overnight — phone Goal Prompt follow-up started
+
+From930b681a on `codex/wamp-phone-goal-prompt-2026-10-15`. Confirm and fix the cramped phone prompt row, preserving draft text and desktop controls. Scoring PR207 is merged with all source gates and strict native/hosted proof; main/guarded delivery remains separate and pending. F070/master remain partial/145. Receipts: `docs/review/wamp-phone-goal-prompt-2026-10-15.md` and `docs/review/wamp-goal-scoring-registry-2026-10-15.md`.
+
+
 ## 2026-10-15 overnight — F070 Worker verification rules complete and live
 
 PR #206 / source `42fe04b7` / main `203e19e0`; API `a60abcfa` at100%, Pages `4fbee8a6`. All source/main four-check gates,3,669-test quality,20 canonical trace contracts and required-type rejection pass. The initial post-publish smoke/immutable fetch hit propagation404; unchanged rechecks pass, including59 exact file hashes, canonical API health/catalog, strict live WebKit seven-goal save/reload and actual guest API jump/menu return. No baseline allowances or custom-domain analytics stub. F070 remains partial/master145: scoring is in progress and client runtime is open. Receipt: `docs/review/wamp-goal-verification-registry-2026-10-15.md`.
