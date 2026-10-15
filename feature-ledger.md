@@ -1,4 +1,8 @@
 
+## 2026-10-15 overnight — F070 marker display started
+
+From PR210 source36cdd2ea on `codex/wamp-goal-marker-registry-2026-10-15`. Four pre-extraction actual-controller/editor comparison contracts pass. Centralize required typed flag display policies while retaining practice/course start, room-coordinate conversion and sprite ownership; preserve NPC Editor/Play differences and reached opacity. Integrate210 main after its separate delivery. F070/master partial/145. Receipt: `docs/review/wamp-goal-marker-registry-2026-10-15.md`.
+
 ## 2026-10-15 overnight — F070 presentation complete and live
 
 PR #209 / source73a54a1b / mainedd1748e; APIb4084418 at100%, Pagesfca7862a. Full3,683-test quality,46 mobile cases,49,338 exact old/new HUD/course outputs, native checkpoint completion/editor/client matrices and all source/main gates pass. Guard publishes then immediate propagation404; unchanged smoke recheck passes.59 exact custom/immutable files, canonical API health/catalog, strict live WebKit HUD/seven-goal save/reload and real guest API jump/menu return pass with zero errors. Images inspected. F070 remains partial/master145; room clock policies are tested separately. Receipt: `docs/review/wamp-goal-presentation-registry-2026-10-15.md`.

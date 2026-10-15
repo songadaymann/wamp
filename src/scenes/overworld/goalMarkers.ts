@@ -1,5 +1,7 @@
+import { buildPlayGoalFlags } from '../../goals/goalSchema';
 import Phaser from 'phaser';
 import {
+  COURSE_GOAL_DEFINITIONS,
   type CourseMarkerPoint,
   type CourseSnapshot,
 } from '../../courses/model';
@@ -7,12 +9,10 @@ import {
   createGoalMarkerFlagSprite,
   type GoalMarkerFlagVariant,
 } from '../../goals/markerFlags';
-import { type GoalMarkerPoint } from '../../goals/roomGoals';
+import { ROOM_GOAL_DEFINITIONS, type GoalMarkerPoint } from '../../goals/roomGoals';
 import { type RoomCoordinates } from '../../persistence/roomModel';
 import { type ActiveCourseRunState } from './courseRuns';
 import { type GoalRunState } from './goalRuns';
-
-const REACHED_CHECKPOINT_ALPHA = 0.55;
 
 const GOAL_MARKER_SPRITE_DEPTH = 29;
 const GOAL_MARKER_LABEL_DEPTH = 30;
@@ -138,68 +138,12 @@ export class OverworldGoalMarkerController {
       });
     }
 
-    switch (runState.goal.type) {
-      case 'reach_exit':
-        return runState.goal.exit
-          ? [
-              ...markers,
-              {
-                point: this.toWorldGoalPoint(runState.roomCoordinates, runState.goal.exit),
-                label: null,
-                variant: (runState.result === 'completed' ? 'finish-cleared' : 'finish-pending') as GoalMarkerFlagVariant,
-                textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
-              },
-            ]
-          : markers;
-      case 'checkpoint_sprint':
-        return [
-          ...markers,
-          ...runState.goal.checkpoints.map((checkpoint, index) => {
-            const reached = index < runState.nextCheckpointIndex;
-            return {
-              point: this.toWorldGoalPoint(runState.roomCoordinates, checkpoint),
-              label: `${index + 1}`,
-              variant: (reached ? 'checkpoint-reached' : 'checkpoint-pending') as GoalMarkerFlagVariant,
-              textColor: reached ? '#a9ffd0' : '#ffefef',
-              // Reached flags also fade, so they differ from pending ones by more than red/green (F179).
-              alpha: reached ? REACHED_CHECKPOINT_ALPHA : undefined,
-            };
-          }),
-          ...(runState.goal.finish
-            ? [{
-                point: this.toWorldGoalPoint(runState.roomCoordinates, runState.goal.finish),
-                label: null,
-                variant: (runState.result === 'completed' ? 'finish-cleared' : 'finish-pending') as GoalMarkerFlagVariant,
-                textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
-              }]
-            : []),
-        ];
-      case 'npc_quest':
-        return runState.goal.questType === 'escort' && runState.goal.destination
-          ? [
-              ...markers,
-              {
-                point: this.toWorldGoalPoint(
-                  runState.roomCoordinates,
-                  runState.goal.destination,
-                ),
-                label: 'NPC',
-                variant: (
-                  runState.result === 'completed'
-                    ? 'finish-cleared'
-                    : 'finish-pending'
-                ) as GoalMarkerFlagVariant,
-                textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
-              },
-            ]
-          : markers;
-      case 'collect_target':
-      case 'collect_race':
-      case 'defeat_all':
-      case 'survival':
-        // These goals have no flags to show.
-        return markers;
-    }
+    return [
+      ...markers,
+      ...buildPlayGoalFlags(runState.goal, ROOM_GOAL_DEFINITIONS, runState).map(marker => ({
+        ...marker, point: this.toWorldGoalPoint(runState.roomCoordinates, marker.point),
+      })),
+    ];
   }
 
   private getCourseMarkerDescriptors(runState: ActiveCourseRunState): PlayGoalMarkerDescriptor[] {
@@ -219,38 +163,11 @@ export class OverworldGoalMarkerController {
       });
     }
 
-    if (goal.type === 'reach_exit' && goal.exit) {
-      markers.push({
-        point: this.toWorldCoursePoint(goal.exit),
-        label: null,
-        variant: (runState.result === 'completed' ? 'finish-cleared' : 'finish-pending') as GoalMarkerFlagVariant,
-        textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
-      });
-    }
-
-    if (goal.type === 'checkpoint_sprint') {
-      for (let index = 0; index < goal.checkpoints.length; index += 1) {
-        const checkpoint = goal.checkpoints[index];
-        const reached = index < runState.nextCheckpointIndex;
-        markers.push({
-          point: this.toWorldCoursePoint(checkpoint),
-          label: `${index + 1}`,
-          variant: (reached ? 'checkpoint-reached' : 'checkpoint-pending') as GoalMarkerFlagVariant,
-          textColor: reached ? '#a9ffd0' : '#ffefef',
-          alpha: reached ? REACHED_CHECKPOINT_ALPHA : undefined,
-        });
-      }
-
-      if (goal.finish) {
-        markers.push({
-          point: this.toWorldCoursePoint(goal.finish),
-          label: null,
-          variant: (runState.result === 'completed' ? 'finish-cleared' : 'finish-pending') as GoalMarkerFlagVariant,
-          textColor: runState.result === 'completed' ? '#f6e6a6' : '#ffefef',
-        });
-      }
-    }
-
-    return markers;
+    return [
+      ...markers,
+      ...buildPlayGoalFlags(goal, COURSE_GOAL_DEFINITIONS, runState).map(marker => ({
+        ...marker, point: this.toWorldCoursePoint(marker.point),
+      })),
+    ];
   }
 }

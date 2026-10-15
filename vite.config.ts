@@ -95,7 +95,7 @@ export default defineConfig(({ mode }) => {
             if (id.includes('/src/config/') || id.endsWith('/src/config.ts')
               || id.endsWith('/src/persistence/roomModel.ts')
               || id.endsWith('/src/goals/roomGoals.ts') || id.endsWith('/src/goals/goalSchema.ts')
-              || id.endsWith('/src/goals/goalDefinitions.ts') || id.endsWith('/src/goals/goalScoring.ts') || id.endsWith('/src/goals/goalPresentation.ts')
+              || id.endsWith('/src/goals/goalDefinitions.ts') || id.endsWith('/src/goals/goalScoring.ts') || id.endsWith('/src/goals/goalPresentation.ts') || id.endsWith('/src/goals/goalMarkerPresentation.ts')
               || id.endsWith('/src/autotiling/model.ts') || id.endsWith('/src/autotiling/registry.ts')) return 'room-data';
             return undefined;
           },
