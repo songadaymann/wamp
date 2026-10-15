@@ -9,6 +9,10 @@ const port = Number(process.env.MOBILE_SMOKE_PORT ?? 4173);
 const outDir = 'dist-mobile-smoke';
 const args = new Set(process.argv.slice(2));
 const mode = args.has('--record') ? 'record' : 'replay';
+const engineIndex = process.argv.indexOf('--engine');
+const engine = engineIndex < 0 ? (mode === 'record' ? 'chromium' : 'all') : process.argv[engineIndex + 1];
+if (!['all', 'chromium', 'webkit'].includes(engine)) throw new Error('Choose all, chromium or webkit');
+const engines = engine === 'all' ? ['chromium', 'webkit'] : [engine];
 const vite = 'node_modules/.bin/vite';
 
 if (!args.has('--skip-build')) {
@@ -25,15 +29,16 @@ const preview = spawn(process.execPath, [vite, 'preview', '--outDir', outDir, '-
 let exitCode = 1;
 try {
   await waitForServer(`http://127.0.0.1:${port}/`, 30_000);
-  const smoke = spawnSync(process.execPath, ['scripts/mobile_smoke.mjs', '--url', `http://127.0.0.1:${port}`], {
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      MOBILE_SMOKE_API_FIXTURES: mode,
-      MOBILE_SMOKE_OUTPUT_DIR: process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci',
-    },
-  });
-  exitCode = smoke.status ?? 1;
+  exitCode = 0;
+  for (const browserEngine of engines) {
+    const smoke = spawnSync(process.execPath, ['scripts/mobile_smoke.mjs', '--url', `http://127.0.0.1:${port}`, '--engine', browserEngine], {
+      stdio: 'inherit',
+      env: { ...process.env, MOBILE_SMOKE_API_FIXTURES: mode,
+        MOBILE_SMOKE_OUTPUT_DIR: `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/${browserEngine}` },
+    });
+    if (smoke.status !== 0) exitCode = smoke.status ?? 1;
+  }
+
 } finally {
   preview.kill();
 }

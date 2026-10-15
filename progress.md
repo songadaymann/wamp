@@ -1,5 +1,21 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-14 overnight — phone candidate validated
+
+Final 3,620-test quality and all forty-two Chromium/WebKit scenarios pass. Native production-build Chrome portrait/landscape and WebKit portrait menu, chat typing/return and touch jumps pass without page errors/missing fixtures; screenshots inspected. Landscape Start now scrolls into view and accepts a tap, with regression coverage. Installed-client Canvas playback is ready/error-free with inspected state/image (software-renderer performance prompt; no FPS claim). Hosted/release proof remain pending. F089 real iOS remains manual, F109/master unchanged until live delivery.
+
+## 2026-10-14 overnight — final phone matrix passes
+
+All twenty cases pass in Chromium and desktop WebKit, with zero console/page errors and zero fixture misses. Final keyboard screenshots show visible fields and a stable canvas. The foreground-field check caught clipped World Chat despite a numerically visible input; viewport anchoring fixes it. Eight focused layout/inset tests, typecheck, focused lint and OSS scan (zero blockers/warnings) pass. Full final quality/native/client/hosted/delivery remain pending.
+
+## 2026-10-14 overnight — F089/F109 phone candidate
+
+Twenty scenarios across Chromium/WebKit; actual keyboard text, visual-only shrinking, field visibility/16px, stable canvas, foreground 40×40 audits and library/menu/Play coverage. Actual phone targets are 44px; compact HUD/action row and menu access preserve sightline. Focused fields now account for keyboard occlusion; three inset unit cases/focused lint pass. Initial tests caught and drove fixes for tall HUD, Room+/Stop overlap, email occlusion and short portrait buttons; pending final dual/full/native/release gates. F089 physical iOS remains manual; F109/master unchanged. Receipt: `docs/review/wamp-phone-keyboard-targets-2026-10-14.md`.
+
+## 2026-10-14 — New overnight goal through October 15, 5am
+
+Authoritative new goal begins 7:46:52pm New York; cutoff October 15 05:00 / 09:00 UTC. Baseline main `fdb0b142`, master 143/215. Reused cutoff heartbeat updated; selected 240×135 / 32-color animation hash verified. Start F089 keyboard/visible-target and WebKit coverage; investigate undersized targets as F109 instead of hiding failures. Then actionable refactors while time allows. Preserve primary auth work, private/decision-gated items and manual iOS checks. Plan/audit: `docs/review/wamp-overnight-checklist-2026-10-14.md`.
+
 ## 2026-10-14 — F019 complete and live
 
 PR #200 / source `8b1db184`, main `77bbd0d6`, Pages `307dcdd0`. Eighteen deferred controllers; held publish cancellation/retry and automatic guest recovery preserved. Startup 642.8 → 630.7 KB brotli. Full 3,617-test/mobile/source-and-merge hosted gates, six native and live-asset UI fixture cases, installed-client playback, clean-main guarded Pages delivery, health and 33 exact custom/immutable file hashes pass. Actual live desktop/touch/WebKit jumps pass with no page errors; screenshots inspected. Renderer timeouts resolve under the complete isolated gate; immutable-host WebKit analytics error reproduces on the prior release, while actual custom-domain flows pass without a stub. No FPS or physical-device claim. Master 143/215. Owned QA stopped; primary auth work, animation selection/server and pending decisions preserved. Receipt: `docs/review/wamp-remaining-dialogs-2026-10-14.md`.

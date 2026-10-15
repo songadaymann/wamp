@@ -1,3 +1,15 @@
+## 2026-10-14 overnight — phone source validated
+
+Full 3,620-test quality, forty-two dual-engine mobile cases and three native production-build menu/input/touch flows pass; inspected images show stable canvas and visible fields. Landscape Start is scrollable and covered by an actual tap. Installed-client Canvas playback is ready/error-free; native gameplay is separately verified. Hosted checks and Pages/live delivery remain pending. Branch `codex/wamp-mobile-checks-2026-10-14`; master 143, F089 partial.
+
+## 2026-10-14 overnight — F089/F109 phone candidate
+
+Twenty-one scenarios across Chromium/WebKit; actual keyboard text, visual-only shrinking, field visibility/16px, stable canvas, foreground 40×40 audits and library/menu/Play coverage. Actual phone targets are 44px; compact HUD/action row and menu access preserve sightline. Focused fields now account for keyboard occlusion; three inset unit cases/focused lint pass. Initial tests caught and drove fixes for tall HUD, Room+/Stop overlap, email occlusion and short portrait buttons; pending final dual/full/native/release gates. F089 physical iOS remains manual; F109/master unchanged. Receipt: `docs/review/wamp-phone-keyboard-targets-2026-10-14.md`.
+
+## 2026-10-14 — New overnight goal through October 15, 5am
+
+Authoritative new goal begins 7:46:52pm New York; cutoff October 15 05:00 / 09:00 UTC. Baseline main `fdb0b142`, master 143/215. Reused cutoff heartbeat updated; selected 240×135 / 32-color animation hash verified. Start F089 keyboard/visible-target and WebKit coverage; investigate undersized targets as F109 instead of hiding failures. Then actionable refactors while time allows. Preserve primary auth work, private/decision-gated items and manual iOS checks. Plan/audit: `docs/review/wamp-overnight-checklist-2026-10-14.md`.
+
 ## 2026-10-14 — F019 complete and live
 
 PR #200 / source `8b1db184`, main `77bbd0d6`, Pages `307dcdd0`. Eighteen deferred controllers; held publish cancellation/retry and automatic guest recovery preserved. Startup 642.8 → 630.7 KB brotli. Full 3,617-test/mobile/source-and-merge hosted gates, six native and live-asset UI fixture cases, installed-client playback, clean-main guarded Pages delivery, health and 33 exact custom/immutable file hashes pass. Actual live desktop/touch/WebKit jumps pass with no page errors; screenshots inspected. Renderer timeouts resolve under the complete isolated gate; immutable-host WebKit analytics error reproduces on the prior release, while actual custom-domain flows pass without a stub. No FPS or physical-device claim. Master 143/215. Owned QA stopped; primary auth work, animation selection/server and pending decisions preserved. Receipt: `docs/review/wamp-remaining-dialogs-2026-10-14.md`.

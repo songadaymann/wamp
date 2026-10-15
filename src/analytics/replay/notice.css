@@ -14,3 +14,11 @@ body[data-device-class='phone'][data-app-mode='play-world'] .guest-replay-notice
   min-height: 44px;
   padding: 4px 8px;
 }
+
+/* Landscape overlays have run controls on the left and action controls on the right. */
+body[data-device-class='phone'][data-app-mode='play-world'][data-orientation-state='landscape'] .guest-replay-notice {
+  left: calc(190px + var(--safe-left));
+  right: calc(208px + var(--safe-right));
+  max-width: 430px;
+  margin-inline: auto;
+}
