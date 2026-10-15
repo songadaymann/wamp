@@ -11,7 +11,7 @@ import type { RoomRushModalController } from './roomRushModal';
 import type { RoomRushResultModalController } from './roomRushResultModal';
 import { SettingsModalController } from './settingsModal';
 import {
-  getActiveEditorScene,
+  getActiveCourseWorkspaceScene,
   getActiveOverworldScene,
   getOverworldScene,
 } from './sceneBridge';
@@ -41,7 +41,7 @@ export function setupSceneCommands(
   const worldJumpInput = doc.getElementById('world-jump-input') as HTMLInputElement | null;
   const courseSaveBtn = doc.getElementById('btn-course-editor-save-course');
   const coursePublishBtn = doc.getElementById('btn-course-editor-publish-course');
-  const roomSharing = new RoomSharingController(() => getActiveOverworldScene(game)?.getSelectedRoomContext?.() ?? null, doc, doc.defaultView ?? window);
+  const roomSharing = new RoomSharingController(() => getActiveOverworldScene(game)?.getSelectedRoomContext() ?? null, doc, doc.defaultView ?? window);
 
   const closeMenu = () => {
     authPanel?.classList.remove('menu-open');
@@ -56,7 +56,7 @@ export function setupSceneCommands(
     roomRushModal.close();
     roomRushResultModal.close();
     chatModerationModal.close();
-    getActiveOverworldScene(game)?.closeRoomCommentComposer?.();
+    getActiveOverworldScene(game)?.closeRoomCommentComposer();
   };
 
   const handleWorldJump = () => {
@@ -96,7 +96,7 @@ export function setupSceneCommands(
     }
 
     const overworldScene = getOverworldScene(game);
-    if (!overworldScene?.openRoomChatComposer || overworldScene.isRoomChatComposerOpen?.()) {
+    if (!overworldScene?.openRoomChatComposer || overworldScene.isRoomChatComposerOpen()) {
       return;
     }
 
@@ -126,7 +126,7 @@ export function setupSceneCommands(
     }
 
     const overworldScene = getOverworldScene(game);
-    if (!overworldScene?.openRoomCommentComposer || overworldScene.isRoomCommentComposerOpen?.()) {
+    if (!overworldScene?.openRoomCommentComposer || overworldScene.isRoomCommentComposerOpen()) {
       return;
     }
 
@@ -151,24 +151,24 @@ export function setupSceneCommands(
     onPlayRoom: () => {
       const overworldScene = getActiveOverworldScene(game);
       closeWorldPanels();
-      void overworldScene?.playSelectedRoom?.();
+      void overworldScene?.playSelectedRoom();
     },
     onRestartRun: () => {
       closeWorldPanels();
-      void getActiveOverworldScene(game)?.restartCurrentRun?.();
+      void getActiveOverworldScene(game)?.restartCurrentRun();
     },
     onPlayCourse: () => {
       closeWorldPanels();
-      void getActiveOverworldScene(game)?.playSelectedCourse?.();
+      void getActiveOverworldScene(game)?.playSelectedCourse();
     },
     onEditRoom: () => {
       closeWorldPanels();
-      getActiveOverworldScene(game)?.editSelectedRoom?.();
+      getActiveOverworldScene(game)?.editSelectedRoom();
     },
     onBuildRoom: () => {
       const startBuild = () => {
         closeWorldPanels();
-        getActiveOverworldScene(game)?.buildSelectedRoom?.();
+        getActiveOverworldScene(game)?.buildSelectedRoom();
       };
       if (getGameSettings().builderMode === 'unselected') {
         window.dispatchEvent(new CustomEvent(REQUEST_BUILDER_MODE_EVENT, {
@@ -180,17 +180,17 @@ export function setupSceneCommands(
     },
     onOpenCourseBuilder: () => {
       closeWorldPanels();
-      void (getActiveOverworldScene(game)?.openCourseEditor?.() ??
-        getActiveOverworldScene(game)?.openCourseComposer?.());
+      void (getActiveOverworldScene(game)?.openCourseEditor() ??
+        getActiveOverworldScene(game)?.openCourseComposer());
     },
     onJumpToCoordinates: (coordinates) => {
-      void getActiveOverworldScene(game)?.jumpToCoordinates?.(coordinates);
+      void getActiveOverworldScene(game)?.jumpToCoordinates(coordinates);
     },
     onZoomIn: () => {
-      getActiveOverworldScene(game)?.zoomIn?.();
+      getActiveOverworldScene(game)?.zoomIn();
     },
     onZoomOut: () => {
-      getActiveOverworldScene(game)?.zoomOut?.();
+      getActiveOverworldScene(game)?.zoomOut();
     },
     onOpenExplore: () => {
       leaderboardModal.close();
@@ -225,8 +225,8 @@ export function setupSceneCommands(
       chatModerationModal.close();
       roomRushResultModal.close();
       const scene = getActiveOverworldScene(game);
-      if (scene?.isRoomRushRunActive?.()) {
-        scene.endRoomRushRun?.();
+      if (scene?.isRoomRushRunActive()) {
+        scene.endRoomRushRun();
         return;
       }
       void roomRushModal.open();
@@ -242,7 +242,7 @@ export function setupSceneCommands(
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
-      return getActiveOverworldScene(game)?.openMultiplayerLauncher?.() ?? false;
+      return getActiveOverworldScene(game)?.openMultiplayerLauncher() ?? false;
     },
     onInviteMultiplayer: (modeId, entry) => {
       leaderboardModal.close();
@@ -255,7 +255,7 @@ export function setupSceneCommands(
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
-      void getActiveOverworldScene(game)?.inviteMultiplayer?.(modeId, entry);
+      void getActiveOverworldScene(game)?.inviteMultiplayer(modeId, entry);
     },
     onOpenRoomComment: () => {
       leaderboardModal.close();
@@ -268,7 +268,7 @@ export function setupSceneCommands(
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
-      getActiveOverworldScene(game)?.openRoomCommentComposer?.();
+      getActiveOverworldScene(game)?.openRoomCommentComposer();
     },
     onToggleRoomComments: () => {
       leaderboardModal.close();
@@ -281,7 +281,7 @@ export function setupSceneCommands(
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
-      getActiveOverworldScene(game)?.toggleRoomComments?.();
+      getActiveOverworldScene(game)?.toggleRoomComments();
     },
     onOpenSettings: () => {
       leaderboardModal.close();
@@ -293,7 +293,7 @@ export function setupSceneCommands(
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
-      getActiveOverworldScene(game)?.closeRoomCommentComposer?.();
+      getActiveOverworldScene(game)?.closeRoomCommentComposer();
       settingsModal.open();
     },
     onOpenControls: () => {
@@ -320,7 +320,7 @@ export function setupSceneCommands(
       roomRushModal.close();
       roomRushResultModal.close();
       chatModerationModal.close();
-      getActiveOverworldScene(game)?.fitLoadedWorld?.();
+      getActiveOverworldScene(game)?.fitLoadedWorld();
     },
   });
 
@@ -380,8 +380,8 @@ export function setupSceneCommands(
     chatModerationModal.close();
     exploreModal.close();
     roomRushResultModal.close();
-    const editorScene = getActiveEditorScene(game);
-    if (editorScene?.saveCourseDraft) {
+    const editorScene = getActiveCourseWorkspaceScene(game);
+    if (editorScene) {
       await editorScene.saveCourseDraft();
     }
   }));
@@ -391,8 +391,8 @@ export function setupSceneCommands(
     aboutModal.close();
     chatModerationModal.close();
     roomRushResultModal.close();
-    const editorScene = getActiveEditorScene(game);
-    if (editorScene?.publishCourseDraft) {
+    const editorScene = getActiveCourseWorkspaceScene(game);
+    if (editorScene) {
       await editorScene.publishCourseDraft();
     }
   }));

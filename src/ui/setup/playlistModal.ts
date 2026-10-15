@@ -210,7 +210,7 @@ export class PlaylistModalController {
     button.className = 'profile-room-card playlist-room-card';
     button.addEventListener('click', () => {
       this.close();
-      void getActiveOverworldScene(this.game)?.jumpToCoordinates?.(item.roomCoordinates);
+      void getActiveOverworldScene(this.game)?.jumpToCoordinates(item.roomCoordinates);
     });
 
     const preview = this.doc.createElement('div');

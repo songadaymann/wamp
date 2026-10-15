@@ -1,205 +1,45 @@
-// The HTML UI calls scene methods through optional bridge members (`scene.x?.()`), so renaming
-// or removing a scene method would silently disable a button. These types require every bridge
-// member each scene implements today: drop one from a scene and typecheck fails (F062). When a
-// scene gains a bridge method, add it here.
+// Required per-scene capabilities and coordinator command types reject missing or renamed methods.
 import { describe, expect, it } from 'vitest';
 import type { CourseEditorScene } from '../../scenes/CourseEditorScene';
+import type { CourseComposerScene } from '../../scenes/CourseComposerScene';
 import type { EditorScene } from '../../scenes/EditorScene';
 import type { OverworldPlayScene } from '../../scenes/OverworldPlayScene';
-import type { EditorSceneBridge, OverworldSceneBridge } from './sceneBridge';
+import type { CourseWorkspaceSceneBridge, CourseComposerSceneBridge, RoomEditorSceneBridge, OverworldSceneBridge, EditorMusicCommands } from './sceneBridge';
 
-type Keeps<Bridge, Keys extends keyof Bridge> = Required<Pick<Bridge, Keys>>;
+type Assert<T extends true> = T;
+type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
+export type RoomCapabilitiesAreRequired = Assert<OptionalKeys<RoomEditorSceneBridge> extends never ? true : false>;
+export type CourseCapabilitiesAreRequired = Assert<OptionalKeys<CourseWorkspaceSceneBridge> extends never ? true : false>;
+export type OverworldCapabilitiesAreRequired = Assert<OptionalKeys<OverworldSceneBridge> extends never ? true : false>;
+export type ComposerCapabilitiesAreRequired = Assert<OptionalKeys<CourseComposerSceneBridge> extends never ? true : false>;
+export type MusicCommandsAreRequired = Assert<OptionalKeys<EditorMusicCommands> extends never ? true : false>;
 
-type EditorSceneBridgeMembers =
-  | 'adminRestoreToVersion'
-  | 'assignMusicPhraseToArrangementSlot'
-  | 'beginFocusedPressurePlateConnection'
-  | 'cancelPressurePlateConnection'
-  | 'clearAllArrangementSlots'
-  | 'clearCourseGoalMarkers'
-  | 'clearFocusedContainerContents'
-  | 'clearFocusedPressurePlateConnection'
-  | 'clearGoalMarkers'
-  | 'clearSelectedArrangementSlot'
-  | 'closeRoomMusicPhraseSavePrompt'
-  | 'confirmRoomMusicPhraseSavePrompt'
-  | 'deleteActiveRoomMusicPhrase'
-  | 'exportWampOGramRoomSnapshot'
-  | 'fitToScreen'
-  | 'getCourseEditorState'
-  | 'getHistoryState'
-  | 'handlePublishNudgeAction'
-  | 'loadHistory'
-  | 'loadMoreMusicPhrases'
-  | 'mintRoom'
-  | 'publishRoom'
-  | 'redoAction'
-  | 'refreshMintMetadata'
-  | 'refreshMusicPhraseLibrary'
-  | 'replaceLegacyRoomMusicWithPattern'
-  | 'returnToCourseBuilder'
-  | 'returnToWorld'
-  | 'revertToVersion'
-  | 'saveActiveRoomMusicPhrase'
-  | 'saveAsActiveRoomMusicPhrase'
-  | 'saveDraft'
-  | 'saveRoomMusicDraftAndPhrases'
-  | 'selectArrangementSlot'
-  | 'setCanonicalVersion'
-  | 'setCourseGoalRequiredCount'
-  | 'setCourseGoalSurvivalSeconds'
-  | 'setCourseGoalTimeLimitSeconds'
-  | 'setCourseGoalType'
-  | 'setGoalRequiredCount'
-  | 'setGoalSurvivalSeconds'
-  | 'setGoalTimeLimitSeconds'
-  | 'setGoalType'
-  | 'setLeaderboardSourceVersion'
-  | 'setMusicComposerMode'
-  | 'setMusicModeActive'
-  | 'setMusicPatternInstrumentTab'
-  | 'setPlacedSignText'
-  | 'setRoomMusicArrangementSlotCount'
-  | 'setRoomMusicKeyMode'
-  | 'setRoomMusicKeyTonic'
-  | 'setRoomMusicPhraseNameSuffix'
-  | 'setRoomMusicPhraseSavePromptName'
-  | 'setRoomMusicPitchMode'
-  | 'setRoomTitle'
-  | 'shiftRoomMusicOctave'
-  | 'shiftRoomMusicSwing'
-  | 'shiftRoomMusicTempo'
-  | 'startCourseGoalMarkerPlacement'
-  | 'startGoalMarkerPlacement'
-  | 'startNewRoomMusicPhrase'
-  | 'startPlayMode'
-  | 'toggleMusicMode'
-  | 'toggleMusicPhraseAudition'
-  | 'toggleRoomMusicPhraseMetadataEditor'
-  | 'toggleRoomMusicPreview'
-  | 'undoAction'
-  | 'updateToolUi'
-  | 'useCustomSpriteAsTile'
-  | 'useMusicPhrase'
-  | 'usesCustomSprite'
-  | 'zoomIn'
-  | 'zoomOut';
+export function editorSceneKeepsItsBridge(scene: EditorScene): RoomEditorSceneBridge { return scene; }
+export function courseEditorSceneKeepsItsBridge(scene: CourseEditorScene): CourseWorkspaceSceneBridge { return scene; }
+export function overworldSceneKeepsItsBridge(scene: OverworldPlayScene): OverworldSceneBridge { return scene; }
+export function composerSceneKeepsItsBridge(scene: CourseComposerScene): CourseComposerSceneBridge { return scene; }
 
-type CourseEditorSceneBridgeMembers =
-  | 'assignMusicPhraseToArrangementSlot'
-  | 'clearAllArrangementSlots'
-  | 'clearCourseGoalMarkers'
-  | 'clearGoalMarkers'
-  | 'clearSelectedArrangementSlot'
-  | 'closeRoomMusicPhraseSavePrompt'
-  | 'confirmRoomMusicPhraseSavePrompt'
-  | 'deleteActiveRoomMusicPhrase'
-  | 'fitToScreen'
-  | 'getCourseEditorState'
-  | 'loadMoreMusicPhrases'
-  | 'publishCourseDraft'
-  | 'publishRoom'
-  | 'redoAction'
-  | 'refreshMusicPhraseLibrary'
-  | 'replaceLegacyRoomMusicWithPattern'
-  | 'returnToCourseBuilder'
-  | 'returnToWorld'
-  | 'saveActiveRoomMusicPhrase'
-  | 'saveAsActiveRoomMusicPhrase'
-  | 'saveCourseDraft'
-  | 'saveDraft'
-  | 'saveRoomMusicDraftAndPhrases'
-  | 'selectArrangementSlot'
-  | 'setCourseGoalRequiredCount'
-  | 'setCourseGoalSurvivalSeconds'
-  | 'setCourseGoalTimeLimitSeconds'
-  | 'setCourseGoalType'
-  | 'setGoalRequiredCount'
-  | 'setGoalSurvivalSeconds'
-  | 'setGoalTimeLimitSeconds'
-  | 'setGoalType'
-  | 'setMusicComposerMode'
-  | 'setMusicModeActive'
-  | 'setMusicPatternInstrumentTab'
-  | 'setPlacedSignText'
-  | 'setRoomMusicArrangementSlotCount'
-  | 'setRoomMusicKeyMode'
-  | 'setRoomMusicKeyTonic'
-  | 'setRoomMusicPhraseNameSuffix'
-  | 'setRoomMusicPhraseSavePromptName'
-  | 'setRoomMusicPitchMode'
-  | 'setRoomTitle'
-  | 'shiftRoomMusicOctave'
-  | 'shiftRoomMusicSwing'
-  | 'shiftRoomMusicTempo'
-  | 'startCourseGoalMarkerPlacement'
-  | 'startGoalMarkerPlacement'
-  | 'startNewRoomMusicPhrase'
-  | 'startPlayMode'
-  | 'toggleMusicMode'
-  | 'toggleMusicPhraseAudition'
-  | 'toggleRoomMusicPhraseMetadataEditor'
-  | 'toggleRoomMusicPreview'
-  | 'undoAction'
-  | 'updateToolUi'
-  | 'useCustomSpriteAsTile'
-  | 'useMusicPhrase'
-  | 'usesCustomSprite'
-  | 'zoomIn'
-  | 'zoomOut';
-
-type OverworldSceneBridgeMembers =
-  | 'adjustMobilePortraitCameraTuning'
-  | 'buildSelectedRoom'
-  | 'canPresentPerformanceAdvisorSuggestion'
-  | 'closeRoomChatComposer'
-  | 'closeRoomCommentComposer'
-  | 'dismissPerformanceAdvisorSuggestion'
-  | 'editSelectedRoom'
-  | 'endRoomRushRun'
-  | 'fitLoadedWorld'
-  | 'getMobilePortraitCameraTuning'
-  | 'getPerformanceAdvisorSuggestion'
-  | 'getSelectedRoomContext'
-  | 'inviteMultiplayer'
-  | 'invitePvpDuel'
-  | 'isRoomChatComposerOpen'
-  | 'isRoomCommentComposerOpen'
-  | 'isRoomRushRunActive'
-  | 'jumpToCoordinates'
-  | 'logMobilePortraitCameraTuning'
-  | 'openCourseComposer'
-  | 'openCourseEditor'
-  | 'openGuestDraftRoom'
-  | 'openMultiplayerLauncher'
-  | 'openRoomChatComposer'
-  | 'openRoomCommentComposer'
-  | 'playSelectedCourse'
-  | 'playSelectedRoom'
-  | 'resetMobilePortraitCameraTuning'
-  | 'restartCurrentRun'
-  | 'returnToWorld'
-  | 'setMobilePortraitCameraTuning'
-  | 'setPerformanceSuggestionPauseRequested'
-  | 'startRoomRushRun'
-  | 'toggleRoomComments'
-  | 'zoomIn'
-  | 'zoomOut';
-
-export function editorSceneKeepsItsBridge(scene: EditorScene): Keeps<EditorSceneBridge, EditorSceneBridgeMembers> {
-  return scene;
-}
-
-export function courseEditorSceneKeepsItsBridge(scene: CourseEditorScene): Keeps<EditorSceneBridge, CourseEditorSceneBridgeMembers> {
-  return scene;
-}
-
-export function overworldSceneKeepsItsBridge(scene: OverworldPlayScene): Keeps<OverworldSceneBridge, OverworldSceneBridgeMembers> {
-  return scene;
+// These counterexamples must remain compile errors: missing methods, wrong parameters and
+// a course editor pretending to support room history cannot silently become valid contracts.
+export function rejectCapabilityDrift(room: RoomEditorSceneBridge, course: CourseWorkspaceSceneBridge, music: EditorMusicCommands): void {
+  const { getMusicWorkflow: removed, ...missing } = room;
+  void removed;
+  // @ts-expect-error The music accessor is required.
+  const renamed: RoomEditorSceneBridge = missing;
+  void renamed;
+  // @ts-expect-error Course workspaces do not supply room history.
+  course.getHistoryState();
+  // @ts-expect-error Tempo commands require a number.
+  music.shiftRoomMusicTempo('fast');
+  // @ts-expect-error The old scene music delegates have been replaced by the required accessor.
+  room.shiftRoomMusicTempo(5);
 }
 
 describe('scene bridge contract (F062)', () => {
-  it('is checked by typecheck; the functions above only exist for their types', () => {
+  it('has compile-checked concrete scene and command contracts', () => {
     expect(typeof editorSceneKeepsItsBridge).toBe('function');
+    expect(typeof courseEditorSceneKeepsItsBridge).toBe('function');
+    expect(typeof overworldSceneKeepsItsBridge).toBe('function');
+    expect(typeof composerSceneKeepsItsBridge).toBe('function');
   });
 });

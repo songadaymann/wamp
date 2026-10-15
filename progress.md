@@ -1,5 +1,18 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-14 overnight — F062 final local acceptance
+
+Full 3,630-test quality and all 42 Chromium/WebKit scenarios pass with zero browser errors/missing fixtures. Six native room/course music flows pass, including a regression-backed arrangement-cell selection fix found during testing. Both editors use one required music coordinator; checked scene capabilities replace optional commands and arbitrary casts. Installed-client real-API loading/control capture is inspected (software-renderer performance prompt; no FPS claim). Source/merge gates and guarded live delivery remain pending; master stays 144. Receipt: `docs/review/wamp-required-scene-capabilities-2026-10-14.md`.
+
+
+## 2026-10-14 overnight — F062 local quality passes
+
+Required shared/room/course capabilities, checked/cached scene lookup and one music accessor replace optional forwarding. Nine new regressions plus all 3,629 tests/typecheck/build/assets pass; boot is 631.6 KB. WebKit mobile passes; initial Chromium notice/camera actions met a late intro dialog. Unchanged-main focused comparison passes, so no baseline-noise claim. The final run clears blockers after asynchronous notice loading and uses actual camera taps, with all existing geometric/state assertions retained. Native editor/music, installed client and hosted/delivery proof remain pending.
+
+## 2026-10-14 overnight — F062 capability refactor started
+
+Baseline `08814c83`, master 144. Branch `codex/wamp-required-scene-capabilities-2026-10-14`. Audit finds 75 editor bridge members (73 room/61 course), 36 overworld and 19 composer methods. Plan required capabilities and one music accessor, meaningful drift/runtime/UI checks, then full/mobile/hosted/Pages/live delivery. Primary auth lane and pending decisions remain preserved. Receipt: `docs/review/wamp-required-scene-capabilities-2026-10-14.md`.
+
 ## 2026-10-14 overnight — F109 complete and live
 
 PR #201 / source `83d4a99f`, main `a0cab3e4`, final Pages `2b4402d4`. Full 3,620-test quality, forty-two Chromium/WebKit cases, source/merge four-check gates, native/hosted/live menu and keyboard/touch flows, actual guest backend play and 34 exact custom/immutable file hashes pass; inspected screenshots and 320px phone bounds pass. Automatic merged-main build overtook the initial upload; final guarded delivery follows completed hosted gates. Final live flows use no analytics stub; the immutable WebKit analytics error reproduces on the previous release. Master 144/215, F089 physical iOS remains manual. Overnight goal stays active through October 15 5am; continue with F062. Primary auth work, selected animation/server and pending decisions preserved. Receipt: `docs/review/wamp-phone-keyboard-targets-2026-10-14.md`.

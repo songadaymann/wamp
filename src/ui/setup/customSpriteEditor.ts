@@ -37,7 +37,7 @@ import {
 import { queueCustomSpriteSync, refreshOwnedCustomSprites } from '../../customSprites/sync';
 import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
 import { syncGameKeyboardFocus } from '../keyboardFocus';
-import { withActiveEditorScene } from './sceneBridge';
+import { withActiveEditorScene, withActiveEditorMusic } from './sceneBridge';
 
 type SpritePaintTool = 'pencil' | 'eraser' | 'fill';
 type SpritePaintDragMode = 'paint' | 'erase';
@@ -913,7 +913,7 @@ export function setupCustomSpriteEditor(
       if (isCustomSpriteUsedInLocalRoomStorage(spriteId)) return true;
       let usedInActiveEditor = false;
       withActiveEditorScene(game, (scene) => {
-        usedInActiveEditor = scene.usesCustomSprite?.(spriteId) ?? false;
+        usedInActiveEditor = scene.usesCustomSprite(spriteId) ?? false;
       });
       return usedInActiveEditor;
     };
@@ -987,7 +987,7 @@ export function setupCustomSpriteEditor(
 
     if (active) {
       void refreshOwnedCustomSprites().catch(() => undefined);
-      withActiveEditorScene(game, (scene) => scene.setMusicModeActive?.(false));
+      withActiveEditorMusic(game, (music) => music.setMusicModeActive(false));
       editorState.paletteMode = 'objects';
       renderLibrary();
       renderCanvas();
@@ -1040,7 +1040,7 @@ export function setupCustomSpriteEditor(
   const saveSpriteAsTile = (sprite: CustomSpriteDefinition): void => {
     let selectedTile = false;
     withActiveEditorScene(game, (scene) => {
-      selectedTile = scene.useCustomSpriteAsTile?.(sprite) ?? false;
+      selectedTile = scene.useCustomSpriteAsTile(sprite) ?? false;
     });
     if (!selectedTile) {
       setStatus('Open an editable room before saving a tile.', 'error');
@@ -1301,7 +1301,7 @@ export function setupCustomSpriteEditor(
     if (canCustomSpriteBecomeRoomTile(sprite)) {
       let selected = false;
       withActiveEditorScene(game, (scene) => {
-        selected = scene.useCustomSpriteAsTile?.(sprite) ?? false;
+        selected = scene.useCustomSpriteAsTile(sprite) ?? false;
       });
       if (!selected) {
         setStatus('Open an editable room before using this tile.', 'error');

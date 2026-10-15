@@ -90,49 +90,49 @@ export class CourseComposerPanelController {
     this.windowObj.addEventListener(COURSE_COMPOSER_STATE_CHANGED_EVENT, this.handleStateChanged);
 
     this.elements.pitsInput?.addEventListener('change', () => {
-      getActiveCourseComposerScene(this.game)?.setCoursePitsAreDeadly?.(this.elements.pitsInput?.checked === true);
+      getActiveCourseComposerScene(this.game)?.setCoursePitsAreDeadly(this.elements.pitsInput?.checked === true);
     });
     this.elements.titleInput?.addEventListener('input', () => {
-      getActiveCourseComposerScene(this.game)?.setCourseTitle?.(this.elements.titleInput?.value ?? null);
+      getActiveCourseComposerScene(this.game)?.setCourseTitle(this.elements.titleInput?.value ?? null);
     });
     this.elements.heartsSelect?.addEventListener('change', () => {
-      getActiveCourseComposerScene(this.game)?.setCoursePlayerHearts?.(Number(this.elements.heartsSelect?.value));
+      getActiveCourseComposerScene(this.game)?.setCoursePlayerHearts(Number(this.elements.heartsSelect?.value));
     });
     this.elements.toggleSelectedRoomButton?.addEventListener('click', () => {
-      getActiveCourseComposerScene(this.game)?.toggleSelectedRoomMembership?.();
+      getActiveCourseComposerScene(this.game)?.toggleSelectedRoomMembership();
     });
     this.elements.openSelectedRoomButton?.addEventListener('click', () => {
-      void getActiveCourseComposerScene(this.game)?.openSelectedRoom?.();
+      void getActiveCourseComposerScene(this.game)?.openSelectedRoom();
     });
     this.elements.centerSelectedRoomButton?.addEventListener('click', () => {
-      getActiveCourseComposerScene(this.game)?.centerSelectedRoom?.();
+      getActiveCourseComposerScene(this.game)?.centerSelectedRoom();
     });
     this.elements.editCourseButton?.addEventListener('click', () => {
-      void getActiveCourseComposerScene(this.game)?.openCourseEditor?.();
+      void getActiveCourseComposerScene(this.game)?.openCourseEditor();
     });
     this.elements.testDraftButton?.addEventListener('click', () => {
-      void getActiveCourseComposerScene(this.game)?.testDraftCourse?.();
+      void getActiveCourseComposerScene(this.game)?.testDraftCourse();
     });
     this.elements.saveButton?.addEventListener('click', () => {
-      void getActiveCourseComposerScene(this.game)?.saveCourseDraft?.();
+      void getActiveCourseComposerScene(this.game)?.saveCourseDraft();
     });
     this.elements.publishButton?.addEventListener('click', () => {
-      void getActiveCourseComposerScene(this.game)?.publishCourseDraft?.();
+      void getActiveCourseComposerScene(this.game)?.publishCourseDraft();
     });
     this.elements.unpublishButton?.addEventListener('click', () => {
-      void getActiveCourseComposerScene(this.game)?.unpublishCourse?.();
+      void getActiveCourseComposerScene(this.game)?.unpublishCourse();
     });
     this.elements.zoomInButton?.addEventListener('click', () => {
-      getActiveCourseComposerScene(this.game)?.zoomIn?.();
+      getActiveCourseComposerScene(this.game)?.zoomIn();
     });
     this.elements.zoomOutButton?.addEventListener('click', () => {
-      getActiveCourseComposerScene(this.game)?.zoomOut?.();
+      getActiveCourseComposerScene(this.game)?.zoomOut();
     });
     this.elements.fitButton?.addEventListener('click', () => {
-      getActiveCourseComposerScene(this.game)?.fitCourseToView?.();
+      getActiveCourseComposerScene(this.game)?.fitCourseToView();
     });
     this.elements.backButton?.addEventListener('click', () => {
-      void getActiveCourseComposerScene(this.game)?.returnToWorld?.();
+      void getActiveCourseComposerScene(this.game)?.returnToWorld();
     });
 
     this.elements.roomList?.addEventListener('click', (event) => {
@@ -142,7 +142,7 @@ export class CourseComposerPanelController {
       if (!roomId) {
         return;
       }
-      getActiveCourseComposerScene(this.game)?.selectRoom?.(roomId);
+      getActiveCourseComposerScene(this.game)?.selectRoom(roomId);
     });
 
     this.elements.checkpointList?.addEventListener('click', (event) => {
@@ -160,11 +160,11 @@ export class CourseComposerPanelController {
       }
 
       if (action === 'up') {
-        scene.moveCheckpoint?.(index, -1);
+        scene.moveCheckpoint(index, -1);
       } else if (action === 'down') {
-        scene.moveCheckpoint?.(index, 1);
+        scene.moveCheckpoint(index, 1);
       } else if (action === 'remove') {
-        scene.removeCheckpoint?.(index);
+        scene.removeCheckpoint(index);
       }
     });
 
@@ -176,7 +176,7 @@ export class CourseComposerPanelController {
   }
 
   render(): void {
-    const state = getActiveCourseComposerScene(this.game)?.getCourseEditorState?.() ?? null;
+    const state = getActiveCourseComposerScene(this.game)?.getCourseEditorState() ?? null;
     const visible = state?.visible ?? false;
     this.elements.shell?.classList.toggle('hidden', !visible);
     if (!state) {

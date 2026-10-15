@@ -226,7 +226,7 @@ export class MobileUiController {
     });
 
     this.elements.worldRoomChatButton?.addEventListener('click', () => {
-      getActiveOverworldScene(this.game)?.openRoomChatComposer?.();
+      getActiveOverworldScene(this.game)?.openRoomChatComposer();
     });
 
     this.elements.worldJumpSheetButton?.addEventListener('click', () => {
@@ -311,29 +311,29 @@ export class MobileUiController {
         }
 
         if (action === 'zoom-out') {
-          scene.adjustMobilePortraitCameraTuning?.(
+          scene.adjustMobilePortraitCameraTuning(
             { zoomMultiplierDelta: -0.05 },
             'button-zoom-out',
           );
         } else if (action === 'zoom-in') {
-          scene.adjustMobilePortraitCameraTuning?.(
+          scene.adjustMobilePortraitCameraTuning(
             { zoomMultiplierDelta: 0.05 },
             'button-zoom-in',
           );
         } else if (action === 'player-up') {
-          scene.adjustMobilePortraitCameraTuning?.(
+          scene.adjustMobilePortraitCameraTuning(
             { targetYDelta: -0.03 },
             'button-player-up',
           );
         } else if (action === 'player-down') {
-          scene.adjustMobilePortraitCameraTuning?.(
+          scene.adjustMobilePortraitCameraTuning(
             { targetYDelta: 0.03 },
             'button-player-down',
           );
         } else if (action === 'reset') {
-          scene.resetMobilePortraitCameraTuning?.();
+          scene.resetMobilePortraitCameraTuning();
         } else if (action === 'log') {
-          scene.logMobilePortraitCameraTuning?.('button-log');
+          scene.logMobilePortraitCameraTuning('button-log');
         }
 
         this.render();
@@ -557,7 +557,7 @@ export class MobileUiController {
       return;
     }
 
-    const snapshot = getActiveOverworldScene(this.game)?.getMobilePortraitCameraTuning?.();
+    const snapshot = getActiveOverworldScene(this.game)?.getMobilePortraitCameraTuning();
     if (!snapshot) {
       valueElement.textContent = 'waiting for camera';
       return;

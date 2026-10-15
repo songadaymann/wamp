@@ -1,3 +1,4 @@
+import { sceneCapabilityFixture } from './sceneCapabilityRegistry.testSupport';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -201,7 +202,7 @@ function makeScene(suggestion: PerformanceAdvisorSuggestion | null): TestScene {
       return true;
     },
   };
-  return scene;
+  return Object.assign(scene, sceneCapabilityFixture('OverworldPlayScene', scene));
 }
 
 function createHarness(initialScene: TestScene, suggestion: PerformanceAdvisorSuggestion) {

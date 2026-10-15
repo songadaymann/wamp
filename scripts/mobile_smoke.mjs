@@ -435,6 +435,8 @@ async function runPhoneRecordingNotice(page, scenarioSummary, scenarioDir) {
   await waitForBodyAppMode(page, 'play-world', 'phone recording notice play mode', 30_000);
   await closeBlockingOverlaysUntilClear(page);
   await page.locator('.guest-replay-notice').waitFor({ state: 'visible', timeout: 15_000 });
+  // The room intro can arrive while the replay notice is loading.
+  await closeBlockingOverlaysUntilClear(page);
   const layout = await page.evaluate(() => {
     const notice = document.querySelector('.guest-replay-notice');
     const rect = notice.getBoundingClientRect();
@@ -827,12 +829,19 @@ async function runPhonePortraitCameraTuner(page, scenarioSummary, scenarioDir) {
     'phone portrait camera tuner bounds',
   );
 
+  // Exercise camera tuning with the visitor's normal opt-out action; notice geometry
+  // remains covered independently by the recording-notice scenarios.
+  const replayOptOut = page.locator('.guest-replay-notice button');
+  await replayOptOut.waitFor({ state: 'visible', timeout: 15_000 });
+  await replayOptOut.tap();
+  await page.locator('.guest-replay-notice').waitFor({ state: 'hidden' });
   const before = await readCameraTunerSnapshot(page);
   assertCondition(
     before.zoomMultiplier === 2 && before.targetY === 0.53,
     `camera tuner should begin from the wider, centered portrait defaults: ${JSON.stringify(before)}`,
   );
-  await clickElement(page, '[data-mobile-camera-tuner-action="zoom-in"]');
+  await closeBlockingOverlaysUntilClear(page);
+  await page.locator('[data-mobile-camera-tuner-action="zoom-in"]').tap();
   const afterZoom = await waitForCameraTunerSnapshot(
     page,
     (snapshot) => snapshot.zoomMultiplier > before.zoomMultiplier,
@@ -844,7 +853,8 @@ async function runPhonePortraitCameraTuner(page, scenarioSummary, scenarioDir) {
   );
   // The player anchor only steers the camera when the room is too tall to fit above the console;
   // otherwise the whole room stays framed.
-  await clickElement(page, '[data-mobile-camera-tuner-action="player-up"]');
+  await closeBlockingOverlaysUntilClear(page);
+  await page.locator('[data-mobile-camera-tuner-action="player-up"]').tap();
   const afterPlayerUp = await waitForCameraTunerSnapshot(
     page,
     (snapshot) => snapshot.targetY < afterZoom.targetY,

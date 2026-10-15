@@ -588,7 +588,7 @@ export class ExploreModalController {
 
     const openDraft = () => {
       this.close();
-      void getActiveOverworldScene(this.game)?.openGuestDraftRoom?.(draft.snapshot);
+      void getActiveOverworldScene(this.game)?.openGuestDraftRoom(draft.snapshot);
     };
     card.addEventListener('click', openDraft);
     card.addEventListener('keydown', (event) => {
@@ -654,7 +654,7 @@ export class ExploreModalController {
     card.setAttribute('role', 'button');
     card.addEventListener('click', () => {
       this.close();
-      void getActiveOverworldScene(this.game)?.jumpToCoordinates?.(entry.roomCoordinates);
+      void getActiveOverworldScene(this.game)?.jumpToCoordinates(entry.roomCoordinates);
     });
     card.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' && event.key !== ' ') {
@@ -662,7 +662,7 @@ export class ExploreModalController {
       }
       event.preventDefault();
       this.close();
-      void getActiveOverworldScene(this.game)?.jumpToCoordinates?.(entry.roomCoordinates);
+      void getActiveOverworldScene(this.game)?.jumpToCoordinates(entry.roomCoordinates);
     });
 
     const preview = this.doc.createElement('div');

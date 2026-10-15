@@ -89,7 +89,7 @@ export class RoomSequenceController {
     if (!sequence || sequence.mode !== 'play' || this.navigating || this.isComplete()) {
       return;
     }
-    void getActiveOverworldScene(this.game)?.restartCurrentRun?.();
+    void getActiveOverworldScene(this.game)?.restartCurrentRun();
   };
 
   private readonly handleNextClick = (): void => {
@@ -110,7 +110,7 @@ export class RoomSequenceController {
     if (!sequence || sequence.mode !== 'play' || this.navigating || this.isComplete()) {
       return;
     }
-    getActiveOverworldScene(this.game)?.openRoomCommentComposer?.();
+    getActiveOverworldScene(this.game)?.openRoomCommentComposer();
   };
 
   private readonly handleRunRatingSubmitted = (event: Event): void => {
@@ -266,7 +266,7 @@ export class RoomSequenceController {
     this.render();
 
     if (shouldReturnToWorld && wasPlaying) {
-      getActiveOverworldScene(this.game)?.returnToWorld?.();
+      getActiveOverworldScene(this.game)?.returnToWorld();
     }
   }
 
@@ -279,7 +279,7 @@ export class RoomSequenceController {
     if (sequence.index >= sequence.entries.length - 1) {
       if (sequence.kind === 'welcome') {
         this.leaderboardModal.close();
-        getActiveOverworldScene(this.game)?.returnToWorld?.();
+        getActiveOverworldScene(this.game)?.returnToWorld();
         this.activeSequence = null;
         this.render();
         this.firstStepsSummary?.finish();
@@ -330,7 +330,7 @@ export class RoomSequenceController {
           throw new Error('The room player is not ready yet.');
         }
         this.leaderboardModal.close();
-        if (entry.buildPrompt && !matchesPromptRoom(entry, scene.getSelectedRoomContext?.())) {
+        if (entry.buildPrompt && !matchesPromptRoom(entry, scene.getSelectedRoomContext())) {
           throw new Error('The loaded level does not match the submitted version. Open Build Prompt to refresh.');
         }
         await scene.playSelectedRoom(entry.buildPrompt ? { forceGoalIntro: sequence.forceGoalIntro,

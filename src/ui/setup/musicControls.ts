@@ -8,7 +8,7 @@ import {
 } from '../../music/model';
 import { isCoarsePointerDevice } from '../deviceLayout';
 import { syncGameKeyboardFocus } from '../keyboardFocus';
-import { withActiveEditorScene } from './sceneBridge';
+import { withActiveEditorScene, withActiveEditorMusic } from './sceneBridge';
 
 function withInstrumentId(
   value: string | undefined,
@@ -146,74 +146,74 @@ export function setupRoomMusicControls(
   };
 
   modeButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.toggleMusicMode?.();
+    withActiveEditorMusic(game, (music) => {
+      music.toggleMusicMode();
     });
   });
 
   previewToggleButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.toggleRoomMusicPreview?.();
+    withActiveEditorMusic(game, (music) => {
+      music.toggleRoomMusicPreview();
     });
   });
 
   saveButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      void scene.saveRoomMusicDraftAndPhrases?.();
+    withActiveEditorMusic(game, (music) => {
+      void music.saveRoomMusicDraftAndPhrases();
     });
   });
 
   publishButton?.addEventListener('click', () => {
     withActiveEditorScene(game, (scene) => {
-      void scene.publishRoom?.();
+      void scene.publishRoom();
     });
   });
 
   octaveDownButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.shiftRoomMusicOctave?.(-1);
+    withActiveEditorMusic(game, (music) => {
+      music.shiftRoomMusicOctave(-1);
     });
   });
 
   octaveUpButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.shiftRoomMusicOctave?.(1);
+    withActiveEditorMusic(game, (music) => {
+      music.shiftRoomMusicOctave(1);
     });
   });
 
   tempoDownButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.shiftRoomMusicTempo?.(-5);
+    withActiveEditorMusic(game, (music) => {
+      music.shiftRoomMusicTempo(-5);
     });
   });
 
   tempoUpButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.shiftRoomMusicTempo?.(5);
+    withActiveEditorMusic(game, (music) => {
+      music.shiftRoomMusicTempo(5);
     });
   });
 
   swingDownButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.shiftRoomMusicSwing?.(-1);
+    withActiveEditorMusic(game, (music) => {
+      music.shiftRoomMusicSwing(-1);
     });
   });
 
   swingUpButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.shiftRoomMusicSwing?.(1);
+    withActiveEditorMusic(game, (music) => {
+      music.shiftRoomMusicSwing(1);
     });
   });
 
   replaceLegacyButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.replaceLegacyRoomMusicWithPattern?.();
+    withActiveEditorMusic(game, (music) => {
+      music.replaceLegacyRoomMusicWithPattern();
     });
   });
 
   phraseNewButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      const result = scene.startNewRoomMusicPhrase?.();
+    withActiveEditorMusic(game, (music) => {
+      const result = music.startNewRoomMusicPhrase();
       if (result && typeof (result as Promise<unknown>).finally === 'function') {
         void (result as Promise<unknown>).finally(() => {
           focusPhraseNameInput();
@@ -225,15 +225,15 @@ export function setupRoomMusicControls(
   });
 
   phraseEditButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.toggleRoomMusicPhraseMetadataEditor?.();
+    withActiveEditorMusic(game, (music) => {
+      music.toggleRoomMusicPhraseMetadataEditor();
       focusPhraseNameInput();
     });
   });
 
   phraseNameInput?.addEventListener('input', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.setRoomMusicPhraseNameSuffix?.(phraseNameInput.value);
+    withActiveEditorMusic(game, (music) => {
+      music.setRoomMusicPhraseNameSuffix(phraseNameInput.value);
     });
   });
 
@@ -243,8 +243,8 @@ export function setupRoomMusicControls(
     }
 
     event.preventDefault();
-    withActiveEditorScene(game, (scene) => {
-      void scene.saveActiveRoomMusicPhrase?.();
+    withActiveEditorMusic(game, (music) => {
+      void music.saveActiveRoomMusicPhrase();
     });
   });
 
@@ -257,14 +257,14 @@ export function setupRoomMusicControls(
   });
 
   phraseSaveButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      void scene.saveActiveRoomMusicPhrase?.();
+    withActiveEditorMusic(game, (music) => {
+      void music.saveActiveRoomMusicPhrase();
     });
   });
 
   phraseSaveAsButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.saveAsActiveRoomMusicPhrase?.();
+    withActiveEditorMusic(game, (music) => {
+      music.saveAsActiveRoomMusicPhrase();
     });
   });
 
@@ -273,14 +273,14 @@ export function setupRoomMusicControls(
       return;
     }
 
-    withActiveEditorScene(game, (scene) => {
-      void scene.deleteActiveRoomMusicPhrase?.();
+    withActiveEditorMusic(game, (music) => {
+      void music.deleteActiveRoomMusicPhrase();
     });
   });
 
   phraseSavePromptInput?.addEventListener('input', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.setRoomMusicPhraseSavePromptName?.(phraseSavePromptInput.value);
+    withActiveEditorMusic(game, (music) => {
+      music.setRoomMusicPhraseSavePromptName(phraseSavePromptInput.value);
     });
   });
 
@@ -290,50 +290,50 @@ export function setupRoomMusicControls(
     }
 
     event.preventDefault();
-    withActiveEditorScene(game, (scene) => {
-      void scene.confirmRoomMusicPhraseSavePrompt?.();
+    withActiveEditorMusic(game, (music) => {
+      void music.confirmRoomMusicPhraseSavePrompt();
     });
   });
 
   phraseSavePromptCloseButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.closeRoomMusicPhraseSavePrompt?.();
+    withActiveEditorMusic(game, (music) => {
+      music.closeRoomMusicPhraseSavePrompt();
     });
   });
 
   phraseSavePromptCancelButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.closeRoomMusicPhraseSavePrompt?.();
+    withActiveEditorMusic(game, (music) => {
+      music.closeRoomMusicPhraseSavePrompt();
     });
   });
 
   phraseSavePromptConfirmButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      void scene.confirmRoomMusicPhraseSavePrompt?.();
+    withActiveEditorMusic(game, (music) => {
+      void music.confirmRoomMusicPhraseSavePrompt();
     });
   });
 
   libraryRefreshButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.refreshMusicPhraseLibrary?.();
+    withActiveEditorMusic(game, (music) => {
+      music.refreshMusicPhraseLibrary();
     });
   });
 
   libraryMoreButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.loadMoreMusicPhrases?.();
+    withActiveEditorMusic(game, (music) => {
+      music.loadMoreMusicPhrases();
     });
   });
 
   arrangementClearButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.clearSelectedArrangementSlot?.();
+    withActiveEditorMusic(game, (music) => {
+      music.clearSelectedArrangementSlot();
     });
   });
 
   arrangementClearAllButton?.addEventListener('click', () => {
-    withActiveEditorScene(game, (scene) => {
-      scene.clearAllArrangementSlots?.();
+    withActiveEditorMusic(game, (music) => {
+      music.clearAllArrangementSlots();
     });
   });
 
@@ -413,8 +413,8 @@ export function setupRoomMusicControls(
         return;
       }
 
-      withActiveEditorScene(game, (scene) => {
-        void scene.assignMusicPhraseToArrangementSlot?.(draggedPhraseId as string, instrumentId, slotIndex);
+      withActiveEditorMusic(game, (music) => {
+        void music.assignMusicPhraseToArrangementSlot(draggedPhraseId as string, instrumentId, slotIndex);
       });
     });
     clearArrangementDropTarget();
@@ -484,8 +484,8 @@ export function setupRoomMusicControls(
     const instrumentButton = target.closest<HTMLElement>('[data-room-music-instrument-tab]');
     if (instrumentButton) {
       withInstrumentId(instrumentButton.dataset.roomMusicInstrumentTab, (instrumentId) => {
-        withActiveEditorScene(game, (scene) => {
-          scene.setMusicPatternInstrumentTab?.(instrumentId);
+        withActiveEditorMusic(game, (music) => {
+          music.setMusicPatternInstrumentTab(instrumentId);
         });
       });
       return;
@@ -494,18 +494,18 @@ export function setupRoomMusicControls(
     const composerModeButton = target.closest<HTMLElement>('[data-room-music-composer-mode]');
     if (composerModeButton) {
       withComposerMode(composerModeButton.dataset.roomMusicComposerMode, (mode) => {
-        withActiveEditorScene(game, (scene) => {
-          scene.setMusicComposerMode?.(mode);
+        withActiveEditorMusic(game, (music) => {
+          music.setMusicComposerMode(mode);
         });
       });
       return;
     }
 
-    const arrangementSlotCountButton = target.closest<HTMLElement>('[data-room-music-arrangement-slot-count]');
+    const arrangementSlotCountButton = target.closest<HTMLButtonElement>('button[data-room-music-arrangement-slot-count]');
     if (arrangementSlotCountButton) {
       withArrangementSlotCount(arrangementSlotCountButton.dataset.roomMusicArrangementSlotCount, (slotCount) => {
-        withActiveEditorScene(game, (scene) => {
-          scene.setRoomMusicArrangementSlotCount?.(slotCount);
+        withActiveEditorMusic(game, (music) => {
+          music.setRoomMusicArrangementSlotCount(slotCount);
         });
       });
       return;
@@ -514,8 +514,8 @@ export function setupRoomMusicControls(
     const pitchModeButton = target.closest<HTMLElement>('[data-room-music-pitch-mode]');
     if (pitchModeButton) {
       withPitchMode(pitchModeButton.dataset.roomMusicPitchMode, (mode) => {
-        withActiveEditorScene(game, (scene) => {
-          scene.setRoomMusicPitchMode?.(mode);
+        withActiveEditorMusic(game, (music) => {
+          music.setRoomMusicPitchMode(mode);
         });
       });
       return;
@@ -525,8 +525,8 @@ export function setupRoomMusicControls(
     if (auditionButton) {
       const phraseId = auditionButton.dataset.roomMusicPhraseAudition;
       if (phraseId) {
-        withActiveEditorScene(game, (scene) => {
-          void scene.toggleMusicPhraseAudition?.(phraseId);
+        withActiveEditorMusic(game, (music) => {
+          void music.toggleMusicPhraseAudition(phraseId);
         });
       }
       return;
@@ -536,8 +536,8 @@ export function setupRoomMusicControls(
     if (phraseButton) {
       const phraseId = phraseButton.dataset.roomMusicPhraseId;
       if (phraseId) {
-        withActiveEditorScene(game, (scene) => {
-          void scene.useMusicPhrase?.(phraseId);
+        withActiveEditorMusic(game, (music) => {
+          void music.useMusicPhrase(phraseId);
         });
       }
       return;
@@ -552,8 +552,8 @@ export function setupRoomMusicControls(
           return;
         }
 
-        withActiveEditorScene(game, (scene) => {
-          scene.selectArrangementSlot?.(instrumentId, slotIndex);
+        withActiveEditorMusic(game, (music) => {
+          music.selectArrangementSlot(instrumentId, slotIndex);
         });
       });
     }
