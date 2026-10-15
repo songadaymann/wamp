@@ -1,8 +1,21 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-15 overnight — F070 room objective rules complete and live
+
+PR #214/source267538b0/mainbd077131; Pageseffd649f, API8c4b3513 unchanged100%.3,703-test quality,46 mobile cases,4,644 strict controller frames, both-engine exit/escort/checkpoint/event gameplay and all source/main gates pass. Guarded Pages-only release exits0 including immediate smoke.60 exact custom/immutable hashes, canonical health/catalog, strict live normal-input pickup/delivery, phone goal save/reload and real guest jump/menu flow pass0errors; images inspected. F070/master partial/145. Receipt: `docs/review/wamp-goal-objective-registry-2026-10-15.md`.
+
+## 2026-10-15 overnight — F070 run-start targets complete and live
+
+PR #213/source8b6ec875/main9f560f15; API8c4b3513100%, Pages7664186c.3,699-test quality,46 mobile cases,1,824 strict initializations/lazy count-work comparisons and all source/main gates pass. Full guard exits0 including immediate smoke.60 exact custom/immutable hashes, canonical health/catalog, six no-hook normal-input live pickup/delivery cases, strict goal save/reload and real guest jump/menu flow pass0errors; images inspected. F070/master partial/145. Receipt: `docs/review/wamp-goal-run-targets-2026-10-15.md`.
+
+## 2026-10-15 overnight — spawn pickup coverage, fixture corrected
+
+The apparent spawn-credit issue was an invalid test: two coins shared one editor anchor cell and normalization correctly retained one. The discarded runtime gate is removed in full. Corrected valid-cell fixtures pass unchanged Chromium/WebKit with0 errors; retain the maintained ordinary-Start goal-clear case for48 total mobile scenarios. No app runtime change; master145/F070 partial. Receipt: `docs/review/wamp-spawn-pickups-2026-10-15.md`.
+
+
 ## 2026-10-15 overnight — F070 room event policies complete and live
 
-PR #212/source4d0bef33/mainde08bdab; APIe7d264c7100%, Pages8d79a96a.3,697-test quality,46 mobile cases,5,952 actual old/new event comparisons and all source/main gates pass. Guard publishes; immediate propagation404 clears on smoke recheck.60 exact custom/immutable hashes and canonical health/catalog pass. Six actual-domain normal-play pickup/Survival/Give cases use no movement hook, plus strict WebKit goal save/reload and real guest jump/menu return, all0errors. Images inspected. A separate spawn-overlap credit edge is reproduced on unchanged code and retained for follow-up. F070/master partial/145. Receipt: `docs/review/wamp-room-goal-events-2026-10-15.md`.
+PR #212/source4d0bef33/mainde08bdab; APIe7d264c7100%, Pages8d79a96a.3,697-test quality,46 mobile cases,5,952 actual old/new event comparisons and all source/main gates pass. Guard publishes; immediate propagation404 clears on smoke recheck.60 exact custom/immutable hashes and canonical health/catalog pass. Six actual-domain normal-play pickup/Survival/Give cases use no movement hook, plus strict WebKit goal save/reload and real guest jump/menu return, all0errors. Images inspected. The initial spawn-overlap diagnosis is superseded: both fixture objects shared one anchor cell; valid-cell checks pass unchanged code. F070/master partial/145. Receipt: `docs/review/wamp-room-goal-events-2026-10-15.md`.
 
 ## 2026-10-15 overnight — F070 room objective rules started
 

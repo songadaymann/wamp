@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { createApiFixtures } from './lib/apiFixtures.mjs';
+import { createMobileSpawnPickupFixtures } from './lib/mobileSpawnPickupFixture.mjs';
 import { readPhoneTapTargets, setKeyboardViewport, restoreKeyboardViewport, readBackgroundThumbnailImages } from './lib/mobileInputAudits.mjs';
 import { installMobileSignedFixture } from './lib/mobileSignedFixture.mjs';
 
@@ -15,10 +16,11 @@ const outputDir =
 
 // MOBILE_SMOKE_API_FIXTURES=record saves production API responses; =replay serves them (CI).
 const apiFixtureMode = process.env.MOBILE_SMOKE_API_FIXTURES?.trim() || null;
+const apiFixtureFile = process.env.MOBILE_SMOKE_API_FIXTURE_FILE?.trim() || 'scripts/fixtures/mobile-smoke-api.json.gz';
 const apiFixtures = apiFixtureMode
   ? createApiFixtures({
       mode: apiFixtureMode,
-      file: process.env.MOBILE_SMOKE_API_FIXTURE_FILE?.trim() || 'scripts/fixtures/mobile-smoke-api.json.gz',
+      file: apiFixtureFile,
     })
   : null;
 
@@ -142,6 +144,7 @@ const scenarios = [
   { name: 'phone-portrait-tap-targets', profile: profiles.phonePortrait, run: runPhoneTapTargets },
   { name: 'phone-landscape-tap-targets', profile: profiles.phoneLandscape, run: runPhoneTapTargets },
   { name: 'phone-signed-room-controls', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
+  { name: 'phone-spawn-goal-pickups', profile: profiles.phonePortrait, spawnPickupFixture: true, searchParams: { x: '0', y: '0' }, run: runSpawnGoalPickups },
   { name: 'phone-narrow-signed-room-controls', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
 ];
 
@@ -223,7 +226,9 @@ async function runScenario(browserInstance, scenario) {
     hasTouch: true,
     userAgent: scenario.profile.userAgent,
   });
-  await apiFixtures?.install(context);
+  const scenarioApiFixtures = scenario.spawnPickupFixture
+    ? createMobileSpawnPickupFixtures(apiFixtureFile, path.join(scenarioDir, 'api.json.gz')) : apiFixtures;
+  await scenarioApiFixtures?.install(context);
   if (scenario.signedFixture) {
     if (!apiFixtures) throw new Error('Signed input checks require isolated API fixtures');
     await installMobileSignedFixture(context, { roomChat: scenario.roomChatFixture, roomEditor: scenario.roomEditorFixture, activity: scenario.activityFixture });
@@ -293,6 +298,11 @@ async function runScenario(browserInstance, scenario) {
   try {
     await gotoMobileSmokePage(page, scenario.searchParams);
     await scenario.run(page, scenarioSummary, scenarioDir);
+    if (scenario.spawnPickupFixture) {
+      const report = scenarioApiFixtures.report();
+      assertCondition(Object.keys(report.misses).length === 0, 'Spawn pickup requests must all be isolated fixtures');
+      scenarioSummary.assertions.push({ label: 'Spawn pickup API replay has no misses', apiFixtures: report });
+    }
     const state = await readState(page);
     scenarioSummary.ok = true;
     scenarioSummary.device = state?.device ?? null;
@@ -376,6 +386,22 @@ async function runPhoneRoomKeyboard(page, summary, directory) {
   await checkKeyboard(page, '#room-chat-input', summary, directory);
   assertCondition((await readState(page))?.activeScene?.mode === 'play', 'Room typing must preserve Play');
   await captureScenarioScreenshot(page, summary, directory, 'room-keyboard-return');
+}
+async function runSpawnGoalPickups(page, summary, directory) {
+  await waitForReadyOverworld(page, 'spawn pickups');
+  const start = page.locator('#btn-room-goal-intro-start');
+  await start.waitFor({ state: 'visible', timeout: 30_000 });
+  const before = (await readState(page)).activeScene;
+  const coins = before.liveObjects.filter(object => object.id === 'coin_gold' && object.room.x === 0 && object.room.y === 0);
+  assertCondition(coins.length === 2, `Both spawn coins must remain before Start; got ${coins.length}`);
+  await start.tap();
+  await page.locator('#room-goal-intro-modal').waitFor({ state: 'hidden' });
+  await waitForAppState(page, state => state?.activeScene?.goalRun?.collectiblesCollected === 2
+    && state.activeScene.goalRun.result === 'completed', 'Both spawn pickups credit the newly started goal', 15_000);
+  const run = (await readState(page)).activeScene.goalRun;
+  assertCondition(run.deaths === 0, 'Spawn pickup goal clears without a death or movement hook');
+  summary.assertions.push({ label: 'Real Start tap preserves then credits both spawn pickups', before: coins.length, collected: run.collectiblesCollected, result: run.result, movementHook: false });
+  await captureScenarioScreenshot(page, summary, directory, 'spawn-pickup-clear');
 }
 async function startKeyboardFixtureRoom(page, summary, label) {
   await waitForReadyOverworld(page, label);
