@@ -94,3 +94,19 @@ body[data-device-class='phone']:has(.room-chat-input:focus) .room-chat-composer 
   top: auto;
   bottom: calc(8px + var(--safe-bottom) + max(var(--mobile-portrait-console-height, 0px), var(--keyboard-inset, 0px)));
 }
+
+/* Keep signed-in identity and notifications clear of the portrait room controls. */
+body[data-device-class='phone'][data-orientation-state='portrait']:is([data-app-mode='world'], [data-app-mode='play-world']) #auth-panel:not(.menu-open) #auth-identity {
+  display: none;
+}
+
+body[data-device-class='phone'][data-orientation-state='portrait']:is([data-app-mode='world'], [data-app-mode='play-world']) #auth-panel:not(.menu-open) #btn-activity-open {
+  position: absolute;
+  top: 52px;
+  right: 0;
+}
+
+/* Keep the focused music panel Close corner clear of Activity. */
+body[data-app-mode='editor'][data-editor-music-mode='true'] #auth-panel:not(.menu-open) #btn-activity-open {
+  display: none;
+}
