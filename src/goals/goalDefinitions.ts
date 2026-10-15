@@ -1,3 +1,4 @@
+import { EMPTY_ROOM_GOAL_TARGETS } from './goalRunTargets';
 import { goalCollectiblesExhausted } from './goalRunEvents';
 import { editorCheckpointFlags, finishGoalFlag, playCheckpointFlags } from './goalMarkerPresentation';
 import { formatLimitedGoalTimer } from './goalPresentation';
@@ -25,6 +26,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
     : [];
   return {
     reach_exit: {
+      roomTargets: () => EMPTY_ROOM_GOAL_TARGETS,
       roomEvents: {
         countsEnemyDefeats: false,
         countsPlayerCollectibles: () => false,
@@ -74,6 +76,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
       validate: goal => goal.exit ? null : 'Reach Exit needs an exit marker. Choose Set Exit and place it in the room.'
     },
     collect_target: {
+      roomTargets: goal => ({ ...EMPTY_ROOM_GOAL_TARGETS, collectibleTarget: goal.requiredCount }),
       roomEvents: {
         countsEnemyDefeats: false,
         countsPlayerCollectibles: () => true,
@@ -126,6 +129,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
         ? `You've set the collect goal for ${goal.requiredCount} object${goal.requiredCount === 1 ? '' : 's'}, but you've only placed ${context.collectiblesPlaced}.` : null
     },
     collect_race: {
+      roomTargets: (_goal, context) => ({ ...EMPTY_ROOM_GOAL_TARGETS, collectibleTarget: context.countCollectibles() }),
       roomEvents: {
         countsEnemyDefeats: false,
         countsPlayerCollectibles: () => true,
@@ -173,6 +177,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
           : context.collectModeEnemyCount > 1 ? 'Collect Race currently supports exactly one Sword Hunter set to Collect Items.' : null
     },
     defeat_all: {
+      roomTargets: (_goal, context) => ({ ...EMPTY_ROOM_GOAL_TARGETS, enemyTarget: context.countEnemies() }),
       roomEvents: {
         countsEnemyDefeats: true,
         countsPlayerCollectibles: () => false,
@@ -227,6 +232,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
       validate: (_goal, context) => context.enemyCount <= 0 ? 'Defeat All needs at least one enemy in the room.' : null
     },
     checkpoint_sprint: {
+      roomTargets: goal => ({ ...EMPTY_ROOM_GOAL_TARGETS, checkpointTarget: goal.checkpoints.length }),
       roomEvents: {
         countsEnemyDefeats: false,
         countsPlayerCollectibles: () => false,
@@ -279,6 +285,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
       validate: goal => goal.finish ? null : 'Checkpoint Sprint needs a finish marker. Choose Set Finish and place it in the room.'
     },
     survival: {
+      roomTargets: () => EMPTY_ROOM_GOAL_TARGETS,
       roomEvents: {
         countsEnemyDefeats: true,
         countsPlayerCollectibles: () => true,
@@ -330,6 +337,7 @@ export function createGoalDefinitions<P extends GoalMarkerPoint>(marker: GoalMar
       validate: () => null
     },
     npc_quest: {
+      roomTargets: (goal, context) => ({ ...EMPTY_ROOM_GOAL_TARGETS, collectibleTarget: goal.questType === 'give' ? goal.requiredCount : null, npcTargetInstanceId: goal.npcInstanceId ?? context.firstNpcInstanceId(), npcAlive: true }),
       roomEvents: {
         countsEnemyDefeats: false,
         countsPlayerCollectibles: goal => goal.questType === 'give',
