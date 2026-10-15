@@ -285,6 +285,20 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
   gap: 6px;
 }
 
+/* Leave room for the selected settings below the phone's section navigation. */
+body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'][data-editor-shell-panel='room'] #editor-drawer-room-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 4px;
+  overflow-x: auto;
+}
+
+body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-drawer-room-tabs > button {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #sidebar .sidebar-section {
   width: 100%;
   min-width: 0;

@@ -416,3 +416,71 @@
   font-size: 10px;
   line-height: 1.45;
 }
+
+/* Keep thumbnail URL declarations in their stylesheet resolution context. */
+
+#background-card-grid [data-background-id="forest"] {
+  --background-card-back: url('/assets/backgrounds/forest/1.png');
+  --background-card-front: url('/assets/backgrounds/forest/8.png');
+  --background-card-tint: rgba(74, 102, 58, 0.42);
+}
+
+#background-card-grid [data-background-id="dark_forest"] {
+  --background-card-back: url('/assets/backgrounds/dark_forest/1.png');
+  --background-card-front: url('/assets/backgrounds/dark_forest/7.png');
+  --background-card-tint: rgba(47, 68, 54, 0.46);
+}
+
+#background-card-grid [data-background-id="jungle_vines"] {
+  --background-card-back: url('/assets/backgrounds/jungle_vines/layer_0.png');
+  --background-card-front: url('/assets/backgrounds/jungle_vines/layer_5.png');
+  --background-card-tint: rgba(43, 91, 49, 0.4);
+}
+
+#background-card-grid [data-background-id="spooky_moon"] {
+  --background-card-back: url('/assets/backgrounds/spooky_moon/sky.png');
+  --background-card-front: url('/assets/backgrounds/spooky_moon/moon.png');
+  --background-card-tint: rgba(37, 95, 108, 0.48);
+}
+
+#background-card-grid [data-background-id="spooky_mountain"] {
+  --background-card-back: url('/assets/backgrounds/spooky_mountain/sky.png');
+  --background-card-front: url('/assets/backgrounds/spooky_mountain/mountain_near.png');
+  --background-card-tint: rgba(35, 55, 74, 0.52);
+}
+
+#background-card-grid [data-background-id="grassland"] {
+  --background-card-back: url('/assets/backgrounds/grassland/1.png');
+  --background-card-front: url('/assets/backgrounds/grassland/4.png');
+  --background-card-tint: rgba(122, 151, 67, 0.42);
+}
+
+#background-card-grid [data-background-id="mountains"] {
+  --background-card-back: url('/assets/backgrounds/mountains/1.png');
+  --background-card-front: url('/assets/backgrounds/mountains/4.png');
+  --background-card-tint: rgba(92, 103, 127, 0.42);
+}
+
+#background-card-grid [data-background-id="meadow"] {
+  --background-card-back: url('/assets/backgrounds/meadow/1.png');
+  --background-card-front: url('/assets/backgrounds/meadow/5.png');
+  --background-card-tint: rgba(119, 160, 98, 0.42);
+}
+
+#background-card-grid [data-background-id="aurora"] {
+  --background-card-back: url('/assets/backgrounds/aurora/1.png');
+  --background-card-front: url('/assets/backgrounds/aurora/3.png');
+  --background-card-tint: rgba(83, 111, 146, 0.44);
+}
+
+#background-card-grid [data-background-id="cave"] {
+  --background-card-back: url('/assets/backgrounds/cave/layer1_far.png');
+  --background-card-front: url('/assets/backgrounds/cave/layer3_near.png');
+  --background-card-tint: rgba(79, 74, 118, 0.46);
+}
+
+#background-card-grid [data-background-id="desert"] {
+  --background-card-back: url('/assets/backgrounds/desert/far.png');
+  --background-card-front: url('/assets/backgrounds/desert/near.png');
+  --background-card-tint: rgba(189, 145, 92, 0.34);
+}

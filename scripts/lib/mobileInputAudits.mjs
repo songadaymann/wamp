@@ -30,3 +30,28 @@ export async function restoreKeyboardViewport(page) {
     viewport.dispatchEvent(new Event('resize')); window.dispatchEvent(new Event('resize'));
   });
 }
+
+/** Decode the actual URLs resolved by CSS, including variables consumed in another sheet. */
+export async function readBackgroundThumbnailImages(page) {
+  return page.evaluate(async () => {
+    const cards = Array.from(document.querySelectorAll('#background-card-grid [data-background-id]'))
+      .filter(card => !['none', 'solid_color'].includes(card.dataset.backgroundId));
+    if (!cards.length) throw new Error('No built-in background cards');
+    const images = cards.flatMap(card => {
+      const art = card.querySelector('.background-card-art');
+      if (!art) throw new Error('Missing background art');
+      const urls = Array.from(getComputedStyle(art).backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g), match => match[1]);
+      if (urls.length !== 2) throw new Error(`${card.dataset.backgroundId} needs both thumbnail layers`);
+      return urls.map(url => ({ id: card.dataset.backgroundId, url }));
+    });
+    return Promise.all(images.map(async entry => {
+      const url = new URL(entry.url);
+      if (!url.pathname.startsWith('/assets/backgrounds/')) throw new Error(`Thumbnail resolved below the wrong directory: ${entry.url}`);
+      if (!/^[a-f0-9]{12}$/.test(url.searchParams.get('v') ?? '')) throw new Error(`Thumbnail lost its content version: ${entry.url}`);
+      const image = new Image(); image.src = entry.url;
+      await image.decode();
+      if (!image.naturalWidth || !image.naturalHeight) throw new Error(`Empty thumbnail: ${entry.url}`);
+      return { ...entry, width: image.naturalWidth, height: image.naturalHeight };
+    }));
+  });
+}

@@ -1,4 +1,13 @@
+## 2026-10-14 overnight — signed controls complete and live
+
+- **Signed phone controls and Music Close delivered.** PR #203 / source `127b2b20` / main `332cc064` / Pages `bc5f33a4`. All source/merged-main hosted gates, full3,633-test quality,46 mobile cases, four strict native phone cases, strict desktop music and guarded Pages health pass. Custom-domain four-phone/desktop flows use no analytics stub and report only22 exact known thumbnail404s; real guest API jump/menu/email flow has zero errors. Inspected live images and37 exact custom/immutable JS/CSS file hashes pass. Master145/215; background thumbnail correction is separate and in progress. No new checkbox or animation decision.
+
 ## 2026-10-14 overnight — F062 native proof
+
+## 2026-10-14 overnight — background thumbnail follow-up
+
+From merged `332cc064` on `codex/wamp-background-thumbnails-2026-10-14`; master145. All22 wrong thumbnail URLs404 on old/current immutable releases; their canonical root URLs are200 images. Move existing eleven-preset URL/tint variables from HTML to CSS, preserving appearance and asset versions, then actual image-decode/browser/full/hosted/release proof. Signed controls delivery is still separate/pending merged-main gates. No new checklist count and no animation/upload decision change. Receipt: `docs/review/wamp-background-thumbnails-2026-10-14.md`.
+
 
 ## 2026-10-14 overnight — signed phone natural entry passes both engines
 

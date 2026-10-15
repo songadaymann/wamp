@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { createApiFixtures } from './lib/apiFixtures.mjs';
-import { readPhoneTapTargets, setKeyboardViewport, restoreKeyboardViewport } from './lib/mobileInputAudits.mjs';
+import { readPhoneTapTargets, setKeyboardViewport, restoreKeyboardViewport, readBackgroundThumbnailImages } from './lib/mobileInputAudits.mjs';
 import { installMobileSignedFixture } from './lib/mobileSignedFixture.mjs';
 
 const rawUrl = getStringArg('--url') || process.env.MOBILE_SMOKE_URL?.trim() || 'http://127.0.0.1:3000';
@@ -1843,7 +1843,24 @@ async function runSignedRoomControls(page, summary, directory) {
   await page.locator('#btn-world-edit').tap();
   await waitForBodyAppMode(page, 'editor', 'real portrait Edit touch enters editor', 30_000);
   await page.locator('[data-editor-shell-action="room"]').tap();
-  await page.locator('[data-editor-room-section="music"]').tap();
+  await page.locator('button[data-editor-room-section="background"]').tap();
+  await page.locator('#background-card-grid').waitFor({ state: 'visible' });
+  const thumbnails = await readBackgroundThumbnailImages(page);
+  assertCondition(thumbnails.length === 22, 'All 22 built-in thumbnail layers decode');
+  summary.assertions.push({ label: 'all built-in background layers use versioned root URLs and decode', thumbnails });
+  const forest = page.locator('#background-card-grid button[data-background-id="forest"]');
+  await forest.scrollIntoViewIfNeeded();
+  await hit('#background-card-grid button[data-background-id="forest"]');
+  await captureScenarioScreenshot(page, summary, directory, 'signed-background-thumbnails');
+  const [backgroundSaved] = await Promise.all([
+    page.waitForResponse(response => new URL(response.url()).pathname === '/api/rooms/0%2C0/draft' && response.request().method() === 'PUT' && response.status() === 200, { timeout: 15_000 }),
+    forest.tap(),
+  ]);
+  assertCondition((await page.locator('#background-select').inputValue()) === 'forest', 'Decoded background remains selectable');
+  assertCondition((await backgroundSaved.json()).draft.background === 'forest', 'Selected background is saved in the draft');
+  const musicTab = page.locator('button[data-editor-room-section="music"]');
+  if (!(await musicTab.isVisible())) await page.locator('[data-editor-shell-action="room"]').tap();
+  await musicTab.tap();
   await page.locator('#editor-music-overlay').waitFor({ state: 'visible' });
   const tools = page.locator('#btn-editor-music-touch-tools');
   if (await tools.isVisible() && await tools.getAttribute('aria-expanded') !== 'true') await tools.tap();
