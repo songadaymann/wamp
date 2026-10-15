@@ -66,6 +66,8 @@ export interface GoalPublishValidationContext {
   npcInstanceIds?: string[];
 }
 
+export type RoomGoalTickResolution = 'collect_race_timeout' | 'time_up' | 'survival_clear' | 'npc_protected' | null;
+
 interface GoalDefinitionBase<P extends GoalMarkerPoint, K extends GoalType> {
   label: string;
   markerKind: 'exit' | 'checkpoints' | 'npc_destination' | 'none';
@@ -77,6 +79,7 @@ interface GoalDefinitionBase<P extends GoalMarkerPoint, K extends GoalType> {
   introText: (goal: Goal<P, K>, options: GoalTextOptions) => string;
   validate: (goal: Goal<P, K>, context: GoalPublishValidationContext) => string | null;
   presentation: GoalPresentation<P, K>;
+  roomTick: (goal: Goal<P, K>, elapsedMs: number) => RoomGoalTickResolution;
   roomScoring: {
     score: (goal: Goal<P, K>, context: RoomGoalScoreContext) => number;
     ranking: (goal: Goal<P, K>) => RoomGoalRankingPolicy;
@@ -179,4 +182,9 @@ export function formatCourseGoalProgressText<P extends GoalMarkerPoint, K extend
 
 export function formatGoalTimerText<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, elapsedMs: number, formatTimer: GoalTimerFormatter): string {
   return registry[goal.type].presentation.timer(goal, elapsedMs, formatTimer);
+}
+
+/** Eligibility, time advancement, suspension and side effects stay in the caller. */
+export function resolveRoomGoalTick<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, elapsedMs: number): RoomGoalTickResolution {
+  return registry[goal.type].roomTick(goal, elapsedMs);
 }
