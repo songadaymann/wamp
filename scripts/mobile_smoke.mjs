@@ -141,6 +141,8 @@ const scenarios = [
   { name: 'phone-landscape-room-start', profile: profiles.phoneLandscape, searchParams: { x: '0', y: '0' }, run: runPhoneLandscapeRoomStart },
   { name: 'phone-portrait-tap-targets', profile: profiles.phonePortrait, run: runPhoneTapTargets },
   { name: 'phone-landscape-tap-targets', profile: profiles.phoneLandscape, run: runPhoneTapTargets },
+  { name: 'phone-signed-room-controls', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
+  { name: 'phone-narrow-signed-room-controls', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
 ];
 
 mkdirSync(outputDir, { recursive: true });
@@ -224,7 +226,7 @@ async function runScenario(browserInstance, scenario) {
   await apiFixtures?.install(context);
   if (scenario.signedFixture) {
     if (!apiFixtures) throw new Error('Signed input checks require isolated API fixtures');
-    await installMobileSignedFixture(context, { roomChat: scenario.roomChatFixture });
+    await installMobileSignedFixture(context, { roomChat: scenario.roomChatFixture, roomEditor: scenario.roomEditorFixture, activity: scenario.activityFixture });
   }
   await context.addInitScript(() => {
     window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
@@ -1802,4 +1804,60 @@ function isIgnoredConsoleError(text, url = null) {
 
 function writeSummary() {
   writeFileSync(path.join(outputDir, 'summary.json'), JSON.stringify(summary, null, 2));
+}
+
+
+async function runSignedRoomControls(page, summary, directory) {
+  await waitForBodyAppMode(page, 'play-world', 'signed portrait initial Play', 30_000);
+  // Play mode precedes the asynchronous room intro; wait for its actual Start action.
+  await page.locator('#btn-room-goal-intro-start').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.locator('#btn-room-goal-intro-start').tap();
+  await page.locator('#room-goal-intro-modal').waitFor({ state: 'hidden' });
+  await closeBlockingOverlaysUntilClear(page);
+  await page.locator('#btn-mobile-world-stop').tap();
+  await waitForBodyAppMode(page, 'world', 'signed portrait Stop');
+  await closeBlockingOverlaysUntilClear(page);
+  const hit = async selector => {
+    await page.locator(selector).waitFor({ state: 'visible' });
+    const result = await page.locator(selector).evaluate(element => {
+      const r = element.getBoundingClientRect(), h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return { width: r.width, height: r.height, foreground: element === h || element.contains(h), inside: r.x >= 0 && r.y >= 0 && r.right <= innerWidth && r.bottom <= innerHeight };
+    });
+    assertCondition(result.width >= 40 && result.height >= 40 && result.foreground && result.inside, `${selector} must remain a reachable target: ${JSON.stringify(result)}`);
+  };
+  for (const id of ['#btn-world-edit', '#btn-mobile-world-hud-details', '#btn-mobile-world-hud-minimize', '#menu-toggle']) await hit(id);
+  await page.locator('#btn-mobile-world-hud-details').tap();
+  await page.waitForFunction(() => document.body.dataset.mobileWorldHudDetails === 'true');
+  await page.locator('#btn-mobile-world-hud-details').tap();
+  await waitForBodyAppMode(page, 'world', 'More keeps the room stopped');
+  await page.locator('#btn-activity-open').waitFor({ state: 'visible', timeout: 30_000 });
+  await hit('#btn-activity-open');
+  assertCondition((await page.locator('#activity-unread-count').textContent()) === '3', 'Activity keeps its unread indicator');
+  await page.locator('#btn-activity-open').tap(); await page.locator('#activity-modal').waitFor({ state: 'visible' });
+  await page.locator('#btn-activity-close').tap();
+  await captureScenarioScreenshot(page, summary, directory, 'signed-room-controls');
+  await page.locator('#menu-toggle').tap(); await hit('#auth-identity'); await hit('#btn-activity-open');
+  await captureScenarioScreenshot(page, summary, directory, 'signed-open-menu');
+  await page.locator('#menu-toggle').tap();
+  await assertHidden(page, '#auth-identity', 'signed profile kept inside the closed menu');
+  await page.locator('#btn-world-edit').tap();
+  await waitForBodyAppMode(page, 'editor', 'real portrait Edit touch enters editor', 30_000);
+  await page.locator('[data-editor-shell-action="room"]').tap();
+  await page.locator('[data-editor-room-section="music"]').tap();
+  await page.locator('#editor-music-overlay').waitFor({ state: 'visible' });
+  const tools = page.locator('#btn-editor-music-touch-tools');
+  if (await tools.isVisible() && await tools.getAttribute('aria-expanded') !== 'true') await tools.tap();
+  const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/rooms/0%2C0/draft' && response.request().method() === 'PUT' && response.status() === 200, { timeout: 15_000 });
+  await page.locator('#btn-editor-music-tempo-up').tap();
+  assertCondition((await page.locator('#editor-music-tempo-label').textContent()).includes('125'), 'real music touch changes tempo');
+  await page.locator('#btn-editor-music-tempo-down').tap();
+  await captureScenarioScreenshot(page, summary, directory, 'signed-portrait-music');
+  await hit('#btn-editor-music-close'); await page.locator('#btn-editor-music-close').tap();
+  await assertHidden(page, '#editor-music-overlay', 'Music Close stays reachable with signed Activity');
+  await saved;
+  await page.locator('#btn-editor-phone-menu').tap();
+  await page.locator('#btn-editor-phone-account').tap();
+  await hit('#btn-activity-open');
+  await page.locator('#menu-toggle').tap();
+  summary.assertions.push({ label: 'signed room controls, notifications, profile menu and natural portrait editor/music touches pass' });
 }

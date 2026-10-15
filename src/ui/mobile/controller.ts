@@ -3,6 +3,7 @@ import { getDeviceLayoutState, initializeDeviceLayout, DEVICE_LAYOUT_CHANGED_EVE
 import { getActiveOverworldScene } from '../setup/sceneBridge';
 import { hasFocusedRoomCoordinateLink } from './focusedRoomLink';
 import { PortraitPlayControlsController } from './portraitPlayControls';
+import { keepHtmlPointerOutsideGame } from './gamePointerBoundary';
 
 type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'goal' | 'actions';
 
@@ -86,6 +87,9 @@ export class MobileUiController {
     this.portraitPlayControls.init();
     this.bindMobileCameraTuner();
     this.bindDoubleTapZoomSuppression();
+    // Keep native defaults; allow releases through so canvas drags can finish outside it.
+    this.doc.addEventListener('touchstart', this.handleHtmlPointerStart, { passive: true });
+    this.doc.addEventListener('mousedown', this.handleHtmlPointerStart, { passive: true });
     this.windowObj.addEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
     this.render();
   }
@@ -96,6 +100,8 @@ export class MobileUiController {
     this.windowObj.removeEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleDeviceLayoutChanged as EventListener);
     this.windowObj.removeEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
     this.doc.removeEventListener('touchend', this.handleTouchEndSuppressDoubleTapZoom, true);
+    this.doc.removeEventListener('touchstart', this.handleHtmlPointerStart);
+    this.doc.removeEventListener('mousedown', this.handleHtmlPointerStart);
   }
 
   private readonly handleDeviceLayoutChanged = () => {
@@ -284,6 +290,10 @@ export class MobileUiController {
     if (interval > 0 && interval < 320 && event.cancelable) {
       event.preventDefault();
     }
+  };
+
+  private readonly handleHtmlPointerStart = (event: Event): void => {
+    keepHtmlPointerOutsideGame(event, this.game.canvas);
   };
 
   private shouldAllowNativeDoubleTap(target: Element | null): boolean {

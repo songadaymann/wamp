@@ -1,5 +1,20 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-14 overnight — signed phone natural entry passes both engines
+
+Portrait 320/390px Chrome/WebKit now passes actual Stop/More/Activity/profile menu/Edit→Music with zero page errors/missing fixtures. WebKit's compatibility mousedown needed the same HTML start boundary as touchstart; exact failed trace retained. Native defaults, canvas starts and outside releases stay intact. Closed-room/profile/music screenshots inspected; baseline More failure and eight focused boundary/pan tests pass their expected checks. Full final/replay/client/hosted/delivery remain pending; no new checklist count.
+
+
+## 2026-10-14 overnight — F062 complete and live
+
+PR #202 / `80a01d04` / main `8c590fa0`, guarded Pages `e84dc8c1`. Full 3,630-test/42-mobile/source-and-main four-check gates; six native music flows; three hosted/live music flows after wide entry preparation; actual guest backend jump/menus; health and 36 exact live files pass. Portrait entry and signed More/profile overlap reproduce on prior release; a touch-start trace identifies the game receiving Edit touches. Separate signed phone follow-up is active with a baseline-failing regression. Master 145/215; overnight goal remains active through October 15 5am. Receipt: `docs/review/wamp-required-scene-capabilities-2026-10-14.md`.
+
+
+## 2026-10-14 overnight — signed phone controls follow-up
+
+Baseline `8c590fa0`, branch `codex/wamp-phone-profile-overlap-2026-10-14`. Previous F109 release reproduces signed profile covering More. Plan profile access through the existing open menu and Activity in the existing right gutter, then a signed touch/target/Activity regression and full/native/release proof. Portrait editor entry also fails on previous/current builds; investigate without treating it as accepted entry coverage. F062 release is still being verified separately; no checkbox/count change here.
+
+
 ## 2026-10-14 overnight — F062 final local acceptance
 
 Full 3,630-test quality and all 42 Chromium/WebKit scenarios pass with zero browser errors/missing fixtures. Six native room/course music flows pass, including a regression-backed arrangement-cell selection fix found during testing. Both editors use one required music coordinator; checked scene capabilities replace optional commands and arbitrary casts. Installed-client real-API loading/control capture is inspected (software-renderer performance prompt; no FPS claim). Source/merge gates and guarded live delivery remain pending; master stays 144. Receipt: `docs/review/wamp-required-scene-capabilities-2026-10-14.md`.
