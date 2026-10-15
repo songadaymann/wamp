@@ -1,5 +1,13 @@
 
 
+## 2026-10-15 — Expanded-room run rules and naming complete and live
+
+PR216/source3d22510c/mainf860ff0a; API27e57a67100%, Pages545e8469. All source/main gates,3,708-test full quality,48 mobile cases,78,960 old/new comparisons,12 baseline+12 candidate+12 hosted and12 strict live run cases, three editor-form profiles and actual-backend guest controls pass. Full guard exits0 including immediate smoke.65 exact custom/immutable JS/CSS/background files and unchanged catalog/renderer pass. Initial asset propagation404 and one544-message WebKit report-only navigation remain failed diagnostics; unchanged full strict live recheck passes0errors/misses without allowances/stubs or code/deployment changes. Images inspected. Four owned previews stopped; primary dirty auth/editor work and selected animation preserved. F070/master remain partial/145. Receipt: `docs/review/wamp-expanded-room-run-rules-2026-10-15.md`.
+
+## 2026-10-15 — Expanded-room run source accepted and merged
+
+PR216/source3d22510c/mainf860ff0a, identical trees. All four source checks including48 strict mobile cases pass; immutable5ec37341 passes12 ordinary-input Chromium/WebKit goal/timeout cases,0 errors/misses, inspected images. Three native editor-form profiles pass all five defaults/edits. Full3,708 tests and78,960 old/new comparisons pass. Main gates and guarded API/Pages/custom-domain proof are pending; F070/master stay partial/145. Receipt: `docs/review/wamp-expanded-room-run-rules-2026-10-15.md`.
+
 ## 2026-10-15 — Expanded-room run rules ready for hosted checks
 
 Required typed targets/tick/readiness and shared event mutations, canonical ExpandedRoom run module/exports and remaining display/error naming are implemented.12 Worker files differ only in69 message literals; SQL/routes/keys and shared model formats are unchanged. Full504-file/3,708-test quality,78,960 exact old/new comparisons and12 baseline +12 candidate public-build Chromium/WebKit ordinary-input goal cases pass0errors/misses; images inspected. Source/main48-mobile/hosting gates and guarded API+Pages/live delivery are pending. F070/master partial/145. Receipt: `docs/review/wamp-expanded-room-run-rules-2026-10-15.md`.
