@@ -1,5 +1,13 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-15 overnight — F070 room event policies complete and live
+
+PR #212/source4d0bef33/mainde08bdab; APIe7d264c7100%, Pages8d79a96a.3,697-test quality,46 mobile cases,5,952 actual old/new event comparisons and all source/main gates pass. Guard publishes; immediate propagation404 clears on smoke recheck.60 exact custom/immutable hashes and canonical health/catalog pass. Six actual-domain normal-play pickup/Survival/Give cases use no movement hook, plus strict WebKit goal save/reload and real guest jump/menu return, all0errors. Images inspected. A separate spawn-overlap credit edge is reproduced on unchanged code and retained for follow-up. F070/master partial/145. Receipt: `docs/review/wamp-room-goal-events-2026-10-15.md`.
+
+## 2026-10-15 overnight — F070 room objective rules started
+
+From213 source8b6ec875 on `codex/wamp-goal-objective-registry-2026-10-15`. Four original boundary contracts and4,644 frame comparisons pass before extraction. Client-only required rules explicitly skip event/clock goals and preserve guards, checkpoint/NPC geometry and event/effect order. Context is per controller; no per-frame callbacks/objects added. Keep213 delivery separate and integrate its main. F070/master partial/145. Receipt: `docs/review/wamp-goal-objective-registry-2026-10-15.md`.
+
 ## 2026-10-15 overnight — F070 run-start targets started
 
 From212 source4d0bef33 on `codex/wamp-goal-run-targets-2026-10-15`. Frozen exact-source1,824 initializations and two explicit contracts cover raw/lazy counts, NPC identity/fallback, entry modes and immediate zero-enemy completion. Required typed initialization keeps state ownership and reads in the existing controller; no per-frame change. Integrate212 main after its separate delivery. F070/master partial/145. Receipt: `docs/review/wamp-goal-run-targets-2026-10-15.md`.

@@ -1,3 +1,4 @@
+import { updateRoomGoalObjective, type RoomGoalObjectiveContext } from './goalObjectiveRules';
 import Phaser from 'phaser';
 import type { SfxCue } from '../../audio/sfx';
 import type { CourseMarkerPoint } from '../../courses/model';
@@ -10,7 +11,6 @@ import {
 } from './courseRuns';
 import type {
   GoalRunMutationResult,
-  GoalRunState,
   OverworldGoalRunController,
 } from './goalRuns';
 import type {
@@ -21,7 +21,7 @@ import type {
   RoomSnapshot,
 } from '../../persistence/roomModel';
 
-interface OverworldObjectiveControllerHost {
+export interface OverworldObjectiveControllerHost {
   goalRunController: OverworldGoalRunController;
   getActiveCourseRun(): ActiveCourseRunState | null;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
@@ -63,10 +63,19 @@ interface OverworldObjectiveControllerHost {
 }
 
 export class OverworldObjectiveController {
+  private readonly goalObjectiveContext: RoomGoalObjectiveContext;
   constructor(
     private readonly host: OverworldObjectiveControllerHost,
     private readonly options: { goalTouchRadius: number },
-  ) {}
+  ) {
+    this.goalObjectiveContext = {
+      host,
+      getGoalTouchRadius: () => this.options.goalTouchRadius,
+      playerTouchesGoalPoint: point => this.playerTouchesGoalPoint(point),
+      applyGoalRunMutation: mutation => this.applyGoalRunMutation(mutation),
+      completeGoalRun: message => this.completeGoalRun(message),
+    };
+  }
 
   syncGoalRunForRoom(
     room: RoomSnapshot | null,
@@ -132,38 +141,7 @@ export class OverworldObjectiveController {
       return;
     }
 
-    switch (runState.goal.type) {
-      case 'reach_exit':
-        if (
-          runState.goal.exit &&
-          this.playerTouchesGoalPoint(
-            this.host.toWorldGoalPoint(runState.roomCoordinates, runState.goal.exit),
-          )
-        ) {
-          this.host.recordRankedGoalEvent({
-            type: 'reach_exit',
-            roomId: runState.roomId,
-            roomCoordinates: runState.roomCoordinates,
-            x: runState.goal.exit.x,
-            y: runState.goal.exit.y,
-            checkpointIndex: null,
-          });
-          this.completeGoalRun('Exit reached.');
-        }
-        break;
-      case 'checkpoint_sprint':
-        this.updateCheckpointSprintRun(runState);
-        break;
-      case 'npc_quest':
-        this.updateNpcQuestRun(runState);
-        break;
-      case 'collect_target':
-      case 'collect_race':
-      case 'defeat_all':
-      case 'survival':
-        // Progress comes from collect and defeat events or the clock, not a per-frame check.
-        break;
-    }
+    updateRoomGoalObjective(runState.goal, runState, this.goalObjectiveContext);
   }
 
   failGoalRun(message: string): void {
@@ -220,107 +198,6 @@ export class OverworldObjectiveController {
     );
     this.applyGoalRunMutation(result);
     return result.changed;
-  }
-
-  private updateNpcQuestRun(runState: GoalRunState): void {
-    if (runState.goal.type !== 'npc_quest') {
-      return;
-    }
-    const npcState = this.host.getRoomNpcState(
-      runState.roomId,
-      runState.goal.npcInstanceId ?? runState.npcTargetInstanceId,
-    );
-    if (!npcState) {
-      return;
-    }
-    this.host.goalRunController.resolveNpcTarget(npcState.instanceId);
-
-    if (runState.goal.questType === 'protect') {
-      return;
-    }
-    if (runState.goal.questType === 'escort' && runState.goal.destination) {
-      const destination = this.host.toWorldGoalPoint(
-        runState.roomCoordinates,
-        runState.goal.destination,
-      );
-      if (
-        Phaser.Math.Distance.Between(
-          npcState.x,
-          npcState.y,
-          destination.x,
-          destination.y,
-        ) <= this.options.goalTouchRadius
-      ) {
-        this.applyGoalRunMutation(
-          this.host.goalRunController.recordNpcReachedDestination(runState.roomId),
-        );
-      }
-      return;
-    }
-    if (
-      runState.goal.questType === 'give' &&
-      runState.collectiblesCollected >= runState.goal.requiredCount
-    ) {
-      const playerBody = this.host.getPlayerBody();
-      if (
-        playerBody &&
-        Phaser.Math.Distance.Between(
-          playerBody.center.x,
-          playerBody.center.y,
-          npcState.x,
-          npcState.y,
-        ) <= 52
-      ) {
-        this.applyGoalRunMutation(
-          this.host.goalRunController.recordGiveReturned(runState.roomId),
-        );
-      }
-    }
-  }
-
-  private updateCheckpointSprintRun(runState: GoalRunState): void {
-    if (runState.goal.type !== 'checkpoint_sprint') {
-      return;
-    }
-
-    const nextCheckpoint = runState.goal.checkpoints[runState.nextCheckpointIndex] ?? null;
-    if (nextCheckpoint) {
-      const worldPoint = this.host.toWorldGoalPoint(runState.roomCoordinates, nextCheckpoint);
-      if (this.playerTouchesGoalPoint(worldPoint)) {
-        this.host.recordRankedGoalEvent({
-          type: 'checkpoint',
-          roomId: runState.roomId,
-          roomCoordinates: runState.roomCoordinates,
-          x: nextCheckpoint.x,
-          y: nextCheckpoint.y,
-          checkpointIndex: runState.nextCheckpointIndex,
-        });
-        const mutation = this.host.goalRunController.recordCheckpointReached();
-        if (mutation.changed) this.host.activateRespawnCheckpoint?.(
-          { roomId: runState.roomId, x: nextCheckpoint.x, y: nextCheckpoint.y },
-          runState.nextCheckpointIndex - 1,
-        );
-        this.applyGoalRunMutation(mutation);
-      }
-      return;
-    }
-
-    if (
-      runState.goal.finish &&
-      this.playerTouchesGoalPoint(
-        this.host.toWorldGoalPoint(runState.roomCoordinates, runState.goal.finish),
-      )
-    ) {
-      this.host.recordRankedGoalEvent({
-        type: 'finish',
-        roomId: runState.roomId,
-        roomCoordinates: runState.roomCoordinates,
-        x: runState.goal.finish.x,
-        y: runState.goal.finish.y,
-        checkpointIndex: null,
-      });
-      this.completeGoalRun('Sprint clear.');
-    }
   }
 
   private playerTouchesGoalPoint(point: GoalMarkerPoint): boolean {
