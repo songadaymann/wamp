@@ -1,3 +1,5 @@
+import { createGoalDefinitions } from '../goals/goalDefinitions';
+import { cloneGoal, normalizeGoal, type Goal, type GoalType } from '../goals/goalSchema';
 import { normalizePositiveInteger } from '../goals/roomGoals';
 import {
   normalizeRoomTitle,
@@ -7,15 +9,18 @@ import {
 import { createRandomUuid } from '../utils/randomId';
 import { normalizePlayerHearts, type PlayerHearts } from '../player/hearts';
 
-export const COURSE_GOAL_TYPES = [
-  'reach_exit',
-  'collect_target',
-  'defeat_all',
-  'checkpoint_sprint',
-  'survival',
-] as const;
+type CourseGoalDefinitions = ReturnType<typeof createGoalDefinitions<CourseMarkerPoint>>;
+export type CourseGoalType = {
+  [K in GoalType]: CourseGoalDefinitions[K]['courseSupported'] extends true ? K : never
+}[GoalType];
 
-export type CourseGoalType = typeof COURSE_GOAL_TYPES[number];
+export const COURSE_GOAL_DEFINITIONS = createGoalDefinitions<CourseMarkerPoint>({
+  clone: cloneCourseMarkerPoint,
+  normalize: value => isCourseMarkerPointLike(value) ? cloneCourseMarkerPoint(value) : null,
+}, 5);
+export const COURSE_GOAL_TYPES = (Object.keys(COURSE_GOAL_DEFINITIONS) as GoalType[])
+  .filter((type): type is CourseGoalType => COURSE_GOAL_DEFINITIONS[type].courseSupported);
+
 export type CourseStatus = 'draft' | 'published';
 
 export interface CourseMarkerPoint {
@@ -40,41 +45,12 @@ export interface CourseObjectLink {
 
 export type CoursePressurePlateLink = CourseObjectLink;
 
-export interface CourseReachExitGoal {
-  type: 'reach_exit';
-  exit: CourseMarkerPoint | null;
-  timeLimitMs: number | null;
-}
-
-export interface CourseCollectTargetGoal {
-  type: 'collect_target';
-  requiredCount: number;
-  timeLimitMs: number | null;
-}
-
-export interface CourseDefeatAllGoal {
-  type: 'defeat_all';
-  timeLimitMs: number | null;
-}
-
-export interface CourseCheckpointSprintGoal {
-  type: 'checkpoint_sprint';
-  checkpoints: CourseMarkerPoint[];
-  finish: CourseMarkerPoint | null;
-  timeLimitMs: number | null;
-}
-
-export interface CourseSurvivalGoal {
-  type: 'survival';
-  durationMs: number;
-}
-
-export type CourseGoal =
-  | CourseReachExitGoal
-  | CourseCollectTargetGoal
-  | CourseDefeatAllGoal
-  | CourseCheckpointSprintGoal
-  | CourseSurvivalGoal;
+export type CourseReachExitGoal = Goal<CourseMarkerPoint, 'reach_exit'>;
+export type CourseCollectTargetGoal = Goal<CourseMarkerPoint, 'collect_target'>;
+export type CourseDefeatAllGoal = Goal<CourseMarkerPoint, 'defeat_all'>;
+export type CourseCheckpointSprintGoal = Goal<CourseMarkerPoint, 'checkpoint_sprint'>;
+export type CourseSurvivalGoal = Goal<CourseMarkerPoint, 'survival'>;
+export type CourseGoal = Goal<CourseMarkerPoint, CourseGoalType>;
 
 export interface CourseSnapshot {
   id: string;
@@ -131,13 +107,9 @@ export const MAX_EXPANDED_ROOM_CELLS = 16;
 export const MAX_COURSE_ROOMS = MAX_EXPANDED_ROOM_CELLS;
 export const MIN_COURSE_ROOMS = 2;
 
-export const COURSE_GOAL_LABELS: Record<CourseGoalType, string> = {
-  reach_exit: 'Reach Exit',
-  collect_target: 'Collect Target',
-  defeat_all: 'Defeat All',
-  checkpoint_sprint: 'Checkpoint Sprint',
-  survival: 'Survival',
-};
+export const COURSE_GOAL_LABELS = Object.fromEntries(
+  COURSE_GOAL_TYPES.map(type => [type, COURSE_GOAL_DEFINITIONS[type].label]),
+) as Record<CourseGoalType, string>;
 
 function getCourseGoalTypeValue(goal: Pick<CourseGoal, 'type'> | CourseGoalType | null): CourseGoalType | null {
   if (!goal) {
@@ -151,7 +123,9 @@ export function courseGoalRequiresStartPoint(
   goal: Pick<CourseGoal, 'type'> | CourseGoalType | null
 ): boolean {
   const goalType = getCourseGoalTypeValue(goal);
-  return goalType === 'reach_exit' || goalType === 'checkpoint_sprint';
+  if (!goalType) return false;
+  const markerKind = COURSE_GOAL_DEFINITIONS[goalType].markerKind;
+  return markerKind === 'exit' || markerKind === 'checkpoints';
 }
 
 export function courseGoalUsesMarkerPlacement(
@@ -182,37 +156,7 @@ export function createDefaultCoursePermissions(): CoursePermissions {
 }
 
 export function createDefaultCourseGoal(type: CourseGoalType): CourseGoal {
-  switch (type) {
-    case 'reach_exit':
-      return {
-        type,
-        exit: null,
-        timeLimitMs: null,
-      };
-    case 'collect_target':
-      return {
-        type,
-        requiredCount: 5,
-        timeLimitMs: null,
-      };
-    case 'defeat_all':
-      return {
-        type,
-        timeLimitMs: null,
-      };
-    case 'checkpoint_sprint':
-      return {
-        type,
-        checkpoints: [],
-        finish: null,
-        timeLimitMs: null,
-      };
-    case 'survival':
-      return {
-        type,
-        durationMs: 30_000,
-      };
-  }
+  return COURSE_GOAL_DEFINITIONS[type].createDefault();
 }
 
 export function createDefaultCourseSnapshot(
@@ -365,41 +309,7 @@ export function cloneCoursePressurePlateLink(
 }
 
 export function cloneCourseGoal(goal: CourseGoal | null): CourseGoal | null {
-  if (!goal) {
-    return null;
-  }
-
-  switch (goal.type) {
-    case 'reach_exit':
-      return {
-        type: goal.type,
-        exit: goal.exit ? cloneCourseMarkerPoint(goal.exit) : null,
-        timeLimitMs: goal.timeLimitMs,
-      };
-    case 'collect_target':
-      return {
-        type: goal.type,
-        requiredCount: goal.requiredCount,
-        timeLimitMs: goal.timeLimitMs,
-      };
-    case 'defeat_all':
-      return {
-        type: goal.type,
-        timeLimitMs: goal.timeLimitMs,
-      };
-    case 'checkpoint_sprint':
-      return {
-        type: goal.type,
-        checkpoints: goal.checkpoints.map(cloneCourseMarkerPoint),
-        finish: goal.finish ? cloneCourseMarkerPoint(goal.finish) : null,
-        timeLimitMs: goal.timeLimitMs,
-      };
-    case 'survival':
-      return {
-        type: goal.type,
-        durationMs: goal.durationMs,
-      };
-  }
+  return goal ? cloneGoal(goal, COURSE_GOAL_DEFINITIONS) : null;
 }
 
 export function cloneCourseSnapshot(snapshot: CourseSnapshot): CourseSnapshot {
@@ -605,51 +515,7 @@ export function normalizeCoursePressurePlateLinks(
 }
 
 export function normalizeCourseGoal(value: unknown): CourseGoal | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const goal = value as Partial<CourseGoal> & {
-    checkpoints?: unknown;
-    finish?: unknown;
-    exit?: unknown;
-  };
-
-  switch (goal.type) {
-    case 'reach_exit':
-      return {
-        type: 'reach_exit',
-        exit: isCourseMarkerPointLike(goal.exit) ? cloneCourseMarkerPoint(goal.exit) : null,
-        timeLimitMs: normalizePositiveInteger(goal.timeLimitMs),
-      };
-    case 'collect_target':
-      return {
-        type: 'collect_target',
-        requiredCount: normalizePositiveInteger(goal.requiredCount) ?? 1,
-        timeLimitMs: normalizePositiveInteger(goal.timeLimitMs),
-      };
-    case 'defeat_all':
-      return {
-        type: 'defeat_all',
-        timeLimitMs: normalizePositiveInteger(goal.timeLimitMs),
-      };
-    case 'checkpoint_sprint':
-      return {
-        type: 'checkpoint_sprint',
-        checkpoints: Array.isArray(goal.checkpoints)
-          ? goal.checkpoints.filter(isCourseMarkerPointLike).map(cloneCourseMarkerPoint)
-          : [],
-        finish: isCourseMarkerPointLike(goal.finish) ? cloneCourseMarkerPoint(goal.finish) : null,
-        timeLimitMs: normalizePositiveInteger(goal.timeLimitMs),
-      };
-    case 'survival':
-      return {
-        type: 'survival',
-        durationMs: normalizePositiveInteger(goal.durationMs) ?? 30_000,
-      };
-    default:
-      return null;
-  }
+  return normalizeGoal(value, COURSE_GOAL_DEFINITIONS, COURSE_GOAL_TYPES);
 }
 
 export function normalizeCourseRoomRef(value: unknown): CourseRoomRef | null {
