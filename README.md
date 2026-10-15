@@ -1,6 +1,6 @@
 # Everybody's Platformer
 
-Everybody's Platformer is a collaborative, web-based platformer world. Players explore an infinite grid of rooms, build and publish their own rooms, play authored goals and courses, and connect identity, ownership, leaderboards, chat, and presence around the world.
+Everybody's Platformer is a collaborative, web-based platformer world. Players explore an infinite grid of rooms, build and publish their own rooms, play authored goals and expanded rooms, and connect identity, ownership, leaderboards, chat, and presence around the world.
 
 Live app: <https://wamp.land>
 

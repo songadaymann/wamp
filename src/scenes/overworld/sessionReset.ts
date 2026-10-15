@@ -6,8 +6,8 @@ import {
   roomIdFromCoordinates,
 } from '../../persistence/roomModel';
 import type {
-  ActiveCourseRunState,
-} from './courseRuns';
+  ActiveExpandedRoomRunState,
+} from './expandedRoomRuns';
 import type {
   GoalRunState,
 } from './goalRuns';
@@ -17,17 +17,17 @@ import type {
 
 interface OverworldSessionResetHost {
   getCurrentGoalRun(): GoalRunState | null;
-  getActiveCourseRun(): ActiveCourseRunState | null;
+  getActiveCourseRun(): ActiveExpandedRoomRunState | null;
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   hasActivePvpMatch(): boolean;
   isPvpDamageActive(): boolean;
   tryAbsorbPlayerDamage?(): boolean;
   onPlayerDeath?(): void;
   cancelPlayerAttack(): void;
-  setActiveCourseRun(runState: ActiveCourseRunState | null): void;
+  setActiveCourseRun(runState: ActiveExpandedRoomRunState | null): void;
   recordGoalRunDeath(): void;
   recordRunDeathLocation?(): void;
-  recordCourseRunDeath(): void;
+  recordExpandedRoomRunDeath(): void;
   recordRoomRushDeath(reason: string): boolean;
   recordPvpSelfDeath(reason: string): boolean;
   playPlayerFailFx(): void;
@@ -79,7 +79,7 @@ export class OverworldSessionResetController {
 
     this.host.recordRunDeathLocation?.();
     this.host.recordGoalRunDeath();
-    this.host.recordCourseRunDeath();
+    this.host.recordExpandedRoomRunDeath();
     this.host.playPlayerFailFx();
     const afterBeat = () => {
       this.host.respawnPlayerToCurrentRoom();
@@ -213,7 +213,7 @@ export class OverworldSessionResetController {
   }
 
   private shouldAbandonExpandedRoomRunForExit(
-    runState: ActiveCourseRunState,
+    runState: ActiveExpandedRoomRunState,
     nextRoomCoordinates: RoomCoordinates,
   ): boolean {
     if (!runState.expandedRoomId || runState.result !== 'active') {
@@ -224,7 +224,7 @@ export class OverworldSessionResetController {
     return !runState.course.roomRefs.some((roomRef) => roomRef.roomId === nextRoomId);
   }
 
-  private resetChallengeStateForCourseRun(runState: ActiveCourseRunState): void {
+  private resetChallengeStateForCourseRun(runState: ActiveExpandedRoomRunState): void {
     for (const roomRef of runState.course.roomRefs) {
       const room = this.host.getRoomSnapshotForCoordinates(roomRef.coordinates);
       if (room) {

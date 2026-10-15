@@ -658,7 +658,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
     const state = this.uiState;
     if (!state?.canUnpublishCourse) {
-      this.statusText = state?.unpublishCourseDisabledReason ?? 'Course is not ready to unpublish.';
+      this.statusText = state?.unpublishCourseDisabledReason ?? 'Expanded Room is not ready to unpublish.';
       this.renderUi();
       return;
     }
@@ -712,7 +712,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       centerCoordinates: { ...startRoom.coordinates },
       roomCoordinates: { ...startRoom.coordinates },
       mode: 'play',
-      statusMessage: 'Testing draft course.',
+      statusMessage: 'Testing draft expanded room.',
       courseDraftPreviewId: draft.id,
       courseEditorReturnTarget: {
         courseId: draft.id,
@@ -766,8 +766,8 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
       await this.refreshAround(this.centerCoordinates, true);
     } catch (error) {
-      console.error('Failed to open course composer', error);
-      this.statusText = error instanceof Error ? error.message : 'Failed to open course editor.';
+      console.error('Failed to open expanded room composer', error);
+      this.statusText = error instanceof Error ? error.message : 'Failed to open expanded room editor.';
       this.renderUi();
     } finally {
       this.loading = false;
@@ -1395,7 +1395,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     }
 
     if (!this.getSelectedRoomRef()) {
-      this.statusText = 'Add this room to the course first.';
+      this.statusText = 'Add this room to the expanded room first.';
       this.redraw();
       return;
     }

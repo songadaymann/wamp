@@ -30,7 +30,7 @@ import type {
 import type { CameraMode } from './camera';
 import { ensureEditorScenesRegistered } from '../editorSceneLoader';
 import type { CoursePlaybackRoomSourceMode } from './coursePlayback';
-import type { ActiveCourseRunState } from './courseRuns';
+import type { ActiveExpandedRoomRunState } from './expandedRoomRuns';
 import type { ActiveRoomRushRunState } from './roomRushRuns';
 import type { SelectedCellState } from './hudViewModel';
 
@@ -81,14 +81,14 @@ interface OverworldSceneFlowHost {
   createCourseRunState(
     snapshot: CourseSnapshot,
     options?: { hadPreviousCompletion?: boolean; previousViewerRank?: number | null }
-  ): ActiveCourseRunState;
+  ): ActiveExpandedRoomRunState;
   getCourseStartRoomRef(
     course: CourseSnapshot,
     lockedStartRoomId?: string | null,
   ): CourseRoomRef | null;
-  getActiveCourseRun(): ActiveCourseRunState | null;
+  getActiveCourseRun(): ActiveExpandedRoomRunState | null;
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
-  setActiveCourseRun(runState: ActiveCourseRunState | null): void;
+  setActiveCourseRun(runState: ActiveExpandedRoomRunState | null): void;
   emitCourseComposerStateChanged(): void;
   renderHud(): void;
 }
@@ -493,7 +493,7 @@ export class OverworldSceneFlowController {
       runState.course.roomRefs[0] ??
       null;
     if (!startRoom) {
-      throw new Error('This course has no playable rooms.');
+      throw new Error('This expanded room has no playable rooms.');
     }
 
     this.host.setBrowseInspectZoom(this.host.getInspectZoom());
@@ -515,7 +515,7 @@ export class OverworldSceneFlowController {
 
   private preloadCourseCompletionHistory(
     snapshot: CourseSnapshot,
-    runState: ActiveCourseRunState,
+    runState: ActiveExpandedRoomRunState,
   ): void {
     const authState = getAuthDebugState();
     if (snapshot.status !== 'published' || !authState.authenticated) {
@@ -576,7 +576,7 @@ export class OverworldSceneFlowController {
       courseId: selectedCourseId,
       selectedCoordinates: { ...selectedCoordinates },
       centerCoordinates: { ...this.host.getCurrentRoomCoordinates() },
-      statusMessage: authState.authenticated ? null : 'Sign in to author and publish courses.',
+      statusMessage: authState.authenticated ? null : 'Sign in to author and publish expanded rooms.',
     };
 
     this.host.emitCourseComposerStateChanged();

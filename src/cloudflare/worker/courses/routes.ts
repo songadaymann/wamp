@@ -108,7 +108,7 @@ export async function handleCourseCreate(
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
-    'create course drafts',
+    'create expanded room drafts',
     'rooms:write'
   );
   const snapshot = await parseCourseSnapshotBody(request);
@@ -123,7 +123,7 @@ export async function handleCourseGet(
   courseId: string
 ): Promise<Response> {
   const auth = await loadOptionalRequestAuth(env, request);
-  requireOptionalScope(auth, 'rooms:read', 'read courses');
+  requireOptionalScope(auth, 'rooms:read', 'read expanded rooms');
   const record = await loadCourseRecord(
     env,
     courseId,
@@ -132,7 +132,7 @@ export async function handleCourseGet(
   );
 
   if (!record) {
-    throw new HttpError(404, 'Course not found.');
+    throw new HttpError(404, 'Expanded Room not found.');
   }
 
   if (record.permissions.canSaveDraft || auth?.isAdmin) {
@@ -143,7 +143,7 @@ export async function handleCourseGet(
   }
 
   if (!record.published) {
-    throw new HttpError(404, 'Published course not found.');
+    throw new HttpError(404, 'Published expanded room not found.');
   }
 
   return jsonResponse(request, sanitizeCourseRecordForPublicRead(record));
@@ -157,7 +157,7 @@ export async function handleCourseDraftByRoomLookup(
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
-    'load editable course drafts',
+    'load editable expanded room drafts',
     'rooms:write'
   );
   const record = await loadLatestEditableDraftCourseForRoom(
@@ -168,7 +168,7 @@ export async function handleCourseDraftByRoomLookup(
   );
 
   if (!record) {
-    throw new HttpError(404, 'Draft course not found for this room.');
+    throw new HttpError(404, 'Draft expanded room not found for this room.');
   }
 
   return jsonResponse(
@@ -185,7 +185,7 @@ export async function handleCourseDraftSave(
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
-    'save course drafts',
+    'save expanded room drafts',
     'rooms:write'
   );
   const snapshot = await parseCourseSnapshotBody(request, courseId);
@@ -203,12 +203,12 @@ export async function handleCoursePublish(
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
-    'publish courses',
+    'publish expanded rooms',
     'rooms:write'
   );
   const existing = await loadCourseRecord(env, courseId, auth.user.id, auth.isAdmin);
   if (!existing) {
-    throw new HttpError(404, 'Course draft not found.');
+    throw new HttpError(404, 'Expanded Room draft not found.');
   }
   await assertPrimeOnlyAuthoringRooms(env, existing.draft.roomRefs.map((room) => room.roomId));
 
@@ -250,7 +250,7 @@ export async function handleCourseUnpublish(
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
-    'unpublish courses',
+    'unpublish expanded rooms',
     'rooms:write'
   );
   const record = await unpublishCourse(env, courseId, auth.user, auth.isAdmin);
@@ -285,7 +285,7 @@ export async function handleCourseRunStart(
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
-    'submit course runs',
+    'submit expanded room runs',
     'runs:write'
   );
   await assertWampLeaderboardWriteAllowed(env, auth, 'play');
@@ -293,12 +293,12 @@ export async function handleCourseRunStart(
   const snapshot = await resolvePublishedCourseVersion(env, body.courseId, body.courseVersion);
   await assertSoloCourseRun(env, snapshot);
   if (!snapshot.goal) {
-    throw new HttpError(400, 'This course version does not have an active goal.');
+    throw new HttpError(400, 'This expanded room version does not have an active goal.');
   }
 
   const canonicalGoal = cloneCourseGoal(snapshot.goal);
   if (JSON.stringify(canonicalGoal) !== JSON.stringify(body.goal)) {
-    throw new HttpError(409, 'Run goal does not match the published course version.');
+    throw new HttpError(409, 'Run goal does not match the published expanded room version.');
   }
 
   const attemptId = crypto.randomUUID();
@@ -372,7 +372,7 @@ export async function handleCourseRunFinish(
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
-    'submit course runs',
+    'submit expanded room runs',
     'runs:write'
   );
   await assertWampLeaderboardWriteAllowed(env, auth, 'play');
@@ -387,17 +387,17 @@ export async function handleCourseRunFinish(
   }
 
   if (existing.result !== 'active') {
-    throw new HttpError(409, 'This course run attempt has already been finalized.');
+    throw new HttpError(409, 'This expanded room run attempt has already been finalized.');
   }
 
   const snapshot = await resolvePublishedCourseVersion(env, existing.courseId, existing.courseVersion);
   await assertSoloCourseRun(env, snapshot);
   if (!snapshot.goal) {
-    throw new HttpError(409, 'This course version no longer has a leaderboard goal.');
+    throw new HttpError(409, 'This expanded room version no longer has a leaderboard goal.');
   }
   const courseRecord = await loadCourseRecord(env, existing.courseId, auth.user.id, auth.isAdmin);
   if (!courseRecord) {
-    throw new HttpError(404, 'Course record not found.');
+    throw new HttpError(404, 'Expanded Room record not found.');
   }
   const courseOwnerUserId = await resolvePublishedCourseOwnerUserId(env, existing.courseId);
   const rewardScope = resolveCourseClearRewardScope(
@@ -608,10 +608,10 @@ export async function handleCourseRunFinish(
     throw new HttpError(
       409,
       verificationReason === 'missing_trace'
-        ? 'Missing verification trace for ranked course run.'
+        ? 'Missing verification trace for ranked expanded room run.'
         : verificationReason === 'trace_client_outdated'
           ? 'Client update required for ranked verification.'
-          : 'Ranked course run could not be verified.',
+          : 'Ranked expanded room run could not be verified.',
     );
   }
 
@@ -621,7 +621,7 @@ export async function handleCourseRunFinish(
 
   const finalizedRun = await loadCourseRunByAttemptId(env, attemptId);
   if (!finalizedRun) {
-    throw new HttpError(500, 'Failed to reload finalized course run.');
+    throw new HttpError(500, 'Failed to reload finalized expanded room run.');
   }
   await scheduleDiscoveryMetrics(executionContext, recordDiscoveryRunPlayer(
     env, 'expanded_room:course:' + existing.courseId, existing.courseVersion, auth.user.id,
@@ -692,7 +692,7 @@ export async function handleCourseLeaderboard(
 ): Promise<Response> {
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
-  requireOptionalScope(auth, 'leaderboards:read', 'read course leaderboards');
+  requireOptionalScope(auth, 'leaderboards:read', 'read expanded room leaderboards');
   const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
   const snapshot = await timing.measure(
@@ -700,14 +700,14 @@ export async function handleCourseLeaderboard(
     () => resolvePublishedCourseVersion(env, courseId, version ?? undefined),
   );
   if (!snapshot.goal) {
-    throw new HttpError(404, 'This course version does not have a leaderboard goal.');
+    throw new HttpError(404, 'This expanded room version does not have a leaderboard goal.');
   }
   const record = await timing.measure(
     'course_record',
     () => loadCourseRecord(env, courseId, auth?.user.id ?? null, auth?.isAdmin ?? false),
   );
   if (!record) {
-    throw new HttpError(404, 'Course not found.');
+    throw new HttpError(404, 'Expanded Room not found.');
   }
 
   const leaderboard = await timing.measure('leaderboard', () => buildCourseLeaderboardResponse(
@@ -737,13 +737,13 @@ export async function handleCourseRatingSubmit(
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
-    'rate courses',
+    'rate expanded rooms',
     'runs:write',
   );
   const body = await parseCourseRatingBody(request);
   const record = await loadCourseRecord(env, courseId, auth.user.id, auth.isAdmin);
   if (!record) {
-    throw new HttpError(404, 'Course not found.');
+    throw new HttpError(404, 'Expanded Room not found.');
   }
 
   const responseBody = await submitCourseRating(env, {
@@ -761,7 +761,7 @@ export async function handleCourseRatingSubmit(
 function sanitizeCourseRecordForPublicRead(record: CourseRecord): CourseRecord {
   const published = record.published ? cloneCourseSnapshot(record.published) : null;
   if (!published) {
-    throw new HttpError(404, 'Published course not found.');
+    throw new HttpError(404, 'Published expanded room not found.');
   }
 
   return {
@@ -797,15 +797,15 @@ async function resolvePublishedCourseVersion(
 
   const record = await loadCourseRecord(env, courseId);
   if (!record) {
-    throw new HttpError(404, 'Course not found.');
+    throw new HttpError(404, 'Expanded Room not found.');
   }
   if (version === undefined || version === null) {
-    throw new HttpError(404, 'Published course not found.');
+    throw new HttpError(404, 'Published expanded room not found.');
   }
   const historicalVersion =
     record?.versions.find((entry) => entry.version === version) ?? null;
   if (!historicalVersion) {
-    throw new HttpError(404, `Course version ${version} was not found.`);
+    throw new HttpError(404, `Expanded Room version ${version} was not found.`);
   }
 
   return cloneCourseSnapshot(historicalVersion.snapshot);
@@ -878,7 +878,7 @@ async function loadCourseRunByAttemptId(
 }
 
 function mapCourseRunRow(row: CourseRunRow): CourseRunRecord {
-  const goal = parseStoredCourseGoal(row.goal_json, 'course run goal');
+  const goal = parseStoredCourseGoal(row.goal_json, 'expanded room run goal');
   return {
     attemptId: row.attempt_id,
     courseId: row.course_id,

@@ -1,4 +1,12 @@
 
+
+## 2026-10-15 — Expanded-room run rules ready for hosted checks
+
+Required typed targets/tick/readiness and shared event mutations, canonical ExpandedRoom run module/exports and remaining display/error naming are implemented.12 Worker files differ only in69 message literals; SQL/routes/keys and shared model formats are unchanged. Full504-file/3,708-test quality,78,960 exact old/new comparisons and12 baseline +12 candidate public-build Chromium/WebKit ordinary-input goal cases pass0errors/misses; images inspected. Source/main48-mobile/hosting gates and guarded API+Pages/live delivery are pending. F070/master partial/145. Receipt: `docs/review/wamp-expanded-room-run-rules-2026-10-15.md`.
+
+## 2026-10-15 — F070 expanded-room run rules started
+
+User request: consolidate course-run logic, test and ship; product name is Expanded Room. Branch `codex/wamp-expanded-room-run-rules-2026-10-15`, origin/main759f4939 plus the preserved local overnight receipt commits. Plan: freeze old behavior; extract required typed expanded-room initialization/tick/readiness rules and target-event handling; rename the run-module/callers and remaining visible course copy without changing stored/API keys; run exact old/new comparisons, full quality/48 mobile/native and hosted gates; guarded release and actual-domain verification. Master145/215 and F070 remain partial. Primary auth/editor work and selected animation stay untouched.
 ## 2026-10-15 overnight — F070 room objective rules complete and live
 
 PR #214/source267538b0/mainbd077131; Pageseffd649f, API8c4b3513 unchanged100%.3,703-test quality,46 mobile cases,4,644 strict controller frames, both-engine exit/escort/checkpoint/event gameplay and all source/main gates pass. Guarded Pages-only release exits0 including immediate smoke.60 exact custom/immutable hashes, canonical health/catalog, strict live normal-input pickup/delivery, phone goal save/reload and real guest jump/menu flow pass0errors; images inspected. F070/master partial/145. Receipt: `docs/review/wamp-goal-objective-registry-2026-10-15.md`.

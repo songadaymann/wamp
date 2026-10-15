@@ -10,7 +10,7 @@ function harness(qualificationState: 'qualified' | 'practice' = 'qualified', sur
     result: 'active', elapsedMs: 3000, deaths: 0 };
   const host = { getCurrentGoalRun: () => run, getActiveCourseRun: () => null, getActiveRoomRushRun: () => null,
     hasActivePvpMatch: () => false, recordGoalRunDeath: vi.fn(() => { run.deaths++; }),
-    recordCourseRunDeath: vi.fn(), recordRunDeathLocation: vi.fn(), playPlayerFailFx: vi.fn(),
+    recordExpandedRoomRunDeath: vi.fn(), recordRunDeathLocation: vi.fn(), playPlayerFailFx: vi.fn(),
     cancelPlayerAttack: vi.fn(),
     respawnPlayerToCurrentRoom: vi.fn(), clearRespawnCheckpoints: vi.fn(), showTransientStatus: vi.fn(),
     getRoomSnapshotForCoordinates: () => room, failGoalRun: vi.fn(), restartGoalRunForRoom: vi.fn(),

@@ -390,7 +390,7 @@ export function markRecordGapCourseRuns(
         },
         goal
       ),
-    'course run'
+    'expanded room run'
   );
 }
 
@@ -399,7 +399,7 @@ function markRecordGapRuns(
   recentRuns: CombinedRunBase[],
   historicalRuns: HistoricalComparableRun[],
   compare: (left: HistoricalComparableRun, right: HistoricalComparableRun) => number,
-  runLabel: 'run' | 'course run'
+  runLabel: 'run' | 'expanded room run'
 ): void {
   const counts = new Map<string, number>();
   const bestSummaries = new Map<string, { improvementMs: number; ratio: number }>();

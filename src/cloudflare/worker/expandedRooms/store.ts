@@ -677,7 +677,7 @@ async function loadLegacyCourseExpandedRoomTargetAtCoordinates(
     return null;
   }
   if (memberships.length > 1) {
-    console.warn('Conflicting legacy course memberships for coordinate.', {
+    console.warn('Conflicting legacy expanded room memberships for coordinate.', {
       coordinates,
       courseIds: memberships.map((membership) => membership.courseId),
     });

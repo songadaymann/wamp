@@ -19,7 +19,7 @@ import type {
   OverworldHudViewModel,
   OverworldOnlineRosterViewEntry,
 } from './hud';
-import type { ActiveCourseRunState } from './courseRuns';
+import type { ActiveExpandedRoomRunState } from './expandedRoomRuns';
 import type { GoalRunState } from './goalRuns';
 import type { ActiveRoomRushRunState } from './roomRushRuns';
 import type { ActiveSignState } from './signPosts';
@@ -82,7 +82,7 @@ export interface BuildOverworldHudViewModelOptions {
   rankingMode: LeaderboardRankingMode | null;
   roomTop: RoomLeaderboardEntry | null;
   currentRoomLeaderboard: RoomLeaderboardResponse | null;
-  activeCourseRun: ActiveCourseRunState | null;
+  activeCourseRun: ActiveExpandedRoomRunState | null;
   activeRoomRushRun: ActiveRoomRushRunState | null;
   activeRoomGoalRun: GoalRunState | null;
   activeGoalRoom: RoomSnapshot | null;
@@ -95,12 +95,12 @@ export interface BuildOverworldHudViewModelOptions {
   roomCommentsVisible: boolean;
   zoom: number;
   getRoomDisplayTitle: (title: string | null, coordinates: RoomCoordinates) => string;
-  getCourseGoalBadgeText: (goal: CourseGoal | null) => string;
+  getExpandedRoomGoalBadgeText: (goal: CourseGoal | null) => string;
   getGoalBadgeText: (goal: RoomGoal) => string;
   getSelectedRoomGoalText: (room: RoomSnapshot) => string;
-  getCourseGoalTimerText: (runState: ActiveCourseRunState) => string;
+  getExpandedRoomGoalTimerText: (runState: ActiveExpandedRoomRunState) => string;
   getPlayGoalTimerText: (runState: GoalRunState) => string;
-  getCourseGoalProgressText: (runState: ActiveCourseRunState) => string;
+  getExpandedRoomGoalProgressText: (runState: ActiveExpandedRoomRunState) => string;
   getPlayGoalProgressText: (runState: GoalRunState) => string;
   getRoomRushGoalBadgeText: (runState: ActiveRoomRushRunState) => string;
   getRoomRushTimerText: (runState: ActiveRoomRushRunState) => string;
@@ -163,12 +163,12 @@ export function buildOverworldHudViewModel(
     roomCommentsVisible,
     zoom,
     getRoomDisplayTitle,
-    getCourseGoalBadgeText,
+    getExpandedRoomGoalBadgeText,
     getGoalBadgeText,
     getSelectedRoomGoalText,
-    getCourseGoalTimerText,
+    getExpandedRoomGoalTimerText,
     getPlayGoalTimerText,
-    getCourseGoalProgressText,
+    getExpandedRoomGoalProgressText,
     getPlayGoalProgressText,
     getRoomRushGoalBadgeText,
     getRoomRushTimerText,
@@ -559,21 +559,21 @@ export function buildOverworldHudViewModel(
           )
         : '',
     goalPanelGoalText: activeCourseRun
-      ? getCourseGoalBadgeText(activeCourseRun.course.goal ?? null).toUpperCase()
+      ? getExpandedRoomGoalBadgeText(activeCourseRun.course.goal ?? null).toUpperCase()
       : activeRoomRushRun
         ? getRoomRushGoalBadgeText(activeRoomRushRun).toUpperCase()
       : activeRoomGoalRun
         ? getGoalBadgeText(activeRoomGoalRun.goal).toUpperCase()
         : '',
     goalPanelTimerText: activeCourseRun
-      ? getCourseGoalTimerText(activeCourseRun)
+      ? getExpandedRoomGoalTimerText(activeCourseRun)
       : activeRoomRushRun
         ? getRoomRushTimerText(activeRoomRushRun)
       : activeRoomGoalRun
         ? getPlayGoalTimerText(activeRoomGoalRun)
         : '',
     goalPanelProgressText: activeCourseRun
-      ? getCourseGoalProgressText(activeCourseRun)
+      ? getExpandedRoomGoalProgressText(activeCourseRun)
       : activeRoomRushRun
         ? getRoomRushProgressText(activeRoomRushRun)
       : activeRoomGoalRun

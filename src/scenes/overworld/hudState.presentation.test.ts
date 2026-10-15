@@ -3,7 +3,7 @@ vi.mock('../../auth/client',()=>({getAuthDebugState:()=>({authenticated:false})}
 import {OverworldHudStateController} from './hudState';
 import {ROOM_GOAL_DEFINITIONS,createDefaultRoomGoal,ROOM_GOAL_TYPES,type CollectTargetGoal} from '../../goals/roomGoals';
 import {createDefaultCourseGoal} from '../../courses/model';
-import {getCourseGoalBadgeText,getCourseGoalProgressText,getCourseGoalTimerText} from './courseRuns';
+import {getExpandedRoomGoalBadgeText,getExpandedRoomGoalProgressText,getExpandedRoomGoalTimerText} from './expandedRoomRuns';
 const hud=new OverworldHudStateController({countRoomEnemies:()=>7} as never);
 const run=(type:typeof ROOM_GOAL_TYPES[number],changes={})=>({goal:createDefaultRoomGoal(type),qualificationState:'ranked',leaderboardEligible:true,result:'active',elapsedMs:12500,collectiblesCollected:2,enemyCollectiblesCollected:1,enemiesDefeated:3,checkpointsReached:1,enemyTarget:7,checkpointTarget:4,...changes});
 describe('goal HUD presentation compatibility',()=>{
@@ -31,15 +31,15 @@ describe('goal HUD presentation compatibility',()=>{
  });
  it('pins course fallbacks, progress targets and unchanged timer callback values',()=>{
   const courseRun=(type:Parameters<typeof createDefaultCourseGoal>[0],changes={})=>({course:{goal:createDefaultCourseGoal(type)},result:'active',elapsedMs:12500,collectiblesCollected:2,collectibleTarget:9,enemiesDefeated:3,enemyTarget:7,checkpointsReached:1,checkpointTarget:4,...changes});
-  expect(getCourseGoalBadgeText(null)).toBe('Course');
-  expect(getCourseGoalBadgeText(createDefaultCourseGoal('collect_target'))).toBe('Collect 5');
-  expect(getCourseGoalProgressText(courseRun('collect_target') as never)).toBe('2/9 collected');
-  expect(getCourseGoalProgressText(courseRun('collect_target',{collectibleTarget:null}) as never)).toBe('2/5 collected');
-  expect(getCourseGoalProgressText(courseRun('checkpoint_sprint',{checkpointTarget:null}) as never)).toBe('1/0 checkpoints');
-  expect(getCourseGoalProgressText(courseRun('survival',{result:'completed'}) as never)).toBe('Survived');
-  expect(getCourseGoalProgressText({...courseRun('survival'),course:{goal:null}} as never)).toBe('');
-  expect(getCourseGoalTimerText(courseRun('survival') as never,ms=>String(ms))).toBe('17500 LEFT');
-  expect(getCourseGoalTimerText({...courseRun('survival'),course:{goal:null}} as never,ms=>String(ms))).toBe('12500');
+  expect(getExpandedRoomGoalBadgeText(null)).toBe('Expanded Room');
+  expect(getExpandedRoomGoalBadgeText(createDefaultCourseGoal('collect_target'))).toBe('Collect 5');
+  expect(getExpandedRoomGoalProgressText(courseRun('collect_target') as never)).toBe('2/9 collected');
+  expect(getExpandedRoomGoalProgressText(courseRun('collect_target',{collectibleTarget:null}) as never)).toBe('2/5 collected');
+  expect(getExpandedRoomGoalProgressText(courseRun('checkpoint_sprint',{checkpointTarget:null}) as never)).toBe('1/0 checkpoints');
+  expect(getExpandedRoomGoalProgressText(courseRun('survival',{result:'completed'}) as never)).toBe('Survived');
+  expect(getExpandedRoomGoalProgressText({...courseRun('survival'),course:{goal:null}} as never)).toBe('');
+  expect(getExpandedRoomGoalTimerText(courseRun('survival') as never,ms=>String(ms))).toBe('17500 LEFT');
+  expect(getExpandedRoomGoalTimerText({...courseRun('survival'),course:{goal:null}} as never,ms=>String(ms))).toBe('12500');
  });
 });
 

@@ -197,7 +197,7 @@ export function createPostRunClearReward(options: {
   const isCourse = options.contentType === 'course';
   const isExpandedRoom = options.contentType === 'expanded_room';
   const kind = isExpandedRoom ? 'expanded-room-clear' : isCourse ? 'course-clear' : 'room-clear';
-  const label = isExpandedRoom ? 'Expanded Room' : isCourse ? 'Course' : 'Room';
+  const label = isExpandedRoom ? 'Expanded Room' : isCourse ? 'Expanded Room' : 'Room';
   return {
     kind,
     tone: isCourse ? 'curator' : 'player',
@@ -438,7 +438,7 @@ function formatTrophyDetail(
     trophy.contentType === 'expanded_room'
       ? `Expanded Room ${trophy.contentId}`
       : trophy.contentType === 'course'
-      ? `Course ${trophy.contentId}`
+      ? `Expanded Room ${trophy.contentId}`
       : `Room ${trophy.contentId}`;
   return `${targetLabel} v${trophy.versionKey}`;
 }

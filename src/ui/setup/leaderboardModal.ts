@@ -661,8 +661,8 @@ export class LeaderboardModalController {
 
     if (this.activeTab === 'course') {
       const courseLabel = this.courseLeaderboard
-        ? `${this.courseLeaderboard.courseTitle?.trim() || 'Course'} · ${this.courseLeaderboard.goalType.replace('_', ' ')} · v${this.courseLeaderboard.courseVersion}`
-        : 'No published course selected.';
+        ? `${this.courseLeaderboard.courseTitle?.trim() || 'Expanded Room'} · ${this.courseLeaderboard.goalType.replace('_', ' ')} · v${this.courseLeaderboard.courseVersion}`
+        : 'No published expanded room selected.';
       this.elements.meta.textContent = courseLabel;
       return;
     }

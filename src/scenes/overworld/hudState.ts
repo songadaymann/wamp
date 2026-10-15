@@ -6,11 +6,11 @@ import {
   type CourseSnapshot,
 } from '../../courses/model';
 import {
-  getCourseGoalBadgeText as formatCourseGoalBadgeText,
-  getCourseGoalProgressText as formatCourseGoalProgressText,
-  getCourseGoalTimerText as formatCourseGoalTimerText,
-  type ActiveCourseRunState,
-} from './courseRuns';
+  getExpandedRoomGoalBadgeText as formatCourseGoalBadgeText,
+  getExpandedRoomGoalProgressText as formatCourseGoalProgressText,
+  getExpandedRoomGoalTimerText as formatCourseGoalTimerText,
+  type ActiveExpandedRoomRunState,
+} from './expandedRoomRuns';
 import { ROOM_GOAL_DEFINITIONS, type RoomGoal } from '../../goals/roomGoals';
 import { formatGoalBadgeText, formatGoalSelectedText, formatRoomGoalProgressText, formatGoalTimerText } from '../../goals/goalSchema';
 import { formatGoalOverlayTimer } from '../../goals/goalPresentation';
@@ -67,7 +67,7 @@ interface OverworldHudStateControllerHost {
   getRoomPopulation(coordinates: RoomCoordinates): number;
   getRoomEditorCount(coordinates: RoomCoordinates): number;
   getRoomEditorDisplayNames(coordinates: RoomCoordinates): string[];
-  getActiveCourseRun(): ActiveCourseRunState | null;
+  getActiveCourseRun(): ActiveExpandedRoomRunState | null;
   getActiveRoomRushRun(): ActiveRoomRushRunState | null;
   getCurrentGoalRun(): GoalRunState | null;
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshotView | null;
@@ -258,12 +258,12 @@ export class OverworldHudStateController {
         roomCommentsVisible: this.host.areRoomCommentsVisible(),
         zoom: this.host.getZoom(),
         getRoomDisplayTitle: (title, coordinates) => this.getRoomDisplayTitle(title, coordinates),
-        getCourseGoalBadgeText: (goal) => this.getCourseGoalBadgeText(goal),
+        getExpandedRoomGoalBadgeText: (goal) => this.getExpandedRoomGoalBadgeText(goal),
         getGoalBadgeText: (goal) => this.getGoalBadgeText(goal),
         getSelectedRoomGoalText: (room) => this.getSelectedRoomGoalText(room),
-        getCourseGoalTimerText: (runState) => this.getCourseGoalTimerText(runState),
+        getExpandedRoomGoalTimerText: (runState) => this.getExpandedRoomGoalTimerText(runState),
         getPlayGoalTimerText: (runState) => this.getPlayGoalTimerText(runState),
-        getCourseGoalProgressText: (runState) => this.getCourseGoalProgressText(runState),
+        getExpandedRoomGoalProgressText: (runState) => this.getExpandedRoomGoalProgressText(runState),
         getPlayGoalProgressText: (runState) => this.getPlayGoalProgressText(runState),
         getRoomRushGoalBadgeText: (runState) => this.getRoomRushGoalBadgeText(runState),
         getRoomRushTimerText: (runState) => this.getRoomRushTimerText(runState),
@@ -353,7 +353,7 @@ export class OverworldHudStateController {
       })
       .catch((error) => {
         this.loadingCourseIds.delete(courseId);
-        console.warn('Failed to load selected course snapshot', error);
+        console.warn('Failed to load selected expanded room snapshot', error);
       });
   }
 
@@ -392,7 +392,7 @@ export class OverworldHudStateController {
     return formatGoalSelectedText(goal, ROOM_GOAL_DEFINITIONS, enemyCount);
   }
 
-  private getCourseGoalBadgeText(goal: CourseGoal | null): string {
+  private getExpandedRoomGoalBadgeText(goal: CourseGoal | null): string {
     return formatCourseGoalBadgeText(goal);
   }
 
@@ -401,7 +401,7 @@ export class OverworldHudStateController {
     return formatGoalTimerText(runState.goal, ROOM_GOAL_DEFINITIONS, runState.elapsedMs, formatGoalOverlayTimer);
   }
 
-  private getCourseGoalTimerText(runState: ActiveCourseRunState): string {
+  private getExpandedRoomGoalTimerText(runState: ActiveExpandedRoomRunState): string {
     return formatCourseGoalTimerText(runState, formatGoalOverlayTimer);
   }
 
@@ -412,7 +412,7 @@ export class OverworldHudStateController {
     return formatRoomGoalProgressText(runState.goal, ROOM_GOAL_DEFINITIONS, runState);
   }
 
-  private getCourseGoalProgressText(runState: ActiveCourseRunState): string {
+  private getExpandedRoomGoalProgressText(runState: ActiveExpandedRoomRunState): string {
     return formatCourseGoalProgressText(runState);
   }
 

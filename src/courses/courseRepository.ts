@@ -164,7 +164,7 @@ class ApiCourseRepository implements CourseRepository {
 
     if (!response.ok) {
       const details = await response.text();
-      let message = details || `Course API request failed with status ${response.status}.`;
+      let message = details || `Expanded Room API request failed with status ${response.status}.`;
       if (details) {
         try {
           const parsed = JSON.parse(details) as { error?: unknown };

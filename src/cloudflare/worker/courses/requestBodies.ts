@@ -150,23 +150,23 @@ export function normalizeFinalizedCourseRunBody(
     goal.timeLimitMs !== null &&
     reportedElapsedMs > goal.timeLimitMs
   ) {
-    throw new HttpError(409, 'Completed course runs must finish within the published time limit.');
+    throw new HttpError(409, 'Completed expanded room runs must finish within the published time limit.');
   }
 
   switch (goal.type) {
     case 'collect_target':
       if (body.collectiblesCollected < goal.requiredCount) {
-        throw new HttpError(409, 'Completed collect-target course runs must meet the published goal.');
+        throw new HttpError(409, 'Completed collect-target expanded room runs must meet the published goal.');
       }
       break;
     case 'checkpoint_sprint':
       if (body.checkpointsReached < goal.checkpoints.length) {
-        throw new HttpError(409, 'Completed checkpoint course runs must hit every checkpoint.');
+        throw new HttpError(409, 'Completed checkpoint expanded room runs must hit every checkpoint.');
       }
       break;
     case 'survival':
       if (body.elapsedMs < goal.durationMs) {
-        throw new HttpError(409, 'Completed survival course runs must last the full published duration.');
+        throw new HttpError(409, 'Completed survival expanded room runs must last the full published duration.');
       }
       break;
     case 'defeat_all':

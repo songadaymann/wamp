@@ -256,7 +256,7 @@ export async function assertPrimeOnlyAuthoringRooms(env: Env, roomIds: string[])
      LIMIT 1`,
   ).bind(...uniqueRoomIds).first<{ number: number }>();
   if (row) {
-    throw new HttpError(403, 'Expanded Room and course authoring are disabled for numbered World rooms.');
+    throw new HttpError(403, 'Expanded Room authoring is disabled for numbered World rooms.');
   }
 }
 

@@ -89,8 +89,8 @@ export function buildPressurePlateInspectorState(
       options.statusText ??
       (options.connectMode
         ? canConnect
-          ? 'Click a door, barricade, cage, or chest anywhere in this course to link this pressure plate.'
-          : 'No door, barricade, cage, or chest is in this course yet.'
+          ? 'Click a door, barricade, cage, or chest anywhere in this expanded room to link this pressure plate.'
+          : 'No door, barricade, cage, or chest is in this expanded room yet.'
         : options.targetSummary
           ? `Linked to ${options.targetSummary}.`
           : 'This pressure plate is not linked yet.'),
@@ -99,7 +99,7 @@ export function buildPressurePlateInspectorState(
     pressureConnectDisabled: options.connectMode || !canConnect,
     pressureConnectTitle: canConnect
       ? ''
-      : options.connectTitle ?? 'Add a door, metal door, cage, or chest to this course first.',
+      : options.connectTitle ?? 'Add a door, metal door, cage, or chest to this expanded room first.',
     pressureClearHidden: options.connectMode,
     pressureClearDisabled: !targetExists,
     pressureDoneLaterHidden: !options.connectMode,

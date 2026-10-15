@@ -52,7 +52,7 @@ const ACTIVITY_FILTERS: Array<{
   { key: 'room_play', label: 'Room Plays' },
   { key: 'room_claims', label: 'Room Claims' },
   { key: 'room_publishes', label: 'Room Publishes' },
-  { key: 'course_publishes', label: 'Expanded/Course Publishes' },
+  { key: 'course_publishes', label: 'Expanded Room Publishes' },
 ];
 
 const adminKeyInput = document.getElementById('admin-key-input') as HTMLInputElement | null;
@@ -1085,8 +1085,8 @@ function renderTotals(): void {
     ['Rooms', totals.rooms],
     ['Published Rooms', totals.publishedRooms],
     ['Room Runs', totals.roomRuns],
-    ['Courses', totals.courses],
-    ['Course Runs', totals.courseRuns],
+    ['Expanded Rooms', totals.courses],
+    ['Expanded Room Runs', totals.courseRuns],
     ['Expanded Rooms', totals.expandedRooms],
     ['Expanded Room Runs', totals.expandedRoomRuns],
     ['Chat Messages', totals.chatMessages],
@@ -1371,7 +1371,7 @@ function renderActivityWindowCards(range: LaunchStatsActivityRange): string {
     },
     {
       filterKey: 'course_publishes',
-      label: 'Expanded/Course Publishes',
+      label: 'Expanded Room Publishes',
       value: formatCountWithNoun(
         windowStats.expandedRoomPublishes + windowStats.coursePublishes,
         'publish',
@@ -1559,9 +1559,9 @@ function renderRecentSummaryKindLabel(
       return 'Room Build';
     case 'course_build':
       if (filterKey === 'course_publishes') {
-        return 'Course Publish';
+        return 'Expanded Room Publish';
       }
-      return 'Course Build';
+      return 'Expanded Room Build';
     default:
       return 'Activity';
   }
@@ -1659,12 +1659,12 @@ function renderRecentSummaryBody(
       const courses = summary.courseCount ?? summary.topCourses.length;
       const publishes = summary.coursePublishCount ?? courses;
       if (publishes > courses) {
-        return `published ${formatNumber(publishes)} course version${publishes === 1 ? '' : 's'} ${rangePhrase} across ${formatNumber(
+        return `published ${formatNumber(publishes)} expanded room version${publishes === 1 ? '' : 's'} ${rangePhrase} across ${formatNumber(
           courses
-        )} course${courses === 1 ? '' : 's'}.`;
+        )} expanded room${courses === 1 ? '' : 's'}.`;
       }
 
-      return `published ${formatNumber(courses)} course${courses === 1 ? '' : 's'} ${rangePhrase}.`;
+      return `published ${formatNumber(courses)} expanded room${courses === 1 ? '' : 's'} ${rangePhrase}.`;
     }
     default:
       return 'showed up recently.';
@@ -1704,7 +1704,7 @@ function renderRecentSummaryDetail(
     }
     case 'visit_only': {
       const sessions = summary.sessionCount ?? 0;
-      return `${formatNumber(sessions)} login session${sessions === 1 ? '' : 's'} · no room or course play/build in ${range.description}.`;
+      return `${formatNumber(sessions)} login session${sessions === 1 ? '' : 's'} · no room or expanded room play/build in ${range.description}.`;
     }
     case 'room_play': {
       const parts = [
@@ -1817,7 +1817,7 @@ function formatCourseReference(course: LaunchStatsRecentCourseReference): string
     return coordinateSummary;
   }
 
-  return `course ${course.courseId}`;
+  return `expanded room ${course.courseId}`;
 }
 
 function formatTimestamp(value: string): string {

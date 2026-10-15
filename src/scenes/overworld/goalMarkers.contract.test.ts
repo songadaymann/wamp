@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {OverworldGoalMarkerController} from './goalMarkers';
 import {buildRoomGoalMarkerDescriptors} from '../editor/goalDocument';
 import type {GoalRunState} from './goalRuns';
-import type {ActiveCourseRunState} from './courseRuns';
+import type {ActiveExpandedRoomRunState} from './expandedRoomRuns';
 function setup(){
  const sprites:{x:number;y:number;texture:string;alpha?:number;animation?:string;destroyed:boolean}[]=[],labels:{x:number;y:number;text:string}[]=[];
  const scene={add:{sprite:(x:number,y:number,texture:string)=>{const value={x,y,texture,destroyed:false} as (typeof sprites)[number];sprites.push(value);return {setOrigin(){return this;},setDepth(){return this;},setAlpha(alpha:number){value.alpha=alpha;return this;},play(animation:string){value.animation=animation;return this;},destroy(){value.destroyed=true;}};},text:(x:number,y:number,text:string)=>{labels.push({x,y,text});return {setOrigin(){return this;},setDepth(){return this;},destroy(){}};}}};
@@ -18,7 +18,7 @@ describe('goal marker rendering contract',()=>{
   controller.redrawMarkers({...room,result:'completed'},null);expect(sprites.slice(0,4).every(s=>s.destroyed)).toBe(true);expect(sprites.at(-1)?.texture).toBe('goal-marker-flag-checkered-gold');
  });
  it('lets course markers own the redraw and keeps missing-room fallback coordinates',()=>{
-  const {controller,sprites,labels}=setup();const course={course:{startPoint:{roomId:'room',x:8,y:16},goal:{type:'reach_exit',exit:{roomId:'missing',x:24,y:32},timeLimitMs:null}},result:'completed',nextCheckpointIndex:0} as unknown as ActiveCourseRunState;
+  const {controller,sprites,labels}=setup();const course={course:{startPoint:{roomId:'room',x:8,y:16},goal:{type:'reach_exit',exit:{roomId:'missing',x:24,y:32},timeLimitMs:null}},result:'completed',nextCheckpointIndex:0} as unknown as ActiveExpandedRoomRunState;
   controller.redrawMarkers(room,course);expect(sprites).toMatchObject([{x:2568,y:-1902,texture:'goal-marker-flag-red'},{x:-1256,y:1186,texture:'goal-marker-flag-checkered-gold'}]);expect(labels.map(l=>l.text)).toEqual(['S']);
  });
  it('shows a non-Escort NPC destination in the editor while Play leaves it hidden',()=>{

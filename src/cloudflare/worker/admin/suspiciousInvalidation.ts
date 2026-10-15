@@ -522,7 +522,7 @@ async function loadSelectedCourseRuns(
   }
 
   if (rows.length !== new Set(attemptIds).size) {
-    throw new HttpError(404, 'One or more selected course runs were not found for that user.');
+    throw new HttpError(404, 'One or more selected expanded room runs were not found for that user.');
   }
 
   return rows.sort(compareRunCases);

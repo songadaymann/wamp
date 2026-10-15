@@ -256,9 +256,9 @@ import {
 } from './overworld/worldStreaming';
 import { BrowseRealtimeStartupGate } from './overworld/browseRealtimeStartup';
 import {
-  recordCourseRunDeath,
-  type ActiveCourseRunState,
-} from './overworld/courseRuns';
+  recordExpandedRoomRunDeath,
+  type ActiveExpandedRoomRunState,
+} from './overworld/expandedRoomRuns';
 import {
   type ActiveRoomRushRunState,
   type RoomRushDifficulty,
@@ -507,7 +507,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private readonly profileRepository = createProfileRepository();
   private readonly publishedCourseSnapshotsById = new Map<string, CourseSnapshot>();
   private readonly publishedCourseSnapshotLoadsById = new Map<string, Promise<CourseSnapshot | null>>();
-  private activeCourseRun: ActiveCourseRunState | null = null;
+  private activeCourseRun: ActiveExpandedRoomRunState | null = null;
   private pvpSpawnAppliedMatchId: string | null = null;
   private readonly localPresenceRoomScratch: RoomCoordinates = { x: 0, y: 0 };
   private readonly localPvpPresenceScratch = {
@@ -1810,8 +1810,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       recordGoalRunDeath: () => {
         this.goalRunController.recordDeath();
       },
-      recordCourseRunDeath: () => {
-        recordCourseRunDeath(this.activeCourseRun);
+      recordExpandedRoomRunDeath: () => {
+        recordExpandedRoomRunDeath(this.activeCourseRun);
       },
       recordRoomRushDeath: (reason) => this.recordRoomRushDeath(reason),
       recordPvpSelfDeath: (reason) => this.recordPvpSelfDeath(reason),
@@ -3616,7 +3616,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     return movement;
   }
 
-  private setActiveCourseRun(runState: ActiveCourseRunState | null): void {
+  private setActiveCourseRun(runState: ActiveExpandedRoomRunState | null): void {
     this.activeCourseRun = runState;
     this.syncActiveCourseObjectLinks(this.loadedFullRoomsById.values());
   }
