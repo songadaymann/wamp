@@ -24,6 +24,6 @@ describe('completed level invitations', () => {
   });
   it('names an untitled legacy expanded result truthfully', () => {
     expect(buildRunShareText({ ...base, contentType: 'course', expandedRoomId: 'legacy' }, null)).toContain('this Expanded Room');
-    expect(buildRunShareText({ ...base, contentType: 'course' }, null)).toContain('this course');
+    expect(buildRunShareText({ ...base, contentType: 'course' }, null)).toContain('this expanded room');
   });
 });

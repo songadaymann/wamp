@@ -180,7 +180,7 @@ export async function buildCourseLeaderboardResponse(
   viewerUserId: string | null = null
 ): Promise<CourseLeaderboardResponse> {
   if (!snapshot.goal) {
-    throw new HttpError(404, 'This course version does not have a leaderboard goal.');
+    throw new HttpError(404, 'This expanded room version does not have a leaderboard goal.');
   }
 
   const entryRows = await loadRankedCourseLeaderboardRows(

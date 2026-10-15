@@ -11,7 +11,7 @@ import {
 } from '../../goals/markerFlags';
 import { ROOM_GOAL_DEFINITIONS, type GoalMarkerPoint } from '../../goals/roomGoals';
 import { type RoomCoordinates } from '../../persistence/roomModel';
-import { type ActiveCourseRunState } from './courseRuns';
+import { type ActiveExpandedRoomRunState } from './expandedRoomRuns';
 import { type GoalRunState } from './goalRuns';
 
 const GOAL_MARKER_SPRITE_DEPTH = 29;
@@ -53,7 +53,7 @@ export class OverworldGoalMarkerController {
 
   redrawMarkers(
     currentGoalRun: GoalRunState | null,
-    activeCourseRun: ActiveCourseRunState | null,
+    activeCourseRun: ActiveExpandedRoomRunState | null,
   ): void {
     this.destroy();
 
@@ -146,7 +146,7 @@ export class OverworldGoalMarkerController {
     ];
   }
 
-  private getCourseMarkerDescriptors(runState: ActiveCourseRunState): PlayGoalMarkerDescriptor[] {
+  private getCourseMarkerDescriptors(runState: ActiveExpandedRoomRunState): PlayGoalMarkerDescriptor[] {
     const goal = runState.course.goal;
     if (!goal) {
       return [];

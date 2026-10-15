@@ -207,7 +207,7 @@ export function getCurrentCourseDraftSaveDisabledReason(
   }
 
   if (!dirty) {
-    return 'No unpublished course changes yet.';
+    return 'No unpublished expanded room changes yet.';
   }
 
   return null;

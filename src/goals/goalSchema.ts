@@ -165,14 +165,14 @@ export function roomGoalRankingPolicy<P extends GoalMarkerPoint, K extends GoalT
 export function scoreCourseGoal<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, finish: GoalScoreMetrics, registry: GoalRegistry<P>): number {
   const policy = registry[goal.type].courseScoring;
   if (!policy)
-    throw new Error(`Goal ${goal.type} is not supported in courses.`);
+    throw new Error(`Goal ${goal.type} is not supported in expanded rooms.`);
   return policy.score(goal, finish);
 }
 
 export function courseGoalRankingMode<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>): GoalRankingMode {
   const policy = registry[goal.type].courseScoring;
   if (!policy)
-    throw new Error(`Goal ${goal.type} is not supported in courses.`);
+    throw new Error(`Goal ${goal.type} is not supported in expanded rooms.`);
   return policy.ranking(goal);
 }
 
@@ -191,7 +191,7 @@ export function formatRoomGoalProgressText<P extends GoalMarkerPoint, K extends 
 export function formatCourseGoalProgressText<P extends GoalMarkerPoint, K extends GoalType>(goal: Goal<P, K>, registry: GoalRegistry<P>, facts: CourseGoalProgressFacts): string {
   const progress = registry[goal.type].courseProgress;
   if (!progress)
-    throw new Error(`Goal ${goal.type} is not supported in courses.`);
+    throw new Error(`Goal ${goal.type} is not supported in expanded rooms.`);
   return progress(goal, facts);
 }
 

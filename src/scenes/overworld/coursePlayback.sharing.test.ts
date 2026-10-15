@@ -5,7 +5,7 @@ vi.mock('../../courses/courseRepository', () => ({ createCourseRepository: () =>
 vi.mock('../../expandedRooms/repository', () => ({ createExpandedRoomRepository: () => ({}), isExpandedRoomApiError: () => false }));
 vi.mock('../../progression/postRunRatingEvents', () => ({ requestPostRunGuestClaim: vi.fn(), requestPostRunRating: vi.fn() }));
 import { requestPostRunGuestClaim } from '../../progression/postRunRatingEvents';
-import { createActiveCourseRunState } from './courseRuns';
+import { createActiveExpandedRoomRunState } from './expandedRoomRuns';
 import { OverworldCoursePlaybackController } from './coursePlayback';
 
 function fixture(expandedRoomId: string | null) {
@@ -14,7 +14,7 @@ function fixture(expandedRoomId: string | null) {
     roomRefs: [{ roomId: '10,20', coordinates: { x: 10, y: 20 }, roomVersion: 1, roomTitle: null },
       { roomId: '11,20', coordinates: { x: 11, y: 20 }, roomVersion: 1, roomTitle: null }],
     startPoint: null, goal: { type: 'survival' as const, durationMs: 1000 }, objectLinks: [], pressurePlateLinks: [], createdAt: now, updatedAt: now, publishedAt: now };
-  const run = createActiveCourseRunState({ course, expandedRoomId, expandedRoomVersion: expandedRoomId ? 2 : null,
+  const run = createActiveExpandedRoomRunState({ course, expandedRoomId, expandedRoomVersion: expandedRoomId ? 2 : null,
     startRoomId: '11,20', returnCoordinates: { x: 90, y: 90 }, enemyTarget: null, leaderboardEligible: false });
   run.result = 'completed'; run.elapsedMs = 1000;
   const guestRuns = { has: () => true, finish: vi.fn() };

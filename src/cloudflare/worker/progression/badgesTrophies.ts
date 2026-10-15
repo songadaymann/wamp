@@ -46,7 +46,7 @@ const BADGE_DEFINITIONS: Record<
   player_first_clear: {
     category: 'player',
     label: 'First Clear',
-    description: 'Completed a published room or course challenge.',
+    description: 'Completed a published room or expanded room challenge.',
   },
   player_first_lost_song: {
     category: 'player', label: 'First Lost Song', description: 'Found a hidden Lost Song in another builder’s room.',
@@ -60,12 +60,12 @@ const BADGE_DEFINITIONS: Record<
   player_10_clears: {
     category: 'player',
     label: '10 Clears',
-    description: 'Completed ten published room or course challenges.',
+    description: 'Completed ten published room or expanded room challenges.',
   },
   player_100_clears: {
     category: 'player',
     label: '100 Clears',
-    description: 'Completed one hundred published room or course challenges.',
+    description: 'Completed one hundred published room or expanded room challenges.',
   },
   player_top10_entrant: {
     category: 'player',
@@ -104,7 +104,7 @@ const BADGE_DEFINITIONS: Record<
   builder_first_trophy_room: {
     category: 'builder',
     label: 'First Trophy',
-    description: 'One of your room or course versions earned a trophy.',
+    description: 'One of your room or expanded room versions earned a trophy.',
   },
   curator_first_rating: {
     category: 'curator',

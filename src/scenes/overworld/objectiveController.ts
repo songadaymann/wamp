@@ -3,12 +3,12 @@ import Phaser from 'phaser';
 import type { SfxCue } from '../../audio/sfx';
 import type { CourseMarkerPoint } from '../../courses/model';
 import {
-  recordCourseRunCollectibleCollected,
-  recordCourseRunEnemyDefeated,
-  tickActiveCourseRun,
-  type ActiveCourseRunState,
-  type CourseRunMutationResult,
-} from './courseRuns';
+  recordExpandedRoomRunCollectibleCollected,
+  recordExpandedRoomRunEnemyDefeated,
+  tickActiveExpandedRoomRun,
+  type ActiveExpandedRoomRunState,
+  type ExpandedRoomRunMutationResult,
+} from './expandedRoomRuns';
 import type {
   GoalRunMutationResult,
   OverworldGoalRunController,
@@ -23,7 +23,7 @@ import type {
 
 export interface OverworldObjectiveControllerHost {
   goalRunController: OverworldGoalRunController;
-  getActiveCourseRun(): ActiveCourseRunState | null;
+  getActiveCourseRun(): ActiveExpandedRoomRunState | null;
   getPlayer(): Phaser.GameObjects.Rectangle | null;
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
   getCurrentRoomCoordinates(): RoomCoordinates;
@@ -170,7 +170,7 @@ export class OverworldObjectiveController {
   }
 
   handleEnemyDefeated(roomId: string, enemyName: string): boolean {
-    this.applyCourseRunMutation(recordCourseRunEnemyDefeated(this.host.getActiveCourseRun()));
+    this.applyCourseRunMutation(recordExpandedRoomRunEnemyDefeated(this.host.getActiveCourseRun()));
 
     const result = this.host.goalRunController.recordEnemyDefeated(roomId, enemyName);
     this.applyGoalRunMutation(result);
@@ -178,7 +178,7 @@ export class OverworldObjectiveController {
   }
 
   handleCollectibleCollected(roomId: string): void {
-    this.applyCourseRunMutation(recordCourseRunCollectibleCollected(this.host.getActiveCourseRun()));
+    this.applyCourseRunMutation(recordExpandedRoomRunCollectibleCollected(this.host.getActiveCourseRun()));
     this.applyGoalRunMutation(this.host.goalRunController.recordCollectibleCollected(roomId));
   }
 
@@ -217,7 +217,7 @@ export class OverworldObjectiveController {
 
   private updateCourseRun(delta: number, interactionsSuspended: boolean): void {
     this.applyCourseRunMutation(
-      tickActiveCourseRun(this.host.getActiveCourseRun(), {
+      tickActiveExpandedRoomRun(this.host.getActiveCourseRun(), {
         delta,
         suspendGoalResolution: interactionsSuspended,
         touchesCoursePoint: (point) => this.playerTouchesGoalPoint(this.host.toWorldCoursePoint(point)),
@@ -226,7 +226,7 @@ export class OverworldObjectiveController {
     );
   }
 
-  private applyCourseRunMutation(result: CourseRunMutationResult): void {
+  private applyCourseRunMutation(result: ExpandedRoomRunMutationResult): void {
     if (!result.changed) {
       return;
     }

@@ -1522,7 +1522,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       centerCoordinates: { ...startRoom.coordinates },
       roomCoordinates: { ...startRoom.coordinates },
       mode: 'play',
-      statusMessage: 'Testing draft course.',
+      statusMessage: 'Testing draft expanded room.',
       courseDraftPreviewId: draft.id,
       courseEditorReturnTarget: {
         courseId: draft.id,
@@ -1713,8 +1713,8 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       this.redrawCourseMarkers();
       this.redrawSelection();
     } catch (error) {
-      console.error('Failed to open course editor', error);
-      this.statusText = error instanceof Error ? error.message : 'Failed to open the course editor.';
+      console.error('Failed to open expanded room editor', error);
+      this.statusText = error instanceof Error ? error.message : 'Failed to open the expanded room editor.';
     } finally {
       this.loading = false;
       this.renderUi();
@@ -1729,7 +1729,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     }
 
     if (!courseId) {
-      throw new Error('No active course to edit.');
+      throw new Error('No active expanded room to edit.');
     }
 
     const record = await this.expandedRoomEditorRepository.loadExpandedRoomRecord(courseId);

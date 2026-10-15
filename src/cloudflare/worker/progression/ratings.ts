@@ -758,10 +758,10 @@ export async function submitCourseRating(
   const now = params.now ?? new Date().toISOString();
   const published = params.courseRecord.published;
   if (!published || published.version !== params.body.courseVersion) {
-    throw new HttpError(409, 'Ratings are only available on the current published course version.');
+    throw new HttpError(409, 'Ratings are only available on the current published expanded room version.');
   }
   if (params.courseRecord.ownerUserId === params.userId) {
-    throw new HttpError(409, 'You cannot rate your own course.');
+    throw new HttpError(409, 'You cannot rate your own expanded room.');
   }
 
   const qualityStars = normalizeQualityStars(params.body.qualityStars);
@@ -779,7 +779,7 @@ export async function submitCourseRating(
     params.userId,
   );
   if (!hasCompleted) {
-    throw new HttpError(409, 'Complete this course version window once before rating it.');
+    throw new HttpError(409, 'Complete this expanded room version window once before rating it.');
   }
 
   const progress = await loadOrBackfillUserProgress(env, params.userId);

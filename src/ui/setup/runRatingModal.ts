@@ -923,7 +923,7 @@ export class RunRatingModalController {
         ? roomSummary?.roomTitle ?? request?.contentTitle ?? 'Room Challenge'
         : courseSummary?.courseTitle
           ?? request?.contentTitle
-          ?? (request?.contentType === 'expanded_room' ? 'Expanded Room Run' : 'Course Run');
+          ?? (request?.contentType === 'expanded_room' ? 'Expanded Room Run' : 'Expanded Room Run');
 
     if (this.elements.title) {
       this.elements.title.textContent = summaryTitle;
@@ -938,7 +938,7 @@ export class RunRatingModalController {
             ? `Post-run room rating · version ${request.version}`
             : request.contentType === 'expanded_room'
               ? `Post-run Expanded Room rating · version ${request.version}`
-              : `Post-run course rating · version ${request.version}`;
+              : `Post-run expanded room rating · version ${request.version}`;
       } else {
         this.elements.meta.textContent = 'Post-run rating';
       }
@@ -1207,7 +1207,7 @@ export class RunRatingModalController {
     return contentType === 'expanded_room'
       ? 'Rated an Expanded Room'
       : contentType === 'course'
-        ? 'Rated a course'
+        ? 'Rated an expanded room'
         : 'Rated a room';
   }
 
@@ -1275,7 +1275,7 @@ function formatPromptTitle(detail: PostRunRatingRequestDetail): string {
   if (detail.contentType === 'expanded_room') {
     return 'Expanded Room';
   }
-  return detail.contentType === 'course' ? 'Course' : 'Untitled Room';
+  return detail.contentType === 'course' ? 'Expanded Room' : 'Untitled Room';
 }
 
 function formatPromptQueueStatus(
@@ -1336,7 +1336,7 @@ function buildPromptStatus(request: PostRunRatingRequestDetail | null): string {
     return 'Rate the Expanded Room quality and tweak the suggested difficulty if needed.';
   }
   if (request?.contentType === 'course') {
-    return 'Rate the course quality and tweak the suggested difficulty if needed.';
+    return 'Rate the expanded room quality and tweak the suggested difficulty if needed.';
   }
   return 'Rate the room quality and tweak the suggested difficulty if needed.';
 }

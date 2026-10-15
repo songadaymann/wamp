@@ -89,7 +89,7 @@ function getRunShareSubject(
     return cleanTitle ? `"${cleanTitle}"` : 'this Expanded Room';
   }
 
-  return cleanTitle ? `"${cleanTitle}"` : 'this course';
+  return cleanTitle ? `"${cleanTitle}"` : 'this expanded room';
 }
 
 function formatAchievementTime(elapsedMs: number): string {

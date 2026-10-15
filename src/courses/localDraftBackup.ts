@@ -89,7 +89,7 @@ export class ExpandedRoomDraftBackup {
   recoverCourse(remote: CourseSnapshot): DraftRecovery<CourseSnapshot> {
     const backup = this.read(this.key(remote.id), remote.id, (value: CourseSnapshot) => {
       if (!Array.isArray(value.roomRefs) || !Array.isArray(value.objectLinks)
-        || !('goal' in value) || !('startPoint' in value)) throw new Error('Invalid course backup');
+        || !('goal' in value) || !('startPoint' in value)) throw new Error('Invalid expanded room backup');
       return normalizeCourseSnapshot(value, remote.id);
     });
     return this.recover(backup, remote);

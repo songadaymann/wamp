@@ -360,11 +360,11 @@ export async function publishCourse(
 ): Promise<CourseRecord> {
   const existing = await loadCourseRecord(env, courseId, actor.id, actorIsAdmin);
   if (!existing) {
-    throw new HttpError(404, 'Course draft not found.');
+    throw new HttpError(404, 'Expanded Room draft not found.');
   }
 
   if (!existing.permissions.canPublish) {
-    throw new HttpError(403, 'You do not have permission to publish this course.');
+    throw new HttpError(403, 'You do not have permission to publish this expanded room.');
   }
 
   const now = new Date().toISOString();
@@ -438,7 +438,7 @@ export async function publishCourse(
 
   const stored = await loadCourseRecord(env, courseId, actor.id, actorIsAdmin);
   if (!stored?.published) {
-    throw new HttpError(500, 'Failed to publish course.');
+    throw new HttpError(500, 'Failed to publish expanded room.');
   }
 
   return attachExpandedRoomCellLimit(stored, expandedRoomCellLimit);
@@ -452,15 +452,15 @@ export async function unpublishCourse(
 ): Promise<CourseRecord> {
   const existing = await loadCourseRecord(env, courseId, actor.id, actorIsAdmin);
   if (!existing) {
-    throw new HttpError(404, 'Course draft not found.');
+    throw new HttpError(404, 'Expanded Room draft not found.');
   }
 
   if (!existing.permissions.canUnpublish) {
-    throw new HttpError(403, 'You do not have permission to unpublish this course.');
+    throw new HttpError(403, 'You do not have permission to unpublish this expanded room.');
   }
 
   if (!existing.published) {
-    throw new HttpError(409, 'This course is not published.');
+    throw new HttpError(409, 'This expanded room is not published.');
   }
 
   const now = new Date().toISOString();
@@ -492,7 +492,7 @@ export async function unpublishCourse(
 
   const stored = await loadCourseRecord(env, courseId, actor.id, actorIsAdmin);
   if (!stored || stored.published) {
-    throw new HttpError(500, 'Failed to unpublish course.');
+    throw new HttpError(500, 'Failed to unpublish expanded room.');
   }
 
   return stored;
@@ -675,7 +675,7 @@ function validateCourseMarkerBelongsToCourse(
 
   const roomIds = new Set(roomRefs.map((roomRef) => roomRef.roomId));
   if (!roomIds.has(point.roomId)) {
-    throw new HttpError(400, `${label} must belong to a room in the course.`);
+    throw new HttpError(400, `${label} must belong to a room in the expanded room.`);
   }
 }
 
@@ -726,20 +726,20 @@ function validatePublishableCourseDraft(
   switch (draft.goal.type) {
     case 'reach_exit':
       if (!draft.goal.exit) {
-        throw new HttpError(400, 'Reach Exit courses need an exit.');
+        throw new HttpError(400, 'Reach Exit expanded rooms need an exit.');
       }
       return;
     case 'checkpoint_sprint':
       if (draft.goal.checkpoints.length === 0) {
-        throw new HttpError(400, 'Checkpoint Sprint courses need at least one checkpoint.');
+        throw new HttpError(400, 'Checkpoint Sprint expanded rooms need at least one checkpoint.');
       }
       if (!draft.goal.finish) {
-        throw new HttpError(400, 'Checkpoint Sprint courses need a finish.');
+        throw new HttpError(400, 'Checkpoint Sprint expanded rooms need a finish.');
       }
       for (const checkpoint of draft.goal.checkpoints) {
         const order = getCourseRoomOrder(roomRefs, checkpoint.roomId);
         if (order < 0) {
-          throw new HttpError(400, 'Checkpoint must belong to a room in the course.');
+          throw new HttpError(400, 'Checkpoint must belong to a room in the expanded room.');
         }
       }
       return;
@@ -800,7 +800,7 @@ async function ensureRoomsNotInOtherPublishedCourses(
     .first<{ room_id: string; course_id: string }>();
 
   if (conflict) {
-    throw new HttpError(409, 'A room can only belong to one active published course.');
+    throw new HttpError(409, 'A room can only belong to one active published expanded room.');
   }
 }
 
@@ -933,6 +933,6 @@ function parseStoredCourseSnapshot(raw: string, courseId: string): CourseSnapsho
   try {
     return normalizeCourseSnapshot(JSON.parse(raw), courseId);
   } catch {
-    throw new HttpError(500, 'Stored course data is invalid.');
+    throw new HttpError(500, 'Stored expanded room data is invalid.');
   }
 }

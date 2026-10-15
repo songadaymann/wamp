@@ -20,8 +20,8 @@ import type {
   OverworldMode,
 } from '../sceneData';
 import type {
-  ActiveCourseRunState,
-} from './courseRuns';
+  ActiveExpandedRoomRunState,
+} from './expandedRoomRuns';
 import type {
   CameraMode,
 } from './camera';
@@ -46,7 +46,7 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   getCurrentRoomCoordinates?: () => RoomCoordinates;
   getCurrentRoomSnapshot(): RoomSnapshot | null;
   getActiveCourseSnapshot(): CourseSnapshot | null;
-  getActiveCourseRun(): ActiveCourseRunState | null;
+  getActiveCourseRun(): ActiveExpandedRoomRunState | null;
   getActiveRoomRushRun(): unknown | null;
   isRoomTransitionLocked(): boolean;
   getShouldRespawnPlayer(): boolean;

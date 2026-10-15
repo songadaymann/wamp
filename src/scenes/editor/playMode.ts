@@ -75,7 +75,7 @@ export function buildEditorPlayModeData(
       roomCoordinates: { ...roomCoordinates },
       ...(standalone ? { clearCheck: { roomId: roomSnapshot.id, fingerprint: getEditorDraftFingerprint(roomSnapshot), eligible: !options.practiceStart } } : {}),
     },
-    statusMessage: coursePreview ? 'Testing draft course.' : null,
+    statusMessage: coursePreview ? 'Testing draft expanded room.' : null,
     mode: 'play',
   };
 }

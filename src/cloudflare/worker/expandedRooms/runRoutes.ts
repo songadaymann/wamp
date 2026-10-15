@@ -308,7 +308,7 @@ export async function handleExpandedRoomRunFinish(
     auth.isAdmin,
   );
   if (!courseRecord) {
-    throw new HttpError(404, 'Legacy course record not found for expanded room.');
+    throw new HttpError(404, 'Expanded room compatibility record not found.');
   }
   const creatorUserId = await resolvePublishedCourseOwnerUserId(env, context.legacyCourseId);
   const rewardScope = resolveCourseClearRewardScope(
@@ -652,7 +652,7 @@ export async function handleExpandedRoomLeaderboard(
     auth?.isAdmin ?? false,
   ));
   if (!record) {
-    throw new HttpError(404, 'Legacy course not found for expanded room.');
+    throw new HttpError(404, 'Expanded room compatibility data not found.');
   }
 
   const leaderboard = await timing.measure('leaderboard', () => buildExpandedRoomLeaderboardResponse(env, {
@@ -695,7 +695,7 @@ export async function handleExpandedRoomRatingSubmit(
   );
   const record = await loadCourseRecord(env, context.legacyCourseId, auth.user.id, auth.isAdmin);
   if (!record) {
-    throw new HttpError(404, 'Legacy course not found for expanded room.');
+    throw new HttpError(404, 'Expanded room compatibility data not found.');
   }
 
   const response = await submitCourseRating(env, {
@@ -859,7 +859,7 @@ async function resolvePublishedCourseVersion(
 
   const record = await loadCourseRecord(env, courseId);
   if (!record) {
-    throw new HttpError(404, 'Legacy course not found for expanded room.');
+    throw new HttpError(404, 'Expanded room compatibility data not found.');
   }
   if (version === undefined || version === null) {
     throw new HttpError(404, 'Published expanded room not found.');

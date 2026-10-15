@@ -10,7 +10,7 @@ import { OverworldGoalRunController } from './goalRuns';
 import { OverworldCoursePlaybackController } from './coursePlayback';
 import { GuestRunPlaybackController } from './guestRunPlayback';
 import { RankedRunTraceRecorder, type RankedRunTraceFrameInput } from './rankedRunTraceRecorder';
-import type { ActiveCourseRunState } from './courseRuns';
+import type { ActiveExpandedRoomRunState } from './expandedRoomRuns';
 
 const { requestPostRunGuestClaim, requestPostRunRating, notifyRewardStings, auth } = vi.hoisted(() => ({
   requestPostRunGuestClaim: vi.fn(), requestPostRunRating: vi.fn(), notifyRewardStings: vi.fn(),
@@ -51,7 +51,7 @@ function harness() {
   const service = new GuestRunService({ repository: repo, queue: new GuestRunFinishQueue(null),
     identity: () => ({ guestUserId: 'guest-test', recoveryToken: 'a'.repeat(64) }), notify: vi.fn() });
   const recorder = new RankedRunTraceRecorder();
-  let goals!: OverworldGoalRunController; let currentCourse: ActiveCourseRunState | null = null;
+  let goals!: OverworldGoalRunController; let currentCourse: ActiveExpandedRoomRunState | null = null;
   const startTrace = vi.fn((kind: 'room' | 'course', binding: Parameters<RankedRunTraceRecorder['start']>[1]) => recorder.start(kind, binding, frame));
   const clearTrace = vi.fn(() => recorder.clear()); const renderHud = vi.fn();
   const guests = new GuestRunPlaybackController({ service,

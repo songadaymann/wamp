@@ -591,7 +591,7 @@ function renderRecentInvalidations(): void {
       <div class="audit-meta">
         <div>${escapeHtml(item.reason)}</div>
         <div>${escapeHtml(item.operatorLabel)} · ${formatTimestamp(item.createdAt)}</div>
-        <div>${item.roomRunCount} room runs · ${item.courseRunCount} course runs · ${item.pointEventCount} point events</div>
+        <div>${item.roomRunCount} room runs · ${item.courseRunCount} expanded room runs · ${item.pointEventCount} point events</div>
       </div>
     `;
     recentInvalidations.appendChild(row);
@@ -829,7 +829,7 @@ function renderAuditList(
       <div class="audit-meta">
         <div>${escapeHtml(item.reason)}</div>
         <div>${formatTimestamp(item.createdAt)}</div>
-        <div>${item.roomRunCount} room runs · ${item.courseRunCount} course runs · ${item.pointEventCount} point events</div>
+        <div>${item.roomRunCount} room runs · ${item.courseRunCount} expanded room runs · ${item.pointEventCount} point events</div>
       </div>
     `;
     container.appendChild(row);
@@ -851,7 +851,7 @@ function renderPreview(): void {
   }
 
   previewMeta.innerHTML = `
-    <div>${preview.summary.roomRunsDeleted} room runs · ${preview.summary.courseRunsDeleted} course runs</div>
+    <div>${preview.summary.roomRunsDeleted} room runs · ${preview.summary.courseRunsDeleted} expanded room runs</div>
     <div>${preview.summary.selectedPointEventsDeleted} selected point events · ${preview.summary.runPointEventsDeleted} run point events · ${preview.summary.creatorPointEventsDeleted} creator point events</div>
   `;
 
@@ -887,8 +887,8 @@ function renderSelectionSummary(): void {
   const pointCount = state.selectedPointEventIds.size;
   selectionSummary.textContent =
     state.detail?.scope === 'player_history'
-      ? `${roomCount} room runs, ${courseCount} course runs, and ${pointCount} point events selected. Full history mode starts with nothing selected.`
-      : `${roomCount} room runs, ${courseCount} course runs, and ${pointCount} point events selected.`;
+      ? `${roomCount} room runs, ${courseCount} expanded room runs, and ${pointCount} point events selected. Full history mode starts with nothing selected.`
+      : `${roomCount} room runs, ${courseCount} expanded room runs, and ${pointCount} point events selected.`;
 }
 
 function renderQueueTabs(): void {
