@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-15 overnight — F070 editor authoring registry
+
+Continue the checklist until October16 at5am Eastern. Typed editor rules now own all seven goals' field controls/edits, marker mutations and summaries; command guards/view-model controls use those rules.5,980 exact frozen old/new operations,528 full view-model comparisons and12 focused tests pass. Desktop public-build defaults/edits/canvas markers/clearing/reload pass. Final exact-source quality/mobile/native/official-client/hosted/delivery are pending; master145/215 and F070 remain partial. Primary auth/editor lane, selected240px/32-color animation and decision-gated work preserved. See `docs/review/wamp-overnight-checklist-2026-10-15.md` and `docs/review/wamp-goal-authoring-registry-2026-10-15.md`.
+
 ## 2026-10-15 — Expanded-room run rules ready for hosted checks
 
 Required typed targets/tick/readiness and shared event mutations, canonical ExpandedRoom run module/exports and remaining display/error naming are implemented.12 Worker files differ only in69 message literals; SQL/routes/keys and shared model formats are unchanged. Full504-file/3,708-test quality,78,960 exact old/new comparisons and12 baseline +12 candidate public-build Chromium/WebKit ordinary-input goal cases pass0errors/misses; images inspected. Source/main48-mobile/hosting gates and guarded API+Pages/live delivery are pending. F070/master partial/145. Receipt: `docs/review/wamp-expanded-room-run-rules-2026-10-15.md`.

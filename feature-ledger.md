@@ -1,3 +1,7 @@
+## 2026-10-15 overnight — F070 editor authoring registry
+
+Continue the checklist until October16 at5am Eastern. Typed editor rules now own all seven goals' field controls/edits, marker mutations and summaries; command guards/view-model controls use those rules.5,980 exact frozen old/new operations,528 full view-model comparisons and12 focused tests pass. Desktop public-build defaults/edits/canvas markers/clearing/reload pass. Final exact-source quality/mobile/native/official-client/hosted/delivery are pending; master145/215 and F070 remain partial. Primary auth/editor lane, selected240px/32-color animation and decision-gated work preserved. See `docs/review/wamp-overnight-checklist-2026-10-15.md` and `docs/review/wamp-goal-authoring-registry-2026-10-15.md`.
+
 
 
 ## 2026-10-15 — Expanded-room run rules ready for hosted checks

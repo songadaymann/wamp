@@ -1,4 +1,5 @@
-import { goalSupportsTimeLimit, type RoomGoal } from '../../goals/roomGoals';
+import { getRoomGoalAuthoringControls } from './goalDocument';
+import type { RoomGoal } from '../../goals/roomGoals';
 import type { RoomCoordinates, RoomPermissions, RoomVersionRecord } from '../../persistence/roomRepository';
 import type { EditorUiViewModel } from './uiBridge';
 import type { GoalPlacementMode } from './editRuntime';
@@ -155,35 +156,10 @@ export function buildEditorUiViewModel(
     goal: {
       goalTypeValue: roomGoal?.type ?? '',
       goalTypeDisabled: false,
-      npcQuestTypeHidden: roomGoal?.type !== 'npc_quest',
-      npcQuestTypeValue: roomGoal?.type === 'npc_quest' ? roomGoal.questType : 'protect',
-      timeLimitHidden: !roomGoal || !goalSupportsTimeLimit(roomGoal.type),
+      ...getRoomGoalAuthoringControls(roomGoal),
       timeLimitDisabled: false,
-      timeLimitValue:
-        roomGoal &&
-        goalSupportsTimeLimit(roomGoal.type) &&
-        roomGoal.type !== 'survival' &&
-        roomGoal.timeLimitMs
-          ? String(Math.round(roomGoal.timeLimitMs / 1000))
-          : '',
-      requiredCountHidden:
-        roomGoal?.type !== 'collect_target' &&
-        !(roomGoal?.type === 'npc_quest' && roomGoal.questType === 'give'),
       requiredCountDisabled: false,
-      requiredCountValue:
-        roomGoal?.type === 'collect_target' ||
-        (roomGoal?.type === 'npc_quest' && roomGoal.questType === 'give')
-          ? String(roomGoal.requiredCount)
-          : '1',
-      survivalHidden:
-        roomGoal?.type !== 'survival' &&
-        !(roomGoal?.type === 'npc_quest' && roomGoal.questType === 'protect'),
       survivalDisabled: false,
-      survivalValue:
-        roomGoal?.type === 'survival' ||
-        (roomGoal?.type === 'npc_quest' && roomGoal.questType === 'protect')
-          ? String(Math.round(roomGoal.durationMs / 1000))
-          : '30',
       introTextHidden: !roomGoal,
       introTextDisabled: !roomGoal,
       introTextValue: roomGoalIntroText ?? '',
@@ -206,18 +182,10 @@ export function buildEditorUiViewModel(
       contextText: '',
       placeStartHidden: true,
       placeStartActive: false,
-      placeExitHidden: roomGoal?.type !== 'reach_exit',
       placeExitActive: roomPlacementMode === 'exit',
-      placeExitNeeded: roomGoal?.type === 'reach_exit' && !roomGoal.exit,
-      addCheckpointHidden: roomGoal?.type !== 'checkpoint_sprint',
       addCheckpointActive: roomPlacementMode === 'checkpoint',
-      placeFinishHidden: roomGoal?.type !== 'checkpoint_sprint',
       placeFinishActive: roomPlacementMode === 'finish',
-      placeFinishNeeded: roomGoal?.type === 'checkpoint_sprint' && !roomGoal.finish,
-      linkNpcHidden: roomGoal?.type !== 'npc_quest',
       linkNpcActive: roomPlacementMode === 'npc',
-      placeNpcDestinationHidden:
-        roomGoal?.type !== 'npc_quest' || roomGoal.questType !== 'escort',
       placeNpcDestinationActive: roomPlacementMode === 'npc_destination',
     },
     course: {
